@@ -21,6 +21,7 @@ import time
 import warnings
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
+from urllib.parse import urlsplit
 
 warnings.filterwarnings("ignore", message="pkg_resources")
 sys.path.insert(0, str(Path(__file__).parent))
@@ -84,6 +85,7 @@ class Karaoke(BaseHTTPRequestHandler):
         return wav, score
 
     def do_GET(self) -> None:
+        self.path = urlsplit(self.path).path  # a ?t=... only busts the browser's cache
         if self.path in ("/", "/index.html"):
             self.send(PAGE.read_bytes(), "text/html; charset=utf-8")
         elif self.path == "/guide.wav":
