@@ -7,30 +7,46 @@
 <style>
   :root {
     --bg: #15120f; --panel: #211c18; --line: #3a322c; --ink: #efe6da; --dim: #857a6f;
-    --sung: #f2b25c; --accent: #e0664d; --ok: #8cc084;
+    --sung: #f2b25c; --accent: #e0664d; --ok: #8cc084; --off: #e0a04d;
   }
   * { box-sizing: border-box; }
   [hidden] { display: none !important; }
   body { margin: 0; background: var(--bg); color: var(--ink); font: 16px/1.45 -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif; }
-  main { max-width: 920px; margin: 0 auto; padding: 22px 16px 56px; }
+  main { max-width: 960px; margin: 0 auto; padding: 22px 16px 56px; }
   header { display: flex; justify-content: space-between; align-items: baseline; gap: 12px; flex-wrap: wrap; }
   h1 { font-size: 20px; margin: 0; font-weight: 650; }
   .hint { color: var(--dim); font-size: 14px; }
-  .stage { background: var(--panel); border-radius: 16px; padding: 30px 26px; min-height: 290px; margin: 18px 0 10px;
-           display: flex; flex-direction: column; justify-content: center; gap: 16px; }
-  .section { color: var(--accent); text-transform: uppercase; letter-spacing: .14em; font-size: 13px; font-weight: 600; min-height: 1.2em; }
-  .now { font-size: clamp(24px, 4.4vw, 42px); font-weight: 650; line-height: 1.25; min-height: 1.3em; }
-  .next { font-size: clamp(16px, 2.6vw, 24px); color: var(--dim); min-height: 1.3em; }
-  .syl.sung { color: var(--sung); }
-  .count { font-size: 64px; font-weight: 750; color: var(--sung); line-height: 1; }
-  .bar { height: 6px; background: #2e2722; border-radius: 3px; overflow: hidden; }
+
+  canvas.lane { display: block; width: 100%; height: 190px; margin-top: 16px; background: var(--panel); border-radius: 14px; }
+  .scroller { position: relative; height: 240px; overflow: hidden; margin-top: 10px; background: var(--panel); border-radius: 14px;
+              -webkit-mask-image: linear-gradient(transparent, #000 14%, #000 80%, transparent);
+              mask-image: linear-gradient(transparent, #000 14%, #000 80%, transparent); }
+  .reel { position: absolute; left: 0; right: 0; top: 0; padding: 0 26px; transition: transform .5s cubic-bezier(.2, .7, .2, 1); }
+  .item { padding: 7px 0; transform-origin: left center; transform: scale(.74); opacity: .42; transition: transform .5s, opacity .5s; }
+  .item.current { transform: scale(1); opacity: 1; }
+  .item.past { opacity: .18; }
+  .label { color: var(--accent); font-size: 12px; letter-spacing: .14em; text-transform: uppercase; font-weight: 650; margin-bottom: 3px; }
+  .words { font-size: clamp(22px, 4vw, 38px); font-weight: 650; line-height: 1.22; }
+  .syl { background: linear-gradient(90deg, var(--sung) var(--p, 0%), var(--ink) var(--p, 0%));
+         -webkit-background-clip: text; background-clip: text; color: transparent; }
+  .gap { display: flex; align-items: center; gap: 12px; margin: 2px 0 6px; color: var(--dim); font-size: 13px; transition: opacity .6s; }
+  .gap.spent { opacity: 0; }
+  .track { flex: 0 0 160px; height: 4px; border-radius: 2px; background: #332b25; overflow: hidden; }
+  .fill { height: 100%; width: 0; background: var(--dim); }
+  .dots i { display: inline-block; width: 9px; height: 9px; margin-right: 6px; border-radius: 50%; background: #3a322c; }
+  .dots i.on { background: var(--sung); }
+  .done { font-size: 22px; color: var(--dim); padding: 16px 0; }
+
+  .bar { height: 5px; margin-top: 10px; background: #2e2722; border-radius: 3px; overflow: hidden; }
   .bar > div { height: 100%; width: 0; background: var(--accent); }
-  .controls { display: flex; flex-wrap: wrap; gap: 10px; margin: 16px 0 8px; align-items: center; }
+  .controls { display: flex; flex-wrap: wrap; gap: 10px; margin: 14px 0 8px; align-items: center; }
   button { font: inherit; padding: 10px 16px; border-radius: 10px; border: 1px solid var(--line); background: #2a241f; color: var(--ink); cursor: pointer; }
   button.primary { background: var(--accent); border-color: var(--accent); color: #1b120e; font-weight: 650; }
   button:disabled { opacity: .4; cursor: default; }
-  .meter { width: 140px; height: 8px; background: #2e2722; border-radius: 4px; overflow: hidden; }
+  label.check { display: inline-flex; gap: 6px; align-items: center; }
+  .meter { width: 120px; height: 8px; background: #2e2722; border-radius: 4px; overflow: hidden; }
   .meter > div { height: 100%; width: 0; background: var(--ok); }
+  .status { min-height: 1.4em; margin: 4px 0; }
   .panel { background: var(--panel); border-radius: 12px; padding: 14px 16px; margin: 12px 0; }
   .panel h2 { font-size: 15px; margin: 0 0 8px; }
   ul { margin: 6px 0; padding-left: 20px; }
@@ -49,19 +65,18 @@
     <span class="hint">Headphones on, so the guide stays out of the mic.</span>
   </header>
 
-  <div class="stage">
-    <div class="section" id="section"></div>
-    <div class="now" id="now">Loading…</div>
-    <div class="next" id="next"></div>
-  </div>
+  <canvas class="lane" id="lane"></canvas>
+  <div class="scroller"><div class="reel" id="reel"></div></div>
   <div class="bar"><div id="progress"></div></div>
 
   <div class="controls">
     <button id="rehearse">▶ Rehearse</button>
     <button id="record" class="primary">● Record a take</button>
     <button id="stop" disabled>■ Stop</button>
+    <label class="check hint"><input type="checkbox" id="pitchOn" checked> show my pitch</label>
     <span class="row hint">mic <span class="meter"><div id="level"></div></span></span>
   </div>
+  <div class="status hint" id="status">Loading…</div>
 
   <div class="panel" id="review" hidden>
     <h2>That take</h2>
@@ -82,7 +97,7 @@
     <div class="portrait hint" id="portrait"></div>
     <div class="row" id="hear" hidden>
       <button id="machine">▶ Hear the machine sing it your way</button>
-      <label class="hint"><input type="checkbox" id="choir"> with a lineage choir</label>
+      <label class="check hint"><input type="checkbox" id="choir"> with a lineage choir</label>
     </div>
     <audio id="player" controls hidden></audio>
   </div>
@@ -97,9 +112,11 @@
 
 <script>
 const $ = id => document.getElementById(id);
-const S = { ctx: null, guide: null, lyrics: null, mode: "idle", t0: 0, out: 0, inn: 0, chunks: [], take: null, takes: [],
-            shownLine: -2, src: [], phrasing: null };
-const NAMES = { intro: "Intro", verse: "Verse", refrain: "Refrain", turn: "Turn: breathe", bridge: "Bridge", tag: "Tag", break: "Break", outro: "Outro" };
+const S = { ctx: null, guide: null, lyrics: null, notes: [], lo: 0, hi: 0, items: [], focus: -2, mode: "idle",
+            t0: 0, out: 0, inn: 0, chunks: [], take: null, takes: [], src: [], phrasing: null,
+            analyser: null, buf: null, trail: [], takeTrail: null, showTrail: null };
+const NAMES = { intro: "Intro", verse: "Verse", refrain: "Refrain", turn: "Turn", bridge: "Bridge", tag: "Tag", break: "Break", outro: "Outro" };
+const PAST = 2.0, FUTURE = 5.0;  // seconds of the lane either side of the playhead
 
 const WORKLET = `
 class TakeRecorder extends AudioWorkletProcessor {
@@ -118,35 +135,193 @@ registerProcessor("take-recorder", TakeRecorder);`;
 try { $("nudge").value = localStorage.getItem("songbird-nudge") || "0"; } catch (e) {}
 $("nudge").addEventListener("change", () => { try { localStorage.setItem("songbird-nudge", $("nudge").value); } catch (e) {} });
 
+/* ---------- the words ---------- */
+
 async function init() {
   S.lyrics = await (await fetch("/lyrics.json")).json();
   $("title").textContent = `Songbird Karaoke: ${S.lyrics.title}`;
   document.title = `Karaoke: ${S.lyrics.title}`;
-  idle("Rehearse to hear it through, or record when you're ready.");
+  S.notes = S.lyrics.lines.flatMap(l => l.syllables);
+  const pitches = S.notes.map(n => n.pitch);
+  S.lo = Math.min(...pitches) - 2;
+  S.hi = Math.max(...pitches) + 2;
+  buildReel();
+  resting();
+  status("Rehearse to hear it through, or record when you're ready.");
   if (!window.isSecureContext || !navigator.mediaDevices) {
-    $("now").innerHTML = '<span class="warn">Open this page at http://127.0.0.1 so the browser allows the microphone.</span>';
+    status('<span class="warn">Open this page at http://127.0.0.1 so the browser allows the microphone.</span>');
   }
-  const kept = await (await fetch("/takes")).json();
-  kept.forEach(addTake);
+  (await (await fetch("/takes")).json()).forEach(addTake);
 }
 
-function idle(message) {
-  $("section").textContent = "";
-  $("now").textContent = message;
-  $("next").textContent = S.lyrics.lines.length ? "First line: " + text(S.lyrics.lines[0]) : "";
+function status(html) { $("status").innerHTML = html; }
+
+function resting() {  // before playing: the words at the start, the lane showing the first notes to come
+  drawWords(0);
+  drawLane(S.notes[0].start - 1.0);
   $("progress").style.width = "0";
-  S.shownLine = -2;
 }
 
-function text(line) {
-  return line.syllables.map(s => s.text + (s.word_end ? " " : "")).join("").trim();
+function buildReel() {
+  const reel = $("reel");
+  reel.innerHTML = "";
+  const lines = S.lyrics.lines;
+  S.items = lines.map((line, i) => {
+    const el = document.createElement("div");
+    el.className = "item";
+    const before = i ? lines[i - 1] : null;
+    const gapStart = before ? before.end : 0;
+    const gap = line.syllables[0].start - gapStart;
+    let html = "";
+    if (!before || before.section !== line.section || gap > 3) html += `<div class="label">${NAMES[line.section] || line.section}</div>`;
+    if (gap >= 1.2) {
+      html += `<div class="gap"><span class="track"><span class="fill" style="display:block"></span></span>`
+            + `<span class="dots"><i></i><i></i><i></i><i></i></span>${gap >= 3 && before ? "<span>breathe</span>" : ""}</div>`;
+    }
+    html += `<div class="words">` + line.syllables.map(s => `<span class="syl">${s.text}</span>${s.word_end ? " " : ""}`).join("") + `</div>`;
+    el.innerHTML = html;
+    reel.appendChild(el);
+    return { el, line, gapStart, gap, syls: [...el.querySelectorAll(".syl")], fill: el.querySelector(".fill"),
+             dots: [...el.querySelectorAll(".dots i")], lead: el.querySelector(".gap") };
+  });
+  const end = document.createElement("div");
+  end.className = "item done";
+  end.textContent = "That's the song.";
+  reel.appendChild(end);
+  S.items.push({ el: end, line: null });
 }
+
+function focusOn(f) {
+  if (f === S.focus) return;
+  S.items.forEach((it, i) => {
+    it.el.classList.toggle("current", i === f);
+    it.el.classList.toggle("past", i < f);
+    if (it.syls) it.syls.forEach(s => s.style.setProperty("--p", i < f ? "100%" : "0%"));
+  });
+  const anchor = 64;  // where the current line sits in the window
+  $("reel").style.transform = `translateY(${anchor - S.items[f].el.offsetTop}px)`;
+  S.focus = f;
+}
+
+function drawWords(pos) {
+  let f = S.items.findIndex(it => it.line && pos < it.line.end + 0.15);
+  if (f < 0) f = S.items.length - 1;
+  focusOn(f);
+  const it = S.items[f];
+  if (!it.line) return;
+  const beat = 60 / S.lyrics.tempo;
+  const first = it.line.syllables[0].start;
+  if (it.fill) it.fill.style.width = Math.max(0, Math.min(100, (100 * (pos - it.gapStart)) / it.gap)) + "%";
+  if (it.lead) it.lead.classList.toggle("spent", pos > first + 0.4);  // the count-in has done its job
+  it.dots.forEach((d, k) => d.classList.toggle("on", pos >= first - (4 - k) * beat));
+  it.line.syllables.forEach((s, k) => {
+    const next = it.line.syllables[k + 1];
+    const until = next ? Math.min(s.end, next.start) : s.end;
+    const p = Math.max(0, Math.min(1, (pos - s.start) / Math.max(until - s.start, 0.05)));
+    it.syls[k].style.setProperty("--p", (100 * p).toFixed(1) + "%");
+  });
+}
+
+/* ---------- the notes ---------- */
+
+function target(t) {
+  const n = S.notes.find(n => t >= n.start && t < n.end);
+  if (n) return n.pitch;
+  let best = null, gap = 0.35;
+  for (const m of S.notes) {
+    const d = Math.min(Math.abs(t - m.start), Math.abs(t - m.end));
+    if (d < gap) { gap = d; best = m.pitch; }
+  }
+  return best;
+}
+
+function drawLane(pos) {
+  const c = $("lane"), g = c.getContext("2d");
+  const dpr = window.devicePixelRatio || 1, W = c.clientWidth, H = c.clientHeight;
+  if (c.width !== Math.round(W * dpr) || c.height !== Math.round(H * dpr)) { c.width = Math.round(W * dpr); c.height = Math.round(H * dpr); }
+  g.setTransform(dpr, 0, 0, dpr, 0, 0);
+  g.clearRect(0, 0, W, H);
+  const span = PAST + FUTURE, px = (W * PAST) / span;
+  const x = t => px + ((t - pos) * W) / span;
+  const y = m => H - 22 - ((m - S.lo) / (S.hi - S.lo)) * (H - 40);
+  const h = Math.max(7, ((H - 40) / (S.hi - S.lo)) * 0.72);
+
+  g.strokeStyle = "rgba(239,230,218,0.05)";
+  g.lineWidth = 1;
+  for (let m = Math.ceil(S.lo); m <= S.hi; m++) { g.beginPath(); g.moveTo(0, y(m)); g.lineTo(W, y(m)); g.stroke(); }
+
+  g.font = "11px -apple-system, system-ui, sans-serif";
+  for (const n of S.notes) {
+    if (n.end < pos - PAST - 1 || n.start > pos + FUTURE + 1) continue;
+    const x0 = x(n.start), x1 = Math.max(x(n.end) - 3, x0 + 5), yy = y(n.pitch);
+    const now = pos >= n.start && pos < n.end, done = pos >= n.end;
+    g.fillStyle = now ? "#f2b25c" : done ? "rgba(242,178,92,0.32)" : "rgba(239,230,218,0.5)";
+    g.beginPath();
+    if (g.roundRect) g.roundRect(x0, yy - h / 2, x1 - x0, h, 4); else g.rect(x0, yy - h / 2, x1 - x0, h);
+    g.fill();
+    if (x1 - x0 > 12) { g.fillStyle = done ? "rgba(239,230,218,0.35)" : "rgba(239,230,218,0.75)"; g.fillText(n.text, x0 + 1, yy + h / 2 + 12); }
+  }
+
+  const trail = S.showTrail;
+  if (trail && trail.length) {
+    g.lineWidth = 3;
+    g.lineCap = "round";
+    for (let i = 1; i < trail.length; i++) {
+      const a = trail[i - 1], b = trail[i];
+      if (a.m === null || b.m === null || b.t - a.t > 0.12 || b.t < pos - PAST || a.t > pos) continue;
+      const want = target(b.t);
+      const fb = want === null ? b.m : b.m + 12 * Math.round((want - b.m) / 12);
+      const fa = want === null ? a.m : a.m + 12 * Math.round((want - a.m) / 12);
+      g.strokeStyle = want === null ? "rgba(239,230,218,0.6)" : Math.abs(fb - want) <= 0.5 ? "#8cc084" : "#e0a04d";
+      g.beginPath(); g.moveTo(x(a.t), y(fa)); g.lineTo(x(b.t), y(fb)); g.stroke();
+    }
+  }
+
+  g.strokeStyle = "#e0664d";
+  g.lineWidth = 2;
+  g.beginPath(); g.moveTo(px, 8); g.lineTo(px, H - 8); g.stroke();
+}
+
+/* ---------- listening to the singer ---------- */
+
+function yin(buf, rate) {
+  const n = buf.length >> 1, x = new Float32Array(n);
+  for (let i = 0; i < n; i++) x[i] = 0.5 * (buf[2 * i] + buf[2 * i + 1]);
+  const r = rate / 2, lo = Math.floor(r / 1000), hi = Math.min(Math.floor(r / 65), (n >> 1) - 1), w = n - hi;
+  const d = new Float32Array(hi + 2);
+  for (let tau = 1; tau <= hi + 1; tau++) {
+    let s = 0;
+    for (let i = 0; i < w; i++) { const e = x[i] - x[i + tau]; s += e * e; }
+    d[tau] = s;
+  }
+  let sum = 0;
+  for (let tau = 1; tau <= hi + 1; tau++) { sum += d[tau]; d[tau] = (d[tau] * tau) / (sum || 1); }
+  for (let tau = Math.max(lo, 2); tau <= hi; tau++) {
+    if (d[tau] < 0.15) {
+      while (tau + 1 <= hi && d[tau + 1] < d[tau]) tau++;
+      const a = d[tau - 1], b = d[tau], c = d[tau + 1], den = a - 2 * b + c;
+      return r / (tau + (den ? (a - c) / (2 * den) : 0));
+    }
+  }
+  return null;
+}
+
+function listen(pos) {
+  if (!S.analyser || !$("pitchOn").checked) return;
+  S.analyser.getFloatTimeDomainData(S.buf);
+  let e = 0;
+  for (let i = 0; i < S.buf.length; i++) e += S.buf[i] * S.buf[i];
+  const hz = Math.sqrt(e / S.buf.length) > 0.008 ? yin(S.buf, S.ctx.sampleRate) : null;
+  S.trail.push({ t: pos - S.inn - 0.02, m: hz ? 69 + 12 * Math.log2(hz / 440) : null });
+}
+
+/* ---------- playing and recording ---------- */
 
 async function audio() {
   if (!S.ctx) S.ctx = new AudioContext({ latencyHint: "interactive" });
   await S.ctx.resume();
   if (!S.guide) {
-    $("now").textContent = "Loading the guide…";
+    status("Loading the guide…");
     S.guide = await S.ctx.decodeAudioData(await (await fetch("/guide.wav")).arrayBuffer());
   }
 }
@@ -162,17 +337,21 @@ async function microphone() {
   const silent = S.ctx.createGain();
   silent.gain.value = 0;
   mic.connect(S.recorder).connect(silent).connect(S.ctx.destination);
+  S.analyser = S.ctx.createAnalyser();
+  S.analyser.fftSize = 2048;
+  S.buf = new Float32Array(S.analyser.fftSize);
+  mic.connect(S.analyser);
   S.recorder.port.onmessage = e => {
     if (S.mode === "recording") S.chunks.push(e.data);
     $("level").style.width = Math.min(100, 140 * e.data.peak) + "%";
   };
 }
 
-function start(buffers, recording) {
+function start(buffers, mode) {
   S.t0 = S.ctx.currentTime + 0.3;
   S.out = (S.ctx.outputLatency || 0) + (S.ctx.baseLatency || 0);
-  S.inn = recording ? (S.stream.getAudioTracks()[0].getSettings().latency || 0) : 0;
-  $("latency").textContent = `playback ${Math.round(S.out * 1000)} ms` + (recording ? `, mic ${Math.round(S.inn * 1000)} ms` : "");
+  S.inn = S.stream ? S.stream.getAudioTracks()[0].getSettings().latency || 0 : 0;
+  $("latency").textContent = `playback ${Math.round(S.out * 1000)} ms` + (S.stream ? `, mic ${Math.round(S.inn * 1000)} ms` : "");
   S.src = buffers.map(buffer => {
     const src = S.ctx.createBufferSource();
     src.buffer = buffer;
@@ -182,10 +361,13 @@ function start(buffers, recording) {
   });
   S.src[0].onended = () => { if (S.mode !== "idle") stop(); };
   S.chunks = [];
-  S.mode = recording ? "recording" : "playing";
+  S.trail = [];
+  S.showTrail = mode === "listening" ? S.takeTrail : S.trail;
+  S.mode = mode;
   $("stop").disabled = false;
   $("record").disabled = $("rehearse").disabled = true;
   $("review").hidden = true;
+  status(mode === "recording" ? "Recording. Space or Stop to finish." : mode === "listening" ? "Your take, with the guide." : "Rehearsing.");
   requestAnimationFrame(tick);
 }
 
@@ -197,7 +379,8 @@ function stop() {
   $("stop").disabled = true;
   $("record").disabled = $("rehearse").disabled = false;
   if (was === "recording") finishTake();
-  else idle("Rehearse again, or record a take.");
+  else status("Rehearse again, or record a take.");
+  resting();
 }
 
 function finishTake() {
@@ -205,7 +388,8 @@ function finishTake() {
   const nudge = (parseFloat($("nudge").value) || 0) / 1000;
   // the guide's first sample reached your ears S.out after t0; your voice reached the recorder S.inn after that
   const first = Math.round((S.t0 + S.out + S.inn + nudge) * rate);
-  const last = S.chunks.length ? S.chunks[S.chunks.length - 1].frame + S.chunks[S.chunks.length - 1].samples.length : first;
+  const tail = S.chunks[S.chunks.length - 1];
+  const last = tail ? tail.frame + tail.samples.length : first;
   const samples = new Float32Array(Math.max(last - first, 0));
   for (const c of S.chunks) {
     const at = c.frame - first;
@@ -213,42 +397,27 @@ function finishTake() {
   }
   S.chunks = [];
   S.take = { samples, rate };
-  idle(samples.length / rate > 5 ? "Got it. Listen back, then keep it or let it go." : "That was short. Record again?");
-  $("review").hidden = samples.length / rate <= 5;
+  S.takeTrail = S.trail.slice();
+  const long = samples.length / rate > 5;
+  status(long ? "Got it. Listen back, then keep it or let it go." : "That was short. Record again?");
+  $("review").hidden = !long;
 }
 
 function tick() {
   if (S.mode === "idle") return;
-  draw(S.ctx.currentTime - S.t0 - S.out);
+  const pos = S.ctx.currentTime - S.t0 - S.out;
+  if (S.mode !== "listening") listen(pos);
+  show(pos);
   requestAnimationFrame(tick);
 }
 
-function draw(pos) {
-  const lines = S.lyrics.lines;
+function show(pos) {
   $("progress").style.width = Math.max(0, Math.min(100, (100 * pos) / S.lyrics.duration)) + "%";
-  const i = lines.findIndex(l => pos < l.end + 0.25);
-  const section = S.lyrics.sections.find(s => pos >= s.start && pos < s.end);
-  $("section").textContent = section ? NAMES[section.name] || section.name : "";
-  if (i < 0) {
-    if (S.shownLine !== -1) { $("now").textContent = "That's the song."; $("next").textContent = ""; S.shownLine = -1; }
-    return;
-  }
-  const line = lines[i];
-  const wait = line.syllables[0].start - pos;
-  if (wait > 1.5) {  // a countdown through the intro and the turns
-    $("now").innerHTML = `<span class="count">${Math.ceil(wait)}</span>`;
-    $("next").textContent = text(line);
-    S.shownLine = -3;
-    return;
-  }
-  if (S.shownLine !== i) {
-    $("now").innerHTML = line.syllables
-      .map((s, k) => `<span class="syl" data-k="${k}">${s.text}</span>${s.word_end ? " " : ""}`).join("");
-    $("next").textContent = lines[i + 1] ? text(lines[i + 1]) : "";
-    S.shownLine = i;
-  }
-  $("now").querySelectorAll(".syl").forEach(el => el.classList.toggle("sung", pos >= line.syllables[+el.dataset.k].start));
+  drawWords(pos);
+  drawLane(pos);
 }
+
+/* ---------- takes ---------- */
 
 function wav(samples, rate) {
   const buf = new ArrayBuffer(44 + samples.length * 2), v = new DataView(buf);
@@ -277,28 +446,33 @@ async function post(url, body, type = "application/json") {
   return data;
 }
 
-$("rehearse").onclick = async () => { await audio(); start([S.guide], false); };
+$("rehearse").onclick = async () => {
+  await audio();
+  if ($("pitchOn").checked) { try { await microphone(); } catch (e) { status(`<span class="warn">No microphone (${e.message}); rehearsing without your pitch.</span>`); } }
+  start([S.guide], "rehearsing");
+};
 $("record").onclick = async () => {
-  try { await audio(); await microphone(); } catch (e) { $("now").innerHTML = `<span class="warn">No microphone: ${e.message}</span>`; return; }
-  start([S.guide], true);
+  try { await audio(); await microphone(); } catch (e) { status(`<span class="warn">No microphone: ${e.message}</span>`); return; }
+  start([S.guide], "recording");
 };
 $("stop").onclick = stop;
 document.addEventListener("keydown", e => { if (e.code === "Space" && S.mode !== "idle") { e.preventDefault(); stop(); } });
+window.addEventListener("resize", () => { if (S.mode === "idle" && S.lyrics) resting(); });
 
 $("listen").onclick = () => {
   const b = S.ctx.createBuffer(1, S.take.samples.length, S.take.rate);
   b.copyToChannel(S.take.samples, 0);
-  start([S.guide, b], false);
+  start([S.guide, b], "listening");
 };
-$("discard").onclick = () => { S.take = null; $("review").hidden = true; idle("Take discarded. Ready when you are."); };
+$("discard").onclick = () => { S.take = null; $("review").hidden = true; status("Take discarded. Ready when you are."); };
 $("keep").onclick = async () => {
   $("keep").disabled = true;
   try {
     const { path } = await post("/take", wav(S.take.samples, S.take.rate), "audio/wav");
     addTake(path);
     $("review").hidden = true;
-    idle("Kept. Another take, or make your phrasing.");
-  } catch (e) { $("now").innerHTML = `<span class="warn">${e.message}</span>`; }
+    status("Kept. Another take, or make your phrasing.");
+  } catch (e) { status(`<span class="warn">${e.message}</span>`); }
   $("keep").disabled = false;
 };
 $("analyze").onclick = async () => {

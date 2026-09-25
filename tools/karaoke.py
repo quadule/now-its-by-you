@@ -34,19 +34,21 @@ ROOT = Path(__file__).parent.parent
 PAGE = Path(__file__).with_suffix(".html")
 
 
-def lyrics(score: dict, title: str) -> dict:
-    """The guide's words, line by line, with every syllable's time."""
+def lyrics(score: dict, title: str, tempo: float) -> dict:
+    """The guide's words, line by line, with every syllable's time and pitch."""
     notes = sorted((n for n in score["notes"] if n["part"] == "voice"), key=lambda n: n["start"])
     lines, current, left = [], [], 0
     for n in notes:
         left = left or n["word_len"]  # syllables still to come in this word
         left -= 1
-        current.append({"text": n["syllable"], "start": n["start"], "end": n["start"] + n["dur"], "word_end": left == 0})
+        current.append({"text": n["syllable"], "start": n["start"], "end": n["start"] + n["dur"], "pitch": n["pitch"],
+                        "word_end": left == 0})
         if n["line_end"]:
             lines.append((n["section"], current))
             current = []
     return {
         "title": title,
+        "tempo": tempo,
         "duration": score["duration"],
         "sections": [{"name": s, "start": a, "end": b} for s, a, b in score["sections"]],
         "lines": [{"section": section, "start": line[0]["start"], "end": line[-1]["end"], "syllables": line}
@@ -91,7 +93,7 @@ class Karaoke(BaseHTTPRequestHandler):
             self.send_json([str(f.relative_to(ROOT)) for f in kept])
         elif self.path == "/lyrics.json":
             score = json.loads(self.guide()[1].read_text())
-            self.send_json(lyrics(score, self.genome.title))
+            self.send_json(lyrics(score, self.genome.title, choose_params(self.genome).tempo))
         elif self.path.startswith("/renders/"):
             name = Path(self.path).name  # never a path out of renders/
             f = ROOT / "renders" / name
