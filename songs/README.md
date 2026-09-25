@@ -27,6 +27,7 @@ own `lexicon`).
 | H | Now It's by You | the best of: A's question, B's answer, vehicle verses; 4/4 major pentatonic | | |
 | I | Something Going Round | the creature, abstract: lives in the air, dies on the ground; one host per verse; 4/4 major pentatonic | | |
 | J | Goes Like This | sound outlasts words: the refrain ends by singing its own tune on "la"; common-metre verses; 4/4 major pentatonic | | |
+| L | Sticky Burr | stickiness, obliquely: the song as a burdock burr ("you never picked it, it picked you"); 6/8 major pentatonic, a playground-chant hook | | |
 
 A to C were written by Claude; D to G by Fable lyricists, each sent down a
 stranger path. H onwards follow "Where next" below.
@@ -60,6 +61,11 @@ stranger path. H onwards follow "Where next" below.
   further without breaking a plot.
 
 ## Line bank
+
+**Stickiness**
+- Sticky burr, sticky burr, stuck on you; / you never picked it, it picked you (L)
+- Pick it off, it's stuck to your hand; / it drops, and it grows where it lands (L)
+- She never knew. Beside her door / a weed came up, as once before (L)
 
 **Who made it**
 - Who made this song? Nobody knows. / It came through the window and out it goes. (A)
@@ -125,3 +131,4 @@ stranger path. H onwards follow "Where next" below.
 - I asked a far stranger for words, and they came (E)
 - I'll be a little bit wrong. That's the way. (D)
 - Only the ring of it, nothing of you (E)
+- One caught a coat with no one in / that wore it well through thick and thin (L)

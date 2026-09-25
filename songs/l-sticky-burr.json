@@ -1,0 +1,85 @@
+{
+  "title": "Sticky Burr",
+  "sketch": "L: the burr. The song is a burdock burr, never called anything else: it hooks whoever brushes past, rides along uninvited, drops somewhere else and grows. Nobody plants it and nobody chooses it; you never picked it, it picked you. The refrain is a playground chant on the sol-mi cell; the verses follow one burr at a time (a dog, a girl's hair, her brother's back, a hat forty years in a hall, a coat with no one in it, a stranger's sock on a train) in lilting 6/8 iambic couplets, major pentatonic over I, IV, V and vi.",
+  "meter": {"signature": "6/8", "unit": 8, "bar": 6, "beat": 3, "foot": 3},
+
+  "phrases": {
+    "v1": {"tune": "5, | 1 - 2 3 - 2 | 3 - 5 3 - -", "chords": "I | vi"},
+    "v2": {"tune": "5, | 1 - 2 3 - 2 | 1 - 2 1 - -", "chords": "I | V I"},
+    "v3": {"tune": "3 | 5 - 5 6 - 5 | 3 - 5 6 - -",  "chords": "I | IV"},
+    "v4": {"tune": "5 | 6 - 5 3 - 2 | 3 - 2 1 - -",  "chords": "IV | V I"},
+
+    "r1": {"tune": "| 5 5 3 5 5 3 | 6 - 5 3 - -",              "chords": "I | IV I"},
+    "r2": {"tune": "3 | 5 - 3 5 - 3 | 1 - - 3 - - | 5 - - - - -", "chords": "I | I | V"},
+    "r3": {"tune": "| 6 - 5 6 - 5 | 3 2 1 2 - -",              "chords": "IV | V"},
+    "r4": {"tune": "2 | 1 1 2 5 3 2 | 1 - - - - -",            "chords": "I V | I"}
+  },
+
+  "sections": {
+    "intro":   {"phrases": ["r1", "r4"]},
+    "verse":   {"phrases": ["v1", "v2", "v3", "v4"], "lyrics": "verse"},
+    "refrain": {"phrases": ["r1", "r2", "r3", "r4"], "lyrics": "refrain"},
+    "break":   {"phrases": ["v1", "v2", "v3", "v4"]},
+    "outro":   {"phrases": ["r1"]}
+  },
+  "form": ["intro?", "verse", "refrain", "verse*", "refrain", "break?", "verse*", "refrain", "outro?"],
+
+  "refrain": [
+    "Stick-y burr, stick-y burr, stuck on you;",
+    "you nev-er picked it, it picked you.",
+    "Pick it off, it's stuck to your hand;",
+    "it drops, and it grows where it lands."
+  ],
+
+  "verse_template": {
+    "lines": [
+      "[one burr, or the plant it came from: where it came up, or who or what it caught: fur, hair, wool, a sleeve, a hat, a sock, a coat with no one in it]",
+      "[how it rode along, unnoticed and uninvited], rhyming with line 1",
+      "[where it dropped, or how it was picked at and passed on]",
+      "[what came of that: it grew, it waited, it rode again], rhyming with line 3"
+    ],
+    "rhyme": "AABB",
+    "stress": "eight syllables, iambic: da DUM da DUM da DUM da DUM (a WEED came UP be-SIDE the GATE); the first syllable is a weak pickup, the last is stressed and held",
+    "voice": "third person, plain nouns and plain verbs; the burr is 'it' or 'one' (one of many from the same plant), its carriers are 'he', 'she', 'they', a dog, a coat; nobody in a verse is 'I'",
+    "image": "One image system only: the burdock burr and what it touches. It hooks onto whatever brushes past (fur, hair, wool, coats, sleeves, socks, hats), rides along until it drops, and grows where it lands; nobody plants it, nobody chooses it, and whoever carries it usually never knows. Stay with hooks, wool, fur, hair, gates, fields, roads, hats, coats, doors, wind, seasons. Never say song, tune, voice, hum, sing, music, machine or program; the listener works it out. Nothing gross: no ticks, no lice, no dirt, no wounds.",
+    "note": "One burr per verse, in the order they travelled, so the lineage branches like the plant: one rides a dog and ends in a girl's hair; one goes down a brother's back as a joke and falls by a step and grows; one waits forty years on a hat that no one wore and rides again; one hangs all winter on a coat with no one in it, a scarecrow never named, until the wind shakes it loose; one takes a train in a stranger's sock. Keep one carrier who plays the joke on someone else, one that waits in the dark for years and rides again, one carrier that is hollow (a coat with no one in it), and end with a stranger a long way off who never knew: by her door, a weed comes up as once before, so the last verse returns to where the first began. The refrain is never quoted or explained in a verse."
+  },
+
+  "hooks": [
+    {"phrase": "r1", "notes": [0, 8], "why": "the playground chant: sol sol mi, sol sol mi, la sol mi on 'sticky burr, sticky burr, stuck on you'"},
+    {"phrase": "r2", "notes": [5, 7], "why": "'it picked you': three hammered beats rising do mi sol, the last held a whole bar over V"}
+  ],
+
+  "seed_verses": [
+    ["A weed came up be-side the gate",
+     "that no one asked for, no one ate;",
+     "it flow-ered pur-ple, fed the bees",
+     "and turned to hooks be-fore the freeze."],
+    ["A dog brushed past; it took a hold",
+     "and rode him home, a mile, all told.",
+     "A girl who stroked him found it there;",
+     "it left the dog and took her hair."],
+    ["She put it down her bro-ther's back;",
+     "he wore it home a-long the track",
+     "and nev-er knew. It fell, and grew,",
+     "and made a hun-dred more, all new."],
+    ["One caught a hat that no one wore,",
+     "that hung for for-ty years and more,",
+     "then rode a grand-son's head to town",
+     "and fell off there, and set-tled down."],
+    ["One caught a coat with no one in",
+     "that wore it well through thick and thin.",
+     "In March the wind blew down the sleeve",
+     "and shook it loose; it took its leave."],
+    ["It found a stran-ger's wool-ly sock",
+     "and caught the train at six o'-clock.",
+     "She nev-er knew. Be-side her door",
+     "a weed came up, as once be-fore."]
+  ],
+
+  "seed_params": {
+    "tonic": 62, "mode": "ionian", "tempo": 72, "seed": 1,
+    "accomp": "0 . 2 3 4 3",
+    "form": ["intro", "verse", "refrain", "verse", "verse", "refrain", "verse", "verse", "refrain", "verse", "refrain", "outro"]
+  }
+}
