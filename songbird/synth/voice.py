@@ -315,8 +315,9 @@ def _lowpassed_noise(rng: np.random.Generator, n: int, cutoff: float, rate: floa
     return x / (np.std(x) + 1e-12)
 
 
-def pitch_track(notes: list[Note], n_blocks: int, sr: int, voice: VoiceParams, rng) -> np.ndarray:
-    """f0 in Hz per block: glides between notes, a scoop into each phrase, vibrato, drift and jitter."""
+def pitch_track(notes: list[Note], n_blocks: int, sr: int, voice: VoiceParams, rng, sounding=None) -> np.ndarray:
+    """f0 in Hz per block: glides between notes, a scoop into each phrase, vibrato, drift and jitter.
+    sounding: when each note's vowel ends, so a phrasing's bends and falls happen while it can be heard."""
     tb = (np.arange(n_blocks) + 0.5) * BLOCK / sr
     target = np.full(n_blocks, notes[0].pitch + voice.shift, dtype=float)
     vib_env = np.zeros(n_blocks)
@@ -333,8 +334,9 @@ def pitch_track(notes: list[Note], n_blocks: int, sr: int, voice: VoiceParams, r
             t_on = min(t_on, prev.start + prev.dur - breath + 0.01)
         after = tb >= t_on
         if phrase_start:
-            # start a little under the note and rise into it (as far as the phrasing says, if it does)
-            scoop = -g.scoop / 100.0 if g is not None and g.scoop else voice.scoop
+            # start a little under the note and rise into it; a phrasing's scoop is added below instead,
+            # so that it always means how far off the note the vowel begins
+            scoop = 0.0 if g is not None and g.scoop else voice.scoop
             rise = np.clip((tb - note.start + 0.12) / 0.2, 0.0, 1.0)
             target[after] = p - scoop * (1.0 - 0.5 * (1 - np.cos(np.pi * rise[after])))
         else:
@@ -355,13 +357,14 @@ def pitch_track(notes: list[Note], n_blocks: int, sr: int, voice: VoiceParams, r
             v *= g.vibrato / max(voice.vibrato_depth, 1.0)
         vib_env[inside] = v[inside]
         if g is not None:
-            dur = end - note.start
-            x = np.clip((tb - note.start) / max(dur, 1e-3), 0.0, 1.0)
+            heard = min(sounding[k], end) if sounding is not None else end  # the vowel's own end
+            dur = max(heard - note.start, 0.05)
+            x = np.clip((tb - note.start) / dur, 0.0, 1.0)
             approach = min(0.12, 0.3 * dur)
             letgo = min(0.12, 0.35 * dur)
             into = np.clip((tb - note.start) / approach, 0.0, 1.0)
-            out = np.clip((tb - (end - letgo)) / letgo, 0.0, 1.0)
-            shape = (0.0 if phrase_start else g.scoop * 0.5 * (1 + np.cos(np.pi * into)))  # comes in from off the note
+            out = np.clip((tb - (heard - letgo)) / letgo, 0.0, 1.0)
+            shape = g.scoop * 0.5 * (1 + np.cos(np.pi * into))  # the vowel begins off the note and settles onto it
             shape = shape + g.bend * np.clip((x - 0.3) / 0.6, 0.0, 1.0)  # drifts while held
             shape = shape + g.fall * 0.5 * (1 - np.cos(np.pi * out))  # falls or lifts letting go
             gestures[inside] += np.broadcast_to(shape, tb.shape)[inside]
@@ -388,7 +391,7 @@ def sing(notes: list[Note], sr: int, voice: VoiceParams, seed: int = 0, lexicon:
     n_blocks = int(np.ceil(duration * sr / BLOCK))
     n = n_blocks * BLOCK
     tracks = control_tracks(segs, n_blocks, sr, voice)
-    f0_blocks = pitch_track(notes, n_blocks, sr, voice, rng)
+    f0_blocks = pitch_track(notes, n_blocks, sr, voice, rng, [s.t1 for s in segs if s.role == "vowel"])
 
     # Singers raise the first formant to stay above a high fundamental.
     formants = tracks["formants"]

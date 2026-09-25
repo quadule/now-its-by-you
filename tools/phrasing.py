@@ -199,41 +199,140 @@ def align_sung_line(take, f0, line_notes, line_knots, template, lag: int):
     return [(to_take(v0), to_take(v1), to_take(c1)) for _, v0, v1, c1, _, _ in line_knots]
 
 
-def measure_sung(notes, knots, found, f0, band, active, lag: int, key: int, tempo: float):
-    """One gesture per sung note, and each note's distance from the tune (cents)."""
-    levels = np.array([np.median(band[v0 : max(v1, v0 + 1)]) for v0, v1, _ in found])
+def note_spans(knots, active, found=None):
+    """(vowel start, vowel end, release) in frames for every note: where the
+    alignment found them in a take, or where the schedule put them in the
+    template. A note is held until the voice stops or the next vowel starts."""
+    spans = found or [(int(round(v0 / S.FRAME)), int(round(v1 / S.FRAME)), 0) for _, v0, v1, _, _, _ in knots]
+    out = []
+    for k, (v0, v1, _) in enumerate(spans):
+        nxt = spans[k + 1][0] if k + 1 < len(spans) else v1 + 40
+        sounding = np.flatnonzero(active[v0 : max(nxt, v0 + 1)])
+        out.append((v0, max(v1, v0 + 1), v0 + (sounding[-1] + 1 if len(sounding) else 1)))
+    return out
+
+
+def contour(f0, a: int, b: int, target: float) -> np.ndarray:
+    """Cents from the target note, frame by frame; NaN where unvoiced or where
+    the tracker slipped an octave."""
+    seg = f0[a:b]
+    c = np.where(seg > 0, 1200 * np.log2(np.maximum(seg, 1.0) / 440.0) + 6900 - 100 * target, np.nan)
+    if np.isfinite(c).any():
+        c[np.abs(c - np.nanmedian(c)) > 700] = np.nan
+    return c
+
+
+def fit_edge(c, c_t, shape: np.ndarray, at_end: bool, reach: int = 5) -> float | None:
+    """How much of a gesture shape (a scoop settling at a vowel's start, or a
+    fall at its end) best explains how the take's pitch differs from the
+    template's there, allowing either to sit up to reach frames (25 ms) off
+    the other. Near a note's edges the machine is still gliding from or to its
+    neighbours at several cents a millisecond, so without the shift a slip of
+    a few milliseconds would pass for a gesture. None if too little is voiced."""
+    w = len(shape)
+    mine = c[-w:] if at_end else c[:w]
+    best = None
+    for shift in range(-reach, reach + 1):
+        lo = len(c_t) - reach - w + shift if at_end else reach + shift
+        theirs = c_t[lo : lo + w]
+        if len(theirs) != w:
+            continue
+        ok = np.isfinite(mine) & np.isfinite(theirs)
+        if ok.sum() < 4 or not np.any(shape[ok]):
+            continue
+        d, x = mine[ok] - theirs[ok], shape[ok]
+        size = float(np.dot(d, x) / np.dot(x, x))
+        err = float(np.sum((d - size * x) ** 2))
+        if best is None or err < best[0]:
+            best = (err, size)
+    return None if best is None else best[1]
+
+
+def shapes(c, c_t, dur: float) -> dict:
+    """The pitch gestures by which one note's contour (cents, about its middle)
+    differs from the template singer's: the same shapes the singer draws."""
+    c = c - np.nanmedian(c)
+    c_t = c_t - np.nanmedian(c_t)
+    approach, letgo = min(0.12, 0.3 * dur), min(0.12, 0.35 * dur)
+    w = max(int(round(max(approach, letgo) / S.FRAME)), 4)
+    t = np.arange(w) * S.FRAME
+    settle = 0.5 * (1 + np.cos(np.pi * np.clip(t / approach, 0.0, 1.0)))
+    go = 0.5 * (1 - np.cos(np.pi * np.clip((t - (t[-1] - letgo)) / letgo, 0.0, 1.0)))
+    inner = c_t[5:-5] if len(c_t) > 10 else c_t
+
+    def q(r, a, b):
+        part = r[int(a * len(r)) : max(int(b * len(r)), int(a * len(r)) + 1)]
+        return float(np.nanmedian(part)) if np.isfinite(part).any() else 0.0
+
+    out = {"bend": (q(c, 0.7, 0.9) - q(c, 0.2, 0.4)) - (q(inner, 0.7, 0.9) - q(inner, 0.2, 0.4))}
+    for name, edge, at_end in (("scoop", settle, False), ("fall", go, True)):
+        size = fit_edge(c, c_t, edge, at_end) if len(c) >= w else None
+        if size is not None:
+            out[name] = size
+    return out
+
+
+def wobble(c: np.ndarray) -> float | None:
+    """Depth (cents) of the 4 to 8 Hz wobble in the second half of a held note,
+    where vibrato lives; None if the note is too short to tell."""
+    r = c[len(c) // 2 :]
+    r = r[np.isfinite(r)]
+    if len(r) * S.FRAME < 0.25:
+        return None
+    r = r - np.polyval(np.polyfit(np.arange(len(r)), r, 1), np.arange(len(r)))
+    spectrum = np.fft.rfft(r * np.hanning(len(r)), 256)
+    freqs = np.fft.rfftfreq(256, S.FRAME)
+    band = (freqs >= 4.0) & (freqs <= 8.0)
+    power = 2 * np.sum(np.abs(spectrum[band]) ** 2) / np.sum(np.hanning(len(r)) ** 2) / 256
+    return float(np.sqrt(2 * power))
+
+
+def measure_sung(notes, knots, found, take, template, lag: int, key: int, tempo: float):
+    """One gesture per sung note, and each note's distance from the tune (cents).
+
+    Everything is measured twice, on the take and on the template singer
+    singing the same notes in the same key, and a gesture is the difference:
+    what the person did that the machine wouldn't have done anyway (its glides
+    between notes, its louder high notes, its breath at line ends)."""
+    f0, band, active = take
+    f0_t, band_t, active_t = template
+    spans = note_spans(knots, active, found)
+    spans_t = note_spans(knots, active_t)
+    level = np.array([np.median(band[v0:v1]) for v0, v1, _ in spans])
+    level_t = np.array([np.median(band_t[v0:v1]) for v0, v1, _ in spans_t])
+    level, level_t = level - np.median(level), level_t - np.median(level_t)
+
+    def swell(b, v0, v1):
+        n = max(v1 - v0, 4)
+        return float(np.mean(b[v0 + 3 * n // 4 : v0 + n]) - np.mean(b[v0 : v0 + n // 4 + 1]))
+
     gestures, off = [], []
-    for k, (note, (_, T_v0, T_v1, _, _, _), (v0, v1, c1)) in enumerate(zip(notes, knots, found)):
+    for k, (note, (_, T_v0, *_r), (v0, v1, release), (t0, t1, release_t)) in enumerate(zip(notes, knots, spans, spans_t)):
         g = {}
         late = (v0 * S.FRAME - (T_v0 + lag * S.FRAME)) * tempo / 60.0
         # a quarter of a beat off is past anyone's phrasing: the alignment slipped, so don't count it
         g["early"] = -SUNG["timing"] * late if abs(late) <= 0.25 else float("nan")
-        # held until the voice stops, or the next note starts
-        nxt = found[k + 1][0] if k + 1 < len(found) else c1 + 40
-        sounding = np.flatnonzero(active[v0 : max(nxt, v0 + 1)])
-        release = v0 + (sounding[-1] + 1 if len(sounding) else 1)
-        g["hold"] = float(np.clip((release - v0) * S.FRAME / max(note.dur, 1e-3), 0.6, 1.0))
-        g["level"] = SUNG["level"] * (levels[k] - np.median(levels))
-        n = max(v1 - v0, 4)
-        g["swell"] = SUNG["swell"] * (np.mean(band[v0 + 3 * n // 4 : v0 + n]) - np.mean(band[v0 : v0 + n // 4 + 1]))
-        voiced = np.flatnonzero(f0[v0:release] > 0)
-        if len(voiced) >= 6:
-            c = 1200 * np.log2(f0[v0:release][voiced] / 440.0) + 6900 - 100 * (note.pitch + key)
-            keep = np.abs(c - np.median(c)) < 700  # a tracker's octave slips are not gestures
-            c, where = c[keep], voiced[keep]
-            middle = float(np.median(c))
+        # detached: a gap of silence before the next note, where the machine would have sung on
+        nxt = spans[k + 1][0] if k + 1 < len(spans) else None
+        if nxt is not None and (nxt - release) * S.FRAME >= 0.04 and not note.line_end:
+            nominal = T_v0 / S.FRAME + lag
+            g["hold"] = float(np.clip((release - nominal) / max(release_t - T_v0 / S.FRAME, 1.0), 0.6, 1.0))
+        elif note.line_end:
+            g["hold"] = float(np.clip((release - (T_v0 / S.FRAME + lag)) / max(release_t - T_v0 / S.FRAME, 1.0), 0.6, 1.0))
+        g["level"] = SUNG["level"] * (level[k] - level_t[k])
+        g["swell"] = SUNG["swell"] * (swell(band, v0, v1) - swell(band_t, t0, t1))
+        c = contour(f0, v0, v1, note.pitch + key)  # the vowel only: its consonants belong to their neighbours
+        if np.isfinite(c).sum() >= 6:
+            middle = float(np.nanmedian(c))
             off.append(middle)
-            if abs(middle) <= WRONG_NOTE and len(c) >= 6:
-                r = c - middle
-                q = lambda a, b: float(np.median(r[int(a * len(r)) : max(int(b * len(r)), int(a * len(r)) + 1)]))  # noqa: E731
-                g["scoop"] = SUNG["scoop"] * float(np.mean(r[:3]))
-                g["bend"] = SUNG["bend"] * (q(0.7, 0.9) - q(0.2, 0.4))
-                g["fall"] = SUNG["fall"] * (float(np.mean(r[-3:])) - q(0.6, 0.8))
-                if len(r) * S.FRAME >= 0.35:
-                    smooth = np.convolve(r, np.ones(30) / 30, mode="same")
-                    wobble = (r - smooth)[len(r) // 5 : -len(r) // 5 or None]
-                    depth = float(np.sqrt(2) * np.std(wobble)) if len(wobble) > 20 else 0.0
-                    g["vibrato"] = SUNG["vibrato"] * depth if depth >= 8.0 else 0.0
+            c_t = contour(f0_t, max(t0 - 5, 0), t1 + 5, note.pitch + key)  # a little either side, to slide against
+            if abs(middle) <= WRONG_NOTE and np.isfinite(c_t).sum() >= 6:
+                for name, size in shapes(c, c_t, (t1 - t0) * S.FRAME).items():
+                    g[name] = SUNG[name] * size
+                depth, depth_t = wobble(c), wobble(c_t[5:-5])
+                if depth is not None and depth_t is not None:  # beyond the machine's own settling wobble
+                    extra = float(np.sqrt(max(depth**2 - depth_t**2, 0.0)))
+                    g["vibrato"] = SUNG["vibrato"] * extra if extra >= 8.0 else 0.0
         gestures.append(P.Gesture(**{k2: float(v) for k2, v in g.items()}))
     return gestures, off
 
@@ -267,11 +366,12 @@ def sung_phrasing(genome_path: Path, genome, takes: list[str]):
         if key not in templates:  # sing the template where the take was sung, so their spectra compare
             singer = replace(flat, shift=key, tract=1.0 if key <= -6 else 1.12)
             y_t = V.sing(notes, S.SR, singer, 0, genome.lexicon)
-            templates[key] = (y_t, analyze_take(y_t)[0])
+            templates[key] = (y_t, analyze_take(y_t))
+        y_t, analysis_t = templates[key]
         found = []
         for line in lines:
-            found += align_sung_line(take, f0, [notes[k] for k in line], [knots[k] for k in line], templates[key], lag)
-        gestures, off = measure_sung(notes, knots, found, f0, band, active, lag, key, tempo)
+            found += align_sung_line(take, f0, [notes[k] for k in line], [knots[k] for k in line], (y_t, analysis_t[0]), lag)
+        gestures, off = measure_sung(notes, knots, found, (f0, band, active), analysis_t, lag, key, tempo)
         for note, g in zip(notes, gestures):
             seen[(note.phrase, index_in_phrase(notes, note))].append(g)
         portrait.append((path, lag * S.FRAME, key, gestures, off))
@@ -287,25 +387,42 @@ def index_in_phrase(notes, note) -> int:
     return i - j
 
 
+def way(values, down: str, up: str) -> str:
+    """Which way most of some gestures go, as the end of a sentence."""
+    if not len(values):
+        return "."
+    below = values[values < 0]
+    above = values[values > 0]
+    if len(below) >= 2 * len(above):
+        return f", mostly {down} (typically {np.median(below):+.0f} cents)."
+    if len(above) >= 2 * len(below):
+        return f", mostly {up} (typically {np.median(above):+.0f} cents)."
+    return f", both ways ({np.median(below):+.0f} and {np.median(above):+.0f} cents)."
+
+
 def describe(portrait, tempo: float) -> str:
     """A few plain sentences about how someone sang."""
     out = []
     for path, lag, key, gestures, off in portrait:
         ms = 60000.0 / tempo
         early = np.array([g.early for g in gestures if g.early == g.early]) * ms
-        scoops = np.array([g.scoop for g in gestures if g.scoop])
-        falls = np.array([g.fall for g in gestures if g.fall])
+        scoops = np.array([g.scoop for g in gestures if abs(g.scoop) >= 20])
+        falls = np.array([g.fall for g in gestures if abs(g.fall) >= 20])
         vib = [g.vibrato for g in gestures if g.vibrato >= 0]
         where = "lined up with the guide" if lag == 0 else f"{lag:+.2f} s against the guide"
         pitch = {0: "in the guide's key", 12: "an octave up", -12: "an octave down"}.get(key, f"{key:+d} semitones from the guide")
-        out.append(
-            f"{Path(path).name}: {where}, {pitch}. "
-            f"You land {abs(np.median(early)):.0f} ms {'behind' if np.median(early) < 0 else 'ahead of'} the beat on average "
-            f"(spread {np.std(early):.0f} ms); {len(scoops)} of {len(gestures)} notes come in from off the note "
-            f"(median {np.median(scoops) if len(scoops) else 0:+.0f} cents); falls median {np.median(falls) if len(falls) else 0:+.0f} cents; "
-            f"vibrato on {sum(v > 0 for v in vib)} of {len(vib)} long notes; "
-            f"{sum(abs(o) > WRONG_NOTE for o in off)} of {len(off)} notes more than {WRONG_NOTE:.0f} cents off the tune."
-        )
+        lean = np.median(early) if len(early) else 0.0
+        sentences = [
+            f"{Path(path).name}: {where}, {pitch}.",
+            f"You sit {abs(lean):.0f} ms {'behind' if lean < 0 else 'ahead of'} the beat on average, give or take {np.std(early) if len(early) else 0:.0f} ms.",
+            f"You slide into {len(scoops)} of {len(gestures)} notes by 20 cents or more{way(scoops, 'from below', 'from above')}",
+            f"You bend off the end of {len(falls)} notes{way(falls, 'down', 'up')}",
+            f"Vibrato on {sum(v > 0 for v in vib)} of {len(vib)} long notes"
+            + (f" (about {np.median([v for v in vib if v > 0]):.0f} cents deep)." if any(v > 0 for v in vib) else "."),
+            f"{sum(abs(o) > WRONG_NOTE for o in off)} of {len(off)} notes were more than {WRONG_NOTE:.0f} cents from the tune"
+            " (fine: their pitch gestures are left out).",
+        ]
+        out.append(" ".join(sentences))
     return "\n".join(out)
 
 
