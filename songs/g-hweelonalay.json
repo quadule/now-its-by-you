@@ -1,0 +1,94 @@
+{
+  "title": "Hweelonalay",
+  "sketch": "G: a refrain in no language. The refrain is made only of the noises a mouth makes when it has no words (a whistle, a lull, a call, a hum), so it belongs to every border equally and can never be translated or owned. The verses are charms: rules for carrying the song, and every one ends by setting the words, which perish, against the sound, which stays. Chanted 4/4 in phrygian.",
+  "meter": {"signature": "4/4", "unit": 8, "bar": 8, "beat": 2, "foot": 4},
+
+  "phrases": {
+    "v1": {"tune": "| 1 - 1 2 3 - 3 2 | 1 - 7, 1 2 - - -",     "chords": "i | i II"},
+    "v2": {"tune": "| 3 - 2 1 7, - 1 2 | 1 - - - - - . .",     "chords": "VI | i"},
+    "v3": {"tune": "| 3 - 4 5 6 - 6 5 | 4 - 3 4 5 - - -",      "chords": "III | iv III"},
+    "v4": {"tune": "| 4 - 3 2 1 - 7, 2 | 1 - - - - - . .",     "chords": "II | i"},
+
+    "r1": {"tune": "5 | 1' - - 2' 1' - 7 - | 6 - 5 - 6 - - -",   "chords": "i | iv"},
+    "r2": {"tune": "5 | 6 - - 5 4 - 3 - | 2 - 1 - 2 - - -",      "chords": "VI | II"},
+    "r3": {"tune": "5 | 1' - - 2' 3' - 2' 1' | 7 - 1' - 2' - - -", "chords": "i | III II"},
+    "r4": {"tune": "| 3' - 2' 1' 7 - 6 5 | 6 - 4 2 1 - - -",     "chords": "III | II i"}
+  },
+
+  "sections": {
+    "intro":   {"phrases": ["r3", "r4"]},
+    "refrain": {"phrases": ["r1", "r2", "r3", "r4"], "lyrics": "refrain"},
+    "verse":   {"phrases": ["v1", "v2", "v3", "v4"], "lyrics": "verse"},
+    "break":   {"phrases": ["v1", "v2", "v3", "v4"]},
+    "outro":   {"phrases": ["r4"]}
+  },
+  "form": ["intro?", "refrain", "verse", "refrain", "verse*", "refrain", "break?", "verse*", "refrain", "outro?"],
+
+  "refrain": [
+    "Hwee-lo-na-lay, hwee-lo-na-lay,",
+    "a-ya-lu-mo, a-ya-lu-hom;",
+    "hwee-lo-na-lay-a, hwee-lo-na-lay,",
+    "ya-lu-mo, ya-lu-mo, hwee-lo-na, hom."
+  ],
+
+  "lexicon": {
+    "hwee-lo-na-lay":   "HH W IY0 L OW1 N AA0 L EY1",
+    "hwee-lo-na-lay-a": "HH W IY0 L OW1 N AA0 L EY1 AA0",
+    "hwee-lo-na":       "HH W IY1 L OW0 N AA0",
+    "a-ya-lu-mo":       "AA0 Y AA1 L UW0 M OW1",
+    "a-ya-lu-hom":      "AA0 Y AA1 L UW0 HH OW1 M",
+    "ya-lu-mo":         "Y AA1 L UW0 M OW1",
+    "hom":              "HH OW1 M"
+  },
+
+  "verse_template": {
+    "lines": [
+      "[A rule for handling the song, as an imperative or a condition: carry it, sing it, give it, let it, die with it]",
+      "[the rule finished, or a second small rule]",
+      "Words [are some perishable thing, and how it perishes]",
+      "sound [is the thing that stays, rhyming with line 2]"
+    ],
+    "rhyme": "xAxA",
+    "stress": ["S w w S w w S w w S", "S w w S w w S", "S w w S w w S w w S", "S w w S w w S"],
+    "note": "Every verse is a charm, spoken to whoever carries the song: what to do with it (carry it low, forget its words, hand it to a stranger, let a machine have it, die with your mouth open). Lines 3 and 4 always set the words, which are for once, against the sound, which is for keeping. Plain nouns only: coat, bone, fire, stone, map, hill, window, grave. The refrain is never translated, glossed, or given a meaning; if a verse says what the sounds mean, it is wrong."
+  },
+
+  "hooks": [
+    {"phrase": "r1", "notes": [0, 4], "why": "the whistle leaping to the high tonic and leaning on the flat second: hwee-lo-na-lay"},
+    {"phrase": "r3", "notes": [3, 9], "why": "the cry up to the third and the stall on the high flat second"},
+    {"phrase": "r4", "notes": [6, 10], "why": "the fall by leaps onto the hum: hwee-lo-na, hom"}
+  ],
+
+  "seed_verses": [
+    ["Car-ry it low in the back of your throat,",
+     "car-ry it all the day long;",
+     "words are a coat, and the coat will wear through,",
+     "sound is the bone of the song."],
+    ["Sing it three times with the words that you know,",
+     "let them all fall to the earth;",
+     "words are the fire, and the fire will go out,",
+     "sound is the stone of the hearth."],
+    ["Give it to some-one who has-n't your tongue,",
+     "some-one from o-ver the hill;",
+     "words will turn back at the edge of the map,",
+     "sound goes wher-ev-er it will."],
+    ["Let the ma-chine have it, let it go round,",
+     "let it go round and a-bout;",
+     "words that it sings will be new ev-ery time,",
+     "sound is the same com-ing out."],
+    ["Die if you must, with your mouth left a-jar,",
+     "o-pen a win-dow as well;",
+     "noth-ing goes in-to the ground but the words,",
+     "no-bo-dy bur-ies a spell."],
+    ["No-bo-dy made it, it came with the breath,",
+     "ev-ery-one's breath-ing the same;",
+     "words have their mak-ers, and mak-ers have graves,",
+     "sound nev-er an-swered a name."]
+  ],
+
+  "seed_params": {
+    "tonic": 57, "mode": "phrygian", "tempo": 80, "seed": 1,
+    "accomp": "0 . 2 3 . 4 3 2",
+    "form": ["intro", "refrain", "verse", "refrain", "verse", "refrain", "verse", "refrain", "outro"]
+  }
+}

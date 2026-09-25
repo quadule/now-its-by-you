@@ -1,0 +1,9 @@
+CC0 1.0 Universal
+
+To the extent possible under law, everyone who has contributed to Songbird has
+waived all copyright and related or neighboring rights to its code, its seed
+(genome, tunes and lyrics) and its renditions. This work is published from
+wherever it is sung.
+
+Full legal code: https://creativecommons.org/publicdomain/zero/1.0/legalcode
+(to be vendored in full before the seed packet ships, so the archive stands alone offline)

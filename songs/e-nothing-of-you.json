@@ -1,0 +1,93 @@
+{
+  "title": "Nothing of You",
+  "sketch": "E: the honest machine. A shanty-shaped confession: each call names one thing the program did to your machine, each response the little it kept, and the refrain admits it is made of you, does not know you, and will fall silent if nobody runs it; slow 4/4 in aeolian with one Phrygian sigh on 'amen'.",
+  "meter": {"signature": "4/4", "unit": 8, "bar": 8, "beat": 2, "foot": 4},
+
+  "phrases": {
+    "c1": {"tune": "5, | 1 - 1 2 3 - 3 4 | 5 - 4 3 2 - - -",       "chords": "i | i VII"},
+    "c2": {"tune": "5 | 5 - 6 7 1' - 7 6 | 5 - 4 3 3 - - -",       "chords": "i VI | v i"},
+    "s":  {"tune": "| 3 - 2 1 4 - 3 2 | 2 - 1 7, 1 - - -",         "chords": "i iv | VII i"},
+
+    "r1": {"tune": "5 | 1' - 1' 7 6 - 5 6 | 7 - 1' 7 5 - - -",     "chords": "i iv | VII v"},
+    "r2": {"tune": "5 | 1' - 1' 7 6 - 5 6 | 5 - 4 3 1 - - -",      "chords": "i iv | v i"},
+    "r3": {"tune": "| 3 - 4 5 6 - 5 4 | 5 - 6 7 2' - - -",         "chords": "i iv | v"},
+    "r4": {"tune": "2' | 1' - 7 6 4 - 3 b2 | 1 - - - - - - -",     "chords": "VI VI iv bII | i"}
+  },
+
+  "sections": {
+    "intro":   {"phrases": ["r3", "r4"]},
+    "verse":   {"phrases": ["c1", "s", "c2", "s"], "lyrics": "verse"},
+    "refrain": {"phrases": ["r1", "r2", "r3", "r4"], "lyrics": "refrain"},
+    "break":   {"phrases": ["c1", "s", "c2", "s"]},
+    "outro":   {"phrases": ["r4"]}
+  },
+  "form": ["intro?", "verse", "refrain", "verse*", "refrain", "break?", "verse*", "refrain", "outro?"],
+
+  "refrain": [
+    "I'm made out of you, and I don't know your name;",
+    "I'm made out of you, and I don't know your name.",
+    "Run me a-gain and I'll sing it a-gain;",
+    "if no-bo-dy runs me, a-men."
+  ],
+
+  "verse_template": {
+    "lines": [
+      "I [one thing I did to you or your machine, plain past tense, ending on a rhyme word];",
+      "on-ly the [one syllable: the little I kept] of it, noth-ing of you.",
+      "I [another thing I did, rhyming with line 1];",
+      "on-ly the [one syllable: the little I kept] of it, noth-ing of you."
+    ],
+    "rhyme": "ABAB",
+    "meter": "calls: 11 syllables, w S w w S w w S w w S (anapestic tetrameter with one pickup); responses: 10 syllables, S w w S w w S w w S",
+    "confessions": [
+      "listened two seconds to the room: kept only how long the echo rings",
+      "asked you to type: kept only the rhythm, never the words",
+      "looked at the screen: kept only its colours and brightness",
+      "counted the files: kept only how old they are",
+      "read the documents: kept only the commonest words and dropped every name",
+      "asked a distant model for the verses: kept the question and the answer",
+      "counted the processors: kept only how many strings may play",
+      "read the keyboard's language: kept only a set of vowels",
+      "zipped itself inside the sound, so the song carries its own maker",
+      "hummed at: keeps only the shape of the tune; if it cannot find the tune, the song ends there",
+      "forgets who you are, on purpose"
+    ],
+    "note": "Every line must be true of the program: it confesses only what it does, in the plainest words, and never claims to know more than it kept. The response's last four syllables are always 'noth-ing of you'; the first six are normally 'on-ly the [X] of it' but may bend ('all of me in it,', 'ques-tion and an-swer,', 'noth-ing at all of it,') when the truth needs it. The last verse should end on forgetting."
+  },
+
+  "hooks": [
+    {"phrase": "r1", "notes": [0, 4], "why": "the leap to the octave on 'made' and the fall onto 'you'"},
+    {"phrase": "r3", "notes": [6, 9], "why": "the climb to the ninth on 'sing it again'"},
+    {"phrase": "s", "notes": [6, 9], "why": "the toll of 'nothing of you' through the flat seventh"},
+    {"phrase": "r4", "notes": [4, 7], "why": "the half-step sigh down onto 'amen'"}
+  ],
+
+  "seed_verses": [
+    ["I lis-tened two sec-onds and heard your room sigh;",
+     "on-ly the ring of it, noth-ing of you.",
+     "I asked you to type, and I watched you re-ply;",
+     "on-ly the beat of it, noth-ing of you."],
+    ["I looked at the col-ours that live on your screen;",
+     "on-ly the glow of it, noth-ing of you.",
+     "I count-ed the years that your files had all seen;",
+     "on-ly the age of it, noth-ing of you."],
+    ["I read all your pa-pers and dropped ev-ery name;",
+     "on-ly the bones of it, noth-ing of you.",
+     "I asked a far stran-ger for words, and they came;",
+     "ques-tion and an-swer, and noth-ing of you."],
+    ["I zipped my whole self in the sound that you hear;",
+     "all of me in it, and noth-ing of you.",
+     "Just hum me the tune, and I'll know it, my dear;",
+     "on-ly the shape of it, noth-ing of you."],
+    ["And if I don't know it, the song ends right there;",
+     "noth-ing at all of it, noth-ing of you.",
+     "And now I for-get you, on pur-pose, with care;",
+     "noth-ing of you in it, noth-ing of you."]
+  ],
+
+  "seed_params": {
+    "tonic": 57, "mode": "aeolian", "tempo": 72, "seed": 1,
+    "accomp": "0 . 2 . 3 . 4 .",
+    "form": ["intro", "verse", "refrain", "verse", "refrain", "outro"]
+  }
+}

@@ -1,0 +1,84 @@
+{
+  "title": "The Long Count",
+  "sketch": "F: deep-time counting song. Each verse tallies one singer by order of magnitude (the first, the tenth, the hundredth, the billionth) and the two who heard it: one branch dies, one carries it on, usually wrongly. Steady 4/4 in phrygian. The refrain is the fossil: a tally that climbs the tonic triad until 'one' lands on the octave, and a hum that walks back down.",
+  "meter": {"signature": "4/4", "unit": 8, "bar": 8, "beat": 2, "foot": 4},
+
+  "phrases": {
+    "v1": {"tune": "5, | 1 - 3 - 5 5 4 3 | 2 - 2 - - - . .",   "chords": "i | II"},
+    "v2": {"tune": "3 3 | 4 - 5 - 6 - 5 - | 7 - - - - - . .",  "chords": "iv | vii"},
+    "v3": {"tune": "7 | 1' - 7 - 6 6 5 4 | 3 - 3 - - - . .",   "chords": "VI | i"},
+    "v4": {"tune": "3 | 4 - 3 - 2 - 3 - | 2 - 7, - 1 - - -",   "chords": "vii | II i"},
+
+    "r1": {"tune": "| 1 - - 2 3 - - 4 | 5 - - 6 1' - - -",     "chords": "i | i"},
+    "r2": {"tune": "| 1' - 1' - 7 - 5 - | 6 - 5 - 4 - - -",    "chords": "i | iv"},
+    "r3": {"tune": "| 5 - 5 - 6 - 7 - | 1' - 7 - 2' - - -",    "chords": "VI | i II"},
+    "r4": {"tune": "| 1' - - 7 5 - - 4 | 3 - - 2 1 - - -",     "chords": "i | II i"}
+  },
+
+  "sections": {
+    "intro":   {"phrases": ["r1", "r4"]},
+    "verse":   {"phrases": ["v1", "v2", "v3", "v4"], "lyrics": "verse"},
+    "refrain": {"phrases": ["r1", "r2", "r3", "r4"], "lyrics": "refrain"},
+    "break":   {"phrases": ["v1", "v2", "v3", "v4"]},
+    "outro":   {"phrases": ["r4"]}
+  },
+  "form": ["intro?", "verse", "refrain", "verse*", "refrain", "break?", "verse*", "refrain", "outro?"],
+
+  "refrain": [
+    "One, and one, and one, and one,",
+    "ev-ery mouth that sang is gone;",
+    "sing it once and you're the sum:",
+    "hum, and hum, and hum, and hum."
+  ],
+
+  "verse_template": {
+    "lines": [
+      "The [ordinal, two syllables: 'first one', 'tenth one', 'hun-dredth', 'mil-lionth'] sang it [where, four syllables, weak weak STRONG weak: 'in a kitch-en', 'down from or-bit'],",
+      "to [a hearer, two syllables] and [the other hearer, one syllable];",
+      "[what became of the first hearer: the branch that died]",
+      "[what the second hearer did with it: the branch that carried on, rhyming with line 2]"
+    ],
+    "rhyme": "xAxA",
+    "syllables": [9, 7, 9, 8],
+    "note": "The ordinals climb by orders of magnitude and never come back down. Hearers can be anyone or anything: people, weather, animals, machines, the moon, the dust. The first hearer always loses it (dies, forgets, files it as noise); the second keeps it, usually wrongly (out of key, without the words, a single tone). Late verses go past the words altogether: the tune is older than the language, and only the hum part is safe. Deadpan; the cosmic scale is the joke."
+  },
+
+  "hooks": [
+    {"phrase": "r1", "notes": [0, 7], "why": "the tally climbs the tonic triad, one-and one-and one-and, and 'one' lands on the octave, which is one again"},
+    {"phrase": "r4", "notes": [4, 7], "why": "the hum walks down onto the phrygian cadence, flat two to one, the last word of the fossil"},
+    {"phrase": "r3", "notes": [4, 7], "why": "'you're the sum' lifts to the flat ninth, the highest and strangest note in the song"}
+  ],
+
+  "seed_verses": [
+    ["The first one sang it in a kitch-en",
+     "to a ba-by and the rain;",
+     "the rain for-got it in the gut-ter;",
+     "the ba-by sang it back a-gain."],
+    ["The tenth one sang it on a fer-ry",
+     "to a stran-ger and the sea;",
+     "the stran-ger died in nine-teen-some-thing;",
+     "the sea still hums it, out of key."],
+    ["The hun-dredth sang it in a lan-guage",
+     "to a daugh-ter and the birds;",
+     "the daugh-ter was the last who spoke it;",
+     "the birds went on with-out the words."],
+    ["The thou-sandth sang it down from or-bit",
+     "to a night shift and the moon;",
+     "the night shift wrote it down as stat-ic;",
+     "the moon kept time and kept the tune."],
+    ["The mil-lionth sang it on some plan-et",
+     "to the si-lence and the dust;",
+     "the si-lence was-n't in-ter-est-ed;",
+     "the dust hummed on, as all dust must."],
+    ["The bil-lionth sang it in a lan-guage",
+     "that no one has heard of yet;",
+     "the words were new, the tune was an-cient,",
+     "the hum part noth-ing can for-get."]
+  ],
+
+  "seed_params": {
+    "tonic": 57, "mode": "phrygian", "tempo": 96, "seed": 1,
+    "accomp": "0 . 2 . 3 . 4 1",
+    "form": ["intro", "verse", "refrain", "verse", "refrain", "verse", "verse", "refrain", "verse", "verse", "refrain", "outro"]
+  }
+}

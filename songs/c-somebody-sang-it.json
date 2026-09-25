@@ -1,0 +1,78 @@
+{
+  "title": "Somebody Sang It to Me",
+  "sketch": "C: lullaby. The singer weighs every other way to keep something (a mind, a page, numbers, a screen) and sings it instead; rocking 3/4 in a plain major.",
+  "meter": {"signature": "3/4", "unit": 8, "bar": 6, "beat": 2, "foot": 6},
+
+  "phrases": {
+    "v1": {"tune": "| 1 - - 1 5, - | 1 - - 2 3 - | 4 - - 3 2 - | 3 - - - - -",   "chords": "I | I | IV | I"},
+    "v2": {"tune": "| 5 - - 4 3 - | 2 - - 1 2 - | 5, - - - - - | - - - - - -",  "chords": "I | ii | V | V"},
+    "v3": {"tune": "| 3 - - 3 4 - | 5 - - 6 5 - | 6 - - 7 1' - | 5 - - - - -",  "chords": "vi | iii | IV | V"},
+    "v4": {"tune": "| 4 - - 3 2 - | 2 - - 7, 5, - | 1 - - - - - | - - - - - -", "chords": "ii | V | I | I"},
+
+    "r1": {"tune": "| 1 - - 2 3 - | 5 - - 6 5 - | 1' - - 7 6 - | 5 - - - 3 -",      "chords": "I | I | IV | I"},
+    "r2": {"tune": "| 4 - - 3 2 - | 3 - - 2 1 - | 2 - - - - - | - - - - - -",       "chords": "IV | vi | V | V"},
+    "r3": {"tune": "5, - | 1 - - 2 3 - | 5 - - 6 5 - | 1' - - 2' 1' - | 7 - - - 6 -", "chords": "I | iii | IV | V"},
+    "r4": {"tune": "| 5 - - 4 3 - | 2 - - 3 2 - | 1 - - - - - | - - - - - -",       "chords": "iii | ii V | I | I"}
+  },
+
+  "sections": {
+    "intro":   {"phrases": ["r3", "r4"]},
+    "verse":   {"phrases": ["v1", "v2", "v3", "v4"], "lyrics": "verse"},
+    "refrain": {"phrases": ["r1", "r2", "r3", "r4"], "lyrics": "refrain"},
+    "break":   {"phrases": ["r1", "r2", "r3", "r4"]},
+    "outro":   {"phrases": ["r4"]}
+  },
+  "form": ["intro?", "verse", "refrain", "verse*", "refrain", "break?", "verse*", "refrain", "outro?"],
+
+  "refrain": [
+    "No-bo-dy wrote it and no-bo-dy owns it;",
+    "some-bo-dy sang it to me.",
+    "I'll sing it to you, and you'll sing it to some-one,",
+    "some-one I nev-er will see."
+  ],
+
+  "verse_template": {
+    "lines": [
+      "I could have [kept it in a vehicle],",
+      "[an image of it held there];",
+      "[how that vehicle fails over time],",
+      "[the loss, rhyming with line 2]."
+    ],
+    "rhyme": "xAxA",
+    "note": "The last verse answers why it was sung instead."
+  },
+
+  "hooks": [
+    {"phrase": "r1", "notes": [0, 6], "why": "'nobody' rising, then 'nobody' falling from the octave"},
+    {"phrase": "r3", "notes": [6, 10], "why": "the climb to the ninth on 'sing it to someone'"}
+  ],
+
+  "seed_verses": [
+    ["I could have kept it a-lone in my head,",
+     "safe as a stone in a well;",
+     "down it would go when I went to my rest,",
+     "no-bo-dy left who could tell."],
+    ["I could have writ-ten it down on a page,",
+     "fold-ed and put on a shelf;",
+     "pa-per will yel-low and lan-guage will change",
+     "till it is strange to it-self."],
+    ["I could have saved it as num-bers and light,",
+     "cop-ied as quick as a wink;",
+     "bright as it is, when the pow-er goes out,",
+     "dark-er than wa-ter or ink."],
+    ["I could have shown it to all of the world,",
+     "lit up in ev-ery-one's hand;",
+     "ev-ery-one watch-es and no-bo-dy sings,",
+     "gone like a print in the sand."],
+    ["So I just sang it the way that it came,",
+     "hummed it with-out all the words;",
+     "songs need no pa-per or pow-er or name,",
+     "on-ly a mouth, like the birds."]
+  ],
+
+  "seed_params": {
+    "tonic": 60, "mode": "ionian", "tempo": 80, "seed": 1,
+    "accomp": "0 . 2 3 4 3",
+    "form": ["intro", "verse", "refrain", "verse", "refrain", "outro"]
+  }
+}

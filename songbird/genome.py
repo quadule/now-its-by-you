@@ -1,0 +1,208 @@
+"""The song's skeleton: what persists across generations.
+
+A genome is authored once for the seed and carried forward unchanged; only the
+ear path may mutate its contour. It holds the seed's tune as scale degrees on a
+rhythmic grid, which a person can read and edit. Everything the lineage gate
+compares (coarse contour, stress pattern, phrase-final targets) is derived
+from that tune rather than stored beside it, so the two can never disagree.
+
+Tune notation, one token per grid unit:
+
+    5      scale degree, 1 = tonic; ' raises an octave, , lowers one (5, 1 1')
+    #4 b7  chromatic alteration
+    -      hold the previous note one more unit
+    .      rest
+    |      bar line; tokens before the first bar line are a pickup
+"""
+
+from __future__ import annotations
+
+import json
+import re
+from dataclasses import dataclass
+from pathlib import Path
+
+from .theory import parse_chord
+
+_DEGREE = re.compile(r"([#b]?)([1-7])([',]*)")
+
+
+@dataclass(frozen=True)
+class Meter:
+    signature: str
+    unit: int  # note value of one grid unit: 4 = quarter, 8 = eighth
+    bar: int  # grid units per bar
+    beat: int  # grid units per beat; tempo counts beats
+    foot: int  # grid units per metrical foot; each stressed syllable starts one
+
+
+@dataclass(frozen=True)
+class TuneNote:
+    degree: int | None  # absolute scale degree, None for a rest
+    alter: int
+    onset: int  # grid units from the phrase's first bar line, negative in a pickup
+    dur: int
+
+
+@dataclass(frozen=True)
+class Phrase:
+    id: str
+    tune: str
+    notes: tuple[TuneNote, ...]
+    bars: int
+    chords: tuple[tuple[str, ...], ...]  # one tuple of functions per bar
+
+    @property
+    def sung(self) -> tuple[TuneNote, ...]:
+        return tuple(n for n in self.notes if n.degree is not None)
+
+    @property
+    def pickup(self) -> int:
+        return max(0, -min(n.onset for n in self.notes))
+
+    @property
+    def target(self) -> int:
+        """Phrase-final scale degree, folded into one octave (1-7)."""
+        return (self.sung[-1].degree - 1) % 7 + 1
+
+    def stress(self, meter: Meter) -> str:
+        return " ".join("S" if n.onset % meter.foot == 0 else "w" for n in self.sung)
+
+    def contour(self) -> str:
+        """Relative moves between sung notes: h hold, u/d step, U/D leap."""
+        moves = []
+        for a, b in zip(self.sung, self.sung[1:]):
+            step = b.degree - a.degree
+            moves.append("h" if step == 0 else ("u" if step == 1 else "d" if step == -1 else "U" if step > 0 else "D"))
+        return " ".join(moves)
+
+
+@dataclass(frozen=True)
+class Section:
+    name: str
+    phrases: tuple[str, ...]
+    lyrics: str | None  # "refrain", "verse", or None for an instrumental section
+
+
+@dataclass(frozen=True)
+class Genome:
+    title: str
+    meter: Meter
+    phrases: dict[str, Phrase]
+    sections: dict[str, Section]
+    form: tuple[str, ...]  # template; "?" marks optional sections, "*" repeatable ones
+    refrain: tuple[str, ...]
+    verse_template: dict
+    hooks: tuple[dict, ...]
+    seed_verses: tuple[tuple[str, ...], ...]
+    seed_params: dict
+    source: dict  # the JSON as authored, carried forward verbatim
+    lexicon: dict  # the song's own words: spelling -> ARPAbet, for words no dictionary has
+
+
+def syllables(line: str) -> list[str]:
+    """Sung syllables of a lyric line; hyphens split words into syllables."""
+    return [piece for word in line.split() for piece in word.split("-") if piece]
+
+
+def sung_words(line: str) -> list[tuple[str, str, int]]:
+    """(syllable, whole word, syllables in the word) for each sung syllable."""
+    out = []
+    for word in line.split():
+        pieces = [p for p in word.split("-") if p]
+        out += [(piece, word, len(pieces)) for piece in pieces]
+    return out
+
+
+def parse_tune(tune: str, meter: Meter) -> tuple[tuple[TuneNote, ...], int]:
+    """Parse tune notation into notes and a bar count."""
+    segments = tune.split("|")
+    pickup, bars = segments[0].split(), [s.split() for s in segments[1:]]
+    for i, bar in enumerate(bars):
+        if len(bar) != meter.bar:
+            raise ValueError(f"bar {i + 1} of {tune!r} has {len(bar)} units, meter needs {meter.bar}")
+    notes: list[list] = []  # [degree, alter, onset, dur], mutable while holds extend them
+    t = -len(pickup)
+    for token in pickup + [tok for bar in bars for tok in bar]:
+        if token == "-":
+            if not notes:
+                raise ValueError(f"{tune!r} starts with a hold")
+            notes[-1][3] += 1
+        elif token == ".":
+            if notes and notes[-1][0] is None:
+                notes[-1][3] += 1
+            else:
+                notes.append([None, 0, t, 1])
+        else:
+            match = _DEGREE.fullmatch(token)
+            if not match:
+                raise ValueError(f"bad token {token!r} in {tune!r}")
+            accidental, digit, octaves = match.groups()
+            degree = int(digit) + 7 * (octaves.count("'") - octaves.count(","))
+            notes.append([degree, {"": 0, "#": 1, "b": -1}[accidental], t, 1])
+        t += 1
+    return tuple(TuneNote(*n) for n in notes), len(bars)
+
+
+def _parse_chords(text: str, bars: int, phrase_id: str) -> tuple[tuple[str, ...], ...]:
+    per_bar = tuple(tuple(bar.split()) for bar in text.split("|"))
+    if len(per_bar) != bars:
+        raise ValueError(f"phrase {phrase_id}: {len(per_bar)} bars of chords for {bars} bars of tune")
+    for bar in per_bar:
+        if not bar:
+            raise ValueError(f"phrase {phrase_id}: empty chord bar")
+        for symbol in bar:
+            parse_chord(symbol)
+    return per_bar
+
+
+def _check_lines(lines, section: Section, phrases: dict[str, Phrase], what: str) -> None:
+    if len(lines) != len(section.phrases):
+        raise ValueError(f"{what}: {len(lines)} lines for {len(section.phrases)} phrases")
+    for line, pid in zip(lines, section.phrases):
+        want, got = len(phrases[pid].sung), len(syllables(line))
+        if want != got:
+            raise ValueError(f"{what}: {line!r} has {got} syllables, phrase {pid} has {want} notes")
+
+
+def from_dict(data: dict) -> Genome:
+    meter = Meter(**data["meter"])
+    phrases = {}
+    for pid, spec in data["phrases"].items():
+        notes, bars = parse_tune(spec["tune"], meter)
+        phrases[pid] = Phrase(pid, spec["tune"], notes, bars, _parse_chords(spec["chords"], bars, pid))
+    sections = {}
+    for name, spec in data["sections"].items():
+        missing = [p for p in spec["phrases"] if p not in phrases]
+        if missing:
+            raise ValueError(f"section {name} names unknown phrases {missing}")
+        sections[name] = Section(name, tuple(spec["phrases"]), spec.get("lyrics"))
+    for token in data["form"]:
+        if token.rstrip("?*") not in sections:
+            raise ValueError(f"form names unknown section {token!r}")
+
+    genome = Genome(
+        title=data["title"],
+        meter=meter,
+        phrases=phrases,
+        sections=sections,
+        form=tuple(data["form"]),
+        refrain=tuple(data["refrain"]),
+        verse_template=data.get("verse_template", {}),
+        hooks=tuple(data.get("hooks", [])),
+        seed_verses=tuple(tuple(v) for v in data.get("seed_verses", [])),
+        seed_params=data.get("seed_params", {}),
+        source=data,
+        lexicon=dict(data.get("lexicon", {})),
+    )
+    for section in sections.values():
+        if section.lyrics == "refrain":
+            _check_lines(genome.refrain, section, phrases, "refrain")
+        elif section.lyrics == "verse":
+            for i, verse in enumerate(genome.seed_verses):
+                _check_lines(verse, section, phrases, f"seed verse {i + 1}")
+    return genome
+
+
+def load(path: str | Path) -> Genome:
+    return from_dict(json.loads(Path(path).read_text()))

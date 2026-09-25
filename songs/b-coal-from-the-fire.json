@@ -1,0 +1,97 @@
+{
+  "title": "Coal from the Fire",
+  "sketch": "B: riddle song in the shape of 'Who Killed Cock Robin'. Each vehicle volunteers and each fails, until the question turns to who made the song; lilting 6/8 in mixolydian.",
+  "meter": {"signature": "6/8", "unit": 8, "bar": 6, "beat": 3, "foot": 3},
+
+  "phrases": {
+    "q":  {"tune": "| 1 1 2 3 - -",                  "chords": "I"},
+    "c":  {"tune": "| 7 6 5 4 - -",                  "chords": "VII"},
+    "m":  {"tune": "| 6 5 4 3 - -",                  "chords": "IV I"},
+    "e":  {"tune": "1 | 2 - 7, 1 - -",               "chords": "v I"},
+    "f1": {"tune": "5 | 1' 7 6 5 4 5 | 6 5 4 5 - -", "chords": "I | IV v"},
+    "f2": {"tune": "5 | 1' 1' 7 6 5 4 | 2 3 7, 1 - -", "chords": "I IV | v I"},
+
+    "r1": {"tune": "| 1' 7 6 5 6 7 | 1' 2' 1' 5 - -",  "chords": "I | IV v"},
+    "r2": {"tune": "| 1' 7 6 5 6 7 | 1' 2' 7 1' - -",  "chords": "I | IV I"},
+    "r3": {"tune": "5 | 1' 1' 1' 2' 1' 7 | 6 5 4 5 - -", "chords": "I VII | IV v"},
+    "r4": {"tune": "5 | 4 3 2 1 2 3 | 4 2 7, 1 - -",   "chords": "IV I | VII I"}
+  },
+
+  "sections": {
+    "intro":   {"phrases": ["r1", "r2"]},
+    "verse":   {"phrases": ["q", "c", "m", "e", "f1", "f2"], "lyrics": "verse"},
+    "refrain": {"phrases": ["r1", "r2", "r3", "r4"], "lyrics": "refrain"},
+    "break":   {"phrases": ["r1", "r2", "r3", "r4"]},
+    "outro":   {"phrases": ["r4"]}
+  },
+  "form": ["intro?", "verse", "refrain", "verse*", "refrain", "break?", "verse*", "refrain", "refrain?", "outro?"],
+
+  "refrain": [
+    "Car-ry it o-ver the wa-ter and wire,",
+    "hand it a-long like a coal from the fire;",
+    "it's no-bo-dy's mak-ing and ev-ery-one's own,",
+    "it dies in the dark if you leave it a-lone."
+  ],
+
+  "verse_template": {
+    "lines": [
+      "Who'll [do something to it]?",
+      "\"I,\" said the [one-syllable vehicle],",
+      "\"[how, rhyming with the vehicle],",
+      "I'll [do something to it].\"",
+      "[what the vehicle did with it]",
+      "[what became of it]"
+    ],
+    "rhyme": "xAAx BB",
+    "note": "Late verses turn the question to authorship: 'Who made this song?' 'No,' said the ..., 'it's not my song.'"
+  },
+
+  "hooks": [
+    {"phrase": "r1", "notes": [0, 10], "why": "the rolling first line"},
+    {"phrase": "r4", "notes": [7, 11], "why": "the drop through the flat seventh onto 'alone'"}
+  ],
+
+  "seed_verses": [
+    ["Who'll keep it safe?",
+     "\"I,\" said the Mind,",
+     "\"close and con-fined,",
+     "I'll keep it safe.\"",
+     "It slept in his head till the day that he died;",
+     "they bur-ied the Mind with the thought still in-side."],
+    ["Who'll write it down?",
+     "\"I,\" said the Ink,",
+     "\"dry in a blink,",
+     "I'll write it down.\"",
+     "It lay in a drawer for a hun-dred-odd years;",
+     "it speaks in a voice that now no-bo-dy hears."],
+    ["Who'll send it far?",
+     "\"I,\" said the Wire,",
+     "\"quick-er than fire,",
+     "I'll send it far.\"",
+     "It flew round the world in the wink of an eye;",
+     "it lived in a box till they let the box die."],
+    ["Who'll show the world?",
+     "\"I,\" said the Screen,",
+     "\"bright-est you've seen,",
+     "I'll show the world.\"",
+     "A bil-lion eyes watched it and scrolled right a-long,",
+     "but no-bo-dy hummed it; it was-n't a song."],
+    ["Who made this song?",
+     "\"No,\" said the Bird,",
+     "\"sang what I heard;",
+     "it's not my song.\"",
+     "The Bird had it off of a girl in the lane,",
+     "who'd had it from some-one who'd had it the same."],
+    ["Who made this song?",
+     "\"No,\" said the Code,",
+     "\"on-ly the road;",
+     "it's not my song.\"",
+     "A thou-sand have made it, and none of them knew;",
+     "by ev-ery-one, no one, and now it's by you."]
+  ],
+
+  "seed_params": {
+    "tonic": 57, "mode": "mixolydian", "tempo": 63, "seed": 1,
+    "form": ["intro", "verse", "refrain", "verse", "refrain", "outro"]
+  }
+}

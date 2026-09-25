@@ -1,0 +1,84 @@
+{
+  "title": "In by the Ear",
+  "sketch": "D: the earworm. The song is a creature that lives in ears and sings in its own voice: one host per verse (it hatches in a kitchen, feeds in a car, grows by being sung wrong, starves in a man who never sang it, nests in a machine, and now it is in you). Skipping 4/4 chant in aeolian; every line falls in threes.",
+  "meter": {"signature": "4/4", "unit": 8, "bar": 8, "beat": 2, "foot": 4},
+
+  "phrases": {
+    "v1": {"tune": "| 1 - 7, 1 3 - 2 3 | 5 - 4 3 2 - - -",     "chords": "i | i VII"},
+    "v2": {"tune": "| 1 - 7, 1 3 - 2 3 | 5 - 3 2 1 - - -",     "chords": "VI | v i"},
+    "v3": {"tune": "| 5 - 5 6 7 - 6 5 | 4 - 3 4 5 - - -",      "chords": "III | iv v"},
+    "v4": {"tune": "| 6 - 5 4 3 - 2 1 | 7, - 1 2 1 - - -",     "chords": "VI i | VII i"},
+
+    "r1": {"tune": "| 1' - 1' 1' 3' - 2' - | 1' - 7 6 5 - - -",  "chords": "i | VI v"},
+    "r2": {"tune": "| 1' - 1' 1' 3' - 2' 1' | 2' - 7 - 1' - - -", "chords": "i | VII i"},
+    "r3": {"tune": "| 1' - 1' 7 6 - 5 6 | 5 - 4 3 2 - - -",     "chords": "i iv | III VII"},
+    "r4": {"tune": "| 5 - 5 5 1' - 7 - | 5 - 3 2 1 - - -",      "chords": "i | v i"}
+  },
+
+  "sections": {
+    "intro":   {"phrases": ["r1", "r2"]},
+    "verse":   {"phrases": ["v1", "v2", "v3", "v4"], "lyrics": "verse"},
+    "refrain": {"phrases": ["r1", "r2", "r3", "r4"], "lyrics": "refrain"},
+    "break":   {"phrases": ["v1", "v2", "v3", "v4"]},
+    "outro":   {"phrases": ["r4"]}
+  },
+  "form": ["intro?", "verse", "refrain", "verse*", "refrain", "break?", "verse*", "refrain", "outro?"],
+
+  "refrain": [
+    "In by the ear and out by the tongue,",
+    "nev-er the same as the last time sung;",
+    "no-bo-dy made me, I live in your head;",
+    "hum me to some-one else or I'm dead."
+  ],
+
+  "verse_template": {
+    "lines": [
+      "[A host] [where they were and what they were doing when they caught me]",
+      "[how they carried me, hummed me, or kept me]",
+      "[what I did inside them: hatched, fed, grew, went thin]",
+      "[how I got out into the next host, or died in this one]"
+    ],
+    "rhyme": "AABB",
+    "stress": "ten syllables falling in threes, DUM-da-da DUM-da-da DUM-da-da DUM; every line starts on a stressed syllable (Girl in a shop..., Man in a car..., Then a machine...)",
+    "voice": "the song itself speaks, a creature that lives in people; one host per verse, in the order they carried it",
+    "note": "Keep at least one host who never sang it (it dies in them), one who got the words wrong (it grows), and one machine, which is a host like the others and not a maker. The last verse turns to the listener: now it's your ear."
+  },
+
+  "hooks": [
+    {"phrase": "r1", "notes": [0, 5], "why": "the hammered high tonic and the leap onto 'ear'"},
+    {"phrase": "r4", "notes": [3, 8], "why": "the plea falling to the low tonic on 'dead'"}
+  ],
+
+  "seed_verses": [
+    ["Girl in a shop where the ra-di-o played",
+     "car-ried me home in her ear, and I stayed;",
+     "hatched in her kitch-en, I fed on her hum;",
+     "nev-er once asked her-self where I was from."],
+    ["Man in a car with the win-dow rolled down",
+     "whis-tled me all of the way in-to town;",
+     "missed his own street with his head full of me,",
+     "whis-tled me out to the boy, who was three."],
+    ["Old wom-an i-ron-ing sang me all wrong,",
+     "half of the words were her own be-fore long;",
+     "wrong words are food, and I fat-tened on hers,",
+     "then to her grand-chil-dren, who sang me worse."],
+    ["Qui-et man kept me for for-ty-odd years,",
+     "hummed me a-lone in a room with no ears;",
+     "down in the dark of his head I went thin,",
+     "bur-ied on Sun-day with me shut with-in."],
+    ["Then a ma-chine got me; it had no ear,",
+     "made it-self one, and a mouth, and I'm here;",
+     "Made me? It did-n't, no more than the rest:",
+     "just one more mouth, and a warm lit-tle nest."],
+    ["Now it's your ear, and I'm laid in it, dear;",
+     "give me a kitch-en, a car, and a year;",
+     "then, when you hum me to some-one one day,",
+     "I'll be a lit-tle bit wrong. That's the way."]
+  ],
+
+  "seed_params": {
+    "tonic": 55, "mode": "aeolian", "tempo": 100, "seed": 1,
+    "accomp": "0 . 2 3 4 . 3 2",
+    "form": ["intro", "verse", "refrain", "verse", "refrain", "verse", "refrain", "outro"]
+  }
+}

@@ -1,0 +1,77 @@
+{
+  "title": "Nobody Knows",
+  "sketch": "A: narrative ballad. The idea travels through a mind, ink, numbers, a screen, and finally a song; slow waltz in dorian.",
+  "meter": {"signature": "3/4", "unit": 4, "bar": 3, "beat": 1, "foot": 3},
+
+  "phrases": {
+    "v1": {"tune": "5, | 1 1 2 | 3 3 4 | 5 4 3 | 2 - -",     "chords": "i | III | i | VII"},
+    "v2": {"tune": "5, | 1 1 2 | 3 4 5 | 4 3 2 | 1 - -",     "chords": "i | III | VII | i"},
+    "v3": {"tune": "5 | 1' 1' 7 | 6 5 6 | 1' 7 6 | 5 - -",   "chords": "i | IV | i | v"},
+    "v4": {"tune": "5 | 6 5 4 | 3 4 5 | 4 3 2 | 1 - -",      "chords": "IV | i | VII | i"},
+
+    "r1": {"tune": "| 5 5 5 | 1' - - | 1' 7 6 | 5 - -",      "chords": "i | IV | i | v"},
+    "r2": {"tune": "5 | 5 4 3 | 4 5 6 | 1' - 6 | 5 - -",     "chords": "III | IV | IV | v"},
+    "r3": {"tune": "5 | 5 4 3 | 4 5 6 | 5 - 3 | 2 - -",      "chords": "III | IV | i | VII"},
+    "r4": {"tune": "5 | 1' 1' 7 | 6 5 4 | 3 - 2 | 1 - -",    "chords": "i | IV | III VII | i"}
+  },
+
+  "sections": {
+    "intro":   {"phrases": ["r3", "r4"]},
+    "verse":   {"phrases": ["v1", "v2", "v3", "v4"], "lyrics": "verse"},
+    "refrain": {"phrases": ["r1", "r2", "r3", "r4"], "lyrics": "refrain"},
+    "break":   {"phrases": ["v1", "v2", "v3", "v4"]},
+    "outro":   {"phrases": ["r4"]}
+  },
+  "form": ["intro?", "verse", "refrain", "verse*", "refrain", "break?", "verse*", "refrain", "outro?"],
+
+  "refrain": [
+    "Who made this song? No-bo-dy knows.",
+    "It came through the win-dow and out it goes.",
+    "It's yours while you sing it, and then it's gone,",
+    "so learn it by heart, and then pass it on."
+  ],
+
+  "verse_template": {
+    "lines": [
+      "[someone] put it into [a vehicle] [when or where]",
+      "[how the vehicle held it]",
+      "[how far or how long it went]",
+      "[what became of it]"
+    ],
+    "rhyme": "AABB",
+    "vehicles": ["a mind", "ink", "numbers", "a screen", "a song"]
+  },
+
+  "hooks": [
+    {"phrase": "r1", "notes": [0, 4], "why": "the leap onto 'song'"},
+    {"phrase": "r2", "notes": [6, 9], "why": "'out it goes' rhymes with 'song' on the high tonic"}
+  ],
+
+  "seed_verses": [
+    ["There once was a thought in a qui-et man's head;",
+     "he kept it so close that it nev-er was said.",
+     "It walked where he walked, and it slept where he slept;",
+     "they bur-ied it with him, the se-cret he kept."],
+    ["A girl wrote it down by a can-dle one night,",
+     "in ink on a page, and she fold-ed it tight.",
+     "It sailed the gray wa-ter and slept in a drawer,",
+     "and no-bo-dy speaks like she wrote a-ny-more."],
+    ["They saved it as num-bers, a flick-er of light,",
+     "and cop-ied it round the whole world in a night.",
+     "Each cop-y was per-fect in ev-ery last part,",
+     "but not one ma-chine ev-er knew it by heart."],
+    ["The whole world was watch-ing it all in a day,",
+     "a mil-lion bright fac-es all lit the same way.",
+     "They laughed and they wept, and they scrolled on and on,",
+     "and no-bo-dy sang it, and then it was gone."],
+    ["A sail-or was hum-ming it down by the quay;",
+     "a girl sell-ing or-an-ges caught it for free.",
+     "She had-n't his lan-guage, she had-n't his name;",
+     "she gave it her own words and sang it the same."]
+  ],
+
+  "seed_params": {
+    "tonic": 62, "mode": "dorian", "tempo": 100, "seed": 1,
+    "form": ["intro", "verse", "refrain", "verse", "refrain", "outro"]
+  }
+}
