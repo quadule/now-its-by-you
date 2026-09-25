@@ -172,7 +172,7 @@ def stretches(active, lo: int, hi: int, gap: int) -> list[tuple[int, int]]:
     return [(a, b) for a, b in runs if b - a >= 8] or runs  # drop clicks
 
 
-def align_reading(model, reading, world, active, texts, first_of, notes, lexicon, midi) -> list[list[tuple]]:
+def align_reading(model, reading, world, band, active, texts, first_of, notes, lexicon, midi) -> list[list[tuple]]:
     """Knots for every syllable of every spoken line. The reading is cut at
     its pauses; the words Whisper hears say which line each stretch belongs to."""
     words, weights, owner = [], [], []
@@ -207,7 +207,7 @@ def align_reading(model, reading, world, active, texts, first_of, notes, lexicon
             raise SystemExit(f"couldn't find line {li + 1} in the reading: {texts[li]!r}")
         mine = [m for m, o in enumerate(owner) if o == li]
         knots.append(align_line(reading, windows[li], [notes[k] for k in first_of[li]],
-                                [(spans[m], weights[m]) for m in mine], midi, lexicon, active, world[0]))
+                                [(spans[m], weights[m]) for m in mine], midi, lexicon, active, world[0], band))
     return knots
 
 
@@ -274,7 +274,7 @@ def align_piece(reading, a: int, b: int, piece_notes, midi: float, lexicon, acti
     return [list(map(int, np.round(flat[4 * j : 4 * j + 4]))) for j in range(len(knots_t))]
 
 
-def align_line(reading, window, line_notes, words, midi: float, lexicon, active, f0_world) -> list[tuple]:
+def align_line(reading, window, line_notes, words, midi: float, lexicon, active, f0_world, band) -> list[tuple]:
     """(onset start, vowel start, vowel end, coda end), in reading frames, for
     every syllable of one spoken line within window (frames). The line is cut
     at its pauses and each piece aligned on its own; Whisper's word times, where
@@ -308,6 +308,27 @@ def align_line(reading, window, line_notes, words, midi: float, lexicon, active,
     for kn in knots:
         kn[2] = max(kn[2], kn[1] + 2)  # every vowel keeps at least two frames
         kn[3] = max(kn[3], kn[2])
+    # Inside one syllable the vowel is the loudest voiced stretch. Where the
+    # warp plainly missed it (mostly unvoiced, or far quieter than the
+    # syllable's best), move it there; otherwise trust the warp, which keeps
+    # nasals and liquids out of the vowel better than loudness can.
+    prev_end = w0
+    for kn in knots:
+        lo, hi = max(kn[0] - 4, prev_end), kn[3]
+        if hi - lo >= 3:
+            score = band[lo:hi] - 30.0 * (f0_world[lo:hi] <= 0)
+            q = lo + int(np.argmax(score))
+            here = slice(kn[1], max(kn[2], kn[1] + 1))
+            missed = np.mean(f0_world[here] > 0) < 0.5 or band[q] - np.median(band[here]) > 12.0
+            if missed and f0_world[q] > 0:
+                a = b = q
+                while a - 1 >= lo and band[a - 1] >= band[q] - 10.0 and f0_world[a - 1] > 0:
+                    a -= 1
+                while b + 1 < hi and band[b + 1] >= band[q] - 10.0 and f0_world[b + 1] > 0:
+                    b += 1
+                kn[1], kn[2] = a, max(b + 1, a + 2)
+                kn[0], kn[3] = min(kn[0], a), max(kn[3], kn[2])
+        prev_end = kn[2]
     for kn, nxt in zip(knots, knots[1:]):  # a pause belongs to neither side
         quiet = np.flatnonzero(~active[kn[2] : nxt[1]])
         if len(quiet) >= 12:
@@ -318,8 +339,9 @@ def align_line(reading, window, line_notes, words, midi: float, lexicon, active,
 # --- the song ----------------------------------------------------------------------
 
 
-def target_knots(segs) -> list[tuple[float, float, float, float, V.Segment]]:
-    """(onset start, vowel start, vowel end, coda end, vowel) in seconds for every sung note."""
+def target_knots(segs) -> list[tuple]:
+    """(onset start, vowel start, vowel end, coda end, vowel segment, coda
+    phones) for every sung note, times in seconds."""
     out = []
     for i, s in enumerate(segs):
         if s.role != "vowel":
@@ -329,25 +351,36 @@ def target_knots(segs) -> list[tuple[float, float, float, float, V.Segment]]:
             a -= 1
         while b + 1 < len(segs) and segs[b + 1].role == "coda":
             b += 1
-        out.append((segs[a].t0, s.t0, s.t1, segs[b].t1, s))
+        out.append((segs[a].t0, s.t0, s.t1, segs[b].t1, s, [g.phone for g in segs[i + 1 : b + 1]]))
     return out
 
 
-def vowel_map(tt, T0, T1, S0, S1, diphthong: bool, wobble):
-    """Source frame for target times inside one vowel. The vowel's own
-    transitions keep their spoken speed and the steady middle stretches; a
-    diphthong holds its first quality and turns to the second at the end."""
-    Ss, Ts = S1 - S0, (T1 - T0) / FRAME
-    if Ts <= Ss:
+def steadiest(S0: int, S1: int, level, noise, f0, diphthong: bool) -> int:
+    """The frame of a spoken vowel a singer would hold: loud, clearly pitched
+    and least noisy, away from the vowel's edges, where a spoken word fades,
+    creaks or breathes out (in a diphthong, in its first quality)."""
+    lo = S0 + (S1 - S0) // 5
+    hi = S0 + (S1 - S0) // 2 if diphthong else S1 - (S1 - S0) // 5
+    if hi <= lo:
+        return (S0 + S1) // 2
+    score = level[lo:hi] - 20.0 * noise[lo:hi] - 30.0 * (f0[lo:hi] <= 0)
+    return lo + int(np.argmax(score))
+
+
+def vowel_map(tt, T0, T1, S0, S1, core: int, wobble):
+    """Source frame for target times inside one vowel. A note longer than the
+    spoken vowel arrives at the vowel's steadiest frame at speaking speed,
+    holds it (drifting a frame or two so it never freezes), and leaves at
+    speaking speed into whatever follows; a diphthong's steadiest frame lies
+    in its first quality, so it turns to the second at the end of the note."""
+    Ts = (T1 - T0) / FRAME
+    if Ts <= S1 - S0:
         return np.interp(tt, [T0, T1], [S0, S1])
-    if diphthong:
-        g = min(0.15, 0.4 * (T1 - T0), 0.6 * Ss * FRAME)
-        return np.interp(tt, [T0, T1 - g, T1], [S0, S0 + 0.35 * Ss, S1])
-    edge = min(8.0, 0.3 * Ss)
-    s = np.interp(tt, [T0, T0 + edge * FRAME, T1 - edge * FRAME, T1], [S0, S0 + edge, S1 - edge, S1])
-    middle = (s > S0 + edge) & (s < S1 - edge)
-    # a spoken vowel held for a sung note would freeze; let it drift a little inside itself
-    s[middle] = np.clip(s[middle] + wobble[middle], S0 + edge, S1 - edge)
+    attack = float(np.clip(core - S0, 1, 0.35 * Ts)) * FRAME
+    release = float(np.clip(S1 - core, 1, 0.35 * Ts)) * FRAME
+    s = np.interp(tt, [T0, T0 + attack, T1 - release, T1], [S0, core, core, S1])
+    hold = (tt > T0 + attack) & (tt < T1 - release)
+    s[hold] = np.clip(s[hold] + wobble[hold], max(S0, core - 2), min(S1, core + 2))
     return s
 
 
@@ -365,6 +398,8 @@ def sing_from_speech(notes, segs, reading, lines, which, voice, seed, formant=1.
     knots_s = reading["knots"]  # per spoken line, per syllable
     level = reading["band"]
     log_sp = np.log(sp_s + 1e-30)
+    freqs = np.linspace(0.0, SR / 2, sp_s.shape[1])
+    noise = ap_s[:, (freqs >= 500) & (freqs <= 4000)].mean(axis=1)  # 0 periodic, 1 noise
 
     targets = target_knots(segs)
     duration = max(s.t1 for s in segs) + 0.5
@@ -377,22 +412,26 @@ def sing_from_speech(notes, segs, reading, lines, which, voice, seed, formant=1.
     src = np.full(n_out, np.nan)
     gain = np.zeros(n_out)
     vowel = np.zeros(n_out, dtype=bool)
+    keep_voicing = np.zeros(n_out, dtype=bool)
     levels, amps, spans = [], [], []
     for line_index, line in enumerate(lines):
         spoken = knots_s[which[line_index]]
         for j, k in enumerate(line):
-            T_on, T_v0, T_v1, T_c1, seg = targets[k]
+            T_on, T_v0, T_v1, T_c1, seg, coda = targets[k]
             S_on, S_v0, S_v1, S_c1 = spoken[j]
+            core = steadiest(S_v0, S_v1, level, noise, f0_s, seg.phone in ph.DIPHTHONGS)
             f = np.arange(int(np.ceil(T_on / FRAME)), min(int(np.ceil(T_c1 / FRAME)), n_out))
             tt = f * FRAME
             s = np.empty(len(f))
             on, vw, co = tt < T_v0, (tt >= T_v0) & (tt < T_v1), tt >= T_v1
             s[on] = np.interp(tt[on], [T_on, T_v0], [S_on, S_v0])
-            s[vw] = vowel_map(tt[vw], T_v0, T_v1, S_v0, S_v1, seg.phone in ph.DIPHTHONGS, wobble[f[vw]])
+            s[vw] = vowel_map(tt[vw], T_v0, T_v1, S_v0, S_v1, core, wobble[f[vw]])
             s[co] = np.interp(tt[co], [T_v1, T_c1], [S_v1, max(S_c1, S_v1)])
             src[f] = s
             vowel[f[vw]] = True
-            levels.append(float(np.percentile(level[S_v0 : max(S_v1, S_v0 + 1)], 75)))
+            if coda and all(ph.CONSONANTS[c][2] for c in coda):  # a voiced ending stays voiced
+                keep_voicing[f[co][:-2]] = True
+            levels.append(float(np.mean(level[max(core - 3, 0) : core + 4])))
             amps.append(seg.amp)
             spans.append(f)
     # loudness follows the score: level every syllable, then apply the singer's dynamics
@@ -402,8 +441,14 @@ def sing_from_speech(notes, segs, reading, lines, which, voice, seed, formant=1.
         correction = float(np.clip(lv - middle, -8.0, 8.0)) if lv > middle - 30.0 else 0.0
         gain[f] = 20 * np.log10(amp / 0.9) - correction
     gain = uniform_filter1d(gain, 7)
-
     sung = ~np.isnan(src)
+    # fade in and out wherever the voice starts or stops, so nothing clicks
+    edges = np.flatnonzero(np.diff(np.concatenate([[0], sung.astype(int), [0]])))
+    for a, b in zip(edges[::2], edges[1::2]):
+        fade_in, fade_out = min(2, (b - a) // 4), min(4, (b - a) // 3)
+        gain[a : a + fade_in] += np.linspace(-18.0, 0.0, fade_in, endpoint=False)
+        gain[b - fade_out : b] += np.linspace(0.0, -30.0, fade_out)
+
     s = np.clip(src[sung], 0, len(f0_s) - 1.001)
     i0 = s.astype(int)
     w = (s - i0)[:, None]
@@ -420,12 +465,12 @@ def sing_from_speech(notes, segs, reading, lines, which, voice, seed, formant=1.
     pitch = np.interp(t_out, tb, V.pitch_track(notes, n_blocks, SR, voice, rng))
     voiced = np.zeros(n_out, dtype=bool)
     voiced[sung] = f0_s[np.round(s).astype(int)] > 0
-    voiced |= vowel
-    f0 = np.where(voiced, pitch, 0.0)
+    voiced |= vowel | keep_voicing
+    f0 = np.where(voiced & sung, pitch, 0.0)
 
     y = pyworld.synthesize(np.ascontiguousarray(f0), np.ascontiguousarray(sp), np.ascontiguousarray(ap), SR, FRAME * 1000)
     mask = np.zeros(len(y), dtype=bool)
-    for _, T_v0, T_v1, _, _ in targets:
+    for _, T_v0, T_v1, *_ in targets:
         mask[int(T_v0 * SR) : int(T_v1 * SR)] = True
     return 0.3 * y / (np.sqrt(np.mean(y[mask] ** 2)) + 1e-12) / np.sqrt(2.0)
 
@@ -487,7 +532,7 @@ def main() -> None:
     first_of = {}
     for i, w in enumerate(which):
         first_of.setdefault(w, lines[i])
-    knots = align_reading(model, reading, world, active, texts, first_of, notes, genome.lexicon, spoken)
+    knots = align_reading(model, reading, world, band, active, texts, first_of, notes, genome.lexicon, spoken)
 
     sung = sing_from_speech(notes, segs, {"world": world, "knots": knots, "band": band},
                             lines, which, voice, params.seed, args.formant)
