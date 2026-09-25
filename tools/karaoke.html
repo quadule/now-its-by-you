@@ -52,6 +52,8 @@
   ul { margin: 6px 0; padding-left: 20px; }
   .portrait { white-space: pre-wrap; }
   .row { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
+  .sync { margin-top: 10px; }
+  input[type=range] { flex: 1 1 200px; max-width: 360px; accent-color: var(--accent); }
   input { font: inherit; background: #2a241f; color: var(--ink); border: 1px solid var(--line); border-radius: 8px; padding: 6px 8px; }
   input[type=number] { width: 80px; }
   audio { width: 100%; margin-top: 8px; }
@@ -85,6 +87,15 @@
       <button id="keep" class="primary">✓ Keep it</button>
       <button id="discard">✗ Discard</button>
     </div>
+    <div class="row sync">
+      <span class="hint">If your voice sits late or early against the music, slide it while you listen:</span>
+    </div>
+    <div class="row sync">
+      <span class="hint">earlier</span>
+      <input type="range" id="shift" min="-400" max="400" step="5" value="0">
+      <span class="hint">later</span>
+      <span class="hint" id="shiftValue">as recorded</span>
+    </div>
   </div>
 
   <div class="panel">
@@ -102,11 +113,17 @@
     <audio id="player" controls hidden></audio>
   </div>
 
-  <details class="panel">
+  <details class="panel" id="timing">
     <summary class="hint">Timing</summary>
     <p class="hint">Takes are recorded in the same clock as the guide, minus the delay your device reports for playback and the mic
-      (<span id="latency">not measured yet</span>). If your takes still seem to sit late or early, nudge them here.</p>
-    <div class="row"><label>extra correction <input type="number" id="nudge" value="0" step="5"> ms</label></div>
+      (<span id="latency">not measured yet</span>). Browsers under-report it, Bluetooth headphones most of all, so every take is
+      also synced automatically against the song, and what that finds is remembered here as the extra correction. To check it
+      yourself, calibrate: press the button and tap, clap or say "ta" on each of the clicks.</p>
+    <div class="row">
+      <button id="calibrate">Calibrate by tapping</button>
+      <label>extra correction <input type="number" id="nudge" value="0" step="5"> ms</label>
+    </div>
+    <div class="hint" id="calibration"></div>
   </details>
 </main>
 
@@ -114,7 +131,7 @@
 const $ = id => document.getElementById(id);
 const S = { ctx: null, guide: null, lyrics: null, notes: [], lo: 0, hi: 0, items: [], focus: -2, mode: "idle",
             t0: 0, out: 0, inn: 0, chunks: [], take: null, takes: [], src: [], phrasing: null,
-            analyser: null, buf: null, trail: [], takeTrail: null, showTrail: null };
+            analyser: null, buf: null, trail: [], takeTrail: null, showTrail: null, shift: 0, takeBuffer: null };
 const NAMES = { intro: "Intro", verse: "Verse", refrain: "Refrain", turn: "Turn", bridge: "Bridge", tag: "Tag", break: "Break", outro: "Outro" };
 const PAST = 2.0, FUTURE = 5.0;  // seconds of the lane either side of the playhead
 
@@ -262,7 +279,7 @@ function drawLane(pos) {
     if (x1 - x0 > 12) { g.fillStyle = done ? "rgba(239,230,218,0.35)" : "rgba(239,230,218,0.75)"; g.fillText(n.text, x0 + 1, yy + h / 2 + 12); }
   }
 
-  const trail = S.showTrail;
+  const trail = S.mode === "listening" || $("pitchOn").checked ? S.showTrail : null;
   if (trail && trail.length) {
     g.lineWidth = 3;
     g.lineCap = "round";
@@ -306,13 +323,56 @@ function yin(buf, rate) {
   return null;
 }
 
+function delay() {  // what the device adds beyond what it reports, learned from takes or a calibration
+  return (parseFloat($("nudge").value) || 0) / 1000;
+}
+
+function learn(ms) {
+  $("nudge").value = Math.round(ms);
+  try { localStorage.setItem("songbird-nudge", String(Math.round(ms))); } catch (e) {}
+}
+
 function listen(pos) {
-  if (!S.analyser || !$("pitchOn").checked) return;
+  if (!S.analyser || (!$("pitchOn").checked && S.mode !== "recording")) return;
   S.analyser.getFloatTimeDomainData(S.buf);
   let e = 0;
   for (let i = 0; i < S.buf.length; i++) e += S.buf[i] * S.buf[i];
   const hz = Math.sqrt(e / S.buf.length) > 0.008 ? yin(S.buf, S.ctx.sampleRate) : null;
-  S.trail.push({ t: pos - S.inn - 0.02, m: hz ? 69 + 12 * Math.log2(hz / 440) : null });
+  S.trail.push({ t: pos - S.inn - delay() - 0.02, m: hz ? 69 + 12 * Math.log2(hz / 440) : null });
+}
+
+function autoSync(trail) {
+  /* How late the take runs against the guide: slide the pitch you sang against
+     the song's notes and rests, and keep the slide where they agree best (your
+     voice inside a note, better still on its pitch; your voice in a rest counts
+     against). Returns seconds to move the take earlier, or 0 if nothing clearly
+     beats leaving it as recorded. */
+  const pts = trail.filter(p => p.m !== null);
+  if (pts.length < 100) return 0;
+  const starts = S.notes.map(n => n.start);
+  const noteAt = u => {
+    let lo = 0, hi = starts.length - 1, k = -1;
+    while (lo <= hi) { const mid = (lo + hi) >> 1; if (starts[mid] <= u) { k = mid; lo = mid + 1; } else hi = mid - 1; }
+    return k >= 0 && u < S.notes[k].end ? S.notes[k] : null;
+  };
+  const score = lag => {
+    let s = 0;
+    for (const p of pts) {
+      const n = noteAt(p.t - lag);
+      if (!n) { s -= 0.5; continue; }
+      const m = p.m + 12 * Math.round((n.pitch - p.m) / 12);
+      s += Math.abs(m - n.pitch) <= 1 ? 2 : 1;
+    }
+    return s;
+  };
+  const lags = [], scores = [];
+  for (let k = -30; k <= 120; k++) { lags.push(k * 0.005); scores.push(score(k * 0.005)); }
+  // the gaps between syllables let a slide of a few tens of ms go unpunished, so the best
+  // score is a plateau: take its middle, not its first edge
+  const top = Math.max(...scores);
+  const flat = lags.filter((lag, i) => scores[i] >= top - 0.002 * pts.length);
+  const best = flat[Math.floor(flat.length / 2)];
+  return Math.abs(best) >= 0.01 ? Math.round(best * 1000) / 1000 : 0;
 }
 
 /* ---------- playing and recording ---------- */
@@ -342,27 +402,29 @@ async function microphone() {
   S.buf = new Float32Array(S.analyser.fftSize);
   mic.connect(S.analyser);
   S.recorder.port.onmessage = e => {
-    if (S.mode === "recording") S.chunks.push(e.data);
+    if (S.mode === "recording" || S.mode === "calibrating") S.chunks.push(e.data);
     $("level").style.width = Math.min(100, 140 * e.data.peak) + "%";
   };
 }
 
-function start(buffers, mode) {
-  S.t0 = S.ctx.currentTime + 0.3;
+function start(buffers, mode, from = 0, shifts = []) {
+  const when = S.ctx.currentTime + 0.12;
+  S.t0 = when - from;
   S.out = (S.ctx.outputLatency || 0) + (S.ctx.baseLatency || 0);
   S.inn = S.stream ? S.stream.getAudioTracks()[0].getSettings().latency || 0 : 0;
   $("latency").textContent = `playback ${Math.round(S.out * 1000)} ms` + (S.stream ? `, mic ${Math.round(S.inn * 1000)} ms` : "");
-  S.src = buffers.map(buffer => {
+  S.src = buffers.map((buffer, i) => {
     const src = S.ctx.createBufferSource();
     src.buffer = buffer;
     src.connect(S.ctx.destination);
-    src.start(S.t0);
+    const at = from + (shifts[i] || 0);  // a positive shift plays the buffer that much earlier
+    if (at >= 0) src.start(when, at); else src.start(when - at);
     return src;
   });
   S.src[0].onended = () => { if (S.mode !== "idle") stop(); };
   S.chunks = [];
   S.trail = [];
-  S.showTrail = mode === "listening" ? S.takeTrail : S.trail;
+  S.showTrail = mode === "listening" ? S.takeTrail.map(p => ({ t: p.t - S.shift, m: p.m })) : S.trail;
   S.mode = mode;
   $("stop").disabled = false;
   $("record").disabled = $("rehearse").disabled = true;
@@ -385,9 +447,9 @@ function stop() {
 
 function finishTake() {
   const rate = S.ctx.sampleRate;
-  const nudge = (parseFloat($("nudge").value) || 0) / 1000;
-  // the guide's first sample reached your ears S.out after t0; your voice reached the recorder S.inn after that
-  const first = Math.round((S.t0 + S.out + S.inn + nudge) * rate);
+  // the guide's first sample reached your ears S.out after t0; your voice reached the recorder S.inn
+  // after that, plus whatever the device adds without saying
+  const first = Math.round((S.t0 + S.out + S.inn + delay()) * rate);
   const tail = S.chunks[S.chunks.length - 1];
   const last = tail ? tail.frame + tail.samples.length : first;
   const samples = new Float32Array(Math.max(last - first, 0));
@@ -398,8 +460,14 @@ function finishTake() {
   S.chunks = [];
   S.take = { samples, rate };
   S.takeTrail = S.trail.slice();
+  S.takeBuffer = null;
   const long = samples.length / rate > 5;
-  status(long ? "Got it. Listen back, then keep it or let it go." : "That was short. Record again?");
+  S.shift = S.autoShift = long ? autoSync(S.takeTrail) : 0;
+  $("shift").value = String(Math.max(-400, Math.min(400, -S.shift * 1000)));
+  $("shiftValue").textContent = S.shift ? `auto-synced, ${Math.abs(Math.round(S.shift * 1000))} ms ${S.shift > 0 ? "earlier" : "later"}` : "as recorded";
+  if (S.shift) learn(delay() * 1000 + S.shift * 1000);  // so the next take, and your pitch line, start closer
+  const synced = S.shift ? ` Synced automatically: your device held the sound ${Math.round(Math.abs(S.shift) * 1000)} ms longer than it said.` : "";
+  status(long ? `Got it.${synced} Listen back; if it still feels off, slide it.` : "That was short. Record again?");
   $("review").hidden = !long;
 }
 
@@ -459,22 +527,112 @@ $("stop").onclick = stop;
 document.addEventListener("keydown", e => { if (e.code === "Space" && S.mode !== "idle") { e.preventDefault(); stop(); } });
 window.addEventListener("resize", () => { if (S.mode === "idle" && S.lyrics) resting(); });
 
-$("listen").onclick = () => {
-  const b = S.ctx.createBuffer(1, S.take.samples.length, S.take.rate);
-  b.copyToChannel(S.take.samples, 0);
-  start([S.guide, b], "listening");
+function takeBuffer() {
+  if (!S.takeBuffer) {
+    S.takeBuffer = S.ctx.createBuffer(1, S.take.samples.length, S.take.rate);
+    S.takeBuffer.copyToChannel(S.take.samples, 0);
+  }
+  return S.takeBuffer;
+}
+
+function listenFrom(from) {
+  S.src.forEach(s => { s.onended = null; try { s.stop(); } catch (e) {} });
+  start([S.guide, takeBuffer()], "listening", Math.max(0, from), [0, S.shift]);
+}
+
+$("listen").onclick = () => listenFrom(0);
+$("shift").oninput = () => {
+  const ms = parseFloat($("shift").value);
+  S.shift = -ms / 1000;  // slid left, the voice comes earlier
+  $("shiftValue").textContent = ms ? `${Math.abs(ms)} ms ${ms < 0 ? "earlier" : "later"}` + (S.shift === S.autoShift ? " (auto)" : "") : "as recorded";
 };
+$("shift").onchange = () => {  // on letting go, hear it from where you were
+  if (S.mode === "listening") listenFrom(S.ctx.currentTime - S.t0 - S.out - 1.0);
+};
+
+function shifted(samples, rate, earlier) {
+  const n = Math.round(earlier * rate);
+  if (n >= 0) return samples.subarray(Math.min(n, samples.length));
+  const out = new Float32Array(samples.length - n);
+  out.set(samples, -n);
+  return out;
+}
 $("discard").onclick = () => { S.take = null; $("review").hidden = true; status("Take discarded. Ready when you are."); };
 $("keep").onclick = async () => {
   $("keep").disabled = true;
   try {
-    const { path } = await post("/take", wav(S.take.samples, S.take.rate), "audio/wav");
+    const { path } = await post("/take", wav(shifted(S.take.samples, S.take.rate, S.shift), S.take.rate), "audio/wav");
     addTake(path);
     $("review").hidden = true;
-    status("Kept. Another take, or make your phrasing.");
+    const byEar = S.shift - (S.autoShift || 0);
+    if (Math.abs(byEar) >= 0.005) {  // your correction beyond the automatic one, for the takes to come
+      learn(delay() * 1000 + byEar * 1000);
+      status(`Kept, with your ${Math.abs(Math.round(byEar * 1000))} ms nudge ${byEar > 0 ? "earlier" : "later"}; the next takes start from it.`);
+    } else {
+      status("Kept. Another take, or make your phrasing.");
+    }
   } catch (e) { status(`<span class="warn">${e.message}</span>`); }
   $("keep").disabled = false;
 };
+$("calibrate").onclick = async () => {
+  try { await audio(); await microphone(); } catch (e) { $("calibration").textContent = `No microphone: ${e.message}`; return; }
+  if (S.mode !== "idle") return;
+  const beat = 0.6, count = 12, when = S.ctx.currentTime + 0.6;
+  for (let k = 0; k < count; k++) {  // short blips, the first four a little lower, to count you in
+    const osc = S.ctx.createOscillator(), env = S.ctx.createGain();
+    osc.frequency.value = k < 4 ? 880 : 1320;
+    env.gain.setValueAtTime(0, when + k * beat);
+    env.gain.linearRampToValueAtTime(0.5, when + k * beat + 0.002);
+    env.gain.exponentialRampToValueAtTime(0.001, when + k * beat + 0.06);
+    osc.connect(env).connect(S.ctx.destination);
+    osc.start(when + k * beat);
+    osc.stop(when + k * beat + 0.08);
+  }
+  S.chunks = [];
+  S.mode = "calibrating";
+  $("calibrate").disabled = $("record").disabled = $("rehearse").disabled = true;
+  $("calibration").textContent = "Tap, clap or say \"ta\" on every click; the first four count you in.";
+  await new Promise(r => setTimeout(r, (0.6 + count * beat + 0.8) * 1000));
+  S.mode = "idle";
+  $("calibrate").disabled = $("record").disabled = $("rehearse").disabled = false;
+
+  // where each tap began: the loudness of 5 ms windows, and the first to jump well above the quiet
+  const rate = S.ctx.sampleRate, win = Math.round(0.005 * rate);
+  const energy = [];
+  for (const c of S.chunks) for (let i = 0; i < c.samples.length; i += win) {
+    let e = 0;
+    for (let j = i; j < Math.min(i + win, c.samples.length); j++) e += c.samples[j] * c.samples[j];
+    energy.push({ t: (c.frame + i) / rate, e });
+  }
+  S.chunks = [];
+  const sorted = energy.map(x => x.e).sort((a, b) => a - b);
+  const floor = sorted[Math.floor(sorted.length * 0.3)] || 0, loud = sorted[Math.floor(sorted.length * 0.99)] || 0;
+  const threshold = Math.max(floor * 8, loud * 0.15);
+  const onsets = [];
+  let quiet = 0;
+  for (const x of energy) {
+    if (x.e < threshold) { quiet++; continue; }
+    if (quiet >= 12) onsets.push(x.t);
+    quiet = 0;
+  }
+  const lags = [];
+  for (let k = 4; k < count; k++) {
+    const click = when + k * beat;
+    const near = onsets.filter(t => t > click - 0.2 && t < click + 0.5);
+    if (near.length) lags.push(near.reduce((a, b) => (Math.abs(a - click - 0.1) < Math.abs(b - click - 0.1) ? a : b)) - click);
+  }
+  if (lags.length < 4) {
+    $("calibration").textContent = `Heard ${lags.length} of 8 taps; try again, a little louder or nearer the mic.`;
+    return;
+  }
+  lags.sort((a, b) => a - b);
+  const total = lags[Math.floor(lags.length / 2)];
+  const nudge = Math.round((total - S.out - S.inn) * 1000);
+  learn(nudge);
+  $("calibration").textContent = `From click to tap took about ${Math.round(total * 1000)} ms (the device reports ${Math.round((S.out + S.inn) * 1000)}), `
+    + `so takes will be shifted ${nudge} ms more from now on. Tapping tends to run a little early, so fine-tune by ear with the slider after a take.`;
+};
+
 $("analyze").onclick = async () => {
   $("analyze").disabled = true;
   $("portrait").textContent = "Listening to your takes (about a minute a take)…";
