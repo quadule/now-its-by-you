@@ -99,3 +99,21 @@ def test_a_fixed_line_can_turn_one_word_each_time_round():
     assert G.turn(line, 0, 2) == "Who made this song?" and G.turn(line, 1, 2) == "Who owns this song?"
     assert G.turns(line) == [f"Who {w} this song?" for w in ("made", "sang", "heard", "owns")]
     assert G.turns("no choices") == ["no choices"]
+
+
+def test_phrasing_moves_only_the_voice():
+    from dataclasses import replace
+
+    from songbird import phrasing as P
+    from songbird.realize import choose_params, realize
+
+    g = G.load(Path(__file__).parent.parent / "songs" / "h-now-its-by-you.json")
+    params = choose_params(g)
+    plain = realize(g, params)
+    late = {pid: tuple(P.Gesture(early=-0.125, hold=0.9, level=2.0) for _ in ph.sung) for pid, ph in g.phrases.items()}
+    phrased = realize(g, params, phrasing=late)
+    assert phrased.duration == plain.duration
+    assert [n for n in phrased.notes if n.part != "voice"] == [n for n in plain.notes if n.part != "voice"]
+    beat = 60.0 / params.tempo
+    for a, b in zip(plain.part("voice"), phrased.part("voice")):
+        assert abs(b.start - (a.start + 0.125 * beat)) < 1e-9 and b.gesture.level == 2.0

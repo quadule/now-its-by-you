@@ -38,8 +38,12 @@ from songbird import genome as G  # noqa: E402
 from songbird import phrasing as P  # noqa: E402
 from songbird.realize import choose_params, realize  # noqa: E402
 
-# How much of each spoken measurement a singer keeps.
-SPEECH = dict(timing=0.3, level=0.6, swell=0.4, scoop=0.25, bend=0.2, fall=0.3)
+# How much of each spoken measurement a singer keeps, and how far it may go.
+# Speech rhythm, emphasis and intonation don't follow a tune; leaning on them
+# harder than this pushed syllables off the beat, weakened weak words and
+# swooped the pitch, and cost words (H, formant voice: 18% misheard -> 26%).
+SPEECH = dict(timing=0.15, level=0.3, swell=0.3, scoop=0.15, bend=0.1, fall=0.2)
+SPEECH_LIMIT = dict(early=0.1, level=(-4.0, 4.0), cents=60.0)
 
 
 def cents(f0: np.ndarray) -> np.ndarray:
@@ -73,6 +77,12 @@ def measure(line_notes, knots, f0, band, tempo: float) -> list[P.Gesture]:
             g["scoop"] = SPEECH["scoop"] * np.mean(c[:3])
             g["bend"] = SPEECH["bend"] * (q3 - q1)
             g["fall"] = SPEECH["fall"] * (np.mean(c[-3:]) - q3)
+        if "early" in g:
+            g["early"] = np.clip(g["early"], -SPEECH_LIMIT["early"], SPEECH_LIMIT["early"])
+        g["level"] = np.clip(g["level"], *SPEECH_LIMIT["level"])
+        for k in ("scoop", "bend", "fall"):
+            if k in g:
+                g[k] = np.clip(g[k], -SPEECH_LIMIT["cents"], SPEECH_LIMIT["cents"])
         gestures.append(P.Gesture(**{k: float(v) for k, v in g.items()}))
     return gestures
 
@@ -122,7 +132,7 @@ def main() -> None:
             phrasing[pid] = tuple(P.average(seen[(pid, j)]) if (pid, j) in seen else P.Gesture() for j in range(count))
 
     who = args.name or (f"{args.say} (macOS say)" if args.say else "a reader")
-    data = P.to_json(phrasing, source="speech", source_detail=f"a reading by {who}", scale=SPEECH)
+    data = P.to_json(phrasing, source="speech", source_detail=f"a reading by {who}", scale=SPEECH, limit=SPEECH_LIMIT)
     tag = (args.say or Path(args.speech).stem).split()[0].lower()
     out = Path(args.out or Path("renders") / "phrasing" / f"{Path(args.genome).stem}.{tag}.json")
     out.parent.mkdir(parents=True, exist_ok=True)

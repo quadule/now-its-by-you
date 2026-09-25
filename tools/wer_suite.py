@@ -33,6 +33,23 @@ ROOT = Path(__file__).parent.parent
 SR = 44100
 
 
+def collapse_loops(tokens: list[str], most: int = 4) -> list[str]:
+    """Whisper sometimes runs away on a long held note ("I'm sorry. I'm sorry.
+    I'm sorry..."): any run of one to four words said three or more times in a
+    row becomes one. No lyric here repeats itself like that."""
+    out = list(tokens)
+    for n in range(1, most + 1):
+        i = 0
+        while i + 3 * n <= len(out):
+            if out[i : i + n] == out[i + n : i + 2 * n] == out[i + 2 * n : i + 3 * n]:
+                j = i + 3 * n
+                while out[j : j + n] == out[i : i + n]:
+                    j += n
+                out[i + n : j] = []
+            i += 1
+    return out
+
+
 def words_of(notes) -> list[str]:
     out, i = [], 0
     while i < len(notes):
@@ -116,8 +133,13 @@ def score_sections(model, y, notes, segs, show):
                                        condition_on_previous_text=False, vad_filter=False,
                                        no_repeat_ngram_size=5)
         heard = " ".join(s.text for s in segments)
-        ref = words_of(line)
-        e, pairs = align(ref, normalize(heard))
+        ref = collapse_loops(words_of(line))  # a sung "la la la la" counts once, like a heard one
+        _, pairs = align(ref, collapse_loops(normalize(heard)))
+        # Whisper sometimes runs away on a long last note ("I'm sorry. I'm
+        # sorry..."); words it adds after the lyric ends are its own, not the singer's.
+        while pairs and not pairs[-1][0]:
+            pairs.pop()
+        e = sum(r != h for r, h in pairs)
         edits, words = edits + e, words + len(ref)
         misses += [f"{r or '-'}→{h or '-'}" for r, h in pairs if r != h]
         record.append({"sung": " ".join(ref), "heard": heard.strip(), "edits": e})

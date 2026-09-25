@@ -195,8 +195,8 @@ def realize(genome: Genome, params: Params, verses=None, phrasing: Phrasing | No
             g = m["gesture"]
             if g is not None:
                 start = max(0.0, note.start - g.early * seconds_per_unit * meter.beat)
-                end = note.start + note.dur * g.hold
-                sung_note = replace(sung_note, start=start, dur=max(end - start, 0.05), gesture=g)
+                let_go = note.start + note.dur * g.hold
+                sung_note = replace(sung_note, start=start, dur=max(let_go - start, 0.05), gesture=g)
             notes.append(sung_note)
             if m["choir"]:  # the lineage joins, each voice on its own harmony line
                 for i in range(params.choir):
