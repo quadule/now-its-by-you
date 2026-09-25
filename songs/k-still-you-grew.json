@@ -1,0 +1,85 @@
+{
+  "title": "Still You Grew",
+  "sketch": "K: the song as a named character. Daisy is a lawn daisy: nobody plants her, everyone picks her, mowers and frost can't be rid of her, and she comes up again in any grass, uninvited. The verses tell her life in one family of images (seed, wind, a shoe, the crack between two stones, petals, the yellow eye, chains, hair, a blind roaring mower, frost, graves) and never say song; the refrain asks her two plain questions and gets one answer twice. Bright 4/4 in the major pentatonic over I, IV, V and vi; verses in trochaic sevens with a long-short skip, refrain a high call and a low answer.",
+  "meter": {"signature": "4/4", "unit": 8, "bar": 8, "beat": 2, "foot": 4},
+
+  "phrases": {
+    "v1": {"tune": "| 1 - - 2 3 - - 3 | 2 - - 1 6, - - -",  "chords": "I | V vi"},
+    "v2": {"tune": "| 1 - - 2 3 - - 5 | 3 - - 3 2 - - -",   "chords": "I | I V"},
+    "v3": {"tune": "| 5 - - 5 6 - - 5 | 3 - - 5 6 - - -",   "chords": "I IV | I vi"},
+    "v4": {"tune": "| 5 - - 3 2 - - 1 | 6, - - 5, 1 - - -", "chords": "I V | vi I"},
+
+    "r1": {"tune": "3 | 6 - 5 3 5 - 6 - | 5 - - - - - . .", "chords": "IV I | V"},
+    "r2": {"tune": "| 1 - 1 2 3 - 2 - | 3 - 2 - 1 - - -",   "chords": "I | vi I"},
+    "r3": {"tune": "3 | 6 - 5 3 5 - 6 - | 5 - - - - - . .", "chords": "IV I | V"},
+    "r4": {"tune": "| 1 - 1 2 3 - 2 - | 5 - 3 - 1 - - -",   "chords": "I | V I"}
+  },
+
+  "sections": {
+    "intro":   {"phrases": ["r1", "r2"]},
+    "verse":   {"phrases": ["v1", "v2", "v3", "v4"], "lyrics": "verse"},
+    "refrain": {"phrases": ["r1", "r2", "r3", "r4"], "lyrics": "refrain"},
+    "break":   {"phrases": ["v1", "v2", "v3", "v4"]},
+    "outro":   {"phrases": ["r3", "r4"]}
+  },
+  "form": ["intro?", "verse", "refrain", "verse*", "refrain", "break?", "verse*", "refrain", "outro?"],
+
+  "refrain": [
+    "Oh Dai-sy, who plant-ed you?",
+    "No-bo-dy did, and still you grew.",
+    "Oh Dai-sy, who want-ed you?",
+    "No-bo-dy did, and still you grew."
+  ],
+
+  "verse_template": {
+    "lines": [
+      "[one chapter of Daisy's life: where she came up, whose hands she was in, or what tried to be rid of her]",
+      "[the same scene, one more plain image, rhyming with line 1]",
+      "[the turn: what she meant or didn't, or what she did while they weren't looking]",
+      "[how she went on anyway, rhyming with line 3]"
+    ],
+    "rhyme": "AABB",
+    "stress": "seven syllables a line, DUM da DUM da DUM da DUM (NO one SOWED her, NO one KNEW), the metre of 'Twinkle, twinkle, little star': every line begins on a stressed syllable and ends on one, and the last stress is held",
+    "images": ["seed", "wind", "a shoe", "the crack between two stones", "grass", "lawn", "petals", "the yellow eye", "stems split with a thumbnail", "chains", "hair", "a buttonhole", "something blind that roars and cuts the grass", "frost", "snow", "a row of graves", "dew", "bees", "sun"],
+    "voice": "third person: Daisy is 'she' and 'her', and every daisy is one of her; 'you' is whoever is listening and appears only in the last verse; nobody is 'I'",
+    "note": "Daisy is a daisy, the small lawn flower nobody plants. One chapter of her life per verse, in order: how she came up where nobody sowed her (wind and a stranger's shoe, the crack between two stones, nobody's garden); how she lived in people's hands (petals pulled to tell a fortune, chains split and threaded by children, hair, a buttonhole, a grave); how they tried to be rid of her or forgot her (a blind roaring thing that cuts the grass, frost, paving, the people who wore her growing old and dying); and how someone's child far away, years from now or long ago, finds her and splits her stem the way you do, not knowing anyone did it before. She is never asked for and never gone. Keep her a daisy: never say song, tune, sing, hum, music, machine, computer or program; no paper, books, ink or pages; nothing gross. Every generation keeps a verse in which nobody sowed her and still she came; a verse in which she means nothing and is asked anyway (the petals fall, the yellow eye stays); something blind that cuts the grass and never knows she is there; and a last verse in which a stranger's child threads another daisy through her."
+  },
+
+  "hooks": [
+    {"phrase": "r1", "notes": [0, 3], "why": "'Oh Daisy': mi up a fourth to la and down to so, a call across the lawn that ends open on so"},
+    {"phrase": "r4", "notes": [4, 8], "why": "'and still you grew': re lifting to so and falling so-mi-do, the one answer the refrain gives, closing the second time"}
+  ],
+
+  "seed_verses": [
+    ["No one sowed her, no one knew;",
+     "half was wind and half was shoe.",
+     "Up she came be-tween two stones,",
+     "no one's gar-den, all her own."],
+    ["Some-one pulled her pet-als: yes,",
+     "no, and yes, and no, and yes.",
+     "All she meant, she gave a-way;",
+     "still the yel-low eye would stay."],
+    ["Chil-dren split her stems and strung",
+     "ev-ery one of her on one;",
+     "round their necks and through their hair,",
+     "off she went to who knows where."],
+    ["Some-thing blind came roar-ing past,",
+     "cut the whole world down to grass;",
+     "low she learned to flow-er, low;",
+     "blind, it passed, and did-n't know."],
+    ["Those who wore her, old and grey,",
+     "lost her name and went a-way;",
+     "where they laid them, row on row,",
+     "she's the on-ly thing they grow."],
+    ["Some-one's child, in some-one's grass,",
+     "years from now, or long since past,",
+     "split her stem, the way you do,",
+     "pulled a-noth-er dai-sy through."]
+  ],
+
+  "seed_params": {
+    "tonic": 62, "mode": "ionian", "tempo": 112, "seed": 1,
+    "accomp": "0 . 3 4 2 . 3 4",
+    "form": ["intro", "verse", "refrain", "verse", "verse", "refrain", "verse", "verse", "refrain", "verse", "refrain", "outro"]
+  }
+}

@@ -136,8 +136,8 @@ def tracks(sp: np.ndarray):
     return band, full > np.percentile(full, 99.5) - 50.0
 
 
-def word_spans(model, y: np.ndarray, words: list[str], weights: list[int]) -> list[tuple[float, float]]:
-    """Where Whisper hears each expected word; words it misses share their neighbours' gap."""
+def word_spans(model, y: np.ndarray, words: list[str]) -> list[tuple[float, float] | None]:
+    """Where Whisper hears each expected word, in seconds; None where it heard something else."""
     audio = resample_poly(y, 16000, SR).astype(np.float32)
     segments, _ = model.transcribe(audio, language="en", beam_size=5, word_timestamps=True,
                                    condition_on_previous_text=False, vad_filter=False)
@@ -151,31 +151,64 @@ def word_spans(model, y: np.ndarray, words: list[str], weights: list[int]) -> li
     spans: list = [None] * len(words)
     i = j = 0
     for r, h in pairs:
-        if r and h:
+        if r and r == h:
             spans[i] = heard[j][1:]
         i, j = i + bool(r), j + bool(h)
-    if all(s is None for s in spans):
-        raise SystemExit("Whisper heard none of the lyric in the reading")
-    k = 0
-    while k < len(spans):
-        if spans[k] is not None:
-            k += 1
-            continue
-        e = k
-        while e < len(spans) and spans[e] is None:
-            e += 1
-        left = spans[k - 1][1] if k else spans[e][0] - 0.25 * sum(weights[k:e])
-        right = spans[e][0] if e < len(spans) else left + 0.25 * sum(weights[k:e])
-        t = left
-        for m in range(k, e):
-            d = (right - left) * weights[m] / sum(weights[k:e])
-            spans[m], t = (t, t + d), t + d
-        k = e
     return spans
 
 
+LINE_GAP = 60  # frames of quiet (300 ms) that may separate two lines of the reading
+SPLIT = 20  # frames of quiet (100 ms) that split a line into pieces aligned on their own
 HOP = 220  # samples per alignment frame, about 5 ms
-PAUSE = 20  # frames of quiet (100 ms) that split a spoken line into pieces aligned on their own
+
+
+def stretches(active, lo: int, hi: int, gap: int) -> list[tuple[int, int]]:
+    """Runs of speech between frames lo and hi, split wherever it pauses for gap frames or more."""
+    on = lo + np.flatnonzero(active[lo:hi])
+    if not len(on):
+        return []
+    edges = np.flatnonzero(np.diff(on) > gap)
+    runs = list(zip([on[0]] + [on[e + 1] for e in edges], [on[e] + 1 for e in edges] + [on[-1] + 1]))
+    return [(a, b) for a, b in runs if b - a >= 8] or runs  # drop clicks
+
+
+def align_reading(model, reading, world, active, texts, first_of, notes, lexicon, midi) -> list[list[tuple]]:
+    """Knots for every syllable of every spoken line. The reading is cut at
+    its pauses; the words Whisper hears say which line each stretch belongs to."""
+    words, weights, owner = [], [], []
+    for li in range(len(texts)):
+        for word, idx in words_of_line(notes, first_of[li]):
+            words += [word]
+            weights += [len(idx)]
+            owner += [li]
+    spans = word_spans(model, reading, words)
+    if all(s is None for s in spans):
+        raise SystemExit("Whisper heard none of the lyric in the reading")
+
+    runs = stretches(active, 0, len(active), LINE_GAP)
+    votes = [[owner[m] for m, s in enumerate(spans) if s is not None and a <= (s[0] + s[1]) / 2 / FRAME < b]
+             for a, b in runs]
+    label = [max(set(v), key=v.count) if v else None for v in votes]
+    # a stretch nobody's words landed in is the next line Whisper missed, if any, or part of its neighbour
+    for r, lab in enumerate(label):
+        if lab is None:
+            prev = next((label[q] for q in range(r - 1, -1, -1) if label[q] is not None), -1)
+            nxt = next((label[q] for q in range(r + 1, len(label)) if label[q] is not None), len(texts))
+            label[r] = prev + 1 if nxt - prev > 1 else max(prev, 0)
+    label = list(np.maximum.accumulate(label))
+    windows: dict[int, list[int]] = {}
+    for (a, b), lab in zip(runs, label):
+        w = windows.setdefault(lab, [a, b])
+        w[0], w[1] = min(w[0], a), max(w[1], b)
+
+    knots = []
+    for li in range(len(texts)):
+        if li not in windows:
+            raise SystemExit(f"couldn't find line {li + 1} in the reading: {texts[li]!r}")
+        mine = [m for m, o in enumerate(owner) if o == li]
+        knots.append(align_line(reading, windows[li], [notes[k] for k in first_of[li]],
+                                [(spans[m], weights[m]) for m in mine], midi, lexicon, active, world[0]))
+    return knots
 
 
 def features(y: np.ndarray, voiced: np.ndarray) -> np.ndarray:
@@ -186,7 +219,8 @@ def features(y: np.ndarray, voiced: np.ndarray) -> np.ndarray:
     m = librosa.feature.mfcc(y=y.astype(np.float32), sr=SR, n_mfcc=20, n_fft=2048, hop_length=HOP,
                              n_mels=40, fmin=80.0, fmax=8000.0)
     m -= m.mean(axis=1, keepdims=True)
-    return np.vstack([m, librosa.feature.delta(m[1:], width=5), voiced[: m.shape[1]][None]])
+    delta = librosa.feature.delta(m[1:], width=5) if m.shape[1] >= 5 else np.zeros_like(m[1:])
+    return np.vstack([m, delta, voiced[: m.shape[1]][None]])
 
 
 def template(piece_notes, seconds: float, midi: float, lexicon):
@@ -207,67 +241,67 @@ def template(piece_notes, seconds: float, midi: float, lexicon):
     return y, target_knots(segs), voiced
 
 
-def align_piece(reading, a: int, b: int, piece_notes, midi: float, lexicon, f0_world) -> list[list[int]]:
-    """Knots in reading frames for a stretch of speech with no pause in it:
-    warp the template's known phoneme times onto the reading (dynamic time warping)."""
+def align_piece(reading, a: int, b: int, piece_notes, midi: float, lexicon, active, f0_world) -> list[list[int]]:
+    """Knots in reading frames for a few syllables spoken between frames a
+    and b: warp the template's known phoneme times onto the reading (dynamic
+    time warping), leaving the reading's silences out of the warp."""
     import librosa
 
-    y_t, knots_t, voiced_t = template(piece_notes, (b - a) / SR, midi, lexicon)
+    s0, s1 = int(a * FRAME * SR), int(b * FRAME * SR)
+    y_t, knots_t, voiced_t = template(piece_notes, (s1 - s0) / SR, midi, lexicon)
     ta, tb = int((knots_t[0][0] - 0.02) * SR), int((knots_t[-1][3] + 0.02) * SR)
-    i0 = ta // HOP
-    world_frame = np.clip(((a + np.arange((b - a) // HOP + 2) * HOP) / SR / FRAME).astype(int), 0, len(f0_world) - 1)
-    X = features(y_t[ta:tb], voiced_t[i0:])
-    Y = features(reading[a:b], (f0_world[world_frame] > 0).astype(float))
-    both = np.hstack([X, Y])
+    world_frame = np.clip(((s0 + np.arange((s1 - s0) // HOP + 2) * HOP) / SR / FRAME).astype(int), 0, len(f0_world) - 1)
+    X = features(y_t[ta:tb], voiced_t[ta // HOP :])
+    Y = features(reading[s0:s1], (f0_world[world_frame] > 0).astype(float))
+    keep = active[world_frame[: Y.shape[1]]].copy()
+    quiet = np.flatnonzero(np.diff(np.concatenate([[1], keep.astype(int), [1]])))
+    for q0, q1 in zip(quiet[::2], quiet[1::2]):
+        if q1 - q0 < 12:
+            keep[q0:q1] = True
+    cols = np.flatnonzero(keep) if keep.any() else np.arange(Y.shape[1])
+    both = np.hstack([X, Y[:, cols]])
     mu, sd = both.mean(axis=1, keepdims=True), both.std(axis=1, keepdims=True) + 1e-9
     weight = np.ones((X.shape[0], 1))
     weight[-1] = 2.0  # voicing
-    _, path = librosa.sequence.dtw(X=(X - mu) / sd * weight, Y=(Y - mu) / sd * weight, metric="euclidean")
+    _, path = librosa.sequence.dtw(X=(X - mu) / sd * weight, Y=(Y[:, cols] - mu) / sd * weight, metric="euclidean")
     path = path[::-1]
 
     def to_reading(t: float) -> float:
         i = int(np.clip(round((t * SR - ta) / HOP), 0, X.shape[1] - 1))
-        return (a + float(np.median(path[path[:, 0] == i, 1])) * HOP) / SR / FRAME
+        return (s0 + float(np.median(cols[path[path[:, 0] == i, 1]])) * HOP) / SR / FRAME
 
     flat = np.maximum.accumulate([to_reading(t) for k in knots_t for t in k[:4]])
     return [list(map(int, np.round(flat[4 * j : 4 * j + 4]))) for j in range(len(knots_t))]
 
 
-def align_line(reading, a: int, b: int, line_notes, words, midi: float, lexicon, active, f0_world):
+def align_line(reading, window, line_notes, words, midi: float, lexicon, active, f0_world) -> list[tuple]:
     """(onset start, vowel start, vowel end, coda end), in reading frames, for
-    every syllable of one spoken line lying between samples a and b. The line
-    is cut at its pauses, Whisper's word times say which words fall in which
-    piece, and each piece is aligned on its own. words: ((start, end), syllables)."""
-    f0, f1 = int(a / SR / FRAME), int(b / SR / FRAME)
-    on = f0 + np.flatnonzero(active[f0:f1])
-    if not len(on):
-        on = np.arange(f0, f1)
-    edges = np.flatnonzero(np.diff(on) > PAUSE)
-    starts = [on[0]] + [on[e + 1] for e in edges]
-    ends = [on[e] + 1 for e in edges] + [on[-1] + 1]
-    pieces = list(zip(starts, ends))
-
-    # which piece each word falls in, never going backwards
-    where = []
-    for (w0, w1), _ in words:
-        mid = (w0 + w1) / 2 / FRAME
+    every syllable of one spoken line within window (frames). The line is cut
+    at its pauses and each piece aligned on its own; Whisper's word times, where
+    it heard the word, say which words fall in which piece. words: (span or None, syllables)."""
+    w0, w1 = window
+    pieces = stretches(active, w0, w1, SPLIT) or [(w0, w1)]
+    # a word Whisper missed sits in proportion between its heard neighbours
+    total = sum(n for _, n in words)
+    where, done = [], 0
+    for span, n in words:
+        mid = (span[0] + span[1]) / 2 / FRAME if span else w0 + (w1 - w0) * (done + n / 2) / total
         inside = [i for i, (p0, p1) in enumerate(pieces) if p0 <= mid < p1]
         where.append(inside[0] if inside else int(np.argmin([min(abs(mid - p0), abs(mid - p1)) for p0, p1 in pieces])))
+        done += n
     where = list(np.maximum.accumulate(where))
     # pieces nobody's words landed in join the piece before them (or the first one)
     groups: dict[int, list[int]] = {}
     for i, (p0, p1) in enumerate(pieces):
         owner = max([w for w in where if w <= i], default=min(where))
-        lo, hi = groups.get(owner, (p0, p1))
-        groups[owner] = [min(lo, p0), max(hi, p1)]
+        g = groups.setdefault(owner, [p0, p1])
+        g[0], g[1] = min(g[0], p0), max(g[1], p1)
 
     knots, k = [], 0
     for g in sorted(set(where)):
         n = sum(syl for (_, syl), w in zip(words, where) if w == g)
         p0, p1 = groups[g]
-        a_g = int(max(p0 - 4, 0) * FRAME * SR)
-        b_g = int((p1 + 4) * FRAME * SR)
-        knots += align_piece(reading, a_g, b_g, line_notes[k : k + n], midi, lexicon, f0_world)
+        knots += align_piece(reading, max(p0 - 4, 0), p1 + 4, line_notes[k : k + n], midi, lexicon, active, f0_world)
         k += n
     flat = np.maximum.accumulate([x for kn in knots for x in kn])
     knots = [list(flat[4 * j : 4 * j + 4]) for j in range(len(knots))]
@@ -358,13 +392,15 @@ def sing_from_speech(notes, segs, reading, lines, which, voice, seed, formant=1.
             s[co] = np.interp(tt[co], [T_v1, T_c1], [S_v1, max(S_c1, S_v1)])
             src[f] = s
             vowel[f[vw]] = True
-            levels.append(float(np.mean(level[S_v0 : max(S_v1, S_v0 + 1)])))
+            levels.append(float(np.percentile(level[S_v0 : max(S_v1, S_v0 + 1)], 75)))
             amps.append(seg.amp)
             spans.append(f)
     # loudness follows the score: level every syllable, then apply the singer's dynamics
     middle = float(np.median(levels))
     for f, lv, amp in zip(spans, levels, amps):
-        gain[f] = 20 * np.log10(amp / 0.9) - float(np.clip(lv - middle, -12.0, 12.0))
+        # a vowel far below the rest was found in the wrong place; never boost it
+        correction = float(np.clip(lv - middle, -8.0, 8.0)) if lv > middle - 30.0 else 0.0
+        gain[f] = 20 * np.log10(amp / 0.9) - correction
     gain = uniform_filter1d(gain, 7)
 
     sung = ~np.isnan(src)
@@ -451,25 +487,7 @@ def main() -> None:
     first_of = {}
     for i, w in enumerate(which):
         first_of.setdefault(w, lines[i])
-    words, weights, owner = [], [], []
-    for li in range(len(texts)):
-        for word, idx in words_of_line(notes, first_of[li]):
-            words.append(word)
-            weights.append(len(idx))
-            owner.append(li)
-    spans = word_spans(model, reading, words, weights)
-
-    knots = []
-    for li in range(len(texts)):
-        mine = [m for m, o in enumerate(owner) if o == li]
-        before = spans[mine[0] - 1][1] if mine[0] else 0.0
-        after = spans[mine[-1] + 1][0] if mine[-1] + 1 < len(spans) else len(reading) / SR
-        lo = max(spans[mine[0]][0] - 0.3, (before + spans[mine[0]][0]) / 2)
-        hi = min(spans[mine[-1]][1] + 0.4, (spans[mine[-1]][1] + after) / 2)
-        line_notes = [notes[k] for k in first_of[li]]
-        line_words = [(spans[m], weights[m]) for m in mine]
-        knots.append(align_line(reading, int(lo * SR), int(hi * SR), line_notes, line_words, spoken,
-                                genome.lexicon, active, world[0]))
+    knots = align_reading(model, reading, world, active, texts, first_of, notes, genome.lexicon, spoken)
 
     sung = sing_from_speech(notes, segs, {"world": world, "knots": knots, "band": band},
                             lines, which, voice, params.seed, args.formant)

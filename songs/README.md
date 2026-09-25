@@ -27,6 +27,7 @@ own `lexicon`).
 | H | Now It's by You | the best of: A's question, B's answer, vehicle verses; 4/4 major pentatonic | | |
 | I | Something Going Round | the creature, abstract: lives in the air, dies on the ground; one host per verse; 4/4 major pentatonic | | |
 | J | Goes Like This | sound outlasts words: the refrain ends by singing its own tune on "la"; common-metre verses; 4/4 major pentatonic | | |
+| K | Still You Grew | the song as a named character: Daisy, the lawn flower nobody plants; 4/4 major pentatonic, a call and answer | | |
 | L | Sticky Burr | stickiness, obliquely: the song as a burdock burr ("you never picked it, it picked you"); 6/8 major pentatonic, a playground-chant hook | | |
 
 A to C were written by Claude; D to G by Fable lyricists, each sent down a
@@ -64,6 +65,8 @@ stranger path. H onwards follow "Where next" below.
 
 **Stickiness**
 - Sticky burr, sticky burr, stuck on you; / you never picked it, it picked you (L)
+- Oh Daisy, who wanted you? / Nobody did, and still you grew (K)
+- All she meant, she gave away; / still the yellow eye would stay (K)
 - Pick it off, it's stuck to your hand; / it drops, and it grows where it lands (L)
 - She never knew. Beside her door / a weed came up, as once before (L)
 
@@ -124,6 +127,7 @@ stranger path. H onwards follow "Where next" below.
 - It dies in the dark if you leave it alone (B)
 - And nobody sang it, and then it was gone (A)
 - Every mouth that sang is gone (F)
+- Where they laid them, row on row, / she's the only thing they grow (K)
 - If nobody runs me, amen (E)
 
 **The machine**
