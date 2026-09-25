@@ -33,7 +33,9 @@ VOWEL_FORMANTS = {
     "ER": (480, 1350, 1690),
 }
 # Diphthongs: sung on the first quality, turning to the second at the note's end.
-DIPHTHONGS = {"EY": ("EH", "IY"), "AY": ("AA", "IH"), "OW": ("OH", "UH"), "AW": ("AA", "UH"), "OY": ("AO", "IY")}
+DIPHTHONGS = {"EY": ("EH", "IY"), "AY": ("AA", "IH"), "OW": ("OH", "UH"), "AW": ("AA", "UH"), "OY": ("AO", "IY"),
+              # fire, wire, hour, our: sung on one note the r is a third vowel quality, er, that rings at the end
+              "AYR": ("AA", "IH", "ER"), "AWR": ("AA", "UH", "ER"), "OYR": ("AO", "IY", "ER")}
 
 # manner, place, voiced
 CONSONANTS = {
@@ -266,5 +268,8 @@ def _syllabify(phones: list[str]) -> list[Syllable]:
         stressed = raw.endswith(("1", "2"))
         if vowel == "AH" and not stressed:
             vowel = "AX"
-        out.append(Syllable(tuple(phones[start:nucleus_index]), vowel, tuple(phones[nucleus_index + 1 : end]), stressed))
+        coda = tuple(phones[nucleus_index + 1 : end])
+        if vowel in ("AY", "AW", "OY") and coda[:1] == ("R",):  # fire, hour: the r joins the vowel
+            vowel, coda = vowel + "R", coda[1:]
+        out.append(Syllable(tuple(phones[start:nucleus_index]), vowel, coda, stressed))
     return out

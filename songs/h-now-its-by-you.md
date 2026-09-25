@@ -42,8 +42,9 @@ it, and the next line answers: it's yours while you sing it.
 
 > la la la la la la la la la la la.
 
-**Form of the seed:** intro, verse (wire), refrain, verse (screen), refrain,
-bridge, refrain, tag.
+**Form of the seed:** intro, verse (wire), refrain, turn, verse (screen),
+refrain, turn, bridge, refrain, tag. A turn is two bars of the strings alone
+(IV, V) so a singer can catch their breath.
 
 **Further seed verses**, for longer forms and as the LLM's first context:
 

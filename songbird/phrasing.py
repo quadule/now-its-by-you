@@ -36,21 +36,26 @@ Phrasing = dict[str, tuple[Gesture, ...]]  # phrase id -> one gesture per sung n
 
 
 def reduce(g: Gesture) -> Gesture:
-    """Clip a gesture to its bounds and round it to its steps."""
+    """Clip a gesture to its bounds and round it to its steps; a field that
+    was never measured (NaN) takes its default."""
     values = []
     for f, lo, hi, step in zip(fields(Gesture), astuple(LOW), astuple(HIGH), astuple(STEP)):
-        v = min(max(getattr(g, f.name), lo), hi)
+        v = getattr(g, f.name)
+        v = f.default if v != v else min(max(v, lo), hi)
         values.append(round(round(v / step) * step, 4))
     return Gesture(*values)
 
 
 def average(gestures: list[Gesture]) -> Gesture:
     """One gesture from several sightings of the same note (a verse tune sung to
-    different words, say); 'leave it to the singer' wins a tie on vibrato."""
-    n = len(gestures)
-    mean = [sum(getattr(g, f.name) for g in gestures) / n for f in fields(Gesture)]
+    different words, say), field by field over the sightings that measured it;
+    'leave it to the singer' wins a tie on vibrato."""
+    mean = []
+    for f in fields(Gesture):
+        seen = [getattr(g, f.name) for g in gestures if getattr(g, f.name) == getattr(g, f.name)]
+        mean.append(sum(seen) / len(seen) if seen else float("nan"))
     own = [g.vibrato for g in gestures if g.vibrato >= 0]
-    mean[-1] = sum(own) / len(own) if len(own) * 2 > n else -1.0
+    mean[-1] = sum(own) / len(own) if len(own) * 2 > len(gestures) else -1.0
     return reduce(Gesture(*mean))
 
 

@@ -13,8 +13,9 @@ def spell(syllables):
 
 
 def test_tune_chooses_the_reading():
-    assert spell(P.fit("fire", 1)) == "F[AY]R"
+    assert spell(P.fit("fire", 1)) == "F[AYR]"  # one note: the r rings as the vowel's last quality
     assert spell(P.fit("fire", 2)) == "F[AY] | [ER]"
+    assert spell(P.fit("tired", 1)) == "T[AYR]D"
 
 
 def test_consonants_move_late_within_english_onsets():

@@ -1,0 +1,332 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Songbird Karaoke</title>
+<style>
+  :root {
+    --bg: #15120f; --panel: #211c18; --line: #3a322c; --ink: #efe6da; --dim: #857a6f;
+    --sung: #f2b25c; --accent: #e0664d; --ok: #8cc084;
+  }
+  * { box-sizing: border-box; }
+  [hidden] { display: none !important; }
+  body { margin: 0; background: var(--bg); color: var(--ink); font: 16px/1.45 -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif; }
+  main { max-width: 920px; margin: 0 auto; padding: 22px 16px 56px; }
+  header { display: flex; justify-content: space-between; align-items: baseline; gap: 12px; flex-wrap: wrap; }
+  h1 { font-size: 20px; margin: 0; font-weight: 650; }
+  .hint { color: var(--dim); font-size: 14px; }
+  .stage { background: var(--panel); border-radius: 16px; padding: 30px 26px; min-height: 290px; margin: 18px 0 10px;
+           display: flex; flex-direction: column; justify-content: center; gap: 16px; }
+  .section { color: var(--accent); text-transform: uppercase; letter-spacing: .14em; font-size: 13px; font-weight: 600; min-height: 1.2em; }
+  .now { font-size: clamp(24px, 4.4vw, 42px); font-weight: 650; line-height: 1.25; min-height: 1.3em; }
+  .next { font-size: clamp(16px, 2.6vw, 24px); color: var(--dim); min-height: 1.3em; }
+  .syl.sung { color: var(--sung); }
+  .count { font-size: 64px; font-weight: 750; color: var(--sung); line-height: 1; }
+  .bar { height: 6px; background: #2e2722; border-radius: 3px; overflow: hidden; }
+  .bar > div { height: 100%; width: 0; background: var(--accent); }
+  .controls { display: flex; flex-wrap: wrap; gap: 10px; margin: 16px 0 8px; align-items: center; }
+  button { font: inherit; padding: 10px 16px; border-radius: 10px; border: 1px solid var(--line); background: #2a241f; color: var(--ink); cursor: pointer; }
+  button.primary { background: var(--accent); border-color: var(--accent); color: #1b120e; font-weight: 650; }
+  button:disabled { opacity: .4; cursor: default; }
+  .meter { width: 140px; height: 8px; background: #2e2722; border-radius: 4px; overflow: hidden; }
+  .meter > div { height: 100%; width: 0; background: var(--ok); }
+  .panel { background: var(--panel); border-radius: 12px; padding: 14px 16px; margin: 12px 0; }
+  .panel h2 { font-size: 15px; margin: 0 0 8px; }
+  ul { margin: 6px 0; padding-left: 20px; }
+  .portrait { white-space: pre-wrap; }
+  .row { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
+  input { font: inherit; background: #2a241f; color: var(--ink); border: 1px solid var(--line); border-radius: 8px; padding: 6px 8px; }
+  input[type=number] { width: 80px; }
+  audio { width: 100%; margin-top: 8px; }
+  .warn { color: var(--sung); }
+</style>
+</head>
+<body>
+<main>
+  <header>
+    <h1 id="title">Songbird Karaoke</h1>
+    <span class="hint">Headphones on, so the guide stays out of the mic.</span>
+  </header>
+
+  <div class="stage">
+    <div class="section" id="section"></div>
+    <div class="now" id="now">Loading…</div>
+    <div class="next" id="next"></div>
+  </div>
+  <div class="bar"><div id="progress"></div></div>
+
+  <div class="controls">
+    <button id="rehearse">▶ Rehearse</button>
+    <button id="record" class="primary">● Record a take</button>
+    <button id="stop" disabled>■ Stop</button>
+    <span class="row hint">mic <span class="meter"><div id="level"></div></span></span>
+  </div>
+
+  <div class="panel" id="review" hidden>
+    <h2>That take</h2>
+    <div class="row">
+      <button id="listen">▶ Listen back with the guide</button>
+      <button id="keep" class="primary">✓ Keep it</button>
+      <button id="discard">✗ Discard</button>
+    </div>
+  </div>
+
+  <div class="panel">
+    <h2>Kept takes</h2>
+    <ul id="takes"><li class="hint">None yet. Sing it however it comes out; wrong notes are fine.</li></ul>
+    <div class="row">
+      <input id="name" placeholder="your name (optional)">
+      <button id="analyze" disabled>Make my phrasing</button>
+    </div>
+    <div class="portrait hint" id="portrait"></div>
+    <div class="row" id="hear" hidden>
+      <button id="machine">▶ Hear the machine sing it your way</button>
+      <label class="hint"><input type="checkbox" id="choir"> with a lineage choir</label>
+    </div>
+    <audio id="player" controls hidden></audio>
+  </div>
+
+  <details class="panel">
+    <summary class="hint">Timing</summary>
+    <p class="hint">Takes are recorded in the same clock as the guide, minus the delay your device reports for playback and the mic
+      (<span id="latency">not measured yet</span>). If your takes still seem to sit late or early, nudge them here.</p>
+    <div class="row"><label>extra correction <input type="number" id="nudge" value="0" step="5"> ms</label></div>
+  </details>
+</main>
+
+<script>
+const $ = id => document.getElementById(id);
+const S = { ctx: null, guide: null, lyrics: null, mode: "idle", t0: 0, out: 0, inn: 0, chunks: [], take: null, takes: [],
+            shownLine: -2, src: [], phrasing: null };
+const NAMES = { intro: "Intro", verse: "Verse", refrain: "Refrain", turn: "Turn: breathe", bridge: "Bridge", tag: "Tag", break: "Break", outro: "Outro" };
+
+const WORKLET = `
+class TakeRecorder extends AudioWorkletProcessor {
+  process(inputs) {
+    const ch = inputs[0] && inputs[0][0];
+    if (ch) {
+      let peak = 0;
+      for (let i = 0; i < ch.length; i++) peak = Math.max(peak, Math.abs(ch[i]));
+      this.port.postMessage({ frame: currentFrame, samples: ch.slice(0), peak });
+    }
+    return true;
+  }
+}
+registerProcessor("take-recorder", TakeRecorder);`;
+
+try { $("nudge").value = localStorage.getItem("songbird-nudge") || "0"; } catch (e) {}
+$("nudge").addEventListener("change", () => { try { localStorage.setItem("songbird-nudge", $("nudge").value); } catch (e) {} });
+
+async function init() {
+  S.lyrics = await (await fetch("/lyrics.json")).json();
+  $("title").textContent = `Songbird Karaoke: ${S.lyrics.title}`;
+  document.title = `Karaoke: ${S.lyrics.title}`;
+  idle("Rehearse to hear it through, or record when you're ready.");
+  if (!window.isSecureContext || !navigator.mediaDevices) {
+    $("now").innerHTML = '<span class="warn">Open this page at http://127.0.0.1 so the browser allows the microphone.</span>';
+  }
+  const kept = await (await fetch("/takes")).json();
+  kept.forEach(addTake);
+}
+
+function idle(message) {
+  $("section").textContent = "";
+  $("now").textContent = message;
+  $("next").textContent = S.lyrics.lines.length ? "First line: " + text(S.lyrics.lines[0]) : "";
+  $("progress").style.width = "0";
+  S.shownLine = -2;
+}
+
+function text(line) {
+  return line.syllables.map(s => s.text + (s.word_end ? " " : "")).join("").trim();
+}
+
+async function audio() {
+  if (!S.ctx) S.ctx = new AudioContext({ latencyHint: "interactive" });
+  await S.ctx.resume();
+  if (!S.guide) {
+    $("now").textContent = "Loading the guide…";
+    S.guide = await S.ctx.decodeAudioData(await (await fetch("/guide.wav")).arrayBuffer());
+  }
+}
+
+async function microphone() {
+  if (S.recorder) return;
+  S.stream = await navigator.mediaDevices.getUserMedia({
+    audio: { echoCancellation: false, noiseSuppression: false, autoGainControl: false, channelCount: 1 },
+  });
+  const mic = S.ctx.createMediaStreamSource(S.stream);
+  await S.ctx.audioWorklet.addModule(URL.createObjectURL(new Blob([WORKLET], { type: "application/javascript" })));
+  S.recorder = new AudioWorkletNode(S.ctx, "take-recorder", { numberOfOutputs: 1, outputChannelCount: [1] });
+  const silent = S.ctx.createGain();
+  silent.gain.value = 0;
+  mic.connect(S.recorder).connect(silent).connect(S.ctx.destination);
+  S.recorder.port.onmessage = e => {
+    if (S.mode === "recording") S.chunks.push(e.data);
+    $("level").style.width = Math.min(100, 140 * e.data.peak) + "%";
+  };
+}
+
+function start(buffers, recording) {
+  S.t0 = S.ctx.currentTime + 0.3;
+  S.out = (S.ctx.outputLatency || 0) + (S.ctx.baseLatency || 0);
+  S.inn = recording ? (S.stream.getAudioTracks()[0].getSettings().latency || 0) : 0;
+  $("latency").textContent = `playback ${Math.round(S.out * 1000)} ms` + (recording ? `, mic ${Math.round(S.inn * 1000)} ms` : "");
+  S.src = buffers.map(buffer => {
+    const src = S.ctx.createBufferSource();
+    src.buffer = buffer;
+    src.connect(S.ctx.destination);
+    src.start(S.t0);
+    return src;
+  });
+  S.src[0].onended = () => { if (S.mode !== "idle") stop(); };
+  S.chunks = [];
+  S.mode = recording ? "recording" : "playing";
+  $("stop").disabled = false;
+  $("record").disabled = $("rehearse").disabled = true;
+  $("review").hidden = true;
+  requestAnimationFrame(tick);
+}
+
+function stop() {
+  const was = S.mode;
+  S.mode = "idle";
+  S.src.forEach(s => { try { s.stop(); } catch (e) {} });
+  S.src = [];
+  $("stop").disabled = true;
+  $("record").disabled = $("rehearse").disabled = false;
+  if (was === "recording") finishTake();
+  else idle("Rehearse again, or record a take.");
+}
+
+function finishTake() {
+  const rate = S.ctx.sampleRate;
+  const nudge = (parseFloat($("nudge").value) || 0) / 1000;
+  // the guide's first sample reached your ears S.out after t0; your voice reached the recorder S.inn after that
+  const first = Math.round((S.t0 + S.out + S.inn + nudge) * rate);
+  const last = S.chunks.length ? S.chunks[S.chunks.length - 1].frame + S.chunks[S.chunks.length - 1].samples.length : first;
+  const samples = new Float32Array(Math.max(last - first, 0));
+  for (const c of S.chunks) {
+    const at = c.frame - first;
+    for (let i = 0; i < c.samples.length; i++) if (at + i >= 0 && at + i < samples.length) samples[at + i] = c.samples[i];
+  }
+  S.chunks = [];
+  S.take = { samples, rate };
+  idle(samples.length / rate > 5 ? "Got it. Listen back, then keep it or let it go." : "That was short. Record again?");
+  $("review").hidden = samples.length / rate <= 5;
+}
+
+function tick() {
+  if (S.mode === "idle") return;
+  draw(S.ctx.currentTime - S.t0 - S.out);
+  requestAnimationFrame(tick);
+}
+
+function draw(pos) {
+  const lines = S.lyrics.lines;
+  $("progress").style.width = Math.max(0, Math.min(100, (100 * pos) / S.lyrics.duration)) + "%";
+  const i = lines.findIndex(l => pos < l.end + 0.25);
+  const section = S.lyrics.sections.find(s => pos >= s.start && pos < s.end);
+  $("section").textContent = section ? NAMES[section.name] || section.name : "";
+  if (i < 0) {
+    if (S.shownLine !== -1) { $("now").textContent = "That's the song."; $("next").textContent = ""; S.shownLine = -1; }
+    return;
+  }
+  const line = lines[i];
+  const wait = line.syllables[0].start - pos;
+  if (wait > 1.5) {  // a countdown through the intro and the turns
+    $("now").innerHTML = `<span class="count">${Math.ceil(wait)}</span>`;
+    $("next").textContent = text(line);
+    S.shownLine = -3;
+    return;
+  }
+  if (S.shownLine !== i) {
+    $("now").innerHTML = line.syllables
+      .map((s, k) => `<span class="syl" data-k="${k}">${s.text}</span>${s.word_end ? " " : ""}`).join("");
+    $("next").textContent = lines[i + 1] ? text(lines[i + 1]) : "";
+    S.shownLine = i;
+  }
+  $("now").querySelectorAll(".syl").forEach(el => el.classList.toggle("sung", pos >= line.syllables[+el.dataset.k].start));
+}
+
+function wav(samples, rate) {
+  const buf = new ArrayBuffer(44 + samples.length * 2), v = new DataView(buf);
+  const put = (at, s) => { for (let i = 0; i < s.length; i++) v.setUint8(at + i, s.charCodeAt(i)); };
+  put(0, "RIFF"); v.setUint32(4, 36 + samples.length * 2, true); put(8, "WAVE"); put(12, "fmt ");
+  v.setUint32(16, 16, true); v.setUint16(20, 1, true); v.setUint16(22, 1, true); v.setUint32(24, rate, true);
+  v.setUint32(28, rate * 2, true); v.setUint16(32, 2, true); v.setUint16(34, 16, true);
+  put(36, "data"); v.setUint32(40, samples.length * 2, true);
+  for (let i = 0; i < samples.length; i++) v.setInt16(44 + 2 * i, Math.max(-1, Math.min(1, samples[i])) * 32767, true);
+  return new Blob([buf], { type: "audio/wav" });
+}
+
+function addTake(path) {
+  if (!S.takes.length) $("takes").innerHTML = "";
+  S.takes.push(path);
+  const li = document.createElement("li");
+  li.textContent = path;
+  $("takes").appendChild(li);
+  $("analyze").disabled = false;
+}
+
+async function post(url, body, type = "application/json") {
+  const r = await fetch(url, { method: "POST", headers: { "Content-Type": type }, body });
+  const data = await r.json();
+  if (data.error) throw new Error(data.error);
+  return data;
+}
+
+$("rehearse").onclick = async () => { await audio(); start([S.guide], false); };
+$("record").onclick = async () => {
+  try { await audio(); await microphone(); } catch (e) { $("now").innerHTML = `<span class="warn">No microphone: ${e.message}</span>`; return; }
+  start([S.guide], true);
+};
+$("stop").onclick = stop;
+document.addEventListener("keydown", e => { if (e.code === "Space" && S.mode !== "idle") { e.preventDefault(); stop(); } });
+
+$("listen").onclick = () => {
+  const b = S.ctx.createBuffer(1, S.take.samples.length, S.take.rate);
+  b.copyToChannel(S.take.samples, 0);
+  start([S.guide, b], false);
+};
+$("discard").onclick = () => { S.take = null; $("review").hidden = true; idle("Take discarded. Ready when you are."); };
+$("keep").onclick = async () => {
+  $("keep").disabled = true;
+  try {
+    const { path } = await post("/take", wav(S.take.samples, S.take.rate), "audio/wav");
+    addTake(path);
+    $("review").hidden = true;
+    idle("Kept. Another take, or make your phrasing.");
+  } catch (e) { $("now").innerHTML = `<span class="warn">${e.message}</span>`; }
+  $("keep").disabled = false;
+};
+$("analyze").onclick = async () => {
+  $("analyze").disabled = true;
+  $("portrait").textContent = "Listening to your takes (about a minute a take)…";
+  try {
+    const r = await post("/analyze", JSON.stringify({ takes: S.takes, name: $("name").value.trim() }));
+    S.phrasing = r.phrasing;
+    $("portrait").textContent = r.portrait + `\n\nSaved as ${r.phrasing}.`;
+    $("hear").hidden = false;
+  } catch (e) { $("portrait").textContent = e.message; }
+  $("analyze").disabled = false;
+};
+$("machine").onclick = async () => {
+  $("machine").disabled = true;
+  const label = $("machine").textContent;
+  $("machine").textContent = "The machine is learning the song…";
+  try {
+    const r = await post("/render", JSON.stringify({ phrasing: S.phrasing, choir: $("choir").checked ? 3 : 0 }));
+    $("player").src = r.url;
+    $("player").hidden = false;
+    $("player").play();
+  } catch (e) { $("portrait").textContent += "\n" + e.message; }
+  $("machine").textContent = label;
+  $("machine").disabled = false;
+};
+
+init();
+</script>
+</body>
+</html>

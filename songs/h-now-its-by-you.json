@@ -16,7 +16,9 @@
     "b1": {"tune": "| 6 - 6 5 3 - 5 6 | 5 - 3 2 3 - - -",    "chords": "vi | I"},
     "b2": {"tune": "| 6 - 6 5 3 - 2 3 | 5 - 3 2 2 - - -",    "chords": "vi | V"},
     "b3": {"tune": "3 | 5 - 5 6 5 - 3 2 | 3 - 2 1 2 - - -",  "chords": "I | vi V"},
-    "b4": {"tune": "3 | 5 - 6 5 3 - 2 1 | 2 - 1 6, 5, - - -", "chords": "I | V"}
+    "b4": {"tune": "3 | 5 - 6 5 3 - 2 1 | 2 - 1 6, 5, - - -", "chords": "I | V"},
+
+    "t1": {"tune": "| . . . . . . . . | . . . . . . . .",   "chords": "IV | V"}
   },
 
   "sections": {
@@ -25,10 +27,11 @@
     "refrain": {"phrases": ["r1", "r2", "r3", "r4"], "lyrics": "refrain"},
     "bridge":  {"phrases": ["b1", "b2", "b3", "b4"], "lyrics": "bridge", "choir": true},
     "tag":     {"phrases": ["r4"], "lyrics": "tag", "choir": true},
+    "turn":    {"phrases": ["t1"]},
     "break":   {"phrases": ["v1", "v2", "v3", "v2"]},
     "outro":   {"phrases": ["r4"]}
   },
-  "form": ["intro?", "verse", "refrain", "verse*", "refrain", "break?", "bridge", "refrain", "tag?", "outro?"],
+  "form": ["intro?", "verse", "refrain", "turn?", "verse*", "refrain", "turn?", "break?", "bridge", "refrain", "tag?", "outro?"],
 
   "refrain": [
     "Who {made|sang|heard|owns} this song? No-bo-dy knows.",
@@ -93,6 +96,6 @@
   "seed_params": {
     "tonic": 62, "mode": "ionian", "tempo": 96, "seed": 1,
     "accomp": "0 . 2 3 4 . 3 2",
-    "form": ["intro", "verse", "refrain", "verse", "refrain", "bridge", "refrain", "tag"]
+    "form": ["intro", "verse", "refrain", "turn", "verse", "refrain", "turn", "bridge", "refrain", "tag"]
   }
 }

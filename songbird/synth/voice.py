@@ -216,9 +216,15 @@ def control_tracks(segs: list[Segment], n_blocks: int, sr: int, voice: VoicePara
         if s.role == "vowel":
             tau = min(0.035, 0.25 * d)
             if s.phone in ph.DIPHTHONGS:
-                a, b = (ph.VOWEL_FORMANTS[q] for q in ph.DIPHTHONGS[s.phone])
+                targets = [ph.VOWEL_FORMANTS[q] for q in ph.DIPHTHONGS[s.phone]]
                 glide = min(0.15, 0.4 * d)
-                keys += [(s.t0 + tau, a), (s.t1 - glide, a), (s.t1 - 0.01, b)]
+                if len(targets) == 3:  # fire, wire: hold the first quality, turn through the second, let the er ring
+                    a, b, c = targets
+                    tail, turn = min(0.3, 0.3 * d), min(0.1, 0.25 * d)
+                    keys += [(s.t0 + tau, a), (s.t1 - tail - turn, a), (s.t1 - tail, b), (s.t1 - 0.6 * tail, c), (s.t1 - 0.01, c)]
+                else:
+                    a, b = targets
+                    keys += [(s.t0 + tau, a), (s.t1 - glide, a), (s.t1 - 0.01, b)]
             else:
                 f = ph.VOWEL_FORMANTS[s.phone]
                 keys += [(s.t0 + tau, f), (s.t1 - tau, f)]
