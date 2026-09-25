@@ -287,6 +287,72 @@ def wobble(c: np.ndarray) -> float | None:
     return float(np.sqrt(2 * power))
 
 
+def align_by_pitch(f0, band, line_notes, line_knots, lag: int, key: int):
+    """(vowel start, vowel end, release) in take frames for each note of one
+    sung line, by warping the tune onto the pitch the person actually sang:
+    their pitch moving from one note to the next is the anchor, their voice
+    falling silent marks the rests, and the dip in loudness at each consonant
+    separates syllables sung on one pitch. Timbre plays no part, so any voice
+    through any microphone will do, and a wrong note costs no more than a few
+    semitones' worth, so a line sung flat still lines up."""
+    from scipy.ndimage import maximum_filter1d
+
+    import librosa
+
+    t0, t1 = line_knots[0][0] - 0.05, line_knots[-1][3] + 0.05
+    a, b = int(t0 / S.FRAME), int(t1 / S.FRAME)
+    ta, tb = max(a + lag - 70, 0), min(b + lag + 70, len(f0))  # 350 ms either side
+    tune = np.full(b - a, np.nan)
+    for note, (_, v0, v1, *_r) in zip(line_notes, line_knots):
+        i0, i1 = max(int(v0 / S.FRAME) - a, 0), max(int(v1 / S.FRAME) - a, 0)
+        tune[i0:i1] = note.pitch
+    heard = f0[ta:tb]
+    sung = np.where(heard > 0, 12 * np.log2(np.maximum(heard, 1.0) / 440.0) + 69 - key, np.nan)
+    gap = np.abs((tune[:, None] - sung[None, :] + 6.0) % 12.0 - 6.0)  # octave-blind distance in semitones
+    loud = band[ta:tb]
+    dip = np.clip((maximum_filter1d(loud, 41) - loud) / 12.0, 0.0, 1.0)[None, :]  # 1 in a consonant's trough
+    in_vowel = np.isfinite(tune)[:, None]
+    cost = np.where(in_vowel,
+                    np.where(np.isfinite(sung)[None, :], np.minimum(np.nan_to_num(gap, nan=3.0), 3.0) / 3.0, 0.8) + 0.25 * dip,
+                    0.3 - 0.25 * dip)  # between vowels anything goes, a trough best
+    steps = np.array([[1, 1], [1, 2], [2, 1]])
+    _, path = librosa.sequence.dtw(C=cost, subseq=True, step_sizes_sigma=steps,
+                                   weights_add=np.zeros(3), weights_mul=np.ones(3))
+    path = path[::-1]
+    xs = np.unique(path[:, 0])
+    ys = np.array([path[path[:, 0] == x, 1].mean() for x in xs])
+
+    def to_take(t: float) -> int:
+        return int(round(ta + float(np.interp(t / S.FRAME - a, xs, ys))))
+
+    return [(to_take(v0), to_take(v1), to_take(c1)) for _, v0, v1, c1, _, _ in line_knots]
+
+
+def vowel_onsets(found, band):
+    """Move each note's start from where its pitch arrived to where its vowel
+    began: the loudness climbing back out of the consonant before it. Someone
+    who slides up into a note starts it on time and scoops; judged by pitch
+    alone they would seem late. Notes with no clear trough keep their place."""
+    out, floor = [], 0
+    for k, (v0, v1, c1) in enumerate(found):
+        lo = max(v0 - 40, floor)  # up to 200 ms back, never into the last vowel
+        hi = min(v0 + 10, len(band) - 1)
+        if hi - lo < 6:
+            out.append((v0, v1, c1))
+            floor = v0 + 16
+            continue
+        m = lo + int(np.argmin(band[lo:hi]))
+        peak = float(np.max(band[m : min(m + 40, len(band))]))
+        if peak - band[m] >= 6.0:
+            rise = np.flatnonzero(band[m : m + 40] >= band[m] + 0.6 * (peak - band[m]))
+            start = m + int(rise[0]) if len(rise) else v0
+        else:
+            start = v0
+        out.append((start, max(v1, start + 2), max(c1, start + 2)))
+        floor = start + 16  # the next vowel starts at least 80 ms later
+    return out
+
+
 def measure_sung(notes, knots, found, take, template, lag: int, key: int, tempo: float):
     """One gesture per sung note, and each note's distance from the tune (cents).
 
@@ -370,7 +436,8 @@ def sung_phrasing(genome_path: Path, genome, takes: list[str]):
         y_t, analysis_t = templates[key]
         found = []
         for line in lines:
-            found += align_sung_line(take, f0, [notes[k] for k in line], [knots[k] for k in line], (y_t, analysis_t[0]), lag)
+            found += align_by_pitch(f0, band, [notes[k] for k in line], [knots[k] for k in line], lag, key)
+        found = vowel_onsets(found, band)
         gestures, off = measure_sung(notes, knots, found, (f0, band, active), analysis_t, lag, key, tempo)
         for note, g in zip(notes, gestures):
             seen[(note.phrase, index_in_phrase(notes, note))].append(g)

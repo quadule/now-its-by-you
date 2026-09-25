@@ -24,10 +24,10 @@ own `lexicon`).
 | E | Nothing of You | the machine confesses, 4/4 aeolian | 6.5 | Tune not catchy enough; lyrics too literal; some details are cool, but not all of them are decided yet |
 | F | The Long Count | deep-time counting song, 4/4 phrygian | 7 | Interesting concept, not working as a song |
 | G | Hweelonalay | refrain in no language, 4/4 phrygian | 7 | Interesting; the melody could be better and the refrain is a little too complex |
-| H | Now It's by You | the best of: A's question, B's answer, vehicle verses; 4/4 major pentatonic | | |
+| H | Now It's by You | the best of: A's question, B's answer, vehicle verses; now with B's refrain as a bridge for the lineage choir, a la tag, turns to breathe, and a turning question (made, sang, heard, owns); 4/4 major pentatonic | lead | Best all round: the chorus is memorable and encapsulates the project; the wire and screen verses are favourites |
 | I | Something Going Round | the creature, abstract: lives in the air, dies on the ground; one host per verse; 4/4 major pentatonic | | |
-| J | Goes Like This | sound outlasts words: the refrain ends by singing its own tune on "la"; common-metre verses; 4/4 major pentatonic | | |
-| K | Still You Grew | the song as a named character: Daisy, the lawn flower nobody plants; 4/4 major pentatonic, a call and answer | | |
+| J | Goes Like This | sound outlasts words: the refrain ends by singing its own tune on "la"; common-metre verses; 4/4 major pentatonic | | Good ideas; likes how the ending connects to the chorus, but the la la las run long (H's tag borrows it, shorter) |
+| K | Still You Grew | the song as a named character: Daisy, the lawn flower nobody plants; 4/4 major pentatonic, a call and answer | runner-up | Catchy chorus, lyrics and melody; loves the hidden Daisy Bell reference; the overall meaning would be lost on most listeners |
 | L | Sticky Burr | stickiness, obliquely: the song as a burdock burr ("you never picked it, it picked you"); 6/8 major pentatonic, a playground-chant hook | | |
 
 A to C were written by Claude; D to G by Fable lyricists, each sent down a
