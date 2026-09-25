@@ -24,9 +24,12 @@ own `lexicon`).
 | E | Nothing of You | the machine confesses, 4/4 aeolian | 6.5 | Tune not catchy enough; lyrics too literal; some details are cool, but not all of them are decided yet |
 | F | The Long Count | deep-time counting song, 4/4 phrygian | 7 | Interesting concept, not working as a song |
 | G | Hweelonalay | refrain in no language, 4/4 phrygian | 7 | Interesting; the melody could be better and the refrain is a little too complex |
+| H | Now It's by You | the best of: A's question, B's answer, vehicle verses; 4/4 major pentatonic | | |
+| I | Something Going Round | the creature, abstract: lives in the air, dies on the ground; one host per verse; 4/4 major pentatonic | | |
+| J | Goes Like This | sound outlasts words: the refrain ends by singing its own tune on "la"; common-metre verses; 4/4 major pentatonic | | |
 
 A to C were written by Claude; D to G by Fable lyricists, each sent down a
-stranger path.
+stranger path. H onwards follow "Where next" below.
 
 ## Where next
 
@@ -53,6 +56,8 @@ stranger path.
 - "No," said the Bird, "sang what I heard." (B)
 - I'm made out of you, and I don't know your name (E)
 - Makers have graves; sound never answered a name (G)
+- There's something going round and round (I)
+- The one who made it up is gone, / and no one knows the name (J)
 
 **Passing it on**
 - Carry it over the water and wire, / hand it along like a coal from the fire (B)
@@ -63,6 +68,9 @@ stranger path.
 - Sing it once and you're the sum (F)
 - She hadn't his language, she hadn't his name; / she gave it her own words and sang it the same. (A)
 - A girl selling oranges caught it for free (A)
+- So lend it your voice, and it's going round (I)
+- It went round the world, and it came round to you (I)
+- It came to you when you were small, / before you had a word (J)
 
 **What other vehicles lose**
 - They buried it with him, the secret he kept (A)
@@ -77,6 +85,7 @@ stranger path.
 - Everyone watches and nobody sings (C)
 - But nobody hummed it; it wasn't a song (B)
 - Gone like a print in the sand (C)
+- It lives in the air, and it dies on the ground (I)
 
 **What survives: sound, tune, mouth**
 - Songs need no paper or power or name, / only a mouth, like the birds (C)
@@ -87,6 +96,9 @@ stranger path.
 - The sea still hums it, out of key (F)
 - The birds went on without the words (F)
 - Nobody buries a spell (G)
+- You'll get the words a little wrong; / the words were never the song. / The part you'll keep goes like this: la la la (J)
+- An old man lost the names of things, / and then he lost his own; / and still he hummed it in his chair: / the tune was in the bone (J)
+- The birds went on without the words, / and sing it still outside (J)
 
 **Death**
 - It dies in the dark if you leave it alone (B)

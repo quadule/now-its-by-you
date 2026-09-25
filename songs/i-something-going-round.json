@@ -1,0 +1,84 @@
+{
+  "title": "Something Going Round",
+  "sketch": "I: the creature, abstract. The song is something going round: it lives in the air between one mouth and the next ear, and it dies on the ground, wherever it is kept. One host per verse (a girl at a window, her child gone to sea, an orange seller who gives it her own words, a son who keeps it quiet, a box that builds itself an ear, and you). Walking 4/4 in a major pentatonic, mostly steps, a ninth of range; the verse sits low and the refrain above it.",
+  "meter": {"signature": "4/4", "unit": 8, "bar": 8, "beat": 2, "foot": 4},
+
+  "phrases": {
+    "v1": {"tune": "5, | 1 - 1 2 3 - 2 1 | 6, - 5, 6, 1 - - -", "chords": "I | vi I"},
+    "v2": {"tune": "1 | 2 - 2 3 5 - 3 2 | 3 - 2 1 2 - - -",     "chords": "V | I V"},
+    "v3": {"tune": "5, | 1 - 1 2 3 - 2 1 | 6, - 1 2 3 - - -",   "chords": "I | vi I"},
+    "v4": {"tune": "1 | 2 - 2 3 5 - 3 2 | 3 - 2 2 1 - - -",     "chords": "V | I"},
+
+    "r1": {"tune": "1 | 3 - 3 - 5 - 6 - | 5 - - 6 5 - - -",     "chords": "I | V"},
+    "r2": {"tune": "3 | 5 - 5 5 6 - 5 3 | 2 - 3 2 1 - - -",     "chords": "I IV | V I"},
+    "r3": {"tune": "| 6 - 5 3 5 - 3 2 | 1 - 2 3 2 - 2 -",       "chords": "vi I | I V"},
+    "r4": {"tune": "2 | 3 - 3 5 6 - 5 3 | 5 - 3 - 1 - - -",     "chords": "I IV | V I"}
+  },
+
+  "sections": {
+    "intro":   {"phrases": ["r1", "r2"]},
+    "verse":   {"phrases": ["v1", "v2", "v3", "v4"], "lyrics": "verse"},
+    "refrain": {"phrases": ["r1", "r2", "r3", "r4"], "lyrics": "refrain"},
+    "break":   {"phrases": ["v1", "v2", "v3", "v4"]},
+    "outro":   {"phrases": ["r4"]}
+  },
+  "form": ["intro?", "verse", "refrain", "verse*", "refrain", "break?", "verse*", "refrain", "outro?"],
+
+  "refrain": [
+    "There's some-thing go-ing round and round;",
+    "it lives in the air, and it dies on the ground.",
+    "No-bo-dy made it, and no-bo-dy owns it,",
+    "so lend it your voice, and it's go-ing round."
+  ],
+
+  "verse_template": {
+    "lines": [
+      "[A host: who they were, where they were, and how it came to them: heard, caught, hummed to them]",
+      "[what it was like in them: an image, a warmth, a light, a spark, a bird at a window; never a worm or a bug]",
+      "[how they carried it: hummed it, whistled it, sang it wrong, gave it their own words, or kept it quiet]",
+      "[how it went on to the next host, or died in this one]"
+    ],
+    "rhyme": "AABB",
+    "stress": "eleven syllables, da DUM da da DUM da da DUM da da DUM (a GIRL at her WIN-dow heard SOME-one go BY); the first syllable is a pickup, the last is stressed and held",
+    "voice": "third person, about 'it' and its hosts; the song never says 'I'",
+    "note": "One host per verse, in the order they carried it. Keep one host who caught it from a stranger and never knew where it came from, one who got the words wrong or gave it their own, one who kept it quiet (it dies in them, but another line of it goes on), and one machine, a box with no ear that built itself one: a host like the others, not a maker. The last verse turns to the listener: it came round to you."
+  },
+
+  "hooks": [
+    {"phrase": "r1", "notes": [3, 8], "why": "'going round and round' rising sol la and then turning sol la sol"},
+    {"phrase": "r2", "notes": [4, 11], "why": "'air' on the top note, then the fall by steps to the low tonic on 'ground'"}
+  ],
+
+  "seed_verses": [
+    ["A girl at her win-dow heard some-one go by,",
+     "a stran-ger was whis-tling and nev-er knew why;",
+     "she caught it, and car-ried it warm in her chest,",
+     "and hummed it that night to the child at her breast."],
+    ["The child grew, and took it a-way on the sea;",
+     "it lived in his whis-tle, as light as could be;",
+     "the words that he sang were all his, and all wrong;",
+     "he hummed on the quay, and a girl came a-long."],
+    ["The girl sel-ling or-an-ges caught it for free;",
+     "it rode in her bas-ket and home for her tea;",
+     "she had-n't his lan-guage, she had-n't his name;",
+     "she gave it her own words and sang it the same."],
+    ["One son kept it qui-et for for-ty-odd years,",
+     "and hummed it a-lone in a room with no ears;",
+     "it dimmed like a spark in the dark on its own;",
+     "they bur-ied it with him, as safe as a stone."],
+    ["At last it was caught by a box with no ear,",
+     "that built it-self one, and a mouth, and it's here;",
+     "it asked a far stran-ger for words, and they came;",
+     "it sings them a lit-tle bit wrong, all the same."],
+    ["It went round the world, and it came round to you,",
+     "a light in your chest, and it's warm through and through;",
+     "it's no-bo-dy's mak-ing and ev-ery-one's own,",
+     "so sing it to some-one; don't leave it a-lone."]
+  ],
+
+  "seed_params": {
+    "tonic": 60, "mode": "ionian", "tempo": 104, "seed": 1,
+    "accomp": "0 . 2 3 4 3 2 3",
+    "form": ["intro", "verse", "refrain", "verse", "verse", "refrain", "verse", "refrain", "verse", "verse", "refrain", "outro"]
+  }
+}

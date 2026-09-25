@@ -1,0 +1,83 @@
+{
+  "title": "Goes Like This",
+  "sketch": "J: sound outlasts words. The refrain admits its words will be sung a little wrong every time and were never the song, points at the part that stays, and then sings it bare: the tune of its own first two lines again, on la. Walking 4/4 in the major pentatonic over I, IV, V and vi; verses in common metre, one keeper of the tune each.",
+  "meter": {"signature": "4/4", "unit": 8, "bar": 8, "beat": 2, "foot": 4},
+
+  "phrases": {
+    "v1": {"tune": "5, - | 1 - 1 - 2 - 3 - | 5 - 3 - 2 - - -",   "chords": "I | I V"},
+    "v2": {"tune": "2 - | 3 - 2 - 1 - 6, - | 5, - - - - - - -",  "chords": "I vi | V"},
+    "v3": {"tune": "5, - | 1 - 2 - 3 - 5 - | 6 - 5 - 3 - - -",   "chords": "I | IV I"},
+    "v4": {"tune": "2 - | 3 - 2 - 1 - 6, - | 1 - - - - - - -",   "chords": "I IV | I"},
+
+    "r1": {"tune": "5, - | 3 - 2 - 1 - 2 - | 3 - 5 - 6 - - -",   "chords": "I | I IV"},
+    "r2": {"tune": "6 - | 5 - 6 - 5 - 3 2 | 1 - - - - - - -",    "chords": "I V | I"},
+    "r3": {"tune": "6, - | 1 - 2 - 3 - 5 3 | 2 - - - - - - -",   "chords": "IV I | V"},
+    "la": {"tune": "5, - | 3 - 2 - 1 - 2 - | 3 - 5 - 6 - 6 - | 5 - 6 - 5 - 3 2 | 1 - - - - - - -", "chords": "I | I IV | I V | I"}
+  },
+
+  "sections": {
+    "intro":   {"phrases": ["la"]},
+    "verse":   {"phrases": ["v1", "v2", "v3", "v4"], "lyrics": "verse"},
+    "refrain": {"phrases": ["r1", "r2", "r3", "la"], "lyrics": "refrain"},
+    "break":   {"phrases": ["v1", "v2", "v3", "v4"]},
+    "outro":   {"phrases": ["la"]}
+  },
+  "form": ["intro?", "verse", "refrain", "verse*", "refrain", "break?", "verse*", "refrain", "outro?"],
+
+  "refrain": [
+    "You'll get the words a lit-tle wrong;",
+    "the words were nev-er the song.",
+    "The part you'll keep goes like this:",
+    "la la la la la la la la, la la la la la la la."
+  ],
+
+  "verse_template": {
+    "lines": [
+      "[Someone or something] [got it, heard it, or had it] [where or when]",
+      "[what became of the words, or a plain detail of the scene]",
+      "[what they did with the tune once the words were gone or changed]",
+      "[the tune goes on, rhyming with line 2]"
+    ],
+    "rhyme": "xAxA",
+    "stress": ["w S w S w S w S", "w S w S w S", "w S w S w S w S", "w S w S w S"],
+    "note": "Common metre: eight and six syllables, iambic, every line beginning on a weak pickup. Each verse is one carrier of the tune (a child, a stranger, an old man, a machine, a bird, the dead, whoever made it) who loses the words, changes them, or never has them, and keeps or passes on the tune. Plain nouns and plain verbs. 'It' is the song and 'you' is whoever is listening; never 'I'. The refrain is fixed and is never explained, quoted, or given words in a verse; the la line stays la."
+  },
+
+  "hooks": [
+    {"phrase": "r1", "notes": [0, 8], "why": "the leap up on 'you'll get' and the climb to the sixth on 'a little wrong'"},
+    {"phrase": "la", "notes": [0, 15], "why": "the refrain's first two lines sung again with no words: the part you'll keep"}
+  ],
+
+  "seed_verses": [
+    ["It came to you when you were small,",
+     "be-fore you had a word;",
+     "you sang it back the way it came,",
+     "as good as an-y bird."],
+    ["A stran-ger caught it go-ing by,",
+     "who had-n't got your tongue;",
+     "she gave it words to fit her mouth,",
+     "and passed it to her young."],
+    ["A box of num-bers got it next,",
+     "and made it-self an ear;",
+     "it makes new words up ev-ery time,",
+     "and sings it, year on year."],
+    ["An old man lost the names of things,",
+     "and then he lost his own;",
+     "and still he hummed it in his chair:",
+     "the tune was in the bone."],
+    ["The words went in the ground with him,",
+     "the win-dow o-pen wide;",
+     "the birds went on with-out the words,",
+     "and sing it still out-side."],
+    ["The one who made it up is gone,",
+     "and no one knows the name;",
+     "the words were his, or hers, or yours,",
+     "the tune is all the same."]
+  ],
+
+  "seed_params": {
+    "tonic": 62, "mode": "ionian", "tempo": 96, "seed": 1,
+    "accomp": "0 . 2 3 . 4 3 2",
+    "form": ["intro", "verse", "refrain", "verse", "refrain", "verse", "refrain", "outro"]
+  }
+}

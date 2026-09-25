@@ -1,0 +1,79 @@
+{
+  "title": "Now It's by You",
+  "sketch": "H: the best of. A's question and B's twist make the refrain; the verses are A's vehicle ballad, each one stitched from two songs (a mind, ink, wire, a screen, a mouth). Striding 4/4 in major pentatonic with a long-short-short lilt; chords I, IV, V and vi only, range low so to la.",
+  "meter": {"signature": "4/4", "unit": 8, "bar": 8, "beat": 2, "foot": 4},
+
+  "phrases": {
+    "v1": {"tune": "5, | 1 - 2 3 5 - 3 2 | 3 - 2 1 2 - - -", "chords": "I | I V"},
+    "v2": {"tune": "5, | 1 - 2 3 5 - 5 3 | 2 - 3 2 1 - - -", "chords": "I | V I"},
+    "v3": {"tune": "3 | 5 - 5 6 5 - 3 5 | 6 - 5 3 2 - - -",  "chords": "I | IV V"},
+
+    "r1": {"tune": "5, | 1 - 1 - 5 - - - | 6 - 5 3 5 - - -", "chords": "I | IV V"},
+    "r2": {"tune": "3 | 3 - 3 5 6 - 5 3 | 5 - 3 - 1 - - -",  "chords": "I vi | V I"},
+    "r3": {"tune": "5 | 6 - 6 5 6 - 6 5 | 3 - 5 3 2 - - -",  "chords": "vi IV | I V"},
+    "r4": {"tune": "3 | 5 - 6 5 3 - 2 3 | 5 - 3 2 1 - - -",  "chords": "I | V I"}
+  },
+
+  "sections": {
+    "intro":   {"phrases": ["r3", "r4"]},
+    "verse":   {"phrases": ["v1", "v2", "v3", "v2"], "lyrics": "verse"},
+    "refrain": {"phrases": ["r1", "r2", "r3", "r4"], "lyrics": "refrain"},
+    "break":   {"phrases": ["v1", "v2", "v3", "v2"]},
+    "outro":   {"phrases": ["r4"]}
+  },
+  "form": ["intro?", "verse", "refrain", "verse*", "refrain", "break?", "verse*", "refrain", "outro?"],
+
+  "refrain": [
+    "Who made this song? No-bo-dy knows.",
+    "It's yours while you sing it, and then it goes.",
+    "It's no-bo-dy's mak-ing, it's old and it's new;",
+    "by ev-ery-one, no one, and now it's by you."
+  ],
+
+  "verse_template": {
+    "lines": [
+      "[someone] [kept, wrote, saved or showed] it [in a vehicle] [where or when]",
+      "[how the vehicle held it], rhyming with line 1",
+      "[how far or how long it went]",
+      "[what became of it], rhyming with line 3"
+    ],
+    "rhyme": "AABB",
+    "meter": "11 syllables a line: an unstressed pickup, three dactyls and a final stress (w S w w S w w S w w S), as in 'a QUI-et man KEPT it a-LONE in his HEAD'",
+    "vehicles": ["a mind", "ink", "wire", "a screen", "a mouth"],
+    "note": "Third person throughout: the song is 'it' and its keepers are 'he', 'she' and 'they'; nobody in a verse is 'I'. Every vehicle but the mouth loses it. The last verse is the one where somebody sings it and it gets away."
+  },
+
+  "hooks": [
+    {"phrase": "r1", "notes": [0, 4], "why": "'Who made this song?': the leap of a fifth onto 'song', answered by 'nobody knows' rocking la-so-mi-so"},
+    {"phrase": "r4", "notes": [7, 11], "why": "'now it's by you' falling so-mi-re-do, the same cadence that closed 'then it goes'"}
+  ],
+
+  "seed_verses": [
+    ["A qui-et man kept it a-lone in his head,",
+     "so close and so safe that it nev-er was said.",
+     "It went where he went, and it slept where he slept;",
+     "they bur-ied it with him, the se-cret he kept."],
+    ["A girl wrote it down by a can-dle one night,",
+     "in ink on a page, and she fold-ed it tight.",
+     "It lay in a drawer for a hun-dred-odd years;",
+     "it speaks in a voice that now no-bo-dy hears."],
+    ["They saved it as num-bers and sent it by wire,",
+     "a flick-er of light, and as quick as a fire.",
+     "Each cop-y was per-fect in ev-ery last part,",
+     "but not one ma-chine ev-er knew it by heart."],
+    ["The whole world was watch-ing it all in a day,",
+     "a mil-lion bright fac-es all lit the same way;",
+     "they laughed and they wept, and they scrolled right a-long,",
+     "but no-bo-dy hummed it; it was-n't a song."],
+    ["A sail-or was hum-ming it down by the quay;",
+     "a girl sell-ing or-an-ges caught it for free.",
+     "She had-n't his lan-guage, she had-n't his name;",
+     "a mouth is e-nough, and she sang it the same."]
+  ],
+
+  "seed_params": {
+    "tonic": 62, "mode": "ionian", "tempo": 96, "seed": 1,
+    "accomp": "0 . 2 3 4 . 3 2",
+    "form": ["intro", "verse", "refrain", "verse", "refrain", "outro"]
+  }
+}
