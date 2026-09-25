@@ -1,6 +1,6 @@
 import pytest
 
-from songbird.theory import chord_tones, degree_semitones, parse_chord
+from songbird.theory import chord_tones, degree_semitones, harmony, parse_chord
 
 
 def test_degrees_wrap_octaves():
@@ -24,3 +24,13 @@ def test_bad_chord_raises():
     assert parse_chord("vii") == (7, 0)
     with pytest.raises(ValueError):
         parse_chord("X")
+
+
+def test_harmony_takes_chord_tones_around_the_melody():
+    d = 62  # D major; the melody's B over vi (B D F#)
+    assert harmony(71, "vi", d, "ionian", 0) == 66  # F# below
+    assert harmony(71, "vi", d, "ionian", 1) == 74  # D above
+    assert harmony(71, "vi", d, "ionian", 2) == 59  # the root, B, beneath
+    assert harmony(71, "vi", d, "ionian", 3) == 54  # role 0 an octave down
+    # a passing tone still gets a chord tone: E over I lands on A below
+    assert harmony(64, "I", d, "ionian", 0) == 57

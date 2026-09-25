@@ -21,6 +21,8 @@ def render_command(args: argparse.Namespace) -> int:
     params = choose_params(genome)
     if args.form:
         params = replace(params, form=tuple(args.form))
+    if args.choir is not None:
+        params = replace(params, choir=args.choir)
     score = realize(genome, params)
     defaults = VoiceParams()
     voice = replace(defaults, **{k: type(getattr(defaults, k))(v) for k, v in (kv.split("=", 1) for kv in args.voice)})
@@ -67,6 +69,8 @@ def main(argv: list[str] | None = None) -> int:
     render.add_argument("--stems", action="store_true", help="also write each part, dry, as WAV")
     render.add_argument("--voice", nargs="*", default=[], metavar="FIELD=VALUE",
                         help="override the singer, e.g. --voice tract=1.0 shift=-12 rd=1.3")
+    render.add_argument("--choir", type=int, metavar="N",
+                        help="lineage voices joining in harmony where the song has a choir (stand-ins for now)")
     render.set_defaults(run=render_command)
 
     args = parser.parse_args(argv)

@@ -61,6 +61,24 @@ def chord_tones(symbol: str, mode: str) -> tuple[int, int, int]:
     )
 
 
+def harmony(melody: int, chord: str, tonic: int, mode: str, role: int) -> int:
+    """A choir voice's pitch (MIDI) against one melody note. Role 0 takes the
+    nearest chord tone a third or more below the melody, role 1 the nearest a
+    third or more above, role 2 the chord's root beneath both; further roles
+    repeat those an octave lower. Chord tones keep every voice consonant with
+    the accompaniment whatever the melody passes through."""
+    tones = chord_tones(chord, mode)
+    pcs = {(tonic + t) % 12 for t in tones}
+    kind, octave = role % 3, role // 3
+    if kind == 0:
+        pitch = next(p for p in range(melody - 3, melody - 15, -1) if p % 12 in pcs)
+    elif kind == 1:
+        pitch = next(p for p in range(melody + 3, melody + 15) if p % 12 in pcs)
+    else:
+        pitch = next(p for p in range(melody - 5, melody - 17, -1) if p % 12 == (tonic + tones[0]) % 12)
+    return pitch - 12 * octave
+
+
 def midi_to_hz(pitch: float) -> float:
     return 440.0 * 2.0 ** ((pitch - 69.0) / 12.0)
 

@@ -19,7 +19,7 @@ from __future__ import annotations
 
 import json
 import re
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
 
 from .theory import parse_chord
@@ -81,7 +81,8 @@ class Phrase:
 class Section:
     name: str
     phrases: tuple[str, ...]
-    lyrics: str | None  # "refrain", "verse", or None for an instrumental section
+    lyrics: str | None  # "verse", a fixed block ("refrain", "bridge", ...), or None for an instrumental section
+    choir: bool = False  # voices from the lineage join in harmony here
 
 
 @dataclass(frozen=True)
@@ -98,6 +99,7 @@ class Genome:
     seed_params: dict
     source: dict  # the JSON as authored, carried forward verbatim
     lexicon: dict  # the song's own words: spelling -> ARPAbet, for words no dictionary has
+    fixed: dict = field(default_factory=dict)  # every fixed lyric block by name, the refrain among them
 
 
 def syllables(line: str) -> list[str]:
@@ -176,7 +178,7 @@ def from_dict(data: dict) -> Genome:
         missing = [p for p in spec["phrases"] if p not in phrases]
         if missing:
             raise ValueError(f"section {name} names unknown phrases {missing}")
-        sections[name] = Section(name, tuple(spec["phrases"]), spec.get("lyrics"))
+        sections[name] = Section(name, tuple(spec["phrases"]), spec.get("lyrics"), bool(spec.get("choir", False)))
     for token in data["form"]:
         if token.rstrip("?*") not in sections:
             raise ValueError(f"form names unknown section {token!r}")
@@ -194,13 +196,18 @@ def from_dict(data: dict) -> Genome:
         seed_params=data.get("seed_params", {}),
         source=data,
         lexicon=dict(data.get("lexicon", {})),
+        fixed={
+            s.lyrics: tuple(data[s.lyrics]) for s in sections.values() if s.lyrics not in (None, "verse") and s.lyrics in data
+        } | {"refrain": tuple(data["refrain"])},
     )
     for section in sections.values():
-        if section.lyrics == "refrain":
-            _check_lines(genome.refrain, section, phrases, "refrain")
-        elif section.lyrics == "verse":
+        if section.lyrics == "verse":
             for i, verse in enumerate(genome.seed_verses):
                 _check_lines(verse, section, phrases, f"seed verse {i + 1}")
+        elif section.lyrics is not None:
+            if section.lyrics not in genome.fixed:
+                raise ValueError(f"section {section.name} sings {section.lyrics!r}, which the genome doesn't have")
+            _check_lines(genome.fixed[section.lyrics], section, phrases, section.lyrics)
     return genome
 
 

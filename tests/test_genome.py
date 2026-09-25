@@ -56,3 +56,36 @@ def test_sketches_load(path):
     verse = g.sections["verse"]
     for pid in verse.phrases:
         assert g.phrases[pid].stress(g.meter).count("S") >= 2
+
+
+def test_fixed_blocks_and_choir():
+    g = G.from_dict({
+        "title": "t", "meter": WALTZ.__dict__,
+        "phrases": {"a": {"tune": "| 1 1 2 | 3 - -", "chords": "i | i"}},
+        "sections": {"s": {"phrases": ["a"], "lyrics": "refrain"},
+                     "b": {"phrases": ["a"], "lyrics": "bridge", "choir": True}},
+        "form": ["s", "b"], "refrain": ["one two three four"], "bridge": ["la la la la"],
+    })
+    assert g.fixed == {"refrain": ("one two three four",), "bridge": ("la la la la",)}
+    assert g.sections["b"].choir and not g.sections["s"].choir
+    with pytest.raises(ValueError, match="doesn't have"):
+        G.from_dict({
+            "title": "t", "meter": WALTZ.__dict__,
+            "phrases": {"a": {"tune": "| 1 1 2 | 3 - -", "chords": "i | i"}},
+            "sections": {"b": {"phrases": ["a"], "lyrics": "bridge"}},
+            "form": ["b"], "refrain": ["one two three four"],
+        })
+
+
+def test_choir_sings_only_where_the_genome_allows():
+    from dataclasses import replace
+
+    from songbird.realize import choose_params, realize
+
+    g = G.load(Path(__file__).parent.parent / "songs" / "h-now-its-by-you.json")
+    score = realize(g, replace(choose_params(g), choir=2))
+    choir = [n for n in score.notes if n.part.startswith("choir")]
+    assert {n.part for n in choir} == {"choir1", "choir2"}
+    assert {n.section for n in choir} == {"bridge", "tag"}
+    lead = {(n.start, n.syllable) for n in score.part("voice") if n.section in ("bridge", "tag")}
+    assert {(n.start, n.syllable) for n in score.part("choir1")} == lead  # same words, same time

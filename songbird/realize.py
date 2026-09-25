@@ -15,7 +15,7 @@ import numpy as np
 
 from .genome import Genome, Phrase, sung_words
 from .score import Note, Score
-from .theory import chord_tones, degree_semitones
+from .theory import chord_tones, degree_semitones, harmony
 
 
 @dataclass(frozen=True)
@@ -30,6 +30,7 @@ class Params:
     accomp: str = "0 1 2 3 2 1"  # arpeggio over the chord voicing, one token per step; . rests
     humanize: float = 0.006  # standard deviation of onset jitter, seconds
     ritardando: float = 0.35  # how much slower the final phrase ends than it began
+    choir: int = 0  # voices from the lineage that join in harmony where the genome allows
 
     @classmethod
     def from_dict(cls, data: dict) -> Params:
@@ -66,11 +67,11 @@ def realize(genome: Genome, params: Params, verses=None) -> Score:
     for name in params.form:
         section = genome.sections[name]
         lines: list = [None] * len(section.phrases)
-        if section.lyrics == "refrain":
-            lines = list(genome.refrain)
-        elif section.lyrics == "verse" and verses:
+        if section.lyrics == "verse" and verses:
             lines = list(verses[verse_index % len(verses)])
             verse_index += 1
+        elif section.lyrics in genome.fixed:
+            lines = list(genome.fixed[section.lyrics])
         for pid, line in zip(section.phrases, lines):
             phrase = genome.phrases[pid]
             placed.append((name, phrase, t, line))
@@ -104,6 +105,10 @@ def realize(genome: Genome, params: Params, verses=None) -> Score:
         for k, (note, (syllable, word, word_len)) in enumerate(zip(sung, words)):
             u = start + lead + note.onset
             stressed = note.onset % meter.foot == 0
+            # the chord under this note, for any voices harmonizing it (a pickup takes the first bar's)
+            bar = min(max(note.onset // meter.bar, 0), phrase.bars - 1)
+            in_bar = phrase.chords[bar]
+            chord = in_bar[min(max((note.onset - bar * meter.bar) * len(in_bar) // meter.bar, 0), len(in_bar) - 1)]
             melody.append(
                 dict(
                     u=u,
@@ -116,6 +121,8 @@ def realize(genome: Genome, params: Params, verses=None) -> Score:
                     line_end=k == len(sung) - 1,
                     section=section_name,
                     phrase=phrase.id,
+                    chord=chord,
+                    choir=genome.sections[section_name].choir,
                 )
             )
 
@@ -174,7 +181,12 @@ def realize(genome: Genome, params: Params, verses=None) -> Score:
         )
         notes.append(note)
         if m["syllable"]:
-            notes.append(replace(note, part="voice", vel=float(m["vel"])))
+            sung_note = replace(note, part="voice", vel=float(m["vel"]))
+            notes.append(sung_note)
+            if m["choir"]:  # the lineage joins, each voice on its own harmony line
+                for i in range(params.choir):
+                    pitch = harmony(int(m["pitch"]), m["chord"], params.tonic, params.mode, i)
+                    notes.append(replace(sung_note, part=f"choir{i + 1}", pitch=float(pitch), vel=0.9 * sung_note.vel))
 
     ring = 3.0  # the last chord rings out
     final = seconds(end)

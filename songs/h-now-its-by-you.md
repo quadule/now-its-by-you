@@ -2,26 +2,19 @@
 
 *The best of. Striding 4/4 with a long-short-short lilt, D major pentatonic
 (do re mi so la only), chords I, IV, V and vi, range low so to la. Four-line
-verses of eleven syllables, AABB; the refrain is two couplets.*
+verses of eleven syllables, AABB; the refrain is two couplets; the bridge is
+sung by the lineage.*
 
 A's question, answered the way B ends: nobody made it, and now it's by you.
 The verses are A's vehicle ballad, one keeper per verse, each stitched from two
-songs; the last one gets away by mouth.
+songs. The bridge is B's refrain, where every earlier voice in the song's
+lineage joins in harmony to tell you to hand it along; the last refrain lands
+on "now it's by you", and everyone sings its tune once more, without words.
 
 > Who made this song? Nobody knows.
 > It's yours while you sing it, and then it goes.
 > It's nobody's making, it's old and it's new;
 > by everyone, no one, and now it's by you.
-
-> A quiet man kept it alone in his head,
-> so close and so safe that it never was said.
-> It went where he went, and it slept where he slept;
-> they buried it with him, the secret he kept.
-
-> A girl wrote it down by a candle one night,
-> in ink on a page, and she folded it tight.
-> It lay in a drawer for a hundred-odd years;
-> it speaks in a voice that now nobody hears.
 
 > They saved it as numbers and sent it by wire,
 > a flicker of light, and as quick as a fire.
@@ -33,6 +26,32 @@ songs; the last one gets away by mouth.
 > they laughed and they wept, and they scrolled right along,
 > but nobody hummed it; it wasn't a song.
 
+**Bridge** (the lineage sings with the lead)
+
+> Carry it over the water and wire,
+> hand it along like a coal from the fire;
+> it's nobody's making and everyone's own,
+> it dies in the dark if you leave it alone.
+
+**Tag** (everyone, on the tune of "by everyone, no one, and now it's by you")
+
+> la la la la la la la la la la la.
+
+**Form of the seed:** intro, verse (wire), refrain, verse (screen), refrain,
+bridge, refrain, tag.
+
+**Further seed verses**, for longer forms and as the LLM's first context:
+
+> A quiet man kept it alone in his head,
+> so close and so safe that it never was said.
+> It went where he went, and it slept where he slept;
+> they buried it with him, the secret he kept.
+
+> A girl wrote it down by a candle one night,
+> in ink on a page, and she folded it tight.
+> It lay in a drawer for a hundred-odd years;
+> it speaks in a voice that now nobody hears.
+
 > A sailor was humming it down by the quay;
 > a girl selling oranges caught it for free.
 > She hadn't his language, she hadn't his name;
@@ -42,22 +61,34 @@ songs; the last one gets away by mouth.
 
 ## Notes
 
-- **The tune.** Each foot is a quarter and two eighths, which is what the
-  bank's anapestic lines fall into on their own. Refrain lines 1 and 2 are a
-  question and answer (open on so, closed on do); line 3 sits on la, the top
-  of the range; line 4 falls home so-mi-re-do, the same cadence that closed
-  "then it goes". The verse is lower and plainer: lines 2 and 4 share one
-  melody, line 3 lifts to la once. The only leaps are the pickup fourth into
-  each line and the fifth onto "song".
-- **What the LLM refills.** The four verse lines, from the template above,
-  one vehicle per verse. The refrain never changes.
-- **Bank lines used.** Refrain: "Who made this song? Nobody knows" (A);
-  "It's yours while you sing it, and then it's gone" (A), bent to "then it
-  goes" so it rhymes and says passing-on rather than dying; "It's nobody's
-  making" (B); "by everyone, no one, and now it's by you" (B), promoted from
-  B's last verse to the hook. "Old and new" is F's "the words were new, the
-  tune was ancient" in three words. Verses: A's mind verse with C's "kept it
-  alone in [his] head"; A's ink couplet with B's drawer couplet; B's wire
-  ("sent it by wire", "quicker than fire") with A's "not one machine ever
+- **The artist's picks (2026-09-25).** H is the lead candidate: the chorus is
+  memorable and encapsulates the project. The wire and screen verses are the
+  favourites, so they open the seed; B's refrain quatrain ("Carry it over the
+  water and wire...") is another favourite and became the bridge. J's idea of
+  ending on the chorus's own tune without words survives as a two-bar tag,
+  shorter than J's four.
+- **The lineage choir.** The bridge and the tag are the sections where voices
+  from the song's lineage join in (`"choir": true` in the genome). Each takes a
+  harmony line against the melody from the chord underneath: the nearest chord
+  tone a third or more below, the nearest above, the root beneath, then the
+  same an octave down. The seed has no ancestors, so it sings its bridge alone;
+  each generation adds a voice, so you can hear how far a rendition has
+  travelled. Until the seed packet carries real ancestors (milestone 5),
+  `songbird render --choir N` stands in N made-up singers.
+- **The tune.** Each foot is a quarter and two eighths. Refrain lines 1 and 2
+  are a question and answer (open on so, closed on do); line 3 sits on la, the
+  top of the range; line 4 falls home so-mi-re-do. The verse is lower and
+  plainer: lines 2 and 4 share one melody. The bridge turns to the relative
+  minor (vi) with the first two lines starting on la with no pickup, climbs
+  back through I, and ends open, low on so over V, so the last refrain has
+  something to answer.
+- **What the LLM refills.** The verses, from the template above, one vehicle
+  per verse. The refrain, the bridge and the tag never change.
+- **Bank lines used.** Refrain: "Who made this song? Nobody knows" (A); "It's
+  yours while you sing it, and then it's gone" (A), bent to "then it goes";
+  "It's nobody's making" (B); "by everyone, no one, and now it's by you" (B).
+  Bridge: B's refrain, whole. Verses: B's wire with A's "not one machine ever
   knew it by heart"; A's screen verse with B's "nobody hummed it; it wasn't a
-  song"; A's sailor and orange girl with C's "only a mouth".
+  song"; A's mind verse with C's "kept it alone in [his] head"; A's ink
+  couplet with B's drawer couplet; A's sailor and orange girl with C's "only a
+  mouth".

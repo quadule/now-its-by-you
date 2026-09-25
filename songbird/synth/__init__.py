@@ -22,6 +22,8 @@ SR = 44100
 LUTE = ((110.0, 5.0, 2.5), (250.0, 3.0, 2.0), (520.0, 2.0, 2.0), (2500.0, -5.0, 0.9))
 HARP = ((180.0, 3.0, 1.5), (1000.0, 1.5, 1.0), (2500.0, -4.0, 0.9), (4500.0, -2.0, 0.7))
 VOICE_GAIN = 1.6  # about +4 dB: the words sit clear of the strings
+CHOIR_GAIN = 0.55  # each lineage voice about 5 dB under the lead
+CHOIR_PANS = (-0.45, 0.45, -0.25, 0.25, -0.65, 0.65)
 
 # Milestone 1 instrument settings; the voice harvest will drive these.
 PARTS = {
@@ -77,7 +79,31 @@ def render_stems(score: Score, sr: int = SR, seed: int = 0, voice: VoiceParams |
     if sung:
         y = sing(sung, sr, voice or VoiceParams(), seed, score.lexicon)[:length]
         stems["voice"] = pan(np.pad(y, (0, length - len(y))), 0.0) * VOICE_GAIN
+    choir = sorted({n.part for n in score.notes if n.part.startswith("choir")}, key=lambda p: int(p[5:]))
+    for name, singer in zip(choir, lineage_voices(len(choir), seed)):
+        i = int(name[5:]) - 1
+        y = sing(list(score.part(name)), sr, singer, seed + 101 * (i + 1), score.lexicon)[:length]
+        stems[name] = pan(np.pad(y, (0, length - len(y))), CHOIR_PANS[i % len(CHOIR_PANS)]) * VOICE_GAIN * CHOIR_GAIN
     return stems
+
+
+def lineage_voices(n: int, seed: int) -> list[VoiceParams]:
+    """Stand-ins for the voices of a rendition's ancestors, until the seed
+    packet carries them (milestone 5): each a different singer, drawn from the
+    ranges the voice harvest will span, half of them an octave down."""
+    rng = np.random.default_rng(7919 + seed)
+    voices = []
+    for _ in range(n):
+        low = bool(rng.random() < 0.5)
+        u = lambda a, b: float(rng.uniform(a, b))  # noqa: E731
+        voices.append(VoiceParams(
+            shift=-12 if low else 0, tract=u(0.95, 1.05) if low else u(1.08, 1.2),
+            rd=u(0.6, 1.3), tilt=u(0.3, 0.7), breath=u(0.03, 0.12),
+            vibrato_rate=u(4.8, 6.0), vibrato_depth=u(15.0, 40.0), vibrato_delay=u(0.2, 0.4),
+            glide=u(0.06, 0.12), scoop=u(0.2, 0.5), jitter=u(0.2, 0.5), wander=u(4.0, 9.0),
+            shimmer=u(1.5, 3.5), dynamics=u(6.0, 12.0), mouth=u(0.8, 1.2),
+        ))
+    return voices
 
 
 # How much of each stem reaches the room. The singer stands nearer the
