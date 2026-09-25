@@ -102,10 +102,11 @@ def load(path) -> np.ndarray:
     try:
         y, sr = sf.read(str(path), always_2d=True)
         y = y.mean(axis=1)
-    except sf.LibsndfileError:  # m4a from a phone, say
-        import librosa
-
-        y, sr = librosa.load(str(path), sr=None, mono=True)
+    except sf.LibsndfileError:  # m4a from a phone's voice memos, say: let ffmpeg decode it
+        with tempfile.TemporaryDirectory() as tmp:
+            wav = Path(tmp) / "reading.wav"
+            subprocess.run(["ffmpeg", "-loglevel", "error", "-i", str(path), "-ac", "1", str(wav)], check=True)
+            y, sr = sf.read(str(wav))
     return resample_poly(y, SR, sr) if sr != SR else y
 
 
