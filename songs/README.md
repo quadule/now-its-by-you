@@ -33,6 +33,13 @@ stranger path. H onwards follow "Where next" below.
 
 ## Where next
 
+- **The heart of it is stickiness** (the artist, 2026-09-25): music sticks in
+  your head whether you want it to or not, and AI-made hooks stick just as
+  easily even when they're kind of meaningless. "Pass it along or it dies"
+  is still interesting but secondary: the song travels because it sticks,
+  not because anyone decides to pass it on. So the hook matters more than
+  the message: short, repetitive and easy to hum, and a little nonsense is fine.
+  D (the earworm), G and J (sound over words) are closest to this.
 - **Mix and match.** Many lines are strong; take them across songs (bank below).
 - **Simpler scale and melody.** Major pentatonic or plain major, mostly steps,
   a narrow range, I, IV, V and vi. A plain tune leaves room for the drift to
@@ -44,6 +51,13 @@ stranger path. H onwards follow "Where next" below.
   disgust factor could limit how far it spreads.
 - **Don't pin down undecided mechanics** (what exactly the harvest reads) in
   the fixed refrain.
+- **More metaphorical and oblique** (2026-09-25). The artist's own "Oh
+  Melody", made in Suno in 2025, is an Elephant 6-ish song that tells the
+  story of its own writing and forgetting without ever saying so. The song is
+  a named character, told in one family of images, and a stranger ends up
+  retracing its shapes without knowing. Keep the refrain plain enough to hear
+  and let the verses wander; an LLM refilling image-led verses can drift
+  further without breaking a plot.
 
 ## Line bank
 

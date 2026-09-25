@@ -5,3 +5,6 @@ __pycache__/
 renders/
 *.egg-info/
 dist/
+
+# The artist's own voice stays out of git unless they choose otherwise
+recordings/
