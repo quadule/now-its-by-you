@@ -16,6 +16,11 @@ on "now it's by you", and everyone sings its tune once more, without words.
 > It's nobody's making, it's old and it's new;
 > by everyone, no one, and now it's by you.
 
+The question turns each time the refrain comes round (the artist's idea):
+**made**, then **sang**, then **owns** in the seed's three refrains; a form
+with four puts **heard** before owns. The last refrain always asks who owns
+it, and the next line answers: it's yours while you sing it.
+
 > They saved it as numbers and sent it by wire,
 > a flicker of light, and as quick as a fire.
 > Each copy was perfect in every last part,
@@ -67,6 +72,10 @@ bridge, refrain, tag.
   water and wire...") is another favourite and became the bridge. J's idea of
   ending on the chorus's own tune without words survives as a two-bar tag,
   shorter than J's four.
+- **The turning question.** "Who {made|sang|heard|owns} this song?" in the
+  genome: a fixed line may turn one word each time its block comes round, in
+  order, the last time always taking the last word. Authorship in four words:
+  making, singing, hearing, owning; "Nobody knows" never changes.
 - **The lineage choir.** The bridge and the tag are the sections where voices
   from the song's lineage join in (`"choir": true` in the genome). Each takes a
   harmony line against the melody from the chord underneath: the nearest chord

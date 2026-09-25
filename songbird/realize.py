@@ -13,7 +13,8 @@ from dataclasses import asdict, dataclass, fields, replace
 
 import numpy as np
 
-from .genome import Genome, Phrase, sung_words
+from .genome import Genome, Phrase, sung_words, turn
+from .phrasing import Phrasing, gesture
 from .score import Note, Score
 from .theory import chord_tones, degree_semitones, harmony
 
@@ -54,7 +55,10 @@ def choose_params(genome: Genome, parent: Params | None = None) -> Params:
     return parent if parent is not None else Params.from_dict(genome.seed_params)
 
 
-def realize(genome: Genome, params: Params, verses=None) -> Score:
+def realize(genome: Genome, params: Params, verses=None, phrasing: Phrasing | None = None) -> Score:
+    """The timed score. With a phrasing, the voice sings each note its way:
+    early or late against the grid, held longer or shorter, and carrying the
+    note's gesture on to the singer for loudness and pitch."""
     verses = verses if verses is not None else genome.seed_verses
     meter = genome.meter
     rng = np.random.default_rng(params.seed)
@@ -64,6 +68,9 @@ def realize(genome: Genome, params: Params, verses=None) -> Score:
     placed: list[tuple[str, Phrase, int, str | None]] = []
     t = 0
     verse_index = 0
+    # how often each fixed block comes round, so a turning line knows which time it is
+    rounds = {b: sum(genome.sections[n].lyrics == b for n in params.form) for b in genome.fixed}
+    heard = dict.fromkeys(genome.fixed, 0)
     for name in params.form:
         section = genome.sections[name]
         lines: list = [None] * len(section.phrases)
@@ -71,7 +78,9 @@ def realize(genome: Genome, params: Params, verses=None) -> Score:
             lines = list(verses[verse_index % len(verses)])
             verse_index += 1
         elif section.lyrics in genome.fixed:
-            lines = list(genome.fixed[section.lyrics])
+            block = section.lyrics
+            lines = [turn(line, heard[block], rounds[block]) for line in genome.fixed[block]]
+            heard[block] += 1
         for pid, line in zip(section.phrases, lines):
             phrase = genome.phrases[pid]
             placed.append((name, phrase, t, line))
@@ -123,6 +132,7 @@ def realize(genome: Genome, params: Params, verses=None) -> Score:
                     phrase=phrase.id,
                     chord=chord,
                     choir=genome.sections[section_name].choir,
+                    gesture=gesture(phrasing, phrase.id, k),
                 )
             )
 
@@ -182,11 +192,18 @@ def realize(genome: Genome, params: Params, verses=None) -> Score:
         notes.append(note)
         if m["syllable"]:
             sung_note = replace(note, part="voice", vel=float(m["vel"]))
+            g = m["gesture"]
+            if g is not None:
+                start = max(0.0, note.start - g.early * seconds_per_unit * meter.beat)
+                end = note.start + note.dur * g.hold
+                sung_note = replace(sung_note, start=start, dur=max(end - start, 0.05), gesture=g)
             notes.append(sung_note)
             if m["choir"]:  # the lineage joins, each voice on its own harmony line
                 for i in range(params.choir):
                     pitch = harmony(int(m["pitch"]), m["chord"], params.tonic, params.mode, i)
-                    notes.append(replace(sung_note, part=f"choir{i + 1}", pitch=float(pitch), vel=0.9 * sung_note.vel))
+                    # together with the lead in time, but each with its own way with pitch
+                    notes.append(replace(sung_note, part=f"choir{i + 1}", pitch=float(pitch), vel=0.9 * sung_note.vel,
+                                         gesture=None))
 
     ring = 3.0  # the last chord rings out
     final = seconds(end)

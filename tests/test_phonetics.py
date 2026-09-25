@@ -35,7 +35,8 @@ def test_unknown_word_raises():
 @pytest.mark.parametrize("path", SKETCHES, ids=lambda p: p.stem)
 def test_every_seed_lyric_is_singable(path):
     g = G.load(path)
-    for line in list(g.refrain) + [l for verse in g.seed_verses for l in verse]:
+    fixed = [sung for block in g.fixed.values() for line in block for sung in G.turns(line)]
+    for line in fixed + [l for verse in g.seed_verses for l in verse]:
         for word in line.split():
             n = len([p for p in word.split("-") if p])
             assert len(P.fit(word, n, g.lexicon)) == n, (line, word)

@@ -4,6 +4,8 @@ from __future__ import annotations
 
 from dataclasses import asdict, dataclass, field
 
+from .phrasing import Gesture
+
 
 @dataclass(frozen=True)
 class Note:
@@ -18,6 +20,7 @@ class Note:
     line_end: bool = False  # last syllable of a lyric line
     section: str = ""
     phrase: str = ""
+    gesture: Gesture | None = None  # a person's way with this note, if the rendition has a phrasing
 
 
 @dataclass(frozen=True)

@@ -10,7 +10,7 @@ from pathlib import Path
 
 import numpy as np
 
-from . import __version__, genome as genome_mod, synth
+from . import __version__, genome as genome_mod, phrasing as phrasing_mod, synth
 from .realize import choose_params, realize
 from .synth import master
 from .synth.voice import VoiceParams
@@ -23,7 +23,10 @@ def render_command(args: argparse.Namespace) -> int:
         params = replace(params, form=tuple(args.form))
     if args.choir is not None:
         params = replace(params, choir=args.choir)
-    score = realize(genome, params)
+    # a person's phrasing: the file given, or the one the seed carries
+    phrasing_json = json.loads(Path(args.phrasing).read_text()) if args.phrasing else genome.source.get("seed_phrasing")
+    phrasing = phrasing_mod.from_json(phrasing_json) if phrasing_json else None
+    score = realize(genome, params, phrasing=phrasing)
     defaults = VoiceParams()
     voice = replace(defaults, **{k: type(getattr(defaults, k))(v) for k, v in (kv.split("=", 1) for kv in args.voice)})
 
@@ -40,6 +43,7 @@ def render_command(args: argparse.Namespace) -> int:
         "title": genome.title,
         "params": params.to_dict(),
         "voice": asdict(voice),
+        "phrasing": {k: v for k, v in phrasing_json.items() if k not in ("phrases", "fields")} if phrasing_json else None,
         "loudness_lufs": round(master.loudness(pcm / 32768.0, synth.SR), 2),
         "peak_dbfs": round(20 * np.log10(np.max(np.abs(pcm)) / 32768.0), 2),
         "duration": round(len(pcm) / synth.SR, 3),
@@ -71,6 +75,8 @@ def main(argv: list[str] | None = None) -> int:
                         help="override the singer, e.g. --voice tract=1.0 shift=-12 rd=1.3")
     render.add_argument("--choir", type=int, metavar="N",
                         help="lineage voices joining in harmony where the song has a choir (stand-ins for now)")
+    render.add_argument("--phrasing", metavar="FILE",
+                        help="sing with a person's phrasing, from tools/phrasing.py (default: the seed's own, if any)")
     render.set_defaults(run=render_command)
 
     args = parser.parse_args(argv)

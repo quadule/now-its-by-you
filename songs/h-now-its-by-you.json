@@ -31,7 +31,7 @@
   "form": ["intro?", "verse", "refrain", "verse*", "refrain", "break?", "bridge", "refrain", "tag?", "outro?"],
 
   "refrain": [
-    "Who made this song? No-bo-dy knows.",
+    "Who {made|sang|heard|owns} this song? No-bo-dy knows.",
     "It's yours while you sing it, and then it goes.",
     "It's no-bo-dy's mak-ing, it's old and it's new;",
     "by ev-ery-one, no one, and now it's by you."

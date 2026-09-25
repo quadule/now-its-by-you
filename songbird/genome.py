@@ -102,6 +102,30 @@ class Genome:
     fixed: dict = field(default_factory=dict)  # every fixed lyric block by name, the refrain among them
 
 
+_TURN = re.compile(r"\{([^{}]*)\}")
+
+
+def turn(line: str, i: int, n: int) -> str:
+    """A fixed line as sung the i-th of n times its block comes round. A line
+    can turn one word each time, written {made|sang|heard|owns}: the choices
+    go in order, and the last time round always takes the last one."""
+
+    def pick(match: re.Match) -> str:
+        options = match.group(1).split("|")
+        if n > 1 and i == n - 1:
+            return options[-1]
+        return options[i % max(len(options) - 1, 1)]
+
+    return _TURN.sub(pick, line)
+
+
+def turns(line: str) -> list[str]:
+    """Every way a fixed line can be sung."""
+    match = _TURN.search(line)
+    options = match.group(1).split("|") if match else [""]
+    return [line[: match.start()] + o + line[match.end() :] for o in options] if match else [line]
+
+
 def syllables(line: str) -> list[str]:
     """Sung syllables of a lyric line; hyphens split words into syllables."""
     return [piece for word in line.split() for piece in word.split("-") if piece]
@@ -162,9 +186,10 @@ def _check_lines(lines, section: Section, phrases: dict[str, Phrase], what: str)
     if len(lines) != len(section.phrases):
         raise ValueError(f"{what}: {len(lines)} lines for {len(section.phrases)} phrases")
     for line, pid in zip(lines, section.phrases):
-        want, got = len(phrases[pid].sung), len(syllables(line))
-        if want != got:
-            raise ValueError(f"{what}: {line!r} has {got} syllables, phrase {pid} has {want} notes")
+        for sung in turns(line):
+            want, got = len(phrases[pid].sung), len(syllables(sung))
+            if want != got:
+                raise ValueError(f"{what}: {sung!r} has {got} syllables, phrase {pid} has {want} notes")
 
 
 def from_dict(data: dict) -> Genome:

@@ -76,6 +76,7 @@ class Segment:
     amp: float  # the syllable's loudness
     prev_vowel: str | None = None
     next_vowel: str | None = None
+    swell: float = 0.0  # dB a vowel grows from its start to its end (a phrasing gesture)
 
 
 def _smooth(x: np.ndarray, width: int) -> np.ndarray:
@@ -148,6 +149,8 @@ def schedule(notes: list[Note], voice: VoiceParams, lexicon: dict[str, str] | No
     segs: list[Segment] = []
     for k, (note, syl) in enumerate(zip(notes, sylls)):
         loud_db = voice.dynamics * (note.vel - 0.75) + 0.3 * (note.pitch - line_median[k])
+        if note.gesture is not None:
+            loud_db += note.gesture.level
         amp = 0.9 * 10.0 ** (loud_db / 20.0)
         prev_v = sylls[k - 1].nucleus if k else None
         next_v = sylls[k + 1].nucleus if k + 1 < len(sylls) else None
@@ -159,7 +162,8 @@ def schedule(notes: list[Note], voice: VoiceParams, lexicon: dict[str, str] | No
             segs.append(Segment(t, t + d, c, "onset", amp, prev_v, syl.nucleus))
             t += d
         v_end = max(limit(k) - sum(coda[k]), note.start + 0.04)
-        segs.append(Segment(note.start, v_end, syl.nucleus, "vowel", amp, prev_v, next_v))
+        segs.append(Segment(note.start, v_end, syl.nucleus, "vowel", amp, prev_v, next_v,
+                            note.gesture.swell if note.gesture is not None else 0.0))
         t = v_end
         for c, d in zip(syl.coda, coda[k]):
             segs.append(Segment(t, t + d, c, "coda", amp, syl.nucleus, next_v))
@@ -218,9 +222,11 @@ def control_tracks(segs: list[Segment], n_blocks: int, sr: int, voice: VoicePara
             else:
                 f = ph.VOWEL_FORMANTS[s.phone]
                 keys += [(s.t0 + tau, f), (s.t1 - tau, f)]
-            # a long note swells a little through its middle
+            # a long note swells a little through its middle, and a phrasing
+            # can have it grow or fade from start to end
             idx = np.arange(region.start, region.stop)
             swell = 1.0 + (0.15 * np.sin(np.pi * (tb[idx] - s.t0) / d) if d > 0.5 else 0.0)
+            swell *= 10.0 ** (s.swell * np.clip((tb[idx] - s.t0) / max(d, 1e-3), 0.0, 1.0) / 20.0)
             av[idx] = s.amp * swell
             ah[region] = voice.breath * s.amp
             rd[region] = voice.rd - 0.8 * (s.amp - 0.9)
@@ -308,9 +314,11 @@ def pitch_track(notes: list[Note], n_blocks: int, sr: int, voice: VoiceParams, r
     tb = (np.arange(n_blocks) + 0.5) * BLOCK / sr
     target = np.full(n_blocks, notes[0].pitch + voice.shift, dtype=float)
     vib_env = np.zeros(n_blocks)
+    gestures = np.zeros(n_blocks)  # cents from a phrasing: scoops, bends and falls
     for k, note in enumerate(notes):
         p = note.pitch + voice.shift
         prev = notes[k - 1] if k else None
+        g = note.gesture
         phrase_start = prev is None or note.start - (prev.start + prev.dur) > 0.05 or prev.line_end
         t_on = note.start - 0.7 * voice.glide
         if phrase_start and prev is not None:
@@ -319,9 +327,10 @@ def pitch_track(notes: list[Note], n_blocks: int, sr: int, voice: VoiceParams, r
             t_on = min(t_on, prev.start + prev.dur - breath + 0.01)
         after = tb >= t_on
         if phrase_start:
-            # start a little under the note and rise into it
+            # start a little under the note and rise into it (as far as the phrasing says, if it does)
+            scoop = -g.scoop / 100.0 if g is not None and g.scoop else voice.scoop
             rise = np.clip((tb - note.start + 0.12) / 0.2, 0.0, 1.0)
-            target[after] = p - voice.scoop * (1.0 - 0.5 * (1 - np.cos(np.pi * rise[after])))
+            target[after] = p - scoop * (1.0 - 0.5 * (1 - np.cos(np.pi * rise[after])))
         else:
             q = prev.pitch + voice.shift
             w = np.clip((tb - t_on) / voice.glide, 0.0, 1.0)
@@ -336,12 +345,25 @@ def pitch_track(notes: list[Note], n_blocks: int, sr: int, voice: VoiceParams, r
         v = np.clip((tb - note.start - voice.vibrato_delay) / 0.25, 0.0, 1.0)
         v *= np.clip((end - tb) / 0.08, 0.0, 1.0)
         inside = (tb >= note.start) & (tb < end)
+        if g is not None and g.vibrato >= 0:
+            v *= g.vibrato / max(voice.vibrato_depth, 1.0)
         vib_env[inside] = v[inside]
+        if g is not None:
+            dur = end - note.start
+            x = np.clip((tb - note.start) / max(dur, 1e-3), 0.0, 1.0)
+            approach = min(0.12, 0.3 * dur)
+            letgo = min(0.12, 0.35 * dur)
+            into = np.clip((tb - note.start) / approach, 0.0, 1.0)
+            out = np.clip((tb - (end - letgo)) / letgo, 0.0, 1.0)
+            shape = (0.0 if phrase_start else g.scoop * 0.5 * (1 + np.cos(np.pi * into)))  # comes in from off the note
+            shape = shape + g.bend * np.clip((x - 0.3) / 0.6, 0.0, 1.0)  # drifts while held
+            shape = shape + g.fall * 0.5 * (1 - np.cos(np.pi * out))  # falls or lifts letting go
+            gestures[inside] += np.broadcast_to(shape, tb.shape)[inside]
 
     rate = sr / BLOCK
     vib_rate = voice.vibrato_rate * (1.0 + 0.05 * _lowpassed_noise(rng, n_blocks, 0.5, rate))
     vib_phase = 2 * np.pi * np.cumsum(vib_rate) / rate
-    cents = voice.vibrato_depth * vib_env * np.sin(vib_phase)
+    cents = voice.vibrato_depth * vib_env * np.sin(vib_phase) + gestures
     cents += voice.wander * _lowpassed_noise(rng, n_blocks, 1.0, rate)
     cents += 17.3 * voice.jitter * _lowpassed_noise(rng, n_blocks, 25.0, rate)
     return 440.0 * 2.0 ** ((target + cents / 100.0 - 69.0) / 12.0)

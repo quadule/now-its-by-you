@@ -89,3 +89,13 @@ def test_choir_sings_only_where_the_genome_allows():
     assert {n.section for n in choir} == {"bridge", "tag"}
     lead = {(n.start, n.syllable) for n in score.part("voice") if n.section in ("bridge", "tag")}
     assert {(n.start, n.syllable) for n in score.part("choir1")} == lead  # same words, same time
+
+
+def test_a_fixed_line_can_turn_one_word_each_time_round():
+    line = "Who {made|sang|heard|owns} this song?"
+    assert [G.turn(line, i, 3) for i in range(3)] == ["Who made this song?", "Who sang this song?", "Who owns this song?"]
+    assert [G.turn(line, i, 4) for i in range(4)] == [f"Who {w} this song?" for w in ("made", "sang", "heard", "owns")]
+    assert G.turn(line, 0, 1) == "Who made this song?"
+    assert G.turn(line, 0, 2) == "Who made this song?" and G.turn(line, 1, 2) == "Who owns this song?"
+    assert G.turns(line) == [f"Who {w} this song?" for w in ("made", "sang", "heard", "owns")]
+    assert G.turns("no choices") == ["no choices"]
