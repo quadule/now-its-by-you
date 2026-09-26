@@ -32,7 +32,7 @@
   .gap { display: flex; align-items: center; gap: 12px; margin: 2px 0 6px; color: var(--dim); font-size: 13px; transition: opacity .6s; }
   .gap.spent { opacity: 0; }
   .track { flex: 0 0 160px; height: 4px; border-radius: 2px; background: #332b25; overflow: hidden; }
-  .fill { height: 100%; width: 0; background: var(--dim); }
+  .fill { display: block; height: 100%; width: 0; background: var(--dim); }
   .dots i { display: inline-block; width: 9px; height: 9px; margin-right: 6px; border-radius: 50%; background: #3a322c; }
   .dots i.on { background: var(--sung); }
   .done { font-size: 22px; color: var(--dim); padding: 16px 0; }
@@ -81,6 +81,11 @@
 
   <div class="controls">
     <input id="singer" placeholder="who's singing?" autocomplete="off">
+    <select id="mix" title="what you hear while you sing">
+      <option value="melody">the tune alone, with a pulse</option>
+      <option value="full">the whole song</option>
+      <option value="voice">the machine's singer alone</option>
+    </select>
     <button id="rehearse">▶ Rehearse</button>
     <button id="record" class="primary">● Record a take</button>
     <button id="stop" disabled>■ Stop</button>
@@ -139,47 +144,32 @@
   </details>
 </main>
 
-<script>
+<script type="module">
+import * as K from "/karaoke.js";  // tools/karaoke.js: the timing, sync and drawing this page shares with web/sing
+
 const $ = id => document.getElementById(id);
-const S = { ctx: null, guide: null, lyrics: null, notes: [], lo: 0, hi: 0, items: [], focus: -2, mode: "idle",
-            t0: 0, out: 0, inn: 0, chunks: [], take: null, takeSinger: "", singers: [], src: [],
+const S = { ctx: null, guides: {}, digests: {}, lyrics: null, notes: [], lo: 0, hi: 0, reel: null, mode: "idle",
+            t0: 0, out: 0, inn: 0, chunks: [], take: null, takeSinger: "", takeMix: "", singers: [], src: [],
             analyser: null, buf: null, trail: [], takeTrail: null, showTrail: null, shift: 0, takeBuffer: null };
-const NAMES = { intro: "Intro", verse: "Verse", refrain: "Refrain", turn: "Turn", bridge: "Bridge", tag: "Tag", break: "Break", outro: "Outro" };
-const PAST = 2.0, FUTURE = 5.0;  // seconds of the lane either side of the playhead
 
-const WORKLET = `
-class TakeRecorder extends AudioWorkletProcessor {
-  process(inputs) {
-    const ch = inputs[0] && inputs[0][0];
-    if (ch) {
-      let peak = 0;
-      for (let i = 0; i < ch.length; i++) peak = Math.max(peak, Math.abs(ch[i]));
-      this.port.postMessage({ frame: currentFrame, samples: ch.slice(0), peak });
-    }
-    return true;
-  }
-}
-registerProcessor("take-recorder", TakeRecorder);`;
+const saved = (key, fallback) => { try { return localStorage.getItem(key) || fallback; } catch (e) { return fallback; } };
+const save = (key, value) => { try { localStorage.setItem(key, value); } catch (e) {} };
+$("nudge").value = saved("songbird-nudge", "0");
+$("singer").value = saved("songbird-singer", "");
+$("mix").value = saved("songbird-mix", "melody");
+$("singer").addEventListener("input", () => { $("singer").classList.remove("missing"); save("songbird-singer", $("singer").value.trim()); });
+$("nudge").addEventListener("change", () => save("songbird-nudge", $("nudge").value));
+$("mix").addEventListener("change", () => save("songbird-mix", $("mix").value));
 
-try { $("nudge").value = localStorage.getItem("songbird-nudge") || "0"; } catch (e) {}
-try { $("singer").value = localStorage.getItem("songbird-singer") || ""; } catch (e) {}
-$("singer").addEventListener("input", () => {
-  $("singer").classList.remove("missing");
-  try { localStorage.setItem("songbird-singer", $("singer").value.trim()); } catch (e) {}
-});
-$("nudge").addEventListener("change", () => { try { localStorage.setItem("songbird-nudge", $("nudge").value); } catch (e) {} });
-
-/* ---------- the words ---------- */
+/* ---------- the words and notes ---------- */
 
 async function init() {
   S.lyrics = await (await fetch("/lyrics.json")).json();
   $("title").textContent = `Songbird Karaoke: ${S.lyrics.title}`;
   document.title = `Karaoke: ${S.lyrics.title}`;
-  S.notes = S.lyrics.lines.flatMap(l => l.syllables);
-  const pitches = S.notes.map(n => n.pitch);
-  S.lo = Math.min(...pitches) - 2;
-  S.hi = Math.max(...pitches) + 2;
-  buildReel();
+  S.notes = K.notesOf(S.lyrics);
+  ({ lo: S.lo, hi: S.hi } = K.range(S.notes));
+  S.reel = new K.Reel($("reel"), S.lyrics);
   resting();
   status("Rehearse to hear it through, or record when you're ready.");
   if (!window.isSecureContext || !navigator.mediaDevices) {
@@ -191,154 +181,17 @@ async function init() {
 function status(html) { $("status").innerHTML = html; }
 
 function resting() {  // before playing: the words at the start, the lane showing the first notes to come
-  drawWords(0);
+  S.reel.show(0);
   drawLane(S.notes[0].start - 1.0);
   $("progress").style.width = "0";
 }
 
-function buildReel() {
-  const reel = $("reel");
-  reel.innerHTML = "";
-  const lines = S.lyrics.lines;
-  S.items = lines.map((line, i) => {
-    const el = document.createElement("div");
-    el.className = "item";
-    const before = i ? lines[i - 1] : null;
-    const gapStart = before ? before.end : 0;
-    const gap = line.syllables[0].start - gapStart;
-    let html = "";
-    if (!before || before.section !== line.section || gap > 3) html += `<div class="label">${NAMES[line.section] || line.section}</div>`;
-    if (gap >= 1.2) {
-      html += `<div class="gap"><span class="track"><span class="fill" style="display:block"></span></span>`
-            + `<span class="dots"><i></i><i></i><i></i><i></i></span>${gap >= 3 && before ? "<span>breathe</span>" : ""}</div>`;
-    }
-    html += `<div class="words">` + line.syllables.map(s => `<span class="syl">${s.text}</span>${s.word_end ? " " : ""}`).join("") + `</div>`;
-    el.innerHTML = html;
-    reel.appendChild(el);
-    return { el, line, gapStart, gap, syls: [...el.querySelectorAll(".syl")], fill: el.querySelector(".fill"),
-             dots: [...el.querySelectorAll(".dots i")], lead: el.querySelector(".gap") };
-  });
-  const end = document.createElement("div");
-  end.className = "item done";
-  end.textContent = "That's the song.";
-  reel.appendChild(end);
-  S.items.push({ el: end, line: null });
-}
-
-function focusOn(f) {
-  if (f === S.focus) return;
-  S.items.forEach((it, i) => {
-    it.el.classList.toggle("current", i === f);
-    it.el.classList.toggle("past", i < f);
-    if (it.syls) it.syls.forEach(s => s.style.setProperty("--p", i < f ? "100%" : "0%"));
-  });
-  const anchor = 64;  // where the current line sits in the window
-  $("reel").style.transform = `translateY(${anchor - S.items[f].el.offsetTop}px)`;
-  S.focus = f;
-}
-
-function drawWords(pos) {
-  let f = S.items.findIndex(it => it.line && pos < it.line.end + 0.15);
-  if (f < 0) f = S.items.length - 1;
-  focusOn(f);
-  const it = S.items[f];
-  if (!it.line) return;
-  const beat = 60 / S.lyrics.tempo;
-  const first = it.line.syllables[0].start;
-  if (it.fill) it.fill.style.width = Math.max(0, Math.min(100, (100 * (pos - it.gapStart)) / it.gap)) + "%";
-  if (it.lead) it.lead.classList.toggle("spent", pos > first + 0.4);  // the count-in has done its job
-  it.dots.forEach((d, k) => d.classList.toggle("on", pos >= first - (4 - k) * beat));
-  it.line.syllables.forEach((s, k) => {
-    const next = it.line.syllables[k + 1];
-    const until = next ? Math.min(s.end, next.start) : s.end;
-    const p = Math.max(0, Math.min(1, (pos - s.start) / Math.max(until - s.start, 0.05)));
-    it.syls[k].style.setProperty("--p", (100 * p).toFixed(1) + "%");
-  });
-}
-
-/* ---------- the notes ---------- */
-
-function target(t) {
-  const n = S.notes.find(n => t >= n.start && t < n.end);
-  if (n) return n.pitch;
-  let best = null, gap = 0.35;
-  for (const m of S.notes) {
-    const d = Math.min(Math.abs(t - m.start), Math.abs(t - m.end));
-    if (d < gap) { gap = d; best = m.pitch; }
-  }
-  return best;
-}
-
 function drawLane(pos) {
-  const c = $("lane"), g = c.getContext("2d");
-  const dpr = window.devicePixelRatio || 1, W = c.clientWidth, H = c.clientHeight;
-  if (c.width !== Math.round(W * dpr) || c.height !== Math.round(H * dpr)) { c.width = Math.round(W * dpr); c.height = Math.round(H * dpr); }
-  g.setTransform(dpr, 0, 0, dpr, 0, 0);
-  g.clearRect(0, 0, W, H);
-  const span = PAST + FUTURE, px = (W * PAST) / span;
-  const x = t => px + ((t - pos) * W) / span;
-  const y = m => H - 22 - ((m - S.lo) / (S.hi - S.lo)) * (H - 40);
-  const h = Math.max(7, ((H - 40) / (S.hi - S.lo)) * 0.72);
-
-  g.strokeStyle = "rgba(239,230,218,0.05)";
-  g.lineWidth = 1;
-  for (let m = Math.ceil(S.lo); m <= S.hi; m++) { g.beginPath(); g.moveTo(0, y(m)); g.lineTo(W, y(m)); g.stroke(); }
-
-  g.font = "11px -apple-system, system-ui, sans-serif";
-  for (const n of S.notes) {
-    if (n.end < pos - PAST - 1 || n.start > pos + FUTURE + 1) continue;
-    const x0 = x(n.start), x1 = Math.max(x(n.end) - 3, x0 + 5), yy = y(n.pitch);
-    const now = pos >= n.start && pos < n.end, done = pos >= n.end;
-    g.fillStyle = now ? "#f2b25c" : done ? "rgba(242,178,92,0.32)" : "rgba(239,230,218,0.5)";
-    g.beginPath();
-    if (g.roundRect) g.roundRect(x0, yy - h / 2, x1 - x0, h, 4); else g.rect(x0, yy - h / 2, x1 - x0, h);
-    g.fill();
-    if (x1 - x0 > 12) { g.fillStyle = done ? "rgba(239,230,218,0.35)" : "rgba(239,230,218,0.75)"; g.fillText(n.text, x0 + 1, yy + h / 2 + 12); }
-  }
-
   const trail = S.mode === "listening" || $("pitchOn").checked ? S.showTrail : null;
-  if (trail && trail.length) {
-    g.lineWidth = 3;
-    g.lineCap = "round";
-    for (let i = 1; i < trail.length; i++) {
-      const a = trail[i - 1], b = trail[i];
-      if (a.m === null || b.m === null || b.t - a.t > 0.12 || b.t < pos - PAST || a.t > pos) continue;
-      const want = target(b.t);
-      const fb = want === null ? b.m : b.m + 12 * Math.round((want - b.m) / 12);
-      const fa = want === null ? a.m : a.m + 12 * Math.round((want - a.m) / 12);
-      g.strokeStyle = want === null ? "rgba(239,230,218,0.6)" : Math.abs(fb - want) <= 0.5 ? "#8cc084" : "#e0a04d";
-      g.beginPath(); g.moveTo(x(a.t), y(fa)); g.lineTo(x(b.t), y(fb)); g.stroke();
-    }
-  }
-
-  g.strokeStyle = "#e0664d";
-  g.lineWidth = 2;
-  g.beginPath(); g.moveTo(px, 8); g.lineTo(px, H - 8); g.stroke();
+  K.drawLane($("lane"), S.notes, S.lo, S.hi, pos, trail);
 }
 
 /* ---------- listening to the singer ---------- */
-
-function yin(buf, rate) {
-  const n = buf.length >> 1, x = new Float32Array(n);
-  for (let i = 0; i < n; i++) x[i] = 0.5 * (buf[2 * i] + buf[2 * i + 1]);
-  const r = rate / 2, lo = Math.floor(r / 1000), hi = Math.min(Math.floor(r / 65), (n >> 1) - 1), w = n - hi;
-  const d = new Float32Array(hi + 2);
-  for (let tau = 1; tau <= hi + 1; tau++) {
-    let s = 0;
-    for (let i = 0; i < w; i++) { const e = x[i] - x[i + tau]; s += e * e; }
-    d[tau] = s;
-  }
-  let sum = 0;
-  for (let tau = 1; tau <= hi + 1; tau++) { sum += d[tau]; d[tau] = (d[tau] * tau) / (sum || 1); }
-  for (let tau = Math.max(lo, 2); tau <= hi; tau++) {
-    if (d[tau] < 0.15) {
-      while (tau + 1 <= hi && d[tau + 1] < d[tau]) tau++;
-      const a = d[tau - 1], b = d[tau], c = d[tau + 1], den = a - 2 * b + c;
-      return r / (tau + (den ? (a - c) / (2 * den) : 0));
-    }
-  }
-  return null;
-}
 
 function delay() {  // what the device adds beyond what it reports, learned from takes or a calibration
   return (parseFloat($("nudge").value) || 0) / 1000;
@@ -346,61 +199,28 @@ function delay() {  // what the device adds beyond what it reports, learned from
 
 function learn(ms) {
   $("nudge").value = Math.round(ms);
-  try { localStorage.setItem("songbird-nudge", String(Math.round(ms))); } catch (e) {}
+  save("songbird-nudge", String(Math.round(ms)));
 }
 
 function listen(pos) {
   if (!S.analyser || (!$("pitchOn").checked && S.mode !== "recording")) return;
   S.analyser.getFloatTimeDomainData(S.buf);
-  let e = 0;
-  for (let i = 0; i < S.buf.length; i++) e += S.buf[i] * S.buf[i];
-  const hz = Math.sqrt(e / S.buf.length) > 0.008 ? yin(S.buf, S.ctx.sampleRate) : null;
-  S.trail.push({ t: pos - S.inn - delay() - 0.02, m: hz ? 69 + 12 * Math.log2(hz / 440) : null });
-}
-
-function autoSync(trail) {
-  /* How late the take runs against the guide: slide the pitch you sang against
-     the song's notes and rests, and keep the slide where they agree best (your
-     voice inside a note, better still on its pitch; your voice in a rest counts
-     against). Returns seconds to move the take earlier, or 0 if nothing clearly
-     beats leaving it as recorded. */
-  const pts = trail.filter(p => p.m !== null);
-  if (pts.length < 100) return 0;
-  const starts = S.notes.map(n => n.start);
-  const noteAt = u => {
-    let lo = 0, hi = starts.length - 1, k = -1;
-    while (lo <= hi) { const mid = (lo + hi) >> 1; if (starts[mid] <= u) { k = mid; lo = mid + 1; } else hi = mid - 1; }
-    return k >= 0 && u < S.notes[k].end ? S.notes[k] : null;
-  };
-  const score = lag => {
-    let s = 0;
-    for (const p of pts) {
-      const n = noteAt(p.t - lag);
-      if (!n) { s -= 0.5; continue; }
-      const m = p.m + 12 * Math.round((n.pitch - p.m) / 12);
-      s += Math.abs(m - n.pitch) <= 1 ? 2 : 1;
-    }
-    return s;
-  };
-  const lags = [], scores = [];
-  for (let k = -30; k <= 120; k++) { lags.push(k * 0.005); scores.push(score(k * 0.005)); }
-  // the gaps between syllables let a slide of a few tens of ms go unpunished, so the best
-  // score is a plateau: take its middle, not its first edge
-  const top = Math.max(...scores);
-  const flat = lags.filter((lag, i) => scores[i] >= top - 0.002 * pts.length);
-  const best = flat[Math.floor(flat.length / 2)];
-  return Math.abs(best) >= 0.01 ? Math.round(best * 1000) / 1000 : 0;
+  S.trail.push({ t: pos - S.inn - delay() - 0.02, m: K.pitchAt(S.buf, S.ctx.sampleRate) });
 }
 
 /* ---------- playing and recording ---------- */
 
-async function audio() {
+async function audio(mix = $("mix").value) {
   if (!S.ctx) S.ctx = new AudioContext({ latencyHint: "interactive" });
   await S.ctx.resume();
-  if (!S.guide) {
+  if (!S.guides[mix]) {
     status("Loading the guide…");
-    S.guide = await S.ctx.decodeAudioData(await (await fetch("/guide.wav")).arrayBuffer());
+    const r = await fetch(`/guide.wav?mix=${mix}`);
+    if (!r.ok) throw new Error((await r.json()).error || `no ${mix} guide`);
+    S.digests[mix] = r.headers.get("X-Guide-Score");
+    S.guides[mix] = await S.ctx.decodeAudioData(await r.arrayBuffer());
   }
+  return S.guides[mix];
 }
 
 async function microphone() {
@@ -409,7 +229,7 @@ async function microphone() {
     audio: { echoCancellation: false, noiseSuppression: false, autoGainControl: false, channelCount: 1 },
   });
   const mic = S.ctx.createMediaStreamSource(S.stream);
-  await S.ctx.audioWorklet.addModule(URL.createObjectURL(new Blob([WORKLET], { type: "application/javascript" })));
+  await S.ctx.audioWorklet.addModule("/recorder.js");
   S.recorder = new AudioWorkletNode(S.ctx, "take-recorder", { numberOfOutputs: 1, outputChannelCount: [1] });
   const silent = S.ctx.createGain();
   silent.gain.value = 0;
@@ -444,7 +264,7 @@ function start(buffers, mode, from = 0, shifts = []) {
   S.showTrail = mode === "listening" ? S.takeTrail.map(p => ({ t: p.t - S.shift, m: p.m })) : S.trail;
   S.mode = mode;
   $("stop").disabled = false;
-  $("record").disabled = $("rehearse").disabled = true;
+  $("record").disabled = $("rehearse").disabled = $("mix").disabled = true;
   $("review").hidden = true;
   status(mode === "recording" ? "Recording. Space or Stop to finish." : mode === "listening" ? "Your take, with the guide." : "Rehearsing.");
   requestAnimationFrame(tick);
@@ -456,7 +276,7 @@ function stop() {
   S.src.forEach(s => { try { s.stop(); } catch (e) {} });
   S.src = [];
   $("stop").disabled = true;
-  $("record").disabled = $("rehearse").disabled = false;
+  $("record").disabled = $("rehearse").disabled = $("mix").disabled = false;
   if (was === "recording") finishTake();
   else status("Rehearse again, or record a take.");
   resting();
@@ -464,22 +284,13 @@ function stop() {
 
 function finishTake() {
   const rate = S.ctx.sampleRate;
-  // the guide's first sample reached your ears S.out after t0; your voice reached the recorder S.inn
-  // after that, plus whatever the device adds without saying
-  const first = Math.round((S.t0 + S.out + S.inn + delay()) * rate);
-  const tail = S.chunks[S.chunks.length - 1];
-  const last = tail ? tail.frame + tail.samples.length : first;
-  const samples = new Float32Array(Math.max(last - first, 0));
-  for (const c of S.chunks) {
-    const at = c.frame - first;
-    for (let i = 0; i < c.samples.length; i++) if (at + i >= 0 && at + i < samples.length) samples[at + i] = c.samples[i];
-  }
+  const samples = K.assemble(S.chunks, K.firstFrame(S.t0, S.out, S.inn, delay(), rate));
   S.chunks = [];
   S.take = { samples, rate };
   S.takeTrail = S.trail.slice();
   S.takeBuffer = null;
   const long = samples.length / rate > 5;
-  S.shift = S.autoShift = long ? autoSync(S.takeTrail) : 0;
+  S.shift = S.autoShift = long ? K.autoSync(S.takeTrail, S.notes) : 0;
   $("shift").value = String(Math.max(-400, Math.min(400, -S.shift * 1000)));
   $("shiftValue").textContent = S.shift ? `auto-synced, ${Math.abs(Math.round(S.shift * 1000))} ms ${S.shift > 0 ? "earlier" : "later"}` : "as recorded";
   if (S.shift) learn(delay() * 1000 + S.shift * 1000);  // so the next take, and your pitch line, start closer
@@ -498,22 +309,11 @@ function tick() {
 
 function show(pos) {
   $("progress").style.width = Math.max(0, Math.min(100, (100 * pos) / S.lyrics.duration)) + "%";
-  drawWords(pos);
+  S.reel.show(pos);
   drawLane(pos);
 }
 
 /* ---------- takes ---------- */
-
-function wav(samples, rate) {
-  const buf = new ArrayBuffer(44 + samples.length * 2), v = new DataView(buf);
-  const put = (at, s) => { for (let i = 0; i < s.length; i++) v.setUint8(at + i, s.charCodeAt(i)); };
-  put(0, "RIFF"); v.setUint32(4, 36 + samples.length * 2, true); put(8, "WAVE"); put(12, "fmt ");
-  v.setUint32(16, 16, true); v.setUint16(20, 1, true); v.setUint16(22, 1, true); v.setUint32(24, rate, true);
-  v.setUint32(28, rate * 2, true); v.setUint16(32, 2, true); v.setUint16(34, 16, true);
-  put(36, "data"); v.setUint32(40, samples.length * 2, true);
-  for (let i = 0; i < samples.length; i++) v.setInt16(44 + 2 * i, Math.max(-1, Math.min(1, samples[i])) * 32767, true);
-  return new Blob([buf], { type: "audio/wav" });
-}
 
 async function loadSingers() {
   S.singers = await (await fetch("/singers")).json();
@@ -524,6 +324,8 @@ function when(stamp) {  // 2026-09-25T15:28:07 -> 25 Sep, 15:28
   const d = new Date(stamp);
   return isNaN(d) ? stamp : `${d.getDate()} ${d.toLocaleString("en", { month: "short" })}, ${stamp.slice(11, 16)}`;
 }
+
+const HEARD = { melody: "to the tune", full: "to the song", voice: "to the singer" };
 
 function drawSingers() {
   const box = $("singers");
@@ -542,14 +344,14 @@ function drawSingers() {
     for (const t of s.takes) {
       const li = document.createElement("li");
       li.innerHTML = `<label class="check"><input type="checkbox"> <span></span></label><button class="small">▶ with the guide</button>`;
-      li.querySelector("span").textContent = when(t.recorded);
+      li.querySelector("span").textContent = `${when(t.recorded)}, ${HEARD[t.mix] || ""}`;
       const tick = li.querySelector("input");
       tick.checked = t.use;
       tick.onchange = async () => {
         try { await post("/use", JSON.stringify({ path: t.path, use: tick.checked })); await loadSingers(); }
         catch (e) { status(`<span class="warn">${e.message}</span>`); }
       };
-      li.querySelector("button").onclick = () => playKept(t.path);
+      li.querySelector("button").onclick = () => playKept(t.path, t.mix);
       el.querySelector("ul").appendChild(li);
     }
     const make = el.querySelector(".make");
@@ -588,14 +390,14 @@ async function analyze(s, el) {
   make.disabled = false;
 }
 
-async function playKept(path) {
+async function playKept(path, mix) {
   if (!$("review").hidden) { status("Keep or discard the new take first."); return; }
-  await audio();
+  const guide = await audio(mix || "full");  // the guide they heard while they sang it
   const buffer = await S.ctx.decodeAudioData(await (await fetch("/" + path)).arrayBuffer());
   S.src.forEach(s => { s.onended = null; try { s.stop(); } catch (e) {} });
   S.takeTrail = [];
   S.shift = 0;
-  start([S.guide, buffer], "listening", 0, [0, 0]);
+  start([guide, buffer], "listening", 0, [0, 0]);
 }
 
 async function post(url, body, type = "application/json") {
@@ -606,20 +408,23 @@ async function post(url, body, type = "application/json") {
 }
 
 $("rehearse").onclick = async () => {
-  await audio();
+  let guide;
+  try { guide = await audio(); } catch (e) { status(`<span class="warn">${e.message}</span>`); return; }
   if ($("pitchOn").checked) { try { await microphone(); } catch (e) { status(`<span class="warn">No microphone (${e.message}); rehearsing without your pitch.</span>`); } }
-  start([S.guide], "rehearsing");
+  start([guide], "rehearsing");
 };
 $("record").onclick = async () => {
   S.takeSinger = $("singer").value.trim();
+  S.takeMix = $("mix").value;
   if (!S.takeSinger) {  // every take belongs to someone, so different people's phrasings stay apart
     $("singer").classList.add("missing");
     $("singer").focus();
     status('<span class="warn">Put a name in first (yours, or anything you like), so your takes stay together.</span>');
     return;
   }
-  try { await audio(); await microphone(); } catch (e) { status(`<span class="warn">No microphone: ${e.message}</span>`); return; }
-  start([S.guide], "recording");
+  let guide;
+  try { guide = await audio(S.takeMix); await microphone(); } catch (e) { status(`<span class="warn">No microphone: ${e.message}</span>`); return; }
+  start([guide], "recording");
 };
 $("stop").onclick = stop;
 document.addEventListener("keydown", e => { if (e.code === "Space" && S.mode !== "idle") { e.preventDefault(); stop(); } });
@@ -635,7 +440,7 @@ function takeBuffer() {
 
 function listenFrom(from) {
   S.src.forEach(s => { s.onended = null; try { s.stop(); } catch (e) {} });
-  start([S.guide, takeBuffer()], "listening", Math.max(0, from), [0, S.shift]);
+  start([S.guides[S.takeMix], takeBuffer()], "listening", Math.max(0, from), [0, S.shift]);
 }
 
 $("listen").onclick = () => listenFrom(0);
@@ -648,20 +453,14 @@ $("shift").onchange = () => {  // on letting go, hear it from where you were
   if (S.mode === "listening") listenFrom(S.ctx.currentTime - S.t0 - S.out - 1.0);
 };
 
-function shifted(samples, rate, earlier) {
-  const n = Math.round(earlier * rate);
-  if (n >= 0) return samples.subarray(Math.min(n, samples.length));
-  const out = new Float32Array(samples.length - n);
-  out.set(samples, -n);
-  return out;
-}
 $("discard").onclick = () => { S.take = null; $("review").hidden = true; status("Take discarded. Ready when you are."); };
 $("keep").onclick = async () => {
   $("keep").disabled = true;
   try {
-    const q = new URLSearchParams({ singer: S.takeSinger, shift_ms: Math.round(S.shift * 1000),
-                                    auto_ms: Math.round((S.autoShift || 0) * 1000), device_ms: Math.round(delay() * 1000) });
-    await post("/take?" + q, wav(shifted(S.take.samples, S.take.rate, S.shift), S.take.rate), "audio/wav");
+    const q = new URLSearchParams({ singer: S.takeSinger, mix: S.takeMix, guide: S.digests[S.takeMix] || "",
+                                    shift_ms: Math.round(S.shift * 1000), auto_ms: Math.round((S.autoShift || 0) * 1000),
+                                    device_ms: Math.round(delay() * 1000) });
+    await post("/take?" + q, K.wav(K.shifted(S.take.samples, S.take.rate, S.shift), S.take.rate), "audio/wav");
     $("review").hidden = true;
     await loadSingers();
     const byEar = S.shift - (S.autoShift || 0);
@@ -677,55 +476,25 @@ $("keep").onclick = async () => {
 $("calibrate").onclick = async () => {
   try { await audio(); await microphone(); } catch (e) { $("calibration").textContent = `No microphone: ${e.message}`; return; }
   if (S.mode !== "idle") return;
-  const beat = 0.6, count = 12, when = S.ctx.currentTime + 0.6;
-  for (let k = 0; k < count; k++) {  // short blips, the first four a little lower, to count you in
-    const osc = S.ctx.createOscillator(), env = S.ctx.createGain();
-    osc.frequency.value = k < 4 ? 880 : 1320;
-    env.gain.setValueAtTime(0, when + k * beat);
-    env.gain.linearRampToValueAtTime(0.5, when + k * beat + 0.002);
-    env.gain.exponentialRampToValueAtTime(0.001, when + k * beat + 0.06);
-    osc.connect(env).connect(S.ctx.destination);
-    osc.start(when + k * beat);
-    osc.stop(when + k * beat + 0.08);
-  }
+  const when = S.ctx.currentTime + 0.6;
+  K.scheduleClicks(S.ctx, when);
   S.chunks = [];
   S.mode = "calibrating";
   $("calibrate").disabled = $("record").disabled = $("rehearse").disabled = true;
   $("calibration").textContent = "Tap, clap or say \"ta\" on every click; the first four count you in.";
-  await new Promise(r => setTimeout(r, (0.6 + count * beat + 0.8) * 1000));
+  await new Promise(r => setTimeout(r, (0.6 + K.CLICKS.count * K.CLICKS.beat + 0.8) * 1000));
   S.mode = "idle";
   $("calibrate").disabled = $("record").disabled = $("rehearse").disabled = false;
+  S.out = (S.ctx.outputLatency || 0) + (S.ctx.baseLatency || 0);
+  S.inn = S.stream ? S.stream.getAudioTracks()[0].getSettings().latency || 0 : 0;
 
-  // where each tap began: the loudness of 5 ms windows, and the first to jump well above the quiet
-  const rate = S.ctx.sampleRate, win = Math.round(0.005 * rate);
-  const energy = [];
-  for (const c of S.chunks) for (let i = 0; i < c.samples.length; i += win) {
-    let e = 0;
-    for (let j = i; j < Math.min(i + win, c.samples.length); j++) e += c.samples[j] * c.samples[j];
-    energy.push({ t: (c.frame + i) / rate, e });
-  }
+  const lags = K.tapLags(S.chunks, S.ctx.sampleRate, when);
   S.chunks = [];
-  const sorted = energy.map(x => x.e).sort((a, b) => a - b);
-  const floor = sorted[Math.floor(sorted.length * 0.3)] || 0, loud = sorted[Math.floor(sorted.length * 0.99)] || 0;
-  const threshold = Math.max(floor * 8, loud * 0.15);
-  const onsets = [];
-  let quiet = 0;
-  for (const x of energy) {
-    if (x.e < threshold) { quiet++; continue; }
-    if (quiet >= 12) onsets.push(x.t);
-    quiet = 0;
-  }
-  const lags = [];
-  for (let k = 4; k < count; k++) {
-    const click = when + k * beat;
-    const near = onsets.filter(t => t > click - 0.2 && t < click + 0.5);
-    if (near.length) lags.push(near.reduce((a, b) => (Math.abs(a - click - 0.1) < Math.abs(b - click - 0.1) ? a : b)) - click);
-  }
-  if (lags.length < 4) {
-    $("calibration").textContent = `Heard ${lags.length} of 8 taps; try again, a little louder or nearer the mic.`;
+  const heard = K.CLICKS.count - K.CLICKS.lead;
+  if (lags.length < heard / 2) {
+    $("calibration").textContent = `Heard ${lags.length} of ${heard} taps; try again, a little louder or nearer the mic.`;
     return;
   }
-  lags.sort((a, b) => a - b);
   const total = lags[Math.floor(lags.length / 2)];
   const nudge = Math.round((total - S.out - S.inn) * 1000);
   learn(nudge);

@@ -1,12 +1,15 @@
 """Who sang what: sung takes kept on this computer, a folder per singer (dev-only).
 
     recordings/<singer>/<song>-<yyyymmdd-hhmmss>.wav    a take, already lined up with the guide
-    recordings/<singer>/<song>-<yyyymmdd-hhmmss>.json   who sang it, to which guide, whether to use it
+    recordings/<singer>/<song>-<yyyymmdd-hhmmss>.json   who sang it, to which guide (and which mix of
+                                                        it they heard), whether to use it
     recordings/guides/<song>.<digest>.score.json        every guide anyone has sung to, so that a
                                                         take still lines up after the song changes
 
 recordings/ never goes in git. A singer's name only names their folder here;
 it goes into a phrasing only if they ask to be credited (principle 12).
+Takes sung on the online page (web/sing) arrive here the same way, through
+tools/invite.py fetch.
 """
 
 from __future__ import annotations
@@ -59,11 +62,15 @@ class Take:
         self.sidecar().write_text(json.dumps(data, indent=1) + "\n")
 
 
+STAMPED = re.compile(r"^(?P<song>.+)-\d{8}-\d{6}(-\d+)?$")  # <song>-<yyyymmdd-hhmmss>, maybe -2, -3...
+
+
 def load(path: Path) -> Take:
     path = Path(path).resolve()
     side = path.with_suffix(".json")
     data = json.loads(side.read_text()) if side.exists() else {}
-    song = data.pop("song", path.stem.rsplit("-", 2)[0])
+    named = STAMPED.match(path.stem)
+    song = data.pop("song", named["song"] if named else path.stem)
     return Take(path, data.pop("singer", path.parent.name), song, data.pop("guide", None), data.pop("use", True), data)
 
 
@@ -101,11 +108,24 @@ def guide_score(song: str, d: str | None) -> Path | None:
 
 def keep(song: str, singer: str, wav: bytes, score: Path, **info) -> Take:
     """Save a new take by singer, sung to the guide whose score is at score."""
+    return keep_sung(song, singer, wav, keep_guide(song, score), **info)
+
+
+def keep_sung(song: str, singer: str, wav: bytes, guide: str, recorded: time.struct_time | None = None,
+              **info) -> Take:
+    """Save a take by singer, sung to a guide already kept here (by its digest):
+    one just sung in the karaoke, or one fetched from the online page. recorded:
+    when it was sung, in local time (default now); a second take in the same
+    second gets -2, -3... after its time."""
+    when = recorded or time.localtime()
     folder = RECORDINGS / slug(singer)
     folder.mkdir(parents=True, exist_ok=True)
-    path = folder / f"{song}-{time.strftime('%Y%m%d-%H%M%S')}.wav"
+    stamp = time.strftime("%Y%m%d-%H%M%S", when)
+    path, n = folder / f"{song}-{stamp}.wav", 2
+    while path.exists() or path.with_suffix(".json").exists():
+        path, n = folder / f"{song}-{stamp}-{n}.wav", n + 1
     path.write_bytes(wav)
-    take = Take(path, singer.strip(), song, keep_guide(song, score), True,
-                {"recorded": time.strftime("%Y-%m-%dT%H:%M:%S"), **info})
+    take = Take(path, singer.strip(), song, guide, True,
+                {"recorded": time.strftime("%Y-%m-%dT%H:%M:%S", when), **info})
     take.save()
     return take

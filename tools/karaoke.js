@@ -1,0 +1,360 @@
+// Songbird's sing-along core, shared by the karaoke on this computer (tools/karaoke.html)
+// and the page singers use anywhere (web/sing): the words and notes as they come, the
+// singer's pitch, and a take cut, synced and written the same way wherever it was sung.
+//
+// The clock: the guide starts at t0 on the AudioContext's clock and reaches the singer's
+// ears `out` later (the output latency the device reports). Their voice reaches the
+// recorder `inn` after that (the input latency), plus whatever the device adds without
+// saying (`extra`, learned from a calibration or from earlier takes). So the take's first
+// sample is the recorder's frame (t0 + out + inn + extra) * rate, and every sample after
+// it lines up with the guide's timeline. autoSync() then finds any lag left by sliding the
+// pitch sung against the song's notes.
+
+export const NAMES = { intro: "Intro", verse: "Verse", refrain: "Refrain", turn: "Turn", bridge: "Bridge", tag: "Tag",
+                       break: "Break", outro: "Outro" };
+export const PAST = 2.0, FUTURE = 5.0; // seconds of the lane either side of the playhead
+
+/* ---------- the notes ---------- */
+
+export function notesOf(lyrics) {
+  return lyrics.lines.flatMap(l => l.syllables);
+}
+
+export function range(notes) {
+  const pitches = notes.map(n => n.pitch);
+  return { lo: Math.min(...pitches) - 2, hi: Math.max(...pitches) + 2 };
+}
+
+export function target(notes, t) {
+  // the pitch the song wants at t: the note sounding, else the nearest within 0.35 s, else null
+  const n = notes.find(n => t >= n.start && t < n.end);
+  if (n) return n.pitch;
+  let best = null, gap = 0.35;
+  for (const m of notes) {
+    const d = Math.min(Math.abs(t - m.start), Math.abs(t - m.end));
+    if (d < gap) { gap = d; best = m.pitch; }
+  }
+  return best;
+}
+
+export function drawLane(c, notes, lo, hi, pos, trail) {
+  // the notes to come as bars at their pitch, the playhead, and the pitch sung as a line
+  // (green on the note, amber off it), folded into the song's octave
+  const g = c.getContext("2d");
+  const dpr = globalThis.devicePixelRatio || 1, W = c.clientWidth, H = c.clientHeight;
+  if (c.width !== Math.round(W * dpr) || c.height !== Math.round(H * dpr)) { c.width = Math.round(W * dpr); c.height = Math.round(H * dpr); }
+  g.setTransform(dpr, 0, 0, dpr, 0, 0);
+  g.clearRect(0, 0, W, H);
+  const span = PAST + FUTURE, px = (W * PAST) / span;
+  const x = t => px + ((t - pos) * W) / span;
+  const y = m => H - 22 - ((m - lo) / (hi - lo)) * (H - 40);
+  const h = Math.max(7, ((H - 40) / (hi - lo)) * 0.72);
+
+  g.strokeStyle = "rgba(239,230,218,0.05)";
+  g.lineWidth = 1;
+  for (let m = Math.ceil(lo); m <= hi; m++) { g.beginPath(); g.moveTo(0, y(m)); g.lineTo(W, y(m)); g.stroke(); }
+
+  g.font = "11px -apple-system, system-ui, sans-serif";
+  for (const n of notes) {
+    if (n.end < pos - PAST - 1 || n.start > pos + FUTURE + 1) continue;
+    const x0 = x(n.start), x1 = Math.max(x(n.end) - 3, x0 + 5), yy = y(n.pitch);
+    const now = pos >= n.start && pos < n.end, done = pos >= n.end;
+    g.fillStyle = now ? "#f2b25c" : done ? "rgba(242,178,92,0.32)" : "rgba(239,230,218,0.5)";
+    g.beginPath();
+    if (g.roundRect) g.roundRect(x0, yy - h / 2, x1 - x0, h, 4); else g.rect(x0, yy - h / 2, x1 - x0, h);
+    g.fill();
+    if (x1 - x0 > 12) { g.fillStyle = done ? "rgba(239,230,218,0.35)" : "rgba(239,230,218,0.75)"; g.fillText(n.text, x0 + 1, yy + h / 2 + 12); }
+  }
+
+  if (trail && trail.length) {
+    g.lineWidth = 3;
+    g.lineCap = "round";
+    for (let i = 1; i < trail.length; i++) {
+      const a = trail[i - 1], b = trail[i];
+      if (a.m === null || b.m === null || b.t - a.t > 0.12 || b.t < pos - PAST || a.t > pos) continue;
+      const want = target(notes, b.t);
+      const fb = want === null ? b.m : b.m + 12 * Math.round((want - b.m) / 12);
+      const fa = want === null ? a.m : a.m + 12 * Math.round((want - a.m) / 12);
+      g.strokeStyle = want === null ? "rgba(239,230,218,0.6)" : Math.abs(fb - want) <= 0.5 ? "#8cc084" : "#e0a04d";
+      g.beginPath(); g.moveTo(x(a.t), y(fa)); g.lineTo(x(b.t), y(fb)); g.stroke();
+    }
+  }
+
+  g.strokeStyle = "#e0664d";
+  g.lineWidth = 2;
+  g.beginPath(); g.moveTo(px, 8); g.lineTo(px, H - 8); g.stroke();
+}
+
+/* ---------- the words ---------- */
+
+function escape(s) {
+  return String(s).replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]);
+}
+
+export class Reel {
+  // the words line by line in a scrolling window: the current line large, each syllable
+  // filling in as it's sung; before a line after a rest, a bar and four dots count it in
+  constructor(el, lyrics) {
+    this.el = el;
+    this.tempo = lyrics.tempo;
+    this.focus = -2;
+    el.innerHTML = "";
+    const lines = lyrics.lines;
+    this.items = lines.map((line, i) => {
+      const item = document.createElement("div");
+      item.className = "item";
+      const before = i ? lines[i - 1] : null;
+      const gapStart = before ? before.end : 0;
+      const gap = line.syllables[0].start - gapStart;
+      let html = "";
+      if (!before || before.section !== line.section || gap > 3) html += `<div class="label">${escape(NAMES[line.section] || line.section)}</div>`;
+      if (gap >= 1.2) {
+        html += `<div class="gap"><span class="track"><span class="fill"></span></span>`
+              + `<span class="dots"><i></i><i></i><i></i><i></i></span>${gap >= 3 && before ? "<span>breathe</span>" : ""}</div>`;
+      }
+      html += `<div class="words">` + line.syllables.map(s => `<span class="syl">${escape(s.text)}</span>${s.word_end ? " " : ""}`).join("") + `</div>`;
+      item.innerHTML = html;
+      el.appendChild(item);
+      return { el: item, line, gapStart, gap, syls: [...item.querySelectorAll(".syl")], fill: item.querySelector(".fill"),
+               dots: [...item.querySelectorAll(".dots i")], lead: item.querySelector(".gap") };
+    });
+    const end = document.createElement("div");
+    end.className = "item done";
+    end.textContent = "That's the song.";
+    el.appendChild(end);
+    this.items.push({ el: end, line: null });
+  }
+
+  focusOn(f) {
+    if (f === this.focus) return;
+    this.items.forEach((it, i) => {
+      it.el.classList.toggle("current", i === f);
+      it.el.classList.toggle("past", i < f);
+      if (it.syls) it.syls.forEach(s => s.style.setProperty("--p", i < f ? "100%" : "0%"));
+    });
+    const anchor = 64; // where the current line sits in the window
+    this.el.style.transform = `translateY(${anchor - this.items[f].el.offsetTop}px)`;
+    this.focus = f;
+  }
+
+  show(pos) {
+    let f = this.items.findIndex(it => it.line && pos < it.line.end + 0.15);
+    if (f < 0) f = this.items.length - 1;
+    this.focusOn(f);
+    const it = this.items[f];
+    if (!it.line) return;
+    const beat = 60 / this.tempo;
+    const first = it.line.syllables[0].start;
+    if (it.fill) it.fill.style.width = Math.max(0, Math.min(100, (100 * (pos - it.gapStart)) / it.gap)) + "%";
+    if (it.lead) it.lead.classList.toggle("spent", pos > first + 0.4); // the count-in has done its job
+    it.dots.forEach((d, k) => d.classList.toggle("on", pos >= first - (4 - k) * beat));
+    it.line.syllables.forEach((s, k) => {
+      const next = it.line.syllables[k + 1];
+      const until = next ? Math.min(s.end, next.start) : s.end;
+      const p = Math.max(0, Math.min(1, (pos - s.start) / Math.max(until - s.start, 0.05)));
+      it.syls[k].style.setProperty("--p", (100 * p).toFixed(1) + "%");
+    });
+  }
+}
+
+/* ---------- listening to the singer ---------- */
+
+export function yin(buf, rate) {
+  // the pitch of a block of the mic, by YIN at half the rate; null when there is none
+  const n = buf.length >> 1, x = new Float32Array(n);
+  for (let i = 0; i < n; i++) x[i] = 0.5 * (buf[2 * i] + buf[2 * i + 1]);
+  const r = rate / 2, lo = Math.floor(r / 1000), hi = Math.min(Math.floor(r / 65), (n >> 1) - 1), w = n - hi;
+  const d = new Float32Array(hi + 2);
+  for (let tau = 1; tau <= hi + 1; tau++) {
+    let s = 0;
+    for (let i = 0; i < w; i++) { const e = x[i] - x[i + tau]; s += e * e; }
+    d[tau] = s;
+  }
+  let sum = 0;
+  for (let tau = 1; tau <= hi + 1; tau++) { sum += d[tau]; d[tau] = (d[tau] * tau) / (sum || 1); }
+  for (let tau = Math.max(lo, 2); tau <= hi; tau++) {
+    if (d[tau] < 0.15) {
+      while (tau + 1 <= hi && d[tau + 1] < d[tau]) tau++;
+      const a = d[tau - 1], b = d[tau], c = d[tau + 1], den = a - 2 * b + c;
+      return r / (tau + (den ? (a - c) / (2 * den) : 0));
+    }
+  }
+  return null;
+}
+
+export function pitchAt(buf, rate) {
+  // a block's pitch as a MIDI number, or null if it's too quiet or unpitched
+  let e = 0;
+  for (let i = 0; i < buf.length; i++) e += buf[i] * buf[i];
+  const hz = Math.sqrt(e / buf.length) > 0.008 ? yin(buf, rate) : null;
+  return hz ? 69 + 12 * Math.log2(hz / 440) : null;
+}
+
+export function autoSync(trail, notes) {
+  /* How late the take runs against the guide: slide the pitch you sang against
+     the song's notes and rests, and keep the slide where they agree best (your
+     voice inside a note, better still on its pitch; your voice in a rest counts
+     against). Returns seconds to move the take earlier, or 0 if nothing clearly
+     beats leaving it as recorded. */
+  const pts = trail.filter(p => p.m !== null);
+  if (pts.length < 100) return 0;
+  const starts = notes.map(n => n.start);
+  const noteAt = u => {
+    let lo = 0, hi = starts.length - 1, k = -1;
+    while (lo <= hi) { const mid = (lo + hi) >> 1; if (starts[mid] <= u) { k = mid; lo = mid + 1; } else hi = mid - 1; }
+    return k >= 0 && u < notes[k].end ? notes[k] : null;
+  };
+  const score = lag => {
+    let s = 0;
+    for (const p of pts) {
+      const n = noteAt(p.t - lag);
+      if (!n) { s -= 0.5; continue; }
+      const m = p.m + 12 * Math.round((n.pitch - p.m) / 12);
+      s += Math.abs(m - n.pitch) <= 1 ? 2 : 1;
+    }
+    return s;
+  };
+  const lags = [], scores = [];
+  for (let k = -30; k <= 120; k++) { lags.push(k * 0.005); scores.push(score(k * 0.005)); }
+  // the gaps between syllables let a slide of a few tens of ms go unpunished, so the best
+  // score is a plateau: take its middle, not its first edge
+  const top = Math.max(...scores);
+  const flat = lags.filter((lag, i) => scores[i] >= top - 0.002 * pts.length);
+  const best = flat[Math.floor(flat.length / 2)];
+  return Math.abs(best) >= 0.01 ? Math.round(best * 1000) / 1000 : 0;
+}
+
+/* ---------- a take ---------- */
+
+export function firstFrame(t0, out, inn, extra, rate) {
+  // the recorder frame the take starts on: when the guide's first sample reached the
+  // singer's ears (t0 + out), plus the way back in (inn) and what the device doesn't say (extra)
+  return Math.round((t0 + out + inn + extra) * rate);
+}
+
+export function assemble(chunks, first) {
+  // the recorder's blocks laid out from frame `first` on: anything earlier is dropped, a gap stays silent
+  const tail = chunks[chunks.length - 1];
+  const last = tail ? tail.frame + tail.samples.length : first;
+  const samples = new Float32Array(Math.max(last - first, 0));
+  for (const c of chunks) {
+    const at = c.frame - first;
+    for (let i = 0; i < c.samples.length; i++) if (at + i >= 0 && at + i < samples.length) samples[at + i] = c.samples[i];
+  }
+  return samples;
+}
+
+export function shifted(samples, rate, earlier) {
+  // the take moved `earlier` seconds earlier (its start dropped), or later (silence in front)
+  const n = Math.round(earlier * rate);
+  if (n >= 0) return samples.subarray(Math.min(n, samples.length));
+  const out = new Float32Array(samples.length - n);
+  out.set(samples, -n);
+  return out;
+}
+
+export function wavBytes(samples, rate) {
+  // 16-bit mono PCM WAV with the plain 44-byte header
+  const buf = new ArrayBuffer(44 + samples.length * 2), v = new DataView(buf);
+  const put = (at, s) => { for (let i = 0; i < s.length; i++) v.setUint8(at + i, s.charCodeAt(i)); };
+  put(0, "RIFF"); v.setUint32(4, 36 + samples.length * 2, true); put(8, "WAVE"); put(12, "fmt ");
+  v.setUint32(16, 16, true); v.setUint16(20, 1, true); v.setUint16(22, 1, true); v.setUint32(24, rate, true);
+  v.setUint32(28, rate * 2, true); v.setUint16(32, 2, true); v.setUint16(34, 16, true);
+  put(36, "data"); v.setUint32(40, samples.length * 2, true);
+  for (let i = 0; i < samples.length; i++) v.setInt16(44 + 2 * i, Math.round(Math.max(-1, Math.min(1, samples[i])) * 32767), true);
+  return buf;
+}
+
+export function wav(samples, rate) {
+  return new Blob([wavBytes(samples, rate)], { type: "audio/wav" });
+}
+
+/* ---------- calibration ---------- */
+
+export const CLICKS = { beat: 0.6, count: 12, lead: 4 }; // a click every 0.6 s, the first four to count you in
+
+export function scheduleClicks(ctx, when) {
+  // short blips from `when`, the count-in a little lower
+  for (let k = 0; k < CLICKS.count; k++) {
+    const osc = ctx.createOscillator(), env = ctx.createGain();
+    osc.frequency.value = k < CLICKS.lead ? 880 : 1320;
+    env.gain.setValueAtTime(0, when + k * CLICKS.beat);
+    env.gain.linearRampToValueAtTime(0.5, when + k * CLICKS.beat + 0.002);
+    env.gain.exponentialRampToValueAtTime(0.001, when + k * CLICKS.beat + 0.06);
+    osc.connect(env).connect(ctx.destination);
+    osc.start(when + k * CLICKS.beat);
+    osc.stop(when + k * CLICKS.beat + 0.08);
+  }
+}
+
+export function tapLags(chunks, rate, when) {
+  // how long after each click (past the count-in) a tap began: where the loudness of
+  // 5 ms windows first jumps well above the quiet, near the click
+  const win = Math.round(0.005 * rate);
+  const energy = [];
+  for (const c of chunks) for (let i = 0; i < c.samples.length; i += win) {
+    let e = 0;
+    for (let j = i; j < Math.min(i + win, c.samples.length); j++) e += c.samples[j] * c.samples[j];
+    energy.push({ t: (c.frame + i) / rate, e });
+  }
+  const sorted = energy.map(x => x.e).sort((a, b) => a - b);
+  const floor = sorted[Math.floor(sorted.length * 0.3)] || 0, loud = sorted[Math.floor(sorted.length * 0.99)] || 0;
+  const threshold = Math.max(floor * 8, loud * 0.15);
+  const onsets = [];
+  let quiet = 0;
+  for (const x of energy) {
+    if (x.e < threshold) { quiet++; continue; }
+    if (quiet >= 12) onsets.push(x.t);
+    quiet = 0;
+  }
+  const lags = [];
+  for (let k = CLICKS.lead; k < CLICKS.count; k++) {
+    const click = when + k * CLICKS.beat;
+    const near = onsets.filter(t => t > click - 0.2 && t < click + 0.5);
+    if (near.length) lags.push(near.reduce((a, b) => (Math.abs(a - click - 0.1) < Math.abs(b - click - 0.1) ? a : b)) - click);
+  }
+  return lags.sort((a, b) => a - b);
+}
+
+/* ---------- a guide that came through a compressed file ---------- */
+
+export function envelope(data, rate, seconds, frame = 0.001) {
+  // RMS in `frame`-second windows over the first `seconds` of a mono signal
+  const n = Math.floor(seconds / frame), out = new Float32Array(n);
+  for (let k = 0; k < n; k++) {
+    const a = Math.floor(k * frame * rate), b = Math.min(Math.floor((k + 1) * frame * rate), data.length);
+    let e = 0;
+    for (let i = a; i < b; i++) e += data[i] * data[i];
+    out[k] = b > a ? Math.sqrt(e / (b - a)) : 0;
+  }
+  return out;
+}
+
+export function decodeOffset(decoded, rate, reference, frame = 0.001, reach = 0.08) {
+  /* Seconds of silence a decoder put in front of the guide (an MP3 decoder that
+     ignores the encoder's delay adds about 25 to 50 ms), found by sliding the
+     decoded guide's opening loudness against `reference`, the same measured on
+     the original before it was encoded; 0 if nothing is clearly better. */
+  const ref = Float32Array.from(reference);
+  const env = envelope(decoded, rate, ref.length * frame + reach + 0.01, frame);
+  const norm = a => { const m = a.reduce((s, v) => s + v, 0) / a.length; const d = a.map(v => v - m); const l = Math.hypot(...d) || 1; return d.map(v => v / l); };
+  const r = norm(Array.from(ref));
+  const corr = [];
+  const steps = Math.round(reach / frame);
+  for (let lag = -5; lag <= steps; lag++) {
+    const seg = [];
+    for (let k = 0; k < r.length; k++) { const j = k + lag; seg.push(j >= 0 && j < env.length ? env[j] : 0); }
+    const s = norm(seg);
+    let c = 0;
+    for (let k = 0; k < r.length; k++) c += r[k] * s[k];
+    corr.push({ lag, c });
+  }
+  const best = corr.reduce((a, b) => (b.c > a.c ? b : a));
+  if (best.c < 0.8) return 0; // no clear match: trust the decoder
+  const i = corr.indexOf(best);
+  const a = corr[i - 1], b = corr[i + 1];
+  let lag = best.lag;
+  if (a && b) { const den = a.c - 2 * best.c + b.c; if (den < 0) lag += 0.5 * (a.c - b.c) / den; }
+  const seconds = lag * frame;
+  return Math.abs(seconds) < 0.002 ? 0 : seconds;
+}
