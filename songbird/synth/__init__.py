@@ -7,45 +7,19 @@ pretrained audio models, so the program stays the whole artifact.
 from __future__ import annotations
 
 import numpy as np
-from scipy.signal import sosfilt
 
 from ..score import Score
-from ..theory import midi_to_hz
 from . import mixing
+from .instruments import INSTRUMENTS, render_band
 from .mixing import MixParams
-from .pluck import pluck
 from .voice import VoiceParams, sing
 
 SR = 44100
 
-# Body resonances as (centre Hz, gain dB, Q): a small lute and a lighter harp.
-# Both dip around 2.5 kHz, where the voice's consonants and upper formants live.
-LUTE = ((110.0, 5.0, 2.5), (250.0, 3.0, 2.0), (520.0, 2.0, 2.0), (2500.0, -5.0, 0.9))
-HARP = ((180.0, 3.0, 1.5), (1000.0, 1.5, 1.0), (2500.0, -4.0, 0.9), (4500.0, -2.0, 0.7))
-VOICE_GAIN = 1.6  # about +4 dB: the words sit clear of the strings
+VOICE_GAIN = 1.6  # about +4 dB: the words sit clear of the band
 CHOIR_GAIN = 0.55  # each lineage voice about 5 dB under the lead
 CHOIR_PANS = (-0.45, 0.45, -0.25, 0.25, -0.65, 0.65)
-
-# Milestone 1 instrument settings; the voice harvest will drive these.
-PARTS = {
-    "melody": dict(brightness=0.62, decay=2.6, pick=0.17, body=LUTE, pan=-0.12, gain=1.0),
-    "harp": dict(brightness=0.45, decay=3.4, pick=0.11, body=HARP, pan=0.22, gain=0.42),
-    "bass": dict(brightness=0.30, decay=4.0, pick=0.21, body=HARP, pan=0.05, gain=0.55),
-}
-
-
-def _peaking(f0: float, gain_db: float, q: float, sr: int) -> np.ndarray:
-    """One RBJ peaking-EQ biquad as a second-order section."""
-    a = 10.0 ** (gain_db / 40.0)
-    w = 2.0 * np.pi * f0 / sr
-    alpha = np.sin(w) / (2.0 * q)
-    b = np.array([1.0 + alpha * a, -2.0 * np.cos(w), 1.0 - alpha * a])
-    den = np.array([1.0 + alpha / a, -2.0 * np.cos(w), 1.0 - alpha / a])
-    return np.concatenate([b, den]) / den[0]
-
-
-def body(x: np.ndarray, sr: int, resonances) -> np.ndarray:
-    return sosfilt(np.array([_peaking(f, g, q, sr) for f, g, q in resonances]), x)
+PARTS = INSTRUMENTS  # the band's stems, by role (songbird.synth.instruments builds each)
 
 
 def pan(mono: np.ndarray, position: float) -> np.ndarray:
@@ -55,27 +29,11 @@ def pan(mono: np.ndarray, position: float) -> np.ndarray:
 
 
 def render_stems(score: Score, sr: int = SR, seed: int = 0, voice: VoiceParams | None = None) -> dict[str, np.ndarray]:
-    """Each part rendered dry, in stereo, all the same length."""
-    rng = np.random.default_rng(seed)
+    """Each part rendered dry, in stereo, all the same length: a stem for every
+    instrument that plays (lute, guitar, harp, bass, fiddle, whistle, drum,
+    drone), then the voice and each lineage voice."""
     length = int(np.ceil(score.duration * sr))
-    stems = {}
-    for name, spec in PARTS.items():
-        mono = np.zeros(length)
-        for note in score.part(name):
-            y = pluck(
-                midi_to_hz(note.pitch),
-                note.dur,
-                sr,
-                rng,
-                vel=note.vel,
-                brightness=spec["brightness"],
-                decay=spec["decay"],
-                pick=spec["pick"],
-            )
-            i = int(round(note.start * sr))
-            j = min(length, i + len(y))
-            mono[i:j] += y[: j - i]
-        stems[name] = pan(body(mono, sr, spec["body"]), spec["pan"]) * spec["gain"]
+    stems = render_band(score, sr, seed)
     sung = list(score.part("voice"))
     if sung:
         y = sing(sung, sr, voice or VoiceParams(), seed, score.lexicon)[:length]

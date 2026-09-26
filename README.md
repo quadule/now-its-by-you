@@ -15,23 +15,35 @@ uv sync
 uv run songbird render songs/b-coal-from-the-fire.json            # renders/b-coal-from-the-fire.flac
 uv run songbird render songs/b-coal-from-the-fire.json --form refrain --stems \
     --voice tract=1.0 shift=-12                                               # a lower singer, parts as WAVs
+uv run songbird harvest --show                                     # this machine's voice, exactly what is kept
+uv run songbird render songs/h-now-its-by-you.json --machine here --date 2026-12-25  # sung by this machine that day
+uv run songbird render songs/h-now-its-by-you.json --machine fictional:ada           # by a made-up machine, now
+uv run songbird year songs/h-now-its-by-you.json --machine fictional:ada             # its choices through a year
 uv run pytest
 ```
 
 ## Layout
 
 `songbird/` follows the pipeline: `genome` (the persistent skeleton; tunes are
-written as scale degrees on a rhythmic grid), `realize` (genome plus parameters
-to a timed score), `synth/` (plucked string, LF glottal source, Klatt-style
-tract, singing voice, room, mastering), `phonetics` (CMU dictionary to sung
-syllables). `harvest`, `drift`, `lyrics`, `gate` and `pack` are the later
-milestones and only describe their interfaces so far.
+written as scale degrees on a rhythmic grid), `harvest` (the machine's context
+reduced to a voice: [docs/HARVEST.md](docs/HARVEST.md) lists exactly what is
+read), `drift` (time as a smooth noise field), `realize` (genome plus
+parameters to a timed score; `variation` is the table by which the parent's
+parameters pull toward the voice as the drift moves them), `arrange` (the
+words, drawn from the song's bank: [docs/ARRANGE.md](docs/ARRANGE.md)), `band`
+(who in the band plays what, section by section: [docs/BAND.md](docs/BAND.md)),
+`synth/` (the band's instruments: plucked, bowed, blown, struck and reed
+models in their bodies; the singer: LF glottal source and Klatt-style tract,
+or the learned throat of [docs/THROAT.md](docs/THROAT.md); room, mastering),
+`phonetics` (CMU dictionary to sung syllables). `lyrics`, `gate` and `pack`
+are the later milestones and only describe their interfaces so far.
 
 ## Checking a render without ears
 
 - `tools/analyze.py renders/<name> [--part voice]` tracks pitch against the score and draws it.
 - `tools/voiceview.py renders/<name>` draws the voice's spectrogram with every phoneme labelled.
 - `tools/mixview.py renders/<name>.flac` shows mix balance and flags clicks.
+- `tools/band_solos.py songs/<name>.json --plots` renders each instrument of the band alone, playing its part.
 - `tools/wer_suite.py [--mix] [--seeds 3] [--set field=value]` sings every lyric in
   `songs/` and scores intelligibility with Whisper (dev-only; downloads the base.en model).
 

@@ -36,3 +36,30 @@ def test_pluck_decays_and_is_deterministic():
     assert np.array_equal(a, b)
     early, late = np.abs(a[: SR // 4]).max(), np.abs(a[int(1.75 * SR): 2 * SR]).max()
     assert late < early * 0.5
+
+
+def test_two_planes_give_a_loud_start_and_a_long_soft_tail():
+    y = pluck(146.83, 4.0, SR, np.random.default_rng(3), brightness=0.5, decay=3.0, planes=0.35)
+    hop = SR // 50
+    env = 20 * np.log10(np.sqrt(np.convolve(y**2, np.ones(hop) / hop, mode="valid"))[::hop] + 1e-12)
+    early = np.polyfit(np.arange(5, 25) / 50, env[5:25], 1)[0]
+    late = np.polyfit(np.arange(120, 190) / 50, env[120:190], 1)[0]
+    assert early < late < 0  # decays fast while the plane across the top dominates, then slower
+
+
+def test_a_paired_course_beats_and_a_muted_stroke_stops():
+    single = pluck(293.66, 2.0, SR, np.random.default_rng(4), decay=4.0)
+    paired = pluck(293.66, 2.0, SR, np.random.default_rng(4), decay=4.0, course=6.0, spread=0.004)
+    assert not np.allclose(single, paired)
+    muted = pluck(146.83, 0.3, SR, np.random.default_rng(4), mute=True)
+    rms = lambda x: np.sqrt(np.mean(x**2))  # noqa: E731
+    assert rms(muted[int(0.1 * SR): int(0.3 * SR)]) < 0.05 * rms(muted[: int(0.01 * SR)])
+
+
+def test_open_strings_answer_what_shares_their_harmonics():
+    from songbird.synth.pluck import sympathetic
+
+    note = pluck(146.83, 1.0, SR, np.random.default_rng(5), decay=3.0)  # D3
+    tuned = sympathetic(note, SR, [50, 57])  # open D3 and A3
+    detuned = sympathetic(note, SR, [51, 56])  # open strings sharing nothing with it
+    assert np.sqrt(np.mean(tuned**2)) > 4 * np.sqrt(np.mean(detuned**2))

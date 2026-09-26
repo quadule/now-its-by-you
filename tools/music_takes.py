@@ -115,7 +115,8 @@ def guide_singer(genome_path: Path, genome) -> np.ndarray:
     return V.sing(g.notes, S.SR, V.VoiceParams(), choose_params(genome).seed, g.lexicon)
 
 
-def eleven(genome_path: Path, genome, voice: str, seed: int, song_id: str | None, strength: str = "xhigh") -> tuple[np.ndarray, dict]:
+def eleven(genome_path: Path, genome, voice: str, seed: int, song_id: str | None, strength: str = "xhigh",
+           only: list[int] | None = None) -> tuple[np.ndarray, dict]:
     """A take section by section: asked for all at once, Eleven Music let the words slide about a line
     early through each section, but a single section, conditioned on its own stretch of the guide, keeps
     within about 0.2 s. Every sung section is asked for on its own (same voice, same seed) and laid where
@@ -131,7 +132,9 @@ def eleven(genome_path: Path, genome, voice: str, seed: int, song_id: str | None
         song_id = json.loads(tts.request("https://api.elevenlabs.io/v1/music/upload", {**xi, "Content-Type": kind}, body))["song_id"]
     take = np.zeros(int((parts[-1]["end"] + 1.0) * S.SR))
     asked = []
-    for part, t0, t1 in windows(parts, parts[-1]["end"] + 0.5):
+    for w, (part, t0, t1) in enumerate(windows(parts, parts[-1]["end"] + 0.5)):
+        if only is not None and w not in only:
+            continue
         a, b = int(round((t0 - origin) * 1000)), int(round((t1 - origin) * 1000))
         chunk = {
             "text": f"[{NAMES.get(part['name'], part['name'].title())}]\n" + "\n".join(line[0] for line in part["lines"]),
@@ -283,6 +286,8 @@ def main() -> None:
     ap.add_argument("--seed", type=int, default=1)
     ap.add_argument("--takes", type=int, default=1, help="takes per voice (each its own seed)")
     ap.add_argument("--first", type=int, default=1, help="number the takes from this one (to add to a voice's takes)")
+    ap.add_argument("--windows", type=int, nargs="*", default=None, metavar="N",
+                    help="only these sung sections (0 the first verse, 1 the first refrain...): a timbre prompt needs only one")
     ap.add_argument("--strength", default="xhigh", choices=("low", "medium", "high", "xhigh"),
                     help="how hard Eleven Music holds to the guide's melody: looser leaves the singer more of their own way")
     args = ap.parse_args()
@@ -293,7 +298,8 @@ def main() -> None:
     jobs += [("lyria", v, t) for v in args.lyria for t in range(args.first, args.first + args.takes)]
     for i, (model, voice, number) in enumerate(jobs):
         if model == "eleven":
-            y, about = eleven(genome_path, genome, voice, args.seed + i + 100 * (number - 1), song_id, args.strength)
+            y, about = eleven(genome_path, genome, voice, args.seed + i + 100 * (number - 1), song_id, args.strength,
+                              args.windows)
             song_id = about["song_id"]
         else:
             y, about = lyria(genome_path, genome, voice)

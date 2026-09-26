@@ -1,6 +1,6 @@
 """Check a render against its score: pitch accuracy per note, and a picture.
 
-    uv run python tools/analyze.py renders/b-coal-from-the-fire  [--part melody] [--start 0 --end 30]
+    uv run python tools/analyze.py renders/b-coal-from-the-fire  [--part voice] [--start 0 --end 30]
 
 Reads <stem>.<part>.wav (written by `songbird render --stems`) and
 <stem>.score.json, tracks pitch with pYIN, and reports how far each sounded
@@ -24,7 +24,7 @@ import soundfile as sf
 def main() -> None:
     ap = argparse.ArgumentParser()
     ap.add_argument("stem", help="render path without extension, e.g. renders/b-coal-from-the-fire")
-    ap.add_argument("--part", default="melody")
+    ap.add_argument("--part", default="voice")
     ap.add_argument("--start", type=float, default=0.0)
     ap.add_argument("--end", type=float, default=None)
     args = ap.parse_args()
