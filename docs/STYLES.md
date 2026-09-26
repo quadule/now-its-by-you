@@ -320,7 +320,44 @@ percussion names on the drum strip).
 
 ## Measurements
 
-(filled in below as the examples are rendered)
+Measured with tools/stylemeter.py on one made-up machine (ada, 2026-09-27), three lineage voices, a verse and
+a refrain in each style with no bare verse, stand-in instruments, the formant singer; the band's level is
+its bus at master level, and the voice over the band is measured where the voice sings (as MIX.md does).
+Every master is -14.0 LUFS integrated, and no sample reaches full scale.
+
+| Style | Feel | Tempo | Band in the verse | Band in the refrain | Voice over band, verse | refrain | True peak | Words misheard |
+|---|---|---|---|---|---|---|---|---|
+| synthfolk | straight | 110 | -30.4 LUFS | -25.9 LUFS | 14.0 dB | 8.8 dB | -1.05 dBTP | 43% |
+| indie | straight | 112 | -32.6 LUFS | -27.1 LUFS | 14.3 dB | 8.2 dB | -1.05 dBTP | 33% |
+| gospel | twelve | 66 | -28.7 LUFS | -24.6 LUFS | 12.9 dB | 7.7 dB | -1.05 dBTP | 34% |
+| blues | shuffle | 86 | -26.0 LUFS | -23.8 LUFS | 12.3 dB | 9.2 dB | -1.22 dBTP | 41% |
+| country | shuffle | 96 | -26.7 LUFS | -23.7 LUFS | 13.0 dB | 9.2 dB | -1.36 dBTP | 20% |
+| stringband | straight | 117 | -26.5 LUFS | -24.3 LUFS | 12.8 dB | 9.7 dB | -1.84 dBTP | 16% |
+| shanty | six | 115 | -42.4 LUFS | -31.0 LUFS | 23.4 dB | 11.4 dB | -1.05 dBTP | 40% |
+| ballad | straight | 96 | -25.7 LUFS | -24.3 LUFS | 11.8 dB | 9.6 dB | -1.6 dBTP | 29% |
+| chamber | waltz | 60 | -26.1 LUFS | -24.0 LUFS | 11.9 dB | 9.0 dB | -1.82 dBTP | 71% |
+| songwriter | swing | 90 | -27.3 LUFS | -22.6 LUFS | 13.3 dB | 8.2 dB | -1.05 dBTP | 26% |
+| lullaby | six | 79 | -26.5 LUFS | -26.7 LUFS | 9.9 dB | 10.0 dB | -1.05 dBTP | 46% |
+| ambient | half | 67 | -27.7 LUFS | -29.3 LUFS | 9.5 dB | 10.3 dB | -1.05 dBTP | 60% |
+| lofi | swing | 78 | -25.1 LUFS | -23.4 LUFS | 11.1 dB | 8.8 dB | -1.06 dBTP | 23% |
+
+- **The singer is always the loudest.** The voice stands 7.7 to 12.9 dB over the band in the refrains
+  (the seed's own band: 9.6) and more in the verses, where every style is sparser. The shanty's first
+  verse is the shantyman almost alone, by the style's design.
+- **Peaks** stay under the master's ceiling: the true peak is -1.1 dBTP or lower everywhere.
+- **Nothing sits on a sung pitch.** Counting comping notes that start on the pitch being sung finds none
+  in any style but the ballad and synth folk. The ballad's 24 are its lute doubling the last refrain by
+  design. Synth folk's 2 are the arpeggiator's. tests/test_styles.py checks every coloured tone against
+  every sung note.
+- **The words are the open problem.** Whisper base.en mishears 16% to 71% of the words (the ballad's own
+  band: 29% here, 17% in its tour excerpt with an intro). Whisper is a jumpy judge on about 70 words;
+  single runs differ by 10 points. The string band and country are as clear as the ballad; chamber,
+  ambient and the lullaby are much worse.
+  - Chamber stays near 50% even a cappella with the ballad's singer and mix. So its trouble is not the
+    band or the leans; it is somewhere in the slow tempo, the looser timing and the re-barring. That
+    is the first thing to look at.
+  - The rest likely come from sustained textures (pads, a reed-box stand-in, harp stand-ins ringing
+    4.5 s) sitting in the voice's range. The real instruments may change this.
 
 ## Examples
 

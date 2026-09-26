@@ -79,7 +79,31 @@ Our vocoder alone costs about 0.25 of that; the model and the delivery cost the 
 
 ### Genres and arrangement
 
-(in progress: a style agent, and two agents building new instruments)
+**Styles (landed on the styles branch; docs/STYLES.md).** Every rendition is now played in a style: a
+tradition the song has been carried into, with its own band, feel, harmony and arrangement.
+- *Thirteen styles on a ring:* synth folk, indie, gospel, blues, country, a string band (old-time and
+  bluegrass), a shanty, the seed's ballad, chamber folk, a singer-songwriter, a lullaby, ambient and
+  lo-fi. Neighbours share instruments or a feel.
+- *How they travel:* a machine's harvest gives it a home on the ring. A child keeps its parent's style
+  about three times in five, otherwise it steps to a neighbour. A machine singing one parent day after
+  day changes style about twice a year, never back and forth. No style (the seed) is byte-identical.
+- *Arrangement within any style:* a pad or a cappella start, a count-in, a bare verse, stop-time, a
+  breakdown, a half-time bridge, entrances line by line, a lift to the last refrain, a cold stop, a
+  repeated last line, a plagal amen. Backing voices come from the lineage's own singers: the gang,
+  thirds, answers, or oohs.
+- *The song in three:* a waltz or slow six-eight re-bars H so every stressed syllable lands on a
+  downbeat.
+- *Listen:* renders/production/styles/ (README.txt): the tour first, then the lineage, then the songs.
+- *Stand-ins:* the new instruments are played by the seed band's own models until the instrument
+  modules land. For now the styles differ in rhythm, harmony, form, texture and mix, not yet in timbre.
+- *To reconsider:*
+  - the rates (`PULL_STYLE` 0.1, `STYLE_SPAN` 1.1 in songbird/style.py);
+  - the palette and the ring's order (`STYLES`, `RING`);
+  - that backing voices are only the lineage's own, so early generations sound thin;
+  - the styles' leans on the singer and the mix;
+  - that from the seed a first child can only reach the shanty or chamber.
+- *Open problem:* Whisper hears the words worse in most styles than in the ballad (STYLES.md,
+  "Measurements"). In chamber, even a cappella with the ballad's singer and mix, it stays near 50%.
 
 ### Evolution, the studio, the sing page
 
