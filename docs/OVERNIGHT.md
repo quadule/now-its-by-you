@@ -129,6 +129,9 @@ A melody-only karaoke guide, now the default, and a Cloudflare Worker and page f
 songbird.quadule.com, with one-time invitations and private storage for takes. It isn't
 deployed: you run `wrangler login` and the steps in the doc.
 
+The karaoke's full-song guide was re-rendered, so the learned voice sings it. Your two earlier
+takes stay pinned to the guide they were sung to.
+
 ### Fixed
 
 - **Swing had its lilt backwards** in G, H, I and K, whose first pickup is an eighth. The beats were
