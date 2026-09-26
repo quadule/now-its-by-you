@@ -218,6 +218,21 @@ Each item names the choice, and how to undo it or where it lives.
 
 ## Next
 
+**The artist's first notes (the morning after):**
+- *Refrain variety:* "Different variations should be possible in each iteration of the chorus".
+  Today the refrain's slot words are chosen once a song, and only the turning word and the couplet
+  change from refrain to refrain.
+- *A new refrain variant for the bank:* "Who wrote this song? Nobody, so / it's yours if you sing
+  it and then who knows?"
+- *The hiss:* "Sometimes the reverb (+ other effects?) produce a loud hiss", as at the start of
+  styles/lineage/4-hana.verse-refrain.
+  - *Measured:* half a second in, the band above 6 kHz rises to 8 dB under the mids, where it is
+    15 to 25 dB under elsewhere.
+  - *Not tape wear:* that mix's wear is 0.
+  - *Suspect:* the plate reverb, which the country style turns up, on a sparse texture.
+
+**Then:**
+
 - **Human singers.**
   - *Finding them:* docs/SINGERS.md has the brief and release.
   - *Recording:* the sing page is ready to deploy.
