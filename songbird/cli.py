@@ -118,11 +118,28 @@ def render_one(genome, params: Params, out: Path, *, voice=None, drift=None, lyr
     return record
 
 
+def _arrangement(items: list[str]) -> dict | None:
+    """--arrange FIELD=VALUE ... as Style fields (songbird/style.py): true/false, numbers, or names."""
+    out = {}
+    for item in items or []:
+        key, _, value = item.partition("=")
+        low = value.strip().lower()
+        if low in ("true", "yes", "on", "false", "no", "off"):
+            out[key] = low in ("true", "yes", "on")
+        else:
+            try:
+                out[key] = int(value) if low.lstrip("-").isdigit() else float(value)
+            except ValueError:
+                out[key] = value
+    return out or None
+
+
 def render_command(args: argparse.Namespace) -> int:
     genome = genome_mod.load(args.genome)
     voice, drift = _machine(args)
     parent = _parent_record(args.parent)
-    params = choose_params(genome, Params.from_dict(parent["params"]) if parent else None, voice, drift, seed=args.seed)
+    params = choose_params(genome, Params.from_dict(parent["params"]) if parent else None, voice, drift, seed=args.seed,
+                           style=args.style, arrange=_arrangement(args.arrange))
     if args.form:
         params = replace(params, form=tuple(args.form))
     if args.choir is not None:
@@ -363,6 +380,13 @@ def main(argv: list[str] | None = None) -> int:
     render.add_argument("--mix", nargs="*", default=[], metavar="FIELD=VALUE",
                         help="change the mix (synth/mixing.py MixParams), e.g. --mix rt60=2.2 wear=0.5 "
                              "tone=1,1,1,0.8,0.6 balance=fiddle:2")
+    render.add_argument("--style", metavar="NAME",
+                        help="play it in this style (songbird/style.py STYLES: ballad, stringband, country, gospel, "
+                             "shanty, songwriter, chamber, lullaby, ambient, synthfolk, lofi, indie, blues) instead of "
+                             "the one the machine and its parent lead to")
+    render.add_argument("--arrange", nargs="*", default=[], metavar="FIELD=VALUE",
+                        help="set the arrangement's options (songbird/style.py Style), e.g. --arrange feel=waltz "
+                             "lift=true ending=cold backing=gang")
     render.add_argument("--choir", type=int, metavar="N",
                         help="lineage voices joining in harmony where the song has a choir (stand-ins for now)")
     render.add_argument("--phrasing", metavar="FILE",

@@ -18,6 +18,7 @@ from .band import Band
 from .genome import Genome, Phrase, sung_words, turn
 from .phrasing import Gesture, Phrasing, gesture
 from .score import Note, Score
+from . import style as style_mod
 from .style import Style
 from .theory import degree_semitones, harmony
 
@@ -151,15 +152,21 @@ def realize(genome: Genome, params: Params, verses=None, phrasing: Phrasing | No
             phrase = genome.phrases[pid]
             placed.append((name, phrase, t, line))
             t += phrase.bars * meter.bar
-    lead = placed[0][1].pickup  # shift so the song's first pickup starts at zero
-    end = t + lead
+    for name, phrase, line in style_mod.repeated(genome, params, placed):  # a style's ending may sing the last line again
+        placed.append((name, phrase, t, line))
+        t += phrase.bars * meter.bar
+    # shift so the song's first pickup starts at zero (after a count-in bar, if the style counts in)
+    lead = placed[0][1].pickup + style_mod.count_in(genome, params)
+    sung_end = t + lead  # where the last line ends
+    end = sung_end + style_mod.coda(genome, params)  # and a plagal amen's bars after it, if the style has one
 
     seconds_per_unit = 60.0 / params.tempo / meter.beat
     rit_start = placed[-1][2] + lead
     preroll = 0.6  # room for a breath and the first consonants before the first note
     # Swing delays each beat's off-beat half, from straight (0) to a triplet lilt (1);
     # a compound beat (three to a beat) keeps its own lilt.
-    swing = params.band.swing if meter.beat % 3 else 0.0
+    swing = style_mod.swing(params) if meter.beat % 3 else 0.0
+    rebar = style_mod.rebarred(genome, params)  # a waltz or a slow six-eight: each foot's three syllables made even
     ratio = 0.5 + swing / 6.0
 
     def swung(u: float) -> float:
@@ -174,8 +181,8 @@ def realize(genome: Genome, params: Params, verses=None, phrasing: Phrasing | No
         return lead + b * meter.beat + x
 
     def seconds(u: float) -> float:
-        """Grid units to seconds, swung, slowing linearly through the final phrase."""
-        u = swung(u)
+        """Grid units to seconds, swung (or re-barred in three), slowing linearly through the final phrase."""
+        u = style_mod.rebar(u, lead) if rebar else swung(u)
         if u <= rit_start:
             return preroll + u * seconds_per_unit
         x = u - rit_start
@@ -223,7 +230,7 @@ def realize(genome: Genome, params: Params, verses=None, phrasing: Phrasing | No
     melody.sort(key=lambda m: m["u"])
     notes: list[Note] = []
     for i, m in enumerate(melody):
-        u_end = min(m["u_end"], melody[i + 1]["u"]) if i + 1 < len(melody) else end
+        u_end = min(m["u_end"], melody[i + 1]["u"]) if i + 1 < len(melody) else sung_end
         start_s = max(0.0, seconds(m["u"]) + jitter())
         if m["syllable"]:
             beat = seconds_per_unit * meter.beat
@@ -255,7 +262,7 @@ def realize(genome: Genome, params: Params, verses=None, phrasing: Phrasing | No
                                              vel=0.9 * sung_note.vel, gesture=None))
 
     accomp, band_settings = band_mod.arrange(genome, params, placed, lead, end, melody, seconds)
-    ring = 3.0  # the last chord rings out
+    ring = style_mod.ring(params)  # the last chord rings out (3 s; a cold ending stops short)
     final = seconds(end)
     notes += accomp
     # plucked strings and voices ring on; a bow or a breath is held a moment longer, then let go
@@ -274,4 +281,5 @@ def realize(genome: Genome, params: Params, verses=None, phrasing: Phrasing | No
             section_spans.append((section_name, s0, s1))
 
     notes.sort(key=lambda n: (n.start, n.part, n.pitch))
-    return Score(tuple(notes), final + ring, tuple(section_spans), dict(genome.lexicon), band=band_settings)
+    score = Score(tuple(notes), final + ring, tuple(section_spans), dict(genome.lexicon), band=band_settings)
+    return style_mod.finish(score, genome, params)  # a style's key lift for the last refrain, if it has one
