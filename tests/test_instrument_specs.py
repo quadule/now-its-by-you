@@ -166,6 +166,6 @@ def test_cheap_enough_for_a_whole_song(module, name):
     notes = levels.typical_part(spec, bars=2)
     levels.render_placed(module, name, notes)  # compile first
     notes = levels.typical_part(spec, bars=16)  # 40 s of music
-    t = time.perf_counter()
+    t = time.process_time()  # this process's CPU time: a busy machine doesn't count against it
     levels.render_placed(module, name, notes)
-    assert time.perf_counter() - t < 4.0  # a three-minute part well under 20 s
+    assert time.process_time() - t < 4.0  # a three-minute part well under 20 s

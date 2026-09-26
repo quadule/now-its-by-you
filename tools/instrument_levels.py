@@ -193,11 +193,12 @@ def main() -> None:
             level = spec["level"] * 10 ** ((target - lufs) / 20.0)
             line = (f"{mod_name:11s} {name:14s} {spec['role']:10s} {lufs:6.1f} LUFS  target {target:6.1f}  "
                     f"off {lufs - target:+5.1f} dB  level {spec['level']:.4g} -> {level:.4g}")
-            if args.cpu:
+            if args.cpu:  # CPU time of this process (the machine may be busy; wall time says less)
                 long = typical_part(spec, bars=int(np.ceil(180.0 / (4 * BEAT))))
-                t = time.perf_counter()
+                t, wall = time.process_time(), time.perf_counter()
                 render_placed(module, name, long)
-                line += f"  3-min part {time.perf_counter() - t:5.2f} s ({len(long)} notes)"
+                line += (f"  3-min part {time.process_time() - t:5.2f} s cpu ({time.perf_counter() - wall:5.2f} s wall,"
+                         f" {len(long)} notes)")
             print(line, flush=True)
 
 
