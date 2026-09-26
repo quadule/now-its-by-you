@@ -125,6 +125,25 @@ def test_the_pickup_hears_its_place_on_the_string():
     assert np.all(bridge[1:5] > -10)
 
 
+def test_the_tone_knob_sits_near_the_top_and_the_coil_sings():
+    """At a middling brightness the player's tone knob is near the top, so the coil's resonance with the pots
+    and cable stands up as Zollner measures it: a single coil's 3 dB and more at 3-6 kHz, a humbucker's 4 dB
+    and more at 2.5-4 kHz; turned toward the bridge it is sharper still."""
+    from songbird.synth import amp
+
+    for maker in range(8):
+        d = electric.built(maker)
+        for bright in (0.5, 1.0):
+            chosen, _, coil, circuit = electric.pickups(d, bright, "clean")
+            f, height, q = amp.resonance(*amp.pickup_ba(coil, **circuit))
+            if d["humbucker"]:
+                assert 2500 < f < 4000 and height > 4.0
+            else:
+                assert 3000 < f < 6000 and height > 2.5
+            if bright == 1.0:
+                assert height > 5.0 and q > 1.4
+
+
 def repeated(name, vel, strums=12):
     return [note(p, start=0.1 + 0.3 * k, dur=0.3, vel=vel, art="down" if k % 2 == 0 else "up", part=name)
             for k in range(strums) for p in (45, 52, 57, 61, 64)]

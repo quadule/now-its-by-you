@@ -189,7 +189,8 @@ def pickups(d: dict, brightness: float, setting: str) -> tuple[list[str], tuple,
         coil, pot = amp.SINGLE, 250e3
     if len(chosen) == 2:
         coil = amp.parallel(coil)
-    position = 0.72 + 0.28 * float(np.clip(brightness, 0.0, 1.0))  # the guitar's tone knob
+    # the guitar's tone knob: most players leave it near the top (8 to 10), where the coil's resonance sings
+    position = 0.85 + 0.15 * float(np.clip(brightness, 0.0, 1.0))
     tone = None if (not d["humbucker"] and chosen == ["bridge"]) else pot * (81.0 ** position - 1.0) / 80.0
     return chosen, comb, coil, dict(pot=pot, tone=tone, tone_cap=d["tone_cap"], cable=d["cable"])
 
@@ -358,13 +359,15 @@ def bass(notes, sr: int, length: int, rng: np.random.Generator, make: np.random.
     if precision:  # the split coil sits about 150 mm from the bridge
         comb = ((0.150 / scale, 1.0),)
         coil = amp.BASS_P
-        circuit = dict(pot=250e3, tone=250e3 * (81.0 ** (0.75 + 0.25 * bright) - 1.0) / 80.0, tone_cap=47e-9,
+        circuit = dict(pot=250e3, tone=250e3 * (81.0 ** (0.85 + 0.15 * bright) - 1.0) / 80.0, tone_cap=47e-9,
                        cable=cable)
     else:  # two single coils, the neck's and the bridge's, blended toward the bridge for a brighter sound
         blend = float(np.clip(0.35 + 0.3 * bright + make.normal(0.0, 0.08), 0.1, 0.9))
         comb = ((0.153 / scale, 1.0 - blend), (0.085 / scale, blend))
         coil = amp.parallel(amp.BASS_J)
-        circuit = dict(pot=250e3, tone=None, tone_cap=47e-9, cable=cable)
+        # each pickup's own 250k volume pot, both loading the pair at full volume, and the tone pot
+        circuit = dict(pot=125e3, tone=250e3 * (81.0 ** (0.85 + 0.15 * bright) - 1.0) / 80.0, tone_cap=47e-9,
+                       cable=cable)
     strings = Strings(
         open=BASS_TUNING, comb=comb, offsets=tuple(z * (0.5 + 4.0 * wear) for z in detune),
         gains=tuple(10.0 ** (p / 20.0) for p in poles),
