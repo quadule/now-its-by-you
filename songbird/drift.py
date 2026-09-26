@@ -53,7 +53,7 @@ VIEWS = {
 }
 
 # Every dimension of the field and what reads it (see variation.KNOBS and
-# DECISIONS). The last four are for the instruments and the mix.
+# DECISIONS). "held" choices change with hysteresis: see variation.held.
 DIMENSIONS = {
     "key": "tonic offset (year)",
     "mode": "which member of the voice's mode family (year)",
@@ -73,9 +73,12 @@ DIMENSIONS = {
     "mood": "the lyric's mood, lighter or heavier (slow)",
     "era": "the lyric's era, older or newer verses (slow)",
     "rarity": "the lyric's appetite for rare verses (slow)",
-    "ensemble": "which instruments play (for the instruments)",
-    "balance": "the instruments' balance (for the instruments)",
-    "sheen": "the instruments' brightness and tilt (for the instruments and the mix)",
+    "ensemble": "the band leaning on its plucked strings or its bowed and blown ones (slow)",
+    "balance": "the band's balance, each machine's instruments moving their own ways (slow)",
+    "sheen": "the instruments' brightness",
+    "pattern": "the band's accompaniment family: air, pick, lilt, strum (slow, held)",
+    "lead": "who states the tune where nobody sings: whistle, fiddle, lute (year, held)",
+    "arc": "how strongly the band builds through the song (slow)",
     "space": "the mix's width and distance (for the mix)",
 }
 
@@ -92,19 +95,21 @@ class Drift:
     slow: dict  # the month and year octaves
     season: dict  # mostly the year, a little of the month
     year: dict  # the year octave
+    hash: str = ""  # the voice hash that seeded it, so its past can be read (held choices look back)
 
     def view(self, name: str) -> dict:
         return getattr(self, name)
 
     def to_dict(self) -> dict:
-        out = {"t": round(self.t, 6), "at": when(self.t).isoformat()}
+        out = {"t": round(self.t, 6), "at": when(self.t).isoformat(), "hash": self.hash}
         for name in VIEWS:
             out[name] = {k: round(v, 4) for k, v in self.view(name).items()}
         return out
 
     @classmethod
     def from_dict(cls, data: dict) -> Drift:
-        return cls(t=float(data["t"]), **{name: dict(data.get(name, {})) for name in VIEWS})
+        return cls(t=float(data["t"]), **{name: dict(data.get(name, {})) for name in VIEWS},
+                   hash=str(data.get("hash", "")))
 
 
 def _seed(*parts) -> int:
@@ -177,7 +182,8 @@ def series(t, voice_hash: str, dimensions=None) -> dict[str, dict[str, np.ndarra
 def drift(t_days: float, voice_hash: str) -> Drift:
     """The drift vector for one machine (its voice hash) at one instant."""
     values = series([t_days], voice_hash)
-    return Drift(t=float(t_days), **{view: {k: float(v[view][0]) for k, v in values.items()} for view in VIEWS})
+    return Drift(t=float(t_days), **{view: {k: float(v[view][0]) for k, v in values.items()} for view in VIEWS},
+                 hash=voice_hash)
 
 
 def days(moment: datetime) -> float:
