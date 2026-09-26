@@ -431,7 +431,12 @@ async function take(request, env, sid, who, now) {
   } catch (e) {
     return drained(reader, fail(400, "take", e instanceof SyntaxError || e instanceof DOMException ? "The take's details can't be read." : e.message));
   }
-  const lyric = await lyricsOf(env, request, s, spec);
+  let lyric;
+  try {
+    lyric = await lyricsOf(env, request, s, spec);
+  } catch (e) {
+    return drained(reader, fail(500, "error", "Something went wrong on our side. Try again in a moment."));
+  }
   const sent = (await listed(env, `takes/${sid}/`)).filter(o => o.key.endsWith(".json")).length;
   if (sent >= inv.limit) {
     return drained(reader, fail(403, "limit", `You can keep up to ${inv.limit} takes, and they're all in. Delete one on your page to send another.`));
@@ -610,13 +615,11 @@ async function summary(env, sid, who, now) {
                        bytes: o.size, made: new Date(o.uploaded).toISOString() });
     }
   }
-  for (const o of words.slice(0, MAX_WORDS)) {
+  const sent = await Promise.all(words.slice(0, MAX_WORDS).map(async o => {
     const w = await env.TAKES.get(o.key);
-    if (w) {
-      const data = await w.json();
-      out.words.push({ at: data.at, text: data.text });
-    }
-  }
+    return w ? w.json() : null;
+  }));
+  out.words = sent.filter(Boolean).map(w => ({ at: w.at, text: w.text }));
   return out;
 }
 

@@ -14,6 +14,8 @@ What it writes, all served by web/sing/src/worker.js:
     song/melody.mp3, song/full.mp3   the guides (tools/guides.py), encoded with ffmpeg, in mono (a phone
                                      decodes each to a buffer; stereo would double it)
     _headers                         the security headers for the files served without the worker
+    yours.html, yours.css, yours.js  each singer's own page (web/sing/page/), at /y/<singer>
+    song/worker.json                 what the worker needs of song.json, without the loudness curves
 
 The worker serves song/ only to an open invitation. The guide score is kept in
 recordings/guides/ (tools/takes.py), so takes fetched with tools/invite.py are
@@ -207,7 +209,23 @@ def build(genome_path: Path, out: Path, rebuild: bool = False, bitrate: str = BI
         "built": dt.datetime.now(dt.timezone.utc).isoformat(timespec="seconds"),
     }
     (out / "song" / "song.json").write_text(json.dumps(song, separators=(",", ":")) + "\n")
+    # each singer's own page, and the worker's small copy of song.json (web/sing/src/worker.js)
+    for name in ("yours.html", "yours.css", "yours.js"):
+        shutil.copyfile(WEB / "page" / name, out / name)
+    if "guides" in song:
+        (out / "song" / "worker.json").write_text(json.dumps(worker_index(song), separators=(",", ":")) + "\n")
     return song
+
+
+def worker_index(song: dict) -> dict:
+    """What web/sing/src/worker.js needs of song.json v2: every guide's score digest, words, length and
+    MP3s, the sets and the releases' digests, without the guides' loudness curves, so a cold start reads
+    it well within the free plan's 10 ms of work a request (song.json itself can run to megabytes)."""
+    return {"song": song["song"], "consent": song["consent"], "words_release": song.get("words_release"),
+            "sets": [s["id"] for s in song.get("sets", [])], "max_seconds": song.get("max_seconds"),
+            "guides": {spec: {"guide": g["guide"], "lyrics": g["lyrics"], "duration": g["duration"],
+                              "mixes": {mix: m["file"] for mix, m in g["mixes"].items()}}
+                       for spec, g in song["guides"].items()}}
 
 
 HEADERS = """/*
