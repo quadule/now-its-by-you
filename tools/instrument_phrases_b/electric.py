@@ -1,5 +1,5 @@
-"""The electric instruments' phrases: an electric guitar through its amp (clean, crunch, tremolo), an electric
-bass, a pedal steel and a slide guitar, each in D.
+"""The electric instruments' phrases: an electric guitar through its amp (clean, crunch, tremolo) and an electric
+bass, each in D (the pedal steel and the slide are in steel.py).
 
 Chord shapes are written as pitches low to high; the instrument finds its own strings and frets.
 """
