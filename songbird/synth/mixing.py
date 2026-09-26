@@ -184,7 +184,7 @@ def role_of(name: str) -> str:
 
 
 # The voice and choir, in the same terms as the band's roles.
-VOICE_EQ = (("hp", 80), ("peak", 900, -2.0, 1.2), ("peak", 3500, 1.5, 0.9), ("high", 11000, -2.0))
+VOICE_EQ = (("hp", 80), ("peak", 900, -2.0, 1.2), ("peak", 3500, 2.0, 0.9), ("high", 11000, -2.0))
 # Compressors: (floor: dB under the part's loud passages, ratio, attack s, release s, ride s, above dB).
 # With a ride, the threshold is `above` dB over the level of the surrounding `ride` seconds (never under the
 # floor): a syllable is evened against its phrase, a strum against its bar, but a quiet verse stays quiet.
