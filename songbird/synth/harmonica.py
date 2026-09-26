@@ -49,8 +49,9 @@ turns round (blow to draw) dips, and the same reed again is tongued, the air
 stopped for 15-25 ms. A singer-songwriter's harp is held in a neck rack
 (the style "songwriter"): no hands on it.
 
-Articulations: "" (tongued; a note the harp can't play natural is bent
-into), "slur" (the breath carries on), "bend" (a blues bend: a natural note
+Articulations: "" (joined as above: tongued after a rest, slid on across
+the holes straight after a note; a note the harp can't play natural is bent
+into), "slur" (the breath carries on, even over the same reed), "bend" (a blues bend: a natural note
 scooped up from a semitone under, a bent one drawn down slowly from the
 unbent reed), "slide" (a reed that bends scooped into, any
 other slid onto across the next hole), "slap" (tongue-blocked: the hole and
@@ -83,8 +84,10 @@ KEYS = range(55, 67)  # hole 1's blow note: a G harp (G3) to an F# harp (F#4)
 COSTS = dict(natural=0.0, over=4.0, moved=3.0, missing=20.0)  # a bend costs its semitones
 
 ARTICULATIONS = {
-    "": "tongued; a note the harp can't play natural is bent into (or overblown), from the unbent reed",
-    "slur": "the breath carries on from the note before (a dip if its direction turns)",
+    "": "tongued after a rest; straight after a note, slid on across the holes on one breath (the breath turning "
+        "round with a dip, the same reed tongued); a note the harp can't play natural is bent into (or overblown)",
+    "slur": "the breath carries on from the note before (a dip if its direction turns; the same reed keeps "
+            "swinging)",
     "bend": "a blues bend: a natural note scooped up from a semitone under; a bent one drawn down slowly",
     "slide": "slid into: a reed that bends scooped up from a little under the note, any other reached across the "
              "next hole on the same breath",
