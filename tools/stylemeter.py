@@ -52,11 +52,11 @@ def clash_count(score) -> tuple[int, int]:
     return hits, len(comping)
 
 
-def measure(genome, params, voice, drift, words, out: Path | None, wer_model=None) -> dict:
+def measure(genome, params, voice, drift, words, out: Path | None, wer_model=None, mix_overrides=()) -> dict:
     score = variation.lay(realize(genome, params, lyrics=words), params)
     singer = cli._singer(params, [])
     stems = synth.render_stems(score, seed=params.seed, voice=singer)
-    mix = MixParams.from_dict(params.mix or {})
+    mix = MixParams.parse(list(mix_overrides), base=MixParams.from_dict(params.mix or {}))
     taps, mtaps = {}, {}
     mixed = mixing.mix(stems, SR, params.seed, mix, taps=taps)
     final = master.master(mixed, SR, taps=mtaps)
@@ -108,7 +108,55 @@ def measure(genome, params, voice, drift, words, out: Path | None, wer_model=Non
     return report
 
 
+def measure_file(path: Path, wer_model=None) -> dict:
+    """A finished render (with its .json and .score.json beside it): loudness, peaks, and Whisper's word
+    error rate on its sung sections."""
+    import soundfile as sf
+
+    from songbird.score import Note
+    from songbird.synth.voice import VoiceParams, schedule
+
+    record = json.loads(path.with_suffix(".json").read_text())
+    score = json.loads(path.with_suffix(".score.json").read_text())
+    x, sr = sf.read(str(path), always_2d=True)
+    out = {"file": path.name, "style": (record["params"].get("style") or {}).get("name", "(seed)"),
+           "lufs": round(master.loudness(x, sr), 2), "true_peak": round(master.true_peak(x), 2),
+           "peak": round(20 * np.log10(np.abs(x).max() + 1e-12), 2), "lra": round(master.loudness_range(x, sr), 1)}
+    if wer_model is not None:
+        from wer_suite import score_sections
+
+        fields = set(Note.__dataclass_fields__)
+        notes = sorted((Note(**{k: v for k, v in n.items() if k in fields and k != "gesture"})
+                        for n in score["notes"] if n["part"] == "voice"), key=lambda n: n.start)
+        singer = VoiceParams(**{k: v for k, v in record["singer"].items() if k in VoiceParams.__dataclass_fields__})
+        segs = schedule(notes, singer, score.get("lexicon") or {})
+        e, w, misses, _ = score_sections(wer_model, x.mean(axis=1), notes, segs, False)
+        out["wer"] = round(e / max(w, 1), 3)
+        out["misses"] = misses[:10]
+    return out
+
+
 def main() -> None:
+    if "--files" in sys.argv:
+        ap = argparse.ArgumentParser()
+        ap.add_argument("--files", nargs="+")
+        ap.add_argument("--wer", action="store_true")
+        args = ap.parse_args()
+        model = None
+        if args.wer:
+            sys.path.insert(0, str(Path(__file__).parent))
+            from faster_whisper import WhisperModel
+
+            model = WhisperModel("base.en", device="cpu", compute_type="int8", cpu_threads=2)
+        files = []
+        for f in args.files:  # a folder: every render in it (not the excerpts cut from them)
+            files += sorted(q for q in Path(f).glob("*.flac") if ".verse-refrain" not in q.name) if Path(f).is_dir() else [Path(f)]
+        for f in files:
+            r = measure_file(Path(f), model)
+            print(f"{r['file']:28s} {r['style']:11s} {r['lufs']:6.1f} LUFS  TP {r['true_peak']:5.1f}  peak {r['peak']:5.1f}  "
+                  f"LRA {r['lra']:4.1f}" + (f"  WER {r['wer']:.1%}  {', '.join(r['misses'][:6])}" if "wer" in r else ""))
+            sys.stdout.flush()
+        return
     ap = argparse.ArgumentParser()
     ap.add_argument("genome")
     ap.add_argument("--machine", default="fictional:ada")
@@ -119,6 +167,9 @@ def main() -> None:
     ap.add_argument("--wer", action="store_true")
     ap.add_argument("--out", help="write each style's mastered FLAC here")
     ap.add_argument("--json", help="write the reports here")
+    ap.add_argument("--arrange", nargs="*", default=[], metavar="FIELD=VALUE", help="the style's options (Style)")
+    ap.add_argument("--mix", nargs="*", default=[], metavar="FIELD=VALUE", help="mix overrides (MixParams)")
+    ap.add_argument("--voice", nargs="*", default=[], metavar="FIELD=VALUE", help="singer overrides (VoiceParams)")
     args = ap.parse_args()
     genome = G.load(args.genome)
     voice = H.machine_voice(args.machine)
@@ -131,14 +182,16 @@ def main() -> None:
         model = WhisperModel("base.en", device="cpu", compute_type="int8", cpu_threads=2)
     reports = []
     for name in args.styles or list(S.RING):
-        params = choose_params(genome, None, voice, drift, style=name)
+        params = choose_params(genome, None, voice, drift, style=name, arrange=cli._arrangement(args.arrange))
+        if args.voice:
+            params = replace(params, singer={**params.singer, **{k: float(v) for k, v in (kv.split("=", 1) for kv in args.voice)}})
         if args.form:
             params = replace(params, form=tuple(args.form))
         if args.choir is not None:
             params = replace(params, choir=args.choir)
         words = cli.words(genome, params, sung_by_a_machine=True)
         out = Path(args.out) / f"{name}.flac" if args.out else None
-        r = measure(genome, params, voice, drift, words, out, model)
+        r = measure(genome, params, voice, drift, words, out, model, args.mix)
         reports.append(r)
         vob = [s["voice_over_band"] for s in r["sections"] if s.get("voice_over_band") is not None]
         print(f"{name:11s} {r['feel']:8s} {r['tempo']:6.1f} bpm {r['duration']:5.1f}s  {r['lufs']:6.1f} LUFS  "
