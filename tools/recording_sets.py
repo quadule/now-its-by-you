@@ -368,29 +368,34 @@ def _head_words(lines) -> int:
     return sum(len([w for w in line.split() if re.sub(r"[^A-Za-z]", "", w)]) for line in lines[:2])
 
 
-# What the sets must cover
+# What the sets must hold
 
-MISHEARD = 0.5  # a word misheard at least this often, over every time it was sung, is one the sets must hold
-WORST = 0.8  # ... and at least this often, one they hold twice
+MISHEARD = 0.5  # a word misheard at least this often, over at least three hearings, is one the sets should hold
+SURE = 0.9  # a word misheard at least this often ...
+SURE_HEARINGS = 6  # ... over at least this many hearings (sung two ways, or in two places, each heard three
+# times) is one the voice surely says wrong: the sets must hold it, and ideally twice
 HIGH = 1.5  # a verse whose word error rate is at least this many times the verses' median is clearly high
-WORST_VERSES = 5  # the verses with the highest rates are held twice
+WORST_VERSES = 5  # the verses with the highest rates, which the sets ideally hold twice
 
 
-def targets(analysis: dict) -> tuple[dict[str, int], dict[str, float]]:
-    """What the sets should hold, how many times, and how much each matters: "word:<w>" for each word
-    misheard at least MISHEARD of the times it was sung (at least three times), twice past WORST, weighing
-    its rate times how often the song sings it where it is (1 in a verse's own words, a third for one of a
-    slot's three words); "verse:<id>" for each verse whose rate is clearly high, the worst WORST_VERSES
-    twice, weighing three words."""
-    need, weight = {}, {}
+def targets(analysis: dict) -> dict[str, dict]:
+    """What the sets should hold, by "word:<w>" (as tokens() has it) or "verse:<id>": {"need": how many
+    times, "must": whether they must hold it at least once, "weight": how much it matters otherwise}.
+
+    - A word misheard at least MISHEARD of the times it was sung (three hearings at least) should be held
+      once; one misheard SURE of the times over SURE_HEARINGS or more must be, ideally twice. A word
+      weighs its rate times how often the song sings it where it is: 1 in a verse's own words, a third as
+      one of a slot's three words.
+    - A verse whose rate is clearly high (HIGH times the verses' median or more) must be held, the worst
+      WORST_VERSES ideally twice."""
+    out = {}
     for w, (n, m) in analysis["words"].items():
         if w and n >= 3 and m / n >= MISHEARD:
-            need[f"word:{w}"] = 2 if m / n >= WORST else 1
-            weight[f"word:{w}"] = m / n * analysis["share"].get(w, 1.0)
+            must = m / n >= SURE and n >= SURE_HEARINGS
+            out[f"word:{w}"] = {"need": 2 if must else 1, "must": must, "weight": m / n * analysis["share"].get(w, 1.0)}
     for i, v in enumerate(high_verses(analysis)):
-        need[f"verse:{v}"] = 2 if i < WORST_VERSES else 1
-        weight[f"verse:{v}"] = 3.0
-    return need, weight
+        out[f"verse:{v}"] = {"need": 2 if i < WORST_VERSES else 1, "must": True, "weight": 3.0}
+    return out
 
 
 def verse_rates(analysis: dict) -> dict[str, float]:
@@ -405,35 +410,48 @@ def high_verses(analysis: dict) -> list[str]:
     return sorted((v for v in rates if rates[v] >= HIGH * median), key=lambda v: -rates[v])
 
 
+def _count(lines, out: Counter) -> Counter:
+    for line in lines:
+        for word in line.replace("*", "").split():
+            t = word_token(re.sub(r"[^A-Za-z'\-]", "", word))
+            if t:
+                out[f"word:{t}"] += 1
+    return out
+
+
 def held_targets(genome, held: dict, form) -> Counter:
-    """How many times some held words, sung in a form, hold each word (tokens()) and each verse."""
-    lyrics = A.sing(genome, form, held)
+    """How many times some held words, sung in a form, sing each word (as tokens() has it) and each verse."""
     out = Counter()
-    for s in lyrics.sections:
-        if s.block == "tag":
-            continue
-        for line in s.lines:
-            for word in line.replace("*", "").split():
-                t = word_token(re.sub(r"[^A-Za-z'\-]", "", word))
-                if t:
-                    out[f"word:{t}"] += 1
+    for s in A.sing(genome, form, held).sections:
+        if s.block != "tag":
+            _count(s.lines, out)
         if s.block == "verse":
             out[f"verse:{s.id}"] += 1
+    return out
+
+
+def coverage(genome, sets: list[dict]) -> Counter:
+    """How many times the sets, together, sing each word and each verse."""
+    out = Counter()
+    for s in sets:
+        out += held_targets(genome, s["words"], s["form"])
     return out
 
 
 # The sets: each a song the bank's rules allow, in one of the song's own shapes (variation.fits)
 
 FOUR = ("intro", "verse", "refrain", "verse", "refrain", "verse", "refrain", "bridge", "refrain", "tag")
-THREE = ("intro", "verse", "refrain", "verse", "verse", "refrain", "bridge", "refrain", "tag")
 EXTRA = ("intro", "verse", "refrain", "verse", "verse", "refrain", "bridge", "bridge2", "refrain", "tag")
+LONG = ("intro", "verse", "refrain", "verse", "verse", "verse", "refrain", "bridge", "refrain", "tag")
 
-# Each set's form and the extra bridge stanza it sings, if any. Four refrains give two refrains between the
-# first and the last, where the other heads are sung (the first and last sing the song's own, knows); so
-# nine heads between them, all seven others once and the artist's so twice, take three sets of four
-# refrains and three of three. The two extra stanzas each need a set of their own.
+# Each set's form and the extra bridge stanza it sings, if any; every one lasts the same, nine sung
+# sections. The first and last refrains of a song sing its own head (knows), and another head is sung at
+# most once a song, so only the refrains between carry the other eight: sung once each and the artist's so
+# twice, that is nine, which three sets of four refrains (two between) and three of three (one) just hold.
+# The two extra stanzas each need a set; the last set sings four verses, as the rules allow, since the
+# words the voice surely says wrong are spread over nineteen verses.
 PLAN = (("a", FOUR, None), ("b", FOUR, None), ("c", FOUR, None), ("d", EXTRA, "coat"), ("e", EXTRA, "given"),
-        ("f", THREE, None))
+        ("f", LONG, None))
 SO = "so"  # the artist's head, sung in the first two sets
 
 
@@ -442,227 +460,232 @@ def singers_form(genome, form) -> tuple[str, ...]:
     doubled), so none touch."""
     out: list[str] = []
     for name in form:
-        sung = bool(genome.section(name).lyrics)
-        if sung and out:
-            last = next((n for n in reversed(out)), None)
-            if last is not None and genome.section(last).lyrics and last != "turn":
-                out.append("turn")
+        if out and genome.section(name).lyrics and genome.section(out[-1]).lyrics:
+            out.append("turn")
         out.append(name)
     return tuple(out)
 
 
 def seconds(genome, form) -> float:
-    """How long a form lasts, sung at the seed's tempo."""
+    """How long a form lasts, at the seed's tempo, its last note's ring included."""
     from songbird.realize import choose_params, realize
 
     return float(realize(genome, replace(choose_params(genome), form=tuple(form))).duration)
 
 
-def _ease(entry: dict) -> float:
-    """How hard a verse is to sing, roughly: a verse that rhymes another way or runs a line on, a rare
-    one, and one with many words (short notes, more to say on each) are harder."""
+def ease(entry: dict) -> float:
+    """How hard a verse is to sing, roughly: one that rhymes another way or runs a line on is harder, a
+    rare one a little, and the more words it has (shorter notes, more to say on each), the harder."""
     words = sum(len(line.split()) for line in entry["lines"])
-    return 2.0 * (entry["scheme"] != "AABB" or bool(entry.get("enjambed"))) + (entry.get("rarity") == "rare") \
-        + words / 40.0
+    variant = entry["scheme"] != "AABB" or bool(entry.get("enjambed"))
+    return 2.0 * variant + (entry.get("rarity") == "rare") + words / 40.0
 
 
-def _verse_options(genome, entry: dict) -> list[dict]:
-    """Every way a verse's slots can be sung, as held words keep them."""
-    names = slot_names(entry["lines"])
-    slots = entry.get("slots", {})
+def _verse_ways(genome, entry: dict) -> list[tuple[dict, Counter]]:
+    """Every way a verse's slots can be sung (as held words keep them), with the words each sings."""
     import itertools
 
-    return [A._chosen(entry, dict(zip(names, combo)))
-            for combo in itertools.product(*(range(width(slots, n)) for n in names))]
-
-
-def _verse_words(genome, entry: dict, chosen: dict) -> Counter:
-    """How many times a verse, sung with some slot words, holds each word (tokens())."""
     song = A._song(genome)
-    picks = A._held_picks(entry, chosen, entry["id"])
-    out = Counter()
-    for line in song.sing(entry, picks):
-        for word in line.replace("*", "").split():
-            t = word_token(re.sub(r"[^A-Za-z'\-]", "", word))
-            if t:
-                out[f"word:{t}"] += 1
-    out[f"verse:{entry['id']}"] += 1
+    names = slot_names(entry["lines"])
+    slots = entry.get("slots", {})
+    out = []
+    for combo in itertools.product(*(range(width(slots, n)) for n in names)):
+        picks = dict(zip(names, combo))
+        counts = _count(song.sing(entry, picks), Counter())
+        counts[f"verse:{entry['id']}"] += 1
+        out.append((A._chosen(entry, picks), counts))
     return out
 
 
-FIRST = 10.0  # holding something for the first time is worth this many times holding it again
-
-
-def _gain(counts: Counter, need: dict[str, int], have: Counter, weight: dict[str, float]) -> float:
-    """What some words would add to what the sets hold: each target's weight for each time still needed,
-    the first time most."""
+def _value(have: Counter, want: dict[str, dict]) -> float:
+    """How well what the sets sing meets what they should: a must a hundred for its first time and ten for
+    a second it needs, anything else ten times its weight for its first time and its weight for a second."""
     total = 0.0
-    for t, c in counts.items():
-        for j in range(have[t], min(need.get(t, 0), have[t] + c)):
-            total += weight.get(t, 1.0) * (FIRST if j == 0 else 1.0)
+    for t, w in want.items():
+        n = have[t]
+        if n >= 1:
+            total += 100.0 if w["must"] else 10.0 * w["weight"]
+        if n >= 2 and w["need"] >= 2:
+            total += 10.0 if w["must"] else w["weight"]
     return total
 
 
-def _refrain_rounds(genome, n: int, middle: list[str], couplets: list[str], prefer) -> list[dict]:
-    """The rounds of a set's n refrains: the song's own head first and last, the given heads between, the
-    given couplets and canon last, and every slot's words as the rules have them, prefer(slot, words)
-    choosing among the words the rules leave free."""
+def _refrain_rounds(genome, heads: list[str], couplets: list[str], prefer) -> list[dict]:
+    """A set's refrains as held words keep them: these heads and couplets, canon last, and every slot's
+    words as the rules have them, prefer(slot, words) choosing among the words the rules leave free."""
     song = A._song(genome)
-    heads = [song.head_id] + list(middle) + [song.head_id]
-    assert len(heads) == n
     words = A.refrain_words(genome, heads, [{} for _ in heads], lambda i, slot, options: prefer(slot, options))
     last = song.rules["refrain"]["couplet_last"]
     return [{"head": h, "words": w, "id": c, "slots": {}} for h, w, c in zip(heads, words, list(couplets) + [last])]
 
 
-def choose(genome, analysis: dict) -> tuple[list[dict], dict]:
-    """The sets, in order of importance, and what they cover: each set's held words (hold() shaped) and
-    form. Heads and couplets are handed round, the worst heard first; the verses of each set are the three
-    the rules let be sung together that hold the most of what the sets must still hold (the worst words
-    weigh most), easier verses first where the rules leave the order free."""
+def _frames(genome, analysis: dict, want: dict[str, dict]) -> list[dict]:
+    """Each set of the plan without its verses: its form, refrains, bridge and tag. The heads between the
+    first and last refrains are handed out worst heard first, the artist's so in the first two sets; the
+    couplets are handed round worst heard first; a slot's words are the most misheard the rules leave free
+    and not yet held, else the one sung least so far; the tag's syllable turns."""
     song = A._song(genome)
     bank = song.bank
-    need, weight = targets(analysis)
     rates = analysis["words"]
-    have = Counter()
-    used_words = Counter()  # slot words sung so far, so later sets sing others
+    have, sung = Counter(), Counter()
 
-    def prefer(slot_words_now: list[str]):
-        # the word most often misheard, then the one sung least so far
+    def prefer(slot, words):
         def rank(w):
             t = f"word:{word_token(_label(w).split()[-1])}"
-            r = rates.get(t[5:], (1, 0))
-            return (-(r[1] / max(r[0], 1)) * (need.get(t, 0) > have[t]), used_words[_label(w)], _label(w))
-        return min(slot_words_now, key=rank)
+            n, m = rates.get(t[5:], (1, 0))
+            wanted = t in want and have[t] < want[t]["need"]
+            return (-(m / max(n, 1)) * wanted, sung[_label(w)], _label(w))
 
-    heads = [h for h in song.heads if h not in (song.head_id, SO)]
-    heads.sort(key=lambda h: -analysis["entries"].get(f"head:{h}", 0.0))
-    middles, k = [], 0
-    for sid, form, _ in PLAN:
+        w = min(words, key=rank)
+        sung[_label(w)] += 1
+        have[f"word:{word_token(_label(w).split()[-1])}"] += 1
+        return w
+
+    heads = sorted((h for h in song.heads if h not in (song.head_id, SO)),
+                   key=lambda h: -analysis["entries"].get(f"head:{h}", 0.0))
+    last = song.rules["refrain"]["couplet_last"]
+    couplets = sorted((c["id"] for c in bank["refrain"]["couplets"] if c["id"] != last),
+                      key=lambda c: -analysis["entries"].get(f"couplet:{c}", 0.0))
+    canon = next(b for b in bank["bridges"] if b["id"] == song.rules["bridge"]["always"])
+    frames, k, j = [], 0, 0
+    for i, (sid, form, extra) in enumerate(PLAN):
         n = sum(genome.section(s).lyrics == "refrain" for s in form)
-        take = n - 2
-        mid = []
-        if sid in ("a", "b"):
-            mid.append(SO)
-        while len(mid) < take:
-            mid.append(heads[k % len(heads)])
+        middle = [SO] if i < 2 else []
+        while len(middle) < n - 2:
+            middle.append(heads[k % len(heads)])
             k += 1
-        middles.append(mid)
-    couplet_order = sorted((c["id"] for c in bank["refrain"]["couplets"] if c["id"] != song.rules["refrain"]["couplet_last"]),
-                           key=lambda c: -analysis["entries"].get(f"couplet:{c}", 0.0))
-    ci = 0
-    sets = []
-    verse_uses = Counter()
-    entries = {v.id: v.entry for v in song.verses}
-    for (sid, form, extra), mid in zip(PLAN, middles):
-        n = sum(genome.section(s).lyrics == "refrain" for s in form)
-        couplets = []
-        while len(couplets) < n - 1:
-            c = couplet_order[ci % len(couplet_order)]
-            ci += 1
-            if c not in couplets:
-                couplets.append(c)
-
-        def pick(slot, options):
-            w = prefer(options)
-            used_words[_label(w)] += 1
-            return w
-
-        rounds_ = _refrain_rounds(genome, n, mid, couplets, pick)
-        canon = next(b for b in bank["bridges"] if b["id"] == song.rules["bridge"]["always"])
-        bridge_slots = {name: pick(name, options) for name, options in A.slot_words(canon).items()}
-        bridge = [{"id": canon["id"], "slots": bridge_slots}] + ([{"id": extra, "slots": {}}] if extra else [])
-        tag = bank["tag"]["syllables"][len(sets) % len(bank["tag"]["syllables"])]
-        # what the refrains, bridge and tag hold already (verses to come)
-        partial = {"verses": [], "refrain": {"rounds": rounds_}, "bridge": bridge, "tag": tag}
-        base = _non_verse_targets(genome, partial, form)
-        have_now = have + base
-        # the verses: the three the rules allow together that hold the most still needed
-        k_verses = sum(genome.section(s).lyrics == "verse" for s in form)
-        best = _best_verses(genome, entries, k_verses, need, have_now, weight, verse_uses, analysis)
-        held = {"verses": best, "refrain": {"rounds": rounds_}, "bridge": bridge, "tag": tag}
-        why = A.held_problem(genome, form, held)
-        if why:
-            raise ValueError(f"set {sid}: {why}")
-        have += held_targets(genome, held, form)
-        for v in best:
-            verse_uses[v["id"]] += 1
-        sets.append({"id": sid, "form": list(form), "words": held})
-    covered = {t: have[t] for t in need}
-    return sets, {"need": need, "have": covered}
+        chosen: list[str] = []
+        while len(chosen) < n - 1:
+            c = couplets[j % len(couplets)]
+            j += 1
+            if c not in chosen:
+                chosen.append(c)
+        rounds_ = _refrain_rounds(genome, [song.head_id, *middle, song.head_id], chosen, prefer)
+        bridge = [{"id": canon["id"], "slots": {name: prefer(name, words) for name, words in A.slot_words(canon).items()}}]
+        bridge += [{"id": extra, "slots": {}}] if extra else []
+        tag = bank["tag"]["syllables"][i % len(bank["tag"]["syllables"])]
+        frames.append({"id": sid, "form": list(form),
+                       "words": {"verses": [], "refrain": {"rounds": rounds_}, "bridge": bridge, "tag": tag}})
+    return frames
 
 
-def _non_verse_targets(genome, partial: dict, form) -> Counter:
-    """What a set's refrains, bridge and tag hold, before its verses are chosen."""
+def _frame_targets(genome, frame: dict) -> Counter:
+    """What a set sings besides its verses."""
     song = A._song(genome)
     out = Counter()
     couplets = {c["id"]: c for c in song.bank["refrain"]["couplets"]}
-    for r in partial["refrain"]["rounds"]:
+    for r in frame["words"]["refrain"]["rounds"]:
         head = song.heads[r["head"]]
-        picks = A._held_picks(head, r["words"], "refrain")
-        for line in song.sing(head, picks) + song.sing(couplets[r["id"]], {}):
-            for word in line.replace("*", "").split():
-                t = word_token(re.sub(r"[^A-Za-z'\-]", "", word))
-                if t:
-                    out[f"word:{t}"] += 1
+        _count(song.sing(head, A._held_picks(head, r["words"], "refrain")) + song.sing(couplets[r["id"]], {}), out)
     stanzas = {b["id"]: b for b in song.bank["bridges"]}
-    first = partial["bridge"][0]["slots"]
-    for b in partial["bridge"]:
+    first = frame["words"]["bridge"][0]["slots"]
+    for b in frame["words"]["bridge"]:
         stanza = stanzas[b["id"]]
-        picks = A._held_picks(stanza, {**first, **b["slots"]}, "bridge")
-        for line in song.sing(stanza, picks):
-            for word in line.replace("*", "").split():
-                t = word_token(re.sub(r"[^A-Za-z'\-]", "", word))
-                if t:
-                    out[f"word:{t}"] += 1
+        _count(song.sing(stanza, A._held_picks(stanza, {**first, **b["slots"]}, "bridge")), out)
     return out
 
 
-def _best_verses(genome, entries: dict, k: int, need: dict, have: Counter, weight: dict, uses: Counter,
-                 analysis: dict) -> list[dict]:
-    """The k verses, with slot words and in an order the rules allow, that hold the most of what is still
-    needed; a verse already sung in other sets counts for less, and among equals the easier and the more
-    misheard verses come first."""
-    import itertools
+def choose(genome, analysis: dict, rounds: int = 40) -> list[dict]:
+    """The sets, most important first: each {"id", "form", "words"} (words as hold() keeps them).
 
-    # each verse's best slot words for what's needed now, and what it would hold with them
-    best = {}
-    for vid, entry in entries.items():
-        options = _verse_options(genome, entry)
-        scored = [(_gain(_verse_words(genome, entry, o), need, have, weight), i) for i, o in enumerate(options)]
-        g, i = max(scored, key=lambda s: (s[0], -s[1]))
-        best[vid] = (options[i], _verse_words(genome, entry, options[i]), g)
-    wer = {k.split(":", 1)[1]: v for k, v in analysis["entries"].items() if k.startswith("verse:")}
-    # only the verses worth the most are tried together
-    ranked = sorted(entries, key=lambda v: -(best[v][2] - 0.75 * uses[v] + 0.5 * wer.get(v, 0.0)))[:18]
-    top, top_score = None, None
-    for combo in itertools.combinations(ranked, k):
-        counts = Counter()
-        for v in combo:
-            counts += best[v][1]
-        score = _gain(counts, need, have, weight) - 0.75 * sum(uses[v] for v in combo) \
-            + 0.5 * sum(wer.get(v, 0.0) for v in combo) - 0.05 * sum(_ease(entries[v]) for v in combo)
-        if top_score is not None and score <= top_score:
-            continue
-        order = _easy_order(genome, entries, combo, best)
-        if order is None:
-            continue
-        top, top_score = order, score
-    if top is None:
-        raise ValueError("no verses the rules allow together")
-    return top
+    The refrains, bridges and tags come from _frames(). The verses, as many as each set's form sings, are
+    chosen together:
+    starting from each set in turn taking the verses (and slot words) that add most to what the sets
+    should hold, any one verse of any set is swapped for whichever other verse or slot words adds most,
+    while any swap adds something (a verse sung in a third set costs as much as a word, and an easier
+    verse is worth a little more). Every set's verses must be ones the bank's rules let be sung together
+    in some order; each set sings them in the order the rules allow that has the easier verses first. Sets
+    of the same size are then handed their verses by what those hold, the most to the earliest letter."""
+    song = A._song(genome)
+    want = targets(analysis)
+    frames = _frames(genome, analysis, want)
+    base = Counter()
+    for f in frames:
+        base += _frame_targets(genome, f)
+    entries = {v.id: v.entry for v in song.verses}
+    ways = {vid: _verse_ways(genome, e) for vid, e in entries.items()}
+    hardness = {vid: ease(e) for vid, e in entries.items()}
+    order_of = {vid: i for i, vid in enumerate(entries)}
+    allowed: dict[frozenset, list | None] = {}
+
+    def order(ids) -> list[str] | None:
+        key = frozenset(ids)
+        if key not in allowed:
+            found = A.verse_order(genome, list(ids))
+            allowed[key] = list(found) if found else None
+        return allowed[key]
+
+    def total(pick: list[list[tuple[str, int]]]) -> float:
+        have = Counter(base)
+        uses = Counter()
+        for chosen in pick:
+            for vid, w in chosen:
+                have += ways[vid][w][1]
+                uses[vid] += 1
+        return _value(have, want) - 10.0 * sum(max(0, n - 2) for n in uses.values()) \
+            - 0.5 * sum(hardness[vid] for chosen in pick for vid, _ in chosen)
+
+    sizes = [sum(genome.section(n).lyrics == "verse" for n in f["form"]) for f in frames]
+    pick: list[list[tuple[str, int]]] = [[] for _ in frames]
+    for s in range(len(frames)):  # a first draw: each set in turn, verse by verse, the best addition
+        while len(pick[s]) < sizes[s]:
+            options = [(vid, w) for vid in entries if vid not in {v for v, _ in pick[s]}
+                       for w in range(len(ways[vid])) if order([v for v, _ in pick[s]] + [vid]) is not None]
+            # among equals, a verse's own first slot words (the bank's), then the bank's order
+            pick[s].append(max(options, key=lambda o: (total(pick[:s] + [pick[s] + [o]] + pick[s + 1:]),
+                                                       -o[1], -order_of[o[0]])))
+    score = total(pick)
+    for _ in range(rounds):  # then any single swap that adds most, while one adds anything
+        best = None
+        for s in range(len(pick)):
+            for p in range(sizes[s]):
+                rest = [v for i, (v, _) in enumerate(pick[s]) if i != p]
+                for vid in entries:
+                    if vid in rest or order(rest + [vid]) is None:
+                        continue
+                    for w in range(len(ways[vid])):
+                        trial = [list(c) for c in pick]
+                        trial[s][p] = (vid, w)
+                        t = total(trial)
+                        if t > score + 1e-9 and (best is None or t > best[0]):
+                            best = (t, trial)
+        if best is None:
+            break
+        score, pick = best
+    # sets of the same size handed their verses by what those hold, the most first; each sings the easier
+    # verses first where the rules allow
+    worth = []
+    for chosen in pick:
+        have = Counter()
+        for vid, w in chosen:
+            have += ways[vid][w][1]
+        worth.append(_value(have, want))
+    ranked = list(range(len(pick)))
+    for size in set(sizes):
+        places = [s for s in range(len(pick)) if sizes[s] == size]
+        for place, s in zip(places, sorted(places, key=lambda s: -worth[s])):
+            ranked[place] = s
+    sets = []
+    for frame, s in zip(frames, ranked):
+        verses = _easy_order(genome, [(vid, ways[vid][w][0]) for vid, w in pick[s]], hardness)
+        held = {**frame["words"], "verses": verses}
+        why = A.held_problem(genome, frame["form"], held)
+        if why:
+            raise ValueError(f"set {frame['id']}: {why}")
+        sets.append({"id": frame["id"], "form": frame["form"], "words": held})
+    return sets
 
 
-def _easy_order(genome, entries: dict, combo, best) -> list[dict] | None:
-    """The order the rules allow these verses in that sings the easier ones first; None if none."""
+def _easy_order(genome, chosen: list[tuple[str, dict]], hardness: dict[str, float]) -> list[dict]:
+    """Some verses (with their slot words) in the order the rules allow that sings the easier ones first."""
     import itertools
 
     orders = []
-    for perm in itertools.permutations(combo):
-        held = [{"id": v, "slots": best[v][0]} for v in perm]
+    for perm in itertools.permutations(chosen):
+        held = [{"id": vid, "slots": slots} for vid, slots in perm]
         if A.verse_problem(genome, held) is None:
-            orders.append((tuple(_ease(entries[v]) for v in perm), held))
-    return min(orders, key=lambda o: o[0])[1] if orders else None
+            orders.append((tuple(hardness[vid] for vid, _ in perm), held))
+    return min(orders, key=lambda o: o[0])[1]
 
 
 # The sets file, for singers
@@ -729,7 +752,7 @@ def main(argv: list[str] | None = None) -> int:
         return 0
     analysis = analyze(genome, heard)
     if args.what == "choose":
-        sets, _ = choose(genome, analysis)
+        sets = choose(genome, analysis)
         SETS.mkdir(parents=True, exist_ok=True)
         path = SETS / f"{SONG.stem}.json"
         path.write_text(json.dumps(sets_file(genome, sets), indent=1, ensure_ascii=False) + "\n")

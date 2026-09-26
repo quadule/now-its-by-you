@@ -6,7 +6,7 @@
   {
    "id": "a",
    "name": "Set A",
-   "about": "Verses about a music box, a dance hall and a screen; the refrain the artist wrote and another way into the refrain",
+   "about": "Verses about the church bells, a space probe and a screen; the refrain the artist wrote and another way into the refrain",
    "form": [
     "intro",
     "verse",
@@ -22,12 +22,17 @@
    "words": {
     "verses": [
      {
-      "id": "box",
-      "slots": {}
+      "id": "bell",
+      "slots": {
+       "tower": "bel-fry",
+       "when": "eve-ning"
+      }
      },
      {
-      "id": "hall",
-      "slots": {}
+      "id": "probe",
+      "slots": {
+       "planet": "Nep-tune"
+      }
      },
      {
       "id": "screen",
@@ -94,7 +99,7 @@
   {
    "id": "b",
    "name": "Set B",
-   "about": "Verses about the church bells, the trenches and a space probe; the refrain the artist wrote and another way into the refrain",
+   "about": "Verses about the milk round, a dance hall and a lullaby; the refrain the artist wrote and another way into the refrain",
    "form": [
     "intro",
     "verse",
@@ -110,20 +115,19 @@
    "words": {
     "verses": [
      {
-      "id": "bell",
+      "id": "milk",
       "slots": {
-       "tower": "bel-fry",
-       "when": "eve-ning"
+       "who": "milk-man"
       }
      },
      {
-      "id": "trench",
+      "id": "hall",
       "slots": {}
      },
      {
-      "id": "probe",
+      "id": "lullaby",
       "slots": {
-       "planet": "Nep-tune"
+       "age": "thir-ty"
       }
      }
     ],
@@ -185,7 +189,7 @@
   {
    "id": "c",
    "name": "Set C",
-   "about": "Verses about a letter in a drawer, the milk round and childhood; other ways into the refrain",
+   "about": "Verses about a letter in a drawer, an old tape and a skipping rope; other ways into the refrain",
    "form": [
     "intro",
     "verse",
@@ -211,14 +215,17 @@
       }
      },
      {
-      "id": "milk",
+      "id": "tape",
       "slots": {
-       "who": "milk-man"
+       "place": "trunk by the bed"
       }
      },
      {
-      "id": "kids",
-      "slots": {}
+      "id": "skip",
+      "slots": {
+       "kids": "girls",
+       "yard": "field"
+      }
      }
     ],
     "refrain": {
@@ -277,7 +284,7 @@
   {
    "id": "d",
    "name": "Set D",
-   "about": "Verses about an emigrant ship, a mining village and a lullaby; another way into the refrain and the bridge's second verse, the coat",
+   "about": "Verses about a music box, the trenches and a sample; another way into the refrain and the bridge's second verse, the coat",
    "form": [
     "intro",
     "verse",
@@ -293,17 +300,18 @@
    "words": {
     "verses": [
      {
-      "id": "boat",
+      "id": "box",
       "slots": {}
      },
      {
-      "id": "mine",
+      "id": "trench",
       "slots": {}
      },
      {
-      "id": "lullaby",
+      "id": "sample",
       "slots": {
-       "age": "thir-ty"
+       "who": "girl",
+       "sung": "him"
       }
      }
     ],
@@ -359,7 +367,7 @@
   {
    "id": "e",
    "name": "Set E",
-   "about": "Verses about a gravestone, an old tape and a wall by the railway; another way into the refrain and the bridge's second verse, given",
+   "about": "Verses about a gravestone, a wax record and childhood; another way into the refrain and the bridge's second verse, given",
    "form": [
     "intro",
     "verse",
@@ -381,16 +389,14 @@
       }
      },
      {
-      "id": "tape",
+      "id": "wax",
       "slots": {
-       "place": "trunk by the bed"
+       "day": "Sun-day"
       }
      },
      {
-      "id": "wall",
-      "slots": {
-       "who": "kid"
-      }
+      "id": "kids",
+      "slots": {}
      }
     ],
     "refrain": {
@@ -445,11 +451,12 @@
   {
    "id": "f",
    "name": "Set F",
-   "about": "Verses about weddings and wakes, a skipping rope and a songbird; another way into the refrain",
+   "about": "Verses about shelling peas, a shepherd, a parrot and a songbird; another way into the refrain",
    "form": [
     "intro",
     "verse",
     "refrain",
+    "verse",
     "verse",
     "verse",
     "refrain",
@@ -460,14 +467,26 @@
    "words": {
     "verses": [
      {
-      "id": "wakes",
-      "slots": {}
+      "id": "shell",
+      "slots": {
+       "who": {
+        "he": "he",
+        "him": "him",
+        "his": "his"
+       }
+      }
      },
      {
-      "id": "skip",
+      "id": "shepherd",
       "slots": {
-       "kids": "girls",
-       "yard": "field"
+       "who": "goat-herd",
+       "flock": "sheep"
+      }
+     },
+     {
+      "id": "parrot",
+      "slots": {
+       "who": "sail-or's"
       }
      },
      {
