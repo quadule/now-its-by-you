@@ -77,7 +77,7 @@ class VoiceParams:
     vibrato_from: float = 0.9  # seconds a note must last before the singer puts vibrato on it (0.55 at a line's end)
     breathe: float = 0.18  # seconds between lines needed for an audible breath
     accent: float = 8.0  # cents a strongly leaned-on note is lifted
-    focus: float = 2.0  # dB more on a word the lyric marks as its line's focus (*word*), most on its stressed syllable
+    focus: float = 1.0  # dB more on a word the lyric marks as its line's focus (*word*), most on its stressed syllable (2 cost words)
     reduce: float = 0.0  # how far a little word's vowel off the beat moves toward "uh" (0.3 cost the words: WER 15% -> 18%)
     mouth: float = 1.0  # cm radius of the mouth opening: small keeps the upper resonances ringing
     engine: str = "formant"  # "formant" (Klatt cascade) or "tube" (waveguide tract, experimental)
