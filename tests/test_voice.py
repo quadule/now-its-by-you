@@ -5,7 +5,7 @@ import numpy as np
 
 from songbird import genome as G
 from songbird.realize import choose_params, realize
-from songbird.synth.voice import VoiceParams, schedule, sing
+from songbird.synth.voice import VoiceParams, line_release, schedule, sing
 
 SKETCH = Path(__file__).parent.parent / "songs" / "b-coal-from-the-fire.json"
 
@@ -82,19 +82,47 @@ def test_breaths_between_lines_are_quiet_bright_noise_and_move_nothing_else():
     assert power[(f > 2000) & (f < 10000)].sum() > 3 * power[f < 1000].sum()  # a breath's hiss, not a vowel
 
 
-def test_vibrato_is_kept_for_held_notes():
+def wobbles(notes, voice, seed):
+    """Each note's pitch wobble (cents SD) past its way in and before its way out, and the note."""
     from songbird.synth.voice import BLOCK, pitch_track
+
+    n_blocks = int((notes[-1].start + notes[-1].dur + 1.0) * 44100 / BLOCK)
+    f0 = pitch_track(notes, n_blocks, 44100, voice, np.random.default_rng(seed))
+    tb = (np.arange(n_blocks) + 0.5) * BLOCK / 44100
+    for n in notes:
+        heard = n.start + n.dur - (line_release(n.dur) if n.line_end else 0.0)  # a line lets go early, to breathe
+        inside = (tb > n.start + 0.4) & (tb < heard - 0.1)
+        if inside.sum() >= 20:
+            yield n, np.std(1200 * np.log2(f0[inside] / (440 * 2 ** ((n.pitch - 69) / 12))))
+
+
+def test_vibrato_is_for_some_held_notes_likelier_the_longer():
+    from songbird.synth.voice import vibrato_chance
+
+    g = G.load(Path(__file__).parent.parent / "songs" / "h-now-its-by-you.json")
+    score = realize(g, replace(choose_params(g), form=("verse", "refrain", "verse", "refrain")))
+    notes = sorted(score.part("voice"), key=lambda n: n.start)
+    voice = VoiceParams(jitter=0.0, wander=0.0)
+    seen = {"mid": [], "long": []}
+    for seed in range(4):
+        for n, wobble in wobbles(notes, voice, seed):
+            if n.dur < 0.45:
+                assert wobble < 3, (n.syllable, n.dur, wobble)  # a short note is sung straight
+            seen["mid" if n.dur < 0.9 else "long"].append(wobble > 5)
+    assert 0.1 < np.mean(seen["mid"]) < 0.6 and 0.4 < np.mean(seen["long"]) < 0.95, {k: np.mean(v) for k, v in seen.items()}
+    assert np.mean(seen["long"]) > np.mean(seen["mid"])
+    # sung alike every time (spread 0), it's there exactly where it's likelier than not
+    for n, wobble in wobbles(notes, replace(voice, spread=0.0), 0):
+        assert (wobble > 5) == (vibrato_chance(n.dur, n.line_end, voice.vibrato_from) > 0.5), (n.syllable, n.dur, wobble)
+
+
+def test_a_phrasings_vibrato_is_sung_as_asked():
+    from songbird.phrasing import Gesture
 
     notes = refrain_notes()
     voice = VoiceParams(jitter=0.0, wander=0.0)
-    n_blocks = int((notes[-1].start + notes[-1].dur + 1.0) * 44100 / BLOCK)
-    f0 = pitch_track(notes, n_blocks, 44100, voice, np.random.default_rng(0))
-    tb = (np.arange(n_blocks) + 0.5) * BLOCK / 44100
-    for n in notes:
-        inside = (tb > n.start + 0.4) & (tb < n.start + n.dur - 0.1)
-        if inside.sum() < 20:
-            continue
-        cents = 1200 * np.log2(f0[inside] / (440 * 2 ** ((n.pitch - 69) / 12)))
-        wobble = np.std(cents)  # past the glide in, a straight note holds its pitch
-        held = n.dur >= (0.55 if n.line_end else voice.vibrato_from)
-        assert (wobble > 5) == held, (n.syllable, n.dur, wobble)
+    for depth in (0.0, 30.0):
+        asked = [replace(n, gesture=Gesture(vibrato=depth)) for n in notes]
+        for n, wobble in wobbles(asked, voice, 0):
+            if n.dur >= 0.8:
+                assert (wobble > 5) == (depth > 0), (n.syllable, depth, wobble)

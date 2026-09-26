@@ -52,9 +52,9 @@ class VoiceParams:
     rd: float = 0.7  # glottal shape: 0.6 pressed, 1 modal, 1.8 breathy
     tilt: float = 0.4  # glottal closing speed: below 1 closes faster, a brighter voice
     breath: float = 0.05  # aspiration mixed into voicing
-    vibrato_rate: float = 5.3  # Hz
-    vibrato_depth: float = 28.0  # cents
-    vibrato_delay: float = 0.28  # seconds into a note before vibrato starts
+    vibrato_rate: float = 5.6  # Hz (each note's own, around this)
+    vibrato_depth: float = 22.0  # cents, a held note's vibrato once grown in (each note's own, around this)
+    vibrato_delay: float = 0.25  # seconds into a note before vibrato starts (each note's own, around this)
     glide: float = 0.11  # sets how fast the voice moves between notes: 10-90% in half of this for a step, 4 ms more a semitone
     glide_spread: float = 0.35  # how unalike two moves are: their length (log scale), when they happen and how far past they go
     overshoot: float = 0.025  # fraction of each interval sung past the new note before settling, on average
@@ -75,7 +75,7 @@ class VoiceParams:
     let_go: float = 1.0  # dB softer for its last, let go of
     climb: float = 0.5  # dB louder per semitone above the line's middle
     taper: float = -3.0  # dB a held vowel fades from a third of the way through to its end
-    vibrato_from: float = 0.9  # seconds a note must last before the singer puts vibrato on it (0.55 at a line's end)
+    vibrato_from: float = 0.7  # seconds of note on which about four in ten notes get vibrato (more at a line's end; never all)
     breathe: float = 0.18  # seconds between lines needed for an audible breath
     inhale: float = -36.0  # dB of that breath's loudest moment against the sung vowels, as the natural singers breathe
     accent: float = 8.0  # cents a strongly leaned-on note is lifted
@@ -533,18 +533,27 @@ def consonant_pitch(segs: list[Segment], tb: np.ndarray) -> np.ndarray:
     return out
 
 
+def vibrato_chance(dur: float, line_end: bool, half: float, lean: float = 0.0) -> float:
+    """How likely a singer is to put vibrato on a note this long (seconds): natural singers on about 0.3
+    of notes of 0.5-0.9 s, 0.55 of 0.9-1.5 s and 0.7 of longer ones, 0.15 more at a line's end, never all
+    (`half` moves the curve; lean, in log-odds, is a phrase's own taste for it)."""
+    if dur < 0.45:
+        return 0.0
+    return min(0.75 / (1.0 + np.exp(-(dur - half) / 0.25 - lean)) + (0.15 if line_end else 0.0), 0.9)
+
+
 def pitch_track(notes: list[Note], n_blocks: int, sr: int, voice: VoiceParams, rng, sounding=None,
                 accents=None, segs: list[Segment] | None = None) -> np.ndarray:
-    """f0 in Hz per block: transitions between notes, a rise into each phrase, vibrato on held notes,
-    the pitch around consonants, a fall as a line lets go, drift and jitter.
+    """f0 in Hz per block: transitions between notes, a rise into each phrase, vibrato on some held
+    notes, the pitch around consonants, a fall as a line lets go, drift and jitter.
     sounding: when each note's vowel ends, so a phrasing's bends and falls happen while it can be heard.
     accents: cents to lift each note by, for the syllables leaned on hardest.
     segs: the schedule (schedule()), for when each syllable starts and where its consonants are; without
     it, phrases rise from their vowels and consonants leave the pitch alone.
 
-    No two transitions or rises come out alike: each draws its own moment, length, overshoot and
-    preparation, or depth, and each phrase its own lean in time, all scaled by voice.spread (0 sings every
-    one alike). The draws come from streams spawned off rng, so
+    No two transitions, rises or vibratos come out alike: each draws its own moment, length, overshoot and
+    preparation, depth, rate, extent and onset, and each phrase its own lean in time and taste for vibrato,
+    all scaled by voice.spread (0 sings every one alike). The draws come from streams spawned off rng, so
     the engines, which call this first, sing the same pitch."""
     tb = (np.arange(n_blocks) + 0.5) * BLOCK / sr
     n = len(notes)
@@ -554,11 +563,12 @@ def pitch_track(notes: list[Note], n_blocks: int, sr: int, voice: VoiceParams, r
     u = note_rng.random((n, 3))
     starts = phrase_starts(notes)
     phrase = np.cumsum(starts) - 1
-    zp = phrase_rng.standard_normal((int(phrase[-1]) + 1, 2))  # a phrase's lean in time
+    zp = phrase_rng.standard_normal((int(phrase[-1]) + 1, 2))  # a phrase's lean in time, and its taste for vibrato
     begins = syllable_starts(segs, n)
     closes = voiced_closure(segs, n)
     target = np.full(n_blocks, notes[0].pitch + voice.shift, dtype=float)
-    vib_env = np.zeros(n_blocks)
+    vib_env = np.zeros(n_blocks)  # cents of vibrato
+    vib_rate = np.full(n_blocks, voice.vibrato_rate)
     gestures = np.zeros(n_blocks)  # cents from a phrasing (scoops, bends and falls) and the machine's own lifts and falls
     for k, note in enumerate(notes):
         p = note.pitch + voice.shift
@@ -602,13 +612,26 @@ def pitch_track(notes: list[Note], n_blocks: int, sr: int, voice: VoiceParams, r
             dip = -(0.03 * (p - q) + 0.04) * float(np.exp(0.5 * s * zk[3])) if p > q else 0.0
             target[after] = q + (p - q) * glide_shape(tau) + past * overshoot_bump(tau) + dip * preparation_dip(tau)
         inside = (tb >= note.start) & (tb < end)
-        v = np.clip((tb - note.start - voice.vibrato_delay) / 0.25, 0.0, 1.0)
-        v *= np.clip((end - tb) / 0.08, 0.0, 1.0)
+        # vibrato on some held notes: likelier the longer the note and at a line's end, and in some phrases
+        # more than others; each its own depth, rate and onset, growing in over a few tenths of a second and
+        # a little more through a long note, and at a line's end blooming, slower and wider, as it lets go
+        chance = vibrato_chance(note.dur, note.line_end, voice.vibrato_from, 0.8 * s * zp[phrase[k], 1])
+        wants = (u[k, 1] if s > 0 else 0.5) < chance
+        extent = voice.vibrato_depth * float(np.clip(np.exp(0.35 * s * zk[5]), 0.4, 2.0))
+        delay = min(voice.vibrato_delay * float(np.exp(0.5 * s * zk[6])), 0.35 * max(heard - note.start, 0.0))
+        rate_k = voice.vibrato_rate + 0.4 * s * float(zk[7])
         if g is not None and g.vibrato >= 0:
-            v *= g.vibrato / max(voice.vibrato_depth, 1.0)
-        elif note.dur < (0.55 if note.line_end else voice.vibrato_from):
-            v *= 0.0  # a singer keeps vibrato for the notes they hold; the rest are sung straight
-        vib_env[inside] = v[inside]
+            wants, extent = g.vibrato > 0, g.vibrato
+        if wants:
+            x = np.maximum(tb - note.start - delay, 0.0)
+            v = (1.0 - np.exp(-x / 0.12)) * (0.85 + 0.15 * np.clip((x - 0.4) / 0.8, 0.0, 1.0))
+            v *= np.clip((end - tb) / 0.08, 0.0, 1.0)
+            here = np.full(n_blocks, rate_k)
+            if note.line_end:
+                bloom = np.clip((tb - (heard - 0.3)) / 0.3, 0.0, 1.0)
+                v, here = v * (1.0 + 0.3 * bloom), here * (1.0 - 0.1 * bloom)
+            vib_env[inside] = extent * v[inside]
+            vib_rate[inside] = here[inside]
         if accents is not None and accents[k]:  # a note leaned on is lifted a little, eased in and out
             lift = accents[k] * np.clip((tb - note.start) / 0.05, 0.0, 1.0) * np.clip((end - tb) / 0.05, 0.0, 1.0)
             gestures[inside] += lift[inside]
@@ -632,9 +655,11 @@ def pitch_track(notes: list[Note], n_blocks: int, sr: int, voice: VoiceParams, r
             gestures[inside] += np.broadcast_to(shape, tb.shape)[inside]
 
     rate = sr / BLOCK
-    vib_rate = voice.vibrato_rate * (1.0 + 0.05 * _lowpassed_noise(vib_rng, n_blocks, 0.5, rate))
+    # a vibrato's rate and extent both drift within the note (natural singers: rate CV ~0.2, extent ~0.6)
+    vib_rate = vib_rate * (1.0 + 0.2 * s * _lowpassed_noise(vib_rng, n_blocks, 2.0, rate))
     vib_phase = 2 * np.pi * np.cumsum(vib_rate) / rate
-    cents = voice.vibrato_depth * vib_env * np.sin(vib_phase) + gestures
+    vib_env = vib_env * np.maximum(1.0 + 0.8 * s * _lowpassed_noise(vib_rng, n_blocks, 2.0, rate), 0.15)
+    cents = vib_env * np.sin(vib_phase) + gestures
     if segs is not None:
         cents += consonant_pitch(segs, tb)
     cents += voice.wander * _lowpassed_noise(drift_rng, n_blocks, 1.0, rate)
