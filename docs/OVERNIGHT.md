@@ -95,6 +95,9 @@ Each item names the choice, why it was made, and how to undo it.
      error after decoding every sample, and macOS `ditto` won't unzip it.
    - *The alternative:* the plan's own fallback, the archive in a FLAC metadata block, which is
      strictly valid FLAC but no longer unzippable or runnable.
+2. **A packet run fetches its dependencies.** The first run asks, then fetches them from PyPI
+   (~150 MB) into ~/.songbird. Carrying them inside the file would tie it to one platform and add
+   about 100 MB.
 3. **Where the seed and its program hash are published.**
    - *Why it matters:* a careful stranger can't look Songbird up before running a 13 MB "song" that
      wants to set up 250 MB.
@@ -108,6 +111,3 @@ Each item names the choice, why it was made, and how to undo it.
 5. **The tags use a working title.** Rendered FLACs now carry the genome's title (e.g. "Now It's
    by You") and "Songbird" as the artist until you choose (docs/STATEMENT.md proposes "Nobody
    Knows" and "Nobody").
-2. **A packet run fetches its dependencies.** The first run asks, then fetches them from PyPI
-   (~150 MB) into ~/.songbird. Carrying them inside the file would tie it to one platform and add
-   about 100 MB.
