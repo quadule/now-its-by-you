@@ -108,6 +108,7 @@ def main() -> None:
     d = {k: raw[k] for k in raw.files}
     segments, offsets, lengths = [str(s) for s in d["segments"]], d["offsets"], d["lengths"]
     singers = [str(s) for s in d["singers"]]
+    sources = [str(s) for s in d["sources"]] if "sources" in d else ["eleven-music"] * len(singers)
     phones = [str(p) for p in d["phones"]]
     roles = ["sil", "breath", "onset", "vowel", "coda"]
     sp = d["sp"].astype(np.float32)
@@ -199,6 +200,7 @@ def main() -> None:
     config = dict(channels=args.channels, dilations=list(DILATIONS), kernel=KERNEL, embed=EMBED, role=ROLE,
                   dropout=args.dropout, noise=args.noise,
                   singer=SINGER, cont=CONT, phones=phones, roles=roles, singers=singers, steps=args.steps,
+                  registers=registers, sources=dict(zip(singers, sources)),
                   dataset=str(args.dataset), frames=int(len(sp)), params=int(n_params), held_out=args.hold_out or [])
     args.out.parent.mkdir(parents=True, exist_ok=True)
     np.savez(args.out, config=json.dumps(config), sp_mean=sp_mean, sp_std=sp_std, ap_mean=ap_mean, ap_std=ap_std,

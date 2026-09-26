@@ -86,3 +86,33 @@ singer on the same notes and seed: 16.9%):
 
 More data is what it wants. The learning curve is Fable's first question before rendering
 more.
+
+## Taking ElevenLabs out (2026-09-25, late)
+
+The artist found that ElevenLabs' terms likely don't allow training on its output. So the seven
+Eleven Music voices are a benchmark only, and nothing trained on them will ship. Every corpus
+singer now records where its timbre came from (`source` in tools/throat/corpus.py's SINGERS,
+carried into every label, the dataset and the model's config). The fix is then a switch, not an
+excavation: `tools/throat/dataset.py --without eleven-music` builds a training set with none of
+their voices, and training on that gives a throat with no Eleven lineage.
+
+The replacement is the **house singers**. SoulX-Singer is prompted with our own formant singer,
+sung with ten different VoiceParams (longer and shorter tracts, pressed and breathy sources, high
+and low registers). SoulX sings our scores naturally in each of those timbres, and the throat
+learns from that.
+
+- **Every timbre starts in this program.** SoulX's natural delivery is laid over it: the learned
+  voice is recognizably both human and synthetic, which is what the artist asked of it.
+- **First test, two items per singer** (`tools/throat/judge.py`, Whisper on each segment):
+
+  | Timbre prompt | Notes within 50 cents | Words misheard |
+  |---|---|---|
+  | house singers (6) | 92–100% | 7–12% |
+  | Eleven Music, same items | 91–100% | 0–6% |
+
+  House singers are a little less clear, but they're good training material. Their spectra keep a
+  trace of the formant singer's clean upper harmonics under natural consonants and transitions.
+
+Consenting human singers (docs/SINGERS.md) are the next source. Each of them is a prompt for
+unlimited SoulX singing as well as direct training data. They'd enter the same way,
+`source="human"`.

@@ -91,7 +91,8 @@ def main() -> None:
             wav.parent.mkdir(parents=True, exist_ok=True)
             sf.write(str(wav), np.clip(y, -1.0, 1.0), SR, subtype="PCM_16")
             label = {k2: v for k2, v in seg.items() if k2 not in ("duration", "text", "phoneme", "note_pitch", "note_type")}
-            label.update(singer=it["singer"], item=it["item"], kind=it["kind"], shift=it["shift"], seed=seed,
+            label.update(singer=it["singer"], source=it.get("source", "eleven-music"), item=it["item"], kind=it["kind"],
+                         shift=it["shift"], seed=seed,
                          steps=args.steps, cfg=args.cfg, sr=SR, audio_s=round(len(y) / SR, 3), compute_s=round(took, 2),
                          soulx=dict(duration=seg["duration"], phoneme=seg["phoneme"], note_pitch=seg["note_pitch"],
                                     note_type=seg["note_type"]))

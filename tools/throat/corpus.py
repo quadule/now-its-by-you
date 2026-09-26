@@ -33,19 +33,31 @@ GUIDE = ROOT / "renders/guide/h-now-its-by-you.guide.score.json"
 H = ROOT / "songs/h-now-its-by-you.json"
 THROAT = ROOT / "renders/throat"
 
-# name: (Eleven take directory, keys to sing in, semitones from the written tune)
+# Every singer the corpus can use, with where its ten-second timbre prompt comes from, so a whole
+# source can be left out and the throat retrained without it (dataset.py --without SOURCE):
+#   eleven-music  a clip of an Eleven Music a cappella take of H (a benchmark only: ElevenLabs' terms
+#                 likely don't allow training on its output, so these go before anything ships)
+#   formant       our own formant singer, sung with the given VoiceParams: a timbre made by this program
+# keys: semitones from the written tune the singer sings in (low voices an octave down).
 SINGERS = {
-    "bright": ("eleven-clear-bright-female", (-3, 0, 3)),
-    "husky": ("eleven-husky-mezzo-female", (-4, 0, 2)),
-    "alto": ("eleven-low-warm-alto", (-5, -2, 0)),
-    "breathy": ("eleven-soft-breathy-young", (-2, 0, 4)),
-    "tenor": ("eleven-tender-tenor-male", (-7, -4, 0)),
-    "baritone": ("eleven-warm-baritone-male", (-15, -12, -9)),
-    "gravelly": ("eleven-gravelly-older-male", (-14, -12, -8)),
-    # added so that low machines have as many singers to blend as high ones
-    "bass": ("eleven-deep-bass-male", (-12, -9, -7)),
-    "raspy": ("eleven-raspy-young-male", (-9, -7, -5)),
-    "low": ("eleven-soft-low-male", (-14, -12, -9)),
+    "bright": dict(source="eleven-music", take="eleven-clear-bright-female", keys=(-3, 0, 3)),
+    "husky": dict(source="eleven-music", take="eleven-husky-mezzo-female", keys=(-4, 0, 2)),
+    "alto": dict(source="eleven-music", take="eleven-low-warm-alto", keys=(-5, -2, 0)),
+    "breathy": dict(source="eleven-music", take="eleven-soft-breathy-young", keys=(-2, 0, 4)),
+    "tenor": dict(source="eleven-music", take="eleven-tender-tenor-male", keys=(-7, -4, 0)),
+    "baritone": dict(source="eleven-music", take="eleven-warm-baritone-male", keys=(-15, -12, -9)),
+    "gravelly": dict(source="eleven-music", take="eleven-gravelly-older-male", keys=(-14, -12, -8)),
+    # house singers: our formant singer as the timbre, SoulX's natural singing as the delivery
+    "house-alto": dict(source="formant", voice=dict(), shift=0, keys=(-3, 0, 2)),
+    "house-bright": dict(source="formant", voice=dict(tract=1.2, rd=0.6, tilt=0.3), shift=0, keys=(-1, 0, 3)),
+    "house-breathy": dict(source="formant", voice=dict(tract=1.16, rd=1.2, breath=0.12), shift=0, keys=(-4, -2, 0)),
+    "house-tenor": dict(source="formant", voice=dict(tract=1.04, rd=0.8), shift=-7, keys=(-9, -7, -5)),
+    "house-baritone": dict(source="formant", voice=dict(tract=0.98, rd=0.9, tilt=0.5), shift=-12, keys=(-14, -12, -9)),
+    "house-bass": dict(source="formant", voice=dict(tract=0.93, rd=0.7, tilt=0.45), shift=-12, keys=(-15, -13, -11)),
+    "house-mezzo": dict(source="formant", voice=dict(tract=1.08, rd=0.75, tilt=0.35), shift=0, keys=(-5, -3, 0)),
+    "house-low-alto": dict(source="formant", voice=dict(tract=1.1, rd=0.95, breath=0.08), shift=-5, keys=(-7, -5, -3)),
+    "house-rough": dict(source="formant", voice=dict(tract=0.97, rd=0.6, tilt=0.25), shift=-12, keys=(-13, -11, -9)),
+    "house-soft-tenor": dict(source="formant", voice=dict(tract=1.02, rd=1.1, breath=0.1), shift=-7, keys=(-9, -7, -4)),
 }
 PROMPT_AT, PROMPT_LEN = 30.45, 10.10  # the first refrain on the guide: "Who made this song? ... and then it goes."
 
@@ -55,25 +67,43 @@ def voice_notes(score) -> list[dict]:
                  line_end=n.line_end, vel=n.vel) for n in score.part("voice")]
 
 
-def prompt(name: str, take_dir: str) -> dict:
-    """A singer's ten-second prompt: the clip, cut from their first take, and its metadata from the guide score."""
-    take = MUSIC / take_dir / "h-now-its-by-you-take1.wav"
-    sidecar = json.loads(take.with_suffix(".json").read_text())
-    window = next(r for r in sidecar["requests"]
-                  if r["composition_plan"]["chunks"][0]["conditioning_ref"]["range"]["start_ms"] <= PROMPT_AT * 1000
-                  < r["composition_plan"]["chunks"][0]["conditioning_ref"]["range"]["end_ms"])
-    y, sr = sf.read(str(take), dtype="float32")
-    y = y if y.ndim == 1 else y.mean(axis=1)
-    clip = y[int(PROMPT_AT * sr): int((PROMPT_AT + PROMPT_LEN) * sr)]
+def prompt(name: str) -> dict:
+    """A singer's ten-second prompt: the clip (from their first take of H, or sung here by our formant
+    singer) and its metadata from the guide score."""
+    spec = SINGERS[name]
+    score = json.loads(GUIDE.read_text())
     out = THROAT / "prompts" / f"{name}.wav"
     out.parent.mkdir(parents=True, exist_ok=True)
+    if spec["source"] == "eleven-music":
+        take = MUSIC / spec["take"] / "h-now-its-by-you-take1.wav"
+        sidecar = json.loads(take.with_suffix(".json").read_text())
+        window = next(r for r in sidecar["requests"]
+                      if r["composition_plan"]["chunks"][0]["conditioning_ref"]["range"]["start_ms"] <= PROMPT_AT * 1000
+                      < r["composition_plan"]["chunks"][0]["conditioning_ref"]["range"]["end_ms"])
+        key = window["key"]
+        y, sr = sf.read(str(take), dtype="float32")
+        y = y if y.ndim == 1 else y.mean(axis=1)
+    else:  # our formant singer sings the guide's own notes, in the singer's register
+        from dataclasses import fields as dfields
+
+        from songbird.score import Note
+        from songbird.synth.voice import VoiceParams, sing as formant_sing
+
+        key = spec["shift"]
+        known = {f.name for f in dfields(Note)}
+        notes = [Note(**{k: v for k, v in n.items() if k in known and k != "gesture"})
+                 for n in score["notes"] if n["part"] == "voice"]
+        sr = 44100
+        y = formant_sing(notes, sr, replace(VoiceParams(), shift=key, **spec["voice"]), seed=1,
+                         lexicon=G.load(H).lexicon).astype(np.float32)
+        y = 0.5 * y / max(float(np.max(np.abs(y))), 1e-9)
+    clip = y[int(PROMPT_AT * sr): int((PROMPT_AT + PROMPT_LEN) * sr)]
     sf.write(str(out), clip, sr, subtype="PCM_16")
-    score = json.loads(GUIDE.read_text())
     notes = [dict(n, start=n["start"] - PROMPT_AT) for n in score["notes"]
              if n["part"] == "voice" and PROMPT_AT - 0.05 <= n["start"] < PROMPT_AT + PROMPT_LEN - 0.1]
-    meta = segment(notes, G.load(H).lexicon, 0.0, PROMPT_LEN, breath=0.0, index=f"prompt_{name}", shift=window["key"])
+    meta = segment(notes, G.load(H).lexicon, 0.0, PROMPT_LEN, breath=0.0, index=f"prompt_{name}", shift=key)
     meta["wav"] = str(out)
-    return {"take": str(take), "key": window["key"], "meta": meta}
+    return {"source": spec["source"], "take": str(spec.get("take", "")), "voice": spec.get("voice"), "key": key, "meta": meta}
 
 
 def sung(genome, form, *, tempo_scale: float, verses=None, fixed=None) -> list[dict]:
@@ -175,6 +205,7 @@ def main() -> None:
     ap.add_argument("--seed", type=int, default=0)
     ap.add_argument("--per-item", type=int, default=2, help="singers per item (H itself is sung by all)")
     ap.add_argument("--singers", nargs="*", default=None, help="plan only for these singers")
+    ap.add_argument("--items", nargs="*", default=None, help="only these items (ids such as h-verse-wire)")
     ap.add_argument("--budget", type=float, default=None,
                     help="with --singers: minutes each, drawn from every item (H first) instead of the usual split")
     ap.add_argument("--coverage", type=Path, default=None,
@@ -183,12 +214,14 @@ def main() -> None:
     rng = np.random.default_rng(args.seed)
 
     names = args.singers or list(SINGERS)
-    singers = {name: prompt(name, SINGERS[name][0]) for name in names}
+    singers = {name: prompt(name) for name in names}
     plan = []
     load = dict.fromkeys(names, 0.0)  # seconds assigned so far, to keep the singers even
     if args.coverage:
         args.per_item = 1
     pool = coverage(args.coverage, rng) if args.coverage else items(rng)
+    if args.items:
+        pool = [it for it in pool if it["id"] in args.items]
     if args.budget:  # every item is a candidate; H first, the rest in random order, until each singer has enough
         pool = sorted(pool, key=lambda it: (it["id"] != H.stem, rng.random()))
         args.per_item = 1
@@ -204,9 +237,10 @@ def main() -> None:
             order = sorted(names, key=lambda n: (load[n], rng.random()))
             who = order[: args.per_item]
         for name in who:
-            shift = int(rng.choice(SINGERS[name][1]))
+            shift = int(rng.choice(SINGERS[name]["keys"]))
             segs = segments(it["notes"], it["lexicon"], f"{name}.{it['id']}", shift=shift)
-            plan.append(dict(id=f"{name}.{it['id']}", singer=name, item=it["id"], kind=it["kind"], shift=shift,
+            plan.append(dict(id=f"{name}.{it['id']}", singer=name, source=SINGERS[name]["source"], item=it["id"],
+                             kind=it["kind"], shift=shift,
                              seed=int(rng.integers(1 << 30)), segments=segs))
             load[name] += length
     args.out.parent.mkdir(parents=True, exist_ok=True)

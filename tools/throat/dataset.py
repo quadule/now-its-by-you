@@ -145,9 +145,17 @@ def main() -> None:
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("root", type=Path, nargs="?", default=ROOT / "renders/throat")
     ap.add_argument("--out", type=Path, default=None)
+    ap.add_argument("--without", nargs="*", default=[], metavar="SOURCE",
+                    help="leave out every singer whose timbre came from these sources (e.g. eleven-music)")
     args = ap.parse_args()
     quality = json.loads((args.root / "quality.json").read_text())
     kept = sorted(k for k, v in quality.items() if v["keep"])
+    sources = {}
+    for key in kept:
+        singer, seg = key.split("/")
+        label = json.loads((args.root / "corpus" / singer / f"{seg}.json").read_text())
+        sources[singer] = label.get("source", "eleven-music")  # the first corpus predates the field: all Eleven
+    kept = [k for k in kept if sources[k.split("/")[0]] not in args.without]
     singers = sorted({k.split("/")[0] for k in kept})
     parts, index = [], []
     for key in kept:
@@ -162,7 +170,8 @@ def main() -> None:
         parts.append(x)
     data = {k: np.concatenate([p[k] for p in parts]) for k in parts[0]}
     out = args.out or args.root / "dataset.npz"
-    np.savez(out, **data, singers=np.array(singers), phones=np.array(throat.PHONES), segments=np.array([i[0] for i in index]),
+    np.savez(out, **data, singers=np.array(singers), sources=np.array([sources[n] for n in singers]),
+             phones=np.array(throat.PHONES), segments=np.array([i[0] for i in index]),
              offsets=np.array([i[1] for i in index]), lengths=np.array([i[2] for i in index]))
     n = len(data["phone"])
     print(f"{len(index)} segments, {n} frames ({n * throat.FRAME / 60:.1f} min), {data['mask'].mean():.1%} unmasked, "
