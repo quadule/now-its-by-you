@@ -187,17 +187,18 @@ def test_clap_is_three_bursts_about_ten_ms_apart_over_a_tail(name, period):
 # --- hats and cymbals ---------------------------------------------------------------------------------------
 
 
-@pytest.mark.parametrize("name", KITS)
-def test_hats_live_between_3_and_16_khz_and_close_as_the_chart_says(name):
+@pytest.mark.parametrize("name,floor", [("drums-808", -40.0), ("drums-909", -20.0)])
+def test_hats_live_between_3_and_16_khz_and_close_as_the_chart_says(name, floor):
     """Their energy between 3 and 12 kHz (reviewer; the 808's closed hat reaches higher, high-passed at 11.7 kHz),
-    nothing folded down below 1 kHz, the closed about 50-80 ms, the open 300-500 ms (reviewer; Roland's chart:
-    50 ms and 90 to 600 ms to fall 20 dB), the pedal shortest."""
+    little below 1 kHz (on the 808, whose circuit high-passes at 7.8 kHz, nothing: no square has folded down; the
+    909's recording has a stick's chick in its first milliseconds), the closed about 50-80 ms, the open
+    300-500 ms (reviewer; Roland's chart: 50 ms and 90 to 600 ms to fall 20 dB), the pedal shortest."""
     lengths = {}
     for piece in ("hat", "hat-open", "hat-pedal"):
         y = hit(name, piece, 0.6, 2.0)
         seg = y[: int(0.25 * SR)]
         assert share(seg, 3000.0, 16000.0) > 0.9 and share(seg, 3000.0, 12000.0) > 0.7
-        assert 10 * np.log10(share(seg, 0.0, 1000.0)) < -30.0
+        assert 10 * np.log10(share(seg, 0.0, 1000.0)) < floor
         lengths[piece] = fall(y, 40)
     assert 0.04 < lengths["hat"] < 0.11
     assert 0.2 < lengths["hat-open"] < 0.7

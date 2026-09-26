@@ -734,12 +734,15 @@ def _cymbal_rom(kind: str, sr: int, clock: float) -> np.ndarray:
     its design (within 2%): the whole recording plays that much higher. The same for every machine and
     every hit: it is a recording."""
     rng = np.random.default_rng({"hat": 909, "crash": 9091, "ride": 9092}[kind])
+    # a cymbal's modes crowd so close (and its nonlinearity spreads them so) that its wash is nearly noise: a
+    # thousand or more, or the mids ring as separate lines (360 left the crash's 1-2 kHz 37 dB peakier than
+    # noise; 1600, 3 dB)
     if kind == "hat":  # an open hi-hat struck with a stick: dense modes 2.5 to 17 kHz, the most near 8
-        length, count, lo, hi, centre, width, ring = 1.6, 220, 2200.0, 17000.0, 8000.0, 0.9, 1.8
+        length, count, lo, hi, centre, width, ring = 1.6, 900, 2200.0, 17000.0, 8000.0, 0.9, 1.8
     elif kind == "crash":  # a thin crash: broad, bright, long
-        length, count, lo, hi, centre, width, ring = 2.4, 360, 300.0, 16000.0, 4500.0, 1.3, 3.2
+        length, count, lo, hi, centre, width, ring = 2.4, 1600, 300.0, 16000.0, 4500.0, 1.3, 3.2
     else:  # a ride's wash
-        length, count, lo, hi, centre, width, ring = 2.2, 260, 400.0, 15000.0, 3500.0, 1.1, 2.6
+        length, count, lo, hi, centre, width, ring = 2.2, 1200, 400.0, 15000.0, 3500.0, 1.1, 2.6
     n = int(length * sr)
     f = np.exp(rng.uniform(np.log(lo), np.log(hi), count))
     amp = np.exp(-0.5 * (np.log2(f / centre) / width) ** 2) * rng.uniform(0.3, 1.0, count)
@@ -747,7 +750,7 @@ def _cymbal_rom(kind: str, sr: int, clock: float) -> np.ndarray:
     if kind == "ride":  # the stick on the bow: a few strong modes 2.5 to 5 kHz, a ping over the wash
         ping = np.exp(rng.uniform(np.log(2500.0), np.log(5000.0), 12))
         f = np.r_[f, ping]
-        amp = np.r_[amp, 2.5 * rng.uniform(0.6, 1.0, 12)]
+        amp = np.r_[amp, 2.5 * np.sqrt(count / 260.0) * rng.uniform(0.6, 1.0, 12)]  # as loud against the wash
         t60 = np.r_[t60, rng.uniform(0.5, 0.9, 12)]
     phase = rng.uniform(0.0, 2.0 * np.pi, len(f))
     out = np.zeros((1, n))
@@ -775,6 +778,7 @@ def _cymbal_rom(kind: str, sr: int, clock: float) -> np.ndarray:
     dac = sosfilt(np.vstack([_biquad("lp", 14000.0, 0.7071, sr), _biquad("hp", 400.0, 0.7071, sr)]), stored)
     fade = np.ones(n)
     fade[-int(0.3 * sr):] = np.linspace(1.0, 0.0, int(0.3 * sr))
+    fade *= _attack(n, sr, 0.0003)  # a recording starts from silence: the stick's contact
     if kind == "hat":  # the hats' decay is the VCA's; the recording is kept flat
         return dac * fade
     return dac * level / level.max() * fade  # the crash and ride: the recording's own decay, re-imposed
