@@ -14,14 +14,18 @@ cross-correlating where they sing with where the song has singing, unless it
 already lines up), found an octave or key if they sang in their own, and
 aligned line by line by warping the tune onto the pitch they sang; each
 vowel's start is then found where its loudness climbs out of the consonant
-before it, less the bias measured for that consonant (ONSET_BIAS). Each note
+before it, less the bias measured for that consonant (ONSET_BIAS). Where the
+Montreal Forced Aligner is installed (tools/align.py), its vowel starts lead
+and these are the fallback: it reads consonants against vowels far better,
+and its own timing shows where it has lost its place. Each note
 is measured against the template singer singing the same notes: how early or
 late its vowel lands against the beat, how long it's held, its level and
 swell (against the same vowel elsewhere), how the pitch scoops in, bends and
 falls off, and the depth of any vibrato. Wrong notes are fine: pitch
 gestures are measured around the note the singer actually sang, and skipped
 where that was far from the tune. Each take is measured once, raw, into
-renders/measured/ (until the take, its guide or the measuring code changes).
+renders/measured/ (until the take, its guide, the measuring code or the
+aligner changes).
 
 A phrasing is made from those measurements: scaled as a phrasing keeps them
 (SUNG), and learned as the singer's rules for notes like each one (on the
@@ -66,6 +70,7 @@ import numpy as np
 
 warnings.filterwarnings("ignore", message="pkg_resources")
 sys.path.insert(0, str(Path(__file__).parent))
+import align as A  # noqa: E402
 import speech_to_song as S  # noqa: E402
 import takes as K  # noqa: E402
 
@@ -159,9 +164,9 @@ def version() -> str:
     h = hashlib.sha256()
     for name in MEASURING:
         h.update(inspect.getsource(globals()[name]).encode())
-    for fn in (S.load, S.tracks, S.target_knots, S.lines_of):
+    for fn in (S.load, S.tracks, S.target_knots, S.lines_of, A.plausible, A.combine):
         h.update(inspect.getsource(fn).encode())
-    h.update(repr((WRONG_NOTE, FLAT, ONSET_BIAS, S.FRAME, S.SR)).encode())
+    h.update(repr((WRONG_NOTE, FLAT, ONSET_BIAS, A.MFA_BIAS, A.GATE, S.FRAME, S.SR)).encode())
     for f in (ROOT / "songbird" / "synth" / "voice.py", ROOT / "songbird" / "phonetics.py"):
         h.update(f.read_bytes())
     return h.hexdigest()[:12]
@@ -411,6 +416,28 @@ def vowel_onsets(found, band, f0=None):
     return out
 
 
+def with_aligner(found, heard: dict, g: Guide, lag: int):
+    """Each note's vowel start where the forced aligner heard it (tools/align.py): wherever its own timing
+    looks like singing of the tune or it agrees with ours, less its bias; ours elsewhere, and wherever its
+    start would come within 40 ms of the note before. Where ours was far off (it had lost its place in the
+    line) or ended the vowel before the aligner starts it, the vowel ends where the aligner ends it too.
+    Returns the spans and which notes are the aligner's."""
+    ours = np.array([v0 for v0, _, _ in found]) * S.FRAME - lag * S.FRAME  # on the guide's timeline
+    onset, use = A.combine(ours, heard, g.notes, g.before)
+    out, used, last = [], [], -(10**9)
+    for k, ((v0, v1, c1), t, mfa, end) in enumerate(zip(found, onset, use, heard["vowel_end"])):
+        start = int(round(t / S.FRAME)) + lag
+        mfa = bool(mfa) and start > last + 8
+        if mfa:
+            if end is not None and (abs(t - ours[k]) > A.GATE or v1 < start + 8):
+                v1 = int(round(end / S.FRAME)) + lag
+            v0 = start
+        out.append((v0, max(v1, v0 + 2), max(c1, v0 + 2)))
+        used.append(mfa)
+        last = v0
+    return out, used
+
+
 def by_vowel(x: np.ndarray, vowels: list[str], keep: bool = False) -> np.ndarray:
     """Each value less the median of its vowel's (or of all, for a vowel sung fewer than three times).
     keep: add the median over everything back, so what every note shares (a singer's habit) stays."""
@@ -505,10 +532,15 @@ def measure_take(path: Path, g: Guide) -> dict:
     found = vowel_onsets(found, band, f0)
     shift = [int(round(ONSET_BIAS.get(b, 0.0) / S.FRAME)) for b in g.before]
     found = [(v0 - d, max(v1, v0 - d + 2), max(c1, v0 - d + 2)) for (v0, v1, c1), d in zip(found, shift)]
+    heard = A.aligned(path, g, lag * S.FRAME)  # None without MFA: our own onsets alone
+    if heard is not None:
+        found, used = with_aligner(found, heard, g, lag)
     gestures, off = measure_sung(g.notes, g.knots, found, (f0, band, active), template(g, key), lag, key, g.tempo)
     return {
         "lag": lag * S.FRAME,
         "key": key,
+        "aligner": None if heard is None else {"mfa": heard["key"]["mfa"], "lowered": heard["lowered"],
+                                               "onsets": int(sum(used))},
         "fields": [f.name for f in fields(P.Gesture)],
         "notes": [{"phrase": n.phrase, "index": index_in_phrase(g.notes, k), "start": round(n.start, 4),
                    "onset": round(v0 * S.FRAME, 4), "off": rounded(o, 1),
@@ -532,7 +564,8 @@ def measured(genome_path: Path, genome, take) -> dict:
         take = K.Take(path, "", genome_path.stem, pinned)
     g = guide(genome_path, genome, take.guide)
     stat = take.path.stat()
-    stamp = {"guide": g.digest, "extractor": version(), "bytes": stat.st_size, "mtime": int(stat.st_mtime)}
+    stamp = {"guide": g.digest, "extractor": version(), "aligner": A.fingerprint(), "bytes": stat.st_size,
+             "mtime": int(stat.st_mtime)}
     name = take.path.relative_to(ROOT).as_posix() if take.path.is_relative_to(ROOT) else take.path.as_posix().lstrip("/")
     cache = MEASURED / (name.replace("/", "__").removesuffix(".wav") + ".json")
     if cache.exists():
@@ -824,8 +857,8 @@ def write_guide(path: Path, genome, transpose: int) -> None:
 
 # everything a take's measurement depends on (version() hashes their source)
 MEASURING = ("guide", "template", "analyze_take", "place_take", "note_spans", "contour", "fit_edge", "shapes", "wobble",
-             "align_by_pitch", "vowel_onsets", "by_vowel", "measure_sung", "find_key", "measure_take", "index_in_phrase",
-             "rounded")
+             "align_by_pitch", "vowel_onsets", "with_aligner", "by_vowel", "measure_sung", "find_key", "measure_take",
+             "index_in_phrase", "rounded")
 
 
 def main() -> None:
