@@ -41,8 +41,10 @@ Inside:
 | `program/` | songbird/ (source and data: the learned voice's weights travel here) and pyproject.toml |
 | `LICENSE` | CC0, with the legal code in full; it also travels as `program/LICENSE`, so every child carries it |
 
-The program adds about 0.2 MB, compressed; the learned voice's weights will add
-a few MB more. A rendition's archive is deterministic: the same rendition
+With everything merged (the learned voice's weights, the styles and the new
+instruments), the program is 85 files, 5.3 MB unpacked and about 3.4 MB in the
+archive. H's seed packet is 16 MB in all. Sung cold from it with `--here`, a
+child took 38 s. A rendition's archive is deterministic: the same rendition
 packs to the same bytes, with its entries dated by the rendition's own day.
 Packing again replaces the archive rather than stacking a second one, and the
 audio before it is never touched.
