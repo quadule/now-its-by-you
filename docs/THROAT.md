@@ -54,7 +54,7 @@ No recording of any person was used.
 - **Analysis.**
   - `tools/throat/features.py`: WORLD analysis. Harvest f0, searched within a fifth of the
     notes.
-  - `tools/throat/align.py`: phone boundaries from the Montreal Forced Aligner. Its dictionary is
+  - `tools/throat/phones.py`: phone boundaries from the Montreal Forced Aligner. Its dictionary is
     exactly the phones SoulX was asked to sing. High voices are aligned an octave down by our
     vocoder, envelope and timing kept.
   - `tools/throat/check.py` scores each segment; `tools/throat/dataset.py` builds the frames.

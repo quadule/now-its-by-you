@@ -4,7 +4,7 @@
 
 Per segment: the share of notes whose middle sits within 50 cents of the note (WORLD's f0, from
 tools/throat/features.py) and the share of notes whose vowel MFA found where the note is sung
-(tools/throat/align.py). Writes renders/throat/quality.json, which training reads to leave out the
+(tools/throat/phones.py). Writes renders/throat/quality.json, which training reads to leave out the
 segments SoulX sang badly (below either threshold).
 """
 import argparse

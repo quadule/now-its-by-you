@@ -1,6 +1,6 @@
 """Phone boundaries in the learned throat's corpus, from the Montreal Forced Aligner (dev only).
 
-    uv run python tools/throat/align.py [renders/throat/corpus] [--jobs 8]
+    uv run python tools/throat/phones.py [renders/throat/corpus] [--jobs 8]
 
 Every rendered segment is cut into its lines at the quiet between them, each line aligned with MFA's
 english_us_arpa acoustic model against exactly the phones SoulX was asked to sing (a dictionary

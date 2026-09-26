@@ -6,7 +6,7 @@ For every corpus segment that tools/throat/check.py kept, the inputs the throat 
 sings (songbird.synth.throat.timeline: the phone, its neighbours, how far through it, its length,
 the syllable's stress, the note's level; plus log f0 and the singer) and what it should give back
 (the WORLD envelope and aperiodicity on their mel grids), every 5 ms. The phones come from MFA's
-alignment (tools/throat/align.py) turned into songbird's inventory: stress dropped, an unstressed
+alignment (tools/throat/phones.py) turned into songbird's inventory: stress dropped, an unstressed
 AH is AX, a diphthong running into r (fire, hour) one phone. The quiet between phones is silence,
 or a breath where it's loud enough just before the singing starts again. Notes whose alignment
 MFA got wrong are masked out, with their consonants.
