@@ -70,6 +70,11 @@ def test_a_second_pick_lands_on_the_ringing_string():
                                                picks=((0.0, 1.0), (0.3, 1.0))))
 
 
+def test_a_pick_jittered_before_the_note_lands_at_its_start():
+    y = stringloop.note(220.0, 0.5, SR, np.random.default_rng(6), picks=((-0.003, 1.0), (0.2, 0.8)))
+    assert np.all(np.isfinite(y)) and np.abs(y[: int(0.1 * SR)]).max() > 0
+
+
 def test_the_note_ends_quietly_and_without_dc():
     y = stringloop.note(110.0, 0.5, SR, np.random.default_rng(4), damp=0.1)
     assert np.all(np.isfinite(y))

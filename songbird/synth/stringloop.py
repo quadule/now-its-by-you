@@ -137,7 +137,7 @@ def note(freq: float, dur: float, sr: int, rng: np.random.Generator, *, cents: n
     t60 = decay * (220.0 / f) ** 0.4
     x = np.zeros(length)
     for at, factor in picks:
-        i = int(round(at * sr))
+        i = max(0, int(round(at * sr)))  # a pick can't land before the note starts
         if i >= length:
             continue
         period = excitation(f[i], sr, rng, pick=pick * rng.uniform(0.9, 1.1), hardness=hardness, vel=vel * factor)
@@ -158,7 +158,7 @@ def note(freq: float, dur: float, sr: int, rng: np.random.Generator, *, cents: n
         y += ring(f * 2.0 ** (detune / 1200.0), x * amount, sr, loss=loss, t60=np.inf, gain=g)
     if click:
         for at, factor in picks:
-            i = int(round(at * sr))
+            i = max(0, int(round(at * sr)))
             if i < length:
                 y[i:] += _pluck._attack(sr, hardness, vel * factor, length - i, rng)
     if touch > 0.0 and held < length:
