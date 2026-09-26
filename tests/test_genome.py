@@ -101,6 +101,16 @@ def test_a_fixed_line_can_turn_one_word_each_time_round():
     assert G.turns("no choices") == ["no choices"]
 
 
+def test_a_numbered_section_is_its_section_again():
+    g = G.load(Path(__file__).parent.parent / "songs" / "h-now-its-by-you.json")
+    again = g.section("bridge2")
+    assert again.name == "bridge2" and again.lyrics == "bridge" and again.choir
+    assert again.phrases == g.sections["bridge"].phrases and g.section("bridge") is g.sections["bridge"]
+    for missing in ("chorus", "chorus2", "2"):
+        with pytest.raises(KeyError):
+            g.section(missing)
+
+
 def test_phrasing_moves_only_the_voice():
     from dataclasses import replace
 
