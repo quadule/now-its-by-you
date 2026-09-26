@@ -389,6 +389,8 @@ class Context:
     parent: object  # the parent's Params
     c: Character
     drift: Drift | None
+    style: str | None = None  # a style asked for by name (songbird render --style), else the ring decides
+    arrange: dict | None = None  # the arrangement's options asked for (Style fields), else the style decides
 
     def at(self, view: str, dimension: str) -> float:
         return self.drift.view(view).get(dimension, 0.0) if self.drift is not None else 0.0
@@ -869,23 +871,38 @@ def choose_room(out: dict, ctx: Context) -> None:
         out.setdefault("mix", {}).update(rt60=ctx.c.room["rt60"], tone=list(ctx.c.room["tone"]))
 
 
+def choose_style(out: dict, ctx: Context) -> None:
+    """The rendition's style and what it brings (songbird/style.py): last, once the form, the choir and
+    every number are chosen, since a style leans on them."""
+    from .style import choose_style as choose
+
+    choose(out, ctx, ctx.style, ctx.arrange)
+
+
 DECISIONS = (choose_mode, choose_form, choose_accomp, choose_pattern, choose_lead, choose_choir, choose_mood,
-             choose_vocabulary, choose_inventory, choose_room)
+             choose_vocabulary, choose_inventory, choose_room, choose_style)
 
 
 # ---------------------------------------------------------------- putting it together
 
 
 def choose(genome: Genome, parent=None, voice: Voice | None = None, drift: Drift | None = None,
-           seed: int | None = None):
+           seed: int | None = None, style: str | None = None, arrange: dict | None = None):
     """The child's parameters; see realize.choose_params."""
     from .realize import Params
 
     song = Params.from_dict(genome.seed_params)
     parent = parent if parent is not None else song
     if voice is None and drift is None:
-        return parent if seed is None else replace(parent, seed=seed)
-    ctx = Context(genome, song, parent, character(voice), drift)
+        chosen = parent if seed is None else replace(parent, seed=seed)
+        if style is None and not arrange:
+            return chosen
+        # a style asked for with no machine: the parent played in it, nothing else chosen
+        out = chosen.to_dict()
+        choose_style(out, Context(genome, song, parent, Character(), None, style or (parent.style.name or "ballad"),
+                                  arrange))
+        return Params.from_dict(out)
+    ctx = Context(genome, song, parent, character(voice), drift, style, arrange)
     out = parent.to_dict()
     for key in ("singer", "mix", "leanings"):
         out[key] = dict(out.get(key) or {})

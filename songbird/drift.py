@@ -82,6 +82,8 @@ DIMENSIONS = {
     "space": "how much of the room is heard (slow)",
     "near": "how close the singer stands: the voice's own reverb (slow)",
     "duck": "how much the band and the room make way for the voice (slow)",
+    "style": "where on the ring of styles a machine leans today (slow, held)",
+    "arrange": "turns the arrangement's options (the intro, a bare verse, a lift, the ending...) (season)",
 }
 
 DAY = 86400.0

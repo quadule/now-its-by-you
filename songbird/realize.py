@@ -81,7 +81,8 @@ class Params:
 
 
 def choose_params(genome: Genome, parent: Params | None = None, voice: Voice | None = None,
-                  drift: Drift | None = None, seed: int | None = None) -> Params:
+                  drift: Drift | None = None, seed: int | None = None, style: str | None = None,
+                  arrange: dict | None = None) -> Params:
     """Inherit from the parent, pull toward the voice, apply drift.
 
     With no voice and no drift, the parent's parameters (the seed's, from the
@@ -91,12 +92,12 @@ def choose_params(genome: Genome, parent: Params | None = None, voice: Voice | N
     seed comes from (voice, instant, parent), or from `seed` if given: the same
     machine, instant and parent always give the same child.
     """
-    if voice is None and drift is None:
+    if voice is None and drift is None and style is None and not arrange:
         chosen = parent if parent is not None else Params.from_dict(genome.seed_params)
         return chosen if seed is None else replace(chosen, seed=seed)
     from .variation import choose  # the table reads the singer's fields, so it brings the synth with it
 
-    return choose(genome, parent, voice, drift, seed)
+    return choose(genome, parent, voice, drift, seed, style, arrange)
 
 
 def sung_as(note: Note, g: Gesture | None, beat: float) -> Note:
