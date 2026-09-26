@@ -420,10 +420,11 @@ thirteen makers it averages -23.7 LUFS (-26.4 to -22.2, sd 1.3; comping,
 (sd 1.3; a lead, -20.7). The slide's answers, as the blues writes them, sit
 at -19.7 to -21.6 by body (a lead, -20.7, beside the harmonica it answers
 with). In the tour's country rendition (ada, 2026-09-27)
-the steel reads -19.0 LUFS in the intro, -20.5 in the verse's fills and -21.7
+the steel reads -17.9 LUFS in the intro, -20.0 in the verse's fills and -21.3
 under the refrain, where its stand-in read -13.7, -16.5 and -19.5, and the
-guitar -25.2, -24.1 and -22.6. In the blues rendition the slide's two-note
-answers read -28.2 (its stand-in -25.2, the guitar's boogie -27.4).
+guitar -25.2, -24.1 and -22.6. In the blues rendition the slide's three
+two-note answers are at their loudest (400 ms) -25.8 to -25.0 LUFS, the
+harmonica's -22.3 and -20.9: a picked note dies, a reed sustains.
 
 ## Idioms for the part-writer
 
