@@ -62,7 +62,26 @@ LANGUAGES = {
     "south_asian": "South Asian languages", "east_asian": "East Asian languages", "other": "its languages",
 }
 PLAYERS = {"lute": "lute", "guitar": "guitar", "harp": "harp", "bass": "bass", "fiddle": "fiddle",
-           "whistle": "whistle", "drum": "frame drum", "drone": "drone"}
+           "whistle": "whistle", "drum": "frame drum", "drone": "drone",
+           # the styles' players (songbird.style), as a person would name them
+           "arp": "arpeggiated synth", "synthpad": "synth pad", "synthbass": "synth bass", "synthlead": "synth lead",
+           "drummachine": "drum machine", "epiano": "electric piano", "ebass": "electric bass",
+           "electric": "electric guitar", "kit": "drum kit", "steel": "pedal steel", "slide": "slide guitar",
+           "glock": "glockenspiel", "vibes": "vibraphone", "musicbox": "music box", "stomps": "stomping feet",
+           "claps": "hand claps", "strings": "string section", "banjo": "banjo", "mandolin": "mandolin",
+           "cello": "cello", "piano": "piano", "organ": "organ", "harmonica": "harmonica", "concertina": "concertina",
+           "celesta": "celesta", "tambourine": "tambourine", "accordion": "accordion", "harmonium": "harmonium"}
+# The styles, as the page names them (songbird/style.py STYLES), and their feels
+STYLE_NAMES = {"ballad": "the ballad band, the song's own", "stringband": "a string band", "country": "country",
+               "gospel": "gospel", "shanty": "a sea shanty", "songwriter": "a singer-songwriter",
+               "chamber": "chamber folk", "lullaby": "a lullaby", "ambient": "ambient", "synthfolk": "synth folk",
+               "lofi": "lo-fi", "indie": "indie folk", "blues": "country blues"}
+FEEL_NAMES = {"straight": "played straight", "swing": "swung", "shuffle": "a shuffle", "twelve": "in twelve-eight",
+              "half": "half-time", "double": "double-time", "waltz": "a waltz", "six": "in six-eight"}
+ENDING_NAMES = {"ring": "the last chord rings", "rit": "it slows broadly to the end", "cold": "it stops dead",
+                "amen": "it ends on an amen", "repeat": "the last line is sung again"}
+BACKING_NAMES = {"oohs": "backing voices on oohs", "echo": "backing voices echo the lines",
+                 "thirds": "backing voices in harmony", "gang": "everyone sings along"}
 PATTERNS = {"lilt": "a lilting strum", "strum": "a steady strum", "pick": "fingerpicking", "air": "a slow air"}
 PATTERN_DETAIL = {"lilt": "the strum follows the tune's long-short-short", "strum": "the old faithful strum",
                   "pick": "picked strings, no strumming", "air": "rolled chords and held notes, no drum"}
@@ -80,9 +99,9 @@ KINDS = {"you": "you", "machine": "your machine", "time": "time", "parent": "kep
          "chance": "chance", "rule": "the song's rule", "lineage": "the versions before"}
 # Params fields a card below speaks for; any other gets a plain card of its own
 KNOWN = {"tonic", "mode", "tempo", "form", "seed", "accomp", "humanize", "ritardando", "choir", "band", "singer",
-         "mix", "leanings", "lay", "inventory", "variants", "words", "generation", "made"}
+         "mix", "leanings", "lay", "inventory", "variants", "words", "generation", "made", "style"}
 KNOWN_BAND = {*INSTRUMENTS, "brightness", "pattern", "density", "swing", "wear", "ornament", "arc", "lead", "body",
-              "maker"}
+              "maker", "lineup"}
 # How big a pull or a push must be to be heard, per number (smaller ones are said to have kept it as it was)
 HEARD = {"tempo": 1.0, "tonic": 0.5, "band.density": 0.04, "band.brightness": 0.04, "mix.space": 0.04,
          "mix.width": 0.04, "mix.forward": 0.25, "mix.intimacy": 0.04, "mix.tilt": 0.15, "mix.wear": 0.04,
@@ -105,8 +124,22 @@ def listed(items: list[str], last: str = "and") -> str:
     return items[0] if len(items) == 1 else f"{', '.join(items[:-1])} {last} {items[-1]}"
 
 
+@lru_cache(maxsize=256)
 def player(name: str) -> str:
-    return PLAYERS.get(name, name.replace("_", " "))
+    """An instrument as a person would name it: the page's own name, else the first words its maker used."""
+    if name in PLAYERS:
+        return PLAYERS[name]
+    try:
+        from .synth.instruments import spec
+
+        about = str(spec(name).get("about") or name)
+    except (ValueError, KeyError):
+        about = name
+    about = about.split(":")[0].split("(")[0].split(",")[0].strip()
+    for article in ("a ", "an ", "the "):
+        if about.lower().startswith(article):
+            about = about[len(article):]
+    return (about or name).replace("_", " ").replace("-", " ")
 
 
 def note(midi: int) -> str:
@@ -147,25 +180,45 @@ def brightness_words(x: float) -> str:
             else "very bright")
 
 
-def leader(band) -> str | None:
-    """Who states the tune where nobody sings: the lead, or the next that plays (as the band does)."""
+def players(band, style=None) -> list[str]:
+    """Who is in the band: a style's lineup in its own order, else the eight."""
+    if band.lineup:
+        from .style import of
+
+        return of(style).order(band.lineup) if style is not None else sorted(band.lineup)
+    return list(INSTRUMENTS)
+
+
+def leader(band, style=None) -> str | None:
+    """Who states the tune where nobody sings: the style's leads, or the band's lead, the first that plays."""
+    if band.lineup and style is not None:
+        from .style import of
+
+        return next((n for n in of(style).leads if band.plays(n)), None)
     if band.plays(band.lead):
         return band.lead
     return next((n for n in ("whistle", "fiddle", "lute") if band.plays(n)), None)
 
 
-def band_words(band) -> str:
-    """'a steady strum with the whistle leading; moderate and clear; all eight play'."""
-    playing = [n for n in INSTRUMENTS if band.plays(n)]
+def band_words(band, style=None) -> str:
+    """'a steady strum with the whistle leading; moderate and clear; all eight play', or for a style's band
+    'the fiddle leading; busy and bright; bass, banjo, mandolin, guitar and fiddle play'."""
+    everyone = players(band, style)
+    playing = [n for n in everyone if band.plays(n)]
     if not playing:
         return "no band: the voice alone"
-    out = [n for n in INSTRUMENTS if n not in playing]
+    out = [n for n in everyone if n not in playing]
+    lead = leader(band, style)
+    leading = f"the {player(lead)} leading" if lead else ""
+    colour = f"{density_words(band.density)} and {brightness_words(band.brightness)}"
+    if band.lineup:
+        who = f"{listed([player(n) for n in playing])} play"
+        if out:
+            who += f", the {listed([player(n) for n in out])} sitting out"
+        return "; ".join(x for x in (leading, colour, who) if x)
     who = (f"all {number(len(INSTRUMENTS))} play" if not out
            else f"the {listed([player(n) for n in out])} sit{'s' if len(out) == 1 else ''} out")
-    lead = leader(band)
-    leading = f" with the {player(lead)} leading" if lead else ""
-    return (f"{PATTERNS.get(band.pattern, band.pattern)}{leading}; {density_words(band.density)} and "
-            f"{brightness_words(band.brightness)}; {who}")
+    return (f"{PATTERNS.get(band.pattern, band.pattern)}{' with ' + leading if leading else ''}; {colour}; {who}")
 
 
 def room_words(rt60: float) -> str:
@@ -367,6 +420,7 @@ class Version:
     problems: list = field(default_factory=list)
     applied: list = field(default_factory=list)
     marks: dict = field(default_factory=dict)
+    changes: list = field(default_factory=list)  # what the program changed in the tune and the words, with why
     _cf: dict = field(default_factory=dict, repr=False)
 
     @property
@@ -442,11 +496,12 @@ class Context:
         d = drift_mod.drift(self.instant(day), (voice if voice is not None else harvest.Voice()).hash)
         chosen_phrasing = json.loads(Path(phrasings[clean["phrasing"]]).read_text()) if "phrasing" in clean else None
         trace: dict = {}
+        changes: list = []
         r = edits_mod.resolve(genome, self.parent, voice, d, clean, phrasing_json=chosen_phrasing, trace=trace,
-                              day_chosen="date" in clean)
+                              day_chosen="date" in clean, log=changes)
         phrasing_json = chosen_phrasing or genome.source.get("seed_phrasing")
         return Version(self, clean, voice, d, day, r.generated, r.params, r.generated_lyrics, r.lyrics, phrasing_json,
-                       trace, problems + r.problems, r.applied, r.marks)
+                       trace, problems + r.problems, r.applied, r.marks, changes)
 
     # ------------------------------------------------------------ labels
 
@@ -489,6 +544,8 @@ def _kept(v: Version, path: str | None = None) -> dict:
 def _read(params, path: str):
     if path == "form":
         return tuple(params.form)
+    if path == "style.name":  # the song's own arrangement is the ballad band, named or not
+        return params.style.name or "ballad"
     head, _, tail = path.partition(".")
     if tail and head not in ("singer", "mix", "leanings", "band"):
         value = getattr(params, head)
@@ -634,6 +691,13 @@ def tempo_card(v: Version) -> dict:
         return f"{'a brisk' if m > 0 else 'an unhurried'} machine" + (f" ({listed(sources)})" if sources else "")
 
     why = number_reasons(v, "tempo", machine, lambda t: f"{_when('full')} is a little {'quicker' if t > 0 else 'slower'}")
+    name = p.style.name or "ballad"
+    if name != "ballad" and "tempo" not in v.applied:  # a style takes the song at its own pace (songbird.style)
+        song = v.context.song.tempo
+        pace = "quicker" if p.tempo > song * 1.03 else "slower" if p.tempo < song * 0.97 else "at about the song's own pace"
+        why = [{"kind": "you" if "style.name" in v.applied else "rule",
+                "text": f"{STYLE_NAMES.get(name, name)} takes the song {pace}"
+                        + (" than it began" if pace in ("quicker", "slower") else "")}] + why
     mine = _mine(v, ["tempo"], lambda path, was: f"{was:.0f}")
     return _card(v, "tempo", "Tempo", tempo_words(p.tempo), "", mine + _finish(v, why, "tempo"), ["tempo"],
                  tempo=p.tempo)
@@ -701,24 +765,95 @@ def band_card(v: Version) -> dict:
         return (f"{_when('slow')} lean to {PATTERNS.get(value, value)}" if path == "band.pattern"
                 else f"{_when('year')}, the {player(value)} leads")
 
-    why = choice_reasons(v, ["band.pattern", "band.lead"], machine, time,
-                         lambda path, value: PATTERNS.get(value, value) if path == "band.pattern"
-                         else f"the {player(value)} leading") + why
+    style = v.params.style
+    if not band.lineup:  # the ballad band's own pattern and lead; a style's band is the style's (its own card)
+        why = choice_reasons(v, ["band.pattern", "band.lead"], machine, time,
+                             lambda path, value: PATTERNS.get(value, value) if path == "band.pattern"
+                             else f"the {player(value)} leading") + why
+    else:
+        why = [{"kind": "rule", "text": f"the players are {STYLE_NAMES.get(style.name, style.name)}'s own"}] + why
     names = {"band.pattern": lambda w: PATTERNS.get(w, w), "band.lead": lambda w: f"the {player(w)}",
              "band.density": density_words, "band.brightness": brightness_words}
     mine = _mine(v, list(names), lambda path, was: names[path](was) if was is not None else None)
-    benched = [p for p in v.mine("band.") if p[5:] in INSTRUMENTS]
+    everyone = players(band, style)
+    benched = [p for p in v.mine("band.") if p[5:] in everyone]
     if benched:
         mine.append({"kind": "you", "text": "who plays: chosen by you", "path": benched[0]})
-    lead = leader(band)
-    detail = PATTERN_DETAIL.get(band.pattern, "")
-    if lead and lead != band.lead:
-        detail = f"the {player(band.lead)} sits out, so the {player(lead)} takes the tune; {detail}"
+    lead = leader(band, style)
+    if band.lineup:
+        detail = ""
+    else:
+        detail = PATTERN_DETAIL.get(band.pattern, "")
+        if lead and lead != band.lead:
+            detail = f"the {player(band.lead)} sits out, so the {player(lead)} takes the tune; {detail}"
     extra = {k: val for k, val in band.to_dict().items() if k not in KNOWN_BAND}
     if extra:
         detail += f"; also {plain(extra)}"
-    return _card(v, "band", "The band", band_words(band), detail, mine + _finish(v, why, "band"), ["band."],
-                 band=band.to_dict(), leader=lead, players={n: player(n) for n in INSTRUMENTS})
+    return _card(v, "band", "The band", band_words(band, style), detail, mine + _finish(v, why, "band"), ["band."],
+                 band={**band.to_dict(), **{n: band.gain(n) for n in everyone}}, leader=lead,
+                 players={n: player(n) for n in everyone}, styled=bool(band.lineup))
+
+
+def style_card(v: Version) -> dict:
+    """The tradition the song is played in (songbird.style): its feel and the arrangement's options, why,
+    and every style and feel a person could choose."""
+    from . import style as style_mod
+
+    s = v.params.style
+    name = s.name or "ballad"
+    sdef = style_mod.of(s)
+    c = variation.character(v.voice)
+    feel = s.feel or next(iter(sdef.feels), "straight")
+    value = f"{STYLE_NAMES.get(name, name)}, {FEEL_NAMES.get(feel, feel)}"
+    options = [f"the last refrain a whole step up" if s.lift else "",
+               f"verse {s.alone} sung {'with the ' + player(s.alone_with) + ' alone' if s.alone_with else 'bare'}"
+               if s.alone else "",
+               f"verse {s.stops} in stop-time" if s.stops else "",
+               "the last refrain starts stripped down" if s.breakdown else "",
+               "the band joins line by line in the first verse" if s.entrances else "",
+               "the bridge in half-time" if s.bridge == "half" else "",
+               {"lead": "", "pad": "a pad swells in to begin", "count": "a count-in to begin",
+                "voice": "the singer begins alone"}.get(s.intro, ""),
+               BACKING_NAMES.get(s.backing, ""),
+               ENDING_NAMES.get(s.ending, "") if s.ending and s.ending != "ring" else ""]
+    about = sdef.about.split(":", 1)[-1].strip() if name != "ballad" else \
+        "harp, cittern, whistle, fiddle, guitar, upright bass, frame drum and a reed drone"
+    detail = "; ".join(x for x in [about, *options] if x)
+
+    def machine(path, value, blind):
+        home = style_mod.home(c)
+        if home is None:
+            return None
+        at = style_mod.RING[int(round(home)) % len(style_mod.RING)]
+        return f"your machine is at home in {STYLE_NAMES.get(at, at)}, and a version moves one style at a time"
+
+    def time(path, value, frozen):
+        return f"{_when('slow')} lean toward {STYLE_NAMES.get(value or 'ballad', value)}"
+
+    why = choice_reasons(v, ["style.name"], machine, time,
+                         lambda path, value: STYLE_NAMES.get(value or "ballad", value))
+    home = style_mod.home(c)
+    if not why:  # kept: say so, and where the machine would take it, a style at a time
+        why = [_kept(v, "style")]
+        at = style_mod.RING[int(round(home)) % len(style_mod.RING)] if home is not None else None
+        if at is not None and at != (v.generated.style.name or "ballad"):
+            why.append({"kind": "machine", "text": f"your machine is at home in {STYLE_NAMES.get(at, at)}; the song "
+                                                   f"moves toward it one style at a time, as the seasons allow"})
+    before = list(dict.fromkeys(reversed(s.lineage[:-1])))[:3]
+    if before and s.lineage[:-1]:
+        where = listed([STYLE_NAMES.get(x, x).split(",")[0] for x in before])
+        why.append({"kind": "lineage", "text": f"the versions before were played as {where}"})
+    labels = {"style.name": lambda w: STYLE_NAMES.get(w or "ballad", w), "style.feel": lambda w: FEEL_NAMES.get(w, w),
+              "style.ending": lambda w: ENDING_NAMES.get(w or "ring", w),
+              "style.backing": lambda w: BACKING_NAMES.get(w, "no backing voices"),
+              "style.lift": lambda w: "a lift" if w else "no lift"}
+    mine = _mine(v, list(labels), lambda path, was: labels[path](was) if was is not None else None)
+    feels = style_mod.feels_for(v.context.genome, sdef)
+    return _card(v, "style", "The style", value, detail, mine + _finish(v, why, "style"), ["style."],
+                 style={"name": name, "feel": feel, "ending": s.ending or "ring", "backing": s.backing,
+                        "lift": s.lift},
+                 styles={k: STYLE_NAMES.get(k, k) for k in style_mod.RING}, feels={f: FEEL_NAMES.get(f, f) for f in feels},
+                 endings=dict(ENDING_NAMES), backings={"": "no backing voices", **BACKING_NAMES})
 
 
 def mix_card(v: Version) -> dict:
@@ -806,8 +941,9 @@ def words_card(v: Version) -> dict:
               if share > 1.2 / max(len(c.themes or {}), 1)][:3]
     if themes and v.generated.leanings.get("vocabulary"):
         mood.append({"kind": "machine", "text": f"the words you use bring forward verses about {listed(themes)}"})
-    why = mood + why
-    why.append({"kind": "chance", "text": "drawn by chance, within the song's rules"})
+    # what reaches for which words: the machine's taste, for the words it takes in or swaps
+    taste = [dict(r, text=f"what your machine reaches for: {r['text']}") for r in mood + why]
+    changes = word_changes(v)
     mine = []
     if "mode" in v.applied and (v.params.leanings or {}).get("mood_weights") != (v.generated.leanings or {}).get("mood_weights"):
         mine.append({"kind": "you", "text": f"leaning {'darker' if v.params.mode in MINOR else 'lighter'} for the "
@@ -816,11 +952,88 @@ def words_card(v: Version) -> dict:
     mine += [{"kind": "you", "text": f"{_word_place(p)}: chosen by you", "path": p}
              for p in v.mine("words.") if p not in v.held]
     if v.held:
-        mine.append({"kind": "you", "text": "the words kept as they were drawn: kept by you",
-                     "path": sorted(v.held)[0]})
-    n = len(bank.get("verses", []))
-    return _card(v, "words", "The words", f"drawn from the song's {n} verses, within its rules",
-                 f"leaning {lean_words(lean)}", mine + _unique(why), ["words."])
+        mine.append({"kind": "you", "text": "the words kept as they are: kept by you", "path": sorted(v.held)[0]})
+    before = "the song's own words, as it began" if v.context.parent_record is None else "the version before's words"
+    n = len([c for c in changes if c["kind"] != "rule"])
+    value = f"{before}, handed down" + (f", with {number(n)} change{'s' if n != 1 else ''} this time" if n else " as they were")
+    lineage = {"kind": "lineage", "text": "the rest handed down as they were: a song's words change a little at a time"}
+    return _card(v, "words", "The words", value, f"your machine's picks lean {lean_words(lean).replace('a little ', '')}"
+                 if lean_words(lean) != "no particular way" else "", mine + changes + [lineage] + _unique(taste),
+                 ["words."])
+
+
+CHANGE_WORDS = {"added": "taken in", "left out": "left out", "swapped": "changed", "rule": "changed by the song's rule",
+                "drawn": "drawn afresh", "learned": "learned", "forgot": "forgotten", "dropped": "dropped"}
+
+
+def _said(text: str) -> str:
+    """The program's own why, in the page's words."""
+    import re
+
+    text = re.sub(r"\s*\([^()]*(?:%|appetite)[^()]*\)", "", str(text or ""))  # the clock's odds: code, not reasons
+    text = re.sub(r"\s*\(the song's rule; the seed sings its canon every time\)", "", text.replace("bank's", "song's"))
+    for code, plain_ in (("this machine's", "your machine's"), ("this machine", "your machine"),
+                         ("the bank", "the song"), ("the seed's", "the song's first"), ("the seed", "the song as it began"),
+                         ("canon", "last couplet")):
+        text = text.replace(code, plain_)
+    return text
+
+
+def _named(value) -> str:
+    return str(value).replace("-", "") if value else ""
+
+
+def word_changes(v: Version) -> list[dict]:
+    """What the program changed in the words this time, and why (evolve's log, choose_params(log=))."""
+    out = []
+    for e in v.changes:
+        if not isinstance(e, dict) or e.get("what") != "words":
+            continue
+        change = CHANGE_WORDS.get(e.get("change"), e.get("change") or "changed")
+        fr, to = _named(e.get("from")), _named(e.get("to"))
+        what = "" if e.get("change") == "rule" else f"{fr} for {to}" if fr and to else to or fr
+        where = e.get("where") or "the words"
+        out.append({"kind": "rule" if e.get("change") == "rule" else "time",
+                    "text": f"{where} {change}{f' ({what})' if what else ''}: {_said(e.get('why'))}", "where": where})
+    return out
+
+
+def tune_changes(v: Version) -> list[dict]:
+    """What the program changed in the tune this time, and why."""
+    out = []
+    for e in v.changes:
+        if not isinstance(e, dict) or e.get("what") != "tune":
+            continue
+        change = CHANGE_WORDS.get(e.get("change"), e.get("change") or "changed")
+        out.append({"kind": "time", "text": f"{_said(e.get('about') or 'a small change')} {change}: {_said(e.get('why'))}"})
+    return out
+
+
+def handed(v: Version) -> dict[tuple[str, int], bool]:
+    """Which sung parts are as the version before held them: (block, nth) -> True where handed down."""
+    from . import evolve
+
+    now = v.params.words or {}
+    if not now:
+        return {}
+    base = v.context.base
+    was = getattr(base, "words", None) or evolve.seed_words(v.context.genome, base)
+    out: dict[tuple[str, int], bool] = {}
+    for i, entry in enumerate(now.get("verses", [])):
+        old = was.get("verses", [])
+        out[("verse", i)] = i < len(old) and old[i] == entry
+    refrain, old_refrain = now.get("refrain", {}), was.get("refrain", {})
+    same_slots = refrain.get("slots") == old_refrain.get("slots")
+    couplets, old_couplets = refrain.get("couplets", []), old_refrain.get("couplets", [])
+    for i, entry in enumerate(couplets):
+        out[("refrain", i)] = same_slots and i < len(old_couplets) and old_couplets[i] == entry
+    out[("refrain", len(couplets))] = same_slots  # the last, which always sings the song's own last couplet
+    for j, entry in enumerate(now.get("bridge", [])):
+        old = was.get("bridge", [])
+        out[("bridge", j)] = j < len(old) and old[j] == entry
+    if now.get("tag"):
+        out[("tag", 0)] = now.get("tag") == was.get("tag")
+    return out
 
 
 def _word_place(path: str) -> str:
@@ -867,10 +1080,14 @@ def variants_card(v: Version) -> dict | None:
     on = sum(bool(i["value"]) for i in items)
     value = (f"{number(on)} small change{'s' if on != 1 else ''} to the tune, handed down or found here"
              if on else "the tune as it was written")
-    why = choice_reasons(v, ["variants"], lambda p, a, b: "your machine's own way with the tune",
-                         lambda p, a, b: "time moves the tune's small changes slowly",
-                         label=lambda p, value: "the tune's small changes")
-    return _card(v, "variants", "The melody", value, "", _finish(v, why, "variants"), ["variants."], variants=items)
+    why = tune_changes(v)  # what changed this time, and why (songbird.evolve's own reasons)
+    if not why:
+        why = [{"kind": "lineage", "text": "handed down as the version before sang it; a tune changes a little at a "
+                                           "time, a note now and then"}] if on else []
+    mine = [{"kind": "you", "text": "dropped by you: " + next((i["label"] for i in items if i["path"] == p), p),
+             "path": p} for p in v.mine("variants.")]
+    return _card(v, "variants", "The melody", value, "", mine + _finish(v, why, "variants"), ["variants."],
+                 variants=items)
 
 
 def machine_card(v: Version, label: str, quiet: bool) -> dict:
@@ -908,7 +1125,9 @@ def words_view(v: Version) -> list[dict]:
     drawn = v.lyrics is not None
     bank = genome.source.get("bank") or {}
     verses = {e["id"]: e for e in bank.get("verses", [])}
-    lead = leader(v.params.band)
+    lead = leader(v.params.band, v.params.style)
+    kept_from = handed(v) if drawn else {}
+    changed_at = {c["where"]: c["text"] for c in word_changes(v)}
     sung = iter(lyrics.sections)
     seen: dict = {}
     out = []
@@ -938,11 +1157,23 @@ def words_view(v: Version) -> list[dict]:
                     "rare" if entry.get("rarity") == "rare" else None]
         if block == "refrain" and s.slots.get("question"):
             tags = [f"asks who {s.slots['question']}"]
-        how = ("kept by you" if kept else "chosen by you") if mine else \
-            ("drawn by chance" if drawn else "the song's own words")
+        note = ""
+        if mine:
+            how = "kept by you" if kept else "chosen by you"
+        elif not drawn:
+            how = "the song's own words"
+        elif kept_from.get((block, nth), True):
+            how = "handed down"
+        else:
+            how = "new this time"
+            places = {"verse": [f"verse {nth + 1}"], "refrain": [f"refrain {nth + 1}", f"refrain {nth + 1}'s couplet"],
+                      "bridge": ["bridge 2", "the bridge's extra stanza"] if nth else ["the bridge's"],
+                      "tag": ["tag", "the tag's syllable"]}.get(block, [])
+            note = next((text for where, text in changed_at.items()
+                         if any(where == p or where.startswith(p) for p in places)), "")
         item.update({"block": block, "nth": nth, "id": s.id, "lines": [readable(line) for line in s.lines],
-                     "tags": [t for t in tags if t], "how": how, "mine": mine, "kept": kept, "path": path,
-                     "changeable": bool(drawn and bank)})
+                     "tags": [t for t in tags if t], "how": how, "note": note, "mine": mine, "kept": kept,
+                     "path": path, "changeable": bool(drawn and bank)})
         out.append(item)
     return out
 
@@ -980,11 +1211,11 @@ def keep_words(v: Version) -> dict:
 def view(ctx: Context, v: Version, phrasings: list[dict] | None = None) -> dict:
     """Everything the page draws for a version: the header, the words, the cards, the problems."""
     phrasings = phrasings or []
-    cards = [key_card(v), tempo_card(v), shape_card(v), band_card(v), mix_card(v), singer_card(v, phrasings),
-             words_card(v), choir_card(v)]
+    cards = [style_card(v), key_card(v), tempo_card(v), shape_card(v), band_card(v), mix_card(v),
+             singer_card(v, phrasings), words_card(v), choir_card(v)]
     extra = variants_card(v)
     if extra:
-        cards.insert(3, extra)
+        cards.insert(4, extra)
     cards += other_cards(v)
     cards.append(machine_card(v, ctx.machine_label(), ctx.quiet))
     if v.offset:  # the same choices today: what moving the day changed, the person's edits and all
@@ -1044,7 +1275,8 @@ def timeline(ctx: Context, days: int = TIMELINE_DAYS) -> dict:
     vhash = (voice if voice is not None else harvest.Voice()).hash
     series = drift_mod.series(ts, vhash)
     names = list(series)
-    lanes: dict = {k: [] for k in ("key", "mode", "tonic", "tempo", "verses", "parts", "pattern", "lead", "lean")}
+    lanes: dict = {k: [] for k in ("key", "mode", "tonic", "tempo", "verses", "parts", "pattern", "lead", "lean",
+                                   "style")}
     for i, t in enumerate(ts):
         d = drift_mod.Drift(t=float(t), **{view: {name: float(series[name][view][i]) for name in names}
                                            for view in drift_mod.VIEWS}, hash=vhash)
@@ -1059,10 +1291,14 @@ def timeline(ctx: Context, days: int = TIMELINE_DAYS) -> dict:
         lanes["parts"].append(" ".join(k for k in ("intro", "turn", "break", "bridge2", "tag", "outro", "pairs")
                                        if parts.get(k)))
         lanes["pattern"].append(p.band.pattern)
-        lanes["lead"].append(leader(p.band) or "")
+        lanes["lead"].append(leader(p.band, p.style) or "")
         lanes["lean"].append(round(float(np.log2(mood.get("light", 1.0) / max(mood.get("dark", 1.0), 1e-6))), 3))
+        lanes["style"].append(p.style.name or "ballad")
+    names_seen = {n for n in lanes["lead"] if n}
     return {"start": dates[0], "today": days, "dates": dates, "lanes": lanes,
-            "brightness": dict(variation.BRIGHTNESS), "patterns": PATTERNS, "players": PLAYERS,
+            "brightness": dict(variation.BRIGHTNESS), "patterns": PATTERNS,
+            "players": {n: player(n) for n in names_seen | set(PLAYERS)},
+            "styles": {k: STYLE_NAMES.get(k, k).split(",")[0] for k in STYLE_NAMES},
             "modes": {m: MODES[m][0] for m in MODES}}
 
 
@@ -1076,10 +1312,15 @@ def summary(ctx: Context, v: Version, who: str, name: str | None = None) -> dict
     first = next((readable(s.lines[0]).replace("*", "") for s in lyrics.sections if s.block == "verse" and s.lines), "")
     mix = MixParams.from_dict(p.mix or {})
     singer = singer_of(p)
+    style = p.style.name or "ballad"
+    lead = leader(p.band, p.style)
+    band = (f"the {player(lead)} leading" if p.band.lineup else
+            f"{PATTERNS.get(p.band.pattern, p.band.pattern)}, the {player(lead or 'band')} leading")
     return {"who": who, "name": name or "Yours",
-            "rows": {"Key": key_words(p.tonic, p.mode), "Tempo": f"{p.tempo:.0f} beats a minute",
+            "rows": {"Style": STYLE_NAMES.get(style, style).split(",")[0],
+                     "Key": key_words(p.tonic, p.mode), "Tempo": f"{p.tempo:.0f} beats a minute",
                      "Shape": shape_words(edits_mod.shape(ctx.genome, p.form)),
-                     "Band": f"{PATTERNS.get(p.band.pattern, p.band.pattern)}, the {player(leader(p.band) or 'band')} leading",
+                     "Band": band,
                      "Singer": "a low voice" if singer.shift <= -12 else "a high voice",
                      "Room": room_words(mix.rt60), "First line": first}}
 

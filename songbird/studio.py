@@ -362,7 +362,11 @@ class Studio:
         self.genome = genome_mod.load(self.genome_path)
         self.song_digest = hashlib.sha256(self.genome_path.read_bytes()).hexdigest()
         self.parent_record = record
-        parent_params = Params.from_dict(record["params"]) if record else None
+        from .cli import _parent
+
+        # as `songbird render --parent` reads it: its generation from the record, and the words it sang as the
+        # words it holds where it is from before its lineage held words
+        parent_params = _parent(record, self.genome) if record else None
         quiet = False
         if machine == "here":
             cached = harvest.load()
@@ -506,7 +510,8 @@ class Studio:
         with contextlib.redirect_stdout(io.StringIO()):
             record = render_one(self.genome, v.params, folder / "rendition.flac", voice=v.voice, drift=v.drift,
                                 lyrics=v.lyrics, phrasing_json=v.phrasing_json, parent=self.parent_record,
-                                packet_genome=self.genome_path, chosen_by_you=v.marks or None, progress=job.report)
+                                packet_genome=self.genome_path, changes=v.changes if v.drift is not None else None,
+                                chosen_by_you=v.marks or None, progress=job.report)
         (folder / "rendition.json").write_text(json.dumps(record, indent=2) + "\n")
         link(folder / "rendition.flac", self.cache / f"{key}.flac")
         job.url = f"/audio/{key}.flac"
@@ -834,6 +839,12 @@ class Handler(BaseHTTPRequestHandler):
 class Server(ThreadingHTTPServer):
     request_queue_size = 128  # the page asks for several things at once, and a player many ranges
     daemon_threads = True
+
+    def handle_error(self, request, client_address) -> None:
+        """A browser closing a connection it kept open (a player seeking, a tab closing) is no error."""
+        if isinstance(sys.exc_info()[1], (ConnectionResetError, BrokenPipeError, TimeoutError)):
+            return
+        super().handle_error(request, client_address)
 
 
 def serve(studio: Studio, port: int = PORT, tries: int = 20) -> ThreadingHTTPServer:

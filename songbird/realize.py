@@ -122,6 +122,9 @@ def choose_params(genome: Genome, parent: Params | None = None, voice: Voice | N
         from .edits import Overrides
 
         overrides = overrides if isinstance(overrides, Overrides) else Overrides(genome, overrides)
+        asked, options = overrides.style()  # a style a person chose goes in by name, bringing its band and tempo
+        style = style or asked
+        arrange = {**(arrange or {}), **options} or None
     if voice is None and drift is None and style is None and not arrange:
         chosen = parent if parent is not None else Params.from_dict(genome.seed_params)
         chosen = chosen if form is None else replace(chosen, form=tuple(form))
@@ -131,6 +134,9 @@ def choose_params(genome: Genome, parent: Params | None = None, voice: Voice | N
 
     if overrides is None:
         return choose(genome, parent, voice, drift, seed, log=log, form=form, style=style, arrange=arrange)
+    if voice is None and drift is None:  # a style with no machine: the parent played in it, then the person's
+        return overrides.params(choose(genome, parent, voice, drift, seed, log=log, form=form, style=style,
+                                       arrange=arrange))
     return overrides.finish(choose(genome, parent, voice, drift, seed, log=log, form=form, pin=overrides.pin,
                                    style=style, arrange=arrange))
 

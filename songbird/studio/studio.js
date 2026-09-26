@@ -192,7 +192,8 @@ function renderWords() {
     if (w.sung) {
       if (w.id && w.block === "verse") meta.append(h("span", {}, w.id));
       for (const t of w.tags || []) meta.append(h("span", { class: "tag rule" }, t));
-      meta.append(w.mine ? tag("you", w.how) : tag(w.how === "drawn by chance" ? "chance" : "song", w.how));
+      const kind = w.mine ? "you" : { "handed down": "lineage", "new this time": "time", "drawn by chance": "chance" }[w.how] || "song";
+      meta.append(tag(kind, w.how));
     }
     const tools = h("span", { class: "sec-tools" }, play);
     const key = `${w.block}.${w.nth}`;
@@ -204,7 +205,8 @@ function renderWords() {
     }
     const sec = h("div", { class: `sec${w.sung ? "" : " instrumental"}${w.mine ? " mine" : ""}`, id: `sec-${w.index}` },
       h("div", { class: "sec-head" }, h("span", { class: "sec-name" }, w.label), meta, tools),
-      lines(w.lines));
+      lines(w.lines),
+      w.note ? h("p", { class: "sec-note" }, w.note) : null);
     if (state.choose && state.choose.key === key && state.options) sec.append(chooser(w, state.options));
     box.append(sec);
   }
@@ -403,19 +405,32 @@ function editor(c) {
     }
     case "band": {
       const band = c.band;
-      const players = h("div", { class: "players" }, b["band.players"].options.map((n) => {
+      // who plays: the style's own band, or the song's own eight
+      const players = h("div", { class: "players" }, Object.keys(c.players).map((n) => {
         const box = h("input", { type: "checkbox" });
         box.checked = band[n] > 0.02;
         box.addEventListener("change", () => setEdit(`band.${n}`, box.checked ? null : 0));
         return h("label", {}, box, c.players[n] || n);
       }));
       return h("div", {},
-        chips("How the band plays", b["band.pattern"].options, band.pattern, (x) => setEdit("band.pattern", x), { text: s.patterns }),
-        chips("Who leads where nobody sings", b["band.lead"].options, band.lead, (x) => setEdit("band.lead", x), { text: c.players }),
+        c.styled ? null : chips("How the band plays", b["band.pattern"].options, band.pattern, (x) => setEdit("band.pattern", x), { text: s.patterns }),
+        c.styled ? null : chips("Who leads where nobody sings", b["band.lead"].options, band.lead, (x) => setEdit("band.lead", x), { text: c.players }),
         slider("How busy", "band.density", band.density, b["band.density"], (x) => `${Math.round(x * 100)}%`, ["sparse", "busy"]),
         slider("How bright", "band.brightness", band.brightness, b["band.brightness"], (x) => `${Math.round(x * 100)}%`, ["dark and soft", "bright"]),
         h("div", { class: "control" }, h("label", {}, "Who plays"), players),
-        h("p", { class: "hint" }, "With nobody playing, the voice sings alone."));
+        h("p", { class: "hint" }, c.styled ? "The style chooses who plays and who leads; change the style to change the band. With nobody playing, the voice sings alone."
+          : "With nobody playing, the voice sings alone."));
+    }
+    case "style": {
+      const st = c.style;
+      return h("div", {},
+        chips("The style", Object.keys(c.styles), st.name, (x) => setEdit("style.name", x), { text: c.styles }),
+        chips("Its feel", Object.keys(c.feels), st.feel, (x) => setEdit("style.feel", x), { text: c.feels }),
+        chips("How it ends", Object.keys(c.endings), st.ending, (x) => setEdit("style.ending", x), { text: c.endings }),
+        chips("Backing voices", Object.keys(c.backings), st.backing, (x) => setEdit("style.backing", x), { text: c.backings }),
+        chips("The last refrain", ["lift", "no lift"], st.lift ? "lift" : "no lift", (x) => setEdit("style.lift", x === "lift"),
+          { text: { "lift": "a whole step up", "no lift": "in the same key" } }),
+        h("p", { class: "hint" }, "A style brings its own band, its pace and its feel; a version moves one style at a time, so its children will drift back toward your machine's."));
     }
     case "mix": {
       const m = c.mix;
@@ -493,7 +508,7 @@ function renderTimeline() {
   const n = tl.dates.length;
   const left = 70, right = 10, laneH = 22, gap = 8;
   const x = (i) => left + (i / (n - 1)) * (width - left - right);
-  const lanes = [["Key", "key"], ["Tempo", "tempo"], ["Verses", "verses"], ["Band", "pattern"], ["Lead", "lead"], ["Words", "lean"]];
+  const lanes = [["Style", "style"], ["Key", "key"], ["Tempo", "tempo"], ["Verses", "verses"], ["Lead", "lead"], ["Words", "lean"]];
   const height = lanes.length * (laneH + gap) + 26;
   const root = svg("svg", { class: "timeline", viewBox: `0 0 ${width} ${height}`, width: "100%", height, role: "img",
     "aria-label": "Six years of your machine's song: key, tempo, verses, band, lead and the words' leaning" });
@@ -527,6 +542,7 @@ function renderTimeline() {
       else if (key === "pattern") tint = PATTERN_TINT[value] ?? 0.5;
       else if (key === "verses") tint = 0.3 + 0.2 * (value - 2);
       else if (key === "lead") tint = { whistle: 0.35, fiddle: 0.6, lute: 0.85 }[value] ?? 0.5;
+      else if (key === "style") tint = value === "ballad" ? 0.3 : 0.75;
       const w = Math.max(1, x(b - 1) - x(a) + (width - left - right) / n);
       root.append(svg("rect", { x: x(a), y, width: w, height: laneH, rx: 3, fill: key === "key" ? time : accent,
         "fill-opacity": (0.15 + 0.6 * tint).toFixed(2) }, svg("title", {}, `${tl.dates[a]} to ${tl.dates[b - 1]}: ${label(key, value, tl)}`)));
@@ -552,6 +568,7 @@ function label(key, value, tl, w) {
   if (key === "pattern") return (tl.patterns[value] || value).replace(/^a /, "");
   if (key === "lead") return tl.players[value] || value;
   if (key === "verses") return `${value} verses`;
+  if (key === "style") return ((tl.styles || {})[value] || value).replace(/^(a|the) /, "");
   return String(value);
 }
 

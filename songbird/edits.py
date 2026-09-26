@@ -48,6 +48,17 @@ from .genome import Genome
 from .synth.mixing import RANGES, MixParams
 
 MIX = ("space", "width", "forward", "intimacy")
+# The arrangement's options a person may set (songbird.style.Style), each as the style's own choices go
+STYLE_OPTIONS = {"feel": ("straight", "swing", "shuffle", "twelve", "half", "double", "waltz", "six"),
+                 "ending": ("ring", "rit", "cold", "amen", "repeat"), "backing": ("", "oohs", "echo", "thirds", "gang"),
+                 "lift": bool}
+
+
+def instruments() -> tuple[str, ...]:
+    """Every instrument a band can have: the eight, and every other a style may bring."""
+    from .synth.instruments import known
+
+    return known()
 SHAPE = ("verses", "pairs", "intro", "turn", "break", "tag", "outro", "bridge2")
 WORDS = re.compile(r"words\.(verse|refrain)\.(\d+)|words\.(refrain|bridge|bridge2|tag)")
 
@@ -257,8 +268,22 @@ def check(genome: Genome, edits: dict, phrasings=()) -> tuple[dict, list[dict]]:
                 clean[path] = value
             elif path in ("band.density", "band.brightness"):
                 clean[path] = round(_number(value, 0.0, 1.0), 2)
-            elif path.startswith("band.") and path[5:] in INSTRUMENTS:
+            elif path.startswith("band.") and path[5:] in instruments():
                 clean[path] = round(_number(value, 0.0, 2.0), 2)
+            elif path == "style.name":
+                from .style import STYLES
+
+                if value not in STYLES:
+                    raise LookupError(f"the styles are {', '.join(sorted(STYLES))}")
+                clean[path] = value
+            elif path.startswith("style.") and path[6:] in STYLE_OPTIONS:
+                options = STYLE_OPTIONS[path[6:]]
+                if options is bool:
+                    clean[path] = bool(value)
+                elif value not in options:
+                    raise LookupError(f"the {path[6:]} is one of {', '.join(o or 'none' for o in options)}")
+                else:
+                    clean[path] = value
             elif path.startswith("mix.") and path[4:] in MIX:
                 lo, hi = RANGES[path[4:]]
                 clean[path] = round(_number(value, lo, hi), 2)
@@ -318,6 +343,22 @@ class Overrides:
             if values:
                 held = out.get(head)
                 held = held.to_dict() if hasattr(held, "to_dict") else dict(held or {})
+                if head == "band":
+                    # an instrument a style brought is in its lineup; one of the eight, where no style set one,
+                    # is a field of its own; one the band hasn't got can't be sat out
+                    lineup = dict(held.get("lineup") or {})
+                    for name in [k for k in values if k in instruments()]:
+                        gain = values.pop(name)
+                        if lineup and name in lineup:
+                            lineup[name] = gain
+                        elif not lineup and name in INSTRUMENTS:
+                            held[name] = gain
+                        else:
+                            problems.append(Problem(f"band.{name}", "this version's band has no such player"))
+                            continue
+                        applied.append(f"band.{name}")
+                    if lineup:
+                        held["lineup"] = lineup
                 out[head] = {**held, **values}
                 applied += [f"{head}.{k}" for k in values]
         variants = {p[9:]: v for p, v in e.items() if p.startswith("variants.")}
@@ -340,11 +381,29 @@ class Overrides:
             applied += done
         self.applied, self.problems = applied, problems
 
+    def style(self) -> tuple[str | None, dict]:
+        """The style asked for and the arrangement's options, which go in by name (choose_params(style=,
+        arrange=)), not pinned: a style brings its lineup, its tempo and its leans with it."""
+        options = {p[6:]: v for p, v in self.edits.items() if p.startswith("style.") and p != "style.name"}
+        return self.edits.get("style.name"), options
+
     def finish(self, params):
-        """The parameters with chance drawn again, if a roll was asked for."""
+        """The parameters with chance drawn again, if a roll was asked for; and which style edits took
+        effect (a feel the style can't play this song in doesn't)."""
         if self.edits.get("roll"):
             params = replace(params, seed=rolled(params.seed, self.edits["roll"]))
             self.applied = [*self.applied, "roll"]
+        style = getattr(params, "style", None)
+        for path, value in self.edits.items():
+            if not path.startswith("style.") or style is None:
+                continue
+            field = path[6:]
+            now = (style.name or "ballad") if field == "name" else getattr(style, field, None)
+            if now == value:
+                self.applied = [*self.applied, path]
+            else:
+                self.problems = [*self.problems, Problem(path, f"the {style.name or 'ballad'} style can't play "
+                                                               f"this song that way")]
         return params
 
     def params(self, params):
@@ -423,40 +482,56 @@ class Resolved:
 
 
 def resolve(genome: Genome, parent, voice, drift, edits: dict, *, seed: int | None = None,
-            phrasing_json: dict | None = None, trace: dict | None = None, day_chosen: bool = False) -> Resolved:
+            phrasing_json: dict | None = None, trace: dict | None = None, day_chosen: bool = False,
+            log: list | None = None) -> Resolved:
     """The rendition with a person's (checked) edits in place of the program's choices: the parameters
-    through choose_params(overrides=...), then the words, each chosen word kept only if the song's rules can
-    keep it beside the ones before it. trace receives the program's own arithmetic (variation.choose);
-    day_chosen marks the date as the person's; phrasing_json is the phrasing the edits chose, if any."""
+    through choose_params(overrides=...), a style by name; then the words: the ones the lineage holds
+    (Params.words, songbird.evolve), with each word a person chose put in its place and nothing else moved,
+    kept only if the song's rules can keep it beside the ones before it. The lineage then holds what is
+    sung (as `songbird render` sets it). trace receives the program's own arithmetic and log what it changed
+    in the tune and the words, with why (variation.choose); day_chosen marks the date as the person's;
+    phrasing_json is the phrasing the edits chose, if any."""
+    from . import evolve
     from .cli import words
     from .realize import choose_params
 
     sung_by_a_machine = voice is not None or drift is not None
     if voice is None and drift is None:
-        generated = choose_params(genome, parent, voice, drift, seed)
+        generated = choose_params(genome, parent, voice, drift, seed, log=log)
     else:
-        generated = variation.choose(genome, parent, voice, drift, seed, trace=trace)
+        generated = variation.choose(genome, parent, voice, drift, seed, trace=trace, log=log)
     applied: list[str] = ["date"] if day_chosen else []
     problems: list[dict] = []
     params = generated
     body = {k: v for k, v in edits.items() if k not in ("date", "phrasing") and not WORDS.fullmatch(k)}
+    if "style.feel" in body:  # a feel the style can't play this song in is said, not bent
+        from .style import STYLES, feels_for, of
+
+        name = body.get("style.name") or (generated.style.name or "ballad")
+        feels = feels_for(genome, STYLES.get(name) or of(generated.style))
+        if body["style.feel"] not in feels:
+            problems.append(Problem("style.feel", f"that style plays this song {' or '.join(sorted(feels))}, "
+                                                  f"not {body.pop('style.feel')}"))
     if body:
         overrides = Overrides(genome, body)
         params = choose_params(genome, parent, voice, drift, seed, overrides=overrides)
         applied += overrides.applied
         problems += overrides.problems
-    generated_lyrics = words(genome, generated, sung_by_a_machine=sung_by_a_machine)
+    generated_lyrics = words(genome, generated, sung_by_a_machine=sung_by_a_machine, voice=voice, drift=drift)
     lyrics = generated_lyrics
-    if (params.form, params.seed, params.leanings) != (generated.form, generated.seed, generated.leanings):
-        lyrics = words(genome, params, sung_by_a_machine=sung_by_a_machine)
+    if params is not generated:  # the person's choices may have moved the shape, and the words with it
+        lyrics = words(genome, params, sung_by_a_machine=sung_by_a_machine, voice=voice, drift=drift)
     chosen, trouble, wanted = pins(genome, params.form, edits)
     problems += trouble
+    kept: list[str] = []
     if chosen and lyrics is not None:
-        kept: list[str] = []
+        base = lyrics
         for path in wanted:
             trial = pins(genome, params.form, {p: edits[p] for p in [*kept, path]})[0]
             try:
-                attempt = arrange_mod.arrange(genome, params.form, params.seed, variation.leanings(params), trial)
+                attempt = arrange_mod.keep(genome, base, trial, variation.leanings(params))
+                if base.held:  # sung as held words, so the lineage can hand them down
+                    attempt = arrange_mod.sing(genome, params.form, arrange_mod.hold(genome, attempt))
             except arrange_mod.ArrangeError as e:
                 problems.append(Problem(path, str(e)))
                 continue
@@ -466,6 +541,10 @@ def resolve(genome: Genome, parent, voice, drift, edits: dict, *, seed: int | No
     elif chosen:
         problems += [Problem(p, "this song's words aren't drawn from a store of verses, so they can't be chosen")
                      for p in wanted]
+    if sung_by_a_machine and lyrics is not None and genome.source.get("bank"):
+        # the lineage holds what is sung: the person's words among them, else its own fitted to the form
+        params = replace(params, words=arrange_mod.hold(genome, lyrics) if kept
+                         else evolve.fitted(genome, params, voice, drift))
     if "phrasing" in edits and phrasing_json is not None:
         applied.append("phrasing")
     marks_ = marks(genome, generated, generated_lyrics, lyrics, applied, edits, phrasing_json)
@@ -510,6 +589,11 @@ def marks(genome: Genome, generated, generated_lyrics, final_lyrics, applied: li
             value = _sung(final_lyrics, path) or value
         elif path.startswith("variants."):  # every variant the program chose was sung: dropping one changes it
             was = int(path[9:]) < len(getattr(generated, "variants", None) or ())
+        elif path.startswith("band.") and path[5:] in instruments():  # a player's gain, in a lineup or of the eight
+            was = generated.band.gain(path[5:])
+        elif path.startswith("style."):
+            was = getattr(generated.style, path[6:], None)
+            was = (was or "ballad") if path == "style.name" else was
         else:
             was = variation.read(generated, path)
         out[path] = {"value": value, "was": was}
