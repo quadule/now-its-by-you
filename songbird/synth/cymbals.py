@@ -62,7 +62,7 @@ class Plate:
 
 
 RIDE = Plate(size=20.0, lowest=170.0, spacing=21.0, top=3500.0, t60=7.0, slope=0.4, wash_t60=(5.0, 1.8),
-             lines=(0.004, 0.021), stick=0.5, bloom=0.5, drain=2.0, correlation=0.75, gain=1.5)
+             lines=(0.004, 0.021), stick=0.5, bloom=0.5, drain=8.0, correlation=0.75, gain=1.5)
 CRASH = Plate(size=18.0, lowest=200.0, spacing=19.0, top=3500.0, t60=4.5, slope=0.4, wash_t60=(3.2, 1.2),
               lines=(0.003, 0.017), stick=0.3, bloom=1.4, drain=5.0, correlation=0.6, gain=2.0)
 HAT = Plate(size=14.0, lowest=300.0, spacing=26.0, top=3000.0, t60=2.8, slope=0.45, wash_t60=(2.0, 0.8),
@@ -83,7 +83,7 @@ IMPLEMENTS = {
     "stick": (0.00012, 0.0005, 1.0, 1.0),
     "rod": (0.0002, 0.0006, 0.6, 0.8),
     "brush": (0.0012, 0.002, 0.12, 0.35),
-    "mallet": (0.003, 0.004, 0.0, 0.15),
+    "mallet": (0.0008, 0.0012, 0.0, 0.15),  # felt on bronze: stiff, so far shorter than on a skin
 }
 
 
@@ -113,6 +113,15 @@ class Cymbal:
     taps: np.ndarray  # (2, 8): each microphone's mix of the lines
     signs: np.ndarray  # (8,): how the feed enters each line
     mix: np.ndarray  # (K + bell, 2): each microphone's mix of the modes
+    reference: float = 1.0  # the plate's motion at the peak of a full-force stroke: what the bloom is measured by
+
+
+def _pair_of_microphones(make: np.random.Generator, count: int) -> np.ndarray:
+    """Two overhead microphones' mixes of `count` sources: the second hears nearly what the first does (the
+    same signs but for a fifth of them, each a little louder or softer), as an overhead pair does."""
+    first = make.uniform(0.4, 1.0, count) * make.choice([-1.0, 1.0], count)
+    second = first * make.uniform(0.6, 1.0, count) * np.where(make.random(count) < 0.2, -1.0, 1.0)
+    return np.stack([first, second], axis=-1)
 
 
 def make_cymbal(plate: Plate, make: np.random.Generator, sr: int, size: float = 1.0) -> Cymbal:
@@ -136,10 +145,17 @@ def make_cymbal(plate: Plate, make: np.random.Generator, sr: int, size: float = 
     lines = np.exp(np.linspace(np.log(plate.lines[0]), np.log(plate.lines[1]), 8)) * scale
     lines = np.round(lines * np.exp(make.uniform(-0.12, 0.12, 8)) * sr).astype(np.int64)
     lines = lines + np.arange(8)  # never two alike
-    taps = make.uniform(0.5, 1.0, (2, 8)) * make.choice([-1.0, 1.0], (2, 8))
+    taps = np.ascontiguousarray(_pair_of_microphones(make, 8).T)
     signs = make.choice([-1.0, 1.0], 8)
-    mix = make.uniform(0.4, 1.0, (len(freqs) + len(bell), 2)) * make.choice([-1.0, 1.0], (len(freqs) + len(bell), 2))
-    return Cymbal(freqs, t60s, patterns, pair, bell, lines, taps, signs, mix)
+    mix = _pair_of_microphones(make, len(freqs) + len(bell))
+    cymbal = Cymbal(freqs, t60s, patterns, pair, bell, lines, taps, signs, mix)
+    # the plate's motion at the peak of a full-force stick stroke on its bow: what the bloom is measured by, so a
+    # cymbal's bloom depends on how it is struck and how its strokes pile up, never on the rest of the part
+    radiation = (freqs / 1000.0) ** 0.75
+    amps = _contact(freqs, _contact_time(1.0, "stick")) * radiation * patterns["bow"] / np.sqrt(len(freqs) / 100.0)
+    motion = struck.ring(freqs, t60s, [0.0], amps[None, :], sr, int(0.03 * sr))
+    cymbal.reference = float(np.max(np.abs(motion))) + 1e-12
+    return cymbal
 
 
 def _contact(freqs: np.ndarray, contact: float) -> np.ndarray:
@@ -245,15 +261,16 @@ def play(plate: Plate, hits: list[Hit], sr: int, length: int, rng: np.random.Gen
         amps[j, k:] = h.vel * bell_level * spectrum[k:] * rng.uniform(0.7, 1.0, len(bell)) * 3.0
         burst_levels[j] = h.vel ** 1.6 * wash_level * IMPLEMENTS[h.implement][3]  # harder is brighter
     times = np.array([h.time for h in hits])
-    # the loud phase drains the low modes into the high ones: extra damping that follows the plate's energy
+    # The loud phase drains energy into the wash, from the strike's high partials most (their energy is what
+    # climbs first; the ride's ping rings down into its wash while its gong stays): extra damping that follows
+    # the plate's energy, weighted by frequency. A hand or a pedal damps every mode alike, on a track of its own.
     energy = _energy(times, np.array([h.vel * ZONES[h.zone][2] for h in hits]) ** 2, sr, length, 0.08)
-    drain = plate.drain * energy
-    total = drain if damp is None else drain + damp
     # three outputs: the two microphones, and the plate's motion as a whole (for the nonlinear feed)
     mix = np.concatenate([cymbal.mix, np.ones((len(all_freqs), 1))], axis=1)
-    rung = struck.ring(all_freqs, all_t60, times, amps, sr, length, mix=mix, damp=total)
+    rung = struck.ring(all_freqs, all_t60, times, amps, sr, length, mix=mix, damp=plate.drain * energy,
+                       dweight=all_freqs / 1000.0, damp2=damp)
     out += rung[:, :2]
-    feed = _feed(plate, hits, rung[:, 2], burst_levels, sr, length, rng, brightness)
+    feed = _feed(plate, hits, rung[:, 2] / cymbal.reference, burst_levels, sr, length, rng, brightness)
     wash = _wash(plate, cymbal, feed, sr, length, damp, wear, brightness)
     out += wash
     out += _ticks(hits, sr, length, rng, brightness)
@@ -272,8 +289,10 @@ def _energy(times: np.ndarray, levels: np.ndarray, sr: int, length: int, tau: fl
 
 def _feed(plate: Plate, hits: list[Hit], motion: np.ndarray, burst_levels: np.ndarray, sr: int, length: int,
           rng: np.random.Generator, brightness: float) -> np.ndarray:
-    """What drives the wash: each strike's burst (as bright as the contact is short), and the low modes'
-    motion squared and cubed (the plate's nonlinearity passing their energy upward)."""
+    """What drives the wash: each strike's burst (as bright as the contact is short), and the modes' motion
+    (against a full-force stroke's) squared and cubed, and that again: the plate's nonlinearity passing
+    energy upward in steps, so even a mallet's low modes, piling up in a roll, reach the top. The motion is
+    held under about two and a half times a full stroke's (the cascade saturates)."""
     feed = np.zeros(length)
     for h, level in zip(hits, burst_levels):
         if level <= 0.0:
@@ -289,23 +308,12 @@ def _feed(plate: Plate, hits: list[Hit], motion: np.ndarray, burst_levels: np.nd
         pole = np.exp(-2.0 * np.pi * cut / sr)
         feed[i:i + m] += lfilter([1.0 - pole], [1.0, -pole], grain) * level * plate.stick
     if plate.bloom > 0.0 and np.any(motion):
-        reference = _reference(motion, hits, sr)
-        u = motion / reference
-        feed += plate.bloom * (0.6 * u * u + 0.4 * u * u * u) * 0.5
+        u = motion / np.sqrt(1.0 + (motion / 2.5) ** 2)
+        v = 0.6 * u * u + 0.4 * u * u * u
+        feed += plate.bloom * (v + 0.5 * v * v) * 0.5
     # nothing below the modes' reach enters the wash
     sos = butter(2, 2500.0 + 1000.0 * brightness, btype="highpass", fs=sr, output="sos")
     return sosfilt(sos, feed)
-
-
-def _reference(motion: np.ndarray, hits: list[Hit], sr: int) -> float:
-    """The plate's motion a full-force strike would give: the loudest hit's early peak over its velocity."""
-    best = 1e-9
-    for h in hits:
-        i = int(round(h.time * sr))
-        seg = motion[i:i + int(0.02 * sr)]
-        if len(seg) and h.vel > 0.05:
-            best = max(best, float(np.max(np.abs(seg))) / h.vel)
-    return best
 
 
 def _wash(plate: Plate, cymbal: Cymbal, feed: np.ndarray, sr: int, length: int, damp: np.ndarray | None,
@@ -342,13 +350,13 @@ def _ticks(hits: list[Hit], sr: int, length: int, rng: np.random.Generator, brig
             continue
         burst = sosfilt(sos, rng.standard_normal(m + 32))[32:] * np.exp(-np.arange(m) / (0.0003 * sr))
         pan = rng.uniform(0.35, 0.65)
-        out[i:i + m, 0] += burst * level * h.vel ** 1.5 * 0.2 * np.sqrt(2 * (1 - pan))
-        out[i:i + m, 1] += burst * level * h.vel ** 1.5 * 0.2 * np.sqrt(2 * pan)
+        out[i:i + m, 0] += burst * level * h.vel ** 1.5 * 2.0 * np.sqrt(2 * (1 - pan))
+        out[i:i + m, 1] += burst * level * h.vel ** 1.5 * 2.0 * np.sqrt(2 * pan)
     return out
 
 
 def sizzle(times_open: list[tuple[float, float, float]], strikes: list[Hit], sr: int, rng: np.random.Generator,
-           damping: float = 30.0) -> list[Hit]:
+           damping: float = 4.0) -> list[Hit]:
     """Half-open hi-hat plates rattling: a stream of small collisions, most while the plates move most (after a
     strike), fewer the wider the pedal lets them apart. times_open: (start, end, openness) of each half-open
     stretch. Returns the collisions as hits."""
@@ -363,7 +371,7 @@ def sizzle(times_open: list[tuple[float, float, float]], strikes: list[Hit], sr:
         for h in struck_here:
             after = t >= h.time
             energy[after] += h.vel ** 2 * np.exp(-2.0 * damping * (t[after] - h.time))
-        rate = 280.0 * (1.0 - openness) * np.clip(energy, 0.0, 1.5)
+        rate = 600.0 * (1.0 - openness) * np.clip(energy, 0.0, 1.5)
         counts = rng.poisson(rate * step)
         for i in np.flatnonzero(counts):
             for _ in range(int(counts[i])):
