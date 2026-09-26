@@ -203,8 +203,10 @@ def test_every_instrument_finds_its_strip():
     assert mixing.role_of("synthlead") == "synth" and mixing.role_of("lead") == "voice"
     expected = {"keys": "keys", "mallets": "keys", "organ": "organ", "pad": "organ", "drums": "drum",
                 "percussion": "drum", "reed": "reed", "bass": "bass"}
-    # sustained keyboards take the organ's strip, whatever family their maker filed them under
-    specific = {"organ": "organ", "harmonium": "organ", "synth-pad": "organ"}
+    # sustained keyboards take the organ's strip, whatever family their maker filed them under; a kit, a banjo
+    # and a mandolin have strips of their own
+    specific = {"organ": "organ", "harmonium": "organ", "synth-pad": "organ", "kit": "kit", "banjo": "banjo",
+                "mandolin": "mandolin"}
     for name in instruments.known():
         role = mixing.role_of(name)
         assert role in mixing.ROLES and role not in ("voice", "choir"), name
@@ -216,3 +218,14 @@ def test_every_instrument_finds_its_strip():
     assert mixing.role_of("cello") == "strings"  # a cello keeps its low strings: no fiddle's 180 Hz high-pass
     assert mixing.role_of("viola") == "strings" and mixing.role_of("music-box") == "keys"
     assert mixing.role_of("nylon") == "guitar" and mixing.role_of("ukulele") == "guitar"
+    # the banjo and mandolin comp: their strips don't step back under the voice as the lute's doubling does
+    assert mixing.role_of("banjo") == "banjo" and mixing.role_of("mandolin") == "mandolin"
+    assert mixing.ROLES["banjo"].duck == 0.0 and mixing.ROLES["mandolin"].duck == 0.0
+    assert mixing.role_of("melody") == "lute" and mixing.ROLES["lute"].duck > 0.0
+    # a kit keeps its kick (a 30 Hz high-pass, not the frame drum's 40) and its cymbals' top
+    assert mixing.role_of("kit") == "kit" and mixing.role_of("drummachine") == "drum"
+    hp = dict((band[0], band[1]) for band in mixing.ROLES["kit"].eq)
+    assert hp["hp"] <= 30 and "high" not in hp and "lp" not in hp
+    assert mixing.ROLES["kit"].comp[2] > mixing.ROLES["drum"].comp[2]  # slower to grab: the strokes keep their edge
+    for name in ("claps", "stomps", "cajon", "shaker", "tambourine"):
+        assert mixing.role_of(name) == "drum", name  # the frame drum's strip, its 40 Hz high-pass
