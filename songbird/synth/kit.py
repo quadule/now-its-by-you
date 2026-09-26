@@ -769,7 +769,7 @@ ARTICULATIONS = {
 
 SPEC = {
     "kit": dict(
-        family="drums", role="percussion", register=None, place=(0.05, 0.8), level=0.58, poly=True,
+        family="drums", role="percussion", register=None, place=(0.05, 0.8), level=0.55, poly=True,
         articulations=ARTICULATIONS,
         about="an acoustic drum kit (kick, snare, three toms, hi-hat, ride, crash) played with sticks, brushes, "
               "rods or mallets, heard from the drummer's seat",
