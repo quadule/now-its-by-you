@@ -11,3 +11,6 @@ recordings/
 
 # API keys for the reference voices (ElevenLabs, Gemini), never in git
 .env
+
+# Parallel agents work in their own git worktrees here
+.claude/worktrees/
