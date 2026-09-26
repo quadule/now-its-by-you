@@ -805,8 +805,16 @@ def choir_card(v: Version) -> dict:
     where = listed([f"the {SECTIONS.get(s, s).lower()}" for s in sings])
     value = (f"{number(n)} voice{'s' if n != 1 else ''} from earlier versions join{'s' if n == 1 else ''} {where}"
              if n else "no voices from earlier versions yet")
-    return _card(v, "choir", "Voices before", value[0].upper() + value[1:],
-                 "stand-ins for now, until a recording carries its ancestors' voices",
+    parent = v.context.parent_record or {}
+    known = (1 + len(parent.get("lineage_singers") or [])) if parent.get("singer") else 0
+    if known and n:
+        own = min(known, n)
+        detail = (f"{'the version before sings' if own == 1 else f'the {number(own)} versions before sing'} in "
+                  f"{'its' if own == 1 else 'their'} own voice{'s' if own > 1 else ''}"
+                  + (f"; stand-ins sing the other {number(n - own)}" if n > own else ""))
+    else:
+        detail = "stand-ins for now: the versions before haven't left their voices"
+    return _card(v, "choir", "Voices before", value[0].upper() + value[1:], detail,
                  [{"kind": "lineage", "text": "one more for every version before this one, up to six"}], [])
 
 
