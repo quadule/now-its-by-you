@@ -416,3 +416,29 @@ measuring. It changed:
 - **A waltz or six-eight** makes the song half again as long at the same
   tempo; waltz styles take a slower tempo to compensate.
 - **Stand-ins** until the instrument modules land; see "Instruments".
+
+## Measured again with the learned voice and the real instruments (2026-09-26, morning)
+
+This is the same tour (ada on 2026-09-27, a verse and a refrain each), after the instrument
+modules and the learned voice landed on main. Whisper's words misheard on the finished mix
+(`tools/stylemeter.py --files renders/production/styles/tour --wer`):
+
+| Style | Now | Before (stand-ins, formant voice) |
+|---|---|---|
+| ballad | 1.4% | 29% |
+| lofi | 1.4% | 23% |
+| blues | 5.7% | 41% |
+| songwriter | 5.7% | 26% |
+| gospel | 8.6% | 34% |
+| stringband | 10.0% | 16% |
+| lullaby | 10.0% | 46% |
+| chamber | 10.0% | 71% |
+| shanty | 11.4% | 40% |
+| ambient | 11.4% | 60% |
+| synthfolk | 12.7% | 43% |
+| country | 15.7% | 20% |
+| indie | 17.7% | 33% |
+
+Every master is -14.0 LUFS with true peak at -1.1 dBTP or below. What was the open problem is
+mostly the old voice. Indie and country, with the kit and electric guitar under the voice, are
+where to look next.

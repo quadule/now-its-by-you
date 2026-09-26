@@ -155,9 +155,12 @@ Each item names the choice, and how to undo it or where it lives.
    - *Near the seed:* a seed's first child can only reach the ballad's neighbours, the shanty or
      chamber.
    - *Backing voices:* they are the lineage's own, so early generations sound thin.
-5. **Words are harder to hear in some styles**, the one open problem. Chamber, ambient and the
-   lullaby are the worst. Chamber stays near 50% misheard even a cappella, so the suspects are its
-   slow tempo, rubato and re-barring. Measured with the old voice; the learned one should help.
+5. **Words in the busier styles.** With the learned voice and the real instruments, Whisper
+   mishears 1.4% of the tour's words in the ballad and lo-fi, and 18% at worst, in indie (country
+   16%).
+   - *Before:* with the old voice and stand-ins it was 29% to 71%; chamber, the worst, is now 10%.
+   - *Where to look next:* indie's and country's kit and electric guitar in the voice's range.
+   - *The numbers:* renders/production/styles/tour-wer-learned.txt.
 6. **Instruments:**
    - *The kit:* sits at folk level (rock wants it louder) and is heard from the drummer's seat,
      with the hi-hat on the left.
@@ -210,5 +213,5 @@ Each item names the choice, and how to undo it or where it lives.
 - **Learn from singers.** Note shifts and ornaments (docs/MAKING-IT-THEIR-OWN.md). The variant
   record already takes `source: "sung:<name>"`.
 - **A second, larger house corpus** and a retrained voice. More data has helped at every step.
-- **Words in the quieter styles**, and deploying the sing page.
+- **Words in indie and country,** and deploying the sing page.
 - **The song's title.**
