@@ -107,6 +107,6 @@ A seventh set, if one is wanted, would start from the verses that sing most of t
 
 ## Running it again
 
-    uv run python tools/recording_sets.py measure    # sing and hear everything (renders/sets/, about 4 minutes)
+    uv run python tools/recording_sets.py measure    # sing and hear it all (renders/sets/, 4 minutes)
     uv run python tools/recording_sets.py choose     # write tools/sets/h-now-its-by-you.json
     uv run python tools/recording_sets.py report     # write this page

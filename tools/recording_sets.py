@@ -1,14 +1,15 @@
 """Recording sets: what singers are asked to sing, so that their takes hold the words the learned voice
-says worst, while each set stays a short song that is easy to sing.
+says worst, while each set stays a song that is easy to sing.
 
 The learned voice (VoiceParams' default, the "learned" engine) sings every entry of the song's bank, dry,
 at the seed's key and tempo: each verse with every word its slots can take, each refrain head with every
 question it can ask, every couplet, each bridge stanza and the tag, one section at a time. Whisper base.en
 hears each, never shown the lyric, and every sung word is scored heard or misheard by
 tools/intelligibility.py's alignment (a homophone, a number written as digits, or a compound heard as two
-words counts as heard: a listener couldn't tell them apart). The chooser then picks a few sets, each a song
-the bank's rules allow, that together put every word the voice gets wrong, and every verse it gets clearly
-wrong, in front of singers at least once, the worst twice.
+words counts as heard: a listener couldn't tell them apart). The chooser then picks six sets, each a song
+the bank's rules allow, that together hold every word the voice surely says wrong and every verse it gets
+clearly wrong at least once (targets() says what surely and clearly mean), and as many as fit of the other
+words it often mishears; docs/RECORDING-SETS.md tells what they hold and what they leave out.
 
     uv run python tools/recording_sets.py measure    # sing and hear everything (cached in renders/sets/)
     uv run python tools/recording_sets.py choose     # write tools/sets/h-now-its-by-you.json
@@ -20,6 +21,7 @@ Dev-only: measuring needs faster-whisper and its base.en model; choosing needs o
 from __future__ import annotations
 
 import argparse
+import datetime
 import hashlib
 import json
 import os
@@ -222,8 +224,8 @@ def hear(item: dict, seed: int) -> dict:
     sung = A.Sung(item["section"], genome.section(item["section"]).lyrics, item["entry"], {}, tuple(item["lines"]),
                   item.get("head"))
     lyrics = A.Lyrics((item["section"],), None, (sung,))
-    score = realize(genome, replace(choose_params(genome), form=(item["section"],)), lyrics=lyrics)
-    notes = sorted(score.part("voice"), key=lambda n: n.start)
+    rendition = realize(genome, replace(choose_params(genome), form=(item["section"],)), lyrics=lyrics)
+    notes = sorted(rendition.part("voice"), key=lambda n: n.start)
     voice = VoiceParams()
     y = sing(notes, SR, voice, seed=seed, lexicon=genome.lexicon)
     segs = schedule(notes, voice, genome.lexicon, throat.DURATIONS, seed=seed)
@@ -589,7 +591,8 @@ def _frames(genome, analysis: dict, want: dict[str, dict]) -> list[dict]:
             if c not in chosen:
                 chosen.append(c)
         rounds_ = _refrain_rounds(genome, [song.head_id, *middle, song.head_id], chosen, prefer)
-        bridge = [{"id": canon["id"], "slots": {name: prefer(name, words) for name, words in A.slot_words(canon).items()}}]
+        slots = {name: prefer(name, words) for name, words in A.slot_words(canon).items()}
+        bridge = [{"id": canon["id"], "slots": slots}]
         bridge += [{"id": extra, "slots": {}}] if extra else []
         tag = bank["tag"]["syllables"][i % len(bank["tag"]["syllables"])]
         frames.append({"id": sid, "form": list(form),
@@ -794,10 +797,10 @@ def report(genome, analysis: dict, data: dict) -> str:
     items_n = len(analysis["items"])
     hearings = sum(n for n, _ in rates.values())
     out = ["# Recording sets", "",
-           "*Made by `tools/recording_sets.py` (2026-09-26), for singing v2. The sets themselves are in "
-           "`tools/sets/h-now-its-by-you.json`.*", "",
-           f"Singers are asked to sing one of {A._number(len(sets))} sets: each is the whole song, three or four verses, "
-           "its refrains, the bridge and the tag, in one of the song's own shapes and within the bank's rules. "
+           f"*Made by `tools/recording_sets.py` ({datetime.date.today().isoformat()}), for singing v2. The sets "
+           "themselves are in `tools/sets/h-now-its-by-you.json`.*", "",
+           f"Singers are asked to sing one of {A._number(len(sets))} sets: each is the whole song, three or four "
+           "verses, its refrains, the bridge and the tag, in one of the song's own shapes and within the bank's rules. "
            "Between them the sets put in front of singers the words and verses the learned voice says worst, "
            "so that singers' takes are the data for making every word legible. The singers never hear that: "
            "each set's line for them only says what its verses are about.", ""]
@@ -817,8 +820,9 @@ def report(genome, analysis: dict, data: dict) -> str:
         rounds_ = w["refrain"]["rounds"]
         between = [f"{r['head']} (who {r['words'].get('question', '')})" for r in rounds_[1:-1]]
         couplets = [r["id"] for r in rounds_]
-        bridge = " + ".join([w["bridge"][0]["id"] + " (" + ", ".join(_label(x) for x in w["bridge"][0]["slots"].values())
-                             + ")"] + [b["id"] for b in w["bridge"][1:]])
+        first = w["bridge"][0]
+        bridge = " + ".join([f"{first['id']} ({', '.join(_label(x) for x in first['slots'].values())})"]
+                            + [b["id"] for b in w["bridge"][1:]])
         length = seconds(genome, singers_form(genome, s["form"]))
         out.append(f"| {s['id']} | {', '.join(verses)} | {', '.join(between)} | {', '.join(couplets)} | {bridge} | "
                    f"{w['tag']} | {_minutes(length)} |")
@@ -885,7 +889,8 @@ def report(genome, analysis: dict, data: dict) -> str:
             ", ".join(f"{v} {_pct(vr[v])}" for v in sorted(vr, key=vr.get)[:5]) + ".", ""]
     ent = analysis["entries"]
     out += ["**Refrains and bridges.** Heads: " +
-            ", ".join(f"{h} {_pct(ent.get(f'head:{h}', 0))}" for h in sorted(song.heads, key=lambda h: -ent.get(f"head:{h}", 0)))
+            ", ".join(f"{h} {_pct(ent.get(f'head:{h}', 0))}"
+                      for h in sorted(song.heads, key=lambda h: -ent.get(f"head:{h}", 0)))
             + ". Couplets: " +
             ", ".join(f"{c} {_pct(ent.get(f'couplet:{c}', 0))}" for c in
                       sorted(A.couplet_ids(genome), key=lambda c: -ent.get(f"couplet:{c}", 0))) +
@@ -948,7 +953,7 @@ def report(genome, analysis: dict, data: dict) -> str:
             "- The voice was heard dry. In the full mix the band covers some consonants further.",
             f"- Every set lasts {' or '.join(_minutes(x) for x in sorted(lengths))}, not three minutes (above).", "",
             "## Running it again", "",
-            "    uv run python tools/recording_sets.py measure    # sing and hear everything (renders/sets/, about 4 minutes)",
+            "    uv run python tools/recording_sets.py measure    # sing and hear it all (renders/sets/, 4 minutes)",
             "    uv run python tools/recording_sets.py choose     # write tools/sets/h-now-its-by-you.json",
             "    uv run python tools/recording_sets.py report     # write this page", ""]
     return "\n".join(out)
