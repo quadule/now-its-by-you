@@ -2,27 +2,27 @@
 
 A warm, intimate acoustic folk record with the voice clear and in front.
 Every stem goes through a channel strip chosen by its name (voice, choir1,
-guitar, fiddle...; anything unknown gets a sensible instrument strip), then
-onto one of three buses:
+guitar, fiddle...; anything unknown gets a plain instrument strip), then onto
+one of three buses:
 
-- the voice: cleaned below 80 Hz, a little mud and honk taken out, presence
-  and air added, sibilance tamed by its balance against the rest of the
-  voice, a compressor that only leans on the loudest syllables, a touch of
-  warmth; it has a plate of its own and stands nearer than the band;
+- the voice: cleaned below 80 Hz, a little honk and synthetic sizzle taken
+  out, a little presence added, sibilance tamed by its balance against the
+  rest of the voice, a compressor that only leans on the loudest syllables,
+  a touch of warmth; it has a plate of its own and stands nearer than the band;
 - the lineage choir: thinner and softer in the presence range than the
   lead, compressed as one group, wider, and further back in the room;
-- the band: each instrument set to its place in the balance by loudness
-  (so an instrument model that comes out louder or quieter still lands in
-  the same place), carved around the voice, then compressed together
-  gently; where the voice sings, the band's presence range dips a few dB,
-  and comes back when it stops.
+- the band: each instrument at the level and place the arrangement gave it
+  (the drift's balance included), its sound shaped and cleared around the
+  voice; together, set `forward` dB under the voice while it sings, and
+  there its presence range dips and the lute doubling the tune steps back,
+  both coming back when the voice stops.
 
 The buses share the room (room.py: this machine's RT60, tone and predelay),
-each at its own distance; its return is kept out of the low end, and dips a
-little while the voice sings so the words keep their edges. The sum is
-glued with a slow compressor, tilted brighter or darker, and optionally worn
-like an old tape. master.py then brings it to loudness under a true-peak
-ceiling.
+each at its own distance; its return is kept out of the low end and the top,
+and gives way a little while the voice sings so the words keep their edges.
+The sum is glued lightly, tilted brighter or darker, and optionally worn like
+an old tape. master.py then brings it to loudness under a true-peak ceiling.
+docs/MIX.md has the design and how it was measured.
 
 Everything a variation might turn is in MixParams, with its range.
 """
@@ -140,19 +140,19 @@ class Strip:
 ROLES: dict[str, Strip] = {
     # A plucked lute or cittern, doubling the tune under the words: boxiness and the voice's range cleared,
     # and it steps back while the voice sings the same notes.
-    "lute": Strip(eq=(("hp", 90), ("peak", 320, -2.0, 1.0), ("peak", 2800, -2.0, 0.9), ("high", 7500, -1.5)),
-                  drive=0.1, duck=4.0),
+    "lute": Strip(eq=(("hp", 90), ("peak", 320, -2.0, 1.0), ("peak", 2800, -2.0, 0.9)), drive=0.1, duck=4.0),
     # The main accompaniment: weight kept, boom and clang tamed, sparkle above the voice.
     "guitar": Strip(eq=(("hp", 75), ("peak", 200, -2.0, 1.1), ("peak", 2600, -2.0, 0.8), ("high", 9000, 1.0)),
                     comp=(8.0, 2.0, 0.015, 0.2), drive=0.1, send=0.9),
     "harp": Strip(eq=(("hp", 70), ("peak", 2800, -1.5, 0.9)), send=1.2),
-    # Round and even: mud out, no string noise, saturated so small speakers hear its pitch.
-    "bass": Strip(eq=(("hp", 35, 4), ("low", 100, 2.0), ("peak", 380, -2.0, 0.8), ("lp", 3000)),
+    # Round and even: no rumble, mud out, no string noise, saturated so small speakers hear its pitch.
+    "bass": Strip(eq=(("hp", 40, 4), ("peak", 380, -2.0, 0.8), ("lp", 3000)),
                   comp=(6.0, 3.0, 0.01, 0.15), drive=0.35, send=0.25),
-    "fiddle": Strip(eq=(("hp", 180), ("peak", 2500, -2.5, 1.0), ("high", 8000, -2.0)),
+    "fiddle": Strip(eq=(("hp", 180), ("peak", 2500, -2.5, 1.0), ("high", 8000, -1.0)),
                     comp=(8.0, 2.0, 0.02, 0.25), send=1.3, duck=2.0),
-    "whistle": Strip(eq=(("hp", 250), ("peak", 3000, -2.0, 1.4), ("high", 9000, -2.0)), send=1.3, duck=2.0),
-    "drum": Strip(eq=(("hp", 40), ("peak", 420, -2.0, 1.0), ("high", 8000, -1.5)), comp=(6.0, 3.0, 0.004, 0.12), send=0.6),
+    "whistle": Strip(eq=(("hp", 250), ("peak", 3000, -2.0, 1.4), ("high", 9000, -1.0)), send=1.3, duck=2.0),
+    "drum": Strip(eq=(("hp", 40), ("peak", 420, -2.0, 1.0), ("high", 8000, -1.0)), comp=(6.0, 3.0, 0.004, 0.12), send=0.6),
+    # A held drone stays out of the words altogether.
     "drone": Strip(eq=(("hp", 50), ("peak", 2500, -3.0, 0.7), ("lp", 6000))),
     "band": Strip(eq=(("hp", 60), ("peak", 2800, -1.5, 0.9))),  # anything else
 }
@@ -204,9 +204,9 @@ RETURN_DIP = 5.0  # dB the room and plate give way while the voice sings
 
 CARVE = (2600.0, 0.7)  # the band's dip for the voice: centre Hz, Q
 CARVE_DEPTH = 5.0  # dB at full voice
-BAND_EQ = (("low", 180, 3.0), ("high", 4500, -2.5))  # the band as a whole: warm, full, out of the words' way
-BAND_COMP = (6.0, 1.8, 0.02, 0.25)
-GLUE = (4.0, 1.5, 0.08, 0.6)  # the whole mix, slow enough to leave syllables alone: dB under its loud passages, ratio, attack, release
+BAND_EQ = (("peak", 600, -2.0, 0.8),)  # the band as a whole: less boxy where the voice's vowels sit
+BAND_COMP = (3.0, 1.5, 0.02, 0.2)  # the band together, lightly: its arc from sparse verses to full refrains is kept
+GLUE = (2.0, 1.3, 0.1, 0.8)  # the whole mix, lightly and slowly (it leaves syllables and the song's arc alone): dB under its loud passages, ratio, attack, release
 REFERENCE = -20.0  # LUFS the voice is brought to before the balance is set
 
 
@@ -409,7 +409,7 @@ def wear(x: np.ndarray, sr: int, amount: float, seed: int = 0) -> np.ndarray:
     y = fx.warp(x, np.interp(np.arange(n) / sr, t, lag - lag.mean()))
 
     # The tape itself: saturation, a narrower band, the head bump.
-    y = fx.saturate(y, sr, 0.25 + 0.75 * a, bias=0.12)
+    y = fx.saturate(y, sr, 0.1 + 0.9 * a, bias=0.12)
     top = 20000.0 * (1.0 - 0.62 * a)
     y = fx.equalize(y, fx.design((("hp", 20.0 + 60.0 * a), ("low", 90.0, 2.0 * a), ("lp", top)), sr))
 
