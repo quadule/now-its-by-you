@@ -60,10 +60,13 @@ def test_the_arrangement_builds_and_leaves_room():
     assert all(any(v in ("quote", "lead") for v in s["parts"].values()) for s in sections if s["role"] == "turn")
     bridge = next(s for s in sections if s["role"] == "bridge")
     assert "guitar" not in bridge["parts"] and bridge["parts"].get("drone")  # a different texture under the choir
-    # under words the harp picks softer than where nobody sings
-    intro_end = next(s for n, s, e in [(x, y, z) for x, y, z in score.sections] if n == "verse")
-    harp = score.part("harp")
-    assert np.mean([n.vel for n in harp if n.start >= intro_end]) < np.mean([n.vel for n in harp if n.start < intro_end]) * 1.1
+    # the harp never picks the note being sung, and no pad or counter-line sits in the singer's register
+    voice = score.part("voice")
+    for n in score.part("harp"):
+        sung = [v for v in voice if v.start - 0.02 <= n.start < v.start + v.dur - 0.03]
+        assert all(v.pitch != n.pitch for v in sung)
+    singer_top = max(v.pitch for v in voice)
+    assert all(n.pitch > singer_top for n in score.part("fiddle") if n.section in ("verse", "bridge", "refrain"))
 
 
 def test_an_instrument_at_zero_sits_out():

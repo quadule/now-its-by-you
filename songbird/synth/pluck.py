@@ -187,14 +187,15 @@ def pluck(
 
 
 def _attack(sr: int, hardness: float, vel: float, length: int, rng: np.random.Generator) -> np.ndarray:
-    """The pick or nail leaving the string: a click of a millisecond or two, bright for a pick."""
-    n = min(length, int(0.003 * sr))
+    """The pick or nail leaving the string: a click of a few milliseconds, bright
+    and longer for a pick, which scrapes as it goes; a fingertip barely clicks."""
+    n = min(length, int((0.002 + 0.006 * hardness) * sr))
     burst = np.zeros(length)
     if n < 8:
         return burst
     noise = rng.standard_normal(n + 64)
     noise = sosfilt(butter(2, 1500.0 + 4000.0 * hardness, btype="highpass", fs=sr, output="sos"), noise)[64:]
-    burst[:n] = noise * np.exp(-np.arange(n) / (0.0006 * sr)) * 0.06 * hardness * vel
+    burst[:n] = noise * np.exp(-np.arange(n) / ((0.0005 + 0.0015 * hardness) * sr)) * 0.1 * hardness**1.5 * vel
     return burst
 
 

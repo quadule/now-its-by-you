@@ -37,7 +37,7 @@ from functools import lru_cache
 import numpy as np
 
 from .score import Note
-from .theory import MODES, chord_tones, degree_semitones
+from .theory import MODES, chord_tones, degree_semitones, harmony
 
 INSTRUMENTS = ("lute", "guitar", "harp", "bass", "fiddle", "whistle", "drum", "drone")
 PATTERNS = ("lilt", "strum", "pick", "air")
@@ -187,6 +187,7 @@ class Context:
         self.chords: list[Chord] = []
         self.tune: list[Tune] = []
         self.phrases: list[tuple[float, float]] = []  # each placed phrase's span, bar line to bar line
+        self.choir: list[tuple[float, float, int]] = []  # the lineage voices' notes, where they sing
         self._streams: dict[tuple[str, int], np.random.Generator] = {}
         self._layout(placed, lead, melody)
         self._energy()
@@ -221,6 +222,9 @@ class Context:
             u1 = min(m["u_end"], ordered[i + 1]["u"]) if i + 1 < len(ordered) else self.end
             self.tune.append(Tune(m["u"], u1, int(m["pitch"]), float(m["vel"]), bool(m["syllable"]),
                                   self.section_at(m["u"]), m["index"] == 0, bool(m["line_end"])))
+            if m["syllable"] and m.get("choir"):  # each lineage voice's harmony, as realize() gives it
+                for role in range(int(getattr(self.params, "choir", 0))):
+                    self.choir.append((m["u"], u1, harmony(int(m["pitch"]), m["chord"], self.tonic, self.mode, role)))
 
     def section_at(self, u: float) -> int:
         for i, s in enumerate(self.sections):
@@ -275,6 +279,11 @@ class Context:
     def sung_at(self, u: float) -> Tune | None:
         return next((t for t in self.tune if t.sung and t.u0 - 1e-9 <= u < t.u1 - 1e-9), None)
 
+    def voices_at(self, u: float) -> list[int]:
+        """Every pitch being sung at u: the singer's and the lineage voices'."""
+        sung = self.sung_at(u)
+        return ([sung.pitch] if sung else []) + [p for u0, u1, p in self.choir if u0 - 1e-9 <= u < u1 - 1e-9]
+
     def pcs(self, symbol: str) -> tuple[int, int, int]:
         return tuple((self.tonic + t) % 12 for t in chord_tones(symbol, self.mode))
 
@@ -310,7 +319,7 @@ class Context:
         if self.sung_at(u):
             v *= under_words
         elif any(what in ("lead", "quote") for what in self.sections[self.section_at(u)].parts.values()):
-            v *= 0.75
+            v *= 0.7
         return float(np.clip(v * (1.0 + self.rand(part, u).uniform(-0.06, 0.06)), 0.03, 1.0))
 
 
@@ -601,6 +610,9 @@ def let_ring(ctx: Context, events: list[Ev]) -> list[Ev]:
     """A harp's strings ring until they are plucked again or the harmony moves
     away from them: a string that belongs to the next chord rings on into it
     (a bar at most); one that doesn't is damped as the chord changes."""
+    for e in events:  # never on a note being sung, the choir's included: an octave down instead
+        while int(round(e.pitch)) in ctx.voices_at(e.u0):
+            e.pitch -= 12
     events.sort(key=lambda e: (e.u0, e.shift, e.pitch))
     starts: dict[int, list[float]] = {}
     for e in events:
@@ -734,8 +746,8 @@ def guitar_part(ctx: Context, capo: int) -> list[Ev]:
             if stroke == "D" and backbeat and not chopped and what == "strum" and s.role == "refrain" \
                     and rng.random() < 0.2 * density:
                 stroke, chopped, rebound = "X", True, True  # a muted chop on a backbeat, once a bar at most
-            if u > c.u0 + 1e-9 and stroke == "B":
-                stroke = "b"
+            if stroke in ("B", "b"):  # the thumb takes the root where a chord starts, the next string after
+                stroke = "B" if abs(u - c.u0) < 1e-9 else "b"
             strokes.append((u, stroke, accent, c))
         if what == "strum" and density > 0.65:  # a busy player fills the gaps with light ups
             for b in range(ctx.beats):
@@ -906,7 +918,7 @@ def quote(ctx: Context, section: int, part: str) -> list[Ev]:
         u1 = min(u0 + n.dur, s.u0 + best[k + 1].onset if k + 1 < len(best) else s.u1 - ctx.sub)
         notes.append(Tune(u0, u1, ctx.tonic + degree_semitones(n.degree, ctx.mode, n.alter),
                           0.8 if n.onset % ctx.meter.foot == 0 else 0.68, False, section, k == 0, k == len(best) - 1))
-    return statement(ctx, part, notes, 0.95, section)
+    return statement(ctx, part, notes, 0.88, section)
 
 
 def window(part: str, lo: int, hi: int) -> tuple[int, int]:
@@ -932,7 +944,9 @@ def counter(ctx: Context, section: int, part: str, lo: int, hi: int, vel_scale: 
     out: list[Ev] = []
     prev = None
     repeats = 0
-    lines = [(t.u0, t.u1, t.pitch, (t.u0 - ctx.sections[section].u0) % ctx.beat == 0) for t in ctx.tune_in(section)]
+    s = ctx.sections[section]
+    lines = [(t.u0, t.u1, t.pitch, (t.u0 - s.u0) % ctx.beat == 0) for t in ctx.tune_in(section)]
+    lines += [(u0, u1, p, True) for u0, u1, p in ctx.choir if s.u0 <= u0 < s.u1]
     lines += [(e.u0, e.u1, e.pitch, True) for e in others or []]
     for c in ctx.chords_in(section):
         rng = ctx.rand(part, c.u0)
@@ -970,11 +984,13 @@ def counter(ctx: Context, section: int, part: str, lo: int, hi: int, vel_scale: 
         if held is not None and rng.random() < 0.5 + 0.4 * ctx.band.density:
             # the singer holds: the line moves, a step toward where it goes next, or a neighbour and back
             goal = b.pitch if b is not None else a.pitch
-            steps = [q for q in range(int(a.pitch) - 3, int(a.pitch) + 4) if q % 12 in ctx.scale and q != a.pitch]
+            at = held.u0 + ctx.sub
+            sung = ctx.voices_at(at)
+            steps = [q for q in range(max(lo, int(a.pitch) - 3), min(hi, int(a.pitch) + 3) + 1)
+                     if q % 12 in ctx.scale and q != a.pitch and all((q - v) % 12 not in (1, 2, 6, 10, 11) for v in sung)]
             toward = [q for q in steps if (q - a.pitch) * (goal - a.pitch) > 0] or steps
             if toward:
                 q = min(toward, key=lambda x: abs(x - a.pitch))
-                at = held.u0 + ctx.sub
                 moving.append(Ev(part, at, a.u1, q, a.vel * 0.95, art="slur" if bow else "", section=section))
                 a.u1 = at
                 continue
@@ -1036,6 +1052,9 @@ def _run(ctx: Context, rng: np.random.Generator, part: str, start: float, stop: 
             p = nearest(pcs, p + 4, p + 1, p + 9)
     else:
         goal = target + 12
+        floor = max(t.pitch for t in ctx.tune_in(section)) + 1  # an answer sits above the tune, as the counter-lines do
+        while goal - 2 < floor:
+            goal += 12
         rising = target > held.pitch if target != held.pitch else rng.random() < 0.5
         climb = rising if rng.random() < 0.75 else not rising  # a run climbing into the goal, or falling onto it
         d = 1 if climb else -1
@@ -1058,6 +1077,41 @@ def _run(ctx: Context, rng: np.random.Generator, part: str, start: float, stop: 
     return out
 
 
+def held_through(ctx: Context, tune: list[Tune]) -> list[Tune]:
+    """The tune with each note that isn't a tone of its chord held over from the note before."""
+    out: list[Tune] = []
+    for t in tune:
+        if out and t.pitch % 12 not in ctx.pcs(ctx.chord_at(t.u0).symbol) and abs(out[-1].u1 - t.u0) < 1e-9:
+            out[-1] = Tune(out[-1].u0, t.u1, out[-1].pitch, out[-1].vel, out[-1].sung, out[-1].section, out[-1].first,
+                           t.last)
+        else:
+            out.append(t)
+    return out
+
+
+def held_tone(ctx: Context, section: int, part: str, top: int) -> list[Ev]:
+    """One long bowed tone a line, just above the tune: the tonic or its fifth,
+    whichever sits best with that line's chords, swelling and fading."""
+    s = ctx.sections[section]
+    lo, hi = window(part, top + 1, top + 13)
+    out = []
+    for p0, p1 in ctx.phrases:
+        if not (s.u0 - 1e-9 <= p0 < s.u1 - 1e-9):
+            continue
+        chords = [c for c in ctx.chords if p0 - 1e-9 <= c.u0 < p1 - 1e-9]
+        options = [q for q in range(lo, hi + 1) if q % 12 in ((ctx.tonic % 12), (ctx.tonic + 7) % 12)]
+        if not options or not chords:
+            continue
+
+        def fit(q):
+            return sum((c.u1 - c.u0) * (1.0 if q % 12 in ctx.pcs(c.symbol) else
+                                        0.3 if (q - ctx.root(c.symbol)) % 12 in (2, 9) else -1.0) for c in chords)
+
+        q = max(options, key=lambda q: (fit(q), -q))
+        out.append(Ev(part, p0, p1 - ctx.sub, q, ctx.vel(part, p0, 0.75 * 0.4, 0.85), art="swell", section=section))
+    return out
+
+
 def melodic_parts(ctx: Context) -> list[Ev]:
     out: list[Ev] = []
     whole = [t.pitch for t in ctx.tune]
@@ -1068,19 +1122,21 @@ def melodic_parts(ctx: Context) -> list[Ev]:
         for part in ("whistle", "fiddle", "lute"):
             what = s.parts.get(part)
             if what == "lead":  # the tune where nobody sings (not the singer's pickup into the next line)
-                mine = statement(ctx, part, [t for t in tune if not t.sung], 0.95, i)
+                mine = statement(ctx, part, [t for t in tune if not t.sung], 0.85, i)
             elif what == "quote":
                 mine = quote(ctx, i, part)
             elif what == "double" and tune:
                 if part == "lute":  # the cittern doubles the singer at pitch, under the words
                     mine = statement(ctx, part, tune, 0.55, i, ornament=False, shift=0)
-                else:
-                    mine = statement(ctx, part, tune, 0.5, i)
+                else:  # with the lineage singing harmony, the tune's passing notes are held over, not played
+                    mine = statement(ctx, part, held_through(ctx, tune) if ctx.choir else tune, 0.5, i)
             elif what == "counter":
                 if part == "whistle":  # a descant, high above the singer
                     mine = counter(ctx, i, part, top + 5, top + 17, 0.48)
                 else:
                     mine = counter(ctx, i, part, top + 1, top + 13, 0.55, bow=True)
+            elif what == "pad" and s.role == "verse":  # under a verse, just one held tone a line
+                mine = held_tone(ctx, i, part, top)
             elif what == "pad":  # long bowed notes, a new bow a bar, swelling: above the singer, clear of a descant
                 mine = counter(ctx, i, part, top + 1, top + 12, 0.45, bow=True, others=written)
                 for e in mine:

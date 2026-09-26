@@ -24,6 +24,9 @@ from numba import njit
 from scipy.signal import butter, sosfilt
 from scipy.special import jn_zeros, jv
 
+STROKE_GAIN = {"bass": 1.0, "tip": 0.55, "mute": 0.5, "rim": 0.45}
+
+
 def _modes(top: float = 40.0) -> tuple[tuple[int, int, float], ...]:
     """(m, n, Bessel zero j_mn) of every mode of an ideal membrane up to j = top
     (about sixteen times the fundamental): the first few are (0,1) 2.405,
@@ -119,8 +122,10 @@ def hit(stroke: str, vel: float, sr: int, rng: np.random.Generator, *, pitch: fl
     n = int(0.004 * sr)
     burst = sosfilt(butter(2, [900.0, 6000.0], btype="bandpass", fs=sr, output="sos"), rng.standard_normal(n + 64))[64:]
     y[:n] += burst * np.exp(-np.arange(n) / (0.0008 * sr)) * click * (0.3 + 0.5 * brightness) * level
-    peak = np.max(np.abs(y)) + 1e-12
-    return y * vel / peak * (0.35 + 0.65 * vel)
+    # scaled by the loudness of its first 30 ms, not its peak (a click would set the level), and a tipped
+    # stroke well under the open boom, as a player plays them
+    body = np.sqrt(np.mean(y[: int(0.03 * sr)] ** 2)) + 1e-12
+    return y * vel * 0.25 / body * (0.35 + 0.65 * vel) * STROKE_GAIN.get(stroke, 0.6)
 
 
 def play(notes, sr: int, length: int, rng: np.random.Generator, *, pitch: float = 82.0, brightness: float = 0.5,
