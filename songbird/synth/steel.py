@@ -223,8 +223,8 @@ def reachable(pitches: tuple[int, ...], bar: int, sounding: frozenset = frozense
 
 def thirds_offset(string: int, change: int, thirds: float) -> float:
     """Cents a string sits off equal temperament when the player tunes the major thirds `thirds` cents flat
-    (toward pure thirds, as Jeff Newman's chart has them: the G# strings, the A pedal's C#, the D# a little
-    less); the other strings and pedal stops are tuned equal."""
+    (toward pure thirds, as Jeff Newman's chart has them: the G# strings and the A pedal's C# 13.7, the D# 9.8,
+    the F# 3.9); the other strings and pedal stops are tuned equal."""
     if not thirds:
         return 0.0
     number = ORDER[string]
@@ -234,6 +234,8 @@ def thirds_offset(string: int, change: int, thirds: float) -> float:
         return -0.85 * thirds
     if number in (5, 10) and change == 2:  # C#: the third of the A chord (the A pedal)
         return -thirds
+    if number in (1, 7) and change == 0:  # F#: a little flat too (Newman: -3.9 cents against the thirds' -13.7)
+        return -0.3 * thirds
     return 0.0
 
 
@@ -405,7 +407,7 @@ def _steel_built(seed: int) -> dict:
     g = np.random.default_rng(seed)
     d: dict = {}
     d["humbucker"] = bool(g.random() < 0.5)
-    d["thirds"] = 0.0 if g.random() < 0.55 else float(g.uniform(5.0, 12.0))  # cents the thirds are tuned flat
+    d["thirds"] = 0.0 if g.random() < 0.55 else float(g.uniform(6.0, 14.0))  # cents the thirds are tuned flat
     d["t60"] = float(g.uniform(11.0, 15.0))  # s at 220 Hz: a steel's rigid body and a steel bar
     d["pickup"] = float(g.uniform(0.038, 0.05))  # m from the bridge, on a 0.622 m (24.5 inch) scale
     d["pick"] = float(g.uniform(0.08, 0.12))
@@ -418,10 +420,11 @@ def _steel_built(seed: int) -> dict:
     d["bend"] = float(g.uniform(0.15, 0.3))  # s: a pedal pressed slowly into a note
     d["swell"] = float(g.uniform(0.8, 1.25))  # how slowly this player swells
     d["home"] = int(g.integers(5, 10))  # where the bar sits before the first note
+    d["pot_pedal"] = bool(g.random() < 0.6)  # a pot volume pedal loading the pickup, or a buffered one
     fifteen = g.random() < 0.5
     d["amp"] = amp.Amp(
-        voicing="fender", treble=float(g.uniform(0.5, 0.7)), middle=float(g.uniform(0.3, 0.5)),
-        bass=float(g.uniform(0.35, 0.55)), volume=float(g.uniform(-27.0, -24.0)), headroom=float(g.uniform(55.0, 70.0)),
+        voicing="fender", treble=float(g.uniform(0.5, 0.7)), middle=float(g.uniform(0.5, 0.8)),
+        bass=float(g.uniform(0.25, 0.45)), volume=float(g.uniform(-27.0, -24.0)), headroom=float(g.uniform(55.0, 70.0)),
         knee=2, tilt=0.01, sag=float(g.uniform(0.02, 0.06)), reverb=float(g.uniform(0.18, 0.3)),
         tank=amp.Tank(traversals=(float(g.uniform(0.03, 0.034)), float(g.uniform(0.038, 0.043))),
                       t60=float(g.uniform(2.6, 3.4)), coef=float(g.uniform(0.6, 0.68)), seed=int(g.integers(1 << 30))),
@@ -438,18 +441,24 @@ def _steel_strings(d: dict, bright: float, wear: float) -> tuple[Strings, amp.Co
     scale = 0.622
     if d["humbucker"]:
         comb = (((d["pickup"] - 0.009) / scale, 0.5), ((d["pickup"] + 0.009) / scale, 0.5))
-        coil = amp.HUMBUCKER
     else:
         comb = ((d["pickup"] / scale, 1.0),)
-        coil = amp.SINGLE
-    circuit = dict(pot=500e3, tone=None, tone_cap=22e-9, cable=500e-12)
+    # a steel's pickup is wound far hotter than a guitar's (George L's, Lawrence, Emmons: 15 to 19 kohm); a pot
+    # volume pedal loads it with its 500 kohm besides the guitar's (resonance near 1.5-2 kHz), a buffered one
+    # doesn't
+    coil = STEEL_COIL if d["pot_pedal"] else BUFFERED_COIL
+    circuit = dict(pot=250e3 if d["pot_pedal"] else 500e3, tone=None, tone_cap=22e-9, cable=500e-12)
     strings = Strings(
         open=OPEN, comb=comb, offsets=tuple(z * (0.3 + 3.0 * wear) for z in d["detune"]),
         gains=tuple(10.0 ** (p / 20.0) for p in d["poles"]),
-        damping=(4e-6 + 4e-6 * wear) * (1.4 - 0.8 * bright), t60=d["t60"] * (1.0 - 0.25 * wear), along=1.2,
+        damping=(2e-6 + 2e-6 * wear) * (1.4 - 0.8 * bright), t60=d["t60"] * (1.0 - 0.25 * wear), along=1.2,
         heard=0.45, driven=0.6, pick=d["pick"], hardness=0.95, click=0.2, frets=BARS - 1,
         kinds=(("thumb", (1.0, 0.85, 1.0, 0.7)),))
     return strings, coil, circuit
+
+
+STEEL_COIL = amp.Coil(12.0, 18000.0, 200e-12, 3.0)  # a steel pickup on a pot pedal
+BUFFERED_COIL = amp.Coil(9.0, 15000.0, 180e-12, 2.5)  # and one a buffered pedal doesn't load
 
 
 def _glide_time(frets: float, d: dict) -> float:
@@ -495,8 +504,9 @@ def _bar_tracks(groups, sr: int, rng: np.random.Generator, d: dict, ornament: fl
         repick = legato and min(t0 - current[i].start for i in sounding) > STALE * sr
         if repick:
             legato = False
-        if "swell" in arts:  # the pedal back just before the pick
-            volume.move(t0 - int(30 * ms), FLOOR, int(25 * ms))
+        if "swell" in arts:  # the pedal back just before the pick, over a fifth of a second
+            pull = int(min(0.2 * sr, max(0.03 * sr, 0.8 * (t0 - last))))
+            volume.move(t0 - pull, FLOOR, int(0.9 * pull))
         elif not legato and abs(volume.at(t0) - REST) > 0.1:  # back to where it rests, easing off a swell
             volume.move(t0 - int(150 * ms), REST, int(140 * ms))
         if legato:
@@ -563,8 +573,12 @@ def _bar_tracks(groups, sr: int, rng: np.random.Generator, d: dict, ornament: fl
         where, state = g.bar, list(target)
         swell = 0
         if "swell" in arts:  # pushed to the top along a raised cosine in decibels: the attack vanishes
-            swell = int(np.clip(0.35 * dur, 0.25, 0.9) * d["swell"] * sr)
+            swell = int(np.clip(0.5 * dur, 0.3, 1.2) * d["swell"] * sr)
             volume.move(t0, 0.0, swell)
+        elif not legato and dur >= 0.4 and not arts & {"mute", "fall"}:
+            # the foot rides the pedal in as the string decays, so a held note stays within a few dB of its pick
+            ride = min(0.0, REST + 3.0 + 5.0 * min(dur, 1.5))
+            volume.move(t0 + int(0.12 * sr), ride, int(min(0.8 * dur, 1.5) * sr))
         if "fall" in arts and g.bar > 1:  # the bar slides off down the neck as the note ends, the pedal easing
             at = t0 + int(0.6 * dur * sr)
             drop = float(min(g.bar - 0.5, rng.uniform(2.0, 5.0)))
@@ -634,7 +648,7 @@ def _warmed(chain: amp.Chain, emf: np.ndarray, sr: int) -> np.ndarray:
     return amp.play(chain, np.concatenate([np.zeros(pre), emf]))[pre:]
 
 
-STEEL_OUT = 16.3  # the stem's scale: the country style's line under the singer, as written, sits as a comping part
+STEEL_OUT = 13.0  # the stem's scale: the country style's line under the singer, as written, sits as a comping part
 EMF = 0.055  # volts per unit of string velocity for a single coil (as electric.py's)
 SCRAPE = 0.009  # the bar's scrape at full speed, against a string's velocity: 25 dB under a note on a wound string
 
@@ -653,8 +667,9 @@ def _voltage(segs, strings: Strings, coil: amp.Coil, circuit: dict, sr: int, len
 @lru_cache(maxsize=32)
 def _steel_master(seed: int, bright: float, wear: float, sr: int) -> float:
     """The amp's master volume, set as a player sets it: an A chord high on the strings and a D chord low on them,
-    each held, come out of the speaker at a fixed loudness whatever the steel's pickup, amp and speaker. The
-    bar starts at the fifth fret for every maker, so every steel is judged on the same strings."""
+    each held, ring at a fixed loudness once their picks have passed (a steel is heard in its sustain, and the
+    pickups differ most in their attack), whatever the steel's pickup, pedal, amp and speaker. The bar starts
+    at the fifth fret for every maker, so every steel is judged on the same strings."""
     d = {**_steel_built(seed), "home": 5}
     strings, coil, circuit = _steel_strings(d, bright, wear)
     notes = [Note("steel", 0.0, 1.5, float(p), 0.6) for p in (69.0, 73.0, 76.0)]
@@ -664,7 +679,9 @@ def _steel_master(seed: int, bright: float, wear: float, sr: int) -> float:
     _finish(segs, strings, sr, int(3.2 * sr), bar, pedals, vib, d["thirds"])
     emf = _voltage(segs, strings, coil, circuit, sr, int(3.2 * sr), rng)
     chain = amp.Chain(d["amp"], sr, os_=2)
-    return float(10.0 ** ((-20.0 - loudness(amp.play(chain, emf), sr)) / 20.0))
+    y = amp.play(chain, emf)
+    held = np.concatenate([y[int(0.3 * sr): int(1.45 * sr)], y[int(1.8 * sr): int(2.95 * sr)]])
+    return float(10.0 ** ((-20.0 - loudness(held, sr)) / 20.0))
 
 
 # --- the slide guitar -----------------------------------------------------------------------------
@@ -674,9 +691,11 @@ OPEN_G = (38, 43, 50, 55, 59, 62)  # D G D G B D
 SHAPES = {"open D": (OPEN_D, 2), "open G": (OPEN_G, 7)}  # the tuning and its root's pitch class
 KINDS = ("acoustic", "resonator", "electric")
 
-RESONATOR = body.Body(  # a spun aluminium cone under the bridge: a few strong, ringing midrange modes, little bass
+RESONATOR = body.Body(  # a spun aluminium cone under the bridge: a few strong, ringing midrange modes, little bass,
+    # and a thin cone radiating 1-4 kHz far better than a spruce top (the resonator's honk and bark)
     modes=((190.0, 14.0, 2.0), (420.0, 16.0, 6.0), (780.0, 20.0, 7.0), (1350.0, 22.0, 5.0), (2300.0, 24.0, 4.0)),
-    dense=(900.0, 9000.0, 90), tilt=-1.5, q=(45.0, 30.0), direct=0.3, lowcut=140.0, highcut=9000.0, length=0.5)
+    dense=(900.0, 12000.0, 90), tilt=0.0, q=(45.0, 30.0), direct=0.35, lowcut=150.0, highcut=12000.0,
+    hill=(1800.0, 1.5, 6.0), length=0.5)
 
 
 def open_tuning(tonic: int, prefer: str) -> tuple[tuple[float, ...], str, int, int]:
@@ -706,14 +725,14 @@ def _slide_built(seed: int) -> dict:
     d["kind"] = KINDS[int(np.searchsorted(np.cumsum([0.4, 0.35, 0.25]), g.random(), side="right"))]
     d["prefer"] = "open D" if g.random() < 0.5 else "open G"
     d["brass"] = bool(g.random() < 0.5)  # a brass slide rings brighter and longer than glass
-    d["t60"] = float(g.uniform(1.6, 2.2) if d["kind"] == "resonator" else g.uniform(2.0, 2.8))  # s at 220 Hz
+    d["t60"] = float(g.uniform(2.0, 2.6) if d["kind"] == "resonator" else g.uniform(2.6, 3.4))  # s at 220 Hz
     d["pick"] = float(g.uniform(0.1, 0.16))
     d["detune"] = tuple(g.standard_normal(6))
     d["flat"] = float(g.uniform(15.0, 35.0))  # cents a note lands under its pitch before it settles
     d["vibrato"] = float(g.uniform(4.8, 6.0))
     d["glide"] = float(g.uniform(0.8, 1.2))
     d["rattle"] = float(g.uniform(0.3, 1.0))
-    d["behind"] = (float(g.uniform(0.015, 0.05)), float(g.uniform(0.06, 0.25)))  # the ring behind: level, T60 s
+    d["behind"] = (float(g.uniform(0.015, 0.05)), float(g.uniform(0.06, 0.4)))  # the ring behind: level, T60 s
     d["drive"] = float(g.uniform(0.45, 0.7))  # the electric's amp, pushed a little
     d["body_seed"] = int(g.integers(1 << 30))
     return d
@@ -722,17 +741,17 @@ def _slide_built(seed: int) -> dict:
 def _slide_strings(d: dict, tuning, bright: float, wear: float, s: dict, sr: int, kind: str):
     """The slide's strings, and for the electric its pickup, circuit and amp (None for the others)."""
     offsets = tuple(z * (0.5 + 4.0 * wear) for z in d["detune"])
-    damping = (1.6e-5 + 1e-5 * wear) * (1.3 - 0.6 * bright) * (0.75 if d["brass"] else 1.0)
+    damping = (1.0e-5 + 0.8e-5 * wear) * (1.3 - 0.6 * bright) * (0.75 if d["brass"] else 1.0)
     t60 = d["t60"] * (1.15 if d["brass"] else 1.0) * (1.0 - 0.25 * wear)
     if kind != "electric":
         strings = Strings(open=tuning, comb=(), offsets=offsets, damping=damping, t60=t60, along=2.5, heard=0.35,
                           driven=1.0, pick=d["pick"], hardness=0.7, click=0.6, touch=0.2, frets=20,
-                          kinds=(("behind", (0.15, 1.0, 1.0, 0.0)),))
+                          kinds=(("behind", (0.15, 1.0, 1.0, 0.0)), ("sympathy", (1.0, 0.3, 1.0, 0.0))))
         return strings, None
     rig_s = _electric_settings(d, s)
     strings, coil, circuit, rig_amp = electric.rig("electric", rig_s, sr)
-    strings = replace(strings, open=tuning, offsets=offsets, damping=0.6 * damping, t60=1.6 * t60, frets=22,
-                      kinds=(("behind", (0.15, 1.0, 1.0, 0.0)),))
+    strings = replace(strings, open=tuning, offsets=offsets, damping=0.6 * damping, t60=2.2 * t60, frets=22,
+                      kinds=(("behind", (0.15, 1.0, 1.0, 0.0)), ("sympathy", (1.0, 0.3, 1.0, 0.0))))
     return strings, (coil, circuit, rig_amp, rig_s)
 
 
@@ -807,7 +826,9 @@ def _slide_sound(notes, sr: int, length: int, rng: np.random.Generator, d: dict,
     segs, position, vib, swells = _slide_tracks(_groups(notes, 0.02), tuning, sr, rng, d, ornament, length,
                                                  kind == "electric")
     _finish(segs, strings, sr, length, position, None, vib, ring_db=70.0)
-    segs = segs + _behind(segs, strings, position, vib, sr, length, d)
+    if kind != "electric":  # an electric's pickup sits under the sounding length: it can't hear behind the slide
+        segs = segs + _behind(segs, strings, position, vib, sr, length, d)
+    segs = segs + _halo(segs, strings, sr, length)
     wound = [0, 1, 2] if kind == "electric" else [0, 1, 2, 3]
     if rig is not None:
         coil, circuit, rig_amp, rig_s = rig
@@ -822,7 +843,7 @@ def _slide_sound(notes, sr: int, length: int, rng: np.random.Generator, d: dict,
     force = np.zeros(length)
     for seg in segs:
         y = fretboard.sound(seg, strings, sr, rng)
-        if seg.picks and seg.picks[0][2] != "behind":
+        if seg.picks and seg.picks[0][2] == "pick":
             y = y + _rattle(y, sr, d["rattle"] * (0.5 + wear))
         end = min(length, seg.start + len(y))
         force[seg.start:end] += y[: end - seg.start]
@@ -880,7 +901,7 @@ def _slide_tracks(groups, tuning, sr: int, rng: np.random.Generator, d: dict, or
                 if art in ("slide", "bend"):  # from two or three semitones below (a bend: a tone, slower)
                     under = 2.0 if art == "bend" else float(rng.integers(2, 4))
                     position.move(pre, x - min(under, x), int(6 * ms))
-                    over = np.clip((0.5 if art == "bend" else 0.3) * dur, 0.06, 0.3 if art == "bend" else 0.15)
+                    over = np.clip((0.5 if art == "bend" else 0.3) * dur, 0.06, 0.4 if art == "bend" else 0.3)
                     position.move(t0 + int(10 * ms), x, int(over * sr))
                 else:  # landing a touch flat and settling onto the note
                     flat = d["flat"] / 100.0 * (0.4 + 0.6 * ornament)
@@ -915,8 +936,8 @@ def _slide_tracks(groups, tuning, sr: int, rng: np.random.Generator, d: dict, or
         after = int(round(groups[k + 1][0].start * sr)) if k + 1 < len(groups) else t0 + int(dur * sr)
         hold = min(after, t0 + int(dur * sr))
         wide = "vibrato" in arts
-        if stopped and "fall" not in arts and (hold - t0 > 0.6 * sr or wide):
-            depth = (6.0 + 10.0 * ornament) * (2.2 if wide else 1.0)
+        if stopped and "fall" not in arts and (hold - t0 > 0.4 * sr or wide):
+            depth = (10.0 + 20.0 * ornament) * (2.0 if wide else 1.0)
             grow = 0.3 if "swell" not in arts else max(0.3, 0.6 * (hold - t0) / sr)
             vib.add(t0 + int(0.2 * sr) + swell, hold, d["vibrato"] * rng.uniform(0.95, 1.05), depth, grow)
         last = t0
@@ -960,6 +981,31 @@ def _behind(segs, strings: Strings, position: Track, vib: Vibrato, sr: int, leng
         if np.any(np.abs(track) > 1e-6):
             b.bar = track
         out.append(b)
+    return out
+
+
+def _halo(segs, strings: Strings, sr: int, length: int, level: float = 0.04, most: float = 1.5) -> list[Segment]:
+    """The open strings ringing in sympathy: in an open tuning every string is a tone of the chord, so a note
+    picked on an open string sets the other open strings that aren't sounding ringing faintly (about 28 dB
+    under it), each until it is next picked or `most` seconds have passed. With the slide down, the hand damps
+    them."""
+    picked = sorted((s for s in segs if s.picks and s.picks[0][2] == "pick"), key=lambda s: s.start)
+    starts: dict[int, list[int]] = {}
+    for s in picked:
+        starts.setdefault(s.string, []).append(s.start)
+    out = []
+    for s in picked:
+        if s.hand > 0:
+            continue
+        for j in range(len(strings.open)):
+            if j == s.string or any(t.string == j and t.start <= s.start < t.start + t.end for t in picked):
+                continue
+            later = [t for t in starts.get(j, []) if t > s.start]
+            n = min(int(most * sr), (later[0] - s.start) if later else length, length - s.start)
+            if n < int(0.05 * sr):
+                continue
+            out.append(Segment(string=j, start=s.start, base=strings.open[j], held=n, end=n, release=0.02,
+                               picks=[(0, s.picks[0][1] * level, "sympathy")], hand=0.0))
     return out
 
 

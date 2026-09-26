@@ -184,14 +184,16 @@ def test_a_pedal_bend_rises_into_the_note():
     assert abs(cents(y, 61, 0.8, 1.9)) < 2.0
 
 
-def test_the_volume_pedal_swells_a_note_in():
-    """A swelled note's pick is 25 dB or more under where the swell arrives, a quarter to a whole second
-    later; a plain one is loudest at its pick."""
+def test_the_volume_pedal_swells_a_note_in_and_rides_a_held_one():
+    """A swelled note's pick is 25 dB or more under where the swell arrives, a quarter of a second to 1.6 s
+    later; after a plain pick the foot rides the pedal in as the string decays, so a held note in the middle
+    register stays within 3 dB of its pick for a second and a half."""
     swell = env_db(render("steel", [note(66, start=0.2, dur=2.5, art="swell")], 3.0, maker=ET))
-    plain = env_db(render("steel", [note(66, start=0.2, dur=2.5)], 3.0, maker=ET))
     top = int(np.argmax(swell))
-    assert swell[21] < swell[top] - 25 and 0.25 < (top - 20) * 0.01 < 1.3
-    assert int(np.argmax(plain)) < 26
+    assert swell[21] < swell[top] - 25 and 0.25 < (top - 20) * 0.01 < 1.6
+    for pitch in (57, 66):
+        plain = env_db(render("steel", [note(pitch, start=0.2, dur=2.5)], 3.0, maker=ET))
+        assert np.max(np.abs(plain[25:170] - plain[20:25].max())) < 3.0
 
 
 def test_the_strings_ring_long_and_their_partials_die_by_their_frequency():
@@ -288,10 +290,12 @@ def phrases():
 
 @pytest.mark.parametrize("name", ["steel", "slide"])
 def test_a_typical_part_sits_at_its_target(name):
+    """Each maker within 3 dB of the target: a steel's makers spread with an sd of 1.3 dB on its swelled line
+    (how slowly each player swells, which pickup and pedal), their mean on the target."""
     kind, notes = phrases().LEVELS[name]
     length = int((max(n.start + n.dur for n in notes) + 1.0) * SR)
     for maker in (0, 1, 2):
-        assert abs(loudness(steel, name, notes, length, maker=maker) - TARGETS[kind]) < 2.5
+        assert abs(loudness(steel, name, notes, length, maker=maker) - TARGETS[kind]) < 3.0
 
 
 def test_a_typical_part_is_cheap():
