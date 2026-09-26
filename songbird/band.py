@@ -336,6 +336,7 @@ def plan(ctx: Context) -> None:
     pattern = band.pattern
     for i, s in enumerate(ctx.sections):
         e, r = s.energy, s.role
+        b = e + 0.3 * (band.density - 0.5)  # how busy the band is here: a dense band comes in earlier and fuller
         prv = ctx.sections[i - 1] if i > 0 else None
         last_refrain = r == "refrain" and s.nth == s.count - 1
         parts: dict[str, str] = {}
@@ -353,10 +354,10 @@ def plan(ctx: Context) -> None:
                 parts["bass"] = "long"
             elif pattern == "air":  # a slow air: the bass holds, and only marks the harmony in the refrains
                 parts["bass"] = "roots" if r in ("refrain", "break") else "long"
-            elif r == "verse" and s.nth == 0:
+            elif r == "verse" and s.nth == 0 and b < 0.5:
                 parts["bass"] = "roots"
             else:
-                parts["bass"] = "walk"
+                parts["bass"] = "walk" if band.density >= 0.3 else "roots"
         if ctx.on("harp"):
             if r in ("bridge", "tag") or pattern == "air":
                 parts["harp"] = "roll"
@@ -376,8 +377,10 @@ def plan(ctx: Context) -> None:
                 what = "strum"
             elif r == "turn" and prv is not None and prv.role == "refrain":
                 what = "strum"
-            elif r == "verse" and (e >= 0.42 or pattern == "strum"):
+            elif r == "verse" and (b >= 0.42 or pattern == "strum"):
                 what = "light"
+            if what == "strum" and band.density < 0.3:  # a sparse player: two strums a bar, or one a chord
+                what = "light" if band.density >= 0.12 else "ring"
             if what:
                 parts["guitar"] = what
         if ctx.on("lute") and "lute" not in parts:
@@ -388,7 +391,7 @@ def plan(ctx: Context) -> None:
         if ctx.on("fiddle") and "fiddle" not in parts:
             if r == "bridge" or (last_refrain and ctx.on("whistle")) or (r == "verse" and s.nth >= 1):
                 parts["fiddle"] = "pad"
-            elif r == "refrain" and (s.nth >= 1 or e >= 0.6):
+            elif r == "refrain" and (s.nth >= 1 or b >= 0.6):
                 parts["fiddle"] = "counter"
         if ctx.on("whistle") and "whistle" not in parts:
             if last_refrain:
@@ -398,11 +401,11 @@ def plan(ctx: Context) -> None:
             elif r == "refrain":
                 parts["whistle"] = "fills"
         if ctx.on("drum") and pattern != "air":
-            if r in ("refrain", "break") and e >= 0.5:
-                parts["drum"] = "full" if e >= 0.78 else "pulse"
-            elif r == "turn" and e >= 0.5:
+            if r in ("refrain", "break") and b >= 0.45:
+                parts["drum"] = "light" if band.density < 0.3 else "full" if b >= 0.75 else "pulse"
+            elif r == "turn" and b >= 0.5:
                 parts["drum"] = "pulse"
-            elif r == "verse" and e >= 0.42:
+            elif r == "verse" and b >= 0.42:
                 parts["drum"] = "light"
             elif r == "bridge" and e >= 0.45:
                 parts["drum"] = "heart"
