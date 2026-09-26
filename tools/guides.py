@@ -1,11 +1,12 @@
 """What a singer hears while they sing along: the karaoke's guide mixes (dev-only).
 
     full     the song as the machine sings it: its singer and its band, mixed and mastered
-    melody   the tune alone, on one soft instrument (the band's whistle, played plainly), over a
-             quiet pulse on the beats, the downbeats a little higher: every sung note as the
-             singer sings it, and where no one sings, the tune as the band plays it there, in
-             the singer's register. The default for singers: they keep time and hear the tune
-             without copying the machine's phrasing, which is what their takes are for.
+    melody   the tune alone, on the band's whistle played plainly, over a quiet pulse: every sung
+             note as the singer sings it, and where no one sings, the tune as the band plays it
+             there, at the band's own octave and softer, so the singer hears their entry drop into
+             their register; the pulse counts each entry in and steps back under the singing. The
+             default for singers: they keep time and hear the tune without copying the machine's
+             phrasing, which is what their takes are for.
     voice    the machine's singer alone, as it sounds in the full guide
 
 Every mix comes from one score. tools/phrasing.py's write_guide renders the full
@@ -32,6 +33,7 @@ import threading
 import warnings
 from dataclasses import fields, replace
 from pathlib import Path
+from typing import NamedTuple
 
 import numpy as np
 
@@ -51,19 +53,34 @@ DEFAULT = "melody"
 # Measured on H's sung notes (harvest f0 against the score): within 5 cents at the 95th percentile,
 # every note held (96% of each within 10 dB of its peak), 17 dB between repeated notes, breath hiss
 # 39 dB under the tone. The lute was as clear but let long notes die (59% held); a pure tone
-# was clean but isn't one of the song's instruments.
-WHISTLE = dict(brightness=0.25, wear=0.0, breathiness=0.3, vibrato=0.3)
-STATED = 0.8  # the tune the band states where no one sings, a little softer than the sung line
+# was clean but isn't one of the song's instruments. So low (220-500 Hz) the model is nearly a sine
+# (its 2nd and 3rd harmonics 16-20 dB down, whatever the brightness), which a singer's own voice
+# covers in the headphones; a second whistle an octave up, 9 dB down, gives it a wooden flute's
+# strong second harmonic and carries it over them, the pitch where it's written.
+WHISTLE = dict(brightness=0.4, wear=0.0, breathiness=0.3, vibrato=0.3)
+OCTAVE_DB = -9.0
+STATED = 0.5  # the band's statement of the tune where no one sings, against the singer's level
 MELODIC = ("whistle", "fiddle", "lute", "melody")  # parts that can state the tune ("melody": scores from before the band)
-REST = 2.0  # seconds without singing before the band's statement of the tune is heard in the melody guide
-# The pulse: a small woodblock, higher on the downbeat. Nothing under 600 Hz, so it can't cover the
-# tune's fundamentals; 27 ms long; its level against the tune's is set in render_melody.
-TOCK = 1150.0  # Hz, the block's lowest mode; the downbeat's is a major third higher
-PULSE_DB = (-15.0, -12.0)  # a beat's and a downbeat's level (first 20 ms) against the tune's typical level
-PULSE_PAN = 0.2  # a little to the right of the tune, so the ear can tell them apart
+REST = 2.0  # seconds without singing before a line is counted in, and the band's statement is heard
+# The pulse: a small woodblock. Nothing under 600 Hz, so it can't cover the tune's fundamentals; 27 ms
+# long, a little to the right of the tune. Its levels (first 20 ms, against the tune's typical level):
+# a beat, a downbeat (a major third higher), and the four beats that count in a line after a rest
+# (higher, louder). Under the singing it steps back DUCK_DB: it keeps time without setting it, since
+# a click to sing to would press the singer's own timing, which the takes are for, onto the grid.
+TOCK = 1150.0  # Hz, the block's lowest mode
+PULSE_DB = {"beat": -15.0, "downbeat": -12.0, "count": -9.0}
+DUCK_DB = 6.0
+COUNT = 4
+PULSE_PAN = 0.2
 ROOM = dict(rt60=0.7, wet=0.1)  # a small room around the whistle, so it isn't clinical; the pulse stays dry
 
 _lock = threading.Lock()
+
+
+class Mix(NamedTuple):
+    wav: Path  # the mix to sing to
+    score: Path  # the score every mix follows
+    digest: str  # the score's digest, when the mix was made from it
 
 
 def full_paths(stem: str) -> tuple[Path, Path]:
@@ -78,9 +95,9 @@ def mix_path(stem: str, mix: str) -> Path:
 
 
 def recipe() -> str:
-    """What a derived mix depends on beyond its score: this file and the synthesis it calls."""
+    """What a derived mix depends on beyond its score: this file, the synthesis it calls, the phonetics."""
     h = hashlib.sha256(Path(__file__).read_bytes())
-    for f in sorted((ROOT / "songbird" / "synth").glob("*.py")):
+    for f in [*sorted((ROOT / "songbird" / "synth").glob("*.py")), ROOT / "songbird" / "phonetics.py"]:
         h.update(f.read_bytes())
     return h.hexdigest()[:12]
 
@@ -109,26 +126,31 @@ def fresh(genome_path: Path) -> bool:
     return '"beats"' in score.read_text()
 
 
-def ensure(genome_path: Path, genome, mix: str = "full", rebuild: bool = False) -> tuple[Path, Path]:
-    """The guide mix to sing to and the score it follows, rendering whatever is missing or stale.
-    rebuild: render the full guide again from the current code (the other mixes follow)."""
+def ensure(genome_path: Path, genome=None, mix: str = "full", rebuild: bool = False) -> Mix:
+    """The guide mix to sing to, the score it follows and that score's digest, rendering whatever
+    is missing or stale. genome: what to render if the full guide must be written (default: the
+    genome file as it is now). A guide written transposed stays transposed. rebuild: write the
+    full guide again from the current code (the other mixes follow)."""
     import phrasing as T  # tools/phrasing.py, imported late: it brings the aligner and whisper with it
+
+    from songbird import genome as G
 
     genome_path = Path(genome_path)
     out = mix_path(genome_path.stem, mix)
     with _lock:
-        if rebuild or not fresh(genome_path):
-            with contextlib.redirect_stdout(io.StringIO()):
-                T.write_guide(genome_path, genome, 0)
         wav, score = full_paths(genome_path.stem)
-        if mix == "full":
-            return wav, score
-        stamp = {"score": K.digest(score), "recipe": recipe()}
-        note = out.with_suffix(".json")
-        if not out.exists() or not note.exists() or json.loads(note.read_text()) != stamp:
-            write_mix(score, mix, out)
-            note.write_text(json.dumps(stamp) + "\n")
-        return out, score
+        if rebuild or not fresh(genome_path):
+            transpose = json.loads(score.read_text()).get("transpose", 0) if score.exists() else 0
+            with contextlib.redirect_stdout(io.StringIO()):
+                T.write_guide(genome_path, genome if genome is not None else G.load(genome_path), transpose)
+        digest = K.digest(score)
+        if mix != "full":
+            stamp = {"score": digest, "recipe": recipe()}
+            note = out.with_suffix(".json")
+            if not out.exists() or not note.exists() or json.loads(note.read_text()) != stamp:
+                write_mix(score, mix, out)
+                note.write_text(json.dumps(stamp) + "\n")
+        return Mix(out, score, digest)
 
 
 def write_mix(score_path: Path, mix: str, out: Path) -> Path:
@@ -159,21 +181,36 @@ def write_mix(score_path: Path, mix: str, out: Path) -> Path:
 # --- the melody ------------------------------------------------------------------------------
 
 
+def rests(sung: list[Note], duration: float, rest: float = REST) -> list[tuple[float, float]]:
+    """Every stretch of `rest` seconds or more without singing: before the first sung note, between
+    two, after the last."""
+    bounds = [0.0] + [t for n in sung for t in (n.start, n.start + n.dur)] + [duration]
+    return [(a, b) for a, b in zip(bounds[0::2], bounds[1::2]) if b - a >= rest]
+
+
+def entries(sung: list[Note], rest: float = REST) -> list[float]:
+    """Where the singer comes in: the first sung note, and every one after a rest of `rest` seconds or more."""
+    out = [n.start for k, n in enumerate(sung) if k == 0 or n.start - (sung[k - 1].start + sung[k - 1].dur) >= rest]
+    return out
+
+
+def one_line(notes: list[Note]) -> list[Note]:
+    """Notes as one line: each ends by the time the next begins."""
+    notes = sorted(notes, key=lambda n: (n.start, n.pitch))
+    return [replace(n, dur=max(min(n.dur, m.start - n.start), 0.01)) for n, m in zip(notes, notes[1:])] + notes[-1:]
+
+
 def melody_line(score: Score) -> list[Note]:
-    """The tune as one line for the whistle: every sung note, tongued, as the
-    singer sings it; and in each stretch of REST seconds or more where no one
-    sings, the notes of the band's part that states the tune there (the one
-    with most notes), moved by octaves into the singer's register and a little
-    softer. Each note ends by the time the next begins."""
+    """The tune for the whistle: every sung note ("sung"), tongued, as the singer sings it; and in
+    each stretch of REST seconds or more where no one sings, the notes of the band's part that
+    states the tune there (the one with most notes) at the band's own octave, with the players'
+    dynamics at STATED of the singer's level ("stated"). Each is one line: a note ends by the time
+    the next begins."""
     sung = sorted(score.part("voice"), key=lambda n: n.start)
-    line = [replace(n, part="guide", art="") for n in sung]
+    stated = []
     if sung:
-        centre = float(np.median([n.pitch for n in sung]))
         loud = float(np.median([n.vel for n in sung]))
-        bounds = [0.0] + [t for n in sung for t in (n.start, n.start + n.dur)] + [score.duration]
-        for a, b in zip(bounds[0::2], bounds[1::2]):  # before the first note, between notes, after the last
-            if b - a < REST:
-                continue
+        for a, b in rests(sung, score.duration):
             # a statement starts after the last sung note ends (give or take the players' timing) and
             # leaves the next line's start to the singer
             found = {p: [n for n in score.part(p) if a - 0.05 <= n.start < b - 0.1] for p in MELODIC}
@@ -181,13 +218,11 @@ def melody_line(score: Score) -> list[Note]:
             notes = found[part]
             if not notes:
                 continue
-            shift = 12.0 * round((centre - float(np.median([n.pitch for n in notes]))) / 12.0)
-            # the players' own dynamics, at STATED of the singer's level
             scale = STATED * loud / max(float(np.median([n.vel for n in notes])), 1e-3)
-            line += [replace(n, part="guide", pitch=n.pitch + shift, vel=float(min(1.0, n.vel * scale)),
-                             dur=min(n.dur, b - n.start)) for n in notes]
-    line.sort(key=lambda n: (n.start, n.pitch))
-    return [replace(n, dur=max(min(n.dur, m.start - n.start), 0.01)) for n, m in zip(line, line[1:])] + line[-1:]
+            stated += [replace(n, part="stated", vel=float(min(1.0, n.vel * scale)), dur=min(n.dur, b - n.start))
+                       for n in notes]
+    line = one_line([replace(n, part="sung", art="") for n in sung]) + (one_line(stated) if stated else [])
+    return sorted(line, key=lambda n: (n.start, n.pitch))
 
 
 def tock(downbeat: bool, sr: int) -> np.ndarray:
@@ -208,15 +243,33 @@ def tock(downbeat: bool, sr: int) -> np.ndarray:
     return y / np.max(np.abs(y))
 
 
-def pulse(beats: list[tuple[float, bool]], sr: int, length: int) -> np.ndarray:
-    """A tock on every beat (seconds, whether it begins a bar), each peaking at 1 (downbeats) or
-    10^(-3/20) of that (the others): mono, `length` samples."""
+def strokes(beats: list[tuple[float, bool]], sung: list[Note] = ()) -> list[tuple[float, str, float]]:
+    """What the pulse plays on each beat: (seconds, "count", "downbeat" or "beat", dB against a
+    downbeat). The COUNT beats before each entry (before it by more than the players' timing) count
+    it in; a beat under the singing steps back DUCK_DB."""
+    sung = sorted(sung, key=lambda n: n.start)
+    counted = set()
+    for e in entries(sung):
+        counted.update([t for t, _ in beats if t < e - 0.05][-COUNT:])
+    spans = [(n.start - 0.05, n.start + n.dur) for n in sung]
+    out = []
+    for t, bar in beats:
+        kind = "count" if t in counted else "downbeat" if bar else "beat"
+        db = PULSE_DB[kind] - PULSE_DB["downbeat"]
+        if kind != "count" and any(a <= t < b for a, b in spans):
+            db -= DUCK_DB
+        out.append((t, kind, db))
+    return out
+
+
+def pulse(beats: list[tuple[float, bool]], sr: int, length: int, sung: list[Note] = ()) -> np.ndarray:
+    """The pulse as a mono track `length` samples long, a downbeat's stroke peaking at 1 (strokes())."""
+    sounds = {"count": tock(True, sr), "downbeat": tock(True, sr), "beat": tock(False, sr)}
     out = np.zeros(length)
-    strokes = {True: tock(True, sr), False: tock(False, sr) * 10.0 ** ((PULSE_DB[0] - PULSE_DB[1]) / 20.0)}
-    for t, downbeat in beats:
+    for t, kind, db in strokes(beats, sung):
         i = int(round(t * sr))
         if 0 <= i < length:
-            y = strokes[downbeat][: length - i]
+            y = sounds[kind][: length - i] * 10.0 ** (db / 20.0)
             out[i : i + len(y)] += y
     return out
 
@@ -233,18 +286,25 @@ def typical_level(x: np.ndarray, sr: int, notes: list[Note]) -> float:
 
 
 def render_melody(score: Score, beats: list[tuple[float, bool]], sr: int, seed: int = 0) -> np.ndarray:
-    """The melody guide, unmastered stereo: the whistle in the middle of a small room, the pulse dry
-    beside it, the downbeats PULSE_DB[1] dB against the tune's typical level."""
+    """The melody guide, unmastered stereo: the whistle (and its octave, on the sung line) in the
+    middle of a small room, the pulse dry beside it at PULSE_DB against the sung line's level."""
     from songbird.synth import pipe, room
     from songbird.synth.instruments import place
 
     length = int(np.ceil(score.duration * sr))
     line = melody_line(score)
-    tune = pipe.blow(line, sr, length, np.random.default_rng([seed, 23]), **WHISTLE)
-    level = typical_level(tune, sr, [n for n in line if n.art != "cut"])
-    click = pulse(beats, sr, length)
+    sung = [n for n in line if n.part == "sung"]
+    stated = [n for n in line if n.part == "stated"]
+    # the octave plays from the same seed, so its tuning and breath move with the line's
+    tune = pipe.blow(sung, sr, length, np.random.default_rng([seed, 23]), **WHISTLE)
+    tune += pipe.blow([replace(n, pitch=n.pitch + 12) for n in sung], sr, length, np.random.default_rng([seed, 23]),
+                      **WHISTLE) * 10.0 ** (OCTAVE_DB / 20.0)
+    level = typical_level(tune, sr, sung)
+    if stated:
+        tune += pipe.blow(stated, sr, length, np.random.default_rng([seed, 29]), **WHISTLE)
+    click = pulse(beats, sr, length, sung)
     if level > 0:
-        click *= level * 10.0 ** (PULSE_DB[1] / 20.0) / np.sqrt(np.mean(tock(True, sr)[: int(0.02 * sr)] ** 2))
+        click *= level * 10.0 ** (PULSE_DB["downbeat"] / 20.0) / np.sqrt(np.mean(tock(True, sr)[: int(0.02 * sr)] ** 2))
     dry = place(tune, 0.0, 0.0) + place(click, PULSE_PAN, 0.0)
     ir = room.impulse_response(sr, rt60=ROOM["rt60"], seed=room.seed_of(ROOM["rt60"]))
     return room.apply(dry, ir, send=place(tune, 0.0, 0.0), wet=ROOM["wet"])
@@ -262,15 +322,13 @@ def render_voice(score: Score, sr: int, seed: int = 0) -> np.ndarray:
 
 
 def main() -> None:
-    from songbird import genome as G
-
     ap = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
     ap.add_argument("genome")
     ap.add_argument("mix", nargs="?", default=DEFAULT, choices=MIXES)
     ap.add_argument("--rebuild", action="store_true", help="render the full guide again from the current code first")
     args = ap.parse_args()
-    wav, score = ensure(Path(args.genome), G.load(args.genome), args.mix, args.rebuild)
-    print(f"{wav}  (score {K.digest(score)})")
+    mix = ensure(Path(args.genome), None, args.mix, args.rebuild)
+    print(f"{mix.wav}  (score {mix.digest})")
 
 
 if __name__ == "__main__":

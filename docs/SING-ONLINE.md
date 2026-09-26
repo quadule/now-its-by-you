@@ -22,10 +22,13 @@ It runs on the free tiers of Workers, KV and R2 at this scale (a few singers, a 
 (`renders/guide/<song>.guide.score.json`), so a take measures the same whichever was heard, and every
 take's sidecar says which:
 
-- **melody**, the default for singers: every sung note on the band's whistle, played plainly, with a
-  quiet woodblock on every beat (higher on the downbeat); where no one sings (the intro, the turns)
-  the tune as the band plays it there. Singers hear the tune and keep time without copying the
-  machine's phrasing, which is what their takes are for.
+- **melody**, the default for singers: every sung note on the band's whistle, played plainly and
+  doubled softly an octave up so it carries over the singer's own voice; where no one sings (the
+  intro, the turns) the tune as the band plays it there, at the band's own octave and softer, so
+  the singer hears their entry drop into their register. Under it a small woodblock keeps the beat:
+  higher on the downbeat, louder on the four beats that count in each line after a rest, and 6 dB
+  quieter under the singing, so it keeps time without pressing the singer onto the grid. Singers
+  hear the tune without copying the machine's phrasing, which is what their takes are for.
 - **full**: the song as the machine sings it, band and all.
 - **voice**: the machine's singer alone (the karaoke here only).
 
