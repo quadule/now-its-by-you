@@ -117,11 +117,12 @@ class Seg:
     notes: list[dict] = field(default_factory=list)
 
 
-def load_segments(corpus: Path, sources: set[str], split: str | None, singers: list[str] | None = None) -> list[Seg]:
+def load_segments(corpus: Path, sources: set[str], split: str | None, singers: list[str] | None = None,
+                  only: set[str] | None = None) -> list[Seg]:
     out = []
     for js in sorted(corpus.glob("*/*.json")):
         wav = js.with_suffix(".wav")
-        if not wav.exists():
+        if not wav.exists() or (only is not None and js.stem not in only):
             continue
         label = json.loads(js.read_text())
         if label.get("source", "eleven-music") not in sources:
@@ -750,7 +751,8 @@ def summarize(per_seg: dict[str, dict]) -> dict:
 def run_measure(args) -> None:
     corpus = args.corpus
     cache = args.cache
-    segs = load_segments(corpus, set(args.source), args.split, args.singers)
+    only = set(args.segments.read_text().split()) if args.segments else None
+    segs = load_segments(corpus, set(args.source), args.split, args.singers, only)
     if args.limit:
         segs = segs[: args.limit]
     voice_set = {}
@@ -838,6 +840,7 @@ def main() -> None:
     m.add_argument("--set", nargs="*", default=[], metavar="FIELD=VALUE", help="VoiceParams fields for ours")
     m.add_argument("--seed", type=int, default=1)
     m.add_argument("--limit", type=int, default=0)
+    m.add_argument("--segments", type=Path, default=None, help="only the segments named in this file (one stem a line)")
     m.add_argument("--jobs", type=int, default=3)
     m.add_argument("--keep", type=Path, default=None, help="write our renders here")
     m.add_argument("--raw", type=Path, default=None, help="also write every per-note record here")
