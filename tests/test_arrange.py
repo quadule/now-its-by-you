@@ -331,3 +331,67 @@ def test_the_arrange_command_prints_a_lyric_sheet(capsys):
     assert "1 verse section" in capsys.readouterr().err
     assert A.main([str(H), "--forms"]) == 0
     assert capsys.readouterr().out.startswith("verse: 2, 3 or 4\nrefrain: 1 to 6\nbridge: 1 or 2\n")
+
+
+# Singing them
+
+
+def test_the_seed_arrangement_is_unchanged():
+    """Without lyrics realize sings the seed's own words, as it always has, and
+    those words given to it as a Lyrics sing exactly the same score."""
+    from dataclasses import replace
+
+    from songbird.realize import choose_params, realize
+
+    score = realize(g, choose_params(g))
+    refrain = [[G.turn(line, i, 3) for line in g.refrain] for i in range(3)]
+    blocks = [g.seed_verses[0], refrain[0], g.seed_verses[1], refrain[1], g.fixed["bridge"], refrain[2], g.fixed["tag"]]
+    assert [n.word for n in score.part("voice")] == [w for b in blocks for line in b for _, w, _ in G.sung_words(line)]
+    for path in sorted((ROOT / "songs").glob("*.json")):
+        song = G.load(path)
+        params = choose_params(song)
+        forms = [params.form, ("refrain",)] + ([tuple(params.form) + ("bridge2",)] if "bridge" in song.sections else [])
+        for form in forms:
+            q = replace(params, form=tuple(form), choir=2)
+            assert realize(song, q, lyrics=A.seed_lyrics(song, q.form)) == realize(song, q), (path.stem, form)
+
+
+def test_realize_sings_the_drawn_words_on_their_notes():
+    from dataclasses import replace
+
+    from songbird.realize import choose_params, realize
+
+    form = shape(3, 4, 2)
+    params = replace(choose_params(g), form=form, choir=2)
+    seeded = realize(g, params)  # a second bridge section sings the seed's bridge again
+    for seed in (4, 21, 30):
+        lyrics = A.arrange(g, form, seed)
+        score = realize(g, params, lyrics=lyrics)
+        want = [(s.section, pid, syllable, word) for s in lyrics.sections
+                for line, pid in zip(s.lines, g.section(s.section).phrases) for syllable, word, _ in G.sung_words(line)]
+        assert [(n.section, n.phrase, n.syllable, n.word) for n in score.part("voice")] == want
+        # the second bridge is the bridge again: its phrases, the choir singing with the lead
+        assert {n.section for n in score.notes if n.part.startswith("choir")} == {"bridge", "bridge2", "tag"}
+        # and the words change nothing else: the same parts, times and pitches as the seed's words
+        assert [(n.part, n.start, n.dur, n.pitch) for n in score.notes] == \
+            [(n.part, n.start, n.dur, n.pitch) for n in seeded.notes]
+        # the focus marks reach the singer, as they do in the seed's words
+        marked = {n.word for n in score.part("voice") if "*" in n.word}
+        assert {"*yours*", "*own*,", "*you*."} <= marked
+
+
+def test_realize_wont_sing_words_that_dont_fit():
+    from dataclasses import replace
+
+    from songbird.realize import choose_params, realize
+
+    params = choose_params(g)
+    lyrics = A.arrange(g, SEED_FORM, 1)
+    with pytest.raises(ValueError, match="drawn for the form"):
+        realize(g, replace(params, form=shape(3)), lyrics=lyrics)
+    with pytest.raises(ValueError, match="not both"):
+        realize(g, params, verses=g.seed_verses, lyrics=lyrics)
+    record = lyrics.to_dict()
+    record["sections"][0]["lines"][0] = "too few syl-la-bles"
+    with pytest.raises(ValueError, match="syllables"):
+        realize(g, params, lyrics=A.Lyrics.from_dict(record))
