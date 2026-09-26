@@ -571,7 +571,8 @@ fingers; per-onset timing looser than a Scruggs-style picker's (9 ms, for
 6-8); a mandolin's flat pick too soft and its A-style box 4 dB dull at 1-4
 kHz; a chop that was a click without a chunk (a hand damping it in 20 ms,
 not 40-60); eighths picked all down at 112 bpm; a mandolin's air 4 dB under
-a lead; and strips taking out what the models no longer had too much of.
+a lead; the microphone pair cancelling half the head's upper modes in the
+mono sum; and strips taking out what the models no longer had too much of.
 All of these are changed (see the sections above, and the commits); what the
 advisor also asked for and isn't done is under Limits.
 
@@ -597,11 +598,13 @@ advisor also asked for and isn't done is under Limits.
   sharper than the 40-70 ms the review also asked for.
 - Not done from the banjo's review: note-to-note unevenness (a partial on a
   head mode dies fast and loud, one between rings on quieter: ±2-3 dB), a
-  slow wander in the rolls' timing (only their jitter is smaller), a
-  clawhammer's lilt (55:45), and the stereo pair's mono sum: `body.py` gives
-  each upper mode a random sign in each microphone, so the placed banjo's
-  middle loses 1-7 dB against one channel above 1.5 kHz; `body.py` also
-  builds the ballad's instruments, whose renders are golden.
+  slow wander in the rolls' timing (only their jitter is smaller) and a
+  clawhammer's lilt (55:45). The microphone pair now hears half the body's
+  upper modes alike (`body.impulse_response(alike=)`), so the banjo's and
+  mandolin's mono sum keeps level with one channel above 1.25 kHz, but a
+  third-octave can still stand 4 dB apart (the advisor asked for 2); the
+  other bodies, the ballad's among them, hear every mode their own way as
+  before.
 - The kit is at the frame drum's level, as the brief asked: a rock or pop
   arrangement will want it several dB louder (the mix's balance).
 - The kit is heard from the drummer's seat (hi-hat left); an audience's view
