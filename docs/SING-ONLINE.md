@@ -14,7 +14,10 @@ them from the server.
   keeps invitations in KV and takes in a private R2 bucket, and answers your admin commands.
 - **tools/invite.py**, on your machine: makes links, lists them, fetches takes, revokes.
 
-It runs on the free tiers of Workers, KV and R2 at this scale (a few singers, a few hundred MB).
+It runs on the free tiers of Workers, KV and R2 at this scale (a few singers, a few hundred MB). A
+take streams straight through the Worker into R2, which checks it against the checksum the page
+worked out, so the Worker does almost no work per take (the free plan allows 10 ms a request); still,
+send one real three-minute take from a phone to the deployed site before you invite anyone.
 
 ## The guides
 
@@ -71,9 +74,10 @@ Everything below runs in `web/sing`. `npx wrangler` is the copy `npm install` pu
 
 1. **Log in**: `npx wrangler login` opens a browser to your Cloudflare account (free is fine).
 2. **The bucket for takes**: `npx wrangler r2 bucket create songbird-takes`. It is private: don't
-   turn on its public r2.dev address or give it a custom domain. As a backstop, have R2 delete
-   anything left unfetched after 30 days:
-   `npx wrangler r2 bucket lifecycle add songbird-takes expire-unfetched --expire-days 30`.
+   turn on its public r2.dev address or give it a custom domain. As a backstop, have R2 delete takes
+   left unfetched after 30 days (only under `takes/`: the bucket also keeps a marker for each closed
+   invitation, which must outlast its record in KV):
+   `npx wrangler r2 bucket lifecycle add songbird-takes expire-unfetched takes/ --expire-days 30`.
 3. **The invitations**: `npx wrangler kv namespace create INVITES`, then paste the `id` it prints
    into `wrangler.toml` in place of `PASTE-THE-KV-NAMESPACE-ID-HERE` (the id isn't a secret).
 4. **Build and deploy**: `uv run python tools/sing_site.py` (from the repo), then
@@ -86,7 +90,8 @@ Everything below runs in `web/sing`. `npx wrangler` is the copy `npm install` pu
 
    Until it's set the admin API answers 503. To change it later, run both lines again.
 6. **Check it**: `SONGBIRD_SING_URL=https://songbird-sing.<your-subdomain>.workers.dev uv run python tools/invite.py new`,
-   open the link on your phone, sing a take, then `... tools/invite.py fetch` and find it in `recordings/`.
+   open the link on your phone, sing a whole take, then `... tools/invite.py fetch` and find it in
+   `recordings/`.
 
 ### At songbird.quadule.com
 
@@ -94,9 +99,15 @@ A Worker can answer at your own address only if the domain's DNS is on Cloudflar
 
 - **quadule.com is already a Cloudflare zone**: uncomment the `routes` line in `wrangler.toml` and
   `npx wrangler deploy` again. Cloudflare makes the DNS record and the certificate for
-  songbird.quadule.com itself. (Or in the dashboard: Workers & Pages, songbird-sing, Settings,
-  Domains & Routes, Add, Custom domain.) If you like, set `workers_dev = false` then, so only the
-  custom address answers.
+  songbird.quadule.com itself, but refuses if a DNS record for that name already exists: delete it
+  first. (Or in the dashboard: Workers & Pages, songbird-sing, Settings, Domains & Routes, Add,
+  Custom domain.) The certificate stays if you remove the domain later. If you like, set
+  `workers_dev = false` then, so only the custom address answers. For this hostname, turn off Rocket
+  Loader, Email Obfuscation and Bot Fight Mode (Configuration Rules can do it per hostname): the
+  page loads nothing but its own scripts, so anything Cloudflare injects breaks it, and a challenge
+  breaks the upload. One rate-limiting rule comes free with the zone: point it at `/i/*` and `/api/*`
+  (say 100 requests in 10 seconds from one address) so a flood is stopped before it uses up the
+  Worker's free 100,000 requests a day.
 - **quadule.com's DNS is elsewhere** (at the registrar or another host): a CNAME from
   songbird.quadule.com to the workers.dev address won't work, because workers.dev answers only its
   own names. Either move quadule.com's DNS to Cloudflare (free: add the domain in the dashboard, check
@@ -123,27 +134,35 @@ Send each person their own link: a link is the key, and anyone who has it can si
 closes (when they press "I'm done", when it expires, when it has its takes, or when you revoke it).
 If a link goes astray, revoke it and send a new one. The note is only for you; singers never see it.
 
-`fetch` puts each take in `recordings/<singer>/` beside a sidecar, as the karaoke does: the name they
-gave (or the invitation's note, or `singer-<token>`) names the folder, and the sidecar keeps the
-guide score's digest, the mix they heard, the device's delays and sample rate, when they agreed to
-the release and to which text, and whether they want to be credited. From there it's the same as a
-karaoke take: the karaoke's Singers panel lists it, and "Make X's phrasing" measures it. A take that
-arrives damaged (its size or hash doesn't match) is left on the server and reported.
+`fetch` puts each take in `recordings/<singer>/` beside a sidecar, as the karaoke does, and the
+sidecar keeps the guide score's digest, the mix they heard, the device's delays and sample rate,
+when they agreed to the release and to which text, and whether they want to be credited. The name
+they gave names the folder; if that folder already holds someone else's takes (another invitation's,
+or ones sung here in the karaoke) the invitation's first characters are added, so two people called
+Jo never become one phrasing; with no name, it's the invitation's note and those characters. To put
+one person's takes from two invitations together, fetch with `--singer`. From there it's the same as a
+karaoke take: the karaoke's Singers panel lists it, and "Make X's phrasing" measures it; a singer who
+asked not to be credited can't be credited in it. A take that arrives damaged (its size or hash
+doesn't match) is left on the server and reported; `--purge-incomplete` clears half-sent ones.
+The admin token only travels over https (or plain http to this computer, for `wrangler dev`).
 
 ## What is kept, where, and for how long
 
 | Where | What | How long |
 | --- | --- | --- |
-| The singer's browser | the name they typed, their credit choice, the guide they chose, their device's measured delay (localStorage, on their device only) | until they clear it |
-| Cloudflare KV | each invitation: when it was made and expires, its take limit, your note, whether it's open, done or revoked; and how many takes it sent | 90 days after it expires, then deleted by KV |
+| The singer's browser | the name they typed (for that invitation), their credit choice, the guide they chose, their device's measured delay (localStorage, on their device only) | until they clear it |
+| Cloudflare KV | each invitation: when it was made and expires, its take limit, your note (use initials if you'd rather no name sat there), whether it's open, done or revoked; and how many takes it sent | 90 days after it expires, then deleted by KV |
 | Cloudflare R2 (private) | each take (16-bit mono WAV) and its sidecar: the name given, the credit choice, when the release was agreed and a digest of its text, the guide's digest and mix, the sample rate and delays, when it arrived, its size and hash; and for each closed invitation an empty marker saying when and how it closed (KV takes up to a minute to tell every location; R2 tells them at once) | until you fetch it (fetch deletes it), delete it, or the 30-day rule in step 2 does |
-| Your machine | the takes and sidecars in `recordings/` (never in git), the guide scores in `recordings/guides/` | yours to keep; delete a singer's folder if they withdraw |
+| Your machine | the takes and sidecars in `recordings/` (never in git); in `recordings/guides/`, the guide scores and each release exactly as singers read it (`release.<digest>.html`, the digest their takes carry) | yours to keep; delete a singer's folder if they withdraw |
 
-Nothing else is stored: no addresses, no browser or device details, no logs (the Worker's logs are
-off, and it never logs a name, a token or an address). A singer's address is used only as the key
-for a rate limit (240 requests a minute), counted briefly at the edge and never written down;
-invitations take at most 6 takes a minute. Cloudflare itself handles the traffic under its own
-privacy policy, as any host would.
+The Worker stores nothing else, and logs nothing (its logs are off, and it never logs a name, a
+token or an address). A singer's address is used only as the key for rate limits (about 60
+requests a minute, and 10 a minute asking after invitations that don't exist), counted briefly at
+each Cloudflare location and never written down; an invitation takes about 6 takes a minute.
+Cloudflare itself handles the traffic under its own privacy policy, as any host would; on your own
+domain, the zone's traffic analytics keep a sample of requests (their paths, which include the
+invitation, and the visitor's address and browser) for a few days, and `npx wrangler tail` shows
+requests live while it runs.
 
 If a singer withdraws before the version their takes were used in is released: delete their folder in
 `recordings/` and any phrasing made from it (`renders/phrasing/<song>.<singer>.json`), and, if they
@@ -159,7 +178,10 @@ admin API).
 - **How long takes may wait** on the server before you fetch them (the lifecycle rule in step 2 says
   30 days).
 - **Headphones**: the page asks for them, but can't tell. A take with the guide bleeding into it
-  still measures, but less well; listen to a singer's first take when it comes in.
+  still measures, but less well; listen to a singer's first take when it comes in. Wired is best:
+  Bluetooth headphones switch to a narrow telephone-quality mode when a microphone opens, which
+  spoils both the guide and the take. On iPhones and iPads the browser reports no delays at all, so
+  the tapping step matters most there.
 
 ## How the timing holds up
 
