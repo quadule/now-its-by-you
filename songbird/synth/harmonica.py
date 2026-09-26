@@ -35,8 +35,8 @@ mezzo-forte breath in the middle holes, twice that soft or an octave lower,
 10 ms hard, starting a few cents sharp. Harps are tuned sharp and sag as the
 breath presses them (a soft note sharp, a hard one flat, the long low reeds
 most), each maker's in equal temperament or a compromise one (the blow
-chord's third 5 cents low), a blues player's sometimes in the old just
-intonation. The throat's vibrato pulses the breath (3-6 dB) and dips the
+chord's third 5 cents low), a blues player's sometimes the old Marine
+Band's, nearer just intonation. The throat's vibrato pulses the breath (3-6 dB) and dips the
 pitch only on a reed that bends. A bent note is attacked a little above and
 held by ear, a few cents off and wavering; weaker and darker. The breath
 itself hisses, about as loud however hard it blows, most as a note is
@@ -214,16 +214,16 @@ NOISE = 0.0069  # the breath's hiss: it grows only a little with the breath, so 
 PULSE = 0.5  # the throat vibrato's swing of the breath, at ornament 1
 BENT_DB = 2.5  # dB a bent note's reed loses per semitone of bend (the mouth's resonance on its fundamental gives
 # one of them back: about 1.5 dB a semitone in all)
-HANDS = (900.0, 4000.0, 0.15, 0.3)  # the cupped hands: low-pass corner shut and open (Hz), the leak between the
+HANDS = (1000.0, 4500.0, 0.16, 0.3)  # the cupped hands: low-pass corner shut and open (Hz), the leak between the
 # fingers, and how much of the sound they soak up when shut (3 dB)
 # A maker's temperament, cents per hole from 1 to 10 against equal temperament: a harp tuned for its chords
-# (the blow chord's third a little low, as Hohner's compromise tunings), and an old-style one in just intonation
-# (the thirds and the draw sevenths 11-12 cents low: a sweet blues chord, sour against a piano) that only a blues
-# player carries
+# (the blow chord's third a little low, as Hohner's compromise tunings, Pat Missin's measures), and the old Marine
+# Band's, nearer just intonation (the thirds and the draw sevenths 11-12 cents low: a sweet blues chord, sour
+# against a piano) that only a blues player carries
 TEMPERAMENTS = {
     "equal": ((0,) * 10, (0,) * 10),
     "compromise": ((0, -5, 1, 0, -5, 1, 0, -5, 1, 0), (2, 4, 0, 5, 2, 6, 0, 5, 2, 6)),
-    "just": ((0, -12, 1, 0, -12, 1, 0, -12, 1, 0), (2, 1, -11, 2, -12, 3, -11, 2, -12, 3)),
+    "classic": ((0, -12, 1, 0, -12, 1, 0, -12, 1, 0), (2, 1, -11, 2, -12, 3, -11, 2, -12, 3)),
 }
 
 
@@ -249,7 +249,7 @@ def _mouth(f0: float, breath: str, bent: float, size: float):
 
 @njit(cache=True)
 def _hands(x, opening, sr, shut, wide, leak, absorb):
-    """The cupped hands over the harp: a resonant low-pass (a topology-preserving state-variable filter) whose
+    """The cupped hands over the harp: a gentle low-pass (a topology-preserving state-variable filter) whose
     corner rises from `shut` Hz to `wide` Hz as they open, blended with the open sound by how open they are and
     never quite shut (`leak`: what still gets out between the fingers); shut, they also soak up `absorb` of it."""
     n = x.shape[0]
@@ -260,7 +260,7 @@ def _hands(x, opening, sr, shut, wide, leak, absorb):
         o = opening[i]
         fc = shut * (wide / shut) ** o
         g = np.tan(np.pi * fc / sr)
-        k = 1.0 / (1.2 - 0.5 * o)
+        k = 1.41
         a1 = 1.0 / (1.0 + g * (g + k))
         a2 = g * a1
         a3 = g * a2
@@ -329,10 +329,10 @@ def render(name: str, notes, sr: int, length: int, rng: np.random.Generator, mak
     rate = float(make.uniform(4.6, 5.8))
     kind = float(make.uniform())
     temper = s.get("temperament") or ("equal" if kind < 0.45 else
-                                      "compromise" if kind < 0.85 or style != "blues" else "just")
+                                      "compromise" if kind < 0.85 or style != "blues" else "classic")
     over_band = float(make.uniform(0.0, 2.0))
-    for (h, b) in tuning:
-        tuning[(h, b)] += TEMPERAMENTS[temper][b == "draw"][h] + over_band + _sag(h, b)
+    for (h, b) in tuning:  # (never more than 8 cents over the band at a mezzo-forte breath)
+        tuning[(h, b)] = min(tuning[(h, b)] + TEMPERAMENTS[temper][b == "draw"][h] + over_band, 8.0) + _sag(h, b)
     notes = sorted((n for n in notes if n.start * sr < length and n.dur > 0), key=lambda n: (n.start, -n.pitch))
     out = np.zeros(length)
     if not notes:
@@ -364,6 +364,9 @@ def render(name: str, notes, sr: int, length: int, rng: np.random.Generator, mak
         m = max(1, min(length - i0, int(round(note.dur * sr))))
         # how the note gives way to the next: the old reed dies away as the lips slide on (both sound a moment),
         # stops short as the breath turns, is cut by the tongue before the same reed again
+        if then in ("moved", "turned"):  # the breath carries on (the lips sliding, or turning it round) until the
+            # new note starts, over the part's few milliseconds of gap
+            m = max(m, min(length - i0, int(round((notes[after].start - note.start) * sr))))
         if then in ("repeat", "turned"):  # the tongue stops the air, or the breath stops before turning round
             stop = rng.uniform(0.015, 0.025) if then == "repeat" else rng.uniform(0.002, 0.006)
             m = max(min(m, int(0.02 * sr)), m - int(stop * sr))  # never below 20 ms, nor longer than written
@@ -420,7 +423,7 @@ def render(name: str, notes, sr: int, length: int, rng: np.random.Generator, mak
         # the reed builds up (low reeds and soft breaths slower), and the tone brightens with the breath; bent
         # notes are darker and weaker, overblows thin
         speak = SPEAK * 2.0 ** ((78.0 - pitch) / 14.0) * (0.6 / max(vel, 0.15)) ** 1.2
-        speak *= 1.15 if played.breath == "draw" else 1.0
+        speak = min(speak * (1.15 if played.breath == "draw" else 1.0), 0.028)
         build = 1.0 if carried and last_reed is not None and (last_reed.hole, last_reed.breath) == \
             (played.hole, played.breath) else 1.0 - np.exp(-t / speak)  # a slur on the same reed: still swinging
         # companions on the same breath, the holes the mouth has open besides the note's, which the breath is

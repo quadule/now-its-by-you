@@ -150,8 +150,8 @@ def test_the_harp_is_tuned_sharp_sags_with_the_breath_and_has_a_makers_temperame
     soft, hard = (cents(peak_hz(play([note(74, vel=v)], 1.6, temperament="equal"), f, 0.5, 1.2), f) for v in (0.3, 0.9))
     assert soft - hard > 4.0 and soft > 1.5 and hard < 0.0  # a soft breath sharp, a hard one flat
     third = {t: cents(peak_hz(play([note(78)], 1.6, temperament=t), midi_to_hz(78), 0.5, 1.2), midi_to_hz(78))
-             for t in ("equal", "compromise", "just")}  # F#5, 5 blow: the blow chord's third
-    assert third["equal"] - third["compromise"] > 3.0 and third["equal"] - third["just"] > 9.0
+             for t in ("equal", "compromise", "classic")}  # F#5, 5 blow: the blow chord's third
+    assert third["equal"] - third["compromise"] > 3.0 and third["equal"] - third["classic"] > 9.0
 
 
 @pytest.mark.parametrize("pitch", [69, 76])
