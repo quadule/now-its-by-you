@@ -63,6 +63,27 @@ FIDDLE = Body(  # the violin: A0 near 275 Hz, the B1 pair near 470 and 540, a br
     dense=(950.0, 10000.0, 120), tilt=-1.5, q=(34.0, 20.0), direct=0.2, lowcut=190.0, highcut=9000.0,
     hill=(2600.0, 1.3, 7.0),
 )
+CELLO = Body(  # the cello: A0 near 100 Hz, the B1 pair near 180 and 215 (the wolf's F-F#), a bridge hill near 1.3 kHz
+    # (Askenfelt 1982; Bynum and Rossing 1997; the bridge's own resonances near 1 and 2.2 kHz, Reinicke 1973): a
+    # violin scaled about 0.38 in its low modes, the hill half as high up
+    modes=((100.0, 16.0, 4.0), (150.0, 26.0, 1.0), (182.0, 30.0, 8.0), (216.0, 32.0, 7.0),
+           (290.0, 28.0, 3.0), (372.0, 26.0, 2.0)),
+    dense=(400.0, 8000.0, 120), tilt=-2.0, q=(30.0, 18.0), direct=0.2, lowcut=70.0, highcut=7500.0,
+    hill=(1300.0, 1.4, 6.0),
+)
+VIOLA = Body(  # the viola: A0 near 230 Hz, the B1 pair near 410 and 460, a bridge hill near 2.1 kHz; too small a box for
+    # its pitch, so its C string's fundamental is weak (Fletcher and Rossing ch. 10)
+    modes=((230.0, 18.0, 5.0), (340.0, 28.0, 1.0), (410.0, 34.0, 8.0), (462.0, 36.0, 7.0),
+           (600.0, 30.0, 3.0), (780.0, 28.0, 2.0)),
+    dense=(800.0, 9000.0, 120), tilt=-1.7, q=(34.0, 20.0), direct=0.2, lowcut=160.0, highcut=8500.0,
+    hill=(2100.0, 1.3, 6.5),
+)
+HARMONICA = Body(  # a harmonica's comb and cover plates in a player's cupped hands: the hands' cavity near 450 Hz,
+    # the plates' bright hump near 3 kHz; hardly any box at all, so mostly the reed itself (direct)
+    modes=((450.0, 3.0, 3.0), (1150.0, 4.0, 1.5), (2900.0, 5.0, 4.0), (4300.0, 6.0, 1.5)),
+    dense=(1500.0, 9000.0, 24), tilt=-2.0, q=(10.0, 6.0), direct=0.75, lowcut=150.0, highcut=10000.0,
+    length=0.06,
+)
 REED_BOX = Body(  # a harmonium's reed chamber and bellows box: a few broad, nasal humps
     modes=((180.0, 6.0, 2.0), (420.0, 5.0, 5.0), (1250.0, 4.0, 4.0), (2600.0, 4.0, 1.0)),
     dense=(500.0, 4000.0, 30), tilt=-4.0, q=(14.0, 8.0), direct=0.6, lowcut=60.0, highcut=5000.0,
