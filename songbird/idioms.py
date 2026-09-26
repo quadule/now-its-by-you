@@ -999,14 +999,26 @@ def w_oompah(ctx: StyleContext, i: int, part: str) -> list[Ev]:
     arts = instruments.spec(part).get("articulations", {})
     oom, pah = ("bass", "chord") if "bass" in arts and "chord" in arts else ("", "")
     out = []
+    n = len(ctx.grid.beats)
     for c in ctx.chords_in(i):
         root, fifth = left_hand(ctx, part, c)
         beats = ctx.grid.beats_in(c.u0, c.u1)
+        subs = ctx.grid.subs_in(c.u0, c.u1)
         lh = 0
         for k, u in enumerate(beats):
-            b, n = ctx.grid.beat_index(u), len(ctx.grid.beats)
+            b = ctx.grid.beat_index(u)
             end = until(beats, k, c.u1)
-            if b == 0 or (n == 4 and b == 2) or (n == 2 and b == 1) or abs(u - c.u0) < 1e-9:
+            if n == 2:  # a bar of two beats: each an oom and its subdivisions the pahs (oom-pa-pa in six-eight)
+                pas = [v for v in subs if u + 1e-9 < v < end - 1e-9]
+                out.append(ev(part, u, u + 0.7 * ((pas[0] if pas else end) - u), root if lh % 2 == 0 else fifth,
+                              ctx.vel(part, u, 0.7), art=oom, i=i))
+                lh += 1
+                for j, v in enumerate(pas):
+                    stop = pas[j + 1] if j + 1 < len(pas) else end
+                    for p in fingering(ctx, part, c, v, stop, i)[-3:]:
+                        out.append(ev(part, v, v + 0.55 * (stop - v), p, ctx.vel(part, v, 0.55 - 0.05 * j), art=pah,
+                                      i=i))
+            elif b == 0 or (n == 4 and b == 2) or abs(u - c.u0) < 1e-9:
                 out.append(ev(part, u, u + 0.7 * (end - u), root if lh % 2 == 0 else fifth, ctx.vel(part, u, 0.7),
                               art=oom, i=i))
                 lh += 1

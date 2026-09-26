@@ -267,6 +267,22 @@ def test_the_oompah_idiom_tells_an_accordion_which_hand_but_not_a_concertina(mon
         assert score.part(part) and arts == want, (part, arts)
 
 
+def test_the_oompah_in_six_eight_is_oom_pa_pa():
+    from pathlib import Path
+
+    from songbird import genome as G
+    from songbird.realize import choose_params, realize
+
+    g = G.load(Path(__file__).parent.parent / "songs" / "h-now-its-by-you.json")
+    p = choose_params(g, style="shanty", arrange={"alone": 0, "feel": "six"})
+    assert p.style.feel == "six"
+    notes = [n for n in realize(g, p).part("concertina") if n.section.startswith("refrain")]
+    starts = sorted({n.start for n in notes})
+    sizes = [sum(1 for n in notes if n.start == t) for t in starts]
+    # each dotted beat a lone bass note and then a chord on each of its other two eighths
+    assert sizes.count(1) >= 8 and sum(s >= 2 for s in sizes) >= 2 * sizes.count(1) - 4, sizes
+
+
 def test_the_shantys_squeezebox_is_sometimes_an_accordion_and_a_lineage_keeps_it():
     from dataclasses import replace
     from pathlib import Path
