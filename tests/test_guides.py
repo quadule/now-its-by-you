@@ -138,6 +138,155 @@ def test_a_stale_mix_is_made_again(workspace):
     assert json.loads(note_path.read_text())["score"] == K.digest(score)
 
 
+def test_a_spec_is_only_what_is_on_offer():
+    spec = M.Spec.parse("a.k-2.t90")
+    assert (spec.set, spec.key, spec.tempo, spec.id) == ("a", -2, 90, "a.k-2.t90")
+    assert spec.to_dict() == {"id": "a.k-2.t90", "set": "a", "key": -2, "tempo": 90}
+    assert M.Spec.parse("song.k0.t100") == M.Spec("song")
+    for bad in ("a.k+2.t90", "a.k3.t90", "a.k0.t95", "a.k-0.t100", "a.k02.t100", "A.k0.t100", "toolongset.k0.t100",
+                "a.k0", "../x.k0.t100", "", None):
+        with pytest.raises(ValueError):
+            M.Spec.parse(bad)
+
+
+def test_the_singers_arrangement_puts_the_band_between_sung_sections():
+    genome = G.load(H)
+    assert M.arrangement(genome, ["intro", "verse", "refrain", "verse", "refrain", "bridge", "refrain", "tag"]) == (
+        "intro", "verse", "turn", "refrain", "turn", "verse", "turn", "refrain", "turn", "bridge", "turn", "refrain",
+        "turn", "tag")
+    # an existing turn isn't doubled, nor is one put after something unsung
+    assert M.arrangement(genome, ["verse", "turn", "refrain", "break", "verse"]) == ("verse", "turn", "refrain", "break",
+                                                                                      "verse")
+
+
+def held(genome, form, seed):
+    """Words a set might hold: drawn from the bank for a form, as a lineage keeps them."""
+    from songbird import arrange
+
+    return arrange.hold(genome, arrange.arrange(genome, form, seed))
+
+
+@pytest.fixture
+def specs(workspace, monkeypatch):
+    """A short H on disk and a sets file of its own: set "a" sings drawn words in a short form, "b"
+    the song's own words in its own form."""
+    data = json.loads(H.read_text())
+    data["seed_params"]["form"] = ["verse"]
+    path = workspace / "h-short.json"
+    path.write_text(json.dumps(data))
+    genome = G.load(path)
+    monkeypatch.setattr(M, "SETS", workspace / "sets")
+    sets = {"song": "h-short", "sets": [
+        {"id": "a", "name": "Set A", "about": "two verses and a refrain", "form": ["verse", "refrain", "verse"],
+         "words": held(genome, ["verse", "refrain", "verse"], 5)},
+        {"id": "b", "name": "Set B", "about": "the song's own"}]}
+    (workspace / "sets").mkdir()
+    (workspace / "sets" / "h-short.json").write_text(json.dumps(sets))
+    return path
+
+
+def test_sets_come_from_the_sets_file_or_are_the_song(specs, workspace):
+    have = M.sets(specs)
+    assert [s["id"] for s in have] == ["a", "b"] and have[1]["form"] == ["verse"] and have[1]["words"] is None
+    assert M.variants(specs) == {"sets": [{"id": "a", "name": "Set A", "about": "two verses and a refrain"},
+                                          {"id": "b", "name": "Set B", "about": "the song's own"}],
+                                 "keys": [-4, -2, 0, 2, 4], "tempos": [100, 90, 80], "mixes": ["melody", "full", "voice"],
+                                 "default": {"set": "a", "key": 0, "tempo": 100, "mix": "melody"}}
+    (workspace / "sets" / "h-short.json").unlink()
+    assert [(s["id"], s["form"], s["words"]) for s in M.sets(specs)] == [("song", ["verse"], None)]
+    (workspace / "sets" / "h-short.json").write_text(json.dumps({"sets": [{"id": "Set A"}]}))
+    with pytest.raises(ValueError, match="lowercase"):
+        M.sets(specs)
+
+
+def test_a_spec_score_is_the_set_in_the_singers_arrangement_at_its_key_and_speed(specs):
+    score = M.spec_score(specs, "a.k2.t80")
+    assert sorted(p.name for p in score.parent.iterdir()) == ["a.k2.t80.note.json", "a.k2.t80.score.json"]  # no audio
+    data = json.loads(score.read_text())
+    assert data["spec"] == {"id": "a.k2.t80", "set": "a", "key": 2, "tempo": 80}
+    seed = choose_params(G.load(specs))
+    assert data["tempo"] == pytest.approx(seed.tempo * 0.8) and data["transpose"] == 2 and data["seed"] == seed.seed
+    assert [s[0] for s in data["sections"]] == ["verse", "turn", "refrain", "turn", "verse"]
+    turn = data["sections"][1]
+    assert turn[2] - turn[1] == pytest.approx(2 * 4 * 60 / data["tempo"])  # two bars of the band alone
+    assert not [n for n in data["notes"] if n["part"] == "voice" and turn[1] + 0.1 < n["start"] < turn[2] - 0.5]
+    # the set's words, a tone up from the song's own key
+    song = json.loads(M.spec_score(specs, "b.k0.t100").read_text())
+    first = [n for n in data["notes"] if n["part"] == "voice"][0]
+    assert first["pitch"] == [n for n in song["notes"] if n["part"] == "voice"][0]["pitch"] + 2
+    held_verse = M.find_set(specs, "a")["words"]["verses"][0]["id"]
+    assert held_verse in {v["id"] for v in G.load(specs).source["bank"]["verses"]}
+    # asked for again: the same file, untouched; stale once the set changes
+    before = score.stat().st_mtime_ns
+    assert M.spec_score(specs, "a.k2.t80") == score and score.stat().st_mtime_ns == before
+    sets = json.loads(M.SETS.joinpath("h-short.json").read_text())
+    sets["sets"][0]["form"] = ["verse", "verse"]
+    sets["sets"][0]["words"] = held(G.load(specs), ["verse", "verse"], 9)
+    M.SETS.joinpath("h-short.json").write_text(json.dumps(sets))
+    assert [s[0] for s in json.loads(M.spec_score(specs, "a.k2.t80").read_text())["sections"]] == ["verse", "turn", "verse"]
+
+
+def test_a_spec_has_every_mix_and_stems_that_make_the_full_guide(specs):
+    melody, score, digest = M.ensure_spec(specs, "b.k-2.t100")
+    assert melody == M.spec_path("h-short", "b.k-2.t100", "melody") and digest == K.digest(score)
+    for mix in M.MIXES:
+        assert M.spec_path("h-short", "b.k-2.t100", mix).exists()
+    assert not M.spec_path("h-short", "b.k-2.t100", "band").exists()  # the stems only when asked for
+    full = M.spec_path("h-short", "b.k-2.t100", "full")
+    before = full.stat().st_mtime_ns
+    assert M.ensure_spec(specs, "b.k-2.t100", "full").wav == full and full.stat().st_mtime_ns == before  # kept
+
+    band, lead, same = M.stems(specs, "b.k-2.t100")
+    assert same == score and K.digest(score) == digest  # the same score, so every take still measures
+    b, sr = sf.read(band)
+    v, _ = sf.read(lead)
+    y, _ = sf.read(full)
+    assert sf.info(band).subtype == "FLOAT" and b.shape == v.shape == y.shape
+    from songbird.synth import master
+
+    data = json.loads(score.read_text())
+    pcm = master.to_pcm16(master.master(b + v, sr), seed=data["seed"]).astype(int)
+    assert np.abs(pcm - np.round(y * 32768).astype(int)).max() <= 1  # the full guide, to the dither's last bit
+    # the lead is the voice (and its room): quiet where no one sings, where the band plays on
+    sung = [n for n in data["notes"] if n["part"] == "voice"]
+    a, z = int((sung[-1]["start"] + sung[-1]["dur"] + 2.0) * sr), int((data["duration"] - 0.2) * sr)
+    rms = lambda x: np.sqrt(np.mean(x ** 2))  # noqa: E731
+    if z - a > sr // 2:
+        assert rms(v[a:z]) < 0.05 * rms(b[a:z])
+    inside = np.concatenate([v[int(n["start"] * sr) + 2000 : int((n["start"] + n["dur"]) * sr)] for n in sung])
+    assert rms(inside) > 0.3 * rms(b)
+
+
+def test_a_phrasing_moves_the_machines_singing_but_not_the_score(specs, workspace):
+    from songbird import phrasing as P
+
+    score = M.spec_score(specs, "b.k0.t100")
+    grid, data = M.load_score(score)
+    genome = G.load(specs)
+    late = {pid: tuple(P.Gesture(early=-0.25) for _ in phrase.sung) for pid, phrase in genome.phrases.items()}
+    path = workspace / "late.json"
+    path.write_text(json.dumps(P.to_json(late, source="test")))
+    sung = M.phrased(grid, data, path)
+    before, after = grid.part("voice"), sung.part("voice")
+    assert len(before) == len(after)
+    assert all(b.start + 0.25 * 60 / data["tempo"] == pytest.approx(a.start) for a, b in zip(after, before))
+    assert [n for n in sung.notes if n.part != "voice"] == [n for n in grid.notes if n.part != "voice"]
+    digest = K.digest(score)
+    M.ensure_spec(specs, "b.k0.t100", "full", phrasing=path)
+    assert K.digest(score) == digest and json.loads(M.spec_path("h-short", "b.k0.t100", "note").read_text())["audio"][
+        "phrasing"] == K.digest(path)
+
+
+def test_a_take_goes_through_the_machines_strip_and_room():
+    sr = 44100
+    t = np.arange(2 * sr) / sr
+    dry = 0.1 * np.sin(2 * np.pi * 220 * t) * (t > 0.5)
+    wet = M.voice_strip(dry, sr, 1)
+    assert wet.ndim == 2 and wet.shape[1] == 2 and len(wet) > len(dry)  # stereo, with the room's tail
+    assert np.abs(wet[len(dry):]).max() > 0  # the room rings on
+    assert np.corrcoef(wet[:, 0], wet[:, 1])[0, 1] > 0.8  # in the middle, the room around it
+
+
 def test_a_guide_without_beats_is_written_again(workspace):
     genome = short(form=("verse",))
     score = M.ensure(H, genome, "full").score
