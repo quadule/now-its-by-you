@@ -33,7 +33,7 @@ import re
 from dataclasses import dataclass, fields
 
 import numpy as np
-from scipy.ndimage import uniform_filter1d
+from scipy.ndimage import minimum_filter1d, uniform_filter1d
 
 from . import fx, room
 from .master import limit, loudness
@@ -396,8 +396,10 @@ def mix(stems: dict[str, np.ndarray], sr: int, seed: int = 0, params: MixParams 
         band *= gain
         band_send *= gain
         if singing is not None:
-            # where the voice rests a while (the intro, the turns), the band is ridden up, as an engineer would
-            rest = uniform_filter1d((singing < 0.05).astype(float), int(RIDE[1] * sr), mode="nearest")
+            # where the voice rests a while (the intro, the turns), the band is ridden up, as an engineer would;
+            # the ride goes up and comes back down inside the rest, so the band is down again before the voice returns
+            resting = minimum_filter1d((singing < 0.05).astype(float), int(RIDE[1] * sr), mode="nearest")
+            rest = uniform_filter1d(resting, int(RIDE[1] * sr / 2), mode="nearest")
             ride = 10.0 ** (RIDE[0] * p.duck * rest / 20.0)
             band *= ride[:, None]
             band_send *= ride[:, None]
