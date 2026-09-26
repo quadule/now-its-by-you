@@ -18,6 +18,7 @@ from .band import Band
 from .genome import Genome, Phrase, sung_words, turn
 from .phrasing import Gesture, Phrasing, gesture
 from .score import Note, Score
+from .style import Style
 from .theory import degree_semitones, harmony
 
 if TYPE_CHECKING:
@@ -45,6 +46,7 @@ class Params:
     leanings: dict = field(default_factory=dict)  # for songbird.arrange (variation.leanings): its Leanings' fields
     lay: float = 0.0  # beats the singers sit ahead of the beat, behind if negative (applied by variation.lay)
     inventory: str = ""  # phoneme inventory for the singer's vowels, "" the seed's (not yet read by the singer)
+    style: Style = field(default_factory=Style)  # the tradition it's played in and its arrangement (songbird.style)
 
     @classmethod
     def from_dict(cls, data: dict) -> Params:
@@ -60,6 +62,8 @@ class Params:
             values["band"] = band = {**(band or {}), "swing": min(1.0, float(data["swing"]) / 0.333)}
         if "band" in values:
             values["band"] = band if isinstance(band, Band) else Band.from_dict(band)
+        if "style" in values and not isinstance(values["style"], Style):  # absent in old records: the seed's
+            values["style"] = Style.from_dict(values["style"])
         return cls(**values)
 
     def to_dict(self) -> dict:

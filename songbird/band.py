@@ -71,6 +71,9 @@ class Band:
     lead: str = "whistle"  # who states the tune where nobody sings, one of LEADS: whistle, fiddle, lute
     body: float = 1.0  # 0.8..1.25: the instruments' size; a bigger body resonates lower
     maker: int = 0  # seeds the instruments themselves (bodies, string quirks, the drum's skin), stable per machine
+    # Who plays when a style sets the band (songbird.style): instrument -> gain, 0..2, any instrument the
+    # registry knows (synth.instruments.known()). Empty: the eight above, as the seed's band always played.
+    lineup: dict = field(default_factory=dict)
 
     @classmethod
     def from_dict(cls, data: dict | None) -> Band:
@@ -84,7 +87,10 @@ class Band:
         values = {}
         for f in fields(self):
             v = getattr(self, f.name)
-            if f.name in INSTRUMENTS:
+            if f.name == "lineup":  # a mapping, or (name, gain) pairs as an old JSON might hold them
+                pairs = v.items() if isinstance(v, dict) else (v or ())
+                v = {str(k): float(np.clip(float(g), 0.0, 2.0)) for k, g in pairs}
+            elif f.name in INSTRUMENTS:
                 v = float(np.clip(float(v), 0.0, 2.0))
             elif f.name in ("brightness", "density", "swing", "wear", "ornament", "arc"):
                 v = float(np.clip(float(v), 0.0, 1.0))
@@ -99,8 +105,14 @@ class Band:
             values[f.name] = v
         return Band(**values)
 
+    def gain(self, name: str) -> float:
+        """An instrument's gain: from the lineup when a style set one, else the eight's own fields."""
+        if self.lineup:
+            return float(self.lineup.get(name, 0.0))
+        return float(getattr(self, name, 0.0)) if name in INSTRUMENTS else 0.0
+
     def plays(self, name: str) -> bool:
-        return getattr(self, name) > 0.02
+        return self.gain(name) > 0.02
 
 
 # Timing habits: seconds each part sits against the grid (a bowed note speaks
