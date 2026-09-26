@@ -26,7 +26,8 @@ what a cellist does differently from a fiddler:
   width through slurs and bow changes, narrower on short notes, easing before
   a rest.
 - Shifts: "slide" glides from the note before (or from a tone and a half
-  below after a rest), slower than a fiddler's.
+  below after a rest), slower than a fiddler's; "swell" grows from 9 dB down
+  and dies back.
 - "trem": the bow reversing 11 to 15 times a second; "pizz": the string
   plucked with the fingertip over the end of the fingerboard (pluck.py),
   through the same body.
@@ -110,6 +111,7 @@ LOUDER = 0.4  # the pole falls this much per unit of velocity: a heavier, faster
 GLASS = (("low", 400.0, -6.0), ("high", 1500.0, 10.0))  # sul ponticello's tilt of the bridge force
 BRIGHTER = (8.0, 10.0, -6.0)  # dB above 1 kHz per unit of brightness and of velocity, and for sul tasto's light bow
 PIZZ = 0.55  # a pizzicato's force against a bowed note's
+SWELL = 0.5  # a swell's bow speed at its ends against its middle, on top of bowed.tracks' 0.7 (9 dB in all)
 VIB_ONSET, VIB_CARRY, VIB_EASE = 0.28, 0.1, 0.15  # s a vibrato takes to grow in, to change width, to ease off
 
 # How much longer than asked the loop runs (samples), measured over bow positions 0.04 to 0.2, poles 0.25 to 0.62
@@ -259,6 +261,14 @@ def _bowed(kind: Kind, notes, sr: int, length: int, rng: np.random.Generator, s:
     period, bridge_len, bow_v, grip, catch = bowed.tracks(
         notes, sr, length, rng, vibrato=0.0, wear=wear, rise=kind.rise, turn=kind.turn, bite=kind.bite,
         slide=(None, kind.shift), bowing=bowing, intonation=INTONATION)
+    # A swell: bowed.tracks leans on the middle of the note by 3 dB (a fiddler's); a string player's hairpin grows
+    # from nearly three times softer and dies back, the bow's weight going with its speed (Schelleng's window)
+    for note in notes:
+        i0, i1 = max(0, int(round(note.start * sr))), min(length, int(round((note.start + note.dur) * sr)))
+        if note.art == "swell" and i1 - i0 >= 16:
+            deeper = SWELL + (1.0 - SWELL) * np.sin(np.pi * np.linspace(0.0, 1.0, i1 - i0))
+            bow_v[i0:i1] *= deeper
+            grip[i0:i1] *= deeper
     # the vibrato, carried through the notes (bowed.tracks' own starts afresh on every note, a fiddler's)
     cents = _vibrato(notes, sr, length, rng, vibrato(kind, float(s["ornament"])) * q["depth"], kind.rate * q["rate"],
                      kind.shift, q["wait"], q["onset"])
@@ -298,8 +308,10 @@ def _bowed(kind: Kind, notes, sr: int, length: int, rng: np.random.Generator, s:
         i0, i1 = int(round(note.start * sr)), min(length, int(round((note.start + note.dur) * sr)))
         if i1 - i0 < 16:
             continue
-        seg = bow_v[i0:i1]
-        full = np.abs(seg[len(seg) // 2]) if note.art != "trem" else np.abs(seg).max()
+        # the speed the stroke gathers to (its first tenth of a second: a swell goes on growing long after, and
+        # waiting for it would set the string moving afresh in the middle of the note)
+        seg = bow_v[i0:i1] if note.art == "trem" else bow_v[i0: min(i1, i0 + int(0.12 * sr))]
+        full = np.abs(seg).max()
         up = np.abs(seg) >= 0.9 * full
         size = (0.6 if joined else 0.85) * (1.0 - 0.35 * wear) * rng.uniform(0.9, 1.1)
         if full > 0 and up.any():

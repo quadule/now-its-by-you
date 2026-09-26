@@ -237,6 +237,21 @@ def test_a_section_player_starts_the_vibrato_in_their_own_time():
     assert halves[1] - halves[0] > 0.15
 
 
+@pytest.mark.parametrize("name,pitch,dur", [("cello", 50, 6.0), ("cello", 38, 4.0), ("viola", 62, 3.0)])
+def test_a_swell_speaks_at_once_and_never_starts_again(name, pitch, dur):
+    """The string is set moving once the bow has gathered speed, not when a swell reaches most of its peak a second
+    later (that reset the string mid-note: a click 20 dB over the note's highs, after a slow, scratchy start)."""
+    kind = cello.KINDS[name]
+    y = cello.player(kind, [Note("x", 0.1, dur, float(pitch), 0.5, art="swell")], SR, int((dur + 0.5) * SR),
+                     np.random.default_rng(2), PLAIN)
+    f = midi_to_hz(pitch)
+    env = envelope(y, f)
+    assert np.argmax(env[int(0.1 * SR):] > 0.7 * np.median(env[int(0.25 * SR): int(0.35 * SR)])) / SR < 0.06
+    highs = sosfiltfilt(butter(4, 4000, btype="highpass", fs=SR, output="sos"), y)
+    rms = np.sqrt(np.convolve(highs**2, np.ones(882) / 882, mode="same"))[int(0.2 * SR): int((dur - 0.1) * SR)]
+    assert 20 * np.log10(rms.max() / np.median(rms)) < 8
+
+
 def test_pizzicato_rings_down_and_tremolo_reverses_a_dozen_times_a_second():
     y = stem("cello", [Note("cello", 0.1, 0.3, 43.0, 0.7, art="pizz")], 2.0).mean(axis=1)
     env = envelope(y, midi_to_hz(43))
