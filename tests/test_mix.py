@@ -206,7 +206,7 @@ def test_every_instrument_finds_its_strip():
     # sustained keyboards take the organ's strip, whatever family their maker filed them under; a kit, a banjo
     # and a mandolin have strips of their own
     specific = {"organ": "organ", "harmonium": "organ", "synth-pad": "organ", "kit": "kit", "banjo": "banjo",
-                "mandolin": "mandolin"}
+                "mandolin": "mandolin", "harmonica": "harmonica"}
     for name in instruments.known():
         role = mixing.role_of(name)
         assert role in mixing.ROLES and role not in ("voice", "choir"), name
@@ -229,3 +229,6 @@ def test_every_instrument_finds_its_strip():
     assert mixing.ROLES["kit"].comp[2] > mixing.ROLES["drum"].comp[2]  # slower to grab: the strokes keep their edge
     for name in ("claps", "stomps", "cajon", "shaker", "tambourine"):
         assert mixing.role_of(name) == "drum", name  # the frame drum's strip, its 40 Hz high-pass
+    # a harmonica's presence is its reed's own: its strip takes none of it, as the free reeds' still does
+    assert mixing.role_of("harmonica") == "harmonica" and mixing.role_of("accordion") == "reed"
+    assert not any(band[0] == "peak" and 2000 <= band[1] <= 4000 for band in mixing.ROLES["harmonica"].eq)

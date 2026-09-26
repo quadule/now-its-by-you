@@ -183,9 +183,12 @@ ROLES: dict[str, Strip] = {
                   comp=(10.0, 2.0, 0.015, 0.2, 1.5, 3.0), send=1.0),
     # An organ or a pad: held under everything, out of the words, no fizz.
     "organ": Strip(eq=(("hp", 55), ("peak", 2500, -2.5, 0.7), ("lp", 8000)), send=1.0),
-    # Free reeds and harmonicas: nasal mids tamed, stepping back a little under the voice like a lead line.
+    # Free reeds: nasal mids tamed, stepping back a little under the voice like a lead line.
     "reed": Strip(eq=(("hp", 140), ("peak", 1200, -1.5, 1.0), ("peak", 2800, -2.0, 1.0), ("high", 9000, -1.0)),
                   send=1.1, duck=2.0),
+    # A harmonica: its cover plates' presence near 3 kHz is its reed's own now, so only a little of its honk near
+    # 1 kHz out and its breath's top softened; a lead line, it steps back under the voice.
+    "harmonica": Strip(eq=(("hp", 180), ("peak", 1000, -1.5, 1.0), ("high", 10000, -1.0)), send=1.1, duck=2.0),
     # A cello or a section: the fiddle's treatment without its 180 Hz high-pass, so the low strings are heard; the
     # cut for boxiness at the B1 pair's boom (190 Hz), not in the cello's formant above it (250-500 Hz).
     "strings": Strip(eq=(("hp", 45), ("peak", 190, -1.5, 1.0), ("peak", 2500, -2.0, 1.0), ("high", 8000, -1.0)),
@@ -213,7 +216,8 @@ NAMES = {
     "keys": ("piano", "epiano", "rhodes", "keys", "celesta", "musicbox", "music-box", "glock", "glockenspiel", "vibes",
              "vibraphone", "marimba", "xylophone", "bells"),
     "organ": ("organ", "synthpad", "synth-pad", "harmonium"),  # sustained keys: no drone's 6 kHz low-pass
-    "reed": ("harmonica", "accordion", "concertina", "melodeon"),
+    "reed": ("accordion", "concertina", "melodeon"),
+    "harmonica": ("harmonica",),
     "strings": ("cello", "viola", "strings", "quartet"),  # their low strings kept: no fiddle's 180 Hz high-pass
     "synth": ("synth", "synthlead", "arp", "chip"),
 }
