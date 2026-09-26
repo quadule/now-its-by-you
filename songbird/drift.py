@@ -84,6 +84,8 @@ DIMENSIONS = {
     "duck": "how much the band and the room make way for the voice (slow)",
     "tune": "how freely the singer takes the tune this season: how often it learns or forgets a variant (slow)",
     "words": "how restless the words are this season: how often one is swapped (slow)",
+    "style": "where on the ring of styles a machine leans today (slow, held)",
+    "arrange": "turns the arrangement's options (the intro, a bare verse, a lift, the ending...) (season)",
 }
 
 DAY = 86400.0

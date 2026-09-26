@@ -19,6 +19,8 @@ from .band import Band
 from .genome import Genome, Meter, Phrase, sung_words, turn
 from .phrasing import Gesture, Phrasing, gesture
 from .score import Note, Score
+from . import style as style_mod
+from .style import Style
 from .theory import degree_semitones, harmony
 
 if TYPE_CHECKING:
@@ -53,6 +55,7 @@ class Params:
     words: dict = field(default_factory=dict)  # the words this lineage holds (arrange.hold): {} the seed's own
     generation: int = 0  # renditions between this one and the seed: 0 the seed, 1 its child...
     made: dict = field(default_factory=dict)  # by (a machine's hash, its first 12 digits) and at (days): whose clocks it turned
+    style: Style = field(default_factory=Style)  # the tradition it's played in and its arrangement (songbird.style)
 
     @classmethod
     def from_dict(cls, data: dict) -> Params:
@@ -71,6 +74,8 @@ class Params:
         values["variants"] = variants_mod.parse(values.get("variants"))
         values["words"] = dict(values.get("words") or {})
         values["made"] = dict(values.get("made") or {})
+        if "style" in values and not isinstance(values["style"], Style):  # absent in old records: the seed's
+            values["style"] = Style.from_dict(values["style"])
         return cls(**values)
 
     def to_dict(self) -> dict:
@@ -80,12 +85,21 @@ class Params:
         for name, empty in (("variants", []), ("words", {}), ("generation", 0), ("made", {})):
             if data[name] == empty:
                 del data[name]
+        # The seed's own style and band leave no trace, so a record (and the rendition seed a child draws
+        # from its parent's record) is as it was before styles existed.
+        if self.style.seed:
+            del data["style"]
+        else:
+            data["style"] = self.style.to_dict()
+        if not self.band.lineup:
+            del data["band"]["lineup"]
         return data
 
 
 def choose_params(genome: Genome, parent: Params | None = None, voice: Voice | None = None,
                   drift: Drift | None = None, seed: int | None = None, log: list | None = None,
-                  form: tuple | None = None, overrides=None) -> Params:
+                  form: tuple | None = None, overrides=None, style: str | None = None,
+                  arrange: dict | None = None) -> Params:
     """Inherit from the parent, pull toward the voice, apply drift.
 
     With no voice and no drift, the parent's parameters (the seed's, from the
@@ -108,7 +122,7 @@ def choose_params(genome: Genome, parent: Params | None = None, voice: Voice | N
         from .edits import Overrides
 
         overrides = overrides if isinstance(overrides, Overrides) else Overrides(genome, overrides)
-    if voice is None and drift is None:
+    if voice is None and drift is None and style is None and not arrange:
         chosen = parent if parent is not None else Params.from_dict(genome.seed_params)
         chosen = chosen if form is None else replace(chosen, form=tuple(form))
         chosen = chosen if seed is None else replace(chosen, seed=seed)
@@ -116,8 +130,9 @@ def choose_params(genome: Genome, parent: Params | None = None, voice: Voice | N
     from .variation import choose  # the table reads the singer's fields, so it brings the synth with it
 
     if overrides is None:
-        return choose(genome, parent, voice, drift, seed, log=log, form=form)
-    return overrides.finish(choose(genome, parent, voice, drift, seed, log=log, form=form, pin=overrides.pin))
+        return choose(genome, parent, voice, drift, seed, log=log, form=form, style=style, arrange=arrange)
+    return overrides.finish(choose(genome, parent, voice, drift, seed, log=log, form=form, pin=overrides.pin,
+                                   style=style, arrange=arrange))
 
 
 def sung_as(note: Note, g: Gesture | None, beat: float) -> Note:
@@ -147,6 +162,7 @@ class Clock:
     rit_start: int  # units to the final phrase's first bar line
     swing: float = 0.0
     ritardando: float = 0.0
+    triple: str = ""  # "waltz" or "six": the song re-barred in three (songbird.style), each foot three even pulses
 
     @property
     def unit(self) -> float:
@@ -167,8 +183,8 @@ class Clock:
         return self.lead + b * beat + x
 
     def seconds(self, u: float) -> float:
-        """Grid units to seconds, swung, slowing linearly through the final phrase."""
-        u = self.swung(u)
+        """Grid units to seconds, swung (or re-barred in three), slowing linearly through the final phrase."""
+        u = style_mod.rebar(u, self.lead) if self.triple else self.swung(u)
         if u <= self.rit_start:
             return PREROLL + u * self.unit
         x = u - self.rit_start
@@ -181,6 +197,16 @@ class Clock:
         start (there is one before an eighth-note pickup, in the preroll) to the
         final bar line, where the last note ends."""
         m = self.meter
+        if self.triple:  # re-barred: three beats a foot (0, 2, 3 before the re-barring), a bar a foot or two
+            out = []
+            for f in range(-1, (self.end - self.lead) // m.foot + 1):
+                for x in (0, 2, 3):
+                    u = self.lead + f * m.foot + x
+                    t = self.seconds(u)
+                    if t >= 0.0 and u <= self.end:
+                        bar = x == 0 and (self.triple == "waltz" or (f * m.foot) % m.bar == 0)
+                        out.append((t, bar))
+            return out
         first = -((self.lead * self.unit + PREROLL) // (m.beat * self.unit))  # as far back as time zero
         out = []
         for k in range(int(first), (self.end - self.lead) // m.beat + 1):
@@ -195,11 +221,14 @@ def timeline(genome: Genome, params: Params) -> Clock:
     the grid, phrase after phrase, the song's first pickup at zero."""
     meter = genome.meter
     phrases = [genome.phrases[pid] for name in params.form for pid in genome.section(name).phrases]
-    lead = phrases[0].pickup
-    end = sum(p.bars for p in phrases) * meter.bar + lead
-    # a compound beat (three to a beat) keeps its own lilt
-    swing = params.band.swing if meter.beat % 3 else 0.0
-    return Clock(meter, params.tempo, lead, end, end - phrases[-1].bars * meter.bar, swing, params.ritardando)
+    phrases += style_mod.repeated_phrases(genome, params)  # a style's ending may sing the last line again
+    lead = phrases[0].pickup + style_mod.count_in(genome, params)  # after a count-in bar, if the style has one
+    sung = sum(p.bars for p in phrases) * meter.bar + lead
+    end = sung + style_mod.coda(genome, params)  # and a plagal amen's bars after the last line, if it has one
+    # a compound beat (three to a beat) keeps its own lilt; a style's feel sets the swing (songbird.style)
+    swing = style_mod.swing(params) if meter.beat % 3 else 0.0
+    return Clock(meter, params.tempo, lead, end, sung - phrases[-1].bars * meter.bar, swing, params.ritardando,
+                 style_mod.triple(genome, params))
 
 
 def realize(genome: Genome, params: Params, verses=None, phrasing: Phrasing | None = None,
@@ -242,8 +271,12 @@ def realize(genome: Genome, params: Params, verses=None, phrasing: Phrasing | No
             phrase = genome.phrases[pid]
             placed.append((name, phrase, t, line))
             t += phrase.bars * meter.bar
+    for name, phrase, line in style_mod.repeated(genome, params, placed):  # a style's ending may sing the last line again
+        placed.append((name, phrase, t, line))
+        t += phrase.bars * meter.bar
     clock = timeline(genome, params)  # the same layout, as time
     lead, end, seconds, seconds_per_unit = clock.lead, clock.end, clock.seconds, clock.unit
+    sung_end = end - style_mod.coda(genome, params)  # where the last line ends, before a style's amen
 
     def jitter() -> float:
         return float(rng.normal(0.0, params.humanize))
@@ -291,7 +324,7 @@ def realize(genome: Genome, params: Params, verses=None, phrasing: Phrasing | No
     melody.sort(key=lambda m: m["u"])
     notes: list[Note] = []
     for i, m in enumerate(melody):
-        u_end = min(m["u_end"], melody[i + 1]["u"]) if i + 1 < len(melody) else end
+        u_end = min(m["u_end"], melody[i + 1]["u"]) if i + 1 < len(melody) else sung_end
         start_s = max(0.0, seconds(m["u"]) + jitter())
         if m["syllable"]:
             beat = seconds_per_unit * meter.beat
@@ -325,7 +358,7 @@ def realize(genome: Genome, params: Params, verses=None, phrasing: Phrasing | No
                                              vel=0.9 * sung_note.vel, gesture=None, ornament=()))
 
     accomp, band_settings = band_mod.arrange(genome, params, placed, lead, end, melody, seconds)
-    ring = 3.0  # the last chord rings out
+    ring = style_mod.ring(params)  # the last chord rings out (3 s; a cold ending stops short)
     final = seconds(end)
     notes += accomp
     # plucked strings and voices ring on; a bow or a breath is held a moment longer, then let go
@@ -344,4 +377,5 @@ def realize(genome: Genome, params: Params, verses=None, phrasing: Phrasing | No
             section_spans.append((section_name, s0, s1))
 
     notes.sort(key=lambda n: (n.start, n.part, n.pitch))
-    return Score(tuple(notes), final + ring, tuple(section_spans), dict(genome.lexicon), band=band_settings)
+    score = Score(tuple(notes), final + ring, tuple(section_spans), dict(genome.lexicon), band=band_settings)
+    return style_mod.finish(score, genome, params)  # a style's key lift for the last refrain, if it has one

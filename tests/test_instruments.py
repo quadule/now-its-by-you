@@ -150,3 +150,31 @@ def test_a_fresh_bow_stroke_speaks_like_a_players():
         env = np.sqrt(np.convolve(band**2, np.ones(88) / 88, mode="same"))
         steady = np.median(env[int(0.8 * SR): int(1.4 * SR)])
         assert np.argmax(env[int(0.1 * SR):] > 0.9 * steady) / SR < 0.15
+
+
+# --- the registry: instruments beyond the eight ---------------------------------------------------
+
+
+def test_every_known_instrument_has_a_spec_and_renders():
+    from songbird.synth import instruments
+
+    names = instruments.known()
+    assert names[:8] == instruments.INSTRUMENTS and len(set(names)) == len(names)
+    for name in ("piano", "banjo", "kit", "organ", "synthbass", "harmonica"):
+        info = instruments.spec(name)
+        assert info["family"] and len(info["place"]) == 2 and info["level"] > 0
+        pitched = info["register"] is not None
+        notes = tuple(Note(name, 0.1 + 0.25 * k, 0.4, 60.0 + 2 * k if pitched else 0.0, 0.6,
+                           art="" if pitched else ("kick", "snare", "hat")[k % 3]) for k in range(6))
+        stem = instruments.render_part(name, notes, SR, SR * 2, {"gains": {name: 0.5}}, seed=3)
+        assert stem.shape == (SR * 2, 2) and np.all(np.isfinite(stem)) and np.abs(stem).max() > 1e-4, name
+        again = instruments.render_part(name, notes, SR, SR * 2, {"gains": {name: 0.5}}, seed=3)
+        assert np.array_equal(stem, again)  # deterministic from the seed
+
+
+def test_an_instruments_streams_are_its_own():
+    from songbird.synth import instruments
+
+    assert [instruments.stream(n) for n in instruments.INSTRUMENTS] == list(range(8))  # the seed's band is unmoved
+    others = [instruments.stream(n) for n in instruments.KNOWN]
+    assert len(set(others)) == len(others) and min(others) >= 1000

@@ -180,6 +180,22 @@ def render_one(genome, params: Params, out: Path, *, voice=None, drift=None, lyr
     return record
 
 
+def _arrangement(items: list[str]) -> dict | None:
+    """--arrange FIELD=VALUE ... as Style fields (songbird/style.py): true/false, numbers, or names."""
+    out = {}
+    for item in items or []:
+        key, _, value = item.partition("=")
+        low = value.strip().lower()
+        if low in ("true", "yes", "on", "false", "no", "off"):
+            out[key] = low in ("true", "yes", "on")
+        else:
+            try:
+                out[key] = int(value) if low.lstrip("-").isdigit() else float(value)
+            except ValueError:
+                out[key] = value
+    return out or None
+
+
 def parent_of(record: dict) -> dict | None:
     """As much of a rendition's parent as its record keeps: its place in the lineage, and the earlier
     versions' singers who sang its choir (the parent's first), so rendering it again sings the same."""
@@ -255,7 +271,8 @@ def render_command(args: argparse.Namespace) -> int:
             params = replace(params, form=tuple(args.form))
     else:
         params = choose_params(genome, parent_params, voice, drift, seed=args.seed, log=changes,
-                               form=tuple(args.form) if args.form else None)
+                               form=tuple(args.form) if args.form else None, style=args.style,
+                               arrange=_arrangement(args.arrange))
     if args.choir is not None:
         params = replace(params, choir=args.choir)
     # a person's phrasing: the file given, or the one the seed carries
@@ -532,6 +549,13 @@ def main(argv: list[str] | None = None) -> int:
     render.add_argument("--mix", nargs="*", default=[], metavar="FIELD=VALUE",
                         help="change the mix (synth/mixing.py MixParams), e.g. --mix rt60=2.2 wear=0.5 "
                              "tone=1,1,1,0.8,0.6 balance=fiddle:2")
+    render.add_argument("--style", metavar="NAME",
+                        help="play it in this style (songbird/style.py STYLES: ballad, stringband, country, gospel, "
+                             "shanty, songwriter, chamber, lullaby, ambient, synthfolk, lofi, indie, blues) instead of "
+                             "the one the machine and its parent lead to")
+    render.add_argument("--arrange", nargs="*", default=[], metavar="FIELD=VALUE",
+                        help="set the arrangement's options (songbird/style.py Style), e.g. --arrange feel=waltz "
+                             "lift=true ending=cold backing=gang")
     render.add_argument("--choir", type=int, metavar="N",
                         help="lineage voices joining in harmony where the song has a choir (stand-ins for now)")
     render.add_argument("--phrasing", metavar="FILE",

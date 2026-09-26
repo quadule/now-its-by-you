@@ -1,8 +1,9 @@
 """The band's instruments: how each instrument's notes in a score become a stem.
 
-Eight instruments, each a physical or physically inspired model (see pluck,
-bowed, pipe, drum and reed) played through its own body, and delivered dry,
-panned and at a level that sits with the others and under the singer:
+The seed's band is eight instruments, each a physical or physically inspired
+model (see pluck, bowed, pipe, drum and reed) played through its own body, and
+delivered dry, panned and at a level that sits with the others and under the
+singer:
 
     lute     a cittern-like long-neck lute, paired courses, played with a pick
     guitar   a steel-string flat top, strummed, capoed to the song's key
@@ -16,9 +17,28 @@ panned and at a level that sits with the others and under the singer:
 How the instruments are built (their bodies' maker, size, brightness, how
 worn they are) and how loud each plays comes from the score's band settings,
 which realize() copies from Params.band.
+
+Every other instrument a style can call on (a piano, a banjo, a kit, a synth)
+comes from the registry: a module under songbird/synth/ that exposes
+
+    SPEC: {name: dict(family, register=(lo, hi) or None, place=(position, width), level, poly,
+                      articulations={art: meaning}, about)}
+    render(name, notes, sr, length, rng, make, settings) -> dry mono (length,) or stereo (length, 2)
+
+registers its instruments by name (registry()); this module places each stem
+and sets its level (SPEC level times the lineup's gain), exactly as it does for
+the eight. An instrument no module provides yet is played by a stand-in, one
+of the eight models (STAND_INS), under its own name, place and level, so every
+style renders from the start and the mix treats the stem by its real name.
 """
 
 from __future__ import annotations
+
+import hashlib
+import importlib
+import pkgutil
+from functools import lru_cache
+from pathlib import Path
 
 import numpy as np
 from scipy.signal import butter, sosfilt
@@ -59,6 +79,63 @@ LEVEL = {
 
 DEFAULTS = dict(brightness=0.5, wear=0.25, ornament=0.5, body=1.0, maker=0, tonic=62, capo=0,
                 **{name: 1.0 for name in INSTRUMENTS})
+
+# --- the instruments a style can call on --------------------------------------------------------
+#
+# What the arrangement needs to know of each (its family, the range it plays, where it sits, how
+# loud, whether it plays chords) and which of the eight models plays it until its own module lands.
+# A registered module's SPEC replaces everything here but the stand-in. The levels are the stand-ins':
+# each set so a typical part at velocity 0.6 sits as the band's own reference for its kind does (comping
+# as the guitar's strum, a lead as the whistle, a bass as the upright, percussion as the frame drum; pads
+# 4 dB and bells 3 to 6 dB under), as the instrument contract asks of the real modules.
+#   name: (family, register or None, place, level, poly, stand-in, what it is)
+KNOWN = {
+    "piano": ("keys", (28, 96), (-0.1, 0.8), 0.12, True, "harp", "an upright or grand piano"),
+    "epiano": ("keys", (36, 91), (0.15, 0.7), 0.12, True, "harp", "an electric piano, tines and a soft hammer"),
+    "organ": ("organ", (36, 91), (0.0, 0.8), 0.2, True, "drone", "a drawbar organ, or a small church organ"),
+    "vibes": ("mallets", (53, 89), (-0.25, 0.6), 0.09, True, "harp", "a vibraphone, motor slow or off"),
+    "marimba": ("mallets", (45, 96), (-0.3, 0.6), 0.095, True, "harp", "a marimba"),
+    "glock": ("mallets", (79, 108), (0.35, 0.2), 0.2, False, "harp", "a glockenspiel"),
+    "musicbox": ("mallets", (60, 100), (-0.15, 0.3), 0.17, True, "harp", "a music box's comb"),
+    "celesta": ("mallets", (60, 108), (0.2, 0.5), 0.095, True, "harp", "a celesta"),
+    "synthpad": ("pad", (36, 88), (0.0, 1.0), 0.18, True, "drone", "an analog synth pad"),
+    "synthbass": ("bass", (24, 55), (0.0, 0.0), 0.41, False, "bass", "an analog synth bass"),
+    "synthlead": ("lead", (48, 96), (-0.2, 0.2), 0.15, False, "whistle", "an analog synth lead"),
+    "arp": ("synth", (48, 96), (0.25, 0.7), 0.135, False, "harp", "an analog synth arpeggio"),
+    "chip": ("synth", (36, 96), (0.0, 0.3), 0.17, False, "whistle", "a game console's square waves"),
+    "drummachine": ("drums", None, (0.0, 0.3), 1.2, True, "drum", "a drum machine"),
+    "banjo": ("plucked", (50, 84), (0.3, 0.5), 0.27, True, "lute", "a five-string banjo"),
+    "mandolin": ("plucked", (55, 88), (-0.35, 0.5), 0.29, True, "lute", "a mandolin"),
+    "electric": ("plucked", (40, 88), (0.4, 0.6), 0.175, True, "guitar", "an electric guitar through a small amp"),
+    "steel": ("bowed", (40, 88), (0.45, 0.5), 0.27, True, "fiddle", "a pedal steel guitar"),
+    "slide": ("plucked", (40, 84), (0.4, 0.5), 0.21, False, "fiddle", "a slide guitar"),
+    "cello": ("bowed", (36, 76), (0.3, 0.5), 0.25, False, "fiddle", "a cello"),
+    "strings": ("bowed", (36, 96), (0.0, 0.9), 0.2, True, "drone", "a string section or quartet"),
+    "ebass": ("bass", (28, 60), (0.0, 0.0), 0.3, False, "bass", "an electric bass"),
+    "kit": ("drums", None, (0.05, 0.6), 1.25, True, "drum", "a drum kit: sticks, brushes or rods"),
+    "claps": ("percussion", None, (-0.2, 0.5), 1.0, True, "drum", "hand claps"),
+    "stomps": ("percussion", None, (0.0, 0.3), 1.2, True, "drum", "feet on a wooden floor"),
+    "shaker": ("percussion", None, (0.35, 0.2), 0.5, True, "drum", "a shaker"),
+    "tambourine": ("percussion", None, (-0.35, 0.2), 1.0, True, "drum", "a tambourine"),
+    "cajon": ("percussion", None, (0.1, 0.2), 1.3, True, "drum", "a cajon"),
+    "harmonica": ("reed", (60, 96), (-0.3, 0.1), 0.125, False, "whistle", "a diatonic harmonica"),
+    "accordion": ("reed", (41, 93), (-0.25, 0.8), 0.2, True, "drone", "an accordion"),
+    "concertina": ("reed", (48, 96), (-0.25, 0.6), 0.21, True, "drone", "a concertina"),
+}
+
+# How a stand-in frame drum takes a kit's (or a hand percussionist's) strokes.
+DRUM_STROKES = {
+    "kick": "bass", "stomp": "bass", "cajon-bass": "bass", "tom-lo": "bass", "tom-mid": "tip", "tom-hi": "tip",
+    "snare": "rim", "rim": "rim", "clap": "rim", "cajon-slap": "rim", "crash": "tip", "ride": "mute",
+    "hat": "mute", "hat-open": "mute", "shaker": "mute", "tambourine": "mute", "brush-tap": "tip",
+    "brush-sweep": "mute", "ghost": "mute",
+}
+QUIET = {"hat": 0.45, "hat-open": 0.55, "ride": 0.5, "shaker": 0.35, "tambourine": 0.5, "brush-sweep": 0.35,
+         "ghost": 0.4}
+
+# Modules under songbird/synth/ that are not instruments (never imported to look for a SPEC).
+NOT_INSTRUMENTS = {"__init__", "instruments", "body", "bowed", "drum", "pipe", "pluck", "reed", "glottis", "master",
+                   "mixing", "fx", "room", "throat", "tract", "tube", "tubevoice", "voice"}
 
 
 def place(y: np.ndarray, position: float, width: float) -> np.ndarray:
@@ -108,31 +185,27 @@ def _open_strings(tonic: int, low: int, high: int) -> list[int]:
     return [p for p in range(low, high + 1) if p % 12 in pcs]
 
 
-def render_part(name: str, notes: tuple[Note, ...], sr: int, length: int, settings: dict, seed: int) -> np.ndarray:
-    """One instrument's stem: dry, stereo, `length` samples, at its level."""
-    s = {**DEFAULTS, **settings}
-    bright, wear, size, maker = float(s["brightness"]), float(s["wear"]), float(s["body"]), int(s["maker"])
+def _model(kind: str, notes, sr: int, length: int, s: dict, rng: np.random.Generator,
+           make: np.random.Generator) -> np.ndarray:
+    """The dry stem of one of the eight models playing `notes`: mono or stereo, before its place and level."""
+    bright, wear, size = float(s["brightness"]), float(s["wear"]), float(s["body"])
     ornament = float(s["ornament"])
-    # Each part has its own performance randomness, and each instrument its own maker's quirks.
-    index = INSTRUMENTS.index(name)
-    rng = np.random.default_rng([seed, 17, index])
-    make = np.random.default_rng([maker, 29, index])
 
     def with_body(force: np.ndarray, spec: body.Body) -> np.ndarray:
         ir = body.impulse_response(spec, sr, seed=int(make.integers(1 << 30)), size=size)
         return body.resonate(force, ir)
 
-    if name in ("lute", "guitar", "harp", "bass"):
-        if name == "lute":
+    if kind in ("lute", "guitar", "harp", "bass"):
+        if kind == "lute":
             spec = dict(brightness=0.45 + 0.35 * bright, decay=2.4, pick=0.13, hardness=0.75, planes=0.3,
                         course=1.5 + 6.0 * wear, spread=0.005, touch=0.3)
             box, opens, coupling = body.CITTERN, _open_strings(int(s["tonic"]), 45, 69), 0.0012
-        elif name == "guitar":
+        elif kind == "guitar":
             spec = dict(brightness=0.45 + 0.35 * bright, decay=3.2, pick=0.22, hardness=0.7, planes=0.35,
                         touch=0.15, damp=0.05)
             capo = int(s["capo"])
             box, opens, coupling = body.GUITAR, [p + capo for p in (40, 45, 50, 55, 59, 64)], 0.001
-        elif name == "harp":
+        elif kind == "harp":
             spec = dict(brightness=0.3 + 0.35 * bright, decay=4.5, pick=0.36, hardness=0.25, planes=0.4,
                         touch=0.25, damp=0.12)
             box, opens, coupling = body.HARP, _open_strings(int(s["tonic"]), 43, 81), 0.0018
@@ -146,37 +219,140 @@ def render_part(name: str, notes: tuple[Note, ...], sr: int, length: int, settin
         force = _strings(notes, sr, length, rng, spec, tuning=lambda n: offsets[int(round(n.pitch)) % 128])
         if opens:
             force = force + pluck.sympathetic(force, sr, opens, coupling=coupling, decay=3.0, brightness=0.3)
-        stem = with_body(force, box)
-    elif name == "fiddle":
+        return with_body(force, box)
+    if kind == "fiddle":
         # a folk fiddler's vibrato is narrow, when there is one: 6 to 16 cents
         force = bowed.bow(notes, sr, length, rng, vibrato=6.0 + 10.0 * ornament, wear=wear, noise=0.3 + 0.8 * wear)
         force = sosfilt(butter(1, 60.0, btype="highpass", fs=sr, output="sos"), force)
-        stem = with_body(force, body.FIDDLE)
-    elif name == "whistle":
-        stem = pipe.blow(notes, sr, length, rng, brightness=bright, wear=wear, vibrato=ornament)
-    elif name == "drum":
+        return with_body(force, body.FIDDLE)
+    if kind == "whistle":
+        return pipe.blow(notes, sr, length, rng, brightness=bright, wear=wear, vibrato=ornament)
+    if kind == "drum":
         # a frame drum is tuned by warming the skin, not to the key: its maker's, somewhere near 80 Hz
         skin = 80.0 * 2.0 ** make.uniform(-0.25, 0.25) / size
-        stem = drum.play(notes, sr, length, rng, pitch=skin, brightness=bright, wear=wear)
-    elif name == "drone":
+        return drum.play(notes, sr, length, rng, pitch=skin, brightness=bright, wear=wear)
+    if kind == "drone":
         tone = reed.drone(notes, sr, length, rng, brightness=bright, wear=wear)
-        stem = with_body(tone, body.REED_BOX)
-    else:
-        raise ValueError(f"no such instrument: {name}")
+        return with_body(tone, body.REED_BOX)
+    raise ValueError(f"no such instrument: {kind}")
+
+
+def render_part(name: str, notes: tuple[Note, ...], sr: int, length: int, settings: dict, seed: int) -> np.ndarray:
+    """One instrument's stem: dry, stereo, `length` samples, at its level."""
+    if name not in INSTRUMENTS:
+        return render_other(name, notes, sr, length, settings, seed)
+    s = {**DEFAULTS, **settings}
+    # Each part has its own performance randomness, and each instrument its own maker's quirks.
+    index = INSTRUMENTS.index(name)
+    rng = np.random.default_rng([seed, 17, index])
+    make = np.random.default_rng([int(s["maker"]), 29, index])
+    stem = _model(name, notes, sr, length, s, rng, make)
     position, width = PLACE[name]
     return place(stem, position, width) * LEVEL[name] * float(s[name])
 
 
+# --- the registry -------------------------------------------------------------------------------
+
+
+def stream(name: str) -> int:
+    """A stable number for an instrument's own random streams (the eight keep their places 0..7)."""
+    if name in INSTRUMENTS:
+        return INSTRUMENTS.index(name)
+    return 1000 + int.from_bytes(hashlib.sha256(f"instrument|{name}".encode()).digest()[:4], "little") % 1_000_000
+
+
+@lru_cache(maxsize=1)
+def registry() -> dict[str, tuple[dict, object]]:
+    """Every instrument a module under songbird/synth/ provides: name -> (its SPEC entry, its module).
+    A module is looked at only if its source names a SPEC and a render(), and imported in name order."""
+    found: dict[str, tuple[dict, object]] = {}
+    here = Path(__file__).parent
+    for info in sorted(pkgutil.iter_modules([str(here)]), key=lambda m: m.name):
+        if info.name in NOT_INSTRUMENTS or info.name.startswith("_"):
+            continue
+        text = (here / f"{info.name}.py").read_text(errors="ignore") if (here / f"{info.name}.py").exists() else ""
+        if "SPEC" not in text or "def render(" not in text:
+            continue
+        module = importlib.import_module(f"{__package__}.{info.name}")
+        spec, render = getattr(module, "SPEC", None), getattr(module, "render", None)
+        if not isinstance(spec, dict) or not callable(render):
+            continue
+        for name, entry in spec.items():
+            if name not in INSTRUMENTS and name not in found:
+                found[name] = (dict(entry), module)
+    return found
+
+
+def spec(name: str) -> dict:
+    """What the band knows of an instrument: family, register (None: unpitched), place, level, poly,
+    about, and stand_in (the model playing it until a module provides it, or None)."""
+    if name in INSTRUMENTS:
+        family = {"lute": "plucked", "guitar": "plucked", "harp": "plucked", "bass": "bass", "fiddle": "bowed",
+                  "whistle": "blown", "drum": "percussion", "drone": "reed"}[name]
+        register = {"lute": (50, 84), "guitar": (40, 80), "harp": (28, 96), "bass": (28, 55), "fiddle": (55, 88),
+                    "whistle": (62, 93), "drum": None, "drone": (36, 72)}[name]
+        return dict(family=family, register=register, place=PLACE[name], level=LEVEL[name],
+                    poly=name in ("guitar", "harp", "drone", "drum"), about=name, stand_in=None)
+    registered = registry().get(name)
+    if registered is not None:
+        entry = registered[0]
+        register = entry.get("register")
+        return dict(family=entry.get("family", "band"), register=tuple(register) if register else None,
+                    place=tuple(entry.get("place", (0.0, 0.5))), level=float(entry.get("level", 0.15)),
+                    poly=bool(entry.get("poly", True)), about=entry.get("about", name), stand_in=None,
+                    articulations=dict(entry.get("articulations", {})))
+    if name in KNOWN:
+        family, register, where, level, poly, stand_in, about = KNOWN[name]
+        return dict(family=family, register=register, place=where, level=level, poly=poly, about=about,
+                    stand_in=stand_in)
+    raise ValueError(f"no such instrument: {name}")
+
+
+def known() -> tuple[str, ...]:
+    """Every instrument name the band can play: the eight, then every other, by name."""
+    return INSTRUMENTS + tuple(sorted(set(KNOWN) | set(registry()) - set(INSTRUMENTS)))
+
+
+def render_other(name: str, notes: tuple[Note, ...], sr: int, length: int, settings: dict, seed: int) -> np.ndarray:
+    """A stem for an instrument beyond the eight: its module's sound, or its stand-in's, placed and
+    levelled by its SPEC and scaled by its gain in the lineup (settings["gains"])."""
+    s = {**DEFAULTS, **settings}
+    info = spec(name)
+    index = stream(name)
+    rng = np.random.default_rng([seed, 17, index])
+    make = np.random.default_rng([int(s["maker"]), 29, index])
+    registered = registry().get(name)
+    if registered is not None:
+        y = np.asarray(registered[1].render(name, notes, sr, length, rng, make, s), dtype=np.float64)
+        y = y[:length] if len(y) >= length else np.pad(y, [(0, length - len(y))] + [(0, 0)] * (y.ndim - 1))
+    else:
+        kind = info["stand_in"]
+        if kind == "drum":  # a frame drum takes the kit's strokes as near as it can
+            notes = tuple(_as_drum(n) for n in notes)
+        y = _model(kind, notes, sr, length, s, rng, make)
+    position, width = info["place"]
+    gain = float((s.get("gains") or {}).get(name, 1.0))
+    return place(y, position, width) * info["level"] * gain
+
+
+def _as_drum(note: Note) -> Note:
+    from dataclasses import replace
+
+    return replace(note, art=DRUM_STROKES.get(note.art, "tip"), vel=note.vel * QUIET.get(note.art, 1.0))
+
+
 def render_band(score: Score, sr: int, seed: int, progress=None) -> dict[str, np.ndarray]:
-    """A stem for every instrument that plays in the score. progress, if given, is told the name of each
-    instrument as it starts on it."""
+    """A stem for every instrument that plays in the score: the eight in their order, then any other by name.
+    progress, if given, is told the name of each instrument as it starts on it."""
     length = int(np.ceil(score.duration * sr))
     # a low harp string can still be ringing when the song's last ring is over: let every stem end softly
     fade = min(length, int(0.3 * sr))
     ending = np.ones(length)
     ending[length - fade:] = 0.5 + 0.5 * np.cos(np.linspace(0.0, np.pi, fade))
+    others = sorted({n.part for n in score.notes} - set(INSTRUMENTS) - {"voice"}
+                    - {p for p in {n.part for n in score.notes} if p.startswith("choir")})
     stems = {}
-    for name in INSTRUMENTS:
+    for name in INSTRUMENTS + tuple(others):
         notes = score.part(name)
         if notes:
             if progress is not None:

@@ -117,9 +117,10 @@ def test_a_neutral_machine_sings_like_its_parent(h):
 def test_a_lineage_keeps_its_accent(h):
     seed = Params.from_dict(h.seed_params)
     a, b = H.fictional("ada"), H.fictional("cy")
-    first = choose_params(h, None, a)
-    second = choose_params(h, first, b)
-    alone = choose_params(h, None, b)  # machine b singing straight from the seed
+    # in one style throughout: a style takes the song at its own tempo (tests/test_styles.py)
+    first = choose_params(h, None, a, style="ballad")
+    second = choose_params(h, first, b, style="ballad")
+    alone = choose_params(h, None, b, style="ballad")  # machine b singing straight from the seed
     own = V.character(b)
     b_tempo = seed.tempo * 2 ** (0.18 * own.pace)
     assert abs(second.tempo - (first.tempo + V.PULL * (b_tempo - first.tempo))) < 0.11

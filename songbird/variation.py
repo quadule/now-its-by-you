@@ -395,6 +395,8 @@ class Context:
     drift: Drift | None
     log: list | None = None  # where to note what changed from the parent in the tune and the words, and why
     trace: dict | None = None  # if given, each knob's arithmetic by path (for the studio's reasons)
+    style: str | None = None  # a style asked for by name (songbird render --style), else the ring decides
+    arrange: dict | None = None  # the arrangement's options asked for (Style fields), else the style decides
 
     def at(self, view: str, dimension: str) -> float:
         return self.drift.view(view).get(dimension, 0.0) if self.drift is not None else 0.0
@@ -927,9 +929,17 @@ def choose_room(out: dict, ctx: Context) -> None:
         out.setdefault("mix", {}).update(rt60=ctx.c.room["rt60"], tone=list(ctx.c.room["tone"]))
 
 
+def choose_style(out: dict, ctx: Context) -> None:
+    """The rendition's style and what it brings (songbird/style.py): once the form, the choir and every
+    number are chosen, since a style leans on them."""
+    from .style import choose_style as choose
+
+    choose(out, ctx, ctx.style, ctx.arrange)
+
+
 # The words and the tune last: they read the form and the leanings chosen above (songbird.evolve).
 DECISIONS = (choose_mode, choose_form, choose_accomp, choose_pattern, choose_lead, choose_choir, choose_mood,
-             choose_vocabulary, choose_inventory, choose_room, choose_timbre, evolve.choose_words,
+             choose_vocabulary, choose_inventory, choose_room, choose_timbre, choose_style, evolve.choose_words,
              evolve.choose_variants)
 
 
@@ -938,10 +948,11 @@ DECISIONS = (choose_mode, choose_form, choose_accomp, choose_pattern, choose_lea
 
 def choose(genome: Genome, parent=None, voice: Voice | None = None, drift: Drift | None = None,
            seed: int | None = None, log: list | None = None, form=None, pin: Callable | None = None,
-           trace: dict | None = None):
+           trace: dict | None = None, style: str | None = None, arrange: dict | None = None):
     """The child's parameters; see realize.choose_params. log, form: as there. pin(out), if given, puts a
     person's choices (songbird.edits) in place after the knobs and after every decision, so a decision that
-    reads one reads the person's and none overwrites it; trace, if given, receives each knob's arithmetic."""
+    reads one reads the person's and none overwrites it; trace, if given, receives each knob's arithmetic.
+    style, arrange: a style asked for by name and its options (songbird.style), else the ring decides."""
     from .realize import Params
 
     song = Params.from_dict(genome.seed_params)
@@ -950,8 +961,15 @@ def choose(genome: Genome, parent=None, voice: Voice | None = None, drift: Drift
     generation = int(getattr(parent, "generation", 0)) + 1 if parent is not None else 0
     parent = parent if parent is not None else song
     if voice is None and drift is None:
-        return parent if seed is None else replace(parent, seed=seed)
-    ctx = Context(genome, song, parent, character(voice), drift, log=log, trace=trace)
+        chosen = parent if seed is None else replace(parent, seed=seed)
+        if style is None and not arrange:
+            return chosen
+        # a style asked for with no machine: the parent played in it, nothing else chosen
+        out = chosen.to_dict()
+        choose_style(out, Context(genome, song, parent, Character(), None, log=log,
+                                  style=style or (parent.style.name or "ballad"), arrange=arrange))
+        return Params.from_dict(out)
+    ctx = Context(genome, song, parent, character(voice), drift, log=log, trace=trace, style=style, arrange=arrange)
     out = parent.to_dict()
     for key in ("singer", "mix", "leanings"):
         out[key] = dict(out.get(key) or {})

@@ -62,6 +62,7 @@ class MixParams:
     wear      0-1         0 new; toward 1 an old tape: wow and flutter, saturation, a narrower
                           band, hiss, and from 0.35 crackle
     balance   name: dB    an instrument (by stem name or role) up or down, e.g. fiddle: +2
+    plate     0-2         how much of the singers' plate is heard: 0 none, 1 as designed (a style's taste)
     """
 
     rt60: float = 1.1
@@ -75,6 +76,7 @@ class MixParams:
     tilt: float = 0.0
     wear: float = 0.0
     balance: tuple[tuple[str, float], ...] = ()
+    plate: float = 1.0
 
     @classmethod
     def from_dict(cls, data: dict) -> MixParams:
@@ -127,6 +129,7 @@ RANGES = {
     "duck": (0.0, 2.0),
     "tilt": (-2.0, 2.0),
     "wear": (0.0, 1.0),
+    "plate": (0.0, 2.0),
 }
 
 # --- channel strips ---------------------------------------------------------------------
@@ -163,6 +166,19 @@ ROLES: dict[str, Strip] = {
     "drum": Strip(eq=(("hp", 40), ("peak", 420, -2.0, 1.0), ("high", 8000, -1.0)), comp=(12.0, 3.0, 0.004, 0.12, 1.0, 4.0), send=0.6),
     # A held drone stays out of the words altogether.
     "drone": Strip(eq=(("hp", 50), ("peak", 2500, -3.0, 0.7), ("lp", 6000))),
+    # Keys and mallets comping like the guitar: weight kept, boxiness and the voice's presence cleared.
+    "keys": Strip(eq=(("hp", 60), ("peak", 250, -1.5, 1.0), ("peak", 2600, -2.0, 0.8), ("high", 9000, 0.5)),
+                  comp=(10.0, 2.0, 0.015, 0.2, 1.5, 3.0), send=1.0),
+    # An organ or a pad: held under everything, out of the words, no fizz.
+    "organ": Strip(eq=(("hp", 55), ("peak", 2500, -2.5, 0.7), ("lp", 8000)), send=1.0),
+    # Free reeds and harmonicas: nasal mids tamed, stepping back a little under the voice like a lead line.
+    "reed": Strip(eq=(("hp", 140), ("peak", 1200, -1.5, 1.0), ("peak", 2800, -2.0, 1.0), ("high", 9000, -1.0)),
+                  send=1.1, duck=2.0),
+    # A cello or a section: the fiddle's treatment without its 180 Hz high-pass, so the low strings are heard.
+    "strings": Strip(eq=(("hp", 45), ("peak", 250, -1.5, 1.0), ("peak", 2500, -2.0, 1.0), ("high", 8000, -1.0)),
+                     comp=(10.0, 2.0, 0.02, 0.25, 2.0, 3.0), send=1.3),
+    # Synths: an arpeggio or a lead line, cleared around the voice.
+    "synth": Strip(eq=(("hp", 80), ("peak", 2800, -2.0, 0.9)), send=0.9, duck=1.5),
     "band": Strip(eq=(("hp", 60), ("peak", 2800, -1.5, 0.9))),  # anything else
 }
 
@@ -170,24 +186,33 @@ NAMES = {
     "voice": ("voice", "lead", "vocal", "singer"),
     "choir": ("choir", "harmony", "backing"),
     "lute": ("melody", "lute", "mandolin", "bouzouki", "cittern", "oud", "banjo"),
-    "guitar": ("guitar", "strum", "pick"),
+    "guitar": ("guitar", "strum", "pick", "electric"),
     "harp": ("harp", "dulcimer", "zither", "kantele", "psaltery"),
     "bass": ("bass", "contrabass", "upright"),
-    "fiddle": ("fiddle", "violin", "viola", "cello", "strings", "bow"),
+    "fiddle": ("fiddle", "violin", "viola", "bow", "steel", "slide"),
     "whistle": ("whistle", "flute", "pipe", "recorder", "fife", "blown"),
-    "drum": ("drum", "drums", "percussion", "bodhran", "tambourine", "shaker", "kick", "snare", "skin", "frame"),
-    "drone": ("drone", "pad", "organ", "harmonium", "shruti", "bagpipe", "hum"),
+    "drum": ("drum", "drums", "percussion", "bodhran", "tambourine", "shaker", "kick", "snare", "skin", "frame",
+             "kit", "claps", "clap", "stomps", "stomp", "cajon", "machine", "hats"),
+    "drone": ("drone", "pad", "harmonium", "shruti", "bagpipe", "hum"),
+    "keys": ("piano", "epiano", "rhodes", "keys", "celesta", "musicbox", "glock", "glockenspiel", "vibes",
+             "vibraphone", "marimba", "xylophone", "bells"),
+    "organ": ("organ", "synthpad"),
+    "reed": ("harmonica", "accordion", "concertina", "melodeon"),
+    "strings": ("cello", "strings", "quartet"),
+    "synth": ("synth", "synthlead", "arp", "chip"),
 }
+SINGERS = ("voice", "choir")  # stems sung by the singers: matched by their whole names only
 
 
 def role_of(name: str) -> str:
-    """The role a stem plays, from its name: "choir2" is choir, "guitar_low" guitar, anything unknown "band"."""
+    """The role a stem plays, from its name: "choir2" is choir, "guitar_low" guitar, anything unknown "band".
+    Only a whole name makes a stem a singer ("synthlead" is a synth, never the lead voice)."""
     word = re.sub(r"[\d_\-\s.]+$", "", name.lower())
     for role, names in NAMES.items():
         if word in names:
             return role
     for role, names in NAMES.items():
-        if any(n in word for n in names):
+        if role not in SINGERS and any(n in word for n in names):
             return role
     return "band"
 
@@ -413,10 +438,10 @@ def mix(stems: dict[str, np.ndarray], sr: int, seed: int = 0, params: MixParams 
     plate_send = np.zeros(length)
     if voice is not None:
         send += voice * (VOICE_ROOM * near)
-        plate_send += voice.sum(axis=1) * (VOICE_PLATE * near * np.sqrt(0.5))
+        plate_send += voice.sum(axis=1) * (VOICE_PLATE * p.plate * near * np.sqrt(0.5))
     if choir is not None:
         send += fx.delay(choir, int(CHOIR_LATER * sr)) * CHOIR_ROOM
-        plate_send += choir.sum(axis=1) * (CHOIR_PLATE * np.sqrt(0.5))
+        plate_send += choir.sum(axis=1) * (CHOIR_PLATE * p.plate * np.sqrt(0.5))
     # the room is its numbers: the same numbers (a machine's harvested room) give the same room every rendition
     early, tail = room.responses(sr, p.rt60, p.tone, p.predelay, room.seed_of(p.rt60, p.tone, p.predelay))
     plates = [(plate_send * p.space, room.plate(sr, PLATE_RT60, 0))] if np.any(plate_send) else []
