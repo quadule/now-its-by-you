@@ -91,16 +91,16 @@ def check(form, lyrics):
 
     rounds = [s for s in lyrics.sections if s.block == "refrain"]
     head = BANK["refrain"]
-    assert [s.slots["question"] for s in rounds] == QUESTIONS[len(rounds)]
+    assert [s.slots["question"] for s in rounds] == QUESTIONS.get(len(rounds), [])
     for name in RULES["refrain"]["once_per_song"]:
-        assert len({s.slots[name] for s in rounds}) == 1
+        assert len({s.slots[name] for s in rounds}) <= 1
     couplets = [s.id for s in rounds]
-    assert couplets[-1] == RULES["refrain"]["couplet_last"] and len(set(couplets)) == len(couplets)
+    assert couplets[-1:] in ([], [RULES["refrain"]["couplet_last"]]) and len(set(couplets)) == len(couplets)
     for s in rounds:
         assert plain(s.lines) == sung(head, s.slots) + sung(COUPLETS[s.id], s.slots)
 
     bridges = [s for s in lyrics.sections if s.block == "bridge"]
-    assert 1 <= len(bridges) <= 2 and bridges[0].id == RULES["bridge"]["always"]
+    assert len(bridges) <= 2 and [b.id for b in bridges[:1]] in ([], [RULES["bridge"]["always"]])
     assert all(b.id in RULES["bridge"]["extra"] for b in bridges[1:])
     for s in bridges:
         assert plain(s.lines) == sung(STANZAS[s.id], s.slots)
@@ -117,7 +117,11 @@ def test_the_seed_form_has_the_templates_shape():
 
 
 def test_forms_says_how_many_of_each_section_the_bank_can_fill():
-    assert A.forms(g) == {"verse": (2, 3, 4), "refrain": (1, 2, 3, 4, 5, 6), "bridge": (1, 2)}
+    assert A.forms(g) == {"verse": (2, 3, 4), "refrain": (0, 1, 2, 3, 4, 5, 6), "bridge": (0, 1, 2)}
+    assert A.problem(g, SEED_FORM) is None and A.problem(g, shape(4, 6, 2)) is None
+    assert A.problem(g, shape(5)).startswith("this form has 5 verse sections;")
+    assert "no section 'chorus'" in A.problem(g, ("verse", "verse", "chorus"))
+    assert "no lyric bank" in A.problem(G.load(ROOT / "songs" / "b-coal-from-the-fire.json"), ("refrain",))
 
 
 @pytest.mark.parametrize("verses", [2, 3, 4])
@@ -128,7 +132,7 @@ def test_the_rules_hold_for_thousands_of_seeds(verses):
 
 
 def test_the_rules_hold_in_every_supported_form():
-    forms = [shape(v, r, b, t, again) for v in (2, 3, 4) for r in range(1, 7) for b in (1, 2) for t in (True, False)
+    forms = [shape(v, r, b, t, again) for v in (2, 3, 4) for r in range(7) for b in (0, 1, 2) for t in (True, False)
              for again in (("bridge2", "bridge") if b == 2 else ("bridge2",))]
     forms += [("refrain", "verse", "verse", "bridge", "refrain"),  # the shape needn't be the template's
               ("verse", "bridge", "verse", "refrain", "bridge", "tag", "refrain", "tag"),
@@ -165,7 +169,7 @@ def test_the_same_inputs_give_the_same_words():
     leanings = A.Leanings({"tender": 3}, -0.5, 0.5, {"phone", "banjo"})
     for seed in range(40):
         assert A.arrange(g, shape(3, 4, 2), seed, leanings) == A.arrange(g, shape(3, 4, 2), seed, leanings)
-    assert A.arrange(g, SEED_FORM, 3) == A.arrange(g, SEED_FORM, 3, None)
+    assert A.arrange(g, SEED_FORM, 3) == A.arrange(g, SEED_FORM, 3, None) == A.arrange(g, SEED_FORM, 3, A.Leanings())
     # and another seed, other words: a hundred seeds, a hundred songs
     assert len({tuple(s.lines for s in A.arrange(g, SEED_FORM, seed).sections) for seed in range(100)}) == 100
 
@@ -218,6 +222,17 @@ def test_a_rare_verse_comes_less_often_than_a_common_one():
     assert max(rare) < sorted(common)[len(common) // 2] and min(common) > 0 and min(rare) > 0
 
 
+def test_a_pair_answers_itself_about_half_the_time():
+    def answered(call, answer, leanings=None):
+        songs = [lyrics.verses for lyrics in (A.arrange(g, shape(3), seed, leanings) for seed in range(1500))]
+        called = [verses for verses in songs if call in verses]
+        return sum(answer in verses for verses in called) / len(called)
+
+    assert answered("wax", "sample") > 0.35 and answered("mind", "names") > 0.35
+    assert answered("wire", "learned") > 0.25  # learned is rare, but not as an answer
+    assert answered("mind", "names", A.Leanings(mood_weights={"tender": 0.05})) < 0.1  # unless leaned away from
+
+
 def share(leanings, measure, seeds=600, form=shape(3)):
     return sum(measure(A.arrange(g, form, seed, leanings)) for seed in range(seeds)) / seeds
 
@@ -240,8 +255,8 @@ def test_the_era_bias_leans_older_or_newer():
 
 def test_the_rarity_appetite():
     rare = lambda lyrics: any(VERSES[v]["rarity"] == "rare" for v in lyrics.verses)  # noqa: E731
-    assert share(A.Leanings(rarity_appetite=1), rare) > 2 * share(None, rare) > 4 * share(
-        A.Leanings(rarity_appetite=-1), rare)
+    high, neutral, low = (share(A.Leanings(rarity_appetite=a), rare) for a in (1, 0, -1))
+    assert high > 1.6 * neutral and neutral > 2 * low  # (a rare verse answering its partner isn't rationed)
 
 
 def test_a_persons_words_are_preferred():
@@ -284,10 +299,8 @@ def test_the_seeds_own_words_are_named_for_their_bank_entries():
 @pytest.mark.parametrize("form, why", [
     (shape(5), "5 verse sections; the bank's rules sing 2, 3 or 4 verses"),
     (shape(1), "1 verse section;"),
-    (shape(2, 7), "7 refrain sections; the bank's rules sing 1 to 6 refrains"),
-    (shape(2, 3, 3), "3 bridge sections"),
-    (shape(2, 3, 0), "0 bridge sections"),
-    (shape(2, 0), "0 refrain sections"),
+    (shape(2, 7), "7 refrain sections; the bank's rules sing 0 to 6 refrains"),
+    (shape(2, 3, 3), "3 bridge sections; the bank's rules sing 0, 1 or 2 bridge sections"),
     (("verse", "verse", "chorus", "refrain", "bridge"), "no section 'chorus'"),
 ])
 def test_a_form_the_rules_cant_fill_is_refused_plainly(form, why):
@@ -312,13 +325,24 @@ def test_what_arrange_refuses():
     data["bank"]["rules"]["bridge"]["extra"] = ["coat", "cloak"]
     with pytest.raises(A.ArrangeError, match="cloak"):
         A.forms(G.from_dict(data))
+    with pytest.raises(TypeError, match="one string"):
+        A.arrange(g, "verse", 1)
     with pytest.raises(ValueError, match="moods"):
         A.Leanings(mood_weights={"sad": 2})
     with pytest.raises(ValueError, match="dark"):
         A.Leanings(mood_weights={"dark": -1})
+    with pytest.raises(ValueError, match="era_bias"):
+        A.Leanings(era_bias=float("nan"))
     with pytest.raises(TypeError):
         A.Leanings(vocabulary="banjo")
+    with pytest.raises(TypeError):
+        A.Leanings.from_dict({"vocabulary": "banjo"})
     assert A.Leanings(vocabulary=["Banjo,", "PHONE", "*num-bers*"]).vocabulary == {"banjo", "phone", "numbers"}
+    assert A.Leanings(mood_weights=None, vocabulary=None) == A.Leanings()  # nothing to lean on is neutral
+    # past its range a leaning is held at the end, and says so
+    held = A.Leanings({"plain": 0, "dark": 99}, era_bias=3, rarity_appetite=-7)
+    assert held.to_dict() == {"mood_weights": {"plain": 0.05, "dark": 20.0}, "era_bias": 1.0, "rarity_appetite": -1.0,
+                              "vocabulary": []}
 
 
 def test_the_arrange_command_prints_a_lyric_sheet(capsys):
@@ -330,7 +354,7 @@ def test_the_arrange_command_prints_a_lyric_sheet(capsys):
     assert A.main([str(H), "--seed", "7", "--form", "verse", "refrain", "bridge"]) == 1
     assert "1 verse section" in capsys.readouterr().err
     assert A.main([str(H), "--forms"]) == 0
-    assert capsys.readouterr().out.startswith("verse: 2, 3 or 4\nrefrain: 1 to 6\nbridge: 1 or 2\n")
+    assert capsys.readouterr().out.startswith("verse: 2, 3 or 4\nrefrain: 0 to 6\nbridge: 0, 1 or 2\n")
 
 
 # Singing them

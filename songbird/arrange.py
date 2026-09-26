@@ -37,7 +37,7 @@ from .phonetics import FUNCTION_WORDS, clean
 RARE = 1 / 3  # a rare verse comes a third as often as a common one
 SPAN = 3.0  # a full leaning, +1 or -1, makes a choice up to this many times likelier or less likely
 VOCAB = 1.5  # added to a choice's weight for a word of the person's that no other choice has, twice at most
-PAIR = 12.0  # once one verse of a pair is drawn, its partner is this many times likelier to follow it
+ANSWER = 0.5  # once one verse of a pair is drawn, how often its partner answers it next (less if leaned away from)
 MOOD_WEIGHTS = (0.05, 20.0)  # a mood's weight is held in this range: leanings steer, they never forbid
 ATTEMPTS = 2000  # sets of verses drawn before searching the bank for one instead
 _STREAM = 0x5EED  # the words draw from their own stream of a seed, apart from the rest of a rendition
@@ -73,13 +73,17 @@ class Leanings:
     mood_weights: plain, light, dark, tender -> how much likelier a verse of
         that mood is than the bank has it (1; held between 0.05 and 20)
     era_bias: -1 leans to older verses, +1 to newer ones (a verse with no year
-        stays as likely as it was)
+        stays as likely as it was; held between -1 and 1)
     rarity_appetite: -1 shuns rare verses, +1 seeks them out (at 0 a rare
-        verse comes a third as often as a common one, at +1 as often)
+        verse comes a third as often as a common one, at +1 as often; held
+        between -1 and 1)
     vocabulary: common words a person uses; the verses, couplets, stanzas and
         slot words that use them are preferred, the more so the fewer of the
         other choices share them. Only the words that mean count, not the
         little ones between them.
+
+    Values past their range are held at its ends, and kept that way, so a
+    Leanings says what bore on the draw. None for a field means neutral.
     """
 
     mood_weights: Mapping[str, float] = field(default_factory=dict)
@@ -88,7 +92,7 @@ class Leanings:
     vocabulary: frozenset[str] = frozenset()
 
     def __post_init__(self) -> None:
-        moods = dict(self.mood_weights)
+        moods = dict(self.mood_weights or {})
         unknown = sorted(set(moods) - set(MOODS))
         if unknown:
             raise ValueError(f"leanings name moods {unknown}; a verse's mood is one of {MOODS}")
@@ -97,14 +101,16 @@ class Leanings:
                 raise ValueError(f"the weight for {mood} verses must be a number at least 0, not {weight!r}")
         for name in ("era_bias", "rarity_appetite"):
             value = getattr(self, name)
+            if value is None:
+                value = 0.0
             if not (isinstance(value, (int, float)) and math.isfinite(value)):
-                raise ValueError(f"{name} must be a number from -1 to 1, not {value!r}")
+                raise ValueError(f"{name} must be a number (held between -1 and 1), not {value!r}")
+            object.__setattr__(self, name, max(-1.0, min(1.0, float(value))))
         if isinstance(self.vocabulary, str):
             raise TypeError("vocabulary is a collection of words, not one string")
-        object.__setattr__(self, "mood_weights", {m: float(moods[m]) for m in MOODS if m in moods})
-        object.__setattr__(self, "era_bias", float(self.era_bias))
-        object.__setattr__(self, "rarity_appetite", float(self.rarity_appetite))
-        object.__setattr__(self, "vocabulary", frozenset(w for w in map(clean, self.vocabulary) if w))
+        lo, hi = MOOD_WEIGHTS
+        object.__setattr__(self, "mood_weights", {m: max(lo, min(hi, float(moods[m]))) for m in MOODS if m in moods})
+        object.__setattr__(self, "vocabulary", frozenset(w for w in map(clean, self.vocabulary or ()) if w))
 
     def to_dict(self) -> dict:
         return {
@@ -120,7 +126,7 @@ class Leanings:
             mood_weights=data.get("mood_weights", {}),
             era_bias=data.get("era_bias", 0.0),
             rarity_appetite=data.get("rarity_appetite", 0.0),
-            vocabulary=frozenset(data.get("vocabulary", ())),
+            vocabulary=data.get("vocabulary", ()),
         )
 
 
@@ -176,7 +182,7 @@ class Lyrics:
     def lines_for(self, genome: Genome, form: Iterable[str]) -> list[tuple[str, ...] | None]:
         """The lines each section of the form sings, None where it sings no
         words, checked against the form they were drawn for and the tune."""
-        form = tuple(form)
+        form = _form(form)
         if form != self.form:
             raise ValueError(f"these words were drawn for the form {' '.join(self.form)}, not {' '.join(form)}")
         drawn = iter(self.sections)
@@ -388,12 +394,14 @@ class _Song:
                          for v in verses]
         eras = [v.era for v in verses if v.era is not None]
         self.eras = (min(eras), max(eras)) if eras else (0, 0)
-        lo, hi = rules["verses"].get("count", (1, len(verses)))
+        # what the rules as data allow: the verses they count, a couplet for
+        # each refrain and never one twice, the canon and at most one extra stanza
+        lo, hi = rules["verses"].get("count", (0, len(verses)))
         self.supported = {
             "verse": tuple(k for k in range(max(lo, 0), min(hi, len(verses)) + 1)
                            if k == 0 or _search(verses, self.checks, k, range(len(verses))) is not None),
-            "refrain": tuple(range(1, len(bank["refrain"]["couplets"]) + 1)),
-            "bridge": (1, 2) if rules["bridge"].get("extra") else (1,),
+            "refrain": tuple(range(len(bank["refrain"]["couplets"]) + 1)),
+            "bridge": (0, 1, 2) if rules["bridge"].get("extra") else (0, 1),
         }
         refrain = bank["refrain"]
         head = len(refrain["lines"])
@@ -431,12 +439,28 @@ def _song(genome: Genome) -> _Song:
 
 def forms(genome: Genome) -> dict[str, tuple[int, ...]]:
     """How many sections of each lyric block a form may have for the bank to
-    fill it within its rules: for H, {"verse": (2, 3, 4), "refrain": (1, 2, 3,
-    4, 5, 6), "bridge": (1, 2)}. Verses: as many as the rules allow and the bank
-    can sing together. Refrains: one couplet each, none twice, canon last. The
-    bridge: the canon always, and at most one extra stanza after it. A tag may
-    come any number of times, always on its one syllable."""
+    fill it within its rules: for H, {"verse": (2, 3, 4), "refrain": (0, 1, 2,
+    3, 4, 5, 6), "bridge": (0, 1, 2)}. Verses: as many as the rules count and
+    the bank can sing together. Refrains: one couplet each, none twice, canon
+    last. Bridge sections: the canon, then at most one extra stanza. A tag may
+    come any number of times, always on its one syllable. (The genome's form
+    template asks for more: three refrains and a bridge.)"""
     return dict(_song(genome).supported)
+
+
+def problem(genome: Genome, form: Iterable[str]) -> str | None:
+    """Why the bank can't fill a form within its rules, in one plain
+    sentence; None if it can."""
+    try:
+        return _problem(_song(genome).supported, _blocks(genome, _form(form)))
+    except ArrangeError as e:
+        return str(e)
+
+
+def _form(form: Iterable[str]) -> tuple[str, ...]:
+    if isinstance(form, str):
+        raise TypeError(f"a form is a sequence of section names, not one string: {form!r}")
+    return tuple(form)
 
 
 def _either(counts: tuple[int, ...]) -> str:
@@ -452,7 +476,7 @@ def _problem(supported: dict[str, tuple[int, ...]], blocks: Counter) -> str | No
     why = {
         "verse": "verses to a song",
         "refrain": "refrains to a song, each with its own couplet and canon last",
-        "bridge": "bridge sections: the canon in every song, and at most one extra stanza after it",
+        "bridge": "bridge sections: the canon, and at most one extra stanza after it",
     }
     for block, allowed in supported.items():
         n = blocks[block]
@@ -505,21 +529,27 @@ def _affinity(choices, words, vocabulary: frozenset[str]) -> list[float]:
             for s in sets]
 
 
-def _lean(x: float) -> float:
-    return max(-1.0, min(1.0, x))
-
-
-def _verse_weights(song: _Song, leanings: Leanings) -> np.ndarray:
+def _verse_weights(song: _Song, leanings: Leanings) -> tuple[np.ndarray, np.ndarray]:
+    """Each verse's weight in the draw, and how far the leanings tilt it from
+    where the bank has it (1 for no tilt)."""
     lo, hi = song.eras
     fondness = _affinity([v.entry for v in song.verses], song.words, leanings.vocabulary)
-    weights = []
+    weights, tilts = [], []
     for v, fond in zip(song.verses, fondness):
-        w = RARE * SPAN ** _lean(leanings.rarity_appetite) if v.rare else 1.0
-        w *= min(max(leanings.mood_weights.get(v.mood, 1.0), MOOD_WEIGHTS[0]), MOOD_WEIGHTS[1])
+        tilt = fond * leanings.mood_weights.get(v.mood, 1.0)
+        if v.rare:
+            tilt *= SPAN ** leanings.rarity_appetite
         if v.era is not None and hi > lo:
-            w *= SPAN ** (_lean(leanings.era_bias) * (2.0 * (v.era - lo) / (hi - lo) - 1.0))
-        weights.append(w * fond)
-    return np.array(weights, dtype=float)
+            tilt *= SPAN ** (leanings.era_bias * (2.0 * (v.era - lo) / (hi - lo) - 1.0))
+        weights.append((RARE if v.rare else 1.0) * tilt)
+        tilts.append(tilt)
+    # A verse that also comes as its partner's answer is drawn on its own less
+    # often, by as much as its partner calls it (as often as it's drawn, up to
+    # as often as the verse itself) and it answers: having a partner doesn't
+    # make a verse commoner. A pair of equals: each two thirds as often alone.
+    alone = [w / (1.0 + ANSWER * min(1.0, tilt) * sum(min(1.0, weights[j] / w) for j in partners))
+             for w, tilt, partners in zip(weights, tilts, song.partners)]
+    return np.array(alone, dtype=float), np.array(tilts, dtype=float)
 
 
 def _rng(seed: int, part: int) -> np.random.Generator:
@@ -608,22 +638,29 @@ def _lend(lines, options: list[list[str]] | None) -> tuple[str, ...]:
 # The draw
 
 
-def _draw_verses(song: _Song, k: int, weights: np.ndarray, rng: np.random.Generator) -> tuple[_Verse, ...]:
+def _draw_verses(song: _Song, k: int, weights: np.ndarray, tilts: np.ndarray,
+                 rng: np.random.Generator) -> tuple[_Verse, ...]:
     """k verses the rules let a song sing together, in an order they allow:
-    drawn as likely as their weights, a pair's partner likelier once one of
-    them is in, and drawn again until the rules can sing them."""
+    drawn one at a time as likely as their weights, except that once one of
+    a pair is drawn its partner answers it next, ANSWER of the time (less if
+    the leanings turn away from the partner; its rarity doesn't count
+    against it, since it comes as an answer); drawn again until the rules
+    can sing them."""
     if k == 0:
         return ()
     verses = song.verses
     for _ in range(ATTEMPTS):
         left = weights.copy()
-        chosen = []
-        for _ in range(k):
-            i = _draw(rng, left)
+        chosen: list[int] = []
+        partner = None
+        while len(chosen) < k:
+            if partner is not None and rng.random() < ANSWER * min(1.0, tilts[partner]):
+                i = partner
+            else:
+                i = _draw(rng, left)
             chosen.append(i)
             left[i] = 0.0
-            for j in song.partners[i]:
-                left[j] *= PAIR
+            partner = next((j for j in song.partners[i] if left[j] > 0), None)
         orders = song.checks.orders([verses[i] for i in sorted(chosen)])
         if orders:
             return orders[int(rng.integers(len(orders)))]
@@ -704,10 +741,12 @@ def arrange(genome: Genome, form: Iterable[str], seed: int, leanings: Leanings |
       dated verses earliest first, a pair side by side, no two dark verses
       side by side, at most one light one; each verse's slots chosen once;
     - refrains, one per refrain section: the question word turning in order
-      and the last time asking who owns it, the once-per-song slots the same
-      every time, and a couplet each time, none twice, canon last;
-    - the bridge: the canon, its slots chosen once, and if the form sings the
-      bridge twice (bridge, bridge or bridge, bridge2) one extra stanza;
+      and the last time asking who owns it (a lone refrain asks who made it,
+      as the fixed refrain does), the once-per-song slots the same every
+      time, and a couplet each time, none twice, canon last;
+    - the bridge: the canon in the first bridge section, its slots chosen
+      once, and if the form sings the bridge twice (bridge, bridge or bridge,
+      bridge2) one extra stanza in the second;
     - the tag: one syllable for every note, the same in every tag section.
 
     A fixed block the bank doesn't hold is sung as the genome has it. Where a
@@ -716,20 +755,20 @@ def arrange(genome: Genome, form: Iterable[str], seed: int, leanings: Leanings |
     break no rule. The same genome, form, seed and leanings always give the
     same words. Raises ArrangeError when the form can't be filled within the
     rules; forms() says what can."""
-    form = tuple(form)
+    form = _form(form)
     if isinstance(seed, bool) or not isinstance(seed, (int, np.integer)) or seed < 0:
         raise ValueError(f"the seed must be a whole number at least 0, not {seed!r}")
     song = _song(genome)
     blocks = _blocks(genome, form)
-    problem = _problem(song.supported, blocks)
-    if problem:
-        raise ArrangeError(problem)
+    why = _problem(song.supported, blocks)
+    if why:
+        raise ArrangeError(why)
     lean = leanings if leanings is not None else Leanings()
     vocabulary = lean.vocabulary
 
     rng = _rng(seed, _VERSES)
     verses = []
-    for v in _draw_verses(song, blocks["verse"], _verse_weights(song, lean), rng):
+    for v in _draw_verses(song, blocks["verse"], *_verse_weights(song, lean), rng):
         picks = _pick(slot_names(v.entry["lines"]), v.entry.get("slots", {}), rng, vocabulary)
         verses.append((v.id, _chosen(v.entry, picks), song.sing(v.entry, picks)))
     drawn = {
@@ -765,11 +804,9 @@ def arrange(genome: Genome, form: Iterable[str], seed: int, leanings: Leanings |
         sections.append(Sung(name, block, key, slots, tuple(lines)))
 
     # Only the person's words the bank has can bear on the draw, so only they
-    # are kept: nothing more of them leaves the machine, and replaying the
-    # draw with what is kept gives the same words.
-    kept = None
-    if leanings is not None:
-        kept = Leanings(leanings.mood_weights, leanings.era_bias, leanings.rarity_appetite, vocabulary & song.known)
+    # are kept: nothing more of them leaves the machine, and drawing again
+    # with what is kept gives the same words.
+    kept = Leanings(lean.mood_weights, lean.era_bias, lean.rarity_appetite, vocabulary & song.known)
     return Lyrics(form, int(seed), tuple(sections), kept)
 
 
@@ -778,7 +815,7 @@ def seed_lyrics(genome: Genome, form: Iterable[str]) -> Lyrics:
     Lyrics: the seed verses in turn, and each fixed block as written, its
     turning word turning. Where the genome has a bank, each is named for the
     bank entry it is, with the slot words it uses."""
-    form = tuple(form)
+    form = _form(form)
     bank = genome.source.get("bank") or {}
     rounds, heard = Counter(), Counter()
     for name in form:
