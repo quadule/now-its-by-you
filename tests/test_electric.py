@@ -176,6 +176,27 @@ def test_clean_is_clean_and_crunch_crunches_whatever_the_guitar(maker):
     assert -18.0 < strum_error(maker, "electric-crunch", 0.6) < -10.0
 
 
+def test_the_tremolo_is_deep_enough_to_hear():
+    """The amp's tremolo as players set it to be heard: its swing 11 to 19 dB, a photocell's dipping fast
+    and coming back slowly, a bias tremolo's evenly."""
+    from dataclasses import replace
+
+    from songbird.synth import amp
+
+    t = np.arange(3 * SR) / SR
+    for maker in range(4):
+        *_, rig_amp = electric.rig("electric-tremolo", {**S0, "maker": maker}, SR)
+        chain = amp.Chain(replace(rig_amp, reverb=0.0), SR, os_=2)
+        y = chain.run(0.1 * np.sin(2 * np.pi * 330.0 * t))
+        env = 20 * np.log10(np.sqrt(np.convolve(y**2, np.ones(128) / 128, mode="same"))[int(0.5 * SR): int(2.9 * SR)])
+        assert 11.0 < np.percentile(env, 99) - np.percentile(env, 1) < 19.0
+        phase = (np.arange(len(env)) / SR * chain.rate) % 1.0
+        cycle = np.array([env[(phase >= k / 40) & (phase < (k + 1) / 40)].mean() for k in range(40)])
+        top = int(np.argmax(cycle))
+        falls = (int(np.argmin(np.roll(cycle, -top))) % 40) / 40  # the part of the cycle from the top to the bottom
+        assert (falls < 0.35) if rig_amp.tremolo[0] == "optical" else (0.35 < falls < 0.65)
+
+
 def test_the_settings_can_ask_for_another_amp_setting():
     part = repeated("electric", 0.6, 4)
     a = render("electric", part, 1.8, amp="crunch")

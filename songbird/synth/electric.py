@@ -19,7 +19,7 @@ modest spring reverb; "electric-crunch", the volume up so the second stage and
 the power valves break up, the reverb off, the master down so it sits as loud
 as the clean sound; "electric-tremolo", clean through the amp's tremolo
 (a Fender's optical or a Vox-like bias tremolo by the maker, 4 to 7 Hz, locked
-to the tempo when the band gives one). The three names are the same guitar and
+to the tempo when the band gives one, dipping the sound 11 to 16 dB). The three names are the same guitar and
 the same amp on a machine (both drawn from its maker, whatever the name), so a
 style that changes settings mid-song hears one rig. settings["amp"] may name a
 setting ("clean", "crunch", "tremolo") or give a dict of {"setting", "drive"
@@ -141,8 +141,11 @@ def built(maker: int) -> dict:
     springs = (first, first * float(g.uniform(1.12, 1.3))) + ((first * 1.45,) if g.random() < 0.3 else ())
     d["tank"] = amp.Tank(traversals=springs, t60=float(g.uniform(2.2, 3.2)), coef=float(g.uniform(0.58, 0.68)),
                          stretch=int(g.choice([5, 6])), seed=int(g.integers(1 << 30)))
-    d["tremolo"] = ("optical" if d["voicing"] == "fender" else "bias", float(g.uniform(4.5, 6.5)),
-                    float(g.uniform(0.45, 0.7)))
+    # the tremolo as players set it to be heard: a Fender's photocell dips the sound 13 to 19 dB, a bias
+    # tremolo (it can only swing the power valves' bias so far) 11 to 16
+    kind = "optical" if d["voicing"] == "fender" else "bias"
+    deep = (0.78, 0.89) if kind == "optical" else (0.72, 0.84)
+    d["tremolo"] = (kind, float(g.uniform(4.5, 6.5)), float(g.uniform(*deep)))
     ten = g.random() < 0.4
     d["cabinet"] = amp.Cabinet(
         fs=float(g.uniform(92.0, 110.0) if ten else g.uniform(75.0, 90.0)), q=float(g.uniform(1.0, 1.6)),
