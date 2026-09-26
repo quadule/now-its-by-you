@@ -187,7 +187,7 @@ def harvest_command(args: argparse.Namespace) -> int:
     kept_out = set(stored.get("without", []))
     without = (kept_out | {harvest.signal_name(s) for s in args.without}) - {harvest.signal_name(s) for s in args.allow}
     # a voice read quietly by a render (languages, size, screen) is read in full the first time a person asks
-    if cached is not None and not args.refresh and not args.allow and not stored.get("quiet"):
+    if cached is not None and not (args.refresh or args.new_voice or args.allow or stored.get("quiet")):
         voice = replace(cached, **{s: None for s in without})  # leaving a signal out never reads anything
         if args.wallpaper and "colour" not in without:
             voice = replace(voice, colour=harvest.colour(Path(args.wallpaper)))
@@ -316,7 +316,7 @@ def main(argv: list[str] | None = None) -> int:
         "harvest", help="read this machine's voice (see docs/HARVEST.md for exactly what is read)")
     harvest_parser.add_argument("--show", action="store_true", help="print the reduced numbers, all that is kept")
     harvest_parser.add_argument("--refresh", action="store_true", help="read the machine again (the same singer)")
-    harvest_parser.add_argument("--new-voice", action="store_true", help="with --refresh: become a new singer")
+    harvest_parser.add_argument("--new-voice", action="store_true", help="read the machine again as a new singer (a new salt)")
     harvest_parser.add_argument("--without", nargs="+", default=[], metavar="SIGNAL",
                                 help=f"leave signals out, now and from now on: {', '.join(harvest.SIGNALS)} "
                                      "(or locale, hardware, files, screen, documents, typing, mic)")

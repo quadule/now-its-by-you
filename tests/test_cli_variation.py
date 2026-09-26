@@ -46,6 +46,14 @@ def test_a_quiet_voice_is_read_in_full_when_a_person_asks(tmp_path, monkeypatch,
     assert "quiet" not in json.loads(H.cache_path().read_text())
 
 
+def test_a_new_voice_is_a_new_salt(tmp_path, monkeypatch):
+    monkeypatch.setenv("SONGBIRD_HOME", str(tmp_path / "home"))
+    H.save(H.fictional("ada"))
+    monkeypatch.setattr(H, "harvest", lambda without=(), salt=None, **kw: H.Voice(salt=salt or "fresh"))
+    assert cli.main(["harvest", "--new-voice", "--no-typing"]) == 0
+    assert H.load().salt == "fresh"
+
+
 def test_harvest_with_everything_left_out_reads_nothing(tmp_path, monkeypatch, capsys):
     monkeypatch.setenv("SONGBIRD_HOME", str(tmp_path / "home"))
     everything = list(H.SIGNALS)

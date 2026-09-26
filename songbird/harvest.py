@@ -592,11 +592,11 @@ def _wallpaper_path() -> Path | None:
     return None  # macOS keeps it in a Library database; pass --wallpaper instead
 
 
-def colour(wallpaper: Path | None = None) -> Colour | None:
+def colour(wallpaper: Path | None = None, pictures: bool = True) -> Colour | None:
     """Reads: the desktop picture (a file given with --wallpaper, or where the
     system names it), shrunk to 64 pixels; failing that, whether the screen is
     in dark mode and its accent colour. Keeps: brightness and three hue shares."""
-    path = Path(wallpaper) if wallpaper else _wallpaper_path()
+    path = (Path(wallpaper) if wallpaper else _wallpaper_path()) if pictures else None
     if path is not None and path.is_file():
         pixels = _thumbnail(path)
         if pixels is not None and pixels.size:
@@ -862,14 +862,15 @@ def new_salt() -> str:
 
 
 def harvest(without=(), *, home: Path | None = None, private: bool = True, wallpaper: Path | None = None,
-            typing: bool = False, salt: str | None = None) -> Voice:
-    """Read every signal not left out. A signal that fails is missing, never an error."""
+            typing: bool = False, salt: str | None = None, pictures: bool = True) -> Voice:
+    """Read every signal not left out. A signal that fails is missing, never an error.
+    pictures=False reads the screen's colour from its appearance alone, never a picture file."""
     skip = {signal_name(s) for s in without}
     readers = {
         "tongue": tongue,
         "machine": machine,
         "ages": lambda: ages(home, private=private),
-        "colour": lambda: colour(wallpaper),
+        "colour": lambda: colour(wallpaper, pictures),
         "words": lambda: words(None if home is None else [Path(home) / "Documents", Path(home) / "Desktop"]),
         "hand": lambda: reduce_hand(typing_sample() or []) if typing else None,
         "room": room,
@@ -923,12 +924,12 @@ def rested(voice: Voice) -> Voice:
 def here() -> Voice:
     """This machine's voice: the cached one, its uptime read now. A machine
     never harvested is read quietly the first time: its languages, size and
-    screen, never its files, documents or typing, which only `songbird
-    harvest` reads. That voice is cached, salt and all, so the singer stays
+    screen (dark mode and accent colour, never a picture), never its files,
+    documents or typing, which only `songbird harvest` reads. That voice is cached, salt and all, so the singer stays
     the same when the rest is read."""
     voice = load()
     if voice is None:
-        voice = harvest(without=QUIET)
+        voice = harvest(without=QUIET, pictures=False)
         save(voice, quiet=True)
         print("This machine hasn't been harvested, so it sings with its languages, size and screen only; "
               "`songbird harvest --show` reads the rest and shows exactly what is kept.", file=sys.stderr)

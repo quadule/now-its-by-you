@@ -31,10 +31,11 @@ uv run songbird harvest --show --without words hand
 - Typing is only ever timed when you run `songbird harvest` yourself at a
   terminal and choose to type the line it shows. Never in the background,
   never during a render.
-- Files and documents are only read by `songbird harvest`. A render as this
-  machine (`--machine here`) before any harvest reads only its languages,
-  its size and its screen, says so, and caches that; the next `songbird
-  harvest` reads the rest, keeping the same singer.
+- Files, documents and pictures are only read by `songbird harvest`. A
+  render as this machine (`--machine here`) before any harvest reads only its
+  languages, its size and its screen's appearance (dark mode and accent
+  colour), says so, and caches that; the next `songbird harvest` reads the
+  rest, keeping the same singer.
 - Nothing goes over the network.
 
 ## The salt and the hash
@@ -67,8 +68,10 @@ Keeps one language group, by vote (a tie goes to the system's own language):
 in: `folk` (ionian, mixolydian, dorian, aeolian; home ionian) for English,
 Celtic, South Asian and other; `bright` (lydian, ionian, mixolydian; home
 ionian) for Germanic, Romance and East Asian; `dark` (ionian, dorian,
-aeolian, phrygian; home aeolian) for Slavic and West Asian. Every family can
-reach the seed's own ionian. The tables are `harvest.LANGUAGES`, `FAMILY_OF`
+aeolian, phrygian; home aeolian) for Slavic and West Asian. The year's
+drift moves a machine through its family: for H a folk or bright machine
+sings ionian most years and mixolydian some, a dark one aeolian most years
+and the seed's own ionian some. The tables are `harvest.LANGUAGES`, `FAMILY_OF`
 and `MODE_FAMILIES`, and they are a stylization for the artist to revisit.
 
 Drives which modes the tune is realized in (only modes in which every chord
@@ -115,7 +118,8 @@ rougher voice, and a lyric that leans to older verses).
 
 Reads a desktop picture: one you name with `--wallpaper FILE`, or on Linux
 (GNOME) and Windows the one the system's settings name, shrunk to 64 pixels
-(macOS `sips`, or Pillow where it happens to be installed). Without one, whether the screen is
+(macOS `sips`, into a temporary folder deleted at once, or Pillow where it
+happens to be installed). Without one, whether the screen is
 in dark mode and its accent colour (macOS `AppleInterfaceStyle` and
 `AppleAccentColor`, GNOME `color-scheme` and `accent-color`, Windows
 `AppsUseLightTheme`). macOS keeps its desktop picture in a database under
@@ -141,11 +145,12 @@ in at least two documents, are in the CMU Pronouncing Dictionary and aren't
 function words; of those, the 200 most frequent.
 
 Keeps, for eight public word lists (`harvest.THEMES`: sea, fire, machines,
-earth, home, town, music, past), the share of those 200 words each list
-holds (distinct words, not counts, in twentieths summing to 1); an era lean
-(new-fashioned words against old-fashioned ones, `harvest.ERA`, in quarters);
-and richness (the moving-average type-token ratio of all the text, in
-tenths). No word is kept, and no mood is read: what a person writes about is
+earth, home, town, music, past), how much of each list those 200 words cover
+(distinct words, not counts, and as a fraction of the list, so a short list
+and a long one count alike), as shares summing to 1 in twentieths; an era
+lean (new-fashioned words against old-fashioned ones, `harvest.ERA`, in
+quarters); and richness (the moving-average type-token ratio of all the
+text, 0.45 to 0.75 mapped onto 0 to 1, in tenths). No word is kept, and no mood is read: what a person writes about is
 not the song's business.
 
 Drives the lyric's vocabulary (the song's own words in the themes the
@@ -206,7 +211,9 @@ leanings) are `variation.DECISIONS`.
 ## What a rendition carries
 
 A render's record (`renders/<name>.json`) holds the voice (the reduced
-numbers, the salt and the hash), the drift vector and the parameters chosen.
+numbers, the salt and the hash), the drift vector, the parameters chosen
+and, where the words were drawn from the bank, what was drawn (with a lyric
+sheet beside it); only the bank's words ever appear there.
 The seed packet's manifest (milestone 6) should carry less: the parameters
 (what can be heard anyway) and the hash, not the voice block.
 
