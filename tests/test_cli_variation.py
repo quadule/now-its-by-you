@@ -75,7 +75,10 @@ def test_a_machine_at_a_date_renders_the_same_every_time(tmp_path):
     assert a["id"] == b["id"] and a["params"] == b["params"]
     assert a["voice"]["hash"] == H.fictional("bo").hash
     assert a["rendered_at"] == "2026-09-25T12:00:00+00:00" and a["drift"]["full"]
-    assert a["params"]["room"] and a["singer"]["tract"] == a["params"]["singer"].get("tract", a["singer"]["tract"])
+    assert a["singer"]["tract"] == a["params"]["singer"].get("tract", a["singer"]["tract"])
+    for field, value in a["params"]["mix"].items():  # the mix the rendition chose is the mix it was made with
+        assert a["mix"][field] == value, field
+    assert a["mix"]["rt60"] == H.fictional("bo").room.rt60
     # the record replays: its voice, sung again, is the same rendition
     c = render(tmp_path / "c.flac", str(tmp_path / "a.json"), "3")
     assert c["id"] == a["id"]

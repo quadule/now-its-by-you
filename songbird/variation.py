@@ -11,7 +11,8 @@ drift (when), plus chance. Every number goes the same way:
 3. The child pulls from its parent toward that: child = parent + PULL (own
    - parent), so it is 0.4 its parent and 0.6 its machine today, and a
    lineage keeps its accent. A body (the singer's register, tract, mouth,
-   vibrato rate and grain; the room) is the machine's own outright.
+   vibrato rate and grain; the instruments' size and maker; the room and
+   the recording's wear) is the machine's own outright.
 
 Choices a number can't express (mode, form, accompaniment, choir, the
 band's pattern and lead, lyric leanings) follow the same logic in DECISIONS;
@@ -21,9 +22,9 @@ of the sound and the lyric's draws; the form and the key never depend on the
 second a render starts, so they can't flicker between two renders a minute
 apart.
 
-To add a knob: give Params (or VoiceParams, or the band's Band) the field,
-then add one row to KNOBS reading the machine through Character and time
-through a dimension of drift.DIMENSIONS.
+To add a knob: give Params (or VoiceParams, the band's Band or the mix's
+MixParams) the field, then add one row to KNOBS reading the machine through
+Character and time through a dimension of drift.DIMENSIONS.
 """
 
 from __future__ import annotations
@@ -41,6 +42,7 @@ from .band import INSTRUMENTS, Band
 from .drift import DIMENSIONS, Drift, series
 from .genome import Genome
 from .harvest import MODE_FAMILIES, THEMES, Voice
+from .synth.mixing import MixParams
 from .synth.voice import VoiceParams
 from .theory import MODES, chord_tones
 
@@ -192,12 +194,11 @@ class Chance:
 LEANINGS = {"mood_weights": {"plain": 1.0, "light": 1.0, "dark": 1.0, "tender": 1.0}, "era_bias": 0.0,
             "rarity_appetite": 0.0, "vocabulary": {}}
 VOCABULARY_AT = 0.6
-ROOM = {"rt60": 1.1, "tone": [1.0, 1.0, 1.0, 0.9, 0.7]}  # synth.room.impulse_response's defaults
 
 
 def read(params, path: str):
-    """A value from Params by path: 'tempo', 'singer.rd', 'room.rt60', 'leanings.era_bias', 'band.density'.
-    A singer, room or leaning the params don't set has its default; the band always has every field."""
+    """A value from Params by path: 'tempo', 'singer.rd', 'mix.rt60', 'leanings.era_bias', 'band.density'.
+    A singer, mix or leaning the params don't set has its default; the band always has every field."""
     head, _, tail = path.partition(".")
     if not tail:
         return getattr(params, head)
@@ -206,7 +207,7 @@ def read(params, path: str):
         return getattr(held, tail)
     if tail in held:
         return held[tail]
-    return {"singer": lambda: getattr(VoiceParams(), tail), "room": lambda: ROOM[tail],
+    return {"singer": lambda: getattr(VoiceParams(), tail), "mix": lambda: getattr(MixParams(), tail),
             "leanings": lambda: LEANINGS[tail]}[head]()
 
 
@@ -221,7 +222,8 @@ def write(out: dict, path: str, value) -> None:
 def exists(path: str) -> bool:
     """Whether a knob's field exists (a singer's or the band's may be gone after it changes)."""
     head, _, tail = path.partition(".")
-    return {"singer": lambda: hasattr(VoiceParams(), tail), "band": lambda: hasattr(Band(), tail)}.get(head, lambda: True)()
+    return {"singer": lambda: hasattr(VoiceParams(), tail), "band": lambda: hasattr(Band(), tail),
+            "mix": lambda: hasattr(MixParams(), tail)}.get(head, lambda: True)()
 
 
 # ---------------------------------------------------------------- the table of numbers
@@ -231,7 +233,8 @@ def exists(path: str) -> bool:
 class Knob:
     """One number a rendition decides.
 
-    path    where it goes: a Params field, singer.<VoiceParams field>, band.<Band field>, leanings.<key>
+    path    where it goes: a Params field, singer.<VoiceParams field>, band.<Band field>,
+            mix.<MixParams field>, leanings.<key>
     uses    the traits its own value reads; with none of them known, own is the parent's
     own     the machine's own value, from its character c and x, the song's own value
     drift   the drift dimension that moves the machine's own value, and span how far
@@ -347,6 +350,27 @@ KNOBS = (
            drift=("balance", "ensemble"), span=(lambda c, name=name: 0.3 * c.id(f"balance:{name}"), 0.25 * ENSEMBLE[name]),
            ratio=True, view="slow", bounds=(0.5, 1.5), step=0.01)
       for name in INSTRUMENTS),
+    # ---- the mix (songbird.synth.mixing.MixParams); the room's rt60 and tone are choose_room's ------------------
+    # the room answers sooner in a small room and later in a big one: part of the room, so the machine's own
+    Knob("mix.predelay", ("room", "identity"),
+         lambda c, x: x * (c.room["rt60"] / 1.1 if c.room else 1.0) ** 0.8 * 2 ** (0.25 * c.id("predelay")),
+         inherit=False, bounds=(0.005, 0.04), step=0.001),
+    Knob("mix.space", ("identity",), lambda c, x: x + 0.12 * c.id("space"),
+         drift="space", span=0.3, view="slow", bounds=(0.7, 1.3), step=0.01),
+    Knob("mix.intimacy", ("identity",), lambda c, x: x + 0.12 * c.id("intimacy"),
+         drift="near", span=0.12, view="slow", bounds=(0.3, 0.7), step=0.01),
+    Knob("mix.width", ("warmth", "identity"), lambda c, x: x - 0.08 * c.warmth + 0.05 * c.id("width"),
+         drift="sheen", span=0.12, view="slow", bounds=(0.9, 1.25), step=0.01),
+    # how far the voice stands over the band: kept near the designed 10 dB (lower costs words; 6-7 might be warmer)
+    Knob("mix.forward", ("identity",), lambda c, x: x + 0.6 * c.id("forward"),
+         drift="voice", span=0.5, bounds=(8.5, 11.0), step=0.1),
+    Knob("mix.duck", (), lambda c, x: x, drift="duck", span=0.4, view="slow", bounds=(0.6, 1.4), step=0.01),
+    Knob("mix.tilt", ("brightness",), lambda c, x: x + 0.8 * c.brightness,
+         drift="sheen", span=0.5, bounds=(-1.2, 1.2), step=0.05),
+    # the recording's wear, a tape's: from old files and a tired machine; crackle starts at 0.35, which only the
+    # oldest machines reach (a median file age of about eight years or more)
+    Knob("mix.wear", ("wear", "tired"), lambda c, x: max(0.0, 0.12 + 0.24 * c.wear + 0.03 * c.tired),
+         inherit=False, bounds=(0.0, 0.4), step=0.01),
     # ---- what the lyric leans toward (for songbird.arrange) ------------------------------------------------------
     Knob("leanings.era_bias", ("era", "wear"), lambda c, x: x + 0.6 * c.era - 0.3 * c.wear,
          drift="era", span=0.6, view="slow", bounds=(-1.0, 1.0), step=0.05),
@@ -839,14 +863,46 @@ def choose_inventory(out: dict, ctx: Context) -> None:
         out["inventory"] = ctx.c.inventory
 
 
+def sung_pitch(genome: Genome, out: dict) -> float:
+    """Where this rendition's singer sings: the median of the tune's notes (MIDI) in its key and mode,
+    with the singer's octave."""
+    from .theory import degree_semitones
+
+    shift = (out.get("singer") or {}).get("shift", 0)
+    pitches = [out["tonic"] + degree_semitones(n.degree, out["mode"], n.alter)
+               for phrase in genome.phrases.values() for n in phrase.notes if n.degree is not None]
+    return float(np.median(pitches) if pitches else out["tonic"]) + shift
+
+
+def choose_timbre(out: dict, ctx: Context) -> None:
+    """The learned singer's own voice: a blend of the singers the throat learned from, drawn from the
+    machine's identity among those who sing where it sings, pulled from the parent's blend as every
+    trait is, and never more than 0.6 of any one of them (throat.machine_mix). Only when the learned
+    throat sings (it is there, and the singer's engine is "learned"), for a machine with an identity."""
+    from .synth import throat
+
+    engine = (out.get("singer") or {}).get("engine") or VoiceParams().engine
+    if engine != "learned" or "identity" not in ctx.c.known or not throat.available():
+        return
+    model = throat.load()
+    pitch = sung_pitch(ctx.genome, out)
+    seed = int.from_bytes(hashlib.sha256(f"identity|{ctx.c.hash}|timbre".encode()).digest()[:8], "little")
+    own = throat.parse_mix(throat.machine_mix(seed, pitch, model))
+    was = throat.parse_mix(read(ctx.parent, "singer.timbre"))
+    was = {n: w for n, w in (was or {}).items() if n in model.config["singers"]} or throat.default_mix(model, pitch)
+    names = set(own) | set(was)
+    blend = {n: was.get(n, 0.0) + PULL * (own.get(n, 0.0) - was.get(n, 0.0)) for n in names}
+    out["singer"]["timbre"] = throat.blend_spec(throat.capped(blend))
+
+
 def choose_room(out: dict, ctx: Context) -> None:
-    """The room is where the machine lives: its own, else its parent's."""
+    """The room (the mix's rt60 and tone) is where the machine lives: its own, else its parent's."""
     if ctx.c.room:
-        out["room"] = dict(ctx.c.room)
+        out.setdefault("mix", {}).update(rt60=ctx.c.room["rt60"], tone=list(ctx.c.room["tone"]))
 
 
 DECISIONS = (choose_mode, choose_form, choose_accomp, choose_pattern, choose_lead, choose_choir, choose_mood,
-             choose_vocabulary, choose_inventory, choose_room)
+             choose_vocabulary, choose_inventory, choose_room, choose_timbre)
 
 
 # ---------------------------------------------------------------- putting it together
@@ -863,7 +919,7 @@ def choose(genome: Genome, parent=None, voice: Voice | None = None, drift: Drift
         return parent if seed is None else replace(parent, seed=seed)
     ctx = Context(genome, song, parent, character(voice), drift)
     out = parent.to_dict()
-    for key in ("singer", "room", "leanings"):
+    for key in ("singer", "mix", "leanings"):
         out[key] = dict(out.get(key) or {})
     for knob in KNOBS:
         knob.apply(out, ctx)

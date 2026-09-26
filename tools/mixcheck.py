@@ -29,6 +29,7 @@ from scipy.ndimage import uniform_filter1d
 from scipy.signal import butter, sosfiltfilt, welch
 
 sys.path.insert(0, str(Path(__file__).parent.parent))
+from songbird.synth.voice import VoiceParams  # noqa: E402
 from songbird import genome as G, synth  # noqa: E402
 from songbird.realize import choose_params, realize  # noqa: E402
 from songbird.synth import master, mixing  # noqa: E402
@@ -58,6 +59,8 @@ def main() -> None:
     ap.add_argument("--choir", type=int, default=None)
     ap.add_argument("--stems", help="an .npz of stems to use instead of rendering")
     ap.add_argument("--mix", nargs="*", default=[], metavar="FIELD=VALUE")
+    ap.add_argument("--voice", nargs="*", default=[], metavar="FIELD=VALUE",
+                    help="the singer, e.g. --voice engine=learned (VoiceParams fields)")
     args = ap.parse_args()
 
     g = G.load(args.genome)
@@ -68,7 +71,9 @@ def main() -> None:
         with np.load(args.stems) as z:
             stems = {k: z[k].astype(np.float64) for k in z.files}
     else:
-        stems = synth.render_stems(realize(g, params), seed=params.seed)
+        defaults = VoiceParams()
+        singer = replace(defaults, **{k: type(getattr(defaults, k))(v) for k, v in (kv.split("=", 1) for kv in args.voice)})
+        stems = synth.render_stems(realize(g, params), seed=params.seed, voice=singer)
     taps, mtaps = {}, {}
     mixed = mixing.mix(stems, SR, params.seed, MixParams.parse(args.mix), taps=taps)
     final = master.master(mixed, SR, taps=mtaps)
