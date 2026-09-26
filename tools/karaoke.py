@@ -3,14 +3,18 @@
     uv run python tools/karaoke.py songs/h-now-its-by-you.json      # then open http://127.0.0.1:8765
 
 A small server on this machine only. It serves one page (tools/karaoke.html)
-that plays the guide track, shows the words as they come, and records the
+that plays a guide, shows the words as they come, and records the
 microphone in the same audio clock as the playback, so every take lines up
-with the guide exactly. Whoever sings puts their name in first: kept takes go
-to recordings/<name>/ (never tracked by git, tools/takes.py), and each
-singer's takes become that singer's phrasing (tools/phrasing.py), so several
-people can sing without blending into one another. Then hear the machine sing
-the song one person's way, or everyone's way at once, with the other singers
-in the lineage choir.
+with the guide exactly. The guide is the tune alone on a whistle over a quiet
+pulse (melody, the default), the whole song (full) or the machine's singer
+alone (voice): all three follow one score, so a take is measured the same
+whichever was heard, and its sidecar says which (tools/guides.py). Whoever
+sings puts their name in first: kept takes go to recordings/<name>/ (never
+tracked by git, tools/takes.py), and each singer's takes become that
+singer's phrasing (tools/phrasing.py), so several people can sing without
+blending into one another. Then hear the machine sing the song one person's
+way, or everyone's way at once, with the other singers in the lineage choir.
+The same page, for singers anywhere, is web/sing (docs/SING-ONLINE.md).
 """
 
 from __future__ import annotations
@@ -28,6 +32,7 @@ from urllib.parse import parse_qs, urlsplit
 
 warnings.filterwarnings("ignore", message="pkg_resources")
 sys.path.insert(0, str(Path(__file__).parent))
+import guides as M  # noqa: E402  (tools/guides.py)
 import phrasing as T  # noqa: E402  (tools/phrasing.py)
 import takes as K  # noqa: E402  (tools/takes.py)
 
@@ -36,10 +41,13 @@ from songbird.realize import choose_params  # noqa: E402
 
 ROOT = Path(__file__).parent.parent
 PAGE = Path(__file__).with_suffix(".html")
+# what the page shares with the online one (web/sing): its timing, sync and drawing, and the take recorder
+SCRIPTS = {"/karaoke.js": Path(__file__).with_suffix(".js"), "/recorder.js": Path(__file__).with_name("karaoke-recorder.js")}
 
 
 def lyrics(score: dict, title: str, tempo: float) -> dict:
-    """The guide's words, line by line, with every syllable's time and pitch."""
+    """The guide's words, line by line, with every syllable's time and pitch, and the beats
+    (seconds) its notes were placed on, to count each line in."""
     notes = sorted((n for n in score["notes"] if n["part"] == "voice"), key=lambda n: n["start"])
     lines, current, left = [], [], 0
     for n in notes:
@@ -57,7 +65,17 @@ def lyrics(score: dict, title: str, tempo: float) -> dict:
         "sections": [{"name": s, "start": a, "end": b} for s, a, b in score["sections"]],
         "lines": [{"section": section, "start": line[0]["start"], "end": line[-1]["end"], "syllables": line}
                   for section, line in lines],
+        "beats": [round(t, 4) for t, _ in score.get("beats", [])],
     }
+
+
+def credited(takes: list) -> str | None:
+    """The name a phrasing made from these takes may credit: the one the singer gave to be credited
+    by, and only if every take says they want it (a take sung here says nothing: the singer was in
+    the room to be asked); None if not."""
+    if not takes or not all(t.info.get("credit", True) for t in takes):
+        return None
+    return takes[-1].info.get("credit_as", takes[-1].singer) or None
 
 
 class Karaoke(BaseHTTPRequestHandler):
@@ -67,9 +85,11 @@ class Karaoke(BaseHTTPRequestHandler):
     def log_message(self, fmt, *args):  # keep the terminal quiet
         pass
 
-    def send(self, body: bytes, kind: str, code: int = 200) -> None:
+    def send(self, body: bytes, kind: str, code: int = 200, headers: dict | None = None) -> None:
         self.send_response(code)
         self.send_header("Content-Type", kind)
+        for k, v in (headers or {}).items():
+            self.send_header(k, v)
         self.send_header("Content-Length", str(len(body)))
         self.send_header("Cache-Control", "no-store")
         self.end_headers()
@@ -78,14 +98,10 @@ class Karaoke(BaseHTTPRequestHandler):
     def send_json(self, data, code: int = 200) -> None:
         self.send(json.dumps(data).encode(), "application/json", code)
 
-    def guide(self) -> tuple[Path, Path]:
-        stem = self.genome_path.stem
-        wav = ROOT / "renders" / "guide" / f"{stem}.guide.wav"
-        score = wav.with_name(f"{stem}.guide.score.json")
-        if not wav.exists() or wav.stat().st_mtime < self.genome_path.stat().st_mtime:
-            with contextlib.redirect_stdout(io.StringIO()):
-                T.write_guide(self.genome_path, self.genome, 0)
-        return wav, score
+    def guide(self, mix: str = "full") -> M.Mix:
+        """A guide mix's WAV, the score every mix follows and its digest, rendered if missing or
+        stale (from the genome file as it is now)."""
+        return M.ensure(self.genome_path, None, mix)
 
     def phrasing_path(self, who: str) -> Path:
         return ROOT / "renders" / "phrasing" / f"{self.genome_path.stem}.{who}.json"
@@ -97,22 +113,35 @@ class Karaoke(BaseHTTPRequestHandler):
             out.append({
                 "who": who,
                 "name": kept[-1].singer or who,
-                "takes": [{"path": t.rel, "use": t.use, "recorded": t.info.get("recorded", "")} for t in kept],
+                "takes": [{"path": t.rel, "use": t.use, "recorded": t.info.get("recorded", ""),
+                           "mix": t.info.get("mix", "full"), "online": t.info.get("source") == "online"} for t in kept],
+                "credit": credited(kept) is not None,
                 "phrasing": phrasing.relative_to(ROOT).as_posix() if phrasing.exists() else None,
             })
         return out
 
     def do_GET(self) -> None:
-        self.path = urlsplit(self.path).path  # a ?t=... only busts the browser's cache
+        url = urlsplit(self.path)
+        self.path = url.path  # a ?t=... only busts the browser's cache
+        query = {k: v[0] for k, v in parse_qs(url.query).items()}
         if self.path in ("/", "/index.html"):
             self.send(PAGE.read_bytes(), "text/html; charset=utf-8")
+        elif self.path in SCRIPTS:
+            self.send(SCRIPTS[self.path].read_bytes(), "text/javascript; charset=utf-8")
         elif self.path == "/guide.wav":
-            self.send(self.guide()[0].read_bytes(), "audio/wav")
+            mix = query.get("mix", "full")  # asked for without a mix, as before there was a choice: the full guide
+            if mix not in M.MIXES:
+                self.send_json({"error": f"no guide mix {mix!r}"}, 404)
+            else:  # which score it follows, so the take can say what it was sung to
+                guide = self.guide(mix)
+                self.send(guide.wav.read_bytes(), "audio/wav", headers={"X-Guide-Score": guide.digest})
         elif self.path == "/singers":
             self.send_json(self.singers())
         elif self.path == "/lyrics.json":
-            score = json.loads(self.guide()[1].read_text())
-            self.send_json(lyrics(score, self.genome.title, choose_params(self.genome).tempo))
+            guide = self.guide()
+            score = json.loads(guide.score.read_text())
+            words = lyrics(score, self.genome.title, score.get("tempo") or choose_params(self.genome).tempo)
+            self.send_json({**words, "guide": guide.digest})
         elif self.path.startswith("/recordings/"):
             f = (ROOT / self.path.lstrip("/")).resolve()  # only a take, never a path out of recordings/
             if f.is_relative_to(K.RECORDINGS) and f.suffix == ".wav" and f.exists():
@@ -139,7 +168,17 @@ class Karaoke(BaseHTTPRequestHandler):
                 if not singer:
                     raise ValueError("a take needs the singer's name")
                 info = {k: float(query[k]) for k in ("shift_ms", "auto_ms", "device_ms") if k in query}
-                take = K.keep(self.genome_path.stem, singer, body, self.guide()[1], **info)
+                mix, heard = query.get("mix"), query.get("guide", "")
+                if mix not in M.MIXES:
+                    raise ValueError("a take must say which guide it was sung to: reload the page")
+                song = self.genome_path.stem
+                now = self.guide()  # every mix follows the full guide's score
+                if heard == now.digest:
+                    take = K.keep(song, singer, body, now.score, mix=mix, **info)
+                elif heard and K.guide_score(song, heard):  # sung to an earlier guide, which is still kept
+                    take = K.keep_sung(song, singer, body, heard, mix=mix, **info)
+                else:
+                    raise ValueError("the guide changed while you sang (the song was rendered again): reload and sing it anew")
                 self.send_json({"path": take.rel, "who": take.who})
             elif url.path == "/use":
                 request = json.loads(body)
@@ -156,7 +195,7 @@ class Karaoke(BaseHTTPRequestHandler):
                 if not chosen:
                     raise ValueError(f"{who} has no takes marked to use")
                 with contextlib.redirect_stdout(io.StringIO()):
-                    credit = chosen[-1].singer if request.get("credit") else None
+                    credit = credited(chosen) if request.get("credit") else None
                     phrasing, data, portrait = T.singer_phrasing(self.genome_path, self.genome, chosen, credit)
                     T.write(data, phrasing, self.phrasing_path(who))
                 self.send_json({"phrasing": self.phrasing_path(who).relative_to(ROOT).as_posix(),
