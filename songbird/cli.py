@@ -76,12 +76,17 @@ def render_one(genome, params: Params, out: Path, *, voice=None, drift=None, lyr
     mix = synth.render(score, seed=params.seed, voice=singer, mix_params=mixing, ancestors=ancestors)
     mastered = master.master(mix, synth.SR)
     pcm = master.to_pcm16(mastered, seed=params.seed)
-    master.write_flac(out, pcm, synth.SR)
+    lineage = pack_mod.lineage(parent)
+    master.write_flac(out, pcm, synth.SR, tags=dict(
+        title=genome.title, artist="Songbird", date=drift.to_dict()["at"][:10] if drift is not None else None,
+        comment=f"Generation {lineage['generation']}, id {master.pcm_sha256(pcm)[:12]}."
+                + (" This file is also the program that sang it: run it with python3, or unzip it."
+                   if packet_genome is not None else "")))
 
     record = {
         "id": master.pcm_sha256(pcm),
         "title": genome.title,
-        **pack_mod.lineage(parent),
+        **lineage,
         "rendered_at": drift.to_dict()["at"] if drift is not None else None,
         "params": params.to_dict(),
         "lyrics": lyrics.to_dict() if lyrics else None,  # the words drawn from the bank; None: the seed's own
@@ -137,7 +142,11 @@ def _arrangement(items: list[str]) -> dict | None:
 def render_command(args: argparse.Namespace) -> int:
     genome = genome_mod.load(args.genome)
     voice, drift = _machine(args)
-    parent = _parent_record(args.parent)
+    try:
+        parent = _parent_record(args.parent)
+    except (ValueError, OSError) as e:
+        print(f"songbird: can't sing from that parent: {e}", file=sys.stderr)
+        return 2
     params = choose_params(genome, Params.from_dict(parent["params"]) if parent else None, voice, drift, seed=args.seed,
                            style=args.style, arrange=_arrangement(args.arrange))
     if args.form:
@@ -166,11 +175,26 @@ def render_command(args: argparse.Namespace) -> int:
 def pack_command(args: argparse.Namespace) -> int:
     flac = Path(args.flac)
     record_path = Path(args.record) if args.record else flac.with_suffix(".json")
-    if not record_path.exists():
+    inside = pack_mod.read_manifest(flac)  # a packet already: pack it again with the program running now
+    if record_path.exists():
+        record = json.loads(record_path.read_text())
+    elif inside is not None:
+        record = inside
+    else:
         print(f"songbird: no render record at {record_path} (--record)", file=sys.stderr)
         return 2
-    record = json.loads(record_path.read_text())
+    if args.parent:
+        try:
+            record = {**record, **pack_mod.lineage(pack_mod.read_record(args.parent))}
+        except (ValueError, OSError) as e:
+            print(f"songbird: {e}", file=sys.stderr)
+            return 2
     genome_path = Path(args.genome) if args.genome else None
+    if genome_path is None and inside is not None:  # the genome the packet carries
+        import tempfile
+
+        genome_path = Path(tempfile.mkdtemp()) / "genome.json"
+        genome_path.write_text(pack_mod.read_member(flac, "genome.json") or "")
     if genome_path is None:  # the song whose title the record carries
         songs = Path(__file__).resolve().parents[1] / "songs"
         genome_path = next((g for g in sorted(songs.glob("*.json"))
@@ -180,7 +204,8 @@ def pack_command(args: argparse.Namespace) -> int:
             return 2
     sheet, score = flac.with_suffix(".txt"), flac.with_suffix(".score.json")
     lyrics = sheet.read_text() if sheet.exists() else \
-        pack_mod.words_as_sung(json.loads(score.read_text()), record.get("title")) if score.exists() else None
+        pack_mod.words_as_sung(json.loads(score.read_text()), record.get("title")) if score.exists() else \
+        pack_mod.read_member(flac, "lyrics.txt")
     out = pack_mod.pack(flac, record, genome_path, lyrics=lyrics, out=args.out)
     print(f"{out}  carries the program ({out.stat().st_size / 2**20:.1f} MB in all)")
     return 0
@@ -190,7 +215,7 @@ def unpack_command(args: argparse.Namespace) -> int:
     to = Path(args.to) if args.to else Path(args.flac).with_name(Path(args.flac).stem + "-unpacked")
     try:
         pack_mod.unpack(args.flac, to)
-    except ValueError as e:
+    except (ValueError, OSError) as e:
         print(f"songbird: {e}", file=sys.stderr)
         return 2
     print(f"unpacked into {to}")
@@ -428,6 +453,8 @@ def main(argv: list[str] | None = None) -> int:
     pack_parser.add_argument("--record", metavar="FILE", help="its render record (default: beside the FLAC)")
     pack_parser.add_argument("--genome", metavar="FILE", help="the genome it sang (default: the song with its title)")
     pack_parser.add_argument("--out", metavar="FILE", help="write the packet here (default: attach it in place)")
+    pack_parser.add_argument("--parent", metavar="FILE",
+                             help="the rendition it was sung from (packet or record), if its record doesn't say")
     pack_parser.set_defaults(run=pack_command)
 
     unpack_parser = commands.add_parser("unpack", help="unpack a rendition's packet into a folder")

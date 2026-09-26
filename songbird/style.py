@@ -754,6 +754,11 @@ def rebarred(genome, params) -> bool:
     return params.style.feel in ("waltz", "six") and triple_ok(genome)
 
 
+def triple(genome, params) -> str:
+    """"waltz" or "six" when the song is re-barred in three for this rendition, else ""."""
+    return params.style.feel if rebarred(genome, params) else ""
+
+
 def rebar(u: float, lead: float) -> float:
     """Grid units re-barred in three, the feet counted from the first bar line (songbird.idioms.warp)."""
     from .idioms import warp
@@ -771,14 +776,20 @@ def coda(genome, params) -> int:
     return 2 * genome.meter.bar if params.style.ending == "amen" else 0
 
 
+def repeated_phrases(genome, params) -> list:
+    """The phrases sung again after the form: the last line, when the style ends by repeating it and the
+    song ends on a refrain."""
+    if params.style.ending != "repeat" or not params.form:
+        return []
+    last = genome.section(params.form[-1])
+    return [genome.phrases[last.phrases[-1]]] if last.lyrics == "refrain" else []
+
+
 def repeated(genome, params, placed) -> list:
-    """The last line sung again, when the style ends by repeating it (and the song ends on a refrain):
-    (section, phrase, line) to lay out after the last."""
-    if params.style.ending != "repeat" or not placed:
+    """(section, phrase, line) to lay out after the last placed phrase: the last line again, as sung."""
+    if not repeated_phrases(genome, params) or not placed:
         return []
     name, phrase, _start, line = placed[-1]
-    if genome.section(name).lyrics != "refrain" or not line:
-        return []
     return [(name, phrase, line)]
 
 
