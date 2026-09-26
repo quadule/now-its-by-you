@@ -447,6 +447,13 @@ class Studio:
             job = self.jobs.submit(key, "preview", label, lambda job: self._section(job, v, key, section))
         return job.view() | {"key": key}
 
+    def warm(self) -> None:
+        """Make today's first verse while the page opens: the synthesis is compiled the first time it runs
+        (10 to 15 s), so the first thing a person asks to hear doesn't wait for that, and it's ready."""
+        v = self.version({})
+        first = next((k for k, name in enumerate(v.params.form) if self.genome.section(name).lyrics), 0)
+        self.listen({}, "you", first)
+
     def _score(self, v: explain.Version):
         from . import phrasing as phrasing_mod
 
@@ -823,6 +830,7 @@ def run(args: argparse.Namespace) -> int:
     print(f"Songbird studio: {studio.genome.title}, {studio.context.opening()}\n  open {url}  (Ctrl-C to stop)",
           flush=True)
     threading.Thread(target=studio.timeline, daemon=True).start()  # ready by the time it's scrolled to
+    studio.warm()
     if not args.no_open:
         threading.Timer(0.4, lambda: webbrowser.open(url)).start()
     try:

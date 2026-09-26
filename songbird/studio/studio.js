@@ -687,6 +687,9 @@ async function sing() {
 
 async function record() {
   const saved = $("saved");
+  if (state.recording) return;
+  state.recording = true;
+  for (const id of ["record", "recordNow"]) $(id).disabled = true;
   saved.replaceChildren(h("p", {}, "Recording…"));
   $("recordPanel").scrollIntoView({ behavior: "smooth", block: "nearest" });
   try {
@@ -707,6 +710,9 @@ async function record() {
       h("button", { class: "btn", type: "button", onclick: () => play(job.url, "The recording") }, "Play the recording"));
   } catch (e) {
     saved.replaceChildren(h("p", { class: "problem" }, `Couldn't record it: ${e.message}`));
+  } finally {
+    state.recording = false;
+    for (const id of ["record", "recordNow"]) $(id).disabled = false;
   }
 }
 
