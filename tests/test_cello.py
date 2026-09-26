@@ -289,6 +289,18 @@ def test_a_swell_speaks_at_once_and_never_starts_again(name, pitch, dur):
     assert 20 * np.log10(rms.max() / np.median(rms)) < 8
 
 
+def test_a_plucked_string_rings_until_it_is_played_again():
+    """An arpeggio's strings ring together (each was stopped by the next note, whatever its string); plucking the
+    same string again stops it."""
+    arpeggio = [Note("cello", 0.1 + 0.3 * k, 0.3, float(p), 0.7, art="pizz") for k, p in enumerate((43, 50, 57, 64))]
+    y = stem("cello", arpeggio, 2.0).mean(axis=1)
+    env = envelope(y, midi_to_hz(43), 0.9, 1.1)
+    assert 20 * np.log10(env[int(1.0 * SR)] / env[int(0.25 * SR)]) > -20  # G2 still ringing under the others
+    again = [Note("cello", 0.1, 0.3, 43.0, 0.7, art="pizz"), Note("cello", 0.4, 0.3, 45.0, 0.7, art="pizz")]
+    env = envelope(stem("cello", again, 2.0).mean(axis=1), midi_to_hz(43), 0.97, 1.03)
+    assert 20 * np.log10(env[int(0.9 * SR)] / env[int(0.3 * SR)]) < -25  # the G string stopped by its next note
+
+
 def test_pizzicato_rings_down_and_tremolo_reverses_a_dozen_times_a_second():
     y = stem("cello", [Note("cello", 0.1, 0.3, 43.0, 0.7, art="pizz")], 2.0).mean(axis=1)
     env = envelope(y, midi_to_hz(43))

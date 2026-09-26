@@ -35,7 +35,7 @@ what a cellist does differently from a fiddler:
   near 0.9 s); an open string rings on.
 - "trem": the bow reversing 11 to 15 times a second; "pizz": the string
   plucked with the fingertip over the end of the fingerboard (pluck.py),
-  through the same body.
+  through the same body, ringing until its string is played again.
 
 Double stops (overlapping notes) go to a second string. The string section
 ("strings") is violins, violas and cellos, each line of the part taken by the
@@ -120,6 +120,7 @@ HISS = (0.15, 700.0, 0.6)  # the bow's noise: its level against the motion, its 
 BITE = (20.0, 0.012)  # a fresh stroke's burst of it: against the steady hiss, and s it dies away over
 SWELL = 0.5  # a swell's bow speed at its ends against its middle, on top of bowed.tracks' 0.7 (9 dB in all)
 FINGER = 0.9  # s a stopped string rings (T60) once the bow has left it before a rest
+RING = 2.5  # the longest a pizzicato rings, s, before the hand stops it (the next note on its string stops it sooner)
 VIB_ONSET, VIB_CARRY, VIB_EASE = 0.28, 0.1, 0.15  # s a vibrato takes to grow in, to change width, to ease off
 
 # How much longer than asked the loop runs (samples), measured over bow positions 0.04 to 0.2, poles 0.25 to 0.62
@@ -402,13 +403,18 @@ def _damping(kind: Kind, notes, sr: int, length: int) -> np.ndarray:
     return gain
 
 
+def _string(kind: Kind, pitch: float) -> int:
+    """The open string a note is played on: the highest at or below it (the lowest position)."""
+    opens = [o for o in kind.strings if o <= pitch + 0.3]
+    return opens[-1] if opens else kind.strings[0]
+
+
 def _pizz(kind: Kind, note, sr: int, rng: np.random.Generator, s: dict, ring: float) -> np.ndarray:
-    """A pizzicato: the fingertip over the end of the fingerboard, the note left to ring `ring` s at most."""
-    opens = [o for o in kind.strings if o <= note.pitch + 0.3]
-    string = opens[-1] if opens else kind.strings[0]
+    """A pizzicato: the fingertip over the end of the fingerboard, the note left to ring `ring` s, then stopped."""
+    string = _string(kind, note.pitch)
     stopped = note.pitch - string > 0.3
     point = min(0.45, kind.fingerboard * 2.0 ** ((note.pitch - string) / 12.0))
-    y = pluck.pluck(midi_to_hz(note.pitch), max(note.dur, ring), sr, rng, vel=note.vel,
+    y = pluck.pluck(midi_to_hz(note.pitch), ring, sr, rng, vel=note.vel,
                     brightness=0.25 + 0.3 * float(s["brightness"]) * (0.8 + 0.4 * note.vel),
                     decay=kind.ring * (1.0 if stopped else 1.8), pick=point * rng.uniform(0.9, 1.1),
                     hardness=0.1 + 0.1 * note.vel, planes=0.3, touch=0.15, damp=0.1)
@@ -428,11 +434,14 @@ def player(kind: Kind, notes, sr: int, length: int, rng: np.random.Generator, s:
         fade = min(len(y), int(0.25 * sr))
         y[len(y) - fade:] *= np.linspace(1.0, 0.0, fade) ** 2
         force[s0:s1] += y
+    # A plucked string rings on while the others are played (an arpeggio's notes sound together), until the next
+    # note on that same string stops it, or RING s.
     plucks = [n for n in notes if n.art == "pizz"]
-    for k, note in enumerate(plucks):
+    for note in plucks:
         i0 = int(round(note.start * sr))
-        after = [n.start for n in notes if n.start > note.start + 0.02]
-        ring = min(1.2, (after[0] - note.start) if after else 1.2)
+        string = _string(kind, note.pitch)
+        after = [n.start for n in notes if n.start > note.start + 0.02 and _string(kind, n.pitch) == string]
+        ring = min(max(RING, note.dur), (after[0] - note.start) if after else np.inf)
         y = _pizz(kind, note, sr, rng, s, ring)
         end = min(length, i0 + len(y))
         force[i0:end] += y[: end - i0]
