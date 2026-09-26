@@ -25,6 +25,9 @@ what a cellist does differently from a fiddler:
   phrase: half there 0.1-0.2 s into a note after a rest, carried on at its
   width through slurs and bow changes, narrower on short notes, easing before
   a rest.
+- The bow's noise: a hiss between the harmonics, pulsing with the slip, 30 to
+  45 dB under them, and a scratch as each fresh stroke lands. A bow change
+  takes 25-30 ms to turn round.
 - Shifts: "slide" glides from the note before (or from a tone and a half
   below after a rest), slower than a fiddler's; "swell" grows from 9 dB down
   and dies back.
@@ -95,11 +98,11 @@ class Kind:
     ring: float  # a stopped pizzicato's T60 at 220 Hz, s
 
 
-CELLO = Kind(strings=(36, 43, 50, 57), box=body.CELLO, rate=5.5, depth=(20.0, 35.0), rise=0.015, turn=0.012,
+CELLO = Kind(strings=(36, 43, 50, 57), box=body.CELLO, rate=5.5, depth=(20.0, 35.0), rise=0.015, turn=0.03,
              bite=0.08, shift=0.14, dark=0.13, bright=0.06, fingerboard=0.2, ring=1.6)
-VIOLA = Kind(strings=(48, 55, 62, 69), box=body.VIOLA, rate=5.9, depth=(14.0, 26.0), rise=0.013, turn=0.01,
+VIOLA = Kind(strings=(48, 55, 62, 69), box=body.VIOLA, rate=5.9, depth=(14.0, 26.0), rise=0.013, turn=0.025,
              bite=0.07, shift=0.11, dark=0.12, bright=0.06, fingerboard=0.22, ring=1.2)
-VIOLIN = Kind(strings=(55, 62, 69, 76), box=body.FIDDLE, rate=6.0, depth=(12.0, 25.0), rise=0.012, turn=0.01,
+VIOLIN = Kind(strings=(55, 62, 69, 76), box=body.FIDDLE, rate=6.0, depth=(12.0, 25.0), rise=0.012, turn=0.022,
               bite=0.06, shift=0.09, dark=0.12, bright=0.06, fingerboard=0.24, ring=1.0)
 KINDS = {"cello": CELLO, "viola": VIOLA}
 
@@ -111,6 +114,8 @@ LOUDER = 0.4  # the pole falls this much per unit of velocity: a heavier, faster
 GLASS = (("low", 400.0, -6.0), ("high", 1500.0, 10.0))  # sul ponticello's tilt of the bridge force
 BRIGHTER = (8.0, 10.0, -6.0)  # dB above 1 kHz per unit of brightness and of velocity, and for sul tasto's light bow
 PIZZ = 0.55  # a pizzicato's force against a bowed note's
+HISS = (0.15, 700.0, 0.6)  # the bow's noise: its level against the motion, its high-pass (Hz), how much it pulses
+BITE = (20.0, 0.012)  # a fresh stroke's burst of it: against the steady hiss, and s it dies away over
 SWELL = 0.5  # a swell's bow speed at its ends against its middle, on top of bowed.tracks' 0.7 (9 dB in all)
 VIB_ONSET, VIB_CARRY, VIB_EASE = 0.28, 0.1, 0.15  # s a vibrato takes to grow in, to change width, to ease off
 
@@ -297,6 +302,7 @@ def _bowed(kind: Kind, notes, sr: int, length: int, rng: np.random.Generator, s:
     period = loop + bowed._SLIP_EARLY - np.interp(np.arange(length), grid, fix)
     # where each stroke is up to speed, the string is set moving
     primes = _tremolo(notes, bow_v, sr, rng)
+    strokes = []  # where each fresh stroke lands, the motion it is heading for, and how hard it bites
     last_end, last = -1.0, None
     for note in sorted(notes, key=lambda n: n.start):
         if note.dur * sr < 16:
@@ -313,10 +319,11 @@ def _bowed(kind: Kind, notes, sr: int, length: int, rng: np.random.Generator, s:
         seg = bow_v[i0:i1] if note.art == "trem" else bow_v[i0: min(i1, i0 + int(0.12 * sr))]
         full = np.abs(seg).max()
         up = np.abs(seg) >= 0.9 * full
-        size = (0.6 if joined else 0.85) * (1.0 - 0.35 * wear) * rng.uniform(0.9, 1.1)
+        size = (0.45 if joined else 0.85) * (1.0 - 0.35 * wear) * rng.uniform(0.9, 1.1)
         if full > 0 and up.any():
             k = int(np.argmax(up))
             primes.append((i0 + k, size * seg[k]))
+            strokes.append((i0, full * REF / beta[i0 + k], (0.5 if joined else 1.0) * (0.6 + 0.8 * note.vel)))
     primes.sort()
     at = np.array([p[0] for p in primes], dtype=np.int64)
     velocity = np.array([p[1] for p in primes], dtype=np.float64)
@@ -326,6 +333,7 @@ def _bowed(kind: Kind, notes, sr: int, length: int, rng: np.random.Generator, s:
     hair[on] = rng.standard_normal(len(on)) * (0.3 + 0.8 * wear) * 0.02 * np.abs(bow_v[on]) * REF / beta[on]
     force = bowed.run_primed(period, bridge_len, bow_v, np.maximum(grip, 1e-4), hair + catch, pole, bowed.GAIN,
                              at, velocity)
+    force = force + _hiss(force, bow_v, beta, sr, rng, wear, strokes)
     # The friction re-sharpens the corner every period, so the loop's rounding moves the tone only a little (about
     # 1 dB at 2 kHz over its whole range). What makes a heavier bow brighter is the corner's rounding at the bow,
     # which shrinks as the force grows (Cremer): stood in for by a shelf on the force above 1 kHz, a few dB up
@@ -340,6 +348,38 @@ def _bowed(kind: Kind, notes, sr: int, length: int, rng: np.random.Generator, s:
         glass = uniform_filter1d(glass, ease)
         force = force + glass * (fx.equalize(force, fx.design(GLASS, sr)) - force)
     return force
+
+
+def _hiss(force: np.ndarray, bow_v: np.ndarray, beta: np.ndarray, sr: int, rng: np.random.Generator,
+          wear: float, strokes=()) -> np.ndarray:
+    """The bow's own noise, to add to the bridge force. The hair never grips cleanly: a bowed string's tone carries
+    a hiss, loudest as the string slips and so pulsing once a period (Chafe 1990; McIntyre, Schumacher and
+    Woodhouse 1981). The waveguide's friction noise is combed onto the harmonics by the string's own resonances, so
+    what lies between them is added here: noise above HISS[1] Hz in proportion to the motion (the bow's speed over
+    its distance from the bridge), gated by the corner's passing (the force's steepest edge each period). Each
+    fresh stroke bites: the hair catching the string before the motion settles (Guettler and Askenfelt's
+    pre-Helmholtz slips) is a burst of the same noise, BITE times the steady hiss of the stroke's own speed as the
+    bow lands (strokes: (sample, that motion, how hard: 1 after a rest, less at a bow change)), dying away over
+    BITE[1] s."""
+    level, cut, pulse = HISS
+    on = bow_v != 0.0
+    if not on.any():
+        return np.zeros_like(force)
+    burst = np.zeros(len(force))
+    n = int(4 * BITE[1] * sr)
+    fall = np.exp(-np.arange(n) / (BITE[1] * sr))
+    for at, motion, hard in strokes:
+        m = min(n, len(force) - at)
+        if m > 0:
+            burst[at: at + m] += BITE[0] * hard * motion * fall[:m]
+    edge = np.abs(np.diff(force, prepend=force[0]))
+    edge = uniform_filter1d(edge, max(1, int(0.0004 * sr)))
+    mean = uniform_filter1d(edge, max(1, int(0.03 * sr))) + 1e-12
+    gate = (1.0 - pulse) + pulse * np.minimum(edge / mean, 4.0)
+    noise = sosfilt(butter(2, cut, btype="highpass", fs=sr, output="sos"), rng.standard_normal(len(force)))
+    motion = np.where(on, np.abs(bow_v) * REF / beta, 0.0)
+    steady = uniform_filter1d(motion, max(1, int(0.005 * sr))) * gate
+    return level * (1.0 + 2.0 * wear) * (steady + burst) * noise
 
 
 def _pizz(kind: Kind, note, sr: int, rng: np.random.Generator, s: dict, ring: float) -> np.ndarray:

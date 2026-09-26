@@ -148,6 +148,30 @@ def test_a_bow_change_on_the_c_string_recovers_quickly_and_a_slur_barely_dips():
     assert 20 * np.log10(around.min() / np.median(rms[int(0.75 * SR): int(0.95 * SR)])) > -6  # a slur's dip
 
 
+def between_harmonics(y, f0, t0, t1, lo=1000.0, hi=4000.0):
+    """How far the harmonics between lo and hi stand over the noise halfway between them, dB (their mean)."""
+    seg = y[int(t0 * SR): int(t1 * SR)].mean(axis=1)
+    n = 1 << int(np.ceil(np.log2(4 * len(seg))))
+    db = 20 * np.log10(np.abs(np.fft.rfft(seg * np.hanning(len(seg)), n)) + 1e-30)
+    f = np.fft.rfftfreq(n, 1 / SR)
+    out = [db[(f > f0 * (h - 0.2)) & (f < f0 * (h + 0.2))].max()
+           - np.median(db[(f > f0 * (h + 0.35)) & (f < f0 * (h + 0.65))])
+           for h in range(1, 200) if lo <= h * f0 and (h + 1) * f0 <= hi]
+    return float(np.mean(out))
+
+
+@pytest.mark.parametrize("pitch,lo,hi", [(43, 28, 40), (50, 30, 42), (57, 32, 45)])
+def test_the_bow_hisses_and_bites(pitch, lo, hi):
+    """Between the harmonics of a held note (1-4 kHz) the bow's noise sits 30-45 dB under them, as on a real
+    string (it was 44-72: the friction's own noise is combed onto the harmonics); and a fresh stroke lands with a
+    scratch: its first 30 ms 2-6 kHz stand 5-14 dB over the held note's (it never rose over them)."""
+    y = stem("cello", [Note("cello", 0.1, 1.6, float(pitch), 0.7)], 2.0, ornament=0.0)
+    assert lo < between_harmonics(y, midi_to_hz(pitch), 0.7, 1.6) < hi
+    band = sosfiltfilt(butter(4, [2000, 6000], btype="bandpass", fs=SR, output="sos"), y.mean(axis=1))
+    rms = np.sqrt(np.convolve(band**2, np.ones(441) / 441, mode="same"))
+    assert 5 < 20 * np.log10(rms[int(0.1 * SR): int(0.13 * SR)].max() / np.median(rms[int(0.7 * SR): int(1.5 * SR)])) < 14
+
+
 def test_tasto_is_dark_ponticello_glassy_and_brightness_moves_between():
     notes = lambda art: [Note("cello", 0.1, 1.6, 50.0, 0.6, art=art)]  # noqa: E731
     tasto, arco, pont = (upper_db(stem("cello", notes(a), 2.0), 0.6, 1.6) for a in ("tasto", "", "pont"))
