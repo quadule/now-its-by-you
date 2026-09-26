@@ -102,7 +102,13 @@ def _smooth(x: np.ndarray, width: int) -> np.ndarray:
     return uniform_filter1d(uniform_filter1d(x, width, axis=0, mode="nearest"), width, axis=0, mode="nearest")
 
 
-def _consonant_duration(c: str, in_cluster: bool, onset: bool, voice: VoiceParams | None = None) -> float:
+def _consonant_duration(c: str, in_cluster: bool, onset: bool, voice: VoiceParams | None = None,
+                        table: dict[str, float] | None = None) -> float:
+    if table:  # measured lengths, "N coda" or "S onset cluster", already as a singer clusters them
+        key = f"{c} {'onset' if onset else 'coda'}"
+        found = table.get(key + " cluster" if in_cluster else key, table.get(key))
+        if found is not None:
+            return found
     manner, place, voiced = ph.CONSONANTS[c]
     if manner == "fricative":
         d = ph.FRICATIVE_DURATIONS[c]
@@ -118,8 +124,11 @@ def _vowel_formants(v: str) -> tuple[float, float, float]:
     return ph.VOWEL_FORMANTS[ph.DIPHTHONGS[v][0] if v in ph.DIPHTHONGS else v]
 
 
-def schedule(notes: list[Note], voice: VoiceParams, lexicon: dict[str, str] | None = None) -> list[Segment]:
-    """Place every phoneme of every sung note in time."""
+def schedule(notes: list[Note], voice: VoiceParams, lexicon: dict[str, str] | None = None,
+             durations: dict[str, float] | None = None) -> list[Segment]:
+    """Place every phoneme of every sung note in time. durations: how long each consonant lasts, by
+    phone and place in the syllable ("N coda", "S onset cluster"), instead of the formant singer's
+    rules (the learned throat sings with the lengths its teacher sang)."""
     # Pronounce word by word, then hand syllables back to their notes.
     sylls: list[ph.Syllable] = []
     i = 0
@@ -130,8 +139,10 @@ def schedule(notes: list[Note], voice: VoiceParams, lexicon: dict[str, str] | No
     if len(sylls) != len(notes):
         raise ValueError("syllables and notes disagree")
 
-    onset = [[_consonant_duration(c, len(s.onset) > 1, True, voice) * voice.articulation for c in s.onset] for s in sylls]
-    coda = [[_consonant_duration(c, len(s.coda) > 1, False, voice) * voice.articulation for c in s.coda] for s in sylls]
+    onset = [[_consonant_duration(c, len(s.onset) > 1, True, voice, durations) * voice.articulation for c in s.onset]
+             for s in sylls]
+    coda = [[_consonant_duration(c, len(s.coda) > 1, False, voice, durations) * voice.articulation for c in s.coda]
+            for s in sylls]
     for k in range(len(sylls) - 1):  # a coda running into the next onset is sung as one cluster
         if coda[k] and onset[k + 1] and not notes[k].line_end and voice.across != 1.0:
             coda[k] = [d * voice.across for d in coda[k]]

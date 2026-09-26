@@ -73,3 +73,16 @@ No recording of any person was used.
 The oracle was Fable's gate before training. It asks whether our puppeteer, driving a perfect
 throat, still sounds right and is understood. It is, so the interface holds. What remains is
 how close a small network gets to that throat.
+
+## The network, as the corpus grows
+
+Whisper on H's refrain and seed verses, dry, one render each (the WER suite's method; the formant
+singer on the same notes and seed: 16.9%):
+
+| Corpus | Held-out loss (L1, normalized) | Words misheard on H |
+|---|---|---|
+| 14 min (v0) | 0.33, rising after 1,000 steps: too little to generalize | 21.0% |
+| 39 min (v0b) | 0.29, still falling at 6,000 steps | 17.4% |
+
+More data is what it wants. The learning curve is Fable's first question before rendering
+more.

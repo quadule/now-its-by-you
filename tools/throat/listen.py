@@ -40,6 +40,7 @@ def main() -> None:
     ap.add_argument("--voice", nargs="*", default=[], metavar="FIELD=VALUE")
     ap.add_argument("--gv", type=float, default=1.0)
     ap.add_argument("--seeds", type=int, default=1)
+    ap.add_argument("--our-lengths", action="store_true", help="the learned throat sings the formant singer's consonant lengths")
     ap.add_argument("--skip-formant", action="store_true")
     ap.add_argument("--out", type=Path, default=ROOT / "renders/throat/listen")
     ap.add_argument("--tag", default="")
@@ -52,13 +53,15 @@ def main() -> None:
     form = ("refrain",) + ("verse",) * len(g.seed_verses)
     score = realize(g, replace(choose_params(g), form=form))
     notes = sorted(score.part("voice"), key=lambda n: n.start)
-    segs = schedule(notes, voice, g.lexicon)
     whisper = WhisperModel("base.en", device="cpu", compute_type="int8")
     args.out.mkdir(parents=True, exist_ok=True)
-    engines = {"learned": lambda seed: throat.sing(notes, SR, voice, seed, g.lexicon, mix=args.mix, gv=args.gv, model=args.model)}
+    lengths = None if args.our_lengths else throat.DURATIONS
+    engines = {"learned": lambda seed: throat.sing(notes, SR, voice, seed, g.lexicon, mix=args.mix, gv=args.gv, model=args.model,
+                                                   durations=lengths)}
     if not args.skip_formant:
         engines["formant"] = lambda seed: sing(notes, SR, voice, seed=seed, lexicon=g.lexicon)
     for name, render in engines.items():
+        segs = schedule(notes, voice, g.lexicon, lengths if name == "learned" else None)
         edits = words = 0
         misses = []
         for seed in range(1, args.seeds + 1):

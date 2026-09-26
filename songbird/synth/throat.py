@@ -338,6 +338,23 @@ def warp(values: np.ndarray, factor: float) -> np.ndarray:
 # ---- singing: our schedule, pitch and dynamics through the learned throat ---------------------------
 
 RATE = 24000  # the throat sings at its training data's rate; the result is resampled to the mix's
+
+# How long its teacher held each consonant (median seconds, by phone and place in the syllable,
+# measured by forced alignment over the SoulX corpus, 2026-09-25). SoulX's sonorants run about
+# twice the formant singer's (a coda n 120 ms against 49): sung under those lengths, the throat
+# hears what it learned instead of consonants squeezed into half the time.
+DURATIONS = {
+    "B onset": 0.09, "CH onset": 0.155, "D coda": 0.05, "D coda cluster": 0.05, "D onset": 0.09, "DH onset": 0.03,
+    "F coda": 0.11, "F coda cluster": 0.08, "F onset": 0.13, "F onset cluster": 0.1, "G onset": 0.06, "HH onset": 0.07,
+    "HH onset cluster": 0.06, "JH coda": 0.14, "K coda": 0.09, "K coda cluster": 0.05, "K onset": 0.09,
+    "K onset cluster": 0.09, "L coda": 0.13, "L coda cluster": 0.135, "L onset": 0.12, "L onset cluster": 0.08,
+    "M coda": 0.13, "M onset": 0.09, "N coda": 0.12, "N coda cluster": 0.09, "N onset": 0.09, "NG coda": 0.13,
+    "P coda cluster": 0.07, "P onset": 0.05, "P onset cluster": 0.09, "R coda": 0.11, "R coda cluster": 0.13,
+    "R onset": 0.11, "R onset cluster": 0.07, "S coda": 0.095, "S coda cluster": 0.1, "S onset": 0.16,
+    "S onset cluster": 0.11, "SH onset": 0.17, "T coda": 0.05, "T coda cluster": 0.06, "T onset": 0.1,
+    "T onset cluster": 0.08, "TH onset": 0.15, "TH onset cluster": 0.07, "V coda": 0.08, "V onset": 0.08,
+    "W onset": 0.09, "W onset cluster": 0.07, "Y onset": 0.11, "Z coda": 0.1, "Z coda cluster": 0.1,
+}
 TRACT = 1.12  # VoiceParams.tract that leaves the learned envelope where it is
 
 
@@ -368,7 +385,7 @@ def stresses(notes, lexicon) -> list[bool]:
 
 
 def sing(notes, sr: int, voice, seed: int = 0, lexicon: dict | None = None, mix: str | dict | None = None,
-         gv: float = 1.0, model: str | None = None) -> np.ndarray:
+         gv: float = 1.0, model: str | None = None, durations: dict | None = DURATIONS) -> np.ndarray:
     """Sung notes as a mono signal, vowels near the formant singer's level: our schedule (when each
     phone is sung), our pitch track and our dynamics, through the learned throat."""
     from scipy.signal import butter, resample_poly, sosfilt
@@ -378,7 +395,7 @@ def sing(notes, sr: int, voice, seed: int = 0, lexicon: dict | None = None, mix:
     net = load(model)
     notes = sorted(notes, key=lambda n: n.start)
     rng = np.random.default_rng(seed)
-    segs = schedule(notes, voice, lexicon)
+    segs = schedule(notes, voice, lexicon, durations)
     stressed = stresses(notes, lexicon)
     rows, k = [], -1
     for s in segs:  # each note sings its onsets, one vowel, its codas

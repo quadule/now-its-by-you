@@ -42,6 +42,10 @@ SINGERS = {
     "tenor": ("eleven-tender-tenor-male", (-7, -4, 0)),
     "baritone": ("eleven-warm-baritone-male", (-15, -12, -9)),
     "gravelly": ("eleven-gravelly-older-male", (-14, -12, -8)),
+    # added so that low machines have as many singers to blend as high ones
+    "bass": ("eleven-deep-bass-male", (-12, -9, -7)),
+    "raspy": ("eleven-raspy-young-male", (-9, -7, -5)),
+    "low": ("eleven-soft-low-male", (-14, -12, -9)),
 }
 PROMPT_AT, PROMPT_LEN = 30.45, 10.10  # the first refrain on the guide: "Who made this song? ... and then it goes."
 
@@ -170,20 +174,31 @@ def main() -> None:
     ap.add_argument("--out", type=Path, default=THROAT / "plan.json")
     ap.add_argument("--seed", type=int, default=0)
     ap.add_argument("--per-item", type=int, default=2, help="singers per item (H itself is sung by all)")
+    ap.add_argument("--singers", nargs="*", default=None, help="plan only for these singers")
+    ap.add_argument("--budget", type=float, default=None,
+                    help="with --singers: minutes each, drawn from every item (H first) instead of the usual split")
     ap.add_argument("--coverage", type=Path, default=None,
                     help="instead: a JSON list of written lines ({'text': ...}) to sing to our phrases, one singer each")
     args = ap.parse_args()
     rng = np.random.default_rng(args.seed)
 
-    singers = {name: prompt(name, take_dir) for name, (take_dir, _) in SINGERS.items()}
-    names = list(SINGERS)
+    names = args.singers or list(SINGERS)
+    singers = {name: prompt(name, SINGERS[name][0]) for name in names}
     plan = []
     load = dict.fromkeys(names, 0.0)  # seconds assigned so far, to keep the singers even
     if args.coverage:
         args.per_item = 1
-    for it in (coverage(args.coverage, rng) if args.coverage else items(rng)):
+    pool = coverage(args.coverage, rng) if args.coverage else items(rng)
+    if args.budget:  # every item is a candidate; H first, the rest in random order, until each singer has enough
+        pool = sorted(pool, key=lambda it: (it["id"] != H.stem, rng.random()))
+        args.per_item = 1
+    for it in pool:
         length = it["notes"][-1]["start"] + it["notes"][-1]["dur"] - it["notes"][0]["start"]
-        if it["id"] == H.stem:
+        if args.budget and min(load.values()) >= args.budget * 60:
+            break
+        if args.budget and it["id"] != H.stem:
+            who = [n for n in sorted(names, key=lambda n: (load[n], rng.random())) if load[n] < args.budget * 60][:1]
+        elif it["id"] == H.stem:
             who = names
         else:  # the least loaded singers, ties broken at random
             order = sorted(names, key=lambda n: (load[n], rng.random()))
