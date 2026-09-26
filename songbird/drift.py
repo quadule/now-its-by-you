@@ -75,11 +75,13 @@ DIMENSIONS = {
     "rarity": "the lyric's appetite for rare verses (slow)",
     "ensemble": "the band leaning on its plucked strings or its bowed and blown ones (slow)",
     "balance": "the band's balance, each machine's instruments moving their own ways (slow)",
-    "sheen": "the instruments' brightness",
+    "sheen": "the instruments' brightness, the record's tilt, and (slowly) its width",
     "pattern": "the band's accompaniment family: air, pick, lilt, strum (slow, held)",
     "lead": "who states the tune where nobody sings: whistle, fiddle, lute (year, held)",
     "arc": "how strongly the band builds through the song (slow)",
-    "space": "the mix's width and distance (for the mix)",
+    "space": "how much of the room is heard (slow)",
+    "near": "how close the singer stands: the voice's own reverb (slow)",
+    "duck": "how much the band and the room make way for the voice (slow)",
 }
 
 DAY = 86400.0
