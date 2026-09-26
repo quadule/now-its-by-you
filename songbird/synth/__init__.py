@@ -43,7 +43,7 @@ def _peaking(f0: float, gain_db: float, q: float, sr: int) -> np.ndarray:
     return np.concatenate([b, den]) / den[0]
 
 
-def body(x: np.ndarray, sr: int, resonances) -> np.ndarray:
+def eq_body(x: np.ndarray, sr: int, resonances) -> np.ndarray:
     return sosfilt(np.array([_peaking(f, g, q, sr) for f, g, q in resonances]), x)
 
 
@@ -74,7 +74,7 @@ def render_stems(score: Score, sr: int = SR, seed: int = 0, voice: VoiceParams |
             i = int(round(note.start * sr))
             j = min(length, i + len(y))
             mono[i:j] += y[: j - i]
-        stems[name] = pan(body(mono, sr, spec["body"]), spec["pan"]) * spec["gain"]
+        stems[name] = pan(eq_body(mono, sr, spec["body"]), spec["pan"]) * spec["gain"]
     sung = list(score.part("voice"))
     if sung:
         y = sing(sung, sr, voice or VoiceParams(), seed, score.lexicon)[:length]
