@@ -65,17 +65,21 @@ FIDDLE = Body(  # the violin: A0 near 275 Hz, the B1 pair near 470 and 540, a br
 )
 CELLO = Body(  # the cello: A0 near 100 Hz, the B1 pair near 180 and 215 (the wolf's F-F#), a bridge hill near 1.3 kHz
     # (Askenfelt 1982; Bynum and Rossing 1997; the bridge's own resonances near 1 and 2.2 kHz, Reinicke 1973): a
-    # violin scaled about 0.38 in its low modes, the hill half as high up
-    modes=((100.0, 16.0, 4.0), (150.0, 26.0, 1.0), (182.0, 30.0, 8.0), (216.0, 32.0, 7.0),
-           (290.0, 28.0, 3.0), (372.0, 26.0, 2.0)),
+    # violin scaled about 0.38 in its low modes, the hill half as high up. Above the B1 pair a cello radiates well
+    # through 250-500 Hz (its principal formant, Meyer), where the scaled violin had a 7-10 dB hole: a cluster of
+    # modes fills it, and the pair stands 6-9 dB over it rather than 11-13.
+    modes=((100.0, 16.0, 4.0), (150.0, 26.0, 1.0), (182.0, 30.0, 5.5), (216.0, 32.0, 4.5),
+           (258.0, 24.0, 4.0), (292.0, 28.0, 3.0), (330.0, 24.0, 4.0), (372.0, 26.0, 4.0)),
     dense=(400.0, 8000.0, 120), tilt=-2.0, q=(30.0, 18.0), direct=0.2, lowcut=70.0, highcut=7500.0,
     hill=(1300.0, 1.4, 6.0),
 )
 VIOLA = Body(  # the viola: A0 near 230 Hz, the B1 pair near 410 and 460, a bridge hill near 2.1 kHz; too small a box for
-    # its pitch, so its C string's fundamental is weak (Fletcher and Rossing ch. 10)
-    modes=((230.0, 18.0, 5.0), (340.0, 28.0, 1.0), (410.0, 34.0, 8.0), (462.0, 36.0, 7.0),
-           (600.0, 30.0, 3.0), (780.0, 28.0, 2.0)),
-    dense=(800.0, 9000.0, 120), tilt=-1.7, q=(34.0, 20.0), direct=0.2, lowcut=160.0, highcut=8500.0,
+    # its pitch, so its C string's fundamental is weak (Fletcher and Rossing ch. 10). The plate modes run on from
+    # 540 Hz, so there is no 5-12 dB trough between the B1 pair and the hill (it left the E string's first notes
+    # 5 dB down)
+    modes=((230.0, 18.0, 5.0), (340.0, 28.0, 1.0), (410.0, 34.0, 7.0), (462.0, 36.0, 6.0),
+           (540.0, 28.0, 3.0), (620.0, 30.0, 3.0)),
+    dense=(650.0, 9000.0, 130), tilt=-1.7, q=(34.0, 20.0), direct=0.2, lowcut=160.0, highcut=8500.0,
     hill=(2100.0, 1.3, 6.5),
 )
 HARMONICA = Body(  # a harmonica's comb and cover plates in a player's cupped hands: the hands' cavity near 450 Hz,

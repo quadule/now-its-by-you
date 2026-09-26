@@ -88,6 +88,24 @@ def test_the_boxes_ring_where_cellos_and_violas_do(maker):
     assert 390 < strongest(body.VIOLA, 370, 500) < 480  # its B1 pair, 400-460
 
 
+@pytest.mark.parametrize("maker", [0, 1, 2])
+def test_no_hole_after_the_b1_pair(maker):
+    """A cello radiates well through 250-500 Hz, its principal formant (Meyer); the violin's dip after its B1 pair,
+    scaled down, had left a 7-10 dB hole there (a hollow D string). The viola's plate modes run on from its B1 pair
+    to its bridge hill."""
+    def bands(box, centres):
+        ir = cello.voiced(body.impulse_response(box, SR, seed=maker), SR).mean(axis=1)
+        power = np.abs(np.fft.rfft(ir, 1 << 17)) ** 2
+        f = np.fft.rfftfreq(1 << 17, 1 / SR)
+        return [10 * np.log10(power[(f >= c * 2 ** -(1 / 6)) & (f < c * 2 ** (1 / 6))].mean()) for c in centres]
+
+    b200, *cluster = bands(body.CELLO, (200, 250, 315, 400))
+    assert all(b > b200 - 6 for b in cluster)  # within 6 dB of the B1 band (7-10 dB under it before)
+    top, *trough = bands(body.VIOLA, (315, 500, 630, 800))
+    top = max(top, bands(body.VIOLA, (400,))[0])
+    assert all(b > top - 7 for b in trough)  # (5-12 dB under before)
+
+
 # --- the bowed string, played as a cellist plays it ----------------------------------------
 
 
