@@ -63,6 +63,14 @@ instrument says so: `ped+soft`, `gospel fast`, `25+arp-min`):
 An unknown articulation plays as the instrument's plain note (on the drum
 machines, an unknown piece as the closed hat); none raises.
 
+Every one's typical part measures within 0.1 dB of its target at its SPEC
+level. A three-minute part costs, in CPU seconds on an idle machine: piano
+2.9 (13 for the worst case, pedalled bass octaves every half bar), epiano
+1.9, epiano-reed 1.5, organ 1.2, harmonium 2.1, vibraphone 1.8, marimba 1.3,
+glockenspiel, celesta and music box 0.7 each, synth-pad 5.0, synth-bass 1.3,
+synth-solo 1.6, synth-arp 2.8, sub-bass 0.2, chip 0.8, chip-bass 0.8,
+chip-drums 1.0, drums-808 1.3, drums-909 1.0.
+
 Levels were set the same way for all of them (`tools/instrument_levels.py`):
 a typical part for the instrument's role, in D at velocity 0.6, rendered,
 placed and at its SPEC level, measured in LUFS while it plays against the
