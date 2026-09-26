@@ -15,6 +15,7 @@ from songbird import genome as G
 from songbird import harvest as H
 from songbird import variation as V
 from songbird.realize import Params, choose_params, realize
+from songbird.synth.mixing import MixParams
 from songbird.synth.voice import VoiceParams
 
 ROOT = Path(__file__).parent.parent
@@ -101,13 +102,13 @@ def test_two_machines_are_two_singers(h):
     bodies = {(sings(p, "shift"), sings(p, "tract"), sings(p, "vibrato_rate")) for p in children}
     assert len(bodies) == len(MACHINES)
     assert {sings(p, "shift") for p in children} == {0, -12}  # low singers and high ones
-    assert len({p.room["rt60"] for p in children}) > 1
+    assert len({p.mix["rt60"] for p in children}) > 1
 
 
 def test_a_neutral_machine_sings_like_its_parent(h):
     seed = Params.from_dict(h.seed_params)
     p = choose_params(h, voice=H.Voice(salt="locked-down"))
-    assert (p.tonic, p.mode, p.tempo, p.accomp, p.singer, p.room) == (seed.tonic, seed.mode, seed.tempo, seed.accomp,
+    assert (p.tonic, p.mode, p.tempo, p.accomp, p.singer, p.mix) == (seed.tonic, seed.mode, seed.tempo, seed.accomp,
                                                                         {}, {})
     assert p.choir == seed.choir + 1  # still a generation
     assert V.fits(h, p.form)
@@ -171,6 +172,7 @@ def test_the_form_changes_by_the_season_not_the_day(h):
 
 def test_the_table_is_wired():
     from songbird.band import Band
+    from songbird.synth.mixing import MixParams
 
     params = {f for f in Params.__dataclass_fields__}
     for knob in V.KNOBS:
@@ -180,6 +182,8 @@ def test_the_table_is_wired():
             assert hasattr(VoiceParams(), tail), knob.path
         if head == "band":
             assert hasattr(Band(), tail), knob.path
+        if head == "mix":
+            assert hasattr(MixParams(), tail), knob.path
         if head == "leanings":
             assert tail in V.LEANINGS
         dims = knob.drift if isinstance(knob.drift, tuple) else (knob.drift,) if knob.drift else ()
@@ -189,7 +193,8 @@ def test_the_table_is_wired():
             assert dim in D.DIMENSIONS, knob.path
         assert knob.view in D.VIEWS
     for dimension in ("intro", "turn", "break", "tag", "outro", "other", "verses", "pairs", "extra", "texture", "mood",
-                      "mode", "key", "pattern", "lead", "arc", "sheen", "balance", "ensemble"):
+                      "mode", "key", "pattern", "lead", "arc", "sheen", "balance", "ensemble", "space", "near",
+                      "duck"):
         assert dimension in D.DIMENSIONS
     assert "swing" not in params  # the band's swing is the only swing
 
@@ -228,6 +233,50 @@ def test_the_band_follows_the_machine(h):
     assert choose_params(h, voice=old).band.wear > choose_params(h, voice=young).band.wear
     lilting = H.Voice(hand=H.Hand(interval=200, unevenness=0.5, skew=2.5), salt="s")
     assert choose_params(h, voice=lilting).band.swing > 0.2  # a skewed hand swings the band and the singer
+
+
+def test_every_machine_mixes_its_own_record_within_bounds(h):
+    from songbird.synth.mixing import RANGES, MixParams
+
+    seen = {}
+    for name in MACHINES:
+        voice = H.fictional(name)
+        for t in np.arange(D.parse("2026-01-01"), D.parse("2029-01-01"), 17.0):
+            chosen = choose_params(h, voice=voice, drift=D.drift(t, voice.hash)).mix
+            mix = MixParams.from_dict(chosen)
+            for field, (lo, hi) in RANGES.items():
+                assert lo <= getattr(mix, field) <= hi, (field, getattr(mix, field))
+            assert 8.5 <= mix.forward <= 11.0  # the voice stays well over the band
+            assert 0.3 <= mix.intimacy <= 0.7 and 0.9 <= mix.width <= 1.25 and abs(mix.tilt) <= 1.2
+            assert (mix.rt60, list(mix.tone)) == (voice.room.rt60, list(voice.room.tone))  # the machine's own room
+            old = voice.ages.median >= 3.4  # files some eight years old or more
+            assert mix.wear < 0.35 or old  # crackle only on the oldest machines
+            seen.setdefault(name, set()).add((mix.predelay, mix.wear))
+        assert len(seen[name]) == 1  # the room's predelay and the recording's wear belong to the machine
+    assert len({next(iter(s)) for s in seen.values()}) > 1
+
+
+def test_the_mix_follows_the_machine(h):
+    from songbird.synth.mixing import MixParams
+
+    def mix(voice):
+        return MixParams.from_dict(choose_params(h, voice=voice).mix)
+
+    assert mix(H.Voice(ages=H.Ages(median=3.75, spread=1.0), salt="s")).wear > 0.35  # a truly old machine crackles
+    assert mix(H.Voice(ages=H.Ages(median=1.5, spread=1.0), salt="s")).wear == 0.0  # a young one is clean
+    bright = mix(H.Voice(colour=H.Colour(1.0, 0.25, 0.5, 0.25), salt="s")).tilt
+    dark = mix(H.Voice(colour=H.Colour(0.0, 0.25, 0.5, 0.25), salt="s")).tilt
+    assert bright > 0 > dark
+    big = mix(H.Voice(room=H.Room(rt60=2.2, tone=(1, 1, 1, 0.9, 0.7)), salt="s")).predelay
+    small = mix(H.Voice(room=H.Room(rt60=0.4, tone=(1, 1, 1, 0.9, 0.7)), salt="s")).predelay
+    assert big > small  # a big room answers later
+
+
+def test_old_records_keep_their_room(h):
+    record = Params.from_dict(h.seed_params).to_dict()
+    del record["mix"]
+    record["room"] = {"rt60": 0.7, "tone": [1.0, 0.9, 1.0, 0.8, 0.6]}
+    assert Params.from_dict(record).mix == {"rt60": 0.7, "tone": [1.0, 0.9, 1.0, 0.8, 0.6]}
 
 
 def test_old_records_keep_their_swing(h):

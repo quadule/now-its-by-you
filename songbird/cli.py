@@ -57,8 +57,8 @@ def render_one(genome, params: Params, out: Path, *, voice=None, drift=None, lyr
     choir = [phrasing_mod.from_json(d) for d in choir_json]
     score = variation.lay(realize(genome, params, phrasing=phrasing, choir=choir, lyrics=lyrics), params)
     singer = _singer(params, list(singer_overrides))
-    # the mix: in the room the rendition was given (params.room, where the harvest puts it), then any --mix changes
-    mixing = MixParams.parse(list(mix_overrides), base=MixParams.from_dict(params.room or {}))
+    # the mix: as the rendition chose it (params.mix: the machine's room, its drift and its habits), then any --mix
+    mixing = MixParams.parse(list(mix_overrides), base=MixParams.from_dict(params.mix or {}))
 
     out.parent.mkdir(parents=True, exist_ok=True)
     mix = synth.render(score, seed=params.seed, voice=singer, mix_params=mixing)

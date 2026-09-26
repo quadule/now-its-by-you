@@ -39,9 +39,9 @@ class Params:
     ritardando: float = 0.35  # how much slower the final phrase ends than it began
     choir: int = 0  # voices from the lineage that join in harmony where the genome allows
     band: Band = field(default_factory=Band)  # who plays and how (songbird.band); absent in old params: the defaults
-    # Chosen by the machine and inherited; empty means the seed's own (VoiceParams' and room's defaults).
+    # Chosen by the machine and inherited; empty means the seed's own (VoiceParams' and MixParams' defaults).
     singer: dict = field(default_factory=dict)  # VoiceParams fields that differ from the seed singer's
-    room: dict = field(default_factory=dict)  # rt60 and tone for synth.room.impulse_response
+    mix: dict = field(default_factory=dict)  # MixParams fields (synth.mixing), the machine's room's rt60 and tone among them
     leanings: dict = field(default_factory=dict)  # for songbird.arrange (variation.leanings): its Leanings' fields
     lay: float = 0.0  # beats the singers sit ahead of the beat, behind if negative (applied by variation.lay)
     inventory: str = ""  # phoneme inventory for the singer's vowels, "" the seed's (not yet read by the singer)
@@ -51,6 +51,8 @@ class Params:
         known = {f.name for f in fields(cls)}
         values = {k: v for k, v in data.items() if k in known}
         values["form"] = tuple(values["form"])
+        if data.get("room"):  # a record from before the mix: its room was the mix's rt60 and tone
+            values["mix"] = {**data["room"], **(values.get("mix") or {})}
         band = values.get("band")
         if data.get("swing") and not isinstance(band, Band) and "swing" not in (band or {}):
             # a record from before the band: its swing was the fraction of the off-beat half pushed late,
