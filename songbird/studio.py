@@ -351,6 +351,7 @@ class Studio:
         genome_path, record, self.where = locate(parent, song, self.home)
         self.genome_path = Path(genome_path).resolve()
         self.genome = genome_mod.load(self.genome_path)
+        self.song_digest = hashlib.sha256(self.genome_path.read_bytes()).hexdigest()
         self.parent_record = record
         parent_params = Params.from_dict(record["params"]) if record else None
         quiet = False
@@ -418,7 +419,7 @@ class Studio:
 
     def key(self, v: explain.Version, section: int | None) -> str:
         """What a render depends on, hashed: the same rendition and section are made once."""
-        material = {"program": __version__, "song": self.genome.source, "params": v.params.to_dict(),
+        material = {"program": __version__, "song": self.song_digest, "params": v.params.to_dict(),
                     "lyrics": v.lyrics.to_dict() if v.lyrics else None, "phrasing": v.phrasing_json,
                     "section": section, "voice": v.voice.to_dict() if v.voice is not None else None,
                     "drift": v.drift.to_dict() if v.drift is not None else None,
@@ -455,13 +456,17 @@ class Studio:
     def _section(self, job: Job, v: explain.Version, key: str, index: int) -> dict:
         """A preview of one section: cut from the whole rendition's score, made, and brought up by the gain a
         whole rendition gets in mastering (so a quiet verse stays quiet), under the same ceiling."""
+        from .cli import choir_of
+
         job.stage = stage_words("score")
         score = self._score(v)
         t0, t1 = window(self.genome, v.params, score, v.params.form, index)
         part, lead_in = cut(score, t0, t1)
         job.plan = stages(part)
-        mix = synth.render(part, seed=v.params.seed, voice=explain.singer_of(v.params),
-                           mix_params=MixParams.from_dict(v.params.mix or {}), progress=job.report)
+        singer = explain.singer_of(v.params)
+        ancestors = choir_of(self.parent_record, singer)[1]  # the earlier versions sing its choir, as they will
+        mix = synth.render(part, seed=v.params.seed, voice=singer, mix_params=MixParams.from_dict(v.params.mix or {}),
+                           ancestors=ancestors, progress=job.report)
         job.report("master")
         ceiling = master.CEILING_DB - master.MARGIN_DB
         loud = master.limit(master.clip(mix * 10.0 ** (PREVIEW_GAIN_DB / 20.0), ceiling), synth.SR, ceiling)

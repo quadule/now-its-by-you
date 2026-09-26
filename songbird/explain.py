@@ -189,7 +189,13 @@ def singer_words(singer) -> str:
     press = "pressed and bright" if singer.rd < 0.68 else "breathy" if singer.rd > 0.95 else "clear"
     depth = "light" if singer.vibrato_depth < 22 else "wide" if singer.vibrato_depth > 36 else "gentle"
     rate = "quick" if singer.vibrato_rate > 5.6 else "slow" if singer.vibrato_rate < 5.0 else ""
-    return f"{register}{f' ({size})' if size else ''}, {press}, with a {listed([rate, depth])} vibrato"
+    voice = f"{register}{f' ({size})' if size else ''}, {press}, with a {listed([rate, depth])} vibrato"
+    if getattr(singer, "engine", "formant") == "learned":
+        blend = [part.split(":")[0] for part in str(singer.timbre or "").split(",") if part and ":" in part
+                 and not part.startswith("machine")]
+        voice += "; the learned voice" + (f", a blend of {number(len(blend))} singers it learned from" if len(blend) > 1
+                                           else "")
+    return voice
 
 
 def lean_words(leanings: dict) -> str:

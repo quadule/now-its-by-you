@@ -56,6 +56,14 @@ def _singer(params: Params, overrides: list[str]) -> VoiceParams:
     return replace(singer, **{k: type(getattr(defaults, k))(v) for k, v in (kv.split("=", 1) for kv in overrides)})
 
 
+def choir_of(parent: dict | None, singer: VoiceParams) -> tuple[list[dict], list[VoiceParams]]:
+    """The earlier versions' singers, the parent's first, who sing the lineage choir (as many as it has
+    voices): as a record keeps them, and as the synth sings them."""
+    lineage_singers = ([{"id": parent.get("id"), "singer": parent.get("singer")}, *(parent.get("lineage_singers") or [])]
+                       if parent and parent.get("singer") else [])[: variation.CHOIR_MAX]
+    return lineage_singers, synth.ancestors_from(lineage_singers, learned=singer.engine == "learned")
+
+
 def render_one(genome, params: Params, out: Path, *, voice=None, drift=None, lyrics=None, phrasing_json=None,
                choir_json=(), singer_overrides=(), stems: bool = False, mix_overrides=(), parent: dict | None = None,
                packet_genome: str | Path | None = None, chosen_by_you=None, progress=None) -> dict:
@@ -72,7 +80,9 @@ def render_one(genome, params: Params, out: Path, *, voice=None, drift=None, lyr
     mixing = MixParams.parse(list(mix_overrides), base=MixParams.from_dict(params.mix or {}))
 
     out.parent.mkdir(parents=True, exist_ok=True)
-    mix = synth.render(score, seed=params.seed, voice=singer, mix_params=mixing, progress=progress)
+    lineage_singers, ancestors = choir_of(parent, singer)
+    mix = synth.render(score, seed=params.seed, voice=singer, mix_params=mixing, ancestors=ancestors,
+                       progress=progress)
     if progress is not None:
         progress("master")
     mastered = master.master(mix, synth.SR)
@@ -87,6 +97,7 @@ def render_one(genome, params: Params, out: Path, *, voice=None, drift=None, lyr
         "params": params.to_dict(),
         "lyrics": lyrics.to_dict() if lyrics else None,  # the words drawn from the bank; None: the seed's own
         "singer": asdict(singer),
+        "lineage_singers": lineage_singers,  # who sings in the choir: the earlier versions, the parent's first
         "voice": voice.to_dict() if voice is not None else None,
         "drift": drift.to_dict() if drift is not None else None,
         "phrasing": {k: v for k, v in phrasing_json.items() if k not in ("phrases", "fields")} if phrasing_json else None,
@@ -113,7 +124,7 @@ def render_one(genome, params: Params, out: Path, *, voice=None, drift=None, lyr
     if stems:
         import soundfile as sf
 
-        for name, stem in synth.render_stems(score, seed=params.seed, voice=singer).items():
+        for name, stem in synth.render_stems(score, seed=params.seed, voice=singer, ancestors=ancestors).items():
             sf.write(str(out.with_name(f"{out.stem}.{name}.wav")), stem, synth.SR, subtype="FLOAT")
 
     print(f"{out}  {record['duration']:.1f}s  {record['loudness_lufs']} LUFS  id {record['id'][:12]}")
