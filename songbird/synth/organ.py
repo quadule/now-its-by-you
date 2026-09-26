@@ -333,7 +333,9 @@ def _generator(n, sr, freqs, phases, h2, h3, ev_t, ev_w, ev_main, ev_perc, ev_ra
 @njit(cache=True)
 def _scanner(x, sr, seg_t, seg_depth, seg_wet, seg_dry, phase0, lp):
     """The scanner: a delay line swept by a rounded triangle at 6.87 Hz. seg_*: from sample seg_t[i] on,
-    the sweep's depth (samples each way), how much of the swept signal and of the dry one to mix."""
+    the sweep's depth (samples each way), how much of the swept signal and of the dry one to mix; a
+    change of setting glides over about 5 ms. Every setting, off included, hears the line's middle, so
+    switching never shifts the signal in time."""
     n = x.shape[0]
     y = np.empty(n)
     size = 256
@@ -344,19 +346,25 @@ def _scanner(x, sr, seg_t, seg_depth, seg_wet, seg_dry, phase0, lp):
     p = phase0
     wet_lp = 0.0
     k = 0
-    depth = 0.0
-    wet = 0.0
-    dry = 1.0
+    depth, wet, dry = 0.0, 0.0, 1.0
+    if seg_t.shape[0] > 0:  # it starts where the first setting puts it
+        depth, wet, dry = seg_depth[0], seg_wet[0], seg_dry[0]
+    depth_to, wet_to, dry_to = depth, wet, dry
+    glide = 1.0 - np.exp(-1.0 / (0.005 * sr))
     segs = seg_t.shape[0]
     for t in range(n):
         while k < segs and seg_t[k] <= t:
-            depth = seg_depth[k]
-            wet = seg_wet[k]
-            dry = seg_dry[k]
+            depth_to = seg_depth[k]
+            wet_to = seg_wet[k]
+            dry_to = seg_dry[k]
             k += 1
+        depth += (depth_to - depth) * glide
+        wet += (wet_to - wet) * glide
+        dry += (dry_to - dry) * glide
         line[t % size] = x[t]
-        if wet == 0.0:
-            y[t] = x[t]
+        dry_now = line[(t - int(base)) % size]  # the line's middle
+        if wet < 1e-6 and wet_to == 0.0:
+            y[t] = dry * dry_now
         else:
             # the rounded triangle, 1 at p = 0 and -1 at p = 0.5
             q = p if p < 0.5 else 1.0 - p  # 0..0.5
@@ -378,7 +386,6 @@ def _scanner(x, sr, seg_t, seg_depth, seg_wet, seg_dry, phase0, lp):
             v = (x0 + f * (0.5 * (x1 - xm1) + f * (xm1 - 2.5 * x0 + 2.0 * x1 - 0.5 * x2
                                                     + f * (1.5 * (x0 - x1) + 0.5 * (x2 - xm1)))))
             wet_lp += lp * (v - wet_lp)  # the line's coils and capacitors: a gentle low-pass
-            dry_now = line[(t - int(base)) % size]  # the dry signal, as late as the line's middle
             y[t] = wet * wet_lp + dry * dry_now
         p += inc
         if p >= 1.0:
@@ -665,17 +672,17 @@ class Organ:
     def scanner(self, x: np.ndarray, plan, rng: np.random.Generator) -> np.ndarray:
         """The vibrato and chorus, set by each registration from the note that names it."""
         sr = self.sr
-        seg_t, seg_depth, seg_wet, seg_dry = [0], [0.0], [0.0], [1.0]
+        seg_t, seg_depth, seg_wet, seg_dry = [], [], [], []
         last = None
         for note, key, name in plan:
             mode = registration(name, self.brightness).scanner
             if mode == last:
                 continue
-            last = mode
             cents = SCANNER_CENTS[mode]
             depth = cents / 1731.234 * sr / (4.0 * SCANNER_HZ)  # the delay's sweep each way, in samples
             wet, dry = (0.0, 1.0) if not mode else ((1.0, 0.0) if mode[0] == "V" else (0.5, 0.5))
-            seg_t.append(int(round(note.start * sr)))
+            seg_t.append(0 if last is None else int(round(note.start * sr)))  # the first is set before playing
+            last = mode
             seg_depth.append(depth)
             seg_wet.append(wet)
             seg_dry.append(dry)
