@@ -293,3 +293,127 @@ def collide(energy: np.ndarray, length: int, rng: np.random.Generator, *, rate: 
              sb, sa1, sa2, np.ascontiguousarray(gains), direct, ma1, ma2, np.ascontiguousarray(mg),
              np.ascontiguousarray(tilt, dtype=np.float64), np.asarray(starts, dtype=np.int64), kick, seed_of(rng), out)
     return out
+
+
+# --- contacts: snare wires or strings pressed against a plate ------------------------------------
+
+
+@njit(cache=True)
+def _wires(freqs, decay, amps, shapes, spring, press, damping, bounce, sr, n_max, click, state, out, start):
+    """Wires pressed against a struck plate, driven by its motion, sample by sample.
+
+    The plate's modes (freqs Hz, decay nepers a second) ring from a strike with
+    displacement amplitudes amps (a sine from sample 0); shapes (J, K) is each
+    wire's contact point's share of each mode, so the plate there moves as
+    u_j. A wire is a mass on a spring (spring, rad/s) pressed `press` into the
+    plate: while touching it rides the plate, and it lifts off when the plate
+    pulls away faster than its spring can follow (the plate's acceleration
+    under the wire's own); in flight it springs back and lands with the
+    relative speed it has then, bouncing back with `bounce` of it, until it
+    rests on the plate again. Each landing is a click: its speed added to a
+    level that falls by `click` a sample, times noise. Adds the clicks to
+    out[start:]; returns the generator's state."""
+    k_n = freqs.shape[0]
+    j_n = shapes.shape[0]
+    dt = 1.0 / sr
+    c1 = np.empty(k_n)
+    c2 = np.empty(k_n)
+    cur = np.empty(k_n)
+    prev = np.zeros(k_n)
+    pull = np.empty(k_n)  # the most each mode can pull on any wire
+    bound = 0.0
+    for k in range(k_n):
+        r = np.exp(-decay[k] * dt)
+        th = 2.0 * np.pi * freqs[k] * dt
+        c1[k] = 2.0 * r * np.cos(th)
+        c2[k] = r * r
+        cur[k] = amps[k] * r * np.sin(th)
+        top = 0.0
+        for j in range(j_n):
+            top = max(top, abs(shapes[j, k]))
+        pull[k] = abs(amps[k]) * (2.0 * np.pi * freqs[k]) ** 2 * top
+        bound += pull[k]
+    rest = 1e300
+    for j in range(j_n):
+        rest = min(rest, spring[j] * spring[j] * press[j])
+    if bound < 0.3 * rest:  # never pulls away hard enough to lift a wire
+        return state
+    u1 = np.zeros(j_n)
+    u2 = np.zeros(j_n)
+    touching = np.ones(j_n, dtype=np.bool_)
+    w = np.zeros(j_n)
+    wv = np.zeros(j_n)
+    level = 0.0
+    n_out = out.shape[0]
+    for n in range(1, n_max):
+        i = start + n - 1
+        if i >= n_out:
+            break
+        for j in range(j_n):
+            u = 0.0
+            for k in range(k_n):
+                u += shapes[j, k] * cur[k]
+            if n >= 2:
+                acc = (u - 2.0 * u1[j] + u2[j]) * sr * sr
+                vel = (u - u2[j]) * 0.5 * sr
+                if touching[j]:
+                    held = -spring[j] * spring[j] * (u1[j] + press[j]) - 2.0 * damping * spring[j] * vel
+                    if acc < held:  # the plate pulls away faster than the wire can follow
+                        touching[j] = False
+                        w[j] = u1[j]
+                        wv[j] = vel
+                else:
+                    a = -spring[j] * spring[j] * (w[j] + press[j]) - 2.0 * damping * spring[j] * wv[j]
+                    wv[j] += a * dt
+                    w[j] += wv[j] * dt
+                    if w[j] <= u1[j]:  # it lands
+                        rel = wv[j] - vel
+                        if rel < 0.0:
+                            level += -rel
+                            wv[j] = vel - bounce * rel
+                        w[j] = u1[j]
+                        if abs(wv[j] - vel) < 0.05 * spring[j] * press[j]:
+                            touching[j] = True
+                            wv[j] = vel
+            u2[j] = u1[j]
+            u1[j] = u
+        for k in range(k_n):
+            nxt = c1[k] * cur[k] - c2[k] * prev[k]
+            prev[k] = cur[k]
+            cur[k] = nxt
+        if level > 0.0:
+            state, x = _next(state)
+            out[i] += level * (2.0 * x - 1.0)
+            level *= click
+        if n % 64 == 0 and level < 1e-12:
+            left = 0.0  # how hard the plate can still pull, mode by mode as each dies away
+            for k in range(k_n):
+                left += pull[k] * np.exp(-decay[k] * n * dt)
+            settled = left < 0.3 * rest
+            for j in range(j_n):
+                settled = settled and touching[j]
+            if settled:
+                break
+    return state
+
+
+def wires(freqs, t60s, amps, shapes, spring, press, *, damping: float = 0.05, bounce: float = 0.35,
+          click_ms: float = 0.15, seconds: float = 0.4, sr: int = 44100, out: np.ndarray, start: int,
+          rng: np.random.Generator) -> None:
+    """The clicks of wires (or strings) pressed against a plate struck at sample `start` of `out`, added to
+    out: see _wires. amps are the strike's modal displacements, shapes (J, K) each wire's share of each mode,
+    spring (J,) each wire's spring (Hz), press (J,) how far each is pressed into the plate."""
+    freqs = np.asarray(freqs, dtype=np.float64)
+    _wires(freqs, 6.907755 / np.asarray(t60s, dtype=np.float64), np.asarray(amps, dtype=np.float64),
+           np.ascontiguousarray(shapes, dtype=np.float64), 2.0 * np.pi * np.asarray(spring, dtype=np.float64),
+           np.asarray(press, dtype=np.float64), damping, bounce, float(sr), int(seconds * sr),
+           float(np.exp(-1.0 / (click_ms * 1e-3 * sr))), seed_of(rng), out, int(start))
+
+
+@njit(cache=True)
+def comb(x: np.ndarray, period: int, gain: float) -> np.ndarray:
+    """y[n] = x[n] + gain y[n - period]: a string's ring, its harmonics losing `gain` each pass."""
+    y = x.copy()
+    for n in range(period, y.shape[0]):
+        y[n] += gain * y[n - period]
+    return y
