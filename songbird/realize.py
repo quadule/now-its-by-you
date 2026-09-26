@@ -16,7 +16,7 @@ import numpy as np
 from . import band as band_mod
 from . import variants as variants_mod
 from .band import Band
-from .genome import Genome, Phrase, sung_words, turn
+from .genome import Genome, Meter, Phrase, sung_words, turn
 from .phrasing import Gesture, Phrasing, gesture
 from .score import Note, Score
 from .theory import degree_semitones, harmony
@@ -119,6 +119,77 @@ def sung_as(note: Note, g: Gesture | None, beat: float) -> Note:
     return replace(note, start=start, dur=max(let_go - start, 0.05), gesture=g)
 
 
+PREROLL = 0.6  # seconds before the first note: room for a breath and the first consonants
+
+
+@dataclass(frozen=True)
+class Clock:
+    """A rendition's clock: grid units, counted from the song's first pickup,
+    to seconds. The final phrase slows by `ritardando`; swing delays each
+    beat's off-beat half, from straight (0) to a triplet lilt (1)."""
+
+    meter: Meter
+    tempo: float  # beats per minute
+    lead: int  # units from the first pickup to the first bar line
+    end: int  # units from the first pickup to the song's last bar line
+    rit_start: int  # units to the final phrase's first bar line
+    swing: float = 0.0
+    ritardando: float = 0.0
+
+    @property
+    def unit(self) -> float:
+        """Seconds per grid unit at the song's tempo."""
+        return 60.0 / self.tempo / self.meter.beat
+
+    def swung(self, u: float) -> float:
+        # The beats fall on the bar lines' grid, which starts `lead` units in (after the song's first
+        # pickup), not at u = 0: counted from there, the beats never move and only each beat's off-beat
+        # half is delayed, whatever the pickup's length.
+        if not self.swing:
+            return u
+        beat = self.meter.beat
+        ratio = 0.5 + self.swing / 6.0
+        b, x = divmod(u - self.lead, beat)
+        half = beat / 2.0
+        x = x / half * ratio * beat if x < half else ratio * beat + (x - half) / half * (1.0 - ratio) * beat
+        return self.lead + b * beat + x
+
+    def seconds(self, u: float) -> float:
+        """Grid units to seconds, swung, slowing linearly through the final phrase."""
+        u = self.swung(u)
+        if u <= self.rit_start:
+            return PREROLL + u * self.unit
+        x = u - self.rit_start
+        span = max(self.end - self.rit_start, 1)
+        return PREROLL + (self.rit_start + x + self.ritardando * x * x / (2 * span)) * self.unit
+
+    def beats(self) -> list[tuple[float, bool]]:
+        """Every beat of the song in seconds, and whether it begins a bar: the
+        pulse the notes were placed on, from the first beat after the song's
+        start (there is one before an eighth-note pickup, in the preroll) to the
+        final bar line, where the last note ends."""
+        m = self.meter
+        first = -((self.lead * self.unit + PREROLL) // (m.beat * self.unit))  # as far back as time zero
+        out = []
+        for k in range(int(first), (self.end - self.lead) // m.beat + 1):
+            t = self.seconds(self.lead + k * m.beat)
+            if t >= 0.0:
+                out.append((t, (k * m.beat) % m.bar == 0))
+        return out
+
+
+def timeline(genome: Genome, params: Params) -> Clock:
+    """The clock realize() puts a rendition's notes on: its form laid out on
+    the grid, phrase after phrase, the song's first pickup at zero."""
+    meter = genome.meter
+    phrases = [genome.phrases[pid] for name in params.form for pid in genome.section(name).phrases]
+    lead = phrases[0].pickup
+    end = sum(p.bars for p in phrases) * meter.bar + lead
+    # a compound beat (three to a beat) keeps its own lilt
+    swing = params.band.swing if meter.beat % 3 else 0.0
+    return Clock(meter, params.tempo, lead, end, end - phrases[-1].bars * meter.bar, swing, params.ritardando)
+
+
 def realize(genome: Genome, params: Params, verses=None, phrasing: Phrasing | None = None,
             choir: list[Phrasing | None] | None = None, lyrics=None) -> Score:
     """The timed score. With a phrasing, the voice sings each note its way:
@@ -159,36 +230,8 @@ def realize(genome: Genome, params: Params, verses=None, phrasing: Phrasing | No
             phrase = genome.phrases[pid]
             placed.append((name, phrase, t, line))
             t += phrase.bars * meter.bar
-    lead = placed[0][1].pickup  # shift so the song's first pickup starts at zero
-    end = t + lead
-
-    seconds_per_unit = 60.0 / params.tempo / meter.beat
-    rit_start = placed[-1][2] + lead
-    preroll = 0.6  # room for a breath and the first consonants before the first note
-    # Swing delays each beat's off-beat half, from straight (0) to a triplet lilt (1);
-    # a compound beat (three to a beat) keeps its own lilt.
-    swing = params.band.swing if meter.beat % 3 else 0.0
-    ratio = 0.5 + swing / 6.0
-
-    def swung(u: float) -> float:
-        # The beats fall on the bar lines' grid, which starts `lead` units in (after the song's first
-        # pickup), not at u = 0: counted from there, the beats never move and only each beat's off-beat
-        # half is delayed, whatever the pickup's length.
-        if not swing:
-            return u
-        b, x = divmod(u - lead, meter.beat)
-        half = meter.beat / 2.0
-        x = x / half * ratio * meter.beat if x < half else ratio * meter.beat + (x - half) / half * (1.0 - ratio) * meter.beat
-        return lead + b * meter.beat + x
-
-    def seconds(u: float) -> float:
-        """Grid units to seconds, swung, slowing linearly through the final phrase."""
-        u = swung(u)
-        if u <= rit_start:
-            return preroll + u * seconds_per_unit
-        x = u - rit_start
-        span = max(end - rit_start, 1)
-        return preroll + (rit_start + x + params.ritardando * x * x / (2 * span)) * seconds_per_unit
+    clock = timeline(genome, params)  # the same layout, as time
+    lead, end, seconds, seconds_per_unit = clock.lead, clock.end, clock.seconds, clock.unit
 
     def jitter() -> float:
         return float(rng.normal(0.0, params.humanize))
