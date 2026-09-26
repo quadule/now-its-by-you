@@ -190,10 +190,11 @@ def _stack_matrix(s: complex, t: float, m: float, l: float, parts, load: float) 
     """The TMB network's nodal admittance matrix and source vector at complex frequency s, driven by a 1 V
     source through its source resistance. Nodes: 0 input, 1 the treble pot's top, 2 its wiper (the output),
     3 its bottom and the bass pot's top, 4 the bass pot's bottom and the mid pot's top, 5 where the slope
-    resistor meets the bass and mid caps."""
+    resistor meets the bass and mid caps, 6 the mid pot's wiper, where the mid cap lands (the whole mid pot
+    runs from node 4 to ground: Yeh and Smith's circuit, whose closed form this reproduces exactly)."""
     c1, c2, c3, r1, r2, r3, r4, rs = parts
-    y = np.zeros((6, 6), dtype=complex)
-    src = np.zeros(6, dtype=complex)
+    y = np.zeros((7, 7), dtype=complex)
+    src = np.zeros(7, dtype=complex)
 
     def branch(a, b, g):
         y[a, a] += g
@@ -208,10 +209,11 @@ def _stack_matrix(s: complex, t: float, m: float, l: float, parts, load: float) 
     branch(1, 2, 1.0 / ((1.0 - t) * r1))
     branch(2, 3, 1.0 / (t * r1))
     branch(3, 4, 1.0 / (l * r2))
-    branch(4, None, 1.0 / (m * r3))
+    branch(4, 6, 1.0 / ((1.0 - m) * r3))
+    branch(6, None, 1.0 / (m * r3))
     branch(0, 5, 1.0 / r4)
     branch(5, 3, s * c2)
-    branch(5, 4, s * c3)
+    branch(5, 6, s * c3)
     branch(2, None, 1.0 / load)
     return y, src
 
