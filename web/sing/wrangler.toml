@@ -10,12 +10,24 @@ workers_dev = true
 preview_urls = false
 # routes = [{ pattern = "songbird.quadule.com", custom_domain = true }]
 
+# The dates singing keeps (ISO 8601, Pacific time). Singing closes at CLOSES_AT: no more joining, takes,
+# words or withdrawing after it (singers' own pages keep working). At DELETE_BY the hourly purge deletes
+# every take and file, and every email but those of singers who asked to hear when the song is released.
+# They must match what web/sing/consent.md tells singers.
+[vars]
+CLOSES_AT = "2026-09-27T22:00:00-07:00"
+DELETE_BY = "2026-09-30T20:00:00-07:00"
+
+# Every hour, on the hour: forget the addresses counted for joining, and after DELETE_BY, the purge.
+[triggers]
+crons = ["0 * * * *"]
+
 [assets]
 directory = "./public"
 binding = "ASSETS"
-# The worker sees the page's own address, the API and the song (served only to open invitations);
-# the page's scripts and styles are served straight from the assets, with public/_headers.
-run_worker_first = ["/", "/index.html", "/i/*", "/api/*", "/song/*"]
+# The worker sees the pages' own addresses, the API and the song (served only to open invitations);
+# the pages' scripts and styles are served straight from the assets, with public/_headers.
+run_worker_first = ["/", "/index.html", "/yours.html", "/i/*", "/y/*", "/api/*", "/song/*"]
 html_handling = "none"
 not_found_handling = "none"
 
@@ -25,14 +37,18 @@ not_found_handling = "none"
 binding = "INVITES"
 id = "aa2b6ac9172d4276a186ac9e648a8c57"
 
-# Takes, private: `npx wrangler r2 bucket create songbird-takes`. Never make this bucket public.
+# Takes, private: `npx wrangler r2 bucket create songbird-takes`. Never make this bucket public. As a
+# backstop to the purge, have R2 itself delete takes and files after 30 September
+# (docs/SING-ONLINE.md, "Put it online").
 [[r2_buckets]]
 binding = "TAKES"
 bucket_name = "songbird-takes"
 
-# About 6 takes a minute on one invitation, 60 requests a minute from one address, and 10 a minute
-# from an address asking after invitations that don't exist. Counted at each Cloudflare location,
-# so a little loose; the address is only a key for the count, held briefly and never stored.
+# About 6 takes (or words) a minute from one singer, 60 requests a minute from one address, and 10 a
+# minute from an address asking after invitations or pages that don't exist. Counted at each Cloudflare
+# location, so a little loose; the address is only a key for the count, held briefly and never stored.
+# (Joining is also held to 20 an hour from one address, counted in R2 by a digest of it, forgotten
+# within the hour.)
 [[ratelimits]]
 name = "UPLOADS"
 namespace_id = "1701"
@@ -48,7 +64,7 @@ name = "UNKNOWN"
 namespace_id = "1703"
 simple = { limit = 10, period = 60 }
 
-# No logs kept: requests carry invitation tokens and singers' names.
+# No logs kept: requests carry invitation tokens, the links to singers' own pages, names and emails.
 [observability]
 enabled = false
 
