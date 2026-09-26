@@ -265,7 +265,7 @@ def test_each_refrain_of_a_lineage_keeps_words_of_its_own(h):
             own += len({(r["words"].get("while"), r["words"].get("then")) for r in rounds}) > 1
             assert rounds[0]["head"] == rounds[-1]["head"] == A.refrain_heads(h)[0]
             assert [r["words"]["question"] for r in (rounds[0], rounds[-1])] == ["made", "owns"]
-    assert heads == {"knows", "so"} and len(questions) >= 3 and own > 24
+    assert {"knows", "so"} <= heads and len(heads) >= 5 and len(questions) >= 3 and own > 24
 
 
 def test_a_verse_held_before_the_bank_gave_it_swaps_keeps_its_place(h):

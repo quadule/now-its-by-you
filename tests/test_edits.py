@@ -153,7 +153,8 @@ def test_a_refrains_own_head_and_words_are_marked_and_replay():
     refrains = [s for s in done.lyrics.sections if s.block == "refrain"]
     assert not done.problems and refrains[1].head == "so" and refrains[1].lines[0].startswith("Who *wrote*")
     assert refrains[0].slots["while"] == other and refrains[1].slots["then"] == "who knows"
-    assert len({s.slots["then"] for s in refrains}) == min(len(refrains), 3)  # each ends its own way
+    thens = [s.slots["then"] for s in refrains if "then" in s.slots]
+    assert len(set(thens)) == min(len(thens), 3)  # each ends its own way
     assert done.marks["words.refrain.1"]["value"] == {"head": "so"}
     assert done.marks["words.refrain.0"] == {"value": {"slots": {"while": other}}, "was": {"slots": {"while": first.slots["while"]}}}
     again = E.resolve(g, None, ADA, DAY, E.check(g, E.from_record({"params": {}, "chosen_by_you": done.marks}))[0])

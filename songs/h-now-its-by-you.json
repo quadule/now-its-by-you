@@ -118,6 +118,43 @@
           "by": "artist",
           "lines": ["Who *{question}* this song? No-bo-dy, so", "it's *yours* {while} you sing it and then {then}?"],
           "fixed": {"question": "wrote", "while": "if", "then": "who knows"}
+        },
+        {
+          "id": "stuck",
+          "by": "claude",
+          "lines": ["Who *{question}* this song? No-bo-dy, though", "it's *stuck* in your head, and it won't let go."]
+        },
+        {
+          "id": "even",
+          "by": "claude",
+          "lines": ["Who *{question}* this song? No-bo-dy, though", "there's *some-bo-dy* sing-ing it, e-ven so."]
+        },
+        {
+          "id": "swear",
+          "by": "claude",
+          "lines": ["Who *{question}* this song? No-bo-dy, though", "you'd *swear* that you wrote it, the way it goes."],
+          "fixed": {"question": "made"}
+        },
+        {
+          "id": "kept",
+          "by": "claude",
+          "lines": ["Who *{question}* this song? No-bo-dy, so", "it's *kept* by the sing-ing, and on it goes."],
+          "fixed": {"question": "kept"}
+        },
+        {
+          "id": "go",
+          "by": "claude",
+          "lines": ["Who *{question}* this song? No-bo-dy. Go", "and *sing* it to some-one, and watch it grow."]
+        },
+        {
+          "id": "never",
+          "by": "claude",
+          "lines": ["Who *{question}* this song? No-bo-dy knows,", "but *once* you have heard it, it nev-er goes."]
+        },
+        {
+          "id": "window",
+          "by": "claude",
+          "lines": ["Who *{question}* this song? No-bo-dy knows;", "it *came* in the win-dow, the way it goes."]
         }
       ],
       "couplets": [

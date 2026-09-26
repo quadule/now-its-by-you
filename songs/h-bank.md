@@ -44,6 +44,48 @@ It asks who wrote it, says "if" and ends "who knows?", as written; no other
 refrain in the same song ends "who knows", so the question comes as a
 question.
 
+These seven, the artist's pick of all of them (2026-09-26), turn "Nobody" the
+same way or keep "Nobody knows" and turn the second line. Each asks whatever
+question its refrain draws, but for swear (made) and kept (kept), as written:
+
+**stuck** · by claude
+
+> Who heard this song? Nobody, though
+> it's stuck in your head, and it won't let go.
+
+**even** · by claude
+
+> Who sang this song? Nobody, though
+> there's somebody singing it, even so.
+
+**swear** · by claude
+
+> Who made this song? Nobody, though
+> you'd swear that you wrote it, the way it goes.
+
+**kept** · by claude
+
+> Who kept this song? Nobody, so
+> it's kept by the singing, and on it goes.
+
+**go** · by claude
+
+> Who heard this song? Nobody. Go
+> and sing it to someone, and watch it grow.
+
+**never** · by claude
+
+> Who sang this song? Nobody knows,
+> but once you have heard it, it never goes.
+
+**window** · by claude
+
+> Who kept this song? Nobody knows;
+> it came in the window, the way it goes.
+
+A refrain between the first and last sings any of the nine heads (the song's
+own among them) about as often as another.
+
 Lines 3 and 4 are one of these couplets, a different one each time round,
 canon always last:
 

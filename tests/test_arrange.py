@@ -213,8 +213,8 @@ def test_the_seeds_focus_marks_come_with_its_words():
             if s.head is None:  # Who *made* this song? ..., the question marked as the seed marks it
                 assert s.lines[0] == f"Who *{s.slots['question']}* this song? No-bo-dy knows."
                 assert s.lines[1].startswith("It's *yours* ")
-            else:  # another head marks its own
-                assert s.lines[0].startswith("Who *") and s.lines[1].startswith("it's *yours* ")
+            else:  # another head marks its own: the question, and one word of its second line
+                assert s.lines[0].startswith("Who *") and s.lines[1].count("*") == 2
             if s.id == "canon":
                 assert s.lines[2:] == g.refrain[2:]
         bridge = next(s for s in lyrics.sections if s.block == "bridge")
