@@ -148,6 +148,46 @@ def test_a_packet_opens_as_the_parent(home):
         assert any("where a person chose it" in r["text"] for r in tempo["reasons"])
 
 
+def test_the_studio_runs_from_an_unpacked_packet_alone(home):
+    """As the file's bootstrap runs it: the packet's own program (PYTHONPATH), in a folder with no checkout
+    around it, opening the rendition the packet came from; the checkout's extras aren't there."""
+    import os
+    import socket
+
+    genome = load(LEAD)
+    rng = np.random.default_rng(2)
+    pcm = np.clip(rng.normal(0, 2000, (22050, 2)), -32768, 32767).astype("<i2")
+    flac = home / "song.flac"
+    master.write_flac(flac, pcm, 44100)
+    record = {"id": master.pcm_sha256(pcm), "title": genome.title, "rendered_at": "2026-09-01T12:00:00+00:00",
+              "params": genome.seed_params, "program_version": "test", **pack.lineage(None)}
+    pack.pack(flac, record, LEAD)
+    unpacked = pack.unpack(flac, home / "unpacked")
+    elsewhere = home / "elsewhere"
+    elsewhere.mkdir()
+    with socket.socket() as s:
+        s.bind(("127.0.0.1", 0))
+        port = s.getsockname()[1]
+    env = {**os.environ, "PYTHONPATH": str(unpacked / "program"), "SONGBIRD_PACKET": str(flac)}
+    server = subprocess.Popen([sys.executable, "-m", "songbird", "studio", "--packet", str(flac), "--machine",
+                               "fictional:ada", "--no-open", "--port", str(port)], cwd=elsewhere, env=env,
+                              stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True)
+    try:
+        opened = server.stdout.readline()
+        assert "from the first version, made Tuesday 1 September 2026" in opened, opened
+        status, _, page = ask(port, "GET", "/")
+        token = re.search(rb'name="studio-token" content="([^"]+)"', page).group(1).decode()
+        start = json.loads(ask(port, "GET", "/api/start")[2])
+        assert start["title"] == genome.title and not start["sing"]["available"] and start["phrasings"] == []
+        assert start["out"] == "."  # recordings go where it was run from
+        status, _, data = ask(port, "POST", "/api/song", {"edits": {"tempo": 90}},
+                              {"Content-Type": "application/json", "X-Studio": token})
+        assert status == 200 and json.loads(data)["cards"][1]["value"].startswith("90")
+    finally:
+        server.terminate()
+        server.wait(timeout=20)
+
+
 def wait(studio, job):
     for _ in range(600):
         state = studio.jobs.get(job["id"]).view()
