@@ -6,10 +6,18 @@
     recordings/guides/<song>.<digest>.score.json        every guide anyone has sung to, so that a
                                                         take still lines up after the song changes
 
+A take of one section holds only its window of the guide: its sidecar says
+where on the guide's clock its first sample is (from_s), where it was meant to
+end or the singer stopped (to_s), which section it sang (section, its index
+in the lyrics' sections) and which set, key and speed it was sung to (spec,
+as tools/guides.py names them). A take from the top has from_s 0, or none.
+
 recordings/ never goes in git. A singer's name only names their folder here;
 it goes into a phrasing only if they ask to be credited (principle 12).
 Takes sung on the online page (web/sing) arrive here the same way, through
-tools/invite.py fetch.
+tools/invite.py, their sidecars saying so (source "online") and whose they
+are there (sid); online() finds them, and remove() and remove_singer() delete
+a take or a singer with everything measuring them kept.
 """
 
 from __future__ import annotations
@@ -21,11 +29,13 @@ import shutil
 import time
 import unicodedata
 from dataclasses import dataclass, field
+from datetime import datetime
 from pathlib import Path
 
 ROOT = Path(__file__).parent.parent
 RECORDINGS = ROOT / "recordings"
 GUIDES = RECORDINGS / "guides"
+NOT_SINGERS = ("guides", "words")  # folders in recordings/ that hold no one's takes
 
 
 def slug(name: str) -> str:
@@ -56,6 +66,48 @@ class Take:
     @property
     def rel(self) -> str:
         return self.path.relative_to(ROOT).as_posix()
+
+    @property
+    def from_s(self) -> float:
+        """Where on its guide's clock the take's first sample is, in seconds: 0 for a take from the top."""
+        return float(self.info.get("from_s") or 0.0)
+
+    @property
+    def to_s(self) -> float | None:
+        """Where it was meant to end, or where the singer stopped (guide time); None: the song's end."""
+        return None if self.info.get("to_s") is None else float(self.info["to_s"])
+
+    @property
+    def section(self) -> int | None:
+        """The one section it sang (its index in the lyrics' sections); None for a take of the whole song."""
+        return None if self.info.get("section") is None else int(self.info["section"])
+
+    @property
+    def spec(self) -> str | None:
+        """The set, key and speed it was sung to (a spec id, a.k-2.t90); None for the song's own guide."""
+        return self.info.get("spec") or None
+
+    @property
+    def online(self) -> bool:
+        """Whether it was sung on the online page."""
+        return self.info.get("source") == "online"
+
+    @property
+    def sid(self) -> str | None:
+        """Its singer's id on the online page, for a take sung there."""
+        return self.info.get("sid") or None
+
+    @property
+    def recorded_at(self) -> datetime | None:
+        """When it was sung, in this computer's local time: as its sidecar says, or else its file's name."""
+        with_time = self.info.get("recorded")
+        if with_time:
+            try:
+                return datetime.fromisoformat(str(with_time)).replace(tzinfo=None)
+            except ValueError:
+                pass
+        named = re.search(r"-(\d{8}-\d{6})(-\d+)?$", self.path.stem)
+        return datetime.strptime(named[1], "%Y%m%d-%H%M%S") if named else None
 
     def sidecar(self) -> Path:
         return self.path.with_suffix(".json")
@@ -92,6 +144,64 @@ def singers(song: str) -> dict[str, list[Take]]:
     for t in takes(song):
         out.setdefault(t.who, []).append(t)
     return out
+
+
+def online(song: str | None = None) -> list[Take]:
+    """Every take sung on the online page (of one song, or any), oldest first: each knows its
+    singer's id there (Take.sid) and when it was sung (Take.recorded_at), so a purge on a date,
+    or a singer who withdraws, finds every one."""
+    found = []
+    for wav in RECORDINGS.glob("*/*.wav"):
+        if wav.parent.name not in NOT_SINGERS:
+            t = load(wav)
+            if t.online and (song is None or t.song == song):
+                found.append(t)
+    return sorted(found, key=lambda t: (t.recorded_at or datetime.min, t.path.name))
+
+
+def caches(take: Take | Path) -> list[Path]:
+    """What measuring a take kept about it, whether or not it's there yet: its measurement
+    (tools/phrasing.py, renders/measured/) and where MFA heard its vowels (tools/align.py,
+    renders/measured/mfa/), each named for the take's path as those tools name it."""
+    path = Path(take.path if isinstance(take, Take) else take).resolve()
+    name = path.relative_to(ROOT).as_posix() if path.is_relative_to(ROOT) else path.as_posix().lstrip("/")
+    flat = name.replace("/", "__").removesuffix(".wav") + ".json"
+    measured = ROOT / "renders" / "measured"
+    return [measured / flat, measured / "mfa" / flat]
+
+
+def remove(take: Take) -> list[Path]:
+    """Delete a take: its WAV, its sidecar and what measuring it kept. Returns what was deleted."""
+    gone = []
+    for f in [take.path, take.sidecar(), *caches(take)]:
+        if f.exists():
+            f.unlink()
+            gone.append(f)
+    return gone
+
+
+def remove_singer(who: str, song: str | None = None) -> list[Path]:
+    """Delete one singer's takes (by folder name) of a song, or of every song, with what measuring
+    them kept, their phrasings (renders/phrasing/<song>.<who>.json) and the karaoke's renders of the
+    machine singing their way; their folder too, once nothing else is in it (without a song,
+    everything in it goes). A blend of everyone's phrasings keeps what it learned until it's made
+    again. Returns what was deleted."""
+    if who != slug(who) or who in NOT_SINGERS:
+        raise ValueError(f"{who!r} isn't a singer's folder")
+    folder = RECORDINGS / who
+    gone = []
+    for wav in sorted(folder.glob("*.wav")):
+        t = load(wav)
+        if song is None or t.song == song:
+            gone += remove(t)
+    renders = ROOT / "renders"
+    for f in [*(renders / "phrasing").glob(f"{song or '*'}.{who}.json"), *renders.glob(f"{song or '*'}.karaoke.{who}.flac")]:
+        f.unlink()
+        gone.append(f)
+    if folder.is_dir() and (song is None or not [f for f in folder.iterdir() if f.name != ".DS_Store"]):
+        gone += [f for f in sorted(folder.rglob("*")) if f.is_file()]
+        shutil.rmtree(folder)
+    return gone
 
 
 def keep_guide(song: str, score: Path) -> str:
