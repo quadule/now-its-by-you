@@ -82,6 +82,8 @@ DIMENSIONS = {
     "space": "how much of the room is heard (slow)",
     "near": "how close the singer stands: the voice's own reverb (slow)",
     "duck": "how much the band and the room make way for the voice (slow)",
+    "tune": "how freely the singer takes the tune this season: how often it learns or forgets a variant (slow)",
+    "words": "how restless the words are this season: how often one is swapped (slow)",
 }
 
 DAY = 86400.0
@@ -179,6 +181,39 @@ def series(t, voice_hash: str, dimensions=None) -> dict[str, dict[str, np.ndarra
     o = octaves(t, voice_hash, names)
     views = {view: np.clip(np.einsum("k,dkt->dt", np.asarray(w), o), -1.0, 1.0) for view, w in VIEWS.items()}
     return {name: {view: values[d] for view, values in views.items()} for d, name in enumerate(names)}
+
+
+def epoch(t_days: float, voice_hash: str, name: str, lo: float, hi: float) -> tuple[int, float]:
+    """Which stretch of a named clock the moment t falls in, and the day that stretch began.
+
+    A choice made from a set (which variants a singer adds, which verse comes in) can't ride a smooth field
+    the way a number or an ordered category (held()) can, so it rides a clock instead. Each machine's clock
+    of each name runs in stretches of one length of its own between lo and hi days, from a phase of its
+    own; anything chosen from (machine, name, stretch) holds through the stretch and changes only as the
+    next begins. So it never flickers from one day to the next, no two clocks turn together, and none
+    turns on a calendar edge. Rates can still follow the drift: read it at the stretch's start.
+
+    The stretches sit on a grid of the clock's own period with each boundary nudged by up to a quarter of
+    it, so no two stretches need be alike and a clock never repeats itself."""
+    u = _seed("epoch", voice_hash, name)
+    period = lo + (hi - lo) * ((u & 0xFFFFFFFF) / 2.0**32)
+    phase = period * ((u >> 32) / 2.0**32)
+
+    def boundary(k: int) -> float:
+        return phase + k * period + 0.25 * period * (2.0 * chance("boundary", voice_hash, name, k) - 1.0)
+
+    t = float(t_days)
+    k = int(np.floor((t - phase) / period)) - 1
+    while boundary(k + 1) <= t:
+        k += 1
+    while boundary(k) > t:
+        k -= 1
+    return k, boundary(k)
+
+
+def chance(*parts) -> float:
+    """A number in [0, 1) fixed by its parts: a coin tossed once for good."""
+    return _seed("chance", *parts) / 2.0**64
 
 
 def drift(t_days: float, voice_hash: str) -> Drift:
