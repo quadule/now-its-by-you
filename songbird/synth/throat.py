@@ -239,11 +239,12 @@ def synthesize(f0: np.ndarray, sp: np.ndarray, ap: np.ndarray, sr: int, rng: np.
 
 ROLES = ("sil", "breath", "onset", "vowel", "coda")
 
-# The longest silence the network is told of. It learned from phrases whose silences were short (median
-# 0.26 s, 99% under 0.7 s, none as long as 1 s). Told of a longer one (a rest between sections, a choir
-# waiting minutes for its entry) it guessed an envelope far louder than silence, and the vocoder whispered
-# through it: up to 8 dB under the singing at the start of a 220 s wait (docs/MIX.md, "The hiss"). A
-# longer silence is told as one this long: its first and last halves at their own pace, held between.
+# The longest silence the network is told of. It learned from phrases whose silences were short (half of
+# them under 0.07 s, 99% under 0.51 s, none as long as 1 s). Told of a longer one (a rest between sections,
+# a choir waiting minutes for its entry) it guessed an envelope far louder than silence, and the vocoder
+# murmured through it: up to 8 dB under the singing at the start of a 220 s wait (docs/MIX.md, "The
+# hiss"). A longer silence is told as one this long: its first and last halves at their own pace, held
+# between. (33 of the training set's 5,959 silences are longer, up to 0.97 s: a retrain would hear them so.)
 SILENCE = 0.6
 # Where nothing is sung the vocoder is silent: it sounds from HUSH[0] s before a sung phone to HUSH[1] s
 # after one (a phone's own ring), fading over HUSH[2] s beyond. Breaths are voice.breaths', added after.

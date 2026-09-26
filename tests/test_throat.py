@@ -147,7 +147,7 @@ def test_a_silence_longer_than_any_it_heard_is_told_as_one_it_knows():
     sil = long["phone"] == idx["sil"]
     assert np.allclose(long["dur"][sil], np.log(T.SILENCE))
     assert 0.0 <= long["pos"][sil].min() and long["pos"][sil].max() <= 1.0
-    frame = lambda t: int(round(t / T.FRAME))  # noqa: E731
+    frame = lambda t: round(t / T.FRAME)  # noqa: E731
     assert np.isclose(long["pos"][frame(0.1)], 0.1 / T.SILENCE, atol=1e-3)  # just after it starts, at its pace
     assert np.isclose(long["pos"][frame(wait / 2)], 0.5)  # held
     assert np.isclose(long["pos"][frame(wait - 0.1)], 1.0 - 0.1 / T.SILENCE, atol=0.01)  # just before the note
