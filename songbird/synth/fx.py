@@ -333,23 +333,32 @@ def apply_gain(x: np.ndarray, gain_db: np.ndarray) -> np.ndarray:
     return _apply(_stereo(x), 10.0 ** (gain_db / 20.0), STEP, np.zeros((0, 0))).reshape(x.shape)
 
 
-def deess(x: np.ndarray, sr: int, split: float = 5500.0, excess: float = 3.0, ratio: float = 3.0,
+def _both_ways(x2: np.ndarray, sos: np.ndarray) -> np.ndarray:
+    """x through sos forward and then backward: the response's magnitude squared and no phase at all (a
+    render has the whole signal at hand)."""
+    return np.ascontiguousarray(_biquads(np.ascontiguousarray(_biquads(x2, sos)[::-1]), sos)[::-1])
+
+
+def deess(x: np.ndarray, sr: int, split: float = 4500.0, excess: float = 3.0, ratio: float = 3.0,
           most: float = 8.0) -> tuple[np.ndarray, np.ndarray]:
     """Turn the highs down while they outweigh the voice's body: a split-band
     de-esser whose threshold is the voice's own balance, so it hears an "s"
     by its spectrum, not by how loud the singer is. It listens to the band
     above `split` against the body, the voice an octave under the split,
     where no sibilant reaches (so an "s" sitting across the split is heard
-    whole), and turns down the voice above `split` as the complement of a
-    low-pass, which adds back to the voice in phase (what it takes is taken
-    from the "s", not smeared around the split). `excess`: how far (dB) the
-    highs may rise over the body before they are reduced, by `ratio`, never
-    by more than `most` dB. Highs 40 dB under the voice's loud passages are
-    left alone, whatever their balance (breath, the start of a sound). Where
-    nothing is reduced the output is the input."""
+    whole), and turns down the voice above `split`. Both bands are split
+    without phase (a low-pass run forward and back, and what it leaves): the
+    two add back to the voice exactly, and the part turned down rises
+    smoothly from -14 dB half an octave under the split (-6 dB at it) to all
+    of the voice above it, so an "s" is turned down rather than tilted, and
+    nothing is ever turned up.
+    `excess`: how far (dB) the highs may rise over the body before they are
+    reduced, by `ratio`, never by more than `most` dB. Highs 40 dB under the
+    voice's loud passages are left alone, whatever their balance (breath, the
+    start of a sound). Where nothing is reduced the output is the input."""
     x2 = _stereo(x)
-    highs = x2 - _biquads(x2, butter(2, split, btype="lowpass", fs=sr, output="sos"))
-    body = _biquads(x2, butter(2, split / 2.0, btype="lowpass", fs=sr, output="sos"))
+    highs = x2 - _both_ways(x2, butter(2, split, btype="lowpass", fs=sr, output="sos"))
+    body = _both_ways(x2, butter(2, split / 2.0, btype="lowpass", fs=sr, output="sos"))
     coef = _coef(0.004, sr)
     high = db(_detect(highs, coef)[::STEP])
     over = high - db(_detect(body, coef)[::STEP]) - excess

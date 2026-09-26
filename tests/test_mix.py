@@ -174,6 +174,14 @@ def test_the_de_esser_takes_an_s_across_its_split_and_leaves_the_vowels():
     assert level(x, 0.92, 1.03) - level(y, 0.92, 1.03) > 3.0
     assert np.allclose(y[: int(0.85 * SR)], x[: int(0.85 * SR)])
     assert np.allclose(y[int(1.6 * SR):], x[int(1.6 * SR):], atol=1e-4)
+    # it turns the "s" down and never up: no third of an octave from 1 to 16 kHz is louder (the old one lifted
+    # 3-5 kHz by a decibel while it cut)
+    seg = slice(int(0.92 * SR), int(1.03 * SR))
+    f = np.fft.rfftfreq(seg.stop - seg.start, 1 / SR)
+    px, py = (np.abs(np.fft.rfft(z[seg, 0] * np.hanning(seg.stop - seg.start))) ** 2 for z in (x, y))
+    for c in 1000 * 2 ** (np.arange(0, 13) / 3):
+        m = (f >= c / 2 ** (1 / 6)) & (f < c * 2 ** (1 / 6))
+        assert 10 * np.log10(py[m].sum() / px[m].sum()) < 0.05
 
 
 def test_a_riding_compressor_keeps_the_arc():
