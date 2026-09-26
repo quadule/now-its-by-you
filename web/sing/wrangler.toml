@@ -44,6 +44,5 @@ simple = { limit = 240, period = 60 }
 [observability]
 enabled = false
 
-# The admin API's secret: `npx wrangler secret put ADMIN_TOKEN` (for `wrangler dev`, in .dev.vars).
-[secrets]
-required = ["ADMIN_TOKEN"]
+# The admin API's secret, ADMIN_TOKEN, is set after the first deploy with `npx wrangler secret put
+# ADMIN_TOKEN` (for `wrangler dev`, in .dev.vars); until then the admin API answers 503.
