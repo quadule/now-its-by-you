@@ -878,9 +878,9 @@ def roll_notes(ctx: StyleContext, part: str, c: Chord, u0: float, u1: float, i: 
 def w_roll(ctx: StyleContext, i: int, part: str) -> list[Ev]:
     """A banjo's forward roll: thumb, index, middle, thumb, index, middle, thumb, middle across the eighths
     (third string, second, first, fifth, second, first, fifth, first), the thumb's notes of the 3-3-2 a
-    little stronger (the roll's drive), never on a sung note; in triplets thumb, index, middle. Backup
-    rolls are played firmly (0.55 to 0.7), only a little under the words: a banjo is the loudest thing in
-    a string band, and a roll's twang and sparkle go when it is picked softly."""
+    little stronger (the roll's drive), never on a sung note; in triplets thumb, index, middle. Rolls are
+    picked firmly (0.55 to 0.65 where nobody sings: a banjo is the loudest thing in a string band, and a
+    roll's twang and sparkle go when it is picked softly), backing off under the words as backup does."""
     out = []
     for c in ctx.chords_in(i):
         subs = ctx.grid.subs_in(c.u0, c.u1)
