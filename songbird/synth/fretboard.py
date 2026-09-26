@@ -420,6 +420,8 @@ def sound(seg: Segment, strings: Strings, sr: int, rng: np.random.Generator, *, 
     b = strings.stiffness[seg.string] * (base_hz / open_hz) ** 2 if strings.stiffness else 0.0
     ad = dispersion(round(base_hz, 6), round(b, 9), strings.stiff_sections, sr)
     sections = strings.stiff_sections if ad != 0.0 else 0
+    if sections and sections * _allpass_delay(2.0 * np.pi * base_hz / sr, ad) > 0.5 * sr / base_hz:
+        sections = 0  # more stretch than a loop this short can hold: none (no string on these needs it)
     # the comb's delays: 2d/c, the same for any fret of this string; a bend (tension) shortens them
     delays = np.array([b * sr / open_hz for b, _ in strings.comb])
     weights = np.array([w for _, w in strings.comb])
