@@ -140,3 +140,20 @@ def test_old_records_still_load():
     old = {"tonic": 62, "mode": "ionian", "tempo": 96, "form": list(g.seed_params["form"]), "room": {"rt60": 0.8}}
     assert Params.from_dict(old).mix["rt60"] == 0.8
     assert V.choose(g, None, None, None) == Params.from_dict(g.seed_params)
+
+
+def test_a_refrains_own_head_and_words_are_marked_and_replay():
+    r = E.resolve(g, None, ADA, DAY, {})
+    first = next(s for s in r.lyrics.sections if s.block == "refrain")
+    other = "when" if first.slots["while"] != "when" else "if"
+    edits = {"words.refrain.1": {"head": "so"}, "words.refrain.0": {"slots": {"while": other}}}
+    done = E.resolve(g, None, ADA, DAY, edits)
+    refrains = [s for s in done.lyrics.sections if s.block == "refrain"]
+    assert not done.problems and refrains[1].head == "so" and refrains[1].lines[0].startswith("Who *wrote*")
+    assert refrains[0].slots["while"] == other and refrains[0].slots["then"] == first.slots["then"]
+    assert done.marks["words.refrain.1"]["value"] == {"head": "so"}
+    assert done.marks["words.refrain.0"] == {"value": {"slots": {"while": other}}, "was": {"slots": {"while": first.slots["while"]}}}
+    again = E.resolve(g, None, ADA, DAY, E.check(g, E.from_record({"params": {}, "chosen_by_you": done.marks}))[0])
+    assert again.lyrics == done.lyrics
+    refused = E.resolve(g, None, ADA, DAY, {"words.refrain.0": {"head": "so"}})
+    assert refused.problems and "always sings the knows head" in refused.problems[0]["why"]

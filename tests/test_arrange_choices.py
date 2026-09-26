@@ -21,8 +21,9 @@ GOLDEN = Path(__file__).parent / "golden" / "h-words.sha256"
 
 
 def test_drawing_without_choices_is_as_it_was():
-    """The words golden: computed with arrange.py before choices were added, over 600 draws with and without
-    leanings, so the pin-free draw consumes chance exactly as before."""
+    """The words golden, over 600 draws with and without leanings, so the pin-free draw consumes chance
+    exactly as before: computed before choices were added, and again when each refrain came to draw words
+    of its own (2026-09-26; every verse, bridge and tag drawn then was as before)."""
     lean = A.Leanings(mood_weights={"light": 2.0, "dark": 0.5}, era_bias=-0.4, rarity_appetite=0.6,
                       vocabulary=frozenset({"sea", "ship", "fiddle", "bird"}))
     digest = hashlib.sha256()
@@ -83,6 +84,10 @@ def test_refused_choices_say_why():
     assert "only the last" in A.problem(g, LONG, {"couplets": {0: "canon"}})
     assert "chosen refrain by refrain" in A.problem(g, LONG, {"refrain": {"question": "sang"}})
     assert "the first refrain asks who made" in A.problem(g, LONG, {"refrains": {0: {"slots": {"question": "sang"}}}})
+    assert "only the last who owns" in A.problem(g, LONG, {"refrains": {1: {"slots": {"question": "owns"}}}})
+    assert "always sings the knows head" in A.problem(g, LONG, {"refrains": {0: {"head": "so"}}})
+    assert "sings its while as if" in A.problem(g, LONG, {"refrains": {1: {"head": "so", "slots": {"while": "when"}}}})
+    assert "chosen for two refrains" in A.problem(g, LONG, {"refrains": {1: {"head": "so"}, 2: {"head": "so"}}})
     assert "has no place to choose" in A.problem(g, LONG, {"refrains": {1: {"slots": {"place": "desert"}}}})
     assert "no verse 10" in A.problem(g, LONG, {"verses": {9: "wire"}})
     assert "not 'ha'" in A.problem(g, LONG, {"tag": "ha"})
@@ -128,8 +133,10 @@ def test_options_for_the_fixed_blocks(block, index):
     if block == "refrain" and index == 3:
         assert not any(c["allowed"] for c in options["choices"] if c["id"] != "canon")
         assert any(f["what"] == "couplet" for f in options["fixed"])
-    if block == "refrain":
-        assert any(f["what"] == "question" for f in options["fixed"])
+    if block == "refrain":  # the first and the last: the song's own head, and the question the rules give them
+        assert any(f["what"] == "question" for f in options["fixed"]) and any(f["what"] == "head" for f in options["fixed"])
+        assert {w["slot"] for w in options["words"]} == {"while", "then"}
+        assert [h["allowed"] for h in options["heads"]] == [True, False]
     if block == "bridge" and index == 0:
         assert options["fixed"] and {w["slot"] for w in options["words"]} == {"place", "ember", "where"}
     if block == "bridge" and index == 1:
@@ -137,3 +144,43 @@ def test_options_for_the_fixed_blocks(block, index):
     if block == "tag":
         assert [c["id"] for c in options["choices"]] == ["la", "loo", "oo"]
 
+
+def test_each_refrain_has_words_of_its_own():
+    """A refrain between the first and the last can sing another head, ask its own question and choose its
+    own words; the rest stay as drawn, and a head or question another refrain had trades or is asked afresh."""
+    heads_seen, words_seen = set(), set()
+    for seed in range(200):
+        drawn = A.arrange(g, LONG, seed)
+        heads_seen.add(drawn.heads)
+        words_seen.update((s.slots.get("while"), s.slots.get("then")) for s in drawn.sections if s.block == "refrain")
+        refrains = [s for s in drawn.sections if s.block == "refrain"]
+        assert len({(s.slots.get("while"), s.slots.get("then")) for s in refrains}) > 1 or seed % 7  # they vary
+        options = A.options(g, drawn, "refrain", 1)
+        assert {h["id"] for h in options["heads"]} == {"knows", "so"} and all(h["allowed"] for h in options["heads"])
+        question = next(w for w in options["words"] if w["slot"] == "question") if drawn.heads[1] is None else None
+        if question:
+            assert question["options"] == ["sang", "heard", "kept", "wrote"]
+        # another head in refrain 2: its fixed words as written, the rest as drawn
+        kept = A.arrange(g, LONG, seed, None, {"refrains": {1: {"head": "so"}}})
+        so = [s for s in kept.sections if s.block == "refrain"][1]
+        assert kept.heads[1] == "so" and so.lines[0] == "Who *wrote* this song? No-bo-dy, so" and so.slots["while"] == "if"
+        assert kept.couplets == drawn.couplets and "so" not in [h for i, h in enumerate(kept.heads) if i != 1]
+        assert len(set(kept.questions[1:-1])) == len(kept.questions[1:-1])  # a clashing question is asked afresh
+        # one refrain's own words, the others' as drawn
+        mine = A.arrange(g, LONG, seed, None, {"refrains": {0: {"slots": {"while": "when", "then": "it grows"}}}})
+        first = next(s for s in mine.sections if s.block == "refrain")
+        assert first.slots["while"] == "when" and first.slots["then"] == "it grows"
+        assert [s for s in mine.sections if s.block == "refrain"][1:] == refrains[1:]
+    assert len(heads_seen) > 2 and len(words_seen) == 10  # nine ways of the song's own head, and the other's
+
+
+def test_a_person_can_ask_a_question_in_a_refrain_between():
+    drawn = A.arrange(g, LONG, 4)
+    heads = drawn.heads
+    at = next(i for i in (1, 2) if heads[i] is None)
+    other = drawn.questions[3 - at]
+    kept = A.arrange(g, LONG, 4, None, {"refrains": {at: {"slots": {"question": other}}}})
+    assert kept.questions[at] == other and kept.questions[3 - at] != other  # the other refrain asks something else
+    assert A.problem(g, LONG, {"refrains": {at: {"slots": {"question": other}}}}) is None
+    if heads[3 - at] == "so":  # the so head's question is its own: it can't be taken from it
+        assert "asks who wrote already" in A.problem(g, LONG, {"refrains": {at: {"slots": {"question": "wrote"}}}})

@@ -24,13 +24,25 @@ lines are eight and ten, and the bridge's first two are ten with no pickup.
 > It's nobody's making, it's old and it's new;
 > by everyone, no one, and now it's by you.
 
-*Made* turns each time the refrain comes round: made, sang, heard, kept,
-wrote, and the last time always owns. A song with three refrains asks made,
-sang, owns; with four, heard comes before owns; kept and wrote only come in
-with five or six. *While* can be when or if, and *it goes* can be who knows
-or it grows, chosen once per song and kept the same in every refrain. Lines 3
-and 4 are one of these couplets, a different one each time round, canon
-always last:
+Every refrain has words of its own. *Made* is the question: the first
+refrain asks who made it and the last who owns it, and each refrain between
+asks something else (sang, heard, kept or wrote), a different word each
+time. *While* can be when or if, and *it goes* can be who knows or it grows,
+drawn afresh each time round.
+
+Lines 1 and 2 are the refrain's head. The first and last refrains always
+sing this one (**knows**), so the hook is heard first and last; a refrain
+between may sing another head instead, each at most once a song:
+
+**so** · by artist
+
+> Who wrote this song? Nobody, so
+> it's yours if you sing it and then who knows?
+
+It asks who wrote it and says "if", as written.
+
+Lines 3 and 4 are one of these couplets, a different one each time round,
+canon always last:
 
 **canon** · by fable (A's question, B's answer)
 
@@ -437,10 +449,14 @@ How a song is put together from the bank; the same rules are data under
   verses go in era order, earliest first, so the song reads as time passing;
   verses with no year go anywhere. Paired verses are sung adjacent, in era
   order. No two dark verses adjacent; at most one light verse.
-- **Refrain.** The question word turns in order each time round, and the last
-  refrain always asks who owns it. While, when or if and it goes, who knows
-  or it grows are chosen once per song. Each refrain sings one couplet, none
-  twice until all are used, and the last always sings canon.
+- **Refrain.** Every refrain has words of its own. The first asks who made
+  it and the last who owns it; each between asks something else, a
+  different word each time while any are left. While, when or if and it
+  goes, who knows or it grows are drawn afresh each time round. The first
+  and last refrains sing the knows head; a refrain between may sing another
+  head, each at most once a song, with the words it fixes as written. Each
+  refrain sings one couplet, none twice until all are used, and the last
+  always sings canon.
 - **Bridge.** The canon is always sung, its swaps chosen once per song. A
   long form may add one extra stanza, coat or given, after it.
 - **Tag.** One syllable for the whole tag, chosen once per song.
@@ -455,6 +471,7 @@ How a song is put together from the bank; the same rules are data under
   it anything more than the breath and the air"): it fits the tune, but it
   replaces every hook line, so the refrain would stop being the refrain.
 - "Who owns this song? What does it owe?" as a first line: "Nobody knows"
-  never changes.
+  opens and closes every song. The artist's so head is the one change to
+  it, and only in a refrain between.
 - Verses about a mill and a school; a soap-for-beer swap that broke the
   soap/cope rhyme; "mm" as a tag syllable, which has no vowel to sing.

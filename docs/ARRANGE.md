@@ -25,14 +25,22 @@ section of that form is then filled:
   both are in. No two dark verses side by side, and at most one light verse.
   Each verse's swaps are chosen once: a girl, or a nun, and her pronouns
   with her.
-- **The refrain**, each time round. The question turns in order and the
-  last refrain asks who owns it: made, sang, owns with three refrains; heard
-  before owns with four; kept and wrote only with five or six. A lone
-  refrain asks who made it, as the fixed refrain does. "While" (or when, or
-  if) and "it goes" (or who knows, or it grows) are chosen once and kept
-  every time. Its second couplet is different each time, never repeated,
-  and the last refrain always sings the canon: "by everyone, no one, and now
-  it's by you."
+- **The refrain**, each time round, with words of its own (since the
+  artist asked for "different variations ... in each iteration of the
+  chorus", 2026-09-26). Its first two lines are its head. The first and last
+  refrains sing the song's own ("Who made this song? Nobody knows. / It's
+  yours while you sing it, and then it goes."), so the hook is heard first
+  and last. A refrain between them may sing another head instead, each at
+  most once a song: for H, the artist's, sung as written, "Who wrote this
+  song? Nobody, so / it's yours if you sing it and then who knows?" (in
+  about half of the songs with three refrains, always the middle one). The
+  first refrain asks who made it and the last who owns it; each refrain
+  between asks something else (sang, heard, kept or wrote), a different word
+  each time. A lone refrain asks who made it, as the fixed refrain does.
+  "While" (or when, or if) and "it goes" (or who knows, or it grows) are
+  drawn afresh each time round. Its second couplet is different each time,
+  never repeated, and the last refrain always sings the canon: "by
+  everyone, no one, and now it's by you."
 - **The bridge**: the first bridge section sings the canon, its swaps
   (water, mountain, border or desert; coal, spark or light; dark or cold)
   chosen once. If the form sings the bridge twice (bridge, bridge, or bridge
@@ -64,7 +72,22 @@ tag syllable) is an even draw among its options unless a leaning tilts it.
 
 Each part of the song draws from its own stream of the seed, separate from
 the rest of the rendition's randomness, so changing how many verses a form
-has doesn't change which couplets its refrains sing.
+has doesn't change which couplets its refrains sing. The refrains' heads and
+their questions have streams of their own too.
+
+The refrain's rules are data, as the rest are (`bank.rules.refrain`):
+`question` is "turn" (in order, as the fixed refrain turns, the last time
+round the last word) or "draw" (H's: the first word first, the last last,
+the rest drawn between); `once_per_song` names head slots kept the same in
+every refrain (H's had while and then until 2026-09-26; none now);
+`head_first` and `head_last` name the heads the first and last refrains
+sing, and `head_repeat: false` sings another head at most once a song. A
+head is written like the refrain's own lines, on the same phrases, singing
+the refrain's slots by name; its `fixed` holds any slot to one word, sung as
+written. With H's rules as they were before, this draw gives exactly the
+words the old one gave (the words golden, unchanged); the new rules change
+only the refrains (every verse, bridge and tag drawn over the golden's 600
+draws is as before).
 
 What that gives, over 3,000 seeds. With the seed's two verses: 603
 different pairs of verses (769 counting their order); every one of the 29
@@ -83,7 +106,8 @@ or out of time (with four verses, 43% open on a verse from the 1800s and
 time moves that.
 
 The singer leans on a line's focus word, marked `*like this*`. The bank
-marks none of its own yet. Where a bank entry is one of the seed's own
+marks none of its own verses yet; the artist's refrain head carries its
+own marks, on the question and on "yours", as the song's own head has them. Where a bank entry is one of the seed's own
 blocks (the five seed verses, the refrain's first two lines, the canon
 couplet, the canon bridge) the seed's marks come with it, on the same word
 in the same place, whatever the swaps: "It's *yours* when you sing it",

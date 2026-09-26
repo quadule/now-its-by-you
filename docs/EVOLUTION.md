@@ -104,22 +104,26 @@ song in songs/ is 1.1 to 1.5 away.
 
 Before this, a machine's words were drawn afresh from the bank every render, so they changed completely
 from one day to the next. Now a lineage **holds** its words (`Params.words`): the verses it sang in order
-with their slot words, the refrain's once-a-song words (while or when or if, it goes or who knows or it
-grows), the couplet each refrain sang before the last, the bridge's stanzas with their slot words and the
-tag's syllable. A child keeps its parent's, and the words change three ways:
+with their slot words, each refrain as it sang it (a round: its head, the words it sang in the head's slots,
+such as while or when or if and it goes or who knows or it grows, the question it asked, and its couplet),
+the bridge's stanzas with their slot words and the tag's syllable. A child keeps its parent's, and the words
+change three ways:
 
 - **The form.** When a machine's form grows (the form changes by the season), a new verse comes in: the
   machine's own pick, weighted as the bank's own draw weighs it with the machine's lyric leanings, at
   the end where the rules allow (else wherever they do). When the form shrinks, the last verse is left
-  out: a child only learns what its parent sang. Couplets and the bridge's extra stanza follow the number
-  of refrains and bridges the same way.
+  out: a child only learns what its parent sang. Refrains and the bridge's extra stanza follow the number
+  of refrains and bridges the same way: a longer form takes in a refrain before the last (a couplet, a
+  head and words of the machine's choosing), a shorter one leaves the last of those before it out.
 - **The rules.** The seed sings its fixed refrain, the canon couplet every time round; the bank's rules,
   which every drawn and held rendition keeps, want each refrain but the last to sing a couplet of its own.
   So a child of the seed takes other couplets for its first refrains, its machine's picks, and says so.
 - **One swap, now and then.** When a machine's swap clock turns, with chance 0.3 + 0.2 x a restless habit
   + 0.2 x the slow drift of "words" (held between 0.1 and 0.6), one thing is swapped for one the machine
-  likes: a verse (most often), a verse's slot word (a girl for a nun, with her pronouns), a couplet, the
-  refrain's or the bridge's slot word, the tag's syllable, or the bridge's extra stanza. Where it falls
+  likes: a verse (most often), a verse's slot word (a girl for a nun, with her pronouns), a couplet, a
+  refrain's own word (its while or its then, or the question a refrain between the first and last asks),
+  a refrain's head (between the first and last), the bridge's slot word, the tag's syllable, or the
+  bridge's extra stanza. Where it falls
   is fixed for the machine and the generation of the song it is singing, so a machine singing one parent
   for months swaps in one place (it toggles, one change at a time), while a lineage swaps somewhere new
   each generation.
@@ -185,13 +189,16 @@ The interfaces a tool that explores and edits the song before recording should u
   with `variants.problems(genome, variants)` (plain sentences, empty if sound) or one addition with
   `variants.fits(genome, current, v)`, name one with `variants.describe(genome, v, lyrics)`, and measure
   how far a tune has come with `variants.distance(genome, a, b)`. A person's own choice is `source="edit"`.
-- `Params.words`: the held words, plain JSON (see the comment above `arrange.hold`). Sing them with
+- `Params.words`: the held words, plain JSON (see the comment above `arrange.hold`). Words held before
+  each refrain had words of its own (the refrain's once-a-song `slots`, `couplets`, `last`) are read as the
+  refrains they sang (`arrange.rounds`), so an older lineage sings on as it did. Sing them with
   `arrange.sing(genome, form, words)` and check an edit with `arrange.check(genome, form, words)` (the
   first thing wrong, exactly what the drift's own changes are checked against). To offer one change at a
   time, `evolve.places(genome, words)` lists every place a swap could fall and
   `evolve.alternatives(genome, words, place)` what could stand there keeping the rules (`evolve.label`
   names a place); for a wider view, `arrange.verse_ids`, `slot_words(bank_entry(genome, kind, id))`,
-  `couplet_ids`, `bridge_ids`, `tag_syllables` and `verse_order`. A held entry a person chose may carry
+  `couplet_ids`, `bridge_ids`, `tag_syllables` and `verse_order`, and for the refrains `refrain_heads`,
+  `head_words`, `refrain_place` (what the rules give a refrain in its place) and `free_questions`. A held entry a person chose may carry
   `"source": "edit"`; the words keep it for as long as the entry stands.
 - `Params.generation` (as the record counts it) and `Params.made` (`{"by": the machine's hash, 12
   digits, "at": days}`).

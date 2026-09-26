@@ -63,3 +63,21 @@ def test_a_focus_mark_wraps_a_whole_word():
     for bad in ("knew it by *heart.", "knew it by he*art*", "knew it by **heart**", "knew it by *", "*num-*bers"):
         with pytest.raises(ValueError, match="focus mark"):
             B.check_marks(bad, "wire")
+
+
+def test_a_refrains_other_heads_are_checked_like_its_own():
+    import json
+
+    data = json.loads(H.read_text())
+    B.check(G.from_dict(data))
+    so = data["bank"]["refrain"]["heads"][0]
+    for change, why in ((lambda h: h["fixed"].update(question="whistled"), "isn't one of the question"),
+                        (lambda h: h["fixed"].update(then="who knows"), "which its lines don't sing"),
+                        (lambda h: h["lines"].__setitem__(0, "Who {question} this song? No-bo-dy, so then"), "syllables"),
+                        (lambda h: h.update(id="knows"), "ids repeat"),
+                        (lambda h: h["lines"].__setitem__(1, "it's {yours} if you sing it and then who knows?"), "no slots")):
+        broken = json.loads(json.dumps(data))
+        change(broken["bank"]["refrain"]["heads"][0])
+        with pytest.raises(ValueError, match=why):
+            B.check(G.from_dict(broken))
+    assert so["id"] == "so" and so["by"] == "artist"

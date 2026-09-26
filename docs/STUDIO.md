@@ -155,11 +155,16 @@ A sung section's *change* opens its choices in place:
   away: "it could be verse 3 instead", or "sing it as verse 1 instead" (the
   verses reordered as the rules ask, moving as few as can be). Below, the
   verse's swapped words ("girl", "boy", "nun", "monk").
-- **A refrain**: its couplet, any the other refrains aren't singing (choosing
-  one another refrain sings trades places with it); the question turns by the
-  song's rule and the last refrain always sings "by everyone, no one, and now
-  it's by you", both said, not offered. The once-a-song words ("while",
-  "then") are chosen once for every refrain.
+- **A refrain**, with words of its own: its couplet, any the other refrains
+  aren't singing (choosing one another refrain sings trades places with it);
+  between the first and the last, how it begins (the song's own head, or
+  another, "Who wrote this song? Nobody, so / it's yours if you sing it and
+  then who knows?", which trades places too) and the question it asks
+  (sang, heard, kept or wrote; one another refrain asks is asked afresh
+  there); and its own "while" and "then". What the rules keep is said, not
+  offered: the first and last refrains' head and question, the words a head
+  sings as written, and the last refrain's "by everyone, no one, and now
+  it's by you".
 - **The bridge**: its canon stanza always first (said), its once-a-song words
   (water, mountain, border or desert...); a second bridge section chooses its
   stanza.
@@ -192,8 +197,9 @@ server keeps nothing else but caches, so any request can be replayed.
 | `mix.space`, `mix.width`, `mix.forward`, `mix.intimacy` | as `MixParams` | `Params.mix` |
 | `variants.<name>` | as the variant takes | `Params.variants`, once it exists (said refused until then) |
 | `words.verse.<i>` | `{"id": verse, "slots": {slot: words}}` | the i-th verse section's verse (from 0) |
-| `words.refrain.<i>` | a couplet | the i-th refrain's couplet (never the last's) |
-| `words.refrain`, `words.bridge` | `{slot: words}` | the once-a-song words |
+| `words.refrain.<i>` | `{"id": couplet, "head": head, "slots": {slot: words}}`, any of the three, or just a couplet | the i-th refrain's own words: its couplet (never the last's), its head (between the first and last), its words (the question too, between them) |
+| `words.refrain` | `{slot: words}` | words for every refrain whose head sings them, unless one chooses its own |
+| `words.bridge` | `{slot: words}` | the bridge's once-a-song words |
 | `words.bridge2`, `words.tag` | a stanza, a syllable | the second bridge, every tag |
 | `phrasing` | a phrasing's name on this computer | whose way it is sung |
 
@@ -354,7 +360,7 @@ browser's storage keeps the edits in progress on this browser only.
   byte as before (a golden of 600 draws taken before the change); every refusal
   agrees with the rules (4,000 random sets); every verse offered is kept in its
   place with nothing else moving; choices hold, and the rules hold, as chance
-  changes; couplets trade, once-a-song words hold everywhere; each alternative
+  changes; couplets and heads trade, words for every refrain hold everywhere; each alternative
   offered can be sung.
 - tests/test_edits.py: no edits change nothing; each edit takes its place in
   its bounds; a minor mode darkens the words; refusals say why; the shape

@@ -246,3 +246,19 @@ def test_words_held_before_each_refrain_had_its_own_sing_as_they_did(h):
     child = sing_on(h, "ada", "2027-01-05", parent)
     assert not A.held_problem(h, child.form, child.words) and "rounds" in child.words["refrain"]
 
+
+def test_each_refrain_of_a_lineage_keeps_words_of_its_own(h):
+    """Down lineages, refrains hand on their own words: other heads between the first and last now and
+    then, questions that differ, and while and then that differ from refrain to refrain."""
+    rng = np.random.default_rng(5)
+    heads, questions, own = set(), set(), 0
+    for n in range(12):
+        for parent, child, log in lineage(h, 100 + n, 4, rng):
+            rounds = A.rounds(h, child.words)
+            heads.update(r["head"] for r in rounds[1:-1])
+            questions.update(r["words"].get("question") for r in rounds[1:-1])
+            own += len({(r["words"].get("while"), r["words"].get("then")) for r in rounds}) > 1
+            assert rounds[0]["head"] == rounds[-1]["head"] == A.refrain_heads(h)[0]
+            assert [r["words"]["question"] for r in (rounds[0], rounds[-1])] == ["made", "owns"]
+    assert heads == {"knows", "so"} and len(questions) >= 3 and own > 24
+

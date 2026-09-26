@@ -105,12 +105,21 @@
   "bank": {
     "note": "Every verse, refrain couplet, bridge and tag syllable the song can draw on, with named slots for the words that swap and the rules for combining them; songs/h-bank.md is the same bank for reading. A slot is {name}, or {name.column} for a coupled slot whose columns are chosen together, once per block; songbird/bank.py checks every way each line can be sung against the tune and the dictionary. Lines are syllabified with hyphens like every other lyric here.",
     "refrain": {
+      "id": "knows",
       "lines": ["Who {question} this song? No-bo-dy knows.", "It's yours {while} you sing it, and then {then}."],
       "slots": {
         "question": ["made", "sang", "heard", "kept", "wrote", "owns"],
         "while": ["while", "when", "if"],
         "then": ["it goes", "who knows", "it grows"]
       },
+      "heads": [
+        {
+          "id": "so",
+          "by": "artist",
+          "lines": ["Who *{question}* this song? No-bo-dy, so", "it's *yours* {while} you sing it and then who knows?"],
+          "fixed": {"question": "wrote", "while": "if"}
+        }
+      ],
       "couplets": [
         {
           "id": "canon",
@@ -872,11 +881,13 @@
         "note": "A variant is a verse whose scheme isn't AABB or that runs a phrase over a line break (enjambed); the first verse teaches the shape, so it is never one. The chosen verses go in era order, earliest first, so a song reads as time passing; a verse with no era can go anywhere. Paired verses (pairs_with) are sung adjacent, in era order. No two dark verses adjacent; at most one light verse per song."
       },
       "refrain": {
-        "question": "turn",
-        "once_per_song": ["while", "then"],
+        "question": "draw",
         "couplet_last": "canon",
         "couplet_repeat": false,
-        "note": "The question word turns in order each time the refrain comes round and the last refrain always asks who owns it, as the fixed refrain does. The while and then slots are chosen once and kept the same in every refrain. Each refrain sings one couplet, none twice until all are used, and the last refrain always sings canon."
+        "head_first": "knows",
+        "head_last": "knows",
+        "head_repeat": false,
+        "note": "Every refrain has words of its own. The first refrain asks who made it and the last who owns it, as the fixed refrain does; each refrain between asks something else, a different word each time while any are left. The while and then slots are drawn afresh each time round. The first and last refrains sing the refrain's own head (knows), so the hook is heard first and last; a refrain between may sing another head instead, each at most once a song, singing any words it fixes as written. Each refrain sings one couplet, none twice until all are used, and the last refrain always sings canon."
       },
       "bridge": {
         "always": "canon",
