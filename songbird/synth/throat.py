@@ -349,22 +349,62 @@ def _linear(x: np.ndarray, w: dict, name: str) -> np.ndarray:
     return x @ w[f"{name}.weight"].T + w[f"{name}.bias"]
 
 
-def timbre(model: Model, mix: dict[str, float] | None, pitch: float | None = None) -> np.ndarray:
-    """A singer embedding: the weighted mean of the trained singers'. By default, every singer who
-    sings near this pitch (MIDI; within a fifth of their register, the nearer the more), or all of
-    them evenly when the model doesn't know their registers."""
+def default_mix(model: Model, pitch: float | None = None) -> dict[str, float]:
+    """The trained singers blended by default: every one who sings near this pitch (MIDI; within a
+    fifth of their register, the nearer the more), or all of them evenly when the model doesn't know
+    their registers."""
     names = model.config["singers"]
-    if mix:
-        weights = np.array([float(mix.get(n, 0.0)) for n in names])
-    elif pitch is not None and model.config.get("registers"):
+    if pitch is not None and model.config.get("registers"):
         away = np.array([abs(pitch - model.config["registers"][n]) for n in names])
         weights = np.clip(1.0 - away / 7.0, 0.0, None)
         if weights.sum() == 0:
             weights = (away == away.min()).astype(float)
     else:
         weights = np.ones(len(names))
-    weights = weights / max(weights.sum(), 1e-9)
+    weights = weights / weights.sum()
+    return {n: float(w) for n, w in zip(names, weights) if w > 0}
+
+
+def timbre(model: Model, mix: dict[str, float] | None, pitch: float | None = None) -> np.ndarray:
+    """A singer embedding: the weighted mean of the trained singers' (default_mix unless a mix is
+    given; singers this model doesn't know are left out, and a mix of none it knows is the default)."""
+    names = model.config["singers"]
+    weights = np.array([float((mix or {}).get(n, 0.0)) for n in names])
+    if weights.sum() <= 0:
+        chosen = default_mix(model, pitch)
+        weights = np.array([chosen.get(n, 0.0) for n in names])
+    weights = weights / weights.sum()
     return weights @ model.w["singer.weight"]
+
+
+def available(path: str | None = None) -> bool:
+    """Whether a learned throat is there to sing (its weights ship as throat.npz beside this file)."""
+    return Path(path or os.environ.get("SONGBIRD_THROAT") or MODEL).exists()
+
+
+def capped(mix: dict[str, float], most: float = 0.6) -> dict[str, float]:
+    """A blend normalized to 1 with no singer above `most` (the excess shared among the rest in
+    proportion), so no voice is ever mostly one of the synthetic singers it learned from."""
+    w = {n: max(float(x), 0.0) for n, x in mix.items() if x > 0}
+    total = sum(w.values())
+    if not w or total <= 0:
+        return {}
+    w = {n: x / total for n, x in w.items()}
+    if len(w) * most < 1.0:  # too few singers to keep any under the cap: share evenly
+        return {n: 1.0 / len(w) for n in w}
+    for _ in range(len(w)):
+        over = {n for n, x in w.items() if x > most + 1e-9}
+        if not over:
+            break
+        excess = sum(w[n] - most for n in over)
+        rest = sum(x for n, x in w.items() if n not in over)
+        w = {n: most if n in over else x + excess * x / rest for n, x in w.items()}
+    return w
+
+
+def blend_spec(mix: dict[str, float]) -> str:
+    """A blend as VoiceParams.timbre writes it: 'house-alto:0.412,house-mezzo:0.588'."""
+    return ",".join(f"{n}:{x:.3f}" for n, x in sorted(mix.items()) if x >= 0.0005)
 
 
 def machine_mix(seed: int, pitch: float, model: Model | None = None, most: float = 0.6) -> str:
@@ -524,6 +564,8 @@ def sing(notes, sr: int, voice, seed: int = 0, lexicon: dict | None = None, mix:
     f0b = pitch_track(notes, n_blocks, RATE, voice, rng, [s.t1 for s in vowels], accents)
     f0 = np.interp(np.arange(n) * FRAME, (np.arange(n_blocks) + 0.5) * BLOCK / RATE, f0b)
     sung = np.median([n.pitch + voice.shift for n in notes])
+    if isinstance(mix, str) and mix.startswith("machine:"):  # a singer of its own, drawn for this pitch
+        mix = machine_mix(int(mix.split(":", 1)[1]), float(sung), net)
     sp, ap = predict(net, t, np.log(f0), timbre(net, parse_mix(mix), sung), gv=gv)
     sp = sharpen(sp, SHARPEN)
     factor = voice.tract / TRACT

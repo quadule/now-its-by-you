@@ -103,8 +103,9 @@ sung with ten different VoiceParams (longer and shorter tracts, pressed and brea
 and low registers). SoulX sings our scores naturally in each of those timbres, and the throat
 learns from that.
 
-- **Every timbre starts in this program.** SoulX's natural delivery is laid over it: the learned
-  voice is recognizably both human and synthetic, which is what the artist asked of it.
+- **Every timbre starts in this program.** SoulX's natural delivery is laid over it. The artist's
+  direction since (2026-09-26) is to aim for as natural a voice as we can: "we don't need to *try*
+  to make it sound synthetic, i'm confident there will always be an uncanny valley."
 - **First test, two items per singer** (`tools/throat/judge.py`, Whisper on each segment):
 
   | Timbre prompt | Notes within 50 cents | Words misheard |
@@ -118,6 +119,40 @@ learns from that.
 Consenting human singers (docs/SINGERS.md) are the next source. Each of them is a prompt for
 unlimited SoulX singing as well as direct training data. They'd enter the same way,
 `source="human"`.
+
+## In the song (2026-09-26, night)
+
+**Heard in the band, the learned voice is far clearer than the formant singer.** Whisper on H's
+finished mix (instruments, room, master; `tools/wer_suite.py --sketch h --mix`), the same seed and
+notes:
+
+| Singer | Words misheard in the mix |
+|---|---|
+| formant singer | 34.7% |
+| learned throat (the v1 benchmark) | **15.1%** |
+
+Automatic naturalness (UTMOS, a speech-trained predictor: a rough guide on singing), dry, on H:
+
+| Voice | UTMOS |
+|---|---|
+| formant | 1.47 |
+| v0b | 1.68 |
+| v1 | 1.95 |
+| SoulX itself on H's lines | 2.4 to 2.7 |
+| our vocoder resynthesizing SoulX's own features (the ceiling) | about 0.25 below SoulX |
+
+So most of what is left is in the network and the delivery, not the vocoder.
+
+**Each machine sings with a singer of its own.**
+- *The blend (`variation.choose_timbre`):* when the learned throat sings, a machine's singer is a
+  blend of the trained singers who sing near where it sings. It is drawn from the machine's
+  identity (`throat.machine_mix`), pulled 0.6 of the way from the parent's blend as every trait is,
+  and never more than 0.6 of any one singer (`throat.capped`), so no rendition is ever one of the
+  synthetic singers the throat learned from.
+- *The lineage choir:* it sings through the throat too. Each earlier version the record remembers
+  (up to six, the parent's first) sings in its own voice. An ancestor that sang with the formant
+  singer is heard as a throat singer of its own, drawn from its id.
+- *While the formant singer is the default, none of this changes anything.*
 
 ## Vocoder (2026-09-26)
 

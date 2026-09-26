@@ -385,22 +385,70 @@ def line_release(dur: float) -> float:
     return min(0.3, 0.35 * dur)
 
 
+ORNAMENT_MOVE = 0.035  # seconds the voice takes to turn to an ornament's next tone (less when the tone is short)
+ORNAMENT_ROOM = 2.5  # a vowel shorter than this many of its ornament's moves is sung plain, as singers swallow them
+
+
+def ornament_moves(ornament) -> int:
+    """How many times an ornament turns the voice."""
+    was, n = 0.0, 0
+    for _, s in ornament:
+        n += float(s) != was
+        was = float(s)
+    return n
+
+
+def ornament_bend(ornament, t0: float, t1: float, tb: np.ndarray,
+                  move_time: float = ORNAMENT_MOVE) -> tuple[np.ndarray, float, float]:
+    """The semitones an ornament (songbird.variants) adds at each block time, over a note sung from t0 to
+    t1 (its vowel): each breakpoint (fraction of the note, semitones) is turned to by a quick raised-cosine
+    move centred on it, and one at the note's very start is already there as the vowel begins. Also
+    returns when the ornament starts moving and when it has settled."""
+    span = max(t1 - t0, 1e-3)
+    times = [t0 + float(f) * span for f, _ in ornament]
+    out = np.zeros_like(tb)
+    was, first, last = 0.0, None, t0
+    for i, (f, s) in enumerate(ornament):
+        after = (times[i + 1] if i + 1 < len(times) else t1) - times[i]
+        before = times[i] - times[i - 1] if i else move_time / 0.45
+        move = max(0.008, min(move_time, 0.45 * after, 0.45 * before))
+        start = t0 - 0.8 * move if float(f) <= 0.0 else times[i] - 0.5 * move
+        if float(s) != was:
+            out += (float(s) - was) * 0.5 * (1 - np.cos(np.pi * np.clip((tb - start) / move, 0.0, 1.0)))
+            first = start if first is None else first
+            last = start + move
+        was = float(s)
+    return out, (t0 if first is None else first), last
+
+
 def pitch_track(notes: list[Note], n_blocks: int, sr: int, voice: VoiceParams, rng, sounding=None,
                 accents=None) -> np.ndarray:
     """f0 in Hz per block: glides between notes, a scoop into each phrase, vibrato, drift and jitter.
     sounding: when each note's vowel ends, so a phrasing's bends and falls happen while it can be heard.
-    accents: cents to lift each note by, for the syllables leaned on hardest."""
+    accents: cents to lift each note by, for the syllables leaned on hardest. A note's ornament
+    (Note.ornament) is sung inside it, and the glide to the next note starts where it left the voice."""
     tb = (np.arange(n_blocks) + 0.5) * BLOCK / sr
     target = np.full(n_blocks, notes[0].pitch + voice.shift, dtype=float)
     vib_env = np.zeros(n_blocks)
     gestures = np.zeros(n_blocks)  # cents from a phrasing: scoops, bends and falls
+    left = 0.0  # semitones off its own pitch where the last note's ornament left the voice
+    # the learned throat reads the pitch's slope, and a fast ornament is steeper than anything it learned
+    move_time = 0.05 if voice.engine == "learned" else ORNAMENT_MOVE
     for k, note in enumerate(notes):
         p = note.pitch + voice.shift
         prev = notes[k - 1] if k else None
         g = note.gesture
+        orn = note.ornament
+        if orn:  # sung over the vowel, and done before the voice moves on to the next note
+            span_end = min(sounding[k], note.start + note.dur) if sounding is not None else note.start + note.dur
+            nxt = notes[k + 1] if k + 1 < len(notes) else None
+            if nxt is not None and not note.line_end and nxt.start - (note.start + note.dur) <= 0.05:
+                span_end = min(span_end, nxt.start - 0.7 * voice.glide)
+            if span_end - note.start < ORNAMENT_ROOM * ORNAMENT_MOVE * ornament_moves(orn):
+                orn = ()  # too little vowel to turn in: sung plain
         phrase_start = prev is None or note.start - (prev.start + prev.dur) > 0.05 or prev.line_end
         # a wider leap takes longer to sing across, and no two are sung alike
-        glide = voice.glide * float(np.clip(0.76 + 0.06 * (abs(p - prev.pitch - voice.shift) - 2), 0.6, 1.8)) if prev else voice.glide
+        glide = voice.glide * float(np.clip(0.76 + 0.06 * (abs(p - prev.pitch - voice.shift - left) - 2), 0.6, 1.8)) if prev else voice.glide
         glide *= float(np.exp(voice.glide_spread * rng.standard_normal()))
         glide = min(glide, 0.6 * prev.dur) if prev else glide
         t_on = note.start - 0.7 * glide
@@ -411,23 +459,32 @@ def pitch_track(notes: list[Note], n_blocks: int, sr: int, voice: VoiceParams, r
         after = tb >= t_on
         if phrase_start:
             # start a little under the note and rise into it; a phrasing's scoop is added below instead,
-            # so that it always means how far off the note the vowel begins
-            scoop = 0.0 if g is not None and g.scoop else voice.scoop
+            # so that it always means how far off the note the vowel begins; an ornament that starts off
+            # the note is the way in instead
+            scoop = 0.0 if (g is not None and g.scoop) or (orn and float(orn[0][0]) <= 0 and orn[0][1]) else voice.scoop
             rise = np.clip((tb - note.start + 0.12) / 0.2, 0.0, 1.0)
             target[after] = p - scoop * (1.0 - 0.5 * (1 - np.cos(np.pi * rise[after])))
         else:
-            q = prev.pitch + voice.shift
+            q = prev.pitch + voice.shift + left
             w = np.clip((tb - t_on) / glide, 0.0, 1.0)
             target[after] = q + (p - q) * 0.5 * (1 - np.cos(np.pi * w[after]))
             # Voices overshoot a new note a little and settle, like a damped
             # spring; a glide that lands dead on target sounds mechanical.
-            t_arrive = t_on + glide
-            x = tb[after] - t_arrive
-            ring = np.where(x > 0, np.sin(np.pi * x / 0.13) * np.exp(-x / 0.07), 0.0)
-            target[after] += voice.overshoot * (p - q) * ring
+            if not orn:  # (an ornament is its own way onto the note)
+                t_arrive = t_on + glide
+                x = tb[after] - t_arrive
+                ring = np.where(x > 0, np.sin(np.pi * x / 0.13) * np.exp(-x / 0.07), 0.0)
+                target[after] += voice.overshoot * (p - q) * ring
         end = note.start + note.dur
         v = np.clip((tb - note.start - voice.vibrato_delay) / 0.25, 0.0, 1.0)
         v *= np.clip((end - tb) / 0.08, 0.0, 1.0)
+        left = 0.0
+        if orn:  # sung inside the note, over its vowel; vibrato eases off while the voice turns
+            bend, moving, settled = ornament_bend(orn, note.start, max(span_end, note.start + 0.05), tb, move_time)
+            target[after] += bend[after]
+            window = np.clip((tb - moving + 0.05) / 0.05, 0.0, 1.0) * np.clip((settled + 0.1 - tb) / 0.05, 0.0, 1.0)
+            v *= 1.0 - 0.8 * (0.5 - 0.5 * np.cos(np.pi * window))
+            left = float(orn[-1][1])
         inside = (tb >= note.start) & (tb < end)
         if g is not None and g.vibrato >= 0:
             v *= g.vibrato / max(voice.vibrato_depth, 1.0)
@@ -448,6 +505,8 @@ def pitch_track(notes: list[Note], n_blocks: int, sr: int, voice: VoiceParams, r
             shape = g.scoop * 0.5 * (1 + np.cos(np.pi * into))  # the vowel begins off the note and settles onto it
             shape = shape + g.bend * np.clip((x - 0.3) / 0.6, 0.0, 1.0)  # drifts while held
             shape = shape + g.fall * 0.5 * (1 - np.cos(np.pi * out))  # falls or lifts letting go
+            if orn:  # an ornament is the note's shape: the gesture keeps only its tuning
+                shape = 0.0
             # the note held a little sharp or flat, eased in and out so the glides between notes stay whole
             shape = shape + g.tune * np.clip((tb - note.start) / 0.03, 0.0, 1.0) * np.clip((end - tb) / 0.03, 0.0, 1.0)
             gestures[inside] += np.broadcast_to(shape, tb.shape)[inside]

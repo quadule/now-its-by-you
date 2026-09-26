@@ -1,0 +1,15 @@
+{
+  "name": "songbird-sing",
+  "private": true,
+  "description": "Singers anywhere sing along to Songbird's guide through one-time invites; a Cloudflare Worker keeps their takes for the artist.",
+  "license": "CC0-1.0",
+  "type": "module",
+  "scripts": {
+    "dev": "wrangler dev",
+    "deploy": "wrangler deploy",
+    "test": "node --test test/"
+  },
+  "devDependencies": {
+    "wrangler": "^4.141.0"
+  }
+}

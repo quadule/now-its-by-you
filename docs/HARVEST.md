@@ -214,8 +214,11 @@ The band's rows are in [BAND.md](BAND.md), the mix's in [MIX.md](MIX.md).
 
 A render's record (`renders/<name>.json`) holds the voice (the reduced
 numbers, the salt and the hash), the drift vector, the parameters chosen
-and, where the words were drawn from the bank, what was drawn (with a lyric
-sheet beside it); only the bank's words ever appear there.
+and, where the words came from the bank, the words sung (with a lyric
+sheet beside it); only the bank's words ever appear there. The parameters
+include the tune's variants and the words the lineage holds, and who made
+the rendition (the hash's first 12 digits) and when, so a child on the same
+machine can tell which of its clocks have turned since (docs/EVOLUTION.md).
 The seed packet's manifest (milestone 6) should carry less: the parameters
 (what can be heard anyway) and the hash, not the voice block.
 

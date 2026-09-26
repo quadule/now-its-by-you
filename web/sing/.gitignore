@@ -1,0 +1,9 @@
+# installed by npm, and wrangler's local state
+node_modules/
+.wrangler/
+# built by tools/sing_site.py: the song's guides never go in git
+public/
+# local secrets for `wrangler dev`
+.dev.vars
+.dev.vars.*
+.env

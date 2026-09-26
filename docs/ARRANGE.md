@@ -132,7 +132,11 @@ draws differently from the same seed.
 The first prints a lyric sheet and what was chosen (add `--form ...` for
 another form, `--json` for the record). The last sings it, with the lyric
 sheet written beside the render. Without `--lyrics-seed` a render sings the
-seed's own words exactly as before.
+seed's own words exactly as before; a machine or a date sings the words its
+lineage holds (`Params.words`), which change a verse or a word at a time
+rather than being drawn afresh every render (docs/EVOLUTION.md). `hold()`
+keeps a rendition's words for its lineage, `sing()` sings held words in a
+form, and `check()` says why they can't be.
 
 In code: `arrange(genome, form, seed, leanings=None)` gives the `Lyrics`,
 and `realize(genome, params, ..., lyrics=lyrics)` sings them. `forms(genome)`
