@@ -381,11 +381,13 @@ def align_by_pitch(f0, band, line_notes, line_knots, lag: int, key: int):
     return [(to_take(v0), to_take(v1), to_take(c1)) for _, v0, v1, c1, _, _ in line_knots]
 
 
-def vowel_onsets(found, band):
+def vowel_onsets(found, band, f0=None):
     """Move each note's start from where its pitch arrived to where its vowel
     began: the loudness climbing back out of the consonant before it. Someone
     who slides up into a note starts it on time and scoops; judged by pitch
-    alone they would seem late. Notes with no clear trough keep their place."""
+    alone they would seem late. Notes with no clear trough keep their place.
+    A vowel is voiced: given f0, a start in the breath or a voiceless
+    consonant before a line moves on to where the voice has pitch."""
     out, floor = [], 0
     for k, (v0, v1, c1) in enumerate(found):
         lo = max(v0 - 40, floor)  # up to 200 ms back, never into the last vowel
@@ -401,6 +403,9 @@ def vowel_onsets(found, band):
             start = m + int(rise[0]) if len(rise) else v0
         else:
             start = v0
+        if f0 is not None and f0[min(start, len(f0) - 1)] <= 0:
+            voiced = np.flatnonzero(f0[start : max(v0 + 10, start + 1)] > 0)
+            start = start + int(voiced[0]) if len(voiced) else start
         out.append((start, max(v1, start + 2), max(c1, start + 2)))
         floor = start + 16  # the next vowel starts at least 80 ms later
     return out
@@ -497,7 +502,7 @@ def measure_take(path: Path, g: Guide) -> dict:
     found = []
     for line in g.lines:
         found += align_by_pitch(f0, band, [g.notes[k] for k in line], [g.knots[k] for k in line], lag, key)
-    found = vowel_onsets(found, band)
+    found = vowel_onsets(found, band, f0)
     shift = [int(round(ONSET_BIAS.get(b, 0.0) / S.FRAME)) for b in g.before]
     found = [(v0 - d, max(v1, v0 - d + 2), max(c1, v0 - d + 2)) for (v0, v1, c1), d in zip(found, shift)]
     gestures, off = measure_sung(g.notes, g.knots, found, (f0, band, active), template(g, key), lag, key, g.tempo)

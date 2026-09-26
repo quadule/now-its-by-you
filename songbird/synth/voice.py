@@ -69,11 +69,11 @@ class VoiceParams:
     release: float = 0.05  # seconds over which the voice lets go at a phrase end
     dynamics: float = 15.0  # dB of loudness per unit of stress; an even singer is low, an expressive one high
     lean: float = 1.0  # dB a word's stressed syllable is sung above its others (and they below it)
-    light: float = 1.5  # dB softer for the little words between the ones that mean (a, the, it, and, of...)
-    ease: float = 1.5  # dB softer for a line's first syllable, eased into
+    light: float = 1.0  # dB softer for the little words between the ones that mean (a, the, it, and, of...)
+    ease: float = 0.75  # dB softer for a line's first syllable, eased into
     let_go: float = 1.0  # dB softer for its last, let go of
     climb: float = 0.5  # dB louder per semitone above the line's middle
-    taper: float = -4.0  # dB a held vowel fades from a third of the way through to its end
+    taper: float = -3.0  # dB a held vowel fades from a third of the way through to its end
     vibrato_from: float = 0.9  # seconds a note must last before the singer puts vibrato on it (0.55 at a line's end)
     breathe: float = 0.18  # seconds between lines needed for an audible breath
     accent: float = 8.0  # cents a strongly leaned-on note is lifted
