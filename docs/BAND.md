@@ -194,15 +194,46 @@ clamped.
 | body | 0.8..1.25 | 1 | the instruments' size: a bigger body resonates lower |
 | maker | any integer | 0 | seeds the instruments themselves (body modes, string quirks, the drum's skin), so a machine keeps its band across renditions |
 
-Plausible mappings from the plan's harvest: wear from file ages, brightness
-from the screen's hue and brightness, density from CPU count and memory,
-swing from typing rhythm, maker from the voice hash, and the instrument gains,
-pattern and ornament from the drift field. Two cautions for that work:
+What a machine and the drift choose is below; it follows these suggested
+mappings: wear from file ages, brightness from the screen's hue and
+brightness, density from CPU count and memory, swing from typing rhythm,
+maker from the voice hash, and the instrument gains, pattern and ornament
+from the drift field. Two cautions it heeds:
 `pattern` and `lead` are categories, so a continuous drift value should map
 onto them with some hysteresis or they will flip back and forth near a
 boundary; and a gain that falls below 0.02 removes the part, which can move
 other parts' roles (another instrument takes the intro), a bigger step than
 the gain itself suggests.
+
+## What a machine and the drift choose
+
+`choose_params()` (the table is `songbird/variation.py`) sets the band as it
+sets everything else: the machine's own value, from its harvest
+([HARVEST.md](HARVEST.md)), moved by the drift, and the child pulled 0.6 of
+the way there from its parent. With no machine and no date the seed's
+defaults stand.
+
+| Field | The machine's own | Drift (view) | Range kept |
+|---|---|---|---|
+| brightness | 0.5 + 0.25 screen brightness - 0.1 warmth | sheen (daily), ±0.15 | 0.1..0.9 |
+| density | 0.5 + 0.25 cores and memory | texture (weeks), ±0.2 | 0.1..0.9 |
+| swing | 0.18 + 0.18 the typing's skew | feel (daily), ±0.09 | 0..0.6 |
+| wear | 0.25 + 0.2 file ages + 0.05 uptime | none | 0..0.7 |
+| ornament | 0.5 + 0.25 the vocabulary's richness | feel (daily), ±0.1 | 0.1..0.9 |
+| arc | 0.75 ± 0.12 by the machine | arc (weeks), ±0.12 | 0.4..1 |
+| body | 1 ± 0.1, bigger with a bigger-built singer, ± 0.04 more; the machine's own, never inherited | none | 0.85..1.2 |
+| maker | an integer from the voice hash, the machine's own, never inherited | none | |
+| each gain | 1 × 2^(±0.35) by the machine | balance (weeks), ±30% each machine's own way; ensemble (weeks), ±25% plucked strings against bowed and blown | 0.5..1.5 |
+| pattern | lilt ± 1.1 steps by the machine, + 0.4 toward the strum for a busy one, along air, pick, lilt, strum | pattern (weeks), 1.2 steps, held | |
+| lead | fiddle ± 1.3 steps by the machine, along whistle, fiddle, lute | lead (year), 1.2 steps, held | |
+
+A gain never falls below 0.5, since one under 0.02 would drop the part and
+hand its role to another. pattern and lead are held against flicker: a
+stateless Schmitt trigger, which within 0.2 of a boundary keeps the choice
+the drift last sat firmly in, read back from the drift field day by day.
+Over 16 made-up machines and four years the pattern changed about 2.5 times
+a year (never back within 13 days) and the lead about once in three years;
+the gains stayed within 0.70..1.44.
 
 ## Stems
 

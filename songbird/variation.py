@@ -13,16 +13,17 @@ drift (when), plus chance. Every number goes the same way:
    lineage keeps its accent. A body (the singer's register, tract, mouth,
    vibrato rate and grain; the room) is the machine's own outright.
 
-Choices a number can't express (mode, form, accompaniment, choir, lyric
-leanings) follow the same logic in DECISIONS. Chance, seeded by (voice hash,
+Choices a number can't express (mode, form, accompaniment, choir, the
+band's pattern and lead, lyric leanings) follow the same logic in DECISIONS;
+the band's two categories are held against flicker (see held()). Chance, seeded by (voice hash,
 instant, parent), sets only the rendition's seed, which colours every detail
 of the sound and the lyric's draws; the form and the key never depend on the
 second a render starts, so they can't flicker between two renders a minute
 apart.
 
-To add a knob: give Params (or VoiceParams) the field, then add one row to
-KNOBS reading the machine through Character and time through a dimension of
-drift.DIMENSIONS.
+To add a knob: give Params (or VoiceParams, or the band's Band) the field,
+then add one row to KNOBS reading the machine through Character and time
+through a dimension of drift.DIMENSIONS.
 """
 
 from __future__ import annotations
@@ -32,9 +33,12 @@ import hashlib
 import json
 import re
 from dataclasses import dataclass, replace
+
+import numpy as np
 from typing import Callable
 
-from .drift import DIMENSIONS, Drift
+from .band import INSTRUMENTS, Band
+from .drift import DIMENSIONS, Drift, series
 from .genome import Genome
 from .harvest import MODE_FAMILIES, THEMES, Voice
 from .synth.voice import VoiceParams
@@ -192,12 +196,14 @@ ROOM = {"rt60": 1.1, "tone": [1.0, 1.0, 1.0, 0.9, 0.7]}  # synth.room.impulse_re
 
 
 def read(params, path: str):
-    """A value from Params by path: 'tempo', 'singer.rd', 'room.rt60', 'leanings.era_bias'.
-    A singer, room or leaning the params don't set has its default."""
+    """A value from Params by path: 'tempo', 'singer.rd', 'room.rt60', 'leanings.era_bias', 'band.density'.
+    A singer, room or leaning the params don't set has its default; the band always has every field."""
     head, _, tail = path.partition(".")
     if not tail:
         return getattr(params, head)
     held = getattr(params, head)
+    if not isinstance(held, dict):  # a dataclass, the band
+        return getattr(held, tail)
     if tail in held:
         return held[tail]
     return {"singer": lambda: getattr(VoiceParams(), tail), "room": lambda: ROOM[tail],
@@ -213,9 +219,9 @@ def write(out: dict, path: str, value) -> None:
 
 
 def exists(path: str) -> bool:
-    """Whether a knob's field exists (a singer field may be gone after the singer changes)."""
+    """Whether a knob's field exists (a singer's or the band's may be gone after it changes)."""
     head, _, tail = path.partition(".")
-    return head != "singer" or hasattr(VoiceParams(), tail)
+    return {"singer": lambda: hasattr(VoiceParams(), tail), "band": lambda: hasattr(Band(), tail)}.get(head, lambda: True)()
 
 
 # ---------------------------------------------------------------- the table of numbers
@@ -225,11 +231,11 @@ def exists(path: str) -> bool:
 class Knob:
     """One number a rendition decides.
 
-    path    where it goes: a Params field, singer.<VoiceParams field>, leanings.<key>
+    path    where it goes: a Params field, singer.<VoiceParams field>, band.<Band field>, leanings.<key>
     uses    the traits its own value reads; with none of them known, own is the parent's
     own     the machine's own value, from its character c and x, the song's own value
     drift   the drift dimension that moves the machine's own value, and span how far
-            a drift of 1 moves it (a fraction of it where ratio)
+            a drift of 1 moves it (a fraction of it where ratio); or a tuple of each
     view    which view of the drift: full (daily), slow (weeks), season (months), year (about once a year)
     bounds  (lo, hi), or a function of x
     step    what the value is rounded to
@@ -239,8 +245,8 @@ class Knob:
     path: str
     uses: tuple
     own: Callable
-    drift: str | None = None
-    span: float | Callable = 0.0
+    drift: str | tuple | None = None
+    span: float | Callable | tuple = 0.0
     ratio: bool = False
     view: str = "full"
     bounds: tuple | Callable = (float("-inf"), float("inf"))
@@ -254,22 +260,31 @@ class Knob:
         was = read(ctx.parent, self.path)
         own = self.own(ctx.c, x) if any(u in ctx.c.known for u in self.uses) else was
         if self.drift and ctx.drift is not None:
-            d = ctx.drift.view(self.view).get(self.drift, 0.0)
-            span = self.span(ctx.c) if callable(self.span) else self.span
-            own = own * (1 + span * d) if self.ratio else own + span * d
+            dims = self.drift if isinstance(self.drift, tuple) else (self.drift,)
+            spans = self.span if isinstance(self.span, tuple) else (self.span,)
+            for dim, span in zip(dims, spans):
+                d = ctx.drift.view(self.view).get(dim, 0.0)
+                span = span(ctx.c) if callable(span) else span
+                own = own * (1 + span * d) if self.ratio else own + span * d
         value = was + PULL * (own - was) if self.inherit else own
         lo, hi = self.bounds(x) if callable(self.bounds) else self.bounds
         value = round(float(round(clip(value, lo, hi) / self.step) * self.step), 6)
         head, _, tail = self.path.partition(".")
-        if tail and value == was and tail not in getattr(ctx.parent, head):
+        held = getattr(ctx.parent, head)
+        if tail and isinstance(held, dict) and value == was and tail not in held:
             return  # nothing chosen: the default the parent sang with stands
         write(out, self.path, int(value) if self.step >= 1 else value)
 
 
+# Where each instrument leans when the ensemble drift moves: toward the plucked strings (-1) or the bowed
+# and blown (+1).
+ENSEMBLE = {"lute": -1.0, "guitar": -1.0, "harp": -1.0, "bass": 0.0, "fiddle": 1.0, "whistle": 1.0, "drum": 0.0,
+            "drone": 1.0}
+
 # Own values are read from the machine's character c and x, the song's own
 # value of the same knob (its seed parameters; VoiceParams' defaults for the
-# singer). Spans are what a drift of 1 does to the machine's own value; a
-# child hears 0.6 of it.
+# singer, Band's for the band). Spans are what a drift of 1 does to the
+# machine's own value; a child hears 0.6 of it.
 KNOBS = (
     # ---- the performance ------------------------------------------------------------------------------------------
     Knob("tempo", ("pace",), lambda c, x: x * 2 ** (0.18 * c.pace),
@@ -280,8 +295,6 @@ KNOBS = (
          drift="feel", span=0.4, ratio=True, bounds=(0.002, 0.02), step=0.0001),
     Knob("ritardando", ("rubato", "pace"), lambda c, x: x + 0.12 * c.rubato - 0.08 * c.pace,
          drift="feel", span=0.12, bounds=(0.1, 0.7), step=0.01),
-    Knob("swing", ("swing",), lambda c, x: 0.06 + 0.06 * c.swing,
-         drift="feel", span=0.03, bounds=(0.0, 0.2), step=0.005),
     Knob("lay", ("lay",), lambda c, x: 0.07 * c.lay, bounds=(-0.08, 0.08), step=0.005),
     # ---- the singer's body: this machine's own, never inherited -------------------------------------------------
     Knob("singer.shift", ("identity",), lambda c, x: -12 if low(c) else 0, inherit=False, bounds=(-12, 0), step=12),
@@ -309,6 +322,31 @@ KNOBS = (
     Knob("singer.wander", ("identity",), lambda c, x: x + 1.5 * c.id("wander") + 1.2 * c.wear, bounds=(3.0, 10.0), step=0.1),
     Knob("singer.dynamics", ("identity",), lambda c, x: x + 2.5 * c.id("dynamics"),
          drift="voice", span=2.5, bounds=(10.0, 19.0), step=0.5),
+    # ---- the band (songbird.band.Band) ---------------------------------------------------------------------------
+    # swing, 0 straight to 1 a triplet lilt, for the players and the singer's time alike
+    Knob("band.swing", ("swing",), lambda c, x: 0.18 + 0.18 * c.swing,
+         drift="feel", span=0.09, bounds=(0.0, 0.6), step=0.01),
+    Knob("band.brightness", ("brightness",), lambda c, x: x + 0.25 * c.brightness - 0.1 * c.warmth,
+         drift="sheen", span=0.15, bounds=(0.1, 0.9), step=0.01),
+    Knob("band.density", ("density",), lambda c, x: x + 0.25 * c.density,
+         drift="texture", span=0.2, view="slow", bounds=(0.1, 0.9), step=0.01),
+    Knob("band.wear", ("wear", "tired"), lambda c, x: x + 0.2 * c.wear + 0.05 * c.tired, bounds=(0.0, 0.7), step=0.01),
+    Knob("band.ornament", ("richness",), lambda c, x: x + 0.25 * c.richness,
+         drift="feel", span=0.1, bounds=(0.1, 0.9), step=0.01),
+    Knob("band.arc", ("identity",), lambda c, x: x + 0.12 * c.id("arc"),
+         drift="arc", span=0.12, view="slow", bounds=(0.4, 1.0), step=0.01),
+    # the instruments' size and their maker's hand are the machine's own, like the singer's body
+    Knob("band.body", ("identity",), lambda c, x: x - 0.1 * size(c) + 0.04 * c.id("body"),
+         inherit=False, bounds=(0.85, 1.2), step=0.01),
+    Knob("band.maker", ("identity",), lambda c, x: (c.id("maker") + 1) / 2 * (2**31 - 1),
+         inherit=False, bounds=(0, 2**31 - 1), step=1),
+    # each instrument's gain: the machine's own balance, moved by two slow drifts, one that each machine's
+    # instruments follow their own ways and one between the plucked strings and the bowed and blown; never
+    # below 0.5, since a gain under 0.02 would drop the part and hand its role to another
+    *(Knob(f"band.{name}", ("identity",), lambda c, x, name=name: x * 2 ** (0.35 * c.id(f"gain:{name}")),
+           drift=("balance", "ensemble"), span=(lambda c, name=name: 0.3 * c.id(f"balance:{name}"), 0.25 * ENSEMBLE[name]),
+           ratio=True, view="slow", bounds=(0.5, 1.5), step=0.01)
+      for name in INSTRUMENTS),
     # ---- what the lyric leans toward (for songbird.arrange) ------------------------------------------------------
     Knob("leanings.era_bias", ("era", "wear"), lambda c, x: x + 0.6 * c.era - 0.3 * c.wear,
          drift="era", span=0.6, view="slow", bounds=(-1.0, 1.0), step=0.05),
@@ -414,6 +452,66 @@ def choose_accomp(out: dict, ctx: Context) -> None:
     best = min(abs(busy(p) - target) for p in choices)
     near = [p for p in choices if abs(busy(p) - target) - best < 1e-9]
     out["accomp"] = near[min(len(near) - 1, int((ctx.c.id("accomp") + 1) / 2 * len(near)))]
+
+
+HOLD = 0.2  # a held choice moves to a neighbour only once its position is this far past the boundary
+HISTORY = 730  # days a held choice looks back for where it last stood firmly
+
+
+def held(ctx: Context, view: str, dimension: str, base: float, span: float, n: int) -> int:
+    """One of n ordered categories (0..n-1) at position base + span x the drift, with hysteresis:
+    a Schmitt trigger with no state. Within HOLD of a boundary between two categories the choice
+    is the one the position last sat firmly in, found by reading the drift field back day by day;
+    so a choice changes only when the drift has moved well past a boundary, and never flickers
+    between renders a day apart."""
+
+    def firm(p: float) -> int | None:
+        if p <= 0.5 - HOLD:
+            return 0
+        if p >= n - 1.5 + HOLD:
+            return n - 1
+        k = int(np.floor(p + 0.5))
+        return k if abs(p - k) <= 0.5 - HOLD else None
+
+    now = base + span * ctx.at(view, dimension)
+    here = firm(now)
+    if here is not None:
+        return here
+    drift = ctx.drift
+    if drift is not None and drift.hash:
+        for start in range(1, HISTORY + 1, 60):
+            back = np.arange(start, min(start + 60, HISTORY + 1), dtype=float)
+            for v in series(drift.t - back, drift.hash, [dimension])[dimension][view]:
+                k = firm(base + span * float(v))
+                if k is not None:
+                    return k
+    return int(np.clip(np.floor(now + 0.5), 0, n - 1))
+
+
+# The band's categories in an order the drift can walk: accompaniment families from the sparest to the
+# busiest, and the lead instruments from breath through bow to pluck. A drift of 1 moves either this many steps.
+PATTERN_ORDER = ("air", "pick", "lilt", "strum")
+LEAD_ORDER = ("whistle", "fiddle", "lute")
+PATTERN_SPAN = 1.2
+LEAD_SPAN = 1.2
+
+
+def choose_pattern(out: dict, ctx: Context) -> None:
+    """The band's accompaniment family: the parent's pulled toward the machine's own (its identity,
+    a busy machine leaning to the strum), moved by the slow drift, held against flicker."""
+    was = PATTERN_ORDER.index(ctx.parent.band.pattern) if ctx.parent.band.pattern in PATTERN_ORDER else 2
+    own = 2.0 + 1.1 * ctx.c.id("pattern") + 0.4 * ctx.c.density if "identity" in ctx.c.known else was
+    k = held(ctx, "slow", "pattern", ctx.pull(was, own), PATTERN_SPAN, len(PATTERN_ORDER))
+    out.setdefault("band", {})["pattern"] = PATTERN_ORDER[k]
+
+
+def choose_lead(out: dict, ctx: Context) -> None:
+    """Who states the tune where nobody sings: the parent's lead pulled toward the machine's own,
+    moved by the year's drift, held against flicker."""
+    was = LEAD_ORDER.index(ctx.parent.band.lead) if ctx.parent.band.lead in LEAD_ORDER else 0
+    own = 1.0 + 1.3 * ctx.c.id("lead") if "identity" in ctx.c.known else was
+    k = held(ctx, "year", "lead", ctx.pull(was, own), LEAD_SPAN, len(LEAD_ORDER))
+    out.setdefault("band", {})["lead"] = LEAD_ORDER[k]
 
 
 def choose_choir(out: dict, ctx: Context) -> None:
@@ -747,8 +845,8 @@ def choose_room(out: dict, ctx: Context) -> None:
         out["room"] = dict(ctx.c.room)
 
 
-DECISIONS = (choose_mode, choose_form, choose_accomp, choose_choir, choose_mood, choose_vocabulary,
-             choose_inventory, choose_room)
+DECISIONS = (choose_mode, choose_form, choose_accomp, choose_pattern, choose_lead, choose_choir, choose_mood,
+             choose_vocabulary, choose_inventory, choose_room)
 
 
 # ---------------------------------------------------------------- putting it together

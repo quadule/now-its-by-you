@@ -43,7 +43,6 @@ class Params:
     singer: dict = field(default_factory=dict)  # VoiceParams fields that differ from the seed singer's
     room: dict = field(default_factory=dict)  # rt60 and tone for synth.room.impulse_response
     leanings: dict = field(default_factory=dict)  # for songbird.arrange (variation.leanings): its Leanings' fields
-    swing: float = 0.0  # fraction of a beat's second half the off-beats are pushed late (read as band.swing)
     lay: float = 0.0  # beats the singers sit ahead of the beat, behind if negative (applied by variation.lay)
     inventory: str = ""  # phoneme inventory for the singer's vowels, "" the seed's (not yet read by the singer)
 
@@ -52,8 +51,13 @@ class Params:
         known = {f.name for f in fields(cls)}
         values = {k: v for k, v in data.items() if k in known}
         values["form"] = tuple(values["form"])
+        band = values.get("band")
+        if data.get("swing") and not isinstance(band, Band) and "swing" not in (band or {}):
+            # a record from before the band: its swing was the fraction of the off-beat half pushed late,
+            # a third being a triplet lilt, which is band.swing 1
+            values["band"] = band = {**(band or {}), "swing": min(1.0, float(data["swing"]) / 0.333)}
         if "band" in values:
-            values["band"] = values["band"] if isinstance(values["band"], Band) else Band.from_dict(values["band"])
+            values["band"] = band if isinstance(band, Band) else Band.from_dict(band)
         return cls(**values)
 
     def to_dict(self) -> dict:
