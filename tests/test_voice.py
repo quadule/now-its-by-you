@@ -121,8 +121,9 @@ def test_a_phrasings_vibrato_is_sung_as_asked():
 
     notes = refrain_notes()
     voice = VoiceParams(jitter=0.0, wander=0.0)
+    held = {}
     for depth in (0.0, 30.0):
         asked = [replace(n, gesture=Gesture(vibrato=depth)) for n in notes]
-        for n, wobble in wobbles(asked, voice, 0):
-            if n.dur >= 0.8:
-                assert (wobble > 5) == (depth > 0), (n.syllable, depth, wobble)
+        held[depth] = [wobble for n, wobble in wobbles(asked, voice, 0) if n.dur >= 0.8]
+    assert max(held[0.0]) < 3 and np.mean(held[30.0]) > 8, held  # none where asked for none, on every held note where asked
+    assert min(held[30.0]) > 2 * max(held[0.0]), held

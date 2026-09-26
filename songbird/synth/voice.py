@@ -82,7 +82,7 @@ class VoiceParams:
     accent: float = 8.0  # cents a strongly leaned-on note is lifted
     tremolo: float = 0.4  # dB the loudness swings with a vibrato of vibrato_depth
     waver: float = 2.2  # dB of slow unsteadiness in a held note's loudness: breath pressure never holds still
-    spread: float = 1.0  # how unalike the singer's moves are: transitions, rises, vibratos, falls, consonants (0 sings each alike)
+    spread: float = 0.7  # how unalike the singer's moves are: transitions, rises, vibratos, falls, consonants (0 sings each alike; 1 as unalike as the natural singers, which cost words: H 20% misheard at 1, 18.4% at 0.7)
     focus: float = 1.0  # dB more on a word the lyric marks as its line's focus (*word*), most on its stressed syllable (2 cost words)
     reduce: float = 0.0  # how far a little word's vowel off the beat moves toward "uh" (0.3 cost the words: WER 15% -> 18%)
     mouth: float = 1.0  # cm radius of the mouth opening: small keeps the upper resonances ringing
