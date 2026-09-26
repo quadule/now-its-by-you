@@ -2,8 +2,10 @@
 
 The targets are today's stems in H (songs/h-now-its-by-you.json, default params), placed and at their
 LEVEL, integrated loudness (BS.1770) over the passage: the guitar's strum in the first refrain (comping),
-the whistle stating the tune in the intro (a lead), the frame drum (percussion: -31.5 light in the first
-refrain to -28.4 full in the last) and the upright bass in the first refrain.
+the whistle stating the tune in the intro (a lead), the frame drum's full pattern in the last refrain
+(percussion, -28.4; it is -31.5 light in the first) and the upright bass in the first refrain (-24.1);
+colour (-26.5) is a bell-like line 3 dB under the comping. The same as tools/instrument_levels.py's, for
+the other new instruments.
 """
 
 from __future__ import annotations
@@ -15,7 +17,7 @@ import numpy as np
 from songbird.synth import instruments, master
 
 SR = 44100
-TARGETS = {"comping": -23.7, "lead": -20.7, "percussion": -29.5, "bass": -24.0}
+TARGETS = {"comping": -23.7, "lead": -20.7, "percussion": -28.4, "bass": -24.1, "colour": -26.5}
 SETTINGS = dict(brightness=0.5, wear=0.25, ornament=0.5, body=1.0, maker=0, tonic=62, capo=0)
 
 

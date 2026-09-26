@@ -12,8 +12,8 @@ For every phrase, writes <out>/<title>.flac: its parts rendered, placed and leve
 say, through the house mix and its room (synth.mix), mastered to -18 LUFS so they can be compared
 (--dry: no mix or room, just the placed stems); and <out>/README-b.txt listing them. --levels prints
 each calibration part's loudness against its target (today's stems in H: the guitar's strum in the
-first refrain, the whistle's intro, the frame drum, the upright bass); --cpu the seconds its part
-takes to render when played for three minutes.
+first refrain, the whistle's intro, the frame drum's full pattern, the upright bass; the same targets
+as tools/instrument_levels.py); --cpu the seconds its part takes to render when played for three minutes.
 """
 
 from __future__ import annotations
@@ -34,7 +34,7 @@ from songbird import synth  # noqa: E402
 from songbird.synth import instruments, master  # noqa: E402
 
 SR = synth.SR
-TARGETS = {"comping": -23.7, "lead": -20.7, "percussion": -29.5, "bass": -24.0}
+TARGETS = {"comping": -23.7, "lead": -20.7, "percussion": -28.4, "bass": -24.1, "colour": -26.5}
 SETTINGS = dict(brightness=0.5, wear=0.25, ornament=0.5, body=1.0, maker=0, tonic=62, capo=0)
 PHRASE_DIR = Path(__file__).parent / "instrument_phrases_b"
 OUT = Path("/Users/milo/Code/songbird/renders/production/instruments")

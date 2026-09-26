@@ -760,13 +760,17 @@ ARTICULATIONS = {
     "tom-lo-roll": "a roll on the floor tom, swelling (with mallets, tom-lo-roll:mallet, timpani-like)",
     "brush-tap": "a brush tapped on the snare: soft, smeared, the wires answering",
     "brush-sweep": "a brush swept across the snare for the note's length: the swish, fastest a little past its middle",
-    ":brush, :rod, :mallet": "after any piece, what plays it (sticks otherwise): ride:brush, snare:rod, tom-lo:mallet",
-    "(no art)": "the piece General MIDI gives the note's pitch (36 kick, 38 snare, 42 hat, 46 open hat, 49 crash, 51 ride...)",
+    "ride:brush": "any piece followed by :brush, :rod or :mallet is played with it (sticks otherwise)",
+    "hat:rod": "the closed hi-hat played with rods", "snare-cross:rod": "a cross-stick with rods",
+    "tom-lo:mallet": "the floor tom with a soft mallet: dark, no click",
+    "": "no art: the piece General MIDI gives the note's pitch (36 kick, 38 snare, 42 hat, 46 open hat, 49 crash, "
+        "51 ride, 53 ride bell, 41/43 floor tom, 45/47 middle tom, 48/50 high tom, 37 cross-stick, 39/40 rim shot)",
 }
 
 SPEC = {
     "kit": dict(
-        family="drums", register=None, place=(0.05, 0.8), level=0.51, poly=True, articulations=ARTICULATIONS,
+        family="drums", role="percussion", register=None, place=(0.05, 0.8), level=0.58, poly=True,
+        articulations=ARTICULATIONS,
         about="an acoustic drum kit (kick, snare, three toms, hi-hat, ride, crash) played with sticks, brushes, "
               "rods or mallets, heard from the drummer's seat",
     ),
