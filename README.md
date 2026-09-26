@@ -45,6 +45,16 @@ or the learned throat of [docs/THROAT.md](docs/THROAT.md); room, mastering),
 `phonetics` (CMU dictionary to sung syllables). `lyrics`, `gate` and `pack`
 are the later milestones and only describe their interfaces so far.
 
+## Singers
+
+A person's phrasing comes from takes they sing along to a guide: the tune
+alone on a whistle over a quiet pulse, the whole song, or the machine's singer.
+`uv run python tools/karaoke.py songs/h-now-its-by-you.json` records them on
+this computer; singers anywhere use the same page behind one-time links, on
+Cloudflare ([docs/SING-ONLINE.md](docs/SING-ONLINE.md)). Takes stay in
+`recordings/`, never in git; [docs/SINGERS.md](docs/SINGERS.md) is the brief
+and release for singers.
+
 ## Checking a render without ears
 
 - `tools/analyze.py renders/<name> [--part voice]` tracks pitch against the score and draws it.

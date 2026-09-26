@@ -62,6 +62,15 @@ def audio_bytes(path: str | Path) -> bytes:
     return data if start is None else data[:start]
 
 
+def read_member(path: str | Path, name: str) -> str | None:
+    """One text file from a packet's archive, or None."""
+    try:
+        with zipfile.ZipFile(path) as z:
+            return z.read(name).decode() if name in z.namelist() else None
+    except (zipfile.BadZipFile, OSError):
+        return None
+
+
 def read_manifest(path: str | Path) -> dict | None:
     """A packet's record, or None if the file carries no packet."""
     try:
@@ -71,10 +80,21 @@ def read_manifest(path: str | Path) -> dict | None:
         return None
 
 
-def read_record(path: str | Path) -> dict:
-    """A rendition's record, from its packet (a FLAC carrying one) or from a render record (.json)."""
+def samples_id(audio: bytes) -> str:
+    """A rendition's identity from its audio: the SHA-256 of its decoded 16-bit samples."""
+    import soundfile as sf
+
+    pcm, _ = sf.read(io.BytesIO(audio), dtype="int16", always_2d=True)
+    return hashlib.sha256(np.ascontiguousarray(pcm, dtype="<i2").tobytes()).hexdigest()
+
+
+def read_record(path: str | Path, verify: bool = True) -> dict:
+    """A rendition's record, from its packet (a FLAC carrying one) or from a render record (.json). A
+    packet's record is checked against its own audio, so a lineage is never taken on faith."""
     record = read_manifest(path)
     if record is not None:
+        if verify and record.get("id") and samples_id(audio_bytes(path)) != record["id"]:
+            raise ValueError(f"{Path(path).name}'s audio isn't the rendition its record describes")
         return record
     try:
         return json.loads(Path(path).read_text())
@@ -100,8 +120,9 @@ def program_files(root: Path = ROOT) -> dict[str, bytes]:
                 or any(part.startswith(".") for part in rel.parts):
             continue
         files[f"program/{rel.as_posix()}"] = path.read_bytes()
-    if (root / "pyproject.toml").exists():
-        files["program/pyproject.toml"] = (root / "pyproject.toml").read_bytes()
+    for name in ("pyproject.toml", "LICENSE"):  # the license travels with the program, so children carry it too
+        if (root / name).exists():
+            files[f"program/{name}"] = (root / name).read_bytes()
     total = sum(len(b) for b in files.values())
     if total > LIMIT:
         biggest = max(files, key=lambda k: len(files[k]))
@@ -160,32 +181,39 @@ def readme(m: dict) -> str:
 {where}; id {str(m.get('id'))[:12]}{', sung ' + m['rendered_at'][:10] if m.get('rendered_at') else ''}.
 
 This file is a song and the program that sang it. It plays as music in any
-audio player. It is also a zip archive: any unzip tool opens it, and Python
-runs it.
+audio player. It is also a zip archive: unzip, bsdtar, 7-Zip and Python open
+it (the FLAC reference decoder reports the archive as trailing data after the
+last sample; `flac -d -F` decodes it anyway). And Python runs it:
 
     python3 THIS_FILE.flac          what this is, and what you can do
     python3 THIS_FILE.flac new      sing a new version here, today
-    python3 THIS_FILE.flac studio   explore, change and record a version first
-    python3 THIS_FILE.flac unpack   unpack everything into a folder
+    python3 THIS_FILE.flac unpack   unpack everything into a folder, to read it first
+
+(On Windows: py THIS_FILE.flac.) Running it runs the program inside the file.
+It says what it will do and asks before it writes anything.
 
 A new version keeps the song's tune, refrain and chords and inherits from
 this one. Its singer, band, room, tempo, key and verses take their character
 from a few plain facts about the computer it is sung on (its languages, its
 size, its screen's colours) and from the day. Those facts are reduced to a
-handful of numbers before anything uses them, and only the numbers are kept,
-in the new version's record, so no one can read your computer back out of
-them. `songbird harvest --show` shows exactly what is read and kept, and
-`songbird harvest --without ...` leaves anything out.
+handful of numbers before anything uses them. Only the numbers are kept, in
+~/.songbird/voice.json and in the new version's record, so no one can read
+your computer back out of them.
+`python3 THIS_FILE.flac songbird harvest --show` shows exactly what is read
+and kept, and `... songbird harvest --without ...` leaves anything out.
 
 The first time it runs, the program needs numpy, scipy, numba, soundfile and
-cmudict. It asks before fetching them from PyPI (about 150 MB) into
-~/.songbird (or $SONGBIRD_HOME), and installs nothing anywhere else.
+cmudict. It fetches them from PyPI (about 100 MB to download, 250 MB on disk)
+into ~/.songbird (or $SONGBIRD_HOME); with uv it may also fetch the Python it
+was made with. The installers keep their usual download caches. Nothing is
+installed into your system.
 
 Inside:
     manifest.json     this version's record: its lineage and every choice it made
     genome.json       the song's skeleton: its tune, refrain, chords and verse bank
     lyrics.txt        the words as sung
-    program/          the program that sang it (Songbird, {m.get('program_version') or '?'})
+    program/          the program that sang it (Songbird {m.get('program_version') or '?'}; its hash,
+                      {str(m.get('program_sha256') or '?')[:16]}, is the same in every version it sings)
     requirements.txt  what it needs to run
     LICENSE           CC0: this song and its program belong to no one
 
@@ -204,12 +232,9 @@ def pack(flac: str | Path, record: dict, genome: str | Path, lyrics: str | None 
          out: str | Path | None = None, root: Path = ROOT) -> Path:
     """Attach the packet to a rendition's FLAC (in place unless `out` is given). The record is the render
     record (with its lineage); the id it carries must be the audio's own."""
-    import soundfile as sf
-
     flac, out = Path(flac), Path(out) if out else Path(flac)
     audio = audio_bytes(flac)
-    pcm, _ = sf.read(io.BytesIO(audio), dtype="int16", always_2d=True)
-    sha = hashlib.sha256(np.ascontiguousarray(pcm, dtype="<i2").tobytes()).hexdigest()
+    sha = samples_id(audio)
     if record.get("id") and record["id"] != sha:
         raise ValueError(f"the record is for {record['id'][:12]}, but {flac.name} holds {sha[:12]}")
     program = program_files(root)
@@ -250,7 +275,11 @@ def pack(flac: str | Path, record: dict, genome: str | Path, lyrics: str | None 
 def unpack(path: str | Path, to: str | Path) -> Path:
     """Unpack a packet's archive into a folder."""
     to = Path(to)
-    with zipfile.ZipFile(path) as z:
+    try:
+        z = zipfile.ZipFile(path)
+    except zipfile.BadZipFile:
+        raise ValueError(f"{path} carries no packet") from None
+    with z:
         if MANIFEST not in z.namelist():
             raise ValueError(f"{path} carries no packet")
         for info in z.infolist():
