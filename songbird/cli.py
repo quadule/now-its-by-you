@@ -235,8 +235,8 @@ def year_command(args: argparse.Namespace) -> int:
     print(f"{genome.title}: machine {args.machine} (voice {voice.hash}), {args.days} days from "
           f"{drift_mod.when(start).date()}, every {args.step:g}")
     print(f"form: {', '.join(f'{v}={k}' for k, v in FORM_LETTERS.items())}\n")
-    head = f"{'date':10s}  {'key':3s} {'mode':10s} {'bpm':>5s}  {'form':16s} {'accomp':16s} {'hum':>5s} {'rit':>4s} " \
-           f"{'breath':>6s} {'vib':>4s}  {'mood (p l d t)':19s} {'era':>5s}"
+    head = f"{'date':10s}  {'key':3s} {'mode':10s} {'bpm':>5s}  {'form':16s} {'band':14s} {'dens':>4s} {'brt':>4s} " \
+           f"{'harp':16s} {'hum':>5s} {'rit':>4s} {'breath':>6s} {'vib':>4s}  {'mood (p l d t)':19s} {'era':>5s}"
     print(head)
     rows = []
     t = start
@@ -247,7 +247,8 @@ def year_command(args: argparse.Namespace) -> int:
         mood = p.leanings.get("mood_weights", {})
         rows.append(p)
         print(f"{drift_mod.when(t).date()!s:10s}  {NOTE_NAMES[p.tonic % 12]:3s} {p.mode:10s} {p.tempo:5.1f}  "
-              f"{_form(p.form):16s} {p.accomp:16s} {p.humanize * 1000:4.1f}m {p.ritardando:4.2f} "
+              f"{_form(p.form):16s} {p.band.pattern + '/' + p.band.lead:14s} {p.band.density:4.2f} "
+              f"{p.band.brightness:4.2f} {p.accomp:16s} {p.humanize * 1000:4.1f}m {p.ritardando:4.2f} "
               f"{sing.breath:6.3f} {sing.vibrato_depth:4.1f}  "
               f"{' '.join(f'{mood.get(k, 1):.2f}' for k in ('plain', 'light', 'dark', 'tender')):19s} "
               f"{p.leanings.get('era_bias', 0.0):5.2f}")
@@ -263,7 +264,9 @@ def year_command(args: argparse.Namespace) -> int:
           f"mode {changes(lambda p: p.mode)} ({', '.join(sorted({p.mode for p in rows}))}), "
           f"form {changes(lambda p: p.form)} ({len({p.form for p in rows})} forms, "
           f"{min(sum(n == 'verse' for n in p.form) for p in rows)}-{max(sum(n == 'verse' for n in p.form) for p in rows)} verses), "
-          f"accompaniment {changes(lambda p: p.accomp)}; tempo {min(tempos):.1f}-{max(tempos):.1f}")
+          f"band pattern {changes(lambda p: p.band.pattern)} ({', '.join(sorted({p.band.pattern for p in rows}))}), "
+          f"lead {changes(lambda p: p.band.lead)} ({', '.join(sorted({p.band.lead for p in rows}))}), "
+          f"harp's picking {changes(lambda p: p.accomp)}; tempo {min(tempos):.1f}-{max(tempos):.1f}")
 
     if args.render:
         out_dir = Path(args.render)
