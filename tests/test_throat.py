@@ -107,3 +107,12 @@ def test_the_shipped_throat_sings_a_note():
     notes = [Note("voice", 0.3, 0.8, 62.0, 0.8, syllable="home", word="home", line_end=True)]
     y = T.sing(notes, 44100, VoiceParams(), seed=1)
     assert np.isfinite(y).all() and np.abs(y).max() > 0.05
+
+
+def test_a_machines_singer_is_a_blend_never_one_of_the_trained_singers(tmp_path):
+    model = T.load(tiny_model(tmp_path, singers=("a", "b", "c")))
+    for seed in range(20):
+        mix = T.parse_mix(T.machine_mix(seed, 62.0, model))
+        weights = np.array(list(mix.values()))
+        assert abs(weights.sum() - 1.0) < 0.01 and weights.max() <= 0.6 + 1e-6
+    assert T.machine_mix(3, 62.0, model) == T.machine_mix(3, 62.0, model)

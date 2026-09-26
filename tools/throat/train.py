@@ -190,6 +190,11 @@ def main() -> None:
     print(f"global variance, real over predicted: envelope median {np.median(gv[:sp.shape[1]]):.2f}, "
           f"aperiodicity {np.median(gv[sp.shape[1]:]):.2f}", flush=True)
 
+    # each singer's register: the median pitch it sang (MIDI), so a machine's voice can be mixed from
+    # the singers who sing where it sings
+    voiced = mask & (d["role"] == 3)
+    registers = {name: float(69 + 12 * np.log2(np.exp(np.median(d["lf0"][voiced & (d["singer"] == i)])) / 440.0))
+                 for i, name in enumerate(singers)}
     weights = {k: v.detach().cpu().numpy().astype(np.float32) for k, v in model.state_dict().items()}
     config = dict(channels=args.channels, dilations=list(DILATIONS), kernel=KERNEL, embed=EMBED, role=ROLE,
                   dropout=args.dropout, noise=args.noise,

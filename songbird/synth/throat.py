@@ -261,12 +261,42 @@ def _linear(x: np.ndarray, w: dict, name: str) -> np.ndarray:
     return x @ w[f"{name}.weight"].T + w[f"{name}.bias"]
 
 
-def timbre(model: Model, mix: dict[str, float] | None) -> np.ndarray:
-    """A singer embedding: the weighted mean of the trained singers' (all equally, by default)."""
+def timbre(model: Model, mix: dict[str, float] | None, pitch: float | None = None) -> np.ndarray:
+    """A singer embedding: the weighted mean of the trained singers'. By default, every singer who
+    sings near this pitch (MIDI; within a fifth of their register, the nearer the more), or all of
+    them evenly when the model doesn't know their registers."""
     names = model.config["singers"]
-    weights = np.array([float((mix or {}).get(n, 0.0 if mix else 1.0)) for n in names])
+    if mix:
+        weights = np.array([float(mix.get(n, 0.0)) for n in names])
+    elif pitch is not None and model.config.get("registers"):
+        away = np.array([abs(pitch - model.config["registers"][n]) for n in names])
+        weights = np.clip(1.0 - away / 7.0, 0.0, None)
+        if weights.sum() == 0:
+            weights = (away == away.min()).astype(float)
+    else:
+        weights = np.ones(len(names))
     weights = weights / max(weights.sum(), 1e-9)
     return weights @ model.w["singer.weight"]
+
+
+def machine_mix(seed: int, pitch: float, model: Model | None = None, most: float = 0.6) -> str:
+    """A machine's own singer, as a timbre spec for VoiceParams.timbre: a random blend (from seed) of
+    the trained singers who sing near this pitch (MIDI), never more than `most` of any one of them,
+    so no machine is ever one of the synthetic singers it learned from."""
+    model = model or load()
+    names = model.config["singers"]
+    registers = model.config.get("registers") or {}
+    near = [n for n in names if abs(registers.get(n, pitch) - pitch) <= 7.0] or list(names)
+    if len(near) < 2:
+        near = sorted(names, key=lambda n: abs(registers.get(n, pitch) - pitch))[:2]
+    rng = np.random.default_rng(seed)
+    for _ in range(100):
+        w = rng.dirichlet(np.full(len(near), 1.5))
+        if w.max() <= most:
+            break
+    else:
+        w = np.full(len(near), 1.0 / len(near))
+    return ",".join(f"{n}:{x:.3f}" for n, x in zip(near, w))
 
 
 def predict(model: Model, t: dict, lf0: np.ndarray, singer: np.ndarray, gv: float = 1.0) -> tuple[np.ndarray, np.ndarray]:
@@ -367,7 +397,8 @@ def sing(notes, sr: int, voice, seed: int = 0, lexicon: dict | None = None, mix:
     accents = [voice.accent * float(np.clip(20 * np.log10(s.amp / 0.9) / 3.0, 0.0, 1.0)) for s in vowels]
     f0b = pitch_track(notes, n_blocks, RATE, voice, rng, [s.t1 for s in vowels], accents)
     f0 = np.interp(np.arange(n) * FRAME, (np.arange(n_blocks) + 0.5) * BLOCK / RATE, f0b)
-    sp, ap = predict(net, t, np.log(f0), timbre(net, parse_mix(mix)), gv=gv)
+    sung = np.median([n.pitch + voice.shift for n in notes])
+    sp, ap = predict(net, t, np.log(f0), timbre(net, parse_mix(mix), sung), gv=gv)
     factor = voice.tract / TRACT
     sp, ap = warp(sp, factor), warp(ap, factor)
     times = np.arange(n) * FRAME
