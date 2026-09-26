@@ -10,7 +10,8 @@ one of three buses:
   rest of the voice, a compressor that only leans on the loudest syllables,
   a touch of warmth; it has a plate of its own and stands nearer than the band;
 - the lineage choir: thinner and softer in the presence range than the
-  lead, compressed as one group, wider, and further back in the room;
+  lead, de-essed and compressed as one group, wider, and further back in
+  the room;
 - the band: each instrument at the level and place the arrangement gave it
   (the drift's balance included), its sound shaped and cleared around the
   voice; together, set `forward` dB under the voice while it sings, and
@@ -367,12 +368,13 @@ def mix(stems: dict[str, np.ndarray], sr: int, seed: int = 0, params: MixParams 
         voice = _treated(voice, lead)
         singing = fx.activity(voice, sr, attack=MAKE_WAY[0], release=MAKE_WAY[1])
 
-    # The lineage choir, as one group, where it sings.
+    # The lineage choir, as one group, where it sings; de-essed as the lead is (its voices say each "s" together,
+    # and its sends to the room and plate are the biggest)
     choir = _sum(stems, [n for n, r in roles.items() if r == "choir"])
     if choir is not None:
         where = fx.span(choir, sr)
         if where.stop - where.start > sr // 2:
-            group = fx.equalize(choir[where], fx.design(CHOIR_EQ, sr))
+            group = fx.deess(fx.equalize(choir[where], fx.design(CHOIR_EQ, sr)), sr)[0]
             group = _peaks(_compressed(group, sr, CHOIR_COMP), sr)
             group = fx.width(group, sr, min(CHOIR_WIDTH * p.width, 1.6))
             choir = np.zeros((length, 2))

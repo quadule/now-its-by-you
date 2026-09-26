@@ -184,6 +184,30 @@ def test_the_de_esser_takes_an_s_across_its_split_and_leaves_the_vowels():
         assert 10 * np.log10(py[m].sum() / px[m].sum()) < 0.05
 
 
+def test_the_choir_is_de_essed_as_a_group():
+    """The lineage choir's voices say each "s" together and send the most to the room and plate: the group is
+    de-essed as the lead is."""
+    from unittest import mock
+
+    rng = np.random.default_rng(6)
+    t = np.arange(3 * SR) / SR
+    vowel = sum(np.sin(2 * np.pi * 196 * k * t) / k for k in range(1, 12))
+    ess = sosfilt(butter(4, [3800, 8000], btype="bandpass", fs=SR, output="sos"), rng.standard_normal(len(t)))
+    ess *= 0.5 * np.std(vowel) / np.std(ess)
+    s = (t > 1.4) & (t < 1.55)
+    choir = np.where(s, ess, vowel) * 0.05 * ((t > 0.5) & (t < 2.5))
+    stems = {"choir1": panned(choir, -0.45), "choir2": panned(choir, 0.45), "guitar": panned(0.02 * vowel, 0.0)}
+    band = butter(4, [4000, 11000], btype="bandpass", fs=SR, output="sos")
+
+    def choir_s(deess=None):
+        taps = {}
+        with mock.patch.object(fx, "deess", deess or fx.deess):
+            mixing.mix(stems, SR, 0, MixParams(), taps=taps)
+        vowels = 10 * np.log10(np.mean(taps["choir"][int(0.8 * SR): int(1.3 * SR)] ** 2))
+        return 10 * np.log10(np.mean(sosfilt(band, taps["choir"], axis=0)[int(1.42 * SR): int(1.53 * SR)] ** 2)) - vowels
+    assert choir_s(deess=lambda x, sr: (x, None)) - choir_s() > 3.0
+
+
 def test_a_riding_compressor_keeps_the_arc():
     # a quiet passage then one 12 dB louder, each with a syllable every half second that stands 6 dB out
     t = np.arange(8 * SR) / SR
