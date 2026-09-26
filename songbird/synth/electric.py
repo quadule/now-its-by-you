@@ -126,12 +126,16 @@ def built(maker: int) -> dict:
     d["dead"] = (float(g.uniform(190.0, 262.0)), float(g.uniform(0.35, 0.6)))  # its dead spot: Hz, how much it drinks
     d["voicing"] = "fender" if g.random() < 0.6 else "marshall"
     d["knobs"] = (float(g.uniform(-0.1, 0.1)), float(g.uniform(0.35, 0.65)), float(g.uniform(-0.1, 0.1)))
-    d["clean"] = float(g.uniform(-24.0, -19.0))  # dB: the volume a player sets for a clean sound
-    d["crunch"] = float(g.uniform(-9.0, -4.0))
+    # how hard the player drives the second stage, clean and crunched: the volume plus the rig's own heat
+    # (heat()), so a hot humbucker into a Marshall's stack sits lower on the knob than a single coil into a
+    # Fender's for the same sound; a player dials the sound, not the knob
+    d["clean"] = float(g.uniform(-38.0, -33.0))
+    d["crunch"] = float(g.uniform(-17.0, -11.0))
     d["headroom"] = float(g.uniform(38.0, 52.0))
     d["sag"] = float(g.uniform(0.08, 0.18))
     d["tilt"] = float(g.uniform(0.0, 0.06))
-    d["knee"] = 1 if (d["voicing"] == "marshall" or g.random() < 0.6) else 2
+    # the power valves: a pair with little feedback, or (some Fenders) a blackface's with negative feedback
+    d["knee"] = 2 if (d["voicing"] == "marshall" or g.random() < 0.6) else 3
     d["reverb"] = float(g.uniform(0.12, 0.22))
     first = float(g.uniform(0.028, 0.034))
     springs = (first, first * float(g.uniform(1.12, 1.3))) + ((first * 1.45,) if g.random() < 0.3 else ())
@@ -203,7 +207,10 @@ def rig(name: str, s: dict, sr: int) -> tuple[Strings, amp.Coil, dict, amp.Amp]:
         t60=d["t60"] * (1.0 - 0.3 * wear), along=1.3, heard=0.4, driven=0.5, pick=d["pick"], hardness=0.85,
         click=0.25, touch=0.0, frets=24)
     treble, middle, bass = d["knobs"]
-    volume = d["crunch"] if setting == "crunch" else d["clean"]
+    treble = float(np.clip(0.45 + 0.35 * bright + treble + (0.05 if setting == "crunch" else 0.0), 0, 1))
+    bass = float(np.clip(0.55 - 0.15 * bright + bass, 0, 1))
+    # the volume knob turned to the sound the player wants, as far as it goes
+    volume = min(0.0, d["crunch" if setting == "crunch" else "clean"] - heat(coil, treble, middle, bass, d["voicing"]))
     if "drive" in extra:
         volume = -26.0 + 23.0 * float(np.clip(extra["drive"], 0.0, 1.0))
     reverb = 0.0 if setting == "crunch" else d["reverb"]
@@ -218,11 +225,23 @@ def rig(name: str, s: dict, sr: int) -> tuple[Strings, amp.Coil, dict, amp.Amp]:
     cab = d["cabinet"]
     cab = replace(cab, fs=cab.fs / size ** 0.5)
     rig_amp = amp.Amp(
-        voicing=d["voicing"], treble=float(np.clip(0.45 + 0.35 * bright + treble + (0.05 if setting == "crunch" else 0.0), 0, 1)),
-        middle=middle, bass=float(np.clip(0.55 - 0.15 * bright + bass, 0, 1)), volume=volume, headroom=d["headroom"],
+        voicing=d["voicing"], treble=treble, middle=middle, bass=bass, volume=volume, headroom=d["headroom"],
         knee=d["knee"], tilt=d["tilt"], sag=d["sag"], reverb=reverb, tank=d["tank"], tremolo=(kind, rate, depth),
         cabinet=cab)
     return strings, coil, circuit, rig_amp
+
+
+@lru_cache(maxsize=256)
+def _stack_heat(treble: float, middle: float, bass: float, voicing: str) -> float:
+    f = np.exp(np.linspace(np.log(150.0), np.log(1500.0), 24))
+    return float(10.0 * np.log10(np.mean(np.abs(amp.stack_response(f, treble, middle, bass, voicing)) ** 2)))
+
+
+def heat(coil: amp.Coil, treble: float, middle: float, bass: float, voicing: str) -> float:
+    """How hot a rig reaches the volume knob, in dB: the pickup's output (a humbucker's is 7 dB over a
+    single coil's) and what the tone stack lets through where a strum's energy is (150 Hz to 1.5 kHz: a
+    Fender's stack loses 5 to 7 dB more there than a Marshall's)."""
+    return 20.0 * np.log10(coil.sensitivity) + _stack_heat(round(treble, 4), round(middle, 4), round(bass, 4), voicing)
 
 
 def _dead_spot(segments: list, strings: Strings, dead: tuple[float, float]) -> None:
@@ -269,17 +288,17 @@ def guitar(name: str, notes, sr: int, length: int, rng: np.random.Generator, s: 
             burst = fretboard.chop_noise(sr, rng, note.vel) * EMF * coil.sensitivity * 3.0
             j = min(length, i + len(burst))
             emf[i:j] += burst[: j - i]
-    chain = _chain(rig_amp, s, sr)
+    chain = _chain(rig_amp, s, sr, _setting(name, s)[0] == "crunch")
     chain.p[21] = master_volume(name, s, sr)
     return amp.play(chain, emf) * GUITAR_OUT
 
 
-def _chain(rig_amp: amp.Amp, s: dict, sr: int) -> amp.Chain:
+def _chain(rig_amp: amp.Amp, s: dict, sr: int, crunch: bool) -> amp.Chain:
     """The amp ready to play; the driven settings oversample four times (their harmonics reach far up), a
     clean amp twice."""
     tempo = s.get("tempo")
     return amp.Chain(rig_amp, sr, tempo=float(tempo) if isinstance(tempo, (int, float)) and tempo > 0 else None,
-                     os_=4 if rig_amp.volume > -15.0 else 2)
+                     os_=4 if crunch or rig_amp.volume > -15.0 else 2)
 
 
 def _rig_key(name: str, s: dict) -> tuple:
@@ -312,7 +331,7 @@ def _master(key: tuple, sr: int) -> float:
     placed = fretboard.fret(fretboard.strum(notes, rng), strings)
     segs = fretboard.segments(placed, strings, sr, rng)
     emf = _pickup_voltage(segs, strings, coil, circuit, sr, int(3.0 * sr), rng)
-    chain = _chain(rig_amp, {}, sr)
+    chain = _chain(rig_amp, {}, sr, setting == "crunch")
     return float(10.0 ** ((REFERENCE_LUFS - loudness(amp.play(chain, emf), sr)) / 20.0))
 
 

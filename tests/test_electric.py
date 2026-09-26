@@ -147,6 +147,35 @@ def test_crunch_and_tremolo_sit_about_as_loud_as_clean():
         assert abs(master.loudness(render(name, part, 5.5), SR) - clean) < 2.5
 
 
+def strum_error(maker, name, vel):
+    """How far the rig's amp is from linear on its own strummed A chord, dB: the output against the same amp
+    played 60 dB quieter and scaled back up (distortion, intermodulation and compression together)."""
+    from dataclasses import replace
+
+    from songbird.synth import amp
+
+    strings, coil, circuit, rig_amp = electric.rig(name, {**S0, "maker": maker}, SR)
+    rig_amp = replace(rig_amp, reverb=0.0)
+    notes = [note(p, dur=1.0, vel=vel, art="down") for p in (45, 52, 57, 61, 64)]
+    placed = fretboard.fret(fretboard.strum(notes, np.random.default_rng(0)), strings)
+    segs = fretboard.segments(placed, strings, SR, np.random.default_rng(0))
+    v = electric._pickup_voltage(segs, strings, coil, circuit, SR, int(1.2 * SR), np.random.default_rng(0))
+    chain = amp.Chain(rig_amp, SR, os_=4 if name == "electric-crunch" else 2)
+    idle = chain.run(np.zeros_like(v))
+    y, lin = chain.run(v) - idle, (chain.run(v * 1e-3) - idle) * 1e3
+    return 10 * np.log10(np.sum((y - lin) ** 2) / np.sum(lin**2))
+
+
+@pytest.mark.parametrize("maker", range(6))
+def test_clean_is_clean_and_crunch_crunches_whatever_the_guitar(maker):
+    """A player turns the volume to the sound, not to a place on the knob: a hard strum through the clean
+    setting stays within 3% of linear, humbucker or single coil, Fender or Marshall; the crunch breaks up
+    as much on every rig (12-32% from linear), rather than a hot humbucker into a Marshall's stack fuzzing
+    while a single coil into a Fender's barely does."""
+    assert strum_error(maker, "electric", 0.9) < -30.0
+    assert -18.0 < strum_error(maker, "electric-crunch", 0.6) < -10.0
+
+
 def test_the_settings_can_ask_for_another_amp_setting():
     part = repeated("electric", 0.6, 4)
     a = render("electric", part, 1.8, amp="crunch")

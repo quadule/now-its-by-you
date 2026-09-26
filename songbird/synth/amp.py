@@ -448,7 +448,10 @@ class Amp:
     leak: float = 1e6  # ohm: its grid leak
     volume: float = -20.0  # dB: the volume pot between the stack and the second stage
     headroom: float = 45.0  # V: the second stage's swing that takes the power stage to its knee
-    knee: int = 1  # the power stage's knee: 1 soft (6V6s or EL84s), 2 harder (6L6s with feedback)
+    # the power stage's knee, a / (1 + a^2p)^(1/2p): 1 (p = 1) very soft, compressing from a third of its
+    # ceiling; 2 (p = 2) a push-pull pair with little feedback (EL84s, 6V6s: a few percent at half power);
+    # 3 (p = 4) one with negative feedback (a blackface's 6V6s or 6L6s): linear nearly to its ceiling
+    knee: int = 1
     tilt: float = 0.03  # the push-pull pair's mismatch: a little even distortion
     sag: float = 0.12  # how far the supply falls when the power stage is driven flat out
     sag_times: tuple[float, float] = (0.03, 0.2)  # s: how fast it falls, and recovers
@@ -503,7 +506,9 @@ def _run(x, rev, up, down, p, tab1, tab2, drop2, sos):
     top = tab1.shape[0] - 1
     rot_re = np.cos(2.0 * np.pi * rate)  # the LFO turns this far each oversampled sample
     rot_im = np.sin(2.0 * np.pi * rate)
-    if knee > 1.5:
+    if knee > 2.5:
+        tilt_out = tilt / (1.0 + tilt**8) ** 0.125
+    elif knee > 1.5:
         tilt_out = tilt / (1.0 + tilt**4) ** 0.25
     else:
         tilt_out = tilt / np.sqrt(1.0 + tilt * tilt)
@@ -580,7 +585,11 @@ def _run(x, rev, up, down, p, tab1, tab2, drop2, sos):
                     v *= 1.0 - depth * (0.5 + 0.5 * c_im)
             # the power stage, push-pull, its ceiling the supply
             a = v / sup + tilt
-            if knee > 1.5:
+            if knee > 2.5:
+                a2 = a * a
+                a4 = a2 * a2
+                o = (a / np.sqrt(np.sqrt(np.sqrt(1.0 + a4 * a4))) - tilt_out) * sup
+            elif knee > 1.5:
                 a2 = a * a
                 o = (a / np.sqrt(np.sqrt(1.0 + a2 * a2)) - tilt_out) * sup
             else:
