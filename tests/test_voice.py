@@ -39,3 +39,33 @@ def test_sing_is_finite_and_deterministic():
     b = sing(notes, 44100, VoiceParams(), seed=3)
     assert np.all(np.isfinite(a)) and np.array_equal(a, b)
     assert 0.05 < np.sqrt(np.mean(a**2)) < 0.5
+
+
+def test_little_words_and_unstressed_syllables_are_sung_lighter():
+    from songbird import phonetics as ph
+
+    g = G.load(Path(__file__).parent.parent / "songs" / "h-now-its-by-you.json")
+    score = realize(g, replace(choose_params(g), form=("verse", "refrain")))
+    notes = sorted(score.part("voice"), key=lambda n: n.start)
+    vowels = [s for s in schedule(notes, VoiceParams(), g.lexicon) if s.role == "vowel"]
+    little = [s.amp for s, n in zip(vowels, notes) if n.word.replace("-", "").lower().strip(".,;:!?'") in ph.FUNCTION_WORDS]
+    others = [s.amp for s, n in zip(vowels, notes) if n.word.replace("-", "").lower().strip(".,;:!?'") not in ph.FUNCTION_WORDS]
+    assert np.median(little) < 0.85 * np.median(others)
+
+
+def test_vibrato_is_kept_for_held_notes():
+    from songbird.synth.voice import BLOCK, pitch_track
+
+    notes = refrain_notes()
+    voice = VoiceParams(jitter=0.0, wander=0.0)
+    n_blocks = int((notes[-1].start + notes[-1].dur + 1.0) * 44100 / BLOCK)
+    f0 = pitch_track(notes, n_blocks, 44100, voice, np.random.default_rng(0))
+    tb = (np.arange(n_blocks) + 0.5) * BLOCK / 44100
+    for n in notes:
+        inside = (tb > n.start + 0.4) & (tb < n.start + n.dur - 0.1)
+        if inside.sum() < 20:
+            continue
+        cents = 1200 * np.log2(f0[inside] / (440 * 2 ** ((n.pitch - 69) / 12)))
+        wobble = np.std(cents)  # past the glide in, a straight note holds its pitch
+        held = n.dur >= (0.55 if n.line_end else voice.vibrato_from)
+        assert (wobble > 5) == held, (n.syllable, n.dur, wobble)

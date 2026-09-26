@@ -273,3 +273,10 @@ def _syllabify(phones: list[str]) -> list[Syllable]:
             vowel, coda = vowel + "R", coda[1:]
         out.append(Syllable(tuple(phones[start:nucleus_index]), vowel, coda, stressed))
     return out
+
+
+# The little words a singer passes over lightly: articles, prepositions, pronouns, auxiliaries, conjunctions.
+FUNCTION_WORDS = frozenset("""a an the and but or nor so yet if as at by for from in into of off on onto out over to up
+with without it its it's he him his she her they them their we us our you your i me my this that these those who
+whom whose what which where when while than then there here is was were be been am are do did does has had have
+not no all each some""".split())

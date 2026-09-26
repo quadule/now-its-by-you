@@ -61,8 +61,20 @@ class VoiceParams:
     wander: float = 6.0  # cents, slow pitch drift
     shimmer: float = 2.5  # percent, fast amplitude wobble
     articulation: float = 1.0  # consonant length scale
+    cluster: float = 0.7  # length of each consonant in a cluster within a syllable, against alone
+    across: float = 1.0  # length of consonants where one syllable's coda meets the next one's onset
+    glides: float = 1.0  # length scale for the consonants w and y, which singers linger in
+    liquids: float = 1.0  # length scale for l and r
     release: float = 0.05  # seconds over which the voice lets go at a phrase end
-    dynamics: float = 10.0  # dB of loudness per unit of stress; an even singer is low, an expressive one high
+    dynamics: float = 15.0  # dB of loudness per unit of stress; an even singer is low, an expressive one high
+    lean: float = 1.0  # dB a word's stressed syllable is sung above its others (and they below it)
+    light: float = 1.5  # dB softer for the little words between the ones that mean (a, the, it, and, of...)
+    ease: float = 1.5  # dB softer for a line's first syllable, eased into
+    let_go: float = 1.0  # dB softer for its last, let go of
+    climb: float = 0.5  # dB louder per semitone above the line's middle
+    taper: float = -4.0  # dB a held vowel fades from a third of the way through to its end
+    vibrato_from: float = 0.9  # seconds a note must last before the singer puts vibrato on it (0.55 at a line's end)
+    breathe: float = 0.18  # seconds between lines needed for an audible breath
     mouth: float = 1.0  # cm radius of the mouth opening: small keeps the upper resonances ringing
     engine: str = "formant"  # "formant" (Klatt cascade) or "tube" (waveguide tract, experimental)
 
@@ -83,7 +95,7 @@ def _smooth(x: np.ndarray, width: int) -> np.ndarray:
     return uniform_filter1d(uniform_filter1d(x, width, axis=0, mode="nearest"), width, axis=0, mode="nearest")
 
 
-def _consonant_duration(c: str, in_cluster: bool, onset: bool) -> float:
+def _consonant_duration(c: str, in_cluster: bool, onset: bool, voice: VoiceParams | None = None) -> float:
     manner, place, voiced = ph.CONSONANTS[c]
     if manner == "fricative":
         d = ph.FRICATIVE_DURATIONS[c]
@@ -91,7 +103,8 @@ def _consonant_duration(c: str, in_cluster: bool, onset: bool) -> float:
         d = CLOSURE + ph.VOICE_ONSET[place]  # closure, then the aspiration that marks it voiceless
     else:
         d = ph.DURATIONS[manner]
-    return d * (0.7 if in_cluster else 1.0)
+    voice = voice or VoiceParams()
+    return d * (voice.cluster if in_cluster else 1.0) * {"glide": voice.glides, "liquid": voice.liquids}.get(manner, 1.0)
 
 
 def _vowel_formants(v: str) -> tuple[float, float, float]:
@@ -110,8 +123,12 @@ def schedule(notes: list[Note], voice: VoiceParams, lexicon: dict[str, str] | No
     if len(sylls) != len(notes):
         raise ValueError("syllables and notes disagree")
 
-    onset = [[_consonant_duration(c, len(s.onset) > 1, True) * voice.articulation for c in s.onset] for s in sylls]
-    coda = [[_consonant_duration(c, len(s.coda) > 1, False) * voice.articulation for c in s.coda] for s in sylls]
+    onset = [[_consonant_duration(c, len(s.onset) > 1, True, voice) * voice.articulation for c in s.onset] for s in sylls]
+    coda = [[_consonant_duration(c, len(s.coda) > 1, False, voice) * voice.articulation for c in s.coda] for s in sylls]
+    for k in range(len(sylls) - 1):  # a coda running into the next onset is sung as one cluster
+        if coda[k] and onset[k + 1] and not notes[k].line_end and voice.across != 1.0:
+            coda[k] = [d * voice.across for d in coda[k]]
+            onset[k + 1] = [d * voice.across for d in onset[k + 1]]
 
     def limit(k: int) -> float:
         """When note k's last sound must end: its own end, a breath at a line end,
@@ -119,7 +136,7 @@ def schedule(notes: list[Note], voice: VoiceParams, lexicon: dict[str, str] | No
         note = notes[k]
         end = note.start + note.dur
         if note.line_end:
-            end -= min(0.2, 0.3 * note.dur)
+            end -= min(0.3, 0.35 * note.dur)  # let go in time to breathe
         if k + 1 < len(notes):
             end = min(end, notes[k + 1].start - sum(onset[k + 1]) - (0.03 if note.line_end else 0.0))
         return end
@@ -136,8 +153,10 @@ def schedule(notes: list[Note], voice: VoiceParams, lexicon: dict[str, str] | No
             if k + 1 < len(notes):
                 onset[k + 1] = [d * scale for d in onset[k + 1]]
 
-    # Voices get louder as they climb: about 0.3 dB per semitone above the
-    # line's middle, on top of the stress the score gives each syllable.
+    # How hard each syllable is leaned on (dB), as a singer does it: the beat
+    # (the score's stress), the word's stressed syllable over its others, the
+    # words that mean over the little ones between them, a line eased into and
+    # let go of, and louder as the voice climbs.
     line_median, line = {}, []
     for k, note in enumerate(notes):
         line.append(k)
@@ -146,9 +165,28 @@ def schedule(notes: list[Note], voice: VoiceParams, lexicon: dict[str, str] | No
             line_median.update({j: middle for j in line})
             line = []
 
+    first_of_line = [k == 0 or notes[k - 1].line_end for k in range(len(notes))]
+    in_word, word_len, word = [], [], []
+    k = 0
+    while k < len(notes):
+        n = notes[k].word_len
+        for j in range(n):
+            in_word.append(j)
+            word_len.append(n)
+            word.append((notes[k].word or "").replace("-", "").lower().strip(".,;:!?\"'"))
+        k += n
+
     segs: list[Segment] = []
     for k, (note, syl) in enumerate(zip(notes, sylls)):
-        loud_db = voice.dynamics * (note.vel - 0.75) + 0.3 * (note.pitch - line_median[k])
+        loud_db = voice.dynamics * (note.vel - 0.75) + voice.climb * (note.pitch - line_median[k])
+        if word_len[k] > 1:
+            loud_db += voice.lean if syl.stressed else -voice.lean
+        if word[k] in ph.FUNCTION_WORDS:
+            loud_db -= voice.light
+        if first_of_line[k]:
+            loud_db -= voice.ease
+        if note.line_end:
+            loud_db -= voice.let_go
         if note.gesture is not None:
             loud_db += note.gesture.level
         amp = 0.9 * 10.0 ** (loud_db / 20.0)
@@ -156,8 +194,8 @@ def schedule(notes: list[Note], voice: VoiceParams, lexicon: dict[str, str] | No
         next_v = sylls[k + 1].nucleus if k + 1 < len(sylls) else None
         t = note.start - sum(onset[k])
         gap_before = t - (segs[-1].t1 if segs else 0.0)
-        if gap_before > 0.3:  # an audible in-breath before a phrase
-            segs.append(Segment(t - min(0.3, gap_before - 0.05), t - 0.03, "breath", "breath", amp))
+        if gap_before > voice.breathe:  # a moment's quiet, then an audible in-breath before the phrase
+            segs.append(Segment(t - min(0.2, gap_before - 0.12), t - 0.03, "breath", "breath", amp))
         for c, d in zip(syl.onset, onset[k]):
             segs.append(Segment(t, t + d, c, "onset", amp, prev_v, syl.nucleus))
             t += d
@@ -228,11 +266,12 @@ def control_tracks(segs: list[Segment], n_blocks: int, sr: int, voice: VoicePara
             else:
                 f = ph.VOWEL_FORMANTS[s.phone]
                 keys += [(s.t0 + tau, f), (s.t1 - tau, f)]
-            # a long note swells a little through its middle, and a phrasing
-            # can have it grow or fade from start to end
+            # a held vowel fades from a third of the way through (voices tire and
+            # let go), and a phrasing can have it grow or fade from start to end
             idx = np.arange(region.start, region.stop)
-            swell = 1.0 + (0.15 * np.sin(np.pi * (tb[idx] - s.t0) / d) if d > 0.5 else 0.0)
-            swell *= 10.0 ** (s.swell * np.clip((tb[idx] - s.t0) / max(d, 1e-3), 0.0, 1.0) / 20.0)
+            x = np.clip((tb[idx] - s.t0) / max(d, 1e-3), 0.0, 1.0)
+            fade = voice.taper * np.clip((x - 0.3) / 0.7, 0.0, 1.0) if d > 0.35 else 0.0
+            swell = 10.0 ** ((fade + s.swell * x) / 20.0)
             av[idx] = s.amp * swell
             ah[region] = voice.breath * s.amp
             rd[region] = voice.rd - 0.8 * (s.amp - 0.9)
@@ -355,6 +394,8 @@ def pitch_track(notes: list[Note], n_blocks: int, sr: int, voice: VoiceParams, r
         inside = (tb >= note.start) & (tb < end)
         if g is not None and g.vibrato >= 0:
             v *= g.vibrato / max(voice.vibrato_depth, 1.0)
+        elif note.dur < (0.55 if note.line_end else voice.vibrato_from):
+            v *= 0.0  # a singer keeps vibrato for the notes they hold; the rest are sung straight
         vib_env[inside] = v[inside]
         if g is not None:
             heard = min(sounding[k], end) if sounding is not None else end  # the vowel's own end
