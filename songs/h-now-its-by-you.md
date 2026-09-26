@@ -65,40 +65,54 @@ refrain, turn, bridge, refrain, tag. A turn is two bars of the strings alone
 
 **Template:** [someone] [kept, wrote, saved or showed] it [in a vehicle] [where or when] / [how the vehicle held it] / [how far or how long it went] / [what became of it]. AABB, eleven syllables a line (an unstressed pickup, three dactyls, a final stress), third person only: the song is "it", nobody is "I".
 
+**Bank:** every verse and variation the program can draw on, with the words that swap and the rules for combining them, is in [h-bank.md](h-bank.md) for reading and under `bank` in the genome for the program; `uv run python -m songbird.bank songs/h-now-its-by-you.json` checks every way each line can be sung against the tune and the dictionary. A verse may rhyme ABAB or ABCB or run a phrase over a line break, at most one such verse per song and never the first.
+
 ## Notes
 
 - **The artist's picks (2026-09-25).** H is the lead candidate: the chorus is
-  memorable and encapsulates the project. The wire and screen verses are the
-  favourites, so they open the seed; B's refrain quatrain ("Carry it over the
-  water and wire...") is another favourite and became the bridge. J's idea of
-  ending on the chorus's own tune without words survives as a two-bar tag,
-  shorter than J's four.
-- **The turning question.** "Who {made|sang|heard|owns} this song?" in the
-  genome: a fixed line may turn one word each time its block comes round, in
-  order, the last time always taking the last word. Authorship in four words:
-  making, singing, hearing, owning; "Nobody knows" never changes.
+memorable and encapsulates the project. The wire and screen verses are the
+favorites, so they open the seed; B's refrain quatrain ("Carry it over the
+water and wire...") is another favorite and became the bridge. J's idea of
+ending on the chorus's own tune without words survives as a two-bar tag,
+shorter than J's four.
+- **The turning question.** "Who {made|sang|heard|kept|wrote|owns} this song?"
+in the genome: a fixed line may turn one word each time its block comes
+round, in order, the last time always taking the last word. Authorship in six
+words: making, singing, hearing, keeping, writing, owning. Three refrains ask
+made, sang, owns; with four, heard comes before owns; kept and wrote only come
+in with five or six. "Nobody knows" never changes.
 - **The lineage choir.** The bridge and the tag are the sections where voices
-  from the song's lineage join in (`"choir": true` in the genome). Each takes a
-  harmony line against the melody from the chord underneath: the nearest chord
-  tone a third or more below, the nearest above, the root beneath, then the
-  same an octave down. The seed has no ancestors, so it sings its bridge alone;
-  each generation adds a voice, so you can hear how far a rendition has
-  travelled. Until the seed packet carries real ancestors (milestone 5),
-  `songbird render --choir N` stands in N made-up singers.
+from the song's lineage join in (`"choir": true` in the genome). Each takes a
+harmony line against the melody from the chord underneath: the nearest chord
+tone a third or more below, the nearest above, the root beneath, then the
+same an octave down. The seed has no ancestors, so it sings its bridge alone;
+each generation adds a voice, so you can hear how far a rendition has
+travelled. Until the seed packet carries real ancestors (milestone 5),
+`songbird render --choir N` stands in N made-up singers.
 - **The tune.** Each foot is a quarter and two eighths. Refrain lines 1 and 2
-  are a question and answer (open on so, closed on do); line 3 sits on la, the
-  top of the range; line 4 falls home so-mi-re-do. The verse is lower and
-  plainer: lines 2 and 4 share one melody. The bridge turns to the relative
-  minor (vi) with the first two lines starting on la with no pickup, climbs
-  back through I, and ends open, low on so over V, so the last refrain has
-  something to answer.
-- **What the LLM refills.** The verses, from the template above, one vehicle
-  per verse. The refrain, the bridge and the tag never change.
+are a question and answer (open on so, closed on do); line 3 sits on la, the
+top of the range; line 4 falls home so-mi-re-do. The verse is lower and
+plainer: lines 2 and 4 share one melody. The bridge turns to the relative
+minor (vi) with the first two lines starting on la with no pickup, climbs
+back through I, and ends open, low on so over V, so the last refrain has
+something to answer.
+- **What gets refilled.** The verses, from the bank (or, with an LLM, from the
+template), two to four per song in era order. The refrain keeps its shape and
+varies only in its question word, its while/when/if and it goes/who knows/it
+grows slots, chosen once per song, and the couplet each time round, canon
+last. The bridge is always the canon, with one extra stanza (coat or given)
+allowed after it in a long form; the tag sings one syllable, la, loo or oo.
+The rules are in the bank.
 - **Bank lines used.** Refrain: "Who made this song? Nobody knows" (A); "It's
-  yours while you sing it, and then it's gone" (A), bent to "then it goes";
-  "It's nobody's making" (B); "by everyone, no one, and now it's by you" (B).
-  Bridge: B's refrain, whole. Verses: B's wire with A's "not one machine ever
-  knew it by heart"; A's screen verse with B's "nobody hummed it; it wasn't a
-  song"; A's mind verse with C's "kept it alone in [his] head"; A's ink
-  couplet with B's drawer couplet; A's sailor and orange girl with C's "only a
-  mouth".
+yours while you sing it, and then it's gone" (A), bent to "then it goes";
+"It's nobody's making" (B); "by everyone, no one, and now it's by you" (B).
+Bridge: B's refrain, whole. Verses: B's wire with A's "not one machine ever
+knew it by heart"; A's screen verse with B's "nobody hummed it; it wasn't a
+song"; A's mind verse with C's "kept it alone in [his] head"; A's ink
+couplet with B's drawer couplet; A's sailor and orange girl with C's "only a
+mouth".
+- **The bank (2026-09-25).** Thirty-eight verses, six refrain couplets, three
+bridges and three tag syllables, riffed with the artist in one thread and
+checked against the tune: see [h-bank.md](h-bank.md). The artist's own lines
+are the heard and owns refrains (now the true and take couplets) and the first
+line of the kids verse.

@@ -34,17 +34,17 @@
   "form": ["intro?", "verse", "refrain", "turn?", "verse*", "refrain", "turn?", "break?", "bridge", "refrain", "tag?", "outro?"],
 
   "refrain": [
-    "Who {made|sang|heard|owns} this song? No-bo-dy knows.",
-    "It's yours while you sing it, and then it goes.",
-    "It's no-bo-dy's mak-ing, it's old and it's new;",
-    "by ev-ery-one, no one, and now it's by you."
+    "Who {*made*|*sang*|*heard*|*kept*|*wrote*|*owns*} this song? No-bo-dy knows.",
+    "It's *yours* while you sing it, and then it goes.",
+    "It's no-bo-dy's mak-ing, it's old and it's *new*;",
+    "by ev-ery-one, no one, and now it's by *you*."
   ],
 
   "bridge": [
-    "Car-ry it o-ver the wa-ter and wire,",
-    "hand it a-long like a coal from the fire;",
-    "it's no-bo-dy's mak-ing and ev-ery-one's own,",
-    "it dies in the dark if you leave it a-lone."
+    "*Car-ry* it o-ver the wa-ter and wire,",
+    "*hand* it a-long like a coal from the fire;",
+    "it's no-bo-dy's mak-ing and ev-ery-one's *own*,",
+    "it *dies* in the dark if you leave it a-lone."
   ],
 
   "tag": [
@@ -59,6 +59,7 @@
       "[what became of it], rhyming with line 3"
     ],
     "rhyme": "AABB",
+    "variants": "A verse may rhyme ABAB or ABCB, or run a phrase over a line break, at most one such verse per song and never the first; the bank marks them.",
     "meter": "11 syllables a line: an unstressed pickup, three dactyls and a final stress (w S w w S w w S w w S), as in 'a QUI-et man KEPT it a-LONE in his HEAD'",
     "vehicles": ["wire", "a screen", "a mind", "ink", "a mouth"],
     "note": "Third person throughout: the song is 'it' and its keepers are 'he', 'she' and 'they'; nobody in a verse is 'I'. Every vehicle but the mouth loses it. The bridge, which never changes, answers the verses: carry it, hand it along."
@@ -71,31 +72,821 @@
   ],
 
   "seed_verses": [
-    ["They saved it as num-bers and sent it by wire,",
-     "a flick-er of light, and as quick as a fire.",
-     "Each cop-y was per-fect in ev-ery last part,",
-     "but not one ma-chine ev-er knew it by heart."],
-    ["The whole world was watch-ing it all in a day,",
-     "a mil-lion bright fac-es all lit the same way;",
-     "they laughed and they wept, and they scrolled right a-long,",
-     "but no-bo-dy hummed it; it was-n't a song."],
-    ["A qui-et man kept it a-lone in his head,",
-     "so close and so safe that it nev-er was said.",
-     "It went where he went, and it slept where he slept;",
-     "they bur-ied it with him, the se-cret he kept."],
-    ["A girl wrote it down by a can-dle one night,",
-     "in ink on a page, and she fold-ed it tight.",
-     "It lay in a drawer for a hun-dred-odd years;",
-     "it speaks in a voice that now no-bo-dy hears."],
-    ["A sail-or was hum-ming it down by the quay;",
-     "a girl sell-ing or-an-ges caught it for free.",
-     "She had-n't his lan-guage, she had-n't his name;",
-     "a mouth is e-nough, and she sang it the same."]
+    ["They saved it as *num-bers* and sent it by wire,",
+     "a *flick-er* of light, and as quick as a fire.",
+     "Each cop-y was *per-fect* in ev-ery last part,",
+     "but not one ma-chine ev-er knew it by *heart*."],
+    ["The whole world was watch-ing it all in a *day*,",
+     "a mil-lion bright fac-es all lit the *same* way;",
+     "they laughed and they wept, and they *scrolled* right a-long,",
+     "but no-bo-dy hummed it; it was-n't a *song*."],
+    ["A qui-et man *kept* it a-lone in his head,",
+     "so close and so *safe* that it nev-er was said.",
+     "It *went* where he went, and it *slept* where he slept;",
+     "they *bur-ied* it with him, the se-cret he kept."],
+    ["A girl *wrote* it down by a can-dle one night,",
+     "in ink on a page, and she *fold-ed* it tight.",
+     "It *lay* in a drawer for a hun-dred-odd years;",
+     "it *speaks* in a voice that now no-bo-dy hears."],
+    ["A sail-or was *hum-ming* it down by the quay;",
+     "a girl sell-ing or-an-ges *caught* it for free.",
+     "She had-n't his *lan-guage*, she had-n't his name;",
+     "a mouth is e-nough, and she sang it the *same*."]
   ],
 
   "seed_params": {
     "tonic": 62, "mode": "ionian", "tempo": 96, "seed": 1,
     "accomp": "0 . 2 3 4 . 3 2",
     "form": ["intro", "verse", "refrain", "turn", "verse", "refrain", "turn", "bridge", "refrain", "tag"]
+  },
+
+  "lexicon": {"oo": "UW1"},
+
+  "bank": {
+    "note": "Every verse, refrain couplet, bridge and tag syllable the song can draw on, with named slots for the words that swap and the rules for combining them; songs/h-bank.md is the same bank for reading. A slot is {name}, or {name.column} for a coupled slot whose columns are chosen together, once per block; songbird/bank.py checks every way each line can be sung against the tune and the dictionary. Lines are syllabified with hyphens like every other lyric here.",
+    "refrain": {
+      "lines": ["Who {question} this song? No-bo-dy knows.", "It's yours {while} you sing it, and then {then}."],
+      "slots": {
+        "question": ["made", "sang", "heard", "kept", "wrote", "owns"],
+        "while": ["while", "when", "if"],
+        "then": ["it goes", "who knows", "it grows"]
+      },
+      "couplets": [
+        {
+          "id": "canon",
+          "by": "fable (A's question, B's answer)",
+          "lines": ["It's no-bo-dy's mak-ing, it's old and it's new;", "by ev-ery-one, no one, and now it's by you."]
+        },
+        {
+          "id": "true",
+          "by": "artist",
+          "lines": ["It's no-bo-dy's mak-ing, it might not be true;", "but now that you know it, go make it from you."]
+        },
+        {
+          "id": "take",
+          "by": "artist and fable",
+          "lines": [
+            "It's yours for the tak-ing, so take it, and do",
+            "what-ev-er you like, but leave some of you too."
+          ]
+        },
+        {
+          "id": "blue",
+          "by": "fable",
+          "lines": [
+            "It's no-bo-dy's mak-ing, it's out of the blue",
+            "and goes back to no-where un-less it's through you."
+          ]
+        },
+        {
+          "id": "due",
+          "by": "fable",
+          "lines": ["It's no-bo-dy's mak-ing, and no-bo-dy's due", "a pen-ny for sing-ing; so sing it right through."]
+        },
+        {
+          "id": "sang",
+          "by": "fable",
+          "lines": ["It's no-bo-dy's mak-ing, and that much is true;", "but some-bo-dy sang it, and now it's by you."]
+        }
+      ]
+    },
+    "verses": [
+      {
+        "id": "wire",
+        "era": 1990,
+        "mood": "plain",
+        "scheme": "AABB",
+        "rarity": "common",
+        "pairs_with": ["learned"],
+        "by": "fable (B's wire verse, A's last line)",
+        "lines": [
+          "They saved it as num-bers and sent it by wire,",
+          "a flick-er of light, and as quick as a fire.",
+          "Each cop-y was per-fect in ev-ery last part,",
+          "but not one ma-chine ev-er knew it by heart."
+        ]
+      },
+      {
+        "id": "screen",
+        "era": 2015,
+        "mood": "plain",
+        "scheme": "AABB",
+        "rarity": "common",
+        "by": "fable (A's screen verse, B's last line)",
+        "slots": {
+          "many": ["mil-lion", "bil-lion", "thou-sand"]
+        },
+        "lines": [
+          "The whole world was watch-ing it all in a day,",
+          "a {many} bright fac-es all lit the same way;",
+          "they laughed and they wept, and they scrolled right a-long,",
+          "but no-bo-dy hummed it; it was-n't a song."
+        ]
+      },
+      {
+        "id": "mind",
+        "era": null,
+        "mood": "dark",
+        "scheme": "AABB",
+        "rarity": "common",
+        "pairs_with": ["names"],
+        "by": "fable (A's mind verse, C's 'kept it alone in his head')",
+        "slots": {
+          "who": {
+            "noun": ["man", "girl", "boy", "nun", "monk"],
+            "he": ["he", "she", "he", "she", "he"],
+            "him": ["him", "her", "him", "her", "him"],
+            "his": ["his", "her", "his", "her", "his"]
+          }
+        },
+        "lines": [
+          "A qui-et {who.noun} kept it a-lone in {who.his} head,",
+          "so close and so safe that it nev-er was said.",
+          "It went where {who.he} went, and it slept where {who.he} slept;",
+          "they bur-ied it with {who.him}, the se-cret {who.he} kept."
+        ]
+      },
+      {
+        "id": "ink",
+        "era": 1800,
+        "mood": "dark",
+        "scheme": "AABB",
+        "rarity": "common",
+        "pairs_with": ["carve"],
+        "by": "fable (A's ink couplet, B's drawer couplet)",
+        "slots": {
+          "who": {
+            "noun": ["girl", "boy", "nun", "monk"],
+            "he": ["she", "he", "she", "he"]
+          },
+          "years": ["hun-dred-odd", "thou-sand-odd", "six-ty-odd", "nine-ty-odd"]
+        },
+        "lines": [
+          "A {who.noun} wrote it down by a can-dle one night,",
+          "in ink on a page, and {who.he} fold-ed it tight.",
+          "It lay in a drawer for a {years} years;",
+          "it speaks in a voice that now no-bo-dy hears."
+        ]
+      },
+      {
+        "id": "mouth",
+        "era": 1800,
+        "mood": "plain",
+        "scheme": "AABB",
+        "rarity": "common",
+        "by": "fable (A's sailor and orange girl, C's 'only a mouth')",
+        "slots": {
+          "who": ["sail-or", "sol-dier", "tink-er", "ped-dler"],
+          "wares": ["or-an-ges", "news-pa-pers", "vi-o-lets"]
+        },
+        "lines": [
+          "A {who} was hum-ming it down by the quay;",
+          "a girl sell-ing {wares} caught it for free.",
+          "She had-n't his lan-guage, she had-n't his name;",
+          "a mouth is e-nough, and she sang it the same."
+        ]
+      },
+      {
+        "id": "kids",
+        "era": null,
+        "mood": "tender",
+        "scheme": "ABAB",
+        "rarity": "common",
+        "pairs_with": ["lullaby"],
+        "by": "artist (first line) and fable",
+        "lines": [
+          "They sang it as kids while they sat by the fire,",
+          "the words half-in-vent-ed, the tune half-a-sleep;",
+          "they're gray now, and scat-tered, and most of the choir",
+          "are grand-par-ents, sing-ing their grand-kids to sleep."
+        ]
+      },
+      {
+        "id": "bird",
+        "era": null,
+        "mood": "plain",
+        "scheme": "ABCB",
+        "rarity": "common",
+        "by": "fable",
+        "slots": {
+          "bird": ["black-bird", "star-ling", "rob-in", "lin-net"],
+          "month": ["June", "May", "March", "spring"]
+        },
+        "lines": [
+          "A {bird} out-side of a win-dow in {month}",
+          "picked up the first line and in-vent-ed the rest.",
+          "It sang it at dawn to a bird who'd flown in",
+          "from some-where; she took it back home to her nest."
+        ]
+      },
+      {
+        "id": "pipe",
+        "era": null,
+        "mood": "dark",
+        "scheme": "AABB",
+        "rarity": "common",
+        "by": "fable",
+        "slots": {
+          "who": {
+            "noun": ["man", "girl", "boy"],
+            "he": ["he", "she", "he"]
+          }
+        },
+        "lines": [
+          "A {who.noun} in a cell tapped it out on the wall",
+          "to some-one {who.he} nev-er once saw, down the hall.",
+          "The some-one tapped back, and for years, ev-ery day,",
+          "it went through the stone; it was all they could say."
+        ]
+      },
+      {
+        "id": "lullaby",
+        "era": null,
+        "mood": "tender",
+        "scheme": "ABAB",
+        "rarity": "common",
+        "pairs_with": ["kids"],
+        "by": "fable",
+        "slots": {
+          "age": ["for-ty", "fif-ty", "six-ty", "thir-ty"]
+        },
+        "lines": [
+          "A wom-an was sing-ing it low to a child",
+          "who slept be-fore ev-er the sec-ond verse came;",
+          "the child nev-er learned it. At {age}, she smiled",
+          "at stran-gers who hummed it, not know-ing its name."
+        ]
+      },
+      {
+        "id": "wax",
+        "era": 1900,
+        "mood": "plain",
+        "scheme": "AABB",
+        "rarity": "common",
+        "pairs_with": ["sample"],
+        "by": "fable",
+        "slots": {
+          "day": ["Tues-day", "Mon-day", "Fri-day", "Sun-day"]
+        },
+        "lines": [
+          "They cut it in wax on a {day} in town;",
+          "the nee-dle went round and the rec-ord wore down.",
+          "It kept the one slip where the sing-er went wrong,",
+          "and ev-ery-one since sings the slip in the song."
+        ]
+      },
+      {
+        "id": "trench",
+        "era": 1916,
+        "mood": "dark",
+        "scheme": "ABAB",
+        "rarity": "rare",
+        "enjambed": true,
+        "by": "fable",
+        "note": "a noun split across the line break; ration it",
+        "lines": [
+          "Two ar-mies in mud with a field in be-tween",
+          "were both of them sing-ing it, nei-ther one knew,",
+          "in two dif-ferent tongues. In the dark, a ma-chine",
+          "gun stopped, for the length of a verse, and then two."
+        ]
+      },
+      {
+        "id": "probe",
+        "era": 1977,
+        "mood": "plain",
+        "scheme": "AABB",
+        "rarity": "common",
+        "by": "fable",
+        "slots": {
+          "planet": ["Nep-tune", "Sat-urn", "Plu-to"]
+        },
+        "lines": [
+          "They put it a-board with the gold and the maps",
+          "and shot it past {planet} to no one, per-haps.",
+          "Out there it's a groove in a disc, noth-ing more;",
+          "it's pa-tient; it's wait-ed for sing-ers be-fore."
+        ]
+      },
+      {
+        "id": "fiddle",
+        "era": null,
+        "mood": "plain",
+        "scheme": "ABCB",
+        "rarity": "common",
+        "by": "fable",
+        "slots": {
+          "who": ["man", "girl", "boy"],
+          "instrument": ["fid-dle", "whis-tle", "squeeze-box", "ban-jo"]
+        },
+        "lines": [
+          "A {who} with a {instrument} would play it for coins,",
+          "the trains ran a-bove it, the traf-fic ran by;",
+          "and no-bo-dy stopped, but a thou-sand went home,",
+          "the tune in their pock-ets, not know-ing quite why."
+        ]
+      },
+      {
+        "id": "tongue",
+        "era": null,
+        "mood": "plain",
+        "scheme": "ABCB",
+        "rarity": "common",
+        "enjambed": true,
+        "by": "fable",
+        "slots": {
+          "count": ["sev-en", "twen-ty", "thir-ty"]
+        },
+        "lines": [
+          "It's sung in a lan-guage that no-bo-dy speaks",
+          "by {count} old wom-en who don't know a word;",
+          "they learned it as sound from their moth-ers, and sound",
+          "is all that a song ev-er needs to be heard."
+        ]
+      },
+      {
+        "id": "hold",
+        "era": 1990,
+        "mood": "light",
+        "scheme": "ABAB",
+        "rarity": "common",
+        "pairs_with": ["ring"],
+        "by": "fable",
+        "slots": {
+          "many": ["mil-lion", "bil-lion", "thou-sand"]
+        },
+        "lines": [
+          "It played on the phone while a {many} held on",
+          "for some-bo-dy, an-y-one, hop-ing to speak;",
+          "they hat-ed it, hummed it, hung up, and were gone;",
+          "they're sing-ing it still in the show-er each week."
+        ]
+      },
+      {
+        "id": "bell",
+        "era": 1900,
+        "mood": "plain",
+        "scheme": "AABB",
+        "rarity": "common",
+        "by": "fable",
+        "slots": {
+          "tower": ["tow-er", "stee-ple", "bel-fry"],
+          "when": ["eve-ning", "morn-ing"]
+        },
+        "lines": [
+          "A {tower} was ring-ing it out o-ver town",
+          "each {when}, till some-one had tak-en it down.",
+          "The bells went for can-non, the {tower} for stone;",
+          "the tune's in the streets now, and rings on its own."
+        ]
+      },
+      {
+        "id": "shell",
+        "era": null,
+        "mood": "plain",
+        "scheme": "AABB",
+        "rarity": "common",
+        "by": "fable",
+        "slots": {
+          "who": {
+            "he": ["he", "she"],
+            "him": ["him", "her"],
+            "his": ["his", "her"]
+          }
+        },
+        "lines": [
+          "A wom-an was hum-ming it, shell-ing the peas;",
+          "the tune drift-ed out on the af-ter-noon breeze",
+          "to some-bo-dy pass-ing who could-n't have said",
+          "its name, but it went all the way to {who.his} bed."
+        ]
+      },
+      {
+        "id": "tape",
+        "era": 1980,
+        "mood": "plain",
+        "scheme": "AABB",
+        "rarity": "common",
+        "by": "fable, last line the artist's",
+        "slots": {
+          "place": ["box in a shed", "drawer by the bed", "trunk by the bed"]
+        },
+        "lines": [
+          "It sat on a tape in a {place},",
+          "a name on the la-bel of some-bo-dy dead.",
+          "The tape was near ru-ined, the hiss was like rain,",
+          "but still, some years on, it was heard once a-gain."
+        ]
+      },
+      {
+        "id": "skip",
+        "era": null,
+        "mood": "plain",
+        "scheme": "AABB",
+        "rarity": "common",
+        "by": "fable",
+        "lines": [
+          "The girls in the yard turned it in-to a game;",
+          "they skipped to it, count-ing; the rope al-ways came",
+          "down ear-ly, and no one had heard how it ends.",
+          "They made up an end-ing and taught it to friends."
+        ]
+      },
+      {
+        "id": "mine",
+        "era": 1950,
+        "mood": "plain",
+        "scheme": "AABB",
+        "rarity": "common",
+        "by": "fable",
+        "lines": [
+          "The men in the mine used to sing it be-low;",
+          "as long as they're sing-ing, the oth-ers all know.",
+          "The pit's long been closed, and the vil-lage is small;",
+          "the choir ev-ery Sun-day still gives it its all."
+        ]
+      },
+      {
+        "id": "wakes",
+        "era": null,
+        "mood": "plain",
+        "scheme": "AABB",
+        "rarity": "common",
+        "by": "fable",
+        "lines": [
+          "They sang it at wed-dings, they sang it at wakes;",
+          "it's mer-ry or mourn-ful, which-ev-er it takes.",
+          "It's been to more church-es than an-y-one knows;",
+          "it mar-ries, it bur-ies, and then off it goes."
+        ]
+      },
+      {
+        "id": "ship",
+        "era": 1930,
+        "mood": "plain",
+        "scheme": "AABB",
+        "rarity": "common",
+        "by": "fable",
+        "lines": [
+          "A ship in the night picked it up on the air",
+          "from some-bo-dy's wire-less, and who could say where;",
+          "it crack-led and fad-ed and went with the dawn;",
+          "the cook whis-tled on, though the sig-nal was gone."
+        ]
+      },
+      {
+        "id": "deaf",
+        "era": null,
+        "mood": "tender",
+        "scheme": "AABB",
+        "rarity": "common",
+        "by": "fable",
+        "slots": {
+          "who": {
+            "noun": ["girl", "boy"],
+            "he": ["she", "he"],
+            "him": ["her", "him"],
+            "his": ["her", "his"]
+          }
+        },
+        "lines": [
+          "A {who.noun} who was deaf felt it come through the floor",
+          "when-ev-er {who.his} moth-er was sing-ing next door;",
+          "{who.he} nev-er once heard it, but {who.he} knew the beat;",
+          "{who.his} chil-dren all learned it by watch-ing {who.his} feet."
+        ]
+      },
+      {
+        "id": "learned",
+        "era": 2025,
+        "mood": "plain",
+        "scheme": "AABB",
+        "rarity": "rare",
+        "pairs_with": ["wire"],
+        "by": "fable",
+        "note": "the project's self-portrait; answers the wire verse",
+        "lines": [
+          "They fed a ma-chine ev-ery way it was sung",
+          "by an-y-one, ev-er, on tape or on wire;",
+          "it learned ev-ery note, and it learned ev-ery tongue,",
+          "and sings it in all of their voic-es: a choir."
+        ]
+      },
+      {
+        "id": "carve",
+        "era": 1800,
+        "mood": "dark",
+        "scheme": "AABB",
+        "rarity": "common",
+        "pairs_with": ["ink"],
+        "by": "fable",
+        "slots": {
+          "whose": ["man's", "wife's", "child's"]
+        },
+        "lines": [
+          "They carved the first line of it in-to a stone",
+          "a-bove a {whose} grave, in a church-yard, a-lone;",
+          "the name's worn to noth-ing, the line's still cut clear,",
+          "and an-y-one read-ing it has it by ear."
+        ]
+      },
+      {
+        "id": "box",
+        "era": 1850,
+        "mood": "plain",
+        "scheme": "AABB",
+        "rarity": "common",
+        "by": "fable",
+        "lines": [
+          "They pinned it on brass in a box with a key",
+          "that played it for chil-dren who climbed on a knee;",
+          "the comb's lost a tooth, and it's miss-ing a pin;",
+          "it plays it with gaps, and the chil-dren fill in."
+        ]
+      },
+      {
+        "id": "milk",
+        "era": 1930,
+        "mood": "plain",
+        "scheme": "AABB",
+        "rarity": "common",
+        "by": "fable",
+        "slots": {
+          "who": ["milk-man", "post-man", "bak-er"]
+        },
+        "lines": [
+          "A {who} would whis-tle it, street af-ter street,",
+          "at five in the morn-ing, in rain and in sleet;",
+          "and no one was up, and it fell on no ear;",
+          "they all woke up hum-ming it, year af-ter year."
+        ]
+      },
+      {
+        "id": "hall",
+        "era": 1950,
+        "mood": "tender",
+        "scheme": "AABB",
+        "rarity": "common",
+        "by": "fable",
+        "lines": [
+          "They danced to it, Sat-ur-days, up at the hall;",
+          "the band had it wrong, and that suit-ed them all.",
+          "The hall's been pulled down, and the band is long dead;",
+          "the cou-ples who met there still hum it in bed."
+        ]
+      },
+      {
+        "id": "terrace",
+        "era": 1970,
+        "mood": "light",
+        "scheme": "AABB",
+        "rarity": "common",
+        "by": "fable",
+        "slots": {
+          "game": ["foot-ball", "ball-game"]
+        },
+        "lines": [
+          "The crowd at the {game} would sing it to jeer",
+          "with words that their moth-ers were sor-ry to hear;",
+          "the tune did-n't mind, it had heard worse be-fore;",
+          "it went home with both sides, what-ev-er the score."
+        ]
+      },
+      {
+        "id": "boat",
+        "era": 1850,
+        "mood": "plain",
+        "scheme": "AABB",
+        "rarity": "common",
+        "by": "fable",
+        "lines": [
+          "They sang it on deck as the har-bor grew small,",
+          "and sang it be-low through the sick-ness and squall;",
+          "they land-ed with noth-ing, and no one to meet;",
+          "by spring it was sung on the whole of the street."
+        ]
+      },
+      {
+        "id": "ring",
+        "era": 2005,
+        "mood": "light",
+        "scheme": "AABB",
+        "rarity": "common",
+        "pairs_with": ["hold"],
+        "by": "fable",
+        "lines": [
+          "They put it in phones as the sound of a ring;",
+          "it went off in pock-ets, and no one would sing;",
+          "and now when they hear it, they reach for their phone,",
+          "and half of them think that the tune is their own."
+        ]
+      },
+      {
+        "id": "wall",
+        "era": 2020,
+        "mood": "plain",
+        "scheme": "AABB",
+        "rarity": "common",
+        "enjambed": true,
+        "by": "fable",
+        "slots": {
+          "who": ["kid", "lad", "girl"]
+        },
+        "lines": [
+          "A {who} with a can sprayed the words on a wall",
+          "in red, by the rail-way, a-bout ten feet tall;",
+          "they paint-ed it out; but the eight fif-teen train",
+          "had al-read-y passed it, and passed it a-gain."
+        ]
+      },
+      {
+        "id": "sample",
+        "era": 2010,
+        "mood": "plain",
+        "scheme": "AABB",
+        "rarity": "common",
+        "pairs_with": ["wax"],
+        "by": "fable",
+        "slots": {
+          "who": ["girl", "boy"],
+          "sung": ["her", "him"]
+        },
+        "lines": [
+          "A {who} put a piece of it un-der a beat,",
+          "two sec-onds of some-bo-dy's voice, on re-peat;",
+          "and no-bo-dy asked who the some-bo-dy was,",
+          "and no-bo-dy paid {sung}, and no-bo-dy does."
+        ]
+      },
+      {
+        "id": "shepherd",
+        "era": null,
+        "mood": "plain",
+        "scheme": "AABB",
+        "rarity": "common",
+        "by": "fable",
+        "slots": {
+          "who": ["shep-herd", "goat-herd"],
+          "flock": ["sheep", "goats"]
+        },
+        "lines": [
+          "A {who} would sing it to {flock} on a hill;",
+          "the {flock} nev-er learned it, and nev-er stood still;",
+          "the wind took it down to the farms in the vale,",
+          "and that's how it came to be sung o-ver ale."
+        ]
+      },
+      {
+        "id": "nurse",
+        "era": null,
+        "mood": "plain",
+        "scheme": "AABB",
+        "rarity": "common",
+        "by": "fable",
+        "slots": {
+          "who": {
+            "he": ["he", "she"],
+            "him": ["him", "her"],
+            "his": ["his", "her"]
+          },
+          "day": ["Tues-day", "Mon-day", "Fri-day", "Sun-day"]
+        },
+        "lines": [
+          "A nurse used to hum it at night on the ward,",
+          "and most of them slept, and the rest of them snored;",
+          "but one lay a-wake, and {who.he} learned ev-ery note;",
+          "it went home on {day} in-side of {who.his} coat."
+        ]
+      },
+      {
+        "id": "names",
+        "era": null,
+        "mood": "tender",
+        "scheme": "AABB",
+        "rarity": "common",
+        "pairs_with": ["mind"],
+        "by": "fable",
+        "slots": {
+          "kin": ["daugh-ter", "hus-band"]
+        },
+        "lines": [
+          "An old wom-an lost all the names and the years,",
+          "and who was her {kin}, and why there were tears;",
+          "but some-bo-dy hummed the first line, and she smiled,",
+          "and sang all the rest as she did as a child."
+        ]
+      },
+      {
+        "id": "parrot",
+        "era": 1850,
+        "mood": "light",
+        "scheme": "AABB",
+        "rarity": "common",
+        "by": "fable",
+        "note": "a clone that can't make it its own",
+        "slots": {
+          "who": ["sail-or's", "sol-dier's"]
+        },
+        "lines": [
+          "A par-rot had learned it, a line and a half,",
+          "and sang it all day, and it made peo-ple laugh;",
+          "the {who} long dead, but it sings in his voice",
+          "the line and a half, and it has-n't a choice."
+        ]
+      },
+      {
+        "id": "soap",
+        "era": 1955,
+        "mood": "light",
+        "scheme": "AABB",
+        "rarity": "common",
+        "by": "fable",
+        "lines": [
+          "A com-pa-ny bought it to sell peo-ple soap,",
+          "and played it so of-ten that no one could cope;",
+          "the soap is long gone, and the firm's been dis-solved;",
+          "the tune did-n't no-tice; it was-n't in-volved."
+        ]
+      }
+    ],
+    "bridges": [
+      {
+        "id": "canon",
+        "scheme": "AABB",
+        "by": "fable (B's refrain)",
+        "slots": {
+          "place": ["wa-ter", "moun-tain", "bor-der", "des-ert"],
+          "ember": ["coal", "spark", "light"],
+          "where": ["dark", "cold"]
+        },
+        "lines": [
+          "Car-ry it o-ver the {place} and wire,",
+          "hand it a-long like a {ember} from the fire;",
+          "it's no-bo-dy's mak-ing and ev-ery-one's own,",
+          "it dies in the {where} if you leave it a-lone."
+        ]
+      },
+      {
+        "id": "coat",
+        "scheme": "ABAB",
+        "by": "fable",
+        "lines": [
+          "Give it a-way like a coat that's too small;",
+          "some-bo-dy's shiv-er-ing, some-bo-dy's near.",
+          "So sing it out loud in a room or a hall,",
+          "and sing it to some-one, or no one will hear."
+        ]
+      },
+      {
+        "id": "given",
+        "scheme": "ABAB",
+        "by": "fable",
+        "lines": [
+          "No-bo-dy wrote it, and no-bo-dy's paid;",
+          "no-bo-dy signed it, and no-bo-dy's due.",
+          "And some-bo-dy sang it to you, and you're made",
+          "of what you were giv-en. It's giv-en to you."
+        ]
+      }
+    ],
+    "tag": {
+      "syllables": ["la", "loo", "oo"],
+      "note": "one syllable for every note of the tag, chosen once per song"
+    },
+    "rules": {
+      "verses": {
+        "count": [2, 4],
+        "first": {
+          "scheme": "AABB",
+          "rarity": "common",
+          "enjambed": false
+        },
+        "max_variants": 1,
+        "max_rare": 1,
+        "order": "era",
+        "never_adjacent": ["dark"],
+        "max_mood": {
+          "light": 1
+        },
+        "pairs": "adjacent",
+        "note": "A variant is a verse whose scheme isn't AABB or that runs a phrase over a line break (enjambed); the first verse teaches the shape, so it is never one. The chosen verses go in era order, earliest first, so a song reads as time passing; a verse with no era can go anywhere. Paired verses (pairs_with) are sung adjacent, in era order. No two dark verses adjacent; at most one light verse per song."
+      },
+      "refrain": {
+        "question": "turn",
+        "once_per_song": ["while", "then"],
+        "couplet_last": "canon",
+        "couplet_repeat": false,
+        "note": "The question word turns in order each time the refrain comes round and the last refrain always asks who owns it, as the fixed refrain does. The while and then slots are chosen once and kept the same in every refrain. Each refrain sings one couplet, none twice until all are used, and the last refrain always sings canon."
+      },
+      "bridge": {
+        "always": "canon",
+        "extra": ["coat", "given"],
+        "once_per_song": ["place", "ember", "where"],
+        "note": "The canon bridge is always sung, its slots chosen once per song. In a long form one extra stanza may follow it, sung as a second section (bridge2) on the same phrases by the same choir."
+      },
+      "tag": {
+        "once_per_song": "syllable"
+      }
+    }
   }
 }

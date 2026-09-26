@@ -1,0 +1,65 @@
+from pathlib import Path
+
+import pytest
+
+from songbird import bank as B, genome as G
+
+SONGS = sorted(Path(__file__).parent.parent.joinpath("songs").glob("*.json"))
+H = Path(__file__).parent.parent / "songs" / "h-now-its-by-you.json"
+
+
+@pytest.mark.parametrize("path", SONGS, ids=lambda p: p.stem)
+def test_every_way_a_bank_line_can_be_sung_fits_the_tune(path):
+    g = G.load(path)
+    if "bank" not in g.source:
+        pytest.skip("no bank")
+    summary = B.check(g)
+    assert summary["verses"] >= len(g.seed_verses) and summary["couplets"] >= 1
+
+
+def test_coupled_slots_are_chosen_together():
+    slots = {"who": {"noun": ["man", "girl"], "he": ["he", "she"]}, "day": ["Mon-day", "Fri-day"]}
+    lines = ["A {who.noun} kept it on {day};", "{who.he} kept it well."]
+    assert list(B.expansions(lines, slots)) == [
+        ["A man kept it on Mon-day;", "he kept it well."],
+        ["A man kept it on Fri-day;", "he kept it well."],
+        ["A girl kept it on Mon-day;", "she kept it well."],
+        ["A girl kept it on Fri-day;", "she kept it well."],
+    ]
+    assert B.ways(lines, slots) == 4
+    with pytest.raises(ValueError, match="coupled"):
+        B.fill(["{who} kept it"], slots, {"who": 0})
+    with pytest.raises(ValueError, match="doesn't define"):
+        list(B.expansions(["{when} it was"], slots))
+
+
+def test_a_slot_option_that_breaks_the_count_or_the_dictionary_is_caught():
+    g = G.load(H)
+    wax = next(v for v in g.source["bank"]["verses"] if v["id"] == "wax")
+    verse = g.sections["verse"].phrases
+    B.check_block(wax["lines"], wax["slots"], verse, g.phrases, g.lexicon, "wax")
+    with pytest.raises(ValueError, match="syllables"):
+        B.check_block(wax["lines"], {"day": ["Sat-ur-day"]}, verse, g.phrases, g.lexicon, "wax")
+    with pytest.raises(ValueError, match="can't sing"):
+        B.check_block(wax["lines"], {"day": ["Qzx-day"]}, verse, g.phrases, g.lexicon, "wax")
+    with pytest.raises(ValueError, match="never used"):
+        B.check_block(wax["lines"], {"day": ["Tues-day"], "moon": ["June"]}, verse, g.phrases, g.lexicon, "wax")
+
+
+def test_the_banks_question_words_are_the_fixed_refrains():
+    g = G.load(H)
+    assert [B.unmarked(l) for l in G.turns(g.refrain[0])] == [
+        f"Who {w} this song? No-bo-dy knows." for w in g.source["bank"]["refrain"]["slots"]["question"]]
+
+
+def test_a_focus_mark_wraps_a_whole_word():
+    g = G.load(H)
+    wax = next(v for v in g.source["bank"]["verses"] if v["id"] == "wax")
+    verse = g.sections["verse"].phrases
+    marked = [wax["lines"][0].replace("wax", "*wax*")] + wax["lines"][1:]
+    B.check_block(marked, wax["slots"], verse, g.phrases, g.lexicon, "wax")  # counts and pronunciation ignore the mark
+    B.check_marks("but not one ma-chine ev-er knew it by *heart*.", "wire")
+    B.check_marks("Who {*made*|*sang*} this song?".replace("{*made*|*sang*}", "*made*"), "refrain")
+    for bad in ("knew it by *heart.", "knew it by he*art*", "knew it by **heart**", "knew it by *", "*num-*bers"):
+        with pytest.raises(ValueError, match="focus mark"):
+            B.check_marks(bad, "wire")
