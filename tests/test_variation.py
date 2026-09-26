@@ -143,6 +143,32 @@ def test_the_modes_chosen_keep_every_chord_a_triad(h):
             assert mode in V.allowed_modes(h, "ionian") and mode in members
 
 
+def test_every_family_comes_round_to_its_members(h):
+    days = np.arange(D.parse("2026-01-01"), D.parse("2034-01-01"), 14.0)
+    reached = {"folk": set(), "bright": set(), "dark": set()}
+    for k in range(60):
+        voice = H.fictional(f"m{k}")
+        parent = None
+        for t in days:  # a lineage sung on this one machine, a fortnight apart
+            parent = choose_params(h, parent, voice, D.drift(t, voice.hash))
+            reached[voice.tongue.family].add(parent.mode)
+    assert reached["dark"] == {"aeolian", "ionian"}  # a dark lineage in minor still comes back to the seed's mode
+    assert {"ionian", "mixolydian"} <= reached["folk"] and reached["bright"] == {"ionian", "mixolydian"}
+
+
+def test_the_form_changes_by_the_season_not_the_day(h):
+    days = np.arange(D.parse("2026-01-01"), D.parse("2028-01-01"), 1.0)
+    per_year = []
+    for name in MACHINES:
+        voice = H.fictional(name)
+        forms = [choose_params(h, voice=voice, drift=D.drift(t, voice.hash)).form for t in days]
+        for form in forms:  # a machine takes a breath after every refrain that day, or after none
+            turns = sum(s == "turn" for s in form)
+            assert turns in (0, sum(s == "refrain" for s in form) - 1)
+        per_year.append(sum(a != b for a, b in zip(forms, forms[1:])) / 2)
+    assert 2 <= np.mean(per_year) <= 15, per_year
+
+
 def test_the_table_is_wired():
     params = {f for f in Params.__dataclass_fields__}
     for knob in V.KNOBS:
@@ -155,7 +181,8 @@ def test_the_table_is_wired():
         if knob.drift:
             assert knob.drift in D.DIMENSIONS, knob.path
         assert knob.view in D.VIEWS
-    for dimension in list(V.SECTION_DRIFT.values()) + ["verses", "pairs", "extra", "texture", "mood", "mode", "key"]:
+    for dimension in ("intro", "turn", "break", "tag", "outro", "other", "verses", "pairs", "extra", "texture", "mood",
+                      "mode", "key"):
         assert dimension in D.DIMENSIONS
 
 

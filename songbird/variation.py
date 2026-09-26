@@ -34,7 +34,7 @@ import re
 from dataclasses import dataclass, replace
 from typing import Callable
 
-from .drift import Drift
+from .drift import DIMENSIONS, Drift
 from .genome import Genome
 from .harvest import MODE_FAMILIES, THEMES, Voice
 from .synth.voice import VoiceParams
@@ -230,7 +230,7 @@ class Knob:
     own     the machine's own value, from its character c and x, the song's own value
     drift   the drift dimension that moves the machine's own value, and span how far
             a drift of 1 moves it (a fraction of it where ratio)
-    view    which view of the drift: full (daily), slow (weeks), year (about once a year)
+    view    which view of the drift: full (daily), slow (weeks), season (months), year (about once a year)
     bounds  (lo, hi), or a function of x
     step    what the value is rounded to
     inherit False for a body: the machine's own value outright, not pulled from the parent
@@ -300,7 +300,7 @@ KNOBS = (
     Knob("singer.rd", ("identity",), lambda c, x: x + 0.15 * c.id("rd") + 0.08 * c.wear - 0.06 * c.brightness,
          drift="voice", span=0.06, bounds=(0.55, 1.3), step=0.01),
     Knob("singer.breath", ("identity",), lambda c, x: x + 0.02 * c.id("breath") + 0.015 * c.wear + 0.01 * c.tired,
-         drift="voice", span=0.03, bounds=(0.02, 0.13), step=0.005),
+         drift="voice", span=0.015, bounds=(0.02, 0.13), step=0.005),
     Knob("singer.vibrato_depth", ("identity",), lambda c, x: x + 9 * c.id("vibrato_depth") + 5 * c.rubato,
          drift="voice", span=12.0, bounds=(14.0, 44.0), step=0.5),
     Knob("singer.vibrato_delay", ("identity",), lambda c, x: x + 0.07 * c.id("vibrato_delay"), bounds=(0.18, 0.4), step=0.01),
@@ -343,8 +343,10 @@ class Context:
         return clip(0.5 + 0.3 * self.c.id(f"habit:{name}") + local, 0.0, 1.0)
 
 
-# Modes by brightness, and a chord's quality in a mode.
+# Modes by brightness, and a chord's quality in a mode. A drift of 1 moves the machine's own mode this many
+# steps of brightness, so every member of its family comes round some year (ionian to aeolian is three).
 BRIGHTNESS = {"lydian": 6, "ionian": 5, "mixolydian": 4, "dorian": 3, "aeolian": 2, "phrygian": 1, "locrian": 0}
+MODE_SPAN = 3.5
 MINOR = {"dorian", "aeolian", "phrygian", "locrian"}
 
 
@@ -379,7 +381,7 @@ def choose_mode(out: dict, ctx: Context) -> None:
         members = [m for m in family if m in allowed] or allowed
     elif parent not in allowed:
         members = sorted(set(allowed) | {parent}, key=lambda m: -BRIGHTNESS[m])
-    target = ctx.pull(BRIGHTNESS[parent], BRIGHTNESS[home] + 2.0 * ctx.at("year", "mode"))
+    target = ctx.pull(BRIGHTNESS[parent], BRIGHTNESS[home] + MODE_SPAN * ctx.at("year", "mode"))
     out["mode"] = min(members, key=lambda m: (abs(BRIGHTNESS[m] - target), abs(BRIGHTNESS[m] - BRIGHTNESS[parent])))
 
 
@@ -423,7 +425,11 @@ def choose_choir(out: dict, ctx: Context) -> None:
 
 # ---------------------------------------------------------------- form
 
-SECTION_DRIFT = {"intro": "intro", "turn": "turns", "break": "break", "tag": "tag", "outro": "outro"}
+# How the form drifts: which view of the field, and how far a drift of 1 moves a section's score (it plays
+# above 0.5) and the verse count. Each section's own dimension of the drift is named after it.
+FORM_VIEW = "season"
+SECTION_SPAN = 0.5
+VERSE_SPAN = 1.2
 
 
 def template(genome: Genome) -> list[tuple[str, str]]:
@@ -575,12 +581,14 @@ def choose_form(out: dict, ctx: Context) -> None:
     """How many verses, how they come, and which optional sections play.
 
     The verse count pulls the parent's toward the machine's taste (a rich
-    vocabulary tells longer stories) moved by the slow verses drift. Each
-    optional section's score is the parent's (1 played, 0 not) pulled toward
-    the machine's habit (0.5 for a neutral voice), plus half its slow drift;
-    it plays above 0.5, so a lineage remembers its form and a machine's habits
-    pull it. Two verses to a refrain is scored the same way against a machine
-    that leans away from it, since a verse and then its refrain is the song's
+    vocabulary tells longer stories), moved by its drift. Each optional
+    section (an intro, the turns, a break, the tag, an outro) is decided once
+    for the whole form: its score is how often the parent played it (1 or 0,
+    or 0.5 if the parent had no place for it) pulled toward the machine's
+    habit (0.5 for a neutral voice), plus SECTION_SPAN of its drift; it plays
+    above 0.5, so a lineage remembers its form and a machine's habits pull it.
+    Two verses to a refrain is scored the same way against a machine that
+    leans away from it, since a verse and then its refrain is the song's
     shape: rare where the parent never did it."""
     genome = ctx.genome
     source = ctx.parent.form if parse_form(genome, ctx.parent.form) else ctx.song.form
@@ -594,42 +602,47 @@ def choose_form(out: dict, ctx: Context) -> None:
     else:
         habit = ctx.habit("verses")
         own = lo + (hi - lo) * (0.5 if habit is None else habit)
-    verses = max(lo, min(hi, round(ctx.pull(had, own) + 1.2 * ctx.at("slow", "verses"))))
+    verses = max(lo, min(hi, round(ctx.pull(had, own) + VERSE_SPAN * ctx.at(FORM_VIEW, "verses"))))
 
-    def plays(before: bool, habit: float | None, dimension: str) -> bool:
-        score = ctx.pull(1.0 if before else 0.0, 0.5 if habit is None else habit)
-        return score + 0.5 * ctx.at("slow", dimension) > 0.5
+    def plays(before: float, habit: float | None, dimension: str) -> bool:
+        score = ctx.pull(before, 0.5 if habit is None else habit)
+        return score + SECTION_SPAN * ctx.at(FORM_VIEW, dimension) > 0.5
 
     sung = paired = 0  # the parent's units, and how many of them had two verses
+    possible: dict[str, int] = {}  # where the parent could have played each optional section, and did
+    played: dict[str, int] = {}
     for it in items(genome):
+        text = was.get(f"t{it.index}", "")
         if it.repeat and len(it.tokens) > 1:
             verse, refrain = it.tokens[0][0], it.tokens[1][0]
-            for chunk in was[f"t{it.index}"].split(f"{refrain},"):
+            for chunk in text.split(f"{refrain},"):
                 n = chunk.split(",").count(verse)
                 sung += n > 0
                 paired += n > 1
+            for name, flag in it.tokens[1:]:
+                if flag == "?":
+                    possible[name] = possible.get(name, 0) + text.count(f"{refrain},")
+                    played[name] = played.get(name, 0) + text.count(f"{name},")
+        elif not it.repeat and it.tokens[0][1] == "?":
+            name = it.tokens[0][0]
+            possible[name] = possible.get(name, 0) + 1
+            played[name] = played.get(name, 0) + bool(text)
     habit = ctx.habit("pairs")
-    pairs = plays(sung > 0 and paired / sung >= 0.5, 0.25 if habit is None else habit / 2, "pairs")
+    pairs = plays(float(sung > 0 and paired / sung >= 0.5), 0.25 if habit is None else habit / 2, "pairs")
+    decided = {name: plays(float(played[name] / n >= 0.5) if n else 0.5, ctx.habit(name),
+                           name if name in DIMENSIONS else "other")
+               for name, n in possible.items()}
 
     plan = units(genome, verses, pairs)
     present = {}
     for it in items(genome):
-        text = was.get(f"t{it.index}", "")
-        if it.repeat:
-            sung = max(1, text.count(f"{it.tokens[1][0]},")) if len(it.tokens) > 1 else 1
-            for name, flag in it.tokens[1:]:
-                if flag == "?":
-                    before = text.count(f"{name},") / sung >= 0.5
-                    for r in range(len(plan[it.index])):
-                        present[(it.index, name, r)] = plays(before, ctx.habit(name, f"{it.index}.{r}"),
-                                                             SECTION_DRIFT.get(name, "tag"))
-        elif it.tokens[0][1] == "?":
-            name = it.tokens[0][0]
-            present[(it.index, name, 0)] = plays(bool(text), ctx.habit(name, str(it.index)),
-                                                 SECTION_DRIFT.get(name, "tag"))
+        for name, flag in it.tokens[1:] if it.repeat else it.tokens:
+            if flag == "?":
+                for r in range(len(plan[it.index]) if it.repeat else 1):
+                    present[(it.index, name, r)] = decided[name]
     second = False
     if extra_bridge(genome) and verses > lo:  # a long form may sing the bridge's extra stanza
-        second = plays(any(v for k, v in was.items() if k.startswith("x")), ctx.habit("extra"), "extra")
+        second = plays(float(any(v for k, v in was.items() if k.startswith("x"))), ctx.habit("extra"), "extra")
     form = build(genome, verses, present, second, pairs)
     if genome.source.get("bank"):  # the bank must be able to fill it; it always can, this makes sure
         from .arrange import problem

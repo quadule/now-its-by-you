@@ -15,16 +15,19 @@ on the same day and adding a dimension never moves the others. The periods
 sit slightly off the day, the month and the year, so the field neither lines
 up with the calendar nor repeats.
 
-The field is read three ways, each spanning about -1..1 (standard deviation
-about 0.45, clipped at 1):
+The field is read four ways, each spanning about -1..1 (standard deviation
+about 0.4 to 0.45, clipped at 1):
 
-    full  all three octaves, for what may move a little every day (tempo,
-          feel, the singer's day)
-    slow  the month and year octaves, for choices that should hold for weeks
-          (the form, the accompaniment, the lyric's leanings); a quantized
-          choice on it changes three to six times a year
-    year  the year octave alone, for the most salient choices (key, mode),
-          which change about once a year and never flicker
+    full    all three octaves, for what may move a little every day (tempo,
+            feel, the singer's day)
+    slow    the month and year octaves, for choices that should hold for
+            weeks (the accompaniment, the lyric's leanings); a quantized
+            choice on it changes three to six times a year
+    season  mostly the year, a little of the month, for the form: with its
+            nine or so choices it changes about ten times a year, so forms a
+            month apart differ about half the time and a year apart mostly
+    year    the year octave alone, for the most salient choices (key, mode),
+            which change about once a year and never flicker
 
 A stateless field can't hold a choice with hysteresis, so the smoothness of
 the view a choice reads is what keeps it from flickering across a threshold.
@@ -45,6 +48,7 @@ SCALE = 1.45  # stretches the noise so each view spans about -1..1
 VIEWS = {
     "full": (0.15, 0.35, 0.5),
     "slow": (0.0, 0.35, 0.5),
+    "season": (0.0, 0.15, 0.6),
     "year": (0.0, 0.0, 0.62),
 }
 
@@ -54,14 +58,15 @@ DIMENSIONS = {
     "key": "tonic offset (year)",
     "mode": "which member of the voice's mode family (year)",
     "tempo": "tempo within the voice's range",
-    "verses": "how many verses (slow)",
-    "pairs": "whether added verses come two to a refrain (slow)",
-    "intro": "whether the intro plays (slow)",
-    "turns": "whether the strings take a turn after a refrain (slow)",
-    "break": "whether an instrumental break comes before the bridge (slow)",
-    "tag": "whether everyone sings the tag (slow)",
-    "outro": "whether the outro plays (slow)",
-    "extra": "whether a long form sings the bridge's extra stanza (slow)",
+    "verses": "how many verses (season)",
+    "pairs": "whether added verses come two to a refrain (season)",
+    "intro": "whether the intro plays (season)",
+    "turn": "whether the strings take a turn after the refrains (season)",
+    "break": "whether an instrumental break comes before the bridge (season)",
+    "tag": "whether everyone sings the tag (season)",
+    "outro": "whether the outro plays (season)",
+    "other": "whether any other optional section plays (season)",
+    "extra": "whether a long form sings the bridge's extra stanza (season)",
     "texture": "how busy the accompaniment pattern is (slow)",
     "feel": "humanize, ritardando and swing: how loose the playing is",
     "voice": "the singer's day: breath, vibrato depth, dynamics, glottal shape",
@@ -85,10 +90,11 @@ class Drift:
     t: float  # days since the epoch
     full: dict  # dimension -> value, all three octaves
     slow: dict  # the month and year octaves
+    season: dict  # mostly the year, a little of the month
     year: dict  # the year octave
 
     def view(self, name: str) -> dict:
-        return {"full": self.full, "slow": self.slow, "year": self.year}[name]
+        return getattr(self, name)
 
     def to_dict(self) -> dict:
         out = {"t": round(self.t, 6), "at": when(self.t).isoformat()}
