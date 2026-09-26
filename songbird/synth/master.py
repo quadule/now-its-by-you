@@ -266,5 +266,15 @@ def pcm_sha256(pcm: np.ndarray) -> str:
     return hashlib.sha256(np.ascontiguousarray(pcm, dtype="<i2").tobytes()).hexdigest()
 
 
-def write_flac(path: str | Path, pcm: np.ndarray, sr: int) -> None:
-    sf.write(str(path), pcm, sr, format="FLAC", subtype="PCM_16")
+def write_flac(path: str | Path, pcm: np.ndarray, sr: int, tags: dict | None = None) -> None:
+    """16-bit FLAC; with tags (title, artist, date, comment, album...), as Vorbis comments players show.
+    Tags never touch the samples, so a rendition's id (their hash) is the same with or without them."""
+    if not tags:
+        sf.write(str(path), pcm, sr, format="FLAC", subtype="PCM_16")
+        return
+    channels = pcm.shape[1] if pcm.ndim > 1 else 1
+    with sf.SoundFile(str(path), "w", samplerate=sr, channels=channels, format="FLAC", subtype="PCM_16") as f:
+        for key, value in tags.items():
+            if value:
+                setattr(f, key, str(value))
+        f.write(pcm)
