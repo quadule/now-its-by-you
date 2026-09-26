@@ -31,6 +31,15 @@ The Gemini Puck takes aren't used below. Its reading was aligned badly when
 it was moved onto the tune, so its vowels don't start where its truth says
 they do (the medians are 170 ms late).
 
+**Correction, later the same day.** Listening showed the Gemini references
+had bursts of static. Gemini 3.8 returns WAV, and its header had been played
+as sound, putting a click before every line; that probably also broke Puck's
+alignment. tools/tts.py now reads the header as a header and uses Gemini
+3.8's interactions API with a style, and Eleven v3. The Kore numbers below
+predate the fix. The calibration voices (Daniel, George, Matilda) weren't
+affected. Every reference is also robotic, because speech is moved onto the
+tune by the WORLD vocoder; finding references that sound natural is next.
+
 ## What the first run showed
 
 A phrasing learned from one voice was *worse* than singing plain, and more
