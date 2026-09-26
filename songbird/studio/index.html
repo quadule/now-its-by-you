@@ -1,0 +1,114 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="color-scheme" content="light dark">
+<meta name="studio-token" content="{{token}}">
+<title>Songbird studio</title>
+<link rel="stylesheet" href="/studio.css">
+<script src="/studio.js" defer></script>
+</head>
+<body>
+<header class="top wrap">
+  <div class="eyebrow">Songbird studio</div>
+  <h1 id="title">…</h1>
+  <p class="which" id="which">Making your version of the song…</p>
+  <div class="actions">
+    <button class="btn primary" id="hearAll" type="button">
+      <svg class="icon" viewBox="0 0 16 16" aria-hidden="true"><path d="M4 2.5v11l9-5.5z" fill="currentColor"/></svg>
+      Hear it all
+    </button>
+    <button class="btn" id="roll" type="button" title="Draw the words and the small details of the sound again">
+      <svg class="icon" viewBox="0 0 16 16" aria-hidden="true"><rect x="2" y="2" width="12" height="12" rx="3" fill="none" stroke="currentColor" stroke-width="1.5"/><circle cx="5.5" cy="5.5" r="1.2" fill="currentColor"/><circle cx="10.5" cy="10.5" r="1.2" fill="currentColor"/><circle cx="8" cy="8" r="1.2" fill="currentColor"/></svg>
+      Roll chance again
+    </button>
+    <span class="hint" id="draw"></span>
+  </div>
+  <div class="yours-bar" id="yoursBar" hidden></div>
+  <div class="problems-bar" id="problemsBar" hidden></div>
+</header>
+
+<main class="wrap">
+  <div class="columns">
+    <section class="panel" aria-labelledby="wordsTitle">
+      <h2 id="wordsTitle">The words <span class="aside hint" id="wordsAside"></span></h2>
+      <div class="words" id="words"></div>
+    </section>
+    <aside aria-label="The choices, and why they were made">
+      <div class="cards" id="cards"></div>
+    </aside>
+  </div>
+
+  <section class="panel" aria-labelledby="timeTitle" data-gap="22">
+    <h2 id="timeTitle">Through time <span class="aside hint">three years back to three years on</span></h2>
+    <p class="hint">Your machine's song changes a little from day to day, more from month to month and most from year to year. Move through time to see and hear how.</p>
+    <div id="timeline" class="timeline-box"><p class="hint">Drawing six years of your machine's song…</p></div>
+    <div class="slider">
+      <input type="range" id="day" min="-1095" max="1095" step="1" value="0" aria-label="The day the song is sung">
+      <div class="ends"><span>3 years ago</span><span id="dayLabel" class="when">today</span><span>in 3 years</span></div>
+      <div class="steps" role="group" aria-label="Move through time">
+        <button class="chip" type="button" data-step="-365">‹ year</button>
+        <button class="chip" type="button" data-step="-30">‹ month</button>
+        <button class="chip" type="button" data-step="-1">‹ day</button>
+        <button class="chip" type="button" data-step="0">today</button>
+        <button class="chip" type="button" data-step="1">day ›</button>
+        <button class="chip" type="button" data-step="30">month ›</button>
+        <button class="chip" type="button" data-step="365">year ›</button>
+      </div>
+    </div>
+  </section>
+
+  <section class="panel" aria-labelledby="othersTitle" data-gap="18">
+    <h2 id="othersTitle">Other machines <span class="aside hint">the same song, from the same version, on the same day</span></h2>
+    <div class="compare-wrap" id="compare"><p class="hint">Asking other machines…</p></div>
+    <form class="make-up" id="makeUp">
+      <label class="hint" for="machineName">Make up a machine:</label>
+      <input id="machineName" placeholder="any name" autocomplete="off" maxlength="24">
+      <button class="btn quiet" type="submit">Add it</button>
+      <span class="hint">The same name always makes the same machine.</span>
+    </form>
+  </section>
+
+  <div class="two">
+    <section class="panel" aria-labelledby="singTitle">
+      <h2 id="singTitle">Sing it</h2>
+      <p>Sing along, and the song learns a little of your timing and inflection. Your recording stays on this computer; only a few numbers about how you sang go into the song, and never your name unless you ask.</p>
+      <div class="actions"><button class="btn" id="sing" type="button">Open the singing page</button></div>
+      <p class="hint" id="singNote"></p>
+    </section>
+    <section class="panel" id="recordPanel" aria-labelledby="recordTitle">
+      <h2 id="recordTitle">Record it</h2>
+      <p>Makes the finished recording and its record, with every choice you made marked as yours.</p>
+      <div class="actions"><button class="btn primary" id="record" type="button">
+        <svg class="icon" viewBox="0 0 16 16" aria-hidden="true"><circle cx="8" cy="8" r="5" fill="currentColor"/></svg>
+        Record it</button></div>
+      <div class="saved" id="saved" aria-live="polite"></div>
+      <p class="hint" id="packetNote"></p>
+    </section>
+  </div>
+
+  <footer>Nothing on this page leaves this computer.</footer>
+</main>
+
+<div class="player" role="region" aria-label="Player">
+  <div class="wrap">
+    <button class="big" id="playPause" type="button" aria-label="Play" disabled>
+      <svg viewBox="0 0 16 16" aria-hidden="true"><path id="playShape" d="M4 2.5v11l9-5.5z" fill="currentColor"/></svg>
+    </button>
+    <div class="what">
+      <div class="title" id="nowTitle">Nothing playing</div>
+      <div class="sub" id="nowSub">Press a play button beside any part of the song.</div>
+      <div class="bar" id="bar"><div id="barFill"></div></div>
+    </div>
+    <div class="time" id="nowTime"></div>
+    <button class="btn" id="recordNow" type="button" title="Record it">
+      <svg class="icon" viewBox="0 0 16 16" aria-hidden="true"><circle cx="8" cy="8" r="5" fill="currentColor"/></svg>
+      <span class="wide-only">Record it</span>
+    </button>
+  </div>
+</div>
+<div class="toast" id="toast" role="status" aria-live="polite"></div>
+<audio id="audio" preload="auto"></audio>
+</body>
+</html>
