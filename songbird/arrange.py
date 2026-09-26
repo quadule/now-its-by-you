@@ -906,6 +906,9 @@ def hold(genome: Genome, lyrics: Lyrics) -> dict:
         },
         "bridge": [{"id": s.id, "slots": dict(s.slots)} for s in sung if s.block == "bridge"],
     }
+    last = {k: v for k, v in refrains[-1].slots.items() if k not in head} if refrains else {}
+    if last:  # the last refrain's couplet (the canon) with its own slot words, where it has any
+        held["refrain"]["last"] = {"id": refrains[-1].id, "slots": last}
     tag = next((s.id for s in sung if s.block == "tag"), None)
     if tag is not None:
         held["tag"] = tag
@@ -981,6 +984,14 @@ def held_problem(genome: Genome, form: Iterable[str], held: dict) -> str | None:
             return str(e)
     if len(set(ids)) != len(ids):
         return "a refrain couplet is held twice"
+    if blocks["refrain"] and slot_names(couplets[last]["lines"]):
+        kept = refrain.get("last") or {}
+        if kept.get("id", last) != last:
+            return f"the last refrain sings the {last} couplet, not {kept.get('id')!r}"
+        try:
+            _held_picks(couplets[last], kept.get("slots", {}), f"couplet {last}")
+        except ArrangeError as e:
+            return str(e)
     stanzas = {b["id"]: b for b in bank.get("bridges", [])}
     for j, b in enumerate(held.get("bridge", ())[: blocks["bridge"]]):
         want = [rules["bridge"]["always"]] if j == 0 else list(rules["bridge"].get("extra", ()))
@@ -1037,7 +1048,7 @@ def sing(genome: Genome, form: Iterable[str], held: dict) -> Lyrics:
                 picks["question"] = _turned(i, n, width(spec["slots"], "question"))
             entry, kept = ((couplets[held_couplets[i]["id"]], held_couplets[i].get("slots", {})) if i < n - 1
                            else (last, held.get("refrain", {}).get("last", {}).get("slots", {})))
-            cpicks = {k: _index(entry["slots"][k], kept.get(k)) or 0 for k in slot_names(entry["lines"])}
+            cpicks = {k: _index(entry["slots"][k], kept.get(k)) for k in slot_names(entry["lines"])}
             lines = song.sing(spec, picks) + song.sing(entry, cpicks)
             sections.append(Sung(name, block, entry["id"], _chosen(spec, picks) | _chosen(entry, cpicks), lines))
         elif block == "bridge":
@@ -1140,6 +1151,11 @@ def couplet_ids(genome: Genome) -> tuple[str, ...]:
     song = _song(genome)
     last = song.rules["refrain"]["couplet_last"]
     return tuple(c["id"] for c in song.bank["refrain"]["couplets"] if c["id"] != last)
+
+
+def last_couplet(genome: Genome) -> str:
+    """The couplet the last refrain always sings (the canon)."""
+    return _song(genome).rules["refrain"]["couplet_last"]
 
 
 def bridge_ids(genome: Genome) -> tuple[str, tuple[str, ...]]:

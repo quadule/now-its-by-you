@@ -31,7 +31,7 @@ arc), with defaults that are the seed's arrangement.
 from __future__ import annotations
 
 import re
-from dataclasses import asdict, dataclass, field, fields
+from dataclasses import asdict, dataclass, field, fields, replace
 from functools import lru_cache
 
 import numpy as np
@@ -1118,8 +1118,13 @@ def held_through(ctx: Context, tune: list[Tune]) -> list[Tune]:
     for t in tune:
         chord = ctx.pcs(ctx.chord_at(t.u0).symbol)
         if out and t.pitch % 12 not in chord and out[-1].pitch % 12 in chord and abs(out[-1].u1 - t.u0) < 1e-9:
-            out[-1] = Tune(out[-1].u0, t.u1, out[-1].pitch, out[-1].vel, out[-1].sung, out[-1].section, out[-1].first,
-                           t.last)
+            held = out[-1]
+            # a lineage's ornament at the note's start keeps its pace over the longer note; one leading on into
+            # the next note has nothing to lead into now
+            keep = held.ornament and not held.ornament[-1][1]
+            ratio = (held.u1 - held.u0) / max(t.u1 - held.u0, 1e-9)
+            out[-1] = replace(held, u1=t.u1, last=t.last,
+                              ornament=tuple((f * ratio, s) for f, s in held.ornament) if keep else ())
         else:
             out.append(t)
     return out

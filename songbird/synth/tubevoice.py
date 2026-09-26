@@ -134,7 +134,8 @@ def sing(notes: list[Note], sr: int, voice: V.VoiceParams, seed: int = 0, lexico
     n_blocks = int(np.ceil((max(s.t1 for s in segs) + 0.5) * sr / V.BLOCK))
     tracks = V.control_tracks(segs, n_blocks, sr, voice)
     tb = tracks["tb"]
-    f0_blocks = V.pitch_track(notes, n_blocks, sr, voice, rng)
+    # each vowel's end, so an ornament (and a gesture's bend or fall) happens while it can be heard
+    f0_blocks = V.pitch_track(notes, n_blocks, sr, voice, rng, [s.t1 for s in segs if s.role == "vowel"])
     art = articulation(segs, tb)
 
     sections = tube.sections(voice.tract, sr)
