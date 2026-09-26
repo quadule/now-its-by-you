@@ -849,7 +849,7 @@ def _slide_sound(notes, sr: int, length: int, rng: np.random.Generator, d: dict,
         volume = _swell_track(swells, length, sr, floor=-30.0)
         if volume is not None:
             emf *= volume
-        chain = electric._chain(rig_amp, rig_s, sr)
+        chain = electric._chain(rig_amp, rig_s, sr, crunch=False)  # the slide's amp is set clean
         chain.p[21] = electric.master_volume("electric", rig_s, sr)
         return _warmed(chain, emf, sr)
     force = np.zeros(length)
