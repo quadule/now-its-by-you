@@ -82,11 +82,12 @@ VIOLA = Body(  # the viola: A0 near 230 Hz, the B1 pair near 410 and 460, a brid
     dense=(650.0, 9000.0, 130), tilt=-1.7, q=(34.0, 20.0), direct=0.2, lowcut=160.0, highcut=8500.0,
     hill=(2100.0, 1.3, 6.5),
 )
-HARMONICA = Body(  # a harmonica's comb and cover plates in a player's cupped hands: the hands' cavity near 450 Hz,
-    # the plates' bright hump near 3 kHz; hardly any box at all, so mostly the reed itself (direct)
-    modes=((450.0, 3.0, 3.0), (1150.0, 4.0, 1.5), (2900.0, 5.0, 4.0), (4300.0, 6.0, 1.5)),
-    dense=(1500.0, 9000.0, 24), tilt=-2.0, q=(10.0, 6.0), direct=0.75, lowcut=150.0, highcut=10000.0,
-    length=0.06,
+HARMONICA = Body(  # a harmonica's comb and cover plates: hardly any box at all, the reed heard as it is, flat from
+    # 120 Hz to 11 kHz (resonant modes here, summed with the reed's direct sound, cut notches of 10-18 dB above
+    # 5 kHz); the plates' broad hump near 3 kHz, the player's mouth, the radiation and the hands are shaped by
+    # harmonica.py itself, harmonic by harmonic
+    modes=(), dense=(2000.0, 12000.0, 0), tilt=0.0, q=(4.0, 3.0), direct=1.0, lowcut=120.0, highcut=11000.0,
+    length=0.02,
 )
 REED_BOX = Body(  # a harmonium's reed chamber and bellows box: a few broad, nasal humps
     modes=((180.0, 6.0, 2.0), (420.0, 5.0, 5.0), (1250.0, 4.0, 4.0), (2600.0, 4.0, 1.0)),
