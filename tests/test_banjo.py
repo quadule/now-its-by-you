@@ -2,6 +2,7 @@
 pick, the hands' strokes, its level and its cost."""
 
 import time
+from pathlib import Path
 
 import numpy as np
 import pytest
@@ -10,6 +11,8 @@ from _levels_b import TARGETS, loudness, streams
 
 from songbird.score import Note
 from songbird.synth import banjo, body, fretwork
+
+ROOT = Path(__file__).parent.parent
 
 
 def note(start, dur, pitch, vel=0.6, art="pick"):
@@ -91,6 +94,49 @@ def test_the_head_takes_the_strings_energy_fast():
     """An open string falls 60 dB in one to two seconds, a high fretted note far sooner."""
     low, first, high = (t60(play([note(0.05, 4.0, p)], 4.3), 0.05) for p in (50, 62, 81))
     assert 1.4 < low < 2.4 and 1.0 < first < 1.9 and high < 0.9
+
+
+def test_the_fifth_string_is_the_tuning_of_the_key():
+    assert [banjo.fifth_string(t) for t in (67, 62, 69, 60, 64)] == [67, 69, 69, 67, 64]
+    assert all(banjo.fifth_string(t) == banjo.tuning(t)[1] for t in range(60, 72))
+
+
+def test_one_banjo_plays_clawhammer_verses_and_picked_refrains():
+    """Each passage by the strokes it names: the thumb and plain notes of a clawhammer verse are the nail's
+    and the thumb's flesh, those of a rolled refrain the picks'; a plain passage far from both is played as
+    the part mostly is."""
+    verse = [note(0.0, 0.5, 62, art="claw"), note(0.5, 0.25, 57, art="brush"), note(0.75, 0.25, 69, art="thumb")]
+    refrain = [note(4.0 + 0.25 * k, 0.5, p, art="pick") for k, p in enumerate((54, 57, 62, 69, 57, 62, 69, 62))]
+    alone = [note(9.0, 0.5, 66, art="")]
+    notes = verse + refrain + [note(6.2, 0.5, 69, art="thumb")] + alone
+    assert banjo.hands(notes, False) == [True, True, True] + [False] * 8 + [False, False]
+    assert banjo.hands(notes, True)[-1] is True
+    # heard: the verse's thumb is the flesh (darker) and the refrain's the thumbpick
+    flesh = play(verse + refrain, 7.0)
+    picked = play([note(0.0, 0.5, 62, art="pick"), note(0.5, 0.25, 57, art="pick"),
+                   note(0.75, 0.25, 69, art="thumb")] + refrain, 7.0)
+    assert centroid(flesh, 0.75, 1.0) < 0.85 * centroid(picked, 0.75, 1.0)
+
+
+def test_the_string_bands_banjo_and_mandolin_play_their_own_strokes():
+    """The string band's idioms, as the banjo and mandolin know them: clawhammer written as the nail, the
+    brush and the thumb, forward rolls with the thumb on the fifth string as the banjo is tuned (A4 in D),
+    and the mandolin's backbeat as its chop."""
+    from dataclasses import replace
+
+    from songbird import genome as G
+    from songbird.realize import choose_params, realize
+
+    g = G.load(ROOT / "songs" / "h-now-its-by-you.json")
+    p = replace(choose_params(g, style="stringband"), form=("intro", "verse", "refrain"), choir=0)
+    score = realize(g, p)
+    tonic = int(score.band["tonic"])
+    arts = {part: {n.art for n in score.notes if n.part == part} for part in ("banjo", "mandolin")}
+    assert {"claw", "brush", "thumb", "pick"} <= arts["banjo"] and not arts["banjo"] & {"down", "up"}
+    assert "chop" in arts["mandolin"] and "mute" not in arts["mandolin"]
+    rolls = [n for n in score.notes if n.part == "banjo" and n.art == "pick"]
+    drone = sum(1 for n in rolls if n.pitch == banjo.fifth_string(tonic))
+    assert drone >= 0.2 * len(rolls)  # two notes in eight on the fifth string, but where the tune would rub
 
 
 def test_clawhammer_is_played_on_an_open_back_and_picks_on_a_resonator():
@@ -199,6 +245,15 @@ def test_silent_before_its_first_note_no_dc_and_quiet_after_its_last():
     for ch in range(2):
         assert abs(y[:, ch].mean()) < 1e-3 * np.sqrt(np.mean(y[:, ch] ** 2))
     assert np.abs(y[-int(0.05 * SR):]).max() < 1e-3 * peak
+
+
+def test_a_stopped_note_leaves_only_the_drone_ringing_faintly():
+    """Of the open strings only the fifth, never fretted, rings on in sympathy: a quarter of a second after
+    a D4 is stopped, 60 dB down (a long string ringing in sympathy through fretted chords and chops left it
+    only 50 dB down)."""
+    y = play([note(0.1, 0.25, 62, vel=0.8)], 1.5)
+    e = env_db(y)
+    assert e[60] < e.max() - 60
 
 
 def test_a_stopped_note_ends_without_a_click():

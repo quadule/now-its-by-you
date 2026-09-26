@@ -28,8 +28,9 @@ head cancel the front below its first mode, 12 dB an octave, and is mellower abo
 follows the part's style (mostly clawhammer: an open back; picks: a resonator) and, for a few makers,
 the other way round.
 
-The hands: see ARTICULATIONS. A clawhammer part's plain notes are the nail's; a picked part's the
-fingerpicks'.
+The hands: see ARTICULATIONS. One banjo may be played both ways in a song (the string band's
+clawhammer verses and rolled refrains): a clawhammer passage's plain notes and thumb are the nail's
+and the thumb's flesh; a picked passage's the fingerpicks' and a thumbpick's.
 """
 
 from __future__ import annotations
@@ -48,7 +49,7 @@ PULL = 0.6  # the break angle's pull: its 2f at velocity 1 about 21 dB under the
 FORCE = 1.0  # the strings' force scale
 
 ARTICULATIONS = {
-    "": "the part's plain stroke: the nail in a clawhammer part, a fingerpick otherwise",
+    "": "the passage's plain stroke: the nail where it is clawhammer, a fingerpick where it is picked",
     "pick": "three-finger style: a metal fingerpick near the bridge, very bright and clicky",
     "claw": "clawhammer: the nail strikes down over the end of the neck: rounder, with a knock",
     "brush": "clawhammer brush: the nail down across the strings of a chord, low to high",
@@ -91,9 +92,15 @@ def tuning(tonic: int) -> tuple[tuple[int, int, int, int], int, int]:
         k = k - 12 if k > 6 else k
         fourth = 50 + k
         longs = (fourth + 12, fourth + 9, fourth + 5, fourth)
+    return longs, fifth_string(tonic), max(k, 0)
+
+
+def fifth_string(tonic: int) -> int:
+    """The short fifth string's pitch for a key: its tonic or fifth, whichever lies nearer G4 (from E4 to
+    B4; the tonic if both are as near). A part-writer's drone (idioms.roll_notes) asks for it here."""
+    t = int(tonic) % 12
     pcs = (t, (t + 7) % 12)
-    drone = min((p for p in range(64, 72) if p % 12 in pcs), key=lambda p: (abs(p - 67), p % 12 != t))
-    return longs, drone, max(k, 0)
+    return min((p for p in range(64, 72) if p % 12 in pcs), key=lambda p: (abs(p - 67), p % 12 != t))
 
 
 def head(f1: float, q: float, bridge: float, resonator: bool, helm: float, bright: float) -> body.Body:
@@ -140,6 +147,26 @@ def style(notes, back: float) -> tuple[bool, bool]:
     return clawhammer, (not clawhammer) if back > 0.12 else clawhammer
 
 
+def hands(notes, clawhammer: bool, reach: float = 2.0) -> list[bool]:
+    """For each note, whether its passage is clawhammer (True) or picked (False): a song whose verses are
+    clawhammer and refrains rolls is played so, on the one banjo. A note that names the nail (claw,
+    brush) or a pick is played so; any other (the thumb, a plain note, a hammer-on) as the nearest note
+    that does, within `reach` seconds, or as the part mostly is."""
+    marked = [(n.start, n.art in ("claw", "brush")) for n in notes if n.art in ("claw", "brush", "pick")]
+    if not marked:
+        return [clawhammer] * len(notes)
+    at = np.array([t for t, _ in marked])
+    nail = np.array([m for _, m in marked])
+    out = []
+    for n in notes:
+        if n.art in ("claw", "brush", "pick"):
+            out.append(n.art != "pick")
+            continue
+        k = int(np.argmin(np.abs(at - n.start)))
+        out.append(bool(nail[k]) if abs(at[k] - n.start) <= reach else clawhammer)
+    return out
+
+
 def _maker(make: np.random.Generator) -> dict:
     """This machine's banjo: every draw in a fixed order, whatever the part."""
     return dict(
@@ -172,6 +199,7 @@ def render(name: str, notes, sr: int, length: int, rng: np.random.Generator, mak
     tonic = int(settings.get("tonic", 62))
 
     clawhammer, resonator = style(notes, quirks["back"])
+    nail = {id(n): m for n, m in zip(notes, hands(notes, clawhammer))}
 
     longs, drone, capo = tuning(tonic)
     fingered = fretwork.assign(notes, board := neck(tonic))
@@ -198,12 +226,11 @@ def render(name: str, notes, sr: int, length: int, rng: np.random.Generator, mak
         return np.abs(sosfreqz(back, worN=freqs, fs=sr)[1]) ** 2
 
     freqs, power = fretwork.body_power(ir, sr, behind, place=SPEC["banjo"]["place"])
-    strokes = [_stroke(f, sr, quirks, bright, wear, clawhammer, capo, drone, rng) for f in fingered]
+    strokes = [_stroke(f, sr, quirks, bright, wear, nail[id(f.note)], capo, drone, rng) for f in fingered]
     force = fretwork.play(strokes, strings, sr, length, rng, freqs, power)
-    # the drone, and the lowest long string on the tonic, answer what shares their harmonics
-    low = min((p for p in longs if p % 12 == tonic % 12), default=None)
-    opens = [drone] + ([low] if low is not None else [])
-    force = force + pluck.sympathetic(force, sr, opens, coupling=0.0015, decay=1.5, brightness=0.4)
+    # the drone, never fretted, answers what shares its harmonics (a D string's third harmonic is the A
+    # drone's second): the sympathetic ring Politzer counts among the banjo's brightness
+    force = force + pluck.sympathetic(force, sr, [drone], coupling=0.0015, decay=1.5, brightness=0.4)
     out = body.resonate(force, ir)
     if back is not None:
         out = sosfilt(back, out, axis=0)
@@ -212,7 +239,7 @@ def render(name: str, notes, sr: int, length: int, rng: np.random.Generator, mak
 
 def _stroke(f: fretwork.Fingered, sr: int, q: dict, bright: float, wear: float, clawhammer: bool, capo: int,
             drone: int, rng: np.random.Generator) -> fretwork.Stroke:
-    """What the hands do for one fingered note."""
+    """What the hands do for one fingered note (clawhammer: whether its passage is played with the nail)."""
     note = f.note
     art = note.art if note.art in ARTICULATIONS else ""
     plain = "claw" if clawhammer else "pick"

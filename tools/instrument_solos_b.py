@@ -8,6 +8,8 @@ The phrases live in tools/instrument_phrases_b/, one file per family, each with
                            mix_as={instrument: an existing mix role}, optional)}
     LEVELS  = {instrument: (kind, [Note, ...])}, kind one of comping, lead, percussion, bass, colour:
               the instrument's typical part, whose placed loudness should meet that kind's target.
+    LEADS   = {instrument: [Note, ...]}, optional: a comping instrument's break, played as a style's lead
+              plays it, measured against the lead target too.
 
 For every phrase, writes <out>/<title>.flac: its parts rendered, placed and levelled as their SPECs
 say, through the house mix and its room (synth.mix), mastered to -18 LUFS so they can be compared
@@ -133,6 +135,13 @@ def main() -> None:
                     module.render(name, tuple(part), SR, int((span(part) + 1.0) * SR), rng, make, dict(SETTINGS))
                     row += f"  3-minute part {time.process_time() - t:5.1f} s CPU ({len(part)} notes)"
                 print(row, flush=True)
+            for name, notes in getattr(family, "LEADS", {}).items():  # a family's breaks, as a style's lead plays them
+                if wanted and name not in wanted:
+                    continue
+                length = int((span(notes) + 1.0) * SR)
+                lufs = master.loudness(placed(module_for(family, name), name, notes, length), SR)
+                print(f"{name:18s} {'lead':10s} {lufs:6.1f} LUFS  target {TARGETS['lead']:6.1f}  "
+                      f"({lufs - TARGETS['lead']:+.1f})", flush=True)
         if args.no_render:
             continue
         for title, phrase in family.PHRASES.items():

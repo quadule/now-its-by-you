@@ -126,6 +126,13 @@ def test_a_chop_is_a_short_knock():
     assert chopped[20] < chopped.max() - 25 and strummed[20] > chopped[20] + 15
 
 
+def test_a_chop_leaves_nothing_ringing():
+    """The chop's fretting hand lies across all four courses, so no open course rings on in sympathy: a
+    fifth of a second after the stroke nothing is left (80 dB down)."""
+    chopped = env_db(play([note(0.1, 0.5, p, 0.7, art="chop") for p in CHOP["D"]], 1.0))
+    assert chopped[30] < chopped.max() - 80
+
+
 def test_harder_is_louder_and_brighter():
     soft, hard = (play([note(0.05, 1.5, 69, vel=v)], 1.7) for v in (0.3, 0.9))
     swing = 20 * np.log10(fretwork.dynamics(0.9) / fretwork.dynamics(0.3))

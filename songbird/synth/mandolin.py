@@ -30,7 +30,7 @@ from __future__ import annotations
 
 import numpy as np
 
-from . import body, fretwork, pluck
+from . import body, fretwork
 
 SCALE_MM = 350.0  # 13 7/8 inches
 OPENS = (55, 62, 69, 76)  # G3 D4 A4 E5
@@ -131,13 +131,12 @@ def render(name: str, notes, sr: int, length: int, rng: np.random.Generator, mak
     bright = float(np.clip(settings.get("brightness", 0.5), 0.0, 1.0))
     wear = float(np.clip(settings.get("wear", 0.25), 0.0, 1.0))
     size = float(np.clip(settings.get("body", 1.0), 0.5, 2.0))
-    tonic = int(settings.get("tonic", 62))
     rate = tremolo_rate(settings, quirks["rate"])
 
     board = fretwork.Board(opens=tuple(float(p) for p in OPENS), top=(17,) * 4, fretted=(True,) * 4,
                            order=(0, 1, 2, 3))
     fingered = fretwork.assign(notes, board)
-    fretwork.spread(fingered, board, lambda art: {"chop": 0.009, "mute": 0.006}.get(art, 0.016), rng)
+    fretwork.spread(fingered, board, lambda art: {"chop": 0.009, "mute": 0.006, "tremolo": 0.006}.get(art, 0.016), rng)
 
     detune = (1.0 + 5.0 * wear) * quirks["pairs"]  # 1 to 6 cents between a course's strings
     loss = tuple(0.14 - 0.08 * bright + (0.05 if k < 2 else 0.0) for k in range(4))  # G and D courses wound
@@ -160,11 +159,8 @@ def render(name: str, notes, sr: int, length: int, rng: np.random.Generator, mak
         chord = together[round(f.note.start, 3)] > 1
         stroke, last = _stroke(f, chord, sr, quirks, bright, wear, rate, last, rng)
         strokes.append(stroke)
+    # (no open courses ringing in sympathy: a chop's fretting hand lies across all four)
     force = fretwork.play(strokes, strings, sr, length, rng, freqs, power)
-    # the open courses on the tonic and the fifth answer what shares their harmonics
-    opens = [p for p in OPENS if p % 12 in (tonic % 12, (tonic + 7) % 12)]
-    if opens:
-        force = force + pluck.sympathetic(force, sr, opens, coupling=0.001, decay=1.2, brightness=0.5)
     return body.resonate(force, ir)
 
 

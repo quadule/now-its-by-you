@@ -819,40 +819,66 @@ def w_travis(ctx: StyleContext, i: int, part: str) -> list[Ev]:
     return ring_on(out)
 
 
+def own_art(part: str, art: str, plain: str) -> str:
+    """The instrument's own stroke for an articulation where its module plays one (its SPEC names it: a
+    banjo's `claw`, a mandolin's `chop`), else the plain stroke every plucked instrument knows."""
+    from .synth import instruments
+
+    return art if art in instruments.spec(part).get("articulations", {}) else plain
+
+
+def fifth_string(ctx: StyleContext, part: str) -> int | None:
+    """The pitch a banjo's short fifth string is tuned to for this key, as its module tunes it (A4 in D,
+    G4 in G), or None for an instrument without one."""
+    from .synth import instruments
+
+    _, found = instruments.registered(part)
+    tuned = getattr(found[1], "fifth_string", None) if found is not None else None
+    return int(tuned(ctx.tonic)) if callable(tuned) else None
+
+
 def roll_notes(ctx: StyleContext, part: str, c: Chord, u0: float, u1: float, i: int) -> tuple[list[int], int]:
-    """A banjo's three fretted strings for a chord, and its short fifth string: the tonic, high."""
+    """A banjo's three fretted strings for a chord, and its short fifth string: the drone the banjo is
+    tuned to (the key's tonic or fifth, high), or the tonic high on an instrument without one."""
     tones = ctx.tones(c, u0, u1, colour=False)
     lo, hi = B.register_of(part)
     chord = ctx.voicing(part, tones, max(lo, ctx.tonic - 7), min(hi, ctx.tonic + 12), u0, u1, size=3)
-    drone = nearest({ctx.tonic % 12}, ctx.tonic + 10, ctx.tonic + 5, min(hi, ctx.tonic + 17))
-    if not ctx.fits(drone, c, u0, u1):  # the open fifth string, stopped where it would rub against the tune
+    drone = fifth_string(ctx, part)
+    if drone is None:
+        drone = nearest({ctx.tonic % 12}, ctx.tonic + 10, ctx.tonic + 5, min(hi, ctx.tonic + 17))
+    if not ctx.fits(drone, c, u0, u1):  # the open fifth string, left for a chord tone where it would rub
         drone = nearest(set(tones), drone, ctx.tonic + 5, min(hi, ctx.tonic + 17))
     return chord or [ctx.tonic], drone
 
 
 def w_roll(ctx: StyleContext, i: int, part: str) -> list[Ev]:
-    """A banjo's forward roll: thumb, index, middle, over and over across the eighths (or the triplets), the
-    thumb coming back to the high fifth string, never on a sung note."""
+    """A banjo's forward roll: thumb, index, middle, thumb, index, middle, thumb, middle across the eighths
+    (third string, second, first, fifth, second, first, fifth, first), the thumb's notes of the 3-3-2 a
+    little stronger (the roll's drive), never on a sung note; in triplets thumb, index, middle."""
     out = []
     for c in ctx.chords_in(i):
         subs = ctx.grid.subs_in(c.u0, c.u1)
         for k, u in enumerate(subs):
             chord, drone = roll_notes(ctx, part, c, u, u + ctx.beat, i)
             low, mid, top = chord[0], chord[len(chord) // 2], chord[-1]
-            cell = [low, mid, top, drone, mid, top, low, drone][k % 8] if len(ctx.grid.subs) >= 8 else \
-                [low, mid, top, drone, mid, top][k % 6]
+            eighths = len(ctx.grid.subs) >= 8
+            step = k % (8 if eighths else 6)
+            cell = ([low, mid, top, drone, mid, top, drone, top] if eighths else [low, mid, top, drone, mid, top])[step]
             sung = {p for _a, _b, p, _s in ctx.sung_in(u, u + ctx.beat / 2)}
             if cell in sung:
                 cell = drone if drone not in sung else cell - 12
-            accent = 0.62 if ctx.grid.on_beat(u) else 0.5
+            thumb = step in ((0, 3, 6) if eighths else (0, 3))
+            accent = (0.64 if step == 0 else 0.58) if thumb else 0.5
             out.append(ev(part, u, u + 2 * ctx.beat, cell, ctx.vel(part, u, accent, 0.72), art="pick", i=i))
     return ring_on(out)
 
 
 def w_claw(ctx: StyleContext, i: int, part: str) -> list[Ev]:
-    """Clawhammer: bum-ditty, a note struck down on the beat, the back of the nail brushing the strings,
-    the thumb catching the high fifth string: the long-short-short the song's feet already have."""
+    """Clawhammer: bum-ditty, a note struck down on the beat with the nail, the back of the nail brushing
+    the strings, the thumb catching the high fifth string: the long-short-short the song's feet already
+    have. A banjo plays them as its own strokes (claw, brush, thumb); another instrument strums them."""
     out = []
+    bum, brush, thumb = own_art(part, "claw", "down"), own_art(part, "brush", "down"), own_art(part, "thumb", "up")
     for c in ctx.chords_in(i):
         for bar in sorted(set(ctx.grid.bars(c.u0, c.u1)) | {c.u0 - ((c.u0 - ctx.grid.origin) % ctx.grid.bar)}):
             cells = ([(0.0, "bum"), (2.0, "dit"), (3.0, "ty"), (4.0, "bum"), (6.0, "dit"), (7.0, "ty")]
@@ -865,20 +891,23 @@ def w_claw(ctx: StyleContext, i: int, part: str) -> list[Ev]:
                 if what == "bum":
                     sung = {p for _a, _b, p, _s in ctx.sung_in(u, u + ctx.beat)}
                     p = next((q for q in reversed(chord) if q not in sung), chord[0])
-                    out.append(ev(part, u, u + ctx.beat, p, ctx.vel(part, u, 0.66, 0.75), art="down", i=i))
+                    out.append(ev(part, u, u + ctx.beat, p, ctx.vel(part, u, 0.66, 0.75), art=bum, i=i))
                 elif what == "dit":
                     for j, p in enumerate(chord):
-                        out.append(ev(part, u, u + ctx.beat / 2, p, ctx.vel(part, u, 0.42, 0.75), art="down", i=i,
+                        out.append(ev(part, u, u + ctx.beat / 2, p, ctx.vel(part, u, 0.42, 0.75), art=brush, i=i,
                                       shift=0.01 * j))
                 else:
-                    out.append(ev(part, u, u + ctx.beat, drone, ctx.vel(part, u, 0.45, 0.75), art="up", i=i))
+                    out.append(ev(part, u, u + ctx.beat, drone, ctx.vel(part, u, 0.45, 0.75), art=thumb, i=i))
     return ring_on(out)
 
 
 def w_chop(ctx: StyleContext, i: int, part: str) -> list[Ev]:
-    """A mandolin's chop: a short, muted three-note chord on every backbeat."""
+    """A mandolin's chop: a three-note chord on every backbeat, struck hard and choked at once by the
+    fretting hand (the mandolin's own `chop`: a burst of chord, the pick's scrape, the box's knock; a
+    short muted strum on an instrument without one)."""
     out = []
     lo, hi = B.register_of(part)
+    art = own_art(part, "chop", "mute")
     for c in ctx.chords_in(i):
         rng = ctx.rand(part, c.u0)
         for u in ctx.grid.beats_in(c.u0, c.u1):
@@ -888,17 +917,23 @@ def w_chop(ctx: StyleContext, i: int, part: str) -> list[Ev]:
             notes = ctx.voicing(part, tones, max(lo, ctx.tonic - 5), min(hi, ctx.tonic + 14), u, u + ctx.beat / 2, 3)
             vel = ctx.vel(part, u, 0.82, 0.9) * rng.uniform(0.9, 1.05)
             for j, p in enumerate(notes):
-                out.append(ev(part, u, u, p, vel, art="mute", i=i, length=0.11, shift=0.006 * j))
+                out.append(ev(part, u, u, p, vel, art=art, i=i, length=0.11, shift=0.006 * j))
     return out
 
 
 def w_tremolo(ctx: StyleContext, i: int, part: str) -> list[Ev]:
     """Tremolo picking: two notes of the chord above the tune picked fast and even, as a mandolin or an
-    electric guitar through a tremolo sustains a chord."""
+    electric guitar through a tremolo sustains a chord. An instrument with a tremolo stroke of its own (a
+    mandolin's: down and up at its player's rate, each pick landing on the ringing course) holds the two
+    notes through the chord with it."""
     out = []
+    own = own_art(part, "tremolo", "") == "tremolo"
     for c in ctx.chords_in(i):
         lo, hi = high_range(ctx, part, i, 2, 12)
         notes = ctx.voicing(part, ctx.tones(c, c.u0, c.u1), lo, hi, c.u0, c.u1, 2, chord=c)
+        if own:
+            out += [ev(part, c.u0, c.u1, p, ctx.vel(part, c.u0, 0.36), art="tremolo", i=i) for p in notes]
+            continue
         for u in ctx.grid.fine_in(c.u0, c.u1):
             for p in notes:
                 out.append(ev(part, u, u + 0.4, p, ctx.vel(part, u, 0.32 if not ctx.grid.on_beat(u) else 0.38), i=i))
