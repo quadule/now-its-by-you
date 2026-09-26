@@ -430,7 +430,7 @@ def sing(notes, sr: int, voice, seed: int = 0, lexicon: dict | None = None, mix:
     phone is sung), our pitch track and our dynamics, through the learned throat."""
     from scipy.signal import butter, resample_poly, sosfilt
 
-    from .voice import BLOCK, breaths, pitch_track, schedule
+    from .voice import BLOCK, breaths, pitch_track, schedule, sway
 
     net = load(model)
     notes = sorted(notes, key=lambda n: n.start)
@@ -454,7 +454,8 @@ def sing(notes, sr: int, voice, seed: int = 0, lexicon: dict | None = None, mix:
     vowels = [s for s in segs if s.role == "vowel"]
     n_blocks = int(np.ceil(duration * RATE / BLOCK))
     accents = [voice.accent * float(np.clip(20 * np.log10(s.amp / 0.9) / 3.0, 0.0, 1.0)) for s in vowels]
-    f0b = pitch_track(notes, n_blocks, RATE, voice, rng, [s.t1 for s in vowels], accents, segs)
+    parts: dict = {}
+    f0b = pitch_track(notes, n_blocks, RATE, voice, rng, [s.t1 for s in vowels], accents, segs, parts)
     f0 = np.interp(np.arange(n) * FRAME, (np.arange(n_blocks) + 0.5) * BLOCK / RATE, f0b)
     sung = np.median([n.pitch + voice.shift for n in notes])
     if isinstance(mix, str) and mix.startswith("machine:"):  # a singer of its own, drawn for this pitch
@@ -463,6 +464,9 @@ def sing(notes, sr: int, voice, seed: int = 0, lexicon: dict | None = None, mix:
     factor = voice.tract / TRACT
     sp, ap = warp(sp, factor), warp(ap, factor)
     times = np.arange(n) * FRAME
+    # the vibrato's swing in loudness (the network's own envelope already moves as slowly as a singer's)
+    trem = np.interp(times, (np.arange(n_blocks) + 0.5) * BLOCK / RATE, parts["tremolo"])
+    sp += (sway(n, 1.0 / FRAME, voice, seed, trem, slow=False) * np.log(10.0) / 10.0)[:, None]
     for s in vowels:  # a phrasing's swell grows or fades the vowel from its start to its end
         if s.swell:
             i0, i1 = np.searchsorted(times, [s.t0, s.t1])

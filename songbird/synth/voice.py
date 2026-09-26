@@ -74,11 +74,13 @@ class VoiceParams:
     ease: float = 0.75  # dB softer for a line's first syllable, eased into
     let_go: float = 1.0  # dB softer for its last, let go of
     climb: float = 0.5  # dB louder per semitone above the line's middle
-    taper: float = -3.0  # dB a held vowel fades from a third of the way through to its end
+    taper: float = -4.0  # dB a held vowel fades from a fifth of the way through to its end, as natural singers' do
     vibrato_from: float = 0.7  # seconds of note on which about four in ten notes get vibrato (more at a line's end; never all)
     breathe: float = 0.18  # seconds between lines needed for an audible breath
     inhale: float = -36.0  # dB of that breath's loudest moment against the sung vowels, as the natural singers breathe
     accent: float = 8.0  # cents a strongly leaned-on note is lifted
+    tremolo: float = 0.4  # dB the loudness swings with a vibrato of vibrato_depth
+    waver: float = 2.2  # dB of slow unsteadiness in a held note's loudness: breath pressure never holds still
     spread: float = 1.0  # how unalike the singer's moves are: transitions, rises, vibratos, falls, consonants (0 sings each alike)
     focus: float = 1.0  # dB more on a word the lyric marks as its line's focus (*word*), most on its stressed syllable (2 cost words)
     reduce: float = 0.0  # how far a little word's vowel off the beat moves toward "uh" (0.3 cost the words: WER 15% -> 18%)
@@ -296,11 +298,11 @@ def control_tracks(segs: list[Segment], n_blocks: int, sr: int, voice: VoicePara
             else:
                 f = toward(ph.VOWEL_FORMANTS[s.phone])
                 keys += [(s.t0 + tau, f), (s.t1 - tau, f)]
-            # a held vowel fades from a third of the way through (voices tire and
+            # a held vowel fades from a fifth of the way through (voices tire and
             # let go), and a phrasing can have it grow or fade from start to end
             idx = np.arange(region.start, region.stop)
             x = np.clip((tb[idx] - s.t0) / max(d, 1e-3), 0.0, 1.0)
-            fade = voice.taper * np.clip((x - 0.3) / 0.7, 0.0, 1.0) if d > 0.35 else 0.0
+            fade = voice.taper * np.clip((x - 0.2) / 0.8, 0.0, 1.0) if d > 0.25 else 0.0
             swell = 10.0 ** ((fade + s.swell * x) / 20.0)
             av[idx] = s.amp * swell
             ah[region] = voice.breath * s.amp
@@ -552,13 +554,15 @@ def _colored(rng: np.random.Generator, n: int, rate: float, corner: float, top: 
 
 
 def pitch_track(notes: list[Note], n_blocks: int, sr: int, voice: VoiceParams, rng, sounding=None,
-                accents=None, segs: list[Segment] | None = None) -> np.ndarray:
+                accents=None, segs: list[Segment] | None = None, parts: dict | None = None) -> np.ndarray:
     """f0 in Hz per block: transitions between notes, a rise into each phrase, vibrato on some held
     notes, the pitch around consonants, a fall as a line lets go, drift and jitter.
     sounding: when each note's vowel ends, so a phrasing's bends and falls happen while it can be heard.
     accents: cents to lift each note by, for the syllables leaned on hardest.
     segs: the schedule (schedule()), for when each syllable starts and where its consonants are; without
     it, phrases rise from their vowels and consonants leave the pitch alone.
+    parts: a dict to receive "tremolo", the vibrato's swing in loudness per block (1 at a vibrato of
+    vibrato_depth, with each note's own phase), for the engines to apply.
 
     No two transitions, rises or vibratos come out alike: each draws its own moment, length, overshoot and
     preparation, depth, rate, extent and onset, and each phrase its own lean in time and taste for vibrato,
@@ -578,6 +582,7 @@ def pitch_track(notes: list[Note], n_blocks: int, sr: int, voice: VoiceParams, r
     target = np.full(n_blocks, notes[0].pitch + voice.shift, dtype=float)
     vib_env = np.zeros(n_blocks)  # cents of vibrato
     vib_rate = np.full(n_blocks, voice.vibrato_rate)
+    trem_phase = np.zeros(n_blocks)
     gestures = np.zeros(n_blocks)  # cents from a phrasing (scoops, bends and falls) and the machine's own lifts and falls
     for k, note in enumerate(notes):
         p = note.pitch + voice.shift
@@ -641,6 +646,7 @@ def pitch_track(notes: list[Note], n_blocks: int, sr: int, voice: VoiceParams, r
                 v, here = v * (1.0 + 0.3 * bloom), here * (1.0 - 0.1 * bloom)
             vib_env[inside] = extent * v[inside]
             vib_rate[inside] = here[inside]
+            trem_phase[inside] = 2 * np.pi * u[k, 2]
         if accents is not None and accents[k]:  # a note leaned on is lifted a little, eased in and out
             lift = accents[k] * np.clip((tb - note.start) / 0.05, 0.0, 1.0) * np.clip((end - tb) / 0.05, 0.0, 1.0)
             gestures[inside] += lift[inside]
@@ -673,7 +679,23 @@ def pitch_track(notes: list[Note], n_blocks: int, sr: int, voice: VoiceParams, r
         cents += consonant_pitch(segs, tb)
     cents += voice.wander * _colored(drift_rng, n_blocks, rate, 1.0, 4.0)
     cents += 17.3 * voice.jitter * _lowpassed_noise(drift_rng, n_blocks, 25.0, rate)
+    if parts is not None:
+        parts["tremolo"] = vib_env / max(voice.vibrato_depth, 1.0) * np.sin(vib_phase + trem_phase)
     return 440.0 * 2.0 ** ((target + cents / 100.0 - 69.0) / 12.0)
+
+
+def sway(n: int, rate: float, voice: VoiceParams, seed: int, tremolo: np.ndarray | None = None,
+         slow: bool = True) -> np.ndarray:
+    """The voice's loudness moving under a held note, in dB per point (n points at `rate` a second): the
+    vibrato's own swing (voice.tremolo, from pitch_track's parts) and, if slow, breath pressure that never
+    quite holds still (voice.waver, 1/f to 1.5 Hz and falling after, as natural singers' held notes move).
+    Its own random stream."""
+    db = np.zeros(n)
+    if tremolo is not None:
+        db += voice.tremolo * tremolo[:n]
+    if slow and voice.waver:
+        db += voice.waver * voice.spread * _colored(np.random.default_rng([seed, 0x5A7]), n, rate, 0.5, 1.5, steep=2)
+    return db
 
 
 def sing(notes: list[Note], sr: int, voice: VoiceParams, seed: int = 0, lexicon: dict[str, str] | None = None) -> np.ndarray:
@@ -695,7 +717,9 @@ def sing(notes: list[Note], sr: int, voice: VoiceParams, seed: int = 0, lexicon:
     tracks = control_tracks(segs, n_blocks, sr, voice)
     vowels = [s for s in segs if s.role == "vowel"]
     accents = [voice.accent * float(np.clip(20 * np.log10(s.amp / 0.9) / 3.0, 0.0, 1.0)) for s in vowels]
-    f0_blocks = pitch_track(notes, n_blocks, sr, voice, rng, [s.t1 for s in vowels], accents, segs)
+    parts: dict = {}
+    f0_blocks = pitch_track(notes, n_blocks, sr, voice, rng, [s.t1 for s in vowels], accents, segs, parts)
+    tracks["av"] = tracks["av"] * 10.0 ** (sway(n_blocks, sr / BLOCK, voice, seed, parts["tremolo"]) / 20.0)
 
     # Singers raise the first formant to stay above a high fundamental.
     formants = tracks["formants"]
