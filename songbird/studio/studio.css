@@ -69,7 +69,7 @@ a { color: var(--you); }
 
 /* ---------------------------------------------------------------- header */
 
-header.top { padding: 26px 0 14px; }
+header.top { padding-top: 26px; padding-bottom: 14px; }
 .eyebrow { font-size: 12px; letter-spacing: .14em; text-transform: uppercase; color: var(--faint); font-weight: 600; }
 h1 { font-family: var(--serif); font-weight: 600; font-size: clamp(30px, 5vw, 44px); line-height: 1.1; margin: 4px 0 8px; }
 .which { color: var(--soft); font-size: 16px; max-width: 70ch; }
@@ -190,6 +190,7 @@ select { border: 1px solid var(--line); background: var(--card); border-radius: 
 .timeline { width: 100%; display: block; }
 .timeline text { font: 11px var(--sans); fill: var(--faint); }
 .timeline .lane-name { fill: var(--soft); font-weight: 600; }
+.timeline .lane-scale { font-size: 9.5px; fill: var(--faint); }
 .timeline .cursor { stroke: var(--accent); stroke-width: 2; }
 .timeline .today-mark { stroke: var(--faint); stroke-dasharray: 3 3; }
 .timeline .grid { stroke: var(--line); }
@@ -243,6 +244,7 @@ footer { color: var(--faint); font-size: 13px; padding: 28px 0 10px; }
 
 @media (max-width: 600px) {
   body { font-size: 15px; }
+  .lines { font-size: 18px; }
   header.top { padding-top: 18px; }
   .sec.mine::before { left: -8px; }
   section.panel { padding: 14px 14px; }

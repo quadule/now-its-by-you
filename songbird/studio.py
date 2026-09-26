@@ -406,9 +406,10 @@ class Studio:
 
     def compare(self, edits: dict, names: list[str]) -> dict:
         rows = [explain.summary(self.context, self.version(edits), "you")]
+        own = self.machine.split(":", 1)[1].lower() if self.machine.startswith("fictional:") else None
         for name in names[:6]:
             name = re.sub(r"[^A-Za-z0-9 _-]", "", str(name)).strip()[:24]
-            if name:
+            if name and name.lower() != own:
                 who = f"fictional:{name.lower()}"
                 rows.append(explain.summary(self.context, self.version(edits, who), who, name=name.title()))
         return {"machines": rows}

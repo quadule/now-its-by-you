@@ -275,7 +275,7 @@ function chooser(w, o) {
     box.append(h("div", { class: "slot" }, h("div", { class: "label" }, slot.slot),
       h("div", { class: "chips" }, slot.options.map((opt) => h("button", {
         class: `chip${opt === slot.sung ? " on" : ""}`, type: "button", "aria-pressed": opt === slot.sung ? "true" : "false",
-        onclick: () => chooseSlot(o, slot.slot, opt) }, opt)))));
+        onclick: () => chooseSlot(o, slot.slot, opt) }, (slot.labels && slot.labels[opt]) || opt)))));
   }
   if ((o.words || []).length && o.block !== "verse") box.append(h("p", { class: "hint" }, "These words are chosen once for the whole song."));
   return box;
@@ -502,7 +502,6 @@ function renderTimeline() {
   });
   lanes.forEach(([name, key], row) => {
     const y = row * (laneH + gap) + 4;
-    root.append(svg("text", { class: "lane-name", x: 0, y: y + 15 }, name));
     const values = tl.lanes[key];
     if (key === "tempo" || key === "lean") {
       const lo = Math.min(...values), hi = Math.max(...values);
@@ -510,10 +509,12 @@ function renderTimeline() {
       let d = "";
       for (let i = 0; i < n; i += 2) d += `${i ? "L" : "M"}${x(i).toFixed(1)},${(y + laneH - 2 - ((values[i] - lo) / span) * (laneH - 4)).toFixed(1)}`;
       root.append(svg("path", { d, class: key === "tempo" ? "tempo" : "lean" }));
-      root.append(svg("text", { x: width - right, y: y + 9, "text-anchor": "end" }, key === "tempo" ? `${Math.round(hi)}` : "lighter"),
-        svg("text", { x: width - right, y: y + laneH, "text-anchor": "end" }, key === "tempo" ? `${Math.round(lo)}` : "darker"));
+      // the scale under the lane's name: the tempo's range, or which way is lighter
+      root.append(svg("text", { class: "lane-name", x: 0, y: y + 10 }, name),
+        svg("text", { class: "lane-scale", x: 0, y: y + 21 }, key === "tempo" ? `${Math.round(lo)}–${Math.round(hi)}` : "lighter ↑"));
       return;
     }
+    root.append(svg("text", { class: "lane-name", x: 0, y: y + 15 }, name));
     for (const [a, b, value] of segments(values)) {
       let tint = 0.5;
       if (key === "key") tint = MODE_TINT[tl.lanes.mode[a]] ?? 0.5;
@@ -523,7 +524,8 @@ function renderTimeline() {
       const w = Math.max(1, x(b - 1) - x(a) + (width - left - right) / n);
       root.append(svg("rect", { x: x(a), y, width: w, height: laneH, rx: 3, fill: key === "key" ? time : accent,
         "fill-opacity": (0.15 + 0.6 * tint).toFixed(2) }, svg("title", {}, `${tl.dates[a]} to ${tl.dates[b - 1]}: ${label(key, value, tl)}`)));
-      if (w > 46) root.append(svg("text", { x: x(a) + 4, y: y + 15, fill: ink }, label(key, value, tl, w)));
+      const text = label(key, value, tl, w);
+      if (w > 10 + 6.4 * text.length) root.append(svg("text", { x: x(a) + 4, y: y + 15, fill: ink }, text));
     }
   });
   const today = tl.today;
@@ -751,10 +753,14 @@ async function main() {
     const [block, nth] = hash.choose.split(".");
     const w = state.view.words.find((x) => x.block === block && String(x.nth) === nth);
     if (w) await toggleChooser(w);
+    if (hash.refused !== undefined) for (const d of document.querySelectorAll(".chooser details.refused")) d.open = true;
   }
-  api("/api/timeline").then((tl) => { state.timeline = tl; renderTimeline(); }).catch(() => {
+  const scroll = () => { const el = hash.scroll && $(hash.scroll); if (el) el.scrollIntoView({ block: "start" }); };
+  scroll();
+  api("/api/timeline").then((tl) => { state.timeline = tl; renderTimeline(); scroll(); }).catch(() => {
     $("timeline").replaceChildren(h("p", { class: "hint" }, "The timeline couldn't be drawn."));
   });
+  if (hash.compare !== undefined) loadCompare();
 }
 
 function setDayQuiet(offset) {

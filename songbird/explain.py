@@ -27,6 +27,7 @@ from __future__ import annotations
 import json
 from dataclasses import asdict, dataclass, field, fields, is_dataclass
 from datetime import date as _date, timedelta
+from functools import lru_cache
 from pathlib import Path
 
 import numpy as np
@@ -285,8 +286,27 @@ def distance(days: int) -> str:
 
 
 def readable(line: str) -> str:
-    """A sung line as it reads: no syllable hyphens; *focus* marks kept for the page to show."""
-    return line.replace("-", "")
+    """A sung line as it reads: its syllables joined into words, a real hyphen kept where the joined word
+    isn't one and its two halves are (six-ty-odd reads sixty-odd); *focus* marks kept for the page."""
+    return " ".join(_word(token) for token in line.split(" "))
+
+
+@lru_cache(maxsize=8192)
+def _word(token: str) -> str:
+    if "-" not in token:
+        return token
+    words = harvest._dictionary()
+    start = len(token) - len(token.lstrip("*\"'("))
+    end = len(token.rstrip("*.,;:!?\"')"))
+    head, core, tail = token[:start], token[start:end], token[end:]
+    parts = core.split("-")
+    joined = "".join(parts)
+    if joined.lower() not in words:
+        for k in range(1, len(parts)):
+            left, right = "".join(parts[:k]), "".join(parts[k:])
+            if left.lower() in words and right.lower() in words:
+                return f"{head}{left}-{right}{tail}"
+    return f"{head}{joined}{tail}"
 
 
 # ---------------------------------------------------------------- a version: the program's choices, then a person's
@@ -528,6 +548,10 @@ def _when(view: str) -> str:
     return VIEWS[view]
 
 
+def _drift_at(v: Version, view: str, dimension: str) -> float:
+    return v.drift.view(view).get(dimension, 0.0) if v.drift is not None else 0.0
+
+
 def _mine(v: Version, paths: list[str], show) -> list[dict]:
     """'chosen by you' for each edit under these paths, with what the program had chosen."""
     out = []
@@ -630,7 +654,7 @@ def band_card(v: Version) -> dict:
         v, "band.density",
         lambda m: f"a {'busy' if m > 0 else 'quiet'} machine plays {'busier' if m > 0 else 'sparer'}"
         if "density" in c.known else "your machine's own band",
-        lambda t: f"{_when('slow')} play a little {'busier' if t > 0 else 'sparer'}")
+        lambda t: f"{_when('slow')}, it plays a little {'busier' if t > 0 else 'sparer'}")
     why += number_reasons(
         v, "band.brightness",
         lambda m: f"your screen makes the band {'brighter' if m > 0 else 'darker'}" if "brightness" in c.known
@@ -731,24 +755,24 @@ def words_card(v: Version) -> dict:
                           lambda m: f"a {'rich' if m > 0 else 'plain'} vocabulary {'seeks out' if m > 0 else 'passes over'} rare verses",
                           lambda t: f"{_when('slow')} lean to {'rarer' if t > 0 else 'commoner'} verses")
 
-    def light(weights) -> float:
-        weights = weights or {}
-        return float(np.log2(weights.get("light", 1.0) / max(weights.get("dark", 1.0), 1e-6)))
-
-    def machine(path, value, blind):
-        if path == "leanings.mood_weights":
-            return (f"your {'light' if light(value) > light(blind) else 'dark'} screen leans them "
-                    f"{'lighter' if light(value) > light(blind) else 'darker'}") if "brightness" in c.known else None
-        themes = [THEMES.get(t, t) for t, share in sorted((c.themes or {}).items(), key=lambda x: -x[1])
-                  if share > 1.2 / max(len(c.themes or {}), 1)][:3]
-        return f"the words you use bring forward verses about {listed(themes)}" if themes else None
-
-    def time(path, value, frozen):
-        if path == "leanings.mood_weights":
-            return f"{_when('slow')} lean {'lighter' if light(value) > light(frozen) else 'darker'}"
-        return None
-
-    why = choice_reasons(v, ["leanings.mood_weights", "leanings.vocabulary"], machine, time) + why
+    # the mood: what choose_mood reads, each said only where it leans (the screen, a minor key, these weeks)
+    mood = []
+    if "brightness" in c.known and abs(c.brightness) > 0.2:
+        mood.append({"kind": "machine", "text": f"your {'light' if c.brightness > 0 else 'dark'} screen leans them "
+                                                f"{'lighter' if c.brightness > 0 else 'darker'}"})
+    if "warmth" in c.known and c.warmth > 0.2:
+        mood.append({"kind": "machine", "text": "your warm screen leans them tender"})
+    if v.generated.mode in MINOR:
+        mood.append({"kind": "machine" if c.family else "time",
+                     "text": f"the {MODES.get(v.generated.mode, (v.generated.mode,))[0]} key leans them darker"})
+    tilt = _drift_at(v, "slow", "mood")
+    if abs(tilt) > 0.15:
+        mood.append({"kind": "time", "text": f"{_when('slow')} lean {'lighter' if tilt > 0 else 'darker'}"})
+    themes = [THEMES.get(t, t) for t, share in sorted((c.themes or {}).items(), key=lambda x: -x[1])
+              if share > 1.2 / max(len(c.themes or {}), 1)][:3]
+    if themes and v.generated.leanings.get("vocabulary"):
+        mood.append({"kind": "machine", "text": f"the words you use bring forward verses about {listed(themes)}"})
+    why = mood + why
     why.append({"kind": "chance", "text": "drawn by chance, within the song's rules"})
     mine = []
     if "mode" in v.applied and (v.params.leanings or {}).get("mood_weights") != (v.generated.leanings or {}).get("mood_weights"):
@@ -881,6 +905,8 @@ def word_options(ctx: Context, v: Version, block: str, index: int) -> dict:
     out["slots_path"] = {"verse": out["path"], "refrain": "words.refrain", "bridge": "words.bridge"}.get(block)
     for choice in out["choices"]:
         choice["lines"] = [readable(line) for line in choice.get("lines", [])]
+    for slot in out["words"]:  # as they read; the page sends them back as they read, which arrange matches
+        slot["labels"] = {o: _word(o) for o in slot["options"]}
     return out
 
 

@@ -1007,16 +1007,18 @@ def _options(spec) -> list:
 
 
 def _label(value) -> str:
-    """How an option reads: its words, a coupled slot by its noun (else its first column)."""
+    """An option by its words as written (syllables hyphenated), a coupled slot by its noun (else its first
+    column)."""
     if isinstance(value, dict):
         value = value.get("noun", next(iter(value.values())))
-    return str(value).replace("-", "")
+    return str(value)
 
 
 def _option(spec, value) -> int | None:
     """Which option of a slot these words are: as written, or as they read (hyphens and case aside)."""
     for i, option in enumerate(_options(spec)):
-        if option == value or (isinstance(value, str) and _label(option).lower() == value.replace("-", "").lower()):
+        if option == value or (isinstance(value, str) and
+                               _label(option).replace("-", "").lower() == value.replace("-", "").lower()):
             return i
     return None
 
@@ -1043,8 +1045,8 @@ def _chosen_slots(entry: dict, wanted: Mapping, what: str) -> dict[str, int]:
             raise ArrangeError(f"{what} has no {name} to choose")
         i = _option(spec[name], value)
         if i is None:
-            raise ArrangeError(f"{what}'s {name} can be {_and([_label(o) for o in _options(spec[name])])}, "
-                               f"not {_label(value)}")
+            raise ArrangeError(f"{what}'s {name} can be {_and([_label(o).replace('-', '') for o in _options(spec[name])])}, "
+                               f"not {_label(value).replace('-', '')}")
         out[name] = i
     return out
 
@@ -1291,7 +1293,9 @@ def options(genome: Genome, lyrics: Lyrics, block: str, index: int = 0) -> dict:
         whole = None not in current
         for v in song.verses:
             seq = [x for x in (current[:index] + [v] + current[index + 1:]) if x is not None]
-            why = song.checks.why(seq)
+            already = next((k for k, x in enumerate(current) if k != index and x is not None and x.id == v.id), None)
+            why = f"the {v.id} verse is sung already, as verse {already + 1}" if already is not None \
+                else song.checks.why(seq)
             elsewhere, reorder = [], None
             if why and whole:
                 # where else it could go: in place of another verse; or here, the verses reordered as the
