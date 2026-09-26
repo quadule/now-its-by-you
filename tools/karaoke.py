@@ -169,10 +169,12 @@ def where(score: dict, query: dict) -> dict:
 
 def spec_lyrics(genome_path: Path, title: str, spec) -> dict:
     """A spec's words and notes as the page shows them (lyrics()), with its score's digest and the
-    spec: from its score alone, written if need be (quick, no audio)."""
+    spec: from its score alone, written if need be (quick, no audio). The score is kept beside the
+    takes as it's handed out, so a take sung to it is kept even if the spec is rendered again
+    while it's sung (its set changed, say)."""
     score = M.spec_score(genome_path, spec)
     data = json.loads(score.read_text())
-    return {**lyrics(data, title, data["tempo"]), "guide": K.digest(score), "spec": data["spec"]}
+    return {**lyrics(data, title, data["tempo"]), "guide": K.keep_guide(Path(genome_path).stem, score), "spec": data["spec"]}
 
 
 def credited(takes: list) -> str | None:
@@ -187,6 +189,7 @@ def credited(takes: list) -> str | None:
 class Karaoke(BaseHTTPRequestHandler):
     genome_path: Path
     genome = None
+    phrasing: Path | None = None  # what the machine sings the specs' full guides with (--phrasing)
 
     def log_message(self, fmt, *args):  # keep the terminal quiet
         pass
@@ -261,7 +264,8 @@ class Karaoke(BaseHTTPRequestHandler):
             self.send_json(M.variants(self.genome_path))
         elif self.path == "/guide.wav" and "spec" in query:
             # a spec's guide, rendered the first time it's asked for (half a minute), and which score it follows
-            guide = M.ensure_spec(self.genome_path, query["spec"], self.mix(query.get("mix", M.DEFAULT)))
+            guide = M.ensure_spec(self.genome_path, query["spec"], self.mix(query.get("mix", M.DEFAULT)),
+                                  phrasing=self.phrasing)
             self.send(guide.wav.read_bytes(), "audio/wav", headers={"X-Guide-Score": guide.digest})
         elif self.path == "/guide.wav":
             mix = query.get("mix", "full")  # asked for without a mix, as before there was a choice: the full guide
@@ -382,7 +386,10 @@ def main() -> None:
     ap = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
     ap.add_argument("genome")
     ap.add_argument("--port", type=int, default=8765)
+    ap.add_argument("--phrasing", help="a phrasing file the machine's singer sings the specs' full guides with, "
+                                       "everyone's say (the words and the takes stay on the grid)")
     args = ap.parse_args()
+    Karaoke.phrasing = Path(args.phrasing).resolve() if args.phrasing else None
     Karaoke.genome_path = Path(args.genome).resolve()
     Karaoke.genome = G.load(Karaoke.genome_path)
     server = ThreadingHTTPServer(("127.0.0.1", args.port), Karaoke)

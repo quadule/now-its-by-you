@@ -153,6 +153,7 @@ def test_the_karaoke_sings_a_spec_and_records_one_section_at_a_time(workspace, m
         sung = [s for s in words["sections"] if s["sung"]]
         assert sung and sung[0]["label"] and sung[0]["window"][1] > sung[0]["window"][0] >= 0
         assert not (workspace / "renders" / "guide" / "h-short" / "song.k-2.t90.melody.wav").exists()  # words: no audio
+        assert K.guide_score("h-short", words["guide"])  # its score kept as it's handed out, for the takes sung to it
         code, headers, body = get("/guide.wav?spec=song.k-2.t90&mix=melody")
         assert code == 200 and headers["X-Guide-Score"] == words["guide"]
         assert body == M.spec_path("h-short", "song.k-2.t90", "melody").read_bytes()
