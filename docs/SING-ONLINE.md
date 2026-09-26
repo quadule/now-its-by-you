@@ -133,7 +133,7 @@ arrives damaged (its size or hash doesn't match) is left on the server and repor
 | --- | --- | --- |
 | The singer's browser | the name they typed, their credit choice, the guide they chose, their device's measured delay (localStorage, on their device only) | until they clear it |
 | Cloudflare KV | each invitation: when it was made and expires, its take limit, your note, whether it's open, done or revoked; and how many takes it sent | 90 days after it expires, then deleted by KV |
-| Cloudflare R2 (private) | each take (16-bit mono WAV) and its sidecar: the name given, the credit choice, when the release was agreed and a digest of its text, the guide's digest and mix, the sample rate and delays, when it arrived, its size and hash | until you fetch it (fetch deletes it), delete it, or the 30-day rule in step 2 does |
+| Cloudflare R2 (private) | each take (16-bit mono WAV) and its sidecar: the name given, the credit choice, when the release was agreed and a digest of its text, the guide's digest and mix, the sample rate and delays, when it arrived, its size and hash; and for each closed invitation an empty marker saying when and how it closed (KV takes up to a minute to tell every location; R2 tells them at once) | until you fetch it (fetch deletes it), delete it, or the 30-day rule in step 2 does |
 | Your machine | the takes and sidecars in `recordings/` (never in git), the guide scores in `recordings/guides/` | yours to keep; delete a singer's folder if they withdraw |
 
 Nothing else is stored: no addresses, no browser or device details, no logs (the Worker's logs are

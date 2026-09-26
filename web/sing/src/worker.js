@@ -17,7 +17,8 @@
 //   GET    /api/admin/take/<key>        download one
 //   DELETE /api/admin/take/<key>        delete one
 //
-// Invites live in KV (INVITES), takes in a private R2 bucket (TAKES) under takes/<token>/.
+// Invites live in KV (INVITES), takes in a private R2 bucket (TAKES) under takes/<token>/; closing
+// an invite also leaves closed/<token> in the bucket, which every location reads at once.
 // The page, its scripts and the guides are static assets (tools/sing_site.py builds them);
 // the song's words and guides are served only to an open invite. Nothing personal is
 // logged: no names, no tokens, no addresses. An address is used only as a rate-limit key.
@@ -97,7 +98,19 @@ async function song(env, request) {
 
 async function invite(env, token) {
   if (!TOKEN.test(token)) return null;
-  return env.INVITES.get(`invite:${token}`, "json");
+  const record = await env.INVITES.get(`invite:${token}`, "json");
+  if (record && record.state === "open") {
+    // closing is written to R2 too: KV can go on serving "open" elsewhere for a minute, R2 can't
+    const closed = await env.TAKES.head(`closed/${token}`);
+    if (closed) return { ...record, state: closed.customMetadata?.state || "done", closed: closed.customMetadata?.at };
+  }
+  return record;
+}
+
+async function close(env, token, inv, state) {
+  const at = new Date().toISOString();
+  await env.TAKES.put(`closed/${token}`, "", { customMetadata: { state, at } });
+  await saveInvite(env, token, { ...inv, state, closed: at });
 }
 
 async function saveInvite(env, token, record) {
@@ -149,7 +162,7 @@ async function singer(request, env, parts) {
   }
   if (kind === "take" && request.method === "PUT") return take(request, env, token, inv);
   if (kind === "done" && request.method === "POST") {
-    await saveInvite(env, token, { ...inv, state: "done", closed: new Date().toISOString() });
+    await close(env, token, inv, "done");
     return json({ state: "done" });
   }
   return fail(405, "method", "Not here.");
@@ -215,15 +228,19 @@ async function admin(request, env, parts) {
     return json({ invites: made });
   }
   if (what === "invites" && request.method === "GET") {
-    const counts = {};
+    const counts = {}, closed = {};
     for (const o of await allTakes(env)) if (o.key.endsWith(".json")) counts[o.key.split("/")[1]] = (counts[o.key.split("/")[1]] || 0) + 1;
+    for (const o of await listed(env, "closed/", ["customMetadata"])) {
+      closed[o.key.slice(7)] = { state: o.customMetadata?.state || "done", closed: o.customMetadata?.at };
+    }
     const out = [];
     let cursor;
     do {
       const page = await env.INVITES.list({ prefix: "invite:", cursor });
       for (const k of page.keys) {
         const token = k.name.slice(7);
-        const record = k.metadata && k.metadata.expires ? k.metadata : await env.INVITES.get(k.name, "json");
+        let record = k.metadata && k.metadata.expires ? k.metadata : await env.INVITES.get(k.name, "json");
+        if (record && record.state === "open" && closed[token]) record = { ...record, ...closed[token] };
         if (record) {
           const sent = Math.max(Number(await env.INVITES.get(`sent:${token}`)) || 0, counts[token] || 0);
           out.push({ token, url: `${url.origin}/i/${token}`, ...record, state: stateOf(record), takes: counts[token] || 0, sent });
@@ -237,7 +254,7 @@ async function admin(request, env, parts) {
   if (what === "revoke" && request.method === "POST") {
     const inv = await invite(env, rest);
     if (!inv) return fail(404, "unknown", "No such invitation.");
-    await saveInvite(env, rest, { ...inv, state: "revoked", closed: new Date().toISOString() });
+    await close(env, rest, inv, "revoked");
     return json({ state: "revoked" });
   }
   if (what === "takes" && request.method === "GET") {
@@ -266,10 +283,14 @@ async function admin(request, env, parts) {
 }
 
 async function allTakes(env, only) {
+  return listed(env, only ? `takes/${only}/` : "takes/");
+}
+
+async function listed(env, prefix, include) {
   const out = [];
   let cursor;
   do {
-    const page = await env.TAKES.list({ prefix: only ? `takes/${only}/` : "takes/", cursor });
+    const page = await env.TAKES.list({ prefix, cursor, ...(include ? { include } : {}) });
     out.push(...page.objects);
     cursor = page.truncated ? page.cursor : undefined;
   } while (cursor);
