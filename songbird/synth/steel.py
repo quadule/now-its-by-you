@@ -792,7 +792,7 @@ def _slide_trim(seed: int, kind: str, key: tuple, sr: int) -> float:
     return float(10.0 ** ((SLIDE_REFERENCE - loudness(y, sr)) / 20.0))
 
 
-SLIDE_REFERENCE = -9.9  # LUFS of the reference lick, unplaced: so the fills at vel 0.6 sit as a lead (-20.7)
+SLIDE_REFERENCE = -9.6  # LUFS of the reference lick, unplaced: so its answers at vel 0.6 sit as a lead (-20.7)
 
 
 def _slide_sound(notes, sr: int, length: int, rng: np.random.Generator, d: dict, kind: str, s: dict) -> np.ndarray:

@@ -80,9 +80,10 @@ def _blues(part: str = "slide", vel: float = 0.65) -> list:
             for name, beat, beats, art in line]
 
 
-def _fills(vel: float = 0.6) -> list:
-    """The blues style's part for it: answers at the ends of the singer's lines (a run of three or four notes
-    into the next line, above the tune) and a held tone swelling through a line, twice."""
+def _fills(vel: float = 0.6, tone: bool = True) -> list:
+    """The blues style's part for it: answers at the ends of the singer's lines (a run of two to four notes
+    into the next line, above the tune, as songbird.band.fills writes them) and, with `tone`, a held tone
+    swelling through a line (the bridge's)."""
     c = Clock(86, swing=1.0)
     notes = []
     for rep in range(2):
@@ -93,7 +94,10 @@ def _fills(vel: float = 0.6) -> list:
         for k, name in enumerate(("A4", "G4", "F#4")):
             notes.append(c.note("slide", b0 + 7.0 + 0.5 * k, 0.5 if k < 2 else 1.0, pitch(name), vel,
                                 "" if k else "slide"))
-        notes.append(c.note("slide", b0 + 8.0, 7.0, pitch("A4"), vel, "swell"))
+        for k, name in enumerate(("B4", "A4")):
+            notes.append(c.note("slide", b0 + 11.0 + 0.5 * k, 0.5 if k < 1 else 1.0, pitch(name), vel))
+        if tone:
+            notes.append(c.note("slide", b0 + 12.0, 3.5, pitch("A4"), vel, "swell"))
     return notes
 
 
@@ -125,4 +129,4 @@ PHRASES = {
         about="slide guitar: the blues style's answers at the ends of lines, and a held tone"),
 }
 
-LEVELS = {"steel": ("comping", _under()), "slide": ("lead", _fills())}
+LEVELS = {"steel": ("comping", _under()), "slide": ("lead", _fills(tone=False))}
