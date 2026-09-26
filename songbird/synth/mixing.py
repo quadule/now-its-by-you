@@ -179,6 +179,13 @@ ROLES: dict[str, Strip] = {
                      comp=(10.0, 2.0, 0.02, 0.25, 2.0, 3.0), send=1.3),
     # Synths: an arpeggio or a lead line, cleared around the voice.
     "synth": Strip(eq=(("hp", 80), ("peak", 2800, -2.0, 0.9)), send=0.9, duck=1.5),
+    # A pedal steel: its low strings kept (B2 is 123 Hz, its warmth below 250), the voice's presence cleared, a
+    # generous send; no compressor and no duck, since its own volume pedal swells it in and out under the voice.
+    "steel": Strip(eq=(("hp", 70), ("peak", 2600, -2.0, 0.9), ("high", 8000, -1.0)), send=1.2),
+    # A slide guitar answering the voice: the guitar's weight kept, its box and the voice's presence cleared, and
+    # a small step back while the voice sings, as a lead line takes.
+    "slide": Strip(eq=(("hp", 70), ("peak", 250, -1.5, 1.0), ("peak", 2800, -2.0, 0.9), ("high", 9000, -0.5)),
+                   comp=(10.0, 2.0, 0.015, 0.2, 1.5, 3.0), send=1.1, duck=1.5),
     "band": Strip(eq=(("hp", 60), ("peak", 2800, -1.5, 0.9))),  # anything else
 }
 
@@ -189,7 +196,7 @@ NAMES = {
     "guitar": ("guitar", "strum", "pick", "electric", "nylon", "ukulele"),
     "harp": ("harp", "dulcimer", "zither", "kantele", "psaltery"),
     "bass": ("bass", "contrabass", "upright"),
-    "fiddle": ("fiddle", "violin", "bow", "steel", "slide"),
+    "fiddle": ("fiddle", "violin", "bow"),
     "whistle": ("whistle", "flute", "pipe", "recorder", "fife", "blown"),
     "drum": ("drum", "drums", "percussion", "bodhran", "tambourine", "shaker", "kick", "snare", "skin", "frame",
              "kit", "claps", "clap", "stomps", "stomp", "cajon", "machine", "hats"),
@@ -200,6 +207,8 @@ NAMES = {
     "reed": ("harmonica", "accordion", "concertina", "melodeon"),
     "strings": ("cello", "viola", "strings", "quartet"),  # their low strings kept: no fiddle's 180 Hz high-pass
     "synth": ("synth", "synthlead", "arp", "chip"),
+    "steel": ("steel", "pedalsteel", "lapsteel"),  # its low strings kept, and no fiddle's duck: it swells by its pedal
+    "slide": ("slide", "bottleneck"),
 }
 SINGERS = ("voice", "choir")  # stems sung by the singers: matched by their whole names only
 

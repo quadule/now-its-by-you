@@ -216,3 +216,6 @@ def test_every_instrument_finds_its_strip():
     assert mixing.role_of("cello") == "strings"  # a cello keeps its low strings: no fiddle's 180 Hz high-pass
     assert mixing.role_of("viola") == "strings" and mixing.role_of("music-box") == "keys"
     assert mixing.role_of("nylon") == "guitar" and mixing.role_of("ukulele") == "guitar"
+    # a pedal steel keeps its low strings and swells by its own pedal: not the fiddle's 180 Hz high-pass and duck
+    assert mixing.role_of("steel") == "steel" and mixing.ROLES["steel"].duck == 0.0
+    assert mixing.ROLES["steel"].eq[0] == ("hp", 70) and mixing.role_of("slide") == "slide"
