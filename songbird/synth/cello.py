@@ -21,7 +21,10 @@ what a cellist does differently from a fiddler:
   sharp, a light one over the fingerboard rounds it (the loop's loss pole,
   0.25 to 0.62, its delay taken off the period so the pitch holds).
 - A cellist's vibrato: 5 to 6 Hz, 20 to 35 cents (a violist's 5.5 to 6.3,
-  14 to 26), wider with ornament, on notes longer than a third of a second.
+  14 to 26), wider with ornament. It is one motion of the hand through a
+  phrase: half there 0.1-0.2 s into a note after a rest, carried on at its
+  width through slurs and bow changes, narrower on short notes, easing before
+  a rest.
 - Shifts: "slide" glides from the note before (or from a tone and a half
   below after a rest), slower than a fiddler's.
 - "trem": the bow reversing 11 to 15 times a second; "pizz": the string
@@ -32,8 +35,9 @@ Double stops (overlapping notes) go to a second string. The string section
 ("strings") is violins, violas and cellos, each line of the part taken by the
 section whose register its middle sits in and played by two or three players,
 each a few cents off, a few tens of milliseconds early or late, with a vibrato
-and a bow of their own; each section is heard through two bodies (a desk
-each), seated violins left, violas in the middle, cellos right.
+(narrower than a soloist's, starting in their own time) and a bow of their
+own; each section is heard through two bodies (a desk each), seated violins
+left, violas in the middle, cellos right.
 """
 
 from __future__ import annotations
@@ -106,6 +110,7 @@ LOUDER = 0.4  # the pole falls this much per unit of velocity: a heavier, faster
 GLASS = (("low", 400.0, -6.0), ("high", 1500.0, 10.0))  # sul ponticello's tilt of the bridge force
 BRIGHTER = (8.0, 10.0, -6.0)  # dB above 1 kHz per unit of brightness and of velocity, and for sul tasto's light bow
 PIZZ = 0.55  # a pizzicato's force against a bowed note's
+VIB_ONSET, VIB_CARRY, VIB_EASE = 0.28, 0.1, 0.15  # s a vibrato takes to grow in, to change width, to ease off
 
 # How much longer than asked the loop runs (samples), measured over bow positions 0.04 to 0.2, poles 0.25 to 0.62
 # and velocities 0.35 to 0.9 at D4 to E5 (scratchpad calibration: rms error 0.009 samples, worst 0.033): the slip
@@ -130,6 +135,40 @@ def _excess(pole: np.ndarray, beta: np.ndarray, weight: np.ndarray) -> np.ndarra
 def vibrato(kind: Kind, ornament: float) -> float:
     """Peak cents of a player's vibrato on a long note: nearly none played plain, the kind's widest at ornament 1."""
     return 0.15 * kind.depth[0] + (kind.depth[1] - 0.15 * kind.depth[0]) * max(0.0, ornament) ** 0.5
+
+
+def _vibrato(notes, sr: int, length: int, rng: np.random.Generator, depth: float, rate: float, shift: float,
+             wait: float = 0.0, onset: float = 0.0) -> np.ndarray:
+    """A player's vibrato over a stretch of notes, in cents a sample: one motion of the hand, its phase carried
+    through the notes (a string player's vibrato is continuous: a slurred or re-bowed note arrives with it going,
+    at the width it had), each note's width its own. A note after a rest starts plain and the hand joins in after
+    `wait` s, reaching the whole width `onset` s later (VIB_ONSET for a soloist); a shift stops it for the glide;
+    a short note gets a narrower one; it eases off in the last VIB_EASE s before a rest."""
+    onset = onset or VIB_ONSET
+    width = np.zeros(length)
+    ordered = [n for n in sorted(notes, key=lambda n: n.start) if n.dur * sr >= 16]
+    last_end, level = -1.0, 0.0
+    for k, note in enumerate(ordered):
+        i0, i1 = max(0, int(round(note.start * sr))), min(length, int(round((note.start + note.dur) * sr)))
+        if i1 - i0 < 16:
+            continue
+        t = np.arange(i1 - i0) / sr
+        full = depth * rng.uniform(0.9, 1.1) * float(np.clip((note.dur - 0.08) / 0.32, 0.35, 1.0))
+        if note.art == "slide":
+            env = full * np.clip((t - shift) / onset, 0.0, 1.0)
+        elif note.start - last_end < 0.02:
+            env = level + (full - level) * np.clip(t / VIB_CARRY, 0.0, 1.0)
+        else:
+            env = full * np.clip((t - wait) / onset, 0.0, 1.0)
+        if k + 1 == len(ordered) or ordered[k + 1].start - (note.start + note.dur) >= 0.02:
+            env = env * (1.0 - 0.5 * np.clip((t - (t[-1] - VIB_EASE)) / VIB_EASE, 0.0, 1.0))
+        width[i0:i1] = env
+        last_end, level = note.start + note.dur, float(env[-1])
+    width = uniform_filter1d(width, max(1, int(0.03 * sr)))
+    t = np.arange(length) / sr
+    wobble = rate * (1.0 + 0.04 * np.sin(2.0 * np.pi * 0.7 * t + rng.uniform(0.0, 2.0 * np.pi)))
+    breathe = 1.0 + 0.05 * np.sin(2.0 * np.pi * rng.uniform(0.3, 0.7) * t + rng.uniform(0.0, 2.0 * np.pi))
+    return width * breathe * np.sin(2.0 * np.pi * np.cumsum(wobble) / sr + rng.uniform(0.0, 2.0 * np.pi))
 
 
 def lines(notes, overlap: float = 0.08) -> list[list]:
@@ -217,10 +256,14 @@ def _bowed(kind: Kind, notes, sr: int, length: int, rng: np.random.Generator, s:
         where, level = place(note)
         return where, 0.08 * where, where / REF * level, (REF / where) ** 1.5
 
-    depth = vibrato(kind, float(s["ornament"])) * q["depth"]
     period, bridge_len, bow_v, grip, catch = bowed.tracks(
-        notes, sr, length, rng, vibrato=depth, rate=kind.rate * q["rate"], wear=wear, rise=kind.rise,
-        turn=kind.turn, bite=kind.bite, slide=(None, kind.shift), bowing=bowing, intonation=INTONATION)
+        notes, sr, length, rng, vibrato=0.0, wear=wear, rise=kind.rise, turn=kind.turn, bite=kind.bite,
+        slide=(None, kind.shift), bowing=bowing, intonation=INTONATION)
+    # the vibrato, carried through the notes (bowed.tracks' own starts afresh on every note, a fiddler's)
+    cents = _vibrato(notes, sr, length, rng, vibrato(kind, float(s["ornament"])) * q["depth"], kind.rate * q["rate"],
+                     kind.shift, q["wait"], q["onset"])
+    period = (period + bowed._FILTER_DELAY - bowed._SLIP_EARLY) * 2.0 ** (-cents / 1200.0) \
+        - bowed._FILTER_DELAY + bowed._SLIP_EARLY
     # The corner's rounding, the bow's weight and how far toward sul ponticello's surface sound, note by note
     # (each held from its note's start to the next's): a heavier, faster bow keeps the corner sharper, so louder
     # is brighter.
@@ -303,7 +346,7 @@ def _pizz(kind: Kind, note, sr: int, rng: np.random.Generator, s: dict, ring: fl
 def player(kind: Kind, notes, sr: int, length: int, rng: np.random.Generator, s: dict, q: dict | None = None,
            ) -> np.ndarray:
     """One player's line (bowed and plucked notes, one at a time): the string's force on the bridge."""
-    q = {"position": 1.0, "depth": 1.0, "rate": 1.0, **(q or {})}
+    q = {"position": 1.0, "depth": 1.0, "rate": 1.0, "wait": 0.0, "onset": 0.0, **(q or {})}
     force = np.zeros(length)
     notes = [n for n in sorted(notes, key=lambda n: n.start) if n.start * sr < length and n.dur > 0]
     bows = [n for n in notes if n.art != "pizz"]
@@ -382,8 +425,11 @@ def _section(notes, sr: int, length: int, rng: np.random.Generator, make: np.ran
     seeds = {name: [int(make.integers(1 << 30)) for _ in range(2)] for name, *_ in SECTIONS}
     ways = {name: [dict(detune=float(make.choice([-1.0, 1.0]) * make.uniform(3.0, 8.0)),
                         late=float(make.uniform(0.0, 0.015)), rate=float(make.uniform(0.9, 1.1)),
-                        depth=float(make.uniform(0.7, 1.2)), position=float(make.uniform(0.85, 1.15)))
+                        depth=float(make.uniform(0.5, 0.9)), position=float(make.uniform(0.85, 1.15)),
+                        wait=float(make.uniform(0.0, 0.2)), onset=float(make.uniform(0.15, 0.35)))
                    for _ in range(16)] for name, *_ in SECTIONS}
+    # (each a little narrower in vibrato than a soloist: many players' vibratos average out to a narrower one, which
+    # two or three can't; and each starts it in their own time, not all together)
     # how far apart the players' tunings sit: 3 to 8 cents at the default wear, a quarter of that new, twice worn
     spread = min(2.0, 0.25 + 3.0 * wear)
     groups: dict[str, list] = {name: [] for name, *_ in SECTIONS}

@@ -185,6 +185,58 @@ def test_a_players_vibrato_rate_and_width(name, pitch, rate):
     assert depths[0] < 5 and depths[1] > 15  # plain: nearly none; ornamented: a wide singer's vibrato
 
 
+def cents(y, f0, t0, t1):
+    """The pitch of a bridge force's fundamental from t0 to t1 s, in cents from f0 (a 10 ms average)."""
+    band = sosfiltfilt(butter(4, [f0 * 0.92, f0 * 1.08], btype="bandpass", fs=SR, output="sos"), y)
+    inst = np.diff(np.unwrap(np.angle(hilbert(band)))) * SR / (2 * np.pi)
+    return 1200 * np.log2(np.maximum(np.convolve(inst, np.ones(441) / 441, mode="same"), 1.0) / f0)[
+        int(t0 * SR): int(t1 * SR)]
+
+
+def swing(c, cycle=0.18):
+    """Half the vibrato's peak to peak over the cycle before each 10 ms step."""
+    n = int(cycle * SR)
+    return np.array([np.ptp(c[max(0, i - n): i]) / 2 for i in range(n // 4, len(c), int(0.01 * SR))])
+
+
+def bowed_line(kind, notes, dur, q=None, **s):
+    return cello.player(kind, notes, SR, int(dur * SR), np.random.default_rng(5), {**PLAIN, **s}, q)
+
+
+def test_the_vibrato_grows_in_at_once_and_carries_through_a_phrase():
+    """A cellist's vibrato is one motion of the hand: on a note after a rest it is half there in 0.08-0.2 s and
+    whole by 0.4 s (it was nothing for a quarter of a second, then half at 0.35); through a slur it keeps going (it
+    started again from nothing on every note); a 0.3 s note in a line still has some (it had none under 0.35 s)."""
+    f = midi_to_hz(50)
+    y = bowed_line(cello.CELLO, [Note("x", 0.1, 2.0, 50.0, 0.6)], 2.4)
+    w = swing(cents(y, f, 0.13, 2.0))
+    full = np.median(w[80:])
+    t = np.arange(len(w)) * 0.01 + 0.18 / 4 + 0.03
+    assert 0.08 < t[np.argmax(w > 0.5 * full)] < 0.2 and t[np.argmax(w > 0.9 * full)] < 0.4 and full > 15
+    slur = [Note("x", 0.1, 0.8, 50.0, 0.6), Note("x", 0.9, 0.8, 52.0, 0.6, art="slur")]
+    y = bowed_line(cello.CELLO, slur, 2.0)
+    before = np.ptp(cents(y, f, 0.65, 0.88)) / 2
+    after = np.ptp(cents(y, midi_to_hz(52), 1.0, 1.25)) / 2
+    assert after > 0.6 * before
+    for dur, least in ((0.3, 5.0), (0.45, 10.0)):
+        line = [Note("x", 0.1 + dur * k, dur, float(p), 0.6, art="slur" if k % 2 else "")
+                for k, p in enumerate([50, 52, 54, 55, 57, 55])]
+        y = bowed_line(cello.CELLO, line, 0.5 + 6 * dur)
+        for k, p in enumerate([50, 52, 54, 55, 57, 55][1:], start=1):
+            c = cents(y, midi_to_hz(p), 0.1 + dur * k + 0.04, 0.1 + dur * (k + 1) - 0.02)
+            assert np.ptp(c) / 2 > least, (dur, k)
+
+
+def test_a_section_player_starts_the_vibrato_in_their_own_time():
+    f = midi_to_hz(62)
+    halves = []
+    for wait, onset in ((0.0, 0.15), (0.2, 0.35)):
+        y = bowed_line(cello.VIOLA, [Note("x", 0.1, 1.6, 62.0, 0.6)], 2.0, {"wait": wait, "onset": onset, "depth": 0.7})
+        w = swing(cents(y, f, 0.13, 1.6))
+        halves.append(np.argmax(w > 0.5 * np.median(w[80:])) * 0.01)
+    assert halves[1] - halves[0] > 0.15
+
+
 def test_pizzicato_rings_down_and_tremolo_reverses_a_dozen_times_a_second():
     y = stem("cello", [Note("cello", 0.1, 0.3, 43.0, 0.7, art="pizz")], 2.0).mean(axis=1)
     env = envelope(y, midi_to_hz(43))
