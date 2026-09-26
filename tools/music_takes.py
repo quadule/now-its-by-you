@@ -302,6 +302,7 @@ def main() -> None:
         folder.mkdir(parents=True, exist_ok=True)
         wav = folder / f"{genome_path.stem}-take{number}.wav"
         sf.write(str(wav), (0.5 * y / (np.max(np.abs(y)) + 1e-12)).astype(np.float32), S.SR, subtype="FLOAT")
+        about["guide"] = T.guide(genome_path, genome).digest  # the guide it was steered onto
         wav.with_suffix(".json").write_text(json.dumps(about, indent=1) + "\n")
         print(f"{wav.relative_to(T.ROOT)}  {len(y) / S.SR:.0f} s")
 

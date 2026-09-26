@@ -520,7 +520,11 @@ def rounded(v: float, digits: int) -> float | None:
 def measured(genome_path: Path, genome, take) -> dict:
     """A take (a kept take or a path) measured once and kept in renders/measured/
     until the take, the guide it was sung to or this extractor changes."""
-    take = take if isinstance(take, K.Take) else K.Take(Path(take).resolve(), "", genome_path.stem)
+    if not isinstance(take, K.Take):  # a reference take: the guide it followed is written beside it
+        path = Path(take).resolve()
+        about = [path.with_suffix(".truth.json"), path.with_suffix(".json")]
+        pinned = next((json.loads(f.read_text()).get("guide") for f in about if f.exists()), None)
+        take = K.Take(path, "", genome_path.stem, pinned)
     g = guide(genome_path, genome, take.guide)
     stat = take.path.stat()
     stamp = {"guide": g.digest, "extractor": version(), "bytes": stat.st_size, "mtime": int(stat.st_mtime)}
