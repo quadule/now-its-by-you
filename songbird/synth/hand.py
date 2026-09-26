@@ -16,18 +16,21 @@ their own hands, strength, place in the room and habit of timing; clapping
 along to a band, their onsets spread over 10 to 25 ms (Repp, "Sensorimotor
 synchronization", Psychonomic Bulletin & Review 12(6), 2005: taps wander
 by about 10 ms around the beat), more for a looser, more worn group, which
-now and then drops a clap.
+now and then drops a clap. The first hands meet on the note's time and the
+rest follow, since the notes carry the part's own timing and nothing may
+sound before them.
 
 Stomps. A foot comes down on a wooden stage or porch: the heel lands first,
 a hard edge for a millisecond, then the leg's weight through the sole over
 several (the softer and longer the contact, the more of the energy goes low),
 and the sole slaps down after it. The floor booms: boards on joists over an
-air space, a big stiff plate whose lowest modes, 35 to 250 Hz here, ring for
-a few tenths of a second, with the air under it (the cavity's lengthwise and
-crosswise modes) breathing along. The modes that change the floor's volume
-(odd in both directions) radiate best; the others mostly cancel themselves
-(Fletcher and Rossing, section 3.13). Under each foot, the board it lands on
-knocks: a plank between two joists is a clamped beam, modes at 1, 2.76, 5.40,
+air space, a big stiff plate whose modes (the lowest at 45 to 75 Hz, a
+handful more up to 400) ring for a few tenths of a second, with the air under
+it (the cavity's lengthwise and crosswise modes) and the frame holding it up
+along. The modes that change the floor's volume (odd in both directions)
+radiate best; the others mostly cancel themselves (Fletcher and Rossing, The
+Physics of Musical Instruments, on radiation from plates). Under each foot,
+the board it lands on knocks: a plank between two joists is a clamped beam, modes at 1, 2.76, 5.40,
 8.93 and 13.3 times the first, 180 to 320 Hz here, gone in a tenth of a
 second. Two to five people stomp together, each on their own board and place
 on the floor, which rings for all of them at once (the struck bank adds

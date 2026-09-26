@@ -12,8 +12,9 @@ closed form), without rendering the stroke first.
 A contact of duration tau (a palm, a heel, a fingertip, a jingle meeting its
 pair) passes what it strikes as a half-sine force does: flat below 1/(2 tau),
 falling 12 dB an octave above. A harder stroke is a shorter contact, so a
-brighter one (Fletcher and Rossing, The Physics of Musical Instruments, 2nd
-ed., 1998, section 2.18; Rossing, Science of Percussion Instruments, 2000).
+brighter one (the struck string's and struck bar's hammer and mallet in
+Fletcher and Rossing, The Physics of Musical Instruments, 2nd ed., 1998;
+Rossing, Science of Percussion Instruments, 2000).
 
 The rattles (a shaker's beads, a tambourine's jingles, a cajon's snares) are
 collisions: many small impacts whose rate and strength follow the energy put
