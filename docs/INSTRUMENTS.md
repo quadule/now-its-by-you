@@ -12,8 +12,8 @@ artifact: no samples, no downloads.
 
 As with the band, nobody but the artist can listen, so every model was
 judged by measurement against what the real instrument does, and a Fable
-advisor reviewed the plan before any of it was built and the instruments by
-measurement after. The renders in `renders/production/instruments/` are for
+advisor reviewed the plan before any of it was built and the rendered
+instruments by measurement after. The renders in `renders/production/instruments/` are for
 the ears: each instrument alone, a short phrase in D written for it.
 
 ## How they plug in
@@ -599,6 +599,20 @@ solved implicitly. The soundboard's two microphones differed by up to 8 dB
 in some registers, pulling notes across the player's image; they are
 balanced third-octave by third-octave.
 
+A last Fable review measured the rendered demos. It found every solo at
+exactly its loudness, no DC, no aliasing (18-22 kHz 90 to 110 dB under the
+peak), tails ending cleanly, positive stereo correlation throughout, and
+every checked note within 5 cents; the organ, harmonium, electric pianos,
+pad, basses and chip nothing wrong. It found clicks: the drum machines'
+voices stepped out of silence in one sample (the 909's kick to a third of
+full scale), which now open over half a millisecond, and soft mallet
+strokes spiked at their start (up to a fifth of the peak in the marimba's
+roll), from a correction taken out while the mallet touches whose second
+difference has no meaning at a pulse's start; that term is gone and every
+mallet's worst jump is under 3.3 times its local slope, as the piano's.
+The sketches' sub bass sat 3 to 3.6 dB heavy under the ballad and lounge,
+and is 4 dB lower there.
+
 ## Limits
 
 - Nobody has listened. The models are right by the measures above, but the
@@ -628,3 +642,11 @@ balanced third-octave by third-octave.
   recordings. The drum machines' docstrings name the machines they model.
 - Comping instruments were levelled on block chords at velocity 0.6; a
   one-note arpeggio or a single line on them sits a few dB lower.
+- Open from the last review: the arpeggio synth ticks at some chord changes
+  in its demo (a swing of half its peak within five samples at 5.93 s, the
+  level continuous across it), not traced yet; the mallets' attacks measure
+  36 to 86 ms from -20 dB to their peak in the demos (the resonators'
+  bloom explains the marimba's and vibraphone's, not the glockenspiel's or
+  the music box's); some solos lean to one side (up to 4 dB), which is
+  mostly their SPEC place in the band; and the piano is dark above 5 kHz
+  for a mid-weight blow.
