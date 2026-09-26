@@ -14,7 +14,8 @@ import numpy as np
 from . import __version__, drift as drift_mod, genome as genome_mod, harvest, phrasing as phrasing_mod, synth, variation
 from .arrange import ArrangeError, arrange, problem
 from .realize import Params, choose_params, realize
-from .synth import master, room
+from .synth import master
+from .synth.mixing import MixParams
 from .synth.voice import VoiceParams
 
 
@@ -48,30 +49,19 @@ def _singer(params: Params, overrides: list[str]) -> VoiceParams:
     return replace(singer, **{k: type(getattr(defaults, k))(v) for k, v in (kv.split("=", 1) for kv in overrides)})
 
 
-def _mix(score, seed: int, singer: VoiceParams, rooms: dict) -> np.ndarray:
-    """The unmastered mix, in the rendition's room (the synth's default room if it has none)."""
-    if not rooms:
-        return synth.render(score, seed=seed, voice=singer)
-    # A stopgap until synth.mix takes the room: the same mix as synth.mix, in this room.
-    stems = synth.render_stems(score, seed=seed, voice=singer)
-    dry = sum(stems.values())
-    send = sum(stem * synth.SENDS.get(name, 1.0) for name, stem in stems.items())
-    ir = room.impulse_response(synth.SR, rt60=float(rooms.get("rt60", 1.1)),
-                               tone=tuple(rooms.get("tone", (1.0, 1.0, 1.0, 0.9, 0.7))), seed=seed)
-    return room.apply(dry, ir, send)
-
-
 def render_one(genome, params: Params, out: Path, *, voice=None, drift=None, lyrics=None, phrasing_json=None,
-               choir_json=(), singer_overrides=(), stems: bool = False) -> dict:
+               choir_json=(), singer_overrides=(), stems: bool = False, mix_overrides=()) -> dict:
     """Render one rendition to out (FLAC), with its record (.json), score (.score.json) and, if its words were
     drawn, its lyric sheet (.txt) beside it."""
     phrasing = phrasing_mod.from_json(phrasing_json) if phrasing_json else None
     choir = [phrasing_mod.from_json(d) for d in choir_json]
     score = variation.lay(realize(genome, params, phrasing=phrasing, choir=choir, lyrics=lyrics), params)
     singer = _singer(params, list(singer_overrides))
+    # the mix: in the room the rendition was given (params.room, where the harvest puts it), then any --mix changes
+    mixing = MixParams.parse(list(mix_overrides), base=MixParams.from_dict(params.room or {}))
 
     out.parent.mkdir(parents=True, exist_ok=True)
-    mix = _mix(score, params.seed, singer, params.room)
+    mix = synth.render(score, seed=params.seed, voice=singer, mix_params=mixing)
     mastered = master.master(mix, synth.SR)
     pcm = master.to_pcm16(mastered, seed=params.seed)
     master.write_flac(out, pcm, synth.SR)
@@ -87,7 +77,10 @@ def render_one(genome, params: Params, out: Path, *, voice=None, drift=None, lyr
         "drift": drift.to_dict() if drift is not None else None,
         "phrasing": {k: v for k, v in phrasing_json.items() if k not in ("phrases", "fields")} if phrasing_json else None,
         "choir_phrasings": [{k: v for k, v in d.items() if k not in ("phrases", "fields")} for d in choir_json] or None,
+        "mix": mixing.to_dict(),
         "loudness_lufs": round(master.loudness(pcm / 32768.0, synth.SR), 2),
+        "loudness_range_lu": round(master.loudness_range(pcm / 32768.0, synth.SR), 2),
+        "true_peak_dbtp": round(master.true_peak(pcm / 32768.0), 2),
         "peak_dbfs": round(20 * np.log10(np.max(np.abs(pcm)) / 32768.0), 2),
         "duration": round(len(pcm) / synth.SR, 3),
         "program_version": __version__,
@@ -127,7 +120,7 @@ def render_command(args: argparse.Namespace) -> int:
         return 2
     out = Path(args.out or Path("renders") / (Path(args.genome).stem + ".flac"))
     render_one(genome, params, out, voice=voice, drift=drift, lyrics=lyrics, phrasing_json=phrasing_json,
-               choir_json=choir_json, singer_overrides=args.voice, stems=args.stems)
+               choir_json=choir_json, singer_overrides=args.voice, stems=args.stems, mix_overrides=args.mix)
     return 0
 
 
@@ -307,6 +300,9 @@ def main(argv: list[str] | None = None) -> int:
     render.add_argument("--stems", action="store_true", help="also write each part, dry, as WAV")
     render.add_argument("--voice", nargs="*", default=[], metavar="FIELD=VALUE",
                         help="override the singer, e.g. --voice tract=1.0 shift=-12 rd=1.3")
+    render.add_argument("--mix", nargs="*", default=[], metavar="FIELD=VALUE",
+                        help="change the mix (synth/mixing.py MixParams), e.g. --mix rt60=2.2 wear=0.5 "
+                             "tone=1,1,1,0.8,0.6 balance=fiddle:2")
     render.add_argument("--choir", type=int, metavar="N",
                         help="lineage voices joining in harmony where the song has a choir (stand-ins for now)")
     render.add_argument("--phrasing", metavar="FILE",

@@ -1,0 +1,513 @@
+"""The mix: stems in, one stereo record out, ready for mastering.
+
+A warm, intimate acoustic folk record with the voice clear and in front.
+Every stem goes through a channel strip chosen by its name (voice, choir1,
+guitar, fiddle...; anything unknown gets a plain instrument strip), then onto
+one of three buses:
+
+- the voice: cleaned below 80 Hz, a little honk and synthetic sizzle taken
+  out, a little presence added, sibilance tamed by its balance against the
+  rest of the voice, a compressor that only leans on the loudest syllables,
+  a touch of warmth; it has a plate of its own and stands nearer than the band;
+- the lineage choir: thinner and softer in the presence range than the
+  lead, compressed as one group, wider, and further back in the room;
+- the band: each instrument at the level and place the arrangement gave it
+  (the drift's balance included), its sound shaped and cleared around the
+  voice; together, set `forward` dB under the voice while it sings, and
+  there its presence range dips and the lute doubling the tune steps back,
+  both coming back when the voice stops.
+
+The buses share the room (room.py: this machine's RT60, tone and predelay),
+each at its own distance; its return is kept out of the low end and the top,
+and gives way a little while the voice sings so the words keep their edges.
+The sum is glued lightly, tilted brighter or darker, and optionally worn like
+an old tape. master.py then brings it to loudness under a true-peak ceiling.
+docs/MIX.md has the design and how it was measured.
+
+Everything a variation might turn is in MixParams, with its range.
+"""
+
+from __future__ import annotations
+
+import re
+from dataclasses import dataclass, fields
+
+import numpy as np
+from scipy.ndimage import minimum_filter1d, uniform_filter1d
+
+from . import fx, room
+from .master import limit, loudness
+
+# --- the knobs ------------------------------------------------------------------------
+
+
+@dataclass(frozen=True)
+class MixParams:
+    """What a rendition may vary about its mix. Every knob has a default that
+    is the mix as designed, and a range (RANGES) it is held to; the harvest
+    sets the room, the drift may move any of them.
+
+    rt60      0.3-2.5 s   how long the room rings, mid band (the harvest measures it)
+    tone      5 x 0-2     the room's level in five bands from 40 Hz to 16 kHz (the harvest)
+    predelay  0.005-0.08 s  how soon the room answers after the sound
+    space     0-1.5       how much of the room is heard: 0 dry, 1 as designed, 1.5 half again
+    intimacy  0-1         how close the singer is: 0 back in the room (twice the voice's reverb),
+                          0.5 as designed, 1 right at the ear (half of it)
+    width     0-1.4       stereo width of the band, choir and room: 0 mono, 1 as designed
+    forward   5-15 dB     how far the voice stands above the band while it sings
+                          (before the band makes way: the dip and the lead lines' step back add more)
+    duck      0-2         how much the band and room make way for the voice: 0 not at all, 1 as designed
+    tilt      -2-+2 dB    the whole record darker (-) or brighter (+): the top end up and the bottom
+                          down by this much against 1 kHz
+    wear      0-1         0 new; toward 1 an old tape: wow and flutter, saturation, a narrower
+                          band, hiss, and from 0.35 crackle
+    balance   name: dB    an instrument (by stem name or role) up or down, e.g. fiddle: +2
+    """
+
+    rt60: float = 1.1
+    tone: tuple[float, ...] = room.TONE
+    predelay: float = 0.012
+    space: float = 1.0
+    intimacy: float = 0.5
+    width: float = 1.0
+    forward: float = 10.0
+    duck: float = 1.0
+    tilt: float = 0.0
+    wear: float = 0.0
+    balance: tuple[tuple[str, float], ...] = ()
+
+    @classmethod
+    def from_dict(cls, data: dict) -> MixParams:
+        known = {f.name for f in fields(cls)}
+        values = {k: v for k, v in data.items() if k in known}
+        if "tone" in values:
+            values["tone"] = tuple(float(v) for v in values["tone"])
+        if "balance" in values:
+            pairs = values["balance"].items() if isinstance(values["balance"], dict) else values["balance"]
+            values["balance"] = tuple((str(k), float(v)) for k, v in pairs)
+        return cls(**{k: (float(v) if k in RANGES else v) for k, v in values.items()})
+
+    @classmethod
+    def parse(cls, items: list[str], base: MixParams | None = None) -> MixParams:
+        """From FIELD=VALUE strings: rt60=2.2 wear=0.5 tone=1,1,1,0.8,0.6 balance=fiddle:2,drum:-3."""
+        values = (base or cls()).to_dict()
+        for item in items:
+            key, _, value = item.partition("=")
+            if key not in values:
+                raise ValueError(f"no mix setting {key!r}; there are {', '.join(values)}")
+            if key == "tone":
+                values[key] = [float(v) for v in value.split(",")]
+            elif key == "balance":
+                values[key] = {k: float(v) for k, v in (pair.split(":") for pair in value.split(",") if pair)}
+            else:
+                values[key] = float(value)
+        return cls.from_dict(values)
+
+    def to_dict(self) -> dict:
+        out = {f.name: getattr(self, f.name) for f in fields(self)}
+        out["tone"] = list(self.tone)
+        out["balance"] = dict(self.balance)
+        return out
+
+    def clamped(self) -> MixParams:
+        """The same settings held inside their ranges."""
+        values = {name: float(np.clip(getattr(self, name), lo, hi)) for name, (lo, hi) in RANGES.items()}
+        tone = tuple(float(np.clip(v, 0.0, 2.0)) for v in self.tone)[:5]
+        tone = tone + room.TONE[len(tone):]
+        return MixParams(**values, tone=tone, balance=tuple((k, float(np.clip(v, -12.0, 12.0))) for k, v in self.balance))
+
+
+RANGES = {
+    "rt60": (0.3, 2.5),
+    "predelay": (0.005, 0.08),
+    "space": (0.0, 1.5),
+    "intimacy": (0.0, 1.0),
+    "width": (0.0, 1.4),
+    "forward": (5.0, 15.0),
+    "duck": (0.0, 2.0),
+    "tilt": (-2.0, 2.0),
+    "wear": (0.0, 1.0),
+}
+
+# --- channel strips ---------------------------------------------------------------------
+
+
+@dataclass(frozen=True)
+class Strip:
+    """How one kind of instrument is treated on its way to the band bus. The
+    arrangement sets each instrument's level and place (and the drift its
+    balance); the strip only shapes its sound and trims it."""
+
+    eq: tuple = ()  # equalizer bands, fx.design
+    trim: float = 0.0  # dB against its level as arranged
+    comp: tuple | None = None  # a compressor (see VOICE_COMP)
+    drive: float = 0.0  # warmth, fx.saturate
+    send: float = 1.0  # how much reaches the room, against the band's usual
+    duck: float = 0.0  # dB it steps back while the voice sings (a doubling of the tune, a lead line)
+
+
+ROLES: dict[str, Strip] = {
+    # A plucked lute or cittern, doubling the tune under the words: boxiness and the voice's range cleared,
+    # and it steps back while the voice sings the same notes.
+    "lute": Strip(eq=(("hp", 90), ("peak", 320, -2.0, 1.0), ("peak", 2800, -2.0, 0.9)), drive=0.1, duck=3.0),
+    # The main accompaniment: weight kept, boom and clang tamed, sparkle above the voice.
+    "guitar": Strip(eq=(("hp", 75), ("peak", 200, -2.0, 1.1), ("peak", 2600, -2.0, 0.8), ("high", 9000, 1.0)),
+                    comp=(10.0, 2.0, 0.015, 0.2, 1.5, 3.0), drive=0.1, send=0.9),
+    "harp": Strip(eq=(("hp", 70), ("peak", 2800, -1.5, 0.9)), send=1.2),
+    # Round and even: no rumble, mud out, no string noise, saturated so small speakers hear its pitch.
+    "bass": Strip(eq=(("hp", 40, 4), ("peak", 380, -2.0, 0.8), ("lp", 3000)),
+                  comp=(10.0, 3.0, 0.01, 0.15, 1.5, 3.0), drive=0.35, send=0.25),
+    "fiddle": Strip(eq=(("hp", 180), ("peak", 2500, -2.5, 1.0), ("high", 8000, -1.0)),
+                    comp=(10.0, 2.0, 0.02, 0.25, 2.0, 3.0), send=1.3, duck=2.0),
+    "whistle": Strip(eq=(("hp", 250), ("peak", 3000, -2.0, 1.4), ("high", 9000, -1.0)), send=1.3, duck=2.0),
+    "drum": Strip(eq=(("hp", 40), ("peak", 420, -2.0, 1.0), ("high", 8000, -1.0)), comp=(12.0, 3.0, 0.004, 0.12, 1.0, 4.0), send=0.6),
+    # A held drone stays out of the words altogether.
+    "drone": Strip(eq=(("hp", 50), ("peak", 2500, -3.0, 0.7), ("lp", 6000))),
+    "band": Strip(eq=(("hp", 60), ("peak", 2800, -1.5, 0.9))),  # anything else
+}
+
+NAMES = {
+    "voice": ("voice", "lead", "vocal", "singer"),
+    "choir": ("choir", "harmony", "backing"),
+    "lute": ("melody", "lute", "mandolin", "bouzouki", "cittern", "oud", "banjo"),
+    "guitar": ("guitar", "strum", "pick"),
+    "harp": ("harp", "dulcimer", "zither", "kantele", "psaltery"),
+    "bass": ("bass", "contrabass", "upright"),
+    "fiddle": ("fiddle", "violin", "viola", "cello", "strings", "bow"),
+    "whistle": ("whistle", "flute", "pipe", "recorder", "fife", "blown"),
+    "drum": ("drum", "drums", "percussion", "bodhran", "tambourine", "shaker", "kick", "snare", "skin", "frame"),
+    "drone": ("drone", "pad", "organ", "harmonium", "shruti", "bagpipe", "hum"),
+}
+
+
+def role_of(name: str) -> str:
+    """The role a stem plays, from its name: "choir2" is choir, "guitar_low" guitar, anything unknown "band"."""
+    word = re.sub(r"[\d_\-\s.]+$", "", name.lower())
+    for role, names in NAMES.items():
+        if word in names:
+            return role
+    for role, names in NAMES.items():
+        if any(n in word for n in names):
+            return role
+    return "band"
+
+
+# The voice and choir, in the same terms as the band's roles.
+VOICE_EQ = (("hp", 80), ("peak", 900, -2.0, 1.2), ("peak", 3500, 2.0, 0.9))
+# The voice's air (7-14 kHz) against its body (0.5-2 kHz): natural singers (SoulX-Singer renders of our score)
+# measure -21 to -23 dB. A voice brighter than AIR is brought half way back, never by more than 3 dB.
+AIR = -20.0
+# Compressors: (floor: dB under the part's loud passages, ratio, attack s, release s, ride s, above dB).
+# With a ride, the threshold is `above` dB over the level of the surrounding `ride` seconds (never under the
+# floor): a syllable is evened against its phrase, a strum against its bar, but a quiet verse stays quiet.
+VOICE_COMP = (10.0, 2.0, 0.015, 0.2, 3.0, 3.0)  # only the syllables that stand out of their phrase are leaned on
+CHOIR_EQ = (("hp", 120), ("low", 260, -2.0), ("peak", 3000, -2.5, 0.8), ("high", 9000, -2.0))
+CHOIR_COMP = (6.0, 2.0, 0.03, 0.3, 0.0, 0.0)
+PEAKS = 3.0  # dB over its loud peaks a choir's, drum's or the room's onset may reach before a peak stage rounds it off
+CHOIR_UNDER = 4.0  # dB the choir as a whole sits under the lead
+CHOIR_WIDTH = 1.35  # never past 1.6, whatever `width` asks
+CHOIR_LATER = 0.02  # s the choir's sound reaches the room after the band's: it stands further back
+
+# Sends to the room (amplitude, before `space`), and the plate's for the voice.
+VOICE_ROOM = 0.08
+VOICE_PLATE = 0.18
+BAND_ROOM = 0.18
+CHOIR_ROOM = 0.5
+CHOIR_PLATE = 0.12
+PLATE_RT60 = 1.5
+RETURN_EQ = (("hp", 120), ("lp", 12000))  # wide enough that the harvested tone's ends are heard
+RETURN_DIP = 3.0  # dB the room and plate give way while the voice sings
+MAKE_WAY = (0.02, 0.9)  # s the band and room take to make way for the voice (quick: its first consonants), and to come back after it (slow: no breathing)
+RIDE = (3.0, 1.5)  # dB the band comes up where the voice rests, over this many seconds
+
+CARVE = (2600.0, 0.7)  # the band's dip for the voice: centre Hz, Q
+CARVE_DEPTH = 6.0  # dB at full voice
+BAND_EQ = (("low", 200, 2.5), ("peak", 600, -2.0, 0.8))  # the band as a whole: warmer, and less boxy where the voice's vowels sit
+BAND_COMP = (10.0, 1.5, 0.02, 0.2, 2.0, 3.0)  # the band together, lightly: its arc from sparse verses to full refrains is kept
+GLUE = (8.0, 1.5, 0.05, 0.4, 3.0, 3.0)  # the whole mix, lightly: what stands out of its surroundings, never the song's arc
+REFERENCE = -20.0  # LUFS the voice is brought to before the balance is set
+WARMTH = (("low", 180, 2.0),)  # the whole record: a little more weight under the voice, where only the band and a low singer reach
+
+
+# --- helpers ----------------------------------------------------------------------------
+
+
+def quick_loudness(x: np.ndarray, sr: int) -> float:
+    """Integrated loudness at half the sample rate (pairs averaged): within a
+    few tenths of a LU of the full measurement for a stem, at half the cost."""
+    n = len(x) // 2 * 2
+    if n < 2 * sr:
+        return loudness(x, sr)
+    return loudness((x[:n:2] + x[1:n:2]) / 2.0, sr // 2)
+
+
+def _compressor(x: np.ndarray, sr: int, setting, **extra) -> tuple[np.ndarray, np.ndarray]:
+    floor, ratio, attack, release, ride, above = (*setting, 0.0, 0.0)[:6]
+    if ride:  # a narrow knee, whose foot stays over the surroundings' level: only what stands out is touched
+        extra = {"knee": 4.0, **extra} if "knee" not in extra else {**extra, "knee": min(extra["knee"], 2 * (above - 1))}
+    return fx.compress(x, sr, fx.loud_level(x, sr) - floor, ratio, attack, release, ride=ride, above=above, **extra)
+
+
+def _sizzle(x: np.ndarray, sr: int) -> tuple:
+    """A high shelf that brings a voice brighter than natural singers (AIR) half way back."""
+    mono = x.reshape(len(x), -1).mean(axis=1)
+    n = 1 << 13
+    if len(mono) < n:
+        return ()
+    starts = np.linspace(0, len(mono) - n, min(200, len(mono) // n)).astype(np.int64)
+    spectrum = (np.abs(np.fft.rfft(mono[starts[:, None] + np.arange(n)] * np.hanning(n), axis=1)) ** 2).sum(axis=0)
+    f = np.fft.rfftfreq(n, 1.0 / sr)
+    air = spectrum[(f >= 7000) & (f < 14000)].sum()
+    body = spectrum[(f >= 500) & (f < 2000)].sum()
+    if air <= 0 or body <= 0:
+        return ()
+    over = 10.0 * np.log10(air / body) - AIR
+    return (("high", 9000, -min(3.0, 0.5 * over)),) if over > 0 else ()
+
+
+def _compressed(x: np.ndarray, sr: int, setting) -> np.ndarray:
+    return _compressor(x, sr, setting)[0]
+
+
+def _at(x: np.ndarray, sr: int, target: float) -> np.ndarray:
+    """x scaled so its loudness is `target` LUFS."""
+    measured = quick_loudness(x, sr)
+    return x * 10.0 ** ((target - measured) / 20.0) if np.isfinite(measured) else x
+
+
+def _treated(x: np.ndarray, treat) -> np.ndarray:
+    """treat(x), done once on the sound itself when the stem is one mono sound panned."""
+    mono = fx.as_mono(x)
+    if mono is None:
+        return treat(x)
+    sound, gains = mono
+    return treat(sound[:, None]) * gains[None, :]
+
+
+def _conformed(stems: dict[str, np.ndarray]) -> dict[str, np.ndarray]:
+    """Every stem as a float (samples, 2) array, all as long as the longest: a
+    mono stem sounds in the middle, a longer one isn't cut."""
+    out = {}
+    for name, x in stems.items():
+        x = np.asarray(x, dtype=np.float64)
+        x = x.reshape(len(x), -1)
+        if x.shape[1] == 1:
+            x = np.repeat(x * np.sqrt(0.5), 2, axis=1)
+        out[name] = x[:, :2]
+    length = max((len(x) for x in out.values()), default=0)
+    return {k: (np.pad(x, ((0, length - len(x)), (0, 0))) if len(x) < length else x) for k, x in out.items()}
+
+
+def _peaks(x: np.ndarray, sr: int) -> np.ndarray:
+    """A peak stage for parts whose onsets jump far over the rest (a choir's
+    consonants, a drum's strike, the room's first echoes of them): what
+    swings past PEAKS dB over the part's loud peaks is rounded off by a
+    look-ahead limiter, so the master's limiter hardly has to work."""
+    return limit(x, sr, 20.0 * np.log10(fx.loud_peak(x, sr) + 1e-12) + PEAKS)
+
+
+def _sum(stems: dict[str, np.ndarray], names: list[str]) -> np.ndarray | None:
+    out = None
+    for name in names:
+        out = stems[name].copy() if out is None else out + stems[name]
+    return out if out is not None and np.any(out) else None
+
+
+# --- the mix --------------------------------------------------------------------------------
+
+
+def mix(stems: dict[str, np.ndarray], sr: int, seed: int = 0, params: MixParams | None = None,
+        taps: dict | None = None) -> np.ndarray:
+    """Stems (each stereo, all one length) into one unmastered stereo mix, room
+    included. taps: a dict to receive the buses and each treated stem as they
+    go into the sum (for analysis)."""
+    p = (params or MixParams()).clamped()
+    stems = _conformed(stems)
+    if not stems:
+        return np.zeros((0, 2))
+    length = len(next(iter(stems.values())))
+    balance = dict(p.balance)
+    roles = {name: role_of(name) for name in sorted(stems)}
+    nudge = {name: balance.get(name, balance.get(role, 0.0)) for name, role in roles.items()}  # a name wins over its role
+
+    # The lead first: everything else is placed against it.
+    voice = _sum(stems, [n for n, r in roles.items() if r == "voice"])
+    singing = None
+    if voice is not None:
+        def lead(x):
+            x = fx.equalize(x, fx.design(VOICE_EQ + _sizzle(x, sr), sr))
+            x = fx.deess(x, sr)[0]
+            x = _compressed(x, sr, VOICE_COMP)
+            return _at(_peaks(fx.saturate(x, sr, 0.2), sr), sr, REFERENCE)
+        voice = _treated(voice, lead)
+        singing = fx.activity(voice, sr, attack=MAKE_WAY[0], release=MAKE_WAY[1])
+
+    # The lineage choir, as one group, where it sings.
+    choir = _sum(stems, [n for n, r in roles.items() if r == "choir"])
+    if choir is not None:
+        where = fx.span(choir, sr)
+        if where.stop - where.start > sr // 2:
+            group = fx.equalize(choir[where], fx.design(CHOIR_EQ, sr))
+            group = _peaks(_compressed(group, sr, CHOIR_COMP), sr)
+            group = fx.width(group, sr, min(CHOIR_WIDTH * p.width, 1.6))
+            choir = np.zeros((length, 2))
+            choir[where] = _at(group, sr, REFERENCE - CHOIR_UNDER + balance.get("choir", 0.0))
+        else:
+            choir = None
+
+    # The band: each instrument to its place, then together.
+    band = np.zeros((length, 2))
+    band_send = np.zeros((length, 2))
+    stepping = np.zeros((length, 2))  # what the instruments that step back under the voice give up
+    for name, role in roles.items():
+        if role in ("voice", "choir"):
+            continue
+        strip = ROLES[role]
+        where = fx.span(stems[name], sr)
+        if where.stop <= where.start:
+            continue
+
+        def channel(x, strip=strip, role=role):
+            x = fx.equalize(x, fx.design(strip.eq, sr))
+            if strip.comp:
+                x = _compressed(x, sr, strip.comp)
+            if role == "drum":
+                x = _peaks(x, sr)
+            return fx.saturate(x, sr, strip.drive)
+        x = _treated(stems[name][where], channel) * 10.0 ** ((strip.trim + nudge[name]) / 20.0)
+        if taps is not None:
+            taps[name] = (where, x)
+        band[where] += x
+        band_send[where] += x * strip.send
+        if strip.duck and singing is not None:
+            stepping[where] += x * (1.0 - 10.0 ** (-strip.duck * p.duck * singing[where] / 20.0))[:, None]
+    gain = 1.0
+    if np.any(band):
+        eq = fx.design(BAND_EQ, sr)
+        band = fx.equalize(band, eq)
+        band, squeeze = _compressor(band, sr, BAND_COMP)
+        # the band under the voice, measured where the voice sings, before it makes way for it
+        sung = singing is not None and np.mean(singing > 0.5) > 0.05
+        level = quick_loudness(band[singing > 0.5], sr) if sung else quick_loudness(band, sr)
+        if np.isfinite(level):
+            gain = 10.0 ** ((REFERENCE - (p.forward if sung else 3.0) - level) / 20.0)
+        if np.any(stepping):  # the lead lines step back, through the same equalizer and compressor
+            band -= fx.apply_gain(fx.equalize(stepping, eq), squeeze)
+        band *= gain
+        band_send *= gain
+        if singing is not None:
+            # where the voice rests a while (the intro, the turns), the band is ridden up, as an engineer would;
+            # the ride goes up and comes back down inside the rest, so the band is down again before the voice returns
+            resting = minimum_filter1d((singing < 0.05).astype(float), int(RIDE[1] * sr), mode="nearest")
+            rest = uniform_filter1d(resting, int(RIDE[1] * sr / 2), mode="nearest")
+            ride = 10.0 ** (RIDE[0] * p.duck * rest / 20.0)
+            band *= ride[:, None]
+            band_send *= ride[:, None]
+            band = fx.dynamic_dip(band, sr, CARVE[0], CARVE[1], CARVE_DEPTH * p.duck * singing)
+        band = fx.width(band, sr, p.width)
+
+    # The room, heard from each bus at its own distance; the plate for the singers.
+    size = min(1.0, (1.1 / p.rt60) ** 0.25)  # a long room needs less sent to be heard as much
+    near = 2.0 ** (1.0 - 2.0 * p.intimacy)  # the voice's own sends: 2 far back, 1 as designed, 0.5 at the ear
+    send = band_send * BAND_ROOM
+    plate_send = np.zeros(length)
+    if voice is not None:
+        send += voice * (VOICE_ROOM * near)
+        plate_send += voice.sum(axis=1) * (VOICE_PLATE * near * np.sqrt(0.5))
+    if choir is not None:
+        send += fx.delay(choir, int(CHOIR_LATER * sr)) * CHOIR_ROOM
+        plate_send += choir.sum(axis=1) * (CHOIR_PLATE * np.sqrt(0.5))
+    # the room is its numbers: the same numbers (a machine's harvested room) give the same room every rendition
+    early, tail = room.responses(sr, p.rt60, p.tone, p.predelay, room.seed_of(p.rt60, p.tone, p.predelay))
+    plates = [(plate_send * p.space, room.plate(sr, PLATE_RT60, 0))] if np.any(plate_send) else []
+    wet = room.convolve(send * (p.space * size), early, tail, plates)
+    wet = _peaks(fx.width(fx.equalize(wet, fx.design(RETURN_EQ, sr)), sr, p.width), sr)
+    if singing is not None:
+        # the room gives way to the lead's words, but not where the lineage sings with it: that is its space
+        dip = np.zeros(len(wet))
+        dip[:length] = RETURN_DIP * p.duck * singing * (1.0 - fx.activity(choir, sr) if choir is not None else 1.0)
+        wet *= (10.0 ** (-dip / 20.0))[:, None]
+
+    if taps is not None:
+        taps.update(voice=voice, choir=choir, band=band, wet=wet.copy(), singing=singing, band_gain=gain)
+    out = wet
+    for bus in (voice, choir, band):
+        if bus is not None:
+            out[:length] += bus
+
+    # The whole: glued, tilted, maybe worn.
+    out, glue = _compressor(out, sr, GLUE, knee=8.0, window=0.05)
+    if taps is not None:
+        taps["glue"] = glue
+    tone = WARMTH
+    if p.tilt:  # shelves reach their gain only well past their corners: these give +-tilt at 60 Hz and 12 kHz
+        tone = tone + (("low", 300, -1.15 * p.tilt), ("high", 3000, 1.15 * p.tilt))
+    out = fx.equalize(out, fx.design(tone, sr))
+    if p.wear > 0:
+        out = wear(out, sr, p.wear, seed)
+    return out
+
+
+# --- wear -------------------------------------------------------------------------------------
+
+WOW = 0.0022  # peak speed error from wow (0.22%, about 4 cents) at full wear
+FLUTTER = 0.0007  # RMS speed error from flutter at full wear
+HISS = (-74.0, -46.0)  # dB of hiss under the music's loudness, from a trace of wear to full
+CRACKLE = 0.35  # wear from which the surface starts to crackle
+
+
+def _band_noise(rng: np.random.Generator, n: int, rate: float, lo: float, hi: float) -> np.ndarray:
+    """Unit-RMS noise between lo and hi Hz, `n` points at `rate` per second."""
+    x = rng.standard_normal(n)
+    x = fx.equalize(x[:, None], fx.design((("hp", lo), ("lp", hi)), int(rate)))[:, 0]
+    return x / (np.sqrt(np.mean(x**2)) + 1e-12)
+
+
+def wear(x: np.ndarray, sr: int, amount: float, seed: int = 0) -> np.ndarray:
+    """How worn the recording sounds, 0 (new) to 1 (an old copy of a copy):
+    the tape transport's wow and flutter bend the pitch, the tape saturates
+    and loses its top and bottom (with a little bump where the head
+    resonates), hiss rises under the music, and past a third of the way the
+    surface starts to crackle. Everything is made from `seed`."""
+    a = float(np.clip(amount, 0.0, 1.0))
+    if a <= 0 or not len(x):
+        return x
+    rng = np.random.default_rng(seed + 4242)
+    n = len(x)
+    level = quick_loudness(x, sr)
+
+    # Transport: the speed wanders slowly (wow) and trembles (flutter); the tape is read that much early or late.
+    rate = 1000.0
+    k = int(n / sr * rate) + 2
+    t = np.arange(k) / rate
+    wow = (np.sin(2 * np.pi * rng.uniform(0.45, 0.8) * t + rng.uniform(0, 2 * np.pi))
+           + 0.5 * np.sin(2 * np.pi * rng.uniform(0.15, 0.3) * t + rng.uniform(0, 2 * np.pi))) / 1.5
+    speed = a * (WOW * wow + FLUTTER * _band_noise(rng, k, rate, 5.0, 14.0))
+    lag = np.cumsum(speed) / rate * sr  # samples read ahead (+) or behind (-)
+    y = fx.warp(x, np.interp(np.arange(n) / sr, t, lag - lag.mean()))
+
+    # The tape itself: saturation, a narrower band, the head bump.
+    y = fx.saturate(y, sr, 0.1 + 0.9 * a, bias=0.12)
+    top = 20000.0 * (1.0 - 0.62 * a)
+    y = fx.equalize(y, fx.design((("hp", 20.0 + 60.0 * a), ("low", 90.0, 2.0 * a), ("lp", top)), sr))
+
+    # Hiss under everything, each channel its own, brighter than pink, through the same narrow band.
+    if np.isfinite(level):
+        hiss = rng.standard_normal((n, 2))
+        hiss = fx.equalize(hiss, fx.design((("hp", 400.0), ("high", 6000.0, 4.0), ("lp", top)), sr))
+        target = level + HISS[0] + (HISS[1] - HISS[0]) * a
+        y = y + hiss * 10.0 ** ((target - quick_loudness(hiss, sr)) / 20.0)
+
+    # Crackle: sparse clicks, each a tiny ring somewhere between 1.5 and 5 kHz, mostly toward one side or the other.
+    if a > CRACKLE and np.isfinite(level):
+        depth = (a - CRACKLE) / (1.0 - CRACKLE)
+        count = rng.poisson(n / sr * (1.0 + 14.0 * depth))
+        peak = float(np.max(np.abs(y))) * 10.0 ** ((-46.0 + 10.0 * depth) / 20.0)
+        span = int(0.002 * sr)
+        tt = np.arange(span) / sr
+        for at, size, f, side in zip(rng.integers(0, max(1, n - span), count), rng.lognormal(0.0, 0.8, count),
+                                     rng.uniform(1500.0, 5000.0, count), rng.uniform(0.15, 0.85, count)):
+            click = np.exp(-tt / 0.0003) * np.sin(2 * np.pi * f * tt + np.pi / 2) * min(size, 4.0) * peak * rng.choice((-1, 1))
+            y[at : at + span, 0] += click * np.sqrt(1.0 - side)
+            y[at : at + span, 1] += click * np.sqrt(side)
+    return y
