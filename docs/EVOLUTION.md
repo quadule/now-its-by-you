@@ -16,11 +16,11 @@ tune and the words change) and the holding of words in `songbird/arrange.py`.
 A **variant** is how one lineage has come to sing one note of the tune. The kinds:
 
 - **Ornaments**, sung inside the note, so a syllable stays one note: a grace note from the next note of
-  the song's scale above or below; a mordent (a quick flick up or down and back); a turn (above, the
-  note, below, the note); a neighbour note in the middle of a line's long last note; a passing tone,
-  sliding through the one degree between a note and the next a third away; an anticipation, the next
-  note's pitch arriving early on the tail of a weak note, so the strong syllable after it lands on a note
-  already sounding.
+  the song's scale above or below; a mordent (a quick flick a step up or down and back); a turn (a step
+  above, the note, a step below, the note); a neighbour note a step away in the middle of a line's long
+  last note; a passing tone, sliding through the one degree between a note and the next a third away; an
+  anticipation, the next note's pitch arriving early on the tail of a weak note, so the strong syllable
+  after it lands on a note already sounding.
 - **A leap resized** within its contour class: a note moved a step or two (a third becomes a fourth or
   a fifth, or less), only to a tone of the chord under it and within the song's range.
 - **Rhythm**: an even pair of notes made long-short (dotted), or an uneven weak pair evened. A stressed
@@ -33,12 +33,13 @@ What a variant never changes, and `variants.problems()` checks every time:
 - the stress: stressed notes stay on their beats, a moved weak note stays weak and in its foot, and no
   note is left shorter than a grid unit (in H that rules out dotting its pairs of quavers, which would
   leave a syllable a sixteenth, fussy against the swing the band already has);
-- the mode and the song's own scale: H is pentatonic, and its ornaments keep to its five notes. The one
-  exception is a passing tone, a quick waypoint of about 80 ms through fa or ti across a third, which
-  folk singers do;
+- the mode and the song's own scale: H is pentatonic, and every note and every held ornament tone keeps
+  to its five notes. Only quick tones may touch fa or ti: a passing tone's waypoint of about 80 ms across
+  a third, which folk singers do, and a mordent's or a turn's 75 ms step (a pentatonic turn, a third wide
+  where the scale has a gap, sounds lopsided). Nothing is ever chromatic;
 - the chord functions: a moved note is a tone of its chord;
 - the hooks and the refrain's first line, sung as written, and the note leading into a hook (the approach
-  is part of it; "and" before "now it's by you" is never moved or run on);
+  is part of it; "and" before "now it's by you" is never moved, shifted or run on);
 - how many: at most 12% of any section's notes carry a variant, never two on one note or on neighbouring
   notes. A phrase sung twice in a section counts twice. For H that is 5 notes of a verse's 44, 4 of the
   refrain's 40, 5 of the bridge's 42, and 1 of the tag's 11 (the tag, intro and outro sing the refrain's
@@ -77,22 +78,27 @@ then:
   began. What it learns is its own pick for that stretch: the first variant, in its own weighted order of
   everything the tune allows, that the lineage has room for. The order weighs the kinds by its character
   (an ornamenting machine decorates, a plain one moves notes, a lilting one dots, one ahead of the beat
-  anticipates) and the places (a verse 1.3, the bridge 1, the refrain 0.7: verses are where a folk tune
-  wanders, a refrain is what everyone knows).
+  anticipates), shares each kind's weight among its candidates but never lets one candidate weigh more
+  than three grace notes (so a figure the tune offers only once, like H's one dotted pair, can't become
+  every lineage's habit), prefers an ornament at a note's start on a stressed or longer note to one on a
+  passing quaver, and weighs the places (a verse 1.3, the bridge 1, the refrain 0.7: verses are where a
+  folk tune wanders, a refrain is what everyone knows).
 - **Forgetting.** Each variant has a forgetting clock of its own; when it turns, the variant is forgotten
   with chance 0.03 + 0.04 x (1 - appetite), half that once it has lasted three generations (a lineage's
   settled way), and more as its section fills (0.3 x how far past 60% full).
 
 ### What that gives, for H
 
-Measured over forty lineages handed from machine to machine two to five months apart: a lineage carries
+Measured over sixty lineages handed from machine to machine two to five months apart: a lineage carries
 about half a variant after one generation, two after four and three and a half after eight, and a child
-keeps 96% of its parent's. One machine singing the same parent (the seed, say) over three years holds one
-or two variants of its own at a time, which change two to four times a year and never change back within
-a week. A machine that sings its own last rendition gathers variants at the pace of its clocks: after
-three years of weekly renditions, three to eight. However many a lineage gathers, its tune stays close to
-the seed's as the lineage gate will measure it (relative moves by dynamic time warping, hooks weighted):
-0.4 semitones a move for the fullest set, where every other song in songs/ is 1.1 to 1.5 away.
+keeps 95% of its parent's. What they learn is mostly ornament (graces, mordents, turns, passing tones,
+anticipations, neighbour notes, in that order) and now and then a moved note. One machine singing the same
+parent (the seed, say) over three years holds one or two variants of its own at a time, which change two
+to four times a year and never change back within a week. A machine that sings its own last rendition
+gathers variants at the pace of its clocks: after three years of weekly renditions, three to nine. However
+many a lineage gathers, its tune stays close to the seed's as the lineage gate will measure it (relative
+moves by dynamic time warping, hooks weighted): 0.4 semitones a move for the fullest set, where every other
+song in songs/ is 1.1 to 1.5 away.
 
 ## The words
 
@@ -135,16 +141,19 @@ smooth field the way a number or an ordered category can. So each rides a **cloc
 machine's clock of a given name runs in stretches of weeks or months of its own length, on a grid nudged at
 every boundary so no two stretches are alike and no clock repeats, from a phase of its own, so no two
 clocks turn together and none turns on a calendar edge or at midnight. Anything chosen from (machine,
-clock, stretch) holds through the stretch and changes only as the next begins: never overnight, and one
-thing at a time. The learning clocks run 60 to 150 days, each variant's forgetting clock 90 to 220, the
-word swap clock 40 to 110.
+clock, stretch) holds through the stretch and changes only as the next begins: never overnight, and almost
+always one thing at a time (the second learning clock's pick depends on the first's, so twice or so in
+three years a machine changes two variants on one day). A clock's period is drawn between two bounds and
+each stretch runs between half and one and a half of it: the learning clocks' periods are 60 to 150 days,
+each variant's forgetting clock 90 to 220, the word swap clock 40 to 110.
 
 A rendition records who made it and when (`Params.made`). A child sung on the machine that made its parent
 changes only what a clock has turned on since then, so a machine re-singing its own last rendition the
 next day sings it the same; a child sung on another machine takes its one turn at everything, so a lineage
 changes about once a hand-off. No chance is ever read from the instant a render starts. (A Fable review
 caught the first design's flaw here: coins keyed by the parent would have re-rolled on every render of a
-machine's own chain.)
+machine's own chain.) `Params.generation` counts as the record does (the seed packet's lineage): a
+machine singing from the genome with no parent rendition is generation 0, its child 1.
 
 ## What never changes
 
@@ -163,7 +172,7 @@ each rendition's tune against the seed's and its lyric sheet), made by `uv run p
 - `lineage/`: the seed, then four generations on four made-up machines, each singing the one before, a few
   months apart. Picked from a couple of thousand orderings of twelve made-up machines as a lively lineage
   that shows every kind of change on top of the key, mode, tempo, form, band and singer (a typical lineage
-  carries two variants by its fourth generation; this one four).
+  carries two variants by its fourth generation; this one five).
 - `timeline/`: one made-up machine singing the seed every four months for three years: time alone.
 - `own/`: the same machine singing its own last rendition every nine months.
 
@@ -177,24 +186,35 @@ The interfaces a tool that explores and edits the song before recording should u
   `variants.fits(genome, current, v)`, name one with `variants.describe(genome, v, lyrics)`, and measure
   how far a tune has come with `variants.distance(genome, a, b)`. A person's own choice is `source="edit"`.
 - `Params.words`: the held words, plain JSON (see the comment above `arrange.hold`). Sing them with
-  `arrange.sing(genome, form, words)`, check an edit with `arrange.check(genome, form, words)` (exactly
-  what the drift's own changes are checked against), and offer choices with `arrange.verse_ids`,
-  `slot_words(bank_entry(genome, kind, id))`, `couplet_ids`, `bridge_ids`, `tag_syllables` and
-  `verse_order`. `evolve.fitted(genome, params)` fits held words to a form set by hand.
-- `Params.generation` and `Params.made` (`{"by": the machine's hash, 12 digits, "at": days}`).
-- `choose_params(genome, parent, voice, drift, log=[])` fills the list with what changed and why, one dict
-  each: `what` (tune or words), `change` (learned, forgot, dropped, added, left out, swapped, rule), `about`
-  or `where`, `from` and `to`, and `why`. `evolve.diff(genome, parent, child)` gives the what of any two.
-- The render's record has an `evolution` block: the generation, each variant with its description, the
-  changes, and the tune's contour distance to its parent and to the seed. A record without it is the
-  seed's, or from before.
+  `arrange.sing(genome, form, words)` and check an edit with `arrange.check(genome, form, words)` (the
+  first thing wrong, exactly what the drift's own changes are checked against). To offer one change at a
+  time, `evolve.places(genome, words)` lists every place a swap could fall and
+  `evolve.alternatives(genome, words, place)` what could stand there keeping the rules (`evolve.label`
+  names a place); for a wider view, `arrange.verse_ids`, `slot_words(bank_entry(genome, kind, id))`,
+  `couplet_ids`, `bridge_ids`, `tag_syllables` and `verse_order`. A held entry a person chose may carry
+  `"source": "edit"`; the words keep it for as long as the entry stands.
+- `Params.generation` (as the record counts it) and `Params.made` (`{"by": the machine's hash, 12
+  digits, "at": days}`).
+- `choose_params(genome, parent, voice, drift, log=[], form=None)` fills the list with what changed and
+  why, one dict each: `what` (tune or words), `change` (learned, forgot or dropped for the tune; added, left
+  out, swapped, rule or drawn for the words), `about` and `variant` (the variant as a dict) for the tune,
+  `where`, `from` and `to` for the words, and `why`. `form` is a form set by hand: the words are fitted to
+  it and the fitting logged. `evolve.diff(genome, parent, child)` gives the what of any two, for reading.
+- To record an edit, render the edited Params as any other (`cli.render_one`), after setting
+  `params.words` to the words to be sung (`arrange.hold` of a Lyrics, or the edited dict). An edited
+  rendition is a new one: give it its parent's generation plus one and a `made` of the machine and the
+  moment it was edited (or `{}`), or a later child on that machine will misjudge which clocks have turned.
+- The render's record has an `evolution` block: each variant with its description, the changes, and the
+  tune's contour distance to its parent and to the seed. A record without it is the seed's, or from before.
 
 ## For the artist to decide
 
 - **How fast.** The rates are the constants at the top of `songbird/evolve.py`. Now: about half a variant
   and a third of a word swap a hand-off; one machine's own song changes its tune two to four times a year.
-- **Fa and ti.** H's ornaments keep to its five notes, except passing tones, which slide through fa or ti
-  across a third for about 80 ms. They could be banned, leaving H's passing tones to 3-1 and 1-6 only.
+- **Fa and ti.** H's grace notes, neighbour notes, anticipations and moved notes keep to its five notes;
+  passing tones (an 80 ms slide through fa or ti across a third) and mordents and turns (a 75 ms step) may
+  touch them. Banning them would leave H's passing tones to mi-do and do-la, and its mordents and turns to
+  notes with a scale step on both sides.
 - **The seed's refrain.** A child of the seed sings other couplets before its last refrain (the bank's rule
   for drawn words), so the first hand-off always changes those couplets. Holding the seed's canon until a
   swap changes it is the alternative.

@@ -38,8 +38,8 @@ LETTERS = {"intro": "i", "verse": "V", "refrain": "R", "turn": "t", "break": "k"
 
 # The lineage: the seed, then four made-up machines a few months apart, each singing the one before. These four
 # were picked from a couple of thousand orderings of twelve made-up machines as a lively lineage that shows every
-# kind of change; a typical one gathers about two variants by its fourth generation, this one four.
-LINEAGE = (("wren", "2027-01-19"), ("hare", "2027-05-08"), ("otter", "2027-08-27"), ("plover", "2027-12-14"))
+# kind of change; a typical one gathers about two variants by its fourth generation, this one five.
+LINEAGE = (("wren", "2027-01-19"), ("badger", "2027-05-08"), ("stoat", "2027-08-27"), ("marten", "2027-12-14"))
 # One machine over three years: kite singing the seed every four months (time alone), and kite singing its own
 # last rendition every nine (a person who keeps singing their own version).
 TIMELINE = ("kite", ("2026-10-04", "2027-02-04", "2027-06-04", "2027-10-04", "2028-02-04", "2028-06-04",
@@ -204,15 +204,15 @@ Regenerate everything (about ten minutes):  uv run python tools/evolution.py
 Redraw the pictures and this file only:      uv run python tools/evolution.py --no-render
 Finish an interrupted run:                   uv run python tools/evolution.py --keep
 Any one of them by hand, e.g. the second generation:
-    uv run songbird render songs/h-now-its-by-you.json --machine fictional:hare --date 2027-05-08 \\
-        --parent renders/production/evolution/lineage/1-wren.json --out renders/production/evolution/lineage/2-hare.flac
+    uv run songbird render songs/h-now-its-by-you.json --machine fictional:badger --date 2027-05-08 \\
+        --parent renders/production/evolution/lineage/1-wren.json --out renders/production/evolution/lineage/2-badger.flac
 """
 
 SETS = {
     "lineage": ("lineage/: the seed, then four generations on four made-up machines a few months apart, each\n"
                 "singing the one before (songbird render --parent). The machines were picked from a couple of\n"
                 "thousand orderings of twelve as a lively lineage that shows every kind of change; a typical one\n"
-                "carries about two variants by its fourth generation, this one four."),
+                "carries about two variants by its fourth generation, this one five."),
     "timeline": ("timeline/: one made-up machine, kite, singing the seed every four months for three years: time\n"
                  "alone. Its tune carries at most one or two variants of its own at a time, changing with the\n"
                  "seasons; its words hold for weeks and change a verse or a word at a time."),
@@ -228,10 +228,9 @@ def write_readme(out: Path, genome, done: dict[str, list[tuple[str, dict, dict |
             continue
         text += ["", SETS[name], ""]
         for path, record, before in done[name]:
-            story = record.get("evolution") or {}
             who = record.get("voice", {}) or {}
             at = (record.get("rendered_at") or "")[:10]
-            label = f"generation {story.get('generation', 0)}" + (f", {at}" if at else ", no machine, no date")
+            label = f"generation {record.get('generation', 0)}" + (f", {at}" if at else ", no machine, no date")
             text.append(f"{path}  {label}, {record['duration']:.0f} s, id {record['id'][:12]}"
                         + (f", voice {who.get('hash')}" if who else ""))
             text += summary(record)
@@ -292,8 +291,7 @@ def main(argv=None) -> int:
     for rows in done.values():
         for path, record, _ in rows:
             p = Params.from_dict(record["params"])
-            story = record.get("evolution") or {}
-            title = (f"{path}: generation {story.get('generation', 0)}, {_key(p)}, {p.tempo:g} bpm, "
+            title = (f"{path}: generation {record.get('generation', 0)}, {_key(p)}, {p.tempo:g} bpm, "
                      f"{len(p.variants)} variant{'s' if len(p.variants) != 1 else ''}")
             roll(genome, record, out / path, title)
     if set(done) == {"lineage", "timeline", "own"} or args.no_render:
