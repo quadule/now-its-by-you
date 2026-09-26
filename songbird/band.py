@@ -31,11 +31,12 @@ arc), with defaults that are the seed's arrangement.
 from __future__ import annotations
 
 import re
-from dataclasses import asdict, dataclass, field, fields
+from dataclasses import asdict, dataclass, field, fields, replace
 from functools import lru_cache
 
 import numpy as np
 
+from . import variants as variants_mod
 from .score import Note
 from .theory import MODES, chord_tones, degree_semitones, harmony
 
@@ -146,6 +147,7 @@ class Tune:
     section: int
     first: bool  # a phrase's first note
     last: bool  # a phrase's last note
+    ornament: tuple = ()  # the lineage's ornament on this note (songbird.variants): ((fraction, semitones), ...)
 
 
 @dataclass
@@ -221,7 +223,8 @@ class Context:
         for i, m in enumerate(ordered):
             u1 = min(m["u_end"], ordered[i + 1]["u"]) if i + 1 < len(ordered) else self.end
             self.tune.append(Tune(m["u"], u1, int(m["pitch"]), float(m["vel"]), bool(m["syllable"]),
-                                  self.section_at(m["u"]), m["index"] == 0, bool(m["line_end"])))
+                                  self.section_at(m["u"]), m["index"] == 0, bool(m["line_end"]),
+                                  tuple(m.get("ornament", ()))))
             if m["syllable"] and m.get("choir"):  # each lineage voice's harmony, as realize() gives it
                 for role in range(int(getattr(self.params, "choir", 0))):
                     self.choir.append((m["u"], u1, harmony(int(m["pitch"]), m["chord"], self.tonic, self.mode, role)))
@@ -821,11 +824,31 @@ def octave_for(part: str, pitches: list[int]) -> int:
     return 12
 
 
+def ornamented(part: str, t: Tune, pitch: int, vel: float, art: str, section: int) -> list[Ev]:
+    """A note of the tune with the lineage's ornament on it (a variant the singer sings too), played
+    the instrument's way: its tones fingered or bowed as one (a pluck's, lighter), each where the
+    ornament puts it in the note."""
+    span = t.u1 - t.u0
+    points = [(float(f), float(s)) for f, s in t.ornament]
+    if points[0][0] > 0:
+        points.insert(0, (0.0, 0.0))  # the note itself, until the ornament turns away from it
+    out = []
+    for i, (f, s) in enumerate(points):
+        u0 = t.u0 + f * span
+        u1 = t.u0 + points[i + 1][0] * span if i + 1 < len(points) else t.u1
+        if u1 - u0 <= 1e-6:
+            continue
+        light = 0.75 if s else 1.0
+        out.append(Ev(part, u0, u1, pitch + int(round(s)), vel * light, art=art if not out else "slur", section=section))
+    return out
+
+
 def statement(ctx: Context, part: str, notes: list[Tune], vel_scale: float, section: int,
               ornament: bool = True, shift: int | None = None) -> list[Ev]:
     """An instrument playing a line of the tune in its own register (or `shift`
     semitones from the tune) and its own way: a whistle cuts and rolls, a
-    fiddle slides and slurs; how often, the band's ornament setting says."""
+    fiddle slides and slurs; how often, the band's ornament setting says. Where
+    the lineage sings an ornament on a note, the instrument plays that one."""
     if not notes:
         return []
     if shift is None:
@@ -849,6 +872,10 @@ def statement(ctx: Context, part: str, notes: list[Tune], vel_scale: float, sect
                 art = "slide"
         elif part == "whistle":
             art = "slur" if step and not t.first else ""
+        if ornament and t.ornament:  # the lineage's own ornament, as the singer sings it
+            out += ornamented(part, t, pitch, vel, art, section)
+            prev = (pitch + int(round(float(t.ornament[-1][1]))), t.u1)
+            continue
         grace = None
         if often and part in ("whistle", "fiddle"):
             repeated = joined and prev[0] == pitch
@@ -890,7 +917,7 @@ def quote(ctx: Context, section: int, part: str) -> list[Ev]:
     bars = int(round((s.u1 - s.u0) / ctx.bar))
     under = [(c.u0 - s.u0, c.u1 - s.u0, c.symbol) for c in ctx.chords_in(section)]
     refrain_phrases = {pid for sec in ctx.genome.sections.values() if sec.lyrics == "refrain" for pid in sec.phrases}
-    best, best_score = None, -1e9
+    best, best_score, chosen = None, -1e9, None
     for pid, phrase in sorted(ctx.genome.phrases.items()):
         sung = [n for n in phrase.sung if 0 <= n.onset < bars * ctx.bar]
         if phrase.bars < bars or len(sung) < 3:
@@ -909,15 +936,23 @@ def quote(ctx: Context, section: int, part: str) -> list[Ev]:
                 score -= weight
         score += rng.uniform(0.0, 0.5)
         if score > best_score:
-            best, best_score = sung, score
+            best, best_score, chosen = sung, score, phrase
     if best is None:
         return []
+    variants = getattr(ctx.params, "variants", ())
+    if variants:  # the phrase as this lineage sings it
+        played = {id(n): v for n, v in zip(chosen.sung, variants_mod.realized(chosen, variants))}
     notes = []
     for k, n in enumerate(best):
-        u0 = s.u0 + n.onset
-        u1 = min(u0 + n.dur, s.u0 + best[k + 1].onset if k + 1 < len(best) else s.u1 - ctx.sub)
-        notes.append(Tune(u0, u1, ctx.tonic + degree_semitones(n.degree, ctx.mode, n.alter),
-                          0.8 if n.onset % ctx.meter.foot == 0 else 0.68, False, section, k == 0, k == len(best) - 1))
+        v = played[id(n)] if variants else None
+        onset, dur, degree = (v.onset, v.dur, v.degree) if v else (n.onset, n.dur, n.degree)
+        nxt = (played[id(best[k + 1])].onset if variants else best[k + 1].onset) if k + 1 < len(best) else None
+        u0 = s.u0 + onset
+        u1 = min(u0 + dur, s.u0 + nxt if nxt is not None else s.u1 - ctx.sub)
+        ornament = variants_mod.semitones(v.ornament, degree, ctx.mode, n.alter) if v and v.ornament else ()
+        notes.append(Tune(u0, u1, ctx.tonic + degree_semitones(degree, ctx.mode, n.alter),
+                          0.8 if n.onset % ctx.meter.foot == 0 else 0.68, False, section, k == 0, k == len(best) - 1,
+                          ornament))
     return statement(ctx, part, notes, 0.88, section)
 
 
@@ -1083,8 +1118,13 @@ def held_through(ctx: Context, tune: list[Tune]) -> list[Tune]:
     for t in tune:
         chord = ctx.pcs(ctx.chord_at(t.u0).symbol)
         if out and t.pitch % 12 not in chord and out[-1].pitch % 12 in chord and abs(out[-1].u1 - t.u0) < 1e-9:
-            out[-1] = Tune(out[-1].u0, t.u1, out[-1].pitch, out[-1].vel, out[-1].sung, out[-1].section, out[-1].first,
-                           t.last)
+            held = out[-1]
+            # a lineage's ornament at the note's start keeps its pace over the longer note; one leading on into
+            # the next note has nothing to lead into now
+            keep = held.ornament and not held.ornament[-1][1]
+            ratio = (held.u1 - held.u0) / max(t.u1 - held.u0, 1e-9)
+            out[-1] = replace(held, u1=t.u1, last=t.last,
+                              ornament=tuple((f * ratio, s) for f, s in held.ornament) if keep else ())
         else:
             out.append(t)
     return out
