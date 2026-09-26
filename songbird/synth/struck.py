@@ -96,11 +96,36 @@ def _bank(freqs, decay, phase, pos, amps, mix, bend, damp, dweight, rate, length
 
 
 # The lowpass for each doubling of the rate: flat to 0.8 of the lower rate's Nyquist, about 75 dB down from 1.2.
+# It is a half-band filter (every other tap zero but the middle one), so a doubled signal keeps its old samples
+# and only the new ones between them are filtered: 24 taps for every other sample.
 HALFBAND = firwin(47, 0.5, window=("kaiser", 7.5))
+_ODD = np.ascontiguousarray(2.0 * HALFBAND[0::2][::-1])  # the taps between old samples, reversed for the sum below
+_MIDDLE = 2.0 * HALFBAND[23]
+
+
+@njit(cache=True)
+def _up2(x, taps, middle):
+    """One channel at twice the rate, as resample_poly(x, 2, 1) with HALFBAND would give it."""
+    n = x.shape[0]
+    m = taps.shape[0]
+    half = m // 2
+    padded = np.zeros(n + m)
+    padded[half - 1: half - 1 + n] = x
+    y = np.empty(2 * n)
+    for i in range(n):
+        y[2 * i] = middle * x[i]
+        acc = 0.0
+        for t in range(m):
+            acc += taps[t] * padded[i + t]
+        y[2 * i + 1] = acc
+    return y
 
 
 def _double(y: np.ndarray) -> np.ndarray:
-    return resample_poly(y, 2, 1, axis=0, window=HALFBAND)
+    y = np.asarray(y, dtype=np.float64)
+    if y.ndim == 1:
+        return _up2(np.ascontiguousarray(y), _ODD, _MIDDLE)
+    return np.stack([_up2(np.ascontiguousarray(y[:, c]), _ODD, _MIDDLE) for c in range(y.shape[1])], axis=1)
 
 
 def _factor(freq: float, sr: int) -> int:
