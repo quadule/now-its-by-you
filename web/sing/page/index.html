@@ -1,0 +1,131 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="robots" content="noindex">
+<meta name="color-scheme" content="light dark">
+<title>Sing with Songbird</title>
+<link rel="icon" href="/favicon.svg" type="image/svg+xml">
+<link rel="stylesheet" href="/sing.css">
+</head>
+<body>
+<main>
+  <header>
+    <p class="kicker">Songbird</p>
+    <h1 id="title">Sing along</h1>
+  </header>
+
+  <p class="status" id="loading">Loading…</p>
+
+  <section id="closed" class="card" hidden>
+    <p id="closedWhy"></p>
+  </section>
+
+  <div id="steps" hidden>
+    <section class="step" id="about">
+      <h2><span class="n">1</span> What this is</h2>
+      <p>This is a folk song that passes itself on: every copy carries the small program that sings it, and each time
+        it runs, it sings the song again a little differently. Its singer is synthetic, and it learns how people sing
+        (where you breathe, lean on a word, slide into a note) from recordings like the ones you're about to make.</p>
+      <p>Put headphones on, sing along with the guide in your own way, and send the takes you like. Wrong notes are fine.</p>
+    </section>
+
+    <section class="step" id="release">
+      <h2><span class="n">2</span> The release</h2>
+      <div class="consent" id="consentText" data-digest="{{CONSENT_DIGEST}}">{{CONSENT}}</div>
+      <label class="agree"><input type="checkbox" id="agree"> I've read this and I agree.</label>
+      <p class="hint">What's kept: your takes, the name you give below (if any), when you agreed, and a few timing
+        numbers from your device (its sample rate and delays). Nothing else: no address, no device details.</p>
+    </section>
+
+    <section class="step" id="who" data-needs="agree">
+      <h2><span class="n">3</span> Your name</h2>
+      <label for="name">Your name, or a name you'd like to be credited by</label>
+      <input id="name" autocomplete="off" maxlength="80" placeholder="optional">
+      <div class="choices" role="radiogroup" aria-label="Credit">
+        <label><input type="radio" name="credit" value="yes" checked> Credit me by this name</label>
+        <label><input type="radio" name="credit" value="no"> Don't credit me</label>
+      </div>
+    </section>
+
+    <section class="step" id="check" data-needs="agree">
+      <h2><span class="n">4</span> Microphone and timing</h2>
+      <p>Headphones on, so the guide stays out of the microphone. Then let the page hear you: sing or say something and
+        watch the level move.</p>
+      <div class="row">
+        <button id="mic" class="primary">Allow the microphone</button>
+        <span class="meter" aria-label="microphone level"><span id="level"></span></span>
+      </div>
+      <p class="hint" id="micNote"></p>
+      <div id="calibrateBox" hidden>
+        <p>Every phone and pair of headphones delays the sound a little. To measure yours, press the button and tap the
+          microphone (or clap, or say "ta") on each click after the first four. It takes ten seconds and helps your takes
+          line up.</p>
+        <div class="row">
+          <button id="calibrate">Measure the delay</button>
+          <span class="hint" id="calibration"></span>
+        </div>
+      </div>
+    </section>
+
+    <section class="step" id="guide" data-needs="mic">
+      <h2><span class="n">5</span> What you'll hear</h2>
+      <div class="choices" id="mixes" role="radiogroup" aria-label="Guide"></div>
+      <p class="hint">The tune alone leaves the singing to you. You can switch between takes.</p>
+    </section>
+
+    <section class="step" id="sing" data-needs="mic">
+      <h2><span class="n">6</span> Sing</h2>
+      <div class="stage">
+        <canvas class="lane" id="lane"></canvas>
+        <div class="scroller"><div class="reel" id="reel"></div></div>
+        <div class="bar"><div id="progress"></div></div>
+      </div>
+      <div class="row controls">
+        <button id="rehearse">▶ Listen first</button>
+        <button id="record" class="primary">● Record a take</button>
+        <button id="stop" disabled>■ Stop</button>
+      </div>
+      <p class="status" id="status" aria-live="polite"></p>
+
+      <div class="card" id="review" hidden>
+        <h3>That take</h3>
+        <div class="row">
+          <button id="listen">▶ Listen back</button>
+          <button id="keep" class="primary">✓ Keep and send</button>
+          <button id="discard">✗ Redo</button>
+        </div>
+        <p class="hint">If your voice sits late or early against the guide, slide it while you listen:</p>
+        <div class="row slide">
+          <span class="hint">earlier</span>
+          <input type="range" id="shift" min="-400" max="400" step="5" value="0" aria-label="move the take earlier or later">
+          <span class="hint">later</span>
+        </div>
+        <p class="hint" id="shiftValue">as recorded</p>
+      </div>
+    </section>
+
+    <section class="step" id="sent" data-needs="mic">
+      <h2><span class="n">7</span> Your takes</h2>
+      <ol id="takes"><li class="hint none">Nothing sent yet.</li></ol>
+      <p class="hint" id="takesLeft"></p>
+    </section>
+
+    <section class="step" id="finish">
+      <h2><span class="n">8</span> When you're done</h2>
+      <p>Press this when you've sent everything you want to. The link stops working after that.</p>
+      <button id="done">I'm done</button>
+      <p class="hint" id="doneNote"></p>
+    </section>
+  </div>
+
+  <section id="thanks" class="card" hidden>
+    <h2>Thank you</h2>
+    <p id="thanksText">Your takes are with the artist now. They stay private: what travels with the song is only
+      the way you sang, blended with everyone else's.</p>
+  </section>
+</main>
+<script type="module" src="/sing.js"></script>
+</body>
+</html>
