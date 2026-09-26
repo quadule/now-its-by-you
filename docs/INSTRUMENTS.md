@@ -642,9 +642,12 @@ and is 4 dB lower there.
   recordings. The drum machines' docstrings name the machines they model.
 - Comping instruments were levelled on block chords at velocity 0.6; a
   one-note arpeggio or a single line on them sits a few dB lower.
-- Open from the last review: the arpeggio synth ticks at some chord changes
-  in its demo (a swing of half its peak within five samples at 5.93 s, the
-  level continuous across it), not traced yet; the mallets' attacks measure
+- Open from the last review: the arpeggio synth's accented notes (every
+  beat in its demo) start with a snap, a swing of half the peak within five
+  samples, 6 to 10 times the local slope; its envelopes aren't instant (1.5
+  ms, the filter's 1 ms), so it is most likely the resonant ladder snapping
+  3.2 octaves open, the pluck's own snap, louder on an accent, but it is not
+  confirmed; the mallets' attacks measure
   36 to 86 ms from -20 dB to their peak in the demos (the resonators'
   bloom explains the marimba's and vibraphone's, not the glockenspiel's or
   the music box's); some solos lean to one side (up to 4 dB), which is
