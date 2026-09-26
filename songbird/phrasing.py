@@ -5,8 +5,9 @@ analysed once (tools/phrasing.py) into one gesture for every note of the tune,
 keyed by the phrase the note belongs to and its place in that phrase, so a
 gesture carries over to verses the LLM writes new words for. A gesture is a
 handful of rounded numbers (when the syllable lands against the beat, how long
-it is held, how loud it is and whether it swells or fades, and the pitch's way
-into, through and out of the note): nothing a voice could be rebuilt from.
+it is held, how loud it is and whether it swells or fades, the pitch's way
+into, through and out of the note, and where the note sits against its
+written pitch): nothing a voice could be rebuilt from.
 """
 
 from __future__ import annotations
@@ -24,13 +25,14 @@ class Gesture:
     bend: float = 0.0  # cents the held note has drifted by the time it lets go
     fall: float = 0.0  # cents it falls (negative) or lifts as it lets go
     vibrato: float = -1.0  # cents of vibrato on the note; -1 leaves it to the singer
+    tune: float = 0.0  # cents the held note sits off its written pitch (sharp +), against the singer's own tuning
 
 
 # Every gesture is rounded to these steps and kept inside these bounds, so a
 # phrasing file holds tendencies, not a recording's fine detail.
-STEP = Gesture(early=1 / 48, hold=0.05, level=0.5, swell=0.5, scoop=5.0, bend=5.0, fall=5.0, vibrato=1.0)
-LOW = Gesture(early=-0.25, hold=0.6, level=-8.0, swell=-6.0, scoop=-150.0, bend=-80.0, fall=-150.0, vibrato=-1.0)
-HIGH = Gesture(early=0.25, hold=1.0, level=8.0, swell=6.0, scoop=150.0, bend=80.0, fall=150.0, vibrato=60.0)
+STEP = Gesture(early=1 / 48, hold=0.05, level=0.5, swell=0.5, scoop=5.0, bend=5.0, fall=5.0, vibrato=1.0, tune=2.0)
+LOW = Gesture(early=-0.25, hold=0.6, level=-8.0, swell=-6.0, scoop=-150.0, bend=-80.0, fall=-150.0, vibrato=-1.0, tune=-50.0)
+HIGH = Gesture(early=0.25, hold=1.0, level=8.0, swell=6.0, scoop=150.0, bend=80.0, fall=150.0, vibrato=60.0, tune=50.0)
 
 Phrasing = dict[str, tuple[Gesture, ...]]  # phrase id -> one gesture per sung note of that phrase
 
@@ -56,7 +58,7 @@ def average(gestures: list[Gesture]) -> Gesture:
         mean.append(sum(seen) / len(seen) if seen else float("nan"))
     judged = [g.vibrato for g in gestures if g.vibrato == g.vibrato]
     own = [v for v in judged if v >= 0]
-    mean[-1] = sum(own) / len(own) if len(own) * 2 > len(judged) else -1.0
+    mean[[f.name for f in fields(Gesture)].index("vibrato")] = sum(own) / len(own) if len(own) * 2 > len(judged) else -1.0
     return reduce(Gesture(*mean))
 
 

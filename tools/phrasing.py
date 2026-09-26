@@ -24,8 +24,10 @@ where that was far from the tune. Each take is measured once, raw, into
 renders/measured/ (until the take, its guide or the measuring code changes).
 
 A phrasing is made from those measurements: scaled as a phrasing keeps them
-(SUNG), each note's sightings pulled toward the singer's habit as far as the
-evidence for that note goes (shrunk). Some of what the extractor gets wrong
+(SUNG), and learned as the singer's rules for notes like each one (on the
+downbeat or not, reached by a leap or a step, long or short, at the end of
+a line...), each note keeping its own way only as far as the evidence for it
+goes (ruled, shrunk). Some of what the extractor gets wrong
 repeats in every take by the same voice (REPEATS), so more takes by one
 person only go so far; other people's takes go further, and several singers'
 takes make everyone's way at once, each person counting once. How well all
@@ -87,13 +89,13 @@ SPEECH_LIMIT = dict(early=0.1, level=(-4.0, 4.0), cents=60.0)
 # A sung take is phrasing already; keep nearly all of it. Checked against reference singers
 # (tools/phrasing_eval.py --reference): vibrato reads at about 0.57 of its size, so it's scaled back
 # up; swell can't be read yet (r about 0.2 against what was sung), so it's left to the singer.
-SUNG = dict(timing=1.0, level=0.8, swell=0.0, scoop=0.8, bend=0.8, fall=0.8, vibrato=1.75)
+SUNG = dict(timing=1.0, level=0.8, swell=0.0, scoop=0.8, bend=0.8, fall=0.8, vibrato=1.75, tune=1.0)
 # The extractor's error that repeats in every take of one voice at one place in the song (its timbre,
 # its way with those consonants), as a standard deviation in the extractor's units: more takes by the
 # same person can't average it away, only other words on the same note or other people. Measured on
 # reference singers (say-daniel, elevenlabs-george, elevenlabs-matilda); the same within a tenth on
 # gemini-kore and the formant singer.
-REPEATS = P.Gesture(early=0.048, hold=0.08, level=2.6, swell=3.0, scoop=50.0, bend=13.0, fall=23.0, vibrato=6.0)
+REPEATS = P.Gesture(early=0.048, hold=0.08, level=2.6, swell=3.0, scoop=50.0, bend=13.0, fall=23.0, vibrato=6.0, tune=15.0)
 WRONG_NOTE = 150.0  # cents from the tune beyond which a note's pitch gestures aren't trusted
 # the template singer: the machine's own schedule and tune, without any habits of its own
 FLAT = V.VoiceParams(vibrato_depth=0.0, scoop=0.0, jitter=0.0, wander=0.0)
@@ -530,15 +532,25 @@ def measured(genome_path: Path, genome, take) -> dict:
 
 
 def gestures_of(data: dict) -> list[P.Gesture]:
-    """A measured take's raw gestures, NaN where a field wasn't measured."""
-    return [P.Gesture(**{f: NAN if v is None else v for f, v in zip(data["fields"], n["gesture"])}) for n in data["notes"]]
+    """A measured take's raw gestures, NaN where a field wasn't measured. A note's tune is where its
+    vowel sat against the tune (off), less where the whole take sat: someone singing a little flat all
+    through leans on no note; wrong notes (off by more than WRONG_NOTE) aren't intonation."""
+    offs = np.array([NAN if n["off"] is None else n["off"] for n in data["notes"]], dtype=float)
+    fine = np.abs(offs) <= WRONG_NOTE
+    centre = float(np.median(offs[fine])) if fine.any() else 0.0
+    out = []
+    for n, off, ok in zip(data["notes"], offs, fine):
+        g = {f: NAN if v is None else v for f, v in zip(data["fields"], n["gesture"])}
+        g["tune"] = off - centre if ok else NAN
+        out.append(P.Gesture(**g))
+    return out
 
 
 def scaled(g: P.Gesture, s: dict) -> P.Gesture:
     """A raw measurement, as much of it as a phrasing keeps."""
     return replace(g, early=g.early * s["timing"], level=g.level * s["level"], swell=g.swell * s["swell"],
                    scoop=g.scoop * s["scoop"], bend=g.bend * s["bend"], fall=g.fall * s["fall"],
-                   vibrato=g.vibrato * s["vibrato"] if g.vibrato >= 0 else g.vibrato)
+                   vibrato=g.vibrato * s["vibrato"] if g.vibrato >= 0 else g.vibrato, tune=g.tune * s.get("tune", 1.0))
 
 
 def bounded(g: P.Gesture) -> P.Gesture:
@@ -580,7 +592,8 @@ def components(groups: list[np.ndarray]) -> tuple[float, float]:
     return max(float(between), 0.0), float(within)
 
 
-def shrunk(seen: dict, contexts: dict | None = None, floor: P.Gesture | None = None, weights: dict | None = None) -> dict:
+def shrunk(seen: dict, contexts: dict | None = None, floor: P.Gesture | None = None, weights: dict | None = None,
+           prior: dict | None = None) -> dict:
     """Every note's sightings as one gesture, each field pulled toward the
     singer's habit (their mean over every note) as far as the evidence for
     that note's own way goes. A note's mean is off by the noise of each
@@ -591,10 +604,12 @@ def shrunk(seen: dict, contexts: dict | None = None, floor: P.Gesture | None = N
     the habit; one heard often, to several words, keeps its own way. How far
     notes truly differ from one another is what's left of their spread once
     both errors are taken off. weights: how much each sighting counts (so
-    that each person counts once, however many takes they sang). Vibrato
-    keeps its vote (P.average)."""
-    names = [f.name for f in fields(P.Gesture)][:-1]
-    floor = floor or P.Gesture(**dict.fromkeys(names, 0.0), vibrato=0.0)
+    that each person counts once, however many takes they sang). prior:
+    what to pull each note toward instead of the habit, field by field
+    (the singer's rules for notes like it: ruled()). Vibrato keeps its
+    vote (P.average) unless a prior says otherwise."""
+    names = [f.name for f in fields(P.Gesture) if f.name != "vibrato" or prior]
+    floor = floor or P.Gesture(**dict.fromkeys([f.name for f in fields(P.Gesture)], 0.0))
     est: dict = {k: {} for k in seen}
     for name in names:
         bias = getattr(floor, name) ** 2
@@ -611,6 +626,7 @@ def shrunk(seen: dict, contexts: dict | None = None, floor: P.Gesture | None = N
                 est[k][name] = NAN
             continue
         habit = float(np.average(pooled, weights=np.concatenate(list(counts.values()))))
+        toward = {k: prior[k][name] if prior and k in prior else habit for k in seen}
         # noise: how the same note sung to the same word varies (another take, another time round)
         same = [values[k][[i for i, w in enumerate(words[k]) if w == word]] for k in values for word in set(words[k])]
         same = [x for x in same if len(x) >= 2]
@@ -624,15 +640,85 @@ def shrunk(seen: dict, contexts: dict | None = None, floor: P.Gesture | None = N
         mean = {k: float(np.average(values[k], weights=counts[k])) for k in heard}
         sightings = {k: counts[k].sum() ** 2 / (counts[k] ** 2).sum() for k in heard}  # as many as count equally
         error = {k: noise / sightings[k] + bias / len(set(words[k])) for k in heard}
-        means = np.array([mean[k] for k in heard])
-        truly = max(float(np.var(means, ddof=1)) - float(np.mean(list(error.values()))), 0.0) if len(heard) >= 5 else 0.0
+        apart = np.array([mean[k] - toward[k] for k in heard])  # how far each note strays from what it's pulled toward
+        spread = float(np.mean(apart**2)) if prior else float(np.var(apart, ddof=1)) if len(heard) > 1 else 0.0
+        truly = max(spread - float(np.mean(list(error.values()))), 0.0) if len(heard) >= 5 else 0.0
         for k in seen:
             if k in error:
                 trust = truly / (truly + error[k]) if truly > 0 else 0.0
-                est[k][name] = habit + trust * (mean[k] - habit)
+                est[k][name] = toward[k] + trust * (mean[k] - toward[k])
             else:
-                est[k][name] = habit
-    return {k: [P.Gesture(**est[k], vibrato=P.average(v).vibrato)] for k, v in seen.items()}
+                est[k][name] = toward[k]
+    return {k: [P.Gesture(**{**est[k], **({} if "vibrato" in est[k] else {"vibrato": P.average(v).vibrato})})]
+            for k, v in seen.items()}
+
+
+def features(genome, key: tuple[str, int]) -> np.ndarray:
+    """What a note of the tune is, as a singer might treat it: where it falls in its line and its bar,
+    how long it is, and how it's reached and left (by leap or step, up or down)."""
+    from songbird.theory import degree_semitones
+
+    mode = choose_params(genome).mode
+    m = genome.meter
+    notes = genome.phrases[key[0]].sung
+    k = key[1]
+    n = notes[k]
+    at = [degree_semitones(x.degree, mode, x.alter) for x in notes]
+    into = at[k] - at[k - 1] if k else 0
+    out = at[k + 1] - at[k] if k + 1 < len(notes) else 0
+    beats = n.dur / m.beat
+    return np.array([
+        k == 0, k == len(notes) - 1, n.onset < 0,  # first, last, a pickup
+        n.onset % m.bar == 0, n.onset % m.foot == 0,  # on the downbeat, on a stressed beat
+        np.log2(max(beats, 0.25)), beats >= 1.5,  # how long; long enough to hold
+        into >= 3, 0 < into < 3, -3 < into < 0, into <= -3,  # reached by a leap or step up, a step or leap down
+        out > 0, out < 0,  # left rising, left falling
+    ], dtype=float)
+
+
+def ruled(genome, seen: dict, contexts: dict | None = None, floor: P.Gesture | None = None,
+          weights: dict | None = None, ridge: float = 4.0) -> dict:
+    """Every note's gesture from a singer's rules as well as the note itself.
+
+    A singer treats notes alike when they're alike: leans on downbeats, scoops
+    into leaps, lets go at line ends, puts vibrato on long notes. For each
+    field, a ridge regression on what each note is (features()) says what
+    this singer does with notes like it, learned from every sighting of every
+    note; each note is then pulled toward that rather than toward one habit
+    for all, and keeps its own way only as far as the evidence goes (shrunk)."""
+    keys = list(seen)
+    X = np.array([features(genome, k) for k in keys])
+    mu, sd = X.mean(axis=0), X.std(axis=0) + 1e-9
+    Z = (X - mu) / sd
+    prior: dict = {k: {} for k in keys}
+    for f in fields(P.Gesture):
+        rows, ys, ws = [], [], []
+        for i, k in enumerate(keys):
+            for j, g in enumerate(seen[k]):
+                v = getattr(g, f.name)
+                if np.isfinite(v) and (f.name != "vibrato" or v >= 0):
+                    rows.append(i)
+                    ys.append(v)
+                    ws.append(weights[k][j] if weights else 1.0)
+        if len(ys) < 10:
+            continue
+        A, y, w = Z[rows], np.array(ys), np.array(ws)
+        base = float(np.average(y, weights=w))
+        beta = np.linalg.solve(A.T @ (A * w[:, None]) + ridge * np.eye(A.shape[1]), A.T @ (w * (y - base)))
+        for i, k in enumerate(keys):
+            prior[k][f.name] = base + float(Z[i] @ beta)
+    prior = {k: v for k, v in prior.items() if v}
+    made = shrunk(seen, contexts, floor, weights, prior)
+    for k, v in made.items():
+        # vibrato: where the singer was heard, their call (mostly none: leave it to the machine) with the
+        # rules' depth; on a long note never heard held, the rules' depth; otherwise the machine's own
+        judged = [g.vibrato for g in seen[k] if np.isfinite(g.vibrato)]
+        left = judged and 2 * sum(x >= 0 for x in judged) <= len(judged)
+        held = features(genome, k)[6] > 0
+        depth = v[0].vibrato if np.isfinite(v[0].vibrato) else NAN
+        vibrato = -1.0 if left or not (judged or held) or np.isnan(depth) else max(depth, 0.0)
+        made[k] = [replace(v[0], vibrato=vibrato)]
+    return made
 
 
 def floor_for(scale: dict) -> P.Gesture:
@@ -647,7 +733,7 @@ def singer_phrasing(genome_path: Path, genome, takes, credit: str | None = None)
     singer's, or, given several singers' takes, everyone's at once, each
     person counting once and each voice's own errors averaging away."""
     seen, (words, weights), portrait = sung_phrasing(genome_path, genome, takes)
-    phrasing = gather(genome, shrunk(seen, words, floor_for(SUNG), weights))
+    phrasing = gather(genome, ruled(genome, seen, words, floor_for(SUNG), weights))
     detail = f"{len(takes)} sung take(s)" + (f" by {credit}" if credit else "")
     return phrasing, P.to_json(phrasing, source="song", source_detail=detail, scale=SUNG), portrait
 

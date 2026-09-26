@@ -155,7 +155,7 @@ def seedvc(y: np.ndarray, target: Path) -> np.ndarray:
         src = Path(tmp) / "source.wav"
         sf.write(str(src), y.astype(np.float32), S.SR, subtype="FLOAT")
         subprocess.run([str(SEED_VC / ".venv" / "bin" / "python"), "inference.py", "--source", str(src),
-                        "--target", str(target), "--output", tmp, "--diffusion-steps", "30", "--length-adjust", "1.0",
+                        "--target", str(Path(target).resolve()), "--output", tmp, "--diffusion-steps", "30", "--length-adjust", "1.0",
                         "--inference-cfg-rate", "0.7", "--f0-condition", "True", "--auto-f0-adjust", "False",
                         "--semi-tone-shift", "0", "--fp16", "False"],
                        cwd=SEED_VC, check=True, capture_output=True)

@@ -46,18 +46,31 @@ from songbird import genome as G  # noqa: E402
 from songbird import phrasing as P  # noqa: E402
 
 FIELDS = [f.name for f in fields(P.Gesture)]
-PLAIN = np.array([0.0, 1.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0])  # singing it plain: no gesture at all
-LOW = np.array(astuple(P.LOW)[:-1] + (0.0,))
+PLAIN = np.array([1.0 if f == "hold" else 0.0 for f in FIELDS])  # singing it plain: no gesture at all
+LOW = np.array([0.0 if f == "vibrato" else getattr(P.LOW, f) for f in FIELDS])
 HIGH = np.array(astuple(P.HIGH))
+GENOME = None  # the song, for rules (T.ruled)
+METHOD = "ruled"  # how a phrasing is made from sightings: "ruled" (T.ruled) or "shrunk" (T.shrunk)
 WORDS: list[str] = []  # what each note of the guide is sung to (every take here was sung to the current guide)
-RAW = dict.fromkeys(("timing", "level", "swell", "scoop", "bend", "fall", "vibrato"), 1.0)
-UNITS = {"early": "ms", "hold": "", "level": "dB", "swell": "dB", "scoop": "c", "bend": "c", "fall": "c", "vibrato": "c"}
+RAW = dict.fromkeys(("timing", "level", "swell", "scoop", "bend", "fall", "vibrato", "tune"), 1.0)
+UNITS = {"early": "ms", "hold": "", "level": "dB", "swell": "dB", "scoop": "c", "bend": "c", "fall": "c", "vibrato": "c",
+         "tune": "c"}
 
 
 def matrix(data: dict) -> np.ndarray:
     """A measured take as notes x fields, NaN where unmeasured, each sighting kept within a phrasing's bounds."""
-    m = np.array([[np.nan if v is None else v for v in n["gesture"]] for n in data["notes"]], dtype=float)
+    m = np.array([astuple(g) for g in T.gestures_of(data)], dtype=float)
+    m[:, FIELDS.index("vibrato")] = np.where(m[:, FIELDS.index("vibrato")] < 0, np.nan, m[:, FIELDS.index("vibrato")])
     return np.clip(m, LOW, HIGH)
+
+
+def by_name(names: list[str], rows: list) -> np.ndarray:
+    """Rows of gesture values listed under names, as notes x FIELDS; a field a file doesn't have is plain."""
+    out = np.tile(PLAIN, (len(rows), 1))
+    for j, name in enumerate(names):
+        if name in FIELDS:
+            out[:, FIELDS.index(name)] = [r[j] for r in rows]
+    return np.clip(out, LOW, HIGH)
 
 
 def keys_of(data: dict) -> list[tuple[str, int]]:
@@ -194,7 +207,8 @@ def phrasing_from(rows: list[tuple[list, np.ndarray]]) -> dict:
     return {k: np.nanmean(np.array(v), axis=0) for k, v in pooled.items()}
 
 
-def phrasing_made(takes: list[dict], scale: dict | None = None, floor: bool = True, who: list | None = None) -> dict:
+def phrasing_made(takes: list[dict], scale: dict | None = None, floor: bool = True, who: list | None = None,
+                  method: str | None = None) -> dict:
     """A phrasing as tools/phrasing.py makes one (scaled as a phrasing keeps it, bounded, shrunk toward the
     singer's habit), before rounding. scale: T.SUNG, or RAW to stay in the extractor's own units. who: the
     voice of each take, when they're not all one singer's (the extractor's repeating error is each voice's
@@ -202,12 +216,23 @@ def phrasing_made(takes: list[dict], scale: dict | None = None, floor: bool = Tr
     scale = scale or T.SUNG
     seen: dict = {}
     words: dict = {}
+    weights: dict = {}
     for i, d in enumerate(takes):
+        share = 1.0 / (who.count(who[i]) if who else len(takes))  # each singer counts once
         for n, ge, w in zip(d["notes"], T.gestures_of(d), WORDS):
-            seen.setdefault((n["phrase"], n["index"]), []).append(T.bounded(T.scaled(ge, scale)))
-            words.setdefault((n["phrase"], n["index"]), []).append(f"{who[i] if who else ''}|{w}")
-    made = T.shrunk(seen, words, T.floor_for(scale) if floor else None)
-    return {k: np.array(astuple(v[0]), dtype=float) for k, v in made.items()}
+            key = (n["phrase"], n["index"])
+            seen.setdefault(key, []).append(T.bounded(T.scaled(ge, scale)))
+            words.setdefault(key, []).append(f"{who[i] if who else ''}|{w}")
+            weights.setdefault(key, []).append(share)
+    floor_ = T.floor_for(scale) if floor else None
+    if (method or METHOD) == "ruled":
+        made = T.ruled(GENOME, seen, words, floor_, weights)
+    else:
+        made = T.shrunk(seen, words, floor_, weights)
+    out = {k: np.array(astuple(v[0]), dtype=float) for k, v in made.items()}
+    for v in out.values():
+        v[FIELDS.index("vibrato")] = max(v[FIELDS.index("vibrato")], 0.0)  # "the machine's own" reads as none here
+    return out
 
 
 def blended(phrasings: list[dict]) -> dict:
@@ -227,7 +252,7 @@ def intent_of(truth: dict) -> dict:
     intent = {}
     for k, g in truth["intended"].items():
         phrase, index = k.rsplit("#", 1)
-        intent[(phrase, int(index))] = np.clip(np.array(g, dtype=float), LOW, HIGH)
+        intent[(phrase, int(index))] = by_name(truth["fields"], [g])[0]
     return intent
 
 
@@ -242,7 +267,7 @@ def onsets(genome_path: Path, genome, runs: dict) -> None:
     table: dict = {}
     for v, takes in runs.items():
         for d, truth in takes:
-            notes = [sung_as(n, P.Gesture(*s), beat) for n, s in zip(g.notes, truth["sung"])]
+            notes = [sung_as(n, P.Gesture(**dict(zip(truth["fields"], s))), beat) for n, s in zip(g.notes, truth["sung"])]
             starts = [seg.t0 for seg in V.schedule(notes, T.FLAT, g.lexicon) if seg.role == "vowel"]
             for n, t, before in zip(d["notes"], starts, g.before):
                 table.setdefault(before, {}).setdefault(v, []).append(1000 * (n["onset"] - d["lag"] - t))
@@ -270,7 +295,7 @@ def evaluate_reference(genome_path: Path, genome, voices: list[str], pool: bool,
         cells = []
         for f, name in enumerate(FIELDS):
             m = np.concatenate([matrix(d)[:, f] for d, _ in takes])
-            s = np.clip(np.concatenate([np.array(t["sung"], dtype=float)[:, f] for _, t in takes]), LOW[f], HIGH[f])
+            s = np.concatenate([by_name(t["fields"], t["sung"])[:, f] for _, t in takes])
             ok = np.isfinite(m) & np.isfinite(s)
             if ok.sum() < 8 or np.std(s[ok]) == 0:
                 cells.append(f"{'-':>15}")
@@ -302,7 +327,7 @@ def evaluate_reference(genome_path: Path, genome, voices: list[str], pool: bool,
                 combos = [combos[j] for j in np.random.default_rng(0).choice(len(combos), 30, replace=False)]
             for c in combos:
                 rows = [(keys_of(takes[i][0]), matrix(takes[i][0])) for i in c]
-                sung = [(keys_of(takes[i][0]), np.clip(np.array(takes[i][1]["sung"], dtype=float), LOW, HIGH)) for i in c]
+                sung = [(keys_of(takes[i][0]), by_name(takes[i][1]["fields"], takes[i][1]["sung"])) for i in c]
                 est = phrasing_made([takes[i][0] for i in c], who=[takes[i][2] for i in c])
                 raw, best = phrasing_from(rows), phrasing_from(sung)
                 made.append([closeness(est, intent, f) for f in range(len(FIELDS))])
@@ -321,10 +346,13 @@ def main() -> None:
     who.add_argument("--reference", nargs="+", metavar="VOICE", help="reference voices' folder names in renders/reference/")
     ap.add_argument("--pool", action="store_true", help="with --reference: also pool every voice's takes")
     ap.add_argument("--onsets", action="store_true", help="with --reference: where vowel starts were found, by consonant")
+    ap.add_argument("--method", choices=("ruled", "shrunk"), default="ruled", help="how a phrasing is made from sightings")
     args = ap.parse_args()
     genome_path = Path(args.genome).resolve()
     genome = G.load(genome_path)
     WORDS[:] = [(n.syllable or "").lower() for n in T.guide(genome_path, genome).notes]
+    global GENOME, METHOD
+    GENOME, METHOD = genome, args.method
     if args.singer:
         evaluate_singer(genome_path, genome, K.slug(args.singer))
     else:

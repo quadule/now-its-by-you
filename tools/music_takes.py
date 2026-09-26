@@ -115,7 +115,7 @@ def guide_singer(genome_path: Path, genome) -> np.ndarray:
     return V.sing(g.notes, S.SR, V.VoiceParams(), choose_params(genome).seed, g.lexicon)
 
 
-def eleven(genome_path: Path, genome, voice: str, seed: int, song_id: str | None) -> tuple[np.ndarray, dict]:
+def eleven(genome_path: Path, genome, voice: str, seed: int, song_id: str | None, strength: str = "xhigh") -> tuple[np.ndarray, dict]:
     """A take section by section: asked for all at once, Eleven Music let the words slide about a line
     early through each section, but a single section, conditioned on its own stretch of the guide, keeps
     within about 0.2 s. Every sung section is asked for on its own (same voice, same seed) and laid where
@@ -140,7 +140,7 @@ def eleven(genome_path: Path, genome, voice: str, seed: int, song_id: str | None
             "negative_styles": AVOID,
             "context_adherence": "high",
             "conditioning_ref": {"song_id": song_id, "range": {"start_ms": a, "end_ms": min(b, a + 30000)}},
-            "condition_strength": "xhigh",
+            "condition_strength": strength,
         }
         best = None
         for attempt in range(TRIES):  # a stretch that sings other words, or sings them late or early, is asked for again
@@ -164,7 +164,7 @@ def eleven(genome_path: Path, genome, voice: str, seed: int, song_id: str | None
         take[: len(y)] += (y * fade)[: len(take)]
         asked.append({**request, "words_heard": round(heard, 2), "seconds_off": round(off, 2), "on_tune": round(tune, 2),
                       "key": key, "moved_s": round(moved, 3)})
-    return take, {"model": "music_v2_5", "voice": voice, "seed": seed, "song_id": song_id, "requests": asked}
+    return take, {"model": "music_v2_5", "voice": voice, "seed": seed, "strength": strength, "song_id": song_id, "requests": asked}
 
 
 TRIES = 4
@@ -281,20 +281,26 @@ def main() -> None:
     ap.add_argument("--eleven", nargs="*", default=[], metavar="VOICE", help="Eleven Music takes, one per voice described")
     ap.add_argument("--lyria", nargs="*", default=[], metavar="VOICE", help="Lyria 3.5 takes, one per voice described")
     ap.add_argument("--seed", type=int, default=1)
+    ap.add_argument("--takes", type=int, default=1, help="takes per voice (each its own seed)")
+    ap.add_argument("--first", type=int, default=1, help="number the takes from this one (to add to a voice's takes)")
+    ap.add_argument("--strength", default="xhigh", choices=("low", "medium", "high", "xhigh"),
+                    help="how hard Eleven Music holds to the guide's melody: looser leaves the singer more of their own way")
     args = ap.parse_args()
     genome_path = Path(args.genome).resolve()
     genome = G.load(genome_path)
     song_id = None
-    jobs = [("eleven", v) for v in args.eleven] + [("lyria", v) for v in args.lyria]
-    for i, (model, voice) in enumerate(jobs):
+    jobs = [("eleven", v, t) for v in args.eleven for t in range(args.first, args.first + args.takes)]
+    jobs += [("lyria", v, t) for v in args.lyria for t in range(args.first, args.first + args.takes)]
+    for i, (model, voice, number) in enumerate(jobs):
         if model == "eleven":
-            y, about = eleven(genome_path, genome, voice, args.seed + i, song_id)
+            y, about = eleven(genome_path, genome, voice, args.seed + i + 100 * (number - 1), song_id, args.strength)
             song_id = about["song_id"]
         else:
             y, about = lyria(genome_path, genome, voice)
-        folder = OUT / (f"{model}-" + "-".join(w for w in "".join(c if c.isalnum() else " " for c in voice.lower()).split()[:3]))
+        folder = OUT / (f"{model}-" + "-".join(w for w in "".join(c if c.isalnum() else " " for c in voice.lower()).split()[:3])
+                        + ("" if model != "eleven" or args.strength == "xhigh" else f"-{args.strength}"))
         folder.mkdir(parents=True, exist_ok=True)
-        wav = folder / f"{genome_path.stem}-take1.wav"
+        wav = folder / f"{genome_path.stem}-take{number}.wav"
         sf.write(str(wav), (0.5 * y / (np.max(np.abs(y)) + 1e-12)).astype(np.float32), S.SR, subtype="FLOAT")
         wav.with_suffix(".json").write_text(json.dumps(about, indent=1) + "\n")
         print(f"{wav.relative_to(T.ROOT)}  {len(y) / S.SR:.0f} s")

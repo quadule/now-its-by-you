@@ -30,3 +30,9 @@ def test_blend_counts_each_singer_once():
 def test_unmeasured_vibrato_does_not_vote():
     nan = float("nan")
     assert P.average([P.Gesture(vibrato=24.0), P.Gesture(vibrato=nan), P.Gesture(vibrato=nan)]).vibrato == 24.0
+
+
+def test_tune_rounds_and_bounds_like_the_rest():
+    assert P.reduce(P.Gesture(tune=-73.0)).tune == -50.0
+    assert P.reduce(P.Gesture(tune=13.1)).tune == 14.0
+    assert P.from_json({"fields": ["early", "hold"], "phrases": {"r1": [[0.0625, 1.0]]}})["r1"][0].tune == 0.0  # old files
