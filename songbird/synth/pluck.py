@@ -189,6 +189,10 @@ def pluck(
                        release_t60)
         y[lag:] += across + along
     y += _attack(sr, hardness, vel, length, rng)
+    if mute:  # a chop: the pick's scrape across strings the hand has already deadened
+        n = min(length, int(0.02 * sr))
+        scrape = sosfilt(butter(2, [700.0, 5000.0], btype="bandpass", fs=sr, output="sos"), rng.standard_normal(n + 64))
+        y[:n] += scrape[64:] * np.exp(-np.arange(n) / (0.004 * sr)) * 0.25 * vel * (0.4 + 0.6 * hardness)
     if touch > 0.0 and held < length and not mute:
         y += _touch(sr, held, length, freq, touch * vel, rng)
     tail = min(length, int(0.004 * sr))
