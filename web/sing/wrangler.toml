@@ -23,7 +23,7 @@ not_found_handling = "none"
 # and paste the id it prints here.
 [[kv_namespaces]]
 binding = "INVITES"
-id = "PASTE-THE-KV-NAMESPACE-ID-HERE"
+id = "aa2b6ac9172d4276a186ac9e648a8c57"
 
 # Takes, private: `npx wrangler r2 bucket create songbird-takes`. Never make this bucket public.
 [[r2_buckets]]
