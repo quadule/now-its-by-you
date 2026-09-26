@@ -283,6 +283,20 @@ def registry() -> dict[str, tuple[dict, object]]:
     return found
 
 
+# The styles' names for instruments whose modules were given other names: played by those modules.
+ALIASES = {"vibes": "vibraphone", "glock": "glockenspiel", "musicbox": "music-box", "synthpad": "synth-pad",
+           "synthbass": "synth-bass", "synthlead": "synth-solo", "arp": "synth-arp", "drummachine": "drums-808"}
+
+
+def registered(name: str) -> tuple[str, tuple[dict, object] | None]:
+    """The module that plays an instrument, by its own name or its alias: (the module's name for it,
+    (SPEC entry, module)), or (name, None) while no module provides it."""
+    found = registry().get(name)
+    if found is None and name in ALIASES and ALIASES[name] in registry():
+        return ALIASES[name], registry()[ALIASES[name]]
+    return name, found
+
+
 def spec(name: str) -> dict:
     """What the band knows of an instrument: family, register (None: unpitched), place, level, poly,
     about, and stand_in (the model playing it until a module provides it, or None)."""
@@ -293,9 +307,9 @@ def spec(name: str) -> dict:
                     "whistle": (62, 93), "drum": None, "drone": (36, 72)}[name]
         return dict(family=family, register=register, place=PLACE[name], level=LEVEL[name],
                     poly=name in ("guitar", "harp", "drone", "drum"), about=name, stand_in=None)
-    registered = registry().get(name)
-    if registered is not None:
-        entry = registered[0]
+    _, found = registered(name)
+    if found is not None:
+        entry = found[0]
         register = entry.get("register")
         return dict(family=entry.get("family", "band"), register=tuple(register) if register else None,
                     place=tuple(entry.get("place", (0.0, 0.5))), level=float(entry.get("level", 0.15)),
@@ -321,9 +335,9 @@ def render_other(name: str, notes: tuple[Note, ...], sr: int, length: int, setti
     index = stream(name)
     rng = np.random.default_rng([seed, 17, index])
     make = np.random.default_rng([int(s["maker"]), 29, index])
-    registered = registry().get(name)
-    if registered is not None:
-        y = np.asarray(registered[1].render(name, notes, sr, length, rng, make, s), dtype=np.float64)
+    own, found = registered(name)
+    if found is not None:
+        y = np.asarray(found[1].render(own, notes, sr, length, rng, make, s), dtype=np.float64)
         y = y[:length] if len(y) >= length else np.pad(y, [(0, length - len(y))] + [(0, 0)] * (y.ndim - 1))
     else:
         kind = info["stand_in"]
