@@ -13,10 +13,12 @@ from typing import TYPE_CHECKING
 
 import numpy as np
 
+from . import band as band_mod
+from .band import Band
 from .genome import Genome, Phrase, sung_words, turn
 from .phrasing import Gesture, Phrasing, gesture
 from .score import Note, Score
-from .theory import chord_tones, degree_semitones, harmony
+from .theory import degree_semitones, harmony
 
 if TYPE_CHECKING:
     from .drift import Drift
@@ -32,15 +34,16 @@ class Params:
     tempo: float  # beats per minute
     form: tuple[str, ...]  # concrete section order
     seed: int = 0  # seeds every random choice in the rendition
-    accomp: str = "0 1 2 3 2 1"  # arpeggio over the chord voicing, one token per step; . rests
+    accomp: str = "0 1 2 3 2 1"  # the harp's picking over the chord voicing, one token per step; . rests
     humanize: float = 0.006  # standard deviation of onset jitter, seconds
     ritardando: float = 0.35  # how much slower the final phrase ends than it began
     choir: int = 0  # voices from the lineage that join in harmony where the genome allows
+    band: Band = field(default_factory=Band)  # who plays and how (songbird.band); absent in old params: the defaults
     # Chosen by the machine and inherited; empty means the seed's own (VoiceParams' and room's defaults).
     singer: dict = field(default_factory=dict)  # VoiceParams fields that differ from the seed singer's
     room: dict = field(default_factory=dict)  # rt60 and tone for synth.room.impulse_response
     leanings: dict = field(default_factory=dict)  # for songbird.arrange (variation.leanings): its Leanings' fields
-    swing: float = 0.0  # fraction of a beat's second half the off-beats are pushed late (for the players; not yet read)
+    swing: float = 0.0  # fraction of a beat's second half the off-beats are pushed late (read as band.swing)
     lay: float = 0.0  # beats the singers sit ahead of the beat, behind if negative (applied by variation.lay)
     inventory: str = ""  # phoneme inventory for the singer's vowels, "" the seed's (not yet read by the singer)
 
@@ -49,6 +52,8 @@ class Params:
         known = {f.name for f in fields(cls)}
         values = {k: v for k, v in data.items() if k in known}
         values["form"] = tuple(values["form"])
+        if "band" in values:
+            values["band"] = values["band"] if isinstance(values["band"], Band) else Band.from_dict(values["band"])
         return cls(**values)
 
     def to_dict(self) -> dict:
@@ -133,9 +138,22 @@ def realize(genome: Genome, params: Params, verses=None, phrasing: Phrasing | No
     seconds_per_unit = 60.0 / params.tempo / meter.beat
     rit_start = placed[-1][2] + lead
     preroll = 0.6  # room for a breath and the first consonants before the first note
+    # Swing delays each beat's off-beat half, from straight (0) to a triplet lilt (1);
+    # a compound beat (three to a beat) keeps its own lilt.
+    swing = params.band.swing if meter.beat % 3 else 0.0
+    ratio = 0.5 + swing / 6.0
+
+    def swung(u: float) -> float:
+        if not swing:
+            return u
+        b, x = divmod(u, meter.beat)
+        half = meter.beat / 2.0
+        x = x / half * ratio * meter.beat if x < half else ratio * meter.beat + (x - half) / half * (1.0 - ratio) * meter.beat
+        return b * meter.beat + x
 
     def seconds(u: float) -> float:
-        """Grid units to seconds, slowing linearly through the final phrase."""
+        """Grid units to seconds, swung, slowing linearly through the final phrase."""
+        u = swung(u)
         if u <= rit_start:
             return preroll + u * seconds_per_unit
         x = u - rit_start
@@ -146,9 +164,6 @@ def realize(genome: Genome, params: Params, verses=None, phrasing: Phrasing | No
         return float(rng.normal(0.0, params.humanize))
 
     melody: list[dict] = []
-    accomp: list[Note] = []
-    steps = params.accomp.split()
-    beats_per_bar = meter.bar // meter.beat
 
     for section_name, phrase, start, line in placed:
         sung = phrase.sung
@@ -179,63 +194,30 @@ def realize(genome: Genome, params: Params, verses=None, phrasing: Phrasing | No
                 )
             )
 
-        for b, chords in enumerate(phrase.chords):
-            bar_u = start + lead + b * meter.bar
-            step_u = meter.bar / len(steps)
-            steps_per_beat = len(steps) / beats_per_bar
-            starts = [round(round(k * beats_per_bar / len(chords)) * steps_per_beat) for k in range(len(chords))]
-            spans = list(zip(starts, starts[1:] + [len(steps)]))
-            for symbol, (s0, s1) in zip(chords, spans):
-                root, third, fifth = chord_tones(symbol, params.mode)
-                low = params.tonic - 22  # the bass root lands in the octave above this
-                bass = low + (params.tonic + root - low) % 12
-                voicing = [bass, bass + (fifth - root), bass + 12, bass + 12 + (third - root), bass + 12 + (fifth - root)]
-                chord_end = seconds(bar_u + s1 * step_u)
-                for s in range(s0, s1):
-                    token = steps[s - s0]
-                    if token == ".":
-                        continue
-                    index = int(token)
-                    onset = max(0.0, seconds(bar_u + s * step_u) + jitter())
-                    accomp.append(
-                        Note(
-                            part="bass" if index == 0 else "harp",
-                            start=onset,
-                            dur=max(chord_end - onset, 0.05),
-                            pitch=float(voicing[index]),
-                            # players comp softer (and so darker) under a singer
-                            vel=((0.75 if s == 0 else 0.5) + rng.uniform(-0.05, 0.05)) * (0.65 if line else 1.0),
-                            section=section_name,
-                            phrase=phrase.id,
-                        )
-                    )
-
     # The melody is one line: each note sounds until the next begins, which
     # also trims a held phrase ending where the next phrase's pickup starts.
-    # Where there are words the voice takes the line and the plucked string
-    # drops back to doubling it.
+    # Where there are words the voice sings it; where there are none, the band
+    # decides who plays it (songbird.band).
     melody.sort(key=lambda m: m["u"])
     notes: list[Note] = []
     for i, m in enumerate(melody):
         u_end = min(m["u_end"], melody[i + 1]["u"]) if i + 1 < len(melody) else end
         start_s = max(0.0, seconds(m["u"]) + jitter())
-        note = Note(
-            part="melody",
-            start=start_s,
-            dur=max(seconds(u_end) - start_s, 0.05),
-            pitch=float(m["pitch"]),
-            vel=float(m["vel"]) * (0.25 if m["syllable"] else 1.0),
-            syllable=m["syllable"],
-            word=m["word"],
-            word_len=m["word_len"],
-            line_end=m["line_end"],
-            section=m["section"],
-            phrase=m["phrase"],
-        )
-        notes.append(note)
         if m["syllable"]:
             beat = seconds_per_unit * meter.beat
-            unphrased = replace(note, part="voice", vel=float(m["vel"]))
+            unphrased = Note(
+                part="voice",
+                start=start_s,
+                dur=max(seconds(u_end) - start_s, 0.05),
+                pitch=float(m["pitch"]),
+                vel=float(m["vel"]),
+                syllable=m["syllable"],
+                word=m["word"],
+                word_len=m["word_len"],
+                line_end=m["line_end"],
+                section=m["section"],
+                phrase=m["phrase"],
+            )
             sung_note = sung_as(unphrased, m["gesture"], beat)
             notes.append(sung_note)
             if m["choir"]:  # the lineage joins, each voice on its own harmony line
@@ -250,11 +232,15 @@ def realize(genome: Genome, params: Params, verses=None, phrasing: Phrasing | No
                         notes.append(replace(sung_note, part=f"choir{i + 1}", pitch=float(pitch),
                                              vel=0.9 * sung_note.vel, gesture=None))
 
+    accomp, band_settings = band_mod.arrange(genome, params, placed, lead, end, melody, seconds)
     ring = 3.0  # the last chord rings out
     final = seconds(end)
     notes += accomp
+    # plucked strings and voices ring on; a bow or a breath is held a moment longer, then let go
+    held = {"fiddle": 1.0, "whistle": 0.8}
     notes = [
-        replace(n, dur=n.dur + ring) if n.start + n.dur >= final - 1e-3 and n.part != "voice" else n for n in notes
+        replace(n, dur=n.dur + held.get(n.part, ring)) if n.start + n.dur >= final - 1e-3 and n.part != "voice" else n
+        for n in notes
     ]
 
     section_spans = []
@@ -266,4 +252,4 @@ def realize(genome: Genome, params: Params, verses=None, phrasing: Phrasing | No
             section_spans.append((section_name, s0, s1))
 
     notes.sort(key=lambda n: (n.start, n.part, n.pitch))
-    return Score(tuple(notes), final + ring, tuple(section_spans), dict(genome.lexicon))
+    return Score(tuple(notes), final + ring, tuple(section_spans), dict(genome.lexicon), band=band_settings)

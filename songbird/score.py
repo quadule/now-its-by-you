@@ -9,7 +9,7 @@ from .phrasing import Gesture
 
 @dataclass(frozen=True)
 class Note:
-    part: str  # "melody", "harp", "bass", later "voice"
+    part: str  # "voice", "choir1".., or an instrument: "lute", "guitar", "harp", "bass", "fiddle", "whistle", "drum", "drone"
     start: float  # seconds
     dur: float  # seconds the note sounds before it is damped
     pitch: float  # MIDI note number
@@ -21,6 +21,7 @@ class Note:
     section: str = ""
     phrase: str = ""
     gesture: Gesture | None = None  # a person's way with this note, if the rendition has a phrasing
+    art: str = ""  # how an instrument plays it: a strum's "down", "up" or "mute", a bow's "slur", a pipe's "cut", a drum's "tip"...
 
 
 @dataclass(frozen=True)
@@ -29,6 +30,7 @@ class Score:
     duration: float  # seconds, including the final ring
     sections: tuple[tuple[str, float, float], ...]  # (name, start, end) in seconds
     lexicon: dict = field(default_factory=dict)  # the song's own pronunciations
+    band: dict = field(default_factory=dict)  # how the instruments are built and set up (see songbird.band)
 
     def part(self, name: str) -> tuple[Note, ...]:
         return tuple(n for n in self.notes if n.part == name)
@@ -39,4 +41,5 @@ class Score:
             "sections": [list(s) for s in self.sections],
             "notes": [asdict(n) for n in self.notes],
             "lexicon": self.lexicon,
+            "band": self.band,
         }

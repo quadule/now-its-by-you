@@ -29,16 +29,21 @@ written as scale degrees on a rhythmic grid), `harvest` (the machine's context
 reduced to a voice: [docs/HARVEST.md](docs/HARVEST.md) lists exactly what is
 read), `drift` (time as a smooth noise field), `realize` (genome plus
 parameters to a timed score; `variation` is the table by which the parent's
-parameters pull toward the voice as the drift moves them), `synth/` (plucked
-string, LF glottal source, Klatt-style tract, singing voice, room, mastering),
-`phonetics` (CMU dictionary to sung syllables). `lyrics`, `gate` and `pack` are
-the later milestones and only describe their interfaces so far.
+parameters pull toward the voice as the drift moves them), `arrange` (the
+words, drawn from the song's bank: [docs/ARRANGE.md](docs/ARRANGE.md)), `band`
+(who in the band plays what, section by section: [docs/BAND.md](docs/BAND.md)),
+`synth/` (the band's instruments: plucked, bowed, blown, struck and reed
+models in their bodies; the singer: LF glottal source and Klatt-style tract,
+or the learned throat of [docs/THROAT.md](docs/THROAT.md); room, mastering),
+`phonetics` (CMU dictionary to sung syllables). `lyrics`, `gate` and `pack`
+are the later milestones and only describe their interfaces so far.
 
 ## Checking a render without ears
 
 - `tools/analyze.py renders/<name> [--part voice]` tracks pitch against the score and draws it.
 - `tools/voiceview.py renders/<name>` draws the voice's spectrogram with every phoneme labelled.
 - `tools/mixview.py renders/<name>.flac` shows mix balance and flags clicks.
+- `tools/band_solos.py songs/<name>.json --plots` renders each instrument of the band alone, playing its part.
 - `tools/wer_suite.py [--mix] [--seeds 3] [--set field=value]` sings every lyric in
   `songs/` and scores intelligibility with Whisper (dev-only; downloads the base.en model).
 
