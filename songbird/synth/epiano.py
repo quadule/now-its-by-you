@@ -103,7 +103,7 @@ SPEC = {
         role="comping",
         register=(33, 96),
         place=(-0.12, 0.0),
-        level=0.146,
+        level=0.132,
         poly=True,
         articulations={
             "": "a key played and released: the damper falls at the end of the note",
@@ -203,6 +203,17 @@ def _electrostatic(x, limit, scale, out, start):
         prev = c
 
 
+def _held_to(force, freqs, gains, t60s, sr2: float, most: float) -> float:
+    """How much of a note's gains to keep so that the tip, pushed along while the hammer is still on it
+    (a push as long as the mode's period moves it without setting it ringing much), goes no further than
+    `most`: a hammer that slow leaves a weaker note, not a wild swing. 1 when the push is brief."""
+    during = np.zeros((1, len(force) + 1))
+    modal.ring(during, 0, force, freqs, np.ascontiguousarray(gains.real), np.ascontiguousarray(gains.imag),
+               t60s, t60s, -1, 1.0, np.ones(1), sr2, 0.0)
+    peak = float(np.max(np.abs(during)))
+    return min(1.0, most / peak) if peak > 0.0 else 1.0
+
+
 def _restrikes(notes) -> tuple[list, list]:
     """The notes in time order, and for each the time after its start when its key is struck again (None if not)."""
     ordered = sorted(notes, key=lambda n: (n.start, n.pitch))
@@ -298,6 +309,7 @@ class TinePiano:
         t60s = np.array([t60, quick, bell_t60, 0.5 * bell_t60])
         reach = _reach(force, freqs, sr2)
         gains = -1j * swing * rel / reach[0]  # a tine starts from rest: each mode a sine
+        gains *= _held_to(force, freqs, gains, t60s, sr2, 2.0 * swing)
         # the damper: felt from below, a tenth to a fifth of a second; a worn one leaks
         end = note.dur if until is None else min(note.dur, until)
         damped = np.array([0.15, 0.15, 0.08, 0.05]) * (1.0 + 1.5 * self.wear)
@@ -336,7 +348,7 @@ class TinePiano:
 REED_LOW, REED_HIGH = 33, 96  # A1 to C7: 64 keys
 REED_GAMMA = 1.3  # the reed's swing grows as vel^1.3
 REED_SWING = 0.42  # its swing (fractions of the gap) at velocity 0.5
-REED_CONTACT = ((33, 3.2e-3), (48, 2.4e-3), (60, 1.9e-3), (72, 1.5e-3), (96, 1.0e-3))
+REED_CONTACT = ((33, 3.2e-3), (48, 2.4e-3), (60, 1.8e-3), (72, 1.2e-3), (84, 0.75e-3), (96, 0.45e-3))
 
 
 def reed_t60(f0: float) -> float:
@@ -375,7 +387,8 @@ class ReedPiano:
         rel = np.array([1.0, 0.3, 0.12])
         t60s = np.array([t60, float(np.clip(0.15 * (262.0 / f0) ** 0.3, 0.05, 0.3)), 0.05])
         reach = _reach(force, freqs, sr2)
-        gains = -1j * swing * rel / reach[0]
+        gains = 1j * swing * rel / reach[0]  # the hammer's push takes the reed away from the plate first
+        gains *= _held_to(force, freqs, gains, t60s, sr2, 1.5 * swing)
         end = note.dur if until is None else min(note.dur, until)
         damped = np.array([0.12, 0.06, 0.04]) * (1.0 + 1.5 * self.wear)
         if until is not None and until < note.dur:

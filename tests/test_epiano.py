@@ -64,6 +64,12 @@ def rms_db(y, t0, t1):
     return 10 * np.log10(np.mean(y[int(t0 * SR): int(t1 * SR)] ** 2) + 1e-30)
 
 
+def crossing_rate(x, t):
+    """Cycles a second of a slow oscillation x sampled at times t: from its first to its last zero crossing."""
+    crossings = np.flatnonzero(np.diff(np.sign(x)) != 0)
+    return 0.5 * (len(crossings) - 1) / (t[crossings[-1]] - t[crossings[0]])
+
+
 @pytest.mark.parametrize("name", ["epiano", "epiano-reed"])
 def test_in_tune_across_the_keyboard(name):
     lo, hi = epiano.SPEC[name]["register"]
@@ -130,10 +136,7 @@ def test_the_tremolo_pans_at_four_to_six_hertz_as_deep_as_ornament_asks():
         depth = np.percentile(np.abs(pan), 99)
         assert abs(depth - 0.85 * ornament) < 0.05
         # the rate: how often the pan crosses the middle
-        t = np.flatnonzero(ok) / SR
-        crossings = np.flatnonzero(np.diff(np.sign(pan)) != 0)
-        rate = 0.5 * len(crossings) / (t[-1] - t[0])
-        assert 3.9 < rate < 6.1
+        assert 3.95 < crossing_rate(pan, np.flatnonzero(ok) / SR) < 6.05
     y = render("epiano", notes, 3.0, ornament=0.0)
     assert np.array_equal(y[:, 0], y[:, 1])
 
@@ -168,11 +171,8 @@ def test_the_reed_pianos_tremolo_swings_its_level_at_five_and_a_half_to_six_and_
         live[: int(0.2 * SR)] = False
         gain = wet[live] / dry[live]
         assert abs((gain.max() - gain.min()) - 0.7 * ornament) < 0.03  # as deep as ornament asks
-        t = np.flatnonzero(live) / SR
         g = gain - 0.5 * (gain.max() + gain.min())
-        crossings = np.flatnonzero(np.diff(np.sign(g)) != 0)
-        rate = 0.5 * len(crossings) / (t[-1] - t[0])
-        assert 5.4 < rate < 6.6
+        assert 5.45 < crossing_rate(g, np.flatnonzero(live) / SR) < 6.55
 
 
 def test_each_machine_has_its_own_piano_and_a_rendition_replays_exactly():
