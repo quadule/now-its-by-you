@@ -8,7 +8,7 @@ from scipy.signal import butter, hilbert, sosfiltfilt
 
 from _levels_b import TARGETS, loudness
 from songbird.score import Note
-from songbird.synth import body, cello
+from songbird.synth import body, cello, instruments
 from songbird.theory import midi_to_hz
 
 SR = 44100
@@ -331,6 +331,16 @@ def test_the_section_sits_violins_left_cellos_right_and_every_line_is_a_chorus()
         return e.std() / e.mean()
 
     assert wander(section) > 1.5 * wander(solo)
+
+
+def test_the_section_is_as_wide_as_a_real_one():
+    """Each desk heard through a stereo pair (each microphone its own mix of the plate modes), not one mono body
+    panned: a chord's channels correlate 0.3-0.8 (a pair on a real section, 0.3-0.7), not 0.8-0.95."""
+    for chord in ((50.0, 54.0, 57.0), (50.0, 57.0, 62.0, 66.0)):
+        y = stem("strings", [Note("strings", 0.1, 2.0, p, 0.6) for p in chord], 2.4)
+        placed = instruments.place(y, *cello.SPEC["strings"]["place"])[int(0.5 * SR): int(2.0 * SR)]
+        left, right = placed[:, 0], placed[:, 1]
+        assert 0.25 < np.sum(left * right) / np.sqrt(np.sum(left**2) * np.sum(right**2)) < 0.8, chord
 
 
 def test_a_section_entry_spreads_but_nobody_comes_in_early():

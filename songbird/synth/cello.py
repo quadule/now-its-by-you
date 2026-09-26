@@ -42,8 +42,9 @@ Double stops (overlapping notes) go to a second string. The string section
 section whose register its middle sits in and played by two or three players,
 each a few cents off, a few tens of milliseconds early or late, with a vibrato
 (narrower than a soloist's, starting in their own time) and a bow of their
-own; each section is heard through two bodies (a desk each), seated violins
-left, violas in the middle, cellos right.
+own; each section is heard through two bodies (a desk each, each through a
+stereo pair of microphones), seated violins left, violas in the middle, cellos
+right.
 """
 
 from __future__ import annotations
@@ -494,9 +495,10 @@ def voiced(ir: np.ndarray, sr: int, lo: float = 80.0, hi: float = 3000.0) -> np.
     return ir / np.sqrt(max(gain, 1e-12))
 
 
-def _pan(y: np.ndarray, position: float) -> np.ndarray:
+def _spread(y: np.ndarray, position: float) -> np.ndarray:
+    """A desk's two microphone signals, (samples, 2), panned to its seat: each channel keeps its own."""
     theta = (position + 1.0) * np.pi / 4.0
-    return np.stack([y * np.cos(theta), y * np.sin(theta)], axis=1) * np.sqrt(2.0)
+    return np.stack([y[:, 0] * np.cos(theta), y[:, 1] * np.sin(theta)], axis=1) * np.sqrt(2.0)
 
 
 def _section(notes, sr: int, length: int, rng: np.random.Generator, make: np.random.Generator,
@@ -542,9 +544,11 @@ def _section(notes, sr: int, length: int, rng: np.random.Generator, make: np.ran
             if not force.any():
                 continue
             force = sosfilt(butter(1, 25.0, btype="highpass", fs=sr, output="sos"), force)
-            ir = voiced(body.impulse_response(box, sr, seed=seeds[name][d], size=size, channels=1)[:, 0], sr)
-            y = oaconvolve(force, ir)[:length]
-            out += _pan(y, seat + (SEAT_SPREAD if d else -SEAT_SPREAD))
+            # each microphone hears its own mix of the desk's plate modes (the box breathing as a whole reaches
+            # both alike), so the section is as wide above a few hundred hertz as a real one sounds
+            ir = voiced(body.impulse_response(box, sr, seed=seeds[name][d], size=size, channels=2), sr)
+            y = oaconvolve(force[:, None], ir, axes=0)[:length]  # the force transformed once for both
+            out += _spread(y, seat + (SEAT_SPREAD if d else -SEAT_SPREAD))
     return out
 
 
