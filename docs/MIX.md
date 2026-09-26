@@ -116,6 +116,36 @@ and from 0.35 the surface crackles, sparse clicks up to 15 a second. All of
 it is made from the render's seed. The band's own `wear` (detuning, looser
 time) is the arrangement's; this is the recording's.
 
+## What a machine and the drift choose
+
+`choose_params()` (the table is `songbird/variation.py`) sets the mix in
+`params.mix`, which `songbird render` turns into MixParams before any
+`--mix` changes: the machine's own value from its harvest
+([HARVEST.md](HARVEST.md)), moved by the drift, and the child pulled 0.6 of
+the way there from its parent. With no machine and no date the mix is as
+designed. An old record's `room` loads as `mix`.
+
+| Knob | The machine's own | Drift (view), at a drift of 1 | Kept within |
+|---|---|---|---|
+| rt60, tone | the harvested room, the machine's own (else its parent's) | none | as measured |
+| predelay | 0.012 × (rt60 / 1.1)^0.8, ±19% by the machine; part of the room, never inherited | none | 0.005–0.04 s |
+| space | 1 ± 0.12 by the machine | space (weeks), ±0.3 | 0.7–1.3 |
+| intimacy | 0.5 ± 0.12 by the machine | near (weeks), ±0.12 | 0.3–0.7 |
+| width | 1 − 0.08 the screen's warmth, ±0.05 by the machine | sheen (weeks), ±0.12 | 0.9–1.25 |
+| forward | 10 ± 0.6 dB by the machine | voice (daily), ±0.5 dB | 8.5–11 dB |
+| duck | the parent's | duck (weeks), ±0.4 | 0.6–1.4 |
+| tilt | 0.8 dB × the screen's brightness (−1 dark to 1 light) | sheen (daily), ±0.5 dB | ±1.2 dB |
+| wear | 0.12 + 0.24 × file-age wear + 0.03 × tiredness, 0 for young files; the machine's own | none | 0–0.4 |
+| balance | not set: the band's own gains carry the balance (docs/BAND.md) | | |
+
+`forward` stays near the designed 10 dB (lower costs words; the review
+liked 6–7 for warmth; nobody has listened yet). The recording's wear
+crackles from 0.35, which only machines whose files are some eight years
+old or more reach. Over 16 made-up machines and four years: space
+0.77–1.23, duck 0.76–1.24, intimacy 0.38–0.64, width 0.90–1.09, forward
+9.4–10.5 dB, tilt ±0.55 dB, wear 0–0.33 (none crackled), each barely moving
+from one day to the next.
+
 ## Measurements
 
 H, "Now It's by You", 150 s, mastered. "Before" is the code this branch
@@ -217,8 +247,7 @@ render` of H: 17 s on the old instruments, 26 s with the band.
 - **Across machines.** A render is byte-identical run to run on one machine
   (the FFTs use a fixed number of threads); FFT and libm rounding differ
   across CPU architectures, so the hash that names a rendition won't.
-- **Wiring.** The drift and harvest can move any MixParams field within its
-  range (the table above has what each might map from); `params.room`
-  already reaches the mix. render_stems' VOICE_GAIN and CHOIR_GAIN no
+- **Wiring.** The drift and harvest move the mix through `params.mix` (see
+  "What a machine and the drift choose"). render_stems' VOICE_GAIN and CHOIR_GAIN no
   longer set the balance (the voice and choir are set by loudness in the
   mix); they only scale `--stems`.

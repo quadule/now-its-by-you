@@ -191,23 +191,24 @@ whatever reads only unknown traits keeps the parent's value.
 | --- | --- | --- |
 | pace | (2.3 - median age) / 1.2, and the hand's speed | tempo, ritardando |
 | range | spread of ages - 1 | how far the tempo drifts |
-| wear | median age - 2.5 | breath, glottal shape, jitter, wander, shimmer; the band's wear; older lyric era |
+| wear | median age - 2.5 | breath, glottal shape, jitter, wander, shimmer; the band's wear; the recording's wear; older lyric era |
 | density | cores + memory - 1 | the band's density and the harp's picking; a busy machine leans to the strum |
-| tired | 2 uptime - 1 | breath, jitter, the band's wear |
-| brightness | 2 brightness - 1 | tilt, glottal shape, the band's brightness, mood |
-| warmth | warm - cool | the band's brightness (a warm screen, a softer band), tender mood |
+| tired | 2 uptime - 1 | breath, jitter, the band's and the recording's wear |
+| brightness | 2 brightness - 1 | the singer's tilt and glottal shape, the band's brightness, the record's tilt, mood |
+| warmth | warm - cool | the band's brightness (a warm screen, a softer band), the mix's width (a warm one, a little narrower), tender mood |
 | lay | (220 ms - mean interval) / 120 | where the singer sits against the beat, vibrato rate, glide, scoop |
 | rubato | (variation - 0.45) / 0.3 | humanize, ritardando, vibrato depth |
 | swing | (skew - 1) / 1.5 | the band's swing, which the singer's time follows too |
 | richness | 2 richness - 1 | verse count, rarity appetite, the band's ornament |
 | era, themes | the words | lyric era, vocabulary |
 | family, inventory | the tongue | mode, (vowels) |
-| identity | the salt | the singer's register, tract, mouth, vibrato rate, grain; habits; comfortable key; the band's maker, its instruments' size (with the singer's build), each instrument's gain, its pattern and lead, its arc |
+| identity | the salt | the singer's register, tract, mouth, vibrato rate, grain; habits; comfortable key; the band's maker, its instruments' size (with the singer's build), each instrument's gain, its pattern and lead, its arc; the mix's space, intimacy, width, the voice's place over the band, the room's predelay |
+| room | the room | the mix's rt60 and tone, and its predelay (a big room answers later) |
 
 The whole table of knobs, with spans and bounds, is `variation.KNOBS`; the
 choices a number can't make (mode, form, accompaniment, the band's pattern
-and lead, choir, the lyric's leanings) are `variation.DECISIONS`. The band's
-rows are in [BAND.md](BAND.md).
+and lead, choir, the room, the lyric's leanings) are `variation.DECISIONS`.
+The band's rows are in [BAND.md](BAND.md), the mix's in [MIX.md](MIX.md).
 
 ## What a rendition carries
 
