@@ -82,10 +82,12 @@ singer on the same notes and seed: 16.9%):
 | Corpus | Held-out loss (L1, normalized) | Words misheard on H |
 |---|---|---|
 | 14 min (v0) | 0.33, rising after 1,000 steps: too little to generalize | 21.0% |
-| 39 min (v0b) | 0.29, still falling at 6,000 steps | 17.4% |
+| 39 min (v0b) | 0.29, still falling at 6,000 steps | 17.4% (16.4% with the teacher's consonant lengths) |
+| 100 min (v1, 0.89M parameters, 12,000 steps) | 0.26 | **11.9%** |
 
-More data is what it wants. The learning curve is Fable's first question before rendering
-more.
+More data is what it wants. v1, on the whole first corpus, is the first learned voice clearly
+understood better than the formant singer. It is also the benchmark: its seven voices are the Eleven
+Music ones, so it will never ship (see below).
 
 ## Taking ElevenLabs out (2026-09-25, late)
 
