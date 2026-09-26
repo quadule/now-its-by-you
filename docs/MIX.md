@@ -23,9 +23,12 @@ length). The tools are in songbird/synth/fx.py.
 presence at 3.5 kHz (set beside natural singers: SoulX-Singer renders of the
 same score). Its air (7–14 kHz against 0.5–2 kHz) is measured, and only a
 voice brighter than natural singers is brought back, halfway. A de-esser
-that listens to the balance of the highs against the rest of the voice,
-not to how loud the singer is. A compressor that only leans on the
-syllables that stand out of their phrase: its threshold rides 3 dB over the
+that listens to the balance of the highs (over 4.5 kHz) against the voice's
+body (the voice an octave under them, where no "s" reaches), not to how
+loud the singer is, and turns the highs down on a split without phase, so
+an "s" comes down whole and nothing is ever turned up (see "The hiss"). A
+compressor that only leans on the syllables that stand out of their
+phrase: its threshold rides 3 dB over the
 level of the three seconds around each moment, so a syllable is evened
 against its neighbours but a quiet verse stays quiet and a full refrain
 full (2:1, 15 ms attack; on H it works on 30% of the sung time, by more
@@ -35,11 +38,11 @@ voice itself, so a quieter or brighter singer (the learned one) is treated
 the same.
 
 **The lineage choir** (the bridge and tag, `--choir N`) is one group:
-thinner below 260 Hz and in the presence range than the lead, compressed
-together, 35% wider, 4 dB under the lead, and further back in the room (a
-bigger send, reaching the room 20 ms later). Its consonants jumped far over
-the rest and made the master limiter work 5 dB in the bridge; a peak stage
-rounds them off now.
+thinner below 260 Hz and in the presence range than the lead, de-essed and
+compressed together, 35% wider, 4 dB under the lead, and further back in
+the room (a bigger send, reaching the room 20 ms later). Its consonants
+jumped far over the rest and made the master limiter work 5 dB in the
+bridge; a peak stage rounds them off now.
 
 **The band.** The arrangement sets each instrument's level and place (and
 the drift turns each up or down), so the mix keeps them: an instrument's
@@ -192,7 +195,12 @@ contrast is kept by the strip, 78% as finally heard (glue and limiter
 too); the equalizer alone keeps 93% (vowels differ in how much of them sits
 at 900 Hz), the dynamics 85% of what they are given. The loud half of the
 singer's intended syllables stands 4.0 dB over the soft half dry, 3.4 dB as
-heard. The de-esser works 4.6% of the sung time, never more than 1.7 dB.
+heard. The de-esser then worked 4.6% of the sung time, never more than
+1.7 dB: it was barely de-essing at all (see "The hiss"). Now, on the
+learned singer (4-hana), it works 12.0% of the sung time (more than 2 dB on
+7.4%), takes 4.7 dB (median; 2.3-5.1 dB, 10th to 90th percentile) off the
+loud "s" sounds and at most 8 dB, and moves the vowels' 150-2000 Hz by
+0.002 dB (99th percentile).
 
 **The room.** T30 per octave within a few percent of what was asked at
 every octave, rt60 0.3 to 2.5 s; the ears' coherence 0.8 at 125 Hz, under
@@ -217,6 +225,132 @@ warmer; the voice at `forward` 10 dominates the middle (see Doubts).
 numba kernels compile once, about 1.5 s, and are cached). A full `songbird
 render` of H: 17 s on the old instruments, 26 s with the band.
 
+## The hiss (2026-09-26)
+
+The artist: "Sometimes the reverb (+ other effects?) produce a loud hiss; a
+good example is the beginning 4-hana.verse-refrain". 4-hana was rendered
+again from 3-dee's record, byte-identical (id aaff7164ee58), keeping every
+stem and the mixer's buses; its highs over 6 kHz were followed every 50 ms
+through each dry stem, the voice, choir and band buses, and the room's and
+the plate's returns apart, and a Fable review measured the diagnosis and
+the fixes again. It was a hiss and a murmur under it, neither the reverb's
+own: the reverb returned what it was sent.
+
+**The hiss: the de-esser never de-essed.** At each burst of highs the mix's
+highs were the voice bus's (−30 to −32 dB; the band 60 dB under, the room
+and plate 14-30 dB under): the "s" of "saved" (0.8-0.95 s into the
+excerpt), "as", "numbers", "sent", 100-250 ms each, up to 9 dB over the
+mix's 1-4 kHz band. After each "s" the plate carried it for a quarter of a
+second, the loudest source of highs until it died. The throat's "s" is a
+natural singer's (its sibilants 16.3 dB under its vowels, its teacher's
+16.9, over 59 training segments); the de-esser took at most 0.5 dB from any
+of them, 0.0 dB (median) from the loud ones over the song. It weighed the
+highs over 5.5 kHz against `x` minus a second-order high-pass, which is
++1.8 dB at the split and still −4.4 dB at 11 kHz, so an "s" was mostly its
+own "rest of the voice" and read 1-5 dB under it, never over the threshold;
+and it turned down that high-pass's output, 90 degrees from the voice near
+the split, which at −8 dB lifted 3.9 kHz by 1.2 dB and cut the split by
+0.7. This singer's "s" (tract 1.025, 8.5% under the throat's own) centres at
+5 kHz, across the split. The lineage choir had no de-esser at all: in the
+bridge, four choir voices and the lead said the "s" of "it's" together
+(237.15 s), 16.5 dB over the mix's 1-4 kHz band, into the choir's room send
+(0.5, the band's 0.18) and the plate.
+
+Now `fx.deess` weighs the highs against the body (the voice an octave under
+the split, where no "s" reaches: an "s" stands 5-11 dB over it, a vowel
+24-34 dB under) and splits the voice without phase (its low-passes run
+forward and back): the part turned down is −14 dB half an octave under the
+split, −6 dB at it and all of the voice above, adds back to the voice
+exactly, and is never turned up. So the split comes down onto this
+singer's "s", 4.5 kHz. `excess` is +3 dB over the body (it was −3 over the
+old reference), `ratio` 3, at most 8 dB, as before. The choir group goes
+through the same de-esser after its equalizer. On 4-hana's lead it works
+12.0% of the sung time (more than 2 dB on 7.4%), takes 4.7 dB (median) off
+the loud "s" sounds, the hardest from −3.3 dB at 4-5 kHz to −7.3 at 8-9 kHz,
+and moves the vowels' 150-2000 Hz by 0.002 dB. The plate and the room are
+unchanged: fed a de-essed voice, the plate's tail after the "s" of "saved"
+is about 10 dB lower.
+
+**The murmur: the singers sounded where they didn't sing.** The throat's
+network learned from phrases whose silences were short (half under 0.07 s,
+99% under 0.51 s, none as long as 1 s); `throat.timeline` told it of every
+rest as one silence as long as the rest, and it guessed an envelope far
+louder than silence, which the vocoder filled with noise: a murmur coloured
+like a vowel (96% of its power under 1 kHz, peaks near 450 Hz and 2 kHz,
+noise to 11 kHz). Its teacher's silences aren't silent either (−31 dB
+under its vowels 0.15-0.3 s after a phone), so a silence told as one it knows
+still murmurs at −38 to −44 dB: the vocoder has to be hushed too. Against
+the singing:
+
+| Silence | Before | Told as a silence it knows | And hushed |
+|---|---|---|---|
+| a 220 s wait, its first second | −7.7 dB | −44 dB | silent |
+| a 60 s wait, its first second | −13 dB | −45 dB | silent |
+| a 15 s wait | −41 to −44 dB | −44 dB | silent |
+| the middle of a 2-16 s rest | −34 to −41 dB | −38 dB | silent |
+
+In 4-hana the four choir voices wait 224 s for the bridge. They murmured
+from the first second at −31 dB in the mix, level with the whole band
+(−26 to −37 dB) through the intro and the first verse, 12 LU under the
+song (the choir bus alone over its first minute: −25.9 LUFS), fading over
+the song; through the choir's room send the room ran level with the band in
+the intro instead of 8-10 dB under it. The lead's 14 s intro murmured 31-44
+dB under its singing. Every render with a learned singer had it wherever a
+singer rested more than a second; worst where a choir waits longest: 4-hana
+(224 s), country-waltz (209 s), 5-jun (176 s), stringband (120 s), 6-lu
+and 3-dee (about 100 s), and every tour piece with a choir (25-60 s).
+
+Now `throat.timeline` tells the network of a silence longer than 0.6 s
+(`SILENCE`) as one 0.6 s long, its first and last halves at their own pace
+and its middle held (33 of the training set's 5,959 silences, 0.6-0.97 s
+long, would be told so on a retrain; the shipped weights need nothing); and
+`throat.hush` silences the vocoder where nothing is sung, from 60 ms before
+a sung phone to 150 ms after one, with a 30 ms fade (`HUSH`). A phone's
+release has fallen 70 dB within 50 ms, before the murmur's return at about
+100 ms; the gate opens 45-75 ms before an onset, where the murmur's foot
+lies 47-58 dB under the vowel; inside sung stretches nothing changes. The
+breaths are added after, as before. The network's receptive field is ±150 ms,
+so sung frames near a rest hear the change: on 4-hana's stems every band
+stem is bit-identical, the singers differ by 55-60 dB under their singing
+where they sing and, where they rest, fall from 19-37 dB under their
+singing to 53-63 dB under (the breaths). A note after a 60 s wait is within
+1 dB of the same note after a 1 s one.
+
+| 4-hana | Before | After |
+|---|---|---|
+| choir bus, intro and first verse | −31 dB (the band −26 to −37) | silent until it sings |
+| room return, intro | −28 to −30 dB, level with the band | −33 to −37 dB, 8-10 dB under it |
+| the "s" of "saved", its highs (mastered, 100 ms) | −25.4 dBFS, +6 dB over 1-4 kHz | −31.7 dBFS, +1.5 dB |
+| the plate's tail after it (>6 kHz) | −45 to −54 dB | −55 to −64 dB |
+| the "s" of "it's" in the bridge (237.15 s), over 1-4 kHz | +16.5 dB | +8.0 dB |
+| excerpt, 0.5-1.5 s: highs over 1-4 kHz (1 s) | −4.0 dB | −9.2 dB |
+| excerpt, seconds within 10 dB of 1-4 kHz | 16 of 55 | 9 of 55 |
+| excerpt, loudest highs (99th percentile, re its loud level) | −10.0 dB | −16.3 dB |
+
+**Across the styles renders** (`tools/hisscheck.py`, every render of
+renders/production/styles made again with this code): seconds where the
+highs come within 10 dB of 1-4 kHz, 303 to 145 over the tour and the four
+songs, 299 to 179 over the lineage; every render's worst 100 ms 0.3-6.5 dB
+lower, its worst second 1.4-6.5 dB lower, and the loudest highs of every
+listening pair 4.7-7.3 dB lower. What remains is consonants on a sparse texture
+(the lofi piece's "s" of "song" at 27 s, 22 dB over the mids for 100 ms
+over a dark electric piano), as in any record, and the kit's cymbals. One
+moment reads worse by the ratio and isn't: the "z" of "as" (2.45 s into
+4-hana's excerpt) is as loud as before (−30.6 dBFS against −30.3) but the
+murmur under the mids is gone (+7.6 dB over 1-4 kHz, from +3.4). A voiced
+"z" loses only about 1 dB, its voicing counting as the body; `excess` 0
+would take 1.9, −3 would take 3.0, and change little else (see Doubts).
+Listening pairs are in renders/production/mix/hiss/ (README.txt).
+
+**Not it:** the plate's and room's responses are shaped noise but add
+nothing of their own (a convolution is silent when nothing is sent); what
+they returned was the choir's murmur and the "s". The pedal steel's
+stand-in (the bowed model) was the band's highs until its last note ended
+at 13.96 s, the excerpt's first 0.45 s (the real pedal steel, merged since,
+lowers the highs there 3-5 dB); it wasn't playing at any burst. The kit's brush sweep starts just after the first "s" (14.52 s) and
+was 29-34 dB under the voice in the highs there. The bursts stop at 11.8
+kHz, where the throat's envelope ends.
+
 ## Doubts and next
 
 - **The balance is a judgment.** `forward` 10 dB puts the voice well on top
@@ -237,7 +371,22 @@ render` of H: 17 s on the old instruments, 26 s with the band.
 - **The learned singer** (engine "learned") wasn't tried: its weights
   weren't in any tree. Everything the voice's tools react to is relative to
   the voice itself, its air shelf is measured, and its equalizer is gentle,
-  but its de-esser and presence should be looked at when it sings.
+  but its de-esser and presence should be looked at when it sings. (Its
+  de-esser was, and it didn't work: "The hiss". Its presence hasn't been
+  looked at yet.)
+- **The de-esser's depth is a judgment.** About 5 dB off a loud "s", at most
+  8 (`excess` +3 over the body, `ratio` 3, `most` 8). A voiced "z" loses
+  about 1 dB: `excess` 0 takes 1.9, −3 takes 3.0, and change little else.
+  A de-essed "s" still stands 17.8 dB over the lead's low mids in the stem;
+  a close-miked singer is nearer 10-15, and `most` 10 or `ratio` 4 would go
+  there. Nobody has listened yet.
+- **The plate is bright by design:** its top decays at 0.87 of its middle
+  (the room's at 0.55), so a 120 ms "s" rings within 10 dB for 0.23 s.
+  `PLATE_AIR` (0.75, 0.95, 1.0, 0.85, 0.6) would darken its top (6-12 kHz
+  RT60 1.24 to 0.97 s, the vowels' tails unchanged): a matter of taste.
+- **Line ends are as sudden as the throat makes them.** The murmur used to
+  cushion them; the throat lets go of a phone 54 dB in 50 ms. If a line's
+  last note sounds clipped, that is the network's release, not the hush.
 - **Verses are narrow** (L/R correlation about 0.95 while the voice carries
   a sparse verse), wide in the bridge; the band's own placement decides
   most of it. `width` 1.2–1.3 opens the verses.

@@ -154,6 +154,60 @@ def test_dynamics_leave_quiet_or_plain_signals_alone():
     assert np.max(np.abs(loud)) < 0.5 * 0.9  # the loud peaks are rounded off
 
 
+def test_the_de_esser_takes_an_s_across_its_split_and_leaves_the_vowels():
+    """An "s" centred at 5 kHz, half under the 5.5 kHz split (a learned singer's, a little lower than most):
+    heard against the voice's body and taken from the voice in phase, it comes down by several dB; the vowel
+    either side is untouched. (Heard against x minus a high-pass, and taken as that high-pass, the same "s"
+    lost nothing.)"""
+    rng = np.random.default_rng(5)
+    t = np.arange(2 * SR) / SR
+    vowel = sum(np.sin(2 * np.pi * 220 * k * t) / k for k in range(1, 12))
+    ess = sosfilt(butter(4, [3800, 8000], btype="bandpass", fs=SR, output="sos"), rng.standard_normal(len(t)))
+    ess *= 0.5 * np.std(vowel) / np.std(ess)
+    s = (t > 0.9) & (t < 1.05)
+    x = (np.where(s, ess, vowel) * 0.1)[:, None]
+    y = fx.deess(x, SR)[0]
+    band = butter(4, [4000, 11000], btype="bandpass", fs=SR, output="sos")
+
+    def level(z, a, b):
+        return 10 * np.log10(np.mean(sosfilt(band, z[:, 0])[int(a * SR): int(b * SR)] ** 2))
+    assert level(x, 0.92, 1.03) - level(y, 0.92, 1.03) > 3.0
+    assert np.allclose(y[: int(0.85 * SR)], x[: int(0.85 * SR)])
+    assert np.allclose(y[int(1.6 * SR):], x[int(1.6 * SR):], atol=1e-4)
+    # it turns the "s" down and never up: no third of an octave from 1 to 16 kHz is louder (the old one lifted
+    # 3-5 kHz by a decibel while it cut)
+    seg = slice(int(0.92 * SR), int(1.03 * SR))
+    f = np.fft.rfftfreq(seg.stop - seg.start, 1 / SR)
+    px, py = (np.abs(np.fft.rfft(z[seg, 0] * np.hanning(seg.stop - seg.start))) ** 2 for z in (x, y))
+    for c in 1000 * 2 ** (np.arange(0, 13) / 3):
+        m = (f >= c / 2 ** (1 / 6)) & (f < c * 2 ** (1 / 6))
+        assert 10 * np.log10(py[m].sum() / px[m].sum()) < 0.05
+
+
+def test_the_choir_is_de_essed_as_a_group():
+    """The lineage choir's voices say each "s" together and send the most to the room and plate: the group is
+    de-essed as the lead is."""
+    from unittest import mock
+
+    rng = np.random.default_rng(6)
+    t = np.arange(3 * SR) / SR
+    vowel = sum(np.sin(2 * np.pi * 196 * k * t) / k for k in range(1, 12))
+    ess = sosfilt(butter(4, [3800, 8000], btype="bandpass", fs=SR, output="sos"), rng.standard_normal(len(t)))
+    ess *= 0.5 * np.std(vowel) / np.std(ess)
+    s = (t > 1.4) & (t < 1.55)
+    choir = np.where(s, ess, vowel) * 0.05 * ((t > 0.5) & (t < 2.5))
+    stems = {"choir1": panned(choir, -0.45), "choir2": panned(choir, 0.45), "guitar": panned(0.02 * vowel, 0.0)}
+    band = butter(4, [4000, 11000], btype="bandpass", fs=SR, output="sos")
+
+    def choir_s(deess=None):
+        taps = {}
+        with mock.patch.object(fx, "deess", deess or fx.deess):
+            mixing.mix(stems, SR, 0, MixParams(), taps=taps)
+        vowels = 10 * np.log10(np.mean(taps["choir"][int(0.8 * SR): int(1.3 * SR)] ** 2))
+        return 10 * np.log10(np.mean(sosfilt(band, taps["choir"], axis=0)[int(1.42 * SR): int(1.53 * SR)] ** 2)) - vowels
+    assert choir_s(deess=lambda x, sr: (x, None)) - choir_s() > 3.0
+
+
 def test_a_riding_compressor_keeps_the_arc():
     # a quiet passage then one 12 dB louder, each with a syllable every half second that stands 6 dB out
     t = np.arange(8 * SR) / SR
