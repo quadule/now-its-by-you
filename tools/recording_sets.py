@@ -909,16 +909,21 @@ def report(genome, analysis: dict, data: dict) -> str:
     held_twice = [t for t in twice if have[t] >= 2]
     should = [t for t, w in want.items() if not w["must"]]
     should_held = [t for t in should if have[t] >= 1]
+    sung_couplets = Counter(r["id"] for s in sets for r in s["words"]["refrain"]["rounds"][:-1])
+    times = set(sung_couplets.values())
+    couplet_times = (f"each {A._number(times.pop())} times" if len(times) == 1 else
+                     "each " + " to ".join(A._number(n) for n in (min(times), max(times))) + " times")
     out += ["## How the sets were chosen", "",
             f"- **Must hold ({must_n}):** every word surely misheard (above) and every verse clearly high. "
             f"All {held_once} are held at least once. The worst would ideally be held twice, but the verses "
-            f"that hold them fill all {places} verse places the six sets have, so only {len(held_twice)} of "
-            f"{len(twice)} are, in two sets or more: " + ", ".join(spell.get(t[5:], t[5:]) for t in held_twice) + ".",
+            f"that hold them fill all {places} verse places the {A._number(len(sets))} sets have, so only "
+            f"{len(held_twice)} of {len(twice)} are, in two sets or more: "
+            + ", ".join(spell.get(t[5:], t[5:]) for t in held_twice) + ".",
             f"- **Should hold ({len(should)}):** every other word misheard at least half the times it was sung, "
             f"weighed by how often it is misheard and how often the song sings it (a word one of three slot "
             f"choices counts a third). {len(should_held)} of them are held.",
             "- **Heads:** every head at least once, the artist's so in sets a and b; the others worst heard "
-            "first. **Couplets:** each three times, worst heard first. **Bridges:** the canon in every set, "
+            f"first. **Couplets:** {couplet_times}, worst heard first. **Bridges:** the canon in every set, "
             "coat in d, given in e; the canon's slot words and the refrain's question, while and then words are "
             "the most misheard the rules leave free, then the least sung so far. **Tag:** la, loo and oo in "
             "turn.",
@@ -938,9 +943,9 @@ def report(genome, analysis: dict, data: dict) -> str:
                                  for combo in _combos(v.entry)]):
                 where[w].append(v.id)
     out += ["## Left out", "",
-            f"{len(sets)} sets can't hold everything. These {len(missing)} words, each misheard at least half "
-            "the times it was sung but less surely, or one of a slot's choices, aren't in any set (the verse "
-            "that sings each is in brackets): " +
+            f"{A._number(len(sets)).capitalize()} sets can't hold everything. These {len(missing)} words, each "
+            "misheard at least half the times it was sung but less surely, or one of a slot's choices, aren't in "
+            "any set (the verse that sings each is in brackets): " +
             ", ".join(f"{spell.get(w, w)} ({'/'.join(where[w][:2])})" for w in sorted(missing)) + ".", "",
             "A seventh set, if one is wanted, would start from the verses that sing most of them: " +
             ", ".join(f"{v} ({n})" for v, n in Counter(v for w in missing for v in where[w][:1]).most_common(6)) +

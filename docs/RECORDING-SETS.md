@@ -94,7 +94,7 @@ The best said: oy 0%, sh 1%, y 3%, o (hot) 4%, th (thin) 4%. Of the 25 words the
 
 ## Left out
 
-6 sets can't hold everything. These 27 words, each misheard at least half the times it was sung but less surely, or one of a slot's choices, aren't in any set (the verse that sings each is in brackets): buries (wakes), child's (carve), cook (ship), cope (soap), door (deaf), eight (wall), firm's (soap), hadn't (mouth), harbor (boat), jeer (terrace), meet (boat), Monday (wax/nurse), mothers (tongue/terrace), next (deaf), nun (mind/ink), others (mine), painted (wall), peddler (mouth), pit's (mine), postman (milk), sprayed (wall), squall (boat), starling (bird), tinker (mouth), twenty (tongue), violets (mouth), wakes (wakes).
+Six sets can't hold everything. These 27 words, each misheard at least half the times it was sung but less surely, or one of a slot's choices, aren't in any set (the verse that sings each is in brackets): buries (wakes), child's (carve), cook (ship), cope (soap), door (deaf), eight (wall), firm's (soap), hadn't (mouth), harbor (boat), jeer (terrace), meet (boat), Monday (wax/nurse), mothers (tongue/terrace), next (deaf), nun (mind/ink), others (mine), painted (wall), peddler (mouth), pit's (mine), postman (milk), sprayed (wall), squall (boat), starling (bird), tinker (mouth), twenty (tongue), violets (mouth), wakes (wakes).
 
 A seventh set, if one is wanted, would start from the verses that sing most of them: mouth (4), boat (3), wall (3), tongue (2), mine (2), wakes (2).
 
