@@ -58,7 +58,7 @@ def test_breaths_between_lines_are_quiet_bright_noise_and_move_nothing_else():
     score = realize(g, replace(choose_params(g), form=("verse",)))
     notes = sorted(score.part("voice"), key=lambda n: n.start)
     sr, voice = 24000, VoiceParams()
-    segs = schedule(notes, voice, g.lexicon)
+    segs = schedule(notes, voice, g.lexicon, seed=2)  # as sing() schedules it with seed 2
     breaths = [s for s in segs if s.role == "breath"]
     assert len(breaths) >= 3
     for s in breaths:  # each in the quiet between the voice letting go and the next line's first sound

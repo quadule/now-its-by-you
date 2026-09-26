@@ -76,7 +76,7 @@ class VoiceParams:
     climb: float = 0.5  # dB louder per semitone above the line's middle
     taper: float = -4.0  # dB a held vowel fades from a fifth of the way through to its end, as natural singers' do
     vibrato_from: float = 0.7  # seconds of note on which about four in ten notes get vibrato (more at a line's end; never all)
-    breathe: float = 0.18  # seconds between lines needed for an audible breath
+    breathe: float = 0.12  # seconds between lines needed for an audible breath
     inhale: float = -36.0  # dB of that breath's loudest moment against the sung vowels, as the natural singers breathe
     accent: float = 8.0  # cents a strongly leaned-on note is lifted
     tremolo: float = 0.4  # dB the loudness swings with a vibrato of vibrato_depth
@@ -130,10 +130,12 @@ def _vowel_formants(v: str) -> tuple[float, float, float]:
 
 
 def schedule(notes: list[Note], voice: VoiceParams, lexicon: dict[str, str] | None = None,
-             durations: dict[str, float] | None = None) -> list[Segment]:
+             durations: dict[str, float] | None = None, seed: int | None = None) -> list[Segment]:
     """Place every phoneme of every sung note in time. durations: how long each consonant lasts, by
     phone and place in the syllable ("N coda", "S onset cluster"), instead of the formant singer's
-    rules (the learned throat sings with the lengths its teacher sang)."""
+    rules (the learned throat sings with the lengths its teacher sang). seed: sing each consonant a
+    little longer or shorter than its rule (15% at voice.spread 1), as no singer times two alike;
+    without one, every consonant takes exactly its rule's length."""
     # Pronounce word by word, then hand syllables back to their notes.
     sylls: list[ph.Syllable] = []
     i = 0
@@ -148,6 +150,10 @@ def schedule(notes: list[Note], voice: VoiceParams, lexicon: dict[str, str] | No
              for s in sylls]
     coda = [[_consonant_duration(c, len(s.coda) > 1, False, voice, durations) * voice.articulation for c in s.coda]
             for s in sylls]
+    if seed is not None and voice.spread > 0:
+        rng = np.random.default_rng([seed, 0xC0DA])
+        vary = lambda ds: [d * float(np.exp(0.15 * voice.spread * rng.standard_normal())) for d in ds]  # noqa: E731
+        onset, coda = [vary(ds) for ds in onset], [vary(ds) for ds in coda]
     for k in range(len(sylls) - 1):  # a coda running into the next onset is sung as one cluster
         if coda[k] and onset[k + 1] and not notes[k].line_end and voice.across != 1.0:
             coda[k] = [d * voice.across for d in coda[k]]
@@ -387,8 +393,9 @@ def _lowpassed_noise(rng: np.random.Generator, n: int, cutoff: float, rate: floa
 
 
 def line_release(dur: float) -> float:
-    """How long before a line's last note ends the singer lets go of it, to breathe."""
-    return min(0.3, 0.35 * dur)
+    """How long before a line's last note ends the singer lets go of it, to breathe: natural singers hold
+    about 85% of it."""
+    return min(0.2, 0.25 * dur)
 
 
 # A breath between phrases as natural singers breathe (SoulX's house singers, measured by
@@ -710,7 +717,7 @@ def sing(notes: list[Note], sr: int, voice: VoiceParams, seed: int = 0, lexicon:
         return throat.sing(notes, sr, voice, seed, lexicon, mix=voice.timbre)
     notes = sorted(notes, key=lambda n: n.start)
     rng = np.random.default_rng(seed)
-    segs = schedule(notes, voice, lexicon)
+    segs = schedule(notes, voice, lexicon, seed=seed)
     duration = max(s.t1 for s in segs) + 0.5
     n_blocks = int(np.ceil(duration * sr / BLOCK))
     n = n_blocks * BLOCK

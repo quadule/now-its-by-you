@@ -435,7 +435,7 @@ def sing(notes, sr: int, voice, seed: int = 0, lexicon: dict | None = None, mix:
     net = load(model)
     notes = sorted(notes, key=lambda n: n.start)
     rng = np.random.default_rng(seed)
-    segs = schedule(notes, voice, lexicon, durations)
+    segs = schedule(notes, voice, lexicon, durations, seed=seed)
     stressed = stresses(notes, lexicon)
     rows, k = [], -1
     for s in segs:  # each note sings its onsets, one vowel, its codas; breaths are added after (voice.breaths)
