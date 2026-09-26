@@ -38,6 +38,7 @@ from dataclasses import dataclass, replace
 import numpy as np
 from typing import Callable
 
+from . import evolve
 from .band import INSTRUMENTS, Band
 from .drift import DIMENSIONS, Drift, series
 from .genome import Genome
@@ -389,6 +390,7 @@ class Context:
     parent: object  # the parent's Params
     c: Character
     drift: Drift | None
+    log: list | None = None  # where to note what changed from the parent in the tune and the words, and why
     style: str | None = None  # a style asked for by name (songbird render --style), else the ring decides
     arrange: dict | None = None  # the arrangement's options asked for (Style fields), else the style decides
 
@@ -846,9 +848,9 @@ def choose_vocabulary(out: dict, ctx: Context) -> None:
 
 
 def leanings(params):
-    """The leanings chosen with params, as songbird.arrange takes them; None for
-    parameters that chose none (the seed's), which arrange reads as neutral."""
-    lean = params.leanings
+    """The leanings chosen with params (or the leanings dict itself), as songbird.arrange
+    takes them; None for parameters that chose none (the seed's), which arrange reads as neutral."""
+    lean = params if isinstance(params, dict) else params.leanings
     if not lean:
         return None
     from .arrange import Leanings
@@ -857,6 +859,26 @@ def leanings(params):
     return Leanings(mood_weights=lean.get("mood_weights", {}), era_bias=lean.get("era_bias", 0.0),
                     rarity_appetite=lean.get("rarity_appetite", 0.0),
                     vocabulary=frozenset(w for w, weight in vocabulary.items() if weight >= VOCABULARY_AT))
+
+
+LEANING_KNOBS = tuple(k for k in KNOBS if k.path.startswith("leanings."))
+
+
+def own_leanings(ctx: Context, t: float | None = None, mode: str | None = None):
+    """The lyric leanings this machine would choose from its parent's at a moment (a clock's stretch's start,
+    so a choice made with them holds through the stretch), or with no moment, from its character alone: its
+    taste without the season's drift. As songbird.arrange takes them; None if neutral."""
+    from .drift import drift as drift_at
+
+    hash_ = ctx.drift.hash if ctx.drift is not None else ""
+    moment = drift_at(t, hash_) if t is not None and hash_ else None
+    sub = Context(ctx.genome, ctx.song, ctx.parent, ctx.c, moment)
+    tmp = {"leanings": dict(getattr(ctx.parent, "leanings", None) or {}), "mode": mode}
+    for knob in LEANING_KNOBS:
+        knob.apply(tmp, sub)
+    choose_mood(tmp, sub)
+    choose_vocabulary(tmp, sub)
+    return leanings(tmp["leanings"])
 
 
 def choose_inventory(out: dict, ctx: Context) -> None:
@@ -904,26 +926,32 @@ def choose_room(out: dict, ctx: Context) -> None:
 
 
 def choose_style(out: dict, ctx: Context) -> None:
-    """The rendition's style and what it brings (songbird/style.py): last, once the form, the choir and
-    every number are chosen, since a style leans on them."""
+    """The rendition's style and what it brings (songbird/style.py): once the form, the choir and every
+    number are chosen, since a style leans on them."""
     from .style import choose_style as choose
 
     choose(out, ctx, ctx.style, ctx.arrange)
 
 
+# The words and the tune last: they read the form and the leanings chosen above (songbird.evolve).
 DECISIONS = (choose_mode, choose_form, choose_accomp, choose_pattern, choose_lead, choose_choir, choose_mood,
-             choose_vocabulary, choose_inventory, choose_room, choose_timbre, choose_style)
+             choose_vocabulary, choose_inventory, choose_room, choose_timbre, choose_style, evolve.choose_words,
+             evolve.choose_variants)
 
 
 # ---------------------------------------------------------------- putting it together
 
 
 def choose(genome: Genome, parent=None, voice: Voice | None = None, drift: Drift | None = None,
-           seed: int | None = None, style: str | None = None, arrange: dict | None = None):
+           seed: int | None = None, log: list | None = None, form=None, style: str | None = None,
+           arrange: dict | None = None):
     """The child's parameters; see realize.choose_params."""
     from .realize import Params
 
     song = Params.from_dict(genome.seed_params)
+    # a generation on from its parent, made here and now (a child on this machine changes only what a clock has
+    # turned on since); sung from the genome with no parent rendition it is, as its record counts, generation 0
+    generation = int(getattr(parent, "generation", 0)) + 1 if parent is not None else 0
     parent = parent if parent is not None else song
     if voice is None and drift is None:
         chosen = parent if seed is None else replace(parent, seed=seed)
@@ -931,17 +959,21 @@ def choose(genome: Genome, parent=None, voice: Voice | None = None, drift: Drift
             return chosen
         # a style asked for with no machine: the parent played in it, nothing else chosen
         out = chosen.to_dict()
-        choose_style(out, Context(genome, song, parent, Character(), None, style or (parent.style.name or "ballad"),
+        choose_style(out, Context(genome, song, parent, Character(), None, log, style or (parent.style.name or "ballad"),
                                   arrange))
         return Params.from_dict(out)
-    ctx = Context(genome, song, parent, character(voice), drift, style, arrange)
+    ctx = Context(genome, song, parent, character(voice), drift, log, style, arrange)
     out = parent.to_dict()
     for key in ("singer", "mix", "leanings"):
         out[key] = dict(out.get(key) or {})
+    out["generation"] = generation
+    out["made"] = {"by": drift.hash[:12], "at": round(drift.t, 6)} if drift is not None and drift.hash else {}
     for knob in KNOBS:
         knob.apply(out, ctx)
     for decide in DECISIONS:
         decide(out, ctx)
+        if decide is choose_form and form is not None:  # a form set by hand stands in for the season's
+            out["form"] = list(form)
     out["seed"] = Chance(voice, drift, parent, seed).seed
     return Params.from_dict(out)
 

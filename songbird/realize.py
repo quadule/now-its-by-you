@@ -14,6 +14,7 @@ from typing import TYPE_CHECKING
 import numpy as np
 
 from . import band as band_mod
+from . import variants as variants_mod
 from .band import Band
 from .genome import Genome, Meter, Phrase, sung_words, turn
 from .phrasing import Gesture, Phrasing, gesture
@@ -47,6 +48,13 @@ class Params:
     leanings: dict = field(default_factory=dict)  # for songbird.arrange (variation.leanings): its Leanings' fields
     lay: float = 0.0  # beats the singers sit ahead of the beat, behind if negative (applied by variation.lay)
     inventory: str = ""  # phoneme inventory for the singer's vowels, "" the seed's (not yet read by the singer)
+    # How this lineage has come to sing the song (docs/EVOLUTION.md). Inherited, and changed a little at a time
+    # by songbird.evolve; empty for the seed, which sings its tune as written and its own words. Left out of
+    # to_dict() while empty, so a record from before them reads (and seeds its children) as it did.
+    variants: tuple = ()  # songbird.variants.Variant: this lineage's departures from the written tune
+    words: dict = field(default_factory=dict)  # the words this lineage holds (arrange.hold): {} the seed's own
+    generation: int = 0  # renditions between this one and the seed: 0 the seed, 1 its child...
+    made: dict = field(default_factory=dict)  # by (a machine's hash, its first 12 digits) and at (days): whose clocks it turned
     style: Style = field(default_factory=Style)  # the tradition it's played in and its arrangement (songbird.style)
 
     @classmethod
@@ -63,6 +71,9 @@ class Params:
             values["band"] = band = {**(band or {}), "swing": min(1.0, float(data["swing"]) / 0.333)}
         if "band" in values:
             values["band"] = band if isinstance(band, Band) else Band.from_dict(band)
+        values["variants"] = variants_mod.parse(values.get("variants"))
+        values["words"] = dict(values.get("words") or {})
+        values["made"] = dict(values.get("made") or {})
         if "style" in values and not isinstance(values["style"], Style):  # absent in old records: the seed's
             values["style"] = Style.from_dict(values["style"])
         return cls(**values)
@@ -70,6 +81,10 @@ class Params:
     def to_dict(self) -> dict:
         data = asdict(self)
         data["form"] = list(self.form)
+        data["variants"] = [v.to_dict() for v in self.variants]
+        for name, empty in (("variants", []), ("words", {}), ("generation", 0), ("made", {})):
+            if data[name] == empty:
+                del data[name]
         # The seed's own style and band leave no trace, so a record (and the rendition seed a child draws
         # from its parent's record) is as it was before styles existed.
         if self.style.seed:
@@ -82,8 +97,8 @@ class Params:
 
 
 def choose_params(genome: Genome, parent: Params | None = None, voice: Voice | None = None,
-                  drift: Drift | None = None, seed: int | None = None, style: str | None = None,
-                  arrange: dict | None = None) -> Params:
+                  drift: Drift | None = None, seed: int | None = None, log: list | None = None,
+                  form: tuple | None = None, style: str | None = None, arrange: dict | None = None) -> Params:
     """Inherit from the parent, pull toward the voice, apply drift.
 
     With no voice and no drift, the parent's parameters (the seed's, from the
@@ -91,14 +106,19 @@ def choose_params(genome: Genome, parent: Params | None = None, voice: Voice | N
     parameter pulls from the parent's toward the machine's own value as the
     drift moves it today (variation.KNOBS and DECISIONS), and the rendition's
     seed comes from (voice, instant, parent), or from `seed` if given: the same
-    machine, instant and parent always give the same child.
+    machine, instant and parent always give the same child. log: a list to
+    which what changed from the parent in the tune and the words is added,
+    each with why (songbird.evolve), for the render's record. form: a form set
+    by hand (--form), in place of the one the drift would choose, and the words
+    fitted to it.
     """
     if voice is None and drift is None and style is None and not arrange:
         chosen = parent if parent is not None else Params.from_dict(genome.seed_params)
+        chosen = chosen if form is None else replace(chosen, form=tuple(form))
         return chosen if seed is None else replace(chosen, seed=seed)
     from .variation import choose  # the table reads the singer's fields, so it brings the synth with it
 
-    return choose(genome, parent, voice, drift, seed, style, arrange)
+    return choose(genome, parent, voice, drift, seed, log=log, form=form, style=style, arrange=arrange)
 
 
 def sung_as(note: Note, g: Gesture | None, beat: float) -> Note:
@@ -252,18 +272,23 @@ def realize(genome: Genome, params: Params, verses=None, phrasing: Phrasing | No
     for section_name, phrase, start, line in placed:
         sung = phrase.sung
         words = sung_words(line) if line else [(None, None, 1)] * len(sung)
+        # the lineage's variants: a note moved to another degree, a weak note's onset moved, an ornament
+        played = variants_mod.realized(phrase, params.variants) if params.variants else None
         for k, (note, (syllable, word, word_len)) in enumerate(zip(sung, words)):
-            u = start + lead + note.onset
+            v = played[k] if played else None
+            u = start + lead + (v.onset if v else note.onset)
             stressed = note.onset % meter.foot == 0
             # the chord under this note, for any voices harmonizing it (a pickup takes the first bar's)
             bar = min(max(note.onset // meter.bar, 0), phrase.bars - 1)
             in_bar = phrase.chords[bar]
             chord = in_bar[min(max((note.onset - bar * meter.bar) * len(in_bar) // meter.bar, 0), len(in_bar) - 1)]
+            degree = v.degree if v else note.degree
             melody.append(
                 dict(
                     u=u,
-                    u_end=u + note.dur,
-                    pitch=params.tonic + degree_semitones(note.degree, params.mode, note.alter),
+                    u_end=u + (v.dur if v else note.dur),
+                    pitch=params.tonic + degree_semitones(degree, params.mode, note.alter),
+                    ornament=variants_mod.semitones(v.ornament, degree, params.mode, note.alter) if v and v.ornament else (),
                     vel=(0.82 if stressed else 0.68) + rng.uniform(-0.04, 0.04),
                     syllable=syllable,
                     word=word,
@@ -301,20 +326,22 @@ def realize(genome: Genome, params: Params, verses=None, phrasing: Phrasing | No
                 line_end=m["line_end"],
                 section=m["section"],
                 phrase=m["phrase"],
+                ornament=m["ornament"],
             )
             sung_note = sung_as(unphrased, m["gesture"], beat)
             notes.append(sung_note)
-            if m["choir"]:  # the lineage joins, each voice on its own harmony line
+            if m["choir"]:  # the lineage joins, each voice on its own harmony line, plain as harmony is sung
                 for i in range(params.choir):
                     pitch = harmony(int(m["pitch"]), m["chord"], params.tonic, params.mode, i)
                     own = choir[i] if choir and i < len(choir) else None
                     if own:  # sung that voice's way, from its own phrasing
                         g = gesture(own, m["phrase"], m["index"])
-                        base = replace(unphrased, part=f"choir{i + 1}", pitch=float(pitch), vel=0.9 * unphrased.vel)
+                        base = replace(unphrased, part=f"choir{i + 1}", pitch=float(pitch), vel=0.9 * unphrased.vel,
+                                       ornament=())
                         notes.append(sung_as(base, g, beat))
                     else:  # together with the lead in time, but each with its own way with pitch
                         notes.append(replace(sung_note, part=f"choir{i + 1}", pitch=float(pitch),
-                                             vel=0.9 * sung_note.vel, gesture=None))
+                                             vel=0.9 * sung_note.vel, gesture=None, ornament=()))
 
     accomp, band_settings = band_mod.arrange(genome, params, placed, lead, end, melody, seconds)
     ring = style_mod.ring(params)  # the last chord rings out (3 s; a cold ending stops short)
