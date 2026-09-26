@@ -1,0 +1,49 @@
+# Songbird's page for singers anywhere: docs/SING-ONLINE.md has every step.
+# Build the site first (uv run python tools/sing_site.py), then `npx wrangler deploy` from this folder.
+name = "songbird-sing"
+main = "src/worker.js"
+compatibility_date = "2026-09-25"
+
+# It starts on https://songbird-sing.<your-subdomain>.workers.dev; once quadule.com's DNS is on
+# Cloudflare, uncomment the route below and deploy again to serve it at songbird.quadule.com.
+workers_dev = true
+preview_urls = false
+# routes = [{ pattern = "songbird.quadule.com", custom_domain = true }]
+
+[assets]
+directory = "./public"
+binding = "ASSETS"
+run_worker_first = true      # every request passes the worker: the song and its guides only reach open invitations
+html_handling = "none"
+not_found_handling = "none"
+
+# Invitations. Create the namespace with `npx wrangler kv namespace create INVITES`
+# and paste the id it prints here.
+[[kv_namespaces]]
+binding = "INVITES"
+id = "PASTE-THE-KV-NAMESPACE-ID-HERE"
+
+# Takes, private: `npx wrangler r2 bucket create songbird-takes`. Never make this bucket public.
+[[r2_buckets]]
+binding = "TAKES"
+bucket_name = "songbird-takes"
+
+# At most 6 takes a minute on one invitation, and 240 requests a minute from one address.
+# The address is only a key for the count, held briefly at the edge and never stored.
+[[ratelimits]]
+name = "UPLOADS"
+namespace_id = "1701"
+simple = { limit = 6, period = 60 }
+
+[[ratelimits]]
+name = "REQUESTS"
+namespace_id = "1702"
+simple = { limit = 240, period = 60 }
+
+# No logs kept: requests carry invitation tokens and singers' names.
+[observability]
+enabled = false
+
+# The admin API's secret: `npx wrangler secret put ADMIN_TOKEN` (for `wrangler dev`, in .dev.vars).
+[secrets]
+required = ["ADMIN_TOKEN"]
