@@ -1,6 +1,6 @@
 """Each new instrument alone, playing a short phrase in D written for it, so it can be heard.
 
-    uv run python tools/instrument_solos.py [--out DIR] [--only NAME ...] [--plots]
+    uv run python tools/instrument_solos.py [--out DIR] [--only NAME ...] [--plots] [--sketches]
 
 Writes <out>/<instrument>.flac (default renders/production/instruments/) for
 every instrument of the new modules (piano, epiano, organ, mallets, analog,
@@ -13,7 +13,10 @@ arpeggios, a groove with a fill on the drum machines), at its SPEC level
 and place, with the maker's defaults, in the song's room (synth.mix, as
 tools/band_solos.py does), mastered to -18 LUFS so they can be compared, and
 a README.txt that says what each file is. With --plots, a spectrogram and
-level envelope of each beside it.
+level envelope of each beside it. With --sketches, a few genre sketches as
+well (sketch-*.flac): the same phrases stacked into a small band (a piano
+ballad, soul, synth-pop, a chiptune, a lullaby, lounge), to hear how the
+instruments sit together. (--only with no names renders only the sketches.)
 """
 
 from __future__ import annotations
@@ -62,10 +65,11 @@ def voicing(chord, centre: float, count: int = 3) -> list[int]:
 
 
 def tune(shift: int = 0, scale: float = 1.0, art: str = "", vel: float = 0.62, legato: float = 0.95) -> list[Note]:
+    """The tune's notes (their part is "tune", so a sketch can leave them out of an accompaniment)."""
     out = []
     for bar, beat, beats, step in TUNE:
         v = vel + (0.08 if beat == 0 else 0.0) - (0.05 if beats < 1 else 0.0)
-        out.append(Note("x", at(bar, beat), beats * BEAT * legato * scale, 62.0 + step + shift, v, art=art))
+        out.append(Note("tune", at(bar, beat), beats * BEAT * legato * scale, 62.0 + step + shift, v, art=art))
     return out
 
 
@@ -343,22 +347,73 @@ def solo(module, name: str) -> tuple[np.ndarray, str, tuple[Note, ...]]:
     return synth.mix({name: stem}, SR, 0), what, notes
 
 
+# Genre sketches: the same phrases stacked (they share the progression and the tempo), each part at
+# a gain against its SPEC level and with the band settings the style would choose.
+SKETCHES = {
+    "ballad": ("a piano ballad: the pedalled piano and its tune, a pad beneath, a sub bass",
+               dict(brightness=0.45), {"piano": 1.0, "synth-pad": 0.7, "sub-bass": 0.8}),
+    "soul": ("soul: the organ's held chords with the rotor speeding up, the tine piano comping, synth bass, "
+             "the 909-style kit", dict(brightness=0.55),
+             {"organ": 0.8, "epiano": 0.9, "synth-bass": 1.0, "drums-909": 1.0}),
+    "synthpop": ("synth-pop: arpeggios, a pad, pumping synth bass, the 808-style kit and the tune on the mono synth",
+                 dict(brightness=0.6), {"synth-arp": 0.8, "synth-pad": 0.7, "synth-bass": 1.0, "drums-808": 1.0,
+                                        "synth-solo": 0.9}),
+    "chiptune": ("a game console's tune: the pulse channel's tune and arpeggios, the triangle bass, the noise drums",
+                 dict(), {"chip": 1.0, "chip-bass": 1.0, "chip-drums": 1.0}),
+    "lullaby": ("a lullaby: the music box's tune, the celesta's chords, a felt piano's accompaniment",
+                dict(brightness=0.2, wear=0.1), {"music-box": 1.0, "celesta": (0.7, "comp"), "piano": (0.6, "comp")}),
+    "lounge": ("lounge: the vibraphone's tune, the tine piano's voicings, a sub bass and the 808-style kit played soft",
+               dict(brightness=0.4), {"vibraphone": 1.0, "epiano": 0.8, "sub-bass": 0.8, "drums-808": 0.6}),
+}
+
+
+def sketch(owners: dict, parts: dict, settings: dict) -> np.ndarray | None:
+    """The parts' phrases stacked, each a stem at its level times its gain, in the song's room.
+    A part given as (gain, "comp") plays its accompaniment without the tune."""
+    if not all(name in owners for name in parts):
+        return None
+    rendered, gains = {}, {}
+    for name, how in parts.items():
+        spec = owners[name].SPEC[name]
+        notes, _ = phrase_for(name, spec)
+        gain, variant = how if isinstance(how, tuple) else (how, "")
+        if variant == "comp":
+            notes = [n for n in notes if n.part != "tune"]
+        rendered[name], gains[name] = keep_in(notes, spec["register"]), gain
+    length = int(np.ceil((max(n.start + n.dur for ns in rendered.values() for n in ns) + 2.5) * SR))
+    stems = {}
+    for i, name in enumerate(parts):
+        gain = gains[name]
+        spec = owners[name].SPEC[name]
+        rng = np.random.default_rng([0, 17, i])
+        make = np.random.default_rng([0, 29, i])
+        y = owners[name].render(name, rendered[name], SR, length, rng, make, {**SETTINGS, **settings})
+        stem = instruments.place(y, *spec["place"]) * spec["level"] * gain
+        fade = min(length, int(0.3 * SR))
+        stem[length - fade:] *= np.linspace(1.0, 0.0, fade)[:, None]
+        stems[name] = stem
+    return synth.mix(stems, SR, 0)
+
+
 def main() -> None:
     ap = argparse.ArgumentParser()
     ap.add_argument("--out", default=str(Path(__file__).parent.parent / "renders" / "production" / "instruments"))
     ap.add_argument("--only", nargs="*", default=None)
     ap.add_argument("--plots", action="store_true")
+    ap.add_argument("--sketches", action="store_true", help="also render the genre sketches (sketch-*.flac)")
     args = ap.parse_args()
     out = Path(args.out)
     out.mkdir(parents=True, exist_ok=True)
     lines = []
+    owners = {}
     for mod_name in MODULES:
         try:
             module = importlib.import_module(f"songbird.synth.{mod_name}")
         except ModuleNotFoundError:
             continue
         for name, spec in module.SPEC.items():
-            if args.only and name not in args.only:
+            owners[name] = module
+            if args.only is not None and name not in args.only:
                 continue
             mix, what, notes = solo(module, name)
             pcm = master.to_pcm16(master.master(mix, SR, target=-18.0), seed=1)
@@ -370,7 +425,17 @@ def main() -> None:
                 from band_solos import plot
 
                 plot(pcm / 32768.0, path.with_suffix(".png"), name)
-    if not args.only:
+    if args.sketches:
+        for genre, (what, settings, parts) in SKETCHES.items():
+            mix = sketch(owners, parts, settings)
+            if mix is None:
+                continue
+            pcm = master.to_pcm16(master.master(mix, SR, target=-16.0), seed=1)
+            path = out / f"sketch-{genre}.flac"
+            master.write_flac(path, pcm, SR)
+            print(f"{path}  {len(pcm) / SR:.1f}s", flush=True)
+            lines.append((path.name, f"{what} (mastered to -16 LUFS)."))
+    if args.only is None:
         width = max(len(f) for f, _ in lines) + 2
         readme = ["The new instruments, each alone (see docs/INSTRUMENTS.md for how each is built and measured).",
                   "Every file plays a short phrase in D (I, vi, IV, V and home, 96 bpm) written for the instrument,",
