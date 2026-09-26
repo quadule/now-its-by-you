@@ -35,7 +35,7 @@ them. If you pay singers, say so here. The dates below must match CLOSES_AT and 
   anyone to use (CC0, public domain), and your name if you'd like to be credited.
 - **Your email** is used only to send you your page and your version, and is deleted by the end of
   30 September, unless you ask to hear when the song is released to the public: then it's kept for that one message.
-- **Questions**, or anything else: reply to the email with your link, or ask the person who sent you
-  here.
+- **Who's asking:** Songbird is by Milo Winningham. Questions, or anything else: write to
+  milo@quadule.com.
 
 **By ticking the box below, I agree to this, and I'm 18 or over.**
