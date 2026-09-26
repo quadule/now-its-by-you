@@ -344,3 +344,5 @@ def test_every_articulation_and_the_contract():
         assert np.max(np.abs(a[: int(0.095 * SR)])) < 1e-12 * np.max(np.abs(a))  # nothing before the first
     with pytest.raises(ValueError):
         render("xylophone", [], 0.1)
+    for name in mallets.SPEC:  # nothing to play, or nowhere to play it
+        assert not np.any(render(name, [], 0.5)) and render(name, [Note("x", 0.1, 0.5, 72.0, 0.6)], 0.0).shape == (0, 2)

@@ -887,6 +887,8 @@ def render(name: str, notes, sr: int, length: int, rng: np.random.Generator, mak
     """A mallet part: stereo, dry, `length` samples, before placement and level."""
     if name not in SPEC:
         raise ValueError(f"no such instrument: {name}")
+    if length <= 0:
+        return np.zeros((0, 2))
     if name == "music-box":
         return _music_box(notes, sr, length, rng, make, settings)
     return _bars(name, notes, sr, length, rng, make, settings)
