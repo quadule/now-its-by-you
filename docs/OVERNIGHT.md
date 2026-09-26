@@ -83,7 +83,20 @@ Our vocoder alone costs about 0.25 of that; the model and the delivery cost the 
 
 ### Evolution, the studio, the sing page
 
-(in progress: the drift of melody and words, the studio, the shareable sing-along page)
+(in progress: the drift of melody and words, the studio)
+
+**The sing page (landed).**
+- *The melody guide:* the karaoke has a melody-only guide, now its default. The tune is on the
+  band's whistle, doubled softly an octave up, over a quiet pulse that counts each line in.
+  Listen: renders/production/sing/h-melody-guide.mp3.
+- *Singing from anywhere:* web/sing/ is a Cloudflare Worker and page for songbird.quadule.com.
+  - one-time invitations, which expire after 7 days and hold up to 30 takes;
+  - takes stream into a private R2 bucket, checked by the page's own SHA-256;
+  - tools/invite.py mints invitations, lists them, fetches takes into recordings/ and revokes them.
+- *Not deployed:* docs/SING-ONLINE.md has the steps (wrangler login, a bucket, a KV namespace, a
+  secret, and quadule.com's DNS on Cloudflare for the custom domain).
+- *Not yet tried on a real phone:* send one real three-minute take from a phone to the deployed
+  site before inviting anyone.
 
 ## To reconsider
 
@@ -111,3 +124,11 @@ Each item names the choice, why it was made, and how to undo it.
 5. **The tags use a working title.** Rendered FLACs now carry the genome's title (e.g. "Now It's
    by You") and "Songbird" as the artist until you choose (docs/STATEMENT.md proposes "Nobody
    Knows" and "Nobody").
+6. **The sing page's release and retention.**
+   - *The release text:* web/sing/consent.md. It isn't legal advice and says nothing about
+     payment.
+   - *Withdrawal:* who singers contact to withdraw is "the person who sent me this link".
+   - *Retention:* unfetched takes wait 30 days.
+   - *Invite notes:* KV keeps them 90 days after expiry, so perhaps use initials.
+7. **The melody guide's levels.** By ear: the whistle's statements in the intro and turns, the
+   octave doubling, and the pulse (6 dB down under the singing).
