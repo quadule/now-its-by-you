@@ -103,6 +103,11 @@ GUITAR_OUT = 2.7  # the stem's scale: the amp's output as the band's other stems
 BASS_OUT = 3.0  # and the DI's
 TUNING = (40.0, 45.0, 50.0, 55.0, 59.0, 64.0)  # E2 A2 D3 G3 B3 E4
 BASS_TUNING = (28.0, 33.0, 38.0, 43.0)  # E1 A1 D2 G2
+# each open string's inharmonicity B (pi^3 E d^4 / 64 T L^2 on its core, a third more for a winding): the
+# wound strings' partials and the plain G's run sharp (the low E's 8th by 7 cents), the bass's far more
+# (its E's 10th by a third of a semitone: the growl of a long, stiff roundwound string)
+STIFFNESS = (1.2e-4, 6e-5, 3e-5, 1e-4, 4e-5, 1.3e-5)
+BASS_STIFFNESS = (4e-4, 2e-4, 1e-4, 4e-5)
 
 
 # --- the guitar and the amp, as a machine's maker built them ------------------------------------------
@@ -212,7 +217,7 @@ def rig(name: str, s: dict, sr: int) -> tuple[Strings, amp.Coil, dict, amp.Amp]:
         gains=tuple(10.0 ** (p / 20.0) for p in d["poles"]),
         damping=(7e-6 + 5e-6 * wear) * (1.4 - 0.8 * bright),  # new strings ring bright, old ones go dull
         t60=d["t60"] * (1.0 - 0.3 * wear), along=1.3, heard=0.4, driven=0.5, pick=d["pick"], hardness=0.85,
-        click=0.25, touch=0.0, frets=24, glide=6.0, glide_time=0.08)
+        click=0.25, touch=0.0, frets=24, glide=6.0, glide_time=0.08, stiffness=STIFFNESS, stiff_sections=2)
     treble, middle, bass = d["knobs"]
     treble = float(np.clip(0.45 + 0.35 * bright + treble + (0.05 if setting == "crunch" else 0.0), 0, 1))
     bass = float(np.clip(0.55 - 0.15 * bright + bass, 0, 1))
@@ -378,7 +383,8 @@ def bass(notes, sr: int, length: int, rng: np.random.Generator, make: np.random.
         t60=t60 * (1.0 - 0.3 * wear), along=1.2, heard=0.5, driven=0.6, pick=finger, hardness=0.35, click=0.2,
         touch=0.3, frets=20,
         kinds=(("pick", (0.75, 2.6, 1.0, 1.0)), ("finger", (1.0, 1.0, 1.0, 0.0))),
-        glide=20.0, glide_time=0.12)  # a long string plucked wide: sharp by a sixth of a semitone, settling
+        glide=20.0, glide_time=0.12,  # a long string plucked wide: sharp by a sixth of a semitone, settling
+        stiffness=BASS_STIFFNESS, stiff_sections=4)
     placed = fretboard.fret(notes, strings)
     segs = fretboard.segments(placed, strings, sr, rng, ornament=float(s.get("ornament", 0.5)))
     picked = {int(round(n.start * sr)) for n, _, _ in placed if n.art == "pick"}

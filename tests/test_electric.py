@@ -339,6 +339,24 @@ def test_the_bass_attack_is_bright_and_darkens_fast():
     assert fall_time(y) > 1.0
 
 
+def test_stiff_strings_stretch_their_partials():
+    """A steel string's stiffness puts its partials sharp of the harmonic series (f_k = k f0 sqrt(1 + B k^2)),
+    the more so the thicker its core and the shorter it is fretted; the fundamental stays in tune. The bass's
+    open E: its 8th partial some 25 cents sharp (Fable's target 18-26), its 10th 30-40; the guitar's low E's
+    8th 5-8, the plain G's 5-7, the high e's under a cent and a half."""
+
+    def stretch(y, pitch, k, f1_cents):
+        return cents_of(y, pitch + 12 * np.log2(k), 0.15, 0.9) - f1_cents
+
+    y = render("ebass", [note(28, dur=2.5, vel=0.7, part="ebass")], 3.0)
+    f1 = cents_of(y, 28, 0.4, 1.6)
+    assert 18.0 < stretch(y, 28, 8, f1) < 30.0 and 28.0 < stretch(y, 28, 10, f1) < 42.0
+    for pitch, string, lo, hi in ((40, 0, 4.0, 9.0), (55, 3, 4.0, 8.0), (64, 5, -0.5, 1.5)):
+        y = pickup(pitch, string, 0, 2.5)
+        f1 = cents_of(y, pitch, 0.4, 1.6)
+        assert lo < stretch(y, pitch, 8, f1) < hi
+
+
 def mean_cents(y, f, t0, t1):
     """The fundamental's mean instantaneous pitch over t0..t1, cents from f."""
     band = sosfiltfilt(butter(2, [f * 0.85, f * 1.15], btype="bandpass", fs=SR, output="sos"), y)

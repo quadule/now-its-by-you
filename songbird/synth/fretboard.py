@@ -22,7 +22,10 @@ one-zero of pluck.py and stringloop.py where that is enough, with a one-pole
 low-pass after it where it isn't (a bass string's zing is gone in a fifth of a
 second, which a one-zero at 41 Hz cannot do). A string plucked wide is tauter
 while it swings, so a hard pluck starts a few cents sharp (a bass's 10 to 20)
-and settles as it rings down (glide()).
+and settles as it rings down (glide()). A steel string is stiff, so its
+partials run sharp of the harmonic series, the more for a thick core or a
+short fretted length: first-order allpasses in the loop stretch them
+(dispersion(), after Rauhala and Välimäki's tunable dispersion filters).
 
 The pickup hears the string's velocity at its distance d from the bridge:
 what is running toward the bridge minus what is coming back from it, 2d/c
@@ -78,6 +81,8 @@ class Strings:
     kinds: tuple = ()  # (kind, (pick point factor, hardness factor, level, click)) overriding KINDS
     glide: float = 0.0  # cents a pluck at full velocity starts sharp by, its swing stretching the string
     glide_time: float = 0.1  # s: how fast that settles
+    stiffness: tuple[float, ...] = ()  # each open string's inharmonicity B (partial k at k f0 sqrt(1 + B k^2))
+    stiff_sections: int = 2  # allpasses in each loop to stretch its partials so
 
     def hz(self, string: int) -> float:
         cents = self.offsets[string] if self.offsets else 0.0
@@ -184,19 +189,51 @@ def loss_filter(f0: float, sr: int, damping: float, ref: float = 2000.0) -> tupl
     return 0.5, float(min(p, 0.95))
 
 
-def _filter_delay(omega: np.ndarray, loss: float, pole: float) -> np.ndarray:
-    """Phase delay (samples) of the loop filter at omega."""
+def _filter_delay(omega: np.ndarray, loss: float, pole: float, ad: float = 0.0, sections: int = 0) -> np.ndarray:
+    """Phase delay (samples) of the loop filter at omega: the one-zero, the one-pole and the stiffness's
+    allpasses."""
     zero = np.arctan2(loss * np.sin(omega), (1.0 - loss) + loss * np.cos(omega)) / omega
     one = np.arctan2(pole * np.sin(omega), 1.0 - pole * np.cos(omega)) / omega
+    if sections:
+        one = one + sections * _allpass_delay(omega, ad)
     return zero + one
 
 
-def read_delay(period: np.ndarray, loss: float, pole: float) -> np.ndarray:
-    """The read delay that makes the whole loop (read, one-zero and one-pole) one `period` long at the
-    fundamental (stringloop.read_delay, with the one-pole's phase too)."""
+def _allpass_delay(omega, a):
+    """Phase delay (samples) of the first-order allpass (a + 1/z) / (1 + a/z)."""
+    return 2.0 * np.arctan((1.0 - a) / (1.0 + a) * np.tan(omega / 2.0)) / omega
+
+
+@lru_cache(maxsize=4096)
+def dispersion(f0: float, b: float, sections: int, sr: int) -> float:
+    """The coefficient of `sections` first-order allpasses in the loop that stretch a string's partials as
+    its stiffness does (f_k = k f0 sqrt(1 + b k^2)): matched at the partial nearest 900 Hz (at most the
+    10th), where a bass's growl and a wound string's shimmer are; those below come out within a fifth of
+    the stiff string's stretch, those above short of it. 0 where there is nothing to stretch."""
+    if b <= 0.0 or sections <= 0:
+        return 0.0
+    k = max(2, int(round(min(10.0, 900.0 / f0))))
+    w1 = 2.0 * np.pi * f0 / sr
+    wk = 2.0 * np.pi * k * f0 * np.sqrt(1.0 + b * k * k) / sr
+    need = sr / f0 - 2.0 * np.pi * k / wk  # the loop's delay must be this much shorter at partial k
+    lo, hi = -0.999, 0.0
+    if sections * (_allpass_delay(w1, lo) - _allpass_delay(wk, lo)) < need:
+        return lo
+    for _ in range(60):  # bisection: the drop in delay grows as a goes toward -1
+        mid = 0.5 * (lo + hi)
+        if sections * (_allpass_delay(w1, mid) - _allpass_delay(wk, mid)) > need:
+            lo = mid
+        else:
+            hi = mid
+    return float(0.5 * (lo + hi))
+
+
+def read_delay(period: np.ndarray, loss: float, pole: float, ad: float = 0.0, sections: int = 0) -> np.ndarray:
+    """The read delay that makes the whole loop (read, one-zero, one-pole and any stiffness allpasses) one
+    `period` long at the fundamental (stringloop.read_delay, with the others' phase too)."""
     period = np.asarray(period, dtype=np.float64)
     omega = 2.0 * np.pi / period
-    filt = _filter_delay(omega, loss, pole)
+    filt = _filter_delay(omega, loss, pole, ad, sections)
     delay = period - filt
     for _ in range(3):
         delay = delay + (period - filt - stringloop._interp_phase_delay(delay, omega))
@@ -211,14 +248,19 @@ def filter_gain(omega: np.ndarray, loss: float, pole: float) -> np.ndarray:
 
 
 @njit(cache=True)
-def _two_planes(xa, xb, da, db, ga, gb, loss, pole, size, heard):
-    """Two string planes at once: y[t] = x[t] + g[t] * lowpass(onezero(read(y, t - d[t]))), the read cubic
-    Lagrange (as stringloop._run's); returns the first plane plus `heard` times the second."""
+def _two_planes(xa, xb, da, db, ga, gb, loss, pole, size, heard, ad, sections):
+    """Two string planes at once: y[t] = x[t] + g[t] * allpasses(lowpass(onezero(read(y, t - d[t])))), the
+    read cubic Lagrange (as stringloop._run's), `sections` first-order allpasses of coefficient ad for the
+    string's stiffness; returns the first plane plus `heard` times the second."""
     n = xa.shape[0]
     mask = size - 1
     ba = np.zeros(size)
     bb = np.zeros(size)
     out = np.zeros(n)
+    xa1 = np.zeros(max(sections, 1))
+    ya1 = np.zeros(max(sections, 1))
+    xb1 = np.zeros(max(sections, 1))
+    yb1 = np.zeros(max(sections, 1))
     pa = 0.0
     pb = 0.0
     la = 0.0
@@ -236,7 +278,13 @@ def _two_planes(xa, xb, da, db, ga, gb, loss, pole, size, heard):
         v = (1.0 - loss) * r + loss * pa
         pa = r
         la = (1.0 - pole) * v + pole * la
-        ya = xa[t] + ga[t] * la
+        w = la
+        for s in range(sections):
+            o = ad * w + xa1[s] - ad * ya1[s]
+            xa1[s] = w
+            ya1[s] = o
+            w = o
+        ya = xa[t] + ga[t] * w
         ba[t & mask] = ya
         # plane b
         pos = t - db[t]
@@ -250,24 +298,30 @@ def _two_planes(xa, xb, da, db, ga, gb, loss, pole, size, heard):
         v = (1.0 - loss) * r + loss * pb
         pb = r
         lb = (1.0 - pole) * v + pole * lb
-        yb = xb[t] + gb[t] * lb
+        w = lb
+        for s in range(sections):
+            o = ad * w + xb1[s] - ad * yb1[s]
+            xb1[s] = w
+            yb1[s] = o
+            w = o
+        yb = xb[t] + gb[t] * w
         bb[t & mask] = yb
         out[t] = ya + heard * yb
     return out
 
 
 @lru_cache(maxsize=8192)
-def _steady_delay(period: float, loss: float, pole: float) -> float:
-    return float(read_delay(np.array([period]), loss, pole)[0])
+def _steady_delay(period: float, loss: float, pole: float, ad: float = 0.0, sections: int = 0) -> float:
+    return float(read_delay(np.array([period]), loss, pole, ad, sections)[0])
 
 
-def _delay_track(freq, n: int, sr: int, loss: float, pole: float) -> np.ndarray:
+def _delay_track(freq, n: int, sr: int, loss: float, pole: float, ad: float = 0.0, sections: int = 0) -> np.ndarray:
     """The read delay for each sample of a pitch track (or a steady pitch)."""
     if np.ndim(freq) == 0:
-        return np.full(n, _steady_delay(round(sr / float(freq), 9), round(loss, 12), round(pole, 12)))
+        return np.full(n, _steady_delay(round(sr / float(freq), 9), round(loss, 12), round(pole, 12), ad, sections))
     period = sr / freq
     at = np.unique(np.append(np.arange(0, n, CONTROL), n - 1))
-    return np.interp(np.arange(n), at, read_delay(period[at], loss, pole))
+    return np.interp(np.arange(n), at, read_delay(period[at], loss, pole, ad, sections))
 
 
 @lru_cache(maxsize=64)
@@ -362,6 +416,10 @@ def sound(seg: Segment, strings: Strings, sr: int, rng: np.random.Generator, *, 
         cents = (length if length is not None else 0.0) + (tension if tension is not None else 0.0)
         freq = base_hz * 2.0 ** (np.broadcast_to(cents, (n,)) / 1200.0)
     loss, pole = loss_filter(base_hz, sr, strings.damping)
+    # a stiff string's partials run sharp, the more so the shorter it is fretted (B grows as 1/L^2)
+    b = strings.stiffness[seg.string] * (base_hz / open_hz) ** 2 if strings.stiffness else 0.0
+    ad = dispersion(round(base_hz, 6), round(b, 9), strings.stiff_sections, sr)
+    sections = strings.stiff_sections if ad != 0.0 else 0
     # the comb's delays: 2d/c, the same for any fret of this string; a bend (tension) shortens them
     delays = np.array([b * sr / open_hz for b, _ in strings.comb])
     weights = np.array([w for _, w in strings.comb])
@@ -412,13 +470,14 @@ def sound(seg: Segment, strings: Strings, sr: int, rng: np.random.Generator, *, 
         planes.append(g)
     # the planes a fraction of a cent either side: the loop's own delay moves by the period's change (the
     # filters' phase delays hardly change over a third of a cent)
-    delay = _delay_track(freq, n, sr, use_loss, use_pole)
+    delay = _delay_track(freq, n, sr, use_loss, use_pole, ad, sections)
     if rise is not None:  # a steady note's glide: only its loop's length follows (a few cents move nothing else)
         delay[: len(rise)] *= np.exp2(-rise / 1200.0)
     da = delay + period * (2.0 ** (split / 2400.0) - 1.0)
     db = delay + period * (2.0 ** (-split / 2400.0) - 1.0)
     size = 1 << int(np.ceil(np.log2(max(da.max(), db.max()) + 16)))
-    out = _two_planes(x * strings.driven, x, da, db, planes[0], planes[1], use_loss, use_pole, size, strings.heard)
+    out = _two_planes(x * strings.driven, x, da, db, planes[0], planes[1], use_loss, use_pole, size, strings.heard,
+                      ad, sections)
     if comb_sound:
         scale = np.ones(n) if tension is None else 2.0 ** (-tension / 1200.0)
         out = _combed(out, delays, weights, scale)
