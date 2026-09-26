@@ -7,6 +7,13 @@
       "runtimeArgs": ["run", "python", "tools/karaoke.py", "songs/h-now-its-by-you.json"],
       "port": 8765,
       "url": "http://127.0.0.1:8765"
+    },
+    {
+      "name": "studio",
+      "runtimeExecutable": "uv",
+      "runtimeArgs": ["run", "songbird", "studio", "--no-open"],
+      "port": 8766,
+      "url": "http://127.0.0.1:8766"
     }
   ]
 }

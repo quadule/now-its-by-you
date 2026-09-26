@@ -1,4 +1,5 @@
-"""Command line: `songbird render`, `harvest`, `year`, `pack` and `unpack` now, `songbird sing` once the pipeline is whole."""
+"""Command line: `songbird render`, `harvest`, `year`, `pack`, `unpack` and `studio` now, `songbird sing` once the
+pipeline is whole."""
 
 from __future__ import annotations
 
@@ -94,14 +95,24 @@ def _singer(params: Params, overrides: list[str]) -> VoiceParams:
     return replace(singer, **{k: type(getattr(defaults, k))(v) for k, v in (kv.split("=", 1) for kv in overrides)})
 
 
+def choir_of(parent: dict | None, singer: VoiceParams) -> tuple[list[dict], list[VoiceParams]]:
+    """The earlier versions' singers, the parent's first, who sing the lineage choir (as many as it has
+    voices): as a record keeps them, and as the synth sings them."""
+    lineage_singers = ([{"id": parent.get("id"), "singer": parent.get("singer")}, *(parent.get("lineage_singers") or [])]
+                       if parent and parent.get("singer") else [])[: variation.CHOIR_MAX]
+    return lineage_singers, synth.ancestors_from(lineage_singers, learned=singer.engine == "learned")
+
+
 def render_one(genome, params: Params, out: Path, *, voice=None, drift=None, lyrics=None, phrasing_json=None,
                choir_json=(), singer_overrides=(), stems: bool = False, mix_overrides=(), parent: dict | None = None,
-               packet_genome: str | Path | None = None, changes=None) -> dict:
+               packet_genome: str | Path | None = None, changes=None, chosen_by_you=None, progress=None) -> dict:
     """Render one rendition to out (FLAC), with its record (.json), score (.score.json) and, if its words were
     drawn or held, its lyric sheet (.txt) beside it. With packet_genome (the genome file sung), the FLAC carries
     its packet: the program, the genome, the record and the words (songbird/pack.py). parent: the parent's
     record; changes: what choosing these parameters changed from it (choose_params' log), for the record's
-    evolution (docs/EVOLUTION.md)."""
+    evolution (docs/EVOLUTION.md); chosen_by_you: which of its choices a person made, and what the program had
+    chosen (songbird.edits.marks), kept in the record; progress: told each part's name as the render starts
+    on it (synth.render), then "master"."""
     phrasing = phrasing_mod.from_json(phrasing_json) if phrasing_json else None
     choir = [phrasing_mod.from_json(d) for d in choir_json]
     score = variation.lay(realize(genome, params, phrasing=phrasing, choir=choir, lyrics=lyrics), params)
@@ -110,11 +121,11 @@ def render_one(genome, params: Params, out: Path, *, voice=None, drift=None, lyr
     mixing = MixParams.parse(list(mix_overrides), base=MixParams.from_dict(params.mix or {}))
 
     out.parent.mkdir(parents=True, exist_ok=True)
-    # the earlier versions' singers, the parent's first, sing the lineage choir (as many as it has voices)
-    lineage_singers = ([{"id": parent.get("id"), "singer": parent.get("singer")}, *(parent.get("lineage_singers") or [])]
-                       if parent and parent.get("singer") else [])[: variation.CHOIR_MAX]
-    ancestors = synth.ancestors_from(lineage_singers, learned=singer.engine == "learned")
-    mix = synth.render(score, seed=params.seed, voice=singer, mix_params=mixing, ancestors=ancestors)
+    lineage_singers, ancestors = choir_of(parent, singer)
+    mix = synth.render(score, seed=params.seed, voice=singer, mix_params=mixing, ancestors=ancestors,
+                       progress=progress)
+    if progress is not None:
+        progress("master")
     mastered = master.master(mix, synth.SR)
     pcm = master.to_pcm16(mastered, seed=params.seed)
     lineage = pack_mod.lineage(parent)
@@ -148,6 +159,8 @@ def render_one(genome, params: Params, out: Path, *, voice=None, drift=None, lyr
     story = evolution(genome, params, _parent(parent, genome) if parent else None, lyrics, changes)
     if story is not None:  # the tune's variants and what changed from the parent (docs/EVOLUTION.md)
         record["evolution"] = story
+    if chosen_by_you:  # a person's choices, marked as theirs (never who they are)
+        record["chosen_by_you"] = chosen_by_you
     if packet_genome is not None:  # one file: the record and the words travel inside it
         sung = lyrics.sheet(genome.title) if lyrics else pack_mod.words_as_sung(score.to_dict(), genome.title)
         pack_mod.pack(out, record, packet_genome, lyrics=sung)
@@ -183,8 +196,58 @@ def _arrangement(items: list[str]) -> dict | None:
     return out or None
 
 
+def parent_of(record: dict) -> dict | None:
+    """As much of a rendition's parent as its record keeps: its place in the lineage, and the earlier
+    versions' singers who sang its choir (the parent's first), so rendering it again sings the same."""
+    if not record.get("parent_id"):
+        return None
+    sang = list(record.get("lineage_singers") or [])
+    return {"id": record["parent_id"], "generation": int(record.get("generation", 1)) - 1,
+            "ancestry": list(record.get("ancestry") or [])[:-1],
+            "singer": sang[0].get("singer") if sang else None, "lineage_singers": sang[1:]}
+
+
+def replay_command(args: argparse.Namespace, genome) -> int:
+    """A rendition rendered again exactly as its record says: its parameters, the words it recorded (not
+    drawn again), its machine and moment; a person's phrasing given again with --phrasing."""
+    from .arrange import Lyrics
+
+    record = pack_mod.read_record(args.replay)
+    params = Params.from_dict(record["params"])
+    lyrics = Lyrics.from_dict(record["lyrics"]) if record.get("lyrics") else None
+    voice = harvest.Voice.from_dict(record["voice"]) if record.get("voice") else None
+    drift = drift_mod.Drift.from_dict(record["drift"]) if record.get("drift") else None
+    phrasing_json = json.loads(Path(args.phrasing).read_text()) if args.phrasing else genome.source.get("seed_phrasing")
+    if record.get("phrasing") and not args.phrasing:
+        print("songbird: this rendition was sung with a person's phrasing; give it with --phrasing to hear it "
+              "the same", file=sys.stderr)
+    choir_json = [json.loads(Path(f).read_text()) for f in args.choir_phrasing]
+    parent = parent_of(record)
+    out = Path(args.out or Path("renders") / (Path(args.genome).stem + ".replay.flac"))
+    render_one(genome, params, out, voice=voice, drift=drift, lyrics=lyrics, phrasing_json=phrasing_json,
+               choir_json=choir_json, singer_overrides=args.voice, stems=args.stems, mix_overrides=args.mix,
+               parent=parent, packet_genome=args.genome if args.pack else None,
+               chosen_by_you=record.get("chosen_by_you"))
+    return 0
+
+
 def render_command(args: argparse.Namespace) -> int:
     genome = genome_mod.load(args.genome)
+    if args.replay:
+        return replay_command(args, genome)
+    edits = None
+    if args.edits:  # a person's choices: an edits file, or a record's marks
+        from . import edits as edits_mod
+
+        edits, problems = edits_mod.check(genome, edits_mod.from_record(json.loads(Path(args.edits).read_text())))
+        if edits.pop("phrasing", None):
+            print("songbird: a phrasing is given with --phrasing", file=sys.stderr)
+        if "date" in edits and not args.date:
+            args.date = edits["date"]
+        elif "date" in edits:
+            edits.pop("date")  # --date given: that day, not the file's
+        for problem in problems:
+            print(f"songbird: can't keep {problem['path']}: {problem['why']}", file=sys.stderr)
     voice, drift = _machine(args)
     try:
         parent = _parent_record(args.parent)
@@ -192,9 +255,24 @@ def render_command(args: argparse.Namespace) -> int:
         print(f"songbird: can't sing from that parent: {e}", file=sys.stderr)
         return 2
     changes: list = []
-    params = choose_params(genome, _parent(parent, genome), voice, drift, seed=args.seed, log=changes,
-                           form=tuple(args.form) if args.form else None, style=args.style,
-                           arrange=_arrangement(args.arrange))
+    parent_params = _parent(parent, genome) if parent else None
+    chosen = resolved = None
+    if edits:
+        if args.lyrics_seed is not None or (args.form and any(p.startswith(("form.", "words.")) for p in edits)):
+            print("songbird: these edits choose the shape or the words; leave out --form and --lyrics-seed",
+                  file=sys.stderr)
+            return 2
+        resolved = edits_mod.resolve(genome, parent_params, voice, drift, edits, seed=args.seed,
+                                     day_chosen="date" in edits)
+        for problem in resolved.problems:
+            print(f"songbird: can't keep {problem['path']}: {problem['why']}", file=sys.stderr)
+        params, chosen = resolved.params, resolved.marks or None
+        if args.form:
+            params = replace(params, form=tuple(args.form))
+    else:
+        params = choose_params(genome, parent_params, voice, drift, seed=args.seed, log=changes,
+                               form=tuple(args.form) if args.form else None, style=args.style,
+                               arrange=_arrangement(args.arrange))
     if args.choir is not None:
         params = replace(params, choir=args.choir)
     # a person's phrasing: the file given, or the one the seed carries
@@ -203,8 +281,10 @@ def render_command(args: argparse.Namespace) -> int:
     if choir_json and args.choir is None:
         params = replace(params, choir=len(choir_json))
     sung_by_a_machine = voice is not None or drift is not None
+    chose_words = resolved is not None and not args.form and any(p.startswith("words.") for p in edits)
     try:
-        lyrics = words(genome, params, args.lyrics_seed, sung_by_a_machine=sung_by_a_machine, voice=voice, drift=drift)
+        lyrics = resolved.lyrics if chose_words else \
+            words(genome, params, args.lyrics_seed, sung_by_a_machine=sung_by_a_machine, voice=voice, drift=drift)
     except (ArrangeError, ValueError) as e:
         print(f"songbird: can't draw words for that form: {e}", file=sys.stderr)
         return 2
@@ -214,13 +294,15 @@ def render_command(args: argparse.Namespace) -> int:
             changes = [c for c in changes if c.get("what") != "words"] + [
                 {"what": "words", "change": "drawn",
                  "why": f"drawn afresh from the bank with --lyrics-seed {args.lyrics_seed}, not handed down"}]
+        elif chose_words:  # a person chose words: the lineage holds what was sung, their choices among it
+            params = replace(params, words=hold(genome, lyrics))
         else:
             params = replace(params, words=evolve.fitted(genome, params, voice, drift))
     out = Path(args.out or Path("renders") / (Path(args.genome).stem + ".flac"))
     render_one(genome, params, out, voice=voice, drift=drift, lyrics=lyrics, phrasing_json=phrasing_json,
                choir_json=choir_json, singer_overrides=args.voice, stems=args.stems, mix_overrides=args.mix,
                parent=parent, packet_genome=args.genome if args.pack else None,
-               changes=changes if sung_by_a_machine else None)
+               changes=changes if sung_by_a_machine else None, chosen_by_you=chosen)
     return 0
 
 
@@ -480,7 +562,19 @@ def main(argv: list[str] | None = None) -> int:
                         help="sing with a person's phrasing, from tools/phrasing.py (default: the seed's own, if any)")
     render.add_argument("--choir-phrasing", nargs="+", default=[], metavar="FILE",
                         help="a phrasing for each choir voice, in order (sets --choir to their number unless given)")
+    render.add_argument("--edits", metavar="FILE",
+                        help="a person's choices on top of the program's (songbird.edits): an edits file, or a "
+                             "record whose marked choices are made again")
+    render.add_argument("--replay", metavar="RECORD",
+                        help="render a rendition again exactly as its record says (its words as recorded)")
     render.set_defaults(run=render_command)
+
+    from .studio import add_arguments as studio_arguments, run as studio_run
+
+    studio = commands.add_parser("studio", help="see how your version of the song is made, change it if you "
+                                                "like, and record it, in a page on this computer")
+    studio_arguments(studio)
+    studio.set_defaults(run=studio_run)
 
     harvest_parser = commands.add_parser(
         "harvest", help="read this machine's voice (see docs/HARVEST.md for exactly what is read)")

@@ -333,6 +333,7 @@ class _VerseRules:
 
     def __init__(self, rules: dict):
         vr = rules["verses"]
+        self.first = dict(vr.get("first", {}))
         self.max_variants = vr.get("max_variants")
         self.max_rare = vr.get("max_rare")
         self.max_mood = dict(vr.get("max_mood", {}))
@@ -370,6 +371,114 @@ class _VerseRules:
         if not verses or not self.together(verses):
             return []
         return [p for p in itertools.permutations(verses) if self.in_order(p)]
+
+    def why(self, verses) -> str | None:
+        """Why these verses can't be sung in this order, in one plain sentence;
+        None if they can. For different verses, None exactly when together()
+        and in_order() both hold; a verse sung twice is refused first."""
+        verses = list(verses)
+        seen: dict[str, int] = {}
+        for i, v in enumerate(verses):
+            if v.id in seen:
+                return f"the {v.id} verse is sung already, as verse {seen[v.id] + 1}"
+            seen[v.id] = i
+        if not verses:
+            return None
+        if not verses[0].opens:
+            return self._opener(verses[0])
+        return self._counts(verses) or self._years(verses) or self._placed(dict(enumerate(verses)))
+
+    def pinned(self, fixed: dict[int, _Verse]) -> str | None:
+        """Why verses fixed in these places (by index from 0) can't all be sung, whatever is sung around them;
+        None if nothing about them alone rules it out."""
+        if 0 in fixed and not fixed[0].opens:
+            return self._opener(fixed[0])
+        verses = [fixed[i] for i in sorted(fixed)]
+        return self._counts(verses) or self._years(verses) or self._placed(fixed)
+
+    def _opener(self, v: _Verse) -> str:
+        return f"the first verse teaches the song's shape, so it is a plain one, and the {v.id} verse {_and(self._unplain(v))}"
+
+    def _counts(self, verses) -> str | None:
+        """At most so many variants, rare verses and verses of a mood in one song."""
+        variants = [v for v in verses if v.variant]
+        if self.max_variants is not None and len(variants) > self.max_variants:
+            return (f"a song sings {_at_most(self.max_variants, 'verse')} that rhymes another way or runs a line "
+                    f"on, and {_these(variants)} {_all(variants)} do")
+        rare = [v for v in verses if v.rare]
+        if self.max_rare is not None and len(rare) > self.max_rare:
+            return f"a song sings {_at_most(self.max_rare, 'rare verse')}, and {_these(rare)} are {_all(rare)} rare"
+        for mood, most in self.max_mood.items():
+            same = [v for v in verses if v.mood == mood]
+            if len(same) > most:
+                return f"a song sings {_at_most(most, f'{mood} verse')}, and {_these(same)} are {_all(same)} {mood}"
+        return None
+
+    def _years(self, verses) -> str | None:
+        """Dated verses, in the order they're sung, go earliest first."""
+        if self.era_order:
+            dated = [v for v in verses if v.era is not None]
+            for a, b in zip(dated, dated[1:]):
+                if a.era > b.era:
+                    return (f"the verses are sung in the order of their years, so the {b.id} verse ({b.era}) "
+                            f"can't come after the {a.id} verse ({a.era})")
+        return None
+
+    def _placed(self, at: dict[int, _Verse]) -> str | None:
+        """No two of a mood kept apart in neighbouring places, and a pair in neighbouring places."""
+        for i in sorted(at):
+            a, b = at[i], at.get(i + 1)
+            if b is not None and a.mood == b.mood and a.mood in self.apart:
+                return f"two {a.mood} verses never come side by side, as the {a.id} and {b.id} verses would"
+        if self.pairs_adjacent:
+            where = {v.id: i for i, v in at.items()}
+            for i in sorted(at):
+                for p in at[i].partners:
+                    if p in where and abs(where[p] - i) != 1:
+                        return f"the {at[i].id} and {p} verses are a pair, and a pair is sung side by side"
+        return None
+
+    def _unplain(self, v: _Verse) -> list[str]:
+        """What keeps a verse from opening a song, in words."""
+        out = []
+        for key, want in self.first.items():
+            got = v.entry.get(key, False if key == "enjambed" else None)
+            if got == want:
+                continue
+            if key == "scheme":
+                out.append(f"rhymes {got} (not {want})")
+            elif key == "rarity":
+                out.append(f"is {got}")
+            elif key == "enjambed":
+                out.append("runs a line on" if got else "doesn't run a line on")
+            else:
+                out.append(f"has {key} {got}, not {want}")
+        return out or ["can't open a song"]
+
+
+_NUMBERS = ("no", "one", "two", "three", "four", "five", "six")
+
+
+def _number(n: int) -> str:
+    return _NUMBERS[n] if 0 <= n < len(_NUMBERS) else str(n)
+
+
+def _at_most(n: int, noun: str) -> str:
+    """'at most one light verse', 'at most two rare verses', 'no rare verse'."""
+    return f"no {noun}" if n == 0 else f"at most {_number(n)} {noun}{'s' if n > 1 else ''}"
+
+
+def _and(words: list[str]) -> str:
+    return words[0] if len(words) == 1 else f"{', '.join(words[:-1])} and {words[-1]}"
+
+
+def _these(verses) -> str:
+    """'the hold and ring verses'."""
+    return f"the {_and([v.id for v in verses])} verse{'s' if len(verses) > 1 else ''}"
+
+
+def _all(items) -> str:
+    return "both" if len(items) == 2 else "all"
 
 
 def _search(verses: list[_Verse], rules: _VerseRules, k: int, order) -> list[tuple[_Verse, ...]] | None:
@@ -452,11 +561,15 @@ def forms(genome: Genome) -> dict[str, tuple[int, ...]]:
     return dict(_song(genome).supported)
 
 
-def problem(genome: Genome, form: Iterable[str]) -> str | None:
+def problem(genome: Genome, form: Iterable[str], chosen: Mapping | None = None) -> str | None:
     """Why the bank can't fill a form within its rules, in one plain
-    sentence; None if it can."""
+    sentence; None if it can. With chosen (a person's choices, as arrange()
+    takes them), also why those choices can't be sung in their places."""
     try:
-        return _problem(_song(genome).supported, _blocks(genome, _form(form)))
+        why = _problem(_song(genome).supported, _blocks(genome, _form(form)))
+        if why is None and chosen:
+            arrange(genome, form, 0, None, chosen)
+        return why
     except ArrangeError as e:
         return str(e)
 
@@ -736,7 +849,8 @@ def _blocks(genome: Genome, form: tuple[str, ...]) -> Counter:
     return blocks
 
 
-def arrange(genome: Genome, form: Iterable[str], seed: int, leanings: Leanings | None = None) -> Lyrics:
+def arrange(genome: Genome, form: Iterable[str], seed: int, leanings: Leanings | None = None,
+            chosen: Mapping | None = None) -> Lyrics:
     """The words for a concrete form (the section order a rendition sings,
     as in Params.form), drawn from the genome's bank within its rules:
 
@@ -758,7 +872,14 @@ def arrange(genome: Genome, form: Iterable[str], seed: int, leanings: Leanings |
     with it. seed: a whole number at least 0. leanings tilt every choice and
     break no rule. The same genome, form, seed and leanings always give the
     same words. Raises ArrangeError when the form can't be filled within the
-    rules; forms() says what can."""
+    rules; forms() says what can.
+
+    chosen: a person's choices, kept in their places (see keep()): verses by
+    place, refrain couplets, the refrain's and the bridge's once-a-song
+    words, the second bridge's stanza, the tag's syllable. Everything not
+    chosen is drawn as without them, and stays as drawn wherever the rules
+    allow it beside the choices. Raises ArrangeError, saying why, when the
+    choices themselves can't be sung together within the rules."""
     form = _form(form)
     if isinstance(seed, bool) or not isinstance(seed, (int, np.integer)) or seed < 0:
         raise ValueError(f"the seed must be a whole number at least 0, not {seed!r}")
@@ -811,7 +932,8 @@ def arrange(genome: Genome, form: Iterable[str], seed: int, leanings: Leanings |
     # are kept: nothing more of them leaves the machine, and drawing again
     # with what is kept gives the same words.
     kept = Leanings(lean.mood_weights, lean.era_bias, lean.rarity_appetite, vocabulary & song.known)
-    return Lyrics(form, int(seed), tuple(sections), kept)
+    lyrics = Lyrics(form, int(seed), tuple(sections), kept)
+    return keep(genome, lyrics, chosen, lean) if chosen else lyrics
 
 
 def seed_lyrics(genome: Genome, form: Iterable[str]) -> Lyrics:
@@ -919,6 +1041,35 @@ def _index(spec, value) -> int | None:
     """Which option of a slot some sung words are; None if none."""
     for i in range(width({"s": spec}, "s")):
         if _value(spec, i) == value:
+            return i
+    return None
+
+
+# A person's choices, kept in their places
+
+_PLACED = 16  # the streams the words drawn around a person's choices come from, apart from the draw's own
+CHOSEN = ("verses", "couplets", "refrain", "bridge", "bridge2", "tag")
+
+
+def _options(spec) -> list:
+    """A slot's options as written: its words, or a coupled slot's by column."""
+    n = len(next(iter(spec.values()))) if isinstance(spec, dict) else len(spec)
+    return [_value(spec, i) for i in range(n)]
+
+
+def _label(value) -> str:
+    """An option by its words as written (syllables hyphenated), a coupled slot by its noun (else its first
+    column)."""
+    if isinstance(value, dict):
+        value = value.get("noun", next(iter(value.values())))
+    return str(value)
+
+
+def _option(spec, value) -> int | None:
+    """Which option of a slot these words are: as written, or as they read (hyphens and case aside)."""
+    for i, option in enumerate(_options(spec)):
+        if option == value or (isinstance(value, str) and
+                               _label(option).replace("-", "").lower() == value.replace("-", "").lower()):
             return i
     return None
 
@@ -1173,6 +1324,336 @@ def affinity(genome: Genome, kind: str, ids, vocabulary) -> list[float]:
     song = _song(genome)
     entries = [bank_entry(genome, kind, i) for i in ids]
     return _affinity(entries, song.words, frozenset(vocabulary or ()))
+
+
+def _picks(entry: dict, slots: Mapping) -> dict[str, int]:
+    """The option each of an entry's slots was given, from the words a Sung records for them."""
+    spec = entry.get("slots", {})
+    out = {}
+    for name in slot_names(entry["lines"]):
+        if name in slots:
+            i = _option(spec[name], slots[name])
+            if i is not None:
+                out[name] = i
+    return out
+
+
+def _chosen_slots(entry: dict, wanted: Mapping, what: str) -> dict[str, int]:
+    """The options a person chose for an entry's slots, every one checked."""
+    spec = entry.get("slots", {})
+    names = slot_names(entry["lines"])
+    out = {}
+    for name, value in (wanted or {}).items():
+        if name not in names:
+            raise ArrangeError(f"{what} has no {name} to choose")
+        i = _option(spec[name], value)
+        if i is None:
+            raise ArrangeError(f"{what}'s {name} can be {_and([_label(o).replace('-', '') for o in _options(spec[name])])}, "
+                               f"not {_label(value).replace('-', '')}")
+        out[name] = i
+    return out
+
+
+def _ordered(song: _Song, lean: Leanings, seed: int) -> list[_Verse]:
+    """Every verse, in an order drawn by weight: the ones to try first when some must be drawn again."""
+    weights, _ = _verse_weights(song, lean)
+    rng = _rng(seed, _PLACED)
+    keys = np.log(rng.random(len(song.verses))) / np.maximum(weights, 1e-300)
+    return [song.verses[int(i)] for i in np.argsort(-keys, kind="stable")]
+
+
+def _place(song: _Song, current: list[_Verse], fixed: dict[int, _Verse], lean: Leanings, seed: int) -> list[_Verse]:
+    """The verses with each chosen one in its place and the rest as they were wherever the rules allow;
+    where they don't, as few of the rest as need to be are drawn again, by weight, to make the rules hold."""
+    n = len(current)
+    ids = [v.id for v in fixed.values()]
+    twice = next((i for i in ids if ids.count(i) > 1), None)
+    if twice:
+        raise ArrangeError(f"the {twice} verse is chosen for two places, and a verse is sung once")
+    why = song.checks.pinned(fixed)
+    if why:  # the chosen verses rule themselves out, whatever is sung around them
+        raise ArrangeError(why)
+    base = [fixed.get(i, v) for i, v in enumerate(current)]
+    taken = {v.id for v in fixed.values()}
+    must = [i for i in range(n) if i not in fixed and base[i].id in taken]  # it is sung in a chosen place now
+    others = [i for i in range(n) if i not in fixed and i not in must]
+    order = _ordered(song, lean, seed)
+    for r in range(len(others) + 1):
+        for extra in itertools.combinations(others, r):
+            free = set(must) | set(extra)
+            found = _fill(song, base, free, order)
+            if found is not None:
+                return found
+    raise ArrangeError("no verse in the bank can go between the verses chosen within the rules")
+
+
+def _fill(song: _Song, base: list[_Verse], free: set[int], order: list[_Verse]) -> list[_Verse] | None:
+    """base with a verse drawn for each free place (first in order that the rules allow), or None."""
+    seq = list(base)
+    held = {v.id for i, v in enumerate(base) if i not in free}
+
+    def walk(i: int) -> bool:
+        if i == len(seq):
+            return song.checks.why(seq) is None
+        if i not in free:
+            return song.checks.why(seq[: i + 1]) is None and walk(i + 1)
+        for v in order:
+            if v.id in held or any(seq[j].id == v.id for j in range(i) if j in free):
+                continue
+            seq[i] = v
+            if song.checks.why(seq[: i + 1]) is None and walk(i + 1):
+                return True
+        return False
+
+    return seq if walk(0) else None
+
+
+def keep(genome: Genome, lyrics: Lyrics, chosen: Mapping, leanings: Leanings | None = None) -> Lyrics:
+    """Some drawn words with a person's choices kept in their places:
+
+    - "verses": {place: {"id": verse, "slots": {slot: words}}} (or just the
+      verse's id), by its place among the form's verses from 0. A chosen
+      verse is sung there; the verses around it stay as drawn wherever the
+      rules allow them beside it, and where they don't, as few as need to be
+      are drawn again, by weight, until the rules hold. Its slots are the
+      ones chosen, else as drawn if it was drawn there, else drawn.
+    - "couplets": {place: couplet}, by refrain from 0: never the canon but in
+      the last refrain, which always sings it; a couplet another refrain was
+      singing trades places with the one it replaces.
+    - "refrain": {slot: words}: the refrain's once-a-song words (while, then),
+      in every refrain. The question turns by rule and can't be chosen.
+    - "bridge": {slot: words}: the bridge's once-a-song words, in every
+      stanza that sings them. "bridge2": the second bridge section's stanza.
+    - "tag": the tag's syllable, in every tag.
+
+    Words for anything drawn again come from their own streams of the
+    seed, so the same choices give the same words. Raises ArrangeError, in
+    one plain sentence, when a choice isn't in the bank or can't be kept
+    within the rules."""
+    unknown = sorted(set(chosen) - set(CHOSEN))
+    if unknown:
+        raise ArrangeError(f"words can be chosen for the {_and(list(CHOSEN))}, not {_and(unknown)}")
+    song = _song(genome)
+    lean = leanings if leanings is not None else (lyrics.leanings or Leanings())
+    vocabulary = lean.vocabulary
+    seed = int(lyrics.seed or 0)
+    sections = list(lyrics.sections)
+    at = {block: [k for k, s in enumerate(sections) if s.block == block] for block in ("verse", "refrain", "bridge", "tag")}
+
+    # ---- verses
+    pins = {int(i): (p if isinstance(p, Mapping) else {"id": p}) for i, p in (chosen.get("verses") or {}).items()}
+    if pins:
+        places = at["verse"]
+        by_id = {v.id: v for v in song.verses}
+        for i, pin in sorted(pins.items()):
+            if not 0 <= i < len(places):
+                raise ArrangeError(f"this form sings {_number(len(places))} verses, so it has no verse {i + 1}")
+            if pin.get("id") not in by_id:
+                raise ArrangeError(f"the bank has no verse called {pin.get('id')!r}")
+        current = [by_id.get(sections[k].id) for k in places]
+        if any(v is None for v in current):
+            raise ArrangeError("these words' verses aren't all from the bank, so they can't be chosen among")
+        order = _place(song, current, {i: by_id[p["id"]] for i, p in pins.items()}, lean, seed)
+        for i, v in enumerate(order):
+            k = places[i]
+            wanted = pins.get(i, {}).get("slots") or {}
+            if v.id == sections[k].id and not wanted:
+                continue
+            entry = v.entry
+            picks = _picks(entry, sections[k].slots) if v.id == sections[k].id else {}
+            picks |= _chosen_slots(entry, wanted, f"the {v.id} verse")
+            names = [n for n in slot_names(entry["lines"]) if n not in picks]
+            if names:
+                picks |= _pick(names, entry.get("slots", {}), _rng(seed, _PLACED + 1 + i), vocabulary)
+            sections[k] = Sung(sections[k].section, "verse", v.id, _chosen(entry, picks), song.sing(entry, picks))
+
+    # ---- refrains
+    couplet_pins = {int(i): c for i, c in (chosen.get("couplets") or {}).items()}
+    head_pins = dict(chosen.get("refrain") or {})
+    if couplet_pins or head_pins:
+        spec, rr = song.bank["refrain"], song.rules["refrain"]
+        couplets = {c["id"]: c for c in spec["couplets"]}
+        last, places = rr["couplet_last"], at["refrain"]
+        n = len(places)
+        for i, cid in sorted(couplet_pins.items()):
+            if not 0 <= i < n:
+                raise ArrangeError(f"this form sings {_number(n)} refrains, so it has no refrain {i + 1}")
+            if cid not in couplets:
+                raise ArrangeError(f"the refrain has no couplet called {cid!r}")
+            if i == n - 1 and cid != last:
+                raise ArrangeError(f"the last refrain always sings the {last} couplet")
+            if cid == last and i != n - 1:
+                raise ArrangeError(f"the {last} couplet is the last refrain's, and only the last's")
+        chosen_ids = list(couplet_pins.values())
+        twice = next((c for c in chosen_ids if chosen_ids.count(c) > 1), None)
+        if twice:
+            raise ArrangeError(f"the {twice} couplet is chosen for two refrains, and each refrain sings its own")
+        if "question" in head_pins:
+            raise ArrangeError("the refrain's question turns by the song's rule, and the last refrain asks who owns it")
+        head = _chosen_slots(spec, head_pins, "the refrain")
+        ids = [sections[k].id for k in places]
+        for i, cid in couplet_pins.items():
+            if ids[i] != cid:
+                if cid in ids and ids.index(cid) not in couplet_pins:
+                    ids[ids.index(cid)] = ids[i]  # the couplet it replaces moves to where this one was
+                ids[i] = cid
+        for r, k in enumerate(places):
+            s = sections[k]
+            if ids[r] == s.id and not head:
+                continue
+            couplet = couplets[ids[r]]
+            picks = _picks(spec, s.slots) | head
+            if ids[r] == s.id:
+                cpicks = _picks(couplet, s.slots)
+            else:
+                cpicks = _pick(slot_names(couplet["lines"]), couplet.get("slots", {}), _rng(seed, _PLACED + 8 + r),
+                               vocabulary)
+            sections[k] = Sung(s.section, "refrain", couplet["id"], _chosen(spec, picks) | _chosen(couplet, cpicks),
+                               song.sing(spec, picks) + song.sing(couplet, cpicks))
+
+    # ---- the bridge
+    bridge_pins = dict(chosen.get("bridge") or {})
+    second = chosen.get("bridge2")
+    if bridge_pins or second is not None:
+        stanzas = {b["id"]: b for b in song.bank.get("bridges", [])}
+        places = at["bridge"]
+        extra = tuple(song.rules["bridge"].get("extra", ()))
+        if second is not None:
+            if len(places) < 2:
+                raise ArrangeError("this form sings the bridge once, so it has no second stanza to choose")
+            if second not in extra:
+                raise ArrangeError(f"the second bridge sings the {_and(list(extra))} stanza, not {second!r}")
+        sung = [stanzas.get(sections[k].id) for k in places]
+        if second is not None:
+            sung[1] = stanzas[second]
+        names = {n for st in sung if st for n in slot_names(st["lines"])}
+        stray = sorted(set(bridge_pins) - names)
+        if stray:
+            raise ArrangeError(f"the bridge has no {_and(stray)} to choose")
+        for r, (k, stanza) in enumerate(zip(places, sung)):
+            if stanza is None:
+                continue
+            s = sections[k]
+            own = {n: v for n, v in bridge_pins.items() if n in slot_names(stanza["lines"])}
+            if stanza["id"] == s.id and not own:
+                continue
+            picks = (_picks(stanza, s.slots) if stanza["id"] == s.id else {}) | _chosen_slots(stanza, own, "the bridge")
+            rest = [n for n in slot_names(stanza["lines"]) if n not in picks]
+            if rest:
+                picks |= _pick(rest, stanza.get("slots", {}), _rng(seed, _PLACED + 12 + r), vocabulary)
+            sections[k] = Sung(s.section, "bridge", stanza["id"], _chosen(stanza, picks), song.sing(stanza, picks))
+
+    # ---- the tag
+    tag = chosen.get("tag")
+    if tag is not None:
+        options = list(song.bank["tag"]["syllables"])
+        if tag not in options:
+            raise ArrangeError(f"the tag sings {_and(options)}, not {tag!r}")
+        if not at["tag"]:
+            raise ArrangeError("this form has no tag to sing it on")
+        for k in at["tag"]:
+            s = sections[k]
+            lines = tuple(" ".join([tag] * len(genome.phrases[pid].sung)) + "." for pid in genome.section(s.section).phrases)
+            sections[k] = Sung(s.section, "tag", tag, {}, lines)
+
+    return Lyrics(lyrics.form, lyrics.seed, tuple(sections), lyrics.leanings)
+
+
+def _readable_lines(entry: dict) -> list[str]:
+    """An entry's lines as they read with each slot's first option."""
+    names = slot_names(entry["lines"])
+    return [_readable(line) for line in fill(entry["lines"], entry.get("slots", {}), dict.fromkeys(names, 0))]
+
+
+def _slot_choices(entry: dict, slots: Mapping, skip=()) -> list[dict]:
+    """An entry's swappable words: each slot's options as they read, and which is sung."""
+    spec = entry.get("slots", {})
+    out = []
+    for name in slot_names(entry["lines"]):
+        if name in skip:
+            continue
+        options = _options(spec[name])
+        at = _option(spec[name], slots[name]) if name in slots else None
+        out.append({"slot": name, "options": [_label(o) for o in options],
+                    "sung": _label(options[at]) if at is not None else None})
+    return out
+
+
+def options(genome: Genome, lyrics: Lyrics, block: str, index: int = 0) -> dict:
+    """Every choice for one sung section of some words: the index-th verse or refrain (from 0), the bridge
+    (0 the first bridge section, 1 the second) or the tag. Each choice is allowed or refused, with the reason
+    problem() would give; a verse refused here says where else it could go. Also the section's swappable
+    words, and anything the song's rules fix, with why."""
+    song = _song(genome)
+    sections = [s for s in lyrics.sections if s.block == block]
+    if not 0 <= index < len(sections):
+        raise ArrangeError(f"these words have no {block} {index + 1}")
+    here = sections[index]
+    out: dict = {"block": block, "index": index, "sung": here.id, "choices": [], "words": [], "fixed": []}
+    if block == "verse":
+        by_id = {v.id: v for v in song.verses}
+        current = [by_id.get(s.id) for s in sections]
+        whole = None not in current
+        for v in song.verses:
+            seq = [x for x in (current[:index] + [v] + current[index + 1:]) if x is not None]
+            already = next((k for k, x in enumerate(current) if k != index and x is not None and x.id == v.id), None)
+            why = f"the {v.id} verse is sung already, as verse {already + 1}" if already is not None \
+                else song.checks.why(seq)
+            elsewhere, reorder = [], None
+            if why and whole:
+                # where else it could go: in place of another verse; or here, the verses reordered as the
+                # rules ask (moving as few as can be), if only their order is in the way
+                for j in range(len(current)):
+                    if j != index and v.id != current[j].id:
+                        if song.checks.why(current[:j] + [v] + current[j + 1:]) is None:
+                            elsewhere.append(j)
+                if v.id not in {x.id for k, x in enumerate(current) if k != index}:
+                    orders = song.checks.orders(seq)
+                    if orders:
+                        best = min(orders, key=lambda o: sum(a.id != b.id for a, b in zip(o, seq)))
+                        reorder = [x.id for x in best]
+            out["choices"].append({
+                "id": v.id, "lines": list(here.lines) if v.id == here.id else _readable_lines(v.entry),
+                "mood": v.mood, "era": v.era, "rare": v.rare, "variant": v.variant, "allowed": why is None,
+                "why": why, "elsewhere": elsewhere, "reorder": reorder})
+        entry = by_id.get(here.id)
+        out["words"] = _slot_choices(entry.entry, here.slots) if entry else []
+    elif block == "refrain":
+        spec, rr = song.bank["refrain"], song.rules["refrain"]
+        last = rr["couplet_last"]
+        others = {s.id: i for i, s in enumerate(sections)}
+        n = len(sections)
+        for c in spec["couplets"]:
+            why = None
+            if index == n - 1 and c["id"] != last:
+                why = f"the last refrain always sings the {last} couplet"
+            elif c["id"] == last and index != n - 1:
+                why = f"the {last} couplet is the last refrain's, and only the last's"
+            out["choices"].append({"id": c["id"], "lines": _readable_lines(c), "allowed": why is None, "why": why,
+                                   "trades": others.get(c["id"]) if why is None and c["id"] != here.id else None})
+        out["words"] = _slot_choices(spec, here.slots, skip=("question",))
+        question = here.slots.get("question")
+        if question is not None:
+            out["fixed"].append({"what": "question", "sung": _label(question),
+                                 "why": "the question turns each time the refrain comes round, and the last "
+                                        "refrain asks who owns it"})
+        if index == n - 1:
+            out["fixed"].append({"what": "couplet", "sung": last, "why": f"the last refrain always sings the {last} couplet"})
+    elif block == "bridge":
+        stanzas = {b["id"]: b for b in song.bank.get("bridges", [])}
+        br = song.rules["bridge"]
+        if index == 0:
+            out["fixed"].append({"what": "stanza", "sung": here.id,
+                                 "why": f"the bridge always sings its {br['always']} stanza first"})
+        else:
+            for sid in br.get("extra", ()):
+                out["choices"].append({"id": sid, "lines": _readable_lines(stanzas[sid]), "allowed": True, "why": None})
+        if here.id in stanzas:
+            out["words"] = _slot_choices(stanzas[here.id], here.slots)
+    elif block == "tag":
+        for syllable in song.bank["tag"]["syllables"]:
+            out["choices"].append({"id": syllable, "lines": [], "allowed": True, "why": None})
+    return out
 
 
 def main(argv: list[str] | None = None) -> int:

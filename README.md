@@ -19,8 +19,15 @@ uv run songbird harvest --show                                     # this machin
 uv run songbird render songs/h-now-its-by-you.json --machine here --date 2026-12-25  # sung by this machine that day
 uv run songbird render songs/h-now-its-by-you.json --machine fictional:ada           # by a made-up machine, now
 uv run songbird year songs/h-now-its-by-you.json --machine fictional:ada             # its choices through a year
+uv run songbird studio                         # your version today: see how it's made, change it, record it
 uv run pytest
 ```
+
+The studio ([docs/STUDIO.md](docs/STUDIO.md)) is a page on this computer
+only: every choice in the song and why it was made, six years of this
+machine's song to move through, other machines beside it, any section to
+hear, anything to change (each change marked as yours), and the recording.
+A rendition opens it on itself: `python3 song.flac studio`.
 
 ## Layout
 
