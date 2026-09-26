@@ -172,6 +172,19 @@ def test_the_bow_hisses_and_bites(pitch, lo, hi):
     assert 5 < 20 * np.log10(rms[int(0.1 * SR): int(0.13 * SR)].max() / np.median(rms[int(0.7 * SR): int(1.5 * SR)])) < 14
 
 
+def test_a_stopped_note_dies_under_the_finger_and_an_open_string_rings():
+    """Once the bow leaves it before a rest, a stopped note is damped by the finger's pad (the fundamental's T60 near
+    0.9 s; the free string rang 1.5-2 s), and an open string rings on."""
+    def t60(pitch):
+        y = bowed_line(cello.CELLO, [Note("x", 0.1, 1.0, float(pitch), 0.6)], 2.6, ornament=0.0)
+        env = 20 * np.log10(envelope(y, midi_to_hz(pitch)) + 1e-12)
+        a, b = int(1.25 * SR), int(1.75 * SR)
+        return -60.0 / np.polyfit(np.arange(b - a) / SR, env[a:b], 1)[0]
+
+    assert 0.6 < t60(40) < 1.3 and 0.6 < t60(48) < 1.3  # E2 and C3, stopped on the C and G strings
+    assert t60(43) > 1.5  # the open G
+
+
 def test_tasto_is_dark_ponticello_glassy_and_brightness_moves_between():
     notes = lambda art: [Note("cello", 0.1, 1.6, 50.0, 0.6, art=art)]  # noqa: E731
     tasto, arco, pont = (upper_db(stem("cello", notes(a), 2.0), 0.6, 1.6) for a in ("tasto", "", "pont"))

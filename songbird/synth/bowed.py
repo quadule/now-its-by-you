@@ -120,7 +120,9 @@ def run_primed(period, bridge_len, bow_v, grip, noise, pole, gain, at, velocity)
     pole here is a track, one value a sample: how round the corner is kept
     (the bridge's loss, standing in for the bow's own rounding: a heavy bow
     near the bridge keeps it sharp, a light one over the fingerboard rounds it).
-    The caller keeps the pitch by taking pole/(1 - pole) off the period.
+    The caller keeps the pitch by taking pole/(1 - pole) off the period. So is
+    gain, the loss a round trip: a finger damps a stopped string once the bow
+    has left it. (Only the cello's module plays this; the fiddle plays run().)
     """
     n = period.shape[0]
     size = 4096
@@ -143,15 +145,15 @@ def run_primed(period, bridge_len, bow_v, grip, noise, pole, gain, at, velocity)
             # write into each line what its reads will find over the next trip
             for j in range(t - int(lb) - 3, t):
                 x = (j + lb - t) / p
-                to_bridge[j & mask] = -height * (0.5 - (x - np.floor(x))) / gain
+                to_bridge[j & mask] = -height * (0.5 - (x - np.floor(x))) / gain[t]
             for j in range(t - int(ln) - 3, t):
                 x = (j - t) / p
                 to_nut[j & mask] = -height * ((x - np.floor(x)) - 0.5)
-            lp = -0.5 * height / gain
+            lp = -0.5 * height / gain[t]
             e += 1
         arriving = _read_masked(to_bridge, t, lb)
         lp = (1.0 - pl) * arriving + pl * lp
-        from_bridge = -gain * lp
+        from_bridge = -gain[t] * lp
         from_nut = -_read_masked(to_nut, t, ln)
         v_string = from_bridge + from_nut
         v = 0.0

@@ -31,6 +31,8 @@ what a cellist does differently from a fiddler:
 - Shifts: "slide" glides from the note before (or from a tone and a half
   below after a rest), slower than a fiddler's; "swell" grows from 9 dB down
   and dies back.
+- When the bow leaves a stopped note before a rest the finger damps it (a T60
+  near 0.9 s); an open string rings on.
 - "trem": the bow reversing 11 to 15 times a second; "pizz": the string
   plucked with the fingertip over the end of the fingerboard (pluck.py),
   through the same body.
@@ -117,6 +119,7 @@ PIZZ = 0.55  # a pizzicato's force against a bowed note's
 HISS = (0.15, 700.0, 0.6)  # the bow's noise: its level against the motion, its high-pass (Hz), how much it pulses
 BITE = (20.0, 0.012)  # a fresh stroke's burst of it: against the steady hiss, and s it dies away over
 SWELL = 0.5  # a swell's bow speed at its ends against its middle, on top of bowed.tracks' 0.7 (9 dB in all)
+FINGER = 0.9  # s a stopped string rings (T60) once the bow has left it before a rest
 VIB_ONSET, VIB_CARRY, VIB_EASE = 0.28, 0.1, 0.15  # s a vibrato takes to grow in, to change width, to ease off
 
 # How much longer than asked the loop runs (samples), measured over bow positions 0.04 to 0.2, poles 0.25 to 0.62
@@ -331,8 +334,8 @@ def _bowed(kind: Kind, notes, sr: int, length: int, rng: np.random.Generator, s:
     hair = np.zeros(length)
     on = np.flatnonzero(bow_v)
     hair[on] = rng.standard_normal(len(on)) * (0.3 + 0.8 * wear) * 0.02 * np.abs(bow_v[on]) * REF / beta[on]
-    force = bowed.run_primed(period, bridge_len, bow_v, np.maximum(grip, 1e-4), hair + catch, pole, bowed.GAIN,
-                             at, velocity)
+    force = bowed.run_primed(period, bridge_len, bow_v, np.maximum(grip, 1e-4), hair + catch, pole,
+                             _damping(kind, notes, sr, length), at, velocity)
     force = force + _hiss(force, bow_v, beta, sr, rng, wear, strokes)
     # The friction re-sharpens the corner every period, so the loop's rounding moves the tone only a little (about
     # 1 dB at 2 kHz over its whole range). What makes a heavier bow brighter is the corner's rounding at the bow,
@@ -380,6 +383,23 @@ def _hiss(force: np.ndarray, bow_v: np.ndarray, beta: np.ndarray, sr: int, rng: 
     motion = np.where(on, np.abs(bow_v) * REF / beta, 0.0)
     steady = uniform_filter1d(motion, max(1, int(0.005 * sr))) * gate
     return level * (1.0 + 2.0 * wear) * (steady + burst) * noise
+
+
+def _damping(kind: Kind, notes, sr: int, length: int) -> np.ndarray:
+    """The string's loss a round trip, a sample at a time: bowed.GAIN, but once the bow leaves a stopped note before
+    a rest the finger's soft pad damps it, so it dies in FINGER s (T60) rather than the 1.5-2 s the free string
+    would ring; an open string rings on."""
+    gain = np.full(length, bowed.GAIN)
+    ordered = sorted(notes, key=lambda n: n.start)
+    for k, note in enumerate(ordered):
+        end = note.start + note.dur
+        after = ordered[k + 1].start if k + 1 < len(ordered) else None
+        if (after is not None and after - end < 0.02) or min(abs(note.pitch - o) for o in kind.strings) < 0.3:
+            continue
+        i0 = min(length, max(0, int(round(end * sr))))
+        i1 = length if after is None else min(length, max(i0, int(round(after * sr))))
+        gain[i0:i1] = min(bowed.GAIN, 10.0 ** (-3.0 / (FINGER * midi_to_hz(note.pitch))))
+    return gain
 
 
 def _pizz(kind: Kind, note, sr: int, rng: np.random.Generator, s: dict, ring: float) -> np.ndarray:
