@@ -22,6 +22,16 @@ class Note:
     phrase: str = ""
     gesture: Gesture | None = None  # a person's way with this note, if the rendition has a phrasing
     art: str = ""  # how an instrument plays it: a strum's "down", "up" or "mute", a bow's "slur", a pipe's "cut", a drum's "tip"...
+    # an ornament sung inside the note (songbird.variants): ((fraction of the sung note, semitones from it), ...),
+    # each the pitch the voice turns to at that point; () for a plain note
+    ornament: tuple = ()
+
+
+def _note_dict(note: Note) -> dict:
+    data = asdict(note)
+    if not note.ornament:  # a plain note's record is as it always was
+        del data["ornament"]
+    return data
 
 
 @dataclass(frozen=True)
@@ -39,7 +49,7 @@ class Score:
         return {
             "duration": self.duration,
             "sections": [list(s) for s in self.sections],
-            "notes": [asdict(n) for n in self.notes],
+            "notes": [_note_dict(n) for n in self.notes],
             "lexicon": self.lexicon,
             "band": self.band,
         }
