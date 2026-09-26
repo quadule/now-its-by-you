@@ -24,8 +24,6 @@ several channels, each hearing its own mix of the modes (two microphones).
 
 from __future__ import annotations
 
-from functools import lru_cache
-
 import numpy as np
 from numba import njit
 from scipy.signal import firwin, resample_poly
@@ -97,16 +95,12 @@ def _bank(freqs, decay, phase, pos, amps, mix, bend, damp, dweight, rate, length
     return out
 
 
-@lru_cache(maxsize=8)
-def _taps(factor: int) -> np.ndarray:
-    """A lowpass for upsampling by `factor`: flat to 0.8 of the low rate's Nyquist, 80 dB down past 1.2."""
-    return firwin(40 * factor + 1, 1.0 / factor, window=("kaiser", 8.0))
+# The lowpass for each doubling of the rate: flat to 0.8 of the lower rate's Nyquist, about 75 dB down from 1.2.
+HALFBAND = firwin(47, 0.5, window=("kaiser", 7.5))
 
 
-def _upsample(y: np.ndarray, factor: int, length: int) -> np.ndarray:
-    if factor == 1:
-        return y[:length]
-    return resample_poly(y, factor, 1, axis=0, window=_taps(factor))[:length]
+def _double(y: np.ndarray) -> np.ndarray:
+    return resample_poly(y, 2, 1, axis=0, window=HALFBAND)
 
 
 def _factor(freq: float, sr: int) -> int:
@@ -147,14 +141,26 @@ def ring(freqs, t60s, times, amps, sr: int, length: int, *, mix=None, bend=None,
     floor = float((QUIET * loudest.max()) ** 2)
     audible = (freqs < 0.47 * sr) & (freqs > 0.0) & (loudest > 0.0)
     factors = np.array([_factor(f, sr) if multirate else 1 for f in freqs])
-    for factor in sorted(set(factors[audible].tolist()), reverse=True):
+    # The slowest modes first; their sum is doubled in rate and joined by the next, and so on: one short
+    # filter a doubling, whatever the number of groups or channels.
+    base = -(-length // 8) + 16
+    acc, at = None, 8
+    for factor in (8, 4, 2, 1):
+        while acc is not None and at > factor:
+            acc, at = _double(acc), at // 2
         sel = np.flatnonzero(audible & (factors == factor))
+        if not len(sel):
+            continue
         rate = sr / factor
-        n = -(-length // factor) + 64
+        n = base * (8 // factor)
         track = lambda x: np.zeros(0) if x is None else np.ascontiguousarray(  # noqa: E731
             np.pad(np.asarray(x, dtype=np.float64)[::factor], (0, n)))[:n]
         y = _bank(freqs[sel], decay[sel], np.ascontiguousarray(phase[sel]), times * rate,
                   np.ascontiguousarray(amps[:, sel]), np.ascontiguousarray(mix[sel]), track(bend), track(damp),
                   np.ascontiguousarray(dweight[sel]), float(rate), n, floor)
-        out += _upsample(y, factor, length)
+        acc, at = (y if acc is None else acc + y), factor
+    while acc is not None and at > 1:
+        acc, at = _double(acc), at // 2
+    if acc is not None:
+        out += acc[:length]
     return out[:, 0] if mono else out
