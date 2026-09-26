@@ -242,6 +242,9 @@ def check(genome: Genome, edits: dict, phrasings=()) -> tuple[dict, list[dict]]:
             elif path.startswith("form."):
                 part = path[5:]
                 if part == "verses":
+                    counts = b["form.verses"]["options"]
+                    if int(value) not in counts:
+                        raise LookupError(f"the song sings {counts[0]} to {counts[-1]} verses, not {int(value)}")
                     clean[path] = int(value)
                 elif part in SHAPE:
                     clean[path] = bool(value)

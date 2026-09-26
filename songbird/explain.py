@@ -71,6 +71,8 @@ SECTIONS = {"intro": "Intro", "verse": "Verse", "refrain": "Refrain", "turn": "T
 PARTS = {"verses": "how many verses", "pairs": "verses in pairs", "intro": "an intro",
          "turn": "a turn after the refrains", "break": "a break before the bridge", "bridge2": "the bridge twice",
          "tag": "everyone singing the tag", "outro": "an outro"}
+SHORT = {"pairs": "verses in pairs", "intro": "an intro", "turn": "the turns", "break": "a break",
+         "bridge2": "the bridge twice", "tag": "the tag", "outro": "an outro"}  # the parts, as a reason says them
 VIEWS = {"full": "today", "slow": "these weeks", "season": "this season", "year": "this year"}
 THEMES = {"sea": "the sea", "fire": "fire", "machines": "machines", "earth": "the land", "home": "home",
           "town": "the town", "music": "music", "past": "the past"}  # harvest.THEMES, as the page says them
@@ -175,21 +177,22 @@ def mix_words(mix) -> str:
     """'a warm hall; the voice close and well over the band; wide'."""
     near = "close" if mix.intimacy > 0.6 else "further back" if mix.intimacy < 0.4 else ""
     over = "well over the band" if mix.forward > 11 else "among the band" if mix.forward < 8.5 else "over the band"
-    space = "with little of the room" if mix.space < 0.75 else "with plenty of the room" if mix.space > 1.2 else ""
+    space = "little of it heard" if mix.space < 0.75 else "much of it heard" if mix.space > 1.2 else ""
     width = "wide" if mix.width > 1.12 else "narrow" if mix.width < 0.85 else ""
     wear = "worn like an old tape" if mix.wear > 0.3 else "a little worn" if mix.wear > 0.12 else ""
     voice = f"the voice {listed([near, over])}"
-    return "; ".join(x for x in (f"{room_words(mix.rt60)} {space}".strip(), voice, width, wear) if x)
+    room = f"{room_words(mix.rt60)}, {space}" if space else room_words(mix.rt60)
+    return "; ".join(x for x in (room, voice, width, wear) if x)
 
 
 def singer_words(singer) -> str:
     """'a high voice, clear, with a gentle vibrato'."""
-    register = "a low voice" if singer.shift <= -12 else "a high voice"
     size = "small" if singer.tract > 1.14 else "big" if singer.tract < 1.03 else ""
+    register = f"a {size + ', ' if size else ''}{'low' if singer.shift <= -12 else 'high'} voice"
     press = "pressed and bright" if singer.rd < 0.68 else "breathy" if singer.rd > 0.95 else "clear"
     depth = "light" if singer.vibrato_depth < 22 else "wide" if singer.vibrato_depth > 36 else "gentle"
     rate = "quick" if singer.vibrato_rate > 5.6 else "slow" if singer.vibrato_rate < 5.0 else ""
-    voice = f"{register}{f' ({size})' if size else ''}, {press}, with a {listed([rate, depth])} vibrato"
+    voice = f"{register}, {press}, with a {listed([rate, depth])} vibrato"
     if getattr(singer, "engine", "formant") == "learned":
         blend = [part.split(":")[0] for part in str(singer.timbre or "").split(",") if part and ":" in part
                  and not part.startswith("machine")]
@@ -219,8 +222,10 @@ def machine_words(voice) -> list[str]:
         return ["nothing is read from it, so the song is moved by time alone"]
     out = []
     if voice.tongue:
-        out.append(f"it speaks {LANGUAGES.get(voice.tongue.inventory, 'its languages')}, and leans to "
-                   f"{FAMILIES.get(voice.tongue.family, voice.tongue.family)} modes")
+        modes = f"{FAMILIES.get(voice.tongue.family, voice.tongue.family)} modes"
+        speaks = LANGUAGES.get(voice.tongue.inventory)
+        out.append(f"it speaks {speaks}, and leans to {modes}" if voice.tongue.inventory in LANGUAGES
+                   and voice.tongue.inventory != "other" else f"its languages lean to {modes}")
     if voice.machine:
         size = voice.machine.cores + voice.machine.memory
         up = {0.0: "restarted today", 0.5: "up for days", 1.0: "up for more than a week"}.get(voice.machine.uptime, "")
@@ -283,11 +288,13 @@ def distance(days: int) -> str:
         amount = f"{number(n)} days"
     elif n < 60:
         amount = f"{number(round(n / 7))} weeks"
-    elif n < 700:
+    elif n < 350:
         amount = f"{number(round(n / 30.44))} months"
     else:
-        half = round(n / 365.25 * 2) / 2
-        amount = f"{number(int(half))} years" if half == int(half) else f"{number(int(half))} and a half years"
+        half = max(1.0, round(n / 365.25 * 2) / 2)
+        whole = int(half)
+        amount = ("a year" if half == 1 else "a year and a half" if half == 1.5 else
+                  f"{number(whole)} years" if half == whole else f"{number(whole)} and a half years")
     return f"in {amount}" if days > 0 else f"{amount} ago"
 
 
@@ -382,6 +389,17 @@ class Version:
     def mine(self, *prefixes: str) -> list[str]:
         """The edits that took effect under these paths."""
         return [p for p in self.applied if any(p == x or p.startswith(x) for x in prefixes)]
+
+    @property
+    def held(self) -> set[str]:
+        """Word edits that hold the words as the program drew them ("keep these words"): kept, not changed."""
+        return {p for p in self.applied if p.startswith("words.") and p in self.marks
+                and self.marks[p].get("value") == self.marks[p].get("was")}
+
+    @property
+    def changed(self) -> list[str]:
+        """The edits that changed something: not the day, not chance drawn again, not words held as they were."""
+        return [p for p in self.applied if p not in ("date", "roll") and p not in self.held]
 
     def troubles(self, *prefixes: str) -> list[dict]:
         return [p for p in self.problems if any(p["path"] == x or p["path"].startswith(x) for x in prefixes)]
@@ -511,8 +529,9 @@ def number_reasons(v: Version, path: str, machine, time) -> list[dict]:
     return out
 
 
-def choice_reasons(v: Version, paths: list[str], machine=None, time=None) -> list[dict]:
-    """Why a choice among a few is what it is, by asking again without time and without the machine."""
+def choice_reasons(v: Version, paths: list[str], machine=None, time=None, label=None) -> list[dict]:
+    """Why a choice among a few is what it is, by asking again without time and without the machine.
+    label(path, value) names the choice when neither alone explains it."""
     now, parent = v.generated, v.without("both")
     out: list[dict] = []
     for path in paths:
@@ -532,7 +551,8 @@ def choice_reasons(v: Version, paths: list[str], machine=None, time=None) -> lis
                 out.append({"kind": "time", "text": text})
                 said = True
         if not said:
-            out.append({"kind": "time", "text": "your machine and time together"})
+            what = label(path, value) if label else plain(value)
+            out.append({"kind": "machine", "text": f"{what}: your machine and time together"})
     return out
 
 
@@ -595,7 +615,7 @@ def key_card(v: Version) -> dict:
     def time(path, value, frozen):
         return f"{_when('year')} leans {'brighter' if variation.BRIGHTNESS[value] > variation.BRIGHTNESS[frozen] else 'darker'}"
 
-    why += choice_reasons(v, ["mode"], machine, time)
+    why += choice_reasons(v, ["mode"], machine, time, lambda path, value: f"the {MODES.get(value, (value,))[0]} mode")
     mine = _mine(v, ["tonic", "mode"], lambda path, was: note(was) if path == "tonic" else MODES.get(was, (was,))[0])
     return _card(v, "key", "Key", key_words(p.tonic, p.mode), mode_gloss(p.mode), mine + _finish(v, why, "mode"),
                  ["tonic", "mode"], tonic=p.tonic, mode=p.mode)
@@ -633,7 +653,7 @@ def shape_card(v: Version) -> dict:
         if value == parent.get(name):
             continue
         what = (f"{number(value)} verses, not {number(parent.get(name, 0))}" if name == "verses"
-                else f"{'with' if value else 'without'} {PARTS[name]}")
+                else f"{'with' if value else 'without'} {SHORT.get(name, PARTS[name])}")
         machine = value != blind.get(name)
         time = value != frozen.get(name)
         if machine:
@@ -675,7 +695,9 @@ def band_card(v: Version) -> dict:
         return (f"{_when('slow')} lean to {PATTERNS.get(value, value)}" if path == "band.pattern"
                 else f"{_when('year')}, the {player(value)} leads")
 
-    why = choice_reasons(v, ["band.pattern", "band.lead"], machine, time) + why
+    why = choice_reasons(v, ["band.pattern", "band.lead"], machine, time,
+                         lambda path, value: PATTERNS.get(value, value) if path == "band.pattern"
+                         else f"the {player(value)} leading") + why
     names = {"band.pattern": lambda w: PATTERNS.get(w, w), "band.lead": lambda w: f"the {player(w)}",
              "band.density": density_words, "band.brightness": brightness_words}
     mine = _mine(v, list(names), lambda path, was: names[path](was) if was is not None else None)
@@ -716,7 +738,7 @@ def mix_card(v: Version) -> dict:
     for path, (machine, time) in say.items():
         why += number_reasons(v, path, machine, time)
     why = choice_reasons(v, ["mix.rt60"], lambda path, value, blind: f"your machine's room: {room_words(value)}",
-                         None) + why
+                         None, lambda path, value: room_words(value)) + why
     labels = {"mix.space": "how much room", "mix.width": "how wide", "mix.forward": "the voice over the band",
               "mix.intimacy": "how close the singer is"}
     mine = [{"kind": "you", "text": f"{labels.get(p, p)}: chosen by you", "path": p} for p in v.mine("mix.")]
@@ -768,8 +790,8 @@ def words_card(v: Version) -> dict:
                                                 f"{'lighter' if c.brightness > 0 else 'darker'}"})
     if "warmth" in c.known and c.warmth > 0.2:
         mood.append({"kind": "machine", "text": "your warm screen leans them tender"})
-    if v.generated.mode in MINOR:
-        mood.append({"kind": "machine" if c.family else "time",
+    if v.generated.mode in MINOR:  # the song's own rule, whatever brought the minor mode
+        mood.append({"kind": "rule",
                      "text": f"the {MODES.get(v.generated.mode, (v.generated.mode,))[0]} key leans them darker"})
     tilt = _drift_at(v, "slow", "mood")
     if abs(tilt) > 0.15:
@@ -785,7 +807,11 @@ def words_card(v: Version) -> dict:
         mine.append({"kind": "you", "text": f"leaning {'darker' if v.params.mode in MINOR else 'lighter'} for the "
                                             f"{MODES.get(v.params.mode, (v.params.mode,))[0]} key you chose",
                      "path": "mode"})
-    mine += [{"kind": "you", "text": f"{_word_place(p)}: chosen by you", "path": p} for p in v.mine("words.")]
+    mine += [{"kind": "you", "text": f"{_word_place(p)}: chosen by you", "path": p}
+             for p in v.mine("words.") if p not in v.held]
+    if v.held:
+        mine.append({"kind": "you", "text": "the words kept as they were drawn: kept by you",
+                     "path": sorted(v.held)[0]})
     n = len(bank.get("verses", []))
     return _card(v, "words", "The words", f"drawn from the song's {n} verses, within its rules",
                  f"leaning {lean_words(lean)}", mine + _unique(why), ["words."])
@@ -807,7 +833,9 @@ def choir_card(v: Version) -> dict:
              if n else "no voices from earlier versions yet")
     parent = v.context.parent_record or {}
     known = (1 + len(parent.get("lineage_singers") or [])) if parent.get("singer") else 0
-    if known and n:
+    if not v.context.parent_record:
+        detail = "the song as it began counts as the version before; a stand-in sings for it"
+    elif known and n:
         own = min(known, n)
         detail = (f"{'the version before sings' if own == 1 else f'the {number(own)} versions before sing'} in "
                   f"{'its' if own == 1 else 'their'} own voice{'s' if own > 1 else ''}"
@@ -885,8 +913,11 @@ def words_view(v: Version) -> list[dict]:
         nth = sum(1 for x in lyrics.sections[: lyrics.sections.index(s)] if x.block == s.block)
         path = (f"words.{block}.{nth}" if block in ("verse", "refrain")
                 else "words.bridge2" if block == "bridge" and nth == 1 else f"words.{block}")
-        mine = path in v.applied or (block == "refrain" and "words.refrain" in v.applied) or \
-            (block == "bridge" and nth == 0 and "words.bridge" in v.applied)
+        paths = [path] + (["words.refrain"] if block == "refrain" else ["words.bridge"] if block == "bridge" and nth == 0
+                          else [])
+        taken = [p for p in paths if p in v.applied]
+        mine = bool(taken)
+        kept = mine and all(p in v.held for p in taken)
         tags = []
         entry = verses.get(s.id)
         if block == "verse" and entry:
@@ -894,10 +925,11 @@ def words_view(v: Version) -> list[dict]:
                     "rare" if entry.get("rarity") == "rare" else None]
         if block == "refrain" and s.slots.get("question"):
             tags = [f"asks who {s.slots['question']}"]
+        how = ("kept by you" if kept else "chosen by you") if mine else \
+            ("drawn by chance" if drawn else "the song's own words")
         item.update({"block": block, "nth": nth, "id": s.id, "lines": [readable(line) for line in s.lines],
-                     "tags": [t for t in tags if t],
-                     "how": "chosen by you" if mine else ("drawn by chance" if drawn else "the song's own words"),
-                     "mine": mine, "path": path, "changeable": bool(drawn and bank)})
+                     "tags": [t for t in tags if t], "how": how, "mine": mine, "kept": kept, "path": path,
+                     "changeable": bool(drawn and bank)})
         out.append(item)
     return out
 
@@ -942,8 +974,8 @@ def view(ctx: Context, v: Version, phrasings: list[dict] | None = None) -> dict:
         cards.insert(3, extra)
     cards += other_cards(v)
     cards.append(machine_card(v, ctx.machine_label(), ctx.quiet))
-    if v.offset:
-        today = ctx.version({}, v.voice)
+    if v.offset:  # the same choices today: what moving the day changed, the person's edits and all
+        today = ctx.version({k: val for k, val in v.edits.items() if k not in ("date", "phrasing")}, v.voice)
         for card in cards:
             was, now = _headline(card["id"], today), _headline(card["id"], v)
             if was is not None and was != now:
@@ -957,6 +989,8 @@ def view(ctx: Context, v: Version, phrasings: list[dict] | None = None) -> dict:
         "cards": cards,
         "edits": v.edits,
         "applied": v.applied,
+        "changed": v.changed,  # the person's choices that changed something: the header counts these
+        "held": sorted(v.held),
         "problems": v.problems,
         "marks": v.marks,
         "form": list(v.params.form),

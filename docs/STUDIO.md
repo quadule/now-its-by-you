@@ -164,14 +164,16 @@ else is still drawn by chance around it within the rules, and stays as drawn
 wherever the rules allow it beside the choice (so a choice offered in place
 changes nothing else). Roll chance again, and the rest is drawn again around
 what you chose. *Keep these words* (on the words card) pins every word as it
-is, so moving through time and rolling chance change only the music.
+is, so moving through time and rolling chance change only the music; the
+words then say "kept by you", and the header counts only what was changed.
 
 ## How edits flow
 
 An edit is one entry in a flat map from a path to a value: what the person
 chose, on top of what the program chose. The page holds the map (and its
-browser storage keeps it across a reload) and sends it with every request;
-the server keeps nothing else but caches, so any request can be replayed.
+browser storage keeps it across a reload, all but the day and chance drawn
+again, so tomorrow opens on tomorrow) and sends it with every request; the
+server keeps nothing else but caches, so any request can be replayed.
 
 | Path | Value | Acts on |
 |---|---|---|
@@ -273,8 +275,9 @@ season, this year), chance and you.
 A preview is a section (or the whole song) made when asked. A section is cut
 from the whole rendition's score by what is sounding: the notes from a breath
 before its first pickup (a beat of the band before it at least) to where the
-next section's pickup begins, a note already ringing brought in a second
-early so it has settled, a sung syllable never begun halfway. It is made,
+next section's pickup begins, an instrument's note already ringing brought in
+a second early so it has settled, and no sung syllable from before it (none is
+begun halfway). It is made,
 brought up by the gain mastering gives a whole rendition (5.3 dB, measured on
 H: 5.1 to 5.4) under the same ceiling, so a quiet verse stays quiet and a turn
 isn't pushed to the loudness of a refrain, and faded in and out. A section of
@@ -367,7 +370,12 @@ browser's storage keeps the edits in progress on this browser only.
 - A Fable review of the design (read-only) before it was built: its findings
   are in (the phrasing mark, roll for seed, edits inside the table, the knobs'
   trace, cutting by what sounds, the token, the refusals' alternatives,
-  --replay).
+  --replay). A second Fable review of the built studio found that a replay of
+  a child lost its parent's choir voices, that "today:" ignored the person's
+  own choices, that held words counted as changes, that a preview could begin
+  the line before's last syllable, and some holes in the server (a refusal
+  that left a kept-alive connection out of step, a short listen queue, a
+  verse count unchecked): all fixed and tested, with its wording notes.
 
 ## Decisions for the artist
 

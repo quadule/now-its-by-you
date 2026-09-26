@@ -180,8 +180,9 @@ def window(genome, params: Params, score, form, index: int) -> tuple[float, floa
 
 
 def cut(score, t0: float, t1: float, before: float = 1.0, tail: float = 2.5):
-    """The notes sounding between t0 and t1, moved so that t0 - before is zero: a note already ringing
-    starts at zero (held that much shorter), so the second of lead-in gives it time to settle before t0."""
+    """The notes sounding between t0 and t1, moved so that t0 - before is zero: an instrument's note already
+    ringing starts at zero (held that much shorter), so the second of lead-in gives it time to settle before
+    t0, where the preview begins. A sung syllable before t0 is left out: none is begun halfway."""
     from dataclasses import replace as dc_replace
 
     start = max(0.0, t0 - before)
@@ -189,9 +190,9 @@ def cut(score, t0: float, t1: float, before: float = 1.0, tail: float = 2.5):
     for n in score.notes:
         if n.start >= t1 or n.start + n.dur <= start:
             continue
+        if (n.part == "voice" or n.part.startswith("choir")) and n.start < t0:
+            continue
         if n.start < start:
-            if n.part == "voice" or n.part.startswith("choir"):
-                continue  # a sung syllable is never begun halfway
             n = dc_replace(n, dur=n.start + n.dur - start, start=start)
         notes.append(dc_replace(n, start=n.start - start))
     return dc_replace(score, notes=tuple(notes), duration=(t1 - start) + tail,
@@ -211,7 +212,7 @@ def faded(x: np.ndarray, sr: int, skip: float, fade_in: float = 0.25, fade_out: 
 
 
 STAGE_WEIGHTS = {"voice": 5.0, "mix": 5.0, "master": 1.0}  # a band part 1, a lineage voice 2 (measured on H)
-STAGE_WORDS = {"voice": "the singer", "mix": "mixing", "master": "mastering", "score": "laying out the song"}
+STAGE_WORDS = {"voice": "singing", "mix": "mixing", "master": "mastering", "score": "laying out the song"}
 
 
 def stages(score) -> list[tuple[str, float]]:
@@ -224,9 +225,10 @@ def stages(score) -> list[tuple[str, float]]:
 
 
 def stage_words(name: str) -> str:
+    """What a render is doing, as the player says it: "playing the lute", "singing", "mixing"."""
     if name.startswith("choir"):
-        return "a voice from before"
-    return STAGE_WORDS.get(name, f"the {explain.player(name)}")
+        return "a voice from before singing"
+    return STAGE_WORDS.get(name, f"playing the {explain.player(name)}")
 
 
 # ---------------------------------------------------------------- the render queue
@@ -328,10 +330,17 @@ class Jobs:
                 job = self._next()
                 job.state = "running"
             try:
-                job.result = job.work(job) or {}
-                for then in job.then:
-                    job.result.update(then(job) or {})
-                job.progress, job.stage, job.state = 1.0, "", "done"
+                result = job.work(job) or {}
+                done = 0
+                while True:  # what was asked to follow it (a recording's copy), even if asked for just now
+                    with self.lock:
+                        todo = job.then[done:]
+                        if not todo:
+                            job.result, job.progress, job.stage, job.state = result, 1.0, "", "done"
+                            break
+                    for then in todo:
+                        result.update(then(job) or {})
+                    done += len(todo)
             except Exception as e:  # said on the page; the studio carries on
                 traceback.print_exc()
                 job.error, job.state = f"{type(e).__name__}: {e}", "failed"
@@ -499,7 +508,7 @@ class Studio:
                                 lyrics=v.lyrics, phrasing_json=v.phrasing_json, parent=self.parent_record,
                                 packet_genome=self.genome_path, chosen_by_you=v.marks or None, progress=job.report)
         (folder / "rendition.json").write_text(json.dumps(record, indent=2) + "\n")
-        shutil.copyfile(folder / "rendition.flac", self.cache / f"{key}.flac")
+        link(folder / "rendition.flac", self.cache / f"{key}.flac")
         job.url = f"/audio/{key}.flac"
         prune(self.cache, CACHE_LIMIT)
         return {"url": job.url, "id": record["id"], "duration": record["duration"]}
@@ -511,7 +520,8 @@ class Studio:
         key = self.key(v, None)
         folder = self.cache / key
         keep = lambda job=None: self._keep(folder)  # noqa: E731
-        if (folder / "rendition.json").exists() and (self.cache / f"{key}.flac").exists():
+        if all((folder / name).exists() for name in ("rendition.json", "rendition.flac")) \
+                and (self.cache / f"{key}.flac").exists():
             return {"state": "done", "progress": 1.0, "url": f"/audio/{key}.flac", "result": keep(),
                     "label": "the recording", "kind": "record"}
         return self.jobs.submit(key, "record", "the recording", lambda job: self._whole(job, v, key), then=keep).view()
@@ -613,6 +623,16 @@ def singer_name(who: str) -> str:
     return who.replace("-", " ").title()
 
 
+def link(src: Path, dst: Path) -> None:
+    """dst the same file as src (a hard link, so a whole song isn't stored twice), else a copy."""
+    with contextlib.suppress(OSError):
+        dst.unlink()
+    try:
+        os.link(src, dst)
+    except OSError:
+        shutil.copyfile(src, dst)
+
+
 def listening(port: int) -> bool:
     with contextlib.closing(socket.socket(socket.AF_INET, socket.SOCK_STREAM)) as s:
         s.settimeout(0.2)
@@ -629,18 +649,26 @@ def shown(path: Path) -> str:
 
 
 def prune(folder: Path, limit: int) -> None:
-    """Keep the cache under its limit, the least recently used first to go."""
-    files = [p for p in folder.rglob("*") if p.is_file()]
-    total = sum(p.stat().st_size for p in files)
-    for p in sorted(files, key=lambda p: p.stat().st_mtime):
+    """Keep the cache under its limit, the least recently used first to go: a preview's file, or a whole
+    rendition's folder at once (never half of one)."""
+    units = []
+    for p in folder.iterdir():
+        with contextlib.suppress(OSError):
+            if p.is_dir():
+                files = [f for f in p.rglob("*") if f.is_file()]
+                stats = [f.stat() for f in files]
+                units.append((max((s.st_mtime for s in stats), default=p.stat().st_mtime),
+                              sum(s.st_size for s in stats), p))
+            else:
+                s = p.stat()
+                units.append((s.st_mtime, s.st_size, p))
+    total = sum(size for _, size, _ in units)
+    for _, size, p in sorted(units, key=lambda u: u[0]):
         if total <= limit:
             break
-        total -= p.stat().st_size
+        total -= size
         with contextlib.suppress(OSError):
-            p.unlink()
-    for d in sorted((p for p in folder.rglob("*") if p.is_dir()), reverse=True):
-        with contextlib.suppress(OSError):
-            d.rmdir()  # only the empty ones
+            shutil.rmtree(p) if p.is_dir() else p.unlink()
 
 
 # ---------------------------------------------------------------- the server
@@ -650,6 +678,7 @@ class Handler(BaseHTTPRequestHandler):
     studio: Studio
     port: int = PORT
     server_version = "songbird-studio"
+    sys_version = ""  # no need to say which Python
     protocol_version = "HTTP/1.1"
 
     def log_message(self, fmt, *args):  # keep the terminal quiet
@@ -749,23 +778,30 @@ class Handler(BaseHTTPRequestHandler):
     # ------------------------------------------------------------ POST
 
     def do_POST(self) -> None:
+        # the body first, so a refusal leaves the connection in step for the next request
+        try:
+            length = int(self.headers.get("Content-Length") or 0)
+        except ValueError:
+            length = -1
+        if not 0 <= length <= 2**20:
+            self.close_connection = True
+            return self.fail(413, "too much")
+        raw = self.rfile.read(length) if length else b""
         # only the studio's own page: its address, JSON, and the token it was given (a header no other page
         # can send without asking first, which this server never answers)
         if not self._local():
             return self.fail(403, "this page answers only its own address")
         if self.headers.get("Content-Type", "").split(";")[0].strip() != "application/json":
             return self.fail(415, "send JSON")
-        if not secrets.compare_digest(self.headers.get("X-Studio", ""), self.studio.token):
+        if not secrets.compare_digest(self.headers.get("X-Studio", "").encode("utf-8", "replace"),
+                                      self.studio.token.encode()):
             return self.fail(403, "this page answers only the page it gave out")
         path = urlsplit(self.path).path
         try:
-            length = int(self.headers.get("Content-Length", 0))
-            if length > 2**20:
-                return self.fail(413, "too much")
-            body = json.loads(self.rfile.read(length) or b"{}")
+            body = json.loads(raw or b"{}")
+            if not isinstance(body, dict) or not isinstance(body.get("edits") or {}, dict):
+                return self.fail(400, "send a map, with the edits a map of choices")
             edits = body.get("edits") or {}
-            if not isinstance(body, dict) or not isinstance(edits, dict):
-                return self.fail(400, "edits are a map of choices")
             studio = self.studio
             if path == "/api/song":
                 return self.send_json(studio.song(edits))
@@ -795,15 +831,19 @@ class Handler(BaseHTTPRequestHandler):
             return self.fail(500, f"{type(e).__name__}: {e}")
 
 
+class Server(ThreadingHTTPServer):
+    request_queue_size = 128  # the page asks for several things at once, and a player many ranges
+    daemon_threads = True
+
+
 def serve(studio: Studio, port: int = PORT, tries: int = 20) -> ThreadingHTTPServer:
     """A server for the studio on 127.0.0.1, on the port asked for or the next free one."""
     for p in range(port, port + tries):
         handler = type("StudioHandler", (Handler,), {"studio": studio, "port": p})
         try:
-            server = ThreadingHTTPServer(("127.0.0.1", p), handler)
+            server = Server(("127.0.0.1", p), handler)
         except OSError:
             continue
-        server.daemon_threads = True
         return server
     raise SystemExit(f"songbird studio: no free port from {port} to {port + tries - 1}")
 

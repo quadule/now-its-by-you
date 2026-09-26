@@ -67,8 +67,10 @@ function storeKey() {
   return state.start ? `songbird-studio|${state.start.title}|${state.start.from}|${state.start.machine.label}` : null;
 }
 function save() {
-  // only ever after a person's own change: edits that came in the page's address are never saved on their own
-  try { localStorage.setItem(storeKey(), JSON.stringify(state.edits)); } catch (e) { /* storage may be off */ }
+  // only ever after a person's own change (edits that came in the page's address are never saved on their
+  // own); the day and chance drawn again aren't kept, so tomorrow opens on tomorrow
+  const kept = Object.fromEntries(Object.entries(state.edits).filter(([p]) => p !== "date" && p !== "roll"));
+  try { localStorage.setItem(storeKey(), JSON.stringify(kept)); } catch (e) { /* storage may be off */ }
 }
 function restore() {
   try { return JSON.parse(localStorage.getItem(storeKey()) || "{}") || {}; } catch (e) { return {}; }
@@ -127,6 +129,7 @@ async function refresh() {
     render();
     loadCompare();
   } catch (e) {
+    if (!state.view) $("which").textContent = `The studio couldn't make your version of the song: ${e.message}`;
     toast(e.message);
   } finally {
     state.busy--;
@@ -142,14 +145,16 @@ function renderHeader() {
   const when = v.offset ? `on ${v.date} (${v.when})` : `today, ${v.date}`;
   $("which").replaceChildren("Your version ", h("b", {}, when), `, ${v.from}, sung by ${v.by}.`);
   $("draw").textContent = v.roll ? `chance drawn again: draw ${v.roll + 1}` : "";
-  const mine = v.applied.filter((p) => p !== "date");
+  const mine = v.changed;
+  const held = v.held.length > 0;
   const bar = $("yoursBar");
-  bar.hidden = !mine.length;
+  bar.hidden = !mine.length && !held;
   bar.replaceChildren();
-  if (mine.length) {
+  if (mine.length || held) {
     bar.append(
-      tag("you", `${mine.length} choice${mine.length === 1 ? " is" : "s are"} yours`),
-      h("button", { class: "link small", type: "button", onclick: () => listen("program", null) }, "hear it as the program would sing it"),
+      mine.length ? tag("you", `${mine.length} choice${mine.length === 1 ? " is" : "s are"} yours`) : null,
+      held ? tag("you", "the words are kept") : null,
+      mine.length ? h("button", { class: "link small", type: "button", onclick: () => listen("program", null) }, "hear it as the program would sing it") : null,
       h("button", { class: "link small", type: "button", onclick: () => {
         const keep = state.edits.date ? { date: state.edits.date } : {};
         state.edits = keep; save(); refresh();
@@ -187,7 +192,7 @@ function renderWords() {
     if (w.sung) {
       if (w.id && w.block === "verse") meta.append(h("span", {}, w.id));
       for (const t of w.tags || []) meta.append(h("span", { class: "tag rule" }, t));
-      meta.append(w.mine ? tag("you", "chosen by you") : tag(w.how === "drawn by chance" ? "chance" : "song", w.how));
+      meta.append(w.mine ? tag("you", w.how) : tag(w.how === "drawn by chance" ? "chance" : "song", w.how));
     }
     const tools = h("span", { class: "sec-tools" }, play);
     const key = `${w.block}.${w.nth}`;
@@ -615,7 +620,7 @@ async function follow(job, playing) {
   playing.job = job;
   const title = job.label || playing.label;
   if (job.state === "done") {
-    play(job.url, title);
+    play(job.url, title, playing.section === null ? "the whole song, as it would be recorded" : "a preview of this part");
     refreshReady(job.key);
     return;
   }
@@ -623,8 +628,11 @@ async function follow(job, playing) {
     showPlayer(title, job.error === "cancelled" ? "stopped" : `couldn't make it: ${job.error}`, 0, false);
     return;
   }
-  const where = job.state === "queued" ? "waiting its turn" : `making ${job.stage || "it"}…`;
-  showPlayer(title, `${where} ${Math.round((job.progress || 0) * 100)}%`, job.progress || 0, true);
+  playing.since = playing.since || Date.now();
+  const slow = Date.now() - playing.since > 8000 && (job.progress || 0) < 0.05
+    ? " (the first one takes longer, while the program warms up)" : "";
+  const where = job.state === "queued" ? "waiting its turn" : `${job.stage || "making it"}…`;
+  showPlayer(title, `${where} ${Math.round((job.progress || 0) * 100)}%${slow}`, job.progress || 0, true);
   state.poll = setTimeout(async () => {
     try { await follow(await api(`/api/job/${job.id}`), playing); } catch (e) { showPlayer(title, e.message, 0, false); }
   }, 450);
@@ -637,10 +645,10 @@ function refreshReady(key) {
   }
 }
 
-function play(url, title) {
+function play(url, title, sub) {
   audio.src = url;
   audio.play().catch(() => {});
-  showPlayer(title, "a preview: made on this computer just now", 0, false);
+  showPlayer(title, sub || "", 0, false);
   $("playPause").disabled = false;
 }
 
@@ -696,7 +704,7 @@ async function record() {
   try {
     let job = await api("/api/record", { edits: state.edits });
     while (job.state === "queued" || job.state === "running") {
-      saved.replaceChildren(h("p", {}, `Recording: ${job.state === "queued" ? "waiting its turn" : `making ${job.stage || "it"}`}… ${Math.round((job.progress || 0) * 100)}%`),
+      saved.replaceChildren(h("p", {}, `Recording: ${job.state === "queued" ? "waiting its turn" : job.stage || "making it"}… ${Math.round((job.progress || 0) * 100)}%`),
         h("div", { class: "bar making" }, h("div", { style: null })));
       saved.querySelector(".bar > div").style.width = `${Math.round((job.progress || 0) * 100)}%`;
       await new Promise((r) => setTimeout(r, 600));
@@ -708,7 +716,7 @@ async function record() {
       h("p", {}, "Saved ", h("code", {}, r.flac), ` (${fmtTime(r.duration)}): the song, the program that sang it and its record, in one file.`),
       h("p", {}, r.yours ? `${r.yours} choice${r.yours === 1 ? " is" : "s are"} marked as yours in it (what you chose, never who you are).` : "Every choice in it is the program's."),
       h("p", { class: "hint" }, "To make the next version from this one: ", h("code", {}, r.next)),
-      h("button", { class: "btn", type: "button", onclick: () => play(job.url, "The recording") }, "Play the recording"));
+      h("button", { class: "btn", type: "button", onclick: () => play(job.url, "The recording", r.flac) }, "Play the recording"));
   } catch (e) {
     saved.replaceChildren(h("p", { class: "problem" }, `Couldn't record it: ${e.message}`));
   } finally {

@@ -188,6 +188,65 @@ def test_the_studio_runs_from_an_unpacked_packet_alone(home):
         server.wait(timeout=20)
 
 
+def test_a_replay_keeps_the_lineage_and_its_choir():
+    """render --replay rebuilds a rendition's parent from its record: its place in the lineage and the earlier
+    singers of its choir, so a child of a child sings again with the same voices."""
+    from songbird import cli
+    from songbird.synth.voice import VoiceParams
+
+    grand = {"id": "a" * 64, "singer": {"shift": -12, "rd": 0.9}}
+    parent = {"id": "b" * 64, "generation": 1, "ancestry": ["a" * 64], "singer": {"tract": 1.15, "rd": 0.7},
+              "lineage_singers": [grand]}
+    singer = VoiceParams()
+    sang, voices = cli.choir_of(parent, singer)
+    child = {"id": "c" * 64, **pack.lineage(parent), "lineage_singers": sang}
+    rebuilt = cli.parent_of(child)
+    assert cli.choir_of(rebuilt, singer) == (sang, voices)
+    assert pack.lineage(rebuilt) == pack.lineage(parent)
+    assert cli.parent_of({"id": "d" * 64, "generation": 0, "parent_id": None}) is None
+
+
+def test_held_words_are_kept_not_changed_and_today_keeps_the_persons_choices(home):
+    studio = S.Studio(None, str(LEAD), "fictional:ada", out=home / "out")
+    kept = studio.keep_words({})["edits"]
+    view = explain.view(studio.context, studio.version(kept))
+    assert view["changed"] == [] and len(view["held"]) == len(kept)
+    assert all(w["how"] == "kept by you" for w in view["words"] if w["sung"])
+    view = explain.view(studio.context, studio.version({"tempo": 88, "date": "2027-09-26"}))
+    tempo = next(c for c in view["cards"] if c["id"] == "tempo")
+    assert tempo["value"].startswith("88") and "today" not in tempo  # today it is 88 too: the person chose it
+    problems = studio.version({"form.verses": 10**9}).problems
+    assert problems[0]["path"] == "form.verses" and "2 to 4 verses" in problems[0]["why"]
+
+
+def test_a_preview_never_begins_a_sung_syllable_halfway(home):
+    studio = S.Studio(None, str(LEAD), "fictional:ada", out=home / "out")
+    v = studio.version({})
+    score = studio._score(v)
+    for index in range(len(v.params.form)):
+        t0, t1 = S.window(studio.genome, v.params, score, v.params.form, index)
+        part, lead_in = S.cut(score, t0, t1)
+        sung = [n for n in part.notes if n.part == "voice" or n.part.startswith("choir")]
+        assert all(n.start >= lead_in - 1e-9 for n in sung), (v.params.form[index], min(n.start for n in sung))
+
+
+def test_a_refusal_keeps_the_connection_in_step(served):
+    studio, port = served
+    c = http.client.HTTPConnection("127.0.0.1", port, timeout=30)
+    head = {"Host": f"127.0.0.1:{port}", "Content-Type": "application/json"}
+    for extra, body, code in (({"X-Studio": "wrong"}, b'{"edits": {}}', 403),
+                              ({"X-Studio": "café".encode().decode("latin-1")}, b'{"edits": {}}', 403),
+                              ({"X-Studio": studio.token}, b"[1, 2]", 400),
+                              ({"X-Studio": studio.token}, b'{"edits": {}}', 200)):
+        c.request("POST", "/api/song", body=body, headers={**head, **extra})
+        r = c.getresponse()
+        r.read()
+        assert r.status == code
+    c.request("GET", "/api/start", headers={"Host": f"127.0.0.1:{port}"})
+    assert c.getresponse().status == 200
+    c.close()
+
+
 def wait(studio, job):
     for _ in range(600):
         state = studio.jobs.get(job["id"]).view()

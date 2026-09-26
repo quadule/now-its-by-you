@@ -131,6 +131,17 @@ def render_one(genome, params: Params, out: Path, *, voice=None, drift=None, lyr
     return record
 
 
+def parent_of(record: dict) -> dict | None:
+    """As much of a rendition's parent as its record keeps: its place in the lineage, and the earlier
+    versions' singers who sang its choir (the parent's first), so rendering it again sings the same."""
+    if not record.get("parent_id"):
+        return None
+    sang = list(record.get("lineage_singers") or [])
+    return {"id": record["parent_id"], "generation": int(record.get("generation", 1)) - 1,
+            "ancestry": list(record.get("ancestry") or [])[:-1],
+            "singer": sang[0].get("singer") if sang else None, "lineage_singers": sang[1:]}
+
+
 def replay_command(args: argparse.Namespace, genome) -> int:
     """A rendition rendered again exactly as its record says: its parameters, the words it recorded (not
     drawn again), its machine and moment; a person's phrasing given again with --phrasing."""
@@ -146,9 +157,7 @@ def replay_command(args: argparse.Namespace, genome) -> int:
         print("songbird: this rendition was sung with a person's phrasing; give it with --phrasing to hear it "
               "the same", file=sys.stderr)
     choir_json = [json.loads(Path(f).read_text()) for f in args.choir_phrasing]
-    # its place in the lineage, as recorded: its parent as the record names it
-    parent = ({"id": record["parent_id"], "generation": int(record.get("generation", 1)) - 1,
-               "ancestry": list(record.get("ancestry") or [])[:-1]} if record.get("parent_id") else None)
+    parent = parent_of(record)
     out = Path(args.out or Path("renders") / (Path(args.genome).stem + ".replay.flac"))
     render_one(genome, params, out, voice=voice, drift=drift, lyrics=lyrics, phrasing_json=phrasing_json,
                choir_json=choir_json, singer_overrides=args.voice, stems=args.stems, mix_overrides=args.mix,
