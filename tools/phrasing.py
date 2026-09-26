@@ -88,8 +88,9 @@ SPEECH = dict(timing=0.15, level=0.3, swell=0.3, scoop=0.15, bend=0.1, fall=0.2)
 SPEECH_LIMIT = dict(early=0.1, level=(-4.0, 4.0), cents=60.0)
 # A sung take is phrasing already; keep nearly all of it. Checked against reference singers
 # (tools/phrasing_eval.py --reference): vibrato reads at about 0.57 of its size, so it's scaled back
-# up; swell can't be read yet (r about 0.2 against what was sung), so it's left to the singer.
-SUNG = dict(timing=1.0, level=0.8, swell=0.0, scoop=0.8, bend=0.8, fall=0.8, vibrato=1.75, tune=1.0)
+# up. Swell read poorly on the robotic references, but a person's held notes fade the same way take
+# after take (Milo: -7 to -9 dB by the end of a long note, both takes), so it's kept.
+SUNG = dict(timing=1.0, level=0.8, swell=1.0, scoop=0.8, bend=0.8, fall=0.8, vibrato=1.75, tune=1.0)
 # The extractor's error that repeats in every take of one voice at one place in the song (its timbre,
 # its way with those consonants), as a standard deviation in the extractor's units: more takes by the
 # same person can't average it away, only other words on the same note or other people. Measured on
@@ -405,14 +406,15 @@ def vowel_onsets(found, band):
     return out
 
 
-def by_vowel(x: np.ndarray, vowels: list[str]) -> np.ndarray:
-    """Each value less the median of its vowel's (or of all, for a vowel sung fewer than three times)."""
+def by_vowel(x: np.ndarray, vowels: list[str], keep: bool = False) -> np.ndarray:
+    """Each value less the median of its vowel's (or of all, for a vowel sung fewer than three times).
+    keep: add the median over everything back, so what every note shares (a singer's habit) stays."""
     out = x - np.median(x)
     for v in set(vowels):
         idx = [i for i, w in enumerate(vowels) if w == v]
         if len(idx) >= 3:
             out[idx] = x[idx] - np.median(x[idx])
-    return out
+    return out + (np.median(x) if keep else 0.0)
 
 
 def measure_sung(notes, knots, found, take, template, lag: int, key: int, tempo: float):
@@ -440,7 +442,8 @@ def measure_sung(notes, knots, found, take, template, lag: int, key: int, tempo:
     vowels = [kn[4].phone for kn in knots]
     level = np.array([np.median(band[v0:v1]) - np.median(band_t[t0:t1]) for (v0, v1, _), (t0, t1, _) in zip(spans, spans_t)])
     swells = np.array([swell(band, v0, v1) - swell(band_t, t0, t1) for (v0, v1, _), (t0, t1, _) in zip(spans, spans_t)])
-    level, swells = by_vowel(level, vowels), by_vowel(swells, vowels)
+    # a singer who fades every held note more than the machine does keeps that: only the vowel's own part goes
+    level, swells = by_vowel(level, vowels), by_vowel(swells, vowels, keep=True)
 
     gestures, off = [], []
     for k, (note, (_, T_v0, *_r), (v0, v1, release), (t0, t1, release_t)) in enumerate(zip(notes, knots, spans, spans_t)):
