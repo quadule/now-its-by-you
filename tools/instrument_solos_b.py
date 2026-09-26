@@ -124,7 +124,8 @@ def main() -> None:
                 module = module_for(family, name)
                 length = int((span(notes) + 1.0) * SR)
                 lufs = master.loudness(placed(module, name, notes, length), SR)
-                row = f"{name:18s} {kind:10s} {lufs:6.1f} LUFS  target {TARGETS[kind]:6.1f}  ({lufs - TARGETS[kind]:+.1f})"
+                target = float(module.SPEC[name].get("loudness", TARGETS[kind]))  # a SPEC may name its own
+                row = f"{name:18s} {kind:10s} {lufs:6.1f} LUFS  target {target:6.1f}  ({lufs - target:+.1f})"
                 if args.cpu:  # this process's CPU time: a busy machine doesn't count against it
                     part = looped(notes)
                     rng, make = streams(name)
