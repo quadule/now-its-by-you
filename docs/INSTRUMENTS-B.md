@@ -280,25 +280,41 @@ tune within 2 cents; strummed at vel 0.6 they sit at -23.8 LUFS.
 `electric`, `electric-crunch`, `electric-tremolo` and `ebass` (`electric.py`,
 with the circuits in `amp.py` and the fretting hand in `fretboard.py`).
 
-Six steel strings on a solid body ring long (a fundamental falls 60 dB in 6
-to 10 seconds mid-neck, each partial faster by its frequency), with each
-maker's neck having its own dead spot between G3 and C4 (Fleischer and
-Zwicker 1999). The magnetic pickup hears the string's velocity where it sits
-(a comb) through its coil's resonance with the pots and cable, worked out from
-the circuit: single coils near 4 kHz, humbuckers near 3 (Zollner). The amp:
-two 12AX7 stages solved on their load lines from Koren's triode equations
-(asymmetric, clamped where the grid conducts, the second stage's coupling
-capacitor charging under a hard attack: the pushed amp's breath), the Fender
-or Marshall tone stack (Yeh and Smith's transfer function), a spring reverb, a
-push-pull power stage and a speaker cabinet. The three names are three
-settings of one rig on a machine: clean with a modest spring; crunch, the
-second stage and power valves breaking up, the master down so it sits as
-loud as clean; tremolo, the amp's (optical or bias, by maker, 4-7 Hz, locked
-to the tempo when the band gives one). `settings["amp"]` may name a setting
-or give its knobs. The bass: long-scale roundwound strings through a pickup
-into a DI, fingered or picked.
+Six steel strings on a solid body ring long (a fundamental falls 60 dB in 6 to
+11 seconds, open high e to open low E, each partial faster by its frequency),
+with each maker's neck having its own dead spot between G3 and C4 (Fleischer
+and Zwicker 1999). Steel is stiff: allpasses in each string's loop stretch its
+partials sharp of the harmonic series as its core does (the low E's 8th
+partial 7 cents, the plain G's 5, the high e's under 1, more up the neck), the
+fundamental still within a tenth of a cent; and a hard pluck starts a few
+cents sharp and settles as the string's swing dies. The magnetic pickup hears
+the string's velocity where it sits (a comb) through its coil's resonance with
+the pots and cable, worked out from the circuit, the tone knob near the top:
+single coils 3 to 6 dB up near 3.5 to 6 kHz, humbuckers 4.5 to 8.5 dB up near
+2.8 to 3.8 kHz (Zollner). The amp: two 12AX7 stages solved on their load lines
+from Koren's triode equations (asymmetric, clamped where the grid conducts,
+the second stage's coupling capacitor charging under a hard attack: the pushed
+amp's breath), the Fender or Marshall tone stack (Yeh and Smith's circuit,
+matching their closed form to a thousandth of a dB), a spring reverb, a
+push-pull power stage nearly linear up to its ceiling (the firmer with
+negative feedback) and a close-miked open-back cabinet (the cone's resonance
+standing at 75 to 110 Hz over what the open back cancels below it, a presence
+rise at 2 to 4 kHz, the fall past 5 or 6 kHz). The three names are three
+settings of one rig on a machine: clean (within 3% of linear on a hard strum)
+with a modest spring; crunch (a strum 12 to 35% from linear), the master down
+so it sits as loud as clean; tremolo, the amp's (optical or bias, by maker, 4
+to 7 Hz, locked to the tempo when the band gives one, dipping 11 to 16 dB). A
+player dials the sound, not the knob: each setting's volume is the maker's
+drive less the rig's heat (a humbucker is 7 dB hotter than a single coil, a
+Fender's stack 5 to 7 dB lossier than a Marshall's), so every rig's clean is
+clean and every crunch crunches. `settings["amp"]` may name a setting or give
+its knobs. The bass: long-scale roundwound strings, stiffer still (the open
+E's 10th partial a third of a semitone sharp: its growl; a fingered note at
+0.8 starts 13 cents sharp and settles within a third of a second), through a P
+or J pickup (the J loaded by its two volume pots and its tone pot) into a DI,
+fingered or picked.
 
-Levels at vel 0.6: clean -24.1, crunch -23.4, tremolo -24.1 LUFS (comping),
+Levels at vel 0.6: clean -23.8, crunch -23.1, tremolo -23.3 LUFS (comping),
 the bass's root-fifth line -23.3 (-24.1).
 
 ## Cello, viola and the string section; the harmonica
@@ -337,18 +353,34 @@ desk is heard through a stereo pair, so a chord's channels correlate 0.4 to
 0.55, as a pair on a real section hears it.
 
 **Harmonica.** A ten-hole Richter harp: the major chord on every blow hole,
-the full scale only in holes 4 to 7, the gaps filled by bending (draw bends
-in holes 1-6 of 1, 2, 3, 1, ½ and 1 semitones, blow bends in 8-10 of 1, 1
-and 2: Bahnson, Antaki and Beery 1998), overblows beyond. For each part the
-harp is chosen that plays its notes with the fewest bends: first position
-for a major tune, second (the blues harp, a fourth above) only when the tune
-has the flat seventh, third for a dorian one. The reed's tone brightens with
-the breath, speaks in 10 to 30 ms, and differs drawing and blowing; a bent
-note is approached from the unbent reed, darker; the tongue slaps chords and
-splits octaves, and the hands wah and tremble.
+the full scale only in holes 4 to 7, the gaps filled by bending (draw bends in
+holes 1-6 of 1, 2, 3, 1, ½ and 1 semitones, blow bends in 8-10 of 1, 1 and 2:
+Bahnson, Antaki and Beery 1998), overblows beyond. For each part the harp is
+chosen that plays its notes with the fewest bends: first position for a major
+tune; second (the cross harp, a fourth above) when it bends less, and in the
+blues unless it bends more than half a semitone a note beyond the straight
+harp; third for a dorian one. Notes that follow straight on are joined as a
+player's mouth joins them: across the holes on one breath the lips slide (the
+old reed dying away as the new one speaks, dips of 2-6 dB), a breath turning
+from blow to draw dips 12-18 dB, the same reed again is tongued. The reed is
+bright and buzzy, its harmonics within 20 dB to 6-9 kHz in the middle holes
+and as bright drawing as blowing (the mouth's resonance follows the note),
+brightening with the breath (from -10 dB an octave of harmonics soft to -5
+hard); it speaks in 15-25 ms at mezzo-forte in the middle holes, 40 soft, 10
+hard, twice as slowly an octave down. Harps are tuned sharp and sag as the
+breath presses them (mezzo-forte 0-2 cents over the band, soft 4 over, hard
+2-7 under), each maker's in equal temperament or a compromise one (the blow
+chord's third 5 cents low), a blues player's sometimes the old Marine Band's
+(its thirds 12 cents low). The throat's vibrato pulses the breath by 3-6 dB
+and dips the pitch only on a reed that bends. A bent note is attacked 20-45
+cents high and held by ear, 1.5-2 dB a semitone weaker and darker; a blues
+`bend` holds the unbent reed, then draws down; `slide` scoops a reed that
+bends or crosses the next hole onto one that doesn't; the tongue slaps chords
+and splits octaves (only where there is one); the cupped hands wah and
+tremble. A singer-songwriter's harp sits in a neck rack, with no hands on it.
 
 Levels: a cello's held bass line -23.3 LUFS, a viola's held line -23.6 and
-the section's pad -23.1 (comping, -23.7); the harmonica's melody -21.0 (a lead,
+the section's pad -23.1 (comping, -23.7); the harmonica's melody -21.4 (a lead,
 -20.7).
 
 ## Idioms for the part-writer
@@ -459,10 +491,13 @@ over a new note, `slide` shifts up into a note, `swell` swells through it,
 from or to the bridge for a note. Keep the cello low (C2-D4 is its voice).
 
 **Harmonica.** Write the tune in the song's key; the harp is chosen for it.
-`bend` on a note approached from above (the blues third and fifth), `wah` on
-a long note (the hands opening), `trem` (hand tremolo), `slap` and `chord`
-for tongue-blocked chords (three notes sharing a start), `octave` for a
-tongue-split octave, `slur` to join notes on one breath.
+Notes written one after another are played legato across the holes, so `slur`
+is only needed to keep a repeated reed swinging. `bend` on a note approached
+from above (the blues third and fifth), `wah` on a long note (the hands
+opening), `trem` (hand tremolo), `slap` and `chord` for tongue-blocked chords
+(on the top note alone or on all the chord's notes starting together: one
+breath either way), `octave` for a tongue-split octave; `wah` and `trem` are
+ignored in the songwriter's rack.
 
 ## Levels and cost
 
@@ -485,14 +520,14 @@ a three-minute part costs on the M1 Max:
 | mandolin | an air in tremolo (as a lead) | -22.6 | -20.7 | |
 | nylon | strummed chords | -23.8 | -23.7 | 5.1 |
 | ukulele | island strum | -23.8 | -23.7 | 4.5 |
-| electric | strummed and picked | -24.1 | -23.7 | 2.4 |
-| electric-crunch | riff | -23.4 | -23.7 | 3.1 |
-| electric-tremolo | held chords | -24.1 | -23.7 | 2.4 |
-| ebass | root and fifth | -23.3 | -24.1 | 1.0 |
+| electric | strummed and picked | -23.8 | -23.7 | 2.9 |
+| electric-crunch | riff | -23.1 | -23.7 | 3.4 |
+| electric-tremolo | held chords | -23.3 | -23.7 | 2.7 |
+| ebass | root and fifth | -23.3 | -24.1 | 1.1 |
 | cello | held bass line | -23.3 | -23.7 | 1.6 |
 | viola | held line | -23.6 | -23.7 | 1.5 |
 | strings | four-note pad | -23.1 | -23.7 | 8.8 |
-| harmonica | melody | -21.0 | -20.7 | 0.7 |
+| harmonica | melody | -21.4 | -20.7 | 0.8 |
 
 The other new set's test measures every instrument with one generic part per
 role (a four-note comping chord four times a bar, a kit groove for all
@@ -526,10 +561,13 @@ these now finds one that suits it:
   its low octaves.
 - `stomps`, `cajon`, `claps`, `shaker` and `tambourine` take the frame drum's
   strip (a 40 Hz high-pass: a stomp's boom and a cajón's bass kept).
-- `electric` takes the guitar's strip, `ebass` the bass's, `harmonica` (and
-  `accordion`, `concertina`) the reeds' (a 140 Hz high-pass, nasal mids
-  tamed, 2 dB back under the voice like a lead line); `steel` and `slide` the
-  fiddle's.
+- `harmonica` has its own: a 180 Hz high-pass, 1.5 dB of honk out near 1 kHz,
+  its breath's top softened, 2 dB back under the voice like a lead line, and
+  nothing taken from its presence near 3 kHz, which its reed now makes itself
+  (the free reeds' strip, which the accordion and concertina keep, takes 2 dB
+  there).
+- `electric` takes the guitar's strip, `ebass` the bass's; `steel` and `slide`
+  the fiddle's.
 
 ## What the reviews changed
 
@@ -562,8 +600,9 @@ snare strokes. All are fixed: a snare's first 2 ms now centre near 3.4 kHz
 and a tom's near 1.5 kHz (a felt-beater kick's stays low, near 400 Hz), the
 wires collide on and ring as their own strands, the ride's high partials
 drain into the wash, the overhead pair hears nearly the same mix, sweeps flow
-when they follow one another. The builders' own reviews did not run: the
-session's limit stopped them.
+when they follow one another. The other builders' own reviews did not run
+then (the session's limit stopped them); they ran the next afternoon, one
+review for each family, below.
 
 The banjo and mandolin were then reviewed by measurement (2026-09-26,
 afternoon), after their builder's last refinements were finished (only the
@@ -609,15 +648,67 @@ boxiness at the cello's B1 boom (190 Hz), not in the formant the body now
 fills; its compressor, suspected of riding the section's beating, measured
 0.04 dB of movement and stays.
 
+A Fable advisor then reviewed the electric guitar and bass by measurement. It
+found the amp's volume at a fixed place on the knob whatever the guitar, so a
+humbucker into a Marshall's stack reached the second stage 12 dB hotter than a
+single coil into a Fender's: one maker's clean was gritty, its crunch a fuzz,
+another's crunch barely broke up; the power stage's soft knee compressed from
+a third of its ceiling; the tremolo dipped only 6-7 dB; the tone knob stood so
+low a single coil's resonance was a 2 dB bump, and the J bass had no tone pot
+(a 10 dB peak); every partial of every string was exactly harmonic and no
+pluck glided into pitch; the cabinet's open-back shelf buried the cone's
+resonance (some makers 10 dB thin at 100 Hz) and its microphones' reflections
+combed 5 dB deep. All are fixed: each setting's volume is the player's drive
+less the rig's heat (clean within 3% of linear on every rig, crunch 12-35%),
+the power valves stay linear to near their ceiling, the tremolo swings 12-15
+dB, the tone knob sits near the top, the strings are stiff (the bass E's 10th
+partial 35 cents sharp) and glide (a bass's hard pluck 13 cents sharp,
+settling in 0.3 s), and the cabinet's resonance stands. The tone stack's
+middle pot is now wired as Yeh and Smith's. It also found the electric 11 LU
+under the acoustic guitar in the indie style: the part-writing's. Its
+tremolo-picked and pulsing parts are now written firmer (0.5-0.58 from
+0.32-0.42) and picked down and up in turn, which brings it up 2.3 dB (see
+Limits).
+
+The harmonica's review by measurement (a Fable advisor, then a second look at
+the style stems) found every joined note re-attacked from silence with a burst
+of breath: the songwriter's legato intro dipped 3-13 dB at all 21 joins,
+breath reversals no deeper than slides, repeated notes not separated at all.
+It also found a tone dull above 3 kHz and 40% darker drawing than blowing (a
+fixed mouth resonance, and a body whose modes cut 10-18 dB notches above 5
+kHz); an 11-22 cent pitch vibrato on every reed, where a harp's throat vibrato
+is a pulse of the breath and only a bendable reed dips; attacks the same at
+every breath; harps in exact A440 equal temperament; every bent note gliding
+from the unbent reed and 8 dB weak; the blues played on a straight D harp
+because the cross harp was considered only for tunes with a flat seventh;
+`bend` on A4 taking the unbendable 3 blow; the part-writer's `slide` ignored;
+written chords sounding their lowest reed three times; `octave` giving a
+seventh on most draw holes; and hands that cut the highs by 40 dB. All are
+fixed, to the review's targets. Its strip no longer takes back the presence
+its reed now has (see For the mix).
+
 ## Limits
 
 - Nobody has listened. The models are right by the measures above, but the
   measures are not the ear.
 - The pedal steel, the slide guitar, the accordion and the concertina are not
-  here: their builders ran out of session before committing them. The
-  electric and harmonica builders' own reviews never ran; their instruments
-  pass their tests and the other set's contract test (but for the loudness
-  of its generic parts), and want a review by measurement next.
+  here: their builders ran out of session before committing them.
+- In the indie style the electric guitar still sits 8 LU under the acoustic
+  guitar (-32.7 LUFS while it plays, against -24.4): its parts are two or
+  three strings at 0.5-0.58, and the style gives it a gain of about 0.7.
+  Doubling the velocities once more, or playing the verse on the amp's
+  tremolo (`electric-tremolo`, held chords) as the style's own description
+  has it, would bring it up; that is the artist's choice.
+- The electric's stiffness allpasses are matched at one partial (the one
+  nearest 900 Hz): those below come within a fifth of a real string's
+  stretch, those above fall short (the bass E's 20th is 66 cents sharp, a
+  real one's about 128), where they have mostly died away. The Fender voicing
+  is the '59 Bassman's stack driven from a plate as a blackface's is, not a
+  blackface Deluxe's own parts: its scoop sits near 800 Hz rather than 400.
+- The harmonica's lowest holes (1-3) keep their fundamental as the strongest
+  harmonic, where a real harp's third and fourth lead, and its bent notes are
+  somewhat darker than a real one's. No style yet writes its bends, wahs or
+  chords.
 - The string section is two or three players to a line, a chamber group's
   sound more than an orchestra's: its held notes beat by 6-7 dB over a couple
   of seconds.
