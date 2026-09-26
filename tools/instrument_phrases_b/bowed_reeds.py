@@ -32,9 +32,29 @@ def _cello_bass(vel: float = 0.6, bars: int = 8) -> list:
     return notes
 
 
+def _cello_under() -> list:
+    """The chamber style's line under the voice: quiet, a new bow every other bar, slurred between, long notes."""
+    return _line("cello", [("F#3", 4, ""), ("G3", 2, "slur"), ("E3", 1, "slur"), ("D3", 3, "slur"), ("D3", 4, ""),
+                           ("C#3", 2, "slur"), ("D3", 1, "slur"), ("B2", 3, "slur"), ("D3", 4, ""), ("A2", 4, "")],
+                 Clock(60), vel=0.35)
+
+
 def _viola() -> list:
     return _line("viola", [("A4", 1, ""), ("B4", 1, "slur"), ("D5", 2, ""), ("C#5", 1, ""), ("B4", 1, "slur"),
                            ("A4", 2, "swell"), ("F#4", 2, "slide"), ("E4", 2, ""), ("D4", 4, "")], Clock(80))
+
+
+def _viola_held(vel: float = 0.6, bars: int = 8) -> list:
+    c = Clock(96)
+    roots = ["D3", "B3", "G3", "A3"]
+    return [c.note("viola", 4 * bar, 3.8, pitch(roots[(bar // 2) % 4]), vel, "") for bar in range(bars)]
+
+
+def _swell() -> list:
+    """The ambient style's slow bowed swell: each chord grows from almost nothing and dies back."""
+    c = Clock(60)
+    shapes = [chord("D3", "A3", "F#4"), chord("B2", "F#3", "D4"), chord("G2", "D3", "B3")]
+    return [c.note("strings", 6 * k, 6, p, 0.5, "swell") for k, shape in enumerate(shapes) for p in shape]
 
 
 def _pad(vel: float = 0.6, bars: int = 8) -> list:
@@ -82,15 +102,17 @@ def _melody() -> list:
                                ("D4", 4, "")], Clock(96))
 
 
-PHRASES = {
-    "cello-line": dict(parts={"cello": _cello()}, about="a cello line down in its low strings, slides and slurs",
-                       mix_as={"cello": "harp"}),
-    "viola-line": dict(parts={"viola": _viola()}, about="a viola line, a swell and a slide", mix_as={"viola": "harp"}),
-    "strings-pad": dict(parts={"strings": _pad()}, about="the section holding D, Bm, G and A, swelling in",
-                        mix_as={"strings": "harp"}),
-    "strings-pizz": dict(parts={"strings": _pizz()}, about="the section plucking an arpeggio", mix_as={"strings": "harp"}),
+PHRASES = {  # the bowed strings go through the mix's own "strings" strip
+    "cello-line": dict(parts={"cello": _cello()}, about="a cello line down in its low strings, slides and slurs"),
+    "cello-under": dict(parts={"cello": _cello_under()},
+                        about="the chamber style's quiet line under the voice: long slurs, the vibrato carried through"),
+    "viola-line": dict(parts={"viola": _viola()}, about="a viola line, a swell and a slide"),
+    "strings-pad": dict(parts={"strings": _pad()}, about="the section holding D, Bm, G and A, swelling in"),
+    "strings-swell": dict(parts={"strings": _swell()}, about="the ambient style's slow swells, each chord from nothing"),
+    "strings-pizz": dict(parts={"strings": _pizz()}, about="the section plucking an arpeggio, the strings ringing on"),
     "harmonica-blues": dict(parts={"harmonica": _harp_blues()}, about="a blues lick in D: bends, a wah, a slap"),
     "harmonica-vamp": dict(parts={"harmonica": _harp_vamp()}, about="tongue-blocked chords, a slap on each bar"),
 }
 
-LEVELS = {"cello": ("comping", _cello_bass()), "strings": ("comping", _pad()), "harmonica": ("lead", _melody())}
+LEVELS = {"cello": ("comping", _cello_bass()), "viola": ("comping", _viola_held()), "strings": ("comping", _pad()),
+          "harmonica": ("lead", _melody())}
