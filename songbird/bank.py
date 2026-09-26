@@ -143,6 +143,26 @@ def head_ids(refrain: dict) -> list[str]:
     return [refrain.get("id", "refrain")] + [h["id"] for h in refrain.get("heads", [])]
 
 
+def refrain_rules_problem(refrain: dict, rr: dict) -> str | None:
+    """Why a refrain's words and rules can't be kept together, in one plain sentence; None if they can: a
+    slot the rules keep distinct in each refrain is one the refrain's own lines sing, other than the
+    question, and isn't also kept once a song; no head fixes a slot kept once a song; and a head that asks
+    its own question is sung at most once a song (head_repeat false), so no two refrains ask it."""
+    own = set(slot_names(refrain["lines"])) - {"question"}
+    once = set(rr.get("once_per_song", ())) - {"question"}
+    distinct = set(rr.get("distinct", ()))
+    if distinct - own or distinct & once:
+        return ("the refrain's distinct slots must be ones its own lines sing, other than the question, and not "
+                f"kept once a song: not {', '.join(sorted((distinct - own) | (distinct & once)))}")
+    for head in refrain.get("heads", []):
+        fixed = set(head.get("fixed", {}))
+        if fixed & once:
+            return f"the {head['id']} head fixes {', '.join(sorted(fixed & once))}, which the rules keep once a song"
+        if "question" in fixed and rr.get("head_repeat", True) is not False:
+            return f"the {head['id']} head asks its own question, so it can be sung only once a song (head_repeat false)"
+    return None
+
+
 def check_block(lines, slots: dict, phrase_ids, phrases: dict, lexicon: dict | None, what: str) -> None:
     """Every way the lines can be sung fits its phrase and can be pronounced."""
     if len(lines) != len(phrase_ids):
@@ -221,6 +241,9 @@ def check(genome: Genome) -> dict:
     for rule in ("head_first", "head_last"):
         if rule in rules["refrain"] and rules["refrain"][rule] not in heads:
             raise ValueError(f"rules name a {rule.replace('_', ' ')} the bank doesn't have")
+    why = refrain_rules_problem(refrain, rules["refrain"])
+    if why:
+        raise ValueError(why)
     couplet_ids = [c["id"] for c in refrain["couplets"]]
     for c in refrain["couplets"]:
         check_block(c["lines"], c.get("slots", {}), r_phrases[len(head):], genome.phrases, lexicon, f"couplet {c['id']}")

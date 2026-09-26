@@ -407,9 +407,10 @@ def fit_rounds(genome, n: int, rounds: list[dict], picker: Picker, note=None) ->
     """Held refrains fitted to a form that sings n of them, keeping all they can: the rounds before the last
     follow the form (a longer one takes in a couplet of the machine's choosing, a shorter one leaves the last
     of them out), the last always sings the canon; each keeps its head where the rules let it be sung there
-    (the first and the last sing the ones the rules give them; another head once a song), asks its question
-    where no other refrain asks it, and keeps its words where they are its head's; anything else is the
-    machine's pick. Every change is logged with why."""
+    (the first and the last sing the ones the rules give them; another head once a song) and its words
+    wherever the rules allow them (arrange.refrain_words: a question or a distinct word no other refrain
+    sings, a word kept once a song the same in all); anything else is the machine's pick. Every change is
+    logged with why."""
     note = note or (lambda entry: None)
     if n == 0:
         return []
@@ -445,6 +446,7 @@ def fit_rounds(genome, n: int, rounds: list[dict], picker: Picker, note=None) ->
     m = len(placed)
 
     used: set = set()  # the other heads sung so far
+    held_heads = [r.get("head") for r in placed]
     for i, r in enumerate(placed):
         rule = arrange.refrain_place(genome, i, m)["head"]
         held_head = r.get("head")
@@ -462,37 +464,19 @@ def fit_rounds(genome, n: int, rounds: list[dict], picker: Picker, note=None) ->
             used.add(head)
         r["head"] = head
 
-    once: dict = {}  # a word the rules keep once a song: the first refrain's as held, else the machine's
-    for slot in arrange.refrain_once(genome):
-        options = arrange.head_words(genome, main).get(slot, [])
-        held_w = next((r.get("words", {}).get(slot) for r in placed if slot in (r.get("words") or {})), None)
-        once[slot] = held_w if held_w in options else picker.one(f"refrain:{slot}", options)
-    free_q = arrange.free_questions(genome)
-    asked = {i: arrange.refrain_place(genome, i, m, r["head"])["question"] for i, r in enumerate(placed)}
-    taken = {q for i, q in asked.items() if q is not None and 0 < i < m - 1}
-    for i, r in enumerate(placed):
-        was = r.get("words") or {}
-        words = {}
-        for slot, options in arrange.head_words(genome, r["head"]).items():
-            if slot == "question" and asked[i] is not None:
-                words[slot] = asked[i]
-            elif slot == "question":
-                held_q = was.get(slot)
-                if held_q in free_q and held_q not in taken:
-                    words[slot] = held_q
-                else:
-                    left = [q for q in free_q if q not in taken] or list(free_q)
-                    words[slot] = picker.one(f"refrain {i + 1}:question", left)
-                    if held_q is not None:
-                        note({"what": "words", "change": "rule", "where": f"refrain {i + 1}'s question", "from": held_q,
-                              "to": words[slot], "why": "each refrain between the first and the last asks its own "
-                                                        "question, none asked twice"})
-                taken.add(words[slot])
-            elif slot in once and once[slot] in options:
-                words[slot] = once[slot]
-            else:
-                words[slot] = was[slot] if was.get(slot) in options else picker.one(f"refrain {i + 1}:{slot}", options)
-        r["words"] = words
+    once = arrange.refrain_once(genome)
+
+    def pick(i: int, slot: str, words: list):  # the machine's own (a word kept once a song, as it always was)
+        return picker.one(f"refrain:{slot}" if slot in once else f"refrain {i + 1}:{slot}", words)
+
+    held = [r.get("words") or {} for r in placed]
+    words = arrange.refrain_words(genome, [r["head"] for r in placed], held, pick)
+    for i, (r, was, now) in enumerate(zip(placed, held, words)):
+        for slot in arrange.shared_slots(genome):
+            if was.get(slot) is not None and slot in now and was[slot] != now[slot] and r["head"] == held_heads[i]:
+                note({"what": "words", "change": "rule", "where": f"refrain {i + 1}'s {slot}", "from": _plain(was[slot]),
+                      "to": _plain(now[slot]), "why": "each refrain sings its own, none twice while there are others"})
+        r["words"] = now
         r["slots"] = picker.slots(f"couplet-slots:{r['id']}", arrange.bank_entry(genome, "couplet", r["id"]),
                                   r.get("slots"))
     return placed
@@ -567,19 +551,22 @@ def alternatives(genome, held: dict, where: tuple) -> list:
             taken = {x["id"] for x in rounds}
             return [c for c in arrange.couplet_ids(genome) if c not in taken]
         if kind == "refrain":
-            words = arrange.head_words(genome, r["head"]).get(where[2], [])
-            if where[2] == "question":
-                others = {x["words"].get("question") for j, x in enumerate(rounds) if j != where[1]}
-                words = [w for w in arrange.free_questions(genome) if w not in others]
-            return [w for w in words if w != r["words"].get(where[2])]
+            slot = where[2]
+            words = arrange.head_words(genome, r["head"]).get(slot, [])
+            if slot == "question":
+                words = [w for w in words if w in arrange.free_questions(genome)]
+            if slot in arrange.shared_slots(genome):
+                others = [x["words"].get(slot) for j, x in enumerate(rounds) if j != where[1]]
+                words = [w for w in words if w not in others]
+            return [w for w in words if w != r["words"].get(slot)]
         heads = arrange.refrain_heads(genome)
         others = [x for j, x in enumerate(rounds) if j != where[1]]
-        asked = {x["words"].get("question") for x in others}
 
-        def fits(h):  # sung once a song, and asking no question another refrain asks
-            fixed = arrange.refrain_place(genome, where[1], len(rounds), h)["question"]
+        def fits(h):  # sung once a song, and fixing no word another refrain sings where each sings its own
             once = h == heads[0] or arrange.head_repeats(genome) or h not in {x["head"] for x in others}
-            return once and (fixed is None or fixed == r["words"].get("question") or fixed not in asked)
+            return once and not any(slot in arrange.shared_slots(genome) and w != r["words"].get(slot)
+                                    and w in {x["words"].get(slot) for x in others}
+                                    for slot, w in arrange.head_fixed(genome, h).items())
 
         return [h for h in heads if h != r["head"] and fits(h)]
     if kind == "bridge":
@@ -729,7 +716,7 @@ def _entry(e) -> str | None:
     return f"{e['id']} ({words})" if words else e["id"]
 
 
-def _round(r: dict) -> str:
+def _round_text(r: dict) -> str:
     """A held refrain for reading: its head and words, then its couplet."""
     words = ", ".join(_plain(v) for v in (r.get("words") or {}).values())
     return f"{r.get('head')} ({words}) + {_entry(r)}" if words else f"{r.get('head')} + {_entry(r)}"
@@ -757,7 +744,7 @@ def diff(genome, parent, child) -> list[dict]:
     ra = arrange.rounds(genome, a) if a.get("refrain") else []
     rb = arrange.rounds(genome, b) if b.get("refrain") else []
     for i in range(max(len(ra), len(rb))):
-        x, y = (_round(ra[i]) if i < len(ra) else None), (_round(rb[i]) if i < len(rb) else None)
+        x, y = (_round_text(ra[i]) if i < len(ra) else None), (_round_text(rb[i]) if i < len(rb) else None)
         if x != y:
             out.append({"what": "words", "change": "refrain", "where": f"refrain {i + 1}", "from": x, "to": y})
     ba, bb = (", ".join(_entry(e) for e in w.get("bridge", [])) for w in (a, b))

@@ -72,7 +72,7 @@ def test_a_refrains_other_heads_are_checked_like_its_own():
     B.check(G.from_dict(data))
     so = data["bank"]["refrain"]["heads"][0]
     for change, why in ((lambda h: h["fixed"].update(question="whistled"), "isn't one of the question"),
-                        (lambda h: h["fixed"].update(then="who knows"), "which its lines don't sing"),
+                        (lambda h: h["fixed"].update(place="desert"), "which its lines don't sing"),
                         (lambda h: h["lines"].__setitem__(0, "Who {question} this song? No-bo-dy, so then"), "syllables"),
                         (lambda h: h.update(id="knows"), "ids repeat"),
                         (lambda h: h["lines"].__setitem__(1, "it's {yours} if you sing it and then who knows?"), "no slots")):
@@ -81,3 +81,12 @@ def test_a_refrains_other_heads_are_checked_like_its_own():
         with pytest.raises(ValueError, match=why):
             B.check(G.from_dict(broken))
     assert so["id"] == "so" and so["by"] == "artist"
+    # and the rules with them: a head can't fix a word kept once a song, a head asking its own question is sung
+    # once a song, and a distinct slot is one the refrain's own lines sing
+    for change, why in ((lambda d: d["bank"]["rules"]["refrain"].update(once_per_song=["while"], distinct=["then"]), "once a song"),
+                        (lambda d: d["bank"]["rules"]["refrain"].pop("head_repeat"), "head_repeat false"),
+                        (lambda d: d["bank"]["rules"]["refrain"].update(distinct=["question"]), "distinct slots")):
+        broken = json.loads(json.dumps(data))
+        change(broken)
+        with pytest.raises(ValueError, match=why):
+            B.check(G.from_dict(broken))

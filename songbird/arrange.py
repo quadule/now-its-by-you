@@ -30,7 +30,7 @@ from dataclasses import dataclass, field
 
 import numpy as np
 
-from .bank import MOODS, expansions, fill, head_ids, slot_names, unmarked, width
+from .bank import MOODS, expansions, fill, head_ids, refrain_rules_problem, slot_names, unmarked, width
 from .genome import Genome, load, syllables, turn, turns
 from .phonetics import FUNCTION_WORDS, clean
 
@@ -42,15 +42,15 @@ MOOD_WEIGHTS = (0.05, 20.0)  # a mood's weight is held in this range: leanings s
 ATTEMPTS = 2000  # sets of verses drawn before searching the bank for one instead
 _STREAM = 0x5EED  # the words draw from their own stream of a seed, apart from the rest of a rendition
 # and each part of the song from its own, so one can't shift another
-_VERSES, _REFRAIN, _BRIDGE, _TAG, _HEADS, _QUESTIONS = range(6)
+_VERSES, _REFRAIN, _BRIDGE, _TAG, _HEADS, _QUESTIONS, _DISTINCT = range(7)
 
 _BRACES = re.compile(r"\{[^{}]*\}")
 
 # Every rule the bank can state that arrange keeps; a rule it doesn't know is an error, not a silence.
 _RULES = {
     "verses": {"count", "first", "max_variants", "max_rare", "order", "never_adjacent", "max_mood", "pairs", "note"},
-    "refrain": {"question", "once_per_song", "couplet_last", "couplet_repeat", "head_first", "head_last", "head_repeat",
-                "note"},
+    "refrain": {"question", "once_per_song", "distinct", "couplet_last", "couplet_repeat", "head_first", "head_last",
+                "head_repeat", "note"},
     "bridge": {"always", "extra", "once_per_song", "note"},
     "tag": {"once_per_song", "note"},
 }
@@ -317,6 +317,9 @@ def _bank(genome: Genome) -> tuple[dict, dict]:
     for rule, names in missing.items():
         if names:
             raise ArrangeError(f"the bank's {rule} rule names {names}, which the bank doesn't have")
+    why = refrain_rules_problem(bank["refrain"], rr)
+    if why:
+        raise ArrangeError(why)
     return bank, rules
 
 
@@ -549,7 +552,7 @@ class _Song:
             names = slot_names(other["lines"])
             if len(other["lines"]) != head or not set(names) <= set(shared):
                 raise ArrangeError(f"the refrain's {other['id']} head doesn't sing on the refrain's lines and slots")
-            fixed = {name: _option(shared[name], word) for name, word in other.get("fixed", {}).items()}
+            fixed = {name: _index(shared[name], word) for name, word in other.get("fixed", {}).items()}
             if None in fixed.values() or not set(fixed) <= set(names):
                 raise ArrangeError(f"the refrain's {other['id']} head fixes words its slots don't have")
             self.heads[other["id"]] = {"id": other["id"], "lines": other["lines"], "slots": {n: shared[n] for n in names}}
@@ -866,24 +869,161 @@ def _head_order(song: _Song, n: int, rng: np.random.Generator, vocabulary: froze
     return out
 
 
-def _question_order(song: _Song, heads: list[str], rng: np.random.Generator,
-                    vocabulary: frozenset[str]) -> list[int | None]:
-    """The question each refrain asks, as the question slot's option (None where its head asks none): the
-    rules' where they give it; else (question "draw") a word drawn from those between the first and the
-    last, each a different one while any are left."""
+def _shared(song: _Song) -> tuple[str, ...]:
+    """The refrain's slots in which each refrain sings a word no other sings while the words last: the
+    question where the rules draw it (between the first refrain's and the last's), and any the rules keep
+    distinct."""
+    rr = song.rules["refrain"]
+    drawn = ("question",) if rr.get("question", "turn") == "draw" else ()
+    return drawn + tuple(s for s in rr.get("distinct", ()) if s != "question")
+
+
+def _allowed(song: _Song, slot: str) -> list[int]:
+    """The options a refrain may take in a shared slot: for the question, all but the first word and the
+    last (the first and last refrains'); for any other, all."""
+    k = width(song.bank["refrain"]["slots"], slot)
+    return list(range(1, k - 1)) if slot == "question" else list(range(k))
+
+
+def _say(song: _Song, slot: str, v: int) -> str:
+    """A refrain singing an option of a slot, for a sentence: 'asks who wrote', 'sings "who knows"'."""
+    word = _label(_value(song.bank["refrain"]["slots"][slot], v)).replace("-", "")
+    return f"asks who {word}" if slot == "question" else f'sings "{word}"'
+
+
+def _ends(song: _Song, slot: str) -> str:
+    slots = song.bank["refrain"]["slots"]
+    first, last = (_label(_value(slots[slot], v)).replace("-", "") for v in (0, width(slots, slot) - 1))
+    return f"only the first refrain asks who {first}, and only the last who {last}"
+
+
+def _round_words(song: _Song, heads: list[str], pick, chosen: Mapping | None = None,
+                 now: Mapping | None = None) -> list[dict[str, int]]:
+    """The option each refrain sings in each of its head's slots, by refrain (slot -> option), as the rules
+    have them, in this order:
+
+    - a slot its head fixes: the head's word;
+    - the question the rules give a refrain (the first's and the last's, or each one's turn);
+    - a slot kept once a song: one word in every refrain that sings it (a person's, else what the first of
+      them sings now, else picked);
+    - a shared slot (_shared): a word no other refrain sings while the words last, the words the rules or
+      a head give aside (a person's, else what it sings now where no other does, else picked among those
+      left);
+    - any other: the refrain's own (a person's, else what it sings now, else picked).
+
+    chosen: {refrain: {slot: option}}, a person's choices, each kept or refused in one sentence
+    (ArrangeError). now: {refrain: {slot: option}}, what each sings now, kept wherever the rules allow.
+    pick(refrain, slot, options) picks one of some options for the rest."""
+    chosen, now = chosen or {}, now or {}
+    rr = song.rules["refrain"]
+    slots = song.bank["refrain"].get("slots", {})
     n = len(heads)
-    out = [_question_rule(song, i, n, h) if _asks(song, h) else None for i, h in enumerate(heads)]
-    spec = song.bank["refrain"].get("slots", {}).get("question")
-    if spec is None:
-        return out
-    middle = list(range(1, width({"q": spec}, "q") - 1))
-    left = [q for q in middle if q not in out]
+    names = [slot_names(song.heads[h]["lines"]) for h in heads]
+    out: list[dict[str, int]] = [dict(song.fixed[h]) for h in heads]
+    for i, words in chosen.items():
+        for slot, v in words.items():
+            if slot not in names[i]:
+                raise ArrangeError(f"{_nth_refrain(i, n)} has no {slot} to choose")
+            if slot in out[i] and v != out[i][slot]:
+                raise ArrangeError(f"the {heads[i]} head sings its {slot} as "
+                                   f"{_label(_value(slots[slot], out[i][slot])).replace('-', '')}")
     for i, h in enumerate(heads):
-        if out[i] is None and _asks(song, h):
-            if not left:
-                left = list(middle)  # every word asked: they come round again
-            out[i] = left.pop(_draw(rng, _affinity(left, lambda q: _option_words(spec, q), vocabulary)))
+        if "question" in names[i] and "question" not in out[i]:
+            q = _question_rule(song, i, n, h)
+            if q is not None:
+                c = chosen.get(i, {}).get("question")
+                if c is not None and c != q:
+                    raise ArrangeError(f"{_nth_refrain(i, n)} {_say(song, 'question', q)}")
+                out[i]["question"] = q
+    for slot in [s for s in rr.get("once_per_song", ()) if s != "question"]:
+        singers = [i for i in range(n) if slot in names[i] and slot not in out[i]]
+        if not singers:
+            continue
+        picked = {chosen[i][slot] for i in singers if slot in chosen.get(i, {})}
+        if len(picked) > 1:
+            raise ArrangeError(f"the refrain's {slot} is sung once a song, the same in every refrain")
+        v = next(iter(picked), None)
+        if v is None:
+            v = next((now[i][slot] for i in singers if now.get(i, {}).get(slot) is not None), None)
+        if v is None:
+            v = pick(singers[0], slot, list(range(width(slots, slot))))
+        for i in singers:
+            out[i][slot] = v
+    for slot in _shared(song):
+        singers = [i for i in range(n) if slot in names[i]]
+        allowed = _allowed(song, slot)
+        given = {i: out[i][slot] for i in singers if slot in out[i]}  # a head's own word, or the rules'
+        free = [i for i in singers if i not in given]
+        left = [v for v in allowed if v not in given.values()]
+        room = len(free) <= len(left)  # every free refrain can sing a word of its own
+        taken = dict(given)
+        for i in free:
+            c = chosen.get(i, {}).get(slot)
+            if c is None:
+                continue
+            if c not in allowed:
+                raise ArrangeError(_ends(song, slot))
+            j = next((j for j, v in taken.items() if v == c), None)
+            if j is not None and (room or j in given):
+                raise ArrangeError(f"{_nth_refrain(j, n)} {_say(song, slot, c)} already")
+            taken[i] = c
+        for i in free:  # what each sings now, where no other does
+            v = now.get(i, {}).get(slot)
+            if i not in taken and v in allowed and v not in taken.values():
+                taken[i] = v
+        for i in free:
+            if i in taken:
+                continue
+            unsung = [v for v in allowed if v not in taken.values()]
+            v = now.get(i, {}).get(slot)
+            if not unsung and v in allowed:  # every word is sung: it may keep its own, though another sings it too
+                taken[i] = v
+            else:
+                taken[i] = pick(i, slot, unsung or left or allowed)
+        for i, v in taken.items():
+            out[i][slot] = v
+    for i in range(n):
+        for slot in names[i]:
+            if slot in out[i]:
+                continue
+            k = width(slots, slot)
+            v = chosen.get(i, {}).get(slot, now.get(i, {}).get(slot))
+            out[i][slot] = v if v is not None and 0 <= v < k else pick(i, slot, list(range(k)))
     return out
+
+
+def _round_words_problem(song: _Song, heads: list[str], words: list[dict[str, int]]) -> str | None:
+    """Why the words some refrains sing in their heads' slots break the rules, in one plain sentence; None
+    if they keep them (as _round_words gives them)."""
+    rr = song.rules["refrain"]
+    slots = song.bank["refrain"].get("slots", {})
+    n = len(heads)
+    for i, (h, w) in enumerate(zip(heads, words)):
+        for slot, v in song.fixed[h].items():
+            if w.get(slot) != v:
+                return f"the {h} head sings its {slot} as {_label(_value(slots[slot], v)).replace('-', '')}"
+        if "question" in w and "question" not in song.fixed[h]:
+            q = _question_rule(song, i, n, h)
+            if q is not None and w["question"] != q:
+                return f"{_nth_refrain(i, n)} {_say(song, 'question', q)}"
+    for slot in [s for s in rr.get("once_per_song", ()) if s != "question"]:
+        if len({w[slot] for w in words if slot in w}) > 1:
+            return f"the refrain's {slot} is sung once a song, the same in every refrain"
+    for slot in _shared(song):
+        allowed = _allowed(song, slot)
+        singers = [i for i in range(n) if slot in words[i]]
+        given = {i: words[i][slot] for i in singers if slot in song.fixed[heads[i]]
+                 or (slot == "question" and _question_rule(song, i, n, heads[i]) is not None)}
+        free = [words[i][slot] for i in singers if i not in given]
+        left = [v for v in allowed if v not in given.values()]
+        if any(v not in allowed for v in free):
+            return _ends(song, slot) if slot == "question" else f"the refrain's {slot} is sung as one of its words"
+        if len(free) <= len(left) and (len(set(free)) < len(free) or set(free) & set(given.values())):
+            return ("a question is asked twice while there are others left to ask" if slot == "question" else
+                    f"the refrain's {slot} is sung the same twice while there are others left to sing")
+        if len(free) > len(left) and not set(left or allowed) <= set(free):
+            return f"the refrain's {slot} sings one of its words twice while another is left unsung"
+    return None
 
 
 def _refrains(song: _Song, n: int, seed: int,
@@ -900,15 +1040,17 @@ def _refrains(song: _Song, n: int, seed: int,
     others = [c for c in spec["couplets"] if c["id"] != last["id"]]
     order = _sample(rng, _affinity(others, song.words, vocabulary), n - 1)
     heads = _head_order(song, n, _rng(seed, _HEADS), vocabulary)
-    questions = _question_order(song, heads, _rng(seed, _QUESTIONS), vocabulary)
+    streams = {"question": _rng(seed, _QUESTIONS)} | {s: _rng(seed, _DISTINCT) for s in rr.get("distinct", ())}
+
+    def pick(i: int, slot: str, options: list[int]) -> int:
+        return options[_draw(streams.get(slot, rng), _affinity(options, lambda o: _option_words(slots[slot], o),
+                                                               vocabulary))]
+
+    words = _round_words(song, heads, pick, now={i: dict(once) for i in range(n)})
     out = []
-    for i, (hid, question) in enumerate(zip(heads, questions)):
+    for i, hid in enumerate(heads):
         head = song.heads[hid]
-        names = slot_names(head["lines"])
-        picks = {s: once[s] for s in names if s in once} | song.fixed[hid]
-        if question is not None:
-            picks["question"] = question
-        picks.update(_pick([s for s in names if s not in picks], slots, rng, vocabulary))
+        picks = words[i]
         couplet = others[order[i]] if i < n - 1 else last
         cpicks = _pick(slot_names(couplet["lines"]), couplet.get("slots", {}), rng, vocabulary)
         lines = song.sing(head, picks) + song.sing(couplet, cpicks)
@@ -918,7 +1060,7 @@ def _refrains(song: _Song, n: int, seed: int,
 
 
 def _bridges(song: _Song, n: int, rng: np.random.Generator,
-             vocabulary: frozenset[str]) -> list[tuple[str, dict, tuple[str, ...]]]:
+             vocabulary: frozenset[str]) -> list[tuple[str, dict, tuple[str, ...], None]]:
     """The canon stanza, its slots chosen once, and in a form that sings the
     bridge twice, one extra stanza after it."""
     if n == 0:
@@ -936,7 +1078,7 @@ def _bridges(song: _Song, n: int, rng: np.random.Generator,
         picks = {s: once[s] for s in names if s in once}
         picks.update(_pick([s for s in names if s not in picks], stanza.get("slots", {}), rng, vocabulary))
         once.update({s: picks[s] for s in names if s in br.get("once_per_song", ())})
-        out.append((stanza["id"], _chosen(stanza, picks), song.sing(stanza, picks)))
+        out.append((stanza["id"], _chosen(stanza, picks), song.sing(stanza, picks), None))
     return out
 
 
@@ -984,8 +1126,9 @@ def arrange(genome: Genome, form: Iterable[str], seed: int, leanings: Leanings |
     rules; forms() says what can.
 
     chosen: a person's choices, kept in their places (see keep()): verses by
-    place, refrain couplets, the refrain's and the bridge's once-a-song
-    words, the second bridge's stanza, the tag's syllable. Everything not
+    place; each refrain's couplet, head and words, and words for every
+    refrain; the bridge's once-a-song words, the second bridge's stanza, the
+    tag's syllable. Everything not
     chosen is drawn as without them, and stays as drawn wherever the rules
     allow it beside the choices. Raises ArrangeError, saying why, when the
     choices themselves can't be sung together within the rules."""
@@ -1004,7 +1147,7 @@ def arrange(genome: Genome, form: Iterable[str], seed: int, leanings: Leanings |
     verses = []
     for v in _draw_verses(song, blocks["verse"], *_verse_weights(song, lean), rng):
         picks = _pick(slot_names(v.entry["lines"]), v.entry.get("slots", {}), rng, vocabulary)
-        verses.append((v.id, _chosen(v.entry, picks), song.sing(v.entry, picks)))
+        verses.append((v.id, _chosen(v.entry, picks), song.sing(v.entry, picks), None))
     drawn = {
         "verse": iter(verses),
         "refrain": iter(_refrains(song, blocks["refrain"], int(seed), vocabulary)),
@@ -1026,8 +1169,7 @@ def arrange(genome: Genome, form: Iterable[str], seed: int, leanings: Leanings |
             continue
         head = None
         if block in drawn:
-            key, slots, lines, *rest = next(drawn[block])
-            head = rest[0] if rest else None
+            key, slots, lines, head = next(drawn[block])
         elif block == "tag":
             key, slots = tag, {}
             lines = tuple(" ".join([tag] * len(genome.phrases[pid].sung)) + "." for pid in section.phrases)
@@ -1163,17 +1305,18 @@ def rounds(genome: Genome, held: dict) -> list[dict]:
     refrain = held.get("refrain") or {}
     if "rounds" in refrain:
         return [{"head": r.get("head"), "words": dict(r.get("words") or {}), "id": r.get("id"),
-                 "slots": dict(r.get("slots") or {})} for r in refrain["rounds"]]
+                 "slots": dict(r.get("slots") or {})} for r in refrain["rounds"] or () if isinstance(r, dict)]
     song = _song(genome)
     spec = song.bank["refrain"].get("slots", {})
     asked = _options(spec["question"]) if "question" in spec else []
     k = len(asked)
     once = dict(refrain.get("slots") or {})
     couplets = list(refrain.get("couplets") or [])
-    out = [{"head": song.head_id, "words": once | ({"question": asked[i % max(k - 1, 1)]} if k else {}),
+    n = len(couplets) + 1
+    out = [{"head": song.head_id, "words": once | ({"question": asked[_turned(i, n, k)]} if k else {}),
             "id": c.get("id"), "slots": dict(c.get("slots") or {})} for i, c in enumerate(couplets)]
     last = refrain.get("last") or {}
-    out.append({"head": song.head_id, "words": once | ({"question": asked[k - 1 if couplets else 0]} if k else {}),
+    out.append({"head": song.head_id, "words": once | ({"question": asked[_turned(n - 1, n, k)]} if k else {}),
                 "id": last.get("id", song.rules["refrain"]["couplet_last"]), "slots": dict(last.get("slots") or {})})
     return out
 
@@ -1203,8 +1346,7 @@ def _rounds_problem(song: _Song, placed: list[dict]) -> str | None:
     couplets = {c["id"]: c for c in spec["couplets"]}
     last = rr["couplet_last"]
     n = len(placed)
-    asked = _options(spec["slots"]["question"]) if "question" in spec.get("slots", {}) else []
-    middle: list = []
+    heads, words = [], []
     for i, r in enumerate(placed):
         where = _nth_refrain(i, n)
         head = r.get("head") or song.head_id
@@ -1214,29 +1356,15 @@ def _rounds_problem(song: _Song, placed: list[dict]) -> str | None:
         if want is not None and head != want:
             return f"{where} sings the {want} head, not {head}"
         entry = song.heads[head]
-        words = r.get("words") or {}
-        names = slot_names(entry["lines"])
-        stray = sorted(set(words) - set(names))
+        held = r.get("words") or {}
+        stray = sorted(set(held) - set(slot_names(entry["lines"])))
         if stray:
             return f"{where}'s {head} head has no {_and(stray)} to sing"
-        for name in names:
-            at = _index(entry["slots"][name], words.get(name))
-            if at is None:
-                return f"{where}'s {name} holds {words.get(name)!r}, which isn't one of its words"
-            fixed = song.fixed[head].get(name)
-            if fixed is not None and at != fixed:
-                return f"the {head} head sings its {name} as {_label(_value(entry['slots'][name], fixed))}"
-        if "question" in names:
-            q = _index(entry["slots"]["question"], words["question"])
-            rule = _question_rule(song, i, n, head)
-            if rule is not None and q != rule:
-                return f"{where} asks who {asked[rule]}, not who {words['question']}"
-            if rule is None:
-                if q in (0, len(asked) - 1):
-                    return f"only the first refrain asks who {asked[0]}, and only the last who {asked[-1]}"
-                middle.append(q)
-            elif "question" in song.fixed[head] and 0 < i < n - 1:
-                middle.append(q)
+        try:
+            words.append(_held_picks(entry, held, where))
+        except ArrangeError as e:
+            return str(e)
+        heads.append(head)
         cid = r.get("id")
         if cid not in couplets:
             return f"the bank has no refrain couplet {cid!r}"
@@ -1251,16 +1379,11 @@ def _rounds_problem(song: _Song, placed: list[dict]) -> str | None:
     ids = [r.get("id") for r in placed]
     if len(set(ids)) != len(ids):
         return "a refrain couplet is sung twice"
-    if len(set(middle)) < min(len(middle), max(len(asked) - 2, 0)):
-        return "a question is asked twice while there are others left to ask"
     if rr.get("head_repeat") is False:
-        others = [r.get("head") for r in placed if (r.get("head") or song.head_id) != song.head_id]
+        others = [h for h in heads if h != song.head_id]
         if len(set(others)) != len(others):
             return f"the {next(h for h in others if others.count(h) > 1)} head is sung twice"
-    for name in rr.get("once_per_song", ()):
-        if len({repr(r["words"][name]) for r in placed if name in (r.get("words") or {})}) > 1:
-            return f"the refrain's {name} is sung once a song, the same in every refrain"
-    return None
+    return _round_words_problem(song, heads, words)
 
 
 def _index(spec, value) -> int | None:
@@ -1312,6 +1435,27 @@ def _held_picks(entry: dict, slots: dict, what: str) -> dict[str, int]:
     return picks
 
 
+def _shape_problem(held) -> str | None:
+    """Why some held words aren't in the shape a record keeps them, in one plain sentence; None if they are."""
+    def entries(value, keys):
+        return isinstance(value, list) and all(isinstance(e, dict) and all(
+            isinstance(e.get(k), t) or (k in ("slots", "words", "head") and e.get(k) is None) for k, t in keys.items())
+            for e in value)
+
+    if not isinstance(held, dict):
+        return "held words are a record's words, not " + type(held).__name__
+    refrain = held.get("refrain", {})
+    shaped = (entries(held.get("verses", []), {"id": str, "slots": dict})
+              and entries(held.get("bridge", []), {"id": str, "slots": dict})
+              and isinstance(refrain, dict)
+              and (entries(refrain["rounds"], {"id": str, "slots": dict, "words": dict, "head": str})
+                   if "rounds" in refrain else
+                   entries(refrain.get("couplets", []), {"id": str, "slots": dict})
+                   and isinstance(refrain.get("slots", {}), dict) and isinstance(refrain.get("last", {}), dict))
+              and isinstance(held.get("tag", ""), str))
+    return None if shaped else "these held words aren't in the shape a record keeps them"
+
+
 def held_counts(held: dict) -> dict[str, int]:
     """How many verses, refrains and bridge sections some held words can sing."""
     refrain = held.get("refrain", {})
@@ -1330,6 +1474,9 @@ def held_problem(genome: Genome, form: Iterable[str], held: dict) -> str | None:
     except ArrangeError as e:
         return str(e)
     why = _problem(song.supported, blocks)
+    if why:
+        return why
+    why = _shape_problem(held)
     if why:
         return why
     bank, rules = song.bank, song.rules
@@ -1534,6 +1681,37 @@ def refrain_place(genome: Genome, i: int, n: int, head: str | None = None) -> di
     return {"head": want, "question": question}
 
 
+def head_fixed(genome: Genome, head: str) -> dict:
+    """The words a refrain's head fixes, as written, by slot."""
+    song = _song(genome)
+    return {name: _value(song.heads[head]["slots"][name], at) for name, at in song.fixed[head].items()}
+
+
+def refrain_words(genome: Genome, heads: list[str], held: list[dict], pick) -> list[dict]:
+    """The words each of some refrains (their heads in order, a form's) sings in its head's slots, as the
+    rules have them (_round_words): what's held kept wherever the rules allow, and pick(refrain, slot,
+    words) choosing among some words as written for the rest. By refrain: slot -> words as written."""
+    song = _song(genome)
+    slots = song.bank["refrain"].get("slots", {})
+    now = {}
+    for i, h in enumerate(heads):
+        spec = song.heads[h]["slots"]
+        now[i] = {name: at for name, w in (held[i] if i < len(held) else {}).items()
+                  if name in spec and (at := _index(spec[name], w)) is not None}
+
+    def pick_option(i: int, slot: str, options: list[int]) -> int:
+        words = [_value(slots[slot], o) for o in options]
+        return options[words.index(pick(i, slot, words))]
+
+    out = _round_words(song, heads, pick_option, now=now)
+    return [{name: _value(slots[name], at) for name, at in w.items()} for w in out]
+
+
+def shared_slots(genome: Genome) -> tuple[str, ...]:
+    """The refrain's slots in which each refrain sings a word no other sings while the words last."""
+    return _shared(_song(genome))
+
+
 def free_questions(genome: Genome) -> tuple[str, ...]:
     """The words a refrain between the first and the last may ask where the rules leave it its own to ask:
     all but the first and the last."""
@@ -1660,15 +1838,12 @@ def _fill(song: _Song, base: list[_Verse], free: set[int], order: list[_Verse]) 
     return seq if walk(0) else None
 
 
-def _keep_refrains(song: _Song, sections: list, places: list[int], pins: dict[int, dict], every: dict,
-                   seed: int, vocabulary: frozenset[str]) -> None:
-    """The refrains with a person's choices kept in their places (keep()), in sections, in place."""
-    spec, rr = song.bank["refrain"], song.rules["refrain"]
-    couplets = {c["id"]: c for c in spec["couplets"]}
-    last, n = rr["couplet_last"], len(places)
-    qspec = spec.get("slots", {}).get("question")
-    asked = _options(qspec) if qspec is not None else []
-    k = len(asked)
+def _refrain_pins_problem(song: _Song, pins: dict[int, dict], every: dict, n: int) -> None:
+    """Raises ArrangeError, in one plain sentence, for a person's refrain choices the rules refuse whatever
+    else is sung: a refrain the form hasn't, a couplet or head that can't go there or is chosen twice."""
+    rr = song.rules["refrain"]
+    couplets = {c["id"] for c in song.bank["refrain"]["couplets"]}
+    last = rr["couplet_last"]
     for i, pin in sorted(pins.items()):
         if not 0 <= i < n:
             raise ArrangeError(f"this form sings {_number(n)} refrains, so it has no refrain {i + 1}")
@@ -1696,107 +1871,96 @@ def _keep_refrains(song: _Song, sections: list, places: list[int], pins: dict[in
             raise ArrangeError(f"the {twice} {what} is chosen for two refrains, and it's sung once a song")
     if "question" in every:
         raise ArrangeError("each refrain asks its own question, so it's chosen refrain by refrain")
+    own = sorted(set(every) & set(_shared(song)))
+    if own:
+        raise ArrangeError(f"each refrain sings its own {_and(own)}, so it's chosen refrain by refrain")
 
+
+def _traded(song: _Song, ids: list[str], heads: list[str], pins: dict[int, dict]) -> None:
+    """Each refrain's couplet and head as chosen, in place: a couplet (or another head) another refrain was
+    singing moves there from a refrain whose own was chosen away, as a trade; failing that, the refrain
+    takes the first couplet no refrain sings (or the song's own head)."""
+    def trade(values: list, chosen: dict[int, str], repeats=lambda v: False) -> None:
+        taken = set(chosen.values())
+        freed = [values[i] for i in sorted(chosen) if values[i] not in taken and not repeats(values[i])]
+        for i, v in chosen.items():
+            values[i] = v
+        for j in range(len(values)):
+            if j not in chosen and values[j] in taken and not repeats(values[j]):
+                values[j] = freed.pop(0) if freed else None
+
+    trade(ids, {i: p["id"] for i, p in pins.items() if p.get("id")})
+    spare = [c["id"] for c in song.bank["refrain"]["couplets"]
+             if c["id"] not in ids and c["id"] != song.rules["refrain"]["couplet_last"]]
+    for j, v in enumerate(ids):
+        if v is None:
+            ids[j] = spare.pop(0)
+    once = song.rules["refrain"].get("head_repeat") is False
+    trade(heads, {i: p["head"] for i, p in pins.items() if p.get("head")},
+          lambda h: h == song.head_id or not once)
+    for j, v in enumerate(heads):
+        if v is None:
+            heads[j] = song.head_id
+
+
+def _keep_refrains(song: _Song, sections: list, places: list[int], pins: dict[int, dict], every: dict,
+                   seed: int, vocabulary: frozenset[str]) -> None:
+    """The refrains with a person's choices kept in their places (keep()), in sections, in place. Each
+    refrain's words: its own choices, else the ones for every refrain, else as sung, else drawn, all as
+    _round_words has the rules keep them."""
+    spec = song.bank["refrain"]
+    couplets = {c["id"]: c for c in spec["couplets"]}
+    n = len(places)
+    _refrain_pins_problem(song, pins, every, n)
     ids = [sections[k].id for k in places]
     heads = [sections[k].head or song.head_id for k in places]
-    for i, p in sorted(pins.items()):
-        cid = p.get("id")
-        if cid and ids[i] != cid:
-            if cid in ids and not pins.get(ids.index(cid), {}).get("id"):
-                ids[ids.index(cid)] = ids[i]  # the couplet it replaces moves to where this one was
-            ids[i] = cid
-        hid = p.get("head")
-        if hid and heads[i] != hid:
-            if hid != song.head_id and rr.get("head_repeat") is False and hid in heads:
-                heads[heads.index(hid)] = heads[i]  # the head it replaces moves to where this one was
-            heads[i] = hid
+    _traded(song, ids, heads, pins)
 
-    # each refrain's words: its own choices, else the ones for every refrain, else as sung (where it sings
-    # the same head and couplet), else drawn; the question by the rules, else chosen, else as asked unless
-    # another refrain asks it now, else drawn among the words no other refrain asks
-    once = [s for s in rr.get("once_per_song", ()) if s != "question"]
-    for name in once:  # a word the rules keep once a song, chosen in one refrain, holds in every refrain
-        chosen_once = {repr(p["slots"][name]): p["slots"][name] for p in pins.values() if name in (p.get("slots") or {})}
-        if len(chosen_once) > 1:
-            raise ArrangeError(f"the refrain's {name} is sung once a song, the same in every refrain")
-        if chosen_once:
-            every[name] = next(iter(chosen_once.values()))
-    wanted = []
+    chosen, theirs = {}, {}
     for r in range(n):
         head, couplet = song.heads[heads[r]], couplets[ids[r]]
         hnames, cnames = slot_names(head["lines"]), slot_names(couplet["lines"])
-        own = {k: v for k, v in ((pins.get(r) or {}).get("slots") or {}).items() if k not in once}
+        own = dict((pins.get(r) or {}).get("slots") or {})
         stray = sorted(set(own) - set(hnames) - set(cnames))
         if stray:
             raise ArrangeError(f"{_nth_refrain(r, n)} has no {_and(stray)} to choose")
-        fixed = song.fixed[heads[r]]
-        mine = {name: w for name, w in every.items() if name in hnames and name not in fixed}
+        mine = {name: w for name, w in every.items() if name in hnames and name not in song.fixed[heads[r]]}
         mine |= {name: w for name, w in own.items() if name in hnames}
         question = mine.pop("question", None)
-        mine = _chosen_slots(head, mine, _nth_refrain(r, n))
-        for name, at in mine.items():
-            if name in fixed and at != fixed[name]:
-                raise ArrangeError(f"the {heads[r]} head sings its {name} as "
-                                   f"{_label(_value(head['slots'][name], fixed[name])).replace('-', '')}")
-        wanted.append((mine, question, {name: w for name, w in own.items() if name in cnames and name not in hnames}))
+        chosen[r] = _chosen_slots(head, mine, _nth_refrain(r, n))
+        if question is not None:
+            at = _option(spec["slots"]["question"], question)
+            if at is None:
+                raise ArrangeError(f"a refrain can ask who {_and([_label(o) for o in _options(spec['slots']['question'])])}, "
+                                   f"not who {question}")
+            chosen[r]["question"] = at
+        theirs[r] = {name: w for name, w in own.items() if name in cnames and name not in hnames}
     stray = sorted(set(every) - {name for h in heads for name in slot_names(song.heads[h]["lines"])})
     if stray:
         raise ArrangeError(f"the refrain has no {_and(stray)} to choose")
 
-    questions: dict[int, int] = {}
-    free = []
-    for r in range(n):
-        if not _asks(song, heads[r]):
-            continue
-        rule = _question_rule(song, r, n, heads[r])
-        choice = wanted[r][1]
-        at = _option(qspec, choice) if choice is not None else None
-        if choice is not None and at is None:
-            raise ArrangeError(f"a refrain can ask who {_and(asked)}, not who {choice}")
-        if rule is not None:
-            if at is not None and at != rule:
-                raise ArrangeError(f"{_nth_refrain(r, n)} asks who {asked[rule]}")
-            questions[r] = rule
-        elif at is not None:
-            if at in (0, k - 1):
-                raise ArrangeError(f"only the first refrain asks who {asked[0]}, and only the last who {asked[-1]}")
-            clash = next((j for j, q in questions.items() if q == at and 0 < j < n - 1), None)
-            if clash is not None:
-                raise ArrangeError(f"refrain {clash + 1} asks who {asked[at]} already")
-            questions[r] = at
-        else:
-            free.append(r)
-    for r in free:
-        now = _option(qspec, sections[places[r]].slots.get("question"))
-        taken = set(questions.values())
-        if now is not None and 0 < now < k - 1 and now not in taken:
-            questions[r] = now
-        else:
-            left = [q for q in range(1, k - 1) if q not in taken] or list(range(1, k - 1))
-            rng = _rng(seed, _PLACED + 32 + r)
-            questions[r] = left[_draw(rng, _affinity(left, lambda q: _option_words(qspec, q), vocabulary))]
+    def pick(r: int, slot: str, options: list[int]) -> int:
+        rng = _rng(seed, _PLACED + 32 + r) if slot in _shared(song) else _rng(seed, _PLACED + 8 + r)
+        return options[_draw(rng, _affinity(options, lambda o: _option_words(spec["slots"][slot], o), vocabulary))]
 
+    now = {r: _picks(song.heads[heads[r]], sections[k].slots) for r, k in enumerate(places)}
+    words = _round_words(song, heads, pick, chosen, now)
+    why = _round_words_problem(song, heads, words)
+    if why:  # choices that keep each rule alone but not all of them together (a word chosen twice too often)
+        raise ArrangeError(why)
     for r, place in enumerate(places):
         s = sections[place]
         head, couplet = song.heads[heads[r]], couplets[ids[r]]
-        mine, _, theirs = wanted[r]
-        same_head = heads[r] == (s.head or song.head_id)
-        picks = (_picks(head, s.slots) if same_head else {}) | song.fixed[heads[r]] | mine
-        if r in questions:
-            picks["question"] = questions[r]
-        cpicks = (_picks(couplet, s.slots) if ids[r] == s.id else {}) | _chosen_slots(couplet, theirs, f"the {ids[r]} couplet")
-        rng = _rng(seed, _PLACED + 8 + r)
-        rest = [name for name in slot_names(head["lines"]) if name not in picks]
-        if rest:
-            picks |= _pick(rest, head["slots"], rng, vocabulary)
+        picks = words[r]
+        cpicks = (_picks(couplet, s.slots) if ids[r] == s.id else {}) | _chosen_slots(couplet, theirs[r], f"the {ids[r]} couplet")
         rest = [name for name in slot_names(couplet["lines"]) if name not in cpicks]
         if rest:
-            cpicks |= _pick(rest, couplet.get("slots", {}), rng, vocabulary)
-        words = _chosen(head, picks) | _chosen(couplet, cpicks)
+            cpicks |= _pick(rest, couplet.get("slots", {}), _rng(seed, _PLACED + 8 + r), vocabulary)
+        sung = _chosen(head, picks) | _chosen(couplet, cpicks)
         sung_head = None if heads[r] == song.head_id else heads[r]
-        if words == s.slots and couplet["id"] == s.id and sung_head == s.head:
+        if sung == s.slots and couplet["id"] == s.id and sung_head == s.head:
             continue
-        sections[place] = Sung(s.section, "refrain", couplet["id"], words,
+        sections[place] = Sung(s.section, "refrain", couplet["id"], sung,
                                song.sing(head, picks) + song.sing(couplet, cpicks), sung_head)
 
 
@@ -2020,9 +2184,14 @@ def options(genome: Genome, lyrics: Lyrics, block: str, index: int = 0) -> dict:
         skip = set(fixed) | ({"question"} if rule is not None else set())
         entry = song.heads.get(head, spec)
         words = _slot_choices(entry, here.slots, skip=skip)
+        heads_sung = [s.head or song.head_id for s in sections]
         for w in words:
-            if w["slot"] == "question":  # the first and the last words are the first and last refrains'
-                w["options"] = w["options"][1:-1]
+            if w["slot"] in _shared(song):  # never a word the rules or a head give another refrain
+                spec_ = spec["slots"][w["slot"]]
+                given = {_index(spec_, s.slots.get(w["slot"])) for j, s in enumerate(sections) if j != index and (
+                    w["slot"] in song.fixed.get(heads_sung[j], {})
+                    or (w["slot"] == "question" and _question_rule(song, j, n, heads_sung[j]) is not None))}
+                w["options"] = [_label(_value(spec_, v)) for v in _allowed(song, w["slot"]) if v not in given]
             if w["slot"] in rr.get("once_per_song", ()):
                 w["once"] = True  # chosen once for every refrain
         couplet = next((c for c in spec["couplets"] if c["id"] == here.id), None)

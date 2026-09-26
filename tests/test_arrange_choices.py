@@ -159,8 +159,8 @@ def test_each_refrain_has_words_of_its_own():
         options = A.options(g, drawn, "refrain", 1)
         assert {h["id"] for h in options["heads"]} == {"knows", "so"} and all(h["allowed"] for h in options["heads"])
         question = next(w for w in options["words"] if w["slot"] == "question") if drawn.heads[1] is None else None
-        if question:
-            assert question["options"] == ["sang", "heard", "kept", "wrote"]
+        if question:  # never a word another refrain's head asks as written
+            assert question["options"] == ["sang", "heard", "kept"] + ([] if "so" in drawn.heads else ["wrote"])
         # another head in refrain 2: its fixed words as written, the rest as drawn
         kept = A.arrange(g, LONG, seed, None, {"refrains": {1: {"head": "so"}}})
         so = [s for s in kept.sections if s.block == "refrain"][1]
@@ -185,3 +185,27 @@ def test_a_person_can_ask_a_question_in_a_refrain_between():
     assert A.problem(g, LONG, {"refrains": {at: {"slots": {"question": other}}}}) is None
     if heads[3 - at] == "so":  # the so head's question is its own: it can't be taken from it
         assert "asks who wrote already" in A.problem(g, LONG, {"refrains": {at: {"slots": {"question": "wrote"}}}})
+
+
+def test_a_question_another_refrains_head_asks_as_written_cant_be_chosen():
+    """The Fable review's case: with the so head in refrain 3, choosing "wrote" for refrain 2 is refused, not
+    sung twice."""
+    seed = next(s for s in range(200) if A.arrange(g, LONG, s).heads == (None, None, "so", None))
+    assert "refrain 3 asks who wrote already" in A.problem(g, LONG, {"refrains": {1: {"slots": {"question": "wrote"}}}})
+    assert "wrote" not in next(w for w in A.options(g, A.arrange(g, LONG, seed), "refrain", 1)["words"]
+                               if w["slot"] == "question")["options"]
+
+
+def test_couplets_chosen_for_two_refrains_at_once_trade_without_singing_one_twice():
+    """Found by fuzzing: choosing refrain 2's couplet and refrain 3's at once, where refrain 3 was singing the
+    one chosen for refrain 2, once left that couplet in two refrains."""
+    five = ("intro", "verse", "refrain", "verse", "refrain", "verse", "refrain", "bridge", "refrain", "refrain", "tag")
+    for seed in range(60):
+        drawn = A.arrange(g, five, seed)
+        a, b = drawn.couplets[1], drawn.couplets[2]
+        for pins in ({1: {"id": b}, 2: {"id": a}}, {1: {"id": b}, 2: {"id": drawn.couplets[0]}},
+                     {2: {"id": drawn.couplets[3]}, 1: {"id": drawn.couplets[2]}}):
+            kept = A.arrange(g, five, seed, None, {"refrains": pins})
+            assert len(set(kept.couplets)) == len(kept.couplets) and kept.couplets[-1] == "canon"
+            assert all(kept.couplets[i] == p["id"] for i, p in pins.items())
+            assert A.held_problem(g, five, A.hold(g, kept)) is None
