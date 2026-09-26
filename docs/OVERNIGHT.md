@@ -28,6 +28,27 @@ program, the song, its record and its words. `python3 song.flac new` sets the pr
 first) and sings a new version on that computer, as the file's child and a packet in turn.
 docs/PACKET.md has the details and what was checked.
 
+### Swing had its lilt backwards in four songs (fixed)
+
+The swing was measured from each song's first pickup instead of its first bar line. Songs whose
+pickup is an eighth before a 4/4 bar (G, H, I and K) therefore had their beats pushed late and
+their off-beat eighths left on time: a reversed, short-long lilt, with every bar line late too.
+
+**Now:** the beats stay on the grid, only each off-beat eighth is late, the band and the voice
+move together, and sections start on their bar lines. tests/test_swing.py checks all of it.
+
+**What didn't change:** the seed, the karaoke guide, the training corpora (all swing 0), the other
+songs, and the compound meters. All realize byte-identically.
+
+**What did change:** every machine-sung rendition of G, H, I and K. Each note moves by swing/3 of
+an eighth: 6 to 16 ms in tonight's examples (swing 0.06 to 0.15), up to about 60 ms at the
+highest swing a machine can reach (0.6).
+
+The examples are re-rendered. The old versions are in `before-swing-fix/` beside them, in
+renders/production/lineage/ and renders/production/variation/, and each README lists every
+file's shift. The drift agent re-renders its evolution examples, and the sing page's refactored
+clock gets the same fix.
+
 ### The voice
 
 (in progress: the learned voice trained only on our own house singers; a delivery agent; a
@@ -74,6 +95,19 @@ Each item names the choice, why it was made, and how to undo it.
      error after decoding every sample, and macOS `ditto` won't unzip it.
    - *The alternative:* the plan's own fallback, the archive in a FLAC metadata block, which is
      strictly valid FLAC but no longer unzippable or runnable.
+3. **Where the seed and its program hash are published.**
+   - *Why it matters:* a careful stranger can't look Songbird up before running a 13 MB "song" that
+     wants to set up 250 MB.
+   - *The suggestion (the packet review's):* one line in README.txt saying where the seed and its
+     program's hash are published, e.g. songbird.quadule.com. It keeps the anonymity ("Who made
+     this song? Nobody knows.") without the smell.
+   - *Related:* signing the program would let a packet refuse modified programs, but it sits
+     awkwardly with CC0 and with anyone packing their own changes.
+4. **Whether the seed carries its day.** A seed rendered without `--date` has no rendered_at, so
+   its archive's entries are dated 1980.
+5. **The tags use a working title.** Rendered FLACs now carry the genome's title (e.g. "Now It's
+   by You") and "Songbird" as the artist until you choose (docs/STATEMENT.md proposes "Nobody
+   Knows" and "Nobody").
 2. **A packet run fetches its dependencies.** The first run asks, then fetches them from PyPI
    (~150 MB) into ~/.songbird. Carrying them inside the file would tie it to one platform and add
    about 100 MB.
