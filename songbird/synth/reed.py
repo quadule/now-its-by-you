@@ -32,6 +32,48 @@ def table(freq: float, sr: int, rng: np.random.Generator, brightness: float = 0.
     return wave / np.max(np.abs(wave))
 
 
+def tables(freq: float, sr: int, rng: np.random.Generator, slopes, even: float = 0.8, shape=None,
+           top: float | None = None) -> np.ndarray:
+    """Periods of a free reed's tone, one for each spectral slope (harmonic k's amplitude goes as k**-slope),
+    sharing their phases so they can be cross-faded without cancelling (a reed played harder is brighter: its
+    pulse of air is sharper). even scales the even harmonics (a pulse a little narrower than half the period);
+    shape, if given, is a gain per frequency in Hz (a chamber's or a mouth's resonances); top, the highest
+    frequency the tone must stay under (for a note that will bend up), by default the note's own.
+    Shape (len(slopes), TABLE), scaled by the brightest row's RMS (0.35), so a reed's loudness doesn't hang
+    on how its harmonics' random phases happen to peak."""
+    count = int(min(80, 0.45 * sr / max(freq, top or freq)))
+    count = max(count, 1)
+    k = np.arange(1, count + 1)
+    phases = rng.uniform(0.0, 2.0 * np.pi, count)
+    gain = np.ones(count)
+    gain[1::2] *= even
+    if shape is not None:
+        gain = gain * shape(k * freq)
+    x = np.arange(TABLE) / TABLE
+    basis = np.sin(2.0 * np.pi * k[:, None] * x[None, :] + phases[:, None])
+    out = np.stack([((k ** -float(s)) * gain) @ basis for s in slopes])
+    return out * (0.35 / np.sqrt(np.mean(out[int(np.argmin(slopes))] ** 2)))
+
+
+@njit(cache=True)
+def _read_mix(dark, bright, increments, amplitude, mix, out, offset, phase):
+    """_read, cross-fading from the dark period to the bright one by mix (0..1), sample by sample."""
+    size = dark.shape[0]
+    for i in range(increments.shape[0]):
+        phase += increments[i]
+        if phase >= 1.0:
+            phase -= 1.0
+        x = phase * size
+        j = int(x)
+        f = x - j
+        j0 = j % size
+        j1 = (j + 1) % size
+        a = (1.0 - f) * dark[j0] + f * dark[j1]
+        b = (1.0 - f) * bright[j0] + f * bright[j1]
+        out[offset + i] += amplitude[i] * (a + mix[i] * (b - a))
+    return phase
+
+
 @njit(cache=True)
 def _read(wave, increments, amplitude, out, offset, phase):
     size = wave.shape[0]
