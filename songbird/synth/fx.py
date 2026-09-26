@@ -146,7 +146,7 @@ def _biquads(x: np.ndarray, sos: np.ndarray) -> np.ndarray:
 
 def equalize(x: np.ndarray, sos: np.ndarray) -> np.ndarray:
     """x through the sections of `sos` (fx.design); x may be mono."""
-    if not len(sos):
+    if not len(sos) or not len(x):
         return x
     y = _biquads(np.ascontiguousarray(x.reshape(len(x), -1), dtype=np.float64), np.ascontiguousarray(sos, dtype=np.float64))
     return y.reshape(x.shape)
