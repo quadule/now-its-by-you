@@ -121,6 +121,16 @@ def test_its_phrases_never_clip_and_its_amp_stays_clean(name):
 # --- the pedal steel ------------------------------------------------------------------------------
 
 
+def test_a_chord_no_bar_can_hold_is_played_as_far_as_it_reaches():
+    """B2 with E6 can't be held at one bar position: the player leaves out the high note rather than fail."""
+    keep, g = steel.reachable((47, 88), 5)
+    assert keep == (0,) and steel.OPEN[g.strings[0]] + g.bar + g.change[g.strings[0]] == 47
+    y = render("steel", [note(47), note(88), note(62, start=1.0, dur=1.0)], 2.5)
+    assert np.all(np.isfinite(y)) and np.any(y)
+    y = render("slide", [note(40, part="slide"), note(83, part="slide")], 2.5)
+    assert np.all(np.isfinite(y)) and np.any(y)
+
+
 def test_the_copedant():
     """E9 with the A, B and C pedals and four knee levers: A raises B to C#, B raises G# to A, the knee levers
     raise and lower the E's; two levers pulling one string opposite ways never go together."""

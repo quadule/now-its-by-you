@@ -204,6 +204,23 @@ def grip(pitches: tuple[int, ...], bar: int, sounding: frozenset = frozenset(), 
     raise ValueError(f"no grip for {pitches}")
 
 
+def reachable(pitches: tuple[int, ...], bar: int, sounding: frozenset = frozenset(), glide: bool = False,
+              bend: frozenset = frozenset()) -> tuple[tuple[int, ...], Grip]:
+    """The grip for as many of these notes as one bar position can hold: all of them if it can, else the
+    player leaves out what is out of reach, keeping the lowest notes first. Returns the kept notes' indices."""
+    try:
+        return tuple(range(len(pitches))), grip(pitches, bar, sounding, glide, bend)
+    except ValueError:
+        pass
+    for n in range(len(pitches) - 1, 0, -1):
+        for keep in combinations(range(len(pitches)), n):
+            try:
+                return keep, grip(tuple(pitches[k] for k in keep), bar, sounding, glide)
+            except ValueError:
+                continue
+    raise ValueError(f"no grip for any of {pitches}")
+
+
 def thirds_offset(string: int, change: int, thirds: float) -> float:
     """Cents a string sits off equal temperament when the player tunes the major thirds `thirds` cents flat
     (toward pure thirds, as Jeff Newman's chart has them: the G# strings, the A pedal's C#, the D# a little
@@ -458,13 +475,16 @@ def _bar_tracks(groups, sr: int, rng: np.random.Generator, d: dict, ornament: fl
         t0 = int(round(group[0].start * sr))
         if t0 >= length:
             break
-        pitches = tuple(int(round(n.pitch)) for n in group)
+        sounding = frozenset(i for i, seg in current.items() if seg.start + seg.held > t0 - int(0.03 * sr))
+        legato = bool({n.art for n in group} & set(LEGATO)) and bool(sounding)
+        bending = frozenset(j for j, n in enumerate(group) if n.art == "bend")
+        keep, g = reachable(tuple(int(round(n.pitch)) for n in group), where, sounding if legato else frozenset(),
+                            legato, bending)
+        if len(keep) < len(group):  # a chord no bar position can hold: what is out of reach is left out
+            group = [group[k] for k in keep]
+            bending = frozenset()
         arts = {n.art for n in group}
         dur = max(n.dur for n in group)
-        sounding = frozenset(i for i, seg in current.items() if seg.start + seg.held > t0 - int(0.03 * sr))
-        legato = bool(arts & set(LEGATO)) and bool(sounding)
-        bending = frozenset(j for j, n in enumerate(group) if n.art == "bend")
-        g = grip(pitches, where, sounding if legato else frozenset(), legato, bending)
         target = list(g.change)
         moved = [i for i in range(len(OPEN)) if target[i] != state[i]]
         bent = {g.strings[j] for j in bending if g.change[g.strings[j]] > 0}
@@ -833,6 +853,9 @@ def _slide_tracks(groups, tuning, sr: int, rng: np.random.Generator, d: dict, or
         sounding = {i for i, seg in current.items() if seg.start + seg.held > t0 - int(0.03 * sr)}
         glide = bool(arts & set(LEGATO))
         placed = place_slide(tuple(n.pitch for n in group), tuning, where, previous, glide)
+        if placed is None and len(group) > 1:  # a chord no one slide position holds: its top note alone
+            group = [max(group, key=lambda n: n.pitch)]
+            placed = place_slide((group[0].pitch,), tuning, where, previous, glide)
         if placed is None:
             continue
         x, chosen = placed
