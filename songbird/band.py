@@ -182,6 +182,7 @@ class Context:
         self.sections: list[Section] = []
         self.chords: list[Chord] = []
         self.tune: list[Tune] = []
+        self.phrases: list[tuple[float, float]] = []  # each placed phrase's span, bar line to bar line
         self._layout(placed, lead, melody)
         self._energy()
         self.scale = self._scale()
@@ -201,6 +202,7 @@ class Context:
                                              section.lyrics is not None, section.choir))
                 rounds[role] = rounds.get(role, 0) + 1
             index = len(self.sections) - 1
+            self.phrases.append((s0, s1))
             beats_per_bar = meter.bar / meter.beat
             for b, chords in enumerate(phrase.chords):
                 bar_u = s0 + b * meter.bar
@@ -283,10 +285,18 @@ class Context:
     def on(self, name: str) -> bool:
         return self.band.plays(name)
 
+    def breath(self, u: float) -> float:
+        """Players breathe with the phrase: a little fuller through a line's middle than at its ends."""
+        for p0, p1 in self.phrases:
+            if p0 - 1e-9 <= u < p1 - 1e-9:
+                return 0.96 + 0.08 * float(np.sin(np.pi * (u - p0) / (p1 - p0)))
+        return 1.0
+
     def vel(self, u: float, base: float, under_words: float = 0.65) -> float:
-        """A velocity: base scaled by the energy there, softer under words (or
-        under an instrument stating the tune), never twice the same."""
-        v = base * (0.62 + 0.5 * self.energy_at(u))
+        """A velocity: base scaled by the energy there and the phrase's breath,
+        softer under words (or under an instrument stating the tune), never
+        twice the same."""
+        v = base * (0.62 + 0.5 * self.energy_at(u)) * self.breath(u)
         if self.sung_at(u):
             v *= under_words
         elif any(what in ("lead", "quote") for what in self.sections[self.section_at(u)].parts.values()):
@@ -341,6 +351,8 @@ def plan(ctx: Context) -> None:
         if ctx.on("bass"):
             if r in ("bridge", "tag", "outro") or (r == "intro" and e < 0.45):
                 parts["bass"] = "long"
+            elif pattern == "air":  # a slow air: the bass holds, and only marks the harmony in the refrains
+                parts["bass"] = "roots" if r in ("refrain", "break") else "long"
             elif r == "verse" and s.nth == 0:
                 parts["bass"] = "roots"
             else:
@@ -355,7 +367,7 @@ def plan(ctx: Context) -> None:
         if ctx.on("guitar"):
             what = None
             if pattern == "pick":
-                what = "pick" if r not in ("intro", "bridge") else None
+                what = "ring" if r in ("tag", "outro") else "pick" if r not in ("intro", "bridge") else None
             elif r in ("tag", "outro"):
                 what = "ring"
             elif pattern == "air":
@@ -910,25 +922,26 @@ def fills(ctx: Context) -> list[Ev]:
 
 
 def _run(ctx: Context, part: str, start: float, stop: float, held: Tune, target: int, section: int) -> list[Ev]:
+    """A fill: a flourish up the chord (harp), or a scale run into the next
+    sung note, an octave up, stopping a step short of it so the singer
+    completes it, coming from the side the tune is moving from."""
     n = max(2, min(int(np.floor((stop - start) / ctx.sub + 1e-6)), 4))
     chord = ctx.chord_at(start)
     pcs = ctx.pcs(chord.symbol)
-    if part == "harp":  # a flourish up the chord, above the held note
+    if part == "harp":
         p = nearest(pcs, held.pitch + 5, held.pitch + 1, held.pitch + 12)
         pitches = []
         for _ in range(n):
             pitches.append(p)
             p = nearest(pcs, p + 4, p + 1, p + 9)
-    else:  # a scale run into the next line's first note, an octave up, stopping a step short
+    else:
         goal = target + 12
-        first = nearest(pcs, goal + (4 if ctx.rng.random() < 0.5 else -4), goal - 7, goal + 7)
-        scale = [p for p in range(min(first, goal) - 7, max(first, goal) + 8) if p % 12 in ctx.scale]
-        i0 = scale.index(first) if first in scale else 0
-        ig = scale.index(goal) if goal in scale else i0
-        step = -1 if ig < i0 else 1
-        pitches = [scale[min(max(i0 + step * j, 0), len(scale) - 1)] for j in range(n)]
-        if pitches[-1] == goal:
-            pitches[-1] = scale[min(max(ig - step, 0), len(scale) - 1)]
+        rising = target > held.pitch if target != held.pitch else ctx.rng.random() < 0.5
+        climb = rising if ctx.rng.random() < 0.75 else not rising  # a run climbing into the goal, or falling onto it
+        d = 1 if climb else -1
+        scale = [q for q in range(goal - 16, goal + 17) if q % 12 in ctx.scale]
+        ig = min(range(len(scale)), key=lambda k: abs(scale[k] - goal))
+        pitches = [scale[min(max(ig - d * (n - j), 0), len(scale) - 1)] for j in range(n)]
     bottom, top = REGISTER.get(part, (0, 127))
     while max(pitches) > top and min(pitches) - 12 >= bottom:
         pitches = [p - 12 for p in pitches]
@@ -1005,6 +1018,11 @@ def drum_part(ctx: Context) -> list[Ev]:
                     (nxt.energy >= s.energy or nxt.role == "refrain"):  # a triplet into what comes next
                 hits = [h for h in hits if h[0] < ctx.beats - 1]
                 hits += [(ctx.beats - 1 + k / 3.0, "tip", 0.4 + 0.15 * k) for k in range(3)]
+            elif last_bar and nxt is not None and nxt.energy - s.energy >= 0.2:  # a build into a much bigger section
+                start = max(0, ctx.beats - 2)
+                steps = int(round((ctx.beats - start) * ctx.beat / ctx.sub))
+                hits = [h for h in hits if h[0] < start] + [
+                    (start + k * ctx.sub / ctx.beat, "tip", 0.3 + 0.45 * k / max(steps - 1, 1)) for k in range(steps)]
             if what == "end":
                 hits = [(0.0, "bass", 0.35)] if not last_bar else []
             for pos, stroke, v in hits:
