@@ -86,6 +86,10 @@ HEARD = {"tempo": 1.0, "tonic": 0.5, "band.density": 0.04, "band.brightness": 0.
          "mix.predelay": 0.004, "leanings.era_bias": 0.1, "leanings.rarity_appetite": 0.1}
 
 
+ORDINALS = ("first", "second", "third", "fourth", "fifth", "sixth", "seventh", "eighth", "ninth", "tenth",
+            "eleventh", "twelfth")  # a record's generation 0 is the first version
+
+
 def number(n: int) -> str:
     return ("no", "one", "two", "three", "four", "five", "six", "seven", "eight", "nine", "ten", "eleven",
             "twelve")[n] if 0 <= n <= 12 else str(n)
@@ -406,7 +410,10 @@ class Context:
         if self.parent_record is None:
             return "from the song as it began"
         made = (self.parent_record.get("rendered_at") or "")[:10]
-        return f"from a version made {long_date(made)}" if made else "from a version before"
+        generation = self.parent_record.get("generation")
+        which = (f"the {ORDINALS[generation]} version" if isinstance(generation, int) and generation < len(ORDINALS)
+                 else "a version before")
+        return f"from {which}, made {long_date(made)}" if made else f"from {which}"
 
     def machine_label(self) -> str:
         spec = self.machine

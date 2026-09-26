@@ -168,8 +168,8 @@ def render_command(args: argparse.Namespace) -> int:
     parent_params = Params.from_dict(parent["params"]) if parent else None
     chosen = None
     if edits:
-        if args.form or args.lyrics_seed is not None:
-            print("songbird: --edits chooses the shape and the words; leave out --form and --lyrics-seed",
+        if args.lyrics_seed is not None or (args.form and any(p.startswith(("form.", "words.")) for p in edits)):
+            print("songbird: these edits choose the shape or the words; leave out --form and --lyrics-seed",
                   file=sys.stderr)
             return 2
         resolved = edits_mod.resolve(genome, parent_params, voice, drift, edits, seed=args.seed,
@@ -189,8 +189,8 @@ def render_command(args: argparse.Namespace) -> int:
     if choir_json and args.choir is None:
         params = replace(params, choir=len(choir_json))
     try:
-        lyrics = resolved.lyrics if edits else words(genome, params, args.lyrics_seed,
-                                                      sung_by_a_machine=voice is not None or drift is not None)
+        lyrics = resolved.lyrics if edits and not args.form else \
+            words(genome, params, args.lyrics_seed, sung_by_a_machine=voice is not None or drift is not None)
     except (ArrangeError, ValueError) as e:
         print(f"songbird: can't draw words for that form: {e}", file=sys.stderr)
         return 2

@@ -1,0 +1,194 @@
+"""The studio: a page on this computer only that shows your version of the song, lets you change it and
+records it. Its server answers only its own page; its words never use the code's names; its today is the
+command line's; a packet opens as the parent; previews are made and served; a recording is a packet whose
+marks say what a person chose (never who) and which renders again byte for byte."""
+
+import http.client
+import json
+import re
+import subprocess
+import sys
+import threading
+import time
+from pathlib import Path
+
+import numpy as np
+import pytest
+
+from songbird import drift as D, explain, harvest as H, pack, studio as S
+from songbird.genome import load
+from songbird.realize import choose_params
+from songbird.synth import master
+
+ROOT = Path(__file__).resolve().parents[1]
+LEAD = ROOT / "songs" / "h-now-its-by-you.json"
+B = ROOT / "songs" / "b-coal-from-the-fire.json"
+FORBIDDEN = re.compile(r"\b(genome|drift|harvest|hash|knob|params?|seed)\b", re.I)
+
+
+@pytest.fixture
+def home(tmp_path, monkeypatch):
+    monkeypatch.setenv("SONGBIRD_HOME", str(tmp_path / "home"))
+    return tmp_path
+
+
+@pytest.fixture
+def served(home):
+    studio = S.Studio(None, str(LEAD), "fictional:ada", out=home / "out")
+    server = S.serve(studio, 18766)
+    threading.Thread(target=server.serve_forever, daemon=True).start()
+    yield studio, server.server_address[1]
+    server.shutdown()
+    server.server_close()
+
+
+def ask(port, method, path, body=None, headers=None):
+    c = http.client.HTTPConnection("127.0.0.1", port, timeout=60)
+    head = {"Host": f"127.0.0.1:{port}", **(headers or {})}
+    data = json.dumps(body).encode() if body is not None else None
+    c.request(method, path, body=data, headers=head)
+    r = c.getresponse()
+    out = r.status, dict(r.getheaders()), r.read()
+    c.close()
+    return out
+
+
+def post(port, studio, path, body, **headers):
+    head = {"Content-Type": "application/json", "X-Studio": studio.token, **headers}
+    status, _, data = ask(port, "POST", path, body, head)
+    return status, json.loads(data)
+
+
+def shown(view) -> list[str]:
+    """Every piece of text the page shows a person."""
+    out = [view["when"], view["from"], view["by"]]
+    for card in view["cards"]:
+        out += [card["title"], card["value"], card.get("detail") or "", card.get("today") or ""]
+        out += [r["text"] for r in card["reasons"]] + [p["why"] for p in card["problems"]] + card.get("lines", [])
+    for w in view["words"]:
+        out += [w["label"], w.get("how", "")] + w.get("tags", []) + (w["lines"] if not w["sung"] else [])
+    return out + [p["why"] for p in view["problems"]]
+
+
+def test_the_server_answers_only_its_own_page(served):
+    studio, port = served
+    status, _, page = ask(port, "GET", "/")
+    assert status == 200 and studio.token.encode() in page and b"{{token}}" not in page
+    assert ask(port, "GET", "/studio.js")[0] == 200 and ask(port, "GET", "/studio.css")[0] == 200
+    assert ask(port, "GET", "/", headers={"Host": "evil.example:80"})[0] == 403  # a renamed address
+    assert ask(port, "GET", "/api/start", headers={"Host": f"songbird.local:{port}"})[0] == 403
+    body = {"edits": {}}
+    assert post(port, studio, "/api/song", body)[0] == 200
+    assert post(port, studio, "/api/song", body, **{"X-Studio": "guess"})[0] == 403  # not its page's token
+    assert post(port, studio, "/api/song", body, Origin="https://evil.example")[0] == 403
+    assert ask(port, "POST", "/api/song", body, {"Content-Type": "text/plain", "X-Studio": studio.token})[0] == 415
+    assert ask(port, "GET", "/audio/../../etc/passwd")[0] == 404
+    assert ask(port, "GET", "/renders/x.flac")[0] == 404
+    assert post(port, studio, "/api/listen", {"edits": {}, "who": "../../x"})[0] == 400
+
+
+def test_the_page_gets_the_song_its_choices_and_their_bounds(served):
+    studio, port = served
+    status, _, data = ask(port, "GET", "/api/start")
+    start = json.loads(data)
+    assert status == 200 and start["title"] == "Now It's by You"
+    assert start["bounds"]["mode"]["options"] == ["ionian", "mixolydian", "aeolian"]
+    status, view = post(port, studio, "/api/song", {"edits": {"tempo": 88, "band.drum": 0, "nonsense": 1}})
+    assert status == 200
+    assert {c["id"] for c in view["cards"]} >= {"key", "tempo", "shape", "band", "mix", "singer", "words", "choir",
+                                                "machine"}
+    tempo = next(c for c in view["cards"] if c["id"] == "tempo")
+    assert tempo["mine"] and tempo["value"].startswith("88") and tempo["reasons"][0]["kind"] == "you"
+    assert any(p["path"] == "nonsense" for p in view["problems"])
+    assert len(view["words"]) == len(view["form"]) and view["listen"]["whole"]
+    status, options = post(port, studio, "/api/options", {"edits": {}, "block": "verse", "index": 1})
+    assert status == 200 and any(c["allowed"] for c in options["choices"]) and options["path"] == "words.verse.1"
+    status, compare = post(port, studio, "/api/compare", {"edits": {}, "names": ["Basil", "<script>"]})
+    assert [m["name"] for m in compare["machines"]] == ["Yours", "Basil", "Script"]
+    status, kept = post(port, studio, "/api/keep-words", {"edits": {"tempo": 90}})
+    assert kept["edits"]["tempo"] == 90 and "words.verse.0" in kept["edits"]
+
+
+def test_the_page_never_says_the_codes_words(home):
+    studio = S.Studio(None, str(LEAD), "fictional:ada", out=home / "out")
+    for who in ("ada", "basil", "coral", "dmitri"):
+        voice = H.fictional(who)
+        for day in ("2026-09-26", "2027-03-01", "2025-06-15"):
+            v = studio.context.version({"date": day, "mode": "aeolian", "band.whistle": 0}, voice=voice)
+            for text in shown(explain.view(studio.context, v)):
+                assert not FORBIDDEN.search(text), text
+
+
+def test_today_is_the_command_lines_today(home):
+    studio = S.Studio(None, str(LEAD), "fictional:ada", out=home / "out")
+    voice = H.fictional("ada")
+    day = studio.day
+    cli = choose_params(load(LEAD), None, voice, D.drift(D.parse(day), voice.hash))
+    assert studio.version({}).params == cli
+
+
+def test_a_packet_opens_as_the_parent(home):
+    genome = load(LEAD)
+    rng = np.random.default_rng(1)
+    pcm = np.clip(rng.normal(0, 2000, (22050, 2)), -32768, 32767).astype("<i2")
+    flac = home / "seed.flac"
+    master.write_flac(flac, pcm, 44100)
+    parent = choose_params(genome, None, H.fictional("basil"), D.drift(D.parse("2026-08-01"), H.fictional("basil").hash))
+    record = {"id": master.pcm_sha256(pcm), "title": genome.title, "rendered_at": "2026-08-01T12:00:00+00:00",
+              "params": parent.to_dict(), "program_version": "test", **pack.lineage(None),
+              "chosen_by_you": {"tempo": {"value": parent.tempo, "was": 96.0}}}
+    pack.pack(flac, record, LEAD)
+    studio = S.Studio(str(flac), None, "fictional:ada", out=home / "out")
+    assert studio.where == "packet" and studio.genome.title == genome.title
+    assert studio.context.parent == parent
+    assert studio.context.from_words() == "from the first version, made Saturday 1 August 2026"
+    v = studio.version({})
+    tempo = next(c for c in explain.view(studio.context, v)["cards"] if c["id"] == "tempo")
+    if v.params.tempo == parent.tempo:
+        assert any("where a person chose it" in r["text"] for r in tempo["reasons"])
+
+
+def wait(studio, job):
+    for _ in range(600):
+        state = studio.jobs.get(job["id"]).view()
+        if state["state"] in ("done", "failed"):
+            return state
+        time.sleep(0.5)
+    raise TimeoutError
+
+
+def test_a_section_is_made_on_demand_and_served_with_byte_ranges(served):
+    studio, port = served
+    status, job = post(port, studio, "/api/listen", {"edits": {}, "who": "you", "section": 3})
+    assert status == 200 and job["kind"] == "preview"
+    done = wait(studio, job) if job["state"] != "done" else job
+    assert done["state"] == "done", done
+    status, head, data = ask(port, "GET", done["url"], headers={"Range": "bytes=0-99"})
+    assert status == 206 and len(data) == 100 and head["Content-Range"].endswith(f"/{(studio.cache / done['url'].split('/')[-1]).stat().st_size}")
+    status, _, whole = ask(port, "GET", done["url"])
+    assert status == 200 and whole[:4] == b"fLaC"
+    # asked again, it's there at once
+    status, again = post(port, studio, "/api/listen", {"edits": {}, "who": "you", "section": 3})
+    assert again["state"] == "done" and again["url"] == done["url"]
+
+
+def test_a_recording_is_a_packet_marked_with_a_persons_choices_and_replays(home):
+    studio = S.Studio(None, str(B), "fictional:ada", out=home / "out")
+    edits = {"tempo": 70, "band.pattern": "pick", "mix.space": 1.2, "form.verses": 2, "form.intro": False,
+             "form.outro": False, "form.break": False, "roll": 1}
+    job = studio.record(edits)
+    done = job if job["state"] == "done" else wait(studio, job)
+    assert done["state"] == "done", done
+    recorded = done["result"]["recorded"]
+    flac = home / "out" / Path(recorded["flac"]).name
+    manifest = pack.read_manifest(flac)
+    marks = manifest["chosen_by_you"]
+    assert marks["tempo"] == {"value": 70.0, "was": studio.version({}).params.tempo}
+    assert marks["roll"]["value"] == 1 and "form.verses" in marks
+    assert manifest["generation"] == 0 and manifest["params"]["tempo"] == 70.0
+    assert flac.name.startswith("coal-from-the-fire") and not (flac.with_suffix(".json")).exists()
+    # the recording renders again, byte for byte, from its own record
+    out = home / "again.flac"
+    subprocess.run([sys.executable, "-m", "songbird", "render", str(B), "--replay", str(flac), "--out", str(out)],
+                   check=True, cwd=ROOT, capture_output=True)
+    assert json.loads(out.with_suffix(".json").read_text())["id"] == manifest["id"]

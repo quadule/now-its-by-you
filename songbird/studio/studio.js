@@ -699,10 +699,10 @@ async function record() {
     if (job.state === "failed") throw new Error(job.error);
     const r = job.result.recorded;
     saved.replaceChildren(
-      h("p", {}, "Saved ", h("code", {}, r.flac), ` (${fmtTime(r.duration)}) and its record, `, h("code", {}, r.record), "."),
+      h("p", {}, "Saved ", h("code", {}, r.flac), ` (${fmtTime(r.duration)}): the song, the program that sang it and its record, in one file.`),
       h("p", {}, r.yours ? `${r.yours} choice${r.yours === 1 ? " is" : "s are"} marked as yours in it (what you chose, never who you are).` : "Every choice in it is the program's."),
       h("p", { class: "hint" }, "To make the next version from this one: ", h("code", {}, r.next)),
-      h("button", { class: "btn", type: "button", onclick: () => play(job.url || `/audio/${job.key}.flac`, "The recording") }, "Play the recording"));
+      h("button", { class: "btn", type: "button", onclick: () => play(job.url, "The recording") }, "Play the recording"));
   } catch (e) {
     saved.replaceChildren(h("p", { class: "problem" }, `Couldn't record it: ${e.message}`));
   }

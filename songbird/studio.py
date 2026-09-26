@@ -48,7 +48,7 @@ from urllib.parse import urlsplit
 
 import numpy as np
 
-from . import __version__, drift as drift_mod, explain, genome as genome_mod, harvest, synth, variation
+from . import __version__, drift as drift_mod, explain, genome as genome_mod, harvest, pack, synth, variation
 from .realize import Params, realize
 from .synth import master
 from .synth.instruments import INSTRUMENTS
@@ -69,31 +69,30 @@ STATIC = {"/studio.css": ("studio.css", "text/css; charset=utf-8"),
 
 
 def packet_beside() -> tuple[Path, Path] | None:
-    """A seed packet's own program runs beside its song and its record: genome.json and manifest.json next
-    to the songbird package (docs/PLAN.md, "Seed packet"). Both, if so."""
-    genome, record = ROOT / "genome.json", ROOT / "manifest.json"
-    return (genome, record) if genome.is_file() and record.is_file() else None
+    """An unpacked seed packet: its genome.json and manifest.json beside the program (docs/PACKET.md: the
+    program under program/, the song and record beside it). Both, if so."""
+    for folder in (ROOT, ROOT.parent):
+        genome, record = folder / "genome.json", folder / "manifest.json"
+        if genome.is_file() and record.is_file():
+            return genome, record
+    return None
 
 
-def open_packet(path: Path, into: Path) -> tuple[Path, Path] | None:
-    """A FLAC with the program appended as a zip (a seed packet): its song and record copied out, by name
-    (nothing else in it is opened); None if it isn't one."""
+def packet_genome(path: Path, into: Path) -> Path | None:
+    """The song a seed packet carries (its genome.json), copied out to sing from and to pack again; None if
+    the file carries no packet. Nothing else in it is opened."""
     try:
-        if not zipfile.is_zipfile(path):
-            return None
         with zipfile.ZipFile(path) as z:
-            names = {Path(n).name: n for n in z.namelist() if n.count("/") <= 1}
-            if "genome.json" not in names or "manifest.json" not in names:
+            if pack.MANIFEST not in z.namelist() or "genome.json" not in z.namelist():
+                return None
+            info = z.getinfo("genome.json")
+            if info.file_size > 16 * 2**20:
                 return None
             into.mkdir(parents=True, exist_ok=True)
-            for name in ("genome.json", "manifest.json"):
-                info = z.getinfo(names[name])
-                if info.file_size > 16 * 2**20:
-                    return None
-                (into / name).write_bytes(z.read(info))
+            (into / "genome.json").write_bytes(z.read(info))
     except (OSError, zipfile.BadZipFile):
         return None
-    return into / "genome.json", into / "manifest.json"
+    return into / "genome.json"
 
 
 def find_song(record: dict | None, song: str | None) -> Path:
@@ -113,26 +112,31 @@ def find_song(record: dict | None, song: str | None) -> Path:
     raise SystemExit("songbird studio: which song? Name its genome with --song")
 
 
-def locate(parent: str | None, song: str | None, cache: Path) -> tuple[Path, Path | None, str]:
+def locate(parent: str | None, song: str | None, cache: Path) -> tuple[Path, dict | None, str]:
     """The song's genome, the parent's record (or None: the song as it began), and where they came from:
-    "packet" (a seed packet, beside the program or the file given), "file" (a record, or a FLAC with its
-    record beside it), or "checkout" (the program's own songs)."""
+    "packet" (a seed packet: the file given, or unpacked beside the program), "file" (a render record, or a
+    FLAC with its record beside it), or "checkout" (the program's own songs)."""
     if parent:
         path = Path(parent)
-        if path.suffix.lower() != ".json":
+        record = pack.read_manifest(path) if path.suffix.lower() != ".json" else None
+        if record is not None:
             key = hashlib.sha256(str(path.resolve()).encode()).hexdigest()[:12]
-            opened = open_packet(path, cache / "packets" / key)
-            if opened:
-                return (Path(song) if song else opened[0]), opened[1], "packet"
-        record = path if path.suffix.lower() == ".json" else path.with_suffix(".json")
-        if not record.is_file():
-            raise SystemExit(f"songbird studio: no record for {parent} (looked inside it and for {record.name} "
-                             "beside it)")
-        return find_song(json.loads(record.read_text()), song), record, "file"
+            genome = Path(song) if song else packet_genome(path, cache / "packets" / key)
+            return genome, record, "packet"
+        record_path = path if path.suffix.lower() == ".json" else path.with_suffix(".json")
+        if not record_path.is_file():
+            raise SystemExit(f"songbird studio: {parent} carries no packet, and there's no record beside it")
+        record = pack.read_record(record_path)
+        return find_song(record, song), record, "file"
     beside = packet_beside()
     if beside and not song:
-        return beside[0], beside[1], "packet"
+        return beside[0], pack.read_record(beside[1]), "packet"
     return find_song(None, song), None, "checkout"
+
+
+def slug(text: str) -> str:
+    """A title as a file name: 'Now It's by You' -> now-its-by-you."""
+    return re.sub(r"[^a-z0-9]+", "-", text.lower().replace("'", "").replace("’", "")).strip("-") or "song"
 
 
 def today() -> tuple[str, float]:
@@ -140,19 +144,6 @@ def today() -> tuple[str, float]:
     `songbird render --date YYYY-MM-DD` has it, so the same machine opens on the same version all day."""
     day = date.today().isoformat()
     return day, drift_mod.parse(day)
-
-
-def seal(flac: Path, record: dict) -> bool:
-    """The seed packet's hook (milestone 6): the program, the song and this record appended to the FLAC,
-    so the file carries what sings its next version. Until songbird.pack can, the record stays beside the
-    file (and the page says so). True if sealed."""
-    from . import pack
-
-    sealer = getattr(pack, "seal", None)
-    if sealer is None:
-        return False
-    sealer(flac, record)
-    return True
 
 
 # ---------------------------------------------------------------- previews
@@ -357,10 +348,10 @@ class Studio:
         self.home = Path(home or harvest.home_dir()) / "studio"
         self.cache = self.home / "cache"
         self.cache.mkdir(parents=True, exist_ok=True)
-        genome_path, record_path, self.where = locate(parent, song, self.home)
+        genome_path, record, self.where = locate(parent, song, self.home)
         self.genome_path = Path(genome_path).resolve()
         self.genome = genome_mod.load(self.genome_path)
-        record = json.loads(record_path.read_text()) if record_path else None
+        self.parent_record = record
         parent_params = Params.from_dict(record["params"]) if record else None
         quiet = False
         if machine == "here":
@@ -370,7 +361,8 @@ class Studio:
         self.machine = machine
         self.voice = harvest.machine_voice(machine)
         self.day, self.t = today()
-        self.out = Path(out or "renders")
+        # a checkout records into renders/; a packet's program, into the folder it was run from
+        self.out = Path(out) if out else (Path.cwd() if self.where == "packet" else Path("renders"))
         self.jobs = Jobs()
         self.token = secrets.token_urlsafe(18)
         self._timeline = None
@@ -481,7 +473,9 @@ class Studio:
         return {"url": job.url, "duration": round(len(pcm) / synth.SR, 2)}
 
     def _whole(self, job: Job, v: explain.Version, key: str) -> dict:
-        """The whole rendition, made exactly as `songbird render` makes it (cli.render_one): it is the recording."""
+        """The whole rendition, made exactly as `songbird render --pack` makes it (cli.render_one): one file
+        carrying the program, the song and its record, the child of the version the studio opened on. It is
+        the recording."""
         from .cli import render_one
 
         job.stage = stage_words("score")
@@ -489,8 +483,9 @@ class Studio:
         folder = self.cache / key
         with contextlib.redirect_stdout(io.StringIO()):
             record = render_one(self.genome, v.params, folder / "rendition.flac", voice=v.voice, drift=v.drift,
-                                lyrics=v.lyrics, phrasing_json=v.phrasing_json, chosen_by_you=v.marks or None,
-                                progress=job.report)
+                                lyrics=v.lyrics, phrasing_json=v.phrasing_json, parent=self.parent_record,
+                                packet_genome=self.genome_path, chosen_by_you=v.marks or None, progress=job.report)
+        (folder / "rendition.json").write_text(json.dumps(record, indent=2) + "\n")
         shutil.copyfile(folder / "rendition.flac", self.cache / f"{key}.flac")
         job.url = f"/audio/{key}.flac"
         prune(self.cache, CACHE_LIMIT)
@@ -509,30 +504,24 @@ class Studio:
         return self.jobs.submit(key, "record", "the recording", lambda job: self._whole(job, v, key), then=keep).view()
 
     def _keep(self, folder: Path) -> dict:
-        """The recording copied from the cache to where recordings go: <song>.<day>.<its id's first six>."""
+        """The recording copied from the cache to where recordings go, as <song>.<day>.<its id's first six>.flac:
+        one file, the program, the song and the record inside it."""
         record = json.loads((folder / "rendition.json").read_text())
         day = (record.get("rendered_at") or self.day)[:10]
-        name = f"{self.genome_path.stem}.{day}.{record['id'][:6]}"
+        flac = self.out / f"{slug(self.genome.title)}.{day}.{record['id'][:6]}.flac"
         self.out.mkdir(parents=True, exist_ok=True)
-        for suffix in (".flac", ".json", ".score.json", ".txt"):
-            src = folder / f"rendition{suffix}"
-            if src.exists():
-                shutil.copyfile(src, self.out / f"{name}{suffix}")
-        flac = self.out / f"{name}.flac"
-        sealed = seal(flac, record)
-        return {"recorded": {"flac": shown(flac), "record": shown(self.out / f"{name}.json"), "id": record["id"],
-                             "duration": record["duration"], "yours": len(record.get("chosen_by_you") or {}),
-                             "sealed": sealed, "next": f"songbird studio {shown(flac)}"}}
+        shutil.copyfile(folder / "rendition.flac", flac)
+        again = f"python3 {shown(flac)} studio" if self.where == "packet" else f"uv run songbird studio {shown(flac)}"
+        return {"recorded": {"flac": shown(flac), "id": record["id"], "duration": record["duration"],
+                             "generation": record.get("generation"), "yours": len(record.get("chosen_by_you") or {}),
+                             "next": again}}
 
     def out_shown(self) -> str:
         return shown(self.out)
 
     def packet_note(self) -> str:
-        from . import pack
-
-        if getattr(pack, "seal", None):
-            return "The program that sings it goes inside the file."
-        return "The program isn't inside the file yet: its record travels beside it."
+        return ("The recording is one file: it plays anywhere, and it carries the program that sang it, the song "
+                "and its record, so anyone can run it to make the next version.")
 
     # ------------------------------------------------------------ singing (from a checkout of the program)
 
@@ -809,6 +798,9 @@ def add_arguments(parser: argparse.ArgumentParser) -> None:
                         help="the rendition to make a new version of: a seed packet, a FLAC with its record "
                              "beside it, or a record (.json); default: the packet this program came in, else "
                              "the song as it began")
+    parser.add_argument("--packet", metavar="FILE",
+                        help="the packet this program came in (the file's own bootstrap passes it): the rendition "
+                             "to open, as the parent of the new version")
     parser.add_argument("--song", metavar="GENOME", help="the song's genome, where the parent doesn't carry it")
     parser.add_argument("--machine", default="here", metavar="here|none|fictional:NAME|FILE",
                         help="who sings: this machine (default), none, a made-up one, or a voice file or record")
@@ -818,7 +810,8 @@ def add_arguments(parser: argparse.ArgumentParser) -> None:
 
 
 def run(args: argparse.Namespace) -> int:
-    studio = Studio(args.parent, args.song, args.machine, Path(args.out) if args.out else None)
+    parent = args.packet or args.parent or os.environ.get("SONGBIRD_PACKET") or None
+    studio = Studio(parent, args.song, args.machine, Path(args.out) if args.out else None)
     server = serve(studio, args.port)
     url = f"http://127.0.0.1:{server.server_address[1]}"
     print(f"Songbird studio: {studio.genome.title}, {studio.context.opening()}\n  open {url}  (Ctrl-C to stop)",
