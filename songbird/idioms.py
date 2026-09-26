@@ -388,7 +388,8 @@ DEFAULT_PARTS = {  # for an instrument the style doesn't know (one added to the 
 def plan_style(ctx: StyleContext) -> None:
     """Decide, for every section, what each of the style's players does there."""
     sdef = ctx.sdef
-    leads = [x for x in sdef.leads if ctx.on(x)] or [x for x in ctx.lineup if family(x) not in PERCUSSION + ("bass",)]
+    leads = [x for x in (sdef.playing(x, ctx.lineup) for x in sdef.leads) if ctx.on(x)] \
+        or [x for x in ctx.lineup if family(x) not in PERCUSSION + ("bass",)]
     refrains = [i for i, s in enumerate(ctx.sections) if s.role == "refrain"]
     breaks = turns = verses = 0
     for i, s in enumerate(ctx.sections):
@@ -414,7 +415,7 @@ def plan_style(ctx: StyleContext) -> None:
         for inst in ctx.lineup:
             if inst in parts:
                 continue
-            table = sdef.parts.get(inst) or DEFAULT_PARTS.get(family(inst), {})
+            table = sdef.parts.get(inst) or sdef.parts.get(sdef.part_of(inst)) or DEFAULT_PARTS.get(family(inst), {})
             spec = next((table[k] for k in keys if k in table), "")
             idiom = idiom_of(spec, b)
             if idiom:
@@ -991,21 +992,39 @@ def w_block(ctx: StyleContext, i: int, part: str) -> list[Ev]:
 
 def w_oompah(ctx: StyleContext, i: int, part: str) -> list[Ev]:
     """Oom-pah: a bass note on the strong beats (root, then fifth), a short chord on the others, as a
-    concertina, an accordion or a pub piano keeps a song going."""
+    concertina, an accordion or a pub piano keeps a song going; an instrument with a left hand of bass and
+    chord buttons (an accordion's Stradella) is told which is which."""
+    from .synth import instruments
+
+    arts = instruments.spec(part).get("articulations", {})
+    oom, pah = ("bass", "chord") if "bass" in arts and "chord" in arts else ("", "")
     out = []
+    n = len(ctx.grid.beats)
     for c in ctx.chords_in(i):
         root, fifth = left_hand(ctx, part, c)
         beats = ctx.grid.beats_in(c.u0, c.u1)
+        subs = ctx.grid.subs_in(c.u0, c.u1)
         lh = 0
         for k, u in enumerate(beats):
-            b, n = ctx.grid.beat_index(u), len(ctx.grid.beats)
+            b = ctx.grid.beat_index(u)
             end = until(beats, k, c.u1)
-            if b == 0 or (n == 4 and b == 2) or (n == 2 and b == 1) or abs(u - c.u0) < 1e-9:
-                out.append(ev(part, u, u + 0.7 * (end - u), root if lh % 2 == 0 else fifth, ctx.vel(part, u, 0.7), i=i))
+            if n == 2:  # a bar of two beats: each an oom and its subdivisions the pahs (oom-pa-pa in six-eight)
+                pas = [v for v in subs if u + 1e-9 < v < end - 1e-9]
+                out.append(ev(part, u, u + 0.7 * ((pas[0] if pas else end) - u), root if lh % 2 == 0 else fifth,
+                              ctx.vel(part, u, 0.7), art=oom, i=i))
+                lh += 1
+                for j, v in enumerate(pas):
+                    stop = pas[j + 1] if j + 1 < len(pas) else end
+                    for p in fingering(ctx, part, c, v, stop, i)[-3:]:
+                        out.append(ev(part, v, v + 0.55 * (stop - v), p, ctx.vel(part, v, 0.55 - 0.05 * j), art=pah,
+                                      i=i))
+            elif b == 0 or (n == 4 and b == 2) or abs(u - c.u0) < 1e-9:
+                out.append(ev(part, u, u + 0.7 * (end - u), root if lh % 2 == 0 else fifth, ctx.vel(part, u, 0.7),
+                              art=oom, i=i))
                 lh += 1
             else:
                 for p in fingering(ctx, part, c, u, end, i)[-3:]:
-                    out.append(ev(part, u, u + 0.55 * (end - u), p, ctx.vel(part, u, 0.55), i=i))
+                    out.append(ev(part, u, u + 0.55 * (end - u), p, ctx.vel(part, u, 0.55), art=pah, i=i))
     return out
 
 
@@ -1577,7 +1596,10 @@ def shape_plan(ctx: Context, style, plan: Plan, rhythm, pads, chords_first) -> N
                 plan.entrances[(0, p)] = starts[1]
     if style.alone and len(verses) >= style.alone:
         i = verses[style.alone - 1]
-        with_ = style.alone_with if style.alone_with in sections[i].parts or style.alone_with in chords_first_all(ctx) else ""
+        alone_with = style.alone_with
+        if alone_with and getattr(ctx, "sdef", None) is not None:  # or whoever the style swapped in for it
+            alone_with = ctx.sdef.playing(alone_with, ctx.lineup)
+        with_ = alone_with if alone_with in sections[i].parts or alone_with in chords_first_all(ctx) else ""
         sections[i].parts = {with_: sections[i].parts.get(with_) or "ring"} if with_ else {}
     if style.stops and len(verses) >= style.stops:
         plan.stops.add(verses[style.stops - 1])

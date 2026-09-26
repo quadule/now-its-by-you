@@ -203,8 +203,10 @@ def test_every_instrument_finds_its_strip():
     assert mixing.role_of("synthlead") == "synth" and mixing.role_of("lead") == "voice"
     expected = {"keys": "keys", "mallets": "keys", "organ": "organ", "pad": "organ", "drums": "drum",
                 "percussion": "drum", "reed": "reed", "bass": "bass"}
-    # sustained keyboards take the organ's strip, whatever family their maker filed them under
-    specific = {"organ": "organ", "harmonium": "organ", "synth-pad": "organ"}
+    # sustained keyboards take the organ's strip, whatever family their maker filed them under; squeezeboxes a
+    # reed strip that keeps their left hand's bass
+    specific = {"organ": "organ", "harmonium": "organ", "synth-pad": "organ", "accordion": "squeezebox",
+                "concertina": "squeezebox"}
     for name in instruments.known():
         role = mixing.role_of(name)
         assert role in mixing.ROLES and role not in ("voice", "choir"), name
@@ -219,3 +221,6 @@ def test_every_instrument_finds_its_strip():
     # a pedal steel keeps its low strings and swells by its own pedal: not the fiddle's 180 Hz high-pass and duck
     assert mixing.role_of("steel") == "steel" and mixing.ROLES["steel"].duck == 0.0
     assert mixing.ROLES["steel"].eq[0] == ("hp", 70) and mixing.role_of("slide") == "slide"
+    assert mixing.role_of("melodeon") == "squeezebox" and mixing.role_of("harmonica") == "reed"
+    hp = next(band for band in mixing.ROLES["squeezebox"].eq if band[0] == "hp")
+    assert hp[1] <= 60  # a Stradella bass button's C2 (65 Hz) kept

@@ -6,9 +6,8 @@ a rendition can now also be played by an acoustic drum kit, hand percussion
 (claps, stomps, a shaker, a tambourine, a cajón), a banjo, a mandolin, a
 classical guitar and a ukulele, an electric guitar through a pickup and a
 small valve amp, an electric bass, a cello, a viola and a string section, a
-diatonic harmonica, a pedal steel and a slide guitar. (An accordion and a
-concertina were begun and are not here: their builders were cut off before
-committing them. Another set, the piano,
+diatonic harmonica, a pedal steel and a slide guitar, and an accordion and
+an English concertina. (Another set, the piano,
 electric piano, organ, mallets, synthesizers and a drum machine, is described
 elsewhere.) Every one is synthesized from a physical model in code, nothing
 is sampled, and every one is deterministic from its seeds, so a rendition's
@@ -426,6 +425,121 @@ guitar -25.2, -24.1 and -22.6. In the blues rendition the slide's three
 two-note answers are at their loudest (400 ms) -25.8 to -25.0 LUFS, the
 harmonica's -22.3 and -20.9: a picked note dies, a reed sustains.
 
+## The accordion and the concertina
+
+`accordion` and `concertina` (`accordion.py`, their boxes in `body.py`). A
+builder had left one unfinished commit (reeds, bellows, a musette), which was
+read critically and rebuilt: its chord notes below F3 would have sounded as
+bass buttons, its reeds started as if switched on, its spectrum was a
+harmonium's (an A4 centroid of 480 Hz), its tremolo was the same in cents
+across the keyboard, and its bellows turned on a clock.
+
+**The reed.** A steel tongue riveted over a slot: the air sets it swinging
+and it chops the stream into pulses. The radiated sound follows the rate of
+change of that flow, so its harmonics fall slowly (an accordion reed's fifth
+harmonic can stand over its fundamental): at A4 the accordion's centroid is
+0.9 kHz (2.1 times its fundamental, harmonics 2 to 5 within 7 to 14 dB of
+it), the concertina's 1.1 kHz. Pressed harder the pulses sharpen: from
+velocity 0.2 to 1 the level rises 20 dB, the centroid goes from 0.65 to 1.2
+kHz, and the pitch sags 5 cents (a free reed goes flat as the pressure rises:
+Cottingham's G# reed near 421 Hz falls about 2 Hz from 0.05 to 0.85 kPa),
+more for low reeds. Every note has a push and a pull reed, each tuned by hand
+(a cent or two apart, more when worn), the pull reed in the reed block's small
+chamber a shade darker. A low reed's pulses are heard as pulses, which is the
+bass buttons' growl: its harmonics start in phase below D3 (a D2 reed's period
+has a crest of 20 dB), scattering by D4, where the ear no longer hears their
+phase. The boxes are broad humps (the box near 240 Hz, the reed chambers'
+nasal humps near 1.1 and 2.6 kHz, the concertina's near 1.6 and 3.2) with no
+deep notches, and the accordion's bass side is a bigger box.
+
+**Speaking.** A reed at rest is started by the puff of air as its pallet
+lifts, and its swing grows exponentially until the slot limits it: a
+logistic from 2% of full swing whose rate follows the pressure. Its
+brightness follows its swing, so the fundamental comes first and the buzz as
+the swing reaches through the slot, and it starts a few cents sharp. The puff
+itself is heard, rushing through the slot until the tongue swings and chokes
+it; after that the air past the reeds sits about 40 dB under a mezzo-forte
+note and 35 under a soft one. To nine tenths at velocity 0.6, the bellows
+already pressed: the accordion's A6 in 14 ms, A4 in 26, A3 in 39, D3 in 65, a
+Stradella bass button in 61; the concertina's reeds 40% quicker (A4 in 16 ms,
+A6 in 8). Harder is quicker (A4: 38 ms at 0.3, 22 at 0.9). When the pad
+shuts the note is gone in 6 to 25 ms, with the pad's thud; a key's click is
+about 28 dB under the note.
+
+**The bellows.** One bellows drives every reed that sounds, so the pressure
+follows the player's arm (the notes' velocities, held over rests shorter than
+a second, a swell shaped through its note from a third of its pressure), not
+the keys. Every reed drinks air, a chord more than a note and the big bass
+reeds most (a bass button's reeds 1.5 litres a second at full pressure, a
+middle treble reed 0.2), from a stroke of 6 to 9 litres (an accordion) or 2
+to 3.2 (a concertina). The player turns the bellows at a rest once the stroke
+has run 3 to 6 seconds (a concertina's 1.2 to 2.8), waiting for a strong note
+if one comes soon (the oom of an oom-pah, so the new stroke accents it); at a
+note's start once most of the air is used or before a held chord would run
+it out; and wherever they must once all of it is. The first stroke opens
+them. A turn takes 40 to 70 ms (a concertina's 30 to 50) with the pressure
+dipping to a quarter, and a note held through it hands over to its other
+reed, which must speak again. Measured: the calibration oom-pah turns every
+3.1 to 4.3 s on the accordion and 2 to 3.2 on the concertina, every turn just
+before an oom; held chords turn at their changes, a break of about 30 ms and
+20 dB. 'shake' turns them on the subdivision of the beat nearest 6.5 a second
+(sixteenths at 100 bpm: 6.7 Hz, 20 dB deep).
+
+**The accordion's treble**, F3 to A6. The maker's box: two middle reeds, a
+bassoon with two (LMM), a piccolo too (LMMH, the commonest), or a musette box
+of three middle reeds (MMM, LMMM). Its tremolo is one of the regional tunings
+(Liberty Bellows' table, the cents between the tremolo reeds and the true one
+at A4: dry 0, swing 4, Irish 7, Cajun 10, Alpine 12, German and Italian 15,
+French 18, old French 22, Scottish 25; a musette box 10 or more), along the
+tuners' curve: 1.3 times A4's cents at A3 and below, 2/3 at A5, 4/9 at A6, so
+the beats quicken toward the top, but less than the pitch does. Measured on a
+French musette box (17.4 cents): the reeds at -22.0/0/+22.0 cents at A3,
+-17.1/0/+17.4 at A4, -11.7/0/+12.0 at A5, -8.1/0/+7.9 at A6; its two reeds
+of the violin register beat 2.8 Hz at A3 and 4.4 at A4. The player's
+register: ornament sounds one middle reed (clarinet), two (violin, the
+band's default) or three (musette); brightness under 0.4 adds the bassoon,
+over 0.6 the piccolo. Three makers in ten set the middle and bassoon reeds in
+a tone chamber (cassotto): darker.
+
+**The accordion's left hand.** A Stradella bass button sounds its note's
+pitch class on the bass (C2-B2), tenor (C3-B3) and, lighter, contralto (F#3-F4)
+ranks and the chord reeds' octave, wherever it was written (a D is D2, D3 and
+D4 from any octave), so a bass line breaks between B and C as a real one does;
+a chord button's notes sound in the contralto's octave, F#3 to F4, and the one
+above (the ranks of a professional 120-bass, after Wikipedia's Stradella bass
+system). 'bass' and 'chord' name them, and the oom-pah idiom writes them for
+an accordion; a plain note below the treble keyboard is a bass button alone
+and a chord button when struck with others. The oom sits about 3 dB over the
+pah.
+
+**The concertina.** An English concertina, a tenor-treble (C3 to C7; the
+48-key treble starts at G3): one reed a note each way, sounding the same note
+pushed or pulled. The scale alternates between the hands (the notes on the
+treble staff's lines at the left end, those in its spaces at the right, an
+accidental with its natural, as Wheatstone laid it out), each end a small
+hexagonal box of its own a little left or right. Three makers in four fit
+concertina reeds, quicker and more cutting; the rest make hybrids with
+accordion reeds.
+
+**Where they play.** The concertina is the shanty's (oom-pah in the verses and
+refrains, held chords in the bridge and tag, the tune in its breaks and
+turns). No style had an accordion, so this proposes, for the artist to keep
+or drop (one commit), that a style may name a player another can stand in for
+(StyleDef.swaps): for about three machines in ten the shanty crew's
+squeezebox is an accordion, playing the concertina's parts with its oom-pah
+on the Stradella buttons, and a lineage keeps the one it had. Sailors and
+shanty crews played both, and it changes no other style. The other place it
+would belong is a country waltz (the 1940s Opry bands had an accordion where
+later ones had a steel), but country's lineup is the steel's and would want a
+swap of its own.
+
+Levels at vel 0.6: the oom-pah -23.7 LUFS on both (comping, -23.7; -23.5 to
+-24.1 across six makers on the accordion, -22.7 to -23.7 on the concertina);
+a slow air -22.0 and -24.2; held chords 2 to 5 dB over the oom-pah, as a
+held chord is louder than a vamp. A pad pressed as hard as 0.9 peaks near
+full scale placed (their low reeds' pulses give the oom-pah a crest of 16 to
+18 dB).
+
 ## Idioms for the part-writer
 
 **The kit.** An art names the piece and stroke: `kick`, `snare`, `snare-rim`
@@ -547,6 +661,21 @@ a long note (the hands opening), `trem` (hand tremolo), `slap` and `chord`
 for tongue-blocked chords (three notes sharing a start), `octave` for a
 tongue-split octave, `slur` to join notes on one breath.
 
+**Accordion and concertina.** One bellows plays everything, so velocity is the
+bellows' pressure: all the notes sounding together share the loudest one's.
+- Oom-pah: a bass note on the strong beats (root, then fifth) and a short
+  chord between; in six-eight each dotted beat an oom and a chord on its other
+  two eighths (oom-pa-pa), in a waltz oom-pah-pah. On the accordion write the
+  oom `bass` and the pah `chord` (the idiom does): the left hand's buttons,
+  whatever octave they are written in.
+- Held chords: the notes together, `swell` on a phrase's first to press into
+  it; the bellows turn where the chords change if they can.
+- A tune on the accordion's treble (F3 up; below it the left hand plays), or
+  anywhere on the concertina; `slur` for legato, `shake` on a long note for a
+  bellows shake. The accordion's register comes from the band: ornament for
+  the tremolo reeds (0.7 and up a musette, on a box that has three), brightness
+  for the bassoon and piccolo.
+
 ## Levels and cost
 
 Each instrument's calibration part at vel 0.6, rendered, placed and levelled
@@ -575,6 +704,8 @@ a three-minute part costs on the M1 Max:
 | harmonica | melody | -21.0 | -20.7 | 0.7 |
 | steel | the country style's line under a singer | -23.1 | -23.7 | 2.6 |
 | slide | answers at the ends of lines | -19.9 | -20.7 (lead) | 1.1 |
+| accordion | oom-pah on the bass and chord buttons | -23.7 | -23.7 | 2.1 |
+| concertina | oom-pah | -23.7 | -23.7 | 1.3 |
 
 The other new set's test measures every instrument with one generic part per
 role (a four-note comping chord four times a bar, a kit groove for all
@@ -605,8 +736,8 @@ point:
 - `banjo` and `mandolin` fall to the lute's strip, which ducks 3 dB under the
   voice as for a doubling of the tune: right when they double it, a little
   shy when they comp.
-- `electric`, `harmonica`, `accordion` and `concertina` fall to the generic
-  strip, which does them no harm; `ebass` to the bass strip.
+- By name, `electric` falls to the guitar's strip, `harmonica` to the reed
+  strip and `ebass` to the bass strip.
 - `steel` and `slide` have strips of their own. They had fallen to the
   fiddle's, whose 180 Hz high-pass took the steel's low strings (B2 is 123 Hz)
   and whose 2 dB duck under the voice fought the steel's own volume pedal:
@@ -615,6 +746,12 @@ point:
   the slide's keeps the guitar's weight (70 Hz), clears its box and the
   voice's presence and steps back 1.5 dB under the voice, as a lead line
   answering it does.
+- `accordion` and `concertina` have a strip of their own (`squeezebox`, as do
+  a melodeon and a bandoneon by name): the harmonica's reed strip would have
+  high-passed them at 140 Hz, taking the Stradella bass's two lowest octaves
+  (65-123 Hz) and thinning the concertina's oom; theirs is the reed treatment
+  with a 50 Hz high-pass, the box's hump near 250 Hz eased, and a 1 dB step
+  back under the voice (they mostly comp; the harmonica steps back 2).
 
 The solo tool's demos borrow a suitable strip where the mix has none (the
 README says which), so they sound as these will once the mix has its own.
@@ -678,15 +815,35 @@ judged the glides, bends, vibrato rates, pickup position, scrape, swell slope,
 spring and levels in range, and the wobble in the pitch tracks of bends and
 glides to be the two planes beating under the pitch tracker, not the model.
 
+The accordion and concertina were reviewed by measurement once built. The
+review found, and these are fixed: in the shanty's six-eight the concertina
+never played a chord (the oom-pah idiom took both beats of a two-beat bar for
+the bass, so three shanties in ten had a lone bass note a dotted beat; now
+oom-pa-pa); the boxes' scattered modes, with random signs, cut notches of -21
+to -27 dB, often in the concertina's 4-5 kHz edge (now all one way, Body's
+new `coherent`: the deepest -3 to -8 dB); the Stradella bass had no growl
+(random harmonic phases made a D2 reed's period an organ pad, crest 9.6 dB;
+now a pulse train below D3, 20 dB, through reed.tables' new `pulse`); the
+onsets were cleaner than the steady tone and the air was 53 dB down at every
+velocity (now a puff as the pallet lifts and air about 40 dB under a
+mezzo-forte note, 35 under a soft one); half the bellows turns came before a
+pah (now all before an oom); the dynamic range was 22 dB from velocity 0.1 to
+1 and a swell 5 dB (now the pressure to the power 1.3, and a swell of 8 dB
+and more); and it asked for a reed a few cents sharp until it swings, a bass
+button's fourth rank, and the concertina called a tenor-treble. It confirmed
+the reed tables (consistent with Cottingham's free-reed spectra), the tremolo
+table and curve, the speaking times and release, the pitch sag, the Stradella
+ranks, octaves and break, the English layout, the clicks, the levels and the
+cost. Not done: a push stroke a little stronger than a pull, and a bellows
+vibrato on held notes.
+
 ## Limits
 
 - Nobody has listened. The models are right by the measures above, but the
   measures are not the ear.
-- The accordion and the concertina are not here: their builders ran out of
-  session before committing them. The
-  banjo, mandolin, electric, bowed and harmonica builders' own reviews never
-  ran; their instruments pass their tests and the other set's contract test
-  (but for the loudness of its generic parts), and want a review by
+- The banjo, mandolin, electric, bowed and harmonica builders' own reviews
+  never ran; their instruments pass their tests and the other set's contract
+  test (but for the loudness of its generic parts), and want a review by
   measurement next.
 - The pedal steel's level differs by maker by up to 4 dB on its swelled line
   (sd 1.3: how slowly each player swells, which pickup and pedal), and a
@@ -705,6 +862,18 @@ glides to be the two planes beating under the pitch tracker, not the model.
   is the mirror image.
 - A felt-beater kick's first milliseconds stay dark (a centroid near 400 Hz);
   a plastic beater (some makers') clicks brighter.
+- The concertina is an English one only: no Anglo, whose buttons sound one
+  note pushed and another pulled, so its bellows follow the tune (the bounce
+  of Anglo oom-pah); no duet. The accordion is a piano accordion with a
+  Stradella bass: no chromatic button box, no one-row Cajun melodeon, no free
+  bass. A chord button's notes are the notes written, folded into its octave,
+  not a fixed triad, seventh or diminished button.
+- An accordion's register is the band's (ornament and brightness) for the
+  whole part; a player switches between sections. The bellows' push is no
+  stronger than their pull, and there is no bellows vibrato or bellows noise.
+- A low reed's pulses give the squeezeboxes a crest of 16 to 18 dB: a loud pad
+  peaks near full scale in its stem (the mix's compressors and the master's
+  limiter take it).
 - The mix has no strips of its own for most of these yet (see For the mix).
 - Two modal engines now exist: this set's `struck.py` (modes driven by
   strikes, each with its own amplitudes, multirate) and the other set's

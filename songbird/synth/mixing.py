@@ -174,6 +174,10 @@ ROLES: dict[str, Strip] = {
     # Free reeds and harmonicas: nasal mids tamed, stepping back a little under the voice like a lead line.
     "reed": Strip(eq=(("hp", 140), ("peak", 1200, -1.5, 1.0), ("peak", 2800, -2.0, 1.0), ("high", 9000, -1.0)),
                   send=1.1, duck=2.0),
+    # Squeezeboxes: the reed's treatment, but an accordion's Stradella bass (65-123 Hz) and a concertina's oom (from
+    # 131 Hz) kept, the box's hump near 250 Hz eased; they mostly comp, so they step back only a little.
+    "squeezebox": Strip(eq=(("hp", 50), ("peak", 250, -1.0, 1.0), ("peak", 1200, -1.5, 1.0), ("peak", 2800, -2.0, 1.0),
+                            ("high", 9000, -1.0)), send=1.1, duck=1.0),
     # A cello or a section: the fiddle's treatment without its 180 Hz high-pass, so the low strings are heard.
     "strings": Strip(eq=(("hp", 45), ("peak", 250, -1.5, 1.0), ("peak", 2500, -2.0, 1.0), ("high", 8000, -1.0)),
                      comp=(10.0, 2.0, 0.02, 0.25, 2.0, 3.0), send=1.3),
@@ -204,7 +208,8 @@ NAMES = {
     "keys": ("piano", "epiano", "rhodes", "keys", "celesta", "musicbox", "music-box", "glock", "glockenspiel", "vibes",
              "vibraphone", "marimba", "xylophone", "bells"),
     "organ": ("organ", "synthpad", "synth-pad", "harmonium"),  # sustained keys: no drone's 6 kHz low-pass
-    "reed": ("harmonica", "accordion", "concertina", "melodeon"),
+    "reed": ("harmonica",),
+    "squeezebox": ("accordion", "concertina", "melodeon", "bandoneon", "squeezebox"),
     "strings": ("cello", "viola", "strings", "quartet"),  # their low strings kept: no fiddle's 180 Hz high-pass
     "synth": ("synth", "synthlead", "arp", "chip"),
     "steel": ("steel", "pedalsteel", "lapsteel"),  # its low strings kept, and no fiddle's duck: it swells by its pedal

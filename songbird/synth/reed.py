@@ -33,18 +33,22 @@ def table(freq: float, sr: int, rng: np.random.Generator, brightness: float = 0.
 
 
 def tables(freq: float, sr: int, rng: np.random.Generator, slopes, even: float = 0.8, shape=None,
-           top: float | None = None) -> np.ndarray:
+           top: float | None = None, pulse: float = 0.0) -> np.ndarray:
     """Periods of a free reed's tone, one for each spectral slope (harmonic k's amplitude goes as k**-slope),
     sharing their phases so they can be cross-faded without cancelling (a reed played harder is brighter: its
     pulse of air is sharper). even scales the even harmonics (a pulse a little narrower than half the period);
     shape, if given, is a gain per frequency in Hz (a chamber's or a mouth's resonances); top, the highest
-    frequency the tone must stay under (for a note that will bend up), by default the note's own.
+    frequency the tone must stay under (for a note that will bend up), by default the note's own; pulse (0..1),
+    how far the harmonics start in phase as a pulse train's do (at 1 within 0.3 radian of a cosine: the growl
+    of a low reed, whose period the ear hears as a pulse; at 0 their phases random).
     Shape (len(slopes), TABLE), scaled by the brightest row's RMS (0.35), so a reed's loudness doesn't hang
-    on how its harmonics' random phases happen to peak."""
+    on how its harmonics' phases happen to peak."""
     count = int(min(80, 0.45 * sr / max(freq, top or freq)))
     count = max(count, 1)
     k = np.arange(1, count + 1)
     phases = rng.uniform(0.0, 2.0 * np.pi, count)
+    if pulse:
+        phases = 0.5 * np.pi + (phases - np.pi) * (1.0 - float(pulse) * (1.0 - 0.3 / np.pi))
     gain = np.ones(count)
     gain[1::2] *= even
     if shape is not None:
