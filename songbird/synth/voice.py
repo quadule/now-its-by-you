@@ -397,8 +397,9 @@ BREATH_SPECTRUM = ((0.0, -26.0), (125.0, -18.0), (375.0, -7.5), (750.0, -4.5), (
 
 def breath_length(gap: float) -> float:
     """Seconds an audible breath lasts in a gap of this many seconds between phrases: most of a short gap
-    (0.1 s in 0.2), up to 0.4 s in a long rest."""
-    return float(np.clip(0.75 * (gap - 0.08), 0.08, 0.42))
+    (0.12 s in 0.2), up to 0.4 s in a long rest (natural singers: 0.10, 0.18 and 0.35 s in gaps of 0.1-0.2,
+    0.2-0.4 and 0.4-1 s)."""
+    return float(np.clip(0.6 * gap, 0.1, 0.4))
 
 
 def breaths(segs: list[Segment], n: int, sr: int, voice: VoiceParams, seed: int) -> np.ndarray:

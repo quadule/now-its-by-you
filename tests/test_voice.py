@@ -53,6 +53,35 @@ def test_little_words_and_unstressed_syllables_are_sung_lighter():
     assert np.median(little) < 0.85 * np.median(others)
 
 
+def test_breaths_between_lines_are_quiet_bright_noise_and_move_nothing_else():
+    g = G.load(Path(__file__).parent.parent / "songs" / "h-now-its-by-you.json")
+    score = realize(g, replace(choose_params(g), form=("verse",)))
+    notes = sorted(score.part("voice"), key=lambda n: n.start)
+    sr, voice = 24000, VoiceParams()
+    segs = schedule(notes, voice, g.lexicon)
+    breaths = [s for s in segs if s.role == "breath"]
+    assert len(breaths) >= 3
+    for s in breaths:  # each in the quiet between the voice letting go and the next line's first sound
+        before = [x for x in segs if x.role != "breath" and x.t1 <= s.t0 + 1e-9]
+        after = [x for x in segs if x.role != "breath" and x.t0 >= s.t1 - 1e-9]
+        assert (not before or s.t0 - before[-1].t1 >= 0.04 - 1e-9) and after and after[0].t0 - s.t1 >= 0.04 - 1e-9
+    y = sing(notes, sr, voice, seed=2, lexicon=g.lexicon)
+    plain = sing(notes, sr, replace(voice, inhale=-200.0), seed=2, lexicon=g.lexicon)
+    b = y - plain  # breathing is added on its own: everything else is exactly as it was
+    assert np.array_equal(y[: int(breaths[0].t0 * sr)], plain[: int(breaths[0].t0 * sr)])
+    vowels = np.concatenate([plain[int(s.t0 * sr): int(s.t1 * sr)] for s in segs if s.role == "vowel"])
+    ref = np.sqrt(np.mean(vowels**2))
+    win = int(0.03 * sr)
+    for s in breaths:
+        x = b[int(s.t0 * sr): int(s.t1 * sr)]
+        peak = max(np.sqrt(np.mean(x[i: i + win] ** 2)) for i in range(0, len(x) - win, win // 3))
+        assert -44.0 < 20 * np.log10(peak / ref) < -28.0
+    x = np.concatenate([b[int(s.t0 * sr): int(s.t1 * sr)] for s in breaths])
+    power = np.abs(np.fft.rfft(x)) ** 2
+    f = np.fft.rfftfreq(len(x), 1 / sr)
+    assert power[(f > 2000) & (f < 10000)].sum() > 3 * power[f < 1000].sum()  # a breath's hiss, not a vowel
+
+
 def test_vibrato_is_kept_for_held_notes():
     from songbird.synth.voice import BLOCK, pitch_track
 
