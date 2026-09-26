@@ -28,15 +28,13 @@ import sys
 import warnings
 from collections import Counter, defaultdict
 from concurrent.futures import ProcessPoolExecutor
-from dataclasses import asdict, replace
+from dataclasses import replace
 from pathlib import Path
 
 import numpy as np
 
 warnings.filterwarnings("ignore", message="pkg_resources")
 sys.path.insert(0, str(Path(__file__).parent))
-from intelligibility import align  # noqa: E402  (tools/intelligibility.py)
-from wer_suite import collapse_loops  # noqa: E402  (tools/wer_suite.py)
 
 from songbird import arrange as A  # noqa: E402
 from songbird import genome as G  # noqa: E402
@@ -252,6 +250,9 @@ def score(record: dict) -> dict:
     """A hearing scored: each sung word (as written, with its syllable count) with the word it is compared
     as and what was heard in its place ("" for nothing), and the edits between the two, as
     tools/intelligibility.py counts them (words heard after the lyric ends aside)."""
+    from intelligibility import align  # tools/intelligibility.py (these bring Whisper, so only when hearing)
+    from wer_suite import collapse_loops  # tools/wer_suite.py
+
     written = [w[:2] for w in record["words"]]
     ref = [word_token(w) for w, _ in written]
     hyp = collapse_loops(joined(tokens(record["heard"]), set(ref)))
@@ -304,7 +305,12 @@ def analyze(genome, heard: list[dict]) -> dict:
     - "items": each item's word error rate (a verse with some slot words, a refrain...);
     - "words": each word as heard (tokens()), how often it was sung and how often misheard;
     - "phones": each sound, how often it was sung in a word and how often that word was misheard;
-    - "overall": the word error rate over everything but the tag."""
+    - "share": how often the song sings each word where it is (1 for a verse's own words, a third for one
+      of a slot's three words);
+    - "heard_as": what each word was most often heard as, when misheard ("-" for nothing);
+    - "sounds": each word's sounds, and "spelled": each word as the lyric spells it;
+    - "overall" and "misheard": the word error rate, and the share of sung words misheard, over
+      everything but the tag."""
     listed = {i["key"]: i for i in items(genome)}
     by_item = defaultdict(list)
     for h in heard:
@@ -324,6 +330,9 @@ def analyze(genome, heard: list[dict]) -> dict:
             entries[f"{item['kind']}:{item['entry']}"] += [h["edits"] / max(len(h["words"]), 1) for h in hs]
     words: dict[str, list[int]] = defaultdict(lambda: [0, 0])
     phone_counts: dict[str, list[int]] = defaultdict(lambda: [0, 0])
+    heard_as: dict[str, Counter] = defaultdict(Counter)
+    sounds: dict[str, list[str]] = {}
+    spelled: dict[str, str] = {}
     lexicon = genome.lexicon or None
     for h in heard:
         if listed[h["key"]]["kind"] == "tag":
@@ -332,7 +341,13 @@ def analyze(genome, heard: list[dict]) -> dict:
             wrong = int(fate != ref)
             words[ref][0] += 1
             words[ref][1] += wrong
-            for p in set(phones(written, n, lexicon)):
+            heard_as[ref][fate or "-"] += wrong
+            if ref not in sounds:
+                sounds[ref] = phones(written, n, lexicon)
+            plain = written.replace("-", "")
+            if ref not in spelled or plain[:1].islower():  # a name keeps its capital
+                spelled[ref] = plain
+            for p in set(sounds[ref]):
                 phone_counts[p][0] += 1
                 phone_counts[p][1] += wrong
     sung = [h for h in heard if listed[h["key"]]["kind"] != "tag"]
@@ -356,6 +371,9 @@ def analyze(genome, heard: list[dict]) -> dict:
         "words": {w: tuple(c) for w, c in words.items()},
         "phones": {p: tuple(c) for p, c in phone_counts.items()},
         "share": share,
+        "heard_as": {w: [f for f, n in c.most_common(2) if n] for w, c in heard_as.items()},
+        "sounds": sounds,
+        "spelled": spelled,
     }
 
 
@@ -431,10 +449,11 @@ def held_targets(genome, held: dict, form) -> Counter:
 
 
 def coverage(genome, sets: list[dict]) -> Counter:
-    """How many times the sets, together, sing each word and each verse."""
+    """How many of the sets sing each word and each verse: what twice means is two sets, so two singers
+    at least."""
     out = Counter()
     for s in sets:
-        out += held_targets(genome, s["words"], s["form"])
+        out.update(set(held_targets(genome, s["words"], s["form"])))
     return out
 
 
@@ -443,6 +462,7 @@ def coverage(genome, sets: list[dict]) -> Counter:
 FOUR = ("intro", "verse", "refrain", "verse", "refrain", "verse", "refrain", "bridge", "refrain", "tag")
 EXTRA = ("intro", "verse", "refrain", "verse", "verse", "refrain", "bridge", "bridge2", "refrain", "tag")
 LONG = ("intro", "verse", "refrain", "verse", "verse", "verse", "refrain", "bridge", "refrain", "tag")
+PLAIN = ("intro", "verse", "refrain", "verse", "verse", "refrain", "bridge", "refrain", "tag")  # none of these
 
 # Each set's form and the extra bridge stanza it sings, if any; every one lasts the same, nine sung
 # sections. The first and last refrains of a song sing its own head (knows), and another head is sung at
@@ -599,9 +619,7 @@ def choose(genome, analysis: dict, rounds: int = 40) -> list[dict]:
     song = A._song(genome)
     want = targets(analysis)
     frames = _frames(genome, analysis, want)
-    base = Counter()
-    for f in frames:
-        base += _frame_targets(genome, f)
+    bases = [set(_frame_targets(genome, f)) for f in frames]
     entries = {v.id: v.entry for v in song.verses}
     ways = {vid: _verse_ways(genome, e) for vid, e in entries.items()}
     hardness = {vid: ease(e) for vid, e in entries.items()}
@@ -616,12 +634,13 @@ def choose(genome, analysis: dict, rounds: int = 40) -> list[dict]:
         return allowed[key]
 
     def total(pick: list[list[tuple[str, int]]]) -> float:
-        have = Counter(base)
-        uses = Counter()
-        for chosen in pick:
+        have, uses = Counter(), Counter()  # how many sets sing each target; how many sing each verse
+        for s, chosen in enumerate(pick):
+            present = set(bases[s])
             for vid, w in chosen:
-                have += ways[vid][w][1]
+                present.update(ways[vid][w][1])
                 uses[vid] += 1
+            have.update(present)
         return _value(have, want) - 10.0 * sum(max(0, n - 2) for n in uses.values()) \
             - 0.5 * sum(hardness[vid] for chosen in pick for vid, _ in chosen)
 
@@ -658,7 +677,7 @@ def choose(genome, analysis: dict, rounds: int = 40) -> list[dict]:
     for chosen in pick:
         have = Counter()
         for vid, w in chosen:
-            have += ways[vid][w][1]
+            have.update(set(ways[vid][w][1]) - set(have))
         worth.append(_value(have, want))
     ranked = list(range(len(pick)))
     for size in set(sizes):
@@ -730,12 +749,209 @@ def sets_file(genome, sets: list[dict]) -> dict:
     """The sets as tools/sets/<song>.json keeps them (the shared contract's section 1)."""
     return {
         "song": SONG.stem,
-        "about": ("Recording scripts: each set is the song with verses and refrains of its own, so that between "
-                  "them singers sing every part of the song the machine singer finds hardest to say clearly."),
+        "about": ("Recording scripts: each set is the whole song, with verses and refrains of its own, so that "
+                  "between them singers sing every part of it."),
         "made_by": "tools/recording_sets.py",
         "sets": [{"id": s["id"], "name": f"Set {s['id'].upper()}", "about": about(genome, s["form"], s["words"]),
                   "form": list(s["form"]), "words": s["words"]} for s in sets],
     }
+
+
+# The report, for the artist (docs/RECORDING-SETS.md)
+
+# The sounds, as a reader says them.
+SAY = {"P": "p", "G": "g (go)", "K": "k", "HH": "h", "AE": "a (cat)", "OW": "o (go)", "AYR": "ire (fire)",
+       "JH": "j", "T": "t", "AH": "u (cup)", "UH": "oo (book)", "D": "d", "M": "m", "R": "r", "AW": "ow (now)",
+       "IH": "i (sit)", "L": "l", "AX": "the a of about", "NG": "ng", "ER": "er", "AY": "i (time)", "AO": "aw (saw)",
+       "S": "s", "EY": "a (day)", "CH": "ch", "N": "n", "Z": "z", "W": "w", "V": "v", "IY": "ee", "EH": "e (bed)",
+       "F": "f", "B": "b", "DH": "th (this)", "UW": "oo (too)", "TH": "th (thin)", "AA": "o (hot)", "Y": "y",
+       "SH": "sh", "OY": "oy", "ZH": "zh"}
+
+
+def _pct(x: float) -> str:
+    return f"{100 * x:.0f}%"
+
+
+def _minutes(s: float) -> str:
+    return f"{int(s // 60)}:{int(round(s % 60)):02d}"
+
+
+def report(genome, analysis: dict, data: dict) -> str:
+    """docs/RECORDING-SETS.md: what the learned voice says worst, the sets, and what they hold."""
+    song = A._song(genome)
+    want = targets(analysis)
+    sets = data["sets"]
+    have = coverage(genome, [{"form": s["form"], "words": s["words"]} for s in sets])
+    rates = analysis["words"]
+    items_n = len(analysis["items"])
+    hearings = sum(n for n, _ in rates.values())
+    out = ["# Recording sets", "",
+           "*Made by `tools/recording_sets.py` (2026-09-26), for singing v2. The sets themselves are in "
+           "`tools/sets/h-now-its-by-you.json`.*", "",
+           f"Singers are asked to sing one of {A._number(len(sets))} sets: each is the whole song, three or four verses, "
+           "its refrains, the bridge and the tag, in one of the song's own shapes and within the bank's rules. "
+           "Between them the sets put in front of singers the words and verses the learned voice says worst, "
+           "so that singers' takes are the data for making every word legible. The singers never hear that: "
+           "each set's line for them only says what its verses are about.", ""]
+
+    # the sets
+    out += ["## The sets", "",
+            "| Set | Verses, in order | Refrains between the first and last | Couplets | Bridge | Tag | Length |",
+            "|---|---|---|---|---|---|---|"]
+    for s in sets:
+        w = s["words"]
+        verses = []
+        for v in w["verses"]:
+            entry = A.bank_entry(genome, "verse", v["id"])
+            own = A._chosen(entry, {n: 0 for n in slot_names(entry["lines"])})
+            changed = [_label(val) for name, val in v["slots"].items() if val != own.get(name)]
+            verses.append(v["id"] + (f" ({', '.join(changed)})" if changed else ""))
+        rounds_ = w["refrain"]["rounds"]
+        between = [f"{r['head']} (who {r['words'].get('question', '')})" for r in rounds_[1:-1]]
+        couplets = [r["id"] for r in rounds_]
+        bridge = " + ".join([w["bridge"][0]["id"] + " (" + ", ".join(_label(x) for x in w["bridge"][0]["slots"].values())
+                             + ")"] + [b["id"] for b in w["bridge"][1:]])
+        length = seconds(genome, singers_form(genome, s["form"]))
+        out.append(f"| {s['id']} | {', '.join(verses)} | {', '.join(between)} | {', '.join(couplets)} | {bridge} | "
+                   f"{w['tag']} | {_minutes(length)} |")
+    out += ["", "What each set tells singers:", ""]
+    out += [f"- **{s['id']}**: {s['about']}" for s in sets]
+    lengths = {round(seconds(genome, singers_form(genome, s["form"])), 1) for s in sets}
+    places = sum(len(s["words"]["verses"]) for s in sets)
+    out += ["", f"Every set lasts {' or '.join(_minutes(x) for x in sorted(lengths))} with a two-bar turn between "
+            "its sung sections, at 96 BPM (the seed's rendition is 2:30, with two turns): nine sung sections "
+            "each, where three verses, three refrains, the bridge and the tag would be eight "
+            f"({_minutes(seconds(genome, singers_form(genome, PLAIN)))}). The rules and what the sets must hold "
+            "add the ninth:",
+            "",
+            "- The first and last refrains of a song always sing the song's own head (knows), and another head "
+            "at most once a song, so the other heads can only go in the refrains between. Nine of them (the "
+            "seven others once, the artist's so twice) take three sets with four refrains.",
+            "- The bridge's extra stanzas, coat and given, can only follow the canon's, so two sets sing two "
+            "bridge sections.",
+            f"- The words the voice surely says wrong, and the verses it gets clearly wrong, take {places} "
+            "verses, so the last set sings four.",
+            "",
+            "Singers can record one section at a time, so no one need sing a whole set at once.", ""]
+
+    # what the voice says worst
+    out += ["## What the learned voice says worst", "",
+            f"The default learned voice sang every entry of the bank dry, at the seed's key and tempo, one "
+            f"section at a time: all 38 verses with every word each slot can take, all nine refrain heads with "
+            f"every question each can ask, the six couplets, the three bridge stanzas and the three tag "
+            f"syllables, {items_n} ways in all, each three times with the voice's own chance (seeds 1-3). "
+            f"Whisper base.en, never shown the lyric, heard each; a homophone (quay and key), a number written "
+            f"as digits, or a compound heard as two words counted as heard. Over {hearings:,} sung words, "
+            f"{_pct(analysis['misheard'])} were misheard (a word error rate of {_pct(analysis['overall'])}).", ""]
+    phones_ = sorted(((p, n, m) for p, (n, m) in analysis["phones"].items() if n >= 40), key=lambda x: -x[2] / x[1])
+    out += ["**Sounds.** A word with one of these sounds in it was misheard more often than the "
+            f"{_pct(analysis['misheard'])} of all words:", "", "| Sound | Misheard | Words it was in, misheard |",
+            "|---|---|---|"]
+    spell = analysis["spelled"]
+    for p, n, m in phones_[:8]:
+        examples = sorted((w for w, s in analysis["sounds"].items() if p in s and rates.get(w, (0, 0))[1] > 0
+                           and w not in phonetics.FUNCTION_WORDS), key=lambda w: -rates[w][1])[:6]
+        out.append(f"| {SAY.get(p, p)} | {_pct(m / n)} of {n:,} | {', '.join(spell.get(w, w) for w in examples)} |")
+    worst = {p for p, _, _ in phones_[:8]}
+    musts_ = [t[5:] for t, w in want.items() if w["must"] and t.startswith("word:")]
+    with_them = [w for w in musts_ if worst & set(analysis["sounds"].get(w, []))]
+    out += ["", "The best said: " + ", ".join(f"{SAY.get(p, p)} {_pct(m / n)}" for p, n, m in phones_[::-1][:5]) +
+            f". Of the {len(musts_)} words the voice surely says wrong (below), {len(with_them)} have one of the "
+            "sounds above, so the sets that hold those words hold the sounds too.", ""]
+    musts = sorted((t[5:] for t, w in want.items() if w["must"] and t.startswith("word:")),
+                   key=lambda w: (-rates[w][1] / rates[w][0], -rates[w][0]))
+    out += [f"**Words.** {len([t for t in want if t.startswith('word:')])} words were misheard at least half the "
+            f"times they were sung (three hearings or more). These {len(musts)} were misheard at least nine times "
+            "in ten, over six hearings or more (sung two ways, or in two places): the voice surely says them "
+            "wrong.", "", "| Word | Misheard | Heard as |", "|---|---|---|"]
+    for w in musts:
+        n, m = rates[w]
+        heard_as = [spell.get(x, x) if x != "-" else "(nothing)" for x in analysis["heard_as"].get(w, [])]
+        out.append(f"| {spell.get(w, w)} | {m} of {n} | {', '.join(heard_as)} |")
+    vr = verse_rates(analysis)
+    median = float(np.median(list(vr.values())))
+    high = high_verses(analysis)
+    out += ["", f"**Verses.** The verses' median word error rate is {_pct(median)}; these {len(high)} are "
+            f"clearly high ({HIGH:g} times that or more): " +
+            ", ".join(f"{v} {_pct(vr[v])}" for v in high) + ". The best heard: " +
+            ", ".join(f"{v} {_pct(vr[v])}" for v in sorted(vr, key=vr.get)[:5]) + ".", ""]
+    ent = analysis["entries"]
+    out += ["**Refrains and bridges.** Heads: " +
+            ", ".join(f"{h} {_pct(ent.get(f'head:{h}', 0))}" for h in sorted(song.heads, key=lambda h: -ent.get(f"head:{h}", 0)))
+            + ". Couplets: " +
+            ", ".join(f"{c} {_pct(ent.get(f'couplet:{c}', 0))}" for c in
+                      sorted(A.couplet_ids(genome), key=lambda c: -ent.get(f"couplet:{c}", 0))) +
+            ". Bridge stanzas: " +
+            ", ".join(f"{b} {_pct(ent.get(f'bridge:{b}', 0))}" for b in ("canon", "coat", "given")) +
+            f". In the last refrain's couplet, old (it's old and it's new) was misheard {rates['old'][1]} times in "
+            f"{rates['old'][0]}, most often as {analysis['heard_as']['old'][0]}; in the bridge, dies as "
+            f"{analysis['heard_as']['dies'][0]} and coal as {analysis['heard_as']['coal'][0]}. The tag's loo and oo "
+            "aren't words, so Whisper never heard them as sung; la it heard.", ""]
+
+    # how they were chosen
+    must_n = sum(1 for w in want.values() if w["must"])
+    places = sum(len(s["words"]["verses"]) for s in sets)
+    held_once = sum(1 for t, w in want.items() if w["must"] and have[t] >= 1)
+    twice = [t for t, w in want.items() if w["must"] and w["need"] >= 2]
+    held_twice = [t for t in twice if have[t] >= 2]
+    should = [t for t, w in want.items() if not w["must"]]
+    should_held = [t for t in should if have[t] >= 1]
+    out += ["## How the sets were chosen", "",
+            f"- **Must hold ({must_n}):** every word surely misheard (above) and every verse clearly high. "
+            f"All {held_once} are held at least once. The worst would ideally be held twice, but the verses "
+            f"that hold them fill all {places} verse places the six sets have, so only {len(held_twice)} of "
+            f"{len(twice)} are, in two sets or more: " + ", ".join(spell.get(t[5:], t[5:]) for t in held_twice) + ".",
+            f"- **Should hold ({len(should)}):** every other word misheard at least half the times it was sung, "
+            f"weighed by how often it is misheard and how often the song sings it (a word one of three slot "
+            f"choices counts a third). {len(should_held)} of them are held.",
+            "- **Heads:** every head at least once, the artist's so in sets a and b; the others worst heard "
+            "first. **Couplets:** each three times, worst heard first. **Bridges:** the canon in every set, "
+            "coat in d, given in e; the canon's slot words and the refrain's question, while and then words are "
+            "the most misheard the rules leave free, then the least sung so far. **Tag:** la, loo and oo in "
+            "turn.",
+            "- **Verses:** chosen together: each set in turn takes the verses and slot words that add most, "
+            "then any single verse of any set is swapped for whatever adds most, until nothing does. Every set's "
+            "verses keep the bank's rules (checked with `arrange.held_problem`, with and without the turns). A "
+            "verse keeps its own first slot words unless another one is misheard. Each set sings its easier "
+            "verses first where the rules leave the order free (a verse that rhymes another way or runs a line "
+            "on, a rare one, or a wordy one counts as harder). The sets with the most in them come first: set a "
+            "holds the most.", ""]
+    missing = [t[5:] for t in should if have[t] < 1 and t.startswith("word:")]
+    where = defaultdict(list)
+    for w in missing:
+        for v in song.verses:
+            if any(w in {word_token(re.sub(r"[^A-Za-z'\-]", "", x)) for line in lines for x in line.split()}
+                   for lines in [song.sing(v.entry, dict(zip(slot_names(v.entry["lines"]), combo)))
+                                 for combo in _combos(v.entry)]):
+                where[w].append(v.id)
+    out += ["## Left out", "",
+            f"{len(sets)} sets can't hold everything. These {len(missing)} words, each misheard at least half "
+            "the times it was sung but less surely, or one of a slot's choices, aren't in any set (the verse "
+            "that sings each is in brackets): " +
+            ", ".join(f"{spell.get(w, w)} ({'/'.join(where[w][:2])})" for w in sorted(missing)) + ".", "",
+            "A seventh set, if one is wanted, would start from the verses that sing most of them: " +
+            ", ".join(f"{v} ({n})" for v, n in Counter(v for w in missing for v in where[w][:1]).most_common(6)) +
+            ".", ""]
+    out += ["## Doubts", "",
+            "- Whisper base.en is a proxy for a listener, and a harsh one on singing; it knows nothing of the "
+            "lyric, so a rare word (belfry, goatherd, squall) is misheard partly for being rare.",
+            "- Three hearings of a word sung once are few: the should-hold words are less certain than the "
+            "must-hold ones, which is why they weigh less.",
+            "- The voice was heard dry. In the full mix the band covers some consonants further.",
+            f"- Every set lasts {' or '.join(_minutes(x) for x in sorted(lengths))}, not three minutes (above).", "",
+            "## Running it again", "",
+            "    uv run python tools/recording_sets.py measure    # sing and hear everything (renders/sets/, about 4 minutes)",
+            "    uv run python tools/recording_sets.py choose     # write tools/sets/h-now-its-by-you.json",
+            "    uv run python tools/recording_sets.py report     # write this page", ""]
+    return "\n".join(out)
+
+
+def _combos(entry: dict):
+    import itertools
+
+    names = slot_names(entry["lines"])
+    slots = entry.get("slots", {})
+    return itertools.product(*(range(width(slots, n)) for n in names))
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -756,6 +972,11 @@ def main(argv: list[str] | None = None) -> int:
         SETS.mkdir(parents=True, exist_ok=True)
         path = SETS / f"{SONG.stem}.json"
         path.write_text(json.dumps(sets_file(genome, sets), indent=1, ensure_ascii=False) + "\n")
+        print(f"wrote {path.relative_to(ROOT)}")
+    if args.what == "report":
+        data = json.loads((SETS / f"{SONG.stem}.json").read_text())
+        path = ROOT / "docs" / "RECORDING-SETS.md"
+        path.write_text(report(genome, analysis, data))
         print(f"wrote {path.relative_to(ROOT)}")
     return 0
 

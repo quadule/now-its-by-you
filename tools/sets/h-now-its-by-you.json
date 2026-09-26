@@ -1,6 +1,6 @@
 {
  "song": "h-now-its-by-you",
- "about": "Recording scripts: each set is the song with verses and refrains of its own, so that between them singers sing every part of the song the machine singer finds hardest to say clearly.",
+ "about": "Recording scripts: each set is the whole song, with verses and refrains of its own, so that between them singers sing every part of it.",
  "made_by": "tools/recording_sets.py",
  "sets": [
   {
