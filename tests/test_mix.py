@@ -203,10 +203,16 @@ def test_every_instrument_finds_its_strip():
     assert mixing.role_of("synthlead") == "synth" and mixing.role_of("lead") == "voice"
     expected = {"keys": "keys", "mallets": "keys", "organ": "organ", "pad": "organ", "drums": "drum",
                 "percussion": "drum", "reed": "reed", "bass": "bass"}
+    # sustained keyboards take the organ's strip, whatever family their maker filed them under
+    specific = {"organ": "organ", "harmonium": "organ", "synth-pad": "organ"}
     for name in instruments.known():
         role = mixing.role_of(name)
         assert role in mixing.ROLES and role not in ("voice", "choir"), name
         family = instruments.spec(name)["family"]
-        if family in expected and name not in instruments.INSTRUMENTS:
+        if name in specific:
+            assert role == specific[name], (name, role)
+        elif family in expected and name not in instruments.INSTRUMENTS:
             assert role == expected[family], (name, role)
     assert mixing.role_of("cello") == "strings"  # a cello keeps its low strings: no fiddle's 180 Hz high-pass
+    assert mixing.role_of("viola") == "strings" and mixing.role_of("music-box") == "keys"
+    assert mixing.role_of("nylon") == "guitar" and mixing.role_of("ukulele") == "guitar"

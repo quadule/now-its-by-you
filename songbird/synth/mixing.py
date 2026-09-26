@@ -186,19 +186,19 @@ NAMES = {
     "voice": ("voice", "lead", "vocal", "singer"),
     "choir": ("choir", "harmony", "backing"),
     "lute": ("melody", "lute", "mandolin", "bouzouki", "cittern", "oud", "banjo"),
-    "guitar": ("guitar", "strum", "pick", "electric"),
+    "guitar": ("guitar", "strum", "pick", "electric", "nylon", "ukulele"),
     "harp": ("harp", "dulcimer", "zither", "kantele", "psaltery"),
     "bass": ("bass", "contrabass", "upright"),
-    "fiddle": ("fiddle", "violin", "viola", "bow", "steel", "slide"),
+    "fiddle": ("fiddle", "violin", "bow", "steel", "slide"),
     "whistle": ("whistle", "flute", "pipe", "recorder", "fife", "blown"),
     "drum": ("drum", "drums", "percussion", "bodhran", "tambourine", "shaker", "kick", "snare", "skin", "frame",
              "kit", "claps", "clap", "stomps", "stomp", "cajon", "machine", "hats"),
-    "drone": ("drone", "pad", "harmonium", "shruti", "bagpipe", "hum"),
-    "keys": ("piano", "epiano", "rhodes", "keys", "celesta", "musicbox", "glock", "glockenspiel", "vibes",
+    "drone": ("drone", "pad", "shruti", "bagpipe", "hum"),
+    "keys": ("piano", "epiano", "rhodes", "keys", "celesta", "musicbox", "music-box", "glock", "glockenspiel", "vibes",
              "vibraphone", "marimba", "xylophone", "bells"),
-    "organ": ("organ", "synthpad"),
+    "organ": ("organ", "synthpad", "synth-pad", "harmonium"),  # sustained keys: no drone's 6 kHz low-pass
     "reed": ("harmonica", "accordion", "concertina", "melodeon"),
-    "strings": ("cello", "strings", "quartet"),
+    "strings": ("cello", "viola", "strings", "quartet"),  # their low strings kept: no fiddle's 180 Hz high-pass
     "synth": ("synth", "synthlead", "arp", "chip"),
 }
 SINGERS = ("voice", "choir")  # stems sung by the singers: matched by their whole names only
