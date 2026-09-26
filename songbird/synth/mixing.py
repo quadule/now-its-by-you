@@ -33,6 +33,7 @@ import re
 from dataclasses import dataclass, fields
 
 import numpy as np
+from scipy.ndimage import uniform_filter1d
 
 from . import fx, room
 from .master import limit, loudness
@@ -217,6 +218,7 @@ PLATE_RT60 = 1.5
 RETURN_EQ = (("hp", 120), ("lp", 12000))  # wide enough that the harvested tone's ends are heard
 RETURN_DIP = 3.0  # dB the room and plate give way while the voice sings
 MAKE_WAY = (0.02, 0.9)  # s the band and room take to make way for the voice (quick: its first consonants), and to come back after it (slow: no breathing)
+RIDE = (3.0, 1.5)  # dB the band comes up where the voice rests, over this many seconds
 
 CARVE = (2600.0, 0.7)  # the band's dip for the voice: centre Hz, Q
 CARVE_DEPTH = 6.0  # dB at full voice
@@ -394,6 +396,11 @@ def mix(stems: dict[str, np.ndarray], sr: int, seed: int = 0, params: MixParams 
         band *= gain
         band_send *= gain
         if singing is not None:
+            # where the voice rests a while (the intro, the turns), the band is ridden up, as an engineer would
+            rest = uniform_filter1d((singing < 0.05).astype(float), int(RIDE[1] * sr), mode="nearest")
+            ride = 10.0 ** (RIDE[0] * p.duck * rest / 20.0)
+            band *= ride[:, None]
+            band_send *= ride[:, None]
             band = fx.dynamic_dip(band, sr, CARVE[0], CARVE[1], CARVE_DEPTH * p.duck * singing)
         band = fx.width(band, sr, p.width)
 
