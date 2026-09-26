@@ -254,15 +254,24 @@ def place_take(f0, active, knots, n_frames: int) -> int:
     return 0 if abs(best) * S.FRAME < 0.25 else best
 
 
+def next_sound(knots, spans, k: int) -> int:
+    """The frame where the syllable after note k begins: its vowel less its consonants as the template sings them."""
+    if k + 1 >= len(spans):
+        return spans[k][1] + 40
+    on, v0 = knots[k + 1][0], knots[k + 1][1]
+    return max(spans[k + 1][0] - int(round((v0 - on) / S.FRAME)), spans[k][0] + 1)
+
+
 def note_spans(knots, active, band, found=None):
     """(vowel start, vowel end, release) in frames for every note: where the
     alignment found them in a take, or where the schedule put them in the
     template. A note is held until the voice falls 20 dB below its vowel or
-    the next vowel starts; a room's reverberation and hiss don't count."""
+    the next syllable's first sound (its consonants, as long as the template
+    sings them, before its vowel) begins; a room's reverberation and hiss don't count."""
     spans = found or [(int(round(v0 / S.FRAME)), int(round(v1 / S.FRAME)), 0) for _, v0, v1, _, _, _ in knots]
     out = []
     for k, (v0, v1, _) in enumerate(spans):
-        nxt = spans[k + 1][0] if k + 1 < len(spans) else v1 + 40
+        nxt = next_sound(knots, spans, k)
         floor = np.median(band[v0 : max(v1, v0 + 1)]) - 20.0
         sounding = np.flatnonzero(active[v0 : max(nxt, v0 + 1)] & (band[v0 : max(nxt, v0 + 1)] >= floor))
         out.append((v0, max(v1, v0 + 1), v0 + (sounding[-1] + 1 if len(sounding) else 1)))
@@ -484,7 +493,7 @@ def measure_sung(notes, knots, found, take, template, lag: int, key: int, tempo:
         # a quarter of a beat off is past anyone's phrasing: the alignment slipped, so don't count it
         g["early"] = -late if abs(late) <= 0.25 else NAN
         # detached: a gap of silence before the next note, where the machine would have sung on
-        nxt = spans[k + 1][0] if k + 1 < len(spans) else None
+        nxt = next_sound(knots, spans, k) if k + 1 < len(spans) else None
         if nxt is not None and (nxt - release) * S.FRAME >= 0.04 and not note.line_end:
             nominal = T_v0 / S.FRAME + lag
             g["hold"] = float(np.clip((release - nominal) / max(release_t - T_v0 / S.FRAME, 1.0), 0.6, 1.0))
@@ -856,9 +865,9 @@ def write_guide(path: Path, genome, transpose: int) -> None:
 
 
 # everything a take's measurement depends on (version() hashes their source)
-MEASURING = ("guide", "template", "analyze_take", "place_take", "note_spans", "contour", "fit_edge", "shapes", "wobble",
-             "align_by_pitch", "vowel_onsets", "with_aligner", "by_vowel", "measure_sung", "find_key", "measure_take",
-             "index_in_phrase", "rounded")
+MEASURING = ("guide", "template", "analyze_take", "place_take", "next_sound", "note_spans", "contour", "fit_edge",
+             "shapes", "wobble", "align_by_pitch", "vowel_onsets", "with_aligner", "by_vowel", "measure_sung", "find_key",
+             "measure_take", "index_in_phrase", "rounded")
 
 
 def main() -> None:
