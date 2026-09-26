@@ -95,10 +95,18 @@ Two related changes:
   | Eleven baritone | +0.38 (was +0.17) |
   | Milo | +0.48 |
 
+  These two figures predate the forced aligner, which has since changed
+  how timing is measured. Some of the agreement between takes was the old
+  extractor's own repeating error: docs/PHRASING-CALIBRATION.md.
+
 ## Next
 
-- A forced aligner (Montreal Forced Aligner) in place of the loudness-climb
-  onset heuristic, if it measures better.
+- Vowel starts now come from a forced aligner (Montreal Forced Aligner)
+  where its timing can be trusted, with the loudness-climb heuristic as the
+  fallback. On the natural references, 96% land within 30 ms, up from 78%
+  (docs/PHRASING-CALIBRATION.md). Next there: lower the floor under timing
+  (REPEATS), which was set for the old extractor's errors, and check holds
+  on more real singers.
 - Score-following singing synthesis (SoulX-Singer or DiffSinger) for
   natural references with known timing.
 - An automatic naturalness score (a MOS predictor) as a relative number,
