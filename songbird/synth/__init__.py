@@ -11,7 +11,8 @@ from scipy.signal import sosfilt
 
 from ..score import Score
 from ..theory import midi_to_hz
-from . import room
+from . import mixing
+from .mixing import MixParams
 from .pluck import pluck
 from .voice import VoiceParams, sing
 
@@ -106,18 +107,13 @@ def lineage_voices(n: int, seed: int) -> list[VoiceParams]:
     return voices
 
 
-# How much of each stem reaches the room. The singer stands nearer the
-# listener than the instruments do, so words keep their edges.
-SENDS = {"voice": 0.5}
+def mix(stems: dict[str, np.ndarray], sr: int = SR, seed: int = 0, params: MixParams | None = None) -> np.ndarray:
+    """Stems into one stereo mix, in their room (mixing.py: the channel strips,
+    buses, room and what MixParams can vary)."""
+    return mixing.mix(stems, sr, seed, params)
 
 
-def mix(stems: dict[str, np.ndarray], sr: int = SR, seed: int = 0) -> np.ndarray:
-    """Stems into one stereo mix, in their room."""
-    dry = sum(stems.values())
-    send = sum(stem * SENDS.get(name, 1.0) for name, stem in stems.items())
-    return room.apply(dry, room.impulse_response(sr, seed=seed), send)
-
-
-def render(score: Score, sr: int = SR, seed: int = 0, voice: VoiceParams | None = None) -> np.ndarray:
+def render(score: Score, sr: int = SR, seed: int = 0, voice: VoiceParams | None = None,
+           mix_params: MixParams | None = None) -> np.ndarray:
     """The unmastered stereo mix, in its room."""
-    return mix(render_stems(score, sr, seed, voice), sr, seed)
+    return mix(render_stems(score, sr, seed, voice), sr, seed, mix_params)

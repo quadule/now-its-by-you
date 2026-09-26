@@ -13,6 +13,7 @@ import numpy as np
 from . import __version__, genome as genome_mod, phrasing as phrasing_mod, synth
 from .realize import choose_params, realize
 from .synth import master
+from .synth.mixing import MixParams
 from .synth.voice import VoiceParams
 
 
@@ -33,11 +34,12 @@ def render_command(args: argparse.Namespace) -> int:
     score = realize(genome, params, phrasing=phrasing, choir=choir)
     defaults = VoiceParams()
     voice = replace(defaults, **{k: type(getattr(defaults, k))(v) for k, v in (kv.split("=", 1) for kv in args.voice)})
+    mixing = MixParams.parse(args.mix)
 
     out = Path(args.out or Path("renders") / (Path(args.genome).stem + ".flac"))
     out.parent.mkdir(parents=True, exist_ok=True)
 
-    mix = synth.render(score, seed=params.seed, voice=voice)
+    mix = synth.render(score, seed=params.seed, voice=voice, mix_params=mixing)
     mastered = master.master(mix, synth.SR)
     pcm = master.to_pcm16(mastered, seed=params.seed)
     master.write_flac(out, pcm, synth.SR)
@@ -49,7 +51,10 @@ def render_command(args: argparse.Namespace) -> int:
         "voice": asdict(voice),
         "phrasing": {k: v for k, v in phrasing_json.items() if k not in ("phrases", "fields")} if phrasing_json else None,
         "choir_phrasings": [{k: v for k, v in d.items() if k not in ("phrases", "fields")} for d in choir_json] or None,
+        "mix": mixing.to_dict(),
         "loudness_lufs": round(master.loudness(pcm / 32768.0, synth.SR), 2),
+        "loudness_range_lu": round(master.loudness_range(pcm / 32768.0, synth.SR), 2),
+        "true_peak_dbtp": round(master.true_peak(pcm / 32768.0), 2),
         "peak_dbfs": round(20 * np.log10(np.max(np.abs(pcm)) / 32768.0), 2),
         "duration": round(len(pcm) / synth.SR, 3),
         "program_version": __version__,
@@ -78,6 +83,9 @@ def main(argv: list[str] | None = None) -> int:
     render.add_argument("--stems", action="store_true", help="also write each part, dry, as WAV")
     render.add_argument("--voice", nargs="*", default=[], metavar="FIELD=VALUE",
                         help="override the singer, e.g. --voice tract=1.0 shift=-12 rd=1.3")
+    render.add_argument("--mix", nargs="*", default=[], metavar="FIELD=VALUE",
+                        help="change the mix (synth/mixing.py MixParams), e.g. --mix rt60=2.2 wear=0.5 "
+                             "tone=1,1,1,0.8,0.6 balance=fiddle:2")
     render.add_argument("--choir", type=int, metavar="N",
                         help="lineage voices joining in harmony where the song has a choir (stand-ins for now)")
     render.add_argument("--phrasing", metavar="FILE",
