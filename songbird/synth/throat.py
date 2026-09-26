@@ -423,6 +423,27 @@ def warp(values: np.ndarray, factor: float) -> np.ndarray:
     return values[:, lo] * (1 - f) + values[:, hi] * f
 
 
+SHARPEN = 1.5  # how far sing() pushes a predicted envelope's formants from its trend (1 leaves it; docs/THROAT.md)
+
+
+def sharpen(sp: np.ndarray, amount: float, width: int = 17) -> np.ndarray:
+    """A log-power envelope on the mel grid with its peaks and valleys pushed `amount` times as far
+    from its own trend (a Hann over `width` grid points), each frame's power kept. A network's
+    envelope is an average, and averages flatten the formants a voice has."""
+    if abs(amount - 1.0) < 1e-6:
+        return sp
+    from scipy.ndimage import convolve1d
+
+    k = np.hanning(width + 2)[1:-1]
+    trend = convolve1d(sp, k / k.sum(), axis=1, mode="nearest")
+    out = trend + amount * (sp - trend)
+    df = np.gradient(grid(sp.shape[1]))  # Hz each point stands for
+    top = sp.max(axis=1, keepdims=True)
+    before = np.log(np.exp(sp - top) @ df)
+    after = np.log(np.exp(out - top) @ df)
+    return out + (before - after)[:, None]
+
+
 # ---- singing: our schedule, pitch and dynamics through the learned throat ---------------------------
 
 RATE = 24000  # the throat sings at its training data's rate; the result is resampled to the mix's
@@ -504,6 +525,7 @@ def sing(notes, sr: int, voice, seed: int = 0, lexicon: dict | None = None, mix:
     f0 = np.interp(np.arange(n) * FRAME, (np.arange(n_blocks) + 0.5) * BLOCK / RATE, f0b)
     sung = np.median([n.pitch + voice.shift for n in notes])
     sp, ap = predict(net, t, np.log(f0), timbre(net, parse_mix(mix), sung), gv=gv)
+    sp = sharpen(sp, SHARPEN)
     factor = voice.tract / TRACT
     sp, ap = warp(sp, factor), warp(ap, factor)
     times = np.arange(n) * FRAME

@@ -99,6 +99,22 @@ def test_jitter_unsettles_the_upper_harmonics_more_than_the_lower():
     assert lo[1] - lo[0] < 0.03 and hi[1] - hi[0] > 0.1
 
 
+def test_sharpening_deepens_the_formants_and_keeps_the_power():
+    g = T.grid(128)
+    sp = (-6.0 - 0.3 * np.log2(g / 500.0).clip(0) + 1.5 * np.exp(-0.5 * ((g - 700) / 150) ** 2)
+          + 1.0 * np.exp(-0.5 * ((g - 1800) / 250) ** 2))[None]
+    assert np.array_equal(T.sharpen(sp, 1.0), sp)
+    out = T.sharpen(sp, 1.5)
+    at = np.searchsorted(g, [700.0, 1200.0, 1800.0])
+    peaks = lambda s: (s[0, at[0]] - s[0, at[1]], s[0, at[2]] - s[0, at[1]])  # noqa: E731
+    assert all(b > 1.1 * a > 0 for a, b in zip(peaks(sp), peaks(out)))
+    k = np.hanning(19)[1:-1]
+    detrended = lambda s: s[0] - np.convolve(np.pad(s[0], 8, mode="edge"), k / k.sum(), mode="valid")  # noqa: E731
+    assert np.std(detrended(out)[10:-10]) > 1.15 * np.std(detrended(sp)[10:-10])
+    df = np.gradient(g)
+    assert abs(np.log(np.exp(out[0]) @ df) - np.log(np.exp(sp[0]) @ df)) < 1e-9
+
+
 def test_a_louder_envelope_is_louder_by_as_much():
     f0 = np.full(300, 180.0)
     ap = np.full((300, 32), 0.05)
