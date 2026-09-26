@@ -6,6 +6,10 @@ contract's fields, that a typical part renders finite, deterministic, with
 nothing before its first note and no DC, at its role's loudness, louder (and,
 where the SPEC says, brighter) when played harder, in tune in the middle of
 its compass, and cheaply. Modules not yet written are skipped.
+
+Optional SPEC keys it reads: loudness (LUFS, the typical part's target, in
+place of the role's), brighter (octaves the spectral centroid rises from
+velocity 0.3 to 0.9), dynamic (False: velocity doesn't change the level).
 """
 
 from __future__ import annotations
@@ -111,7 +115,8 @@ def test_harder_is_louder_and_as_bright_as_the_spec_says(module, name):
     soft = mono(render(module, name, probe(spec, 0.3), 1.2))[int(0.1 * SR): int(0.4 * SR)]
     hard = mono(render(module, name, probe(spec, 0.9), 1.2))[int(0.1 * SR): int(0.4 * SR)]
     louder = 20 * np.log10(np.sqrt(np.mean(hard**2)) / np.sqrt(np.mean(soft**2)))
-    assert louder > 4.0
+    if spec.get("dynamic", True):  # an instrument without dynamics (a chip's triangle) says so
+        assert louder > 4.0
     brighter = float(spec.get("brighter", 0.0))
     if brighter > 0.0:
         assert np.log2(centroid(hard) / centroid(soft)) > 0.8 * brighter
