@@ -44,6 +44,60 @@ def test_a_pulses_dc_is_taken_away_around_it_not_after_it():
     assert np.abs(after).max() < 1e-3 * np.abs(voiced).max()
 
 
+def steady_voice(texture, seed=0, f0=200.0, frames=400):
+    """A second or two of one steady vowel-ish envelope through the vocoder, at 24 kHz."""
+    g = T.grid(128)
+    sp = -6.0 - 1.5 * np.log2(g / 500.0).clip(0) + 2.0 * np.exp(-0.5 * ((g - 700) / 120) ** 2)
+    return T.synthesize(np.full(frames, f0), np.tile(sp, (frames, 1)), np.full((frames, 32), 0.05), 24000,
+                        np.random.default_rng(seed), texture=texture)
+
+
+def band(y, lo, hi, sr=24000):
+    from scipy.signal import butter, sosfiltfilt
+
+    return sosfiltfilt(butter(6, [lo, hi], btype="bandpass", fs=sr, output="sos"), y)
+
+
+def test_texture_follows_the_seed():
+    busy = T.Texture(spread=0.15, jitter=0.005, scatter=0.5)
+    assert np.array_equal(steady_voice(busy, seed=3), steady_voice(busy, seed=3))
+    assert not np.array_equal(steady_voice(busy, seed=3), steady_voice(busy, seed=4))
+
+
+def test_spread_softens_the_click_but_keeps_the_spectrum_and_the_period():
+    plain, spread = steady_voice(T.Texture())[4800:-4800], steady_voice(T.Texture(spread=0.2))[4800:-4800]
+    hf_plain, hf_spread = band(plain, 5000, 9000), band(spread, 5000, 9000)
+    crest = lambda y: np.abs(y).max() / np.sqrt(np.mean(y**2))  # noqa: E731
+    assert crest(hf_spread) < 0.75 * crest(hf_plain)
+    for lo, hi in ((300, 1000), (1000, 3000), (3000, 6000), (6000, 10000)):
+        assert abs(20 * np.log10(np.std(band(spread, lo, hi)) / np.std(band(plain, lo, hi)))) < 0.5
+    period = 24000 // 200  # still the same every period (the noise aside)
+    hf = hf_spread
+    r = np.dot(hf[:-period], hf[period:]) / np.dot(hf, hf)
+    assert r > 0.8
+
+
+def test_scatter_unlocks_the_upper_harmonics_from_one_period_to_the_next_but_not_the_lower():
+    y = steady_voice(T.Texture(scatter=1.5))[4800:-4800]
+    period = 24000 // 200
+
+    def alike(x):
+        return np.dot(x[:-period], x[period:]) / np.dot(x, x)
+
+    assert alike(band(y, 200, 1000)) > 0.95
+    assert alike(band(y, 5000, 9000)) < 0.6
+
+
+def test_jitter_unsettles_the_upper_harmonics_more_than_the_lower():
+    y = steady_voice(T.Texture(jitter=0.005, jitter_corr=0.0), frames=800)[4800:-4800]
+    z = steady_voice(T.Texture(), frames=800)[4800:-4800]
+    period = 24000 // 200
+    # a period against the next: 25 us of jitter barely moves 0.1-1 kHz, and 3-6 kHz noticeably
+    lo = [np.corrcoef(band(s, 100, 1000)[:-period], band(s, 100, 1000)[period:])[0, 1] for s in (y, z)]
+    hi = [np.corrcoef(band(s, 3000, 6000)[:-period], band(s, 3000, 6000)[period:])[0, 1] for s in (y, z)]
+    assert lo[1] - lo[0] < 0.03 and hi[1] - hi[0] > 0.1
+
+
 def test_a_louder_envelope_is_louder_by_as_much():
     f0 = np.full(300, 180.0)
     ap = np.full((300, 32), 0.05)
