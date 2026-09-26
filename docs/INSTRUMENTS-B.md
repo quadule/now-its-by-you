@@ -5,8 +5,8 @@ hearing it the artist asked for "more variation in arrangement and genre", so
 a rendition can now also be played by an acoustic drum kit, hand percussion
 (claps, stomps, a shaker, a tambourine, a cajón), a banjo, a mandolin, a
 classical guitar and a ukulele, an electric guitar through a pickup and a
-small valve amp, an electric bass, a cello, a viola and a string section, and
-a diatonic harmonica. (A pedal steel, a slide guitar, an accordion and a
+small valve amp, an electric bass, a cello, a viola and a string section, a
+diatonic harmonica, a pedal steel and a slide guitar. (An accordion and a
 concertina were begun and are not here: their builders were cut off before
 committing them. Another set, the piano,
 electric piano, organ, mallets, synthesizers and a drum machine, is described
@@ -312,6 +312,96 @@ splits octaves, and the hands wah and tremble.
 Levels: a cello's held bass line -23.0 LUFS and the section's pad -23.8
 (comping, -23.7); the harmonica's melody -21.0 (a lead, -20.7).
 
+## Pedal steel and slide guitar
+
+`steel` and `slide` (`steel.py`, on `fretboard.py`'s strings and `amp.py`).
+They replace the stand-ins (the bowed fiddle model had played both): the
+country style's steel and the blues style's slide are these now.
+
+**The pedal steel.** Ten strings tuned to E9 (F#4 D#4 G#4 E4 B3 G#3 F#3 E3 D3
+B2), stopped by a steel bar, with the standard three pedals and four knee
+levers: A raises the B strings a tone to C#, B the G# strings a semitone to A,
+C the E and B strings a tone; the left knee raises or lowers the E strings a
+semitone, the right knee raises the F#s and lowers the D# and D. Each chord
+is found as a player finds it: the bar's fret, the fewest pedals and levers,
+the tightest grip, the bar near where it was; so D at the tenth fret becomes
+G by pressing the A and B pedals at the same fret, the instrument's own
+sound. A glide (or a bowed line's slur) is the bar sliding with no pick,
+every ringing string moving with it and the pedals moving the strings that
+must go by other intervals; half the glide comes before the beat, so it lands
+near it (a tenth or two of a second for a few frets). A pedal bend picks a
+note with its pedal or lever up and presses it in, the pitch rising a
+semitone or a tone along an S over 0.15 to 0.3 s. The player blocks a ringing
+string with the palm before the bar or a pedal moves under it, and picks a
+slurred note again once it has rung two and a half seconds (a slur that long
+would be heard fading, not moving). The volume pedal rests about half way
+down, 14 dB under its top, while the player picks, the top of its travel kept
+for swells; a swell pulls it back 45 dB for the pick and pushes it to the top
+along a raised cosine in decibels over a quarter of a second to nearly a
+second, and since the pedal is the whole instrument's, it takes whatever else
+rings with it. The bar's vibrato rocks both ways about the fret
+(5 to 6.5 Hz), which a fretting finger cannot. The strings are metal finger
+picks and a thumb pick on the low ones, a chord pinched a few milliseconds
+apart; the bar whirs and hisses along the wound strings as it moves (the
+whir at its speed over the windings' 0.4 mm pitch), about 25 dB under a note.
+Some makers' players tune the major thirds (the G# strings, the A pedal's C#)
+5 to 12 cents flat, toward pure thirds; the rest tune equal. The steel plays
+through a pickup 38 to 50 mm from the bridge, single coil or humbucker, and a
+clean amp with plenty of headroom (the Fender stack, a spring reverb, a 12 or
+15 inch speaker), switched on a quarter of a second before it plays.
+
+Measured: an equal-tempered steel in tune within 0.5 cent from B2 to D6, and
+where each glide lands (within 0.3 cent); on the beat a glide from A4 to B4 is
+half way (-111 cents) and it is there 40 ms later. A bend rises from -100
+cents to the note in 0.25 s. A swell's pick is 32 dB under its top, which
+comes a second later, 1 dB over a plain pick's peak. The strings ring
+long: the fundamental's T60 is 16.8 s at B2, 11.9 at A3, 10.2 at F#5 (a solid
+electric's is 6-10), the fifth partial's 5.3, 4.3 and 1.5 s. An A3 through the
+amp is centred at 1.6 kHz at the pick and darkens to 0.34 kHz a second on; the
+pick's place and the pickup's notch its harmonics near the 6th and 9th. A
+chord picked at 1.0 is 8.8 dB louder than at 0.36 (the amp stays clean). The
+bar vibrato asked for (ornament 0.5) swings -23 to +18 cents about the note.
+
+**The slide guitar.** A bottleneck on a guitar tuned open to the key (open D
+or open G, retuned up to three semitones or capoed): an acoustic flat-top, a
+resonator (a spun cone's few strong, ringing modes from 190 Hz to 2.3 kHz), or
+an electric through the maker's small valve amp pushed a little, by the maker
+(4 in 10, 3.5, 2.5) or `settings["slide"]`. The slide stops every string at any
+pitch, so the steel's glide machinery moves it; a note lands 6 to 35 cents
+flat (with the ornament) and settles in 50 to 100 ms, a "slide" comes up from
+two or three semitones under, the vibrato is wide and even either side of the
+note (4.8 to 6 Hz), a "fall" slides away down as the note ends. A slide is a
+soft stop, so its notes die sooner than fretted ones (T60 2 to 2.8 s at 220
+Hz); a string pressed too lightly rattles on it as a note starts; it scrapes
+the wound strings as it moves, whichever are ringing. The string behind the
+slide, between it and the nut, rings too: the energy that leaks past the
+slide sounds it at 1/(1 - 2^(-x/12)) of the open pitch (an octave up at the
+twelfth fret, a twelfth up at the seventh), falling as the slide climbs, 26 to
+36 dB under the note until the player's trailing finger damps it, in 0.06 to
+0.25 s by the maker's player. Each maker's slide is levelled by a reference
+lick, so the body, the slide and the amp change its colour and not its
+balance.
+
+Measured: in tune within 0.7 cent on every body once landed; a plain note
+lands 42 cents flat (ornament 1) and is there in 0.1 s; a slid note comes from
+-175 cents and is there in 0.27 s; the vibrato swings -22 to +25 cents. An E4
+is centred at 0.78 kHz at the pick on the flat-top, 0.87 on the resonator
+(whose first four harmonics stand within 2 dB of each other) and 1.3 kHz on
+the electric; its fundamental's T60 is 2.5 to 2.6 s.
+
+Levels. The steel is levelled on the country style's line under the singer as
+the style writes it for H's first refrain (low, D3 to B3, at half a comping
+part's velocity so it sits under the words): -23.7 LUFS across six makers
+(-25.3 to -22.3; comping, -23.7), and its picked intro, the tune an octave up,
+-20.5 (a lead's -20.7). The slide's answers sit at -20.0 to -21.3 by body (a
+lead, -20.7, beside the harmonica it answers with). In the tour's country
+rendition (ada, 2026-09-27) the steel reads -17.0 LUFS in the intro, -18.5 in
+the verse's fills and -19.7 under the refrain, where its stand-in read -13.7,
+-16.5 and -19.5, and the guitar -25.2, -24.1 and -22.6: that machine's steel is
+at the loud end of the makers, and the lineup gives it 1.13. In the blues
+rendition the slide's two-note answers read -28.2 (its stand-in -25.2, the
+guitar's boogie -27.4).
+
 ## Idioms for the part-writer
 
 **The kit.** An art names the piece and stroke: `kick`, `snare`, `snare-rim`
@@ -413,6 +503,20 @@ over a new note, `slide` shifts up into a note, `swell` swells through it,
 `pizz` plucks, `trem` bows a tremolo, `tasto` and `pont` move the bow away
 from or to the bridge for a note. Keep the cello low (C2-D4 is its voice).
 
+**Pedal steel.** Swells in the alto under the singer (`swell` on each long
+note or chord: two or three notes of a grip sharing a start ring best), the
+moves between them `slur` (or `glide`), so the bar and pedals carry them; a
+chord change the pedals can make at one fret is the steel's own sound (D
+A4 D5 F#5 to G B4 D5 G5). `slide` slides a note in from a fret or two under,
+`bend` bends it in with a pedal, `vibrato` for a deeper bar vibrato, `fall`
+for the bar leaving a last note, `mute` for a blocked one. Keep it B2 to D6.
+
+**Slide guitar.** Answers and a held tone: `slide` into the long notes,
+`glide` (or `slur`) between notes of a run, `vibrato` on a held one, `fall` to
+end, `swell` for a note let bloom. It plays one line (a chord shares one
+slide position or open strings); the open strings of its tuning (the key's
+root and fifth) ring free under it.
+
 **Harmonica.** Write the tune in the song's key; the harp is chosen for it.
 `bend` on a note approached from above (the blues third and fifth), `wah` on
 a long note (the hands opening), `trem` (hand tremolo), `slap` and `chord`
@@ -445,6 +549,8 @@ a three-minute part costs on the M1 Max:
 | cello | held bass line | -23.0 | -23.7 | 1.4 |
 | strings | four-note pad | -23.8 | -23.7 | 6.1 |
 | harmonica | melody | -21.0 | -20.7 | 0.7 |
+| steel | the country style's line under a singer | -24.1 | -23.7 | 2.7 |
+| slide | answers and a held tone | -18.6 | -20.7 (lead) | 1.1 |
 
 The other new set's test measures every instrument with one generic part per
 role (a four-note comping chord four times a bar, a kit groove for all
@@ -475,8 +581,16 @@ point:
 - `banjo` and `mandolin` fall to the lute's strip, which ducks 3 dB under the
   voice as for a doubling of the tune: right when they double it, a little
   shy when they comp.
-- `electric`, `steel`, `slide`, `harmonica`, `accordion` and `concertina` fall
-  to the generic strip, which does them no harm; `ebass` to the bass strip.
+- `electric`, `harmonica`, `accordion` and `concertina` fall to the generic
+  strip, which does them no harm; `ebass` to the bass strip.
+- `steel` and `slide` have strips of their own. They had fallen to the
+  fiddle's, whose 180 Hz high-pass took the steel's low strings (B2 is 123 Hz)
+  and whose 2 dB duck under the voice fought the steel's own volume pedal:
+  the steel's high-passes at 70 Hz, clears the voice's presence (2.6 kHz, -2
+  dB), sends to the room generously (1.2) and neither compresses nor ducks;
+  the slide's keeps the guitar's weight (70 Hz), clears its box and the
+  voice's presence and steps back 1.5 dB under the voice, as a lead line
+  answering it does.
 
 The solo tool's demos borrow a suitable strip where the mix has none (the
 README says which), so they sound as these will once the mix has its own.
@@ -519,12 +633,22 @@ session's limit stopped them.
 
 - Nobody has listened. The models are right by the measures above, but the
   measures are not the ear.
-- The pedal steel, the slide guitar, the accordion and the concertina are not
-  here: their builders ran out of session before committing them. The
+- The accordion and the concertina are not here: their builders ran out of
+  session before committing them. The
   banjo, mandolin, electric, bowed and harmonica builders' own reviews never
   ran; their instruments pass their tests and the other set's contract test
   (but for the loudness of its generic parts), and want a review by
   measurement next.
+- The pedal steel's level differs by maker by up to 3 dB on the same part
+  (its amp is levelled on a held chord, not on its swells), and a picked
+  note's attack stands about 20 dB over its loudness, so a picked steel line's
+  placed stem peaks near full scale (the stems are floats; the mix brings the
+  band down to the voice). Its pedals move no other string (a real steel's
+  "cabinet drop" flattens the others a few cents), and it plays E9 only (no
+  B6 or universal neck). The slide plays one line at a time (a chord shares
+  one slide position or open strings), and nobody has heard how loud the
+  ring behind the slide or the slide's scrape should be: they are set by
+  judgement, 26-36 and 20-30 dB under a note.
 - The kit is at the frame drum's level, as the brief asked: a rock or pop
   arrangement will want it several dB louder (the mix's balance).
 - The kit is heard from the drummer's seat (hi-hat left); an audience's view

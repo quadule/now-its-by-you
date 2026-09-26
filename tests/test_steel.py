@@ -14,8 +14,9 @@ from songbird.synth import instruments, steel
 from songbird.theory import midi_to_hz
 
 sys.path.insert(0, str(Path(__file__).parent))
-from _fretted import cents, env_db, mono, render as _render  # noqa: E402
-from _levels_b import TARGETS, loudness  # noqa: E402
+from _fretted import cents, env_db, mono
+from _fretted import render as _render
+from _levels_b import TARGETS, loudness
 
 SR = 44100
 
@@ -166,7 +167,7 @@ def test_the_bar_glides_onto_the_beat_and_lands_in_tune():
     for n, t0, t1 in ((notes[0], 0.3, 0.95), (notes[1], 1.3, 2.0), (notes[2], 2.35, 3.4)):
         assert abs(cents(y, n.pitch, t0, t1)) < 2.0
     c = pitch_track(y, 71)
-    at = lambda t: c[int(t * SR)]  # noqa: E731
+    at = lambda t: c[int(t * SR)]
     assert -170 < at(1.1) < -30  # on the beat it is part way there
     assert abs(at(1.25)) < 25 and at(1.0) < -170  # a tenth of a second before, still on A; soon after, on B
 
@@ -246,7 +247,7 @@ def test_the_slide_lands_in_tune_on_every_body(kind, pitch):
 def test_the_open_tuning_follows_the_key():
     assert steel.open_tuning(62, "open D")[0] == tuple(float(p) for p in steel.OPEN_D)
     assert steel.open_tuning(64, "open D")[0] == tuple(float(p + 2) for p in steel.OPEN_D)  # open E
-    tuning, name, shift, capo = steel.open_tuning(67, "open D")
+    _, name, shift, capo = steel.open_tuning(67, "open D")
     assert name == "open G" and shift == 0 and capo == 0
     assert max(abs(s) for s in (steel.open_tuning(k, "open G")[2] for k in range(60, 72))) <= 3
 

@@ -657,7 +657,7 @@ def _steel_master(seed: int, bright: float, wear: float, sr: int) -> float:
     strings, coil, circuit = _steel_strings(d, bright, wear)
     notes = [Note("steel", 0.0, 2.5, float(p), 0.6) for p in (69.0, 73.0, 76.0)]
     rng = np.random.default_rng([seed, 71])
-    segs, bar, pedals, vib, volume = _bar_tracks(_groups(notes), sr, rng, d, 0.5, int(3.0 * sr))
+    segs, bar, pedals, vib, _ = _bar_tracks(_groups(notes), sr, rng, d, 0.5, int(3.0 * sr))
     _finish(segs, strings, sr, int(3.0 * sr), bar, pedals, vib, d["thirds"])
     emf = _voltage(segs, strings, coil, circuit, sr, int(3.0 * sr), rng)
     chain = amp.Chain(d["amp"], sr, os_=2)
