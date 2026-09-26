@@ -960,9 +960,10 @@ def w_tremolo(ctx: StyleContext, i: int, part: str) -> list[Ev]:
         if own:
             out += [ev(part, c.u0, c.u1, p, ctx.vel(part, c.u0, 0.36), art="tremolo", i=i) for p in notes]
             continue
-        for u in ctx.grid.fine_in(c.u0, c.u1):
+        for k, u in enumerate(ctx.grid.fine_in(c.u0, c.u1)):  # picked down and up in turn
             for p in notes:
-                out.append(ev(part, u, u + 0.4, p, ctx.vel(part, u, 0.32 if not ctx.grid.on_beat(u) else 0.38), i=i))
+                out.append(ev(part, u, u + 0.4, p, ctx.vel(part, u, 0.5 if not ctx.grid.on_beat(u) else 0.58),
+                              art="up" if k % 2 else "down", i=i))
     return out
 
 
@@ -1120,15 +1121,18 @@ def w_epiano(ctx: StyleContext, i: int, part: str) -> list[Ev]:
 
 
 def w_pulse(ctx: StyleContext, i: int, part: str) -> list[Ev]:
-    """A chord repeated on every eighth, accented on the beats: a driving electric guitar, a pulsing piano."""
+    """A chord repeated on every eighth, accented on the beats, struck down on them and up between: a driving
+    electric guitar, a pulsing piano."""
     out = []
     for c in ctx.chords_in(i):
         subs = ctx.grid.subs_in(c.u0, c.u1)
         for k, u in enumerate(subs):
             end = until(subs, k, c.u1)
             notes = fingering(ctx, part, c, u, end, i)[-3:]
+            on = ctx.grid.on_beat(u)
             for p in notes:
-                out.append(ev(part, u, u + 0.8 * (end - u), p, ctx.vel(part, u, 0.42 if ctx.grid.on_beat(u) else 0.32), i=i))
+                out.append(ev(part, u, u + 0.8 * (end - u), p, ctx.vel(part, u, 0.58 if on else 0.46),
+                              art="down" if on else "up", i=i))
     return out
 
 
