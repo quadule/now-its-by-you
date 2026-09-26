@@ -558,7 +558,8 @@ these now finds one that suits it:
   slow compressor (20 ms), nothing taken from its bark.
 - `cello`, `viola` and `strings` take the strings' strip: the fiddle's
   treatment with a 45 Hz high-pass in place of its 180 Hz, so a cello keeps
-  its low octaves.
+  its low octaves, and its 1.5 dB cut for boxiness at the cello's B1 boom
+  (190 Hz), not in the formant above it.
 - `stomps`, `cajon`, `claps`, `shaker` and `tambourine` take the frame drum's
   strip (a 40 Hz high-pass: a stomp's boom and a cajón's bass kept).
 - `harmonica` has its own: a 180 Hz high-pass, 1.5 dB of honk out near 1 kHz,
