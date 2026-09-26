@@ -135,3 +135,18 @@ def test_reeds_are_in_tune_and_beat():
     hop = SR // 20
     env = np.sqrt(np.convolve(y**2, np.ones(hop) / hop, mode="valid"))[int(1.5 * SR): int(5.0 * SR): hop]
     assert env.std() / env.mean() > 0.02
+
+
+def test_a_fresh_bow_stroke_speaks_like_a_players():
+    """The Helmholtz motion is established within about a tenth of a second, as
+    in a good détaché, because the hair catches the string as it lands."""
+    from scipy.signal import butter, sosfiltfilt
+
+    for pitch in (55, 69):
+        f = midi_to_hz(pitch)
+        y = bowed.bow([Note("fiddle", 0.1, 1.5, float(pitch), 0.6)], SR, int(1.8 * SR), np.random.default_rng(1),
+                      vibrato=0.0)
+        band = sosfiltfilt(butter(2, [f * 0.8, f * 1.25], btype="bandpass", fs=SR, output="sos"), y)
+        env = np.sqrt(np.convolve(band**2, np.ones(88) / 88, mode="same"))
+        steady = np.median(env[int(0.8 * SR): int(1.4 * SR)])
+        assert np.argmax(env[int(0.1 * SR):] > 0.9 * steady) / SR < 0.15

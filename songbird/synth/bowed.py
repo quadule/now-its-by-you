@@ -96,6 +96,7 @@ def tracks(notes, sr: int, length: int, rng: np.random.Generator, *, vibrato: fl
     bridge_len = np.full(length, 0.1 * sr / 196.0)
     bow_v = np.zeros(length)
     bow_f = np.zeros(length)
+    catch = np.zeros(length)
     direction = 1.0
     last_end = -1.0
     last_pitch = None
@@ -151,6 +152,10 @@ def tracks(notes, sr: int, length: int, rng: np.random.Generator, *, vibrato: fl
         if not legato:  # a stroke starts with a little extra bite, so the string speaks at once
             bite = min(m, int(0.06 * sr))
             grip[:bite] *= 1.0 + 0.8 * (1.0 - np.linspace(0.0, 1.0, bite))
+            # and the hair catches the string as it lands: a jolt, a third of a Helmholtz corner, one trip
+            # to the bridge wide, which the stick and slip lock onto (the build-up drops from 60-80 periods to 15-20)
+            width = max(1, int(round(beta * p.mean())))
+            catch[i0 : i0 + width] += direction * 0.3 * speed / beta
         bow_f[i0:i1] = grip
         last_end = note.start + note.dur
         last_pitch = pitch
@@ -161,7 +166,7 @@ def tracks(notes, sr: int, length: int, rng: np.random.Generator, *, vibrato: fl
         idx = np.maximum.accumulate(np.where(playing, np.arange(length), 0))
         period = period[idx]
         bridge_len = bridge_len[idx]
-    return period, bridge_len, bow_v, bow_f
+    return period, bridge_len, bow_v, bow_f, catch
 
 
 POLE = 0.45  # the bridge's loss filter: a higher pole is a darker string
@@ -175,6 +180,6 @@ def bow(notes, sr: int, length: int, rng: np.random.Generator, *, vibrato: float
     """A bowed part's bridge force, `length` samples long."""
     if not notes:
         return np.zeros(length)
-    period, bridge_len, bow_v, grip = tracks(notes, sr, length, rng, vibrato=vibrato, wear=wear)
-    hair = rng.standard_normal(length) * noise * 0.02 * np.abs(bow_v)
+    period, bridge_len, bow_v, grip, catch = tracks(notes, sr, length, rng, vibrato=vibrato, wear=wear)
+    hair = rng.standard_normal(length) * noise * 0.02 * np.abs(bow_v) + catch
     return run(period, bridge_len, bow_v, np.maximum(grip, 1e-4), hair, POLE, GAIN)

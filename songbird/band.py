@@ -823,11 +823,12 @@ def quote(ctx: Context, section: int, part: str) -> list[Ev]:
 
 
 def window(part: str, lo: int, hi: int) -> tuple[int, int]:
-    """A register for a part, moved by octaves until the instrument can play it."""
+    """A register for a part within what the instrument can play: trimmed if
+    most of it is playable, otherwise moved by octaves until it is."""
     bottom, top = REGISTER.get(part, (0, 127))
-    while lo < bottom and hi + 12 <= top:
+    while min(hi, top) - max(lo, bottom) < 7 and lo < bottom and hi + 12 <= top + 12:
         lo, hi = lo + 12, hi + 12
-    while hi > top and lo - 12 >= bottom:
+    while min(hi, top) - max(lo, bottom) < 7 and hi > top and lo - 12 >= bottom - 12:
         lo, hi = lo - 12, hi - 12
     return max(lo, bottom), min(hi, top)
 
@@ -947,8 +948,12 @@ def _run(ctx: Context, part: str, start: float, stop: float, held: Tune, target:
 
 def melodic_parts(ctx: Context) -> list[Ev]:
     out: list[Ev] = []
+    whole = [t.pitch for t in ctx.tune]
     for i, s in enumerate(ctx.sections):
         tune = ctx.tune_in(i)
+        # where the tune lies here: counter-lines go above its top, a low pad below its middle
+        sung = [t.pitch for t in tune] or whole
+        top, middle = max(sung), int(np.median(sung))
         for part in ("whistle", "fiddle", "lute"):
             what = s.parts.get(part)
             if what == "lead" and tune:
@@ -962,13 +967,13 @@ def melodic_parts(ctx: Context) -> list[Ev]:
                     out += statement(ctx, part, tune, 0.5, i)
             elif what == "counter":
                 if part == "whistle":  # a descant, high above the singer
-                    out += counter(ctx, i, part, ctx.tonic + 12, ctx.tonic + 26, 0.48)
+                    out += counter(ctx, i, part, top + 5, top + 17, 0.48)
                 else:
-                    out += counter(ctx, i, part, ctx.tonic + 7, ctx.tonic + 19, 0.55, art="slur")
+                    out += counter(ctx, i, part, top + 1, top + 13, 0.55, art="slur")
             elif what == "pad":  # long bowed notes, swelling through the bar: above the singer, or,
-                # when a descant has the top, down on the fiddle's lowest string, under the tune
-                lo = ctx.tonic - 7 if s.parts.get("whistle") == "counter" else ctx.tonic + 5
-                for e in counter(ctx, i, part, lo, lo + 12, 0.45, art="slur"):
+                # when a descant has the top, low on the fiddle, under the tune
+                lo = middle - 14 if s.parts.get("whistle") == "counter" else top + 1
+                for e in counter(ctx, i, part, lo, lo + 11, 0.45, art="slur"):
                     if e.u1 - e.u0 >= ctx.bar:
                         e.art = "swell"
                     out.append(e)
@@ -1100,7 +1105,8 @@ def arrange(genome, params, placed, lead, end, melody, seconds, rng) -> tuple[li
         s = ctx.sections[min(max(e.section, 0), len(ctx.sections) - 1)]
         notes.append(Note(part=e.part, start=start, dur=max(dur, 0.03), pitch=float(e.pitch),
                           vel=float(np.clip(e.vel, 0.02, 1.0)), section=s.name, art=e.art))
-    drum_hz = min((midi_to_hz(p) for p in range(28, 52) if p % 12 == ctx.tonic % 12), key=lambda f: abs(f - 80.0))
+    # the drum tuned (as players do, roughly, by warming the skin) to the tonic, in the octave a frame drum sits in
+    drum_hz = next(midi_to_hz(p) for p in range(24, 60) if p % 12 == ctx.tonic % 12 and midi_to_hz(p) >= 62.0)
     settings = {
         **{name: getattr(ctx.band, name) for name in INSTRUMENTS},
         "brightness": ctx.band.brightness,
