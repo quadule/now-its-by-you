@@ -153,14 +153,15 @@ ROLES: dict[str, Strip] = {
     # A plucked lute or cittern, doubling the tune under the words: boxiness and the voice's range cleared,
     # and it steps back while the voice sings the same notes.
     "lute": Strip(eq=(("hp", 90), ("peak", 320, -2.0, 1.0), ("peak", 2800, -2.0, 0.9)), drive=0.1, duck=3.0),
-    # A banjo comping (rolls, clawhammer): nothing under its lowest string, its ring kept clear of the voice's
-    # presence, a compressor slow enough to grab that the picks keep their edge; it comps, so it doesn't duck.
-    "banjo": Strip(eq=(("hp", 90), ("peak", 2800, -2.0, 0.9)), comp=(10.0, 2.0, 0.015, 0.2, 1.5, 3.0), drive=0.05,
-                   send=0.9),
-    # A mandolin comping (strums, the chop): its weak low course cleared, a little box and the voice's range
-    # out, compressed gently and slowly so the chop keeps its bark.
-    "mandolin": Strip(eq=(("hp", 110), ("peak", 700, -1.5, 1.0), ("peak", 2800, -2.0, 0.9)),
-                      comp=(10.0, 2.0, 0.02, 0.2, 1.5, 3.0), drive=0.05),
+    # A banjo comping (rolls, clawhammer): nothing under its lowest string, 1 dB of its ring out where the voice's
+    # consonants are (the band's own dip does the rest while the voice sings), a compressor slow to grab and
+    # leaning only on what stands 5 dB out of its bar, so the picks keep their edge and a roll its accents;
+    # it comps, so it doesn't duck.
+    "banjo": Strip(eq=(("hp", 90), ("peak", 2800, -1.0, 0.9)), comp=(10.0, 2.0, 0.015, 0.2, 1.5, 5.0), drive=0.05,
+                   send=0.8),
+    # A mandolin comping (strums, the chop): its weak low course cleared, nothing taken from its bark,
+    # compressed gently and slowly (a tremolo evened, the chop untouched).
+    "mandolin": Strip(eq=(("hp", 110),), comp=(10.0, 2.0, 0.02, 0.2, 1.5, 3.0), drive=0.05),
     # The main accompaniment: weight kept, boom and clang tamed, sparkle above the voice.
     "guitar": Strip(eq=(("hp", 75), ("peak", 200, -2.0, 1.1), ("peak", 2600, -2.0, 0.8), ("high", 9000, 1.0)),
                     comp=(10.0, 2.0, 0.015, 0.2, 1.5, 3.0), drive=0.1, send=0.9),
