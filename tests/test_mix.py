@@ -193,3 +193,20 @@ def test_wear_adds_noise_and_bends_time(stems):
     assert np.all(np.isfinite(worn)) and worn.shape == clean.shape
     tail = slice(len(clean) - SR // 2, len(clean))  # the room has died away: only the hiss is left
     assert np.std(worn[tail]) > 4 * np.std(clean[tail])
+
+
+def test_every_instrument_finds_its_strip():
+    """A stem's name decides its channel strip; only a whole name makes a stem a singer."""
+    from songbird.synth import instruments
+
+    assert mixing.role_of("voice") == "voice" and mixing.role_of("choir3") == "choir"
+    assert mixing.role_of("synthlead") == "synth" and mixing.role_of("lead") == "voice"
+    expected = {"keys": "keys", "mallets": "keys", "organ": "organ", "pad": "organ", "drums": "drum",
+                "percussion": "drum", "reed": "reed", "bass": "bass"}
+    for name in instruments.known():
+        role = mixing.role_of(name)
+        assert role in mixing.ROLES and role not in ("voice", "choir"), name
+        family = instruments.spec(name)["family"]
+        if family in expected and name not in instruments.INSTRUMENTS:
+            assert role == expected[family], (name, role)
+    assert mixing.role_of("cello") == "strings"  # a cello keeps its low strings: no fiddle's 180 Hz high-pass

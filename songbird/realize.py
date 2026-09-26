@@ -69,6 +69,14 @@ class Params:
     def to_dict(self) -> dict:
         data = asdict(self)
         data["form"] = list(self.form)
+        # The seed's own style and band leave no trace, so a record (and the rendition seed a child draws
+        # from its parent's record) is as it was before styles existed.
+        if self.style.seed:
+            del data["style"]
+        else:
+            data["style"] = self.style.to_dict()
+        if not self.band.lineup:
+            del data["band"]["lineup"]
         return data
 
 

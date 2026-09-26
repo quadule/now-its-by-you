@@ -58,8 +58,8 @@ def test_the_seed_of_h_renders_byte_identical(tmp_path):
 def test_old_params_load_with_the_seeds_style_and_band():
     g = G.load(H)
     record = Params.from_dict(g.seed_params).to_dict()
-    del record["style"]
-    del record["band"]["lineup"]
+    # the seed's own style and band leave no trace in a record, as in every record from before styles
+    assert "style" not in record and "lineup" not in record["band"]
     p = Params.from_dict(record)
     assert p.style == Style() and p.style.seed and p.band.lineup == {} and p.band == Band()
     assert choose_params(g) == p

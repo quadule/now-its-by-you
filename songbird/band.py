@@ -123,7 +123,30 @@ GUITAR_TUNING = (40, 45, 50, 55, 59, 64)
 REGISTER = {"whistle": (62, 93), "fiddle": (55, 88), "lute": (50, 84)}  # MIDI ranges the players reach
 # Each part draws its choices from its own stream, one per bar, so changing what one part plays in one
 # bar never re-rolls another's; the numbers only name the streams.
-STREAM = {name: k + 1 for k, name in enumerate(INSTRUMENTS)} | {"fills": 20, "quote": 21, "time": 22}
+STREAM = {name: k + 1 for k, name in enumerate(INSTRUMENTS)} | {"fills": 20, "quote": 21, "time": 22,
+                                                                  "colour": 23, "backing": 24, "arrange": 25}
+
+
+def register_of(part: str) -> tuple[int, int]:
+    """The MIDI range a part's player reaches: the seed's band's own table (unlimited for the eight
+    it doesn't list, as it always was), and any other instrument's from the registry."""
+    if part in REGISTER:
+        return REGISTER[part]
+    if part in INSTRUMENTS:
+        return (0, 127)
+    from .synth import instruments
+
+    register = instruments.spec(part).get("register")
+    return (int(register[0]), int(register[1])) if register else (0, 127)
+
+
+def stream_of(part: str) -> int:
+    """The number naming a part's random streams: STREAM's, or the instrument registry's for any other."""
+    if part in STREAM:
+        return STREAM[part]
+    from .synth import instruments
+
+    return instruments.stream(part)
 
 
 @dataclass
@@ -271,7 +294,7 @@ class Context:
         bar = int(np.floor((u - self.sections[0].u0) / self.bar + 1e-9))
         key = (part, bar)
         if key not in self._streams:
-            self._streams[key] = np.random.default_rng([self.seed & 0xFFFFFFFF, 0xBA4D, STREAM[part], bar + 4096])
+            self._streams[key] = np.random.default_rng([self.seed & 0xFFFFFFFF, 0xBA4D, stream_of(part), bar + 4096])
         return self._streams[key]
 
     # --- the song's facts ---------------------------------------------------------
@@ -826,7 +849,7 @@ def _fingerpick(ctx: Context, rng: np.random.Generator, c: Chord, capo: int) -> 
 
 def octave_for(part: str, pitches: list[int]) -> int:
     """The octave a part plays the tune in: up one if it fits the instrument."""
-    lo, hi = REGISTER[part]
+    lo, hi = register_of(part)
     for shift in (12, 0, 24, -12):
         if min(pitches) + shift >= lo and max(pitches) + shift <= hi:
             return shift
@@ -936,7 +959,7 @@ def quote(ctx: Context, section: int, part: str) -> list[Ev]:
 def window(part: str, lo: int, hi: int) -> tuple[int, int]:
     """A register for a part within what the instrument can play: trimmed if
     most of it is playable, otherwise moved by octaves until it is."""
-    bottom, top = REGISTER.get(part, (0, 127))
+    bottom, top = register_of(part)
     while min(hi, top) - max(lo, bottom) < 7 and lo < bottom and hi + 12 <= top + 12:
         lo, hi = lo + 12, hi + 12
     while min(hi, top) - max(lo, bottom) < 7 and hi > top and lo - 12 >= bottom - 12:
@@ -1073,7 +1096,7 @@ def _run(ctx: Context, rng: np.random.Generator, part: str, start: float, stop: 
         scale = [q for q in range(goal - 16, goal + 17) if q % 12 in ctx.scale]
         ig = min(range(len(scale)), key=lambda k: abs(scale[k] - goal))
         pitches = [scale[min(max(ig - d * (n - j), 0), len(scale) - 1)] for j in range(n)]
-    bottom, top = REGISTER.get(part, (0, 127))
+    bottom, top = register_of(part)
     while max(pitches) > top and min(pitches) - 12 >= bottom:
         pitches = [p - 12 for p in pitches]
     while min(pitches) < bottom and max(pitches) + 12 <= top:
@@ -1291,7 +1314,7 @@ def arrange(genome, params, placed, lead, end, melody, seconds) -> tuple[list[No
     for e in sorted(events, key=lambda e: (e.u0, e.shift, e.part, e.pitch)):
         key = (e.part, int(round(e.u0 * 1000)))
         if key not in jitters:
-            rng = np.random.default_rng([ctx.seed & 0xFFFFFFFF, 0x71, STREAM[e.part], key[1] + (1 << 20)])
+            rng = np.random.default_rng([ctx.seed & 0xFFFFFFFF, 0x71, stream_of(e.part), key[1] + (1 << 20)])
             jitters[key] = float(rng.normal(0.0, wobble))
         start = max(0.0, seconds(e.u0) + e.shift + LAG.get(e.part, 0.0) + jitters[key])
         dur = e.length if e.length > 0 else seconds(e.u1) - start
