@@ -533,7 +533,7 @@ moves between them `slur` (or `glide`), so the bar and pedals carry them; a
 chord change the pedals can make at one fret is the steel's own sound (D
 A4 D5 F#5 to G B4 D5 G5). `slide` slides a note in from a fret or two under,
 `bend` bends it in with a pedal, `vibrato` for a deeper bar vibrato, `fall`
-for the bar leaving a last note, `mute` for a blocked one. Keep it B2 to D6.
+for the bar leaving a last note, `mute` for a blocked one. Keep it B2 to E6.
 
 **Slide guitar.** Answers and a held tone: `slide` into the long notes,
 `glide` (or `slur`) between notes of a run, `vibrato` on a held one, `fall` to
