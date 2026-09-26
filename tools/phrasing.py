@@ -845,22 +845,27 @@ def describe(portrait, tempo: float) -> str:
 
 def write_guide(path: Path, genome, transpose: int) -> None:
     """The seed's own rendition as a WAV to sing along to, and the exact score
-    it follows, which the sung-take extractor reads back."""
+    it follows, which the sung-take extractor reads back. The score keeps the
+    tempo, the seed it was rendered with and every beat of its clock, so the
+    other guide mixes (tools/guides.py) can be made from it alone."""
     import soundfile as sf
 
     from songbird import synth
+    from songbird.realize import timeline
     from songbird.synth import master
 
     params = choose_params(genome)
     params = replace(params, tonic=params.tonic + transpose)
     score = realize(genome, params)
     pcm = master.to_pcm16(master.master(synth.render(score, seed=params.seed), synth.SR), seed=params.seed)
-    out = Path("renders") / "guide"
+    out = ROOT / "renders" / "guide"
     out.mkdir(parents=True, exist_ok=True)
     wav = out / f"{path.stem}.guide.wav"
     sf.write(str(wav), pcm, synth.SR, subtype="PCM_16")
-    (out / f"{path.stem}.guide.score.json").write_text(json.dumps({**score.to_dict(), "tempo": params.tempo}) + "\n")
-    first = min(n.start for n in score.part("voice"))
+    beats = [[t, int(bar)] for t, bar in timeline(genome, params).beats()]  # [seconds, 1 if it begins a bar]
+    data = {**score.to_dict(), "tempo": params.tempo, "seed": params.seed, "beats": beats}
+    (out / f"{path.stem}.guide.score.json").write_text(json.dumps(data) + "\n")
+    first = min((n.start for n in score.part("voice")), default=0.0)
     print(f"{wav}  {len(pcm) / synth.SR:.0f} s, key tonic {params.tonic}, first word at {first:.1f} s")
 
 
