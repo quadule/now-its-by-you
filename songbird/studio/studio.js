@@ -67,6 +67,7 @@ function storeKey() {
   return state.start ? `songbird-studio|${state.start.title}|${state.start.from}|${state.start.machine.label}` : null;
 }
 function save() {
+  // only ever after a person's own change: edits that came in the page's address are never saved on their own
   try { localStorage.setItem(storeKey(), JSON.stringify(state.edits)); } catch (e) { /* storage may be off */ }
 }
 function restore() {
@@ -746,7 +747,9 @@ async function main() {
   state.names = s.names.slice();
   state.edits = restore();
   const hash = readHash();
-  if (hash.e) { try { state.edits = JSON.parse(hash.e); } catch (e) { /* ignore */ } }
+  if (hash.e) {
+    try { state.edits = JSON.parse(hash.e) || {}; } catch (e) { /* ignore */ }
+  }
   if (hash.day) setDayQuiet(Number(hash.day));
   for (const id of (hash.open || "").split(",").filter(Boolean)) state.open[id] = true;
   $("packetNote").textContent = s.packet;

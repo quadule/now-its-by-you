@@ -729,8 +729,7 @@ class Handler(BaseHTTPRequestHandler):
         """A rendering, with byte ranges (players seek with them; Safari won't play without)."""
         if not path.exists():
             return self.fail(404, "not made yet")
-        data = path.read_bytes()
-        size = len(data)
+        size = path.stat().st_size
         rng = re.fullmatch(r"bytes=(\d*)-(\d*)", self.headers.get("Range", "").strip())
         if rng and (rng.group(1) or rng.group(2)):
             if rng.group(1):
@@ -740,9 +739,12 @@ class Handler(BaseHTTPRequestHandler):
                 start, end = max(0, size - int(rng.group(2))), size - 1
             if start >= size or start > end:
                 return self.send(b"", "audio/flac", 416, {"Content-Range": f"bytes */{size}"})
-            return self.send(data[start:end + 1], "audio/flac", 206,
+            with path.open("rb") as f:  # just the part asked for, not the whole file each time
+                f.seek(start)
+                part = f.read(end + 1 - start)
+            return self.send(part, "audio/flac", 206,
                              {"Content-Range": f"bytes {start}-{end}/{size}", "Accept-Ranges": "bytes"})
-        self.send(data, "audio/flac", 200, {"Accept-Ranges": "bytes"})
+        self.send(path.read_bytes(), "audio/flac", 200, {"Accept-Ranges": "bytes"})
 
     # ------------------------------------------------------------ POST
 
