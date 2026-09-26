@@ -195,3 +195,188 @@ def test_a_style_takes_the_song_at_its_own_tempo():
         assert lo * song - 0.1 <= p.tempo <= hi * song + 0.1, (name, p.tempo)
         assert p.style.name == name and p.style.lineage == ("ballad", name)
         assert (p.band.lineup == {}) == (name == "ballad")
+
+
+# --- the harmony a style adds -------------------------------------------------------------------------------
+
+CHORDAL = {"strum", "ring", "boom", "travis", "roll", "claw", "chop", "tremolo", "comp", "arpeggio", "block", "oompah",
+           "pad", "swell", "epiano", "pulse", "arp", "box", "bells", "boogie"}
+
+
+@pytest.mark.parametrize("name", ["gospel", "lofi", "songwriter", "chamber", "country", "blues", "lullaby"])
+def test_the_colours_never_rub_against_the_tune(name):
+    """Every tone a style's chords add to the genome's (a sixth, a seventh, an added ninth, a suspension) is
+    checked against what is sung where it sounds: never a minor second or major seventh from a sung note,
+    and never a major second, minor seventh or tritone within an octave of one on a strong beat (a foot's
+    start) or held a beat or more. The chord functions themselves are the genome's."""
+    from songbird.idioms import chord_times
+    from songbird.realize import timeline
+    from songbird.theory import chord_tones
+
+    g = G.load(H)
+    p = choose_params(g, style=name, arrange={"harmony": 1.0, "lift": False, "backing": "thirds"})
+    p = replace(p, choir=2)
+    score = realize(g, p)
+    clock = timeline(g, p)
+    beat = 60.0 / p.tempo
+    feet = [clock.seconds(clock.lead + k * g.meter.foot) for k in range(-1, (clock.end - clock.lead) // g.meter.foot + 1)]
+    sung = [n for n in score.notes if n.part == "voice" or n.part.startswith("choir")]
+    strong = {id(n): n.dur >= 0.95 * beat or min(abs(n.start - f) for f in feet) < 0.05 for n in sung}
+    chords = chord_times(g, p)
+    spans = [(t0, t1, s["parts"]) for (_name, t0, t1), s in zip(score.sections, score.band["sections"])]
+    checked = coloured = 0
+    for n in score.notes:
+        parts = next((ps for t0, t1, ps in spans if t0 - 0.05 <= n.start < t1 - 0.05), spans[-1][2])
+        if parts.get(n.part) not in CHORDAL or n.part in ("kit", "drummachine"):
+            continue
+        heard = n.start + 0.06  # a player may be a few hundredths early (a bow speaks late); judge it where it sounds
+        at = next((c for c in chords if c[0] <= heard < c[1]), None)
+        if at is None:
+            continue
+        triad = {(p.tonic + t) % 12 for t in chord_tones(at[2], p.mode)}
+        checked += 1
+        if int(round(n.pitch)) % 12 in triad:
+            continue
+        coloured += 1
+        for v in sung:
+            if v.start - 0.02 <= heard < v.start + v.dur:
+                d = abs(int(round(n.pitch)) - int(round(v.pitch)))
+                ic = min(d % 12, 12 - d % 12)
+                assert ic != 1, (name, n, v)
+                assert not (strong[id(v)] and ic in (2, 6) and d < 12), (name, n, v)
+    assert checked > 100 and coloured > 0, (checked, coloured)  # the style did colour its chords
+
+
+# --- the arrangement's options -----------------------------------------------------------------------------
+
+OFF = {"intro": "", "alone": 0, "stops": 0, "breakdown": False, "bridge": "", "lift": False, "ending": "",
+       "entrances": False, "backing": ""}
+
+
+def styled(name, **options):
+    g = G.load(H)
+    return g, replace(choose_params(g, style=name, arrange={**OFF, **options}), choir=2)
+
+
+def band_notes(score, section_index=None):
+    spans = score.sections
+    out = [n for n in score.notes if n.part != "voice" and not n.part.startswith("choir")]
+    if section_index is None:
+        return out
+    _name, t0, t1 = spans[section_index]
+    return [n for n in out if t0 + 0.05 <= n.start < t1 - 0.05]
+
+
+def test_the_ballad_as_a_style_with_nothing_asked_plays_the_seeds_band():
+    g = G.load(H)
+    seed = realize(g, choose_params(g))
+    p = choose_params(g, style="ballad", arrange=OFF)
+    assert p.style.name == "ballad" and not p.style.seed
+    again = realize(g, replace(p, tempo=seed.band and choose_params(g).tempo))
+    assert [n for n in again.notes] == [n for n in seed.notes]
+
+
+def test_a_bare_verse_and_stop_time():
+    g, p = styled("country", alone=2, stops=1)
+    score = realize(g, p)
+    verses = [k for k, s in enumerate(score.sections) if s[0] == "verse"]
+    assert not band_notes(score, verses[1])  # the second verse a cappella
+    stopped = band_notes(score, verses[0])
+    t0, t1 = score.sections[verses[0]][1:]
+    bar = 60.0 / p.tempo * g.meter.bar / g.meter.beat
+    lines = ("steel",)  # a line may go on through stop-time; everyone keeping time hits the bars' ones
+    kept = [n for n in stopped if n.part not in lines]
+    assert kept and all(abs(((n.start - t0 + bar / 2) % bar) - bar / 2) < 0.09 for n in kept)
+    g, p = styled("country", alone=1, alone_with="guitar")
+    score = realize(g, p)
+    first = [k for k, s in enumerate(score.sections) if s[0] == "verse"][0]
+    assert {n.part for n in band_notes(score, first)} == {"guitar"}
+
+
+def test_a_count_in_a_lift_and_a_cold_ending():
+    g, plain = styled("indie")
+    g, p = styled("indie", intro="count", lift=True, ending="cold")
+    a, b = realize(g, plain), realize(g, p)
+    bar = 60.0 / p.tempo * g.meter.bar / g.meter.beat
+    assert abs((b.sections[0][1] - a.sections[0][1]) - bar) < 1e-6  # everything a bar later
+    clicks = [n for n in b.notes if n.start < b.sections[0][1] - 0.2 and n.part == "kit"]
+    assert len(clicks) == 4 and {n.art for n in clicks} == {"rim"}
+    last = [s for s in b.sections if s[0] == "refrain"][-1][1]
+    lifted = {round(n.pitch - m.pitch) for n, m in zip(b.part("voice"), a.part("voice")) if n.start >= last + 0.1}
+    earlier = {round(n.pitch - m.pitch) for n, m in zip(b.part("voice"), a.part("voice")) if n.start < last - 2.0}
+    assert lifted == {2} and earlier == {0}  # the last refrain a whole step up, nothing before it
+    assert b.duration - b.sections[-1][2] < 1.0 < a.duration - a.sections[-1][2]  # a cold stop, not a ring
+
+
+def test_an_amen_and_a_repeated_last_line():
+    g, p = styled("gospel", ending="amen")
+    score = realize(g, p)
+    amen = [n for n in score.notes if n.part.startswith("choir") and n.word == "a-men"]
+    assert len(amen) == 2 * p.choir and {n.syllable for n in amen} == {"a", "men"}
+    last_sung = max(n.start + n.dur for n in score.part("voice"))
+    assert min(n.start for n in amen) >= last_sung - 0.05  # after the last line: the singer has stopped
+    g, p = styled("shanty", ending="repeat")
+    form_ends_on_refrain = g.section(p.form[-1]).lyrics == "refrain"
+    plain = realize(g, replace(p, style=replace(p.style, ending="")))
+    again = realize(g, p)
+    if form_ends_on_refrain:
+        words = [n.word for n in again.part("voice")]
+        tail = [n.word for n in plain.part("voice")][-len(g.phrases[g.section("refrain").phrases[-1]].sung):]
+        assert len(words) == len(plain.part("voice")) + len(tail) and words[-len(tail):] == tail
+
+
+def test_the_waltz_keeps_every_stressed_syllable_on_a_downbeat():
+    """Re-barred in three, each foot of the song is a bar of a waltz: every stressed syllable (a foot's
+    start) lands on a bar's one, the tune's pitches and order unchanged."""
+    from songbird.realize import timeline
+
+    g, p = styled("country", feel="waltz")
+    plain = realize(g, replace(p, style=replace(p.style, feel="shuffle")))
+    score = realize(g, p)
+    assert [n.pitch for n in score.part("voice")] == [n.pitch for n in plain.part("voice")]
+    clock = timeline(g, p)
+    assert clock.triple == "waltz"
+    ones = [t for t, bar in clock.beats() if bar]
+    beats = [t for t, _bar in clock.beats()]
+    for n in score.part("voice"):
+        near = min(beats, key=lambda t: abs(t - n.start))
+        assert abs(near - n.start) < 0.06  # every syllable on a beat of the waltz
+    feet = [clock.seconds(clock.lead + k * g.meter.foot) for k in range((clock.end - clock.lead) // g.meter.foot)]
+    assert all(min(abs(f - o) for o in ones) < 1e-6 for f in feet)  # every foot's start is a bar's one
+
+
+@pytest.mark.parametrize("kind", ["gang", "thirds", "echo", "oohs"])
+def test_the_backing_voices_are_the_lineages_own(kind):
+    g, p = styled("shanty", backing=kind)
+    for voices in (1, 3):
+        score = realize(g, replace(p, choir=voices))
+        refrains = [s for s in score.sections if s[0] == "refrain"]
+        choir = [n for n in score.notes if n.part.startswith("choir")]
+        assert {n.part for n in choir} == {f"choir{v + 1}" for v in range(voices)}  # never more than the lineage
+        backing = [n for n in choir if n.section == "refrain" and any(t0 - 1.0 <= n.start < t1 for _nm, t0, t1 in refrains)]
+        assert backing, kind
+        if kind == "gang":
+            sung = {(round(n.start, 1), n.pitch) for n in score.part("voice")}
+            assert sum((round(n.start, 1), n.pitch) in sung for n in backing) > 0.5 * len(backing)
+        if kind == "oohs":
+            assert {n.syllable for n in backing} == {"oo"}
+            voice = score.part("voice")
+            for n in backing:  # under the singer, never on the note being sung
+                assert all(n.pitch < v.pitch for v in voice if v.start <= n.start < v.start + v.dur)
+    g, p = styled("shanty", backing="gang")
+    assert not [n for n in realize(g, replace(p, choir=0)).notes if n.part.startswith("choir")]
+
+
+@pytest.mark.parametrize("name", sorted(__import__("songbird.style", fromlist=["STYLES"]).STYLES))
+def test_every_style_renders(name):
+    """Every style's band, stems and all, for a verse and a refrain: finite, stereo, nothing louder than it should be."""
+    from songbird import synth
+
+    g = G.load(H)
+    p = replace(choose_params(g, style=name), form=("verse", "refrain"), choir=1)
+    score = realize(g, p)
+    stems = synth.render_stems(score, seed=p.seed)
+    assert "voice" in stems and len(stems) >= 3
+    for stem_name, stem in stems.items():
+        assert stem.ndim == 2 and stem.shape[1] == 2 and np.all(np.isfinite(stem)), stem_name
+        assert np.abs(stem).max() < 4.0, (stem_name, float(np.abs(stem).max()))

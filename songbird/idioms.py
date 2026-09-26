@@ -46,6 +46,29 @@ def triple_ok(genome) -> bool:
     return all(n.onset % m.foot in (0, 2, 3) for p in genome.phrases.values() for n in p.sung)
 
 
+def chord_times(genome, params) -> list[tuple[float, float, str]]:
+    """Every chord of a rendition as (start, end, function) in seconds, laid out as realize() lays out the
+    form (a style's repeated last line and amen included), for checking what the band plays against them."""
+    from .realize import timeline
+    from .style import coda, repeated_phrases
+
+    clock = timeline(genome, params)
+    m = genome.meter
+    phrases = [genome.phrases[pid] for name in params.form for pid in genome.section(name).phrases]
+    phrases += repeated_phrases(genome, params)
+    out, u = [], clock.lead
+    for phrase in phrases:
+        for b, chords in enumerate(phrase.chords):
+            for k, symbol in enumerate(chords):
+                a = u + b * m.bar + round(k * (m.bar / m.beat) / len(chords)) * m.beat
+                z = u + b * m.bar + (round((k + 1) * (m.bar / m.beat) / len(chords)) * m.beat if k + 1 < len(chords) else m.bar)
+                out.append((clock.seconds(a), clock.seconds(z), symbol))
+        u += phrase.bars * m.bar
+    if coda(genome, params):
+        out += [(clock.seconds(u), clock.seconds(u + m.bar), "IV"), (clock.seconds(u + m.bar), clock.seconds(u + 2 * m.bar), "I")]
+    return out
+
+
 def warp(u: float, origin: float) -> float:
     """Grid units re-barred in three: within each foot of four units (bar lines at `origin`), the
     strong-weak-weak positions 0, 2, 3 move to 0, 4/3, 8/3, three even pulses; bar lines stay put."""
@@ -151,12 +174,24 @@ def quality(pcs: tuple[int, int, int]) -> str:
 
 
 def clashes(pc: int, sung: list[tuple[float, float, int, bool]]) -> bool:
-    """Whether a tone (a pitch class) sounding against these sung notes would clash: a minor second or
-    major seventh with any of them, or a major second, minor seventh or tritone with one that is
+    """Whether a tone (a pitch class, in any octave) sounding against these sung notes would clash: a minor
+    second or major seventh with any of them, or a major second, minor seventh or tritone with one that is
     strong (on a foot's start) or long (a beat or more)."""
     for _u0, _u1, pitch, strong in sung:
         ic = min((pc - pitch) % 12, (pitch - pc) % 12)
         if ic == 1 or (strong and ic in (2, 6)):
+            return True
+    return False
+
+
+def rubs(pitch: int, sung: list[tuple[float, float, int, bool]]) -> bool:
+    """Whether a pitch, where it is, rubs against a sung note: a minor second or a major seventh at any
+    distance, or a major second, minor seventh or tritone within an octave of a strong or long one. A
+    ninth or more away, a second is an ordinary extension of the chord (an added ninth under the tune)."""
+    for _u0, _u1, q, strong in sung:
+        d = abs(pitch - q)
+        ic = min(d % 12, 12 - d % 12)
+        if ic == 1 or (strong and ic in (2, 6) and d < 12):
             return True
     return False
 
@@ -232,8 +267,9 @@ class StyleContext(Context):
         return self._colour[c.u0]
 
     def tones(self, c: Chord, u0: float, u1: float, colour: bool = True) -> list[int]:
-        """The chord's pitch classes sounding over [u0, u1), root first: its triad, with its colour
-        where no sung note there clashes with the colour's tone."""
+        """The chord's pitch classes sounding over [u0, u1), root first: its triad, with its colour where
+        no sung note there is a semitone from the colour's tone (where the colour then sits in a voicing
+        is checked there: see fits())."""
         pcs = list(self.pcs(c.symbol))
         name = self.colour(c) if colour else None
         if not name:
@@ -241,20 +277,27 @@ class StyleContext(Context):
         interval, replaces, suits = COLOURS[name]
         if quality(tuple(pcs)) not in suits:
             return pcs
-        sung = self.sung_in(u0, u1)
         if interval is None:  # an open fifth: no third to clash
             return [pcs[0], pcs[2]]
         tone = (pcs[0] + interval) % 12
-        if clashes(tone, sung):
+        if any(min((tone - q) % 12, (q - tone) % 12) == 1 for _a, _b, q, _s in self.sung_in(u0, u1)):
             return pcs
         if replaces == "third":
             return [pcs[0], tone, pcs[2]]
         return pcs + [tone]
 
+    def fits(self, pitch: int, c: Chord, u0: float, u1: float) -> bool:
+        """Whether a pitch may sound over [u0, u1) with this chord: its triad's own tones always; a colour's
+        only where it doesn't rub against what is sung (rubs())."""
+        if pitch % 12 in self.pcs(c.symbol):
+            return True
+        return not rubs(pitch, self.sung_in(u0, u1))
+
     def voicing(self, part: str, pcs: list[int], lo: int, hi: int, u0: float, u1: float, size: int = 4,
-                root: bool = True) -> list[int]:
+                root: bool = True, chord: Chord | None = None) -> list[int]:
         """A chord for a part in [lo, hi]: close position, led smoothly from the part's last chord,
-        never on a pitch being sung (moved an octave down, or left out)."""
+        never on a pitch being sung (moved an octave down, or left out), and with `chord`, a colour tone
+        that would rub against the tune where it lands moved an octave down, or left for the third."""
         tones = list(dict.fromkeys(pcs))
         if not root and len(tones) > 3:
             tones = tones[1:]  # the bass has the root; the hands take the colour
@@ -264,12 +307,12 @@ class StyleContext(Context):
             for base in range(lo, hi + 1):
                 if base % 12 != order[0]:
                     continue
-                chord, p = [base], base
+                stack, p = [base], base
                 for pc in order[1:size]:
                     p = p + ((pc - p) % 12 or 12)
-                    chord.append(p)
-                if chord[-1] <= hi:
-                    options.append(chord)
+                    stack.append(p)
+                if stack[-1] <= hi:
+                    options.append(stack)
         if not options:
             return []
         prev = self._last.get(part)
@@ -286,6 +329,12 @@ class StyleContext(Context):
         for p in best:
             while p in sung and p - 12 >= lo:
                 p -= 12
+            if chord is not None and not self.fits(p, chord, u0, u1):
+                if p - 12 >= lo and self.fits(p - 12, chord, u0, u1):
+                    p -= 12
+                else:  # the colour gives way: the chord's own third (or root) in its place
+                    triad = self.pcs(chord.symbol)
+                    p = nearest({triad[1]}, p, lo, hi) if triad[1] not in pcs else nearest({triad[0]}, p, lo, hi)
             if p not in sung and p not in out:
                 out.append(p)
         return sorted(out)
@@ -641,9 +690,11 @@ def fingering(ctx: StyleContext, part: str, c: Chord, u0: float, u1: float, i: i
         pcs = tuple(tones) if len(tones) >= 3 else (tones[0], tones[1], tones[1])
         shape, _ = B.guitar_voicing(pcs, capo)
         sung = {p for _a, _b, p, _s in ctx.sung_in(u0, u1)}
-        return [p - 12 if p in sung and p - 12 >= 40 + capo else p for _, p in shape]
+        notes = [p - 12 if p in sung and p - 12 >= 40 + capo else p for _, p in shape]
+        kept = [p for p in notes if ctx.fits(p, c, u0, u1)]  # a colour's string that would rub is left unplayed
+        return kept if len(kept) >= 3 else [p for p in notes if p % 12 in ctx.pcs(c.symbol)]
     lo, hi = comp_range(ctx, part, i)
-    return ctx.voicing(part, tones, lo, hi, u0, u1, size=4)
+    return ctx.voicing(part, tones, lo, hi, u0, u1, size=4, chord=c)
 
 
 def w_strum(ctx: StyleContext, i: int, part: str, kind: str = "strum") -> list[Ev]:
@@ -732,10 +783,11 @@ def w_boom(ctx: StyleContext, i: int, part: str) -> list[Ev]:
             target = nearest({ctx.root(nxt.symbol)}, root, lo, lo + 12)
             start = beats[-2]
             run = [scale_step(ctx, target, -k) for k in (3, 2, 1)] + [target]
-            out = [e for e in out if not (start - 1e-9 <= e.u0 < c.u1 - 1e-9)]
             subs = [u for u in ctx.grid.subs_in(start, c.u1)][:3]
-            for k, u in enumerate(subs):
-                out.append(ev(part, u, until(subs, k, c.u1), run[k], ctx.vel(part, u, 0.62), art="down", i=i))
+            if all(not rubs(run[k], ctx.sung_in(u, until(subs, k, c.u1))) for k, u in enumerate(subs)):
+                out = [e for e in out if not (start - 1e-9 <= e.u0 < c.u1 - 1e-9)]
+                for k, u in enumerate(subs):
+                    out.append(ev(part, u, until(subs, k, c.u1), run[k], ctx.vel(part, u, 0.62), art="down", i=i))
     return ring_on(out)
 
 
@@ -773,6 +825,8 @@ def roll_notes(ctx: StyleContext, part: str, c: Chord, u0: float, u1: float, i: 
     lo, hi = B.register_of(part)
     chord = ctx.voicing(part, tones, max(lo, ctx.tonic - 7), min(hi, ctx.tonic + 12), u0, u1, size=3)
     drone = nearest({ctx.tonic % 12}, ctx.tonic + 10, ctx.tonic + 5, min(hi, ctx.tonic + 17))
+    if not ctx.fits(drone, c, u0, u1):  # the open fifth string, stopped where it would rub against the tune
+        drone = nearest(set(tones), drone, ctx.tonic + 5, min(hi, ctx.tonic + 17))
     return chord or [ctx.tonic], drone
 
 
@@ -844,7 +898,7 @@ def w_tremolo(ctx: StyleContext, i: int, part: str) -> list[Ev]:
     out = []
     for c in ctx.chords_in(i):
         lo, hi = high_range(ctx, part, i, 2, 12)
-        notes = ctx.voicing(part, ctx.tones(c, c.u0, c.u1), lo, hi, c.u0, c.u1, 2)
+        notes = ctx.voicing(part, ctx.tones(c, c.u0, c.u1), lo, hi, c.u0, c.u1, 2, chord=c)
         for u in ctx.grid.fine_in(c.u0, c.u1):
             for p in notes:
                 out.append(ev(part, u, u + 0.4, p, ctx.vel(part, u, 0.32 if not ctx.grid.on_beat(u) else 0.38), i=i))
@@ -893,7 +947,7 @@ def w_arpeggio(ctx: StyleContext, i: int, part: str) -> list[Ev]:
         subs = ctx.grid.subs_in(c.u0, c.u1)
         top = ctx.floor(i) + 1
         tones = ctx.tones(c, c.u0, c.u1)
-        ladder = [p for p in range(root, top + 1) if p % 12 in tones and p >= root][:6]
+        ladder = [p for p in range(root, top + 1) if p % 12 in tones and ctx.fits(p, c, c.u0, c.u1)][:6]
         if len(ladder) < 3:
             ladder = [root, root + 7, root + 12]
         shape = ladder + ladder[-2:0:-1]
@@ -962,7 +1016,7 @@ def w_pad(ctx: StyleContext, i: int, part: str, swell_all: bool = False) -> list
     lo, hi = B.register_of(part)
     lo, hi = max(lo, ctx.tonic - 14), max(min(hi, ctx.floor(i)), max(lo, ctx.tonic - 14) + 10)
     for c in ctx.chords_in(i):
-        notes = ctx.voicing(part, ctx.tones(c, c.u0, c.u1), lo, hi, c.u0, c.u1, size=4)
+        notes = ctx.voicing(part, ctx.tones(c, c.u0, c.u1), lo, hi, c.u0, c.u1, size=4, chord=c)
         art = "swell" if swell_all or any(abs(c.u0 - p) < 1e-9 for p in phrase_starts) else ""
         for p in notes:
             held = next((e for e in out if e.pitch == p and abs(e.u1 - c.u0) < 1e-9), None)
@@ -995,7 +1049,7 @@ def w_epiano(ctx: StyleContext, i: int, part: str) -> list[Ev]:
         hits = sorted(set(hits))
         for k, u in enumerate(hits):
             end = hits[k + 1] if k + 1 < len(hits) else c.u1
-            notes = ctx.voicing(part, ctx.tones(c, u, end), lo, hi, u, end, size=4, root=False)
+            notes = ctx.voicing(part, ctx.tones(c, u, end), lo, hi, u, end, size=4, root=False, chord=c)
             for j, p in enumerate(notes):
                 out.append(ev(part, u, end, p, ctx.vel(part, u, 0.5 if k == 0 else 0.4), i=i, shift=0.008 * j))
     return out
@@ -1021,7 +1075,7 @@ def w_arp(ctx: StyleContext, i: int, part: str) -> list[Ev]:
     for c in ctx.chords_in(i):
         lo, hi = high_range(ctx, part, i, 2, 20)
         tones = ctx.tones(c, c.u0, c.u1)
-        ladder = [p for p in range(lo, hi + 1) if p % 12 in tones][:7]
+        ladder = [p for p in range(lo, hi + 1) if p % 12 in tones and ctx.fits(p, c, c.u0, c.u1)][:7]
         if len(ladder) < 3:
             continue
         shape = ladder + ladder[-2:0:-1]
@@ -1040,7 +1094,7 @@ def w_box(ctx: StyleContext, i: int, part: str) -> list[Ev]:
         rng = ctx.rand(part, c.u0)
         lo, hi = high_range(ctx, part, i, 5, 19)
         tones = ctx.tones(c, c.u0, c.u1)
-        ladder = [p for p in range(lo, hi + 1) if p % 12 in tones][:5]
+        ladder = [p for p in range(lo, hi + 1) if p % 12 in tones and ctx.fits(p, c, c.u0, c.u1)][:5]
         if len(ladder) < 2:
             continue
         shape = [ladder[k] for k in (0, 2, 1, 3, 2, 4, 3, 1) if k < len(ladder)]
@@ -1060,7 +1114,7 @@ def w_bells(ctx: StyleContext, i: int, part: str) -> list[Ev]:
         rng = ctx.rand(part, c.u0)
         lo, hi = high_range(ctx, part, i, 3, 14)
         tones = ctx.tones(c, c.u0, c.u1)
-        options = [p for p in range(lo, hi + 1) if p % 12 in tones]
+        options = [p for p in range(lo, hi + 1) if p % 12 in tones and ctx.fits(p, c, c.u0, c.u1)]
         if not options:
             continue
         for u in ctx.grid.beats_in(c.u0, c.u1):
@@ -1551,15 +1605,18 @@ def chords_first_all(ctx: Context) -> list[str]:
     return [p for p in CHORDS_FIRST if ctx.on(p)]
 
 
+LINES = ("lead", "quote", "counter", "descant", "under", "tone", "double", "hook", "fills")
+
+
 def shape_events(ctx: Context, plan: Plan, events: list[Ev], rhythm, style) -> list[Ev]:
-    """The options applied to what was written: late entrances, stop-time, a half-time bridge's drums, a
-    cold ending."""
+    """The options applied to what was written: late entrances, stop-time (everyone keeping time hits
+    each bar's one together and leaves the words bare; a line or a fill may go on), a cold ending."""
     out = []
     for e in events:
         start = plan.entrances.get((e.section, e.part))
         if start is not None and e.u0 < start - 1e-9:
             continue
-        if e.section in plan.stops and e.part in rhythm:
+        if e.section in plan.stops and ctx.sections[e.section].parts.get(e.part, "fills") not in LINES:
             s = ctx.sections[e.section]
             at_bar = abs(((e.u0 - s.u0) % ctx.bar)) < 1e-6 and e.shift < 0.06
             if not at_bar:

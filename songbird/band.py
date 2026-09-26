@@ -1291,6 +1291,16 @@ def arrange(genome, params, placed, lead, end, melody, seconds) -> tuple[list[No
         return arrange_style(genome, params, placed, lead, end, melody, seconds, of(style))
     ctx = Context(genome, params, placed, lead, end, melody)
     plan(ctx)
+    # the ballad chosen as a style (not the seed's own): its arrangement's options and the backing voices
+    shaped = style is not None and not style.seed
+    if shaped:
+        from . import idioms
+
+        shape = idioms.Plan()
+        rhythm = {p for p in ("bass", "drum") if ctx.on(p)}
+        idioms.shape_plan(ctx, style, shape, rhythm, {"drone"}, "guitar" if ctx.on("guitar") else "harp")
+        sung = idioms.backing(ctx, melody, style)
+        ctx.choir += [(v.u0, v.u1, v.pitch) for v in sung]  # the band keeps clear of the backing voices too
     capo = choose_capo(ctx)
     events: list[Ev] = []
     if ctx.on("bass"):
@@ -1305,6 +1315,8 @@ def arrange(genome, params, placed, lead, end, melody, seconds) -> tuple[list[No
     if ctx.on("drone"):
         events += drone_part(ctx)
     events = [e for e in events if ctx.band.plays(e.part)]
+    if shaped:
+        events = idioms.shape_events(ctx, shape, events, rhythm, style)
     harp = let_ring(ctx, [e for e in events if e.part == "harp"])
     events = [e for e in events if e.part != "harp"] + harp
     for e in events:  # whatever sounds through the last chord holds to the end, and rings on from there
@@ -1327,6 +1339,8 @@ def arrange(genome, params, placed, lead, end, melody, seconds) -> tuple[list[No
         s = ctx.sections[min(max(e.section, 0), len(ctx.sections) - 1)]
         notes.append(Note(part=e.part, start=start, dur=max(dur, 0.03), pitch=float(e.pitch),
                           vel=float(np.clip(e.vel, 0.02, 1.0)), section=s.name, art=e.art))
+    if shaped:
+        notes += idioms.sung_notes(sung, seconds, ctx.seed)
     settings = {
         **{name: getattr(ctx.band, name) for name in INSTRUMENTS},
         "brightness": ctx.band.brightness,
