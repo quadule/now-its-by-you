@@ -101,11 +101,13 @@ WRONG_NOTE = 150.0  # cents from the tune beyond which a note's pitch gestures a
 FLAT = V.VoiceParams(vibrato_depth=0.0, scoop=0.0, jitter=0.0, wander=0.0)
 NAN = float("nan")
 # Where the aligner puts a vowel's start against where it began (seconds; negative is early), by what comes
-# before the vowel: a glide or a nasal swells into the vowel, so the loudness climbs early. Measured on
-# reference singers whose every vowel start is known (say-daniel, elevenlabs-george, elevenlabs-matilda:
-# tools/phrasing_eval.py --reference ... --onsets), medians over 3132 vowels, and taken back off every take.
-ONSET_BIAS = {"affricate": 0.011, "aspirate": -0.017, "fricative": -0.003, "fricative+v": -0.010, "glide+v": -0.035,
-              "liquid+v": -0.012, "nasal+v": -0.021, "stop": -0.030, "stop+v": -0.017, "vowel": 0.009}
+# before the vowel, taken back off every take. Measured on natural voices (Seed-VC re-voicing planted takes as
+# two Eleven Music singers, 6 takes, 1566 vowels; tools/phrasing_eval.py --reference seedvc-... --onsets): all
+# within 15 ms. Robotic references (WORLD speech moved onto the tune) had glides and nasals found 20 to 35 ms
+# early, and correcting natural voices by those put their vowels as late: a shared error that passed for
+# shared timing.
+ONSET_BIAS = {"affricate": 0.014, "aspirate": -0.012, "fricative": 0.009, "fricative+v": 0.004, "glide+v": 0.003,
+              "liquid+v": -0.008, "nasal+v": 0.008, "stop": 0.007, "stop+v": 0.001, "vowel": 0.007}
 
 
 def cents(f0: np.ndarray) -> np.ndarray:
