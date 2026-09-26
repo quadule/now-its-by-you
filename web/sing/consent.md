@@ -15,18 +15,18 @@ them. If you pay singers, say so here. The dates below must match CLOSES_AT and 
   when you come in, where you slide into a note, which words you lean on, what you hold and let go.
   Those are numbers, not sound. Blended with everyone else's, they shape how the song's machine singer
   sings, so the voice you hear in this karaoke changes a little with each person who sings.
-- **The machine's voice may also learn the words from you.** Once, before 30 September, the recordings
-  may be used, all singers' together, to help the song's voice say its words more clearly. The voice is
-  never set to sound like any one person, and can't be made to.
+- **The machine's voice may also learn the words from you.** Once, after singing closes and before
+  30 September, the recordings may be used, all singers' together, to help the song's voice say its
+  words more clearly. The voice is never set to sound like any one person, and can't be made to.
 - **Your recordings stay private, and they're deleted.** They're never published or shared, and they
   never travel with the song. They wait in private storage and on the artist's computer, and **are
   deleted by 30 September 2026**, sooner if you delete them yourself.
 - **Your own page.** You'll get a private link (on screen, and by email) where you can listen to what
   you sent, download your version of the song and your vocals, and delete them.
-- **You can change your mind.** Until the artist shares the project publicly, you can withdraw from
-  your page: your recordings and the numbers taken from them are deleted, and if the voice has already
-  learned from the recordings, the song goes back to a voice made before anyone sang. Once the project
-  is shared, what you gave stays part of it.
+- **You can change your mind until singing closes.** Until 10 PM Pacific on Sunday 27 September, you
+  can withdraw from your page, and your recordings and the numbers taken from them are deleted. After
+  that the song is finished from everyone's singing and shared, so what you gave stays part of it;
+  you can still delete your recordings themselves.
 - **What travels with the song** is only the numbers and the voice, blended from everyone, free for
   anyone to use (CC0, public domain), and your name if you'd like to be credited.
 - **Your email** is used only to send you your page and to tell you when your version is ready, and is
