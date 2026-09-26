@@ -143,6 +143,24 @@ def test_in_tune_through_the_middle_of_its_compass(module, name):
 
 
 @pytest.mark.parametrize("module,name", INSTRUMENTS)
+def test_odd_notes_and_every_articulation_render_safely(module, name):
+    spec = module.SPEC[name]
+    arts = list(spec["articulations"]) + ["no-such-art"]
+    if spec["register"] is None:
+        notes = [Note("x", 0.1 + 0.07 * i, (0.001, 0.3)[i % 2], 60.0, (0.0, 1.0, 0.5)[i % 3], art=a)
+                 for i, a in enumerate(arts)]
+    else:
+        lo, hi = spec["register"]
+        mid = (lo + hi) / 2.0
+        notes = [Note("x", 0.1, 0.001, float(lo), 1.0), Note("x", 0.15, 1.5, float(hi), 1.0),
+                 Note("x", 0.2, 0.5, mid + 0.37, 0.0), Note("x", 0.3, 0.2, float(lo), 0.5),
+                 Note("x", 0.35, 0.2, float(lo), 0.5), Note("x", 9.0, 1.0, mid, 0.5)]
+        notes += [Note("x", 0.5 + 0.1 * i, 0.4, float(round(mid)), 0.6, art=a) for i, a in enumerate(arts)]
+    y = render(module, name, sorted(notes, key=lambda n: n.start), 2.5)
+    assert y.shape[0] == int(2.5 * SR) and np.all(np.isfinite(y)) and np.max(np.abs(y)) < 50.0
+
+
+@pytest.mark.parametrize("module,name", INSTRUMENTS)
 def test_cheap_enough_for_a_whole_song(module, name):
     spec = module.SPEC[name]
     notes = levels.typical_part(spec, bars=2)
