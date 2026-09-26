@@ -135,6 +135,55 @@ def test_the_timeline_says_what_is_sung_in_every_frame():
     assert 0.0 <= t["pos"][40] <= 1.0 and t["pos"][33] < t["pos"][40]
 
 
+def test_a_silence_longer_than_any_it_heard_is_told_as_one_it_knows():
+    """The network never heard a silence of a second; a choir waiting 220 s for its entry was told of one that
+    long and whispered through it. A long silence is told as SILENCE long: its ends at their own pace, its
+    middle held; a short one is told as it is."""
+    idx = {p: i for i, p in enumerate(T.PHONES)}
+    short = T.timeline([("AA", 0.4, 0.8, True, 0.0, "vowel")], 200)
+    assert np.isclose(short["dur"][40], np.log(0.4)) and np.isclose(short["pos"][40], 0.5)
+    wait = 220.0
+    long = T.timeline([("AA", wait, wait + 0.4, True, 0.0, "vowel")], int((wait + 1.0) / T.FRAME))
+    sil = long["phone"] == idx["sil"]
+    assert np.allclose(long["dur"][sil], np.log(T.SILENCE))
+    assert 0.0 <= long["pos"][sil].min() and long["pos"][sil].max() <= 1.0
+    frame = lambda t: int(round(t / T.FRAME))  # noqa: E731
+    assert np.isclose(long["pos"][frame(0.1)], 0.1 / T.SILENCE, atol=1e-3)  # just after it starts, at its pace
+    assert np.isclose(long["pos"][frame(wait / 2)], 0.5)  # held
+    assert np.isclose(long["pos"][frame(wait - 0.1)], 1.0 - 0.1 / T.SILENCE, atol=0.01)  # just before the note
+
+
+def test_the_throat_is_hushed_where_nothing_is_sung():
+    idx = {p: i for i, p in enumerate(T.PHONES)}
+    phones = np.full(1000, idx["sil"], dtype=np.int16)
+    phones[400:500] = idx["AA"]  # sung from 2.0 to 2.5 s
+    g = T.hush(phones, 1000, 5000)
+    before, after, fade = T.HUSH
+    assert g[2000:2500].min() == 1.0 and g[int(1000 * (2.0 - before)) + 20] == 1.0
+    assert g[int(1000 * (2.5 + after)) - 20] == 1.0
+    assert g[: int(1000 * (2.0 - before - fade))].max() == 0.0 and g[int(1000 * (2.5 + after + fade)) + 1:].max() == 0.0
+    assert np.all(np.diff(g[1000:2000]) >= 0)  # a fade, never a step back
+    assert not T.hush(np.full(10, idx["sil"], dtype=np.int16), 1000, 50).any()
+
+
+@pytest.mark.skipif(not T.MODEL.exists(), reason="no trained throat shipped yet")
+def test_a_voice_waiting_for_its_entry_is_silent_and_then_sings_as_after_a_short_wait():
+    """A choir voice waits minutes for its entry: that wait is silence (but for the breath before it sings),
+    and the note after it sounds as it would after a moment's rest."""
+    from songbird.score import Note
+    from songbird.synth.voice import VoiceParams
+
+    sr = 44100
+    heard = {}
+    for wait in (1.0, 60.0):
+        y = T.sing([Note("voice", wait, 0.8, 62.0, 0.8, syllable="home", word="home", line_end=True)], sr,
+                   VoiceParams(), seed=1)
+        heard[wait] = 10 * np.log10(np.mean(y[int(wait * sr): int((wait + 0.6) * sr)] ** 2))
+        if wait > 1.0:
+            assert not y[: int((wait - 1.0) * sr)].any()  # silent until its breath
+    assert abs(heard[60.0] - heard[1.0]) < 1.0
+
+
 def test_a_source_at_the_reference_changes_nothing_and_a_pressed_one_brightens():
     f0 = np.full(3, 220.0)
     assert not T.source_change(f0, T.RD_REF, T.TILT_REF, 128).any()

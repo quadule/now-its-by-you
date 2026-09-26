@@ -239,13 +239,24 @@ def synthesize(f0: np.ndarray, sp: np.ndarray, ap: np.ndarray, sr: int, rng: np.
 
 ROLES = ("sil", "breath", "onset", "vowel", "coda")
 
+# The longest silence the network is told of. It learned from phrases whose silences were short (median
+# 0.26 s, 99% under 0.7 s, none as long as 1 s). Told of a longer one (a rest between sections, a choir
+# waiting minutes for its entry) it guessed an envelope far louder than silence, and the vocoder whispered
+# through it: up to 8 dB under the singing at the start of a 220 s wait (docs/MIX.md, "The hiss"). A
+# longer silence is told as one this long: its first and last halves at their own pace, held between.
+SILENCE = 0.6
+# Where nothing is sung the vocoder is silent: it sounds from HUSH[0] s before a sung phone to HUSH[1] s
+# after one (a phone's own ring), fading over HUSH[2] s beyond. Breaths are voice.breaths', added after.
+HUSH = (0.06, 0.15, 0.03)
+
 
 def timeline(segments: list[tuple], n: int) -> dict[str, np.ndarray]:
     """What is being sung in each of n frames, from (phone, start, end, stressed, level dB, role)
     segments in time order; the gaps between them are silence, as loud as what follows. Per frame:
     the phone and the two before and after it (indices into PHONES), its role (ROLES), how far
     through the phone it is, the phone's length (log seconds), its syllable's stress and its note's
-    level."""
+    level. A silence longer than SILENCE is given as one SILENCE long: its ends at their own pace,
+    its middle held."""
     filled: list[tuple] = []
     t = 0.0
     end = n * FRAME
@@ -273,11 +284,36 @@ def timeline(segments: list[tuple], n: int) -> dict[str, np.ndarray]:
         out["next"][i0:i1] = ids[j + 1] if j + 1 < len(ids) else 0
         out["next2"][i0:i1] = ids[j + 2] if j + 2 < len(ids) else 0
         out["role"][i0:i1] = ROLES.index(role)
-        out["pos"][i0:i1] = (times[i0:i1] - a) / max(b - a, 1e-3)
-        out["dur"][i0:i1] = np.log(max(b - a, 1e-3))
+        if role == "sil" and b - a > SILENCE:  # longer than any it heard: its two ends at their pace, held between
+            since, until = times[i0:i1] - a, b - times[i0:i1]
+            out["pos"][i0:i1] = np.where(since < SILENCE / 2, since / SILENCE,
+                                         np.where(until < SILENCE / 2, 1.0 - until / SILENCE, 0.5))
+            out["dur"][i0:i1] = np.log(SILENCE)
+        else:
+            out["pos"][i0:i1] = (times[i0:i1] - a) / max(b - a, 1e-3)
+            out["dur"][i0:i1] = np.log(max(b - a, 1e-3))
         out["stress"][i0:i1] = float(stressed)
         out["level"][i0:i1] = level
     return out
+
+
+def hush(phones: np.ndarray, sr: int, n: int) -> np.ndarray:
+    """Per sample (n of them), 1 where something is sung and HUSH's margins around it, 0 in the silence
+    between, with a raised-cosine fade: the throat is quiet where nothing is sung. phones: the timeline's
+    phone for every frame."""
+    from scipy.ndimage import uniform_filter1d
+
+    before, after, fade = HUSH
+    sung = phones != PHONES.index("sil")
+    if not sung.any():
+        return np.zeros(n)
+    idx = np.arange(len(sung))
+    last = np.maximum.accumulate(np.where(sung, idx, -len(sung) - 1))  # the latest sung frame at or before each
+    ahead = np.minimum.accumulate(np.where(sung, idx, 2 * len(sung) + 1)[::-1])[::-1]  # the next one at or after
+    keep = ((idx - last) * FRAME <= after) | ((ahead - idx) * FRAME <= before)
+    frame = np.minimum((np.arange(n) / (FRAME * sr)).astype(np.int64), len(keep) - 1)
+    ramp = uniform_filter1d(keep[frame].astype(np.float64), max(1, int(fade * sr)), mode="nearest")
+    return 0.5 - 0.5 * np.cos(np.pi * np.clip(ramp, 0.0, 1.0))
 
 
 # ---- the glottal source, relative to the one the throat learned -------------------------------------
@@ -587,6 +623,7 @@ def sing(notes, sr: int, voice, seed: int = 0, lexicon: dict | None = None, mix:
     y = resample_poly(y, sr // np.gcd(sr, RATE), RATE // np.gcd(sr, RATE)) if sr != RATE else y
     y = sosfilt(butter(1, 60.0, btype="highpass", fs=sr, output="sos"), y)
     y = np.concatenate([y, np.zeros(max(0, int(np.ceil(duration * sr)) - len(y)))])[: int(np.ceil(duration * sr))]
+    y = y * hush(t["phone"], sr, len(y))
     mask = np.zeros(len(y), dtype=bool)
     for s in vowels:
         mask[int(s.t0 * sr): int(s.t1 * sr)] = True
