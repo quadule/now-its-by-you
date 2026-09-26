@@ -96,15 +96,79 @@ def _run(packet, *args, home):
 def test_python_runs_the_file(rendition, tmp_path):
     flac, _, record = rendition
     pack.pack(flac, record, GENOME)
-    about = _run(flac, home=tmp_path / "home")
+    home = tmp_path / "home"
+    about = _run(flac, home=home)
     assert about.returncode == 0 and "Now It's by You" in about.stdout and "the seed" in about.stdout
+    assert not home.exists()  # reading about it writes nothing
+    # nothing is written before the person agrees
+    asked = _run(flac, "--here", "songbird", "--help", home=home)
+    assert asked.returncode != 0 and "--yes" in asked.stderr and not (home / "packets").exists()
     # the program inside runs (with this Python's own dependencies: --here)
-    help_ = _run(flac, "songbird", "--help", "--here", home=tmp_path / "home")
+    help_ = _run(flac, "--yes", "--here", "songbird", "--help", home=home)
     assert help_.returncode == 0, help_.stderr
     assert "render" in help_.stdout and "pack" in help_.stdout
-    assert list((tmp_path / "home" / "packets").glob("*/program/songbird/cli.py"))
-    unpacked = _run(flac, "unpack", str(tmp_path / "out"), home=tmp_path / "home")
+    assert list((home / "packets").glob("*/program/songbird/cli.py"))
+    unpacked = _run(flac, "unpack", str(tmp_path / "out"), home=home)
     assert unpacked.returncode == 0 and (tmp_path / "out" / "manifest.json").exists()
+    # the studio isn't offered until the program has one
+    assert ("studio" in about.stdout) == (ROOT / "songbird" / "studio.py").exists()
+
+
+def _rewrite(packet, out, change):
+    """A copy of a packet with its archive's entries changed by change(name, data) -> data."""
+    with zipfile.ZipFile(packet) as z:
+        entries = [(i, change(i.filename, z.read(i.filename))) for i in z.infolist()]
+    out.write_bytes(pack.audio_bytes(packet))
+    with zipfile.ZipFile(out, "a") as z:
+        for info, data in entries:
+            z.writestr(info, data)
+    return out
+
+
+def test_a_changed_program_is_refused_and_the_record_chooses_no_paths(rendition, tmp_path):
+    flac, _, record = rendition
+    pack.pack(flac, record, GENOME)
+    home = tmp_path / "home"
+    tampered = _rewrite(flac, tmp_path / "tampered.flac",
+                        lambda n, d: d + b"\nprint('changed')\n" if n == "program/songbird/cli.py" else d)
+    run = _run(tampered, "--yes", "--here", "songbird", "--help", home=home)
+    assert run.returncode != 0 and "doesn't match" in run.stderr and not (home / "packets").exists()
+    # a record whose id is a path unpacks where every packet does: in a folder named by the file's own hash
+    hostile = _rewrite(flac, tmp_path / "hostile.flac", lambda n, d: json.dumps(
+        {**json.loads(d), "id": "../../../escaped"}).encode() if n == "manifest.json" else d)
+    run = _run(hostile, "--yes", "--here", "songbird", "--help", home=home)
+    assert run.returncode == 0, run.stderr
+    assert not (tmp_path / "escaped").exists() and not (home.parent / "escaped").exists()
+    assert all(len(p.name) == 16 for p in (home / "packets").iterdir() if p.is_dir())
+
+
+def test_a_packet_sings_its_children_with_the_license_and_is_checked_as_a_parent(rendition, tmp_path):
+    flac, pcm, record = rendition
+    pack.pack(flac, record, GENOME)
+    inside = pack.unpack(flac, tmp_path / "inside")
+    # packed again by the program it carries (its root is program/), the license comes along in full
+    child = tmp_path / "child.flac"
+    master.write_flac(child, pcm[::-1].copy(), 44100)
+    child_record = {"id": master.pcm_sha256(pcm[::-1].copy()), "title": "Now It's by You", **pack.lineage(record)}
+    pack.pack(child, child_record, GENOME, root=inside / "program")
+    with zipfile.ZipFile(child) as z:
+        assert z.read("LICENSE") == (ROOT / "LICENSE").read_bytes() and b"Statement of Purpose" in z.read("LICENSE")
+        assert json.loads(z.read("manifest.json"))["generation"] == 1
+    assert pack.read_record(child)["parent_id"] == record["id"]
+    # a packet whose audio isn't the one its record describes is refused as a parent
+    swapped = tmp_path / "swapped.flac"
+    swapped.write_bytes(pack.audio_bytes(child) + flac.read_bytes()[len(pack.audio_bytes(flac)):])
+    with pytest.raises(ValueError):
+        pack.read_record(swapped)
+    # a packet packs again from what it carries, and a plain FLAC has nothing to unpack
+    from songbird.cli import main
+
+    assert main(["pack", str(flac), "--out", str(tmp_path / "again.flac")]) == 0
+    assert pack.read_record(tmp_path / "again.flac")["id"] == record["id"]
+    plain = tmp_path / "plain.flac"
+    master.write_flac(plain, pcm, 44100)
+    with pytest.raises(ValueError):
+        pack.unpack(plain, tmp_path / "nothing")
 
 
 @pytest.mark.skipif(not shutil.which("ffmpeg"), reason="ffmpeg not installed")
