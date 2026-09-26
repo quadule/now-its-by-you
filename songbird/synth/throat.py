@@ -123,7 +123,7 @@ class Texture:
     spread_from: float = 1500.0
     jitter: float = 0.0
     jitter_corr: float = 0.5
-    scatter: float = 0.0
+    scatter: float = 0.4  # radians: upper harmonics nearer the teacher's steadiness (docs/THROAT.md)
     scatter_from: float = 8.0
     scatter_to: float = 20.0
 
