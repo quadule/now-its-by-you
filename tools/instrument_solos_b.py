@@ -23,7 +23,7 @@ import importlib
 import importlib.util
 import sys
 import time
-import zlib
+import hashlib
 from dataclasses import replace
 from pathlib import Path
 
@@ -56,8 +56,8 @@ def module_for(family, name: str):
 
 
 def streams(name: str, seed: int = 0, maker: int = 0) -> tuple[np.random.Generator, np.random.Generator]:
-    """A part's performance stream and its maker's stream, as the band would give them."""
-    k = zlib.crc32(name.encode()) & 0xFFFF
+    """A part's performance stream and its maker's stream, as the band's registry gives them (instruments.stream)."""
+    k = int.from_bytes(hashlib.sha256(f"instrument|{name}".encode()).digest()[:4], "little") % 1_000_000
     return np.random.default_rng([seed, 17, 1000 + k]), np.random.default_rng([maker, 29, 1000 + k])
 
 

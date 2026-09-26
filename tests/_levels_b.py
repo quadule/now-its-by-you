@@ -8,7 +8,7 @@ refrain to -28.4 full in the last) and the upright bass in the first refrain.
 
 from __future__ import annotations
 
-import zlib
+import hashlib
 
 import numpy as np
 
@@ -20,8 +20,8 @@ SETTINGS = dict(brightness=0.5, wear=0.25, ornament=0.5, body=1.0, maker=0, toni
 
 
 def streams(name: str, seed: int = 0, maker: int = 0) -> tuple[np.random.Generator, np.random.Generator]:
-    """A part's performance stream and its maker's stream, as the band would give them."""
-    k = zlib.crc32(name.encode()) & 0xFFFF
+    """A part's performance stream and its maker's stream, as the band's registry gives them (instruments.stream)."""
+    k = int.from_bytes(hashlib.sha256(f"instrument|{name}".encode()).digest()[:4], "little") % 1_000_000
     return np.random.default_rng([seed, 17, 1000 + k]), np.random.default_rng([maker, 29, 1000 + k])
 
 
