@@ -14,6 +14,7 @@ from __future__ import annotations
 
 import numpy as np
 from numba import njit
+from scipy.ndimage import uniform_filter1d
 from scipy.signal import butter
 
 # --- equalizers: RBJ cookbook biquads as second-order sections -----------------
@@ -303,13 +304,25 @@ def _stereo(x: np.ndarray) -> np.ndarray:
 
 
 def compress(x: np.ndarray, sr: int, threshold: float, ratio: float, attack: float, release: float,
-             knee: float = 6.0, window: float = 0.01, key: np.ndarray | None = None) -> tuple[np.ndarray, np.ndarray]:
+             knee: float = 6.0, window: float = 0.01, key: np.ndarray | None = None,
+             ride: float = 0.0, above: float = 0.0) -> tuple[np.ndarray, np.ndarray]:
     """A feed-forward compressor, channels linked: it listens to the power of
     `key` (x itself by default) averaged over about `window` seconds, has a
     soft knee `knee` dB wide, and attack and release times in seconds.
+
+    With `ride` (seconds), the threshold rides on the music: it is `above` dB
+    over the level of the `ride` seconds around each moment, and never under
+    `threshold`. Such a compressor evens a moment against its surroundings
+    (a syllable against its phrase, a pluck against its bar) but leaves a
+    quiet verse quiet and a full refrain full: the song's arc is kept.
+
     Returns the output and the gain it applied (dB, every STEP samples)."""
     x2 = _stereo(x)
-    level = db(_detect(x2 if key is None else _stereo(key), _coef(window, sr))[::STEP])
+    power = _detect(x2 if key is None else _stereo(key), _coef(window, sr))[::STEP]
+    level = db(power)
+    if ride > 0:
+        around = db(uniform_filter1d(power, max(1, int(ride * sr / STEP)), mode="nearest"))
+        threshold = np.maximum(around + above, threshold)
     rate = sr / STEP
     gain = _ballistics(gain_computer(level, threshold, ratio, knee), _coef(attack, rate), _coef(release, rate))
     return apply_gain(x, gain), gain

@@ -134,6 +134,25 @@ def test_dynamics_leave_quiet_or_plain_signals_alone():
     assert np.max(np.abs(loud)) < 0.5 * 0.9  # the loud peaks are rounded off
 
 
+def test_a_riding_compressor_keeps_the_arc():
+    # a quiet passage then one 12 dB louder, each with a syllable every half second that stands 6 dB out
+    t = np.arange(8 * SR) / SR
+    level = np.where(t < 4.0, 0.05, 0.2) * np.where((t % 0.5) < 0.15, 2.0, 1.0)
+    x = (level * np.sin(2 * np.pi * 220 * t))[:, None]
+    y, _ = fx.compress(x, SR, threshold=-60.0, ratio=4.0, attack=0.005, release=0.05, ride=2.0, above=1.0)
+
+    def db(a, b, peaks):
+        seg = y[int(a * SR) : int(b * SR), 0]
+        tt = t[int(a * SR) : int(b * SR)]
+        sel = ((tt % 0.5) < 0.15) == peaks
+        return 10 * np.log10(np.mean(seg[sel] ** 2))
+    arc = db(5, 7.5, False) - db(1, 3.5, False)
+    assert arc == pytest.approx(12.0, abs=1.5)  # the loud passage is still 12 dB up
+    quiet, loud = db(1, 3.5, True) - db(1, 3.5, False), db(5, 7.5, True) - db(5, 7.5, False)
+    assert quiet < 5.0 and loud < 5.0  # in both, what stood out (by 6 dB) is evened
+    assert quiet == pytest.approx(loud, abs=0.5)  # and alike
+
+
 def test_room_decays_as_asked():
     for rt60 in (0.3, 1.1, 2.5):
         ir = room.impulse_response(SR, rt60=rt60, seed=2)

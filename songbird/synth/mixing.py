@@ -131,7 +131,7 @@ class Strip:
 
     eq: tuple = ()  # equalizer bands, fx.design
     trim: float = 0.0  # dB against its level as arranged
-    comp: tuple[float, float, float, float] | None = None  # dB under its loud passages, ratio, attack s, release s
+    comp: tuple | None = None  # a compressor (see VOICE_COMP)
     drive: float = 0.0  # warmth, fx.saturate
     send: float = 1.0  # how much reaches the room, against the band's usual
     duck: float = 0.0  # dB it steps back while the voice sings (a doubling of the tune, a lead line)
@@ -143,15 +143,15 @@ ROLES: dict[str, Strip] = {
     "lute": Strip(eq=(("hp", 90), ("peak", 320, -2.0, 1.0), ("peak", 2800, -2.0, 0.9)), drive=0.1, duck=4.0),
     # The main accompaniment: weight kept, boom and clang tamed, sparkle above the voice.
     "guitar": Strip(eq=(("hp", 75), ("peak", 200, -2.0, 1.1), ("peak", 2600, -2.0, 0.8), ("high", 9000, 1.0)),
-                    comp=(8.0, 2.0, 0.015, 0.2), drive=0.1, send=0.9),
+                    comp=(10.0, 2.0, 0.015, 0.2, 1.5, 3.0), drive=0.1, send=0.9),
     "harp": Strip(eq=(("hp", 70), ("peak", 2800, -1.5, 0.9)), send=1.2),
     # Round and even: no rumble, mud out, no string noise, saturated so small speakers hear its pitch.
     "bass": Strip(eq=(("hp", 40, 4), ("peak", 380, -2.0, 0.8), ("lp", 3000)),
-                  comp=(6.0, 3.0, 0.01, 0.15), drive=0.35, send=0.25),
+                  comp=(10.0, 3.0, 0.01, 0.15, 1.5, 2.0), drive=0.35, send=0.25),
     "fiddle": Strip(eq=(("hp", 180), ("peak", 2500, -2.5, 1.0), ("high", 8000, -1.0)),
-                    comp=(8.0, 2.0, 0.02, 0.25), send=1.3, duck=2.0),
+                    comp=(10.0, 2.0, 0.02, 0.25, 2.0, 3.0), send=1.3, duck=2.0),
     "whistle": Strip(eq=(("hp", 250), ("peak", 3000, -2.0, 1.4), ("high", 9000, -1.0)), send=1.3, duck=2.0),
-    "drum": Strip(eq=(("hp", 40), ("peak", 420, -2.0, 1.0), ("high", 8000, -1.0)), comp=(6.0, 3.0, 0.004, 0.12), send=0.6),
+    "drum": Strip(eq=(("hp", 40), ("peak", 420, -2.0, 1.0), ("high", 8000, -1.0)), comp=(12.0, 3.0, 0.004, 0.12, 1.0, 4.0), send=0.6),
     # A held drone stays out of the words altogether.
     "drone": Strip(eq=(("hp", 50), ("peak", 2500, -3.0, 0.7), ("lp", 6000))),
     "band": Strip(eq=(("hp", 60), ("peak", 2800, -1.5, 0.9))),  # anything else
@@ -185,9 +185,12 @@ def role_of(name: str) -> str:
 
 # The voice and choir, in the same terms as the band's roles.
 VOICE_EQ = (("hp", 80), ("peak", 900, -2.0, 1.2), ("peak", 3500, 1.5, 0.9), ("high", 11000, -2.0))
-VOICE_COMP = (2.0, 2.0, 0.015, 0.2)  # dB under its loud syllables, ratio, attack, release: only the loudest are leaned on
+# Compressors: (floor: dB under the part's loud passages, ratio, attack s, release s, ride s, above dB).
+# With a ride, the threshold is `above` dB over the level of the surrounding `ride` seconds (never under the
+# floor): a syllable is evened against its phrase, a strum against its bar, but a quiet verse stays quiet.
+VOICE_COMP = (10.0, 2.0, 0.015, 0.2, 3.0, 2.0)  # only the syllables that stand out of their phrase are leaned on
 CHOIR_EQ = (("hp", 120), ("low", 260, -2.0), ("peak", 3000, -2.5, 0.8), ("high", 9000, -2.0))
-CHOIR_COMP = (6.0, 2.0, 0.03, 0.3)
+CHOIR_COMP = (6.0, 2.0, 0.03, 0.3, 0.0, 0.0)
 CHOIR_UNDER = 4.0  # dB the choir as a whole sits under the lead
 CHOIR_WIDTH = 1.35
 CHOIR_LATER = 0.02  # s the choir's sound reaches the room after the band's: it stands further back
@@ -203,10 +206,10 @@ RETURN_EQ = (("hp", 180), ("lp", 9000))
 RETURN_DIP = 5.0  # dB the room and plate give way while the voice sings
 
 CARVE = (2600.0, 0.7)  # the band's dip for the voice: centre Hz, Q
-CARVE_DEPTH = 5.0  # dB at full voice
+CARVE_DEPTH = 6.0  # dB at full voice
 BAND_EQ = (("peak", 600, -2.0, 0.8),)  # the band as a whole: less boxy where the voice's vowels sit
-BAND_COMP = (3.0, 1.5, 0.02, 0.2)  # the band together, lightly: its arc from sparse verses to full refrains is kept
-GLUE = (2.0, 1.3, 0.1, 0.8)  # the whole mix, lightly and slowly (it leaves syllables and the song's arc alone): dB under its loud passages, ratio, attack, release
+BAND_COMP = (10.0, 1.5, 0.02, 0.2, 2.0, 3.0)  # the band together, lightly: its arc from sparse verses to full refrains is kept
+GLUE = (8.0, 1.5, 0.05, 0.4, 3.0, 2.0)  # the whole mix, lightly: what stands out of its surroundings, never the song's arc
 REFERENCE = -20.0  # LUFS the voice is brought to before the balance is set
 
 
@@ -222,10 +225,13 @@ def quick_loudness(x: np.ndarray, sr: int) -> float:
     return loudness((x[:n:2] + x[1:n:2]) / 2.0, sr // 2)
 
 
-def _compressed(x: np.ndarray, sr: int, setting, key: np.ndarray | None = None) -> np.ndarray:
-    under, ratio, attack, release = setting
-    threshold = fx.loud_level(x if key is None else key, sr) - under
-    return fx.compress(x, sr, threshold, ratio, attack, release, key=key)[0]
+def _compressor(x: np.ndarray, sr: int, setting, **extra) -> tuple[np.ndarray, np.ndarray]:
+    floor, ratio, attack, release, ride, above = (*setting, 0.0, 0.0)[:6]
+    return fx.compress(x, sr, fx.loud_level(x, sr) - floor, ratio, attack, release, ride=ride, above=above, **extra)
+
+
+def _compressed(x: np.ndarray, sr: int, setting) -> np.ndarray:
+    return _compressor(x, sr, setting)[0]
 
 
 def _at(x: np.ndarray, sr: int, target: float) -> np.ndarray:
@@ -317,8 +323,7 @@ def mix(stems: dict[str, np.ndarray], sr: int, seed: int = 0, params: MixParams 
     if np.any(band):
         eq = fx.design(BAND_EQ, sr)
         band = fx.equalize(band, eq)
-        under, ratio, attack, release = BAND_COMP
-        band, squeeze = fx.compress(band, sr, fx.loud_level(band, sr) - under, ratio, attack, release)
+        band, squeeze = _compressor(band, sr, BAND_COMP)
         # the band under the voice, measured where the voice sings, before it makes way for it
         sung = singing is not None and np.mean(singing > 0.5) > 0.05
         level = quick_loudness(band[singing > 0.5], sr) if sung else quick_loudness(band, sr)
@@ -360,8 +365,7 @@ def mix(stems: dict[str, np.ndarray], sr: int, seed: int = 0, params: MixParams 
             out[:length] += bus
 
     # The whole: glued, tilted, maybe worn.
-    under, ratio, attack, release = GLUE
-    out, glue = fx.compress(out, sr, fx.loud_level(out, sr) - under, ratio, attack, release, knee=8.0, window=0.05)
+    out, glue = _compressor(out, sr, GLUE, knee=8.0, window=0.05)
     if taps is not None:
         taps["glue"] = glue
     if p.tilt:
