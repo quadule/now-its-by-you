@@ -139,11 +139,21 @@ class StyleDef:
     singer: dict = field(default_factory=dict)  # offsets to the singer's habits (VoiceParams fields), gently
     mix: dict = field(default_factory=dict)  # offsets to the mix (MixParams fields; "choir" dB for the backing voices)
     options: dict = field(default_factory=dict)  # the arrangement's propensities (see choose_options)
+    swaps: dict = field(default_factory=dict)  # a player -> {another who may play the part instead: how often}
 
     def order(self, lineup: dict) -> list[str]:
-        """The instruments of a lineup in the style's own order, any others after by name."""
-        mine = [name for name in self.lineup if name in lineup]
-        return mine + sorted(name for name in lineup if name not in self.lineup)
+        """The instruments of a lineup in the style's own order (one swapped in where its part is), any others
+        after by name."""
+        mine = [who for name in self.lineup for who in (name, *self.swaps.get(name, {})) if who in lineup]
+        return mine + sorted(name for name in lineup if name not in mine)
+
+    def playing(self, name: str, lineup) -> str:
+        """Who plays the style's part `name` in a lineup: its own player, or the one swapped in for it."""
+        return next((who for who in (name, *self.swaps.get(name, {})) if who in lineup), name)
+
+    def part_of(self, name: str) -> str:
+        """The style's part a player plays: its own, or the one it was swapped in for."""
+        return next((part for part, swaps in self.swaps.items() if name in swaps), name)
 
     def colours_for(self, symbol: str) -> tuple:
         key = symbol if symbol in self.colours else symbol.upper() if symbol.upper() in self.colours else "*"
@@ -252,6 +262,7 @@ SHANTY = _def(
     options={"intro": {"voice": 0.6, "lead": 0.4}, "alone": 0.7, "stops": 0.15, "breakdown": 0.3, "lift": 0.2,
              "ending": {"cold": 0.4, "ring": 0.3, "repeat": 0.3}, "entrances": 0.5,
              "backing": {"gang": 0.9, "echo": 0.1}},
+    swaps={"concertina": {"accordion": 0.3}},  # a crew's squeezebox is sometimes an accordion: its bass buttons' oom-pah
 )
 
 SONGWRITER = _def(
@@ -516,6 +527,19 @@ def coin(material: str, what: str, drift=None) -> float:
     return x % 1.0
 
 
+def player(sdef: StyleDef, part: str, parent: dict, material: str) -> str:
+    """Who plays one of the style's parts in a rendition: its own player, or one the style may swap in for it
+    (the shanty's squeezebox is sometimes an accordion), fixed by the machine and the parent; a lineage keeps
+    the player it had."""
+    swaps = sdef.swaps.get(part)
+    if not swaps:
+        return part
+    had = next((who for who in (part, *swaps) if who in parent), None)
+    if had is not None:
+        return had
+    return pick({part: 1.0 - sum(swaps.values()), **swaps}, coin(material, f"swap:{part}"))
+
+
 def pick(weights: dict, u: float) -> str:
     total = sum(w for w in weights.values() if w > 0)
     if total <= 0:
@@ -663,7 +687,8 @@ def choose_style(out: dict, ctx, forced: str | None = None, arrange: dict | None
         was = dict(ctx.parent.band.lineup)
         drift = ctx.drift.view("slow") if ctx.drift is not None else {}
         lineup = {}
-        for inst, gain in sdef.lineup.items():
+        for part, gain in sdef.lineup.items():
+            inst = player(sdef, part, was, material)
             own = gain * 2 ** (0.3 * c.id(f"gain:{inst}")) * (1 + 0.25 * c.id(f"balance:{inst}") * drift.get("balance", 0.0))
             g = was[inst] + PULL * (own - was[inst]) if inst in was else own
             lineup[inst] = round(max(0.5 * gain, min(1.5 * gain, g)), 2)

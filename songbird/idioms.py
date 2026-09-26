@@ -388,7 +388,8 @@ DEFAULT_PARTS = {  # for an instrument the style doesn't know (one added to the 
 def plan_style(ctx: StyleContext) -> None:
     """Decide, for every section, what each of the style's players does there."""
     sdef = ctx.sdef
-    leads = [x for x in sdef.leads if ctx.on(x)] or [x for x in ctx.lineup if family(x) not in PERCUSSION + ("bass",)]
+    leads = [x for x in (sdef.playing(x, ctx.lineup) for x in sdef.leads) if ctx.on(x)] \
+        or [x for x in ctx.lineup if family(x) not in PERCUSSION + ("bass",)]
     refrains = [i for i, s in enumerate(ctx.sections) if s.role == "refrain"]
     breaks = turns = verses = 0
     for i, s in enumerate(ctx.sections):
@@ -414,7 +415,7 @@ def plan_style(ctx: StyleContext) -> None:
         for inst in ctx.lineup:
             if inst in parts:
                 continue
-            table = sdef.parts.get(inst) or DEFAULT_PARTS.get(family(inst), {})
+            table = sdef.parts.get(inst) or sdef.parts.get(sdef.part_of(inst)) or DEFAULT_PARTS.get(family(inst), {})
             spec = next((table[k] for k in keys if k in table), "")
             idiom = idiom_of(spec, b)
             if idiom:
@@ -1583,7 +1584,10 @@ def shape_plan(ctx: Context, style, plan: Plan, rhythm, pads, chords_first) -> N
                 plan.entrances[(0, p)] = starts[1]
     if style.alone and len(verses) >= style.alone:
         i = verses[style.alone - 1]
-        with_ = style.alone_with if style.alone_with in sections[i].parts or style.alone_with in chords_first_all(ctx) else ""
+        alone_with = style.alone_with
+        if alone_with and getattr(ctx, "sdef", None) is not None:  # or whoever the style swapped in for it
+            alone_with = ctx.sdef.playing(alone_with, ctx.lineup)
+        with_ = alone_with if alone_with in sections[i].parts or alone_with in chords_first_all(ctx) else ""
         sections[i].parts = {with_: sections[i].parts.get(with_) or "ring"} if with_ else {}
     if style.stops and len(verses) >= style.stops:
         plan.stops.add(verses[style.stops - 1])

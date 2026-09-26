@@ -267,6 +267,30 @@ def test_the_oompah_idiom_tells_an_accordion_which_hand_but_not_a_concertina(mon
         assert score.part(part) and arts == want, (part, arts)
 
 
+def test_the_shantys_squeezebox_is_sometimes_an_accordion_and_a_lineage_keeps_it():
+    from dataclasses import replace
+    from pathlib import Path
+
+    from songbird import genome as G
+    from songbird import style as S
+    from songbird.realize import choose_params, realize
+
+    picks = [S.player(S.SHANTY, "concertina", {}, f"machine {k}|parent|shanty") for k in range(2000)]
+    assert 0.26 < picks.count("accordion") / len(picks) < 0.34 and set(picks) == {"accordion", "concertina"}
+    assert S.player(S.SHANTY, "concertina", {"accordion": 1.0}, "any") == "accordion"
+    assert S.player(S.SHANTY, "concertina", {"concertina": 1.0}, "any") == "concertina"
+    assert S.player(S.SHANTY, "fiddle", {}, "any") == "fiddle"
+    g = G.load(Path(__file__).parent.parent / "songs" / "h-now-its-by-you.json")
+    p = choose_params(g, style="shanty", arrange={"alone": 0})
+    lineup = {("accordion" if k == "concertina" else k): v for k, v in p.band.lineup.items()}
+    child = choose_params(g, replace(p, band=replace(p.band, lineup=lineup)), style="shanty", arrange={"alone": 0})
+    assert "accordion" in child.band.lineup and "concertina" not in child.band.lineup
+    score = realize(g, child)
+    assert not score.part("concertina")
+    assert {"bass", "chord"} <= {n.art for n in score.part("accordion")}  # the concertina's oom-pah, on buttons
+    assert S.SHANTY.order(child.band.lineup)[0] == "accordion"  # in the concertina's place
+
+
 # --- the bellows ---------------------------------------------------------------------------------------
 
 
