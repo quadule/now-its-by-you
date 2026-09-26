@@ -183,12 +183,12 @@ def changelog(before: dict | None, record: dict) -> list[str]:
     lines = ["   changed: " + ("; ".join(out) if out else "none of key, tempo, form, band or singer")]
     for entry in (record.get("evolution") or {}).get("changes", []):
         if entry["what"] == "tune":
-            lines.append(f"   - tune {entry['change']}: {entry['about']} ({entry['why']})")
+            lines.append(f"   - the tune {entry['change']} {entry['about']}; why: {entry['why']}")
         else:
             what = f"{entry.get('from')} -> {entry.get('to')}" if entry.get("from") and entry.get("to") else \
                 (entry.get("to") or entry.get("from") or "")
-            lines.append(f"   - words {entry['change']}{' ' + entry['where'] if entry.get('where') else ''}"
-                         f"{': ' + what if what else ''} ({entry['why']})")
+            lines.append(f"   - the words, {entry['change']}{' ' + entry['where'] if entry.get('where') else ''}"
+                         f"{': ' + what if what else ''}; why: {entry['why']}")
     return lines
 
 
@@ -202,6 +202,7 @@ tones inside its note). docs/EVOLUTION.md explains how the tune and the words dr
 
 Regenerate everything (about ten minutes):  uv run python tools/evolution.py
 Redraw the pictures and this file only:      uv run python tools/evolution.py --no-render
+Finish an interrupted run:                   uv run python tools/evolution.py --keep
 Any one of them by hand, e.g. the second generation:
     uv run songbird render songs/h-now-its-by-you.json --machine fictional:hare --date 2027-05-08 \\
         --parent renders/production/evolution/lineage/1-wren.json --out renders/production/evolution/lineage/2-hare.flac
@@ -244,6 +245,7 @@ def main(argv=None) -> int:
     parser.add_argument("--out", default=str(OUT))
     parser.add_argument("--only", choices=("lineage", "timeline", "own"), nargs="+")
     parser.add_argument("--no-render", action="store_true", help="draw and write up the records already there")
+    parser.add_argument("--keep", action="store_true", help="keep any rendition already rendered, render the rest")
     args = parser.parse_args(argv)
     out = Path(args.out)
     genome = genome_mod.load(SONG)
@@ -252,7 +254,8 @@ def main(argv=None) -> int:
 
     def make(path: Path, machine=None, date=None, parent=None) -> dict:
         path.parent.mkdir(parents=True, exist_ok=True)
-        record = json.loads(path.with_suffix(".json").read_text()) if args.no_render else \
+        done_already = args.no_render or (args.keep and path.with_suffix(".json").exists() and path.exists())
+        record = json.loads(path.with_suffix(".json").read_text()) if done_already else \
             render(SONG, path, machine, date, parent)
         lyric_sheet(genome, record, path)
         return record
