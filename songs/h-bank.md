@@ -334,7 +334,8 @@ Swap *forty* for fifty, sixty or thirty.
 > It went where he went, and it slept where he slept;
 > they buried it with him, the secret he kept.
 
-Swap *man* for girl, boy, nun or monk, the pronouns following.
+Swap *man* for girl, boy, kid, nun or monk, the pronouns following (they
+for the kid: "It went where they went, and it slept where they slept").
 
 **names** · tender · AABB · pairs with mind · by fable
 
@@ -381,12 +382,14 @@ Swap *his* for her.
 
 Swap *shepherd* for goatherd; *sheep* for goats.
 
-**skip** · plain · AABB · by fable
+**skip** · plain · AABB · by fable, the swaps the artist's
 
-> The girls in the yard turned it into a game;
+> The *girls* in the *yard* turned it into a game;
 > they skipped to it, counting; the rope always came
 > down early, and no one had heard how it ends.
 > They made up an ending and taught it to friends.
+
+Swap *girls* for boys or kids; *yard* for field.
 
 **tongue** · plain · ABCB · enjambed · by fable
 

@@ -202,10 +202,10 @@
         "by": "fable (A's mind verse, C's 'kept it alone in his head')",
         "slots": {
           "who": {
-            "noun": ["man", "girl", "boy", "nun", "monk"],
-            "he": ["he", "she", "he", "she", "he"],
-            "him": ["him", "her", "him", "her", "him"],
-            "his": ["his", "her", "his", "her", "his"]
+            "noun": ["man", "girl", "boy", "kid", "nun", "monk"],
+            "he": ["he", "she", "he", "they", "she", "he"],
+            "him": ["him", "her", "him", "them", "her", "him"],
+            "his": ["his", "her", "his", "their", "her", "his"]
           }
         },
         "lines": [
@@ -493,9 +493,13 @@
         "mood": "plain",
         "scheme": "AABB",
         "rarity": "common",
-        "by": "fable",
+        "by": "fable, the swaps the artist's",
+        "slots": {
+          "kids": ["girls", "boys", "kids"],
+          "yard": ["field", "yard"]
+        },
         "lines": [
-          "The girls in the yard turned it in-to a game;",
+          "The {kids} in the {yard} turned it in-to a game;",
           "they skipped to it, count-ing; the rope al-ways came",
           "down ear-ly, and no one had heard how it ends.",
           "They made up an end-ing and taught it to friends."

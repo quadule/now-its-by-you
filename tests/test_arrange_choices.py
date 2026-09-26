@@ -23,7 +23,8 @@ GOLDEN = Path(__file__).parent / "golden" / "h-words.sha256"
 def test_drawing_without_choices_is_as_it_was():
     """The words golden, over 600 draws with and without leanings, so the pin-free draw consumes chance
     exactly as before: computed before choices were added, and again when each refrain came to draw words
-    of its own (2026-09-26; every verse, bridge and tag drawn then was as before)."""
+    of its own and the skip and mind verses gained the artist's swaps (2026-09-26; the refrain alone moved
+    every verse, bridge and tag drawn as before)."""
     lean = A.Leanings(mood_weights={"light": 2.0, "dark": 0.5}, era_bias=-0.4, rarity_appetite=0.6,
                       vocabulary=frozenset({"sea", "ship", "fiddle", "bird"}))
     digest = hashlib.sha256()

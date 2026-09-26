@@ -262,3 +262,19 @@ def test_each_refrain_of_a_lineage_keeps_words_of_its_own(h):
             assert [r["words"]["question"] for r in (rounds[0], rounds[-1])] == ["made", "owns"]
     assert heads == {"knows", "so"} and len(questions) >= 3 and own > 24
 
+
+def test_a_verse_held_before_the_bank_gave_it_swaps_keeps_its_place(h):
+    """A lineage that held the skip verse before it swapped its girls and its yard keeps singing it, with
+    the machine's picks for the words it now swaps, rather than leaving verses out."""
+    parent = sing_on(h, "ada", "2027-01-05")
+    words = json.loads(json.dumps(parent.words))
+    at = 0 if words["verses"][0]["id"] != "skip" and all(v["id"] != "skip" for v in words["verses"]) else None
+    if at is None:
+        pytest.skip("this lineage already sings the skip verse")
+    words["verses"][at] = {"id": "skip", "slots": {}}
+    assert A.held_problem(h, parent.form, words)  # as held, it can't be sung: the verse has words to swap now
+    log: list = []
+    fitted = E.fit(h, parent.form, words, E.Picker(h), log)
+    assert [v["id"] for v in fitted["verses"]] == [v["id"] for v in words["verses"]]
+    assert set(fitted["verses"][at]["slots"]) == {"kids", "yard"} and not A.held_problem(h, parent.form, fitted)
+    assert any(e["change"] == "added" and e["where"] == f"verse {at + 1}" for e in log)
