@@ -157,6 +157,7 @@ const save = (key, value) => { try { localStorage.setItem(key, value); } catch (
 $("nudge").value = saved("songbird-nudge", "0");
 $("singer").value = saved("songbird-singer", "");
 $("mix").value = saved("songbird-mix", "melody");
+if (!$("mix").value) $("mix").value = "melody";  // a choice this page no longer has
 $("singer").addEventListener("input", () => { $("singer").classList.remove("missing"); save("songbird-singer", $("singer").value.trim()); });
 $("nudge").addEventListener("change", () => save("songbird-nudge", $("nudge").value));
 $("mix").addEventListener("change", () => save("songbird-mix", $("mix").value));
@@ -219,6 +220,9 @@ async function audio(mix = $("mix").value) {
     if (!r.ok) throw new Error((await r.json()).error || `no ${mix} guide`);
     S.digests[mix] = r.headers.get("X-Guide-Score");
     S.guides[mix] = await S.ctx.decodeAudioData(await r.arrayBuffer());
+  }
+  if (S.lyrics.guide && S.digests[mix] !== S.lyrics.guide) {  // the song was rendered again since the words loaded
+    throw new Error("The song has changed since this page loaded: reload the page.");
   }
   return S.guides[mix];
 }
@@ -423,7 +427,8 @@ $("record").onclick = async () => {
     return;
   }
   let guide;
-  try { guide = await audio(S.takeMix); await microphone(); } catch (e) { status(`<span class="warn">No microphone: ${e.message}</span>`); return; }
+  try { guide = await audio(S.takeMix); } catch (e) { status(`<span class="warn">${e.message}</span>`); return; }
+  try { await microphone(); } catch (e) { status(`<span class="warn">No microphone: ${e.message}</span>`); return; }
   start([guide], "recording");
 };
 $("stop").onclick = stop;

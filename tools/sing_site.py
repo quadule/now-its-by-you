@@ -146,7 +146,8 @@ def encode(wav: Path, mp3: Path, bitrate: str = BITRATE) -> dict:
     heard = decode(mp3, rate)
     drift = decode_offset(heard, rate, env)
     if abs(len(heard) - len(mono)) > 0.01 * rate or abs(drift) > 0.002:
-        raise SystemExit(f"{mp3.name} doesn't decode in time with its guide ({len(heard) - len(mono)} samples, {drift * 1000:.1f} ms)")
+        raise SystemExit(f"{mp3.name} doesn't decode in time with its guide "
+                         f"({len(heard) - len(mono)} samples, {drift * 1000:.1f} ms)")
     return {"file": mp3.name, "bytes": mp3.stat().st_size, "rate": rate, "samples": len(mono),
             "seconds": round(len(mono) / rate, 3), "frame": FRAME, "env": [round(float(v), 5) for v in env]}
 
@@ -170,7 +171,7 @@ def build(genome_path: Path, out: Path, rebuild: bool = False, bitrate: str = BI
 
     genome_path = Path(genome_path)
     genome = G.load(genome_path)
-    wavs = {mix: M.ensure(genome_path, genome, mix, rebuild=rebuild and mix == MIXES[0])[0] for mix in MIXES}
+    wavs = {mix: M.ensure(genome_path, genome, mix, rebuild=rebuild and mix == MIXES[0]).wav for mix in MIXES}
     score = M.full_paths(genome_path.stem)[1]
     guide = K.keep_guide(genome_path.stem, score)  # so takes sung to it can always be measured against it
     data = json.loads(score.read_text())

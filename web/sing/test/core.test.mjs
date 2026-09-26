@@ -5,7 +5,7 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 
 import {
-  CLICKS, assemble, autoSync, decodeOffset, envelope, firstFrame, pitchAt, shifted, tapLags, wavBytes, yin,
+  CLICKS, assemble, autoSync, countIn, decodeOffset, envelope, firstFrame, pitchAt, shifted, tapLags, wavBytes, yin,
 } from "../../../tools/karaoke.js";
 
 const RATE = 48000;
@@ -97,6 +97,14 @@ test("a calibration hears the taps after the count-in", () => {
   const lags = tapLags(chunks, RATE, when);
   assert.equal(lags.length, CLICKS.count - CLICKS.lead);
   assert.ok(lags.every(l => Math.abs(l - lag) < 0.006));
+});
+
+test("a line is counted in on the beats the pulse plays, not between them", () => {
+  const beats = Array.from({ length: 11 }, (_, k) => 0.5 * k); // 120 bpm
+  assert.deepEqual(countIn(beats, 3.75, 120), [2.0, 2.5, 3.0, 3.5]); // a pickup: in on the "and" of four
+  assert.deepEqual(countIn(beats, 4.003, 120), [2.0, 2.5, 3.0, 3.5]); // on the downbeat, a hair late: that beat is the entry
+  assert.deepEqual(countIn(beats, 0.8, 120), [-Infinity, -Infinity, 0.0, 0.5]); // too early for four: the rest lit at once
+  assert.deepEqual(countIn([], 3.75, 120), [1.75, 2.25, 2.75, 3.25]); // words from before the beats: the tempo
 });
 
 test("the singer's pitch, and none when there's only quiet", () => {

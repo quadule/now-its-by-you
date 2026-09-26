@@ -46,7 +46,8 @@ SCRIPTS = {"/karaoke.js": Path(__file__).with_suffix(".js"), "/recorder.js": Pat
 
 
 def lyrics(score: dict, title: str, tempo: float) -> dict:
-    """The guide's words, line by line, with every syllable's time and pitch."""
+    """The guide's words, line by line, with every syllable's time and pitch, and the beats
+    (seconds) its notes were placed on, to count each line in."""
     notes = sorted((n for n in score["notes"] if n["part"] == "voice"), key=lambda n: n["start"])
     lines, current, left = [], [], 0
     for n in notes:
@@ -64,6 +65,7 @@ def lyrics(score: dict, title: str, tempo: float) -> dict:
         "sections": [{"name": s, "start": a, "end": b} for s, a, b in score["sections"]],
         "lines": [{"section": section, "start": line[0]["start"], "end": line[-1]["end"], "syllables": line}
                   for section, line in lines],
+        "beats": [round(t, 4) for t, _ in score.get("beats", [])],
     }
 
 
@@ -87,9 +89,10 @@ class Karaoke(BaseHTTPRequestHandler):
     def send_json(self, data, code: int = 200) -> None:
         self.send(json.dumps(data).encode(), "application/json", code)
 
-    def guide(self, mix: str = "full") -> tuple[Path, Path]:
-        """A guide mix's WAV and the score every mix follows, rendered if missing or stale."""
-        return M.ensure(self.genome_path, self.genome, mix)
+    def guide(self, mix: str = "full") -> M.Mix:
+        """A guide mix's WAV, the score every mix follows and its digest, rendered if missing or
+        stale (from the genome file as it is now)."""
+        return M.ensure(self.genome_path, None, mix)
 
     def phrasing_path(self, who: str) -> Path:
         return ROOT / "renders" / "phrasing" / f"{self.genome_path.stem}.{who}.json"
@@ -116,17 +119,19 @@ class Karaoke(BaseHTTPRequestHandler):
         elif self.path in SCRIPTS:
             self.send(SCRIPTS[self.path].read_bytes(), "text/javascript; charset=utf-8")
         elif self.path == "/guide.wav":
-            mix = query.get("mix", M.DEFAULT)
+            mix = query.get("mix", "full")  # asked for without a mix, as before there was a choice: the full guide
             if mix not in M.MIXES:
                 self.send_json({"error": f"no guide mix {mix!r}"}, 404)
             else:  # which score it follows, so the take can say what it was sung to
-                wav, score = self.guide(mix)
-                self.send(wav.read_bytes(), "audio/wav", headers={"X-Guide-Score": K.digest(score)})
+                guide = self.guide(mix)
+                self.send(guide.wav.read_bytes(), "audio/wav", headers={"X-Guide-Score": guide.digest})
         elif self.path == "/singers":
             self.send_json(self.singers())
         elif self.path == "/lyrics.json":
-            score = json.loads(self.guide()[1].read_text())
-            self.send_json(lyrics(score, self.genome.title, choose_params(self.genome).tempo))
+            guide = self.guide()
+            score = json.loads(guide.score.read_text())
+            words = lyrics(score, self.genome.title, score.get("tempo") or choose_params(self.genome).tempo)
+            self.send_json({**words, "guide": guide.digest})
         elif self.path.startswith("/recordings/"):
             f = (ROOT / self.path.lstrip("/")).resolve()  # only a take, never a path out of recordings/
             if f.is_relative_to(K.RECORDINGS) and f.suffix == ".wav" and f.exists():
@@ -153,13 +158,17 @@ class Karaoke(BaseHTTPRequestHandler):
                 if not singer:
                     raise ValueError("a take needs the singer's name")
                 info = {k: float(query[k]) for k in ("shift_ms", "auto_ms", "device_ms") if k in query}
-                mix = query.get("mix", "full")  # a page from before the guides had a choice played the full one
+                mix, heard = query.get("mix"), query.get("guide", "")
                 if mix not in M.MIXES:
-                    raise ValueError(f"no guide mix {mix!r}")
-                score = self.guide()[1]  # every mix follows the full guide's score
-                if query.get("guide") and query["guide"] != K.digest(score):
+                    raise ValueError("a take must say which guide it was sung to: reload the page")
+                song = self.genome_path.stem
+                now = self.guide()  # every mix follows the full guide's score
+                if heard == now.digest:
+                    take = K.keep(song, singer, body, now.score, mix=mix, **info)
+                elif heard and K.guide_score(song, heard):  # sung to an earlier guide, which is still kept
+                    take = K.keep_sung(song, singer, body, heard, mix=mix, **info)
+                else:
                     raise ValueError("the guide changed while you sang (the song was rendered again): reload and sing it anew")
-                take = K.keep(self.genome_path.stem, singer, body, score, mix=mix, **info)
                 self.send_json({"path": take.rel, "who": take.who})
             elif url.path == "/use":
                 request = json.loads(body)

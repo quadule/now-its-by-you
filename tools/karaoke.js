@@ -87,6 +87,15 @@ export function drawLane(c, notes, lo, hi, pos, trail) {
 
 /* ---------- the words ---------- */
 
+export function countIn(beats, start, tempo, n = 4) {
+  // the times a line is counted in on: the last n beats before its first syllable (before it by
+  // more than the players' timing), so a line that starts on a pickup is counted on the beats the
+  // pulse plays, not between them; without the beats, n beats of the tempo back from the syllable
+  if (!beats || !beats.length) return Array.from({ length: n }, (_, k) => start - (n - k) * (60 / tempo));
+  const before = beats.filter(t => t < start - 0.05).slice(-n);
+  return [...Array(n - before.length).fill(-Infinity), ...before];
+}
+
 function escape(s) {
   return String(s).replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]);
 }
@@ -116,7 +125,8 @@ export class Reel {
       item.innerHTML = html;
       el.appendChild(item);
       return { el: item, line, gapStart, gap, syls: [...item.querySelectorAll(".syl")], fill: item.querySelector(".fill"),
-               dots: [...item.querySelectorAll(".dots i")], lead: item.querySelector(".gap") };
+               dots: [...item.querySelectorAll(".dots i")], lead: item.querySelector(".gap"),
+               count: countIn(lyrics.beats, line.syllables[0].start, lyrics.tempo) };
     });
     const end = document.createElement("div");
     end.className = "item done";
@@ -143,11 +153,10 @@ export class Reel {
     this.focusOn(f);
     const it = this.items[f];
     if (!it.line) return;
-    const beat = 60 / this.tempo;
     const first = it.line.syllables[0].start;
     if (it.fill) it.fill.style.width = Math.max(0, Math.min(100, (100 * (pos - it.gapStart)) / it.gap)) + "%";
     if (it.lead) it.lead.classList.toggle("spent", pos > first + 0.4); // the count-in has done its job
-    it.dots.forEach((d, k) => d.classList.toggle("on", pos >= first - (4 - k) * beat));
+    it.dots.forEach((d, k) => d.classList.toggle("on", pos >= it.count[k]));
     it.line.syllables.forEach((s, k) => {
       const next = it.line.syllables[k + 1];
       const until = next ? Math.min(s.end, next.start) : s.end;
