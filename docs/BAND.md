@@ -9,6 +9,11 @@ band, eight instruments built from physical models, arranged section by
 section so the song builds and breathes, with the choices a rendition can
 vary gathered in one place (`Params.band`).
 
+This is the seed's band, the **ballad**: the first of the styles a rendition
+can be played in (2026-09-26: a string band, country, gospel, a shanty, synth
+folk, lo-fi and more, each with its own lineup and idioms; docs/STYLES.md).
+With no style chosen a rendition is played exactly as described here.
+
 Nobody but the artist can listen. Everything below was judged by
 measurement against what real instruments and arrangements do, and a Fable
 advisor reviewed the band twice, measuring as it went; both reviews changed
@@ -193,6 +198,7 @@ clamped.
 | lead | whistle, fiddle, lute | whistle | who states the tune where nobody sings |
 | body | 0.8..1.25 | 1 | the instruments' size: a bigger body resonates lower |
 | maker | any integer | 0 | seeds the instruments themselves (body modes, string quirks, the drum's skin), so a machine keeps its band across renditions |
+| lineup | instrument -> 0..2 | empty | who plays when a style sets the band (any instrument synth/instruments.known() names), and each one's gain; empty: the eight fields above. Pattern, lead and the harp's picking are the ballad's; the other knobs apply to every style (docs/STYLES.md) |
 
 What a machine and the drift choose is below; it follows these suggested
 mappings: wear from file ages, brightness from the screen's hue and
@@ -238,8 +244,9 @@ the gains stayed within 0.70..1.44.
 ## Stems
 
 `render_stems()` returns a stem for each instrument that plays, named by role
-(lute, guitar, harp, bass, fiddle, whistle, drum, drone), then the voice and
-the choir: dry, stereo, all the same length, each fading over its last 0.3 s.
+(lute, guitar, harp, bass, fiddle, whistle, drum, drone, and in another style
+any instrument of its lineup: banjo, piano, kit...), then the voice and the
+choir: dry, stereo, all the same length, each fading over its last 0.3 s.
 Positions: bass centre, drum just right, guitar right and lute left of
 centre, harp a little left, fiddle further right and whistle left of centre;
 plucked instruments carry their bodies' two-microphone width (left/right

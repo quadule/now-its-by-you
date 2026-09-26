@@ -23,7 +23,7 @@ import numpy as np
 
 FEELS = ("straight", "swing", "shuffle", "twelve", "half", "double", "waltz", "six")
 INTROS = ("lead", "pad", "count", "voice")
-ENDINGS = ("ring", "rit", "cold", "fade", "amen", "repeat")
+ENDINGS = ("ring", "rit", "cold", "amen", "repeat")
 BACKINGS = ("oohs", "echo", "thirds", "gang")
 LINEAGE_MAX = 16  # generations of styles a record remembers
 
@@ -49,7 +49,7 @@ class Style:
     breakdown   the last refrain starts stripped to the rhythm and the band comes back at its third line
     bridge      "half": the bridge in half-time; "" as the style plays it
     lift        the last refrain a whole step up
-    ending      ring (the last chord rings), rit (a broad ritardando), cold (a dead stop), fade, amen (a
+    ending      ring (the last chord rings), rit (a broad ritardando), cold (a dead stop), amen (a
                 plagal IV-I with the backing voices' amen), repeat (the last line sung again); "" ring
     entrances   the first verse builds, instruments joining line by line
     backing     what the backing voices sing: oohs (chord tones), echo (answers at the ends of lines),
