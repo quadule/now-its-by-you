@@ -98,16 +98,84 @@ def pulse_times(f0: np.ndarray, sr: int, n: int) -> tuple[np.ndarray, np.ndarray
     return np.maximum(start, 0), exact - start, sr / f[at]
 
 
+@dataclass(frozen=True)
+class Texture:
+    """What the vocoder adds to WORLD's perfectly regular pulses (docs/THROAT.md, "Vocoder").
+
+    Against the voice it resynthesizes, a WORLD-style vocoder repeats every period exactly and lets
+    each pulse's upper harmonics arrive together: a click every period, where a voice's spread
+    through it. Each of these undoes part of that; the random ones draw on the rng synthesize() is
+    given, so a seed still gives one voice.
+
+    - spread: a fixed all-pass above spread_from Hz (full from twice that), the same for every pulse
+      and every song, whose group delay wanders along frequency (a smooth random curve, RMS this
+      fraction of the pulse's period): each pulse's upper harmonics arrive spread through part of
+      the period, still periodic.
+    - jitter: each voiced pulse moved by this fraction of its period (RMS), correlated jitter_corr
+      from one pulse to the next: the cycle-to-cycle irregularity that voice.pitch_track's slow
+      wobble can't give.
+    - scatter: a fresh random phase on every pulse (radians RMS, smooth over SCATTER_BW Hz), rising
+      in from harmonic scatter_from to scatter_to: upper harmonics that don't lock from one period to
+      the next. By harmonic, because what matters is where harmonics stop being heard one by one.
+    """
+
+    spread: float = 0.15  # the teacher's upper harmonics are about this spread (docs/THROAT.md)
+    spread_from: float = 1500.0
+    jitter: float = 0.0
+    jitter_corr: float = 0.5
+    scatter: float = 0.4  # radians: upper harmonics nearer the teacher's steadiness (docs/THROAT.md)
+    scatter_from: float = 8.0
+    scatter_to: float = 20.0
+
+
+TEXTURE = Texture()  # what the throat sings with
+PLAIN = Texture(spread=0.0, jitter=0.0, scatter=0.0)  # none: WORLD's own synthesis
+SPREAD_SEED, SPREAD_KNOT = 1, 500.0  # the fixed all-pass's curve: a random value every 500 Hz, linear between
+SCATTER_BW = 300.0  # Hz over which a pulse's random phase is smooth
+
+
+@lru_cache(maxsize=16)
+def _spread_curve(fft: int, sr: int, start: float) -> np.ndarray:
+    """The all-pass's phase per FFT bin, for a group delay of RMS one second above 2 x start Hz,
+    ramping in from start; zero mean above start, so the upper harmonics stay centred on the pulse.
+    The same curve at every sample rate."""
+    knots = np.arange(0.0, 24000.0 + SPREAD_KNOT, SPREAD_KNOT)
+    values = np.random.default_rng(SPREAD_SEED).standard_normal(len(knots))
+    hz = np.arange(fft // 2 + 1) * sr / fft
+    ramp = np.clip((hz - start) / start, 0.0, 1.0)
+    delay = np.interp(hz, knots, values)
+    full = (hz >= 2 * start) & (hz <= 12000.0)
+    delay = ramp * (delay - delay[full].mean()) / delay[full].std()
+    return -2.0 * np.pi * np.cumsum(delay) * (sr / fft)
+
+
+def _smooth_random(rng: np.random.Generator, rows: int, fft: int, sr: int) -> np.ndarray:
+    """Rows of unit-variance random values at knots SCATTER_BW Hz apart, linear between them, per FFT bin."""
+    hz = np.arange(fft // 2 + 1) * sr / fft
+    knots = np.arange(0.0, sr / 2 + SCATTER_BW, SCATTER_BW)
+    pos = hz / SCATTER_BW
+    lo = np.minimum(pos.astype(int), len(knots) - 2)
+    w = pos - lo
+    r = rng.standard_normal((rows, len(knots)))
+    return r[:, lo] * (1 - w) + r[:, lo + 1] * w
+
+
 def synthesize(f0: np.ndarray, sp: np.ndarray, ap: np.ndarray, sr: int, rng: np.random.Generator,
-               fft: int | None = None, chunk: int = 2048, source: np.ndarray | None = None) -> np.ndarray:
+               fft: int | None = None, chunk: int = 2048, source: np.ndarray | None = None,
+               texture: Texture | None = None) -> np.ndarray:
     """A voice from per-frame f0 (Hz, 0 unvoiced), log-power envelope (frames, MEL) and
     aperiodicity (frames, AP_MEL), all on FRAME steps. source: an optional log-power change to the
     voiced (periodic) part alone, on the envelope's grid: a different glottal source from the one
-    the envelope was learned with (see source_change)."""
+    the envelope was learned with (see source_change). texture: what breaks the pulses' regularity
+    (TEXTURE if None; PLAIN for none, WORLD's own synthesis)."""
+    from scipy.signal import lfilter
+
+    tx = TEXTURE if texture is None else texture
     fft = fft or (1024 if sr <= 24000 else 2048)
     frames = len(f0)
     n = int(round(frames * FRAME * sr))
-    y = np.zeros(n + fft)
+    half, lead = fft // 2, fft // 4
+    y = np.zeros(n + fft + half)  # runs `half` samples ahead of the output: room for what comes before a pulse
     at, frac, period = pulse_times(f0, sr, n)
     # each pulse's frame position, for interpolating the envelope and deciding voicing
     pos = np.clip(at / sr / FRAME, 0, frames - 1)
@@ -115,9 +183,17 @@ def synthesize(f0: np.ndarray, sp: np.ndarray, ap: np.ndarray, sr: int, rng: np.
     k1 = np.minimum(k0 + 1, frames - 1)
     w = (pos - k0)[:, None]
     voiced = np.where(w[:, 0] < 0.5, f0[k0] > 0, f0[k1] > 0)
+    if tx.jitter > 0 and len(at):  # voiced pulses moved, AR(1) from one to the next
+        c = tx.jitter_corr
+        steps = lfilter([np.sqrt(1.0 - c * c)], [1.0, -c], rng.standard_normal(len(at) + 32))[32:]
+        exact = at + frac + tx.jitter * period * steps * voiced
+        at = np.maximum(np.floor(exact).astype(int), 0)
+        frac = np.clip(exact - at, 0.0, None)
     bins = np.arange(fft // 2 + 1)
+    hz = bins * sr / fft
+    spread = _spread_curve(fft, sr, tx.spread_from) if tx.spread > 0 else None
     hann = 0.5 - 0.5 * np.cos(2 * np.pi * (np.arange(fft) + 1.0) / (fft + 1.0))
-    hann /= hann.sum()  # takes a pulse's DC away smoothly, as WORLD's DC remover does
+    hann /= hann.sum()  # takes a pulse's DC away smoothly over a window centred on it, as WORLD's DC remover does
     for c0 in range(0, len(at), chunk):
         sl = slice(c0, c0 + chunk)
         env = to_bins(sp[k0[sl]] * (1 - w[sl]) + sp[k1[sl]] * w[sl], fft, sr, log_power=True)
@@ -132,9 +208,15 @@ def synthesize(f0: np.ndarray, sp: np.ndarray, ap: np.ndarray, sr: int, rng: np.
                                                   log_power=False))
         # periodic: a minimum-phase pulse, delayed by its fraction of a sample, scaled for its period
         periodic = min_phase(0.5 * np.log(voiced_power * (1.0 - ratio) + 1e-16))
-        periodic *= np.exp(-2j * np.pi * bins * frac[sl, None] / fft)
+        turn = -2 * np.pi * bins * frac[sl, None] / fft
+        if spread is not None:
+            turn = turn + (tx.spread * period[sl, None] / sr) * spread[None, :]
+        if tx.scatter > 0:
+            harmonic = hz[None, :] * period[sl, None] / sr
+            rise = np.clip((harmonic - tx.scatter_from) / max(tx.scatter_to - tx.scatter_from, 1e-9), 0.0, 1.0)
+            turn = turn + tx.scatter * rise * _smooth_random(rng, len(rise), fft, sr)
+        periodic *= np.exp(1j * turn)
         periodic = np.fft.irfft(periodic, n=fft, axis=-1) * np.sqrt(period[sl, None]) * v
-        periodic -= periodic.sum(axis=1, keepdims=True) * hann
         # aperiodic: a period's worth of white noise through the aperiodic part of the envelope
         m = np.maximum(np.round(period[sl]).astype(int), 1)
         noise = rng.standard_normal((len(m), fft))
@@ -143,10 +225,16 @@ def synthesize(f0: np.ndarray, sp: np.ndarray, ap: np.ndarray, sr: int, rng: np.
         noise -= inside * (noise.sum(axis=1, keepdims=True) / m[:, None])  # no DC, as WORLD
         shaped = min_phase(0.5 * np.log(power * ratio + 1e-16)) * np.fft.rfft(noise, axis=-1)
         aperiodic = np.fft.irfft(shaped, n=fft, axis=-1)
-        response = periodic + aperiodic
+        # each response laid out from `half` samples before its pulse: the part of a delayed pulse that
+        # rings before it (which the FFT wraps to the end) back where it belongs, then the pulse's DC
+        # taken away over the window centred on it
+        response = np.zeros((len(m), fft + half))
+        response[:, half - lead: half - lead + fft] = np.roll(periodic, lead, axis=1)
+        response[:, half:] += aperiodic
+        response[:, :fft] -= periodic.sum(axis=1, keepdims=True) * hann
         for j, start in enumerate(at[sl]):
-            y[start : start + fft] += response[j]
-    return y[:n]
+            y[start : start + fft + half] += response[j]
+    return y[half : half + n]
 
 
 ROLES = ("sil", "breath", "onset", "vowel", "coda")
@@ -375,6 +463,27 @@ def warp(values: np.ndarray, factor: float) -> np.ndarray:
     return values[:, lo] * (1 - f) + values[:, hi] * f
 
 
+SHARPEN = 1.5  # how far sing() pushes a predicted envelope's formants from its trend (1 leaves it; docs/THROAT.md)
+
+
+def sharpen(sp: np.ndarray, amount: float, width: int = 17) -> np.ndarray:
+    """A log-power envelope on the mel grid with its peaks and valleys pushed `amount` times as far
+    from its own trend (a Hann over `width` grid points), each frame's power kept. A network's
+    envelope is an average, and averages flatten the formants a voice has."""
+    if abs(amount - 1.0) < 1e-6:
+        return sp
+    from scipy.ndimage import convolve1d
+
+    k = np.hanning(width + 2)[1:-1]
+    trend = convolve1d(sp, k / k.sum(), axis=1, mode="nearest")
+    out = trend + amount * (sp - trend)
+    df = np.gradient(grid(sp.shape[1]))  # Hz each point stands for
+    top = sp.max(axis=1, keepdims=True)
+    before = np.log(np.exp(sp - top) @ df)
+    after = np.log(np.exp(out - top) @ df)
+    return out + (before - after)[:, None]
+
+
 # ---- singing: our schedule, pitch and dynamics through the learned throat ---------------------------
 
 RATE = 24000  # the throat sings at its training data's rate; the result is resampled to the mix's
@@ -461,6 +570,7 @@ def sing(notes, sr: int, voice, seed: int = 0, lexicon: dict | None = None, mix:
     if isinstance(mix, str) and mix.startswith("machine:"):  # a singer of its own, drawn for this pitch
         mix = machine_mix(int(mix.split(":", 1)[1]), float(sung), net)
     sp, ap = predict(net, t, np.log(f0), timbre(net, parse_mix(mix), sung), gv=gv)
+    sp = sharpen(sp, SHARPEN)
     factor = voice.tract / TRACT
     sp, ap = warp(sp, factor), warp(ap, factor)
     times = np.arange(n) * FRAME

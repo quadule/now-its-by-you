@@ -33,6 +33,88 @@ def test_voiced_frames_ring_at_their_pitch_and_unvoiced_ones_are_noise():
     assert peak < 6.0  # no harmonic lines in noise
 
 
+def test_a_pulses_dc_is_taken_away_around_it_not_after_it():
+    sr = 24000
+    f0 = np.where((np.arange(300) >= 100) & (np.arange(300) < 200), 180.0, 0.0)
+    sp = np.where(f0[:, None] > 0, -6.0, -40.0) * np.ones((300, 128))  # silent where unvoiced
+    y = T.synthesize(f0, sp, np.full((300, 32), 0.001), sr, np.random.default_rng(0))
+    voiced = y[int(0.5 * sr): int(1.0 * sr)]
+    assert abs(voiced.mean()) < 1e-3 * np.abs(voiced).max()
+    after = y[int(1.03 * sr): int(1.2 * sr)]  # WORLD's remover reaches half a window (21 ms) past the last pulse
+    assert np.abs(after).max() < 1e-3 * np.abs(voiced).max()
+
+
+def steady_voice(texture, seed=0, f0=200.0, frames=400):
+    """A second or two of one steady vowel-ish envelope through the vocoder, at 24 kHz."""
+    g = T.grid(128)
+    sp = -6.0 - 1.5 * np.log2(g / 500.0).clip(0) + 2.0 * np.exp(-0.5 * ((g - 700) / 120) ** 2)
+    return T.synthesize(np.full(frames, f0), np.tile(sp, (frames, 1)), np.full((frames, 32), 0.05), 24000,
+                        np.random.default_rng(seed), texture=texture)
+
+
+def band(y, lo, hi, sr=24000):
+    from scipy.signal import butter, sosfiltfilt
+
+    return sosfiltfilt(butter(6, [lo, hi], btype="bandpass", fs=sr, output="sos"), y)
+
+
+def test_texture_follows_the_seed():
+    busy = T.Texture(spread=0.15, jitter=0.005, scatter=0.5)
+    assert np.array_equal(steady_voice(busy, seed=3), steady_voice(busy, seed=3))
+    assert not np.array_equal(steady_voice(busy, seed=3), steady_voice(busy, seed=4))
+
+
+def test_spread_softens_the_click_but_keeps_the_spectrum_and_the_period():
+    plain = steady_voice(T.PLAIN)[4800:-4800]
+    spread = steady_voice(T.Texture(spread=0.2, jitter=0.0, scatter=0.0))[4800:-4800]
+    hf_plain, hf_spread = band(plain, 5000, 9000), band(spread, 5000, 9000)
+    crest = lambda y: np.abs(y).max() / np.sqrt(np.mean(y**2))  # noqa: E731
+    assert crest(hf_spread) < 0.75 * crest(hf_plain)
+    for lo, hi in ((300, 1000), (1000, 3000), (3000, 6000), (6000, 10000)):
+        assert abs(20 * np.log10(np.std(band(spread, lo, hi)) / np.std(band(plain, lo, hi)))) < 0.5
+    period = 24000 // 200  # still the same every period (the noise aside)
+    hf = hf_spread
+    r = np.dot(hf[:-period], hf[period:]) / np.dot(hf, hf)
+    assert r > 0.8
+
+
+def test_scatter_unlocks_the_upper_harmonics_from_one_period_to_the_next_but_not_the_lower():
+    y = steady_voice(T.Texture(spread=0.0, jitter=0.0, scatter=1.5))[4800:-4800]
+    period = 24000 // 200
+
+    def alike(x):
+        return np.dot(x[:-period], x[period:]) / np.dot(x, x)
+
+    assert alike(band(y, 200, 1000)) > 0.95
+    assert alike(band(y, 5000, 9000)) < 0.6
+
+
+def test_jitter_unsettles_the_upper_harmonics_more_than_the_lower():
+    y = steady_voice(T.Texture(spread=0.0, jitter=0.005, jitter_corr=0.0, scatter=0.0), frames=800)[4800:-4800]
+    z = steady_voice(T.PLAIN, frames=800)[4800:-4800]
+    period = 24000 // 200
+    # a period against the next: 25 us of jitter barely moves 0.1-1 kHz, and 3-6 kHz noticeably
+    lo = [np.corrcoef(band(s, 100, 1000)[:-period], band(s, 100, 1000)[period:])[0, 1] for s in (y, z)]
+    hi = [np.corrcoef(band(s, 3000, 6000)[:-period], band(s, 3000, 6000)[period:])[0, 1] for s in (y, z)]
+    assert lo[1] - lo[0] < 0.03 and hi[1] - hi[0] > 0.1
+
+
+def test_sharpening_deepens_the_formants_and_keeps_the_power():
+    g = T.grid(128)
+    sp = (-6.0 - 0.3 * np.log2(g / 500.0).clip(0) + 1.5 * np.exp(-0.5 * ((g - 700) / 150) ** 2)
+          + 1.0 * np.exp(-0.5 * ((g - 1800) / 250) ** 2))[None]
+    assert np.array_equal(T.sharpen(sp, 1.0), sp)
+    out = T.sharpen(sp, 1.5)
+    at = np.searchsorted(g, [700.0, 1200.0, 1800.0])
+    peaks = lambda s: (s[0, at[0]] - s[0, at[1]], s[0, at[2]] - s[0, at[1]])  # noqa: E731
+    assert all(b > 1.1 * a > 0 for a, b in zip(peaks(sp), peaks(out)))
+    k = np.hanning(19)[1:-1]
+    detrended = lambda s: s[0] - np.convolve(np.pad(s[0], 8, mode="edge"), k / k.sum(), mode="valid")  # noqa: E731
+    assert np.std(detrended(out)[10:-10]) > 1.15 * np.std(detrended(sp)[10:-10])
+    df = np.gradient(g)
+    assert abs(np.log(np.exp(out[0]) @ df) - np.log(np.exp(sp[0]) @ df)) < 1e-9
+
+
 def test_a_louder_envelope_is_louder_by_as_much():
     f0 = np.full(300, 180.0)
     ap = np.full((300, 32), 0.05)

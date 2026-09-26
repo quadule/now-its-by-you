@@ -64,7 +64,7 @@ No recording of any person was used.
 
 | | Result |
 |---|---|
-| Vocoder: our numpy WORLD against pyworld's, same features | equal level (±0.2 dB per frame); log-mel distance from the original 5.9 dB vs WORLD's 5.3 |
+| Vocoder: our numpy WORLD against pyworld's, same features | equal level (±0.2 dB per frame); log-mel distance from the original 5.9 dB vs WORLD's 5.3 (since the DC fix below, 3.7 against WORLD's 4.0 on house singers) |
 | Features: 128/32-point mel grids against WORLD's full envelope | no measurable loss (5.30 vs 5.31 dB) |
 | Pitch of the corpus | 98% of notes within 50 cents |
 | Alignment | every note's vowel found; 93% where the note is sung (first 14 segments) |
@@ -153,3 +153,150 @@ So most of what is left is in the network and the delivery, not the vocoder.
   (up to six, the parent's first) sings in its own voice. An ancestor that sang with the formant
   singer is heard as a throat singer of its own, drawn from its id.
 - *While the formant singer is the default, none of this changes anything.*
+
+## Vocoder (2026-09-26)
+
+The artist: "I still want to make the voice less robotic (we don't need to *try* to make it sound
+synthetic, i'm confident there will always be an uncanny valley)." A WORLD-style vocoder is the
+classic source of a robotic buzz, so before changing ours I measured what it loses against the
+voice it resynthesizes. `tools/throat/vocoder_eval.py` does it on copy synthesis of 20 house-singer
+segments (two per singer, 12 s each, WORLD features through `synthesize`, against SoulX's
+original), with the same measures on every signal:
+- how alike consecutive periods are per band, once aligned (periodicity, as an HNR);
+- how steady each harmonic's phase stays from one period to the next (coherence);
+- how much of a band's energy falls in the loudest quarter of each period, and how peaky the
+  band is (excess kurtosis);
+- levels per band, a log-mel distance, UTMOS and DNSMOS.
+
+A Fable review checked the diagnosis and the plan before any change, and its experiments shaped
+two of them.
+
+### What was lost
+
+- **A bug.** The DC remover took each pulse's DC away over the 43 ms after it instead of
+  around it, as WORLD's does. It left a slow wobble under the voice and a bump after every
+  phrase's last pulse: most of copysynth.py's log-mel distance, which is dominated by its lowest
+  band. Little of it was audible after sing()'s 60 Hz high-pass.
+- **A click every period.** WORLD's pulses are minimum phase, so each pulse's upper harmonics
+  arrive together. The teacher's 4-8 kHz energy is spread through the period: 46% of it in the
+  loudest quarter of each period against our 61%. Its excess kurtosis at 5-8 kHz is 1.4 against
+  our 3.1.
+- **Upper harmonics locked from period to period.** Above 4 kHz ours was 1.3-1.7 dB more
+  periodic than the teacher and each harmonic's phase step steadier (coherence .60 against .56 at
+  4-6 kHz).
+- **Too periodic below 4 kHz as well** (2.5-4 dB): what cycle-to-cycle jitter would fix, but see
+  below.
+- **Flattened formants in the learned engine.** A network's envelope is an average. On its two
+  held-out segments the house model's envelope rises and falls 1.9 dB around its own trend
+  (RMS, 200 Hz-5 kHz); the natural envelope does 3.3 dB (3.1 averaged over 25 ms, all a 5 ms
+  network can be asked for). The predicted aperiodicity is right: within 0.3 dB of D4C's in
+  every band.
+- **Not lost:**
+  - The aperiodicity's resolution. D4C estimates aperiodicity at knots 3 kHz apart, so the 32
+    mel points are already finer than their source. The feature grid needn't change and
+    nothing needs retraining.
+  - The timing of the noise. The teacher's high band is *less* bursty than ours, not more, so
+    pitch-synchronous noise shaping would have gone the wrong way.
+  - Onsets and offsets: the same steps in level at voicing boundaries.
+  - Levels above 4 kHz: within 0.6 dB.
+- **Left alone.** Below 4 kHz every resynthesis, pyworld's included, is 1.2-2.1 dB louder than
+  the teacher, the most at 0-1 kHz. It's WORLD's own analysis bias, and it grows with pitch: on a
+  synthetic voice Fable measured +0.3 dB at 0-1 kHz at 150 Hz and +2 dB at 350 Hz. A fixed
+  correction would be wrong for every voice but the average, and 2 dB of warmth isn't what
+  "robotic" means.
+
+### What changed
+
+All of it is in `songbird/synth/throat.py`; `synthesize()` keeps its signature and a seed still
+gives one voice.
+
+1. **The DC remover is centred on each pulse,** with room laid out before the pulse.
+2. **Spread (`Texture.spread` 0.15).** A fixed all-pass whose group delay wanders along frequency
+   by 15% of each pulse's period (RMS), from 1.5 kHz, full above 3 kHz. It's the same for every
+   pulse and every song (MELP's pulse dispersion, in effect). A pulse's upper harmonics now
+   arrive spread through part of the period, still periodic. It's scaled to the period because
+   a fixed delay smeared the altos and hardly touched the basses.
+3. **Scatter (`Texture.scatter` 0.4).** A fresh random phase on every pulse (radians, smooth over
+   300 Hz), rising in from harmonic 8 to 20. That's where harmonics stop being heard one by one,
+   and it unlocks them from period to period.
+4. **Sharpening (`sharpen`, `SHARPEN` 1.5, in `sing()` only).** A predicted envelope's peaks and
+   valleys are pushed 1.5 times as far from its own trend (a Hann over 17 mel points), each
+   frame's power kept: 1.9 dB of formant contrast becomes 2.6.
+
+`throat.PLAIN` is WORLD's own synthesis, for comparison. `tools/throat/vocoder_eval.py
+--variant NAME key=value` tries other settings.
+
+### The numbers
+
+Copy synthesis, 20 house-singer segments (teacher / old vocoder / new):
+
+| | Teacher | Old | New |
+|---|---|---|---|
+| 4-8 kHz energy in the loudest quarter of each period | .46 | .61 | .52 |
+| above 8 kHz | .41 | .53 | .45 |
+| excess kurtosis 3-5 kHz / 5-8 kHz | 0.8 / 1.4 | 1.5 / 3.1 | 1.1 / 1.2 |
+| periodicity 4-6 kHz (dB) | 1.0 | 2.5 | 1.7 |
+| coherence 4-6 / 6-8 / 8+ kHz | .556 / .474 / .400 | .603 / .519 / .441 | .585 / .499 / .425 |
+| log-mel distance (copysynth.py's) | | 4.53 dB | 3.68 dB (pyworld 4.04) |
+| the same high-passed at 50 Hz | | 3.26 dB | 3.17 dB |
+| UTMOS | 2.08 | 1.92 | 1.98 |
+| DNSMOS SIG / OVRL | 3.21 / 2.94 | 3.19 / 2.90 | 3.18 / 2.89 |
+
+- The UTMOS gain is almost all the spread: +0.065 ± 0.016 paired, better on 18 of 20 segments.
+  The scatter adds +0.003.
+- DNSMOS is flat within its noise here, and a little lower in the learned engine (below).
+  DNSMOS SIG is a speech enhancer's distortion score, so the lower figure may count added phase
+  irregularity as distortion. That's a reading, not a finding.
+
+The learned engine singing H's refrain and seed verses (122 s, dry, seed 1). The house model is
+the one to judge; model-v1, the Eleven benchmark, was listened to only:
+
+| | UTMOS | DNSMOS SIG / OVRL | Words misheard | 4-8 kHz in the loudest quarter | kurtosis 5-8 kHz |
+|---|---|---|---|---|---|
+| house model, plain vocoder | 1.72 | 3.22 / 2.63 | 14.2% | .79 | 4.0 |
+| + spread and scatter | 1.80 | 3.19 / 2.60 | 14.2% | .69 | 2.3 |
+| + sharpening 1.5 (new) | 1.89 | 3.17 / 2.59 | 12.8% | .65 | 2.1 |
+| v1, plain | 1.92 | 3.18 / 2.53 | 11.9% | .70 | 2.9 |
+| v1, new | 2.04 | 3.17 / 2.52 | | .62 | 2.2 |
+
+The listening pair below (the vocoder as it was against the new one, loudness-matched) scores
+UTMOS 1.74 against 1.88, DNSMOS SIG 3.19 against 3.18.
+
+The learned engine is buzzier than copy synthesis: .79 of its high band falls in the loudest
+quarter of each period, where the teacher has .46. The vocoder changes close about 40% of that
+gap. What remains is the model's smooth envelope, without the frame-to-frame flutter of a
+real one (2.7 dB per frame against 4.1). The vocoder costs no more time: 30 s of voice in about
+a second, and H's two minutes sing in 6-8 s with the network.
+
+### Tried and left out
+
+- **Cycle-to-cycle jitter** (`Texture.jitter`, kept at 0). At 0.4-0.5% of the period it brought
+  the lower bands' periodicity toward the teacher's and UTMOS up in the learned render (+0.014).
+  But it cost DNSMOS (SIG −0.013 in copy synthesis) and did nothing for UTMOS in copy synthesis.
+  voice.pitch_track already has a slow 0.3% wobble.
+- **Per-pulse level flutter** (1-2 dB, above 1 kHz), standing in for a real envelope's
+  frame-to-frame flutter. UTMOS fell (2.04 to 2.00 at 1 dB, 1.94 at 2 dB) and DNSMOS with it.
+- **A fixed spectral tilt** fitted to the mean 0-1 kHz excess. It moved the levels onto the
+  teacher's but UTMOS didn't follow, and the bias depends on pitch (above).
+- **Interpolating the grid in power instead of log power.** It recovers 0.3 dB above 6 kHz but
+  cost UTMOS (−0.019 ± 0.004), and it would change the space the model is trained in.
+- **Pitch-synchronous noise shaping.** It went the wrong way (above).
+- **A neural vocoder.** Not tried. A vocoder trained on spectral losses alone (DDSP, NSF, a Vocos
+  generator without its discriminator) can't learn the phase texture that is the buzz. A GAN on
+  2.4 hours of house singers wouldn't converge reliably in the few hours of shared GPU left
+  tonight. And it would meet the same gap between natural and predicted features that makes the
+  learned engine buzzier than copy synthesis.
+
+  If it's tried later, the design with a head start is a small network refining this vocoder's
+  STFT, adversarially trained, fine-tuned on the house model's own predictions. It should ship
+  only if, from predicted features, it beats this vocoder by ear and on these measures.
+
+### For the lead and the artist
+
+- **Nothing to retrain.** The vocoder reads the same features, and the feature grids are fine.
+- **Measures and teacher.** Every measure above compares against SoulX, a neural vocoder's
+  texture, not a human's. Its high band is smoother than a person's voice probably is, so the
+  settings stop short of it rather than copying it.
+- **Listening files.** `renders/production/vocoder/` (README.txt there) has them:
+  original, old vocoder and new for three house segments, then the house model singing H
+  through the old vocoder and the new.
