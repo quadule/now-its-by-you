@@ -27,9 +27,10 @@ class FakeSite:
     """The admin API's shape, in memory: invites and the objects of a bucket."""
 
     def __init__(self):
-        self.invites, self.objects, self.deleted = {}, {}, []
+        self.invites, self.objects, self.deleted, self.times = {}, {}, [], {}
 
-    def add_take(self, token: str, stamp: str, name: str = "", mix: str = "melody", corrupt: bool = False) -> str:
+    def add_take(self, token: str, stamp: str, name: str = "", mix: str = "melody", corrupt: bool = False,
+                 uploaded: str = "2026-10-01T10:00:00.000Z") -> str:
         wav = io.BytesIO()
         sf.write(wav, np.zeros(48000 * 4), 48000, format="WAV", subtype="PCM_16")
         data = wav.getvalue()
@@ -41,6 +42,7 @@ class FakeSite:
                 "bytes": len(data), "sha256": hashlib.sha256(data + (b"x" if corrupt else b"")).hexdigest(), "take": 1}
         self.objects[f"{key}.wav"] = data
         self.objects[f"{key}.json"] = json.dumps(side).encode()
+        self.times[f"{key}.wav"] = self.times[f"{key}.json"] = uploaded
         return key
 
     def handler(site):  # noqa: N805  (the fake site, seen from its request handler)
@@ -88,7 +90,7 @@ class FakeSite:
                             continue
                         tid = key.rsplit(".", 1)[0]
                         t = takes.setdefault(tid, {"id": tid, "invite": key.split("/")[1]})
-                        t[key.rsplit(".", 1)[1]] = {"key": key, "size": len(data), "uploaded": "2026-10-01T10:00:00.000Z"}
+                        t[key.rsplit(".", 1)[1]] = {"key": key, "size": len(data), "uploaded": site.times[key]}
                     return self.reply(200, {"takes": list(takes.values())})
                 if path.startswith("take/"):
                     key = path[5:]
@@ -141,21 +143,24 @@ def test_fetch_keeps_takes_like_the_karaoke_and_empties_the_server(site, tmp_pat
     token = I.new(site.api, 1, "Ana from choir", 7, 30)[0]["token"]
     K.GUIDES.mkdir(parents=True)
     (K.GUIDES / f"h-now-its-by-you.{GUIDE}.score.json").write_text("{}")  # pinned when the site was built
+    (K.GUIDES / "release.896e20c8603e.html").write_text("<p>the release</p>")  # and the release as it read
     named = site.add_take(token, "20261001T100000Z", name="Ana María")
     site.add_take(token, "20261001T100500Z", name="", mix="full")  # no name: the invitation's note names the folder
     kept = I.fetch(site.api)
     assert len(kept) == 2 and not site.objects  # both here, and gone from the server
     by = {t.who: t for t in kept}
-    assert set(by) == {"ana-mar-a", "ana-from-choir"}
-    ana = by["ana-mar-a"]
+    noted = K.slug(f"Ana from choir ({token[:6]})")
+    assert set(by) == {"ana-maria", noted}
+    ana = by["ana-maria"]
     assert (ana.singer, ana.song, ana.guide, ana.use) == ("Ana María", "h-now-its-by-you", GUIDE, True)
-    assert ana.info["mix"] == "melody" and by["ana-from-choir"].info["mix"] == "full"
+    assert ana.info["mix"] == "melody" and by[noted].info["mix"] == "full"
     assert ana.info["source"] == "online" and ana.info["remote"] == named and ana.info["invite"] == token[:6]
-    assert ana.info["consent"]["agreed"] and ana.info["credit"] is True and by["ana-from-choir"].info["credit"] is False
+    assert ana.info["consent"]["agreed"] and ana.info["credit"] is True and ana.info["credit_as"] == "Ana María"
+    assert by[noted].info["credit"] is False and by[noted].info["credit_as"] == ""  # no name to credit
     assert (ana.info["shift_ms"], ana.info["device_ms"], ana.info["rate"]) == (12, 40, 48000)
     assert sf.info(ana.path).samplerate == 48000
-    assert K.takes("h-now-its-by-you", "ana-mar-a")[0].path == ana.path  # the karaoke and phrasing tools see it
-    assert "isn't in" not in capsys.readouterr().out  # its guide score is here to measure it against
+    assert K.takes("h-now-its-by-you", "ana-maria")[0].path == ana.path  # the karaoke and phrasing tools see it
+    assert "not in guides" not in capsys.readouterr().out  # its guide score and release are here
     assert I.fetch(site.api) == []  # nothing left to fetch
 
 
@@ -163,9 +168,10 @@ def test_fetch_keep_leaves_takes_and_a_later_fetch_clears_them(site, capsys):
     token = I.new(site.api, 1, "", 7, 30)[0]["token"]
     site.add_take(token, "20261001T100000Z")
     kept = I.fetch(site.api, keep=True)
-    assert kept[0].who == K.slug(f"singer-{token[:6]}")  # no name, no note: the invitation names the folder
+    assert kept[0].who == K.slug(f"singer ({token[:6]})")  # no name, no note: the invitation names the folder
     assert len(site.objects) == 2  # still on the server
-    assert "isn't in" in capsys.readouterr().out  # no guide score here: said so
+    out = capsys.readouterr().out
+    assert "guide score" in out and "release" in out and "not in guides" in out  # neither is here: said so
     assert I.fetch(site.api) == [] and not site.objects  # already here: only cleared from the server
     assert len(K.takes("h-now-its-by-you")) == 1
 
@@ -176,6 +182,44 @@ def test_fetch_one_invitation_under_a_chosen_name(site):
     site.add_take(b, "20261001T100000Z", name="Sam")
     kept = I.fetch(site.api, invite=a, singer="Test Singer")
     assert [t.who for t in kept] == ["test-singer"] and len(site.objects) == 2
+
+
+def test_different_people_never_share_a_folder(site):
+    a, b, c, d, e = (inv["token"] for inv in I.new(site.api, 5, "choir, Tuesday", 7, 30))
+    K.keep_sung("h-now-its-by-you", "Milo", b"RIFF-here", GUIDE)  # sung here, in the karaoke
+    ja = site.add_take(a, "20261001T100000Z", name="Jo")
+    jb = site.add_take(b, "20261001T100100Z", name="Jo")  # someone else called Jo
+    ja2 = site.add_take(a, "20261001T100200Z", name="Jo")  # the first Jo again
+    milo = site.add_take(c, "20261001T100300Z", name="Milo")  # not the Milo who sang here
+    blank = site.add_take(d, "20261001T100400Z")  # two who gave no name, from invitations with one note
+    blank2 = site.add_take(e, "20261001T100500Z")
+    odd = site.add_take(e, "20261001T100600Z", name="!!!")
+    akemi = site.add_take(e, "20261001T100700Z", name="明美")
+    by = {t.info["remote"]: t.who for t in I.fetch(site.api)}
+    assert by[ja] == by[ja2] != by[jb] and "jo" in (by[ja], by[jb])
+    assert {by[ja], by[jb]} - {"jo"} <= {K.slug(f"Jo ({a[:6]})"), K.slug(f"Jo ({b[:6]})")}
+    assert by[milo] == K.slug(f"Milo ({c[:6]})")
+    assert by[blank] == K.slug(f"choir, Tuesday ({d[:6]})") != by[blank2] == K.slug(f"choir, Tuesday ({e[:6]})")
+    assert by[odd] == by[blank2]  # a name no folder can be made of is no name: the same invitation, the same singer
+    assert by[akemi] == "明美"
+
+
+def test_the_admin_token_travels_only_over_https(site):
+    with pytest.raises(SystemExit, match="https"):
+        I.Site("http://songbird.quadule.com", ADMIN)
+    I.Site("https://songbird.quadule.com", ADMIN)
+    I.Site("http://localhost:8787", ADMIN)
+
+
+def test_what_never_arrived_whole_can_be_cleared(site, capsys):
+    token = I.new(site.api, 1, "", 7, 30)[0]["token"]
+    old = site.add_take(token, "20260101T100000Z", uploaded="2026-01-01T10:00:00.000Z")
+    new = site.add_take(token, "20261001T100000Z")  # the sidecar may still be on its way
+    del site.objects[f"{old}.json"], site.objects[f"{new}.json"]
+    assert I.fetch(site.api) == [] and len(site.objects) == 2
+    assert "--purge-incomplete deletes it" in capsys.readouterr().out
+    assert I.fetch(site.api, purge=True) == []
+    assert list(site.objects) == [f"{new}.wav"] and site.deleted == [f"{old}.wav"]
 
 
 def test_a_damaged_or_half_sent_take_stays_on_the_server(site, capsys):

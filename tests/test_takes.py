@@ -8,7 +8,8 @@ import takes as K  # noqa: E402  (tools/takes.py, dev-only but pure stdlib)
 
 def test_names_become_folders():
     assert K.slug("Milo") == "milo"
-    assert K.slug("  Ana María & co ") == "ana-mar-a-co"
+    assert K.slug("  Ana María & co ") == "ana-maria-co"
+    assert K.slug("Zoë") == "zoe" and K.slug("Ольга") == "ольга" and K.slug("明美") == "明美"
     assert K.slug("!!!") == "someone"
 
 

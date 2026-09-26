@@ -93,3 +93,14 @@ def test_the_karaoke_says_which_guide_a_take_heard(workspace, monkeypatch):
     finally:
         server.shutdown()
         server.server_close()
+
+
+def test_a_singer_who_asked_not_to_be_credited_is_not(workspace):
+    here = K.keep_sung("song", "Milo", b"RIFF-a", "abc123abc123")  # sung here: credited if the artist asks
+    assert karaoke.credited([here]) == "Milo"
+    yes = K.keep_sung("song", "Ana", b"RIFF-b", "abc123abc123", source="online", credit=True, credit_as="Ana María")
+    no = K.keep_sung("song", "Ana", b"RIFF-c", "abc123abc123", source="online", credit=False, credit_as="Ana María")
+    assert karaoke.credited([yes]) == "Ana María"  # the name they gave to be credited by
+    assert karaoke.credited([yes, no]) is None  # one take said no: no credit
+    nameless = K.keep_sung("song", "choir (ab12cd)", b"RIFF-d", "abc123abc123", source="online", credit=False, credit_as="")
+    assert karaoke.credited([nameless]) is None

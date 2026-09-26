@@ -69,6 +69,15 @@ def lyrics(score: dict, title: str, tempo: float) -> dict:
     }
 
 
+def credited(takes: list) -> str | None:
+    """The name a phrasing made from these takes may credit: the one the singer gave to be credited
+    by, and only if every take says they want it (a take sung here says nothing: the singer was in
+    the room to be asked); None if not."""
+    if not takes or not all(t.info.get("credit", True) for t in takes):
+        return None
+    return takes[-1].info.get("credit_as", takes[-1].singer) or None
+
+
 class Karaoke(BaseHTTPRequestHandler):
     genome_path: Path
     genome = None
@@ -105,7 +114,8 @@ class Karaoke(BaseHTTPRequestHandler):
                 "who": who,
                 "name": kept[-1].singer or who,
                 "takes": [{"path": t.rel, "use": t.use, "recorded": t.info.get("recorded", ""),
-                           "mix": t.info.get("mix", "full")} for t in kept],
+                           "mix": t.info.get("mix", "full"), "online": t.info.get("source") == "online"} for t in kept],
+                "credit": credited(kept) is not None,
                 "phrasing": phrasing.relative_to(ROOT).as_posix() if phrasing.exists() else None,
             })
         return out
@@ -185,7 +195,7 @@ class Karaoke(BaseHTTPRequestHandler):
                 if not chosen:
                     raise ValueError(f"{who} has no takes marked to use")
                 with contextlib.redirect_stdout(io.StringIO()):
-                    credit = chosen[-1].singer if request.get("credit") else None
+                    credit = credited(chosen) if request.get("credit") else None
                     phrasing, data, portrait = T.singer_phrasing(self.genome_path, self.genome, chosen, credit)
                     T.write(data, phrasing, self.phrasing_path(who))
                 self.send_json({"phrasing": self.phrasing_path(who).relative_to(ROOT).as_posix(),

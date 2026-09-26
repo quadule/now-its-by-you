@@ -13,10 +13,14 @@ songbird-sing-admin`, and is never printed.
 fetch keeps each take the way the karaoke keeps one (tools/takes.py): in
 recordings/<singer>/, beside a sidecar saying which guide mix was heard, pinned to
 the guide score it was sung to (tools/sing_site.py keeps that score in
-recordings/guides/ when it builds the site). The singer's folder is the name they
-gave, else the invitation's note, else singer-<the token's first six characters>.
-Then the take is deleted from the server, unless --keep: the recordings stay
-private and with the artist (docs/SING-ONLINE.md).
+recordings/guides/ when it builds the site, with the release as singers read it).
+The singer's folder is the name they gave, unless that folder already holds
+someone else's takes (another invitation's, or ones sung here), when the
+invitation's first six characters follow the name; with no name, the invitation's
+note and those characters, or singer-<them>. One person's takes never merge with
+another's by accident; --singer puts them where you say. Then the take is deleted
+from the server, unless --keep: the recordings stay private and with the artist
+(docs/SING-ONLINE.md).
 """
 
 from __future__ import annotations
@@ -39,12 +43,17 @@ import takes as K  # noqa: E402  (tools/takes.py)
 SITE = "https://songbird.quadule.com"
 SECRET = "songbird-sing-admin"  # its name in the artist's secrets tool
 TIMING = ("shift_ms", "auto_ms", "device_ms", "decode_ms", "out_ms", "in_ms")
+LOCAL = ("localhost", "127.0.0.1", "::1")
+STALE = 600  # seconds after which half a take on the server is left over, not still arriving
 
 
 class Site:
     """The site's admin API."""
 
     def __init__(self, url: str, token: str):
+        parts = urllib.parse.urlsplit(url)
+        if parts.scheme != "https" and not (parts.scheme == "http" and parts.hostname in LOCAL):
+            raise SystemExit(f"{url}: the admin token only travels over https (or plain http to this computer)")
         self.url = url.rstrip("/")
         self.token = token
 
@@ -128,13 +137,34 @@ def fetched() -> dict[str, K.Take]:
     return out
 
 
+def invites_in(folder: str) -> set:
+    """The invitations whose takes are in a singer's folder (None for takes sung here)."""
+    found = set()
+    for side in (K.RECORDINGS / folder).glob("*.json"):
+        try:
+            found.add(json.loads(side.read_text()).get("invite"))
+        except ValueError:
+            continue
+    return found
+
+
 def folder_name(info: dict, notes: dict, invite: str, singer: str | None) -> str:
-    """Whose takes these are, as their folder: --singer, the name they gave, the invitation's note, or its token."""
-    return singer or info.get("name") or notes.get(invite) or f"singer-{invite[:6]}"
+    """Whose takes these are, as the singer's name their folder is made from (takes.slug): --singer as
+    given; the name they gave, with the invitation after it if that folder holds anyone else's takes;
+    with no name (or none a folder can be made of), the invitation's note or "singer", and the invitation."""
+    if singer:
+        return singer
+    tag = invite[:6]
+    name = (info.get("name") or "").strip()
+    if name and K.slug(name) != "someone":
+        return name if invites_in(K.slug(name)) <= {tag} else f"{name} ({tag})"
+    return f"{notes.get(invite) or 'singer'} ({tag})"
 
 
-def fetch(site: Site, invite: str | None = None, keep: bool = False, singer: str | None = None, dry_run: bool = False) -> list:
-    """Every take waiting on the server (or one invitation's) into recordings/, then off the server."""
+def fetch(site: Site, invite: str | None = None, keep: bool = False, singer: str | None = None, dry_run: bool = False,
+          purge: bool = False) -> list:
+    """Every take waiting on the server (or one invitation's) into recordings/, then off the server.
+    purge: delete what's left of takes that never arrived whole (half a take, STALE seconds old)."""
     query = f"?invite={urllib.parse.quote(invite)}" if invite else ""
     waiting = site.call("GET", f"/api/admin/takes{query}")["takes"]
     notes = {inv["token"]: inv.get("note", "") for inv in site.call("GET", "/api/admin/invites")["invites"]}
@@ -147,7 +177,15 @@ def fetch(site: Site, invite: str | None = None, keep: bool = False, singer: str
                 remove(site, t)
             continue
         if "json" not in t or "wav" not in t:
-            print(f"{t['id']}: incomplete on the server (its {'sidecar' if 'wav' in t else 'WAV'} is missing), left there")
+            part = t.get("wav") or t.get("json")
+            uploaded = dt.datetime.fromisoformat(part["uploaded"].replace("Z", "+00:00"))
+            age = (dt.datetime.now(dt.timezone.utc) - uploaded).total_seconds()
+            if purge and age > STALE and not dry_run:
+                remove(site, t)
+                print(f"{t['id']}: never arrived whole (its {'sidecar' if 'wav' in t else 'WAV'} is missing): deleted")
+            else:
+                print(f"{t['id']}: incomplete on the server (its {'sidecar' if 'wav' in t else 'WAV'} is missing), left there"
+                      + ("" if age <= STALE else "; --purge-incomplete deletes it"))
             continue
         info = site.call("GET", f"/api/admin/take/{t['json']['key']}")
         who = folder_name(info, notes, t["invite"], singer)
@@ -161,13 +199,19 @@ def fetch(site: Site, invite: str | None = None, keep: bool = False, singer: str
             continue
         received = dt.datetime.fromisoformat(info["received"].replace("Z", "+00:00")).astimezone()
         extra = {k: info[k] for k in TIMING if k in info}
+        # credit_as: the name they gave, the only one they may be credited by, and only if they said so
         take = K.keep_sung(info["song"], who, wav, info["guide"], recorded=received.timetuple(),
                            mix=info["mix"], source="online", remote=t["id"], invite=t["invite"][:6], rate=info["rate"],
-                           credit=bool(info.get("credit")), consent=info.get("consent"), **extra)
-        pinned = K.guide_score(info["song"], info["guide"])
+                           credit=bool(info.get("credit") and info.get("name")), credit_as=info.get("name", ""),
+                           consent=info.get("consent"), **extra)
+        missing = []
+        if not K.guide_score(info["song"], info["guide"]):
+            missing.append(f"its guide score {info['guide']}")
+        if not (K.GUIDES / f"release.{(info.get('consent') or {}).get('text')}.html").exists():
+            missing.append(f"the release it was agreed under ({(info.get('consent') or {}).get('text')})")
         print(f"{take.rel}: {info['seconds']:.0f} s, {info['mix']} guide" +
-              ("" if pinned else f" (its guide score {info['guide']} isn't in {K.GUIDES.name}/ here: build the site on this "
-                                 "machine, or copy the score over, before measuring it)"))
+              (f" ({' and '.join(missing)} not in {K.GUIDES.name}/ here: build the site on this machine, "
+               "or copy them over)" if missing else ""))
         kept.append(take)
         if not keep:
             remove(site, t)
@@ -197,6 +241,8 @@ def main() -> None:
     f.add_argument("--singer", help="keep them under this singer's name, whatever they gave")
     f.add_argument("--keep", action="store_true", help="leave them on the server too")
     f.add_argument("--dry-run", action="store_true", help="say what would be fetched, and fetch nothing")
+    f.add_argument("--purge-incomplete", action="store_true",
+                   help=f"delete what's left of takes that never arrived whole (over {STALE // 60} minutes old)")
     r = sub.add_parser("revoke", help="close an invitation")
     r.add_argument("token")
     args = ap.parse_args()
@@ -207,7 +253,7 @@ def main() -> None:
     elif args.command == "list":
         listing(site)
     elif args.command == "fetch":
-        fetch(site, args.invite, args.keep, args.singer, args.dry_run)
+        fetch(site, args.invite, args.keep, args.singer, args.dry_run, args.purge_incomplete)
     else:
         revoke(site, args.token)
 

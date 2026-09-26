@@ -19,6 +19,7 @@ import json
 import re
 import shutil
 import time
+import unicodedata
 from dataclasses import dataclass, field
 from pathlib import Path
 
@@ -28,8 +29,10 @@ GUIDES = RECORDINGS / "guides"
 
 
 def slug(name: str) -> str:
-    """A singer's folder: their name in lowercase letters and digits, joined by hyphens."""
-    return re.sub(r"[^a-z0-9]+", "-", name.strip().lower()).strip("-") or "someone"
+    """A singer's folder: their name in lowercase letters and digits, joined by hyphens; accents
+    dropped (Zoë: zoe), letters of other scripts kept as they are."""
+    plain = "".join(c for c in unicodedata.normalize("NFKD", name) if not unicodedata.combining(c))
+    return re.sub(r"[\W_]+", "-", plain.strip().lower()).strip("-") or "someone"
 
 
 def digest(path: Path) -> str:

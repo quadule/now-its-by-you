@@ -339,8 +339,12 @@ function drawSingers() {
     el.className = "singer";
     el.innerHTML = `<div class="row"><strong></strong><span class="hint count"></span></div><ul></ul>
       <div class="row"><button class="make"></button>
-        <label class="check hint"><input type="checkbox" class="credit"> credit the name in it</label></div>
+        <label class="check hint"><input type="checkbox" class="credit"> <span class="creditNote">credit the name in it</span></label></div>
       <div class="portrait hint"></div>`;
+    if (!s.credit) {  // they asked not to be credited, or gave no name to be credited by
+      el.querySelector(".credit").disabled = true;
+      el.querySelector(".creditNote").textContent = "asked not to be credited";
+    }
     el.querySelector("strong").textContent = s.name;
     const using = s.takes.filter(t => t.use).length;
     el.querySelector(".count").textContent = `${s.takes.length} take${s.takes.length === 1 ? "" : "s"}` +
@@ -348,7 +352,7 @@ function drawSingers() {
     for (const t of s.takes) {
       const li = document.createElement("li");
       li.innerHTML = `<label class="check"><input type="checkbox"> <span></span></label><button class="small">▶ with the guide</button>`;
-      li.querySelector("span").textContent = `${when(t.recorded)}, ${HEARD[t.mix] || ""}`;
+      li.querySelector("span").textContent = `${when(t.recorded)}, ${HEARD[t.mix] || ""}${t.online ? ", online" : ""}`;
       const tick = li.querySelector("input");
       tick.checked = t.use;
       tick.onchange = async () => {
