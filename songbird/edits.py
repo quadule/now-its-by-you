@@ -16,8 +16,9 @@ keeps. An edit that can't be kept is left out and said why, never bent.
     mix.space, mix.width, mix.forward, mix.intimacy
     variants.<name>      a melody variant, once a rendition carries them (Params.variants)
     words.verse.<i>      {"id": verse, "slots": {slot: words}}, or just the verse: the i-th verse (from 0)
-    words.refrain.<i>    a couplet for the i-th refrain (never the last's: it always sings the canon)
-    words.refrain        {slot: words}: the refrain's once-a-song words
+    words.refrain.<i>    the i-th refrain's own words: {"id": couplet, "head": head, "slots": {slot: words}},
+                         any of the three, or just a couplet (never the last's: it always sings the canon)
+    words.refrain        {slot: words}: words for every refrain (while, then), unless one chooses its own
     words.bridge         {slot: words}: the bridge's once-a-song words
     words.bridge2        the second bridge's stanza
     words.tag            the tag's syllable
@@ -442,7 +443,7 @@ def pins(genome: Genome, form, edits: dict) -> tuple[dict, list[dict], list[str]
             if i >= counts["refrain"]:
                 problems.append(Problem(path, f"this shape sings {counts['refrain']} refrains, so it has no refrain {i + 1}"))
                 continue
-            chosen.setdefault("couplets", {})[i] = value
+            chosen.setdefault("refrains", {})[i] = dict(value) if isinstance(value, dict) else {"id": value}
         elif whole == "bridge2":
             if counts["bridge"] < 2:
                 problems.append(Problem(path, "this shape sings the bridge once, so it has no second stanza"))
@@ -453,9 +454,9 @@ def pins(genome: Genome, form, edits: dict) -> tuple[dict, list[dict], list[str]
                 problems.append(Problem(path, "this shape has no tag"))
                 continue
             chosen["tag"] = value
-        else:  # words.refrain, words.bridge: the once-a-song words
+        else:  # words.refrain, words.bridge: words for every refrain, the bridge's once-a-song words
             if not isinstance(value, dict):
-                problems.append(Problem(path, "the once-a-song words are chosen slot by slot"))
+                problems.append(Problem(path, "these words are chosen slot by slot"))
                 continue
             if not counts[whole]:
                 problems.append(Problem(path, f"this shape has no {whole}"))
@@ -581,12 +582,12 @@ def marks(genome: Genome, generated, generated_lyrics, final_lyrics, applied: li
             continue
         elif path.startswith("form."):
             was = generated_shape.get(path[5:])
-        elif path in ("words.refrain", "words.bridge"):  # once-a-song words: just the slots chosen
+        elif path in ("words.refrain", "words.bridge"):  # words for all: just the slots chosen, as first sung
             sung = _sung(generated_lyrics, path) or {}
             was = {k: sung.get(k) for k in value}
         elif path.startswith("words."):
-            was = _sung(generated_lyrics, path)
-            value = _sung(final_lyrics, path) or value
+            was = _sung(generated_lyrics, path, value, genome)
+            value = _sung(final_lyrics, path, value, genome) or value
         elif path.startswith("variants."):  # every variant the program chose was sung: dropping one changes it
             was = int(path[9:]) < len(getattr(generated, "variants", None) or ())
         elif path.startswith("band.") and path[5:] in instruments():  # a player's gain, in a lineup or of the eight
@@ -600,8 +601,9 @@ def marks(genome: Genome, generated, generated_lyrics, final_lyrics, applied: li
     return out
 
 
-def _sung(lyrics, path: str):
-    """What some words sing at a word edit's place: a verse's id and its slot words, a couplet's id..."""
+def _sung(lyrics, path: str, like=None, genome: Genome | None = None):
+    """What some words sing at a word edit's place: a verse's id and its slot words; a refrain's couplet,
+    or, for an edit that chose more of it (like), its couplet, head and the slot words chosen..."""
     if lyrics is None:
         return None
     match = WORDS.fullmatch(path)
@@ -611,7 +613,17 @@ def _sung(lyrics, path: str):
         i = int(index)
         if i >= len(sung):
             return None
-        return {"id": sung[i].id, "slots": dict(sung[i].slots)} if block == "verse" else sung[i].id
+        s = sung[i]
+        if block == "verse":
+            return {"id": s.id, "slots": dict(s.slots)}
+        if not isinstance(like, dict):
+            return s.id
+        out = {"id": s.id} if "id" in like else {}
+        if "head" in like:
+            out["head"] = s.head or (arrange_mod.refrain_heads(genome)[0] if genome is not None else None)
+        if "slots" in like:
+            out["slots"] = {k: s.slots.get(k) for k in like["slots"]}
+        return out
     if whole == "tag":
         return lyrics.tag
     bridges = [s for s in lyrics.sections if s.block == "bridge"]
@@ -642,8 +654,19 @@ def keep_words(genome: Genome, lyrics) -> dict:
     bridges = [s for s in lyrics.sections if s.block == "bridge"]
     for i, s in enumerate(verses):
         out[f"words.verse.{i}"] = {"id": s.id, "slots": dict(s.slots)}
-    for i, s in enumerate(refrains[:-1]):
-        out[f"words.refrain.{i}"] = s.id
+    for i, s in enumerate(refrains):  # each refrain's own words: what the rules leave it to choose
+        place = arrange_mod.refrain_place(genome, i, len(refrains), s.head)
+        head = s.head or arrange_mod.refrain_heads(genome)[0]
+        free = arrange_mod.head_words(genome, head)
+        keep = {"id": s.id} if i < len(refrains) - 1 else {}
+        if place["head"] is None:
+            keep["head"] = head
+        slots = {k: v for k, v in s.slots.items() if len(free.get(k, (None, None))) > 1
+                 and not (k == "question" and place["question"] is not None) and k not in arrange_mod.refrain_once(genome)}
+        if slots:
+            keep["slots"] = slots
+        if keep:
+            out[f"words.refrain.{i}"] = keep
     for block, sections in (("refrain", refrains), ("bridge", bridges)):
         once = {k: v for k, v in (sections[0].slots if sections else {}).items()
                 if k in rules.get(block, {}).get("once_per_song", ())}

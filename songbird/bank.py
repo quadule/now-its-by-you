@@ -11,6 +11,10 @@ once per block, so a name used twice in a verse agrees with itself. Options
 are written syllabified like any lyric, and check() makes sure every way a
 line can be sung fits its phrase's notes and can be pronounced.
 
+A refrain's head (its lines before the couplet) may be sung other ways: each
+of its "heads" is another set of lines on the same phrases, singing the
+refrain's own slots by name, and fixing any it wants sung as written.
+
 A line's focus word, the one the singer leans on, is marked *word* (whole
 word, hyphens inside are fine: *num-bers*, punctuation outside: *heart*.);
 the marks don't count as syllables and the singer, not the bank, reads them.
@@ -108,6 +112,37 @@ def ways(lines, slots: dict) -> int:
     return total
 
 
+def head_slots(head: dict, shared: dict, what: str = "a refrain head") -> dict:
+    """The slots one of a refrain's other heads sings: the refrain's own slots, by name, each held to its
+    one word where the head fixes it (a head sings the words it fixes as written)."""
+    names = slot_names(head["lines"])
+    fixed = head.get("fixed", {})
+    unknown = sorted(set(names) - set(shared))
+    if unknown:
+        raise ValueError(f"{what}: the refrain has no slots {unknown}")
+    stray = sorted(set(fixed) - set(names))
+    if stray:
+        raise ValueError(f"{what}: fixes {stray}, which its lines don't sing")
+    out = {}
+    for name in names:
+        spec = shared[name]
+        if name not in fixed:
+            out[name] = spec
+            continue
+        options = [{c: col[i] for c, col in spec.items()} if isinstance(spec, dict) else spec[i]
+                   for i in range(width(shared, name))]
+        if fixed[name] not in options:
+            raise ValueError(f"{what}: {fixed[name]!r} isn't one of the {name} slot's words")
+        i = options.index(fixed[name])
+        out[name] = {c: [col[i]] for c, col in spec.items()} if isinstance(spec, dict) else [spec[i]]
+    return out
+
+
+def head_ids(refrain: dict) -> list[str]:
+    """The refrain's heads by id: its own lines first, then its other heads."""
+    return [refrain.get("id", "refrain")] + [h["id"] for h in refrain.get("heads", [])]
+
+
 def check_block(lines, slots: dict, phrase_ids, phrases: dict, lexicon: dict | None, what: str) -> None:
     """Every way the lines can be sung fits its phrase and can be pronounced."""
     if len(lines) != len(phrase_ids):
@@ -174,6 +209,18 @@ def check(genome: Genome) -> dict:
     fixed_question = [unmarked(o) for o in turning.group(1).split("|")] if turning else []
     if refrain.get("slots", {}).get("question") != fixed_question:
         raise ValueError("the bank's question words differ from the fixed refrain's turning line")
+    heads = head_ids(refrain)
+    if len(set(heads)) != len(heads):
+        raise ValueError(f"refrain head ids repeat: {[i for i, n in Counter(heads).items() if n > 1]}")
+    for h in refrain.get("heads", []):
+        what = f"refrain head {h['id']}"
+        if len(h["lines"]) != len(head):
+            raise ValueError(f"{what}: {len(h['lines'])} lines where the refrain's head has {len(head)}")
+        check_block(h["lines"], head_slots(h, refrain.get("slots", {}), what), r_phrases[: len(head)],
+                    genome.phrases, lexicon, what)
+    for rule in ("head_first", "head_last"):
+        if rule in rules["refrain"] and rules["refrain"][rule] not in heads:
+            raise ValueError(f"rules name a {rule.replace('_', ' ')} the bank doesn't have")
     couplet_ids = [c["id"] for c in refrain["couplets"]]
     for c in refrain["couplets"]:
         check_block(c["lines"], c.get("slots", {}), r_phrases[len(head):], genome.phrases, lexicon, f"couplet {c['id']}")
@@ -208,6 +255,7 @@ def check(genome: Genome) -> dict:
         "rare": sum(v["rarity"] == "rare" for v in verses),
         "variants": sum(v["scheme"] != "AABB" or v.get("enjambed", False) for v in verses),
         "dated": sum(v.get("era") is not None for v in verses),
+        "refrain_heads": len(heads),
         "couplets": len(couplet_ids),
         "bridges": len(bridge_ids),
         "tag_syllables": len(bank["tag"]["syllables"]),

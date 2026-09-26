@@ -32,6 +32,7 @@ from pathlib import Path
 
 import numpy as np
 
+from . import arrange as arrange_mod
 from . import drift as drift_mod
 from . import edits as edits_mod
 from . import harvest, variation
@@ -1022,12 +1023,12 @@ def handed(v: Version) -> dict[tuple[str, int], bool]:
     for i, entry in enumerate(now.get("verses", [])):
         old = was.get("verses", [])
         out[("verse", i)] = i < len(old) and old[i] == entry
-    refrain, old_refrain = now.get("refrain", {}), was.get("refrain", {})
-    same_slots = refrain.get("slots") == old_refrain.get("slots")
-    couplets, old_couplets = refrain.get("couplets", []), old_refrain.get("couplets", [])
-    for i, entry in enumerate(couplets):
-        out[("refrain", i)] = same_slots and i < len(old_couplets) and old_couplets[i] == entry
-    out[("refrain", len(couplets))] = same_slots  # the last, which always sings the song's own last couplet
+    genome = v.context.genome
+    rounds = arrange_mod.rounds(genome, now) if now.get("refrain") else []
+    old_rounds = arrange_mod.rounds(genome, was) if was.get("refrain") else []
+    for i, entry in enumerate(rounds):  # the last as the last before, the others place by place
+        old = old_rounds[-1:] if i == len(rounds) - 1 else old_rounds[i: i + 1] if i < len(old_rounds) - 1 else []
+        out[("refrain", i)] = old == [entry]
     for j, entry in enumerate(now.get("bridge", [])):
         old = was.get("bridge", [])
         out[("bridge", j)] = j < len(old) and old[j] == entry
@@ -1192,7 +1193,9 @@ def word_options(ctx: Context, v: Version, block: str, index: int) -> dict:
     out = word_choices(ctx.genome, v.lyrics, block, index)
     out["path"] = (f"words.{block}.{index}" if block in ("verse", "refrain")
                    else "words.bridge2" if block == "bridge" and index == 1 else f"words.{block}")
-    out["slots_path"] = {"verse": out["path"], "refrain": "words.refrain", "bridge": "words.bridge"}.get(block)
+    out["slots_path"] = {"verse": out["path"], "refrain": out["path"], "bridge": "words.bridge"}.get(block)
+    for head in out.get("heads", []):
+        head["lines"] = [readable(line) for line in head.get("lines", [])]
     for choice in out["choices"]:
         choice["lines"] = [readable(line) for line in choice.get("lines", [])]
     for slot in out["words"]:  # as they read; the page sends them back as they read, which arrange matches

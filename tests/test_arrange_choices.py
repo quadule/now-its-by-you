@@ -81,7 +81,9 @@ def test_choices_hold_as_chance_changes_and_the_rest_keep_every_rule():
 def test_refused_choices_say_why():
     assert "last refrain always sings the canon" in A.problem(g, LONG, {"couplets": {3: "true"}})
     assert "only the last" in A.problem(g, LONG, {"couplets": {0: "canon"}})
-    assert "question turns" in A.problem(g, LONG, {"refrain": {"question": "sang"}})
+    assert "chosen refrain by refrain" in A.problem(g, LONG, {"refrain": {"question": "sang"}})
+    assert "the first refrain asks who made" in A.problem(g, LONG, {"refrains": {0: {"slots": {"question": "sang"}}}})
+    assert "has no place to choose" in A.problem(g, LONG, {"refrains": {1: {"slots": {"place": "desert"}}}})
     assert "no verse 10" in A.problem(g, LONG, {"verses": {9: "wire"}})
     assert "not 'ha'" in A.problem(g, LONG, {"tag": "ha"})
     assert "at most one light verse" in A.problem(g, LONG, {"verses": {1: "hold", 2: "ring"}})
@@ -91,7 +93,7 @@ def test_refused_choices_say_why():
     assert A.problem(g, LONG, {"verses": {1: "wire"}}) is None
 
 
-def test_couplets_trade_places_and_once_a_song_words_hold_everywhere():
+def test_couplets_trade_places_and_words_for_every_refrain_hold_everywhere():
     drawn = A.arrange(g, LONG, 3)
     third = drawn.couplets[2]
     kept = A.arrange(g, LONG, 3, None, {"couplets": {0: third}, "refrain": {"while": "if", "then": "who knows"},
@@ -99,6 +101,7 @@ def test_couplets_trade_places_and_once_a_song_words_hold_everywhere():
     assert kept.couplets[0] == third and kept.couplets[2] == drawn.couplets[0]  # traded, not drawn again
     assert kept.couplets[-1] == "canon" and kept.couplets[1] == drawn.couplets[1]
     assert all("if you sing it" in s.lines[1] and "who knows" in s.lines[1] for s in kept.sections if s.block == "refrain")
+    assert kept.questions == drawn.questions and kept.heads == drawn.heads
     assert kept.bridges == ("canon", "given") and "des-ert" in kept.sections[[s.block for s in kept.sections].index("bridge")].lines[0]
     assert kept.tag == "loo" and all(set(s.lines[0].rstrip(".").split()) == {"loo"} for s in kept.sections if s.block == "tag")
     # a verse's own swapped words, as written or as they read
@@ -127,10 +130,10 @@ def test_options_for_the_fixed_blocks(block, index):
         assert any(f["what"] == "couplet" for f in options["fixed"])
     if block == "refrain":
         assert any(f["what"] == "question" for f in options["fixed"])
-        assert {w["slot"] for w in options["words"]} == {"while", "then"}
     if block == "bridge" and index == 0:
         assert options["fixed"] and {w["slot"] for w in options["words"]} == {"place", "ember", "where"}
     if block == "bridge" and index == 1:
         assert {c["id"] for c in options["choices"]} == {"coat", "given"}
     if block == "tag":
         assert [c["id"] for c in options["choices"]] == ["la", "loo", "oo"]
+

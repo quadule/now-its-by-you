@@ -217,9 +217,32 @@ def test_held_words_sing_exactly_what_was_drawn(h):
 def test_the_studio_can_check_an_edit_exactly_as_the_drift_is(h):
     p = sing_on(h, "cy", "2027-09-09")
     edit = json.loads(json.dumps(p.words))
-    edit["refrain"]["couplets"][0]["id"] = "canon"
+    edit["refrain"]["rounds"][0]["id"] = "canon"
     assert A.check(h, p.form, edit) and not A.check(h, p.form, p.words)
     edit = json.loads(json.dumps(p.words))
     edit["verses"][0]["id"] = "trench"  # a rare variant verse can't open a song
     assert A.check(h, p.form, edit)
     assert variation.leanings(p.leanings) is not None
+
+
+def test_words_held_before_each_refrain_had_its_own_sing_as_they_did(h):
+    """Held words from before (the refrain's once-a-song words, a couplet for each refrain but the last, the
+    question turning in order) are read as the refrains they sang, and a child fits them to the rules."""
+    form = tuple(h.seed_params["form"])
+    old = {"verses": [{"id": "wire", "slots": {}}, {"id": "screen", "slots": {"many": "mil-lion"}}],
+           "refrain": {"slots": {"while": "when", "then": "it grows"},
+                       "couplets": [{"id": "true", "slots": {}}, {"id": "blue", "slots": {}}]},
+           "bridge": [{"id": "canon", "slots": {"place": "wa-ter", "ember": "coal", "where": "dark"}}], "tag": "la"}
+    lyrics = A.sing(h, form, old)
+    refrains = [s for s in lyrics.sections if s.block == "refrain"]
+    assert [s.id for s in refrains] == ["true", "blue", "canon"] and lyrics.questions == ("made", "sang", "owns")
+    assert all(s.slots["while"] == "when" and s.slots["then"] == "it grows" and s.head is None for s in refrains)
+    main = A.refrain_heads(h)[0]
+    assert A.hold(h, lyrics)["refrain"]["rounds"][1] == {
+        "head": main, "words": {"question": "sang", "while": "when", "then": "it grows"}, "id": "blue", "slots": {}}
+    lone = ("verse", "refrain", "verse", "bridge")  # a lone refrain asks what the first asks, and sings the canon
+    assert A.sing(h, lone, old).questions == ("made",) and A.sing(h, lone, old).couplets == ("canon",)
+    parent = Params.from_dict({**h.seed_params, "words": old})
+    child = sing_on(h, "ada", "2027-01-05", parent)
+    assert not A.held_problem(h, child.form, child.words) and "rounds" in child.words["refrain"]
+

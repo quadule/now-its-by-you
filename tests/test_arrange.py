@@ -22,9 +22,8 @@ VERSES = {v["id"]: v for v in BANK["verses"]}
 COUPLETS = {c["id"]: c for c in BANK["refrain"]["couplets"]}
 STANZAS = {b["id"]: b for b in BANK["bridges"]}
 SEED_FORM = tuple(g.seed_params["form"])
-# as h-bank.md says: three refrains ask made, sang, owns; four put heard before owns; kept and wrote come in with five or six
-QUESTIONS = {1: ["made"], 2: ["made", "owns"], 3: ["made", "sang", "owns"], 4: ["made", "sang", "heard", "owns"],
-             5: ["made", "sang", "heard", "kept", "owns"], 6: ["made", "sang", "heard", "kept", "wrote", "owns"]}
+MAIN = BANK["refrain"].get("id", "refrain")
+HEADS = {MAIN: BANK["refrain"]} | {h["id"]: h for h in BANK["refrain"].get("heads", [])}
 
 
 def shape(verses=2, refrains=3, bridges=1, tag=True, again="bridge2"):
@@ -90,14 +89,30 @@ def check(form, lyrics):
                 assert abs(ids.index(partner) - i) == 1, ids
 
     rounds = [s for s in lyrics.sections if s.block == "refrain"]
-    head = BANK["refrain"]
-    assert [s.slots["question"] for s in rounds] == QUESTIONS.get(len(rounds), [])
-    for name in RULES["refrain"]["once_per_song"]:
+    rr, n = RULES["refrain"], len(rounds)
+    shared = BANK["refrain"]["slots"]
+    heads = [s.head or MAIN for s in rounds]
+    # the first and last refrains sing the heads the rules give them; another head is sung once a song
+    assert heads[:1] in ([], [rr.get("head_first", MAIN)]) and (n < 2 or heads[-1] == rr.get("head_last", MAIN))
+    others = [h for h in heads if h != MAIN]
+    assert len(set(others)) == len(others)
+    # a head that fixes its question asks it; else the first asks who made it and the last who owns it, and
+    # those between each ask a different one of the rest
+    asked = shared["question"]
+    questions = [s.slots["question"] for s in rounds]
+    for i, (q, h) in enumerate(zip(questions, heads)):
+        fixed = HEADS[h].get("fixed", {})
+        want = fixed.get("question", asked[0] if i == 0 else asked[-1] if i == n - 1 else None)
+        assert q == want if want else q in asked[1:-1], (questions, heads)
+    assert len(set(questions[1:-1])) == len(questions[1:-1])
+    for name in rr.get("once_per_song", ()):
         assert len({s.slots[name] for s in rounds}) <= 1
     couplets = [s.id for s in rounds]
-    assert couplets[-1:] in ([], [RULES["refrain"]["couplet_last"]]) and len(set(couplets)) == len(couplets)
-    for s in rounds:
-        assert plain(s.lines) == sung(head, s.slots) + sung(COUPLETS[s.id], s.slots)
+    assert couplets[-1:] in ([], [rr["couplet_last"]]) and len(set(couplets)) == len(couplets)
+    for s, h in zip(rounds, heads):
+        head = {"lines": HEADS[h]["lines"], "slots": shared}
+        assert all(s.slots[k] == v for k, v in HEADS[h].get("fixed", {}).items())
+        assert plain(s.lines) == plain(sung(head, s.slots) + sung(COUPLETS[s.id], s.slots))
 
     bridges = [s for s in lyrics.sections if s.block == "bridge"]
     assert len(bridges) <= 2 and [b.id for b in bridges[:1]] in ([], [RULES["bridge"]["always"]])
@@ -195,8 +210,11 @@ def test_the_seeds_focus_marks_come_with_its_words():
     for seed in range(60):
         lyrics = A.arrange(g, SEED_FORM, seed)
         for i, s in enumerate(r for r in lyrics.sections if r.block == "refrain"):
-            assert s.lines[0] == G.turn(g.refrain[0], i, 3)  # Who *made* this song? ...
-            assert s.lines[1].startswith("It's *yours* ")
+            if s.head is None:  # Who *made* this song? ..., the question marked as the seed marks it
+                assert s.lines[0] == f"Who *{s.slots['question']}* this song? No-bo-dy knows."
+                assert s.lines[1].startswith("It's *yours* ")
+            else:  # another head marks its own
+                assert s.lines[0].startswith("Who *") and s.lines[1].startswith("it's *yours* ")
             if s.id == "canon":
                 assert s.lines[2:] == g.refrain[2:]
         bridge = next(s for s in lyrics.sections if s.block == "bridge")

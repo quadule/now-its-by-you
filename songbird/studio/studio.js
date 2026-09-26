@@ -249,6 +249,7 @@ function chooser(w, o) {
   const allowed = o.choices.filter((c) => c.allowed);
   const refused = o.choices.filter((c) => !c.allowed);
   if (o.choices.length) {
+    if (o.block === "refrain" && (o.heads || []).length > 1) box.append(headChooser(o));
     const what = { verse: "Choose the verse", refrain: "Choose this refrain's couplet", bridge: "Choose the second stanza", tag: "Choose the tag's syllable" }[o.block];
     box.append(h("h3", {}, what));
     if (o.block === "tag") {
@@ -262,7 +263,7 @@ function chooser(w, o) {
         const trade = c.trades !== null && c.trades !== undefined ? `trades places with refrain ${c.trades + 1}` : "";
         return h("button", { class: `choice${c.id === o.sung ? " sung" : ""}`, type: "button", role: "listitem",
           title: c.lines.join("\n").replace(/\*/g, ""),
-          onclick: () => setEdit(o.path, o.block === "verse" ? { id: c.id } : c.id) },
+          onclick: () => setEdit(o.path, o.block === "verse" ? { id: c.id } : o.block === "refrain" ? Object.assign(refrainEdit(o), { id: c.id }) : c.id) },
           h("span", { class: "first" }, first),
           h("span", { class: "meta" }, [c.id, bits, trade].filter(Boolean).join(" · ")));
       })));
@@ -285,7 +286,33 @@ function chooser(w, o) {
         class: `chip${opt === slot.sung ? " on" : ""}`, type: "button", "aria-pressed": opt === slot.sung ? "true" : "false",
         onclick: () => chooseSlot(o, slot.slot, opt) }, (slot.labels && slot.labels[opt]) || opt)))));
   }
-  if ((o.words || []).length && o.block !== "verse") box.append(h("p", { class: "hint" }, "These words are chosen once for the whole song."));
+  if ((o.words || []).length && o.block === "refrain") box.append(h("p", { class: "hint" }, o.words.some((w) => w.once) ? "Some of these words are chosen once for every refrain." : "These words are this refrain's own."));
+  else if ((o.words || []).length && o.block !== "verse") box.append(h("p", { class: "hint" }, "These words are chosen once for the whole song."));
+  return box;
+}
+
+// A refrain's edit as it stands, as an object: its couplet (id), head and slot words, any of them.
+function refrainEdit(o) {
+  const current = state.edits[o.path];
+  return typeof current === "string" ? { id: current } : Object.assign({}, current || {});
+}
+
+// A refrain between the first and the last may sing another head: the lines before its couplet sung another way.
+function headChooser(o) {
+  const allowed = o.heads.filter((x) => x.allowed);
+  const refused = o.heads.filter((x) => !x.allowed);
+  const box = h("div", { class: "heads" }, h("h3", {}, "Choose how this refrain begins"));
+  if (allowed.length > 1) {
+    box.append(h("div", { class: "choices", role: "list" }, allowed.map((x) => {
+      const trade = x.trades !== null && x.trades !== undefined ? `trades places with refrain ${x.trades + 1}` : "";
+      return h("button", { class: `choice${x.id === o.head ? " sung" : ""}`, type: "button", role: "listitem",
+        title: x.lines.join("\n"),
+        onclick: () => { const edit = refrainEdit(o); delete edit.slots; edit.head = x.id; setEdit(o.path, edit); } },
+        h("span", { class: "first" }, x.lines.join(" / ")),
+        h("span", { class: "meta" }, [x.id, x.by ? `by ${x.by}` : "", trade].filter(Boolean).join(" · ")));
+    })));
+  }
+  if (refused.length) box.append(h("p", { class: "hint" }, `${refused[0].why}.`));
   return box;
 }
 
@@ -295,6 +322,12 @@ function chooseSlot(o, slot, value) {
     const id = current && current.id ? current.id : o.sung;
     const slots = Object.assign({}, current && current.slots ? current.slots : {}, { [slot]: value });
     setEdit(o.path, { id, slots });
+  } else if (o.block === "refrain" && (o.words || []).some((w) => w.slot === slot && w.once)) {
+    setEdit("words.refrain", Object.assign({}, state.edits["words.refrain"] || {}, { [slot]: value }));
+  } else if (o.block === "refrain") {
+    const edit = refrainEdit(o);
+    edit.slots = Object.assign({}, edit.slots || {}, { [slot]: value });
+    setEdit(o.path, edit);
   } else {
     const path = o.slots_path;
     setEdit(path, Object.assign({}, state.edits[path] || {}, { [slot]: value }));
