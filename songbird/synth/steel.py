@@ -87,12 +87,12 @@ LEGATO = ("glide", "slur")
 
 SPEC = {
     "steel": dict(
-        family="bowed", role="comping", register=(47, 88), place=(0.45, 0.5), level=0.2, poly=True,
+        family="bowed", role="comping", register=(47, 88), place=(0.45, 0.5), level=0.25, poly=True,
         articulations=STEEL_ARTS,
         about="a pedal steel guitar (E9, ten strings, three pedals and four knee levers) through a clean amp "
               "with spring reverb: swells, bar glides, pedal bends, bar vibrato"),
     "slide": dict(
-        family="plucked", role="comping", register=(38, 84), place=(0.4, 0.5), level=0.2, poly=False,
+        family="plucked", role="lead", register=(38, 84), place=(0.4, 0.5), level=0.25, poly=False,
         articulations=SLIDE_ARTS,
         about="a bottleneck slide guitar, open-tuned to the key: an acoustic flat-top, a resonator, or an electric "
               "through a small amp"),
@@ -354,17 +354,20 @@ def _finish(segs, strings: Strings, sr: int, length: int, bar: Track, pedals, vi
 
 
 def _bar_scrape(bar: Track, segs, length: int, sr: int, rng: np.random.Generator, wound, level: float) -> np.ndarray:
-    """The bar's scrape as it moves under wound strings that are sounding."""
+    """The bar's scrape as it moves along the strings: it lies across them all, so it rubs the wound ones
+    whether the palm is damping them or not, louder for each one ringing (it shakes what rings). Only while
+    the bar is on the strings (something it stops is sounding)."""
     out = np.zeros(length)
     for at, target, over in bar.moves:
         if over < int(0.03 * sr) or at >= length or at < 0:
             continue
         n = min(over, length - at)
-        under = sum(1 for s in segs if s.string in wound and s.hand > 0 and s.start <= at < s.start + s.end)
-        if not under:
+        on = [s for s in segs if s.hand > 0 and s.start <= at < s.start + s.end]
+        if not on:
             continue
+        under = sum(1 for s in on if s.string in wound)
         speed = np.gradient(bar.window(at, n)) * sr  # frets a second
-        out[at: at + n] += _scrape(n, speed, sr, rng) * level * np.sqrt(under)
+        out[at: at + n] += _scrape(n, speed, sr, rng) * level * (0.4 + 0.6 * np.sqrt(under))
     return out
 
 
@@ -584,9 +587,9 @@ def steel(notes, sr: int, length: int, rng: np.random.Generator, make: np.random
     return amp.play(chain, emf) * STEEL_OUT
 
 
-STEEL_OUT = 2.5
+STEEL_OUT = 7.1  # the stem's scale: its swelled alto line at vel 0.6 sits as a comping part (-23.7 LUFS)
 EMF = 0.055  # volts per unit of string velocity for a single coil (as electric.py's)
-SCRAPE = 0.08  # the bar's scrape at full speed, against a string's velocity
+SCRAPE = 0.009  # the bar's scrape at full speed, against a string's velocity: 25 dB under a note on a wound string
 
 
 def _voltage(segs, strings: Strings, coil: amp.Coil, circuit: dict, sr: int, length: int,
@@ -660,7 +663,7 @@ def _slide_built(seed: int) -> dict:
     d["vibrato"] = float(g.uniform(4.8, 6.0))
     d["glide"] = float(g.uniform(0.8, 1.2))
     d["rattle"] = float(g.uniform(0.3, 1.0))
-    d["behind"] = (float(g.uniform(0.04, 0.12)), float(g.uniform(0.06, 0.25)))  # the ring behind: level, T60 s
+    d["behind"] = (float(g.uniform(0.015, 0.05)), float(g.uniform(0.06, 0.25)))  # the ring behind: level, T60 s
     d["drive"] = float(g.uniform(0.45, 0.7))  # the electric's amp, pushed a little
     d["body_seed"] = int(g.integers(1 << 30))
     return d
@@ -713,13 +716,36 @@ def place_slide(pitches: tuple[float, ...], tuning, where: float, previous: int 
 
 
 def slide(notes, sr: int, length: int, rng: np.random.Generator, make: np.random.Generator, s: dict) -> np.ndarray:
-    """The slide guitar's stem: (length, 2), its body as two microphones hear it, or its amp."""
+    """The slide guitar's stem: (length, 2), its body as two microphones hear it, or its amp; levelled so a
+    reference lick comes out as loud whatever the maker's guitar, body, slide and amp."""
     notes = _prepare(notes, sr, length)
     if not notes:
         return np.zeros((length, 2))
     seed = int(make.integers(1 << 31))
     d = _slide_built(seed)
     kind = s.get("slide") if s.get("slide") in KINDS else d["kind"]
+    keys = ("brightness", "wear", "ornament", "body", "tonic", "maker")
+    trim = _slide_trim(seed, kind, tuple(round(float(s.get(k, v)), 6) for k, v in zip(keys, (0.5, 0.25, 0.5, 1.0, 62, 0))),
+                       sr)
+    return _slide_sound(notes, sr, length, rng, d, kind, s) * trim
+
+
+@lru_cache(maxsize=64)
+def _slide_trim(seed: int, kind: str, key: tuple, sr: int) -> float:
+    """The gain that brings this maker's slide, played this way, to a fixed loudness on a reference lick (three
+    notes slid into and held with vibrato on the D and A strings)."""
+    s = dict(zip(("brightness", "wear", "ornament", "body", "tonic", "maker"), key))
+    tonic = int(s["tonic"])
+    lick = [Note("slide", 0.05, 0.9, float(tonic + 7), 0.6, art="slide"), Note("slide", 1.0, 0.5, float(tonic + 4), 0.6),
+            Note("slide", 1.5, 1.4, float(tonic), 0.6, art="vibrato")]
+    y = _slide_sound(lick, sr, int(3.2 * sr), np.random.default_rng([seed, 83]), _slide_built(seed), kind, s)
+    return float(10.0 ** ((SLIDE_REFERENCE - loudness(y, sr)) / 20.0))
+
+
+SLIDE_REFERENCE = -9.9  # LUFS of the reference lick, unplaced: so the fills at vel 0.6 sit as a lead (-20.7)
+
+
+def _slide_sound(notes, sr: int, length: int, rng: np.random.Generator, d: dict, kind: str, s: dict) -> np.ndarray:
     bright = float(np.clip(s.get("brightness", 0.5), 0.0, 1.0))
     wear = float(np.clip(s.get("wear", 0.25), 0.0, 1.0))
     ornament = float(np.clip(s.get("ornament", 0.5), 0.0, 1.0))
@@ -742,7 +768,7 @@ def slide(notes, sr: int, length: int, rng: np.random.Generator, make: np.random
             emf *= volume
         chain = electric._chain(rig_amp, rig_s, sr)
         chain.p[21] = electric.master_volume("electric", rig_s, sr)
-        return amp.play(chain, emf) * ELECTRIC_OUT
+        return amp.play(chain, emf)
     force = np.zeros(length)
     for seg in segs:
         y = fretboard.sound(seg, strings, sr, rng)
@@ -753,13 +779,10 @@ def slide(notes, sr: int, length: int, rng: np.random.Generator, make: np.random
     force += _bar_scrape(position, segs, length, sr, rng, wound, SLIDE_SCRAPE * (1.5 if d["brass"] else 1.0))
     box = RESONATOR if kind == "resonator" else body.GUITAR
     ir = body.impulse_response(box, sr, seed=d["body_seed"], size=size)
-    return body.resonate(force, ir) * (RESONATOR_OUT if kind == "resonator" else ACOUSTIC_OUT)
+    return body.resonate(force, ir)
 
 
-ACOUSTIC_OUT = 0.5
-RESONATOR_OUT = 0.5
-ELECTRIC_OUT = 2.7
-SLIDE_SCRAPE = 0.02  # the slide's scrape at full speed, against a string's force on the bridge
+SLIDE_SCRAPE = 0.005  # the slide's scrape at full speed: 20 dB under a note on a wound string, 30 on a plain one
 
 
 def _slide_tracks(groups, tuning, sr: int, rng: np.random.Generator, d: dict, ornament: float, length: int,
