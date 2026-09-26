@@ -15,8 +15,10 @@ person sings: where you breathe, lean on a word, slide into a note, hold one, le
 About 20–30 minutes of singing, in one sitting or two:
 
 1. **The song, along with its guide**, two or three times: headphones on, singing along with the
-   program's own singer. On our karaoke page, which records and labels takes for you; or into
-   your own recorder with the guide track we send.
+   tune played on a whistle over a quiet pulse (or, if you'd rather, the whole song with the
+   program's own singer). On our karaoke page, here or online through a link we send you
+   (docs/SING-ONLINE.md), which records and labels takes for you; or into your own recorder with
+   the guide track we send.
 2. **Verses from its bank**, from a lyric sheet, to the same tune: as many as you're comfortable
    with.
 3. **A few of the other songs** the same way, if there's time.
