@@ -10,21 +10,27 @@ as they open (pull). Each is tuned by hand, so the two directions differ by
 a cent or two, and a shade in tone.
 
 - The attack. A reed at rest is started by the puff of air as its pallet
-  lifts, and its swing grows exponentially until the slot limits it: a note
-  swells in, its fundamental first and its buzz as the swing reaches through
+  lifts (heard, rushing through the slot until the tongue chokes it), and its
+  swing grows exponentially until the slot limits it: a note swells in, a few
+  cents sharp, its fundamental first and its buzz as the swing reaches through
   the slot. To nine tenths of full, a small treble reed takes about 15 ms, a
-  middle one 30 to 40, the long weighted bass reeds 60 to 100; pressed harder,
+  middle one 25 to 40, the long weighted bass reeds 60 to 100; pressed harder,
   all of them quicker. When the pallet shuts the flow stops and the note is
-  gone in a few tens of milliseconds, with the pad's soft thud.
+  gone in a few tens of milliseconds, with the pad's soft thud. A low reed's
+  pulses are heard as pulses (the growl of the bass buttons): its harmonics
+  start in phase below D3, scattering by D4, where the ear no longer hears
+  their phase.
 - The bellows. One bellows drives every reed that sounds, so the pressure,
-  and with it the loudness, the brightness and a hair of flatness (a free
-  reed sounds a few cents lower pressed hard: Cottingham), follows the
-  player's arm, not the keys. The bellows run one way until the player turns
-  them: at a rest once the stroke has run a few seconds (an accordion's 3 to
-  6, a concertina's 1.2 to 2.8), at a note's start once most of the stroke's
-  air is used, and wherever they must once all of it is (a chord drinks air
-  faster than a single note, the big bass reeds fastest; the first stroke
-  opens them). A turn takes 40 to 70 ms with the pressure dipping to a
+  and with it the loudness (as the pressure to the power 1.3: 20 dB from
+  velocity 0.2 to 1), the brightness and a hair of flatness (a free reed
+  sounds a few cents lower pressed hard: Cottingham), follows the player's
+  arm, not the keys. The bellows run one way until the player turns them: at
+  a rest once the stroke has run a few seconds (an accordion's 3 to 6, a
+  concertina's 1.2 to 2.8), on a strong note if one comes soon (the oom of an
+  oom-pah, so the new stroke accents it), at a note's start once most of the
+  stroke's air is used, and wherever they must once all of it is (a chord
+  drinks air faster than a single note, the big bass reeds fastest; the first
+  stroke opens them). A turn takes 40 to 70 ms with the pressure dipping to a
   quarter, and a note held through it hands over to its other reed, which
   must speak again. 'shake' is the bellows shaken: turned 5 to 8 times a
   second (a subdivision of the beat when the band gives a tempo).
@@ -48,9 +54,9 @@ a cent or two, and a shade in tone.
   note below the treble keyboard is a bass button alone, a chord button with
   others struck with it.
 - The concertina: an English one (a button sounds the same note pushed or
-  pulled), chromatic from C3 to C7, one reed a note each way: concertina reeds
-  (quicker and more cutting than an accordion's) or, on some makers' hybrids,
-  accordion reeds. The scale alternates between the hands (the notes on the
+  pulled), a tenor-treble, chromatic from C3 to C7, one reed a note each way:
+  concertina reeds (quicker and more cutting than an accordion's) or, on some
+  makers' hybrids, accordion reeds. The scale alternates between the hands (the notes on the
   staff's lines at the left end, those in its spaces at the right), each end
   a small box of its own.
 - The boxes: the accordion's treble reed blocks behind the grille and its
@@ -89,14 +95,14 @@ CONCERTINA_ARTS = {
 
 SPEC = {
     "accordion": dict(
-        family="reed", role="comping", register=(41, 93), place=(-0.25, 0.8), level=0.327, poly=True,
+        family="reed", role="comping", register=(41, 93), place=(-0.25, 0.8), level=0.316, poly=True,
         articulations=ACCORDION_ARTS,
         about="a piano accordion: its treble F3-A6 on the maker's reed ranks (a tremolo or musette box, dry to "
               "Scottish-wet) in the player's register, the Stradella bass and chord buttons below; one bellows "
               "for everything, turned as the air runs out",
     ),
     "concertina": dict(
-        family="reed", role="comping", register=(48, 96), place=(-0.25, 0.6), level=0.335, poly=True,
+        family="reed", role="comping", register=(48, 96), place=(-0.25, 0.6), level=0.339, poly=True,
         articulations=CONCERTINA_ARTS,
         about="an English concertina, C3-C7: one reed a note each way, quick and bright, the scale shared between "
               "two small hexagonal ends; its small bellows turned every second or two",
@@ -105,7 +111,8 @@ SPEC = {
 
 TREBLE = (53, 93)  # the accordion's keyboard, F3 to A6
 COMPASS = (48, 96)  # the concertina's buttons, C3 to C7
-BASS_RANKS = ((36, 1.0), (48, 0.8), (54, 0.45))  # a bass button: the bass (C2-B2), tenor (C3-B3), contralto (F#3-F4)
+# a bass button: the bass (C2-B2), tenor (C3-B3), contralto (F#3-F4) and, lightest, the chord reeds' octave (F#4-F5)
+BASS_RANKS = ((36, 1.0), (48, 0.8), (54, 0.45), (66, 0.25))
 CHORD_RANKS = ((54, 0.6), (66, 0.35))  # a chord button: the contralto (F#3-F4) and its octave
 # The maker's tremolo, cents the tremolo reeds lie from the true one at A4 (Liberty Bellows' table), and how often
 TUNINGS = (("dry", 0.0, 0.1), ("swing", 4.0, 0.1), ("irish", 7.0, 0.14), ("cajun", 10.0, 0.14),
@@ -120,7 +127,7 @@ SPEAK = ((24.0, 0.13), (36.0, 0.085), (48.0, 0.055), (60.0, 0.035), (72.0, 0.024
 START = 0.02  # a reed's swing as its pallet lifts, against its full swing (a legato note's, 0.06)
 DIP = 0.25  # the pressure at the bottom of a bellows turn
 CLICK = 0.012  # a key's click against a note
-HISS = 0.006  # the air past the reeds and pallets against a reed's tone
+HISS = 0.013  # the air through the slots (the pallet's puff, then past the tongue): -40 dB under a mezzo-forte note
 
 
 @dataclass(frozen=True)
@@ -138,7 +145,7 @@ class Kind:
 
 ACCORDION = Kind(speak=1.0, slopes=(0.95, 0.4), stroke=(6.0, 9.0), habit=(3.0, 6.0), turn=(0.04, 0.07), flow=0.2,
                  box=body.ACCORDION)
-CONCERTINA = Kind(speak=0.6, slopes=(0.8, 0.3), stroke=(2.0, 3.2), habit=(1.2, 2.8), turn=(0.03, 0.05), flow=0.2,
+CONCERTINA = Kind(speak=0.6, slopes=(0.7, 0.25), stroke=(2.0, 3.2), habit=(1.2, 2.8), turn=(0.03, 0.05), flow=0.2,
                   box=body.CONCERTINA)
 BASS_SLOPES, CHORD_SLOPES = (0.9, 0.4), (1.0, 0.45)  # the left hand's reeds: the big bass reeds buzz most
 HYBRID = (0.95, 0.4)  # a hybrid concertina's accordion reeds: a little buzzier, less cutting
@@ -316,9 +323,9 @@ def _arm(x, up, down):
 
 
 def _swell(m: int) -> np.ndarray:
-    """A swell through a note: in at half, up to full a little before its middle, easing to 0.6 at its end."""
+    """A swell through a note: in at a third, up to full a little before its middle, easing to 0.6 at its end."""
     x = np.linspace(0.0, 1.0, m)
-    return np.where(x < 0.45, 0.5 + 0.5 * np.sin(0.5 * np.pi * x / 0.45), 1.0 - 0.4 * ((x - 0.45) / 0.55) ** 2)
+    return np.where(x < 0.45, 0.35 + 0.65 * np.sin(0.5 * np.pi * x / 0.45), 1.0 - 0.4 * ((x - 0.45) / 0.55) ** 2)
 
 
 def _asked(notes, sr: int, length: int) -> np.ndarray:
@@ -356,6 +363,15 @@ def bellows(notes, reeds: list[list[Voice]], sr: int, length: int, kind: Kind, s
     used = np.concatenate([[0.0], np.cumsum(load * np.sqrt(pressure) / sr)])  # litres drawn by each sample
     starts = sorted({int(round(n.start * sr)) for n in notes if n.start * sr < length})
     shakes = {int(round(n.start * sr)): n for n in notes if n.art == "shake"}
+    # where a player would rather turn: on a strong note (a bass button, or the loudest start within a second
+    # either side: the oom of an oom-pah, a bar's first note), so the new stroke's push accents it
+    loudest: dict[int, float] = {}
+    for n in notes:
+        i = int(round(n.start * sr))
+        loudest[i] = max(loudest.get(i, 0.0), float(n.vel) + (1.0 if n.art == "bass" else 0.0))
+    at = np.array(starts)
+    strong = {i: loudest[i] >= 0.97 * max(loudest[j] for j in at[(at >= i - sr) & (at <= i + sr)])
+              for i in starts}
     turns: list[int] = []
     last = starts[0] if starts else 0
     fill, habit = rng.uniform(0.55, 0.8), rng.uniform(*kind.habit)
@@ -383,8 +399,9 @@ def bellows(notes, reeds: list[list[Voice]], sr: int, length: int, kind: Kind, s
         clear = i > 0 and not busy[i - 1]
         rested = i > 0 and not busy[max(0, i - rest): i].any()
         short = used[ahead[k]] - used[last] > stroke  # the air would run out before the next note: turn now
-        if i > starts[0] and ((rested and (drawn > 0.3 * stroke or ran > habit)) or (clear and drawn > fill * stroke)
-                              or drawn > 0.92 * stroke or (short and drawn > 0.3 * stroke)):
+        due = (rested and (drawn > 0.3 * stroke or ran > habit)) or (clear and drawn > fill * stroke)
+        must = drawn > 0.92 * stroke or (short and drawn > 0.3 * stroke)
+        if i > starts[0] and (must or (due and (strong[i] or drawn > 0.8 * stroke))):
             gap = busy[max(0, i - room): i][::-1]
             back = int(np.argmax(gap)) if gap.any() else len(gap)
             turn(i - back // 2 if clear else i)  # a practised player turns in the rest before the note
@@ -426,22 +443,31 @@ def _sounded(v: Voice, pulling: bool, pressure: np.ndarray, a: int, on: int, tai
         return
     rate = np.log(9.0 * (1.0 - start) / start) / t90 * np.maximum(p[:on] / 0.6, 0.05) ** 0.6
     swing = 1.0 / (1.0 + (1.0 - start) / start * np.exp(-np.cumsum(rate) / sr))
+    open_ = np.ones(n)  # the pallet: open while the key is down, shut within a few milliseconds of its rising
     if n > on:
         swing = np.concatenate([swing, swing[-1] * np.exp(-np.arange(1, n - on + 1) / (release * sr))])
+        open_[on:] = np.exp(-np.arange(1, n - on + 1) / (0.004 * sr))
     key = (int(round(v.pitch * 4)), v.rank, pulling)
     if key not in cache:
         f = midi_to_hz(round(v.pitch * 4) / 4.0)
         slopes = (v.slopes[0] + 0.08, v.slopes[1] + 0.08) if pulling else v.slopes
+        # a low reed's pulses are heard as pulses (its harmonics too close for the ear to part): in phase below D3
+        # (150 Hz), scattering by D4
         cache[key] = reed.tables(f, sr, np.random.default_rng([seed, key[0], v.rank, int(pulling)]), slopes,
-                                 even=0.75 if pulling else 0.85, top=f * 1.03)
+                                 even=0.75 if pulling else 0.85, top=f * 1.03,
+                                 pulse=float(np.clip((62.0 - v.pitch) / 12.0, 0.0, 1.0)))
     dark, brightw = cache[key]
     low = 1.0 + float(np.clip((60.0 - v.pitch) / 12.0, 0.0, 2.0))  # low reeds sag more
-    cents = error - 2.5 * low * (p - 0.6) / 0.4
+    # flatter pressed harder; a few cents sharp while the swing is small (near the reed's own frequency)
+    cents = error - 2.5 * low * (p - 0.6) / 0.4 + 3.0 * (1.0 - swing)
     freq = midi_to_hz(v.pitch) * 2.0 ** (cents / 1200.0)
     mix = np.clip(0.25 + 0.5 * bright + 1.2 * (p - 0.6), 0.0, 1.0) * swing**1.5
-    amp = v.gain * swing * p
+    amp = v.gain * swing * 0.6 * (p / 0.6) ** 1.3
     reed._read_mix(dark, brightw, freq / sr, amp, mix, out, offset + a, phase)
-    air[offset + a: offset + a + n] += v.flow * swing * p
+    # the air through the slot: a puff as the pallet lifts, rushing through the slot until the tongue swings and
+    # chokes it, then the flow past the swinging tongue
+    puff = 2.5 * open_ * (1.0 - swing) ** 2
+    air[offset + a: offset + a + n] += v.flow * np.sqrt(p) * (0.4 * open_ + 0.6 * swing + puff)
 
 
 def render(name: str, notes, sr: int, length: int, rng: np.random.Generator, make: np.random.Generator,
@@ -509,7 +535,7 @@ def render(name: str, notes, sr: int, length: int, rng: np.random.Generator, mak
                 thud = sosfilt(up_sos, rng.standard_normal(c + 32))[32:] * np.exp(-np.arange(c) / (0.002 * sr))
                 clicks[side][j: j + c] += 0.7 * thud * loud
     stereo = np.zeros((length, 2))
-    hiss_sos = butter(2, (400.0, 4000.0), btype="bandpass", fs=sr, output="sos")
+    hiss_sos = butter(2, (800.0, 8000.0), btype="bandpass", fs=sr, output="sos")
     dc = butter(1, 20.0, btype="highpass", fs=sr, output="sos")
     places = {"treble": (-0.3, 1.0), "bass": (0.3, 1.3), "left": (-0.25, 1.0), "right": (0.25, 1.0)}
     for k, side in enumerate(sides):

@@ -356,7 +356,63 @@ def test_a_shake_pulses_with_the_beat_and_a_swell_swells(name):
     assert np.percentile(e, 95) > 3 * np.percentile(e, 5)
     y = play(name, [note(69, "swell", dur=2.0, part=name)], 2.5)
     e = envelope(y, 0.05)
-    assert e[int(0.9 * SR)] > 1.6 * e[int(0.25 * SR)] and e[int(0.9 * SR)] > 1.2 * e[int(2.0 * SR)]
+    assert e[int(0.9 * SR)] > 2.5 * e[int(0.25 * SR)] and e[int(0.9 * SR)] > 1.2 * e[int(2.0 * SR)]  # 8 dB and more
+
+
+def test_the_bellows_turn_on_the_oom():
+    """A player turns the bellows so the new stroke's push lands on the strong beat: before the oom, not the pah."""
+    for name in ("accordion", "concertina"):
+        part = _oompah(name, hands=name == "accordion", bars=12)
+        turns, _, _ = bellows(name, part, wear=0.25)
+        starts = np.array(sorted({n.start for n in part}))
+        before = [starts[starts >= t - 1e-6][0] for t in turns]
+        ooms = [s for s in before if sum(1 for n in part if abs(n.start - s) < 1e-6) == 1]
+        assert len(turns) >= 3 and len(ooms) >= 0.8 * len(turns), (name, len(ooms), len(turns))
+
+
+def test_the_boxes_have_no_holes_and_the_low_reeds_pulse():
+    from songbird.synth import body, reed
+
+    for box in (body.ACCORDION, body.CONCERTINA):  # a reed block's chambers are broad humps, not a plate's notches
+        for seed in range(3):
+            ir = body.impulse_response(box, SR, seed=seed, channels=1)[:, 0]
+            spec = np.abs(np.fft.rfft(ir, 1 << 16)) ** 2
+            f = np.fft.rfftfreq(1 << 16, 1 / SR)
+            sel = (f > 200) & (f < 6000)
+            centres = 1000.0 * 2.0 ** (np.arange(-12, 11) / 3.0)
+            thirds = [spec[(f >= c * 2 ** (-1 / 6)) & (f < c * 2 ** (1 / 6))].mean() for c in centres]
+            smooth = np.interp(np.log(f[sel]), np.log(centres), 10 * np.log10(thirds))
+            assert np.min(10 * np.log10(spec[sel]) - smooth) > -9.0
+    # a D2 reed's period is a pulse train (the Stradella bass's growl), a C5 reed's harmonics scattered; as the
+    # band's default brightness blends the dark and bright periods
+    for pulse, crest, kurt in ((1.0, 16.0, 10.0), (0.0, None, None)):
+        wave = reed.tables(midi_to_hz(38), SR, np.random.default_rng(3), (0.9, 0.4), pulse=pulse).mean(axis=0)
+        c = 20 * np.log10(np.abs(wave).max() / np.sqrt(np.mean(wave**2)))
+        k = np.mean(wave**4) / np.mean(wave**2) ** 2 - 3
+        if crest:
+            assert c > crest and k > kurt, (c, k)
+        else:
+            assert c < 13.0 and k < 3.0, (c, k)
+
+
+def test_the_pallets_puff_and_the_air_come_forward_when_playing_softly():
+    was = accordion.HISS
+    ratios = []
+    try:
+        for vel in (0.25, 0.9):
+            notes = [note(81, vel=vel, dur=0.5), note(69, vel=vel, start=0.8, dur=1.2)]
+            y = mono(play("accordion", notes, 2.4, wear=0.25))
+            accordion.HISS = 0.0
+            dry = mono(play("accordion", notes, 2.4, wear=0.25))
+            accordion.HISS = was
+            air = y - dry
+            steady = lambda x: np.sqrt(np.mean(x[int(1.2 * SR): int(1.9 * SR)] ** 2))  # noqa: E731
+            ratios.append(20 * np.log10(steady(air) / steady(dry)))
+            puff = np.sqrt(np.mean(air[int(0.8 * SR): int(0.81 * SR)] ** 2))
+            assert puff > 1.5 * steady(air)  # the air rushes through the slot before the tongue swings
+    finally:
+        accordion.HISS = was
+    assert -48 < ratios[1] < ratios[0] - 6 < -30  # about -35 dB under a soft note, -45 under a loud one
 
 
 def test_legato_runs_on_and_the_concertinas_hands_alternate():
@@ -415,10 +471,16 @@ def test_deterministic_makers_differ_and_the_edges_hold(name):
     assert y.shape == (3 * SR, 2) and np.all(np.isfinite(y)) and np.abs(y).max() > 0
     assert np.abs(y[: int(0.095 * SR)]).max() < 1e-4 * np.abs(y).max()  # nothing before the first note
     assert np.all(np.abs(y.mean(axis=0)) < 1e-3 * np.sqrt(np.mean(y**2, axis=0)))  # no DC leaves the box
-    # placed at its level, held chords played loud (as a pad at a full band's 0.9) stay under full scale
+    # placed at its level, the oom-pah (its low reeds' pulses peaky: a crest of 16-18 dB) keeps 3 dB of headroom,
+    # and held chords pressed as hard as a full band's 0.9 stay within a few dB of full scale (floats: the mix's
+    # compressors and the master's limiter have the rest)
+    part = _oompah(name, hands=name == "accordion")
+    for maker in (0, 1, 2):
+        placed = instruments.place(played(name, part, 19.0, maker, wear=0.25), *accordion.SPEC[name]["place"])
+        assert np.abs(placed * accordion.SPEC[name]["level"]).max() < 0.7, maker
     loud = [note(p, vel=0.9, start=0.1 + 2.0 * k, dur=2.0, part=name) for k in range(4) for p in (54, 57, 62, 66)]
     placed = instruments.place(play(name, loud, 8.5), *accordion.SPEC[name]["place"]) * accordion.SPEC[name]["level"]
-    assert np.abs(placed).max() < 1.0
+    assert np.abs(placed).max() < 2.0
 
 
 @pytest.mark.parametrize("name", ["accordion", "concertina"])

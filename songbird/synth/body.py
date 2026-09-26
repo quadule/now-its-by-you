@@ -32,6 +32,7 @@ class Body:
     highcut: float  # Hz above which radiation falls away
     hill: tuple[float, float, float] = (0.0, 1.0, 0.0)  # a broad bump over the scatter: Hz, octaves wide, dB
     length: float = 0.6  # seconds of response kept
+    coherent: bool = False  # the scattered modes all push one way: broad humps, never a plate's deep notches
 
 
 # Mode frequencies and Qs follow published measurements of each family (Fletcher
@@ -88,14 +89,14 @@ ACCORDION = Body(  # an accordion's reed blocks in their box behind the grille: 
     # chambers' nasal humps near 1.1 and 2.6 kHz, the grille and its cloth taking a little off the top; otherwise
     # nearly flat, as a free reed's radiated pulses are
     modes=((240.0, 4.0, 1.5), (1100.0, 3.0, 3.0), (2600.0, 3.5, 3.0)),
-    dense=(500.0, 7000.0, 36), tilt=-1.0, q=(12.0, 8.0), direct=0.65, lowcut=70.0, highcut=8000.0,
-    length=0.2,
+    dense=(500.0, 7000.0, 36), tilt=-0.4, q=(12.0, 8.0), direct=0.65, lowcut=70.0, highcut=8000.0,
+    hill=(3000.0, 2.0, 4.0), length=0.2, coherent=True,
 )
 CONCERTINA = Body(  # a concertina's small hexagonal ends: the reed pan's chambers and the action board's holes
     # lift 1.5 to 3.5 kHz (its cutting edge), the fretwork takes the very top off, the small box rings down quickly
     modes=((420.0, 4.0, 1.5), (1600.0, 3.0, 3.0), (3200.0, 3.5, 3.5)),
-    dense=(800.0, 8000.0, 30), tilt=-1.5, q=(12.0, 8.0), direct=0.65, lowcut=120.0, highcut=7000.0,
-    length=0.12,
+    dense=(800.0, 8000.0, 30), tilt=0.0, q=(12.0, 8.0), direct=0.65, lowcut=120.0, highcut=7000.0,
+    hill=(3200.0, 1.5, 6.0), length=0.12, coherent=True,
 )
 REED_BOX = Body(  # a harmonium's reed chamber and bellows box: a few broad, nasal humps
     modes=((180.0, 6.0, 2.0), (420.0, 5.0, 5.0), (1250.0, 4.0, 4.0), (2600.0, 4.0, 1.0)),
@@ -144,7 +145,9 @@ def impulse_response(body: Body, sr: int, seed: int = 0, size: float = 1.0, chan
             db += hill_db * np.exp(-0.5 * (np.log2(f / (hill_f / size)) / (hill_w / 2.0)) ** 2)
         q = np.interp(x, [0.0, np.log2(hi / lo)], body.q) * np.exp(rng.normal(0.0, 0.15))
         g = 10.0 ** (db / 20.0) * 2.0 * np.pi * f / q
-        weights = g * rng.uniform(0.3, 1.0, channels) * rng.choice([-1.0, 1.0], channels)
+        spread = rng.uniform(0.3, 1.0, channels)  # drawn before the signs, as always
+        signs = np.ones(channels) if body.coherent else rng.choice([-1.0, 1.0], channels)
+        weights = g * spread * signs
         m, y = ring(f, q)
         ir[:m] += y[:, None] * weights[None, :]
 
