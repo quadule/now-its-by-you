@@ -9,10 +9,111 @@
 // sample is the recorder's frame (t0 + out + inn + extra) * rate, and every sample after
 // it lines up with the guide's timeline. autoSync() then finds any lag left by sliding the
 // pitch sung against the song's notes.
+//
+// One section at a time: playback starts at the section's window (two bars before its first
+// sung note, from the words' JSON) and stops at the window's end, and the take is cut so its
+// sample 0 is guide time `from`: the frame (t0 + from + out + inn + extra) * rate. Everything
+// else is as for the whole song, which is the window [0, the song's end).
 
 export const NAMES = { intro: "Intro", verse: "Verse", refrain: "Refrain", turn: "Turn", bridge: "Bridge", tag: "Tag",
                        break: "Break", outro: "Outro" };
 export const PAST = 2.0, FUTURE = 5.0; // seconds of the lane either side of the playhead
+export const TAIL = 0.6; // seconds a one-section take runs past its window's end, for the last note to die away
+
+/* ---------- the version sung: a set of words, a key and a speed ---------- */
+
+export function specId({ set, key, tempo }) {
+  // "a.k-2.t90": set a, two steps lower, at 90% of the song's speed (no "+": it breaks query strings)
+  return `${set}.k${key}.t${tempo}`;
+}
+
+export function parseSpec(id) {
+  const m = /^([a-z0-9]{1,8})\.k(-?\d{1,2})\.t(\d{2,3})$/.exec(String(id ?? ""));
+  return m ? { id: String(id), set: m[1], key: Number(m[2]), tempo: Number(m[3]) } : null;
+}
+
+export function keyLabel(key) {
+  // semitones from the song's own key, in words a singer uses
+  if (!key) return "as written";
+  const n = Math.abs(key);
+  return `${n} step${n === 1 ? "" : "s"} ${key < 0 ? "lower" : "higher"}`;
+}
+
+export function speedLabel(tempo) {
+  // percent of the song's own speed
+  return tempo === 100 ? "as written" : tempo > 100 ? "faster" : tempo >= 90 ? "a little slower" : "slower";
+}
+
+export function specText(id, sets = []) {
+  // a version in words, what's as written left out: "Set A, 2 steps lower, a little slower"
+  const s = parseSpec(id);
+  if (!s) return "";
+  const set = sets.find(x => x.id === s.set);
+  const out = [set ? set.name : s.set === "song" ? "" : `Set ${s.set.toUpperCase()}`];
+  if (s.key) out.push(keyLabel(s.key));
+  if (s.tempo !== 100) out.push(speedLabel(s.tempo));
+  return out.filter(Boolean).join(", ");
+}
+
+export function nearestSpec(ids, want, keep) {
+  // the version on offer nearest the one wanted: the same set if it can be, then the nearest key,
+  // then the nearest speed; `keep` ("set", "key" or "tempo") holds what was just chosen, if any offer it
+  const all = ids.map(parseSpec).filter(Boolean);
+  const same = keep ? all.filter(s => s[keep] === want[keep]) : [];
+  const cost = s => (s.set === want.set ? 0 : 1000) + 10 * Math.abs(s.key - want.key) + Math.abs(s.tempo - want.tempo);
+  let best = null;
+  for (const s of same.length ? same : all) if (!best || cost(s) < cost(best)) best = s;
+  return best ? best.id : null;
+}
+
+/* ---------- the sections a singer can sing on their own ---------- */
+
+const LITTLE = new Set(["a", "an", "and", "as", "at", "but", "by", "for", "from", "if", "in", "nor", "of", "on", "or", "so", "that",
+                        "the", "to", "while", "with"]);
+
+export function firstWords(line, max = 28) {
+  // the start of a line for a label, at most `max` characters: whole if it fits, else its first
+  // sentence, or its first clause, or its first words (not ending on a little one like "and"), with "…"
+  const text = String(line ?? "").replace(/\s+/g, " ").trim();
+  if (text.length <= max) return text.replace(/[,;:]$/, "");
+  const sentence = /^.{11,}?[.?!](?= )/.exec(text.slice(0, max + 1));
+  if (sentence) return sentence[0];
+  let clause = -1;
+  for (const m of text.matchAll(/[,;:] /g)) if (m.index >= 12 && m.index <= max) clause = m.index;
+  if (clause > 0) return text.slice(0, clause) + "…";
+  const words = text.slice(0, max + 1).split(" ").slice(0, -1); // whole words only
+  while (words.length > 1 && LITTLE.has(words[words.length - 1].toLowerCase())) words.pop();
+  return (words.length ? words.join(" ") : text.slice(0, max)).replace(/[,;:.]$/, "") + "…";
+}
+
+export function sungSections(lyrics) {
+  // the sung sections, in order, each with its window [from, to) and its name as a singer would
+  // say it ("Verse 2"; "Bridge" when there's only one)
+  const sung = (lyrics.sections || []).filter(s => s.sung && Array.isArray(s.window));
+  const kinds = {};
+  for (const s of sung) kinds[s.name] = (kinds[s.name] || 0) + 1;
+  return sung.map(s => {
+    const name = NAMES[s.name] || s.name;
+    return { ...s, from: s.window[0], to: s.window[1], title: kinds[s.name] > 1 && s.nth ? `${name} ${s.nth}` : name };
+  });
+}
+
+export function sectionLabel(s) {
+  // "Verse 2 · They saved it as numbers…"
+  const words = firstWords(s.label);
+  return words ? `${s.title} · ${words}` : s.title;
+}
+
+export function inWindow(notes, from = 0, to = Infinity) {
+  // the notes a one-section take is measured by: those that start inside its window
+  return notes.filter(n => n.start >= from && n.start < to);
+}
+
+export function restAt(notes, from = 0) {
+  // where the lane waits before playing: a second before the first note to sing
+  const n = notes.find(n => n.start >= from);
+  return (n ? n.start : from) - 1.0;
+}
 
 /* ---------- the notes ---------- */
 
@@ -100,21 +201,31 @@ function escape(s) {
   return String(s).replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]);
 }
 
+export function reelLines(lyrics, { from = 0, to = Infinity, name = null } = {}) {
+  // the lines a reel shows (for one section, only its own: those of its kind starting in its
+  // window), each with the rest before it, from the line before or from where playback starts,
+  // and the beats that count it in
+  const lines = lyrics.lines.filter(l => l.syllables[0].start >= from && l.syllables[0].start < to && (!name || l.section === name));
+  return lines.map((line, i) => {
+    const before = i ? lines[i - 1] : null;
+    const gapStart = before ? before.end : from;
+    return { line, before, gapStart, gap: line.syllables[0].start - gapStart,
+             count: countIn(lyrics.beats, line.syllables[0].start, lyrics.tempo) };
+  });
+}
+
 export class Reel {
   // the words line by line in a scrolling window: the current line large, each syllable
-  // filling in as it's sung; before a line after a rest, a bar and four dots count it in
-  constructor(el, lyrics) {
+  // filling in as it's sung; before a line after a rest, a bar and four dots count it in.
+  // `part` is {from, to, name, end} for one section; without it, the whole song
+  constructor(el, lyrics, part = {}) {
     this.el = el;
     this.tempo = lyrics.tempo;
     this.focus = -2;
     el.innerHTML = "";
-    const lines = lyrics.lines;
-    this.items = lines.map((line, i) => {
+    this.items = reelLines(lyrics, part).map(({ line, before, gapStart, gap, count }) => {
       const item = document.createElement("div");
       item.className = "item";
-      const before = i ? lines[i - 1] : null;
-      const gapStart = before ? before.end : 0;
-      const gap = line.syllables[0].start - gapStart;
       let html = "";
       if (!before || before.section !== line.section || gap > 3) html += `<div class="label">${escape(NAMES[line.section] || line.section)}</div>`;
       if (gap >= 1.2) {
@@ -125,12 +236,11 @@ export class Reel {
       item.innerHTML = html;
       el.appendChild(item);
       return { el: item, line, gapStart, gap, syls: [...item.querySelectorAll(".syl")], fill: item.querySelector(".fill"),
-               dots: [...item.querySelectorAll(".dots i")], lead: item.querySelector(".gap"),
-               count: countIn(lyrics.beats, line.syllables[0].start, lyrics.tempo) };
+               dots: [...item.querySelectorAll(".dots i")], lead: item.querySelector(".gap"), count };
     });
     const end = document.createElement("div");
     end.className = "item done";
-    end.textContent = "That's the song.";
+    end.textContent = part.end || "That's the song.";
     el.appendChild(end);
     this.items.push({ el: end, line: null });
   }
@@ -233,12 +343,27 @@ export function autoSync(trail, notes) {
   return Math.abs(best) >= 0.01 ? Math.round(best * 1000) / 1000 : 0;
 }
 
+export function autoSyncWindow(trail, notes, from = 0, to = Infinity) {
+  // autoSync for a one-section take, against only the notes it's measured by (those starting in
+  // its window): singing along to the guide's lead-in, or past the end, can't pull it off
+  return autoSync(trail, inWindow(notes, from, to));
+}
+
 /* ---------- a take ---------- */
 
-export function firstFrame(t0, out, inn, extra, rate) {
-  // the recorder frame the take starts on: when the guide's first sample reached the
-  // singer's ears (t0 + out), plus the way back in (inn) and what the device doesn't say (extra)
-  return Math.round((t0 + out + inn + extra) * rate);
+export function firstFrame(t0, out, inn, extra, rate, from = 0) {
+  // the recorder frame the take starts on: when the guide's first sample (for one section, the
+  // guide at `from` seconds) reached the singer's ears (t0 + from + out), plus the way back in
+  // (inn) and what the device doesn't say (extra)
+  return Math.round((t0 + from + out + inn + extra) * rate);
+}
+
+export function cutTake(chunks, first, rate, seconds = Infinity) {
+  // a take from the recorder's blocks: from frame `first` (see firstFrame) for at most `seconds`,
+  // so a one-section take holds its window and a little after, however late it was stopped
+  const samples = assemble(chunks, first);
+  const most = Math.round(seconds * rate);
+  return samples.length > most ? samples.slice(0, most) : samples;
 }
 
 export function assemble(chunks, first) {
@@ -366,4 +491,34 @@ export function decodeOffset(decoded, rate, reference, frame = 0.001, reach = 0.
   if (a && b) { const den = a.c - 2 * best.c + b.c; if (den < 0) lag += 0.5 * (a.c - b.c) / den; }
   const seconds = lag * frame;
   return Math.abs(seconds) < 0.002 ? 0 : seconds;
+}
+
+/* ---------- names and times, as the pages show them ---------- */
+
+export function slug(name) {
+  // the folder a singer's takes go in (slug() in tools/takes.py): lowercase letters and digits
+  // joined by hyphens, accents dropped, other scripts kept
+  const plain = String(name ?? "").normalize("NFKD").replace(/\p{M}/gu, "");
+  return plain.trim().toLowerCase().replace(/[^\p{L}\p{N}]+/gu, "-").replace(/^-+|-+$/g, "") || "someone";
+}
+
+export const ARTIST_ZONE = "America/Los_Angeles";
+
+export function moment(iso, zone) {
+  // "Sunday 27 September at 10 PM" on the clock of `zone` (an IANA name; the device's own if none)
+  const d = new Date(iso);
+  if (!iso || isNaN(d)) return "";
+  const p = {};
+  const format = new Intl.DateTimeFormat("en-US", { timeZone: zone, weekday: "long", day: "numeric", month: "long",
+                                                    hour: "numeric", minute: "2-digit", hour12: true });
+  for (const { type, value } of format.formatToParts(d)) p[type] = value;
+  const time = p.minute === "00" ? `${p.hour} ${p.dayPeriod}` : `${p.hour}:${p.minute} ${p.dayPeriod}`;
+  return `${p.weekday} ${p.day} ${p.month} at ${time}`;
+}
+
+export function closingTime(iso, zone) {
+  // when singing closes, on the artist's clock, and on the singer's too when it reads differently
+  const there = moment(iso, ARTIST_ZONE), here = moment(iso, zone);
+  if (!there) return "";
+  return here === there ? `${there} Pacific` : `${there} Pacific (${here} your time)`;
 }
