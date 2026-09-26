@@ -216,20 +216,74 @@ Each item names the choice, and how to undo it or where it lives.
 16. **Whether the seed carries its day,** and the tags' working title and "Songbird" as artist
     (docs/STATEMENT.md proposes "Nobody Knows" and "Nobody").
 
+## After the first notes (2026-09-26, afternoon)
+
+### Listen first
+
+- `renders/production/refrain/seed-11.flac`: each chorus with words of its own, your "Nobody, so" in the
+  middle one (its lyric sheet beside it). `seed-3.second-refrain.flac`: the song's own head asking "Who heard
+  this song?".
+- `renders/production/mix/hiss/4-hana.verse-refrain.before.flac` and `.after.flac`: the hiss (README.txt
+  there has the other pairs, and the murmur that was removed, on its own).
+- `renders/production/instruments/styles/country-steel.flac` against `country-standin.flac`, and
+  `blues-slide.flac` against `blues-standin.flac`: the pedal steel and the slide guitar.
+- `renders/production/instruments/shanty-concertina.flac` and `shanty-accordion.flac`: the concertina and
+  the accordion.
+- `renders/production/instruments/review-2026-09-26/styles/stringband-tour-before.flac` against
+  `stringband-tour-after.flac`: the clawhammer and the mandolin's chop, heard for the first time (README-b.txt).
+
+### What changed
+
+- **Every chorus has words of its own** (docs/ARRANGE.md, songs/h-bank.md). The first asks who made the song
+  and the last who owns it; each between asks something else. "While" varies from chorus to chorus, and each
+  chorus ends its own way ("it goes", "who knows", "it grows"), so three choruses sing all three. The first
+  and last keep "Nobody knows"; a chorus between may sing your head, "Who wrote this song? Nobody, so / it's
+  yours if you sing it and then who knows?", as you wrote it, and when it does no other chorus says "who
+  knows". The drift hands each chorus's words down and changes them a word at a time; the studio chooses
+  them chorus by chorus. A Fable review tried to break the rules and found two bugs (both fixed).
+- **Your verse swaps**: the girls, boys or kids in the field or yard; a quiet kid, with "their", "they" and
+  "them" all through the verse.
+- **The hiss** (docs/MIX.md, "The hiss"): the "s" sounds, and the reverb carrying them. The de-esser had
+  never worked (it took half a decibel from an "s"), and the choir had none; both now take about 5 dB off a
+  loud "s". Under it, the learned voice murmured wherever a singer rested (it had only ever learned short
+  silences), and the choir's reverb spread the murmur through the room. The singers are now silent where
+  nothing is sung, but for their breaths.
+- **Four instruments finished** (docs/INSTRUMENTS-B.md): the pedal steel (E9, pedals and knee levers, a
+  volume pedal riding each note) and the slide guitar (acoustic, resonator or electric, open tunings), the
+  accordion (Stradella bass, musette tunings, bellows that turn when the air runs out) and an English
+  concertina.
+- **Five families reviewed by measurement**: banjo and mandolin (metal picks, a tuned head, the chop), the
+  electric guitar and bass (the amp by the rig's heat, an audible tremolo, stiff strings), the cello, viola
+  and strings (a swell bug, vibrato, a stereo section), the harmonica (legato across the holes, the blues on
+  the cross harp). The string band had never played clawhammer or a chop: its parts asked for strums and
+  ticks. Every instrument now has a mix strip that suits it.
+
+### To reconsider
+
+1. **How often your head comes**: in about half the songs with three choruses (three quarters with four).
+   One number makes it rarer.
+2. **"While" varying**: the review thought "while / when / if" changing from chorus to chorus reads as a
+   slip, and suggested holding it once a song; I left it varying, as you asked for variety.
+3. **Endings distinct** ("it goes / who knows / it grows" each once): my call on the review's advice, so your
+   "who knows?" is always heard as a question. One line in the bank's rules undoes it.
+4. **The de-esser's strength** (about 5 dB off a loud "s", at most 8); voiced "z" sounds could be caught
+   harder. **A darker plate** is a matter of taste, left as designed. **Line ends** may sound clipped now
+   that the murmur doesn't soften them.
+5. **The accordion in the shanty**: about 3 machines in 10 now play the shanty's squeezebox part on an
+   accordion (commit 5b14231, drop it to keep the concertina). The six-eight shanties' concertina now plays
+   oom-pa-pa chords where it played bass alone.
+6. **The pedal steel**: it sits 2-4 dB under where its stand-in sat; 45% of makers tune its thirds flat for
+   sweeter chords, which sounds flat on a melody; a quarter of the blues slides are electric.
+7. **Balances**: in indie the electric guitar still sits 8 LU under the acoustic; in the blues the slide's
+   answers sit under the harmonica's.
+8. **The harmonica**: keep the compromise and Marine Band tunings (the latter's thirds 12 cents low), and the
+   songwriter's harp in a neck rack?
+
 ## Next
 
-**The artist's first notes (the morning after):**
-- *Refrain variety:* "Different variations should be possible in each iteration of the chorus".
-  Today the refrain's slot words are chosen once a song, and only the turning word and the couplet
-  change from refrain to refrain.
-- *A new refrain variant for the bank:* "Who wrote this song? Nobody, so / it's yours if you sing
-  it and then who knows?"
-- *The hiss:* "Sometimes the reverb (+ other effects?) produce a loud hiss", as at the start of
-  styles/lineage/4-hana.verse-refrain.
-  - *Measured:* half a second in, the band above 6 kHz rises to 8 dB under the mids, where it is
-    15 to 25 dB under elsewhere.
-  - *Not tape wear:* that mix's wear is 0.
-  - *Suspect:* the plate reverb, which the country style turns up, on a sparse texture.
+**The artist's first notes (the morning after), all done that afternoon (above):** each chorus's
+own words; the "Nobody, so" head; the hiss. Seven more heads along the same lines were offered in
+chat and wait for the artist's pick before they go in the bank.
 
 **Then:**
 
