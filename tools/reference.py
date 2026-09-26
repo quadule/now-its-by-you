@@ -15,6 +15,11 @@ same guide a person sings along to, in one of these voices:
     formant                      the machine's own singer, as a lineage stand-in (the easy case)
     say:<voice>                  a macOS voice's reading of the lyric, moved onto the tune
     elevenlabs:<voice>, gemini:<voice>    the same, read by those services (tools/tts.py)
+    seedvc:<file.wav>            the formant singer's take, sung again by Seed-VC (singing voice
+                                 conversion, installed beside the repo, SEED_VC) in the voice of the
+                                 singer in file.wav (1 to 30 s of them alone, e.g. from
+                                 tools/music_takes.py): a voice that sounds like a person, with the
+                                 pitch and timing sung exactly as planted
 
 and is then heard through a cheap microphone in a small room. The spoken
 voices are moved onto the tune the way tools/speech_to_song.py does it: their
@@ -28,20 +33,24 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
+import subprocess
 import sys
+import tempfile
 import warnings
 from dataclasses import astuple, fields
 from pathlib import Path
 
 import numpy as np
 import soundfile as sf
-from scipy.signal import butter, fftconvolve, sosfilt
+from scipy.signal import butter, fftconvolve, resample_poly, sosfilt
 
 warnings.filterwarnings("ignore", message="pkg_resources")
 sys.path.insert(0, str(Path(__file__).parent))
 import phrasing as T  # noqa: E402
 import speech_to_song as S  # noqa: E402
 import tts  # noqa: E402
+from speech_to_song import pyworld  # noqa: E402
 
 from songbird import genome as G  # noqa: E402
 from songbird import phrasing as P  # noqa: E402
@@ -137,6 +146,24 @@ def mic(y: np.ndarray, rng) -> np.ndarray:
     return y * 10 ** (rng.uniform(-12.0, -4.0) / 20) / (np.max(np.abs(y)) + 1e-12)
 
 
+SEED_VC = Path(os.environ.get("SEED_VC", T.ROOT.parent / "seed-vc"))
+
+
+def seedvc(y: np.ndarray, target: Path) -> np.ndarray:
+    """y sung again in the voice of the singer in target, keeping y's pitch and timing (Seed-VC, singing model)."""
+    with tempfile.TemporaryDirectory() as tmp:
+        src = Path(tmp) / "source.wav"
+        sf.write(str(src), y.astype(np.float32), S.SR, subtype="FLOAT")
+        subprocess.run([str(SEED_VC / ".venv" / "bin" / "python"), "inference.py", "--source", str(src),
+                        "--target", str(target), "--output", tmp, "--diffusion-steps", "30", "--length-adjust", "1.0",
+                        "--inference-cfg-rate", "0.7", "--f0-condition", "True", "--auto-f0-adjust", "False",
+                        "--semi-tone-shift", "0", "--fp16", "False"],
+                       cwd=SEED_VC, check=True, capture_output=True)
+        out, sr = sf.read(str(next(Path(tmp).glob("vc_*.wav"))), always_2d=True)
+    out = out.mean(axis=1)
+    return resample_poly(out, S.SR, sr) if sr != S.SR else out
+
+
 def sing(spec: str, g: T.Guide, sung: list[P.Gesture], reading, seed: int) -> tuple[np.ndarray, int]:
     """One take: the guide's notes sung with these gestures in the voice spec."""
     beat = 60.0 / g.tempo
@@ -144,6 +171,13 @@ def sing(spec: str, g: T.Guide, sung: list[P.Gesture], reading, seed: int) -> tu
     if spec == "formant":
         singer = lineage_voices(1, seed)[0]
         return V.sing(notes, S.SR, singer, seed, g.lexicon), singer.shift
+    if spec.startswith("seedvc:"):
+        target = Path(spec.split(":", 1)[1])
+        tone, sr = sf.read(str(target), always_2d=True)
+        f0 = pyworld.harvest(np.ascontiguousarray(tone.mean(axis=1)), sr, f0_floor=60.0, f0_ceil=900.0, frame_period=5.0)[0]
+        shift = octave_for(hz_to_midi(float(np.median(f0[f0 > 0]))) - 4, g)  # sung where the target sings
+        singer = V.VoiceParams(shift=shift, vibrato_depth=1.0, scoop=0.0, jitter=0.2, wander=3.0)
+        return seedvc(V.sing(notes, S.SR, singer, seed, g.lexicon), target), shift
     shift = octave_for(reading["midi"], g)
     # the gestures carry the vibrato and scoops; a unit depth lets a note's own vibrato through as it is
     singer = V.VoiceParams(shift=shift, vibrato_depth=1.0, scoop=0.0, jitter=0.2, wander=3.0)
@@ -173,8 +207,9 @@ def main() -> None:
         return whisper
 
     for vi, spec in enumerate(args.voice):
-        reading = None if spec == "formant" else spoken(spec, g, model)
-        folder = OUT / ("formant" if spec == "formant" else tts.slug(spec))
+        reading = None if spec == "formant" or spec.startswith("seedvc:") else spoken(spec, g, model)
+        folder = OUT / ("formant" if spec == "formant" else
+                        f"seedvc-{Path(spec.split(':', 1)[1]).parent.name}" if spec.startswith("seedvc:") else tts.slug(spec))
         folder.mkdir(parents=True, exist_ok=True)
         for j in range(args.takes):
             rng = np.random.default_rng([args.seed, vi, j])
