@@ -138,15 +138,17 @@ class Clock:
         return PREROLL + (self.rit_start + x + self.ritardando * x * x / (2 * span)) * self.unit
 
     def beats(self) -> list[tuple[float, bool]]:
-        """Every beat of the song in seconds, from the first pickup's to the last
-        bar's, and whether it begins a bar: the pulse the notes were placed on."""
+        """Every beat of the song in seconds, and whether it begins a bar: the
+        pulse the notes were placed on, from the first beat after the song's
+        start (there is one before an eighth-note pickup, in the preroll) to the
+        final bar line, where the last note ends."""
         m = self.meter
-        first = -(self.lead // m.beat)  # a pickup of a beat or more has beats of its own
+        first = -((self.lead * self.unit + PREROLL) // (m.beat * self.unit))  # as far back as time zero
         out = []
-        for k in range(first, (self.end - self.lead) // m.beat + 1):
-            u = self.lead + k * m.beat
-            if u < self.end:
-                out.append((self.seconds(u), (k * m.beat) % m.bar == 0))
+        for k in range(int(first), (self.end - self.lead) // m.beat + 1):
+            t = self.seconds(self.lead + k * m.beat)
+            if t >= 0.0:
+                out.append((t, (k * m.beat) % m.bar == 0))
         return out
 
 
