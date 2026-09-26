@@ -30,10 +30,13 @@ def pan(mono: np.ndarray, position: float) -> np.ndarray:
     return np.stack([mono * np.cos(theta), mono * np.sin(theta)], axis=1)
 
 
-def render_stems(score: Score, sr: int = SR, seed: int = 0, voice: VoiceParams | None = None) -> dict[str, np.ndarray]:
+def render_stems(score: Score, sr: int = SR, seed: int = 0, voice: VoiceParams | None = None,
+                 ancestors: list[VoiceParams] | None = None) -> dict[str, np.ndarray]:
     """Each part rendered dry, in stereo, all the same length: a stem for every
     instrument that plays (lute, guitar, harp, bass, fiddle, whistle, drum,
-    drone), then the voice and each lineage voice."""
+    drone), then the voice and each lineage voice. ancestors: the singers of
+    the earlier versions, the parent's first, who sing the choir's parts in
+    turn (stand-ins sing the rest)."""
     length = int(np.ceil(score.duration * sr))
     stems = render_band(score, sr, seed)
     sung = list(score.part("voice"))
@@ -42,7 +45,8 @@ def render_stems(score: Score, sr: int = SR, seed: int = 0, voice: VoiceParams |
         stems["voice"] = pan(np.pad(y, (0, length - len(y))), 0.0) * VOICE_GAIN
     choir = sorted({n.part for n in score.notes if n.part.startswith("choir")}, key=lambda p: int(p[5:]))
     learned = (voice or VoiceParams()).engine == "learned"
-    for name, singer in zip(choir, lineage_voices(len(choir), seed, learned=learned)):
+    singers = [*(ancestors or [])[: len(choir)], *lineage_voices(len(choir), seed, learned=learned)]
+    for name, singer in zip(choir, singers):
         i = int(name[5:]) - 1
         y = sing(list(score.part(name)), sr, singer, seed + 101 * (i + 1), score.lexicon)[:length]
         stems[name] = pan(np.pad(y, (0, length - len(y))), CHOIR_PANS[i % len(CHOIR_PANS)]) * VOICE_GAIN * CHOIR_GAIN
@@ -83,6 +87,27 @@ def mix(stems: dict[str, np.ndarray], sr: int = SR, seed: int = 0, params: MixPa
 
 
 def render(score: Score, sr: int = SR, seed: int = 0, voice: VoiceParams | None = None,
-           mix_params: MixParams | None = None) -> np.ndarray:
+           mix_params: MixParams | None = None, ancestors: list[VoiceParams] | None = None) -> np.ndarray:
     """The unmastered stereo mix, in its room."""
-    return mix(render_stems(score, sr, seed, voice), sr, seed, mix_params)
+    return mix(render_stems(score, sr, seed, voice, ancestors), sr, seed, mix_params)
+
+
+def ancestors_from(records: list[dict], learned: bool) -> list[VoiceParams]:
+    """The singers of earlier versions, from their records' singers (the parent's first). When the lead
+    sings with the learned throat, an ancestor who sang with the formant singer is heard through the
+    throat too, as a singer of its own drawn from its id, so the choir stays one kind of voice."""
+    from dataclasses import fields
+
+    known = {f.name for f in fields(VoiceParams)}
+    out = []
+    for record in records:
+        data = {k: v for k, v in (record.get("singer") or {}).items() if k in known}
+        singer = VoiceParams(**data)
+        if learned and singer.engine != "learned":
+            from . import throat
+
+            ident = int(str(record.get("id") or "0")[:15] or "0", 16)
+            singer = replace(singer, engine="learned", timbre=f"machine:{ident}", tract=throat.TRACT,
+                             rd=min(max(singer.rd, 0.65), 1.0), tilt=min(max(singer.tilt, 0.3), 0.5))
+        out.append(singer)
+    return out

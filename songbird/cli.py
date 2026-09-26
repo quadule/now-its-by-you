@@ -69,7 +69,11 @@ def render_one(genome, params: Params, out: Path, *, voice=None, drift=None, lyr
     mixing = MixParams.parse(list(mix_overrides), base=MixParams.from_dict(params.mix or {}))
 
     out.parent.mkdir(parents=True, exist_ok=True)
-    mix = synth.render(score, seed=params.seed, voice=singer, mix_params=mixing)
+    # the earlier versions' singers, the parent's first, sing the lineage choir (as many as it has voices)
+    lineage_singers = ([{"id": parent.get("id"), "singer": parent.get("singer")}, *(parent.get("lineage_singers") or [])]
+                       if parent and parent.get("singer") else [])[: variation.CHOIR_MAX]
+    ancestors = synth.ancestors_from(lineage_singers, learned=singer.engine == "learned")
+    mix = synth.render(score, seed=params.seed, voice=singer, mix_params=mixing, ancestors=ancestors)
     mastered = master.master(mix, synth.SR)
     pcm = master.to_pcm16(mastered, seed=params.seed)
     master.write_flac(out, pcm, synth.SR)
@@ -82,6 +86,7 @@ def render_one(genome, params: Params, out: Path, *, voice=None, drift=None, lyr
         "params": params.to_dict(),
         "lyrics": lyrics.to_dict() if lyrics else None,  # the words drawn from the bank; None: the seed's own
         "singer": asdict(singer),
+        "lineage_singers": lineage_singers,  # who sings in the choir: the earlier versions, the parent's first
         "voice": voice.to_dict() if voice is not None else None,
         "drift": drift.to_dict() if drift is not None else None,
         "phrasing": {k: v for k, v in phrasing_json.items() if k not in ("phrases", "fields")} if phrasing_json else None,
@@ -106,7 +111,7 @@ def render_one(genome, params: Params, out: Path, *, voice=None, drift=None, lyr
     if stems:
         import soundfile as sf
 
-        for name, stem in synth.render_stems(score, seed=params.seed, voice=singer).items():
+        for name, stem in synth.render_stems(score, seed=params.seed, voice=singer, ancestors=ancestors).items():
             sf.write(str(out.with_name(f"{out.stem}.{name}.wav")), stem, synth.SR, subtype="FLOAT")
 
     print(f"{out}  {record['duration']:.1f}s  {record['loudness_lufs']} LUFS  id {record['id'][:12]}")

@@ -75,3 +75,16 @@ def test_the_choir_sings_with_the_learned_throat_when_the_lead_does():
     assert len({v.timbre for v in learned}) == 3
     # the plain stand-ins are drawn exactly as before
     assert [v.shift for v in plain] == [v.shift for v in learned]
+
+
+def test_earlier_versions_sing_the_choir_in_their_own_voices():
+    from songbird.synth import ancestors_from
+
+    formant = {"id": "ab" * 32, "singer": {"engine": "formant", "shift": -12, "rd": 1.3, "tract": 1.0}}
+    learned = {"id": "cd" * 32, "singer": {"engine": "learned", "timbre": "house-alto:1.000", "shift": 0}}
+    kept = ancestors_from([learned, formant], learned=False)
+    assert kept[0].timbre == "house-alto:1.000" and kept[1].engine == "formant" and kept[1].shift == -12
+    heard = ancestors_from([learned, formant], learned=True)
+    # a formant ancestor is heard through the throat as a singer of its own, in its own octave
+    assert heard[1].engine == "learned" and heard[1].timbre.startswith("machine:") and heard[1].shift == -12
+    assert ancestors_from([formant], learned=True)[0].timbre == heard[1].timbre
