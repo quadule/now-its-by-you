@@ -38,6 +38,7 @@ from dataclasses import dataclass, replace
 import numpy as np
 from typing import Callable
 
+from . import evolve
 from .band import INSTRUMENTS, Band
 from .drift import DIMENSIONS, Drift, series
 from .genome import Genome
@@ -389,6 +390,7 @@ class Context:
     parent: object  # the parent's Params
     c: Character
     drift: Drift | None
+    log: list | None = None  # where to note what changed from the parent in the tune and the words, and why
 
     def at(self, view: str, dimension: str) -> float:
         return self.drift.view(view).get(dimension, 0.0) if self.drift is not None else 0.0
@@ -844,9 +846,9 @@ def choose_vocabulary(out: dict, ctx: Context) -> None:
 
 
 def leanings(params):
-    """The leanings chosen with params, as songbird.arrange takes them; None for
-    parameters that chose none (the seed's), which arrange reads as neutral."""
-    lean = params.leanings
+    """The leanings chosen with params (or the leanings dict itself), as songbird.arrange
+    takes them; None for parameters that chose none (the seed's), which arrange reads as neutral."""
+    lean = params if isinstance(params, dict) else params.leanings
     if not lean:
         return None
     from .arrange import Leanings
@@ -855,6 +857,26 @@ def leanings(params):
     return Leanings(mood_weights=lean.get("mood_weights", {}), era_bias=lean.get("era_bias", 0.0),
                     rarity_appetite=lean.get("rarity_appetite", 0.0),
                     vocabulary=frozenset(w for w, weight in vocabulary.items() if weight >= VOCABULARY_AT))
+
+
+LEANING_KNOBS = tuple(k for k in KNOBS if k.path.startswith("leanings."))
+
+
+def own_leanings(ctx: Context, t: float | None = None, mode: str | None = None):
+    """The lyric leanings this machine would choose from its parent's at a moment (a clock's stretch's start,
+    so a choice made with them holds through the stretch), or with no moment, from its character alone: its
+    taste without the season's drift. As songbird.arrange takes them; None if neutral."""
+    from .drift import drift as drift_at
+
+    hash_ = ctx.drift.hash if ctx.drift is not None else ""
+    moment = drift_at(t, hash_) if t is not None and hash_ else None
+    sub = Context(ctx.genome, ctx.song, ctx.parent, ctx.c, moment)
+    tmp = {"leanings": dict(getattr(ctx.parent, "leanings", None) or {}), "mode": mode}
+    for knob in LEANING_KNOBS:
+        knob.apply(tmp, sub)
+    choose_mood(tmp, sub)
+    choose_vocabulary(tmp, sub)
+    return leanings(tmp["leanings"])
 
 
 def choose_inventory(out: dict, ctx: Context) -> None:
@@ -869,15 +891,16 @@ def choose_room(out: dict, ctx: Context) -> None:
         out.setdefault("mix", {}).update(rt60=ctx.c.room["rt60"], tone=list(ctx.c.room["tone"]))
 
 
+# The words and the tune last: they read the form and the leanings chosen above (songbird.evolve).
 DECISIONS = (choose_mode, choose_form, choose_accomp, choose_pattern, choose_lead, choose_choir, choose_mood,
-             choose_vocabulary, choose_inventory, choose_room)
+             choose_vocabulary, choose_inventory, choose_room, evolve.choose_words, evolve.choose_variants)
 
 
 # ---------------------------------------------------------------- putting it together
 
 
 def choose(genome: Genome, parent=None, voice: Voice | None = None, drift: Drift | None = None,
-           seed: int | None = None):
+           seed: int | None = None, log: list | None = None):
     """The child's parameters; see realize.choose_params."""
     from .realize import Params
 
@@ -885,10 +908,13 @@ def choose(genome: Genome, parent=None, voice: Voice | None = None, drift: Drift
     parent = parent if parent is not None else song
     if voice is None and drift is None:
         return parent if seed is None else replace(parent, seed=seed)
-    ctx = Context(genome, song, parent, character(voice), drift)
+    ctx = Context(genome, song, parent, character(voice), drift, log)
     out = parent.to_dict()
     for key in ("singer", "mix", "leanings"):
         out[key] = dict(out.get(key) or {})
+    # a generation on, made here and now: a child on this machine changes only what a clock has turned on since
+    out["generation"] = int(getattr(parent, "generation", 0)) + 1
+    out["made"] = {"by": drift.hash[:12], "at": round(drift.t, 6)} if drift is not None and drift.hash else {}
     for knob in KNOBS:
         knob.apply(out, ctx)
     for decide in DECISIONS:
