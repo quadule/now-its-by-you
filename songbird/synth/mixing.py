@@ -347,8 +347,9 @@ def mix(stems: dict[str, np.ndarray], sr: int, seed: int = 0, params: MixParams 
     wet = room.convolve(send * (p.space * size), early, tail, plates)
     wet = fx.width(fx.equalize(wet, fx.design(RETURN_EQ, sr)), sr, p.width)
     if singing is not None:
+        # the room gives way to the lead's words, but not where the lineage sings with it: that is its space
         dip = np.zeros(len(wet))
-        dip[:length] = RETURN_DIP * singing
+        dip[:length] = RETURN_DIP * singing * (1.0 - fx.activity(choir, sr) if choir is not None else 1.0)
         wet *= (10.0 ** (-dip / 20.0))[:, None]
 
     if taps is not None:
