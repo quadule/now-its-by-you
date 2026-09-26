@@ -104,6 +104,23 @@ export function sectionLabel(s) {
   return words ? `${s.title} · ${words}` : s.title;
 }
 
+export const WHOLE = "The whole song";
+
+export function part(lyrics, index = null) {
+  // what's sung: one sung section, by its index, from its window's start to its end; or, with no
+  // index, the whole song, from 0 to its end; null for a section this version doesn't have
+  if (index === null || index === undefined) return { index: null, name: null, from: 0, to: lyrics.duration, title: WHOLE, label: WHOLE };
+  const s = sungSections(lyrics).find(s => s.index === index);
+  return s ? { index: s.index, name: s.name, from: s.from, to: s.to, title: s.title, label: sectionLabel(s) } : null;
+}
+
+export function nextSection(sections, current, done = new Set()) {
+  // after a section is kept, the one to offer next: the first not yet sung after it, else the
+  // first not yet sung from the top; null when every section has been sung
+  const i = sections.findIndex(s => s.index === current);
+  return [...sections.slice(i + 1), ...sections.slice(0, i + 1)].find(s => s.index !== current && !done.has(s.index)) || null;
+}
+
 export function inWindow(notes, from = 0, to = Infinity) {
   // the notes a one-section take is measured by: those that start inside its window
   return notes.filter(n => n.start >= from && n.start < to);

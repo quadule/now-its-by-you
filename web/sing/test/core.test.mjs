@@ -6,8 +6,8 @@ import { test } from "node:test";
 
 import {
   CLICKS, TAIL, assemble, autoSync, autoSyncWindow, closingTime, countIn, cutTake, decodeOffset, envelope, firstFrame, firstWords,
-  inWindow, keyLabel, moment, nearestSpec, parseSpec, pitchAt, reelLines, restAt, sectionLabel, shifted, slug, specId, specText,
-  speedLabel, sungSections, tapLags, wavBytes, yin,
+  inWindow, keyLabel, moment, nearestSpec, nextSection, parseSpec, part, pitchAt, reelLines, restAt, sectionLabel, shifted, slug,
+  specId, specText, speedLabel, sungSections, tapLags, wavBytes, yin,
 } from "../../../tools/karaoke.js";
 
 const RATE = 48000;
@@ -170,6 +170,19 @@ test("the sections a singer can sing alone, with their windows and their names a
   assert.equal(firstWords("a flicker of light, and as quick as a fire."), "a flicker of light…");
   assert.equal(firstWords("Each copy was perfect in every last part,"), "Each copy was perfect…"); // never ending on "in"
   assert.equal(firstWords("Nobody knows,"), "Nobody knows");
+});
+
+test("what's sung is one section, from its window's start to its end, or the whole song; then the next not yet sung", () => {
+  assert.deepEqual(part(LYRICS), { index: null, name: null, from: 0, to: 49.0, title: "The whole song", label: "The whole song" });
+  assert.deepEqual(part(LYRICS, 5), { index: 5, name: "verse", from: 30.3, to: 39.93, title: "Verse 2", label: "Verse 2 · The whole world was watching…" });
+  assert.equal(part(LYRICS, 2), null); // a turn isn't sung
+  assert.equal(part(LYRICS, 9), null); // nor is a section this version doesn't have
+  const sung = sungSections(LYRICS);
+  assert.equal(nextSection(sung, 1).index, 3);
+  assert.equal(nextSection(sung, 1, new Set([3])).index, 5); // one sung already: the one after it
+  assert.equal(nextSection(sung, 5, new Set([5])).index, 1); // the last kept: from the top
+  assert.equal(nextSection(sung, null, new Set([1])).index, 3); // after the whole song: the first not yet sung
+  assert.equal(nextSection(sung, 5, new Set([1, 3, 5])), null); // every one sung
 });
 
 test("a section's notes are those starting in its window, and the lane waits a second before the first", () => {

@@ -17,7 +17,18 @@
   h1 { font-size: 20px; margin: 0; font-weight: 650; }
   .hint { color: var(--dim); font-size: 14px; }
 
-  canvas.lane { display: block; width: 100%; height: 190px; margin-top: 16px; background: var(--panel); border-radius: 14px; }
+  .pitch { margin: 14px 0 4px; max-width: 46em; }
+  .pitch p { margin: 0 0 6px; color: #cfc3b5; }
+  .pitch p:first-child { font-size: 19px; line-height: 1.4; color: var(--ink); }
+
+  .version { display: flex; flex-wrap: wrap; gap: 8px 18px; align-items: center; }
+  .version label { display: inline-flex; gap: 6px; align-items: center; }
+  .parts { display: flex; flex-wrap: wrap; gap: 8px; margin: 14px 0 4px; }
+  button.chip { padding: 6px 12px; border-radius: 999px; font-size: 15px; }
+  button.chip[aria-pressed="true"] { background: var(--sung); border-color: var(--sung); color: #1b120e; font-weight: 650; }
+  .partLabel { min-height: 1.4em; }
+
+  canvas.lane { display: block; width: 100%; height: 190px; margin-top: 10px; background: var(--panel); border-radius: 14px; }
   .scroller { position: relative; height: 240px; overflow: hidden; margin-top: 10px; background: var(--panel); border-radius: 14px;
               -webkit-mask-image: linear-gradient(transparent, #000 14%, #000 80%, transparent);
               mask-image: linear-gradient(transparent, #000 14%, #000 80%, transparent); }
@@ -72,8 +83,33 @@
 <main>
   <header>
     <h1 id="title">Songbird Karaoke</h1>
-    <span class="hint">Headphones on, so the guide stays out of the mic.</span>
+    <span class="hint">Headphones on (wired if you can), so the guide stays out of the mic.</span>
   </header>
+
+  <section class="pitch" aria-label="What this is">
+    <p>Run the program and you get a new version of the song, shaped by your computer and the day.</p>
+    <p>Sing into it and it learns a little of your timing and inflection (your recording is deleted right after, and your voice is
+      never cloned).</p>
+    <p>The piece confronts the blurred authorship of AI music through the lens of folk music and oral tradition: it wonders
+      who made it, and invites you to take part.</p>
+  </section>
+
+  <div class="panel version" id="version">
+    <label id="setBox" hidden><span class="hint">words</span> <select id="set" title="which verses you sing"></select></label>
+    <label id="keyBox" hidden><span class="hint">key</span> <select id="key" title="too high? go lower"></select></label>
+    <label id="speedBox" hidden><span class="hint">speed</span> <select id="speed"></select></label>
+    <label><span class="hint">hear</span>
+      <select id="mix" title="what you hear while you sing">
+        <option value="melody">the tune alone, with a pulse</option>
+        <option value="full">the whole song</option>
+        <option value="voice">the machine's singer alone</option>
+      </select></label>
+    <span class="hint" id="versionHint">Too high? Go lower. Too fast? Slow it down.</span>
+    <div class="hint" id="setAbout"></div>
+  </div>
+
+  <div class="parts" id="parts" role="group" aria-label="What to sing"></div>
+  <div class="hint partLabel" id="partLabel"></div>
 
   <canvas class="lane" id="lane"></canvas>
   <div class="scroller"><div class="reel" id="reel"></div></div>
@@ -81,21 +117,17 @@
 
   <div class="controls">
     <input id="singer" placeholder="who's singing?" autocomplete="off">
-    <select id="mix" title="what you hear while you sing">
-      <option value="melody">the tune alone, with a pulse</option>
-      <option value="full">the whole song</option>
-      <option value="voice">the machine's singer alone</option>
-    </select>
     <button id="rehearse">▶ Rehearse</button>
-    <button id="record" class="primary">● Record a take</button>
+    <button id="record" class="primary">● Record</button>
     <button id="stop" disabled>■ Stop</button>
     <label class="check hint"><input type="checkbox" id="pitchOn" checked> show my pitch</label>
     <span class="row hint">mic <span class="meter"><div id="level"></div></span></span>
   </div>
   <div class="status hint" id="status">Loading…</div>
+  <div class="row" id="nextBox" hidden><button id="next" class="primary"></button></div>
 
   <div class="panel" id="review" hidden>
-    <h2>That take</h2>
+    <h2 id="reviewTitle">That take</h2>
     <div class="row">
       <button id="listen">▶ Listen back with the guide</button>
       <button id="keep" class="primary">✓ Keep it</button>
@@ -148,9 +180,12 @@
 import * as K from "/karaoke.js";  // tools/karaoke.js: the timing, sync and drawing this page shares with web/sing
 
 const $ = id => document.getElementById(id);
-const S = { ctx: null, guides: {}, digests: {}, lyrics: null, notes: [], lo: 0, hi: 0, reel: null, mode: "idle",
-            t0: 0, out: 0, inn: 0, chunks: [], take: null, takeSinger: "", takeMix: "", singers: [], src: [],
-            analyser: null, buf: null, trail: [], takeTrail: null, showTrail: null, shift: 0, takeBuffer: null };
+// S.lyrics and S.part are what's chosen (the version's words, and one section or the whole song);
+// S.view is what the lane and the words show: the chosen, or a kept take's own while it plays
+const S = { ctx: null, variants: null, spec: null, lyrics: null, sections: [], part: null, view: null, reel: null, mode: "idle",
+            guides: new Map(), downloads: new Map(), words: new Map(), t0: 0, out: 0, inn: 0, stopAt: null, chunks: [],
+            recording: null, take: null, singers: [], src: [], analyser: null, buf: null, trail: [], showTrail: null, shift: 0,
+            autoShift: 0 };
 
 const saved = (key, fallback) => { try { return localStorage.getItem(key) || fallback; } catch (e) { return fallback; } };
 const save = (key, value) => { try { localStorage.setItem(key, value); } catch (e) {} };
@@ -158,38 +193,159 @@ $("nudge").value = saved("songbird-nudge", "0");
 $("singer").value = saved("songbird-singer", "");
 $("mix").value = saved("songbird-mix", "melody");
 if (!$("mix").value) $("mix").value = "melody";  // a choice this page no longer has
-$("singer").addEventListener("input", () => { $("singer").classList.remove("missing"); save("songbird-singer", $("singer").value.trim()); });
+$("singer").addEventListener("input", () => {
+  $("singer").classList.remove("missing");
+  save("songbird-singer", $("singer").value.trim());
+  drawParts();  // the ticks are this singer's
+});
 $("nudge").addEventListener("change", () => save("songbird-nudge", $("nudge").value));
-$("mix").addEventListener("change", () => save("songbird-mix", $("mix").value));
+$("mix").addEventListener("change", () => { save("songbird-mix", $("mix").value); prepare(); });
 
-/* ---------- the words and notes ---------- */
+/* ---------- the version: which words, the key, the speed ---------- */
+
+async function getJSON(url) {
+  const r = await fetch(url);
+  const data = await r.json().catch(() => ({}));
+  if (!r.ok || data.error) throw new Error(data.error || `The server said ${r.status}.`);
+  return data;
+}
+
+function option(select, value, text) {
+  const o = document.createElement("option");
+  o.value = value;
+  o.textContent = text;
+  select.appendChild(o);
+}
 
 async function init() {
-  S.lyrics = await (await fetch("/lyrics.json")).json();
-  $("title").textContent = `Songbird Karaoke: ${S.lyrics.title}`;
-  document.title = `Karaoke: ${S.lyrics.title}`;
-  S.notes = K.notesOf(S.lyrics);
-  ({ lo: S.lo, hi: S.hi } = K.range(S.notes));
-  S.reel = new K.Reel($("reel"), S.lyrics);
-  resting();
-  status("Rehearse to hear it through, or record when you're ready.");
+  try { S.variants = await getJSON("/variants"); } catch (e) { S.variants = null; }  // an older server: the one guide
+  if (S.variants) {
+    const v = S.variants, d = v.default;
+    for (const s of v.sets) option($("set"), s.id, s.name);
+    for (const k of v.keys) option($("key"), k, K.keyLabel(k));
+    for (const t of v.tempos) option($("speed"), t, K.speedLabel(t));
+    $("setBox").hidden = v.sets.length < 2;
+    $("keyBox").hidden = v.keys.length < 2;
+    $("speedBox").hidden = v.tempos.length < 2;
+    for (const o of $("mix").options) o.hidden = !v.mixes.includes(o.value);
+    if (!v.mixes.includes($("mix").value)) $("mix").value = d.mix;
+    const was = K.parseSpec(saved("songbird-spec", ""));  // what was sung here last
+    const pick = was && v.sets.some(s => s.id === was.set) && v.keys.includes(was.key) && v.tempos.includes(was.tempo) ? was : d;
+    $("set").value = pick.set;
+    $("key").value = String(pick.key);
+    $("speed").value = String(pick.tempo);
+    for (const id of ["set", "key", "speed"]) $(id).addEventListener("change", chooseVersion);
+    drawAbout();
+  } else {
+    $("versionHint").hidden = true;
+  }
   if (!window.isSecureContext || !navigator.mediaDevices) {
     status('<span class="warn">Open this page at http://127.0.0.1 so the browser allows the microphone.</span>');
   }
   await loadSingers();
+  await chooseVersion();
+}
+
+function drawAbout() {
+  const s = S.variants.sets.find(s => s.id === $("set").value);
+  $("setAbout").textContent = S.variants.sets.length > 1 && s && s.about ? `${s.name}: ${s.about}` : "";
+}
+
+async function chooseVersion() {
+  // a version chosen: its words and notes at once (the server reads them from the score), its
+  // guide made ready (rendered the first time, about half a minute)
+  const spec = S.variants ? K.specId({ set: $("set").value, key: Number($("key").value), tempo: Number($("speed").value) }) : null;
+  if (S.variants) { save("songbird-spec", spec); drawAbout(); }
+  S.wanted = spec;
+  status("Loading the words…");
+  let lyrics;
+  try { lyrics = await lyricsFor(spec); } catch (e) { if (S.wanted === spec) warn(e.message); return; }
+  if (S.wanted !== spec) return;  // chosen again since
+  const was = S.part;
+  S.spec = spec;
+  S.lyrics = lyrics;
+  S.sections = K.sungSections(lyrics);
+  $("title").textContent = `Songbird Karaoke: ${lyrics.title}`;
+  document.title = `Karaoke: ${lyrics.title}`;
+  // the same section if this version has it (the second verse stays the second verse), else the first not yet sung
+  const same = was && was.index !== null ? S.sections.find(s => s.name === was.name && s.title === was.title) : null;
+  const first = K.nextSection(S.sections, null, sungHere());
+  choosePart(was && was.index === null ? null : same ? same.index : first ? first.index : S.sections.length ? S.sections[0].index : null);
+  status(S.sections.length ? "Choose a section above, or the whole song. Rehearse to hear it through, or record when you're ready."
+                           : "Rehearse to hear it through, or record when you're ready.");
+  prepare();
+}
+
+function lyricsFor(spec) {  // a version's words and notes, fetched once
+  const key = spec || "";
+  if (!S.words.has(key)) {
+    const p = getJSON(spec ? `/lyrics.json?spec=${encodeURIComponent(spec)}` : "/lyrics.json");
+    p.catch(() => S.words.delete(key));
+    S.words.set(key, p);
+  }
+  return S.words.get(key);
+}
+
+/* ---------- what's sung: one section, or the whole song ---------- */
+
+function choosePart(index) {
+  S.part = K.part(S.lyrics, index) || K.part(S.lyrics);
+  $("nextBox").hidden = true;
+  view(S.lyrics, S.part);
+  drawParts();
+  resting();
+}
+
+function sungHere() {
+  // what the singer named above has kept in this version: section indices, and "all" for the whole song
+  const who = K.slug($("singer").value), done = new Set();
+  const s = $("singer").value.trim() && S.singers.find(s => s.who === who);
+  if (s) for (const t of s.takes) if (t.spec && t.spec === S.spec) done.add(t.section ?? "all");
+  return done;
+}
+
+function drawParts() {
+  const box = $("parts"), done = sungHere(), locked = S.mode !== "idle" || !!S.take;
+  box.innerHTML = "";
+  if (!S.lyrics || !S.sections.length) { $("partLabel").textContent = ""; return; }  // words without sections: the whole song only
+  const chip = (index, title, label) => {
+    const b = document.createElement("button");
+    b.type = "button";
+    b.className = "chip";
+    b.textContent = title + (done.has(index ?? "all") ? " ✓" : "");
+    b.title = label + (done.has(index ?? "all") ? " (kept)" : "");
+    b.setAttribute("aria-pressed", String(S.part.index === index));
+    b.disabled = locked;
+    b.onclick = () => choosePart(index);
+    box.appendChild(b);
+  };
+  for (const s of S.sections) chip(s.index, s.title, K.sectionLabel(s));
+  chip(null, K.WHOLE, K.WHOLE);
+  $("partLabel").textContent = S.part.index === null ? "The whole song, from the top." : S.part.label;
+  $("record").textContent = S.part.index === null ? "● Record the whole song" : `● Record ${S.part.title}`;
+}
+
+function view(lyrics, part) {
+  // what the lane and the words show; one section shows only its own notes and lines
+  const notes = K.notesOf(lyrics);
+  S.view = { lyrics, part, notes: part.index === null ? notes : K.inWindow(notes, part.from, part.to), ...K.range(notes) };
+  S.reel = new K.Reel($("reel"), lyrics, part.index === null ? {} : { from: part.from, to: part.to, name: part.name, end: "That's the section." });
 }
 
 function status(html) { $("status").innerHTML = html; }
+function say(text) { $("status").textContent = text; }
+function warn(text) { status('<span class="warn"></span>'); $("status").firstChild.textContent = text; }
 
-function resting() {  // before playing: the words at the start, the lane showing the first notes to come
-  S.reel.show(0);
-  drawLane(S.notes[0].start - 1.0);
+function resting() {  // before playing: the words where it starts, the lane showing the first notes to come
+  if (!S.view) return;
+  S.reel.show(S.view.part.from);
+  drawLane(K.restAt(S.view.notes, S.view.part.from));
   $("progress").style.width = "0";
 }
 
 function drawLane(pos) {
   const trail = S.mode === "listening" || $("pitchOn").checked ? S.showTrail : null;
-  K.drawLane($("lane"), S.notes, S.lo, S.hi, pos, trail);
+  K.drawLane($("lane"), S.view.notes, S.view.lo, S.view.hi, pos, trail);
 }
 
 /* ---------- listening to the singer ---------- */
@@ -209,23 +365,67 @@ function listen(pos) {
   S.trail.push({ t: pos - S.inn - delay() - 0.02, m: K.pitchAt(S.buf, S.ctx.sampleRate) });
 }
 
-/* ---------- playing and recording ---------- */
+/* ---------- the guides ---------- */
 
-async function audio(mix = $("mix").value) {
+async function context() {
   if (!S.ctx) S.ctx = new AudioContext({ latencyHint: "interactive" });
   await S.ctx.resume();
-  if (!S.guides[mix]) {
-    status("Loading the guide…");
-    const r = await fetch(`/guide.wav?mix=${mix}`);
-    if (!r.ok) throw new Error((await r.json()).error || `no ${mix} guide`);
-    S.digests[mix] = r.headers.get("X-Guide-Score");
-    S.guides[mix] = await S.ctx.decodeAudioData(await r.arrayBuffer());
+}
+
+function download(spec, mix) {
+  // a guide's WAV, fetched once; the server renders a new version's the first time it's asked for
+  const key = `${spec || ""}|${mix}`;
+  if (!S.downloads.has(key)) {
+    const p = fetch(spec ? `/guide.wav?spec=${encodeURIComponent(spec)}&mix=${mix}` : `/guide.wav?mix=${mix}`).then(async r => {
+      if (!r.ok) throw new Error((await r.json().catch(() => ({}))).error || `No ${mix} guide for this version.`);
+      return { bytes: await r.arrayBuffer(), digest: r.headers.get("X-Guide-Score") };
+    });
+    p.catch(() => S.downloads.delete(key));
+    S.downloads.set(key, p);
   }
-  if (S.lyrics.guide && S.digests[mix] !== S.lyrics.guide) {  // the song was rendered again since the words loaded
+  return S.downloads.get(key);
+}
+
+function guide(spec, mix) {
+  // a guide decoded, and the digest of the score it follows; the last three are kept
+  const key = `${spec || ""}|${mix}`;
+  if (!S.guides.has(key)) {
+    const p = (async () => {
+      const { bytes, digest } = await download(spec, mix);
+      S.downloads.delete(key);  // decoding hands the bytes over
+      await context();
+      return { buffer: await S.ctx.decodeAudioData(bytes), digest };
+    })();
+    p.catch(() => S.guides.delete(key));
+    S.guides.set(key, p);
+    for (const other of S.guides.keys()) if (S.guides.size > 3 && other !== key) S.guides.delete(other);
+  }
+  return S.guides.get(key);
+}
+
+async function prepare() {
+  // the chosen version's guide fetched ahead, so it's ready when you are
+  const spec = S.spec, mix = $("mix").value, key = `${spec || ""}|${mix}`;
+  if (!S.lyrics || S.guides.has(key)) return;
+  const slow = setTimeout(() => { if (S.mode === "idle" && !S.take && S.spec === spec) status("Preparing this version… (the first time, it takes about half a minute)"); }, 400);
+  try { await download(spec, mix); } catch (e) { if (S.spec === spec && S.mode === "idle") warn(e.message); return; } finally { clearTimeout(slow); }
+  if (S.mode === "idle" && !S.take && S.spec === spec && $("mix").value === mix && /Preparing/.test($("status").textContent)) {
+    status("Ready. Rehearse to hear it through, or record when you're ready.");
+  }
+}
+
+async function chosenGuide(mix) {
+  // the guide for what's chosen, checked against the words on the page
+  if (!S.guides.has(`${S.spec || ""}|${mix}`)) status("Preparing this version… (the first time, it takes about half a minute)");
+  const g = await guide(S.spec, mix);
+  if (S.lyrics.guide && g.digest !== S.lyrics.guide) {  // the song was rendered again since the words loaded
+    S.words.clear();
     throw new Error("The song has changed since this page loaded: reload the page.");
   }
-  return S.guides[mix];
+  return g;
 }
+
+/* ---------- playing and recording ---------- */
 
 async function microphone() {
   if (S.recorder) return;
@@ -243,23 +443,27 @@ async function microphone() {
   S.buf = new Float32Array(S.analyser.fftSize);
   mic.connect(S.analyser);
   S.recorder.port.onmessage = e => {
-    if (S.mode === "recording" || S.mode === "calibrating") S.chunks.push(e.data);
+    if (S.mode === "recording" || S.mode === "finishing" || S.mode === "calibrating") S.chunks.push(e.data);
     $("level").style.width = Math.min(100, 140 * e.data.peak) + "%";
   };
 }
 
-function start(buffers, mode, from = 0, shifts = []) {
+function start(buffers, mode, from = 0, shifts = [], until = null) {
+  // play from guide time `from` (a take's buffer `shifts` seconds earlier), until guide time `until` if given
   const when = S.ctx.currentTime + 0.12;
   S.t0 = when - from;
+  S.stopAt = until;
   S.out = (S.ctx.outputLatency || 0) + (S.ctx.baseLatency || 0);
   S.inn = S.stream ? S.stream.getAudioTracks()[0].getSettings().latency || 0 : 0;
   $("latency").textContent = `playback ${Math.round(S.out * 1000)} ms` + (S.stream ? `, mic ${Math.round(S.inn * 1000)} ms` : "");
   S.src = buffers.map((buffer, i) => {
-    const src = S.ctx.createBufferSource();
+    const src = S.ctx.createBufferSource(), fader = S.ctx.createGain();
     src.buffer = buffer;
-    src.connect(S.ctx.destination);
+    src.connect(fader).connect(S.ctx.destination);
     const at = from + (shifts[i] || 0);  // a positive shift plays the buffer that much earlier
+    if (from > 0) { fader.gain.setValueAtTime(0, when); fader.gain.linearRampToValueAtTime(1, when + 0.03); }  // in mid-song: no click
     if (at >= 0) src.start(when, at); else src.start(when - at);
+    src.fader = fader;
     return src;
   });
   S.src[0].onended = () => { if (S.mode !== "idle") stop(); };
@@ -267,52 +471,95 @@ function start(buffers, mode, from = 0, shifts = []) {
   S.trail = [];
   S.showTrail = mode === "listening" ? S.takeTrail.map(p => ({ t: p.t - S.shift, m: p.m })) : S.trail;
   S.mode = mode;
-  $("stop").disabled = false;
-  $("record").disabled = $("rehearse").disabled = $("mix").disabled = true;
+  controls();
   $("review").hidden = true;
-  status(mode === "recording" ? "Recording. Space or Stop to finish." : mode === "listening" ? "Your take, with the guide." : "Rehearsing.");
+  $("nextBox").hidden = true;
+  const section = S.view.part.index !== null;
+  say(mode === "recording" ? (section ? `Recording ${S.view.part.title}. It stops by itself at the end.` : "Recording. Space or Stop to finish.")
+    : mode === "listening" ? "Your take, with the guide." : "Rehearsing.");
+  const run = S.run = (S.run || 0) + 1;  // one drawing loop per playback
+  const tick = () => {
+    if (run !== S.run || S.mode === "idle" || S.mode === "finishing" || S.mode === "calibrating") return;
+    const pos = S.ctx.currentTime - S.t0 - S.out;
+    if (S.stopAt !== null && pos >= S.stopAt) return windowEnds();
+    if (S.mode !== "listening") listen(pos);
+    show(pos);
+    requestAnimationFrame(tick);
+  };
   requestAnimationFrame(tick);
+}
+
+function silence(sources) {  // stop playing, with a short fade rather than a click
+  const now = S.ctx.currentTime;
+  for (const s of sources) {
+    s.onended = null;
+    try {
+      s.fader.gain.cancelScheduledValues(now);
+      s.fader.gain.setValueAtTime(s.fader.gain.value, now);
+      s.fader.gain.linearRampToValueAtTime(0, now + 0.08);
+      s.stop(now + 0.1);
+    } catch (e) {}
+  }
+}
+
+function controls() {
+  // what can be pressed: nothing else while playing; the version and section stay put while a take waits
+  const idle = S.mode === "idle";
+  $("stop").disabled = idle || S.mode === "calibrating";
+  for (const id of ["record", "rehearse", "calibrate"]) $(id).disabled = !idle;
+  for (const id of ["mix", "set", "key", "speed"]) $(id).disabled = !idle || !!S.take;
+  drawParts();
 }
 
 function stop() {
   const was = S.mode;
+  if (was === "idle" || was === "calibrating") return;
+  const pos = S.ctx.currentTime - S.t0 - S.out;
   S.mode = "idle";
-  S.src.forEach(s => { try { s.stop(); } catch (e) {} });
+  clearTimeout(S.finishing);
+  silence(S.src);
   S.src = [];
-  $("stop").disabled = true;
-  $("record").disabled = $("rehearse").disabled = $("mix").disabled = false;
-  if (was === "recording") finishTake();
-  else status("Rehearse again, or record a take.");
+  if (was === "recording" || was === "finishing") finishTake(was === "finishing" ? S.stopAt : pos);
+  else say(S.take ? "Keep it or discard it." : "Rehearse again, or record a take.");
+  $("review").hidden = !S.take;
+  controls();
+  if (S.view.lyrics !== S.lyrics || S.view.part !== S.part) view(S.lyrics, S.part);  // after a kept take played in its own words
   resting();
 }
 
-function finishTake() {
-  const rate = S.ctx.sampleRate;
-  const samples = K.assemble(S.chunks, K.firstFrame(S.t0, S.out, S.inn, delay(), rate));
+function windowEnds() {
+  // the end of a section: the guide stops; a take records a moment longer, for your last note
+  if (S.mode !== "recording") return stop();
+  S.mode = "finishing";
+  silence(S.src);
+  S.src = [];
+  say("That's the section…");
+  S.finishing = setTimeout(stop, (K.TAIL + Math.max(0, S.inn + delay()) + 0.15) * 1000);
+}
+
+function finishTake(stoppedAt) {
+  const rate = S.ctx.sampleRate, r = S.recording, part = r.part, whole = part.index === null;
+  const first = K.firstFrame(S.t0, S.out, S.inn, delay(), rate, part.from);
+  const samples = whole ? K.assemble(S.chunks, first) : K.cutTake(S.chunks, first, rate, part.to - part.from + K.TAIL);
   S.chunks = [];
-  S.take = { samples, rate };
-  S.takeTrail = S.trail.slice();
-  S.takeBuffer = null;
+  // where the take ends, in guide time: the section's (or the song's) end, or wherever it was stopped before that
+  const to = Math.round(Math.max(part.from, Math.min(part.to, stoppedAt)) * 1000) / 1000;
   const long = samples.length / rate > 5;
-  S.shift = S.autoShift = long ? K.autoSync(S.takeTrail, S.notes) : 0;
+  S.take = long ? { ...r, samples, rate, to, device: delay(), buffer: null } : null;  // the correction it was cut with
+  S.takeTrail = S.trail.slice();
+  const notes = K.notesOf(r.lyrics);
+  S.shift = S.autoShift = long ? (whole ? K.autoSync(S.takeTrail, notes) : K.autoSyncWindow(S.takeTrail, notes, part.from, part.to)) : 0;
   $("shift").value = String(Math.max(-400, Math.min(400, -S.shift * 1000)));
   $("shiftValue").textContent = S.shift ? `auto-synced, ${Math.abs(Math.round(S.shift * 1000))} ms ${S.shift > 0 ? "earlier" : "later"}` : "as recorded";
   if (S.shift) learn(delay() * 1000 + S.shift * 1000);  // so the next take, and your pitch line, start closer
   const synced = S.shift ? ` Synced automatically: your device held the sound ${Math.round(Math.abs(S.shift) * 1000)} ms longer than it said.` : "";
-  status(long ? `Got it.${synced} Listen back; if it still feels off, slide it.` : "That was short. Record again?");
-  $("review").hidden = !long;
-}
-
-function tick() {
-  if (S.mode === "idle") return;
-  const pos = S.ctx.currentTime - S.t0 - S.out;
-  if (S.mode !== "listening") listen(pos);
-  show(pos);
-  requestAnimationFrame(tick);
+  $("reviewTitle").textContent = whole ? "That take" : `That take of ${part.title}`;
+  say(long ? `Got it.${synced} Listen back; if it still feels off, slide it.` : "That was short. Record again?");
 }
 
 function show(pos) {
-  $("progress").style.width = Math.max(0, Math.min(100, (100 * pos) / S.lyrics.duration)) + "%";
+  const { from, to } = S.view.part;
+  $("progress").style.width = Math.max(0, Math.min(100, (100 * (pos - from)) / (to - from))) + "%";
   S.reel.show(pos);
   drawLane(pos);
 }
@@ -320,8 +567,17 @@ function show(pos) {
 /* ---------- takes ---------- */
 
 async function loadSingers() {
-  S.singers = await (await fetch("/singers")).json();
+  try { S.singers = await getJSON("/singers"); } catch (e) { S.singers = []; }
   drawSingers();
+  drawParts();
+  // name the sections of the takes sung to other versions, once their words are here
+  const specs = new Set(S.singers.flatMap(s => s.takes.filter(t => t.spec && t.section != null).map(t => t.spec)));
+  const waiting = [...specs].filter(spec => !S.named || !S.named.has(spec));
+  if (waiting.length) {
+    S.named = new Map(S.named || []);
+    await Promise.all(waiting.map(spec => lyricsFor(spec).then(l => S.named.set(spec, l), () => S.named.set(spec, null))));
+    drawSingers();
+  }
 }
 
 function when(stamp) {  // 2026-09-25T15:28:07 -> 25 Sep, 15:28
@@ -330,6 +586,19 @@ function when(stamp) {  // 2026-09-25T15:28:07 -> 25 Sep, 15:28
 }
 
 const HEARD = { melody: "to the tune", full: "to the song", voice: "to the singer" };
+
+function takeText(t) {
+  // 26 Sep, 17:02, to the tune, Verse 2 · The whole world was watching…, Set B, 2 steps lower, online
+  const bits = [when(t.recorded), HEARD[t.mix] || ""];
+  if (t.spec) {
+    const words = S.named && S.named.get(t.spec);
+    const p = t.section == null ? null : words ? K.part(words, t.section) : null;
+    bits.push(t.section == null ? "the whole song" : p ? p.label : "one section");
+    bits.push(K.specText(t.spec, S.variants ? S.variants.sets : []));
+  }
+  if (t.online) bits.push("online");
+  return bits.filter(Boolean).join(", ");
+}
 
 function drawSingers() {
   const box = $("singers");
@@ -352,14 +621,14 @@ function drawSingers() {
     for (const t of s.takes) {
       const li = document.createElement("li");
       li.innerHTML = `<label class="check"><input type="checkbox"> <span></span></label><button class="small">▶ with the guide</button>`;
-      li.querySelector("span").textContent = `${when(t.recorded)}, ${HEARD[t.mix] || ""}${t.online ? ", online" : ""}`;
+      li.querySelector("span").textContent = takeText(t);
       const tick = li.querySelector("input");
       tick.checked = t.use;
       tick.onchange = async () => {
         try { await post("/use", JSON.stringify({ path: t.path, use: tick.checked })); await loadSingers(); }
-        catch (e) { status(`<span class="warn">${e.message}</span>`); }
+        catch (e) { warn(e.message); }
       };
-      li.querySelector("button").onclick = () => playKept(t.path, t.mix);
+      li.querySelector("button").onclick = () => playKept(t);
       el.querySelector("ul").appendChild(li);
     }
     const make = el.querySelector(".make");
@@ -375,10 +644,9 @@ function drawLead() {
   const lead = $("lead"), was = S.lead;  // what they last chose, if anything
   const have = S.singers.filter(s => s.phrasing);
   lead.innerHTML = "";
-  const option = (value, text) => { const o = document.createElement("option"); o.value = value; o.textContent = text; lead.appendChild(o); };
-  for (const s of have) option(s.who, `${s.name}'s way`);
-  if (have.length >= 2) option("everyone", "everyone's way, blended");
-  option("", "its own way (no phrasing)");
+  for (const s of have) option(lead, s.who, `${s.name}'s way`);
+  if (have.length >= 2) option(lead, "everyone", "everyone's way, blended");
+  option(lead, "", "its own way (no phrasing)");
   lead.value = was !== undefined && [...lead.options].some(o => o.value === was) ? was : lead.options[0].value;
   $("machineNote").textContent = have.length >= 2 ? "With the choir, the other singers sing its harmonies, each their own way."
     : have.length ? "Once someone else has a phrasing, they can sing in the choir." : "Make a phrasing to hear the machine sing it someone's way.";
@@ -391,21 +659,30 @@ async function analyze(s, el) {
   try {
     const r = await post("/analyze", JSON.stringify({ who: s.who, credit: el.querySelector(".credit").checked }));
     out.textContent = r.portrait + `\n\nSaved as ${r.phrasing}.`;
-    S.singers = await (await fetch("/singers")).json();
+    S.singers = await getJSON("/singers");
     S.lead = s.who;
     drawLead();
   } catch (e) { out.textContent = e.message; }
   make.disabled = false;
 }
 
-async function playKept(path, mix) {
-  if (!$("review").hidden) { status("Keep or discard the new take first."); return; }
-  const guide = await audio(mix || "full");  // the guide they heard while they sang it
-  const buffer = await S.ctx.decodeAudioData(await (await fetch("/" + path)).arrayBuffer());
-  S.src.forEach(s => { s.onended = null; try { s.stop(); } catch (e) {} });
-  S.takeTrail = [];
-  S.shift = 0;
-  start([guide, buffer], "listening", 0, [0, 0]);
+async function playKept(t) {
+  // a kept take with the guide it was sung to, in its own version's words: from its first sample (guide time from_s)
+  if (S.take) { status("Keep or discard the new take first."); return; }
+  if (S.mode !== "idle") stop();
+  try {
+    await context();
+    const lyrics = t.spec ? await lyricsFor(t.spec) : S.spec ? await lyricsFor(null) : S.lyrics;
+    const p = K.part(lyrics, t.section ?? null) || K.part(lyrics);
+    const from = Number.isFinite(t.from_s) ? t.from_s : p.from, until = Number.isFinite(t.to_s) && p.index !== null ? t.to_s + 0.3 : null;
+    const g = await guide(t.spec || null, t.mix || "full");
+    const buffer = await S.ctx.decodeAudioData(await (await fetch("/" + t.path)).arrayBuffer());
+    if (S.mode !== "idle" || S.take) return;
+    view(lyrics, p.index === null ? p : { ...p, from });
+    S.takeTrail = [];
+    S.shift = 0;
+    start([g.buffer, buffer], "listening", from, [0, -from], until);
+  } catch (e) { warn(e.message); }
 }
 
 async function post(url, body, type = "application/json") {
@@ -416,40 +693,48 @@ async function post(url, body, type = "application/json") {
 }
 
 $("rehearse").onclick = async () => {
-  let guide;
-  try { guide = await audio(); } catch (e) { status(`<span class="warn">${e.message}</span>`); return; }
-  if ($("pitchOn").checked) { try { await microphone(); } catch (e) { status(`<span class="warn">No microphone (${e.message}); rehearsing without your pitch.</span>`); } }
-  start([guide], "rehearsing");
+  let g;
+  try { await context(); g = await chosenGuide($("mix").value); } catch (e) { warn(e.message); return; }
+  if ($("pitchOn").checked) { try { await microphone(); } catch (e) { warn(`No microphone (${e.message}); rehearsing without your pitch.`); } }
+  if (S.mode !== "idle") return;
+  const p = S.part;
+  start([g.buffer], "rehearsing", p.from, [], p.index === null ? null : p.to);
 };
 $("record").onclick = async () => {
-  S.takeSinger = $("singer").value.trim();
-  S.takeMix = $("mix").value;
-  if (!S.takeSinger) {  // every take belongs to someone, so different people's phrasings stay apart
+  const singer = $("singer").value.trim(), mix = $("mix").value;
+  if (!singer) {  // every take belongs to someone, so different people's phrasings stay apart
     $("singer").classList.add("missing");
     $("singer").focus();
-    status('<span class="warn">Put a name in first (yours, or anything you like), so your takes stay together.</span>');
+    warn("Put a name in first (yours, or anything you like), so your takes stay together.");
     return;
   }
-  let guide;
-  try { guide = await audio(S.takeMix); } catch (e) { status(`<span class="warn">${e.message}</span>`); return; }
-  try { await microphone(); } catch (e) { status(`<span class="warn">No microphone: ${e.message}</span>`); return; }
-  start([guide], "recording");
+  let g;
+  try { await context(); g = await chosenGuide(mix); } catch (e) { warn(e.message); return; }
+  try { await microphone(); } catch (e) { warn(`No microphone: ${e.message}`); return; }
+  if (S.mode !== "idle") return;
+  const p = S.part;
+  S.recording = { singer, mix, spec: S.spec, lyrics: S.lyrics, part: p, digest: g.digest, guide: g.buffer };
+  start([g.buffer], "recording", p.from, [], p.index === null ? null : p.to);
 };
 $("stop").onclick = stop;
-document.addEventListener("keydown", e => { if (e.code === "Space" && S.mode !== "idle") { e.preventDefault(); stop(); } });
-window.addEventListener("resize", () => { if (S.mode === "idle" && S.lyrics) resting(); });
+document.addEventListener("keydown", e => {
+  if (e.code === "Space" && S.mode !== "idle" && S.mode !== "calibrating" && e.target.tagName !== "INPUT") { e.preventDefault(); stop(); }
+});
+window.addEventListener("resize", () => { if (S.mode === "idle" && S.view) resting(); });
 
 function takeBuffer() {
-  if (!S.takeBuffer) {
-    S.takeBuffer = S.ctx.createBuffer(1, S.take.samples.length, S.take.rate);
-    S.takeBuffer.copyToChannel(S.take.samples, 0);
+  if (!S.take.buffer) {
+    S.take.buffer = S.ctx.createBuffer(1, S.take.samples.length, S.take.rate);
+    S.take.buffer.copyToChannel(S.take.samples, 0);
   }
-  return S.takeBuffer;
+  return S.take.buffer;
 }
 
 function listenFrom(from) {
-  S.src.forEach(s => { s.onended = null; try { s.stop(); } catch (e) {} });
-  start([S.guides[S.takeMix], takeBuffer()], "listening", Math.max(0, from), [0, S.shift]);
+  // the take as you'd keep it, with the guide you heard: its sample 0 is guide time part.from
+  const t = S.take, p = t.part;
+  silence(S.src);
+  start([t.guide, takeBuffer()], "listening", Math.max(p.from, from), [0, S.shift - p.from], p.index === null ? null : t.to + 0.3);
 }
 
 $("listen").onclick = () => listenFrom(0);
@@ -459,41 +744,69 @@ $("shift").oninput = () => {
   $("shiftValue").textContent = ms ? `${Math.abs(ms)} ms ${ms < 0 ? "earlier" : "later"}` + (S.shift === S.autoShift ? " (auto)" : "") : "as recorded";
 };
 $("shift").onchange = () => {  // on letting go, hear it from where you were
-  if (S.mode === "listening") listenFrom(S.ctx.currentTime - S.t0 - S.out - 1.0);
+  if (S.mode === "listening" && S.take) listenFrom(S.ctx.currentTime - S.t0 - S.out - 1.0);
 };
 
-$("discard").onclick = () => { S.take = null; $("review").hidden = true; status("Take discarded. Ready when you are."); };
+$("discard").onclick = () => {
+  if (S.mode === "listening") stop();
+  S.take = null;
+  $("review").hidden = true;
+  controls();
+  say("Take discarded. Ready when you are.");
+};
 $("keep").onclick = async () => {
+  const t = S.take;
+  if (!t) return;
+  if (S.mode === "listening") stop();
   $("keep").disabled = true;
   try {
-    const q = new URLSearchParams({ singer: S.takeSinger, mix: S.takeMix, guide: S.digests[S.takeMix] || "",
+    const q = new URLSearchParams({ singer: t.singer, mix: t.mix, guide: t.digest || "",
                                     shift_ms: Math.round(S.shift * 1000), auto_ms: Math.round((S.autoShift || 0) * 1000),
-                                    device_ms: Math.round(delay() * 1000) });
-    await post("/take?" + q, K.wav(K.shifted(S.take.samples, S.take.rate, S.shift), S.take.rate), "audio/wav");
+                                    device_ms: Math.round(t.device * 1000), from_s: t.part.from, to_s: t.to });
+    if (t.spec) q.set("spec", t.spec);
+    if (t.part.index !== null) q.set("section", t.part.index);
+    await post("/take?" + q, K.wav(K.shifted(t.samples, t.rate, S.shift), t.rate), "audio/wav");
+    S.take = null;
     $("review").hidden = true;
+    controls();
     await loadSingers();
     const byEar = S.shift - (S.autoShift || 0);
+    let said = t.part.index === null ? `Kept as one of ${t.singer}'s takes.` : `Kept ${t.part.title}.`;
     if (Math.abs(byEar) >= 0.005) {  // your correction beyond the automatic one, for the takes to come
       learn(delay() * 1000 + byEar * 1000);
-      status(`Kept, with your ${Math.abs(Math.round(byEar * 1000))} ms nudge ${byEar > 0 ? "earlier" : "later"}; the next takes start from it.`);
-    } else {
-      status(`Kept as one of ${S.takeSinger}'s takes. Another, or make the phrasing below.`);
+      said += ` With your ${Math.abs(Math.round(byEar * 1000))} ms nudge ${byEar > 0 ? "earlier" : "later"}; the next takes start from it.`;
+    } else if (t.part.index === null) {
+      said += " Another, or make the phrasing below.";
     }
-  } catch (e) { status(`<span class="warn">${e.message}</span>`); }
+    say(said + offerNext(t));
+  } catch (e) { warn(e.message); }
   $("keep").disabled = false;
 };
+
+function offerNext(t) {
+  // one section kept: the next, a tap away; returns what to add to the status
+  if (t.part.index === null || t.spec !== S.spec) return "";
+  const next = K.nextSection(S.sections, t.part.index, sungHere());
+  if (!next) return " That's every section in this version. Well sung!";
+  $("next").textContent = `Next: ${next.title} →`;
+  $("next").title = K.sectionLabel(next);
+  $("next").onclick = () => choosePart(next.index);
+  $("nextBox").hidden = false;
+  return "";
+}
+
 $("calibrate").onclick = async () => {
-  try { await audio(); await microphone(); } catch (e) { $("calibration").textContent = `No microphone: ${e.message}`; return; }
+  try { await context(); await microphone(); } catch (e) { $("calibration").textContent = `No microphone: ${e.message}`; return; }
   if (S.mode !== "idle") return;
   const when = S.ctx.currentTime + 0.6;
   K.scheduleClicks(S.ctx, when);
   S.chunks = [];
   S.mode = "calibrating";
-  $("calibrate").disabled = $("record").disabled = $("rehearse").disabled = true;
+  controls();
   $("calibration").textContent = "Tap, clap or say \"ta\" on every click; the first four count you in.";
   await new Promise(r => setTimeout(r, (0.6 + K.CLICKS.count * K.CLICKS.beat + 0.8) * 1000));
   S.mode = "idle";
-  $("calibrate").disabled = $("record").disabled = $("rehearse").disabled = false;
+  controls();
   S.out = (S.ctx.outputLatency || 0) + (S.ctx.baseLatency || 0);
   S.inn = S.stream ? S.stream.getAudioTracks()[0].getSettings().latency || 0 : 0;
 
