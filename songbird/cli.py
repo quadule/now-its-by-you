@@ -202,8 +202,12 @@ FORM_LETTERS = {"intro": "i", "verse": "V", "refrain": "R", "turn": "t", "break"
                 "bridge2": "b", "tag": "g", "outro": "o"}
 
 
-def _form(form) -> str:
-    return "".join(FORM_LETTERS.get(name, name[:1]) for name in form)
+def _form(form, leanings: dict | None = None) -> str:
+    """The form in letters; a second bridge stanza the genome has no section for yet shows as b all the same."""
+    shown = "".join(FORM_LETTERS.get(name, name[:1]) for name in form)
+    if leanings and leanings.get("extra_bridge") and "bridge2" not in form:
+        shown = shown.replace("B", "Bb", 1)
+    return shown
 
 
 def year_command(args: argparse.Namespace) -> int:
@@ -227,7 +231,7 @@ def year_command(args: argparse.Namespace) -> int:
         mood = p.leanings.get("mood", {})
         rows.append(p)
         print(f"{drift_mod.when(t).date()!s:10s}  {NOTE_NAMES[p.tonic % 12]:3s} {p.mode:10s} {p.tempo:5.1f}  "
-              f"{_form(p.form):16s} {p.accomp:16s} {p.humanize * 1000:4.1f}m {p.ritardando:4.2f} "
+              f"{_form(p.form, p.leanings):16s} {p.accomp:16s} {p.humanize * 1000:4.1f}m {p.ritardando:4.2f} "
               f"{sing.breath:6.3f} {sing.vibrato_depth:4.1f}  "
               f"{' '.join(f'{mood.get(k, 1):.2f}' for k in ('plain', 'light', 'dark', 'tender')):19s} "
               f"{p.leanings.get('era', 0.0):5.2f}")
