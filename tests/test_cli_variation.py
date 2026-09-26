@@ -31,6 +31,21 @@ def test_harvest_fictional_and_opting_out(tmp_path, monkeypatch, capsys):
     assert "words    (left out)" in shown and '"salt"' in shown
 
 
+def test_a_quiet_voice_is_read_in_full_when_a_person_asks(tmp_path, monkeypatch, capsys):
+    monkeypatch.setenv("SONGBIRD_HOME", str(tmp_path / "home"))
+    H.save(H.Voice(machine=H.Machine(0.5, 0.4, 0.5), salt="0a0b"), quiet=True)  # as a render leaves it
+    asked = []
+
+    def harvest(without=(), salt=None, **kwargs):
+        asked.append((set(without), salt))
+        return H.Voice(machine=H.Machine(0.5, 0.4, 0.5), salt=salt)
+
+    monkeypatch.setattr(H, "harvest", harvest)
+    assert cli.main(["harvest", "--no-typing"]) == 0
+    assert asked == [(set(), "0a0b")]  # everything read, the same singer
+    assert "quiet" not in json.loads(H.cache_path().read_text())
+
+
 def test_harvest_with_everything_left_out_reads_nothing(tmp_path, monkeypatch, capsys):
     monkeypatch.setenv("SONGBIRD_HOME", str(tmp_path / "home"))
     everything = list(H.SIGNALS)
@@ -65,3 +80,14 @@ def test_year_table(capsys):
     rows = [line for line in lines if line[:4].isdigit()]
     assert [r[:10] for r in rows] == ["2026-09-25", "2026-10-05", "2026-10-15"]
     assert lines[-1].startswith("over 3 renders")
+
+
+def test_year_renders_a_day_a_week_a_month_and_a_year_on(tmp_path, monkeypatch):
+    sung = []
+    monkeypatch.setattr(cli, "render_one", lambda genome, params, out, **kw: sung.append((out.name, kw["drift"].t)))
+    assert cli.main(["year", str(LEAD), "--machine", "fictional:ada", "--from", "2026-09-25", "--days", "1",
+                     "--render", str(tmp_path)]) == 0
+    names = [name for name, _ in sung]
+    assert names == [f"h-now-its-by-you.ada.{d}.flac" for d in
+                     ("2026-09-25", "2026-09-26", "2026-10-02", "2026-10-25", "2027-09-25")]
+    assert [round(t - sung[0][1]) for _, t in sung] == [0, 1, 7, 30, 365]

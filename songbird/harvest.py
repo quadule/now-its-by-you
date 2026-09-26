@@ -901,11 +901,15 @@ def load() -> Voice | None:
         return None
 
 
-def save(voice: Voice) -> Path:
+def save(voice: Voice, quiet: bool = False) -> Path:
+    """Cache the voice; `quiet` marks one read without `songbird harvest`, which reads the rest next time."""
     path = cache_path()
     path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(json.dumps(voice.to_dict(), indent=2, sort_keys=True) + "\n")
+    path.write_text(json.dumps({**voice.to_dict(), **({"quiet": True} if quiet else {})}, indent=2, sort_keys=True) + "\n")
     return path
+
+
+QUIET = ("ages", "words", "hand")  # read only when a person runs `songbird harvest`
 
 
 def rested(voice: Voice) -> Voice:
@@ -917,12 +921,17 @@ def rested(voice: Voice) -> Voice:
 
 
 def here() -> Voice:
-    """This machine's voice: the cached one, or a fresh harvest (without the
-    typing prompt) cached for next time; its uptime read now."""
+    """This machine's voice: the cached one, its uptime read now. A machine
+    never harvested is read quietly the first time: its languages, size and
+    screen, never its files, documents or typing, which only `songbird
+    harvest` reads. That voice is cached, salt and all, so the singer stays
+    the same when the rest is read."""
     voice = load()
     if voice is None:
-        voice = harvest()
-        save(voice)
+        voice = harvest(without=QUIET)
+        save(voice, quiet=True)
+        print("This machine hasn't been harvested, so it sings with its languages, size and screen only; "
+              "`songbird harvest --show` reads the rest and shows exactly what is kept.", file=sys.stderr)
     return rested(voice)
 
 

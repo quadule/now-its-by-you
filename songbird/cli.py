@@ -163,9 +163,11 @@ def harvest_command(args: argparse.Namespace) -> int:
 
     path = harvest.cache_path()
     cached = harvest.load()
-    kept_out = set(json.loads(path.read_text()).get("without", [])) if cached is not None else set()
+    stored = json.loads(path.read_text()) if cached is not None else {}
+    kept_out = set(stored.get("without", []))
     without = (kept_out | {harvest.signal_name(s) for s in args.without}) - {harvest.signal_name(s) for s in args.allow}
-    if cached is not None and not args.refresh and not args.allow:
+    # a voice read quietly by a render (languages, size, screen) is read in full the first time a person asks
+    if cached is not None and not args.refresh and not args.allow and not stored.get("quiet"):
         voice = replace(cached, **{s: None for s in without})  # leaving a signal out never reads anything
         if args.wallpaper and "colour" not in without:
             voice = replace(voice, colour=harvest.colour(Path(args.wallpaper)))

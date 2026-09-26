@@ -31,6 +31,10 @@ uv run songbird harvest --show --without words hand
 - Typing is only ever timed when you run `songbird harvest` yourself at a
   terminal and choose to type the line it shows. Never in the background,
   never during a render.
+- Files and documents are only read by `songbird harvest`. A render as this
+  machine (`--machine here`) before any harvest reads only its languages,
+  its size and its screen, says so, and caches that; the next `songbird
+  harvest` reads the rest, keeping the same singer.
 - Nothing goes over the network.
 
 ## The salt and the hash

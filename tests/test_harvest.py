@@ -208,6 +208,21 @@ def test_hash_comes_from_the_salt_and_signals_can_be_left_out():
         H.signal_name("camera")
 
 
+def test_a_render_never_reads_files_documents_or_typing(tmp_path, monkeypatch):
+    monkeypatch.setenv("SONGBIRD_HOME", str(tmp_path / "cache"))
+    asked = []
+
+    def harvest(without=(), **kwargs):
+        asked.append(set(without))
+        return H.Voice(machine=H.Machine(0.5, 0.4, 0.5), salt="quiet")
+
+    monkeypatch.setattr(H, "harvest", harvest)
+    first = H.machine_voice("here")  # a machine nobody has harvested yet
+    assert asked == [{"ages", "words", "hand"}] and first.salt == "quiet"
+    assert json.loads(H.cache_path().read_text())["quiet"] is True
+    assert H.machine_voice("here").salt == "quiet" and len(asked) == 1  # the same singer from then on
+
+
 def test_cache(tmp_path, monkeypatch):
     monkeypatch.setenv("SONGBIRD_HOME", str(tmp_path / "cache"))
     assert H.load() is None
