@@ -299,7 +299,8 @@ def main(argv: list[str] | None = None) -> int:
     render.add_argument("--form", nargs="+", help="override the section order, e.g. intro verse refrain")
     render.add_argument("--lyrics-seed", type=int, metavar="N",
                         help="draw the words from the song's bank with this seed, and write their lyric sheet "
-                             "beside the render (default: the seed's own words)")
+                             "beside the render (default: when a machine or a date sings, with the rendition's "
+                             "own seed; otherwise the seed's own words)")
     render.add_argument("--stems", action="store_true", help="also write each part, dry, as WAV")
     render.add_argument("--voice", nargs="*", default=[], metavar="FIELD=VALUE",
                         help="override the singer, e.g. --voice tract=1.0 shift=-12 rd=1.3")
