@@ -616,7 +616,8 @@ STALE = 2.5  # s: how long a string rings before a slur onto it is picked again
 
 
 def _swell_track(volume, length: int, sr: int, floor: float = FLOOR) -> np.ndarray | None:
-    """The volume pedal: back (floor dB) just before each swelled pick, then pushed in over the swell along a
+    """A volume control's swells (the electric slide's knob under the little finger; the steel's pedal is a
+    Track of its own): back (floor dB) just before each swelled pick, then turned up over the swell along a
     raised cosine in decibels."""
     if not volume:
         return None
