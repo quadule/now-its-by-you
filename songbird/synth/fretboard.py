@@ -334,7 +334,8 @@ def sound(seg: Segment, strings: Strings, sr: int, rng: np.random.Generator, *, 
     # the comb's delays: 2d/c, the same for any fret of this string; a bend (tension) shortens them
     delays = np.array([b * sr / open_hz for b, _ in strings.comb])
     weights = np.array([w for _, w in strings.comb])
-    comb_sound = seg.moves()
+    combed = bool(strings.comb)  # an acoustic instrument has no pickup: its string drives the bridge as it is
+    comb_sound = combed and seg.moves()
     # the excitation: each pick one period of bridge force at the pitch of the moment
     x = np.zeros(n + 16)
     clicks = np.zeros(n)
@@ -349,7 +350,7 @@ def sound(seg: Segment, strings: Strings, sr: int, rng: np.random.Generator, *, 
                                   vel=vel * level)
         if kind == "up":
             e = -e
-        if not comb_sound:
+        if combed and not comb_sound:
             e = _comb_pluck(e, delays * 2.0 ** (-(tension[at] if tension is not None else 0.0) / 1200.0), weights)
         j = min(n + 16, at + len(e))
         x[at:j] += e[: j - at]
