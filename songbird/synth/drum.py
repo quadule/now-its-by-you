@@ -2,7 +2,7 @@
 
 A circular membrane rings in modes at the zeros of Bessel functions: the
 fundamental (0,1), then (1,1) at 1.59 times it, (2,1) at 2.14, (0,2) at 2.30
-and so on, nothing like a harmonic series, which is why a drum has a pitch
+and so on, ever more crowded, nothing like a harmonic series, which is why a drum has a pitch
 you can feel but not quite sing. Where the stick lands decides which modes
 speak: a stroke near the middle excites mostly the round modes (a boom),
 one near the rim the ones with nodal diameters (a drier, higher knock). The
@@ -22,15 +22,21 @@ from __future__ import annotations
 import numpy as np
 from numba import njit
 from scipy.signal import butter, sosfilt
-from scipy.special import jv
+from scipy.special import jn_zeros, jv
 
-# (m, n, Bessel zero j_mn) of the first twenty modes of an ideal membrane.
-MODES = (
-    (0, 1, 2.4048), (1, 1, 3.8317), (2, 1, 5.1356), (0, 2, 5.5201), (3, 1, 6.3802), (1, 2, 7.0156),
-    (4, 1, 7.5883), (2, 2, 8.4172), (0, 3, 8.6537), (5, 1, 8.7715), (3, 2, 9.7610), (6, 1, 9.9361),
-    (1, 3, 10.1735), (4, 2, 11.0647), (7, 1, 11.0864), (2, 3, 11.6198), (0, 4, 11.7915), (8, 1, 12.2251),
-    (5, 2, 12.3386), (3, 3, 13.0152),
-)
+def _modes(top: float = 40.0) -> tuple[tuple[int, int, float], ...]:
+    """(m, n, Bessel zero j_mn) of every mode of an ideal membrane up to j = top
+    (about sixteen times the fundamental): the first few are (0,1) 2.405,
+    (1,1) 3.832, (2,1) 5.136, (0,2) 5.520."""
+    modes = []
+    for m in range(0, 40):
+        for n, j in enumerate(jn_zeros(m, 20), start=1):
+            if j < top:
+                modes.append((m, n, float(j)))
+    return tuple(sorted(modes, key=lambda x: x[2]))
+
+
+MODES = _modes()
 
 STROKES = {
     # radius (0 centre, 1 rim), pitch factor (the hand behind the skin), ring (seconds, the fundamental's T60),
@@ -103,10 +109,16 @@ def hit(stroke: str, vel: float, sr: int, rng: np.random.Generator, *, pitch: fl
         t60s.append(ring * (f0 / f) ** 0.7 * (1.0 + 0.3 * wear))
     length = int((max(t60s) + 0.05) * sr)
     y = _ring(np.array(freqs), np.array(amps), np.array(t60s), 0.06 * vel ** 2, 0.03, length, float(sr))
+    level = np.max(np.abs(y[: int(0.01 * sr)])) + 1e-9
+    # above the modes listed the skin's modes crowd into a band of noise, the slap, gone in a few hundredths
+    n = min(length, int(0.06 * sr))
+    slap = sosfilt(butter(2, [16.0 * f0, min(5000.0, 0.45 * sr)], btype="bandpass", fs=sr, output="sos"),
+                   rng.standard_normal(n + 64))[64:]
+    y[:n] += slap * np.exp(-np.arange(n) / (ring * 0.035 * sr)) * (0.15 + 0.25 * brightness) * radius * level
     # the knock of the stick itself: a millisecond or two of bright noise
     n = int(0.004 * sr)
     burst = sosfilt(butter(2, [900.0, 6000.0], btype="bandpass", fs=sr, output="sos"), rng.standard_normal(n + 64))[64:]
-    y[:n] += burst * np.exp(-np.arange(n) / (0.0008 * sr)) * click * (0.6 + 1.0 * brightness) * np.max(np.abs(y[:n]) + 1e-9)
+    y[:n] += burst * np.exp(-np.arange(n) / (0.0008 * sr)) * click * (0.6 + 1.0 * brightness) * level
     peak = np.max(np.abs(y)) + 1e-12
     return y * vel / peak * (0.35 + 0.65 * vel)
 

@@ -24,7 +24,7 @@ def table(freq: float, sr: int, rng: np.random.Generator, brightness: float = 0.
     """One period of a free reed's tone, band-limited for `freq`."""
     top = int(min(80, 0.45 * sr / freq))
     k = np.arange(1, top + 1)
-    amps = k ** -(1.25 - 0.6 * brightness)
+    amps = k ** -(1.5 - 0.6 * brightness)
     amps[1::2] *= 0.8  # a reed's pulse is a little narrower than half the period: even harmonics a shade weaker
     phases = rng.uniform(0.0, 2.0 * np.pi, top)
     x = np.arange(TABLE) / TABLE

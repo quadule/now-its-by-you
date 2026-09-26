@@ -138,7 +138,9 @@ def blow(notes, sr: int, length: int, rng: np.random.Generator, *, brightness: f
     if not notes:
         return np.zeros(length)
     freq, breath, chiff, drive, aim = tracks(notes, sr, length, rng, brightness=brightness, wear=wear)
-    noise = rng.standard_normal(length) * breathiness * (1.0 + 0.5 * wear)
+    # turbulence at the lip is a hiss, not a rumble: nothing much below a few hundred hertz
+    noise = sosfilt(butter(2, 350.0, btype="highpass", fs=sr, output="sos"), rng.standard_normal(length))
+    noise *= 1.6 * breathiness * (1.0 + 0.5 * wear)
     y = run(freq, breath, chiff, drive, aim, noise, 0.65, 0.35, float(sr))
     # radiation from the open holes and the embouchure favours the highs a little; no DC leaves the pipe
     return sosfilt(butter(1, 180.0, btype="highpass", fs=sr, output="sos"), y)
