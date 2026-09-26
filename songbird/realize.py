@@ -150,12 +150,15 @@ def realize(genome: Genome, params: Params, verses=None, phrasing: Phrasing | No
     ratio = 0.5 + swing / 6.0
 
     def swung(u: float) -> float:
+        # The beats fall on the bar lines' grid, which starts `lead` units in (after the song's first
+        # pickup), not at u = 0: counted from there, the beats never move and only each beat's off-beat
+        # half is delayed, whatever the pickup's length.
         if not swing:
             return u
-        b, x = divmod(u, meter.beat)
+        b, x = divmod(u - lead, meter.beat)
         half = meter.beat / 2.0
         x = x / half * ratio * meter.beat if x < half else ratio * meter.beat + (x - half) / half * (1.0 - ratio) * meter.beat
-        return b * meter.beat + x
+        return lead + b * meter.beat + x
 
     def seconds(u: float) -> float:
         """Grid units to seconds, swung, slowing linearly through the final phrase."""
