@@ -11,7 +11,9 @@ render in it with a score beside it):
   loud level). Each is called sibilant-like when nothing reaches over 12 kHz (the learned voice stops
   at 11.8 kHz) or broadband when it does (cymbals, brushes, noise). A ratio can't tell highs that
   rose from mids that fell, so the highs' own level is given too: the loudest (99th percentile)
-  100 ms of highs against the render's loud level. --list prints the bursts;
+  100 ms of highs against the render's loud level. Nothing 40 dB under the loud level counts (a
+  render's silent tail is dither and the room's last breath, white and so "bright"). --list prints
+  the bursts;
 - the floor: the highs' quietest tenth (their 10th percentile, 100 ms frames) where nobody sings and
   the band plays (within 20 dB of the loud level; 2 s of it at least), against the 1-4 kHz band
   there: a steady hiss raises it (a whisper in the rests mostly lies under 4 kHz: the singers' own
@@ -33,6 +35,7 @@ import soundfile as sf
 from scipy.signal import stft
 
 HOP, WIN = 0.05, 0.1
+QUIET = 40.0  # dB under the render's loud level below which nothing is counted
 
 
 def _frames(x: np.ndarray, sr: int) -> tuple[np.ndarray, dict]:
@@ -43,7 +46,7 @@ def _frames(x: np.ndarray, sr: int) -> tuple[np.ndarray, dict]:
 
     def band(lo, hi):
         return 10 * np.log10(p[(f >= lo) & (f < hi)].sum(0) + 1e-30)
-    return t + WIN / 2, {"hi": band(6000, 16000), "mid": band(1000, 4000), "low6": band(6000, 12000),
+    return t, {"hi": band(6000, 16000), "mid": band(1000, 4000), "low6": band(6000, 12000),  # stft's t: the centres
                          "top": band(12000, 20000), "all": band(40, 20000)}
 
 
@@ -79,8 +82,9 @@ def check(path: Path, limit: float = -10.0, show: bool = False) -> dict:
     ratio = b["hi"] - b["mid"]
     loud = np.percentile(b["all"], 90)
     sparse = b["all"] < loud - 6.0
+    audible = b["all"] > loud - QUIET  # a render's silent tail is dither and the room's last breath: white, so bright
     bursts = []
-    for i, j in _runs(ratio > limit):
+    for i, j in _runs((ratio > limit) & audible):
         k = i + int(np.argmax(ratio[i: j + 1]))
         kind = "sibilant-like" if b["top"][k] < b["low6"][k] - 25.0 else "broadband"
         bursts.append({"at": round(float(t[i] - WIN / 2), 2), "long": round(float((j - i) * HOP + WIN), 2),
@@ -89,7 +93,8 @@ def check(path: Path, limit: float = -10.0, show: bool = False) -> dict:
     # whole seconds (the band energies summed over 20 frames, one second after another)
     lin = {k: 10 ** (v / 10) for k, v in b.items()}
     m = int(1.0 / HOP)
-    second = [10 * np.log10(lin["hi"][i:i + m].sum() / lin["mid"][i:i + m].sum()) for i in range(0, len(t) - m + 1, m)]
+    second = [10 * np.log10(lin["hi"][i:i + m].sum() / lin["mid"][i:i + m].sum()) for i in range(0, len(t) - m + 1, m)
+              if 10 * np.log10(lin["all"][i:i + m].mean()) > loud - QUIET]
     minutes = len(x) / sr / 60.0
     out = {
         "render": path.name, "minutes": round(minutes, 2),
