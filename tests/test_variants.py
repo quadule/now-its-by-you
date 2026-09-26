@@ -65,21 +65,23 @@ def test_every_variant_keeps_the_contour_targets_stress_and_scale(path):
         if v.kind == "leap":  # a moved note is a tone of the chord under it
             n = written[v.note]
             assert V.chord_tone(V.chord_under(phrase, n.onset, g.meter), v.degree), v
-        for _, s in v.steps:  # ornament tones keep to the song's scale; a passing waypoint keeps to the mode
-            assert v.kind == "passing" or (written[v.note].degree + s - 1) % 7 + 1 in scale, v
+        for _, s in v.steps:  # held ornament tones keep to the song's scale; quick ones keep to the mode
+            assert v.kind in V.QUICK or (written[v.note].degree + s - 1) % 7 + 1 in scale, v
+            assert v.kind not in ("mordent", "turn", "neighbour") or abs(s) <= 1, v  # a single step away
 
 
 def test_the_lead_songs_vocabulary(h):
     offered = V.candidates(h)
     kinds = {v.kind for v in offered}
     assert kinds >= {"grace", "mordent", "turn", "neighbour", "passing", "anticipation", "leap", "dotted"}
-    assert V.scale(h) == (1, 2, 3, 5, 6)  # H is pentatonic: ornaments never bring in fa or ti...
+    assert V.scale(h) == (1, 2, 3, 5, 6)  # H is pentatonic: a grace or a held neighbour never brings in fa or ti...
     for v in offered:
-        if v.kind in ("grace", "mordent", "turn", "neighbour"):
+        if v.kind in ("grace", "neighbour"):
             assert all((h.phrases[v.phrase].sung[v.note].degree + s - 1) % 7 + 1 in (1, 2, 3, 5, 6) for _, s in v.steps)
-    # ...except as a quick waypoint sliding across a third (a passing tone), which folk singers do
+    # ...only a quick tone does: a passing tone sliding across a third, a mordent's or a turn's step
     assert {v.kind for v in offered if any((h.phrases[v.phrase].sung[v.note].degree + s - 1) % 7 + 1 in (4, 7)
-                                           for _, s in v.steps)} <= {"passing"}
+                                           for _, s in v.steps)} <= set(V.QUICK)
+    assert all(abs(s) == 1 for v in offered if v.kind == "neighbour" for _, s in v.steps if s)
     # dotting H's pairs of quavers would leave a sixteenth too short for a syllable: only its crotchet pairs dot
     assert all(h.phrases[v.phrase].sung[v.note].dur == 2 for v in offered if v.kind == "dotted")
 

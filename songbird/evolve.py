@@ -50,7 +50,9 @@ FORGET_DAYS = (90, 220)  # and each variant's forgetting clock
 # decorates them), and where: verses are where a folk tune wanders, a refrain is what everyone knows.
 KIND_WEIGHTS = {"grace": 1.0, "mordent": 0.5, "turn": 0.35, "neighbour": 0.5, "passing": 0.7,
                 "anticipation": 0.5, "leap": 0.6, "dotted": 0.4, "even": 0.4}
+LONE = 3.0  # no single candidate weighs more than this many grace notes (a kind offered once isn't a habit)
 PLACES = {"verse": 1.3, "bridge": 1.0, "refrain": 0.7}
+STRESSED, QUAVER = 1.5, 0.5  # a grace, mordent or turn likes a stressed note, and not a passing quaver
 
 # The words.
 SWAP = (0.3, 0.2, 0.2)  # chance of a swap when the swap clock turns: base + habit x this + slow drift x this
@@ -156,9 +158,19 @@ def _place(genome, pid: str) -> float:
     return max((PLACES.get(b, PLACES["refrain"] if b != "verse" else 1.0) for b in blocks), default=1.0)
 
 
+def _emphasis(genome, v: V.Variant) -> float:
+    """An ornament at a note's start sits better on a stressed or a longer note than on a passing quaver."""
+    if v.kind not in V.HEAD:
+        return 1.0
+    n = genome.phrases[v.phrase].sung[v.note]
+    return STRESSED if n.onset % genome.meter.foot == 0 else QUAVER if n.dur <= 1 else 1.0
+
+
 def own_variant(ctx: Context, name: str, k: int, current) -> V.Variant | None:
     """The machine's pick of a variant this stretch of a learning clock: the first, in its own weighted
-    order of everything the tune allows, that the lineage's variants have room for."""
+    order of everything the tune allows, that the lineage's variants have room for. A kind's weight is
+    shared among its candidates, but no one candidate weighs more than LONE times a grace note does, so a
+    kind the tune offers once (H's one dotted pair) can't become every lineage's habit."""
     genome = ctx.genome
     hash_ = Clocks(ctx).hash
 
@@ -166,7 +178,9 @@ def own_variant(ctx: Context, name: str, k: int, current) -> V.Variant | None:
         offered = list(V.candidates(genome))
         likes = kind_weights(ctx.c)
         count = {kind: sum(v.kind == kind for v in offered) for kind in likes}
-        weights = [likes[v.kind] / max(count[v.kind], 1) * _place(genome, v.phrase) for v in offered]
+        each = {kind: likes[kind] / max(count[kind], 1) for kind in likes}
+        cap = LONE * each["grace"] if count.get("grace") else max(each.values())
+        weights = [min(each[v.kind], cap) * _place(genome, v.phrase) * _emphasis(genome, v) for v in offered]
         return _ranked((hash_, name, k), offered, weights, [repr(v.what) for v in offered])
 
     for v in _memo(("own", id(genome), hash_, name, k), ranking, genome):
@@ -378,6 +392,10 @@ def fit(genome, form, held: dict, picker: Picker, log=None) -> dict:
         note({"what": "words", "change": "added", "where": f"refrain {len(couplets)}", "to": chosen,
               "why": "a refrain needed a couplet; this machine's this season"})
     refrain["couplets"] = couplets
+    canon = arrange.bank_entry(genome, "couplet", arrange.last_couplet(genome))
+    if arrange.slot_words(canon) and blocks.get("refrain"):  # the last refrain's couplet, where it has slot words
+        kept = (refrain.get("last") or {}).get("slots", {})
+        refrain["last"] = {"id": canon["id"], "slots": picker.slots(f"couplet-slots:{canon['id']}", canon, kept)}
 
     always, extras = arrange.bridge_ids(genome)
     bridges = list(held.get("bridge", []))
@@ -408,8 +426,10 @@ def fit(genome, form, held: dict, picker: Picker, log=None) -> dict:
     return held
 
 
-def _positions(genome, held: dict) -> list[tuple]:
-    """Every place a swap could fall in some held words, with its weight."""
+def places(genome, held: dict) -> list[tuple]:
+    """Every place in some held words a swap could fall, with how likely the drift is to choose it: ("verse",
+    i), ("slot", i, name) for a verse's slot word, ("couplet", i), ("refrain", name), ("bridge", name),
+    ("tag",) and ("extra",). What a person editing the words could change, one thing at a time."""
     out = []
     verses = held.get("verses", [])
     for i, v in enumerate(verses):
@@ -435,8 +455,10 @@ def _positions(genome, held: dict) -> list[tuple]:
     return out
 
 
-def _alternatives(genome, held: dict, where: tuple) -> list:
-    """What could stand in the place a swap falls, keeping the rules."""
+def alternatives(genome, held: dict, where: tuple) -> list:
+    """What could stand in one of those places, keeping the bank's rules as the rest of the words stand:
+    verse ids, a slot's words (a coupled slot's as a whole, a noun with its pronouns), couplet ids, tag
+    syllables or extra stanzas."""
     kind = where[0]
     if kind == "verse":
         i = where[1]
@@ -468,7 +490,8 @@ def _alternatives(genome, held: dict, where: tuple) -> list:
     return []
 
 
-def _label(where: tuple) -> str:
+def label(where: tuple) -> str:
+    """A place in the words, for reading: "verse 2", "verse 1's who", "the refrain's while"."""
     kind = where[0]
     return {"verse": lambda: f"verse {where[1] + 1}", "slot": lambda: f"verse {where[1] + 1}'s {where[2]}",
             "couplet": lambda: f"refrain {where[1] + 1}'s couplet", "refrain": lambda: f"the refrain's {where[1]}",
@@ -491,12 +514,12 @@ def swap(genome, form, held: dict, ctx: Context, picker: Picker, mode: str | Non
     p = clip(SWAP[0] + SWAP[1] * ctx.c.id("restless") + SWAP[2] * slow(ctx, "words", start), *SWAP_BOUNDS)
     if clocks.coin("swap", k) >= p:
         return held
-    places = _positions(genome, held)
-    if not places:
+    spots = places(genome, held)
+    if not spots:
         return held
     generation = getattr(ctx.parent, "generation", 0)
-    for where in _ranked((clocks.hash, "where", generation), [p for p, _ in places], [w for _, w in places]):
-        options = _alternatives(genome, held, where)
+    for where in _ranked((clocks.hash, "where", generation), [p for p, _ in spots], [w for _, w in spots]):
+        options = alternatives(genome, held, where)
         if not options:
             continue
         new = copy.deepcopy(held)
@@ -531,7 +554,7 @@ def swap(genome, form, held: dict, ctx: Context, picker: Picker, mode: str | Non
                 new["bridge"][1] = {"id": chosen, "slots": {}}
         if arrange.held_problem(genome, form, new):
             continue
-        _log(ctx, {"what": "words", "change": "swapped", "where": _label(where), "from": _plain(was), "to": _plain(chosen),
+        _log(ctx, {"what": "words", "change": "swapped", "where": label(where), "from": _plain(was), "to": _plain(chosen),
                    "why": f"this machine's own this season ({p:.0%} a turn of its clock)"})
         return new
     return held
@@ -584,9 +607,17 @@ def fitted(genome, params, voice=None, drift=None) -> dict:
 # ---------------------------------------------------------------- what changed (for a record and the studio)
 
 
+def _entry(e) -> str | None:
+    """A held verse, couplet or stanza for reading: its id and its slot words."""
+    if not e:
+        return None
+    words = ", ".join(_plain(v) for v in (e.get("slots") or {}).values())
+    return f"{e['id']} ({words})" if words else e["id"]
+
+
 def diff(genome, parent, child) -> list[dict]:
-    """What a child sings differently from its parent, in the tune and the words, without the why (a
-    rendition's record keeps the why its choices were made with)."""
+    """What a child sings differently from its parent, in the tune and the words, for reading, without the
+    why (a rendition's record keeps the why its choices were made with)."""
     out = []
     was = {v.what: v for v in V.parse(getattr(parent, "variants", ()))}
     now = {v.what: v for v in V.parse(getattr(child, "variants", ()))}
@@ -596,21 +627,22 @@ def diff(genome, parent, child) -> list[dict]:
         out.append({"what": "tune", "change": "gained", "about": V.describe(genome, now[key])})
     a = getattr(parent, "words", None) or seed_words(genome, parent)
     b = getattr(child, "words", None) or {}
-    if b:
-        for i in range(max(len(a.get("verses", [])), len(b.get("verses", [])))):
-            x = a["verses"][i] if i < len(a.get("verses", [])) else None
-            y = b["verses"][i] if i < len(b.get("verses", [])) else None
-            if x != y:
-                out.append({"what": "words", "change": "verse", "where": f"verse {i + 1}",
-                            "from": x and f"{x['id']} {_plain(x.get('slots')) or ''}".strip(),
-                            "to": y and f"{y['id']} {_plain(y.get('slots')) or ''}".strip()})
-        ca = [c["id"] for c in a.get("refrain", {}).get("couplets", [])]
-        cb = [c["id"] for c in b.get("refrain", {}).get("couplets", [])]
-        if ca != cb:
-            out.append({"what": "words", "change": "couplets", "from": ", ".join(ca), "to": ", ".join(cb)})
-        for key in ("refrain", "bridge", "tag"):
-            x = a.get(key) if key == "tag" else (a.get(key, {}).get("slots") if key == "refrain" else a.get(key))
-            y = b.get(key) if key == "tag" else (b.get(key, {}).get("slots") if key == "refrain" else b.get(key))
-            if x != y and not (key == "tag" and y is None):
-                out.append({"what": "words", "change": key, "from": x, "to": y})
+    if not b:
+        return out
+    va, vb = a.get("verses", []), b.get("verses", [])
+    for i in range(max(len(va), len(vb))):
+        x, y = (va[i] if i < len(va) else None), (vb[i] if i < len(vb) else None)
+        if x != y:
+            out.append({"what": "words", "change": "verse", "where": f"verse {i + 1}", "from": _entry(x), "to": _entry(y)})
+    ra, rb = a.get("refrain", {}), b.get("refrain", {})
+    pairs = (("couplets", lambda r: ", ".join(_entry(c) for c in r.get("couplets", []))),
+             ("refrain", lambda r: ", ".join(f"{k} {_plain(v)}" for k, v in r.get("slots", {}).items())))
+    for change, text in pairs:
+        if text(ra) != text(rb):
+            out.append({"what": "words", "change": change, "from": text(ra), "to": text(rb)})
+    ba, bb = (", ".join(_entry(e) for e in w.get("bridge", [])) for w in (a, b))
+    if ba != bb:
+        out.append({"what": "words", "change": "bridge", "from": ba, "to": bb})
+    if b.get("tag") is not None and a.get("tag") != b.get("tag"):
+        out.append({"what": "words", "change": "tag", "from": a.get("tag"), "to": b.get("tag")})
     return out

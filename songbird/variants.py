@@ -12,8 +12,9 @@ What a variant may never change (problems() checks every one, and candidates() o
 - the contour: each phrase's string of holds, steps and leaps (Phrase.contour) is the same after it;
 - a phrase's last note (its target): its degree and its time;
 - the stress: a stressed note never moves, and a weak note moved stays weak, in its foot, in order;
-- the mode and the song's scale: every note and every ornament tone is a degree of the song's own
-  scale (for a pentatonic tune, its five notes), so nothing is chromatic;
+- the mode and the song's scale: every note, and every ornament tone that is held, is a degree of the
+  song's own scale (for a pentatonic tune, its five notes); only the quick tones of a passing tone, a
+  mordent or a turn may touch the mode's other degrees, and nothing is ever chromatic;
 - the harmony: a note moved to another degree is a tone of the chord under it;
 - the hooks, and the refrain's first line: sung as written (catchiness first);
 - how many: at most SHARE of the notes of any section carry one, never two on one note or on
@@ -47,6 +48,7 @@ KINDS = ORNAMENTS + ("leap", "dotted", "even")
 HEAD = ("grace", "mordent", "turn")  # at the note's start
 TAIL = ("passing", "anticipation")  # leading out of the note into the next
 RHYTHM = ("dotted", "even")
+QUICK = ("passing", "mordent", "turn")  # tones so quick (75-80 ms) they may touch the mode's degrees outside the song's scale
 
 SHARE = 0.12  # at most this share of any section's sung notes carries a variant
 SOURCES = ("drift", "edit")  # and "sung:<name>" for a singer's own
@@ -314,7 +316,7 @@ def _check(genome: Genome, v: Variant) -> str | None:
         return f"source {v.source!r} is none of drift, edit or sung:<name>"
     if v.key in protected(genome):
         return f"{v.phrase} note {v.note} is a hook or the refrain's first line, sung as written"
-    if v.key in _facts(genome)["approach"] and v.kind in TAIL + ("leap",):
+    if v.key in _facts(genome)["approach"] and v.kind in TAIL + RHYTHM + ("leap",):
         return f"{v.phrase} note {v.note} leads into a hook, which keeps its way in"
     n = notes[v.note]
     last = v.note == len(notes) - 1
@@ -327,10 +329,12 @@ def _check(genome: Genome, v: Variant) -> str | None:
         steps = tuple(v.steps)
         if not steps or any(not 0.0 <= f <= 1.0 for f, _ in steps) or [f for f, _ in steps] != sorted(f for f, _ in steps):
             return "an ornament's breakpoints are fractions of the note, in order"
-        if v.kind != "passing" and any(not in_scale(genome, n.degree + s) for _, s in steps):
+        if v.kind not in QUICK and any(not in_scale(genome, n.degree + s) for _, s in steps):
             return "an ornament's tones keep to the song's scale"
         if any(abs(s) > 4 for _, s in steps):
             return "an ornament keeps within a few steps of its note"
+        if v.kind in ("mordent", "turn", "neighbour") and any(abs(s) > 1 for _, s in steps):
+            return f"a {v.kind} turns a single step from its note"
         if v.kind in TAIL:
             if nxt is None or nxt.onset != n.onset + n.dur:
                 return f"a {v.kind} leads into the next note of its line, so it can't be on a line's last note"
@@ -441,17 +445,18 @@ def candidates(genome: Genome) -> tuple[Variant, ...]:
                 (f,) = _fractions(genome, n, [GRACE])
                 offer += [Variant(pid, k, "grace", steps=((0.0, up), (f, 0))),
                           Variant(pid, k, "grace", steps=((0.0, down), (f, 0)))]
+            # a mordent's and a turn's tones pass as quickly as a passing tone, so they turn on the mode's next
+            # step even where the song's scale has a gap (a pentatonic turn a third wide sounds lopsided)
             if seconds >= LONG_ENOUGH["mordent"]:
                 a, b = _fractions(genome, n, [0.05, 0.05 + TONE])
-                offer += [Variant(pid, k, "mordent", steps=((a, up), (b, 0))),
-                          Variant(pid, k, "mordent", steps=((a, down), (b, 0)))]
+                offer += [Variant(pid, k, "mordent", steps=((a, 1), (b, 0))),
+                          Variant(pid, k, "mordent", steps=((a, -1), (b, 0)))]
             if seconds >= LONG_ENOUGH["turn"]:
                 a, b, c = _fractions(genome, n, [TONE, 2 * TONE, 3 * TONE])
-                offer += [Variant(pid, k, "turn", steps=((0.0, up), (a, 0), (b, down), (c, 0)))]
-            if seconds >= LONG_ENOUGH["neighbour"]:
+                offer += [Variant(pid, k, "turn", steps=((0.0, 1), (a, 0), (b, -1), (c, 0)))]
+            if seconds >= LONG_ENOUGH["neighbour"]:  # held longer: a step of the song's own scale, or none
                 a, b = NEIGHBOUR
-                offer += [Variant(pid, k, "neighbour", steps=((a, up), (b, 0))),
-                          Variant(pid, k, "neighbour", steps=((a, down), (b, 0)))]
+                offer += [Variant(pid, k, "neighbour", steps=((a, s), (b, 0))) for s in (up, down) if abs(s) == 1]
             if nxt is not None and nxt.onset == n.onset + n.dur:
                 gap = nxt.degree - n.degree
                 # the voice leaves this note for the next about 0.08 s before the next begins (a glide's lead)
