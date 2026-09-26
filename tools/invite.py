@@ -152,7 +152,8 @@ def fetch(site: Site, invite: str | None = None, keep: bool = False, singer: str
         info = site.call("GET", f"/api/admin/take/{t['json']['key']}")
         who = folder_name(info, notes, t["invite"], singer)
         if dry_run:
-            print(f"{t['id']}: {info.get('seconds', 0):.0f} s sung to the {info.get('mix')} guide by {who} (not fetched: --dry-run)")
+            print(f"{t['id']}: {info.get('seconds', 0):.0f} s sung to the {info.get('mix')} guide by {who} "
+                  "(not fetched: --dry-run)")
             continue
         wav = site.call("GET", f"/api/admin/take/{t['wav']['key']}", raw=True)
         if len(wav) != info.get("bytes") or hashlib.sha256(wav).hexdigest() != info.get("sha256"):

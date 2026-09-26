@@ -135,7 +135,8 @@ def test_an_invitation_from_link_to_recordings(site):
     other = I.new(admin, 1, "e2e refusals", 1, 3)[0]["token"]
     assert put_take(base, other, take, sidecar(song), kind="text/plain")[0] == 415
     assert put_take(base, other, take[:-3], sidecar(song))[0] == 400  # not a whole WAV
-    assert put_take(base, other, take, sidecar(song, consent={"agreed": True, "at": "2026-10-01T10:00:00Z", "text": "0" * 12}))[0] == 400
+    stale = {"agreed": True, "at": "2026-10-01T10:00:00Z", "text": "0" * 12}  # agreed to another release
+    assert put_take(base, other, take, sidecar(song, consent=stale))[0] == 400
     assert put_take(base, other, take, sidecar(song, mix="kazoo"))[0] == 400
     assert put_take(base, other, take, sidecar(song, rate=44100))[0] == 400
     assert put_take(base, other, take, "not-json")[0] == 400
@@ -155,7 +156,8 @@ def test_an_invitation_from_link_to_recordings(site):
         assert len(kept) == 1
         t = kept[0]
         assert t.path.parent == K.RECORDINGS / who and t.path.read_bytes() == take
-        assert (t.song, t.guide, t.info["mix"], t.info["source"], t.info["rate"]) == (H.stem, song["guide"], "melody", "online", 48000)
+        assert (t.song, t.guide, t.info["mix"]) == (H.stem, song["guide"], "melody")
+        assert (t.info["source"], t.info["rate"]) == ("online", 48000)
         assert t.info["consent"]["text"] == song["consent"] and t.info["credit"] is False
         assert K.guide_score(H.stem, t.guide) is not None  # it can be measured against what was heard
         assert admin.call("GET", f"/api/admin/takes?invite={token}")["takes"] == []

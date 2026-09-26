@@ -403,6 +403,7 @@ function upload(q) {
     try { data = JSON.parse(xhr.responseText); } catch (e) {}
     if (xhr.status === 200 && data.ok) {
       q.state = "sent";
+      q.wav = null; // a phone can't hold every take it has sent
       S.sent = data.take;
       status("Sent. Another take, or press I'm done below when you've finished.");
     } else {
