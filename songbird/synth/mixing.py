@@ -186,8 +186,9 @@ ROLES: dict[str, Strip] = {
     # Free reeds and harmonicas: nasal mids tamed, stepping back a little under the voice like a lead line.
     "reed": Strip(eq=(("hp", 140), ("peak", 1200, -1.5, 1.0), ("peak", 2800, -2.0, 1.0), ("high", 9000, -1.0)),
                   send=1.1, duck=2.0),
-    # A cello or a section: the fiddle's treatment without its 180 Hz high-pass, so the low strings are heard.
-    "strings": Strip(eq=(("hp", 45), ("peak", 250, -1.5, 1.0), ("peak", 2500, -2.0, 1.0), ("high", 8000, -1.0)),
+    # A cello or a section: the fiddle's treatment without its 180 Hz high-pass, so the low strings are heard; the
+    # cut for boxiness at the B1 pair's boom (190 Hz), not in the cello's formant above it (250-500 Hz).
+    "strings": Strip(eq=(("hp", 45), ("peak", 190, -1.5, 1.0), ("peak", 2500, -2.0, 1.0), ("high", 8000, -1.0)),
                      comp=(10.0, 2.0, 0.02, 0.25, 2.0, 3.0), send=1.3),
     # Synths: an arpeggio or a lead line, cleared around the voice.
     "synth": Strip(eq=(("hp", 80), ("peak", 2800, -2.0, 0.9)), send=0.9, duck=1.5),
