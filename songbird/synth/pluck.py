@@ -91,10 +91,12 @@ def _loop(x, whole, taps, gain, release_at, release_gain, length, smooth):
 
 
 def _excitation(period: float, pick: float, hardness: float, vel: float, rng: np.random.Generator, sr: int,
-                roughness: float = 0.3) -> np.ndarray:
+                roughness: float = 0.3, cutoff_hz: float | None = None) -> np.ndarray:
     """One period of bridge force from a pluck at `pick` (fraction of the string
     from the bridge), softened by the plucker's `hardness` (0 a fleshy
-    fingertip, 1 a sharp pick) and by how hard it was played."""
+    fingertip, 1 a sharp pick) and by how hard it was played; or, where the
+    plucker is known better (a metal fingerpick lets a steel string go at
+    once), softened above `cutoff_hz` itself."""
     n = max(4, int(round(period)))
     k = min(n - 1, max(1, int(round(pick * n))))
     shape = np.full(n, -k / n)
@@ -105,7 +107,8 @@ def _excitation(period: float, pick: float, hardness: float, vel: float, rng: np
     # a fingertip rounds the corner off above a kilohertz or two, a pick above six.
     spectrum = np.fft.rfft(x)
     harmonic = np.arange(len(spectrum))
-    cutoff_hz = 1200.0 + 9000.0 * hardness**1.5 * (0.6 + 0.4 * vel)
+    if cutoff_hz is None:
+        cutoff_hz = 1200.0 + 9000.0 * hardness**1.5 * (0.6 + 0.4 * vel)
     cutoff = max(1.5, cutoff_hz * period / sr)  # in harmonics
     spectrum /= np.sqrt(1.0 + (harmonic / cutoff) ** 4)
     x = np.fft.irfft(spectrum, n)

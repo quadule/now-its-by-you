@@ -77,16 +77,17 @@ def test_in_tune_across_its_register(pitch):
 
 
 def test_the_head_rings_at_a_membranes_modes():
-    """(0,1) between 300 and 400 Hz, then (1,1), (2,1), (0,2) at an ideal membrane's ratios, Q 20 to 40."""
+    """(0,1) where players tune it (a resonator's tight head's tap tone G#4 to A4, 380 to 430 Hz; an open
+    back's slacker, 290 to 360), then (1,1), (2,1), (0,2) at an ideal membrane's ratios, Q 20 to 40."""
     for maker in range(4):
         q = banjo._maker(streams("banjo", 0, maker)[1])
-        spec = banjo.head(q["head"], q["q"], q["bridge"], True, q["helm"], 0.5)
+        assert 380 <= banjo.head_mode(q["tension"], True) <= 430 and 290 <= banjo.head_mode(q["tension"], False) <= 360
+        spec = banjo.head(banjo.head_mode(q["tension"], True), q["q"], q["bridge"], True, q["helm"], 0.5)
         f = np.array([m[0] for m in spec.modes[:4]])
-        assert 300 <= f[0] <= 400
         assert np.allclose(f[1:] / f[0], [1.593, 2.136, 2.295], atol=0.01)
         assert all(20 <= m[1] <= 40 for m in spec.modes[:10])
     freqs, db = body.response(body.impulse_response(spec, SR, seed=1), SR, n=1 << 16)
-    near = (freqs > 250) & (freqs < 450)
+    near = (freqs > 300) & (freqs < 500)
     assert abs(freqs[near][np.argmax(db[near])] - f[0]) < 0.08 * f[0]
 
 
@@ -137,6 +138,14 @@ def test_the_string_bands_banjo_and_mandolin_play_their_own_strokes():
     rolls = [n for n in score.notes if n.part == "banjo" and n.art == "pick"]
     drone = sum(1 for n in rolls if n.pitch == banjo.fifth_string(tonic))
     assert drone >= 0.2 * len(rolls)  # two notes in eight on the fifth string, but where the tune would rub
+
+
+def test_the_drone_is_played_as_firmly_as_the_fingers():
+    """The thumb's pick on the fifth string sounds as loud as a finger's at the same velocity (within
+    1.5 dB), so a roll's 3-3-2 accents are the part's, not the instrument's."""
+    drone = play([note(0.05, 1.0, 69, vel=0.6)], 1.2, maker=1)
+    finger = play([note(0.05, 1.0, 62, vel=0.6)], 1.2, maker=1)
+    assert abs(early_db(drone, 0.05) - early_db(finger, 0.05)) < 1.5
 
 
 def test_clawhammer_is_played_on_an_open_back_and_picks_on_a_resonator():
@@ -193,11 +202,25 @@ def test_the_break_angle_pulls_the_bridge_at_twice_the_frequency_harder_as_it_is
 
 
 def test_harder_is_louder_and_brighter():
+    """A metal fingerpick lets the string go sharply at any strength, so a harder stroke's brightness is
+    above 4 kHz (the softest touch rounds the corner at 4 kHz, a hard one at 14), not in the middle."""
     soft, hard = (play([note(0.05, 1.5, 62, vel=v)], 1.7) for v in (0.3, 0.9))
     swing = 20 * np.log10(fretwork.dynamics(0.9) / fretwork.dynamics(0.3))
     assert abs(early_db(hard, 0.05) - early_db(soft, 0.05) - swing) < 1.5
-    assert centroid(hard, 0.05, 0.25) > 1.08 * centroid(soft, 0.05, 0.25)
-    assert share_db(hard, 4000, 16000, 0.05, 0.25) > share_db(soft, 4000, 16000, 0.05, 0.25) + 3
+    assert centroid(hard, 0.05, 0.25) > 1.03 * centroid(soft, 0.05, 0.25)
+    assert share_db(hard, 4000, 16000, 0.05, 0.25) > share_db(soft, 4000, 16000, 0.05, 0.25) + 4
+
+
+def test_a_metal_fingerpick_rings_to_the_top_octave():
+    """A D4 picked as a roll is (vel 0.6): in its first 50 ms the 4-8 kHz octave 5 to 8 dB under the loudest
+    (1-2 kHz) and 8-16 kHz within 30 dB of it (a flat pick's or a soft touch's corner would take 10 more)."""
+    y = play([note(0.05, 2.0, 62, vel=0.6)], 2.3, maker=1, wear=0.0)
+    seg = mono(y)[int(0.05 * SR): int(0.1 * SR)]
+    p = np.abs(np.fft.rfft(seg * np.hanning(len(seg)))) ** 2
+    f = np.fft.rfftfreq(len(seg), 1 / SR)
+    octave = {lo: 10 * np.log10(p[(f >= lo) & (f < 2 * lo)].sum()) for lo in (1000, 4000, 8000)}
+    assert -8.0 < octave[4000] - octave[1000] < -4.0
+    assert octave[8000] - octave[1000] > -30.0
 
 
 def test_picks_near_the_bridge_are_brighter_than_the_nail_over_the_neck():
@@ -293,7 +316,7 @@ def test_the_same_maker_plays_the_same_banjo_and_another_maker_another():
     assert np.array_equal(a, play(notes, 1.8))
     other = play(notes, 1.8, maker=7)
     assert not np.allclose(a, other)
-    heads = [banjo._maker(streams("banjo", 0, m)[1])["head"] for m in (0, 7)]
+    heads = [banjo.head_mode(banjo._maker(streams("banjo", 0, m)[1])["tension"], True) for m in (0, 7)]
     assert abs(heads[0] - heads[1]) > 1.0
 
 

@@ -77,11 +77,11 @@ def box(style: str, low: float, spread: np.ndarray, q: float, bright: float) -> 
     if style == "A":  # oval sound hole (their Gibson oval hole: 209, 398, 482, 575, 728, 805, 918, 1149 Hz)
         named = ((1.0, 14.0, 3.0), (1.90, 18.0, 2.0), (2.31, 20.0, 2.5), (2.75, 22.0, 3.0), (3.48, 20.0, 1.5),
                  (3.85, 18.0, 1.0), (4.39, 24.0, 2.5), (5.50, 24.0, 2.0))
-        lowcut, highcut, tilt, hill = 0.8 * low, 10000.0, -1.2, (3500.0, 1.3, 3.5 + 2.0 * (bright - 0.5))
+        lowcut, highcut, tilt, hill = 0.8 * low, 10000.0, -0.7, (3200.0, 1.8, 5.0 + 2.0 * (bright - 0.5))
     else:  # f-holes (their f-hole Gibson: 313, 464, 570, 821, 886, 895, 1117 Hz): higher, drier, the bark
         named = ((1.0, 13.0, 3.0), (1.48, 18.0, 2.5), (1.82, 22.0, 3.5), (2.62, 20.0, 1.5), (2.83, 24.0, 2.5),
                  (2.86, 18.0, 1.0), (3.57, 24.0, 2.0))
-        lowcut, highcut, tilt, hill = 0.7 * low, 11000.0, -0.8, (3500.0, 1.3, 4.5 + 2.0 * (bright - 0.5))
+        lowcut, highcut, tilt, hill = 0.7 * low, 11000.0, -0.5, (3200.0, 1.8, 5.5 + 2.0 * (bright - 0.5))
     modes = tuple((low * r * (spread[k % len(spread)] if k else 1.0), qq * q, db)
                   for k, (r, qq, db) in enumerate(named))
     return body.Body(modes=modes, dense=(1100.0, highcut, 120), tilt=tilt, q=(34.0, 22.0), direct=0.25,
@@ -178,8 +178,8 @@ def _stroke(f: fretwork.Fingered, chord: bool, sr: int, q: dict, bright: float, 
     if art == "up":
         direction = -1.0
     elif art == "" and not chord:
-        # a run of quick notes is picked down and up in turn
-        if note.start - last[0] < 0.26 and last[1] > 0:
+        # a run of quick notes is picked down and up in turn: eighths from about 80 bpm
+        if note.start - last[0] < 0.4 and last[1] > 0:
             direction = -1.0
     if not chord:
         last = (note.start, direction)
@@ -187,6 +187,8 @@ def _stroke(f: fretwork.Fingered, chord: bool, sr: int, q: dict, bright: float, 
                         roughness=0.3 + 0.3 * wear, touch=0.25, pair=q["gap"] * 1e-3)
     s.beta = q["near"] * (1.1 - 0.2 * bright) / sounding
     s.hardness = (0.88 + 0.1 * bright) * edge
+    # a flat pick lets the string go sharply, and more so the harder it is played: 7 to 9 kHz as it usually is
+    s.cutoff = max(2500.0, 12000.0 * vel - 300.0) * (0.9 + 0.2 * bright)
     s.planes = 0.3
     s.click = ((0.25 + 0.1 * bright) * (0.4 + vel), 3000.0, 2.5)
     s.picks = ((0, 1.0 if direction > 0 else 0.88, direction),)
@@ -197,21 +199,22 @@ def _stroke(f: fretwork.Fingered, chord: bool, sr: int, q: dict, bright: float, 
         for k in range(count):
             jitter = rng.normal(0.0, 0.003) * sr if k else 0.0
             down = k % 2 == 0
-            picks.append((int(k * step + jitter), (0.78 if down else 0.68) * (1.0 + 0.06 * rng.standard_normal()),
+            picks.append((int(k * step + jitter), (0.88 if down else 0.8) * (1.0 + 0.06 * rng.standard_normal()),
                           1.0 if down else -1.0))
         s.picks = tuple(picks)
     elif art == "chop":
-        s.until = min(s.until, at + int((0.03 + 0.03 * rng.random()) * sr))
-        s.damp, s.scrape, s.knock, s.touch = 0.02, 0.35, 0.3, 0.0
+        # 40 to 70 ms of chord, then the relaxed fretting hand damps the courses over some 50 ms
+        s.until = min(s.until, at + int((0.04 + 0.03 * rng.random()) * sr))
+        s.damp, s.scrape, s.knock, s.touch = 0.05, 0.35, 0.5, 0.0
     elif art == "mute":
         s.until = min(s.until, at + int((0.012 + 0.008 * rng.random()) * sr))
         s.damp, s.scrape, s.knock, s.gain, s.touch = 0.02, 0.12, 0.1, 0.8, 0.0
     elif art == "hammer":
         s.kind, s.picks = "hammer", ((0, 0.3, 1.0),)
-        s.beta, s.hardness, s.planes, s.click, s.twang = 0.03, 0.1, 0.2, (0.04, 1500.0, 2.5), 0.0
+        s.beta, s.hardness, s.planes, s.click, s.twang, s.cutoff = 0.03, 0.1, 0.2, (0.04, 1500.0, 2.5), 0.0, 0.0
     elif art == "pull":
         s.kind, s.picks = "pull", ((0, 0.6, -1.0),)
-        s.beta, s.hardness, s.planes, s.click, s.twang = 0.1, 0.25, 0.4, (0.0, 2000.0, 1.0), 0.0
+        s.beta, s.hardness, s.planes, s.click, s.twang, s.cutoff = 0.1, 0.25, 0.4, (0.0, 2000.0, 1.0), 0.0, 0.0
     elif art == "slide":
         s.slide, s.slide_time = float(min(2, f.fret)), 0.06 + 0.02 * rng.random()  # from two frets below, if it can
     s.beta = float(np.clip(s.beta, 0.02, 0.5))

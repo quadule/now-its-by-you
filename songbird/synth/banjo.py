@@ -17,7 +17,8 @@ for a loud pick than a soft one (Politzer, "Banjo timbre from string stretching 
 modulation", Acta Acustica 2015).
 
 The head is an 11-inch Mylar membrane: its modes lie at the ratios of an ideal membrane's (the (0,1)
-between 300 and 400 Hz by maker, tension and wear, then (1,1) at 1.59 times it, (2,1) at 2.14, (0,2)
+at 380-430 Hz on a bluegrass player's tight head, 290-360 on an old-time player's slacker open back,
+by maker, brightness and wear, then (1,1) at 1.59 times it, (2,1) at 2.14, (0,2)
 at 2.30 and so on; Q 20 to 40), each driven by the bridge as far as the bridge stands on its moving
 parts, and radiating well from about 400 Hz up (a head is as wide as the sound's wavelength there),
 then a scatter of the head's crowded upper modes to 12 kHz: most of what a banjo radiates lies
@@ -95,6 +96,12 @@ def tuning(tonic: int) -> tuple[tuple[int, int, int, int], int, int]:
     return longs, fifth_string(tonic), max(k, 0)
 
 
+def long_strings(tonic: int) -> tuple[int, int, int, int]:
+    """The four long strings' open pitches for a key, the first (highest) to the fourth, capo included: a
+    part-writer's chord shapes near the nut (idioms.first_position) are made on them."""
+    return tuning(tonic)[0]
+
+
 def fifth_string(tonic: int) -> int:
     """The short fifth string's pitch for a key: its tonic or fifth, whichever lies nearer G4 (from E4 to
     B4; the tonic if both are as near). A part-writer's drone (idioms.roll_notes) asks for it here."""
@@ -128,6 +135,13 @@ def head(f1: float, q: float, bridge: float, resonator: bool, helm: float, brigh
                          direct=0.3, lowcut=90.0, highcut=12000.0, hill=(2800.0, 2.0, 6.0 + bright_db), length=0.3)
     return body.Body(modes=tuple(modes), dense=(3.5 * f1, 10000.0, 120), tilt=-0.8, q=(32.0, 22.0),
                      direct=0.25, lowcut=120.0, highcut=10000.0, hill=(2500.0, 2.0, 4.0 + bright_db), length=0.3)
+
+
+def head_mode(tension: float, resonator: bool) -> float:
+    """The head's (0,1) mode, Hz, for a player's tension (0 to 1): bluegrass players tune a resonator
+    banjo's head tight, its tap tone G#4 to A4 (380 to 430 Hz); old-time players keep an open back's
+    slacker and warmer (290 to 360 Hz)."""
+    return 380.0 + 50.0 * tension if resonator else 290.0 + 70.0 * tension
 
 
 def neck(tonic: int) -> fretwork.Board:
@@ -172,7 +186,7 @@ def _maker(make: np.random.Generator) -> dict:
     return dict(
         seed=int(make.integers(1 << 30)),
         back=float(make.random()),  # under 0.12: this player chose the other back for their style
-        head=float(make.uniform(320.0, 380.0)),  # the head's (0,1) mode at middling tension, Hz
+        tension=float(make.random()),  # how tight this player keeps the head, 0 to 1 (see head_mode)
         q=float(make.uniform(22.0, 36.0)),
         bridge=float(make.uniform(0.28, 0.4)),
         helm=float(make.uniform(170.0, 230.0)),
@@ -215,7 +229,7 @@ def render(name: str, notes, sr: int, length: int, rng: np.random.Generator, mak
         fretted_decay=0.85, along=2.0, touch_band=(150.0, 2500.0))
 
     # the head: tighter is higher and brighter, a worn one slacker and duller
-    f1 = quirks["head"] * 2.0 ** ((bright - 0.5) * 0.2) * (1.0 - 0.08 * wear) * (1.03 if resonator else 1.0)
+    f1 = head_mode(quirks["tension"], resonator) * 2.0 ** ((bright - 0.5) * 0.2) * (1.0 - 0.08 * wear)
     spec = head(f1, quirks["q"] * (1.0 - 0.2 * wear), quirks["bridge"], resonator, quirks["helm"], bright)
     ir = body.impulse_response(spec, sr, seed=quirks["seed"], size=size)
     back = None if resonator else butter(2, 0.75 * f1 / size, btype="highpass", fs=sr, output="sos")
@@ -262,6 +276,9 @@ def _stroke(f: fretwork.Fingered, sr: int, q: dict, bright: float, wear: float, 
     def picker(stroke: fretwork.Stroke) -> None:
         stroke.beta = q["near"] * (1.15 - 0.3 * bright) / sounding
         stroke.hardness = (0.9 + 0.08 * bright) * edge
+        # a metal fingerpick lets a steel string go at once, the more sharply the harder it is played: its corner
+        # is kept to 9-12 kHz as a roll is played (vel 0.6-0.75), 4 kHz in the softest touch
+        stroke.cutoff = max(2500.0, 16700.0 * vel - 1000.0) * (0.9 + 0.2 * bright)
         stroke.planes = 0.3
         stroke.click = ((0.3 + 0.1 * bright) * (0.4 + vel), 4000.0, 2.0)
 
@@ -287,10 +304,11 @@ def _stroke(f: fretwork.Fingered, sr: int, q: dict, bright: float, wear: float, 
         if clawhammer:  # the thumb's flesh catches the drone and lets it go
             s.beta, s.hardness, s.planes, s.gain = q["over"] / sounding, 0.4 * edge, 0.3, 0.85
             s.click = (0.03 * (0.4 + vel), 2000.0, 1.0)
-        else:  # a plastic thumbpick
+        else:  # a plastic thumbpick: a little rounder than the metal ones
             picker(s)
             s.beta *= 1.2
-            s.hardness, s.click, s.gain = 0.8 * edge, (0.2 * (0.4 + vel), 3500.0, 2.0), 0.9
+            s.hardness, s.click, s.gain = 0.8 * edge, (0.2 * (0.4 + vel), 3500.0, 2.0), 1.0
+            s.cutoff = (7500.0 + 2500.0 * vel) * (0.9 + 0.2 * bright)
     elif base == "hammer":
         s.kind, s.picks = "hammer", ((0, 0.3, 1.0),)
         s.beta, s.hardness, s.planes, s.click, s.twang = 0.03, 0.1, 0.2, (0.04, 1500.0, 2.5), 0.0
