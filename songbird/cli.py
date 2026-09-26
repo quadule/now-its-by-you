@@ -11,6 +11,7 @@ from pathlib import Path
 import numpy as np
 
 from . import __version__, genome as genome_mod, phrasing as phrasing_mod, synth
+from .arrange import ArrangeError, arrange
 from .realize import choose_params, realize
 from .synth import master
 from .synth.voice import VoiceParams
@@ -30,7 +31,15 @@ def render_command(args: argparse.Namespace) -> int:
     if choir_json and args.choir is None:
         params = replace(params, choir=len(choir_json))
     choir = [phrasing_mod.from_json(d) for d in choir_json]
-    score = realize(genome, params, phrasing=phrasing, choir=choir)
+    # the words: drawn from the song's bank with a seed, or the seed's own
+    lyrics = None
+    if args.lyrics_seed is not None:
+        try:
+            lyrics = arrange(genome, params.form, args.lyrics_seed)
+        except (ArrangeError, ValueError) as e:
+            print(f"songbird: can't draw words for that form: {e}", file=sys.stderr)
+            return 2
+    score = realize(genome, params, phrasing=phrasing, choir=choir, lyrics=lyrics)
     defaults = VoiceParams()
     voice = replace(defaults, **{k: type(getattr(defaults, k))(v) for k, v in (kv.split("=", 1) for kv in args.voice)})
 
@@ -46,6 +55,7 @@ def render_command(args: argparse.Namespace) -> int:
         "id": master.pcm_sha256(pcm),
         "title": genome.title,
         "params": params.to_dict(),
+        "lyrics": lyrics.to_dict() if lyrics else None,  # the words drawn from the bank; None: the seed's own
         "voice": asdict(voice),
         "phrasing": {k: v for k, v in phrasing_json.items() if k not in ("phrases", "fields")} if phrasing_json else None,
         "choir_phrasings": [{k: v for k, v in d.items() if k not in ("phrases", "fields")} for d in choir_json] or None,
@@ -56,6 +66,8 @@ def render_command(args: argparse.Namespace) -> int:
     }
     out.with_suffix(".json").write_text(json.dumps(record, indent=2) + "\n")
     out.with_suffix(".score.json").write_text(json.dumps(score.to_dict()) + "\n")
+    if lyrics:
+        out.with_suffix(".txt").write_text(lyrics.sheet(genome.title))
 
     if args.stems:
         import soundfile as sf
@@ -75,6 +87,9 @@ def main(argv: list[str] | None = None) -> int:
     render.add_argument("genome", help="path to a genome JSON file")
     render.add_argument("--out", help="output FLAC path (default renders/<genome>.flac)")
     render.add_argument("--form", nargs="+", help="override the section order, e.g. intro verse refrain")
+    render.add_argument("--lyrics-seed", type=int, metavar="N",
+                        help="draw the words from the song's bank with this seed, and write their lyric sheet "
+                             "beside the render (default: the seed's own words)")
     render.add_argument("--stems", action="store_true", help="also write each part, dry, as WAV")
     render.add_argument("--voice", nargs="*", default=[], metavar="FIELD=VALUE",
                         help="override the singer, e.g. --voice tract=1.0 shift=-12 rd=1.3")

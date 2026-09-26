@@ -395,3 +395,12 @@ def test_realize_wont_sing_words_that_dont_fit():
     record["sections"][0]["lines"][0] = "too few syl-la-bles"
     with pytest.raises(ValueError, match="syllables"):
         realize(g, params, lyrics=A.Lyrics.from_dict(record))
+
+
+def test_the_render_command_says_plainly_when_it_cant_draw_words(tmp_path, capsys):
+    from songbird import cli
+
+    out = tmp_path / "h.flac"
+    assert cli.main(["render", str(H), "--lyrics-seed", "3", "--form", "verse", "refrain", "bridge",
+                     "--out", str(out)]) == 2
+    assert "1 verse section" in capsys.readouterr().err and not out.exists()
