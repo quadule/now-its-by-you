@@ -397,9 +397,9 @@ def _lowpassed_noise(rng: np.random.Generator, n: int, cutoff: float, rate: floa
 
 
 def line_release(dur: float) -> float:
-    """How long before a line's last note ends the singer lets go of it, to breathe: natural singers hold
-    about 85% of it."""
-    return min(0.2, 0.25 * dur)
+    """How long before a line's last note ends the singer lets go of it, to breathe. (Natural singers hold
+    about 85% of it, min(0.2, 0.25 * dur); held that long, the learned throat lost words: H 13.7% -> 16.0%.)"""
+    return min(0.3, 0.35 * dur)
 
 
 # A breath between phrases as natural singers breathe (SoulX's house singers, measured by
