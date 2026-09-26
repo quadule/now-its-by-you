@@ -65,8 +65,10 @@ def test_the_lead_songs_forms(h):
     refrains = lambda form: sum(s == "refrain" for s in form)  # noqa: E731
     assert refrains(V.build(h, 2, {})) == 3 and refrains(V.build(h, 4, {})) == 5  # each verse brings its refrain
     assert refrains(V.build(h, 4, {}, pairs=True)) == 4
-    long = V.build(h, 4, {(4, "turn", r): True for r in range(3)})
-    assert " ".join(long) == "verse refrain verse refrain turn verse refrain turn verse refrain turn bridge refrain"
+    long = V.build(h, 4, {(4, "turn", r): True for r in range(3)}, bridge2=True)
+    assert " ".join(long) == ("verse refrain verse refrain turn verse refrain turn verse refrain turn "
+                              "bridge bridge2 refrain")
+    assert V.fits(h, long) and V.parse_form(h, long)["x8"] == "bridge2,"
     seen = set()
     for name in MACHINES:
         for date in ("2026-09-25", "2026-10-25", "2027-01-25", "2027-06-25", "2027-09-25"):
@@ -158,13 +160,33 @@ def test_the_table_is_wired():
 
 
 def test_leanings_for_the_lyric(h):
+    from songbird.arrange import Leanings, arrange
+
     p = child(h, "ada", "2026-09-25")
     lean = p.leanings
-    assert set(lean) >= {"mood", "era", "rarity", "vocabulary", "extra_bridge"}
-    assert set(lean["mood"]) == {"plain", "light", "dark", "tender"}
-    assert abs(sum(lean["mood"].values()) - 4) < 0.05
-    assert -1 <= lean["era"] <= 1 and 0 <= lean["rarity"] <= 1
+    assert set(lean) == {"mood_weights", "era_bias", "rarity_appetite", "vocabulary"}
+    assert set(lean["mood_weights"]) == {"plain", "light", "dark", "tender"}
+    assert abs(sum(lean["mood_weights"].values()) - 4) < 0.05
+    assert -1 <= lean["era_bias"] <= 1 and -1 <= lean["rarity_appetite"] <= 1
     assert lean["vocabulary"] and set(lean["vocabulary"]) <= V.song_words(h)  # only the song's own words
+    arranged = V.leanings(p)
+    assert isinstance(arranged, Leanings) and arranged.vocabulary and arranged.vocabulary <= V.song_words(h)
+    assert V.leanings(Params.from_dict(h.seed_params)) is None  # the seed leans nowhere
+    words = arrange(h, p.form, p.seed, arranged)
+    assert words.to_dict() == arrange(h, p.form, p.seed, arranged).to_dict()
+
+
+def test_the_bank_can_fill_every_form_chosen(h):
+    from songbird.arrange import problem
+
+    seconds = 0
+    for name in MACHINES:
+        voice = H.fictional(name)
+        for t in np.arange(D.parse("2026-01-01"), D.parse("2028-01-01"), 6.1):
+            p = choose_params(h, voice=voice, drift=D.drift(t, voice.hash))
+            assert problem(h, p.form) is None, p.form
+            seconds += "bridge2" in p.form
+    assert seconds  # a long form sometimes sings the bridge's extra stanza
 
 
 def test_lay_moves_only_the_singers(h):

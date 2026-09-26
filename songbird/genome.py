@@ -19,7 +19,7 @@ from __future__ import annotations
 
 import json
 import re
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from pathlib import Path
 
 from .theory import parse_chord
@@ -100,6 +100,18 @@ class Genome:
     source: dict  # the JSON as authored, carried forward verbatim
     lexicon: dict  # the song's own words: spelling -> ARPAbet, for words no dictionary has
     fixed: dict = field(default_factory=dict)  # every fixed lyric block by name, the refrain among them
+
+    def section(self, name: str) -> Section:
+        """A section of a concrete form by name. A name the genome doesn't
+        define that is a section's name with a number after it, bridge2, is
+        that section sung again as a section of its own: the same phrases,
+        the same lyric block and the same choir."""
+        if name in self.sections:
+            return self.sections[name]
+        base = name.rstrip("0123456789")
+        if base != name and base in self.sections:
+            return replace(self.sections[base], name=name)
+        raise KeyError(f"the genome has no section {name!r}")
 
 
 _TURN = re.compile(r"\{([^{}]*)\}")

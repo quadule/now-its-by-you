@@ -39,7 +39,7 @@ class Params:
     # Chosen by the machine and inherited; empty means the seed's own (VoiceParams' and room's defaults).
     singer: dict = field(default_factory=dict)  # VoiceParams fields that differ from the seed singer's
     room: dict = field(default_factory=dict)  # rt60 and tone for synth.room.impulse_response
-    leanings: dict = field(default_factory=dict)  # for songbird.arrange: mood, era, rarity, vocabulary, extra_bridge
+    leanings: dict = field(default_factory=dict)  # for songbird.arrange (variation.leanings): its Leanings' fields
     swing: float = 0.0  # fraction of a beat's second half the off-beats are pushed late (for the players; not yet read)
     lay: float = 0.0  # beats the singers sit ahead of the beat, behind if negative (applied by variation.lay)
     inventory: str = ""  # phoneme inventory for the singer's vowels, "" the seed's (not yet read by the singer)
@@ -88,12 +88,16 @@ def sung_as(note: Note, g: Gesture | None, beat: float) -> Note:
 
 
 def realize(genome: Genome, params: Params, verses=None, phrasing: Phrasing | None = None,
-            choir: list[Phrasing | None] | None = None) -> Score:
+            choir: list[Phrasing | None] | None = None, lyrics=None) -> Score:
     """The timed score. With a phrasing, the voice sings each note its way:
     early or late against the grid, held longer or shorter, and carrying the
     note's gesture on to the singer for loudness and pitch. choir: a phrasing
     for each lineage voice that joins in (None, or missing: that voice follows
-    the lead's timing with no gestures of its own)."""
+    the lead's timing with no gestures of its own). lyrics: words drawn from
+    the song's bank for this form (arrange.Lyrics), sung in place of the seed's
+    verses and fixed blocks; without them the seed's own words are sung."""
+    if lyrics is not None and verses is not None:
+        raise ValueError("realize sings verses or lyrics, not both")
     verses = verses if verses is not None else genome.seed_verses
     meter = genome.meter
     rng = np.random.default_rng(params.seed)
@@ -104,12 +108,15 @@ def realize(genome: Genome, params: Params, verses=None, phrasing: Phrasing | No
     t = 0
     verse_index = 0
     # how often each fixed block comes round, so a turning line knows which time it is
-    rounds = {b: sum(genome.sections[n].lyrics == b for n in params.form) for b in genome.fixed}
+    rounds = {b: sum(genome.section(n).lyrics == b for n in params.form) for b in genome.fixed}
     heard = dict.fromkeys(genome.fixed, 0)
-    for name in params.form:
-        section = genome.sections[name]
+    drawn = lyrics.lines_for(genome, params.form) if lyrics is not None else None  # per section, None if no words
+    for j, name in enumerate(params.form):
+        section = genome.section(name)  # bridge2: the bridge again, same phrases and choir
         lines: list = [None] * len(section.phrases)
-        if section.lyrics == "verse" and verses:
+        if drawn is not None:
+            lines = list(drawn[j] or lines)
+        elif section.lyrics == "verse" and verses:
             lines = list(verses[verse_index % len(verses)])
             verse_index += 1
         elif section.lyrics in genome.fixed:
@@ -166,7 +173,7 @@ def realize(genome: Genome, params: Params, verses=None, phrasing: Phrasing | No
                     section=section_name,
                     phrase=phrase.id,
                     chord=chord,
-                    choir=genome.sections[section_name].choir,
+                    choir=genome.section(section_name).choir,
                     index=k,
                     gesture=gesture(phrasing, phrase.id, k),
                 )

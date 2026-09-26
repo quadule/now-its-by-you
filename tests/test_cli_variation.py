@@ -73,6 +73,28 @@ def test_a_machine_at_a_date_renders_the_same_every_time(tmp_path):
     assert c["id"] == a["id"]
 
 
+def test_a_machine_sings_words_drawn_with_its_leanings():
+    from dataclasses import replace
+
+    from songbird import drift as D, genome as G, variation as V
+    from songbird.realize import Params, choose_params, realize
+
+    g = G.load(LEAD)
+    assert cli.words(g, Params.from_dict(g.seed_params)) is None  # the seed sings its own words
+    voice = H.fictional("ada")
+    p = choose_params(g, None, voice, D.drift(D.parse("2026-10-25"), voice.hash))
+    assert "bridge2" in p.form  # a long form, with the bridge's extra stanza
+    drawn = cli.words(g, p, sung_by_a_machine=True)
+    again = cli.words(g, p, sung_by_a_machine=True)
+    assert drawn is not None and drawn.to_dict() == again.to_dict()  # from the rendition's own seed
+    assert cli.words(g, p, seed=5).to_dict() != drawn.to_dict()  # --lyrics-seed draws others
+    assert cli.words(g, replace(p, form=("refrain",)), sung_by_a_machine=True) is None  # a form the bank can't fill
+    score = realize(g, p, lyrics=drawn)
+    bridge = [n.syllable for n in score.part("voice") if n.section == "bridge2"]
+    assert bridge and len({n.part for n in score.notes if n.section == "bridge2"}) > 1  # sung, with its choir
+    assert V.leanings(p).vocabulary
+
+
 def test_year_table(capsys):
     assert cli.main(["year", str(LEAD), "--machine", "fictional:ada", "--from", "2026-09-25", "--days", "30",
                      "--step", "10"]) == 0

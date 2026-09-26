@@ -182,13 +182,17 @@ class Chance:
 
 # ---------------------------------------------------------------- where a value lives
 
-LEANINGS = {"mood": {"plain": 1.0, "light": 1.0, "dark": 1.0, "tender": 1.0}, "era": 0.0, "rarity": 0.5,
-            "vocabulary": {}}
+# The lyric's leanings, named as songbird.arrange.Leanings names them; neutral values. vocabulary is kept
+# weighted (word -> weight, an even share of the person's words being 1) so a lineage can remember it;
+# leanings() hands arrange the words at VOCABULARY_AT or more.
+LEANINGS = {"mood_weights": {"plain": 1.0, "light": 1.0, "dark": 1.0, "tender": 1.0}, "era_bias": 0.0,
+            "rarity_appetite": 0.0, "vocabulary": {}}
+VOCABULARY_AT = 0.6
 ROOM = {"rt60": 1.1, "tone": [1.0, 1.0, 1.0, 0.9, 0.7]}  # synth.room.impulse_response's defaults
 
 
 def read(params, path: str):
-    """A value from Params by path: 'tempo', 'singer.rd', 'room.rt60', 'leanings.era'.
+    """A value from Params by path: 'tempo', 'singer.rd', 'room.rt60', 'leanings.era_bias'.
     A singer, room or leaning the params don't set has its default."""
     head, _, tail = path.partition(".")
     if not tail:
@@ -306,10 +310,10 @@ KNOBS = (
     Knob("singer.dynamics", ("identity",), lambda c, x: x + 2.5 * c.id("dynamics"),
          drift="voice", span=2.5, bounds=(10.0, 19.0), step=0.5),
     # ---- what the lyric leans toward (for songbird.arrange) ------------------------------------------------------
-    Knob("leanings.era", ("era", "wear"), lambda c, x: x + 0.6 * c.era - 0.3 * c.wear,
+    Knob("leanings.era_bias", ("era", "wear"), lambda c, x: x + 0.6 * c.era - 0.3 * c.wear,
          drift="era", span=0.6, view="slow", bounds=(-1.0, 1.0), step=0.05),
-    Knob("leanings.rarity", ("richness",), lambda c, x: x + 0.35 * c.richness,
-         drift="rarity", span=0.25, view="slow", bounds=(0.0, 1.0), step=0.05),
+    Knob("leanings.rarity_appetite", ("richness",), lambda c, x: x + 0.7 * c.richness,
+         drift="rarity", span=0.5, view="slow", bounds=(-1.0, 1.0), step=0.05),
 )
 
 
@@ -428,7 +432,7 @@ def template(genome: Genome) -> list[tuple[str, str]]:
 
 
 def is_verse(genome: Genome, name: str) -> bool:
-    return genome.sections[name].lyrics == "verse"
+    return genome.section(name).lyrics == "verse"
 
 
 @dataclass(frozen=True)
@@ -477,7 +481,8 @@ def items(genome: Genome) -> tuple[Item, ...]:
 
 
 def extra_bridge(genome: Genome) -> bool:
-    """Whether the song's bank allows a second bridge stanza in a long form."""
+    """Whether the song's bank allows a second bridge stanza in a long form,
+    sung as bridge2: the bridge's phrases and choir again (Genome.section)."""
     return bool(genome.source.get("bank", {}).get("rules", {}).get("bridge", {}).get("extra"))
 
 
@@ -509,7 +514,7 @@ def _grammar(genome: Genome) -> re.Pattern:
         else:
             name, flag = it.tokens[0]
             parts.append(f"(?P<t{it.index}>(?:{re.escape(name)},){'?' if flag == '?' else ''})")
-            if genome.sections[name].lyrics == "bridge" and "bridge2" in genome.sections:
+            if genome.sections[name].lyrics == "bridge" and extra_bridge(genome):
                 parts.append(f"(?P<x{it.index}>(?:bridge2,)?)")
     return re.compile("".join(parts))
 
@@ -561,7 +566,7 @@ def build(genome: Genome, verses: int, present: dict, bridge2: bool = False, pai
         name, flag = it.tokens[0]
         if flag == "" or present.get((it.index, name, 0)):
             form.append(name)
-        if bridge2 and genome.sections[name].lyrics == "bridge" and "bridge2" in genome.sections:
+        if bridge2 and genome.sections[name].lyrics == "bridge" and extra_bridge(genome):
             form.append("bridge2")
     return tuple(form)
 
@@ -624,10 +629,16 @@ def choose_form(out: dict, ctx: Context) -> None:
                                                  SECTION_DRIFT.get(name, "tag"))
     second = False
     if extra_bridge(genome) and verses > lo:  # a long form may sing the bridge's extra stanza
-        before = any(v for k, v in was.items() if k.startswith("x")) or bool(ctx.parent.leanings.get("extra_bridge"))
-        second = plays(before, ctx.habit("extra"), "extra")
-    out["form"] = list(build(genome, verses, present, second, pairs))
-    out.setdefault("leanings", {})["extra_bridge"] = second
+        second = plays(any(v for k, v in was.items() if k.startswith("x")), ctx.habit("extra"), "extra")
+    form = build(genome, verses, present, second, pairs)
+    if genome.source.get("bank"):  # the bank must be able to fill it; it always can, this makes sure
+        from .arrange import problem
+
+        if problem(genome, form) and second:
+            form = build(genome, verses, present, False, pairs)
+        if problem(genome, form):
+            return
+    out["form"] = list(form)
 
 
 # ---------------------------------------------------------------- the lyric's leanings
@@ -661,7 +672,7 @@ def choose_mood(out: dict, ctx: Context) -> None:
     toward the screen's (a light screen lightens, a warm one is tender), with
     the slow mood drift tilting the machine's own (a positive drift lightens),
     darkened a little in a minor mode. Never read from the person's words."""
-    was = {**LEANINGS["mood"], **ctx.parent.leanings.get("mood", {})}
+    was = {**LEANINGS["mood_weights"], **ctx.parent.leanings.get("mood_weights", {})}
     c = ctx.c
     screen = {"plain": 1.0, "light": 1.0 + 0.4 * c.brightness, "dark": 1.0 - 0.4 * c.brightness,
               "tender": 1.0 + 0.3 * c.warmth} if "brightness" in c.known else None
@@ -675,7 +686,7 @@ def choose_mood(out: dict, ctx: Context) -> None:
             w *= 1.25 if mood == "dark" else 1.1
         weights[mood] = w
     mean = sum(weights.values()) / len(weights)
-    out.setdefault("leanings", {})["mood"] = {k: round(float(v / mean), 2) for k, v in weights.items()}
+    out.setdefault("leanings", {})["mood_weights"] = {k: round(float(v / mean), 2) for k, v in weights.items()}
 
 
 def choose_vocabulary(out: dict, ctx: Context) -> None:
@@ -697,6 +708,20 @@ def choose_vocabulary(out: dict, ctx: Context) -> None:
                     own[w] = max(own.get(w, 0.0), share / even)
     merged = {w: ctx.pull(was.get(w, 0.0), own.get(w, 0.0)) for w in sorted(set(was) | set(own))}
     out.setdefault("leanings", {})["vocabulary"] = {w: round(float(v), 2) for w, v in merged.items() if v >= 0.05}
+
+
+def leanings(params):
+    """The leanings chosen with params, as songbird.arrange takes them; None for
+    parameters that chose none (the seed's), which arrange reads as neutral."""
+    lean = params.leanings
+    if not lean:
+        return None
+    from .arrange import Leanings
+
+    vocabulary = lean.get("vocabulary", {})
+    return Leanings(mood_weights=lean.get("mood_weights", {}), era_bias=lean.get("era_bias", 0.0),
+                    rarity_appetite=lean.get("rarity_appetite", 0.0),
+                    vocabulary=frozenset(w for w, weight in vocabulary.items() if weight >= VOCABULARY_AT))
 
 
 def choose_inventory(out: dict, ctx: Context) -> None:
