@@ -15,17 +15,24 @@ uv sync
 uv run songbird render songs/b-coal-from-the-fire.json            # renders/b-coal-from-the-fire.flac
 uv run songbird render songs/b-coal-from-the-fire.json --form refrain --stems \
     --voice tract=1.0 shift=-12                                               # a lower singer, parts as WAVs
+uv run songbird harvest --show                                     # this machine's voice, exactly what is kept
+uv run songbird render songs/h-now-its-by-you.json --machine here --date 2026-12-25  # sung by this machine that day
+uv run songbird render songs/h-now-its-by-you.json --machine fictional:ada           # by a made-up machine, now
+uv run songbird year songs/h-now-its-by-you.json --machine fictional:ada             # its choices through a year
 uv run pytest
 ```
 
 ## Layout
 
 `songbird/` follows the pipeline: `genome` (the persistent skeleton; tunes are
-written as scale degrees on a rhythmic grid), `realize` (genome plus parameters
-to a timed score), `synth/` (plucked string, LF glottal source, Klatt-style
-tract, singing voice, room, mastering), `phonetics` (CMU dictionary to sung
-syllables). `harvest`, `drift`, `lyrics`, `gate` and `pack` are the later
-milestones and only describe their interfaces so far.
+written as scale degrees on a rhythmic grid), `harvest` (the machine's context
+reduced to a voice: [docs/HARVEST.md](docs/HARVEST.md) lists exactly what is
+read), `drift` (time as a smooth noise field), `realize` (genome plus
+parameters to a timed score; `variation` is the table by which the parent's
+parameters pull toward the voice as the drift moves them), `synth/` (plucked
+string, LF glottal source, Klatt-style tract, singing voice, room, mastering),
+`phonetics` (CMU dictionary to sung syllables). `lyrics`, `gate` and `pack` are
+the later milestones and only describe their interfaces so far.
 
 ## Checking a render without ears
 
