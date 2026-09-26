@@ -1016,6 +1016,11 @@ def render(name: str, notes, sr: int, length: int, rng: np.random.Generator, mak
         y = y + noise * np.repeat(level.reshape(blocks, 256).max(axis=1), 256)[:m] * hiss
         tail = min(m, int(0.003 * sr))  # every voice ends at rest, however far down it has already fallen
         y[m - tail:] *= 0.5 + 0.5 * np.cos(np.linspace(0.0, np.pi, tail))
+        # ...and starts from it: a voice whose oscillator or noise is already mid-swing when its VCA opens
+        # would step from silence to a third of full scale in one sample; an analog output takes half a
+        # millisecond, which keeps the click (a millisecond or two long) and loses the step
+        rise = min(m, int(0.0005 * sr))
+        y[:rise] *= 0.5 - 0.5 * np.cos(np.linspace(0.0, np.pi, rise + 1)[1:])  # sounding from the note's sample
         j = min(length, i + len(y))
         theta = (PAN[piece] + 1.0) * np.pi / 4.0
         out[i:j, 0] += y[: j - i] * np.cos(theta) * np.sqrt(2.0)
