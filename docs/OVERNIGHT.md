@@ -13,7 +13,7 @@ The asks this answers:
 - **The deliverable:** a studio to explore and edit before recording, and a self-contained
   application attached to the audio file.
 
-Everything is merged into main in atomic commits and merges, with 1051 tests passing. Nothing was
+Everything is merged into main in atomic commits and merges, with 1053 tests passing. Nothing was
 pushed or deployed.
 
 ## Listen first
@@ -111,6 +111,11 @@ song today.
 - **It explains:** every choice, and why, in plain words.
 - **It explores:** other days, chance and other machines.
 - **It takes changes:** words, key, tempo, band, mix, shape, and dropping a melody variant.
+- **It speaks the new systems:**
+  - *Style:* the style card says the style and its players in plain words. You can change the
+    style, its feel, its ending, its backing voices and the lift, and its band and tempo follow.
+  - *Words:* the words are the ones the lineage hands down, each labelled "handed down" or "new
+    this time", with the reason. A word you choose changes only that word.
 - **It records:** one file that carries the program, the child of the version you opened.
 
 ### The song file carries its program (docs/PACKET.md)
@@ -176,35 +181,39 @@ Each item names the choice, and how to undo it or where it lives.
    - *The quick ornament tones* may touch fa and ti.
    - *The form can flip back within a week,* as it always could: `choose_form` has no hold.
 8. **The first child always changes couplets**, because the bank's rules make a child sing others
-   before the canon.
+   before the canon. So the studio's words card says "six changes this time" at the first
+   generation.
+9. **One machine's style can flip for short stretches.** Across the studio's six-year timeline, one
+   machine moves between the ballad band and the shanty and back, and the tempo jumps with each
+   style. A stronger hold is in songbird/style.py (the Schmitt trigger's margin).
 
 **The studio** (all in docs/STUDIO.md)
-9. **The studio's defaults:**
+10. **The studio's defaults:**
    - a person's choices pass to their children;
    - "today" is noon UTC;
    - a phrasing isn't embedded in a record;
    - the comparison machines are named Ada, Basil and Coral.
 
 **The sing page**
-10. **The page's terms:**
+11. **The page's terms:**
     - the release text, web/sing/consent.md (not legal advice; nothing on payment);
     - who singers contact to withdraw;
     - 30 days for unfetched takes;
     - invite notes kept 90 days;
     - not yet tried on a real phone.
-11. **The melody guide's levels,** by ear: the whistle's statements, the octave doubling, the
+12. **The melody guide's levels,** by ear: the whistle's statements, the octave doubling, the
     pulse.
 
 **The song file**
-12. **The packet is a polyglot, FLAC plus an appended zip.**
+13. **The packet is a polyglot, FLAC plus an appended zip.**
     - *The cost:* `flac -t` complains after decoding every sample, and macOS `ditto` won't unzip it.
     - *The alternative:* a metadata block, which is strictly valid FLAC but no longer a zip or a
       program.
-13. **The first run fetches dependencies,** about 100 MB from PyPI, after asking.
-14. **Where the seed and its program hash are published.** One line in the README would let a
+14. **The first run fetches dependencies,** about 100 MB from PyPI, after asking.
+15. **Where the seed and its program hash are published.** One line in the README would let a
     careful stranger check a file before running it, for example on songbird.quadule.com. Signing
     sits awkwardly with CC0.
-15. **Whether the seed carries its day,** and the tags' working title and "Songbird" as artist
+16. **Whether the seed carries its day,** and the tags' working title and "Songbird" as artist
     (docs/STATEMENT.md proposes "Nobody Knows" and "Nobody").
 
 ## Next
