@@ -70,7 +70,27 @@ def test_mix_is_deterministic(stems):
     b = mixing.mix({k: v.copy() for k, v in stems.items()}, SR, seed=4)
     assert a.shape[1] == 2 and len(a) > len(stems["voice"])  # the room rings on
     assert np.array_equal(a, b)
-    assert not np.array_equal(a, mixing.mix(stems, SR, seed=5))  # a different room
+    assert np.array_equal(a, mixing.mix(stems, SR, seed=5))  # a room is its numbers: the same every rendition
+    assert not np.array_equal(a, mixing.mix(stems, SR, seed=4, params=MixParams(rt60=1.3)))  # another room
+
+
+def test_stems_of_any_shape(stems):
+    odd = {"voice": stems["voice"][:, 0], "guitar": stems["guitar"][: SR], "bass": stems["bass"][:, :1]}
+    y = mixing.mix(odd, SR)  # mono, short and single-column stems all take part
+    assert y.shape[1] == 2 and len(y) > len(stems["voice"]) and np.all(np.isfinite(y))
+
+
+def test_tilt_does_what_it_says():
+    rng = np.random.default_rng(8)
+    noise = {"guitar": rng.standard_normal((4 * SR, 2)) * 0.1}
+    flat, bright = (mixing.mix(noise, SR, params=MixParams(space=0.0, tilt=t)) for t in (0.0, 2.0))
+
+    def band(x, lo, hi):
+        f = np.fft.rfftfreq(len(x), 1 / SR)
+        p = np.abs(np.fft.rfft(x[:, 0])) ** 2
+        return 10 * np.log10(p[(f >= lo) & (f < hi)].sum())
+    assert band(bright, 10000, 14000) - band(flat, 10000, 14000) == pytest.approx(2.0, abs=0.5)
+    assert band(bright, 40, 80) - band(flat, 40, 80) == pytest.approx(-2.0, abs=0.5)
 
 
 @pytest.mark.parametrize("name", list(mixing.RANGES))

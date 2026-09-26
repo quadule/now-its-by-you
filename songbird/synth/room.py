@@ -21,6 +21,8 @@ machine: dense from the start, bright, wide, with little low end.
 
 from __future__ import annotations
 
+import zlib
+
 import numpy as np
 from scipy.fft import irfft, next_fast_len, rfft, rfftfreq, set_workers
 from scipy.signal import oaconvolve
@@ -145,12 +147,28 @@ def _unit(ir: np.ndarray) -> np.ndarray:
     return ir / np.sqrt(np.sum(ir**2) / ir.shape[-1])
 
 
+def seed_of(rt60: float, tone=TONE, predelay: float = 0.012) -> int:
+    """A room's own seed, from its numbers (as the harvest rounds them): a
+    machine's room is the same room every rendition, echo for echo."""
+    key = f"{rt60:.2f}|" + ",".join(f"{t:.2f}" for t in tone) + f"|{predelay:.3f}"
+    return zlib.crc32(key.encode())
+
+
+def _coloured(early: np.ndarray, sr: int, tone) -> np.ndarray:
+    """The early reflections through the tonal profile too: surfaces colour the first echoes as they do the tail."""
+    n = next_fast_len(early.shape[1] + 256)
+    f = rfftfreq(n, 1.0 / sr)
+    centres = np.log2([np.sqrt(lo * hi) for lo, hi in BANDS])
+    gain = np.interp(np.log2(np.maximum(f, 20.0)), centres, np.asarray(tone, dtype=float))
+    return irfft(rfft(early, n, axis=1) * gain[None, :, None], n, axis=1)[:, : early.shape[1]]
+
+
 def responses(sr: int, rt60: float = 1.1, tone=TONE, predelay: float = 0.012, seed: int = 0) -> tuple[np.ndarray, np.ndarray]:
     """The room's early reflections (2, samples, 2) and late tail (samples, 2),
     scaled together so a centred source's response has unit energy per ear.
     Small rooms are heard more by their early reflections, large ones by
     their tail."""
-    early = early_reflections(sr, rt60, predelay, seed)
+    early = _coloured(early_reflections(sr, rt60, predelay, seed), sr, tone)
     volume = float(np.prod(dimensions(rt60)))
     mixing = max(0.005, 0.001 * np.sqrt(volume))  # when echoes have become too dense to tell apart
     tail = late_tail(sr, rt60, tone, seed, start=predelay, ramp=2.0 * mixing)

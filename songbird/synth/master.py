@@ -3,10 +3,11 @@
 The mix arrives already glued and tilted (mixing.py); mastering only brings
 it to -14 LUFS integrated without letting it swing past -1 dBTP, measured
 with 4x oversampling as BS.1770-4 annex 2 asks, since a player's
-reconstruction filter (or a lossy decoder) swings between the samples. The
-limiter looks ahead 5 ms and lets go over about 80 ms, so it rounds off the
-few peaks that stand out (plucks, a loud syllable) instead of squashing the
-song: its loudness range stays that of the mix.
+reconstruction filter (or a lossy decoder) swings between the samples. A
+soft clip rounds off the sharpest peaks (the top 2 dB, a fraction of a
+percent of samples), then a limiter that looks ahead 5 ms and lets go over
+about 80 ms catches the rest, so the song is never squashed: its loudness
+range stays that of the mix.
 """
 
 from __future__ import annotations
@@ -205,18 +206,39 @@ def limit(x: np.ndarray, sr: int, ceiling_db: float = CEILING_DB, lookahead: flo
     return x * gain[:, None]
 
 
-def master(x: np.ndarray, sr: int, target: float = TARGET_LUFS, ceiling_db: float = CEILING_DB) -> np.ndarray:
-    """Bring a mix to the target loudness without its true peak passing the ceiling."""
+CLIP = (2.0, 1.0)  # the soft clip's knee starts this many dB under the ceiling and flattens this many over it
+
+
+def clip(x: np.ndarray, ceiling_db: float, below: float = CLIP[0], above: float = CLIP[1]) -> np.ndarray:
+    """Round off only the sharpest peaks: samples within `below` dB of the
+    ceiling bend smoothly toward `above` dB past it (a tanh knee); everything
+    quieter passes untouched. On H it touches under 0.2% of samples, and
+    spares the limiter the few peaks that would have made it duck the whole
+    band for a moment."""
+    a = 10.0 ** ((ceiling_db - below) / 20.0)
+    b = 10.0 ** ((ceiling_db + above) / 20.0)
+    out = x.copy()
+    mag = np.abs(x)
+    over = mag > a
+    out[over] = np.sign(x[over]) * (a + (b - a) * np.tanh((mag[over] - a) / (b - a)))
+    return out
+
+
+def master(x: np.ndarray, sr: int, target: float = TARGET_LUFS, ceiling_db: float = CEILING_DB,
+           taps: dict | None = None) -> np.ndarray:
+    """Bring a mix to the target loudness without its true peak passing the
+    ceiling: gain, the soft clip, then the limiter, the gain found again until
+    the loudness is on target.
+    taps: a dict to receive the gain applied ("gain_db") and what the clip and
+    limiter took together ("limited_db", per sample)."""
     level = loudness(x, sr)
     if not np.isfinite(level):
         return x
     ceiling = ceiling_db - MARGIN_DB
     gain = 10.0 ** ((target - level) / 20.0)
-    # the envelope scales with the gain; exact wherever 3 dB more gain could bring it within 6 dB of the ceiling
-    env = true_peak_envelope(x, 0.5 * 10.0 ** (ceiling / 20.0) / (1.41 * gain))
     y = x * gain
     for _ in range(8):
-        y = limit(x * gain, sr, ceiling, envelope=env * gain)
+        y = limit(clip(x * gain, ceiling), sr, ceiling)
         level = loudness(y, sr)
         if abs(level - target) < 0.05:
             break
@@ -224,6 +246,11 @@ def master(x: np.ndarray, sr: int, target: float = TARGET_LUFS, ceiling_db: floa
     over = true_peak(y) - ceiling
     if over > 0:  # the limiter's own gain changes can swing a little past: once more, lower
         y = limit(y, sr, ceiling - over)
+    if taps is not None:
+        taps["gain_db"] = 20.0 * np.log10(gain)
+        with np.errstate(divide="ignore", invalid="ignore"):
+            ratio = np.abs(y).max(axis=1) / (np.abs(x).max(axis=1) * gain)
+        taps["limited_db"] = 20.0 * np.log10(np.where(np.isfinite(ratio) & (ratio > 0), np.minimum(ratio, 1.0), 1.0))
     return y
 
 
