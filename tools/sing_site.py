@@ -11,11 +11,15 @@ What it writes, all served by web/sing/src/worker.js:
     song/song.json                   the words and notes as they come (karaoke.lyrics), the guide score's
                                      digest, the release's digest, and each guide's length and opening
                                      loudness (so the page can tell if an MP3 decoder put silence in front)
-    song/melody.mp3, song/full.mp3   the guides (tools/guides.py), encoded with ffmpeg
+    song/melody.mp3, song/full.mp3   the guides (tools/guides.py), encoded with ffmpeg, in mono (a phone
+                                     decodes each to a buffer; stereo would double it)
+    _headers                         the security headers for the files served without the worker
 
 The worker serves song/ only to an open invitation. The guide score is kept in
 recordings/guides/ (tools/takes.py), so takes fetched with tools/invite.py are
-measured against exactly what their singers heard, whatever the song does next.
+measured against exactly what their singers heard, whatever the song does next;
+beside it, release.<digest>.html keeps the release exactly as singers read it,
+under the digest each of their takes carries.
 """
 
 from __future__ import annotations
@@ -42,7 +46,7 @@ import takes as K  # noqa: E402  (tools/takes.py)
 ROOT = Path(__file__).parent.parent
 WEB = ROOT / "web" / "sing"
 MIXES = ("melody", "full")  # what singers choose between; the tune alone first, and by default
-BITRATE = "128k"
+BITRATE = "96k"
 FRAME = 0.001  # seconds per step of a guide's opening loudness
 OPENING = 2.5  # seconds of it kept: the song's first sounds are at 0.6 s
 MARK = ".songbird-site"  # in an output directory this tool may clear
@@ -139,7 +143,7 @@ def encode(wav: Path, mp3: Path, bitrate: str = BITRATE) -> dict:
     """The guide as an MP3, and what the page needs to know about the original."""
     import soundfile as sf
 
-    ffmpeg("-y", "-i", str(wav), "-codec:a", "libmp3lame", "-b:a", bitrate, str(mp3))
+    ffmpeg("-y", "-i", str(wav), "-ac", "1", "-codec:a", "libmp3lame", "-b:a", bitrate, str(mp3))
     x, rate = sf.read(wav)
     mono = x.mean(axis=1) if x.ndim > 1 else x
     env = envelope(mono, rate)
@@ -190,6 +194,9 @@ def build(genome_path: Path, out: Path, rebuild: bool = False, bitrate: str = BI
     shutil.copyfile(ROOT / "tools" / "karaoke-recorder.js", out / "recorder.js")
     (out / "robots.txt").write_text("User-agent: *\nDisallow: /\n")
     (out / "favicon.svg").write_text(FAVICON)
+    (out / "_headers").write_text(HEADERS)
+    # the release as singers read it, kept by the digest their takes carry
+    (K.GUIDES / f"release.{agreed}.html").write_text(text + "\n")
 
     tempo = data.get("tempo") or choose_params(genome).tempo
     song = {
@@ -202,6 +209,14 @@ def build(genome_path: Path, out: Path, rebuild: bool = False, bitrate: str = BI
     (out / "song" / "song.json").write_text(json.dumps(song, separators=(",", ":")) + "\n")
     return song
 
+
+HEADERS = """/*
+  X-Content-Type-Options: nosniff
+  Referrer-Policy: no-referrer
+  X-Frame-Options: DENY
+  Cross-Origin-Resource-Policy: same-origin
+  Strict-Transport-Security: max-age=15552000
+"""
 
 FAVICON = """<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32"><circle cx="16" cy="16" r="15" fill="#c2533b"/>\
 <path d="M13 22.5a3.5 3 0 1 1-2-2.7V8l10-2v11.5a3.5 3 0 1 1-2-2.7V9.4l-6 1.2z" fill="#fffaf3"/></svg>

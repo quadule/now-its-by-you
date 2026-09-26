@@ -33,7 +33,7 @@ p { margin: 0 0 10px; }
 .step.waiting button, .step.waiting input { pointer-events: none; }
 .closed { padding-top: 40px; }
 
-.consent { max-height: 320px; overflow: auto; border: 1px solid var(--line); border-radius: 10px; padding: 12px 14px; margin-bottom: 12px;
+.consent { border: 1px solid var(--line); border-radius: 10px; padding: 12px 14px; margin-bottom: 12px;
            background: var(--paper); font-size: 15px; }
 .consent h2, .consent h3 { font-size: 16px; }
 .consent ul { padding-left: 20px; margin: 6px 0 10px; }

@@ -11,6 +11,7 @@ left pinned in recordings/guides/ like any other.
 """
 
 import base64
+import hashlib
 import json
 import os
 import secrets
@@ -82,9 +83,9 @@ def request(url, method="GET", data=None, headers=None):
     req = urllib.request.Request(url, data=data, method=method, headers=headers or {})
     try:
         with urllib.request.urlopen(req, timeout=60) as r:
-            return r.status, dict(r.headers), r.read()
+            return r.status, r.headers, r.read()
     except urllib.error.HTTPError as e:
-        return e.code, dict(e.headers), e.read()
+        return e.code, e.headers, e.read()
 
 
 def guide_take(seconds: float = 30.0, rate: int = 48000) -> bytes:
@@ -98,10 +99,12 @@ def guide_take(seconds: float = 30.0, rate: int = 48000) -> bytes:
     return head + b"data" + len(pcm).to_bytes(4, "little") + pcm
 
 
-def sidecar(song: dict, **extra) -> str:
+def sidecar(song: dict, body: bytes, **extra) -> str:
+    """What the page sends with a take, its checksum included."""
     info = {"song": song["song"], "guide": song["guide"], "mix": "melody", "rate": 48000, "name": "Test Singer E2E",
             "credit": False, "consent": {"agreed": True, "at": datetime.now(timezone.utc).isoformat(), "text": song["consent"]},
-            "shift_ms": 0, "auto_ms": 0, "device_ms": 0, "decode_ms": 0, "out_ms": 25, "in_ms": 5, **extra}
+            "shift_ms": 0, "auto_ms": 0, "device_ms": 0, "decode_ms": 0, "out_ms": 25, "in_ms": 5,
+            "sha256": hashlib.sha256(body).hexdigest(), **extra}
     return base64.urlsafe_b64encode(json.dumps(info).encode()).decode().rstrip("=")
 
 
@@ -126,26 +129,35 @@ def test_an_invitation_from_link_to_recordings(site):
     assert mp3 == (site["public"] / "song" / "melody.mp3").read_bytes()
 
     # nothing private without an open invitation, and nothing but what's asked for
-    for path in ("/song/song.json", "/song/melody.mp3", "/index.html", "/.songbird-site", f"/api/guide/{'A' * 24}/melody",
-                 f"/api/song/{token}x", "/api/admin/invites", f"/api/admin/take/takes/{token}/../../x.wav"):
+    for path in ("/song/song.json", "/song/melody.mp3", "/index.html", "/.songbird-site", "/.assetsignore",
+                 f"/api/guide/{'A' * 24}/melody", f"/api/song/{token}x", "/api/admin/invites",
+                 f"/api/admin/take/takes/{token}/../../x.wav"):
         assert request(base + path)[0] in (401, 404), path
+    code, headers, _ = request(f"{base}/sing.js")  # the page's own files come straight from the assets, with _headers
+    assert code == 200 and headers.get("X-Content-Type-Options") == "nosniff"
 
     # the ways a take is refused (on an invitation of their own: six tries a minute each)
     take = guide_take()
     other = I.new(admin, 1, "e2e refusals", 1, 3)[0]["token"]
-    assert put_take(base, other, take, sidecar(song), kind="text/plain")[0] == 415
-    assert put_take(base, other, take[:-3], sidecar(song))[0] == 400  # not a whole WAV
+    assert put_take(base, other, take, sidecar(song, take), kind="text/plain")[0] == 415
+    assert put_take(base, other, take[:-3], sidecar(song, take))[0] == 400  # not a whole WAV
     stale = {"agreed": True, "at": "2026-10-01T10:00:00Z", "text": "0" * 12}  # agreed to another release
-    assert put_take(base, other, take, sidecar(song, consent=stale))[0] == 400
-    assert put_take(base, other, take, sidecar(song, mix="kazoo"))[0] == 400
-    assert put_take(base, other, take, sidecar(song, rate=44100))[0] == 400
+    assert put_take(base, other, take, sidecar(song, take, consent=stale))[0] == 400
+    assert put_take(base, other, take, sidecar(song, take, mix="kazoo"))[0] == 400
+    assert put_take(base, other, take, sidecar(song, take, rate=44100))[0] == 400
     assert put_take(base, other, take, "not-json")[0] == 400
-    assert put_take(base, other, take, sidecar(song))[0] == 429  # a seventh try within the minute
-    assert put_take(base, "B" * 24, take, sidecar(song))[0] == 404
+    assert put_take(base, other, take, sidecar(song, take))[0] == 429  # a seventh try within the minute
+    assert put_take(base, "B" * 24, take, sidecar(song, take))[0] == 404
     assert json.loads(request(f"{base}/api/invite/{other}")[2])["takes"] == 0
 
+    # not from the page, or not what the page sent: refused
+    cross = {"Content-Type": "audio/wav", "X-Take-Info": sidecar(song, take), "Sec-Fetch-Site": "cross-site"}
+    assert request(f"{base}/api/take/{token}", "PUT", take, cross)[0] == 403
+    code, _, body = put_take(base, token, take, sidecar(song, take, sha256="0" * 64))
+    assert code == 400 and json.loads(body)["error"] == "damaged"  # R2 checks it against the page's checksum
+
     # a take
-    code, _, body = put_take(base, token, take, sidecar(song))
+    code, _, body = put_take(base, token, take, sidecar(song, take))
     assert code == 200 and json.loads(body) == {"ok": True, "take": 1, "limit": 3}
     assert json.loads(request(f"{base}/api/invite/{token}")[2])["takes"] == 1
 
@@ -170,7 +182,7 @@ def test_an_invitation_from_link_to_recordings(site):
     assert json.loads(request(f"{base}/api/done/{token}", "POST")[2]) == {"state": "done"}
     assert json.loads(request(f"{base}/api/invite/{token}")[2])["state"] == "done"
     assert request(f"{base}/i/{token}")[0] == 410
-    assert put_take(base, token, take, sidecar(song))[0] == 410
+    assert put_take(base, token, take, sidecar(song, take))[0] == 410
     assert request(f"{base}/api/guide/{token}/melody")[0] == 410
     listed = {inv["token"]: inv for inv in admin.call("GET", "/api/admin/invites")["invites"]}
     assert listed[token]["state"] == "done" and listed[token]["sent"] == 1
@@ -180,8 +192,8 @@ def test_an_invitation_takes_no_more_than_its_limit_and_can_be_revoked(site):
     base, admin, song = site["base"], site["admin"], site["song"]
     token = I.new(admin, 1, "", 1, 1)[0]["token"]
     take = guide_take(seconds=5.0)
-    assert put_take(base, token, take, sidecar(song))[0] == 200
-    code, _, body = put_take(base, token, take, sidecar(song))
+    assert put_take(base, token, take, sidecar(song, take))[0] == 200
+    code, _, body = put_take(base, token, take, sidecar(song, take))
     assert code == 403 and json.loads(body)["error"] == "limit"
     for part in admin.call("GET", f"/api/admin/takes?invite={token}")["takes"]:  # clean up the take
         for kind in ("wav", "json"):

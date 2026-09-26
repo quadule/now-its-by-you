@@ -39,7 +39,7 @@ async function init() {
   ({ lo: S.lo, hi: S.hi } = K.range(S.notes));
   S.reel = new K.Reel($("reel"), S.song);
   drawMixes();
-  $("name").value = saved("songbird-sing-name", "");
+  $("name").value = saved(`songbird-sing-name:${S.token}`, ""); // per invitation: a phone may be passed round
   const credit = saved("songbird-sing-credit", "yes");
   document.querySelectorAll('input[name="credit"]').forEach(r => { r.checked = r.value === credit; });
   $("loading").hidden = true;
@@ -70,14 +70,13 @@ async function api(method, kind, extra = "", body, headers = {}) {
 function status(html) { $("status").innerHTML = html; }
 
 function gate() {
-  // the steps after the release wait for it to be agreed to, and the singing for the microphone
-  const have = { agree: $("agree").checked, mic: !!S.recorder && $("agree").checked };
+  // the steps after the release wait for it to be agreed to (recording asks for the microphone itself)
+  const agreed = $("agree").checked;
   document.querySelectorAll(".step[data-needs]").forEach(step => {
-    const ok = have[step.dataset.needs];
-    step.classList.toggle("waiting", !ok);
-    step.querySelectorAll("button, input").forEach(el => { if (!ok) el.disabled = true; else if (!el.dataset.busy) el.disabled = false; });
+    step.classList.toggle("waiting", !agreed);
+    step.querySelectorAll("button, input").forEach(el => { if (!agreed) el.disabled = true; else if (!el.dataset.busy) el.disabled = false; });
   });
-  if (have.mic) $("stop").disabled = S.mode === "idle";
+  if (agreed) $("stop").disabled = S.mode === "idle";
   $("calibrateBox").hidden = !S.recorder;
 }
 
@@ -85,7 +84,7 @@ $("agree").addEventListener("change", () => {
   S.consentAt = $("agree").checked ? new Date().toISOString() : null;
   gate();
 });
-$("name").addEventListener("input", () => save("songbird-sing-name", $("name").value.trim()));
+$("name").addEventListener("input", () => save(`songbird-sing-name:${S.token}`, $("name").value.trim()));
 document.querySelectorAll('input[name="credit"]').forEach(r => r.addEventListener("change", () => save("songbird-sing-credit", r.value)));
 
 function drawMixes() {
@@ -132,8 +131,16 @@ function learn(ms) {
 /* ---------- sound ---------- */
 
 async function context() {
-  if (!S.ctx) S.ctx = new AudioContext({ latencyHint: "interactive" });
-  await S.ctx.resume();
+  // the audio clock everything is timed by, at the device's own rate; one running far above what a
+  // voice needs (some desktop interfaces run at 176.4 or 192 kHz) is asked for 48 kHz instead
+  if (!S.ctx) {
+    S.ctx = new AudioContext({ latencyHint: "interactive" });
+    if (S.ctx.sampleRate > 96000) {
+      await S.ctx.close();
+      S.ctx = new AudioContext({ latencyHint: "interactive", sampleRate: 48000 });
+    }
+  }
+  if (S.ctx.state !== "running") await S.ctx.resume(); // after a call or the lock screen, too
 }
 
 async function guide(which) {
@@ -152,6 +159,9 @@ async function guide(which) {
       for (let i = 0; i < n; i++) mono[i] += d[i] / buffer.numberOfChannels;
     }
     S.guides[which] = { buffer, offset: K.decodeOffset(mono, buffer.sampleRate, m.env, m.frame) };
+    for (const other of Object.keys(S.guides)) { // a phone holds one decoded guide, and the one a take awaits
+      if (other !== which && other !== (S.take && S.take.mix)) delete S.guides[other];
+    }
   }
   return S.guides[which];
 }
@@ -159,8 +169,7 @@ async function guide(which) {
 async function microphone() {
   if (S.recorder) return;
   if (!window.isSecureContext || !navigator.mediaDevices) throw new Error("This page needs a secure (https) connection for the microphone.");
-  await context();
-  try {
+  try { // the microphone first: a phone reconfigures its audio when it opens, and the clock is made after
     S.stream = await navigator.mediaDevices.getUserMedia({
       audio: { echoCancellation: false, noiseSuppression: false, autoGainControl: false, channelCount: 1 },
     });
@@ -168,6 +177,11 @@ async function microphone() {
     throw new Error(e.name === "NotAllowedError" ? "The browser didn't allow the microphone. Allow it for this page (in the address bar, or your phone's settings) and try again."
       : e.name === "NotFoundError" ? "No microphone was found." : `The microphone didn't start (${e.message}).`);
   }
+  if (S.ctx) { // made before the microphone (to listen first): make it again now it's open
+    try { await S.ctx.close(); } catch (e) {}
+    S.ctx = null;
+  }
+  await context();
   const mic = S.ctx.createMediaStreamSource(S.stream);
   await S.ctx.audioWorklet.addModule("/recorder.js");
   S.recorder = new AudioWorkletNode(S.ctx, "take-recorder", { numberOfOutputs: 1, outputChannelCount: [1] });
@@ -198,7 +212,8 @@ $("mic").onclick = async () => {
   gate();
 };
 
-function start(buffers, mode, from = 0, shifts = []) {
+async function start(buffers, mode, from = 0, shifts = []) {
+  await context();
   const when = S.ctx.currentTime + 0.12;
   S.t0 = when - from;
   S.out = (S.ctx.outputLatency || 0) + (S.ctx.baseLatency || 0);
@@ -224,7 +239,7 @@ function start(buffers, mode, from = 0, shifts = []) {
 }
 
 function busy(on) {
-  for (const id of ["record", "rehearse", "calibrate", "done", "keep", "listen", "discard"]) {
+  for (const id of ["mic", "record", "rehearse", "calibrate", "done", "keep", "listen", "discard"]) {
     $(id).dataset.busy = on ? "1" : "";
     $(id).disabled = on;
   }
@@ -268,7 +283,7 @@ document.addEventListener("visibilitychange", () => { if (document.hidden && S.m
 $("rehearse").onclick = async () => {
   try {
     const g = await guide(mix());
-    start([g.buffer], "rehearsing", 0, [g.offset]);
+    await start([g.buffer], "rehearsing", 0, [g.offset]);
   } catch (e) { status(`<span class="warn">${escapeHtml(e.message)}</span>`); }
 };
 
@@ -277,10 +292,10 @@ $("record").onclick = async () => {
   if (S.sent >= S.invite.limit) { status("You've sent as many takes as this invitation takes. Thank you!"); return; }
   const which = mix();
   let g;
-  try { g = await guide(which); await microphone(); } catch (e) { status(`<span class="warn">${escapeHtml(e.message)}</span>`); return; }
+  try { await microphone(); g = await guide(which); } catch (e) { status(`<span class="warn">${escapeHtml(e.message)}</span>`); return; }
   try { S.wake = navigator.wakeLock ? await navigator.wakeLock.request("screen") : null; } catch (e) { S.wake = null; }
   S.recording = { mix: which, offset: g.offset };
-  start([g.buffer], "recording", 0, [g.offset]);
+  await start([g.buffer], "recording", 0, [g.offset]);
 };
 
 $("stop").onclick = stop;
@@ -311,9 +326,10 @@ function takeBuffer() {
   return S.take.buffer;
 }
 
-function listenFrom(from) {
+async function listenFrom(from) {
   S.src.forEach(s => { s.onended = null; try { s.stop(); } catch (e) {} });
-  start([S.guides[S.take.mix].buffer, takeBuffer()], "listening", Math.max(0, from), [S.take.offset, S.shift]);
+  const g = S.guides[S.take.mix] || await guide(S.take.mix);
+  await start([g.buffer, takeBuffer()], "listening", Math.max(0, from), [S.take.offset, S.shift]);
 }
 
 $("listen").onclick = () => listenFrom(0);
@@ -325,9 +341,10 @@ $("shift").oninput = () => {
 $("shift").onchange = () => { if (S.mode === "listening") listenFrom(S.ctx.currentTime - S.t0 - S.out - 1.0); };
 $("discard").onclick = () => { S.take = null; $("review").hidden = true; status("Ready when you are."); };
 
-$("keep").onclick = () => {
+$("keep").onclick = async () => {
   const t = S.take;
   if (!t) return;
+  if (!$("agree").checked || !S.consentAt) { status('<span class="warn">Tick the release (step 2) to send a take.</span>'); return; }
   const info = {
     song: S.song.song, guide: S.song.guide, mix: t.mix, rate: t.rate,
     name: $("name").value.trim(), credit: document.querySelector('input[name="credit"]:checked').value === "yes",
@@ -338,10 +355,16 @@ $("keep").onclick = () => {
   const byEar = S.shift - (t.auto || 0);
   if (Math.abs(byEar) >= 0.005) learn(t.device * 1000 + byEar * 1000); // their correction beyond the automatic one
   const wav = K.wavBytes(K.shifted(t.samples, t.rate, S.shift), t.rate);
+  // its checksum travels with it, and the bucket keeps it only if what arrives matches
+  info.sha256 = Array.from(new Uint8Array(await crypto.subtle.digest("SHA-256", wav)), b => b.toString(16).padStart(2, "0")).join("");
   S.take = null;
   $("review").hidden = true;
   send({ wav, info, seconds: t.samples.length / t.rate });
 };
+
+window.addEventListener("beforeunload", e => { // a take not yet sent lives only in this page
+  if (S.take || S.mode === "recording" || queue.some(q => q.state !== "sent")) { e.preventDefault(); e.returnValue = ""; }
+});
 
 /* ---------- sending ---------- */
 
@@ -422,6 +445,7 @@ function upload(q) {
 $("calibrate").onclick = async () => {
   try { await microphone(); } catch (e) { $("calibration").textContent = e.message; return; }
   if (S.mode !== "idle") return;
+  await context();
   const when = S.ctx.currentTime + 0.6;
   K.scheduleClicks(S.ctx, when);
   S.chunks = [];

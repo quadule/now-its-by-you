@@ -1,5 +1,5 @@
 // The worker's pure parts: tokens, the WAV a take must be, a take's sidecar and an invite's
-// state (web/sing/src/worker.js uses them; test/worker.test.mjs tests them).
+// state (web/sing/src/worker.js uses them; test/lib.test.mjs tests them).
 
 export const TOKEN = /^[A-Za-z0-9_-]{24}$/; // 18 random bytes, base64url: 144 bits
 export const TAKE_KEY = /^takes\/[A-Za-z0-9_-]{24}\/\d{8}T\d{6}Z-[a-z2-7]{6}\.(wav|json)$/;
@@ -39,29 +39,35 @@ export function stateOf(invite, now = Date.now()) {
   return Date.parse(invite.expires) <= now ? "expired" : "open";
 }
 
-export function parseWav(buffer) {
+export function parseWavHeader(head, total) {
   // a take must be exactly what the page writes: RIFF/WAVE, a 16-byte fmt chunk of 16-bit mono PCM,
-  // then one data chunk running to the end of the file
-  const v = new DataView(buffer);
+  // then one data chunk running to the end of the file, `total` bytes in all; its first 44 bytes are
+  // enough to tell, so the rest can stream on to the bucket
+  if (head.byteLength < 44 || total < 44) throw new Error("too short to be a WAV");
+  const v = new DataView(head.buffer, head.byteOffset, 44);
   const tag = at => String.fromCharCode(v.getUint8(at), v.getUint8(at + 1), v.getUint8(at + 2), v.getUint8(at + 3));
-  if (buffer.byteLength < 44) throw new Error("too short to be a WAV");
   if (tag(0) !== "RIFF" || tag(8) !== "WAVE" || tag(12) !== "fmt " || tag(36) !== "data") throw new Error("not a plain WAV");
-  if (v.getUint32(4, true) !== buffer.byteLength - 8) throw new Error("the RIFF size is wrong");
+  if (v.getUint32(4, true) !== total - 8) throw new Error("the RIFF size is wrong");
   if (v.getUint32(16, true) !== 16) throw new Error("the fmt chunk is not plain PCM");
   const format = v.getUint16(20, true), channels = v.getUint16(22, true), rate = v.getUint32(24, true);
   const byteRate = v.getUint32(28, true), align = v.getUint16(32, true), bits = v.getUint16(34, true);
   if (format !== 1 || channels !== 1 || bits !== 16 || align !== 2 || byteRate !== rate * 2) throw new Error("not 16-bit mono PCM");
   if (!RATES.includes(rate)) throw new Error("an unusual sample rate");
   const size = v.getUint32(40, true);
-  if (size !== buffer.byteLength - 44 || size % 2) throw new Error("the data size is wrong");
+  if (size !== total - 44 || size % 2) throw new Error("the data size is wrong");
   return { rate, samples: size / 2, seconds: size / 2 / rate };
+}
+
+export function parseWav(buffer) {
+  // the same, for a whole take in hand
+  return parseWavHeader(new Uint8Array(buffer, 0, Math.min(44, buffer.byteLength)), buffer.byteLength);
 }
 
 const NUMBERS = ["shift_ms", "auto_ms", "device_ms", "decode_ms", "out_ms", "in_ms"];
 
 export function cleanName(name) {
   // printable text only, trimmed, at most 80 characters
-  return String(name ?? "").replace(/[\u0000-\u001f\u007f-\u009f​-‏‪-‮⁦-⁩]/g, "").trim().slice(0, 80);
+  return String(name ?? "").replace(/[\u0000-\u001f\u007f-\u009f\u200b-\u200f\u202a-\u202e\u2066-\u2069]/g, "").trim().slice(0, 80);
 }
 
 export function checkInfo(info, song, wav, now = Date.now()) {
@@ -71,16 +77,19 @@ export function checkInfo(info, song, wav, now = Date.now()) {
   const consent = info.consent;
   if (!consent || consent.agreed !== true) throw new Error("the release must be agreed to first");
   const at = Date.parse(consent.at);
-  if (!Number.isFinite(at) || at > now + 86400e3 || at < now - 60 * 86400e3) throw new Error("the time the release was agreed to is wrong");
+  if (!Number.isFinite(at) || at > now + 86400e3 || at < now - 60 * 86400e3) {
+    throw new Error("the time the release was agreed to is out by more than a day: check this device's clock and date");
+  }
   if (consent.text !== song.consent) throw new Error("the release has changed since the page was loaded: reload it");
   if (info.song !== song.song || info.guide !== song.guide) throw new Error("the song has changed since the page was loaded: reload it");
   if (!Object.prototype.hasOwnProperty.call(song.mixes, info.mix)) throw new Error("no such guide");
   if (info.rate !== wav.rate) throw new Error("the sample rate doesn't match the recording");
   if (wav.seconds < MIN_TAKE_SECONDS) throw new Error("the take is too short");
   if (wav.seconds > song.max_seconds) throw new Error("the take is longer than the song");
+  if (!/^[0-9a-f]{64}$/.test(String(info.sha256))) throw new Error("the take's checksum is missing");
   const out = {
     song: song.song, guide: song.guide, mix: info.mix, rate: wav.rate, seconds: Math.round(wav.seconds * 1000) / 1000,
-    name: cleanName(info.name), credit: info.credit === true,
+    name: cleanName(info.name), credit: info.credit === true, sha256: info.sha256,
     consent: { agreed: true, at: new Date(at).toISOString(), text: consent.text },
   };
   for (const k of NUMBERS) {

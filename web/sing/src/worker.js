@@ -23,8 +23,8 @@
 // the song's words and guides are served only to an open invite. Nothing personal is
 // logged: no names, no tokens, no addresses. An address is used only as a rate-limit key.
 
-import { DEFAULTS, MAX_TAKE_BYTES, TAKE_KEY, TOKEN, checkInfo, clampInt, cleanName, fromB64url, newToken, parseWav, sameSecret,
-         stateOf, takeKey } from "./lib.js";
+import { DEFAULTS, MAX_TAKE_BYTES, TAKE_KEY, TOKEN, checkInfo, clampInt, cleanName, fromB64url, newToken, parseWavHeader,
+         sameSecret, stateOf, takeKey } from "./lib.js";
 
 const KEEP_AFTER_EXPIRY = 90 * 86400; // seconds an invite's record outlives it, for the artist's list
 const PUBLIC = { "/sing.js": "text/javascript", "/sing.css": "text/css", "/karaoke.js": "text/javascript",
@@ -37,6 +37,7 @@ const SECURITY = {
   "Cross-Origin-Opener-Policy": "same-origin",
   "Cross-Origin-Resource-Policy": "same-origin",
   "Permissions-Policy": "microphone=(self), camera=(), geolocation=(), payment=(), usb=()",
+  "Strict-Transport-Security": "max-age=15552000",
 };
 const PAGE_CSP = "default-src 'none'; script-src 'self'; style-src 'self'; img-src 'self' data:; media-src 'self' blob:; " +
                  "connect-src 'self'; base-uri 'none'; form-action 'none'; frame-ancestors 'none'";
@@ -129,6 +130,13 @@ async function sentBy(env, token) {
   return Math.max(Number(count) || 0, waiting);
 }
 
+function sameSite(request) {
+  // a browser says where a request comes from: a take or "I'm done" must come from the page itself,
+  // never from a page elsewhere that learned the link (tools send no such header)
+  const site = request.headers.get("Sec-Fetch-Site");
+  return site === null || site === "same-origin";
+}
+
 async function limited(limiter, key) {
   if (!limiter) return false; // no binding (an old local wrangler): no limit
   try {
@@ -141,10 +149,11 @@ async function limited(limiter, key) {
 
 /* ---------- the singer's routes ---------- */
 
-async function singer(request, env, parts) {
+async function singer(request, env, parts, ip) {
   const [kind, token, extra] = parts;
   const inv = await invite(env, token);
   const state = stateOf(inv);
+  if (!inv && await limited(env.UNKNOWN, `unknown:${ip}`)) return fail(429, "busy", "Too many requests: wait a minute.");
 
   if (kind === "invite" && request.method === "GET") {
     if (!inv) return fail(404, "unknown", "No such invitation.");
@@ -160,6 +169,7 @@ async function singer(request, env, parts) {
     if (!Object.prototype.hasOwnProperty.call(s.mixes, extra)) return fail(404, "unknown", "No such guide.");
     return asset(env, request, `/song/${s.mixes[extra].file}`, { "Cache-Control": "private, max-age=86400", "Content-Type": "audio/mpeg" });
   }
+  if ((kind === "take" || kind === "done") && !sameSite(request)) return fail(403, "site", "Only the singing page can do that.");
   if (kind === "take" && request.method === "PUT") return take(request, env, token, inv);
   if (kind === "done" && request.method === "POST") {
     await close(env, token, inv, "done");
@@ -168,33 +178,78 @@ async function singer(request, env, parts) {
   return fail(405, "method", "Not here.");
 }
 
+async function drained(reader, response) {
+  // a take refused once its length is known to be sane is read to its end first (and dropped), so
+  // the page, still sending, hears why rather than losing the connection
+  try {
+    for (;;) if ((await reader.read()).done) break;
+  } catch (e) { /* gone already */ }
+  return response;
+}
+
 async function take(request, env, token, inv) {
-  if (await limited(env.UPLOADS, `take:${token}`)) return fail(429, "busy", "Too many takes at once: wait a minute and send it again.");
+  const declared = request.headers.get("Content-Length"), length = Number(declared);
+  if (declared === null || !Number.isInteger(length) || length < 44 || !request.body) return fail(411, "length", "A take must say how long it is.");
+  if (length > MAX_TAKE_BYTES) return fail(413, "size", "That take is too big.");
+  const reader = request.body.getReader();
+  if (await limited(env.UPLOADS, `take:${token}`)) {
+    return drained(reader, fail(429, "busy", "Too many takes at once: wait a minute and send it again."));
+  }
   const type = (request.headers.get("Content-Type") || "").split(";")[0].trim().toLowerCase();
-  if (!["audio/wav", "audio/x-wav", "audio/wave"].includes(type)) return fail(415, "type", "A take must be a WAV.");
-  const length = Number(request.headers.get("Content-Length"));
-  if (!Number.isFinite(length) || length > MAX_TAKE_BYTES) return fail(413, "size", "That take is too big.");
+  if (!["audio/wav", "audio/x-wav", "audio/wave"].includes(type)) return drained(reader, fail(415, "type", "A take must be a WAV."));
   const header = request.headers.get("X-Take-Info") || "";
-  if (!header || header.length > 4096) return fail(400, "info", "The take's details are missing.");
+  if (!header || header.length > 4096) return drained(reader, fail(400, "info", "The take's details are missing."));
 
   const s = await song(env, request);
   const sent = await sentBy(env, token);
-  if (sent >= inv.limit) return fail(403, "limit", `This invitation takes up to ${inv.limit} takes, and they're all in. Thank you!`);
+  if (sent >= inv.limit) {
+    return drained(reader, fail(403, "limit", `This invitation takes up to ${inv.limit} takes, and they're all in. Thank you!`));
+  }
 
-  let info, wav;
-  const body = await request.arrayBuffer();
-  if (body.byteLength > MAX_TAKE_BYTES) return fail(413, "size", "That take is too big.");
+  // its first 44 bytes say whether it's a take at all; the rest streams on to the bucket, so the
+  // Worker never holds or hashes a whole take (the free plan allows it 10 ms of work a request)
+  let head = new Uint8Array(0);
+  while (head.byteLength < 44) {
+    const { value, done } = await reader.read();
+    if (done) break;
+    const joined = new Uint8Array(head.byteLength + value.byteLength);
+    joined.set(head);
+    joined.set(value, head.byteLength);
+    head = joined;
+  }
+  let info;
   try {
-    wav = parseWav(body);
+    const wav = parseWavHeader(head, length);
     info = checkInfo(JSON.parse(new TextDecoder().decode(fromB64url(header))), s, wav);
   } catch (e) {
-    return fail(400, "take", e instanceof SyntaxError ? "The take's details can't be read." : e.message);
+    return drained(reader, fail(400, "take", e instanceof SyntaxError ? "The take's details can't be read." : e.message));
   }
-  const hash = Array.from(new Uint8Array(await crypto.subtle.digest("SHA-256", body)), b => b.toString(16).padStart(2, "0")).join("");
   const received = new Date();
   const key = takeKey(token, received);
-  const sidecar = { ...info, received: received.toISOString(), bytes: body.byteLength, sha256: hash, take: sent + 1 };
-  await env.TAKES.put(`${key}.wav`, body, { httpMetadata: { contentType: "audio/wav" } });
+  // exactly the length it declared, and R2 checks it against the SHA-256 the page worked out: a take
+  // cut short or changed on the way isn't kept
+  const { readable, writable } = new FixedLengthStream(length);
+  const pump = (async () => {
+    const writer = writable.getWriter();
+    try {
+      await writer.write(head);
+      for (;;) {
+        const { value, done } = await reader.read();
+        if (done) break;
+        await writer.write(value);
+      }
+      await writer.close();
+    } catch (e) {
+      await writer.abort(e).catch(() => {});
+      throw e;
+    }
+  })();
+  try {
+    await Promise.all([env.TAKES.put(`${key}.wav`, readable, { sha256: info.sha256, httpMetadata: { contentType: "audio/wav" } }), pump]);
+  } catch (e) {
+    return fail(400, "damaged", "The take arrived damaged or cut short: send it again.");
+  }
+  const sidecar = { ...info, received: received.toISOString(), bytes: length, take: sent + 1 };
   await env.TAKES.put(`${key}.json`, JSON.stringify(sidecar), { httpMetadata: { contentType: "application/json" } });
   const ttl = Math.max(60, Math.round((Date.parse(inv.expires) - Date.now()) / 1000) + KEEP_AFTER_EXPIRY);
   await env.INVITES.put(`sent:${token}`, String(sent + 1), { expirationTtl: ttl });
@@ -303,16 +358,17 @@ export default {
   async fetch(request, env) {
     const url = new URL(request.url);
     const path = url.pathname;
+    const ip = request.headers.get("CF-Connecting-IP") || "local"; // only ever a key for counting requests
     try {
       if (path.startsWith("/api/") || path.startsWith("/i/")) {
-        const ip = request.headers.get("CF-Connecting-IP") || "local";
         if (await limited(env.REQUESTS, `ip:${ip}`)) return fail(429, "busy", "Too many requests: wait a minute.");
       }
       if (path.startsWith("/i/")) {
         const token = path.slice(3);
         const inv = await invite(env, token);
+        if (!inv && await limited(env.UNKNOWN, `unknown:${ip}`)) return fail(429, "busy", "Too many requests: wait a minute.");
         const state = stateOf(inv);
-        if (state !== "open" || request.method !== "GET") return closedPage(state);
+        if (state !== "open" || !["GET", "HEAD"].includes(request.method)) return closedPage(state);
         return asset(env, request, "/index.html", { "Content-Type": "text/html; charset=utf-8", "Cache-Control": "no-store",
                                                   "Content-Security-Policy": PAGE_CSP, "X-Robots-Tag": "noindex" });
       }
@@ -322,7 +378,7 @@ export default {
         if (parts.length < 2 || parts.length > 3 || !["invite", "song", "guide", "take", "done"].includes(parts[0])) {
           return fail(404, "unknown", "No such thing.");
         }
-        return await singer(request, env, parts);
+        return await singer(request, env, parts, ip);
       }
       if (Object.prototype.hasOwnProperty.call(PUBLIC, path) && request.method === "GET") {
         return asset(env, request, path, { "Content-Type": `${PUBLIC[path]}; charset=utf-8`, "Cache-Control": "public, max-age=300" });

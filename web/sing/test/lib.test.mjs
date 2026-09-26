@@ -4,7 +4,8 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 
 import {
-  MAX_TAKE_BYTES, TAKE_KEY, TOKEN, b64url, checkInfo, clampInt, cleanName, fromB64url, newToken, parseWav, sameSecret, stateOf,
+  MAX_TAKE_BYTES, TAKE_KEY, TOKEN, b64url, checkInfo, clampInt, cleanName, fromB64url, newToken, parseWav, parseWavHeader,
+  sameSecret, stateOf,
   takeKey,
 } from "../src/lib.js";
 import { wavBytes } from "../../../tools/karaoke.js";
@@ -14,7 +15,8 @@ const SONG = { song: "h-now-its-by-you", guide: "86341ecd9a2a", consent: "896e20
 
 function info(extra = {}) {
   return { song: SONG.song, guide: SONG.guide, mix: "melody", rate: 48000, name: "Ana", credit: true,
-           consent: { agreed: true, at: new Date().toISOString(), text: SONG.consent }, shift_ms: 12, ...extra };
+           consent: { agreed: true, at: new Date().toISOString(), text: SONG.consent }, shift_ms: 12, sha256: "ab".repeat(32),
+           ...extra };
 }
 
 test("a token is 144 random bits, URL-safe, never the same twice", () => {
@@ -67,6 +69,10 @@ test("a take must be the plain 16-bit mono WAV the page writes", () => {
   assert.throws(() => parseWav(broken(v => { v.setUint32(24, 12345, true); v.setUint32(28, 24690, true); })), /sample rate/);
   assert.throws(() => parseWav(broken(v => v.setUint32(40, 10, true))), /data size/);
   assert.throws(() => parseWav(broken(v => v.setUint8(0, 0x58))), /plain WAV/);
+  // the first 44 bytes and the length it declares are enough: the rest streams past
+  assert.deepEqual(parseWavHeader(new Uint8Array(good, 0, 64), good.byteLength), parseWav(good));
+  assert.throws(() => parseWavHeader(new Uint8Array(good, 0, 44), good.byteLength + 2), /RIFF size/); // declares more than it is
+  assert.throws(() => parseWavHeader(new Uint8Array(good, 0, 30), good.byteLength), /too short/);
   assert.ok(MAX_TAKE_BYTES > 96000 * 2 * 200);
 });
 
@@ -79,10 +85,15 @@ test("a take's sidecar is checked against the song it was sung to", () => {
   assert.equal(out.shift_ms, 12);
   assert.equal(out.extra, undefined);
   assert.equal(out.ua, undefined);
+  assert.equal(out.sha256, "ab".repeat(32));
+  assert.throws(() => checkInfo(info({ sha256: undefined }), SONG, wav), /checksum/);
+  assert.throws(() => checkInfo(info({ sha256: "AB".repeat(32) }), SONG, wav), /checksum/);
 
   assert.throws(() => checkInfo({ ...info(), consent: { agreed: false } }, SONG, wav), /release/);
   assert.throws(() => checkInfo(info({ consent: { agreed: true, at: new Date().toISOString(), text: "000000000000" } }), SONG, wav), /release has changed/);
-  assert.throws(() => checkInfo(info({ consent: { agreed: true, at: "yesterday-ish", text: SONG.consent } }), SONG, wav), /agreed to is wrong/);
+  assert.throws(() => checkInfo(info({ consent: { agreed: true, at: "yesterday-ish", text: SONG.consent } }), SONG, wav), /clock/);
+  const early = new Date(Date.now() - 90 * 86400e3).toISOString();
+  assert.throws(() => checkInfo(info({ consent: { agreed: true, at: early, text: SONG.consent } }), SONG, wav), /clock/);
   assert.throws(() => checkInfo(info({ guide: "000000000000" }), SONG, wav), /song has changed/);
   assert.throws(() => checkInfo(info({ mix: "kazoo" }), SONG, wav), /no such guide/);
   assert.throws(() => checkInfo(info({ mix: "__proto__" }), SONG, wav), /no such guide/);
@@ -95,7 +106,8 @@ test("a take's sidecar is checked against the song it was sung to", () => {
 });
 
 test("names are printable text, trimmed and short", () => {
-  assert.equal(cleanName("  Ana\u0000 María‮ "), "Ana María");
+  assert.equal(cleanName("  Ana\u0000 María\u202e "), "Ana María");
+  assert.equal(cleanName("Jo\u200b\u2066e\u2069"), "Joe"); // invisible and direction marks go too
   assert.equal(cleanName("x".repeat(200)).length, 80);
   assert.equal(cleanName(undefined), "");
   assert.equal(cleanName("<b>Jo</b>"), "<b>Jo</b>"); // kept as text: nothing renders it as HTML

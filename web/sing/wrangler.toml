@@ -13,7 +13,9 @@ preview_urls = false
 [assets]
 directory = "./public"
 binding = "ASSETS"
-run_worker_first = true      # every request passes the worker: the song and its guides only reach open invitations
+# The worker sees the page's own address, the API and the song (served only to open invitations);
+# the page's scripts and styles are served straight from the assets, with public/_headers.
+run_worker_first = ["/", "/index.html", "/i/*", "/api/*", "/song/*"]
 html_handling = "none"
 not_found_handling = "none"
 
@@ -28,8 +30,9 @@ id = "PASTE-THE-KV-NAMESPACE-ID-HERE"
 binding = "TAKES"
 bucket_name = "songbird-takes"
 
-# At most 6 takes a minute on one invitation, and 240 requests a minute from one address.
-# The address is only a key for the count, held briefly at the edge and never stored.
+# About 6 takes a minute on one invitation, 60 requests a minute from one address, and 10 a minute
+# from an address asking after invitations that don't exist. Counted at each Cloudflare location,
+# so a little loose; the address is only a key for the count, held briefly and never stored.
 [[ratelimits]]
 name = "UPLOADS"
 namespace_id = "1701"
@@ -38,7 +41,12 @@ simple = { limit = 6, period = 60 }
 [[ratelimits]]
 name = "REQUESTS"
 namespace_id = "1702"
-simple = { limit = 240, period = 60 }
+simple = { limit = 60, period = 60 }
+
+[[ratelimits]]
+name = "UNKNOWN"
+namespace_id = "1703"
+simple = { limit = 10, period = 60 }
 
 # No logs kept: requests carry invitation tokens and singers' names.
 [observability]
