@@ -576,7 +576,7 @@ def w_eighths(ctx: StyleContext, i: int, part: str) -> list[Ev]:
                 target = nearest({ctx.root(nxt.symbol)}, root, lo, hi)
                 p = scale_step(ctx, target, -1 if target >= root else 1)
             out.append(ev(part, u, u + 0.8 * (until(subs, k, c.u1) - u), p,
-                          ctx.vel(part, u, 0.8 if ctx.grid.on_beat(u) else 0.62, 0.85), i=i))
+                          ctx.vel(part, u, 0.66 if ctx.grid.on_beat(u) else 0.5, 0.85), i=i))
     return out
 
 
@@ -1015,6 +1015,9 @@ def w_pad(ctx: StyleContext, i: int, part: str, swell_all: bool = False) -> list
     phrase_starts = {p0 for p0, _ in ctx.phrases}
     lo, hi = B.register_of(part)
     lo, hi = max(lo, ctx.tonic - 14), max(min(hi, ctx.floor(i)), max(lo, ctx.tonic - 14) + 10)
+    s = ctx.sections[i]
+    alone = not s.sung and len(s.parts) == 1  # a pad on its own (an intro swelling in) plays out, not under
+    base = 0.85 if alone else 0.5
     for c in ctx.chords_in(i):
         notes = ctx.voicing(part, ctx.tones(c, c.u0, c.u1), lo, hi, c.u0, c.u1, size=4, chord=c)
         art = "swell" if swell_all or any(abs(c.u0 - p) < 1e-9 for p in phrase_starts) else ""
@@ -1023,7 +1026,7 @@ def w_pad(ctx: StyleContext, i: int, part: str, swell_all: bool = False) -> list
             if held is not None and not art:
                 held.u1 = c.u1  # a common tone is held over
             else:
-                out.append(ev(part, c.u0, c.u1, p, ctx.vel(part, c.u0, 0.5, 0.9), art=art, i=i))
+                out.append(ev(part, c.u0, c.u1, p, ctx.vel(part, c.u0, base, 0.9), art=art, i=i))
     return out
 
 
@@ -1064,7 +1067,7 @@ def w_pulse(ctx: StyleContext, i: int, part: str) -> list[Ev]:
             end = until(subs, k, c.u1)
             notes = fingering(ctx, part, c, u, end, i)[-3:]
             for p in notes:
-                out.append(ev(part, u, u + 0.8 * (end - u), p, ctx.vel(part, u, 0.5 if ctx.grid.on_beat(u) else 0.38), i=i))
+                out.append(ev(part, u, u + 0.8 * (end - u), p, ctx.vel(part, u, 0.42 if ctx.grid.on_beat(u) else 0.32), i=i))
     return out
 
 
@@ -1241,8 +1244,8 @@ def groove_bar(ctx: StyleContext, kind: str) -> list[tuple[float, str, float]]:
         out += [(b, "rim", 0.4) for b in back]
         return out
     if kind == "four":  # four to the floor: the kick on every beat, the snare on the backbeat, open hats between
-        out += [(b, "kick", 0.8) for b in beats] + [(b, "snare", 0.7) for b in back]
-        out += [(s, "hat-open" if k % 4 == 3 else "hat", 0.45) for k, s in enumerate(subs) if not g.on_beat(g.origin + s)]
+        out += [(b, "kick", 0.72) for b in beats] + [(b, "snare", 0.64) for b in back]
+        out += [(s, "hat-open" if k % 4 == 3 else "hat", 0.4) for k, s in enumerate(subs) if not g.on_beat(g.origin + s)]
         return out
     if kind == "half" or feel == "half":
         out += [(0.0, "kick", 0.75), (beats[n // 2] if n > 1 else 0.0, "snare", 0.7)]
