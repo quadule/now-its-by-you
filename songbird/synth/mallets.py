@@ -4,7 +4,7 @@ A bar rings in bending modes. A free bar of even section has them at
 1 : 2.756 : 5.404 : 8.933 (a glockenspiel's steel bars, a celesta's
 plates), a little lower in a short thick bar, where shear and rotary
 inertia soften it (Timoshenko): a glockenspiel's G5 bar measures
-1 : 2.74 : 5.31, its C8 1 : 2.67 : 4.9. A marimba's and a vibraphone's
+1 : 2.74 : 5.31, its C8 1 : 2.67 : 4.97. A marimba's and a vibraphone's
 bars are undercut, thinned beneath their middles until the second mode sits
 two octaves over the first and the third three octaves and a third
 (1 : 4 : 10); a marimba's top bars are too short to tune the third, which
@@ -72,8 +72,8 @@ motor runs a few per cent fast or slow.
 glockenspiel: steel bars 25 × 7 mm, G5 to C8 sounding, no resonators (the
 case baffles them: corner 1.5 kHz), no damper: they ring 5 s at G5 to 3 s
 at C8 whatever the written length, unless "choke" (the hand, at the note's
-end). The torsional mode climbs from 4.7 times the fundamental at G5 to 2.1
-at C8, where the bars are nearly as wide as they are long.
+end). The torsional mode falls from 4.7 times the fundamental at G5 to 2.1
+at C8, where the bars are short and thick against their width.
 
 celesta: steel plates 30 × 4 mm over tuned wooden boxes (26 dB at C4, 12 at
 C8), C4 to C8, felt hammers from a keyboard striking each plate 13% off
@@ -87,7 +87,7 @@ music-box: a steel comb, C5 to C8, its teeth cantilevers (1 : 6.27 :
 twice the tooth's mass: a lump that rocks brings the second mode down to
 about 4.7 (a point mass alone would raise it; see weighted_tooth). A pin
 bends a tooth and lets go: released from a bend, mode k holds φk(tip)/ωk²
-of it (the displacement falls as 1/n²), but what the box hears is the
+of it (the second mode's swing 32 dB under the first's), but what the box hears is the
 tooth's root, its moment and shear, which gives the second mode 11 dB under
 the first and the third 17; the tip snaps off in 25 µs (no contact filter)
 with a tick of the pin. Teeth ring 4 s at C5 to 2 s at C8. When a tooth
