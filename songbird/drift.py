@@ -55,6 +55,7 @@ DIMENSIONS = {
     "mode": "which member of the voice's mode family (year)",
     "tempo": "tempo within the voice's range",
     "verses": "how many verses (slow)",
+    "pairs": "whether added verses come two to a refrain (slow)",
     "intro": "whether the intro plays (slow)",
     "turns": "whether the strings take a turn after a refrain (slow)",
     "break": "whether an instrumental break comes before the bridge (slow)",
@@ -119,17 +120,19 @@ def _mix(x: np.ndarray) -> np.ndarray:
     return x ^ (x >> np.uint64(31))
 
 
-def _lattice(seed: int, i: np.ndarray, salt: int) -> np.ndarray:
-    """A value in [-1, 1) for each lattice point i, fixed by the seed."""
-    h = _mix(_mix(i.astype(np.int64).view(np.uint64)) ^ np.uint64((seed + salt) % 2**64))
+def _lattice(seed, i: np.ndarray, salt: int) -> np.ndarray:
+    """A value in [-1, 1) for each lattice point i, fixed by the seed (one, or one per point)."""
+    seed = np.asarray(seed, dtype=np.uint64) + np.uint64(salt)
+    h = _mix(_mix(i.astype(np.int64).view(np.uint64)) ^ seed)
     return (h >> np.uint64(11)).astype(np.float64) * (2.0 / 2**53) - 1.0
 
 
-def noise(x, seed: int) -> np.ndarray:
+def noise(x, seed) -> np.ndarray:
     """One-dimensional gradient noise. Each lattice point carries a random value
     and a random slope, and cubic Hermite pieces join them, so the curve and its
     slope are continuous everywhere and it never pins to zero at the lattice
-    (as plain gradient noise does). Values stay within about -1.2..1.2."""
+    (as plain gradient noise does). Values stay within about -1.2..1.2. The
+    seed may be an array broadcasting with x: many noise functions at once."""
     x = np.atleast_1d(np.asarray(x, dtype=np.float64))
     i = np.floor(x)
     f = x - i
@@ -141,25 +144,28 @@ def noise(x, seed: int) -> np.ndarray:
     return (2 * f3 - 3 * f2 + 1) * v0 + (f3 - 2 * f2 + f) * m0 + (3 * f2 - 2 * f3) * v1 + (f3 - f2) * m1
 
 
-def octaves(t, voice_hash: str, dimension: str) -> np.ndarray:
-    """The three octaves of one dimension at times t, unweighted (each SCALE x N),
-    shape (3, len(t))."""
+def _seeds(voice_hash: str, dimensions: tuple) -> tuple[np.ndarray, np.ndarray]:
+    """Each (dimension, octave)'s seed and lattice phase, so the lattice never sits on midnight."""
+    seeds = np.array([[_seed("drift", voice_hash, name, k) for k in range(len(PERIODS))] for name in dimensions],
+                     dtype=np.uint64)
+    return seeds, (seeds >> np.uint64(11)).astype(np.float64) / 2.0**53
+
+
+def octaves(t, voice_hash: str, dimensions) -> np.ndarray:
+    """The three octaves of each dimension at times t, unweighted (each SCALE x N),
+    shape (dimensions, 3, len(t))."""
     t = np.atleast_1d(np.asarray(t, dtype=np.float64))
-    out = []
-    for k, period in enumerate(PERIODS):
-        seed = _seed("drift", voice_hash, dimension, k)
-        phase = (seed >> 11) / 2.0**53  # where the lattice falls, so it never sits on midnight
-        out.append(SCALE * noise(t / period + phase, seed))
-    return np.array(out)
+    seeds, phases = _seeds(voice_hash, tuple(dimensions))
+    x = t[None, None, :] / np.asarray(PERIODS)[None, :, None] + phases[:, :, None]
+    return SCALE * noise(x, seeds[:, :, None])
 
 
 def series(t, voice_hash: str, dimensions=None) -> dict[str, dict[str, np.ndarray]]:
     """The field over many times at once: dimension -> view -> array."""
-    out = {}
-    for name in dimensions or DIMENSIONS:
-        o = octaves(t, voice_hash, name)
-        out[name] = {view: np.clip(np.tensordot(weights, o, axes=1), -1.0, 1.0) for view, weights in VIEWS.items()}
-    return out
+    names = tuple(dimensions or DIMENSIONS)
+    o = octaves(t, voice_hash, names)
+    views = {view: np.clip(np.einsum("k,dkt->dt", np.asarray(w), o), -1.0, 1.0) for view, w in VIEWS.items()}
+    return {name: {view: values[d] for view, values in views.items()} for d, name in enumerate(names)}
 
 
 def drift(t_days: float, voice_hash: str) -> Drift:
