@@ -22,9 +22,11 @@ uv run pytest
 
 `songbird/` follows the pipeline: `genome` (the persistent skeleton; tunes are
 written as scale degrees on a rhythmic grid), `realize` (genome plus parameters
-to a timed score), `synth/` (plucked string, LF glottal source, Klatt-style
-tract, singing voice, room, mastering), `phonetics` (CMU dictionary to sung
-syllables). `harvest`, `drift`, `lyrics`, `gate` and `pack` are the later
+to a timed score), `band` (who in the band plays what, section by section; see
+[docs/BAND.md](docs/BAND.md)), `synth/` (the band's instruments: plucked,
+bowed, blown, struck and reed models in their bodies; LF glottal source,
+Klatt-style tract, singing voice, room, mastering), `phonetics` (CMU dictionary
+to sung syllables). `harvest`, `drift`, `lyrics`, `gate` and `pack` are the later
 milestones and only describe their interfaces so far.
 
 ## Checking a render without ears
@@ -32,6 +34,7 @@ milestones and only describe their interfaces so far.
 - `tools/analyze.py renders/<name> [--part voice]` tracks pitch against the score and draws it.
 - `tools/voiceview.py renders/<name>` draws the voice's spectrogram with every phoneme labelled.
 - `tools/mixview.py renders/<name>.flac` shows mix balance and flags clicks.
+- `tools/band_solos.py songs/<name>.json --plots` renders each instrument of the band alone, playing its part.
 - `tools/wer_suite.py [--mix] [--seeds 3] [--set field=value]` sings every lyric in
   `songs/` and scores intelligibility with Whisper (dev-only; downloads the base.en model).
 

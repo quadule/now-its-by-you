@@ -116,7 +116,6 @@ class Section:
     u0: float
     u1: float
     sung: bool
-    choir: bool
     energy: float = 0.5
     parts: dict = field(default_factory=dict)  # instrument -> what it does here
 
@@ -127,7 +126,6 @@ class Chord:
     u1: float
     symbol: str
     section: int
-    phrase: str
     last: bool  # the phrase's last chord
 
 
@@ -139,7 +137,6 @@ class Tune:
     vel: float
     sung: bool
     section: int
-    phrase: str
     first: bool  # a phrase's first note
     last: bool  # a phrase's last note
 
@@ -158,7 +155,6 @@ class Ev:
     length: float = 0.0  # if set, the note's length in seconds (grace notes)
     group: int = -1  # events in one group share their timing jitter (a strum, a note and its grace)
     section: int = 0
-    string: int = -1  # the guitar string it sounds on
 
 
 class Context:
@@ -198,8 +194,7 @@ class Context:
                 self.sections[-1].u1 = s1
             else:
                 role = _role(name, section)
-                self.sections.append(Section(name, role, rounds.get(role, 0), 0, s0, s1,
-                                             section.lyrics is not None, section.choir))
+                self.sections.append(Section(name, role, rounds.get(role, 0), 0, s0, s1, section.lyrics is not None))
                 rounds[role] = rounds.get(role, 0) + 1
             index = len(self.sections) - 1
             self.phrases.append((s0, s1))
@@ -210,14 +205,14 @@ class Context:
                 ends = starts[1:] + [meter.bar]
                 for k, (symbol, a, z) in enumerate(zip(chords, starts, ends)):
                     last = b == len(phrase.chords) - 1 and k == len(chords) - 1
-                    self.chords.append(Chord(bar_u + a, bar_u + z, symbol, index, phrase.id, last))
+                    self.chords.append(Chord(bar_u + a, bar_u + z, symbol, index, last))
         for s in self.sections:
             s.count = rounds[s.role]
         ordered = sorted(melody, key=lambda m: m["u"])
         for i, m in enumerate(ordered):
             u1 = min(m["u_end"], ordered[i + 1]["u"]) if i + 1 < len(ordered) else self.end
             self.tune.append(Tune(m["u"], u1, int(m["pitch"]), float(m["vel"]), bool(m["syllable"]),
-                                  self.section_at(m["u"]), m["phrase"], m["index"] == 0, bool(m["line_end"])))
+                                  self.section_at(m["u"]), m["index"] == 0, bool(m["line_end"])))
 
     def section_at(self, u: float) -> int:
         for i, s in enumerate(self.sections):
@@ -700,7 +695,7 @@ def guitar_part(ctx: Context, capo: int) -> list[Ev]:
             v = vel * (1.0 - 0.05 * j) * (0.75 if stroke == "U" else 1.0) * ctx.rng.uniform(0.85, 1.05)
             ev = Ev("guitar", u, end, pitch, float(np.clip(v, 0.03, 1.0)), art={"D": "down", "U": "up", "X": "mute"}[stroke],
                     shift=spread * j / max(len(order) - 1, 1) * ctx.rng.uniform(0.8, 1.2), group=g,
-                    section=c.section, string=string)
+                    section=c.section)
             held = ringing.get(string)
             if held is not None and held[0].u1 > u:
                 held[0].u1 = u  # the pick meets the string again
@@ -833,7 +828,7 @@ def quote(ctx: Context, section: int, part: str) -> list[Ev]:
         u0 = s.u0 + n.onset
         u1 = min(u0 + n.dur, s.u0 + best[k + 1].onset if k + 1 < len(best) else s.u1 - ctx.sub)
         notes.append(Tune(u0, u1, ctx.tonic + degree_semitones(n.degree, ctx.mode, n.alter),
-                          0.8 if n.onset % ctx.meter.foot == 0 else 0.68, False, section, "", k == 0, k == len(best) - 1))
+                          0.8 if n.onset % ctx.meter.foot == 0 else 0.68, False, section, k == 0, k == len(best) - 1))
     return statement(ctx, part, notes, 1.1, section)
 
 

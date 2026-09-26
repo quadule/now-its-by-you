@@ -67,22 +67,6 @@ def _cached_loop(period: float, loss: float) -> tuple[int, tuple[float, ...]]:
     return whole, tuple(taps)
 
 
-def string_loop(excitation: np.ndarray, delay: int, taps: np.ndarray, length: int) -> np.ndarray:
-    """y[n] = x[n] + sum_k taps[k] * y[n - delay - k], one period per step."""
-    pad = delay + len(taps)
-    y = np.zeros(pad + length)
-    x = np.zeros(length)
-    x[: min(len(excitation), length)] = excitation[:length]
-    for start in range(0, length, delay):
-        m = min(delay, length - start)
-        acc = x[start : start + m].copy()
-        base = pad + start - delay
-        for k, tap in enumerate(taps):
-            acc += tap * y[base - k : base - k + m]
-        y[pad + start : pad + start + m] = acc
-    return y[pad:]
-
-
 @njit(cache=True)
 def _loop(x, whole, taps, gain, release_at, release_gain, length, smooth):
     """One string plane, sample by sample: y[n] = x[n] + g[n] * sum_k taps[k] y[n - whole - k].
