@@ -198,10 +198,11 @@ COUNTRY = _def(
                "brushes, an upright walking up into each chord, a strummed guitar",
     {"bass": 1.0, "guitar": 0.85, "piano": 0.85, "steel": 0.9, "kit": 0.75},
     {"bass": {"*": "two", "verse1": "roots", "tag": "long"},
-     "guitar": {"*": "strum", "verse1": "boom", "bridge": "boom", "tag": "ring"},
+     "guitar": {"*": "strum", "bridge": "boom", "tag": "ring"},
      "piano": {"verse1": "", "*": "comp", "bridge": "arpeggio", "tag": "ring"},
      "steel": {"*": "under", "verse1": "fills", "bridge": "tone", "tag": "double"},
-     "kit": {"verse1": "", "verse": "brushes", "refrain": "groove", "bridge": "brushes", "tag": "end", "turn": "groove"}},
+     "kit": {"verse1": ((0.3, "brushes"), (0.0, "")), "verse": "brushes", "refrain": "groove", "bridge": "brushes",
+             "tag": "end", "turn": "groove"}},
     ("steel", "piano"), {"shuffle": 0.55, "waltz": 0.45},
     {"shuffle": (0.86, 1.0, 1.12), "waltz": (0.62, 0.7, 0.8)},
     {"I": ("6",), "IV": ("6",), "V": ("7",)}, 0.45, (-0.3, 0.2),
@@ -244,7 +245,7 @@ SHANTY = _def(
      "claps": {"verse1": "", "verse": ((0.55, "claps"), (0.0, "")), "refrain": "claps", "tag": "claps",
                "bridge": ""},
      "bass": {"verse1": "", "*": "two", "bridge": "long", "tag": "long"}},
-    ("concertina", "fiddle"), {"straight": 0.7, "six": 0.3},
+    ("fiddle", "concertina"), {"straight": 0.7, "six": 0.3},
     {"straight": (0.88, 1.0, 1.1), "six": (1.05, 1.2, 1.35)},
     {"*": ("power",)}, 0.3, (-0.7, 0.9),
     singer={"rd": -0.1, "vibrato_depth": -10.0, "dynamics": 1.0},
@@ -296,7 +297,7 @@ LULLABY = _def(
     "lullaby", "a lullaby: a music box's comb and a celesta high above the voice, a harp's broken chords, a soft pad",
     {"musicbox": 0.9, "harp": 0.8, "celesta": 0.7, "synthpad": 0.6},
     {"musicbox": {"*": "box", "bridge": "box"},
-     "harp": {"verse1": "", "*": "arpeggio", "tag": "ring"},
+     "harp": {"verse1": ((0.3, "arpeggio"), (0.0, "")), "*": "arpeggio", "tag": "ring"},
      "celesta": {"verse1": "", "verse": "", "refrain": "bells", "last": "hook", "bridge": "bells"},
      "synthpad": {"*": "pad"}},
     ("musicbox", "celesta"), {"waltz": 0.5, "six": 0.3, "straight": 0.2},
@@ -366,10 +367,12 @@ INDIE = _def(
     "indie", "indie folk and folk rock: a kit driving four to the floor with the floor toms, an electric bass in "
              "eighths, a tremolo electric guitar, an organ underneath, a glockenspiel's hook, claps, gang vocals",
     {"kit": 1.0, "ebass": 1.0, "guitar": 0.8, "electric": 0.8, "organ": 0.65, "glock": 0.55, "claps": 0.65},
-    {"kit": {"verse1": "", "verse": "toms", "refrain": "four", "bridge": "half", "tag": "end", "turn": "four"},
+    {"kit": {"verse1": ((0.3, "toms"), (0.0, "")), "verse": "toms", "refrain": "four", "bridge": "half", "tag": "end",
+             "turn": "four"},
      "ebass": {"verse1": "roots", "*": "eighths", "bridge": "roots", "tag": "long"},
      "guitar": {"*": "strum", "tag": "ring"},
-     "electric": {"verse1": "", "verse": "tremolo", "refrain": "pulse", "bridge": "tremolo", "tag": "ring"},
+     "electric": {"verse1": ((0.45, "tremolo"), (0.0, "")), "verse": "tremolo", "refrain": "pulse", "bridge": "tremolo",
+                  "tag": "ring"},
      "organ": {"verse1": "", "*": "pad"},
      "glock": {"refrain": "hook", "last": "hook"},
      "claps": {"refrain": "claps", "last": "claps"}},
@@ -749,3 +752,66 @@ def rebarred(genome, params) -> bool:
     from .idioms import triple_ok
 
     return params.style.feel in ("waltz", "six") and triple_ok(genome)
+
+
+def rebar(u: float, lead: float) -> float:
+    """Grid units re-barred in three, the feet counted from the first bar line (songbird.idioms.warp)."""
+    from .idioms import warp
+
+    return warp(u, lead)
+
+
+def count_in(genome, params) -> int:
+    """Grid units of silence before the song for a count-in (a bar), when the style counts in."""
+    return genome.meter.bar if params.style.intro == "count" else 0
+
+
+def coda(genome, params) -> int:
+    """Grid units after the last line for a plagal amen (two bars: IV, then I), when the style ends so."""
+    return 2 * genome.meter.bar if params.style.ending == "amen" else 0
+
+
+def repeated(genome, params, placed) -> list:
+    """The last line sung again, when the style ends by repeating it (and the song ends on a refrain):
+    (section, phrase, line) to lay out after the last."""
+    if params.style.ending != "repeat" or not placed:
+        return []
+    name, phrase, _start, line = placed[-1]
+    if genome.section(name).lyrics != "refrain" or not line:
+        return []
+    return [(name, phrase, line)]
+
+
+def ring(params) -> float:
+    """Seconds the last chord rings on: a cold ending stops short."""
+    return 0.9 if params.style.ending == "cold" else 3.0
+
+
+UNPITCHED = ("drum", "kit", "drummachine", "claps", "stomps", "shaker", "tambourine", "cajon")
+
+
+def lifted(genome, score) -> float | None:
+    """Where the last refrain starts (seconds, its first bar line), or None if the song has no two refrains."""
+    refrains = [s for s in score.sections if genome.section(s[0]).lyrics == "refrain"]
+    return refrains[-1][1] if len(refrains) >= 2 else None
+
+
+def finish(score, genome, params):
+    """The score as a style leaves it: with a lift, everything pitched from the last refrain's first line
+    on (its pickup too) goes up a whole step, the singer, the backing voices and the band together."""
+    if not params.style.lift:
+        return score
+    from dataclasses import replace
+
+    start = lifted(genome, score)
+    if start is None:
+        return score
+    beat = 60.0 / params.tempo
+    names = {s[0] for s in score.sections if s[1] >= start - 1e-6}
+    notes = []
+    for n in score.notes:
+        pitched = n.part not in UNPITCHED
+        late = n.start >= start - 1e-6 or (n.section in names and n.start >= start - 1.5 * beat
+                                            and (n.part == "voice" or n.part.startswith("choir")))
+        notes.append(replace(n, pitch=n.pitch + 2.0) if pitched and late else n)
+    return replace(score, notes=tuple(notes))

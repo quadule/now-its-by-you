@@ -1283,6 +1283,12 @@ def arrange(genome, params, placed, lead, end, melody, seconds) -> tuple[list[No
     out the form; lead: the pickup offset; end: the last grid unit; melody:
     realize()'s melody entries; seconds: grid units to seconds.
     """
+    style = getattr(params, "style", None)
+    if style is not None and style.name and style.name != "ballad":  # another tradition's band (songbird.idioms)
+        from .idioms import arrange_style
+        from .style import of
+
+        return arrange_style(genome, params, placed, lead, end, melody, seconds, of(style))
     ctx = Context(genome, params, placed, lead, end, melody)
     plan(ctx)
     capo = choose_capo(ctx)
