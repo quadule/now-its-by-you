@@ -669,8 +669,9 @@ def features(genome, key: tuple[str, int]) -> np.ndarray:
     beats = n.dur / m.beat
     return np.array([
         k == 0, k == len(notes) - 1, n.onset < 0,  # first, last, a pickup
+        k / max(len(notes) - 1, 1),  # how far along the line: pushing on or easing off through it
         n.onset % m.bar == 0, n.onset % m.foot == 0,  # on the downbeat, on a stressed beat
-        np.log2(max(beats, 0.25)), beats >= 1.5,  # how long; long enough to hold
+        np.log2(max(beats, 0.25)), beats >= 1.5,  # how long; long enough to hold (index 7)
         into >= 3, 0 < into < 3, -3 < into < 0, into <= -3,  # reached by a leap or step up, a step or leap down
         out > 0, out < 0,  # left rising, left falling
     ], dtype=float)
@@ -714,7 +715,7 @@ def ruled(genome, seen: dict, contexts: dict | None = None, floor: P.Gesture | N
         # rules' depth; on a long note never heard held, the rules' depth; otherwise the machine's own
         judged = [g.vibrato for g in seen[k] if np.isfinite(g.vibrato)]
         left = judged and 2 * sum(x >= 0 for x in judged) <= len(judged)
-        held = features(genome, k)[6] > 0
+        held = features(genome, k)[7] > 0
         depth = v[0].vibrato if np.isfinite(v[0].vibrato) else NAN
         vibrato = -1.0 if left or not (judged or held) or np.isnan(depth) else max(depth, 0.0)
         made[k] = [replace(v[0], vibrato=vibrato)]
