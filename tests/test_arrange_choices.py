@@ -1,0 +1,136 @@
+"""A person's choices of words (arrange.keep, options, problem with chosen): every choice offered is kept in
+its place, everything not chosen is drawn around it within the rules, every refusal says why in one sentence,
+and drawing without choices is exactly as it was."""
+
+import hashlib
+import json
+import random
+from pathlib import Path
+
+import pytest
+
+from songbird import arrange as A, genome as G
+
+ROOT = Path(__file__).parent.parent
+g = G.load(ROOT / "songs" / "h-now-its-by-you.json")
+SEED_FORM = tuple(g.seed_params["form"])
+LONG = ("intro", "verse", "refrain", "turn", "verse", "refrain", "turn", "verse", "refrain", "bridge", "bridge2",
+        "refrain", "tag")
+FOUR = ("verse", "refrain", "verse", "verse", "refrain", "turn", "verse", "refrain", "bridge", "refrain", "tag", "outro")
+GOLDEN = Path(__file__).parent / "golden" / "h-words.sha256"
+
+
+def test_drawing_without_choices_is_as_it_was():
+    """The words golden: computed with arrange.py before choices were added, over 600 draws with and without
+    leanings, so the pin-free draw consumes chance exactly as before."""
+    lean = A.Leanings(mood_weights={"light": 2.0, "dark": 0.5}, era_bias=-0.4, rarity_appetite=0.6,
+                      vocabulary=frozenset({"sea", "ship", "fiddle", "bird"}))
+    digest = hashlib.sha256()
+    for form in (SEED_FORM, LONG, FOUR):
+        for seed in range(100):
+            for leanings in (None, lean):
+                digest.update(json.dumps(A.arrange(g, form, seed, leanings).to_dict(), sort_keys=True).encode())
+    assert digest.hexdigest() == GOLDEN.read_text().strip()
+    assert A.arrange(g, SEED_FORM, 7, None, {}) == A.arrange(g, SEED_FORM, 7)
+
+
+def test_a_refusal_says_the_rule_it_breaks():
+    rules = A._song(g).checks
+    verses = A._song(g).verses
+    rng = random.Random(3)
+    for _ in range(4000):
+        chosen = rng.sample(verses, rng.choice([2, 3, 4]))
+        why = rules.why(chosen)
+        assert (why is None) == (rules.together(chosen) and rules.in_order(chosen))
+        if why:
+            assert why[0].islower() and not why.endswith(".") and len(why) < 200
+    assert "sung already" in rules.why([verses[0], verses[0]])
+
+
+def test_every_verse_offered_is_kept_in_its_place_and_the_rest_stay():
+    for seed in range(40):
+        drawn = A.arrange(g, LONG, seed)
+        for i in range(3):
+            options = A.options(g, drawn, "verse", i)
+            assert any(c["id"] == drawn.verses[i] and c["allowed"] for c in options["choices"])
+            for c in options["choices"]:
+                if not c["allowed"]:
+                    assert c["why"]
+                    continue
+                kept = A.arrange(g, LONG, seed, None, {"verses": {i: c["id"]}})
+                assert kept.verses[i] == c["id"]
+                # offered in place: nothing else moves
+                assert [v for j, v in enumerate(kept.verses) if j != i] == [v for j, v in enumerate(drawn.verses) if j != i]
+                assert kept.couplets == drawn.couplets and kept.bridges == drawn.bridges and kept.tag == drawn.tag
+
+
+def test_choices_hold_as_chance_changes_and_the_rest_keep_every_rule():
+    rules = A._song(g).checks
+    by_id = {v.id: v for v in A._song(g).verses}
+    rng = random.Random(11)
+    for seed in range(150):
+        drawn = A.arrange(g, FOUR, rng.randrange(10**6))
+        i = rng.randrange(4)
+        pick = rng.choice([c["id"] for c in A.options(g, drawn, "verse", i)["choices"] if c["allowed"]])
+        for again in range(3):
+            kept = A.arrange(g, FOUR, seed * 7 + again, None, {"verses": {i: pick}})
+            assert kept.verses[i] == pick
+            assert rules.why([by_id[v] for v in kept.verses]) is None
+
+
+def test_refused_choices_say_why():
+    assert "last refrain always sings the canon" in A.problem(g, LONG, {"couplets": {3: "true"}})
+    assert "only the last" in A.problem(g, LONG, {"couplets": {0: "canon"}})
+    assert "question turns" in A.problem(g, LONG, {"refrain": {"question": "sang"}})
+    assert "no verse 10" in A.problem(g, LONG, {"verses": {9: "wire"}})
+    assert "not 'ha'" in A.problem(g, LONG, {"tag": "ha"})
+    assert "at most one light verse" in A.problem(g, LONG, {"verses": {1: "hold", 2: "ring"}})
+    assert "teaches the song's shape" in A.problem(g, LONG, {"verses": {0: "trench"}})
+    assert "chosen for two places" in A.problem(g, LONG, {"verses": {0: "wire", 1: "wire"}})
+    assert "sings the bridge once" in A.problem(g, SEED_FORM, {"bridge2": "coat"})
+    assert A.problem(g, LONG, {"verses": {1: "wire"}}) is None
+
+
+def test_couplets_trade_places_and_once_a_song_words_hold_everywhere():
+    drawn = A.arrange(g, LONG, 3)
+    third = drawn.couplets[2]
+    kept = A.arrange(g, LONG, 3, None, {"couplets": {0: third}, "refrain": {"while": "if", "then": "who knows"},
+                                        "bridge": {"place": "desert"}, "bridge2": "given", "tag": "loo"})
+    assert kept.couplets[0] == third and kept.couplets[2] == drawn.couplets[0]  # traded, not drawn again
+    assert kept.couplets[-1] == "canon" and kept.couplets[1] == drawn.couplets[1]
+    assert all("if you sing it" in s.lines[1] and "who knows" in s.lines[1] for s in kept.sections if s.block == "refrain")
+    assert kept.bridges == ("canon", "given") and "des-ert" in kept.sections[[s.block for s in kept.sections].index("bridge")].lines[0]
+    assert kept.tag == "loo" and all(set(s.lines[0].rstrip(".").split()) == {"loo"} for s in kept.sections if s.block == "tag")
+    # a verse's own swapped words, as written or as they read
+    mind = A.arrange(g, SEED_FORM, 7, None, {"verses": {0: {"id": "mind", "slots": {"who": "nun"}}}})
+    assert mind.sections[0].slots["who"]["noun"] == "nun" and "nun" in mind.sections[0].lines[0]
+    assert "can be" in A.problem(g, SEED_FORM, {"verses": {0: {"id": "mind", "slots": {"who": "pope"}}}})
+
+
+def test_options_offer_another_place_for_a_verse_refused_here():
+    for seed in range(60):
+        drawn = A.arrange(g, FOUR, seed)
+        for c in A.options(g, drawn, "verse", 1)["choices"]:
+            for j in c.get("elsewhere", []):
+                assert A.problem(g, FOUR, {"verses": {j: c["id"]}}) is None
+            if c.get("reorder"):
+                order = c["reorder"]
+                assert sorted(order) == sorted([*(v for k, v in enumerate(drawn.verses) if k != 1), c["id"]])
+                assert A.problem(g, FOUR, {"verses": dict(enumerate(order))}) is None
+
+
+@pytest.mark.parametrize("block,index", [("refrain", 0), ("refrain", 3), ("bridge", 0), ("bridge", 1), ("tag", 0)])
+def test_options_for_the_fixed_blocks(block, index):
+    options = A.options(g, A.arrange(g, LONG, 5), block, index)
+    if block == "refrain" and index == 3:
+        assert not any(c["allowed"] for c in options["choices"] if c["id"] != "canon")
+        assert any(f["what"] == "couplet" for f in options["fixed"])
+    if block == "refrain":
+        assert any(f["what"] == "question" for f in options["fixed"])
+        assert {w["slot"] for w in options["words"]} == {"while", "then"}
+    if block == "bridge" and index == 0:
+        assert options["fixed"] and {w["slot"] for w in options["words"]} == {"place", "ember", "where"}
+    if block == "bridge" and index == 1:
+        assert {c["id"] for c in options["choices"]} == {"coat", "given"}
+    if block == "tag":
+        assert [c["id"] for c in options["choices"]] == ["la", "loo", "oo"]

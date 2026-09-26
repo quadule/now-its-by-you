@@ -31,16 +31,19 @@ def pan(mono: np.ndarray, position: float) -> np.ndarray:
 
 
 def render_stems(score: Score, sr: int = SR, seed: int = 0, voice: VoiceParams | None = None,
-                 ancestors: list[VoiceParams] | None = None) -> dict[str, np.ndarray]:
+                 ancestors: list[VoiceParams] | None = None, progress=None) -> dict[str, np.ndarray]:
     """Each part rendered dry, in stereo, all the same length: a stem for every
     instrument that plays (lute, guitar, harp, bass, fiddle, whistle, drum,
     drone), then the voice and each lineage voice. ancestors: the singers of
     the earlier versions, the parent's first, who sing the choir's parts in
-    turn (stand-ins sing the rest)."""
+    turn (stand-ins sing the rest). progress, if given, is told each part's
+    name as it starts on it."""
     length = int(np.ceil(score.duration * sr))
-    stems = render_band(score, sr, seed)
+    stems = render_band(score, sr, seed, progress)
     sung = list(score.part("voice"))
     if sung:
+        if progress is not None:
+            progress("voice")
         y = sing(sung, sr, voice or VoiceParams(), seed, score.lexicon)[:length]
         stems["voice"] = pan(np.pad(y, (0, length - len(y))), 0.0) * VOICE_GAIN
     choir = sorted({n.part for n in score.notes if n.part.startswith("choir")}, key=lambda p: int(p[5:]))
@@ -48,6 +51,8 @@ def render_stems(score: Score, sr: int = SR, seed: int = 0, voice: VoiceParams |
     singers = [*(ancestors or [])[: len(choir)], *lineage_voices(len(choir), seed, learned=learned)]
     for name, singer in zip(choir, singers):
         i = int(name[5:]) - 1
+        if progress is not None:
+            progress(name)
         y = sing(list(score.part(name)), sr, singer, seed + 101 * (i + 1), score.lexicon)[:length]
         stems[name] = pan(np.pad(y, (0, length - len(y))), CHOIR_PANS[i % len(CHOIR_PANS)]) * VOICE_GAIN * CHOIR_GAIN
     return stems
@@ -87,9 +92,14 @@ def mix(stems: dict[str, np.ndarray], sr: int = SR, seed: int = 0, params: MixPa
 
 
 def render(score: Score, sr: int = SR, seed: int = 0, voice: VoiceParams | None = None,
-           mix_params: MixParams | None = None, ancestors: list[VoiceParams] | None = None) -> np.ndarray:
-    """The unmastered stereo mix, in its room."""
-    return mix(render_stems(score, sr, seed, voice, ancestors), sr, seed, mix_params)
+           mix_params: MixParams | None = None, ancestors: list[VoiceParams] | None = None,
+           progress=None) -> np.ndarray:
+    """The unmastered stereo mix, in its room. progress, if given, is told each
+    part's name as it starts on it, then "mix"."""
+    stems = render_stems(score, sr, seed, voice, ancestors, progress)
+    if progress is not None:
+        progress("mix")
+    return mix(stems, sr, seed, mix_params)
 
 
 def ancestors_from(records: list[dict], learned: bool) -> list[VoiceParams]:
