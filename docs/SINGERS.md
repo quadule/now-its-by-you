@@ -12,54 +12,62 @@ person sings: where you breathe, lean on a word, slide into a note, hold one, le
 
 ## What we'd like you to sing
 
-About 20–30 minutes of singing, in one sitting or two:
+About 10–20 minutes of singing, in one sitting or two, on the karaoke page (here, or online through a
+link we send you; docs/SING-ONLINE.md), which records and labels takes for you:
 
-1. **The song, along with its guide**, two or three times: headphones on, singing along with the
-   tune played on a whistle over a quiet pulse (or, if you'd rather, the whole song with the
-   program's own singer). On our karaoke page, here or online through a link we send you
-   (docs/SING-ONLINE.md), which records and labels takes for you; or into your own recorder with
-   the guide track we send.
-2. **Verses from its bank**, from a lyric sheet, to the same tune: as many as you're comfortable
-   with.
-3. **A few of the other songs** the same way, if there's time.
-4. **Held vowels**: "ah", "ee", "oo", "oh", "eh", each held for about three seconds at a low,
-   a middle and a high note that are comfortable for you. About two minutes.
+1. **A set of verses** chosen for you: the song as usual (a few verses, the refrain, the bridge), but
+   with words from its bank that the program most needs to hear people sing. Headphones on, singing
+   along with the tune on a whistle over a quiet pulse (or the whole song, if you'd rather).
+2. **One section at a time, or the whole thing.** Pick a verse or a refrain and sing just that: the
+   page counts you in and stops by itself. There's a short instrumental break between sections.
+3. **In your own key and speed.** Lower or higher, and slower, until it sits comfortably.
+4. **Words of your own, if you like.** There's a box for verses or ideas for the song.
 
 You don't need to be a trained singer. Sing it your own way: the differences between people are
 what we're after. Wrong notes are fine; we measure what you sang, not what you meant to.
 
+Singing online closes on **Sunday 27 September 2026 at 10 PM Pacific**.
+
 ## How to record
 
 - A quiet room with soft things in it (a bedroom or a closet full of clothes beats a kitchen).
-- Any decent microphone 15–20 cm from your mouth, a little off to the side; the same place every time.
-- WAV at 48 kHz, 24-bit, mono if you can (44.1 kHz and 16-bit are fine too).
-- No effects: no reverb, pitch correction, compression or noise reduction. We want it raw.
-- Headphones for the guide, so it doesn't leak into your microphone.
-- Say your name (or the name you'd like to be credited by) and the date at the start of the first
-  file.
+- Wired headphones for the guide, so it doesn't leak into the microphone (Bluetooth ones switch to a
+  narrow telephone-quality mode when a microphone opens).
+- The phone or computer's own microphone is fine; the same place every time, 15–20 cm from your mouth.
+- No effects: no reverb, pitch correction or noise reduction. We want it raw.
 
 ## What happens to your recordings
 
 - **Your phrasing.** From your takes the program measures small numbers: how early or late you sing
-  each note, how you slide into and away from it, how loud you lean on it. Those numbers can
-  travel with the song and shape how its synthetic singer sings.
-- **The voice.** Your recordings may also help train the program's own small voice model, together
-  with several other voices, and your timbre may be used as a reference for a singing-synthesis
-  tool that makes more training material. What the model learns is blended from everyone. It is
-  never set to sound like any one person, and it can't turn someone's speech into your voice.
-- **Your audio stays private.** The recordings themselves are never published and never travel
-  inside the song. They stay on the artist's machine and are deleted if you ask, up to the day
-  that version is released.
+  each note, how you slide into and away from it, how loud you lean on it. Those numbers, blended
+  with everyone else's, travel with the song and shape how its synthetic singer sings, so the voice
+  in the karaoke changes a little with each person who sings.
+- **The voice.** Once, before 30 September, the recordings may also help the program's own small voice
+  model say the song's words more clearly, all singers' together. What the model learns is blended
+  from everyone. It is never set to sound like any one person.
+- **Your audio is deleted.** The recordings themselves are never published and never travel inside
+  the song. They wait in private storage and on the artist's machine, and are deleted by
+  **30 September 2026**, or sooner if you delete them from your own page.
+- **Your own page.** A private link where you can listen to and download what you sent, your
+  version of the song (your voice in the sections you sang, the machine's in the rest) and your
+  vocals alone, and delete them.
+- **Changing your mind.** Until the project is shared publicly you can withdraw from your page: your
+  recordings and the numbers taken from them are deleted, and if the voice has already learned from
+  the recordings, the song goes back to a voice made before anyone sang.
 - **Credit.** Your name, a name you choose, or none: your choice.
 
 ## Release (plain-language draft)
 
+The online page shows the current text (web/sing/consent.md, and web/sing/words-release.md for words
+people send). For someone singing elsewhere:
+
 > I, ________, agree that the recordings I make for this project may be used to measure how I
-> sing (timing, pitch movements, dynamics) and to train and test a voice model that is part of
-> the artwork. The resulting numbers and model weights may be distributed with the song under
-> CC0 (public domain), blended with other voices so that no single person is reproduced. My
-> recordings themselves won't be published or shared. I can withdraw them until the release of
-> the version they're used in. I'd like to be credited as: ________ (or: not credited).
+> sing (timing, pitch movements, dynamics), and once, blended with other singers', to help train
+> the song's voice model to say its words clearly. The resulting numbers and model weights may be
+> distributed with the song under CC0 (public domain), blended with other voices so that no single
+> person is reproduced. My recordings themselves won't be published or shared, and will be deleted
+> by 30 September 2026. I can withdraw until the project is shared publicly. Words I send for the
+> song I give to it for good, under CC0. I'd like to be credited as: ________ (or: not credited).
 > Payment: ________. Signed ________ Date ________
 
 ## Finding singers fast

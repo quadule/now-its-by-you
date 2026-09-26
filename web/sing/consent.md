@@ -1,19 +1,36 @@
 <!--
 The release singers agree to on the online page, before they can record. Edit it freely: tools/sing_site.py
-puts it on the page as written (paragraphs, "- " lists, **bold**, *italic*; comments like this one are left
-out), and every take records a digest of the text its singer agreed to, so changing it later never changes
-what an earlier take was agreed under. Adapted from the draft in docs/SINGERS.md; it isn't legal advice, so
-have it read by someone who knows before relying on it. If you pay singers, say so here.
+puts it on the page as written (paragraphs, "- " lists, "## " headings, **bold**, *italic*; comments like this
+one are left out), and every take records a digest of the text its singer agreed to, so changing it later
+never changes what an earlier take was agreed under. The release for words people send is
+web/sing/words-release.md. Neither is legal advice: have them read by someone who knows before relying on
+them. If you pay singers, say so here. The dates below must match CLOSES_AT and DELETE_BY in wrangler.toml.
 -->
 
-**By ticking the box below, I agree that:**
+**Singing closes on Sunday 27 September 2026 at 10 PM Pacific time.**
 
-- The recordings I make on this page may be used to measure how I sing (timing, pitch movements,
-  dynamics) and to train and test a voice model that is part of the artwork.
-- The resulting numbers and model weights may be distributed with the song under CC0 (public
-  domain), blended with other voices so that no single person is reproduced. The model is never set
-  to sound like any one person.
-- My recordings themselves won't be published or shared. They are kept privately by the artist.
-- I can withdraw them at any time until the release of the version they're used in, by telling the
-  person who sent me this link.
-- I'll be credited by the name I give below, or not at all, as I choose.
+## What happens to what you sing
+
+- **The song learns how you sing, not what you sound like.** The program listens to your takes for
+  when you come in, where you slide into a note, which words you lean on, what you hold and let go.
+  Those are numbers, not sound. Blended with everyone else's, they shape how the song's machine singer
+  sings, so the voice you hear in this karaoke changes a little with each person who sings.
+- **The machine's voice may also learn the words from you.** Once, before 30 September, the recordings
+  may be used, all singers' together, to help the song's voice say its words more clearly. The voice is
+  never set to sound like any one person, and can't be made to.
+- **Your recordings stay private, and they're deleted.** They're never published or shared, and they
+  never travel with the song. They wait in private storage and on the artist's computer, and **are
+  deleted by 30 September 2026**, sooner if you delete them yourself.
+- **Your own page.** You'll get a private link (on screen, and by email) where you can listen to what
+  you sent, download your version of the song and your vocals, and delete them.
+- **You can change your mind.** Until the artist shares the project publicly, you can withdraw from
+  your page: your recordings and the numbers taken from them are deleted, and if the voice has already
+  learned from the recordings, the song goes back to a voice made before anyone sang. Once the project
+  is shared, what you gave stays part of it.
+- **What travels with the song** is only the numbers and the voice, blended from everyone, free for
+  anyone to use (CC0, public domain), and your name if you'd like to be credited.
+- **Your email** is used only to send you your page and to tell you when your version is ready, and is
+  deleted on 30 September, unless you ask to hear when the song is shared: then it's kept for that one
+  message.
+
+**By ticking the box below, I agree to this.** I'm 18 or over, or a parent or guardian has agreed with me.
