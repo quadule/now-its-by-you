@@ -300,3 +300,31 @@ a second, and H's two minutes sing in 6-8 s with the network.
 - **Listening files.** `renders/production/vocoder/` (README.txt there) has them:
   original, old vocoder and new for three house segments, then the house model singing H
   through the old vocoder and the new.
+
+## Shipped: the house model sings by default (2026-09-26, morning)
+
+songbird/synth/throat.npz is renders/throat/model-house.npz: 886,260 parameters, 3.6 MB, trained for
+14,000 steps (160 channels) on the house corpus alone.
+- *The corpus:* SoulX-Singer (Apache-2.0) singing our own scores (every song, H's verse bank, the
+  coverage lines; about 143 minutes) in ten timbres. Each timbre was prompted by our own formant
+  singer.
+- *Provenance:* every singer in the model's config has source "formant", and no ElevenLabs audio is
+  anywhere in its lineage.
+
+| On H | Formant singer | House model |
+|---|---|---|
+| Words misheard, dry | 16.9% | 14.2%, and 12.8% with the new vocoder |
+| Words misheard, in the mix | 34.7% | 14.2% |
+| UTMOS | 1.47 | 1.75, and 1.89 with the new vocoder |
+
+The ElevenLabs benchmark (v1, 11.9% dry) is still a little clearer. More house singing, and human
+singers when they come, should close that gap.
+
+- **The default:** VoiceParams.engine is now "learned". engine="formant" brings the formant singer
+  back.
+- **Tools that mean our formant singer ask for it by name:** the house singers' prompts, the
+  reference singers, the phrasing extractor's template and the WORLD speech-to-song tool. The
+  extractor's version hash and cached measurements are unchanged.
+- **The choir** sings through the throat whenever the lead does.
+- **Without the weights,** the formant singer sings, with a warning, so a program that lost its
+  weights still sings.

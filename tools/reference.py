@@ -176,11 +176,11 @@ def sing(spec: str, g: T.Guide, sung: list[P.Gesture], reading, seed: int) -> tu
         tone, sr = sf.read(str(target), always_2d=True)
         f0 = pyworld.harvest(np.ascontiguousarray(tone.mean(axis=1)), sr, f0_floor=60.0, f0_ceil=900.0, frame_period=5.0)[0]
         shift = octave_for(hz_to_midi(float(np.median(f0[f0 > 0]))) - 4, g)  # sung where the target sings
-        singer = V.VoiceParams(shift=shift, vibrato_depth=1.0, scoop=0.0, jitter=0.2, wander=3.0)
+        singer = V.VoiceParams(engine="formant", shift=shift, vibrato_depth=1.0, scoop=0.0, jitter=0.2, wander=3.0)
         return seedvc(V.sing(notes, S.SR, singer, seed, g.lexicon), target), shift
     shift = octave_for(reading["midi"], g)
     # the gestures carry the vibrato and scoops; a unit depth lets a note's own vibrato through as it is
-    singer = V.VoiceParams(shift=shift, vibrato_depth=1.0, scoop=0.0, jitter=0.2, wander=3.0)
+    singer = V.VoiceParams(engine="formant", shift=shift, vibrato_depth=1.0, scoop=0.0, jitter=0.2, wander=3.0)
     segs = V.schedule(notes, singer, g.lexicon)
     y = S.sing_from_speech(notes, segs, reading, g.lines, reading["which"], singer, seed)
     return y, shift

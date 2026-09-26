@@ -230,7 +230,7 @@ def template(piece_notes, seconds: float, midi: float, lexicon):
     unit = seconds / len(piece_notes)
     notes = [replace(n, start=0.2 + i * unit, dur=unit, pitch=midi, line_end=i == len(piece_notes) - 1)
              for i, n in enumerate(piece_notes)]
-    flat = V.VoiceParams(tract=1.12 if midi > 52 else 1.0, vibrato_depth=0.0, scoop=0.0, jitter=0.0, wander=0.0)
+    flat = V.VoiceParams(engine="formant", tract=1.12 if midi > 52 else 1.0, vibrato_depth=0.0, scoop=0.0, jitter=0.0, wander=0.0)
     segs = V.schedule(notes, flat, lexicon)
     y = V.sing(notes, SR, flat, 0, lexicon)
     t = np.arange(len(y) // HOP + 2) * HOP / SR

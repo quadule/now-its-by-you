@@ -70,7 +70,7 @@ def lineage_voices(n: int, seed: int, learned: bool = False) -> list[VoiceParams
         low = bool(rng.random() < 0.5)
         u = lambda a, b: float(rng.uniform(a, b))  # noqa: E731
         singer = VoiceParams(
-            shift=-12 if low else 0, tract=u(0.95, 1.05) if low else u(1.08, 1.2),
+            engine="formant", shift=-12 if low else 0, tract=u(0.95, 1.05) if low else u(1.08, 1.2),
             rd=u(0.6, 1.3), tilt=u(0.3, 0.7), breath=u(0.03, 0.12),
             vibrato_rate=u(4.8, 6.0), vibrato_depth=u(15.0, 40.0), vibrato_delay=u(0.2, 0.4),
             glide=u(0.06, 0.12), scoop=u(0.2, 0.5), jitter=u(0.2, 0.5), wander=u(4.0, 9.0),

@@ -87,7 +87,7 @@ class VoiceParams:
     reduce: float = 0.0  # how far a little word's vowel off the beat moves toward "uh" (0.3 cost the words: WER 15% -> 18%)
     mouth: float = 1.0  # cm radius of the mouth opening: small keeps the upper resonances ringing
     air: float = 0.0  # noise above 3.5 kHz pulsing with the voicing, against the harmonics (real voices are part noise up there)
-    engine: str = "formant"  # "formant" (Klatt cascade), "learned" (songbird.synth.throat) or "tube" (waveguide, experimental)
+    engine: str = "learned"  # "learned" (songbird.synth.throat, the default), "formant" (Klatt cascade) or "tube" (waveguide, experimental)
     timbre: str = ""  # the learned engine's singer: weights over its trained singers, "bright:2,alto:1" (default all evenly)
 
 
@@ -780,6 +780,17 @@ def sway(n: int, rate: float, voice: VoiceParams, seed: int, tremolo: np.ndarray
     return db
 
 
+_WARNED: set[str] = set()
+
+
+def _warn_once(message: str) -> None:
+    if message not in _WARNED:
+        _WARNED.add(message)
+        import sys
+
+        print(f"songbird: {message}", file=sys.stderr)
+
+
 def sing(notes: list[Note], sr: int, voice: VoiceParams, seed: int = 0, lexicon: dict[str, str] | None = None) -> np.ndarray:
     """Render sung notes to a mono signal, vowels peaking near 0.3."""
     if voice.engine == "tube":
@@ -789,7 +800,9 @@ def sing(notes: list[Note], sr: int, voice: VoiceParams, seed: int = 0, lexicon:
     if voice.engine == "learned":
         from . import throat
 
-        return throat.sing(notes, sr, voice, seed, lexicon, mix=voice.timbre)
+        if throat.available():
+            return throat.sing(notes, sr, voice, seed, lexicon, mix=voice.timbre)
+        _warn_once("the learned voice's weights (songbird/synth/throat.npz) aren't here: the formant singer sings")
     notes = sorted(notes, key=lambda n: n.start)
     rng = np.random.default_rng(seed)
     segs = schedule(notes, voice, lexicon, seed=seed)

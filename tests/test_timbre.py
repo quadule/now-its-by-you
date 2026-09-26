@@ -48,8 +48,9 @@ def test_a_machine_sings_a_blend_of_its_own_pulled_from_its_parent(model):
     seed = Params.from_dict(g.seed_params)
     ada, day = harvest.fictional("ada"), drift.parse("2026-09-26")
     # the formant singer has no use for a blend, so none is chosen
-    assert "timbre" not in choose_params(g, seed, ada, drift.drift(day, ada.hash)).singer
-    learned = replace(seed, singer={"engine": "learned"})
+    formant = replace(seed, singer={"engine": "formant"})
+    assert "timbre" not in choose_params(g, formant, ada, drift.drift(day, ada.hash)).singer
+    learned = seed  # the learned throat is the default singer
     child = choose_params(g, learned, ada, drift.drift(day, ada.hash))
     blend = throat.parse_mix(child.singer["timbre"])
     assert abs(sum(blend.values()) - 1) < 0.01 and max(blend.values()) <= 0.6 + 1e-3
@@ -69,7 +70,7 @@ def test_the_choir_sings_with_the_learned_throat_when_the_lead_does():
     from songbird.synth import lineage_voices
 
     plain = lineage_voices(3, 5)
-    assert all(v.engine == VoiceParams().engine for v in plain)
+    assert all(v.engine == "formant" for v in plain)  # the stand-ins as drawn, before the throat sings them
     learned = lineage_voices(3, 5, learned=True)
     assert all(v.engine == "learned" and v.timbre.startswith("machine:") for v in learned)
     assert len({v.timbre for v in learned}) == 3

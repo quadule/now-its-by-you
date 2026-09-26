@@ -41,7 +41,9 @@ def test_each_edit_takes_its_place_within_bounds():
                               "mix.space", "mix.forward", "roll"}
     # everything not edited is the program's own
     same = {k: v for k, v in plain.to_dict().items() if k not in ("tempo", "tonic", "mode", "band", "mix", "seed", "leanings")}
-    assert {k: v for k, v in p.to_dict().items() if k in same} == same
+    # the learned singer's blend follows where the song sits, so a new key may bring other singers into it
+    unblended = lambda d: {**d, "singer": {k: v for k, v in d.get("singer", {}).items() if k != "timbre"}}  # noqa: E731
+    assert unblended({k: v for k, v in p.to_dict().items() if k in same}) == unblended(same)
 
 
 def test_a_chosen_minor_mode_leans_the_words_darker_as_the_machines_own_would():

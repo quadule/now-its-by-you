@@ -94,7 +94,7 @@ def prompt(name: str) -> dict:
         notes = [Note(**{k: v for k, v in n.items() if k in known and k != "gesture"})
                  for n in score["notes"] if n["part"] == "voice"]
         sr = 44100
-        y = formant_sing(notes, sr, replace(VoiceParams(), shift=key, **spec["voice"]), seed=1,
+        y = formant_sing(notes, sr, replace(VoiceParams(engine="formant"), shift=key, **spec["voice"]), seed=1,
                          lexicon=G.load(H).lexicon).astype(np.float32)
         y = 0.5 * y / max(float(np.max(np.abs(y))), 1e-9)
     clip = y[int(PROMPT_AT * sr): int((PROMPT_AT + PROMPT_LEN) * sr)]

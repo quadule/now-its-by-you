@@ -59,7 +59,7 @@ def main() -> None:
     engines = {"learned": lambda seed: throat.sing(notes, SR, voice, seed, g.lexicon, mix=args.mix, gv=args.gv, model=args.model,
                                                    durations=lengths)}
     if not args.skip_formant:
-        engines["formant"] = lambda seed: sing(notes, SR, voice, seed=seed, lexicon=g.lexicon)
+        engines["formant"] = lambda seed: sing(notes, SR, replace(voice, engine="formant"), seed=seed, lexicon=g.lexicon)
     for name, render in engines.items():
         segs = schedule(notes, voice, g.lexicon, lengths if name == "learned" else None)
         edits = words = 0
