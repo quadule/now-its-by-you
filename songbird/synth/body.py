@@ -84,6 +84,17 @@ HARMONICA = Body(  # a harmonica's comb and cover plates in a player's cupped ha
     dense=(1500.0, 9000.0, 24), tilt=-2.0, q=(10.0, 6.0), direct=0.75, lowcut=150.0, highcut=10000.0,
     length=0.06,
 )
+ACCORDION = Body(  # an accordion's reed blocks in their box behind the grille: the box's low hump, the reed
+    # chambers' nasal humps, the grille and the fretwork taking the edge off the top
+    modes=((230.0, 5.0, 2.0), (520.0, 5.0, 3.0), (1300.0, 4.0, 4.0), (2700.0, 5.0, 2.0)),
+    dense=(600.0, 6000.0, 36), tilt=-3.0, q=(14.0, 8.0), direct=0.55, lowcut=70.0, highcut=7000.0,
+    length=0.25,
+)
+CONCERTINA = Body(  # a concertina's small hexagonal ends and fretwork: higher, brighter, quicker to ring down
+    modes=((380.0, 5.0, 2.0), (900.0, 5.0, 3.0), (2100.0, 5.0, 4.0), (3900.0, 5.0, 2.5)),
+    dense=(900.0, 9000.0, 30), tilt=-2.0, q=(14.0, 8.0), direct=0.6, lowcut=120.0, highcut=9500.0,
+    length=0.15,
+)
 REED_BOX = Body(  # a harmonium's reed chamber and bellows box: a few broad, nasal humps
     modes=((180.0, 6.0, 2.0), (420.0, 5.0, 5.0), (1250.0, 4.0, 4.0), (2600.0, 4.0, 1.0)),
     dense=(500.0, 4000.0, 30), tilt=-4.0, q=(14.0, 8.0), direct=0.6, lowcut=60.0, highcut=5000.0,
