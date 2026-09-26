@@ -154,6 +154,28 @@ def test_dynamics_leave_quiet_or_plain_signals_alone():
     assert np.max(np.abs(loud)) < 0.5 * 0.9  # the loud peaks are rounded off
 
 
+def test_the_de_esser_takes_an_s_across_its_split_and_leaves_the_vowels():
+    """An "s" centred at 5 kHz, half under the 5.5 kHz split (a learned singer's, a little lower than most):
+    heard against the voice's body and taken from the voice in phase, it comes down by several dB; the vowel
+    either side is untouched. (Heard against x minus a high-pass, and taken as that high-pass, the same "s"
+    lost nothing.)"""
+    rng = np.random.default_rng(5)
+    t = np.arange(2 * SR) / SR
+    vowel = sum(np.sin(2 * np.pi * 220 * k * t) / k for k in range(1, 12))
+    ess = sosfilt(butter(4, [3800, 8000], btype="bandpass", fs=SR, output="sos"), rng.standard_normal(len(t)))
+    ess *= 0.5 * np.std(vowel) / np.std(ess)
+    s = (t > 0.9) & (t < 1.05)
+    x = (np.where(s, ess, vowel) * 0.1)[:, None]
+    y = fx.deess(x, SR)[0]
+    band = butter(4, [4000, 11000], btype="bandpass", fs=SR, output="sos")
+
+    def level(z, a, b):
+        return 10 * np.log10(np.mean(sosfilt(band, z[:, 0])[int(a * SR): int(b * SR)] ** 2))
+    assert level(x, 0.92, 1.03) - level(y, 0.92, 1.03) > 3.0
+    assert np.allclose(y[: int(0.85 * SR)], x[: int(0.85 * SR)])
+    assert np.allclose(y[int(1.6 * SR):], x[int(1.6 * SR):], atol=1e-4)
+
+
 def test_a_riding_compressor_keeps_the_arc():
     # a quiet passage then one 12 dB louder, each with a syllable every half second that stands 6 dB out
     t = np.arange(8 * SR) / SR
