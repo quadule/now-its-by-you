@@ -22,8 +22,9 @@ and bass network whose transfer function Yeh and Smith worked out,
 "Discretization of the '59 Fender Bassman tone stack", DAFx 2006), third order
 over third order, its coefficients taken here from the circuit's nodal
 equations and discretized by the bilinear transform. Then the spring reverb's
-return and the tremolo, and the push-pull power stage: symmetric soft clipping
-whose ceiling sags as the supply is drawn down, and the output transformer's
+return and the tremolo, and the push-pull power stage: symmetric clipping,
+nearly linear until close to its ceiling (the firmer with negative feedback),
+the ceiling sagging as the supply is drawn down, and the output transformer's
 band. The nonlinear stages run four times oversampled, the resampling fused
 into the same pass so nothing oversampled is ever stored.
 
@@ -34,8 +35,8 @@ below a transition frequency near 4 kHz, so every echo is a chirp, spread
 further by every trip round the loop; the echoes come a round trip apart.
 
 The cabinet: an impulse response made from a loudspeaker's physics: the cone's
-mass on its suspension (a resonance at 75 to 110 Hz), an open back letting the
-lowest octave cancel, the cone breaking up into a presence region at 2 to 4 kHz
+mass on its suspension (a resonance at 75 to 110 Hz), an open back letting what
+lies below it cancel, the cone breaking up into a presence region at 2 to 4 kHz
 with a scatter of peaks and dips, the steep fall above 5 or 6 kHz, and two
 microphones, each with the comb of a reflection it also hears.
 """

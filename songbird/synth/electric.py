@@ -4,23 +4,29 @@ The guitar. Six steel strings on a solid body (standard tuning, 24 frets)
 ring long: the body takes little of their energy, so a note's fundamental
 falls 60 dB in 6 to 10 seconds in the middle of the neck, less high up, and
 each partial dies faster by its frequency (b3 f^2), the top of the pick's
-brightness gone in a second or two. A guitar's neck has its own dead spot
+brightness gone in a second or two; being steel, and stiff, their partials run
+a little sharp of the harmonic series (the low E's 8th by 7 cents), and a hard
+pluck starts a few cents sharp and settles. A guitar's neck has its own dead spot
 (a resonance that drinks one note's energy: H. Fleischer and T. Zwicker,
 "Investigating dead spots of electric guitars", Acustica 85, 1999), each
 maker's somewhere between G3 and C4. Each note's string is chosen as a
 player's hand would (fretboard.py), and what reaches the amp is what the
 magnetic pickup hears (its comb, its coil's resonance with the pots and
-cable: amp.py): single coils near 4 kHz, humbuckers near 3, the player's
-switch toward the neck for a warm sound and the bridge for a bright or driven
-one.
+cable: amp.py): single coils near 4 kHz, humbuckers near 3, the tone knob near
+the top, the player's switch toward the neck for a warm sound and the bridge for
+a bright or driven one.
 
-The amp (amp.py) has three settings, one per name: "electric" clean, with a
-modest spring reverb; "electric-crunch", the volume up so the second stage and
-the power valves break up, the reverb off, the master down so it sits as loud
-as the clean sound; "electric-tremolo", clean through the amp's tremolo
-(a Fender's optical or a Vox-like bias tremolo by the maker, 4 to 7 Hz, locked
-to the tempo when the band gives one, dipping the sound 11 to 16 dB). The three names are the same guitar and
-the same amp on a machine (both drawn from its maker, whatever the name), so a
+The amp (amp.py) has three settings, one per name: "electric" clean (within 3%
+of linear on a hard strum), with a modest spring reverb; "electric-crunch", the
+volume up so the second stage and the power valves break up (a strum 12-35%
+from linear), the reverb off, the master down so it sits as loud as the clean
+sound; "electric-tremolo", clean through the amp's tremolo (a Fender's optical
+or a Vox-like bias tremolo by the maker, 4 to 7 Hz, locked to the tempo when
+the band gives one, dipping the sound 11 to 16 dB). A player dials the sound,
+not the knob: each setting's volume is the maker's drive less the rig's heat
+(heat(): a humbucker is 7 dB hotter than a single coil, a Fender's stack loses 5
+to 7 dB more than a Marshall's). The three names are the same guitar and the
+same amp on a machine (both drawn from its maker, whatever the name), so a
 style that changes settings mid-song hears one rig. settings["amp"] may name a
 setting ("clean", "crunch", "tremolo") or give a dict of {"setting", "drive"
 0..1, "reverb" 0..1, "tremolo" depth 0..1, "rate" Hz}.
@@ -39,7 +45,9 @@ The bass. Four long-scale (864 mm) roundwound strings: a long sustain whose
 bright, zingy attack darkens within a fifth of a second (their damping grows
 steeply with frequency), through a split-coil (P) or two single-coil (J)
 pickups by the maker, straight into a DI: clean, with a touch of its preamp's
-saturation. Articulations: "" (fingered: round), "pick" (brighter, with the
+saturation. Stiff strings: the open E's partials run sharp (its 10th by a third
+of a semitone, the growl of a long roundwound string), and a hard pluck starts
+up to a sixth of a semitone sharp, settling in a few tenths of a second. Articulations: "" (fingered: round), "pick" (brighter, with the
 pick's click), "mute" (palm-muted, short), "slide" (slid into from two or three
 frets below), "ghost" (a dead note: the left hand only touching the string).
 """
