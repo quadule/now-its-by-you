@@ -119,8 +119,8 @@ class Texture:
       the next. By harmonic, because what matters is where harmonics stop being heard one by one.
     """
 
-    spread: float = 0.0
-    spread_from: float = 2000.0
+    spread: float = 0.15  # the teacher's upper harmonics are about this spread (docs/THROAT.md)
+    spread_from: float = 1500.0
     jitter: float = 0.0
     jitter_corr: float = 0.5
     scatter: float = 0.0
@@ -128,7 +128,8 @@ class Texture:
     scatter_to: float = 20.0
 
 
-TEXTURE = Texture()
+TEXTURE = Texture()  # what the throat sings with
+PLAIN = Texture(spread=0.0, jitter=0.0, scatter=0.0)  # none: WORLD's own synthesis
 SPREAD_SEED, SPREAD_KNOT = 1, 500.0  # the fixed all-pass's curve: a random value every 500 Hz, linear between
 SCATTER_BW = 300.0  # Hz over which a pulse's random phase is smooth
 
@@ -166,7 +167,7 @@ def synthesize(f0: np.ndarray, sp: np.ndarray, ap: np.ndarray, sr: int, rng: np.
     aperiodicity (frames, AP_MEL), all on FRAME steps. source: an optional log-power change to the
     voiced (periodic) part alone, on the envelope's grid: a different glottal source from the one
     the envelope was learned with (see source_change). texture: what breaks the pulses' regularity
-    (TEXTURE if None; Texture() for none, WORLD's own synthesis)."""
+    (TEXTURE if None; PLAIN for none, WORLD's own synthesis)."""
     from scipy.signal import lfilter
 
     tx = TEXTURE if texture is None else texture

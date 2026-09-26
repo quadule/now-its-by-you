@@ -65,7 +65,8 @@ def test_texture_follows_the_seed():
 
 
 def test_spread_softens_the_click_but_keeps_the_spectrum_and_the_period():
-    plain, spread = steady_voice(T.Texture())[4800:-4800], steady_voice(T.Texture(spread=0.2))[4800:-4800]
+    plain = steady_voice(T.PLAIN)[4800:-4800]
+    spread = steady_voice(T.Texture(spread=0.2, jitter=0.0, scatter=0.0))[4800:-4800]
     hf_plain, hf_spread = band(plain, 5000, 9000), band(spread, 5000, 9000)
     crest = lambda y: np.abs(y).max() / np.sqrt(np.mean(y**2))  # noqa: E731
     assert crest(hf_spread) < 0.75 * crest(hf_plain)
@@ -78,7 +79,7 @@ def test_spread_softens_the_click_but_keeps_the_spectrum_and_the_period():
 
 
 def test_scatter_unlocks_the_upper_harmonics_from_one_period_to_the_next_but_not_the_lower():
-    y = steady_voice(T.Texture(scatter=1.5))[4800:-4800]
+    y = steady_voice(T.Texture(spread=0.0, jitter=0.0, scatter=1.5))[4800:-4800]
     period = 24000 // 200
 
     def alike(x):
@@ -89,8 +90,8 @@ def test_scatter_unlocks_the_upper_harmonics_from_one_period_to_the_next_but_not
 
 
 def test_jitter_unsettles_the_upper_harmonics_more_than_the_lower():
-    y = steady_voice(T.Texture(jitter=0.005, jitter_corr=0.0), frames=800)[4800:-4800]
-    z = steady_voice(T.Texture(), frames=800)[4800:-4800]
+    y = steady_voice(T.Texture(spread=0.0, jitter=0.005, jitter_corr=0.0, scatter=0.0), frames=800)[4800:-4800]
+    z = steady_voice(T.PLAIN, frames=800)[4800:-4800]
     period = 24000 // 200
     # a period against the next: 25 us of jitter barely moves 0.1-1 kHz, and 3-6 kHz noticeably
     lo = [np.corrcoef(band(s, 100, 1000)[:-period], band(s, 100, 1000)[period:])[0, 1] for s in (y, z)]

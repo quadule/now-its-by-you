@@ -301,7 +301,7 @@ def render_measures(path: Path, seconds: float) -> dict:
 def texture_of(kv: list[str]) -> throat.Texture:
     """A variant's Texture from key=value pairs over the default one; texture=none for none at all."""
     pairs = dict(item.split("=", 1) for item in kv)
-    base = throat.Texture() if pairs.pop("texture", "") == "none" else throat.TEXTURE
+    base = throat.PLAIN if pairs.pop("texture", "") == "none" else throat.TEXTURE
     return replace(base, **{k: float(v) for k, v in pairs.items()})
 
 
