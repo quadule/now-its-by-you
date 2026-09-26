@@ -22,9 +22,13 @@ the next version):
 **The artist's, current (2026-09-26):**
 
 > Run the program and you get a new version of the song, shaped by your computer and the day. Sing
-> into it and it learns a little of your timing and inflection (without keeping a recording or
-> cloning your voice). The piece confronts the blurred authorship of AI music through the lens of
-> folk music and oral tradition: it wonders who made it, and invites you to take part.
+> into it and it learns a little of your timing and inflection (your recording is deleted right
+> after, and your voice is never cloned). The piece confronts the blurred authorship of AI music
+> through the lens of folk music and oral tradition: it wonders who made it, and invites you to take
+> part.
+
+(2026-09-26: the parenthesis was "without keeping a recording or cloning your voice"; the artist changed
+it once singers' recordings were kept for a few days, until 30 September, to make the song.)
 
 No further edits suggested: "it wonders who made it" is better than any of the drafts below.
 

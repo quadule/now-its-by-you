@@ -42,7 +42,7 @@ Singing online closes on **Sunday 27 September 2026 at 10 PM Pacific**.
   each note, how you slide into and away from it, how loud you lean on it. Those numbers, blended
   with everyone else's, travel with the song and shape how its synthetic singer sings, so the voice
   in the karaoke changes a little with each person who sings.
-- **The voice.** Once, before 30 September, the recordings may also help the program's own small voice
+- **The voice.** Once, after singing closes and before 30 September, the recordings may also help the program's own small voice
   model say the song's words more clearly, all singers' together. What the model learns is blended
   from everyone. It is never set to sound like any one person.
 - **Your audio is deleted.** The recordings themselves are never published and never travel inside
@@ -51,9 +51,10 @@ Singing online closes on **Sunday 27 September 2026 at 10 PM Pacific**.
 - **Your own page.** A private link where you can listen to and download what you sent, your
   version of the song (your voice in the sections you sang, the machine's in the rest) and your
   vocals alone, and delete them.
-- **Changing your mind.** Until the project is shared publicly you can withdraw from your page: your
-  recordings and the numbers taken from them are deleted, and if the voice has already learned from
-  the recordings, the song goes back to a voice made before anyone sang.
+- **Changing your mind.** Until singing closes (Sunday 27 September, 10 PM Pacific) you can withdraw
+  from your page: your recordings and the numbers taken from them are deleted. After that the song is
+  finished from everyone's singing and shared, so what you gave stays part of it; you can still delete
+  the recordings themselves.
 - **Credit.** Your name, a name you choose, or none: your choice.
 
 ## Release (plain-language draft)
@@ -66,7 +67,7 @@ people send). For someone singing elsewhere:
 > the song's voice model to say its words clearly. The resulting numbers and model weights may be
 > distributed with the song under CC0 (public domain), blended with other voices so that no single
 > person is reproduced. My recordings themselves won't be published or shared, and will be deleted
-> by 30 September 2026. I can withdraw until the project is shared publicly. Words I send for the
+> by 30 September 2026. I can withdraw until singing closes (27 September 2026, 10 PM Pacific). Words I send for the
 > song I give to it for good, under CC0. I'd like to be credited as: ________ (or: not credited).
 > Payment: ________. Signed ________ Date ________
 
