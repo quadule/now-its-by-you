@@ -76,6 +76,7 @@ class VoiceParams:
     taper: float = -3.0  # dB a held vowel fades from a third of the way through to its end
     vibrato_from: float = 0.9  # seconds a note must last before the singer puts vibrato on it (0.55 at a line's end)
     breathe: float = 0.18  # seconds between lines needed for an audible breath
+    inhale: float = -36.0  # dB of that breath's loudest moment against the sung vowels, as the natural singers breathe
     accent: float = 8.0  # cents a strongly leaned-on note is lifted
     focus: float = 1.0  # dB more on a word the lyric marks as its line's focus (*word*), most on its stressed syllable (2 cost words)
     reduce: float = 0.0  # how far a little word's vowel off the beat moves toward "uh" (0.3 cost the words: WER 15% -> 18%)
@@ -214,8 +215,9 @@ def schedule(notes: list[Note], voice: VoiceParams, lexicon: dict[str, str] | No
         next_v = sylls[k + 1].nucleus if k + 1 < len(sylls) else None
         t = note.start - sum(onset[k])
         gap_before = t - (segs[-1].t1 if segs else 0.0)
-        if gap_before > voice.breathe:  # a moment's quiet, then an audible in-breath before the phrase
-            segs.append(Segment(t - min(0.2, gap_before - 0.12), t - 0.03, "breath", "breath", amp))
+        if gap_before > voice.breathe:  # an audible in-breath before the phrase (see breaths())
+            end = t - 0.04 - 0.1 * min(max(gap_before - 0.3, 0.0), 0.7)  # quiet again just before it starts
+            segs.append(Segment(max(end - breath_length(gap_before), t - gap_before + 0.04), end, "breath", "breath", amp))
         for c, d in zip(syl.onset, onset[k]):
             segs.append(Segment(t, t + d, c, "onset", amp, prev_v, syl.nucleus))
             t += d
@@ -302,8 +304,7 @@ def control_tracks(segs: list[Segment], n_blocks: int, sr: int, voice: VoicePara
             ah[region] = voice.breath * s.amp
             rd[region] = voice.rd - 0.8 * (s.amp - 0.9)
         elif s.role == "breath":
-            ah[region] = 0.05 * s.amp
-            keys.append(((s.t0 + s.t1) / 2, ph.VOWEL_FORMANTS["AX"]))
+            pass  # a breath is shaped noise added after the tract (breaths()), the same for every engine
         elif s.role in ("onset", "coda"):
             manner, place, voiced = ph.CONSONANTS[s.phone]
             loc = _locus(s.phone, s)
@@ -340,9 +341,10 @@ def control_tracks(segs: list[Segment], n_blocks: int, sr: int, voice: VoicePara
 
     # Phrase endings: singers let the voice go over about a tenth of a second,
     # getting breathier. Voicing cut off in one step sounds like a final d or t.
-    for k, seg in enumerate(segs):
-        gap_after = segs[k + 1].t0 - seg.t1 if k + 1 < len(segs) else 1.0
-        if gap_after < 0.05 or seg.role == "breath":
+    sounds = [s for s in segs if s.role != "breath"]
+    for k, seg in enumerate(sounds):
+        gap_after = sounds[k + 1].t0 - seg.t1 if k + 1 < len(sounds) else 1.0
+        if gap_after < 0.05:
             continue
         voiced_end = seg.t1
         fade = span(voiced_end - voice.release, voiced_end)
@@ -383,6 +385,50 @@ def _lowpassed_noise(rng: np.random.Generator, n: int, cutoff: float, rate: floa
 def line_release(dur: float) -> float:
     """How long before a line's last note ends the singer lets go of it, to breathe."""
     return min(0.3, 0.35 * dur)
+
+
+# A breath between phrases as natural singers breathe (SoulX's house singers, measured by
+# tools/delivery.py): noise whose density per hertz is highest from 1 to 8 kHz and falls away below
+# 500 Hz, rising in about 30 ms, fading slowly through its middle, and quiet again just before the
+# next line's first sound. (Hz, dB per hertz; the octave bands measured -24, -18, -12, -5, -7, 0, -5.5.)
+BREATH_SPECTRUM = ((0.0, -26.0), (125.0, -18.0), (375.0, -7.5), (750.0, -4.5), (1500.0, 0.0), (3000.0, -8.0),
+                   (6000.0, -1.0), (10000.0, -6.5), (14000.0, -14.0), (24000.0, -30.0))
+
+
+def breath_length(gap: float) -> float:
+    """Seconds an audible breath lasts in a gap of this many seconds between phrases: most of a short gap
+    (0.1 s in 0.2), up to 0.4 s in a long rest."""
+    return float(np.clip(0.75 * (gap - 0.08), 0.08, 0.42))
+
+
+def breaths(segs: list[Segment], n: int, sr: int, voice: VoiceParams, seed: int) -> np.ndarray:
+    """Every breath in a schedule as shaped noise, n samples long, against sung vowels of RMS 1. A breath
+    before a louder phrase is deeper (half its level in dB), a long rest's a little more; no two sound
+    quite alike (each takes its own tilt of the spectrum). Its own random stream, so breathing never
+    moves the rest of the voice."""
+    out = np.zeros(n)
+    rng = np.random.default_rng([seed, 0xB4EA7])
+    freq, gain = (np.array(v) for v in zip(*BREATH_SPECTRUM))
+    for k, s in enumerate(segs):
+        if s.role != "breath":
+            continue
+        i0, i1 = max(int(s.t0 * sr), 0), min(int(s.t1 * sr), n)
+        m = i1 - i0
+        if m < 64:
+            continue
+        f = np.fft.rfftfreq(m, 1.0 / sr)
+        tilt = rng.normal(0.0, 1.5) * np.log2(np.maximum(f, 60.0) / 2000.0)  # dB: a breath a little darker or brighter
+        shaped = np.fft.irfft(np.fft.rfft(rng.standard_normal(m)) * 10.0 ** ((np.interp(f, freq, gain) + tilt) / 20.0), m)
+        shaped /= np.sqrt(np.mean(shaped**2)) + 1e-12
+        x = np.linspace(0.0, 1.0, m)
+        rise = min(0.03 * sr / m, 0.3)
+        env = 0.5 - 0.5 * np.cos(np.pi * np.clip(x / rise, 0.0, 1.0))
+        env *= 1.0 - 0.15 * np.clip((x - rise) / max(0.6 - rise, 1e-3), 0.0, 1.0)
+        env *= 0.5 + 0.5 * np.cos(np.pi * np.clip((x - 0.6) / 0.4, 0.0, 1.0))
+        gap = (segs[k + 1].t0 if k + 1 < len(segs) else s.t1) - (segs[k - 1].t1 if k else 0.0)
+        level = voice.inhale + 0.5 * 20.0 * np.log10(max(s.amp, 1e-3) / 0.9) + 2.0 * float(np.clip((gap - 0.3) / 0.5, 0.0, 1.0))
+        out[i0:i1] += 10.0 ** (level / 20.0) * env * shaped
+    return out
 
 
 def pitch_track(notes: list[Note], n_blocks: int, sr: int, voice: VoiceParams, rng, sounding=None,
@@ -549,5 +595,6 @@ def sing(notes: list[Note], sr: int, voice: VoiceParams, seed: int = 0, lexicon:
             env = np.clip(np.minimum((t[lo:hi] - t0) / ramp, (t1 - t[lo:hi]) / ramp), 0.0, 1.0)
             y[lo:hi] += ref * 10.0 ** (level / 20.0) * s.amp * env * shaped
 
+    y += ref * breaths(segs, n, sr, voice, seed)
     y = sosfilt(butter(1, 60.0, btype="highpass", fs=sr, output="sos"), y)
     return 0.3 * y / ref / np.sqrt(2.0)

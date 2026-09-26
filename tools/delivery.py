@@ -44,7 +44,10 @@ from concurrent.futures import ProcessPoolExecutor
 from dataclasses import dataclass, field, replace
 from pathlib import Path
 
-import numpy as np
+for _var in ("OMP_NUM_THREADS", "NUMBA_NUM_THREADS", "OPENBLAS_NUM_THREADS", "MKL_NUM_THREADS"):
+    os.environ.setdefault(_var, "2")  # a shared machine: each worker keeps to two threads
+
+import numpy as np  # noqa: E402
 
 warnings.filterwarnings("ignore", message="pkg_resources")
 warnings.filterwarnings("ignore", category=RuntimeWarning)
@@ -532,7 +535,8 @@ def measure_segment(an: dict, notes: list[dict]) -> dict:
         # after a voiceless coda (or a voiced obstruent, often devoiced at a line's end) the gap starts
         # with that consonant's noise: skip past it
         skip = 0.04 + (0.12 if any(p in VOICELESS or p in VOICED_OBSTRUENT for p in coda) else 0.0)
-        a, b = (s0.start + voiced[-1] + 1) * FRAME + skip, notes[j]["start"] - 0.04
+        # and stop short of the next line's first consonants, which a singer may start before the note
+        a, b = (s0.start + voiced[-1] + 1) * FRAME + skip, notes[j]["start"] - 0.04 - 0.08 * len(phones_of(notes[j])[0])
         if b - a < 0.08:
             continue
         s = span(a, b, n_frames)
@@ -834,7 +838,7 @@ def main() -> None:
     m.add_argument("--set", nargs="*", default=[], metavar="FIELD=VALUE", help="VoiceParams fields for ours")
     m.add_argument("--seed", type=int, default=1)
     m.add_argument("--limit", type=int, default=0)
-    m.add_argument("--jobs", type=int, default=6)
+    m.add_argument("--jobs", type=int, default=3)
     m.add_argument("--keep", type=Path, default=None, help="write our renders here")
     m.add_argument("--raw", type=Path, default=None, help="also write every per-note record here")
     m.add_argument("--out", type=Path, required=True)

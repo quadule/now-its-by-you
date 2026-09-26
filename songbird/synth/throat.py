@@ -430,7 +430,7 @@ def sing(notes, sr: int, voice, seed: int = 0, lexicon: dict | None = None, mix:
     phone is sung), our pitch track and our dynamics, through the learned throat."""
     from scipy.signal import butter, resample_poly, sosfilt
 
-    from .voice import BLOCK, pitch_track, schedule
+    from .voice import BLOCK, breaths, pitch_track, schedule
 
     net = load(model)
     notes = sorted(notes, key=lambda n: n.start)
@@ -438,8 +438,10 @@ def sing(notes, sr: int, voice, seed: int = 0, lexicon: dict | None = None, mix:
     segs = schedule(notes, voice, lexicon, durations)
     stressed = stresses(notes, lexicon)
     rows, k = [], -1
-    for s in segs:  # each note sings its onsets, one vowel, its codas
-        note = k + 1 if s.role in ("onset", "breath") else k
+    for s in segs:  # each note sings its onsets, one vowel, its codas; breaths are added after (voice.breaths)
+        if s.role == "breath":
+            continue
+        note = k + 1 if s.role == "onset" else k
         if s.role == "vowel":
             k += 1
             note = k
@@ -475,4 +477,5 @@ def sing(notes, sr: int, voice, seed: int = 0, lexicon: dict | None = None, mix:
     for s in vowels:
         mask[int(s.t0 * sr): int(s.t1 * sr)] = True
     ref = np.sqrt(np.mean(y[mask] ** 2)) if mask.any() else 1.0
+    y = y + ref * breaths(segs, len(y), sr, voice, seed)
     return 0.3 * y / ref / np.sqrt(2.0)
