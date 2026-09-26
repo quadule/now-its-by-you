@@ -276,7 +276,8 @@ def year_command(args: argparse.Namespace) -> int:
           f"{drift_mod.when(start).date()}, every {args.step:g}")
     print(f"form: {', '.join(f'{v}={k}' for k, v in FORM_LETTERS.items())}\n")
     head = f"{'date':10s}  {'key':3s} {'mode':10s} {'bpm':>5s}  {'form':16s} {'band':14s} {'dens':>4s} {'brt':>4s} " \
-           f"{'harp':16s} {'hum':>5s} {'rit':>4s} {'breath':>6s} {'vib':>4s}  {'mood (p l d t)':19s} {'era':>5s}"
+           f"{'harp':16s} {'hum':>5s} {'rit':>4s} {'breath':>6s} {'vib':>4s}  {'mood (p l d t)':19s} {'era':>5s} " \
+           f"{'var':>3s}  verses"
     print(head)
     rows = []
     t = start
@@ -291,7 +292,8 @@ def year_command(args: argparse.Namespace) -> int:
               f"{p.band.brightness:4.2f} {p.accomp:16s} {p.humanize * 1000:4.1f}m {p.ritardando:4.2f} "
               f"{sing.breath:6.3f} {sing.vibrato_depth:4.1f}  "
               f"{' '.join(f'{mood.get(k, 1):.2f}' for k in ('plain', 'light', 'dark', 'tender')):19s} "
-              f"{p.leanings.get('era_bias', 0.0):5.2f}")
+              f"{p.leanings.get('era_bias', 0.0):5.2f} {len(p.variants):3d}  "
+              f"{' '.join(v['id'] for v in p.words.get('verses', [])) or '-'}")
         t += args.step
 
     def changes(key) -> int:
@@ -306,7 +308,9 @@ def year_command(args: argparse.Namespace) -> int:
           f"{min(sum(n == 'verse' for n in p.form) for p in rows)}-{max(sum(n == 'verse' for n in p.form) for p in rows)} verses), "
           f"band pattern {changes(lambda p: p.band.pattern)} ({', '.join(sorted({p.band.pattern for p in rows}))}), "
           f"lead {changes(lambda p: p.band.lead)} ({', '.join(sorted({p.band.lead for p in rows}))}), "
-          f"harp's picking {changes(lambda p: p.accomp)}; tempo {min(tempos):.1f}-{max(tempos):.1f}")
+          f"harp's picking {changes(lambda p: p.accomp)}; tempo {min(tempos):.1f}-{max(tempos):.1f}; "
+          f"the tune's variants {changes(lambda p: p.variants)} (at most {max(len(p.variants) for p in rows)}), "
+          f"the words {changes(lambda p: json.dumps(p.words, sort_keys=True))}")
 
     if args.render:
         out_dir = Path(args.render)
