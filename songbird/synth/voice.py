@@ -59,8 +59,8 @@ class VoiceParams:
     glide_spread: float = 0.35  # how unalike two moves are: their length (log scale), when they happen and how far past they go
     overshoot: float = 0.025  # fraction of each interval sung past the new note before settling, on average
     scoop: float = 0.35  # semitones below the note a phrase starts from, through an m, n, l, r, w or y (less otherwise)
-    jitter: float = 0.3  # percent, fast pitch wobble
-    wander: float = 6.0  # cents, slow pitch drift
+    jitter: float = 0.4  # percent, fast pitch wobble
+    wander: float = 9.0  # cents, slow pitch drift (1/f, as natural singers' held notes drift)
     shimmer: float = 2.5  # percent, fast amplitude wobble
     articulation: float = 1.0  # consonant length scale
     cluster: float = 0.7  # length of each consonant in a cluster within a syllable, against alone
@@ -542,6 +542,15 @@ def vibrato_chance(dur: float, line_end: bool, half: float, lean: float = 0.0) -
     return min(0.75 / (1.0 + np.exp(-(dur - half) / 0.25 - lean)) + (0.15 if line_end else 0.0), 0.9)
 
 
+def _colored(rng: np.random.Generator, n: int, rate: float, corner: float, top: float, steep: int = 4) -> np.ndarray:
+    """Unit-SD noise, flat below `corner` Hz, its power falling as 1/f up to `top` Hz and faster after: the
+    slow, unsteady drift of a held pitch, or of breath pressure."""
+    f = np.fft.rfftfreq(n, 1.0 / rate)
+    gain = 1.0 / np.sqrt((1.0 + f / corner) * (1.0 + (f / top) ** steep))
+    x = np.fft.irfft(np.fft.rfft(rng.standard_normal(n)) * gain, n)
+    return x / (np.std(x) + 1e-12)
+
+
 def pitch_track(notes: list[Note], n_blocks: int, sr: int, voice: VoiceParams, rng, sounding=None,
                 accents=None, segs: list[Segment] | None = None) -> np.ndarray:
     """f0 in Hz per block: transitions between notes, a rise into each phrase, vibrato on some held
@@ -662,7 +671,7 @@ def pitch_track(notes: list[Note], n_blocks: int, sr: int, voice: VoiceParams, r
     cents = vib_env * np.sin(vib_phase) + gestures
     if segs is not None:
         cents += consonant_pitch(segs, tb)
-    cents += voice.wander * _lowpassed_noise(drift_rng, n_blocks, 1.0, rate)
+    cents += voice.wander * _colored(drift_rng, n_blocks, rate, 1.0, 4.0)
     cents += 17.3 * voice.jitter * _lowpassed_noise(drift_rng, n_blocks, 25.0, rate)
     return 440.0 * 2.0 ** ((target + cents / 100.0 - 69.0) / 12.0)
 
