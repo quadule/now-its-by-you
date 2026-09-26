@@ -63,8 +63,9 @@ across every tube's mouth, so its phase runs through the whole part; each
 disc opens and closes its tube twice a turn: what the tube adds to the
 fundamental swings 11 dB, the note 9 dB (the bar's own sound, a quarter
 cycle apart, fills the dips and turns part of the swing into pitch, ±2 to 3
-cents). Its speed: off for ornament below 0.15, else 2.5 + 4 × ornament Hz
-(4.5 at 0.5); "motor-slow" (3.5 Hz), "motor-fast" (6.5 Hz), "motor-off"
+cents). Its speed: 2.5 + 4 × ornament Hz (4.5 at 0.5), off at 0, the discs'
+swing growing to its full depth by 0.2, so a drifting ornament never flips
+it on and off; "motor-slow" (3.5 Hz), "motor-fast" (6.5 Hz), "motor-off"
 from a note on, the motor taking 0.4 s to change speed; each machine's
 motor runs a few per cent fast or slow.
 
@@ -134,7 +135,7 @@ SPEC = {
             "motor-fast": "the motor on, fast (about 6.5 Hz), from this note on",
         },
         about="a vibraphone: aluminium bars tuned 1:4:10 over tube resonators whose motor-driven discs "
-              "make its tremolo (speed from ornament: off below 0.15), a damper pedal, cord mallets",
+              "make its tremolo (from ornament: off at 0, 4.5 Hz at 0.5), a damper pedal, cord mallets",
         brighter=0.3,  # its upper partials ring for seconds, so the centroid of 0.1-0.4 s moves (0.39 octave)
     ),
     "marimba": dict(
@@ -677,13 +678,15 @@ def _rattle(f1: float, amp: float, n: int, sr: int, rng: np.random.Generator) ->
     return sosfilt(band, hits) * amp
 
 
-def _motor_track(notes, sr: int, length: int, kit: Kit) -> tuple[np.ndarray, np.ndarray]:
+def _motor_track(notes, sr: int, length: int, kit: Kit) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
     """The vibraphone's motor: one shaft turning the discs in every resonator, so one phase for the whole part.
-    Its rate (the tremolo's, Hz) from ornament (off below 0.15, else 2.5 + 4 × ornament) and the art tokens,
-    each from its note on; the motor takes about 0.4 s to change speed. Returns the phase and how far the
-    discs are in play (0 when stopped: they are left open)."""
-    base = 0.0 if kit.ornament < 0.15 else 2.5 + 4.0 * kit.ornament
+    Its rate (the tremolo's, Hz) from ornament, 2.5 + 4 × ornament, off at 0 (and the discs' swing growing to
+    its full depth by 0.2, so a drifting ornament never flips it on and off), or from the art tokens, each from
+    its note on; the motor takes about 0.4 s to change speed. Returns the phase, how far the discs are in play
+    (0 when stopped: they are left open) and the rate."""
+    base = 2.5 + 4.0 * kit.ornament if kit.ornament > 0.0 else 0.0
     target = np.full(length, base * kit.motor_rate)
+    depth = np.full(length, min(kit.ornament / 0.2, 1.0))
     for note in sorted(notes, key=lambda n: n.start):
         art = _tokens(note.art)
         rate = None
@@ -697,10 +700,12 @@ def _motor_track(notes, sr: int, length: int, kit: Kit) -> tuple[np.ndarray, np.
             i = int(round(note.start * sr))
             if i < length:
                 target[i:] = rate * kit.motor_rate
+                depth[i:] = 1.0
     a = np.exp(-1.0 / (0.4 * sr))
     rate = lfilter([1.0 - a], [1.0, -a], target, zi=[a * target[0]])[0]
+    depth = lfilter([1.0 - a], [1.0, -a], depth, zi=[a * depth[0]])[0]
     phase = kit.motor_phase + 2.0 * np.pi * np.cumsum(rate) / sr
-    return phase, np.clip(rate / 1.5, 0.0, 1.0), rate
+    return phase, np.clip(rate / 1.5, 0.0, 1.0) * depth, rate
 
 
 def _tremolo(tube: np.ndarray, sr: int, phase: np.ndarray, engaged: np.ndarray, rate: np.ndarray,

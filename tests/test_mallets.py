@@ -211,6 +211,8 @@ def test_the_motor_makes_a_tremolo_of_6_to_12_db_at_3_to_7_hz():
         assert abs(rate / (hz * kit.motor_rate) - 1.0) < 0.03 and 6.0 < depth < 12.0
     _, depth, pitch = tremolo(one("vibraphone", 65, 4.0), f)  # ornament 0: the motor is off
     assert depth < 1.0 and pitch < 0.5
+    _, shallow, _ = tremolo(one("vibraphone", 65, 4.0, settings=dict(ornament=0.1)), f)
+    assert 1.5 < shallow < 7.0  # a little ornament, a little tremolo: no flip from off to full
 
 
 def test_the_motor_is_one_shaft_for_the_whole_part():
