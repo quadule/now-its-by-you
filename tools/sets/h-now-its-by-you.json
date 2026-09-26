@@ -310,7 +310,7 @@
      {
       "id": "sample",
       "slots": {
-       "who": "girl",
+       "who": "boy",
        "sung": "him"
       }
      }
@@ -480,7 +480,7 @@
       "id": "shepherd",
       "slots": {
        "who": "goat-herd",
-       "flock": "sheep"
+       "flock": "goats"
       }
      },
      {
@@ -493,7 +493,7 @@
       "id": "bird",
       "slots": {
        "bird": "lin-net",
-       "month": "June"
+       "month": "spring"
       }
      }
     ],

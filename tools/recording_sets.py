@@ -502,14 +502,22 @@ def ease(entry: dict) -> float:
 
 
 def _verse_ways(genome, entry: dict) -> list[tuple[dict, Counter]]:
-    """Every way a verse's slots can be sung (as held words keep them), with the words each sings."""
+    """Every way a verse's slots can be sung (as held words keep them), with the words each sings; the
+    most natural first: the bank's own words, then, where a verse's slots have as many words each, the
+    ones that go together (goatherd with goats, not sheep), then the fewest changes."""
     import itertools
 
     song = A._song(genome)
     names = slot_names(entry["lines"])
     slots = entry.get("slots", {})
+    widths = [width(slots, n) for n in names]
+    agree = len(set(widths)) == 1
+
+    def natural(combo):
+        return (len(set(combo)) if agree else 0, sum(combo), combo)
+
     out = []
-    for combo in itertools.product(*(range(width(slots, n)) for n in names)):
+    for combo in sorted(itertools.product(*(range(w) for w in widths)), key=natural):
         picks = dict(zip(names, combo))
         counts = _count(song.sing(entry, picks), Counter())
         counts[f"verse:{entry['id']}"] += 1

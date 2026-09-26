@@ -11,9 +11,9 @@ Singers are asked to sing one of six sets: each is the whole song, three or four
 | a | bell (belfry), probe, screen | so (who wrote), kept (who kept) | due, true, blue, canon | canon (border, coal, cold) | la | 3:40 |
 | b | milk, hall, lullaby (thirty) | so (who wrote), swear (who made) | take, sang, due, canon | canon (desert, coal, dark) | loo | 3:40 |
 | c | ink (monk, ninetyodd), tape (trunk by the bed), skip | go (who heard), stuck (who kept) | true, blue, take, canon | canon (mountain, light, cold) | oo | 3:40 |
-| d | box, trench, sample (him) | window (who sang) | sang, due, canon | canon (water, spark, dark) + coat | la | 3:40 |
+| d | box, trench, sample (boy, him) | window (who sang) | sang, due, canon | canon (water, spark, dark) + coat | la | 3:40 |
 | e | carve (wife's), wax (Sunday), kids | even (who wrote) | true, blue, canon | canon (border, light, cold) + given | loo | 3:40 |
-| f | shell, shepherd (goatherd), parrot, bird (linnet) | never (who heard) | take, sang, canon | canon (desert, spark, dark) | oo | 3:40 |
+| f | shell, shepherd (goatherd, goats), parrot, bird (linnet, spring) | never (who heard) | take, sang, canon | canon (desert, spark, dark) | oo | 3:40 |
 
 What each set tells singers:
 
