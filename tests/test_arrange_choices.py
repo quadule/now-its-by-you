@@ -23,8 +23,8 @@ GOLDEN = Path(__file__).parent / "golden" / "h-words.sha256"
 def test_drawing_without_choices_is_as_it_was():
     """The words golden, over 600 draws with and without leanings, so the pin-free draw consumes chance
     exactly as before: computed before choices were added, and again when each refrain came to draw words
-    of its own and the skip and mind verses gained the artist's swaps (2026-09-26; the refrain alone moved
-    every verse, bridge and tag drawn as before)."""
+    of its own, when the skip and mind verses gained the artist's swaps, and when each refrain came to end
+    its own way (2026-09-26; the refrain's own changes moved every verse, bridge and tag drawn as before)."""
     lean = A.Leanings(mood_weights={"light": 2.0, "dark": 0.5}, era_bias=-0.4, rarity_appetite=0.6,
                       vocabulary=frozenset({"sea", "ship", "fiddle", "bird"}))
     digest = hashlib.sha256()
@@ -102,12 +102,13 @@ def test_refused_choices_say_why():
 def test_couplets_trade_places_and_words_for_every_refrain_hold_everywhere():
     drawn = A.arrange(g, LONG, 3)
     third = drawn.couplets[2]
-    kept = A.arrange(g, LONG, 3, None, {"couplets": {0: third}, "refrain": {"while": "if", "then": "who knows"},
+    kept = A.arrange(g, LONG, 3, None, {"couplets": {0: third}, "refrain": {"while": "if"},
                                         "bridge": {"place": "desert"}, "bridge2": "given", "tag": "loo"})
     assert kept.couplets[0] == third and kept.couplets[2] == drawn.couplets[0]  # traded, not drawn again
     assert kept.couplets[-1] == "canon" and kept.couplets[1] == drawn.couplets[1]
-    assert all("if you sing it" in s.lines[1] and "who knows" in s.lines[1] for s in kept.sections if s.block == "refrain")
+    assert all("if you sing it" in s.lines[1] for s in kept.sections if s.block == "refrain")
     assert kept.questions == drawn.questions and kept.heads == drawn.heads
+    assert "chosen refrain by refrain" in A.problem(g, LONG, {"refrain": {"then": "who knows"}})  # each ends its own way
     assert kept.bridges == ("canon", "given") and "des-ert" in kept.sections[[s.block for s in kept.sections].index("bridge")].lines[0]
     assert kept.tag == "loo" and all(set(s.lines[0].rstrip(".").split()) == {"loo"} for s in kept.sections if s.block == "tag")
     # a verse's own swapped words, as written or as they read
@@ -169,10 +170,13 @@ def test_each_refrain_has_words_of_its_own():
         assert len(set(kept.questions[1:-1])) == len(kept.questions[1:-1])  # a clashing question is asked afresh
         # one refrain's own words, the others' as drawn
         mine = A.arrange(g, LONG, seed, None, {"refrains": {0: {"slots": {"while": "when", "then": "it grows"}}}})
-        first = next(s for s in mine.sections if s.block == "refrain")
-        assert first.slots["while"] == "when" and first.slots["then"] == "it grows"
-        assert [s for s in mine.sections if s.block == "refrain"][1:] == refrains[1:]
-    assert len(heads_seen) > 2 and len(words_seen) == 10  # nine ways of the song's own head, and the other's
+        mine_refrains = [s for s in mine.sections if s.block == "refrain"]
+        assert mine_refrains[0].slots["while"] == "when" and mine_refrains[0].slots["then"] == "it grows"
+        assert [(s.id, s.head, s.slots["question"], s.slots["while"]) for s in mine_refrains[1:]] == \
+            [(s.id, s.head, s.slots["question"], s.slots["while"]) for s in refrains[1:]]
+        stayed = [a == b for a, b in zip(mine_refrains[1:], refrains[1:])]
+        assert sum(stayed) >= len(stayed) - 1  # only a refrain that ended the same way ends another way now
+    assert len(heads_seen) > 2 and len(words_seen) == 9  # every way of while and then
 
 
 def test_a_person_can_ask_a_question_in_a_refrain_between():
@@ -194,6 +198,19 @@ def test_a_question_another_refrains_head_asks_as_written_cant_be_chosen():
     assert "refrain 3 asks who wrote already" in A.problem(g, LONG, {"refrains": {1: {"slots": {"question": "wrote"}}}})
     assert "wrote" not in next(w for w in A.options(g, A.arrange(g, LONG, seed), "refrain", 1)["words"]
                                if w["slot"] == "question")["options"]
+
+
+def test_each_refrain_ends_its_own_way():
+    """Then is distinct: every song of three refrains sings it goes, who knows and it grows, and a song with the
+    so head never sings "and then who knows." as a statement beside its question."""
+    for seed in range(300):
+        for form in (SEED_FORM, LONG):
+            lyrics = A.arrange(g, form, seed)
+            refrains = [s for s in lyrics.sections if s.block == "refrain"]
+            thens = [s.slots["then"] for s in refrains]
+            assert len(set(thens)) == min(len(thens), 3)
+            if "so" in lyrics.heads:
+                assert thens.count("who knows") == 1 and refrains[lyrics.heads.index("so")].slots["then"] == "who knows"
 
 
 def test_couplets_chosen_for_two_refrains_at_once_trade_without_singing_one_twice():

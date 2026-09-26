@@ -37,9 +37,12 @@ section of that form is then filled:
   first refrain asks who made it and the last who owns it; each refrain
   between asks something else (sang, heard, kept or wrote), a different word
   each time. A lone refrain asks who made it, as the fixed refrain does.
-  "While" (or when, or if) and "it goes" (or who knows, or it grows) are
-  drawn afresh each time round. Its second couplet is different each time,
-  never repeated, and the last refrain always sings the canon: "by
+  "While" (or when, or if) is drawn afresh each time round, and so is "it
+  goes" (or who knows, or it grows), but each refrain ends its own way
+  while there are endings left: a song of three refrains sings all three.
+  The artist's head always ends "and then who knows?", so no other refrain
+  in that song says it as a statement. Its second couplet is different each
+  time, never repeated, and the last refrain always sings the canon: "by
   everyone, no one, and now it's by you."
 - **The bridge**: the first bridge section sings the canon, its swaps
   (water, mountain, border or desert; coal, spark or light; dark or cold)
@@ -80,11 +83,18 @@ The refrain's rules are data, as the rest are (`bank.rules.refrain`):
 round the last word) or "draw" (H's: the first word first, the last last,
 the rest drawn between); `once_per_song` names head slots kept the same in
 every refrain (H's had while and then until 2026-09-26; none now);
+`distinct` names slots each refrain sings its own word in while the words
+last, the ones a head fixes set aside for it (H's: then);
 `head_first` and `head_last` name the heads the first and last refrains
 sing, and `head_repeat: false` sings another head at most once a song. A
 head is written like the refrain's own lines, on the same phrases, singing
 the refrain's slots by name; its `fixed` holds any slot to one word, sung as
-written. With H's rules as they were before, this draw gives exactly the
+written. The rules a bank can't keep together are refused when it's read:
+a distinct slot also kept once a song, a head fixing a word kept once a
+song, a head asking its own question that may be sung twice. One function
+(`_round_words`) gives every refrain's words for a fresh draw, held words,
+the drift and a person's choices alike, and one says why words break the
+rules. With H's rules as they were before, this draw gives exactly the
 words the old one gave (the words golden, unchanged); the new rules change
 only the refrains (every verse, bridge and tag drawn over the golden's 600
 draws is as before).

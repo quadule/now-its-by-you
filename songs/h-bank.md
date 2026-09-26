@@ -27,8 +27,9 @@ lines are eight and ten, and the bridge's first two are ten with no pickup.
 Every refrain has words of its own. *Made* is the question: the first
 refrain asks who made it and the last who owns it, and each refrain between
 asks something else (sang, heard, kept or wrote), a different word each
-time. *While* can be when or if, and *it goes* can be who knows or it grows,
-drawn afresh each time round.
+time. *While* can be when or if, drawn afresh each time round. *It goes*
+can be who knows or it grows, and each refrain ends its own way, so three
+refrains sing all three.
 
 Lines 1 and 2 are the refrain's head. The first and last refrains always
 sing this one (**knows**), so the hook is heard first and last; a refrain
@@ -39,7 +40,9 @@ between may sing another head instead, each at most once a song:
 > Who wrote this song? Nobody, so
 > it's yours if you sing it and then who knows?
 
-It asks who wrote it and says "if", as written.
+It asks who wrote it, says "if" and ends "who knows?", as written; no other
+refrain in the same song ends "who knows", so the question comes as a
+question.
 
 Lines 3 and 4 are one of these couplets, a different one each time round,
 canon always last:
@@ -454,8 +457,9 @@ How a song is put together from the bank; the same rules are data under
   order. No two dark verses adjacent; at most one light verse.
 - **Refrain.** Every refrain has words of its own. The first asks who made
   it and the last who owns it; each between asks something else, a
-  different word each time while any are left. While, when or if and it
-  goes, who knows or it grows are drawn afresh each time round. The first
+  different word each time while any are left. While, when or if is drawn
+  afresh each time round, and it goes, who knows or it grows too, each
+  refrain a different one while any are left. The first
   and last refrains sing the knows head; a refrain between may sing another
   head, each at most once a song, with the words it fixes as written. Each
   refrain sings one couplet, none twice until all are used, and the last

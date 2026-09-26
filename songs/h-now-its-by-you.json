@@ -116,8 +116,8 @@
         {
           "id": "so",
           "by": "artist",
-          "lines": ["Who *{question}* this song? No-bo-dy, so", "it's *yours* {while} you sing it and then who knows?"],
-          "fixed": {"question": "wrote", "while": "if"}
+          "lines": ["Who *{question}* this song? No-bo-dy, so", "it's *yours* {while} you sing it and then {then}?"],
+          "fixed": {"question": "wrote", "while": "if", "then": "who knows"}
         }
       ],
       "couplets": [
@@ -886,12 +886,13 @@
       },
       "refrain": {
         "question": "draw",
+        "distinct": ["then"],
         "couplet_last": "canon",
         "couplet_repeat": false,
         "head_first": "knows",
         "head_last": "knows",
         "head_repeat": false,
-        "note": "Every refrain has words of its own. The first refrain asks who made it and the last who owns it, as the fixed refrain does; each refrain between asks something else, a different word each time while any are left. The while and then slots are drawn afresh each time round. The first and last refrains sing the refrain's own head (knows), so the hook is heard first and last; a refrain between may sing another head instead, each at most once a song, singing any words it fixes as written. Each refrain sings one couplet, none twice until all are used, and the last refrain always sings canon."
+        "note": "Every refrain has words of its own. The first refrain asks who made it and the last who owns it, as the fixed refrain does; each refrain between asks something else, a different word each time while any are left. The while slot is drawn afresh each time round, and then too, each refrain a different one while any are left (it goes, who knows, it grows), so the artist's head's question, and then who knows?, is never heard as a statement in the same song. The first and last refrains sing the refrain's own head (knows), so the hook is heard first and last; a refrain between may sing another head instead, each at most once a song, singing any words it fixes as written. Each refrain sings one couplet, none twice until all are used, and the last refrain always sings canon."
       },
       "bridge": {
         "always": "canon",

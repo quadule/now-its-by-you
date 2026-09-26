@@ -95,7 +95,7 @@ def test_the_shape_changes_part_by_part_and_holds_as_the_day_moves():
 
 def test_words_are_kept_or_said_why_and_the_record_marks_the_choices():
     edits, _ = E.check(g, {"date": "2027-01-05", "tempo": 90, "words.verse.1": {"id": "wire"},
-                           "words.verse.7": {"id": "ink"}, "words.tag": "loo", "words.refrain": {"then": "it grows"}})
+                           "words.verse.7": {"id": "ink"}, "words.tag": "loo", "words.refrain": {"while": "if"}})
     d = D.drift(D.parse("2027-01-05"), ADA.hash)
     r = E.resolve(g, None, ADA, d, edits, day_chosen=True)
     assert r.lyrics.verses[1] == "wire"
@@ -108,7 +108,9 @@ def test_words_are_kept_or_said_why_and_the_record_marks_the_choices():
     assert marks["tempo"] == {"value": 90.0, "was": r.generated.tempo}
     assert marks["words.verse.1"]["value"]["id"] == "wire"
     assert marks["words.verse.1"]["was"]["id"] == r.generated_lyrics.verses[1]
-    assert marks["words.refrain"] == {"value": {"then": "it grows"}, "was": {"then": r.generated_lyrics.sections[1].slots["then"]}}
+    assert marks["words.refrain"] == {"value": {"while": "if"}, "was": {"while": r.generated_lyrics.sections[1].slots["while"]}}
+    refused = E.resolve(g, None, ADA, d, {"words.refrain": {"then": "it grows"}}, day_chosen=True)
+    assert "chosen refrain by refrain" in refused.problems[0]["why"]  # each refrain ends its own way
     assert marks["date"]["value"] == "2027-01-05"
     # replaying the marks as edits makes the same rendition
     again = E.resolve(g, None, ADA, d, E.check(g, E.from_record({"params": {}, "chosen_by_you": marks}))[0],
@@ -150,7 +152,8 @@ def test_a_refrains_own_head_and_words_are_marked_and_replay():
     done = E.resolve(g, None, ADA, DAY, edits)
     refrains = [s for s in done.lyrics.sections if s.block == "refrain"]
     assert not done.problems and refrains[1].head == "so" and refrains[1].lines[0].startswith("Who *wrote*")
-    assert refrains[0].slots["while"] == other and refrains[0].slots["then"] == first.slots["then"]
+    assert refrains[0].slots["while"] == other and refrains[1].slots["then"] == "who knows"
+    assert len({s.slots["then"] for s in refrains}) == min(len(refrains), 3)  # each ends its own way
     assert done.marks["words.refrain.1"]["value"] == {"head": "so"}
     assert done.marks["words.refrain.0"] == {"value": {"slots": {"while": other}}, "was": {"slots": {"while": first.slots["while"]}}}
     again = E.resolve(g, None, ADA, DAY, E.check(g, E.from_record({"params": {}, "chosen_by_you": done.marks}))[0])

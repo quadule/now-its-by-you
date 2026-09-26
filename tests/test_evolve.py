@@ -233,15 +233,20 @@ def test_words_held_before_each_refrain_had_its_own_sing_as_they_did(h):
            "refrain": {"slots": {"while": "when", "then": "it grows"},
                        "couplets": [{"id": "true", "slots": {}}, {"id": "blue", "slots": {}}]},
            "bridge": [{"id": "canon", "slots": {"place": "wa-ter", "ember": "coal", "where": "dark"}}], "tag": "la"}
-    lyrics = A.sing(h, form, old)
-    refrains = [s for s in lyrics.sections if s.block == "refrain"]
-    assert [s.id for s in refrains] == ["true", "blue", "canon"] and lyrics.questions == ("made", "sang", "owns")
-    assert all(s.slots["while"] == "when" and s.slots["then"] == "it grows" and s.head is None for s in refrains)
     main = A.refrain_heads(h)[0]
-    assert A.hold(h, lyrics)["refrain"]["rounds"][1] == {
-        "head": main, "words": {"question": "sang", "while": "when", "then": "it grows"}, "id": "blue", "slots": {}}
+    rounds = A.rounds(h, old)  # read as the refrains they sang
+    assert [(r["head"], r["id"], r["words"]) for r in rounds] == [
+        (main, c, {"question": q, "while": "when", "then": "it grows"})
+        for c, q in (("true", "made"), ("blue", "sang"), ("canon", "owns"))]
     lone = ("verse", "refrain", "verse", "bridge")  # a lone refrain asks what the first asks, and sings the canon
     assert A.sing(h, lone, old).questions == ("made",) and A.sing(h, lone, old).couplets == ("canon",)
+    # H's refrains now end each its own way, so words held with one ending for all are fitted: the first keeps
+    # its own, and all keep their couplets, questions and while
+    fitted = E.fit(h, form, old, E.Picker(h))
+    now = A.rounds(h, fitted)
+    assert not A.held_problem(h, form, fitted) and [r["id"] for r in now] == ["true", "blue", "canon"]
+    assert now[0]["words"]["then"] == "it grows" and len({r["words"]["then"] for r in now}) == 3
+    assert [r["words"]["question"] for r in now] == ["made", "sang", "owns"] and {r["words"]["while"] for r in now} == {"when"}
     parent = Params.from_dict({**h.seed_params, "words": old})
     child = sing_on(h, "ada", "2027-01-05", parent)
     assert not A.held_problem(h, child.form, child.words) and "rounds" in child.words["refrain"]

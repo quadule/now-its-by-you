@@ -161,7 +161,8 @@ A sung section's *change* opens its choices in place:
   another, "Who wrote this song? Nobody, so / it's yours if you sing it and
   then who knows?", which trades places too) and the question it asks
   (sang, heard, kept or wrote; one another refrain asks is asked afresh
-  there); and its own "while" and "then". What the rules keep is said, not
+  there); and its own "while" and "then" (each refrain ends its own way: an
+  ending another refrain has moves that one to another). What the rules keep is said, not
   offered: the first and last refrains' head and question, the words a head
   sings as written, and the last refrain's "by everyone, no one, and now
   it's by you".
@@ -198,7 +199,7 @@ server keeps nothing else but caches, so any request can be replayed.
 | `variants.<name>` | as the variant takes | `Params.variants`, once it exists (said refused until then) |
 | `words.verse.<i>` | `{"id": verse, "slots": {slot: words}}` | the i-th verse section's verse (from 0) |
 | `words.refrain.<i>` | `{"id": couplet, "head": head, "slots": {slot: words}}`, any of the three, or just a couplet | the i-th refrain's own words: its couplet (never the last's), its head (between the first and last), its words (the question too, between them) |
-| `words.refrain` | `{slot: words}` | words for every refrain whose head sings them, unless one chooses its own |
+| `words.refrain` | `{slot: words}` | words for every refrain whose head sings them ("while"), unless one chooses its own; the question and "then" are each refrain's own |
 | `words.bridge` | `{slot: words}` | the bridge's once-a-song words |
 | `words.bridge2`, `words.tag` | a stanza, a syllable | the second bridge, every tag |
 | `phrasing` | a phrasing's name on this computer | whose way it is sung |
