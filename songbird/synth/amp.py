@@ -385,6 +385,8 @@ class Cabinet:
     rolloff: float = 5500.0  # Hz where the cone stops following the coil
     order: int = 4  # how steeply it falls past there (2: -12 dB an octave, 4: -24)
     back: float = 5.0  # dB the open back cancels of the lowest octave
+    back_at: float = 150.0  # Hz: where that cancellation sets in (a shelf's corner)
+    breakup: float = 5.0  # dB: how far the cone's breakup peaks and dips reach
     # each microphone: its reflection's extra path (s), that reflection's level, and dB it loses above 3 kHz
     # for sitting off the cone's axis
     mics: tuple[tuple[float, float, float], ...] = ((0.00022, 0.25, 0.0), (0.0012, 0.4, -5.0))
@@ -408,11 +410,11 @@ def cabinet_ir(cab: Cabinet, sr: int, n: int = 2048) -> np.ndarray:
     x = np.zeros(n)
     x[0] = 1.0
     f, db, q = cab.presence
-    bands = [_highpass(cab.fs, cab.q, sr)[None], fx.shelf("low", 150.0, -cab.back, sr)[None],
+    bands = [_highpass(cab.fs, cab.q, sr)[None], fx.shelf("low", cab.back_at, -cab.back, sr)[None],
              fx.peaking(f, db, q, sr)[None], butter(cab.order, cab.rolloff, btype="lowpass", fs=sr, output="sos")]
     # the cone breaking up: a scatter of narrow peaks and dips from 700 Hz to 6 kHz, this speaker's own
     for fb in np.exp(rng.uniform(np.log(700.0), np.log(6000.0), 7)):
-        bands.append(fx.peaking(fb, rng.uniform(-5.0, 5.0), rng.uniform(3.0, 8.0), sr)[None])
+        bands.append(fx.peaking(fb, rng.uniform(-1.0, 1.0) * cab.breakup, rng.uniform(3.0, 8.0), sr)[None])
     y = sosfilt(np.concatenate(bands), x)
     out = np.zeros((n, len(cab.mics)))
     for j, (delay, level, off) in enumerate(cab.mics):

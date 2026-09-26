@@ -148,13 +148,16 @@ def built(maker: int) -> dict:
     d["tremolo"] = (kind, float(g.uniform(4.5, 6.5)), float(g.uniform(*deep)))
     ten = g.random() < 0.4
     d["cabinet"] = amp.Cabinet(
-        fs=float(g.uniform(92.0, 110.0) if ten else g.uniform(75.0, 90.0)), q=float(g.uniform(1.0, 1.6)),
+        fs=float(g.uniform(92.0, 110.0) if ten else g.uniform(75.0, 90.0)), q=float(g.uniform(1.3, 2.0)),
         presence=(float(g.uniform(2200.0, 3500.0)), float(g.uniform(3.0, 7.0)), float(g.uniform(1.0, 1.6))),
         rolloff=float(g.uniform(5500.0, 6500.0) if ten else g.uniform(4800.0, 5800.0)),
-        order=int(g.choice([2, 4])) if ten else 4, back=float(g.uniform(3.0, 6.0)),
-        mics=((float(g.uniform(0.00015, 0.00035)), float(g.uniform(0.15, 0.3)), 0.0),
-              (float(g.uniform(0.0008, 0.0016)), float(g.uniform(0.3, 0.45)), float(g.uniform(-7.0, -3.0)))),
+        order=int(g.choice([2, 4])) if ten else 4, back=float(g.uniform(2.0, 4.0)), breakup=3.5,
+        # the reflections a close microphone also hears (the floor, the baffle's edge): 12 to 20 dB down
+        mics=((float(g.uniform(0.00015, 0.00035)), float(g.uniform(0.1, 0.18)), 0.0),
+              (float(g.uniform(0.0008, 0.0016)), float(g.uniform(0.15, 0.25)), float(g.uniform(-7.0, -3.0)))),
         seed=int(g.integers(1 << 30)))
+    # the open back cancels below the cone's resonance, leaving its hump standing
+    d["cabinet"] = replace(d["cabinet"], back_at=d["cabinet"].fs)
     return d
 
 
@@ -227,7 +230,7 @@ def rig(name: str, s: dict, sr: int) -> tuple[Strings, amp.Coil, dict, amp.Amp]:
     if "rate" in extra:
         rate = float(np.clip(extra["rate"], 2.0, 10.0))
     cab = d["cabinet"]
-    cab = replace(cab, fs=cab.fs / size ** 0.5)
+    cab = replace(cab, fs=cab.fs / size ** 0.5, back_at=cab.back_at / size ** 0.5)
     rig_amp = amp.Amp(
         voicing=d["voicing"], treble=treble, middle=middle, bass=bass, volume=volume, headroom=d["headroom"],
         knee=d["knee"], tilt=d["tilt"], sag=d["sag"], reverb=reverb, tank=d["tank"], tremolo=(kind, rate, depth),

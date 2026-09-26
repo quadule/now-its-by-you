@@ -144,6 +144,29 @@ def test_the_tone_knob_sits_near_the_top_and_the_coil_sings():
                 assert height > 5.0 and q > 1.4
 
 
+def test_every_makers_cabinet_is_a_close_miked_open_back_combo():
+    """Its cone's resonance standing as a hump over what the open back cancels below it, 100 Hz within a few
+    dB of the middle (it was 10 dB under on some makers, with no hump on any), a presence rise at 2-4 kHz
+    within 10 dB, and the fall past 5-6 kHz; the reflections the microphones also hear 12-20 dB down."""
+    from songbird.synth import amp
+
+    n = 1 << 15
+    f = np.fft.rfftfreq(n, 1 / SR)
+
+    def at(h, x, frac=1 / 6):
+        sel = (f > x / 2 ** (frac / 2)) & (f < x * 2 ** (frac / 2))
+        return 10 * np.log10(np.mean(10 ** (h[sel] / 10)))
+
+    for maker in range(20):
+        cab = electric.built(maker)["cabinet"]
+        h = 20 * np.log10(np.abs(np.fft.rfft(amp.cabinet_ir(cab, SR)[:, 0], n)) + 1e-12)  # 0 dB: 200 Hz-4 kHz
+        mid = at(h, 1000, 1 / 3)
+        assert -4.0 < at(h, 100) < 3.0 and at(h, cab.fs) > at(h, 200) - 1.0 and at(h, 50) < at(h, 100) - 6.0
+        assert 0.0 < max(at(h, x, 1 / 3) for x in (2000, 2500, 3150, 4000)) - mid < 10.0
+        assert at(h, 10000, 1 / 3) < mid - 8.0
+        assert all(level <= 0.25 for _, level, _ in cab.mics)
+
+
 def repeated(name, vel, strums=12):
     return [note(p, start=0.1 + 0.3 * k, dur=0.3, vel=vel, art="down" if k % 2 == 0 else "up", part=name)
             for k in range(strums) for p in (45, 52, 57, 61, 64)]
