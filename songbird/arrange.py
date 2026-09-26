@@ -155,9 +155,10 @@ class Lyrics:
     which verses, couplets, stanzas, slot words and tag syllable they are."""
 
     form: tuple[str, ...]  # the form they were drawn for
-    seed: int | None  # the seed they were drawn with; None for the seed's own words
+    seed: int | None  # the seed they were drawn with; None for the seed's own words and for held words
     sections: tuple[Sung, ...]  # one for each sung section of the form, in order
     leanings: Leanings | None = None  # as they bore on the draw: a person's words only where the bank has them
+    held: bool = False  # the words a lineage holds (sing()), handed down and changed a little at a time
 
     @property
     def verses(self) -> tuple[str, ...]:
@@ -211,7 +212,8 @@ class Lyrics:
 
     def sheet(self, title: str | None = None) -> str:
         """The words as sung, for reading."""
-        how = f"words drawn with seed {self.seed}" if self.seed is not None else "the seed's own words"
+        how = ("the words this lineage holds" if self.held else
+               f"words drawn with seed {self.seed}" if self.seed is not None else "the seed's own words")
         out = ([title] if title else []) + [f"{how}; form: {' '.join(self.form)}"]
         for sung in self.sections:
             out += ["", f"[{sung.section}: {sung.id}]"] + [_readable(line) for line in sung.lines]
@@ -234,6 +236,7 @@ class Lyrics:
             "form": list(self.form),
             "leanings": self.leanings.to_dict() if self.leanings is not None else None,
             "sections": [s.to_dict() for s in self.sections],
+            **({"held": True} if self.held else {}),
         }
 
     @classmethod
@@ -244,6 +247,7 @@ class Lyrics:
             seed=data.get("seed"),
             sections=tuple(Sung.from_dict(s) for s in data["sections"]),
             leanings=Leanings.from_dict(leanings) if leanings is not None else None,
+            held=bool(data.get("held", False)),
         )
 
 
@@ -870,6 +874,289 @@ def _named(entries: list[dict], sung, fallback: str) -> tuple[str, dict]:
             if picks is not None:
                 return entry["id"], _chosen(entry, picks)
     return fallback, {}
+
+
+# The words a lineage holds
+#
+# A rendition hands its words down, not its form: the verses it sang in order with their slot words, the
+# refrain's once-a-song slot words, the couplet each refrain but the last sang (the last always sings the
+# canon), the bridge's stanzas with their slot words, and the tag's syllable. As a dict, JSON as it stands:
+#
+#     {"verses": [{"id": "wire", "slots": {}}, {"id": "screen", "slots": {"many": "mil-lion"}}],
+#      "refrain": {"slots": {"while": "while", "then": "it goes"}, "couplets": [{"id": "true", "slots": {}}]},
+#      "bridge": [{"id": "canon", "slots": {"place": "wa-ter", "ember": "coal", "where": "dark"}}],
+#      "tag": "la"}
+#
+# Slot words are kept as sung (a coupled slot's by column), so a record reads plainly. sing() fits held words
+# to a form (the first verses and couplets it needs), held_problem() says why it can't, and songbird.evolve
+# changes them a little at a time down a lineage and over time.
+
+
+def hold(genome: Genome, lyrics: Lyrics) -> dict:
+    """What a rendition hands down of its words: everything it sang, but not its form."""
+    head = set(slot_names(_song(genome).bank["refrain"]["lines"]))
+    sung = [s for s in lyrics.sections if s.lines]
+    refrains = [s for s in sung if s.block == "refrain"]
+    held = {
+        "verses": [{"id": s.id, "slots": dict(s.slots)} for s in sung if s.block == "verse"],
+        "refrain": {
+            "slots": {k: v for k, v in (refrains[0].slots if refrains else {}).items() if k in head and k != "question"},
+            "couplets": [{"id": s.id, "slots": {k: v for k, v in s.slots.items() if k not in head}}
+                         for s in refrains[:-1]],
+        },
+        "bridge": [{"id": s.id, "slots": dict(s.slots)} for s in sung if s.block == "bridge"],
+    }
+    tag = next((s.id for s in sung if s.block == "tag"), None)
+    if tag is not None:
+        held["tag"] = tag
+    return held
+
+
+def _index(spec, value) -> int | None:
+    """Which option of a slot some sung words are; None if none."""
+    for i in range(width({"s": spec}, "s")):
+        if _value(spec, i) == value:
+            return i
+    return None
+
+
+def _held_picks(entry: dict, slots: dict, what: str) -> dict[str, int]:
+    """The option index for each slot an entry sings, from the words held for it."""
+    spec = entry.get("slots", {})
+    picks = {}
+    for name in slot_names(entry["lines"]):
+        i = _index(spec[name], slots.get(name))
+        if i is None:
+            raise ArrangeError(f"{what}: {slots.get(name)!r} isn't one of the {name} slot's words")
+        picks[name] = i
+    return picks
+
+
+def held_counts(held: dict) -> dict[str, int]:
+    """How many verses, refrains and bridge sections some held words can sing."""
+    return {"verse": len(held.get("verses", ())), "refrain": len(held.get("refrain", {}).get("couplets", ())) + 1,
+            "bridge": len(held.get("bridge", ()))}
+
+
+def held_problem(genome: Genome, form: Iterable[str], held: dict) -> str | None:
+    """Why some held words can't be sung in a form within the bank's rules, in one plain sentence; None if
+    they can. Words held for more verses, refrains or bridges than the form has sing the first of them."""
+    form = _form(form)
+    try:
+        song = _song(genome)
+        blocks = _blocks(genome, form)
+    except ArrangeError as e:
+        return str(e)
+    why = _problem(song.supported, blocks)
+    if why:
+        return why
+    bank, rules = song.bank, song.rules
+    have = held_counts(held)
+    for block in ("verse", "bridge"):
+        if blocks[block] > have[block]:
+            return f"these words hold {have[block]} {block}{'s' if have[block] != 1 else ''}; the form sings {blocks[block]}"
+    if blocks["refrain"] > have["refrain"]:
+        return f"these words hold couplets for {have['refrain']} refrains; the form sings {blocks['refrain']}"
+    why = verse_problem(genome, held.get("verses", ())[: blocks["verse"]])
+    if why:
+        return why
+    refrain = held.get("refrain", {})
+    spec = bank["refrain"]
+    if blocks["refrain"]:
+        for name in slot_names(spec["lines"]):
+            if name != "question" and _index(spec["slots"][name], refrain.get("slots", {}).get(name)) is None:
+                return f"the refrain's {name} slot holds {refrain.get('slots', {}).get(name)!r}, which isn't one of its words"
+    couplets = {c["id"]: c for c in spec["couplets"]}
+    held_couplets = refrain.get("couplets", ())[: max(blocks["refrain"] - 1, 0)]
+    ids = [c.get("id") for c in held_couplets]
+    last = rules["refrain"]["couplet_last"]
+    for c, cid in zip(held_couplets, ids):
+        if cid not in couplets:
+            return f"the bank has no refrain couplet {cid!r}"
+        if cid == last:
+            return f"the {last} couplet is sung by the last refrain only"
+        try:
+            _held_picks(couplets[cid], c.get("slots", {}), f"couplet {cid}")
+        except ArrangeError as e:
+            return str(e)
+    if len(set(ids)) != len(ids):
+        return "a refrain couplet is held twice"
+    stanzas = {b["id"]: b for b in bank.get("bridges", [])}
+    for j, b in enumerate(held.get("bridge", ())[: blocks["bridge"]]):
+        want = [rules["bridge"]["always"]] if j == 0 else list(rules["bridge"].get("extra", ()))
+        if b.get("id") not in want:
+            return f"bridge {j + 1} holds {b.get('id')!r}; it sings {' or '.join(want)}"
+        try:
+            _held_picks(stanzas[b["id"]], {**held["bridge"][0].get("slots", {}), **b.get("slots", {})},
+                        f"bridge {b['id']}")
+        except ArrangeError as e:
+            return str(e)
+    if blocks["tag"] and held.get("tag") not in bank["tag"]["syllables"]:
+        return f"the tag holds {held.get('tag')!r}; it sings one of {', '.join(bank['tag']['syllables'])}"
+    return None
+
+
+def sing(genome: Genome, form: Iterable[str], held: dict) -> Lyrics:
+    """Held words sung in a form: its verses in order, each refrain with its question turning and the held
+    couplets before the canon, the bridge's held stanzas and the tag's syllable, every slot as held. Raises
+    ArrangeError when they can't be sung in that form within the rules (held_problem says why)."""
+    form = _form(form)
+    why = held_problem(genome, form, held)
+    if why:
+        raise ArrangeError(why)
+    song = _song(genome)
+    bank, rules = song.bank, song.rules
+    by_id = {v.id: v.entry for v in song.verses}
+    verses = iter(held.get("verses", ()))
+    spec = bank["refrain"]
+    couplets = {c["id"]: c for c in spec["couplets"]}
+    last = couplets[rules["refrain"]["couplet_last"]]
+    held_couplets = list(held.get("refrain", {}).get("couplets", ()))
+    stanzas = {b["id"]: b for b in bank.get("bridges", [])}
+    bridges = iter(held.get("bridge", ()))
+    once: dict[str, int] = {}  # a bridge slot sung once a song keeps its word in a stanza after
+    rounds, heard = Counter(), Counter()
+    for name in form:
+        rounds[genome.section(name).lyrics] += 1
+    sections = []
+    for name in form:
+        section = genome.section(name)
+        block = section.lyrics
+        if not block:
+            continue
+        if block == "verse":
+            v = next(verses)
+            entry = by_id[v["id"]]
+            picks = _held_picks(entry, v.get("slots", {}), f"verse {v['id']}")
+            sections.append(Sung(name, block, v["id"], _chosen(entry, picks), song.sing(entry, picks)))
+        elif block == "refrain":
+            i, n = heard[block], rounds[block]
+            picks = {k: _index(spec["slots"][k], held["refrain"]["slots"][k]) for k in slot_names(spec["lines"])
+                     if k != "question"}
+            if "question" in spec.get("slots", {}):
+                picks["question"] = _turned(i, n, width(spec["slots"], "question"))
+            entry, kept = ((couplets[held_couplets[i]["id"]], held_couplets[i].get("slots", {})) if i < n - 1
+                           else (last, held.get("refrain", {}).get("last", {}).get("slots", {})))
+            cpicks = {k: _index(entry["slots"][k], kept.get(k)) or 0 for k in slot_names(entry["lines"])}
+            lines = song.sing(spec, picks) + song.sing(entry, cpicks)
+            sections.append(Sung(name, block, entry["id"], _chosen(spec, picks) | _chosen(entry, cpicks), lines))
+        elif block == "bridge":
+            b = next(bridges)
+            stanza = stanzas[b["id"]]
+            picks = {k: once[k] if k in once else _index(stanza["slots"][k], b.get("slots", {}).get(k))
+                     for k in slot_names(stanza["lines"])}
+            once.update({k: picks[k] for k in picks if k in rules["bridge"].get("once_per_song", ())})
+            sections.append(Sung(name, block, stanza["id"], _chosen(stanza, picks), song.sing(stanza, picks)))
+        elif block == "tag":
+            tag = held["tag"]
+            lines = tuple(" ".join([tag] * len(genome.phrases[pid].sung)) + "." for pid in section.phrases)
+            sections.append(Sung(name, block, tag, {}, lines))
+        elif block in genome.fixed:
+            lines = tuple(turn(line, heard[block], rounds[block]) for line in genome.fixed[block])
+            sections.append(Sung(name, block, block, {}, lines))
+        else:
+            raise ArrangeError(f"the {name} section sings {block!r}, which neither the bank nor the genome has")
+        heard[block] += 1
+    return Lyrics(form, None, tuple(sections), held=True)
+
+
+# What held words could become, one change at a time (for songbird.evolve, and a studio offering choices)
+
+
+def bank_entry(genome: Genome, kind: str, entry_id: str) -> dict:
+    """A bank entry by kind (verse, couplet, bridge) and id."""
+    bank = _song(genome).bank
+    entries = {"verse": bank["verses"], "couplet": bank["refrain"]["couplets"], "bridge": bank.get("bridges", [])}[kind]
+    return next(e for e in entries if e["id"] == entry_id)
+
+
+def slot_words(entry: dict) -> dict[str, list]:
+    """Every slot a bank entry sings and the words each can take, as held words keep them."""
+    spec = entry.get("slots", {})
+    return {name: [_value(spec[name], i) for i in range(width(spec, name))] for name in slot_names(entry["lines"])}
+
+
+def verse_ids(genome: Genome) -> tuple[str, ...]:
+    return tuple(v.id for v in _song(genome).verses)
+
+
+def verse_problem(genome: Genome, verses) -> str | None:
+    """Why some held verses (in order, with their slot words) can't be sung together as they stand; None
+    if they can: every verse the bank's, every slot word one of its slot's, and the verse rules kept."""
+    song = _song(genome)
+    by_id = {v.id: v for v in song.verses}
+    for v in verses:
+        if v.get("id") not in by_id:
+            return f"the bank has no verse {v.get('id')!r}"
+        try:
+            _held_picks(by_id[v["id"]].entry, v.get("slots", {}), f"verse {v['id']}")
+        except ArrangeError as e:
+            return str(e)
+    chosen = [by_id[v["id"]] for v in verses]
+    if len({v.id for v in chosen}) != len(chosen):
+        return "a verse is held twice"
+    if chosen and not (song.checks.together(chosen) and song.checks.in_order(chosen)):
+        return f"the verses {', '.join(v.id for v in chosen)} can't be sung together in that order"
+    return None
+
+
+def check(genome: Genome, form: Iterable[str], held: dict) -> list[str]:
+    """Everything that keeps held words from being sung in a form within the rules ([] if nothing): what a
+    person's edit is checked against, exactly as the drift's changes are."""
+    why = held_problem(genome, form, held)
+    return [why] if why else []
+
+
+def verse_weights(genome: Genome, leanings: Leanings | None = None) -> dict[str, float]:
+    """How likely each verse of the bank is to be drawn on its own, as arrange() weighs it with these leanings."""
+    song = _song(genome)
+    weights, _ = _verse_weights(song, leanings if leanings is not None else Leanings())
+    return {v.id: float(w) for v, w in zip(song.verses, weights)}
+
+
+def verse_order(genome: Genome, ids, keep=()) -> tuple[str, ...] | None:
+    """An order the rules let these verses be sung in that keeps the verses named in `keep` in the order
+    given there (the first such order); None if there is none."""
+    song = _song(genome)
+    by_id = {v.id: v for v in song.verses}
+    ids = list(ids)
+    if any(i not in by_id for i in ids) or len(set(ids)) != len(ids):
+        return None
+    rank = {vid: k for k, vid in enumerate(keep)}
+    for order in song.checks.orders([by_id[i] for i in ids]):
+        kept = [v.id for v in order if v.id in rank]
+        if kept == sorted(kept, key=rank.get):
+            return tuple(v.id for v in order)
+    return None
+
+
+def refrain_slot_words(genome: Genome) -> dict[str, list]:
+    """The refrain's once-a-song slots and their words (the question turns by itself)."""
+    return {k: v for k, v in slot_words(_song(genome).bank["refrain"]).items() if k != "question"}
+
+
+def couplet_ids(genome: Genome) -> tuple[str, ...]:
+    """The couplets a refrain before the last may sing (all but the canon)."""
+    song = _song(genome)
+    last = song.rules["refrain"]["couplet_last"]
+    return tuple(c["id"] for c in song.bank["refrain"]["couplets"] if c["id"] != last)
+
+
+def bridge_ids(genome: Genome) -> tuple[str, tuple[str, ...]]:
+    """The bridge stanza always sung first, and the extra stanzas a second bridge section may sing."""
+    rules = _song(genome).rules["bridge"]
+    return rules["always"], tuple(rules.get("extra", ()))
+
+
+def tag_syllables(genome: Genome) -> tuple[str, ...]:
+    return tuple(_song(genome).bank["tag"]["syllables"])
+
+
+def affinity(genome: Genome, kind: str, ids, vocabulary) -> list[float]:
+    """How much a person's words favour each of some bank entries (1 for none), as arrange() weighs them."""
+    song = _song(genome)
+    entries = [bank_entry(genome, kind, i) for i in ids]
+    return _affinity(entries, song.words, frozenset(vocabulary or ()))
 
 
 def main(argv: list[str] | None = None) -> int:
