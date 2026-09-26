@@ -129,11 +129,11 @@ def render_command(args: argparse.Namespace) -> int:
 DRIVES = {
     "tongue": "the mode family (and, once the singer reads it, its vowels)",
     "machine": "how busy the band is; uptime: how tired the voice and the band sound today",
-    "ages": "tempo, how far the tempo wanders, how worn the voice and the band are, the lyric's era",
-    "colour": "the singer's and the band's brightness, the singer's glottal shape, the lyric's mood",
+    "ages": "tempo, how far the tempo wanders, how worn the voice, the band and the recording are, the lyric's era",
+    "colour": "the singer's, the band's and the record's brightness, the mix's width, the lyric's mood",
     "words": "the lyric's vocabulary, era, appetite for rare verses, the verse count, the band's ornament",
     "hand": "how far ahead of or behind the beat the singer sits, rubato, the band's swing, tempo",
-    "room": "the reverb every rendition on this machine lives in",
+    "room": "the reverb every rendition on this machine lives in, and how soon it answers",
 }
 
 
