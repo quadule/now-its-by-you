@@ -1,0 +1,750 @@
+"""Variation: how a rendition decides what the genome leaves open.
+
+realize.choose_params() brings three things together here: the parent's
+parameters (what was inherited), the machine's voice (who is singing) and the
+drift (when), plus chance. Every number goes the same way:
+
+1. The machine's own value: read from its voice (see Character); where it
+   gave no signal the decision reads, its own value is the parent's.
+2. Drift moves the machine's own value: today it is a little brisker, a
+   little lower, a little breathier. A drift of 1 moves it by the knob's span.
+3. The child pulls from its parent toward that: child = parent + PULL (own
+   - parent), so it is 0.4 its parent and 0.6 its machine today, and a
+   lineage keeps its accent. A body (the singer's register, tract, mouth,
+   vibrato rate and grain; the room) is the machine's own outright.
+
+Choices a number can't express (mode, form, accompaniment, choir, lyric
+leanings) follow the same logic in DECISIONS. Chance, seeded by (voice hash,
+instant, parent), sets only the rendition's seed, which colours every detail
+of the sound and the lyric's draws; the form and the key never depend on the
+second a render starts, so they can't flicker between two renders a minute
+apart.
+
+To add a knob: give Params (or VoiceParams) the field, then add one row to
+KNOBS reading the machine through Character and time through a dimension of
+drift.DIMENSIONS.
+"""
+
+from __future__ import annotations
+
+import functools
+import hashlib
+import json
+import re
+from dataclasses import dataclass, replace
+from typing import Callable
+
+from .drift import Drift
+from .genome import Genome
+from .harvest import MODE_FAMILIES, THEMES, Voice
+from .synth.voice import VoiceParams
+from .theory import MODES, chord_tones
+
+PULL = 0.6  # how far a child moves from its parent toward its machine: the plan's 0.4 parent, 0.6 voice
+CHOIR_MAX = 6  # the most lineage voices that join in (synth.CHOIR_PANS has places for six)
+
+
+def clip(x: float, lo: float = -1.0, hi: float = 1.0) -> float:
+    return max(lo, min(hi, x))
+
+
+def per_genome(fn):
+    """Remember fn(genome, ...) for as long as that genome object is around:
+    a genome never changes, and a year of choices asks the same things daily."""
+    memo: dict = {}
+
+    @functools.wraps(fn)
+    def remembered(genome, *args):
+        key = (id(genome), args)
+        hit = memo.get(key)
+        if hit is None or hit[0] is not genome:
+            hit = memo[key] = (genome, fn(genome, *args))
+        return hit[1]
+
+    return remembered
+
+
+# ---------------------------------------------------------------- the machine, read musically
+
+
+@dataclass(frozen=True)
+class Character:
+    """What a voice means for the music: a few traits, each -1..1 with 0 typical.
+    `known` names the ones this machine's signals gave; the rest read 0, and a
+    decision that reads only unknown traits keeps the parent's value."""
+
+    known: frozenset = frozenset()
+    pace: float = 0.0  # unhurried (-) or brisk (+): old files, slow hands
+    range: float = 0.0  # how widely its tempo wanders: the spread of its file ages
+    wear: float = 0.0  # fresh (-) or worn (+): young or old files
+    density: float = 0.0  # sparse (-) or busy (+): cores and memory
+    tired: float = 0.0  # rested (-) or tired (+): how long since the machine last restarted
+    brightness: float = 0.0  # a dark (-) or light (+) screen
+    warmth: float = 0.0  # a cool (-) or warm (+) screen
+    lay: float = 0.0  # behind (-) or ahead (+) of the beat: slow or quick hands
+    rubato: float = 0.0  # steady (-) or free (+): even or uneven hands
+    swing: float = 0.0  # straight (-) or lilting (+): the skew of the hands
+    richness: float = 0.0  # a plain (-) or rich (+) vocabulary
+    era: float = 0.0  # old-fashioned (-) or new (+) words
+    themes: dict | None = None  # theme -> share of the person's common words
+    family: str | None = None  # mode family (harvest.MODE_FAMILIES)
+    inventory: str | None = None  # phoneme inventory (harvest.INVENTORIES)
+    room: dict | None = None  # rt60 and tone
+    hash: str = ""
+
+    def id(self, trait: str) -> float:
+        """A stable draw in [-1, 1) for a trait no signal explains (a body, a
+        habit), from the voice hash; 0 for a neutral voice."""
+        if "identity" not in self.known:
+            return 0.0
+        digest = hashlib.sha256(f"identity|{self.hash}|{trait}".encode()).digest()
+        return int.from_bytes(digest[:8], "little") / 2**63 - 1.0
+
+
+def character(voice: Voice | None) -> Character:
+    """The voice's signals as musical traits (docs/HARVEST.md lists each mapping)."""
+    if voice is None or voice.neutral:
+        return Character()
+    known = {"identity"}
+    traits: dict = {}
+    paces = []
+    if voice.ages:
+        paces.append(clip((2.3 - voice.ages.median) / 1.2))
+        traits["range"] = clip(voice.ages.spread - 1.0)
+        traits["wear"] = clip(voice.ages.median - 2.5)
+        known |= {"range", "wear"}
+    if voice.hand:
+        lay = clip((220 - voice.hand.interval) / 120)
+        paces.append(lay)
+        traits |= {"lay": lay, "rubato": clip((voice.hand.unevenness - 0.45) / 0.3),
+                   "swing": clip((voice.hand.skew - 1.0) / 1.5)}
+        known |= {"lay", "rubato", "swing"}
+    if paces:
+        traits["pace"] = sum(paces) / len(paces)
+        known.add("pace")
+    if voice.machine:
+        traits["density"] = clip(voice.machine.cores + voice.machine.memory - 1)
+        traits["tired"] = 2 * voice.machine.uptime - 1
+        known |= {"density", "tired"}
+    if voice.colour:
+        traits["brightness"] = 2 * voice.colour.brightness - 1
+        traits["warmth"] = voice.colour.warm - voice.colour.cool
+        known |= {"brightness", "warmth"}
+    if voice.words:
+        traits |= {"richness": clip(2 * voice.words.richness - 1), "era": voice.words.era,
+                   "themes": dict(voice.words.themes)}
+        known |= {"richness", "era", "themes"}
+    if voice.tongue:
+        traits |= {"family": voice.tongue.family, "inventory": voice.tongue.inventory}
+        known |= {"family", "inventory"}
+    if voice.room:
+        traits["room"] = {"rt60": voice.room.rt60, "tone": list(voice.room.tone)}
+        known.add("room")
+    return Character(known=frozenset(known), hash=voice.hash, **traits)
+
+
+def size(c: Character) -> float:
+    """The singer's build, -1 big to 1 small: register, tract and comfortable key all follow it, loosely."""
+    return c.id("size")
+
+
+def low(c: Character) -> bool:
+    """Whether the machine's singer sings an octave down (half of all machines;
+    mostly the bigger ones, but a tenor or a low contralto happens too)."""
+    return size(c) + 0.4 * c.id("register") < 0
+
+
+def comfort(c: Character) -> float:
+    """Semitones from the song's own key to where this singer is at ease."""
+    return (1.0 if low(c) else -1.0) + 2.0 * size(c) + 0.8 * c.id("comfort")
+
+
+# ---------------------------------------------------------------- chance
+
+
+class Chance:
+    """The rendition's seed, from (voice hash, instant, parent) or --seed: the
+    same machine, instant and parent always give the same child."""
+
+    def __init__(self, voice: Voice | None, drift: Drift | None, parent, seed: int | None = None):
+        digest = hashlib.sha256(json.dumps(parent.to_dict(), sort_keys=True).encode()).hexdigest()[:16]
+        instant = f"{drift.t:.6f}" if drift is not None else "timeless"
+        self.material = f"{voice.hash if voice is not None else 'no-voice'}|{instant}|{digest}"
+        self.fixed = seed
+
+    @property
+    def seed(self) -> int:
+        """Seeds every random choice in the rendition's sound (and the lyric's draws)."""
+        if self.fixed is not None:
+            return self.fixed
+        return int.from_bytes(hashlib.sha256(f"{self.material}|seed".encode()).digest()[:4], "little") % 2**31
+
+
+# ---------------------------------------------------------------- where a value lives
+
+LEANINGS = {"mood": {"plain": 1.0, "light": 1.0, "dark": 1.0, "tender": 1.0}, "era": 0.0, "rarity": 0.5,
+            "vocabulary": {}}
+ROOM = {"rt60": 1.1, "tone": [1.0, 1.0, 1.0, 0.9, 0.7]}  # synth.room.impulse_response's defaults
+
+
+def read(params, path: str):
+    """A value from Params by path: 'tempo', 'singer.rd', 'room.rt60', 'leanings.era'.
+    A singer, room or leaning the params don't set has its default."""
+    head, _, tail = path.partition(".")
+    if not tail:
+        return getattr(params, head)
+    held = getattr(params, head)
+    if tail in held:
+        return held[tail]
+    return {"singer": lambda: getattr(VoiceParams(), tail), "room": lambda: ROOM[tail],
+            "leanings": lambda: LEANINGS[tail]}[head]()
+
+
+def write(out: dict, path: str, value) -> None:
+    head, _, tail = path.partition(".")
+    if tail:
+        out.setdefault(head, {})[tail] = value
+    else:
+        out[head] = value
+
+
+def exists(path: str) -> bool:
+    """Whether a knob's field exists (a singer field may be gone after the singer changes)."""
+    head, _, tail = path.partition(".")
+    return head != "singer" or hasattr(VoiceParams(), tail)
+
+
+# ---------------------------------------------------------------- the table of numbers
+
+
+@dataclass(frozen=True)
+class Knob:
+    """One number a rendition decides.
+
+    path    where it goes: a Params field, singer.<VoiceParams field>, leanings.<key>
+    uses    the traits its own value reads; with none of them known, own is the parent's
+    own     the machine's own value, from its character c and x, the song's own value
+    drift   the drift dimension that moves the machine's own value, and span how far
+            a drift of 1 moves it (a fraction of it where ratio)
+    view    which view of the drift: full (daily), slow (weeks), year (about once a year)
+    bounds  (lo, hi), or a function of x
+    step    what the value is rounded to
+    inherit False for a body: the machine's own value outright, not pulled from the parent
+    """
+
+    path: str
+    uses: tuple
+    own: Callable
+    drift: str | None = None
+    span: float | Callable = 0.0
+    ratio: bool = False
+    view: str = "full"
+    bounds: tuple | Callable = (float("-inf"), float("inf"))
+    step: float = 0.001
+    inherit: bool = True
+
+    def apply(self, out: dict, ctx: Context) -> None:
+        if not exists(self.path):
+            return
+        x = read(ctx.song, self.path)
+        was = read(ctx.parent, self.path)
+        own = self.own(ctx.c, x) if any(u in ctx.c.known for u in self.uses) else was
+        if self.drift and ctx.drift is not None:
+            d = ctx.drift.view(self.view).get(self.drift, 0.0)
+            span = self.span(ctx.c) if callable(self.span) else self.span
+            own = own * (1 + span * d) if self.ratio else own + span * d
+        value = was + PULL * (own - was) if self.inherit else own
+        lo, hi = self.bounds(x) if callable(self.bounds) else self.bounds
+        value = round(float(round(clip(value, lo, hi) / self.step) * self.step), 6)
+        head, _, tail = self.path.partition(".")
+        if tail and value == was and tail not in getattr(ctx.parent, head):
+            return  # nothing chosen: the default the parent sang with stands
+        write(out, self.path, int(value) if self.step >= 1 else value)
+
+
+# Own values are read from the machine's character c and x, the song's own
+# value of the same knob (its seed parameters; VoiceParams' defaults for the
+# singer). Spans are what a drift of 1 does to the machine's own value; a
+# child hears 0.6 of it.
+KNOBS = (
+    # ---- the performance ------------------------------------------------------------------------------------------
+    Knob("tempo", ("pace",), lambda c, x: x * 2 ** (0.18 * c.pace),
+         drift="tempo", span=lambda c: 0.10 + 0.06 * c.range, ratio=True, bounds=lambda x: (0.75 * x, 1.3 * x), step=0.1),
+    Knob("tonic", ("identity",), lambda c, x: x + comfort(c),
+         drift="key", span=2.0, view="year", bounds=lambda x: (x - 5, x + 5), step=1),
+    Knob("humanize", ("rubato",), lambda c, x: x * 2 ** (0.8 * c.rubato),
+         drift="feel", span=0.4, ratio=True, bounds=(0.002, 0.02), step=0.0001),
+    Knob("ritardando", ("rubato", "pace"), lambda c, x: x + 0.12 * c.rubato - 0.08 * c.pace,
+         drift="feel", span=0.12, bounds=(0.1, 0.7), step=0.01),
+    Knob("swing", ("swing",), lambda c, x: 0.06 + 0.06 * c.swing,
+         drift="feel", span=0.03, bounds=(0.0, 0.2), step=0.005),
+    Knob("lay", ("lay",), lambda c, x: 0.07 * c.lay, bounds=(-0.08, 0.08), step=0.005),
+    # ---- the singer's body: this machine's own, never inherited -------------------------------------------------
+    Knob("singer.shift", ("identity",), lambda c, x: -12 if low(c) else 0, inherit=False, bounds=(-12, 0), step=12),
+    Knob("singer.tract", ("identity",), lambda c, x: 1.07 + 0.07 * size(c) + 0.025 * c.id("tract"),
+         inherit=False, bounds=(0.94, 1.21), step=0.005),
+    Knob("singer.mouth", ("identity",), lambda c, x: x + 0.12 * c.id("mouth"), inherit=False, bounds=(0.85, 1.15), step=0.01),
+    Knob("singer.tilt", ("identity",), lambda c, x: x + 0.1 * c.id("tilt") - 0.06 * c.brightness,
+         inherit=False, bounds=(0.25, 0.7), step=0.01),
+    Knob("singer.vibrato_rate", ("identity",), lambda c, x: x + 0.45 * c.id("vibrato_rate") + 0.2 * c.lay,
+         inherit=False, bounds=(4.6, 6.2), step=0.05),
+    Knob("singer.jitter", ("identity",), lambda c, x: x + 0.07 * c.id("jitter") + 0.05 * c.wear + 0.04 * c.tired,
+         inherit=False, bounds=(0.15, 0.55), step=0.01),
+    Knob("singer.shimmer", ("identity",), lambda c, x: x + 0.5 * c.id("shimmer") + 0.4 * c.wear,
+         inherit=False, bounds=(1.5, 4.0), step=0.1),
+    # ---- the singer's habits: learned, so inherited and pulled toward this machine's; drift is the singer's day --
+    Knob("singer.rd", ("identity",), lambda c, x: x + 0.15 * c.id("rd") + 0.08 * c.wear - 0.06 * c.brightness,
+         drift="voice", span=0.06, bounds=(0.55, 1.3), step=0.01),
+    Knob("singer.breath", ("identity",), lambda c, x: x + 0.02 * c.id("breath") + 0.015 * c.wear + 0.01 * c.tired,
+         drift="voice", span=0.03, bounds=(0.02, 0.13), step=0.005),
+    Knob("singer.vibrato_depth", ("identity",), lambda c, x: x + 9 * c.id("vibrato_depth") + 5 * c.rubato,
+         drift="voice", span=12.0, bounds=(14.0, 44.0), step=0.5),
+    Knob("singer.vibrato_delay", ("identity",), lambda c, x: x + 0.07 * c.id("vibrato_delay"), bounds=(0.18, 0.4), step=0.01),
+    Knob("singer.glide", ("identity",), lambda c, x: x + 0.02 * c.id("glide") - 0.01 * c.lay, bounds=(0.07, 0.15), step=0.005),
+    Knob("singer.scoop", ("identity",), lambda c, x: x + 0.1 * c.id("scoop") - 0.08 * c.lay, bounds=(0.15, 0.55), step=0.01),
+    Knob("singer.wander", ("identity",), lambda c, x: x + 1.5 * c.id("wander") + 1.2 * c.wear, bounds=(3.0, 10.0), step=0.1),
+    Knob("singer.dynamics", ("identity",), lambda c, x: x + 2.5 * c.id("dynamics"),
+         drift="voice", span=2.5, bounds=(10.0, 19.0), step=0.5),
+    # ---- what the lyric leans toward (for songbird.arrange) ------------------------------------------------------
+    Knob("leanings.era", ("era", "wear"), lambda c, x: x + 0.6 * c.era - 0.3 * c.wear,
+         drift="era", span=0.6, view="slow", bounds=(-1.0, 1.0), step=0.05),
+    Knob("leanings.rarity", ("richness",), lambda c, x: x + 0.35 * c.richness,
+         drift="rarity", span=0.25, view="slow", bounds=(0.0, 1.0), step=0.05),
+)
+
+
+# ---------------------------------------------------------------- the choices a number can't make
+
+
+@dataclass
+class Context:
+    genome: Genome
+    song: object  # the seed's Params: what own values are measured from
+    parent: object  # the parent's Params
+    c: Character
+    drift: Drift | None
+
+    def at(self, view: str, dimension: str) -> float:
+        return self.drift.view(view).get(dimension, 0.0) if self.drift is not None else 0.0
+
+    def pull(self, was: float, own: float) -> float:
+        return was + PULL * (own - was)
+
+    def habit(self, name: str, where: str = "") -> float | None:
+        """How much this machine likes something (0..1), stable for the machine,
+        a little different at each place it comes up; None for a neutral voice."""
+        if "identity" not in self.c.known:
+            return None
+        local = 0.1 * self.c.id(f"habit:{name}:{where}") if where else 0.0
+        return clip(0.5 + 0.3 * self.c.id(f"habit:{name}") + local, 0.0, 1.0)
+
+
+# Modes by brightness, and a chord's quality in a mode.
+BRIGHTNESS = {"lydian": 6, "ionian": 5, "mixolydian": 4, "dorian": 3, "aeolian": 2, "phrygian": 1, "locrian": 0}
+MINOR = {"dorian", "aeolian", "phrygian", "locrian"}
+
+
+def quality(symbol: str, mode: str) -> str:
+    root, third, fifth = chord_tones(symbol, mode)
+    return {(4, 7): "major", (3, 7): "minor", (3, 6): "diminished", (4, 8): "augmented"}.get(
+        ((third - root) % 12, (fifth - root) % 12), "other")
+
+
+@per_genome
+def allowed_modes(genome: Genome, own_mode: str) -> tuple[str, ...]:
+    """Modes the song can be sung in, brightest first: every chord it uses stays
+    a major or minor triad (or keeps the quality it has in the song's own mode).
+    For I IV V vi that is ionian, mixolydian and aeolian; dorian would make vi
+    diminished, lydian IV and phrygian V."""
+    chords = {s for phrase in genome.phrases.values() for bar in phrase.chords for s in bar}
+    ok = [m for m in MODES
+          if all(quality(s, m) in ("major", "minor") or quality(s, m) == quality(s, own_mode) for s in chords)]
+    return tuple(sorted(ok, key=lambda m: -BRIGHTNESS[m]))
+
+
+def choose_mode(out: dict, ctx: Context) -> None:
+    """The parent's mode pulled toward the voice family's home, moved by the
+    year's drift (a positive drift brightens), then the nearest mode the family
+    and the song's chords allow."""
+    allowed = allowed_modes(ctx.genome, ctx.song.mode)
+    parent = ctx.parent.mode
+    members = allowed
+    home = parent
+    if ctx.c.family in MODE_FAMILIES:
+        family, home = MODE_FAMILIES[ctx.c.family]
+        members = [m for m in family if m in allowed] or allowed
+    elif parent not in allowed:
+        members = sorted(set(allowed) | {parent}, key=lambda m: -BRIGHTNESS[m])
+    target = ctx.pull(BRIGHTNESS[parent], BRIGHTNESS[home] + 2.0 * ctx.at("year", "mode"))
+    out["mode"] = min(members, key=lambda m: (abs(BRIGHTNESS[m] - target), abs(BRIGHTNESS[m] - BRIGHTNESS[parent])))
+
+
+# The accompaniment: patterns over the chord voicing (0 the bass, 1-4 above it; . rests), by steps per bar.
+PATTERNS = {
+    8: ("0 . . . 2 . . .", "0 . . . 2 . 3 .", "0 . 2 . 3 . 4 .", "0 . 2 . 3 . 4 1", "0 . 2 3 4 . 3 2",
+        "0 . 2 3 . 4 3 2", "0 . 3 4 2 . 3 4", "0 . 2 3 4 3 2 3", "0 2 3 4 2 3 4 3"),
+    6: ("0 . . 2 . .", "0 . 2 . 3 .", "0 . 2 3 4 3", "0 1 2 3 2 1", "0 2 3 4 3 2"),
+}
+
+
+def busy(pattern: str) -> float:
+    steps = pattern.split()
+    return sum(s != "." for s in steps) / len(steps)
+
+
+def choose_accomp(out: dict, ctx: Context) -> None:
+    """The pattern nearest in busyness to the parent's pulled toward the
+    machine's density moved by the texture drift; close enough keeps the
+    parent's own pattern."""
+    parent = ctx.parent.accomp
+    choices = PATTERNS.get(len(parent.split()))
+    if not choices:
+        return
+    was = busy(parent)
+    own = 0.72 + 0.2 * ctx.c.density if "density" in ctx.c.known else was
+    target = ctx.pull(was, own + 0.3 * ctx.at("slow", "texture"))
+    if abs(target - was) < 0.08:
+        return
+    best = min(abs(busy(p) - target) for p in choices)
+    near = [p for p in choices if abs(busy(p) - target) - best < 1e-9]
+    out["accomp"] = near[min(len(near) - 1, int((ctx.c.id("accomp") + 1) / 2 * len(near)))]
+
+
+def choose_choir(out: dict, ctx: Context) -> None:
+    """Each generation adds a voice to the choir, so you can hear how far a
+    rendition has travelled (the song's notes), up to six. A record of the
+    lineage, so neither the machine nor the drift touches it."""
+    out["choir"] = min(ctx.parent.choir + 1, CHOIR_MAX)
+
+
+# ---------------------------------------------------------------- form
+
+SECTION_DRIFT = {"intro": "intro", "turn": "turns", "break": "break", "tag": "tag", "outro": "outro"}
+
+
+def template(genome: Genome) -> list[tuple[str, str]]:
+    """The form template as (section, "" | "?" | "*")."""
+    return [(t.rstrip("?*"), t[len(t.rstrip("?*")):][:1]) for t in genome.form]
+
+
+def is_verse(genome: Genome, name: str) -> bool:
+    return genome.sections[name].lyrics == "verse"
+
+
+@dataclass(frozen=True)
+class Item:
+    """A piece of the template: one section, or a repeatable verse with the
+    refrain it brings (and any turn that follows the first verse's refrain).
+    A group is sung as units, each a verse (or two) and then the refrain, so
+    every unit adds a refrain and the question turns once more."""
+
+    index: int  # position of its first token in the template
+    tokens: tuple  # ((name, flag), ...); a group's first token is its verse
+    repeat: bool
+
+
+@per_genome
+def items(genome: Genome) -> tuple[Item, ...]:
+    tokens = template(genome)
+    lyrics = [genome.sections[n].lyrics for n, _ in tokens]
+    followers: set[str] = set()  # what follows the first verse's refrain comes with every refrain a verse brings
+    for k, (n, f) in enumerate(tokens):
+        if f == "" and lyrics[k] == "verse":
+            j = k + 1
+            if j < len(tokens) and lyrics[j] == "refrain":
+                j += 1
+                while j < len(tokens) and tokens[j][1] == "?" and lyrics[j] is None:
+                    followers.add(tokens[j][0])
+                    j += 1
+            break
+    out, i = [], 0
+    while i < len(tokens):
+        name, flag = tokens[i]
+        if flag == "*" and lyrics[i] == "verse":
+            group, j = [(name, "")], i + 1
+            if j < len(tokens) and lyrics[j] == "refrain" and tokens[j][1] == "":
+                group.append(tokens[j])
+                j += 1
+                while j < len(tokens) and tokens[j][1] == "?" and tokens[j][0] in followers:
+                    group.append(tokens[j])
+                    j += 1
+            out.append(Item(i, tuple(group), True))
+            i = j
+        else:
+            out.append(Item(i, (tokens[i],), False))
+            i += 1
+    return tuple(out)
+
+
+def extra_bridge(genome: Genome) -> bool:
+    """Whether the song's bank allows a second bridge stanza in a long form."""
+    return bool(genome.source.get("bank", {}).get("rules", {}).get("bridge", {}).get("extra"))
+
+
+def required_verses(genome: Genome) -> int:
+    return sum(1 for it in items(genome) if not it.repeat and it.tokens[0][1] == "" and is_verse(genome, it.tokens[0][0]))
+
+
+def verse_range(genome: Genome) -> tuple[int, int]:
+    """How many verses a form may have: the bank's rule, or the template's."""
+    rule = genome.source.get("bank", {}).get("rules", {}).get("verses", {}).get("count")
+    if rule:
+        return int(rule[0]), int(rule[1])
+    required = required_verses(genome)
+    if not any(it.repeat for it in items(genome)):
+        return required, required
+    seeded = sum(1 for n in genome.seed_params.get("form", []) if is_verse(genome, n))
+    lo = max(required, 2)
+    return lo, max(lo, seeded, min(len(genome.seed_verses), 5))
+
+
+@per_genome
+def _grammar(genome: Genome) -> re.Pattern:
+    parts = []
+    for it in items(genome):
+        if it.repeat:
+            (verse, _), *rest = it.tokens
+            unit = f"(?:{re.escape(verse)},)+" + "".join(f"(?:{re.escape(n)},){'?' if f == '?' else ''}" for n, f in rest)
+            parts.append(f"(?P<t{it.index}>(?:{unit})*)")
+        else:
+            name, flag = it.tokens[0]
+            parts.append(f"(?P<t{it.index}>(?:{re.escape(name)},){'?' if flag == '?' else ''})")
+            if genome.sections[name].lyrics == "bridge" and "bridge2" in genome.sections:
+                parts.append(f"(?P<x{it.index}>(?:bridge2,)?)")
+    return re.compile("".join(parts))
+
+
+def parse_form(genome: Genome, form) -> dict[str, str] | None:
+    """Each template item's part of a form (tN for the item at template position
+    N, xN for a second bridge after it), or None if the form doesn't follow the
+    template."""
+    match = _grammar(genome).fullmatch("".join(f"{name}," for name in form))
+    return None if match is None else {k: v or "" for k, v in match.groupdict().items()}
+
+
+def fits(genome: Genome, form) -> bool:
+    """A form follows the genome's template and has a verse count its rules allow."""
+    if parse_form(genome, form) is None:
+        return False
+    lo, hi = verse_range(genome)
+    return lo <= sum(1 for n in form if is_verse(genome, n)) <= hi
+
+
+def units(genome: Genome, verses: int, pairs: bool = False) -> dict[int, list[int]]:
+    """How the verses beyond the required ones are sung: for each repeatable
+    group, how many verses each of its units has (one, or two where verses come
+    in pairs), the units handed round the groups, first first."""
+    groups = [it.index for it in items(genome) if it.repeat]
+    plan: dict[int, list[int]] = {g: [] for g in groups}
+    extra, k = max(0, verses - required_verses(genome)), 0
+    while extra > 0 and groups:
+        size = 2 if pairs and extra >= 2 else 1
+        plan[groups[k % len(groups)]].append(size)
+        extra -= size
+        k += 1
+    return plan
+
+
+def build(genome: Genome, verses: int, present: dict, bridge2: bool = False, pairs: bool = False) -> tuple[str, ...]:
+    """A concrete form: the required sections, each optional one where
+    present[(item index, section, unit)] says so, and the verse groups sung as
+    units to make the verse count."""
+    plan = units(genome, verses, pairs)
+    form: list[str] = []
+    for it in items(genome):
+        if it.repeat:
+            (verse, _), *rest = it.tokens
+            for r, size in enumerate(plan[it.index]):
+                form += [verse] * size
+                form += [n for n, f in rest if f == "" or present.get((it.index, n, r))]
+            continue
+        name, flag = it.tokens[0]
+        if flag == "" or present.get((it.index, name, 0)):
+            form.append(name)
+        if bridge2 and genome.sections[name].lyrics == "bridge" and "bridge2" in genome.sections:
+            form.append("bridge2")
+    return tuple(form)
+
+
+def choose_form(out: dict, ctx: Context) -> None:
+    """How many verses, how they come, and which optional sections play.
+
+    The verse count pulls the parent's toward the machine's taste (a rich
+    vocabulary tells longer stories) moved by the slow verses drift. Each
+    optional section's score is the parent's (1 played, 0 not) pulled toward
+    the machine's habit (0.5 for a neutral voice), plus half its slow drift;
+    it plays above 0.5, so a lineage remembers its form and a machine's habits
+    pull it. Two verses to a refrain is scored the same way against a machine
+    that leans away from it, since a verse and then its refrain is the song's
+    shape: rare where the parent never did it."""
+    genome = ctx.genome
+    source = ctx.parent.form if parse_form(genome, ctx.parent.form) else ctx.song.form
+    was = parse_form(genome, source)
+    if was is None:
+        return  # a form outside the template (set by hand) is kept as it is
+    lo, hi = verse_range(genome)
+    had = sum(1 for n in source if is_verse(genome, n))
+    if "richness" in ctx.c.known:
+        own = (lo + hi) / 2 + (hi - lo) / 2 * ctx.c.richness
+    else:
+        habit = ctx.habit("verses")
+        own = lo + (hi - lo) * (0.5 if habit is None else habit)
+    verses = max(lo, min(hi, round(ctx.pull(had, own) + 1.2 * ctx.at("slow", "verses"))))
+
+    def plays(before: bool, habit: float | None, dimension: str) -> bool:
+        score = ctx.pull(1.0 if before else 0.0, 0.5 if habit is None else habit)
+        return score + 0.5 * ctx.at("slow", dimension) > 0.5
+
+    sung = paired = 0  # the parent's units, and how many of them had two verses
+    for it in items(genome):
+        if it.repeat and len(it.tokens) > 1:
+            verse, refrain = it.tokens[0][0], it.tokens[1][0]
+            for chunk in was[f"t{it.index}"].split(f"{refrain},"):
+                n = chunk.split(",").count(verse)
+                sung += n > 0
+                paired += n > 1
+    habit = ctx.habit("pairs")
+    pairs = plays(sung > 0 and paired / sung >= 0.5, 0.25 if habit is None else habit / 2, "pairs")
+
+    plan = units(genome, verses, pairs)
+    present = {}
+    for it in items(genome):
+        text = was.get(f"t{it.index}", "")
+        if it.repeat:
+            sung = max(1, text.count(f"{it.tokens[1][0]},")) if len(it.tokens) > 1 else 1
+            for name, flag in it.tokens[1:]:
+                if flag == "?":
+                    before = text.count(f"{name},") / sung >= 0.5
+                    for r in range(len(plan[it.index])):
+                        present[(it.index, name, r)] = plays(before, ctx.habit(name, f"{it.index}.{r}"),
+                                                             SECTION_DRIFT.get(name, "tag"))
+        elif it.tokens[0][1] == "?":
+            name = it.tokens[0][0]
+            present[(it.index, name, 0)] = plays(bool(text), ctx.habit(name, str(it.index)),
+                                                 SECTION_DRIFT.get(name, "tag"))
+    second = False
+    if extra_bridge(genome) and verses > lo:  # a long form may sing the bridge's extra stanza
+        before = any(v for k, v in was.items() if k.startswith("x")) or bool(ctx.parent.leanings.get("extra_bridge"))
+        second = plays(before, ctx.habit("extra"), "extra")
+    out["form"] = list(build(genome, verses, present, second, pairs))
+    out.setdefault("leanings", {})["extra_bridge"] = second
+
+
+# ---------------------------------------------------------------- the lyric's leanings
+
+
+@per_genome
+def song_words(genome: Genome) -> frozenset[str]:
+    """Every word the song can sing: its bank, seed verses and fixed blocks."""
+    text: list[str] = []
+
+    def walk(x) -> None:
+        if isinstance(x, str):
+            text.append(x)
+        elif isinstance(x, (list, tuple)):
+            for item in x:
+                walk(item)
+        elif isinstance(x, dict):
+            for key, value in x.items():
+                if key not in ("note", "by", "id", "mood", "scheme", "rarity", "pairs_with", "era", "rules"):
+                    walk(value)
+
+    walk(genome.source.get("bank", {}))
+    walk(genome.seed_verses)
+    walk(list(genome.fixed.values()))
+    return frozenset(w.replace("-", "").lower() for t in text
+                     for w in re.findall(r"[A-Za-z][A-Za-z'-]*", t.replace("*", "")))
+
+
+def choose_mood(out: dict, ctx: Context) -> None:
+    """Mood weights over plain, light, dark and tender: the parent's pulled
+    toward the screen's (a light screen lightens, a warm one is tender), with
+    the slow mood drift tilting the machine's own (a positive drift lightens),
+    darkened a little in a minor mode. Never read from the person's words."""
+    was = {**LEANINGS["mood"], **ctx.parent.leanings.get("mood", {})}
+    c = ctx.c
+    screen = {"plain": 1.0, "light": 1.0 + 0.4 * c.brightness, "dark": 1.0 - 0.4 * c.brightness,
+              "tender": 1.0 + 0.3 * c.warmth} if "brightness" in c.known else None
+    tilt = ctx.at("slow", "mood")
+    lean = {"plain": 0.25, "light": 0.5, "dark": -0.5, "tender": -0.25}
+    weights = {}
+    for mood, w in was.items():
+        own = (screen.get(mood, 1.0) if screen else w) * 2 ** (lean.get(mood, 0.0) * tilt)
+        w = ctx.pull(w, own)
+        if out.get("mode") in MINOR and mood in ("dark", "tender"):
+            w *= 1.25 if mood == "dark" else 1.1
+        weights[mood] = w
+    mean = sum(weights.values()) / len(weights)
+    out.setdefault("leanings", {})["mood"] = {k: round(float(v / mean), 2) for k, v in weights.items()}
+
+
+def choose_vocabulary(out: dict, ctx: Context) -> None:
+    """Words the lyric should lean toward: the song's own words in the themes
+    the person's words favour (a weight above 1 is more than an even share),
+    pulled with the parent's. Only the song's words ever appear."""
+    was = dict(ctx.parent.leanings.get("vocabulary", {}))
+    if not ctx.c.themes:
+        if was:
+            out.setdefault("leanings", {})["vocabulary"] = was
+        return
+    words = song_words(ctx.genome)
+    even = 1.0 / len(ctx.c.themes)
+    own: dict[str, float] = {}
+    for theme, share in ctx.c.themes.items():
+        if share > even:
+            for w in THEMES.get(theme, "").split():
+                if w in words:
+                    own[w] = max(own.get(w, 0.0), share / even)
+    merged = {w: ctx.pull(was.get(w, 0.0), own.get(w, 0.0)) for w in sorted(set(was) | set(own))}
+    out.setdefault("leanings", {})["vocabulary"] = {w: round(float(v), 2) for w, v in merged.items() if v >= 0.05}
+
+
+def choose_inventory(out: dict, ctx: Context) -> None:
+    """The phoneme inventory the singer's vowels will come from (the singer doesn't read it yet)."""
+    if ctx.c.inventory:
+        out["inventory"] = ctx.c.inventory
+
+
+def choose_room(out: dict, ctx: Context) -> None:
+    """The room is where the machine lives: its own, else its parent's."""
+    if ctx.c.room:
+        out["room"] = dict(ctx.c.room)
+
+
+DECISIONS = (choose_mode, choose_form, choose_accomp, choose_choir, choose_mood, choose_vocabulary,
+             choose_inventory, choose_room)
+
+
+# ---------------------------------------------------------------- putting it together
+
+
+def choose(genome: Genome, parent=None, voice: Voice | None = None, drift: Drift | None = None,
+           seed: int | None = None):
+    """The child's parameters; see realize.choose_params."""
+    from .realize import Params
+
+    song = Params.from_dict(genome.seed_params)
+    parent = parent if parent is not None else song
+    if voice is None and drift is None:
+        return parent if seed is None else replace(parent, seed=seed)
+    ctx = Context(genome, song, parent, character(voice), drift)
+    out = parent.to_dict()
+    for key in ("singer", "room", "leanings"):
+        out[key] = dict(out.get(key) or {})
+    for knob in KNOBS:
+        knob.apply(out, ctx)
+    for decide in DECISIONS:
+        decide(out, ctx)
+    out["seed"] = Chance(voice, drift, parent, seed).seed
+    return Params.from_dict(out)
+
+
+def lay(score, params):
+    """The sung parts moved ahead of the beat (or behind it) by params.lay beats:
+    where this lineage's singer sits against the band."""
+    if not getattr(params, "lay", 0.0):
+        return score
+    shift = params.lay * 60.0 / params.tempo
+    sung = lambda n: n.part == "voice" or n.part.startswith("choir")  # noqa: E731
+    notes = tuple(replace(n, start=max(0.0, n.start - shift)) if sung(n) else n for n in score.notes)
+    return replace(score, notes=tuple(sorted(notes, key=lambda n: (n.start, n.part, n.pitch))))

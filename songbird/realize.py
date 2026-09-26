@@ -2,14 +2,14 @@
 
 This is the only stage where the genome (what persists), the parent's
 parameters (what was inherited), the voice (who is singing) and the drift
-(when) meet. choose_params() combines the last three into concrete Params;
-realize() walks the genome with them. Milestone 1 realizes fixed parameters;
-inheritance, the voice pull and drift arrive with milestones 3 to 5.
+(when) meet. choose_params() combines the last three into concrete Params
+(the table of how is in variation.py); realize() walks the genome with them.
 """
 
 from __future__ import annotations
 
-from dataclasses import asdict, dataclass, fields, replace
+from dataclasses import asdict, dataclass, field, fields, replace
+from typing import TYPE_CHECKING
 
 import numpy as np
 
@@ -17,6 +17,10 @@ from .genome import Genome, Phrase, sung_words, turn
 from .phrasing import Gesture, Phrasing, gesture
 from .score import Note, Score
 from .theory import chord_tones, degree_semitones, harmony
+
+if TYPE_CHECKING:
+    from .drift import Drift
+    from .harvest import Voice
 
 
 @dataclass(frozen=True)
@@ -32,6 +36,13 @@ class Params:
     humanize: float = 0.006  # standard deviation of onset jitter, seconds
     ritardando: float = 0.35  # how much slower the final phrase ends than it began
     choir: int = 0  # voices from the lineage that join in harmony where the genome allows
+    # Chosen by the machine and inherited; empty means the seed's own (VoiceParams' and room's defaults).
+    singer: dict = field(default_factory=dict)  # VoiceParams fields that differ from the seed singer's
+    room: dict = field(default_factory=dict)  # rt60 and tone for synth.room.impulse_response
+    leanings: dict = field(default_factory=dict)  # for songbird.arrange: mood, era, rarity, vocabulary, extra_bridge
+    swing: float = 0.0  # fraction of a beat's second half the off-beats are pushed late (for the players; not yet read)
+    lay: float = 0.0  # beats the singers sit ahead of the beat, behind if negative (applied by variation.lay)
+    inventory: str = ""  # phoneme inventory for the singer's vowels, "" the seed's (not yet read by the singer)
 
     @classmethod
     def from_dict(cls, data: dict) -> Params:
@@ -46,13 +57,23 @@ class Params:
         return data
 
 
-def choose_params(genome: Genome, parent: Params | None = None) -> Params:
+def choose_params(genome: Genome, parent: Params | None = None, voice: Voice | None = None,
+                  drift: Drift | None = None, seed: int | None = None) -> Params:
     """Inherit from the parent, pull toward the voice, apply drift.
 
-    Milestone 1: the seed has no parent, so its parameters come from the
-    genome's seed_params; a child simply repeats its parent.
+    With no voice and no drift, the parent's parameters (the seed's, from the
+    genome, if there is no parent) come back unchanged. Otherwise each
+    parameter pulls from the parent's toward the machine's own value as the
+    drift moves it today (variation.KNOBS and DECISIONS), and the rendition's
+    seed comes from (voice, instant, parent), or from `seed` if given: the same
+    machine, instant and parent always give the same child.
     """
-    return parent if parent is not None else Params.from_dict(genome.seed_params)
+    if voice is None and drift is None:
+        chosen = parent if parent is not None else Params.from_dict(genome.seed_params)
+        return chosen if seed is None else replace(chosen, seed=seed)
+    from .variation import choose  # the table reads the singer's fields, so it brings the synth with it
+
+    return choose(genome, parent, voice, drift, seed)
 
 
 def sung_as(note: Note, g: Gesture | None, beat: float) -> Note:
