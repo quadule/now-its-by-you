@@ -115,12 +115,60 @@ def test_the_page_gets_the_song_its_choices_and_their_bounds(served):
 
 def test_the_page_never_says_the_codes_words(home):
     studio = S.Studio(None, str(LEAD), "fictional:ada", out=home / "out")
-    for who in ("ada", "basil", "coral", "dmitri"):
+    styles = ("", "stringband", "synthfolk", "gospel")
+    for k, who in enumerate(("ada", "basil", "coral", "dmitri")):
         voice = H.fictional(who)
         for day in ("2026-09-26", "2027-03-01", "2025-06-15"):
-            v = studio.context.version({"date": day, "mode": "aeolian", "band.whistle": 0}, voice=voice)
+            edits = {"date": day, "mode": "aeolian", "band.whistle": 0}
+            if styles[k]:
+                edits = {"date": day, "style.name": styles[k], "style.lift": True}
+            v = studio.context.version(edits, voice=voice)
             for text in shown(explain.view(studio.context, v)):
                 assert not FORBIDDEN.search(text), text
+                assert "lineup" not in text and "None" not in text, text
+
+
+def test_a_chosen_style_brings_its_own_band_and_pace(home):
+    from songbird import style as style_mod
+
+    studio = S.Studio(None, str(LEAD), "fictional:ada", out=home / "out")
+    plain = studio.version({})
+    v = studio.version({"style.name": "stringband", "style.feel": "straight", "band.banjo": 0})
+    assert v.params.style.name == "stringband" and "style.name" in v.applied
+    assert set(v.params.band.lineup) == set(style_mod.STYLES["stringband"].lineup)  # the style's band, not the old one
+    assert v.params.band.lineup["banjo"] == 0 and "band.banjo" in v.applied
+    assert v.params.tempo != plain.params.tempo  # a string band takes the song at its own pace
+    view = explain.view(studio.context, v)
+    style = next(c for c in view["cards"] if c["id"] == "style")
+    assert style["value"].startswith("a string band") and style["mine"]
+    assert any("chosen by you" in r["text"] for r in style["reasons"])
+    band = next(c for c in view["cards"] if c["id"] == "band")
+    assert "banjo" in band["players"] and "the banjo sitting out" in band["value"]
+    assert v.marks["style.name"]["value"] == "stringband"
+    # a feel the style can't play is said, not bent
+    refused = studio.version({"style.name": "stringband", "style.feel": "twelve"})
+    assert any(p["path"] == "style.feel" for p in refused.problems)
+
+
+def test_a_word_chosen_keeps_the_words_handed_down(home):
+    studio = S.Studio(None, str(LEAD), "fictional:ada", out=home / "out")
+    plain = studio.version({})
+    held = plain.params.words
+    options = studio.options({}, "verse", 1)["choices"]
+    pick = next(c["id"] for c in options if c["allowed"] and c["id"] != held["verses"][1]["id"])
+    v = studio.version({"words.verse.1": {"id": pick}})
+    now = v.params.words
+    assert now["verses"][1]["id"] == pick and "words.verse.1" in v.applied
+    assert [x for i, x in enumerate(now["verses"]) if i != 1] == [x for i, x in enumerate(held["verses"]) if i != 1]
+    assert now["refrain"] == held["refrain"] and now.get("bridge") == held.get("bridge") and now.get("tag") == held.get("tag")
+    # what is sung is what the lineage holds, as a recording will hand it down
+    from songbird import arrange
+
+    assert arrange.hold(studio.genome, v.lyrics) == now
+    words = {w["index"]: w for w in explain.view(studio.context, v)["words"]}
+    verse2 = next(w for w in words.values() if w.get("block") == "verse" and w["nth"] == 1)
+    assert verse2["how"] == "chosen by you"
+    assert all(w["how"] in ("handed down", "new this time") for w in words.values() if w["sung"] and not w["mine"])
 
 
 def test_today_is_the_command_lines_today(home):
@@ -186,7 +234,8 @@ def test_the_studio_runs_from_an_unpacked_packet_alone(home):
         assert start["out"] == "."  # recordings go where it was run from
         status, _, data = ask(port, "POST", "/api/song", {"edits": {"tempo": 90}},
                               {"Content-Type": "application/json", "X-Studio": token})
-        assert status == 200 and json.loads(data)["cards"][1]["value"].startswith("90")
+        tempo = next(c for c in json.loads(data)["cards"] if c["id"] == "tempo")
+        assert status == 200 and tempo["value"].startswith("90")
     finally:
         server.terminate()
         server.wait(timeout=20)
