@@ -298,6 +298,7 @@ def sets(genome_path: Path, genome=None) -> list[dict]:
 
 
 def find_set(genome_path: Path, name: str, genome=None) -> dict:
+    """One of the song's sets, by id; ValueError if it has none by that name."""
     for s in sets(genome_path, genome):
         if s["id"] == name:
             return s
