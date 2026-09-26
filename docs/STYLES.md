@@ -97,10 +97,13 @@ Straight at about 117 (up to 134), sometimes a waltz. A tenor harmony on the
 refrains.
 
 **Shanty.** A sea shanty or work song: the shantyman sings the first verse
-alone (or over the concertina*), then the gang (every lineage voice) joins on
+alone (or over the concertina), then the gang (every lineage voice) joins on
 the refrains; feet stamping* on one and three and hands* on two and four; a
-concertina's* oom-pah; the fiddle leading the intro and taking counter-lines.
-Straight or a slow six-eight. Open fifths. A big, wide room.
+concertina's oom-pah (oom-pa-pa in six-eight); the fiddle leading the intro
+and taking counter-lines. For about three machines in ten the crew's
+squeezebox is an accordion instead, its oom-pah on the Stradella bass and
+chord buttons (a lineage keeps the one it had). Straight or a slow six-eight.
+Open fifths. A big, wide room.
 
 **Ballad.** The seed's own band, arranged by songbird/band.py exactly as
 before: harp, cittern, whistle, fiddle, guitar, upright bass, frame drum and
