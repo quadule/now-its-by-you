@@ -138,11 +138,16 @@ def test_the_felt_piano_is_dark_and_hard_hammers_bright():
 
 
 def test_una_corda_is_softer_with_more_of_the_aftersound():
-    open_ = one(57, dur=5.0)
-    soft = one(57, dur=5.0, art="soft")
+    f0 = REF.fundamental[62 - piano.LOW]
+    open_ = one(62, dur=5.0)
+    soft = one(62, dur=5.0, art="soft")
     assert rms_db(soft, 0.05, 0.3) < rms_db(open_, 0.05, 0.3) - 2.0
-    tail = lambda y: rms_db(y, 3.5, 4.5) - rms_db(y, 0.05, 0.3)  # noqa: E731
-    assert tail(soft) > tail(open_) + 1.5
+
+    def fall(y):  # the fundamental's fall over four seconds
+        band = sosfiltfilt(butter(2, [f0 * 0.97, f0 * 1.03], btype="bandpass", fs=SR, output="sos"), y)
+        return rms_db(band, 0.1, 0.3) - rms_db(band, 3.8, 4.3)
+
+    assert fall(soft) < fall(open_) - 3.0  # the strings the hammer set apart ring on
 
 
 def test_the_pedal_adds_a_halo():

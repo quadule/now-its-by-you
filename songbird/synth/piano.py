@@ -65,7 +65,7 @@ SPEC = {
         role="comping",
         register=(21, 108),
         place=(-0.08, 0.8),
-        level=0.50,
+        level=0.51,
         poly=True,
         brighter=0.12,  # the centroid, held down by the strong low partials; above 3 kHz a C4 gains 45 dB pp to ff
         articulations={
@@ -106,8 +106,8 @@ B_TABLE = ((21, 4.0e-4), (28, 2.6e-4), (36, 1.8e-4), (45, 1.8e-4), (52, 2.6e-4),
 # at pp and 2.1 at ff (measured about 4 to 2, Askenfelt and Jansson 1990) and the pulse's peak sharpens
 # with the blow, so the force at 2 kHz rises about 28 dB from pp to ff and at 4 kHz about 60.
 MASS_TABLE = ((21, 6.5e-3), (36, 4.9e-3), (60, 2.97e-3), (96, 2.2e-3), (108, 2.0e-3))
-K_TABLE = ((21, 1.0e11), (36, 2.67e11), (60, 3.0e12), (96, 6.67e14), (108, 2.0e15))
-P_TABLE = ((21, 3.2), (36, 3.3), (60, 3.5), (96, 4.0), (108, 4.1))
+K_TABLE = ((21, 1.0e11), (36, 2.67e11), (60, 3.0e12), (84, 3.0e13), (96, 1.15e14), (108, 3.5e14))
+P_TABLE = ((21, 3.2), (36, 3.3), (60, 3.5), (84, 3.5), (96, 3.5), (108, 3.6))
 # One string's wave impedance sqrt(T mu), kg/s: heavy wound strings in the bass, about 2 above.
 Z_TABLE = ((21, 12.0), (36, 4.6), (48, 2.6), (60, 2.06), (96, 1.95), (108, 1.9))
 # Where the hammer strikes, as a fraction of the speaking length.
@@ -136,6 +136,7 @@ def after_ratio(freq):
 
 
 HALO = 10.0 ** (-21.0 / 20.0)  # an open string's answer to a partial it shares, against that partial
+CREST = 6.0  # the most a string's swing under the hammer may exceed its ring's RMS (the tenor's is 3 to 6)
 HORIZONTAL = (10.0 ** (-18.0 / 20.0), 12)  # the plane along the soundboard: its level against the vertical, up to this partial
 UNDAMPED = 90  # F#6 and above have no dampers
 # the key's and hammer's knock on the frame: its RMS against the tone's at the attack (at vel 0.5)
@@ -214,8 +215,31 @@ def hammer_force(v0, mass, stiff, power, z, delay_left, delay_right, loss, fs, m
         a = out_right[i % size] if i >= 0 else 0.0
         b = out_right[(i + 1) % size] if i + 1 >= 0 else 0.0
         in_right = -loss * ((1.0 - f) * a + f * b) if x >= 0 else 0.0
-        d = eta - y
-        push = stiff * d**power if d > 0.0 else 0.0
+        # the felt's push and the string's give are solved together (the push moves the string under
+        # it at once, through its impedance): F = K (d0 - c F)^p, which stays stable however stiff the felt
+        eta_next = eta + u / fs
+        c = 1.0 / (2.0 * z * fs)
+        d0 = eta_next - (y + (in_left + in_right) / fs)
+        push = 0.0
+        if d0 > 0.0:
+            hi = d0 / c
+            push = min(stiff * d0**power, hi)
+            lo = 0.0
+            for _ in range(40):
+                d = d0 - c * push
+                g = push - stiff * d**power if d > 0.0 else push
+                if g > 0.0:
+                    hi = push
+                else:
+                    lo = push
+                slope = 1.0 + stiff * power * c * d ** (power - 1.0) if d > 0.0 else 1.0
+                step = push - g / slope
+                if step <= lo or step >= hi:
+                    step = 0.5 * (lo + hi)
+                if abs(step - push) <= 1e-12 * max(push, 1e-9):
+                    push = step
+                    break
+                push = step
         if push > 0.0:
             touched = True
             left_contact = 0
@@ -227,11 +251,28 @@ def hammer_force(v0, mass, stiff, power, z, delay_left, delay_right, loss, fs, m
         out_right[t % size] = in_left + half
         y += v_string / fs
         u -= push / mass / fs
-        eta += u / fs
+        eta = eta_next
         force[t] = push
         if touched and left_contact > int(0.004 * fs) and u < 0.0:
             return force[:t + 1]
     return force
+
+
+@njit(cache=True)
+def _spectrum(force, freqs, sr):
+    """The force's Fourier sum at each mode's frequency, sum_t F[t] exp(-i 2 pi f t / sr)."""
+    out = np.zeros(freqs.shape[0], dtype=np.complex128)
+    for k in range(freqs.shape[0]):
+        w = 2.0 * np.pi * freqs[k] / sr
+        step_r, step_i = np.cos(w), -np.sin(w)
+        pr, pi = 1.0, 0.0
+        acc_r, acc_i = 0.0, 0.0
+        for t in range(force.shape[0]):
+            acc_r += force[t] * pr
+            acc_i += force[t] * pi
+            pr, pi = pr * step_r - pi * step_i, pr * step_i + pi * step_r
+        out[k] = acc_r + 1j * acc_i
+    return out
 
 
 class Piano:
@@ -349,7 +390,7 @@ def _note(piano: Piano, note, sr: int, rng: np.random.Generator, until: float | 
     force = force[: len(force) // HAMMER_RATE * HAMMER_RATE].reshape(-1, HAMMER_RATE).mean(axis=1)
     # --- the partials ----------------------------------------------------------------------------
     b = piano.inharmonicity(m)
-    top = int(min(120, MAX_PARTIAL_HZ / f0 + 1))
+    top = int(min(90, MAX_PARTIAL_HZ / f0 + 1))  # a bass note's 90th partial is past 3.5 kHz, all but silent
     n = np.arange(1, top + 1)
     fn = n * f0 * np.sqrt((1.0 + b * n * n) / (1.0 + b))
     keep = fn < min(MAX_PARTIAL_HZ, 0.45 * sr)
@@ -414,8 +455,7 @@ def _note(piano: Piano, note, sr: int, rng: np.random.Generator, until: float | 
                 index.append(np.array([kk, kk]))
     freqs, rates, gains, index = (np.concatenate(x) for x in (freqs, rates, gains, index))
     # the force's spectrum at each mode: how much of the blow reaches it
-    t = np.arange(len(force)) / sr
-    spectrum = (force[None, :] * np.exp(-2j * np.pi * freqs[:, None] * t[None, :])).sum(axis=1)
+    spectrum = _spectrum(np.ascontiguousarray(force), np.ascontiguousarray(freqs), float(sr))
     reach = np.abs(gains * spectrum)
     loud = np.sqrt(0.5 * np.sum(reach[:strings] ** 2))
     live = reach > reach[:strings].max() * 1e-3  # 60 dB under the strongest: inaudible, and half the cost at pp
@@ -431,7 +471,18 @@ def _note(piano: Piano, note, sr: int, rng: np.random.Generator, until: float | 
     if until is not None and until < note.dur:  # re-struck: the hammer stops what was ringing
         damped = np.minimum(damped, 0.08)
     # loudness: the attack's bridge-force RMS set by the velocity; the felt strip takes some away
-    scale = _loudness(vel) * (1.0 - 0.45 * strip) * (0.7 if soft else 1.0) / max(loud, 1e-12)
+    target = _loudness(vel) * (1.0 - 0.45 * strip) * (0.7 if soft else 1.0)
+    scale = target / max(loud, 1e-12)
+    # ...but no voicing can make a string ring louder than its blow can drive it. While the hammer pushes,
+    # each mode follows the force almost statically; for partials far above what the blow reaches (the top
+    # octaves, soft blows, the felt strip) that swing would dwarf the ring once scaled up to the target, so
+    # the note stays as weak as its hammer makes it: the push at most CREST times the ring's RMS
+    during = np.zeros((1, len(force) + 1))
+    modal.ring(during, 0, force, freqs, np.ascontiguousarray(gains.real), np.ascontiguousarray(gains.imag), t60,
+               t60, -1, 1.0, np.ones(1), float(sr), 0.0)
+    push = float(np.abs(during).max())
+    if push * scale > CREST * target:
+        scale = CREST * target / push
     gains = gains * scale
     return force, freqs, gains, t60, damped, damp_at, float(reach.max() * scale)
 
@@ -452,7 +503,13 @@ def render(name: str, notes, sr: int, length: int, rng: np.random.Generator, mak
         if key in next_strike:
             restrike[i] = next_strike[key] - ordered[i].start
         next_strike[key] = ordered[i].start
-    knock_noise = butter(2, [70.0, 1400.0], btype="bandpass", fs=sr, output="sos")
+    # the key and hammer knocking on the frame: a few short thuds, one chosen for each blow
+    thump = int(0.025 * sr)
+    thuds = sosfilt(butter(2, [70.0, 1400.0], btype="bandpass", fs=sr, output="sos"),
+                    rng.standard_normal((8, thump + 64)), axis=1)[:, 64:]
+    env = np.exp(-np.arange(thump) / (0.004 * sr)) * (1.0 - np.exp(-np.arange(thump) / (0.0006 * sr)))
+    thuds *= env[None, :]
+    thuds /= np.sqrt(np.mean(thuds**2, axis=1, keepdims=True)) + 1e-12
     for i, note in enumerate(ordered):
         start = int(round(note.start * sr))
         if start >= length or note.dur <= 0:
@@ -464,17 +521,14 @@ def render(name: str, notes, sr: int, length: int, rng: np.random.Generator, mak
         chan = np.array([np.cos((pan + 1.0) * np.pi / 4.0), np.sin((pan + 1.0) * np.pi / 4.0)]) * np.sqrt(2.0)
         modal.ring(force, start, exc, freqs, np.ascontiguousarray(gains.real), np.ascontiguousarray(gains.imag),
                    t60, damped, damp_at, float(0.012 * sr), chan, float(sr), ringing * 1e-4)
-        # the key and hammer knocking on the frame: a short thud into the soundboard, relatively
-        # louder in the treble (where the strings' tone is thinnest) and in a harder blow
+        # the knock into the soundboard, relatively louder in the treble (where the strings' tone is
+        # thinnest) and in a harder blow
         vel = float(np.clip(note.vel, 0.0, 1.0))
-        n = min(length - start, int(0.025 * sr))
-        if n > 16:
-            thud = sosfilt(knock_noise, rng.standard_normal(n + 64))[64:]
-            env = np.exp(-np.arange(n) / (0.004 * sr)) * (1.0 - np.exp(-np.arange(n) / (0.0006 * sr)))
-            thud *= env / (np.sqrt(np.mean((thud * env) ** 2)) + 1e-12)
-            level = _interp(note.pitch, KNOCK_TABLE) * (1.0 + 2.0 * piano.felt_strip) * (1.0 + 0.5 * piano.wear)
-            level *= _loudness(vel) * (0.5 + vel)
-            force[:, start:start + n] += (thud * level)[None, :] * chan[:, None]
+        n = min(length - start, thump)
+        thud = thuds[int(rng.integers(len(thuds)))][:n] * (1.0 if rng.random() < 0.5 else -1.0)
+        level = _interp(note.pitch, KNOCK_TABLE) * (1.0 + 2.0 * piano.felt_strip) * (1.0 + 0.5 * piano.wear)
+        level *= _loudness(vel) * (0.5 + vel)
+        force[:, start:start + n] += (thud * level)[None, :] * chan[:, None]
     out = np.empty((length, 2))
     for ch in range(2):
         out[:, ch] = oaconvolve(force[ch], piano.board[:, ch])[:length]
