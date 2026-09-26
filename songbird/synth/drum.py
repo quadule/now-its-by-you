@@ -41,7 +41,7 @@ MODES = _modes()
 STROKES = {
     # radius (0 centre, 1 rim), pitch factor (the hand behind the skin), ring (seconds, the fundamental's T60),
     # contact (ms), click level
-    "bass": (0.22, 1.00, 0.55, 1.6, 0.25),
+    "bass": (0.22, 1.00, 0.35, 1.6, 0.25),
     "tip": (0.72, 1.12, 0.22, 0.9, 0.45),
     "mute": (0.45, 1.25, 0.08, 1.1, 0.35),
     "rim": (0.95, 1.15, 0.05, 0.5, 1.0),
@@ -114,11 +114,11 @@ def hit(stroke: str, vel: float, sr: int, rng: np.random.Generator, *, pitch: fl
     n = min(length, int(0.06 * sr))
     slap = sosfilt(butter(2, [16.0 * f0, min(5000.0, 0.45 * sr)], btype="bandpass", fs=sr, output="sos"),
                    rng.standard_normal(n + 64))[64:]
-    y[:n] += slap * np.exp(-np.arange(n) / (ring * 0.035 * sr)) * (0.15 + 0.25 * brightness) * radius * level
+    y[:n] += slap * np.exp(-np.arange(n) / (ring * 0.035 * sr)) * (0.08 + 0.12 * brightness) * radius * level
     # the knock of the stick itself: a millisecond or two of bright noise
     n = int(0.004 * sr)
     burst = sosfilt(butter(2, [900.0, 6000.0], btype="bandpass", fs=sr, output="sos"), rng.standard_normal(n + 64))[64:]
-    y[:n] += burst * np.exp(-np.arange(n) / (0.0008 * sr)) * click * (0.6 + 1.0 * brightness) * level
+    y[:n] += burst * np.exp(-np.arange(n) / (0.0008 * sr)) * click * (0.3 + 0.5 * brightness) * level
     peak = np.max(np.abs(y)) + 1e-12
     return y * vel / peak * (0.35 + 0.65 * vel)
 

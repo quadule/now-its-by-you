@@ -100,7 +100,8 @@ def tracks(notes, sr: int, length: int, rng: np.random.Generator, *, vibrato: fl
     direction = 1.0
     last_end = -1.0
     last_pitch = None
-    for note in sorted(notes, key=lambda n: n.start):
+    ordered = [n for n in sorted(notes, key=lambda n: n.start) if n.dur * sr >= 16]
+    for k, note in enumerate(ordered):
         i0 = max(0, int(round(note.start * sr)))
         i1 = min(length, int(round((note.start + note.dur) * sr)))
         if i1 - i0 < 16:
@@ -109,7 +110,11 @@ def tracks(notes, sr: int, length: int, rng: np.random.Generator, *, vibrato: fl
         t = np.arange(m) / sr
         pitch = note.pitch + rng.normal(0.0, 0.04 + 0.08 * wear)  # a player's own intonation
         cents = np.zeros(m)
-        legato = note.art == "slur" and last_pitch is not None and note.start - last_end < 0.02
+        joined = last_pitch is not None and note.start - last_end < 0.02  # no rest before it
+        legato = note.art == "slur" and joined
+        after = ordered[k + 1] if k + 1 < len(ordered) else None
+        if after is not None and after.start - (note.start + note.dur) >= 0.02:
+            after = None  # a rest follows
         if legato:  # the finger moves; the bow carries on
             glide = min(m, int(0.012 * sr))
             cents[:glide] = (last_pitch - pitch) * 100.0 * (1.0 - np.linspace(0.0, 1.0, glide)) ** 2
@@ -130,19 +135,25 @@ def tracks(notes, sr: int, length: int, rng: np.random.Generator, *, vibrato: fl
         period[i0:i1] = p - _FILTER_DELAY + _SLIP_EARLY
         beta = max(0.085 + 0.02 * rng.standard_normal(), 3.5 / p.min())
         bridge_len[i0:i1] = beta * p.mean()
-        # The bow: speed and weight rise together at a stroke's start; a
-        # slurred note keeps the stroke's speed; the bow lifts at the end if a
-        # rest follows.
+        # The bow: speed and weight rise together at a stroke's start (from
+        # the string, after a rest; through a quick reversal, at a bow change);
+        # a slurred note keeps the stroke going; at a stroke's end the bow
+        # turns round quickly if another stroke follows, or eases and lifts
+        # before a rest.
         speed = 0.02 + 0.25 * note.vel
         envelope = np.ones(m)
         if not legato:
             direction = -direction
-            rise = min(m, int((0.03 + 0.03 * (1.0 - note.vel)) * sr))
+            rise = min(m, int((0.01 if joined else 0.03 + 0.03 * (1.0 - note.vel)) * sr))
             envelope[:rise] = np.linspace(0.0, 1.0, rise) ** 0.7
-        fall = min(m, int(0.03 * sr))
-        envelope[-fall:] *= np.linspace(1.0, 0.25, fall)
+        if after is None:
+            fall = min(m, int(0.03 * sr))
+            envelope[-fall:] *= np.linspace(1.0, 0.25, fall)
+        elif after.art != "slur":
+            fall = min(m, int(0.01 * sr))
+            envelope[-fall:] *= np.linspace(1.0, 0.0, fall)
         if note.art == "swell":
-            envelope *= 0.55 + 0.45 * np.sin(np.pi * np.linspace(0.0, 1.0, m))
+            envelope *= 0.7 + 0.3 * np.sin(np.pi * np.linspace(0.0, 1.0, m))
         wander = 1.0 + 0.04 * np.convolve(rng.standard_normal(m // 256 + 2), np.ones(2) / 2, mode="same")
         wander = np.interp(np.arange(m), np.linspace(0, m, len(wander)), wander)
         bow_v[i0:i1] = direction * speed * envelope * wander
@@ -155,7 +166,7 @@ def tracks(notes, sr: int, length: int, rng: np.random.Generator, *, vibrato: fl
             # and the hair catches the string as it lands: a jolt, a third of a Helmholtz corner, one trip
             # to the bridge wide, which the stick and slip lock onto (the build-up drops from 60-80 periods to 15-20)
             width = max(1, int(round(beta * p.mean())))
-            catch[i0 : i0 + width] += direction * 0.3 * speed / beta
+            catch[i0 : i0 + width] += direction * (0.15 if joined else 0.3) * speed / beta
         bow_f[i0:i1] = grip
         last_end = note.start + note.dur
         last_pitch = pitch

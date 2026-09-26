@@ -41,12 +41,12 @@ class Body:
 GUITAR = Body(  # a steel-string flat top: air mode near 100 Hz, top plate near 200
     modes=((101.0, 22.0, 4.5), (196.0, 30.0, 7.0), (234.0, 28.0, 3.0), (392.0, 30.0, 2.0),
            (532.0, 34.0, 4.0), (660.0, 30.0, 1.0)),
-    dense=(700.0, 7000.0, 90), tilt=-2.0, q=(34.0, 22.0), direct=0.35, lowcut=75.0, highcut=7500.0,
+    dense=(700.0, 7000.0, 90), tilt=-1.0, q=(34.0, 22.0), direct=0.25, lowcut=75.0, highcut=7500.0,
 )
 CITTERN = Body(  # a small bright long-neck lute (bouzouki, cittern): everything higher and livelier
     modes=((132.0, 22.0, 5.0), (262.0, 34.0, 7.0), (318.0, 30.0, 4.0), (486.0, 36.0, 5.0),
            (650.0, 34.0, 2.0), (830.0, 30.0, 2.0)),
-    dense=(900.0, 8000.0, 90), tilt=-1.0, q=(40.0, 24.0), direct=0.4, lowcut=110.0, highcut=9000.0,
+    dense=(900.0, 8000.0, 90), tilt=-1.0, q=(40.0, 24.0), direct=0.25, lowcut=110.0, highcut=9000.0,
 )
 HARP = Body(  # a lever harp's long soundbox: warm, even, a gentle top
     modes=((142.0, 18.0, 4.0), (228.0, 22.0, 5.0), (362.0, 24.0, 3.0), (516.0, 26.0, 2.5), (700.0, 24.0, 1.0)),

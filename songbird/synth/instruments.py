@@ -38,7 +38,7 @@ PLACE = {
     "harp": (-0.2, 0.7),
     "bass": (0.0, 0.15),
     "fiddle": (0.5, 0.4),
-    "whistle": (-0.5, 0.0),
+    "whistle": (-0.3, 0.0),
     "drum": (0.12, 0.0),
     "drone": (0.0, 0.9),
 }
@@ -47,17 +47,17 @@ PLACE = {
 # band part arranges them, each sits where a folk band's players would under
 # a singer (the voice stem stays the loudest thing in the song).
 LEVEL = {
-    "lute": 0.5,
-    "guitar": 0.14,
-    "harp": 0.13,
-    "bass": 0.23,
+    "lute": 0.28,
+    "guitar": 0.19,
+    "harp": 0.18,
+    "bass": 0.26,
     "fiddle": 0.2,
-    "whistle": 0.15,
-    "drum": 1.0,
+    "whistle": 0.12,
+    "drum": 1.4,
     "drone": 0.09,
 }
 
-DEFAULTS = dict(brightness=0.5, wear=0.25, body=1.0, maker=0, tonic=62, capo=0,
+DEFAULTS = dict(brightness=0.5, wear=0.25, ornament=0.5, body=1.0, maker=0, tonic=62, capo=0,
                 **{name: 1.0 for name in INSTRUMENTS})
 
 
@@ -112,6 +112,7 @@ def render_part(name: str, notes: tuple[Note, ...], sr: int, length: int, settin
     """One instrument's stem: dry, stereo, `length` samples, at its level."""
     s = {**DEFAULTS, **settings}
     bright, wear, size, maker = float(s["brightness"]), float(s["wear"]), float(s["body"]), int(s["maker"])
+    ornament = float(s["ornament"])
     # Each part has its own performance randomness, and each instrument its own maker's quirks.
     index = INSTRUMENTS.index(name)
     rng = np.random.default_rng([seed, 17, index])
@@ -127,7 +128,7 @@ def render_part(name: str, notes: tuple[Note, ...], sr: int, length: int, settin
                         course=1.5 + 6.0 * wear, spread=0.005, touch=0.3)
             box, opens, coupling = body.CITTERN, _open_strings(int(s["tonic"]), 45, 69), 0.0012
         elif name == "guitar":
-            spec = dict(brightness=0.35 + 0.35 * bright, decay=3.2, pick=0.22, hardness=0.7, planes=0.35,
+            spec = dict(brightness=0.45 + 0.35 * bright, decay=3.2, pick=0.22, hardness=0.7, planes=0.35,
                         touch=0.15, damp=0.05)
             capo = int(s["capo"])
             box, opens, coupling = body.GUITAR, [p + capo for p in (40, 45, 50, 55, 59, 64)], 0.001
@@ -147,14 +148,16 @@ def render_part(name: str, notes: tuple[Note, ...], sr: int, length: int, settin
             force = force + pluck.sympathetic(force, sr, opens, coupling=coupling, decay=3.0, brightness=0.3)
         stem = with_body(force, box)
     elif name == "fiddle":
-        force = bowed.bow(notes, sr, length, rng, vibrato=16.0 + 8.0 * bright, wear=wear, noise=0.3 + 0.8 * wear)
+        # a folk fiddler's vibrato is narrow, when there is one: 6 to 16 cents
+        force = bowed.bow(notes, sr, length, rng, vibrato=6.0 + 10.0 * ornament, wear=wear, noise=0.3 + 0.8 * wear)
         force = sosfilt(butter(1, 60.0, btype="highpass", fs=sr, output="sos"), force)
         stem = with_body(force, body.FIDDLE)
     elif name == "whistle":
-        stem = pipe.blow(notes, sr, length, rng, brightness=bright, wear=wear)
+        stem = pipe.blow(notes, sr, length, rng, brightness=bright, wear=wear, vibrato=ornament)
     elif name == "drum":
-        stem = drum.play(notes, sr, length, rng, pitch=float(s.get("drum_hz", 82.0)) / size, brightness=bright,
-                         wear=wear)
+        # a frame drum is tuned by warming the skin, not to the key: its maker's, somewhere near 80 Hz
+        skin = 80.0 * 2.0 ** make.uniform(-0.25, 0.25) / size
+        stem = drum.play(notes, sr, length, rng, pitch=skin, brightness=bright, wear=wear)
     elif name == "drone":
         tone = reed.drone(notes, sr, length, rng, brightness=bright, wear=wear)
         stem = with_body(tone, body.REED_BOX)

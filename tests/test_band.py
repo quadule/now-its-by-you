@@ -118,3 +118,21 @@ def test_stems_are_named_by_role_and_line_up():
     assert len(lengths) == 1
     for name, stem in stems.items():
         assert stem.shape[1] == 2 and np.all(np.isfinite(stem)) and np.abs(stem).max() < 4.0, name
+
+
+def test_a_small_change_changes_only_what_it_touches():
+    """Each part draws from its own stream, bar by bar, and its timing from
+    where a note is: dropping the lute leaves the bass, guitar and drum note for
+    note as they were, and nudging the density keeps most of what was played
+    (the drift is meant to be subtle day to day)."""
+    g = G.load(H)
+    p = choose_params(g)
+
+    def notes(band, parts=INSTRUMENTS):
+        return {(n.part, round(n.start, 6), n.pitch, round(n.vel, 6)) for n in realize(g, replace(p, band=band)).notes
+                if n.part in parts}
+
+    base = notes(Band(), ("bass", "guitar", "drum"))
+    assert notes(Band(lute=0.0), ("bass", "guitar", "drum")) == base
+    everyone, nudged = notes(Band()), notes(Band(density=0.55))
+    assert len(everyone & nudged) > 0.6 * len(everyone)

@@ -105,11 +105,13 @@ def _excitation(period: float, pick: float, hardness: float, vel: float, rng: np
     # a fingertip rounds the corner off above a kilohertz or two, a pick above six.
     spectrum = np.fft.rfft(x)
     harmonic = np.arange(len(spectrum))
-    cutoff_hz = 1200.0 + 9000.0 * hardness**1.5 * (0.35 + 0.65 * vel)
+    cutoff_hz = 1200.0 + 9000.0 * hardness**1.5 * (0.6 + 0.4 * vel)
     cutoff = max(1.5, cutoff_hz * period / sr)  # in harmonics
     spectrum /= np.sqrt(1.0 + (harmonic / cutoff) ** 4)
     x = np.fft.irfft(spectrum, n)
-    return x * vel / (np.max(np.abs(x)) + 1e-12)
+    # scaled by its RMS, not its peak: a pluck near the bridge is a narrow, spiky
+    # pulse, and peak scaling would leave it a third as loud as one in the middle
+    return x * 0.5 * vel / (np.sqrt(np.mean(x**2)) + 1e-12)
 
 
 def _plane(freq: float, excitation: np.ndarray, sr: int, loss: float, t60: float, held: int, length: int,

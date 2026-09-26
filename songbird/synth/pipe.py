@@ -133,11 +133,11 @@ def tracks(notes, sr: int, length: int, rng: np.random.Generator, *, brightness:
 
 
 def blow(notes, sr: int, length: int, rng: np.random.Generator, *, brightness: float = 0.5, wear: float = 0.0,
-         breathiness: float = 1.0) -> np.ndarray:
+         breathiness: float = 1.0, vibrato: float = 0.5) -> np.ndarray:
     """A pipe part, `length` samples long."""
     if not notes:
         return np.zeros(length)
-    freq, breath, chiff, drive, aim = tracks(notes, sr, length, rng, brightness=brightness, wear=wear)
+    freq, breath, chiff, drive, aim = tracks(notes, sr, length, rng, brightness=brightness, wear=wear, vibrato=vibrato)
     # turbulence at the lip is a hiss, not a rumble: nothing much below a few hundred hertz
     noise = sosfilt(butter(2, 350.0, btype="highpass", fs=sr, output="sos"), rng.standard_normal(length))
     noise *= 1.6 * breathiness * (1.0 + 0.5 * wear)

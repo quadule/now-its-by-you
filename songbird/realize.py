@@ -81,7 +81,6 @@ def realize(genome: Genome, params: Params, verses=None, phrasing: Phrasing | No
     verses = verses if verses is not None else genome.seed_verses
     meter = genome.meter
     rng = np.random.default_rng(params.seed)
-    band_rng = np.random.default_rng([params.seed, 7])  # the band's own stream: its choices never move the singer
 
     # Lay the form out on the grid, phrase by phrase. Units count grid steps
     # from the first phrase's first bar line; pickups reach back before it.
@@ -205,7 +204,7 @@ def realize(genome: Genome, params: Params, verses=None, phrasing: Phrasing | No
                         notes.append(replace(sung_note, part=f"choir{i + 1}", pitch=float(pitch),
                                              vel=0.9 * sung_note.vel, gesture=None))
 
-    accomp, band_settings = band_mod.arrange(genome, params, placed, lead, end, melody, seconds, band_rng)
+    accomp, band_settings = band_mod.arrange(genome, params, placed, lead, end, melody, seconds)
     ring = 3.0  # the last chord rings out
     final = seconds(end)
     notes += accomp
