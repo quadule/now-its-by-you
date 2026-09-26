@@ -6,10 +6,12 @@ For each render (its score, x.score.json, beside it says where the singers sing;
 render in it with a score beside it):
 
 - bursts: 100 ms stretches where the band above 6 kHz comes within `--limit` dB (default 10) of the
-  1-4 kHz band, and 1 s ones (what an ear hears as a hiss rather than a consonant), per minute, the
-  worst, and how many fall where the texture is sparse (the mix 6 dB or more under its loud level).
-  Each is called sibilant-like when nothing reaches over 12 kHz (the learned voice stops at 11.8 kHz)
-  or broadband when it does (cymbals, brushes, noise). --list prints them;
+  1-4 kHz band, and whole seconds that do (what an ear hears as a hiss rather than a consonant), per
+  minute, the worst, and how many fall where the texture is sparse (the mix 6 dB or more under its
+  loud level). Each is called sibilant-like when nothing reaches over 12 kHz (the learned voice stops
+  at 11.8 kHz) or broadband when it does (cymbals, brushes, noise). A ratio can't tell highs that
+  rose from mids that fell, so the highs' own level is given too: the loudest (99th percentile)
+  100 ms of highs against the render's loud level. --list prints the bursts;
 - the floor: the highs' quietest tenth (their 10th percentile, 100 ms frames) where nobody sings and
   the band plays (within 20 dB of the loud level; 2 s of it at least), against the 1-4 kHz band
   there: a steady hiss raises it (a whisper in the rests mostly lies under 4 kHz: the singers' own
@@ -82,11 +84,12 @@ def check(path: Path, limit: float = -10.0, show: bool = False) -> dict:
         k = i + int(np.argmax(ratio[i: j + 1]))
         kind = "sibilant-like" if b["top"][k] < b["low6"][k] - 25.0 else "broadband"
         bursts.append({"at": round(float(t[i] - WIN / 2), 2), "long": round(float((j - i) * HOP + WIN), 2),
-                       "over": round(float(ratio[k]), 1), "sparse": bool(sparse[k]), "kind": kind})
-    # 1 s windows (the band energies summed over 20 frames, 10 apart)
+                       "over": round(float(ratio[k]), 1), "highs": round(float(b["hi"][k] - loud), 1),
+                       "sparse": bool(sparse[k]), "kind": kind})
+    # whole seconds (the band energies summed over 20 frames, one second after another)
     lin = {k: 10 ** (v / 10) for k, v in b.items()}
     m = int(1.0 / HOP)
-    second = [10 * np.log10(lin["hi"][i:i + m].sum() / lin["mid"][i:i + m].sum()) for i in range(0, len(t) - m, m // 2)]
+    second = [10 * np.log10(lin["hi"][i:i + m].sum() / lin["mid"][i:i + m].sum()) for i in range(0, len(t) - m + 1, m)]
     minutes = len(x) / sr / 60.0
     out = {
         "render": path.name, "minutes": round(minutes, 2),
@@ -94,8 +97,10 @@ def check(path: Path, limit: float = -10.0, show: bool = False) -> dict:
         "sparse": sum(e["sparse"] for e in bursts),
         "worst": max((e["over"] for e in bursts), default=None),
         "broadband": sum(e["kind"] == "broadband" for e in bursts),
+        "seconds": len(second),
         "seconds_over": sum(1 for v in second if v > limit),
         "worst_second": round(float(max(second)), 1) if second else None,
+        "loudest_highs": round(float(np.percentile(b["hi"], 99) - loud), 1),  # against the render's loud level
     }
     if score is not None:
         rests = ~_sung(score, t) & (b["all"] > loud - 20.0)  # nobody sings, and the band plays
@@ -126,7 +131,8 @@ def check(path: Path, limit: float = -10.0, show: bool = False) -> dict:
             out["singers_where_they_rest"] = stems
     if show:
         for e in bursts:
-            print(f"   {e['at']:8.2f} s  {e['long']:.2f} s  {e['over']:+5.1f} dB  {e['kind']}{'  sparse' if e['sparse'] else ''}")
+            print(f"   {e['at']:8.2f} s  {e['long']:.2f} s  {e['over']:+5.1f} dB over 1-4 kHz, highs {e['highs']:+5.1f} dB "
+                  f"re loud  {e['kind']}{'  sparse' if e['sparse'] else ''}")
     return out
 
 
@@ -147,7 +153,8 @@ def main() -> None:
             continue
         line = (f"{r['render']:32} {r['bursts']:4d} bursts ({r['per_minute']:4.1f}/min, {r['sparse']} sparse, "
                 f"{r['broadband']} broadband), worst {r['worst'] if r['worst'] is not None else '-':>5} dB; "
-                f"1 s over: {r['seconds_over']}, worst {r['worst_second']:+.1f} dB")
+                f"seconds over: {r['seconds_over']} of {r['seconds']}, worst {r['worst_second']:+.1f} dB; "
+                f"loudest highs {r['loudest_highs']:+.1f} dB re loud")
         if "floor_in_rests" in r:
             line += f"; floor in rests {r['floor_in_rests']:+.1f} dB"
         print(line)
