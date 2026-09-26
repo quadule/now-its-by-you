@@ -33,7 +33,7 @@ INSTRUMENTS = ("lute", "guitar", "harp", "bass", "fiddle", "whistle", "drum", "d
 # band stands: bass and drum in the middle, the chordal instruments either
 # side, the two melody instruments further out, opposite each other.
 PLACE = {
-    "lute": (-0.35, 0.45),
+    "lute": (-0.35, 0.8),
     "guitar": (0.3, 0.6),
     "harp": (-0.2, 0.7),
     "bass": (0.0, 0.15),

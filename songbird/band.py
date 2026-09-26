@@ -721,14 +721,19 @@ def guitar_part(ctx: Context, capo: int) -> list[Ev]:
             out += _fingerpick(ctx, rng, c, capo)
             continue
         bar_start = c.u0 - ((c.u0 - s.u0) % ctx.bar)
+        chopped = False
+        rebound = False  # after a chop the hand comes straight back up
         for pos, stroke, accent in strum_pattern(ctx, family, what):
             u = bar_start + pos * ctx.beat
             if not (c.u0 - 1e-9 <= u < c.u1 - 1e-9) or (what == "ring" and u > c.u0 + 1e-9):
                 continue
-            if stroke == "U" and (density < 0.3 or rng.random() < 0.15 + 0.3 * max(0.0, 0.5 - density)):
+            if stroke == "U" and not rebound and (density < 0.3 or rng.random() < 0.15 + 0.3 * max(0.0, 0.5 - density)):
                 continue
-            if stroke == "D" and pos > 0 and what == "strum" and s.role == "refrain" and rng.random() < 0.12 * density:
-                stroke = "X"  # a muted chop on a backbeat
+            rebound = False
+            backbeat = pos % 2 == 1 and not ctx.compound
+            if stroke == "D" and backbeat and not chopped and what == "strum" and s.role == "refrain" \
+                    and rng.random() < 0.2 * density:
+                stroke, chopped, rebound = "X", True, True  # a muted chop on a backbeat, once a bar at most
             if u > c.u0 + 1e-9 and stroke == "B":
                 stroke = "b"
             strokes.append((u, stroke, accent, c))
