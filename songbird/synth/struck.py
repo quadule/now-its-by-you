@@ -37,9 +37,10 @@ QUIET = 1e-5  # a mode is dropped once it is this far (-100 dB) under the loudes
 def _bank(freqs, decay, phase, pos, amps, mix, bend, damp, dweight, rate, length, floor):
     """The bank at `rate` Hz for `length` samples. freqs (K,) Hz; decay (K,)
     nepers per second; phase (K,) each mode's starting phase; pos (H,) hit
-    positions in samples (sorted, fractional); amps (H, K); mix (K, C); bend and
-    damp: per-sample tracks, or empty arrays; dweight (K,) each mode's share of
-    the damping; floor: the squared level under which a mode is dropped."""
+    positions in samples (sorted, fractional); amps (H, K); mix (K, C); bend: a
+    per-sample track or an empty array; damp (D, length): D damping tracks
+    (D may be 0); dweight (D, K) each mode's share of each; floor: the squared
+    level under which a mode is dropped."""
     n_modes = freqs.shape[0]
     n_hits = pos.shape[0]
     channels = mix.shape[1]
@@ -75,8 +76,8 @@ def _bank(freqs, decay, phase, pos, amps, mix, bend, damp, dweight, rate, length
                     if bend.shape[0] > 0:
                         w = w * (1.0 + bend[s0])
                     a = decay[k]
-                    if damp.shape[0] > 0:
-                        a = a + damp[s0] * dweight[k]
+                    for d in range(damp.shape[0]):
+                        a = a + damp[d, s0] * dweight[d, k]
                     m = np.exp(complex(-a / rate, w))
                 for n in range(s0, s1):
                     zk = zk * m
@@ -136,7 +137,7 @@ def _factor(freq: float, sr: int) -> int:
 
 
 def ring(freqs, t60s, times, amps, sr: int, length: int, *, mix=None, bend=None, damp=None, dweight=None,
-           phase=None, multirate: bool = True) -> np.ndarray:
+         damp2=None, dweight2=None, phase=None, multirate: bool = True) -> np.ndarray:
     """Modes at `freqs` Hz, each falling 60 dB in its t60 seconds, struck at
     `times` (seconds) with amps[h, k] for hit h and mode k, rendered
     `length` samples long.
@@ -145,8 +146,10 @@ def ring(freqs, t60s, times, amps, sr: int, length: int, *, mix=None, bend=None,
     channel hearing all alike); returns (length,) for one channel, else
     (length, C). bend: a per-sample track of the relative pitch offset every
     mode shares (0.02 is 2% sharp). damp: a per-sample track of extra decay,
-    in nepers per second, that mode k feels times dweight[k] (default 1).
-    phase: each mode's starting phase (default 0, a sine: no click)."""
+    in nepers per second, that mode k feels times dweight[k] (default 1);
+    damp2 and dweight2 a second such track (a hand's, beside a cymbal's own
+    loud-phase drain). phase: each mode's starting phase (default 0, a sine:
+    no click)."""
     freqs = np.asarray(freqs, dtype=np.float64)
     k = len(freqs)
     t60s = np.broadcast_to(np.asarray(t60s, dtype=np.float64), (k,))
@@ -157,7 +160,11 @@ def ring(freqs, t60s, times, amps, sr: int, length: int, *, mix=None, bend=None,
     mono = mix is None
     mix = np.ones((k, 1)) if mono else np.asarray(mix, dtype=np.float64).reshape(k, -1)
     phase = np.zeros(k) if phase is None else np.broadcast_to(np.asarray(phase, dtype=np.float64), (k,))
-    dweight = np.ones(k) if dweight is None else np.broadcast_to(np.asarray(dweight, dtype=np.float64), (k,))
+    tracks, weights = [], []
+    for track_, weight in ((damp, dweight), (damp2, dweight2)):
+        if track_ is not None:
+            tracks.append(np.asarray(track_, dtype=np.float64))
+            weights.append(np.ones(k) if weight is None else np.broadcast_to(np.asarray(weight, dtype=np.float64), (k,)))
     out = np.zeros((length, mix.shape[1]))
     if k == 0 or len(times) == 0 or length == 0:
         return out[:, 0] if mono else out
@@ -180,9 +187,11 @@ def ring(freqs, t60s, times, amps, sr: int, length: int, *, mix=None, bend=None,
         n = base * (8 // factor)
         track = lambda x: np.zeros(0) if x is None else np.ascontiguousarray(  # noqa: E731
             np.pad(np.asarray(x, dtype=np.float64)[::factor], (0, n)))[:n]
+        damps = np.stack([track(t) for t in tracks]) if tracks else np.zeros((0, n))
+        dweights = np.stack([w[sel] for w in weights]) if weights else np.zeros((0, len(sel)))
         y = _bank(freqs[sel], decay[sel], np.ascontiguousarray(phase[sel]), times * rate,
-                  np.ascontiguousarray(amps[:, sel]), np.ascontiguousarray(mix[sel]), track(bend), track(damp),
-                  np.ascontiguousarray(dweight[sel]), float(rate), n, floor)
+                  np.ascontiguousarray(amps[:, sel]), np.ascontiguousarray(mix[sel]), track(bend),
+                  np.ascontiguousarray(damps), np.ascontiguousarray(dweights), float(rate), n, floor)
         acc, at = (y if acc is None else acc + y), factor
     while acc is not None and at > 1:
         acc, at = _double(acc), at // 2
