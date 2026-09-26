@@ -4,13 +4,17 @@
 
 The phrases live in tools/instrument_phrases_b/, one file per family, each with
     MODULE  = {instrument: the songbird.synth module that plays it}
-    PHRASES = {title: dict(parts={instrument: [Note, ...]}, about="what to listen for")}
-    LEVELS  = {instrument: (kind, [Note, ...])}, kind one of comping, lead, percussion, bass:
+    PHRASES = {title: dict(parts={instrument: [Note, ...]}, about="what to listen for",
+                           mix_as={instrument: an existing mix role}, optional)}
+    LEVELS  = {instrument: (kind, [Note, ...])}, kind one of comping, lead, percussion, bass, colour:
               the instrument's typical part, whose placed loudness should meet that kind's target.
 
 For every phrase, writes <out>/<title>.flac: its parts rendered, placed and levelled as their SPECs
 say, through the house mix and its room (synth.mix), mastered to -18 LUFS so they can be compared
-(--dry: no mix or room, just the placed stems); and <out>/README-b.txt listing them. --levels prints
+(--dry: no mix or room, just the placed stems); and <out>/README-b.txt listing them. The mix picks a
+channel strip by a stem's name and has none yet for most of these (a kit gets the generic strip,
+whose 60 Hz high-pass thins its kick; a cello the fiddle's, whose 180 Hz high-pass takes its bottom
+octaves): mix_as names the existing strip a demo borrows until the mix has its own. --levels prints
 each calibration part's loudness against its target (today's stems in H: the guitar's strum in the
 first refrain, the whistle's intro, the frame drum's full pattern, the upright bass; the same targets
 as tools/instrument_levels.py); --cpu the seconds its part takes to render when played for three minutes.
@@ -73,12 +77,20 @@ def span(notes) -> float:
     return max(n.start + n.dur for n in notes)
 
 
-def render_phrase(family, parts: dict, dry: bool = False, settings: dict | None = None) -> np.ndarray:
+def render_phrase(family, parts: dict, dry: bool = False, settings: dict | None = None,
+                  mix_as: dict | None = None) -> np.ndarray:
     length = int((max(span(notes) for notes in parts.values()) + 2.5) * SR)
     stems = {name: placed(module_for(family, name), name, notes, length, settings) for name, notes in parts.items()}
     if dry:
         return sum(stems.values())
-    return synth.mix(stems, SR, 0)
+    borrowed = {}
+    for name, stem in stems.items():  # a stem mixed under the name of the strip it borrows (drum, drum2...)
+        role = (mix_as or {}).get(name, name)
+        key, k = role, 2
+        while key in borrowed:
+            key, k = f"{role}{k}", k + 1
+        borrowed[key] = stem
+    return synth.mix(borrowed, SR, 0)
 
 
 def looped(notes, seconds: float = 180.0):
@@ -113,12 +125,12 @@ def main() -> None:
                 length = int((span(notes) + 1.0) * SR)
                 lufs = master.loudness(placed(module, name, notes, length), SR)
                 row = f"{name:18s} {kind:10s} {lufs:6.1f} LUFS  target {TARGETS[kind]:6.1f}  ({lufs - TARGETS[kind]:+.1f})"
-                if args.cpu:
+                if args.cpu:  # this process's CPU time: a busy machine doesn't count against it
                     part = looped(notes)
                     rng, make = streams(name)
-                    t = time.perf_counter()
+                    t = time.process_time()
                     module.render(name, tuple(part), SR, int((span(part) + 1.0) * SR), rng, make, dict(SETTINGS))
-                    row += f"  3-minute part {time.perf_counter() - t:5.1f} s ({len(part)} notes)"
+                    row += f"  3-minute part {time.process_time() - t:5.1f} s CPU ({len(part)} notes)"
                 print(row, flush=True)
         if args.no_render:
             continue
@@ -127,17 +139,19 @@ def main() -> None:
                 continue
             out.mkdir(parents=True, exist_ok=True)
             t = time.perf_counter()
-            mix = render_phrase(family, phrase["parts"], args.dry, phrase.get("settings"))
+            mix = render_phrase(family, phrase["parts"], args.dry, phrase.get("settings"), phrase.get("mix_as"))
             pcm = master.to_pcm16(master.master(mix, SR, target=-18.0), seed=1)
             path = out / f"{title}.flac"
             master.write_flac(path, pcm, SR)
             print(f"{path}  {len(pcm) / SR:.1f}s  rendered in {time.perf_counter() - t:.1f}s", flush=True)
-            readme.append(f"{title}.flac\n    {', '.join(phrase['parts'])}: {phrase['about']}\n")
+            strips = "".join(f" ({n} through the mix's {r} strip)" for n, r in (phrase.get("mix_as") or {}).items())
+            readme.append(f"{title}.flac\n    {', '.join(phrase['parts'])}: {phrase['about']}{strips}\n")
     if readme and not wanted:
         (out / "README-b.txt").write_text(
             "The second set of instruments, each alone (tools/instrument_solos_b.py): a short phrase in D,\n"
             "placed and levelled as the band would have it, through the house mix and its room, mastered\n"
-            "to -18 LUFS so they can be compared. Everything is synthesized; nothing is sampled.\n\n"
+            "to -18 LUFS so they can be compared. Everything is synthesized; nothing is sampled. The mix has\n"
+            "no channel strip of its own yet for most of these, so some borrow one (named below).\n\n"
             + "\n".join(readme))
 
 

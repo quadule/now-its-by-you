@@ -121,6 +121,8 @@ PHRASES = {
     "kit-swell": dict(parts={"kit": _swell()}, about="a mallet swell on the crash, a floor-tom roll, a rim shot "
                                                      "and a choked crash"),
 }
+for _phrase in PHRASES.values():  # the mix's generic strip would thin the kick: the frame drum's until the kit has one
+    _phrase["mix_as"] = {"kit": "drum"}
 
 
 def _level() -> list:
