@@ -262,6 +262,7 @@ class Knob:
         x = read(ctx.song, self.path)
         was = read(ctx.parent, self.path)
         own = self.own(ctx.c, x) if any(u in ctx.c.known for u in self.uses) else was
+        machine = own
         if self.drift and ctx.drift is not None:
             dims = self.drift if isinstance(self.drift, tuple) else (self.drift,)
             spans = self.span if isinstance(self.span, tuple) else (self.span,)
@@ -272,6 +273,8 @@ class Knob:
         value = was + PULL * (own - was) if self.inherit else own
         lo, hi = self.bounds(x) if callable(self.bounds) else self.bounds
         value = round(float(round(clip(value, lo, hi) / self.step) * self.step), 6)
+        if ctx.trace is not None:  # how the value came to be: the parent's, the machine's own, moved by time
+            ctx.trace[self.path] = {"was": was, "own": machine, "moved": own, "value": value, "inherit": self.inherit}
         head, _, tail = self.path.partition(".")
         held = getattr(ctx.parent, head)
         if tail and isinstance(held, dict) and value == was and tail not in held:
@@ -389,6 +392,7 @@ class Context:
     parent: object  # the parent's Params
     c: Character
     drift: Drift | None
+    trace: dict | None = None  # if given, each knob's arithmetic by path (for the studio's reasons)
 
     def at(self, view: str, dimension: str) -> float:
         return self.drift.view(view).get(dimension, 0.0) if self.drift is not None else 0.0
@@ -877,22 +881,28 @@ DECISIONS = (choose_mode, choose_form, choose_accomp, choose_pattern, choose_lea
 
 
 def choose(genome: Genome, parent=None, voice: Voice | None = None, drift: Drift | None = None,
-           seed: int | None = None):
-    """The child's parameters; see realize.choose_params."""
+           seed: int | None = None, pin: Callable | None = None, trace: dict | None = None):
+    """The child's parameters; see realize.choose_params. pin(out), if given, puts a person's choices
+    (songbird.edits) in place after the knobs and after every decision, so a decision that reads one
+    reads the person's and none overwrites it; trace, if given, receives each knob's arithmetic."""
     from .realize import Params
 
     song = Params.from_dict(genome.seed_params)
     parent = parent if parent is not None else song
     if voice is None and drift is None:
         return parent if seed is None else replace(parent, seed=seed)
-    ctx = Context(genome, song, parent, character(voice), drift)
+    ctx = Context(genome, song, parent, character(voice), drift, trace)
     out = parent.to_dict()
     for key in ("singer", "mix", "leanings"):
         out[key] = dict(out.get(key) or {})
     for knob in KNOBS:
         knob.apply(out, ctx)
+    if pin is not None:
+        pin(out)
     for decide in DECISIONS:
         decide(out, ctx)
+        if pin is not None:
+            pin(out)
     out["seed"] = Chance(voice, drift, parent, seed).seed
     return Params.from_dict(out)
 

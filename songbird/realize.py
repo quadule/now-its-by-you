@@ -69,7 +69,7 @@ class Params:
 
 
 def choose_params(genome: Genome, parent: Params | None = None, voice: Voice | None = None,
-                  drift: Drift | None = None, seed: int | None = None) -> Params:
+                  drift: Drift | None = None, seed: int | None = None, overrides=None) -> Params:
     """Inherit from the parent, pull toward the voice, apply drift.
 
     With no voice and no drift, the parent's parameters (the seed's, from the
@@ -78,13 +78,25 @@ def choose_params(genome: Genome, parent: Params | None = None, voice: Voice | N
     drift moves it today (variation.KNOBS and DECISIONS), and the rendition's
     seed comes from (voice, instant, parent), or from `seed` if given: the same
     machine, instant and parent always give the same child.
+
+    overrides: a person's choices (songbird.edits: an edits map, or an
+    edits.Overrides, which also says which took effect and why any didn't),
+    each put in place of the choice it names, inside the table so a decision
+    that reads it reads the person's. None or none at all: as without.
     """
+    if overrides is not None:
+        from .edits import Overrides
+
+        overrides = overrides if isinstance(overrides, Overrides) else Overrides(genome, overrides)
     if voice is None and drift is None:
         chosen = parent if parent is not None else Params.from_dict(genome.seed_params)
-        return chosen if seed is None else replace(chosen, seed=seed)
+        chosen = chosen if seed is None else replace(chosen, seed=seed)
+        return overrides.params(chosen) if overrides is not None else chosen
     from .variation import choose  # the table reads the singer's fields, so it brings the synth with it
 
-    return choose(genome, parent, voice, drift, seed)
+    if overrides is None:
+        return choose(genome, parent, voice, drift, seed)
+    return overrides.finish(choose(genome, parent, voice, drift, seed, pin=overrides.pin))
 
 
 def sung_as(note: Note, g: Gesture | None, beat: float) -> Note:
