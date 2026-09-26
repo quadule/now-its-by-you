@@ -47,11 +47,11 @@ import numpy as np
 from scipy.signal import butter, lfilter, sosfilt
 
 from . import struck
-from .rattle import add, burst, contact, early_power, modal_weights, pan, vel_gain
+from .rattle import add, burst, contact, early_power, modal_weights, onsets, pan, vel_gain
 
 SPEC = {
     "claps": dict(
-        family="percussion", register=None, place=(-0.2, 0.5), level=0.92, poly=True,
+        family="percussion", role="percussion", register=None, place=(-0.2, 0.5), level=1.0, poly=True,
         articulations={
             "clap": "the group claps together (3 to 8 people, by maker)",
             "clap-solo": "one person claps, 3 dB under the group",
@@ -61,7 +61,7 @@ SPEC = {
               "their onsets spread 10 to 25 ms",
     ),
     "stomps": dict(
-        family="percussion", register=None, place=(0.0, 0.3), level=0.7, poly=True,
+        family="percussion", role="percussion", register=None, place=(0.0, 0.3), level=0.76, poly=True,
         articulations={
             "stomp": "two to five people stomp together on a wooden floor (by maker)",
             "stomp-solo": "one person stomps, 3 dB under the group",
@@ -125,9 +125,11 @@ def _clappers(make: np.random.Generator, size: float) -> list[dict]:
 
 @lru_cache(maxsize=16)
 def _crack_band(sr: int, top: float) -> np.ndarray:
-    """The air's crack: above 1 kHz, falling 6 dB an octave past `top`."""
+    """The air's crack: above 1 kHz, falling 6 dB an octave past `top` and 18 past twice that (a jet of
+    air from a gap that closes in a fraction of a millisecond has little above 10 kHz)."""
     return np.vstack([butter(2, 1000.0, btype="highpass", fs=sr, output="sos"),
-                      butter(1, min(top, 0.45 * sr), fs=sr, output="sos")])
+                      butter(1, min(top, 0.45 * sr), fs=sr, output="sos"),
+                      butter(2, min(2.0 * top, 0.45 * sr), fs=sr, output="sos")])
 
 
 def _unit(x: np.ndarray) -> np.ndarray:
@@ -145,15 +147,16 @@ def _clap(p: dict, vel: float, sr: int, rng: np.random.Generator, bright: float)
     """One person's clap, at unit early loudness."""
     n = int(0.045 * sr)
     exc = np.zeros(n)
-    tau = (0.6 - 0.3 * vel) * 1e-3 * (1.25 - 0.5 * bright) * np.exp(rng.normal(0.0, 0.15))  # harder: shorter
+    tau = (0.8 - 0.55 * vel) * 1e-3 * (1.25 - 0.5 * bright) * np.exp(rng.normal(0.0, 0.15))  # harder: shorter
     t, amp = 0.0, 1.0
     for _ in range(max(1, p["touches"] + int(rng.integers(-1, 2)))):
         add(exc, amp * burst(rng, tau, sr), int(t * sr))
         t += rng.uniform(0.3, 1.3) * 1e-3
         amp *= rng.uniform(0.35, 0.95)
     y = _unit(_resonate(exc, p["fc"] * np.exp(rng.normal(0.0, 0.04)), p["q"] * np.exp(rng.normal(0.0, 0.08)), sr))
-    crack = p["crack"] * (0.5 + 0.8 * vel) * (0.6 + 0.8 * bright)  # its energy against the pocket's
-    y += np.sqrt(crack) * _unit(sosfilt(_crack_band(sr, 2500.0 + 3000.0 * bright), exc))
+    # the crack's energy against the pocket's: hands brought together harder squeeze the air out faster
+    crack = p["crack"] * (0.25 + 1.5 * vel**2) * (0.6 + 0.8 * bright)
+    y += np.sqrt(crack) * _unit(sosfilt(_crack_band(sr, 3000.0 + 3000.0 * bright), exc))
     # the palms' flesh: a soft push of a few milliseconds (its derivative, as the air hears it)
     m = int(rng.uniform(2.0, 3.5) * 1e-3 * sr)
     y[:m] += p["thump"] * np.max(np.abs(y)) * np.cos(np.pi * np.arange(m) / m) * np.hanning(m)
@@ -189,14 +192,14 @@ def claps(notes, sr: int, length: int, rng: np.random.Generator, make: np.random
         else:  # one person, or the one or two who snap, 3 dB under the group
             who = people[:1] if art == "clap-solo" else snappers
             norm = SOLO / np.sqrt(sum(p["gain"] ** 2 for p in who))
-        for p in who:
+        # the first hands meet on the note, the others over the next 10 to 25 ms
+        for p, offset in zip(who, onsets(rng, [p["lag"] for p in who], jitter)):
             if art == "clap" and rng.random() < 0.01 + 0.05 * wear:
                 continue  # someone misses one
             vel = float(np.clip(note.vel * 10.0 ** (rng.normal(0.0, 1.2) / 20.0), 0.0, 1.0))
             y = (_snap if art == "snap" else _clap)(p, vel, sr, rng, bright)
             y *= EARLY * vel_gain(vel) * p["gain"] * norm
-            start = int(round((note.start + p["lag"] + rng.normal(0.0, jitter)) * sr))
-            add(out, y[:, None] * pan(p["pan"])[None, :], start)
+            add(out, y[:, None] * pan(p["pan"])[None, :], int(round((note.start + offset) * sr)))
     return out
 
 
@@ -285,9 +288,10 @@ def stomps(notes, sr: int, length: int, rng: np.random.Generator, make: np.rando
     for note in _playing(notes, length, sr):
         who = people[:1] if note.art == "stomp-solo" else people
         feet = []
+        offsets = onsets(rng, [p["lag"] for p in who], jitter)  # the first foot lands on the note
         for i, p in enumerate(who):
             vel = float(np.clip(note.vel * 10.0 ** (rng.normal(0.0, 1.2) / 20.0), 0.0, 1.0))
-            t = note.start + p["lag"] + rng.normal(0.0, jitter)
+            t = note.start + offsets[i]
             # the heel: its hard edge for about a millisecond, then the leg's weight through the sole
             weight = (8.0 - 4.0 * vel) * 1e-3 * (1.2 - 0.4 * bright) * (1.15 - 0.3 * p["heel"])
             edge = (1.3 - 0.6 * p["heel"]) * 1e-3 * (1.2 - 0.4 * vel)

@@ -4,7 +4,8 @@ import numpy as np
 import pytest
 from scipy.signal import butter, sosfiltfilt
 
-from _levels_b import SETTINGS, TARGETS, loudness, streams
+from _levels_b import SETTINGS, loudness, streams
+from _percussion_b import contract, target
 from songbird.score import Note
 from songbird.synth import hand
 
@@ -125,4 +126,9 @@ def test_a_typical_part_sits_at_the_frame_drums_level(name, art, beats):
     """Claps on 2 and 4, stomps on 1 and 3, at 100 BPM, vel 0.6: at the frame drum's level whoever made them."""
     part = [Note(name, b * 0.6, 0.1, 60.0, 0.6, art=art) for b in beats]
     levels = [loudness(hand, name, part, int(20.0 * SR), maker=maker) for maker in range(3)]
-    assert all(abs(level - TARGETS["percussion"]) < 1.5 for level in levels)
+    assert all(abs(level - target(hand, name)) < 1.5 for level in levels)
+
+
+@pytest.mark.parametrize("name,plain,beats", [("claps", "clap", range(1, 32, 2)), ("stomps", "stomp", range(0, 32, 2))])
+def test_the_registrys_contract(name, plain, beats):
+    contract(hand, name, plain, [Note(name, b * 0.6, 0.1, 60.0, 0.6, art=plain) for b in beats])
