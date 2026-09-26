@@ -151,7 +151,7 @@ function renderHeader() {
   bar.hidden = !mine.length && !held;
   bar.replaceChildren();
   if (mine.length || held) {
-    bar.append(
+    bar.append(...[
       mine.length ? tag("you", `${mine.length} choice${mine.length === 1 ? " is" : "s are"} yours`) : null,
       held ? tag("you", "the words are kept") : null,
       mine.length ? h("button", { class: "link small", type: "button", onclick: () => listen("program", null) }, "hear it as the program would sing it") : null,
@@ -159,7 +159,7 @@ function renderHeader() {
         const keep = state.edits.date ? { date: state.edits.date } : {};
         state.edits = keep; save(); refresh();
       } }, "undo all"),
-    );
+    ].filter(Boolean));  // append() would write a null out as text
   }
   const problems = v.problems.filter((p) => !["tonic", "mode", "tempo"].includes(p.path) && !p.path.startsWith("form.") && !p.path.startsWith("band.") && !p.path.startsWith("mix."));
   const pbar = $("problemsBar");

@@ -107,6 +107,10 @@ def test_the_page_gets_the_song_its_choices_and_their_bounds(served):
     assert [m["name"] for m in compare["machines"]] == ["Yours", "Basil", "Script"]
     status, kept = post(port, studio, "/api/keep-words", {"edits": {"tempo": 90}})
     assert kept["edits"]["tempo"] == 90 and "words.verse.0" in kept["edits"]
+    status, view = post(port, studio, "/api/song", {"edits": {"form.intro": False, "form.verses": 4}})
+    shape = next(c for c in view["cards"] if c["id"] == "shape")
+    said = [r["text"] for r in shape["reasons"] if r["kind"] == "you"]
+    assert "without an intro: chosen by you" in said and "four verses: chosen by you" in said
 
 
 def test_the_page_never_says_the_codes_words(home):

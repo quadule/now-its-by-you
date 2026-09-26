@@ -665,7 +665,13 @@ def shape_card(v: Version) -> dict:
             why.append({"kind": "time", "text": f"{what}: {_when('season')}"})
         if not machine and not time:
             why.append({"kind": "time", "text": f"{what}: your machine and {_when('season')} together"})
-    mine = [{"kind": "you", "text": f"{PARTS[p[5:]]}: chosen by you", "path": p} for p in v.mine("form.")]
+    def chosen(part: str, value) -> str:  # what the person chose for a part, as they chose it
+        if part == "verses":
+            return f"{number(value)} verses"
+        return f"{'with' if value else 'without'} {SHORT.get(part, PARTS.get(part, part))}"
+
+    mine = [{"kind": "you", "text": f"{chosen(p[5:], v.edits.get(p))}: chosen by you", "path": p}
+            for p in v.mine("form.")]
     return _card(v, "shape", "Shape", shape_words(parts), _form_line(v.params.form), mine + _finish(v, why, "form"),
                  ["form."], parts=parts or {}, choices=edits_mod.shapes(genome, v.params.form))
 
