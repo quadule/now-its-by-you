@@ -14,9 +14,8 @@ The phrases live in tools/instrument_phrases_b/, one file per family, each with
 For every phrase, writes <out>/<title>.flac: its parts rendered, placed and levelled as their SPECs
 say, through the house mix and its room (synth.mix), mastered to -18 LUFS so they can be compared
 (--dry: no mix or room, just the placed stems); and <out>/README-b.txt listing them. The mix picks a
-channel strip by a stem's name and has none yet for most of these (a kit gets the generic strip,
-whose 60 Hz high-pass thins its kick; a cello the fiddle's, whose 180 Hz high-pass takes its bottom
-octaves): mix_as names the existing strip a demo borrows until the mix has its own. --levels prints
+channel strip by a stem's name, and each of these now finds one that suits it (docs/INSTRUMENTS-B.md,
+For the mix); mix_as names another strip a demo borrows, should one ever need to. --levels prints
 each calibration part's loudness against its target (today's stems in H: the guitar's strum in the
 first refrain, the whistle's intro, the frame drum's full pattern, the upright bass; the same targets
 as tools/instrument_levels.py); --cpu the seconds its part takes to render when played for three minutes.
@@ -160,8 +159,8 @@ def main() -> None:
         (out / "README-b.txt").write_text(
             "The second set of instruments, each alone (tools/instrument_solos_b.py): a short phrase in D,\n"
             "placed and levelled as the band would have it, through the house mix and its room, mastered\n"
-            "to -18 LUFS so they can be compared. Everything is synthesized; nothing is sampled. The mix has\n"
-            "no channel strip of its own yet for most of these, so some borrow one (named below).\n\n"
+            "to -18 LUFS so they can be compared. Everything is synthesized; nothing is sampled. Each goes\n"
+            "through the mix's channel strip for its name (a demo that borrows another says so below).\n\n"
             + "\n".join(readme))
 
 
