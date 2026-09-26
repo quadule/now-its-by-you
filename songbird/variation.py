@@ -671,20 +671,18 @@ def choose_mood(out: dict, ctx: Context) -> None:
     """Mood weights over plain, light, dark and tender: the parent's pulled
     toward the screen's (a light screen lightens, a warm one is tender), with
     the slow mood drift tilting the machine's own (a positive drift lightens),
-    darkened a little in a minor mode. Never read from the person's words."""
+    darker in a minor mode. Never read from the person's words."""
     was = {**LEANINGS["mood_weights"], **ctx.parent.leanings.get("mood_weights", {})}
     c = ctx.c
-    screen = {"plain": 1.0, "light": 1.0 + 0.4 * c.brightness, "dark": 1.0 - 0.4 * c.brightness,
-              "tender": 1.0 + 0.3 * c.warmth} if "brightness" in c.known else None
+    screen = {"plain": 1.0, "light": 1.0 + 0.6 * c.brightness, "dark": 1.0 - 0.5 * c.brightness,
+              "tender": 1.0 + 0.5 * c.warmth} if "brightness" in c.known else None
     tilt = ctx.at("slow", "mood")
-    lean = {"plain": 0.25, "light": 0.5, "dark": -0.5, "tender": -0.25}
+    lean = {"plain": 0.5, "light": 1.0, "dark": -1.0, "tender": -0.5}  # a drift of 1 doubles light, halves dark
+    minor = {"dark": 1.5, "tender": 1.2} if out.get("mode") in MINOR else {}
     weights = {}
     for mood, w in was.items():
-        own = (screen.get(mood, 1.0) if screen else w) * 2 ** (lean.get(mood, 0.0) * tilt)
-        w = ctx.pull(w, own)
-        if out.get("mode") in MINOR and mood in ("dark", "tender"):
-            w *= 1.25 if mood == "dark" else 1.1
-        weights[mood] = w
+        own = (screen.get(mood, 1.0) if screen else w) * 2 ** (lean.get(mood, 0.0) * tilt) * minor.get(mood, 1.0)
+        weights[mood] = ctx.pull(w, own)
     mean = sum(weights.values()) / len(weights)
     out.setdefault("leanings", {})["mood_weights"] = {k: round(float(v / mean), 2) for k, v in weights.items()}
 
