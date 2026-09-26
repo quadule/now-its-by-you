@@ -634,7 +634,7 @@ def _warmed(chain: amp.Chain, emf: np.ndarray, sr: int) -> np.ndarray:
     return amp.play(chain, np.concatenate([np.zeros(pre), emf]))[pre:]
 
 
-STEEL_OUT = 17.6  # the stem's scale: the country style's line under the singer, as written, sits as a comping part
+STEEL_OUT = 16.3  # the stem's scale: the country style's line under the singer, as written, sits as a comping part
 EMF = 0.055  # volts per unit of string velocity for a single coil (as electric.py's)
 SCRAPE = 0.009  # the bar's scrape at full speed, against a string's velocity: 25 dB under a note on a wound string
 
@@ -652,14 +652,17 @@ def _voltage(segs, strings: Strings, coil: amp.Coil, circuit: dict, sr: int, len
 
 @lru_cache(maxsize=32)
 def _steel_master(seed: int, bright: float, wear: float, sr: int) -> float:
-    """The amp's master volume, set so this steel's A chord (bar at 5), held, comes out at a fixed loudness."""
-    d = _steel_built(seed)
+    """The amp's master volume, set as a player sets it: an A chord high on the strings and a D chord low on them,
+    each held, come out of the speaker at a fixed loudness whatever the steel's pickup, amp and speaker. The
+    bar starts at the fifth fret for every maker, so every steel is judged on the same strings."""
+    d = {**_steel_built(seed), "home": 5}
     strings, coil, circuit = _steel_strings(d, bright, wear)
-    notes = [Note("steel", 0.0, 2.5, float(p), 0.6) for p in (69.0, 73.0, 76.0)]
+    notes = [Note("steel", 0.0, 1.5, float(p), 0.6) for p in (69.0, 73.0, 76.0)]
+    notes += [Note("steel", 1.5, 1.5, float(p), 0.6) for p in (50.0, 57.0, 62.0)]
     rng = np.random.default_rng([seed, 71])
-    segs, bar, pedals, vib, _ = _bar_tracks(_groups(notes), sr, rng, d, 0.5, int(3.0 * sr))
-    _finish(segs, strings, sr, int(3.0 * sr), bar, pedals, vib, d["thirds"])
-    emf = _voltage(segs, strings, coil, circuit, sr, int(3.0 * sr), rng)
+    segs, bar, pedals, vib, _ = _bar_tracks(_groups(notes), sr, rng, d, 0.5, int(3.2 * sr))
+    _finish(segs, strings, sr, int(3.2 * sr), bar, pedals, vib, d["thirds"])
+    emf = _voltage(segs, strings, coil, circuit, sr, int(3.2 * sr), rng)
     chain = amp.Chain(d["amp"], sr, os_=2)
     return float(10.0 ** ((-20.0 - loudness(amp.play(chain, emf), sr)) / 20.0))
 
