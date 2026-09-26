@@ -351,7 +351,7 @@ def solo(module, name: str) -> tuple[np.ndarray, str, tuple[Note, ...]]:
 # a gain against its SPEC level and with the band settings the style would choose.
 SKETCHES = {
     "ballad": ("a piano ballad: the pedalled piano and its tune, a pad beneath, a sub bass",
-               dict(brightness=0.45), {"piano": 1.0, "synth-pad": 0.7, "sub-bass": 0.8}),
+               dict(brightness=0.45), {"piano": 1.0, "synth-pad": 0.7, "sub-bass": 0.5}),
     "soul": ("soul: the organ's held chords with the rotor speeding up, the tine piano comping, synth bass, "
              "the 909-style kit", dict(brightness=0.55),
              {"organ": 0.8, "epiano": 0.9, "synth-bass": 1.0, "drums-909": 1.0}),
@@ -363,7 +363,7 @@ SKETCHES = {
     "lullaby": ("a lullaby: the music box's tune, the celesta's chords, a felt piano's accompaniment",
                 dict(brightness=0.2, wear=0.1), {"music-box": 1.0, "celesta": (0.7, "comp"), "piano": (0.6, "comp")}),
     "lounge": ("lounge: the vibraphone's tune, the tine piano's voicings, a sub bass and the 808-style kit played soft",
-               dict(brightness=0.4), {"vibraphone": 1.0, "epiano": 0.8, "sub-bass": 0.8, "drums-808": 0.6}),
+               dict(brightness=0.4), {"vibraphone": 1.0, "epiano": 0.8, "sub-bass": 0.5, "drums-808": 0.6}),
 }
 
 
