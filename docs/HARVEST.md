@@ -97,11 +97,12 @@ more breath and roughness in the voice.
 Reads the modification time of up to 50,000 files under the home directory,
 at most eight folders deep, for at most four seconds. Never entered: hidden
 files and folders, `Library`, `Applications`, `AppData`, `OneDrive`, iCloud
-Drive, `Pictures`, `Movies`, `Music`, `Videos`, code-dependency and build
-folders (`node_modules`, `venv`, `build`, `dist`, `target`, ...), packages
-(`.app`, `.photoslibrary`, ...) and symbolic links. `Desktop`, `Documents`
-and `Downloads` are included (macOS will ask you first). A file's name is
-only used to decide where to walk next; only its age is counted.
+Drive, code-dependency and build folders (`node_modules`, `venv`, `build`,
+`dist`, `target`, ...), packages (`.app`, `.photoslibrary`, ...), symbolic
+links, and the home's own `Pictures`, `Movies`, `Music` and `Videos`. The
+home's `Desktop`, `Documents` and `Downloads` are included (macOS will ask
+you first). A file's name is only used to decide where to walk next; only
+its age is counted.
 
 Keeps the median of log10(age in days) and the interquartile range of those
 logs, each in quarter steps (a median of 2.5 is about ten months).
