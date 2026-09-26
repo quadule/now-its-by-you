@@ -19,9 +19,10 @@ PART="${1:-all}"
 
 # 1. The genre tour: one made-up machine (ada) on one day, in every style, round the ring from the seed's
 #    ballad; a verse and a refrain (with its intro, where the three fit in about a minute). Three lineage
-#    voices (as if ada sang a third-generation parent), so the backing voices can be heard.
+#    voices (as if ada sang a third-generation parent), so the backing voices can be heard. No verse is left
+#    bare (alone=0): in an excerpt that would hide the band for half of it.
 if [ "$PART" = all ] || [ "$PART" = tour ]; then
-M="--machine fictional:ada --date 2026-09-27 --choir 3"
+M="--machine fictional:ada --date 2026-09-27 --choir 3 --arrange alone=0"
 render $M --style ballad     --form intro verse refrain --out "$OUT/tour/01-ballad.flac"
 render $M --style shanty     --form intro verse refrain --out "$OUT/tour/02-shanty.flac"
 render $M --style stringband --form intro verse refrain --out "$OUT/tour/03-stringband.flac"
