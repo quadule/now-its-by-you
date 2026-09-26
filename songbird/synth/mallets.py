@@ -644,7 +644,9 @@ def _quasi(gains, freqs, t60, force, sr):
     r = -pole / (1.0 - pole)
     smooth = np.max(np.abs(np.diff(force, prepend=0.0))) / max(np.max(force), 1e-30)
     far = np.abs(r) * smooth < 0.35
-    return np.array([np.sum(c0.real), np.sum((c0 * r * far).real), np.sum((c0 * r * r * far).real)])
+    # (the second difference is left out: a pulse rising as t^a with a under 2 has no second derivative at
+    # its start, and taking out its sampled stand-in put a spike of a sixth of the peak on soft strokes)
+    return np.array([np.sum(c0.real), np.sum((c0 * r * far).real), 0.0])
 
 
 def _take_out(buf: np.ndarray, start: int, force: np.ndarray, quasi: np.ndarray, chan: np.ndarray) -> None:
