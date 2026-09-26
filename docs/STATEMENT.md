@@ -19,20 +19,32 @@ the next version):
 
 ## The pitch (continuing the sentence)
 
-**The artist's:**
+**The artist's, current (2026-09-26):**
+
+> Run the program and you get a new version of the song, shaped by your computer and the day. Sing
+> into it and it learns a little of your timing and inflection (without keeping a recording or
+> cloning your voice). The piece confronts the blurred authorship of AI music through the lens of
+> folk music and oral tradition: it wonders who made it, and invites you to take part.
+
+No further edits suggested: "it wonders who made it" is better than any of the drafts below.
+
+<details><summary>Earlier drafts</summary>
+
+The artist's first version:
 
 > Run the program and you get a new version of the song that you can shape. Sing into it yourself
 > and it learns a tiny bit of your timing and inflection (without saving a recording or cloning your
 > voice). The piece confronts the blurred authorship of AI music and contrasts with folk music and
 > oral tradition, asking who made it and inviting you to take part.
 
-**Suggested edit** ("that you can shape" is explained by the next sentence; and the piece works
-*like* an oral tradition as much as against one):
+A suggested edit, since folded in:
 
 > Run the program and you get a new version of the song, shaped by your computer and the day. Sing
 > into it and it learns a little of your timing and inflection, without keeping a recording or
 > cloning your voice. The piece confronts the blurred authorship of AI music by borrowing the ways
 > of folk music and oral tradition: it asks who made it, and invites you to take part.
+
+</details>
 
 ## Longer drafts
 
