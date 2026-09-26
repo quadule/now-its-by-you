@@ -80,7 +80,12 @@ would sing it · undo all". Edits that couldn't be kept say why here, with
 section: each sung section's lines large, in a serif, the line's focus word
 underlined; a small heading with which verse or couplet it is, its tags
 (plain, light, dark or tender; its year; rare; the question it asks), and how
-it came to be there ("drawn by chance" or "chosen by you"). Instrumental
+it came to be there: "handed down" (as the version before held it), "new
+this time" with the program's own reason under it ("verse 3 taken in: the
+form sings three verses; your machine's verse this season", from
+choose_params' log, docs/EVOLUTION.md), "chosen by you" or "kept by you". The
+words are the lineage's own (Params.words), so rolling chance no longer
+changes them. Instrumental
 sections are one quiet line ("the whistle plays the tune in"). Every section
 has a play button; a sung one has *change*, and *undo* once changed.
 
@@ -94,24 +99,25 @@ where a card differs from today.
 
 | Card | Shown as | Reasons | Can change | Within |
 |---|---|---|---|---|
+| The style | "a string band, a waltz", what its band plays, and the arrangement's options that are on ("the last refrain a whole step up; a count-in to begin; backing voices in harmony") | kept from the version before; where your machine is at home among the styles, and that a version moves one style at a time; these weeks' lean; the styles the line was sung in | the style, its feel, how it ends, backing voices, the lift | the styles of songbird/style.py; a feel the style can't play the song in is said, not bent. A style edit goes in by name (choose_params(style=, arrange=)), so its players, pace and leans come with it |
 | Key | "D major", "E mixolydian", "B minor" | where your machine's singer is comfortable; your machine's languages lean to folk (bright, darker) modes; this year | the note, and the mode | five semitones either side of the song's own key; the modes the song's chords keep their shape in (for H: major, mixolydian, minor) |
 | Tempo | "95 beats a minute: a steady walk" | a brisk or unhurried machine (new or old files, quick or slow hands); today | a slider | 0.75 to 1.3 times the song's own |
 | Shape | "three verses, with an intro, a turn after the refrains and the bridge twice", and the sections in order | a rich vocabulary tells a longer story; your machine's habit; this season | how many verses; verses in pairs; intro, turns, break, the bridge twice, the tag, outro | what the song's template and the words' rules allow; a refused part says why |
-| The band | "a steady strum with the whistle leading; moderate and clear; all eight play" | your machine's own band; a busy machine plays busier; your screen brightens it; these weeks; this year's lead | pattern, lead, how busy, how bright, who plays | the band's own ranges; every instrument can sit out, all of them for the voice alone ("the whistle sits out, so the fiddle takes the tune") |
+| The band | "a steady strum with the whistle leading; moderate and clear; all eight play", or under a style "the fiddle leading; busy and bright; bass, banjo, mandolin, guitar and fiddle play" | your machine's own band; the players are the style's own; a busy machine plays busier; your screen brightens it; these weeks; this year's lead | pattern and lead (the song's own band), how busy, how bright, who plays (a style's players by name) | the band's own ranges; every player can sit out, all of them for the voice alone ("the whistle sits out, so the fiddle takes the tune") |
 | The room and the mix | "a room like a living room; the voice close and over the band; wide" | your machine's room; its own way of mixing; these weeks; today | how much of the room, how wide, the voice over the band, how close the singer is | the mix's designed ranges (MixParams RANGES) |
 | The singer | "a high voice, clear, with a gentle vibrato; sung the song's own way" | your machine's own voice, the same in every song it sings; today | only whose way it is sung | the phrasings made on this computer (a checkout's singing page) |
-| The words | "drawn from the song's 38 verses, within its rules; leaning a little lighter, older and rarer" | your light (dark, warm) screen; a minor key; the words you use; these weeks; chance | keep these words, and every section in the words column | the bank's rules |
+| The words | "the version before's words, handed down, with two changes this time" | each change and why (taken in for a longer form, changed by the song's rule, swapped this season); the rest handed down; what your machine reaches for (its screen, the words you use, these weeks) | keep these words, and every section in the words column | the bank's rules; a word you choose changes only that word, the rest held as handed down |
 | Voices before | "one voice from earlier versions joins the bridge" | one more for every version before this one, up to six | no: it is the lineage | |
-| The melody | the variants a version carries, once `Params.variants` exists | | each on or off | |
+| The melody | "one small change to the tune, handed down or found here", each in words | what the tune learned or forgot this time, and why | each can be dropped | as the lineage carries them (songbird.variants) |
 | Your machine | its languages, size, files, screen, words, typing and room, a line each | | no | |
 
-Any Params field no card speaks for yet (the style the style agent is adding,
-say) gets a card of its own in plain values, with reasons found the same way;
-a proper card, and an editor, can follow.
+Any Params field no card speaks for yet gets a card of its own in plain
+values, with reasons found the same way; a proper card, and an editor, can
+follow.
 
 **Through time.** Six years of this machine's song, from three years ago to
-three on, a lane each for the key (shaded by mode), the tempo, the verses,
-the band's pattern and its lead, and which way the words lean. A dashed line
+three on, a lane each for the style, the key (shaded by mode), the tempo, the
+verses, who leads, and which way the words lean. A dashed line
 is today; the cursor is the day shown. The slider, a tap on the lanes, or the
 steps (a day, a month, a year either way; today) move it, and every card
 follows.
@@ -159,12 +165,13 @@ A sung section's *change* opens its choices in place:
   stanza.
 - **The tag**: la, loo or oo.
 
-A choice pins that verse, couplet, word or syllable in its place; everything
-else is still drawn by chance around it within the rules, and stays as drawn
-wherever the rules allow it beside the choice (so a choice offered in place
-changes nothing else). Roll chance again, and the rest is drawn again around
-what you chose. *Keep these words* (on the words card) pins every word as it
-is, so moving through time and rolling chance change only the music; the
+A choice puts that verse, couplet, word or syllable in its place among the
+words the lineage holds; everything else stays as handed down (so a choice
+offered in place changes nothing else), and the recording hands on what was
+sung, the choice among it (`arrange.hold`, as `songbird render` does). Moving
+through time can change the held words (a longer form takes a verse in, a
+season swaps one); *Keep these words* (on the words card) holds every word as
+it is, so moving through time changes only the music; the
 words then say "kept by you", and the header counts only what was changed.
 
 ## How edits flow
