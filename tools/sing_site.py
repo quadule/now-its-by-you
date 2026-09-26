@@ -207,6 +207,12 @@ def specs(genome_path: Path, sets=None, keys=None, tempos=None) -> list[M.Spec]:
     if unknown:
         raise SystemExit(f"nothing called {', '.join(map(str, unknown))} to build: the sets are {', '.join(have)}, the "
                          f"keys {', '.join(map(str, M.KEYS))}, the speeds {', '.join(map(str, M.TEMPOS))}")
+    for s in have:  # every set sung once, quickly, so a set that can't be sung stops the build here
+        if not sets or s in sets:
+            try:
+                M.spec_score(genome_path, M.Spec(s))
+            except (KeyError, ValueError) as e:
+                raise SystemExit(f"set {s} can't be sung: {e}") from e
     return [M.Spec(s, k, t) for s in have if not sets or s in sets for k in M.KEYS if not keys or k in keys
             for t in M.TEMPOS if not tempos or t in tempos]
 

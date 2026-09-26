@@ -138,6 +138,16 @@ def test_the_site_has_a_guide_for_every_spec(tmp_path, monkeypatch):
         (out / n).stat().st_size for n in (W.MARK, ".assetsignore"))
 
 
+def test_a_set_that_cant_be_sung_stops_the_build_before_it_starts(tmp_path, monkeypatch):
+    monkeypatch.setattr(M, "GUIDES", tmp_path / "renders" / "guide")
+    monkeypatch.setattr(M, "SETS", tmp_path / "sets")
+    (tmp_path / "sets").mkdir()
+    (tmp_path / "sets" / "h-now-its-by-you.json").write_text(json.dumps(
+        {"sets": [{"id": "a", "form": ["verse"], "words": {"verses": [{"id": "wire", "slots": {}}]}}]}))
+    with pytest.raises(SystemExit, match="set a can't be sung: .*2, 3 or 4 verses"):
+        W.specs(ROOT / "songs" / "h-now-its-by-you.json")
+
+
 def test_a_melody_that_wont_decode_in_time_is_encoded_at_the_full_guides_rate(tmp_path, monkeypatch):
     tried = []
 
