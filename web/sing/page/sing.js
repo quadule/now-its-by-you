@@ -196,14 +196,15 @@ async function microphone() {
     if (S.mode === "recording" || S.mode === "calibrating") S.chunks.push(e.data);
     $("level").style.width = Math.min(100, 140 * e.data.peak) + "%";
   };
+  $("mic").textContent = "Microphone on"; // however it was opened: this button, recording or measuring
+  $("micNote").textContent = `Recording at ${S.ctx.sampleRate} Hz. If the level doesn't move when you sing, check the microphone.`;
+  gate();
 }
 
 $("mic").onclick = async () => {
   $("mic").disabled = true;
   try {
     await microphone();
-    $("mic").textContent = "Microphone on";
-    $("micNote").textContent = `Recording at ${S.ctx.sampleRate} Hz. If the level doesn't move when you sing, check the microphone.`;
   } catch (e) {
     $("micNote").innerHTML = `<span class="warn"></span>`;
     $("micNote").firstChild.textContent = e.message;
