@@ -955,10 +955,11 @@ def counter(ctx: Context, section: int, part: str, lo: int, hi: int, vel_scale: 
         cands = [p for p in range(lo, hi + 1) if p % 12 in pcs]
         p = min(cands, key=cost) if cands else (prev or lo)
         repeats = repeats + 1 if p == prev else 0
-        bar = int(round((c.u0 - ctx.sections[section].u0) / ctx.bar))
-        art = ("slur" if bar % 2 or c.u0 > ctx.sections[section].u0 + bar * ctx.bar + 1e-9 else "") if bow else ""
-        out.append(Ev(part, c.u0, c.u1, p, ctx.vel(part, c.u0, 0.75 * vel_scale, 0.85), art=art if prev else "",
-                      section=section))
+        offset = c.u0 - ctx.sections[section].u0
+        bar = int(np.floor(offset / ctx.bar + 1e-9))
+        fresh = bar % 2 == 0 and abs(offset - bar * ctx.bar) < 1e-9  # a new bow every other bar line
+        art = "" if prev is None or (bow and fresh) or not bow else "slur"
+        out.append(Ev(part, c.u0, c.u1, p, ctx.vel(part, c.u0, 0.75 * vel_scale, 0.85), art=art, section=section))
         prev = p
     moving: list[Ev] = []
     ends = [t for t in ctx.tune_in(section) if t.last and t.u1 - t.u0 >= 2 * ctx.sub]
