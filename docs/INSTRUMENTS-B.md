@@ -389,18 +389,19 @@ is centred at 0.78 kHz at the pick on the flat-top, 0.87 on the resonator
 (whose first four harmonics stand within 2 dB of each other) and 1.3 kHz on
 the electric; its fundamental's T60 is 2.5 to 2.6 s.
 
-Levels. The steel is levelled on the country style's line under the singer as
-the style writes it for H's first refrain (low, D3 to B3, at half a comping
-part's velocity so it sits under the words): -23.7 LUFS across six makers
-(-25.3 to -22.3; comping, -23.7), and its picked intro, the tune an octave up,
--20.5 (a lead's -20.7). The slide's answers sit at -20.0 to -21.3 by body (a
-lead, -20.7, beside the harmonica it answers with). In the tour's country
-rendition (ada, 2026-09-27) the steel reads -17.0 LUFS in the intro, -18.5 in
-the verse's fills and -19.7 under the refrain, where its stand-in read -13.7,
--16.5 and -19.5, and the guitar -25.2, -24.1 and -22.6: that machine's steel is
-at the loud end of the makers, and the lineup gives it 1.13. In the blues
-rendition the slide's two-note answers read -28.2 (its stand-in -25.2, the
-guitar's boogie -27.4).
+Levels. Each steel's amp is set as a player sets it, on the same two held
+chords (an A high on the strings, a D low, the bar from the fifth fret), and
+the steel is levelled on the country style's line under the singer as the
+style writes it for H's first refrain (low, D3 to B3, at half a comping part's
+velocity so it sits under the words): across thirteen makers it averages
+-23.7 LUFS (-25.8 to -20.8, sd 1.3; comping, -23.7), and the same rendition's
+picked intro, the tune an octave up, -20.7 (sd 0.9; a lead, -20.7). The
+slide's answers sit at -20.0 to -21.3 by body (a lead, -20.7, beside the
+harmonica it answers with). In the tour's country rendition (ada, 2026-09-27)
+the steel reads -19.0 LUFS in the intro, -20.5 in the verse's fills and -21.7
+under the refrain, where its stand-in read -13.7, -16.5 and -19.5, and the
+guitar -25.2, -24.1 and -22.6. In the blues rendition the slide's two-note
+answers read -28.2 (its stand-in -25.2, the guitar's boogie -27.4).
 
 ## Idioms for the part-writer
 
@@ -639,8 +640,9 @@ session's limit stopped them.
   ran; their instruments pass their tests and the other set's contract test
   (but for the loudness of its generic parts), and want a review by
   measurement next.
-- The pedal steel's level differs by maker by up to 3 dB on the same part
-  (its amp is levelled on a held chord, not on its swells), and a picked
+- The pedal steel's level differs by maker by up to 5 dB on its swelled line
+  (sd 1.3; its amp is levelled on held chords, and each player's swells, home
+  position and sustain differ), and a picked
   note's attack stands about 20 dB over its loudness, so a picked steel line's
   placed stem peaks near full scale (the stems are floats; the mix brings the
   band down to the voice). Its pedals move no other string (a real steel's
