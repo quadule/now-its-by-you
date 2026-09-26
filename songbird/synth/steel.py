@@ -17,14 +17,17 @@ lands near it. A pedal bend ("bend") picks the note with its pedal up, a tone
 or a semitone under, and presses it into the note, as B to C# on the A pedal
 does. The bar's vibrato rolls both ways about the fret (5 to 6.5 Hz, about
 10 cents either way, deeper with the ornament) on anything held. The bar
-whirs and hisses along the wound strings as it moves. "swell" is the volume
-pedal: picked with the pedal back, 45 dB down, and swelled in over a quarter
+whirs and hisses along the wound strings as it moves. The volume pedal rests
+part way down (9 dB under the top) while the player picks; "swell" pulls it
+back 45 dB for the pick and pushes it to the top over a quarter of a second
 to nearly a second, so the attack vanishes; the pedal is the whole
 instrument's, so it takes whatever else is ringing with it. The strings
 (metal finger picks, a thumb pick on the low ones, notes together pinched a
-few milliseconds apart) ring very long on a rigid steel body: 9 to 12 s in
-the middle register, until the player blocks them with the palm, as a player
-does before the bar or a pedal moves under a ringing string. Some players
+few milliseconds apart) ring very long on a rigid steel body: the
+fundamental falls 60 dB in 11 to 15 s at 220 Hz, until the player blocks the
+string with the palm, as a player does before the bar or a pedal moves under
+a ringing string; a slur onto a string that has rung for more than two and a
+half seconds is picked again as the bar carries it. Some players
 tune their major thirds a little flat so the chords ring purer (the G#
 strings and the A pedal's C# 5 to 12 cents, D# a little less): the maker
 decides. It plays through a clean amp with plenty of headroom, its spring
@@ -386,7 +389,7 @@ def _steel_built(seed: int) -> dict:
     d: dict = {}
     d["humbucker"] = bool(g.random() < 0.5)
     d["thirds"] = 0.0 if g.random() < 0.55 else float(g.uniform(5.0, 12.0))  # cents the thirds are tuned flat
-    d["t60"] = float(g.uniform(9.0, 12.0))  # s at 220 Hz: a steel's rigid body and a steel bar
+    d["t60"] = float(g.uniform(11.0, 15.0))  # s at 220 Hz: a steel's rigid body and a steel bar
     d["pickup"] = float(g.uniform(0.038, 0.05))  # m from the bridge, on a 0.622 m (24.5 inch) scale
     d["pick"] = float(g.uniform(0.08, 0.12))
     d["poles"] = tuple(g.normal(0.0, 0.8, 10))
@@ -427,7 +430,7 @@ def _steel_strings(d: dict, bright: float, wear: float) -> tuple[Strings, amp.Co
         open=OPEN, comb=comb, offsets=tuple(z * (0.3 + 3.0 * wear) for z in d["detune"]),
         gains=tuple(10.0 ** (p / 20.0) for p in d["poles"]),
         damping=(4e-6 + 4e-6 * wear) * (1.4 - 0.8 * bright), t60=d["t60"] * (1.0 - 0.25 * wear), along=1.2,
-        heard=0.45, driven=0.6, pick=d["pick"], hardness=0.95, click=0.35, frets=BARS - 1,
+        heard=0.45, driven=0.6, pick=d["pick"], hardness=0.95, click=0.2, frets=BARS - 1,
         kinds=(("thumb", (1.0, 0.85, 1.0, 0.7)),))
     return strings, coil, circuit
 
@@ -440,11 +443,11 @@ def _glide_time(frets: float, d: dict) -> float:
 def _bar_tracks(groups, sr: int, rng: np.random.Generator, d: dict, ornament: float, length: int):
     """Walk the part as a steel player does: grips, bar moves and pedal moves, blocks, swells, vibrato.
     Returns the segments (tracks still to be cut from the part's), the bar, the pedals, the vibrato and the
-    volume pedal's swells."""
+    volume pedal (dB)."""
     bar = Track(float(d["home"]))
     pedals = [Track(0.0) for _ in OPEN]
     vib = Vibrato()
-    volume: list[tuple[int, int]] = []  # (pick sample, swell samples)
+    volume = Track(REST)  # the volume pedal, dB: resting part way down, pushed to the top for a swell
     current: dict[int, Segment] = {}
     segs: list[Segment] = []
     where = int(d["home"])
@@ -467,6 +470,15 @@ def _bar_tracks(groups, sr: int, rng: np.random.Generator, d: dict, ornament: fl
         bent = {g.strings[j] for j in bending if g.change[g.strings[j]] > 0}
         # a note no pedal or lever can bend into is slid into with the bar instead
         slide_in = ("slide" in arts or (bending and not bent)) and g.bar > 0
+        # a slur onto strings that have rung a while (fallen 20 dB or more) is picked again, and the bar and
+        # pedals carry it from where they are: a player's pick and glide
+        repick = legato and min(t0 - current[i].start for i in sounding) > STALE * sr
+        if repick:
+            legato = False
+        if "swell" in arts:  # the pedal back just before the pick
+            volume.move(t0 - int(30 * ms), FLOOR, int(25 * ms))
+        elif not legato and abs(volume.at(t0) - REST) > 0.1:  # back to where it rests, easing off a swell
+            volume.move(t0 - int(150 * ms), REST, int(140 * ms))
         if legato:
             # half the glide before the beat, so it lands near it; never longer than most of either note
             over = int(_glide_time(g.bar - bar.at(t0), d) * sr)
@@ -491,6 +503,8 @@ def _bar_tracks(groups, sr: int, rng: np.random.Generator, d: dict, ornament: fl
                     seg.release = 0.025
             pre = t0 - int(10 * ms)
             first = g.bar - (min(g.bar, int(rng.integers(1, 3))) if slide_in else 0)
+            if repick:  # picked where the bar and pedals are, then carried to the new grip
+                first, released = bar.at(pre), list(state)
             if abs(bar.at(pre) - first) > 1e-9:
                 bar.move(pre, first, int(6 * ms))
             for i in range(len(OPEN)):
@@ -498,9 +512,12 @@ def _bar_tracks(groups, sr: int, rng: np.random.Generator, d: dict, ornament: fl
                     pedals[i].move(pre, released[i], int(6 * ms))
             if slide_in:
                 bar.move(t0 + int(10 * ms), g.bar, int(rng.uniform(0.08, 0.15) * sr))
+            elif repick and abs(first - g.bar) > 1e-9:
+                bar.move(t0 + int(10 * ms), g.bar, int(_glide_time(g.bar - first, d) * sr))
             for i in range(len(OPEN)):
                 if released[i] != target[i]:
-                    pedals[i].move(t0 + int(rng.uniform(0.02, 0.05) * sr), target[i], int(d["bend"] * sr))
+                    travel = d["pedal"] if repick else d["bend"]
+                    pedals[i].move(t0 + int(rng.uniform(0.02, 0.05) * sr), target[i], int(travel * sr))
         spread = 0.0
         for note, i in sorted(zip(group, g.strings), key=lambda x: x[0].pitch):
             start = t0 + (int(spread * sr) if not legato else 0)  # thumb and fingers pinch, a few ms apart
@@ -525,13 +542,14 @@ def _bar_tracks(groups, sr: int, rng: np.random.Generator, d: dict, ornament: fl
             segs.append(seg)
         where, state = g.bar, list(target)
         swell = 0
-        if "swell" in arts:
+        if "swell" in arts:  # pushed to the top along a raised cosine in decibels: the attack vanishes
             swell = int(np.clip(0.35 * dur, 0.25, 0.9) * d["swell"] * sr)
-            volume.append((t0, swell))
-        if "fall" in arts and g.bar > 1:  # the bar slides off down the neck as the note ends
+            volume.move(t0, 0.0, swell)
+        if "fall" in arts and g.bar > 1:  # the bar slides off down the neck as the note ends, the pedal easing
             at = t0 + int(0.6 * dur * sr)
             drop = float(min(g.bar - 0.5, rng.uniform(2.0, 5.0)))
             bar.move(at, g.bar - drop, int(min(0.4 * dur, 0.5) * sr))
+            volume.move(at, REST - 14.0, int(min(0.4 * dur, 0.5) * sr))
             where = int(round(g.bar - drop))
         # the bar's vibrato on anything held long enough, deeper where asked
         after = int(round(groups[k + 1][0].start * sr)) if k + 1 < len(groups) else t0 + int(dur * sr)
@@ -547,7 +565,12 @@ def _bar_tracks(groups, sr: int, rng: np.random.Generator, d: dict, ornament: fl
     return segs, bar, pedals, vib, volume
 
 
-def _swell_track(volume, length: int, sr: int, floor: float = -45.0) -> np.ndarray | None:
+REST = -9.0  # dB: where the volume pedal rests while the player picks, leaving the top of its travel for swells
+FLOOR = -45.0  # dB: the pedal back, for a swell's pick
+STALE = 2.5  # s: how long a string rings before a slur onto it is picked again
+
+
+def _swell_track(volume, length: int, sr: int, floor: float = FLOOR) -> np.ndarray | None:
     """The volume pedal: back (floor dB) just before each swelled pick, then pushed in over the swell along a
     raised cosine in decibels."""
     if not volume:
@@ -579,15 +602,19 @@ def steel(notes, sr: int, length: int, rng: np.random.Generator, make: np.random
     _finish(segs, strings, sr, length, bar, pedals, vib, d["thirds"])
     emf = _voltage(segs, strings, coil, circuit, sr, length, rng)
     emf += _bar_scrape(bar, segs, length, sr, rng, [ORDER.index(w) for w in WOUND], SCRAPE * EMF * coil.sensitivity)
-    swell = _swell_track(volume, length, sr)
-    if swell is not None:
-        emf *= swell
+    emf *= 10.0 ** (volume.window(0, length) / 20.0)
     chain = amp.Chain(d["amp"], sr, os_=2)
     chain.p[21] = _steel_master(seed, bright, wear, sr)
-    return amp.play(chain, emf) * STEEL_OUT
+    return _warmed(chain, emf, sr) * STEEL_OUT
 
 
-STEEL_OUT = 7.1  # the stem's scale: its swelled alto line at vel 0.6 sits as a comping part (-23.7 LUFS)
+def _warmed(chain: amp.Chain, emf: np.ndarray, sr: int) -> np.ndarray:
+    """The amp's two microphones, the amp switched on a quarter of a second before (its valves settle)."""
+    pre = int(0.25 * sr)
+    return amp.play(chain, np.concatenate([np.zeros(pre), emf]))[pre:]
+
+
+STEEL_OUT = 19.0  # the stem's scale: its swelled alto line at vel 0.6 sits as a comping part (-23.7 LUFS)
 EMF = 0.055  # volts per unit of string velocity for a single coil (as electric.py's)
 SCRAPE = 0.009  # the bar's scrape at full speed, against a string's velocity: 25 dB under a note on a wound string
 
@@ -768,7 +795,7 @@ def _slide_sound(notes, sr: int, length: int, rng: np.random.Generator, d: dict,
             emf *= volume
         chain = electric._chain(rig_amp, rig_s, sr)
         chain.p[21] = electric.master_volume("electric", rig_s, sr)
-        return amp.play(chain, emf)
+        return _warmed(chain, emf, sr)
     force = np.zeros(length)
     for seg in segs:
         y = fretboard.sound(seg, strings, sr, rng)

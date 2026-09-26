@@ -17,14 +17,17 @@ GRIPS = {"D": chord("A4", "D5", "F#5"), "G": chord("B4", "D5", "G5"), "A": chord
 
 
 def _swells(vel: float = 0.6) -> list:
-    """Swelled grips under a voice at 72: each bar's chord swelled in, the next reached by the pedals (a slur)
-    where the bar can stay, and a vibrato on the held ones."""
+    """Swelled grips under a voice at 72: each bar's chord swelled in, and half way through the bar the next
+    chord reached by the pedals alone (a slur) where the bar can stay: D to G on the A and B pedals and back."""
     c = Clock(72)
     notes = []
-    for bar, (name, art) in enumerate((("D", "swell"), ("G", "slur"), ("D", "slur"), ("A", "swell"),
-                                       ("D", "swell"), ("G", "slur"), ("A", "swell"), ("D", "swell"))):
-        for p in GRIPS[name]:
-            notes.append(c.note("steel", 4 * bar, 4.0, p, vel, art))
+    for bar, (first, then) in enumerate((("D", "G"), ("D", "D"), ("G", "G"), ("A", "A"), ("D", "G"), ("D", "D"),
+                                         ("A", "A"), ("D", "D"))):
+        for p in GRIPS[first]:
+            notes.append(c.note("steel", 4 * bar, 2.0 if then != first else 4.0, p, vel, "swell"))
+        if then != first:
+            for p in GRIPS[then]:
+                notes.append(c.note("steel", 4 * bar + 2, 2.0, p, vel, "slur"))
     return notes
 
 
