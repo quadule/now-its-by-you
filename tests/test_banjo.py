@@ -314,6 +314,20 @@ def test_a_forward_roll_sits_where_the_guitars_strum_does(maker):
     assert abs(loudness(banjo, "banjo", notes, length, maker=maker) - TARGETS["comping"]) < 1.5
 
 
+def test_a_break_sits_where_a_lead_does():
+    """The tune on the beats inside forward rolls, played as a style plays a lead (0.72 to 0.82), stands
+    where the whistle stating the tune does."""
+    beat = 60.0 / 112
+    tune = [(62, "D"), (66, "D"), (67, "G"), (71, "G"), (69, "A"), (64, "A"), (66, "D"), (62, "D")]
+    notes = []
+    for k, (melody, name) in enumerate(tune):
+        at = 2 * k * beat
+        notes.append(note(at, beat, melody, 0.82))
+        notes += [note(at + 0.5 * (j + 1) * beat, 0.75 * beat, p, 0.72) for j, p in enumerate(ROLL[name][1:4])]
+    length = int((max(n.start + n.dur for n in notes) + 1.0) * SR)
+    assert abs(loudness(banjo, "banjo", notes, length) - TARGETS["lead"]) < 1.5
+
+
 def test_forty_seconds_of_rolls_cost_little():
     notes = roll(["D", "D", "G", "A"] * 5)
     play(notes[:4], 1.0)

@@ -915,7 +915,7 @@ def w_chop(ctx: StyleContext, i: int, part: str) -> list[Ev]:
                 continue
             tones = ctx.tones(c, u, u + ctx.beat / 2, colour=False)
             notes = ctx.voicing(part, tones, max(lo, ctx.tonic - 5), min(hi, ctx.tonic + 14), u, u + ctx.beat / 2, 3)
-            vel = ctx.vel(part, u, 0.82, 0.9) * rng.uniform(0.9, 1.05)
+            vel = ctx.vel(part, u, 0.64, 0.85) * rng.uniform(0.9, 1.05)
             for j, p in enumerate(notes):
                 out.append(ev(part, u, u, p, vel, art=art, i=i, length=0.11, shift=0.006 * j))
     return out
