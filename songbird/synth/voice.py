@@ -43,6 +43,7 @@ NASAL_POLE = 270.0
 SONORANT_LEVELS = {"nasal": 0.5, "liquid": 0.7, "glide": 0.8}
 NASAL_MURMUR_F1 = 260.0  # the murmur's first resonance sits low, near the nasal pole
 CLOSURE = 0.055  # seconds a voiceless stop holds its closure before the release
+CONSONANT_SPREAD = 0.15  # log spread of a consonant's length around its rule's, from one syllable to the next
 
 
 @dataclass(frozen=True)
@@ -152,7 +153,7 @@ def schedule(notes: list[Note], voice: VoiceParams, lexicon: dict[str, str] | No
             for s in sylls]
     if seed is not None and voice.spread > 0:
         rng = np.random.default_rng([seed, 0xC0DA])
-        vary = lambda ds: [d * float(np.exp(0.15 * voice.spread * rng.standard_normal())) for d in ds]  # noqa: E731
+        vary = lambda ds: [d * float(np.exp(CONSONANT_SPREAD * voice.spread * rng.standard_normal())) for d in ds]  # noqa: E731
         onset, coda = [vary(ds) for ds in onset], [vary(ds) for ds in coda]
     for k in range(len(sylls) - 1):  # a coda running into the next onset is sung as one cluster
         if coda[k] and onset[k + 1] and not notes[k].line_end and voice.across != 1.0:
@@ -314,7 +315,10 @@ def control_tracks(segs: list[Segment], n_blocks: int, sr: int, voice: VoicePara
             ah[region] = voice.breath * s.amp
             rd[region] = voice.rd - 0.8 * (s.amp - 0.9)
         elif s.role == "breath":
-            pass  # a breath is shaped noise added after the tract (breaths()), the same for every engine
+            # a breath is shaped noise added after the tract (breaths()), the same for every engine; the
+            # tract only rests at a schwa through it, so the next line's first vowel starts from there
+            # rather than gliding in from the last line's (which sounds like a consonant: "a" heard "the")
+            keys.append(((s.t0 + s.t1) / 2, ph.VOWEL_FORMANTS["AX"]))
         elif s.role in ("onset", "coda"):
             manner, place, voiced = ph.CONSONANTS[s.phone]
             loc = _locus(s.phone, s)
@@ -646,7 +650,7 @@ def pitch_track(notes: list[Note], n_blocks: int, sr: int, voice: VoiceParams, r
         if wants:
             x = np.maximum(tb - note.start - delay, 0.0)
             v = (1.0 - np.exp(-x / 0.12)) * (0.85 + 0.15 * np.clip((x - 0.4) / 0.8, 0.0, 1.0))
-            v *= np.clip((end - tb) / 0.08, 0.0, 1.0)
+            v *= np.clip((heard - tb) / 0.08, 0.0, 1.0)  # gone with the vowel: consonants are sung without it
             here = np.full(n_blocks, rate_k)
             if note.line_end:
                 bloom = np.clip((tb - (heard - 0.3)) / 0.3, 0.0, 1.0)
@@ -692,16 +696,25 @@ def pitch_track(notes: list[Note], n_blocks: int, sr: int, voice: VoiceParams, r
 
 
 def sway(n: int, rate: float, voice: VoiceParams, seed: int, tremolo: np.ndarray | None = None,
-         slow: bool = True) -> np.ndarray:
+         vowels: list[tuple[float, float]] | None = None) -> np.ndarray:
     """The voice's loudness moving under a held note, in dB per point (n points at `rate` a second): the
-    vibrato's own swing (voice.tremolo, from pitch_track's parts) and, if slow, breath pressure that never
-    quite holds still (voice.waver, 1/f to 1.5 Hz and falling after, as natural singers' held notes move).
+    vibrato's own swing (voice.tremolo, from pitch_track's parts) and, inside each of `vowels` ((start,
+    end) seconds), breath pressure that never quite holds still (voice.waver, 1/f to 1.5 Hz and falling
+    after, as natural singers' held notes move). The waver moves a vowel about its own level and leaves
+    its edges where the rules put them, so no syllable comes out louder or softer than it was meant to.
     Its own random stream."""
     db = np.zeros(n)
     if tremolo is not None:
         db += voice.tremolo * tremolo[:n]
-    if slow and voice.waver:
-        db += voice.waver * voice.spread * _colored(np.random.default_rng([seed, 0x5A7]), n, rate, 0.5, 1.5, steep=2)
+    if vowels and voice.waver and voice.spread:
+        drift = voice.waver * voice.spread * _colored(np.random.default_rng([seed, 0x5A7]), n, rate, 0.5, 1.5, steep=2)
+        t = (np.arange(n) + 0.5) / rate
+        for t0, t1 in vowels:
+            i0, i1 = np.searchsorted(t, [t0, t1])
+            if i1 - i0 < 4:
+                continue
+            x = t[i0:i1]
+            db[i0:i1] += (drift[i0:i1] - drift[i0:i1].mean()) * np.clip((x - t0) / 0.03, 0.0, 1.0) * np.clip((t1 - x) / 0.03, 0.0, 1.0)
     return db
 
 
@@ -726,7 +739,8 @@ def sing(notes: list[Note], sr: int, voice: VoiceParams, seed: int = 0, lexicon:
     accents = [voice.accent * float(np.clip(20 * np.log10(s.amp / 0.9) / 3.0, 0.0, 1.0)) for s in vowels]
     parts: dict = {}
     f0_blocks = pitch_track(notes, n_blocks, sr, voice, rng, [s.t1 for s in vowels], accents, segs, parts)
-    tracks["av"] = tracks["av"] * 10.0 ** (sway(n_blocks, sr / BLOCK, voice, seed, parts["tremolo"]) / 20.0)
+    held = [(s.t0, s.t1) for s in vowels]
+    tracks["av"] = tracks["av"] * 10.0 ** (sway(n_blocks, sr / BLOCK, voice, seed, parts["tremolo"], held) / 20.0)
 
     # Singers raise the first formant to stay above a high fundamental.
     formants = tracks["formants"]

@@ -466,7 +466,7 @@ def sing(notes, sr: int, voice, seed: int = 0, lexicon: dict | None = None, mix:
     times = np.arange(n) * FRAME
     # the vibrato's swing in loudness (the network's own envelope already moves as slowly as a singer's)
     trem = np.interp(times, (np.arange(n_blocks) + 0.5) * BLOCK / RATE, parts["tremolo"])
-    sp += (sway(n, 1.0 / FRAME, voice, seed, trem, slow=False) * np.log(10.0) / 10.0)[:, None]
+    sp += (sway(n, 1.0 / FRAME, voice, seed, trem) * np.log(10.0) / 10.0)[:, None]
     for s in vowels:  # a phrasing's swell grows or fades the vowel from its start to its end
         if s.swell:
             i0, i1 = np.searchsorted(times, [s.t0, s.t1])
