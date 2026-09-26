@@ -17,21 +17,27 @@ lands near it. A pedal bend ("bend") picks the note with its pedal up, a tone
 or a semitone under, and presses it into the note, as B to C# on the A pedal
 does. The bar's vibrato rolls both ways about the fret (5 to 6.5 Hz, about
 10 cents either way, deeper with the ornament) on anything held. The bar
-whirs and hisses along the wound strings as it moves. The volume pedal rests
-about half way down (14 dB under the top) while the player picks; "swell" pulls it
-back 45 dB for the pick and pushes it to the top over a quarter of a second
-to nearly a second, so the attack vanishes; the pedal is the whole
-instrument's, so it takes whatever else is ringing with it. The strings
-(metal finger picks, a thumb pick on the low ones, notes together pinched a
-few milliseconds apart) ring very long on a rigid steel body: the
-fundamental falls 60 dB in 11 to 15 s at 220 Hz, until the player blocks the
-string with the palm, as a player does before the bar or a pedal moves under
-a ringing string; a slur onto a string that has rung for more than two and a
-half seconds is picked again as the bar carries it. Some players
-tune their major thirds a little flat so the chords ring purer (the G#
-strings and the A pedal's C# 5 to 12 cents, D# a little less): the maker
-decides. It plays through a clean amp with plenty of headroom, its spring
-reverb and a 12- or 15-inch speaker (amp.py).
+whirs and hisses along the wound strings as it moves. The volume pedal is
+never still: it rests about half way down (14 dB under the top) while the
+player picks, and after each pick of a held note the foot rides it in as the
+string decays, so the note stays within a few dB of its pick for a second or
+two; "swell" pulls it back 45 dB over a fifth of a second before the pick and
+pushes it to the top over a third of a second to 1.2 s, so the attack
+vanishes; the pedal is the whole instrument's, so it takes whatever else is
+ringing with it. The strings (metal finger picks, a thumb pick on the low
+ones, notes together pinched a few milliseconds apart) ring very long on a
+rigid steel body: the fundamental falls 60 dB in 11 to 15 s at 220 Hz, and
+the highs last longer than a guitar's, until the player blocks the string
+with the palm, as a player does before the bar or a pedal moves under a
+ringing string; a slur onto a string that has rung for more than two and a
+half seconds is picked again as the bar carries it. Some players tune their
+major thirds flat so the chords ring purer (Jeff Newman's chart: the G#
+strings and the A pedal's C# 6 to 14 cents, the D# a little less, the F# a
+third as much): the maker decides. A steel's pickup is wound hot (15 to 19
+kohm) and, on a pot volume pedal, loaded down to a resonance near 1.5-2 kHz;
+it plays through a clean amp with plenty of headroom, set as steel players
+set it (the middle up, the bass down), its spring reverb and a 12- or 15-inch
+speaker (amp.py).
 
 The slide. An acoustic flat-top, a resonator or an electric (by the maker,
 or settings["slide"]), tuned open to the song's key (open D or open G,
@@ -41,12 +47,17 @@ glide machinery moves it; notes land a touch flat and settle (a slide
 player's intonation); long notes get a wide vibrato, even either side of the
 note; the slide hisses and whirs along the wound strings as it moves; a
 string not pressed quite hard enough rattles against it as a note starts.
-The slide is a soft stop, so its notes die sooner than fretted ones, and the
-string behind it, between the slide and the nut, rings too: a faint, high
+A glass or brass slide is a hard stop: the strings ring about as a fretted
+guitar's do (a resonator's cone takes a little more), and the string behind
+the slide, between it and the nut, rings too: a faint, high
 tone that falls as the slide climbs, which the player's trailing finger
-damps within a tenth of a second or two (some players more carefully than
-others). The electric plays through the maker's small valve amp (electric.py,
-amp.py), pushed a little.
+damps within a tenth of a second to four (some players more carefully than
+others; an electric's pickup doesn't hear it). A note picked on an open
+string sets the other open strings ringing faintly in sympathy: in an open
+tuning they are all tones of its chord. The resonator's thin cone is the
+bright body, radiating 1 to 4 kHz far better than a spruce top. The electric
+plays through the maker's small valve amp (electric.py, amp.py), pushed a
+little.
 """
 
 from __future__ import annotations

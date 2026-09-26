@@ -334,70 +334,92 @@ note with its pedal or lever up and presses it in, the pitch rising a
 semitone or a tone along an S over 0.15 to 0.3 s. The player blocks a ringing
 string with the palm before the bar or a pedal moves under it, and picks a
 slurred note again once it has rung two and a half seconds (a slur that long
-would be heard fading, not moving). The volume pedal rests about half way
-down, 14 dB under its top, while the player picks, the top of its travel kept
-for swells; a swell pulls it back 45 dB for the pick and pushes it to the top
-along a raised cosine in decibels over a quarter of a second to nearly a
-second, and since the pedal is the whole instrument's, it takes whatever else
-rings with it. The bar's vibrato rocks both ways about the fret
+would be heard fading, not moving). The volume pedal is never still. It rests
+about half way down, 14 dB under its top, while the player picks, and after
+each pick of a held note the foot rides it in as the string decays, so the
+note stays within a few dB of its pick for a second or two (the instrument's
+mark as much as its bends). A swell pulls it back 45 dB over a fifth of a
+second before the pick and pushes it to the top along a raised cosine in
+decibels over a third of a second to 1.2 s; the pedal is the whole
+instrument's, so it takes whatever else rings with it. The bar's vibrato rocks both ways about the fret
 (5 to 6.5 Hz), which a fretting finger cannot. The strings are metal finger
 picks and a thumb pick on the low ones, a chord pinched a few milliseconds
 apart; the bar whirs and hisses along the wound strings as it moves (the
 whir at its speed over the windings' 0.4 mm pitch), about 25 dB under a note.
 Some makers' players tune the major thirds (the G# strings, the A pedal's C#)
-5 to 12 cents flat, toward pure thirds; the rest tune equal. The steel plays
-through a pickup 38 to 50 mm from the bridge, single coil or humbucker, and a
-clean amp with plenty of headroom (the Fender stack, a spring reverb, a 12 or
-15 inch speaker), switched on a quarter of a second before it plays.
+6 to 14 cents flat toward pure thirds, the D# a little less and the F# a
+third as much, as Jeff Newman's chart has them; the rest tune equal. The
+pickup sits 38 to 50 mm from the bridge, single coil or humbucker, and is
+wound as a steel's are, far hotter than a guitar's (15 to 19 kohm, 9 to 12 H):
+on a pot volume pedal (six makers in ten), which loads it, it resonates near
+1.5 to 2 kHz; on a buffered pedal a little higher. The strings keep their
+highs longer than a guitar's (heavier plain strings, a steel bar and the
+changer: half the electric's partial damping). The amp is clean with plenty
+of headroom, set as steel players set a Twin (the middle up, the bass down,
+undoing the Fender stack's scoop), with a spring reverb and a 12 or 15 inch
+speaker; it is switched on a quarter of a second before it plays, and its
+master volume is set on two held chords' sustain.
 
 Measured: an equal-tempered steel in tune within 0.5 cent from B2 to D6, and
 where each glide lands (within 0.3 cent); on the beat a glide from A4 to B4 is
-half way (-111 cents) and it is there 40 ms later. A bend rises from -100
-cents to the note in 0.25 s. A swell's pick is 32 dB under its top, which
-comes a second later, 1 dB over a plain pick's peak. The strings ring
-long: the fundamental's T60 is 16.8 s at B2, 11.9 at A3, 10.2 at F#5 (a solid
-electric's is 6-10), the fifth partial's 5.3, 4.3 and 1.5 s. An A3 through the
-amp is centred at 1.6 kHz at the pick and darkens to 0.34 kHz a second on; the
+half way (-109 cents) and it is there 40 ms later. A bend rises from -100
+cents to the note in 0.27 s. A swell's pick is 34 dB under its top, which
+comes 1.4 s later for a note of 2.5 s; a plain held A3 or F#4 stays within
+2.5 dB of its pick for a second and a half (an E5, whose string dies faster,
+falls 14 dB). The strings ring long: the fundamental's T60 is 16.8 s at B2,
+11.9 at A3, 10.2 at F#5 (a solid electric's is 6-10), the fifth partial's 5.7,
+5.2 and 1.9 s. An A3 through the amp is centred at 0.74 kHz at the pick and
+0.43 kHz a second on, its 3rd and 4th harmonics 6 and 7 dB under the 2nd; the
 pick's place and the pickup's notch its harmonics near the 6th and 9th. A
-chord picked at 1.0 is 8.8 dB louder than at 0.36 (the amp stays clean). The
-bar vibrato asked for (ornament 0.5) swings -23 to +18 cents about the note.
+chord picked at 1.0 is 8.7 dB louder than at 0.36 (the amp stays clean). The
+bar vibrato asked for (ornament 0.5) swings -21 to +13 cents about the note.
 
 **The slide guitar.** A bottleneck on a guitar tuned open to the key (open D
 or open G, retuned up to three semitones or capoed): an acoustic flat-top, a
 resonator (a spun cone's few strong, ringing modes from 190 Hz to 2.3 kHz), or
 an electric through the maker's small valve amp pushed a little, by the maker
-(4 in 10, 3.5, 2.5) or `settings["slide"]`. The slide stops every string at any
-pitch, so the steel's glide machinery moves it; a note lands 6 to 35 cents
-flat (with the ornament) and settles in 50 to 100 ms, a "slide" comes up from
-two or three semitones under, the vibrato is wide and even either side of the
-note (4.8 to 6 Hz), a "fall" slides away down as the note ends. A slide is a
-soft stop, so its notes die sooner than fretted ones (T60 2 to 2.8 s at 220
-Hz); a string pressed too lightly rattles on it as a note starts; it scrapes
+(4 in 10, 3.5, 2.5) or `settings["slide"]`. The resonator's thin cone radiates
+1 to 4 kHz far better than a spruce top: its body is the bright one (a hill
+near 1.8 kHz, no fall above), with little below 150 Hz. The slide stops every
+string at any pitch, so the steel's glide machinery moves it; a note lands 6
+to 35 cents flat (with the ornament) and settles in 50 to 100 ms, a "slide"
+comes up from two or three semitones under, lazily (up to 0.3 s), the vibrato
+is a slide player's, wide and even either side of the note (4.8 to 6 Hz, 10
+to 30 cents with the ornament, twice that asked for, on anything held 0.4 s),
+and a "fall" slides away down as the note ends. A glass or brass bottleneck is
+a hard stop, so the strings ring about as a fretted guitar's do (T60 2.6 to
+3.4 s at 220 Hz on the flat-top, 2 to 2.6 on the resonator, whose cone takes
+more); a string pressed too lightly rattles on it as a note starts; it scrapes
 the wound strings as it moves, whichever are ringing. The string behind the
 slide, between it and the nut, rings too: the energy that leaks past the
 slide sounds it at 1/(1 - 2^(-x/12)) of the open pitch (an octave up at the
 twelfth fret, a twelfth up at the seventh), falling as the slide climbs, 26 to
 36 dB under the note until the player's trailing finger damps it, in 0.06 to
-0.25 s by the maker's player. Each maker's slide is levelled by a reference
-lick, so the body, the slide and the amp change its colour and not its
-balance.
+0.4 s by the maker's player; an electric's pickup, under the sounding length,
+doesn't hear it. In an open tuning every string is a tone of the chord, so a
+note picked on an open string sets the other open strings ringing in
+sympathy, about 28 dB under it, until each is next picked. Each maker's slide
+is levelled by a reference lick, so the body, the slide and the amp change its
+colour and not its balance.
 
 Measured: in tune within 0.7 cent on every body once landed; a plain note
-lands 42 cents flat (ornament 1) and is there in 0.1 s; a slid note comes from
--175 cents and is there in 0.27 s; the vibrato swings -22 to +25 cents. An E4
-is centred at 0.78 kHz at the pick on the flat-top, 0.87 on the resonator
-(whose first four harmonics stand within 2 dB of each other) and 1.3 kHz on
-the electric; its fundamental's T60 is 2.5 to 2.6 s.
+lands 43 cents flat (ornament 1) and is there in 0.1 s; a slid note comes from
+-180 cents and is there in 0.4 s; the vibrato asked for swings -37 to +42
+cents. An E4 is centred at 0.83 kHz at the pick on the flat-top, 0.92 on the
+resonator (its first four harmonics within 4 dB of each other) and 1.5 kHz on
+the electric; its fundamental's T60 is 2.9 s on the acoustic bodies and 4.2
+on the electric.
 
 Levels. Each steel's amp is set as a player sets it, on the same two held
-chords (an A high on the strings, a D low, the bar from the fifth fret), and
-the steel is levelled on the country style's line under the singer as the
-style writes it for H's first refrain (low, D3 to B3, at half a comping part's
-velocity so it sits under the words): across thirteen makers it averages
--23.7 LUFS (-25.8 to -20.8, sd 1.3; comping, -23.7), and the same rendition's
-picked intro, the tune an octave up, -20.7 (sd 0.9; a lead, -20.7). The
-slide's answers sit at -20.0 to -21.3 by body (a lead, -20.7, beside the
-harmonica it answers with). In the tour's country rendition (ada, 2026-09-27)
+chords (an A high on the strings, a D low, the bar from the fifth fret, their
+sustain after the pick), and the steel is levelled on the country style's
+line under the singer as the style writes it for H's first refrain (low, D3
+to B3, at half a comping part's velocity so it sits under the words): across
+thirteen makers it averages -23.7 LUFS (-26.4 to -22.2, sd 1.3; comping,
+-23.7), and the same rendition's picked intro, the tune an octave up, -19.8
+(sd 1.3; a lead, -20.7). The slide's answers, as the blues writes them, sit
+at -19.7 to -21.6 by body (a lead, -20.7, beside the harmonica it answers
+with). In the tour's country rendition (ada, 2026-09-27)
 the steel reads -19.0 LUFS in the intro, -20.5 in the verse's fills and -21.7
 under the refrain, where its stand-in read -13.7, -16.5 and -19.5, and the
 guitar -25.2, -24.1 and -22.6. In the blues rendition the slide's two-note
@@ -550,8 +572,8 @@ a three-minute part costs on the M1 Max:
 | cello | held bass line | -23.0 | -23.7 | 1.4 |
 | strings | four-note pad | -23.8 | -23.7 | 6.1 |
 | harmonica | melody | -21.0 | -20.7 | 0.7 |
-| steel | the country style's line under a singer | -24.1 | -23.7 | 2.7 |
-| slide | answers and a held tone | -18.6 | -20.7 (lead) | 1.1 |
+| steel | the country style's line under a singer | -23.1 | -23.7 | 2.6 |
+| slide | answers at the ends of lines | -19.9 | -20.7 (lead) | 1.1 |
 
 The other new set's test measures every instrument with one generic part per
 role (a four-note comping chord four times a bar, a kit groove for all
@@ -630,6 +652,31 @@ drain into the wash, the overhead pair hears nearly the same mix, sweeps flow
 when they follow one another. The builders' own reviews did not run: the
 session's limit stopped them.
 
+The pedal steel and the slide were reviewed by measurement by a Fable
+advisor, given the models, the measurements and the solo renders. For the
+steel it found: notes that decayed like a guitar's, where a player's foot
+rides the volume pedal in after every pick (in the intro the tune's first
+phrase was 25 dB down in 1.2 s); a Stratocaster's pickup, where a steel's is
+wound to 15-19 kohm and, on a pot pedal, resonates near 1.5-2 kHz (the whole
+chain had stood 14 dB higher at 3 kHz than at 1 kHz, so the attack was
+over-bright and the sustain, by contrast, dark); partials above 1.5 kHz dying
+at an electric guitar's rate; the Fender stack set as a guitarist sets it,
+where steel players turn the middle up and the bass down (the held A3's 3rd
+and 4th harmonics had sat 14 dB under its fundamental through the amp, 1-3 dB
+in the string); swells too quick, a 14 dB pull-back step before one, and
+thirds a little short of Newman's chart. For the slide: a resonator darker
+than the flat-top, where the cone is the bright one; notes dying too soon on
+every body, since a bottleneck is a hard stop, not a soft one; a fretted
+guitar's vibrato depth where a slide player's is two or three times it; no
+sympathetic ringing of the open strings, much of an open tuning's sound;
+slides into notes never lazier than 0.15 s; and an electric hearing the string
+behind the slide, which its pickup can't. All of it is in, as described
+above; the amp is now also levelled on its reference chords' sustain, which
+halved the makers' spread on picked parts once the pickups differed. It
+judged the glides, bends, vibrato rates, pickup position, scrape, swell slope,
+spring and levels in range, and the wobble in the pitch tracks of bends and
+glides to be the two planes beating under the pitch tracker, not the model.
+
 ## Limits
 
 - Nobody has listened. The models are right by the measures above, but the
@@ -640,9 +687,9 @@ session's limit stopped them.
   ran; their instruments pass their tests and the other set's contract test
   (but for the loudness of its generic parts), and want a review by
   measurement next.
-- The pedal steel's level differs by maker by up to 5 dB on its swelled line
-  (sd 1.3; its amp is levelled on held chords, and each player's swells, home
-  position and sustain differ), and a picked
+- The pedal steel's level differs by maker by up to 4 dB on its swelled line
+  (sd 1.3: how slowly each player swells, which pickup and pedal), and a
+  picked
   note's attack stands about 20 dB over its loudness, so a picked steel line's
   placed stem peaks near full scale (the stems are floats; the mix brings the
   band down to the voice). Its pedals move no other string (a real steel's
