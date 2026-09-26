@@ -170,6 +170,21 @@ def test_a_chop_is_a_short_knock():
     assert chopped[20] < chopped.max() - 25 and strummed[20] > chopped[20] + 15
 
 
+def test_a_mandolin_stating_a_tune_tremolos_its_long_notes():
+    """In a style's lead, quote or counter-line, notes of a beat and a half or more are tremoloed, the
+    rest picked; another instrument's are left as written."""
+    from types import SimpleNamespace
+
+    from songbird import idioms
+    from songbird.band import Ev
+
+    ctx = SimpleNamespace(beat=2.0, rand=lambda part, u: np.random.default_rng(0))
+    line = [Ev("mandolin", 0.0, 1.0, 69.0, 0.7), Ev("mandolin", 1.0, 4.0, 71.0, 0.7), Ev("mandolin", 4.0, 5.0, 74.0, 0.7)]
+    assert [e.art for e in idioms.sliding(ctx, "mandolin", line)] == ["", "tremolo", ""]
+    other = [Ev("fiddle", 1.0, 4.0, 71.0, 0.7)]
+    assert idioms.sliding(ctx, "fiddle", other)[0].art == ""
+
+
 def test_a_chop_is_a_chunk_not_a_click():
     """40 to 70 ms of chord before the fretting hand, relaxing, damps it over some 50 ms: still within 15 dB
     of its peak 50 ms on (a 30-60 ms chord damped in 20 ms had fallen 18), 20 dB down by 100 ms."""

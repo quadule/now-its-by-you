@@ -140,12 +140,55 @@ def test_the_string_bands_banjo_and_mandolin_play_their_own_strokes():
     assert drone >= 0.2 * len(rolls)  # two notes in eight on the fifth string, but where the tune would rub
 
 
+class _Key:
+    """A part-writer's context reduced to what a banjo's chord shapes need: the key, and nothing sung."""
+
+    def __init__(self, tonic):
+        self.tonic = tonic
+
+    def sung_in(self, u0, u1):
+        return []
+
+
+def test_rolls_make_their_chords_near_the_nut():
+    """As a banjo player makes them on the third, second and first strings: in D (open D tuning) the D
+    chord is the open strings, G is G3 B3 D4, A is A3 C#4 E4; in G (open G) G is open, C is G3 C4 E4 and
+    D is A3 D4 F#4 (the D shape's frets 2, 3, 4)."""
+    from songbird import idioms
+
+    def shape(tonic, pcs):
+        return idioms.first_position(_Key(tonic), "banjo", pcs, 0.0, 1.0)
+
+    assert shape(62, [2, 6, 9]) == [54, 57, 62] and shape(62, [7, 11, 2]) == [55, 59, 62]
+    assert shape(62, [9, 1, 4]) == [57, 61, 64]
+    assert shape(67, [7, 11, 2]) == [55, 59, 62] and shape(67, [0, 4, 7]) == [55, 60, 64]
+    assert shape(67, [2, 6, 9]) == [57, 62, 66]
+    assert idioms.first_position(_Key(62), "guitar", [2, 6, 9], 0.0, 1.0) is None  # no banjo's strings
+
+
 def test_the_drone_is_played_as_firmly_as_the_fingers():
     """The thumb's pick on the fifth string sounds as loud as a finger's at the same velocity (within
     1.5 dB), so a roll's 3-3-2 accents are the part's, not the instrument's."""
     drone = play([note(0.05, 1.0, 69, vel=0.6)], 1.2, maker=1)
     finger = play([note(0.05, 1.0, 62, vel=0.6)], 1.2, maker=1)
     assert abs(early_db(drone, 0.05) - early_db(finger, 0.05)) < 1.5
+
+
+def test_the_string_bands_rolls_run_steadier_than_the_band():
+    """A Scruggs-style picker's onsets wander 6-8 ms from a steady tempo: the string band's rolls in its
+    intro, measured against a smooth tempo curve, wander 4.5 to 8.5 ms."""
+    from dataclasses import replace
+
+    from songbird import genome as G
+    from songbird.realize import choose_params, realize
+
+    g = G.load(ROOT / "songs" / "h-now-its-by-you.json")
+    p = replace(choose_params(g, style="stringband"), form=("intro", "verse", "refrain"), choir=0)
+    score = realize(g, p)
+    starts = np.array(sorted({round(n.start, 5) for n in score.notes if n.part == "banjo" and n.section == "intro"}))
+    k = np.arange(len(starts))
+    wander = starts - np.polyval(np.polyfit(k, starts, 3), k)
+    assert len(starts) >= 16 and 0.0045 < wander.std() < 0.0085
 
 
 def test_clawhammer_is_played_on_an_open_back_and_picks_on_a_resonator():

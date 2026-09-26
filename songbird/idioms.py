@@ -837,12 +837,36 @@ def fifth_string(ctx: StyleContext, part: str) -> int | None:
     return int(tuned(ctx.tonic)) if callable(tuned) else None
 
 
+def first_position(ctx: StyleContext, part: str, pcs: list[int], u0: float, u1: float) -> list[int] | None:
+    """A chord as a banjo player makes it near the nut, on the third, second and first strings as the
+    banjo is tuned for the key: on each, the chord's tone at the lowest fret from open to the fourth (a
+    tone no other string has yet, where it can), never on a pitch being sung. Open D's D chord is its
+    open strings (F#3 A3 D4), its G G3 B3 D4, its A A3 C#4 E4; or None for an instrument without such
+    strings (or a chord that doesn't lie there)."""
+    from .synth import instruments
+
+    _, found = instruments.registered(part)
+    longs = getattr(found[1], "long_strings", None) if found is not None else None
+    if not callable(longs):
+        return None
+    sung = {p for _a, _b, p, _s in ctx.sung_in(u0, u1)}
+    shape: list[int] = []
+    for open_ in reversed(longs(ctx.tonic)[:3]):  # the third string, the second, the first
+        options = [open_ + f for f in range(5) if (open_ + f) % 12 in pcs and open_ + f not in sung]
+        if not options:
+            return None
+        shape.append(min(options, key=lambda p: (p % 12 in {q % 12 for q in shape}, p - open_)))
+    return shape
+
+
 def roll_notes(ctx: StyleContext, part: str, c: Chord, u0: float, u1: float, i: int) -> tuple[list[int], int]:
-    """A banjo's three fretted strings for a chord, and its short fifth string: the drone the banjo is
-    tuned to (the key's tonic or fifth, high), or the tonic high on an instrument without one."""
+    """A banjo's three fretted strings for a chord (as its player makes the chord near the nut), and its
+    short fifth string: the drone the banjo is tuned to (the key's tonic or fifth, high), or the tonic
+    high on an instrument without one."""
     tones = ctx.tones(c, u0, u1, colour=False)
     lo, hi = B.register_of(part)
-    chord = ctx.voicing(part, tones, max(lo, ctx.tonic - 7), min(hi, ctx.tonic + 12), u0, u1, size=3)
+    chord = first_position(ctx, part, tones, u0, u1) or \
+        ctx.voicing(part, tones, max(lo, ctx.tonic - 7), min(hi, ctx.tonic + 12), u0, u1, size=3)
     drone = fifth_string(ctx, part)
     if drone is None:
         drone = nearest({ctx.tonic % 12}, ctx.tonic + 10, ctx.tonic + 5, min(hi, ctx.tonic + 17))
@@ -854,7 +878,9 @@ def roll_notes(ctx: StyleContext, part: str, c: Chord, u0: float, u1: float, i: 
 def w_roll(ctx: StyleContext, i: int, part: str) -> list[Ev]:
     """A banjo's forward roll: thumb, index, middle, thumb, index, middle, thumb, middle across the eighths
     (third string, second, first, fifth, second, first, fifth, first), the thumb's notes of the 3-3-2 a
-    little stronger (the roll's drive), never on a sung note; in triplets thumb, index, middle."""
+    little stronger (the roll's drive), never on a sung note; in triplets thumb, index, middle. Backup
+    rolls are played firmly (0.55 to 0.7), only a little under the words: a banjo is the loudest thing in
+    a string band, and a roll's twang and sparkle go when it is picked softly."""
     out = []
     for c in ctx.chords_in(i):
         subs = ctx.grid.subs_in(c.u0, c.u1)
@@ -868,7 +894,7 @@ def w_roll(ctx: StyleContext, i: int, part: str) -> list[Ev]:
             if cell in sung:
                 cell = drone if drone not in sung else cell - 12
             thumb = step in ((0, 3, 6) if eighths else (0, 3))
-            accent = (0.64 if step == 0 else 0.58) if thumb else 0.5
+            accent = (0.72 if step == 0 else 0.68) if thumb else 0.62
             out.append(ev(part, u, u + 2 * ctx.beat, cell, ctx.vel(part, u, accent, 0.72), art="pick", i=i))
     return ring_on(out)
 
@@ -891,13 +917,13 @@ def w_claw(ctx: StyleContext, i: int, part: str) -> list[Ev]:
                 if what == "bum":
                     sung = {p for _a, _b, p, _s in ctx.sung_in(u, u + ctx.beat)}
                     p = next((q for q in reversed(chord) if q not in sung), chord[0])
-                    out.append(ev(part, u, u + ctx.beat, p, ctx.vel(part, u, 0.66, 0.75), art=bum, i=i))
+                    out.append(ev(part, u, u + ctx.beat, p, ctx.vel(part, u, 0.8, 0.88), art=bum, i=i))
                 elif what == "dit":
                     for j, p in enumerate(chord):
-                        out.append(ev(part, u, u + ctx.beat / 2, p, ctx.vel(part, u, 0.42, 0.75), art=brush, i=i,
+                        out.append(ev(part, u, u + ctx.beat / 2, p, ctx.vel(part, u, 0.58, 0.88), art=brush, i=i,
                                       shift=0.01 * j))
                 else:
-                    out.append(ev(part, u, u + ctx.beat, drone, ctx.vel(part, u, 0.45, 0.75), art=thumb, i=i))
+                    out.append(ev(part, u, u + ctx.beat, drone, ctx.vel(part, u, 0.55, 0.88), art=thumb, i=i))
     return ring_on(out)
 
 
@@ -1182,10 +1208,18 @@ def w_drone(ctx: StyleContext, i: int, part: str) -> list[Ev]:
 
 BOWED = ("fiddle", "cello", "strings", "steel")
 SLIDING = ("steel", "slide", "harmonica", "synthlead")
+TREMOLO_LEADS = ("mandolin",)  # plucked instruments whose players tremolo a tune's long notes
 
 
 def sliding(ctx: StyleContext, part: str, events: list[Ev]) -> list[Ev]:
-    """How a pedal steel, a slide, a harmonica or a synth lead joins its notes: sliding into the long ones."""
+    """How a pedal steel, a slide, a harmonica or a synth lead joins its notes: sliding into the long ones;
+    and how a mandolin holds a tune's long notes (a beat and a half or more): tremolo, its picks filling
+    them as its short-ringing courses would not."""
+    if part in TREMOLO_LEADS and own_art(part, "tremolo", "") == "tremolo":
+        for e in events:
+            if e.u1 - e.u0 >= 1.5 * ctx.beat - 1e-9 and not e.art:
+                e.art = "tremolo"
+        return events
     if part not in SLIDING:
         return events
     for e in events:
@@ -1690,6 +1724,9 @@ def count_in(ctx: Context, style, lineup: list[str]) -> list[Ev]:
 
 LAG = {"bass": 0.007, "bowed": -0.012, "blown": -0.004, "reed": -0.004, "keys": 0.002, "drums": 0.0,
        "percussion": 0.0, "plucked": -0.002}
+# How much steadier than the band's humanize a pattern the hands run on their own is played: a banjo's
+# rolls go like clockwork (a Scruggs-style picker's onsets wander 6-8 ms, not the band's 9).
+STEADY = {"roll": 0.75}
 
 
 def arrange_style(genome, params, placed, lead, end, melody, seconds, sdef) -> tuple[list[Note], dict]:
@@ -1767,12 +1804,12 @@ def arrange_style(genome, params, placed, lead, end, melody, seconds, sdef) -> t
     notes = []
     for e in sorted(events, key=lambda e: (e.u0, e.shift, e.part, e.pitch)):
         key = (e.part, int(round(e.u0 * 1000)))
+        s = ctx.sections[min(max(e.section, 0), len(ctx.sections) - 1)]
         if key not in jitters:
             rng = np.random.default_rng([ctx.seed & 0xFFFFFFFF, 0x71, B.stream_of(e.part), key[1] + (1 << 20)])
-            jitters[key] = float(rng.normal(0.0, wobble))
+            jitters[key] = float(rng.normal(0.0, wobble * STEADY.get(s.parts.get(e.part, ""), 1.0)))
         start = max(0.0, seconds(e.u0) + e.shift + LAG.get(family(e.part), 0.0) + jitters[key])
         dur = e.length if e.length > 0 else seconds(e.u1) - start
-        s = ctx.sections[min(max(e.section, 0), len(ctx.sections) - 1)]
         notes.append(Note(part=e.part, start=start, dur=max(dur, 0.03), pitch=float(e.pitch),
                           vel=float(np.clip(e.vel, 0.02, 1.0)), section=s.name, art=e.art))
     notes += sung_notes(sung, seconds, ctx.seed)
