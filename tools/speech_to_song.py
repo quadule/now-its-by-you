@@ -77,7 +77,7 @@ def words_of_line(notes, line: list[int]) -> list[tuple[str, list[int]]]:
     words, i = [], 0
     while i < len(line):
         n = notes[line[i]].word_len
-        words.append((notes[line[i]].word.replace("-", ""), line[i : i + n]))
+        words.append((notes[line[i]].word.replace("-", "").replace("*", ""), line[i : i + n]))
         i += n
     return words
 

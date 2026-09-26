@@ -45,7 +45,7 @@ def lyrics(score: dict, title: str, tempo: float) -> dict:
     for n in notes:
         left = left or n["word_len"]  # syllables still to come in this word
         left -= 1
-        current.append({"text": n["syllable"], "start": n["start"], "end": n["start"] + n["dur"], "pitch": n["pitch"],
+        current.append({"text": n["syllable"].replace("*", ""), "start": n["start"], "end": n["start"] + n["dur"], "pitch": n["pitch"],
                         "word_end": left == 0})
         if n["line_end"]:
             lines.append((n["section"], current))

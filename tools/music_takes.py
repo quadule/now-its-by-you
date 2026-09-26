@@ -74,7 +74,7 @@ def sections(genome_path: Path, genome) -> list[dict]:
             if a <= (first.start + last.start + last.dur) / 2 < b:
                 words, k = [], line[0]
                 while k <= line[-1]:
-                    words.append((g.notes[k].word.replace("-", ""), g.notes[k].start))
+                    words.append((g.notes[k].word.replace("-", "").replace("*", ""), g.notes[k].start))
                     k += g.notes[k].word_len
                 lines.append((" ".join(w for w, _ in words), first.start, last.start + last.dur, words))
         out.append({"name": name, "start": a, "end": b, "lines": lines})

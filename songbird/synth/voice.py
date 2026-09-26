@@ -77,6 +77,7 @@ class VoiceParams:
     vibrato_from: float = 0.9  # seconds a note must last before the singer puts vibrato on it (0.55 at a line's end)
     breathe: float = 0.18  # seconds between lines needed for an audible breath
     accent: float = 8.0  # cents a strongly leaned-on note is lifted
+    focus: float = 2.0  # dB more on a word the lyric marks as its line's focus (*word*), most on its stressed syllable
     reduce: float = 0.0  # how far a little word's vowel off the beat moves toward "uh" (0.3 cost the words: WER 15% -> 18%)
     mouth: float = 1.0  # cm radius of the mouth opening: small keeps the upper resonances ringing
     engine: str = "formant"  # "formant" (Klatt cascade) or "tube" (waveguide tract, experimental)
@@ -177,7 +178,7 @@ def schedule(notes: list[Note], voice: VoiceParams, lexicon: dict[str, str] | No
         for j in range(n):
             in_word.append(j)
             word_len.append(n)
-            word.append((notes[k].word or "").replace("-", "").lower().strip(".,;:!?\"'"))
+            word.append((notes[k].word or "").replace("-", "").lower().strip(".,;:!?\"'*"))
         k += n
 
     segs: list[Segment] = []
@@ -187,6 +188,8 @@ def schedule(notes: list[Note], voice: VoiceParams, lexicon: dict[str, str] | No
             loud_db += voice.lean if syl.stressed else -voice.lean
         if word[k] in ph.FUNCTION_WORDS:
             loud_db -= voice.light
+        if "*" in (note.word or ""):  # the line's focus, marked in the lyric: leaned on hardest
+            loud_db += voice.focus if (syl.stressed or word_len[k] == 1) else 0.5 * voice.focus
         if first_of_line[k]:
             loud_db -= voice.ease
         if note.line_end:
