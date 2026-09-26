@@ -18,7 +18,7 @@ or a semitone under, and presses it into the note, as B to C# on the A pedal
 does. The bar's vibrato rolls both ways about the fret (5 to 6.5 Hz, about
 10 cents either way, deeper with the ornament) on anything held. The bar
 whirs and hisses along the wound strings as it moves. The volume pedal rests
-part way down (9 dB under the top) while the player picks; "swell" pulls it
+about half way down (14 dB under the top) while the player picks; "swell" pulls it
 back 45 dB for the pick and pushes it to the top over a quarter of a second
 to nearly a second, so the attack vanishes; the pedal is the whole
 instrument's, so it takes whatever else is ringing with it. The strings
@@ -565,7 +565,7 @@ def _bar_tracks(groups, sr: int, rng: np.random.Generator, d: dict, ornament: fl
     return segs, bar, pedals, vib, volume
 
 
-REST = -9.0  # dB: where the volume pedal rests while the player picks, leaving the top of its travel for swells
+REST = -14.0  # dB: where the volume pedal rests while the player picks, leaving the top of its travel for swells
 FLOOR = -45.0  # dB: the pedal back, for a swell's pick
 STALE = 2.5  # s: how long a string rings before a slur onto it is picked again
 
@@ -614,7 +614,7 @@ def _warmed(chain: amp.Chain, emf: np.ndarray, sr: int) -> np.ndarray:
     return amp.play(chain, np.concatenate([np.zeros(pre), emf]))[pre:]
 
 
-STEEL_OUT = 19.0  # the stem's scale: its swelled alto line at vel 0.6 sits as a comping part (-23.7 LUFS)
+STEEL_OUT = 17.6  # the stem's scale: the country style's line under the singer, as written, sits as a comping part
 EMF = 0.055  # volts per unit of string velocity for a single coil (as electric.py's)
 SCRAPE = 0.009  # the bar's scrape at full speed, against a string's velocity: 25 dB under a note on a wound string
 

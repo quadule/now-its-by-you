@@ -10,6 +10,8 @@ from __future__ import annotations
 
 from _common import Clock, chord, pitch
 
+from songbird.score import Note
+
 MODULE = {"steel": "steel", "slide": "steel"}
 
 GRIPS = {"D": chord("A4", "D5", "F#5"), "G": chord("B4", "D5", "G5"), "A": chord("A4", "C#5", "E5"),
@@ -31,17 +33,21 @@ def _swells(vel: float = 0.6) -> list:
     return notes
 
 
-def _under(vel: float = 0.6) -> list:
-    """The country style's part for it: an alto line under the singer, its long notes swelled, the moves slurred,
-    a slide into a note now and then (as songbird.idioms.w_under writes it), four bars twice."""
-    c = Clock(96)
-    line = [("F#4", 4, "swell"), ("G4", 2, "slur"), ("A4", 2, ""), ("B4", 4, "swell"), ("A4", 4, "slide"),
-            ("F#4", 4, "swell"), ("E4", 2, "slur"), ("D4", 2, ""), ("E4", 4, "swell"), ("F#4", 4, "swell")]
-    notes, beat = [], 0.0
-    for name, beats, art in line:
-        notes.append(c.note("steel", beat, beats, pitch(name), vel, art))
-        beat += beats
-    return notes
+# The country style's line under the singer as it wrote it for H's first refrain in D (a shuffle near 96; the
+# machine ada, 2026-09-27): (seconds, MIDI, seconds long, art, velocity). The style writes it at half a comping
+# part's velocity, to sit under the words, so it is the steel's typical part as written, not at 0.6.
+UNDER = ((0.0, 54, 2.519, "swell", 0.308), (2.504, 55, 1.268, "swell", 0.339), (3.76, 52, 0.431, "slur", 0.33),
+         (4.189, 50, 0.837, "slur", 0.313), (5.014, 50, 1.266, "swell", 0.328), (6.27, 50, 1.264, "swell", 0.319),
+         (7.51, 52, 1.278, "swell", 0.329), (8.785, 54, 0.421, "slur", 0.34), (9.194, 57, 0.848, "slur", 0.323),
+         (10.013, 54, 1.282, "swell", 0.298), (11.292, 55, 1.258, "swell", 0.34), (12.53, 57, 1.274, "swell", 0.348),
+         (13.79, 57, 1.267, "swell", 0.33), (15.044, 57, 2.86, "swell", 0.325), (17.899, 57, 1.682, "swell", 0.341),
+         (19.555, 57, 0.623, "slur", 0.348), (20.146, 59, 4.281, "slur", 0.33))
+
+
+def _under() -> list:
+    """The country style's line under the singer, as w_under writes it: long notes swelled, the moves slurred
+    (played by the bar and the pedals), soft."""
+    return [Note("steel", t + 0.1, dur, float(p), vel, art=art) for t, p, dur, art, vel in UNDER]
 
 
 def _intro() -> list:
@@ -98,8 +104,8 @@ PHRASES = {
               "at the same fret (the classic move), a bar vibrato on the held chords"),
     "steel-under": dict(
         parts={"steel": _under()}, settings={"tempo": 96},
-        about="pedal steel: the country style's line under the singer, as the idioms write it: swells, slurs "
-              "played by the bar and the pedals, a slide into a note"),
+        about="pedal steel: the country style's line under the singer in H's first refrain, as the style wrote it: "
+              "low and soft, its long notes swelled in, the moves slurred by the bar and the pedals"),
     "steel-intro": dict(
         parts={"steel": _intro()}, settings={"tempo": 88},
         about="pedal steel: a country intro, the tune in single notes slid into and glided between, two pedal "
