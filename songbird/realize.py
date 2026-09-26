@@ -84,7 +84,8 @@ class Params:
 
 
 def choose_params(genome: Genome, parent: Params | None = None, voice: Voice | None = None,
-                  drift: Drift | None = None, seed: int | None = None, log: list | None = None) -> Params:
+                  drift: Drift | None = None, seed: int | None = None, log: list | None = None,
+                  form: tuple | None = None) -> Params:
     """Inherit from the parent, pull toward the voice, apply drift.
 
     With no voice and no drift, the parent's parameters (the seed's, from the
@@ -94,14 +95,17 @@ def choose_params(genome: Genome, parent: Params | None = None, voice: Voice | N
     seed comes from (voice, instant, parent), or from `seed` if given: the same
     machine, instant and parent always give the same child. log: a list to
     which what changed from the parent in the tune and the words is added,
-    each with why (songbird.evolve), for the render's record.
+    each with why (songbird.evolve), for the render's record. form: a form set
+    by hand (--form), in place of the one the drift would choose, and the words
+    fitted to it.
     """
     if voice is None and drift is None:
         chosen = parent if parent is not None else Params.from_dict(genome.seed_params)
+        chosen = chosen if form is None else replace(chosen, form=tuple(form))
         return chosen if seed is None else replace(chosen, seed=seed)
     from .variation import choose  # the table reads the singer's fields, so it brings the synth with it
 
-    return choose(genome, parent, voice, drift, seed, log=log)
+    return choose(genome, parent, voice, drift, seed, log=log, form=form)
 
 
 def sung_as(note: Note, g: Gesture | None, beat: float) -> Note:
@@ -167,12 +171,15 @@ def realize(genome: Genome, params: Params, verses=None, phrasing: Phrasing | No
     ratio = 0.5 + swing / 6.0
 
     def swung(u: float) -> float:
+        # The beats fall on the bar lines' grid, which starts `lead` units in (after the song's first
+        # pickup), not at u = 0: counted from there, the beats never move and only each beat's off-beat
+        # half is delayed, whatever the pickup's length.
         if not swing:
             return u
-        b, x = divmod(u, meter.beat)
+        b, x = divmod(u - lead, meter.beat)
         half = meter.beat / 2.0
         x = x / half * ratio * meter.beat if x < half else ratio * meter.beat + (x - half) / half * (1.0 - ratio) * meter.beat
-        return b * meter.beat + x
+        return lead + b * meter.beat + x
 
     def seconds(u: float) -> float:
         """Grid units to seconds, swung, slowing linearly through the final phrase."""

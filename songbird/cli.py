@@ -1,4 +1,4 @@
-"""Command line: `songbird render`, `harvest` and `year` now, `songbird sing` once the pipeline is whole."""
+"""Command line: `songbird render`, `harvest`, `year`, `pack` and `unpack` now, `songbird sing` once the pipeline is whole."""
 
 from __future__ import annotations
 
@@ -11,8 +11,8 @@ from pathlib import Path
 
 import numpy as np
 
-from . import __version__, drift as drift_mod, evolve, genome as genome_mod, harvest, phrasing as phrasing_mod, synth
-from . import variants as variants_mod, variation
+from . import __version__, drift as drift_mod, genome as genome_mod, harvest, pack as pack_mod, phrasing as phrasing_mod, synth, variation
+from . import evolve, variants as variants_mod
 from .arrange import ArrangeError, Lyrics, arrange, hold, problem, sing, verse_problem
 from .realize import Params, choose_params, realize
 from .synth import master
@@ -28,20 +28,31 @@ def _machine(args: argparse.Namespace):
     return voice, drift
 
 
-def _record(path: str) -> dict:
-    """A rendition's record: the .json given, or the one beside a rendition's .flac."""
-    p = Path(path)
-    return json.loads((p if p.suffix.lower() == ".json" else p.with_suffix(".json")).read_text())
-
-
-def _parent(path: str | None, genome=None) -> Params | None:
-    """A parent rendition's parameters, from its render record (the .json, or the .flac it sits beside;
-    milestone 5 will read them from the file itself). A record from before its lineage held words gives
-    the words it sang as the words it holds."""
+def _parent_record(path: str | None) -> dict | None:
+    """A parent rendition's record: from the rendition itself (a FLAC carrying its packet), its render record,
+    or the render record beside a FLAC that carries none."""
     if not path:
         return None
-    record = _record(path)
+    beside = Path(path).with_suffix(".json")
+    if Path(path).suffix.lower() != ".json" and not Path(path).exists() and beside.exists():
+        return json.loads(beside.read_text())
+    try:
+        return pack_mod.read_record(path)
+    except ValueError:
+        if Path(path).suffix.lower() != ".json" and beside.exists():
+            return json.loads(beside.read_text())
+        raise
+
+
+def _parent(path_or_record, genome=None) -> Params | None:
+    """A parent rendition's parameters, from its record (or the path to one). Its generation is the record's.
+    A record from before its lineage held words gives the words it sang as the words it holds."""
+    record = _parent_record(path_or_record) if isinstance(path_or_record, (str, Path)) else path_or_record
+    if not record:
+        return None
     params = Params.from_dict(record["params"])
+    if "generation" in record:
+        params = replace(params, generation=int(record["generation"]))
     if not params.words and genome is not None and genome.source.get("bank") and record.get("lyrics"):
         held = hold(genome, Lyrics.from_dict(record["lyrics"]))
         if not verse_problem(genome, held.get("verses", [])):
@@ -62,14 +73,13 @@ def words(genome, params: Params, seed: int | None = None, sung_by_a_machine: bo
 
 
 def evolution(genome, params: Params, parent: Params | None, lyrics=None, changes=None) -> dict | None:
-    """What a record says of the lineage's tune and words: the generation, each variant sung (in words),
-    what changed from the parent and why, and how far the tune's contour has come from the parent and
-    from the seed (as the lineage gate will measure it). None for a rendition with nothing to say (the
-    seed as written), so its record stays as it was."""
-    if not params.variants and not changes and parent is None and not params.generation:
+    """What a record says of the lineage's tune and words: each variant sung (in words), what changed from the
+    parent and why, and how far the tune's contour has come from the parent and from the seed (as the lineage
+    gate will measure it). None for a rendition with nothing to say (the seed as written), so its record
+    stays as it was."""
+    if not params.variants and not changes and parent is None:
         return None
     return {
-        "generation": params.generation,
         "variants": [{"about": variants_mod.describe(genome, v, lyrics), **v.to_dict()} for v in params.variants],
         "changes": list(changes or []),
         "distance": {"parent": variants_mod.distance(genome, parent.variants if parent else (), params.variants),
@@ -85,11 +95,13 @@ def _singer(params: Params, overrides: list[str]) -> VoiceParams:
 
 
 def render_one(genome, params: Params, out: Path, *, voice=None, drift=None, lyrics=None, phrasing_json=None,
-               choir_json=(), singer_overrides=(), stems: bool = False, mix_overrides=(), parent=None,
-               changes=None) -> dict:
+               choir_json=(), singer_overrides=(), stems: bool = False, mix_overrides=(), parent: dict | None = None,
+               packet_genome: str | Path | None = None, changes=None) -> dict:
     """Render one rendition to out (FLAC), with its record (.json), score (.score.json) and, if its words were
-    drawn or held, its lyric sheet (.txt) beside it. parent and changes: the parent's parameters and what
-    choosing these changed from them (choose_params' log), for the record's evolution."""
+    drawn or held, its lyric sheet (.txt) beside it. With packet_genome (the genome file sung), the FLAC carries
+    its packet: the program, the genome, the record and the words (songbird/pack.py). parent: the parent's
+    record; changes: what choosing these parameters changed from it (choose_params' log), for the record's
+    evolution (docs/EVOLUTION.md)."""
     phrasing = phrasing_mod.from_json(phrasing_json) if phrasing_json else None
     choir = [phrasing_mod.from_json(d) for d in choir_json]
     score = variation.lay(realize(genome, params, phrasing=phrasing, choir=choir, lyrics=lyrics), params)
@@ -98,7 +110,11 @@ def render_one(genome, params: Params, out: Path, *, voice=None, drift=None, lyr
     mixing = MixParams.parse(list(mix_overrides), base=MixParams.from_dict(params.mix or {}))
 
     out.parent.mkdir(parents=True, exist_ok=True)
-    mix = synth.render(score, seed=params.seed, voice=singer, mix_params=mixing)
+    # the earlier versions' singers, the parent's first, sing the lineage choir (as many as it has voices)
+    lineage_singers = ([{"id": parent.get("id"), "singer": parent.get("singer")}, *(parent.get("lineage_singers") or [])]
+                       if parent and parent.get("singer") else [])[: variation.CHOIR_MAX]
+    ancestors = synth.ancestors_from(lineage_singers, learned=singer.engine == "learned")
+    mix = synth.render(score, seed=params.seed, voice=singer, mix_params=mixing, ancestors=ancestors)
     mastered = master.master(mix, synth.SR)
     pcm = master.to_pcm16(mastered, seed=params.seed)
     master.write_flac(out, pcm, synth.SR)
@@ -106,10 +122,12 @@ def render_one(genome, params: Params, out: Path, *, voice=None, drift=None, lyr
     record = {
         "id": master.pcm_sha256(pcm),
         "title": genome.title,
+        **pack_mod.lineage(parent),
         "rendered_at": drift.to_dict()["at"] if drift is not None else None,
         "params": params.to_dict(),
         "lyrics": lyrics.to_dict() if lyrics else None,  # the words drawn from the bank; None: the seed's own
         "singer": asdict(singer),
+        "lineage_singers": lineage_singers,  # who sings in the choir: the earlier versions, the parent's first
         "voice": voice.to_dict() if voice is not None else None,
         "drift": drift.to_dict() if drift is not None else None,
         "phrasing": {k: v for k, v in phrasing_json.items() if k not in ("phrases", "fields")} if phrasing_json else None,
@@ -122,18 +140,22 @@ def render_one(genome, params: Params, out: Path, *, voice=None, drift=None, lyr
         "duration": round(len(pcm) / synth.SR, 3),
         "program_version": __version__,
     }
-    story = evolution(genome, params, parent, lyrics, changes)
+    story = evolution(genome, params, _parent(parent, genome) if parent else None, lyrics, changes)
     if story is not None:  # the tune's variants and what changed from the parent (docs/EVOLUTION.md)
         record["evolution"] = story
-    out.with_suffix(".json").write_text(json.dumps(record, indent=2) + "\n")
-    out.with_suffix(".score.json").write_text(json.dumps(score.to_dict()) + "\n")
-    if lyrics:
-        out.with_suffix(".txt").write_text(lyrics.sheet(genome.title))
+    if packet_genome is not None:  # one file: the record and the words travel inside it
+        sung = lyrics.sheet(genome.title) if lyrics else pack_mod.words_as_sung(score.to_dict(), genome.title)
+        pack_mod.pack(out, record, packet_genome, lyrics=sung)
+    else:
+        out.with_suffix(".json").write_text(json.dumps(record, indent=2) + "\n")
+        out.with_suffix(".score.json").write_text(json.dumps(score.to_dict()) + "\n")
+        if lyrics:
+            out.with_suffix(".txt").write_text(lyrics.sheet(genome.title))
 
     if stems:
         import soundfile as sf
 
-        for name, stem in synth.render_stems(score, seed=params.seed, voice=singer).items():
+        for name, stem in synth.render_stems(score, seed=params.seed, voice=singer, ancestors=ancestors).items():
             sf.write(str(out.with_name(f"{out.stem}.{name}.wav")), stem, synth.SR, subtype="FLOAT")
 
     print(f"{out}  {record['duration']:.1f}s  {record['loudness_lufs']} LUFS  id {record['id'][:12]}")
@@ -143,11 +165,10 @@ def render_one(genome, params: Params, out: Path, *, voice=None, drift=None, lyr
 def render_command(args: argparse.Namespace) -> int:
     genome = genome_mod.load(args.genome)
     voice, drift = _machine(args)
-    parent = _parent(args.parent, genome)
+    parent = _parent_record(args.parent)
     changes: list = []
-    params = choose_params(genome, parent, voice, drift, seed=args.seed, log=changes)
-    if args.form:
-        params = replace(params, form=tuple(args.form))
+    params = choose_params(genome, _parent(parent, genome), voice, drift, seed=args.seed, log=changes,
+                           form=tuple(args.form) if args.form else None)
     if args.choir is not None:
         params = replace(params, choir=args.choir)
     # a person's phrasing: the file given, or the one the seed carries
@@ -161,13 +182,55 @@ def render_command(args: argparse.Namespace) -> int:
     except (ArrangeError, ValueError) as e:
         print(f"songbird: can't draw words for that form: {e}", file=sys.stderr)
         return 2
-    if lyrics is not None and genome.source.get("bank"):
-        params = replace(params, words=hold(genome, lyrics))  # a lineage hands on the words it sang
+    if sung_by_a_machine and lyrics is not None and genome.source.get("bank"):
+        if args.lyrics_seed is not None:  # drawn afresh by hand: the lineage holds what was sung, not what was chosen
+            params = replace(params, words=hold(genome, lyrics))
+            changes = [c for c in changes if c.get("what") != "words"] + [
+                {"what": "words", "change": "drawn",
+                 "why": f"drawn afresh from the bank with --lyrics-seed {args.lyrics_seed}, not handed down"}]
+        else:
+            params = replace(params, words=evolve.fitted(genome, params, voice, drift))
     out = Path(args.out or Path("renders") / (Path(args.genome).stem + ".flac"))
     render_one(genome, params, out, voice=voice, drift=drift, lyrics=lyrics, phrasing_json=phrasing_json,
                choir_json=choir_json, singer_overrides=args.voice, stems=args.stems, mix_overrides=args.mix,
-               parent=parent if parent is not None or sung_by_a_machine else None,
+               parent=parent, packet_genome=args.genome if args.pack else None,
                changes=changes if sung_by_a_machine else None)
+    return 0
+
+
+# ---------------------------------------------------------------- the packet
+
+def pack_command(args: argparse.Namespace) -> int:
+    flac = Path(args.flac)
+    record_path = Path(args.record) if args.record else flac.with_suffix(".json")
+    if not record_path.exists():
+        print(f"songbird: no render record at {record_path} (--record)", file=sys.stderr)
+        return 2
+    record = json.loads(record_path.read_text())
+    genome_path = Path(args.genome) if args.genome else None
+    if genome_path is None:  # the song whose title the record carries
+        songs = Path(__file__).resolve().parents[1] / "songs"
+        genome_path = next((g for g in sorted(songs.glob("*.json"))
+                            if json.loads(g.read_text()).get("title") == record.get("title")), None)
+        if genome_path is None:
+            print(f"songbird: which genome sang {record.get('title')!r}? (--genome)", file=sys.stderr)
+            return 2
+    sheet, score = flac.with_suffix(".txt"), flac.with_suffix(".score.json")
+    lyrics = sheet.read_text() if sheet.exists() else \
+        pack_mod.words_as_sung(json.loads(score.read_text()), record.get("title")) if score.exists() else None
+    out = pack_mod.pack(flac, record, genome_path, lyrics=lyrics, out=args.out)
+    print(f"{out}  carries the program ({out.stat().st_size / 2**20:.1f} MB in all)")
+    return 0
+
+
+def unpack_command(args: argparse.Namespace) -> int:
+    to = Path(args.to) if args.to else Path(args.flac).with_name(Path(args.flac).stem + "-unpacked")
+    try:
+        pack_mod.unpack(args.flac, to)
+    except ValueError as e:
+        print(f"songbird: {e}", file=sys.stderr)
+        return 2
+    print(f"unpacked into {to}")
     return 0
 
 
@@ -269,7 +332,8 @@ def _form(form) -> str:
 def year_command(args: argparse.Namespace) -> int:
     genome = genome_mod.load(args.genome)
     voice = harvest.machine_voice(args.machine)
-    parent = _parent(args.parent, genome)
+    parent_record = _parent_record(args.parent)
+    parent = _parent(parent_record, genome)
     start = drift_mod.parse(args.start) if args.start else drift_mod.parse(drift_mod.when(drift_mod.now()).date().isoformat())
     label = args.machine.split(":", 1)[-1] if args.machine.startswith("fictional:") else Path(args.machine).stem
     print(f"{genome.title}: machine {args.machine} (voice {voice.hash}), {args.days} days from "
@@ -317,13 +381,13 @@ def year_command(args: argparse.Namespace) -> int:
         for offset, name in ((0, "day 0"), (1, "a day on"), (7, "a week on"), (30, "a month on"), (365, "a year on")):
             t = start + offset
             d = drift_mod.drift(t, voice.hash)
-            changes: list = []
-            p = choose_params(genome, parent, voice, d, log=changes)
+            log: list = []
+            p = choose_params(genome, parent, voice, d, log=log)
             day = (drift_mod.when(start) + timedelta(days=offset)).date().isoformat()
             print(f"{name}: ", end="")
             render_one(genome, p, out_dir / f"{Path(args.genome).stem}.{label}.{day}.flac", voice=voice, drift=d,
                        lyrics=words(genome, p, sung_by_a_machine=True), phrasing_json=genome.source.get("seed_phrasing"),
-                       parent=parent, changes=changes)
+                       parent=parent_record, changes=log)
     return 0
 
 
@@ -345,7 +409,11 @@ def main(argv: list[str] | None = None) -> int:
                              "(default: now, if a machine sings)")
     render.add_argument("--seed", type=int, help="the rendition's seed (default: from the machine, instant and parent)")
     render.add_argument("--parent", metavar="FILE",
-                        help="inherit from a parent rendition: its record (.json) or the .flac it sits beside")
+                        help="inherit from a parent rendition: its FLAC (carrying its packet, or with its record "
+                             "beside it) or its record (.json)")
+    render.add_argument("--pack", action="store_true",
+                        help="attach the packet: the FLAC carries the program, the genome, its record and its words "
+                             "(and nothing is written beside it)")
     render.add_argument("--form", nargs="+", help="override the section order, e.g. intro verse refrain")
     render.add_argument("--lyrics-seed", type=int, metavar="N",
                         help="draw the words from the song's bank with this seed, and write their lyric sheet "
@@ -389,10 +457,23 @@ def main(argv: list[str] | None = None) -> int:
     year.add_argument("--days", type=float, default=365, help="how many days (default 365)")
     year.add_argument("--step", type=float, default=1, help="days between rows (default 1)")
     year.add_argument("--parent", metavar="FILE",
-                      help="inherit from a parent rendition: its record (.json) or the .flac it sits beside")
+                      help="inherit from a parent rendition: its FLAC (carrying its packet, or with its record beside it) "
+                           "or its record (.json)")
     year.add_argument("--render", metavar="DIR",
                       help="also render the first day, a day, a week, a month and a year on into DIR")
     year.set_defaults(run=year_command)
+
+    pack_parser = commands.add_parser("pack", help="attach the packet to a rendered FLAC: the program, genome, record, words")
+    pack_parser.add_argument("flac", help="a rendered FLAC, with its record (.json) beside it")
+    pack_parser.add_argument("--record", metavar="FILE", help="its render record (default: beside the FLAC)")
+    pack_parser.add_argument("--genome", metavar="FILE", help="the genome it sang (default: the song with its title)")
+    pack_parser.add_argument("--out", metavar="FILE", help="write the packet here (default: attach it in place)")
+    pack_parser.set_defaults(run=pack_command)
+
+    unpack_parser = commands.add_parser("unpack", help="unpack a rendition's packet into a folder")
+    unpack_parser.add_argument("flac", help="a FLAC carrying its packet")
+    unpack_parser.add_argument("--to", metavar="DIR", help="the folder (default: beside the FLAC)")
+    unpack_parser.set_defaults(run=unpack_command)
 
     args = parser.parse_args(argv)
     return args.run(args)

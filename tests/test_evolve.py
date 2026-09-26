@@ -178,7 +178,8 @@ def test_the_record_says_what_changed_and_why(h):
     parent = sing_on(h, "ada", "2026-11-01")
     child = sing_on(h, "fox", "2027-03-15", parent, log)
     story = cli.evolution(h, child, parent, A.sing(h, child.form, child.words), log)
-    assert story["generation"] == 2 and story["changes"] == log
+    assert (parent.generation, child.generation) == (0, 1)  # sung from the genome, then handed on: as the record counts
+    assert story["changes"] == log
     assert all(e.get("why") for e in log) and all(e["what"] in ("tune", "words") for e in log)
     assert story["distance"]["seed"] >= 0 and len(story["variants"]) == len(child.variants)
     assert cli.evolution(h, Params.from_dict(h.seed_params), None) is None  # the seed's record is as it was
