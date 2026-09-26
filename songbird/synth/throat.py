@@ -454,7 +454,7 @@ def sing(notes, sr: int, voice, seed: int = 0, lexicon: dict | None = None, mix:
     vowels = [s for s in segs if s.role == "vowel"]
     n_blocks = int(np.ceil(duration * RATE / BLOCK))
     accents = [voice.accent * float(np.clip(20 * np.log10(s.amp / 0.9) / 3.0, 0.0, 1.0)) for s in vowels]
-    f0b = pitch_track(notes, n_blocks, RATE, voice, rng, [s.t1 for s in vowels], accents)
+    f0b = pitch_track(notes, n_blocks, RATE, voice, rng, [s.t1 for s in vowels], accents, segs)
     f0 = np.interp(np.arange(n) * FRAME, (np.arange(n_blocks) + 0.5) * BLOCK / RATE, f0b)
     sung = np.median([n.pitch + voice.shift for n in notes])
     if isinstance(mix, str) and mix.startswith("machine:"):  # a singer of its own, drawn for this pitch

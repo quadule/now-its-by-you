@@ -24,6 +24,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 
 import numpy as np
+from scipy.interpolate import PchipInterpolator
 from scipy.ndimage import uniform_filter1d
 from scipy.signal import butter, fftconvolve, sosfilt
 
@@ -54,10 +55,10 @@ class VoiceParams:
     vibrato_rate: float = 5.3  # Hz
     vibrato_depth: float = 28.0  # cents
     vibrato_delay: float = 0.28  # seconds into a note before vibrato starts
-    glide: float = 0.11  # seconds to move between notes a step apart (wider leaps take longer)
-    glide_spread: float = 0.3  # how much that varies from one note to the next (log scale)
-    overshoot: float = 0.12  # fraction of each interval sung past the new note before settling
-    scoop: float = 0.35  # semitones below the note that a phrase starts from
+    glide: float = 0.11  # sets how fast the voice moves between notes: 10-90% in half of this for a step, 4 ms more a semitone
+    glide_spread: float = 0.35  # how unalike two moves are: their length (log scale), when they happen and how far past they go
+    overshoot: float = 0.025  # fraction of each interval sung past the new note before settling, on average
+    scoop: float = 0.35  # semitones below the note a phrase starts from, through an m, n, l, r, w or y (less otherwise)
     jitter: float = 0.3  # percent, fast pitch wobble
     wander: float = 6.0  # cents, slow pitch drift
     shimmer: float = 2.5  # percent, fast amplitude wobble
@@ -78,6 +79,7 @@ class VoiceParams:
     breathe: float = 0.18  # seconds between lines needed for an audible breath
     inhale: float = -36.0  # dB of that breath's loudest moment against the sung vowels, as the natural singers breathe
     accent: float = 8.0  # cents a strongly leaned-on note is lifted
+    spread: float = 1.0  # how unalike the singer's moves are: transitions, rises, vibratos, falls, consonants (0 sings each alike)
     focus: float = 1.0  # dB more on a word the lyric marks as its line's focus (*word*), most on its stressed syllable (2 cost words)
     reduce: float = 0.0  # how far a little word's vowel off the beat moves toward "uh" (0.3 cost the words: WER 15% -> 18%)
     mouth: float = 1.0  # cm radius of the mouth opening: small keeps the upper resonances ringing
@@ -432,50 +434,176 @@ def breaths(segs: list[Segment], n: int, sr: int, voice: VoiceParams, seed: int)
     return out
 
 
+# How natural singers get from one legato note to the next (SoulX's house singers, measured by
+# tools/delivery.py over 1,400 transitions, each aligned at its midpoint and timed in its own 10-90%
+# duration): a little slower to leave the old note than to arrive at the new one. Around that shape each
+# transition has its own moment, length and distance past the note (overshoot_bump), and a move up
+# often dips a little first (preparation_dip).
+GLIDE_TAU = np.arange(-1.5, 2.51, 0.25)
+GLIDE_SHAPE = PchipInterpolator(GLIDE_TAU, [0.0, 0.0, 0.0, 0.012, 0.1, 0.265, 0.545, 0.812, 0.949, 0.99, 1.0,
+                                            1.0, 1.0, 1.0, 1.0, 1.0, 1.0])
+
+
+def glide_shape(tau: np.ndarray) -> np.ndarray:
+    """0 to 1 across a transition, tau in its 10-90% durations from its midpoint."""
+    return GLIDE_SHAPE(np.clip(tau, GLIDE_TAU[0], GLIDE_TAU[-1]))
+
+
+def overshoot_bump(tau: np.ndarray) -> np.ndarray:
+    """Where a transition overshoots: most one duration past its midpoint, gone by about two and a half."""
+    return np.exp(-(((tau - 1.0) / 0.6) ** 2))
+
+
+def preparation_dip(tau: np.ndarray) -> np.ndarray:
+    """Where a move up dips first: most about a duration before its midpoint, gone as it rises."""
+    return np.exp(-(((tau + 0.9) / 0.35) ** 2))
+
+
+# A phrase's first note: natural singers rise into it over the first tenth of a second or so of its
+# first syllable, heard through an m, n, l, r, w or y or at a vowel, hidden inside a voiceless consonant
+# (the house singers come up about 40 cents through a sonorant and start a vowel after an s or a t
+# on pitch), and hardly at all through a voiced stop or fricative; about one phrase in four starts flat
+# or a little above.
+FLAT_START = 0.25
+
+# The pitch around consonants, in cents (the house singers between two notes on the same pitch): it sags
+# through a voiced stop or fricative and comes back a little high, falls a little as the voice stops for
+# a voiceless one, and starts again a little high after it.
+SAG, SAG_REBOUND, STOP_FALL, RESTART = -20.0, 5.0, -10.0, 5.0
+FINAL_FALL = -18.0  # cents a line's last vowel falls as the voice lets go of it (natural singers: -11 to -23)
+
+
+def phrase_starts(notes: list[Note]) -> list[bool]:
+    """Whether each note starts a phrase: the first, after a rest, or a line's first."""
+    return [k == 0 or n.start - (notes[k - 1].start + notes[k - 1].dur) > 0.05 or notes[k - 1].line_end
+            for k, n in enumerate(notes)]
+
+
+def syllable_starts(segs: list[Segment] | None, n_notes: int) -> list[float | None]:
+    """When each note's syllable starts: its first consonant, else its vowel (None without a schedule)."""
+    out: list[float | None] = [None] * n_notes
+    k, first = 0, None
+    for s in segs or ():
+        if s.role == "onset" and first is None:
+            first = s.t0
+        elif s.role == "vowel":
+            if k < n_notes:
+                out[k] = first if first is not None else s.t0
+            k, first = k + 1, None
+    return out
+
+
+def voiced_closure(segs: list[Segment] | None, n_notes: int) -> list[bool]:
+    """Whether each note's syllable starts with a voiced stop or fricative (b, d, g, v, z, the...)."""
+    out, k, first = [False] * n_notes, 0, None
+    for s in segs or ():
+        if s.role == "onset" and first is None:
+            first = s.phone
+        elif s.role == "vowel":
+            if first is not None and k < n_notes:
+                manner, _, voiced = ph.CONSONANTS[first]
+                out[k] = voiced and manner in ("stop", "fricative", "affricate")
+            k, first = k + 1, None
+    return out
+
+
+def consonant_pitch(segs: list[Segment], tb: np.ndarray) -> np.ndarray:
+    """Cents the consonants move the pitch by (SAG and the rest), per block time."""
+    out = np.zeros_like(tb)
+    sounds = [s for s in segs if s.role != "breath"]
+
+    def voiced_sound(s: Segment | None) -> bool:
+        return s is not None and (s.role == "vowel" or ph.CONSONANTS[s.phone][2])
+
+    for i, s in enumerate(sounds):
+        if s.role not in ("onset", "coda"):
+            continue
+        manner, _, voiced = ph.CONSONANTS[s.phone]
+        before = sounds[i - 1] if i and sounds[i - 1].t1 > s.t0 - 0.02 else None
+        after = sounds[i + 1] if i + 1 < len(sounds) and sounds[i + 1].t0 < s.t1 + 0.02 else None
+        if voiced and manner in ("stop", "fricative", "affricate") and voiced_sound(before):  # between voiced sounds
+            mid, half = 0.5 * (s.t0 + s.t1), 0.5 * (s.t1 - s.t0) + 0.03
+            out += SAG * (0.5 + 0.5 * np.cos(np.pi * np.clip((tb - mid) / half, -1.0, 1.0)))
+            out += SAG_REBOUND * np.clip((tb - s.t1 + 0.01) / 0.03, 0.0, 1.0) * np.clip((s.t1 + 0.1 - tb) / 0.07, 0.0, 1.0)
+        elif not voiced:
+            if voiced_sound(before):  # the voice stopping: falls into it, then (unheard) back
+                out += STOP_FALL * np.clip((tb - s.t0 + 0.06) / 0.06, 0.0, 1.0) * np.clip((s.t1 - tb) / max(s.t1 - s.t0, 0.02), 0.0, 1.0)
+            if voiced_sound(after):  # starting again a little high, settling in 80 ms
+                out += RESTART * np.clip((tb - s.t1 + 0.03) / 0.03, 0.0, 1.0) * np.clip((s.t1 + 0.08 - tb) / 0.08, 0.0, 1.0)
+    return out
+
+
 def pitch_track(notes: list[Note], n_blocks: int, sr: int, voice: VoiceParams, rng, sounding=None,
-                accents=None) -> np.ndarray:
-    """f0 in Hz per block: glides between notes, a scoop into each phrase, vibrato, drift and jitter.
+                accents=None, segs: list[Segment] | None = None) -> np.ndarray:
+    """f0 in Hz per block: transitions between notes, a rise into each phrase, vibrato on held notes,
+    the pitch around consonants, a fall as a line lets go, drift and jitter.
     sounding: when each note's vowel ends, so a phrasing's bends and falls happen while it can be heard.
-    accents: cents to lift each note by, for the syllables leaned on hardest."""
+    accents: cents to lift each note by, for the syllables leaned on hardest.
+    segs: the schedule (schedule()), for when each syllable starts and where its consonants are; without
+    it, phrases rise from their vowels and consonants leave the pitch alone.
+
+    No two transitions or rises come out alike: each draws its own moment, length, overshoot and
+    preparation, or depth, and each phrase its own lean in time, all scaled by voice.spread (0 sings every
+    one alike). The draws come from streams spawned off rng, so
+    the engines, which call this first, sing the same pitch."""
     tb = (np.arange(n_blocks) + 0.5) * BLOCK / sr
+    n = len(notes)
+    s = voice.spread
+    note_rng, phrase_rng, vib_rng, drift_rng = rng.spawn(4)
+    z = note_rng.standard_normal((n, 10))
+    u = note_rng.random((n, 3))
+    starts = phrase_starts(notes)
+    phrase = np.cumsum(starts) - 1
+    zp = phrase_rng.standard_normal((int(phrase[-1]) + 1, 2))  # a phrase's lean in time
+    begins = syllable_starts(segs, n)
+    closes = voiced_closure(segs, n)
     target = np.full(n_blocks, notes[0].pitch + voice.shift, dtype=float)
     vib_env = np.zeros(n_blocks)
-    gestures = np.zeros(n_blocks)  # cents from a phrasing: scoops, bends and falls
+    gestures = np.zeros(n_blocks)  # cents from a phrasing (scoops, bends and falls) and the machine's own lifts and falls
     for k, note in enumerate(notes):
         p = note.pitch + voice.shift
         prev = notes[k - 1] if k else None
         g = note.gesture
-        phrase_start = prev is None or note.start - (prev.start + prev.dur) > 0.05 or prev.line_end
-        # a wider leap takes longer to sing across, and no two are sung alike
-        glide = voice.glide * float(np.clip(0.76 + 0.06 * (abs(p - prev.pitch - voice.shift) - 2), 0.6, 1.8)) if prev else voice.glide
-        glide *= float(np.exp(voice.glide_spread * rng.standard_normal()))
-        glide = min(glide, 0.6 * prev.dur) if prev else glide
-        t_on = note.start - 0.7 * glide
-        if phrase_start and prev is not None:
-            # move while the voice is silent: just after the last line let go
-            breath = line_release(prev.dur) if prev.line_end else 0.0
-            t_on = min(t_on, prev.start + prev.dur - breath + 0.01)
-        after = tb >= t_on
-        if phrase_start:
-            # start a little under the note and rise into it; a phrasing's scoop is added below instead,
-            # so that it always means how far off the note the vowel begins
-            scoop = 0.0 if g is not None and g.scoop else voice.scoop
-            rise = np.clip((tb - note.start + 0.12) / 0.2, 0.0, 1.0)
-            target[after] = p - scoop * (1.0 - 0.5 * (1 - np.cos(np.pi * rise[after])))
-        else:
-            q = prev.pitch + voice.shift
-            w = np.clip((tb - t_on) / glide, 0.0, 1.0)
-            target[after] = q + (p - q) * 0.5 * (1 - np.cos(np.pi * w[after]))
-            # Voices overshoot a new note a little and settle, like a damped
-            # spring; a glide that lands dead on target sounds mechanical.
-            t_arrive = t_on + glide
-            x = tb[after] - t_arrive
-            ring = np.where(x > 0, np.sin(np.pi * x / 0.13) * np.exp(-x / 0.07), 0.0)
-            target[after] += voice.overshoot * (p - q) * ring
         end = note.start + note.dur
+        heard = min(sounding[k], end) if sounding is not None else end  # the vowel's own end
+        zk = z[k]
+        if starts[k]:
+            # rise into the phrase over its first syllable's first tenth of a second; a phrasing's scoop is
+            # added below instead, so that it always means how far off the note the vowel begins
+            if g is not None and g.scoop:
+                depth = 0.0
+            elif u[k, 0] < FLAT_START * min(s, 1.0):
+                depth = 0.08 * voice.scoop * s * float(zk[4])  # about level, either way
+            else:  # (a voiced stop or fricative starts the voice near the note already)
+                depth = voice.scoop * float(np.exp(0.6 * s * zk[4])) * (0.3 if closes[k] else 1.0)
+            dur = 0.05 * float(np.exp(0.3 * s * zk[0]))
+            t50 = (begins[k] if begins[k] is not None else note.start) + 1.5 * dur
+            t_on = t50 - 1.5 * dur
+            if prev is not None:  # move while the voice is silent: just after the last line let go
+                t_on = min(t_on, prev.start + prev.dur - (line_release(prev.dur) if prev.line_end else 0.0) + 0.01)
+            after = tb >= t_on
+            target[after] = p - depth * (1.0 - glide_shape((tb[after] - t50) / dur))
+        else:
+            # a wider leap takes a little longer (about 4 ms a semitone); each move has its own length, its
+            # own moment (upward ones near the vowel's start, downward ones sooner, a phrase leaning one way
+            # or the other), its own distance past the new note, and a move up its own little dip first
+            d = p - (prev.pitch + voice.shift)
+            dur = voice.glide * (0.45 + 0.04 * abs(d)) * float(np.exp(voice.glide_spread * s * zk[0]))
+            dur = min(dur, 0.35 * prev.dur, 0.5 * note.dur)
+            when = 0.012 * s * zp[phrase[k], 0] + min(0.03 * s, 0.1 * min(prev.dur, note.dur)) * zk[1]
+            t50 = note.start + (-0.01 if d > 0 else -0.04) + when
+            lo, hi = prev.start + 0.5 * prev.dur + 0.75 * dur, note.start + 0.3 * note.dur
+            t50 = float(np.clip(t50, lo, hi)) if lo < hi else note.start - 0.2 * dur
+            t_on = t50 - 2.0 * dur
+            after = tb >= t_on
+            q = float(target[min(int(np.searchsorted(tb, t_on)), n_blocks - 1)])  # wherever the voice is as it leaves
+            tau = (tb[after] - t50) / dur
+            past = voice.overshoot * (p - q) + 0.1 * s * zk[2]  # semitones past the note, at most
+            dip = -(0.03 * (p - q) + 0.04) * float(np.exp(0.5 * s * zk[3])) if p > q else 0.0
+            target[after] = q + (p - q) * glide_shape(tau) + past * overshoot_bump(tau) + dip * preparation_dip(tau)
+        inside = (tb >= note.start) & (tb < end)
         v = np.clip((tb - note.start - voice.vibrato_delay) / 0.25, 0.0, 1.0)
         v *= np.clip((end - tb) / 0.08, 0.0, 1.0)
-        inside = (tb >= note.start) & (tb < end)
         if g is not None and g.vibrato >= 0:
             v *= g.vibrato / max(voice.vibrato_depth, 1.0)
         elif note.dur < (0.55 if note.line_end else voice.vibrato_from):
@@ -484,8 +612,12 @@ def pitch_track(notes: list[Note], n_blocks: int, sr: int, voice: VoiceParams, r
         if accents is not None and accents[k]:  # a note leaned on is lifted a little, eased in and out
             lift = accents[k] * np.clip((tb - note.start) / 0.05, 0.0, 1.0) * np.clip((end - tb) / 0.05, 0.0, 1.0)
             gestures[inside] += lift[inside]
+        if note.line_end and heard - note.start > 0.15:  # the voice falls a little as it lets go of the line
+            letgo = min(0.1, 0.4 * (heard - note.start))
+            fall = FINAL_FALL * float(np.exp(0.4 * s * zk[9]))
+            drop = fall * (0.5 - 0.5 * np.cos(np.pi * np.clip((tb - (heard - letgo)) / letgo, 0.0, 1.0)))
+            gestures[inside] += drop[inside]
         if g is not None:
-            heard = min(sounding[k], end) if sounding is not None else end  # the vowel's own end
             dur = max(heard - note.start, 0.05)
             x = np.clip((tb - note.start) / dur, 0.0, 1.0)
             approach = min(0.12, 0.3 * dur)
@@ -500,11 +632,13 @@ def pitch_track(notes: list[Note], n_blocks: int, sr: int, voice: VoiceParams, r
             gestures[inside] += np.broadcast_to(shape, tb.shape)[inside]
 
     rate = sr / BLOCK
-    vib_rate = voice.vibrato_rate * (1.0 + 0.05 * _lowpassed_noise(rng, n_blocks, 0.5, rate))
+    vib_rate = voice.vibrato_rate * (1.0 + 0.05 * _lowpassed_noise(vib_rng, n_blocks, 0.5, rate))
     vib_phase = 2 * np.pi * np.cumsum(vib_rate) / rate
     cents = voice.vibrato_depth * vib_env * np.sin(vib_phase) + gestures
-    cents += voice.wander * _lowpassed_noise(rng, n_blocks, 1.0, rate)
-    cents += 17.3 * voice.jitter * _lowpassed_noise(rng, n_blocks, 25.0, rate)
+    if segs is not None:
+        cents += consonant_pitch(segs, tb)
+    cents += voice.wander * _lowpassed_noise(drift_rng, n_blocks, 1.0, rate)
+    cents += 17.3 * voice.jitter * _lowpassed_noise(drift_rng, n_blocks, 25.0, rate)
     return 440.0 * 2.0 ** ((target + cents / 100.0 - 69.0) / 12.0)
 
 
@@ -527,7 +661,7 @@ def sing(notes: list[Note], sr: int, voice: VoiceParams, seed: int = 0, lexicon:
     tracks = control_tracks(segs, n_blocks, sr, voice)
     vowels = [s for s in segs if s.role == "vowel"]
     accents = [voice.accent * float(np.clip(20 * np.log10(s.amp / 0.9) / 3.0, 0.0, 1.0)) for s in vowels]
-    f0_blocks = pitch_track(notes, n_blocks, sr, voice, rng, [s.t1 for s in vowels], accents)
+    f0_blocks = pitch_track(notes, n_blocks, sr, voice, rng, [s.t1 for s in vowels], accents, segs)
 
     # Singers raise the first formant to stay above a high fundamental.
     formants = tracks["formants"]

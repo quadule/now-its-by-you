@@ -104,7 +104,7 @@ SUNG = dict(timing=1.0, level=0.8, swell=1.0, scoop=0.8, bend=0.8, fall=0.8, vib
 REPEATS = P.Gesture(early=0.048, hold=0.08, level=2.6, swell=3.0, scoop=50.0, bend=13.0, fall=23.0, vibrato=6.0, tune=15.0)
 WRONG_NOTE = 150.0  # cents from the tune beyond which a note's pitch gestures aren't trusted
 # the template singer: the machine's own schedule and tune, without any habits of its own
-FLAT = V.VoiceParams(vibrato_depth=0.0, scoop=0.0, jitter=0.0, wander=0.0)
+FLAT = V.VoiceParams(vibrato_depth=0.0, scoop=0.0, jitter=0.0, wander=0.0, spread=0.0)
 NAN = float("nan")
 # Where the aligner puts a vowel's start against where it began (seconds; negative is early), by what comes
 # before the vowel, taken back off every take. Measured on natural voices (Seed-VC re-voicing planted takes as
