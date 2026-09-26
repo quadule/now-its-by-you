@@ -70,6 +70,34 @@ def test_a_second_pick_lands_on_the_ringing_string():
                                                picks=((0.0, 1.0), (0.3, 1.0))))
 
 
+@pytest.mark.parametrize("freq", [110.0, 330.0, 880.0])
+def test_a_lossy_string_keeps_its_pitch_and_its_fundamental_but_loses_its_top(freq):
+    # a nylon-like friction, the pole held under what the longer-ringing plane (twice note()'s t60) allows
+    pole = stringloop.pole_for(freq, SR, 2.0 * 3.0 * (220.0 / freq) ** 0.4, 0.012)
+    plain = stringloop.note(freq, 2.0, SR, np.random.default_rng(7), decay=3.0)
+    lossy = stringloop.note(freq, 2.0, SR, np.random.default_rng(7), decay=3.0, pole=pole)
+    assert abs(cents(f0(lossy, freq, 0.2, 1.8), freq)) < 0.5
+    from scipy.signal import butter, sosfiltfilt
+
+    def level(y, lo, hi, t0, t1):
+        z = sosfiltfilt(butter(2, [lo, hi], btype="bandpass", fs=SR, output="sos"), y)
+        return 10 * np.log10(np.mean(z[int(t0 * SR): int(t1 * SR)] ** 2) + 1e-30)
+
+    fund = (freq * 0.8, freq * 1.25)
+    assert abs((level(lossy, *fund, 1.0, 1.5) - level(lossy, *fund, 0.2, 0.5))
+               - (level(plain, *fund, 1.0, 1.5) - level(plain, *fund, 0.2, 0.5))) < 3.0
+    top = (freq * 5.5, freq * 8.5)
+    assert level(lossy, *top, 0.3, 0.6) < level(plain, *top, 0.3, 0.6) - 4.0
+
+
+def test_a_friction_gives_a_pole_the_pitch_can_carry():
+    low = stringloop.pole_for(110.0, SR, 3.0, 0.01)
+    high = stringloop.pole_for(880.0, SR, 1.4, 0.01)
+    assert 0.3 < low < 0.95 and 0.0 < high < low
+    y = stringloop.note(880.0, 2.0, SR, np.random.default_rng(8), decay=3.0, pole=high)
+    assert np.all(np.isfinite(y)) and abs(cents(f0(y, 880.0, 0.2, 1.5), 880.0)) < 0.5
+
+
 def test_a_pick_jittered_before_the_note_lands_at_its_start():
     y = stringloop.note(220.0, 0.5, SR, np.random.default_rng(6), picks=((-0.003, 1.0), (0.2, 0.8)))
     assert np.all(np.isfinite(y)) and np.abs(y[: int(0.1 * SR)]).max() > 0

@@ -27,16 +27,18 @@ from . import pluck as _pluck
 
 
 @njit(cache=True)
-def _run(x, delay, gain, loss, size):
-    """One string plane: y[t] = x[t] + gain[t] * onezero(read(y, t - delay[t])).
+def _run(x, delay, gain, loss, pole, size):
+    """One string plane: y[t] = x[t] + gain[t] * onepole(onezero(read(y, t - delay[t]))).
 
     The read is cubic Lagrange over the four samples around t - delay[t]
-    (delay must stay above 3 samples and below size - 8)."""
+    (delay must stay above 3 samples and below size - 8); the one-pole lowpass
+    is left out when pole is 0."""
     n = x.shape[0]
     mask = size - 1
     buf = np.zeros(size)
     y = np.zeros(n)
     prev = 0.0
+    lp = 0.0
     for t in range(n):
         pos = t - delay[t]
         i = int(np.floor(pos))
@@ -49,6 +51,9 @@ def _run(x, delay, gain, loss, size):
             + (-(f + 1.0) * f * (f - 2.0) / 2.0) * c + ((f + 1.0) * f * (f - 1.0) / 6.0) * d
         v = (1.0 - loss) * r + loss * prev
         prev = r
+        if pole != 0.0:
+            lp = (1.0 - pole) * v + pole * lp
+            v = lp
         out = x[t] + gain[t] * v
         buf[t & mask] = out
         y[t] = out
@@ -65,11 +70,13 @@ def _interp_phase_delay(delay: np.ndarray, omega: np.ndarray) -> np.ndarray:
     return delay - np.angle(extra) / omega
 
 
-def read_delay(period: np.ndarray, loss: float) -> np.ndarray:
-    """The read delay that makes the whole loop (read and loss filter) one `period` long at the fundamental."""
+def read_delay(period: np.ndarray, loss: float, pole: float = 0.0) -> np.ndarray:
+    """The read delay that makes the whole loop (read and loss filters) one `period` long at the fundamental."""
     period = np.asarray(period, dtype=np.float64)
     omega = 2.0 * np.pi / period
     filt = np.arctan2(loss * np.sin(omega), (1.0 - loss) + loss * np.cos(omega)) / omega
+    if pole:
+        filt = filt + np.arctan2(pole * np.sin(omega), 1.0 - pole * np.cos(omega)) / omega
     delay = period - filt
     for _ in range(3):
         delay = delay + (period - filt - _interp_phase_delay(delay, omega))
@@ -82,28 +89,58 @@ def trip(period, sr: int, t60):
 
 
 def ring(freq: np.ndarray, x: np.ndarray, sr: int, *, loss: float = 0.3, t60: float | np.ndarray = 2.0,
-         gain: np.ndarray | None = None, control: int = 32) -> np.ndarray:
+         gain: np.ndarray | None = None, control: int = 32, pole: float = 0.0) -> np.ndarray:
     """One string plane driven by x, its pitch following freq (Hz, one value a sample, as long as x).
 
     loss is the one-zero loss coefficient (0 keeps every harmonic, 0.5 is the
     classic average); t60 the seconds the fundamental takes to fall 60 dB
     (a number or a track; inf leaves the loss to gain); gain a loop-gain
-    track, a factor on each trip (1 leaves it alone: a palm or a finger lowers it). The delay is worked out at a control rate
-    of `control` samples and interpolated between."""
+    track, a factor on each trip (1 leaves it alone: a palm or a finger lowers
+    it). pole adds a one-pole lowpass to every trip (0: none), for a string
+    whose own friction takes its upper harmonics much faster than its
+    fundamental (nylon, gut); the fundamental still falls in its t60, as long
+    as the lowpass takes less from it on each trip than the t60 does (a high,
+    short-ringing note wants a smaller pole: pole_for() finds one). The
+    delay is worked out at a control rate of `control` samples and
+    interpolated between."""
     n = len(x)
     freq = np.broadcast_to(np.asarray(freq, dtype=np.float64), (n,))
     period = sr / freq
     if np.ptp(period) < 1e-9:
-        delay = np.full(n, read_delay(period[:1], loss)[0])
+        delay = np.full(n, read_delay(period[:1], loss, pole)[0])
     else:
         at = np.unique(np.append(np.arange(0, n, control), n - 1))
-        delay = np.interp(np.arange(n), at, read_delay(period[at], loss))
+        delay = np.interp(np.arange(n), at, read_delay(period[at], loss, pole))
     g = trip(period, sr, np.broadcast_to(np.asarray(t60, dtype=np.float64), (n,)))
     if gain is not None:
         g = g * gain
+    if pole:  # what the lowpass takes from the fundamental on each trip is given back, never past unity at DC
+        w = 2.0 * np.pi / period
+        g = np.minimum(g * np.sqrt(1.0 - 2.0 * pole * np.cos(w) + pole * pole) / (1.0 - pole), 0.99995)
     size = 1 << int(np.ceil(np.log2(delay.max() + 16)))
     return _run(np.ascontiguousarray(x, dtype=np.float64), np.ascontiguousarray(delay),
-                np.ascontiguousarray(g, dtype=np.float64), float(loss), size)
+                np.ascontiguousarray(g, dtype=np.float64), float(loss), float(pole), size)
+
+
+def pole_for(freq: float, sr: int, t60: float, friction: float) -> float:
+    """The one-pole lowpass for a string of `freq` Hz whose fundamental falls 60 dB in t60 seconds and whose
+    material's friction (a loss factor: nylon about 0.005-0.02) takes its upper partials at pi * f * friction
+    nepers a second, measured at its eighth partial; held under what the fundamental's own decay allows."""
+    w0, w8 = 2.0 * np.pi * freq / sr, 2.0 * np.pi * min(8.0 * freq, 0.4 * sr) / sr
+    want = np.pi * min(8.0 * freq, 0.4 * sr) * friction  # nepers a second at the eighth partial
+
+    def loss(p, w):  # nepers a trip
+        return -0.5 * np.log((1.0 - p) ** 2 / (1.0 - 2.0 * p * np.cos(w) + p * p))
+
+    allowed = 0.9 * 3.0 * np.log(10.0) / (t60 * freq)  # what the fundamental's own decay takes a trip
+    lo, hi = 0.0, 0.95
+    for _ in range(50):
+        p = 0.5 * (lo + hi)
+        if (loss(p, w8) - loss(p, w0)) * freq < want and loss(p, w0) < allowed:
+            lo = p
+        else:
+            hi = p
+    return float(lo)
 
 
 def excitation(freq: float, sr: int, rng: np.random.Generator, *, pick: float = 0.15, hardness: float = 0.5,
@@ -116,7 +153,7 @@ def excitation(freq: float, sr: int, rng: np.random.Generator, *, pick: float = 
 def note(freq: float, dur: float, sr: int, rng: np.random.Generator, *, cents: np.ndarray | None = None,
          picks=((0.0, 1.0),), vel: float = 0.8, brightness: float = 0.5, decay: float = 3.0, pick: float = 0.15,
          hardness: float = 0.5, planes: float = 0.3, damp: float = 0.08, touch: float = 0.0,
-         gain: np.ndarray | None = None, click: bool = True) -> np.ndarray:
+         gain: np.ndarray | None = None, click: bool = True, pole: float = 0.0) -> np.ndarray:
     """One string's sound for `dur` seconds and then a `damp`-second stop, like pluck.pluck's,
     but its pitch may move and it may be picked more than once while it rings.
 
@@ -124,7 +161,8 @@ def note(freq: float, dur: float, sr: int, rng: np.random.Generator, *, cents: n
     then held) of the pitch against freq: a slide, a bend, a bar's glide, a
     twang. picks: (seconds after the start, velocity factor) of each time the
     string is picked; later picks land on the ringing string. gain: an extra
-    loop-gain track (a palm mute: under 1). The other arguments are pluck.pluck's."""
+    loop-gain track (a palm mute: under 1). pole: a one-pole lowpass on every trip (see ring: nylon, gut).
+    The other arguments are pluck.pluck's."""
     length = int(round((dur + damp) * sr))
     held = min(int(round(dur * sr)), length)
     track = np.zeros(length)
@@ -155,7 +193,7 @@ def note(freq: float, dur: float, sr: int, rng: np.random.Generator, *, cents: n
             g[held:] = stop + (g[held:] - stop) * np.exp(-np.arange(length - held) / (0.004 * sr))
         if gain is not None:
             g = g * np.broadcast_to(gain, (length,))
-        y += ring(f * 2.0 ** (detune / 1200.0), x * amount, sr, loss=loss, t60=np.inf, gain=g)
+        y += ring(f * 2.0 ** (detune / 1200.0), x * amount, sr, loss=loss, t60=np.inf, gain=g, pole=pole)
     if click:
         for at, factor in picks:
             i = max(0, int(round(at * sr)))
