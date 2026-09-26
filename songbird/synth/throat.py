@@ -107,7 +107,8 @@ def synthesize(f0: np.ndarray, sp: np.ndarray, ap: np.ndarray, sr: int, rng: np.
     fft = fft or (1024 if sr <= 24000 else 2048)
     frames = len(f0)
     n = int(round(frames * FRAME * sr))
-    y = np.zeros(n + fft)
+    half, lead = fft // 2, fft // 4
+    y = np.zeros(n + fft + half)  # runs `half` samples ahead of the output: room for what comes before a pulse
     at, frac, period = pulse_times(f0, sr, n)
     # each pulse's frame position, for interpolating the envelope and deciding voicing
     pos = np.clip(at / sr / FRAME, 0, frames - 1)
@@ -117,7 +118,7 @@ def synthesize(f0: np.ndarray, sp: np.ndarray, ap: np.ndarray, sr: int, rng: np.
     voiced = np.where(w[:, 0] < 0.5, f0[k0] > 0, f0[k1] > 0)
     bins = np.arange(fft // 2 + 1)
     hann = 0.5 - 0.5 * np.cos(2 * np.pi * (np.arange(fft) + 1.0) / (fft + 1.0))
-    hann /= hann.sum()  # takes a pulse's DC away smoothly, as WORLD's DC remover does
+    hann /= hann.sum()  # takes a pulse's DC away smoothly over a window centred on it, as WORLD's DC remover does
     for c0 in range(0, len(at), chunk):
         sl = slice(c0, c0 + chunk)
         env = to_bins(sp[k0[sl]] * (1 - w[sl]) + sp[k1[sl]] * w[sl], fft, sr, log_power=True)
@@ -134,7 +135,6 @@ def synthesize(f0: np.ndarray, sp: np.ndarray, ap: np.ndarray, sr: int, rng: np.
         periodic = min_phase(0.5 * np.log(voiced_power * (1.0 - ratio) + 1e-16))
         periodic *= np.exp(-2j * np.pi * bins * frac[sl, None] / fft)
         periodic = np.fft.irfft(periodic, n=fft, axis=-1) * np.sqrt(period[sl, None]) * v
-        periodic -= periodic.sum(axis=1, keepdims=True) * hann
         # aperiodic: a period's worth of white noise through the aperiodic part of the envelope
         m = np.maximum(np.round(period[sl]).astype(int), 1)
         noise = rng.standard_normal((len(m), fft))
@@ -143,10 +143,16 @@ def synthesize(f0: np.ndarray, sp: np.ndarray, ap: np.ndarray, sr: int, rng: np.
         noise -= inside * (noise.sum(axis=1, keepdims=True) / m[:, None])  # no DC, as WORLD
         shaped = min_phase(0.5 * np.log(power * ratio + 1e-16)) * np.fft.rfft(noise, axis=-1)
         aperiodic = np.fft.irfft(shaped, n=fft, axis=-1)
-        response = periodic + aperiodic
+        # each response laid out from `half` samples before its pulse: the part of a delayed pulse that
+        # rings before it (which the FFT wraps to the end) back where it belongs, then the pulse's DC
+        # taken away over the window centred on it
+        response = np.zeros((len(m), fft + half))
+        response[:, half - lead: half - lead + fft] = np.roll(periodic, lead, axis=1)
+        response[:, half:] += aperiodic
+        response[:, :fft] -= periodic.sum(axis=1, keepdims=True) * hann
         for j, start in enumerate(at[sl]):
-            y[start : start + fft] += response[j]
-    return y[:n]
+            y[start : start + fft + half] += response[j]
+    return y[half : half + n]
 
 
 ROLES = ("sil", "breath", "onset", "vowel", "coda")

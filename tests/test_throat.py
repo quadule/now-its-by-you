@@ -33,6 +33,17 @@ def test_voiced_frames_ring_at_their_pitch_and_unvoiced_ones_are_noise():
     assert peak < 6.0  # no harmonic lines in noise
 
 
+def test_a_pulses_dc_is_taken_away_around_it_not_after_it():
+    sr = 24000
+    f0 = np.where((np.arange(300) >= 100) & (np.arange(300) < 200), 180.0, 0.0)
+    sp = np.where(f0[:, None] > 0, -6.0, -40.0) * np.ones((300, 128))  # silent where unvoiced
+    y = T.synthesize(f0, sp, np.full((300, 32), 0.001), sr, np.random.default_rng(0))
+    voiced = y[int(0.5 * sr): int(1.0 * sr)]
+    assert abs(voiced.mean()) < 1e-3 * np.abs(voiced).max()
+    after = y[int(1.03 * sr): int(1.2 * sr)]  # WORLD's remover reaches half a window (21 ms) past the last pulse
+    assert np.abs(after).max() < 1e-3 * np.abs(voiced).max()
+
+
 def test_a_louder_envelope_is_louder_by_as_much():
     f0 = np.full(300, 180.0)
     ap = np.full((300, 32), 0.05)
