@@ -16,3 +16,17 @@ def test_average_skips_what_a_sighting_did_not_measure():
 def test_json_round_trip():
     ph = {"r1": (P.Gesture(early=0.0625, fall=-60.0), P.Gesture(vibrato=25.0))}
     assert P.from_json(P.to_json(ph, source="test")) == ph
+
+
+def test_blend_counts_each_singer_once():
+    a = {"r1": (P.Gesture(early=0.125, fall=-60.0), P.Gesture(vibrato=30.0))}
+    b = {"r1": (P.Gesture(early=0.0625, fall=-20.0), P.Gesture(vibrato=-1.0)), "v1": (P.Gesture(level=2.0),)}
+    both = P.blend([a, b])
+    assert both["r1"][0] == P.reduce(P.Gesture(early=0.09375, fall=-40.0))
+    assert both["r1"][1].vibrato == -1.0  # a tie leaves vibrato to the singer
+    assert both["v1"] == (P.Gesture(level=2.0),)
+
+
+def test_unmeasured_vibrato_does_not_vote():
+    nan = float("nan")
+    assert P.average([P.Gesture(vibrato=24.0), P.Gesture(vibrato=nan), P.Gesture(vibrato=nan)]).vibrato == 24.0

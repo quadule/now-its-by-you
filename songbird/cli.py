@@ -26,7 +26,11 @@ def render_command(args: argparse.Namespace) -> int:
     # a person's phrasing: the file given, or the one the seed carries
     phrasing_json = json.loads(Path(args.phrasing).read_text()) if args.phrasing else genome.source.get("seed_phrasing")
     phrasing = phrasing_mod.from_json(phrasing_json) if phrasing_json else None
-    score = realize(genome, params, phrasing=phrasing)
+    choir_json = [json.loads(Path(f).read_text()) for f in args.choir_phrasing]
+    if choir_json and args.choir is None:
+        params = replace(params, choir=len(choir_json))
+    choir = [phrasing_mod.from_json(d) for d in choir_json]
+    score = realize(genome, params, phrasing=phrasing, choir=choir)
     defaults = VoiceParams()
     voice = replace(defaults, **{k: type(getattr(defaults, k))(v) for k, v in (kv.split("=", 1) for kv in args.voice)})
 
@@ -44,6 +48,7 @@ def render_command(args: argparse.Namespace) -> int:
         "params": params.to_dict(),
         "voice": asdict(voice),
         "phrasing": {k: v for k, v in phrasing_json.items() if k not in ("phrases", "fields")} if phrasing_json else None,
+        "choir_phrasings": [{k: v for k, v in d.items() if k not in ("phrases", "fields")} for d in choir_json] or None,
         "loudness_lufs": round(master.loudness(pcm / 32768.0, synth.SR), 2),
         "peak_dbfs": round(20 * np.log10(np.max(np.abs(pcm)) / 32768.0), 2),
         "duration": round(len(pcm) / synth.SR, 3),
@@ -77,6 +82,8 @@ def main(argv: list[str] | None = None) -> int:
                         help="lineage voices joining in harmony where the song has a choir (stand-ins for now)")
     render.add_argument("--phrasing", metavar="FILE",
                         help="sing with a person's phrasing, from tools/phrasing.py (default: the seed's own, if any)")
+    render.add_argument("--choir-phrasing", nargs="+", default=[], metavar="FILE",
+                        help="a phrasing for each choir voice, in order (sets --choir to their number unless given)")
     render.set_defaults(run=render_command)
 
     args = parser.parse_args(argv)

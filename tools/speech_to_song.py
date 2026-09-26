@@ -413,7 +413,7 @@ def sing_from_speech(notes, segs, reading, lines, which, voice, seed, formant=1.
     gain = np.zeros(n_out)
     vowel = np.zeros(n_out, dtype=bool)
     keep_voicing = np.zeros(n_out, dtype=bool)
-    levels, amps, spans = [], [], []
+    levels, amps, spans, swells = [], [], [], []
     for line_index, line in enumerate(lines):
         spoken = knots_s[which[line_index]]
         for j, k in enumerate(line):
@@ -431,6 +431,8 @@ def sing_from_speech(notes, segs, reading, lines, which, voice, seed, formant=1.
             vowel[f[vw]] = True
             if coda and all(ph.CONSONANTS[c][2] for c in coda):  # a voiced ending stays voiced
                 keep_voicing[f[co][:-2]] = True
+            if seg.swell:  # a phrasing's swell or fade through the vowel
+                swells.append((f[vw], seg.swell * np.clip((tt[vw] - T_v0) / max(T_v1 - T_v0, 1e-3), 0.0, 1.0)))
             levels.append(float(np.mean(level[max(core - 3, 0) : core + 4])))
             amps.append(seg.amp)
             spans.append(f)
@@ -440,6 +442,8 @@ def sing_from_speech(notes, segs, reading, lines, which, voice, seed, formant=1.
         # a vowel far below the rest was found in the wrong place; never boost it
         correction = float(np.clip(lv - middle, -8.0, 8.0)) if lv > middle - 30.0 else 0.0
         gain[f] = 20 * np.log10(amp / 0.9) - correction
+    for f, ramp in swells:
+        gain[f] += ramp
     gain = uniform_filter1d(gain, 7)
     sung = ~np.isnan(src)
     # fade in and out wherever the voice starts or stops, so nothing clicks
@@ -462,7 +466,8 @@ def sing_from_speech(notes, segs, reading, lines, which, voice, seed, formant=1.
     sp[sung], ap[sung] = env, ape
     n_blocks = int(np.ceil(duration * SR / V.BLOCK))
     tb = (np.arange(n_blocks) + 0.5) * V.BLOCK / SR
-    pitch = np.interp(t_out, tb, V.pitch_track(notes, n_blocks, SR, voice, rng))
+    sounding = [g.t1 for g in segs if g.role == "vowel"]  # so a phrasing's falls happen while the vowel is heard
+    pitch = np.interp(t_out, tb, V.pitch_track(notes, n_blocks, SR, voice, rng, sounding))
     voiced = np.zeros(n_out, dtype=bool)
     voiced[sung] = f0_s[np.round(s).astype(int)] > 0
     voiced |= vowel | keep_voicing

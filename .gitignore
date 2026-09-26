@@ -8,3 +8,6 @@ dist/
 
 # The artist's own voice stays out of git unless they choose otherwise
 recordings/
+
+# API keys for the reference voices (ElevenLabs, Gemini), never in git
+.env

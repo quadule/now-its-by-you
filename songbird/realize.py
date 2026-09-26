@@ -14,7 +14,7 @@ from dataclasses import asdict, dataclass, fields, replace
 import numpy as np
 
 from .genome import Genome, Phrase, sung_words, turn
-from .phrasing import Phrasing, gesture
+from .phrasing import Gesture, Phrasing, gesture
 from .score import Note, Score
 from .theory import chord_tones, degree_semitones, harmony
 
@@ -55,10 +55,24 @@ def choose_params(genome: Genome, parent: Params | None = None) -> Params:
     return parent if parent is not None else Params.from_dict(genome.seed_params)
 
 
-def realize(genome: Genome, params: Params, verses=None, phrasing: Phrasing | None = None) -> Score:
+def sung_as(note: Note, g: Gesture | None, beat: float) -> Note:
+    """A sung note the way a gesture sings it: g.early beats (of beat seconds)
+    ahead of the grid, held for g.hold of its written length, and carrying the
+    gesture on to the singer for loudness and pitch."""
+    if g is None:
+        return note
+    start = max(0.0, note.start - g.early * beat)
+    let_go = note.start + note.dur * g.hold
+    return replace(note, start=start, dur=max(let_go - start, 0.05), gesture=g)
+
+
+def realize(genome: Genome, params: Params, verses=None, phrasing: Phrasing | None = None,
+            choir: list[Phrasing | None] | None = None) -> Score:
     """The timed score. With a phrasing, the voice sings each note its way:
     early or late against the grid, held longer or shorter, and carrying the
-    note's gesture on to the singer for loudness and pitch."""
+    note's gesture on to the singer for loudness and pitch. choir: a phrasing
+    for each lineage voice that joins in (None, or missing: that voice follows
+    the lead's timing with no gestures of its own)."""
     verses = verses if verses is not None else genome.seed_verses
     meter = genome.meter
     rng = np.random.default_rng(params.seed)
@@ -132,6 +146,7 @@ def realize(genome: Genome, params: Params, verses=None, phrasing: Phrasing | No
                     phrase=phrase.id,
                     chord=chord,
                     choir=genome.sections[section_name].choir,
+                    index=k,
                     gesture=gesture(phrasing, phrase.id, k),
                 )
             )
@@ -191,19 +206,21 @@ def realize(genome: Genome, params: Params, verses=None, phrasing: Phrasing | No
         )
         notes.append(note)
         if m["syllable"]:
-            sung_note = replace(note, part="voice", vel=float(m["vel"]))
-            g = m["gesture"]
-            if g is not None:
-                start = max(0.0, note.start - g.early * seconds_per_unit * meter.beat)
-                let_go = note.start + note.dur * g.hold
-                sung_note = replace(sung_note, start=start, dur=max(let_go - start, 0.05), gesture=g)
+            beat = seconds_per_unit * meter.beat
+            unphrased = replace(note, part="voice", vel=float(m["vel"]))
+            sung_note = sung_as(unphrased, m["gesture"], beat)
             notes.append(sung_note)
             if m["choir"]:  # the lineage joins, each voice on its own harmony line
                 for i in range(params.choir):
                     pitch = harmony(int(m["pitch"]), m["chord"], params.tonic, params.mode, i)
-                    # together with the lead in time, but each with its own way with pitch
-                    notes.append(replace(sung_note, part=f"choir{i + 1}", pitch=float(pitch), vel=0.9 * sung_note.vel,
-                                         gesture=None))
+                    own = choir[i] if choir and i < len(choir) else None
+                    if own:  # sung that voice's way, from its own phrasing
+                        g = gesture(own, m["phrase"], m["index"])
+                        base = replace(unphrased, part=f"choir{i + 1}", pitch=float(pitch), vel=0.9 * unphrased.vel)
+                        notes.append(sung_as(base, g, beat))
+                    else:  # together with the lead in time, but each with its own way with pitch
+                        notes.append(replace(sung_note, part=f"choir{i + 1}", pitch=float(pitch),
+                                             vel=0.9 * sung_note.vel, gesture=None))
 
     ring = 3.0  # the last chord rings out
     final = seconds(end)

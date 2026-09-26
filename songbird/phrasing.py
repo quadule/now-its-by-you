@@ -54,9 +54,20 @@ def average(gestures: list[Gesture]) -> Gesture:
     for f in fields(Gesture):
         seen = [getattr(g, f.name) for g in gestures if getattr(g, f.name) == getattr(g, f.name)]
         mean.append(sum(seen) / len(seen) if seen else float("nan"))
-    own = [g.vibrato for g in gestures if g.vibrato >= 0]
-    mean[-1] = sum(own) / len(own) if len(own) * 2 > len(gestures) else -1.0
+    judged = [g.vibrato for g in gestures if g.vibrato == g.vibrato]
+    own = [v for v in judged if v >= 0]
+    mean[-1] = sum(own) / len(own) if len(own) * 2 > len(judged) else -1.0
     return reduce(Gesture(*mean))
+
+
+def blend(phrasings: list[Phrasing]) -> Phrasing:
+    """Several people's phrasings as one, note by note, each person counting
+    once however many takes they sang: the song's way, as far as they agree."""
+    out = {}
+    for pid in dict.fromkeys(p for ph in phrasings for p in ph):
+        rows = [ph[pid] for ph in phrasings if pid in ph]
+        out[pid] = tuple(average([r[j] for r in rows if j < len(r)]) for j in range(max(map(len, rows))))
+    return out
 
 
 def to_json(phrasing: Phrasing, **about) -> dict:

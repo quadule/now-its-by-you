@@ -1,21 +1,36 @@
 """A person's phrasing, taken from a sung take or a plain reading (dev-only).
 
     uv run python tools/phrasing.py songs/h-now-its-by-you.json --guide     # a backing track to sing along to
-    uv run python tools/phrasing.py songs/h-now-its-by-you.json --sung recordings/h-take1.wav [more takes]
+    uv run python tools/phrasing.py songs/h-now-its-by-you.json --singer Milo      # every take they kept
+    uv run python tools/phrasing.py songs/h-now-its-by-you.json --sung recordings/milo/h-now-its-by-you-*.wav
     uv run python tools/phrasing.py songs/h-now-its-by-you.json --speech recordings/h-reading.m4a
     uv run python tools/phrasing.py songs/h-now-its-by-you.json --say Daniel
-    uv run songbird render songs/h-now-its-by-you.json --phrasing renders/phrasing/h-now-its-by-you.h-take1.json
+    uv run songbird render songs/h-now-its-by-you.json --phrasing renders/phrasing/h-now-its-by-you.milo.json
 
-Sung takes. Someone sings along to the guide (--guide) on headphones; the take
-is placed against the guide's own score (by cross-correlating where they sing
-with where the song has singing, unless it already lines up), found an
-octave or key if they sang in their own, and aligned line by line by warping
-the formant singer's performance of that line, whose every note boundary is
-known, onto the take. Each note is then measured at full strength (SUNG): how
-early or late its vowel lands against the beat, how long it's held, its level
-and swell, how the pitch scoops in, bends and falls off, and the depth of any
-vibrato. Wrong notes are fine: pitch gestures are measured around the note the
-singer actually sang, and skipped where that was far from the tune.
+Sung takes. Someone sings along to the guide (--guide) on headphones, usually
+through tools/karaoke.py, which keeps each singer's takes apart
+(tools/takes.py). The take is placed against the guide it was sung to (by
+cross-correlating where they sing with where the song has singing, unless it
+already lines up), found an octave or key if they sang in their own, and
+aligned line by line by warping the tune onto the pitch they sang; each
+vowel's start is then found where its loudness climbs out of the consonant
+before it, less the bias measured for that consonant (ONSET_BIAS). Each note
+is measured against the template singer singing the same notes: how early or
+late its vowel lands against the beat, how long it's held, its level and
+swell (against the same vowel elsewhere), how the pitch scoops in, bends and
+falls off, and the depth of any vibrato. Wrong notes are fine: pitch
+gestures are measured around the note the singer actually sang, and skipped
+where that was far from the tune. Each take is measured once, raw, into
+renders/measured/ (until the take, its guide or the measuring code changes).
+
+A phrasing is made from those measurements: scaled as a phrasing keeps them
+(SUNG), each note's sightings pulled toward the singer's habit as far as the
+evidence for that note goes (shrunk). Some of what the extractor gets wrong
+repeats in every take by the same voice (REPEATS), so more takes by one
+person only go so far; other people's takes go further, and several singers'
+takes make everyone's way at once, each person counting once. How well all
+this works, checked against reference singers whose every gesture is known:
+docs/PHRASING-CALIBRATION.md.
 
 Readings. The reading is aligned the way tools/speech_to_song.py aligns it, then every
 syllable is measured against its note: where it falls in its line compared
@@ -27,19 +42,22 @@ replace it. Each note of the tune gets one gesture, averaged over every word
 sung to it, rounded (songbird.phrasing), and written to renders/phrasing/.
 Nothing of the voice is kept.
 
-Either way, every note of the tune gets one gesture, averaged over each time
-it comes round (and over every take), and a short portrait of the phrasing is
-printed.
+Either way, every note of the tune gets one gesture, from each time it comes
+round (and every take), and a short portrait of the phrasing is printed.
 """
 
 from __future__ import annotations
 
 import argparse
+import functools
+import hashlib
+import inspect
 import json
+import os
 import sys
 import warnings
 from collections import defaultdict
-from dataclasses import replace
+from dataclasses import astuple, dataclass, field, fields, replace
 from pathlib import Path
 
 import numpy as np
@@ -47,12 +65,18 @@ import numpy as np
 warnings.filterwarnings("ignore", message="pkg_resources")
 sys.path.insert(0, str(Path(__file__).parent))
 import speech_to_song as S  # noqa: E402
+import takes as K  # noqa: E402
 
 from faster_whisper import WhisperModel  # noqa: E402
 
 from songbird import genome as G  # noqa: E402
+from songbird import phonetics as ph  # noqa: E402
 from songbird import phrasing as P  # noqa: E402
 from songbird.realize import choose_params, realize  # noqa: E402
+from songbird.synth import voice as V  # noqa: E402
+
+ROOT = Path(__file__).parent.parent
+MEASURED = ROOT / "renders" / "measured"
 
 # How much of each spoken measurement a singer keeps, and how far it may go.
 # Speech rhythm, emphasis and intonation don't follow a tune; leaning on them
@@ -60,9 +84,26 @@ from songbird.realize import choose_params, realize  # noqa: E402
 # swooped the pitch, and cost words (H, formant voice: 18% misheard -> 26%).
 SPEECH = dict(timing=0.15, level=0.3, swell=0.3, scoop=0.15, bend=0.1, fall=0.2)
 SPEECH_LIMIT = dict(early=0.1, level=(-4.0, 4.0), cents=60.0)
-# A sung take is phrasing already; keep nearly all of it.
-SUNG = dict(timing=1.0, level=0.8, swell=0.8, scoop=0.8, bend=0.8, fall=0.8, vibrato=1.0)
+# A sung take is phrasing already; keep nearly all of it. Checked against reference singers
+# (tools/phrasing_eval.py --reference): vibrato reads at about 0.57 of its size, so it's scaled back
+# up; swell can't be read yet (r about 0.2 against what was sung), so it's left to the singer.
+SUNG = dict(timing=1.0, level=0.8, swell=0.0, scoop=0.8, bend=0.8, fall=0.8, vibrato=1.75)
+# The extractor's error that repeats in every take of one voice at one place in the song (its timbre,
+# its way with those consonants), as a standard deviation in the extractor's units: more takes by the
+# same person can't average it away, only other words on the same note or other people. Measured on
+# reference singers (say-daniel, elevenlabs-george, elevenlabs-matilda); the same within a tenth on
+# gemini-kore and the formant singer.
+REPEATS = P.Gesture(early=0.048, hold=0.08, level=2.6, swell=3.0, scoop=50.0, bend=13.0, fall=23.0, vibrato=6.0)
 WRONG_NOTE = 150.0  # cents from the tune beyond which a note's pitch gestures aren't trusted
+# the template singer: the machine's own schedule and tune, without any habits of its own
+FLAT = V.VoiceParams(vibrato_depth=0.0, scoop=0.0, jitter=0.0, wander=0.0)
+NAN = float("nan")
+# Where the aligner puts a vowel's start against where it began (seconds; negative is early), by what comes
+# before the vowel: a glide or a nasal swells into the vowel, so the loudness climbs early. Measured on
+# reference singers whose every vowel start is known (say-daniel, elevenlabs-george, elevenlabs-matilda:
+# tools/phrasing_eval.py --reference ... --onsets), medians over 3132 vowels, and taken back off every take.
+ONSET_BIAS = {"affricate": 0.011, "aspirate": -0.017, "fricative": -0.003, "fricative+v": -0.010, "glide+v": -0.035,
+              "liquid+v": -0.012, "nasal+v": -0.021, "stop": -0.030, "stop+v": -0.017, "vowel": 0.009}
 
 
 def cents(f0: np.ndarray) -> np.ndarray:
@@ -106,15 +147,76 @@ def measure(line_notes, knots, f0, band, tempo: float) -> list[P.Gesture]:
     return gestures
 
 
-def load_guide(stem: str):
-    """The voice notes of the guide someone sang along to, exactly as it was rendered."""
+@functools.cache
+def version() -> str:
+    """What a measurement depends on: the functions that measure, the template singer and its phonetics.
+    Anything else in this file (how a phrasing is made from measurements) can change without measuring again."""
+    h = hashlib.sha256()
+    for name in MEASURING:
+        h.update(inspect.getsource(globals()[name]).encode())
+    for fn in (S.load, S.tracks, S.target_knots, S.lines_of):
+        h.update(inspect.getsource(fn).encode())
+    h.update(repr((WRONG_NOTE, FLAT, ONSET_BIAS, S.FRAME, S.SR)).encode())
+    for f in (ROOT / "songbird" / "synth" / "voice.py", ROOT / "songbird" / "phonetics.py"):
+        h.update(f.read_bytes())
+    return h.hexdigest()[:12]
+
+
+@dataclass
+class Guide:
+    """The guide someone sang along to, exactly as it was rendered."""
+
+    digest: str
+    notes: list  # its voice notes, in order
+    knots: list  # the template singer's (onset, vowel start, vowel end, coda end, vowel, coda) for each
+    lines: list  # note indices, line by line
+    tempo: float
+    lexicon: dict
+    before: list  # what each vowel comes after: a consonant's manner (+v if voiced), or "vowel"
+    templates: dict = field(default_factory=dict)  # key -> the template singer's analysis in that key
+
+
+_guides: dict[str, Guide] = {}
+
+
+def guide(genome_path: Path, genome, digest: str | None = None) -> Guide:
+    """The guide a take was sung to, as kept beside the takes, or else the current one."""
     from songbird.score import Note
 
-    path = Path("renders") / "guide" / f"{stem}.guide.score.json"
+    path = K.guide_score(genome_path.stem, digest) or ROOT / "renders" / "guide" / f"{genome_path.stem}.guide.score.json"
     if not path.exists():
         raise SystemExit(f"no guide at {path}: write one with --guide and sing along to that")
-    data = json.loads(path.read_text())
-    return sorted((Note(**{**d, "gesture": None}) for d in data["notes"] if d["part"] == "voice"), key=lambda n: n.start)
+    d = K.digest(path)
+    if d not in _guides:
+        data = json.loads(path.read_text())
+        notes = sorted((Note(**{**n, "gesture": None}) for n in data["notes"] if n["part"] == "voice"), key=lambda n: n.start)
+        lexicon = data.get("lexicon") or genome.lexicon
+        segs = V.schedule(notes, FLAT, lexicon)
+        before = []
+        for i, seg in enumerate(segs):
+            if seg.role == "vowel":
+                c = segs[i - 1].phone if i and segs[i - 1].role == "onset" else None
+                before.append("vowel" if c is None else ph.CONSONANTS[c][0] + ("+v" if ph.CONSONANTS[c][2] else ""))
+        tempo = data.get("tempo") or choose_params(genome).tempo
+        _guides[d] = Guide(d, notes, S.target_knots(segs), S.lines_of(notes), tempo, lexicon, before)
+    return _guides[d]
+
+
+def template(g: Guide, key: int):
+    """The template singer's f0, loudness and activity, singing the guide in a take's key."""
+    if key not in g.templates:
+        cache = MEASURED / "templates" / f"{g.digest}.{key:+d}.{version()}.npz"
+        if cache.exists():
+            z = np.load(cache)
+            g.templates[key] = (z["f0"], z["band"], z["active"])
+        else:  # sung where the take was sung, so their spectra compare
+            singer = replace(FLAT, shift=key, tract=1.0 if key <= -6 else 1.12)
+            f0, band, active = g.templates[key] = analyze_take(V.sing(g.notes, S.SR, singer, 0, g.lexicon))
+            cache.parent.mkdir(parents=True, exist_ok=True)
+            part = cache.with_name(f"{cache.stem}.{os.getpid()}.part.npz")  # whole or not at all, if two measure at once
+            np.savez_compressed(part, f0=f0, band=band, active=active)
+            os.replace(part, cache)
+    return g.templates[key]
 
 
 def analyze_take(y: np.ndarray):
@@ -142,72 +244,17 @@ def place_take(f0, active, knots, n_frames: int) -> int:
     return 0 if abs(best) * S.FRAME < 0.25 else best
 
 
-def pitch_contour(notes, knots, n: int, t0: float) -> np.ndarray:
-    """The tune's pitch every alignment frame from t0, zero between vowels."""
-    out = np.zeros(n)
-    for note, (_, v0, v1, *_rest) in zip(notes, knots):
-        a, b = int((v0 - t0) * S.SR / S.HOP), int((v1 - t0) * S.SR / S.HOP)
-        out[max(a, 0) : max(b, 0)] = note.pitch
-    return out
-
-
-def align_sung_line(take, f0, line_notes, line_knots, template, lag: int):
-    """(vowel start, vowel end, release) in take frames for each note of one
-    sung line: warp the template singer's performance of the line onto the take."""
-    import librosa
-
-    y_t, f0_t = template
-    t0 = line_knots[0][0] - 0.05
-    t1 = line_knots[-1][3] + 0.05
-    a, b = int(t0 * S.SR), int(t1 * S.SR)
-    ta = max(int((t0 + lag * S.FRAME - 0.35) * S.SR), 0)
-    tb = min(int((t1 + lag * S.FRAME + 0.35) * S.SR), len(take))
-    frames_t = np.clip(((a + np.arange((b - a) // S.HOP + 2) * S.HOP) / S.SR / S.FRAME).astype(int), 0, len(f0_t) - 1)
-    frames_y = np.clip(((ta + np.arange((tb - ta) // S.HOP + 2) * S.HOP) / S.SR / S.FRAME).astype(int), 0, len(f0) - 1)
-    X = S.features(y_t[a:b], (f0_t[frames_t] > 0).astype(float))
-    Y = S.features(take[ta:tb], (f0[frames_y] > 0).astype(float))
-    # relative pitch: the tune's shape and the singer's, each about its own middle
-    tune = pitch_contour(line_notes, line_knots, X.shape[1], t0)
-    heard = np.where(f0[frames_y[: Y.shape[1]]] > 0, 12 * np.log2(np.maximum(f0[frames_y[: Y.shape[1]]], 1) / 440) + 69, 0)
-    for arr in (tune, heard):
-        on = arr > 0
-        if on.any():
-            arr[on] -= np.median(arr[on])
-    X = np.vstack([X, tune[None]])
-    Y = np.vstack([Y, heard[None]])
-    both = np.hstack([X, Y])
-    mu, sd = both.mean(axis=1, keepdims=True), both.std(axis=1, keepdims=True) + 1e-9
-    # a person and the template singer differ most in timbre; lean on loudness,
-    # voicing and the shape of the melody instead
-    weight = np.full((X.shape[0], 1), 0.5)
-    weight[0] = 1.0  # loudness (c0)
-    weight[-2] = 2.0  # voicing
-    weight[-1] = 3.0  # pitch
-    # a singer following the guide never runs at more than twice or half its pace
-    steps = np.array([[1, 1], [1, 2], [2, 1]])
-    _, path = librosa.sequence.dtw(X=(X - mu) / sd * weight, Y=(Y - mu) / sd * weight, metric="euclidean",
-                                   subseq=True, step_sizes_sigma=steps, weights_add=np.zeros(3), weights_mul=np.ones(3))
-    path = path[::-1]
-
-    xs, first = np.unique(path[:, 0], return_index=True)
-    ys = np.array([path[path[:, 0] == x, 1].mean() for x in xs])  # the warp skips frames at a 2:1 step
-
-    def to_take(t: float) -> int:
-        i = float(np.clip((t - t0) * S.SR / S.HOP, 0, X.shape[1] - 1))
-        return int(round((ta + float(np.interp(i, xs, ys)) * S.HOP) / S.SR / S.FRAME))
-
-    return [(to_take(v0), to_take(v1), to_take(c1)) for _, v0, v1, c1, _, _ in line_knots]
-
-
-def note_spans(knots, active, found=None):
+def note_spans(knots, active, band, found=None):
     """(vowel start, vowel end, release) in frames for every note: where the
     alignment found them in a take, or where the schedule put them in the
-    template. A note is held until the voice stops or the next vowel starts."""
+    template. A note is held until the voice falls 20 dB below its vowel or
+    the next vowel starts; a room's reverberation and hiss don't count."""
     spans = found or [(int(round(v0 / S.FRAME)), int(round(v1 / S.FRAME)), 0) for _, v0, v1, _, _, _ in knots]
     out = []
     for k, (v0, v1, _) in enumerate(spans):
         nxt = spans[k + 1][0] if k + 1 < len(spans) else v1 + 40
-        sounding = np.flatnonzero(active[v0 : max(nxt, v0 + 1)])
+        floor = np.median(band[v0 : max(v1, v0 + 1)]) - 20.0
+        sounding = np.flatnonzero(active[v0 : max(nxt, v0 + 1)] & (band[v0 : max(nxt, v0 + 1)] >= floor))
         out.append((v0, max(v1, v0 + 1), v0 + (sounding[-1] + 1 if len(sounding) else 1)))
     return out
 
@@ -238,7 +285,8 @@ def fit_edge(c, c_t, shape: np.ndarray, at_end: bool, reach: int = 5) -> float |
         if len(theirs) != w:
             continue
         ok = np.isfinite(mine) & np.isfinite(theirs)
-        if ok.sum() < 4 or not np.any(shape[ok]):
+        # too little of the shape heard (the voice unvoiced where it moves most) and its size is a guess
+        if ok.sum() < 4 or np.dot(shape[ok], shape[ok]) < 0.25 * np.dot(shape, shape):
             continue
         d, x = mine[ok] - theirs[ok], shape[ok]
         size = float(np.dot(d, x) / np.dot(x, x))
@@ -353,31 +401,49 @@ def vowel_onsets(found, band):
     return out
 
 
+def by_vowel(x: np.ndarray, vowels: list[str]) -> np.ndarray:
+    """Each value less the median of its vowel's (or of all, for a vowel sung fewer than three times)."""
+    out = x - np.median(x)
+    for v in set(vowels):
+        idx = [i for i, w in enumerate(vowels) if w == v]
+        if len(idx) >= 3:
+            out[idx] = x[idx] - np.median(x[idx])
+    return out
+
+
 def measure_sung(notes, knots, found, take, template, lag: int, key: int, tempo: float):
-    """One gesture per sung note, and each note's distance from the tune (cents).
+    """One raw gesture per sung note (nothing scaled, rounded or clipped yet),
+    and each note's distance from the tune in cents (NaN if it couldn't tell).
 
     Everything is measured twice, on the take and on the template singer
     singing the same notes in the same key, and a gesture is the difference:
     what the person did that the machine wouldn't have done anyway (its glides
-    between notes, its louder high notes, its breath at line ends)."""
+    between notes, its louder high notes, its breath at line ends). A pitch
+    gesture that couldn't be measured (a wrong note, too little voiced) is NaN,
+    so averages skip it rather than count it as none."""
     f0, band, active = take
     f0_t, band_t, active_t = template
-    spans = note_spans(knots, active, found)
-    spans_t = note_spans(knots, active_t)
-    level = np.array([np.median(band[v0:v1]) for v0, v1, _ in spans])
-    level_t = np.array([np.median(band_t[v0:v1]) for v0, v1, _ in spans_t])
-    level, level_t = level - np.median(level), level_t - np.median(level_t)
+    spans = note_spans(knots, active, band, found)
+    spans_t = note_spans(knots, active_t, band_t)
 
     def swell(b, v0, v1):
         n = max(v1 - v0, 4)
         return float(np.mean(b[v0 + 3 * n // 4 : v0 + n]) - np.mean(b[v0 : v0 + n // 4 + 1]))
 
+    # Loudness in the vowel band depends on the vowel and on the voice (where a person's formants sit
+    # against the machine's), so each note's level and swell are taken against the same vowel's
+    # elsewhere in the take: what's left is how the person leaned on that note.
+    vowels = [kn[4].phone for kn in knots]
+    level = np.array([np.median(band[v0:v1]) - np.median(band_t[t0:t1]) for (v0, v1, _), (t0, t1, _) in zip(spans, spans_t)])
+    swells = np.array([swell(band, v0, v1) - swell(band_t, t0, t1) for (v0, v1, _), (t0, t1, _) in zip(spans, spans_t)])
+    level, swells = by_vowel(level, vowels), by_vowel(swells, vowels)
+
     gestures, off = [], []
     for k, (note, (_, T_v0, *_r), (v0, v1, release), (t0, t1, release_t)) in enumerate(zip(notes, knots, spans, spans_t)):
-        g = {}
+        g = dict(scoop=NAN, bend=NAN, fall=NAN, vibrato=NAN)
         late = (v0 * S.FRAME - (T_v0 + lag * S.FRAME)) * tempo / 60.0
         # a quarter of a beat off is past anyone's phrasing: the alignment slipped, so don't count it
-        g["early"] = -SUNG["timing"] * late if abs(late) <= 0.25 else float("nan")
+        g["early"] = -late if abs(late) <= 0.25 else NAN
         # detached: a gap of silence before the next note, where the machine would have sung on
         nxt = spans[k + 1][0] if k + 1 < len(spans) else None
         if nxt is not None and (nxt - release) * S.FRAME >= 0.04 and not note.line_end:
@@ -385,73 +451,213 @@ def measure_sung(notes, knots, found, take, template, lag: int, key: int, tempo:
             g["hold"] = float(np.clip((release - nominal) / max(release_t - T_v0 / S.FRAME, 1.0), 0.6, 1.0))
         elif note.line_end:
             g["hold"] = float(np.clip((release - (T_v0 / S.FRAME + lag)) / max(release_t - T_v0 / S.FRAME, 1.0), 0.6, 1.0))
-        g["level"] = SUNG["level"] * (level[k] - level_t[k])
-        g["swell"] = SUNG["swell"] * (swell(band, v0, v1) - swell(band_t, t0, t1))
+        g["level"] = level[k]
+        g["swell"] = swells[k]
         c = contour(f0, v0, v1, note.pitch + key)  # the vowel only: its consonants belong to their neighbours
+        middle = NAN
         if np.isfinite(c).sum() >= 6:
             middle = float(np.nanmedian(c))
-            off.append(middle)
             c_t = contour(f0_t, max(t0 - 5, 0), t1 + 5, note.pitch + key)  # a little either side, to slide against
             if abs(middle) <= WRONG_NOTE and np.isfinite(c_t).sum() >= 6:
-                for name, size in shapes(c, c_t, (t1 - t0) * S.FRAME).items():
-                    g[name] = SUNG[name] * size
+                g.update(shapes(c, c_t, (t1 - t0) * S.FRAME))
                 depth, depth_t = wobble(c), wobble(c_t[5:-5])
                 if depth is not None and depth_t is not None:  # beyond the machine's own settling wobble
                     extra = float(np.sqrt(max(depth**2 - depth_t**2, 0.0)))
-                    g["vibrato"] = SUNG["vibrato"] * extra if extra >= 8.0 else 0.0
+                    g["vibrato"] = extra if extra >= 8.0 else 0.0
+        off.append(middle)
         gestures.append(P.Gesture(**{k2: float(v) for k2, v in g.items()}))
     return gestures, off
 
 
-def sung_phrasing(genome_path: Path, genome, takes: list[str]):
-    """Gestures from one or more sung takes of the guide."""
-    from songbird.synth import voice as V
+def find_key(f0, g: Guide, lag: int) -> int:
+    """The singer's octave or key: their median pitch against the tune's, near each vowel."""
+    guesses = []
+    for (_, v0, v1, *_r), note in zip(g.knots, g.notes):
+        a, b = int(v0 / S.FRAME) + lag, int(v1 / S.FRAME) + lag
+        v = f0[max(a, 0) : max(b, 0)]
+        v = v[v > 0]
+        if len(v) >= 5:
+            guesses.append(12 * np.log2(np.median(v) / 440) + 69 - note.pitch)
+    return int(np.round(np.median(guesses))) if guesses else 0
 
-    notes = load_guide(genome_path.stem)
-    tempo = choose_params(genome).tempo
-    flat = V.VoiceParams(vibrato_depth=0.0, scoop=0.0, jitter=0.0, wander=0.0)
-    segs = V.schedule(notes, flat, genome.lexicon)
-    knots = S.target_knots(segs)
-    lines = S.lines_of(notes)
-    templates = {}  # the template singer in each key a take was sung in
+
+def measure_take(path: Path, g: Guide) -> dict:
+    """Every note of the guide as one take sang it: its raw gesture, where its
+    vowel began, and how far from the tune it was."""
+    f0, band, active = analyze_take(S.load(path))
+    lag = place_take(f0, active, g.knots, max(len(f0), int(g.notes[-1].start / S.FRAME) + 400))
+    key = find_key(f0, g, lag)
+    found = []
+    for line in g.lines:
+        found += align_by_pitch(f0, band, [g.notes[k] for k in line], [g.knots[k] for k in line], lag, key)
+    found = vowel_onsets(found, band)
+    shift = [int(round(ONSET_BIAS.get(b, 0.0) / S.FRAME)) for b in g.before]
+    found = [(v0 - d, max(v1, v0 - d + 2), max(c1, v0 - d + 2)) for (v0, v1, c1), d in zip(found, shift)]
+    gestures, off = measure_sung(g.notes, g.knots, found, (f0, band, active), template(g, key), lag, key, g.tempo)
+    return {
+        "lag": lag * S.FRAME,
+        "key": key,
+        "fields": [f.name for f in fields(P.Gesture)],
+        "notes": [{"phrase": n.phrase, "index": index_in_phrase(g.notes, k), "start": round(n.start, 4),
+                   "onset": round(v0 * S.FRAME, 4), "off": rounded(o, 1),
+                   "gesture": [rounded(v, 4) for v in astuple(ge)]}
+                  for k, (n, (v0, _v1, _c1), ge, o) in enumerate(zip(g.notes, found, gestures, off))],
+    }
+
+
+def rounded(v: float, digits: int) -> float | None:
+    """A number for JSON, which has no NaN."""
+    return None if np.isnan(v) else round(float(v), digits)
+
+
+def measured(genome_path: Path, genome, take) -> dict:
+    """A take (a kept take or a path) measured once and kept in renders/measured/
+    until the take, the guide it was sung to or this extractor changes."""
+    take = take if isinstance(take, K.Take) else K.Take(Path(take).resolve(), "", genome_path.stem)
+    g = guide(genome_path, genome, take.guide)
+    stat = take.path.stat()
+    stamp = {"guide": g.digest, "extractor": version(), "bytes": stat.st_size, "mtime": int(stat.st_mtime)}
+    name = take.path.relative_to(ROOT).as_posix() if take.path.is_relative_to(ROOT) else take.path.as_posix().lstrip("/")
+    cache = MEASURED / (name.replace("/", "__").removesuffix(".wav") + ".json")
+    if cache.exists():
+        data = json.loads(cache.read_text())
+        if data.get("stamp") == stamp:
+            return data
+    data = {"take": name, "stamp": stamp, **measure_take(take.path, g)}
+    cache.parent.mkdir(parents=True, exist_ok=True)
+    cache.write_text(json.dumps(data) + "\n")
+    return data
+
+
+def gestures_of(data: dict) -> list[P.Gesture]:
+    """A measured take's raw gestures, NaN where a field wasn't measured."""
+    return [P.Gesture(**{f: NAN if v is None else v for f, v in zip(data["fields"], n["gesture"])}) for n in data["notes"]]
+
+
+def scaled(g: P.Gesture, s: dict) -> P.Gesture:
+    """A raw measurement, as much of it as a phrasing keeps."""
+    return replace(g, early=g.early * s["timing"], level=g.level * s["level"], swell=g.swell * s["swell"],
+                   scoop=g.scoop * s["scoop"], bend=g.bend * s["bend"], fall=g.fall * s["fall"],
+                   vibrato=g.vibrato * s["vibrato"] if g.vibrato >= 0 else g.vibrato)
+
+
+def bounded(g: P.Gesture) -> P.Gesture:
+    """A sighting within a phrasing's bounds, so one wild reading can't drag a note's average; NaN stays unmeasured."""
+    return P.Gesture(*[v if np.isnan(v) else min(max(v, lo), hi) for v, lo, hi in zip(astuple(g), astuple(P.LOW), astuple(P.HIGH))])
+
+
+def sung_phrasing(genome_path: Path, genome, takes):
+    """Gestures from one or more sung takes (paths, or kept takes): every
+    sighting of every note of the tune, scaled as a phrasing keeps them, what
+    each was sung to, and a portrait of each take."""
     seen: dict[tuple[str, int], list[P.Gesture]] = defaultdict(list)
+    words: dict[tuple[str, int], list[str]] = defaultdict(list)  # who sang it to what: singer|syllable
+    weights: dict[tuple[str, int], list[float]] = defaultdict(list)
+    who = [t.who if isinstance(t, K.Take) else "" for t in takes]
     portrait = []
-    for path in takes:
-        take = S.load(path)
-        f0, band, active = analyze_take(take)
-        lag = place_take(f0, active, knots, max(len(f0), int(notes[-1].start / S.FRAME) + 400))
-        # the singer's octave or key: their median against the tune's, near each vowel
-        guesses = []
-        for (_, v0, v1, *_r), note in zip(knots, notes):
-            a, b = int(v0 / S.FRAME) + lag, int(v1 / S.FRAME) + lag
-            v = f0[max(a, 0) : max(b, 0)]
-            v = v[v > 0]
-            if len(v) >= 5:
-                guesses.append(12 * np.log2(np.median(v) / 440) + 69 - note.pitch)
-        key = int(np.round(np.median(guesses))) if guesses else 0
-        if key not in templates:  # sing the template where the take was sung, so their spectra compare
-            singer = replace(flat, shift=key, tract=1.0 if key <= -6 else 1.12)
-            y_t = V.sing(notes, S.SR, singer, 0, genome.lexicon)
-            templates[key] = (y_t, analyze_take(y_t))
-        y_t, analysis_t = templates[key]
-        found = []
-        for line in lines:
-            found += align_by_pitch(f0, band, [notes[k] for k in line], [knots[k] for k in line], lag, key)
-        found = vowel_onsets(found, band)
-        gestures, off = measure_sung(notes, knots, found, (f0, band, active), analysis_t, lag, key, tempo)
-        for note, g in zip(notes, gestures):
-            seen[(note.phrase, index_in_phrase(notes, note))].append(g)
-        portrait.append((path, lag * S.FRAME, key, gestures, off))
-    return seen, portrait
+    for take, singer in zip(takes, who):
+        data = measured(genome_path, genome, take)
+        gestures = gestures_of(data)
+        sung_to = guide(genome_path, genome, data["stamp"]["guide"]).notes
+        for n, note, ge in zip(data["notes"], sung_to, gestures):
+            key = (n["phrase"], n["index"])
+            seen[key].append(bounded(scaled(ge, SUNG)))
+            words[key].append(f"{singer}|{(note.syllable or '').lower()}")
+            weights[key].append(1.0 / who.count(singer))  # each person counts once
+        portrait.append((data["take"], data["lag"], data["key"], gestures, [n["off"] for n in data["notes"]]))
+    return seen, (words, weights), portrait
 
 
-def index_in_phrase(notes, note) -> int:
-    """A note's place within its line (one sounding of its phrase)."""
-    i = notes.index(note)
-    j = i
+def components(groups: list[np.ndarray]) -> tuple[float, float]:
+    """How much notes differ from one another, and how much one note's sightings
+    differ among themselves (variances; one-way random effects). Can't tell: (0, 1)."""
+    many = [x[np.isfinite(x)] for x in groups]
+    many = [x for x in many if len(x) >= 2]
+    if len(many) < 5:
+        return 0.0, 1.0
+    within = sum(((x - x.mean()) ** 2).sum() for x in many) / sum(len(x) - 1 for x in many)
+    between = np.var([x.mean() for x in many], ddof=1) - within / np.mean([len(x) for x in many])
+    return max(float(between), 0.0), float(within)
+
+
+def shrunk(seen: dict, contexts: dict | None = None, floor: P.Gesture | None = None, weights: dict | None = None) -> dict:
+    """Every note's sightings as one gesture, each field pulled toward the
+    singer's habit (their mean over every note) as far as the evidence for
+    that note's own way goes. A note's mean is off by the noise of each
+    sighting, which more sightings average away, and by what the extractor
+    gets wrong at that place every time (floor, a standard deviation per
+    field), which only other words (contexts: what was sung, sighting by
+    sighting) or other people average away. A note heard once takes mostly
+    the habit; one heard often, to several words, keeps its own way. How far
+    notes truly differ from one another is what's left of their spread once
+    both errors are taken off. weights: how much each sighting counts (so
+    that each person counts once, however many takes they sang). Vibrato
+    keeps its vote (P.average)."""
+    names = [f.name for f in fields(P.Gesture)][:-1]
+    floor = floor or P.Gesture(**dict.fromkeys(names, 0.0), vibrato=0.0)
+    est: dict = {k: {} for k in seen}
+    for name in names:
+        bias = getattr(floor, name) ** 2
+        values, words, counts = {}, {}, {}
+        for k, v in seen.items():
+            x = np.array([getattr(g, name) for g in v], dtype=float)
+            ok = np.isfinite(x)
+            values[k] = x[ok]
+            words[k] = [w for w, good in zip(contexts[k], ok) if good] if contexts else list(range(ok.sum()))
+            counts[k] = np.array(weights[k], dtype=float)[ok] if weights else np.ones(ok.sum())
+        pooled = np.concatenate(list(values.values()))
+        if not len(pooled):
+            for k in seen:
+                est[k][name] = NAN
+            continue
+        habit = float(np.average(pooled, weights=np.concatenate(list(counts.values()))))
+        # noise: how the same note sung to the same word varies (another take, another time round)
+        same = [values[k][[i for i, w in enumerate(words[k]) if w == word]] for k in values for word in set(words[k])]
+        same = [x for x in same if len(x) >= 2]
+        if same:
+            noise = sum(((x - x.mean()) ** 2).sum() for x in same) / sum(len(x) - 1 for x in same)
+        else:  # every note sung once to each word: its spread less what the extractor gets wrong
+            many = [x for x in values.values() if len(x) >= 2]
+            spread = sum(((x - x.mean()) ** 2).sum() for x in many) / max(sum(len(x) - 1 for x in many), 1)
+            noise = max(spread - bias, 0.25 * spread)
+        heard = [k for k in values if len(values[k])]
+        mean = {k: float(np.average(values[k], weights=counts[k])) for k in heard}
+        sightings = {k: counts[k].sum() ** 2 / (counts[k] ** 2).sum() for k in heard}  # as many as count equally
+        error = {k: noise / sightings[k] + bias / len(set(words[k])) for k in heard}
+        means = np.array([mean[k] for k in heard])
+        truly = max(float(np.var(means, ddof=1)) - float(np.mean(list(error.values()))), 0.0) if len(heard) >= 5 else 0.0
+        for k in seen:
+            if k in error:
+                trust = truly / (truly + error[k]) if truly > 0 else 0.0
+                est[k][name] = habit + trust * (mean[k] - habit)
+            else:
+                est[k][name] = habit
+    return {k: [P.Gesture(**est[k], vibrato=P.average(v).vibrato)] for k, v in seen.items()}
+
+
+def floor_for(scale: dict) -> P.Gesture:
+    """REPEATS in the units of sightings scaled as a phrasing keeps them."""
+    keys = dict(early="timing")
+    return P.Gesture(**{f.name: getattr(REPEATS, f.name) * abs(scale.get(keys.get(f.name, f.name), 1.0))
+                        for f in fields(P.Gesture)})
+
+
+def singer_phrasing(genome_path: Path, genome, takes, credit: str | None = None):
+    """A phrasing from sung takes, the JSON to keep, and a portrait: one
+    singer's, or, given several singers' takes, everyone's at once, each
+    person counting once and each voice's own errors averaging away."""
+    seen, (words, weights), portrait = sung_phrasing(genome_path, genome, takes)
+    phrasing = gather(genome, shrunk(seen, words, floor_for(SUNG), weights))
+    detail = f"{len(takes)} sung take(s)" + (f" by {credit}" if credit else "")
+    return phrasing, P.to_json(phrasing, source="song", source_detail=detail, scale=SUNG), portrait
+
+
+def index_in_phrase(notes, k: int) -> int:
+    """Note k's place within its line (one sounding of its phrase)."""
+    j = k
     while j > 0 and not notes[j - 1].line_end:
         j -= 1
-    return i - j
+    return k - j
 
 
 def way(values, down: str, up: str) -> str:
@@ -476,6 +682,7 @@ def describe(portrait, tempo: float) -> str:
         scoops = np.array([g.scoop for g in gestures if abs(g.scoop) >= 20])
         falls = np.array([g.fall for g in gestures if abs(g.fall) >= 20])
         vib = [g.vibrato for g in gestures if g.vibrato >= 0]
+        off = [o for o in off if o is not None and np.isfinite(o)]
         where = "lined up with the guide" if lag == 0 else f"{lag:+.2f} s against the guide"
         pitch = {0: "in the guide's key", 12: "an octave up", -12: "an octave down"}.get(key, f"{key:+d} semitones from the guide")
         lean = np.median(early) if len(early) else 0.0
@@ -509,9 +716,15 @@ def write_guide(path: Path, genome, transpose: int) -> None:
     out.mkdir(parents=True, exist_ok=True)
     wav = out / f"{path.stem}.guide.wav"
     sf.write(str(wav), pcm, synth.SR, subtype="PCM_16")
-    (out / f"{path.stem}.guide.score.json").write_text(json.dumps(score.to_dict()) + "\n")
+    (out / f"{path.stem}.guide.score.json").write_text(json.dumps({**score.to_dict(), "tempo": params.tempo}) + "\n")
     first = min(n.start for n in score.part("voice"))
     print(f"{wav}  {len(pcm) / synth.SR:.0f} s, key tonic {params.tonic}, first word at {first:.1f} s")
+
+
+# everything a take's measurement depends on (version() hashes their source)
+MEASURING = ("guide", "template", "analyze_take", "place_take", "note_spans", "contour", "fit_edge", "shapes", "wobble",
+             "align_by_pitch", "vowel_onsets", "by_vowel", "measure_sung", "find_key", "measure_take", "index_in_phrase",
+             "rounded")
 
 
 def main() -> None:
@@ -523,6 +736,7 @@ def main() -> None:
     source.add_argument("--script", action="store_true", help="print the lines to read and stop")
     source.add_argument("--guide", action="store_true", help="write a backing track to sing along to, and stop")
     source.add_argument("--sung", nargs="+", metavar="TAKE", help="one or more takes sung along to the guide")
+    source.add_argument("--singer", metavar="NAME", help="every take this singer kept in recordings/ (and marked to use)")
     ap.add_argument("--transpose", type=int, default=0, help="with --guide: move the song this many semitones to suit you")
     ap.add_argument("--name", help="who the phrasing came from, if they want it said (principle 12)")
     ap.add_argument("--out", help="output JSON (default renders/phrasing/<genome>.<source>.json)")
@@ -532,13 +746,14 @@ def main() -> None:
     if args.guide:
         write_guide(Path(args.genome), genome, args.transpose)
         return
-    if args.sung:
-        seen, portrait = sung_phrasing(Path(args.genome), genome, args.sung)
-        phrasing = gather(genome, seen)
-        who = args.name or "the singer"
-        data = P.to_json(phrasing, source="song", source_detail=f"{len(args.sung)} sung take(s) by {who}", scale=SUNG)
-        tag = Path(args.sung[0]).stem.split()[0].lower()
-        write(data, phrasing, args.out or Path("renders") / "phrasing" / f"{Path(args.genome).stem}.{tag}.json")
+    if args.sung or args.singer:
+        stem = Path(args.genome).stem
+        chosen = [t for t in K.takes(stem, K.slug(args.singer)) if t.use] if args.singer else args.sung
+        if not chosen:
+            raise SystemExit(f"no takes of {stem} by {args.singer} in recordings/{K.slug(args.singer)}/")
+        phrasing, data, portrait = singer_phrasing(Path(args.genome), genome, chosen, args.name)
+        tag = K.slug(args.singer) if args.singer else Path(args.sung[0]).stem.split()[0].lower()
+        write(data, phrasing, args.out or ROOT / "renders" / "phrasing" / f"{stem}.{tag}.json")
         print(describe(portrait, choose_params(genome).tempo))
         return
     params = choose_params(genome)

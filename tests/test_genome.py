@@ -117,3 +117,23 @@ def test_phrasing_moves_only_the_voice():
     beat = 60.0 / params.tempo
     for a, b in zip(plain.part("voice"), phrased.part("voice")):
         assert abs(b.start - (a.start + 0.125 * beat)) < 1e-9 and b.gesture.level == 2.0
+
+
+def test_choir_voices_sing_their_own_phrasings():
+    from dataclasses import replace
+
+    from songbird import phrasing as P
+    from songbird.realize import choose_params, realize
+
+    g = G.load(Path(__file__).parent.parent / "songs" / "h-now-its-by-you.json")
+    params = replace(choose_params(g), choir=2)
+    late = {pid: tuple(P.Gesture(early=-0.25) for _ in ph.sung) for pid, ph in g.phrases.items()}
+    score = realize(g, params, choir=[late, None])
+    lead, first, second = score.part("voice"), score.part("choir1"), score.part("choir2")
+    assert first and len(first) == len(second)
+    # the first choir voice sings a quarter beat behind the lead, its own way; the second keeps with the lead
+    lead_at = {(n.phrase, n.syllable, round(n.start, 6)) for n in lead}
+    assert all((n.phrase, n.syllable, round(n.start, 6)) in lead_at for n in second)
+    behind = sorted(a.start - b.start for a, b in zip(sorted(first, key=lambda n: n.start), sorted(second, key=lambda n: n.start)))
+    assert abs(behind[0] - 0.25 * 60.0 / params.tempo) < 1e-6 and abs(behind[-1] - behind[0]) < 1e-6
+    assert all(n.gesture is not None for n in first) and all(n.gesture is None for n in second)

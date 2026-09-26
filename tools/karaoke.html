@@ -58,6 +58,14 @@
   input[type=number] { width: 80px; }
   audio { width: 100%; margin-top: 8px; }
   .warn { color: var(--sung); }
+  #singer { width: 170px; }
+  #singer.missing { border-color: var(--accent); }
+  .singer { border-top: 1px solid var(--line); padding: 10px 0 4px; }
+  .singer:first-child { border-top: 0; padding-top: 0; }
+  .singer ul { list-style: none; padding: 0; margin: 6px 0 8px; }
+  .singer li { display: flex; gap: 10px; align-items: center; margin: 3px 0; }
+  button.small { padding: 4px 10px; font-size: 14px; }
+  select { font: inherit; background: #2a241f; color: var(--ink); border: 1px solid var(--line); border-radius: 8px; padding: 6px 8px; }
 </style>
 </head>
 <body>
@@ -72,6 +80,7 @@
   <div class="bar"><div id="progress"></div></div>
 
   <div class="controls">
+    <input id="singer" placeholder="who's singing?" autocomplete="off">
     <button id="rehearse">▶ Rehearse</button>
     <button id="record" class="primary">● Record a take</button>
     <button id="stop" disabled>■ Stop</button>
@@ -99,17 +108,20 @@
   </div>
 
   <div class="panel">
-    <h2>Kept takes</h2>
-    <ul id="takes"><li class="hint">None yet. Sing it however it comes out; wrong notes are fine.</li></ul>
+    <h2>Singers</h2>
+    <p class="hint">Each singer's takes make their own phrasing; tick the takes that should count. Names stay on this
+      computer unless you credit them in the phrasing.</p>
+    <div id="singers"><p class="hint">No takes yet. Sing it however it comes out; wrong notes are fine.</p></div>
+  </div>
+
+  <div class="panel">
+    <h2>Hear the machine</h2>
     <div class="row">
-      <input id="name" placeholder="your name (optional)">
-      <button id="analyze" disabled>Make my phrasing</button>
+      <select id="lead"></select>
+      <label class="check hint"><input type="checkbox" id="choir"> with the lineage choir</label>
+      <button id="machine">▶ Sing</button>
     </div>
-    <div class="portrait hint" id="portrait"></div>
-    <div class="row" id="hear" hidden>
-      <button id="machine">▶ Hear the machine sing it your way</button>
-      <label class="check hint"><input type="checkbox" id="choir"> with a lineage choir</label>
-    </div>
+    <div class="hint" id="machineNote"></div>
     <audio id="player" controls hidden></audio>
   </div>
 
@@ -130,7 +142,7 @@
 <script>
 const $ = id => document.getElementById(id);
 const S = { ctx: null, guide: null, lyrics: null, notes: [], lo: 0, hi: 0, items: [], focus: -2, mode: "idle",
-            t0: 0, out: 0, inn: 0, chunks: [], take: null, takes: [], src: [], phrasing: null,
+            t0: 0, out: 0, inn: 0, chunks: [], take: null, takeSinger: "", singers: [], src: [],
             analyser: null, buf: null, trail: [], takeTrail: null, showTrail: null, shift: 0, takeBuffer: null };
 const NAMES = { intro: "Intro", verse: "Verse", refrain: "Refrain", turn: "Turn", bridge: "Bridge", tag: "Tag", break: "Break", outro: "Outro" };
 const PAST = 2.0, FUTURE = 5.0;  // seconds of the lane either side of the playhead
@@ -150,6 +162,11 @@ class TakeRecorder extends AudioWorkletProcessor {
 registerProcessor("take-recorder", TakeRecorder);`;
 
 try { $("nudge").value = localStorage.getItem("songbird-nudge") || "0"; } catch (e) {}
+try { $("singer").value = localStorage.getItem("songbird-singer") || ""; } catch (e) {}
+$("singer").addEventListener("input", () => {
+  $("singer").classList.remove("missing");
+  try { localStorage.setItem("songbird-singer", $("singer").value.trim()); } catch (e) {}
+});
 $("nudge").addEventListener("change", () => { try { localStorage.setItem("songbird-nudge", $("nudge").value); } catch (e) {} });
 
 /* ---------- the words ---------- */
@@ -168,7 +185,7 @@ async function init() {
   if (!window.isSecureContext || !navigator.mediaDevices) {
     status('<span class="warn">Open this page at http://127.0.0.1 so the browser allows the microphone.</span>');
   }
-  (await (await fetch("/takes")).json()).forEach(addTake);
+  await loadSingers();
 }
 
 function status(html) { $("status").innerHTML = html; }
@@ -498,13 +515,87 @@ function wav(samples, rate) {
   return new Blob([buf], { type: "audio/wav" });
 }
 
-function addTake(path) {
-  if (!S.takes.length) $("takes").innerHTML = "";
-  S.takes.push(path);
-  const li = document.createElement("li");
-  li.textContent = path;
-  $("takes").appendChild(li);
-  $("analyze").disabled = false;
+async function loadSingers() {
+  S.singers = await (await fetch("/singers")).json();
+  drawSingers();
+}
+
+function when(stamp) {  // 2026-09-25T15:28:07 -> 25 Sep, 15:28
+  const d = new Date(stamp);
+  return isNaN(d) ? stamp : `${d.getDate()} ${d.toLocaleString("en", { month: "short" })}, ${stamp.slice(11, 16)}`;
+}
+
+function drawSingers() {
+  const box = $("singers");
+  box.innerHTML = S.singers.length ? "" : '<p class="hint">No takes yet. Sing it however it comes out; wrong notes are fine.</p>';
+  for (const s of S.singers) {
+    const el = document.createElement("div");
+    el.className = "singer";
+    el.innerHTML = `<div class="row"><strong></strong><span class="hint count"></span></div><ul></ul>
+      <div class="row"><button class="make"></button>
+        <label class="check hint"><input type="checkbox" class="credit"> credit the name in it</label></div>
+      <div class="portrait hint"></div>`;
+    el.querySelector("strong").textContent = s.name;
+    const using = s.takes.filter(t => t.use).length;
+    el.querySelector(".count").textContent = `${s.takes.length} take${s.takes.length === 1 ? "" : "s"}` +
+      (using < s.takes.length ? `, ${using} counted` : "") + (s.phrasing ? " · has a phrasing" : "");
+    for (const t of s.takes) {
+      const li = document.createElement("li");
+      li.innerHTML = `<label class="check"><input type="checkbox"> <span></span></label><button class="small">▶ with the guide</button>`;
+      li.querySelector("span").textContent = when(t.recorded);
+      const tick = li.querySelector("input");
+      tick.checked = t.use;
+      tick.onchange = async () => {
+        try { await post("/use", JSON.stringify({ path: t.path, use: tick.checked })); await loadSingers(); }
+        catch (e) { status(`<span class="warn">${e.message}</span>`); }
+      };
+      li.querySelector("button").onclick = () => playKept(t.path);
+      el.querySelector("ul").appendChild(li);
+    }
+    const make = el.querySelector(".make");
+    make.textContent = `Make ${s.name}'s phrasing`;
+    make.disabled = !using;
+    make.onclick = () => analyze(s, el);
+    box.appendChild(el);
+  }
+  drawLead();
+}
+
+function drawLead() {
+  const lead = $("lead"), was = S.lead;  // what they last chose, if anything
+  const have = S.singers.filter(s => s.phrasing);
+  lead.innerHTML = "";
+  const option = (value, text) => { const o = document.createElement("option"); o.value = value; o.textContent = text; lead.appendChild(o); };
+  for (const s of have) option(s.who, `${s.name}'s way`);
+  if (have.length >= 2) option("everyone", "everyone's way, blended");
+  option("", "its own way (no phrasing)");
+  lead.value = was !== undefined && [...lead.options].some(o => o.value === was) ? was : lead.options[0].value;
+  $("machineNote").textContent = have.length >= 2 ? "With the choir, the other singers sing its harmonies, each their own way."
+    : have.length ? "Once someone else has a phrasing, they can sing in the choir." : "Make a phrasing to hear the machine sing it someone's way.";
+}
+
+async function analyze(s, el) {
+  const make = el.querySelector(".make"), out = el.querySelector(".portrait");
+  make.disabled = true;
+  out.textContent = "Listening to the takes (about a minute for each new one)…";
+  try {
+    const r = await post("/analyze", JSON.stringify({ who: s.who, credit: el.querySelector(".credit").checked }));
+    out.textContent = r.portrait + `\n\nSaved as ${r.phrasing}.`;
+    S.singers = await (await fetch("/singers")).json();
+    S.lead = s.who;
+    drawLead();
+  } catch (e) { out.textContent = e.message; }
+  make.disabled = false;
+}
+
+async function playKept(path) {
+  if (!$("review").hidden) { status("Keep or discard the new take first."); return; }
+  await audio();
+  const buffer = await S.ctx.decodeAudioData(await (await fetch("/" + path)).arrayBuffer());
+  S.src.forEach(s => { s.onended = null; try { s.stop(); } catch (e) {} });
+  S.takeTrail = [];
+  S.shift = 0;
+  start([S.guide, buffer], "listening", 0, [0, 0]);
 }
 
 async function post(url, body, type = "application/json") {
@@ -520,6 +611,13 @@ $("rehearse").onclick = async () => {
   start([S.guide], "rehearsing");
 };
 $("record").onclick = async () => {
+  S.takeSinger = $("singer").value.trim();
+  if (!S.takeSinger) {  // every take belongs to someone, so different people's phrasings stay apart
+    $("singer").classList.add("missing");
+    $("singer").focus();
+    status('<span class="warn">Put a name in first (yours, or anything you like), so your takes stay together.</span>');
+    return;
+  }
   try { await audio(); await microphone(); } catch (e) { status(`<span class="warn">No microphone: ${e.message}</span>`); return; }
   start([S.guide], "recording");
 };
@@ -561,15 +659,17 @@ $("discard").onclick = () => { S.take = null; $("review").hidden = true; status(
 $("keep").onclick = async () => {
   $("keep").disabled = true;
   try {
-    const { path } = await post("/take", wav(shifted(S.take.samples, S.take.rate, S.shift), S.take.rate), "audio/wav");
-    addTake(path);
+    const q = new URLSearchParams({ singer: S.takeSinger, shift_ms: Math.round(S.shift * 1000),
+                                    auto_ms: Math.round((S.autoShift || 0) * 1000), device_ms: Math.round(delay() * 1000) });
+    await post("/take?" + q, wav(shifted(S.take.samples, S.take.rate, S.shift), S.take.rate), "audio/wav");
     $("review").hidden = true;
+    await loadSingers();
     const byEar = S.shift - (S.autoShift || 0);
     if (Math.abs(byEar) >= 0.005) {  // your correction beyond the automatic one, for the takes to come
       learn(delay() * 1000 + byEar * 1000);
       status(`Kept, with your ${Math.abs(Math.round(byEar * 1000))} ms nudge ${byEar > 0 ? "earlier" : "later"}; the next takes start from it.`);
     } else {
-      status("Kept. Another take, or make your phrasing.");
+      status(`Kept as one of ${S.takeSinger}'s takes. Another, or make the phrasing below.`);
     }
   } catch (e) { status(`<span class="warn">${e.message}</span>`); }
   $("keep").disabled = false;
@@ -633,27 +733,17 @@ $("calibrate").onclick = async () => {
     + `so takes will be shifted ${nudge} ms more from now on. Tapping tends to run a little early, so fine-tune by ear with the slider after a take.`;
 };
 
-$("analyze").onclick = async () => {
-  $("analyze").disabled = true;
-  $("portrait").textContent = "Listening to your takes (about a minute a take)…";
-  try {
-    const r = await post("/analyze", JSON.stringify({ takes: S.takes, name: $("name").value.trim() }));
-    S.phrasing = r.phrasing;
-    $("portrait").textContent = r.portrait + `\n\nSaved as ${r.phrasing}.`;
-    $("hear").hidden = false;
-  } catch (e) { $("portrait").textContent = e.message; }
-  $("analyze").disabled = false;
-};
+$("lead").onchange = () => { S.lead = $("lead").value; };
 $("machine").onclick = async () => {
   $("machine").disabled = true;
   const label = $("machine").textContent;
   $("machine").textContent = "The machine is learning the song…";
   try {
-    const r = await post("/render", JSON.stringify({ phrasing: S.phrasing, choir: $("choir").checked ? 3 : 0 }));
+    const r = await post("/render", JSON.stringify({ lead: $("lead").value, choir: $("choir").checked }));
     $("player").src = r.url;
     $("player").hidden = false;
     $("player").play();
-  } catch (e) { $("portrait").textContent += "\n" + e.message; }
+  } catch (e) { $("machineNote").textContent = e.message; }
   $("machine").textContent = label;
   $("machine").disabled = false;
 };

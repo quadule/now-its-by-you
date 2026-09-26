@@ -5,9 +5,12 @@
 A small server on this machine only. It serves one page (tools/karaoke.html)
 that plays the guide track, shows the words as they come, and records the
 microphone in the same audio clock as the playback, so every take lines up
-with the guide exactly. Kept takes are saved to recordings/ (never tracked by
-git). From the page you can then turn your takes into a phrasing
-(tools/phrasing.py) and hear the machine sing the song your way.
+with the guide exactly. Whoever sings puts their name in first: kept takes go
+to recordings/<name>/ (never tracked by git, tools/takes.py), and each
+singer's takes become that singer's phrasing (tools/phrasing.py), so several
+people can sing without blending into one another. Then hear the machine sing
+the song one person's way, or everyone's way at once, with the other singers
+in the lineage choir.
 """
 
 from __future__ import annotations
@@ -21,14 +24,14 @@ import time
 import warnings
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
-from urllib.parse import urlsplit
+from urllib.parse import parse_qs, urlsplit
 
 warnings.filterwarnings("ignore", message="pkg_resources")
 sys.path.insert(0, str(Path(__file__).parent))
 import phrasing as T  # noqa: E402  (tools/phrasing.py)
+import takes as K  # noqa: E402  (tools/takes.py)
 
 from songbird import genome as G  # noqa: E402
-from songbird import phrasing as P  # noqa: E402
 from songbird.realize import choose_params  # noqa: E402
 
 ROOT = Path(__file__).parent.parent
@@ -84,18 +87,38 @@ class Karaoke(BaseHTTPRequestHandler):
                 T.write_guide(self.genome_path, self.genome, 0)
         return wav, score
 
+    def phrasing_path(self, who: str) -> Path:
+        return ROOT / "renders" / "phrasing" / f"{self.genome_path.stem}.{who}.json"
+
+    def singers(self) -> list[dict]:
+        out = []
+        for who, kept in K.singers(self.genome_path.stem).items():
+            phrasing = self.phrasing_path(who)
+            out.append({
+                "who": who,
+                "name": kept[-1].singer or who,
+                "takes": [{"path": t.rel, "use": t.use, "recorded": t.info.get("recorded", "")} for t in kept],
+                "phrasing": phrasing.relative_to(ROOT).as_posix() if phrasing.exists() else None,
+            })
+        return out
+
     def do_GET(self) -> None:
         self.path = urlsplit(self.path).path  # a ?t=... only busts the browser's cache
         if self.path in ("/", "/index.html"):
             self.send(PAGE.read_bytes(), "text/html; charset=utf-8")
         elif self.path == "/guide.wav":
             self.send(self.guide()[0].read_bytes(), "audio/wav")
-        elif self.path == "/takes":
-            kept = sorted((ROOT / "recordings").glob(f"{self.genome_path.stem}-*.wav"))
-            self.send_json([str(f.relative_to(ROOT)) for f in kept])
+        elif self.path == "/singers":
+            self.send_json(self.singers())
         elif self.path == "/lyrics.json":
             score = json.loads(self.guide()[1].read_text())
             self.send_json(lyrics(score, self.genome.title, choose_params(self.genome).tempo))
+        elif self.path.startswith("/recordings/"):
+            f = (ROOT / self.path.lstrip("/")).resolve()  # only a take, never a path out of recordings/
+            if f.is_relative_to(K.RECORDINGS) and f.suffix == ".wav" and f.exists():
+                self.send(f.read_bytes(), "audio/wav")
+            else:
+                self.send_json({"error": "no such take"}, 404)
         elif self.path.startswith("/renders/"):
             name = Path(self.path).name  # never a path out of renders/
             f = ROOT / "renders" / name
@@ -107,39 +130,69 @@ class Karaoke(BaseHTTPRequestHandler):
             self.send_json({"error": "not found"}, 404)
 
     def do_POST(self) -> None:
+        url = urlsplit(self.path)
+        query = {k: v[0] for k, v in parse_qs(url.query).items()}
         body = self.rfile.read(int(self.headers.get("Content-Length", 0)))
         try:
-            if self.path == "/take":
-                out = ROOT / "recordings" / f"{self.genome_path.stem}-{time.strftime('%Y%m%d-%H%M%S')}.wav"
-                out.parent.mkdir(exist_ok=True)
-                out.write_bytes(body)
-                self.send_json({"path": str(out.relative_to(ROOT))})
-            elif self.path == "/analyze":
+            if url.path == "/take":
+                singer = query.get("singer", "").strip()
+                if not singer:
+                    raise ValueError("a take needs the singer's name")
+                info = {k: float(query[k]) for k in ("shift_ms", "auto_ms", "device_ms") if k in query}
+                take = K.keep(self.genome_path.stem, singer, body, self.guide()[1], **info)
+                self.send_json({"path": take.rel, "who": take.who})
+            elif url.path == "/use":
                 request = json.loads(body)
-                takes = [str(ROOT / t) for t in request["takes"]]
+                take = K.load(ROOT / request["path"])
+                if not take.path.is_relative_to(K.RECORDINGS):
+                    raise ValueError("not a take")
+                take.use = bool(request["use"])
+                take.save()
+                self.send_json({"ok": True})
+            elif url.path == "/analyze":
+                request = json.loads(body)
+                who = K.slug(request["who"])
+                chosen = [t for t in K.takes(self.genome_path.stem, who) if t.use]
+                if not chosen:
+                    raise ValueError(f"{who} has no takes marked to use")
                 with contextlib.redirect_stdout(io.StringIO()):
-                    seen, portrait = T.sung_phrasing(self.genome_path, self.genome, takes)
-                    phrasing = T.gather(self.genome, seen)
-                    who = request.get("name") or "the singer"
-                    data = P.to_json(phrasing, source="song", source_detail=f"{len(takes)} sung take(s) by {who}",
-                                     scale=T.SUNG)
-                    out = ROOT / "renders" / "phrasing" / f"{self.genome_path.stem}.karaoke.json"
-                    T.write(data, phrasing, out)
-                self.send_json({"phrasing": str(out.relative_to(ROOT)),
+                    credit = chosen[-1].singer if request.get("credit") else None
+                    phrasing, data, portrait = T.singer_phrasing(self.genome_path, self.genome, chosen, credit)
+                    T.write(data, phrasing, self.phrasing_path(who))
+                self.send_json({"phrasing": self.phrasing_path(who).relative_to(ROOT).as_posix(),
                                 "portrait": T.describe(portrait, choose_params(self.genome).tempo)})
-            elif self.path == "/render":
-                from songbird.cli import main as songbird
-
-                request = json.loads(body)
-                out = ROOT / "renders" / f"{self.genome_path.stem}.karaoke.flac"
-                with contextlib.redirect_stdout(io.StringIO()):
-                    songbird(["render", str(self.genome_path), "--phrasing", str(ROOT / request["phrasing"]),
-                              "--choir", str(request.get("choir", 0)), "--out", str(out)])
-                self.send_json({"url": f"/renders/{out.name}?t={int(time.time())}"})
+            elif url.path == "/render":
+                self.send_json(self.render(json.loads(body)))
             else:
                 self.send_json({"error": "not found"}, 404)
         except Exception as e:  # report it on the page rather than dropping the connection
             self.send_json({"error": f"{type(e).__name__}: {e}"}, 500)
+
+    def render(self, request: dict) -> dict:
+        """The machine sings: one singer's way (lead: their folder name), everyone's
+        blended ("everyone"), or its own (""); with the choir, the other
+        singers' phrasings are its voices, and stand-ins fill it out to three."""
+        from songbird.cli import main as songbird
+
+        lead = request.get("lead", "")
+        have = {s["who"]: ROOT / s["phrasing"] for s in self.singers() if s["phrasing"]}
+        args = []
+        if lead == "everyone":  # every singer's takes at once, each person counting once
+            chosen = [t for t in K.takes(self.genome_path.stem) if t.use and t.who in have]
+            with contextlib.redirect_stdout(io.StringIO()):
+                phrasing, data, _ = T.singer_phrasing(self.genome_path, self.genome, chosen)
+                data["source_detail"] = f"{len(chosen)} sung takes by {len(have)} singers"
+                T.write(data, phrasing, self.phrasing_path("everyone"))
+            args += ["--phrasing", str(self.phrasing_path("everyone"))]
+        elif lead:
+            args += ["--phrasing", str(have[lead])]
+        if request.get("choir"):
+            others = [str(f) for who, f in have.items() if who != lead]
+            args += ["--choir", str(max(3, len(others)))] + (["--choir-phrasing", *others] if others else [])
+        out = ROOT / "renders" / f"{self.genome_path.stem}.karaoke.{lead or 'plain'}.flac"
+        with contextlib.redirect_stdout(io.StringIO()):
+            songbird(["render", str(self.genome_path), *args, "--out", str(out)])
+        return {"url": f"/renders/{out.name}?t={int(time.time())}"}
 
 
 def main() -> None:
