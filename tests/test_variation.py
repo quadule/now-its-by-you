@@ -170,20 +170,107 @@ def test_the_form_changes_by_the_season_not_the_day(h):
 
 
 def test_the_table_is_wired():
+    from songbird.band import Band
+
     params = {f for f in Params.__dataclass_fields__}
     for knob in V.KNOBS:
         head, _, tail = knob.path.partition(".")
         assert head in params
         if head == "singer":
             assert hasattr(VoiceParams(), tail), knob.path
+        if head == "band":
+            assert hasattr(Band(), tail), knob.path
         if head == "leanings":
             assert tail in V.LEANINGS
-        if knob.drift:
-            assert knob.drift in D.DIMENSIONS, knob.path
+        dims = knob.drift if isinstance(knob.drift, tuple) else (knob.drift,) if knob.drift else ()
+        spans = knob.span if isinstance(knob.span, tuple) else (knob.span,)
+        assert len(dims) <= len(spans), knob.path
+        for dim in dims:
+            assert dim in D.DIMENSIONS, knob.path
         assert knob.view in D.VIEWS
     for dimension in ("intro", "turn", "break", "tag", "outro", "other", "verses", "pairs", "extra", "texture", "mood",
-                      "mode", "key"):
+                      "mode", "key", "pattern", "lead", "arc", "sheen", "balance", "ensemble"):
         assert dimension in D.DIMENSIONS
+    assert "swing" not in params  # the band's swing is the only swing
+
+
+def test_every_machine_has_its_own_band_and_nobody_sits_out(h):
+    from songbird.band import INSTRUMENTS, LEADS, PATTERNS, Band
+
+    seed = Params.from_dict(h.seed_params)
+    assert seed.band == Band()  # the seed's arrangement
+    bands = {}
+    for name in MACHINES:
+        voice = H.fictional(name)
+        for t in np.arange(D.parse("2026-01-01"), D.parse("2029-01-01"), 11.0):
+            band = choose_params(h, voice=voice, drift=D.drift(t, voice.hash)).band
+            assert all(0.5 <= getattr(band, i) <= 1.5 for i in INSTRUMENTS), band  # a gain never drops a part
+            assert band.pattern in PATTERNS and band.lead in LEADS
+            assert 0.0 <= band.swing <= 0.6 and 0.85 <= band.body <= 1.2
+            bands.setdefault(name, set()).add((band.maker, band.body))
+        assert len(bands[name]) == 1  # the maker's hand and the instruments' size are the machine's, every day
+    assert len({next(iter(b)) for b in bands.values()}) == len(MACHINES)  # and every machine's are its own
+    neutral = choose_params(h, voice=H.Voice(salt="locked-down"))
+    assert neutral.band == seed.band  # a machine that gave nothing plays as its parent's band did
+
+
+def test_the_band_follows_the_machine(h):
+    from songbird.band import Band
+
+    bright = H.Voice(colour=H.Colour(1.0, 0.25, 0.5, 0.25), salt="s")
+    dark = H.Voice(colour=H.Colour(0.0, 0.25, 0.5, 0.25), salt="s")
+    assert choose_params(h, voice=bright).band.brightness > Band().brightness > choose_params(h, voice=dark).band.brightness
+    busy = H.Voice(machine=H.Machine(1.0, 1.0, 0.5), salt="s")
+    small = H.Voice(machine=H.Machine(0.0, 0.0, 0.5), salt="s")
+    assert choose_params(h, voice=busy).band.density > choose_params(h, voice=small).band.density
+    old = H.Voice(ages=H.Ages(median=3.5, spread=1.0), salt="s")
+    young = H.Voice(ages=H.Ages(median=1.0, spread=1.0), salt="s")
+    assert choose_params(h, voice=old).band.wear > choose_params(h, voice=young).band.wear
+    lilting = H.Voice(hand=H.Hand(interval=200, unevenness=0.5, skew=2.5), salt="s")
+    assert choose_params(h, voice=lilting).band.swing > 0.2  # a skewed hand swings the band and the singer
+
+
+def test_old_records_keep_their_swing(h):
+    record = {**Params.from_dict(h.seed_params).to_dict(), "swing": 0.1}
+    del record["band"]
+    assert abs(Params.from_dict(record).band.swing - 0.1 / 0.333) < 1e-9
+
+
+def test_pattern_and_lead_hold_against_flicker(h):
+    days = np.arange(D.parse("2026-01-01"), D.parse("2030-01-01"), 1.0)
+    rates, holds = {"pattern": [], "lead": []}, {"pattern": [], "lead": []}
+    for name in MACHINES:
+        voice = H.fictional(name)
+        bands = [choose_params(h, voice=voice, drift=D.drift(t, voice.hash)).band for t in days]
+        for what in ("pattern", "lead"):
+            values = [getattr(b, what) for b in bands]
+            changes = [i for i in range(1, len(values)) if values[i] != values[i - 1]]
+            rates[what].append(len(changes) / 4)
+            holds[what] += list(np.diff(changes))
+    assert min(holds["pattern"] + holds["lead"], default=999) >= 7  # nothing changes back within a week
+    assert np.mean(rates["lead"]) <= 1.5 and np.mean(rates["pattern"]) <= 6, rates
+    assert np.mean(rates["pattern"]) > 0  # but it does move
+
+
+def test_a_held_choice_is_a_schmitt_trigger():
+    class Ctx:  # just enough of a Context: a drift whose past can be read
+        def __init__(self, t):
+            self.drift = D.drift(t, "abc")
+
+        def at(self, view, dimension):
+            return self.drift.view(view).get(dimension, 0.0)
+
+    t = np.arange(D.parse("2026-01-01"), D.parse("2028-01-01"), 1.0)
+    path = D.series(t, "abc", ["pattern"])["pattern"]["slow"]
+    base, span = 1.5, 1.2  # sitting right on the boundary between categories 1 and 2
+    got = [V.held(Ctx(x), "slow", "pattern", base, span, 4) for x in t]
+    plain = [int(np.clip(np.floor(base + span * v + 0.5), 0, 3)) for v in path]
+    flips = lambda xs: sum(a != b for a, b in zip(xs, xs[1:]))  # noqa: E731
+    assert flips(got) < flips(plain)  # fewer changes than rounding would make
+    for g, v in zip(got, path):  # and wherever the position is firmly in a category, that is the choice
+        p = base + span * v
+        if abs(p - round(p)) <= 0.5 - V.HOLD and 0 <= round(p) <= 3:
+            assert g == round(p)
 
 
 def test_leanings_for_the_lyric(h):
