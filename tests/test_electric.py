@@ -316,6 +316,29 @@ def test_the_bass_attack_is_bright_and_darkens_fast():
     assert fall_time(y) > 1.0
 
 
+def mean_cents(y, f, t0, t1):
+    """The fundamental's mean instantaneous pitch over t0..t1, cents from f."""
+    band = sosfiltfilt(butter(2, [f * 0.85, f * 1.15], btype="bandpass", fs=SR, output="sos"), y)
+    inst = np.diff(np.unwrap(np.angle(hilbert(band)))) * SR / (2 * np.pi)
+    return 1200 * np.log2(np.mean(inst[int(t0 * SR): int(t1 * SR)]) / f)
+
+
+def test_a_hard_pluck_starts_sharp_and_settles():
+    """A string plucked wide is stretched tauter while it swings: a bass's fingered A1 at 0.8 starts some 13
+    cents sharp and settles within a third of a second (Fable's review: 10-25 cents for a bass, 3-6 for a
+    guitar's hard strum); a soft note's glide is too small to bother with."""
+    strings, *_ = electric.rig("electric", S0, SR)
+    seg = fretboard.Segment(string=1, start=0, base=45.0, held=SR, picks=[(0, 0.8, "pick"), (SR // 2, 0.2, "up")],
+                            end=SR)
+    rise = fretboard.glide(seg, strings, fretboard.KINDS, SR)
+    assert 3.0 < rise[0] < 5.0 and rise[int(0.3 * SR)] < 0.1 and len(rise) < int(0.55 * SR)  # the soft one: none
+    y = render("ebass", [note(33, dur=1.5, vel=0.8, part="ebass")], 2.0)
+    early, late = mean_cents(y, midi_to_hz(33), 0.13, 0.25), mean_cents(y, midi_to_hz(33), 0.7, 1.3)
+    assert 3.5 < early - late < 12.0
+    y = render("ebass", [note(33, dur=1.5, vel=0.3, part="ebass")], 2.0)
+    assert abs(mean_cents(y, midi_to_hz(33), 0.13, 0.25) - mean_cents(y, midi_to_hz(33), 0.7, 1.3)) < 2.0
+
+
 def test_the_bass_articulations():
     def one(art):
         return render("ebass", [note(38, dur=1.2, art=art, part="ebass")], 1.6)

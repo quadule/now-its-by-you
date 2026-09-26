@@ -209,7 +209,7 @@ def rig(name: str, s: dict, sr: int) -> tuple[Strings, amp.Coil, dict, amp.Amp]:
         gains=tuple(10.0 ** (p / 20.0) for p in d["poles"]),
         damping=(7e-6 + 5e-6 * wear) * (1.4 - 0.8 * bright),  # new strings ring bright, old ones go dull
         t60=d["t60"] * (1.0 - 0.3 * wear), along=1.3, heard=0.4, driven=0.5, pick=d["pick"], hardness=0.85,
-        click=0.25, touch=0.0, frets=24)
+        click=0.25, touch=0.0, frets=24, glide=6.0, glide_time=0.08)
     treble, middle, bass = d["knobs"]
     treble = float(np.clip(0.45 + 0.35 * bright + treble + (0.05 if setting == "crunch" else 0.0), 0, 1))
     bass = float(np.clip(0.55 - 0.15 * bright + bass, 0, 1))
@@ -374,7 +374,8 @@ def bass(notes, sr: int, length: int, rng: np.random.Generator, make: np.random.
         damping=(6e-5 + 5e-5 * wear) * (1.3 - 0.6 * bright),  # roundwound: the zing is gone in a fifth of a second
         t60=t60 * (1.0 - 0.3 * wear), along=1.2, heard=0.5, driven=0.6, pick=finger, hardness=0.35, click=0.2,
         touch=0.3, frets=20,
-        kinds=(("pick", (0.75, 2.6, 1.0, 1.0)), ("finger", (1.0, 1.0, 1.0, 0.0))))
+        kinds=(("pick", (0.75, 2.6, 1.0, 1.0)), ("finger", (1.0, 1.0, 1.0, 0.0))),
+        glide=20.0, glide_time=0.12)  # a long string plucked wide: sharp by a sixth of a semitone, settling
     placed = fretboard.fret(notes, strings)
     segs = fretboard.segments(placed, strings, sr, rng, ornament=float(s.get("ornament", 0.5)))
     picked = {int(round(n.start * sr)) for n, _, _ in placed if n.art == "pick"}

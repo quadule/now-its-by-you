@@ -20,7 +20,9 @@ frequency, not by the note (sigma = b1 + b3 f^2: air and the string's own
 internal friction), so each note's loss filter is designed for it: the
 one-zero of pluck.py and stringloop.py where that is enough, with a one-pole
 low-pass after it where it isn't (a bass string's zing is gone in a fifth of a
-second, which a one-zero at 41 Hz cannot do).
+second, which a one-zero at 41 Hz cannot do). A string plucked wide is tauter
+while it swings, so a hard pluck starts a few cents sharp (a bass's 10 to 20)
+and settles as it rings down (glide()).
 
 The pickup hears the string's velocity at its distance d from the bridge:
 what is running toward the bridge minus what is coming back from it, 2d/c
@@ -74,6 +76,8 @@ class Strings:
     touch: float = 0.0  # the finger's noise as it lands
     frets: int = 22
     kinds: tuple = ()  # (kind, (pick point factor, hardness factor, level, click)) overriding KINDS
+    glide: float = 0.0  # cents a pluck at full velocity starts sharp by, its swing stretching the string
+    glide_time: float = 0.1  # s: how fast that settles
 
     def hz(self, string: int) -> float:
         cents = self.offsets[string] if self.offsets else 0.0
@@ -315,6 +319,29 @@ def _comb_pluck(x: np.ndarray, delays: np.ndarray, weights: np.ndarray) -> np.nd
     return _combed(y, delays, weights, np.ones(len(y)))
 
 
+def glide(seg: Segment, strings: Strings, kinds: dict, sr: int) -> np.ndarray | None:
+    """A plucked string's pitch glide, in cents of tension: stretched further the harder it is plucked, the
+    string is tauter while it swings wide, so each pluck starts sharp by strings.glide (vel level)^2 cents
+    and settles as its swing dies down (strings.glide_time). The track runs as long as a glide lasts
+    (not the segment's whole length); None where there is none to hear."""
+    if strings.glide <= 0.0:
+        return None
+    n = seg.end
+    out = None
+    tau = strings.glide_time * sr
+    for at, vel, kind in seg.picks:
+        cents = strings.glide * (vel * kinds.get(kind, kinds["pick"])[2]) ** 2
+        if at >= n or cents < 0.3:
+            continue
+        k = min(n - at, int(6.0 * tau))
+        if out is None:
+            out = np.zeros(n)
+        out[at: at + k] += cents * np.exp(-np.arange(k) / tau)
+    if out is None:
+        return None
+    return out[: int(np.flatnonzero(out)[-1]) + 1]  # as far as it lasts
+
+
 def sound(seg: Segment, strings: Strings, sr: int, rng: np.random.Generator, *, vel_bright: float = 0.4) -> np.ndarray:
     """What the pickup hears of one segment: `seg.end` samples of the string's velocity at the pickup."""
     n = seg.end
@@ -324,6 +351,10 @@ def sound(seg: Segment, strings: Strings, sr: int, rng: np.random.Generator, *, 
     open_hz = strings.hz(seg.string)
     base_hz = midi_to_hz(seg.base) * open_hz / midi_to_hz(strings.open[seg.string])  # the string's own offset
     length, tension = tracks(seg, sr)
+    rise = glide(seg, strings, kinds, sr)
+    if rise is not None and (length is not None or tension is not None):  # a moving note: it rides the tension
+        tension = np.pad(rise, (0, n - len(rise))) + (tension if tension is not None else 0.0)
+        rise = None
     steady = length is None and tension is None
     if steady:
         freq = base_hz
@@ -382,6 +413,8 @@ def sound(seg: Segment, strings: Strings, sr: int, rng: np.random.Generator, *, 
     # the planes a fraction of a cent either side: the loop's own delay moves by the period's change (the
     # filters' phase delays hardly change over a third of a cent)
     delay = _delay_track(freq, n, sr, use_loss, use_pole)
+    if rise is not None:  # a steady note's glide: only its loop's length follows (a few cents move nothing else)
+        delay[: len(rise)] *= np.exp2(-rise / 1200.0)
     da = delay + period * (2.0 ** (split / 2400.0) - 1.0)
     db = delay + period * (2.0 ** (-split / 2400.0) - 1.0)
     size = 1 << int(np.ceil(np.log2(max(da.max(), db.max()) + 16)))
