@@ -991,7 +991,12 @@ def w_block(ctx: StyleContext, i: int, part: str) -> list[Ev]:
 
 def w_oompah(ctx: StyleContext, i: int, part: str) -> list[Ev]:
     """Oom-pah: a bass note on the strong beats (root, then fifth), a short chord on the others, as a
-    concertina, an accordion or a pub piano keeps a song going."""
+    concertina, an accordion or a pub piano keeps a song going; an instrument with a left hand of bass and
+    chord buttons (an accordion's Stradella) is told which is which."""
+    from .synth import instruments
+
+    arts = instruments.spec(part).get("articulations", {})
+    oom, pah = ("bass", "chord") if "bass" in arts and "chord" in arts else ("", "")
     out = []
     for c in ctx.chords_in(i):
         root, fifth = left_hand(ctx, part, c)
@@ -1001,11 +1006,12 @@ def w_oompah(ctx: StyleContext, i: int, part: str) -> list[Ev]:
             b, n = ctx.grid.beat_index(u), len(ctx.grid.beats)
             end = until(beats, k, c.u1)
             if b == 0 or (n == 4 and b == 2) or (n == 2 and b == 1) or abs(u - c.u0) < 1e-9:
-                out.append(ev(part, u, u + 0.7 * (end - u), root if lh % 2 == 0 else fifth, ctx.vel(part, u, 0.7), i=i))
+                out.append(ev(part, u, u + 0.7 * (end - u), root if lh % 2 == 0 else fifth, ctx.vel(part, u, 0.7),
+                              art=oom, i=i))
                 lh += 1
             else:
                 for p in fingering(ctx, part, c, u, end, i)[-3:]:
-                    out.append(ev(part, u, u + 0.55 * (end - u), p, ctx.vel(part, u, 0.55), i=i))
+                    out.append(ev(part, u, u + 0.55 * (end - u), p, ctx.vel(part, u, 0.55), art=pah, i=i))
     return out
 
 

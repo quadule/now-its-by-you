@@ -250,6 +250,23 @@ def test_chord_buttons_sound_in_their_octave_and_plain_low_notes_find_the_left_h
     assert accordion.hands([note(45, part="concertina")], "concertina") == ["treble"]
 
 
+def test_the_oompah_idiom_tells_an_accordion_which_hand_but_not_a_concertina(monkeypatch):
+    from dataclasses import replace
+    from pathlib import Path
+
+    from songbird import genome as G
+    from songbird import style as S
+    from songbird.realize import choose_params, realize
+
+    g = G.load(Path(__file__).parent.parent / "songs" / "h-now-its-by-you.json")
+    for part, want in (("concertina", {""}), ("accordion", {"bass", "chord"})):
+        oompah = replace(S.SHANTY, lineup={part: 1.0, "fiddle": 0.8}, parts={part: {"*": "oompah"}}, leads=("fiddle",))
+        monkeypatch.setitem(S.STYLES, "shanty", oompah)
+        score = realize(g, choose_params(g, style="shanty", arrange={"alone": 0}))
+        arts = {n.art for n in score.part(part)}
+        assert score.part(part) and arts == want, (part, arts)
+
+
 # --- the bellows ---------------------------------------------------------------------------------------
 
 
