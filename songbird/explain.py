@@ -35,8 +35,8 @@ import numpy as np
 from . import drift as drift_mod
 from . import edits as edits_mod
 from . import harvest, variation
-from .arrange import ArrangeError, arrange, options as word_choices, seed_lyrics
-from .band import INSTRUMENTS, Band
+from .arrange import options as word_choices, seed_lyrics
+from .band import INSTRUMENTS
 from .synth.mixing import MixParams
 from .synth.voice import VoiceParams
 

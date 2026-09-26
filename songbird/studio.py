@@ -39,7 +39,7 @@ import traceback
 import urllib.request
 import webbrowser
 import zipfile
-from dataclasses import dataclass, field, replace
+from dataclasses import dataclass, field
 from datetime import date
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
