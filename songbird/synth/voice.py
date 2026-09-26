@@ -54,7 +54,8 @@ class VoiceParams:
     vibrato_rate: float = 5.3  # Hz
     vibrato_depth: float = 28.0  # cents
     vibrato_delay: float = 0.28  # seconds into a note before vibrato starts
-    glide: float = 0.08  # seconds to move between notes
+    glide: float = 0.11  # seconds to move between notes a step apart (wider leaps take longer)
+    glide_spread: float = 0.3  # how much that varies from one note to the next (log scale)
     overshoot: float = 0.12  # fraction of each interval sung past the new note before settling
     scoop: float = 0.35  # semitones below the note that a phrase starts from
     jitter: float = 0.3  # percent, fast pitch wobble
@@ -75,6 +76,8 @@ class VoiceParams:
     taper: float = -4.0  # dB a held vowel fades from a third of the way through to its end
     vibrato_from: float = 0.9  # seconds a note must last before the singer puts vibrato on it (0.55 at a line's end)
     breathe: float = 0.18  # seconds between lines needed for an audible breath
+    accent: float = 8.0  # cents a strongly leaned-on note is lifted
+    reduce: float = 0.0  # how far a little word's vowel off the beat moves toward "uh" (0.3 cost the words: WER 15% -> 18%)
     mouth: float = 1.0  # cm radius of the mouth opening: small keeps the upper resonances ringing
     engine: str = "formant"  # "formant" (Klatt cascade) or "tube" (waveguide tract, experimental)
 
@@ -89,6 +92,7 @@ class Segment:
     prev_vowel: str | None = None
     next_vowel: str | None = None
     swell: float = 0.0  # dB a vowel grows from its start to its end (a phrasing gesture)
+    reduce: float = 0.0  # how far the vowel is sung toward "uh" (a little word, off the beat)
 
 
 def _smooth(x: np.ndarray, width: int) -> np.ndarray:
@@ -136,7 +140,7 @@ def schedule(notes: list[Note], voice: VoiceParams, lexicon: dict[str, str] | No
         note = notes[k]
         end = note.start + note.dur
         if note.line_end:
-            end -= min(0.3, 0.35 * note.dur)  # let go in time to breathe
+            end -= line_release(note.dur)  # let go in time to breathe
         if k + 1 < len(notes):
             end = min(end, notes[k + 1].start - sum(onset[k + 1]) - (0.03 if note.line_end else 0.0))
         return end
@@ -200,8 +204,9 @@ def schedule(notes: list[Note], voice: VoiceParams, lexicon: dict[str, str] | No
             segs.append(Segment(t, t + d, c, "onset", amp, prev_v, syl.nucleus))
             t += d
         v_end = max(limit(k) - sum(coda[k]), note.start + 0.04)
+        light = word[k] in ph.FUNCTION_WORDS and note.vel < 0.75
         segs.append(Segment(note.start, v_end, syl.nucleus, "vowel", amp, prev_v, next_v,
-                            note.gesture.swell if note.gesture is not None else 0.0))
+                            note.gesture.swell if note.gesture is not None else 0.0, voice.reduce if light else 0.0))
         t = v_end
         for c, d in zip(syl.coda, coda[k]):
             segs.append(Segment(t, t + d, c, "coda", amp, syl.nucleus, next_v))
@@ -253,8 +258,13 @@ def control_tracks(segs: list[Segment], n_blocks: int, sr: int, voice: VoicePara
         region = span(s.t0, s.t1)
         if s.role == "vowel":
             tau = min(0.035, 0.25 * d)
+            schwa = np.array(ph.VOWEL_FORMANTS["AX"])
+
+            def toward(f):  # a little word off the beat, sung partway to "uh"
+                return tuple((1 - s.reduce) * np.array(f) + s.reduce * schwa)
+
             if s.phone in ph.DIPHTHONGS:
-                targets = [ph.VOWEL_FORMANTS[q] for q in ph.DIPHTHONGS[s.phone]]
+                targets = [toward(ph.VOWEL_FORMANTS[q]) for q in ph.DIPHTHONGS[s.phone]]
                 glide = min(0.15, 0.4 * d)
                 if len(targets) == 3:  # fire, wire: hold the first quality, turn through the second, let the er ring
                     a, b, c = targets
@@ -264,7 +274,7 @@ def control_tracks(segs: list[Segment], n_blocks: int, sr: int, voice: VoicePara
                     a, b = targets
                     keys += [(s.t0 + tau, a), (s.t1 - glide, a), (s.t1 - 0.01, b)]
             else:
-                f = ph.VOWEL_FORMANTS[s.phone]
+                f = toward(ph.VOWEL_FORMANTS[s.phone])
                 keys += [(s.t0 + tau, f), (s.t1 - tau, f)]
             # a held vowel fades from a third of the way through (voices tire and
             # let go), and a phrasing can have it grow or fade from start to end
@@ -354,9 +364,16 @@ def _lowpassed_noise(rng: np.random.Generator, n: int, cutoff: float, rate: floa
     return x / (np.std(x) + 1e-12)
 
 
-def pitch_track(notes: list[Note], n_blocks: int, sr: int, voice: VoiceParams, rng, sounding=None) -> np.ndarray:
+def line_release(dur: float) -> float:
+    """How long before a line's last note ends the singer lets go of it, to breathe."""
+    return min(0.3, 0.35 * dur)
+
+
+def pitch_track(notes: list[Note], n_blocks: int, sr: int, voice: VoiceParams, rng, sounding=None,
+                accents=None) -> np.ndarray:
     """f0 in Hz per block: glides between notes, a scoop into each phrase, vibrato, drift and jitter.
-    sounding: when each note's vowel ends, so a phrasing's bends and falls happen while it can be heard."""
+    sounding: when each note's vowel ends, so a phrasing's bends and falls happen while it can be heard.
+    accents: cents to lift each note by, for the syllables leaned on hardest."""
     tb = (np.arange(n_blocks) + 0.5) * BLOCK / sr
     target = np.full(n_blocks, notes[0].pitch + voice.shift, dtype=float)
     vib_env = np.zeros(n_blocks)
@@ -366,10 +383,14 @@ def pitch_track(notes: list[Note], n_blocks: int, sr: int, voice: VoiceParams, r
         prev = notes[k - 1] if k else None
         g = note.gesture
         phrase_start = prev is None or note.start - (prev.start + prev.dur) > 0.05 or prev.line_end
-        t_on = note.start - 0.7 * voice.glide
+        # a wider leap takes longer to sing across, and no two are sung alike
+        glide = voice.glide * float(np.clip(0.76 + 0.06 * (abs(p - prev.pitch - voice.shift) - 2), 0.6, 1.8)) if prev else voice.glide
+        glide *= float(np.exp(voice.glide_spread * rng.standard_normal()))
+        glide = min(glide, 0.6 * prev.dur) if prev else glide
+        t_on = note.start - 0.7 * glide
         if phrase_start and prev is not None:
             # move while the voice is silent: just after the last line let go
-            breath = min(0.2, 0.3 * prev.dur) if prev.line_end else 0.0
+            breath = line_release(prev.dur) if prev.line_end else 0.0
             t_on = min(t_on, prev.start + prev.dur - breath + 0.01)
         after = tb >= t_on
         if phrase_start:
@@ -380,11 +401,11 @@ def pitch_track(notes: list[Note], n_blocks: int, sr: int, voice: VoiceParams, r
             target[after] = p - scoop * (1.0 - 0.5 * (1 - np.cos(np.pi * rise[after])))
         else:
             q = prev.pitch + voice.shift
-            w = np.clip((tb - t_on) / voice.glide, 0.0, 1.0)
+            w = np.clip((tb - t_on) / glide, 0.0, 1.0)
             target[after] = q + (p - q) * 0.5 * (1 - np.cos(np.pi * w[after]))
             # Voices overshoot a new note a little and settle, like a damped
             # spring; a glide that lands dead on target sounds mechanical.
-            t_arrive = t_on + voice.glide
+            t_arrive = t_on + glide
             x = tb[after] - t_arrive
             ring = np.where(x > 0, np.sin(np.pi * x / 0.13) * np.exp(-x / 0.07), 0.0)
             target[after] += voice.overshoot * (p - q) * ring
@@ -397,6 +418,9 @@ def pitch_track(notes: list[Note], n_blocks: int, sr: int, voice: VoiceParams, r
         elif note.dur < (0.55 if note.line_end else voice.vibrato_from):
             v *= 0.0  # a singer keeps vibrato for the notes they hold; the rest are sung straight
         vib_env[inside] = v[inside]
+        if accents is not None and accents[k]:  # a note leaned on is lifted a little, eased in and out
+            lift = accents[k] * np.clip((tb - note.start) / 0.05, 0.0, 1.0) * np.clip((end - tb) / 0.05, 0.0, 1.0)
+            gestures[inside] += lift[inside]
         if g is not None:
             heard = min(sounding[k], end) if sounding is not None else end  # the vowel's own end
             dur = max(heard - note.start, 0.05)
@@ -434,7 +458,9 @@ def sing(notes: list[Note], sr: int, voice: VoiceParams, seed: int = 0, lexicon:
     n_blocks = int(np.ceil(duration * sr / BLOCK))
     n = n_blocks * BLOCK
     tracks = control_tracks(segs, n_blocks, sr, voice)
-    f0_blocks = pitch_track(notes, n_blocks, sr, voice, rng, [s.t1 for s in segs if s.role == "vowel"])
+    vowels = [s for s in segs if s.role == "vowel"]
+    accents = [voice.accent * float(np.clip(20 * np.log10(s.amp / 0.9) / 3.0, 0.0, 1.0)) for s in vowels]
+    f0_blocks = pitch_track(notes, n_blocks, sr, voice, rng, [s.t1 for s in vowels], accents)
 
     # Singers raise the first formant to stay above a high fundamental.
     formants = tracks["formants"]
