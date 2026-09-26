@@ -34,7 +34,8 @@ def render_command(args: argparse.Namespace) -> int:
     score = realize(genome, params, phrasing=phrasing, choir=choir)
     defaults = VoiceParams()
     voice = replace(defaults, **{k: type(getattr(defaults, k))(v) for k, v in (kv.split("=", 1) for kv in args.voice)})
-    mixing = MixParams.parse(args.mix)
+    # the room the rendition was given (params.room, where the harvest puts it), then any --mix changes
+    mixing = MixParams.parse(args.mix, base=MixParams.from_dict(getattr(params, "room", None) or {}))
 
     out = Path(args.out or Path("renders") / (Path(args.genome).stem + ".flac"))
     out.parent.mkdir(parents=True, exist_ok=True)
