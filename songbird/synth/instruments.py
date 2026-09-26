@@ -167,9 +167,13 @@ def render_part(name: str, notes: tuple[Note, ...], sr: int, length: int, settin
 def render_band(score: Score, sr: int, seed: int) -> dict[str, np.ndarray]:
     """A stem for every instrument that plays in the score."""
     length = int(np.ceil(score.duration * sr))
+    # a low harp string can still be ringing when the song's last ring is over: let every stem end softly
+    fade = min(length, int(0.3 * sr))
+    ending = np.ones(length)
+    ending[length - fade:] = 0.5 + 0.5 * np.cos(np.linspace(0.0, np.pi, fade))
     stems = {}
     for name in INSTRUMENTS:
         notes = score.part(name)
         if notes:
-            stems[name] = render_part(name, notes, sr, length, score.band, seed)
+            stems[name] = render_part(name, notes, sr, length, score.band, seed) * ending[:, None]
     return stems
