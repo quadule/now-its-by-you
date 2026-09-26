@@ -26,7 +26,7 @@ import matplotlib.pyplot as plt  # noqa: E402
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT))
 
-from songbird import arrange, cli, genome as genome_mod, variants as V  # noqa: E402
+from songbird import arrange, cli, evolve, genome as genome_mod, variants as V  # noqa: E402
 from songbird.realize import Params  # noqa: E402
 from songbird.theory import degree_semitones  # noqa: E402
 
@@ -140,7 +140,7 @@ def _singer(params: Params) -> str:
     return f"{'a low' if low else 'a high'} singer (tract {params.singer.get('tract', 1.12):g})"
 
 
-def summary(record: dict) -> list[str]:
+def summary(record: dict, from_parent: bool = True) -> list[str]:
     p = Params.from_dict(record["params"])
     verses = sum(n == "verse" for n in p.form)
     lines = [f"   {_key(p)}, {p.tempo:g} bpm; form {_form(p)} ({verses} verses); the band's {p.band.pattern} with the "
@@ -159,13 +159,15 @@ def summary(record: dict) -> list[str]:
         lines.append("   tune: as written")
     if story.get("distance"):
         d = story["distance"]
-        lines.append(f"   the tune's contour, as the lineage gate will measure it: {d['parent']:.2f} from its parent, "
+        parent = f"{d['parent']:.2f} from its parent, " if from_parent else ""
+        lines.append(f"   the tune's contour, as the lineage gate will measure it (pitch, not rhythm): {parent}"
                      f"{d['seed']:.2f} from the seed (semitones a move; another song is 1.1 to 1.5)")
     return lines
 
 
-def changelog(before: dict | None, record: dict) -> list[str]:
-    """What changed from the parent (or the earlier date): the song's settings, then the tune and the words."""
+def changelog(genome, before: dict | None, record: dict, from_parent: bool = True) -> list[str]:
+    """What changed from the parent (with why, from the record), or from the earlier date (what the two sing
+    differently): the song's settings, then the tune and the words."""
     if before is None:
         return []
     a, b = Params.from_dict(before["params"]), Params.from_dict(record["params"])
@@ -181,6 +183,14 @@ def changelog(before: dict | None, record: dict) -> list[str]:
     if a.singer.get("shift", 0) != b.singer.get("shift", 0) or a.singer.get("tract") != b.singer.get("tract"):
         out.append(f"singer {_singer(a)} -> {_singer(b)}")
     lines = ["   changed: " + ("; ".join(out) if out else "none of key, tempo, form, band or singer")]
+    if not from_parent:  # the record's own changes are against its parent (the seed); against the last date:
+        for d in evolve.diff(genome, a, b):
+            if d["what"] == "tune":
+                lines.append(f"   - the tune {'now sings' if d['change'] == 'gained' else 'no longer sings'} {d['about']}")
+            else:
+                lines.append(f"   - the words, {d['where'] if d.get('where') else d['change']}: {d.get('from') or '-'} -> "
+                             f"{d.get('to') or '-'}")
+        return lines
     for entry in (record.get("evolution") or {}).get("changes", []):
         if entry["what"] == "tune":
             lines.append(f"   - the tune {entry['change']} {entry['about']}; why: {entry['why']}")
@@ -215,7 +225,9 @@ SETS = {
                 "carries about two variants by its fourth generation, this one five."),
     "timeline": ("timeline/: one made-up machine, kite, singing the seed every four months for three years: time\n"
                  "alone. Its tune carries at most one or two variants of its own at a time, changing with the\n"
-                 "seasons; its words hold for weeks and change a verse or a word at a time."),
+                 "seasons; its words hold for weeks and change a verse or a word at a time. Each is sung from the\n"
+                 "seed, so below, what changed is against the date before (its record's own changes are against\n"
+                 "the seed)."),
     "own": ("own/: kite singing its own last rendition every nine months: a person who keeps singing their own\n"
             "version. Variants gather at the pace of its clocks, as they do down a lineage."),
 }
@@ -233,8 +245,8 @@ def write_readme(out: Path, genome, done: dict[str, list[tuple[str, dict, dict |
             label = f"generation {record.get('generation', 0)}" + (f", {at}" if at else ", no machine, no date")
             text.append(f"{path}  {label}, {record['duration']:.0f} s, id {record['id'][:12]}"
                         + (f", voice {who.get('hash')}" if who else ""))
-            text += summary(record)
-            text += changelog(before, record)
+            text += summary(record, name != "timeline")
+            text += changelog(genome, before, record, name != "timeline")
             text.append("")
     (out / "README.txt").write_text("\n".join(text).rstrip() + "\n")
 
