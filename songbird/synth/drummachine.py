@@ -378,6 +378,14 @@ def _swing(v: np.ndarray, env: np.ndarray, vt: float = SWING[0], theta: float = 
     return env - ceiling * x / (1.0 + x**alpha) ** (1.0 / alpha)
 
 
+def _noise(rng: np.random.Generator, n: int, tilt: float) -> np.ndarray:
+    """White noise with a machine's own colour: a first-difference tilt of `tilt` (+-0.12 moves 10 kHz about a
+    decibel and 5 kHz a quarter of one: Whittle heard no difference between one 808's noise and another's, so
+    it stays small)."""
+    x = rng.standard_normal(n + 1)
+    return x[1:] + tilt * (x[1:] - x[:-1])
+
+
 def _saturate(x: np.ndarray, limit: float) -> np.ndarray:
     """A transistor stage's soft ceiling: linear for small signals, rounding off toward +-limit."""
     return limit * np.tanh(x / limit)
@@ -535,6 +543,7 @@ class TR808:
         self.lo_norm = 1.0 / (np.std(sosfilt(self.bp_lo, probe)[int(0.01 * sr2):]) + 1e-12)
         # the output coupling: a gentle high-pass at 20 Hz, so a ring's lopsided start leaves no DC
         self.hp_out = _biquad("hp", 20.0, 0.7071, sr)
+        self.tilt = 0.12 * make.uniform(-1.0, 1.0)  # its noise's colour
 
     # -- the square bank
 
@@ -573,7 +582,7 @@ class TR808:
         high = _ring(pulse, float(sr), f2 * h.detune, t2 * h.loose, 1.0, 0, 0.0, 1.0, n)
         y = (1.0 - 0.5 * self.sd_tone) * low + self.sd_tone * high
         m = min(n, int(9.0 * self.sd_tau * h.loose * sr))
-        noise = sosfilt(self.sd_noise, h.rng.standard_normal(m + 256))[256:] / self.sd_noise_rms
+        noise = sosfilt(self.sd_noise, _noise(h.rng, m + 256, self.tilt))[256:] / self.sd_noise_rms
         env = _attack(m, sr, 0.001) * np.exp(-np.arange(m) / (self.sd_tau * h.loose * sr))
         # its VCA is one transistor fed 130 mV rms of noise, past its linear range: the peaks are rounded off
         y[:m] += _saturate(noise, 1.8) * env * (h.size * self.sd_snappy * (1.0 + 0.3 * h.accent))
@@ -582,7 +591,7 @@ class TR808:
     def clap(self, h: Hit) -> np.ndarray:
         sr = self.sr
         n = int((self.cp_tail * 9.0 + 0.04) * sr)
-        noise = sosfilt(self.cp_bp, h.rng.standard_normal(n + 256))[256:] / self.cp_rms
+        noise = sosfilt(self.cp_bp, _noise(h.rng, n + 256, self.tilt))[256:] / self.cp_rms
         t = np.arange(n) / sr
         period = self.cp_period
         kappa = 3.5
@@ -672,7 +681,7 @@ class TR808:
         y = _ring(_pulse(h.size, sr), float(sr), f * h.detune, t60, 1.0, 0, 0.7, 0.75, n)
         if noisy:  # pink noise, low-passed at 400 Hz, a little longer than the tone: "artificial reverberation"
             m = min(n, int(0.085 * 7.0 * sr))
-            rumble = _onepole(h.rng.standard_normal(m + 512), 400.0, sr)[512:]
+            rumble = _onepole(_noise(h.rng, m + 512, self.tilt), 400.0, sr)[512:]
             rumble /= np.std(rumble) + 1e-12
             y[:m] += 0.05 * h.size * rumble * np.exp(-np.arange(m) / (0.085 * sr)) * _attack(m, sr, 0.001)
         return sosfilt(self.hp_out, y)
@@ -708,7 +717,7 @@ class TR808:
     def maracas(self, h: Hit) -> np.ndarray:
         sr = self.sr
         n = int(0.1 * sr)
-        noise = sosfilt(self.ma_hp, h.rng.standard_normal(n + 256))[256:] / self.ma_rms
+        noise = sosfilt(self.ma_hp, _noise(h.rng, n + 256, self.tilt))[256:] / self.ma_rms
         env = _attack(n, sr, 0.0015) * np.exp(-np.arange(n) / (0.012 * h.loose * sr)) * h.size
         env, gone = _cut(env, h.cut, RETRIGGER, sr)
         return noise[:gone] * env
@@ -823,6 +832,8 @@ class TR909:
         self.hat_tone = _biquad("lp", 11000.0 * 2.0 ** (0.8 * (b - 0.5)), 0.7071, sr)
         self.hp_out = _biquad("hp", 20.0, 0.7071, sr)
         self.borrowed = TR808(sr, make, s)
+        self.tilt = 0.12 * make.uniform(-1.0, 1.0)  # its noise's colour (a shift register's, clocked a little
+        # faster or slower from one 909 to the next)
 
     def kick(self, h: Hit) -> np.ndarray:
         sr, sr2 = self.sr, 2.0 * self.sr
@@ -841,7 +852,7 @@ class TR909:
         tick = np.zeros(m)
         width = max(2, int(0.0006 * sr))
         tick[:width] = np.sin(np.pi * np.arange(width) / width)
-        noise = sosfilt(self.bd_noise, h.rng.standard_normal(m + 256))[256:] / self.bd_noise_rms
+        noise = sosfilt(self.bd_noise, _noise(h.rng, m + 256, self.tilt))[256:] / self.bd_noise_rms
         tick += 0.35 * noise * np.exp(-np.arange(m) / (0.003 * sr))
         y[:m] += tick * (h.size * self.bd_click * (1.0 + 0.6 * h.accent))
         y = np.tanh(0.5 * y) / 0.5  # the VCA and output stage, pushed by a big trigger
@@ -863,7 +874,7 @@ class TR909:
         tn = np.arange(n) / sr
         held = np.where(tn < 0.024, 1.0, 1.25 * np.exp(-(tn - 0.024) / (self.sd_noise_tau * h.loose)) - 0.25)
         env = _soft_gate(held, 0.0, 0.01) * _attack(n, sr, 0.0005)
-        noise = sosfilt(self.sd_noise, h.rng.standard_normal(n + 256))[256:] / self.sd_noise_rms
+        noise = sosfilt(self.sd_noise, _noise(h.rng, n + 256, self.tilt))[256:] / self.sd_noise_rms
         y += _saturate(noise, 2.0) * env * (h.size * self.sd_snappy * (1.0 + 0.3 * h.accent))  # its VCA's ceiling
         return sosfilt(self.hp_out, y)
 
@@ -880,7 +891,7 @@ class TR909:
         body = np.tanh(1.4 * tri) / np.tanh(1.4) * _attack(2 * n, sr2, 0.0003) * np.exp(-t * LN1000 / t60)
         y = osc.decimate2(body) * h.size
         m = int(0.08 * sr)
-        noise = sosfilt(self.tom_noise, h.rng.standard_normal(m + 256))[256:] / self.tom_noise_rms
+        noise = sosfilt(self.tom_noise, _noise(h.rng, m + 256, self.tilt))[256:] / self.tom_noise_rms
         y[:m] += 0.25 * h.size * noise * np.exp(-np.arange(m) / (0.012 * sr)) * _attack(m, sr, 0.0005)
         return sosfilt(self.hp_out, y)
 
