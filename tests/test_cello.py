@@ -8,7 +8,7 @@ from scipy.signal import butter, hilbert, sosfiltfilt
 
 from _levels_b import TARGETS, loudness
 from songbird.score import Note
-from songbird.synth import body, cello
+from songbird.synth import body, cello, instruments
 from songbird.theory import midi_to_hz
 
 SR = 44100
@@ -88,6 +88,24 @@ def test_the_boxes_ring_where_cellos_and_violas_do(maker):
     assert 390 < strongest(body.VIOLA, 370, 500) < 480  # its B1 pair, 400-460
 
 
+@pytest.mark.parametrize("maker", [0, 1, 2])
+def test_no_hole_after_the_b1_pair(maker):
+    """A cello radiates well through 250-500 Hz, its principal formant (Meyer); the violin's dip after its B1 pair,
+    scaled down, had left a 7-10 dB hole there (a hollow D string). The viola's plate modes run on from its B1 pair
+    to its bridge hill."""
+    def bands(box, centres):
+        ir = cello.voiced(body.impulse_response(box, SR, seed=maker), SR).mean(axis=1)
+        power = np.abs(np.fft.rfft(ir, 1 << 17)) ** 2
+        f = np.fft.rfftfreq(1 << 17, 1 / SR)
+        return [10 * np.log10(power[(f >= c * 2 ** -(1 / 6)) & (f < c * 2 ** (1 / 6))].mean()) for c in centres]
+
+    b200, *cluster = bands(body.CELLO, (200, 250, 315, 400))
+    assert all(b > b200 - 6 for b in cluster)  # within 6 dB of the B1 band (7-10 dB under it before)
+    top, *trough = bands(body.VIOLA, (315, 500, 630, 800))
+    top = max(top, bands(body.VIOLA, (400,))[0])
+    assert all(b > top - 7 for b in trough)  # (5-12 dB under before)
+
+
 # --- the bowed string, played as a cellist plays it ----------------------------------------
 
 
@@ -130,6 +148,43 @@ def test_a_bow_change_on_the_c_string_recovers_quickly_and_a_slur_barely_dips():
     assert 20 * np.log10(around.min() / np.median(rms[int(0.75 * SR): int(0.95 * SR)])) > -6  # a slur's dip
 
 
+def between_harmonics(y, f0, t0, t1, lo=1000.0, hi=4000.0):
+    """How far the harmonics between lo and hi stand over the noise halfway between them, dB (their mean)."""
+    seg = y[int(t0 * SR): int(t1 * SR)].mean(axis=1)
+    n = 1 << int(np.ceil(np.log2(4 * len(seg))))
+    db = 20 * np.log10(np.abs(np.fft.rfft(seg * np.hanning(len(seg)), n)) + 1e-30)
+    f = np.fft.rfftfreq(n, 1 / SR)
+    out = [db[(f > f0 * (h - 0.2)) & (f < f0 * (h + 0.2))].max()
+           - np.median(db[(f > f0 * (h + 0.35)) & (f < f0 * (h + 0.65))])
+           for h in range(1, 200) if lo <= h * f0 and (h + 1) * f0 <= hi]
+    return float(np.mean(out))
+
+
+@pytest.mark.parametrize("pitch,lo,hi", [(43, 28, 40), (50, 30, 42), (57, 32, 45)])
+def test_the_bow_hisses_and_bites(pitch, lo, hi):
+    """Between the harmonics of a held note (1-4 kHz) the bow's noise sits 30-45 dB under them, as on a real
+    string (it was 44-72: the friction's own noise is combed onto the harmonics); and a fresh stroke lands with a
+    scratch: its first 30 ms 2-6 kHz stand 5-14 dB over the held note's (it never rose over them)."""
+    y = stem("cello", [Note("cello", 0.1, 1.6, float(pitch), 0.7)], 2.0, ornament=0.0)
+    assert lo < between_harmonics(y, midi_to_hz(pitch), 0.7, 1.6) < hi
+    band = sosfiltfilt(butter(4, [2000, 6000], btype="bandpass", fs=SR, output="sos"), y.mean(axis=1))
+    rms = np.sqrt(np.convolve(band**2, np.ones(441) / 441, mode="same"))
+    assert 5 < 20 * np.log10(rms[int(0.1 * SR): int(0.13 * SR)].max() / np.median(rms[int(0.7 * SR): int(1.5 * SR)])) < 14
+
+
+def test_a_stopped_note_dies_under_the_finger_and_an_open_string_rings():
+    """Once the bow leaves it before a rest, a stopped note is damped by the finger's pad (the fundamental's T60 near
+    0.9 s; the free string rang 1.5-2 s), and an open string rings on."""
+    def t60(pitch):
+        y = bowed_line(cello.CELLO, [Note("x", 0.1, 1.0, float(pitch), 0.6)], 2.6, ornament=0.0)
+        env = 20 * np.log10(envelope(y, midi_to_hz(pitch)) + 1e-12)
+        a, b = int(1.25 * SR), int(1.75 * SR)
+        return -60.0 / np.polyfit(np.arange(b - a) / SR, env[a:b], 1)[0]
+
+    assert 0.6 < t60(40) < 1.3 and 0.6 < t60(48) < 1.3  # E2 and C3, stopped on the C and G strings
+    assert t60(43) > 1.5  # the open G
+
+
 def test_tasto_is_dark_ponticello_glassy_and_brightness_moves_between():
     notes = lambda art: [Note("cello", 0.1, 1.6, 50.0, 0.6, art=art)]  # noqa: E731
     tasto, arco, pont = (upper_db(stem("cello", notes(a), 2.0), 0.6, 1.6) for a in ("tasto", "", "pont"))
@@ -167,6 +222,85 @@ def test_a_players_vibrato_rate_and_width(name, pitch, rate):
     assert depths[0] < 5 and depths[1] > 15  # plain: nearly none; ornamented: a wide singer's vibrato
 
 
+def cents(y, f0, t0, t1):
+    """The pitch of a bridge force's fundamental from t0 to t1 s, in cents from f0 (a 10 ms average)."""
+    band = sosfiltfilt(butter(4, [f0 * 0.92, f0 * 1.08], btype="bandpass", fs=SR, output="sos"), y)
+    inst = np.diff(np.unwrap(np.angle(hilbert(band)))) * SR / (2 * np.pi)
+    return 1200 * np.log2(np.maximum(np.convolve(inst, np.ones(441) / 441, mode="same"), 1.0) / f0)[
+        int(t0 * SR): int(t1 * SR)]
+
+
+def swing(c, cycle=0.18):
+    """Half the vibrato's peak to peak over the cycle before each 10 ms step."""
+    n = int(cycle * SR)
+    return np.array([np.ptp(c[max(0, i - n): i]) / 2 for i in range(n // 4, len(c), int(0.01 * SR))])
+
+
+def bowed_line(kind, notes, dur, q=None, **s):
+    return cello.player(kind, notes, SR, int(dur * SR), np.random.default_rng(5), {**PLAIN, **s}, q)
+
+
+def test_the_vibrato_grows_in_at_once_and_carries_through_a_phrase():
+    """A cellist's vibrato is one motion of the hand: on a note after a rest it is half there in 0.08-0.2 s and
+    whole by 0.4 s (it was nothing for a quarter of a second, then half at 0.35); through a slur it keeps going (it
+    started again from nothing on every note); a 0.3 s note in a line still has some (it had none under 0.35 s)."""
+    f = midi_to_hz(50)
+    y = bowed_line(cello.CELLO, [Note("x", 0.1, 2.0, 50.0, 0.6)], 2.4)
+    w = swing(cents(y, f, 0.13, 2.0))
+    full = np.median(w[80:])
+    t = np.arange(len(w)) * 0.01 + 0.18 / 4 + 0.03
+    assert 0.08 < t[np.argmax(w > 0.5 * full)] < 0.2 and t[np.argmax(w > 0.9 * full)] < 0.4 and full > 15
+    slur = [Note("x", 0.1, 0.8, 50.0, 0.6), Note("x", 0.9, 0.8, 52.0, 0.6, art="slur")]
+    y = bowed_line(cello.CELLO, slur, 2.0)
+    before = np.ptp(cents(y, f, 0.65, 0.88)) / 2
+    after = np.ptp(cents(y, midi_to_hz(52), 1.0, 1.25)) / 2
+    assert after > 0.6 * before
+    for dur, least in ((0.3, 5.0), (0.45, 10.0)):
+        line = [Note("x", 0.1 + dur * k, dur, float(p), 0.6, art="slur" if k % 2 else "")
+                for k, p in enumerate([50, 52, 54, 55, 57, 55])]
+        y = bowed_line(cello.CELLO, line, 0.5 + 6 * dur)
+        for k, p in enumerate([50, 52, 54, 55, 57, 55][1:], start=1):
+            c = cents(y, midi_to_hz(p), 0.1 + dur * k + 0.04, 0.1 + dur * (k + 1) - 0.02)
+            assert np.ptp(c) / 2 > least, (dur, k)
+
+
+def test_a_section_player_starts_the_vibrato_in_their_own_time():
+    f = midi_to_hz(62)
+    halves = []
+    for wait, onset in ((0.0, 0.15), (0.2, 0.35)):
+        y = bowed_line(cello.VIOLA, [Note("x", 0.1, 1.6, 62.0, 0.6)], 2.0, {"wait": wait, "onset": onset, "depth": 0.7})
+        w = swing(cents(y, f, 0.13, 1.6))
+        halves.append(np.argmax(w > 0.5 * np.median(w[80:])) * 0.01)
+    assert halves[1] - halves[0] > 0.15
+
+
+@pytest.mark.parametrize("name,pitch,dur", [("cello", 50, 6.0), ("cello", 38, 4.0), ("viola", 62, 3.0)])
+def test_a_swell_speaks_at_once_and_never_starts_again(name, pitch, dur):
+    """The string is set moving once the bow has gathered speed, not when a swell reaches most of its peak a second
+    later (that reset the string mid-note: a click 20 dB over the note's highs, after a slow, scratchy start)."""
+    kind = cello.KINDS[name]
+    y = cello.player(kind, [Note("x", 0.1, dur, float(pitch), 0.5, art="swell")], SR, int((dur + 0.5) * SR),
+                     np.random.default_rng(2), PLAIN)
+    f = midi_to_hz(pitch)
+    env = envelope(y, f)
+    assert np.argmax(env[int(0.1 * SR):] > 0.7 * np.median(env[int(0.25 * SR): int(0.35 * SR)])) / SR < 0.06
+    highs = sosfiltfilt(butter(4, 4000, btype="highpass", fs=SR, output="sos"), y)
+    rms = np.sqrt(np.convolve(highs**2, np.ones(882) / 882, mode="same"))[int(0.2 * SR): int((dur - 0.1) * SR)]
+    assert 20 * np.log10(rms.max() / np.median(rms)) < 8
+
+
+def test_a_plucked_string_rings_until_it_is_played_again():
+    """An arpeggio's strings ring together (each was stopped by the next note, whatever its string); plucking the
+    same string again stops it."""
+    arpeggio = [Note("cello", 0.1 + 0.3 * k, 0.3, float(p), 0.7, art="pizz") for k, p in enumerate((43, 50, 57, 64))]
+    y = stem("cello", arpeggio, 2.0).mean(axis=1)
+    env = envelope(y, midi_to_hz(43), 0.9, 1.1)
+    assert 20 * np.log10(env[int(1.0 * SR)] / env[int(0.25 * SR)]) > -20  # G2 still ringing under the others
+    again = [Note("cello", 0.1, 0.3, 43.0, 0.7, art="pizz"), Note("cello", 0.4, 0.3, 45.0, 0.7, art="pizz")]
+    env = envelope(stem("cello", again, 2.0).mean(axis=1), midi_to_hz(43), 0.97, 1.03)
+    assert 20 * np.log10(env[int(0.9 * SR)] / env[int(0.3 * SR)]) < -25  # the G string stopped by its next note
+
+
 def test_pizzicato_rings_down_and_tremolo_reverses_a_dozen_times_a_second():
     y = stem("cello", [Note("cello", 0.1, 0.3, 43.0, 0.7, art="pizz")], 2.0).mean(axis=1)
     env = envelope(y, midi_to_hz(43))
@@ -197,6 +331,16 @@ def test_the_section_sits_violins_left_cellos_right_and_every_line_is_a_chorus()
         return e.std() / e.mean()
 
     assert wander(section) > 1.5 * wander(solo)
+
+
+def test_the_section_is_as_wide_as_a_real_one():
+    """Each desk heard through a stereo pair (each microphone its own mix of the plate modes), not one mono body
+    panned: a chord's channels correlate 0.3-0.8 (a pair on a real section, 0.3-0.7), not 0.8-0.95."""
+    for chord in ((50.0, 54.0, 57.0), (50.0, 57.0, 62.0, 66.0)):
+        y = stem("strings", [Note("strings", 0.1, 2.0, p, 0.6) for p in chord], 2.4)
+        placed = instruments.place(y, *cello.SPEC["strings"]["place"])[int(0.5 * SR): int(2.0 * SR)]
+        left, right = placed[:, 0], placed[:, 1]
+        assert 0.25 < np.sum(left * right) / np.sqrt(np.sum(left**2) * np.sum(right**2)) < 0.8, chord
 
 
 def test_a_section_entry_spreads_but_nobody_comes_in_early():

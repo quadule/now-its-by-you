@@ -66,6 +66,46 @@ def test_the_tone_stack_is_the_circuit():
             assert np.max(np.abs(20 * np.log10(np.abs(h / direct)))) < 0.01
 
 
+def yeh_smith(t, m, l, parts):
+    """The '59 Bassman tone stack's transfer function in closed form, as Yeh and Smith published it (DAFx
+    2006, eq. 1): b(s) / a(s) in powers of s, highest first, from an ideal source into no load."""
+    c1, c2, c3, r1, r2, r3, r4 = parts
+    b1 = t * c1 * r1 + m * c3 * r3 + l * (c1 * r2 + c2 * r2) + (c1 * r3 + c2 * r3)
+    b2 = (t * (c1 * c2 * r1 * r4 + c1 * c3 * r1 * r4) - m**2 * (c1 * c3 * r3**2 + c2 * c3 * r3**2)
+          + m * (c1 * c3 * r1 * r3 + c1 * c3 * r3**2 + c2 * c3 * r3**2)
+          + l * (c1 * c2 * r1 * r2 + c1 * c2 * r2 * r4 + c1 * c3 * r2 * r4)
+          + l * m * (c1 * c3 * r2 * r3 + c2 * c3 * r2 * r3) + (c1 * c2 * r1 * r3 + c1 * c2 * r3 * r4 + c1 * c3 * r3 * r4))
+    c123 = c1 * c2 * c3
+    b3 = (l * m * c123 * (r1 * r2 * r3 + r2 * r3 * r4) - m**2 * c123 * (r1 * r3**2 + r3**2 * r4)
+          + m * c123 * (r1 * r3**2 + r3**2 * r4) + t * c123 * r1 * r3 * r4 - t * m * c123 * r1 * r3 * r4
+          + t * l * c123 * r1 * r2 * r4)
+    a1 = (c1 * r1 + c1 * r3 + c2 * r3 + c2 * r4 + c3 * r4) + m * c3 * r3 + l * (c1 * r2 + c2 * r2)
+    a2 = (m * (c1 * c3 * r1 * r3 - c2 * c3 * r3 * r4 + c1 * c3 * r3**2 + c2 * c3 * r3**2)
+          + l * m * (c1 * c3 * r2 * r3 + c2 * c3 * r2 * r3) - m**2 * (c1 * c3 * r3**2 + c2 * c3 * r3**2)
+          + l * (c1 * c2 * r2 * r4 + c1 * c2 * r1 * r2 + c1 * c3 * r2 * r4 + c2 * c3 * r2 * r4)
+          + (c1 * c2 * r1 * r4 + c1 * c3 * r1 * r4 + c1 * c2 * r3 * r4 + c1 * c2 * r1 * r3 + c1 * c3 * r3 * r4
+             + c2 * c3 * r3 * r4))
+    a3 = (l * m * c123 * (r1 * r2 * r3 + r2 * r3 * r4) - m**2 * c123 * (r1 * r3**2 + r3**2 * r4)
+          + m * c123 * (r3**2 * r4 + r1 * r3**2 - r1 * r3 * r4) + l * c123 * r1 * r2 * r4 + c123 * r1 * r3 * r4)
+    return np.array([b3, b2, b1, 0.0]), np.array([a3, a2, a1, 1.0])
+
+
+def test_the_tone_stack_is_yeh_and_smiths():
+    """Driven from an ideal source into no load, our network is the '59 Bassman stack whose closed form Yeh
+    and Smith published, to a thousandth of a dB at any setting (the middle pot a potentiometer, the mid
+    cap on its wiper), for the Fender's parts and the Marshall's alike."""
+    f = np.exp(np.linspace(np.log(30.0), np.log(15000.0), 40))
+    for voicing in ("fender", "marshall"):
+        parts = amp.STACKS[voicing][:7]
+        for knobs in ((0.5, 0.5, 0.5), (0.2, 0.8, 0.3), (0.9, 0.1, 0.9), (0.0, 1.0, 0.0)):
+            t, m, l = amp._pots(*knobs)
+            ours = np.array([np.linalg.solve(*amp._stack_matrix(2j * np.pi * x, t, m, l, parts + (1e-3,), 1e15))[2]
+                             for x in f])
+            b, a = yeh_smith(t, m, l, parts)
+            theirs = np.polyval(b, 2j * np.pi * f) / np.polyval(a, 2j * np.pi * f)
+            assert np.max(np.abs(20 * np.log10(np.abs(ours / theirs)))) < 1e-3
+
+
 def test_the_fender_stack_scoops_the_mids_and_the_marshall_less():
     """At noon a Fender stack's response dips between 300 Hz and 1 kHz, 6 dB and more under its bass and
     treble; turning the middle down deepens the scoop; a Marshall's (a lower slope resistor, driven by a

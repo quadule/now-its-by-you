@@ -93,6 +93,50 @@ def test_the_box_has_the_modes_cohen_and_rossing_measured():
     assert np.all(db[(freqs > 40) & (freqs < 0.5 * f[0])] < db[(freqs > 0.9 * f[0]) & (freqs < 1.1 * f[0])].max() - 6)
 
 
+def test_the_box_radiates_evenly_to_four_kilohertz():
+    """Cohen and Rossing: a mandolin's radiated response is fairly even up to about 5 kHz. Heard as the
+    band places it, each maker's 1-4 kHz is within 4 dB of its 400-800 Hz on average."""
+    from songbird.synth.instruments import place
+
+    f = np.fft.rfftfreq(1 << 16, 1 / SR)
+    for maker in range(6):
+        q = mandolin._maker(streams("mandolin", 0, maker)[1])
+        ir = body.impulse_response(mandolin.box(q["style"], q["low"], q["spread"], q["q"], 0.5), SR, seed=q["seed"])
+        p = np.abs(np.fft.rfft(place(ir, *mandolin.SPEC["mandolin"]["place"]).mean(axis=1), 1 << 16)) ** 2
+
+        def third(c):
+            return 10 * np.log10(p[(f >= c / 2 ** (1 / 6)) & (f < c * 2 ** (1 / 6))].mean())
+        low = np.mean([third(c) for c in (400, 500, 630, 800)])
+        mids = np.mean([third(c) for c in (1000, 1250, 1600, 2000, 2500, 3150, 4000)])
+        assert abs(mids - low) < 4.0, (maker, mids - low)
+
+
+def test_a_flat_pick_brings_out_the_bark():
+    """An A4 picked at vel 0.6: in its first 50 ms, 4-8 kHz within 14 dB of the loudest octave and 8-16 kHz
+    within 32 dB (a pick rounded at 5 kHz, as it was, left them 18 and 37 down)."""
+    y = play([note(0.05, 2.0, 69, vel=0.6)], 2.3, maker=1, wear=0.0)
+    seg = mono(y)[int(0.05 * SR): int(0.1 * SR)]
+    p = np.abs(np.fft.rfft(seg * np.hanning(len(seg)))) ** 2
+    f = np.fft.rfftfreq(len(seg), 1 / SR)
+    octave = {lo: 10 * np.log10(p[(f >= lo) & (f < 2 * lo)].sum()) for lo in (250, 500, 1000, 2000, 4000, 8000)}
+    top = max(octave.values())
+    assert octave[4000] - top > -14.0 and octave[8000] - top > -32.0
+
+
+def test_eighths_are_picked_down_and_up_in_turn():
+    """A run of eighths is alternate-picked from about 80 bpm up (eighths 375 ms apart or closer)."""
+    beat = 60.0 / 90  # eighths 333 ms apart
+    notes = [note(0.5 * k * beat, 0.5 * beat, p) for k, p in enumerate((69, 71, 73, 74))]
+    board = fretwork.Board(opens=tuple(map(float, mandolin.OPENS)), top=(17,) * 4, fretted=(True,) * 4,
+                           order=(0, 1, 2, 3))
+    q = mandolin._maker(streams("mandolin", 0, 0)[1])
+    last, directions = (-1.0, -1.0), []
+    for f in fretwork.assign(notes, board):
+        stroke, last = mandolin._stroke(f, False, SR, q, 0.5, 0.25, 11.0, last, np.random.default_rng(0))
+        directions.append(stroke.picks[0][2])
+    assert directions == [1.0, -1.0, 1.0, -1.0]
+
+
 def test_a_mandolin_dies_fast():
     """The open G course falls 60 dB in one to two seconds, the E course's high notes in half a second."""
     low, open_e, high = (t60(play([note(0.05, 3.0, p)], 3.2), 0.05) for p in (55, 76, 88))
@@ -124,6 +168,36 @@ def test_a_chop_is_a_short_knock():
     chopped = env_db(play([note(0.1, 0.5, p, art="chop") for p in CHOP["D"]], 1.0))
     strummed = env_db(play([note(0.1, 0.5, p, art="down") for p in CHOP["D"]], 1.0))
     assert chopped[20] < chopped.max() - 25 and strummed[20] > chopped[20] + 15
+
+
+def test_a_mandolin_stating_a_tune_tremolos_its_long_notes():
+    """In a style's lead, quote or counter-line, notes of a beat and a half or more are tremoloed, the
+    rest picked; another instrument's are left as written."""
+    from types import SimpleNamespace
+
+    from songbird import idioms
+    from songbird.band import Ev
+
+    ctx = SimpleNamespace(beat=2.0, rand=lambda part, u: np.random.default_rng(0))
+    line = [Ev("mandolin", 0.0, 1.0, 69.0, 0.7), Ev("mandolin", 1.0, 4.0, 71.0, 0.7), Ev("mandolin", 4.0, 5.0, 74.0, 0.7)]
+    assert [e.art for e in idioms.sliding(ctx, "mandolin", line)] == ["", "tremolo", ""]
+    other = [Ev("fiddle", 1.0, 4.0, 71.0, 0.7)]
+    assert idioms.sliding(ctx, "fiddle", other)[0].art == ""
+
+
+def test_a_chop_is_a_chunk_not_a_click():
+    """40 to 70 ms of chord before the fretting hand, relaxing, damps it over some 50 ms: still within 15 dB
+    of its peak 50 ms on (a 30-60 ms chord damped in 20 ms had fallen 18), 20 dB down by 100 ms."""
+    env = env_db(play([note(0.1, 0.5, p, 0.7, art="chop") for p in CHOP["D"]], 1.0), hop=0.005)
+    k = int(np.argmax(env))
+    assert env[k + 10] > env[k] - 15 and env[k + 20] < env[k] - 20
+
+
+def test_a_chop_leaves_nothing_ringing():
+    """The chop's fretting hand lies across all four courses, so no open course rings on in sympathy: a
+    fifth of a second after the stroke nothing is left (80 dB down)."""
+    chopped = env_db(play([note(0.1, 0.5, p, 0.7, art="chop") for p in CHOP["D"]], 1.0))
+    assert chopped[30] < chopped.max() - 80
 
 
 def test_harder_is_louder_and_brighter():

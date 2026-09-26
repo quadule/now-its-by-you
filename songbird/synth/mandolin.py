@@ -30,7 +30,7 @@ from __future__ import annotations
 
 import numpy as np
 
-from . import body, fretwork, pluck
+from . import body, fretwork
 
 SCALE_MM = 350.0  # 13 7/8 inches
 OPENS = (55, 62, 69, 76)  # G3 D4 A4 E5
@@ -38,6 +38,7 @@ DECAY = 1.05  # s: an open course's decay at 220 Hz as pluck.py's (fretwork.Stri
 GLIDE = 5.0  # cents a pick at velocity 1 starts sharp: short, tight strings stretch less
 PULL = 0.3  # the break angle's pull over the bridge, weaker than a banjo's on its stiff top
 FORCE = 1.0
+ALIKE = 0.5  # the share of the body's upper modes the microphone pair hears in phase: its mono sum keeps them
 
 ARTICULATIONS = {
     "": "a flat pick: down, or in a quick run down and up in turn",
@@ -77,11 +78,11 @@ def box(style: str, low: float, spread: np.ndarray, q: float, bright: float) -> 
     if style == "A":  # oval sound hole (their Gibson oval hole: 209, 398, 482, 575, 728, 805, 918, 1149 Hz)
         named = ((1.0, 14.0, 3.0), (1.90, 18.0, 2.0), (2.31, 20.0, 2.5), (2.75, 22.0, 3.0), (3.48, 20.0, 1.5),
                  (3.85, 18.0, 1.0), (4.39, 24.0, 2.5), (5.50, 24.0, 2.0))
-        lowcut, highcut, tilt, hill = 0.8 * low, 10000.0, -1.2, (3500.0, 1.3, 3.5 + 2.0 * (bright - 0.5))
+        lowcut, highcut, tilt, hill = 0.8 * low, 10000.0, -0.7, (3200.0, 1.8, 5.0 + 2.0 * (bright - 0.5))
     else:  # f-holes (their f-hole Gibson: 313, 464, 570, 821, 886, 895, 1117 Hz): higher, drier, the bark
         named = ((1.0, 13.0, 3.0), (1.48, 18.0, 2.5), (1.82, 22.0, 3.5), (2.62, 20.0, 1.5), (2.83, 24.0, 2.5),
                  (2.86, 18.0, 1.0), (3.57, 24.0, 2.0))
-        lowcut, highcut, tilt, hill = 0.7 * low, 11000.0, -0.8, (3500.0, 1.3, 4.5 + 2.0 * (bright - 0.5))
+        lowcut, highcut, tilt, hill = 0.7 * low, 11000.0, -0.5, (3200.0, 1.8, 5.5 + 2.0 * (bright - 0.5))
     modes = tuple((low * r * (spread[k % len(spread)] if k else 1.0), qq * q, db)
                   for k, (r, qq, db) in enumerate(named))
     return body.Body(modes=modes, dense=(1100.0, highcut, 120), tilt=tilt, q=(34.0, 22.0), direct=0.25,
@@ -131,13 +132,12 @@ def render(name: str, notes, sr: int, length: int, rng: np.random.Generator, mak
     bright = float(np.clip(settings.get("brightness", 0.5), 0.0, 1.0))
     wear = float(np.clip(settings.get("wear", 0.25), 0.0, 1.0))
     size = float(np.clip(settings.get("body", 1.0), 0.5, 2.0))
-    tonic = int(settings.get("tonic", 62))
     rate = tremolo_rate(settings, quirks["rate"])
 
     board = fretwork.Board(opens=tuple(float(p) for p in OPENS), top=(17,) * 4, fretted=(True,) * 4,
                            order=(0, 1, 2, 3))
     fingered = fretwork.assign(notes, board)
-    fretwork.spread(fingered, board, lambda art: {"chop": 0.009, "mute": 0.006}.get(art, 0.016), rng)
+    fretwork.spread(fingered, board, lambda art: {"chop": 0.009, "mute": 0.006, "tremolo": 0.006}.get(art, 0.016), rng)
 
     detune = (1.0 + 5.0 * wear) * quirks["pairs"]  # 1 to 6 cents between a course's strings
     loss = tuple(0.14 - 0.08 * bright + (0.05 if k < 2 else 0.0) for k in range(4))  # G and D courses wound
@@ -149,7 +149,7 @@ def render(name: str, notes, sr: int, length: int, rng: np.random.Generator, mak
         touch_band=(200.0, 3000.0))
 
     spec = box(quirks["style"], quirks["low"], quirks["spread"], quirks["q"], bright)
-    ir = body.impulse_response(spec, sr, seed=quirks["seed"], size=size)
+    ir = body.impulse_response(spec, sr, seed=quirks["seed"], size=size, alike=ALIKE)
     freqs, power = fretwork.body_power(ir, sr, place=SPEC["mandolin"]["place"])
     together: dict[float, int] = {}
     for f in fingered:
@@ -160,11 +160,8 @@ def render(name: str, notes, sr: int, length: int, rng: np.random.Generator, mak
         chord = together[round(f.note.start, 3)] > 1
         stroke, last = _stroke(f, chord, sr, quirks, bright, wear, rate, last, rng)
         strokes.append(stroke)
+    # (no open courses ringing in sympathy: a chop's fretting hand lies across all four)
     force = fretwork.play(strokes, strings, sr, length, rng, freqs, power)
-    # the open courses on the tonic and the fifth answer what shares their harmonics
-    opens = [p for p in OPENS if p % 12 in (tonic % 12, (tonic + 7) % 12)]
-    if opens:
-        force = force + pluck.sympathetic(force, sr, opens, coupling=0.001, decay=1.2, brightness=0.5)
     return body.resonate(force, ir)
 
 
@@ -182,8 +179,8 @@ def _stroke(f: fretwork.Fingered, chord: bool, sr: int, q: dict, bright: float, 
     if art == "up":
         direction = -1.0
     elif art == "" and not chord:
-        # a run of quick notes is picked down and up in turn
-        if note.start - last[0] < 0.26 and last[1] > 0:
+        # a run of quick notes is picked down and up in turn: eighths from about 80 bpm
+        if note.start - last[0] < 0.4 and last[1] > 0:
             direction = -1.0
     if not chord:
         last = (note.start, direction)
@@ -191,6 +188,8 @@ def _stroke(f: fretwork.Fingered, chord: bool, sr: int, q: dict, bright: float, 
                         roughness=0.3 + 0.3 * wear, touch=0.25, pair=q["gap"] * 1e-3)
     s.beta = q["near"] * (1.1 - 0.2 * bright) / sounding
     s.hardness = (0.88 + 0.1 * bright) * edge
+    # a flat pick lets the string go sharply, and more so the harder it is played: 7 to 9 kHz as it usually is
+    s.cutoff = max(2500.0, 12000.0 * vel - 300.0) * (0.9 + 0.2 * bright)
     s.planes = 0.3
     s.click = ((0.25 + 0.1 * bright) * (0.4 + vel), 3000.0, 2.5)
     s.picks = ((0, 1.0 if direction > 0 else 0.88, direction),)
@@ -201,21 +200,22 @@ def _stroke(f: fretwork.Fingered, chord: bool, sr: int, q: dict, bright: float, 
         for k in range(count):
             jitter = rng.normal(0.0, 0.003) * sr if k else 0.0
             down = k % 2 == 0
-            picks.append((int(k * step + jitter), (0.78 if down else 0.68) * (1.0 + 0.06 * rng.standard_normal()),
+            picks.append((int(k * step + jitter), (0.88 if down else 0.8) * (1.0 + 0.06 * rng.standard_normal()),
                           1.0 if down else -1.0))
         s.picks = tuple(picks)
     elif art == "chop":
-        s.until = min(s.until, at + int((0.03 + 0.03 * rng.random()) * sr))
-        s.damp, s.scrape, s.knock, s.touch = 0.02, 0.35, 0.3, 0.0
+        # 40 to 70 ms of chord, then the relaxed fretting hand damps the courses over some 50 ms
+        s.until = min(s.until, at + int((0.04 + 0.03 * rng.random()) * sr))
+        s.damp, s.scrape, s.knock, s.touch = 0.05, 0.35, 0.5, 0.0
     elif art == "mute":
         s.until = min(s.until, at + int((0.012 + 0.008 * rng.random()) * sr))
         s.damp, s.scrape, s.knock, s.gain, s.touch = 0.02, 0.12, 0.1, 0.8, 0.0
     elif art == "hammer":
         s.kind, s.picks = "hammer", ((0, 0.3, 1.0),)
-        s.beta, s.hardness, s.planes, s.click, s.twang = 0.03, 0.1, 0.2, (0.04, 1500.0, 2.5), 0.0
+        s.beta, s.hardness, s.planes, s.click, s.twang, s.cutoff = 0.03, 0.1, 0.2, (0.04, 1500.0, 2.5), 0.0, 0.0
     elif art == "pull":
         s.kind, s.picks = "pull", ((0, 0.6, -1.0),)
-        s.beta, s.hardness, s.planes, s.click, s.twang = 0.1, 0.25, 0.4, (0.0, 2000.0, 1.0), 0.0
+        s.beta, s.hardness, s.planes, s.click, s.twang, s.cutoff = 0.1, 0.25, 0.4, (0.0, 2000.0, 1.0), 0.0, 0.0
     elif art == "slide":
         s.slide, s.slide_time = float(min(2, f.fret)), 0.06 + 0.02 * rng.random()  # from two frets below, if it can
     s.beta = float(np.clip(s.beta, 0.02, 0.5))

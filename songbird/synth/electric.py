@@ -4,23 +4,29 @@ The guitar. Six steel strings on a solid body (standard tuning, 24 frets)
 ring long: the body takes little of their energy, so a note's fundamental
 falls 60 dB in 6 to 10 seconds in the middle of the neck, less high up, and
 each partial dies faster by its frequency (b3 f^2), the top of the pick's
-brightness gone in a second or two. A guitar's neck has its own dead spot
+brightness gone in a second or two; being steel, and stiff, their partials run
+a little sharp of the harmonic series (the low E's 8th by 7 cents), and a hard
+pluck starts a few cents sharp and settles. A guitar's neck has its own dead spot
 (a resonance that drinks one note's energy: H. Fleischer and T. Zwicker,
 "Investigating dead spots of electric guitars", Acustica 85, 1999), each
 maker's somewhere between G3 and C4. Each note's string is chosen as a
 player's hand would (fretboard.py), and what reaches the amp is what the
 magnetic pickup hears (its comb, its coil's resonance with the pots and
-cable: amp.py): single coils near 4 kHz, humbuckers near 3, the player's
-switch toward the neck for a warm sound and the bridge for a bright or driven
-one.
+cable: amp.py): single coils near 4 kHz, humbuckers near 3, the tone knob near
+the top, the player's switch toward the neck for a warm sound and the bridge for
+a bright or driven one.
 
-The amp (amp.py) has three settings, one per name: "electric" clean, with a
-modest spring reverb; "electric-crunch", the volume up so the second stage and
-the power valves break up, the reverb off, the master down so it sits as loud
-as the clean sound; "electric-tremolo", clean through the amp's tremolo
-(a Fender's optical or a Vox-like bias tremolo by the maker, 4 to 7 Hz, locked
-to the tempo when the band gives one). The three names are the same guitar and
-the same amp on a machine (both drawn from its maker, whatever the name), so a
+The amp (amp.py) has three settings, one per name: "electric" clean (within 3%
+of linear on a hard strum), with a modest spring reverb; "electric-crunch", the
+volume up so the second stage and the power valves break up (a strum 12-35%
+from linear), the reverb off, the master down so it sits as loud as the clean
+sound; "electric-tremolo", clean through the amp's tremolo (a Fender's optical
+or a Vox-like bias tremolo by the maker, 4 to 7 Hz, locked to the tempo when
+the band gives one, dipping the sound 11 to 16 dB). A player dials the sound,
+not the knob: each setting's volume is the maker's drive less the rig's heat
+(heat(): a humbucker is 7 dB hotter than a single coil, a Fender's stack loses 5
+to 7 dB more than a Marshall's). The three names are the same guitar and the
+same amp on a machine (both drawn from its maker, whatever the name), so a
 style that changes settings mid-song hears one rig. settings["amp"] may name a
 setting ("clean", "crunch", "tremolo") or give a dict of {"setting", "drive"
 0..1, "reverb" 0..1, "tremolo" depth 0..1, "rate" Hz}.
@@ -39,7 +45,9 @@ The bass. Four long-scale (864 mm) roundwound strings: a long sustain whose
 bright, zingy attack darkens within a fifth of a second (their damping grows
 steeply with frequency), through a split-coil (P) or two single-coil (J)
 pickups by the maker, straight into a DI: clean, with a touch of its preamp's
-saturation. Articulations: "" (fingered: round), "pick" (brighter, with the
+saturation. Stiff strings: the open E's partials run sharp (its 10th by a third
+of a semitone, the growl of a long roundwound string), and a hard pluck starts
+up to a sixth of a semitone sharp, settling in a few tenths of a second. Articulations: "" (fingered: round), "pick" (brighter, with the
 pick's click), "mute" (palm-muted, short), "slide" (slid into from two or three
 frets below), "ghost" (a dead note: the left hand only touching the string).
 """
@@ -103,6 +111,11 @@ GUITAR_OUT = 2.7  # the stem's scale: the amp's output as the band's other stems
 BASS_OUT = 3.0  # and the DI's
 TUNING = (40.0, 45.0, 50.0, 55.0, 59.0, 64.0)  # E2 A2 D3 G3 B3 E4
 BASS_TUNING = (28.0, 33.0, 38.0, 43.0)  # E1 A1 D2 G2
+# each open string's inharmonicity B (pi^3 E d^4 / 64 T L^2 on its core, a third more for a winding): the
+# wound strings' partials and the plain G's run sharp (the low E's 8th by 7 cents), the bass's far more
+# (its E's 10th by a third of a semitone: the growl of a long, stiff roundwound string)
+STIFFNESS = (1.2e-4, 6e-5, 3e-5, 1e-4, 4e-5, 1.3e-5)
+BASS_STIFFNESS = (4e-4, 2e-4, 1e-4, 4e-5)
 
 
 # --- the guitar and the amp, as a machine's maker built them ------------------------------------------
@@ -126,28 +139,38 @@ def built(maker: int) -> dict:
     d["dead"] = (float(g.uniform(190.0, 262.0)), float(g.uniform(0.35, 0.6)))  # its dead spot: Hz, how much it drinks
     d["voicing"] = "fender" if g.random() < 0.6 else "marshall"
     d["knobs"] = (float(g.uniform(-0.1, 0.1)), float(g.uniform(0.35, 0.65)), float(g.uniform(-0.1, 0.1)))
-    d["clean"] = float(g.uniform(-24.0, -19.0))  # dB: the volume a player sets for a clean sound
-    d["crunch"] = float(g.uniform(-9.0, -4.0))
+    # how hard the player drives the second stage, clean and crunched: the volume plus the rig's own heat
+    # (heat()), so a hot humbucker into a Marshall's stack sits lower on the knob than a single coil into a
+    # Fender's for the same sound; a player dials the sound, not the knob
+    d["clean"] = float(g.uniform(-38.0, -33.0))
+    d["crunch"] = float(g.uniform(-17.0, -11.0))
     d["headroom"] = float(g.uniform(38.0, 52.0))
     d["sag"] = float(g.uniform(0.08, 0.18))
     d["tilt"] = float(g.uniform(0.0, 0.06))
-    d["knee"] = 1 if (d["voicing"] == "marshall" or g.random() < 0.6) else 2
+    # the power valves: a pair with little feedback, or (some Fenders) a blackface's with negative feedback
+    d["knee"] = 2 if (d["voicing"] == "marshall" or g.random() < 0.6) else 3
     d["reverb"] = float(g.uniform(0.12, 0.22))
     first = float(g.uniform(0.028, 0.034))
     springs = (first, first * float(g.uniform(1.12, 1.3))) + ((first * 1.45,) if g.random() < 0.3 else ())
     d["tank"] = amp.Tank(traversals=springs, t60=float(g.uniform(2.2, 3.2)), coef=float(g.uniform(0.58, 0.68)),
                          stretch=int(g.choice([5, 6])), seed=int(g.integers(1 << 30)))
-    d["tremolo"] = ("optical" if d["voicing"] == "fender" else "bias", float(g.uniform(4.5, 6.5)),
-                    float(g.uniform(0.45, 0.7)))
+    # the tremolo as players set it to be heard: a Fender's photocell dips the sound 13 to 19 dB, a bias
+    # tremolo (it can only swing the power valves' bias so far) 11 to 16
+    kind = "optical" if d["voicing"] == "fender" else "bias"
+    deep = (0.78, 0.89) if kind == "optical" else (0.72, 0.84)
+    d["tremolo"] = (kind, float(g.uniform(4.5, 6.5)), float(g.uniform(*deep)))
     ten = g.random() < 0.4
     d["cabinet"] = amp.Cabinet(
-        fs=float(g.uniform(92.0, 110.0) if ten else g.uniform(75.0, 90.0)), q=float(g.uniform(1.0, 1.6)),
+        fs=float(g.uniform(92.0, 110.0) if ten else g.uniform(75.0, 90.0)), q=float(g.uniform(1.3, 2.0)),
         presence=(float(g.uniform(2200.0, 3500.0)), float(g.uniform(3.0, 7.0)), float(g.uniform(1.0, 1.6))),
         rolloff=float(g.uniform(5500.0, 6500.0) if ten else g.uniform(4800.0, 5800.0)),
-        order=int(g.choice([2, 4])) if ten else 4, back=float(g.uniform(3.0, 6.0)),
-        mics=((float(g.uniform(0.00015, 0.00035)), float(g.uniform(0.15, 0.3)), 0.0),
-              (float(g.uniform(0.0008, 0.0016)), float(g.uniform(0.3, 0.45)), float(g.uniform(-7.0, -3.0)))),
+        order=int(g.choice([2, 4])) if ten else 4, back=float(g.uniform(2.0, 4.0)), breakup=3.5,
+        # the reflections a close microphone also hears (the floor, the baffle's edge): 12 to 20 dB down
+        mics=((float(g.uniform(0.00015, 0.00035)), float(g.uniform(0.1, 0.18)), 0.0),
+              (float(g.uniform(0.0008, 0.0016)), float(g.uniform(0.15, 0.25)), float(g.uniform(-7.0, -3.0)))),
         seed=int(g.integers(1 << 30)))
+    # the open back cancels below the cone's resonance, leaving its hump standing
+    d["cabinet"] = replace(d["cabinet"], back_at=d["cabinet"].fs)
     return d
 
 
@@ -182,7 +205,8 @@ def pickups(d: dict, brightness: float, setting: str) -> tuple[list[str], tuple,
         coil, pot = amp.SINGLE, 250e3
     if len(chosen) == 2:
         coil = amp.parallel(coil)
-    position = 0.72 + 0.28 * float(np.clip(brightness, 0.0, 1.0))  # the guitar's tone knob
+    # the guitar's tone knob: most players leave it near the top (8 to 10), where the coil's resonance sings
+    position = 0.85 + 0.15 * float(np.clip(brightness, 0.0, 1.0))
     tone = None if (not d["humbucker"] and chosen == ["bridge"]) else pot * (81.0 ** position - 1.0) / 80.0
     return chosen, comb, coil, dict(pot=pot, tone=tone, tone_cap=d["tone_cap"], cable=d["cable"])
 
@@ -201,9 +225,12 @@ def rig(name: str, s: dict, sr: int) -> tuple[Strings, amp.Coil, dict, amp.Amp]:
         gains=tuple(10.0 ** (p / 20.0) for p in d["poles"]),
         damping=(7e-6 + 5e-6 * wear) * (1.4 - 0.8 * bright),  # new strings ring bright, old ones go dull
         t60=d["t60"] * (1.0 - 0.3 * wear), along=1.3, heard=0.4, driven=0.5, pick=d["pick"], hardness=0.85,
-        click=0.25, touch=0.0, frets=24)
+        click=0.25, touch=0.0, frets=24, glide=6.0, glide_time=0.08, stiffness=STIFFNESS, stiff_sections=2)
     treble, middle, bass = d["knobs"]
-    volume = d["crunch"] if setting == "crunch" else d["clean"]
+    treble = float(np.clip(0.45 + 0.35 * bright + treble + (0.05 if setting == "crunch" else 0.0), 0, 1))
+    bass = float(np.clip(0.55 - 0.15 * bright + bass, 0, 1))
+    # the volume knob turned to the sound the player wants, as far as it goes
+    volume = min(0.0, d["crunch" if setting == "crunch" else "clean"] - heat(coil, treble, middle, bass, d["voicing"]))
     if "drive" in extra:
         volume = -26.0 + 23.0 * float(np.clip(extra["drive"], 0.0, 1.0))
     reverb = 0.0 if setting == "crunch" else d["reverb"]
@@ -216,13 +243,25 @@ def rig(name: str, s: dict, sr: int) -> tuple[Strings, amp.Coil, dict, amp.Amp]:
     if "rate" in extra:
         rate = float(np.clip(extra["rate"], 2.0, 10.0))
     cab = d["cabinet"]
-    cab = replace(cab, fs=cab.fs / size ** 0.5)
+    cab = replace(cab, fs=cab.fs / size ** 0.5, back_at=cab.back_at / size ** 0.5)
     rig_amp = amp.Amp(
-        voicing=d["voicing"], treble=float(np.clip(0.45 + 0.35 * bright + treble + (0.05 if setting == "crunch" else 0.0), 0, 1)),
-        middle=middle, bass=float(np.clip(0.55 - 0.15 * bright + bass, 0, 1)), volume=volume, headroom=d["headroom"],
+        voicing=d["voicing"], treble=treble, middle=middle, bass=bass, volume=volume, headroom=d["headroom"],
         knee=d["knee"], tilt=d["tilt"], sag=d["sag"], reverb=reverb, tank=d["tank"], tremolo=(kind, rate, depth),
         cabinet=cab)
     return strings, coil, circuit, rig_amp
+
+
+@lru_cache(maxsize=256)
+def _stack_heat(treble: float, middle: float, bass: float, voicing: str) -> float:
+    f = np.exp(np.linspace(np.log(150.0), np.log(1500.0), 24))
+    return float(10.0 * np.log10(np.mean(np.abs(amp.stack_response(f, treble, middle, bass, voicing)) ** 2)))
+
+
+def heat(coil: amp.Coil, treble: float, middle: float, bass: float, voicing: str) -> float:
+    """How hot a rig reaches the volume knob, in dB: the pickup's output (a humbucker's is 7 dB over a
+    single coil's) and what the tone stack lets through where a strum's energy is (150 Hz to 1.5 kHz: a
+    Fender's stack loses 5 to 7 dB more there than a Marshall's)."""
+    return 20.0 * np.log10(coil.sensitivity) + _stack_heat(round(treble, 4), round(middle, 4), round(bass, 4), voicing)
 
 
 def _dead_spot(segments: list, strings: Strings, dead: tuple[float, float]) -> None:
@@ -269,17 +308,17 @@ def guitar(name: str, notes, sr: int, length: int, rng: np.random.Generator, s: 
             burst = fretboard.chop_noise(sr, rng, note.vel) * EMF * coil.sensitivity * 3.0
             j = min(length, i + len(burst))
             emf[i:j] += burst[: j - i]
-    chain = _chain(rig_amp, s, sr)
+    chain = _chain(rig_amp, s, sr, _setting(name, s)[0] == "crunch")
     chain.p[21] = master_volume(name, s, sr)
     return amp.play(chain, emf) * GUITAR_OUT
 
 
-def _chain(rig_amp: amp.Amp, s: dict, sr: int) -> amp.Chain:
+def _chain(rig_amp: amp.Amp, s: dict, sr: int, crunch: bool) -> amp.Chain:
     """The amp ready to play; the driven settings oversample four times (their harmonics reach far up), a
     clean amp twice."""
     tempo = s.get("tempo")
     return amp.Chain(rig_amp, sr, tempo=float(tempo) if isinstance(tempo, (int, float)) and tempo > 0 else None,
-                     os_=4 if rig_amp.volume > -15.0 else 2)
+                     os_=4 if crunch or rig_amp.volume > -15.0 else 2)
 
 
 def _rig_key(name: str, s: dict) -> tuple:
@@ -312,7 +351,7 @@ def _master(key: tuple, sr: int) -> float:
     placed = fretboard.fret(fretboard.strum(notes, rng), strings)
     segs = fretboard.segments(placed, strings, sr, rng)
     emf = _pickup_voltage(segs, strings, coil, circuit, sr, int(3.0 * sr), rng)
-    chain = _chain(rig_amp, {}, sr)
+    chain = _chain(rig_amp, {}, sr, setting == "crunch")
     return float(10.0 ** ((REFERENCE_LUFS - loudness(amp.play(chain, emf), sr)) / 20.0))
 
 
@@ -336,20 +375,24 @@ def bass(notes, sr: int, length: int, rng: np.random.Generator, make: np.random.
     if precision:  # the split coil sits about 150 mm from the bridge
         comb = ((0.150 / scale, 1.0),)
         coil = amp.BASS_P
-        circuit = dict(pot=250e3, tone=250e3 * (81.0 ** (0.75 + 0.25 * bright) - 1.0) / 80.0, tone_cap=47e-9,
+        circuit = dict(pot=250e3, tone=250e3 * (81.0 ** (0.85 + 0.15 * bright) - 1.0) / 80.0, tone_cap=47e-9,
                        cable=cable)
     else:  # two single coils, the neck's and the bridge's, blended toward the bridge for a brighter sound
         blend = float(np.clip(0.35 + 0.3 * bright + make.normal(0.0, 0.08), 0.1, 0.9))
         comb = ((0.153 / scale, 1.0 - blend), (0.085 / scale, blend))
         coil = amp.parallel(amp.BASS_J)
-        circuit = dict(pot=250e3, tone=None, tone_cap=47e-9, cable=cable)
+        # each pickup's own 250k volume pot, both loading the pair at full volume, and the tone pot
+        circuit = dict(pot=125e3, tone=250e3 * (81.0 ** (0.85 + 0.15 * bright) - 1.0) / 80.0, tone_cap=47e-9,
+                       cable=cable)
     strings = Strings(
         open=BASS_TUNING, comb=comb, offsets=tuple(z * (0.5 + 4.0 * wear) for z in detune),
         gains=tuple(10.0 ** (p / 20.0) for p in poles),
         damping=(6e-5 + 5e-5 * wear) * (1.3 - 0.6 * bright),  # roundwound: the zing is gone in a fifth of a second
         t60=t60 * (1.0 - 0.3 * wear), along=1.2, heard=0.5, driven=0.6, pick=finger, hardness=0.35, click=0.2,
         touch=0.3, frets=20,
-        kinds=(("pick", (0.75, 2.6, 1.0, 1.0)), ("finger", (1.0, 1.0, 1.0, 0.0))))
+        kinds=(("pick", (0.75, 2.6, 1.0, 1.0)), ("finger", (1.0, 1.0, 1.0, 0.0))),
+        glide=20.0, glide_time=0.12,  # a long string plucked wide: sharp by a sixth of a semitone, settling
+        stiffness=BASS_STIFFNESS, stiff_sections=4)
     placed = fretboard.fret(notes, strings)
     segs = fretboard.segments(placed, strings, sr, rng, ornament=float(s.get("ornament", 0.5)))
     picked = {int(round(n.start * sr)) for n, _, _ in placed if n.art == "pick"}

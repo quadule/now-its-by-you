@@ -125,6 +125,48 @@ def test_the_pickup_hears_its_place_on_the_string():
     assert np.all(bridge[1:5] > -10)
 
 
+def test_the_tone_knob_sits_near_the_top_and_the_coil_sings():
+    """At a middling brightness the player's tone knob is near the top, so the coil's resonance with the pots
+    and cable stands up as Zollner measures it: a single coil's 3 dB and more at 3-6 kHz, a humbucker's 4 dB
+    and more at 2.5-4 kHz; turned toward the bridge it is sharper still."""
+    from songbird.synth import amp
+
+    for maker in range(8):
+        d = electric.built(maker)
+        for bright in (0.5, 1.0):
+            chosen, _, coil, circuit = electric.pickups(d, bright, "clean")
+            f, height, q = amp.resonance(*amp.pickup_ba(coil, **circuit))
+            if d["humbucker"]:
+                assert 2500 < f < 4000 and height > 4.0
+            else:
+                assert 3000 < f < 6000 and height > 2.5
+            if bright == 1.0:
+                assert height > 5.0 and q > 1.4
+
+
+def test_every_makers_cabinet_is_a_close_miked_open_back_combo():
+    """Its cone's resonance standing as a hump over what the open back cancels below it, 100 Hz within a few
+    dB of the middle (it was 10 dB under on some makers, with no hump on any), a presence rise at 2-4 kHz
+    within 10 dB, and the fall past 5-6 kHz; the reflections the microphones also hear 12-20 dB down."""
+    from songbird.synth import amp
+
+    n = 1 << 15
+    f = np.fft.rfftfreq(n, 1 / SR)
+
+    def at(h, x, frac=1 / 6):
+        sel = (f > x / 2 ** (frac / 2)) & (f < x * 2 ** (frac / 2))
+        return 10 * np.log10(np.mean(10 ** (h[sel] / 10)))
+
+    for maker in range(20):
+        cab = electric.built(maker)["cabinet"]
+        h = 20 * np.log10(np.abs(np.fft.rfft(amp.cabinet_ir(cab, SR)[:, 0], n)) + 1e-12)  # 0 dB: 200 Hz-4 kHz
+        mid = at(h, 1000, 1 / 3)
+        assert -4.0 < at(h, 100) < 3.0 and at(h, cab.fs) > at(h, 200) - 1.0 and at(h, 50) < at(h, 100) - 6.0
+        assert 0.0 < max(at(h, x, 1 / 3) for x in (2000, 2500, 3150, 4000)) - mid < 10.0
+        assert at(h, 10000, 1 / 3) < mid - 8.0
+        assert all(level <= 0.25 for _, level, _ in cab.mics)
+
+
 def repeated(name, vel, strums=12):
     return [note(p, start=0.1 + 0.3 * k, dur=0.3, vel=vel, art="down" if k % 2 == 0 else "up", part=name)
             for k in range(strums) for p in (45, 52, 57, 61, 64)]
@@ -145,6 +187,56 @@ def test_crunch_and_tremolo_sit_about_as_loud_as_clean():
     clean = master.loudness(render("electric", part, 5.5), SR)
     for name in ("electric-crunch", "electric-tremolo"):
         assert abs(master.loudness(render(name, part, 5.5), SR) - clean) < 2.5
+
+
+def strum_error(maker, name, vel):
+    """How far the rig's amp is from linear on its own strummed A chord, dB: the output against the same amp
+    played 60 dB quieter and scaled back up (distortion, intermodulation and compression together)."""
+    from dataclasses import replace
+
+    from songbird.synth import amp
+
+    strings, coil, circuit, rig_amp = electric.rig(name, {**S0, "maker": maker}, SR)
+    rig_amp = replace(rig_amp, reverb=0.0)
+    notes = [note(p, dur=1.0, vel=vel, art="down") for p in (45, 52, 57, 61, 64)]
+    placed = fretboard.fret(fretboard.strum(notes, np.random.default_rng(0)), strings)
+    segs = fretboard.segments(placed, strings, SR, np.random.default_rng(0))
+    v = electric._pickup_voltage(segs, strings, coil, circuit, SR, int(1.2 * SR), np.random.default_rng(0))
+    chain = amp.Chain(rig_amp, SR, os_=4 if name == "electric-crunch" else 2)
+    idle = chain.run(np.zeros_like(v))
+    y, lin = chain.run(v) - idle, (chain.run(v * 1e-3) - idle) * 1e3
+    return 10 * np.log10(np.sum((y - lin) ** 2) / np.sum(lin**2))
+
+
+@pytest.mark.parametrize("maker", range(6))
+def test_clean_is_clean_and_crunch_crunches_whatever_the_guitar(maker):
+    """A player turns the volume to the sound, not to a place on the knob: a hard strum through the clean
+    setting stays within 3% of linear, humbucker or single coil, Fender or Marshall; the crunch breaks up
+    as much on every rig (12-32% from linear), rather than a hot humbucker into a Marshall's stack fuzzing
+    while a single coil into a Fender's barely does."""
+    assert strum_error(maker, "electric", 0.9) < -30.0
+    assert -18.0 < strum_error(maker, "electric-crunch", 0.6) < -10.0
+
+
+def test_the_tremolo_is_deep_enough_to_hear():
+    """The amp's tremolo as players set it to be heard: its swing 11 to 19 dB, a photocell's dipping fast
+    and coming back slowly, a bias tremolo's evenly."""
+    from dataclasses import replace
+
+    from songbird.synth import amp
+
+    t = np.arange(3 * SR) / SR
+    for maker in range(4):
+        *_, rig_amp = electric.rig("electric-tremolo", {**S0, "maker": maker}, SR)
+        chain = amp.Chain(replace(rig_amp, reverb=0.0), SR, os_=2)
+        y = chain.run(0.1 * np.sin(2 * np.pi * 330.0 * t))
+        env = 20 * np.log10(np.sqrt(np.convolve(y**2, np.ones(128) / 128, mode="same"))[int(0.5 * SR): int(2.9 * SR)])
+        assert 11.0 < np.percentile(env, 99) - np.percentile(env, 1) < 19.0
+        phase = (np.arange(len(env)) / SR * chain.rate) % 1.0
+        cycle = np.array([env[(phase >= k / 40) & (phase < (k + 1) / 40)].mean() for k in range(40)])
+        top = int(np.argmax(cycle))
+        falls = (int(np.argmin(np.roll(cycle, -top))) % 40) / 40  # the part of the cycle from the top to the bottom
+        assert (falls < 0.35) if rig_amp.tremolo[0] == "optical" else (0.35 < falls < 0.65)
 
 
 def test_the_settings_can_ask_for_another_amp_setting():
@@ -245,6 +337,47 @@ def test_the_bass_attack_is_bright_and_darkens_fast():
 
     assert share(0.1) > -25 and share(0.35) < share(0.1) - 25
     assert fall_time(y) > 1.0
+
+
+def test_stiff_strings_stretch_their_partials():
+    """A steel string's stiffness puts its partials sharp of the harmonic series (f_k = k f0 sqrt(1 + B k^2)),
+    the more so the thicker its core and the shorter it is fretted; the fundamental stays in tune. The bass's
+    open E: its 8th partial some 25 cents sharp (Fable's target 18-26), its 10th 30-40; the guitar's low E's
+    8th 5-8, the plain G's 5-7, the high e's under a cent and a half."""
+
+    def stretch(y, pitch, k, f1_cents):
+        return cents_of(y, pitch + 12 * np.log2(k), 0.15, 0.9) - f1_cents
+
+    y = render("ebass", [note(28, dur=2.5, vel=0.7, part="ebass")], 3.0)
+    f1 = cents_of(y, 28, 0.4, 1.6)
+    assert 18.0 < stretch(y, 28, 8, f1) < 30.0 and 28.0 < stretch(y, 28, 10, f1) < 42.0
+    for pitch, string, lo, hi in ((40, 0, 4.0, 9.0), (55, 3, 4.0, 8.0), (64, 5, -0.5, 1.5)):
+        y = pickup(pitch, string, 0, 2.5)
+        f1 = cents_of(y, pitch, 0.4, 1.6)
+        assert lo < stretch(y, pitch, 8, f1) < hi
+
+
+def mean_cents(y, f, t0, t1):
+    """The fundamental's mean instantaneous pitch over t0..t1, cents from f."""
+    band = sosfiltfilt(butter(2, [f * 0.85, f * 1.15], btype="bandpass", fs=SR, output="sos"), y)
+    inst = np.diff(np.unwrap(np.angle(hilbert(band)))) * SR / (2 * np.pi)
+    return 1200 * np.log2(np.mean(inst[int(t0 * SR): int(t1 * SR)]) / f)
+
+
+def test_a_hard_pluck_starts_sharp_and_settles():
+    """A string plucked wide is stretched tauter while it swings: a bass's fingered A1 at 0.8 starts some 13
+    cents sharp and settles within a third of a second (Fable's review: 10-25 cents for a bass, 3-6 for a
+    guitar's hard strum); a soft note's glide is too small to bother with."""
+    strings, *_ = electric.rig("electric", S0, SR)
+    seg = fretboard.Segment(string=1, start=0, base=45.0, held=SR, picks=[(0, 0.8, "pick"), (SR // 2, 0.2, "up")],
+                            end=SR)
+    rise = fretboard.glide(seg, strings, fretboard.KINDS, SR)
+    assert 3.0 < rise[0] < 5.0 and rise[int(0.3 * SR)] < 0.1 and len(rise) < int(0.55 * SR)  # the soft one: none
+    y = render("ebass", [note(33, dur=1.5, vel=0.8, part="ebass")], 2.0)
+    early, late = mean_cents(y, midi_to_hz(33), 0.13, 0.25), mean_cents(y, midi_to_hz(33), 0.7, 1.3)
+    assert 3.5 < early - late < 12.0
+    y = render("ebass", [note(33, dur=1.5, vel=0.3, part="ebass")], 2.0)
+    assert abs(mean_cents(y, midi_to_hz(33), 0.13, 0.25) - mean_cents(y, midi_to_hz(33), 0.7, 1.3)) < 2.0
 
 
 def test_the_bass_articulations():

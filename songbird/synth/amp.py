@@ -22,8 +22,9 @@ and bass network whose transfer function Yeh and Smith worked out,
 "Discretization of the '59 Fender Bassman tone stack", DAFx 2006), third order
 over third order, its coefficients taken here from the circuit's nodal
 equations and discretized by the bilinear transform. Then the spring reverb's
-return and the tremolo, and the push-pull power stage: symmetric soft clipping
-whose ceiling sags as the supply is drawn down, and the output transformer's
+return and the tremolo, and the push-pull power stage: symmetric clipping,
+nearly linear until close to its ceiling (the firmer with negative feedback),
+the ceiling sagging as the supply is drawn down, and the output transformer's
 band. The nonlinear stages run four times oversampled, the resampling fused
 into the same pass so nothing oversampled is ever stored.
 
@@ -34,8 +35,8 @@ below a transition frequency near 4 kHz, so every echo is a chirp, spread
 further by every trip round the loop; the echoes come a round trip apart.
 
 The cabinet: an impulse response made from a loudspeaker's physics: the cone's
-mass on its suspension (a resonance at 75 to 110 Hz), an open back letting the
-lowest octave cancel, the cone breaking up into a presence region at 2 to 4 kHz
+mass on its suspension (a resonance at 75 to 110 Hz), an open back letting what
+lies below it cancel, the cone breaking up into a presence region at 2 to 4 kHz
 with a scatter of peaks and dips, the steep fall above 5 or 6 kHz, and two
 microphones, each with the comb of a reflection it also hears.
 """
@@ -190,10 +191,11 @@ def _stack_matrix(s: complex, t: float, m: float, l: float, parts, load: float) 
     """The TMB network's nodal admittance matrix and source vector at complex frequency s, driven by a 1 V
     source through its source resistance. Nodes: 0 input, 1 the treble pot's top, 2 its wiper (the output),
     3 its bottom and the bass pot's top, 4 the bass pot's bottom and the mid pot's top, 5 where the slope
-    resistor meets the bass and mid caps."""
+    resistor meets the bass and mid caps, 6 the mid pot's wiper, where the mid cap lands (the whole mid pot
+    runs from node 4 to ground: Yeh and Smith's circuit, whose closed form this reproduces exactly)."""
     c1, c2, c3, r1, r2, r3, r4, rs = parts
-    y = np.zeros((6, 6), dtype=complex)
-    src = np.zeros(6, dtype=complex)
+    y = np.zeros((7, 7), dtype=complex)
+    src = np.zeros(7, dtype=complex)
 
     def branch(a, b, g):
         y[a, a] += g
@@ -208,10 +210,11 @@ def _stack_matrix(s: complex, t: float, m: float, l: float, parts, load: float) 
     branch(1, 2, 1.0 / ((1.0 - t) * r1))
     branch(2, 3, 1.0 / (t * r1))
     branch(3, 4, 1.0 / (l * r2))
-    branch(4, None, 1.0 / (m * r3))
+    branch(4, 6, 1.0 / ((1.0 - m) * r3))
+    branch(6, None, 1.0 / (m * r3))
     branch(0, 5, 1.0 / r4)
     branch(5, 3, s * c2)
-    branch(5, 4, s * c3)
+    branch(5, 6, s * c3)
     branch(2, None, 1.0 / load)
     return y, src
 
@@ -383,6 +386,8 @@ class Cabinet:
     rolloff: float = 5500.0  # Hz where the cone stops following the coil
     order: int = 4  # how steeply it falls past there (2: -12 dB an octave, 4: -24)
     back: float = 5.0  # dB the open back cancels of the lowest octave
+    back_at: float = 150.0  # Hz: where that cancellation sets in (a shelf's corner)
+    breakup: float = 5.0  # dB: how far the cone's breakup peaks and dips reach
     # each microphone: its reflection's extra path (s), that reflection's level, and dB it loses above 3 kHz
     # for sitting off the cone's axis
     mics: tuple[tuple[float, float, float], ...] = ((0.00022, 0.25, 0.0), (0.0012, 0.4, -5.0))
@@ -406,11 +411,11 @@ def cabinet_ir(cab: Cabinet, sr: int, n: int = 2048) -> np.ndarray:
     x = np.zeros(n)
     x[0] = 1.0
     f, db, q = cab.presence
-    bands = [_highpass(cab.fs, cab.q, sr)[None], fx.shelf("low", 150.0, -cab.back, sr)[None],
+    bands = [_highpass(cab.fs, cab.q, sr)[None], fx.shelf("low", cab.back_at, -cab.back, sr)[None],
              fx.peaking(f, db, q, sr)[None], butter(cab.order, cab.rolloff, btype="lowpass", fs=sr, output="sos")]
     # the cone breaking up: a scatter of narrow peaks and dips from 700 Hz to 6 kHz, this speaker's own
     for fb in np.exp(rng.uniform(np.log(700.0), np.log(6000.0), 7)):
-        bands.append(fx.peaking(fb, rng.uniform(-5.0, 5.0), rng.uniform(3.0, 8.0), sr)[None])
+        bands.append(fx.peaking(fb, rng.uniform(-1.0, 1.0) * cab.breakup, rng.uniform(3.0, 8.0), sr)[None])
     y = sosfilt(np.concatenate(bands), x)
     out = np.zeros((n, len(cab.mics)))
     for j, (delay, level, off) in enumerate(cab.mics):
@@ -446,7 +451,10 @@ class Amp:
     leak: float = 1e6  # ohm: its grid leak
     volume: float = -20.0  # dB: the volume pot between the stack and the second stage
     headroom: float = 45.0  # V: the second stage's swing that takes the power stage to its knee
-    knee: int = 1  # the power stage's knee: 1 soft (6V6s or EL84s), 2 harder (6L6s with feedback)
+    # the power stage's knee, a / (1 + a^2p)^(1/2p): 1 (p = 1) very soft, compressing from a third of its
+    # ceiling; 2 (p = 2) a push-pull pair with little feedback (EL84s, 6V6s: a few percent at half power);
+    # 3 (p = 4) one with negative feedback (a blackface's 6V6s or 6L6s): linear nearly to its ceiling
+    knee: int = 1
     tilt: float = 0.03  # the push-pull pair's mismatch: a little even distortion
     sag: float = 0.12  # how far the supply falls when the power stage is driven flat out
     sag_times: tuple[float, float] = (0.03, 0.2)  # s: how fast it falls, and recovers
@@ -501,7 +509,9 @@ def _run(x, rev, up, down, p, tab1, tab2, drop2, sos):
     top = tab1.shape[0] - 1
     rot_re = np.cos(2.0 * np.pi * rate)  # the LFO turns this far each oversampled sample
     rot_im = np.sin(2.0 * np.pi * rate)
-    if knee > 1.5:
+    if knee > 2.5:
+        tilt_out = tilt / (1.0 + tilt**8) ** 0.125
+    elif knee > 1.5:
         tilt_out = tilt / (1.0 + tilt**4) ** 0.25
     else:
         tilt_out = tilt / np.sqrt(1.0 + tilt * tilt)
@@ -578,7 +588,11 @@ def _run(x, rev, up, down, p, tab1, tab2, drop2, sos):
                     v *= 1.0 - depth * (0.5 + 0.5 * c_im)
             # the power stage, push-pull, its ceiling the supply
             a = v / sup + tilt
-            if knee > 1.5:
+            if knee > 2.5:
+                a2 = a * a
+                a4 = a2 * a2
+                o = (a / np.sqrt(np.sqrt(np.sqrt(1.0 + a4 * a4))) - tilt_out) * sup
+            elif knee > 1.5:
                 a2 = a * a
                 o = (a / np.sqrt(np.sqrt(1.0 + a2 * a2)) - tilt_out) * sup
             else:

@@ -154,6 +154,15 @@ ROLES: dict[str, Strip] = {
     # A plucked lute or cittern, doubling the tune under the words: boxiness and the voice's range cleared,
     # and it steps back while the voice sings the same notes.
     "lute": Strip(eq=(("hp", 90), ("peak", 320, -2.0, 1.0), ("peak", 2800, -2.0, 0.9)), drive=0.1, duck=3.0),
+    # A banjo comping (rolls, clawhammer): nothing under its lowest string, 1 dB of its ring out where the voice's
+    # consonants are (the band's own dip does the rest while the voice sings), a compressor slow to grab and
+    # leaning only on what stands 5 dB out of its bar, so the picks keep their edge and a roll its accents;
+    # it comps, so it doesn't duck.
+    "banjo": Strip(eq=(("hp", 90), ("peak", 2800, -1.0, 0.9)), comp=(10.0, 2.0, 0.015, 0.2, 1.5, 5.0), drive=0.05,
+                   send=0.8),
+    # A mandolin comping (strums, the chop): its weak low course cleared, nothing taken from its bark,
+    # compressed gently and slowly (a tremolo evened, the chop untouched).
+    "mandolin": Strip(eq=(("hp", 110),), comp=(10.0, 2.0, 0.02, 0.2, 1.5, 3.0), drive=0.05),
     # The main accompaniment: weight kept, boom and clang tamed, sparkle above the voice.
     "guitar": Strip(eq=(("hp", 75), ("peak", 200, -2.0, 1.1), ("peak", 2600, -2.0, 0.8), ("high", 9000, 1.0)),
                     comp=(10.0, 2.0, 0.015, 0.2, 1.5, 3.0), drive=0.1, send=0.9),
@@ -165,6 +174,9 @@ ROLES: dict[str, Strip] = {
                     comp=(10.0, 2.0, 0.02, 0.25, 2.0, 3.0), send=1.3, duck=2.0),
     "whistle": Strip(eq=(("hp", 250), ("peak", 3000, -2.0, 1.4), ("high", 9000, -1.0)), send=1.3, duck=2.0),
     "drum": Strip(eq=(("hp", 40), ("peak", 420, -2.0, 1.0), ("high", 8000, -1.0)), comp=(12.0, 3.0, 0.004, 0.12, 1.0, 4.0), send=0.6),
+    # A drum kit: the kick's 50 Hz kept, boxiness out, the cymbals' air left alone, a compressor slower to grab
+    # than the frame drum's (a kit's transients are its point), half the band's room.
+    "kit": Strip(eq=(("hp", 30), ("peak", 420, -2.0, 1.0)), comp=(12.0, 3.0, 0.02, 0.15, 1.0, 4.0), send=0.5),
     # A held drone stays out of the words altogether.
     "drone": Strip(eq=(("hp", 50), ("peak", 2500, -3.0, 0.7), ("lp", 6000))),
     # Keys and mallets comping like the guitar: weight kept, boxiness and the voice's presence cleared.
@@ -172,15 +184,19 @@ ROLES: dict[str, Strip] = {
                   comp=(10.0, 2.0, 0.015, 0.2, 1.5, 3.0), send=1.0),
     # An organ or a pad: held under everything, out of the words, no fizz.
     "organ": Strip(eq=(("hp", 55), ("peak", 2500, -2.5, 0.7), ("lp", 8000)), send=1.0),
-    # Free reeds and harmonicas: nasal mids tamed, stepping back a little under the voice like a lead line.
+    # Free reeds: nasal mids tamed, stepping back a little under the voice like a lead line.
     "reed": Strip(eq=(("hp", 140), ("peak", 1200, -1.5, 1.0), ("peak", 2800, -2.0, 1.0), ("high", 9000, -1.0)),
                   send=1.1, duck=2.0),
     # Squeezeboxes: the reed's treatment, but an accordion's Stradella bass (65-123 Hz) and a concertina's oom (from
     # 131 Hz) kept, the box's hump near 250 Hz eased; they mostly comp, so they step back only a little.
     "squeezebox": Strip(eq=(("hp", 50), ("peak", 250, -1.0, 1.0), ("peak", 1200, -1.5, 1.0), ("peak", 2800, -2.0, 1.0),
                             ("high", 9000, -1.0)), send=1.1, duck=1.0),
-    # A cello or a section: the fiddle's treatment without its 180 Hz high-pass, so the low strings are heard.
-    "strings": Strip(eq=(("hp", 45), ("peak", 250, -1.5, 1.0), ("peak", 2500, -2.0, 1.0), ("high", 8000, -1.0)),
+    # A harmonica: its cover plates' presence near 3 kHz is its reed's own now, so only a little of its honk near
+    # 1 kHz out and its breath's top softened; a lead line, it steps back under the voice.
+    "harmonica": Strip(eq=(("hp", 180), ("peak", 1000, -1.5, 1.0), ("high", 10000, -1.0)), send=1.1, duck=2.0),
+    # A cello or a section: the fiddle's treatment without its 180 Hz high-pass, so the low strings are heard; the
+    # cut for boxiness at the B1 pair's boom (190 Hz), not in the cello's formant above it (250-500 Hz).
+    "strings": Strip(eq=(("hp", 45), ("peak", 190, -1.5, 1.0), ("peak", 2500, -2.0, 1.0), ("high", 8000, -1.0)),
                      comp=(10.0, 2.0, 0.02, 0.25, 2.0, 3.0), send=1.3),
     # Synths: an arpeggio or a lead line, cleared around the voice.
     "synth": Strip(eq=(("hp", 80), ("peak", 2800, -2.0, 0.9)), send=0.9, duck=1.5),
@@ -197,20 +213,24 @@ ROLES: dict[str, Strip] = {
 NAMES = {
     "voice": ("voice", "lead", "vocal", "singer"),
     "choir": ("choir", "harmony", "backing"),
-    "lute": ("melody", "lute", "mandolin", "bouzouki", "cittern", "oud", "banjo"),
+    "lute": ("melody", "lute", "bouzouki", "cittern", "oud"),
+    "banjo": ("banjo",),
+    "mandolin": ("mandolin", "mandola"),
     "guitar": ("guitar", "strum", "pick", "electric", "nylon", "ukulele"),
     "harp": ("harp", "dulcimer", "zither", "kantele", "psaltery"),
     "bass": ("bass", "contrabass", "upright"),
     "fiddle": ("fiddle", "violin", "bow"),
     "whistle": ("whistle", "flute", "pipe", "recorder", "fife", "blown"),
     "drum": ("drum", "drums", "percussion", "bodhran", "tambourine", "shaker", "kick", "snare", "skin", "frame",
-             "kit", "claps", "clap", "stomps", "stomp", "cajon", "machine", "hats"),
+             "claps", "clap", "stomps", "stomp", "cajon", "machine", "hats"),
+    "kit": ("kit",),
     "drone": ("drone", "pad", "shruti", "bagpipe", "hum"),
     "keys": ("piano", "epiano", "rhodes", "keys", "celesta", "musicbox", "music-box", "glock", "glockenspiel", "vibes",
              "vibraphone", "marimba", "xylophone", "bells"),
     "organ": ("organ", "synthpad", "synth-pad", "harmonium"),  # sustained keys: no drone's 6 kHz low-pass
-    "reed": ("harmonica",),
+    "reed": ("reed",),
     "squeezebox": ("accordion", "concertina", "melodeon", "bandoneon", "squeezebox"),
+    "harmonica": ("harmonica",),
     "strings": ("cello", "viola", "strings", "quartet"),  # their low strings kept: no fiddle's 180 Hz high-pass
     "synth": ("synth", "synthlead", "arp", "chip"),
     "steel": ("steel", "pedalsteel", "lapsteel"),  # its low strings kept, and no fiddle's duck: it swells by its pedal
@@ -412,7 +432,7 @@ def mix(stems: dict[str, np.ndarray], sr: int, seed: int = 0, params: MixParams 
             x = fx.equalize(x, fx.design(strip.eq, sr))
             if strip.comp:
                 x = _compressed(x, sr, strip.comp)
-            if role == "drum":
+            if role in ("drum", "kit"):
                 x = _peaks(x, sr)
             return fx.saturate(x, sr, strip.drive)
         x = _treated(stems[name][where], channel) * 10.0 ** ((strip.trim + nudge[name]) / 20.0)

@@ -87,14 +87,17 @@ strummed guitar, brushes* in the verses and a groove in the refrains, the
 upright walking up into each new chord. Sixths and V7. A third above and
 below on the refrains; a key change up a step is its habit.
 
-**String band.** Old-time and bluegrass: clawhammer banjo* (bum-ditty: a note,
-a brush, the thumb on the high fifth string, which is exactly the long-short-
-short of H's feet) when the band is quiet, forward rolls when it drives; the
-mandolin's* chop on the backbeat; a boom-chick guitar with a run on its bass
-strings where the singer holds a line's last note; fiddle breaks and fills, a
-counter-line in the last refrain; the upright on one and three with walk-ups.
-Straight at about 117 (up to 134), sometimes a waltz. A tenor harmony on the
-refrains.
+**String band.** Old-time and bluegrass: clawhammer banjo* (bum-ditty: a note
+struck with the nail, a brush, the thumb on the high fifth string, which is
+exactly the long-short-short of H's feet) when the band is quiet, forward
+rolls when it drives (thumb, index, middle, thumb, index, middle, thumb,
+middle, the thumb coming back to the fifth string as the banjo is tuned: A4 in
+D), one banjo played both ways in a song; the mandolin's* chop on the backbeat
+(the chord struck and choked by the fretting hand); a boom-chick guitar with a
+run on its bass strings where the singer holds a line's last note; fiddle
+breaks and fills, a counter-line in the last refrain; the upright on one and
+three with walk-ups. Straight at about 117 (up to 134), sometimes a waltz. A
+tenor harmony on the refrains.
 
 **Shanty.** A sea shanty or work song: the shantyman sings the first verse
 alone (or over the concertina), then the gang (every lineage voice) joins on
@@ -318,8 +321,9 @@ lead by the whistle), each levelled so a typical part at velocity 0.6 sits as
 its kind's reference does. Stand-ins make every timbre Celtic: until the real
 instruments land, the styles differ in rhythm, harmony, form and texture, not
 in sound. The mix finds each stem's channel strip by its name (keys, organ,
-reeds and harmonicas, strings without the fiddle's high-pass, synths, and the
-percussion names on the drum strip).
+reeds and harmonicas, strings without the fiddle's high-pass, synths, the
+percussion names on the drum strip, and a kit, a banjo and a mandolin on their
+own; docs/INSTRUMENTS-B.md, For the mix).
 
 ## Measurements
 

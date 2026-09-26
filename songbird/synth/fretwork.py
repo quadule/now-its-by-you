@@ -215,6 +215,7 @@ class Stroke:
     picks: tuple = ((0, 1.0, 1.0),)  # each pick: samples after `at`, velocity factor, direction (+1 down, -1 up)
     beta: float = 0.1  # where the pick meets the string: a fraction of its sounding length from the bridge
     hardness: float = 0.8  # a fingertip (0) to a sharp pick (1)
+    cutoff: float = 0.0  # Hz above which the pick softens the string's corner (0: as its hardness says)
     roughness: float = 0.3
     planes: float = 0.3  # how much goes into the plane along the top
     damp: float = 0.08  # T60 of the string once stopped
@@ -579,7 +580,7 @@ def _segment(strokes, strings: Strings, string: int, sr: int, length: int, rng, 
             harmonics = None
             for m, (cents, level) in enumerate(members):
                 exc = _pluck._excitation(period * 2.0 ** (-cents / 1200.0), beta, s.hardness, vel, rng, sr,
-                                         roughness=s.roughness) / (0.5 * vel)
+                                         roughness=s.roughness, cutoff_hz=s.cutoff or None) / (0.5 * vel)
                 if harmonics is None:  # the power of each harmonic
                     harmonics = 2.0 * np.abs(np.fft.rfft(exc)[1:]) ** 2 / len(exc) ** 2
                 if norm is None:  # the note's first pick sets its level, the course's other string counted

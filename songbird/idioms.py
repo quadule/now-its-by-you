@@ -820,40 +820,92 @@ def w_travis(ctx: StyleContext, i: int, part: str) -> list[Ev]:
     return ring_on(out)
 
 
+def own_art(part: str, art: str, plain: str) -> str:
+    """The instrument's own stroke for an articulation where its module plays one (its SPEC names it: a
+    banjo's `claw`, a mandolin's `chop`), else the plain stroke every plucked instrument knows."""
+    from .synth import instruments
+
+    return art if art in instruments.spec(part).get("articulations", {}) else plain
+
+
+def fifth_string(ctx: StyleContext, part: str) -> int | None:
+    """The pitch a banjo's short fifth string is tuned to for this key, as its module tunes it (A4 in D,
+    G4 in G), or None for an instrument without one."""
+    from .synth import instruments
+
+    _, found = instruments.registered(part)
+    tuned = getattr(found[1], "fifth_string", None) if found is not None else None
+    return int(tuned(ctx.tonic)) if callable(tuned) else None
+
+
+def first_position(ctx: StyleContext, part: str, pcs: list[int], u0: float, u1: float) -> list[int] | None:
+    """A chord as a banjo player makes it near the nut, on the third, second and first strings as the
+    banjo is tuned for the key: on each, the chord's tone at the lowest fret from open to the fourth (a
+    tone no other string has yet, where it can), never on a pitch being sung. Open D's D chord is its
+    open strings (F#3 A3 D4), its G G3 B3 D4, its A A3 C#4 E4; or None for an instrument without such
+    strings (or a chord that doesn't lie there)."""
+    from .synth import instruments
+
+    _, found = instruments.registered(part)
+    longs = getattr(found[1], "long_strings", None) if found is not None else None
+    if not callable(longs):
+        return None
+    sung = {p for _a, _b, p, _s in ctx.sung_in(u0, u1)}
+    shape: list[int] = []
+    for open_ in reversed(longs(ctx.tonic)[:3]):  # the third string, the second, the first
+        options = [open_ + f for f in range(5) if (open_ + f) % 12 in pcs and open_ + f not in sung]
+        if not options:
+            return None
+        shape.append(min(options, key=lambda p: (p % 12 in {q % 12 for q in shape}, p - open_)))
+    return shape
+
+
 def roll_notes(ctx: StyleContext, part: str, c: Chord, u0: float, u1: float, i: int) -> tuple[list[int], int]:
-    """A banjo's three fretted strings for a chord, and its short fifth string: the tonic, high."""
+    """A banjo's three fretted strings for a chord (as its player makes the chord near the nut), and its
+    short fifth string: the drone the banjo is tuned to (the key's tonic or fifth, high), or the tonic
+    high on an instrument without one."""
     tones = ctx.tones(c, u0, u1, colour=False)
     lo, hi = B.register_of(part)
-    chord = ctx.voicing(part, tones, max(lo, ctx.tonic - 7), min(hi, ctx.tonic + 12), u0, u1, size=3)
-    drone = nearest({ctx.tonic % 12}, ctx.tonic + 10, ctx.tonic + 5, min(hi, ctx.tonic + 17))
-    if not ctx.fits(drone, c, u0, u1):  # the open fifth string, stopped where it would rub against the tune
+    chord = first_position(ctx, part, tones, u0, u1) or \
+        ctx.voicing(part, tones, max(lo, ctx.tonic - 7), min(hi, ctx.tonic + 12), u0, u1, size=3)
+    drone = fifth_string(ctx, part)
+    if drone is None:
+        drone = nearest({ctx.tonic % 12}, ctx.tonic + 10, ctx.tonic + 5, min(hi, ctx.tonic + 17))
+    if not ctx.fits(drone, c, u0, u1):  # the open fifth string, left for a chord tone where it would rub
         drone = nearest(set(tones), drone, ctx.tonic + 5, min(hi, ctx.tonic + 17))
     return chord or [ctx.tonic], drone
 
 
 def w_roll(ctx: StyleContext, i: int, part: str) -> list[Ev]:
-    """A banjo's forward roll: thumb, index, middle, over and over across the eighths (or the triplets), the
-    thumb coming back to the high fifth string, never on a sung note."""
+    """A banjo's forward roll: thumb, index, middle, thumb, index, middle, thumb, middle across the eighths
+    (third string, second, first, fifth, second, first, fifth, first), the thumb's notes of the 3-3-2 a
+    little stronger (the roll's drive), never on a sung note; in triplets thumb, index, middle. Rolls are
+    picked firmly (0.55 to 0.65 where nobody sings: a banjo is the loudest thing in a string band, and a
+    roll's twang and sparkle go when it is picked softly), backing off under the words as backup does."""
     out = []
     for c in ctx.chords_in(i):
         subs = ctx.grid.subs_in(c.u0, c.u1)
         for k, u in enumerate(subs):
             chord, drone = roll_notes(ctx, part, c, u, u + ctx.beat, i)
             low, mid, top = chord[0], chord[len(chord) // 2], chord[-1]
-            cell = [low, mid, top, drone, mid, top, low, drone][k % 8] if len(ctx.grid.subs) >= 8 else \
-                [low, mid, top, drone, mid, top][k % 6]
+            eighths = len(ctx.grid.subs) >= 8
+            step = k % (8 if eighths else 6)
+            cell = ([low, mid, top, drone, mid, top, drone, top] if eighths else [low, mid, top, drone, mid, top])[step]
             sung = {p for _a, _b, p, _s in ctx.sung_in(u, u + ctx.beat / 2)}
             if cell in sung:
                 cell = drone if drone not in sung else cell - 12
-            accent = 0.62 if ctx.grid.on_beat(u) else 0.5
+            thumb = step in ((0, 3, 6) if eighths else (0, 3))
+            accent = (0.72 if step == 0 else 0.68) if thumb else 0.62
             out.append(ev(part, u, u + 2 * ctx.beat, cell, ctx.vel(part, u, accent, 0.72), art="pick", i=i))
     return ring_on(out)
 
 
 def w_claw(ctx: StyleContext, i: int, part: str) -> list[Ev]:
-    """Clawhammer: bum-ditty, a note struck down on the beat, the back of the nail brushing the strings,
-    the thumb catching the high fifth string: the long-short-short the song's feet already have."""
+    """Clawhammer: bum-ditty, a note struck down on the beat with the nail, the back of the nail brushing
+    the strings, the thumb catching the high fifth string: the long-short-short the song's feet already
+    have. A banjo plays them as its own strokes (claw, brush, thumb); another instrument strums them."""
     out = []
+    bum, brush, thumb = own_art(part, "claw", "down"), own_art(part, "brush", "down"), own_art(part, "thumb", "up")
     for c in ctx.chords_in(i):
         for bar in sorted(set(ctx.grid.bars(c.u0, c.u1)) | {c.u0 - ((c.u0 - ctx.grid.origin) % ctx.grid.bar)}):
             cells = ([(0.0, "bum"), (2.0, "dit"), (3.0, "ty"), (4.0, "bum"), (6.0, "dit"), (7.0, "ty")]
@@ -866,20 +918,23 @@ def w_claw(ctx: StyleContext, i: int, part: str) -> list[Ev]:
                 if what == "bum":
                     sung = {p for _a, _b, p, _s in ctx.sung_in(u, u + ctx.beat)}
                     p = next((q for q in reversed(chord) if q not in sung), chord[0])
-                    out.append(ev(part, u, u + ctx.beat, p, ctx.vel(part, u, 0.66, 0.75), art="down", i=i))
+                    out.append(ev(part, u, u + ctx.beat, p, ctx.vel(part, u, 0.8, 0.88), art=bum, i=i))
                 elif what == "dit":
                     for j, p in enumerate(chord):
-                        out.append(ev(part, u, u + ctx.beat / 2, p, ctx.vel(part, u, 0.42, 0.75), art="down", i=i,
+                        out.append(ev(part, u, u + ctx.beat / 2, p, ctx.vel(part, u, 0.58, 0.88), art=brush, i=i,
                                       shift=0.01 * j))
                 else:
-                    out.append(ev(part, u, u + ctx.beat, drone, ctx.vel(part, u, 0.45, 0.75), art="up", i=i))
+                    out.append(ev(part, u, u + ctx.beat, drone, ctx.vel(part, u, 0.55, 0.88), art=thumb, i=i))
     return ring_on(out)
 
 
 def w_chop(ctx: StyleContext, i: int, part: str) -> list[Ev]:
-    """A mandolin's chop: a short, muted three-note chord on every backbeat."""
+    """A mandolin's chop: a three-note chord on every backbeat, struck hard and choked at once by the
+    fretting hand (the mandolin's own `chop`: a burst of chord, the pick's scrape, the box's knock; a
+    short muted strum on an instrument without one)."""
     out = []
     lo, hi = B.register_of(part)
+    art = own_art(part, "chop", "mute")
     for c in ctx.chords_in(i):
         rng = ctx.rand(part, c.u0)
         for u in ctx.grid.beats_in(c.u0, c.u1):
@@ -887,22 +942,29 @@ def w_chop(ctx: StyleContext, i: int, part: str) -> list[Ev]:
                 continue
             tones = ctx.tones(c, u, u + ctx.beat / 2, colour=False)
             notes = ctx.voicing(part, tones, max(lo, ctx.tonic - 5), min(hi, ctx.tonic + 14), u, u + ctx.beat / 2, 3)
-            vel = ctx.vel(part, u, 0.82, 0.9) * rng.uniform(0.9, 1.05)
+            vel = ctx.vel(part, u, 0.64, 0.85) * rng.uniform(0.9, 1.05)
             for j, p in enumerate(notes):
-                out.append(ev(part, u, u, p, vel, art="mute", i=i, length=0.11, shift=0.006 * j))
+                out.append(ev(part, u, u, p, vel, art=art, i=i, length=0.11, shift=0.006 * j))
     return out
 
 
 def w_tremolo(ctx: StyleContext, i: int, part: str) -> list[Ev]:
     """Tremolo picking: two notes of the chord above the tune picked fast and even, as a mandolin or an
-    electric guitar through a tremolo sustains a chord."""
+    electric guitar through a tremolo sustains a chord. An instrument with a tremolo stroke of its own (a
+    mandolin's: down and up at its player's rate, each pick landing on the ringing course) holds the two
+    notes through the chord with it."""
     out = []
+    own = own_art(part, "tremolo", "") == "tremolo"
     for c in ctx.chords_in(i):
         lo, hi = high_range(ctx, part, i, 2, 12)
         notes = ctx.voicing(part, ctx.tones(c, c.u0, c.u1), lo, hi, c.u0, c.u1, 2, chord=c)
-        for u in ctx.grid.fine_in(c.u0, c.u1):
+        if own:
+            out += [ev(part, c.u0, c.u1, p, ctx.vel(part, c.u0, 0.36), art="tremolo", i=i) for p in notes]
+            continue
+        for k, u in enumerate(ctx.grid.fine_in(c.u0, c.u1)):  # picked down and up in turn
             for p in notes:
-                out.append(ev(part, u, u + 0.4, p, ctx.vel(part, u, 0.32 if not ctx.grid.on_beat(u) else 0.38), i=i))
+                out.append(ev(part, u, u + 0.4, p, ctx.vel(part, u, 0.5 if not ctx.grid.on_beat(u) else 0.58),
+                              art="up" if k % 2 else "down", i=i))
     return out
 
 
@@ -1078,15 +1140,18 @@ def w_epiano(ctx: StyleContext, i: int, part: str) -> list[Ev]:
 
 
 def w_pulse(ctx: StyleContext, i: int, part: str) -> list[Ev]:
-    """A chord repeated on every eighth, accented on the beats: a driving electric guitar, a pulsing piano."""
+    """A chord repeated on every eighth, accented on the beats, struck down on them and up between: a driving
+    electric guitar, a pulsing piano."""
     out = []
     for c in ctx.chords_in(i):
         subs = ctx.grid.subs_in(c.u0, c.u1)
         for k, u in enumerate(subs):
             end = until(subs, k, c.u1)
             notes = fingering(ctx, part, c, u, end, i)[-3:]
+            on = ctx.grid.on_beat(u)
             for p in notes:
-                out.append(ev(part, u, u + 0.8 * (end - u), p, ctx.vel(part, u, 0.42 if ctx.grid.on_beat(u) else 0.32), i=i))
+                out.append(ev(part, u, u + 0.8 * (end - u), p, ctx.vel(part, u, 0.58 if on else 0.46),
+                              art="down" if on else "up", i=i))
     return out
 
 
@@ -1166,10 +1231,18 @@ def w_drone(ctx: StyleContext, i: int, part: str) -> list[Ev]:
 
 BOWED = ("fiddle", "cello", "strings", "steel")
 SLIDING = ("steel", "slide", "harmonica", "synthlead")
+TREMOLO_LEADS = ("mandolin",)  # plucked instruments whose players tremolo a tune's long notes
 
 
 def sliding(ctx: StyleContext, part: str, events: list[Ev]) -> list[Ev]:
-    """How a pedal steel, a slide, a harmonica or a synth lead joins its notes: sliding into the long ones."""
+    """How a pedal steel, a slide, a harmonica or a synth lead joins its notes: sliding into the long ones;
+    and how a mandolin holds a tune's long notes (a beat and a half or more): tremolo, its picks filling
+    them as its short-ringing courses would not."""
+    if part in TREMOLO_LEADS and own_art(part, "tremolo", "") == "tremolo":
+        for e in events:
+            if e.u1 - e.u0 >= 1.5 * ctx.beat - 1e-9 and not e.art:
+                e.art = "tremolo"
+        return events
     if part not in SLIDING:
         return events
     for e in events:
@@ -1677,6 +1750,9 @@ def count_in(ctx: Context, style, lineup: list[str]) -> list[Ev]:
 
 LAG = {"bass": 0.007, "bowed": -0.012, "blown": -0.004, "reed": -0.004, "keys": 0.002, "drums": 0.0,
        "percussion": 0.0, "plucked": -0.002}
+# How much steadier than the band's humanize a pattern the hands run on their own is played: a banjo's
+# rolls go like clockwork (a Scruggs-style picker's onsets wander 6-8 ms, not the band's 9).
+STEADY = {"roll": 0.75}
 
 
 def arrange_style(genome, params, placed, lead, end, melody, seconds, sdef) -> tuple[list[Note], dict]:
@@ -1754,12 +1830,12 @@ def arrange_style(genome, params, placed, lead, end, melody, seconds, sdef) -> t
     notes = []
     for e in sorted(events, key=lambda e: (e.u0, e.shift, e.part, e.pitch)):
         key = (e.part, int(round(e.u0 * 1000)))
+        s = ctx.sections[min(max(e.section, 0), len(ctx.sections) - 1)]
         if key not in jitters:
             rng = np.random.default_rng([ctx.seed & 0xFFFFFFFF, 0x71, B.stream_of(e.part), key[1] + (1 << 20)])
-            jitters[key] = float(rng.normal(0.0, wobble))
+            jitters[key] = float(rng.normal(0.0, wobble * STEADY.get(s.parts.get(e.part, ""), 1.0)))
         start = max(0.0, seconds(e.u0) + e.shift + LAG.get(family(e.part), 0.0) + jitters[key])
         dur = e.length if e.length > 0 else seconds(e.u1) - start
-        s = ctx.sections[min(max(e.section, 0), len(ctx.sections) - 1)]
         notes.append(Note(part=e.part, start=start, dur=max(dur, 0.03), pitch=float(e.pitch),
                           vel=float(np.clip(e.vel, 0.02, 1.0)), section=s.name, art=e.art))
     notes += sung_notes(sung, seconds, ctx.seed)
