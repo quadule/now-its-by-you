@@ -312,15 +312,29 @@ quarter of a second to settle into Helmholtz motion; a player's takes under a
 tenth (Guettler and Askenfelt 1997), so once the bow has gathered speed the
 string is set moving as that speed sustains. Brightness moves the bow from
 over the fingerboard (0.13 of the string) toward the bridge (0.06), `tasto`
-and `pont` further, the bow's weight following Schelleng's window so the
-level holds while the tone moves. A cellist's vibrato is 5 to 6 Hz and 20 to
-35 cents (a violist's 5.5 to 6.3 and 14 to 26); shifts slide slower than a
-fiddler's; `trem` reverses the bow 11 to 15 times a second; `pizz` plucks the
-string over the fingerboard through the same body. The bodies follow the
-published modes (a cello's air near 100 Hz and its B1 pair near 180 and 215,
-a viola's near 230 and 400-460). The section gives each line of a chord to
-violins, violas or cellos by register, two or three players each, a few cents
-apart and a few tens of milliseconds early or late, each with its own vibrato.
+and `pont` further, the bow's weight following Schelleng's window so the level
+holds while the tone moves. The bow is not clean: a hiss that pulses with each
+slip sits 30 to 40 dB under the harmonics between 1 and 4 kHz (27 on the C
+string), and a fresh stroke lands with a scratch, its first 30 ms of 2 to 6
+kHz 6 to 8 dB over the held note's on the G and D strings; a bow change turns
+round in 25 to 30 ms. A cellist's vibrato is 5 to 6 Hz and 20 to 35 cents (a
+violist's 5.5 to 6.3 and 14 to 26), one motion of the hand through a phrase:
+half there 0.1 to 0.2 s into a note after a rest and whole by 0.3, carried at
+its width through slurs and bow changes, narrower on short notes, easing
+before a rest. Shifts slide slower than a fiddler's; `swell` grows from 9 dB
+down and dies back; `trem` reverses the bow 11 to 15 times a second. When the
+bow leaves a stopped note before a rest the finger damps it (a T60 of 0.9 s);
+an open string rings on. `pizz` plucks the string over the fingerboard through
+the same body and lets it ring until that string is played again, so an
+arpeggio's notes sound together. The bodies follow the published modes (a
+cello's air near 100 Hz and its B1 pair near 180 and 215, a viola's near 230
+and 400-460), with no hole after the B1 pair: a cello radiates well through
+250 to 500 Hz, its principal formant. The section gives each line of a chord
+to violins, violas or cellos by register, two or three players each, a few
+cents apart and a few tens of milliseconds early or late, each with a vibrato
+of their own, narrower than a soloist's and started in their own time; each
+desk is heard through a stereo pair, so a chord's channels correlate 0.4 to
+0.55, as a pair on a real section hears it.
 
 **Harmonica.** A ten-hole Richter harp: the major chord on every blow hole,
 the full scale only in holes 4 to 7, the gaps filled by bending (draw bends
@@ -333,8 +347,9 @@ the breath, speaks in 10 to 30 ms, and differs drawing and blowing; a bent
 note is approached from the unbent reed, darker; the tongue slaps chords and
 splits octaves, and the hands wah and tremble.
 
-Levels: a cello's held bass line -23.0 LUFS and the section's pad -23.8
-(comping, -23.7); the harmonica's melody -21.0 (a lead, -20.7).
+Levels: a cello's held bass line -23.3 LUFS, a viola's held line -23.6 and
+the section's pad -23.1 (comping, -23.7); the harmonica's melody -21.0 (a lead,
+-20.7).
 
 ## Idioms for the part-writer
 
@@ -474,8 +489,9 @@ a three-minute part costs on the M1 Max:
 | electric-crunch | riff | -23.4 | -23.7 | 3.1 |
 | electric-tremolo | held chords | -24.1 | -23.7 | 2.4 |
 | ebass | root and fifth | -23.3 | -24.1 | 1.0 |
-| cello | held bass line | -23.0 | -23.7 | 1.4 |
-| strings | four-note pad | -23.8 | -23.7 | 6.1 |
+| cello | held bass line | -23.3 | -23.7 | 1.6 |
+| viola | held line | -23.6 | -23.7 | 1.5 |
+| strings | four-note pad | -23.1 | -23.7 | 8.8 |
 | harmonica | melody | -21.0 | -20.7 | 0.7 |
 
 The other new set's test measures every instrument with one generic part per
@@ -576,15 +592,37 @@ mono sum; and strips taking out what the models no longer had too much of.
 All of these are changed (see the sections above, and the commits); what the
 advisor also asked for and isn't done is under Limits.
 
+A review of the bowed strings by measurement (a Fable advisor) found the
+section nearly mono (the chamber pad's channels correlating 0.95: each desk
+was one mono body, panned), the vibrato switched on a quarter of a second into
+every note and started afresh at every slur, the cello's body with a 7-10 dB
+hole between its B1 pair and 500 Hz (its principal formant: a hollow D
+string), the tone 44-72 dB clean between its harmonics with no bite as a
+stroke lands, stopped notes left ringing 2-5 s once the bow lifted, and
+pizzicato choked by the next note on any string. Measuring turned up one more:
+a swell waited most of a second to set the string moving, then set it moving
+afresh mid-note. All are fixed as above. Left for later: a section's
+smoothness (two or three players to a line beat 6-7 dB where eight would not),
+a bow stopped on the string at a note's end, the open strings ringing in
+sympathy, and a shift's S-shaped glide. The strings' strip now takes its
+boxiness at the cello's B1 boom (190 Hz), not in the formant the body now
+fills; its compressor, suspected of riding the section's beating, measured
+0.04 dB of movement and stays.
+
 ## Limits
 
 - Nobody has listened. The models are right by the measures above, but the
   measures are not the ear.
 - The pedal steel, the slide guitar, the accordion and the concertina are not
   here: their builders ran out of session before committing them. The
-  electric, bowed and harmonica builders' own reviews never ran; their
-  instruments pass their tests and the other set's contract test (but for
-  the loudness of its generic parts), and want a review by measurement next.
+  electric and harmonica builders' own reviews never ran; their instruments
+  pass their tests and the other set's contract test (but for the loudness
+  of its generic parts), and want a review by measurement next.
+- The string section is two or three players to a line, a chamber group's
+  sound more than an orchestra's: its held notes beat by 6-7 dB over a couple
+  of seconds.
+- A bowed note ends with the bow lifted, never stopped on the string, and the
+  open strings don't ring in sympathy.
 - The banjo's top octave: a metal-picked D4's 8-16 kHz is 28 dB under its
   loudest octave in its first 50 ms, where the advisor's estimate for a real
   banjo is 18-24; the string's own loss per trip takes the rest, and making
