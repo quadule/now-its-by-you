@@ -1081,7 +1081,8 @@ def held_through(ctx: Context, tune: list[Tune]) -> list[Tune]:
     """The tune with each note that isn't a tone of its chord held over from the note before."""
     out: list[Tune] = []
     for t in tune:
-        if out and t.pitch % 12 not in ctx.pcs(ctx.chord_at(t.u0).symbol) and abs(out[-1].u1 - t.u0) < 1e-9:
+        chord = ctx.pcs(ctx.chord_at(t.u0).symbol)
+        if out and t.pitch % 12 not in chord and out[-1].pitch % 12 in chord and abs(out[-1].u1 - t.u0) < 1e-9:
             out[-1] = Tune(out[-1].u0, t.u1, out[-1].pitch, out[-1].vel, out[-1].sung, out[-1].section, out[-1].first,
                            t.last)
         else:
