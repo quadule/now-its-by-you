@@ -91,6 +91,34 @@ def test_the_head_rings_at_a_membranes_modes():
     assert abs(freqs[near][np.argmax(db[near])] - f[0]) < 0.08 * f[0]
 
 
+def test_its_microphones_hear_half_the_heads_upper_modes_alike():
+    """Two microphones close to a banjo hear most of its head's crowded upper modes in the same phase: with
+    half of them alike, the placed banjo's mono sum stays level with one channel above 1.25 kHz (was 1 dB
+    under, raggedly down to 6), and its channels correlate 0.6 to 0.8 (0.44 with every mode its own)."""
+    from songbird.synth.instruments import place
+
+    f = np.fft.rfftfreq(1 << 16, 1 / SR)
+    thirds = [1250, 1600, 2000, 2500, 3150, 4000, 5000, 6300, 8000]
+
+    def bands(x):
+        p = np.abs(np.fft.rfft(x, 1 << 16)) ** 2
+        return np.array([10 * np.log10(p[(f >= c / 2 ** (1 / 6)) & (f < c * 2 ** (1 / 6))].mean()) for c in thirds])
+
+    gaps, corrs = [], []
+    for maker in range(4):
+        q = banjo._maker(streams("banjo", 0, maker)[1])
+        spec = banjo.head(banjo.head_mode(q["tension"], True), q["q"], q["bridge"], True, q["helm"], 0.5)
+        placed = place(body.impulse_response(spec, SR, seed=q["seed"], alike=banjo.ALIKE), *banjo.SPEC["banjo"]["place"])
+        gaps.append(bands(placed.mean(axis=1)) - bands(placed[:, 0]))
+        corrs.append(np.corrcoef(placed[:, 0], placed[:, 1])[0, 1])
+    assert np.mean(gaps) > -0.5 and np.min(gaps) > -5.0
+    assert 0.6 < np.mean(corrs) < 0.85
+    # and every other instrument's body is as it was: the default hears each mode in each microphone its own way
+    q = banjo._maker(streams("banjo", 0, 0)[1])
+    spec = banjo.head(banjo.head_mode(q["tension"], True), q["q"], q["bridge"], True, q["helm"], 0.5)
+    assert np.array_equal(body.impulse_response(spec, SR, seed=3), body.impulse_response(spec, SR, seed=3, alike=0.0))
+
+
 def test_the_head_takes_the_strings_energy_fast():
     """An open string falls 60 dB in one to two seconds, a high fretted note far sooner."""
     low, first, high = (t60(play([note(0.05, 4.0, p)], 4.3), 0.05) for p in (50, 62, 81))

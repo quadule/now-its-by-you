@@ -38,6 +38,7 @@ DECAY = 1.05  # s: an open course's decay at 220 Hz as pluck.py's (fretwork.Stri
 GLIDE = 5.0  # cents a pick at velocity 1 starts sharp: short, tight strings stretch less
 PULL = 0.3  # the break angle's pull over the bridge, weaker than a banjo's on its stiff top
 FORCE = 1.0
+ALIKE = 0.5  # the share of the body's upper modes the microphone pair hears in phase: its mono sum keeps them
 
 ARTICULATIONS = {
     "": "a flat pick: down, or in a quick run down and up in turn",
@@ -148,7 +149,7 @@ def render(name: str, notes, sr: int, length: int, rng: np.random.Generator, mak
         touch_band=(200.0, 3000.0))
 
     spec = box(quirks["style"], quirks["low"], quirks["spread"], quirks["q"], bright)
-    ir = body.impulse_response(spec, sr, seed=quirks["seed"], size=size)
+    ir = body.impulse_response(spec, sr, seed=quirks["seed"], size=size, alike=ALIKE)
     freqs, power = fretwork.body_power(ir, sr, place=SPEC["mandolin"]["place"])
     together: dict[float, int] = {}
     for f in fingered:

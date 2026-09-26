@@ -48,6 +48,7 @@ DECAY = 1.35  # s: an open string's decay at 220 Hz as pluck.py's (fretwork.Stri
 GLIDE = 15.0  # cents a pick at velocity 1 starts sharp
 PULL = 0.6  # the break angle's pull: its 2f at velocity 1 about 21 dB under the fundamental
 FORCE = 1.0  # the strings' force scale
+ALIKE = 0.5  # the share of the body's upper modes the microphone pair hears in phase: its mono sum keeps them
 
 ARTICULATIONS = {
     "": "the passage's plain stroke: the nail where it is clawhammer, a fingerpick where it is picked",
@@ -231,7 +232,7 @@ def render(name: str, notes, sr: int, length: int, rng: np.random.Generator, mak
     # the head: tighter is higher and brighter, a worn one slacker and duller
     f1 = head_mode(quirks["tension"], resonator) * 2.0 ** ((bright - 0.5) * 0.2) * (1.0 - 0.08 * wear)
     spec = head(f1, quirks["q"] * (1.0 - 0.2 * wear), quirks["bridge"], resonator, quirks["helm"], bright)
-    ir = body.impulse_response(spec, sr, seed=quirks["seed"], size=size)
+    ir = body.impulse_response(spec, sr, seed=quirks["seed"], size=size, alike=ALIKE)
     back = None if resonator else butter(2, 0.75 * f1 / size, btype="highpass", fs=sr, output="sos")
 
     def behind(freqs: np.ndarray) -> np.ndarray:

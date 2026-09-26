@@ -91,15 +91,20 @@ REED_BOX = Body(  # a harmonium's reed chamber and bellows box: a few broad, nas
 )
 
 
-def impulse_response(body: Body, sr: int, seed: int = 0, size: float = 1.0, channels: int = 2) -> np.ndarray:
+def impulse_response(body: Body, sr: int, seed: int = 0, size: float = 1.0, channels: int = 2,
+                     alike: float = 0.0) -> np.ndarray:
     """The body's response to one push of the bridge, shape (samples, channels),
     scaled so its average gain across the playing range is 0 dB.
 
     size scales the body: 1.25 is a quarter bigger, so every mode sits a
     quarter lower; the maker's seed places the scattered modes and nudges the
-    named ones, a few percent either way.
+    named ones, a few percent either way. alike is the share of the scattered
+    modes both microphones hear in the same phase (0: each its own, as two
+    microphones apart hear them; a pair close together hears most alike, so
+    the two don't cancel where they are summed to mono).
     """
     rng = np.random.default_rng(seed)
+    agree = np.random.default_rng([seed, 1]) if alike > 0.0 else None  # its own draws: the rest stay as they were
     n = int(body.length * sr)
     ir = np.zeros((n, channels))
 
@@ -131,7 +136,11 @@ def impulse_response(body: Body, sr: int, seed: int = 0, size: float = 1.0, chan
             db += hill_db * np.exp(-0.5 * (np.log2(f / (hill_f / size)) / (hill_w / 2.0)) ** 2)
         q = np.interp(x, [0.0, np.log2(hi / lo)], body.q) * np.exp(rng.normal(0.0, 0.15))
         g = 10.0 ** (db / 20.0) * 2.0 * np.pi * f / q
-        weights = g * rng.uniform(0.3, 1.0, channels) * rng.choice([-1.0, 1.0], channels)
+        levels = rng.uniform(0.3, 1.0, channels)
+        signs = rng.choice([-1.0, 1.0], channels)
+        if agree is not None and agree.random() < alike:
+            signs = np.full(channels, signs[0])
+        weights = g * levels * signs
         m, y = ring(f, q)
         ir[:m] += y[:, None] * weights[None, :]
 
