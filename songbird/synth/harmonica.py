@@ -316,7 +316,7 @@ def render(name: str, notes, sr: int, length: int, rng: np.random.Generator, mak
     bright, wear, ornament = float(s["brightness"]), float(s["wear"]), float(s["ornament"])
     style = str(s.get("style") or "")
     racked = style == "songwriter"  # a singer-songwriter's harp sits in a neck rack: no hands on it
-    # the maker's harp and its player: the comb's ring, every reed's own tuning (worn draw reeds 1-4, the ones
+    # the maker's harp and its player: the body's seed, every reed's own tuning (worn draw reeds 1-4, the ones
     # bent most, sag flat), the player's mouth and vibrato, then the harp's temperament and how sharp it is
     # tuned (so that played at a mezzo-forte breath it sits 0 to 2 cents over the band), drawn in a fixed order
     seed = int(make.integers(1 << 30))
@@ -363,7 +363,7 @@ def render(name: str, notes, sr: int, length: int, rng: np.random.Generator, mak
         # stops short as the breath turns, is cut by the tongue before the same reed again
         if then in ("repeat", "turned"):  # the tongue stops the air, or the breath stops before turning round
             stop = rng.uniform(0.015, 0.025) if then == "repeat" else rng.uniform(0.002, 0.006)
-            m = max(int(0.02 * sr), m - int(stop * sr))
+            m = max(min(m, int(0.02 * sr)), m - int(stop * sr))  # never below 20 ms, nor longer than written
         tail = int({"moved": 0.03, "turned": 0.015, "repeat": 0.008}.get(then, 0.035) * sr)
         tail = max(0, min(tail, length - i0 - m))
         n = m + tail
