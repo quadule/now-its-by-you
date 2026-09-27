@@ -9,9 +9,11 @@
 
 Sung takes. Someone sings along to the guide (--guide) on headphones, usually
 through tools/karaoke.py, which keeps each singer's takes apart
-(tools/takes.py). The take is placed against the guide it was sung to (by
-cross-correlating where they sing with where the song has singing, unless it
-already lines up), found an octave or key if they sang in their own, and
+(tools/takes.py): the whole song, or one section at a time, a take of one
+section holding only its window of the guide and only the notes inside that
+measured (measure_window). A take is placed against the guide it was sung to
+(by cross-correlating where they sing with where the song has singing, unless
+it already lines up), found an octave or key if they sang in their own, and
 aligned line by line by warping the tune onto the pitch they sang; each
 vowel's start is then found where its loudness climbs out of the consonant
 before it, less the bias measured for that consonant (ONSET_BIAS). Where the
@@ -25,7 +27,11 @@ falls off, and the depth of any vibrato. Wrong notes are fine: pitch
 gestures are measured around the note the singer actually sang, and skipped
 where that was far from the tune. Each take is measured once, raw, into
 renders/measured/ (until the take, its guide, the measuring code or the
-aligner changes).
+aligner changes). A guide in another key or at another speed
+(tools/guides.py) is itself moved and slowed, so a take is measured against
+exactly what its singer heard; timing is kept in beats of the tempo they
+heard and hold as a share of the note, so a phrasing learned at 80% is in
+the song's own time at full speed.
 
 A phrasing is made from those measurements: scaled as a phrasing keeps them
 (SUNG), and learned as the singer's rules for notes like each one (on the
@@ -62,7 +68,7 @@ import json
 import os
 import sys
 import warnings
-from collections import defaultdict
+from collections import Counter, defaultdict
 from dataclasses import astuple, dataclass, field, fields, replace
 from pathlib import Path
 
@@ -563,42 +569,193 @@ def rounded(v: float, digits: int) -> float | None:
     return None if np.isnan(v) else round(float(v), digits)
 
 
+# --- takes of part of the song -------------------------------------------------------------------
+#
+# A take of one section holds only its window of the guide: its first sample is from_s seconds in (the
+# page cuts off everything before), and it was meant to stop at to_s. Only the notes that start inside
+# [from_s, to_s) are measured; the rest are left unmeasured and count for nothing in a phrasing. The
+# functions above measure a whole take exactly as ever (their source is what version() hashes, so a
+# whole take's kept measurement stays good); these few fit a part of the song to them.
+
+WINDOW_REACH = 1.0  # seconds a take of part of the song is looked for either side of where it says it starts
+# Whether MFA hears a take of part of the song: its own lines alone, cut from it as from any take. Checked on
+# windows cut from Milo's three real takes (a verse, the bridge and a refrain from each, 41 to 46 notes): with
+# MFA, 76-100% of vowel starts landed within 10 ms of where aligning the whole take put them (median 0), and
+# timing read as it did there (r 0.88 to 1.00); with our own onsets alone, 16-46% (medians 10 to 263 ms off,
+# r -0.02 to 0.79). Aligning a section takes MFA about 20 s.
+WINDOW_MFA = True
+
+
+def window_of(take: K.Take, g: Guide) -> tuple[float, float] | None:
+    """Where on its guide's clock a take was sung, (from_s, to_s), when that is part of the song: a take of
+    one section, or one that stopped before the last note began. None for a take of the whole song (and for
+    every take from before takes said where they start), which is measured as it always was."""
+    if take.said("from_s") is None and take.said("to_s") is None:
+        return None
+    import soundfile as sf
+
+    end = take.from_s + sf.info(str(take.path)).duration  # a take that stopped short ends where its sound does
+    to_s = end if take.to_s is None else min(take.to_s, end)
+    if take.from_s <= 0.0 and to_s > g.notes[-1].start:
+        return None
+    return take.from_s, to_s
+
+
+def within(g: Guide, inside: list[int]) -> Guide:
+    """The guide's notes at the indices inside (in order) as a guide of their own: their knots, what comes
+    before each vowel, and the lines they're in (cut to the notes inside); the same digest, tempo and words."""
+    at = {k: i for i, k in enumerate(inside)}
+    lines = [[at[k] for k in line if k in at] for line in g.lines]
+    return Guide(g.digest, [g.notes[k] for k in inside], [g.knots[k] for k in inside], [ln for ln in lines if ln],
+                 g.tempo, g.lexicon, [g.before[k] for k in inside], g.templates)
+
+
+def on_the_clock(y: np.ndarray, from_s: float):
+    """A take's f0, loudness and activity (analyze_take) on its guide's clock, frame for frame, for a take
+    whose first sample is from_s seconds in: silence before that. Only the take itself is analysed, moved
+    by the part of a frame from_s falls past the frame grid, so its frames land exactly on the guide's."""
+    pre = int(from_s / S.FRAME + 1e-9)
+    y = np.concatenate([np.zeros(int(round((from_s - pre * S.FRAME) * S.SR))), y])
+    f0, band, active = analyze_take(y)
+    return (np.concatenate([np.zeros(pre), f0]), np.concatenate([np.full(pre, float(np.min(band))), band]),
+            np.concatenate([np.zeros(pre, dtype=bool), active]))
+
+
+def place_window(f0, active, knots, a: int, b: int) -> int:
+    """place_take for a take of part of the song, frames a to b of which are its window on the guide's clock:
+    where they sing against where the notes inside it have singing, and only within WINDOW_REACH. The tune
+    comes round again (every verse sings one tune, and a verse's second and fourth lines are one phrase), so
+    a short take searched as widely as a whole one could slide onto the wrong line or verse. Within 0.25 s it
+    counts as already lined up, as for a whole take."""
+    expected = np.zeros(max(b - a, 0))
+    for _, v0, v1, _, _, _ in knots:
+        expected[max(int(v0 / S.FRAME) - a, 0) : max(int(v1 / S.FRAME) - a, 0)] = 1.0
+    sung = np.zeros(len(expected))
+    got = ((f0[a:b] > 0) & active[a:b]).astype(float)
+    sung[: len(got)] = got
+    x, e, n = sung - sung.mean(), expected - expected.mean(), len(expected)
+    reach = int(WINDOW_REACH / S.FRAME)
+    lags = np.arange(-reach, reach + 1)
+    score = [float(np.dot(x[max(lag, 0) : n + min(lag, 0)], e[max(-lag, 0) : n - max(lag, 0)])) for lag in lags]
+    best = int(lags[int(np.argmax(score))]) if n else 0
+    return 0 if abs(best) * S.FRAME < 0.25 else best
+
+
+def measure_window(path: Path, g: Guide, from_s: float, to_s: float) -> dict:
+    """measure_take for a take of part of the song, whose first sample is from_s seconds into its guide:
+    every note that starts in [from_s, to_s) and ends before the take's sound does, the rest unmeasured
+    (None). The take is placed by the notes inside its window alone (place_window), its key read from
+    them alone, and MFA hears their lines alone (WINDOW_MFA); onsets are on the guide's clock plus the
+    take's lag, as a whole take's are."""
+    y = S.load(path)
+    end = from_s + len(y) / S.SR
+    inside = [k for k, n in enumerate(g.notes) if from_s <= n.start < to_s and n.start + n.dur <= end]
+    lag, key, heard, measured_at = 0, 0, None, {}
+    if inside:
+        part = within(g, inside)
+        f0, band, active = on_the_clock(y, from_s)
+        a = int(from_s / S.FRAME + 1e-9)
+        lag = place_window(f0, active, part.knots, a, min(len(f0), int(round((to_s + WINDOW_REACH) / S.FRAME))))
+        key = find_key(f0, part, lag)
+        found = []
+        for line in part.lines:
+            found += align_by_pitch(f0, band, [part.notes[k] for k in line], [part.knots[k] for k in line], lag, key)
+        found = vowel_onsets(found, band, f0)
+        shift = [int(round(ONSET_BIAS.get(b, 0.0) / S.FRAME)) for b in part.before]
+        found = [(v0 - d, max(v1, v0 - d + 2), max(c1, v0 - d + 2)) for (v0, v1, c1), d in zip(found, shift)]
+        heard = A.aligned(path, part, lag * S.FRAME - from_s) if WINDOW_MFA else None  # the WAV starts at from_s
+        if heard is not None:
+            found, used = with_aligner(found, heard, part, lag)
+        gestures, off = measure_sung(part.notes, part.knots, found, (f0, band, active), template(g, key), lag, key,
+                                     g.tempo)
+        measured_at = {k: (v0, ge, o) for k, (v0, _v1, _c1), ge, o in zip(inside, found, gestures, off)}
+    unmeasured = {"onset": None, "off": None, "gesture": None}
+    return {
+        "lag": lag * S.FRAME,
+        "key": key,
+        "window": [round(from_s, 4), round(to_s, 4)],
+        "aligner": None if heard is None else {"mfa": heard["key"]["mfa"], "lowered": heard["lowered"],
+                                               "onsets": int(sum(used))},
+        "fields": [f.name for f in fields(P.Gesture)],
+        "notes": [{"phrase": n.phrase, "index": index_in_phrase(g.notes, k), "start": round(n.start, 4),
+                   **({"onset": round(m[0] * S.FRAME, 4), "off": rounded(m[2], 1),
+                       "gesture": [rounded(v, 4) for v in astuple(m[1])]} if (m := measured_at.get(k)) else unmeasured)}
+                  for k, n in enumerate(g.notes)],
+    }
+
+
+# what a take of part of the song's measurement depends on besides version()
+WINDOWED = ("window_of", "within", "on_the_clock", "place_window", "measure_window")
+
+
+@functools.cache
+def window_version() -> str:
+    """version(), and the functions that fit a take of part of the song to it."""
+    h = hashlib.sha256(version().encode())
+    for name in WINDOWED:
+        h.update(inspect.getsource(globals()[name]).encode())
+    h.update(repr((WINDOW_REACH, WINDOW_MFA)).encode())
+    return h.hexdigest()[:12]
+
+
 def measured(genome_path: Path, genome, take) -> dict:
     """A take (a kept take or a path) measured once and kept in renders/measured/
-    until the take, the guide it was sung to or this extractor changes."""
+    until the take, the guide it was sung to, the part of it sung or this extractor
+    changes. A take of the whole song is kept as it always was; a take of part of
+    it (its sidecar's from_s and to_s: window_of) says which part in its stamp."""
     if not isinstance(take, K.Take):  # a reference take: the guide it followed is written beside it
         path = Path(take).resolve()
         about = [path.with_suffix(".truth.json"), path.with_suffix(".json")]
         pinned = next((json.loads(f.read_text()).get("guide") for f in about if f.exists()), None)
-        take = K.Take(path, "", genome_path.stem, pinned)
+        part = {k: v for f in reversed(about) if f.exists() for k, v in json.loads(f.read_text()).items()
+                if k in ("from_s", "to_s")}
+        take = K.Take(path, "", genome_path.stem, pinned, info=part)
     g = guide(genome_path, genome, take.guide)
+    window = window_of(take, g)
     stat = take.path.stat()
     stamp = {"guide": g.digest, "extractor": version(), "aligner": A.fingerprint(), "bytes": stat.st_size,
              "mtime": int(stat.st_mtime)}
+    if window is not None:
+        if not WINDOW_MFA:
+            stamp["aligner"] = None
+        stamp.update(from_s=round(window[0], 4), to_s=round(window[1], 4), window=window_version())
     name = take.path.relative_to(ROOT).as_posix() if take.path.is_relative_to(ROOT) else take.path.as_posix().lstrip("/")
     cache = MEASURED / (name.replace("/", "__").removesuffix(".wav") + ".json")
     if cache.exists():
         data = json.loads(cache.read_text())
         if data.get("stamp") == stamp:
             return data
-    data = {"take": name, "stamp": stamp, **measure_take(take.path, g)}
+    data = {"take": name, "stamp": stamp,
+            **(measure_take(take.path, g) if window is None else measure_window(take.path, g, *window))}
     cache.parent.mkdir(parents=True, exist_ok=True)
     cache.write_text(json.dumps(data) + "\n")
     return data
 
 
 def gestures_of(data: dict) -> list[P.Gesture]:
-    """A measured take's raw gestures, NaN where a field wasn't measured. A note's tune is where its
-    vowel sat against the tune (off), less where the whole take sat: someone singing a little flat all
-    through leans on no note; wrong notes (off by more than WRONG_NOTE) aren't intonation."""
+    """A measured take's raw gestures, NaN where a field wasn't measured (every field of a note a take
+    of part of the song didn't sing). A note's tune is where its vowel sat against the tune (off), less
+    where the whole take sat: someone singing a little flat all through leans on no note; wrong notes
+    (off by more than WRONG_NOTE) aren't intonation."""
     offs = np.array([NAN if n["off"] is None else n["off"] for n in data["notes"]], dtype=float)
     fine = np.abs(offs) <= WRONG_NOTE
     centre = float(np.median(offs[fine])) if fine.any() else 0.0
     out = []
     for n, off, ok in zip(data["notes"], offs, fine):
-        g = {f: NAN if v is None else v for f, v in zip(data["fields"], n["gesture"])}
+        g = {f: NAN if v is None else v for f, v in zip(data["fields"], n["gesture"] or [None] * len(data["fields"]))}
         g["tune"] = off - centre if ok else NAN
         out.append(P.Gesture(**g))
+    return out
+
+
+def places(data: dict) -> list[tuple[str, int, int]]:
+    """Where in the song each note of a measured take is: its phrase, its place in the phrase, and which
+    time round that note is (0 the first time the guide sings it)."""
+    count: Counter = Counter()
+    out = []
+    for n in data["notes"]:
+        out.append((n["phrase"], n["index"], count[(n["phrase"], n["index"])]))
+        count[(n["phrase"], n["index"])] += 1
     return out
 
 
@@ -617,22 +774,32 @@ def bounded(g: P.Gesture) -> P.Gesture:
 def sung_phrasing(genome_path: Path, genome, takes):
     """Gestures from one or more sung takes (paths, or kept takes): every
     sighting of every note of the tune, scaled as a phrasing keeps them, what
-    each was sung to, and a portrait of each take."""
+    each was sung to, and a portrait of each take. A note a take didn't sing
+    (outside its part of the song) isn't a sighting at all. Each person counts
+    once at each place in the song, however many of their takes sang it: a
+    take of the whole song sings every place, a take of one section its own."""
     seen: dict[tuple[str, int], list[P.Gesture]] = defaultdict(list)
     words: dict[tuple[str, int], list[str]] = defaultdict(list)  # who sang it to what: singer|syllable
     weights: dict[tuple[str, int], list[float]] = defaultdict(list)
     who = [t.who if isinstance(t, K.Take) else "" for t in takes]
+    data = [measured(genome_path, genome, take) for take in takes]
+    whole = Counter(singer for singer, d in zip(who, data) if "window" not in d)
+    partly = Counter((singer, place) for singer, d in zip(who, data) if "window" in d
+                     for n, place in zip(d["notes"], places(d)) if n["gesture"] is not None)
     portrait = []
-    for take, singer in zip(takes, who):
-        data = measured(genome_path, genome, take)
-        gestures = gestures_of(data)
-        sung_to = guide(genome_path, genome, data["stamp"]["guide"]).notes
-        for n, note, ge in zip(data["notes"], sung_to, gestures):
+    for d, singer in zip(data, who):
+        gestures = gestures_of(d)
+        sung_to = guide(genome_path, genome, d["stamp"]["guide"]).notes
+        for n, note, ge, place in zip(d["notes"], sung_to, gestures, places(d)):
+            if n["gesture"] is None:
+                continue
             key = (n["phrase"], n["index"])
             seen[key].append(bounded(scaled(ge, SUNG)))
             words[key].append(f"{singer}|{(note.syllable or '').lower()}")
-            weights[key].append(1.0 / who.count(singer))  # each person counts once
-        portrait.append((data["take"], data["lag"], data["key"], gestures, [n["off"] for n in data["notes"]]))
+            weights[key].append(1.0 / (whole[singer] + partly[(singer, place)]))  # each person counts once
+        sung = [k for k, n in enumerate(d["notes"]) if n["gesture"] is not None]
+        portrait.append((d["take"], d["lag"], d["key"], [gestures[k] for k in sung],
+                         [d["notes"][k]["off"] for k in sung]))
     return seen, (words, weights), portrait
 
 
@@ -790,9 +957,25 @@ def singer_phrasing(genome_path: Path, genome, takes, credit: str | None = None)
     singer's, or, given several singers' takes, everyone's at once, each
     person counting once and each voice's own errors averaging away."""
     seen, (words, weights), portrait = sung_phrasing(genome_path, genome, takes)
+    if not seen:  # takes of part of the song that stopped before a note, or of a stretch with no singing
+        raise ValueError("none of these takes sang a whole note of the tune")
     phrasing = gather(genome, ruled(genome, seen, words, floor_for(SUNG), weights))
-    detail = f"{len(takes)} sung take(s)" + (f" by {credit}" if credit else "")
+    detail = f"{len(takes)} sung take(s)" + (f" by {credit}" if credit else "") + sung_to(takes)
     return phrasing, P.to_json(phrasing, source="song", source_detail=detail, scale=SUNG), portrait
+
+
+def sung_to(takes) -> str:
+    """What the takes were sung to, for a phrasing's source_detail: how many to each key and speed (their
+    spec ids, as tools/guides.py names them: a.k-2.t80 is set a, two semitones down, at 80%) and how many
+    were of one section. Takes at other speeds hold and scoop differently, so the mix is worth seeing.
+    Nothing for takes of the whole song sung to the song's own guide, as before there was a choice."""
+    kept = [t for t in takes if isinstance(t, K.Take)]
+    specs = Counter(t.spec or "the song's own guide" for t in kept)
+    sections = sum(1 for t in kept if t.section is not None)
+    if not sections and set(specs) <= {"the song's own guide"}:
+        return ""
+    return (f", {sections} of one section" if sections else "") + "; sung to " + ", ".join(
+        f"{spec} ({n})" for spec, n in sorted(specs.items(), key=lambda kv: (-kv[1], kv[0])))
 
 
 def index_in_phrase(notes, k: int) -> int:
