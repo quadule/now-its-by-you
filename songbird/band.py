@@ -225,6 +225,7 @@ class Context:
         self.tune: list[Tune] = []
         self.phrases: list[tuple[float, float]] = []  # each placed phrase's span, bar line to bar line
         self.choir: list[tuple[float, float, int]] = []  # the lineage voices' notes, where they sing
+        self.prelude: tuple[float, float] | None = None  # the quote's bars before the song, if the lead plays one
         self._streams: dict[tuple[str, int], np.random.Generator] = {}
         self._layout(placed, lead, melody)
         self._energy()
@@ -1298,7 +1299,8 @@ def drone_part(ctx: Context) -> list[Ev]:
     out: list[Ev] = []
     root = ctx.tonic - 12
     fifth = root + MODES[ctx.mode][4]
-    spans: list[list[float]] = []
+    # under the quote before the song, and on into it, where the lead plays one (prelude_part)
+    spans: list[list[float]] = [[ctx.prelude[0], ctx.sections[0].u0]] if ctx.prelude and ctx.sections else []
     for s in ctx.sections:
         if s.parts.get("drone"):
             if spans and abs(spans[-1][1] - s.u0) < 1e-9:
@@ -1311,6 +1313,47 @@ def drone_part(ctx: Context) -> list[Ev]:
             out.append(Ev("drone", u0, min(u1 + tail, ctx.end), p, v * (0.7 + 0.4 * ctx.energy_at(u0)),
                           section=ctx.section_at(u0)))
     return out
+
+
+# --- the quote before the song -------------------------------------------------------
+
+
+def prelude_span(ctx: Context) -> tuple[float, float] | None:
+    """Where the genome's quote plays, in grid units: its bars before the song's first pickup, which
+    style.count_in cleared for it; None where there is no quote, or no room."""
+    q = getattr(ctx.genome, "quote", None)
+    if q is None or not ctx.sections or not ctx.tune:
+        return None
+    u1 = min(t.u0 for t in ctx.tune)  # the song's first pickup, or its first bar line
+    u0 = u1 - q.bars * ctx.bar
+    return (u0, u1) if u0 >= -1e-9 else None
+
+
+def prelude_part(ctx: Context, part: str | None = None) -> list[Ev]:
+    """Before the song: the lead instrument alone plays a line of an older song the genome names
+    (genome.quote; H's is the chorus of Daisy Bell, the first song a computer sang), the way it states
+    the tune, in the bars ctx.prelude spans; the drone holds under it (drone_part). part: who plays it
+    (default the band's lead, or the first lead instrument playing)."""
+    if ctx.prelude is None:
+        return []
+    q = ctx.genome.quote
+    if part is None:
+        part = next((x for x in [ctx.band.lead] + [x for x in LEADS if x != ctx.band.lead] if ctx.on(x)), None)
+    if part is None or not ctx.on(part):
+        return []
+    u0, u1 = ctx.prelude
+    sung = q.sung
+    notes = []
+    for k, n in enumerate(sung):
+        start = u0 + n.onset
+        nxt = u0 + sung[k + 1].onset if k + 1 < len(sung) else u1
+        end = min(start + n.dur, nxt, u1)
+        pitch = ctx.tonic + degree_semitones(n.degree, ctx.mode, n.alter)
+        vel = (0.8 if n.onset % ctx.meter.foot == 0 else 0.68) * min(1.0, 0.7 + 0.1 * k)  # easing in, not at once
+        notes.append(Tune(start, end, pitch, vel, False, 0, k == 0, k == len(sung) - 1, ()))
+    # in the octave the intro's statement of the tune will take, so the one leads into the other
+    shift = octave_for(part, [t.pitch for t in ctx.tune_in(0)] or [t.pitch for t in notes])
+    return statement(ctx, part, notes, 0.8, 0, shift=shift)
 
 
 # --- putting it together -----------------------------------------------------------
@@ -1331,6 +1374,8 @@ def arrange(genome, params, placed, lead, end, melody, seconds) -> tuple[list[No
         return arrange_style(genome, params, placed, lead, end, melody, seconds, of(style))
     ctx = Context(genome, params, placed, lead, end, melody)
     plan(ctx)
+    if style is not None and style.intro == "quote":  # the lead's quote of an older song before the song
+        ctx.prelude = prelude_span(ctx)
     # the ballad chosen as a style (not the seed's own): its arrangement's options and the backing voices
     shaped = style is not None and not style.seed
     if shaped:
@@ -1350,6 +1395,7 @@ def arrange(genome, params, placed, lead, end, melody, seconds) -> tuple[list[No
     if ctx.on("guitar"):
         events += guitar_part(ctx, capo)
     events += melodic_parts(ctx)
+    events += prelude_part(ctx)
     if ctx.on("drum"):
         events += drum_part(ctx)
     if ctx.on("drone"):

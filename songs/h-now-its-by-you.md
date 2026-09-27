@@ -116,3 +116,13 @@ bridges and three tag syllables, riffed with the artist in one thread and
 checked against the tune: see [h-bank.md](h-bank.md). The artist's own lines
 are the heard and owns refrains (now the true and take couplets) and the first
 line of the kids verse.
+
+**Quote** (2026-09-27): `quote` in the genome holds the first line of the
+chorus of Daisy Bell (Harry Dacre, 1892; public domain), the first song a
+computer sang (an IBM 7094 at Bell Labs, 1961) and the one HAL sings as he is
+switched off, re-barred from its waltz into the song's 4/4: so mi do so, / la
+ti do la / do so. It is never sung. When a rendition's intro is a quote
+(`--arrange intro=quote`; docs/STYLES.md), the whistle plays it alone over the
+drone in four bars before the song, the machine singer nodding to its
+ancestor. The seed's own arrangement doesn't quote, so the singing site's
+guides keep their timing; the contest render may.

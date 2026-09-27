@@ -124,6 +124,15 @@ energy; with the default arc, H runs:
 | refrain | 0.81 | everything: the whistle's descant, the lute doubling the singer, the fiddle's pad, the full drum |
 | tag | 0.55 | winding down: the whistle doubles the la-la tune, one strum a chord left to ring, rolled harp, the drone, a last open stroke |
 
+Before all of that, when the arrangement's intro is a quote (`--arrange
+intro=quote`, docs/STYLES.md), the whistle alone plays a line of an older song
+the genome names, over the drone, in bars cleared before the song the way a
+count-in's are (`prelude_part`); H's `quote` is the first line of the chorus of
+Daisy Bell (Harry Dacre, 1892), the first song a computer sang (Bell Labs,
+1961), re-barred from its waltz into the song's 4/4: the machine singer nodding
+to its ancestor. The song itself starts later by those bars and is otherwise
+unchanged, so the recording sets' guides, which don't quote, keep their timing.
+
 The rules, briefly:
 
 - **Leave room for the voice, and for the lineage choir.** Comping plays 2

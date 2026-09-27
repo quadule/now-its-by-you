@@ -1667,6 +1667,12 @@ def shape_plan(ctx: Context, style, plan: Plan, rhythm, pads, chords_first) -> N
         if len(starts) > 1:
             for p in sections[0].parts:
                 plan.entrances[(0, p)] = starts[1]
+    if style.intro == "quote" and getattr(ctx, "prelude", None) and sections and sections[0].role == "intro":
+        starts = phrase_starts(ctx, 0)  # after the quote, the intro's rhythm waits for its second phrase
+        if len(starts) > 1:
+            for p in sections[0].parts:
+                if p in rhythm or p == "guitar" or family(p) in ("drums", "percussion", "bass"):
+                    plan.entrances[(0, p)] = starts[1]
     if style.alone and len(verses) >= style.alone:
         i = verses[style.alone - 1]
         alone_with = style.alone_with
@@ -1777,6 +1783,8 @@ def arrange_style(genome, params, placed, lead, end, melody, seconds, sdef) -> t
         ctx.chords += [Chord(end - 2 * ctx.bar, end - ctx.bar, "IV", last, False), Chord(end - ctx.bar, end, "I", last, True)]
     ctx.capo = B.choose_capo(ctx)
     plan_style(ctx)
+    if params.style.intro == "quote":  # the lead's quote of an older song before the song (songbird.band)
+        ctx.prelude = B.prelude_span(ctx)
     rhythm = {p for p in ctx.lineup if family(p) in PERCUSSION + ("bass",)}
     pads = {p for p in ctx.lineup if family(p) in ("pad", "organ") or p in ("strings", "drone")}
     chords_first = next((p for p in chords_first_all(ctx)), None)
@@ -1804,6 +1812,9 @@ def arrange_style(genome, params, placed, lead, end, melody, seconds, sdef) -> t
     else:  # the voices answer the lines: the players leave the ends of lines to them
         events += [e for e in B.fills(ctx) if ctx.sections[e.section].role != "refrain"]
     events += count_in(ctx, params.style, ctx.lineup)
+    if ctx.prelude is not None:  # the style's lead alone quotes an older song before the song (songbird.band)
+        lead_part = next((x for x in (sdef.playing(x, ctx.lineup) for x in sdef.leads) if ctx.on(x)), None)
+        events += B.prelude_part(ctx, lead_part) if lead_part else []
     events = shape_events(ctx, ctx.plan, [e for e in events if ctx.on(e.part)], rhythm, params.style)
 
     # the singer's notes are nobody else's: a chord's note on a sung pitch goes an octave down

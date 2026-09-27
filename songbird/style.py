@@ -22,7 +22,7 @@ from dataclasses import asdict, dataclass, field, fields
 import numpy as np
 
 FEELS = ("straight", "swing", "shuffle", "twelve", "half", "double", "waltz", "six")
-INTROS = ("lead", "pad", "count", "voice")
+INTROS = ("lead", "pad", "count", "voice", "quote")
 ENDINGS = ("ring", "rit", "cold", "amen", "repeat")
 BACKINGS = ("oohs", "echo", "thirds", "gang")
 LINEAGE_MAX = 16  # generations of styles a record remembers
@@ -41,7 +41,9 @@ class Style:
     harmony     0..1, how much of the style's harmony vocabulary colours the chords (sevenths, sixths, added
                 ninths, suspensions, a plagal amen...), always voiced around the sung tune
     intro       lead (an instrument states the tune), pad (a pad swells in alone), count (a count-in on
-                sticks), voice (the singer starts alone and the band comes in on the second line); "" as
+                sticks), voice (the singer starts alone and the band comes in on the second line), quote
+                (the lead instrument alone plays a line of an older song the genome names, genome.quote,
+                in bars cleared before the song; a genome with no quote starts as the form has it); "" as
                 the form has it
     alone       which verse (1 the first) is sung with little: a cappella, or with one instrument; 0 none
     alone_with  the one instrument playing under it; "" a cappella
@@ -791,8 +793,14 @@ def rebar(u: float, lead: float) -> float:
 
 
 def count_in(genome, params) -> int:
-    """Grid units of silence before the song for a count-in (a bar), when the style counts in."""
-    return genome.meter.bar if params.style.intro == "count" else 0
+    """Grid units before the song: a bar of silence for a count-in, when the style counts in, or the bars
+    of the genome's quote (an older song's line the lead plays alone, songbird.band.prelude_part), when
+    the intro quotes and the genome has one to play."""
+    if params.style.intro == "count":
+        return genome.meter.bar
+    if params.style.intro == "quote" and getattr(genome, "quote", None) is not None:
+        return genome.quote.bars * genome.meter.bar
+    return 0
 
 
 def coda(genome, params) -> int:

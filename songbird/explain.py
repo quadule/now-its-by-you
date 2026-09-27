@@ -822,7 +822,7 @@ def style_card(v: Version) -> dict:
                "the band joins line by line in the first verse" if s.entrances else "",
                "the bridge in half-time" if s.bridge == "half" else "",
                {"lead": "", "pad": "a pad swells in to begin", "count": "a count-in to begin",
-                "voice": "the singer begins alone"}.get(s.intro, ""),
+                "voice": "the singer begins alone", "quote": "a line of an older song to begin"}.get(s.intro, ""),
                BACKING_NAMES.get(s.backing, ""),
                ENDING_NAMES.get(s.ending, "") if s.ending and s.ending != "ring" else ""]
     about = sdef.about.split(":", 1)[-1].strip() if name != "ballad" else \

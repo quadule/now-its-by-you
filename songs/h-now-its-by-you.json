@@ -114,6 +114,12 @@
     "misheard": "M IH0 S HH ER1 D", "whatever": "W AH0 T EH1 V ER0", "fifteen": "F IH1 F T IY0 N",
     "unsown": "AH0 N S OW1 N"},
 
+  "quote": {
+    "about": "Daisy Bell (Harry Dacre, 1892; public domain): the first song a computer sang, an IBM 7094 at Bell Labs in 1961, and the one HAL sings as he is switched off. The first line of its chorus (so mi do so, / la ti do la / do so), re-barred from its waltz into the song's own 4/4 and phrased as a player would play it alone: the drone alone for two beats, a breath after 'Daisy, Daisy', 'answer' broad, 'do' held three beats, and a beat's rest before the song. When the arrangement's intro is a quote (songbird/style.py, --arrange intro=quote), the whistle plays it alone over the drone in the bars before the song, and the bass waits for the intro's second phrase: the machine singer nodding to its ancestor.",
+    "tune": "| . . . . 5 - - - | 3 - - - 1 - - - | 5, - - . 6, - 7, - | 1 - 6, - - - 1 - | 5, - - - - - . .",
+    "chords": "I | I | I IV | IV | I"
+  },
+
   "bank": {
     "note": "Every verse, refrain couplet, bridge and tag syllable the song can draw on, with named slots for the words that swap and the rules for combining them; songs/h-bank.md is the same bank for reading. A slot is {name}, or {name.column} for a coupled slot whose columns are chosen together, once per block; songbird/bank.py checks every way each line can be sung against the tune and the dictionary. Lines are syllabified with hyphens like every other lyric here.",
     "refrain": {

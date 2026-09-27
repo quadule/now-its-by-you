@@ -100,6 +100,9 @@ class Genome:
     source: dict  # the JSON as authored, carried forward verbatim
     lexicon: dict  # the song's own words: spelling -> ARPAbet, for words no dictionary has
     fixed: dict = field(default_factory=dict)  # every fixed lyric block by name, the refrain among them
+    # a line of an older song, on the song's grid in its own notation, never sung: the lead instrument may
+    # play it alone before the song (style.intro "quote"); source["quote"]["about"] says what it is and why
+    quote: Phrase | None = None
 
     def section(self, name: str) -> Section:
         """A section of a concrete form by name. A name the genome doesn't
@@ -219,6 +222,14 @@ def from_dict(data: dict) -> Genome:
     for token in data["form"]:
         if token.rstrip("?*") not in sections:
             raise ValueError(f"form names unknown section {token!r}")
+    quote = None
+    if data.get("quote"):
+        spec = data["quote"]
+        notes, bars = parse_tune(spec["tune"], meter)
+        if not notes or not bars or any(n.onset < 0 for n in notes):
+            raise ValueError("the quote is whole bars on the grid, with no pickup")
+        chords = spec.get("chords") or " | ".join(["I"] * bars)
+        quote = Phrase("quote", spec["tune"], notes, bars, _parse_chords(chords, bars, "quote"))
 
     genome = Genome(
         title=data["title"],
@@ -236,6 +247,7 @@ def from_dict(data: dict) -> Genome:
         fixed={
             s.lyrics: tuple(data[s.lyrics]) for s in sections.values() if s.lyrics not in (None, "verse") and s.lyrics in data
         } | {"refrain": tuple(data["refrain"])},
+        quote=quote,
     )
     for section in sections.values():
         if section.lyrics == "verse":

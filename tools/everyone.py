@@ -69,6 +69,9 @@ def main() -> None:
     ap.add_argument("--choir", type=int, default=CHOIR, help=f"the choir's voices (default {CHOIR})")
     ap.add_argument("--render", metavar="OUT.flac", help="render the song everyone's way, packed, to this file")
     ap.add_argument("--stamp", action="store_true", help="also keep everyone's blend as <song>.site-<date-time>.json")
+    ap.add_argument("--arrange", nargs="*", default=[], metavar="FIELD=VALUE",
+                    help="the arrangement's options for the render (songbird render --arrange), e.g. intro=quote "
+                         "for the Daisy Bell quote before the song")
     args = ap.parse_args()
 
     from songbird import genome as G
@@ -89,7 +92,8 @@ def main() -> None:
     if args.render:
         from songbird.cli import main as songbird
 
-        code = songbird(["render", str(genome_path), *render, "--out", args.render, "--pack"])
+        arrange = ["--arrange", *args.arrange] if args.arrange else []
+        code = songbird(["render", str(genome_path), *render, *arrange, "--out", args.render, "--pack"])
         if code:
             raise SystemExit(code)
 

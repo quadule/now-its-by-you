@@ -215,7 +215,11 @@ style leans toward some (`StyleDef.options`):
   does), or a pad swells in alone, where the form has an intro; where it
   doesn't, a count-in (four clicks on the sticks, the hands or a muted chop, a
   bar before the song) or the singer alone, the band coming in on the second
-  line;
+  line; or a quote: the lead instrument alone, over the drone, plays a line of
+  an older song the genome names (`quote` in the genome, its tune on the
+  song's grid; H's is the chorus of Daisy Bell, 1892, the first song a computer
+  sang, at Bell Labs in 1961) in bars cleared before the song as a count-in's
+  are; a genome with no quote starts as the form has it;
 - **a bare verse**: one verse sung a cappella, or over one instrument (a
   shanty's first; for others a later one);
 - **stop-time**: a verse where everyone keeping time hits each bar's one
@@ -289,7 +293,7 @@ times it, and waltz styles have their own, slower, ranges.
 | lineage | the styles this rendition's line was sung in, one a generation, oldest first, this one last (up to 16) |
 | feel | straight, swing, shuffle, twelve, half, double, waltz, six; "" the style's own |
 | harmony | 0..1, how much of the style's vocabulary colours the chords |
-| intro | lead, pad, count, voice; "" as the form has it |
+| intro | lead, pad, count, voice, quote; "" as the form has it |
 | alone, alone_with | which verse (1 the first) is bare, and the one instrument under it ("" a cappella) |
 | stops | which verse is in stop-time |
 | breakdown | the last refrain starts stripped |
