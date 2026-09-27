@@ -79,30 +79,93 @@ def test_an_output_folder_is_cleared_only_if_this_tool_made_it(tmp_path):
 
 
 @pytest.mark.skipif(not shutil.which("ffmpeg"), reason="needs ffmpeg")
-def test_the_site_is_built_from_one_guide_score(tmp_path, monkeypatch):
+def test_the_site_has_a_guide_for_every_spec(tmp_path, monkeypatch):
     for mod, name in ((T, "ROOT"), (K, "ROOT")):
         monkeypatch.setattr(mod, name, tmp_path)
     monkeypatch.setattr(M, "GUIDES", tmp_path / "renders" / "guide")
+    monkeypatch.setattr(M, "SETS", tmp_path / "sets")  # none: the song's own words and form
     monkeypatch.setattr(K, "RECORDINGS", tmp_path / "recordings")
     monkeypatch.setattr(K, "GUIDES", tmp_path / "recordings" / "guides")
     genome = json.loads((ROOT / "songs" / "h-now-its-by-you.json").read_text())
-    genome["seed_params"]["form"] = ["intro", "verse"]
+    genome["seed_params"]["form"] = ["verse"]
     path = tmp_path / "h-short.json"
     path.write_text(json.dumps(genome))
+    # the pages as they'll be, with the words release in them too
+    web = tmp_path / "web"
+    shutil.copytree(W.WEB / "page", web / "page")
+    for name in ("consent.md", "words-release.md"):
+        shutil.copyfile(W.WEB / name, web / name)
+    index = (web / "page" / "index.html").read_text()
+    if "{{WORDS_RELEASE}}" not in index:
+        index = index.replace("</body>", '<div id="wordsRelease" data-digest="{{WORDS_DIGEST}}">{{WORDS_RELEASE}}</div></body>')
+    (web / "page" / "index.html").write_text(index)
+    monkeypatch.setattr(W, "WEB", web)
 
     out = tmp_path / "public"
-    song = W.build(path, out)
-    score = M.full_paths("h-short")[1]
-    assert song["guide"] == K.digest(score) and K.guide_score("h-short", song["guide"])  # pinned for fetched takes
-    assert song["song"] == "h-short" and song["default"] == "melody" and list(song["mixes"]) == ["melody", "full"]
-    assert song["lines"] and song["tempo"] == json.loads(score.read_text())["tempo"]
-    for mix, m in song["mixes"].items():
-        assert (out / "song" / m["file"]).stat().st_size == m["bytes"] > 10000
-        assert len(m["env"]) == int(W.OPENING / W.FRAME) and m["rate"] == 44100
+    with pytest.raises(SystemExit, match="nothing called"):
+        W.build(path, out, keys=[3])
+    done = []
+    song = W.build(path, out, keys=[0, -2], tempos=[100], jobs=2, progress=lambda *a: done.append(a[0]))
+    assert sorted(done) == ["song.k-2.t100", "song.k0.t100"]  # each in a process of its own
+    assert (song["v"], song["song"], song["mixes"], song["keys"], song["tempos"]) == (2, "h-short", ["melody", "full"],
+                                                                                      [-2, 0], [100])
+    assert song["sets"] == [{"id": "song", "name": "The song", "about": M.SONG["about"]}]
+    assert song["default"] == {"set": "song", "key": 0, "tempo": 100, "mix": "melody"}
+    assert list(song["guides"]) == ["song.k-2.t100", "song.k0.t100"]
+    for spec, guide in song["guides"].items():
+        score = M.spec_path("h-short", spec, "score")
+        assert guide["guide"] == K.digest(score) and K.guide_score("h-short", guide["guide"])  # pinned for fetched takes
+        words = json.loads((out / "song" / guide["lyrics"]).read_text())
+        assert words["guide"] == guide["guide"] and words["spec"]["id"] == spec and words["lines"]
+        assert [s["window"] for s in words["sections"] if s["sung"]] and words["duration"] == pytest.approx(guide["duration"], abs=1e-3)
+        for mix, m in guide["mixes"].items():
+            assert m["file"] == f"{spec}.{mix}.mp3" and (out / "song" / m["file"]).stat().st_size == m["bytes"] > 10000
+            assert len(m["env"]) == int(W.OPENING / W.FRAME) and m["rate"] == 44100
+        assert guide["mixes"]["melody"]["bytes"] < 0.8 * guide["mixes"]["full"]["bytes"]  # the melody at 64 kbps
+    assert song["max_seconds"] == round(max(g["duration"] for g in song["guides"].values()) + 60)
     page = (out / "index.html").read_text()
     shown = re.search(r'data-digest="([0-9a-f]{12})">(.*?)</div>', page, re.S)
     assert shown and shown[1] == song["consent"] == W.digest(shown[2])  # the digest is of the text on the page
+    assert song["words_release"] == W.digest(W.consent_html((web / "words-release.md").read_text()))
+    assert f'data-digest="{song["words_release"]}"' in page and "{{" not in page
+    assert (K.GUIDES / f"release.{song['consent']}.html").exists()  # each release as people read it
+    assert (K.GUIDES / f"words-release.{song['words_release']}.html").exists()
     for name in ("sing.js", "sing.css", "karaoke.js", "recorder.js", "robots.txt", "favicon.svg"):
         assert (out / name).exists()
     assert (out / "karaoke.js").read_text() == (ROOT / "tools" / "karaoke.js").read_text()
     assert (out / ".assetsignore").read_text().split() == [W.MARK, ".assetsignore"]
+    assert W.size(out) == sum(f.stat().st_size for f in out.rglob("*") if f.is_file()) - sum(
+        (out / n).stat().st_size for n in (W.MARK, ".assetsignore"))
+    # the WAVs are let go once encoded; the MP3s are kept, and used again while what they were made from holds
+    assert not M.spec_path("h-short", "song.k0.t100", "full").exists()
+    again = W.build(path, out, keys=[0], tempos=[100], jobs=1)
+    assert not M.spec_path("h-short", "song.k0.t100", "full").exists()  # nothing rendered
+    assert again["guides"]["song.k0.t100"] == song["guides"]["song.k0.t100"]
+    W.build(path, out, keys=[0], tempos=[100], jobs=1, keep_wavs=True, melody_bitrate="48k")  # another bitrate: made again
+    assert M.spec_path("h-short", "song.k0.t100", "full").exists()
+
+
+def test_a_set_that_cant_be_sung_stops_the_build_before_it_starts(tmp_path, monkeypatch):
+    monkeypatch.setattr(M, "GUIDES", tmp_path / "renders" / "guide")
+    monkeypatch.setattr(M, "SETS", tmp_path / "sets")
+    (tmp_path / "sets").mkdir()
+    (tmp_path / "sets" / "h-now-its-by-you.json").write_text(json.dumps(
+        {"sets": [{"id": "a", "form": ["verse"], "words": {"verses": [{"id": "wire", "slots": {}}]}}]}))
+    with pytest.raises(SystemExit, match="set a can't be sung: .*2, 3 or 4 verses"):
+        W.specs(ROOT / "songs" / "h-now-its-by-you.json")
+
+
+def test_a_melody_that_wont_decode_in_time_is_encoded_at_the_full_guides_rate(tmp_path, monkeypatch):
+    tried = []
+
+    def encode(wav, mp3, bitrate):
+        tried.append(bitrate)
+        if bitrate == "64k":
+            raise W.OutOfTime("late")
+        return {"bitrate": bitrate}
+
+    monkeypatch.setattr(W, "encode", encode)
+    assert W.encode_first(tmp_path / "x.wav", tmp_path / "x.mp3", ("64k", "96k")) == {"bitrate": "96k"}
+    assert tried == ["64k", "96k"]
+    with pytest.raises(W.OutOfTime):
+        W.encode_first(tmp_path / "x.wav", tmp_path / "x.mp3", ("64k",))
