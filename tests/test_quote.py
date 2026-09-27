@@ -88,9 +88,9 @@ def test_the_quote_as_a_coda_the_whistle_alone_over_the_last_chord():
     assert len(a.part("voice")) == len(b.part("voice"))
 
 
-def test_the_quote_woven_into_the_bridge_as_the_fiddles_line():
-    """The leitmotif: in the bridge's third phrase, where the lineage sings, the fiddle's long notes are Daisy,
-    Daisy (so mi do so,), each a tone of the chord under it; nothing else moves, and by chance about a third of
+def test_the_quote_woven_into_the_bridge_in_the_whistles_voice():
+    """The leitmotif: in the bridge's third phrase, where the lineage sings, the whistle plays Daisy, Daisy
+    (so mi do so,), each a tone of the chord under it, the fiddle's pad resting; nothing else moves, and by chance about a third of
     renditions do it."""
     g = G.load(H)
     plain = choose_params(g)
@@ -100,19 +100,20 @@ def test_the_quote_woven_into_the_bridge_as_the_fiddles_line():
     bridge = next(s for s in b.sections if s[0] == "bridge")
     bar = 60.0 / p.tempo * g.meter.bar / g.meter.beat
     third = (bridge[1] + 4 * bar, bridge[1] + 6 * bar)  # the bridge's third phrase: bars 5 and 6 of eight
-    fiddle = sorted((n for n in b.notes if n.part == "fiddle" and third[0] - 0.2 <= n.start < third[1] - 0.2), key=lambda n: n.start)
-    pcs = [int(round(n.pitch - p.tonic)) % 12 for n in fiddle if n.dur >= 0.4]
+    whistle = sorted((n for n in b.notes if n.part == "whistle" and third[0] - 0.2 <= n.start < third[1] - 0.2), key=lambda n: n.start)
+    pcs = [int(round(n.pitch - p.tonic)) % 12 for n in whistle if n.dur >= 0.4]
     assert pcs == [7, 4, 0, 7], pcs
     choir_top = max(n.pitch for n in b.notes if n.part.startswith("choir") or n.part == "voice")
-    assert all(n.pitch > choir_top - 12 for n in fiddle)  # up with the singers, not under them
-    others = [n for n in a.notes if n.part == "fiddle" and third[0] - 0.2 <= n.start < third[1] - 0.2]
-    assert others and [round(n.pitch) for n in others] != [round(n.pitch) for n in fiddle]  # it replaced the pad's own line
+    assert all(n.pitch > choir_top for n in whistle)  # above the singers
+    assert not [n for n in a.notes if n.part == "whistle" and third[0] - 0.2 <= n.start < third[1] - 0.2]  # silent there without it
+    fiddle_then = [n for n in b.notes if n.part == "fiddle" and third[0] + 0.3 <= n.start < third[1] - 0.3]
+    assert not fiddle_then, fiddle_then  # the pad rests while the motif plays
     from songbird.band import wants_motif
     from songbird.band import Context  # noqa: F401  (the chance is drawn from the seed)
     chance = replace(plain, style=replace(plain.style, motif="chance"))
     hits = 0
     for seed in range(60):
         score = realize(g, replace(chance, seed=seed))
-        fid = [n for n in score.notes if n.part == "fiddle" and third[0] - 0.2 <= n.start < third[1] - 0.2 and n.dur >= 0.4]
+        fid = [n for n in score.notes if n.part == "whistle" and third[0] - 0.2 <= n.start < third[1] - 0.2 and n.dur >= 0.4]
         hits += [int(round(n.pitch - p.tonic)) % 12 for n in fid] == [7, 4, 0, 7]
     assert 8 <= hits <= 32, hits

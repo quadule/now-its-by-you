@@ -1236,6 +1236,12 @@ def melodic_parts(ctx: Context) -> list[Ev]:
         tune = ctx.tune_in(i)
         top = max([t.pitch for t in tune] or whole)  # counter-lines and pads go above where the tune lies here
         written: list[Ev] = []
+        # the quote's opening woven into the bridge, in the lead instrument's voice (H: the whistle), where the
+        # style asks; the fiddle's pad makes room for it
+        woven = motif_part(ctx, i, ctx.band.lead, top) if s.role == "bridge" and ctx.on(ctx.band.lead) else []
+        if woven:
+            written += woven
+            out += woven
         for part in ("whistle", "fiddle", "lute"):
             what = s.parts.get(part)
             if what == "lead":  # the tune where nobody sings (not the singer's pickup into the next line)
@@ -1259,11 +1265,9 @@ def melodic_parts(ctx: Context) -> list[Ev]:
                 for e in mine:
                     if e.u1 - e.u0 >= ctx.bar - 1e-9:
                         e.art = "swell"
-                if s.role == "bridge" and part == "fiddle":
-                    woven = motif_part(ctx, i, part, top)  # the quote's opening, where the style weaves it in
-                    if woven:
-                        a, b = woven[0].u0, max(e.u1 for e in woven)
-                        mine = [e for e in mine if e.u1 <= a + 1e-9 or e.u0 >= b - 1e-9] + woven
+                if woven:  # room for the quote's opening: the pad rests while it plays
+                    a, b = woven[0].u0, max(e.u1 for e in woven)
+                    mine = [e for e in mine if e.u1 <= a + 1e-9 or e.u0 >= b - 1e-9]
             else:
                 mine = []
             written += mine
@@ -1377,10 +1381,11 @@ def wants_motif(ctx: Context) -> bool:
 
 
 def motif_part(ctx: Context, section: int, part: str, top: int) -> list[Ev]:
-    """The quote's opening (H's: Daisy, Daisy, so mi do so,) as the bowed pad's line over a bridge's third
-    phrase, one note to each quarter of the phrase, above the singers; only where every note is a tone of the
-    chord under it (H's b3 runs I, then vi V: so mi over I, do over vi, so, over V), so it sits in the harmony
-    as if it had always been there. Nothing where the style doesn't ask (wants_motif)."""
+    """The quote's opening (H's: Daisy, Daisy, so mi do so,) in the lead instrument's voice over a bridge's third
+    phrase, one note to each quarter of the phrase, above the singers, the fiddle's pad resting for it; only
+    where every note is a tone of the chord under it (H's b3 runs I, then vi V: so mi over I, do over vi, so,
+    over V), so it sits in the harmony as if it had always been there. Nothing where the style doesn't ask
+    (wants_motif)."""
     if not wants_motif(ctx):
         return []
     q = ctx.genome.quote
@@ -1395,7 +1400,8 @@ def motif_part(ctx: Context, section: int, part: str, top: int) -> list[Ev]:
     for k, pitch in enumerate(pitches):
         if pitch % 12 not in ctx.pcs(ctx.chord_at(p0 + k * step).symbol):
             return []
-    shift = 12 * int(np.ceil((top + 1 - min(pitches)) / 12.0))  # just above the singers, in whole octaves
+    # just above the singers, in whole octaves, and no lower than the instrument plays
+    shift = max(12 * int(np.ceil((top + 1 - min(pitches)) / 12.0)), octave_for(part, pitches))
     notes = [Tune(p0 + k * step, p0 + (k + 1) * step, pitch, 0.5, False, section, k == 0, k == len(motif) - 1, ())
              for k, pitch in enumerate(pitches)]
     return statement(ctx, part, notes, 0.42, section, ornament=False, shift=shift)
