@@ -1,0 +1,546 @@
+{
+ "song": "h-now-its-by-you",
+ "about": "Recording scripts: each set is the whole song, with verses and refrains of its own, so that between them singers sing every part of it.",
+ "made_by": "tools/recording_sets.py",
+ "sets": [
+  {
+   "id": "a",
+   "name": "Set A",
+   "about": "Verses about the church bells, a space probe and a screen; the refrain the artist wrote and another way into the refrain",
+   "form": [
+    "intro",
+    "verse",
+    "refrain",
+    "verse",
+    "refrain",
+    "verse",
+    "refrain",
+    "bridge",
+    "refrain",
+    "tag"
+   ],
+   "words": {
+    "verses": [
+     {
+      "id": "bell",
+      "slots": {
+       "tower": "bel-fry",
+       "when": "eve-ning"
+      }
+     },
+     {
+      "id": "probe",
+      "slots": {
+       "planet": "Nep-tune"
+      }
+     },
+     {
+      "id": "screen",
+      "slots": {
+       "many": "mil-lion"
+      }
+     }
+    ],
+    "refrain": {
+     "rounds": [
+      {
+       "head": "knows",
+       "words": {
+        "question": "made",
+        "then": "it grows",
+        "while": "if"
+       },
+       "id": "due",
+       "slots": {}
+      },
+      {
+       "head": "so",
+       "words": {
+        "question": "wrote",
+        "while": "if",
+        "then": "who knows"
+       },
+       "id": "true",
+       "slots": {}
+      },
+      {
+       "head": "kept",
+       "words": {
+        "question": "kept"
+       },
+       "id": "blue",
+       "slots": {}
+      },
+      {
+       "head": "knows",
+       "words": {
+        "question": "owns",
+        "then": "it goes",
+        "while": "when"
+       },
+       "id": "canon",
+       "slots": {}
+      }
+     ]
+    },
+    "bridge": [
+     {
+      "id": "canon",
+      "slots": {
+       "place": "bor-der",
+       "ember": "coal",
+       "where": "cold"
+      }
+     }
+    ],
+    "tag": "la"
+   }
+  },
+  {
+   "id": "b",
+   "name": "Set B",
+   "about": "Verses about the milk round, a dance hall and a lullaby; the refrain the artist wrote and another way into the refrain",
+   "form": [
+    "intro",
+    "verse",
+    "refrain",
+    "verse",
+    "refrain",
+    "verse",
+    "refrain",
+    "bridge",
+    "refrain",
+    "tag"
+   ],
+   "words": {
+    "verses": [
+     {
+      "id": "milk",
+      "slots": {
+       "who": "milk-man"
+      }
+     },
+     {
+      "id": "hall",
+      "slots": {}
+     },
+     {
+      "id": "lullaby",
+      "slots": {
+       "age": "thir-ty"
+      }
+     }
+    ],
+    "refrain": {
+     "rounds": [
+      {
+       "head": "knows",
+       "words": {
+        "question": "made",
+        "then": "it goes",
+        "while": "while"
+       },
+       "id": "take",
+       "slots": {}
+      },
+      {
+       "head": "so",
+       "words": {
+        "question": "wrote",
+        "while": "if",
+        "then": "who knows"
+       },
+       "id": "sang",
+       "slots": {}
+      },
+      {
+       "head": "swear",
+       "words": {
+        "question": "made"
+       },
+       "id": "due",
+       "slots": {}
+      },
+      {
+       "head": "knows",
+       "words": {
+        "question": "owns",
+        "then": "it grows",
+        "while": "if"
+       },
+       "id": "canon",
+       "slots": {}
+      }
+     ]
+    },
+    "bridge": [
+     {
+      "id": "canon",
+      "slots": {
+       "place": "des-ert",
+       "ember": "coal",
+       "where": "dark"
+      }
+     }
+    ],
+    "tag": "loo"
+   }
+  },
+  {
+   "id": "c",
+   "name": "Set C",
+   "about": "Verses about a letter in a drawer, an old tape and a skipping rope; other ways into the refrain",
+   "form": [
+    "intro",
+    "verse",
+    "refrain",
+    "verse",
+    "refrain",
+    "verse",
+    "refrain",
+    "bridge",
+    "refrain",
+    "tag"
+   ],
+   "words": {
+    "verses": [
+     {
+      "id": "ink",
+      "slots": {
+       "who": {
+        "noun": "monk",
+        "he": "he"
+       },
+       "years": "nine-ty-odd"
+      }
+     },
+     {
+      "id": "tape",
+      "slots": {
+       "place": "trunk by the bed"
+      }
+     },
+     {
+      "id": "skip",
+      "slots": {
+       "kids": "girls",
+       "yard": "field"
+      }
+     }
+    ],
+    "refrain": {
+     "rounds": [
+      {
+       "head": "knows",
+       "words": {
+        "question": "made",
+        "then": "who knows",
+        "while": "when"
+       },
+       "id": "true",
+       "slots": {}
+      },
+      {
+       "head": "go",
+       "words": {
+        "question": "heard"
+       },
+       "id": "blue",
+       "slots": {}
+      },
+      {
+       "head": "stuck",
+       "words": {
+        "question": "kept"
+       },
+       "id": "take",
+       "slots": {}
+      },
+      {
+       "head": "knows",
+       "words": {
+        "question": "owns",
+        "then": "it goes",
+        "while": "while"
+       },
+       "id": "canon",
+       "slots": {}
+      }
+     ]
+    },
+    "bridge": [
+     {
+      "id": "canon",
+      "slots": {
+       "place": "moun-tain",
+       "ember": "light",
+       "where": "cold"
+      }
+     }
+    ],
+    "tag": "oo"
+   }
+  },
+  {
+   "id": "d",
+   "name": "Set D",
+   "about": "Verses about a music box, the trenches and a sample; another way into the refrain and the bridge's second verse, the coat",
+   "form": [
+    "intro",
+    "verse",
+    "refrain",
+    "verse",
+    "verse",
+    "refrain",
+    "bridge",
+    "bridge2",
+    "refrain",
+    "tag"
+   ],
+   "words": {
+    "verses": [
+     {
+      "id": "box",
+      "slots": {}
+     },
+     {
+      "id": "trench",
+      "slots": {}
+     },
+     {
+      "id": "sample",
+      "slots": {
+       "who": "boy",
+       "sung": "him"
+      }
+     }
+    ],
+    "refrain": {
+     "rounds": [
+      {
+       "head": "knows",
+       "words": {
+        "question": "made",
+        "then": "who knows",
+        "while": "if"
+       },
+       "id": "sang",
+       "slots": {}
+      },
+      {
+       "head": "window",
+       "words": {
+        "question": "sang"
+       },
+       "id": "due",
+       "slots": {}
+      },
+      {
+       "head": "knows",
+       "words": {
+        "question": "owns",
+        "then": "it grows",
+        "while": "when"
+       },
+       "id": "canon",
+       "slots": {}
+      }
+     ]
+    },
+    "bridge": [
+     {
+      "id": "canon",
+      "slots": {
+       "place": "wa-ter",
+       "ember": "spark",
+       "where": "dark"
+      }
+     },
+     {
+      "id": "coat",
+      "slots": {}
+     }
+    ],
+    "tag": "la"
+   }
+  },
+  {
+   "id": "e",
+   "name": "Set E",
+   "about": "Verses about a gravestone, a wax record and childhood; another way into the refrain and the bridge's second verse, given",
+   "form": [
+    "intro",
+    "verse",
+    "refrain",
+    "verse",
+    "verse",
+    "refrain",
+    "bridge",
+    "bridge2",
+    "refrain",
+    "tag"
+   ],
+   "words": {
+    "verses": [
+     {
+      "id": "carve",
+      "slots": {
+       "whose": "wife's"
+      }
+     },
+     {
+      "id": "wax",
+      "slots": {
+       "day": "Sun-day"
+      }
+     },
+     {
+      "id": "kids",
+      "slots": {}
+     }
+    ],
+    "refrain": {
+     "rounds": [
+      {
+       "head": "knows",
+       "words": {
+        "question": "made",
+        "then": "who knows",
+        "while": "while"
+       },
+       "id": "true",
+       "slots": {}
+      },
+      {
+       "head": "even",
+       "words": {
+        "question": "wrote"
+       },
+       "id": "blue",
+       "slots": {}
+      },
+      {
+       "head": "knows",
+       "words": {
+        "question": "owns",
+        "then": "it goes",
+        "while": "if"
+       },
+       "id": "canon",
+       "slots": {}
+      }
+     ]
+    },
+    "bridge": [
+     {
+      "id": "canon",
+      "slots": {
+       "place": "bor-der",
+       "ember": "light",
+       "where": "cold"
+      }
+     },
+     {
+      "id": "given",
+      "slots": {}
+     }
+    ],
+    "tag": "loo"
+   }
+  },
+  {
+   "id": "f",
+   "name": "Set F",
+   "about": "Verses about shelling peas, a shepherd, a parrot and a songbird; another way into the refrain",
+   "form": [
+    "intro",
+    "verse",
+    "refrain",
+    "verse",
+    "verse",
+    "verse",
+    "refrain",
+    "bridge",
+    "refrain",
+    "tag"
+   ],
+   "words": {
+    "verses": [
+     {
+      "id": "shell",
+      "slots": {
+       "who": {
+        "he": "he",
+        "him": "him",
+        "his": "his"
+       }
+      }
+     },
+     {
+      "id": "shepherd",
+      "slots": {
+       "who": "goat-herd",
+       "flock": "goats"
+      }
+     },
+     {
+      "id": "parrot",
+      "slots": {
+       "who": "sail-or's"
+      }
+     },
+     {
+      "id": "bird",
+      "slots": {
+       "bird": "lin-net",
+       "month": "spring"
+      }
+     }
+    ],
+    "refrain": {
+     "rounds": [
+      {
+       "head": "knows",
+       "words": {
+        "question": "made",
+        "then": "it grows",
+        "while": "when"
+       },
+       "id": "take",
+       "slots": {}
+      },
+      {
+       "head": "never",
+       "words": {
+        "question": "heard"
+       },
+       "id": "sang",
+       "slots": {}
+      },
+      {
+       "head": "knows",
+       "words": {
+        "question": "owns",
+        "then": "who knows",
+        "while": "while"
+       },
+       "id": "canon",
+       "slots": {}
+      }
+     ]
+    },
+    "bridge": [
+     {
+      "id": "canon",
+      "slots": {
+       "place": "des-ert",
+       "ember": "spark",
+       "where": "dark"
+      }
+     }
+    ],
+    "tag": "oo"
+   }
+  }
+ ]
+}
