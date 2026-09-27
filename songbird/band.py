@@ -1436,7 +1436,8 @@ def arrange(genome, params, placed, lead, end, melody, seconds) -> tuple[list[No
     harp = let_ring(ctx, [e for e in events if e.part == "harp"])
     events = [e for e in events if e.part != "harp"] + harp
     # whatever sounds through the last chord holds to the end, and rings on from there (through a coda's bars too)
-    hold = min(ctx.end, sung_end) if ctx.end > sung_end + 1e-9 else ctx.end
+    coda = style is not None and style.coda == "quote" and style.ending != "amen" and ctx.end > sung_end + 1e-9
+    hold = sung_end if coda else ctx.end
     for e in events:
         if e.part != "drum" and e.length <= 0 and e.u1 >= hold - ctx.sub - 1e-9:
             e.u1 = ctx.end

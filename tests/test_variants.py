@@ -136,7 +136,7 @@ def test_no_variants_sings_exactly_as_before(path):
     assert not any(n.ornament for n in score.notes)
     assert all("ornament" not in n for n in score.to_dict()["notes"])  # the score's record is as it was
     assert set(seed.to_dict()) == set(g.seed_params) | {"band", "choir", "humanize", "ritardando", "singer", "mix",
-                                                         "leanings", "lay", "inventory", "seed", "accomp"}
+                                                         "leanings", "lay", "inventory", "seed", "accomp", "loudness"}
 
 
 def test_a_lineage_sings_its_variants_and_the_band_plays_them(h):

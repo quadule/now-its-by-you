@@ -28,6 +28,9 @@ if TYPE_CHECKING:
     from .harvest import Voice
 
 
+SUNG_SYLLABLES = {"oo": "UW1"}  # what backing voices sing (songbird.idioms.backing), readable for every song
+
+
 @dataclass(frozen=True)
 class Params:
     """Everything a rendition decided that the genome leaves open."""
@@ -417,5 +420,7 @@ def realize(genome: Genome, params: Params, verses=None, phrasing: Phrasing | No
             section_spans.append((section_name, s0, s1))
 
     notes.sort(key=lambda n: (n.start, n.part, n.pitch))
-    score = Score(tuple(notes), final + ring, tuple(section_spans), dict(genome.lexicon), band=band_settings)
+    # the score's own words: the song's lexicon, and the syllables the backing voices sing ("oo", which no
+    # dictionary has: a machine choosing oohs for a song without its own reading used to fail)
+    score = Score(tuple(notes), final + ring, tuple(section_spans), {**SUNG_SYLLABLES, **genome.lexicon}, band=band_settings)
     return style_mod.finish(score, genome, params)  # a style's key lift for the last refrain, if it has one

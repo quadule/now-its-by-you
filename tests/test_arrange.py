@@ -146,7 +146,7 @@ def test_the_seed_form_has_the_templates_shape():
 
 
 def test_forms_says_how_many_of_each_section_the_bank_can_fill():
-    assert A.forms(g) == {"verse": (2, 3, 4), "refrain": (0, 1, 2, 3, 4, 5, 6, 7), "bridge": (0, 1, 2)}  # a refrain a couplet
+    assert A.forms(g) == {"verse": (2, 3, 4), "refrain": (0, 1, 2, 3, 4, 5, 6, 7, 8), "bridge": (0, 1, 2)}  # a refrain a couplet
     assert A.problem(g, SEED_FORM) is None and A.problem(g, shape(4, 6, 2)) is None
     assert A.problem(g, shape(5)).startswith("this form has 5 verse sections;")
     assert "no section 'chorus'" in A.problem(g, ("verse", "verse", "chorus"))
@@ -332,7 +332,7 @@ def test_the_seeds_own_words_are_named_for_their_bank_entries():
 @pytest.mark.parametrize("form, why", [
     (shape(5), "5 verse sections; the bank's rules sing 2, 3 or 4 verses"),
     (shape(1), "1 verse section;"),
-    (shape(2, 8), "8 refrain sections; the bank's rules sing 0 to 7 refrains"),
+    (shape(2, 9), "9 refrain sections; the bank's rules sing 0 to 8 refrains"),
     (shape(2, 3, 3), "3 bridge sections; the bank's rules sing 0, 1 or 2 bridge sections"),
     (("verse", "verse", "chorus", "refrain", "bridge"), "no section 'chorus'"),
 ])
@@ -387,7 +387,7 @@ def test_the_arrange_command_prints_a_lyric_sheet(capsys):
     assert A.main([str(H), "--seed", "7", "--form", "verse", "refrain", "bridge"]) == 1
     assert "1 verse section" in capsys.readouterr().err
     assert A.main([str(H), "--forms"]) == 0
-    assert capsys.readouterr().out.startswith("verse: 2, 3 or 4\nrefrain: 0 to 7\nbridge: 0, 1 or 2\n")
+    assert capsys.readouterr().out.startswith("verse: 2, 3 or 4\nrefrain: 0 to 8\nbridge: 0, 1 or 2\n")
 
 
 # Singing them
