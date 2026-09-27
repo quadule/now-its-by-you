@@ -106,7 +106,9 @@
     if (bridge().setEdit) bridge().setEdit(path, value);
   }
   function serializeNotes(notes) {
-    return notes.map((n) => ({ degree: n.degree, onset: round(n.onset), duration: round(n.duration) }));
+    // Keep untouched expressive and compound-meter timing exact. A third of a
+    // beat rounded for display can otherwise become a false syllable overlap.
+    return notes.map((n) => ({ degree: n.degree, onset: n.onset, duration: n.duration }));
   }
   function commitNotes(notes, message) {
     const p = phrase();
@@ -145,8 +147,8 @@
       }
     }
     const latestOnset = Math.min(followingStart - original.duration, index === p.notes.length - 1 ? b.max_final_onset ?? b.max_end : b.max_end);
-    if ("onset" in changes) next.onset = round(clamp(quantize(next.onset), previousEnd, latestOnset));
-    if ("duration" in changes) next.duration = round(clamp(quantize(next.duration), b.min_duration, followingStart - next.onset));
+    if ("onset" in changes) next.onset = clamp(quantize(next.onset), previousEnd, latestOnset);
+    if ("duration" in changes) next.duration = clamp(quantize(next.duration), b.min_duration, followingStart - next.onset);
     return next;
   }
   function changeNote(changes, snap) {
@@ -173,8 +175,8 @@
     const start = p.notes[0].onset, end = p.notes.at(-1).onset + p.notes.at(-1).duration;
     const slots = Math.round((end - start) / b.grid);
     if (slots < p.notes.length) return;
-    const boundaries = p.notes.map((_, i) => round(start + Math.floor(i * slots / p.notes.length) * b.grid));
-    const notes = p.notes.map((n, i) => ({ ...n, onset: boundaries[i], duration: round((boundaries[i + 1] ?? end) - boundaries[i]) }));
+    const boundaries = p.notes.map((_, i) => start + Math.floor(i * slots / p.notes.length) * b.grid);
+    const notes = p.notes.map((n, i) => ({ ...n, onset: boundaries[i], duration: (boundaries[i + 1] ?? end) - boundaries[i] }));
     commitNotes(notes, "Notes spread evenly across the phrase.");
   }
   function smoothMelody() {
@@ -212,8 +214,33 @@
         y1: 24 - (n.degree - low) / Math.max(1, high - low) * 20, y2: 24 - (n.degree - low) / Math.max(1, high - low) * 20,
         stroke: "currentColor", "stroke-width": "2", "stroke-linecap": "round" })));
   }
+  function songSpan() {
+    const start = sections()[0]?.start_beat || 0;
+    const last = sections().at(-1);
+    return { start, duration: Math.max(1, (last?.start_beat || 0) + (last?.duration_beats || 1) - start) };
+  }
+  function songOverview() {
+    const span = songSpan(), c = composition();
+    return el("div", { class: "sbc-overview" },
+      el("div", { class: "sbc-overview-labels" }, el("span", {}, "Whole song"), el("span", {}, `${fmt(span.duration / c.beats_per_bar)} bars`)),
+      el("div", { class: "sbc-overview-track", role: "group", "aria-label": "Complete song timeline; select any section" },
+        sections().map((s, index) => {
+          const width = s.duration_beats / span.duration * 100;
+          return el("button", { type: "button", class: `sbc-overview-section${index === state.section ? " is-selected" : ""}${s.name.includes("refrain") ? " is-refrain" : ""}`,
+            "data-overview-section": index, "aria-pressed": index === state.section ? "true" : "false",
+            "aria-label": `${s.label}, bar ${fmt((s.start_beat - span.start) / c.beats_per_bar + 1)}`, title: s.label,
+            style: { left: `${(s.start_beat - span.start) / span.duration * 100}%`, width: `${width}%` },
+            onclick: () => {
+              selectedSection(index);
+              root()?.querySelector(`[data-section="${index}"]`)?.scrollIntoView({ block: "nearest", inline: "nearest", behavior: "smooth" });
+            },
+          }, el("span", { class: "sbc-overview-section-label" }, width < 5 ? String(index + 1) : s.label), miniNotes(s));
+        }),
+        el("div", { id: "sbc-song-playhead", class: "sbc-song-playhead", hidden: !state.playback, "aria-hidden": "true" })));
+  }
   function arrangement() {
     const c = composition();
+    const start = songSpan().start;
     const cards = sections().map((s, index) => {
       const card = button("", () => selectedSection(index), {
         class: `sbc-section${index === state.section ? " is-selected" : ""}${s.name.includes("refrain") ? " is-refrain" : ""}`,
@@ -235,20 +262,21 @@
       });
       card.append(el("span", { class: "sbc-section-top" }, el("span", { class: "sbc-section-num" }, String(index + 1).padStart(2, "0")),
         el("span", { class: "sbc-section-bars" }, `${fmt(s.duration_beats / c.beats_per_bar)} bars`)),
-      el("strong", {}, s.label), miniNotes(s), el("span", { class: "sbc-section-foot" }, `Bar ${fmt(s.start_beat / c.beats_per_bar + 1)}`));
+      el("strong", {}, s.label), miniNotes(s), el("span", { class: "sbc-section-foot" }, `Bar ${fmt((s.start_beat - start) / c.beats_per_bar + 1)}`));
       return card;
     });
-    const totalSeconds = Math.round(c.duration_beats * 60 / c.tempo);
+    const totalSeconds = Math.round(c.duration_seconds ?? c.duration_beats * 60 / c.tempo);
     return el("div", { class: "sbc-arrangement" },
       el("div", { class: "sbc-row sbc-arrangement-heading" }, el("div", {}, el("h3", {}, "Arrangement"), el("p", { class: "sbc-muted" }, "Drag a section to reorder your song.")),
         el("span", { class: "sbc-tag" }, `${sections().length} sections · ${Math.floor(totalSeconds / 60)}:${String(totalSeconds % 60).padStart(2, "0")}`)),
+      songOverview(),
       el("div", { class: "sbc-arrangement-scroll", "aria-label": "Song sections" }, el("div", { class: "sbc-sections" }, cards)),
       el("div", { class: "sbc-row sbc-arrangement-actions" },
         el("span", { class: "sbc-muted" }, section()?.label || ""),
         el("div", { class: "sbc-button-group", role: "group", "aria-label": "Move selected section" },
           button("← Earlier", () => moveSection(state.section, state.section - 1), { disabled: state.section === 0 }),
           button("Later →", () => moveSection(state.section, state.section + 1), { disabled: state.section === sections().length - 1 }),
-          button("Reset order", () => commit("form.order", null), { class: "sbc-button sbc-quiet" }))));
+          button("Restore order", () => commit("form.order", null), { class: "sbc-button sbc-quiet", title: "Remove your arrangement override and restore this song’s inherited order" }))));
   }
 
   function transport() {
@@ -280,7 +308,7 @@
     const low = Math.max(b.min_degree, Math.min(1, ...notes.map((n) => n.degree)) - 2);
     const high = Math.min(b.max_degree, Math.max(8, ...notes.map((n) => n.degree)) + 2);
     const start = b.min_onset, end = b.max_end;
-    const row = 23, left = 58, ruler = 28;
+    const row = 23, left = 58, ruler = p.chords?.length ? 54 : 28;
     const available = Math.max(500, (root()?.clientWidth || 950) - 44);
     const unit = Math.max(42, (available - left) / Math.max(1, end - start)) * state.zoom;
     return { low, high, start, end, row, left, ruler, unit, width: left + (end - start) * unit, height: ruler + (high - low + 1) * row };
@@ -288,6 +316,14 @@
   function pianoRoll() {
     const p = phrase(), g = gridGeometry(p), c = composition();
     const roll = el("div", { class: "sbc-roll", style: { width: `${g.width}px`, height: `${g.height}px` }, "aria-label": "Melody piano roll" });
+    if (p.chords?.length) {
+      roll.append(el("span", { class: "sbc-harmony-label" }, "Harmony"));
+      p.chords.forEach((chords, bar) => {
+        const span = c.beats_per_bar / chords.length;
+        chords.forEach((chord, index) => roll.append(el("div", { class: "sbc-chord", title: `Bar ${bar + 1}, chord ${chord}`,
+          style: { left: `${g.left + (bar * c.beats_per_bar + index * span - g.start) * g.unit}px`, width: `${Math.max(1, span * g.unit - 2)}px` } }, chord)));
+      });
+    }
     const plot = el("div", { class: "sbc-grid", style: { left: `${g.left}px`, top: `${g.ruler}px`, width: `${g.width - g.left}px`, height: `${g.height - g.ruler}px`,
       backgroundSize: `${g.unit * state.snap}px ${g.row}px` } });
     roll.append(plot);
@@ -394,7 +430,7 @@
     const last = index === p.notes.length - 1;
     const degrees = [];
     for (let degree = b.min_degree; degree <= b.max_degree; degree++) {
-      if (!last || (degree - n.degree) % 7 === 0) degrees.push([degree, `${pitchName(pitchFor(n, degree))} · ${degreeName(degree)}`]);
+      if ((!last || (degree - n.degree) % 7 === 0) && limitedNote(index, { degree }, p).degree === degree) degrees.push([degree, `${pitchName(pitchFor(n, degree))} · ${degreeName(degree)}`]);
     }
     return el("div", { class: "sbc-inspector" },
       el("div", { class: "sbc-note-heading" }, el("span", { class: "sbc-overline" }, `Note ${index + 1} of ${p.notes.length}`),
@@ -430,7 +466,7 @@
           button("↑ Step", () => transpose(1), { title: "Raise melody one scale step, keeping its phrase ending" })),
         button("Soften leaps", smoothMelody, { title: "Bring notes within two scale steps of their neighbors, preserving the ending" }),
         button("Even rhythm", evenRhythm, { title: "Spread the existing syllables evenly across their current phrase span" }),
-        button("Reset phrase", () => { state.note = null; commit(p.path || `tune.${p.id}`, null); }, { class: "sbc-button sbc-quiet" })),
+        button("Restore phrase", () => { state.note = null; commit(p.path || `tune.${p.id}`, null); }, { class: "sbc-button sbc-quiet", title: "Remove your melody override and restore this song’s inherited phrase" })),
       health(),
       el("p", { class: "sbc-editor-help" }, "Drag notes in time or pitch. Arrow keys nudge; Shift + ←/→ changes length. The ending keeps its scale degree, and syllables stay in order."),
       el("p", { id: "sbc-drag-value", class: "sbc-visually-hidden", "aria-live": "off" }));
@@ -461,6 +497,8 @@
     oscillator.start(start); oscillator.stop(start + length + 0.025);
   }
   function audition(pitch) {
+    if (bridge().pauseAudio) bridge().pauseAudio();
+    else document.getElementById("audio")?.pause();
     const ctx = audioContext();
     if (ctx) tone(ctx, pitch, ctx.currentTime + 0.005, 0.3);
   }
@@ -481,7 +519,8 @@
     const ctx = audioContext();
     if (!ctx) return;
     // Keep the rendered vocal and the live sketch from sounding over each other.
-    document.getElementById("audio")?.pause();
+    if (bridge().pauseAudio) bridge().pauseAudio();
+    else document.getElementById("audio")?.pause();
     const sequence = playbackSequence(), seconds = 60 / composition().tempo;
     state.playback = { ...sequence, seconds, started: ctx.currentTime + 0.04, nextCycle: 0 };
     paint(); schedule();
@@ -513,6 +552,9 @@
     if (cursor) { cursor.hidden = localBeat < g.start || localBeat > g.end; cursor.style.left = `${g.left + (localBeat - g.start) * g.unit}px`; }
     const currentSection = sections().findIndex((s) => absoluteBeat >= s.start_beat && absoluteBeat < s.start_beat + s.duration_beats);
     root()?.querySelectorAll(".sbc-section").forEach((node) => node.classList.toggle("is-playing", Number(node.dataset.section) === currentSection));
+    root()?.querySelectorAll(".sbc-overview-section").forEach((node) => node.classList.toggle("is-playing", Number(node.dataset.overviewSection) === currentSection));
+    const songCursor = document.getElementById("sbc-song-playhead"), span = songSpan();
+    if (songCursor) { songCursor.hidden = false; songCursor.style.left = `${clamp((absoluteBeat - span.start) / span.duration * 100, 0, 100)}%`; }
     state.frame = requestAnimationFrame(schedule);
   }
   function stop() {
@@ -524,6 +566,8 @@
     if (play) { play.textContent = "▶ Play sketch"; play.setAttribute("aria-pressed", "false"); }
     const cursor = document.getElementById("sbc-playhead");
     if (cursor) cursor.hidden = true;
+    const songCursor = document.getElementById("sbc-song-playhead");
+    if (songCursor) songCursor.hidden = true;
     root()?.querySelectorAll(".is-playing").forEach((node) => node.classList.remove("is-playing"));
   }
   function paint() {
