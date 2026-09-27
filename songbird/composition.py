@@ -14,9 +14,9 @@ fit of held words to a form. Those rules govern what the bank draws and hands
 down, so a song drawn by chance stays one story; an authored line is none of
 that. It is laid over one line of one section's performance copy
 (lyric_overlay), never written into the held words, so the bank's own choices
-underneath still keep every rule. What a person writes on purpose, even a question asked twice, is theirs
-to sing. An arrangement's order is different: order() still asks
-arrange.problem whether the bank can fill it.
+underneath still keep every rule. What a person writes on purpose, even a
+question asked twice, is theirs to sing. An arrangement's order is different:
+order() still asks arrange.problem whether the bank can fill it.
 """
 
 from __future__ import annotations
