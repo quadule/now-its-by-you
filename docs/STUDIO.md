@@ -64,7 +64,8 @@ records what `songbird render --parent THE_PACKET --machine here --date
 ## The musical workbench
 
 The studio opens in **Arrange**. Four workspaces keep the editing surface focused:
-Arrange, Words, Sound, and Explore. Key, scale, tempo, full sung playback,
+Arrange, Words, Sound, and Explore. Key, scale, tempo, the song's length (the
+realized score's, the last chord's ring included), full sung playback,
 performance redraw, undo and redo remain available above them. The bottom player
 always provides playback and recording. **Record & pass it on** opens the singing
 and export details without placing them in the middle of the score.

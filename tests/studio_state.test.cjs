@@ -298,3 +298,12 @@ test('saved edits are kept under the song genome\'s digest, and older ones keep 
   assert.deepEqual(JSON.parse(storage.get('songbird-studio|Song|home|test|def456')), { tempo: 90, 'band.lute': 0.5 });
   assert.deepEqual(plain(run('restore()')), { tempo: 90, 'band.lute': 0.5 });
 });
+
+test('the song\'s length is shown beside the tempo and key', () => {
+  const { run, nodes } = studio();
+  run(`state.start.bounds = {tempo: {min: 60, max: 120, step: 0.5}};
+    state.view = {cards: [{id: "tempo", tempo: 96}], composition: {duration: 187.4}}; renderSessionControls()`);
+  const shown = nodes.get('sessionControls').children.at(-1);
+  assert.equal(shown.className, 'session-duration hint');
+  assert.equal(shown.children.join(''), 'Length 3:07');
+});

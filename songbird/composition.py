@@ -338,9 +338,11 @@ def phrase_value(genome, params, pid):
 
 
 def view(genome, params, lyrics) -> dict:
-    """The editor's complete arrangement and piano roll without rendering audio."""
+    """The editor's complete arrangement and piano roll without rendering audio. duration: the realized
+    score's length in seconds, the last chord's ring included, which the rendered audio lasts."""
     from .arrange import seed_lyrics
     from .realize import timeline
+    from .style import ring
 
     clock = timeline(genome, params)
     meter = genome.meter
@@ -385,7 +387,9 @@ def view(genome, params, lyrics) -> dict:
                          "sung": bool(section.lyrics), "phrases": phrases})
     return {"tempo": params.tempo, "tonic": params.tonic, "mode": params.mode, "scale": list(MODES[params.mode]),
             "beats_per_bar": meter.bar / meter.beat, "grid": GRID,
-            "duration_beats": clock.end / meter.beat, "duration_seconds": clock.seconds(clock.end),            "order": section_ids(params.form), "sections": sections, "edited_phrases": sorted(edited),
+            "duration_beats": clock.end / meter.beat, "duration_seconds": clock.seconds(clock.end),
+            "duration": round(clock.seconds(clock.end) + ring(params), 3),
+            "order": section_ids(params.form), "sections": sections, "edited_phrases": sorted(edited),
             "arranged": bool(params.composition.get("order")),
             "guidance": "Notes stay in the song's range. Keep one note per syllable and the final home note. "
                         "A tune line changes everywhere it appears. Repeated sections keep their story order."}

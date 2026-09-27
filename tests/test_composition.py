@@ -186,6 +186,19 @@ def test_releasing_an_inherited_order_returns_to_the_parents_form_or_the_machine
     assert fresh.params.form == base.form
 
 
+@pytest.mark.parametrize("ending", ["", "cold"])
+def test_the_view_says_how_long_the_realized_song_lasts(ending):
+    params = choose_params(G, None, ADA, DAY)
+    params = replace(params, style=replace(params.style, ending=ending))
+    from songbird.cli import words
+
+    lyrics = words(G, params, sung_by_a_machine=True)
+    score = realize(G, params, lyrics=lyrics)
+    view = C.view(G, params, explain.as_sung(G, params, lyrics))
+    assert view["duration"] == pytest.approx(score.duration, abs=1e-3)
+    assert view["duration"] > view["duration_seconds"]
+
+
 def test_composition_view_covers_every_section_phrase_and_syllable():
     ctx = explain.Context(G, None, None, ADA, "fictional:ada", "2026-09-27", D.parse("2026-09-27"))
     v = ctx.version({"tune.v1": editable()})

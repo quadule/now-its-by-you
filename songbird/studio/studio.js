@@ -613,8 +613,9 @@ function renderSessionControls() {
     controls.push(chips("Key", notes, key.tonic, (value) => setEdit("tonic", value), { text: bounds.tonic.names }));
     controls.push(chips("Scale", bounds.mode.options, key.mode, (value) => setEdit("mode", value), { text: bounds.mode.names }));
   }
+  // the song's length as it will be recorded: the realized score's, the last chord's ring included
   const total = state.view.composition?.duration;
-  if (total) controls.push(h("span", { class: "session-duration hint" }, fmtTime(total)));
+  if (total) controls.push(h("span", { class: "session-duration hint", title: "How long the song lasts" }, `Length ${fmtTime(total)}`));
   box.replaceChildren(...controls);
 }
 
