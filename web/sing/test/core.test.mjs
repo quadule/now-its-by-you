@@ -313,3 +313,9 @@ test("a Bluetooth headset's microphone is recognised by its name, so the page ca
     assert.ok(!K.bluetoothMic(name), String(name));
   }
 });
+
+test("the microphone is asked for raw, and to take out the page's own sound only without headphones", () => {
+  assert.deepEqual(K.micOptions(), { echoCancellation: false, noiseSuppression: false, autoGainControl: false, channelCount: 1 });
+  assert.equal(K.micOptions(true).echoCancellation, true);
+  assert.equal(K.micOptions(true).noiseSuppression, false); // the take's dynamics are what's measured
+});

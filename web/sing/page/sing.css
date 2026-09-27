@@ -185,3 +185,4 @@ details.listen > summary::-webkit-details-marker { display: none; }
 details.listen > summary .change { color: var(--accent); text-decoration: underline; margin-left: 4px; }
 details.listen ol { margin: 8px 0 0; padding-left: 22px; }
 details.listen li { margin: 4px 0; }
+details.listen label.speaker { display: flex; gap: 8px; align-items: center; margin-top: 6px; color: var(--ink); }

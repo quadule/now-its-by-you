@@ -133,6 +133,7 @@
     <button id="record" class="primary">● Record</button>
     <button id="stop" disabled>■ Stop</button>
     <label class="check hint"><input type="checkbox" id="pitchOn" checked> show my pitch</label>
+    <label class="check hint" title="the page takes the guide out of the microphone (echo cancellation)"><input type="checkbox" id="speaker"> no headphones</label>
     <span class="row hint">mic <span class="meter"><div id="level"></div></span></span>
   </div>
   <div class="status hint" id="status">Loading…</div>
@@ -462,15 +463,22 @@ async function starting(go) {
 
 /* ---------- playing and recording ---------- */
 
+$("speaker").checked = saved("songbird-speaker", "") === "1";
+$("speaker").addEventListener("change", () => {  // opened again as now asked, the next time it's wanted
+  save("songbird-speaker", $("speaker").checked ? "1" : "");
+  if (S.mode !== "idle" || S.starting) return;
+  if (S.stream) S.stream.getTracks().forEach(t => t.stop());
+  if (S.recorder) { try { S.recorder.disconnect(); } catch (e) {} }
+  S.stream = S.recorder = S.analyser = S.opening = null;
+});
+
 function microphone() {  // opened once: a second tap waits for the first
   if (!S.opening) S.opening = openMicrophone().catch(e => { S.opening = null; throw e; });
   return S.opening;
 }
 
 async function openMicrophone() {
-  S.stream = await navigator.mediaDevices.getUserMedia({
-    audio: { echoCancellation: false, noiseSuppression: false, autoGainControl: false, channelCount: 1 },
-  });
+  S.stream = await navigator.mediaDevices.getUserMedia({ audio: K.micOptions($("speaker").checked) });
   if (K.bluetoothMic((S.stream.getAudioTracks()[0] || {}).label)) warn(K.BLUETOOTH);  // a telephone line while the mic is on
   const mic = S.ctx.createMediaStreamSource(S.stream);
   await S.ctx.audioWorklet.addModule("/recorder.js");
@@ -591,7 +599,8 @@ function finishTake(stoppedAt) {
   // where the take ends, in guide time: the section's (or the song's) end, or wherever it was stopped before that
   const to = Math.round(Math.max(part.from, Math.min(part.to, stoppedAt)) * 1000) / 1000;
   const long = samples.length / rate > 5;
-  S.take = long ? { ...r, samples, rate, to, device: delay(), buffer: null } : null;  // the correction it was cut with
+  const aec = !!(S.stream && S.stream.getAudioTracks()[0].getSettings().echoCancellation);  // the guide taken out of the mic
+  S.take = long ? { ...r, samples, rate, to, device: delay(), buffer: null, aec } : null;  // the correction it was cut with
   S.takeTrail = S.trail.slice();
   const notes = K.notesOf(r.lyrics);
   S.shift = S.autoShift = long ? (whole ? K.autoSync(S.takeTrail, notes) : K.autoSyncWindow(S.takeTrail, notes, part.from, part.to)) : 0;
@@ -813,6 +822,7 @@ $("keep").onclick = async () => {
                                     shift_ms: Math.round(S.shift * 1000), auto_ms: Math.round((S.autoShift || 0) * 1000),
                                     device_ms: Math.round(t.device * 1000), from_s: t.part.from, to_s: t.to });
     if (t.spec) q.set("spec", t.spec);
+    if (t.aec) q.set("aec", "1");  // sung with the guide taken out of the microphone
     if (t.part.index !== null) q.set("section", t.part.index);
     await post("/take?" + q, K.wav(K.shifted(t.samples, t.rate, S.shift), t.rate), "audio/wav");
     S.take = null;

@@ -60,7 +60,7 @@ import takes as K  # noqa: E402  (tools/takes.py)
 
 SITE = "https://songbird.quadule.com"  # where singing is live (also at songbird-sing.quadule.workers.dev)
 SECRET = "songbird-sing-admin"  # its name in the artist's secrets tool
-TIMING = ("shift_ms", "auto_ms", "device_ms", "decode_ms", "out_ms", "in_ms")
+TIMING = ("shift_ms", "auto_ms", "device_ms", "decode_ms", "out_ms", "in_ms", "aec")  # aec: sung with the guide taken out of the mic
 PLACE = ("spec", "from_s", "to_s", "section", "label")  # where in the song a take was sung, as its page said
 LOCAL = ("localhost", "127.0.0.1", "::1")
 STALE = 600  # seconds after which half a take on the server is left over, not still arriving

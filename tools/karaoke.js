@@ -632,6 +632,13 @@ export function bluetoothMic(label) {
 export const BLUETOOTH = "Your Bluetooth headphones are the microphone, so while it's on the guide and your takes sound like a phone "
   + "call. Your timing still comes through, but wired headphones are much better; on a computer, choose its own microphone for input.";
 
+export function micOptions(noHeadphones = false) {
+  // what a page asks of the microphone: raw, as sung (no noise suppression or gain riding, which would
+  // change the dynamics a take is measured for); with no headphones, the browser's echo cancellation
+  // too, which takes out of the microphone what the page itself is playing (the guide, leaking from a speaker)
+  return { echoCancellation: !!noHeadphones, noiseSuppression: false, autoGainControl: false, channelCount: 1 };
+}
+
 export const ARTIST_ZONE = "America/Los_Angeles";
 
 export function moment(iso, zone) {

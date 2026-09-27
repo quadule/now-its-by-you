@@ -562,9 +562,7 @@ function microphone() { // opened once: a second tap waits for the first
 async function openMicrophone() {
   if (!window.isSecureContext || !navigator.mediaDevices) throw new Error("This page needs a secure (https) connection for the microphone.");
   try { // the microphone first: a phone reconfigures its audio when it opens, and the clock is made after
-    S.stream = await navigator.mediaDevices.getUserMedia({
-      audio: { echoCancellation: false, noiseSuppression: false, autoGainControl: false, channelCount: 1 },
-    });
+    S.stream = await navigator.mediaDevices.getUserMedia({ audio: K.micOptions(noHeadphones()) });
   } catch (e) {
     throw new Error(e.name === "NotAllowedError" ? "The browser didn't allow the microphone. Allow it for this page (in the address bar, or your phone's settings) and try again."
       : e.name === "NotFoundError" ? "No microphone was found." : `The microphone didn't start (${e.message}).`);
@@ -589,7 +587,7 @@ async function openMicrophone() {
     $("level").style.width = Math.min(100, 140 * e.data.peak) + "%";
   };
   $("mic").textContent = "Microphone on"; // however it was opened: this button, recording or measuring
-  $("micHint").textContent = "on";
+  $("micHint").textContent = cancelling() ? "on, taking out the guide" : "on";
   if (K.bluetoothMic((S.stream.getAudioTracks()[0] || {}).label)) { // AirPods and the like: a telephone line while the mic is on
     $("micHint").textContent = "on: Bluetooth (wired headphones sound much better)";
     warn(K.BLUETOOTH);
@@ -597,6 +595,31 @@ async function openMicrophone() {
   $("micNote").textContent = `Recording at ${S.ctx.sampleRate} Hz. If the level doesn't move when you sing, check the microphone.`;
   controls();
 }
+
+/* ---------- no headphones: the guide taken out of the microphone ---------- */
+
+function noHeadphones() { return saved("songbird-sing-speaker", "") === "1"; }
+
+function cancelling() { // whether the microphone as opened is taking the page's own sound out of what it hears
+  const track = S.stream && S.stream.getAudioTracks()[0];
+  return !!(track && track.getSettings && track.getSettings().echoCancellation);
+}
+
+function closeMicrophone() { // opened again, as now asked, the next time it's wanted
+  if (S.stream) S.stream.getTracks().forEach(t => t.stop());
+  if (S.recorder) { try { S.recorder.disconnect(); } catch (e) {} }
+  S.stream = S.recorder = S.analyser = S.opening = null;
+  $("mic").textContent = "Allow the microphone";
+  $("micHint").textContent = "the first time you record, your browser asks to use it";
+}
+
+$("speaker").checked = noHeadphones();
+$("speaker").addEventListener("change", () => {
+  save("songbird-sing-speaker", $("speaker").checked ? "1" : "");
+  if (S.mode === "idle" && !S.starting) closeMicrophone(); // else the next take opens it again as asked
+  else S.reopen = true;
+  controls();
+});
 
 $("mic").onclick = async () => {
   $("mic").disabled = true;
@@ -728,6 +751,7 @@ $("record").onclick = () => starting(async () => {
   if (!ready()) { warn("Agree to the release and say who you are first (steps 1 and 2)."); return; }
   if (isClosed()) return closed("closed");
   const spec = S.spec, which = mix(), p = S.part, lyrics = S.lyrics;
+  if (S.reopen) { S.reopen = false; closeMicrophone(); } // switched to or from headphones while something played
   await microphone();
   const g = await guide(spec, which);
   try { S.wake = navigator.wakeLock ? await navigator.wakeLock.request("screen") : null; } catch (e) { S.wake = null; }
@@ -754,7 +778,7 @@ function finishTake(stoppedAt) {
   const to = Math.round(Math.max(part.from, Math.min(part.to, stoppedAt)) * 1000) / 1000;
   const long = samples.length / rate > 5, trail = S.trail.slice(), notes = K.notesOf(r.lyrics);
   const auto = long ? (whole ? K.autoSync(trail, notes) : K.autoSyncWindow(trail, notes, part.from, part.to)) : 0;
-  S.take = long ? { ...r, samples, rate, to, trail, buffer: null, out: S.out, inn: S.inn, device: delay(), auto } : null;
+  S.take = long ? { ...r, samples, rate, to, trail, buffer: null, out: S.out, inn: S.inn, device: delay(), auto, aec: cancelling() } : null;
   S.shift = auto;
   $("shift").value = String(Math.max(-400, Math.min(400, -S.shift * 1000)));
   $("shiftValue").textContent = S.shift ? `lined up automatically: ${Math.abs(Math.round(S.shift * 1000))} ms ${S.shift > 0 ? "earlier" : "later"}` : "as recorded";
@@ -815,6 +839,7 @@ $("keep").onclick = async () => {
     consent: { agreed: true, at: S.consentAt, text: $("consentText").dataset.digest },
     shift_ms: Math.round(S.shift * 1000), auto_ms: Math.round((t.auto || 0) * 1000), device_ms: Math.round(t.device * 1000),
     decode_ms: Math.round(t.offset * 10000) / 10, out_ms: Math.round(t.out * 1000), in_ms: Math.round(t.inn * 1000),
+    aec: !!t.aec, // sung with the guide taken out of the microphone (no headphones)
   };
   const byEar = S.shift - (t.auto || 0);
   if (Math.abs(byEar) >= 0.005) learn(t.device * 1000 + byEar * 1000); // their correction beyond the automatic one

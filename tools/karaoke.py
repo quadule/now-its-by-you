@@ -342,6 +342,8 @@ class Karaoke(BaseHTTPRequestHandler):
                 if not singer:
                     raise ValueError("a take needs the singer's name")
                 info = {k: float(query[k]) for k in ("shift_ms", "auto_ms", "device_ms") if k in query}
+                if query.get("aec") == "1":  # sung without headphones, the guide taken out of the microphone
+                    info["aec"] = True
                 mix, heard = query.get("mix"), query.get("guide", "")
                 if mix not in M.MIXES:
                     raise ValueError("a take must say which guide it was sung to: reload the page")

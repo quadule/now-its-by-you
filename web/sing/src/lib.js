@@ -213,6 +213,7 @@ export function checkTake(info, song, spec, lyric, wav) {
     if (!Number.isFinite(x) || Math.abs(x) > 10000) throw new Error(`${k} is out of range`);
     out[k] = Math.round(x * 10) / 10;
   }
+  if (typeof info.aec === "boolean") out.aec = info.aec; // sung without headphones, the guide taken out of the microphone
   return out;
 }
 

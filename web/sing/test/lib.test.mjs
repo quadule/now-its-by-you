@@ -262,3 +262,11 @@ test("numbers from a request are held to their range", () => {
   assert.equal(clampInt("x", 1, 60, 3), 3);
   assert.equal(clampInt(2.5, 1, 60, 3), 3);
 });
+
+test("a take sung without headphones says so, and nothing else passes for it", () => {
+  const lyric = sectionsOf(LYRICS), wav = { rate: 48000, samples: 48000 * 60, seconds: 60 };
+  assert.equal(checkTake(info({ aec: true }), SONG, "a.k0.t100", lyric, wav).aec, true);
+  assert.equal(checkTake(info({ aec: false }), SONG, "a.k0.t100", lyric, wav).aec, false);
+  assert.ok(!("aec" in checkTake(info({ aec: "yes" }), SONG, "a.k0.t100", lyric, wav)));
+  assert.ok(!("aec" in checkTake(info(), SONG, "a.k0.t100", lyric, wav)));
+});
