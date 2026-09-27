@@ -84,7 +84,7 @@ const section = (index, name, start, end, extra = {}) => ({ index, name, start, 
 const LYRICS_A = {
   guide: "aaaaaaaaaaaa", spec: { id: "a.k0.t100", set: "a", key: 0, tempo: 100 }, duration: 60, lines: [],
   sections: [section(0, "intro", 0, 5), section(1, "verse", 5, 20, { sung: true, nth: 1, label: "They saved it as numbers and sent it by wire,", window: [2.5, 21] }),
-             section(2, "turn", 20, 25), section(3, "refrain", 25, 40, { sung: true, nth: 1, label: "Now it's by you", window: [22.5, 41] }),
+             section(2, "turn", 20, 25), section(3, "refrain", 25, 40, { sung: true, nth: 1, label: "Now it’s by you — Zoë’s 名前", window: [22.5, 41] }),
              section(4, "tag", 40, 60, { sung: true, nth: 1, label: "By you", window: [37.5, 60] })],
 };
 const LYRICS_B = { ...LYRICS_A, guide: "bbbbbbbbbbbb", spec: { id: "b.k0.t100", set: "b", key: 0, tempo: 100 } };
@@ -425,6 +425,9 @@ test("a singer's own page: what they sent, played in ranges and downloaded, and 
   assert.equal(t2.name, null);
   assert.deepEqual(mine.files.map(f => [f.name, f.kind, f.about, f.bytes]), [["a.k0.t100.version.mp3", "version", "Your version of the song", 9]]);
   assert.deepEqual(mine.words.map(x => x.text), ["A line"]);
+  // a lyric's line in any script comes back as it was (R2's metadata holds it percent-encoded)
+  assert.equal((await send(w, e, sid, { seconds: 18, section: 3, from_s: 22.5, to_s: 41 })).status, 200);
+  assert.equal((await page(w, e, sid)).data.takes.find(t => t.section === 3).label, "Now it’s by you — Zoë’s 名前");
 
   // play it (Safari asks for two bytes first), download it, and it's still there
   const first = await call(w, e, `/api/yours/${sid}/take/${t1.id}`, { headers: { Range: "bytes=0-1" } });
@@ -442,7 +445,7 @@ test("a singer's own page: what they sent, played in ranges and downloaded, and 
   assert.equal(file.headers.get("Content-Type"), "audio/mpeg");
   const adminCopy = await call(w, e, `/api/admin/take/takes/${sid}/${t1.id}.wav`, { headers: { Authorization: `Bearer ${ADMIN}` } });
   assert.deepEqual(new Uint8Array(await adminCopy.arrayBuffer()), verse.take.bytes);
-  assert.equal((await page(w, e, sid)).data.takes.length, 2); // neither download deleted it
+  assert.equal((await page(w, e, sid)).data.takes.length, 3); // no download deleted anything
   assert.equal((await call(w, e, `/api/yours/${sid}/take/../../x`)).status, 404);
   assert.equal((await call(w, e, `/api/yours/${sid}/file/..%2Fx.mp3`)).status, 404);
 });

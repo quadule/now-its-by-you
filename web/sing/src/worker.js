@@ -224,6 +224,20 @@ async function hashed(text) {
   return Array.from(d.slice(0, 8), b => b.toString(16).padStart(2, "0")).join("");
 }
 
+function plain(text) {
+  // words kept in R2's metadata (a lyric's first line, what a file is): percent-encoded, as metadata
+  // travels in headers, which carry ASCII safely and anything else less surely
+  return encodeURIComponent(String(text ?? ""));
+}
+
+function unplain(text) {
+  try {
+    return decodeURIComponent(String(text ?? ""));
+  } catch (e) {
+    return String(text ?? "");
+  }
+}
+
 function sameSite(request) {
   // a browser says where a request comes from: joining, a take, words, "I'm done" and deleting must
   // come from the pages themselves, never from a page elsewhere that learned a link (tools send no
@@ -480,7 +494,7 @@ async function take(request, env, sid, who, now) {
     }
   })();
   const about = { spec, mix: checked.mix, seconds: String(checked.seconds), section: checked.section === null ? "" : String(checked.section),
-                  part: checked.part || "", label: checked.label || "" }; // for their page and the sets' tally
+                  part: plain(checked.part), label: plain((checked.label || "").slice(0, 120)) }; // for their page and the sets' tally
   try {
     await Promise.all([env.TAKES.put(`${key}.wav`, readable, { sha256: checked.sha256, httpMetadata: { contentType: "audio/wav" },
                                                                customMetadata: about }), pump]);
@@ -605,13 +619,13 @@ async function summary(env, sid, who, now) {
       const m = o.customMetadata || {};
       out.takes.push({ id: o.key.slice(start, -4), seconds: Number(m.seconds) || null,
                        section: m.section === undefined || m.section === "" ? null : Number(m.section),
-                       name: m.part || null, label: m.label || null, spec: m.spec || null, mix: m.mix || null,
+                       name: unplain(m.part) || null, label: unplain(m.label) || null, spec: m.spec || null, mix: m.mix || null,
                        received: new Date(o.uploaded).toISOString(), bytes: o.size });
     }
     out.takes.sort((a, b) => a.received.localeCompare(b.received) || a.id.localeCompare(b.id)); // two in one second, in the order they came
     for (const o of files) {
       const name = o.key.slice(`files/${sid}/`.length);
-      out.files.push({ name, kind: fileKind(name), about: (o.customMetadata && o.customMetadata.about) || fileAbout(name),
+      out.files.push({ name, kind: fileKind(name), about: unplain(o.customMetadata && o.customMetadata.about) || fileAbout(name),
                        bytes: o.size, made: new Date(o.uploaded).toISOString() });
     }
   }
@@ -717,7 +731,7 @@ async function admin(request, env, parts, now) {
     }
     for (const o of await listed(env, "files/", ["customMetadata"])) {
       const [, sid, name] = o.key.split("/");
-      (files[sid] ||= []).push({ name, kind: fileKind(name), about: o.customMetadata?.about || fileAbout(name), bytes: o.size,
+      (files[sid] ||= []).push({ name, kind: fileKind(name), about: unplain(o.customMetadata?.about) || fileAbout(name), bytes: o.size,
                                  made: new Date(o.uploaded).toISOString() });
     }
     for (const o of await listed(env, "sent/", ["customMetadata"])) sent[o.key.slice(5)] = o.customMetadata || {};
@@ -800,7 +814,7 @@ async function admin(request, env, parts, now) {
     const { readable, writable } = new FixedLengthStream(length);
     try {
       await Promise.all([env.TAKES.put(`files/${sid}/${name}`, readable, {
-        httpMetadata: { contentType: name.endsWith(".mp3") ? "audio/mpeg" : "audio/wav" }, customMetadata: { about, spec },
+        httpMetadata: { contentType: name.endsWith(".mp3") ? "audio/mpeg" : "audio/wav" }, customMetadata: { about: plain(about), spec },
       }), request.body.pipeTo(writable)]);
     } catch (e) {
       return fail(400, "damaged", "The file arrived cut short: send it again.");
