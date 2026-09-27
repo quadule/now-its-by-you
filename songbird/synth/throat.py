@@ -559,6 +559,88 @@ def parse_mix(spec: str | dict | None) -> dict[str, float] | None:
     return out
 
 
+# ---- the consonants the throat sings too softly -----------------------------------------------------
+
+# The teacher's word-final consonants are soft and the network's softer: on H sung everyone's way
+# (2026-09-27) a coda t or k came out 22 to 48 dB under its vowel with nothing above 3 kHz (no release at
+# all), a coda d 8 to 18 dB under and no different from the nasal before it, and an f a low rumble; the
+# words went with them ("lit" heard "only", "laughed" "luck", "hummed" "harmed", "part" "board", "saved"
+# "seh"). What tells a listener a stop is its closure and its release, and a weak fricative its hiss. So
+# the formant singer's bursts and frication (songbird.phonetics BURSTS, FRICATION, as voice.sing lays them)
+# go over the throat's own, its output dipped through each stop's closure and each weak fricative, and a
+# coda nasal comes up a little. voice.crisp scales all of it; 0 leaves the throat as it was.
+CLOSURE_DIP = {True: 0.3, False: 0.06}  # what is left of the throat's output through a voiced / voiceless stop's closure
+ASPIRATION = -8.0  # dB under its burst the aspiration after a voiceless stop's release starts, fading to the stop's end
+WEAK_FRICATIVES = {"F": 6.0, "TH": 6.0, "V": 6.0, "DH": 4.0}  # dB over the formant singer's frication levels
+FRICATIVE_DIP = 0.3  # what is left of the throat's output through a voiceless weak fricative
+NASAL_LIFT = 3.0  # dB a coda nasal comes up
+
+
+def articulate(y: np.ndarray, segs: list, sr: int, voice, rng: np.random.Generator, ref: float) -> np.ndarray:
+    """The throat's output (vowels at RMS ref) with its stops given a closure and a release, its weak
+    fricatives their hiss and its coda nasals a lift (see above), scaled by voice.crisp."""
+    from scipy.ndimage import uniform_filter1d
+
+    from .. import phonetics as ph
+    from . import tract
+    from .voice import _locus, _stop_times
+
+    crisp = float(getattr(voice, "crisp", 1.0))
+    if crisp <= 0:
+        return y
+    n = len(y)
+    t = (np.arange(n) + 0.5) / sr
+    gain = np.ones(n)
+    added = np.zeros(n)
+    noise = rng.standard_normal(n)
+
+    def dip(t0: float, t1: float, left: float) -> None:
+        i0, i1 = max(int(t0 * sr), 0), min(int(t1 * sr), n)
+        if i1 > i0:
+            gain[i0:i1] = np.minimum(gain[i0:i1], 1.0 - crisp * (1.0 - left))
+
+    def hiss(t0: float, t1: float, shape, level_db: float, ramp: float, amp: float, fading: bool = False) -> None:
+        i0, i1 = max(int(t0 * sr), 0), min(int(t1 * sr), n)
+        if i1 <= i0:
+            return
+        pad = int(0.01 * sr)
+        lo, hi = max(i0 - pad, 0), min(i1 + pad, n)
+        shaped = tract.noise_band(noise[lo:hi], [(c * voice.tract, b, g) for c, b, g in shape], sr)
+        shaped /= np.sqrt(np.mean(shaped[i0 - lo: i1 - lo] ** 2)) + 1e-12
+        env = np.clip(np.minimum((t[lo:hi] - t0) / ramp, (t1 - t[lo:hi]) / ramp), 0.0, 1.0)
+        if fading:
+            env = env * np.clip((t1 - t[lo:hi]) / max(t1 - t0, 1e-3), 0.0, 1.0)
+        added[lo:hi] += crisp * ref * 10.0 ** (level_db / 20.0) * amp * env * shaped
+
+    for s in segs:
+        if s.role not in ("onset", "coda"):
+            continue
+        manner, place, voiced = ph.CONSONANTS[s.phone]
+        if manner in ("stop", "affricate"):
+            release, _ = _stop_times(s, voiced)
+            dip(s.t0, release, CLOSURE_DIP[voiced])
+            shape, level = ph.BURSTS[place]
+            if place == "velar":
+                f2 = _locus(s.phone, s)[1]
+                shape = [(f2, 900.0, 0.0), (3600.0, 1500.0, -8.0)]
+            hiss(release, release + (0.008 if voiced else 0.012), shape, level - (3.0 if voiced else 0.0), 0.002, s.amp)
+            if manner == "affricate":
+                sh_shape, sh_level = ph.FRICATION["ZH" if voiced else "SH"]
+                hiss(release, s.t1, sh_shape, sh_level, 0.01, s.amp)
+            elif not voiced:
+                hiss(release + 0.008, max(s.t1, release + 0.03), shape, level + ASPIRATION, 0.004, s.amp, fading=True)
+        elif manner == "fricative" and s.phone in WEAK_FRICATIVES:
+            if not voiced:
+                dip(s.t0, s.t1, FRICATIVE_DIP)
+            shape, level = ph.FRICATION[s.phone]
+            hiss(s.t0, s.t1, shape, level + WEAK_FRICATIVES[s.phone], 0.03 if voiced else 0.02, s.amp)
+        elif manner == "nasal" and s.role == "coda":
+            i0, i1 = max(int(s.t0 * sr), 0), min(int(s.t1 * sr), n)
+            gain[i0:i1] *= 10.0 ** (crisp * NASAL_LIFT / 20.0)
+    gain = uniform_filter1d(gain, max(int(0.004 * sr), 1), mode="nearest")  # no step in the gain: a step is a click
+    return y * gain + added
+
+
 def stresses(notes, lexicon) -> list[bool]:
     """Whether each note's syllable carries dictionary stress (as the training labels do: the stress digit
     of the reading songbird.phonetics.fit chooses; little words like "the" and "a" have none)."""
@@ -626,10 +708,11 @@ def sing(notes, sr: int, voice, seed: int = 0, lexicon: dict | None = None, mix:
     y = resample_poly(y, sr // np.gcd(sr, RATE), RATE // np.gcd(sr, RATE)) if sr != RATE else y
     y = sosfilt(butter(1, 60.0, btype="highpass", fs=sr, output="sos"), y)
     y = np.concatenate([y, np.zeros(max(0, int(np.ceil(duration * sr)) - len(y)))])[: int(np.ceil(duration * sr))]
-    y = y * hush(t["phone"], sr, len(y))
     mask = np.zeros(len(y), dtype=bool)
     for s in vowels:
         mask[int(s.t0 * sr): int(s.t1 * sr)] = True
     ref = np.sqrt(np.mean(y[mask] ** 2)) if mask.any() else 1.0
+    y = articulate(y, segs, sr, voice, rng, ref)
+    y = y * hush(t["phone"], sr, len(y))
     y = y + ref * breaths(segs, len(y), sr, voice, seed)
     return 0.3 * y / ref / np.sqrt(2.0)

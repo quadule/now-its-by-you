@@ -1402,9 +1402,11 @@ def motif_part(ctx: Context, section: int, part: str, top: int) -> list[Ev]:
             return []
     # just above the singers, in whole octaves, and no lower than the instrument plays
     shift = max(12 * int(np.ceil((top + 1 - min(pitches)) / 12.0)), octave_for(part, pitches))
-    notes = [Tune(p0 + k * step, p0 + (k + 1) * step, pitch, 0.5, False, section, k == 0, k == len(motif) - 1, ())
+    notes = [Tune(p0 + k * step, p0 + (k + 1) * step, pitch, 0.6, False, section, k == 0, k == len(motif) - 1, ())
              for k, pitch in enumerate(pitches)]
-    return statement(ctx, part, notes, 0.42, section, ornament=False, shift=shift)
+    # heard, not hidden: about 3 dB under the intro's statement of the tune (0.5 and 0.42 sat 8.6 dB under it,
+    # and 20 dB under the singers: "pretty hard to notice", 2026-09-27)
+    return statement(ctx, part, notes, 0.65, section, ornament=False, shift=shift)
 
 
 # --- the quote before the song -------------------------------------------------------

@@ -61,7 +61,9 @@ def chord_tones(symbol: str, mode: str) -> tuple[int, int, int]:
     )
 
 
-FLOOR = 40  # E2: about as low as a choir's basses sing
+FLOOR = 50  # D3: below about 150 Hz the learned throat's pulses are heard one by one (a "tapping" through the
+# bridge, 2026-09-27: 35 thumps a second at E2, 8 at D3, none from B3 up); real basses sing to E2 (40), and the
+# bass instrument has that register
 
 
 def harmony(melody: int, chord: str, tonic: int, mode: str, role: int, previous: int | None = None) -> int:
@@ -82,8 +84,12 @@ def harmony(melody: int, chord: str, tonic: int, mode: str, role: int, previous:
         fits = [p for p in range(melody + 3, melody + 15) if p % 12 in pcs]
     else:  # the root: within two octaves, so it can hold its note while the tune moves, but never below
         # a real bass voice (FLOOR), unless the tune is so low there's nowhere else
-        roots = [p for p in range(melody - 5, melody - 29, -1) if p % 12 == (tonic + tones[0]) % 12]
-        fits = [p for p in roots if p >= FLOOR] or roots[:1]
+        root = (tonic + tones[0]) % 12
+        roots = [p for p in range(melody - 5, melody - 29, -1) if p % 12 == root]
+        fits = [p for p in roots if p >= FLOOR]
+        if not fits:  # the tune so low that no root sits between the floor and a fourth under it: the lowest root
+            # at or above the floor, up to the tune's own note (doubling it), rather than one the voice can't sing
+            fits = [p for p in range(FLOOR, melody + 1) if p % 12 == root][:1] or roots[:1]
     fits = [p - 12 * octave for p in fits]  # nearest the melody first, so a tie goes that way
     return fits[0] if previous is None else min(fits, key=lambda p: abs(p - previous))
 

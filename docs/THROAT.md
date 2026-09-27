@@ -340,3 +340,45 @@ singers when they come, should close that gap.
 - **The choir** sings through the throat whenever the lead does.
 - **Without the weights,** the formant singer sings, with a warning, so a program that lost its
   weights still sings.
+
+## The consonants, sharpened (2026-09-27, evening)
+
+The artist, on the contest render sung everyone's way: "saved" heard "seh", "part" too close to
+"par", "old" without its d, "lit" and "light" without enough t, "laughed" trying to say a g and
+missing its -ed, "scrolled" and "hummed" missing theirs, "song" not enunciating its ng, "own"
+missing its n. Measured on the dry lead (each consonant's RMS against its vowel's, and above 3 kHz):
+
+| | Level under the vowel | Above 3 kHz |
+|---|---|---|
+| coda t, k, p ("lit", "part", "quick", "laughed") | 10 to 48 dB | 30 to 51 dB: no release at all |
+| coda d ("saved", "old", "hummed") | 8 to 18 dB | 28 to 36 dB: no different from the m or l before it |
+| coda f ("laughed") | 18 dB | 35 dB: a low rumble, which is the "g" |
+| coda n, ng | 8 to 14 dB | |
+
+The teacher's word-final consonants are soft (singers let them go) and the network's are softer, at
+5 ms a frame with a median coda t of 50 ms. What tells a listener a stop is its closure and its
+release, and a weak fricative its hiss, and those are exactly what the formant singer always made
+by rule. So `throat.articulate` lays them over the throat's own: through each stop's closure the
+throat's output is dipped (to 6% for a voiceless stop, 30% for a voiced one, whose voice bar stays),
+then the formant singer's burst (`phonetics.BURSTS`, by place; a velar's following the vowel's F2)
+and, after a voiceless one, its aspiration fading to the stop's end; f, th, v and dh get the formant
+singer's frication 4 to 6 dB over its levels, the voiceless ones with the throat's rumble dipped
+under it; a coda nasal comes up 3 dB. s, sh, z and zh are left to the throat, which sings them
+well. `VoiceParams.crisp` scales all of it (1 as described; 0 the throat alone, as before).
+
+Whisper on H, the WER suite's method, two seeds dry and one in the finished mix:
+
+| | crisp 0 (before) | crisp 1 |
+|---|---|---|
+| Words misheard, dry | 14.2% | **7.3%** |
+| Words misheard, in the mix | 13.2% | **9.1%** |
+
+"laughed", "scrolled", "part" and "saved" are heard now; "lit" (heard "only") and "hummed" (heard
+"hung") still aren't. The choir sings through the same layer. Dry before-and-after excerpts of the
+lines with these words are in renders/review/consonants-*.mp3.
+
+The same evening, the lineage choir's bass voice was heard as "tapping a mic" through the bridge:
+below about 150 Hz the vocoder's pulses are heard one by one (35 thumps a second at E2, 8 at D3, none
+from B3 up, counted as 5 ms frames jumping 12 dB over their surroundings). The choir's root now
+keeps to D3 and above (`theory.FLOOR`); the bass instrument has the register below.
+
