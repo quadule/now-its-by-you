@@ -159,7 +159,8 @@ def test_composition_view_covers_every_section_phrase_and_syllable():
 def test_composition_and_editor_travel_inside_the_audio(tmp_path):
     from songbird.studio import Studio
 
-    params = choose_params(G, overrides={"tune.v1": editable(), "form.order": rearranged(choose_params(G).form)})
+    params = choose_params(G, overrides={"tune.v1": editable(), "form.order": rearranged(choose_params(G).form),
+                                        "lyrics.verse:0.0": "I keep the light and sing it through the dark night."})
     pcm = np.zeros((100, 2), dtype=np.int16)
     flac = tmp_path / "edited.flac"
     master.write_flac(flac, pcm, 44100)
@@ -183,5 +184,90 @@ def test_composition_and_editor_travel_inside_the_audio(tmp_path):
         assert opened.where == "packet"
         assert opened.version({}).params.composition == params.composition
         assert opened.song({})["composition"]["edited_phrases"] == ["v1"]
+        verse = next(s for s in opened.song({})["composition"]["sections"] if s["id"] == "verse:0")
+        assert verse["phrases"][0]["lyric_text"] == "I keep the light and sing it through the dark night."
     finally:
         opened.close()
+
+
+AUTHORED = "I keep the light and sing it through the dark night."
+AUTHORED_PATH = "lyrics.verse:0.0"
+
+
+def test_authored_lines_overlay_the_score_without_changing_the_banks_words():
+    base = E.resolve(G, None, ADA, DAY, {})
+    changed = E.resolve(G, None, ADA, DAY, {AUTHORED_PATH: AUTHORED})
+    assert not changed.problems and changed.params.words == base.params.words
+    assert changed.lyrics == base.lyrics
+    score = realize(G, changed.params, lyrics=changed.lyrics)
+    verse = [n for n in score.part("voice") if n.phrase == "v1"]
+    assert [n.syllable for n in verse[:11]] == AUTHORED.split()
+    assert [n.syllable for n in verse[11:22]] != AUTHORED.split()
+    assert AUTHORED in pack.words_as_sung(score.to_dict())
+    assert changed.marks[AUTHORED_PATH]["value"] == AUTHORED
+    assert changed.marks[AUTHORED_PATH]["was"] != AUTHORED
+    replay = E.resolve(G, None, ADA, DAY, E.from_record({"chosen_by_you": changed.marks}))
+    assert replay.params == changed.params
+
+
+def test_authored_words_follow_their_section_and_survive_a_child():
+    base = choose_params(G, None, ADA, DAY)
+    parent = E.resolve(G, None, ADA, DAY, {AUTHORED_PATH: AUTHORED, "form.order": rearranged(base.form)})
+    restored = Params.from_dict(json.loads(json.dumps(parent.params.to_dict())))
+    child = choose_params(G, restored, H.fictional("basil"), D.drift(D.parse("2029-03-14"), ADA.hash))
+    assert child.composition["lyrics"] == {"verse:0": {"0": AUTHORED}}
+    from songbird.cli import words
+
+    score = realize(G, child, lyrics=words(G, child, sung_by_a_machine=True))
+    assert [n.syllable for n in score.part("voice") if n.phrase == "v1"][:11] == AUTHORED.split()
+    assert child.form[0] == "refrain"
+    released = choose_params(G, child, overrides={AUTHORED_PATH: None})
+    assert "lyrics" not in released.composition
+    assert "lyrics" in child.composition
+
+
+@pytest.mark.parametrize("path,text,why", [
+    (AUTHORED_PATH, "too few", "11 syllables"),
+    (AUTHORED_PATH, " ", "1 to 500"),
+    (AUTHORED_PATH, "x" * 501, "1 to 500"),
+    (AUTHORED_PATH, "zzqx keep the light and sing it through the dark night.", "pronounce"),
+    (AUTHORED_PATH, "I keep the light and sing it through the dark {night}.", "punctuation"),
+    (AUTHORED_PATH, "I keep the light and sing it through the dark ni-ght.", "11 syllables"),
+    (AUTHORED_PATH, "I--keep the light and sing it through the dark night.", "inside words"),
+    (AUTHORED_PATH, 42, "1 to 500"),
+    ("lyrics.intro:0.0", AUTHORED, "instrumental"),
+    ("lyrics.verse:0.100", AUTHORED, "no such lyric line"),
+    ("lyrics.verse:999.0", AUTHORED, "no such lyric line"),
+    ("lyrics.unknown:0.0", AUTHORED, "no section"),
+])
+def test_invalid_authored_lyrics_are_rejected_without_changing_the_line(path, text, why):
+    clean, problems = E.check(G, {path: text})
+    assert not clean and why in problems[0]["why"]
+    override = E.Overrides(G, {path: text})
+    params = choose_params(G, overrides=override)
+    assert not params.composition and path not in override.applied
+
+
+def test_hyphenated_lyrics_keep_whole_words_for_pronunciation_and_editor():
+    text = "We car-ry light and sing it through the dark night."
+    cleaned, problems = E.check(G, {AUTHORED_PATH: text})
+    assert not problems
+    ctx = explain.Context(G, None, None, ADA, "fictional:ada", "2026-09-27", D.parse("2026-09-27"))
+    version = ctx.version(cleaned)
+    view = explain.view(ctx, version)
+    section = next(s for s in view["composition"]["sections"] if s["id"] == "verse:0")
+    line = section["phrases"][0]
+    assert line["lyric_text"] == text and line["lyric_path"] == AUTHORED_PATH
+    assert line["syllable_count"] == 11 and line["authored"]
+    assert [n["syllable"] for n in line["notes"][:3]] == ["We", "car", "ry"]
+    assert line["notes"][1]["word"] == line["notes"][2]["word"] == "car-ry"
+    display = next(s for s in view["words"] if s["name"] == "verse")
+    assert display["authored"] == [0] and display["lines"][0] == text.replace("car-ry", "carry")
+
+
+def test_new_lyric_edit_for_an_absent_section_is_reported_and_not_claimed_as_applied():
+    path = "lyrics.verse:12.0"
+    resolved = E.resolve(G, None, ADA, DAY, {path: AUTHORED})
+    assert path not in resolved.applied and path not in resolved.marks
+    assert not resolved.params.composition
+    assert any(p["path"] == path and "no such section" in p["why"] for p in resolved.problems)

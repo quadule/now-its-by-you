@@ -400,7 +400,9 @@ def drawn_words(genome, params):
 
 def as_sung(genome, params, lyrics):
     """Words to show: the drawn ones, or the song's own for the form (named for the bank's entries)."""
-    return lyrics if lyrics is not None else seed_lyrics(genome, params.form)
+    from .composition import lyric_overlay
+
+    return lyric_overlay(genome, params, lyrics) or seed_lyrics(genome, params.form)
 
 
 @dataclass
@@ -1180,6 +1182,11 @@ def words_view(v: Version) -> list[dict]:
         item.update({"block": block, "nth": nth, "id": s.id, "lines": [readable(line) for line in s.lines],
                      "tags": [t for t in tags if t], "how": how, "note": note, "mine": mine, "kept": kept,
                      "path": path, "changeable": bool(drawn and bank)})
+        from .composition import section_ids
+
+        authored = v.params.composition.get("lyrics", {}).get(section_ids(v.params.form)[k], {})
+        if authored:
+            item.update({"authored": sorted(int(i) for i in authored), "how": "includes your own lyrics", "mine": True})
         out.append(item)
     return out
 

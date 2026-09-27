@@ -64,6 +64,7 @@ PREVIEW_GAIN_DB = 5.3  # what mastering gives a whole rendition of H (5.1 to 5.4
 STATIC = {"/studio.css": ("studio.css", "text/css; charset=utf-8"),
           "/composer.js": ("composer.js", "text/javascript; charset=utf-8"),
           "/drafts.js": ("drafts.js", "text/javascript; charset=utf-8"),
+          "/author.js": ("author.js", "text/javascript; charset=utf-8"),
           "/studio.js": ("studio.js", "text/javascript; charset=utf-8")}
 
 

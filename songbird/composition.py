@@ -8,15 +8,17 @@ renditions still fit. Empty composition data leaves old renditions unchanged.
 from __future__ import annotations
 
 import math
+import re
 from collections import Counter
 from dataclasses import replace
 
 from . import variants
-from .genome import sung_words
+from .genome import sung_words, syllables
 from .theory import MODES, degree_semitones
 
 GRID = 0.25  # a sixteenth note in a quarter-note beat
 MAX_SECTIONS = 48
+LYRIC_PATH = re.compile(r"lyrics\.([A-Za-z][A-Za-z0-9_-]*):(\d+)\.(\d+)")
 
 
 def section_ids(form) -> list[str]:
@@ -26,6 +28,86 @@ def section_ids(form) -> list[str]:
         result.append(f"{name}:{seen[name]}")
         seen[name] += 1
     return result
+
+
+def lyric_target(genome, path: str) -> tuple[str, int, str]:
+    match = LYRIC_PATH.fullmatch(path)
+    if match is None:
+        raise ValueError("a lyric line needs its section, occurrence and line number")
+    name, occurrence, line = match.groups()
+    try:
+        section = genome.section(name)
+    except KeyError:
+        raise ValueError(f"there is no section called {name}") from None
+    if name not in genome.sections and name != "bridge2":
+        raise ValueError(f"there is no section called {name}")
+    if not section.lyrics:
+        raise ValueError("this section is instrumental; write words in a sung section")
+    index = int(line)
+    if int(occurrence) >= MAX_SECTIONS or index >= len(section.phrases):
+        raise ValueError("there is no such lyric line in this section")
+    return f"{name}:{int(occurrence)}", index, section.phrases[index]
+
+
+def check_lyric(genome, path: str, value) -> str | None:
+    """A pronounceable syllable per note; spelling, punctuation and emphasis stay human."""
+    from .phonetics import fit
+
+    _, _, pid = lyric_target(genome, path)
+    if value is None:
+        return None
+    if not isinstance(value, str) or not value.strip() or len(value) > 500:
+        raise ValueError("write a lyric line of 1 to 500 characters")
+    if any(ord(c) < 32 and c not in "\t\n\r" for c in value) or any(c in value for c in "{}<>|\\"):
+        raise ValueError("use words and punctuation; split syllables with hyphens")
+    text = " ".join(value.replace("’", "'").split())
+    target = len(genome.phrases[pid].sung)
+    count = len(syllables(text))
+    if count != target:
+        raise ValueError(f"this line needs {target} syllables, one per note; it has {count}. "
+                         "Split longer words with hyphens, like car-ry")
+    for word in text.split():
+        parts = word.split("-")
+        if any(not part for part in parts):
+            raise ValueError("put syllable hyphens inside words, like car-ry")
+        try:
+            fitted = fit(word, len(parts), genome.lexicon)
+        except (KeyError, ValueError):
+            raise ValueError(f"the singer doesn't know how to pronounce {word!r}; try another spelling or word") from None
+        if len(fitted) != len(parts):
+            raise ValueError(f"{word!r} needs {len(fitted)} syllables; show them with hyphens")
+    return text
+
+
+def lyric_overlay(genome, params, lyrics):
+    """Overlay authored lines on a display/performance copy, never on the bank's held words."""
+    authored = params.composition.get("lyrics", {})
+    if not authored:
+        return lyrics
+    from .arrange import seed_lyrics
+
+    base = lyrics if lyrics is not None else seed_lyrics(genome, params.form)
+    sung = iter(base.sections)
+    sections = []
+    for name, identity in zip(params.form, section_ids(params.form)):
+        if not genome.section(name).lyrics:
+            continue
+        section = next(sung)
+        patches = authored.get(identity, {})
+        lines = tuple(patches.get(str(i), text) for i, text in enumerate(section.lines))
+        sections.append(replace(section, lines=lines) if patches else section)
+    return replace(base, sections=tuple(sections))
+
+
+def lyric_value(genome, params, lyrics, path):
+    identity, line, _ = lyric_target(genome, path)
+    if identity not in section_ids(params.form):
+        return None
+    from .arrange import seed_lyrics
+
+    sung = lyric_overlay(genome, params, lyrics) or seed_lyrics(genome, params.form)
+    index = section_ids(params.form).index(identity)
+    return sung.lines_for(genome, params.form)[index][line]
 
 
 def order(genome, value) -> list[str] | None:
@@ -146,6 +228,7 @@ def view(genome, params, lyrics) -> dict:
 
     clock = timeline(genome, params)
     meter = genome.meter
+    lyrics = lyric_overlay(genome, params, lyrics)
     lines = lyrics.lines_for(genome, params.form)
     edited = params.composition.get("tune", {})
     sections = []
@@ -167,7 +250,11 @@ def view(genome, params, lyrics) -> dict:
             phrases.append({"id": pid, "path": f"tune.{pid}", "start_beat": cursor / meter.beat,
                             "duration_beats": phrase.bars * meter.bar / meter.beat,
                             "pickup_beats": phrase.pickup / meter.beat, "notes": notes,
-                            "chords": [list(bar) for bar in phrase.chords], "bounds": bounds(genome, phrase)})
+                            "chords": [list(bar) for bar in phrase.chords], "bounds": bounds(genome, phrase),
+                            "lyric_path": f"lyrics.{identity}.{j}" if section.lyrics else None,
+                            "lyric_text": lines[index][j] if lines[index] else "",
+                            "syllable_count": len(phrase.sung),
+                            "authored": str(j) in params.composition.get("lyrics", {}).get(identity, {})})
             cursor += phrase.bars * meter.bar
         nth = int(identity.rsplit(":", 1)[1])
         label = name.replace("bridge2", "Bridge 2").title()

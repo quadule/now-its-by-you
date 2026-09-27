@@ -250,6 +250,7 @@ def realize(genome: Genome, params: Params, verses=None, phrasing: Phrasing | No
     verses and fixed blocks; without them the seed's own words are sung."""
     if lyrics is not None and verses is not None:
         raise ValueError("realize sings verses or lyrics, not both")
+    authored = params.composition.get("lyrics", {})
     verses = verses if verses is not None else genome.seed_verses
     meter = genome.meter
     rng = np.random.default_rng(params.seed)
@@ -263,7 +264,9 @@ def realize(genome: Genome, params: Params, verses=None, phrasing: Phrasing | No
     rounds = {b: sum(genome.section(n).lyrics == b for n in params.form) for b in genome.fixed}
     heard = dict.fromkeys(genome.fixed, 0)
     drawn = lyrics.lines_for(genome, params.form) if lyrics is not None else None  # per section, None if no words
-    for j, name in enumerate(params.form):
+    from .composition import section_ids
+
+    for j, (name, identity) in enumerate(zip(params.form, section_ids(params.form))):
         section = genome.section(name)  # bridge2: the bridge again, same phrases and choir
         lines: list = [None] * len(section.phrases)
         if drawn is not None:
@@ -275,6 +278,8 @@ def realize(genome: Genome, params: Params, verses=None, phrasing: Phrasing | No
             block = section.lyrics
             lines = [turn(line, heard[block], rounds[block]) for line in genome.fixed[block]]
             heard[block] += 1
+        if identity in authored:
+            lines = [authored[identity].get(str(i), line) for i, line in enumerate(lines)]
         for pid, line in zip(section.phrases, lines):
             phrase = genome.phrases[pid]
             placed.append((name, phrase, t, line))
