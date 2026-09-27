@@ -232,6 +232,45 @@ test("composition tools preserve the cadence, count, phrase bounds and nonoverla
   assert(p.notes.at(-1).onset + p.notes.at(-1).duration <= p.bounds.max_end);
 });
 
+test("even rhythm fits real Coal and Sticky Burr phrases with fractional pickups and early cadences", () => {
+  // These phrase timings come from the repository's B and L 6/8 scores. The
+  // old quarter-grid distribution either delayed their cadence or left a
+  // final syllable shorter than a quarter beat.
+  const cases = [
+    { id: "q", end: 2, last: 17 / 12, notes: [[1, 0, 1 / 3], [1, 1 / 3, 1 / 3], [2, 2 / 3, 1 / 3], [3, 1, 1]] },
+    { id: "f1", end: 4, last: 41 / 12, notes: [[5, -1 / 3, 1 / 3], [8, 0, 1 / 3], [7, 1 / 3, 1 / 3], [6, 2 / 3, 1 / 3],
+      [5, 1, 1 / 3], [4, 4 / 3, 1 / 3], [5, 5 / 3, 1 / 3], [6, 2, 1 / 3], [5, 7 / 3, 1 / 3], [4, 8 / 3, 1 / 3], [5, 3, 1]] },
+    { id: "r1", end: 4, last: 41 / 12, notes: [[5, 0, 1 / 3], [5, 1 / 3, 1 / 3], [3, 2 / 3, 1 / 3], [5, 1, 1 / 3],
+      [5, 4 / 3, 1 / 3], [3, 5 / 3, 1 / 3], [6, 2, 2 / 3], [5, 8 / 3, 1 / 3], [3, 3, 1]] },
+  ];
+  for (const fixture of cases) {
+    const view = score({ compound: true }), phrase = view.composition.sections[1].phrases[0];
+    phrase.id = fixture.id; phrase.path = `tune.${fixture.id}`;
+    phrase.duration_beats = fixture.end; phrase.pickup_beats = -fixture.notes[0][1];
+    phrase.bounds = { ...phrase.bounds, min_degree: -4, max_degree: 11, min_onset: fixture.notes[0][1], max_end: fixture.end,
+      max_final_onset: fixture.last, cadence_degree: fixture.notes.at(-1)[0] };
+    phrase.notes = fixture.notes.map(([degree, onset, duration], index) => ({ degree, onset, duration, index,
+      pitch: 60 + Math.floor((degree - 1) / 7) * 12 + view.composition.scale[(degree - 1) % 7], syllable: "la", word: "la" }));
+    const s = setup(view); s.clickText("Even rhythm");
+    assert.equal(s.commits.length, 1, fixture.id);
+    const notes = s.commits[0].value;
+    assert.equal(notes.length, fixture.notes.length);
+    assert.equal(notes[0].onset, fixture.notes[0][1]);
+    assert.equal(notes.at(-1).degree, fixture.notes.at(-1)[0]);
+    assert(notes.at(-1).onset <= fixture.last + 1e-8, `${fixture.id}: cadence precedes pickup`);
+    assert(Math.abs(notes.at(-1).onset + notes.at(-1).duration - fixture.end) < 1e-8);
+    assert(notes.every((note, index) => note.duration >= 0.25 && (!index || note.onset >= notes[index - 1].onset + notes[index - 1].duration - 1e-8)), fixture.id);
+  }
+});
+
+test("even rhythm leaves an impossible layout untouched and explains why", () => {
+  const view = score(); view.composition.sections[1].phrases[0].bounds.max_final_onset = 0;
+  const s = setup(view), before = clone(s.phrase().notes); s.clickText("Even rhythm");
+  assert.equal(s.commits.length, 0);
+  assert.deepEqual(s.phrase().notes, before);
+  assert.match(s.toasts.at(-1), /too tightly packed/);
+});
+
 test("section moves submit stable occurrence identities and reject reversed story order", () => {
   const s = setup();
   s.clickText("Later →");

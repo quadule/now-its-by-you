@@ -172,13 +172,21 @@
   }
   function evenRhythm() {
     const p = phrase(), b = bounds();
-    if (!p) return;
+    if (!p || p.notes.length < 2) return;
     const start = p.notes[0].onset, end = p.notes.at(-1).onset + p.notes.at(-1).duration;
-    const slots = Math.round((end - start) / b.grid);
-    if (slots < p.notes.length) return;
-    const boundaries = p.notes.map((_, i) => start + Math.floor(i * slots / p.notes.length) * b.grid);
-    const notes = p.notes.map((n, i) => ({ ...n, onset: boundaries[i], duration: (boundaries[i + 1] ?? end) - boundaries[i] }));
-    commitNotes(notes, "Notes spread evenly across the phrase.");
+    // Equal attacks are not always multiples of a quarter beat (6/8 regularly
+    // uses thirds). Leave the cadence its required pickup space and let it
+    // sustain longer when a perfectly even ending would start too late.
+    const lastStart = Math.min(start + (end - start) * (p.notes.length - 1) / p.notes.length,
+      b.max_final_onset ?? b.max_end, end - b.min_duration);
+    const step = (lastStart - start) / (p.notes.length - 1);
+    if (step < b.min_duration - 1e-9 || end - lastStart < b.min_duration - 1e-9) {
+      bridge().toast?.("This phrase is too tightly packed to space evenly while keeping every syllable singable."); return;
+    }
+    const boundaries = p.notes.map((_, i) => i === p.notes.length - 1 ? lastStart : start + i * step);
+    const notes = p.notes.map((n, i) => ({ ...n, onset: boundaries[i],
+      duration: Math.max(b.min_duration, (boundaries[i + 1] ?? end) - boundaries[i]) }));
+    commitNotes(notes, "Notes spaced evenly; the ending leaves room for the next phrase.");
   }
   function smoothMelody() {
     const p = phrase(), b = bounds();
