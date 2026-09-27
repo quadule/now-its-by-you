@@ -139,3 +139,48 @@ def test_a_small_change_changes_only_what_it_touches():
     assert notes(Band(lute=0.0), ("bass", "guitar", "drum")) == base
     everyone, nudged = notes(Band()), notes(Band(density=0.55))
     assert len(everyone & nudged) > 0.6 * len(everyone)
+
+
+def turn_quotes(g, params, monkeypatch) -> list[list[tuple[float, int]]]:
+    """What each turn's quote plays, (units from the turn's start, pitch) a note, before the
+    instrument's own way with it: the band's Context caught as realize() lays the song out."""
+    from songbird import band as B, idioms  # noqa: F401 (idioms subclasses the Context being caught)
+
+    caught = []
+    real = B.Context
+    with monkeypatch.context() as m:
+        m.setattr(B, "Context", lambda *a: caught.append(real(*a)) or caught[-1])
+        realize(g, params)
+    ctx = caught[-1]
+    with monkeypatch.context() as m:
+        m.setattr(B, "statement", lambda ctx, part, notes, *a, **k: notes)
+        return [[(round(t.u0 - s.u0, 6), t.pitch) for t in B.quote(ctx, i, "fiddle")]
+                for i, s in enumerate(ctx.sections) if s.role == "turn"]
+
+
+def test_a_turn_quotes_a_composed_tune_as_it_is_sung(monkeypatch):
+    from songbird import composition as C
+    from songbird.theory import degree_semitones
+
+    g = G.load(H)
+    plain = choose_params(g)
+    before = turn_quotes(g, plain, monkeypatch)
+    r3 = g.phrases["r3"]
+    pitch = lambda d, k: plain.tonic + degree_semitones(d, plain.mode, r3.sung[k].alter)  # noqa: E731
+    as_written = [(round(n.onset, 6), pitch(n.degree, k)) for k, n in enumerate(r3.sung) if n.onset >= 0]
+    assert before and all(q == as_written for q in before)  # H's turns quote the refrain's third line
+
+    def composing(notes):
+        return replace(plain, composition={"tune": {"r3": C.pack_phrase(g, C.check_phrase(g, "r3", notes))}})
+
+    notes = C.phrase_value(g, plain, "r3")
+    assert turn_quotes(g, composing(notes), monkeypatch) == before  # composed as it was written, quoted as before
+    # a person lifts one of its notes to the next chord tone up and moves another later in its beat
+    notes[5]["degree"] += 2
+    later = notes[7]["duration"] / 2
+    notes[7]["onset"] += later
+    notes[7]["duration"] -= later
+    sung = [(round(n["onset"] * g.meter.beat, 6), pitch(n["degree"], k)) for k, n in enumerate(notes)
+            if n["onset"] >= 0]
+    assert sung != as_written
+    assert all(q == sung for q in turn_quotes(g, composing(notes), monkeypatch))  # the turns play it as it's sung
