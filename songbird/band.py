@@ -1356,6 +1356,34 @@ def prelude_part(ctx: Context, part: str | None = None) -> list[Ev]:
     return statement(ctx, part, notes, 0.8, 0, shift=shift)
 
 
+def coda_part(ctx: Context, sung_end: float, part: str | None = None) -> list[Ev]:
+    """After the last line, over the last chord ringing on: the lead instrument alone plays the opening of the
+    older song the genome names (genome.quote's first four notes; H's: Daisy, Daisy, so mi do so,), softly and
+    plainly, each a half bar, the last held to the end. A leitmotif (style.coda == "quote")."""
+    q = getattr(ctx.genome, "quote", None)
+    style = getattr(ctx.params, "style", None)
+    if q is None or style is None or style.coda != "quote" or ctx.end <= sung_end + 1e-9:
+        return []
+    if part is None:
+        part = next((x for x in [ctx.band.lead] + [x for x in LEADS if x != ctx.band.lead] if ctx.on(x)), None)
+    if part is None or not ctx.on(part):
+        return []
+    motif = list(q.sung[:4])
+    if not motif:
+        return []
+    start = sung_end + ctx.beat  # a breath after the last word
+    step = (ctx.end - start) / (len(motif) + 1)  # the last note holds as long again
+    last = len(ctx.sections) - 1
+    notes = []
+    for k, n in enumerate(motif):
+        u0 = start + k * step
+        u1 = ctx.end if k == len(motif) - 1 else u0 + step
+        pitch = ctx.tonic + degree_semitones(n.degree, ctx.mode, n.alter)
+        notes.append(Tune(u0, u1, pitch, 0.55, False, last, k == 0, k == len(motif) - 1, ()))
+    shift = octave_for(part, [t.pitch for t in ctx.tune_in(0)] or [t.pitch for t in notes])
+    return statement(ctx, part, notes, 0.6, last, ornament=False, shift=shift)
+
+
 # --- putting it together -----------------------------------------------------------
 
 
@@ -1396,6 +1424,8 @@ def arrange(genome, params, placed, lead, end, melody, seconds) -> tuple[list[No
         events += guitar_part(ctx, capo)
     events += melodic_parts(ctx)
     events += prelude_part(ctx)
+    sung_end = max((m["u_end"] for m in melody), default=end)
+    events += coda_part(ctx, sung_end)
     if ctx.on("drum"):
         events += drum_part(ctx)
     if ctx.on("drone"):
@@ -1405,8 +1435,10 @@ def arrange(genome, params, placed, lead, end, melody, seconds) -> tuple[list[No
         events = idioms.shape_events(ctx, shape, events, rhythm, style)
     harp = let_ring(ctx, [e for e in events if e.part == "harp"])
     events = [e for e in events if e.part != "harp"] + harp
-    for e in events:  # whatever sounds through the last chord holds to the end, and rings on from there
-        if e.part != "drum" and e.length <= 0 and e.u1 >= ctx.end - ctx.sub - 1e-9:
+    # whatever sounds through the last chord holds to the end, and rings on from there (through a coda's bars too)
+    hold = min(ctx.end, sung_end) if ctx.end > sung_end + 1e-9 else ctx.end
+    for e in events:
+        if e.part != "drum" and e.length <= 0 and e.u1 >= hold - ctx.sub - 1e-9:
             e.u1 = ctx.end
 
     # Each part's timing wobbles around the grid, the same for everything it plays at one moment

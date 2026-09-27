@@ -1812,9 +1812,11 @@ def arrange_style(genome, params, placed, lead, end, melody, seconds, sdef) -> t
     else:  # the voices answer the lines: the players leave the ends of lines to them
         events += [e for e in B.fills(ctx) if ctx.sections[e.section].role != "refrain"]
     events += count_in(ctx, params.style, ctx.lineup)
-    if ctx.prelude is not None:  # the style's lead alone quotes an older song before the song (songbird.band)
-        lead_part = next((x for x in (sdef.playing(x, ctx.lineup) for x in sdef.leads) if ctx.on(x)), None)
-        events += B.prelude_part(ctx, lead_part) if lead_part else []
+    lead_part = next((x for x in (sdef.playing(x, ctx.lineup) for x in sdef.leads) if ctx.on(x)), None)
+    if ctx.prelude is not None and lead_part:  # the style's lead alone quotes an older song before the song (songbird.band)
+        events += B.prelude_part(ctx, lead_part)
+    if lead_part and params.style.ending != "amen":  # ...or its opening after the last chord, as a coda
+        events += B.coda_part(ctx, sung_end, lead_part)
     events = shape_events(ctx, ctx.plan, [e for e in events if ctx.on(e.part)], rhythm, params.style)
 
     # the singer's notes are nobody else's: a chord's note on a sung pitch goes an octave down
@@ -1836,8 +1838,10 @@ def arrange_style(genome, params, placed, lead, end, melody, seconds, sdef) -> t
         mine = by_part[part]
         info = instruments.spec(part)
         events += mine if info["poly"] or info["register"] is None else B._monophonic(mine)
-    for e in events:  # whatever sounds through the last chord holds to the end, and rings on from there
-        if family(e.part) not in PERCUSSION and e.length <= 0 and e.u1 >= ctx.end - ctx.sub - 1e-9 \
+    # whatever sounds through the last chord holds to the end, and rings on from there (through a quote coda's bars too)
+    hold = sung_end if params.style.coda == "quote" and params.style.ending != "amen" and ctx.end > sung_end + 1e-9 else ctx.end
+    for e in events:
+        if family(e.part) not in PERCUSSION and e.length <= 0 and e.u1 >= hold - ctx.sub - 1e-9 \
                 and params.style.ending != "cold":
             e.u1 = ctx.end
 

@@ -57,6 +57,8 @@ class Style:
     backing     what the backing voices sing: oohs (chord tones), echo (answers at the ends of lines),
                 thirds (harmony above and below), gang (everyone on the tune); "" none
     voices      how many backing voices sing it (the lineage's own, and stand-ins where a style wants a group)
+    coda        quote: after the last line, as the last chord rings two bars on, the lead instrument alone plays
+                the opening of the older song the genome names (genome.quote), softly: a leitmotif; "" none
     """
 
     name: str = ""
@@ -74,6 +76,7 @@ class Style:
     entrances: bool = False
     backing: str = ""
     voices: int = 0
+    coda: str = ""  # quote: after the last line, over the ringing last chord, the lead alone plays the quote's opening
 
     @classmethod
     def from_dict(cls, data: dict | None) -> Style:
@@ -106,6 +109,7 @@ class Style:
             entrances=bool(self.entrances),
             backing=pick(self.backing, BACKINGS),
             voices=max(0, min(6, int(self.voices or 0))),
+            coda=pick(self.coda, ("quote",)),
         )
 
     @property
@@ -804,8 +808,11 @@ def count_in(genome, params) -> int:
 
 
 def coda(genome, params) -> int:
-    """Grid units after the last line for a plagal amen (two bars: IV, then I), when the style ends so."""
-    return 2 * genome.meter.bar if params.style.ending == "amen" else 0
+    """Grid units after the last line: two bars for a plagal amen (IV, then I), when the style ends so, or two
+    bars of the last chord ringing under the quote's opening (songbird.band.coda_part), when the style asks."""
+    if params.style.ending == "amen" or (params.style.coda == "quote" and getattr(genome, "quote", None) is not None):
+        return 2 * genome.meter.bar
+    return 0
 
 
 def repeated_phrases(genome, params) -> list:

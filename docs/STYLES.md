@@ -300,6 +300,7 @@ times it, and waltz styles have their own, slower, ranges.
 | bridge | "half": a half-time bridge |
 | lift | the last refrain a whole step up |
 | ending | rit, cold, amen, repeat; "" the last chord rings |
+| coda | quote: the lead alone plays the genome's quote's first notes over the last chord as it rings two bars on (H: Daisy, Daisy, a leitmotif); "" none |
 | entrances | the first verse builds line by line |
 | backing, voices | what the backing voices sing (oohs, echo, thirds, gang) and how many sang it |
 

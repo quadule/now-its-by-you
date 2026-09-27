@@ -66,3 +66,23 @@ def test_a_song_with_no_quote_to_play_starts_as_it_did():
     assert count_in(bare, p) == 0
     a, b = realize(bare, plain), realize(bare, p)
     assert b.sections == a.sections and len(b.notes) == len(a.notes)
+
+
+def test_the_quote_as_a_coda_the_whistle_alone_over_the_last_chord():
+    """The leitmotif the artist asked for instead of an intro: after the last line, as the last chord rings two
+    bars on, the whistle alone plays the quote's opening (Daisy, Daisy: so mi do so,), softly."""
+    g = G.load(H)
+    plain = choose_params(g)
+    p = replace(plain, style=replace(plain.style, coda="quote"))
+    a, b = realize(g, plain), realize(g, p)
+    bar = 60.0 / p.tempo * g.meter.bar / g.meter.beat
+    assert b.sections[0] == a.sections[0]  # nothing before the song moves
+    sung_end = max(n.start + n.dur for n in list(b.part("voice")) + [n for n in b.notes if n.part.startswith("choir")])
+    after = [n for n in b.notes if n.start > sung_end + 0.2]  # begun after the last sung note
+    assert {n.part for n in after} == {"whistle"}, {n.part for n in after}
+    pcs = [int(round(n.pitch - p.tonic)) % 12 for n in sorted(after, key=lambda n: n.start) if n.dur >= 0.25]
+    assert pcs == [7, 4, 0, 7], pcs
+    assert b.duration > a.duration + 1.5 * bar  # the last chord rings on under it (the ritardando stretches the bars)
+    ringing = [n for n in b.notes if n.start < sung_end - 0.5 and n.start + n.dur > after[0].start + 0.5 and n.part != "drum"]
+    assert {"drone"} <= {n.part for n in ringing}, {n.part for n in ringing}
+    assert len(a.part("voice")) == len(b.part("voice"))
