@@ -1,0 +1,23 @@
+{
+  "tempo": 96,
+  "tonic": 62,
+  "mode": "ionian",
+  "style.name": "ballad",
+  "style.feel": "straight",
+  "style.lift": false,
+  "style.entrances": true,
+  "style.breakdown": true,
+  "style.backing": "thirds",
+  "style.ending": "rit",
+  "band.arc": 0.95,
+  "band.density": 0.58,
+  "band.lute": 0.85,
+  "band.fiddle": 0.9,
+  "band.whistle": 0.9,
+  "mix.forward": 8.5,
+  "mix.space": 0.8,
+  "mix.width": 1.1,
+  "mix.intimacy": 0.65,
+  "words.verse.0": {"id": "box"},
+  "words.verse.1": {"id": "wire"}
+}

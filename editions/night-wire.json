@@ -1,0 +1,18 @@
+{
+  "tempo": 102,
+  "tonic": 62,
+  "mode": "ionian",
+  "style.name": "indie",
+  "style.feel": "straight",
+  "style.lift": false,
+  "style.entrances": true,
+  "style.breakdown": true,
+  "style.backing": "echo",
+  "style.ending": "rit",
+  "band.arc": 0.9,
+  "band.density": 0.55,
+  "mix.forward": 8,
+  "mix.space": 0.75,
+  "mix.width": 1.2,
+  "mix.intimacy": 0.7
+}
