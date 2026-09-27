@@ -5,6 +5,32 @@ note to the next, how a held note moves, how loud each syllable is, when and how
 passes so far: the first (2026-09-25, below) against Milo's takes and the Eleven Music singers; the
 second (2026-09-26, next) against a natural singer singing our own scores, note for note.
 
+## Secondary stress stays stressed (2026-09-27)
+
+Tried and not adopted: singing only a primary stress (1) as stressed, so a syllable the dictionary
+marks 2 (the -one of everyone, the second half of a compound) keeps its full vowel but isn't leaned
+on or told to the throat as stressed. English says many of those lightly, and the reviews had heard
+"ev-ery-ONE". Dry, on H's refrain and five seed verses over three seeds, words misheard went from
+12.9% to 14.3% (85 to 94 of 657), and not on those words: the throat was taught with 2 as stressed,
+and telling it otherwise moved its singing everywhere. The rule stays; a word the dictionary marks 2
+where English reduces it gets its own reading in the song's lexicon (tools/pronounce.py lists the
+suspects; banjo, sunday, inside, misheard, whatever and fifteen joined H's today, via Gemini's review).
+
+## Keeping learned timing singable (2026-09-27)
+
+Opposing early and late gestures at the allowed extremes could put syllables
+out of order and overlap their phonemes. H produced 89 overlapping boundaries
+with an alternating -0.25/+0.25-beat phrasing. `realize.ordered_delivery` now
+shares the smallest necessary timing correction among crowded notes, leaving
+uncrowded notes and a phrase's overall lean unchanged. It reserves up to
+100 ms between vowel onsets, never more than half the original spacing.
+The scheduler fits consonants into the remaining space without the old 30%
+minimum that could force them over the next vowel.
+
+The regression check covers the lead and three harmony voices in H, B and L,
+at their own tempo and 40% faster, through both engines' consonant schedules.
+Every syllable stays in order and every phoneme boundary stays disjoint.
+
 ## Against a natural teacher (2026-09-26)
 
 The artist: "I still want to make the voice less robotic (we don't need to *try* to make it sound

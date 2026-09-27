@@ -1,5 +1,7 @@
 # Overnight, 2026-09-26: what changed, what to hear, what to reconsider
 
+> The night of 2026-09-27 (the last before singing closes) is in [OVERNIGHT-2026-09-27.md](OVERNIGHT-2026-09-27.md).
+
 The artist, going to bed: "please take this as far as you possibly can overnight, improving
 anything and following the lead of my previous decisions to improve the quality and variation of
 the music. Just make changes in atomic commits and flag anything I might want to reconsider later.
