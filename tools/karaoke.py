@@ -84,11 +84,12 @@ def lyrics(score: dict, title: str, tempo: float) -> dict:
 
 def sections(score: dict) -> list[dict]:
     """The guide's sections in order, {"index", "name", "start", "end", "sung"}, and for each sung
-    one, which of its kind it is ("nth": verse 1, verse 2...), its first line as plain words
-    ("label"), and the window for recording it alone ("window": [from, to], seconds): from the
-    downbeat two bars before its first sung note (a pickup's bar line counts: after a turn, the
-    turn's first downbeat), never before the song's start, to a bar after its last sung note
-    ends, so the last word's fall isn't cut off, never after the song's end."""
+    one, which of its kind it is ("nth": verse 1, verse 2..., bridge2 the second bridge), its
+    first line as plain words ("label", written()), and the window for recording it alone
+    ("window": [from, to], seconds): from the downbeat two bars before its first sung note (a
+    pickup's bar line counts: after a turn, the turn's first downbeat), never before the song's
+    start, to a bar after its last sung note ends, so the last word's fall isn't cut off, never
+    after the song's end."""
     beats = [(float(t), bool(bar)) for t, bar in score.get("beats") or []]
     duration = float(score["duration"])
     spans = score["sections"]
@@ -104,8 +105,9 @@ def sections(score: dict) -> list[dict]:
     for i, (name, a, b) in enumerate(spans):
         entry = {"index": i, "name": name, "start": a, "end": b, "sung": i in sung}
         if i in sung:
-            seen[name] = seen.get(name, 0) + 1
-            entry.update(nth=seen[name], label=first_line(sung[i], score.get("lexicon")),
+            kind = name.rstrip("0123456789") or name  # bridge2 is the second bridge
+            seen[kind] = seen.get(kind, 0) + 1
+            entry.update(nth=seen[kind], label=first_line(sung[i], score.get("lexicon")),
                          window=window(sung[i], beats, duration))
         out.append(entry)
     return out

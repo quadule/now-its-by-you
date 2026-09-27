@@ -125,6 +125,13 @@ def test_each_sung_section_has_its_first_line_and_a_window_to_record_it_alone():
     assert words["sections"] == found and [line["section"] for line in words["lines"]][:3] == ["verse", "verse", "verse"]
 
 
+def test_a_second_bridge_is_bridge_two():
+    beats = [[0.5 * k, int(k % 4 == 0)] for k in range(40)]
+    notes = [voice(1.0, 1.0, "Car", line_end=True, section="bridge"), voice(9.0, 1.0, "Give", line_end=True, section="bridge2")]
+    score = {"duration": 19.0, "beats": beats, "notes": notes, "sections": [["bridge", 0.5, 8.0], ["bridge2", 8.0, 16.0]]}
+    assert [(s["name"], s["nth"]) for s in karaoke.sections(score)] == [("bridge", 1), ("bridge2", 2)]
+
+
 def test_a_label_keeps_a_compounds_hyphen_and_closes_up_the_syllables():
     assert [karaoke.written(w) for w in ("*num-bers*", "half-in-vent-ed", "nine-ty-odd,", "half-a-sleep;", "has-n't",
                                          "in-vent-ed", "hum-med", "wire,", "zor-blax")] == [
