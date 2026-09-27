@@ -3,6 +3,10 @@
 // (web/sing/src/worker.js uses them; test/lib.test.mjs tests them).
 
 export const TOKEN = /^[A-Za-z0-9_-]{24}$/; // 18 random bytes, base64url: 144 bits (invitations and singers)
+// a word the artist chooses for an invitation instead, short enough to say and type (songbird.quadule.com/i/family):
+// 4 to 24 lowercase letters, digits and hyphens, a letter first; guessable, so for links to family and friends
+export const WORD = /^[a-z][a-z0-9-]{2,22}[a-z0-9]$/;
+export const isInvite = token => TOKEN.test(token) || WORD.test(token);
 export const TAKE_ID = /^\d{8}T\d{6}Z-[a-z2-7]{6}$/;
 export const TAKE_KEY = /^takes\/[A-Za-z0-9_-]{24}\/\d{8}T\d{6}Z-[a-z2-7]{6}\.(wav|json)$/;
 export const WORDS_KEY = /^words\/[A-Za-z0-9_-]{24}\/\d{8}T\d{6}Z-[a-z2-7]{6}\.json$/;

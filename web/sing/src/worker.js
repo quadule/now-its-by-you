@@ -23,7 +23,8 @@
 //
 // and for the artist, with Authorization: Bearer <ADMIN_TOKEN> (wrangler secret put ADMIN_TOKEN):
 //   GET    /api/admin/status                  the dates, and where things stand
-//   POST   /api/admin/invites                 make invitations: {count, days, limit, note, people}
+//   POST   /api/admin/invites                 make invitations: {count, days, limit, note, people}, or one at a
+//                                             word you can say and type, /i/<word>: {word, ...} (lib.js WORD)
 //   GET    /api/admin/invites                 every invitation, who joined, their takes
 //   POST   /api/admin/revoke/<invite>         close an invitation
 //   GET    /api/admin/singers[?emails=1]      every singer (emails only if asked), a page at a time
@@ -45,8 +46,8 @@
 // no emails, no tokens, no addresses. An address is used only to count requests and joins.
 
 import {
-  DEFAULTS, FILE_NAME, MAX_FILE_BYTES, MAX_TAKE_BYTES, MAX_WORDS, SPEC, TAKE_ID, TAKE_KEY, TOKEN, WORDS_KEY,
-  checkConsent, checkTake, clampInt, cleanEmail, cleanName, cleanWords, fileAbout, fileKind, fromB64url,
+  DEFAULTS, FILE_NAME, MAX_FILE_BYTES, MAX_TAKE_BYTES, MAX_WORDS, SPEC, TAKE_ID, TAKE_KEY, TOKEN, WORD, WORDS_KEY,
+  checkConsent, checkTake, clampInt, cleanEmail, cleanName, cleanWords, fileAbout, fileKind, fromB64url, isInvite,
   joinsAllowed, leastSung, moment, newToken, own, parseRange, parseWavHeader, sameSecret, sectionsOf, songIndex,
   specOf, stamp, stampedKey, stateOf, takeKey,
 } from "./lib.js";
@@ -185,7 +186,7 @@ function dates(env) {
 }
 
 async function invite(env, token) {
-  if (!TOKEN.test(token)) return null;
+  if (!isInvite(token)) return null; // a random token, or a word the artist chose (lib.js WORD)
   const record = await env.INVITES.get(`invite:${token}`, "json");
   if (record && record.state === "open") {
     // closing is written to R2 too: KV can go on serving "open" elsewhere for a minute, R2 can't
@@ -689,14 +690,21 @@ async function admin(request, env, parts, now) {
   if (what === "invites" && method === "POST") {
     let body = {};
     try { body = await readJson(request, 8192); } catch (e) { /* defaults */ }
-    const count = clampInt(body.count ?? 1, 1, 50, 1), days = clampInt(body.days ?? DEFAULTS.days, 1, 60, DEFAULTS.days);
+    // a word for the link instead of a random token (one link): short enough to say and type, so guessable
+    const word = body.word === undefined || body.word === null ? null : String(body.word);
+    if (word !== null && !WORD.test(word)) {
+      return fail(400, "word", "A word for a link is 4 to 24 lowercase letters, digits and hyphens, a letter first.");
+    }
+    if (word !== null && await env.INVITES.get(`invite:${word}`) !== null) return fail(409, "word", "That word is a link already.");
+    const count = word !== null ? 1 : clampInt(body.count ?? 1, 1, 50, 1);
+    const days = clampInt(body.days ?? DEFAULTS.days, 1, 60, DEFAULTS.days);
     const limit = clampInt(body.limit ?? DEFAULTS.limit, 1, 200, DEFAULTS.limit);
     const people = clampInt(body.people ?? DEFAULTS.people, 1, 1000, DEFAULTS.people);
     const note = cleanName(String(body.note ?? "")).slice(0, 80);
     const created = new Date(now), expires = new Date(created.getTime() + days * 86400e3);
     const made = [];
     for (let i = 0; i < count; i++) {
-      const token = newToken();
+      const token = word !== null ? word : newToken();
       const record = { v: 2, created: created.toISOString(), expires: expires.toISOString(), limit, note, state: "open", people };
       await saveInvite(env, token, record);
       made.push({ token, url: `${url.origin}/i/${token}`, ...record });

@@ -29,11 +29,14 @@ copy of song.json (`song/worker.json`) so each request stays within the free pla
 
     uv run python tools/invite.py new 3 --note "choir, Tuesday"     # three personal links
     uv run python tools/invite.py new --people 40 --note "instagram" # one group link, for up to 40 people
+    uv run python tools/invite.py new --people 20 --word family      # one group link at a word: songbird.quadule.com/i/family
     uv run python tools/invite.py list                               # each link: open or not, who joined, takes
 
 A **personal link** is for one person, who may join from up to three devices (laptop, then phone);
 joins with the same email on one link are the same person, and their takes share a folder. A
 **group link** admits `--people` joins, so it can be posted; anyone with it can join until it's full,
+and with `--word` it lives at a word you can say aloud and type (`/i/family`: 4 to 24 lowercase letters,
+digits and hyphens, a letter first) instead of a random token, so it is guessable: for family and friends,
 closed, or singing closes. `--limit` is takes per singer (default 30), `--days` how long a link stays
 open (default 7; singing closing ends them all anyway). Joining is held to 20 an hour from one
 address (a choir on one Wi-Fi shares one: raise `JOINS_AN_HOUR` in wrangler.toml and deploy for a

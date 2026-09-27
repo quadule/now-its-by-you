@@ -678,3 +678,19 @@ test("a cold start reads song/worker.json when the site has one, song.json when 
   const t2 = await invitation(broken, none);
   assert.equal((await join(broken, none, t2)).status, 500); // an old site: build it again
 });
+
+test("a word makes one link you can say aloud and type, /i/<word>; taken or misspelt words are refused", async () => {
+  const w = await load(), e = env();
+  const made = (await admin(w, e, "POST", "invites", { word: "family", count: 5, people: 6, note: "family and friends" })).data.invites;
+  assert.equal(made.length, 1); // one link, whatever the count
+  assert.deepEqual([made[0].token, made[0].url, made[0].people], ["family", "https://songbird.test/i/family", 6]);
+  assert.equal((await call(w, e, "/api/invite/family")).status, 200);
+  assert.equal((await call(w, e, "/i/family")).status, 200);
+  assert.equal((await join(w, e, "family", { email: "kin@example.org", name: "Kin" })).status, 200);
+  assert.equal((await admin(w, e, "GET", "invites")).data.invites.find(i => i.token === "family").joined, 1);
+  assert.equal((await admin(w, e, "POST", "invites", { word: "family" })).status, 409); // a link already
+  for (const word of ["Family", "fam", "-family", "family-", "fam ily", "a".repeat(25), "1family"]) {
+    assert.equal((await admin(w, e, "POST", "invites", { word })).status, 400, word);
+  }
+  assert.equal((await call(w, e, "/api/invite/famly")).status, 404); // no such word
+});

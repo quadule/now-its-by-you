@@ -2,6 +2,7 @@
 
     uv run python tools/invite.py new 3 --note "choir, Tuesday"       # three personal links, open 7 days
     uv run python tools/invite.py new --people 40 --note "the list"   # one group link, for up to 40 people
+    uv run python tools/invite.py new --people 20 --word family      # ...at a word you can say and type: /i/family
     uv run python tools/invite.py list                                # every invitation: who joined, their takes
     uv run python tools/invite.py singers [--emails]                  # everyone who joined, and what they were mailed
     uv run python tools/invite.py sync [--watch 60]                   # the site and this computer, in step
@@ -347,10 +348,14 @@ def memory() -> dict:
 
 # ---------- invitations and singers
 
-def new(site: Site, count: int, note: str, days: int, limit: int, people: int = 1) -> list[dict]:
-    """count invitations: personal links (people 1), or group links one person can post (up to people each)."""
-    made = site.call("POST", "/api/admin/invites",
-                     {"count": count, "note": note, "days": days, "limit": limit, "people": people})["invites"]
+def new(site: Site, count: int, note: str, days: int, limit: int, people: int = 1, word: str | None = None) -> list[dict]:
+    """count invitations: personal links (people 1), or group links one person can post (up to people each);
+    with a word, one link at that word (https://songbird.quadule.com/i/family), short enough to say aloud and
+    type, and so guessable: for family and friends."""
+    body = {"count": count, "note": note, "days": days, "limit": limit, "people": people}
+    if word is not None:
+        body["word"] = word
+    made = site.call("POST", "/api/admin/invites", body)["invites"]
     for inv in made:
         print(inv["url"])
     if made:
@@ -1210,6 +1215,8 @@ def main() -> None:
     a.add_argument("--note", default="", help="who they're for, to find them later (kept on the server, never shown to singers)")
     a.add_argument("--days", type=int, default=7, help="how long each stays open (default 7)")
     a.add_argument("--limit", type=int, default=30, help="the most takes each singer can keep (default 30)")
+    a.add_argument("--word", help="one link at this word instead of a random token (/i/<word>): 4 to 24 lowercase "
+                                  "letters, digits and hyphens, a letter first; easy to say and type, so guessable")
     sub.add_parser("list", help="every invitation: its state, who joined, their takes")
     s = sub.add_parser("singers", help="everyone who joined: what they sent, which emails they've had, their page")
     s.add_argument("--emails", action="store_true", help="their email addresses too")
@@ -1236,12 +1243,17 @@ def main() -> None:
     args = ap.parse_args()
     if args.command == "new" and args.people < 1:
         ap.error("--people is 1 or more")
+    if args.command == "new" and args.word is not None:
+        if not re.fullmatch(r"[a-z][a-z0-9-]{2,22}[a-z0-9]", args.word):
+            ap.error("--word is 4 to 24 lowercase letters, digits and hyphens, a letter first")
+        if args.count != 1:
+            ap.error("--word makes one link")
     if args.command == "sync" and args.watch is not None and args.watch < 10:
         ap.error("--watch needs 10 seconds or more (every round lists the site's bucket)")
 
     site = Site(args.url, admin_token())
     if args.command == "new":
-        new(site, args.count, args.note, args.days, args.limit, args.people)
+        new(site, args.count, args.note, args.days, args.limit, args.people, args.word)
     elif args.command == "list":
         listing(site)
     elif args.command == "singers":
