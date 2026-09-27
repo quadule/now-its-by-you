@@ -1,4 +1,4 @@
-# The studio (2026-09-26)
+# The studio (2026-09-27)
 
 The artist: "…for the final deliverable tool to allow the user to explore the
 procedural generation and optionally edit the song before recording."
@@ -13,7 +13,7 @@ records the finished rendition: one FLAC carrying the program, the song and
 its record, your choices marked as yours.
 
 It is a local web page served by the standard library's `http.server` on
-127.0.0.1, with plain HTML, CSS and JavaScript (songbird/studio/, about 70 KB)
+127.0.0.1, with plain HTML, CSS and JavaScript (songbird/studio/)
 and nothing fetched from anywhere else: system fonts, no libraries, no build
 step, only the program's own runtime dependencies. So it runs from a seed
 packet's own program, offline. Nobody editing anything changes nothing about
@@ -61,124 +61,103 @@ Every step but the first is optional: opening the studio and pressing Record
 records what `songbird render --parent THE_PACKET --machine here --date
 <today> --pack` would.
 
-## The screen
+## The musical workbench
 
-Pictures of each part are in `renders/production/studio/` (not in git), made
-with a made-up machine called Ada so nothing of this computer is in them.
+The studio opens in **Arrange**. Four workspaces keep the editing surface focused:
+Arrange, Words, Sound, and Explore. Key, scale, tempo, full sung playback,
+performance redraw, undo and redo remain available above them. The bottom player
+always provides playback and recording. **Record & pass it on** opens the singing
+and export details without placing them in the middle of the score.
 
-On a laptop, two columns under a header; on a small screen, one column in the
-same order, the words first.
+### Arrange
 
-**Header.** The song's title; which version this is ("Your version today,
-Saturday 26 September 2026, from the song as it began, sung by this
-machine"); *Hear it all* and *Roll chance again* (and which draw it is).
-Once anything is changed: "3 choices are yours · hear it as the program
-would sing it · undo all". Edits that couldn't be kept say why here, with
-"let it go".
+A full-song overview shows every section, in proportion to its musical length.
+Select one to open it; the scrollable detail strip underneath shows its miniature
+melody and bar position. Drag sections to rearrange them, or use Earlier/Later.
+The backend checks the arrangement before accepting it. Repeated verses and
+refrains retain their story order: their chronological and canonical lyric rules
+still matter. They can move around other kinds of section. This is a musical
+arrangement, not arbitrary audio clips.
 
-**The words (the main column).** The song as it will be sung, section by
-section: each sung section's lines large, in a serif, the line's focus word
-underlined; a small heading with which verse or couplet it is, its tags
-(plain, light, dark or tender; its year; rare; the question it asks), and how
-it came to be there: "handed down" (as the version before held it), "new
-this time" with the program's own reason under it ("verse 3 taken in: the
-form sings three verses; your machine's verse this season", from
-choose_params' log, docs/EVOLUTION.md), "chosen by you" or "kept by you". The
-words are the lineage's own (Params.words), so rolling chance no longer
-changes them. Instrumental
-sections are one quiet line ("the whistle plays the tune in"). Every section
-has a play button; a sung one has *change*, and *undo* once changed.
+Every section opens a phrase strip and a scale-based piano roll. Each note carries
+its sung syllable. Drag up/down for pitch, left/right for timing, or drag the right
+edge for length. Select a note for precise pitch, start and duration controls.
+Arrow keys nudge notes; Shift+Left/Right changes duration. Snap and zoom adjust the
+editing grid. The harmony lane shows the chords beneath the tune. A shared phrase
+edit updates every appearance, including instrumental echoes; the interface shows
+how many places share it.
 
-**The choices (the side column).** A card for each choice: its value in plain
-words, a line of reasons each tagged by where it came from (your machine,
-time, kept, the song, chance, the versions before, you), and *change*, folded
-away until asked for. When a card has been changed, "chosen by you; the
-program chose major" leads, and the program's own reasons follow under "Why
-the program chose what it did". Moving through time adds "today: D major"
-where a card differs from today.
+Notes retain their syllable count and order, stay within the song's range, keep
+space before the following phrase's pickup, and preserve the ending's scale-degree
+class. Validation rejects overlaps, non-finite values, excessive leaps and notes
+outside the phrase. **Step**, **Soften leaps**, and **Even rhythm** offer small,
+undoable compositional transformations. **Restore phrase/order** removes the local
+override and returns to the version inherited by this studio.
 
-| Card | Shown as | Reasons | Can change | Within |
-|---|---|---|---|---|
-| The style | "a string band, a waltz", what its band plays, and the arrangement's options that are on ("the last refrain a whole step up; a count-in to begin; backing voices in harmony") | kept from the version before; where your machine is at home among the styles, and that a version moves one style at a time; these weeks' lean; the styles the line was sung in | the style, its feel, how it ends, backing voices, the lift | the styles of songbird/style.py; a feel the style can't play the song in is said, not bent. A style edit goes in by name (choose_params(style=, arrange=)), so its players, pace and leans come with it |
-| Key | "D major", "E mixolydian", "B minor" | where your machine's singer is comfortable; your machine's languages lean to folk (bright, darker) modes; this year | the note, and the mode | five semitones either side of the song's own key; the modes the song's chords keep their shape in (for H: major, mixolydian, minor) |
-| Tempo | "95 beats a minute: a steady walk" | a brisk or unhurried machine (new or old files, quick or slow hands); today | a slider | 0.75 to 1.3 times the song's own |
-| Shape | "three verses, with an intro, a turn after the refrains and the bridge twice", and the sections in order | a rich vocabulary tells a longer story; your machine's habit; this season | how many verses; verses in pairs; intro, turns, break, the bridge twice, the tag, outro | what the song's template and the words' rules allow; a refused part says why |
-| The band | "a steady strum with the whistle leading; moderate and clear; all eight play", or under a style "the fiddle leading; busy and bright; bass, banjo, mandolin, guitar and fiddle play" | your machine's own band; the players are the style's own; a busy machine plays busier; your screen brightens it; these weeks; this year's lead | pattern and lead (the song's own band), how busy, how bright, who plays (a style's players by name) | the band's own ranges; every player can sit out, all of them for the voice alone ("the whistle sits out, so the fiddle takes the tune") |
-| The room and the mix | "a room like a living room; the voice close and over the band; wide" | your machine's room; its own way of mixing; these weeks; today | how much of the room, how wide, the voice over the band, how close the singer is | the mix's designed ranges (MixParams RANGES) |
-| The singer | "a high voice, clear, with a gentle vibrato; sung the song's own way" | your machine's own voice, the same in every song it sings; today | only whose way it is sung | the phrasings made on this computer (a checkout's singing page) |
-| The words | "the version before's words, handed down, with two changes this time" | each change and why (taken in for a longer form, changed by the song's rule, swapped this season); the rest handed down; what your machine reaches for (its screen, the words you use, these weeks) | keep these words, and every section in the words column | the bank's rules; a word you choose changes only that word, the rest held as handed down |
-| Voices before | "one voice from earlier versions joins the bridge" | one more for every version before this one, up to six | no: it is the lineage | |
-| The melody | "one small change to the tune, handed down or found here", each in words | what the tune learned or forgot this time, and why | each can be dropped | as the lineage carries them (songbird.variants) |
-| Your machine | its languages, size, files, screen, words, typing and room, a line each | | no | |
+**Play sketch** auditions a phrase, section or whole song immediately through a
+small Web Audio oscillator. Loop and click provide practice tools; the playhead
+follows the score. This is a melody guide. **Hear sung section** and **Hear the
+song** use the real singer, phrasing, arrangement and mix, rendering locally when
+needed. The two players stop each other. Existing audio is marked when it belongs
+to earlier edits.
 
-Any Params field no card speaks for yet gets a card of its own in plain
-values, with reasons found the same way; a proper card, and an editor, can
-follow.
+### Words
 
-**Through time.** Six years of this machine's song, from three years ago to
-three on, a lane each for the style, the key (shaded by mode), the tempo, the
-verses, who leads, and which way the words lean. A dashed line
-is today; the cursor is the day shown. The slider, a tap on the lanes, or the
-steps (a day, a month, a year either way; today) move it, and every card
-follows.
+Each section shows the lyrics as sung. Native dropdowns sit directly in the lines
+where a singable word can change; the verse, couplet or head has a dropdown beside
+its section. Coupled words and refrain trades still follow the bank's rules. The
+rules, unavailable alternatives and valid placements are folded underneath each
+section. Options are loaded automatically and stale replies never replace newer
+choices.
 
-**Other machines.** The same song, from the same version, on the same day, as
-three made-up machines would sing it (Ada, Basil, Coral) beside yours: key,
-tempo, shape, band, singer, room and first line, differences marked, each with
-a play button for its whole song. Any name makes up another.
+**Write your own lines** opens an original-lyrics editor in each sung section.
+Each line displays its syllable target and a live count. Words with more than one
+syllable are written with syllable hyphens (`car-ry`). **Use these lines** checks the
+count and the singer's pronunciation before changing the song, as one undoable
+transaction. Unsupported words and mismatched counts receive an explanation;
+unapplied typing stays in place while choices refresh. The writer is responsible
+for the meaning and rhyme. **Use the song's line** releases authored text, including
+text inherited from a parent recording.
 
-**Sing it.** What singing does, and a button that opens the singing page in a
-new tab (in a checkout; elsewhere it says it isn't there yet).
+Authored text belongs to a section occurrence, such as the first verse, rather
+than to every use of its tune. It follows that section through arrangement moves.
+The bank continues evolving underneath it; restoring a bank line reveals the
+current procedural words. Original lines travel in compact composition data,
+and the exported lyric sheet is taken from the actual sung score.
 
-**Record it.** One button; what it's making while it records; then where the
-file is, how many choices are marked as yours, and the command that makes the
-next version from it.
+### Sound
 
-**The player.** Pinned to the bottom: what is playing, play and pause, where
-it is (tap to seek), and while a preview is made, what the program is making
-("the guitar", "the singer", "a voice from before", "mixing") with its
-progress. *Record it* sits at its right, away from *Roll chance again*.
+Cards expose the style, form, players, room, vocal presence and other choices.
+Reasons and provenance are folded away. Every band player has a gain control
+(0–200%), a mute that remembers its previous level, and a solo control that restores
+the previous band mix when released. Solo leaves the singer audible. A solo or a
+batch of mix changes is one undoable edit. A new style brings its own instruments,
+pace, feel and arrangement options.
 
-### Choosing words
+### Explore
 
-A sung section's *change* opens its choices in place:
+The existing six-year timeline, day/month/year controls, and other-machine
+comparison live here. Your explicit edits remain in place while the machine and
+time change the rest of the song. The same fictional machine name always produces
+the same machine.
 
-- **A verse**: every verse of the bank that can be sung in that place given
-  the verses around it, by its first line and tags, the one sung marked. The
-  ones that can't are folded below, each with the rule it breaks in one
-  sentence (`arrange.problem()`): "a song sings at most one verse that rhymes
-  another way or runs a line on, and the kids and lullaby verses both do";
-  "the verses are sung in the order of their years, so the ink verse (1800)
-  can't come after the wire verse (1990)"; "the first verse teaches the song's
-  shape, so it is a plain one, and the trench verse rhymes ABAB (not AABB), is
-  rare and runs a line on". Where it could go instead, it says so, one tap
-  away: "it could be verse 3 instead", or "sing it as verse 1 instead" (the
-  verses reordered as the rules ask, moving as few as can be). Below, the
-  verse's swapped words ("girl", "boy", "nun", "monk").
-- **A refrain**, with words of its own: its couplet, any the other refrains
-  aren't singing (choosing one another refrain sings trades places with it);
-  between the first and the last, how it begins (the song's own head, or
-  another, "Who wrote this song? Nobody, so / it's yours if you sing it and
-  then who knows?", which trades places too) and the question it asks
-  (sang, heard, kept or wrote; one another refrain asks is asked afresh
-  there); and its own "while" and "then" (each refrain ends its own way: an
-  ending another refrain has moves that one to another). What the rules keep is said, not
-  offered: the first and last refrains' head and question, the words a head
-  sings as written, and the last refrain's "by everyone, no one, and now
-  it's by you".
-- **The bridge**: its canon stanza always first (said), its once-a-song words
-  (water, mountain, border or desert...); a second bridge section chooses its
-  stanza.
-- **The tag**: la, loo or oo.
+### Drafts, history and recording
 
-A choice puts that verse, couplet, word or syllable in its place among the
-words the lineage holds; everything else stays as handed down (so a choice
-offered in place changes nothing else), and the recording hands on what was
-sung, the choice among it (`arrange.hold`, as `songbird render` does). Moving
-through time can change the held words (a longer form takes a verse in, a
-season swaps one); *Keep these words* (on the words card) holds every word as
-it is, so moving through time changes only the music; the
-words then say "kept by you", and the header counts only what was changed.
+Edits save in browser storage on this device. Date and chance are deliberately not
+retained across reloads, so tomorrow opens on tomorrow. Undo/redo covers note drags,
+word changes, arrangements and mixer actions (100 steps during the current visit).
+Cmd/Ctrl+Z works outside text fields; text fields keep their own editing history.
+
+**Save draft** downloads a small `.songbird.json` file with the song's fingerprint
+and edit map. **Open draft** validates the file and its edits before replacing the
+current draft; opening is itself undoable. Drafts contain no audio or software,
+and belong to the exact song genome they were written for. They are useful for
+saving alternatives while the finished FLAC remains the complete portable artifact.
+
+**Record it** uses the normal renderer and marks every chosen value. The finished
+FLAC carries the program, song, composition, lyrics and record. Opening it in the
+studio makes the next generation from those choices. No browser libraries, sample
+packs, build tools or external services are required by the editor.
 
 ## How edits flow
 
@@ -190,6 +169,9 @@ server keeps nothing else but caches, so any request can be replayed.
 
 | Path | Value | Acts on |
 |---|---|---|
+| `form.order` | section occurrence IDs (`verse:0`, `refrain:0`, …) | validated arrangement order, inherited in children |
+| `tune.<phrase>` | `{degree, onset, duration}` for each note, in beats | pitch/rhythm of every appearance of that phrase |
+| `lyrics.<section-id>.<line-index>` | syllable-hyphenated text, or null to release inherited text | one original lyric line, checked against its tune |
 | `date` | "YYYY-MM-DD" | the moment time is read at: noon UTC that day, as `--date` |
 | `roll` | 1, 2, 3... | chance drawn again: the day's own seed drawn again that many times (`edits.rolled`), so chance still follows the day |
 | `tonic`, `mode`, `tempo` | a MIDI note, a mode, beats a minute | `Params` |
@@ -418,3 +400,16 @@ browser's storage keeps the edits in progress on this browser only.
    makes one; any name can be typed.
 8. **Recordings are named** `<song>.<day>.<id6>.flac`, into `renders/` (a
    checkout) or the current folder (a packet).
+
+## Verification
+
+```sh
+uv run pytest tests/test_composition.py tests/test_studio.py tests/test_edits.py tests/test_evolve.py tests/test_pack.py
+node --test tests/studio_*.test.cjs tests/test_studio_drafts.cjs
+```
+
+Composition regression tests cover validation, provenance, replay, inheritance,
+actual packet reopening, compound meter, rendered note timing, and the editor's
+compressed size. Browser interaction tests use dependency-free DOM/audio doubles
+for history, races, selection, dragging, playback and original lyric drafts. Live
+browser checks complement these for layout and native controls.
