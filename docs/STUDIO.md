@@ -92,7 +92,9 @@ space before the following phrase's pickup, and preserve the ending's scale-degr
 class. Validation rejects overlaps, non-finite values, excessive leaps and notes
 outside the phrase. **Step**, **Soften leaps**, and **Even rhythm** offer small,
 undoable compositional transformations. **Restore phrase/order** removes the local
-override and returns to the version inherited by this studio.
+override and returns to the version inherited by this studio: a released order gives
+the form back to the machine, which chooses it from the parent's as it would with no
+order (with no machine, the parent's form stays; never the seed's in its place).
 
 **Play sketch** auditions a phrase, section or whole song immediately through a
 small Web Audio oscillator. Loop and click provide practice tools; the playhead

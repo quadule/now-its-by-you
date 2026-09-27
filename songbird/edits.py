@@ -441,8 +441,10 @@ class Overrides:
             try:
                 names = composition.order(self.genome, e["form.order"])
                 if names is None:
-                    if held.pop("order", None):
-                        out["form"] = list(self.genome.seed_params["form"])
+                    # Released, the form is the one the table has without it: the parent's, which a machine
+                    # singing this version then chooses from (variation.choose_form, after this first pin);
+                    # with no parent, the song's own. Never the seed's in place of the machine's.
+                    held.pop("order", None)
                 else:
                     out["form"] = held["order"] = names
                 applied.append("form.order")

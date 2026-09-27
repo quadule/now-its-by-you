@@ -167,6 +167,25 @@ def test_provenance_replays_edits_and_reset_releases_inherited_phrase():
     assert r.params.to_dict() == inherited
 
 
+def test_releasing_an_inherited_order_returns_to_the_parents_form_or_the_machines_not_the_seeds():
+    base = choose_params(G, None, ADA, DAY)
+    parent = E.resolve(G, None, ADA, DAY, {"form.order": rearranged(base.form)}).params
+    assert parent.form != tuple(G.seed_params["form"])
+    # no machine: nothing else is chosen, so the form is the parent's, no longer held as the person's
+    kept = choose_params(G, parent, overrides={"form.order": None})
+    assert kept.form == parent.form and "order" not in kept.composition
+    # a machine: its own choice for this version, as it chooses from a parent with no order
+    basil = H.fictional("basil")
+    later = D.drift(D.parse("2027-06-01"), basil.hash)
+    released = E.resolve(G, parent, basil, later, {"form.order": None})
+    own = choose_params(G, replace(parent, composition={}), basil, later)
+    assert "form.order" in released.applied and "order" not in released.params.composition
+    assert released.params.form == own.form
+    # and an order a person set only here goes back to what the machine had chosen
+    fresh = E.resolve(G, None, ADA, DAY, {"form.order": None})
+    assert fresh.params.form == base.form
+
+
 def test_composition_view_covers_every_section_phrase_and_syllable():
     ctx = explain.Context(G, None, None, ADA, "fictional:ada", "2026-09-27", D.parse("2026-09-27"))
     v = ctx.version({"tune.v1": editable()})
