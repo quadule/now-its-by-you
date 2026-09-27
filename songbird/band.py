@@ -38,7 +38,7 @@ import numpy as np
 
 from . import variants as variants_mod
 from .score import Note
-from .theory import MODES, chord_tones, degree_semitones, harmony
+from .theory import MODES, choir_voicing, chord_tones, degree_semitones
 
 INSTRUMENTS = ("lute", "guitar", "harp", "bass", "fiddle", "whistle", "drum", "drone")
 PATTERNS = ("lilt", "strum", "pick", "air")
@@ -255,14 +255,14 @@ class Context:
         for s in self.sections:
             s.count = rounds[s.role]
         ordered = sorted(melody, key=lambda m: m["u"])
+        choirs = choir_voicing(ordered, int(getattr(self.params, "choir", 0)), self.tonic, self.mode)
         for i, m in enumerate(ordered):
             u1 = min(m["u_end"], ordered[i + 1]["u"]) if i + 1 < len(ordered) else self.end
             self.tune.append(Tune(m["u"], u1, int(m["pitch"]), float(m["vel"]), bool(m["syllable"]),
                                   self.section_at(m["u"]), m["index"] == 0, bool(m["line_end"]),
                                   tuple(m.get("ornament", ()))))
-            if m["syllable"] and m.get("choir"):  # each lineage voice's harmony, as realize() gives it
-                for role in range(int(getattr(self.params, "choir", 0))):
-                    self.choir.append((m["u"], u1, harmony(int(m["pitch"]), m["chord"], self.tonic, self.mode, role)))
+            for pitch in choirs[i]:  # each lineage voice's harmony, as realize() sings it
+                self.choir.append((m["u"], u1, pitch))
 
     def section_at(self, u: float) -> int:
         for i, s in enumerate(self.sections):

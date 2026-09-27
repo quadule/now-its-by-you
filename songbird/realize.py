@@ -21,7 +21,7 @@ from .phrasing import Gesture, Phrasing, gesture
 from .score import Note, Score
 from . import style as style_mod
 from .style import Style
-from .theory import degree_semitones, harmony
+from .theory import choir_voicing, degree_semitones
 
 if TYPE_CHECKING:
     from .drift import Drift
@@ -329,7 +329,7 @@ def realize(genome: Genome, params: Params, verses=None, phrasing: Phrasing | No
     # decides who plays it (songbird.band).
     melody.sort(key=lambda m: m["u"])
     notes: list[Note] = []
-    voiced: dict[int, int] = {}  # each choir voice's last pitch, while the choir sings
+    choirs = choir_voicing(melody, params.choir, params.tonic, params.mode)  # the band keeps clear of the same
     for i, m in enumerate(melody):
         u_end = min(m["u_end"], melody[i + 1]["u"]) if i + 1 < len(melody) else sung_end
         start_s = max(0.0, seconds(m["u"]) + jitter())
@@ -351,20 +351,17 @@ def realize(genome: Genome, params: Params, verses=None, phrasing: Phrasing | No
             )
             sung_note = sung_as(unphrased, m["gesture"], beat)
             notes.append(sung_note)
-            if not m["choir"]:
-                voiced.clear()  # the next time the choir comes in, it starts afresh
-            else:  # the lineage joins, each voice on its own harmony line, plain as harmony is sung
-                for i in range(params.choir):
-                    pitch = voiced[i] = harmony(int(m["pitch"]), m["chord"], params.tonic, params.mode, i, voiced.get(i))
-                    own = choir[i] if choir and i < len(choir) else None
-                    if own:  # sung that voice's way, from its own phrasing
-                        g = gesture(own, m["phrase"], m["index"])
-                        base = replace(unphrased, part=f"choir{i + 1}", pitch=float(pitch), vel=0.9 * unphrased.vel,
-                                       ornament=())
-                        notes.append(sung_as(base, g, beat))
-                    else:  # together with the lead in time, but each with its own way with pitch
-                        notes.append(replace(sung_note, part=f"choir{i + 1}", pitch=float(pitch),
-                                             vel=0.9 * sung_note.vel, gesture=None, ornament=()))
+            # the lineage joins, each voice on its own harmony line, plain as harmony is sung
+            for v, pitch in enumerate(choirs[i]):
+                own = choir[v] if choir and v < len(choir) else None
+                if own:  # sung that voice's way, from its own phrasing
+                    g = gesture(own, m["phrase"], m["index"])
+                    base = replace(unphrased, part=f"choir{v + 1}", pitch=float(pitch), vel=0.9 * unphrased.vel,
+                                   ornament=())
+                    notes.append(sung_as(base, g, beat))
+                else:  # together with the lead in time, but each with its own way with pitch
+                    notes.append(replace(sung_note, part=f"choir{v + 1}", pitch=float(pitch),
+                                         vel=0.9 * sung_note.vel, gesture=None, ornament=()))
 
     accomp, band_settings = band_mod.arrange(genome, params, placed, lead, end, melody, seconds)
     ring = style_mod.ring(params)  # the last chord rings out (3 s; a cold ending stops short)

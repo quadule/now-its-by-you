@@ -88,6 +88,28 @@ def harmony(melody: int, chord: str, tonic: int, mode: str, role: int, previous:
     return fits[0] if previous is None else min(fits, key=lambda p: abs(p - previous))
 
 
+def choir_voicing(melody: list[dict], voices: int, tonic: int, mode: str) -> list[tuple[int, ...]]:
+    """The lineage choir's pitches for every note of a tune (dicts with its pitch, chord, syllable and
+    whether the choir sings there, in time order): one per voice where the choir sings words, none
+    elsewhere. Each voice is led from where it was (harmony's previous), and starts afresh each time the
+    choir comes in again. realize() sings these and the band keeps clear of them (songbird.band), from
+    this one place, so the two always agree."""
+    out: list[tuple[int, ...]] = []
+    voiced: dict[int, int] = {}
+    for m in melody:
+        if not m["syllable"] or voices <= 0:
+            out.append(())
+            continue
+        if not m.get("choir"):
+            voiced.clear()
+            out.append(())
+            continue
+        for v in range(voices):
+            voiced[v] = harmony(int(m["pitch"]), m["chord"], tonic, mode, v, voiced.get(v))
+        out.append(tuple(voiced[v] for v in range(voices)))
+    return out
+
+
 def midi_to_hz(pitch: float) -> float:
     return 440.0 * 2.0 ** ((pitch - 69.0) / 12.0)
 
