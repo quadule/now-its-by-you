@@ -11,19 +11,20 @@ What it writes, all served by web/sing/src/worker.js:
                                       (web/sing/consent.md) and for words people send (words-release.md)
     karaoke.js, recorder.js           the timing core they share with the karaoke here (tools/karaoke.js)
     song/song.json                    what's on offer (v2): the sets, keys and speeds, and for every spec
-                                      its guide score's digest, its words' file, and each mix's MP3, its
-                                      length and opening loudness (so the page can tell if an MP3 decoder
-                                      put silence in front); the releases' digests
+                                      its guide score's digest, its words' file, and each mix's MP3 and
+                                      its length; the releases' digests. Small, as a phone reads it first
     song/<spec>.json                  a spec's words and notes as they come, its beats, and its sections,
-                                      each sung one with its window for recording it alone (karaoke.lyrics)
+                                      each sung one with its window for recording it alone (karaoke.lyrics);
+                                      and each mix's opening loudness ("opening"), so the page can tell if
+                                      an MP3 decoder put silence in front: fetched only for the spec chosen
     song/<spec>.<mix>.mp3             its guides (tools/guides.py), melody and full, encoded with ffmpeg in
                                       mono (a phone decodes each to a buffer; stereo would double it): the
                                       melody at 64 kbps if it decodes in time with its guide (else 96), the
                                       full guide at 96
     _headers                          the security headers for the files served without the worker
     yours.html, yours.css, yours.js   each singer's own page (web/sing/page/), at /y/<singer>
-    song/worker.json                  what the worker needs of song.json, without the loudness curves: it
-                                      reads it on a cold start (song.json runs to megabytes)
+    song/worker.json                  what the worker needs of song.json: it reads it on a cold start, well
+                                      within the free plan's 10 ms of work a request
 
 Every spec is a set (tools/sets/<song>.json) in every key and at every speed
 (guides.KEYS, TEMPOS), rendered in parallel (--jobs) or found current in
@@ -341,10 +342,15 @@ def build(genome_path: Path, out: Path, rebuild: bool = False, bitrate: str = BI
         if guide != result["guide"]:
             raise SystemExit(f"{spec.id}'s guide changed while the site was built: build it again")
         data = json.loads(score.read_text())
-        words_json = {**karaoke.lyrics(data, genome.title, data["tempo"]), "guide": guide, "spec": data["spec"]}
+        # each mix's opening loudness travels with the spec's words, fetched only when the spec is chosen:
+        # in song.json, 90 specs' curves came to megabytes that a phone read before anything else
+        opening = {mix: {"frame": m["frame"], "env": m["env"]} for mix, m in result["mixes"].items()}
+        words_json = {**karaoke.lyrics(data, genome.title, data["tempo"]), "guide": guide, "spec": data["spec"],
+                      "opening": opening}
         (out / "song" / f"{spec.id}.json").write_text(json.dumps(words_json, separators=(",", ":")) + "\n")
+        mixes = {mix: {k: v for k, v in m.items() if k not in ("frame", "env")} for mix, m in result["mixes"].items()}
         guides[spec.id] = {"guide": guide, "lyrics": f"{spec.id}.json", "duration": round(float(data["duration"]), 3),
-                           "mixes": result["mixes"]}
+                           "mixes": mixes}
         longest = max(longest, float(data["duration"]))
 
     built = {s["id"]: s for s in M.sets(genome_path)}
@@ -369,8 +375,8 @@ def build(genome_path: Path, out: Path, rebuild: bool = False, bitrate: str = BI
 
 def worker_index(song: dict) -> dict:
     """What web/sing/src/worker.js needs of song.json v2: every guide's score digest, words, length and
-    MP3s, the sets and the releases' digests, without the guides' loudness curves, so a cold start reads
-    it well within the free plan's 10 ms of work a request (song.json itself can run to megabytes)."""
+    MP3s, the sets and the releases' digests, so a cold start reads it well within the free plan's 10 ms
+    of work a request."""
     return {"song": song["song"], "consent": song["consent"], "words_release": song.get("words_release"),
             "sets": [s["id"] for s in song.get("sets", [])], "max_seconds": song.get("max_seconds"),
             "guides": {spec: {"guide": g["guide"], "lyrics": g["lyrics"], "duration": g["duration"],

@@ -120,7 +120,8 @@ def test_the_site_has_a_guide_for_every_spec(tmp_path, monkeypatch):
         assert [s["window"] for s in words["sections"] if s["sung"]] and words["duration"] == pytest.approx(guide["duration"], abs=1e-3)
         for mix, m in guide["mixes"].items():
             assert m["file"] == f"{spec}.{mix}.mp3" and (out / "song" / m["file"]).stat().st_size == m["bytes"] > 10000
-            assert len(m["env"]) == int(W.OPENING / W.FRAME) and m["rate"] == 44100
+            assert m["rate"] == 44100 and "env" not in m  # song.json stays small: a phone reads it first
+            assert len(words["opening"][mix]["env"]) == int(W.OPENING / W.FRAME) and words["opening"][mix]["frame"] == W.FRAME
         assert guide["mixes"]["melody"]["bytes"] < 0.8 * guide["mixes"]["full"]["bytes"]  # the melody at 64 kbps
     assert song["max_seconds"] == round(max(g["duration"] for g in song["guides"].values()) + 60)
     page = (out / "index.html").read_text()

@@ -526,7 +526,10 @@ async function guide(spec, which) {
           const d = buffer.getChannelData(c);
           for (let i = 0; i < n; i++) mono[i] += d[i] / buffer.numberOfChannels;
         }
-        return { buffer, offset: K.decodeOffset(mono, buffer.sampleRate, m.env, m.frame) };
+        // the guide's opening loudness, as built, travels with the version's words (song.json stays small)
+        const opening = ((await lyricsFor(spec)).opening || {})[which] || m;
+        const offset = opening.env ? K.decodeOffset(mono, buffer.sampleRate, opening.env, opening.frame) : 0;
+        return { buffer, offset };
       })();
       S.loading[key].finally(() => { delete S.loading[key]; }).catch(() => {});
     }
