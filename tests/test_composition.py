@@ -9,7 +9,7 @@ from pathlib import Path
 import numpy as np
 import pytest
 
-from songbird import composition as C, drift as D, edits as E, explain, harvest as H, pack
+from songbird import bank as B, composition as C, drift as D, edits as E, explain, harvest as H, pack
 from songbird.genome import load
 from songbird.realize import Params, choose_params, realize
 from songbird.synth import master
@@ -261,6 +261,9 @@ def test_authored_words_follow_their_section_and_survive_a_child():
     (AUTHORED_PATH, AUTHORED.replace("fire", "{fire}"), "punctuation"),
     (AUTHORED_PATH, AUTHORED.replace("fire", "fi-re"), "11 syllables"),
     (AUTHORED_PATH, AUTHORED.replace("They sang", "They--sang", 1), "inside words"),
+    (AUTHORED_PATH, AUTHORED.replace("fire", "*fire"), "star each side"),
+    (AUTHORED_PATH, AUTHORED.replace("fire", "fi*re*"), "star each side"),
+    (AUTHORED_PATH, AUTHORED.replace("kids", "**kids**"), "star each side"),
     (AUTHORED_PATH, 42, "1 to 500"),
     ("lyrics.intro:0.0", AUTHORED, "instrumental"),
     ("lyrics.verse:0.100", AUTHORED, "no such lyric line"),
@@ -273,6 +276,23 @@ def test_invalid_authored_lyrics_are_rejected_without_changing_the_line(path, te
     override = E.Overrides(G, {path: text})
     params = choose_params(G, overrides=override)
     assert not params.composition and path not in override.applied
+
+
+def test_an_authored_line_is_checked_as_a_bank_line_is():
+    marked = AUTHORED.replace("fire", "*fire*")
+    assert C.check_lyric(G, AUTHORED_PATH, marked) == marked  # a whole-word mark is the singer's to read
+    for line in (AUTHORED, marked, AUTHORED.replace("fire", "*fire"), " ".join(AUTHORED.split()[:2])):
+        try:
+            B.check_block([line], {}, ["v1"], G.phrases, G.lexicon, "authored")
+            bank_says = None
+        except ValueError as e:
+            bank_says = e
+        try:
+            C.check_lyric(G, AUTHORED_PATH, line)
+            studio_says = None
+        except ValueError as e:
+            studio_says = e
+        assert (bank_says is None) == (studio_says is None), line
 
 
 def test_hyphenated_lyrics_keep_whole_words_for_pronunciation_and_editor():

@@ -46,6 +46,19 @@ def test_a_slot_option_that_breaks_the_count_or_the_dictionary_is_caught():
         B.check_block(wax["lines"], {"day": ["Tues-day"], "moon": ["June"]}, verse, g.phrases, g.lexicon, "wax")
 
 
+def test_a_lines_problem_is_named_for_its_caller_to_say():
+    g = G.load(H)
+    wax = next(v for v in g.source["bank"]["verses"] if v["id"] == "wax")
+    line = B.fill(wax["lines"], wax["slots"], {name: 0 for name in wax["slots"]})[0]
+    notes = len(g.phrases[g.sections["verse"].phrases[0]].sung)
+    assert B.line_problem(line, notes, g.lexicon) is None
+    assert B.line_problem(line, notes + 1, g.lexicon) == ("count", notes)
+    first = line.split()[0]
+    assert B.line_problem(line.replace(first, f"*{first}", 1), notes, g.lexicon) == ("mark", f"*{first}")
+    assert B.line_problem(line.replace(first, "Qzx", 1), notes, g.lexicon)[:2] == ("unknown", "Qzx")
+    assert B.misplaced_mark(line.replace(first, f"*{first}*", 1)) is None
+
+
 def test_the_banks_question_words_are_the_fixed_refrains():
     g = G.load(H)
     assert [B.unmarked(l) for l in G.turns(g.refrain[0])] == [

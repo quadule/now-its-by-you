@@ -3,6 +3,20 @@
 The editor speaks beats; the record stores scale degrees and grid units. A phrase
 keeps its syllable count, bar length and cadence so its words, harmony and future
 renditions still fit. Empty composition data leaves old renditions unchanged.
+
+A line a person writes in the studio is checked as a bank line is for being
+sung: a syllable per note, every word pronounceable, any *focus* mark wrapping
+a whole word (check_lyric, through songbird.bank.line_problem). It is not held
+to the bank's arrangement rules in songbird.arrange: the canon couplet sung
+last, the rules for which question words a refrain asks and when, the twins
+rule against two heads asking the same question as written, or held_problem's
+fit of held words to a form. Those rules govern what the bank draws and hands
+down, so a song drawn by chance stays one story; an authored line is none of
+that. It is laid over one line of one section's performance copy
+(lyric_overlay), never written into the held words, so the bank's own choices
+underneath still keep every rule. What a person writes on purpose, even a question asked twice, is theirs
+to sing. An arrangement's order is different: order() still asks
+arrange.problem whether the bank can fill it.
 """
 
 from __future__ import annotations
@@ -13,7 +27,7 @@ from collections import Counter
 from dataclasses import replace
 
 from . import variants
-from .genome import sung_words, syllables
+from .genome import sung_words
 from .theory import MODES, degree_semitones
 
 GRID = 0.25  # a sixteenth note in a quarter-note beat
@@ -50,8 +64,10 @@ def lyric_target(genome, path: str) -> tuple[str, int, str]:
 
 
 def check_lyric(genome, path: str, value) -> str | None:
-    """A pronounceable syllable per note; spelling, punctuation and emphasis stay human."""
-    from .phonetics import fit
+    """A pronounceable syllable per note; spelling, punctuation and emphasis stay
+    human. The line is checked as a bank line is (songbird.bank.line_problem),
+    a *focus* mark included, and told what's wrong in the studio's words."""
+    from .bank import line_problem
 
     _, _, pid = lyric_target(genome, path)
     if value is None:
@@ -61,22 +77,22 @@ def check_lyric(genome, path: str, value) -> str | None:
     if any(ord(c) < 32 and c not in "\t\n\r" for c in value) or any(c in value for c in "{}<>|\\"):
         raise ValueError("use words and punctuation; split syllables with hyphens")
     text = " ".join(value.replace("’", "'").split())
+    if any(not part for word in text.split() for part in word.split("-")):
+        raise ValueError("put syllable hyphens inside words, like car-ry")
     target = len(genome.phrases[pid].sung)
-    count = len(syllables(text))
-    if count != target:
-        raise ValueError(f"this line needs {target} syllables, one per note; it has {count}. "
+    problem = line_problem(text, target, genome.lexicon)
+    if problem is None:
+        return text
+    kind = problem[0]
+    if kind == "mark":
+        raise ValueError(f"mark the word to lean on with a star each side, like *heart*, "
+                         f"punctuation outside; {problem[1]!r} isn't marked that way")
+    if kind == "count":
+        raise ValueError(f"this line needs {target} syllables, one per note; it has {problem[1]}. "
                          "Split longer words with hyphens, like car-ry")
-    for word in text.split():
-        parts = word.split("-")
-        if any(not part for part in parts):
-            raise ValueError("put syllable hyphens inside words, like car-ry")
-        try:
-            fitted = fit(word, len(parts), genome.lexicon)
-        except (KeyError, ValueError):
-            raise ValueError(f"the singer doesn't know how to pronounce {word!r}; try another spelling or word") from None
-        if len(fitted) != len(parts):
-            raise ValueError(f"{word!r} needs {len(fitted)} syllables; show them with hyphens")
-    return text
+    if kind == "unknown":
+        raise ValueError(f"the singer doesn't know how to pronounce {problem[1]!r}; try another spelling or word")
+    raise ValueError(f"{problem[1]!r} needs {problem[3]} syllables; show them with hyphens")
 
 
 def lyric_overlay(genome, params, lyrics):
