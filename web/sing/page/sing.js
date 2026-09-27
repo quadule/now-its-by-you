@@ -259,7 +259,7 @@ $("thanksCopy").onclick = () => copy($("thanksCopy"));
 function controls() {
   // the steps after the release wait for it, and those after "You" for joining; nothing else while
   // playing; the version and section stay put while a take waits to be kept or redone
-  const agreed = $("agree").checked, joined = ready(), idle = S.mode === "idle", locked = !joined || !idle || !!S.take;
+  const agreed = $("agree").checked, joined = ready(), idle = S.mode === "idle" && !S.starting, locked = !joined || !idle || !!S.take;
   document.querySelectorAll(".step[data-needs]").forEach(step => step.classList.toggle("waiting", step.dataset.needs === "agree" ? !agreed : !joined));
   for (const id of ["email", "name", "notify", "join"]) $(id).disabled = !agreed || S.busy;
   document.querySelectorAll('input[name="credit"]').forEach(r => { r.disabled = !agreed || S.busy; });
@@ -271,9 +271,9 @@ function controls() {
   $("lower").disabled = locked || !S.want || S.want.key <= keys[0];
   $("higher").disabled = locked || !S.want || S.want.key >= keys[keys.length - 1];
   $("rehearse").disabled = $("record").disabled = !joined || !idle || !S.lyrics || S.wanted !== S.spec;
-  $("stop").disabled = idle || S.mode === "calibrating";
+  $("stop").disabled = S.mode === "idle" || S.mode === "calibrating";
   $("listen").disabled = !idle;
-  $("keep").disabled = $("discard").disabled = !(idle || S.mode === "listening");
+  $("keep").disabled = $("discard").disabled = S.starting || !(S.mode === "idle" || S.mode === "listening");
   $("shift").disabled = !joined;
   $("wordsText").disabled = !joined;
   $("wordsAgree").disabled = !joined;
@@ -360,7 +360,7 @@ function mix() {
 
 function pick(change, keep) {
   // a new version chosen: the nearest on offer that keeps what was just changed, remembered for next time
-  if (S.mode !== "idle" || S.take) return drawPickers();
+  if (S.mode !== "idle" || S.take || S.starting) return drawPickers();
   Object.assign(S.want, change);
   const spec = K.nearestSpec(offered(), S.want, keep), got = K.parseSpec(spec);
   if (spec) save(mine("spec"), spec);
@@ -419,7 +419,7 @@ function lyricsFor(spec) { // a version's words and notes, fetched once
 function noteVersion() {
   // how much a new version's guide will take to fetch, before it's fetched
   const g = S.song.guides[S.spec], m = g && g.mixes && g.mixes[mix()];
-  const nearest = S.nearest ? `Not every mix of these is ready, so here's the nearest: ${K.specText(S.spec, S.song.sets) || "as written"}. ` : "";
+  const nearest = S.nearest ? `Not every combination is ready, so here's the nearest: ${K.specText(S.spec, S.song.sets) || "as written"}. ` : "";
   $("versionNote").textContent = !m ? "" : nearest + (S.guides[`${S.spec}/${mix()}`] ? "This version is loaded and ready."
     : `This version's guide is ${(m.bytes / 1e6).toFixed(1)} MB; it loads when you listen or record.`);
 }
@@ -447,7 +447,7 @@ function drawParts() {
   box.innerHTML = "";
   if (!S.lyrics || !S.part) return;
   if (!S.sections.length) { $("partLabel").textContent = ""; $("record").textContent = "● Record"; return; } // the whole song only
-  const done = sungHere(), locked = !ready() || S.mode !== "idle" || !!S.take;
+  const done = sungHere(), locked = !ready() || S.mode !== "idle" || !!S.take || !!S.starting;
   const chip = (index, title, label) => {
     const b = document.createElement("button");
     const sung = done.has(index ?? "all");
@@ -457,7 +457,7 @@ function drawParts() {
     b.title = label + (sung ? " (sent)" : "");
     b.setAttribute("aria-pressed", String(S.part.index === index));
     b.disabled = locked;
-    b.onclick = () => choosePart(index);
+    b.onclick = () => { choosePart(index); say(readyText()); };
     box.appendChild(b);
   };
   for (const s of S.sections) chip(s.index, s.title, K.sectionLabel(s));
@@ -607,7 +607,10 @@ async function start(buffers, mode, from = 0, shifts = [], until = null) {
     src.fader = fader;
     return src;
   });
-  S.src[0].onended = () => { if (S.mode !== "idle") stop(); };
+  S.src[0].onended = () => { // the guide ran out: a section ending with the song still gets its tail recorded
+    if (S.mode === "recording" && S.stopAt !== null) windowEnds();
+    else if (S.mode !== "idle") stop();
+  };
   S.chunks = [];
   S.trail = [];
   S.showTrail = mode === "listening" ? S.take.trail.map(p => ({ t: p.t - S.shift, m: p.m })) : S.trail;
@@ -683,27 +686,32 @@ document.addEventListener("visibilitychange", () => { if (document.hidden && S.m
 
 /* ---------- a take ---------- */
 
-$("rehearse").onclick = async () => {
-  if (!ready()) return;
-  const p = S.part;
-  try {
-    const g = await guide(S.spec, mix());
-    if (S.mode !== "idle") return;
-    await start([g.buffer], "rehearsing", p.from, [g.offset], p.index === null ? null : p.to);
-  } catch (e) { warn(e.message); }
-};
+async function starting(go) {
+  // one playback at a time: while its guide (or the microphone) loads, a second tap does nothing and
+  // the version and section stay put, so what plays is what was chosen at the tap
+  if (S.starting || S.mode !== "idle") return;
+  S.starting = true;
+  controls();
+  try { await go(); } catch (e) { warn(e.message); } finally { S.starting = false; controls(); }
+}
 
-$("record").onclick = async () => {
+$("rehearse").onclick = () => starting(async () => {
+  if (!ready()) return;
+  const spec = S.spec, which = mix(), p = S.part;
+  const g = await guide(spec, which);
+  await start([g.buffer], "rehearsing", p.from, [g.offset], p.index === null ? null : p.to);
+});
+
+$("record").onclick = () => starting(async () => {
   if (!ready()) { warn("Agree to the release and say who you are first (steps 1 and 2)."); return; }
   if (isClosed()) return closed("closed");
-  const spec = S.spec, which = mix(), p = S.part;
-  let g;
-  try { await microphone(); g = await guide(spec, which); } catch (e) { warn(e.message); return; }
-  if (S.mode !== "idle") return;
+  const spec = S.spec, which = mix(), p = S.part, lyrics = S.lyrics;
+  await microphone();
+  const g = await guide(spec, which);
   try { S.wake = navigator.wakeLock ? await navigator.wakeLock.request("screen") : null; } catch (e) { S.wake = null; }
-  S.recording = { spec, mix: which, key: `${spec}/${which}`, offset: g.offset, lyrics: S.lyrics, part: p };
+  S.recording = { spec, mix: which, key: `${spec}/${which}`, offset: g.offset, lyrics, part: p };
   await start([g.buffer], "recording", p.from, [g.offset], p.index === null ? null : p.to);
-};
+});
 
 $("stop").onclick = stop;
 document.addEventListener("keydown", e => {
@@ -744,15 +752,17 @@ function takeBuffer() {
 async function listenFrom(from) {
   // the take as it would be sent, with the guide it was sung to: its sample 0 is guide time part.from
   const t = S.take, p = t.part;
+  if (S.starting) return;
+  S.starting = true;
   silence(S.src);
   S.src = [];
   try {
     const g = S.guides[t.key] || await guide(t.spec, t.mix);
     await start([g.buffer, takeBuffer()], "listening", Math.max(p.from, from), [t.offset, S.shift - p.from], p.index === null ? null : t.to + 0.3);
-  } catch (e) { S.mode = "idle"; controls(); warn(e.message); }
+  } catch (e) { S.mode = "idle"; warn(e.message); } finally { S.starting = false; controls(); }
 }
 
-$("listen").onclick = () => { if (S.take) listenFrom(0); };
+$("listen").onclick = () => { if (S.take && S.mode === "idle") listenFrom(0); };
 $("shift").oninput = () => {
   const ms = parseFloat($("shift").value);
   S.shift = -ms / 1000; // slid left, the voice comes earlier

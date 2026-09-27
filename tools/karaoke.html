@@ -317,7 +317,7 @@ function sungHere() {
 }
 
 function drawParts() {
-  const box = $("parts"), done = sungHere(), locked = S.mode !== "idle" || !!S.take;
+  const box = $("parts"), done = sungHere(), locked = S.mode !== "idle" || !!S.take || !!S.starting;
   box.innerHTML = "";
   if (!S.lyrics || !S.sections.length) { $("partLabel").textContent = ""; return; }  // words without sections: the whole song only
   const chip = (index, title, label) => {
@@ -426,15 +426,24 @@ async function prepare() {
   }
 }
 
-async function chosenGuide(mix) {
-  // the guide for what's chosen, checked against the words on the page
-  if (!S.guides.has(`${S.spec || ""}|${mix}`)) status("Preparing this version… (the first time, it takes about half a minute)");
-  const g = await guide(S.spec, mix);
-  if (S.lyrics.guide && g.digest !== S.lyrics.guide) {  // the song was rendered again since the words loaded
+async function chosenGuide(spec, lyrics, mix) {
+  // the guide for the version chosen, checked against its words on the page
+  if (!S.guides.has(`${spec || ""}|${mix}`)) say("Preparing this version… (the first time, it takes about half a minute)");
+  const g = await guide(spec, mix);
+  if (lyrics.guide && g.digest !== lyrics.guide) {  // the song was rendered again since the words loaded
     S.words.clear();
     throw new Error("The song has changed since this page loaded: reload the page.");
   }
   return g;
+}
+
+async function starting(go) {
+  // one playback at a time: while its guide (or the microphone) loads, a second press does nothing
+  // and the version and section stay put, so what plays is what was chosen at the press
+  if (S.starting || S.mode !== "idle") return;
+  S.starting = true;
+  controls();
+  try { await go(); } catch (e) { warn(e.message); } finally { S.starting = false; controls(); }
 }
 
 /* ---------- playing and recording ---------- */
@@ -482,7 +491,10 @@ function start(buffers, mode, from = 0, shifts = [], until = null) {
     src.fader = fader;
     return src;
   });
-  S.src[0].onended = () => { if (S.mode !== "idle") stop(); };
+  S.src[0].onended = () => {  // the guide ran out: a section ending with the song still gets its tail recorded
+    if (S.mode === "recording" && S.stopAt !== null) windowEnds();
+    else if (S.mode !== "idle") stop();
+  };
   S.chunks = [];
   S.trail = [];
   S.showTrail = mode === "listening" ? S.takeTrail.map(p => ({ t: p.t - S.shift, m: p.m })) : S.trail;
@@ -520,8 +532,8 @@ function silence(sources) {  // stop playing, with a short fade rather than a cl
 
 function controls() {
   // what can be pressed: nothing else while playing; the version and section stay put while a take waits
-  const idle = S.mode === "idle", loading = !S.lyrics || S.wanted !== S.spec;
-  $("stop").disabled = idle || S.mode === "calibrating";
+  const idle = S.mode === "idle" && !S.starting, loading = !S.lyrics || S.wanted !== S.spec;
+  $("stop").disabled = S.mode === "idle" || S.mode === "calibrating";
   for (const id of ["record", "rehearse"]) $(id).disabled = !idle || loading;
   $("calibrate").disabled = !idle;
   for (const id of ["mix", "set", "key", "speed"]) $(id).disabled = !idle || !!S.take;
@@ -683,11 +695,11 @@ async function analyze(s, el) {
   make.disabled = false;
 }
 
-async function playKept(t) {
+function playKept(t) {
   // a kept take with the guide it was sung to, in its own version's words: from its first sample (guide time from_s)
-  if (S.take) { status("Keep or discard the new take first."); return; }
+  if (S.take) { say("Keep or discard the new take first."); return; }
   if (S.mode !== "idle") stop();
-  try {
+  starting(async () => {
     await context();
     const lyrics = t.spec ? await lyricsFor(t.spec) : S.spec ? await lyricsFor(null) : S.lyrics;
     const p = K.part(lyrics, t.section ?? null) || K.part(lyrics);
@@ -695,12 +707,11 @@ async function playKept(t) {
     if (!S.guides.has(`${t.spec || ""}|${t.mix || "full"}`)) say("Loading the guide it was sung to… (the first time, it takes about half a minute)");
     const g = await guide(t.spec || null, t.mix || "full");
     const buffer = await S.ctx.decodeAudioData(await (await fetch("/" + t.path)).arrayBuffer());
-    if (S.mode !== "idle" || S.take) return;
     view(lyrics, p.index === null ? p : { ...p, from });
     S.takeTrail = [];
     S.shift = 0;
     start([g.buffer, buffer], "listening", from, [0, -from], until);
-  } catch (e) { warn(e.message); }
+  });
 }
 
 async function post(url, body, type = "application/json") {
@@ -710,15 +721,14 @@ async function post(url, body, type = "application/json") {
   return data;
 }
 
-$("rehearse").onclick = async () => {
-  let g;
-  try { await context(); g = await chosenGuide($("mix").value); } catch (e) { warn(e.message); return; }
+$("rehearse").onclick = () => starting(async () => {
+  const spec = S.spec, lyrics = S.lyrics, p = S.part;
+  await context();
+  const g = await chosenGuide(spec, lyrics, $("mix").value);
   if ($("pitchOn").checked) { try { await microphone(); } catch (e) { warn(`No microphone (${e.message}); rehearsing without your pitch.`); } }
-  if (S.mode !== "idle") return;
-  const p = S.part;
   start([g.buffer], "rehearsing", p.from, [], p.index === null ? null : p.to);
-};
-$("record").onclick = async () => {
+});
+$("record").onclick = () => {
   const singer = $("singer").value.trim(), mix = $("mix").value;
   if (!singer) {  // every take belongs to someone, so different people's phrasings stay apart
     $("singer").classList.add("missing");
@@ -726,13 +736,14 @@ $("record").onclick = async () => {
     warn("Put a name in first (yours, or anything you like), so your takes stay together.");
     return;
   }
-  let g;
-  try { await context(); g = await chosenGuide(mix); } catch (e) { warn(e.message); return; }
-  try { await microphone(); } catch (e) { warn(`No microphone: ${e.message}`); return; }
-  if (S.mode !== "idle") return;
-  const p = S.part;
-  S.recording = { singer, mix, spec: S.spec, lyrics: S.lyrics, part: p, digest: g.digest, guide: g.buffer };
-  start([g.buffer], "recording", p.from, [], p.index === null ? null : p.to);
+  starting(async () => {
+    const spec = S.spec, lyrics = S.lyrics, p = S.part;
+    await context();
+    const g = await chosenGuide(spec, lyrics, mix);
+    try { await microphone(); } catch (e) { throw new Error(`No microphone: ${e.message}`); }
+    S.recording = { singer, mix, spec, lyrics, part: p, digest: g.digest, guide: g.buffer };
+    start([g.buffer], "recording", p.from, [], p.index === null ? null : p.to);
+  });
 };
 $("stop").onclick = stop;
 document.addEventListener("keydown", e => {
