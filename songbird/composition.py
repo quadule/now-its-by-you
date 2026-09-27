@@ -203,8 +203,11 @@ def check_phrase(genome, pid: str, value) -> list[dict] | None:
 
 
 def pack_phrase(genome, notes) -> list[list]:
-    return [[n["degree"], round(n["onset"] * genome.meter.beat, 6),
-             round(n["duration"] * genome.meter.beat, 6)] for n in notes]
+    # Independent rounding can turn touching notes into overlaps in compound
+    # meters, so the next edit rejects a rhythm we already accepted. Preserve
+    # floating-point timing through the compact representation and JSON.
+    return [[n["degree"], n["onset"] * genome.meter.beat,
+             n["duration"] * genome.meter.beat] for n in notes]
 
 
 def played(phrase, params):

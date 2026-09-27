@@ -58,6 +58,30 @@ def test_compound_meter_notes_round_trip_without_false_overlaps():
     assert [(n[1], n[2]) for n in compact] == [(n.onset, n.dur) for n in song.phrases["e"].sung]
 
 
+def test_even_rhythm_stays_editable_after_compound_meter_storage():
+    song = load(ROOT / "songs/b-coal-from-the-fire.json")
+    notes = C.phrase_value(song, choose_params(song), "r1")
+    # Actual browser Even rhythm boundaries: nine equal gaps before the
+    # cadence's pickup guard, followed by its longer held final syllable.
+    final_onset, end = 41 / 12, 4
+    attacks = [i * (final_onset / 9) for i in range(9)] + [final_onset, end]
+    for i, note in enumerate(notes):
+        note.update(onset=attacks[i], duration=attacks[i + 1] - attacks[i])
+    params = choose_params(song, overrides={"tune.r1": notes})
+    params = Params.from_dict(json.loads(json.dumps(params.to_dict())))
+    returned = C.phrase_value(song, params, "r1")
+    assert C.check_phrase(song, "r1", returned)
+    # A subsequent pitch edit must not reject the already accepted timing.
+    returned[0]["degree"] -= 1
+    clean, problems = E.check(song, {"tune.r1": returned})
+    assert not problems
+    replayed = choose_params(song, params, overrides=clean)
+    assert C.phrase_value(song, replayed, "r1")[0]["degree"] == returned[0]["degree"]
+    for original, stored in zip(notes, returned):
+        assert stored["onset"] == pytest.approx(original["onset"], abs=1e-14)
+        assert stored["duration"] == pytest.approx(original["duration"], abs=1e-14)
+
+
 def test_moving_and_resizing_notes_changes_the_sung_score_in_beats():
     base = replace(choose_params(G), humanize=0)
     changed = choose_params(G, base, overrides={"tune.v1": editable(base)})
