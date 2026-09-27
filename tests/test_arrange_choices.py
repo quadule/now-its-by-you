@@ -27,7 +27,7 @@ def test_drawing_without_choices_is_as_it_was():
     exactly as before: computed before choices were added, and again when each refrain came to draw words
     of its own, when the skip and mind verses gained the artist's swaps, when each refrain came to end its
     own way, and when seven more heads came (2026-09-26; the refrain's own changes moved every verse, bridge
-    and tag drawn as before)."""
+    and tag drawn as before), and when the artist dropped the go head (2026-09-26)."""
     lean = A.Leanings(mood_weights={"light": 2.0, "dark": 0.5}, era_bias=-0.4, rarity_appetite=0.6,
                       vocabulary=frozenset({"sea", "ship", "fiddle", "bird"}))
     digest = hashlib.sha256()

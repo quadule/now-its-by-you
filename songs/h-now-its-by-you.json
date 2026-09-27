@@ -142,11 +142,6 @@
           "fixed": {"question": "kept"}
         },
         {
-          "id": "go",
-          "by": "claude",
-          "lines": ["Who *{question}* this song? No-bo-dy. Go", "and *sing* it to some-one, and watch it grow."]
-        },
-        {
           "id": "never",
           "by": "claude",
           "lines": ["Who *{question}* this song? No-bo-dy knows,", "but *once* you have heard it, it nev-er goes."]

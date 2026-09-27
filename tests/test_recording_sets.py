@@ -23,7 +23,7 @@ FILE = ROOT / "tools" / "sets" / "h-now-its-by-you.json"
 
 # The words the voice surely says wrong (misheard nine times in ten or more, over six hearings or more) and
 # the verses it gets clearly wrong (a word error rate 1.5 times the verses' median or more), as measured.
-SURELY_MISHEARD = ("hummed", "put", "grow", "hum", "ink", "who'd", "low", "record", "dies", "lit", "wept", "disc",
+SURELY_MISHEARD = ("hummed", "put", "hum", "ink", "who'd", "low", "record", "dies", "lit", "wept", "disc",
                    "cannon", "ruined", "hiss", "counting", "rope", "grave", "woke", "belfry", "peas", "repeat",
                    "ale", "parrot", "coal")
 CLEARLY_HIGH = ("trench", "screen", "milk", "kids", "hall", "ink", "probe", "lullaby", "bell", "box")

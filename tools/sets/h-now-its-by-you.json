@@ -241,9 +241,9 @@
        "slots": {}
       },
       {
-       "head": "go",
+       "head": "kept",
        "words": {
-        "question": "heard"
+        "question": "kept"
        },
        "id": "blue",
        "slots": {}
@@ -251,7 +251,7 @@
       {
        "head": "stuck",
        "words": {
-        "question": "kept"
+        "question": "heard"
        },
        "id": "take",
        "slots": {}

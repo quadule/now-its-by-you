@@ -68,11 +68,6 @@ question its refrain draws, but for swear (made) and kept (kept), as written:
 > Who kept this song? Nobody, so
 > it's kept by the singing, and on it goes.
 
-**go** · by claude
-
-> Who heard this song? Nobody. Go
-> and sing it to someone, and watch it grow.
-
 **never** · by claude
 
 > Who sang this song? Nobody knows,
