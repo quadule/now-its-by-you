@@ -98,9 +98,9 @@ THEMES = {"sea": "the sea", "fire": "fire", "machines": "machines", "earth": "th
           "town": "the town", "music": "music", "past": "the past"}  # harvest.THEMES, as the page says them
 KINDS = {"you": "you", "machine": "your machine", "time": "time", "parent": "kept", "song": "the song",
          "chance": "chance", "rule": "the song's rule", "lineage": "the versions before"}
-# Params fields a card below speaks for; any other gets a plain card of its own
+# Params fields a card or the composition editor speaks for; any other gets a plain card of its own
 KNOWN = {"tonic", "mode", "tempo", "form", "seed", "accomp", "humanize", "ritardando", "choir", "band", "singer",
-         "mix", "leanings", "lay", "inventory", "variants", "words", "generation", "made", "style"}
+         "mix", "leanings", "lay", "inventory", "variants", "words", "generation", "made", "style", "composition"}
 KNOWN_BAND = {*INSTRUMENTS, "brightness", "pattern", "density", "swing", "wear", "ornament", "arc", "lead", "body",
               "maker", "lineup"}
 # How big a pull or a push must be to be heard, per number (smaller ones are said to have kept it as it was)

@@ -140,7 +140,9 @@ def test_provenance_replays_edits_and_reset_releases_inherited_phrase():
 def test_composition_view_covers_every_section_phrase_and_syllable():
     ctx = explain.Context(G, None, None, ADA, "fictional:ada", "2026-09-27", D.parse("2026-09-27"))
     v = ctx.version({"tune.v1": editable()})
-    data = explain.view(ctx, v)["composition"]
+    view = explain.view(ctx, v)
+    assert all(card["id"] != "field.composition" for card in view["cards"])  # edited in Arrange and Words, not raw data in Sound
+    data = view["composition"]
     assert data["order"] == C.section_ids(v.params.form)
     assert data["edited_phrases"] == ["v1"]
     assert data["grid"] == 0.25 and len(data["scale"]) == 7
