@@ -19,6 +19,11 @@ SONG = ROOT / "songs/h-now-its-by-you.json"
 G = load(SONG)
 ADA = H.fictional("ada")
 DAY = D.drift(D.parse("2026-09-27"), ADA.hash)
+# Exercise the authoring path with existing song text, without inventing lyrics.
+BANK_LINES = {verse["id"]: verse["lines"] for verse in G.source["bank"]["verses"]}
+AUTHORED = BANK_LINES["kids"][0]
+HYPHENATED = BANK_LINES["lullaby"][0]
+AUTHORED_PATH = "lyrics.verse:0.0"
 
 
 def editable(params=None):
@@ -162,7 +167,7 @@ def test_composition_and_editor_travel_inside_the_audio(tmp_path):
     from songbird.studio import Studio
 
     params = choose_params(G, overrides={"tune.v1": editable(), "form.order": rearranged(choose_params(G).form),
-                                        "lyrics.verse:0.0": "I keep the light and sing it through the dark night."})
+                                        AUTHORED_PATH: AUTHORED})
     pcm = np.zeros((100, 2), dtype=np.int16)
     flac = tmp_path / "edited.flac"
     master.write_flac(flac, pcm, 44100)
@@ -187,13 +192,9 @@ def test_composition_and_editor_travel_inside_the_audio(tmp_path):
         assert opened.version({}).params.composition == params.composition
         assert opened.song({})["composition"]["edited_phrases"] == ["v1"]
         verse = next(s for s in opened.song({})["composition"]["sections"] if s["id"] == "verse:0")
-        assert verse["phrases"][0]["lyric_text"] == "I keep the light and sing it through the dark night."
+        assert verse["phrases"][0]["lyric_text"] == AUTHORED
     finally:
         opened.close()
-
-
-AUTHORED = "I keep the light and sing it through the dark night."
-AUTHORED_PATH = "lyrics.verse:0.0"
 
 
 def test_authored_lines_overlay_the_score_without_changing_the_banks_words():
@@ -229,13 +230,13 @@ def test_authored_words_follow_their_section_and_survive_a_child():
 
 
 @pytest.mark.parametrize("path,text,why", [
-    (AUTHORED_PATH, "too few", "11 syllables"),
+    (AUTHORED_PATH, " ".join(AUTHORED.split()[:2]), "11 syllables"),
     (AUTHORED_PATH, " ", "1 to 500"),
     (AUTHORED_PATH, "x" * 501, "1 to 500"),
-    (AUTHORED_PATH, "zzqx keep the light and sing it through the dark night.", "pronounce"),
-    (AUTHORED_PATH, "I keep the light and sing it through the dark {night}.", "punctuation"),
-    (AUTHORED_PATH, "I keep the light and sing it through the dark ni-ght.", "11 syllables"),
-    (AUTHORED_PATH, "I--keep the light and sing it through the dark night.", "inside words"),
+    (AUTHORED_PATH, AUTHORED.replace("They", "zzqx", 1), "pronounce"),
+    (AUTHORED_PATH, AUTHORED.replace("fire", "{fire}"), "punctuation"),
+    (AUTHORED_PATH, AUTHORED.replace("fire", "fi-re"), "11 syllables"),
+    (AUTHORED_PATH, AUTHORED.replace("They sang", "They--sang", 1), "inside words"),
     (AUTHORED_PATH, 42, "1 to 500"),
     ("lyrics.intro:0.0", AUTHORED, "instrumental"),
     ("lyrics.verse:0.100", AUTHORED, "no such lyric line"),
@@ -251,7 +252,7 @@ def test_invalid_authored_lyrics_are_rejected_without_changing_the_line(path, te
 
 
 def test_hyphenated_lyrics_keep_whole_words_for_pronunciation_and_editor():
-    text = "We car-ry light and sing it through the dark night."
+    text = HYPHENATED
     cleaned, problems = E.check(G, {AUTHORED_PATH: text})
     assert not problems
     ctx = explain.Context(G, None, None, ADA, "fictional:ada", "2026-09-27", D.parse("2026-09-27"))
@@ -261,10 +262,10 @@ def test_hyphenated_lyrics_keep_whole_words_for_pronunciation_and_editor():
     line = section["phrases"][0]
     assert line["lyric_text"] == text and line["lyric_path"] == AUTHORED_PATH
     assert line["syllable_count"] == 11 and line["authored"]
-    assert [n["syllable"] for n in line["notes"][:3]] == ["We", "car", "ry"]
-    assert line["notes"][1]["word"] == line["notes"][2]["word"] == "car-ry"
+    assert [n["syllable"] for n in line["notes"][:3]] == ["A", "wom", "an"]
+    assert line["notes"][1]["word"] == line["notes"][2]["word"] == "wom-an"
     display = next(s for s in view["words"] if s["name"] == "verse")
-    assert display["authored"] == [0] and display["lines"][0] == text.replace("car-ry", "carry")
+    assert display["authored"] == [0] and display["lines"][0] == "A woman was singing it low to a child"
 
 
 def test_new_lyric_edit_for_an_absent_section_is_reported_and_not_claimed_as_applied():
