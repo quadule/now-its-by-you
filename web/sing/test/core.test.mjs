@@ -278,3 +278,14 @@ test("a narrow lane shows fewer seconds, so a short syllable keeps room for its 
     assert.ok(Math.abs(s.past + s.future - s.span) < 1e-9 && Math.abs(s.past / s.future - K.PAST / K.FUTURE) < 1e-9);
   }
 });
+
+test("a quiet take is lifted to be heard back over the guide, a loud one isn't, and peaks stay under full scale", () => {
+  const rate = 48000, tone = a => Float32Array.from({ length: rate }, (_, i) => a * Math.sin((2 * Math.PI * 220 * i) / rate));
+  assert.equal(K.takeGain(tone(0.005), rate), 20); // a phone's raw microphone: as far as it goes
+  assert.equal(K.takeGain(tone(0.8), rate), 1); // already loud: as recorded
+  const g = K.takeGain(tone(0.05), rate);
+  assert.ok(Math.abs(g * 0.05 / Math.SQRT2 - 0.2) < 0.006 && g * 0.05 <= 0.9); // its singing at about a fifth of full scale
+  const clicked = tone(0.05); clicked[1000] = 1; // one stray click doesn't hold the rest down
+  assert.ok(Math.abs(K.takeGain(clicked, rate) / g - 1) < 0.05);
+  assert.equal(K.takeGain(new Float32Array(rate), rate), 1); // silence: nothing to lift
+});

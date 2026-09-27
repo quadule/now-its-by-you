@@ -485,8 +485,8 @@ async function openMicrophone() {
   };
 }
 
-function start(buffers, mode, from = 0, shifts = [], until = null) {
-  // play from guide time `from` (a take's buffer `shifts` seconds earlier), until guide time `until` if given
+function start(buffers, mode, from = 0, shifts = [], until = null, gains = []) {
+  // play from guide time `from` (a take's buffer `shifts` seconds earlier, at `gains`), until guide time `until` if given
   const when = S.ctx.currentTime + 0.12;
   S.t0 = when - from;
   S.stopAt = until;
@@ -497,8 +497,9 @@ function start(buffers, mode, from = 0, shifts = [], until = null) {
     const src = S.ctx.createBufferSource(), fader = S.ctx.createGain();
     src.buffer = buffer;
     src.connect(fader).connect(S.ctx.destination);
-    const at = from + (shifts[i] || 0);  // a positive shift plays the buffer that much earlier
-    if (from > 0) { fader.gain.setValueAtTime(0, when); fader.gain.linearRampToValueAtTime(1, when + 0.03); }  // in mid-song: no click
+    const at = from + (shifts[i] || 0), level = gains[i] ?? 1;  // a positive shift plays the buffer that much earlier
+    if (from > 0) { fader.gain.setValueAtTime(0, when); fader.gain.linearRampToValueAtTime(level, when + 0.03); }  // in mid-song: no click
+    else fader.gain.value = level;
     if (at >= 0) src.start(when, at); else src.start(when - at);
     src.fader = fader;
     return src;
@@ -722,7 +723,7 @@ function playKept(t) {
     view(lyrics, p.index === null ? p : { ...p, from });
     S.takeTrail = [];
     S.shift = 0;
-    start([g.buffer, buffer], "listening", from, [0, -from], until);
+    start([g.buffer, buffer], "listening", from, [0, -from], until, [K.UNDER, K.takeGain(buffer.getChannelData(0), buffer.sampleRate)]);
   });
 }
 
@@ -776,7 +777,9 @@ function listenFrom(from) {
   // the take as you'd keep it, with the guide you heard: its sample 0 is guide time part.from
   const t = S.take, p = t.part;
   silence(S.src);
-  start([t.guide, takeBuffer()], "listening", Math.max(p.from, from), [0, S.shift - p.from], p.index === null ? null : t.to + 0.3);
+  t.gain = t.gain || K.takeGain(t.samples, t.rate);  // lifted to be heard over the guide (what's kept stays as sung)
+  start([t.guide, takeBuffer()], "listening", Math.max(p.from, from), [0, S.shift - p.from], p.index === null ? null : t.to + 0.3,
+        [K.UNDER, t.gain]);
 }
 
 $("listen").onclick = () => listenFrom(0);

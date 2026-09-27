@@ -419,6 +419,31 @@ export function autoSyncWindow(trail, notes, from = 0, to = Infinity) {
 
 /* ---------- a take ---------- */
 
+export const UNDER = 0.6; // the guide's level while you listen back to a take, so your voice sits on top
+
+export function takeGain(samples, rate) {
+  // how much to lift a take to hear it back over the guide (only to hear it: what's sent stays as sung).
+  // A phone's microphone, its own gain turned off, can sit 30 dB under the mastered guide, so a take
+  // played beside it vanishes. The loud part of its singing (the loudest fifth of its 20 ms windows)
+  // goes to about a fifth of full scale, its peaks (bar a stray click) stay under full scale, and it's
+  // never quieter than as recorded or lifted more than 20 times
+  const w = Math.max(1, Math.round(0.02 * rate)), levels = [], peaks = [];
+  for (let i = 0; i + w <= samples.length; i += w) {
+    let e = 0, m = 0;
+    for (let j = i; j < i + w; j++) { const x = samples[j]; e += x * x; if (Math.abs(x) > m) m = Math.abs(x); }
+    levels.push(Math.sqrt(e / w));
+    peaks.push(m);
+  }
+  if (!levels.length) return 1;
+  levels.sort((a, b) => b - a);
+  peaks.sort((a, b) => b - a);
+  const top = levels.slice(0, Math.max(1, Math.floor(levels.length / 5)));
+  // the peak bar the loudest window or two (a stray click, a bump of the microphone)
+  const loud = top.reduce((a, b) => a + b, 0) / top.length, peak = peaks[Math.min(peaks.length - 1, Math.max(1, Math.floor(peaks.length * 0.01)))];
+  if (!(loud > 0) || !(peak > 0)) return 1;
+  return Math.max(1, Math.min(20, 0.2 / loud, 0.9 / peak));
+}
+
 export function firstFrame(t0, out, inn, extra, rate, from = 0) {
   // the recorder frame the take starts on: when the guide's first sample (for one section, the
   // guide at `from` seconds) reached the singer's ears (t0 + from + out), plus the way back in

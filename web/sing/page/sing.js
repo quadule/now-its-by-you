@@ -592,8 +592,8 @@ $("mic").onclick = async () => {
   controls();
 };
 
-async function start(buffers, mode, from = 0, shifts = [], until = null) {
-  // play from guide time `from` (each buffer `shifts` seconds earlier), until guide time `until` if given
+async function start(buffers, mode, from = 0, shifts = [], until = null, gains = []) {
+  // play from guide time `from` (each buffer `shifts` seconds earlier, at `gains`), until guide time `until` if given
   await context();
   const when = S.ctx.currentTime + 0.12;
   S.t0 = when - from;
@@ -604,8 +604,9 @@ async function start(buffers, mode, from = 0, shifts = [], until = null) {
     const src = S.ctx.createBufferSource(), fader = S.ctx.createGain();
     src.buffer = buffer;
     src.connect(fader).connect(S.ctx.destination);
-    const at = from + (shifts[i] || 0); // a positive shift plays the buffer that much earlier
-    if (from > 0) { fader.gain.setValueAtTime(0, when); fader.gain.linearRampToValueAtTime(1, when + 0.03); } // in mid-song: no click
+    const at = from + (shifts[i] || 0), level = gains[i] ?? 1; // a positive shift plays the buffer that much earlier
+    if (from > 0) { fader.gain.setValueAtTime(0, when); fader.gain.linearRampToValueAtTime(level, when + 0.03); } // in mid-song: no click
+    else fader.gain.value = level;
     if (at >= 0) src.start(when, at); else src.start(when - at);
     src.fader = fader;
     return src;
@@ -762,7 +763,9 @@ async function listenFrom(from) {
   S.src = [];
   try {
     const g = S.guides[t.key] || await guide(t.spec, t.mix);
-    await start([g.buffer, takeBuffer()], "listening", Math.max(p.from, from), [t.offset, S.shift - p.from], p.index === null ? null : t.to + 0.3);
+    t.gain = t.gain || K.takeGain(t.samples, t.rate); // a phone's take, lifted to be heard over the guide
+    await start([g.buffer, takeBuffer()], "listening", Math.max(p.from, from), [t.offset, S.shift - p.from], p.index === null ? null : t.to + 0.3,
+                [K.UNDER, t.gain]);
   } catch (e) { S.mode = "idle"; warn(e.message); } finally { S.starting = false; controls(); }
 }
 
