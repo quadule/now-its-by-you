@@ -33,7 +33,7 @@ async function load(first = false) {
   } catch (e) {
     const why = e.offline ? "The page couldn't reach the server. Check your connection and reload it."
       : e.status === 404 ? "This page doesn't exist. Check the link in your email." : e.message;
-    return first || e.status === 404 ? problem(why) : status(why, "warn");
+    return first || e.status === 404 || e.status === 410 ? problem(why) : status(why, "warn"); // 410: they've withdrawn
   }
   S.data = { ...data, takes: data.takes || [], files: data.files || [], words: data.words || [] };
   S.loaded = Date.now();

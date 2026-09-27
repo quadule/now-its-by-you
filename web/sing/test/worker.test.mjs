@@ -419,8 +419,9 @@ test("a singer's own page: what they sent, played in ranges and downloaded, and 
 
   const mine = (await page(w, e, sid)).data;
   assert.deepEqual(Object.keys(mine).sort(), ["can_withdraw", "closes", "created", "credit", "delete_by", "done", "files", "limit", "name",
-                                              "notify", "sing_more", "state", "takes", "words"]);
+                                              "notify", "sent", "set", "sing_more", "state", "takes", "words"]);
   assert.deepEqual([mine.name, mine.credit, mine.notify, mine.can_withdraw, mine.done, mine.closes], ["Ana María", true, false, true, null, LATER]);
+  assert.deepEqual([mine.set, mine.limit, mine.sent], ["a", 30, 2]); // the singing page shows how many more they can send
   assert.equal(mine.takes.length, 2);
   const t1 = mine.takes.find(t => t.section === 1), t2 = mine.takes.find(t => t !== t1); // (two in one second: either order)
   assert.deepEqual({ ...t1, received: null, id: null }, { id: null, seconds: 18.5, section: 1, name: "Verse 1",
@@ -504,8 +505,11 @@ test("withdrawing deletes everything, and is only possible until singing closes"
   const record = await e.INVITES.get(`singer:${sid}`, "json");
   assert.equal(record.name, undefined);
   assert.ok(record.withdrawn);
-  const mine = (await page(w, e, sid)).data;
-  assert.deepEqual([mine.state, mine.can_withdraw, mine.sing_more, mine.name, mine.takes, mine.words], ["withdrawn", false, null, "", [], []]);
+  // gone, as far as the singing page is concerned (it forgets them); their own page says why
+  const mine = await page(w, e, sid);
+  assert.deepEqual([mine.status, mine.data.error], [410, "withdrawn"]);
+  assert.match(mine.data.message, /You've withdrawn/);
+  assert.equal((await call(w, e, `/y/${sid}`)).status, 200);
   assert.equal((await send(w, e, sid)).status, 410);
   assert.equal((await call(w, e, `/api/yours/${sid}/withdraw`, { method: "POST" })).status, 409);
   const gone = (await admin(w, e, "GET", "gone")).data.gone;

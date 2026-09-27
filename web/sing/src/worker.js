@@ -548,7 +548,11 @@ async function yours(request, env, parts, ip, now) {
   const deleted = deleteBy !== null && now >= deleteBy;
   const method = request.method;
 
-  if (parts.length === 2 && method === "GET") return json(await summary(env, sid, who, now));
+  if (parts.length === 2 && method === "GET") {
+    // withdrawn: gone, as far as the singing page is concerned (it forgets them); their own page says why
+    if (who.withdrawn) return fail(410, "withdrawn", "You've withdrawn. Everything you sent has been deleted, and the numbers taken from your singing are coming out of the song.");
+    return json(await summary(env, sid, who, now));
+  }
   if ((what === "take" || what === "file") && parts.length === 4 && (method === "GET" || method === "HEAD")) {
     if (who.withdrawn || deleted) return fail(404, "gone", "That's been deleted.");
     if (what === "take") {
@@ -609,7 +613,8 @@ async function summary(env, sid, who, now) {
     name: who.name || "", credit: who.credit === true, notify: who.notify === true, state,
     done: (done && done.customMetadata && done.customMetadata.at) || null, created: who.created,
     closes: env.CLOSES_AT || null, delete_by: env.DELETE_BY || null,
-    can_withdraw: !who.withdrawn && !(closes !== null && now >= closes), limit: (inv && inv.limit) || DEFAULTS.limit,
+    can_withdraw: !who.withdrawn && !(closes !== null && now >= closes), set: who.set || null,
+    limit: (inv && inv.limit) || DEFAULTS.limit, sent: deleted ? 0 : takes.filter(o => o.key.endsWith(".json")).length,
     takes: [], files: [], words: [], sing_more: state === "open" ? `/i/${who.invite}#s=${sid}` : null,
   };
   if (state === "withdrawn") return out;

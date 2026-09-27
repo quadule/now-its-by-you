@@ -350,7 +350,7 @@ def test_the_artist_syncs_and_mails_while_singers_change_their_minds(online, her
     assert api(base, "DELETE", f"/api/yours/{bo}/take/{bo_take}")[1] == {"deleted": bo_take}
     assert api(base, "POST", f"/api/yours/{cy}/delete")[1]["deleted"] >= 1
     assert api(base, "POST", f"/api/yours/{di}/withdraw")[1] == {"state": "withdrawn"}
-    assert mine(base, di)["state"] == "withdrawn" and send(base, di, 10.0)[0] == 410
+    assert api(base, "GET", f"/api/yours/{di}")[0] == 410 and send(base, di, 10.0)[0] == 410  # the singing page forgets her
     gone = site.call("GET", "/api/admin/gone")["gone"]
     assert [(g["singer"], g["what"], bool(g["take"])) for g in gone] == [(bo, "deleted", True), (cy, "deleted", False), (di, "withdrawn", False)]
     di_folder = next(iter(folders[di]))
