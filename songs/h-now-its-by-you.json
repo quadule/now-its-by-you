@@ -100,7 +100,13 @@
     "form": ["intro", "verse", "refrain", "turn", "verse", "refrain", "turn", "bridge", "refrain", "tag"]
   },
 
-  "lexicon": {"oo": "UW1"},
+  "lexicon": {"oo": "UW1",
+    "nobody": "N OW1 B AA0 D IY0", "nobody's": "N OW1 B AA0 D IY0 Z",
+    "somebody": "S AH1 M B AA0 D IY0", "somebody's": "S AH1 M B AA0 D IY0 Z",
+    "perfect": "P ER1 F IH0 K T", "record": "R EH1 K ER0 D", "ballgame": "B AO1 L G EY2 M",
+    "company": "K AH1 M P AH0 N IY0", "invented": "IH0 N V EH1 N T AH0 D",
+    "halfinvented": "HH AE1 F IH0 N V EH1 N T AH0 D", "involved": "IH0 N V AA1 L V D",
+    "thirty": "TH ER1 D IY0", "borrow": "B AA1 R OW0", "always": "AO1 L W EY0 Z"},
 
   "bank": {
     "note": "Every verse, refrain couplet, bridge and tag syllable the song can draw on, with named slots for the words that swap and the rules for combining them; songs/h-bank.md is the same bank for reading. A slot is {name}, or {name.column} for a coupled slot whose columns are chosen together, once per block; songbird/bank.py checks every way each line can be sung against the tune and the dictionary. Lines are syllabified with hyphens like every other lyric here.",
