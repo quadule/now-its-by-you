@@ -85,6 +85,7 @@ async function init() {
   $("loading").hidden = true;
   $("steps").hidden = false;
   drawTakes();
+  $("wordsText").value = saved(mine("words"), ""); // a draft kept from before a reload
   drawWords();
   controls();
   await chooseVersion(K.nearestSpec(offered(), S.want));
@@ -277,8 +278,7 @@ function controls() {
   $("shift").disabled = !joined;
   $("wordsText").disabled = !joined;
   $("wordsAgree").disabled = !joined;
-  $("wordsSend").disabled = !joined || S.busy || !$("wordsAgree").checked || !$("wordsText").value.trim();
-  $("done").disabled = !joined || !idle;
+  $("done").disabled = !joined || !idle || S.busy;
   $("next").disabled = !joined || !idle;
   drawParts();
 }
@@ -944,7 +944,7 @@ $("calibrate").onclick = async () => {
   $("calibration").textContent = `Your device takes about ${Math.round(total * 1000)} ms from click to tap. Takes will be lined up by that.`;
 };
 
-/* ---------- 7: words for the song ---------- */
+/* ---------- 5: words for the song, given when you're done ---------- */
 
 function drawWords() {
   const list = $("wordsSent");
@@ -955,49 +955,57 @@ function drawWords() {
     li.textContent = text;
     list.appendChild(li);
   }
-  const n = $("wordsText").value.length;
+  const n = $("wordsText").value.length, words = !!$("wordsText").value.trim();
   $("wordsCount").textContent = n ? `${n} of 4000 characters` : "";
+  // words written: the release for them, and its tick, come with "I'm done"
+  $("wordsGive").hidden = !words;
+  $("done").textContent = words ? "Give my words and finish" : "I'm done";
+  $("doneLead").textContent = words ? "Your words go with you when you finish; tick above to give them to the song."
+    : "Press this when you've sent every take you want to.";
 }
 
-$("wordsText").addEventListener("input", () => { drawWords(); controls(); });
+$("wordsText").addEventListener("input", () => {
+  save(mine("words"), $("wordsText").value); // a draft outlives a reload
+  drawWords();
+  controls();
+});
 $("wordsAgree").addEventListener("change", () => {
   S.wordsAt = $("wordsAgree").checked ? new Date().toISOString() : null;
   controls();
 });
-$("wordsSend").onclick = async () => {
-  const text = $("wordsText").value.trim();
-  if (!text || !$("wordsAgree").checked || !S.wordsAt || !S.sid) return;
-  S.busy = true;
-  controls();
-  $("wordsNote").textContent = "Sending…";
-  try {
-    await api("POST", `words/${enc(S.sid)}`, JSON.stringify({
-      text, release: { agreed: true, at: S.wordsAt, text: $("wordsRelease").dataset.digest },
-    }));
-    S.sentWords.push(text);
-    $("wordsText").value = "";
-    $("wordsNote").textContent = "Sent. Thank you: they're with the artist now. More are welcome.";
-  } catch (e) {
-    $("wordsNote").textContent = e.message;
-  }
-  S.busy = false;
-  drawWords();
-  controls();
-};
 
-/* ---------- 8: done ---------- */
+/* ---------- 6: done ---------- */
 
 $("done").onclick = async () => {
   const waiting = queue.filter(q => q.state !== "sent").length + (S.take ? 1 : 0);
+  const text = $("wordsText").value.trim();
+  if (text && (!$("wordsAgree").checked || !S.wordsAt)) {
+    $("doneNote").textContent = "Tick the box above to give your words to the song (or clear them), then finish.";
+    $("wordsAgree").focus();
+    return;
+  }
   if (waiting && !confirm(`${waiting} take${waiting === 1 ? " hasn't" : "s haven't"} been sent yet. Finish anyway?`)) return;
-  $("done").disabled = true;
+  S.busy = true;
+  controls();
   try {
+    if (text) {
+      $("doneNote").textContent = "Sending your words…";
+      await api("POST", `words/${enc(S.sid)}`, JSON.stringify({
+        text, release: { agreed: true, at: S.wordsAt, text: $("wordsRelease").dataset.digest },
+      }));
+      S.sentWords.push(text);
+      $("wordsText").value = "";
+      save(mine("words"), "");
+      drawWords();
+    }
     await api("POST", `done/${enc(S.sid)}`);
   } catch (e) {
     $("doneNote").textContent = e.message;
-    $("done").disabled = false;
+    S.busy = false;
+    controls();
     return;
   }
+  S.busy = false;
   if (S.stream) S.stream.getTracks().forEach(t => t.stop());
   if (S.ctx) S.ctx.close();
   $("steps").hidden = true;
