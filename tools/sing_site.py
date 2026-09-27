@@ -191,6 +191,37 @@ def encode(wav: Path, mp3: Path, bitrate: str = BITRATE) -> dict:
             "seconds": round(len(mono) / rate, 3), "frame": FRAME, "env": [round(float(v), 5) for v in env]}
 
 
+PREVIEW_BITRATE = "128k"  # the song as it stands, in stereo: about 2.4 MB for two and a half minutes
+
+
+def preview_mp3(flac: Path, mp3: Path) -> dict:
+    """The song as it stands, encoded for the page, and what song.json says of it: the file, its size and
+    digest (the page busts caches with it), how long it is, when it was rendered and by how many singers'
+    takes (from the packet's record, when the render carries one; tools/everyone.py --render does)."""
+    if not flac.exists():
+        raise SystemExit(f"{flac} doesn't exist: render it first (tools/everyone.py --render {flac})")
+    mp3.parent.mkdir(parents=True, exist_ok=True)
+    ffmpeg("-y", "-i", str(flac), "-vn", "-ac", "2", "-codec:a", "libmp3lame", "-b:a", PREVIEW_BITRATE, str(mp3))
+    data = mp3.read_bytes()
+    out = {"file": mp3.name, "bytes": len(data), "digest": hashlib.sha256(data).hexdigest()[:12],
+           "seconds": round(len(decode(mp3, 44100)) / 44100, 1)}
+    try:
+        from songbird import pack
+
+        record = pack.read_record(flac)
+    except Exception:  # noqa: BLE001  (a plain FLAC, or a packet from another version: the preview still plays)
+        record = {}
+    if record:
+        if record.get("rendered_at"):
+            out["made"] = record["rendered_at"]
+        out["id"] = str(record.get("id", ""))[:12]
+        detail = str((record.get("phrasing") or {}).get("source_detail") or "")
+        m = re.match(r"(\d+) sung takes by (\d+) singers", detail)
+        if m:
+            out["takes"], out["singers"] = int(m[1]), int(m[2])
+    return out
+
+
 def encode_first(wav: Path, mp3: Path, bitrates) -> dict:
     """The guide at the first of these bitrates at which it decodes in time with itself."""
     for i, bitrate in enumerate(bitrates):
@@ -271,13 +302,14 @@ def render(job: dict) -> dict:
 
 def build(genome_path: Path, out: Path, rebuild: bool = False, bitrate: str = BITRATE, sets=None, keys=None,
           tempos=None, jobs: int = JOBS, phrasing: Path | None = None, melody_bitrate: str = MELODY_BITRATE,
-          progress=None, keep_wavs: bool = False) -> dict:
+          progress=None, keep_wavs: bool = False, preview: Path | None = None) -> dict:
     """The site for one song in out (built beside it, then put in its place whole), and its song.json.
     sets, keys, tempos: build only these (default all). jobs: specs rendered at once, each in a
     process of its own. phrasing:
     a phrasing file the machine's lead sings the full guides with. progress, if given, is told
     each spec as it's done. keep_wavs: keep each spec's rendered mixes for the karaoke here
-    (render())."""
+    (render()). preview: a render of the song as it stands (tools/everyone.py --render), put on
+    the page as an MP3 for singers to hear before they sing (song.json "preview")."""
     import karaoke  # tools/karaoke.py, for the words as they come
 
     from songbird import genome as G
@@ -384,6 +416,8 @@ def build(genome_path: Path, out: Path, rebuild: bool = False, bitrate: str = BI
         "max_seconds": round(longest + 60),
         "built": dt.datetime.now(dt.timezone.utc).isoformat(timespec="seconds"),
     }
+    if preview is not None:
+        song["preview"] = preview_mp3(Path(preview), out / "song" / "preview.mp3")
     (out / "song" / "song.json").write_text(json.dumps(song, separators=(",", ":")) + "\n")
     # the worker's small copy of it (web/sing/src/worker.js): the same, without the loudness curves
     (out / "song" / "worker.json").write_text(json.dumps(worker_index(song), separators=(",", ":")) + "\n")
@@ -471,6 +505,7 @@ def worker_index(song: dict) -> dict:
     of work a request."""
     return {"song": song["song"], "consent": song["consent"], "words_release": song.get("words_release"),
             "sets": [s["id"] for s in song.get("sets", [])], "max_seconds": song.get("max_seconds"),
+            **({"preview": {"file": song["preview"]["file"]}} if song.get("preview") else {}),
             "guides": {spec: {"guide": g["guide"], "lyrics": g["lyrics"], "duration": g["duration"],
                               "mixes": {mix: m["file"] for mix, m in g["mixes"].items()}, "was": g.get("was", [])}
                        for spec, g in song["guides"].items()}}
@@ -505,6 +540,8 @@ def main() -> None:
     ap.add_argument("--jobs", type=int, default=JOBS, help=f"specs rendered at once (default {JOBS})")
     ap.add_argument("--phrasing", help="a phrasing file the machine's lead sings the full guides with (the words stay on the grid)")
     ap.add_argument("--rebuild", action="store_true", help="render every guide again from the current code first")
+    ap.add_argument("--preview", metavar="FLAC", help="a render of the song as it stands (tools/everyone.py --render), "
+                                                     "for singers to hear on the page before they sing")
     ap.add_argument("--bitrate", default=BITRATE, help=f"the full guides' MP3 bitrate (default {BITRATE})")
     ap.add_argument("--melody-bitrate", default=MELODY_BITRATE,
                     help=f"the melody guides' (default {MELODY_BITRATE}; the full guides' if it doesn't decode in time)")
@@ -524,7 +561,7 @@ def main() -> None:
 
     song = build(Path(args.genome), out, args.rebuild, args.bitrate, listed(args.sets), listed(args.keys, int),
                  listed(args.tempos, int), args.jobs, args.phrasing and Path(args.phrasing).resolve(),
-                 args.melody_bitrate, progress, args.keep_wavs)
+                 args.melody_bitrate, progress, args.keep_wavs, args.preview and Path(args.preview).resolve())
     mp3s = [m for g in song["guides"].values() for m in g["mixes"].values()]
     print(f"{out}: {song['title']}, {len(song['guides'])} guides ({len(song['sets'])} sets x {len(song['keys'])} keys x "
           f"{len(song['tempos'])} speeds), {sum(m['bytes'] for m in mp3s) / 1e6:.0f} MB of MP3s; the whole site "

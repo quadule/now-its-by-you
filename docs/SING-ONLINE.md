@@ -87,7 +87,10 @@ logged in, the bucket `songbird-takes` exists, and the KV namespace's id is in w
    take sung to one of them from a page loaded before the deploy. A change to the timing (the form,
    the turns, a tempo) asks those singers to reload: deploy that when nobody's singing. A deploy
    while a build runs publishes the site built before: the new one is built in `public.next` and
-   takes `public`'s place only when it's whole.
+   takes `public`'s place only when it's whole. `--preview renders/review/contest-candidate.flac` puts
+   the song as it stands (everyone's way, `tools/everyone.py --render`) on the page as an MP3 singers can
+   hear before they sing, with a note that it keeps changing; make the render again first when new
+   takes have come.
 2. **Check the dates** in wrangler.toml's `[vars]` against web/sing/consent.md.
 3. **The backstop**: have R2 itself delete takes and files after September 30, in case the purge
    ever doesn't run (it acts within a day of the date, so it's a backstop, not the promise):

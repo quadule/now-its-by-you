@@ -18,6 +18,8 @@ body { margin: 0; background: var(--paper); color: var(--ink);
 main { max-width: 720px; margin: 0 auto; padding: 20px 16px calc(64px + env(safe-area-inset-bottom)); }
 header { margin: 8px 0 18px; }
 .kicker { margin: 0; color: var(--accent); font-size: 13px; letter-spacing: .14em; text-transform: uppercase; font-weight: 650; }
+.preview { margin-top: 14px; }
+.preview audio { display: block; width: 100%; margin-top: 6px; }
 h1 { margin: 2px 0 0; font-size: 28px; line-height: 1.2; font-weight: 700; }
 h2 { font-size: 19px; margin: 0 0 10px; display: flex; align-items: center; gap: 10px; }
 h3 { font-size: 17px; margin: 0 0 10px; }

@@ -6,6 +6,7 @@
 //   GET    /i/<invite>                        the singing page, while the invitation is open
 //   GET    /api/invite/<invite>               the invitation: open or not, until when, how many can join
 //   GET    /api/song/<invite>                 song.json: the sets, keys, speeds and guides
+//   GET    /api/preview/<invite>              the song as it stands, sung everyone's way (MP3), if built
 //   GET    /api/lyrics/<invite>/<spec>        one guide's words and notes, and its sections
 //   GET    /api/guide/<invite>/<spec>/<mix>   one guide to sing along to (MP3)
 //   POST   /api/join/<invite>                 join: an email (kept only to write to them), a name, the release
@@ -336,6 +337,13 @@ async function byInvite(request, env, parts, ip, now) {
     const file = g && own(g.mixes, parts[3]) ? String(g.mixes[parts[3]] || "") : "";
     if (!/^[A-Za-z0-9._-]+\.mp3$/.test(file)) return fail(404, "unknown", "No such guide.");
     // no-cache: kept, but checked each time, so a guide made again is never heard stale
+    return asset(env, request, `/song/${file}`, { "Cache-Control": "private, no-cache", "Content-Type": "audio/mpeg" });
+  }
+  if (kind === "preview" && request.method === "GET" && parts.length === 2) {
+    // the song as it stands, sung everyone's way: for the people invited to sing, like the guides
+    const s = await song(env, request);
+    const file = s.preview && typeof s.preview.file === "string" ? s.preview.file : "";
+    if (!/^[A-Za-z0-9._-]+\.mp3$/.test(file)) return fail(404, "unknown", "No preview yet.");
     return asset(env, request, `/song/${file}`, { "Cache-Control": "private, no-cache", "Content-Type": "audio/mpeg" });
   }
   if (kind === "join" && request.method === "POST" && parts.length === 2) return join(request, env, token, inv, ip, now);
@@ -903,7 +911,7 @@ export default {
       if (path.startsWith("/api/admin/")) return await admin(request, env, path.slice(11).split("/"), now);
       if (path.startsWith("/api/")) {
         const parts = path.slice(5).split("/");
-        if (["invite", "song", "lyrics", "guide", "join"].includes(parts[0]) && parts.length >= 2 && parts.length <= 4) {
+        if (["invite", "song", "lyrics", "guide", "preview", "join"].includes(parts[0]) && parts.length >= 2 && parts.length <= 4) {
           return await byInvite(request, env, parts, ip, now);
         }
         if (["take", "words", "done"].includes(parts[0]) && parts.length === 2) return await bySinger(request, env, parts, ip, now);

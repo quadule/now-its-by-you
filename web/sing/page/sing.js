@@ -64,6 +64,7 @@ async function init() {
   $("title").textContent = S.song.title;
   document.title = `Sing ${S.song.title}`;
   showCloses();
+  showPreview();
 
   // what you sang to last time on this invitation, if it's still on offer; else the set suggested
   // for you when you joined; else the song's own
@@ -141,6 +142,15 @@ function showCloses() {
   $("thanksNote").textContent = `There you can delete your recordings or withdraw until singing closes (${when}). After that, what you gave `
     + `is part of the song, though you can still delete the recordings until ${by}.`;
   $("thanksText").textContent = `Thank you for singing! Your version will appear on your own page in a few days, before ${by}.`;
+}
+
+function showPreview() {
+  // the song as it stands, sung everyone's way, if the site was built with one (sing_site.py --preview)
+  const p = S.song.preview;
+  if (!p || !p.file) return;
+  if (p.singers) $("previewWho").textContent = `the ${p.singers} people who have recorded so far`;
+  $("previewAudio").src = `/api/preview/${enc(S.invite)}?v=${enc(p.digest || "")}`;
+  $("preview").hidden = false;
 }
 
 function deleteBy() { // the day recordings are deleted by: the singer's own record says, else the contract's
