@@ -17,6 +17,9 @@ preview_urls = false
 [vars]
 CLOSES_AT = "2026-09-27T22:00:00-07:00"
 DELETE_BY = "2026-09-30T20:00:00-07:00"
+# Joins from one address in an hour. A choir singing together on one Wi-Fi shares an address: raise it
+# for a session like that, and deploy again.
+JOINS_AN_HOUR = "20"
 
 # Every hour, on the hour: forget the addresses counted for joining, and after DELETE_BY, the purge.
 [triggers]
@@ -44,10 +47,10 @@ id = "aa2b6ac9172d4276a186ac9e648a8c57"
 binding = "TAKES"
 bucket_name = "songbird-takes"
 
-# About 6 takes (or words) a minute from one singer, 60 requests a minute from one address, and 10 a
+# About 6 takes (or words) a minute from one singer, 120 requests a minute from one address, and 10 a
 # minute from an address asking after invitations or pages that don't exist. Counted at each Cloudflare
 # location, so a little loose; the address is only a key for the count, held briefly and never stored.
-# (Joining is also held to 20 an hour from one address, counted in R2 by a digest of it, forgotten
+# (Joining is also held to JOINS_AN_HOUR from one address, counted in R2 by a digest of it, forgotten
 # within the hour.)
 [[ratelimits]]
 name = "UPLOADS"
@@ -57,7 +60,7 @@ simple = { limit = 6, period = 60 }
 [[ratelimits]]
 name = "REQUESTS"
 namespace_id = "1702"
-simple = { limit = 60, period = 60 }
+simple = { limit = 120, period = 60 }
 
 [[ratelimits]]
 name = "UNKNOWN"

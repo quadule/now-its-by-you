@@ -271,6 +271,9 @@ test("a group link admits its people, and one address joins only so often", asyn
   // what's kept to count them: a digest of the address, never the address
   assert.ok(e.TAKES.keys("limits/").length > 0);
   assert.ok(!e.TAKES.keys().some(k => k.includes("203.0.113.9")));
+  // a choir on one Wi-Fi: the artist raises the limit (JOINS_AN_HOUR in [vars])
+  const choir = { ...e, JOINS_AN_HOUR: "25" };
+  assert.equal((await join(w, choir, big, { email: "p20@example.org" }, from)).status, 200);
 });
 
 test("a new singer is given the set with the least singing so far", async () => {
@@ -474,7 +477,8 @@ test("deleting a take, or all of them, leaves word for the artist's copies and k
   const none = (await page(w, e, sid)).data;
   assert.deepEqual([none.takes, none.files, none.state, none.words.length], [[], [], "open", 1]); // they may still sing, and their words stay
   gone = (await admin(w, e, "GET", "gone")).data.gone;
-  assert.deepEqual(gone.map(g => [g.what, g.take]), [["deleted", `takes/${sid}/${one.id}`], ["deleted", null]]);
+  // (two within a millisecond may list either way round: applying them never depends on the order)
+  assert.deepEqual(gone.map(g => [g.what, g.take]).sort(), [["deleted", `takes/${sid}/${one.id}`], ["deleted", null]].sort());
   assert.ok(gone.every(g => Date.parse(g.at) > 0));
   assert.equal((await send(w, e, sid)).status, 200); // and sing again
 });

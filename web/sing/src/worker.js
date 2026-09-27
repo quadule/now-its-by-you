@@ -51,7 +51,7 @@ import {
 } from "./lib.js";
 
 const KEEP_AFTER_EXPIRY = 90 * 86400; // seconds an invite's record outlives it, for the artist's list
-const JOINS_AN_HOUR = 20; // joins from one address in a clock hour: a group link is as good as public
+const JOINS_AN_HOUR = 20; // joins from one address in a clock hour (a group link is as good as public); JOINS_AN_HOUR in [vars] changes it
 const PUBLIC = { "/sing.js": "text/javascript", "/sing.css": "text/css", "/karaoke.js": "text/javascript",
                  "/recorder.js": "text/javascript", "/yours.js": "text/javascript", "/yours.css": "text/css",
                  "/robots.txt": "text/plain", "/favicon.svg": "image/svg+xml" };
@@ -359,7 +359,7 @@ async function join(request, env, token, inv, ip, now) {
   }
   // how often one address joins, per clock hour: a digest of it, forgotten within the hour (the cron)
   const hour = stamp(new Date(now)).slice(0, 11), address = await hashed(`${env.ADMIN_TOKEN || ""}:${ip}`);
-  if ((await listed(env, `limits/${hour}/${address}`)).length >= JOINS_AN_HOUR) {
+  if ((await listed(env, `limits/${hour}/${address}`)).length >= (clampInt(env.JOINS_AN_HOUR, 1, 10000, 0) || JOINS_AN_HOUR)) {
     return fail(429, "busy", "A lot of people have joined from this connection in the last hour. Try again a little later.");
   }
   const joined = await listed(env, `joined/${token}/`, ["customMetadata"]);

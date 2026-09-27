@@ -36,7 +36,8 @@ joins with the same email on one link are the same person, and their takes share
 **group link** admits `--people` joins, so it can be posted; anyone with it can join until it's full,
 closed, or singing closes. `--limit` is takes per singer (default 30), `--days` how long a link stays
 open (default 7; singing closing ends them all anyway). Joining is held to 20 an hour from one
-address. `revoke <token>` closes a link. Notes are for you; singers never see them.
+address (a choir on one Wi-Fi shares one: raise `JOINS_AN_HOUR` in wrangler.toml and deploy for a
+session like that). `revoke <token>` closes a link. Notes are for you; singers never see them.
 
 ## Your routine, until 30 September
 
@@ -116,7 +117,7 @@ elsewhere, send the workers.dev links: they work the same.
 | Your machine | takes and sidecars in `recordings/<singer>/`, words in `recordings/words/`, versions, phrasings and measured numbers (never in git); in `recordings/guides/`, the guide scores and each release as singers read it | WAVs and versions until purge (by 30 September); sidecars and numbers stay (they're what the song keeps), except for anyone who withdrew |
 
 The Worker logs nothing (its logs are off, and it never logs a name, email, token or address). An
-address is used only to count requests (about 60 a minute) and joins (20 an hour, as a digest,
+address is used only to count requests (about 120 a minute) and joins (20 an hour, as a digest,
 forgotten within the hour). Cloudflare itself handles the traffic under its own privacy policy; on
 your own domain the zone's analytics keep a sample of requests (paths include links) for a few days.
 
