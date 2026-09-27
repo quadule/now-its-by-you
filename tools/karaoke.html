@@ -471,6 +471,7 @@ async function openMicrophone() {
   S.stream = await navigator.mediaDevices.getUserMedia({
     audio: { echoCancellation: false, noiseSuppression: false, autoGainControl: false, channelCount: 1 },
   });
+  if (K.bluetoothMic((S.stream.getAudioTracks()[0] || {}).label)) warn(K.BLUETOOTH);  // a telephone line while the mic is on
   const mic = S.ctx.createMediaStreamSource(S.stream);
   await S.ctx.audioWorklet.addModule("/recorder.js");
   S.recorder = new AudioWorkletNode(S.ctx, "take-recorder", { numberOfOutputs: 1, outputChannelCount: [1] });

@@ -623,6 +623,15 @@ export function slug(name) {
   return plain.trim().toLowerCase().replace(/[^\p{L}\p{N}]+/gu, "-").replace(/^-+|-+$/g, "") || "someone";
 }
 
+export function bluetoothMic(label) {
+  // whether the microphone a page opened is a Bluetooth headset's, by the name the browser gives it: those
+  // switch to a telephone line while their microphone is open, so the guide and the take both sound like a call
+  return /airpods|bluetooth|hands-?free|headset|buds|beats|bose|jabra|\bsony (wh|wf)|shokz|aftershokz/i.test(String(label || ""));
+}
+
+export const BLUETOOTH = "Your Bluetooth headphones are the microphone, and while it's on they sound like a phone call: the guide, "
+  + "and your takes too. Wired headphones sound much better (or the phone's own microphone, with wired headphones).";
+
 export const ARTIST_ZONE = "America/Los_Angeles";
 
 export function moment(iso, zone) {

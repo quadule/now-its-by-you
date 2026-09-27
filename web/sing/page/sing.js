@@ -590,6 +590,10 @@ async function openMicrophone() {
   };
   $("mic").textContent = "Microphone on"; // however it was opened: this button, recording or measuring
   $("micHint").textContent = "on";
+  if (K.bluetoothMic((S.stream.getAudioTracks()[0] || {}).label)) { // AirPods and the like: a telephone line while the mic is on
+    $("micHint").textContent = "on: Bluetooth (wired headphones sound much better)";
+    warn(K.BLUETOOTH);
+  }
   $("micNote").textContent = `Recording at ${S.ctx.sampleRate} Hz. If the level doesn't move when you sing, check the microphone.`;
   controls();
 }

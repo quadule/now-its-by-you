@@ -304,3 +304,12 @@ test("listening back never clips: the take is lifted at most ten times, its peak
   assert.equal(K.takeGain(tone(0.001), rate), 10);
   assert.ok(K.takeGain(tone(0.1), rate) * 0.1 <= 0.7 + 1e-9);
 });
+
+test("a Bluetooth headset's microphone is recognised by its name, so the page can say wired sounds better", () => {
+  for (const name of ["AirPods Pro", "Milo's AirPods Pro 3", "Galaxy Buds2", "Bose QC Headphones Hands-Free", "Jabra Elite", "Beats Fit Pro"]) {
+    assert.ok(K.bluetoothMic(name), name);
+  }
+  for (const name of ["iPhone Microphone", "MacBook Pro Microphone", "Default - External Microphone", "USB Audio Device", "", undefined]) {
+    assert.ok(!K.bluetoothMic(name), String(name));
+  }
+});
