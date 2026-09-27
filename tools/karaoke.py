@@ -45,6 +45,7 @@ import numpy as np
 
 warnings.filterwarnings("ignore", message="pkg_resources")
 sys.path.insert(0, str(Path(__file__).parent))
+import everyone as EV  # noqa: E402  (tools/everyone.py)
 import guides as M  # noqa: E402  (tools/guides.py)
 import phrasing as T  # noqa: E402  (tools/phrasing.py)
 import takes as K  # noqa: E402  (tools/takes.py)
@@ -393,12 +394,8 @@ class Karaoke(BaseHTTPRequestHandler):
 
     def blend(self, name: str, takes: list) -> Path:
         """A phrasing from these takes, each person counting once, kept as renders/phrasing/<song>.<name>.json
-        (a name no singer's folder can have: "everyone", "choir.1")."""
-        with contextlib.redirect_stdout(io.StringIO()):
-            phrasing, data, _ = T.singer_phrasing(self.genome_path, self.genome, takes)
-            data["source_detail"] = f"{len(takes)} sung takes by {len({t.who for t in takes})} singers"
-            T.write(data, phrasing, self.phrasing_path(name))
-        return self.phrasing_path(name)
+        (a name no singer's folder can have: "everyone", "choir.1"); tools/everyone.py does the same by hand."""
+        return EV.blend(self.genome_path, self.genome, name, takes)
 
     def render(self, request: dict) -> dict:
         """The machine sings: one singer's way (lead: their folder name), everyone's
@@ -418,11 +415,7 @@ class Karaoke(BaseHTTPRequestHandler):
         elif lead:
             args += ["--phrasing", str(have[lead])]
         if request.get("choir"):
-            others = sorted({t.who for t in counted} - {lead})
-            voices = []
-            for i in range(min(CHOIR, len(others))):
-                with contextlib.suppress(ValueError):  # its singers never sang a whole note: a stand-in sings it
-                    voices.append(str(self.blend(f"choir.{i + 1}", [t for t in counted if t.who in others[i::CHOIR]])))
+            voices = [str(v) for v in EV.choir_blends(self.genome_path, self.genome, counted, lead, CHOIR)]
             args += ["--choir", str(CHOIR)] + (["--choir-phrasing", *voices] if voices else [])
         out = ROOT / "renders" / f"{self.genome_path.stem}.karaoke.{lead or 'plain'}.flac"
         with contextlib.redirect_stdout(io.StringIO()):
