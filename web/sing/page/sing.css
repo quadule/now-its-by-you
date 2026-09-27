@@ -179,3 +179,9 @@ details.step[open] > summary { margin-bottom: 8px; }
 }
 /* the pitch's promise, where the eye lands */
 .promise { font-weight: 650; color: var(--ink); background: linear-gradient(transparent 58%, rgba(224, 102, 77, .22) 58%); }
+details.listen { margin: 6px 0 10px; font-size: 15px; color: var(--dim); }
+details.listen > summary { cursor: pointer; list-style: none; }
+details.listen > summary::-webkit-details-marker { display: none; }
+details.listen > summary .change { color: var(--accent); text-decoration: underline; margin-left: 4px; }
+details.listen ol { margin: 8px 0 0; padding-left: 22px; }
+details.listen li { margin: 4px 0; }

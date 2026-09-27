@@ -629,8 +629,8 @@ export function bluetoothMic(label) {
   return /airpods|bluetooth|hands-?free|headset|buds|beats|bose|jabra|\bsony (wh|wf)|shokz|aftershokz/i.test(String(label || ""));
 }
 
-export const BLUETOOTH = "Your Bluetooth headphones are the microphone, and while it's on they sound like a phone call: the guide, "
-  + "and your takes too. Wired headphones sound much better (or the phone's own microphone, with wired headphones).";
+export const BLUETOOTH = "Your Bluetooth headphones are the microphone, so while it's on the guide and your takes sound like a phone "
+  + "call. Your timing still comes through, but wired headphones are much better; on a computer, choose its own microphone for input.";
 
 export const ARTIST_ZONE = "America/Los_Angeles";
 

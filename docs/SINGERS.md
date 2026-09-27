@@ -31,8 +31,14 @@ Singing online closes on **Sunday, September 27, 2026 at 10 PM Pacific**.
 ## How to record
 
 - A quiet room with soft things in it (a bedroom or a closet full of clothes beats a kitchen).
-- Wired headphones for the guide, so it doesn't leak into the microphone (Bluetooth ones switch to a
-  narrow telephone-quality mode when a microphone opens).
+- What to listen with, best first:
+  1. Wired headphones or earbuds, with the phone's or computer's own microphone.
+  2. On a computer, Bluetooth headphones with the computer's own microphone chosen for input: the guide
+     stays clear, and the page lines up their delay.
+  3. Bluetooth headphones on a phone: while the microphone is on they switch to a telephone line, so the
+     guide and the take sound like a call; timing and phrasing still come through.
+  4. No headphones: a speaker turned low, the microphone close to you and away from it. The guide leaks
+     into the take, and since it plays the tune being sung it can muddle the measuring.
 - The phone or computer's own microphone is fine; the same place every time, 15–20 cm from your mouth.
 - No effects: no reverb, pitch correction or noise reduction. We want it raw.
 
