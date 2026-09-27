@@ -45,7 +45,6 @@ async function init() {
   } catch (e) {
     return closed(e.code ? e.code : "error", e.code ? e.message : "The page couldn't reach the server. Check your connection and reload it.");
   }
-  if (isClosed()) return closed("closed");
   if (S.info.state !== "open") return closed(S.info.state);
   if (S.sid) {
     try {
@@ -125,16 +124,13 @@ function showCloses() {
   // when singing closes, on the artist's clock and the singer's; and what that means for their page
   const at = S.info && S.info.closes, when = at ? `${K.moment(at, K.ARTIST_ZONE)} Pacific` : "Sunday at 10 PM Pacific";
   if (at) {
-    $("closes").textContent = `Singing closes ${K.closingTime(at)}.`;
+    $("closes").textContent = isClosed()
+      ? `Singing for the first version of the song closed ${K.closingTime(at)}. You can still sing: what you send now goes toward later versions.`
+      : `Singing for the first version of the song closes ${K.closingTime(at)}; you can still sing after that, for later versions.`;
     $("closes").hidden = false;
-    // a page left open past it says so, rather than failing at the next take (once nothing is being sung or sent)
+    // a page left open past it says so
     const left = Date.parse(at) - Date.now();
-    const later = () => {
-      if (!$("thanks").hidden) return;
-      if (S.mode === "idle" && !S.take && !queue.some(q => q.state === "sending")) closed("closed");
-      else setTimeout(later, 30000);
-    };
-    if (left > 0 && left < 2 ** 31) setTimeout(later, left + 1000);
+    if (left > 0 && left < 2 ** 31) setTimeout(showCloses, left + 1000);
   }
   const by = deleteBy();
   $("keepNote").textContent = `Your version of the song will appear there in a few days, before ${by}. There you can delete `
@@ -223,7 +219,7 @@ $("join").onclick = async () => {
     showJoined(true);
   } catch (e) {
     $("joinNote").textContent = e.message;
-    if (e.status === 410 && isClosed()) closed("closed");
+    if (e.status === 410 && e.code === "closed") closed("closed");
   }
   S.busy = false;
   controls();
@@ -765,7 +761,6 @@ $("rehearse").onclick = () => starting(async () => {
 
 $("record").onclick = () => starting(async () => {
   if (!ready()) { warn("Agree to the release and say who you are first (steps 1 and 2)."); return; }
-  if (isClosed()) return closed("closed");
   const spec = S.spec, which = mix(), p = S.part, lyrics = S.lyrics;
   if (S.reopen) { S.reopen = false; closeMicrophone(); } // switched to or from headphones while something played
   await microphone();

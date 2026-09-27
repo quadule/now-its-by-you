@@ -7,7 +7,9 @@ web/sing/words-release.md. Neither is legal advice: have them read by someone wh
 them. If you pay singers, say so here. The dates below must match CLOSES_AT and DELETE_BY in wrangler.toml.
 -->
 
-**Singing closes on Sunday, September 27, 2026 at 10 PM Pacific time** (05:00 UTC on Monday, September 28).
+**Singing for the first version of the song closes on Sunday, September 27, 2026 at 10 PM Pacific time** (05:00 UTC
+on Monday, September 28). You can still sing after that: what you send then may go into a later version rather
+than the first.
 
 ## What happens to what you sing
 

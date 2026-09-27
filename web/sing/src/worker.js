@@ -19,7 +19,8 @@
 //   GET    /api/yours/<sid>/take/<id>         one take (WAV); /file/<name> their version or vocals
 //   DELETE /api/yours/<sid>/take/<id>         delete one take's audio (until DELETE_BY)
 //   POST   /api/yours/<sid>/delete            delete all their audio and files (until DELETE_BY)
-//   POST   /api/yours/<sid>/withdraw          withdraw: everything, numbers too (until singing closes)
+//   POST   /api/yours/<sid>/withdraw          withdraw: everything, numbers too (until singing for the first release
+//                                             closes, CLOSES_AT; singing itself goes on after it, for later versions)
 //
 // and for the artist, with Authorization: Bearer <ADMIN_TOKEN> (wrangler secret put ADMIN_TOKEN):
 //   GET    /api/admin/status                  the dates, and where things stand

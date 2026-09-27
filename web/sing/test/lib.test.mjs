@@ -61,7 +61,7 @@ test("the admin secret is compared whole, and never empty", () => {
   assert.ok(!sameSecret("", ""));
 });
 
-test("an invitation is open until it expires, is revoked, or singing closes", () => {
+test("an invitation is open until it expires or is revoked, past the first release's close too", () => {
   const now = Date.parse("2026-09-27T12:00:00Z");
   const open = { state: "open", expires: "2026-10-02T12:00:00Z" };
   assert.equal(stateOf(open, now), "open");
@@ -72,7 +72,7 @@ test("an invitation is open until it expires, is revoked, or singing closes", ()
   const closes = moment("2026-09-27T22:00:00-07:00");
   assert.equal(closes, Date.parse("2026-09-28T05:00:00Z"));
   assert.equal(stateOf(open, now, closes), "open");
-  assert.equal(stateOf(open, closes, closes), "closed");
+  assert.equal(stateOf(open, closes, closes), "open"); // singing goes on past the first release's close
   assert.equal(stateOf({ ...open, state: "revoked" }, closes + 1, closes), "revoked");
   assert.equal(moment(""), null); // a date not set: never
   assert.equal(moment(undefined), null);

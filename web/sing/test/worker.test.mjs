@@ -525,24 +525,22 @@ test("withdrawing deletes everything, and is only possible until singing closes"
   assert.equal(e.TAKES.keys(`takes/${stays}/`).length, 2);
 });
 
-test("once singing has closed: no joining, takes, words or withdrawing, but own pages and deleting still work", async () => {
+test("once singing for the first release has closed: joining, takes and words go on (for later versions), withdrawing doesn't, own pages and deleting still work", async () => {
   const w = await load(), e = env();
   const token = await invitation(w, e, { people: 5 });
   const sid = (await join(w, e, token)).data.singer;
   await send(w, e, sid);
   e.CLOSES_AT = EARLIER;
-  assert.equal((await call(w, e, `/i/${token}`)).status, 410);
-  assert.match(await (await call(w, e, `/i/${token}`)).text(), /Singing has closed/);
-  assert.equal((await (await call(w, e, `/api/invite/${token}`)).json()).state, "closed");
-  assert.equal((await call(w, e, `/api/song/${token}`)).status, 410);
-  const joining = await join(w, e, token, { email: "late@example.org" });
-  assert.deepEqual([joining.status, joining.data.error], [410, "closed"]);
-  const late = await send(w, e, sid);
-  assert.deepEqual([late.status, late.data.error], [410, "closed"]);
+  assert.equal((await call(w, e, `/i/${token}`)).status, 200);
+  assert.equal((await (await call(w, e, `/api/invite/${token}`)).json()).state, "open");
+  assert.equal((await call(w, e, `/api/song/${token}`)).status, 200);
+  assert.equal((await join(w, e, token, { email: "late@example.org" })).status, 200);
+  assert.equal((await send(w, e, sid)).status, 200);
   const words = await call(w, e, `/api/words/${sid}`, { method: "POST", body: JSON.stringify({ text: "late", release: { agreed: true, at: new Date().toISOString(), text: SONG.words_release } }) });
-  assert.equal(words.status, 410);
+  assert.equal(words.status, 200);
   const mine = (await page(w, e, sid)).data;
-  assert.deepEqual([mine.state, mine.sing_more, mine.can_withdraw, mine.takes.length], ["closed", null, false, 1]);
+  assert.deepEqual([mine.state, mine.sing_more !== null, mine.can_withdraw, mine.takes.length], ["open", true, false, 2]);
+  assert.equal((await call(w, e, `/api/yours/${sid}/withdraw`, { method: "POST", headers: { Origin: "https://songbird.test" } })).status, 410);
   assert.equal((await call(w, e, `/y/${sid}`)).status, 200);
   assert.equal((await call(w, e, `/api/yours/${sid}/take/${mine.takes[0].id}`)).status, 200);
   assert.equal((await call(w, e, `/api/yours/${sid}/delete`, { method: "POST" })).status, 200);
