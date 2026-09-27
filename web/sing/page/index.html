@@ -24,9 +24,9 @@
     <p>The piece confronts the blurred authorship of AI music through the lens of folk music and oral tradition: it wonders
       who made it, and invites you to take part.</p>
     <div class="preview" id="preview" hidden>
-      <p>This is the song as it stands today: the machine sings it the way <span id="previewWho">the people who have recorded
-        so far</span> sing it, and a few of them sing the harmonies. It's a preview and it keeps changing; what you send
-        today is in the next one.</p>
+      <p>This is an early version of the song, and it's designed to evolve: the program sings it the way <span id="previewWho">the
+        people who have recorded so far</span> sing it, and it will sing it differently after you. Every version from here on
+        carries a little of everyone who sang into it.</p>
       <audio id="previewAudio" controls preload="none"></audio>
     </div>
   </section>
@@ -57,9 +57,7 @@
       <div id="joinForm">
         <label class="field" for="email">Your email</label>
         <input id="email" type="email" autocomplete="email" inputmode="email" maxlength="200" placeholder="you@example.com" required>
-        <p class="hint">For your own page, where your version of the song will be and where you can delete your recordings.
-          Nothing arrives by email right away: Milo writes to each singer by hand, which can take a day or two. The link
-          to your page appears right here as soon as you continue, so you can save it yourself.</p>
+        <p class="hint">To receive a link to download the completed song.</p>
         <label class="field" for="name">Your name, or a name you'd like to be credited by</label>
         <input id="name" autocomplete="name" maxlength="80" placeholder="optional">
         <div class="choices" role="radiogroup" aria-label="Credit">
@@ -72,7 +70,7 @@
       </div>
       <div id="joined" hidden>
         <p id="joinedAs"></p>
-        <p class="hint">This is your own page; save the link (Milo will email you the same one by hand, in a day or two):</p>
+        <p class="hint">Your own page, where your takes go (save the link):</p>
         <div class="link"><a id="joinedLink" target="_blank" rel="noopener"></a><button id="joinedCopy" type="button">Copy</button></div>
         <p class="hint">Now pick a section below and sing.</p>
         <p class="hint" id="notYou" hidden>Not <span id="notYouName">you</span>? <button id="restart" class="plain" type="button">Start
@@ -181,7 +179,7 @@
       <h2><span class="n">4</span> Your takes</h2>
       <ol id="takes"><li class="hint none">Nothing sent yet.</li></ol>
       <p class="hint">Keep this page open until each take says sent.</p>
-      <p class="hint">They're also on your own page (the link from step 2; Milo emails the same one by hand):</p>
+      <p class="hint">They're also on your own page:</p>
       <div class="link"><a id="pageLink" target="_blank" rel="noopener"></a><button id="copyLink" type="button">Copy</button></div>
       <p class="hint" id="keepNote"></p>
     </section>

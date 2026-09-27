@@ -574,7 +574,7 @@ function microphone() { // opened once: a second tap waits for the first
 async function openMicrophone() {
   if (!window.isSecureContext || !navigator.mediaDevices) throw new Error("This page needs a secure (https) connection for the microphone.");
   try { // the microphone first: a phone reconfigures its audio when it opens, and the clock is made after
-    S.stream = await navigator.mediaDevices.getUserMedia({ audio: K.micOptions(noHeadphones()) });
+    S.stream = await navigator.mediaDevices.getUserMedia({ audio: K.micOptions(noHeadphones() && !IOS) });
   } catch (e) {
     throw new Error(e.name === "NotAllowedError" ? "The browser didn't allow the microphone. Allow it for this page (in the address bar, or your phone's settings) and try again."
       : e.name === "NotFoundError" ? "No microphone was found." : `The microphone didn't start (${e.message}).`);
@@ -611,6 +611,10 @@ async function openMicrophone() {
 /* ---------- no headphones: the guide taken out of the microphone ---------- */
 
 function noHeadphones() { return saved("songbird-sing-speaker", "") === "1"; }
+// An iPhone or iPad: its echo canceller suppresses the singer along with the guide (the artist, singing straight into
+// the phone with the speaker low, got back a near-silent take), so there the microphone is always opened raw and the
+// little of the guide that leaks in is lived with
+const IOS = /iP(hone|ad|od)/.test(navigator.userAgent) || (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1);
 
 function cancelling() { // whether the microphone as opened is taking the page's own sound out of what it hears
   const track = S.stream && S.stream.getAudioTracks()[0];
