@@ -1,0 +1,94 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="robots" content="noindex">
+<meta name="referrer" content="no-referrer">
+<meta name="color-scheme" content="light dark">
+<title>Your Songbird page</title>
+<link rel="icon" href="/favicon.svg" type="image/svg+xml">
+<link rel="stylesheet" href="/yours.css">
+</head>
+<body>
+<main>
+  <header>
+    <p class="kicker">Songbird</p>
+    <h1>Your page</h1>
+    <p class="lede" id="thanks" hidden></p>
+  </header>
+
+  <p class="status" id="loading">Loading…</p>
+
+  <section class="card" id="problem" hidden>
+    <p id="problemText"></p>
+  </section>
+
+  <div id="page" hidden>
+    <section class="card" id="now">
+      <p id="closes"></p>
+      <p id="deletes"></p>
+      <p id="stateNote"></p>
+      <a class="button primary" id="singMore" hidden>Sing more</a>
+      <p class="hint" id="limit" hidden></p>
+    </section>
+
+    <section class="card" id="takesBox">
+      <h2>Your takes</h2>
+      <ul class="items" id="takes"></ul>
+      <p class="hint" id="takesNote"></p>
+    </section>
+
+    <section class="card" id="filesBox">
+      <h2>Your version and vocals</h2>
+      <ul class="items" id="files"></ul>
+      <p class="hint" id="filesNote"></p>
+    </section>
+
+    <section class="card" id="wordsBox">
+      <h2>The words you sent</h2>
+      <ul class="items" id="words"></ul>
+      <p class="hint">These are kept: they aren't deleted with your recordings.</p>
+    </section>
+
+    <section class="card" id="mind">
+      <h2>Changing your mind</h2>
+      <p id="mindText"></p>
+      <div class="options">
+        <div class="choice" id="withdrawBox">
+          <h3>Withdraw</h3>
+          <p>Deletes everything you sent (your recordings, your version and vocals, and your words) and takes the
+            numbers measured from your singing out of the song.</p>
+          <p class="hint" id="countdown"></p>
+          <button class="danger" id="withdraw">Withdraw from the song</button>
+        </div>
+        <div class="choice" id="deleteBox">
+          <h3>Delete your recordings</h3>
+          <p>Deletes the recordings themselves: every take, and your version and vocals. The numbers already taken
+            from them stay part of the song.</p>
+          <p class="hint" id="deleteWhen"></p>
+          <button class="danger" id="deleteAll">Delete all my recordings</button>
+        </div>
+      </div>
+    </section>
+
+    <p class="hint" id="private">Anyone with this page's link can use it, so keep the link to yourself.</p>
+  </div>
+
+  <p class="hint" id="contact" hidden>Questions? Write to Milo Winningham at
+    <a href="mailto:milo@quadule.com">milo@quadule.com</a>.</p>
+
+  <p class="toast" id="status" role="status" aria-live="polite"></p>
+</main>
+
+<dialog id="ask" aria-labelledby="askTitle" aria-describedby="askText" closedby="any">
+  <h2 id="askTitle"></h2>
+  <p id="askText"></p>
+  <div class="row">
+    <button class="danger" id="askYes"></button>
+    <button id="askNo" autofocus>Cancel</button>
+  </div>
+</dialog>
+<script type="module" src="/yours.js"></script>
+</body>
+</html>
