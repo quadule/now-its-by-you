@@ -314,9 +314,10 @@ async function byInvite(request, env, parts, ip, now) {
 
   if (kind === "invite" && request.method === "GET" && parts.length === 2) {
     if (!inv) return fail(404, "unknown", "No such invitation.");
+    // people: how many can join with it (a personal link: one person, on up to three devices)
     const joined = (await listed(env, `joined/${token}/`)).length, allowed = joinsAllowed(inv);
-    return json({ state, expires: inv.expires, limit: inv.limit, closes: env.CLOSES_AT || null, people: inv.people || 1,
-                  joined, room: Math.max(0, allowed - joined), full: joined >= allowed });
+    return json({ state, expires: inv.expires, limit: inv.limit, closes: env.CLOSES_AT || null, people: allowed,
+                  personal: (inv.people || 1) === 1, joined, room: Math.max(0, allowed - joined), full: joined >= allowed });
   }
   if (state !== "open") return shut(state);
 

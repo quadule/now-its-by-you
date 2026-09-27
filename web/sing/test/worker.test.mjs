@@ -186,7 +186,9 @@ test("an invitation closed in R2 is closed, whatever KV still says", async () =>
 
   const open = await invitation(w, e);
   const state = await (await call(w, e, `/api/invite/${open}`)).json();
-  assert.deepEqual(state, { state: "open", expires: state.expires, limit: 30, closes: LATER, people: 1, joined: 0, room: 3, full: false });
+  // people: how many can join with it (a personal link: one person, on up to three devices)
+  assert.deepEqual(state, { state: "open", expires: state.expires, limit: 30, closes: LATER, people: 3, personal: true, joined: 0, room: 3,
+                            full: false });
   const sing = await call(w, e, `/i/${open}`);
   assert.equal(sing.status, 200);
   assert.match(sing.headers.get("Content-Security-Policy"), /script-src 'self'/);

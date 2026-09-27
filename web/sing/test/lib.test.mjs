@@ -151,6 +151,9 @@ test("a take's sidecar is checked against its guide, down to the part of the son
   assert.equal(one.label, "They saved it as numbers and sent it by wire,");
   assert.deepEqual([one.from_s, one.to_s], [2.5, 21]);
   assert.equal(checkTake(info({ section: 1, from_s: 2.52, to_s: 20.9 }), SONG, "a.k0.t100", lyric, verse).from_s, 2.52); // rounding
+  // to_s is where it stopped: the window's end, or earlier when they pressed Stop
+  const stopped = checkTake(info({ section: 1, from_s: 2.5, to_s: 12.25 }), SONG, "a.k0.t100", lyric, { ...verse, seconds: 10.2 });
+  assert.deepEqual([stopped.from_s, stopped.to_s], [2.5, 12.25]);
   // a window that isn't the section's, a section that isn't sung or doesn't exist, too long for its window
   assert.throws(() => checkTake(info({ section: 1, from_s: 10, to_s: 21 }), SONG, "a.k0.t100", lyric, verse), /doesn't match/);
   assert.throws(() => checkTake(info({ section: 1, from_s: 2.5, to_s: 41 }), SONG, "a.k0.t100", lyric, verse), /doesn't match/);
@@ -159,10 +162,11 @@ test("a take's sidecar is checked against its guide, down to the part of the son
   assert.throws(() => checkTake(info({ section: "1", from_s: 2.5, to_s: 21 }), SONG, "a.k0.t100", lyric, verse), /no such part/);
   assert.throws(() => checkTake(info({ section: 1, from_s: 2.5, to_s: 21 }), SONG, "a.k0.t100", lyric,
                                 { ...verse, seconds: 18.5 + 10.1 }), /longer than its part/);
+  assert.throws(() => checkTake(info({ section: 1, from_s: 2.5, to_s: 2.5 }), SONG, "a.k0.t100", lyric, verse), /out of range/);
   // a whole take from anywhere but the top, or out of the song
   assert.throws(() => checkTake(info({ from_s: 5 }), SONG, "a.k0.t100", lyric, wav), /out of range/);
   assert.throws(() => checkTake(info({ from_s: -1 }), SONG, "a.k0.t100", lyric, wav), /out of range/);
-  assert.throws(() => checkTake(info({ to_s: 30 }), SONG, "a.k0.t100", lyric, wav), /out of range/);
+  assert.equal(checkTake(info({ to_s: 30 }), SONG, "a.k0.t100", lyric, { ...wav, seconds: 30.4 }).to_s, 30); // stopped at the bridge
   assert.throws(() => checkTake(info({ to_s: 99 }), SONG, "a.k0.t100", lyric, wav), /out of range/);
   assert.throws(() => checkTake(info({ from_s: "soon" }), SONG, "a.k0.t100", lyric, wav), /out of range/);
   assert.throws(() => checkTake(info(), SONG, "a.k0.t100", lyric, { ...wav, seconds: 121 }), /longer than the song/);

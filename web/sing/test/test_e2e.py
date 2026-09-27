@@ -250,7 +250,8 @@ def test_while_singing_is_open(online, here):
     code, headers, page = request(f"{base}/i/{personal}")
     assert code == 200 and "script-src 'self'" in headers["Content-Security-Policy"]
     state = api(base, "GET", f"/api/invite/{personal}")[1]
-    assert (state["state"], state["people"], state["joined"], state["room"], state["full"]) == ("open", 1, 0, 3, False)
+    # a personal link: one person, on up to three devices (the page checks joined against people)
+    assert (state["state"], state["people"], state["personal"], state["joined"], state["full"]) == ("open", 3, True, 0, False)
     code, ana = join(base, personal, "ana@example.org", "Ana María")
     assert code == 200 and ana["page"] == f"/y/{ana['singer']}"
     code, phone = join(base, personal, "Ana@Example.org")  # the same person on her phone: another page
@@ -267,7 +268,7 @@ def test_while_singing_is_open(online, here):
     assert (code, reply) == (200, {"ok": True, "take": 1, "limit": 5})
     code, reply, verse = send(base, a, 18.0, section=1, from_s=2.5, to_s=21.0, mix="full")
     assert code == 200 and reply["take"] == 2
-    assert send(base, p, 18.0, section=3, from_s=22.5, to_s=41.0)[0] == 200  # the refrain, from her phone
+    assert send(base, p, 12.5, section=3, from_s=22.5, to_s=35.0)[0] == 200  # the refrain from her phone, stopped early
     code, reply, _ = send(base, a, 18.0, section=1, from_s=12.0, to_s=21.0)
     assert code == 400 and "doesn't match" in reply["message"]
     code, reply, _ = send(base, a, 40.0, spec="b.k-2.t90")  # a's score, called b's guide
@@ -275,7 +276,7 @@ def test_while_singing_is_open(online, here):
     assert send(base, a, 40.0, section=2, from_s=20.0, to_s=25.0)[0] == 400  # the turn: nobody sings there
     assert send(base, bo, 30.0, spec="b.k-2.t90", guide=GUIDES["b.k-2.t90"])[0] == 200
     assert send(base, bo, 20.0, section=4, from_s=37.5, to_s=60.0, spec="b.k-2.t90", guide=GUIDES["b.k-2.t90"])[0] == 200
-    assert send(base, cy, 30.0)[0] == 200
+    assert send(base, cy, 30.0, to_s=30.0)[0] == 200  # the whole song, stopped halfway
     assert send(base, di, 30.0)[0] == 200
     assert words(base, a, "A verse about the river,\nand the wire.")[0] == 200
     assert words(base, di, "Di's line")[0] == 200

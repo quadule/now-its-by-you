@@ -187,18 +187,19 @@ export function checkTake(info, song, spec, lyric, wav) {
   if (!Number.isFinite(from) || !Number.isFinite(to) || from < 0 || to <= from || to > duration + 1) {
     throw new Error("the take's place in the song is out of range");
   }
+  // to_s is where the take stopped: its window's end (or the song's), or earlier, when Stop was pressed
   let section = info.section ?? null, part = null, label = null;
   if (section === null) {
-    // the whole song: from the top to the end
-    if (from > WINDOW_SLACK || Math.abs(to - duration) > 1) throw new Error("the take's place in the song is out of range");
+    // the whole song: from the top
+    if (from > WINDOW_SLACK) throw new Error("the take's place in the song is out of range");
     if (wav.seconds > duration + 60) throw new Error("the take is longer than the song");
   } else {
     const s = Number.isInteger(section) ? lyric.sections.find(x => x.index === section && x.sung && x.window) : null;
     if (!s) throw new Error("no such part of the song");
-    if (Math.abs(from - s.window[0]) > WINDOW_SLACK || Math.abs(to - s.window[1]) > WINDOW_SLACK) {
+    if (Math.abs(from - s.window[0]) > WINDOW_SLACK || to > s.window[1] + WINDOW_SLACK) {
       throw new Error("the take's place in the song doesn't match its part: reload the page");
     }
-    if (wav.seconds > to - from + SECTION_SLACK) throw new Error("the take is longer than its part of the song");
+    if (wav.seconds > s.window[1] - s.window[0] + SECTION_SLACK) throw new Error("the take is longer than its part of the song");
     part = partName(s);
     label = s.label ? String(s.label).slice(0, 200) : null;
   }
