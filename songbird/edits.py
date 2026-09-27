@@ -53,7 +53,7 @@ MIX = ("space", "width", "forward", "intimacy")
 # The arrangement's options a person may set (songbird.style.Style), each as the style's own choices go
 STYLE_OPTIONS = {"feel": ("straight", "swing", "shuffle", "twelve", "half", "double", "waltz", "six"),
                  "ending": ("ring", "rit", "cold", "amen", "repeat"), "backing": ("", "oohs", "echo", "thirds", "gang"),
-                 "lift": bool, "entrances": bool, "breakdown": bool, "coda": ("", "quote")}
+                 "lift": bool, "entrances": bool, "breakdown": bool, "coda": ("", "quote"), "motif": ("", "bridge", "chance")}
 
 
 def instruments() -> tuple[str, ...]:

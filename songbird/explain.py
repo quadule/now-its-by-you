@@ -828,6 +828,8 @@ def style_card(v: Version) -> dict:
                {"lead": "", "pad": "a pad swells in to begin", "count": "a count-in to begin",
                 "voice": "the singer begins alone", "quote": "a line of an older song to begin"}.get(s.intro, ""),
                "an older song's first notes over the last chord" if s.coda == "quote" else "",
+               {"bridge": "an older song's first notes in the fiddle's line through the bridge",
+                "chance": "an older song's first notes in the bridge, in some renditions"}.get(s.motif, ""),
                BACKING_NAMES.get(s.backing, ""),
                ENDING_NAMES.get(s.ending, "") if s.ending and s.ending != "ring" else ""]
     about = sdef.about.split(":", 1)[-1].strip() if name != "ballad" else \

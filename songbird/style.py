@@ -59,6 +59,9 @@ class Style:
     voices      how many backing voices sing it (the lineage's own, and stand-ins where a style wants a group)
     coda        quote: after the last line, as the last chord rings two bars on, the lead instrument alone plays
                 the opening of the older song the genome names (genome.quote), softly: a leitmotif; "" none
+    motif       bridge: in the bridge, where the lineage sings, the fiddle's long notes over the third phrase are the
+                quote's opening (band.motif_part; only where every note is a tone of the chord under it); chance:
+                about a third of renditions do, by their seed, an easter egg; "" none
     """
 
     name: str = ""
@@ -77,6 +80,7 @@ class Style:
     backing: str = ""
     voices: int = 0
     coda: str = ""  # quote: after the last line, over the ringing last chord, the lead alone plays the quote's opening
+    motif: str = ""  # bridge: the fiddle's pad in the bridge's third phrase is the quote's opening; chance: some renditions
 
     @classmethod
     def from_dict(cls, data: dict | None) -> Style:
@@ -110,6 +114,7 @@ class Style:
             backing=pick(self.backing, BACKINGS),
             voices=max(0, min(6, int(self.voices or 0))),
             coda=pick(self.coda, ("quote",)),
+            motif=pick(self.motif, ("bridge", "chance")),
         )
 
     @property

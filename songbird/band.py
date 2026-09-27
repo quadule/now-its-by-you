@@ -1219,6 +1219,11 @@ def melodic_parts(ctx: Context) -> list[Ev]:
                 for e in mine:
                     if e.u1 - e.u0 >= ctx.bar - 1e-9:
                         e.art = "swell"
+                if s.role == "bridge" and part == "fiddle":
+                    woven = motif_part(ctx, i, part, top)  # the quote's opening, where the style weaves it in
+                    if woven:
+                        a, b = woven[0].u0, max(e.u1 for e in woven)
+                        mine = [e for e in mine if e.u1 <= a + 1e-9 or e.u0 >= b - 1e-9] + woven
             else:
                 mine = []
             written += mine
@@ -1313,6 +1318,47 @@ def drone_part(ctx: Context) -> list[Ev]:
             out.append(Ev("drone", u0, min(u1 + tail, ctx.end), p, v * (0.7 + 0.4 * ctx.energy_at(u0)),
                           section=ctx.section_at(u0)))
     return out
+
+
+# --- the quote woven in ---------------------------------------------------------------
+
+
+def wants_motif(ctx: Context) -> bool:
+    """Whether this rendition weaves the quote's opening into the bridge: the style says so, or leaves it
+    to chance and this seed's draw says so (about a third of renditions: an easter egg)."""
+    style = getattr(ctx.params, "style", None)
+    if style is None or getattr(ctx.genome, "quote", None) is None:
+        return False
+    if style.motif == "bridge":
+        return True
+    if style.motif == "chance":
+        return bool(np.random.default_rng([ctx.seed & 0xFFFFFFFF, 0xDA15]).random() < 1 / 3)
+    return False
+
+
+def motif_part(ctx: Context, section: int, part: str, top: int) -> list[Ev]:
+    """The quote's opening (H's: Daisy, Daisy, so mi do so,) as the bowed pad's line over a bridge's third
+    phrase, one note to each quarter of the phrase, above the singers; only where every note is a tone of the
+    chord under it (H's b3 runs I, then vi V: so mi over I, do over vi, so, over V), so it sits in the harmony
+    as if it had always been there. Nothing where the style doesn't ask (wants_motif)."""
+    if not wants_motif(ctx):
+        return []
+    q = ctx.genome.quote
+    s = ctx.sections[section]
+    spans = [p for p in ctx.phrases if s.u0 - 1e-9 <= p[0] < s.u1 - 1e-9]
+    motif = list(q.sung[:4])
+    if len(spans) < 3 or len(motif) < 4:
+        return []
+    p0, p1 = spans[2]
+    step = (p1 - p0) / len(motif)
+    pitches = [ctx.tonic + degree_semitones(n.degree, ctx.mode, n.alter) for n in motif]
+    for k, pitch in enumerate(pitches):
+        if pitch % 12 not in ctx.pcs(ctx.chord_at(p0 + k * step).symbol):
+            return []
+    shift = 12 * int(np.ceil((top + 1 - min(pitches)) / 12.0))  # just above the singers, in whole octaves
+    notes = [Tune(p0 + k * step, p0 + (k + 1) * step, pitch, 0.5, False, section, k == 0, k == len(motif) - 1, ())
+             for k, pitch in enumerate(pitches)]
+    return statement(ctx, part, notes, 0.42, section, ornament=False, shift=shift)
 
 
 # --- the quote before the song -------------------------------------------------------

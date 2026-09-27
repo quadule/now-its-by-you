@@ -86,3 +86,33 @@ def test_the_quote_as_a_coda_the_whistle_alone_over_the_last_chord():
     ringing = [n for n in b.notes if n.start < sung_end - 0.5 and n.start + n.dur > after[0].start + 0.5 and n.part != "drum"]
     assert {"drone"} <= {n.part for n in ringing}, {n.part for n in ringing}
     assert len(a.part("voice")) == len(b.part("voice"))
+
+
+def test_the_quote_woven_into_the_bridge_as_the_fiddles_line():
+    """The leitmotif: in the bridge's third phrase, where the lineage sings, the fiddle's long notes are Daisy,
+    Daisy (so mi do so,), each a tone of the chord under it; nothing else moves, and by chance about a third of
+    renditions do it."""
+    g = G.load(H)
+    plain = choose_params(g)
+    p = replace(plain, style=replace(plain.style, motif="bridge"))
+    a, b = realize(g, plain), realize(g, p)
+    assert b.sections == a.sections and len(b.part("voice")) == len(a.part("voice"))
+    bridge = next(s for s in b.sections if s[0] == "bridge")
+    bar = 60.0 / p.tempo * g.meter.bar / g.meter.beat
+    third = (bridge[1] + 4 * bar, bridge[1] + 6 * bar)  # the bridge's third phrase: bars 5 and 6 of eight
+    fiddle = sorted((n for n in b.notes if n.part == "fiddle" and third[0] - 0.2 <= n.start < third[1] - 0.2), key=lambda n: n.start)
+    pcs = [int(round(n.pitch - p.tonic)) % 12 for n in fiddle if n.dur >= 0.4]
+    assert pcs == [7, 4, 0, 7], pcs
+    choir_top = max(n.pitch for n in b.notes if n.part.startswith("choir") or n.part == "voice")
+    assert all(n.pitch > choir_top - 12 for n in fiddle)  # up with the singers, not under them
+    others = [n for n in a.notes if n.part == "fiddle" and third[0] - 0.2 <= n.start < third[1] - 0.2]
+    assert others and [round(n.pitch) for n in others] != [round(n.pitch) for n in fiddle]  # it replaced the pad's own line
+    from songbird.band import wants_motif
+    from songbird.band import Context  # noqa: F401  (the chance is drawn from the seed)
+    chance = replace(plain, style=replace(plain.style, motif="chance"))
+    hits = 0
+    for seed in range(60):
+        score = realize(g, replace(chance, seed=seed))
+        fid = [n for n in score.notes if n.part == "fiddle" and third[0] - 0.2 <= n.start < third[1] - 0.2 and n.dur >= 0.4]
+        hits += [int(round(n.pitch - p.tonic)) % 12 for n in fid] == [7, 4, 0, 7]
+    assert 8 <= hits <= 32, hits
