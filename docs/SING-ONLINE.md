@@ -61,7 +61,7 @@ session like that). `revoke <token>` closes a link. Notes are for you; singers n
   is ready" once it is. It never sends anything: you paste or open each, send it from
   milo@quadule.com, then run `mail --sent`.
 - **purge**, after DELETE_BY, deletes every online singer's WAVs and versions here, keeping sidecars
-  and measured numbers. It can't know which **training sets** were built from their takes: anything
+  and measured numbers, and asks the site to run its own purge now rather than on the hour. It can't know which **training sets** were built from their takes: anything
   in `renders/throat/` made from online singers' recordings must be rebuilt without them or deleted
   by 30 September (purge lists what changed there after the first online take arrived).
 
@@ -116,7 +116,7 @@ elsewhere, send the workers.dev links: they work the same.
 | The singer's browser | their singer id per link, their name and choices, the device's measured delay (localStorage) | until they clear it |
 | Cloudflare KV | each invitation (dates, limits, people, your note, open or closed); each singer's record: the link they joined by, the name to credit (if any) and whether to, whether they asked to hear when the song is released, their set, when and to which release they agreed | invitations 90 days after they expire; singers' records until you delete them (a withdrawal leaves only the dates) |
 | Cloudflare R2 (private) | takes (WAV) and their sidecars; their version and vocals; words they sent; each email (never in KV, never logged); a digest of each email per link, to tell one person's joins apart; what they deleted or withdrew (ids and times) and emails sent (times); a digest of each joining address | takes, files and joining digests until DELETE_BY; emails until DELETE_BY, or, for those who asked to hear when the song is released, until you delete them; addresses' digests within the hour; words and the deleted/withdrawn events until you delete them |
-| Your machine | takes and sidecars in `recordings/<singer>/`, words in `recordings/words/`, versions, phrasings and measured numbers (never in git); in `recordings/guides/`, the guide scores and each release as singers read it | WAVs and versions until purge (by 30 September); sidecars and numbers stay (they're what the song keeps), except for anyone who withdrew |
+| Your machine | takes and sidecars in `recordings/<singer>/`, words in `recordings/words/`, versions in `renders/versions/`, phrasings and measured numbers (never in git); in `recordings/`, `.versions.json` (which versions were made and where they went) and `.mail.json` (the emails last listed, by singer id only); in `recordings/guides/`, the guide scores and each release as singers read it | WAVs and versions until purge (by 30 September); sidecars and numbers stay (they're what the song keeps), except for anyone who withdrew |
 
 The Worker logs nothing (its logs are off, and it never logs a name, email, token or address). An
 address is used only to count requests (about 120 a minute) and joins (20 an hour, as a digest,
