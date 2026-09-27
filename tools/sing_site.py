@@ -24,12 +24,17 @@ What it writes, all served by web/sing/src/worker.js:
 
 Every spec is a set (tools/sets/<song>.json) in every key and at every speed
 (guides.KEYS, TEMPOS), rendered in parallel (--jobs) or found current in
-renders/guide/<song>/. The worker serves song/ only to an open invitation. Each
-guide score is kept in recordings/guides/ (tools/takes.py), so takes fetched with
-tools/invite.py are measured against exactly what their singers heard, whatever
-the song does next; beside them, release.<digest>.html and
-words-release.<digest>.html keep each release exactly as people read it, under the
-digest their takes and words carry.
+renders/guide/<song>/, where each spec's MP3s are kept too, and used again while
+what they were made from holds: a build of fewer specs, or with a release changed,
+renders nothing. Once encoded, a spec's WAVs are let go (--keep-wavs keeps them for
+the karaoke here, about 130 MB a spec). A full build of H (6 sets, 90 specs) takes
+about half an hour on this machine (--jobs 4, 32 GB).
+
+The worker serves song/ only to an open invitation. Each guide score is kept in
+recordings/guides/ (tools/takes.py), so takes fetched with tools/invite.py are
+measured against exactly what their singers heard, whatever the song does next;
+beside them, release.<digest>.html and words-release.<digest>.html keep each
+release exactly as people read it, under the digest their takes and words carry.
 """
 
 from __future__ import annotations
@@ -61,7 +66,7 @@ WEB = ROOT / "web" / "sing"
 MIXES = ("melody", "full")  # what singers choose between; the tune alone first, and by default
 BITRATE = "96k"
 MELODY_BITRATE = "64k"  # the whistle and the pulse carry at 64 as well as at 96, in two thirds the bytes
-JOBS = 6  # specs rendered at once (a render takes about 2 GB and one core)
+JOBS = 4  # specs rendered at once: a render takes one core and up to 3 GB (a 4-minute spec)
 FRAME = 0.001  # seconds per step of a guide's opening loudness
 OPENING = 2.5  # seconds of it kept: the song's first sounds are at 0.6 s
 MARK = ".songbird-site"  # in an output directory this tool may clear
@@ -313,11 +318,17 @@ def build(genome_path: Path, out: Path, rebuild: bool = False, bitrate: str = BI
                 progress(job["spec"], len(done), len(work))
     else:  # each in a fresh process: the synthesis isn't made to share one
         with concurrent.futures.ProcessPoolExecutor(jobs, mp_context=multiprocessing.get_context("spawn")) as pool:
-            for future in concurrent.futures.as_completed([pool.submit(render, job) for job in work]):
-                result = future.result()
-                done[result["spec"]] = result
-                if progress:
-                    progress(result["spec"], len(done), len(work))
+            futures = [pool.submit(render, job) for job in work]
+            try:
+                for future in concurrent.futures.as_completed(futures):
+                    result = future.result()
+                    done[result["spec"]] = result
+                    if progress:
+                        progress(result["spec"], len(done), len(work))
+            except BaseException:  # one failed, or Ctrl-C: nothing more is started
+                for future in futures:
+                    future.cancel()
+                raise
 
     guides, longest = {}, 0.0
     for spec in todo:
