@@ -168,7 +168,7 @@ def _emphasis(genome, v: V.Variant) -> float:
     return STRESSED if n.onset % genome.meter.foot == 0 else QUAVER if n.dur <= 1 else 1.0
 
 
-def own_variant(ctx: Context, name: str, k: int, current) -> V.Variant | None:
+def own_variant(ctx: Context, name: str, k: int, current, held_phrases=()) -> V.Variant | None:
     """The machine's pick of a variant this stretch of a learning clock: the first, in its own weighted
     order of everything the tune allows, that the lineage's variants have room for. A kind's weight is
     shared among its candidates, but no one candidate weighs more than LONE times a grace note does, so a
@@ -186,7 +186,7 @@ def own_variant(ctx: Context, name: str, k: int, current) -> V.Variant | None:
         return _ranked((hash_, name, k), offered, weights, [repr(v.what) for v in offered])
 
     for v in _memo(("own", id(genome), hash_, name, k), ranking, genome):
-        if V.fits(genome, current, v):
+        if v.phrase not in held_phrases and V.fits(genome, current, v):
             return v
     return None
 
@@ -203,6 +203,7 @@ def choose_variants(out: dict, ctx: Context) -> None:
     choose_words, so a change is described with the words this rendition sings.)"""
     genome = ctx.genome
     parent = ctx.parent
+    held_phrases = out.get("composition", {}).get("tune", {})
     generation = int(out.get("generation", 0))
     sung: list = []  # the words this rendition sings, worked out only if a change needs describing
 
@@ -227,6 +228,9 @@ def choose_variants(out: dict, ctx: Context) -> None:
     clocks = Clocks(ctx)
     now: list[V.Variant] = []
     for v in kept:
+        if v.phrase in held_phrases:
+            now.append(v)  # dormant underneath the person's line, available if they release it
+            continue
         name = f"forget:{v.phrase}:{v.note}"
         turned, k, start = clocks.at(name, FORGET_DAYS)
         if turned:
@@ -249,7 +253,7 @@ def choose_variants(out: dict, ctx: Context) -> None:
         p = LEARN[0] + LEARN[1] * a if j == 0 else LEARN_AGAIN * max(0.0, a - 0.5)
         if clocks.coin(name, k) >= p:
             continue
-        v = own_variant(ctx, name, k, now)
+        v = own_variant(ctx, name, k, now, held_phrases)
         if v is None:
             continue
         v = V.Variant(v.phrase, v.note, v.kind, v.degree, v.steps, v.shift, "drift", generation)

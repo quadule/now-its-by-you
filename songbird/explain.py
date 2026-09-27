@@ -731,6 +731,8 @@ def shape_card(v: Version) -> dict:
         if not machine and not time:
             why.append({"kind": "time", "text": f"{what}: your machine and {_when('season')} together"})
     def chosen(part: str, value) -> str:  # what the person chose for a part, as they chose it
+        if part == "order":
+            return "your section arrangement" if value else "the song's section arrangement"
         if part == "verses":
             return f"{number(value)} verses"
         return f"{'with' if value else 'without'} {SHORT.get(part, PARTS.get(part, part))}"
@@ -1005,6 +1007,8 @@ def tune_changes(v: Version) -> list[dict]:
     for e in v.changes:
         if not isinstance(e, dict) or e.get("what") != "tune":
             continue
+        if (e.get("variant") or {}).get("phrase") in v.params.composition.get("tune", {}):
+            continue
         change = CHANGE_WORDS.get(e.get("change"), e.get("change") or "changed")
         out.append({"kind": "time", "text": f"{_said(e.get('about') or 'a small change')} {change}: {_said(e.get('why'))}"})
     return out
@@ -1077,10 +1081,11 @@ def variants_card(v: Version) -> dict | None:
         return None
     genome = v.context.genome
     items = [{"name": str(i), "label": variants_mod.describe(genome, var, v.lyrics), "value": var in sung,
-              "path": f"variants.{i}", "mine": f"variants.{i}" in v.applied} for i, var in enumerate(chosen)]
+              "path": f"variants.{i}", "mine": f"variants.{i}" in v.applied} for i, var in enumerate(chosen)
+             if var.phrase not in v.params.composition.get("tune", {})]
     on = sum(bool(i["value"]) for i in items)
     value = (f"{number(on)} small change{'s' if on != 1 else ''} to the tune, handed down or found here"
-             if on else "the tune as it was written")
+             if on else "your composed tune" if v.params.composition.get("tune") else "the tune as it was written")
     why = tune_changes(v)  # what changed this time, and why (songbird.evolve's own reasons)
     if not why:
         why = [{"kind": "lineage", "text": "handed down as the version before sang it; a tune changes a little at a "
@@ -1213,6 +1218,8 @@ def keep_words(v: Version) -> dict:
 
 def view(ctx: Context, v: Version, phrasings: list[dict] | None = None) -> dict:
     """Everything the page draws for a version: the header, the words, the cards, the problems."""
+    from . import composition
+
     phrasings = phrasings or []
     cards = [style_card(v), key_card(v), tempo_card(v), shape_card(v), band_card(v), mix_card(v),
              singer_card(v, phrasings), words_card(v), choir_card(v)]
@@ -1241,6 +1248,7 @@ def view(ctx: Context, v: Version, phrasings: list[dict] | None = None) -> dict:
         "problems": v.problems,
         "marks": v.marks,
         "form": list(v.params.form),
+        "composition": composition.view(ctx.genome, v.params, as_sung(ctx.genome, v.params, v.lyrics)),
     }
 
 
@@ -1339,7 +1347,8 @@ def start(ctx: Context, studio) -> dict:
     b["mode"]["names"] = {m: MODES.get(m, (m, ""))[0] for m in b["mode"]["options"]}
     b["mode"]["glosses"] = {m: mode_gloss(m) for m in b["mode"]["options"]}
     return {
-        "title": genome.title, "day": ctx.day, "date": long_date(ctx.day), "days": TIMELINE_DAYS,
+        "title": genome.title, "song_digest": studio.song_digest,
+        "day": ctx.day, "date": long_date(ctx.day), "days": TIMELINE_DAYS,
         "machine": {"label": ctx.machine_label(), "lines": machine_words(ctx.voice)},
         "from": ctx.from_words(), "bounds": b, "players": {n: player(n) for n in INSTRUMENTS},
         "patterns": PATTERNS, "parts": PARTS, "optional": list(edits_mod.optional(genome)), "kinds": KINDS,
