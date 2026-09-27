@@ -16,43 +16,66 @@
     <h1 id="title">Sing along</h1>
   </header>
 
+  <section class="pitch" aria-label="What this is">
+    <p class="lead">Run the program and you get a new version of the song, shaped by your computer and the day.</p>
+    <p>Sing into it and it learns a little of your timing and inflection (your recording is deleted right after, and your
+      voice is never cloned).</p>
+    <p>The piece confronts the blurred authorship of AI music through the lens of folk music and oral tradition: it wonders
+      who made it, and invites you to take part.</p>
+  </section>
+  <p class="closes" id="closes" hidden></p>
+
   <p class="status" id="loading">Loading…</p>
 
   <section id="closed" class="card" hidden>
     <p id="closedWhy"></p>
+    <div id="closedYours" hidden>
+      <p>Your own page still works:</p>
+      <p class="link"><a id="closedLink" target="_blank" rel="noopener"></a></p>
+    </div>
   </section>
 
   <div id="steps" hidden>
-    <section class="step" id="about">
-      <h2><span class="n">1</span> What this is</h2>
-      <p>This is a folk song that passes itself on: every copy carries the small program that sings it, and each time
-        it runs, it sings the song again a little differently. Its singer is synthetic, and it learns how people sing
-        (where you breathe, lean on a word, slide into a note) from recordings like the ones you're about to make.</p>
-      <p>Put headphones on, sing along with the guide in your own way, and send the takes you like. Wrong notes are fine.</p>
-    </section>
+    <p class="howto">Put headphones on, then sing along in your own way: one section at a time, or the whole song. Send the
+      takes you like. Wrong notes are fine.</p>
 
     <section class="step" id="release">
-      <h2><span class="n">2</span> The release</h2>
+      <h2><span class="n">1</span> The release</h2>
       <div class="consent" id="consentText" data-digest="{{CONSENT_DIGEST}}">{{CONSENT}}</div>
       <label class="agree"><input type="checkbox" id="agree"> I've read this and I agree.</label>
-      <p class="hint">What's kept: your takes, the name you give below (if any), when you agreed, and a few timing
-        numbers from your device (its sample rate and delays). Nothing else: no address, no device details.</p>
     </section>
 
-    <section class="step" id="who" data-needs="agree">
-      <h2><span class="n">3</span> Your name</h2>
-      <label for="name">Your name, or a name you'd like to be credited by</label>
-      <input id="name" autocomplete="off" maxlength="80" placeholder="optional">
-      <div class="choices" role="radiogroup" aria-label="Credit">
-        <label><input type="radio" name="credit" value="yes" checked> Credit me by this name</label>
-        <label><input type="radio" name="credit" value="no"> Don't credit me</label>
+    <section class="step" id="you" data-needs="agree">
+      <h2><span class="n">2</span> You</h2>
+      <div id="joinForm">
+        <label class="field" for="email">Your email</label>
+        <input id="email" type="email" autocomplete="email" inputmode="email" maxlength="200" placeholder="you@example.com" required>
+        <p class="hint">To send you your own page, where you'll find your version and can delete your recordings.</p>
+        <label class="field" for="name">Your name, or a name you'd like to be credited by</label>
+        <input id="name" autocomplete="name" maxlength="80" placeholder="optional">
+        <div class="choices" role="radiogroup" aria-label="Credit">
+          <label><input type="radio" name="credit" value="yes" checked> Credit me by this name</label>
+          <label><input type="radio" name="credit" value="no"> Don't credit me</label>
+        </div>
+        <label class="check"><input type="checkbox" id="notify"> Tell me when the song is shared (optional)</label>
+        <div class="row"><button id="join" class="primary">Continue</button></div>
+        <p class="hint" id="joinNote" aria-live="polite"></p>
+      </div>
+      <div id="joined" hidden>
+        <p id="joinedAs"></p>
+        <div class="link"><a id="pageLink" target="_blank" rel="noopener"></a><button id="copyLink" type="button">Copy</button></div>
+        <p class="hint" id="keepNote">Keep this link: it's your own page. Your version will appear there in a few days, before
+          30 September, and you can delete your recordings there. Until singing closes you can also withdraw; after that,
+          what you gave is part of the song.</p>
+        <p class="hint" id="notYou" hidden>Not <span id="notYouName">you</span>? <button id="restart" class="plain" type="button">Start
+          afresh as someone else</button></p>
       </div>
     </section>
 
-    <section class="step" id="check" data-needs="agree">
-      <h2><span class="n">4</span> Microphone and timing</h2>
-      <p>Headphones on, so the guide stays out of the microphone. Then let the page hear you: sing or say something and
-        watch the level move.</p>
+    <section class="step" id="check" data-needs="joined">
+      <h2><span class="n">3</span> Microphone and timing</h2>
+      <p>Headphones on, so the guide stays out of the microphone. Wired ones are best: Bluetooth headphones drop to
+        telephone quality when the microphone opens. Then let the page hear you: sing or say something and watch the level move.</p>
       <div class="row">
         <button id="mic" class="primary">Allow the microphone</button>
         <span class="meter" aria-label="microphone level"><span id="level"></span></span>
@@ -69,14 +92,39 @@
       </div>
     </section>
 
-    <section class="step" id="guide" data-needs="agree">
-      <h2><span class="n">5</span> What you'll hear</h2>
-      <div class="choices" id="mixes" role="radiogroup" aria-label="Guide"></div>
-      <p class="hint">The tune alone leaves the singing to you. You can switch between takes.</p>
+    <section class="step" id="hear" data-needs="joined">
+      <h2><span class="n">4</span> What you'll hear</h2>
+      <div class="pick" id="setBox" hidden>
+        <h3>Which verses</h3>
+        <div class="choices" id="sets" role="radiogroup" aria-label="Which verses"></div>
+      </div>
+      <div class="pick" id="keyBox" hidden>
+        <h3>Key</h3>
+        <div class="stepper">
+          <button id="lower" type="button">Lower</button>
+          <span id="keyName" aria-live="polite">as written</span>
+          <button id="higher" type="button">Higher</button>
+        </div>
+        <p class="hint">Too high? Go lower. Too low? Go higher.</p>
+      </div>
+      <div class="pick" id="speedBox" hidden>
+        <h3>Speed</h3>
+        <div class="segmented" id="speeds" role="radiogroup" aria-label="Speed"></div>
+      </div>
+      <div class="pick">
+        <h3>The guide</h3>
+        <div class="choices" id="mixes" role="radiogroup" aria-label="Guide"></div>
+        <p class="hint">The tune alone leaves the singing to you. You can change any of this between takes.</p>
+      </div>
+      <p class="hint" id="versionNote" aria-live="polite"></p>
     </section>
 
-    <section class="step" id="sing" data-needs="agree">
-      <h2><span class="n">6</span> Sing</h2>
+    <section class="step" id="sing" data-needs="joined">
+      <h2><span class="n">5</span> Sing</h2>
+      <p class="hint">One section at a time is easiest: each is short, it stops by itself, and you can sing it again as often as
+        you like.</p>
+      <div class="parts" id="parts" role="group" aria-label="What to sing"></div>
+      <p class="partLabel" id="partLabel"></p>
       <div class="stage">
         <canvas class="lane" id="lane"></canvas>
         <div class="scroller"><div class="reel" id="reel"></div></div>
@@ -84,13 +132,14 @@
       </div>
       <div class="row controls">
         <button id="rehearse">▶ Listen first</button>
-        <button id="record" class="primary">● Record a take</button>
+        <button id="record" class="primary">● Record</button>
         <button id="stop" disabled>■ Stop</button>
       </div>
       <p class="status" id="status" aria-live="polite"></p>
+      <div class="row" id="nextBox" hidden><button id="next" class="primary"></button></div>
 
       <div class="card" id="review" hidden>
-        <h3>That take</h3>
+        <h3 id="reviewTitle">That take</h3>
         <div class="row">
           <button id="listen">▶ Listen back</button>
           <button id="keep" class="primary">✓ Keep and send</button>
@@ -106,16 +155,29 @@
       </div>
     </section>
 
-    <section class="step" id="sent" data-needs="agree">
-      <h2><span class="n">7</span> Your takes</h2>
+    <section class="step" id="sent" data-needs="joined">
+      <h2><span class="n">6</span> Your takes</h2>
       <ol id="takes"><li class="hint none">Nothing sent yet.</li></ol>
-      <p class="hint" id="takesLeft"></p>
       <p class="hint">Keep this page open until each take says sent.</p>
     </section>
 
-    <section class="step" id="finish">
+    <section class="step" id="words" data-needs="joined">
+      <h2><span class="n">7</span> Words for the song</h2>
+      <p>Have a verse in you, a line, or an idea for the song? Write it here: early singers can help shape what it sings.</p>
+      <textarea id="wordsText" rows="5" maxlength="4000" placeholder="a verse, a line, an idea…"></textarea>
+      <p class="hint count" id="wordsCount"></p>
+      <p class="plain">Whatever you send is given to the song: you give up all rights to it, and you understand the song will be
+        shared.</p>
+      <div class="consent" id="wordsRelease" data-digest="{{WORDS_DIGEST}}">{{WORDS_RELEASE}}</div>
+      <label class="agree"><input type="checkbox" id="wordsAgree"> I've read this and I agree.</label>
+      <div class="row"><button id="wordsSend">Send these words</button></div>
+      <p class="hint" id="wordsNote" aria-live="polite"></p>
+      <ul id="wordsSent" class="wordsSent"></ul>
+    </section>
+
+    <section class="step" id="finish" data-needs="joined">
       <h2><span class="n">8</span> When you're done</h2>
-      <p>Press this when you've sent everything you want to. The link stops working after that.</p>
+      <p>Press this when you've sent everything you want to.</p>
       <button id="done">I'm done</button>
       <p class="hint" id="doneNote"></p>
     </section>
@@ -123,9 +185,13 @@
 
   <section id="thanks" class="card" hidden>
     <h2>Thank you</h2>
-    <p id="thanksText">Your takes are with the artist now. They stay private: what travels with the song is only
-      the way you sang, blended with everyone else's.</p>
+    <p id="thanksText">Thank you for singing! Your version will appear on your own page in a few days, before 30 September.</p>
+    <div class="link"><a id="thanksLink" target="_blank" rel="noopener"></a><button id="thanksCopy" type="button">Copy</button></div>
+    <p class="hint" id="thanksNote">There you can delete your recordings or withdraw until singing closes. After that, what you
+      gave is part of the song, though you can still delete the recordings until 30 September.</p>
   </section>
+
+  <footer class="hint">Questions? Write to Milo Winningham at <a href="mailto:milo@quadule.com">milo@quadule.com</a>.</footer>
 </main>
 <script type="module" src="/sing.js"></script>
 </body>
