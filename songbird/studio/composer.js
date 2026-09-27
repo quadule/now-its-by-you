@@ -551,9 +551,17 @@
         const start = offset + event.beat * playback.seconds;
         if (start >= ctx.currentTime - 0.01) tone(ctx, event.pitch, Math.max(ctx.currentTime, start), Math.max(0.07, event.duration * playback.seconds * 0.88));
       }
-      if (state.metronome) for (let beat = 0; beat < playback.duration; beat++) {
-        const start = offset + beat * playback.seconds;
-        if (start >= ctx.currentTime) tone(ctx, beat % composition().beats_per_bar === 0 ? 1200 : 800, start, 0.045, true);
+      if (state.metronome) {
+        // The pickup precedes beat one. Anchor clicks to the score's bar grid,
+        // rather than treating the first playback instant as a downbeat.
+        const scoreStart = songSpan().start, bar = composition().beats_per_bar;
+        const firstBeat = Math.ceil(playback.origin - scoreStart - 1e-9);
+        const endBeat = playback.origin + playback.duration - scoreStart;
+        for (let beat = firstBeat; beat < endBeat - 1e-9; beat++) {
+          const start = offset + (scoreStart + beat - playback.origin) * playback.seconds;
+          const downbeat = ((beat % bar) + bar) % bar < 1e-9;
+          if (start >= ctx.currentTime) tone(ctx, downbeat ? 1200 : 800, start, 0.045, true);
+        }
       }
       playback.nextCycle++;
     }

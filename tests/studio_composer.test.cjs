@@ -362,6 +362,38 @@ test("audio sketch schedules finite tones, advances the full-song playhead and s
   assert.equal(s.find("#sbc-song-playhead").hidden, true);
 });
 
+test("metronome clicks follow score downbeats after pickups in every playback scope and loop", () => {
+  for (const compound of [false, true]) for (const scope of ["phrase", "section", "song"]) for (const loop of [false, true]) {
+    const s = setup(score({ compound }));
+    s.find("#sbc-play-scope").emit("change", { target: { value: scope } });
+    s.find("#sbc-option-click").emit("change", { target: { checked: true } });
+    if (loop) s.find("#sbc-option-loop").emit("change", { target: { checked: true } });
+    s.find("#sbc-play").emit("click");
+    const clicks = s.oscillators.filter((oscillator) => oscillator.type === "sine");
+    const bar = compound ? 2 : 4, pickup = compound ? 1 / 3 : 0.5;
+    const beats = scope === "song" ? bar * 4 : bar, seconds = 60 / 100;
+    const cycles = loop ? 2 : 1;
+    assert.equal(clicks.length, beats * cycles, `${compound ? "6/8" : "4/4"} ${scope} loop=${loop}`);
+    for (let cycle = 0; cycle < cycles; cycle++) for (let beat = 0; beat < beats; beat++) {
+      const click = clicks[cycle * beats + beat];
+      const expectedStart = 0.04 + (pickup + beat + cycle * (beats + pickup)) * seconds;
+      assert(Math.abs(click.started - expectedStart) < 1e-8, "click waits through pickup, then follows whole score beats");
+      assert.equal(click.frequency.value, beat % bar === 0 ? 1200 : 800, "only the score's bar downbeats are accented");
+    }
+    s.window.SongbirdComposer.stop();
+  }
+  const view = score(), phrase = view.composition.sections[1].phrases[0];
+  phrase.pickup_beats = 1.5; phrase.bounds.min_onset = -1.5; phrase.notes[0].onset = -1.5;
+  const s = setup(view);
+  s.find("#sbc-option-click").emit("change", { target: { checked: true } });
+  s.find("#sbc-play").emit("click");
+  const clicks = s.oscillators.filter((oscillator) => oscillator.type === "sine");
+  assert.equal(clicks[0].frequency.value, 800, "a whole beat within a longer pickup is unaccented");
+  assert.equal(clicks[1].frequency.value, 1200, "the accent arrives on the phrase's actual downbeat");
+  assert(Math.abs(clicks[1].started - (0.04 + 1.5 * 0.6)) < 1e-8);
+  s.window.SongbirdComposer.stop();
+});
+
 test("a browser without Web Audio keeps editing available and explains how to listen", () => {
   const s = setup(score(), { audioAvailable: false });
   s.find("#sbc-play").emit("click");
