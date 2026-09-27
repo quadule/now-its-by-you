@@ -112,7 +112,7 @@
     "thirty": "TH ER1 D IY0", "borrow": "B AA1 R OW0", "always": "AO1 L W EY0 Z",
     "banjo": "B AE1 N JH OW0", "sunday": "S AH1 N D IY0", "inside": "IH0 N S AY1 D",
     "misheard": "M IH0 S HH ER1 D", "whatever": "W AH0 T EH1 V ER0", "fifteen": "F IH1 F T IY0 N",
-    "unsown": "AH0 N S OW1 N"},
+    "unsown": "AH0 N S OW1 N", "unasked": "AH0 N AE1 S K T"},
 
   "quote": {
     "about": "Daisy Bell (Harry Dacre, 1892; public domain): the first song a computer sang, an IBM 7094 at Bell Labs in 1961, and the one HAL sings as he is switched off. The first line of its chorus (so mi do so, / la ti do la / do so), re-barred from its waltz into the song's own 4/4 and phrased as a player would play it alone: the drone alone for two beats, a breath after 'Daisy, Daisy', 'answer' broad, 'do' held three beats, and a beat's rest before the song. When the arrangement's intro is a quote (songbird/style.py, --arrange intro=quote), the whistle plays it alone over the drone in the bars before the song, and the bass waits for the intro's second phrase: the machine singer nodding to its ancestor.",
@@ -220,6 +220,14 @@
           "lines": [
             "It's no-bo-dy's mak-ing, it pass-es on through;",
             "a breath on the wa-ter, and now it's by you."
+          ]
+        },
+        {
+          "id": "plant",
+          "by": "claude, after the artist's early daisy draft; the artist's pick of two",
+          "lines": [
+            "It's no-bo-dy's plant-ing; un-asked for, it grew",
+            "through cracks in the pave-ment, and now it's by you."
           ]
         }
       ]

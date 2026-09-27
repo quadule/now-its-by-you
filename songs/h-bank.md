@@ -128,6 +128,13 @@ canon always last:
 > It's nobody's making, and that much is true;
 > but somebody sang it, and now it's by you.
 
+**plant** · by claude, after the artist's early daisy draft; the artist's pick of two (2026-09-27)
+
+> It's nobody's planting; unasked for, it grew
+> through cracks in the pavement, and now it's by you.
+
+The daisy verse's flower in the refrain's own grammar: nobody's making, nobody's planting.
+
 **wind** · by artist and claude, via gemini
 
 > It's nobody's making, it passes on through;
