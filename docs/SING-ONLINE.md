@@ -3,12 +3,12 @@
 Singers who aren't in the room sing the song on a page reached by a link: the karaoke
 (tools/karaoke.html) behind an invitation, recording in the guide's audio clock with the same timing
 corrections, so a take sung online is measured exactly like one sung here. Each singer gets a page
-of their own; their takes stay on the server for them until 30 September, and you copy them into
+of their own; their takes stay on the server for them until September 30, and you copy them into
 `recordings/` as they come.
 
 **The dates** (the release says them, and `[vars]` in web/sing/wrangler.toml must match):
-singing closes **Sunday 27 September, 10 PM Pacific** (`CLOSES_AT`); recordings, files and emails are
-deleted **by 30 September** (`DELETE_BY` is 8 PM Pacific that day, so the hourly purge is done by 9).
+singing closes **Sunday, September 27, 10 PM Pacific** (`CLOSES_AT`); recordings, files and emails are
+deleted **by September 30** (`DELETE_BY` is 8 PM Pacific that day, so the hourly purge is done by 9).
 
 - **The singing page** (web/sing/page, built into web/sing/public by tools/sing_site.py): the release
   (web/sing/consent.md), joining (an email, a name to credit or none), the guides (a set of verses,
@@ -16,7 +16,7 @@ deleted **by 30 September** (`DELETE_BY` is 8 PM Pacific that day, so the hourly
   their own release (web/sing/words-release.md).
 - **Their own page**, `/y/<singer>` (web/sing/page/yours.*): what they sent, to play or download;
   their version of the song and their vocals once you've made them; "Delete recordings" (the audio,
-  until 30 September) and "Withdraw" (the audio and the numbers taken from it, until singing closes).
+  until September 30) and "Withdraw" (the audio and the numbers taken from it, until singing closes).
 - **The Worker** (web/sing/src/worker.js) on Cloudflare: invitations and singers in KV, takes and
   everything else in a private R2 bucket, an hourly cron for the purge, and your admin API.
 - **tools/invite.py**, on your machine: links, sync, mail, purge.
@@ -39,11 +39,11 @@ open (default 7; singing closing ends them all anyway). Joining is held to 20 an
 address (a choir on one Wi-Fi shares one: raise `JOINS_AN_HOUR` in wrangler.toml and deploy for a
 session like that). `revoke <token>` closes a link. Notes are for you; singers never see them.
 
-## Your routine, until 30 September
+## Your routine, until September 30
 
     uv run python tools/invite.py sync --watch 120 --measure --no-versions   # singing day: takes, words, deletions,
                                                       # and each new take measured as it comes
-    uv run python tools/invite.py sync                # later (before 30 September): the versions too
+    uv run python tools/invite.py sync                # later (before September 30): the versions too
     uv run python tools/invite.py mail                # who needs an email, ready to paste
     uv run python tools/invite.py mail --open         # ...or open each in Mail (mailto:)
     uv run python tools/invite.py mail --sent         # after sending: mark exactly those as sent
@@ -60,14 +60,14 @@ session like that). `revoke <token>` closes a link. Notes are for you; singers n
   included. For singers with new takes it makes their version and vocals (tools/versions.py) and
   uploads them to their page (one pair per guide they sang to, on each of their pages). Rendering
   those takes a while: on a busy night run `sync --watch 120 --no-versions`, and a plain `sync` later
-  (before 30 September) makes them all. Once DELETE_BY has passed it runs purge.
+  (before September 30) makes them all. Once DELETE_BY has passed it runs purge.
 - **mail** lists one message per address: their page's link once they've joined, and "your version
   is ready" once it is. It never sends anything: you paste or open each, send it from
   milo@winningham.net, then run `mail --sent`.
 - **purge**, after DELETE_BY, deletes every online singer's WAVs and versions here, keeping sidecars
   and measured numbers, and asks the site to run its own purge now rather than on the hour. It can't know which **training sets** were built from their takes: anything
   in `renders/throat/` made from online singers' recordings must be rebuilt without them or deleted
-  by 30 September (purge lists what changed there after the first online take arrived).
+  by September 30 (purge lists what changed there after the first online take arrived).
 
 A folder is named after the name a singer gave, unless it already holds someone else's takes (then
 their id's first characters are added), so two people called Jo never become one phrasing. (`fetch`
@@ -82,7 +82,7 @@ logged in, the bucket `songbird-takes` exists, and the KV namespace's id is in w
    hour; song.json v2 and the worker's small copy of it, `song/worker.json`; the pages). Build and
    sync on the same machine, so the guide scores takes are measured against are in `recordings/guides/`.
 2. **Check the dates** in wrangler.toml's `[vars]` against web/sing/consent.md.
-3. **The backstop**: have R2 itself delete takes and files after 30 September, in case the purge
+3. **The backstop**: have R2 itself delete takes and files after September 30, in case the purge
    ever doesn't run (it acts within a day of the date, so it's a backstop, not the promise):
 
        npx wrangler r2 bucket lifecycle add songbird-takes expire-takes takes/ --expire-date 2026-10-01
@@ -120,7 +120,7 @@ elsewhere, send the workers.dev links: they work the same.
 | The singer's browser | their singer id per link, their name and choices, the device's measured delay (localStorage) | until they clear it |
 | Cloudflare KV | each invitation (dates, limits, people, your note, open or closed); each singer's record: the link they joined by, the name to credit (if any) and whether to, whether they asked to hear when the song is released, their set, when and to which release they agreed | invitations 90 days after they expire; singers' records until you delete them (a withdrawal leaves only the dates) |
 | Cloudflare R2 (private) | takes (WAV) and their sidecars; their version and vocals; words they sent; each email (never in KV, never logged); a digest of each email per link, to tell one person's joins apart; what they deleted or withdrew (ids and times) and emails sent (times); a digest of each joining address | takes, files and joining digests until DELETE_BY; emails until DELETE_BY, or, for those who asked to hear when the song is released, until you delete them; addresses' digests within the hour; words and the deleted/withdrawn events until you delete them |
-| Your machine | takes and sidecars in `recordings/<singer>/`, words in `recordings/words/`, versions in `renders/versions/`, phrasings and measured numbers (never in git); in `recordings/`, `.versions.json` (which versions were made and where they went) and `.mail.json` (the emails last listed, by singer id only); in `recordings/guides/`, the guide scores and each release as singers read it | WAVs and versions until purge (by 30 September); sidecars and numbers stay (they're what the song keeps), except for anyone who withdrew |
+| Your machine | takes and sidecars in `recordings/<singer>/`, words in `recordings/words/`, versions in `renders/versions/`, phrasings and measured numbers (never in git); in `recordings/`, `.versions.json` (which versions were made and where they went) and `.mail.json` (the emails last listed, by singer id only); in `recordings/guides/`, the guide scores and each release as singers read it | WAVs and versions until purge (by September 30); sidecars and numbers stay (they're what the song keeps), except for anyone who withdrew |
 
 The Worker logs nothing (its logs are off, and it never logs a name, email, token or address). An
 address is used only to count requests (about 120 a minute) and joins (20 an hour, as a digest,

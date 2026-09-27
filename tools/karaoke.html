@@ -625,9 +625,9 @@ async function loadSingers() {
   }
 }
 
-function when(stamp) {  // 2026-09-25T15:28:07 -> 25 Sep, 15:28
+function when(stamp) {  // 2026-09-25T15:28:07 -> Sep 25, 15:28
   const d = new Date(stamp);
-  return isNaN(d) ? stamp : `${d.getDate()} ${d.toLocaleString("en", { month: "short" })}, ${stamp.slice(11, 16)}`;
+  return isNaN(d) ? stamp : `${d.toLocaleString("en", { month: "short" })} ${d.getDate()}, ${stamp.slice(11, 16)}`;
 }
 
 const HEARD = { melody: "to the tune", full: "to the song", voice: "to the singer" };

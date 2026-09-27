@@ -145,8 +145,8 @@ function showCloses() {
 
 function deleteBy() { // the day recordings are deleted by: the singer's own record says, else the contract's
   const at = S.yours && Date.parse(S.yours.delete_by);
-  if (!Number.isFinite(at)) return "30 September";
-  return new Intl.DateTimeFormat("en-GB", { timeZone: K.ARTIST_ZONE, day: "numeric", month: "long" }).format(new Date(at));
+  if (!Number.isFinite(at)) return "September 30";
+  return new Intl.DateTimeFormat("en-US", { timeZone: K.ARTIST_ZONE, day: "numeric", month: "long" }).format(new Date(at));
 }
 
 async function api(method, path, body) {

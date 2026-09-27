@@ -105,6 +105,8 @@ class Worker:
         self.runs += 1
         config = (WEB / "wrangler.toml").read_text()
         config = config.replace('main = "src/worker.js"', f'main = "{WEB / "src" / "worker.js"}"')
+        # the site's own domain would make wrangler dev answer as it, and every link it made would name it
+        config = "\n".join(line for line in config.splitlines() if not line.startswith("routes = "))
         config = config.replace('directory = "./public"', f'directory = "{self.public}"')
         config = config.replace('CLOSES_AT = "2026-09-27T22:00:00-07:00"', f'CLOSES_AT = "{closes}"')
         config = config.replace('DELETE_BY = "2026-09-30T20:00:00-07:00"', f'DELETE_BY = "{delete_by}"')
@@ -339,7 +341,7 @@ def test_the_artist_syncs_and_mails_while_singers_change_their_minds(online, her
     ana_mail = next(m for m in letters if m["to"].lower() == "ana@example.org")
     assert f"{base}/y/{a}" in ana_mail["body"] and f"{base}/y/{p}" in ana_mail["body"] and ana_mail["body"] in out
     assert "or withdraw" in ana_mail["body"] and ana_mail["body"].endswith("Milo")
-    assert "deleted by 1 January" in ana_mail["body"]  # DELETE_BY here is 1 January 2099; on the site, 30 September
+    assert "deleted by January 1" in ana_mail["body"]  # DELETE_BY here is January 1, 2099; on the site, September 30
     assert "released to the public" in next(m for m in letters if m["to"] == "bo@example.org")["body"]  # Bo asked
     I.mark_sent(site)
     capsys.readouterr()

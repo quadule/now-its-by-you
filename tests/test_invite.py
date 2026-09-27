@@ -744,13 +744,13 @@ def test_mail_writes_one_message_per_address(site, capsys):
         "Hi Ana María,\n\n"
         f"Thank you for singing! Your pages are here:\n{base}/y/{ana}\n{base}/y/{phone}\n\n"
         "There you can listen to what you sent, download it, delete it, or withdraw. You can withdraw until singing "
-        "closes on Sunday 27 September at 10 PM Pacific. Your version of the song will appear there in a few days, "
-        "before 30 September (I'll write again when it does). Everything you recorded is deleted by 30 September.\n\n"
+        "closes on Sunday, September 27 at 10 PM Pacific. Your version of the song will appear there in a few days, "
+        "before September 30 (I'll write again when it does). Everything you recorded is deleted by September 30.\n\n"
         "You asked to hear when the song is released to the public, so I'll write again then.\n\n"
         "Milo")
     assert letters[1]["subject"] == "Your Songbird page"
     assert letters[1]["body"].startswith(f"Hi,\n\nThank you for singing! Your own page is here: {base}/y/{jo}\n\n")
-    assert letters[1]["body"].endswith("deleted by 30 September.\n\nMilo")
+    assert letters[1]["body"].endswith("deleted by September 30.\n\nMilo")
     assert "lee@example.com" not in out and "Sam" not in out and "shared" not in out
     listed = json.loads(I.mail_file().read_text())["emails"]
     assert listed == [{"sid": ana, "kind": "link"}, {"sid": phone, "kind": "link"}, {"sid": jo, "kind": "link"}]
@@ -771,7 +771,7 @@ def test_mail_once_singing_has_closed_and_once_a_version_is_ready(site, capsys):
     assert letters["jo@example.com"]["body"] == (
         f"Hi Jo,\n\nYour version of the song is ready on your page: {base}/y/{jo}\n\n"
         "You can listen to it there and download it, with your vocals on their own. Everything you recorded, and "
-        "these files, are deleted by 30 September, so download anything you'd like to keep before then.\n\n"
+        "these files, are deleted by September 30, so download anything you'd like to keep before then.\n\n"
         "Thank you for singing!\nMilo")
     both = letters["ana@example.com"]  # their page and their version at once: one message
     assert both["subject"] == "Your Songbird page" and "withdraw" not in both["body"]
@@ -779,7 +779,7 @@ def test_mail_once_singing_has_closed_and_once_a_version_is_ready(site, capsys):
     assert both["body"].endswith("so download anything you'd like to keep before then.\n\nMilo")
     assert both["covers"] == [(ana, "link"), (ana, "ready")]
     site.now = OPEN
-    assert "You can withdraw until singing closes on Sunday 27 September at 10 PM Pacific." in I.mail(site.api)[1]["body"]
+    assert "You can withdraw until singing closes on Sunday, September 27 at 10 PM Pacific." in I.mail(site.api)[1]["body"]
     site.now = DELETING  # emails are kept only for the one message about the song's release by then
     capsys.readouterr()
     assert I.mail(site.api) == [] and "no one needs an email" in capsys.readouterr().out

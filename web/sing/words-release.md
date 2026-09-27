@@ -7,4 +7,4 @@ legal advice: have it read by someone who knows before relying on it.
 **The words you wrote above, you give to the song for good.** You give up all rights to them: they're
 public domain (CC0), and the artist may use them, change them or leave them out. The song will be shared
 publicly, and any of your words it takes up are credited as you chose. What you send is kept after
-30 September, so leave out personal details (for anything else, write to milo@winningham.net).
+September 30, so leave out personal details (for anything else, write to milo@winningham.net).

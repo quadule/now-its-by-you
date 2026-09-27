@@ -261,11 +261,11 @@ test("names go where the karaoke keeps them, as tools/takes.py slug() does", () 
 
 test("when singing closes, on the artist's clock and the singer's", () => {
   const closes = "2026-09-27T22:00:00-07:00";
-  assert.equal(moment(closes, "America/Los_Angeles"), "Sunday 27 September at 10 PM");
-  assert.equal(closingTime(closes, "America/Los_Angeles"), "Sunday 27 September at 10 PM Pacific");
-  assert.equal(closingTime(closes, "America/Vancouver"), "Sunday 27 September at 10 PM Pacific"); // the same clock: said once
-  assert.equal(closingTime(closes, "Europe/Lisbon"), "Sunday 27 September at 10 PM Pacific (Monday 28 September at 6 AM your time)");
-  assert.equal(closingTime(closes, "Asia/Kolkata"), "Sunday 27 September at 10 PM Pacific (Monday 28 September at 10:30 AM your time)");
+  assert.equal(moment(closes, "America/Los_Angeles"), "Sunday, September 27 at 10 PM");
+  assert.equal(closingTime(closes, "America/Los_Angeles"), "Sunday, September 27 at 10 PM Pacific");
+  assert.equal(closingTime(closes, "America/Vancouver"), "Sunday, September 27 at 10 PM Pacific"); // the same clock: said once
+  assert.equal(closingTime(closes, "Europe/Lisbon"), "Sunday, September 27 at 10 PM Pacific (Monday, September 28 at 6 AM your time)");
+  assert.equal(closingTime(closes, "Asia/Kolkata"), "Sunday, September 27 at 10 PM Pacific (Monday, September 28 at 10:30 AM your time)");
   assert.equal(closingTime(undefined), "");
 });
 

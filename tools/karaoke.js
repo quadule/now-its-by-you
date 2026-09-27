@@ -626,7 +626,7 @@ export function slug(name) {
 export const ARTIST_ZONE = "America/Los_Angeles";
 
 export function moment(iso, zone) {
-  // "Sunday 27 September at 10 PM" on the clock of `zone` (an IANA name; the device's own if none)
+  // "Sunday, September 27 at 10 PM" on the clock of `zone` (an IANA name; the device's own if none)
   const d = new Date(iso);
   if (!iso || isNaN(d)) return "";
   const p = {};
@@ -634,7 +634,7 @@ export function moment(iso, zone) {
                                                     hour: "numeric", minute: "2-digit", hour12: true });
   for (const { type, value } of format.formatToParts(d)) p[type] = value;
   const time = p.minute === "00" ? `${p.hour} ${p.dayPeriod}` : `${p.hour}:${p.minute} ${p.dayPeriod}`;
-  return `${p.weekday} ${p.day} ${p.month} at ${time}`;
+  return `${p.weekday}, ${p.month} ${p.day} at ${time}`;
 }
 
 export function closingTime(iso, zone) {

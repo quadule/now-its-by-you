@@ -168,22 +168,22 @@ def utc_now() -> str:
 
 
 def when(iso: str) -> str:
-    """2026-10-03T08:10:19.306Z -> 3 Oct 2026, 10:10 (local time)."""
+    """2026-10-03T08:10:19.306Z -> Oct 3, 2026, 10:10 (local time)."""
     t = instant(iso).astimezone()
-    return f"{t.day} {t:%b %Y, %H:%M}"
+    return f"{t:%b} {t.day}, {t:%Y, %H:%M}"
 
 
 def day(iso: str) -> str:
-    """2026-09-30T20:00:00-07:00 -> 30 September (where the date was set)."""
+    """2026-09-30T20:00:00-07:00 -> September 30 (where the date was set)."""
     t = dt.datetime.fromisoformat(iso)
-    return f"{t.day} {MONTHS[t.month - 1]}"
+    return f"{MONTHS[t.month - 1]} {t.day}"
 
 
 def moment(iso: str) -> str:
-    """2026-09-27T22:00:00-07:00 -> Sunday 27 September at 10 PM Pacific (where the time was set)."""
+    """2026-09-27T22:00:00-07:00 -> Sunday, September 27 at 10 PM Pacific (where the time was set)."""
     t = dt.datetime.fromisoformat(iso)
     clock = f"{t.hour % 12 or 12}" + (f":{t.minute:02d}" if t.minute else "")
-    return f"{DAYS[t.weekday()]} {day(iso)} at {clock} {'AM' if t.hour < 12 else 'PM'}{zone(t)}"
+    return f"{DAYS[t.weekday()]}, {day(iso)} at {clock} {'AM' if t.hour < 12 else 'PM'}{zone(t)}"
 
 
 def zone(t: dt.datetime) -> str:

@@ -51,8 +51,8 @@ function problem(text) {
 
 /* ---------- words for times and sizes ---------- */
 
-function parts(date, zone) { // "Sunday 27 September" and "10 PM" in a time zone (undefined: the viewer's own)
-  const day = new Intl.DateTimeFormat("en-GB", { timeZone: zone, weekday: "long", day: "numeric", month: "long" }).format(date);
+function parts(date, zone) { // "Sunday, September 27" and "10 PM" in a time zone (undefined: the viewer's own)
+  const day = new Intl.DateTimeFormat("en-US", { timeZone: zone, weekday: "long", day: "numeric", month: "long" }).format(date);
   const time = new Intl.DateTimeFormat("en-US", { timeZone: zone, hour: "numeric", minute: "2-digit" }).format(date);
   // "10:00 PM" is written "10 PM", with a space that never breaks it across two lines
   return { day, time: time.replace(":00", "").replace(/\s+/g, "\u00a0") };
@@ -65,15 +65,15 @@ function when(iso) { // a moment in Pacific time, as the artist writes it, and i
   return { ...there, local: here.day === there.day && here.time === there.time ? "" : `${here.day} at ${here.time}` };
 }
 
-function stamp(iso) { // when something arrived, in the viewer's own time: "26 September at 4:15 PM"
+function stamp(iso) { // when something arrived, in the viewer's own time: "September 26 at 4:15 PM"
   const date = new Date(iso);
   if (!iso || isNaN(date)) return "";
-  return `${new Intl.DateTimeFormat("en-GB", { day: "numeric", month: "long" }).format(date)} at ${parts(date).time}`;
+  return `${new Intl.DateTimeFormat("en-US", { day: "numeric", month: "long" }).format(date)} at ${parts(date).time}`;
 }
 
-function dayOf(iso) { // DELETE_BY as a date in Pacific time: "30 September"
+function dayOf(iso) { // DELETE_BY as a date in Pacific time: "September 30"
   const date = new Date(iso);
-  return !iso || isNaN(date) ? "" : new Intl.DateTimeFormat("en-GB", { timeZone: PACIFIC, day: "numeric", month: "long" }).format(date);
+  return !iso || isNaN(date) ? "" : new Intl.DateTimeFormat("en-US", { timeZone: PACIFIC, day: "numeric", month: "long" }).format(date);
 }
 
 function until(ms) { // "in 5 hours": no seconds ticking
@@ -233,7 +233,7 @@ document.addEventListener("play", e => { // one recording at a time
 
 /* ---------- the countdown to when withdrawal closes ---------- */
 
-function countdown() { // "Withdrawal closes in 5 hours, at 10 PM Pacific on Sunday 27 September."; how long is left
+function countdown() { // "Withdrawal closes in 5 hours, at 10 PM Pacific on Sunday, September 27."; how long is left
   const d = S.data, c = d && d.can_withdraw && when(d.closes);
   $("countdown").hidden = !c;
   if (!c) return Infinity;

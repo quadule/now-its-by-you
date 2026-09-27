@@ -26,7 +26,7 @@ link we send you; docs/SING-ONLINE.md), which records and labels takes for you:
 You don't need to be a trained singer. Sing it your own way: the differences between people are
 what we're after. Wrong notes are fine; we measure what you sang, not what you meant to.
 
-Singing online closes on **Sunday 27 September 2026 at 10 PM Pacific**.
+Singing online closes on **Sunday, September 27, 2026 at 10 PM Pacific**.
 
 ## How to record
 
@@ -42,16 +42,16 @@ Singing online closes on **Sunday 27 September 2026 at 10 PM Pacific**.
   each note, how you slide into and away from it, how loud you lean on it. Those numbers, blended
   with everyone else's, travel with the song and shape how its synthetic singer sings, so the voice
   in the karaoke changes a little with each person who sings.
-- **The voice.** Once, after singing closes and before 30 September, the recordings may also help the program's own small voice
+- **The voice.** Once, after singing closes and before September 30, the recordings may also help the program's own small voice
   model say the song's words more clearly, all singers' together. What the model learns is blended
   from everyone. It is never set to sound like any one person.
 - **Your audio is deleted.** The recordings themselves are never published and never travel inside
   the song. They wait in private storage and on the artist's machine, and are deleted by
-  **30 September 2026**, or sooner if you delete them from your own page.
+  **September 30, 2026**, or sooner if you delete them from your own page.
 - **Your own page.** A private link where you can listen to and download what you sent, your
   version of the song (your voice in the sections you sang, the machine's in the rest) and your
   vocals alone, and delete them.
-- **Changing your mind.** Until singing closes (Sunday 27 September, 10 PM Pacific) you can withdraw
+- **Changing your mind.** Until singing closes (Sunday, September 27, 10 PM Pacific) you can withdraw
   from your page: your recordings and the numbers taken from them are deleted. After that the song is
   finished from everyone's singing and shared, so what you gave stays part of it; you can still delete
   the recordings themselves.
@@ -67,7 +67,7 @@ people send). For someone singing elsewhere:
 > the song's voice model to say its words clearly. The resulting numbers and model weights may be
 > distributed with the song under CC0 (public domain), blended with other voices so that no single
 > person is reproduced. My recordings themselves won't be published or shared, and will be deleted
-> by 30 September 2026. I can withdraw until singing closes (27 September 2026, 10 PM Pacific). Words I send for the
+> by September 30, 2026. I can withdraw until singing closes (September 27, 2026, 10 PM Pacific). Words I send for the
 > song I give to it for good, under CC0. I'd like to be credited as: ________ (or: not credited).
 > Payment: ________. Signed ________ Date ________
 
