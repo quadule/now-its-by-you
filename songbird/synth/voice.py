@@ -178,7 +178,10 @@ def schedule(notes: list[Note], voice: VoiceParams, lexicon: dict[str, str] | No
         if sum(coda[k]) > room or room < 0:
             nxt = sum(onset[k + 1]) if k + 1 < len(notes) else 0.0
             available = limit(k) + nxt - note.start - max(0.06, 0.4 * note.dur)
-            scale = float(np.clip(available / max(sum(coda[k]) + nxt, 1e-9), 0.3, 1.0))
+            # A learned pickup may leave less than 30% of the ordinary
+            # consonant space. A hard lower bound made those phonemes overlap
+            # the next vowel; spend only the space the timeline actually has.
+            scale = float(np.clip(available / max(sum(coda[k]) + nxt, 1e-9), 0.0, 1.0))
             coda[k] = [d * scale for d in coda[k]]
             if k + 1 < len(notes):
                 onset[k + 1] = [d * scale for d in onset[k + 1]]
@@ -230,15 +233,19 @@ def schedule(notes: list[Note], voice: VoiceParams, lexicon: dict[str, str] | No
             end = t - 0.04 - 0.1 * min(max(gap_before - 0.3, 0.0), 0.7)  # quiet again just before it starts
             segs.append(Segment(max(end - breath_length(gap_before), t - gap_before + 0.04), end, "breath", "breath", amp))
         for c, d in zip(syl.onset, onset[k]):
-            segs.append(Segment(t, t + d, c, "onset", amp, prev_v, syl.nucleus))
+            if d > 1e-9:
+                segs.append(Segment(t, t + d, c, "onset", amp, prev_v, syl.nucleus))
             t += d
-        v_end = max(limit(k) - sum(coda[k]), note.start + 0.04)
+        # the vowel: to the coda, at least 40 ms, but never past the next syllable's first sound (two notes a hair
+        # apart, as backing voices at a section's seam can be, used to overlap there)
+        v_end = max(limit(k) - sum(coda[k]), min(note.start + 0.04, limit(k)), note.start + 0.005)
         light = word[k] in ph.FUNCTION_WORDS and note.vel < 0.75
         segs.append(Segment(note.start, v_end, syl.nucleus, "vowel", amp, prev_v, next_v,
                             note.gesture.swell if note.gesture is not None else 0.0, voice.reduce if light else 0.0))
         t = v_end
         for c, d in zip(syl.coda, coda[k]):
-            segs.append(Segment(t, t + d, c, "coda", amp, syl.nucleus, next_v))
+            if d > 1e-9:
+                segs.append(Segment(t, t + d, c, "coda", amp, syl.nucleus, next_v))
             t += d
     return segs
 
