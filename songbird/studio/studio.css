@@ -525,3 +525,21 @@ button:disabled, input:disabled, select:disabled { cursor: not-allowed; }
 .mixer-strip .control .row { gap: 6px; }
 .mixer-strip .control label, .mixer-strip .control output { font-size: 10px; }
 .session-duration { margin-left: auto; font-size: 11px; color: var(--faint); }
+
+/* Original lyrics: folded until the writer wants a blank page. */
+.lyric-author { margin-top: 15px; border-top: 1px dashed var(--line); padding-top: 10px; }
+.lyric-author > summary { color: var(--you); font-size: 12px; cursor: pointer; }
+.lyric-author > .hint { max-width: 85ch; font-size: 12px; line-height: 1.65; }
+.author-lines { display: grid; gap: 13px; }
+.author-line-head { display: flex; align-items: center; flex-wrap: wrap; gap: 8px 12px; margin-bottom: 5px; }
+.author-line-head label { font-size: 11px; font-weight: 600; color: var(--soft); }
+.author-count { font-size: 10px; color: var(--warn); font-variant-numeric: tabular-nums; }
+.author-count.is-valid { color: var(--machine); }
+.author-line-head button { margin-left: auto; font-size: 11px !important; }
+.author-input { display: block; width: 100%; resize: vertical; border: 1px solid var(--line); border-radius: 7px; background: var(--paper); padding: 10px 12px; color: var(--ink); font: 17px/1.6 var(--serif); }
+.author-input.is-dirty { border-color: var(--you); }
+.author-input[aria-invalid=true] { border-color: var(--warn); }
+.author-actions { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 12px; }
+.author-actions .btn { padding: 6px 12px; font-size: 12px; box-shadow: none; border-radius: 6px; }
+.author-actions .btn:first-child { background: var(--accent); color: var(--accent-ink); border-color: var(--accent); }
+.author-status { font-size: 12px; color: var(--soft); min-height: 18px; margin: 8px 0 0; }

@@ -62,7 +62,7 @@
       const view = await response.json();
       if (view.problems?.length) throw new Error(`This draft needs a correction: ${view.problems[0].why}. Your current work is still here.`);
       // If edits changed during validation, never overwrite the newer work.
-      if (JSON.stringify(bridge().snapshot().edits) !== JSON.stringify(snapshot.edits)) throw new Error("Your song changed while the draft opened. Open the draft again when you're ready.");
+      if (bridge().snapshot().revision !== snapshot.revision) throw new Error("Your song changed while the draft opened. Open the draft again when you're ready.");
       bridge().replaceEdits(edits);
       notify("Draft opened. Undo returns to your previous choices.");
     } catch (error) { notify(error.message); }
