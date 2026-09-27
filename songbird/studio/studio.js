@@ -9,6 +9,8 @@ const $ = (id) => document.getElementById(id);
 const state = {
   start: null, view: null, timeline: null, edits: {}, open: {}, choose: null, options: null,
   names: [], compare: null, busy: 0, playing: null, poll: null, recordJob: null,
+  optionsByKey: {}, optionsFailed: false, undo: [], redo: [], editRevision: 0, refreshSerial: 0,
+  historyGroup: null, workspace: "arrange", saveStatus: "Saved on this device", playerSub: "",
 };
 
 // ------------------------------------------------------------------ small helpers
@@ -70,10 +72,14 @@ function save() {
   // only ever after a person's own change (edits that came in the page's address are never saved on their
   // own); the day and chance drawn again aren't kept, so tomorrow opens on tomorrow
   const kept = Object.fromEntries(Object.entries(state.edits).filter(([p]) => p !== "date" && p !== "roll"));
-  try { localStorage.setItem(storeKey(), JSON.stringify(kept)); } catch (e) { /* storage may be off */ }
+  try {
+    localStorage.setItem(storeKey(), JSON.stringify(kept));
+    state.saveStatus = "Saved on this device";
+  } catch (e) { state.saveStatus = "Storage unavailable · keep this tab open"; }
+  renderHistory();
 }
 function restore() {
-  try { return JSON.parse(localStorage.getItem(storeKey()) || "{}") || {}; } catch (e) { return {}; }
+  try { return editMap(JSON.parse(localStorage.getItem(storeKey()) || "{}")); } catch (e) { return {}; }
 }
 
 function lines(texts, className) {
@@ -98,17 +104,67 @@ function fmtTime(s) {
 
 // ------------------------------------------------------------------ edits
 
-function setEdit(path, value) {
-  if (value === null || value === undefined) delete state.edits[path];
-  else state.edits[path] = value;
+function editMap(value) {
+  return value && typeof value === "object" && !Array.isArray(value) ? value : {};
+}
+function copyEdits(edits = state.edits) { return JSON.parse(JSON.stringify(edits)); }
+
+function commitEdits(next, label = "Edit song", group = null) {
+  next = copyEdits(editMap(next));
+  if (JSON.stringify(next) === JSON.stringify(state.edits)) return false;
+  if (!group || state.historyGroup !== group) {
+    state.undo.push({ edits: copyEdits(), label });
+    if (state.undo.length > 100) state.undo.shift();
+  }
+  state.redo = [];
+  state.historyGroup = group;
+  state.edits = next;
+  state.editRevision++;
   save();
-  refresh();
+  markAudioState();
+  refreshSoon(group ? 180 : 0);
+  return true;
 }
 
-function clearEdits(paths) {
-  for (const p of paths) delete state.edits[p];
+function setEdit(path, value, label) {
+  return setEdits({ [path]: value }, label || `Change ${describePath(path).replace(/^your /, "")}`);
+}
+
+function setEdits(patch, label = "Edit song", group = null) {
+  const next = copyEdits();
+  for (const [path, value] of Object.entries(editMap(patch))) {
+    if (value === null || value === undefined) delete next[path];
+    else next[path] = value;
+  }
+  return commitEdits(next, label, group);
+}
+
+function clearEdits(paths, label = "Restore song choices") {
+  return setEdits(Object.fromEntries(paths.map((path) => [path, null])), label);
+}
+
+function travelHistory(direction) {
+  const from = state[direction], to = state[direction === "undo" ? "redo" : "undo"];
+  const entry = from.pop();
+  if (!entry) return;
+  to.push({ edits: copyEdits(), label: entry.label });
+  state.edits = entry.edits;
+  state.historyGroup = null;
+  state.editRevision++;
   save();
-  refresh();
+  markAudioState();
+  refreshSoon(0);
+  toast(`${direction === "undo" ? "Undid" : "Redid"}: ${entry.label}`);
+}
+
+function renderHistory() {
+  for (const direction of ["undo", "redo"]) {
+    const button = $(`${direction}Edit`), entries = state[direction];
+    if (!button) continue;
+    button.disabled = !entries.length;
+    button.title = entries.length ? `${capital(direction)}: ${entries[entries.length - 1].label}` : `Nothing to ${direction}`;
+  }
+  if ($("historyStatus")) $("historyStatus").textContent = state.busy ? "Updating song…" : state.saveStatus;
 }
 
 let refreshTimer = null;
@@ -118,21 +174,38 @@ function refreshSoon(delay = 160) {
 }
 
 async function refresh() {
-  const asked = JSON.stringify(state.edits);
+  clearTimeout(refreshTimer);
+  const edits = copyEdits(), revision = state.editRevision, serial = ++state.refreshSerial;
   state.busy++;
+  renderHistory();
   try {
-    const view = await api("/api/song", { edits: state.edits });
-    if (asked !== JSON.stringify(state.edits)) return; // a newer edit is on its way
+    const view = await api("/api/song", { edits });
+    if (revision !== state.editRevision || serial !== state.refreshSerial) return;
     state.view = view;
     state.options = null;
-    if (state.choose) await loadOptions(state.choose.block, state.choose.index, true);
+    state.optionsByKey = {};
+    state.optionsFailed = false;
     render();
     loadCompare();
+    // Safe word alternates belong to the rendered words, so load them without an extra "change" step.
+    const sections = view.words.filter((w) => w.sung && w.changeable);
+    await Promise.all(sections.map(async (w) => {
+      try {
+        const options = await api("/api/options", { edits, block: w.block, index: w.nth });
+        if (revision !== state.editRevision || serial !== state.refreshSerial) return;
+        state.optionsByKey[`${w.block}.${w.nth}`] = options;
+      } catch (e) {
+        if (revision === state.editRevision && serial === state.refreshSerial) state.optionsFailed = true;
+      }
+    }));
+    if (revision === state.editRevision && serial === state.refreshSerial) renderWords();
   } catch (e) {
+    if (revision !== state.editRevision || serial !== state.refreshSerial) return;
     if (!state.view) $("which").textContent = `The studio couldn't make your version of the song: ${e.message}`;
     toast(e.message);
   } finally {
     state.busy--;
+    renderHistory();
   }
 }
 
@@ -157,8 +230,8 @@ function renderHeader() {
       mine.length ? h("button", { class: "link small", type: "button", onclick: () => listen("program", null) }, "hear it as the program would sing it") : null,
       h("button", { class: "link small", type: "button", onclick: () => {
         const keep = state.edits.date ? { date: state.edits.date } : {};
-        state.edits = keep; save(); refresh();
-      } }, "undo all"),
+        commitEdits(keep, "Reset all song edits");
+      } }, "Reset song"),
     ].filter(Boolean));  // append() would write a null out as text
   }
   const problems = v.problems.filter((p) => !["tonic", "mode", "tempo"].includes(p.path) && !p.path.startsWith("form.") && !p.path.startsWith("band.") && !p.path.startsWith("mix."));
@@ -181,139 +254,194 @@ function describePath(path) {
 function renderWords() {
   const v = state.view;
   const box = $("words");
+  const active = document.activeElement;
+  const focusKey = box.contains(active) ? active.dataset.focus : null;
+  const opened = new Set([...box.querySelectorAll("details[open]")].map((d) => d.dataset.section));
   box.replaceChildren();
-  const drawn = v.words.some((w) => w.sung && w.how !== "the song's own words");
-  $("wordsAside").textContent = drawn ? "as they'll be sung; change any sung part" : "";
+  $("wordsAside").textContent = "Choose highlighted words in place. The melody keeps their syllables singable.";
   for (const w of v.words) {
     const ready = v.listen.ready.includes(v.listen.sections[w.index]);
     const play = h("button", { class: `play${ready ? " ready" : ""}`, type: "button", "aria-label": `Play ${w.label}`,
       title: ready ? "ready to play" : "play (it will be made first)", onclick: () => listen("you", w.index) }, playIcon());
     const meta = h("span", { class: "sec-meta" });
     if (w.sung) {
-      if (w.id && w.block === "verse") meta.append(h("span", {}, w.id));
-      for (const t of w.tags || []) meta.append(h("span", { class: "tag rule" }, t));
       const kind = w.mine ? "you" : { "handed down": "lineage", "new this time": "time", "drawn by chance": "chance" }[w.how] || "song";
-      meta.append(tag(kind, w.how));
+      meta.append(tag(kind, w.mine ? "your words" : w.how));
     }
     const tools = h("span", { class: "sec-tools" }, play);
-    const key = `${w.block}.${w.nth}`;
-    if (w.sung && w.changeable) {
-      const openNow = state.choose && state.choose.key === key;
-      tools.prepend(h("button", { class: "link small", type: "button", "aria-expanded": openNow ? "true" : "false",
-        onclick: () => toggleChooser(w) }, openNow ? "close" : "change"));
-      if (w.mine) tools.prepend(h("button", { class: "link small", type: "button", onclick: () => undoWords(w) }, "undo"));
-    }
+    if (w.mine) tools.prepend(h("button", { class: "link small", type: "button", onclick: () => undoWords(w) }, "Reset words"));
+    const key = `${w.block}.${w.nth}`, options = state.optionsByKey[key];
     const sec = h("div", { class: `sec${w.sung ? "" : " instrumental"}${w.mine ? " mine" : ""}`, id: `sec-${w.index}` },
-      h("div", { class: "sec-head" }, h("span", { class: "sec-name" }, w.label), meta, tools),
-      lines(w.lines),
-      w.note ? h("p", { class: "sec-note" }, w.note) : null);
-    if (state.choose && state.choose.key === key && state.options) sec.append(chooser(w, state.options));
+      h("div", { class: "sec-head" }, h("span", { class: "sec-name" }, w.label), meta, tools));
+    if (options) {
+      const selects = h("div", { class: "section-selects" });
+      if (options.choices.length) selects.append(phraseChooser(w, options));
+      if ((options.heads || []).length > 1) selects.append(headChooser(options, w.label));
+      if (selects.childNodes.length) sec.append(selects);
+      sec.append(inlineLyrics(w, options));
+      const rules = chooser(w, options);
+      if (rules) {
+        rules.open = opened.has(key) || (state.choose && state.choose.key === key);
+        sec.append(rules);
+      }
+    } else {
+      sec.append(lines(w.lines));
+      if (w.sung && w.changeable) sec.append(h("p", { class: "hint" }, state.optionsFailed
+        ? "Word choices couldn't load. " : "Finding singable word choices…",
+      state.optionsFailed ? h("button", { type: "button", class: "link small", onclick: refresh }, "Try again") : null));
+    }
+    if (w.note) sec.append(h("p", { class: "sec-note" }, w.note));
     box.append(sec);
   }
+  if (focusKey) [...box.querySelectorAll("[data-focus]")].find((el) => el.dataset.focus === focusKey)?.focus({ preventScroll: true });
 }
 
 function undoWords(w) {
   const paths = [w.path];
   if (w.block === "refrain") paths.push("words.refrain");
   if (w.block === "bridge" && w.nth === 0) paths.push("words.bridge");
-  clearEdits(paths);
+  clearEdits(paths, `Reset ${w.label.toLowerCase()} words`);
 }
 
+// Retain old deep links, while choices are now loaded and visible in every sung section.
 async function toggleChooser(w) {
-  const key = `${w.block}.${w.nth}`;
-  if (state.choose && state.choose.key === key) {
-    state.choose = null;
-    state.options = null;
-    renderWords();
-    return;
-  }
-  state.choose = { key, block: w.block, index: w.nth };
-  await loadOptions(w.block, w.nth);
+  state.choose = { key: `${w.block}.${w.nth}`, block: w.block, index: w.nth };
+  showWorkspace("words");
   renderWords();
-  const el = $(`sec-${w.index}`);
-  if (el) el.scrollIntoView({ block: "nearest", behavior: "smooth" });
+  $(`sec-${w.index}`)?.scrollIntoView({ block: "nearest", behavior: "smooth" });
 }
 
-async function loadOptions(block, index, quiet) {
-  try {
-    state.options = await api("/api/options", { edits: state.edits, block, index });
-  } catch (e) {
-    state.options = null;
-    if (!quiet) toast(e.message);
-  }
+function choiceLabel(c) {
+  const first = (c.lines[0] || c.id).replace(/\*/g, "");
+  const trade = c.trades !== null && c.trades !== undefined ? ` · swaps with refrain ${c.trades + 1}` : "";
+  return `${first}${trade}${c.allowed ? "" : " · unavailable here"}`;
 }
 
-function chooser(w, o) {
-  const box = h("div", { class: "chooser" });
-  for (const f of o.fixed || []) box.append(h("p", { class: "fixed" }, `${capital(f.what)}: ${f.sung}. `, h("span", { class: "hint" }, `Kept by the song's rule: ${f.why}.`)));
-  const allowed = o.choices.filter((c) => c.allowed);
-  const refused = o.choices.filter((c) => !c.allowed);
-  if (o.choices.length) {
-    if (o.block === "refrain" && (o.heads || []).length > 1) box.append(headChooser(o));
-    const what = { verse: "Choose the verse", refrain: "Choose this refrain's couplet", bridge: "Choose the second stanza", tag: "Choose the tag's syllable" }[o.block];
-    box.append(h("h3", {}, what));
-    if (o.block === "tag") {
-      box.append(h("div", { class: "chips" }, o.choices.map((c) => h("button", {
-        class: `chip${c.id === o.sung ? " on" : ""}`, type: "button", "aria-pressed": c.id === o.sung ? "true" : "false",
-        onclick: () => setEdit(o.path, c.id) }, c.id))));
-    } else {
-      box.append(h("div", { class: "choices", role: "list" }, allowed.map((c) => {
-        const first = (c.lines[0] || c.id).replace(/\*/g, "");
-        const bits = [c.mood, c.era, c.rare ? "rare" : null, c.variant ? "rhymes its own way" : null].filter(Boolean).join(" · ");
-        const trade = c.trades !== null && c.trades !== undefined ? `trades places with refrain ${c.trades + 1}` : "";
-        return h("button", { class: `choice${c.id === o.sung ? " sung" : ""}`, type: "button", role: "listitem",
-          title: c.lines.join("\n").replace(/\*/g, ""),
-          onclick: () => setEdit(o.path, o.block === "verse" ? { id: c.id } : o.block === "refrain" ? Object.assign(refrainEdit(o), { id: c.id }) : c.id) },
-          h("span", { class: "first" }, first),
-          h("span", { class: "meta" }, [c.id, bits, trade].filter(Boolean).join(" · ")));
-      })));
+function phraseChooser(w, o) {
+  const name = { verse: "Verse", refrain: "Couplet", bridge: "Stanza", tag: "Syllable" }[o.block] || "Phrase";
+  const select = h("select", { class: "phrase-select", "aria-label": `${w.label}: ${name.toLowerCase()}`,
+    "data-focus": `${w.block}.${w.nth}.phrase` }, o.choices.map((c) => h("option", {
+      value: c.id, disabled: !c.allowed, title: c.why || c.lines.join(" / ").replace(/\*/g, "") }, choiceLabel(c))));
+  select.value = o.sung;
+  select.addEventListener("change", () => setEdit(o.path, o.block === "verse" ? { id: select.value }
+    : o.block === "refrain" ? Object.assign(refrainEdit(o), { id: select.value }) : select.value,
+  `Choose ${w.label.toLowerCase()} ${name.toLowerCase()}`));
+  return h("label", { class: "lyric-slot-label" }, h("span", {}, name), select);
+}
+
+function slotSelect(w, o, slot, suffix = "") {
+  const select = h("select", { class: "lyric-select", "aria-label": `${w.label}: ${slot.slot.replace(/_/g, " ")}`,
+    "data-focus": `${w.block}.${w.nth}.${slot.slot}${suffix}`,
+    title: `${slot.slot.replace(/_/g, " ")}${slot.once ? " · changes every refrain" : " · choose a singable alternate"}` },
+  slot.options.map((option) => h("option", { value: option }, (slot.labels?.[option] || option).replace(/\*/g, ""))));
+  select.value = slot.sung;
+  const current = (slot.labels?.[slot.sung] || slot.sung || "Choose").replace(/\*/g, "");
+  select.style.width = `${Math.max(4, current.length + 3)}ch`;
+  select.addEventListener("change", () => chooseSlot(o, slot.slot, select.value));
+  return select;
+}
+
+// The API supplies readable slot labels, including multi-word alternatives and coupled noun slots.
+// Match complete words only; anything ambiguous or absent gets a labelled select just below the lines.
+function lyricMatches(texts, slots) {
+  const lines = texts.map((text) => text.replace(/\*/g, ""));
+  const matches = lines.map(() => []), missing = [];
+  const wordChar = (c) => !!c && /[\p{L}\p{N}_]/u.test(c);
+  for (const slot of slots) {
+    const label = (slot.labels?.[slot.sung] || slot.sung || "").replace(/\*/g, "");
+    let found = false;
+    for (let line = 0; label && line < lines.length && !found; line++) {
+      const text = lines[line];
+      let start = -1;
+      while ((start = text.toLocaleLowerCase().indexOf(label.toLocaleLowerCase(), start + 1)) !== -1) {
+        const end = start + label.length;
+        if ((wordChar(label[0]) && wordChar(text[start - 1])) || (wordChar(label[label.length - 1]) && wordChar(text[end]))) continue;
+        if (matches[line].some((match) => start < match.end && end > match.start)) continue;
+        matches[line].push({ start, end, slot });
+        found = true;
+        break;
+      }
     }
-    if (refused.length) {
-      const list = h("ul", {}, refused.map((c) => {
-        const offers = [];
-        if (c.reorder) offers.push(h("button", { class: "link small", type: "button", onclick: () => applyOrder(c.reorder) },
-          `sing it as verse ${c.reorder.indexOf(c.id) + 1} instead`));
-        else if (c.elsewhere && c.elsewhere.length) offers.push(h("button", { class: "link small", type: "button",
-          onclick: () => setEdit(`words.verse.${c.elsewhere[0]}`, { id: c.id }) }, `it could be verse ${c.elsewhere[0] + 1} instead`));
-        return h("li", {}, h("b", {}, (c.lines[0] || c.id).replace(/\*/g, "")), ` (${c.id}): ${c.why}. `, ...offers);
-      }));
-      box.append(h("details", { class: "refused" }, h("summary", {}, `${refused.length} that can't go here, and why`), list));
+    if (!found) missing.push(slot);
+  }
+  matches.forEach((line) => line.sort((a, b) => a.start - b.start));
+  return { lines, matches, missing };
+}
+
+function inlineLyrics(w, o) {
+  const parsed = lyricMatches(w.lines, o.words || []);
+  const box = h("div", { class: "lines editable-lines" });
+  w.lines.forEach((source, line) => {
+    const p = h("p", { class: "lyric-line" });
+    const focused = [];
+    let focus = false;
+    for (const char of source) {
+      if (char === "*") focus = !focus;
+      else focused.push(focus);
     }
-  }
-  for (const slot of o.words || []) {
-    box.append(h("div", { class: "slot" }, h("div", { class: "label" }, slot.slot),
-      h("div", { class: "chips" }, slot.options.map((opt) => h("button", {
-        class: `chip${opt === slot.sung ? " on" : ""}`, type: "button", "aria-pressed": opt === slot.sung ? "true" : "false",
-        onclick: () => chooseSlot(o, slot.slot, opt) }, (slot.labels && slot.labels[opt]) || opt)))));
-  }
-  if ((o.words || []).length && o.block === "refrain") box.append(h("p", { class: "hint" }, o.words.some((w) => w.once) ? "Some of these words are chosen once for every refrain." : "These words are this refrain's own."));
-  else if ((o.words || []).length && o.block !== "verse") box.append(h("p", { class: "hint" }, "These words are chosen once for the whole song."));
+    const appendText = (start, end) => {
+      while (start < end) {
+        let at = start + 1;
+        while (at < end && focused[at] === focused[start]) at++;
+        const text = parsed.lines[line].slice(start, at);
+        p.append(focused[start] ? h("span", { class: "focus" }, text) : document.createTextNode(text));
+        start = at;
+      }
+    };
+    let at = 0;
+    for (const match of parsed.matches[line]) {
+      appendText(at, match.start);
+      const select = slotSelect(w, o, match.slot);
+      if (focused.slice(match.start, match.end).some(Boolean)) select.classList.add("focus");
+      p.append(select);
+      at = match.end;
+    }
+    appendText(at, parsed.lines[line].length);
+    box.append(p);
+  });
+  if (parsed.missing.length) box.append(h("div", { class: "lyric-fallbacks" }, parsed.missing.map((slot) =>
+    h("label", { class: "lyric-slot-label" }, h("span", {}, capital(slot.slot.replace(/_/g, " "))), slotSelect(w, o, slot)))));
+  if ((o.words || []).some((slot) => slot.once)) box.append(h("span", { class: "hint" }, "Shared words change in every refrain."));
   return box;
 }
 
-// A refrain's edit as it stands, as an object: its couplet (id), head and slot words, any of them.
+function chooser(w, o) {
+  const refused = o.choices.filter((c) => !c.allowed);
+  const fixed = o.fixed || [];
+  const heads = (o.heads || []).filter((c) => !c.allowed);
+  if (!fixed.length && !refused.length && !heads.length && !(w.tags || []).length) return null;
+  const box = h("details", { class: "chooser word-rules", "data-section": `${w.block}.${w.nth}` },
+    h("summary", {}, "Song rules & alternatives"));
+  if ((w.tags || []).length) box.append(h("p", { class: "hint" }, w.tags.join(" · ")));
+  for (const f of fixed) box.append(h("p", { class: "fixed" }, `${capital(f.what)}: ${f.sung}. `, h("span", { class: "hint" }, f.why)));
+  for (const head of heads) box.append(h("p", { class: "hint" }, `${head.id}: ${head.why}.`));
+  if (refused.length) box.append(h("ul", { class: "refused" }, refused.map((c) => {
+    const offer = c.reorder
+      ? h("button", { class: "link small", type: "button", onclick: () => applyOrder(c.reorder) }, `Use as verse ${c.reorder.indexOf(c.id) + 1}`)
+      : c.elsewhere?.length ? h("button", { class: "link small", type: "button",
+        onclick: () => setEdit(`words.verse.${c.elsewhere[0]}`, { id: c.id }) }, `Use as verse ${c.elsewhere[0] + 1}`) : null;
+    return h("li", {}, h("b", {}, (c.lines[0] || c.id).replace(/\*/g, "")), `: ${c.why}. `, offer);
+  })));
+  return box;
+}
+
 function refrainEdit(o) {
   const current = state.edits[o.path];
   return typeof current === "string" ? { id: current } : Object.assign({}, current || {});
 }
 
-// A refrain between the first and the last may sing another head: the lines before its couplet sung another way.
-function headChooser(o) {
-  const allowed = o.heads.filter((x) => x.allowed);
-  const refused = o.heads.filter((x) => !x.allowed);
-  const box = h("div", { class: "heads" }, h("h3", {}, "Choose how this refrain begins"));
-  if (allowed.length > 1) {
-    box.append(h("div", { class: "choices", role: "list" }, allowed.map((x) => {
-      const trade = x.trades !== null && x.trades !== undefined ? `trades places with refrain ${x.trades + 1}` : "";
-      return h("button", { class: `choice${x.id === o.head ? " sung" : ""}`, type: "button", role: "listitem",
-        title: x.lines.join("\n"),
-        onclick: () => { const edit = refrainEdit(o); delete edit.slots; edit.head = x.id; setEdit(o.path, edit); } },
-        h("span", { class: "first" }, x.lines.join(" / ")),
-        h("span", { class: "meta" }, [x.id, x.by ? `by ${x.by}` : "", trade].filter(Boolean).join(" · ")));
-    })));
-  }
-  if (refused.length) box.append(h("p", { class: "hint" }, `${refused[0].why}.`));
-  return box;
+function headChooser(o, sectionLabel) {
+  const select = h("select", { class: "phrase-select", "aria-label": `${sectionLabel}: opening lines`,
+    "data-focus": `refrain.${o.index}.head` }, o.heads.map((head) => h("option", {
+      value: head.id, disabled: !head.allowed, title: head.why || head.lines.join(" / ") }, choiceLabel(head))));
+  select.value = o.head;
+  select.addEventListener("change", () => {
+    const edit = refrainEdit(o);
+    delete edit.slots;
+    edit.head = select.value;
+    setEdit(o.path, edit, "Change refrain opening");
+  });
+  return h("label", { class: "lyric-slot-label" }, h("span", {}, "Opening"), select);
 }
 
 function chooseSlot(o, slot, value) {
@@ -335,9 +463,7 @@ function chooseSlot(o, slot, value) {
 }
 
 function applyOrder(order) {
-  order.forEach((id, i) => { state.edits[`words.verse.${i}`] = { id }; });
-  save();
-  refresh();
+  setEdits(Object.fromEntries(order.map((id, i) => [`words.verse.${i}`, { id }])), "Rearrange verses");
 }
 
 function capital(s) { return s.charAt(0).toUpperCase() + s.slice(1); }
@@ -346,22 +472,22 @@ function capital(s) { return s.charAt(0).toUpperCase() + s.slice(1); }
 
 function renderCards() {
   const box = $("cards");
-  const openNow = new Set([...box.querySelectorAll("details.change[open]")].map((d) => d.dataset.card));
+  const openNow = new Set([...box.querySelectorAll("details.card-context[open]")].map((d) => d.dataset.card));
   box.replaceChildren();
   for (const c of state.view.cards) {
     const head = h("div", { class: "card-head" }, h("h3", {}, c.title));
-    if (c.mine && c.paths && c.paths.length) head.append(h("button", { class: "link small undo", type: "button", onclick: () => clearEdits(allPaths(c)) }, "undo"));
+    if (c.mine && c.paths && c.paths.length) head.append(h("button", { class: "link small undo", type: "button", onclick: () => clearEdits(allPaths(c)) }, "Reset"));
     const card = h("section", { class: `card${c.mine ? " mine" : ""}`, "aria-label": c.title }, head,
       h("div", { class: "value" }, c.value),
       c.today ? h("div", { class: "today" }, c.today) : null,
-      c.detail ? h("div", { class: "detail" }, c.detail) : null,
-      c.lines ? h("ul", { class: "machine-lines" }, c.lines.map((l) => h("li", {}, l))) : null,
-      reasonsOf(c),
       (c.problems || []).map((p) => h("p", { class: "problem" }, `Couldn't keep your ${describePath(p.path).replace(/^your /, "")}: ${p.why}.`)));
     const controls = editor(c);
-    if (controls) {
-      const d = h("details", { class: "change", "data-card": c.id }, h("summary", {}, c.id === "words" ? "keep or choose" : "change"), controls);
-      if (openNow.has(c.id) || state.open[c.id]) d.open = true;
+    if (controls) card.append(h("div", { class: "card-controls" }, controls));
+    if (c.detail || c.lines || c.reasons?.length) {
+      const d = h("details", { class: "card-context", "data-card": c.id }, h("summary", {}, "How this choice works"),
+        c.detail ? h("div", { class: "detail" }, c.detail) : null,
+        c.lines ? h("ul", { class: "machine-lines" }, c.lines.map((l) => h("li", {}, l))) : null, reasonsOf(c));
+      d.open = openNow.has(c.id) || !!state.open[c.id];
       d.addEventListener("toggle", () => { state.open[c.id] = d.open; });
       card.append(d);
     }
@@ -397,12 +523,46 @@ function slider(label, path, value, b, show, ends) {
 }
 
 function chips(label, options, current, onpick, names, why) {
-  return h("div", { class: "control" }, h("label", {}, label), h("div", { class: "chips" }, options.map((o) => {
-    const refused = why && why[o];
-    return h("button", { class: `chip${o === current ? " on" : ""}`, type: "button", disabled: refused ? true : null,
-      title: refused || (names && names.title && names.title[o]) || null, "aria-pressed": o === current ? "true" : "false",
-      onclick: () => onpick(o) }, names && names.text ? names.text[o] || o : String(o));
-  })));
+  const select = h("select", { "aria-label": label }, options.map((option, index) => {
+    const refused = why && why[option];
+    return h("option", { value: index, disabled: !!refused, title: refused || names?.title?.[option] || null },
+      `${names?.text?.[option] || String(option)}${refused ? " · unavailable" : ""}`);
+  }));
+  select.value = options.indexOf(current);
+  select.addEventListener("change", () => onpick(options[Number(select.value)]));
+  return h("label", { class: "control select-control" }, h("span", {}, label), select);
+}
+
+function renderSessionControls() {
+  const box = $("sessionControls");
+  if (!box) return;
+  const key = state.view.cards.find((c) => c.id === "key");
+  const tempo = state.view.cards.find((c) => c.id === "tempo");
+  const bounds = state.start.bounds;
+  const controls = [];
+  if (tempo) {
+    const input = h("input", { type: "number", min: bounds.tempo.min, max: bounds.tempo.max, step: bounds.tempo.step,
+      value: tempo.tempo, "aria-label": "Tempo in beats per minute" });
+    input.addEventListener("change", () => {
+      const value = Number(input.value);
+      if (!input.value || !Number.isFinite(value) || value < bounds.tempo.min || value > bounds.tempo.max) {
+        input.value = tempo.tempo;
+        toast(`Choose a tempo from ${bounds.tempo.min} to ${bounds.tempo.max} BPM.`);
+        return;
+      }
+      setEdit("tempo", value, "Change tempo");
+    });
+    controls.push(h("label", { class: "session-control" }, h("span", {}, "Tempo"), input, h("span", { class: "hint" }, "BPM")));
+  }
+  if (key) {
+    const notes = [];
+    for (let note = bounds.tonic.min; note <= bounds.tonic.max; note++) notes.push(note);
+    controls.push(chips("Key", notes, key.tonic, (value) => setEdit("tonic", value), { text: bounds.tonic.names }));
+    controls.push(chips("Scale", bounds.mode.options, key.mode, (value) => setEdit("mode", value), { text: bounds.mode.names }));
+  }
+  const total = state.view.composition?.duration;
+  if (total) controls.push(h("span", { class: "session-duration hint" }, fmtTime(total)));
+  box.replaceChildren(...controls);
 }
 
 function editor(c) {
@@ -508,11 +668,11 @@ function editor(c) {
 
 async function keepWords() {
   try {
-    const r = await api("/api/keep-words", { edits: state.edits });
-    state.edits = r.edits;
-    save();
+    const revision = state.editRevision;
+    const r = await api("/api/keep-words", { edits: copyEdits() });
+    if (revision !== state.editRevision) { toast("The song changed. Keep the words again for this version."); return; }
+    commitEdits(r.edits, "Keep these words");
     toast("The words are held as they are.");
-    refresh();
   } catch (e) { toast(e.message); }
 }
 
@@ -605,18 +765,17 @@ function label(key, value, tl, w) {
   return String(value);
 }
 
-function setDay(offset) {
-  const today = state.start.day;
-  if (!offset) delete state.edits.date;
-  else {
-    const d = new Date(`${today}T12:00:00Z`);
-    d.setUTCDate(d.getUTCDate() + offset);
-    state.edits.date = d.toISOString().slice(0, 10);
-  }
-  save();
+function dateAt(offset) {
+  if (!offset) return null;
+  const day = new Date(`${state.start.day}T12:00:00Z`);
+  day.setUTCDate(day.getUTCDate() + offset);
+  return day.toISOString().slice(0, 10);
+}
+
+function setDay(offset, group = null) {
+  setEdits({ date: dateAt(offset) }, "Move through time", group);
   $("day").value = offset;
-  renderTimeline();
-  refreshSoon(120);
+  $("dayLabel").textContent = offset ? `${dateAt(offset)} · ${offset > 0 ? "+" : ""}${offset} days` : "today";
 }
 
 // ------------------------------------------------------------------ other machines
@@ -627,7 +786,10 @@ function loadCompare() {
   compareTimer = setTimeout(async () => {
     try {
       const date = state.edits.date ? { date: state.edits.date } : {};
-      state.compare = await api("/api/compare", { edits: Object.assign({}, state.edits, date), names: state.names });
+      const revision = state.editRevision, names = JSON.stringify(state.names);
+      const compare = await api("/api/compare", { edits: Object.assign({}, state.edits, date), names: state.names });
+      if (revision !== state.editRevision || names !== JSON.stringify(state.names)) return;
+      state.compare = compare;
       renderCompare();
     } catch (e) { /* shown on the next try */ }
   }, 250);
@@ -648,20 +810,24 @@ function renderCompare() {
 
 const audio = $("audio");
 
-async function listen(who, section) {
+async function listen(who = "you", section = null) {
   if (state.poll && state.playing && state.playing.job && state.playing.job.state === "queued") {
     api("/api/cancel", { job: state.playing.job.id }).catch(() => {});
   }
   clearTimeout(state.poll);
   audio.pause();
-  const label = section === null ? "The whole song" : state.view.words[section].label;
-  state.playing = { who, section, label, job: null };
+  const label = section === null ? "The whole song" : state.view.words.find((w) => w.index === section)?.label || "Song section";
+  const edits = copyEdits();
+  const playing = { who, section, label, job: null, editsKey: JSON.stringify(edits) };
+  state.playing = playing;
+  $("playPause").disabled = true;
+  $("nowTime").textContent = "";
   showPlayer(label, "getting it ready…", 0, true);
   try {
-    const job = await api("/api/listen", { edits: state.edits, who, section });
-    await follow(job, state.playing);
+    const job = await api("/api/listen", { edits, who, section });
+    await follow(job, playing);
   } catch (e) {
-    showPlayer(label, e.message, 0, false);
+    if (playing === state.playing) showPlayer(label, e.message, 0, false);
   }
 }
 
@@ -670,7 +836,7 @@ async function follow(job, playing) {
   playing.job = job;
   const title = job.label || playing.label;
   if (job.state === "done") {
-    play(job.url, title, playing.section === null ? "the whole song, as it would be recorded" : "a preview of this part");
+    play(job.url, title, playing.section === null ? "the whole song, as it would be recorded" : "a preview of this part", playing);
     refreshReady(job.key);
     return;
   }
@@ -684,7 +850,8 @@ async function follow(job, playing) {
   const where = job.state === "queued" ? "waiting its turn" : `${job.stage || "making it"}…`;
   showPlayer(title, `${where} ${Math.round((job.progress || 0) * 100)}%${slow}`, job.progress || 0, true);
   state.poll = setTimeout(async () => {
-    try { await follow(await api(`/api/job/${job.id}`), playing); } catch (e) { showPlayer(title, e.message, 0, false); }
+    try { await follow(await api(`/api/job/${job.id}`), playing); }
+    catch (e) { if (playing === state.playing) showPlayer(title, e.message, 0, false); }
   }, 450);
 }
 
@@ -695,7 +862,9 @@ function refreshReady(key) {
   }
 }
 
-function play(url, title, sub) {
+function play(url, title, sub, playing = null) {
+  state.playing = playing || { editsKey: JSON.stringify(state.edits), label: title, who: "you", section: null, job: null };
+  clearTimeout(state.poll);
   audio.src = url;
   audio.play().catch(() => {});
   showPlayer(title, sub || "", 0, false);
@@ -704,9 +873,17 @@ function play(url, title, sub) {
 
 function showPlayer(title, sub, progress, making) {
   $("nowTitle").textContent = title;
-  $("nowSub").textContent = sub;
+  state.playerSub = sub;
+  markAudioState();
   $("bar").classList.toggle("making", !!making);
   $("barFill").style.width = `${Math.round((progress || 0) * 100)}%`;
+}
+
+function markAudioState() {
+  const stale = !!state.playing && state.playing.editsKey !== JSON.stringify(state.edits);
+  const player = document.querySelector(".player");
+  player?.classList.toggle("player-stale", stale);
+  if ($("nowSub")) $("nowSub").textContent = stale ? "Earlier version · press Play song to hear your edits" : state.playerSub;
 }
 
 audio.addEventListener("timeupdate", () => {
@@ -750,9 +927,12 @@ async function record() {
   state.recording = true;
   for (const id of ["record", "recordNow"]) $(id).disabled = true;
   saved.replaceChildren(h("p", {}, "Recording…"));
+  const exportPanel = $("recordPanel").closest("details");
+  if (exportPanel) exportPanel.open = true;
   $("recordPanel").scrollIntoView({ behavior: "smooth", block: "nearest" });
+  const edits = copyEdits();
   try {
-    let job = await api("/api/record", { edits: state.edits });
+    let job = await api("/api/record", { edits });
     while (job.state === "queued" || job.state === "running") {
       saved.replaceChildren(h("p", {}, `Recording: ${job.state === "queued" ? "waiting its turn" : job.stage || "making it"}… ${Math.round((job.progress || 0) * 100)}%`),
         h("div", { class: "bar making" }, h("div", { style: null })));
@@ -766,7 +946,8 @@ async function record() {
       h("p", {}, "Saved ", h("code", {}, r.flac), ` (${fmtTime(r.duration)}): the song, the program that sang it and its record, in one file.`),
       h("p", {}, r.yours ? `${r.yours} choice${r.yours === 1 ? " is" : "s are"} marked as yours in it (what you chose, never who you are).` : "Every choice in it is the program's."),
       h("p", { class: "hint" }, "To make the next version from this one: ", h("code", {}, r.next)),
-      h("button", { class: "btn", type: "button", onclick: () => play(job.url, "The recording", r.flac) }, "Play the recording"));
+      h("button", { class: "btn", type: "button", onclick: () => play(job.url, "The recording", r.flac,
+        { editsKey: JSON.stringify(edits), label: "The recording", who: "you", section: null, job }) }, "Play the recording"));
   } catch (e) {
     saved.replaceChildren(h("p", { class: "problem" }, `Couldn't record it: ${e.message}`));
   } finally {
@@ -782,7 +963,36 @@ function render() {
   renderWords();
   renderCards();
   renderTimeline();
+  renderSessionControls();
+  renderHistory();
+  window.SongbirdComposer?.render(state.view);
 }
+
+function showWorkspace(name, focus = false) {
+  const tabs = [...document.querySelectorAll("#studioTabs [data-workspace]")];
+  if (!tabs.some((button) => button.dataset.workspace === name)) return;
+  state.workspace = name;
+  tabs.forEach((button) => {
+    const active = button.dataset.workspace === name;
+    button.setAttribute("aria-selected", String(active));
+    button.tabIndex = active ? 0 : -1;
+    if (active && focus) button.focus();
+  });
+  document.querySelectorAll("[data-workspace-panel]").forEach((panel) => {
+    panel.hidden = panel.dataset.workspacePanel !== name;
+  });
+  if (name === "explore") renderTimeline();
+  if (name === "arrange" && state.view) window.SongbirdComposer?.render(state.view);
+}
+
+window.StudioBridge = {
+  setEdit, setEdits, clearEdits, listen, toast,
+  getEdits: () => copyEdits(),
+  snapshot: () => ({ start: state.start ? JSON.parse(JSON.stringify(state.start)) : null, edits: copyEdits() }),
+  replaceEdits: (edits, label = "Load a saved draft") => commitEdits(edits, label),
+  undo: () => travelHistory("undo"), redo: () => travelHistory("redo"),
+  showWorkspace,
+};
 
 function readHash() {
   // #day=120&open=band,key&choose=verse.1&e=<edits as JSON>: a way into a particular view (and for pictures)
@@ -806,7 +1016,7 @@ async function main() {
   state.edits = restore();
   const hash = readHash();
   if (hash.e) {
-    try { state.edits = JSON.parse(hash.e) || {}; } catch (e) { /* ignore */ }
+    try { state.edits = editMap(JSON.parse(hash.e)); } catch (e) { /* ignore */ }
   }
   if (hash.day) setDayQuiet(Number(hash.day));
   for (const id of (hash.open || "").split(",").filter(Boolean)) state.open[id] = true;
@@ -815,12 +1025,13 @@ async function main() {
   $("sing").disabled = !s.sing.available;
   $("day").min = -s.days;
   $("day").max = s.days;
+  showWorkspace(hash.workspace || "arrange");
   await refresh();
-  if (hash.choose) {
+  if (hash.choose && state.view) {
     const [block, nth] = hash.choose.split(".");
     const w = state.view.words.find((x) => x.block === block && String(x.nth) === nth);
     if (w) await toggleChooser(w);
-    if (hash.refused !== undefined) for (const d of document.querySelectorAll(".chooser details.refused")) d.open = true;
+    if (hash.refused !== undefined) for (const d of document.querySelectorAll("details.word-rules")) d.open = true;
   }
   const scroll = () => { const el = hash.scroll && $(hash.scroll); if (el) el.scrollIntoView({ block: "start" }); };
   scroll();
@@ -831,11 +1042,37 @@ async function main() {
 }
 
 function setDayQuiet(offset) {
-  if (!offset) { delete state.edits.date; return; }
-  const d = new Date(`${state.start.day}T12:00:00Z`);
-  d.setUTCDate(d.getUTCDate() + offset);
-  state.edits.date = d.toISOString().slice(0, 10);
+  const date = dateAt(offset);
+  if (date) state.edits.date = date;
+  else delete state.edits.date;
 }
+
+for (const direction of ["undo", "redo"]) $(`${direction}Edit`)?.addEventListener("click", () => travelHistory(direction));
+for (const button of document.querySelectorAll("#studioTabs [data-workspace]")) {
+  button.addEventListener("click", () => showWorkspace(button.dataset.workspace));
+  button.addEventListener("keydown", (event) => {
+    const tabs = [...document.querySelectorAll("#studioTabs [data-workspace]")];
+    const index = tabs.indexOf(button);
+    let next;
+    if (event.key === "ArrowRight") next = (index + 1) % tabs.length;
+    if (event.key === "ArrowLeft") next = (index - 1 + tabs.length) % tabs.length;
+    if (event.key === "Home") next = 0;
+    if (event.key === "End") next = tabs.length - 1;
+    if (next === undefined) return;
+    event.preventDefault();
+    showWorkspace(tabs[next].dataset.workspace, true);
+  });
+}
+document.addEventListener("keydown", (event) => {
+  if (!(event.metaKey || event.ctrlKey) || event.altKey) return;
+  const target = event.target;
+  if (target.isContentEditable || target.tagName === "TEXTAREA" ||
+    (target.tagName === "INPUT" && !["range", "checkbox", "button"].includes(target.type))) return;
+  const key = event.key.toLowerCase();
+  if (key !== "z" && key !== "y") return;
+  event.preventDefault();
+  travelHistory(key === "y" || event.shiftKey ? "redo" : "undo");
+});
 
 $("hearAll").addEventListener("click", () => listen("you", null));
 $("roll").addEventListener("click", () => setEdit("roll", (state.edits.roll || 0) + 1));
@@ -844,11 +1081,9 @@ $("recordNow").addEventListener("click", record);
 $("sing").addEventListener("click", sing);
 $("day").addEventListener("input", (ev) => {
   const offset = Number(ev.target.value);
-  setDayQuiet(offset);
-  save();
-  if (state.timeline) renderTimeline();
-  refreshSoon(180);
+  setDay(offset, "day");
 });
+$("day").addEventListener("change", () => { state.historyGroup = null; });
 for (const b of document.querySelectorAll("[data-step]")) {
   b.addEventListener("click", () => {
     const step = Number(b.dataset.step);
@@ -868,7 +1103,7 @@ window.addEventListener("focus", async () => {
   // back from the singing page: new phrasings may be ready
   try {
     const phrasings = await api("/api/phrasings");
-    if (JSON.stringify(phrasings) !== JSON.stringify(state.start.phrasings)) {
+    if (state.start && state.view && JSON.stringify(phrasings) !== JSON.stringify(state.start.phrasings)) {
       state.start.phrasings = phrasings;
       renderCards();
     }
