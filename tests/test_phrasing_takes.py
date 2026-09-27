@@ -257,3 +257,32 @@ def test_bank_words_keep_the_seed_s_note_keys():
         assert keys == seed_keys and words != seed_words
     for (phrase, index, _, _) in seed_keys:
         assert index < len(genome.phrases[phrase].sung)
+
+
+def test_a_note_the_tune_has_changed_since_a_take_keeps_its_timing_but_not_its_tuning(monkeypatch):
+    """The tune changes where singers sing it otherwise (2026-09-27): a take sung before still says how early,
+    how long and how loud every note was, but its tuning at a changed note was against the old one."""
+    from dataclasses import fields
+    from types import SimpleNamespace
+
+    from songbird import phrasing as P
+    from songbird.realize import choose_params
+
+    genome = G.load(H)
+    tonic, now = choose_params(genome).tonic, T.written(genome)
+    names = [f.name for f in fields(P.Gesture)]
+    sang = {"early": 0.02, "hold": 0.9, "level": 1.0, "swell": 0.0, "scoop": -30.0, "bend": 0.0, "fall": 0.0,
+            "vibrato": None, "tune": None}
+    notes = [{"phrase": "v2", "index": k, "off": -40.0, "gesture": [sang[f] for f in names]} for k in (4, 5)]
+    data = {"take": "x.wav", "lag": 0.0, "key": -4, "fields": names, "notes": notes, "stamp": {"guide": "abc"}}
+    # sung at -4 to a guide whose v2 had its sixth note a step above where the tune has it now
+    sung_to = [SimpleNamespace(pitch=tonic - 4 + now[("v2", 4)], syllable="light"),
+               SimpleNamespace(pitch=tonic - 4 + now[("v2", 5)] + 2, syllable="and")]
+    monkeypatch.setattr(T, "measured", lambda *a: data)
+    monkeypatch.setattr(T, "guide", lambda *a: SimpleNamespace(notes=sung_to))
+    monkeypatch.setattr(T, "transposed", lambda *a: -4)
+    seen, _, _ = T.sung_phrasing(H, genome, ["x.wav"])
+    same, moved = seen[("v2", 4)][0], seen[("v2", 5)][0]
+    assert np.isfinite(same.tune) and np.isnan(moved.tune)
+    assert (moved.early, moved.hold, moved.scoop) == (same.early, same.hold, same.scoop)  # the rest is kept
+    assert now[("v2", 5)] == 5 and now[("r2", 3)] == 5  # fa, where singers sang it: the tune as it is now

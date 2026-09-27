@@ -775,7 +775,9 @@ def sung_phrasing(genome_path: Path, genome, takes):
     """Gestures from one or more sung takes (paths, or kept takes): every
     sighting of every note of the tune, scaled as a phrasing keeps them, what
     each was sung to, and a portrait of each take. A note a take didn't sing
-    (outside its part of the song) isn't a sighting at all. Each person counts
+    (outside its part of the song) isn't a sighting at all, and where the tune
+    has changed a note since a take was sung, that sighting keeps its timing,
+    loudness and the rest but not its tuning. Each person counts
     once at each place in the song, however many of their takes sang it: a
     take of the whole song sings every place, a take of one section its own."""
     seen: dict[tuple[str, int], list[P.Gesture]] = defaultdict(list)
@@ -787,13 +789,17 @@ def sung_phrasing(genome_path: Path, genome, takes):
     partly = Counter((singer, place) for singer, d in zip(who, data) if "window" in d
                      for n, place in zip(d["notes"], places(d)) if n["gesture"] is not None)
     portrait = []
+    now, tonic = written(genome), choose_params(genome).tonic
     for d, singer in zip(data, who):
         gestures = gestures_of(d)
         sung_to = guide(genome_path, genome, d["stamp"]["guide"]).notes
+        shift = transposed(genome_path, d["stamp"]["guide"])
         for n, note, ge, place in zip(d["notes"], sung_to, gestures, places(d)):
             if n["gesture"] is None:
                 continue
             key = (n["phrase"], n["index"])
+            if key in now and round(note.pitch) - tonic - shift != now[key]:
+                ge = replace(ge, tune=NAN)  # the tune has another note here now: this one's tuning was against the old
             seen[key].append(bounded(scaled(ge, SUNG)))
             words[key].append(f"{singer}|{(note.syllable or '').lower()}")
             weights[key].append(1.0 / (whole[singer] + partly[(singer, place)]))  # each person counts once
@@ -801,6 +807,26 @@ def sung_phrasing(genome_path: Path, genome, takes):
         portrait.append((d["take"], d["lag"], d["key"], [gestures[k] for k in sung],
                          [d["notes"][k]["off"] for k in sung]))
     return seen, (words, weights), portrait
+
+
+def written(genome) -> dict[tuple[str, int], int]:
+    """Every note of the tune as it is now: semitones above the tonic, by phrase and place in it."""
+    from songbird.theory import degree_semitones
+
+    mode = choose_params(genome).mode
+    return {(pid, k): degree_semitones(n.degree, mode, n.alter)
+            for pid, p in genome.phrases.items() for k, n in enumerate(p.sung)}
+
+
+_transposes: dict[str | None, int] = {}
+
+
+def transposed(genome_path: Path, digest: str | None) -> int:
+    """How far the guide a take was sung to was moved from the song's own key (its score's transpose)."""
+    if digest not in _transposes:
+        path = K.guide_score(genome_path.stem, digest) or ROOT / "renders" / "guide" / f"{genome_path.stem}.guide.score.json"
+        _transposes[digest] = int(json.loads(path.read_text()).get("transpose", 0)) if path.exists() else 0
+    return _transposes[digest]
 
 
 def components(groups: list[np.ndarray]) -> tuple[float, float]:

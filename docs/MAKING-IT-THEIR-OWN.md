@@ -74,3 +74,27 @@ Word variants next; they're cheap, since Whisper is already in the loop.
 Guard against false positives:
 - the synthetic references never shift a note, so on them the detector must report nothing;
 - a slip that happens once is not a variant.
+
+## The first note shifts the song took (2026-09-27)
+
+After the first night online (four singers, 28 takes: Milo, an open-call singer, milo-test-fnrlhv
+and gorman, who said parts were "harder to match"), `tools/hard_notes.py` pooled every measured
+note, each singer counting once, and found the tune hard in pitch, not in time: every line was
+sung 20 to 45 ms late about equally, but some notes were sung as other notes by nearly everyone.
+Most were lines that start like a more familiar one and then turn, where singers sang the familiar
+line. The artist heard the changes and took them all (15 notes of a whole song, rhythm untouched):
+
+| where | the words | was | now | the singers |
+|---|---|---|---|---|
+| v2, pickup | *a* flicker of light | low so | low la | all three sang it higher: the drop was a fifth, to the song's lowest note |
+| v2, 6th note | light, *and* as quick | so | fa | all three: a passing note down the scale |
+| r2, 4th note | while *you* sing it | so | fa | three of four: the leap fell on a weak syllable |
+| b2, 5th-6th | a-long *like a* coal | re mi | so la | two of three sang so, as the bridge's first line has it there |
+| b3, 7th note | making *and* everyone's | re | so | two of three, as the verse's third line has it there |
+| b4, 7th note | if *you* leave it alone | do | re | two of three (the third higher still) |
+
+Each is now an exact copy of the line it was being mistaken for, or the note the singers chose. Guides
+built from 2026-09-27 00:20 sing it; takes sung before are still measured against what they heard,
+and a phrasing leaves out a changed note's tuning from takes sung to the old one (tools/phrasing.py).
+Run `tools/hard_notes.py` as more people sing: a candidate is a note half the singers or more sing
+as the same other note.
