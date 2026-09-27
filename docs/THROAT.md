@@ -211,12 +211,12 @@ All of it is in `songbird/synth/throat.py`; `synthesize()` keeps its signature a
 gives one voice.
 
 1. **The DC remover is centred on each pulse,** with room laid out before the pulse.
-2. **Spread (`Texture.spread` 0.15).** A fixed all-pass whose group delay wanders along frequency
-   by 15% of each pulse's period (RMS), from 1.5 kHz, full above 3 kHz. It's the same for every
+2. **Spread (`Texture.spread` 0.25; 0.15 until 2026-09-27).** A fixed all-pass whose group delay wanders along frequency
+   by that fraction of each pulse's period (RMS), from 1.5 kHz, full above 3 kHz. It's the same for every
    pulse and every song (MELP's pulse dispersion, in effect). A pulse's upper harmonics now
    arrive spread through part of the period, still periodic. It's scaled to the period because
    a fixed delay smeared the altos and hardly touched the basses.
-3. **Scatter (`Texture.scatter` 0.4).** A fresh random phase on every pulse (radians, smooth over
+3. **Scatter (`Texture.scatter` 0.5; 0.4 until 2026-09-27).** A fresh random phase on every pulse (radians, smooth over
    300 Hz), rising in from harmonic 8 to 20. That's where harmonics stop being heard one by one,
    and it unlocks them from period to period.
 4. **Sharpening (`sharpen`, `SHARPEN` 1.5, in `sing()` only).** A predicted envelope's peaks and
@@ -225,6 +225,18 @@ gives one voice.
 
 `throat.PLAIN` is WORLD's own synthesis, for comparison. `tools/throat/vocoder_eval.py
 --variant NAME key=value` tries other settings.
+
+### Spread and scatter raised (2026-09-27)
+
+A review of the voice's roughness measured steady vowels' 4-8 kHz still bunched at the pulse: excess
+kurtosis 2.8 against the teacher's 1.3, 83% of the band's energy in the loudest quarter of each period
+against 75% (the periodic part carries it, not the noise; the predicted aperiodicity in vowels sits 3-4
+dB under the teacher's). In a low voice (a stand-in shifted down an octave, 189 Hz) the pulse rate falls
+into the roughness band and the >2 kHz envelope's 150-400 Hz modulation read 45% against the teacher's
+27-30%. Spread 0.25 with scatter 0.5 lands on the teacher (0.3/0.6 overshoots: kurtosis 0.8); the same
+scripts are in the session's scratch, `probe_low.py`, and `tools/throat/vocoder_eval.py --variant` tries
+other settings. Raising the predicted aperiodicity 3 dB helps the low voice a little more and was left
+for a listening test.
 
 ### The numbers
 

@@ -119,11 +119,13 @@ class Texture:
       the next. By harmonic, because what matters is where harmonics stop being heard one by one.
     """
 
-    spread: float = 0.15  # the teacher's upper harmonics are about this spread (docs/THROAT.md)
+    spread: float = 0.25  # the teacher's upper harmonics are about this spread (docs/THROAT.md; 0.15 until 2026-09-27)
     spread_from: float = 1500.0
     jitter: float = 0.0
     jitter_corr: float = 0.5
-    scatter: float = 0.4  # radians: upper harmonics nearer the teacher's steadiness (docs/THROAT.md)
+    scatter: float = 0.5  # radians: upper harmonics nearer the teacher's steadiness (docs/THROAT.md; 0.4 until
+    # 2026-09-27: steady vowels' 4-8 kHz still bunched at the pulse, excess kurtosis 2.8 to the teacher's 1.3, and
+    # a low voice buzzed with it; 0.25/0.5 lands on the teacher, 0.3/0.6 overshoots)
     scatter_from: float = 8.0
     scatter_to: float = 20.0
 
