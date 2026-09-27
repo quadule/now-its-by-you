@@ -12,7 +12,8 @@ the site was rebuilt and checked, and waits for your `wrangler deploy` (below).
 
        cd ~/Code/songbird/web/sing && npx wrangler deploy
 
-   BUILD-STATUS
+   Built 02:32 PT (`web/sing/public`, 90 guides, 452 MB) from the committed song and code, everyone's
+   phrasing from 28 takes; checked: all 90 specs list the live guides among the ones they still accept.
 
 2. **Restart your sync loop** on the new code (the extractor's stamp moved with Codex's merge; every
    counted take was measured again, 4 minutes):
@@ -51,7 +52,16 @@ the site was rebuilt and checked, and waits for your `wrangler deploy` (below).
    worst in low voices). The advisor left an A/B pair of a low voice in the session's scratch
    (`fable-voice/low_default.wav` vs `low_fix.wav`) if you want the isolated effect.
 
-## What changed (all on main, tests passing)
+## What changed (all on main; the full suite passed on the working tree, 1289 tests, and runs again on HEAD)
+
+Commits, oldest first: 4ec52a0 the tune · 1456235 the first refrain's questions · 4d4d065 + 3ca1db5 Codex's
+branch (the merge commit came out with only its new files: a `git stash` while it was staged unstaged the
+rest, which 3ca1db5 puts in; the working tree and every test run had it all along) · 77aca7c lone refrain +
+tests · 332c43e hard_notes · f934b1a the 8 MiB goal · 1c9291d bird verse · 5540454 Gemini's couplet, verses
+and readings · d59f95d Open Door as the seed's own · 0470d1a six verses from the lyric review · f4f5345 the
+lead's arc and saturation · 517e727 vocoder texture · b0ac4a9 vowel end · 735aa18 tools/everyone.py ·
+96dbdb3 goldens and this summary · e0b33c4 tests.
+
 
 - **Tune** (commit 4ec52a0, your "yes let's go"): v2's pickup and "and", r2's "you", b2's "like a",
   b3's "and", b4's "you". Pitch only. Old takes keep their timing and loudness data, not their tuning
@@ -110,7 +120,11 @@ words (put, disc, ruined, hiss, hummed, low, cannon, counting).
    plays files as they are, -12 LUFS costs almost nothing here (limiter max 0.6 dB). Ask them.
 4. **Gemini's remaining ideas**: hard_notes categories and `--as-variants` (folk variants into the
    lineage's drift); the "pickup lift" it saw (so, → la,) is 2-of-3 singers, not adopted.
-5. **The bridge's last line**: all three singers went *up* on "leave **it** alone" instead of down
+5. **The band under the rests.** Every time the singer stops, the record drops 6 dB (the intro and the
+   turns sit at -20 LUFS against -14 sung). The mix review's suggestion: `RIDE` in mixing.py from 3 to
+   5 dB, a less deflating intro (the turns barely change: the ride's 1.5 s up and down eats most of a 5 s
+   turn). Not done tonight: it changes every guide's mix, so it wants a rebuild you'd hear first.
+6. **The bridge's last line**: all three singers went *up* on "leave **it** alone" instead of down
    to do, each to a different note. More singers tonight will settle it (`tools/hard_notes.py`).
 
 ## Tonight's routine (unchanged)
