@@ -855,6 +855,7 @@ function renderCompare() {
 const audio = $("audio");
 
 async function listen(who = "you", section = null) {
+  window.SongbirdComposer?.stop();
   if (state.poll && state.playing && state.playing.job && state.playing.job.state === "queued") {
     api("/api/cancel", { job: state.playing.job.id }).catch(() => {});
   }
@@ -872,6 +873,22 @@ async function listen(who = "you", section = null) {
     await follow(job, playing);
   } catch (e) {
     if (playing === state.playing) showPlayer(label, e.message, 0, false);
+  }
+}
+
+function pauseAudio() {
+  const playing = state.playing;
+  audio.pause();
+  clearTimeout(state.poll);
+  state.poll = null;
+  if (!playing) return;
+  if (playing.job?.state === "queued") api("/api/cancel", { job: playing.job.id }).catch(() => {});
+  // A replacement identity invalidates both in-flight listen and job responses. Keep the edit snapshot
+  // so resuming a finished audio track still says when its choices differ from the current song.
+  state.playing = { ...playing };
+  if (!playing.job || ["queued", "running"].includes(playing.job.state)) {
+    showPlayer(playing.label, "Preview stopped while the melody sketch plays", 0, false);
+    $("playPause").disabled = true;
   }
 }
 
@@ -935,7 +952,7 @@ audio.addEventListener("timeupdate", () => {
   $("barFill").style.width = `${(audio.currentTime / audio.duration) * 100}%`;
   $("nowTime").textContent = `${fmtTime(audio.currentTime)} / ${fmtTime(audio.duration)}`;
 });
-audio.addEventListener("play", () => { $("playShape").setAttribute("d", PAUSE); $("playPause").setAttribute("aria-label", "Pause"); });
+audio.addEventListener("play", () => { window.SongbirdComposer?.stop(); $("playShape").setAttribute("d", PAUSE); $("playPause").setAttribute("aria-label", "Pause"); });
 audio.addEventListener("pause", () => { $("playShape").setAttribute("d", PLAY); $("playPause").setAttribute("aria-label", "Play"); });
 $("playPause").addEventListener("click", () => (audio.paused ? audio.play() : audio.pause()));
 $("bar").addEventListener("click", (ev) => {
@@ -965,15 +982,20 @@ async function sing() {
   }
 }
 
+function revealRecording(scroll = false) {
+  const panel = $("recordPanel");
+  const details = panel.closest("details.finish-panel") || panel.closest("details");
+  if (details) details.open = true;
+  if (scroll) panel.scrollIntoView({ behavior: "smooth", block: "nearest" });
+}
+
 async function record() {
   const saved = $("saved");
   if (state.recording) return;
   state.recording = true;
   for (const id of ["record", "recordNow"]) $(id).disabled = true;
   saved.replaceChildren(h("p", {}, "Recording…"));
-  const exportPanel = $("recordPanel").closest("details");
-  if (exportPanel) exportPanel.open = true;
-  $("recordPanel").scrollIntoView({ behavior: "smooth", block: "nearest" });
+  revealRecording(true);
   const edits = copyEdits();
   try {
     let job = await api("/api/record", { edits });
@@ -992,9 +1014,12 @@ async function record() {
       h("p", { class: "hint" }, "To make the next version from this one: ", h("code", {}, r.next)),
       h("button", { class: "btn", type: "button", onclick: () => play(job.url, "The recording", r.flac,
         { editsKey: JSON.stringify(edits), label: "The recording", who: "you", section: null, job }) }, "Play the recording"));
+    toast("Recording saved with your edits and the studio.");
   } catch (e) {
     saved.replaceChildren(h("p", { class: "problem" }, `Couldn't record it: ${e.message}`));
+    toast(`Couldn't record it: ${e.message}`);
   } finally {
+    revealRecording();
     state.recording = false;
     for (const id of ["record", "recordNow"]) $(id).disabled = false;
   }
@@ -1015,6 +1040,7 @@ function render() {
 function showWorkspace(name, focus = false) {
   const tabs = [...document.querySelectorAll("#studioTabs [data-workspace]")];
   if (!tabs.some((button) => button.dataset.workspace === name)) return;
+  if (name !== "arrange") window.SongbirdComposer?.stop();
   state.workspace = name;
   tabs.forEach((button) => {
     const active = button.dataset.workspace === name;
@@ -1030,9 +1056,9 @@ function showWorkspace(name, focus = false) {
 }
 
 window.StudioBridge = {
-  setEdit, setEdits, clearEdits, listen, toast,
+  setEdit, setEdits, clearEdits, listen, toast, pauseAudio,
   getEdits: () => copyEdits(),
-  snapshot: () => ({ start: state.start ? JSON.parse(JSON.stringify(state.start)) : null, edits: copyEdits() }),
+  snapshot: () => ({ start: state.start ? JSON.parse(JSON.stringify(state.start)) : null, edits: copyEdits(), revision: state.editRevision }),
   replaceEdits: (edits, label = "Load a saved draft") => commitEdits(edits, label),
   undo: () => travelHistory("undo"), redo: () => travelHistory("redo"),
   showWorkspace,

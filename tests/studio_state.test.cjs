@@ -24,6 +24,8 @@ function studio() {
     addEventListener(name, callback) { this.listeners[name] = callback; }
     querySelectorAll() { return []; }
     contains() { return false; }
+    closest() { return this.ancestor || null; }
+    scrollIntoView() { this.scrolledWithAncestorOpen = this.ancestor?.open; }
     pause() {}
     play() { return Promise.resolve(); }
   }
@@ -162,4 +164,43 @@ test('mute restores the previous audible level instead of discarding the mix', (
     mutePlayer(bandCard, "lute"); bandCard.band.lute = 0; mutePlayer(bandCard, "lute")`);
   assert.equal(run('state.edits["band.lute"]'), 0.7);
   assert.equal(run('state.undo.length'), 2);
+});
+
+
+test('starting a sketch invalidates an in-flight vocal request and preserves stale-audio tracking', async () => {
+  const { run, context, nodes } = studio();
+  const pending = [];
+  context.request = () => new Promise((resolve) => pending.push(resolve));
+  run('api = request; refreshReady = () => {}; state.view = {words: []}');
+  const listening = run('listen("you", null)');
+  run('pauseAudio()');
+  pending[0]({ state: 'done', url: '/obsolete.flac' });
+  await listening;
+  assert.equal(nodes.get('audio').src, undefined);
+  assert.equal(nodes.get('playPause').disabled, true);
+  run('setEdit("tempo", 100)');
+  assert.match(nodes.get('nowSub').textContent, /Earlier version/);
+});
+
+test('Record opens the finish panel before scrolling and reopens it when the finished result arrives', async () => {
+  const { run, context, nodes } = studio();
+  const pending = [];
+  context.request = () => new Promise((resolve) => pending.push(resolve));
+  run('api = request');
+  const panel = context.document.getElementById('recordPanel');
+  const details = { open: false };
+  panel.ancestor = details;
+  const recording = run('record()');
+  assert.equal(panel.scrolledWithAncestorOpen, true);
+  assert.equal(nodes.get('recordNow').disabled, true);
+  details.open = false;
+  run('setEdit("tempo", 100)');
+  pending[0]({ state: 'done', url: '/recorded.flac', result: { recorded: { flac: 'song.flac', duration: 60, yours: 0, next: 'songbird next' } } });
+  await recording;
+  assert.equal(details.open, true);
+  assert.equal(nodes.get('recordNow').disabled, false);
+  assert.equal(run('state.recording'), false);
+  nodes.get('saved').children.at(-1).listeners.click();
+  assert.equal(nodes.get('audio').src, '/recorded.flac');
+  assert.match(nodes.get('nowSub').textContent, /Earlier version/);
 });
