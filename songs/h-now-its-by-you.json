@@ -957,8 +957,144 @@
           "the pa-pers were halt-ed, the bar-ri-ers high;",
           "the sound of it crossed with no need of a sky."
         ]
+      },
+      {
+        "id": "machine",
+        "era": 2026,
+        "mood": "tender",
+        "scheme": "AABB",
+        "rarity": "common",
+        "by": "fable (the lyric review of 2026-09-27)",
+        "slots": {
+          "who": {
+            "noun": [
+              "girl",
+              "boy"
+            ],
+            "self": [
+              "her-self",
+              "him-self"
+            ],
+            "his": [
+              "her",
+              "his"
+            ]
+          }
+        },
+        "lines": [
+          "A {who.noun} sang it once to a box on the shelf,",
+          "and back came a voice that was near-ly {who.self}:",
+          "it sang in {who.his} voice, but it was-n't a-lone;",
+          "{who.his} moth-er was in it, and oth-ers un-known."
+        ]
+      },
+      {
+        "id": "court",
+        "era": 1960,
+        "mood": "light",
+        "scheme": "AABB",
+        "rarity": "common",
+        "by": "fable (the lyric review of 2026-09-27)",
+        "slots": {
+          "years": [
+            "ten",
+            "six",
+            "nine"
+          ]
+        },
+        "lines": [
+          "Two men went to court o-ver whose it should be,",
+          "and each swore he'd made it, a-lone, by the sea;",
+          "it took them {years} years, and it cost them the lot;",
+          "the rul-ing's long lost, and the tune's not for-got."
+        ]
+      },
+      {
+        "id": "car",
+        "era": 1975,
+        "mood": "tender",
+        "scheme": "AABB",
+        "rarity": "common",
+        "by": "fable (the lyric review of 2026-09-27)",
+        "slots": {
+          "age": [
+            "for-ty",
+            "fif-ty",
+            "thir-ty"
+          ]
+        },
+        "lines": [
+          "A fa-ther would sing it with kids in the back",
+          "on long drives at night, with the win-dows gone black;",
+          "they're {age}, and sing it, and call it his own;",
+          "he'd had it him-self from a man he'd not known."
+        ]
+      },
+      {
+        "id": "voicemail",
+        "era": 2015,
+        "mood": "tender",
+        "scheme": "AABB",
+        "rarity": "common",
+        "by": "fable (the lyric review of 2026-09-27)",
+        "slots": {
+          "kin": [
+            "daugh-ter",
+            "wid-ow"
+          ]
+        },
+        "lines": [
+          "A dead man still sings the first line when you call,",
+          "the mes-sage he'd left, and they've left it, that's all.",
+          "His {kin} still rings on the nights she's a-lone;",
+          "she waits for the line, and rings off at the tone."
+        ]
+      },
+      {
+        "id": "stroke",
+        "era": null,
+        "mood": "tender",
+        "scheme": "AABB",
+        "rarity": "common",
+        "by": "fable (the lyric review of 2026-09-27)",
+        "slots": {
+          "nod": [
+            "nod",
+            "point"
+          ],
+          "wife": [
+            "wife",
+            "son"
+          ]
+        },
+        "lines": [
+          "A man had a stroke, and it left him no words;",
+          "he'd {nod} at the win-dow, the door, or the birds.",
+          "His {wife} sang a line, and he'd fin-ish the song,",
+          "each word in its place, and not one of them wrong."
+        ]
+      },
+      {
+        "id": "hymn",
+        "era": 1750,
+        "mood": "plain",
+        "scheme": "AABB",
+        "rarity": "common",
+        "by": "fable (the lyric review of 2026-09-27)",
+        "slots": {
+          "day": [
+            "Fri-days",
+            "Mon-days"
+          ]
+        },
+        "lines": [
+          "A min-is-ter heard it drift out of an inn,",
+          "and gave it new words, a-bout heav-en and sin;",
+          "they sing it on Sun-days, and think it's a hymn;",
+          "the inn sings it {day}, and no one tells him."
+        ]
       }
-],
+    ],
     "bridges": [
       {
         "id": "canon",

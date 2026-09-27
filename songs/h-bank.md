@@ -136,6 +136,14 @@ earliest first; the verses with no year go anywhere.
 
 Swap *man's* for wife's or child's.
 
+**hymn** · 1750 · plain · AABB · by fable, from the lyric review of 2026-09-27
+
+> A minister heard it drift out of an inn,
+> and gave it new words, about heaven and sin;
+> they sing it on Sundays, and think it's a hymn;
+> the inn sings it Fridays, and no one tells him.
+
+Swap *Fridays* for Mondays.
 
 **ink** · 1800 · dark · AABB · pairs with carve · by fable (A's ink couplet, B's drawer couplet)
 
@@ -358,9 +366,41 @@ Swap *kid* for lad or girl.
 > it learned every note, and it learned every tongue,
 > and sings it in all of their voices: a choir.
 
+**court** · 1960 · light · AABB · by fable, from the lyric review of 2026-09-27
 
+> Two men went to court over whose it should be,
+> and each swore he'd made it, alone, by the sea;
+> it took them ten years, and it cost them the lot;
+> the ruling's long lost, and the tune's not forgot.
 
+Swap *ten* for six or nine.
 
+**car** · 1975 · tender · AABB · by fable, from the lyric review of 2026-09-27
+
+> A father would sing it with kids in the back
+> on long drives at night, with the windows gone black;
+> they're forty, and sing it, and call it his own;
+> he'd had it himself from a man he'd not known.
+
+Swap *forty* for fifty or thirty.
+
+**voicemail** · 2015 · tender · AABB · by fable, from the lyric review of 2026-09-27
+
+> A dead man still sings the first line when you call,
+> the message he'd left, and they've left it, that's all.
+> His daughter still rings on the nights she's alone;
+> she waits for the line, and rings off at the tone.
+
+Swap *daughter* for widow.
+
+**machine** · 2026 · tender · AABB · by fable, from the lyric review of 2026-09-27
+
+> A girl sang it once to a box on the shelf,
+> and back came a voice that was nearly herself:
+> it sang in her voice, but it wasn't alone;
+> her mother was in it, and others unknown.
+
+Swap *girl* for boy (and herself, her for himself, his).
 
 ### Any time
 
@@ -503,6 +543,14 @@ Swap *seven* for twenty or thirty.
 > and that is the way that it's sung in their town:
 > the wrong word is right now, and handed on down.
 
+**stroke** · tender · AABB · by fable, from the lyric review of 2026-09-27
+
+> A man had a stroke, and it left him no words;
+> he'd nod at the window, the door, or the birds.
+> His wife sang a line, and he'd finish the song,
+> each word in its place, and not one of them wrong.
+
+Swap *nod* for point; *wife* for son.
 
 ## The bridge
 
