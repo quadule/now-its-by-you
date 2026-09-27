@@ -50,15 +50,19 @@ def _measure(genome_path: str, wav: str) -> tuple[str, float, str | None]:
     return wav, time.time() - began, None
 
 
-def measure_all(genome_path: Path, jobs: int = JOBS, everything: bool = False, say=print) -> int:
-    """Measure every take of the song (those marked to use, or all), `jobs` at once; the number measured
-    or found measured. Takes whose guide score isn't kept here can't be measured and are reported."""
+def measure_all(genome_path: Path, jobs: int = JOBS, everything: bool = False, say=print, skip: set | None = None,
+                quiet: bool = False) -> list[str]:
+    """Measure every take of the song (those marked to use, or all), `jobs` at once; the paths of those
+    measured, or found measured. Takes whose guide score isn't kept here can't be measured and are
+    reported. skip: paths already dealt with (tools/invite.py sync --measure keeps them from round to
+    round, so a quiet round starts no processes); quiet: say only what was measured anew or failed."""
     genome_path = Path(genome_path).resolve()
-    chosen = [t for t in K.takes(genome_path.stem) if everything or t.use]
+    chosen = [t for t in K.takes(genome_path.stem) if (everything or t.use) and str(t.path) not in (skip or ())]
     if not chosen:
-        say("no takes to measure")
-        return 0
-    done = 0
+        if not quiet:
+            say("no takes to measure")
+        return []
+    done = []
     began = time.time()
     context = multiprocessing.get_context("spawn")
     with concurrent.futures.ProcessPoolExecutor(max(1, jobs), mp_context=context) as pool:
@@ -69,10 +73,11 @@ def measure_all(genome_path: Path, jobs: int = JOBS, everything: bool = False, s
             if error:
                 say(f"  {name}: not measured ({error})")
             else:
-                done += 1
+                done.append(wav)
                 if seconds > 2:  # found measured already takes a second or two; say only what was new
                     say(f"  {name}: measured in {seconds:.0f} s")
-    say(f"{done} of {len(chosen)} takes measured, in {time.time() - began:.0f} s")
+    if not quiet:
+        say(f"{len(done)} of {len(chosen)} takes measured, in {time.time() - began:.0f} s")
     return done
 
 

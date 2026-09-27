@@ -867,10 +867,11 @@ def make_all(site: Site, now: str, withdrawn: set, memo: dict) -> None:
 
 # ---------- sync
 
-def sync(site: Site, make: bool = True, memo: dict | None = None) -> int:
-    """One round: what singers deleted or withdrew, new takes, words, versions (unless not make), and after
-    DELETE_BY the purge. Once in step, a round asks the site only what its bucket lists cheaply (status, gone,
-    takes, words) and says nothing. How many things it did (it says each)."""
+def sync(site: Site, make: bool = True, memo: dict | None = None, measure: bool = False) -> int:
+    """One round: what singers deleted or withdrew, new takes, words, versions (unless not make), the new
+    takes measured (if measure: tools/measure.py, so that phrasings made when singing closes take minutes),
+    and after DELETE_BY the purge. Once in step, a round asks the site only what its bucket lists cheaply
+    (status, gone, takes, words) and says nothing. How many things it did (it says each)."""
     memo = memory() if memo is None else memo
     start = Say.lines
     state = site.call("GET", "/api/admin/status")
@@ -879,6 +880,8 @@ def sync(site: Site, make: bool = True, memo: dict | None = None) -> int:
     if not state.get("deleting"):
         keep_new(site, events, withdrawn, memo)
     keep_words(site, withdrawn)
+    if measure and not state.get("deleting"):
+        measure_new(memo)
     if make and not state.get("deleting"):  # made after every deleting listed here was done: as of the latest
         made_at = max([state.get("now") or utc_now(), *(e["at"] for e in events if e.get("at"))], key=instant)
         make_all(site, made_at, withdrawn, memo)
@@ -887,7 +890,21 @@ def sync(site: Site, make: bool = True, memo: dict | None = None) -> int:
     return Say.lines - start
 
 
-def watch(site: Site, seconds: float, make: bool = True) -> None:
+def measure_new(memo: dict) -> None:
+    """Every take of each song people sang online measured, if it isn't yet (tools/measure.py), saying only what
+    was measured anew; what's been dealt with is remembered from round to round, so a quiet round costs nothing."""
+    import measure as E  # tools/measure.py
+
+    done = memo.setdefault("measured", set())
+    for stem in sorted({t.song for t in K.online()}):
+        genome = K.ROOT / "songs" / f"{stem}.json"
+        if genome.exists():
+            here = {str(t.path) for t in K.takes(stem)}  # after this, each is measured or was said not to be
+            E.measure_all(genome, say=say, skip=done, quiet=True)
+            done.update(here)
+
+
+def watch(site: Site, seconds: float, make: bool = True, measure: bool = False) -> None:
     """sync every so many seconds until Ctrl-C: a round that fails says why, and the next starts over (everything a
     round does is safe to do again); a quiet round is a dot."""
     memo = memory()
@@ -895,7 +912,7 @@ def watch(site: Site, seconds: float, make: bool = True) -> None:
     try:
         while True:
             try:
-                if not sync(site, make, memo):
+                if not sync(site, make, memo, measure):
                     print(".", end="", flush=True)
                     Say.dots = True
             except SystemExit as e:
@@ -1192,6 +1209,7 @@ def main() -> None:
                                     "too, their versions made and put on their pages")
     y.add_argument("--watch", type=float, metavar="SECONDS", help="again every SECONDS (10 or more) until Ctrl-C")
     y.add_argument("--no-versions", action="store_true", help="don't make or upload singers' versions")
+    y.add_argument("--measure", action="store_true", help="measure new takes too (tools/measure.py), so phrasings are quick")
     m = sub.add_parser("mail", help="who needs an email (their page; their version, once ready), ready to paste")
     m.add_argument("--open", action="store_true", help="open each in your mail app too (a mailto: link)")
     m.add_argument("--sent", action="store_true", help="mark the ones the last `mail` listed as sent")
@@ -1223,8 +1241,8 @@ def main() -> None:
     elif args.command == "sync":
         with alone():
             if args.watch:
-                watch(site, args.watch, not args.no_versions)
-            elif not sync(site, not args.no_versions):
+                watch(site, args.watch, not args.no_versions, args.measure)
+            elif not sync(site, not args.no_versions, measure=args.measure):
                 print("nothing new")
     elif args.command == "mail":
         mark_sent(site) if args.sent else mail(site, args.open)

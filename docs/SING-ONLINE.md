@@ -41,13 +41,17 @@ session like that). `revoke <token>` closes a link. Notes are for you; singers n
 
 ## Your routine, until 30 September
 
-    uv run python tools/invite.py sync --watch 120    # keep going: new takes, words, deletions, versions
+    uv run python tools/invite.py sync --watch 120 --measure --no-versions   # singing day: takes, words, deletions,
+                                                      # and each new take measured as it comes
+    uv run python tools/invite.py sync                # later (before 30 September): the versions too
     uv run python tools/invite.py mail                # who needs an email, ready to paste
     uv run python tools/invite.py mail --open         # ...or open each in Mail (mailto:)
     uv run python tools/invite.py mail --sent         # after sending: mark exactly those as sent
     uv run python tools/invite.py singers             # who joined, their takes, what's been mailed
     uv run python tools/invite.py purge               # after DELETE_BY: the local copies go too
 
+- **--measure** measures each new take as it arrives (tools/measure.py; the aligner runs one take
+  at a time, up to a minute each), so when singing closes everyone's phrasing takes minutes to make.
 - **sync** copies new takes into `recordings/<singer>/` with their sidecars (the guide and spec, the
   section and its window, the device's delays, the release they agreed to, whether to credit them,
   and their singer id), leaving them on the server; words go to `recordings/words/<singer>.json`.
