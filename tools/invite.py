@@ -60,7 +60,8 @@ import takes as K  # noqa: E402  (tools/takes.py)
 
 SITE = "https://songbird.quadule.com"  # where singing is live (also at songbird-sing.quadule.workers.dev)
 SECRET = "songbird-sing-admin"  # its name in the artist's secrets tool
-TIMING = ("shift_ms", "auto_ms", "device_ms", "decode_ms", "out_ms", "in_ms", "aec")  # aec: sung with the guide taken out of the mic
+TIMING = ("shift_ms", "auto_ms", "device_ms", "decode_ms", "out_ms", "in_ms")
+HOW = ("aec",)  # how it was sung: without headphones, the guide taken out of the microphone
 PLACE = ("spec", "from_s", "to_s", "section", "label")  # where in the song a take was sung, as its page said
 LOCAL = ("localhost", "127.0.0.1", "::1")
 STALE = 600  # seconds after which half a take on the server is left over, not still arriving
@@ -505,7 +506,7 @@ def keep_online(t: dict, info: dict, wav: bytes, who: str) -> K.Take:
     name = plain(info.get("name"))
     sid = t.get("singer") or info.get("sid")
     received = info.get("received") or utc_now()
-    extra = {k: info[k] for k in (*PLACE, *TIMING) if k in info}
+    extra = {k: info[k] for k in (*PLACE, *TIMING, *HOW) if k in info}
     # credit_as: the name they gave, the only one they may be credited by, and only if they said so
     with whole():
         return K.keep_sung(info["song"], who, wav, info["guide"], recorded=instant(received).astimezone().timetuple(),
