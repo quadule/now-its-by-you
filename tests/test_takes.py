@@ -59,6 +59,8 @@ def test_a_take_of_one_section_says_where_it_starts(kept):
     assert K.load(one.path).info == again.info and K.load(one.path).section == 4
     whole = K.keep_sung("song", "Ana", b"RIFF-b", "abc123abc123", from_s=0.0, to_s=190.2, spec="a.k0.t100")
     assert (whole.from_s, whole.section) == (0.0, None) and not whole.online and whole.sid is None
+    asked = K.keep_sung("song", "Ana", b"RIFF-d", "abc123abc123", from_s="", to_s="", section="", spec="")
+    assert (asked.from_s, asked.to_s, asked.section, asked.spec) == (0.0, None, None, None)  # left empty in a query
     old = K.keep_sung("song", "Ana", b"RIFF-c", "abc123abc123", recorded=at(2026, 9, 25, 15, 28, 7))  # from before
     assert (old.from_s, old.to_s, old.section, old.spec) == (0.0, None, None, None)
     old.sidecar().unlink()  # a take without its sidecar still knows when it was sung, from its name

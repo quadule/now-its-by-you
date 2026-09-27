@@ -67,20 +67,25 @@ class Take:
     def rel(self) -> str:
         return self.path.relative_to(ROOT).as_posix()
 
+    def said(self, name: str) -> str | float | int | None:
+        """What the sidecar says of one field, None if nothing (a query string's empty value too)."""
+        value = self.info.get(name)
+        return None if value is None or value == "" else value
+
     @property
     def from_s(self) -> float:
         """Where on its guide's clock the take's first sample is, in seconds: 0 for a take from the top."""
-        return float(self.info.get("from_s") or 0.0)
+        return float(self.said("from_s") or 0.0)
 
     @property
     def to_s(self) -> float | None:
         """Where it was meant to end, or where the singer stopped (guide time); None: the song's end."""
-        return None if self.info.get("to_s") is None else float(self.info["to_s"])
+        return None if self.said("to_s") is None else float(self.said("to_s"))
 
     @property
     def section(self) -> int | None:
         """The one section it sang (its index in the lyrics' sections); None for a take of the whole song."""
-        return None if self.info.get("section") is None else int(self.info["section"])
+        return None if self.said("section") is None else int(self.said("section"))
 
     @property
     def spec(self) -> str | None:
