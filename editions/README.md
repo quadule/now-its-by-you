@@ -4,7 +4,9 @@ Three authored starting points for **Now It's by You**, retaining the written
 tune, key and turning refrain. Their choices are carried in each packet's
 `chosen_by_you` record. The original seed and its default rendering stay intact.
 
-**Open Door** starts with harp under the first line, lets the rhythm and answering
+**Open Door** is the seed's own arrangement since 2026-09-27 (`seed_params` in the genome carries it,
+with the mix review's tweaks: forward 7.5, width 1.25, drum 1.5; the file here spells the same choices out).
+It starts with harp under the first line, lets the rhythm and answering
 instruments join gradually, then removes the upper band for the first half of the
 last refrain. Guitar and the other players return under its answer. The lead sits
 a little further into the band, with a closer, less reverberant room. This is the

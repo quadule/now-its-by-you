@@ -83,7 +83,8 @@ def test_choir_sings_only_where_the_genome_allows():
     from songbird.realize import choose_params, realize
 
     g = G.load(Path(__file__).parent.parent / "songs" / "h-now-its-by-you.json")
-    score = realize(g, replace(choose_params(g), choir=2))
+    own = choose_params(g)  # the seed's own arrangement sings thirds behind the last refrains: not here
+    score = realize(g, replace(own, choir=2, style=replace(own.style, backing="")))
     choir = [n for n in score.notes if n.part.startswith("choir")]
     assert {n.part for n in choir} == {"choir1", "choir2"}
     assert {n.section for n in choir} == {"bridge", "tag"}
@@ -136,7 +137,8 @@ def test_choir_voices_sing_their_own_phrasings():
     from songbird.realize import choose_params, realize
 
     g = G.load(Path(__file__).parent.parent / "songs" / "h-now-its-by-you.json")
-    params = replace(choose_params(g), choir=2)
+    own = choose_params(g)
+    params = replace(own, choir=2, style=replace(own.style, backing=""))
     late = {pid: tuple(P.Gesture(early=-0.25) for _ in ph.sung) for pid, ph in g.phrases.items()}
     score = realize(g, params, choir=[late, None])
     lead, first, second = score.part("voice"), score.part("choir1"), score.part("choir2")

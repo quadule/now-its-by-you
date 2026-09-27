@@ -108,8 +108,9 @@ def test_two_machines_are_two_singers(h):
 def test_a_neutral_machine_sings_like_its_parent(h):
     seed = Params.from_dict(h.seed_params)
     p = choose_params(h, voice=H.Voice(salt="locked-down"))
+    # the seed's own mix (Open Door, 2026-09-27) comes through, its voice held to the machines' floor of 8.5 dB over the band
     assert (p.tonic, p.mode, p.tempo, p.accomp, p.singer, p.mix) == (seed.tonic, seed.mode, seed.tempo, seed.accomp,
-                                                                        {}, {})
+                                                                        {}, {**seed.mix, "forward": max(seed.mix["forward"], 8.5)})
     assert p.choir == seed.choir + 1  # still a generation
     assert V.fits(h, p.form)
 
@@ -204,7 +205,8 @@ def test_every_machine_has_its_own_band_and_nobody_sits_out(h):
     from songbird.band import INSTRUMENTS, LEADS, PATTERNS, Band
 
     seed = Params.from_dict(h.seed_params)
-    assert seed.band == Band()  # the seed's arrangement
+    assert seed.band.lineup == {} and seed.band.arc == 0.95 and seed.band != Band()  # the seed's own arrangement (Open Door)
+    assert all(0.5 <= getattr(seed.band, i) <= 1.5 for i in INSTRUMENTS)  # within what the machines may do
     bands = {}
     for name in MACHINES:
         voice = H.fictional(name)
@@ -248,7 +250,8 @@ def test_every_machine_mixes_its_own_record_within_bounds(h):
             for field, (lo, hi) in RANGES.items():
                 assert lo <= getattr(mix, field) <= hi, (field, getattr(mix, field))
             assert 8.5 <= mix.forward <= 11.0  # the voice stays well over the band
-            assert 0.3 <= mix.intimacy <= 0.7 and 0.9 <= mix.width <= 1.25 and abs(mix.tilt) <= 1.2
+            # width: from the seed's own 1.25 (Open Door, 2026-09-27) a machine may reach the mixer's limit
+            assert 0.3 <= mix.intimacy <= 0.7 and 0.9 <= mix.width <= RANGES["width"][1] and abs(mix.tilt) <= 1.2
             assert (mix.rt60, list(mix.tone)) == (voice.room.rt60, list(voice.room.tone))  # the machine's own room
             old = voice.ages.median >= 3.4  # files some eight years old or more
             assert mix.wear < 0.35 or old  # crackle only on the oldest machines

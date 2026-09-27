@@ -14,8 +14,9 @@
   "band.lute": 0.85,
   "band.fiddle": 0.9,
   "band.whistle": 0.9,
-  "mix.forward": 8.5,
+  "mix.forward": 7.5,
   "mix.space": 0.8,
-  "mix.width": 1.1,
-  "mix.intimacy": 0.65
+  "mix.width": 1.25,
+  "mix.intimacy": 0.65,
+  "band.drum": 1.5
 }

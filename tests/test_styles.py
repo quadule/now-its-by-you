@@ -58,12 +58,16 @@ def test_the_seed_of_h_renders_byte_identical(tmp_path):
 
 def test_old_params_load_with_the_seeds_style_and_band():
     g = G.load(H)
-    record = Params.from_dict(g.seed_params).to_dict()
-    # the seed's own style and band leave no trace in a record, as in every record from before styles
+    old = {k: v for k, v in g.seed_params.items() if k not in ("style", "band", "mix")}  # a record from before styles
+    record = Params.from_dict(old).to_dict()
+    # the plain style and band leave no trace in a record, as in every record from before styles...
     assert "style" not in record and "lineup" not in record["band"]
     p = Params.from_dict(record)
     assert p.style == Style() and p.style.seed and p.band.lineup == {} and p.band == Band()
-    assert choose_params(g) == p
+    # ...while the seed's own arrangement is written out since 2026-09-27 (Open Door, seed_params), and travels
+    own = choose_params(g)
+    assert own.style.name == "ballad" and own.style.entrances and own.style.breakdown and own.band.arc == 0.95
+    assert Params.from_dict(own.to_dict()) == own and own != p
 
 
 def test_a_style_and_a_lineup_survive_the_record():
@@ -267,12 +271,21 @@ def band_notes(score, section_index=None):
     return [n for n in out if t0 + 0.05 <= n.start < t1 - 0.05]
 
 
-def test_the_ballad_as_a_style_with_nothing_asked_plays_the_seeds_band():
+def test_the_ballad_as_a_style_plays_the_seeds_band():
+    """The ballad is the seed's style: with nothing asked it brings the seed's players; with the seed's own
+    choices asked (Open Door, seed_params, 2026-09-27: entrances, breakdown, thirds, rit, its levels) it plays
+    the seed's notes exactly."""
     g = G.load(H)
-    seed = realize(g, choose_params(g))
+    own = choose_params(g)
+    seed = realize(g, own)
     p = choose_params(g, style="ballad", arrange=OFF)
     assert p.style.name == "ballad" and not p.style.seed
-    again = realize(g, replace(p, tempo=seed.band and choose_params(g).tempo))
+    plain = realize(g, replace(p, tempo=own.tempo))
+    assert {n.part for n in plain.notes} == {n.part for n in seed.notes}
+    asked = replace(p, tempo=own.tempo, band=own.band, ritardando=own.ritardando, style=replace(
+        p.style, lineage=(), **{f: getattr(own.style, f) for f in ("entrances", "breakdown", "backing", "ending", "lift", "feel")}))
+    assert asked.style == own.style
+    again = realize(g, asked)
     assert [n for n in again.notes] == [n for n in seed.notes]
 
 
