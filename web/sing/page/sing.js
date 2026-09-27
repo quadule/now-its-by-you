@@ -783,16 +783,30 @@ K.fullScreen($("sing"), $("full"), () => { if (S.mode === "idle" && S.view) rest
 function finishTake(stoppedAt) {
   const rate = S.ctx.sampleRate, r = S.recording, part = r.part, whole = part.index === null;
   const first = K.firstFrame(S.t0, S.out, S.inn, delay(), rate, part.from); // sample 0 is guide time part.from
-  const samples = whole ? K.assemble(S.chunks, first) : K.cutTake(S.chunks, first, rate, part.to - part.from + K.TAIL);
+  let samples = whole ? K.assemble(S.chunks, first) : K.cutTake(S.chunks, first, rate, part.to - part.from + K.TAIL);
   S.chunks = [];
   // where the take ends, in guide time: the section's (or the song's) end, or wherever it was stopped before that
   const to = Math.round(Math.max(part.from, Math.min(part.to, stoppedAt)) * 1000) / 1000;
   const long = samples.length / rate > 5, trail = S.trail.slice(), notes = K.notesOf(r.lyrics);
-  const auto = long ? (whole ? K.autoSync(trail, notes) : K.autoSyncWindow(trail, notes, part.from, part.to)) : 0;
-  S.take = long ? { ...r, samples, rate, to, trail, buffer: null, out: S.out, inn: S.inn, device: delay(), auto, aec: cancelling() } : null;
+  let auto = long ? (whole ? K.autoSync(trail, notes) : K.autoSyncWindow(trail, notes, part.from, part.to)) : 0;
+  // the guide leaking from a speaker into a raw take (no headphones, and no echo cancellation: an iPhone) is found,
+  // the take lined up by exactly its delay (the singer heard the guide at that delay too), and the leak taken out
+  let leak = null;
+  const g = S.guides[r.key];
+  if (long && g && !cancelling()) {
+    const found = K.leakLag(samples, rate, g.buffer, g.offset, part.from);
+    if (found.prominence >= 7 && found.corr >= 0.02) {
+      const clean = K.cancelLeak(samples, rate, g.buffer, g.offset, part.from, found.lag);
+      samples = clean.samples;
+      auto = found.lag;
+      leak = { lag: found.lag, corr: found.corr, db: clean.leakDb };
+    }
+  }
+  S.take = long ? { ...r, samples, rate, to, trail, buffer: null, out: S.out, inn: S.inn, device: delay(), auto, aec: cancelling(), leak } : null;
   S.shift = auto;
   $("shift").value = String(Math.max(-400, Math.min(400, -S.shift * 1000)));
-  $("shiftValue").textContent = S.shift ? `lined up automatically: ${Math.abs(Math.round(S.shift * 1000))} ms ${S.shift > 0 ? "earlier" : "later"}` : "as recorded";
+  $("shiftValue").textContent = leak ? `lined up by the guide heard in the microphone: ${Math.abs(Math.round(S.shift * 1000))} ms ${S.shift > 0 ? "earlier" : "later"}`
+    : S.shift ? `lined up automatically: ${Math.abs(Math.round(S.shift * 1000))} ms ${S.shift > 0 ? "earlier" : "later"}` : "as recorded";
   if (S.shift) learn(delay() * 1000 + S.shift * 1000); // so the next take starts closer
   $("reviewTitle").textContent = whole ? "That take" : `That take of ${part.title}`;
   let note = S.interrupted ? ' <span class="warn">The page went into the background while you sang, so this take may have gaps: listen before you keep it.</span>' : "";
@@ -856,6 +870,7 @@ $("keep").onclick = async () => {
     shift_ms: Math.round(S.shift * 1000), auto_ms: Math.round((t.auto || 0) * 1000), device_ms: Math.round(t.device * 1000),
     decode_ms: Math.round(t.offset * 10000) / 10, out_ms: Math.round(t.out * 1000), in_ms: Math.round(t.inn * 1000),
     aec: !!t.aec, // sung with the guide taken out of the microphone (no headphones)
+    ...(t.leak ? { leak_ms: Math.round(t.leak.lag * 1000), leak_db: Math.round(Math.max(-99, t.leak.db) * 10) / 10 } : {}), // the guide's leak found and taken out
   };
   const byEar = S.shift - (t.auto || 0);
   if (Math.abs(byEar) >= 0.005) learn(t.device * 1000 + byEar * 1000); // their correction beyond the automatic one

@@ -320,3 +320,27 @@ test("the microphone is asked for raw, and to take out the page's own sound only
   assert.equal(K.micOptions(true).echoCancellation, true);
   assert.equal(K.micOptions(true).noiseSuppression, false); // the take's dynamics are what's measured
 });
+
+test("the guide leaking into a raw take is found at its delay and taken out", () => {
+  const rate = 48000, n = rate * 8, seed = [1234567];
+  const rnd = () => { let x = seed[0]; x ^= x << 13; x >>>= 0; x ^= x >>> 17; x ^= x << 5; x >>>= 0; seed[0] = x; return x / 4294967296 - 0.5; }; // xorshift32
+  const white = Float32Array.from({ length: rate * 20 }, () => 0.3 * rnd());
+  const guide = new Float32Array(white.length); // a "guide" with its energy below 2 kHz, as music has: white noise smoothed
+  for (let i = 0; i < white.length; i++) { let s = 0; for (let k = 0; k < 24; k++) s += white[i - k] || 0; guide[i] = s / 6; }
+  const buffer = { numberOfChannels: 1, length: guide.length, getChannelData: () => guide };
+  const from = 4.0, offset = 0.05, lag = 0.087; // the take's sample 0 is guide time 4 s; the leak arrives 87 ms later
+  const take = new Float32Array(n);
+  for (let i = 0; i < n; i++) {
+    const j = Math.round((from + offset - lag) * rate) + i;
+    take[i] = 0.2 * Math.sin((2 * Math.PI * 220 * i) / rate) + 0.2 * guide[j]; // a sung tone, and the leak from a speaker turned low
+  }
+  const found = K.leakLag(take, rate, buffer, offset, from);
+  assert.ok(Math.abs(found.lag - lag) < 0.001 && found.prominence > 7, JSON.stringify(found));
+  const clean = K.cancelLeak(take, rate, buffer, offset, from, found.lag);
+  assert.ok(Math.abs(clean.gain - 0.2) < 0.02 && clean.leakDb < -14 && clean.leakDb > -26, JSON.stringify({ db: clean.leakDb, g: clean.gain }));
+  let left = 0, was = 0; // the leak is gone from the cleaned take: what's left is the tone
+  for (let i = 0; i < n; i++) { const tone = 0.2 * Math.sin((2 * Math.PI * 220 * i) / rate); left += (clean.samples[i] - tone) ** 2; was += (take[i] - tone) ** 2; }
+  assert.ok(left < was / 100, `${left} of ${was}`);
+  const quiet = K.leakLag(Float32Array.from({ length: n }, (_, i) => 0.2 * Math.sin(i / 30)), rate, buffer, offset, from);
+  assert.ok(quiet.prominence < 7, JSON.stringify(quiet)); // no leak: nothing stands out
+});

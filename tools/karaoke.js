@@ -486,6 +486,86 @@ export function takeFilter(ctx) {
   return hp;
 }
 
+/* ---------- the guide leaking into a raw take (no headphones, no echo cancellation) ---------- */
+
+function guideMono(buffer) {
+  // an AudioBuffer as one channel (the guide, for finding its leak in a take)
+  if (buffer.numberOfChannels === 1) return buffer.getChannelData(0);
+  const out = new Float32Array(buffer.length);
+  for (let c = 0; c < buffer.numberOfChannels; c++) {
+    const d = buffer.getChannelData(c);
+    for (let i = 0; i < out.length; i++) out[i] += d[i] / buffer.numberOfChannels;
+  }
+  return out;
+}
+
+function decimated(samples, factor, start, count) {
+  // every `factor` samples averaged, from `start` (zeros outside the signal), `count` of them
+  const out = new Float32Array(count);
+  for (let k = 0; k < count; k++) {
+    let s = 0;
+    const i0 = start + k * factor;
+    for (let i = i0; i < i0 + factor; i++) if (i >= 0 && i < samples.length) s += samples[i];
+    out[k] = s / factor;
+  }
+  return out;
+}
+
+export function leakLag(samples, rate, guide, offset, from, maxLag = 0.4, window = 6) {
+  /* Where the guide, leaking from a speaker into the microphone, lies in a take: how many seconds
+     later than the take's own estimate of guide time (sample 0 = guide time `from`), and how
+     strongly it correlates (0..1; under about 0.1 there is no leak to speak of). The take's first
+     `window` seconds against the guide (an AudioBuffer at the take's rate, decoded `offset`
+     seconds early), both brought down to about 4 kHz, at every lag within ±maxLag. */
+  const f = Math.max(1, Math.round(rate / 4000)), r = rate / f;
+  const n = Math.min(Math.floor(samples.length / f), Math.round(window * r));
+  if (n < r || !guide) return { lag: 0, corr: 0 };
+  const take = decimated(samples, f, 0, n);
+  const L = Math.round(maxLag * r);
+  const g = guideMono(guide);
+  const ref = decimated(g, f, Math.round((from + offset) * rate) - L * f, n + 2 * L);
+  let tt = 0;
+  for (let i = 0; i < n; i++) tt += take[i] * take[i];
+  let best = 0, at = 0;
+  const all = new Float64Array(2 * L + 1);
+  for (let d = 0; d <= 2 * L; d++) {
+    let s = 0, rr = 0;
+    for (let i = 0; i < n; i++) { const v = ref[i + d]; s += take[i] * v; rr += v * v; }
+    const c = s / Math.sqrt(tt * rr + 1e-18);
+    all[d] = Math.abs(c);
+    if (c > best) { best = c; at = L - d; } // the leak later in the take than the estimate: a positive lag
+  }
+  // a leak is a peak standing far out of the correlation at every other lag (the voice, louder than the leak,
+  // keeps the peak itself small): against the median, chance alone reaches about 5 over these lags, so 7 is a leak
+  const sorted = all.slice().sort();
+  const prominence = best / (sorted[sorted.length >> 1] + 1e-18);
+  return { lag: at / r, corr: best, prominence };
+}
+
+export function cancelLeak(samples, rate, guide, offset, from, lag) {
+  /* The guide's leak taken out of a take: the guide, at the lag leakLag found (refined to the
+     sample), scaled to fit the take best, subtracted. One tap: the direct sound goes, the room's
+     echo of it mostly stays, quieter. Returns the cleaned take, the scale, and how loud the leak
+     was against the whole take (leakDb, negative). */
+  const g = guideMono(guide);
+  const base = Math.round((from + offset - lag) * rate);
+  let tt = 0;
+  for (let i = 0; i < samples.length; i++) tt += samples[i] * samples[i];
+  let bestGain = 0, bestAt = base, bestRes = tt;
+  for (let shift = -Math.round(rate / 4000) - 1; shift <= Math.round(rate / 4000) + 1; shift++) {
+    const g0 = base + shift;
+    let tg = 0, gg = 0;
+    for (let i = 0; i < samples.length; i++) { const j = g0 + i; if (j >= 0 && j < g.length) { tg += samples[i] * g[j]; gg += g[j] * g[j]; } }
+    if (gg <= 0 || tg <= 0) continue;
+    const gain = tg / gg, res = tt - tg * gain; // the residual energy after the best scaled subtraction
+    if (res < bestRes) { bestRes = res; bestGain = gain; bestAt = g0; }
+  }
+  if (bestGain <= 0) return { samples, gain: 0, leakDb: -Infinity };
+  const out = new Float32Array(samples.length);
+  for (let i = 0; i < samples.length; i++) { const j = bestAt + i; out[i] = samples[i] - (j >= 0 && j < g.length ? bestGain * g[j] : 0); }
+  return { samples: out, gain: bestGain, leakDb: 10 * Math.log10(Math.max(tt - bestRes, 1e-18) / tt) };
+}
+
 export function firstFrame(t0, out, inn, extra, rate, from = 0) {
   // the recorder frame the take starts on: when the guide's first sample (for one section, the
   // guide at `from` seconds) reached the singer's ears (t0 + from + out), plus the way back in

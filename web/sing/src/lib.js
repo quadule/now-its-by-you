@@ -184,7 +184,7 @@ export function specOf(info, song) {
   return spec;
 }
 
-const NUMBERS = ["shift_ms", "auto_ms", "device_ms", "decode_ms", "out_ms", "in_ms"];
+const NUMBERS = ["shift_ms", "auto_ms", "device_ms", "decode_ms", "out_ms", "in_ms", "leak_ms", "leak_db"];
 const round3 = x => Math.round(x * 1000) / 1000;
 
 export function checkTake(info, song, spec, lyric, wav) {
