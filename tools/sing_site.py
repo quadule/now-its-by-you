@@ -191,7 +191,7 @@ def encode(wav: Path, mp3: Path, bitrate: str = BITRATE) -> dict:
             "seconds": round(len(mono) / rate, 3), "frame": FRAME, "env": [round(float(v), 5) for v in env]}
 
 
-PREVIEW_BITRATE = "128k"  # the song as it stands, in stereo: about 2.4 MB for two and a half minutes
+PREVIEW_BITRATE = "256k"  # the song as it stands, in stereo: about 4.8 MB for two and a half minutes (128k fluttered on held vowels turned up)
 
 
 def preview_mp3(flac: Path, mp3: Path) -> dict:
