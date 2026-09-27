@@ -224,26 +224,27 @@ test('authored lines never receive bank controls and hidden bank words have no f
 
 test('Reset words releases inherited and local original lines in the selected section as one undo', () => {
   const { run } = studio();
-  run(`state.edits = {"words.verse.0": {id: "home"}, "lyrics.verse:0.2": "My new line", "lyrics.verse:1.0": "Another verse", tempo: 100};
-    state.view = {composition: {sections: [{index: 2, id: "verse:0", phrases: [
-      {lyric_path: "lyrics.verse:0.0", authored: true}, {lyric_path: "lyrics.verse:0.1", authored: false},
-      {lyric_path: "lyrics.verse:0.2", authored: true}
+  run(`state.edits = {"words.verse.0": {id: "home"}, "lyrics.verse:home.2": "My new line", "lyrics.verse:away.0": "Another verse", tempo: 100};
+    state.view = {composition: {sections: [{index: 2, id: "verse:0", lyric_key: "verse:home", phrases: [
+      {lyric_path: "lyrics.verse:home.0", authored: true}, {lyric_path: "lyrics.verse:home.1", authored: false},
+      {lyric_path: "lyrics.verse:home.2", authored: true}
     ]}]}};
     undoWords({index: 2, name: "verse", block: "verse", nth: 0, path: "words.verse.0", label: "Verse 1", authored: [0, 2]})`);
   assert.deepEqual(plain(run('state.edits')), {
-    'lyrics.verse:0.0': null, 'lyrics.verse:0.2': null, 'lyrics.verse:1.0': 'Another verse', tempo: 100,
+    'lyrics.verse:home.0': null, 'lyrics.verse:home.2': null, 'lyrics.verse:away.0': 'Another verse', tempo: 100,
   });
   assert.equal(run('state.undo.length'), 1);
   run('travelHistory("undo")');
   assert.deepEqual(plain(run('state.edits')), {
-    'words.verse.0': { id: 'home' }, 'lyrics.verse:0.2': 'My new line', 'lyrics.verse:1.0': 'Another verse', tempo: 100,
+    'words.verse.0': { id: 'home' }, 'lyrics.verse:home.2': 'My new line', 'lyrics.verse:away.0': 'Another verse', tempo: 100,
   });
 });
 
 test('Reset words uses the second bridge identity and clears pending text without touching the first bridge', () => {
   const { run } = studio();
   run(`state.edits = {"words.bridge2": "then", "lyrics.bridge:0.0": "First bridge", "lyrics.bridge2:0.1": "Pending text"};
-    state.view = {words: [{index: 0, name: "bridge"}, {index: 1, name: "bridge2"}]};
+    state.view = {words: [{index: 0, name: "bridge"}, {index: 1, name: "bridge2"}], composition: {sections: [
+      {index: 0, id: "bridge:0", lyric_key: "bridge:0", phrases: []}, {index: 1, id: "bridge2:0", lyric_key: "bridge2:0", phrases: []}]}};
     undoWords({index: 1, name: "bridge2", block: "bridge", nth: 1, path: "words.bridge2", label: "Bridge 2", authored: [0]})`);
   assert.deepEqual(plain(run('state.edits')), {
     'lyrics.bridge:0.0': 'First bridge', 'lyrics.bridge2:0.0': null, 'lyrics.bridge2:0.1': null,

@@ -3,6 +3,25 @@
 The editor speaks beats; the record stores scale degrees and grid units. A phrase
 keeps its syllable count, bar length and cadence so its words, harmony and future
 renditions still fit. Empty composition data leaves old renditions unchanged.
+
+A person's own lyric lines ("lines") are kept by the words they replace, not by
+where those words fall in the form: a verse's lines under the verse it sings
+(verse:wire, the bank's verse; verse:seed2, the seed's second verse, in a song
+without a bank), and any other sung section's under its name and time round
+(refrain:0, bridge2:0), the last refrain's round being "last", as arrange hands
+down its rounds (the first ones and the last, which sings the canon). The words
+underneath go on changing down a lineage (arrange.hold, songbird.evolve): a
+descendant that still sings that verse sings the person's line in it, wherever
+the verse now comes; one that no longer sings it doesn't sing the line, and a
+later one that sings the verse again brings the line back with it. So a line
+never lands in a verse it wasn't written for, or moves when the verse count
+changes. Keeping the drawn words for every authored section instead would stop
+the lineage's words changing wherever a person wrote a line, and still leave a
+line keyed by place to shift when the count of verses did.
+
+A record made before lines were kept this way keeps them by place ("lyrics",
+under section_ids); it sings them where it sang them, and hands them down
+(handed_down) by key, read from the words it sang.
 """
 
 from __future__ import annotations
@@ -18,10 +37,12 @@ from .theory import MODES, degree_semitones
 
 GRID = 0.25  # a sixteenth note in a quarter-note beat
 MAX_SECTIONS = 48
-LYRIC_PATH = re.compile(r"lyrics\.([A-Za-z][A-Za-z0-9_-]*):(\d+)\.(\d+)")
+LYRIC_PATH = re.compile(r"lyrics\.([A-Za-z][A-Za-z0-9_-]*):([A-Za-z0-9_-]+)\.(\d+)")
+LAST = "last"  # the last refrain's round, which the bank's rules always sing the same way
 
 
 def section_ids(form) -> list[str]:
+    """Each section of a form as the arrangement names it: its name and which time it comes (verse:1)."""
     seen: Counter = Counter()
     result = []
     for name in form:
@@ -30,11 +51,46 @@ def section_ids(form) -> list[str]:
     return result
 
 
+def lyric_keys(genome, form, lyrics=None) -> list[str | None]:
+    """The key a person's lines are kept under for each section of the form, None where it sings no
+    words: a verse's the verse the words sing (arrange.Lyrics; None while the words aren't known, as
+    for lyrics=None), any other sung section's its round, the last refrain's "last"."""
+    form = tuple(form)
+    total, seen = Counter(form), Counter()
+    sung = iter(lyrics.sections) if lyrics is not None else None
+    out: list[str | None] = []
+    for name in form:
+        block = genome.section(name).lyrics
+        if not block:
+            out.append(None)
+            continue
+        verse = next(sung).id if sung is not None else None
+        if block == "verse":
+            out.append(f"{name}:{verse}" if verse else None)
+        elif block == "refrain" and seen[name] == total[name] - 1:
+            out.append(f"{name}:{LAST}")
+        else:
+            out.append(f"{name}:{seen[name]}")
+        seen[name] += 1
+    return out
+
+
+def verse_names(genome) -> set[str]:
+    """What a verse can be called in a lyric key: the bank's verses, and the seed's (seed1, seed2...)."""
+    names = {f"seed{i + 1}" for i in range(len(genome.seed_verses))}
+    if genome.source.get("bank"):
+        from .arrange import verse_ids
+
+        names.update(verse_ids(genome))
+    return names
+
+
 def lyric_target(genome, path: str) -> tuple[str, int, str]:
+    """A lyric path's key, line number and phrase: lyrics.verse:wire.2 is the third line of the verse wire."""
     match = LYRIC_PATH.fullmatch(path)
     if match is None:
-        raise ValueError("a lyric line needs its section, occurrence and line number")
-    name, occurrence, line = match.groups()
+        raise ValueError("a lyric line needs its section, which verse or time round it is, and its line number")
+    name, which, line = match.groups()
     try:
         section = genome.section(name)
     except KeyError:
@@ -43,10 +99,18 @@ def lyric_target(genome, path: str) -> tuple[str, int, str]:
         raise ValueError(f"there is no section called {name}")
     if not section.lyrics:
         raise ValueError("this section is instrumental; write words in a sung section")
-    index = int(line)
-    if int(occurrence) >= MAX_SECTIONS or index >= len(section.phrases):
+    if section.lyrics == "verse":
+        if which.isdigit():
+            raise ValueError("a verse's lines go with the verse they're written for, named for it, "
+                             "not its place; choose the line again where it's sung")
+        if which not in verse_names(genome):
+            raise ValueError(f"this song has no verse called {which}")
+    elif not ((which.isdigit() and int(which) < MAX_SECTIONS) or (which == LAST and section.lyrics == "refrain")):
         raise ValueError("there is no such lyric line in this section")
-    return f"{name}:{int(occurrence)}", index, section.phrases[index]
+    index = int(line)
+    if index >= len(section.phrases):
+        raise ValueError("there is no such lyric line in this section")
+    return f"{name}:{which}", index, section.phrases[index]
 
 
 def check_lyric(genome, path: str, value) -> str | None:
@@ -79,35 +143,83 @@ def check_lyric(genome, path: str, value) -> str | None:
     return text
 
 
+def has_lines(params) -> bool:
+    """Whether a person wrote any of the lines sung, kept by key or, in an older record, by place."""
+    return bool(params.composition.get("lines") or params.composition.get("lyrics"))
+
+
+def authored(genome, params, lyrics=None) -> list[dict]:
+    """A person's lines for each section of the form ({line number: text}, {} for none), as sung over
+    these words (arrange.Lyrics; None: the seed's own): those kept by key, over any an older record
+    keeps by place."""
+    lines, placed = params.composition.get("lines", {}), params.composition.get("lyrics", {})
+    if not lines and not placed:
+        return [{} for _ in params.form]
+    if lines and lyrics is None:
+        from .arrange import seed_lyrics
+
+        lyrics = seed_lyrics(genome, params.form)
+    keys = lyric_keys(genome, params.form, lyrics) if lines else [None] * len(params.form)
+    return [{**placed.get(place, {}), **lines.get(key, {})} if genome.section(name).lyrics else {}
+            for name, place, key in zip(params.form, section_ids(params.form), keys)]
+
+
 def lyric_overlay(genome, params, lyrics):
     """Overlay authored lines on a display/performance copy, never on the bank's held words."""
-    authored = params.composition.get("lyrics", {})
-    if not authored:
+    if not has_lines(params):
         return lyrics
     from .arrange import seed_lyrics
 
     base = lyrics if lyrics is not None else seed_lyrics(genome, params.form)
     sung = iter(base.sections)
     sections = []
-    for name, identity in zip(params.form, section_ids(params.form)):
+    for name, patch in zip(params.form, authored(genome, params, base)):
         if not genome.section(name).lyrics:
             continue
         section = next(sung)
-        patches = authored.get(identity, {})
-        lines = tuple(patches.get(str(i), text) for i, text in enumerate(section.lines))
-        sections.append(replace(section, lines=lines) if patches else section)
+        lines = tuple(patch.get(str(i), text) for i, text in enumerate(section.lines))
+        sections.append(replace(section, lines=lines) if patch else section)
     return replace(base, sections=tuple(sections))
 
 
 def lyric_value(genome, params, lyrics, path):
-    identity, line, _ = lyric_target(genome, path)
-    if identity not in section_ids(params.form):
-        return None
+    """The line a lyric path names as these words sing it (a person's own over them), None if they don't."""
+    key, line, _ = lyric_target(genome, path)
     from .arrange import seed_lyrics
 
-    sung = lyric_overlay(genome, params, lyrics) or seed_lyrics(genome, params.form)
-    index = section_ids(params.form).index(identity)
-    return sung.lines_for(genome, params.form)[index][line]
+    base = lyrics if lyrics is not None else seed_lyrics(genome, params.form)
+    keys = lyric_keys(genome, params.form, base)
+    if key not in keys:
+        return None
+    sung = lyric_overlay(genome, params, base).lines_for(genome, params.form)[keys.index(key)]
+    return sung[line] if sung else None
+
+
+def handed_down(genome, params):
+    """A rendition's parameters as its child inherits them: lines an older record keeps by place
+    ("lyrics") kept by key instead, read from the words it sang (its held words, or the seed's own);
+    a line in a section it didn't sing is left behind. The same parameters when there are none."""
+    placed = params.composition.get("lyrics")
+    if placed is None:
+        return params
+    from . import arrange
+
+    words = params.words
+    if words and genome.source.get("bank") and not arrange.held_problem(genome, params.form, words):
+        sung = arrange.sing(genome, params.form, words)
+    else:
+        sung = arrange.seed_lyrics(genome, params.form)
+    keys = dict(zip(section_ids(params.form), lyric_keys(genome, params.form, sung)))
+    lines: dict = {}
+    for place, patch in placed.items():
+        if keys.get(place):
+            lines.setdefault(keys[place], {}).update(patch)
+    for key, patch in params.composition.get("lines", {}).items():
+        lines.setdefault(key, {}).update(patch)
+    held = {k: v for k, v in params.composition.items() if k != "lyrics"}
+    if lines:
+        held["lines"] = lines
+    return replace(params, composition=held)
 
 
 def order(genome, value) -> list[str] | None:
@@ -227,10 +339,14 @@ def phrase_value(genome, params, pid):
 
 def view(genome, params, lyrics) -> dict:
     """The editor's complete arrangement and piano roll without rendering audio."""
+    from .arrange import seed_lyrics
     from .realize import timeline
 
     clock = timeline(genome, params)
     meter = genome.meter
+    lyrics = lyrics if lyrics is not None else seed_lyrics(genome, params.form)
+    keys = lyric_keys(genome, params.form, lyrics)
+    patches = authored(genome, params, lyrics)
     lyrics = lyric_overlay(genome, params, lyrics)
     lines = lyrics.lines_for(genome, params.form)
     edited = params.composition.get("tune", {})
@@ -254,23 +370,22 @@ def view(genome, params, lyrics) -> dict:
                             "duration_beats": phrase.bars * meter.bar / meter.beat,
                             "pickup_beats": phrase.pickup / meter.beat, "notes": notes,
                             "chords": [list(bar) for bar in phrase.chords], "bounds": bounds(genome, phrase),
-                            "lyric_path": f"lyrics.{identity}.{j}" if section.lyrics else None,
+                            "lyric_path": f"lyrics.{keys[index]}.{j}" if keys[index] else None,
                             "lyric_text": lines[index][j] if lines[index] else "",
                             "syllable_count": len(phrase.sung),
-                            "authored": str(j) in params.composition.get("lyrics", {}).get(identity, {})})
+                            "authored": str(j) in patches[index]})
             cursor += phrase.bars * meter.bar
         nth = int(identity.rsplit(":", 1)[1])
         label = name.replace("bridge2", "Bridge 2").title()
         if sum(n == name for n in params.form) > 1:
             label += f" {nth + 1}"
-        sections.append({"index": index, "id": identity, "name": name, "label": label,
+        sections.append({"index": index, "id": identity, "lyric_key": keys[index], "name": name, "label": label,
                          "start_beat": start / meter.beat, "duration_beats": (cursor - start) / meter.beat,
                          "start_seconds": clock.seconds(start), "end_seconds": clock.seconds(cursor),
                          "sung": bool(section.lyrics), "phrases": phrases})
     return {"tempo": params.tempo, "tonic": params.tonic, "mode": params.mode, "scale": list(MODES[params.mode]),
             "beats_per_bar": meter.bar / meter.beat, "grid": GRID,
-            "duration_beats": clock.end / meter.beat, "duration_seconds": clock.seconds(clock.end),
-            "order": section_ids(params.form), "sections": sections, "edited_phrases": sorted(edited),
+            "duration_beats": clock.end / meter.beat, "duration_seconds": clock.seconds(clock.end),            "order": section_ids(params.form), "sections": sections, "edited_phrases": sorted(edited),
             "arranged": bool(params.composition.get("order")),
             "guidance": "Notes stay in the song's range. Keep one note per syllable and the final home note. "
                         "A tune line changes everywhere it appears. Repeated sections keep their story order."}

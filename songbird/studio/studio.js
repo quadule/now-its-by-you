@@ -315,16 +315,16 @@ function undoWords(w) {
   if (w.block === "bridge" && w.nth === 0) paths.push("words.bridge");
   const next = copyEdits();
   for (const path of paths) delete next[path];
+  // A person's lines are kept by the verse (or time round) they're written for, the section's lyric_key
+  // (songbird/composition.py), not by its place in the form.
   const section = state.view?.composition?.sections.find((item) => item.index === w.index);
-  const name = w.name || w.block;
-  const occurrence = state.view?.words?.filter((item) => item.index < w.index && item.name === name).length
-    ?? w.nth ?? 0;
-  const identity = section?.id || `${name}:${occurrence}`;
-  const prefix = `lyrics.${identity}.`;
   // Null explicitly releases inherited original text. Removing a local edit alone would reveal it again.
-  for (const line of w.authored || []) next[`${prefix}${line}`] = null;
   for (const phrase of section?.phrases || []) if (phrase.authored && phrase.lyric_path) next[phrase.lyric_path] = null;
-  for (const path of Object.keys(next)) if (path.startsWith(prefix)) next[path] = null;
+  if (section?.lyric_key) {
+    const prefix = `lyrics.${section.lyric_key}.`;
+    for (const line of w.authored || []) next[`${prefix}${line}`] = null;
+    for (const path of Object.keys(next)) if (path.startsWith(prefix)) next[path] = null;
+  }
   commitEdits(next, `Reset ${w.label.toLowerCase()} words`);
 }
 

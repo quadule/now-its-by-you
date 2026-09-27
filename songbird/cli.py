@@ -15,6 +15,7 @@ import numpy as np
 from . import __version__, drift as drift_mod, genome as genome_mod, harvest, pack as pack_mod, phrasing as phrasing_mod, synth, variation
 from . import evolve, variants as variants_mod
 from .arrange import ArrangeError, Lyrics, arrange, hold, problem, sing, verse_problem
+from .composition import has_lines
 from .realize import Params, choose_params, realize
 from .synth import master
 from .synth.mixing import MixParams
@@ -165,14 +166,14 @@ def render_one(genome, params: Params, out: Path, *, voice=None, drift=None, lyr
     if chosen_by_you:  # a person's choices, marked as theirs (never who they are)
         record["chosen_by_you"] = chosen_by_you
     if packet_genome is not None:  # one file: the record and the words travel inside it
-        sung = (lyrics.sheet(genome.title) if lyrics and not params.composition.get("lyrics")
+        sung = (lyrics.sheet(genome.title) if lyrics and not has_lines(params)
                 else pack_mod.words_as_sung(score.to_dict(), genome.title))
         pack_mod.pack(out, record, packet_genome, lyrics=sung)
     else:
         out.with_suffix(".json").write_text(json.dumps(record, indent=2) + "\n")
         out.with_suffix(".score.json").write_text(json.dumps(score.to_dict()) + "\n")
-        if lyrics or params.composition.get("lyrics"):
-            sung = (lyrics.sheet(genome.title) if lyrics and not params.composition.get("lyrics")
+        if lyrics or has_lines(params):
+            sung = (lyrics.sheet(genome.title) if lyrics and not has_lines(params)
                     else pack_mod.words_as_sung(score.to_dict(), genome.title))
             out.with_suffix(".txt").write_text(sung)
 

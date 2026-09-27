@@ -1146,6 +1146,9 @@ def words_view(v: Version) -> list[dict]:
     kept_from = handed(v) if drawn else {}
     changed_at = {c["where"]: c["text"] for c in word_changes(v)}
     sung = iter(lyrics.sections)
+    from .composition import authored as authored_lines
+
+    own = authored_lines(genome, v.params, v.lyrics)  # a person's lines, section by section
     seen: dict = {}
     out = []
     for k, name in enumerate(v.params.form):
@@ -1191,9 +1194,7 @@ def words_view(v: Version) -> list[dict]:
         item.update({"block": block, "nth": nth, "id": s.id, "lines": [readable(line) for line in s.lines],
                      "tags": [t for t in tags if t], "how": how, "note": note, "mine": mine, "kept": kept,
                      "path": path, "changeable": bool(drawn and bank)})
-        from .composition import section_ids
-
-        authored = v.params.composition.get("lyrics", {}).get(section_ids(v.params.form)[k], {})
+        authored = own[k]
         if authored:
             item.update({"authored": sorted(int(i) for i in authored), "how": "includes your own lyrics", "mine": True})
         out.append(item)

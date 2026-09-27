@@ -342,7 +342,7 @@ class Overrides:
         self.applied: list[str] = []
         self.problems: list[dict] = []
         self._has_variants = None
-        self._lyrics_before: dict | None = None
+        self._lines_before: dict | None = None
 
     def pin(self, out: dict) -> None:
         """The edits, in the table's working dict of parameters. Idempotent: the table calls it after its
@@ -413,29 +413,30 @@ class Overrides:
             held["tune"] = tune
         else:
             held.pop("tune", None)
-        lyrics = {k: dict(v) for k, v in held.get("lyrics", {}).items()}
-        if self._lyrics_before is None:
-            self._lyrics_before = {k: dict(v) for k, v in lyrics.items()}
+        # a person's own lines, each kept by the verse (or time round) it's written for (songbird.composition)
+        lines = {k: dict(v) for k, v in held.get("lines", {}).items()}
+        if self._lines_before is None:
+            self._lines_before = {k: dict(v) for k, v in lines.items()}
         for path, value in e.items():
             if not path.startswith("lyrics."):
                 continue
             try:
                 text = composition.check_lyric(self.genome, path, value)
-                identity, line, _ = composition.lyric_target(self.genome, path)
-                patch = lyrics.setdefault(identity, {})
+                key, line, _ = composition.lyric_target(self.genome, path)
+                patch = lines.setdefault(key, {})
                 if text is None:
                     patch.pop(str(line), None)
                 else:
                     patch[str(line)] = text
                 if not patch:
-                    lyrics.pop(identity, None)
+                    lines.pop(key, None)
                 applied.append(path)
             except (ValueError, TypeError) as ex:
                 problems.append(Problem(path, str(ex)))
-        if lyrics:
-            held["lyrics"] = lyrics
+        if lines:
+            held["lines"] = lines
         else:
-            held.pop("lyrics", None)
+            held.pop("lines", None)
         if "form.order" in e:
             try:
                 names = composition.order(self.genome, e["form.order"])
@@ -476,30 +477,44 @@ class Overrides:
             else:
                 self.problems = [*self.problems, Problem(path, f"the {style.name or 'ballad'} style can't play "
                                                                f"this song that way")]
-        present = set(composition.section_ids(params.form))
-        absent = [p for p in self.applied if p.startswith("lyrics.") and self.edits.get(p) is not None
-                  and composition.lyric_target(self.genome, p)[0] not in present]
-        if absent:
-            held = dict(params.composition)
-            lyrics = {k: dict(v) for k, v in held.get("lyrics", {}).items()}
-            for path in absent:
-                identity, line, _ = composition.lyric_target(self.genome, path)
-                previous = (self._lyrics_before or {}).get(identity, {}).get(str(line))
-                patch = lyrics.setdefault(identity, {})
-                if previous is None:
-                    patch.pop(str(line), None)
-                else:
-                    patch[str(line)] = previous
-                if not patch:
-                    lyrics.pop(identity, None)
-                self.applied.remove(path)
-                self.problems.append(Problem(path, "this arrangement has no such section; choose a line shown in the song"))
-            if lyrics:
-                held["lyrics"] = lyrics
+        # a line for a time round the form hasn't got; which verses it sings is known with its words (unsung())
+        return self.unsung(params, composition.lyric_keys(self.genome, params.form), verses=False)[0]
+
+    def unsung(self, params, keys, verses: bool = True) -> tuple:
+        """The parameters without the lines a person wrote for a section these keys (composition.lyric_keys)
+        don't sing, each put back as it was and said why, and the paths left out. verses=False: the words
+        aren't known yet, so a verse's lines stay until they are."""
+        absent = []
+        for path in self.applied:
+            if not path.startswith("lyrics.") or self.edits.get(path) is None:
+                continue
+            key = composition.lyric_target(self.genome, path)[0]
+            if not verses and self.genome.section(key.split(":", 1)[0]).lyrics == "verse":
+                continue
+            if key not in keys:
+                absent.append(path)
+        if not absent:
+            return params, []
+        held = dict(params.composition)
+        lines = {k: dict(v) for k, v in held.get("lines", {}).items()}
+        for path in absent:
+            key, line, _ = composition.lyric_target(self.genome, path)
+            previous = (self._lines_before or {}).get(key, {}).get(str(line))
+            patch = lines.setdefault(key, {})
+            if previous is None:
+                patch.pop(str(line), None)
             else:
-                held.pop("lyrics", None)
-            params = replace(params, composition=held)
-        return params
+                patch[str(line)] = previous
+            if not patch:
+                lines.pop(key, None)
+            self.applied = [p for p in self.applied if p != path]
+            self.problems = [*self.problems, Problem(path, "this version doesn't sing that section; "
+                                                           "choose a line shown in the song")]
+        if lines:
+            held["lines"] = lines
+        else:
+            held.pop("lines", None)
+        return replace(params, composition=held), absent
 
     def params(self, params):
         """Edits on parameters the table didn't make (no machine, no day): the same edits, the same way."""
@@ -642,6 +657,12 @@ def resolve(genome: Genome, parent, voice, drift, edits: dict, *, seed: int | No
     elif chosen:
         problems += [Problem(p, "this song's words aren't drawn from a store of verses, so they can't be chosen")
                      for p in wanted]
+    if body and composition.has_lines(params):  # a line for a verse these words don't sing isn't kept
+        sung = lyrics if lyrics is not None else arrange_mod.seed_lyrics(genome, params.form)
+        before = len(overrides.problems)
+        params, unsung = overrides.unsung(params, composition.lyric_keys(genome, params.form, sung))
+        applied = [p for p in applied if p not in unsung]
+        problems += overrides.problems[before:]
     if sung_by_a_machine and lyrics is not None and genome.source.get("bank"):
         # the lineage holds what is sung: the person's words among them, else its own fitted to the form
         params = replace(params, words=arrange_mod.hold(genome, lyrics) if kept

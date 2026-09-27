@@ -119,11 +119,18 @@ unapplied typing stays in place while choices refresh. The writer is responsible
 for the meaning and rhyme. **Use the song's line** releases authored text, including
 text inherited from a parent recording.
 
-Authored text belongs to a section occurrence, such as the first verse, rather
-than to every use of its tune. It follows that section through arrangement moves.
-The bank continues evolving underneath it; restoring a bank line reveals the
-current procedural words. Original lines travel in compact composition data,
-and the exported lyric sheet is taken from the actual sung score.
+Authored text belongs to the words it replaces rather than to every use of its
+tune or to a place in the form: a verse's lines to that verse (`verse:wire`, or
+`verse:seed2` in a song without a bank), a refrain's, bridge's or tag's to its time
+round (`refrain:0`, `bridge2:0`; the last refrain is `refrain:last`, which the
+bank always sings the same way). It follows that section through arrangement
+moves. The bank continues evolving underneath it: a later version that still
+sings the verse sings the line in it, wherever it now comes; one that no longer
+sings it doesn't sing the line. Restoring a bank line reveals the current
+procedural words. Original lines travel in compact composition data (`lines`),
+and the exported lyric sheet is taken from the actual sung score. A recording
+made before lines were kept this way kept them by place (`lyrics`); it still sings
+them there, and its next version takes them by the verses it sang.
 
 ### Sound
 
@@ -171,7 +178,7 @@ server keeps nothing else but caches, so any request can be replayed.
 |---|---|---|
 | `form.order` | section occurrence IDs (`verse:0`, `refrain:0`, …) | validated arrangement order, inherited in children |
 | `tune.<phrase>` | `{degree, onset, duration}` for each note, in beats | pitch/rhythm of every appearance of that phrase |
-| `lyrics.<section-id>.<line-index>` | syllable-hyphenated text, or null to release inherited text | one original lyric line, checked against its tune |
+| `lyrics.<section>:<verse-or-round>.<line-index>` | syllable-hyphenated text, or null to release inherited text | one original lyric line (`lyrics.verse:wire.0`, `lyrics.refrain:last.2`), checked against its tune; kept only where this version sings that verse or round |
 | `date` | "YYYY-MM-DD" | the moment time is read at: noon UTC that day, as `--date` |
 | `roll` | 1, 2, 3... | chance drawn again: the day's own seed drawn again that many times (`edits.rolled`), so chance still follows the day |
 | `tonic`, `mode`, `tempo` | a MIDI note, a mode, beats a minute | `Params` |
