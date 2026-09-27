@@ -303,6 +303,7 @@ def build(genome_path: Path, out: Path, rebuild: bool = False, bitrate: str = BI
                 shutil.copyfile(f, out / f.name)
     shutil.copyfile(ROOT / "tools" / "karaoke.js", out / "karaoke.js")
     shutil.copyfile(ROOT / "tools" / "karaoke-recorder.js", out / "recorder.js")
+    versioned(out)
     (out / "robots.txt").write_text("User-agent: *\nDisallow: /\n")
     (out / "favicon.svg").write_text(FAVICON)
     (out / "_headers").write_text(HEADERS)
@@ -373,6 +374,28 @@ def build(genome_path: Path, out: Path, rebuild: bool = False, bitrate: str = BI
     # the worker's small copy of it (web/sing/src/worker.js): the same, without the loudness curves
     (out / "song" / "worker.json").write_text(json.dumps(worker_index(song), separators=(",", ":")) + "\n")
     return song
+
+
+def versioned(out: Path) -> None:
+    """Every page asks for its scripts and styles by the digest of what they are now (?v=...), so neither a
+    browser nor the domain's cache can hand a phone a page of one build with a script of another (sing.js
+    imports karaoke.js by name: a stale one breaks the page). The files loaded first, then what loads them."""
+    def stamp(name: str) -> str:
+        return digest((out / name).read_text())
+
+    def swap(name: str, old: str, new: str) -> None:
+        f = out / name
+        text = f.read_text()
+        if old not in text:
+            raise SystemExit(f"{name} no longer loads {old}: tools/sing_site.py's versioned() needs telling")
+        f.write_text(text.replace(old, new))
+
+    swap("sing.js", 'from "./karaoke.js"', f'from "./karaoke.js?v={stamp("karaoke.js")}"')
+    swap("sing.js", 'addModule("/recorder.js")', f'addModule("/recorder.js?v={stamp("recorder.js")}")')
+    swap("index.html", 'href="/sing.css"', f'href="/sing.css?v={stamp("sing.css")}"')
+    swap("index.html", 'src="/sing.js"', f'src="/sing.js?v={stamp("sing.js")}"')
+    swap("yours.html", 'href="/yours.css"', f'href="/yours.css?v={stamp("yours.css")}"')
+    swap("yours.html", 'src="/yours.js"', f'src="/yours.js?v={stamp("yours.js")}"')
 
 
 def worker_index(song: dict) -> dict:
