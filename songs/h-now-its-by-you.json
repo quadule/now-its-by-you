@@ -195,7 +195,7 @@
           "by": "fable",
           "lines": ["It's no-bo-dy's mak-ing, and that much is true;", "but some-bo-dy sang it, and now it's by you."]
         }
-      ]
+]
     },
     "verses": [
       {
@@ -317,13 +317,14 @@
         "by": "fable",
         "slots": {
           "bird": ["black-bird", "star-ling", "rob-in", "lin-net"],
-          "month": ["June", "May", "March", "spring"]
+          "month": ["June", "May", "March", "spring"],
+          "carry": ["car-ried it home", "took it back home"]
         },
         "lines": [
           "A {bird} out-side of a win-dow in {month}",
           "picked up the first line and in-vent-ed the rest.",
-          "It sang it at dawn to a bird who'd flown in",
-          "from some-where; she took it back home to her nest."
+          "It sang it at dawn to a bird on the wing,",
+          "who {carry} to the young in her nest."
         ]
       },
       {
@@ -916,7 +917,7 @@
           "they sang it, and fold-ed it, sent to a friend."
         ]
       }
-    ],
+],
     "bridges": [
       {
         "id": "canon",

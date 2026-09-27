@@ -115,6 +115,7 @@ canon always last:
 > It's nobody's making, and that much is true;
 > but somebody sang it, and now it's by you.
 
+
 ## The verses
 
 Grouped by when they happen, since the chosen verses are sung in era order,
@@ -130,6 +131,7 @@ earliest first; the verses with no year go anywhere.
 > and anyone reading it has it by ear.
 
 Swap *man's* for wife's or child's.
+
 
 **ink** · 1800 · dark · AABB · pairs with carve · by fable (A's ink couplet, B's drawer couplet)
 
@@ -272,6 +274,7 @@ Swap *Neptune* for Saturn or Pluto.
 
 Swap *box in a shed* for drawer by the bed or trunk by the bed.
 
+
 **hold** · 1990 · light · ABAB · pairs with ring · by fable
 
 > It played on the phone while a million held on
@@ -345,16 +348,22 @@ Swap *kid* for lad or girl.
 > it learned every note, and it learned every tongue,
 > and sings it in all of their voices: a choir.
 
+
+
+
+
 ### Any time
 
 **bird** · plain · ABCB · by fable
 
 > A blackbird outside of a window in June
 > picked up the first line and invented the rest.
-> It sang it at dawn to a bird who'd flown in
-> from somewhere; she took it back home to her nest.
+> It sang it at dawn to a bird on the wing,
+> who carried it home to the young in her nest.
 
-Swap *blackbird* for starling, robin or linnet; *June* for May, March or spring.
+Swap *blackbird* for starling, robin or linnet; *June* for May, March or spring; *carried it home* for
+took it back home. (Lines 3 and 4 rewritten 2026-09-27: the old "who'd flown in / from somewhere;" held
+"in" on the line's longest note and ended its sentence on a quick one.)
 
 **deaf** · tender · AABB · by fable
 
@@ -463,6 +472,7 @@ Swap *girls* for boys or kids; *yard* for field.
 
 Swap *seven* for twenty or thirty.
 
+
 **wakes** · plain · AABB · by fable
 
 > They sang it at weddings, they sang it at wakes;
@@ -476,6 +486,7 @@ Swap *seven* for twenty or thirty.
 > and taught it their children that way, word for word;
 > and that is the way that it's sung in their town:
 > the wrong word is right now, and handed on down.
+
 
 ## The bridge
 

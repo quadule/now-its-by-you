@@ -493,7 +493,8 @@
       "id": "bird",
       "slots": {
        "bird": "lin-net",
-       "month": "spring"
+       "month": "spring",
+       "carry": "car-ried it home"
       }
      }
     ],
