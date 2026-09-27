@@ -135,8 +135,8 @@ function showCloses() {
     if (left > 0 && left < 2 ** 31) setTimeout(later, left + 1000);
   }
   const by = deleteBy();
-  $("keepNote").textContent = `Keep this link: it's your own page. Your version will appear there in a few days, before ${by}, `
-    + `and you can delete your recordings there. Until singing closes (${when}) you can also withdraw; after that, what you gave is part of the song.`;
+  $("keepNote").textContent = `Your version of the song will appear there in a few days, before ${by}. There you can delete `
+    + `your recordings, or withdraw until singing closes (${when}).`;
   $("thanksNote").textContent = `There you can delete your recordings or withdraw until singing closes (${when}). After that, what you gave `
     + `is part of the song, though you can still delete the recordings until ${by}.`;
   $("thanksText").textContent = `Thank you for singing! Your version will appear on your own page in a few days, before ${by}.`;
@@ -341,7 +341,18 @@ function drawPickers() {
   drawSpeeds();
   $("keyBox").hidden = (S.song.keys || []).length < 2;
   $("keyName").textContent = K.keyLabel(S.want.key);
+  summarize();
   controls();
+}
+
+function summarize() {
+  // what you're singing to, in a line above the choices (which open from it): verses, key, speed, guide
+  if (!S.want) return;
+  const set = (S.song.sets || []).find(s => s.id === S.want.set), sets = (S.song.sets || []).length > 1;
+  const [guide] = MIXES[mix()] || [mix()];
+  const key = S.want.key ? K.keyLabel(S.want.key) : "the written key";
+  const speed = S.want.tempo === 100 ? "full speed" : K.speedLabel(S.want.tempo);
+  $("versionSummary").textContent = [sets && set ? set.name : null, key, speed, guide.toLowerCase()].filter(Boolean).join(" · ");
 }
 
 function drawMixes() {
@@ -418,6 +429,7 @@ function lyricsFor(spec) { // a version's words and notes, fetched once
 
 function noteVersion() {
   // how much a new version's guide will take to fetch, before it's fetched
+  summarize();
   const g = S.song.guides[S.spec], m = g && g.mixes && g.mixes[mix()];
   const nearest = S.nearest ? `Not every combination is ready, so here's the nearest: ${K.specText(S.spec, S.song.sets) || "as written"}. ` : "";
   $("versionNote").textContent = !m ? "" : nearest + (S.guides[`${S.spec}/${mix()}`] ? "This version is loaded and ready."
@@ -577,6 +589,7 @@ async function openMicrophone() {
     $("level").style.width = Math.min(100, 140 * e.data.peak) + "%";
   };
   $("mic").textContent = "Microphone on"; // however it was opened: this button, recording or measuring
+  $("micHint").textContent = "on";
   $("micNote").textContent = `Recording at ${S.ctx.sampleRate} Hz. If the level doesn't move when you sing, check the microphone.`;
   controls();
 }
@@ -600,10 +613,11 @@ async function start(buffers, mode, from = 0, shifts = [], until = null, gains =
   S.stopAt = until;
   S.out = (S.ctx.outputLatency || 0) + (S.ctx.baseLatency || 0);
   S.inn = S.stream ? S.stream.getAudioTracks()[0].getSettings().latency || 0 : 0;
+  const out = mode === "listening" ? K.listenOut(S.ctx) : S.ctx.destination; // listening back: never past full scale
   S.src = buffers.map((buffer, i) => {
     const src = S.ctx.createBufferSource(), fader = S.ctx.createGain();
     src.buffer = buffer;
-    src.connect(fader).connect(S.ctx.destination);
+    (mode === "listening" && i > 0 ? src.connect(K.takeFilter(S.ctx)) : src).connect(fader).connect(out);
     const at = from + (shifts[i] || 0), level = gains[i] ?? 1; // a positive shift plays the buffer that much earlier
     if (from > 0) { fader.gain.setValueAtTime(0, when); fader.gain.linearRampToValueAtTime(level, when + 0.03); } // in mid-song: no click
     else fader.gain.value = level;

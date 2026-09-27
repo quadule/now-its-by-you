@@ -68,6 +68,7 @@ import takes as K  # noqa: E402  (tools/takes.py)
 ROOT = Path(__file__).parent.parent
 WEB = ROOT / "web" / "sing"
 MIXES = ("melody", "full")  # what singers choose between; the tune alone first, and by default
+SLOWER = 90  # the speed a singer starts at, a little slower than written: easier to learn (the artist's choice)
 BITRATE = "96k"
 MELODY_BITRATE = "64k"  # the whistle and the pulse carry at 64 as well as at 96, in two thirds the bytes
 JOBS = 4  # specs rendered at once: a render takes one core and up to 3 GB (a 4-minute spec)
@@ -362,7 +363,8 @@ def build(genome_path: Path, out: Path, rebuild: bool = False, bitrate: str = BI
         "sets": [{k: built[s][k] for k in ("id", "name", "about")} for s in chosen],
         "keys": keys_built, "tempos": tempos_built, "mixes": list(MIXES),
         "default": {"set": chosen[0], "key": 0 if 0 in keys_built else keys_built[0],
-                    "tempo": 100 if 100 in tempos_built else tempos_built[0], "mix": MIXES[0]},
+                    "tempo": SLOWER if SLOWER in tempos_built else 100 if 100 in tempos_built else tempos_built[0],
+                    "mix": MIXES[0]},
         "guides": guides,
         "max_seconds": round(longest + 60),
         "built": dt.datetime.now(dt.timezone.utc).isoformat(timespec="seconds"),

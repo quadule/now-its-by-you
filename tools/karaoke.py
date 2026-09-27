@@ -55,6 +55,7 @@ from songbird.realize import choose_params  # noqa: E402
 ROOT = Path(__file__).parent.parent
 PAGE = Path(__file__).with_suffix(".html")
 # what the page shares with the online one (web/sing): its timing, sync and drawing, and the take recorder
+SLOWER = 90  # the speed a singer starts at, a little slower than written (the artist's choice; as tools/sing_site.py)
 SCRIPTS = {"/karaoke.js": Path(__file__).with_suffix(".js"), "/recorder.js": Path(__file__).with_name("karaoke-recorder.js")}
 
 
@@ -290,7 +291,10 @@ class Karaoke(BaseHTTPRequestHandler):
         elif self.path in SCRIPTS:
             self.send(SCRIPTS[self.path].read_bytes(), "text/javascript; charset=utf-8")
         elif self.path == "/variants":
-            self.send_json(M.variants(self.genome_path))
+            offered = M.variants(self.genome_path)
+            if SLOWER in offered["tempos"]:  # a singer starts a little slower than written: easier to learn
+                offered["default"] = {**offered["default"], "tempo": SLOWER}
+            self.send_json(offered)
         elif self.path == "/guide.wav" and "spec" in query:
             # a spec's guide, rendered the first time it's asked for (half a minute), and which score it follows
             guide = M.ensure_spec(self.genome_path, query["spec"], self.mix(query.get("mix", M.DEFAULT)),

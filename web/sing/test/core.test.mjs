@@ -272,7 +272,7 @@ test("when singing closes, on the artist's clock and the singer's", () => {
 test("a narrow lane shows fewer seconds, so a short syllable keeps room for its word", () => {
   const wide = K.laneSpan(1200), phone = K.laneSpan(375), tiny = K.laneSpan(200);
   assert.equal(wide.span, K.PAST + K.FUTURE); // a wide screen: all of it
-  assert.ok(Math.abs(phone.span - 3.75) < 1e-9 && 375 / phone.span >= K.PX_PER_SECOND); // an upright phone: 100 px a second
+  assert.ok(Math.abs(phone.span - 375 / 102) < 1e-9 && 375 / phone.span >= K.PX_PER_SECOND); // an upright phone: about 100 px a second
   assert.equal(tiny.span, 3); // never less than three seconds
   for (const s of [wide, phone, tiny]) {
     assert.ok(Math.abs(s.past + s.future - s.span) < 1e-9 && Math.abs(s.past / s.future - K.PAST / K.FUTURE) < 1e-9);
@@ -281,11 +281,26 @@ test("a narrow lane shows fewer seconds, so a short syllable keeps room for its 
 
 test("a quiet take is lifted to be heard back over the guide, a loud one isn't, and peaks stay under full scale", () => {
   const rate = 48000, tone = a => Float32Array.from({ length: rate }, (_, i) => a * Math.sin((2 * Math.PI * 220 * i) / rate));
-  assert.equal(K.takeGain(tone(0.005), rate), 20); // a phone's raw microphone: as far as it goes
+  assert.equal(K.takeGain(tone(0.005), rate), 10); // a phone's raw microphone: as far as it goes
   assert.equal(K.takeGain(tone(0.8), rate), 1); // already loud: as recorded
   const g = K.takeGain(tone(0.05), rate);
-  assert.ok(Math.abs(g * 0.05 / Math.SQRT2 - 0.2) < 0.006 && g * 0.05 <= 0.9); // its singing at about a fifth of full scale
+  assert.ok(Math.abs(g * 0.05 / Math.SQRT2 - 0.15) < 0.006 && g * 0.05 <= 0.7); // its singing at about a seventh of full scale
   const clicked = tone(0.05); clicked[1000] = 1; // one stray click doesn't hold the rest down
   assert.ok(Math.abs(K.takeGain(clicked, rate) / g - 1) < 0.05);
   assert.equal(K.takeGain(new Float32Array(rate), rate), 1); // silence: nothing to lift
+});
+
+test("the lane's words grow with the lane, and a lane of big words shows fewer seconds", () => {
+  assert.equal(K.laneFont(150), 12); // a phone's lane: the smallest
+  assert.equal(K.laneFont(300), 23); // a big window's
+  assert.equal(K.laneFont(900), 28); // never bigger
+  const wide = K.laneSpan(1000), big = K.laneSpan(1000, 23);
+  assert.equal(wide.span, K.PAST + K.FUTURE);
+  assert.ok(big.span < wide.span && 1000 / big.span >= 23 * 8.5 - 1e-9); // room for a big word in a short syllable
+});
+
+test("listening back never clips: the take is lifted at most ten times, its peaks kept well under full scale", () => {
+  const rate = 48000, tone = a => Float32Array.from({ length: rate }, (_, i) => a * Math.sin((2 * Math.PI * 220 * i) / rate));
+  assert.equal(K.takeGain(tone(0.001), rate), 10);
+  assert.ok(K.takeGain(tone(0.1), rate) * 0.1 <= 0.7 + 1e-9);
 });

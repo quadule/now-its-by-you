@@ -158,7 +158,7 @@ def test_the_karaoke_sings_a_spec_and_records_one_section_at_a_time(workspace, m
     try:
         code, _, body = get("/variants")
         offered = json.loads(body)
-        assert offered["default"] == {"set": "song", "key": 0, "tempo": 100, "mix": "melody"}
+        assert offered["default"] == {"set": "song", "key": 0, "tempo": 90, "mix": "melody"}  # a little slower, to start
         assert offered["keys"] == list(M.KEYS) and offered["tempos"] == list(M.TEMPOS) and offered["mixes"] == list(M.MIXES)
         code, _, body = get("/lyrics.json?spec=song.k-2.t90")
         words = json.loads(body)

@@ -156,11 +156,16 @@ export function target(notes, t) {
   return best;
 }
 
-export function laneSpan(width) {
+export function laneFont(height) {
+  // the size of the lane's words: grows with the lane, so a tall one (full screen, a big window) reads from a distance
+  return Math.round(Math.max(12, Math.min(28, height * 0.075)));
+}
+
+export function laneSpan(width, font = 12) {
   // the seconds the lane shows either side of the playhead: PAST and FUTURE where the screen is wide
   // enough, else fewer in the same proportion, so a short syllable still has room for its word (a phone
-  // held upright shows about three and a half seconds, turned sideways all seven)
-  const span = Math.min(PAST + FUTURE, Math.max(3, width / PX_PER_SECOND));
+  // held upright shows about three and a half seconds, turned sideways all seven); bigger words, fewer seconds
+  const span = Math.min(PAST + FUTURE, Math.max(3, width / Math.max(PX_PER_SECOND, font * 8.5)));
   return { past: (span * PAST) / (PAST + FUTURE), future: (span * FUTURE) / (PAST + FUTURE), span };
 }
 
@@ -172,16 +177,17 @@ export function drawLane(c, notes, lo, hi, pos, trail) {
   if (c.width !== Math.round(W * dpr) || c.height !== Math.round(H * dpr)) { c.width = Math.round(W * dpr); c.height = Math.round(H * dpr); }
   g.setTransform(dpr, 0, 0, dpr, 0, 0);
   g.clearRect(0, 0, W, H);
-  const { past: PAST, future: FUTURE, span } = laneSpan(W), px = (W * PAST) / span;
+  const font = laneFont(H), under = font + 10; // room under the lowest note for its word
+  const { past: PAST, future: FUTURE, span } = laneSpan(W, font), px = (W * PAST) / span;
   const x = t => px + ((t - pos) * W) / span;
-  const y = m => H - 22 - ((m - lo) / (hi - lo)) * (H - 40);
-  const h = Math.max(7, ((H - 40) / (hi - lo)) * 0.72);
+  const y = m => H - under - ((m - lo) / (hi - lo)) * (H - under - 18);
+  const h = Math.max(7, ((H - under - 18) / (hi - lo)) * 0.72);
 
   g.strokeStyle = "rgba(239,230,218,0.05)";
   g.lineWidth = 1;
   for (let m = Math.ceil(lo); m <= hi; m++) { g.beginPath(); g.moveTo(0, y(m)); g.lineTo(W, y(m)); g.stroke(); }
 
-  g.font = "12px -apple-system, system-ui, sans-serif";
+  g.font = `${font}px -apple-system, system-ui, sans-serif`;
   notes.forEach((n, i) => {
     if (n.end < pos - PAST - 1 || n.start > pos + FUTURE + 1) return;
     const x0 = x(n.start), x1 = Math.max(x(n.end) - 3, x0 + 5), yy = y(n.pitch);
@@ -194,12 +200,12 @@ export function drawLane(c, notes, lo, hi, pos, trail) {
     const room = (notes[i + 1] ? x(notes[i + 1].start) : W) - x0 - 2;
     if (g.measureText(n.text).width <= room || x1 - x0 > 12) {
       g.fillStyle = done ? "rgba(239,230,218,0.35)" : "rgba(239,230,218,0.75)";
-      g.fillText(n.text, x0 + 1, yy + h / 2 + 13);
+      g.fillText(n.text, x0 + 1, yy + h / 2 + font + 1);
     }
   });
 
   if (trail && trail.length) {
-    g.lineWidth = 3;
+    g.lineWidth = Math.max(3, font / 5);
     g.lineCap = "round";
     for (let i = 1; i < trail.length; i++) {
       const a = trail[i - 1], b = trail[i];
@@ -419,7 +425,7 @@ export function autoSyncWindow(trail, notes, from = 0, to = Infinity) {
 
 /* ---------- a take ---------- */
 
-export const UNDER = 0.6; // the guide's level while you listen back to a take, so your voice sits on top
+export const UNDER = 0.5; // the guide's level while you listen back to a take, so your voice sits on top
 
 export function takeGain(samples, rate) {
   // how much to lift a take to hear it back over the guide (only to hear it: what's sent stays as sung).
@@ -441,7 +447,29 @@ export function takeGain(samples, rate) {
   // the peak bar the loudest window or two (a stray click, a bump of the microphone)
   const loud = top.reduce((a, b) => a + b, 0) / top.length, peak = peaks[Math.min(peaks.length - 1, Math.max(1, Math.floor(peaks.length * 0.01)))];
   if (!(loud > 0) || !(peak > 0)) return 1;
-  return Math.max(1, Math.min(20, 0.2 / loud, 0.9 / peak));
+  return Math.max(1, Math.min(10, 0.15 / loud, 0.7 / peak));
+}
+
+export function listenOut(ctx) {
+  // where a take and its guide play when you listen back: a limiter before the speakers, so the two
+  // together never pass full scale (a lifted phone take over a mastered guide can, and clipping buzzes)
+  const limit = ctx.createDynamicsCompressor();
+  limit.threshold.value = -6;
+  limit.knee.value = 3;
+  limit.ratio.value = 20;
+  limit.attack.value = 0.002;
+  limit.release.value = 0.15;
+  limit.connect(ctx.destination);
+  return limit;
+}
+
+export function takeFilter(ctx) {
+  // a take's rumble and hum, lifted with it, left out when you listen back (only then: what's sent stays as sung)
+  const hp = ctx.createBiquadFilter();
+  hp.type = "highpass";
+  hp.frequency.value = 90;
+  hp.Q.value = 0.7;
+  return hp;
 }
 
 export function firstFrame(t0, out, inn, extra, rate, from = 0) {

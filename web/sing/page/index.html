@@ -64,37 +64,18 @@
       </div>
       <div id="joined" hidden>
         <p id="joinedAs"></p>
-        <div class="link"><a id="pageLink" target="_blank" rel="noopener"></a><button id="copyLink" type="button">Copy</button></div>
-        <p class="hint" id="keepNote">Keep this link: it's your own page. Your version will appear there in a few days, before
-          30 September, and you can delete your recordings there. Until singing closes you can also withdraw; after that,
-          what you gave is part of the song.</p>
+        <p class="hint">We'll email you a link to your own page. Now pick a section below and sing.</p>
         <p class="hint" id="notYou" hidden>Not <span id="notYouName">you</span>? <button id="restart" class="plain" type="button">Start
           afresh as someone else</button></p>
       </div>
     </section>
 
-    <section class="step" id="check" data-needs="joined">
-      <h2><span class="n">3</span> Microphone and timing</h2>
-      <p>Headphones on, so the guide stays out of the microphone. Wired ones are best: Bluetooth headphones drop to
-        telephone quality when the microphone opens. Then let the page hear you: sing or say something and watch the level move.</p>
-      <div class="row">
-        <button id="mic" class="primary">Allow the microphone</button>
-        <span class="meter" aria-label="microphone level"><span id="level"></span></span>
-      </div>
-      <p class="hint" id="micNote"></p>
-      <div id="calibrateBox" hidden>
-        <p>Every phone and pair of headphones delays the sound a little. To measure yours, press the button and tap the
-          microphone (or clap, or say "ta") on each click after the first four. It takes ten seconds and helps your takes
-          line up.</p>
-        <div class="row">
-          <button id="calibrate">Measure the delay</button>
-          <span class="hint" id="calibration"></span>
-        </div>
-      </div>
-    </section>
-
-    <section class="step" id="hear" data-needs="joined">
-      <h2><span class="n">4</span> What you'll hear</h2>
+    <section class="step" id="sing" data-needs="joined">
+      <h2><span class="n">3</span> Sing</h2>
+      <p class="hint">Headphones on (wired ones if you can: Bluetooth ones drop to telephone quality when the microphone opens).
+        One section at a time is easiest: each is short, it stops by itself, and you can sing it again as often as you like.</p>
+      <details class="version" id="hear">
+        <summary><span id="versionSummary">as written</span><span class="change">Too high, low or fast? Change it</span></summary>
       <div class="pick" id="setBox" hidden>
         <h3>Which verses</h3>
         <div class="choices" id="sets" role="radiogroup" aria-label="Which verses"></div>
@@ -113,17 +94,13 @@
         <div class="segmented" id="speeds" role="radiogroup" aria-label="Speed"></div>
       </div>
       <div class="pick">
-        <h3>The guide</h3>
+        <h3>Sing along with</h3>
         <div class="choices" id="mixes" role="radiogroup" aria-label="Guide"></div>
         <p class="hint">The tune alone leaves the singing to you. You can change any of this between takes.</p>
       </div>
       <p class="hint" id="versionNote" aria-live="polite"></p>
-    </section>
+      </details>
 
-    <section class="step" id="sing" data-needs="joined">
-      <h2><span class="n">5</span> Sing</h2>
-      <p class="hint">One section at a time is easiest: each is short, it stops by itself, and you can sing it again as often as
-        you like.</p>
       <div class="parts" id="parts" role="group" aria-label="What to sing"></div>
       <p class="partLabel" id="partLabel"></p>
       <div class="stage">
@@ -137,6 +114,8 @@
         <button id="record" class="primary">● Record</button>
         <button id="stop" disabled>■ Stop</button>
       </div>
+      <p class="hint mic">microphone <span class="meter" aria-label="microphone level"><span id="level"></span></span>
+        <span id="micHint">the first time you record, your browser asks to use it</span></p>
       <p class="status" id="status" aria-live="polite"></p>
       <div class="row" id="nextBox" hidden><button id="next" class="primary"></button></div>
 
@@ -157,14 +136,35 @@
       </div>
     </section>
 
+    <details class="step" id="check" data-needs="joined">
+      <summary>Check the microphone and its delay (optional)</summary>
+      <p>Sing or say something and watch the level move. Every phone and pair of headphones also delays the sound a little;
+        your takes are lined up automatically, but measuring it helps.</p>
+      <div class="row">
+        <button id="mic">Allow the microphone</button>
+      </div>
+      <p class="hint" id="micNote"></p>
+      <div id="calibrateBox" hidden>
+        <p>Press the button and tap the microphone (or clap, or say "ta") on each click after the first four. It takes ten
+          seconds.</p>
+        <div class="row">
+          <button id="calibrate">Measure the delay</button>
+          <span class="hint" id="calibration"></span>
+        </div>
+      </div>
+    </details>
+
     <section class="step" id="sent" data-needs="joined">
-      <h2><span class="n">6</span> Your takes</h2>
+      <h2><span class="n">4</span> Your takes</h2>
       <ol id="takes"><li class="hint none">Nothing sent yet.</li></ol>
       <p class="hint">Keep this page open until each take says sent.</p>
+      <p class="hint">They're also on your own page (we'll email you the link):</p>
+      <div class="link"><a id="pageLink" target="_blank" rel="noopener"></a><button id="copyLink" type="button">Copy</button></div>
+      <p class="hint" id="keepNote"></p>
     </section>
 
     <section class="step" id="words" data-needs="joined">
-      <h2><span class="n">7</span> Words for the song</h2>
+      <h2><span class="n">5</span> Words for the song</h2>
       <p>Have a verse in you, a line, or an idea for the song? Write it here: early singers can help shape what it sings.</p>
       <textarea id="wordsText" rows="5" maxlength="4000" placeholder="a verse, a line, an idea…"></textarea>
       <p class="hint count" id="wordsCount"></p>
@@ -176,7 +176,7 @@
     </section>
 
     <section class="step" id="finish" data-needs="joined">
-      <h2><span class="n">8</span> When you're done</h2>
+      <h2><span class="n">6</span> When you're done</h2>
       <p>Press this when you've sent everything you want to.</p>
       <button id="done">I'm done</button>
       <p class="hint" id="doneNote"></p>
