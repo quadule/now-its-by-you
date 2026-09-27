@@ -112,6 +112,10 @@ test("song.json v2 is read down to what the worker needs", () => {
                                                mixes: { melody: "a.k0.t100.melody.mp3", full: "a.k0.t100.full.mp3" }, was: [] });
   assert.deepEqual(songIndex(SONG), SONG); // song/worker.json is the same thing, already small
   assert.throws(() => songIndex({ song: "h", guide: "x", mixes: {} }), /version 2/); // an old site
+  // the song as it stands, for singers to hear first (sing_site.py --preview): kept by its file, or none
+  assert.equal(SONG.preview, null);
+  assert.deepEqual(songIndex({ ...SONG, preview: { file: "preview.mp3", bytes: 2423963, singers: 5 } }).preview, { file: "preview.mp3" });
+  assert.equal(songIndex({ ...SONG, preview: { bytes: 7 } }).preview, null);
   const lyric = sectionsOf(LYRICS);
   assert.equal(lyric.sections.length, 4);
   assert.deepEqual(lyric.sections[1].window, [2.5, 21]);

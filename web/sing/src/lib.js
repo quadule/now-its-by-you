@@ -140,8 +140,10 @@ export function songIndex(song) {
     guides[spec] = { guide: g.guide, lyrics: g.lyrics, duration: Number(g.duration), mixes, was };
   }
   const sets = (song.sets || []).map(s => (typeof s === "string" ? s : s.id)).filter(Boolean);
+  // the song as it stands, for singers to hear before they sing (sing_site.py --preview), when the site has one
+  const preview = song.preview && typeof song.preview.file === "string" ? { file: song.preview.file } : null;
   return { song: song.song, consent: song.consent, words_release: song.words_release ?? null, sets,
-           guides, max_seconds: song.max_seconds ?? null };
+           guides, max_seconds: song.max_seconds ?? null, preview };
 }
 
 export function sectionsOf(lyrics) {
