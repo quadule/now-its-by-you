@@ -49,10 +49,10 @@ the site was rebuilt and checked, and waits for your `wrangler deploy` (below).
 3. **The roughness.** Both fixes are in the candidate: the lead's saturation down (0.2 → 0.05: it was
    distorting the loudest syllables 12 dB more than now, exactly "as the voice gets loud"), and the
    vocoder's pulses spread a little more (spread 0.25, scatter 0.5; the highs bunched at each pulse,
-   worst in low voices). The advisor left an A/B pair of a low voice in the session's scratch
-   (`fable-voice/low_default.wav` vs `low_fix.wav`) if you want the isolated effect.
+   worst in low voices). The advisor's A/B pair of a low voice is renders/review/low-voice-before.wav
+   and low-voice-after.wav, if you want the isolated effect.
 
-## What changed (all on main; the full suite passed on the working tree, 1289 tests, and runs again on HEAD)
+## What changed (all on main, e0b33c4 and after; the full suite on it: 1293 passed, 11 skipped)
 
 Commits, oldest first: 4ec52a0 the tune · 1456235 the first refrain's questions · 4d4d065 + 3ca1db5 Codex's
 branch (the merge commit came out with only its new files: a `git stash` while it was staged unstaged the
