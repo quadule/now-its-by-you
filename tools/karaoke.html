@@ -256,10 +256,21 @@ async function chooseVersion() {
   // guide made ready (rendered the first time, about half a minute)
   const spec = S.variants ? K.specId({ set: $("set").value, key: Number($("key").value), tempo: Number($("speed").value) }) : null;
   if (S.variants) { save("songbird-spec", spec); drawAbout(); }
-  S.wanted = spec;
+  S.wanted = spec;  // until its words are here, nothing is sung (the display would change under the take)
+  controls();
   status("Loading the words…");
   let lyrics;
-  try { lyrics = await lyricsFor(spec); } catch (e) { if (S.wanted === spec) warn(e.message); return; }
+  try {
+    lyrics = await lyricsFor(spec);
+  } catch (e) {
+    if (S.wanted !== spec) return;
+    const was = K.parseSpec(S.spec);  // back to the one we have, if any
+    if (was) { $("set").value = was.set; $("key").value = String(was.key); $("speed").value = String(was.tempo); save("songbird-spec", S.spec); drawAbout(); }
+    S.wanted = S.spec;
+    controls();
+    warn(e.message);
+    return;
+  }
   if (S.wanted !== spec) return;  // chosen again since
   const was = S.part;
   S.spec = spec;
@@ -271,6 +282,7 @@ async function chooseVersion() {
   const same = was && was.index !== null ? S.sections.find(s => s.name === was.name && s.title === was.title) : null;
   const first = K.nextSection(S.sections, null, sungHere());
   choosePart(was && was.index === null ? null : same ? same.index : first ? first.index : S.sections.length ? S.sections[0].index : null);
+  controls();
   status(S.sections.length ? "Choose a section above, or the whole song. Rehearse to hear it through, or record when you're ready."
                            : "Rehearse to hear it through, or record when you're ready.");
   prepare();
@@ -504,9 +516,10 @@ function silence(sources) {  // stop playing, with a short fade rather than a cl
 
 function controls() {
   // what can be pressed: nothing else while playing; the version and section stay put while a take waits
-  const idle = S.mode === "idle";
+  const idle = S.mode === "idle", loading = !S.lyrics || S.wanted !== S.spec;
   $("stop").disabled = idle || S.mode === "calibrating";
-  for (const id of ["record", "rehearse", "calibrate"]) $(id).disabled = !idle;
+  for (const id of ["record", "rehearse"]) $(id).disabled = !idle || loading;
+  $("calibrate").disabled = !idle;
   for (const id of ["mix", "set", "key", "speed"]) $(id).disabled = !idle || !!S.take;
   drawParts();
 }

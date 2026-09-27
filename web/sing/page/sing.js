@@ -125,9 +125,14 @@ function showCloses() {
   if (at) {
     $("closes").textContent = `Singing closes ${K.closingTime(at)}.`;
     $("closes").hidden = false;
-    // a page left open past it says so, rather than failing at the next take
+    // a page left open past it says so, rather than failing at the next take (once nothing is being sung or sent)
     const left = Date.parse(at) - Date.now();
-    if (left > 0 && left < 2 ** 31) setTimeout(() => { if (S.mode === "idle" && !S.take) closed("closed"); }, left + 1000);
+    const later = () => {
+      if (!$("thanks").hidden) return;
+      if (S.mode === "idle" && !S.take && !queue.some(q => q.state === "sending")) closed("closed");
+      else setTimeout(later, 30000);
+    };
+    if (left > 0 && left < 2 ** 31) setTimeout(later, left + 1000);
   }
   const by = deleteBy();
   $("keepNote").textContent = `Keep this link: it's your own page. Your version will appear there in a few days, before ${by}, `
@@ -194,6 +199,7 @@ $("join").onclick = async () => {
     }));
     if (!TOKEN.test(r.singer || "")) throw new Error("The server didn't say who you are. Try again.");
     S.sid = r.singer;
+    if (typeof r.page === "string" && r.page.startsWith("/")) S.page = r.page;
     save(mine("sid"), r.singer);
     S.me = { name, credit };
     $("joinNote").textContent = "";
@@ -213,7 +219,7 @@ $("join").onclick = async () => {
   if (S.mode === "idle" && !S.take) say(readyText());
 };
 
-function pageUrl() { return new URL(`/y/${S.sid}`, location.origin).href; }
+function pageUrl() { return new URL(S.page || `/y/${S.sid}`, location.origin).href; } // their own page
 
 function showJoined(now = false) {
   $("joinForm").hidden = true;
@@ -264,7 +270,7 @@ function controls() {
   const keys = [...((S.song && S.song.keys) || [])].sort((a, b) => a - b);
   $("lower").disabled = locked || !S.want || S.want.key <= keys[0];
   $("higher").disabled = locked || !S.want || S.want.key >= keys[keys.length - 1];
-  $("rehearse").disabled = $("record").disabled = !joined || !idle;
+  $("rehearse").disabled = $("record").disabled = !joined || !idle || !S.lyrics || S.wanted !== S.spec;
   $("stop").disabled = idle || S.mode === "calibrating";
   $("listen").disabled = !idle;
   $("keep").disabled = $("discard").disabled = !(idle || S.mode === "listening");
@@ -374,11 +380,20 @@ async function chooseVersion(spec) {
   // a version's words and notes (small, at once); its guide loads when you listen or record
   if (!spec) { warn("There's no guide to sing to yet. Try again later."); return; }
   const p = K.parseSpec(spec);
-  S.wanted = spec;
+  S.wanted = spec; // until its words are here, nothing is sung (the display would change under the take)
   S.want = { set: p.set, key: p.key, tempo: p.tempo }; // what's shown is what's on offer
   drawPickers();
   let lyrics;
-  try { lyrics = await lyricsFor(spec); } catch (e) { if (S.wanted === spec) warn(e.message); return; }
+  try {
+    lyrics = await lyricsFor(spec);
+  } catch (e) {
+    if (S.wanted !== spec) return;
+    S.wanted = S.spec; // back to the one we have, if any
+    const q = K.parseSpec(S.spec);
+    if (q) { S.want = { set: q.set, key: q.key, tempo: q.tempo }; drawPickers(); }
+    warn(e.message);
+    return;
+  }
   if (S.wanted !== spec) return; // chosen again since
   const was = S.part;
   S.spec = spec;
@@ -389,6 +404,7 @@ async function chooseVersion(spec) {
   const first = K.nextSection(S.sections, null, sungHere());
   choosePart(was && was.index === null ? null : same ? same.index : first ? first.index : S.sections.length ? S.sections[0].index : null);
   noteVersion();
+  controls();
   if (S.mode === "idle" && !S.take) say(readyText());
 }
 
@@ -764,10 +780,10 @@ $("keep").onclick = async () => {
   const byEar = S.shift - (t.auto || 0);
   if (Math.abs(byEar) >= 0.005) learn(t.device * 1000 + byEar * 1000); // their correction beyond the automatic one
   const wav = K.wavBytes(K.shifted(t.samples, t.rate, S.shift), t.rate);
+  S.take = null; // sent once, however many times it's tapped
+  $("review").hidden = true;
   // its checksum travels with it, and the bucket keeps it only if what arrives matches
   info.sha256 = Array.from(new Uint8Array(await crypto.subtle.digest("SHA-256", wav)), b => b.toString(16).padStart(2, "0")).join("");
-  S.take = null;
-  $("review").hidden = true;
   const said = t.part.index === null ? "the whole song" : t.part.title;
   send({ wav, info, seconds: t.samples.length / t.rate, title: t.part.title, said });
   controls();
