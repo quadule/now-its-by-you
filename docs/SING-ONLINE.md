@@ -54,7 +54,9 @@ session like that). `revoke <token>` closes a link. Notes are for you; singers n
   It applies what singers did on their pages: a deleted take loses its WAV here too (its sidecar and
   measured numbers stay), a withdrawal removes everything of theirs, phrasing and measured caches
   included. For singers with new takes it makes their version and vocals (tools/versions.py) and
-  uploads them to their page. Once DELETE_BY has passed it runs purge.
+  uploads them to their page (one pair per guide they sang to, on each of their pages). Rendering
+  those takes a while: on a busy night run `sync --watch 120 --no-versions`, and a plain `sync` later
+  (before 30 September) makes them all. Once DELETE_BY has passed it runs purge.
 - **mail** lists one message per address: their page's link once they've joined, and "your version
   is ready" once it is. It never sends anything: you paste or open each, send it from
   milo@quadule.com, then run `mail --sent`.
