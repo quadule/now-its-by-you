@@ -1371,7 +1371,8 @@ def _placed(song: _Song, held_rounds: list[dict], n: int) -> list[dict]:
         head = out[0].get("head") or song.head_id
         if head in song.heads and _asks(song, head) and "question" not in song.fixed[head]:
             asked = _options(song.bank["refrain"]["slots"]["question"])
-            out[0]["words"] = {**out[0].get("words", {}), "question": asked[_question_rule(song, 0, 1, head)]}
+            q = _question_rule(song, 0, 1, head)  # None: several first words to draw among; the lone one asks the first
+            out[0]["words"] = {**out[0].get("words", {}), "question": asked[_firsts(song)[0] if q is None else q]}
     return out
 
 

@@ -96,15 +96,24 @@ def check(form, lyrics):
     assert heads[:1] in ([], [rr.get("head_first", MAIN)]) and (n < 2 or heads[-1] == rr.get("head_last", MAIN))
     others = [h for h in heads if h != MAIN]
     assert len(set(others)) == len(others)
-    # a head that fixes its question asks it; else the first asks who made it and the last who owns it, and
-    # those between each ask a different one of the rest
+    # a head that fixes its question asks it; else the first asks one of question_first (who made it, if
+    # none), the last who owns it, and those between each ask a different one of the rest (with several
+    # firsts, any word but owns; with one, any but it and owns)
     asked = shared["question"]
+    firsts = rr.get("question_first") or asked[:1]
+    middle = asked[:-1] if len(firsts) > 1 else asked[1:-1]
     questions = [s.slots["question"] for s in rounds]
     for i, (q, h) in enumerate(zip(questions, heads)):
         fixed = HEADS[h].get("fixed", {})
-        want = fixed.get("question", asked[0] if i == 0 else asked[-1] if i == n - 1 else None)
-        assert q == want if want else q in asked[1:-1], (questions, heads)
-    assert len(set(questions[1:-1])) == len(questions[1:-1])
+        if "question" in fixed:
+            assert q == fixed["question"], (questions, heads)
+        elif i == 0:  # a lone refrain asks as a first one does
+            assert q in firsts, (questions, heads)
+        elif i == n - 1:
+            assert q == asked[-1], (questions, heads)
+        else:
+            assert q in middle, (questions, heads)
+    assert len(set(questions)) == len(questions), (questions, heads)
     for name in rr.get("once_per_song", ()):
         assert len({s.slots[name] for s in rounds}) <= 1
     couplets = [s.id for s in rounds]
@@ -132,7 +141,7 @@ def test_the_seed_form_has_the_templates_shape():
 
 
 def test_forms_says_how_many_of_each_section_the_bank_can_fill():
-    assert A.forms(g) == {"verse": (2, 3, 4), "refrain": (0, 1, 2, 3, 4, 5, 6), "bridge": (0, 1, 2)}
+    assert A.forms(g) == {"verse": (2, 3, 4), "refrain": (0, 1, 2, 3, 4, 5, 6, 7), "bridge": (0, 1, 2)}  # a refrain a couplet
     assert A.problem(g, SEED_FORM) is None and A.problem(g, shape(4, 6, 2)) is None
     assert A.problem(g, shape(5)).startswith("this form has 5 verse sections;")
     assert "no section 'chorus'" in A.problem(g, ("verse", "verse", "chorus"))
@@ -284,8 +293,8 @@ def test_a_persons_words_are_preferred():
     played = [s.slots["instrument"] for seed in range(3000) for s in A.arrange(g, shape(3), seed, banjo).sections
               if s.id == "fiddle"]
     assert played.count("ban-jo") / len(played) > 0.35  # of four instruments
-    # the little words everyone uses steer nothing: her, him, she, he
-    assert A.arrange(g, shape(4), 5, A.Leanings(vocabulary={"her", "him", "she", "he", "the"})).sections == \
+    # the little words everyone uses steer nothing: her, him, he, the ("she" sings in four verses of fifty, so it does)
+    assert A.arrange(g, shape(4), 5, A.Leanings(vocabulary={"her", "him", "he", "the"})).sections == \
         A.arrange(g, shape(4), 5).sections
 
 
@@ -317,7 +326,7 @@ def test_the_seeds_own_words_are_named_for_their_bank_entries():
 @pytest.mark.parametrize("form, why", [
     (shape(5), "5 verse sections; the bank's rules sing 2, 3 or 4 verses"),
     (shape(1), "1 verse section;"),
-    (shape(2, 7), "7 refrain sections; the bank's rules sing 0 to 6 refrains"),
+    (shape(2, 8), "8 refrain sections; the bank's rules sing 0 to 7 refrains"),
     (shape(2, 3, 3), "3 bridge sections; the bank's rules sing 0, 1 or 2 bridge sections"),
     (("verse", "verse", "chorus", "refrain", "bridge"), "no section 'chorus'"),
 ])
@@ -372,7 +381,7 @@ def test_the_arrange_command_prints_a_lyric_sheet(capsys):
     assert A.main([str(H), "--seed", "7", "--form", "verse", "refrain", "bridge"]) == 1
     assert "1 verse section" in capsys.readouterr().err
     assert A.main([str(H), "--forms"]) == 0
-    assert capsys.readouterr().out.startswith("verse: 2, 3 or 4\nrefrain: 0 to 6\nbridge: 0, 1 or 2\n")
+    assert capsys.readouterr().out.startswith("verse: 2, 3 or 4\nrefrain: 0 to 7\nbridge: 0, 1 or 2\n")
 
 
 # Singing them
@@ -404,7 +413,8 @@ def test_realize_sings_the_drawn_words_on_their_notes():
     from songbird.realize import choose_params, realize
 
     form = shape(3, 4, 2)
-    params = replace(choose_params(g), form=form, choir=2)
+    own = choose_params(g)
+    params = replace(own, form=form, choir=2, style=replace(own.style, backing=""))  # no thirds behind the refrains
     seeded = realize(g, params)  # a second bridge section sings the seed's bridge again
     for seed in (4, 21, 30):
         lyrics = A.arrange(g, form, seed)

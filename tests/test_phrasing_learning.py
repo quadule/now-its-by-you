@@ -55,7 +55,7 @@ def test_whole_takes_of_different_forms_count_only_where_they_sang(monkeypatch, 
     data = [short, long]
     monkeypatch.setattr(T, "measured", lambda *args: data.pop(0))
     monkeypatch.setattr(T, "guide", lambda *args: SimpleNamespace(
-        notes=[SimpleNamespace(syllable="la")] * (1 if args[-1] == "short" else 2)))
+        notes=[SimpleNamespace(syllable="la", pitch=62)] * (1 if args[-1] == "short" else 2)))
     takes = [K.Take(tmp_path / "ana" / name, "Ana", H.stem) for name in ("short.wav", "long.wav")]
     _, (_, weights), _ = T.sung_phrasing(H, G.load(H), takes)
     assert weights[("v1", 0)] == [0.5, 0.5, 1.0]

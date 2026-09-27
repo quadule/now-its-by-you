@@ -74,12 +74,13 @@ def test_the_lead_songs_vocabulary(h):
     offered = V.candidates(h)
     kinds = {v.kind for v in offered}
     assert kinds >= {"grace", "mordent", "turn", "neighbour", "passing", "anticipation", "leap", "dotted"}
-    assert V.scale(h) == (1, 2, 3, 5, 6)  # H is pentatonic: a grace or a held neighbour never brings in fa or ti...
+    assert V.scale(h) == (1, 2, 3, 4, 5, 6)  # H was pentatonic; since 2026-09-27 the singers' fa is in v2 and r2 (a
+    # grace or a held neighbour may bring in fa where the tune does, never ti)...
     for v in offered:
         if v.kind in ("grace", "neighbour"):
-            assert all((h.phrases[v.phrase].sung[v.note].degree + s - 1) % 7 + 1 in (1, 2, 3, 5, 6) for _, s in v.steps)
-    # ...only a quick tone does: a passing tone sliding across a third, a mordent's or a turn's step
-    assert {v.kind for v in offered if any((h.phrases[v.phrase].sung[v.note].degree + s - 1) % 7 + 1 in (4, 7)
+            assert all((h.phrases[v.phrase].sung[v.note].degree + s - 1) % 7 + 1 in (1, 2, 3, 4, 5, 6) for _, s in v.steps)
+    # ...only a quick tone brings in ti: a passing tone sliding across a third, a mordent's or a turn's step
+    assert {v.kind for v in offered if any((h.phrases[v.phrase].sung[v.note].degree + s - 1) % 7 + 1 == 7
                                            for _, s in v.steps)} <= set(V.QUICK)
     assert all(abs(s) == 1 for v in offered if v.kind == "neighbour" for _, s in v.steps if s)
     # dotting H's pairs of quavers would leave a sixteenth too short for a syllable: only its crotchet pairs dot
