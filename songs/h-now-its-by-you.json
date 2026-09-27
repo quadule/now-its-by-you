@@ -8,7 +8,7 @@
     "v2": {"tune": "6, | 1 - 2 3 5 - 4 3 | 2 - 3 2 1 - - -", "chords": "I | V I"},
     "v3": {"tune": "3 | 5 - 5 6 5 - 3 5 | 6 - 5 3 2 - - -",  "chords": "I | IV V"},
 
-    "r1": {"tune": "5, | 1 - 1 - 5 - - - | 6 - 5 3 5 - - -", "chords": "I | IV V"},
+    "r1": {"tune": "6, | 1 - 1 - 5 - - - | 6 - 5 3 5 - - -", "chords": "I | IV V"},
     "r2": {"tune": "3 | 3 - 3 4 6 - 5 3 | 5 - 3 - 1 - - -",  "chords": "I vi | V I"},
     "r3": {"tune": "5 | 6 - 6 5 6 - 6 5 | 3 - 5 3 2 - - -",  "chords": "vi IV | I V"},
     "r4": {"tune": "3 | 5 - 6 5 3 - 2 3 | 5 - 3 2 1 - - -",  "chords": "I | V I"},
@@ -954,7 +954,7 @@
         "lines": [
           "An old man was hum-ming it, rock-ing his chair;",
           "he'd lost all the words, but the ring was still there.",
-          "The words were all weath-ered and bur-ied in cold;",
+          "The words were all weath-ered, worn thin by the cold;",
           "the tune was in bone, and it nev-er grows old."
         ]
       },
@@ -969,7 +969,7 @@
           "They whis-tled it un-der the fence in the rain,",
           "and no-bo-dy saw, and it went with the train;",
           "the pa-pers were halt-ed, the bar-ri-ers high;",
-          "the sound of it crossed with no need of a sky."
+          "but noth-ing could stop what was sung to the sky."
         ]
       },
       {

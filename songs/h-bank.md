@@ -304,7 +304,7 @@ Swap *box in a shed* for drawer by the bed or trunk by the bed.
 > They whistled it under the fence in the rain,
 > and nobody saw, and it went with the train;
 > the papers were halted, the barriers high;
-> the sound of it crossed with no need of a sky.
+> but nothing could stop what was sung to the sky.
 
 **hold** · 1990 · light · ABAB · pairs with ring · by fable
 
@@ -539,7 +539,7 @@ Swap *seven* for twenty or thirty.
 
 > An old man was humming it, rocking his chair;
 > he'd lost all the words, but the ring was still there.
-> The words were all weathered and buried in cold;
+> The words were all weathered, worn thin by the cold;
 > the tune was in bone, and it never grows old.
 
 **wakes** · plain · AABB · by fable

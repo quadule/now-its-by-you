@@ -127,6 +127,13 @@ words (put, disc, ruined, hiss, hummed, low, cannon, counting).
 6. **The bridge's last line**: all three singers went *up* on "leave **it** alone" instead of down
    to do, each to a different note. More singers tonight will settle it (`tools/hard_notes.py`).
 
+**Decided (the artist, 2026-09-27 ~11:10: "go ahead with recommendations and follow the people in 1/2/4/5/6").**
+1 done (both lines as proposed). 2: the seed keeps `backing: thirds` and the contest render sings it with the
+volunteers' three voices (`tools/everyone.py`), no stand-ins. 3 left at -14 LUFS. 4: the pickup so, -> la, is now
+three of five singers and is adopted (r1 "Who"); the categories are in hard_notes.py, as-variants not taken.
+5: RIDE 3 -> 5 dB. 6: with five singers hard_notes no longer reports the bridge's last line (no majority on any
+one note), so it stays as written.
+
 ## Tonight's routine (unchanged)
 
 Final `sync` after 10 PM; measure is automatic; then the contest render:

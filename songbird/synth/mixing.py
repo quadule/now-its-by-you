@@ -278,7 +278,7 @@ PLATE_RT60 = 1.5
 RETURN_EQ = (("hp", 120), ("lp", 12000))  # wide enough that the harvested tone's ends are heard
 RETURN_DIP = 3.0  # dB the room and plate give way while the voice sings
 MAKE_WAY = (0.02, 0.9)  # s the band and room take to make way for the voice (quick: its first consonants), and to come back after it (slow: no breathing)
-RIDE = (3.0, 1.5)  # dB the band comes up where the voice rests, over this many seconds
+RIDE = (5.0, 1.5)  # dB the band comes up where the voice rests, over this many seconds (3.0 until 2026-09-27)
 
 CARVE = (2600.0, 0.7)  # the band's dip for the voice: centre Hz, Q
 CARVE_DEPTH = 6.0  # dB at full voice
