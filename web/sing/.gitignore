@@ -1,8 +1,10 @@
 # installed by npm, and wrangler's local state
 node_modules/
 .wrangler/
-# built by tools/sing_site.py: the song's guides never go in git
+# built by tools/sing_site.py: the song's guides never go in git (it builds beside public/ first)
 public/
+public.next/
+public.old/
 # local secrets for `wrangler dev`
 .dev.vars
 .dev.vars.*

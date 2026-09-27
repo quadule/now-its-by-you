@@ -184,3 +184,30 @@ def test_a_melody_that_wont_decode_in_time_is_encoded_at_the_full_guides_rate(tm
     assert tried == ["64k", "96k"]
     with pytest.raises(W.OutOfTime):
         W.encode_first(tmp_path / "x.wav", tmp_path / "x.mp3", ("64k",))
+
+
+def test_a_site_being_built_never_replaces_the_one_there_until_it_is_whole(tmp_path, monkeypatch):
+    """A deploy while a build runs publishes the site built before, never part of this one: the new one
+    is built beside it (where wrangler never looks) and put in its place only once it's whole."""
+    out = tmp_path / "public"
+    W.clear(out)  # the site built before, as the last build left it
+    (out / "song").mkdir()
+    (out / "song" / "song.json").write_text('{"built": "before"}\n')
+    monkeypatch.setattr(M, "GUIDES", tmp_path / "renders" / "guide")
+
+    def fails(job):
+        assert Path(job["out"]) == W.aside(out) and not Path(job["out"], "song", "song.json").exists()
+        raise RuntimeError("a render failed")
+
+    monkeypatch.setattr(W, "render", fails)
+    with pytest.raises(RuntimeError, match="render failed"):
+        W.build(ROOT / "songs" / "h-now-its-by-you.json", out, sets=["a"], keys=[0], tempos=[100], jobs=1)
+    assert (out / "song" / "song.json").read_text() == '{"built": "before"}\n' and (out / W.MARK).exists()
+    built, site = tmp_path / "built", tmp_path / "site"
+    W.clear(built)
+    (built / "new.txt").write_text("whole")
+    W.publish(built, site)  # nothing there yet
+    assert (site / "new.txt").exists() and not built.exists()
+    W.clear(built)
+    W.publish(built, site)  # the one there before goes
+    assert not (site / "new.txt").exists() and (site / W.MARK).exists() and not site.with_name("site.old").exists()

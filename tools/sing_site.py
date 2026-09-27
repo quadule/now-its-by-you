@@ -272,8 +272,9 @@ def render(job: dict) -> dict:
 def build(genome_path: Path, out: Path, rebuild: bool = False, bitrate: str = BITRATE, sets=None, keys=None,
           tempos=None, jobs: int = JOBS, phrasing: Path | None = None, melody_bitrate: str = MELODY_BITRATE,
           progress=None, keep_wavs: bool = False) -> dict:
-    """The site for one song in out (cleared first), and its song.json. sets, keys, tempos: build
-    only these (default all). jobs: specs rendered at once, each in a process of its own. phrasing:
+    """The site for one song in out (built beside it, then put in its place whole), and its song.json.
+    sets, keys, tempos: build only these (default all). jobs: specs rendered at once, each in a
+    process of its own. phrasing:
     a phrasing file the machine's lead sings the full guides with. progress, if given, is told
     each spec as it's done. keep_wavs: keep each spec's rendered mixes for the karaoke here
     (render())."""
@@ -284,6 +285,10 @@ def build(genome_path: Path, out: Path, rebuild: bool = False, bitrate: str = BI
     genome_path = Path(genome_path).resolve()
     genome = G.load(genome_path)
     todo = specs(genome_path, sets, keys, tempos)
+    final = Path(out)
+    if final.exists() and any(final.iterdir()) and not (final / MARK).exists():
+        raise SystemExit(f"{final} isn't empty and wasn't built here: choose another --out")
+    out = aside(final)  # built beside it, and put in its place whole at the end (publish())
     clear(out)
     (out / "song").mkdir()
 
@@ -382,7 +387,25 @@ def build(genome_path: Path, out: Path, rebuild: bool = False, bitrate: str = BI
     (out / "song" / "song.json").write_text(json.dumps(song, separators=(",", ":")) + "\n")
     # the worker's small copy of it (web/sing/src/worker.js): the same, without the loudness curves
     (out / "song" / "worker.json").write_text(json.dumps(worker_index(song), separators=(",", ":")) + "\n")
+    publish(out, final)
     return song
+
+
+def aside(out: Path) -> Path:
+    """Where a site is built before it takes out's place: beside it, where wrangler never looks."""
+    return out.with_name(out.name + ".next")
+
+
+def publish(built: Path, out: Path) -> None:
+    """A finished site into out, whole. Until then out holds the site built before, so a deploy while a
+    build runs publishes that, never part of this one (on 2026-09-26 a deploy caught a build 70 specs
+    in, before its song.json was written, and the site was down until it was rolled back)."""
+    old = out.with_name(out.name + ".old")
+    shutil.rmtree(old, ignore_errors=True)
+    if out.exists():
+        out.rename(old)
+    built.rename(out)
+    shutil.rmtree(old, ignore_errors=True)
 
 
 def placement(lyrics: dict) -> list:
