@@ -229,6 +229,19 @@ test("pointer moving and resizing commit notes; cancelling a drag does not", () 
   assert.equal(s.commits.length, count);
 });
 
+test("a vertical pitch drag preserves off-grid timing after the preceding note is shortened", () => {
+  const s = setup(score({ compound: true }));
+  s.find('[data-note="1"]').emit("click");
+  s.find("#sbc-note-length").emit("change", { target: { value: "0.25" } });
+  const original = s.phrase().notes[2].onset;
+  const item = s.find('[data-note="2"]'), rect = item.getBoundingClientRect();
+  item.emit("pointerdown", { clientX: rect.left + 2, clientY: 150 });
+  item.emit("pointermove", { clientX: rect.left + 2, clientY: 127 });
+  item.emit("pointerup", { clientX: rect.left + 2, clientY: 127 });
+  assert.equal(s.commits.at(-1).value[2].degree, 7);
+  assert.equal(s.commits.at(-1).value[2].onset, original, "vertical movement must not quantize the other axis");
+});
+
 test("composition tools preserve the cadence, count, phrase bounds and nonoverlap", () => {
   const s = setup(), p = s.phrase(), ending = p.notes.at(-1).degree;
   s.clickText("↑ Step");

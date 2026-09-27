@@ -155,8 +155,10 @@
       }
     }
     const latestOnset = Math.min(followingStart - original.duration, index === p.notes.length - 1 ? b.max_final_onset ?? b.max_end : b.max_end);
-    if ("onset" in changes) next.onset = clamp(quantize(next.onset), previousEnd, latestOnset);
-    if ("duration" in changes) next.duration = clamp(quantize(next.duration), b.min_duration, followingStart - next.onset);
+    // A vertical drag sends both axes. Keep untouched expressive timing exact
+    // instead of snapping thirds (or a human offset) while changing only pitch.
+    if ("onset" in changes && next.onset !== original.onset) next.onset = clamp(quantize(next.onset), previousEnd, latestOnset);
+    if ("duration" in changes && next.duration !== original.duration) next.duration = clamp(quantize(next.duration), b.min_duration, followingStart - next.onset);
     return next;
   }
   function changeNote(changes, snap) {
