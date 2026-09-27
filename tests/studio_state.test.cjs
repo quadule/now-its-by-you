@@ -141,3 +141,25 @@ test('a slower listen request cannot hijack the current preview', async () => {
   run('setEdit("tempo", 100)');
   assert.match(nodes.get('nowSub').textContent, /Earlier version/);
 });
+
+test('solo switches players and restores the original gain edits in one undoable batch', () => {
+  const { run } = studio();
+  run(`state.edits = {"band.lute": 0.7, tempo: 100};
+    const bandCard = {players: {lute: "Lute", fiddle: "Fiddle"}, band: {lute: 0.7, fiddle: 0.4}};
+    soloPlayer(bandCard, "lute")`);
+  assert.deepEqual(plain(run('state.edits')), { 'band.lute': 0.7, 'band.fiddle': 0, tempo: 100 });
+  run('soloPlayer(bandCard, "fiddle")');
+  assert.deepEqual(plain(run('state.edits')), { 'band.lute': 0, 'band.fiddle': 0.4, tempo: 100 });
+  run('soloPlayer(bandCard, "fiddle")');
+  assert.deepEqual(plain(run('state.edits')), { 'band.lute': 0.7, tempo: 100 });
+  run('travelHistory("undo")');
+  assert.deepEqual(plain(run('state.edits')), { 'band.lute': 0, 'band.fiddle': 0.4, tempo: 100 });
+});
+
+test('mute restores the previous audible level instead of discarding the mix', () => {
+  const { run } = studio();
+  run(`const bandCard = {players: {lute: "Lute"}, band: {lute: 0.7}};
+    mutePlayer(bandCard, "lute"); bandCard.band.lute = 0; mutePlayer(bandCard, "lute")`);
+  assert.equal(run('state.edits["band.lute"]'), 0.7);
+  assert.equal(run('state.undo.length'), 2);
+});

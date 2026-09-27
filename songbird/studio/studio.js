@@ -11,6 +11,7 @@ const state = {
   names: [], compare: null, busy: 0, playing: null, poll: null, recordJob: null,
   optionsByKey: {}, optionsFailed: false, undo: [], redo: [], editRevision: 0, refreshSerial: 0,
   historyGroup: null, workspace: "arrange", saveStatus: "Saved on this device", playerSub: "",
+  solo: null, mutedLevels: {},
 };
 
 // ------------------------------------------------------------------ small helpers
@@ -565,6 +566,55 @@ function renderSessionControls() {
   box.replaceChildren(...controls);
 }
 
+function currentSolo() {
+  if (state.solo && Object.entries(state.solo.patch).some(([path, value]) => state.edits[path] !== value)) state.solo = null;
+  return state.solo;
+}
+
+function soloPlayer(card, player) {
+  const active = currentSolo();
+  if (active?.player === player) {
+    state.solo = null;
+    setEdits(active.before, "Restore the band mix");
+    return;
+  }
+  const names = Object.keys(card.players);
+  const before = active?.before || Object.fromEntries(names.map((name) => {
+    const path = `band.${name}`;
+    return [path, Object.hasOwn(state.edits, path) ? state.edits[path] : null];
+  }));
+  const levels = active?.levels || Object.fromEntries(names.map((name) => [name, card.band[name]]));
+  const patch = Object.fromEntries(names.map((name) => [`band.${name}`, name === player ? Math.max(0.03, levels[name] || 1) : 0]));
+  state.solo = { player, before, levels, patch };
+  setEdits(patch, `Solo ${card.players[player] || player}`);
+}
+
+function mutePlayer(card, player) {
+  const path = `band.${player}`, level = card.band[player] || 0;
+  if (level > 0.02) {
+    state.mutedLevels[player] = level;
+    setEdit(path, 0, `Mute ${card.players[player] || player}`);
+  } else {
+    setEdit(path, state.mutedLevels[player] || 1, `Unmute ${card.players[player] || player}`);
+  }
+}
+
+function bandMixer(card) {
+  const solo = currentSolo();
+  // Every instrument gain uses the server's validated 0..2 range; older packets omit this bounds entry.
+  const bounds = state.start.bounds["band.gain"] || { min: 0, max: 2, step: 0.01 };
+  return h("div", { class: "band-mixer", role: "group", "aria-label": "Instrument mixer" }, Object.keys(card.players).map((name) => {
+    const muted = card.band[name] <= 0.02;
+    return h("div", { class: `mixer-strip${muted ? " muted" : ""}` },
+      h("div", { class: "mixer-strip-head" }, h("span", {}, card.players[name]), h("div", { class: "mixer-buttons" },
+        h("button", { type: "button", class: `chip${muted ? " on" : ""}`, "aria-label": `${muted ? "Unmute" : "Mute"} ${card.players[name]}`,
+          "aria-pressed": String(muted), onclick: () => mutePlayer(card, name) }, "M"),
+        h("button", { type: "button", class: `chip${solo?.player === name ? " on" : ""}`, "aria-label": `Solo ${card.players[name]}`,
+          "aria-pressed": String(solo?.player === name), onclick: () => soloPlayer(card, name) }, "S"))),
+      slider(`${card.players[name]} level`, `band.${name}`, card.band[name] || 0, bounds, (value) => `${Math.round(value * 100)}%`));
+  }));
+}
+
 function editor(c) {
   const s = state.start, b = s.bounds, v = state.view;
   switch (c.id) {
@@ -598,19 +648,13 @@ function editor(c) {
     }
     case "band": {
       const band = c.band;
-      // who plays: the style's own band, or the song's own eight
-      const players = h("div", { class: "players" }, Object.keys(c.players).map((n) => {
-        const box = h("input", { type: "checkbox" });
-        box.checked = band[n] > 0.02;
-        box.addEventListener("change", () => setEdit(`band.${n}`, box.checked ? null : 0));
-        return h("label", {}, box, c.players[n] || n);
-      }));
       return h("div", {},
         c.styled ? null : chips("How the band plays", b["band.pattern"].options, band.pattern, (x) => setEdit("band.pattern", x), { text: s.patterns }),
         c.styled ? null : chips("Who leads where nobody sings", b["band.lead"].options, band.lead, (x) => setEdit("band.lead", x), { text: c.players }),
         slider("How busy", "band.density", band.density, b["band.density"], (x) => `${Math.round(x * 100)}%`, ["sparse", "busy"]),
         slider("How bright", "band.brightness", band.brightness, b["band.brightness"], (x) => `${Math.round(x * 100)}%`, ["dark and soft", "bright"]),
-        h("div", { class: "control" }, h("label", {}, "Who plays"), players),
+        bandMixer(c),
+        h("p", { class: "hint" }, "M mutes a player. S isolates a player in the band; click again to restore the mix. The singer stays audible."),
         h("p", { class: "hint" }, c.styled ? "The style chooses who plays and who leads; change the style to change the band. With nobody playing, the voice sings alone."
           : "With nobody playing, the voice sings alone."));
     }
