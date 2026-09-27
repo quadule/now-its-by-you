@@ -40,6 +40,7 @@ from . import __version__
 ROOT = Path(__file__).resolve().parents[1]  # the program's tree: songbird/ and pyproject.toml beside it
 RUNTIME = ("numpy", "scipy", "numba", "soundfile", "cmudict")  # pyproject's dependencies, what the program needs
 MANIFEST = "manifest.json"
+GOAL = 8 * 2**20  # what the portable program + model should fit in (audio is separate): pack warns past it
 LIMIT = 40 * 2**20  # a program larger than this is a mistake (a stray render in songbird/), not a program
 
 
@@ -128,6 +129,17 @@ def program_files(root: Path = ROOT) -> dict[str, bytes]:
         biggest = max(files, key=lambda k: len(files[k]))
         raise ValueError(f"the program is {total / 2**20:.0f} MB; is {biggest} meant to travel with it?")
     return files
+
+
+def budget(root: Path = ROOT) -> dict:
+    """Portable bytes before compression, against the GOAL (the artist, 2026-09-27: a goal to keep in mind
+    while the model is trimmed, compressed or quantized, not a wall; only LIMIT refuses). Audio and
+    installed runtime dependencies are separate."""
+    files = program_files(root)
+    total = sum(map(len, files.values()))
+    model = sum(len(data) for name, data in files.items() if name.endswith(".npz"))
+    return {"goal_bytes": GOAL, "limit_bytes": LIMIT, "program_bytes": total, "model_bytes": model,
+            "source_bytes": total - model, "headroom_bytes": GOAL - total, "files": len(files)}
 
 
 def program_sha256(files: dict[str, bytes]) -> str:
@@ -257,6 +269,13 @@ def pack(flac: str | Path, record: dict, genome: str | Path, lyrics: str | None 
     }
     if lyrics:
         files["lyrics.txt"] = lyrics.encode()
+    total = sum(map(len, files.values()))
+    if total > LIMIT:
+        raise ValueError(f"the program, model and rendition data are {total / 2**20:.2f} MiB, "
+                         f"over the {LIMIT / 2**20:g} MiB limit (audio excluded)")
+    if total > GOAL:
+        print(f"songbird: the program, model and rendition data are {total / 2**20:.2f} MiB, past the "
+              f"{GOAL / 2**20:g} MiB goal (audio excluded)", file=sys.stderr)
     # the entries' dates are the rendition's own, so the same rendition packs to the same bytes
     stamp = re.match(r"(\d{4})-(\d\d)-(\d\d)T(\d\d):(\d\d):(\d\d)", m.get("rendered_at") or "")
     date = tuple(int(x) for x in stamp.groups()) if stamp and int(stamp.group(1)) >= 1980 else (1980, 1, 1, 0, 0, 0)
@@ -266,6 +285,8 @@ def pack(flac: str | Path, record: dict, genome: str | Path, lyrics: str | None 
         order = ["__main__.py", "README.txt", MANIFEST, "genome.json", "lyrics.txt", "LICENSE", "requirements.txt"]
         for name in [n for n in order if n in files] + sorted(n for n in files if n not in order):
             z.writestr(_entry(name, date), files[name])
+    if buffer.tell() - len(audio) > LIMIT:
+        raise ValueError(f"the attached archive exceeds the {LIMIT / 2**20:g} MiB limit (audio excluded)")
     tmp = out.with_name(out.name + ".part")
     tmp.write_bytes(buffer.getvalue())
     tmp.replace(out)

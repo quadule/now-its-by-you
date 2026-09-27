@@ -6,6 +6,24 @@ the song's skeleton, the rendition's record and its words. Run it with Python
 and it sings a new version of the song, on your computer and your day, as
 that version's child. This is milestone 6 of docs/PLAN.md.
 
+The record's `performance` now carries the lead and choir's rounded phrasing
+gestures, without recordings or local paths. Children inherit them unless a
+new phrasing is supplied; the studio uses them in previews and recordings.
+`render --replay` restores these gestures and the final singer and mix,
+including their overrides. Old records without a performance still use the
+seed's phrasing and warn when an external contribution needs supplying.
+
+The program and model aim for **8 MiB**, excluding the audio: a goal to keep
+in mind while the model is trimmed, compressed or quantized (the artist,
+2026-09-27), not a wall. It is measured before compression so it stays
+meaningful as the model changes; packing warns past the goal and refuses only
+absurd sizes (40 MiB, a stray render). It also measures the attached material,
+including the genome, learned gestures, lineage and ZIP overhead.
+`uv run songbird budget` shows the model, source and remaining room;
+`uv run songbird budget --json` supplies exact counts for build checks. The
+platform's separately installed Python dependencies are not embedded in this
+budget (see setup below).
+
     uv run songbird render songs/h-now-its-by-you.json --pack --out seed.flac
     python3 seed.flac                 what this is, and what you can do
     python3 seed.flac new             sing a new version here, today (a packet too)

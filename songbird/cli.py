@@ -148,6 +148,8 @@ def render_one(genome, params: Params, out: Path, *, voice=None, drift=None, lyr
         "drift": drift.to_dict() if drift is not None else None,
         "phrasing": {k: v for k, v in phrasing_json.items() if k not in ("phrases", "fields")} if phrasing_json else None,
         "choir_phrasings": [{k: v for k, v in d.items() if k not in ("phrases", "fields")} for d in choir_json] or None,
+        "performance": {"lead": phrasing_mod.to_json(phrasing) if phrasing is not None else None,
+                        "choir": [phrasing_mod.to_json(ph) for ph in choir]},
         "mix": mixing.to_dict(),
         "loudness_lufs": round(master.loudness(pcm / 32768.0, synth.SR), 2),
         "loudness_range_lu": round(master.loudness_range(pcm / 32768.0, synth.SR), 2),
@@ -209,19 +211,25 @@ def parent_of(record: dict) -> dict | None:
 
 def replay_command(args: argparse.Namespace, genome) -> int:
     """A rendition rendered again exactly as its record says: its parameters, the words it recorded (not
-    drawn again), its machine and moment; a person's phrasing given again with --phrasing."""
+    drawn again), its machine and moment, and the small performance it carries."""
     from .arrange import Lyrics
 
     record = pack_mod.read_record(args.replay)
     params = Params.from_dict(record["params"])
+    # The final singer and mix include any overrides used for the original.
+    # They can differ from the machine's choices stored in params.
+    params = replace(params, singer=record.get("singer") or params.singer, mix=record.get("mix") or params.mix)
     lyrics = Lyrics.from_dict(record["lyrics"]) if record.get("lyrics") else None
     voice = harvest.Voice.from_dict(record["voice"]) if record.get("voice") else None
     drift = drift_mod.Drift.from_dict(record["drift"]) if record.get("drift") else None
-    phrasing_json = json.loads(Path(args.phrasing).read_text()) if args.phrasing else genome.source.get("seed_phrasing")
-    if record.get("phrasing") and not args.phrasing:
+    phrasing_json, choir_json = phrasing_mod.inherited(genome.source, record)
+    if args.phrasing:
+        phrasing_json = json.loads(Path(args.phrasing).read_text())
+    if record.get("phrasing") and "performance" not in record and not args.phrasing:
         print("songbird: this rendition was sung with a person's phrasing; give it with --phrasing to hear it "
               "the same", file=sys.stderr)
-    choir_json = [json.loads(Path(f).read_text()) for f in args.choir_phrasing]
+    if args.choir_phrasing:
+        choir_json = [json.loads(Path(f).read_text()) for f in args.choir_phrasing]
     parent = parent_of(record)
     out = Path(args.out or Path("renders") / (Path(args.genome).stem + ".replay.flac"))
     render_one(genome, params, out, voice=voice, drift=drift, lyrics=lyrics, phrasing_json=phrasing_json,
@@ -275,10 +283,14 @@ def render_command(args: argparse.Namespace) -> int:
                                arrange=_arrangement(args.arrange))
     if args.choir is not None:
         params = replace(params, choir=args.choir)
-    # a person's phrasing: the file given, or the one the seed carries
-    phrasing_json = json.loads(Path(args.phrasing).read_text()) if args.phrasing else genome.source.get("seed_phrasing")
-    choir_json = [json.loads(Path(f).read_text()) for f in args.choir_phrasing]
-    if choir_json and args.choir is None:
+    # A new contribution replaces the inherited delivery; otherwise it keeps
+    # travelling even when the original recordings are long gone.
+    phrasing_json, choir_json = phrasing_mod.inherited(genome.source, parent)
+    if args.phrasing:
+        phrasing_json = json.loads(Path(args.phrasing).read_text())
+    if args.choir_phrasing:
+        choir_json = [json.loads(Path(f).read_text()) for f in args.choir_phrasing]
+    if args.choir_phrasing and args.choir is None:
         params = replace(params, choir=len(choir_json))
     sung_by_a_machine = voice is not None or drift is not None
     chose_words = resolved is not None and not args.form and any(p.startswith("words.") for p in edits)
@@ -307,6 +319,23 @@ def render_command(args: argparse.Namespace) -> int:
 
 
 # ---------------------------------------------------------------- the packet
+
+def budget_command(args: argparse.Namespace) -> int:
+    try:
+        report = pack_mod.budget()
+    except ValueError as e:
+        print(f"songbird: {e}", file=sys.stderr)
+        return 2
+    if args.json:
+        print(json.dumps(report, indent=2))
+    else:
+        print(f"Program and model: {report['program_bytes'] / 2**20:.2f} MiB; the goal is {report['goal_bytes'] / 2**20:g} MiB"
+              + ("" if report["headroom_bytes"] >= 0 else " (past it: pack warns)"))
+        print(f"  model {report['model_bytes'] / 2**20:.2f} MiB; source and assets {report['source_bytes'] / 2**20:.2f} MiB; "
+              f"room {report['headroom_bytes'] / 2**20:.2f} MiB")
+        print("Before compression. Audio and installed runtime dependencies are separate; packing also checks rendition data.")
+    return 0
+
 
 def pack_command(args: argparse.Namespace) -> int:
     flac = Path(args.flac)
@@ -509,8 +538,9 @@ def year_command(args: argparse.Namespace) -> int:
             p = choose_params(genome, parent, voice, d, log=log)
             day = (drift_mod.when(start) + timedelta(days=offset)).date().isoformat()
             print(f"{name}: ", end="")
+            phrasing_json, choir_json = phrasing_mod.inherited(genome.source, parent_record)
             render_one(genome, p, out_dir / f"{Path(args.genome).stem}.{label}.{day}.flac", voice=voice, drift=d,
-                       lyrics=words(genome, p, sung_by_a_machine=True), phrasing_json=genome.source.get("seed_phrasing"),
+                       lyrics=words(genome, p, sung_by_a_machine=True), phrasing_json=phrasing_json, choir_json=choir_json,
                        parent=parent_record, changes=log)
     return 0
 
@@ -559,7 +589,8 @@ def main(argv: list[str] | None = None) -> int:
     render.add_argument("--choir", type=int, metavar="N",
                         help="lineage voices joining in harmony where the song has a choir (stand-ins for now)")
     render.add_argument("--phrasing", metavar="FILE",
-                        help="sing with a person's phrasing, from tools/phrasing.py (default: the seed's own, if any)")
+                        help="sing with a person's phrasing, from tools/phrasing.py (default: inherited from the "
+                             "parent, or the seed's own)")
     render.add_argument("--choir-phrasing", nargs="+", default=[], metavar="FILE",
                         help="a phrasing for each choir voice, in order (sets --choir to their number unless given)")
     render.add_argument("--edits", metavar="FILE",
@@ -614,6 +645,10 @@ def main(argv: list[str] | None = None) -> int:
     pack_parser.add_argument("--parent", metavar="FILE",
                              help="the rendition it was sung from (packet or record), if its record doesn't say")
     pack_parser.set_defaults(run=pack_command)
+
+    budget_parser = commands.add_parser("budget", help="the portable program and model's size against the 8 MiB goal")
+    budget_parser.add_argument("--json", action="store_true", help="print exact byte counts for build checks")
+    budget_parser.set_defaults(run=budget_command)
 
     unpack_parser = commands.add_parser("unpack", help="unpack a rendition's packet into a folder")
     unpack_parser.add_argument("flac", help="a FLAC carrying its packet")

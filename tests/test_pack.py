@@ -60,6 +60,41 @@ def test_the_same_rendition_packs_to_the_same_bytes(rendition, tmp_path):
     assert a.read_bytes() == b.read_bytes()
 
 
+def test_the_budget_report_measures_the_program_against_the_goal():
+    """The 8 MiB is a goal to keep in mind (the artist, 2026-09-27), not a wall: the report says where we are."""
+    report = pack.budget()
+    assert report["goal_bytes"] == 8 * 2**20 and report["limit_bytes"] == pack.LIMIT > report["goal_bytes"]
+    assert 0 < report["model_bytes"] < report["program_bytes"] <= report["limit_bytes"]
+    assert report["source_bytes"] + report["model_bytes"] == report["program_bytes"]
+    assert report["headroom_bytes"] == report["goal_bytes"] - report["program_bytes"]
+
+
+def test_oversized_program_is_refused_before_replacing_audio(rendition, tmp_path, monkeypatch):
+    flac, _, record = rendition
+    original = flac.read_bytes()
+    monkeypatch.setattr(pack, "LIMIT", 100)
+    with pytest.raises(ValueError, match="meant to travel"):
+        pack.pack(flac, record, GENOME)
+    assert flac.read_bytes() == original and not flac.with_name(flac.name + ".part").exists()
+
+
+def test_large_performance_or_lineage_cannot_bypass_budget(rendition, monkeypatch):
+    flac, _, record = rendition
+    original = flac.read_bytes()
+    monkeypatch.setattr(pack, "program_files", lambda root: {})
+    monkeypatch.setattr(pack, "LIMIT", 100)
+    with pytest.raises(ValueError, match="rendition data.*limit"):
+        pack.pack(flac, record, GENOME)
+    assert flac.read_bytes() == original
+
+
+def test_budget_command_reports_exact_counts(capsys):
+    from songbird import cli
+
+    assert cli.main(["budget", "--json"]) == 0
+    assert json.loads(capsys.readouterr().out) == pack.budget()
+
+
 def test_a_record_for_other_audio_is_refused(rendition):
     flac, _, record = rendition
     with pytest.raises(ValueError):

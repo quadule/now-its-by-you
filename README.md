@@ -7,8 +7,12 @@ moment it was run. The design is in [docs/PLAN.md](docs/PLAN.md); the seed song
 is still being written: every candidate, with lyrics, ratings and a bank of
 lines to reuse, is in [songs/](songs/README.md).
 
-Status: prototype. Milestone 1 (genome and deterministic plucked-string render)
-is done; milestone 2 (the formant voice) sings and is being tuned.
+Status: prototype with a small learned singing voice, procedural bands,
+volunteer phrasing, a local studio and replayable audio/program packets.
+[Listening editions](editions/README.md) and a
+[creative review](docs/CREATIVE-REVIEW.md) develop H, **Now It's by You**.
+The portable program and model aim to fit in **8 MiB**, excluding the audio;
+`uv run songbird budget` reports their current size (packing warns past the goal).
 
 ```
 uv sync
@@ -42,8 +46,9 @@ words, drawn from the song's bank: [docs/ARRANGE.md](docs/ARRANGE.md)), `band`
 `synth/` (the band's instruments: plucked, bowed, blown, struck and reed
 models in their bodies; the singer: LF glottal source and Klatt-style tract,
 or the learned throat of [docs/THROAT.md](docs/THROAT.md); room, mastering),
-`phonetics` (CMU dictionary to sung syllables). `lyrics`, `gate` and `pack`
-are the later milestones and only describe their interfaces so far.
+`phonetics` (CMU dictionary to sung syllables), and `pack` (the playable,
+executable file: [docs/PACKET.md](docs/PACKET.md)). The broader LLM and
+by-ear gate pipeline remains a later milestone.
 
 ## Singers
 
@@ -63,5 +68,8 @@ and release for singers.
 - `tools/band_solos.py songs/<name>.json --plots` renders each instrument of the band alone, playing its part.
 - `tools/wer_suite.py [--mix] [--seeds 3] [--set field=value]` sings every lyric in
   `songs/` and scores intelligibility with Whisper (dev-only; downloads the base.en model).
+- `tools/packet_review.py PACKET.flac ... [--wer] [--out report.json]` compares
+  finished editions: loudness, range, true peak, mono power, payload size, and
+  optionally word recognition with a cached local Whisper model.
 
 Code and seed are dedicated to the public domain (CC0).

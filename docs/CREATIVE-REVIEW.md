@@ -160,7 +160,7 @@ the record, are used by studio previews, and pass to children. Replay restores
 the final voice and mix too. A regression test deletes the local phrasing file
 and verifies an identical replayed audio hash, including a choir.
 
-The agreed **8 MiB** budget is enforced before compression. The program and
+The **8 MiB** budget is a goal, measured before compression (the artist later made it a goal that warns, not a wall). The program and
 model currently occupy about **5.20 MiB**, including a **3.40 MiB** throat, leaving
 about **2.80 MiB** for improvements. Packing additionally checks the rendition's
 metadata and archive size before replacing an existing file. The FLAC audio and
