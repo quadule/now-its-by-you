@@ -128,7 +128,7 @@ STAMPED = re.compile(r"^(?P<song>.+)-\d{8}-\d{6}(-\d+)?$")  # <song>-<yyyymmdd-h
 
 
 def load(path: Path) -> Take:
-    path = Path(path).resolve()
+    path = Path(path).absolute()  # not resolve(): a worktree's symlinked recordings/ must stay under its root
     side = path.with_suffix(".json")
     data = json.loads(side.read_text()) if side.exists() else {}
     named = STAMPED.match(path.stem)

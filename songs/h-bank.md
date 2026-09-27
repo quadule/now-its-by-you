@@ -115,6 +115,10 @@ canon always last:
 > It's nobody's making, and that much is true;
 > but somebody sang it, and now it's by you.
 
+**wind** · by artist and claude, via gemini
+
+> It's nobody's making, it passes on through;
+> a breath on the water, and now it's by you.
 
 ## The verses
 
@@ -274,6 +278,12 @@ Swap *Neptune* for Saturn or Pluto.
 
 Swap *box in a shed* for drawer by the bed or trunk by the bed.
 
+**border** · 1985 · plain · AABB · by fable and artist, via gemini
+
+> They whistled it under the fence in the rain,
+> and nobody saw, and it went with the train;
+> the papers were halted, the barriers high;
+> the sound of it crossed with no need of a sky.
 
 **hold** · 1990 · light · ABAB · pairs with ring · by fable
 
@@ -472,6 +482,12 @@ Swap *girls* for boys or kids; *yard* for field.
 
 Swap *seven* for twenty or thirty.
 
+**bone** · tender · AABB · by fable and artist, via gemini
+
+> An old man was humming it, rocking his chair;
+> he'd lost all the words, but the ring was still there.
+> The words were all weathered and buried in cold;
+> the tune was in bone, and it never grows old.
 
 **wakes** · plain · AABB · by fable
 
