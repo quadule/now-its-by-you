@@ -629,9 +629,10 @@ def only(folder: Path, sid: str) -> bool:
 def forget_singer(sid: str, site: Site | None = None) -> list[str]:
     """Everything here of a singer who withdrew (their sid): their takes (WAVs and sidecars) and the numbers
     measured from them; the phrasing of each folder they sang into, and everyone's, and the machine singing them
-    (each holds their numbers: the karaoke makes them again from what's left); their words; and the versions made
-    with their takes, from their person's other pages too when site is given (sync makes those again). Only this
-    sid's takes: anyone else's in the same folder stay. What went, in words (nothing: it had all gone already)."""
+    (each holds their numbers, as do the choir's blends and its renders: the karaoke makes them again from what's
+    left); their words; and the versions made with their takes, from their person's other pages too when site is
+    given (sync makes those again). Only this sid's takes: anyone else's in the same folder stay. What went, in
+    words (nothing: it had all gone already)."""
     mine = [(side, info) for side, info in sidecars() if info.get("sid") == sid]
     folders = sorted({side.parent for side, _ in mine})
     songs = sorted({info.get("song") for _, info in mine if info.get("song")})
@@ -640,6 +641,12 @@ def forget_singer(sid: str, site: Site | None = None) -> list[str]:
     numbers = [f for side, _ in mine for f in measurements(side.with_suffix(".wav")) if f.exists()]
     made = [f for song in songs for who in [*(folder.name for folder in folders), "everyone"]
             for f in (phrasing_path(song, who), karaoke_render(song, who)) if f.exists()]
+    # the choir's blends hold their numbers too, as does any render the choir sang in, and a render's score
+    made += sorted(({f for song in songs for f in phrasing_path(song, "*").parent.glob(f"{song}.choir.*.json")}
+                    | {f for song in songs for f in karaoke_render(song, "*").parent.glob(f"{song}.karaoke.*.flac")
+                       if read(f.with_suffix(".json"), {}).get("choir_phrasings")}) - set(made))
+    made += [f for r in made if r.suffix == ".flac" for f in (r.with_suffix(".json"), r.with_suffix(".score.json"))
+             if f.exists()]
     with whole():
         for f in numbers + made:
             f.unlink(missing_ok=True)

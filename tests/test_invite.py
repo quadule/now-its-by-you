@@ -645,6 +645,12 @@ def test_a_singer_who_withdraws_leaves_nothing_here(site, capsys):
     for who in ("ana", "jo", "lee", "everyone"):
         I.phrasing_path(SONG, who).write_text("{}")
         I.karaoke_render(SONG, who).write_bytes(b"fLaC")
+    I.phrasing_path(SONG, "choir.1").write_text("{}")  # the karaoke's choir: a blend of several singers
+    solo, sung = I.karaoke_render(SONG, "jo"), I.karaoke_render(SONG, "plain")  # Jo's way alone; its own with the choir
+    solo.with_suffix(".json").write_text(json.dumps({"choir_phrasings": None}))
+    sung.write_bytes(b"fLaC")
+    sung.with_suffix(".json").write_text(json.dumps({"choir_phrasings": [{"source_detail": "1 sung take(s)"}]}))
+    sung.with_suffix(".score.json").write_text("{}")
     site.withdraw(ana, "2026-09-26T23:50:00.000Z")
     site.withdraw(phone, "2026-09-26T23:51:00.000Z")
     capsys.readouterr()
@@ -656,6 +662,9 @@ def test_a_singer_who_withdraws_leaves_nothing_here(site, capsys):
     assert not takes[l2].path.exists() and not takes[l2].sidecar().exists()
     for who in ("ana", "lee", "everyone"):  # each held numbers taken from them
         assert not I.phrasing_path(SONG, who).exists() and not I.karaoke_render(SONG, who).exists()
+    assert not I.phrasing_path(SONG, "choir.1").exists()  # and so did the choir, and what it sang
+    assert not any(f.exists() for f in (sung, sung.with_suffix(".json"), sung.with_suffix(".score.json")))
+    assert solo.with_suffix(".json").exists()
     for t in (takes[j1], takes[l1]):  # Jo's, and Lee's other page's, stay
         assert t.path.exists() and t.sidecar().exists() and all(f.exists() for f in I.measurements(t.path))
     assert (K.RECORDINGS / "words" / f"{jo}.json").exists() and I.phrasing_path(SONG, "jo").exists()

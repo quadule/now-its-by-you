@@ -56,6 +56,7 @@ ROOT = Path(__file__).parent.parent
 PAGE = Path(__file__).with_suffix(".html")
 # what the page shares with the online one (web/sing): its timing, sync and drawing, and the take recorder
 SLOWER = 90  # the speed a singer starts at, a little slower than written (the artist's choice; as tools/sing_site.py)
+CHOIR = 3  # the choir's voices: its harmony has three lines, and more voices would only double them lower
 SCRIPTS = {"/karaoke.js": Path(__file__).with_suffix(".js"), "/recorder.js": Path(__file__).with_name("karaoke-recorder.js")}
 
 
@@ -390,27 +391,39 @@ class Karaoke(BaseHTTPRequestHandler):
         except Exception as e:  # report it on the page rather than dropping the connection
             self.send_json({"error": f"{type(e).__name__}: {e}"}, 500)
 
+    def blend(self, name: str, takes: list) -> Path:
+        """A phrasing from these takes, each person counting once, kept as renders/phrasing/<song>.<name>.json
+        (a name no singer's folder can have: "everyone", "choir.1")."""
+        with contextlib.redirect_stdout(io.StringIO()):
+            phrasing, data, _ = T.singer_phrasing(self.genome_path, self.genome, takes)
+            data["source_detail"] = f"{len(takes)} sung takes by {len({t.who for t in takes})} singers"
+            T.write(data, phrasing, self.phrasing_path(name))
+        return self.phrasing_path(name)
+
     def render(self, request: dict) -> dict:
         """The machine sings: one singer's way (lead: their folder name), everyone's
-        blended ("everyone"), or its own (""); with the choir, the other
-        singers' phrasings are its voices, and stand-ins fill it out to three."""
+        blended ("everyone": every take ticked to count, whether or not its singer's
+        phrasing has been made), or its own (""); with the choir, the other singers
+        are its voices, each their own way, or, with more of them than the choir has
+        voices, several blended in each, so everyone who sang is in it; stand-ins
+        fill it out to three."""
         from songbird.cli import main as songbird
 
         lead = request.get("lead", "")
         have = {s["who"]: ROOT / s["phrasing"] for s in self.singers() if s["phrasing"]}
+        counted = [t for t in K.takes(self.genome_path.stem) if t.use]
         args = []
         if lead == "everyone":  # every singer's takes at once, each person counting once
-            chosen = [t for t in K.takes(self.genome_path.stem) if t.use and t.who in have]
-            with contextlib.redirect_stdout(io.StringIO()):
-                phrasing, data, _ = T.singer_phrasing(self.genome_path, self.genome, chosen)
-                data["source_detail"] = f"{len(chosen)} sung takes by {len(have)} singers"
-                T.write(data, phrasing, self.phrasing_path("everyone"))
-            args += ["--phrasing", str(self.phrasing_path("everyone"))]
+            args += ["--phrasing", str(self.blend("everyone", counted))]
         elif lead:
             args += ["--phrasing", str(have[lead])]
         if request.get("choir"):
-            others = [str(f) for who, f in have.items() if who != lead]
-            args += ["--choir", str(max(3, len(others)))] + (["--choir-phrasing", *others] if others else [])
+            others = sorted({t.who for t in counted} - {lead})
+            voices = []
+            for i in range(min(CHOIR, len(others))):
+                with contextlib.suppress(ValueError):  # its singers never sang a whole note: a stand-in sings it
+                    voices.append(str(self.blend(f"choir.{i + 1}", [t for t in counted if t.who in others[i::CHOIR]])))
+            args += ["--choir", str(CHOIR)] + (["--choir-phrasing", *voices] if voices else [])
         out = ROOT / "renders" / f"{self.genome_path.stem}.karaoke.{lead or 'plain'}.flac"
         with contextlib.redirect_stdout(io.StringIO()):
             songbird(["render", str(self.genome_path), *args, "--out", str(out)])

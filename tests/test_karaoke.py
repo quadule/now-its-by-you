@@ -222,3 +222,42 @@ def test_a_singer_who_asked_not_to_be_credited_is_not(workspace):
     assert karaoke.credited([yes, no]) is None  # one take said no: no credit
     nameless = K.keep_sung("song", "choir (ab12cd)", b"RIFF-d", "abc123abc123", source="online", credit=False, credit_as="")
     assert karaoke.credited([nameless]) is None
+
+
+def test_everyones_way_blends_every_ticked_take_and_the_choir_keeps_three_voices(workspace, monkeypatch):
+    """Everyone's way is every take ticked to count, whether or not its singer's phrasing has been made (on
+    the night singing closes, nobody has time to make forty); the choir sings three voices, and with more
+    singers than that, several are blended into each, so everyone who sang is in it."""
+    import songbird.cli
+
+    path = short(workspace)
+    monkeypatch.setattr(karaoke, "ROOT", workspace)
+    monkeypatch.setattr(karaoke.Karaoke, "genome_path", path, raising=False)
+    monkeypatch.setattr(karaoke.Karaoke, "genome", G.load(path))
+    for who in ("Ana", "Bo", "Cy", "Di", "Ed"):
+        K.keep_sung(path.stem, who, b"RIFF-" + who.encode(), "abc123abc123")
+    unticked = K.keep_sung(path.stem, "Fay", b"RIFF-f", "abc123abc123")
+    unticked.use = False
+    unticked.save()
+    blended, rendered = [], []
+
+    def singer_phrasing(genome_path, genome, takes, credit=None):
+        blended.append(sorted({t.who for t in takes}))
+        return {}, {"source_detail": ""}, []
+
+    def write(data, phrasing, out):
+        Path(out).parent.mkdir(parents=True, exist_ok=True)
+        Path(out).write_text(json.dumps(blended[-1]))
+
+    monkeypatch.setattr(T, "singer_phrasing", singer_phrasing)
+    monkeypatch.setattr(T, "write", write)
+    monkeypatch.setattr(songbird.cli, "main", rendered.append)
+    handler = karaoke.Karaoke.__new__(karaoke.Karaoke)  # no request needed to render
+    assert handler.render({"lead": "everyone", "choir": True})["url"].startswith("/renders/h-short.karaoke.everyone.flac")
+    argv = rendered[-1]
+    everyone = argv[argv.index("--phrasing") + 1]
+    assert json.loads(Path(everyone).read_text()) == ["ana", "bo", "cy", "di", "ed"]  # no phrasing made, and Fay unticked
+    assert argv[argv.index("--choir") + 1] == "3"
+    voices = argv[argv.index("--choir-phrasing") + 1:argv.index("--out")]
+    assert [json.loads(Path(v).read_text()) for v in voices] == [["ana", "di"], ["bo", "ed"], ["cy"]]
+    assert all(Path(v).name.startswith("h-short.choir.") for v in voices)  # no singer's folder can be called that

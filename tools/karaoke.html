@@ -698,13 +698,15 @@ function drawSingers() {
 function drawLead() {
   const lead = $("lead"), was = S.lead;  // what they last chose, if anything
   const have = S.singers.filter(s => s.phrasing);
+  const singing = S.singers.filter(s => s.takes.some(t => t.use));  // everyone's way needs no phrasing made first
   lead.innerHTML = "";
   for (const s of have) option(lead, s.who, `${s.name}'s way`);
-  if (have.length >= 2) option(lead, "everyone", "everyone's way, blended");
+  if (singing.length >= 2) option(lead, "everyone", `everyone's way, blended (${singing.length} singers)`);
   option(lead, "", "its own way (no phrasing)");
   lead.value = was !== undefined && [...lead.options].some(o => o.value === was) ? was : lead.options[0].value;
-  $("machineNote").textContent = have.length >= 2 ? "With the choir, the other singers sing its harmonies, each their own way."
-    : have.length ? "Once someone else has a phrasing, they can sing in the choir." : "Make a phrasing to hear the machine sing it someone's way.";
+  $("machineNote").textContent = singing.length >= 2
+    ? "With the choir, the other singers sing its three harmony voices, each their own way (more than three share them)."
+    : have.length ? "Once someone else has sung, they can sing in the choir." : "Make a phrasing to hear the machine sing it someone's way.";
 }
 
 async function analyze(s, el) {
