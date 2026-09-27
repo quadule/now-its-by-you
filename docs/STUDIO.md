@@ -152,7 +152,10 @@ the same machine.
 
 ### Drafts, history and recording
 
-Edits save in browser storage on this device. Date and chance are deliberately not
+Edits save in browser storage on this device, under the song genome's fingerprint as
+a draft is, so a changed song file doesn't bring back tune or lyric edits made for the
+old one (edits saved before the fingerprint was part of the key keep only the choices
+any genome takes: key, tempo, shape, band, mix, style). Date and chance are deliberately not
 retained across reloads, so tomorrow opens on tomorrow. Undo/redo covers note drags,
 word changes, arrangements and mixer actions (100 steps during the current visit).
 Cmd/Ctrl+Z works outside text fields; text fields keep their own editing history.
