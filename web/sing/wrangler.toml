@@ -8,7 +8,7 @@ compatibility_date = "2026-09-25"
 # Cloudflare, uncomment the route below and deploy again to serve it at songbird.quadule.com.
 workers_dev = true
 preview_urls = false
-# routes = [{ pattern = "songbird.quadule.com", custom_domain = true }]
+routes = [{ pattern = "songbird.quadule.com", custom_domain = true }]
 
 # The dates singing keeps (ISO 8601, Pacific time). Singing closes at CLOSES_AT: no more joining, takes,
 # words or withdrawing after it (singers' own pages keep working). At DELETE_BY the hourly purge deletes
