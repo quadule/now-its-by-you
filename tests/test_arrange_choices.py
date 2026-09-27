@@ -36,7 +36,7 @@ def test_drawing_without_choices_is_as_it_was():
     and tag drawn as before), and when the artist dropped the go head (2026-09-26), and when the given stanza went and owed, borrow, slow and
     four verses came (mic, search, misheard, choir; 2026-09-26), and when the first refrain came to ask who
     made, wrote or sang it (question_first, 2026-09-27: only refrain questions moved), and when the bird verse's
-    last two lines were rewritten with a carry swap, and the wind couplet, the bone and border verses and the lyric review's six came (2026-09-27)."""
+    last two lines were rewritten with a carry swap, and the wind couplet, the bone and border verses and the lyric review's six came, and the refrain came to ask about this, that or the song (2026-09-27)."""
     lean = A.Leanings(mood_weights={"light": 2.0, "dark": 0.5}, era_bias=-0.4, rarity_appetite=0.6,
                       vocabulary=frozenset({"sea", "ship", "fiddle", "bird"}))
     digest = hashlib.sha256()
@@ -206,7 +206,7 @@ def test_each_refrain_has_words_of_its_own():
         # another head in refrain 2: its fixed words as written, the rest as drawn
         kept = A.arrange(g, LONG, seed, None, {"refrains": {1: {"head": "so"}}})
         so = [s for s in kept.sections if s.block == "refrain"][1]
-        assert kept.heads[1] == "so" and so.lines[0] == "Who *wrote* this song? No-bo-dy, so" and so.slots["while"] == "if"
+        assert kept.heads[1] == "so" and so.lines[0] == f"Who *wrote* {so.slots['this']} song? No-bo-dy, so" and so.slots["while"] == "if"
         assert kept.couplets == drawn.couplets and "so" not in [h for i, h in enumerate(kept.heads) if i != 1]
         assert len(set(kept.questions[1:-1])) == len(kept.questions[1:-1])  # a clashing question is asked afresh
         # one refrain's own words, the others' as drawn

@@ -156,6 +156,13 @@ def refrain_rules_problem(refrain: dict, rr: dict) -> str | None:
         return ("the words the first refrain may ask must be the refrain's own questions, but not the last "
                 f"refrain's: not {', '.join(sorted(set(first) - set(asked[:-1])))}")
     own = set(slot_names(refrain["lines"])) - {"question"}
+    for rule in ("first", "last"):  # the words the first and last refrains sing in a slot of their own
+        for slot, word in (rr.get(rule) or {}).items():
+            if slot not in own:
+                return f"the rules' {rule} names {slot}, which the refrain's own lines don't sing (the question has question_first)"
+            words = [unmarked(w).replace("-", "") for w in refrain.get("slots", {}).get(slot, [])]
+            if unmarked(str(word)).replace("-", "") not in words:
+                return f"the rules' {rule} sings {slot} as {word}, which isn't one of its words"
     once = set(rr.get("once_per_song", ())) - {"question"}
     distinct = set(rr.get("distinct", ()))
     if distinct - own or distinct & once:

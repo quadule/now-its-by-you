@@ -90,3 +90,14 @@ def test_a_refrains_other_heads_are_checked_like_its_own():
         change(broken)
         with pytest.raises(ValueError, match=why):
             B.check(G.from_dict(broken))
+
+
+def test_the_rules_may_hold_a_slot_to_one_word_first_and_last():
+    """H's first and last refrains ask about *this* song; the ones between may ask about *that* song or *the*
+    song, so the one song stands for all of them. The rules name the slot and a word it has; nothing else."""
+    g = G.load(Path(__file__).parent.parent / "songs" / "h-now-its-by-you.json")
+    refrain, rules = g.source["bank"]["refrain"], g.source["bank"]["rules"]["refrain"]
+    assert rules["first"] == rules["last"] == {"this": "this"} and B.refrain_rules_problem(refrain, rules) is None
+    assert "isn't one of its words" in B.refrain_rules_problem(refrain, {**rules, "first": {"this": "those"}})
+    assert "question_first" in B.refrain_rules_problem(refrain, {**rules, "last": {"question": "owns"}})
+    assert "don't sing" in B.refrain_rules_problem(refrain, {**rules, "first": {"place": "wa-ter"}})

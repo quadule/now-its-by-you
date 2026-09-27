@@ -117,9 +117,10 @@
     "note": "Every verse, refrain couplet, bridge and tag syllable the song can draw on, with named slots for the words that swap and the rules for combining them; songs/h-bank.md is the same bank for reading. A slot is {name}, or {name.column} for a coupled slot whose columns are chosen together, once per block; songbird/bank.py checks every way each line can be sung against the tune and the dictionary. Lines are syllabified with hyphens like every other lyric here.",
     "refrain": {
       "id": "knows",
-      "lines": ["Who {question} this song? No-bo-dy knows.", "It's yours {while} you sing it, and then {then}."],
+      "lines": ["Who {question} {this} song? No-bo-dy knows.", "It's yours {while} you sing it, and then {then}."],
       "slots": {
         "question": ["made", "sang", "heard", "kept", "wrote", "owns"],
+        "this": ["this", "that", "the"],
         "while": ["while", "when", "if"],
         "then": ["it goes", "who knows", "it grows"]
       },
@@ -127,40 +128,40 @@
         {
           "id": "so",
           "by": "artist",
-          "lines": ["Who *{question}* this song? No-bo-dy, so", "it's *yours* {while} you sing it and then {then}?"],
+          "lines": ["Who *{question}* {this} song? No-bo-dy, so", "it's *yours* {while} you sing it and then {then}?"],
           "fixed": {"question": "wrote", "while": "if", "then": "who knows"}
         },
         {
           "id": "stuck",
           "by": "claude",
-          "lines": ["Who *{question}* this song? No-bo-dy, though", "it's *stuck* in your head, and it won't let go."]
+          "lines": ["Who *{question}* {this} song? No-bo-dy, though", "it's *stuck* in your head, and it won't let go."]
         },
         {
           "id": "even",
           "by": "claude",
-          "lines": ["Who *{question}* this song? No-bo-dy, though", "there's *some-bo-dy* sing-ing it, e-ven so."]
+          "lines": ["Who *{question}* {this} song? No-bo-dy, though", "there's *some-bo-dy* sing-ing it, e-ven so."]
         },
         {
           "id": "swear",
           "by": "claude",
-          "lines": ["Who *{question}* this song? No-bo-dy, though", "you'd *swear* that you wrote it, the way it goes."],
+          "lines": ["Who *{question}* {this} song? No-bo-dy, though", "you'd *swear* that you wrote it, the way it goes."],
           "fixed": {"question": "made"}
         },
         {
           "id": "kept",
           "by": "claude",
-          "lines": ["Who *{question}* this song? No-bo-dy, so", "it's *kept* by the sing-ing, and on it goes."],
+          "lines": ["Who *{question}* {this} song? No-bo-dy, so", "it's *kept* by the sing-ing, and on it goes."],
           "fixed": {"question": "kept"}
         },
         {
           "id": "never",
           "by": "claude",
-          "lines": ["Who *{question}* this song? No-bo-dy knows,", "but *once* you have heard it, it nev-er goes."]
+          "lines": ["Who *{question}* {this} song? No-bo-dy knows,", "but *once* you have heard it, it nev-er goes."]
         },
         {
           "id": "window",
           "by": "claude",
-          "lines": ["Who *{question}* this song? No-bo-dy knows;", "it *came* in the win-dow, the way it goes."]
+          "lines": ["Who *{question}* {this} song? No-bo-dy knows;", "it *came* in the win-dow, the way it goes."]
         }
       ],
       "couplets": [
@@ -1182,13 +1183,15 @@
       "refrain": {
         "question": "draw",
         "question_first": ["made", "wrote", "sang"],
+        "first": {"this": "this"},
+        "last": {"this": "this"},
         "distinct": ["then"],
         "couplet_last": "canon",
         "couplet_repeat": false,
         "head_first": "knows",
         "head_last": "knows",
         "head_repeat": false,
-        "note": "Every refrain has words of its own. The first refrain asks who made, wrote or sang it (question_first), preferring a word no head sung in the song fixes as its own question, and the last asks who owns it, as the fixed refrain does; each refrain between asks something else, a different word each time while any are left. The while slot is drawn afresh each time round, and then too, each refrain a different one while any are left (it goes, who knows, it grows), so the artist's head's question, and then who knows?, is never heard as a statement in the same song. The first and last refrains sing the refrain's own head (knows), so the hook is heard first and last; a refrain between may sing another head instead, each at most once a song, singing any words it fixes as written. Each refrain sings one couplet, none twice until all are used, and the last refrain always sings canon."
+        "note": "Every refrain has words of its own. The first refrain asks who made, wrote or sang it (question_first), preferring a word no head sung in the song fixes as its own question, and the last asks who owns it, as the fixed refrain does; each refrain between asks something else, a different word each time while any are left. The first and last refrains ask about this song (first, last: this); a refrain between may ask about that song or the song, so this one song stands for all of them (the artist, 2026-09-27: a synecdoche). The while slot is drawn afresh each time round, and then too, each refrain a different one while any are left (it goes, who knows, it grows), so the artist's head's question, and then who knows?, is never heard as a statement in the same song. The first and last refrains sing the refrain's own head (knows), so the hook is heard first and last; a refrain between may sing another head instead, each at most once a song, singing any words it fixes as written. Each refrain sings one couplet, none twice until all are used, and the last refrain always sings canon."
       },
       "bridge": {
         "always": "canon",

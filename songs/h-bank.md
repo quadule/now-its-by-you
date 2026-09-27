@@ -30,7 +30,10 @@ asks as written, where it can), the last who owns it, and each refrain
 between asks something else (made, sang, heard, kept or wrote), a different
 word each time. *While* can be when or if, drawn afresh each time round. *It goes*
 can be who knows or it grows, and each refrain ends its own way, so three
-refrains sing all three.
+refrains sing all three. *This* song is what the first and last refrains ask
+about; a refrain between may ask about *that* song or *the* song, so this one
+song stands for all of them (the artist, 2026-09-27: a synecdoche). The heads
+say it the same way.
 
 Lines 1 and 2 are the refrain's head. The first and last refrains always
 sing this one (**knows**), so the hook is heard first and last; a refrain

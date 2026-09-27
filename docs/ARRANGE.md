@@ -86,7 +86,11 @@ every refrain (H's had while and then until 2026-09-26; none now);
 `distinct` names slots each refrain sings its own word in while the words
 last, the ones a head fixes set aside for it (H's: then);
 `head_first` and `head_last` name the heads the first and last refrains
-sing, and `head_repeat: false` sings another head at most once a song. A
+sing, and `head_repeat: false` sings another head at most once a song;
+`first` and `last` hold a slot to one word in the first and last refrains
+(H's: `{"this": "this"}` both, so those ask about this song and the ones
+between may ask about that song or the song), a head's own fixed word
+winning. A
 head is written like the refrain's own lines, on the same phrases, singing
 the refrain's slots by name; its `fixed` holds any slot to one word, sung as
 written. The rules a bank can't keep together are refused when it's read:

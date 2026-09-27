@@ -114,6 +114,11 @@ def check(form, lyrics):
         else:
             assert q in middle, (questions, heads)
     assert len(set(questions)) == len(questions), (questions, heads)
+    # a slot the rules hold to one word in the first and last refrains (H: this song), unless the head fixes it
+    for rule, i in (("first", 0), ("last", n - 1)):
+        for slot, word in rr.get(rule, {}).items():
+            if n and slot in rounds[i].slots and slot not in HEADS[heads[i]].get("fixed", {}):
+                assert rounds[i].slots[slot] == word, (rule, slot, rounds[i].slots)
     for name in rr.get("once_per_song", ()):
         assert len({s.slots[name] for s in rounds}) <= 1
     couplets = [s.id for s in rounds]
@@ -220,7 +225,8 @@ def test_the_seeds_focus_marks_come_with_its_words():
         lyrics = A.arrange(g, SEED_FORM, seed)
         for i, s in enumerate(r for r in lyrics.sections if r.block == "refrain"):
             if s.head is None:  # Who *made* this song? ..., the question marked as the seed marks it
-                assert s.lines[0] == f"Who *{s.slots['question']}* this song? No-bo-dy knows."
+                assert s.lines[0] == f"Who *{s.slots['question']}* {s.slots['this']} song? No-bo-dy knows."
+                assert s.slots["this"] == "this" or 0 < i < lyrics.form.count("refrain") - 1  # this song first and last
                 assert s.lines[1].startswith("It's *yours* ")
             else:  # another head marks its own: the question, and one word of its second line
                 assert s.lines[0].startswith("Who *") and s.lines[1].count("*") == 2
@@ -320,7 +326,7 @@ def test_the_seeds_own_words_are_named_for_their_bank_entries():
     verse, refrain = lyrics.sections[:2]
     assert verse.lines == g.seed_verses[0] and refrain.lines == tuple(G.turn(line, 0, 3) for line in g.refrain)
     assert lyrics.sections[2].slots == {"many": "mil-lion"}
-    assert refrain.slots == {"question": "made", "while": "while", "then": "it goes"}
+    assert refrain.slots == {"question": "made", "this": "this", "while": "while", "then": "it goes"}
 
 
 @pytest.mark.parametrize("form, why", [
@@ -377,7 +383,7 @@ def test_the_arrange_command_prints_a_lyric_sheet(capsys):
     out = capsys.readouterr().out
     assert out.startswith("Now It's by You\nwords drawn with seed 7; form: intro verse refrain")
     assert "[refrain: canon]\nWho owns this song? Nobody knows." in out and "*" not in out
-    assert "\nrefrain  canon  (question owns, while " in out
+    assert "\nrefrain  canon  (question owns, this this, while " in out
     assert A.main([str(H), "--seed", "7", "--form", "verse", "refrain", "bridge"]) == 1
     assert "1 verse section" in capsys.readouterr().err
     assert A.main([str(H), "--forms"]) == 0

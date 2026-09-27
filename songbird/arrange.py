@@ -49,7 +49,7 @@ _BRACES = re.compile(r"\{[^{}]*\}")
 # Every rule the bank can state that arrange keeps; a rule it doesn't know is an error, not a silence.
 _RULES = {
     "verses": {"count", "first", "max_variants", "max_rare", "order", "never_adjacent", "max_mood", "pairs", "note"},
-    "refrain": {"question", "question_first", "once_per_song", "distinct", "couplet_last", "couplet_repeat",
+    "refrain": {"question", "question_first", "first", "last", "once_per_song", "distinct", "couplet_last", "couplet_repeat",
                 "head_first", "head_last", "head_repeat", "note"},
     "bridge": {"always", "extra", "once_per_song", "note"},
     "tag": {"once_per_song", "note"},
@@ -867,6 +867,27 @@ def _firsts(song: _Song) -> list[int]:
     return [v for v in range(width(slots, "question")) if _label(_value(slots["question"], v)).replace("-", "") in words]
 
 
+def _ends_fixed(song: _Song, i: int, n: int, head: str) -> dict[str, int]:
+    """The slot words the rules give the i-th of n refrains for being first or last (rules "first" and
+    "last": {slot: word}), as slot -> index: H's first and last refrains say "this song", the ones between
+    may say "that song" or "the song". A word the head fixes, or the question, isn't among them."""
+    rr, slots = song.rules["refrain"], song.bank["refrain"].get("slots", {})
+    words = {**(rr.get("first", {}) if i == 0 else {}), **(rr.get("last", {}) if n and i == n - 1 else {})}
+    out = {}
+    for slot, word in words.items():
+        if slot == "question" or slot in song.fixed.get(head, {}) or slot not in slots:
+            continue
+        v = _index(slots[slot], word)
+        if v is not None:
+            out[slot] = v
+    return out
+
+
+def _ends_say(song: _Song, i: int, n: int, slot: str, v: int) -> str:
+    slots = song.bank["refrain"].get("slots", {})
+    return f"{_nth_refrain(i, n)} sings its {slot} as {_label(_value(slots[slot], v)).replace('-', '')}"
+
+
 def _firsts_say(song: _Song) -> str:
     """'asks who made, wrote or sang': the first refrain's questions, for a sentence."""
     slots = song.bank["refrain"]["slots"]
@@ -955,6 +976,14 @@ def _round_words(song: _Song, heads: list[str], pick, chosen: Mapping | None = N
             if slot in out[i] and v != out[i][slot]:
                 raise ArrangeError(f"the {heads[i]} head sings its {slot} as "
                                    f"{_label(_value(slots[slot], out[i][slot])).replace('-', '')}")
+    for i, h in enumerate(heads):  # what the first and last refrains sing for being first and last
+        for slot, v in _ends_fixed(song, i, n, h).items():
+            if slot not in names[i]:
+                continue
+            c = chosen.get(i, {}).get(slot)
+            if c is not None and c != v:
+                raise ArrangeError(_ends_say(song, i, n, slot, v))
+            out[i][slot] = v
     for i, h in enumerate(heads):
         if "question" in names[i] and "question" not in out[i]:
             q = _question_rule(song, i, n, h)
@@ -1039,6 +1068,9 @@ def _round_words_problem(song: _Song, heads: list[str], words: list[dict[str, in
         for slot, v in song.fixed[h].items():
             if w.get(slot) != v:
                 return f"the {h} head sings its {slot} as {_label(_value(slots[slot], v)).replace('-', '')}"
+        for slot, v in _ends_fixed(song, i, n, h).items():
+            if slot in w and w[slot] != v:
+                return _ends_say(song, i, n, slot, v)
         if "question" in w and "question" not in song.fixed[h]:
             q = _question_rule(song, i, n, h)
             if q is not None and w["question"] != q:
@@ -1402,7 +1434,7 @@ def _rounds_problem(song: _Song, placed: list[dict]) -> str | None:
         if stray:
             return f"{where}'s {head} head has no {_and(stray)} to sing"
         try:
-            words.append(_held_picks(entry, held, where))
+            words.append(_held_picks(entry, held, where, first_if_missing=True))  # words from before a slot
         except ArrangeError as e:
             return str(e)
         heads.append(head)
@@ -1464,11 +1496,16 @@ def _option(spec, value) -> int | None:
     return None
 
 
-def _held_picks(entry: dict, slots: dict, what: str) -> dict[str, int]:
-    """The option index for each slot an entry sings, from the words held for it."""
+def _held_picks(entry: dict, slots: dict, what: str, first_if_missing: bool = False) -> dict[str, int]:
+    """The option index for each slot an entry sings, from the words held for it. first_if_missing: a slot
+    the words don't name sings its first word (a refrain's held words from before the bank gave the refrain
+    that slot, as "this" song came to be a slot on 2026-09-27: the bank lists the word sung until then first)."""
     spec = entry.get("slots", {})
     picks = {}
     for name in slot_names(entry["lines"]):
+        if first_if_missing and slots.get(name) is None:
+            picks[name] = 0
+            continue
         i = _index(spec[name], slots.get(name))
         if i is None:
             raise ArrangeError(f"{what}: {slots.get(name)!r} isn't one of the {name} slot's words")
@@ -1583,7 +1620,7 @@ def sing(genome: Genome, form: Iterable[str], held: dict) -> Lyrics:
             r = next(placed)
             head_id = r.get("head") or song.head_id
             head = song.heads[head_id]
-            picks = _held_picks(head, r.get("words", {}), f"refrain {heard[block] + 1}")
+            picks = _held_picks(head, r.get("words", {}), f"refrain {heard[block] + 1}", first_if_missing=True)
             entry = couplets[r["id"]]
             cpicks = _held_picks(entry, r.get("slots", {}), f"couplet {entry['id']}")
             lines = song.sing(head, picks) + song.sing(entry, cpicks)
@@ -2222,9 +2259,14 @@ def options(genome: Genome, lyrics: Lyrics, block: str, index: int = 0) -> dict:
                                         "first and last"})
         fixed = song.fixed.get(head, {})
         rule = _question_rule(song, index, n, head) if head in song.heads and _asks(song, head) else None
-        skip = set(fixed) | ({"question"} if rule is not None else set())
+        ends = _ends_fixed(song, index, n, head) if head in song.heads else {}
+        skip = set(fixed) | ({"question"} if rule is not None else set()) | set(ends)
         entry = song.heads.get(head, spec)
         words = _slot_choices(entry, here.slots, skip=skip)
+        for slot, v in ends.items():
+            if slot in here.slots:
+                out["fixed"].append({"what": slot, "sung": _label(_value(spec["slots"][slot], v)),
+                                     "why": f"the {'first' if index == 0 else 'last'} refrain sings it so, as the rules say"})
         heads_sung = [s.head or song.head_id for s in sections]
         for w in words:
             if w["slot"] in _shared(song):  # never a word the rules or a head give another refrain
