@@ -286,6 +286,17 @@ BAND_EQ = (("low", 200, 2.5), ("peak", 600, -2.0, 0.8))  # the band as a whole: 
 BAND_COMP = (10.0, 1.5, 0.02, 0.2, 2.0, 3.0)  # the band together, lightly: its arc from sparse verses to full refrains is kept
 GLUE = (8.0, 1.5, 0.05, 0.4, 3.0, 3.0)  # the whole mix, lightly: what stands out of its surroundings, never the song's arc
 REFERENCE = -20.0  # LUFS the voice is brought to before the balance is set
+# The lead's saturation. At 0.2 its drive was set against the voice's typical peaks, and the throat's loudest
+# syllables (its crest is 13.7 dB) ran 4-9 dB further into the curve: distortion above 2 kHz at -21 dB under
+# the voice's own highs on the loudest twentieth, which nothing masked (the band's highs sit 18-29 dB under
+# the voice's). That was the "roughness as the voice gets loud" the artist heard (2026-09-27). 0.05: -33 dB.
+VOICE_DRIVE = 0.05
+# The singers rise and fall with the arrangement's energy (songbird.band: each section's, 0..1, arcing across
+# the song): LEAD_ARC[0] dB per unit of energy above ENERGY_REST, held between LEAD_ARC[1] and LEAD_ARC[2] dB and
+# smoothed over LEAD_ARC[3] s. Without it the lead came out at REFERENCE in every sung section, whatever the band
+# did, so a build the band made of 6 dB reached the record as half a dB (the mix review of 2026-09-27).
+LEAD_ARC = (6.0, -2.0, 2.5, 1.0)
+ENERGY_REST = 0.55
 WARMTH = (("low", 180, 2.0),)  # the whole record: a little more weight under the voice, where only the band and a low singer reach
 
 
@@ -373,19 +384,38 @@ def _sum(stems: dict[str, np.ndarray], names: list[str]) -> np.ndarray | None:
     return out if out is not None and np.any(out) else None
 
 
+def lead_lift(sections, energies, sr: int, length: int) -> np.ndarray | None:
+    """dB per sample the singers rise with the arrangement: from each section's (name, start, end) and its
+    energy (0..1, the band's, in the same order), LEAD_ARC dB per unit above ENERGY_REST, held within the
+    arc's bounds and smoothed over LEAD_ARC[3] s so a section's change arrives as a swell, not a step. None
+    when the sections and energies don't pair up (an older score: level singers, as before)."""
+    if not sections or not energies or len(sections) != len(energies) or length <= 0:
+        return None
+    lift = np.zeros(length)
+    for (_, start, end), energy in zip(sections, energies):
+        a, b = int(max(0.0, float(start)) * sr), int(min(float(end) * sr, length))
+        if b > a:
+            lift[a:b] = np.clip(LEAD_ARC[0] * (float(energy) - ENERGY_REST), LEAD_ARC[1], LEAD_ARC[2])
+    lift[int(float(sections[-1][2]) * sr):] = lift[min(int(float(sections[-1][2]) * sr), length) - 1]  # the ring holds
+    lift[: int(max(0.0, float(sections[0][1])) * sr)] = lift[min(int(max(0.0, float(sections[0][1])) * sr), length - 1)]
+    return uniform_filter1d(lift, max(int(LEAD_ARC[3] * sr), 1), mode="nearest")
+
+
 # --- the mix --------------------------------------------------------------------------------
 
 
 def mix(stems: dict[str, np.ndarray], sr: int, seed: int = 0, params: MixParams | None = None,
-        taps: dict | None = None) -> np.ndarray:
+        taps: dict | None = None, lift: np.ndarray | None = None) -> np.ndarray:
     """Stems (each stereo, all one length) into one unmastered stereo mix, room
     included. taps: a dict to receive the buses and each treated stem as they
-    go into the sum (for analysis)."""
+    go into the sum (for analysis). lift: dB per sample the singers rise and
+    fall with the arrangement (lead_lift), or None for level singers."""
     p = (params or MixParams()).clamped()
     stems = _conformed(stems)
     if not stems:
         return np.zeros((0, 2))
     length = len(next(iter(stems.values())))
+    rise = None if lift is None else (10.0 ** (np.asarray(lift, dtype=float)[:length] / 20.0))[:, None]
     balance = dict(p.balance)
     roles = {name: role_of(name) for name in sorted(stems)}
     nudge = {name: balance.get(name, balance.get(role, 0.0)) for name, role in roles.items()}  # a name wins over its role
@@ -398,8 +428,10 @@ def mix(stems: dict[str, np.ndarray], sr: int, seed: int = 0, params: MixParams 
             x = fx.equalize(x, fx.design(VOICE_EQ + _sizzle(x, sr), sr))
             x = fx.deess(x, sr)[0]
             x = _compressed(x, sr, VOICE_COMP)
-            return _at(_peaks(fx.saturate(x, sr, 0.2), sr), sr, REFERENCE)
+            return _at(_peaks(fx.saturate(x, sr, VOICE_DRIVE), sr), sr, REFERENCE)
         voice = _treated(voice, lead)
+        if rise is not None:  # the lead rises with the arrangement: quieter in a sparse verse, fuller at the climax
+            voice = voice * rise[:len(voice)]
         singing = fx.activity(voice, sr, attack=MAKE_WAY[0], release=MAKE_WAY[1])
 
     # The lineage choir, as one group, where it sings; de-essed as the lead is (its voices say each "s" together,
@@ -413,6 +445,8 @@ def mix(stems: dict[str, np.ndarray], sr: int, seed: int = 0, params: MixParams 
             group = fx.width(group, sr, min(CHOIR_WIDTH * p.width, 1.6))
             choir = np.zeros((length, 2))
             choir[where] = _at(group, sr, REFERENCE - CHOIR_UNDER + balance.get("choir", 0.0))
+            if rise is not None:
+                choir[where] *= rise[where]
         else:
             choir = None
 

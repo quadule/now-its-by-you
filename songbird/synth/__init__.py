@@ -13,7 +13,7 @@ import numpy as np
 from ..score import Score
 from . import mixing
 from .instruments import INSTRUMENTS, render_band
-from .mixing import MixParams
+from .mixing import MixParams, lead_lift
 from .voice import VoiceParams, sing
 
 SR = 44100
@@ -85,10 +85,12 @@ def lineage_voices(n: int, seed: int, learned: bool = False) -> list[VoiceParams
     return voices
 
 
-def mix(stems: dict[str, np.ndarray], sr: int = SR, seed: int = 0, params: MixParams | None = None) -> np.ndarray:
+def mix(stems: dict[str, np.ndarray], sr: int = SR, seed: int = 0, params: MixParams | None = None,
+        lift: np.ndarray | None = None) -> np.ndarray:
     """Stems into one stereo mix, in their room (mixing.py: the channel strips,
-    buses, room and what MixParams can vary)."""
-    return mixing.mix(stems, sr, seed, params)
+    buses, room and what MixParams can vary; lift: how the singers rise with the
+    arrangement, mixing.lead_lift)."""
+    return mixing.mix(stems, sr, seed, params, lift=lift)
 
 
 def render(score: Score, sr: int = SR, seed: int = 0, voice: VoiceParams | None = None,
@@ -99,7 +101,15 @@ def render(score: Score, sr: int = SR, seed: int = 0, voice: VoiceParams | None 
     stems = render_stems(score, sr, seed, voice, ancestors, progress)
     if progress is not None:
         progress("mix")
-    return mix(stems, sr, seed, mix_params)
+    return mix(stems, sr, seed, mix_params, lift=lift_of(score, sr, stems))
+
+
+def lift_of(score: Score, sr: int, stems: dict) -> np.ndarray | None:
+    """How the singers rise and fall with the arrangement (mixing.lead_lift): from the score's sections and the
+    energy the band gave each (score.band["sections"], in the same order)."""
+    length = max((len(x) for x in stems.values()), default=0)
+    band_sections = (score.band or {}).get("sections") or []
+    return lead_lift(list(score.sections), [s.get("energy", 0.55) for s in band_sections], sr, length)
 
 
 def ancestors_from(records: list[dict], learned: bool) -> list[VoiceParams]:

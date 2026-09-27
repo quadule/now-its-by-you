@@ -351,6 +351,51 @@ lowers the highs there 3-5 dB); it wasn't playing at any burst. The kit's brush 
 was 29-34 dB under the voice in the highs there. The bursts stop at 11.8
 kHz, where the throat's envelope ends.
 
+## The singers rise with the arrangement (2026-09-27)
+
+A mix review of the four candidate renders for the contest measured the arrangement's build and
+found it never reached the meter: from the first verse to the last refrain the dry band rose 6.6 dB,
+the band bus 4.7 dB, the record 0.5 LU. `mix()` brought the lead to `REFERENCE` in every sung
+section and set the band `forward` dB under it, so the voice bus came out within half a dB of the
+same loudness in a sparse verse and at the climax, and the band, 7-12 dB under it, could add only
+its share. The loudness range the renders showed (LRA 6.9-7.7) was voice-on against voice-off: the
+intro and the turns 6 dB under the sung sections, the la-la tag a decibel over them (the loudest
+thing in the record).
+
+Now the singers follow the arrangement's energy (`mixing.lead_lift`, from `songbird.band`'s energy
+per section, 0..1 arcing across the song): `LEAD_ARC` gives 6 dB per unit of energy above 0.55, held
+between -2 and +2.5 dB and smoothed over a second, applied to the lead after its strip and to the
+choir group; `synth.render` computes it from the score (`lift_of`), so older scores without the
+band's sections sing level as before. On the default arrangement (Open Door, below): verse 1
+-15.5 LUFS, refrain 2 -12.8, the last refrain -12.2: a build of 3.3 dB where there was 0.5, the
+whole still at -14 LUFS, the limiter touching the ceiling by hundredths of a decibel. The review
+measured intelligibility improving where it was weakest (the lead over band and room in the
+refrains, +1 to +2 dB) and easing a little in the first verse, still the clearest section.
+
+Also from the review, in the seed's own arrangement (Open Door, `seed_params`): `forward` 7.5 (the
+band a decibel closer; the 125-250 Hz region, which read 9 dB under the 500-1000 Hz band, comes to
+-8), `width` 1.25 (the verses read L/R correlation 0.97 against a folk record's 0.87; the voice
+centred 8-12 dB over everything keeps them narrow whatever the width), `drum` 1.5 (the drum bus sat
+at -39 LUFS where it played, 10 dB under the bass and guitar, so the patterns that mark the build
+were barely there; +3.5 dB moves nothing else). Left alone, with reasons: `duck` below 1 (clarity
+-1 dB), `balance bass:+2` (the low-mid deficit is the guitar's and harp's body, not the bass), a
+louder master (only worth it if the contest plays files without loudness normalization).
+
+## The lead's saturation was the roughness (2026-09-27)
+
+The artist heard "a little roughness as the voice gets loud, not horrible but common". A review of
+the voice found it in the lead strip, not the throat: `fx.saturate(x, sr, 0.2)` sets its drive
+against the voice's typical peaks, and the throat's crest factor is 13.7 dB (the formant singer's
+18.8), so the loudest syllables ran 4-9 dB further into the curve. Distortion above 2 kHz, against
+the voice's own highs, on the loudest twentieth of 50 ms windows: -21 dB (-15 at the 90th
+percentile); the band's highs sit 18-29 dB under the voice's in every section, so nothing masked
+it; and the dry throat's roughness does not rise with level (r = -0.42), so what grew with level was
+this stage. `VOICE_DRIVE` 0.05 reads -33 dB there (the instruments keep their strips' drives). The
+other stage that scales with level, the master's clip and limiter, engages only in a dense bridge
+with a choir (night-wire: 0.3% of the bridge's samples in the knee); in the default arrangement it
+takes nothing. The de-esser dips vowels by more than a decibel 8% of the time (an HF warble on bright
+vowels; a hold above threshold would target it better than `excess`): minor, not done.
+
 ## Doubts and next
 
 - **The balance is a judgment.** `forward` 10 dB puts the voice well on top
