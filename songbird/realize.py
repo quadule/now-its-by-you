@@ -329,6 +329,7 @@ def realize(genome: Genome, params: Params, verses=None, phrasing: Phrasing | No
     # decides who plays it (songbird.band).
     melody.sort(key=lambda m: m["u"])
     notes: list[Note] = []
+    voiced: dict[int, int] = {}  # each choir voice's last pitch, while the choir sings
     for i, m in enumerate(melody):
         u_end = min(m["u_end"], melody[i + 1]["u"]) if i + 1 < len(melody) else sung_end
         start_s = max(0.0, seconds(m["u"]) + jitter())
@@ -350,9 +351,11 @@ def realize(genome: Genome, params: Params, verses=None, phrasing: Phrasing | No
             )
             sung_note = sung_as(unphrased, m["gesture"], beat)
             notes.append(sung_note)
-            if m["choir"]:  # the lineage joins, each voice on its own harmony line, plain as harmony is sung
+            if not m["choir"]:
+                voiced.clear()  # the next time the choir comes in, it starts afresh
+            else:  # the lineage joins, each voice on its own harmony line, plain as harmony is sung
                 for i in range(params.choir):
-                    pitch = harmony(int(m["pitch"]), m["chord"], params.tonic, params.mode, i)
+                    pitch = voiced[i] = harmony(int(m["pitch"]), m["chord"], params.tonic, params.mode, i, voiced.get(i))
                     own = choir[i] if choir and i < len(choir) else None
                     if own:  # sung that voice's way, from its own phrasing
                         g = gesture(own, m["phrase"], m["index"])

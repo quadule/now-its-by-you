@@ -61,22 +61,31 @@ def chord_tones(symbol: str, mode: str) -> tuple[int, int, int]:
     )
 
 
-def harmony(melody: int, chord: str, tonic: int, mode: str, role: int) -> int:
-    """A choir voice's pitch (MIDI) against one melody note. Role 0 takes the
-    nearest chord tone a third or more below the melody, role 1 the nearest a
-    third or more above, role 2 the chord's root beneath both; further roles
-    repeat those an octave lower. Chord tones keep every voice consonant with
-    the accompaniment whatever the melody passes through."""
+FLOOR = 40  # E2: about as low as a choir's basses sing
+
+
+def harmony(melody: int, chord: str, tonic: int, mode: str, role: int, previous: int | None = None) -> int:
+    """A choir voice's pitch (MIDI) against one melody note. Role 0 takes a
+    chord tone a third or more below the melody, role 1 one a third or more
+    above, role 2 the chord's root beneath both; further roles repeat those an
+    octave lower. Chord tones keep every voice consonant with the accompaniment
+    whatever the melody passes through. Alone, a voice takes the chord tone
+    nearest the melody; given where it just was (previous), it moves as little
+    as it can, holding a note the new chord shares (common-tone voice leading),
+    so the voices beneath a moving tune sing lines, not leaps."""
     tones = chord_tones(chord, mode)
     pcs = {(tonic + t) % 12 for t in tones}
     kind, octave = role % 3, role // 3
     if kind == 0:
-        pitch = next(p for p in range(melody - 3, melody - 15, -1) if p % 12 in pcs)
+        fits = [p for p in range(melody - 3, melody - 15, -1) if p % 12 in pcs]
     elif kind == 1:
-        pitch = next(p for p in range(melody + 3, melody + 15) if p % 12 in pcs)
-    else:
-        pitch = next(p for p in range(melody - 5, melody - 17, -1) if p % 12 == (tonic + tones[0]) % 12)
-    return pitch - 12 * octave
+        fits = [p for p in range(melody + 3, melody + 15) if p % 12 in pcs]
+    else:  # the root: within two octaves, so it can hold its note while the tune moves, but never below
+        # a real bass voice (FLOOR), unless the tune is so low there's nowhere else
+        roots = [p for p in range(melody - 5, melody - 29, -1) if p % 12 == (tonic + tones[0]) % 12]
+        fits = [p for p in roots if p >= FLOOR] or roots[:1]
+    fits = [p - 12 * octave for p in fits]  # nearest the melody first, so a tie goes that way
+    return fits[0] if previous is None else min(fits, key=lambda p: abs(p - previous))
 
 
 def midi_to_hz(pitch: float) -> float:

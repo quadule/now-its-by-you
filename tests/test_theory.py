@@ -34,3 +34,12 @@ def test_harmony_takes_chord_tones_around_the_melody():
     assert harmony(71, "vi", d, "ionian", 3) == 54  # role 0 an octave down
     # a passing tone still gets a chord tone: E over I lands on A below
     assert harmony(64, "I", d, "ionian", 0) == 57
+
+
+def test_a_choir_voice_led_from_where_it_was_holds_what_the_next_chord_shares():
+    d = 62
+    assert harmony(71, "I", d, "ionian", 0) == 66  # alone: the chord tone nearest the melody
+    assert harmony(71, "I", d, "ionian", 0, previous=62) == 62  # led: it stays on D, a tone of this chord too
+    assert harmony(71, "I", d, "ionian", 2) == 62
+    assert harmony(71, "I", d, "ionian", 2, previous=50) == 50  # the root holds low rather than leap up an octave
+    assert harmony(57, "I", d, "ionian", 2, previous=38) == 50  # but never below a bass's E2
