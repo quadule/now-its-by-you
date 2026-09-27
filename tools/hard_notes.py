@@ -52,6 +52,8 @@ class Change:
     agree: dict[str, float]  # singer -> their median departure, cents, for those who sing it
     others: dict[str, float]  # everyone else who sang this note
     like: list[str]  # other lines, otherwise alike, that have this degree here
+    category: str = "shift"  # what kind of change: "familiar" (as a line like it has it), "passing" (a step between
+    # its neighbours), "pickup" (a phrase's first note), or a plain "shift" (Gemini's reading of the first results)
 
 
 def name(degree: int) -> str:
@@ -65,16 +67,28 @@ def measured(take: K.Take) -> Path:
     return MEASURED / (rel.replace("/", "__").removesuffix(".wav") + ".json")
 
 
-def sightings(song: str) -> dict[tuple[str, int], dict[str, list[float]]]:
-    """Every measured note of every take ticked to count: (phrase, index) -> singer -> cents off."""
+def sightings(song: str, genome_path: Path, genome) -> dict[tuple[str, int], dict[str, list[float]]]:
+    """Every measured note of every take ticked to count: (phrase, index) -> singer -> cents off the
+    tune as it is now. A take's "off" is from the note of the guide it sang to; where the tune has
+    changed that note since (2026-09-27: v2, r2, b2, b3, b4), the difference is added, so a singer
+    who sang what the tune now says counts as on it."""
+    import phrasing as T  # tools/phrasing.py: each take's guide score, and the tune as written now
+
     seen: dict[tuple[str, int], dict[str, list[float]]] = defaultdict(lambda: defaultdict(list))
+    now, tonic = T.written(genome), T.choose_params(genome).tonic
     for t in K.takes(song):
         f = measured(t)
         if not t.use or not f.exists():
             continue
-        for n in json.loads(f.read_text())["notes"]:
+        d = json.loads(f.read_text())
+        sung_to = T.guide(genome_path, genome, d["stamp"]["guide"]).notes
+        shift = T.transposed(genome_path, d["stamp"]["guide"])
+        for n, note in zip(d["notes"], sung_to):
             if n.get("gesture") is not None and n.get("off") is not None:
-                seen[(n["phrase"], n["index"])][t.who].append(float(n["off"]))
+                key = (n["phrase"], n["index"])
+                then = round(note.pitch) - tonic - shift  # the guide's note, semitones above the tonic
+                moved = 100.0 * (then - now[key]) if key in now else 0.0
+                seen[key][t.who].append(float(n["off"]) + moved)
     return seen
 
 
@@ -119,9 +133,21 @@ def changes(genome, seen: dict, mode: str = "ionian", least: int = 2) -> list[Ch
             if len(agree) >= least:
                 like = [b for b in similar.get(pid, []) if tunes[b][k] == d]
                 others = {w: c for w, c in each.items() if w not in agree}
-                found.append(Change(pid, k, written, d, agree, others, like))
+                found.append(Change(pid, k, written, d, agree, others, like, category(tunes[pid], k, d, like)))
     return sorted(found, key=lambda c: (-len(c.agree) / (len(c.agree) + len(c.others)), -len(c.agree),
                                         -float(np.mean([abs(x) for x in c.agree.values()]))))
+
+
+def category(tune: list[int], k: int, sung: int, like: list[str]) -> str:
+    """What kind of change singers made: a familiar line's note, a passing tone between the note's neighbours
+    (stepwise where the tune leapt), a pickup lifted or dropped, or a plain shift."""
+    if like:
+        return "familiar"
+    if k == 0:
+        return "pickup"
+    if 0 < k < len(tune) - 1 and (tune[k - 1] > sung > tune[k + 1] or tune[k - 1] < sung < tune[k + 1]):
+        return "passing"
+    return "shift"
 
 
 def words(genome) -> dict[tuple[str, int], str]:
@@ -141,13 +167,14 @@ def main() -> None:
     ap.add_argument("--song", default=str(H))
     ap.add_argument("--line", help="one line of the tune (a phrase id: v1, r2, b4...), singer by singer")
     ap.add_argument("--least", type=int, help="singers who must agree (default half of them, and at least 2)")
+    ap.add_argument("--json", action="store_true", help="the changes as JSON (phrase, index, word, written, sung, category, who)")
     args = ap.parse_args()
 
     from songbird import genome as G
 
     genome = G.load(args.song)
     song = Path(args.song).stem
-    seen = sightings(song)
+    seen = sightings(song, Path(args.song).resolve(), genome)
     said = words(genome)
     singers = sorted({w for s in seen.values() for w in s})
     print(f"{len(singers)} singers: {', '.join(singers)}\n")
@@ -157,13 +184,19 @@ def main() -> None:
             print(f"  #{k:<2d} {said.get((args.line, k), ''):10s} {name(note.degree):4s} {cells}")
         return
     found = changes(genome, seen, least=args.least or max(2, (len(singers) + 1) // 2))
+    if args.json:
+        print(json.dumps([{"phrase": c.phrase, "index": c.index, "word": said.get((c.phrase, c.index), ""),
+                           "written": name(c.written), "sung": name(c.sung), "category": c.category,
+                           "agree": c.agree, "others": c.others, "like": c.like} for c in found], indent=1))
+        return
     if not found:
         print("No note that two singers sing as the same other one.")
     for c in found:
         agree = ", ".join(f"{w} {x / 100:+.1f}" for w, x in c.agree.items())
         others = ", ".join(f"{w} {x / 100:+.1f}" for w, x in c.others.items())
         like = f"  (as in {', '.join(c.like)})" if c.like else ""
-        print(f"{c.phrase} #{c.index} \"{said.get((c.phrase, c.index), '')}\": {name(c.written)} -> {name(c.sung)}: "
+        kind = f" [{c.category}]" if c.category != "shift" else ""
+        print(f"{c.phrase} #{c.index} \"{said.get((c.phrase, c.index), '')}\": {name(c.written)} -> {name(c.sung)}{kind}: "
               f"{len(c.agree)} of {len(c.agree) + len(c.others)} singers ({agree}{'; ' + others if others else ''}){like}")
 
 

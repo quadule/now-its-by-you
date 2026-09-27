@@ -98,3 +98,9 @@ built from 2026-09-27 00:20 sing it; takes sung before are still measured agains
 and a phrasing leaves out a changed note's tuning from takes sung to the old one (tools/phrasing.py).
 Run `tools/hard_notes.py` as more people sing: a candidate is a note half the singers or more sing
 as the same other note.
+
+**After a tune change** (2026-09-27): a take's measured "off" is from the note of the guide it sang to,
+so once the tune moves a note, tools/hard_notes.py adds the difference (the guide's note against the
+tune's, in the song's own key) before pooling, and a singer who sang what the tune now says counts as
+on it. tools/phrasing.py likewise keeps such a sighting's timing and loudness but drops its tuning.
+Run hard_notes again after each change: what remains are new candidates, not the old ones repeated.
