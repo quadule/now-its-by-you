@@ -60,6 +60,7 @@ class Params:
     generation: int = 0  # renditions between this one and the seed: 0 the seed, 1 its child...
     made: dict = field(default_factory=dict)  # by (a machine's hash, its first 12 digits) and at (days): whose clocks it turned
     style: Style = field(default_factory=Style)  # the tradition it's played in and its arrangement (songbird.style)
+    composition: dict = field(default_factory=dict)  # portable human arrangement and phrase notes (composition.py)
 
     @classmethod
     def from_dict(cls, data: dict) -> Params:
@@ -78,6 +79,7 @@ class Params:
         values["variants"] = variants_mod.parse(values.get("variants"))
         values["words"] = dict(values.get("words") or {})
         values["made"] = dict(values.get("made") or {})
+        values["composition"] = dict(values.get("composition") or {})
         if "style" in values and not isinstance(values["style"], Style):  # absent in old records: the seed's
             values["style"] = Style.from_dict(values["style"])
         return cls(**values)
@@ -86,7 +88,7 @@ class Params:
         data = asdict(self)
         data["form"] = list(self.form)
         data["variants"] = [v.to_dict() for v in self.variants]
-        for name, empty in (("variants", []), ("words", {}), ("generation", 0), ("made", {})):
+        for name, empty in (("variants", []), ("words", {}), ("generation", 0), ("made", {}), ("composition", {})):
             if data[name] == empty:
                 del data[name]
         # The seed's own style and band leave no trace, so a record (and the rendition seed a child draws
@@ -282,6 +284,7 @@ def realize(genome: Genome, params: Params, verses=None, phrasing: Phrasing | No
     verses and fixed blocks; without them the seed's own words are sung."""
     if lyrics is not None and verses is not None:
         raise ValueError("realize sings verses or lyrics, not both")
+    authored = params.composition.get("lyrics", {})
     verses = verses if verses is not None else genome.seed_verses
     meter = genome.meter
     rng = np.random.default_rng(params.seed)
@@ -295,7 +298,9 @@ def realize(genome: Genome, params: Params, verses=None, phrasing: Phrasing | No
     rounds = {b: sum(genome.section(n).lyrics == b for n in params.form) for b in genome.fixed}
     heard = dict.fromkeys(genome.fixed, 0)
     drawn = lyrics.lines_for(genome, params.form) if lyrics is not None else None  # per section, None if no words
-    for j, name in enumerate(params.form):
+    from .composition import section_ids
+
+    for j, (name, identity) in enumerate(zip(params.form, section_ids(params.form))):
         section = genome.section(name)  # bridge2: the bridge again, same phrases and choir
         lines: list = [None] * len(section.phrases)
         if drawn is not None:
@@ -307,6 +312,8 @@ def realize(genome: Genome, params: Params, verses=None, phrasing: Phrasing | No
             block = section.lyrics
             lines = [turn(line, heard[block], rounds[block]) for line in genome.fixed[block]]
             heard[block] += 1
+        if identity in authored:
+            lines = [authored[identity].get(str(i), line) for i, line in enumerate(lines)]
         for pid, line in zip(section.phrases, lines):
             phrase = genome.phrases[pid]
             placed.append((name, phrase, t, line))
@@ -327,15 +334,22 @@ def realize(genome: Genome, params: Params, verses=None, phrasing: Phrasing | No
         sung = phrase.sung
         words = sung_words(line) if line else [(None, None, 1)] * len(sung)
         # the lineage's variants: a note moved to another degree, a weak note's onset moved, an ornament
-        played = variants_mod.realized(phrase, params.variants) if params.variants else None
+        composed = phrase.id in params.composition.get("tune", {})
+        if composed:
+            from .composition import played as composed_notes
+
+            played = composed_notes(phrase, params)
+        else:
+            played = variants_mod.realized(phrase, params.variants) if params.variants else None
         for k, (note, (syllable, word, word_len)) in enumerate(zip(sung, words)):
             v = played[k] if played else None
             u = start + lead + (v.onset if v else note.onset)
-            stressed = note.onset % meter.foot == 0
+            onset = v.onset if composed else note.onset
+            stressed = onset % meter.foot == 0
             # the chord under this note, for any voices harmonizing it (a pickup takes the first bar's)
-            bar = min(max(note.onset // meter.bar, 0), phrase.bars - 1)
+            bar = int(min(max(onset // meter.bar, 0), phrase.bars - 1))
             in_bar = phrase.chords[bar]
-            chord = in_bar[min(max((note.onset - bar * meter.bar) * len(in_bar) // meter.bar, 0), len(in_bar) - 1)]
+            chord = in_bar[int(min(max((onset - bar * meter.bar) * len(in_bar) // meter.bar, 0), len(in_bar) - 1))]
             degree = v.degree if v else note.degree
             melody.append(
                 dict(
@@ -353,6 +367,7 @@ def realize(genome: Genome, params: Params, verses=None, phrasing: Phrasing | No
                     chord=chord,
                     choir=genome.section(section_name).choir,
                     index=k,
+                    composed=composed,
                     gesture=gesture(phrasing, phrase.id, k),
                 )
             )
@@ -365,7 +380,8 @@ def realize(genome: Genome, params: Params, verses=None, phrasing: Phrasing | No
     deliveries: dict[str, list[tuple[Note, Note]]] = {"voice": []}
     choirs = choir_voicing(melody, params.choir, params.tonic, params.mode)  # the band keeps clear of the same
     for i, m in enumerate(melody):
-        u_end = min(m["u_end"], melody[i + 1]["u"]) if i + 1 < len(melody) else sung_end
+        u_end = min(m["u_end"], melody[i + 1]["u"]) if i + 1 < len(melody) else (
+            min(m["u_end"], sung_end) if m["composed"] else sung_end)
         start_s = max(0.0, seconds(m["u"]) + jitter())
         if m["syllable"]:
             beat = seconds_per_unit * meter.beat

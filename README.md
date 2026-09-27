@@ -28,9 +28,11 @@ uv run pytest
 ```
 
 The studio ([docs/STUDIO.md](docs/STUDIO.md)) is a page on this computer
-only: every choice in the song and why it was made, six years of this
-machine's song to move through, other machines beside it, any section to
-hear, anything to change (each change marked as yours), and the recording.
+only: a whole-song timeline and melody editor, word alternates directly in the
+lyrics, original lyric writing with syllable checks, a small mixer, instant melody
+sketches, and the finished recording. Undo, saved drafts, and the song's musical
+rules make room to experiment. Explore six years of the machine's song or compare
+other machines; your edits travel with the audio.
 A rendition opens it on itself: `python3 song.flac studio`.
 
 ## Layout

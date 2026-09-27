@@ -114,6 +114,7 @@ def render_one(genome, params: Params, out: Path, *, voice=None, drift=None, lyr
     chosen (songbird.edits.marks), kept in the record; progress: told each part's name as the render starts
     on it (synth.render), then "master"."""
     phrasing = phrasing_mod.from_json(phrasing_json) if phrasing_json else None
+    choir_json = list(choir_json)
     choir = [phrasing_mod.from_json(d) for d in choir_json]
     score = variation.lay(realize(genome, params, phrasing=phrasing, choir=choir, lyrics=lyrics), params)
     singer = _singer(params, list(singer_overrides))
@@ -164,13 +165,16 @@ def render_one(genome, params: Params, out: Path, *, voice=None, drift=None, lyr
     if chosen_by_you:  # a person's choices, marked as theirs (never who they are)
         record["chosen_by_you"] = chosen_by_you
     if packet_genome is not None:  # one file: the record and the words travel inside it
-        sung = lyrics.sheet(genome.title) if lyrics else pack_mod.words_as_sung(score.to_dict(), genome.title)
+        sung = (lyrics.sheet(genome.title) if lyrics and not params.composition.get("lyrics")
+                else pack_mod.words_as_sung(score.to_dict(), genome.title))
         pack_mod.pack(out, record, packet_genome, lyrics=sung)
     else:
         out.with_suffix(".json").write_text(json.dumps(record, indent=2) + "\n")
         out.with_suffix(".score.json").write_text(json.dumps(score.to_dict()) + "\n")
-        if lyrics:
-            out.with_suffix(".txt").write_text(lyrics.sheet(genome.title))
+        if lyrics or params.composition.get("lyrics"):
+            sung = (lyrics.sheet(genome.title) if lyrics and not params.composition.get("lyrics")
+                    else pack_mod.words_as_sung(score.to_dict(), genome.title))
+            out.with_suffix(".txt").write_text(sung)
 
     if stems:
         import soundfile as sf

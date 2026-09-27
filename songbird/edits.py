@@ -44,6 +44,7 @@ from datetime import date
 
 from . import arrange as arrange_mod
 from . import variation
+from . import composition
 from .band import INSTRUMENTS, LEADS, PATTERNS
 from .genome import Genome
 from .synth.mixing import RANGES, MixParams
@@ -252,6 +253,13 @@ def check(genome: Genome, edits: dict, phrasings=()) -> tuple[dict, list[dict]]:
                 if value not in b["mode"]["options"]:
                     raise LookupError(f"the song's chords keep their shape only in {', '.join(b['mode']['options'])}")
                 clean[path] = value
+            elif path == "form.order":
+                names = composition.order(genome, value)
+                clean[path] = composition.section_ids(names) if names is not None else None
+            elif path.startswith("tune."):
+                clean[path] = composition.check_phrase(genome, path[5:], value)
+            elif path.startswith("lyrics."):
+                clean[path] = composition.check_lyric(genome, path, value)
             elif path.startswith("form."):
                 part = path[5:]
                 if part == "verses":
@@ -304,7 +312,10 @@ def check(genome: Genome, edits: dict, phrasings=()) -> tuple[dict, list[dict]]:
                 raise LookupError("there's no such choice")
         except LookupError as e:
             problems.append(Problem(path, str(e.args[0]) if e.args else "there's no such choice"))
-        except (TypeError, ValueError):
+        except (TypeError, ValueError) as e:
+            if path == "form.order" or path.startswith(("tune.", "lyrics.")):
+                problems.append(Problem(path, str(e)))
+                continue
             problems.append(Problem(path, f"{value!r} isn't a value this choice can take"))
     return clean, problems
 
@@ -331,6 +342,7 @@ class Overrides:
         self.applied: list[str] = []
         self.problems: list[dict] = []
         self._has_variants = None
+        self._lyrics_before: dict | None = None
 
     def pin(self, out: dict) -> None:
         """The edits, in the table's working dict of parameters. Idempotent: the table calls it after its
@@ -375,12 +387,70 @@ class Overrides:
                              for k in variants if not (k.isdigit() and int(k) < len(held))]
             else:
                 problems += [Problem(f"variants.{k}", "this program has no melody variants yet") for k in variants]
-        changes = {p[5:]: v for p, v in e.items() if p.startswith("form.")}
+        changes = {p[5:]: v for p, v in e.items() if p.startswith("form.") and p != "form.order"}
         if changes:
             form, trouble, done = reshape(self.genome, out["form"], changes)
             out["form"] = list(form)
             problems += trouble
             applied += done
+        # Copy the nested data: the parent's choices are immutable and pin() is
+        # called repeatedly while the machine makes the dependent decisions.
+        held = dict(out.get("composition") or {})
+        tune = dict(held.get("tune") or {})
+        for path, value in e.items():
+            if not path.startswith("tune."):
+                continue
+            try:
+                notes = composition.check_phrase(self.genome, path[5:], value)
+                if notes is None:
+                    tune.pop(path[5:], None)
+                else:
+                    tune[path[5:]] = composition.pack_phrase(self.genome, notes)
+                applied.append(path)
+            except (ValueError, TypeError) as ex:
+                problems.append(Problem(path, str(ex)))
+        if tune:
+            held["tune"] = tune
+        else:
+            held.pop("tune", None)
+        lyrics = {k: dict(v) for k, v in held.get("lyrics", {}).items()}
+        if self._lyrics_before is None:
+            self._lyrics_before = {k: dict(v) for k, v in lyrics.items()}
+        for path, value in e.items():
+            if not path.startswith("lyrics."):
+                continue
+            try:
+                text = composition.check_lyric(self.genome, path, value)
+                identity, line, _ = composition.lyric_target(self.genome, path)
+                patch = lyrics.setdefault(identity, {})
+                if text is None:
+                    patch.pop(str(line), None)
+                else:
+                    patch[str(line)] = text
+                if not patch:
+                    lyrics.pop(identity, None)
+                applied.append(path)
+            except (ValueError, TypeError) as ex:
+                problems.append(Problem(path, str(ex)))
+        if lyrics:
+            held["lyrics"] = lyrics
+        else:
+            held.pop("lyrics", None)
+        if "form.order" in e:
+            try:
+                names = composition.order(self.genome, e["form.order"])
+                if names is None:
+                    if held.pop("order", None):
+                        out["form"] = list(self.genome.seed_params["form"])
+                else:
+                    out["form"] = held["order"] = names
+                applied.append("form.order")
+            except (ValueError, TypeError) as ex:
+                problems.append(Problem("form.order", str(ex)))
+        if held:
+            out["composition"] = held
+        else:
+            out.pop("composition", None)
         self.applied, self.problems = applied, problems
 
     def style(self) -> tuple[str | None, dict]:
@@ -406,6 +476,29 @@ class Overrides:
             else:
                 self.problems = [*self.problems, Problem(path, f"the {style.name or 'ballad'} style can't play "
                                                                f"this song that way")]
+        present = set(composition.section_ids(params.form))
+        absent = [p for p in self.applied if p.startswith("lyrics.") and self.edits.get(p) is not None
+                  and composition.lyric_target(self.genome, p)[0] not in present]
+        if absent:
+            held = dict(params.composition)
+            lyrics = {k: dict(v) for k, v in held.get("lyrics", {}).items()}
+            for path in absent:
+                identity, line, _ = composition.lyric_target(self.genome, path)
+                previous = (self._lyrics_before or {}).get(identity, {}).get(str(line))
+                patch = lyrics.setdefault(identity, {})
+                if previous is None:
+                    patch.pop(str(line), None)
+                else:
+                    patch[str(line)] = previous
+                if not patch:
+                    lyrics.pop(identity, None)
+                self.applied.remove(path)
+                self.problems.append(Problem(path, "this arrangement has no such section; choose a line shown in the song"))
+            if lyrics:
+                held["lyrics"] = lyrics
+            else:
+                held.pop("lyrics", None)
+            params = replace(params, composition=held)
         return params
 
     def params(self, params):
@@ -587,6 +680,12 @@ def marks(genome: Genome, generated, generated_lyrics, final_lyrics, applied: li
         elif path == "phrasing":
             out[path] = phrasing_mark(phrasing_json or {})
             continue
+        elif path == "form.order":
+            was = composition.section_ids(generated.form)
+        elif path.startswith("tune."):
+            was = composition.phrase_value(genome, generated, path[5:])
+        elif path.startswith("lyrics."):
+            was = composition.lyric_value(genome, generated, generated_lyrics, path)
         elif path.startswith("form."):
             was = generated_shape.get(path[5:])
         elif path in ("words.refrain", "words.bridge"):  # words for all: just the slots chosen, as first sung

@@ -7,40 +7,64 @@
 <meta name="studio-token" content="{{token}}">
 <title>Songbird studio</title>
 <link rel="stylesheet" href="/studio.css">
+<script src="/composer.js" defer></script>
+<script src="/author.js" defer></script>
 <script src="/studio.js" defer></script>
+<script src="/drafts.js" defer></script>
 </head>
 <body>
 <header class="top wrap">
-  <div class="eyebrow">Songbird studio</div>
-  <h1 id="title">…</h1>
+  <div class="studio-brand"><span class="brand-mark" aria-hidden="true">♪</span><span class="eyebrow">Songbird <span class="brand-divider">/</span> studio</span><span class="local-badge"><i></i> Local &amp; yours</span></div>
+  <div class="session-heading"><h1 id="title">Your song</h1><span class="session-note">A little song. A world of possibilities.</span></div>
   <p class="which" id="which">Making your version of the song…</p>
-  <div class="actions">
+  <div class="session-toolbar"><div class="actions">
     <button class="btn primary" id="hearAll" type="button">
       <svg class="icon" viewBox="0 0 16 16" aria-hidden="true"><path d="M4 2.5v11l9-5.5z" fill="currentColor"/></svg>
-      Hear it all
+      Hear the song
     </button>
     <button class="btn" id="roll" type="button" title="Draw the small details of the performance again: every strum, breath and ornament">
       <svg class="icon" viewBox="0 0 16 16" aria-hidden="true"><rect x="2" y="2" width="12" height="12" rx="3" fill="none" stroke="currentColor" stroke-width="1.5"/><circle cx="5.5" cy="5.5" r="1.2" fill="currentColor"/><circle cx="10.5" cy="10.5" r="1.2" fill="currentColor"/><circle cx="8" cy="8" r="1.2" fill="currentColor"/></svg>
-      Roll chance again
+      New performance
     </button>
     <span class="hint" id="draw"></span>
-  </div>
+  </div><div class="edit-history" role="group" aria-label="Edit history">
+    <span class="hint" id="historyStatus" role="status">Your edits stay on this computer</span>
+    <button class="btn quiet" id="undoEdit" type="button" disabled title="Undo (⌘/Ctrl Z)">↶ Undo</button>
+    <button class="btn quiet" id="redoEdit" type="button" disabled title="Redo (⌘/Ctrl Shift Z)">↷ Redo</button>
+  </div></div>
+  <div id="sessionControls" class="session-controls" aria-label="Song settings"></div>
   <div class="yours-bar" id="yoursBar" hidden></div>
   <div class="problems-bar" id="problemsBar" hidden></div>
 </header>
 
 <main class="wrap">
-  <div class="columns">
+  <div class="workspace-nav"><div class="workspace-tabs" id="studioTabs" role="tablist" aria-label="Studio workspace">
+    <button type="button" role="tab" id="tab-arrange" data-workspace="arrange" aria-controls="workspace-arrange" aria-selected="true">Arrange <span>01</span></button>
+    <button type="button" role="tab" id="tab-words" data-workspace="words" aria-controls="workspace-words" aria-selected="false" tabindex="-1">Words <span>02</span></button>
+    <button type="button" role="tab" id="tab-sound" data-workspace="sound" aria-controls="workspace-sound" aria-selected="false" tabindex="-1">Sound <span>03</span></button>
+    <button type="button" role="tab" id="tab-explore" data-workspace="explore" aria-controls="workspace-explore" aria-selected="false" tabindex="-1">Explore <span>04</span></button>
+  </div><div class="draft-actions"><button class="link small" type="button" id="openDraft">Open draft</button><button class="btn quiet" type="button" id="saveDraft">Save draft <span aria-hidden="true">↓</span></button><input type="file" id="draftFile" accept=".json,application/json" hidden aria-label="Open a Songbird draft"></div></div>
+
+  <div id="workspace-arrange" data-workspace-panel="arrange" role="tabpanel" aria-labelledby="tab-arrange">
+    <div id="studio-composer"><div class="composer-loading"><span class="eyebrow">Your musical workbench</span><h2>Laying out the song…</h2><p class="hint">Arrange the sections, shape the tune, and find your own way through it.</p></div></div>
+  </div>
+  <div id="workspace-words" data-workspace-panel="words" role="tabpanel" aria-labelledby="tab-words" hidden>
+    <div class="workspace-intro"><div><span class="eyebrow">Tell your version</span><h2>Every word has a place.</h2></div><p>Choose alternate words right in the lines. The song keeps the rhythm and rhyme together.</p></div>
     <section class="panel" aria-labelledby="wordsTitle">
       <h2 id="wordsTitle">The words <span class="aside hint" id="wordsAside"></span></h2>
       <div class="words" id="words"></div>
     </section>
-    <aside aria-label="The choices, and why they were made">
+  </div>
+  <div id="workspace-sound" data-workspace-panel="sound" role="tabpanel" aria-labelledby="tab-sound" hidden>
+    <div class="workspace-intro"><div><span class="eyebrow">Find the feeling</span><h2>Your band. Your room.</h2></div><p>Shape the pace, players, and character. Open a card’s story to see where its choices came from.</p></div>
+    <div aria-label="The choices, and why they were made">
       <div class="cards" id="cards"></div>
-    </aside>
+    </div>
   </div>
 
-  <section class="panel" aria-labelledby="timeTitle" data-gap="22">
+  <div id="workspace-explore" data-workspace-panel="explore" role="tabpanel" aria-labelledby="tab-explore" hidden>
+  <div class="workspace-intro"><div><span class="eyebrow">Let the song wander</span><h2>A song that keeps becoming.</h2></div><p>Travel through time or hear another machine’s take. Your own choices stay with you.</p></div>
+  <section class="panel" aria-labelledby="timeTitle">
     <h2 id="timeTitle">Through time <span class="aside hint">three years back to three years on</span></h2>
     <p class="hint">Your machine's song changes a little from day to day, more from month to month and most from year to year. Move through time to see and hear how.</p>
     <div id="timeline" class="timeline-box"><p class="hint">Drawing six years of your machine's song…</p></div>
@@ -70,6 +94,10 @@
     </form>
   </section>
 
+  </div>
+
+  <details class="finish-panel">
+  <summary><span><span class="finish-dot" aria-hidden="true"></span> Record &amp; pass it on</span><span class="hint">The studio travels inside your audio file <span aria-hidden="true">↗</span></span></summary>
   <div class="two">
     <section class="panel" aria-labelledby="singTitle">
       <h2 id="singTitle">Sing it</h2>
@@ -88,7 +116,9 @@
     </section>
   </div>
 
-  <footer>Nothing on this page leaves this computer.</footer>
+  </details>
+
+  <footer><span>Made here. Heard anywhere.</span><span>Nothing on this page leaves this computer.</span></footer>
 </main>
 
 <div class="player" role="region" aria-label="Player">

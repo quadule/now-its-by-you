@@ -1,6 +1,7 @@
 """A contribution keeps travelling after the original takes and files are gone."""
 
 import json
+from dataclasses import replace
 from pathlib import Path
 
 from songbird import cli, pack, phrasing as P
@@ -37,17 +38,71 @@ def test_children_inherit_delivery_and_explicit_contributions_replace_it(tmp_pat
 
     lead = P.to_json({"r1": (P.Gesture(early=0.125),)})
     choir = P.to_json({"r1": (P.Gesture(fall=-30),)})
-    parent = {"id": "a" * 64, "params": choose_params(load(H)).to_dict(), "performance": {"lead": lead, "choir": [choir]}}
+    parent = {"id": "a" * 64, "params": replace(choose_params(load(H)), choir=3).to_dict(),
+              "performance": {"lead": lead, "choir": [choir]}}
     parent_file = tmp_path / "parent.json"
     parent_file.write_text(json.dumps(parent))
     renders = []
-    monkeypatch.setattr(cli, "render_one", lambda *a, **kw: renders.append(kw))
+    monkeypatch.setattr(cli, "render_one", lambda *a, **kw: renders.append({"params": a[1], **kw}))
     args = ["render", str(H), "--parent", str(parent_file)]
     assert cli.main(args) == 0
     assert renders[-1]["phrasing_json"] == lead and renders[-1]["choir_json"] == [choir]
+    assert renders[-1]["params"].choir == 3  # inherited gestures do not pin the evolving choir's size
     replacement = tmp_path / "new.json"
     replacement.write_text(json.dumps(choir))
     assert cli.main([*args, "--phrasing", str(replacement)]) == 0
     assert renders[-1]["phrasing_json"] == choir
+    assert cli.main([*args, "--choir-phrasing", str(replacement)]) == 0
+    assert renders[-1]["choir_json"] == [choir] and renders[-1]["params"].choir == 1
     assert P.inherited({"seed_phrasing": lead}, {}) == (lead, [])
     assert P.inherited({"seed_phrasing": lead}, {"performance": {"lead": None, "choir": []}}) == (None, [])
+
+
+def test_studio_previews_recordings_and_cache_keep_the_packets_delivery(tmp_path, monkeypatch):
+    from songbird import studio as S
+    from songbird.genome import load
+    from songbird.realize import choose_params
+
+    lead = P.to_json({"r1": (P.Gesture(early=0.125),)})
+    choir = P.to_json({"r1": (P.Gesture(fall=-30),)})
+    parent = {"id": "a" * 64, "params": choose_params(load(H)).to_dict(),
+              "performance": {"lead": lead, "choir": [choir]}}
+    parent_file = tmp_path / "parent.json"
+    parent_file.write_text(json.dumps(parent))
+    studio = S.Studio(str(parent_file), str(H), "fictional:ada", home=tmp_path, out=tmp_path / "out")
+    version = studio.version({})
+    assert version.phrasing_json == lead and version.choir_phrasings == [choir]
+
+    realized = []
+    original_realize = S.realize
+
+    def inspect_score(*args, **kwargs):
+        realized.append(kwargs)
+        return original_realize(*args, **kwargs)
+
+    monkeypatch.setattr(S, "realize", inspect_score)
+    studio._score(version)
+    assert realized[-1]["phrasing"] == P.from_json(lead)
+    assert realized[-1]["choir"] == [P.from_json(choir)]
+    key = studio.key(version, None)
+    studio.context.parent_record["performance"]["choir"] = []
+    assert studio.key(version, None) != key
+    studio.context.parent_record["performance"]["choir"] = [choir]
+
+    recorded = []
+
+    def inspect_render(genome, params, out, **kwargs):
+        recorded.append(kwargs)
+        out.parent.mkdir(parents=True, exist_ok=True)
+        out.write_bytes(b"test recording")
+        return {"id": "b" * 64, "duration": 1.0}
+
+    monkeypatch.setattr(cli, "render_one", inspect_render)
+    job = S.Job("portable", key, "record", "Portable recording", lambda _: None)
+    studio._whole(job, version, key)
+    assert recorded[-1]["phrasing_json"] == lead and recorded[-1]["choir_json"] == [choir]
+
+    replacement = tmp_path / "replacement.json"
+    replacement.write_text(json.dumps(choir))
+    changed = studio.context.version({"phrasing": "replacement"}, phrasings={"replacement": str(replacement)})
+    assert changed.phrasing_json == choir and changed.choir_phrasings == [choir]

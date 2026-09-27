@@ -89,16 +89,18 @@ def from_json(data: dict) -> Phrasing:
     }
 
 
+def inherited(source: dict, record: dict | None = None) -> tuple[dict | None, list[dict]]:
+    """The small performance a rendition carries (only rounded gestures travel; recordings and local paths do
+    not), or the seed's for a record from before performances. An explicit empty performance is meaningful:
+    that version chose to sing without contributions, so it must not silently pick the seed's phrasing up."""
+    performance = (record or {}).get("performance")
+    if isinstance(performance, dict):
+        return performance.get("lead"), list(performance.get("choir") or [])
+    return source.get("seed_phrasing"), []
+
+
 def gesture(phrasing: Phrasing | None, phrase_id: str, index: int) -> Gesture | None:
     if not phrasing or phrase_id not in phrasing or index >= len(phrasing[phrase_id]):
         return None
     return phrasing[phrase_id][index]
 
-
-def inherited(source: dict, record: dict | None = None) -> tuple[dict | None, list[dict]]:
-    """The small performance a rendition carries, or the seed's for older
-    records. Only rounded gestures travel; recordings and local paths do not."""
-    if record is not None and "performance" in record:
-        performance = record["performance"]
-        return performance.get("lead"), list(performance.get("choir") or [])
-    return source.get("seed_phrasing"), []

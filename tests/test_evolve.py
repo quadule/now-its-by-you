@@ -264,8 +264,21 @@ def test_each_refrain_of_a_lineage_keeps_words_of_its_own(h):
             questions.update(r["words"].get("question") for r in rounds[1:-1])
             own += len({(r["words"].get("while"), r["words"].get("then")) for r in rounds}) > 1
             assert rounds[0]["head"] == rounds[-1]["head"] == A.refrain_heads(h)[0]
-            assert rounds[0]["words"]["question"] in ("made", "wrote", "sang") and rounds[-1]["words"]["question"] == "owns"
+            assert rounds[0]["words"]["question"] in h.source["bank"]["rules"]["refrain"]["question_first"]
+            assert rounds[-1]["words"]["question"] == "owns"
     assert {"knows", "so"} <= heads and len(heads) >= 5 and len(questions) >= 3 and own > 24
+
+
+@pytest.mark.parametrize("question", ["made", "wrote", "sang"])
+def test_shortening_to_one_refrain_keeps_the_first_question(h, question):
+    held = A.hold(h, A.arrange(h, h.seed_params["form"], 7))
+    held["refrain"]["rounds"][0]["words"]["question"] = question
+    before = json.loads(json.dumps(held))
+    lone = ("verse", "refrain", "verse", "bridge")
+    sung = A.sing(h, lone, held)
+    assert sung.questions == (question,)
+    assert sung.couplets == ("canon",)
+    assert held == before
 
 
 def test_a_verse_held_before_the_bank_gave_it_swaps_keeps_its_place(h):

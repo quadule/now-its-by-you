@@ -1427,8 +1427,15 @@ def _placed(song: _Song, held_rounds: list[dict], n: int) -> list[dict]:
         head = out[0].get("head") or song.head_id
         if head in song.heads and _asks(song, head) and "question" not in song.fixed[head]:
             asked = _options(song.bank["refrain"]["slots"]["question"])
-            q = _question_rule(song, 0, 1, head)  # None: several first words to draw among; the lone one asks the first
-            out[0]["words"] = {**out[0].get("words", {}), "question": asked[_firsts(song)[0] if q is None else q]}
+            question = _question_rule(song, 0, 1, head)
+            if question is None:
+                # A first refrain can now choose among several questions. When
+                # shortening a song, keep the question its first refrain asked;
+                # the last refrain supplies the canon couplet, not its question.
+                firsts = _firsts(song)
+                held = held_rounds[0].get("words", {}).get("question")
+                question = next((i for i in firsts if asked[i] == held), firsts[0])
+            out[0]["words"] = {**out[0].get("words", {}), "question": asked[question]}
     return out
 
 

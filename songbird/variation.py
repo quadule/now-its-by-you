@@ -720,6 +720,9 @@ def choose_form(out: dict, ctx: Context) -> None:
     Two verses to a refrain is scored the same way against a machine that
     leans away from it, since a verse and then its refrain is the song's
     shape: rare where the parent never did it."""
+    if out.get("composition", {}).get("order"):
+        out["form"] = list(out["composition"]["order"])
+        return  # a person's arrangement is carried; its words and other choices still evolve
     genome = ctx.genome
     source = ctx.parent.form if parse_form(genome, ctx.parent.form) else ctx.song.form
     was = parse_form(genome, source)

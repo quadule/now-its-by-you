@@ -35,7 +35,7 @@ import numpy as np
 from . import arrange as arrange_mod
 from . import drift as drift_mod
 from . import edits as edits_mod
-from . import harvest, variation
+from . import harvest, phrasing as phrasing_mod, variation
 from .arrange import options as word_choices, seed_lyrics
 from .band import INSTRUMENTS
 from .synth.mixing import MixParams
@@ -98,9 +98,9 @@ THEMES = {"sea": "the sea", "fire": "fire", "machines": "machines", "earth": "th
           "town": "the town", "music": "music", "past": "the past"}  # harvest.THEMES, as the page says them
 KINDS = {"you": "you", "machine": "your machine", "time": "time", "parent": "kept", "song": "the song",
          "chance": "chance", "rule": "the song's rule", "lineage": "the versions before"}
-# Params fields a card below speaks for; any other gets a plain card of its own
+# Params fields a card or the composition editor speaks for; any other gets a plain card of its own
 KNOWN = {"tonic", "mode", "tempo", "form", "seed", "accomp", "humanize", "ritardando", "choir", "band", "singer",
-         "mix", "leanings", "lay", "inventory", "variants", "words", "generation", "made", "style"}
+         "mix", "leanings", "lay", "inventory", "variants", "words", "generation", "made", "style", "composition"}
 KNOWN_BAND = {*INSTRUMENTS, "brightness", "pattern", "density", "swing", "wear", "ornament", "arc", "lead", "body",
               "maker", "lineup"}
 # How big a pull or a push must be to be heard, per number (smaller ones are said to have kept it as it was)
@@ -400,7 +400,9 @@ def drawn_words(genome, params):
 
 def as_sung(genome, params, lyrics):
     """Words to show: the drawn ones, or the song's own for the form (named for the bank's entries)."""
-    return lyrics if lyrics is not None else seed_lyrics(genome, params.form)
+    from .composition import lyric_overlay
+
+    return lyric_overlay(genome, params, lyrics) or seed_lyrics(genome, params.form)
 
 
 @dataclass
@@ -739,6 +741,8 @@ def shape_card(v: Version) -> dict:
         if not machine and not time:
             why.append({"kind": "time", "text": f"{what}: your machine and {_when('season')} together"})
     def chosen(part: str, value) -> str:  # what the person chose for a part, as they chose it
+        if part == "order":
+            return "your section arrangement" if value else "the song's section arrangement"
         if part == "verses":
             return f"{number(value)} verses"
         return f"{'with' if value else 'without'} {SHORT.get(part, PARTS.get(part, part))}"
@@ -1014,6 +1018,8 @@ def tune_changes(v: Version) -> list[dict]:
     for e in v.changes:
         if not isinstance(e, dict) or e.get("what") != "tune":
             continue
+        if (e.get("variant") or {}).get("phrase") in v.params.composition.get("tune", {}):
+            continue
         change = CHANGE_WORDS.get(e.get("change"), e.get("change") or "changed")
         out.append({"kind": "time", "text": f"{_said(e.get('about') or 'a small change')} {change}: {_said(e.get('why'))}"})
     return out
@@ -1086,10 +1092,11 @@ def variants_card(v: Version) -> dict | None:
         return None
     genome = v.context.genome
     items = [{"name": str(i), "label": variants_mod.describe(genome, var, v.lyrics), "value": var in sung,
-              "path": f"variants.{i}", "mine": f"variants.{i}" in v.applied} for i, var in enumerate(chosen)]
+              "path": f"variants.{i}", "mine": f"variants.{i}" in v.applied} for i, var in enumerate(chosen)
+             if var.phrase not in v.params.composition.get("tune", {})]
     on = sum(bool(i["value"]) for i in items)
     value = (f"{number(on)} small change{'s' if on != 1 else ''} to the tune, handed down or found here"
-             if on else "the tune as it was written")
+             if on else "your composed tune" if v.params.composition.get("tune") else "the tune as it was written")
     why = tune_changes(v)  # what changed this time, and why (songbird.evolve's own reasons)
     if not why:
         why = [{"kind": "lineage", "text": "handed down as the version before sang it; a tune changes a little at a "
@@ -1184,6 +1191,11 @@ def words_view(v: Version) -> list[dict]:
         item.update({"block": block, "nth": nth, "id": s.id, "lines": [readable(line) for line in s.lines],
                      "tags": [t for t in tags if t], "how": how, "note": note, "mine": mine, "kept": kept,
                      "path": path, "changeable": bool(drawn and bank)})
+        from .composition import section_ids
+
+        authored = v.params.composition.get("lyrics", {}).get(section_ids(v.params.form)[k], {})
+        if authored:
+            item.update({"authored": sorted(int(i) for i in authored), "how": "includes your own lyrics", "mine": True})
         out.append(item)
     return out
 
@@ -1222,6 +1234,8 @@ def keep_words(v: Version) -> dict:
 
 def view(ctx: Context, v: Version, phrasings: list[dict] | None = None) -> dict:
     """Everything the page draws for a version: the header, the words, the cards, the problems."""
+    from . import composition
+
     phrasings = phrasings or []
     cards = [style_card(v), key_card(v), tempo_card(v), shape_card(v), band_card(v), mix_card(v),
              singer_card(v, phrasings), words_card(v), choir_card(v)]
@@ -1250,6 +1264,7 @@ def view(ctx: Context, v: Version, phrasings: list[dict] | None = None) -> dict:
         "problems": v.problems,
         "marks": v.marks,
         "form": list(v.params.form),
+        "composition": composition.view(ctx.genome, v.params, as_sung(ctx.genome, v.params, v.lyrics)),
     }
 
 
@@ -1348,7 +1363,8 @@ def start(ctx: Context, studio) -> dict:
     b["mode"]["names"] = {m: MODES.get(m, (m, ""))[0] for m in b["mode"]["options"]}
     b["mode"]["glosses"] = {m: mode_gloss(m) for m in b["mode"]["options"]}
     return {
-        "title": genome.title, "day": ctx.day, "date": long_date(ctx.day), "days": TIMELINE_DAYS,
+        "title": genome.title, "song_digest": studio.song_digest,
+        "day": ctx.day, "date": long_date(ctx.day), "days": TIMELINE_DAYS,
         "machine": {"label": ctx.machine_label(), "lines": machine_words(ctx.voice)},
         "from": ctx.from_words(), "bounds": b, "players": {n: player(n) for n in INSTRUMENTS},
         "patterns": PATTERNS, "parts": PARTS, "optional": list(edits_mod.optional(genome)), "kinds": KINDS,
