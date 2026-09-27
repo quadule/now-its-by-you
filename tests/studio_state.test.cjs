@@ -249,3 +249,33 @@ test('Reset words uses the second bridge identity and clears pending text withou
     'lyrics.bridge:0.0': 'First bridge', 'lyrics.bridge2:0.0': null, 'lyrics.bridge2:0.1': null,
   });
 });
+
+
+test('Sound shape controls defer to a custom arrangement and release it in one undoable transaction', () => {
+  const { run } = studio();
+  run(`state.start.bounds = {}; state.start.optional = ["intro"]; state.start.parts = {intro: "Intro"};
+    state.view = {composition: {arranged: true}};
+    state.edits = {"form.order": ["verse:0", "intro:0"], "form.intro": true, tempo: 100, "lyrics.verse:0.0": "My line"};
+    const shapeControls = editor({id: "shape", parts: {}, choices: []});`);
+  const tree = run('shapeControls');
+  const nodes = (node) => typeof node === 'object' ? [node, ...node.children.flatMap(nodes)] : [];
+  const buttons = nodes(tree).filter((node) => node.tagName === 'BUTTON');
+  assert.deepEqual(buttons.map((node) => node.children.join('')), ['Open Arrange', "Use the song's shape"]);
+  assert.ok(buttons.every((node) => !Object.hasOwn(node, 'aria-pressed')));
+  buttons[1].listeners.click();
+  assert.deepEqual(plain(run('state.edits')), { 'form.order': null, tempo: 100, 'lyrics.verse:0.0': 'My line' });
+  assert.equal(run('state.undo.length'), 1);
+  run('travelHistory("undo")');
+  assert.deepEqual(plain(run('state.edits["form.order"]')), ['verse:0', 'intro:0']);
+});
+
+test('a template part omitted from server choices is disabled rather than offered as an edit', () => {
+  const { run } = studio();
+  run(`state.start.bounds = {}; state.start.optional = ["intro"]; state.start.parts = {intro: "Intro"};
+    state.view = {composition: {arranged: false}};`);
+  const tree = run('editor({id: "shape", parts: {intro: true}, choices: []})');
+  const nodes = (node) => typeof node === 'object' ? [node, ...node.children.flatMap(nodes)] : [];
+  const toggle = nodes(tree).find((node) => node.tagName === 'BUTTON');
+  assert.ok(Object.hasOwn(toggle, 'disabled'));
+  assert.equal(toggle['aria-pressed'], 'true');
+});

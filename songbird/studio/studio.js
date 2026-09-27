@@ -647,6 +647,19 @@ function editor(c) {
     case "tempo":
       return slider("Beats a minute", "tempo", c.tempo, b.tempo, (x) => `${Number(x).toFixed(0)}`, ["slower", "quicker"]);
     case "shape": {
+      const arranged = !!v.composition?.arranged;
+      if (arranged || !Object.keys(c.parts || {}).length) return h("div", {},
+        h("p", { class: "hint" }, "This section arrangement is edited in Arrange."
+          + (arranged ? " Use the song's shape to choose verse counts and optional sections here again." : "")),
+        h("div", { class: "actions" },
+          h("button", { class: "btn quiet", type: "button", onclick: () => showWorkspace("arrange") }, "Open Arrange"),
+          arranged ? h("button", { class: "btn quiet", type: "button", onclick: () => {
+            const next = copyEdits();
+            for (const path of Object.keys(next)) if (path.startsWith("form.")) delete next[path];
+            // Explicit null also releases an arrangement inherited from a recorded parent.
+            next["form.order"] = null;
+            commitEdits(next, "Use the song's shape");
+          } }, "Use the song's shape") : null));
       const byPart = {};
       for (const ch of c.choices || []) (byPart[ch.part] = byPart[ch.part] || []).push(ch);
       const box = h("div", {});
@@ -658,7 +671,8 @@ function editor(c) {
         const on = !!c.parts[part];
         const flip = options.find((x) => x.value === !on);
         toggles.append(h("button", { class: `chip${on ? " on" : ""}`, type: "button", "aria-pressed": on ? "true" : "false",
-          disabled: flip && !flip.allowed ? true : null, title: flip && !flip.allowed ? flip.why : null,
+          disabled: !flip || !flip.allowed,
+          title: !flip ? "This part can't be changed in this arrangement" : !flip.allowed ? flip.why : null,
           onclick: () => setEdit(`form.${part}`, !on) }, s.parts[part]));
       }
       box.append(h("div", { class: "control" }, h("label", {}, "Parts of the shape"), toggles));
