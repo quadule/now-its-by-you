@@ -539,8 +539,12 @@ async function guide(spec, which) {
   return S.guides[key];
 }
 
-async function microphone() {
-  if (S.recorder) return;
+function microphone() { // opened once: a second tap waits for the first
+  if (!S.opening) S.opening = openMicrophone().catch(e => { S.opening = null; throw e; });
+  return S.opening;
+}
+
+async function openMicrophone() {
   if (!window.isSecureContext || !navigator.mediaDevices) throw new Error("This page needs a secure (https) connection for the microphone.");
   try { // the microphone first: a phone reconfigures its audio when it opens, and the clock is made after
     S.stream = await navigator.mediaDevices.getUserMedia({

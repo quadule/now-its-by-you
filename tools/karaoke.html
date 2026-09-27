@@ -239,11 +239,11 @@ async function init() {
   } else {
     $("versionHint").hidden = true;
   }
+  await loadSingers();
+  await chooseVersion();
   if (!window.isSecureContext || !navigator.mediaDevices) {
     status('<span class="warn">Open this page at http://127.0.0.1 so the browser allows the microphone.</span>');
   }
-  await loadSingers();
-  await chooseVersion();
 }
 
 function drawAbout() {
@@ -439,8 +439,12 @@ async function chosenGuide(mix) {
 
 /* ---------- playing and recording ---------- */
 
-async function microphone() {
-  if (S.recorder) return;
+function microphone() {  // opened once: a second tap waits for the first
+  if (!S.opening) S.opening = openMicrophone().catch(e => { S.opening = null; throw e; });
+  return S.opening;
+}
+
+async function openMicrophone() {
   S.stream = await navigator.mediaDevices.getUserMedia({
     audio: { echoCancellation: false, noiseSuppression: false, autoGainControl: false, channelCount: 1 },
   });
