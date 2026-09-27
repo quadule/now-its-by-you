@@ -58,7 +58,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).parent))
 import takes as K  # noqa: E402  (tools/takes.py)
 
-SITE = "https://songbird.quadule.com"
+SITE = "https://songbird-sing.quadule.workers.dev"  # where singing is live (songbird.quadule.com once its DNS is on Cloudflare)
 SECRET = "songbird-sing-admin"  # its name in the artist's secrets tool
 TIMING = ("shift_ms", "auto_ms", "device_ms", "decode_ms", "out_ms", "in_ms")
 PLACE = ("spec", "from_s", "to_s", "section", "label")  # where in the song a take was sung, as its page said

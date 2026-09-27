@@ -102,7 +102,7 @@ logged in, the bucket `songbird-takes` exists, and the KV namespace's id is in w
    whole song, open your own page, then `invite.py sync` and find the takes in `recordings/`.
 
 To change a date later (say singing closes later), edit `[vars]` and deploy again; the release must say
-the same. `tools/invite.py` talks to https://songbird.quadule.com unless `--url` or `SONGBIRD_SING_URL`
+the same. `tools/invite.py` talks to https://songbird-sing.quadule.workers.dev (its `SITE`) unless `--url` or `SONGBIRD_SING_URL`
 says otherwise.
 
 ### At songbird.quadule.com
