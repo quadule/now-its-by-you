@@ -36,7 +36,8 @@ def test_drawing_without_choices_is_as_it_was():
     and tag drawn as before), and when the artist dropped the go head (2026-09-26), and when the given stanza went and owed, borrow, slow and
     four verses came (mic, search, misheard, choir; 2026-09-26), and when the first refrain came to ask who
     made, wrote or sang it (question_first, 2026-09-27: only refrain questions moved), and when the bird verse's
-    last two lines were rewritten with a carry swap, and the wind couplet, the bone and border verses and the lyric review's six came, and the refrain came to ask about this, that or the song (2026-09-27)."""
+    last two lines were rewritten with a carry swap, and the wind couplet, the bone and border verses and the lyric review's six came, and the refrain came to ask about this, that or the song (2026-09-27), and when the daisy verse and the grew
+    head came, two heads asking the same question as written never sharing a song (2026-09-27)."""
     lean = A.Leanings(mood_weights={"light": 2.0, "dark": 0.5}, era_bias=-0.4, rarity_appetite=0.6,
                       vocabulary=frozenset({"sea", "ship", "fiddle", "bird"}))
     digest = hashlib.sha256()
@@ -197,7 +198,11 @@ def test_each_refrain_has_words_of_its_own():
         refrains = [s for s in drawn.sections if s.block == "refrain"]
         assert len({(s.slots.get("while"), s.slots.get("then")) for s in refrains}) > 1 or seed % 7  # they vary
         options = A.options(g, drawn, "refrain", 1)
-        assert {h["id"] for h in options["heads"]} == set(HEADS) and all(h["allowed"] for h in options["heads"])
+        assert {h["id"] for h in options["heads"]} == set(HEADS)
+        # every head may be chosen here but one asking, as written, what a head another refrain sings asks
+        asked = {HEADS[o].get("fixed", {}).get("question") for i, o in enumerate(drawn.heads) if i != 1 and o} - {None}
+        twins = {h for h in HEADS if HEADS[h].get("fixed", {}).get("question") in asked and h not in drawn.heads}
+        assert {h["id"] for h in options["heads"] if not h["allowed"]} == twins, (drawn.heads, twins)
         question = next((w for w in options["words"] if w["slot"] == "question"), None)
         if question:  # never a word another refrain's head asks as written, nor the first refrain's
             given = {HEADS[h].get("fixed", {}).get("question") for i, h in enumerate(drawn.heads) if i != 1 and h}
@@ -268,3 +273,30 @@ def test_couplets_chosen_for_two_refrains_at_once_trade_without_singing_one_twic
             assert len(set(kept.couplets)) == len(kept.couplets) and kept.couplets[-1] == "canon"
             assert all(kept.couplets[i] == p["id"] for i, p in pins.items())
             assert A.held_problem(g, five, A.hold(g, kept)) is None
+
+
+def test_two_heads_that_ask_the_same_question_as_written_are_never_sung_in_one_song():
+    """swear and grew both ask who made it, as written (grew, 2026-09-27): a song sings at most one of them,
+    so no question is heard twice; choosing the other for another refrain is refused, and the options say
+    which head already asks it."""
+    twins = {}
+    for hid, h in HEADS.items():
+        q = h.get("fixed", {}).get("question")
+        if q:
+            twins.setdefault(q, []).append(hid)
+    pair = next(ids for ids in twins.values() if len(ids) > 1)
+    assert set(pair) == {"swear", "grew"}
+    both = 0
+    for seed in range(200):
+        drawn = A.arrange(g, LONG, seed)
+        assert not set(pair) <= set(drawn.heads), (seed, drawn.heads)
+        i = next((k for k, h in enumerate(drawn.heads) if h in pair), None)
+        if i is not None:
+            both += 1
+            other = next(h for h in pair if h != drawn.heads[i])
+            entry = next(h for h in A.options(g, drawn, "refrain", 3 - i)["heads"] if h["id"] == other)
+            assert not entry["allowed"] and drawn.heads[i] in entry["why"], entry
+    assert both > 20
+    assert "both ask who made" in A.problem(g, LONG, {"refrains": {1: {"head": "swear"}, 2: {"head": "grew"}}})
+    assert A.problem(g, LONG, {"refrains": {1: {"head": "grew"}}}) is None
+    assert A.problem(g, LONG, {"refrains": {1: {"head": "swear"}}}) is None

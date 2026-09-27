@@ -450,16 +450,23 @@ def fit_rounds(genome, n: int, rounds: list[dict], picker: Picker, note=None) ->
     for i, r in enumerate(placed):
         rule = arrange.refrain_place(genome, i, m)["head"]
         held_head = r.get("head")
+        asked = {arrange.head_fixed(genome, u).get("question") for u in used} - {None}  # asked as written so far
+
+        def allowed(h):  # another head once a song, and never two asking the same question as written
+            return h == main or ((repeats or h not in used)
+                                 and (h in used or arrange.head_fixed(genome, h).get("question") not in asked))
+
         if rule is not None:
             head = rule
-        elif held_head in heads and (held_head == main or repeats or held_head not in used):
+        elif held_head in heads and allowed(held_head):
             head = held_head
         else:
-            free = [h for h in heads if h == main or repeats or h not in used]
+            free = [h for h in heads if allowed(h)]
             head = picker.one(f"head:{i + 1}", free, arrange.affinity(genome, "head", free, picker.vocabulary))
         if held_head is not None and head != held_head:
             note({"what": "words", "change": "rule", "where": f"refrain {i + 1}'s head", "from": held_head, "to": head,
-                  "why": "the first and last refrains sing the song's own head, and another head is sung once a song"})
+                  "why": "the first and last refrains sing the song's own head, another head is sung once a song, and "
+                         "no two heads ask the same question as written"})
         if head != main:
             used.add(head)
         r["head"] = head
@@ -562,9 +569,12 @@ def alternatives(genome, held: dict, where: tuple) -> list:
         heads = arrange.refrain_heads(genome)
         others = [x for j, x in enumerate(rounds) if j != where[1]]
 
-        def fits(h):  # sung once a song, and fixing no word another refrain sings where each sings its own
+        def fits(h):  # sung once a song, asking no question another head asks as written, and fixing no word
+            # another refrain sings where each sings its own
             once = h == heads[0] or arrange.head_repeats(genome) or h not in {x["head"] for x in others}
-            return once and not any(slot in arrange.shared_slots(genome) and w != r["words"].get(slot)
+            asked = {arrange.head_fixed(genome, x["head"]).get("question") for x in others if x.get("head")} - {None}
+            twin = h != heads[0] and arrange.head_fixed(genome, h).get("question") in asked
+            return once and not twin and not any(slot in arrange.shared_slots(genome) and w != r["words"].get(slot)
                                     and w in {x["words"].get(slot) for x in others}
                                     for slot, w in arrange.head_fixed(genome, h).items())
 

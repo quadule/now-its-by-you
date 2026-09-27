@@ -6,7 +6,7 @@
   {
    "id": "a",
    "name": "Set A",
-   "about": "Verses about the church bells, a space probe and a screen; the refrain the artist wrote and another way into the refrain",
+   "about": "Verses about the church bells, a space probe and a screen; the refrain the artist wrote and the grew head (nobody made it: it grew) and another way into the refrain",
    "form": [
     "intro",
     "verse",
@@ -46,7 +46,7 @@
       {
        "head": "knows",
        "words": {
-        "question": "made",
+        "question": "sang",
         "then": "it grows",
         "while": "if",
         "this": "this"
@@ -66,9 +66,9 @@
        "slots": {}
       },
       {
-       "head": "kept",
+       "head": "grew",
        "words": {
-        "question": "kept",
+        "question": "made",
         "this": "this"
        },
        "id": "blue",

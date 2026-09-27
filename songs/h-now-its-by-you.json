@@ -111,7 +111,8 @@
     "halfinvented": "HH AE1 F IH0 N V EH1 N T AH0 D", "involved": "IH0 N V AA1 L V D",
     "thirty": "TH ER1 D IY0", "borrow": "B AA1 R OW0", "always": "AO1 L W EY0 Z",
     "banjo": "B AE1 N JH OW0", "sunday": "S AH1 N D IY0", "inside": "IH0 N S AY1 D",
-    "misheard": "M IH0 S HH ER1 D", "whatever": "W AH0 T EH1 V ER0", "fifteen": "F IH1 F T IY0 N"},
+    "misheard": "M IH0 S HH ER1 D", "whatever": "W AH0 T EH1 V ER0", "fifteen": "F IH1 F T IY0 N",
+    "unsown": "AH0 N S OW1 N"},
 
   "bank": {
     "note": "Every verse, refrain couplet, bridge and tag syllable the song can draw on, with named slots for the words that swap and the rules for combining them; songs/h-bank.md is the same bank for reading. A slot is {name}, or {name.column} for a coupled slot whose columns are chosen together, once per block; songbird/bank.py checks every way each line can be sung against the tune and the dictionary. Lines are syllabified with hyphens like every other lyric here.",
@@ -162,6 +163,12 @@
           "id": "window",
           "by": "claude",
           "lines": ["Who *{question}* {this} song? No-bo-dy knows;", "it *came* in the win-dow, the way it goes."]
+        },
+        {
+          "id": "grew",
+          "by": "claude, after the artist's early daisy draft",
+          "lines": ["Who *{question}* {this} song? No-bo-dy knows;", "it *grew* with no wa-ter, and still, it grows."],
+          "fixed": {"question": "made"}
         }
       ],
       "couplets": [
@@ -1094,6 +1101,25 @@
           "they sing it on Sun-days, and think it's a hymn;",
           "the inn sings it {day}, and no one tells him."
         ]
+      },
+      {
+        "id": "daisy",
+        "era": null,
+        "mood": "plain",
+        "scheme": "AABB",
+        "rarity": "common",
+        "by": "claude, after the artist's early daisy draft",
+        "note": "the one verse where 'it' is not the song but a flower nobody planted; sung among the others, the refrain's 'this song' lands on it, and the listener makes the figure",
+        "slots": {
+          "garden": ["gar-den had", "gar-den-er"],
+          "cut": ["mow-er", "reap-er"]
+        },
+        "lines": [
+          "It came up un-sown in the cracks of the stone;",
+          "no {garden} asked it, and still it had grown.",
+          "The chil-dren would string it and wear it a-way;",
+          "the {cut} came o-ver, and low-er it lay."
+        ]
       }
     ],
     "bridges": [
@@ -1191,7 +1217,7 @@
         "head_first": "knows",
         "head_last": "knows",
         "head_repeat": false,
-        "note": "Every refrain has words of its own. The first refrain asks who made, wrote or sang it (question_first), preferring a word no head sung in the song fixes as its own question, and the last asks who owns it, as the fixed refrain does; each refrain between asks something else, a different word each time while any are left. The first and last refrains ask about this song (first, last: this); a refrain between may ask about that song or the song, so this one song stands for all of them (the artist, 2026-09-27: a synecdoche). The while slot is drawn afresh each time round, and then too, each refrain a different one while any are left (it goes, who knows, it grows), so the artist's head's question, and then who knows?, is never heard as a statement in the same song. The first and last refrains sing the refrain's own head (knows), so the hook is heard first and last; a refrain between may sing another head instead, each at most once a song, singing any words it fixes as written. Each refrain sings one couplet, none twice until all are used, and the last refrain always sings canon."
+        "note": "Every refrain has words of its own. The first refrain asks who made, wrote or sang it (question_first), preferring a word no head sung in the song fixes as its own question, and the last asks who owns it, as the fixed refrain does; each refrain between asks something else, a different word each time while any are left. The first and last refrains ask about this song (first, last: this); a refrain between may ask about that song or the song, so this one song stands for all of them (the artist, 2026-09-27: a synecdoche). The while slot is drawn afresh each time round, and then too, each refrain a different one while any are left (it goes, who knows, it grows), so the artist's head's question, and then who knows?, is never heard as a statement in the same song. The first and last refrains sing the refrain's own head (knows), so the hook is heard first and last; a refrain between may sing another head instead, each at most once a song, singing any words it fixes as written; two heads that ask the same question as written (swear and grew both ask who made it) are never sung in one song. Each refrain sings one couplet, none twice until all are used, and the last refrain always sings canon."
       },
       "bridge": {
         "always": "canon",

@@ -48,9 +48,11 @@ It asks who wrote it, says "if" and ends "who knows?", as written; no other
 refrain in the same song ends "who knows", so the question comes as a
 question.
 
-These seven, the artist's pick of all of them (2026-09-26), turn "Nobody" the
-same way or keep "Nobody knows" and turn the second line. Each asks whatever
-question its refrain draws, but for swear (made) and kept (kept), as written:
+These eight (seven the artist's pick of all of them, 2026-09-26; grew, 2026-09-27)
+turn "Nobody" the same way or keep "Nobody knows" and turn the second line.
+Each asks whatever question its refrain draws, but for swear (made), kept
+(kept) and grew (made), as written; two heads that ask the same question as
+written are never sung in one song:
 
 **stuck** · by claude
 
@@ -82,7 +84,15 @@ question its refrain draws, but for swear (made) and kept (kept), as written:
 > Who kept this song? Nobody knows;
 > it came in the window, the way it goes.
 
-A refrain between the first and last sings any of the nine heads (the song's
+**grew** · by claude, after the artist's early daisy draft
+
+> Who made this song? Nobody knows;
+> it grew with no water, and still, it grows.
+
+Nobody made it: it grew. The answer the artist's early daisy draft gave ("still
+you grew"), in the refrain's own words; it asks who made it, as written.
+
+A refrain between the first and last sings any of the ten heads (the song's
 own among them) about as often as another.
 
 Lines 3 and 4 are one of these couplets, a different one each time round,
@@ -555,6 +565,20 @@ Swap *seven* for twenty or thirty.
 
 Swap *nod* for point; *wife* for son.
 
+**daisy** · plain · AABB · by claude, after the artist's early daisy draft
+
+> It came up unsown in the cracks of the stone;
+> no garden had asked it, and still it had grown.
+> The children would string it and wear it away;
+> the mower came over, and lower it lay.
+
+Swap *garden had* for gardener; *mower* for reaper. The one verse where "it"
+isn't the song but a flower nobody planted. The artist's early draft (K, "Still
+You Grew") told the whole song that way, in images, never saying "song", and
+the artist and their wife missed it (2026-09-27). Sung among verses about the
+song, the refrain's "this song" lands on the flower, and the listener makes the
+figure for themselves: it comes up unasked, children string it, it's cut down.
+
 ## The bridge
 
 Sung by the lineage choir. The canon is always sung, its swaps chosen once
@@ -621,7 +645,8 @@ How a song is put together from the bank; the same rules are data under
   afresh each time round, and it goes, who knows or it grows too, each
   refrain a different one while any are left. The first
   and last refrains sing the knows head; a refrain between may sing another
-  head, each at most once a song, with the words it fixes as written. Each
+  head, each at most once a song, with the words it fixes as written, and
+  never two heads that ask the same question as written. Each
   refrain sings one couplet, none twice until all are used, and the last
   always sings canon.
 - **Bridge.** The canon is always sung, its swaps chosen once per song. A

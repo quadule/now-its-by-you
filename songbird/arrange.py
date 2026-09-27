@@ -907,9 +907,33 @@ def _head_order(song: _Song, n: int, rng: np.random.Generator, vocabulary: froze
     once = song.rules["refrain"].get("head_repeat", True) is False
     for i in range(n):
         if out[i] is None:
+            asked = {_asks_as_written(song, h) for h in out if h is not None} - {None}
             free = [h for h in song.heads if h == song.head_id or not (once and h in out)]
+            # never two heads that ask the same question as written (swear and grew: who made it)
+            free = [h for h in free if h in out or _asks_as_written(song, h) not in asked]
             out[i] = free[_draw(rng, _affinity([song.heads[h] for h in free], song.words, vocabulary))]
     return out
+
+
+def _asks_as_written(song: _Song, head: str) -> int | None:
+    """The question a head fixes (asks as written), as the option's index; None where it asks whatever
+    its refrain draws."""
+    return song.fixed.get(head, {}).get("question")
+
+
+def _twins_problem(song: _Song, heads: list[str]) -> str | None:
+    """Why some heads can't be sung in one song for asking the same question as written, in one plain
+    sentence; None if no two do."""
+    asked: dict[int, str] = {}
+    for h in heads:
+        q = _asks_as_written(song, h)
+        if q is None:
+            continue
+        if asked.get(q, h) != h:
+            word = _label(_value(song.bank["refrain"]["slots"]["question"], q)).replace("-", "")
+            return f"the {asked[q]} and {h} heads both ask who {word} it, as written"
+        asked[q] = h
+    return None
 
 
 def _shared(song: _Song) -> tuple[str, ...]:
@@ -1456,7 +1480,7 @@ def _rounds_problem(song: _Song, placed: list[dict]) -> str | None:
         others = [h for h in heads if h != song.head_id]
         if len(set(others)) != len(others):
             return f"the {next(h for h in others if others.count(h) > 1)} head is sung twice"
-    return _round_words_problem(song, heads, words)
+    return _twins_problem(song, heads) or _round_words_problem(song, heads, words)
 
 
 def _index(spec, value) -> int | None:
@@ -1947,6 +1971,9 @@ def _refrain_pins_problem(song: _Song, pins: dict[int, dict], every: dict, n: in
         twice = next((c for c in picked if picked.count(c) > 1), None)
         if twice and (key == "id" or rr.get("head_repeat") is False):
             raise ArrangeError(f"the {twice} {what} is chosen for two refrains, and it's sung once a song")
+    twins = _twins_problem(song, [p["head"] for _i, p in sorted(pins.items()) if p.get("head")])
+    if twins:
+        raise ArrangeError(twins)
     if "question" in every:
         raise ArrangeError("each refrain asks its own question, so it's chosen refrain by refrain")
     own = sorted(set(every) & set(_shared(song)))
@@ -1993,6 +2020,14 @@ def _keep_refrains(song: _Song, sections: list, places: list[int], pins: dict[in
     ids = [sections[k].id for k in places]
     heads = [sections[k].head or song.head_id for k in places]
     _traded(song, ids, heads, pins)
+    # a head chosen where another refrain sings its twin (a head asking the same question as written): the
+    # twin makes way for it and that refrain sings the song's own head
+    pinned = {r for r, p in pins.items() if p.get("head")}
+    for r in range(n):
+        q = _asks_as_written(song, heads[r])
+        if r not in pinned and q is not None and any(_asks_as_written(song, heads[k]) == q and heads[k] != heads[r]
+                                                     for k in pinned):
+            heads[r] = song.head_id
 
     chosen, theirs = {}, {}
     for r in range(n):
@@ -2023,7 +2058,7 @@ def _keep_refrains(song: _Song, sections: list, places: list[int], pins: dict[in
 
     now = {r: _picks(song.heads[heads[r]], sections[k].slots) for r, k in enumerate(places)}
     words = _round_words(song, heads, pick, chosen, now)
-    why = _round_words_problem(song, heads, words)
+    why = _twins_problem(song, heads) or _round_words_problem(song, heads, words)
     if why:  # choices that keep each rule alone but not all of them together (a word chosen twice too often)
         raise ArrangeError(why)
     for r, place in enumerate(places):
@@ -2250,6 +2285,12 @@ def options(genome: Genome, lyrics: Lyrics, block: str, index: int = 0) -> dict:
             trades = None
             if why is None and hid != head and hid != song.head_id and hid in sung_heads:
                 trades = sung_heads.index(hid)
+            if why is None and hid != head and _asks_as_written(song, hid) is not None:
+                # another refrain's head asks the same question as written: the two are never sung together
+                twin = next((h for j, h in enumerate(sung_heads) if j != index and h != hid
+                             and _asks_as_written(song, h) == _asks_as_written(song, hid)), None)
+                if twin is not None:
+                    why = _twins_problem(song, [twin, hid])
             out["heads"].append({"id": hid, "lines": _readable_lines(entry, song.fixed[hid]),
                                  "by": entry.get("by") if entry is not spec else None,
                                  "allowed": why is None, "why": why, "trades": trades})
