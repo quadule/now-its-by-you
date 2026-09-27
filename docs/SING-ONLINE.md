@@ -63,7 +63,7 @@ session like that). `revoke <token>` closes a link. Notes are for you; singers n
   (before 30 September) makes them all. Once DELETE_BY has passed it runs purge.
 - **mail** lists one message per address: their page's link once they've joined, and "your version
   is ready" once it is. It never sends anything: you paste or open each, send it from
-  milo@quadule.com, then run `mail --sent`.
+  milo@winningham.net, then run `mail --sent`.
 - **purge**, after DELETE_BY, deletes every online singer's WAVs and versions here, keeping sidecars
   and measured numbers, and asks the site to run its own purge now rather than on the hour. It can't know which **training sets** were built from their takes: anything
   in `renders/throat/` made from online singers' recordings must be rebuilt without them or deleted

@@ -5,7 +5,7 @@ legal advice: have it read by someone who knows before relying on it.
 -->
 
 **This box is for verses, lines and ideas for the song** (for anything else, write to
-milo@quadule.com). Please leave out personal details.
+milo@winningham.net). Please leave out personal details.
 
 **Anything you send here, you give to the song for good.** You release all your rights to it: it's
 dedicated to the public domain (CC0), and the artist may use it, change it, or leave it out, with or
