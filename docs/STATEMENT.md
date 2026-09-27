@@ -28,7 +28,7 @@ the next version):
 > part.
 
 (2026-09-26: the parenthesis was "without keeping a recording or cloning your voice"; the artist changed
-it once singers' recordings were kept for a few days, until 30 September, to make the song.; and "the day" became "the season", truer to how it drifts: a little every day, but its form, style and verses
+it once singers' recordings were kept for a few days, until 30 September, to make the song; and "the day" became "the season", truer to how it drifts: a little every day, but its form, style and verses
 move with the seasons and its key with the year.)
 
 No further edits suggested: "it wonders who made it" is better than any of the drafts below.
