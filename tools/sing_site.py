@@ -21,6 +21,9 @@ What it writes, all served by web/sing/src/worker.js:
                                       melody at 64 kbps if it decodes in time with its guide (else 96), the
                                       full guide at 96
     _headers                          the security headers for the files served without the worker
+    yours.html, yours.css, yours.js   each singer's own page (web/sing/page/), at /y/<singer>
+    song/worker.json                  what the worker needs of song.json, without the loudness curves: it
+                                      reads it on a cold start (song.json runs to megabytes)
 
 Every spec is a set (tools/sets/<song>.json) in every key and at every speed
 (guides.KEYS, TEMPOS), rendered in parallel (--jobs) or found current in
@@ -359,7 +362,20 @@ def build(genome_path: Path, out: Path, rebuild: bool = False, bitrate: str = BI
         "built": dt.datetime.now(dt.timezone.utc).isoformat(timespec="seconds"),
     }
     (out / "song" / "song.json").write_text(json.dumps(song, separators=(",", ":")) + "\n")
+    # the worker's small copy of it (web/sing/src/worker.js): the same, without the loudness curves
+    (out / "song" / "worker.json").write_text(json.dumps(worker_index(song), separators=(",", ":")) + "\n")
     return song
+
+
+def worker_index(song: dict) -> dict:
+    """What web/sing/src/worker.js needs of song.json v2: every guide's score digest, words, length and
+    MP3s, the sets and the releases' digests, without the guides' loudness curves, so a cold start reads
+    it well within the free plan's 10 ms of work a request (song.json itself can run to megabytes)."""
+    return {"song": song["song"], "consent": song["consent"], "words_release": song.get("words_release"),
+            "sets": [s["id"] for s in song.get("sets", [])], "max_seconds": song.get("max_seconds"),
+            "guides": {spec: {"guide": g["guide"], "lyrics": g["lyrics"], "duration": g["duration"],
+                              "mixes": {mix: m["file"] for mix, m in g["mixes"].items()}}
+                       for spec, g in song["guides"].items()}}
 
 
 def size(out: Path) -> int:
