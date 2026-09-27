@@ -92,6 +92,7 @@ line. The artist heard the changes and took them all (15 notes of a whole song, 
 | b2, 5th-6th | a-long *like a* coal | re mi | so la | two of three sang so, as the bridge's first line has it there |
 | b3, 7th note | making *and* everyone's | re | so | two of three, as the verse's third line has it there |
 | b4, 7th note | if *you* leave it alone | do | re | two of three (the third higher still) |
+| b3, 9th note | and ev-*ery*-one's own | re | mi | three of four, the morning after, once a fifth singer had sung (2026-09-27 10:30) |
 
 Each is now an exact copy of the line it was being mistaken for, or the note the singers chose. Guides
 built from 2026-09-27 00:20 sing it; takes sung before are still measured against what they heard,

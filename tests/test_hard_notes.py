@@ -14,7 +14,7 @@ def test_a_note_several_singers_sing_as_the_same_other_one_is_found_and_a_slip_i
     seen = {
         ("v3", 1): {"ana": [-190.0, -210.0], "bo": [-180.0], "cy": [-80.0]},  # so sung as fa, by all three
         ("b2", 9): {"ana": [190.0], "bo": [220.0], "cy": [30.0]},  # re sung as mi: as b1 has it there
-        ("b3", 8): {"ana": [470.0], "bo": [530.0], "cy": [50.0]},  # a little apart, the same way: so, as v3
+        ("b3", 8): {"ana": [270.0], "bo": [330.0], "cy": [50.0]},  # a little apart, the same way: so, as v3 (b3 #8 is mi since 2026-09-27)
         ("r1", 3): {"ana": [700.0], "bo": [-20.0], "cy": [10.0]},  # one singer: a slip
         ("r2", 3): {"ana": [-150.0], "bo": [160.0], "cy": [5.0]},  # two, but opposite ways
     }
