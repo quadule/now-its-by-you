@@ -255,6 +255,7 @@ function describePath(path) {
 function renderWords() {
   const v = state.view;
   const box = $("words");
+  window.SongbirdAuthor?.capture();
   const active = document.activeElement;
   const focusKey = box.contains(active) ? active.dataset.focus : null;
   const opened = new Set([...box.querySelectorAll("details[open]")].map((d) => d.dataset.section));
@@ -275,12 +276,13 @@ function renderWords() {
     const sec = h("div", { class: `sec${w.sung ? "" : " instrumental"}${w.mine ? " mine" : ""}`, id: `sec-${w.index}` },
       h("div", { class: "sec-head" }, h("span", { class: "sec-name" }, w.label), meta, tools));
     if (options) {
+      const allAuthored = (w.authored || []).length >= w.lines.length;
       const selects = h("div", { class: "section-selects" });
-      if (options.choices.length) selects.append(phraseChooser(w, options));
-      if ((options.heads || []).length > 1) selects.append(headChooser(options, w.label));
+      if (!allAuthored && options.choices.length) selects.append(phraseChooser(w, options));
+      if (!allAuthored && (options.heads || []).length > 1) selects.append(headChooser(options, w.label));
       if (selects.childNodes.length) sec.append(selects);
       sec.append(inlineLyrics(w, options));
-      const rules = chooser(w, options);
+      const rules = allAuthored ? null : chooser(w, options);
       if (rules) {
         rules.open = opened.has(key) || (state.choose && state.choose.key === key);
         sec.append(rules);
@@ -294,6 +296,7 @@ function renderWords() {
     if (w.note) sec.append(h("p", { class: "sec-note" }, w.note));
     box.append(sec);
   }
+  window.SongbirdAuthor?.decorate(state.view, box);
   if (focusKey) [...box.querySelectorAll("[data-focus]")].find((el) => el.dataset.focus === focusKey)?.focus({ preventScroll: true });
 }
 
@@ -344,7 +347,8 @@ function slotSelect(w, o, slot, suffix = "") {
 
 // The API supplies readable slot labels, including multi-word alternatives and coupled noun slots.
 // Match complete words only; anything ambiguous or absent gets a labelled select just below the lines.
-function lyricMatches(texts, slots) {
+function lyricMatches(texts, slots, authored = []) {
+  const excluded = new Set(authored);
   const lines = texts.map((text) => text.replace(/\*/g, ""));
   const matches = lines.map(() => []), missing = [];
   const wordChar = (c) => !!c && /[\p{L}\p{N}_]/u.test(c);
@@ -352,6 +356,7 @@ function lyricMatches(texts, slots) {
     const label = (slot.labels?.[slot.sung] || slot.sung || "").replace(/\*/g, "");
     let found = false;
     for (let line = 0; label && line < lines.length && !found; line++) {
+      if (excluded.has(line)) continue;
       const text = lines[line];
       let start = -1;
       while ((start = text.toLocaleLowerCase().indexOf(label.toLocaleLowerCase(), start + 1)) !== -1) {
@@ -370,7 +375,7 @@ function lyricMatches(texts, slots) {
 }
 
 function inlineLyrics(w, o) {
-  const parsed = lyricMatches(w.lines, o.words || []);
+  const parsed = lyricMatches(w.lines, o.words || [], w.authored || []);
   const box = h("div", { class: "lines editable-lines" });
   w.lines.forEach((source, line) => {
     const p = h("p", { class: "lyric-line" });
@@ -400,7 +405,7 @@ function inlineLyrics(w, o) {
     appendText(at, parsed.lines[line].length);
     box.append(p);
   });
-  if (parsed.missing.length) box.append(h("div", { class: "lyric-fallbacks" }, parsed.missing.map((slot) =>
+  if (parsed.missing.length && !(w.authored || []).length) box.append(h("div", { class: "lyric-fallbacks" }, parsed.missing.map((slot) =>
     h("label", { class: "lyric-slot-label" }, h("span", {}, capital(slot.slot.replace(/_/g, " "))), slotSelect(w, o, slot)))));
   if ((o.words || []).some((slot) => slot.once)) box.append(h("span", { class: "hint" }, "Shared words change in every refrain."));
   return box;

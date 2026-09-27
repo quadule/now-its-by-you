@@ -204,3 +204,19 @@ test('Record opens the finish panel before scrolling and reopens it when the fin
   assert.equal(nodes.get('audio').src, '/recorded.flac');
   assert.match(nodes.get('nowSub').textContent, /Earlier version/);
 });
+
+
+test('authored lines never receive bank controls and hidden bank words have no fallback controls', () => {
+  const { run } = studio();
+  const result = plain(run(`lyricMatches(["My lantern is different", "The lantern stays"], [
+    {slot: "light", sung: "lantern", options: ["lantern", "candle"]},
+    {slot: "feeling", sung: "different", options: ["different", "familiar"]}
+  ], [0])`));
+  assert.equal(result.matches[0].length, 0);
+  assert.equal(result.matches[1][0].slot.slot, 'light');
+  const children = run(`inlineLyrics({block: "verse", nth: 0, label: "Verse", lines: ["My lantern"], authored: [0]}, {
+    words: [{slot: "light", sung: "lantern", options: ["lantern", "candle"]}]
+  }).children`);
+  assert.equal(children.length, 1);
+  assert.equal(children[0].className, 'lyric-line');
+});
