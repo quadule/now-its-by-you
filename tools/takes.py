@@ -104,11 +104,13 @@ class Take:
 
     @property
     def recorded_at(self) -> datetime | None:
-        """When it was sung, in this computer's local time: as its sidecar says, or else its file's name."""
+        """When it was sung, in this computer's local time: as its sidecar says (a time with its zone is
+        moved into this one), or else its file's name."""
         with_time = self.info.get("recorded")
         if with_time:
             try:
-                return datetime.fromisoformat(str(with_time)).replace(tzinfo=None)
+                when = datetime.fromisoformat(str(with_time))
+                return when.astimezone().replace(tzinfo=None) if when.tzinfo else when
             except ValueError:
                 pass
         named = re.search(r"-(\d{8}-\d{6})(-\d+)?$", self.path.stem)

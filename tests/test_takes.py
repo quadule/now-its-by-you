@@ -1,6 +1,6 @@
 import sys
 import time
-from datetime import datetime
+from datetime import datetime, timezone
 from pathlib import Path
 
 import pytest
@@ -63,6 +63,8 @@ def test_a_take_of_one_section_says_where_it_starts(kept):
     assert (asked.from_s, asked.to_s, asked.section, asked.spec) == (0.0, None, None, None)  # left empty in a query
     old = K.keep_sung("song", "Ana", b"RIFF-c", "abc123abc123", recorded=at(2026, 9, 25, 15, 28, 7))  # from before
     assert (old.from_s, old.to_s, old.section, old.spec) == (0.0, None, None, None)
+    zoned = K.Take(old.path, "Ana", "song", info={"recorded": "2026-09-28T05:00:00Z"})  # as a server keeps time
+    assert zoned.recorded_at == datetime(2026, 9, 28, 5, tzinfo=timezone.utc).astimezone().replace(tzinfo=None)
     old.sidecar().unlink()  # a take without its sidecar still knows when it was sung, from its name
     assert K.load(old.path).recorded_at == datetime(2026, 9, 25, 15, 28, 7)
 
