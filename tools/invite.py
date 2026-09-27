@@ -11,7 +11,7 @@
     uv run python tools/invite.py revoke <token>                      # close one
     uv run python tools/invite.py fetch                               # the old way, for first-version links
 
-Talks to the site's admin API (web/sing/src/worker.js) at https://songbird-sing.quadule.workers.dev,
+Talks to the site's admin API (web/sing/src/worker.js) at https://songbird.quadule.com,
 or wherever --url or SONGBIRD_SING_URL says (http://127.0.0.1:8787 under `wrangler dev`).
 The admin token comes from SONGBIRD_SING_ADMIN, or else from `secrets get
 songbird-sing-admin`, and is never printed.
@@ -58,7 +58,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).parent))
 import takes as K  # noqa: E402  (tools/takes.py)
 
-SITE = "https://songbird-sing.quadule.workers.dev"  # where singing is live (songbird.quadule.com once its DNS is on Cloudflare)
+SITE = "https://songbird.quadule.com"  # where singing is live (also at songbird-sing.quadule.workers.dev)
 SECRET = "songbird-sing-admin"  # its name in the artist's secrets tool
 TIMING = ("shift_ms", "auto_ms", "device_ms", "decode_ms", "out_ms", "in_ms")
 PLACE = ("spec", "from_s", "to_s", "section", "label")  # where in the song a take was sung, as its page said
