@@ -11,7 +11,7 @@
     uv run python tools/invite.py revoke <token>                      # close one
     uv run python tools/invite.py fetch                               # the old way, for first-version links
 
-Talks to the site's admin API (web/sing/src/worker.js) at https://songbird.quadule.com,
+Talks to the site's admin API (web/sing/src/worker.js) at https://songbird-sing.quadule.workers.dev,
 or wherever --url or SONGBIRD_SING_URL says (http://127.0.0.1:8787 under `wrangler dev`).
 The admin token comes from SONGBIRD_SING_ADMIN, or else from `secrets get
 songbird-sing-admin`, and is never printed.
