@@ -105,13 +105,15 @@ def sections(score: dict) -> list[dict]:
         entry = {"index": i, "name": name, "start": a, "end": b, "sung": i in sung}
         if i in sung:
             seen[name] = seen.get(name, 0) + 1
-            entry.update(nth=seen[name], label=first_line(sung[i]), window=window(sung[i], beats, duration))
+            entry.update(nth=seen[name], label=first_line(sung[i], score.get("lexicon")),
+                         window=window(sung[i], beats, duration))
         out.append(entry)
     return out
 
 
-def first_line(notes: list[dict]) -> str:
-    """The first line some sung notes sing, as plain words: no *focus* marks, no hyphens."""
+def first_line(notes: list[dict], lexicon: dict | None = None) -> str:
+    """The first line some sung notes sing, as plain words (written()): no *focus* marks, no
+    syllable hyphens."""
     words, left = [], 0
     for n in notes:
         if not left:  # a word's first syllable: the whole word, as written
@@ -120,7 +122,32 @@ def first_line(notes: list[dict]) -> str:
         left -= 1
         if n["line_end"]:
             break
-    return " ".join(w.replace("*", "").replace("-", "") for w in words)
+    return " ".join(written(w, lexicon) for w in words)
+
+
+def written(word: str, lexicon: dict | None = None) -> str:
+    """A word as it's read. The bank's hyphens split syllables and a compound's real hyphen alike
+    ("half-in-vent-ed"), so they're told apart as songbird.phonetics tells them apart to say the
+    word: closed up if the dictionary (or the song's lexicon) knows the whole word, or it's a
+    regular inflection of one ("in-vent-ed": invented); else kept only between the fewest words
+    it knows that cover the syllables (half-invented, ninety-odd, half-asleep)."""
+    from songbird import phonetics as ph
+
+    pieces = [p for p in word.replace("*", "").split("-") if p]
+    if len(pieces) < 2:
+        return "".join(pieces)
+    words, own = ph._dictionary(), {ph.clean(k.replace("-", "")) for k in lexicon or {}}
+    whole = ph.clean("".join(pieces))
+    if whole in words or whole in own or ph._inflected(whole):
+        return "".join(pieces)
+    best: list[list[tuple[int, int]] | None] = [[]] + [None] * len(pieces)  # the fewest words to cover pieces[:k]
+    for end in range(1, len(pieces) + 1):
+        for start in range(end):
+            chunk = ph.clean("".join(pieces[start:end]))
+            if (best[start] is not None and chunk and (chunk in words or chunk in own)
+                    and (best[end] is None or len(best[start]) + 1 < len(best[end]))):
+                best[end] = best[start] + [(start, end)]
+    return "-".join("".join(pieces[a:b]) for a, b in best[-1]) if best[-1] else "".join(pieces)
 
 
 def window(notes: list[dict], beats: list[tuple[float, bool]], duration: float, bars: int = 2) -> list[float]:

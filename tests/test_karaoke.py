@@ -125,6 +125,13 @@ def test_each_sung_section_has_its_first_line_and_a_window_to_record_it_alone():
     assert words["sections"] == found and [line["section"] for line in words["lines"]][:3] == ["verse", "verse", "verse"]
 
 
+def test_a_label_keeps_a_compounds_hyphen_and_closes_up_the_syllables():
+    assert [karaoke.written(w) for w in ("*num-bers*", "half-in-vent-ed", "nine-ty-odd,", "half-a-sleep;", "has-n't",
+                                         "in-vent-ed", "hum-med", "wire,", "zor-blax")] == [
+        "numbers", "half-invented", "ninety-odd,", "half-asleep;", "hasn't", "invented", "hummed", "wire,", "zorblax"]
+    assert karaoke.written("zor-blax-ing", {"zor-blax-ing": "Z AO1 R B L AE0 K S IH0 NG"}) == "zorblaxing"
+
+
 def test_the_karaoke_sings_a_spec_and_records_one_section_at_a_time(workspace, monkeypatch):
     path = short(workspace)
     monkeypatch.setattr(M, "SETS", workspace / "sets")

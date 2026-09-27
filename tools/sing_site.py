@@ -218,25 +218,50 @@ def specs(genome_path: Path, sets=None, keys=None, tempos=None) -> list[M.Spec]:
 
 
 def render(job: dict) -> dict:
-    """One spec's guides, rendered (or found current) and encoded into the site: what song.json
-    says of them. Runs in a process of its own, so it's told where everything is."""
+    """One spec's guides encoded into the site: what song.json says of them. Each MP3 is kept
+    beside the spec's mixes in renders/guide/<song>/ with a note of what it was made from
+    (guides.made_from) and at which bitrates, and used again while that holds; otherwise the
+    mixes are rendered (or found current) and encoded. Then, unless asked to keep them, the
+    spec's WAVs are let go (about 130 MB a spec; the karaoke renders them again when asked).
+    Runs in a process of its own, so it's told where everything is."""
     M.GUIDES, M.SETS = Path(job["guides"]), Path(job["sets"])
     genome_path, spec, song = Path(job["genome"]), M.Spec.parse(job["spec"]), Path(job["out"]) / "song"
     phrasing = Path(job["phrasing"]) if job.get("phrasing") else None
-    wav = {mix: M.ensure_spec(genome_path, spec, mix, phrasing=phrasing, rebuild=job["rebuild"] and mix == MIXES[0])
-           for mix in MIXES}
-    rates = {"melody": (job["melody_bitrate"], job["bitrate"]), "full": (job["bitrate"],)}
-    mixes = {mix: encode_first(wav[mix].wav, song / f"{spec.id}.{mix}.mp3", rates[mix]) for mix in MIXES}
-    return {"spec": spec.id, "score": str(wav[MIXES[0]].score), "guide": wav[MIXES[0]].digest, "mixes": mixes}
+    rates = {"melody": [job["melody_bitrate"], job["bitrate"]], "full": [job["bitrate"]]}
+    score = M.spec_score(genome_path, spec)
+    made = M.made_from(score, phrasing)
+    kept = {mix: M.spec_path(genome_path.stem, spec, mix).with_suffix(".mp3") for mix in MIXES}
+    notes = {mix: kept[mix].with_name(kept[mix].name + ".json") for mix in MIXES}
+
+    def current(mix):
+        note = M._read(notes[mix])
+        return (note.get("from") == made and note.get("bitrates") == rates[mix] and kept[mix].exists()
+                and note["info"]["bytes"] == kept[mix].stat().st_size)
+
+    if job["rebuild"] or not all(current(mix) for mix in MIXES):
+        guide = M.ensure_spec(genome_path, spec, MIXES[0], phrasing=phrasing, rebuild=job["rebuild"])
+        score, made = guide.score, M.made_from(guide.score, phrasing)
+        for mix in MIXES:
+            info = encode_first(M.spec_path(genome_path.stem, spec, mix), kept[mix], rates[mix])
+            M._write(notes[mix], json.dumps({"from": made, "bitrates": rates[mix], "info": info}) + "\n")
+    mixes = {}
+    for mix in MIXES:
+        shutil.copyfile(kept[mix], song / kept[mix].name)
+        mixes[mix] = M._read(notes[mix])["info"]
+    if not job.get("keep_wavs"):
+        for mix in M.MIXES:
+            M.spec_path(genome_path.stem, spec, mix).unlink(missing_ok=True)
+    return {"spec": spec.id, "score": str(score), "guide": made["score"], "mixes": mixes}
 
 
 def build(genome_path: Path, out: Path, rebuild: bool = False, bitrate: str = BITRATE, sets=None, keys=None,
           tempos=None, jobs: int = JOBS, phrasing: Path | None = None, melody_bitrate: str = MELODY_BITRATE,
-          progress=None) -> dict:
+          progress=None, keep_wavs: bool = False) -> dict:
     """The site for one song in out (cleared first), and its song.json. sets, keys, tempos: build
     only these (default all). jobs: specs rendered at once, each in a process of its own. phrasing:
     a phrasing file the machine's lead sings the full guides with. progress, if given, is told
-    each spec as it's done."""
+    each spec as it's done. keep_wavs: keep each spec's rendered mixes for the karaoke here
+    (render())."""
     import karaoke  # tools/karaoke.py, for the words as they come
 
     from songbird import genome as G
@@ -278,7 +303,7 @@ def build(genome_path: Path, out: Path, rebuild: bool = False, bitrate: str = BI
 
     common = {"genome": str(genome_path), "out": str(out), "guides": str(M.GUIDES), "sets": str(M.SETS),
               "rebuild": rebuild, "bitrate": bitrate, "melody_bitrate": melody_bitrate,
-              "phrasing": str(phrasing) if phrasing else None}
+              "phrasing": str(phrasing) if phrasing else None, "keep_wavs": keep_wavs}
     work = [{**common, "spec": spec.id} for spec in todo]
     done: dict[str, dict] = {}
     if jobs <= 1:
@@ -358,6 +383,9 @@ def main() -> None:
     ap.add_argument("--bitrate", default=BITRATE, help=f"the full guides' MP3 bitrate (default {BITRATE})")
     ap.add_argument("--melody-bitrate", default=MELODY_BITRATE,
                     help=f"the melody guides' (default {MELODY_BITRATE}; the full guides' if it doesn't decode in time)")
+    ap.add_argument("--keep-wavs", action="store_true",
+                    help="keep every spec's rendered mixes for the karaoke here (about 130 MB a spec; else let go once "
+                         "encoded, and rendered again when the karaoke asks)")
     args = ap.parse_args()
     out = Path(args.out).resolve()
 
@@ -371,7 +399,7 @@ def main() -> None:
 
     song = build(Path(args.genome), out, args.rebuild, args.bitrate, listed(args.sets), listed(args.keys, int),
                  listed(args.tempos, int), args.jobs, args.phrasing and Path(args.phrasing).resolve(),
-                 args.melody_bitrate, progress)
+                 args.melody_bitrate, progress, args.keep_wavs)
     mp3s = [m for g in song["guides"].values() for m in g["mixes"].values()]
     print(f"{out}: {song['title']}, {len(song['guides'])} guides ({len(song['sets'])} sets x {len(song['keys'])} keys x "
           f"{len(song['tempos'])} speeds), {sum(m['bytes'] for m in mp3s) / 1e6:.0f} MB of MP3s; the whole site "

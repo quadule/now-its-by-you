@@ -441,7 +441,7 @@ def ensure_spec(genome_path: Path, spec, mix: str = DEFAULT, stems: bool = False
         digest = K.digest(score)
         note_path = spec_path(stem, spec, "note")
         note = _read(note_path)
-        stamp = {"score": digest, "recipe": recipe(), "phrasing": K.digest(phrasing) if phrasing else None}
+        stamp = made_from(score, phrasing)
         made = note.get("audio") or {}
         wanted = [*MIXES, *(STEMS if stems else ())]
         if (rebuild or {k: made.get(k) for k in stamp} != stamp or (stems and not made.get("stems"))
@@ -450,6 +450,12 @@ def ensure_spec(genome_path: Path, spec, mix: str = DEFAULT, stems: bool = False
             note = {**_read(note_path), "audio": {**stamp, "stems": stems or bool(made.get("stems")) and not rebuild}}
             _write(note_path, json.dumps(note) + "\n")
         return Mix(out, score, digest)
+
+
+def made_from(score: Path, phrasing: Path | None = None) -> dict:
+    """What a spec's audio is made from: its score (by digest), the code that renders it, and the
+    phrasing its lead sings with. Anything made from its mixes (an MP3) is current while this is."""
+    return {"score": K.digest(score), "recipe": recipe(), "phrasing": K.digest(phrasing) if phrasing else None}
 
 
 def stems(genome_path: Path, spec, phrasing: Path | None = None) -> tuple[Path, Path, Path]:

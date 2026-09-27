@@ -136,6 +136,13 @@ def test_the_site_has_a_guide_for_every_spec(tmp_path, monkeypatch):
     assert (out / ".assetsignore").read_text().split() == [W.MARK, ".assetsignore"]
     assert W.size(out) == sum(f.stat().st_size for f in out.rglob("*") if f.is_file()) - sum(
         (out / n).stat().st_size for n in (W.MARK, ".assetsignore"))
+    # the WAVs are let go once encoded; the MP3s are kept, and used again while what they were made from holds
+    assert not M.spec_path("h-short", "song.k0.t100", "full").exists()
+    again = W.build(path, out, keys=[0], tempos=[100], jobs=1)
+    assert not M.spec_path("h-short", "song.k0.t100", "full").exists()  # nothing rendered
+    assert again["guides"]["song.k0.t100"] == song["guides"]["song.k0.t100"]
+    W.build(path, out, keys=[0], tempos=[100], jobs=1, keep_wavs=True, melody_bitrate="48k")  # another bitrate: made again
+    assert M.spec_path("h-short", "song.k0.t100", "full").exists()
 
 
 def test_a_set_that_cant_be_sung_stops_the_build_before_it_starts(tmp_path, monkeypatch):
