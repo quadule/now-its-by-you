@@ -161,6 +161,10 @@ def test_a_take_that_stopped_leaves_the_rest_unmeasured(sung):
     assert T.window_of(keep("Bo", y, g, spec, from_s=0.0, to_s=80.0), g) == pytest.approx((0, stop), abs=1e-3)
     assert T.window_of(keep("Bo", sung["y"], g, spec, from_s=0.0, to_s=80.0), g) is None
     assert T.window_of(sung["whole"], g) is None  # and so is one from before takes said where they start
+    turn = keep("Bo", sung["y"][int(21.0 * S.SR) : int(25.0 * S.SR)], g, spec, from_s=21.0, to_s=25.0)
+    assert all(n["gesture"] is None for n in T.measured(H, sung["genome"], turn)["notes"])  # the band's turn alone
+    with pytest.raises(ValueError, match="none of these takes sang"):
+        T.singer_phrasing(H, sung["genome"], [turn])
 
 
 def test_a_phrasing_counts_what_each_take_sang_once_a_person(sung):

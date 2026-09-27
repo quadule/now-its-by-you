@@ -957,6 +957,8 @@ def singer_phrasing(genome_path: Path, genome, takes, credit: str | None = None)
     singer's, or, given several singers' takes, everyone's at once, each
     person counting once and each voice's own errors averaging away."""
     seen, (words, weights), portrait = sung_phrasing(genome_path, genome, takes)
+    if not seen:  # takes of part of the song that stopped before a note, or of a stretch with no singing
+        raise ValueError("none of these takes sang a whole note of the tune")
     phrasing = gather(genome, ruled(genome, seen, words, floor_for(SUNG), weights))
     detail = f"{len(takes)} sung take(s)" + (f" by {credit}" if credit else "") + sung_to(takes)
     return phrasing, P.to_json(phrasing, source="song", source_detail=detail, scale=SUNG), portrait
