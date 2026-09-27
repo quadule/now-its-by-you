@@ -25,6 +25,7 @@
   const clamp = (n, lo, hi) => Math.min(hi, Math.max(lo, n));
   const fmt = (n) => Number.isInteger(n) ? String(n) : String(round(n));
   const beatLabel = (n) => n < 0 ? `pickup ${fmt(-n)}` : fmt(n + 1);
+  const displayWords = (value) => String(value || "").replace(/\*/g, "");
   const announce = (message) => {
     const status = document.getElementById("sbc-status");
     if (status) status.textContent = message;
@@ -50,7 +51,7 @@
     return node;
   }
   function button(text, action, attrs = {}) {
-    return el("button", { type: "button", class: "sbc-button", onclick: action, ...attrs }, text);
+    return el("button", { type: "button", class: "sbc-button", "data-composer-action": text || undefined, onclick: action, ...attrs }, text);
   }
   function select(label, value, options, action, attrs = {}) {
     const input = el("select", { "aria-label": label, onchange: (event) => action(event.target.value), ...attrs },
@@ -67,7 +68,7 @@
     return el("label", { class: "sbc-field" }, el("span", {}, label), input);
   }
   function checkbox(label, checked, action) {
-    return el("label", { class: "sbc-check" }, el("input", { type: "checkbox", checked,
+    return el("label", { class: "sbc-check" }, el("input", { type: "checkbox", checked, id: `sbc-option-${label.toLowerCase()}`,
       onchange: (event) => action(event.target.checked) }), label);
   }
 
@@ -93,7 +94,7 @@
     return `${((degree - 1) % 7 + 7) % 7 + 1}${octave > 0 ? "′".repeat(octave) : octave < 0 ? "₋".repeat(-octave) : ""}`;
   }
   function noteTitle(n, index, p = phrase()) {
-    return `${n.syllable || `Note ${index + 1}`}, ${pitchName(pitchFor(n))}, scale degree ${n.degree}, beat ${beatLabel(n.onset)}, ${fmt(n.duration)} beats${index === p.notes.length - 1 ? ", phrase ending" : ""}`;
+    return `${displayWords(n.syllable) || `Note ${index + 1}`}, ${pitchName(pitchFor(n))}, scale degree ${n.degree}, beat ${beatLabel(n.onset)}, ${fmt(n.duration)} beats${index === p.notes.length - 1 ? ", phrase ending" : ""}`;
   }
   function selectedSection(index) {
     stop(); state.section = clamp(index, 0, sections().length - 1); state.phrase = 0; state.note = null; paint();
@@ -226,7 +227,7 @@
       el("div", { class: "sbc-overview-track", role: "group", "aria-label": "Complete song timeline; select any section" },
         sections().map((s, index) => {
           const width = s.duration_beats / span.duration * 100;
-          return el("button", { type: "button", class: `sbc-overview-section${index === state.section ? " is-selected" : ""}${s.name.includes("refrain") ? " is-refrain" : ""}`,
+          return el("button", { type: "button", id: `sbc-overview-${s.id}`, class: `sbc-overview-section${index === state.section ? " is-selected" : ""}${s.name.includes("refrain") ? " is-refrain" : ""}`,
             "data-overview-section": index, "aria-pressed": index === state.section ? "true" : "false",
             "aria-label": `${s.label}, bar ${fmt((s.start_beat - span.start) / c.beats_per_bar + 1)}`, title: s.label,
             style: { left: `${(s.start_beat - span.start) / span.duration * 100}%`, width: `${width}%` },
@@ -243,6 +244,7 @@
     const start = songSpan().start;
     const cards = sections().map((s, index) => {
       const card = button("", () => selectedSection(index), {
+        id: `sbc-section-${s.id}`,
         class: `sbc-section${index === state.section ? " is-selected" : ""}${s.name.includes("refrain") ? " is-refrain" : ""}`,
         draggable: "true", "aria-pressed": index === state.section ? "true" : "false",
         "aria-label": `${index + 1}. ${s.label}, ${fmt(s.duration_beats)} beats. Select to edit; drag to rearrange.`,
@@ -284,7 +286,7 @@
     return el("div", { class: "sbc-transport" },
       el("div", { class: "sbc-transport-main" }, button(state.playback ? "■ Stop sketch" : "▶ Play sketch", togglePlay,
         { id: "sbc-play", class: "sbc-button sbc-primary", "aria-pressed": state.playback ? "true" : "false" }),
-        select("Play", state.scope, [["phrase", "This phrase"], ["section", "This section"], ["song", "Whole song"]], (value) => { stop(); state.scope = value; paint(); }),
+        select("Play", state.scope, [["phrase", "This phrase"], ["section", "This section"], ["song", "Whole song"]], (value) => { stop(); state.scope = value; paint(); }, { id: "sbc-play-scope" }),
         checkbox("Loop", state.loop, (value) => { state.loop = value; }),
         checkbox("Click", state.metronome, (value) => { state.metronome = value; if (state.playback) { stop(); play(); } })),
       el("div", { class: "sbc-transport-meta" }, el("span", { class: "sbc-tempo" }, `${Math.round(c.tempo)} `, el("span", {}, "BPM")),
@@ -297,8 +299,8 @@
       (s.phrases || []).map(phraseButton));
   }
   function phraseButton(p, index) {
-    const words = p.notes.map((n) => n.syllable).filter(Boolean).join(" ");
-    return el("button", { type: "button", class: `sbc-phrase${index === state.phrase ? " is-selected" : ""}`,
+    const words = p.notes.map((n) => displayWords(n.syllable)).filter(Boolean).join(" ");
+    return el("button", { type: "button", id: `sbc-phrase-${index}`, class: `sbc-phrase${index === state.phrase ? " is-selected" : ""}`,
       "aria-pressed": index === state.phrase ? "true" : "false", onclick: () => selectedPhrase(index) },
     el("span", { class: "sbc-phrase-label" }, `Phrase ${index + 1}`, composition().edited_phrases?.includes(p.id) ? el("span", { class: "sbc-edited-dot", title: "Your melody" }, "•") : null),
     el("span", { class: "sbc-phrase-words" }, words || "Instrumental melody"));
@@ -333,6 +335,7 @@
       if (tonic) roll.append(el("div", { class: "sbc-tonic-row", style: { left: `${g.left}px`, top: `${y}px`, width: `${g.width - g.left}px`, height: `${g.row}px` } }));
       const ref = p.notes[0];
       roll.append(button("", () => audition(pitchFor(ref, degree)), { class: `sbc-key${tonic ? " is-tonic" : ""}`,
+        id: `sbc-key-${degree}`,
         title: `Scale degree ${degree}, ${pitchName(pitchFor(ref, degree))}. Click to hear.`, "aria-label": `Hear ${pitchName(pitchFor(ref, degree))}, scale degree ${degree}`,
         style: { top: `${y}px`, height: `${g.row}px`, width: `${g.left - 4}px` },
       }));
@@ -353,12 +356,12 @@
           if (state.drag?.moved) return;
           state.note = index; selectNote(item, index); audition(pitchFor(n));
         }, onpointerdown: (event) => startNoteDrag(event, index, g), onkeydown: (event) => noteKey(event, index),
-      }, el("span", { class: "sbc-note-word" }, n.syllable || "♪"), el("span", { class: "sbc-resize", "aria-hidden": "true" }, ""));
+      }, el("span", { class: "sbc-note-word" }, displayWords(n.syllable) || "♪"), el("span", { class: "sbc-resize", "aria-hidden": "true" }, ""));
       roll.append(item);
     });
     roll.append(el("div", { id: "sbc-playhead", class: "sbc-playhead", hidden: !state.playback,
       style: { left: `${g.left}px`, top: `${g.ruler}px`, height: `${g.height - g.ruler}px` } }));
-    return el("div", { class: "sbc-roll-scroll", tabindex: "0", "aria-label": "Scrollable melody editor" }, roll);
+    return el("div", { id: "sbc-roll-scroll", class: "sbc-roll-scroll", tabindex: "0", "aria-label": "Scrollable melody editor" }, roll);
   }
   function noteStyle(n, g) {
     return { left: `${g.left + (n.onset - g.start) * g.unit + 1}px`, top: `${g.ruler + (g.high - n.degree) * g.row + 2}px`,
@@ -434,7 +437,7 @@
     }
     return el("div", { class: "sbc-inspector" },
       el("div", { class: "sbc-note-heading" }, el("span", { class: "sbc-overline" }, `Note ${index + 1} of ${p.notes.length}`),
-        el("strong", {}, n.word || n.syllable || "Melody note"), last ? el("span", { class: "sbc-cadence-label" }, "Phrase ending") : null),
+        el("strong", {}, displayWords(n.word || n.syllable) || "Melody note"), last ? el("span", { class: "sbc-cadence-label" }, "Phrase ending") : null),
       select("Pitch · scale degree", n.degree, degrees, (value) => changeNote({ degree: Number(value) }), { id: "sbc-note-pitch" }),
       number("Start · beats", n.onset, previous, round(Math.min(next - n.duration, last ? b.max_final_onset ?? b.max_end : b.max_end)), b.grid, (value) => changeNote({ onset: value }, b.grid), { id: "sbc-note-start" }),
       number("Length · beats", n.duration, b.min_duration, round(next - n.onset), b.grid, (value) => changeNote({ duration: value }, b.grid), { id: "sbc-note-length" }),
@@ -457,8 +460,8 @@
     return el("div", { class: "sbc-editor" },
       el("div", { class: "sbc-row sbc-editor-heading" },
         el("div", {}, el("h3", {}, section().label, el("span", { class: "sbc-muted" }, " / Melody")), el("p", { class: "sbc-muted" }, "Edit a phrase once; every appearance follows.")),
-        el("div", { class: "sbc-editor-settings" }, select("Snap", state.snap, [[0.25, "¼ beat"], [0.5, "½ beat"], [1, "1 beat"]], (value) => { state.snap = Number(value); paint(); }),
-          select("Zoom", state.zoom, [[1, "Fit"], [1.5, "150%"], [2, "200%"], [3, "300%"]], (value) => { state.zoom = Number(value); paint(); }))),
+        el("div", { class: "sbc-editor-settings" }, select("Snap", state.snap, [[0.25, "¼ beat"], [0.5, "½ beat"], [1, "1 beat"]], (value) => { state.snap = Number(value); paint(); }, { id: "sbc-snap" }),
+          select("Zoom", state.zoom, [[1, "Fit"], [1.5, "150%"], [2, "200%"], [3, "300%"]], (value) => { state.zoom = Number(value); paint(); }, { id: "sbc-zoom" }))),
       phraseStrip(), pianoRoll(), inspector(),
       el("div", { class: "sbc-tools" }, el("span", { class: "sbc-overline" }, "Shape phrase"),
         el("div", { class: "sbc-button-group", role: "group", "aria-label": "Transpose melody; keep its ending" },
@@ -574,7 +577,7 @@
     const box = root(), c = composition();
     if (!box || !c) return;
     const focused = box.contains(document.activeElement) ? document.activeElement : null;
-    const focusId = focused?.id, focusNote = focused?.dataset.note;
+    const focusId = focused?.id, focusNote = focused?.dataset.note, focusAction = focused?.dataset.composerAction;
     const scroll = box.querySelector(".sbc-roll-scroll")?.scrollLeft || 0;
     const arrangeScroll = box.querySelector(".sbc-arrangement-scroll")?.scrollLeft || 0;
     box.classList.add("sbc-composer");
@@ -582,7 +585,9 @@
       el("div", { id: "sbc-status", class: "sbc-visually-hidden", role: "status", "aria-live": "polite" }));
     const roll = box.querySelector(".sbc-roll-scroll"); if (roll) roll.scrollLeft = scroll;
     const arrange = box.querySelector(".sbc-arrangement-scroll"); if (arrange) arrange.scrollLeft = arrangeScroll;
-    const restore = focusNote !== undefined ? box.querySelector(`[data-note="${focusNote}"]`) : focusId ? document.getElementById(focusId) : null;
+    const restore = focusNote !== undefined ? box.querySelector(`[data-note="${focusNote}"]`)
+      : focusId ? document.getElementById(focusId)
+        : focusAction ? [...box.querySelectorAll("button")].find((node) => node.dataset.composerAction === focusAction) : null;
     restore?.focus({ preventScroll: true });
   }
   function render(view) {

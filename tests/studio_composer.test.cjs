@@ -253,6 +253,37 @@ test("note keyboard focus and selection survive backend view replacement", () =>
   assert.equal(s.find("#sbc-note-pitch").tagName, "select");
 });
 
+test("keyboard focus stays on timeline, phrase, scope, snap, zoom and shape controls", () => {
+  const s = setup();
+  for (const [id, value] of [["sbc-play-scope", "section"], ["sbc-snap", "0.5"], ["sbc-zoom", "2"]]) {
+    const control = s.find(`#${id}`); control.focus(); control.emit("change", { target: { value } });
+    assert.equal(s.document.activeElement.id, id);
+    assert(s.root.contains(s.document.activeElement));
+  }
+  for (const selector of ['[data-overview-section="2"]', '[data-section="1"]', "#sbc-phrase-0"]) {
+    const control = s.find(selector), id = control.id; control.focus(); control.emit("click");
+    assert.equal(s.document.activeElement.id, id);
+    assert(s.root.contains(s.document.activeElement));
+  }
+  const tool = s.root.querySelectorAll("button").find((button) => button.textContent === "Soften leaps");
+  tool.focus(); tool.emit("click");
+  assert.equal(s.document.activeElement.textContent, "Soften leaps");
+  assert(s.root.contains(s.document.activeElement));
+});
+
+test("lyric emphasis markers stay out of labels without altering the song's words", () => {
+  const view = score();
+  view.composition.sections[1].phrases[0].notes[1].syllable = "*this*";
+  view.composition.sections[1].phrases[0].notes[1].word = "*this*";
+  const s = setup(view);
+  assert.equal(s.root.querySelectorAll(".sbc-note-word")[1].textContent, "this");
+  assert(!s.find(".sbc-phrase-words").textContent.includes("*"));
+  assert(!s.find('[data-note="1"]').getAttribute("aria-label").includes("*"));
+  s.find('[data-note="1"]').emit("click");
+  assert(!s.find(".sbc-note-heading").textContent.includes("*"));
+  assert.equal(s.phrase().notes[1].syllable, "*this*");
+});
+
 test("editing a compound-meter pitch preserves exact thirds in every note", () => {
   const s = setup(score({ compound: true })), before = s.phrase().notes.map((note) => [note.onset, note.duration]);
   s.find('[data-note="1"]').emit("keydown", { key: "ArrowUp" });
