@@ -692,6 +692,7 @@ async function playKept(t) {
     const lyrics = t.spec ? await lyricsFor(t.spec) : S.spec ? await lyricsFor(null) : S.lyrics;
     const p = K.part(lyrics, t.section ?? null) || K.part(lyrics);
     const from = Number.isFinite(t.from_s) ? t.from_s : p.from, until = Number.isFinite(t.to_s) && p.index !== null ? t.to_s + 0.3 : null;
+    if (!S.guides.has(`${t.spec || ""}|${t.mix || "full"}`)) say("Loading the guide it was sung to… (the first time, it takes about half a minute)");
     const g = await guide(t.spec || null, t.mix || "full");
     const buffer = await S.ctx.decodeAudioData(await (await fetch("/" + t.path)).arrayBuffer());
     if (S.mode !== "idle" || S.take) return;
