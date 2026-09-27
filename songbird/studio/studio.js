@@ -268,10 +268,11 @@ function renderWords() {
     const meta = h("span", { class: "sec-meta" });
     if (w.sung) {
       const kind = w.mine ? "you" : { "handed down": "lineage", "new this time": "time", "drawn by chance": "chance" }[w.how] || "song";
-      meta.append(tag(kind, w.mine ? "your words" : w.how));
+      meta.append(tag(kind, (w.authored || []).length ? "your lyrics" : w.mine ? "your words" : w.how));
     }
     const tools = h("span", { class: "sec-tools" }, play);
-    if (w.mine) tools.prepend(h("button", { class: "link small", type: "button", onclick: () => undoWords(w) }, "Reset words"));
+    if (w.mine) tools.prepend(h("button", { class: "link small", type: "button",
+      title: "Restore the bank's words and release original lines in this section", onclick: () => undoWords(w) }, "Reset words"));
     const key = `${w.block}.${w.nth}`, options = state.optionsByKey[key];
     const sec = h("div", { class: `sec${w.sung ? "" : " instrumental"}${w.mine ? " mine" : ""}`, id: `sec-${w.index}` },
       h("div", { class: "sec-head" }, h("span", { class: "sec-name" }, w.label), meta, tools));
@@ -304,7 +305,19 @@ function undoWords(w) {
   const paths = [w.path];
   if (w.block === "refrain") paths.push("words.refrain");
   if (w.block === "bridge" && w.nth === 0) paths.push("words.bridge");
-  clearEdits(paths, `Reset ${w.label.toLowerCase()} words`);
+  const next = copyEdits();
+  for (const path of paths) delete next[path];
+  const section = state.view?.composition?.sections.find((item) => item.index === w.index);
+  const name = w.name || w.block;
+  const occurrence = state.view?.words?.filter((item) => item.index < w.index && item.name === name).length
+    ?? w.nth ?? 0;
+  const identity = section?.id || `${name}:${occurrence}`;
+  const prefix = `lyrics.${identity}.`;
+  // Null explicitly releases inherited original text. Removing a local edit alone would reveal it again.
+  for (const line of w.authored || []) next[`${prefix}${line}`] = null;
+  for (const phrase of section?.phrases || []) if (phrase.authored && phrase.lyric_path) next[phrase.lyric_path] = null;
+  for (const path of Object.keys(next)) if (path.startsWith(prefix)) next[path] = null;
+  commitEdits(next, `Reset ${w.label.toLowerCase()} words`);
 }
 
 // Retain old deep links, while choices are now loaded and visible in every sung section.
