@@ -29,8 +29,10 @@ from __future__ import annotations
 import argparse
 import itertools
 import json
+import math
 import sys
 import warnings
+from collections import Counter
 from dataclasses import astuple, fields
 from pathlib import Path
 
@@ -90,6 +92,19 @@ def reliability(values: list[np.ndarray]) -> tuple[float, float, float]:
     return between, within, between / (between + within) if between + within > 0 else np.nan
 
 
+def subsets(items, count: int, draws: int, rng) -> list[tuple]:
+    """A deterministic bounded sample without first enumerating n-choose-k.
+    Large volunteer collections must cost more linearly, not exponentially."""
+    items = tuple(items)
+    total = math.comb(len(items), count)
+    if total <= draws:
+        return list(itertools.combinations(items, count))
+    chosen = set()
+    while len(chosen) < draws:
+        chosen.add(tuple(sorted(rng.choice(len(items), count, replace=False).tolist())))
+    return [tuple(items[i] for i in indices) for indices in sorted(chosen)]
+
+
 def learning_curve(sightings: dict, f: int, sizes=(1, 2, 3, 4), draws: int = 12) -> dict:
     """R2 of predicting each held-out sighting from n others of the same note
     (their mean), against singing it plain; the same for the singer's overall
@@ -99,7 +114,9 @@ def learning_curve(sightings: dict, f: int, sizes=(1, 2, 3, 4), draws: int = 12)
     rng = np.random.default_rng(0)
     groups = [np.array([v[f] for _, v in ss]) for ss in sightings.values()]
     groups = [g[np.isfinite(g)] for g in groups]
-    allv = np.concatenate(groups)
+    allv = np.concatenate(groups) if groups else np.zeros(0)
+    if len(allv) < 2:
+        return {"habit": np.nan, "held_out": 0, **dict.fromkeys(sizes)}
     total, count = allv.sum(), len(allv)
     between, within, _ = reliability(groups)
     lam = (lambda n: n * between / (n * between + within)) if between + within > 0 else (lambda n: 0.0)
@@ -113,9 +130,7 @@ def learning_curve(sightings: dict, f: int, sizes=(1, 2, 3, 4), draws: int = 12)
             for i, x in enumerate(g):
                 pool = np.delete(g, i)
                 habit = (total - x) / (count - 1)
-                combos = list(itertools.combinations(range(len(pool)), n))
-                if len(combos) > draws:
-                    combos = [combos[j] for j in rng.choice(len(combos), draws, replace=False)]
+                combos = subsets(range(len(pool)), n, draws, rng)
                 for c in combos:
                     mean = pool[list(c)].mean()
                     errs.append((x - mean) ** 2)
@@ -125,11 +140,45 @@ def learning_curve(sightings: dict, f: int, sizes=(1, 2, 3, 4), draws: int = 12)
     return out
 
 
-def evaluate_singer(genome_path: Path, genome, who: str) -> None:
+def take_curve(data: list[dict], draws: int = 6, max_held: int = 12) -> dict:
+    """Hold out complete performances, fit all fields once per training set,
+    and report support as well as error. No note of the held-out take trains
+    its prediction. Disjoint partial takes simply have no common evidence."""
+    rng = np.random.default_rng(0)
+    available = len(data) - 1
+    sizes = sorted({1, 2, 4, 8, 16, available} & set(range(1, available + 1)))
+    held_out = sorted(rng.choice(len(data), min(max_held, len(data)), replace=False).tolist())
+    curve = []
+    for count in sizes:
+        error, plain, support = (np.zeros(len(FIELDS)) for _ in range(3))
+        fits = 0
+        for held in held_out:
+            y = matrix(data[held])
+            keys = keys_of(data[held])
+            others = [i for i in range(len(data)) if i != held]
+            for indices in subsets(others, count, draws, rng):
+                made = phrasing_made([data[i] for i in indices], RAW)
+                pred = np.array([made.get(k, np.full(len(FIELDS), np.nan)) for k in keys])
+                ok = np.isfinite(y) & np.isfinite(pred)
+                error += np.where(ok, (y - pred) ** 2, 0).sum(axis=0)
+                plain += np.where(ok, (y - PLAIN) ** 2, 0).sum(axis=0)
+                support += ok.sum(axis=0)
+                fits += 1
+        curve.append({"training_takes": count, "fits": fits,
+                      "fields": {name: {"r2": float(1 - error[f] / plain[f]) if plain[f] > 1e-12 else None,
+                                        "predictions": int(support[f])} for f, name in enumerate(FIELDS)}})
+    return {"takes": len(data), "held_out_takes": len(held_out), "draws_per_size": draws,
+            "method": METHOD, "extractors": sorted({d["stamp"]["extractor"] for d in data
+                                                     if d.get("stamp", {}).get("extractor")}), "curve": curve}
+
+
+def evaluate_singer(genome_path: Path, genome, who: str) -> dict:
     chosen = [t for t in K.takes(genome_path.stem, who) if t.use]
     if not chosen:
         raise SystemExit(f"no takes by {who}")
     data = [T.measured(genome_path, genome, t) for t in chosen]
+    data = [{**d, "_words": [(n.syllable or "").lower() for n in T.guide(genome_path, genome, d["stamp"]["guide"]).notes]}
+            for d in data]
     sightings: dict = {}
     for ti, d in enumerate(data):
         for key, row in zip(keys_of(d), matrix(d)):
@@ -146,25 +195,20 @@ def evaluate_singer(genome_path: Path, genome, who: str) -> None:
             c = curve.get(n)
             cells.append(f"{c[0]:+10.2f} {c[1]:+6.2f}" if c else f"{'':>10} {'':>6}")
         print(f"{name:8} {share:7.2f} {curve['habit']:+6.2f}   " + "   ".join(cells) + f"   ({curve['held_out']} held out)")
+    report = take_curve(data)
     if len(data) >= 2:
         print("\nA new take, predicted by the phrasing made (as tools/phrasing.py makes it) from n of the others:")
-        print(f"{'':8} " + " ".join(f"{'n=' + str(n):>8}" for n in range(1, len(data))))
+        print(f"{'':8} " + " ".join(f"{'n=' + str(row['training_takes']):>8}" for row in report["curve"]))
         for f, name in enumerate(FIELDS):
             cells = []
-            for n in range(1, len(data)):
-                scores = []
-                for held in range(len(data)):
-                    others = [i for i in range(len(data)) if i != held]
-                    for c in itertools.combinations(others, n):
-                        made = phrasing_made([data[i] for i in c], RAW)
-                        y = matrix(data[held])[:, f]
-                        pred = np.array([made[k][f] for k in keys_of(data[held])])
-                        ok = np.isfinite(y) & np.isfinite(pred)
-                        scores.append(1 - np.sum((y[ok] - pred[ok]) ** 2) / np.sum((y[ok] - PLAIN[f]) ** 2))
-                cells.append(f"{np.mean(scores):+8.2f}")
+            for row in report["curve"]:
+                value = row["fields"][name]["r2"]
+                cells.append(f"{value:+8.2f}" if value is not None else f"{'-':>8}")
             print(f"{name:8} " + " ".join(cells))
         print("\nDo the takes agree? Every note's mean in one take against the same note in another (correlation):")
-        for (a, da), (b, db) in itertools.combinations(enumerate(data), 2):
+        print(f"  Sampled at most {report['held_out_takes']} held-out takes and {report['draws_per_size']} training sets per size.")
+        for a, b in subsets(range(len(data)), 2, 12, np.random.default_rng(0)):
+            da, db = data[a], data[b]
             ma, mb = mean_by_key(da), mean_by_key(db)
             both = [k for k in ma if k in mb]
             rs = []
@@ -174,6 +218,7 @@ def evaluate_singer(genome_path: Path, genome, who: str) -> None:
                 ok = np.isfinite(x) & np.isfinite(y)
                 rs.append(f"{name} {np.corrcoef(x[ok], y[ok])[0, 1]:+.2f}" if ok.sum() >= 8 else f"{name}   -  ")
             print(f"  take {a + 1} vs take {b + 1}: " + ", ".join(rs))
+    return report
 
 
 def mean_by_key(d: dict) -> dict:
@@ -217,13 +262,20 @@ def phrasing_made(takes: list[dict], scale: dict | None = None, floor: bool = Tr
     seen: dict = {}
     words: dict = {}
     weights: dict = {}
+    singers = who or [""] * len(takes)
+    heard = Counter((singer, place) for singer, d in zip(singers, takes)
+                    for n, place in zip(d["notes"], T.places(d)) if n["gesture"] is not None)
     for i, d in enumerate(takes):
-        share = 1.0 / (who.count(who[i]) if who else len(takes))  # each singer counts once
-        for n, ge, w in zip(d["notes"], T.gestures_of(d), WORDS):
+        words_of_take = d.get("_words", WORDS)
+        for n, ge, w, place in zip(d["notes"], T.gestures_of(d), words_of_take, T.places(d)):
+            if n["gesture"] is None:
+                continue
             key = (n["phrase"], n["index"])
             seen.setdefault(key, []).append(T.bounded(T.scaled(ge, scale)))
             words.setdefault(key, []).append(f"{who[i] if who else ''}|{w}")
-            weights.setdefault(key, []).append(share)
+            weights.setdefault(key, []).append(1.0 / heard[(singers[i], place)])
+    if not seen:
+        return {}
     floor_ = T.floor_for(scale) if floor else None
     if (method or METHOD) == "ruled":
         made = T.ruled(GENOME, seen, words, floor_, weights)
@@ -322,9 +374,7 @@ def evaluate_reference(genome_path: Path, genome, voices: list[str], pool: bool,
         sizes = sorted({1, 2, 4, len(takes)} & set(range(1, len(takes) + 1)))
         for n in sizes:
             made, plain, ceiling = [], [], []
-            combos = list(itertools.combinations(range(len(takes)), n))
-            if len(combos) > 30:
-                combos = [combos[j] for j in np.random.default_rng(0).choice(len(combos), 30, replace=False)]
+            combos = subsets(range(len(takes)), n, 30, np.random.default_rng(0))
             for c in combos:
                 rows = [(keys_of(takes[i][0]), matrix(takes[i][0])) for i in c]
                 sung = [(keys_of(takes[i][0]), by_name(takes[i][1]["fields"], takes[i][1]["sung"])) for i in c]
@@ -347,15 +397,21 @@ def main() -> None:
     ap.add_argument("--pool", action="store_true", help="with --reference: also pool every voice's takes")
     ap.add_argument("--onsets", action="store_true", help="with --reference: where vowel starts were found, by consonant")
     ap.add_argument("--method", choices=("ruled", "shrunk"), default="ruled", help="how a phrasing is made from sightings")
+    ap.add_argument("--report", type=Path, help="with --singer: save the anonymous held-out learning curve as JSON")
     args = ap.parse_args()
     genome_path = Path(args.genome).resolve()
     genome = G.load(genome_path)
-    WORDS[:] = [(n.syllable or "").lower() for n in T.guide(genome_path, genome).notes]
     global GENOME, METHOD
     GENOME, METHOD = genome, args.method
     if args.singer:
-        evaluate_singer(genome_path, genome, K.slug(args.singer))
+        report = evaluate_singer(genome_path, genome, K.slug(args.singer))
+        if args.report:
+            args.report.parent.mkdir(parents=True, exist_ok=True)
+            args.report.write_text(json.dumps(report, indent=2, allow_nan=False) + "\n")
     else:
+        if args.report:
+            ap.error("--report is used with --singer")
+        WORDS[:] = [(n.syllable or "").lower() for n in T.guide(genome_path, genome).notes]
         evaluate_reference(genome_path, genome, args.reference, args.pool, args.onsets)
 
 

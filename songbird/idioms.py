@@ -1690,7 +1690,12 @@ def shape_plan(ctx: Context, style, plan: Plan, rhythm, pads, chords_first) -> N
     if style.entrances and verses:
         i = verses[0]
         starts = phrase_starts(ctx, i)
-        order = sorted(sections[i].parts, key=lambda p: (0 if p == chords_first else 1 if p in rhythm and
+        # The preferred chord player may sit out this verse (the ballad's
+        # guitar does). Start with a player who is actually accompanying it,
+        # so the first line has harmony before the bass and fills join.
+        first = chords_first if chords_first in sections[i].parts else next(
+            (p for p in chords_first_all(ctx) if p in sections[i].parts), chords_first)
+        order = sorted(sections[i].parts, key=lambda p: (0 if p == first else 1 if p in rhythm and
                                                         family(p) == "bass" else 2 if p in rhythm else 3, p))
         for k, p in enumerate(order):
             if k and len(starts) > 1:

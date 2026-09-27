@@ -5,6 +5,50 @@ result than one.* The phrasing genes (songbird/phrasing.py) are measured from
 sung takes by tools/phrasing.py; this is the check of that extractor, and of
 how its measurements are combined.
 
+## Uneven and partial contributions (2026-09-27)
+
+The learner now counts only the takes that actually sang each occurrence of
+a note, including whole takes made to different-length guides. Missing
+pitch or hold measurements fall back field by field, so a useful timing
+measurement survives even when there is too little evidence to fit an
+inflection rule. Vibrato decisions use the same singer weights as timing;
+ten takes from one person cannot outvote two other people. The value meaning
+"leave vibrato to the machine" never enters a vibrato-depth average.
+
+The repeating-error floor also respects the weights of its contexts. A
+barely heard second context does not provide as much independent evidence
+as two equally represented contexts. These changes use existing cached
+measurements; they do not require aligning recordings again.
+
+`tests/test_phrasing_learning.py` checks those cases and a planted timing
+pattern learned from 1, 2, 4 and 8 independent noisy performances. This is a
+check of the statistical learner, not evidence of better natural singing;
+real takes and held-out listening remain the test of the extractor.
+
+The evaluation tool now samples combinations directly, rather than first
+constructing every possible subset of the recordings. Whole-take validation
+uses at most twelve held-out takes and six training subsets at each of
+1, 2, 4, 8, 16 and all available training takes. Each fit predicts all fields
+at once. It handles partial takes and each take's original guide words, and
+keeps the entire test take out of fitting. Save a report for successive
+recording sessions with:
+
+```
+uv run python tools/phrasing_eval.py songs/h-now-its-by-you.json --singer milo --report renders/review/learning.json
+```
+
+The JSON contains counts, extractor versions, R² against plain singing and
+the number of predictions supporting each score; it contains no singer name
+or recording path. A null score means insufficient evidence or a zero
+baseline, not success. When comparing partial-take cohorts, check support as
+well as R²: different training sizes can cover different notes. This is a
+local evaluation artifact, not material the packet needs to carry.
+
+The [2026-09-27 creative review](CREATIVE-REVIEW.md) records a run on the
+enabled cached volunteer measurements. The sections below retain the earlier
+calibration history; their old scale settings are not a description of the
+current `SUNG` constants in `tools/phrasing.py`.
+
 ## How it was checked
 
 **Reference singers** (tools/reference.py). A reference singer has an

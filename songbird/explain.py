@@ -428,6 +428,12 @@ class Version:
     def offset(self) -> int:
         return (_date.fromisoformat(self.day) - _date.fromisoformat(self.context.day)).days
 
+    @property
+    def choir_phrasings(self) -> list[dict]:
+        from .phrasing import inherited
+
+        return inherited(self.context.genome.source, self.context.parent_record)[1]
+
     def without(self, what: str):
         """The program's choice with something taken away: "time" (standing still), "machine" (one with no
         signals, at the same moment); "both" is the parent's own."""
@@ -500,7 +506,9 @@ class Context:
         changes: list = []
         r = edits_mod.resolve(genome, self.parent, voice, d, clean, phrasing_json=chosen_phrasing, trace=trace,
                               day_chosen="date" in clean, log=changes)
-        phrasing_json = chosen_phrasing or genome.source.get("seed_phrasing")
+        from .phrasing import inherited
+
+        phrasing_json = chosen_phrasing or inherited(genome.source, self.parent_record)[0]
         return Version(self, clean, voice, d, day, r.generated, r.params, r.generated_lyrics, r.lyrics, phrasing_json,
                        trace, problems + r.problems, r.applied, r.marks, changes)
 

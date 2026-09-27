@@ -152,6 +152,36 @@ def sung_as(note: Note, g: Gesture | None, beat: float) -> Note:
     return replace(note, start=start, dur=max(let_go - start, 0.05), gesture=g)
 
 
+def ordered_delivery(pairs: list[tuple[Note, Note]]) -> list[Note]:
+    """Keep syllables in lyric order when learned gestures crowd two notes.
+
+    Project the requested onsets onto an ordered timeline with room for a
+    short vowel and its consonants (up to 100 ms, at most half the written
+    spacing). Adjacent conflicts share the correction equally; other notes
+    and a whole phrase's push or pull stay exactly as sung. This is the
+    least-squares monotone fit after taking the minimum spacings away.
+    """
+    if len(pairs) < 2:
+        return [sung for _, sung in pairs]
+    original = np.array([plain.start for plain, _ in pairs])
+    starts = np.array([sung.start for _, sung in pairs])
+    gaps = np.minimum(0.1, np.maximum(np.diff(original), 0.0) * 0.5)
+    if np.all(np.diff(starts) >= gaps):
+        return [sung for _, sung in pairs]
+    offsets = np.r_[0.0, np.cumsum(gaps)]
+    blocks = []  # [mean, number of onsets], pooled while adjacent means cross
+    for value in starts - offsets:
+        blocks.append([float(value), 1])
+        while len(blocks) > 1 and blocks[-2][0] > blocks[-1][0]:
+            b, nb = blocks.pop()
+            a, na = blocks.pop()
+            blocks.append([(a * na + b * nb) / (na + nb), na + nb])
+    fitted = np.repeat([v for v, _ in blocks], [n for _, n in blocks]) + offsets
+    return [replace(sung, start=max(float(start), 0.0),
+                    dur=max(sung.start + sung.dur - max(float(start), 0.0), 0.05))
+            for (_, sung), start in zip(pairs, fitted)]
+
+
 PREROLL = 0.6  # seconds before the first note: room for a breath and the first consonants
 
 
@@ -328,7 +358,7 @@ def realize(genome: Genome, params: Params, verses=None, phrasing: Phrasing | No
     # Where there are words the voice sings it; where there are none, the band
     # decides who plays it (songbird.band).
     melody.sort(key=lambda m: m["u"])
-    notes: list[Note] = []
+    deliveries: dict[str, list[tuple[Note, Note]]] = {"voice": []}
     choirs = choir_voicing(melody, params.choir, params.tonic, params.mode)  # the band keeps clear of the same
     for i, m in enumerate(melody):
         u_end = min(m["u_end"], melody[i + 1]["u"]) if i + 1 < len(melody) else sung_end
@@ -350,7 +380,7 @@ def realize(genome: Genome, params: Params, verses=None, phrasing: Phrasing | No
                 ornament=m["ornament"],
             )
             sung_note = sung_as(unphrased, m["gesture"], beat)
-            notes.append(sung_note)
+            deliveries["voice"].append((unphrased, sung_note))
             # the lineage joins, each voice on its own harmony line, plain as harmony is sung
             for v, pitch in enumerate(choirs[i]):
                 own = choir[v] if choir and v < len(choir) else None
@@ -358,11 +388,14 @@ def realize(genome: Genome, params: Params, verses=None, phrasing: Phrasing | No
                     g = gesture(own, m["phrase"], m["index"])
                     base = replace(unphrased, part=f"choir{v + 1}", pitch=float(pitch), vel=0.9 * unphrased.vel,
                                    ornament=())
-                    notes.append(sung_as(base, g, beat))
+                    deliveries.setdefault(base.part, []).append((base, sung_as(base, g, beat)))
                 else:  # together with the lead in time, but each with its own way with pitch
-                    notes.append(replace(sung_note, part=f"choir{v + 1}", pitch=float(pitch),
-                                         vel=0.9 * sung_note.vel, gesture=None, ornament=()))
+                    part = f"choir{v + 1}"
+                    deliveries.setdefault(part, []).append((unphrased,
+                        replace(sung_note, part=part, pitch=float(pitch),
+                                vel=0.9 * sung_note.vel, gesture=None, ornament=())))
 
+    notes = [n for pairs in deliveries.values() for n in ordered_delivery(pairs)]
     accomp, band_settings = band_mod.arrange(genome, params, placed, lead, end, melody, seconds)
     ring = style_mod.ring(params)  # the last chord rings out (3 s; a cold ending stops short)
     final = seconds(end)

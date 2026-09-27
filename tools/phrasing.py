@@ -785,9 +785,8 @@ def sung_phrasing(genome_path: Path, genome, takes):
     weights: dict[tuple[str, int], list[float]] = defaultdict(list)
     who = [t.who if isinstance(t, K.Take) else "" for t in takes]
     data = [measured(genome_path, genome, take) for take in takes]
-    whole = Counter(singer for singer, d in zip(who, data) if "window" not in d)
-    partly = Counter((singer, place) for singer, d in zip(who, data) if "window" in d
-                     for n, place in zip(d["notes"], places(d)) if n["gesture"] is not None)
+    heard = Counter((singer, place) for singer, d in zip(who, data)
+                    for n, place in zip(d["notes"], places(d)) if n["gesture"] is not None)
     portrait = []
     now, tonic = written(genome), choose_params(genome).tonic
     for d, singer in zip(data, who):
@@ -802,7 +801,7 @@ def sung_phrasing(genome_path: Path, genome, takes):
                 ge = replace(ge, tune=NAN)  # the tune has another note here now: this one's tuning was against the old
             seen[key].append(bounded(scaled(ge, SUNG)))
             words[key].append(f"{singer}|{(note.syllable or '').lower()}")
-            weights[key].append(1.0 / (whole[singer] + partly[(singer, place)]))  # each person counts once
+            weights[key].append(1.0 / heard[(singer, place)])  # only takes that actually sang this place
         sung = [k for k, n in enumerate(d["notes"]) if n["gesture"] is not None]
         portrait.append((d["take"], d["lag"], d["key"], [gestures[k] for k in sung],
                          [d["notes"][k]["off"] for k in sung]))
@@ -841,6 +840,18 @@ def components(groups: list[np.ndarray]) -> tuple[float, float]:
     return max(float(between), 0.0), float(within)
 
 
+def vibrato_vote(gestures: list[P.Gesture], weights=None) -> float:
+    """A singer gets the same say with one take or many. Unmeasured notes
+    abstain; a tie leaves vibrato to the machine. Its sentinel is never a depth."""
+    values = np.array([g.vibrato for g in gestures])
+    w = np.ones(len(values)) if weights is None else np.asarray(weights, dtype=float)
+    judged = np.isfinite(values) & (w > 0)
+    own = judged & (values >= 0)
+    if w[own].sum() <= w[judged & ~own].sum():
+        return -1.0
+    return float(np.average(values[own], weights=w[own]))
+
+
 def shrunk(seen: dict, contexts: dict | None = None, floor: P.Gesture | None = None, weights: dict | None = None,
            prior: dict | None = None) -> dict:
     """Every note's sightings as one gesture, each field pulled toward the
@@ -866,6 +877,8 @@ def shrunk(seen: dict, contexts: dict | None = None, floor: P.Gesture | None = N
         for k, v in seen.items():
             x = np.array([getattr(g, name) for g in v], dtype=float)
             ok = np.isfinite(x)
+            if name == "vibrato":
+                ok &= x >= 0  # -1 means the machine decides, not a small negative vibrato
             values[k] = x[ok]
             words[k] = [w for w, good in zip(contexts[k], ok) if good] if contexts else list(range(ok.sum()))
             counts[k] = np.array(weights[k], dtype=float)[ok] if weights else np.ones(ok.sum())
@@ -875,7 +888,7 @@ def shrunk(seen: dict, contexts: dict | None = None, floor: P.Gesture | None = N
                 est[k][name] = NAN
             continue
         habit = float(np.average(pooled, weights=np.concatenate(list(counts.values()))))
-        toward = {k: prior[k][name] if prior and k in prior else habit for k in seen}
+        toward = {k: (prior or {}).get(k, {}).get(name, habit) for k in seen}
         # noise: how the same note sung to the same word varies (another take, another time round)
         same = [values[k][[i for i, w in enumerate(words[k]) if w == word]] for k in values for word in set(words[k])]
         same = [x for x in same if len(x) >= 2]
@@ -888,7 +901,16 @@ def shrunk(seen: dict, contexts: dict | None = None, floor: P.Gesture | None = N
         heard = [k for k in values if len(values[k])]
         mean = {k: float(np.average(values[k], weights=counts[k])) for k in heard}
         sightings = {k: counts[k].sum() ** 2 / (counts[k] ** 2).sum() for k in heard}  # as many as count equally
-        error = {k: noise / sightings[k] + bias / len(set(words[k])) for k in heard}
+        # Repeated consonants in one voice share an error. Count their total
+        # weight, not just their names: one barely heard context cannot halve
+        # the uncertainty of a hundred heavily weighted sightings.
+        context_mass = {}
+        for k in heard:
+            mass = defaultdict(float)
+            for word, weight in zip(words[k], counts[k]):
+                mass[word] += weight
+            context_mass[k] = sum(v * v for v in mass.values()) / counts[k].sum() ** 2
+        error = {k: noise / sightings[k] + bias * context_mass[k] for k in heard}
         apart = np.array([mean[k] - toward[k] for k in heard])  # how far each note strays from what it's pulled toward
         spread = float(np.mean(apart**2)) if prior else float(np.var(apart, ddof=1)) if len(heard) > 1 else 0.0
         truly = max(spread - float(np.mean(list(error.values()))), 0.0) if len(heard) >= 5 else 0.0
@@ -898,7 +920,8 @@ def shrunk(seen: dict, contexts: dict | None = None, floor: P.Gesture | None = N
                 est[k][name] = toward[k] + trust * (mean[k] - toward[k])
             else:
                 est[k][name] = toward[k]
-    return {k: [P.Gesture(**{**est[k], **({} if "vibrato" in est[k] else {"vibrato": P.average(v).vibrato})})]
+    return {k: [P.Gesture(**{**est[k], **({} if "vibrato" in est[k] else
+                                     {"vibrato": vibrato_vote(v, weights[k] if weights else None)})})]
             for k, v in seen.items()}
 
 
@@ -962,8 +985,8 @@ def ruled(genome, seen: dict, contexts: dict | None = None, floor: P.Gesture | N
     for k, v in made.items():
         # vibrato: where the singer was heard, their call (mostly none: leave it to the machine) with the
         # rules' depth; on a long note never heard held, the rules' depth; otherwise the machine's own
-        judged = [g.vibrato for g in seen[k] if np.isfinite(g.vibrato)]
-        left = judged and 2 * sum(x >= 0 for x in judged) <= len(judged)
+        judged = any(np.isfinite(g.vibrato) for g in seen[k])
+        left = judged and vibrato_vote(seen[k], weights[k] if weights else None) < 0
         held = features(genome, k)[7] > 0
         depth = v[0].vibrato if np.isfinite(v[0].vibrato) else NAN
         vibrato = -1.0 if left or not (judged or held) or np.isnan(depth) else max(depth, 0.0)

@@ -52,7 +52,7 @@ MIX = ("space", "width", "forward", "intimacy")
 # The arrangement's options a person may set (songbird.style.Style), each as the style's own choices go
 STYLE_OPTIONS = {"feel": ("straight", "swing", "shuffle", "twelve", "half", "double", "waltz", "six"),
                  "ending": ("ring", "rit", "cold", "amen", "repeat"), "backing": ("", "oohs", "echo", "thirds", "gang"),
-                 "lift": bool}
+                 "lift": bool, "entrances": bool, "breakdown": bool}
 
 
 def instruments() -> tuple[str, ...]:
@@ -97,6 +97,7 @@ def bounds(genome: Genome) -> dict:
         "band.lead": {"options": list(LEADS)},
         "band.density": {"min": 0.0, "max": 1.0, "step": 0.01},
         "band.brightness": {"min": 0.0, "max": 1.0, "step": 0.01},
+        "band.arc": {"min": 0.0, "max": 1.0, "step": 0.01},
         "band.players": {"options": list(INSTRUMENTS)},
         "form.verses": {"options": list(verse_counts(genome))},
     }
@@ -267,7 +268,7 @@ def check(genome: Genome, edits: dict, phrasings=()) -> tuple[dict, list[dict]]:
                 if value not in options:
                     raise LookupError(f"the band's {path[5:]} is one of {', '.join(options)}")
                 clean[path] = value
-            elif path in ("band.density", "band.brightness"):
+            elif path in ("band.density", "band.brightness", "band.arc"):
                 clean[path] = round(_number(value, 0.0, 1.0), 2)
             elif path.startswith("band.") and path[5:] in instruments():
                 clean[path] = round(_number(value, 0.0, 2.0), 2)
@@ -525,6 +526,12 @@ def resolve(genome: Genome, parent, voice, drift, edits: dict, *, seed: int | No
     chosen, trouble, wanted = pins(genome, params.form, edits)
     problems += trouble
     kept: list[str] = []
+    if chosen and lyrics is None and genome.source.get("bank"):
+        # The seed normally sings without a drawn Lyrics record. A person
+        # can still choose one of its bank's verses: start from the exact
+        # seed words so that editing one verse doesn't redraw the others.
+        generated_lyrics = arrange_mod.seed_lyrics(genome, generated.form)
+        lyrics = arrange_mod.seed_lyrics(genome, params.form)
     if chosen and lyrics is not None:
         base = lyrics
         for path in wanted:

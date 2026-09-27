@@ -93,3 +93,12 @@ def gesture(phrasing: Phrasing | None, phrase_id: str, index: int) -> Gesture | 
     if not phrasing or phrase_id not in phrasing or index >= len(phrasing[phrase_id]):
         return None
     return phrasing[phrase_id][index]
+
+
+def inherited(source: dict, record: dict | None = None) -> tuple[dict | None, list[dict]]:
+    """The small performance a rendition carries, or the seed's for older
+    records. Only rounded gestures travel; recordings and local paths do not."""
+    if record is not None and "performance" in record:
+        performance = record["performance"]
+        return performance.get("lead"), list(performance.get("choir") or [])
+    return source.get("seed_phrasing"), []
