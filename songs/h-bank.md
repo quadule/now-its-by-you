@@ -172,6 +172,13 @@ Swap *sailor* for soldier, tinker or peddler; *oranges* for newspapers or violet
 
 Swap *sailor's* for soldier's.
 
+**choir** · 1880 · plain · AABB · by claude
+
+> A choir learned it once from a page on a stand,
+> in somebody's handwriting, somebody's hand;
+> the page had no name at the top or the end;
+> they sang it, and folded it, sent to a friend.
+
 **bell** · 1900 · plain · AABB · by fable
 
 > A tower was ringing it out over town
@@ -280,6 +287,14 @@ Swap *million* for billion or thousand.
 > Each copy was perfect in every last part,
 > but not one machine ever knew it by heart.
 
+**mic** · 1995 · light · AABB · enjambed · by claude
+*A sentence runs over the line break, into the third line: ration it.*
+
+> A crowd in a bar took their turns at the mic,
+> and each of them sang it a little unlike
+> the singer before them, and none of them knew
+> they'd changed it for good, and they'd passed it on through.
+
 **ring** · 2005 · light · AABB · pairs with hold · by fable
 
 > They put it in phones as the sound of a ring;
@@ -313,6 +328,13 @@ Swap *million* for billion or thousand.
 > had already passed it, and passed it again.
 
 Swap *kid* for lad or girl.
+
+**search** · 2020 · light · AABB · by claude
+
+> A stranger once hummed it to find out its name;
+> the phone listened close, and the answer that came
+> was nobody's song, with a thousand to thank,
+> and under "who wrote it", the line was left blank.
 
 **learned** · 2025 · plain · AABB · rare · pairs with wire · by fable
 *The project's self-portrait; answers the wire verse.*
@@ -447,10 +469,17 @@ Swap *seven* for twenty or thirty.
 > It's been to more churches than anyone knows;
 > it marries, it buries, and then off it goes.
 
+**misheard** · tender · AABB · by claude
+
+> They sang it for years with a line they'd misheard,
+> and taught it their children that way, word for word;
+> and that is the way that it's sung in their town:
+> the wrong word is right now, and handed on down.
+
 ## The bridge
 
 Sung by the lineage choir. The canon is always sung, its swaps chosen once
-per song; in a long form one extra stanza, coat or given, may follow it,
+per song; in a long form one extra stanza, coat, owed, borrow or slow, may follow it,
 sung by the same choir on the same tune.
 
 **canon** · AABB · by fable (B's refrain)
@@ -469,12 +498,26 @@ Swap *water* for mountain, border or desert; *coal* for spark or light; *dark* f
 > So sing it out loud in a room or a hall,
 > and sing it to someone, or no one will hear.
 
-**given** · ABAB · by fable
+**owed** · ABAB · by claude
 
-> Nobody wrote it, and nobody's paid;
-> nobody signed it, and nobody's due.
-> And somebody sang it to you, and you're made
-> of what you were given. It's given to you.
+> Nobody owns it, and nobody's owed;
+> nobody holds it for long in their hands.
+> It travels by mouth and it travels by road,
+> and settles in strangers in faraway lands.
+
+**borrow** · ABAB · by claude, its ending chosen by the artist
+
+> Borrow it, wear it, and give it away;
+> change what you like, and then hand it along.
+> A stranger will sing it back some other day,
+> a little bit changed, and you'll know it's your song.
+
+**slow** · AABB · by claude
+
+> Sing it too slowly or sing it too fast,
+> sing it a little unlike it was last;
+> it doesn't mind wandering, doesn't mind wear,
+> it only goes quiet when nobody's there.
 
 ## The tag
 
@@ -502,7 +545,7 @@ How a song is put together from the bank; the same rules are data under
   refrain sings one couplet, none twice until all are used, and the last
   always sings canon.
 - **Bridge.** The canon is always sung, its swaps chosen once per song. A
-  long form may add one extra stanza, coat or given, after it.
+  long form may add one extra stanza, coat, owed, borrow or slow, after it.
 - **Tag.** One syllable for the whole tag, chosen once per song.
 
 ## Dropped along the way
@@ -519,3 +562,10 @@ How a song is put together from the bank; the same rules are data under
   it, and only in a refrain between.
 - Verses about a mill and a school; a soap-for-beer swap that broke the
   soap/cope rhyme; "mm" as a tag syllable, which has no vowel to sing.
+- The go head ("Who heard this song? Nobody. Go / and sing it to someone,
+  and watch it grow") and the given stanza ("Nobody wrote it, and nobody's
+  paid; / nobody signed it, and nobody's due. / And somebody sang it to you,
+  and you're made / of what you were given. It's given to you."): the artist
+  found both hard to read (2026-09-26); a rewritten close didn't save given.
+  A machine stanza ("Someone's machine has been singing it now") was offered
+  with owed and slow, and left out.

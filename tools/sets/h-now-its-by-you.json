@@ -367,7 +367,7 @@
   {
    "id": "e",
    "name": "Set E",
-   "about": "Verses about a gravestone, a wax record and childhood; another way into the refrain and the bridge's second verse, given",
+   "about": "Verses about a gravestone, a wax record and childhood; another way into the refrain and a second verse for the bridge",
    "form": [
     "intro",
     "verse",
@@ -441,7 +441,7 @@
       }
      },
      {
-      "id": "given",
+      "id": "owed",
       "slots": {}
      }
     ],

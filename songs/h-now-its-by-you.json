@@ -852,6 +852,63 @@
           "the soap is long gone, and the firm's been dis-solved;",
           "the tune did-n't no-tice; it was-n't in-volved."
         ]
+      },
+      {
+        "id": "mic",
+        "era": 1995,
+        "mood": "light",
+        "scheme": "AABB",
+        "rarity": "common",
+        "enjambed": true,
+        "by": "claude",
+        "lines": [
+          "A crowd in a bar took their turns at the mic,",
+          "and each of them sang it a lit-tle un-like",
+          "the sing-er be-fore them, and none of them knew",
+          "they'd changed it for good, and they'd passed it on through."
+        ]
+      },
+      {
+        "id": "search",
+        "era": 2020,
+        "mood": "light",
+        "scheme": "AABB",
+        "rarity": "common",
+        "by": "claude",
+        "lines": [
+          "A stran-ger once hummed it to find out its name;",
+          "the phone lis-tened close, and the an-swer that came",
+          "was no-bo-dy's song, with a thou-sand to thank,",
+          "and un-der \"who wrote it\", the line was left blank."
+        ]
+      },
+      {
+        "id": "misheard",
+        "era": null,
+        "mood": "tender",
+        "scheme": "AABB",
+        "rarity": "common",
+        "by": "claude",
+        "lines": [
+          "They sang it for years with a line they'd mis-heard,",
+          "and taught it their chil-dren that way, word for word;",
+          "and that is the way that it's sung in their town:",
+          "the wrong word is right now, and hand-ed on down."
+        ]
+      },
+      {
+        "id": "choir",
+        "era": 1880,
+        "mood": "plain",
+        "scheme": "AABB",
+        "rarity": "common",
+        "by": "claude",
+        "lines": [
+          "A choir learned it once from a page on a stand,",
+          "in some-bo-dy's hand-writ-ing, some-bo-dy's hand;",
+          "the page had no name at the top or the end;",
+          "they sang it, and fold-ed it, sent to a friend."
+        ]
       }
     ],
     "bridges": [
@@ -883,14 +940,36 @@
         ]
       },
       {
-        "id": "given",
+        "id": "owed",
         "scheme": "ABAB",
-        "by": "fable",
+        "by": "claude",
         "lines": [
-          "No-bo-dy wrote it, and no-bo-dy's paid;",
-          "no-bo-dy signed it, and no-bo-dy's due.",
-          "And some-bo-dy sang it to you, and you're made",
-          "of what you were giv-en. It's giv-en to you."
+          "No-bo-dy owns it, and no-bo-dy's owed;",
+          "no-bo-dy holds it for long in their hands.",
+          "It trav-els by mouth and it trav-els by road,",
+          "and set-tles in strang-ers in far-a-way lands."
+        ]
+      },
+      {
+        "id": "borrow",
+        "scheme": "ABAB",
+        "by": "claude, its ending chosen by the artist",
+        "lines": [
+          "Bor-row it, wear it, and give it a-way;",
+          "change what you like, and then hand it a-long.",
+          "A stran-ger will sing it back some oth-er day,",
+          "a lit-tle bit changed, and you'll know it's your song."
+        ]
+      },
+      {
+        "id": "slow",
+        "scheme": "AABB",
+        "by": "claude",
+        "lines": [
+          "Sing it too slow-ly or sing it too fast,",
+          "sing it a lit-tle un-like it was last;",
+          "it does-n't mind wan-der-ing, does-n't mind wear,",
+          "it on-ly goes qui-et when no-bo-dy's there."
         ]
       }
     ],
@@ -928,7 +1007,7 @@
       },
       "bridge": {
         "always": "canon",
-        "extra": ["coat", "given"],
+        "extra": ["coat", "owed", "borrow", "slow"],
         "once_per_song": ["place", "ember", "where"],
         "note": "The canon bridge is always sung, its slots chosen once per song. In a long form one extra stanza may follow it, sung as a second section (bridge2) on the same phrases by the same choir."
       },

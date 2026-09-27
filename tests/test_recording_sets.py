@@ -110,7 +110,7 @@ def test_every_head_bridge_couplet_and_tag_is_sung(genome, data):
         tags[s["words"]["tag"]] += 1
     assert set(heads) == set(A.refrain_heads(genome))
     assert heads["so"] >= 2
-    assert set(bridges) == {"canon", "coat", "given"}
+    assert set(bridges) == {"canon", "coat", "owed"}  # borrow and slow came after the sets were chosen (2026-09-26)
     assert set(couplets) == set(A.couplet_ids(genome)) | {A.last_couplet(genome)}
     assert set(tags) == set(A.tag_syllables(genome))
     assert set(questions) == {"made", "sang", "heard", "kept", "wrote", "owns"}
