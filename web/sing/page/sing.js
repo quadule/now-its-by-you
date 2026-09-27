@@ -239,6 +239,7 @@ function showJoined(now = false) {
   $("joinedAs").textContent = now ? (name ? `Thank you, ${name}. You're in.` : "Thank you. You're in.")
     : name ? `Welcome back, ${name}.` : "Welcome back.";
   $("pageLink").href = $("pageLink").textContent = $("thanksLink").href = $("thanksLink").textContent = pageUrl();
+  $("joinedLink").href = $("joinedLink").textContent = pageUrl();
   $("notYou").hidden = now; // a phone passed round: the next singer starts as themselves
   $("notYouName").textContent = name || "you";
 }
@@ -264,6 +265,7 @@ async function copy(button) {
 }
 $("copyLink").onclick = () => copy($("copyLink"));
 $("thanksCopy").onclick = () => copy($("thanksCopy"));
+$("joinedCopy").onclick = () => copy($("joinedCopy"));
 
 /* ---------- what can be pressed ---------- */
 
@@ -794,7 +796,12 @@ function finishTake(stoppedAt) {
   $("shiftValue").textContent = S.shift ? `lined up automatically: ${Math.abs(Math.round(S.shift * 1000))} ms ${S.shift > 0 ? "earlier" : "later"}` : "as recorded";
   if (S.shift) learn(delay() * 1000 + S.shift * 1000); // so the next take starts closer
   $("reviewTitle").textContent = whole ? "That take" : `That take of ${part.title}`;
-  const note = S.interrupted ? ' <span class="warn">The page went into the background while you sang, so this take may have gaps: listen before you keep it.</span>' : "";
+  let note = S.interrupted ? ' <span class="warn">The page went into the background while you sang, so this take may have gaps: listen before you keep it.</span>' : "";
+  const level = long ? K.takeLevel(samples, rate) : 0; // a phone can hand back a very quiet voice, or none at all
+  if (long && level < -40) {
+    note += ` <span class="warn">Your voice came through very quietly (${Math.round(level)} dB), so you may barely hear it played back.` +
+      (S.take.aec ? " Without headphones the phone may be cancelling your voice along with the guide: try headphones, or sing closer to the microphone." : " Try singing closer to the microphone.") + "</span>";
+  }
   status(long ? `Got it. Listen back, then keep it or try again.${note}` : "That was short. Record again?");
 }
 

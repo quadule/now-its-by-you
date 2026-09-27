@@ -57,7 +57,9 @@
       <div id="joinForm">
         <label class="field" for="email">Your email</label>
         <input id="email" type="email" autocomplete="email" inputmode="email" maxlength="200" placeholder="you@example.com" required>
-        <p class="hint">To send you your own page, where you'll find your version and can delete your recordings.</p>
+        <p class="hint">For your own page, where your version of the song will be and where you can delete your recordings.
+          Nothing arrives by email right away: Milo writes to each singer by hand, which can take a day or two. The link
+          to your page appears right here as soon as you continue, so you can save it yourself.</p>
         <label class="field" for="name">Your name, or a name you'd like to be credited by</label>
         <input id="name" autocomplete="name" maxlength="80" placeholder="optional">
         <div class="choices" role="radiogroup" aria-label="Credit">
@@ -70,7 +72,9 @@
       </div>
       <div id="joined" hidden>
         <p id="joinedAs"></p>
-        <p class="hint">We'll email you a link to your own page. Now pick a section below and sing.</p>
+        <p class="hint">This is your own page; save the link (Milo will email you the same one by hand, in a day or two):</p>
+        <div class="link"><a id="joinedLink" target="_blank" rel="noopener"></a><button id="joinedCopy" type="button">Copy</button></div>
+        <p class="hint">Now pick a section below and sing.</p>
         <p class="hint" id="notYou" hidden>Not <span id="notYouName">you</span>? <button id="restart" class="plain" type="button">Start
           afresh as someone else</button></p>
       </div>
@@ -177,7 +181,7 @@
       <h2><span class="n">4</span> Your takes</h2>
       <ol id="takes"><li class="hint none">Nothing sent yet.</li></ol>
       <p class="hint">Keep this page open until each take says sent.</p>
-      <p class="hint">They're also on your own page (we'll email you the link):</p>
+      <p class="hint">They're also on your own page (the link from step 2; Milo emails the same one by hand):</p>
       <div class="link"><a id="pageLink" target="_blank" rel="noopener"></a><button id="copyLink" type="button">Copy</button></div>
       <p class="hint" id="keepNote"></p>
     </section>
@@ -205,7 +209,8 @@
 
   <section id="thanks" class="card" hidden>
     <h2>Thank you</h2>
-    <p id="thanksText">Thank you for singing! Your version will appear on your own page in a few days, before September 30.</p>
+    <p id="thanksText">Thank you for singing! Your version will appear on your own page in a few days, before September 30,
+      and Milo will email you when it's there.</p>
     <div class="link"><a id="thanksLink" target="_blank" rel="noopener"></a><button id="thanksCopy" type="button">Copy</button></div>
     <p class="hint" id="thanksNote">There you can delete your recordings or withdraw until singing closes. After that, what you
       gave is part of the song, though you can still delete the recordings until September 30.</p>

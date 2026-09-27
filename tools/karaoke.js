@@ -432,7 +432,7 @@ export function takeGain(samples, rate) {
   // A phone's microphone, its own gain turned off, can sit 30 dB under the mastered guide, so a take
   // played beside it vanishes. The loud part of its singing (the loudest fifth of its 20 ms windows)
   // goes to about a fifth of full scale, its peaks (bar a stray click) stay under full scale, and it's
-  // never quieter than as recorded or lifted more than 20 times
+  // never quieter than as recorded or lifted more than 30 times (30 dB)
   const w = Math.max(1, Math.round(0.02 * rate)), levels = [], peaks = [];
   for (let i = 0; i + w <= samples.length; i += w) {
     let e = 0, m = 0;
@@ -447,7 +447,21 @@ export function takeGain(samples, rate) {
   // the peak bar the loudest window or two (a stray click, a bump of the microphone)
   const loud = top.reduce((a, b) => a + b, 0) / top.length, peak = peaks[Math.min(peaks.length - 1, Math.max(1, Math.floor(peaks.length * 0.01)))];
   if (!(loud > 0) || !(peak > 0)) return 1;
-  return Math.max(1, Math.min(10, 0.15 / loud, 0.7 / peak));
+  return Math.max(1, Math.min(30, 0.15 / loud, 0.7 / peak));
+}
+
+export function takeLevel(samples, rate) {
+  // how loud a take's singing is, in dBFS: the loudest fifth of its 20 ms windows (what takeGain lifts)
+  const w = Math.max(1, Math.round(0.02 * rate)), levels = [];
+  for (let i = 0; i + w <= samples.length; i += w) {
+    let e = 0;
+    for (let j = i; j < i + w; j++) e += samples[j] * samples[j];
+    levels.push(Math.sqrt(e / w));
+  }
+  if (!levels.length) return -Infinity;
+  levels.sort((a, b) => b - a);
+  const top = levels.slice(0, Math.max(1, Math.floor(levels.length / 5)));
+  return 20 * Math.log10(top.reduce((a, b) => a + b, 0) / top.length + 1e-9);
 }
 
 export function listenOut(ctx) {
