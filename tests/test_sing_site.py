@@ -144,6 +144,20 @@ def test_the_site_has_a_guide_for_every_spec(tmp_path, monkeypatch):
     assert again["guides"]["song.k0.t100"] == song["guides"]["song.k0.t100"]
     W.build(path, out, keys=[0], tempos=[100], jobs=1, keep_wavs=True, melody_bitrate="48k")  # another bitrate: made again
     assert M.spec_path("h-short", "song.k0.t100", "full").exists()
+    assert song["guides"]["song.k0.t100"]["was"] == []  # nothing before it
+
+    # the voice says a word another way, not when: takes sung to the guide before, from a page loaded before
+    # this build is published, are still taken (web/sing/src/lib.js specOf), and measured against what was heard
+    genome["lexicon"] = {**genome.get("lexicon", {}), "numbers": "N AH1 M B ER0 Z"}
+    path.write_text(json.dumps(genome))
+    before = song["guides"]["song.k0.t100"]["guide"]
+    later = W.build(path, out, keys=[0], tempos=[100], jobs=1)["guides"]["song.k0.t100"]
+    assert later["guide"] != before and later["was"] == [before]
+    assert json.loads((out / "song" / "worker.json").read_text())["guides"]["song.k0.t100"]["was"] == [before]
+    # a guide timed otherwise is no longer taken: the takes' places in the song would be wrong
+    genome["seed_params"]["form"] = ["verse", "refrain"]
+    path.write_text(json.dumps(genome))
+    assert W.build(path, out, keys=[0], tempos=[100], jobs=1)["guides"]["song.k0.t100"]["was"] == []
 
 
 def test_a_set_that_cant_be_sung_stops_the_build_before_it_starts(tmp_path, monkeypatch):

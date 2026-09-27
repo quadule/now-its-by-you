@@ -81,6 +81,11 @@ logged in, the bucket `songbird-takes` exists, and the KV namespace's id is in w
 1. **Build the site**, from the repo: `uv run python tools/sing_site.py` (all 90 guides, about half an
    hour; song.json v2 and the worker's small copy of it, `song/worker.json`; the pages). Build and
    sync on the same machine, so the guide scores takes are measured against are in `recordings/guides/`.
+   Building and deploying again while people sing is safe when the words or the voice change but not
+   the timing (a word said another way, a verse swapped for one of the same length): each spec lists
+   its earlier guides that place a take where the new one does (`was`), and the worker still takes a
+   take sung to one of them from a page loaded before the deploy. A change to the timing (the form,
+   the turns, a tempo) asks those singers to reload: deploy that when nobody's singing.
 2. **Check the dates** in wrangler.toml's `[vars]` against web/sing/consent.md.
 3. **The backstop**: have R2 itself delete takes and files after September 30, in case the purge
    ever doesn't run (it acts within a day of the date, so it's a backstop, not the promise):

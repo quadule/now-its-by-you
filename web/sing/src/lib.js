@@ -136,7 +136,8 @@ export function songIndex(song) {
   for (const [spec, g] of Object.entries(song.guides)) {
     const mixes = {};
     for (const [mix, m] of Object.entries(g.mixes || {})) mixes[mix] = typeof m === "string" ? m : m.file;
-    guides[spec] = { guide: g.guide, lyrics: g.lyrics, duration: Number(g.duration), mixes };
+    const was = Array.isArray(g.was) ? g.was.filter(d => typeof d === "string") : []; // its earlier guides, timed the same
+    guides[spec] = { guide: g.guide, lyrics: g.lyrics, duration: Number(g.duration), mixes, was };
   }
   const sets = (song.sets || []).map(s => (typeof s === "string" ? s : s.id)).filter(Boolean);
   return { song: song.song, consent: song.consent, words_release: song.words_release ?? null, sets,
@@ -158,12 +159,18 @@ export function partName(section) {
   return section.nth ? `${name} ${section.nth}` : name;
 }
 
+export function heard(g, digest) {
+  // was a take sung to this guide? Its score now, or an earlier one that places a take exactly where it
+  // does (the words or the voice changed since the page was loaded, not the timing: tools/sing_site.py)
+  return typeof digest === "string" && (g.guide === digest || (Array.isArray(g.was) && g.was.includes(digest)));
+}
+
 export function specOf(info, song) {
   // which of the song's guides a take was sung to: the spec it names, whose score must be the one heard
   if (!info || typeof info !== "object" || Array.isArray(info)) throw new Error("the take's details are missing");
   let spec = info.spec;
-  if (spec === undefined || spec === null) spec = Object.keys(song.guides).find(k => song.guides[k].guide === info.guide);
-  if (typeof spec !== "string" || !own(song.guides, spec) || song.guides[spec].guide !== info.guide) {
+  if (spec === undefined || spec === null) spec = Object.keys(song.guides).find(k => heard(song.guides[k], info.guide));
+  if (typeof spec !== "string" || !own(song.guides, spec) || !heard(song.guides[spec], info.guide)) {
     throw new Error("the song has changed since the page was loaded: reload it");
   }
   return spec;
@@ -204,7 +211,8 @@ export function checkTake(info, song, spec, lyric, wav) {
     label = s.label ? String(s.label).slice(0, 200) : null;
   }
   const out = {
-    song: song.song, spec, guide: g.guide, mix: info.mix, rate: wav.rate, seconds: round3(wav.seconds),
+    song: song.song, spec, guide: heard(g, info.guide) ? info.guide : g.guide, // the score it's measured against
+    mix: info.mix, rate: wav.rate, seconds: round3(wav.seconds),
     from_s: round3(from), to_s: round3(to), section, part, label, sha256: info.sha256,
   };
   for (const k of NUMBERS) {

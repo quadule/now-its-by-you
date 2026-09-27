@@ -12,7 +12,9 @@ What it writes, all served by web/sing/src/worker.js:
     karaoke.js, recorder.js           the timing core they share with the karaoke here (tools/karaoke.js)
     song/song.json                    what's on offer (v2): the sets, keys and speeds, and for every spec
                                       its guide score's digest, its words' file, and each mix's MP3 and
-                                      its length; the releases' digests. Small, as a phone reads it first
+                                      its length; the releases' digests. Small, as a phone reads it first.
+                                      And each spec's earlier guides that place a take exactly as this one
+                                      does ("was", earlier()): the worker takes a take sung to one of them
     song/<spec>.json                  a spec's words and notes as they come, its beats, and its sections,
                                       each sung one with its window for recording it alone (karaoke.lyrics);
                                       and each mix's opening loudness ("opening"), so the page can tell if
@@ -36,7 +38,9 @@ about half an hour on this machine (--jobs 4, 32 GB).
 
 The worker serves song/ only to an open invitation. Each guide score is kept in
 recordings/guides/ (tools/takes.py), so takes fetched with tools/invite.py are
-measured against exactly what their singers heard, whatever the song does next;
+measured against exactly what their singers heard, whatever the song does next,
+and a build that changes the words or the voice but not the timing never turns
+away a take from a page loaded before it was published ("was");
 beside them, release.<digest>.html and words-release.<digest>.html keep each
 release exactly as people read it, under the digest their takes and words carry.
 """
@@ -75,6 +79,7 @@ JOBS = 4  # specs rendered at once: a render takes one core and up to 3 GB (a 4-
 FRAME = 0.001  # seconds per step of a guide's opening loudness
 OPENING = 2.5  # seconds of it kept: the song's first sounds are at 0.6 s
 MARK = ".songbird-site"  # in an output directory this tool may clear
+EARLIER = 24  # earlier guides a spec keeps taking takes for (earlier()): a day of builds, and more
 
 
 def consent_html(text: str) -> str:
@@ -336,7 +341,7 @@ def build(genome_path: Path, out: Path, rebuild: bool = False, bitrate: str = BI
                     future.cancel()
                 raise
 
-    guides, longest = {}, 0.0
+    guides, placed, longest = {}, {}, 0.0
     for spec in todo:
         result = done[spec.id]
         score = Path(result["score"])
@@ -353,7 +358,11 @@ def build(genome_path: Path, out: Path, rebuild: bool = False, bitrate: str = BI
         mixes = {mix: {k: v for k, v in m.items() if k not in ("frame", "env")} for mix, m in result["mixes"].items()}
         guides[spec.id] = {"guide": guide, "lyrics": f"{spec.id}.json", "duration": round(float(data["duration"]), 3),
                            "mixes": mixes}
+        placed[spec.id] = placement(words_json)
         longest = max(longest, float(data["duration"]))
+    was = earlier(genome_path.stem, genome.title, {s: (g["guide"], placed[s]) for s, g in guides.items()})
+    for s, g in guides.items():
+        g["was"] = was[s]
 
     built = {s["id"]: s for s in M.sets(genome_path)}
     chosen = list(dict.fromkeys(spec.set for spec in todo))
@@ -374,6 +383,41 @@ def build(genome_path: Path, out: Path, rebuild: bool = False, bitrate: str = BI
     # the worker's small copy of it (web/sing/src/worker.js): the same, without the loudness curves
     (out / "song" / "worker.json").write_text(json.dumps(worker_index(song), separators=(",", ":")) + "\n")
     return song
+
+
+def placement(lyrics: dict) -> list:
+    """Where a guide puts a take, as the worker checks it (web/sing/src/lib.js checkTake): the song's
+    length, and each section's place, name and window."""
+    return [round(float(lyrics["duration"]), 3),
+            [[x["index"], x["name"], bool(x["sung"]), [round(float(t), 3) for t in x["window"]] if x.get("window") else None]
+             for x in lyrics["sections"]]]
+
+
+def earlier(song: str, title: str, now: dict[str, tuple[str, list]]) -> dict[str, list[str]]:
+    """For each spec (its guide's digest and placement() now), the digests of its earlier guides that
+    place a take exactly where this one does, newest first, at most EARLIER: the words or the voice
+    changed, not the timing. Every guide ever built is kept in recordings/guides/ (build() keeps it),
+    so a take sung to one of them, from a page loaded before this build was published, is measured
+    against what its singer heard, and lies on this guide's timeline for their version: the worker
+    takes it rather than asking them to reload and sing it again."""
+    import karaoke  # tools/karaoke.py
+
+    found: dict[str, list[str]] = {spec: [] for spec in now}
+    for f in sorted(K.GUIDES.glob(f"{song}.*.score.json"), key=lambda p: p.stat().st_mtime, reverse=True):
+        named = re.fullmatch(re.escape(song) + r"\.([0-9a-f]{12})\.score\.json", f.name)
+        if not named:
+            continue
+        data = json.loads(f.read_text())
+        spec = data["spec"].get("id") if isinstance(data.get("spec"), dict) else None
+        if spec not in now or named[1] == now[spec][0] or len(found[spec]) >= EARLIER:
+            continue
+        try:
+            same = placement(karaoke.lyrics(data, title, data["tempo"])) == now[spec][1]
+        except (KeyError, TypeError, ValueError):  # a score from before sections had windows
+            same = False
+        if same:
+            found[spec].append(named[1])
+    return found
 
 
 def versioned(out: Path) -> None:
@@ -405,7 +449,7 @@ def worker_index(song: dict) -> dict:
     return {"song": song["song"], "consent": song["consent"], "words_release": song.get("words_release"),
             "sets": [s["id"] for s in song.get("sets", [])], "max_seconds": song.get("max_seconds"),
             "guides": {spec: {"guide": g["guide"], "lyrics": g["lyrics"], "duration": g["duration"],
-                              "mixes": {mix: m["file"] for mix, m in g["mixes"].items()}}
+                              "mixes": {mix: m["file"] for mix, m in g["mixes"].items()}, "was": g.get("was", [])}
                        for spec, g in song["guides"].items()}}
 
 

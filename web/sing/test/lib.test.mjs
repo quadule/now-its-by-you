@@ -109,7 +109,7 @@ test("a take must be the plain 16-bit mono WAV the page writes", () => {
 test("song.json v2 is read down to what the worker needs", () => {
   assert.deepEqual(SONG.sets, ["a", "b"]);
   assert.deepEqual(SONG.guides["a.k0.t100"], { guide: "aaaaaaaaaaaa", lyrics: "a.k0.t100.json", duration: 60,
-                                               mixes: { melody: "a.k0.t100.melody.mp3", full: "a.k0.t100.full.mp3" } });
+                                               mixes: { melody: "a.k0.t100.melody.mp3", full: "a.k0.t100.full.mp3" }, was: [] });
   assert.deepEqual(songIndex(SONG), SONG); // song/worker.json is the same thing, already small
   assert.throws(() => songIndex({ song: "h", guide: "x", mixes: {} }), /version 2/); // an old site
   const lyric = sectionsOf(LYRICS);
@@ -130,6 +130,20 @@ test("a take names the guide it was sung to, and that guide must be this site's"
   assert.throws(() => specOf(info({ spec: "__proto__" }), SONG), /reload/);
   assert.throws(() => specOf([], SONG), /missing/);
   assert.throws(() => specOf(null, SONG), /missing/);
+});
+
+test("a take sung to an earlier guide of its spec, timed the same, is taken, and keeps the score it was sung to", () => {
+  // the site was built again (the words or the voice changed) while the singer's page was open: tools/sing_site.py
+  // lists each spec's earlier guides that place a take exactly where this one does
+  const song = songIndex({ ...SONG, guides: { ...SONG.guides, "a.k0.t100": { ...SONG.guides["a.k0.t100"], was: ["999999999999", 7] } } });
+  assert.deepEqual(song.guides["a.k0.t100"].was, ["999999999999"]); // digests, nothing else
+  const earlier = info({ guide: "999999999999" }), wav = { rate: 48000, samples: 48000 * 60, seconds: 60 };
+  assert.equal(specOf(earlier, song), "a.k0.t100");
+  assert.equal(specOf({ ...earlier, spec: undefined }, song), "a.k0.t100"); // found by it too
+  assert.equal(checkTake(earlier, song, "a.k0.t100", sectionsOf(LYRICS), wav).guide, "999999999999"); // measured against it
+  assert.equal(checkTake(info(), song, "a.k0.t100", sectionsOf(LYRICS), wav).guide, "aaaaaaaaaaaa");
+  assert.throws(() => specOf(earlier, SONG), /reload/); // not listed: sung to something else
+  assert.throws(() => specOf(info({ spec: "b.k-2.t90", guide: "999999999999" }), song), /reload/); // another spec's
 });
 
 test("a take's sidecar is checked against its guide, down to the part of the song it holds", () => {
