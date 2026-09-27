@@ -35,7 +35,7 @@ import numpy as np
 from . import arrange as arrange_mod
 from . import drift as drift_mod
 from . import edits as edits_mod
-from . import harvest, variation
+from . import harvest, phrasing as phrasing_mod, variation
 from .arrange import options as word_choices, seed_lyrics
 from .band import INSTRUMENTS
 from .synth.mixing import MixParams
@@ -427,6 +427,11 @@ class Version:
     _cf: dict = field(default_factory=dict, repr=False)
 
     @property
+    def choir_json(self) -> list[dict]:
+        """The parent's portable choir delivery, shared by preview and recording."""
+        return phrasing_mod.inherited(self.context.genome.source, self.context.parent_record)[1]
+
+    @property
     def offset(self) -> int:
         return (_date.fromisoformat(self.day) - _date.fromisoformat(self.context.day)).days
 
@@ -502,7 +507,8 @@ class Context:
         changes: list = []
         r = edits_mod.resolve(genome, self.parent, voice, d, clean, phrasing_json=chosen_phrasing, trace=trace,
                               day_chosen="date" in clean, log=changes)
-        phrasing_json = chosen_phrasing or genome.source.get("seed_phrasing")
+        inherited_lead, _ = phrasing_mod.inherited(genome.source, self.parent_record)
+        phrasing_json = chosen_phrasing if chosen_phrasing is not None else inherited_lead
         return Version(self, clean, voice, d, day, r.generated, r.params, r.generated_lyrics, r.lyrics, phrasing_json,
                        trace, problems + r.problems, r.applied, r.marks, changes)
 

@@ -114,6 +114,7 @@ def render_one(genome, params: Params, out: Path, *, voice=None, drift=None, lyr
     chosen (songbird.edits.marks), kept in the record; progress: told each part's name as the render starts
     on it (synth.render), then "master"."""
     phrasing = phrasing_mod.from_json(phrasing_json) if phrasing_json else None
+    choir_json = list(choir_json)
     choir = [phrasing_mod.from_json(d) for d in choir_json]
     score = variation.lay(realize(genome, params, phrasing=phrasing, choir=choir, lyrics=lyrics), params)
     singer = _singer(params, list(singer_overrides))
@@ -148,6 +149,7 @@ def render_one(genome, params: Params, out: Path, *, voice=None, drift=None, lyr
         "drift": drift.to_dict() if drift is not None else None,
         "phrasing": {k: v for k, v in phrasing_json.items() if k not in ("phrases", "fields")} if phrasing_json else None,
         "choir_phrasings": [{k: v for k, v in d.items() if k not in ("phrases", "fields")} for d in choir_json] or None,
+        "performance": {"lead": phrasing_json, "choir": choir_json},
         "mix": mixing.to_dict(),
         "loudness_lufs": round(master.loudness(pcm / 32768.0, synth.SR), 2),
         "loudness_range_lu": round(master.loudness_range(pcm / 32768.0, synth.SR), 2),
@@ -212,19 +214,22 @@ def parent_of(record: dict) -> dict | None:
 
 def replay_command(args: argparse.Namespace, genome) -> int:
     """A rendition rendered again exactly as its record says: its parameters, the words it recorded (not
-    drawn again), its machine and moment; a person's phrasing given again with --phrasing."""
+    drawn again), its machine and moment, and its portable lead and choir contributions."""
     from .arrange import Lyrics
 
     record = pack_mod.read_record(args.replay)
     params = Params.from_dict(record["params"])
+    # Command-line voice and mix overrides live in the record's rendered settings, outside Params.
+    params = replace(params, singer=record.get("singer") or params.singer, mix=record.get("mix") or params.mix)
     lyrics = Lyrics.from_dict(record["lyrics"]) if record.get("lyrics") else None
     voice = harvest.Voice.from_dict(record["voice"]) if record.get("voice") else None
     drift = drift_mod.Drift.from_dict(record["drift"]) if record.get("drift") else None
-    phrasing_json = json.loads(Path(args.phrasing).read_text()) if args.phrasing else genome.source.get("seed_phrasing")
-    if record.get("phrasing") and not args.phrasing:
+    lead, inherited_choir = phrasing_mod.inherited(genome.source, record)
+    phrasing_json = json.loads(Path(args.phrasing).read_text()) if args.phrasing else lead
+    if record.get("phrasing") and "performance" not in record and not args.phrasing:
         print("songbird: this rendition was sung with a person's phrasing; give it with --phrasing to hear it "
               "the same", file=sys.stderr)
-    choir_json = [json.loads(Path(f).read_text()) for f in args.choir_phrasing]
+    choir_json = [json.loads(Path(f).read_text()) for f in args.choir_phrasing] if args.choir_phrasing else inherited_choir
     parent = parent_of(record)
     out = Path(args.out or Path("renders") / (Path(args.genome).stem + ".replay.flac"))
     render_one(genome, params, out, voice=voice, drift=drift, lyrics=lyrics, phrasing_json=phrasing_json,
@@ -278,10 +283,11 @@ def render_command(args: argparse.Namespace) -> int:
                                arrange=_arrangement(args.arrange))
     if args.choir is not None:
         params = replace(params, choir=args.choir)
-    # a person's phrasing: the file given, or the one the seed carries
-    phrasing_json = json.loads(Path(args.phrasing).read_text()) if args.phrasing else genome.source.get("seed_phrasing")
-    choir_json = [json.loads(Path(f).read_text()) for f in args.choir_phrasing]
-    if choir_json and args.choir is None:
+    # Contributions travel with the parent; explicit files replace only the voices they name.
+    lead, inherited_choir = phrasing_mod.inherited(genome.source, parent)
+    phrasing_json = json.loads(Path(args.phrasing).read_text()) if args.phrasing else lead
+    choir_json = [json.loads(Path(f).read_text()) for f in args.choir_phrasing] if args.choir_phrasing else inherited_choir
+    if args.choir_phrasing and args.choir is None:
         params = replace(params, choir=len(choir_json))
     sung_by_a_machine = voice is not None or drift is not None
     chose_words = resolved is not None and not args.form and any(p.startswith("words.") for p in edits)

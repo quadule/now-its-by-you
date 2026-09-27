@@ -89,6 +89,18 @@ def from_json(data: dict) -> Phrasing:
     }
 
 
+def inherited(source: dict, record: dict | None = None) -> tuple[dict | None, list[dict]]:
+    """Delivery carried by a rendition, or the seed's when an older record carries none.
+
+    An explicit empty performance is meaningful: that version chose to sing without
+    contributions, so it must not silently pick the seed's phrasing back up.
+    """
+    performance = (record or {}).get("performance")
+    if isinstance(performance, dict):
+        return performance.get("lead"), list(performance.get("choir") or [])
+    return source.get("seed_phrasing"), []
+
+
 def gesture(phrasing: Phrasing | None, phrase_id: str, index: int) -> Gesture | None:
     if not phrasing or phrase_id not in phrasing or index >= len(phrasing[phrase_id]):
         return None

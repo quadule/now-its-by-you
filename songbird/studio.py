@@ -437,6 +437,7 @@ class Studio:
         """What a render depends on, hashed: the same rendition and section are made once."""
         material = {"program": __version__, "song": self.song_digest, "params": v.params.to_dict(),
                     "lyrics": v.lyrics.to_dict() if v.lyrics else None, "phrasing": v.phrasing_json,
+                    "choir_phrasings": v.choir_json,
                     "section": section, "voice": v.voice.to_dict() if v.voice is not None else None,
                     "drift": v.drift.to_dict() if v.drift is not None else None,
                     "marks": v.marks if section is None else None, "gain": PREVIEW_GAIN_DB}
@@ -474,7 +475,8 @@ class Studio:
         from . import phrasing as phrasing_mod
 
         phrasing = phrasing_mod.from_json(v.phrasing_json) if v.phrasing_json else None
-        return variation.lay(realize(self.genome, v.params, phrasing=phrasing, lyrics=v.lyrics), v.params)
+        choir = [phrasing_mod.from_json(data) for data in v.choir_json]
+        return variation.lay(realize(self.genome, v.params, phrasing=phrasing, choir=choir, lyrics=v.lyrics), v.params)
 
     def _section(self, job: Job, v: explain.Version, key: str, index: int) -> dict:
         """A preview of one section: cut from the whole rendition's score, made, and brought up by the gain a
@@ -512,7 +514,7 @@ class Studio:
         folder = self.cache / key
         with contextlib.redirect_stdout(io.StringIO()):
             record = render_one(self.genome, v.params, folder / "rendition.flac", voice=v.voice, drift=v.drift,
-                                lyrics=v.lyrics, phrasing_json=v.phrasing_json, parent=self.parent_record,
+                                lyrics=v.lyrics, phrasing_json=v.phrasing_json, choir_json=v.choir_json, parent=self.parent_record,
                                 packet_genome=self.genome_path, changes=v.changes if v.drift is not None else None,
                                 chosen_by_you=v.marks or None, progress=job.report)
         (folder / "rendition.json").write_text(json.dumps(record, indent=2) + "\n")
