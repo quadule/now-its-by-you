@@ -44,14 +44,22 @@ def unmarked(line: str) -> str:
     return line.replace("*", "")
 
 
-def check_marks(line: str, what: str) -> None:
-    """Every focus mark wraps one whole word: *word*, punctuation outside."""
+def misplaced_mark(line: str) -> str | None:
+    """The first word whose focus mark doesn't wrap it whole, or None."""
     for token in line.split():
         if "*" not in token:
             continue
         core = token.strip(".,;:!?\"")
         if not (core.startswith("*") and core.endswith("*") and core.count("*") == 2 and len(core) > 2):
-            raise ValueError(f"{what}: a focus mark must wrap a whole word, *word*, not {token!r} in {line!r}")
+            return token
+    return None
+
+
+def check_marks(line: str, what: str) -> None:
+    """Every focus mark wraps one whole word: *word*, punctuation outside."""
+    token = misplaced_mark(line)
+    if token is not None:
+        raise ValueError(f"{what}: a focus mark must wrap a whole word, *word*, not {token!r} in {line!r}")
 
 
 def slot_names(lines) -> list[str]:
@@ -177,6 +185,34 @@ def refrain_rules_problem(refrain: dict, rr: dict) -> str | None:
     return None
 
 
+def line_problem(line: str, notes: int, lexicon: dict | None) -> tuple | None:
+    """Why one line can't be sung on a phrase of `notes` notes, or None if it
+    can. A bank line and a line someone writes in the studio are checked
+    alike, each caller saying what's wrong in its own words; the first
+    problem found comes back:
+
+        ("mark", word)                a focus mark that doesn't wrap its word whole
+        ("count", syllables)          one syllable per note, and this many isn't it
+        ("unknown", word, n)          a word the singer can't pronounce
+        ("fit", word, n, pronounced)  a word split into n syllables that's pronounced in another number
+    """
+    token = misplaced_mark(line)
+    if token is not None:
+        return ("mark", token)
+    got = len(syllables(line))
+    if got != notes:
+        return ("count", got)
+    for word in line.split():
+        n = len([p for p in word.split("-") if p])
+        try:
+            pronounced = len(phonetics.fit(word, n, lexicon))
+        except (KeyError, ValueError):  # not in the dictionary, or no vowel to sing
+            return ("unknown", word, n)
+        if pronounced != n:
+            return ("fit", word, n, pronounced)
+    return None
+
+
 def check_block(lines, slots: dict, phrase_ids, phrases: dict, lexicon: dict | None, what: str) -> None:
     """Every way the lines can be sung fits its phrase and can be pronounced."""
     if len(lines) != len(phrase_ids):
@@ -187,17 +223,13 @@ def check_block(lines, slots: dict, phrase_ids, phrases: dict, lexicon: dict | N
     for sung in expansions(lines, slots):
         for line, pid in zip(sung, phrase_ids):
             check_marks(line, what)
-            want, got = len(phrases[pid].sung), len(syllables(line))
-            if want != got:
-                raise ValueError(f"{what}: {line!r} has {got} syllables, phrase {pid} has {want} notes")
-            for word in line.split():
-                n = len([p for p in word.split("-") if p])
-                try:
-                    singable = len(phonetics.fit(word, n, lexicon)) == n
-                except KeyError:
-                    singable = False
-                if not singable:
-                    raise ValueError(f"{what}: can't sing {word!r} as {n} syllables in {line!r}")
+            want = len(phrases[pid].sung)
+            problem = line_problem(line, want, lexicon)
+            if problem is None:
+                continue
+            if problem[0] == "count":
+                raise ValueError(f"{what}: {line!r} has {problem[1]} syllables, phrase {pid} has {want} notes")
+            raise ValueError(f"{what}: can't sing {problem[1]!r} as {problem[2]} syllables in {line!r}")
 
 
 def check(genome: Genome) -> dict:

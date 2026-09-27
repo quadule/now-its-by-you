@@ -183,6 +183,8 @@ class Tune:
     first: bool  # a phrase's first note
     last: bool  # a phrase's last note
     ornament: tuple = ()  # the lineage's ornament on this note (songbird.variants): ((fraction, semitones), ...)
+    phrase: str = ""  # the tune line it's sung in
+    length: float = 0.0  # its own length, before the next note trims it
 
 
 @dataclass
@@ -224,6 +226,7 @@ class Context:
         self.chords: list[Chord] = []
         self.tune: list[Tune] = []
         self.phrases: list[tuple[float, float]] = []  # each placed phrase's span, bar line to bar line
+        self.phrase_ids: list[str] = []  # and which tune line it is
         self.choir: list[tuple[float, float, int]] = []  # the lineage voices' notes, where they sing
         self.prelude: tuple[float, float] | None = None  # the quote's bars before the song, if the lead plays one
         self._streams: dict[tuple[str, int], np.random.Generator] = {}
@@ -245,6 +248,7 @@ class Context:
                 rounds[role] = rounds.get(role, 0) + 1
             index = len(self.sections) - 1
             self.phrases.append((s0, s1))
+            self.phrase_ids.append(phrase.id)
             beats_per_bar = meter.bar / meter.beat
             for b, chords in enumerate(phrase.chords):
                 bar_u = s0 + b * meter.bar
@@ -261,7 +265,8 @@ class Context:
             u1 = min(m["u_end"], ordered[i + 1]["u"]) if i + 1 < len(ordered) else self.end
             self.tune.append(Tune(m["u"], u1, int(m["pitch"]), float(m["vel"]), bool(m["syllable"]),
                                   self.section_at(m["u"]), m["index"] == 0, bool(m["line_end"]),
-                                  tuple(m.get("ornament", ()))))
+                                  tuple(m.get("ornament", ())), str(m.get("phrase", "")),
+                                  float(m["u_end"] - m["u"])))
             for pitch in choirs[i]:  # each lineage voice's harmony, as realize() sings it
                 self.choir.append((m["u"], u1, pitch))
 
@@ -945,25 +950,52 @@ def statement(ctx: Context, part: str, notes: list[Tune], vel_scale: float, sect
     return out
 
 
+def composed(ctx: Context, phrase) -> list[Tune] | None:
+    """A tune line a person composed (songbird.composition), as the singer
+    sings it the first time: read from the placed melody, each note timed
+    from the line's bar line and at its own length (where the next line's
+    pickup cuts it short is the quote's to decide). None where the line's
+    tune is the song's own."""
+    if phrase.id not in getattr(ctx.params, "composition", {}).get("tune", {}):
+        return None
+    if phrase.id not in ctx.phrase_ids:  # not sung this time: as it would be
+        from .composition import played
+
+        notes = played(phrase, ctx.params)
+        return [Tune(n.onset, n.onset + n.dur, ctx.tonic + degree_semitones(n.degree, ctx.mode, n.alter), 0.0,
+                     True, 0, k == 0, k == len(notes) - 1, (), phrase.id, n.dur) for k, n in enumerate(notes)]
+    s0, s1 = ctx.phrases[ctx.phrase_ids.index(phrase.id)]
+    # a pickup reaches back before the bar line; the line before ends its last note ahead of it
+    notes = [t for t in ctx.tune if t.phrase == phrase.id and s0 - phrase.pickup - 1e-9 <= t.u0 < s1 - 1e-9]
+    return [replace(t, u0=t.u0 - s0, u1=t.u0 - s0 + t.length) for t in notes]
+
+
 def quote(ctx: Context, section: int, part: str) -> list[Ev]:
     """A turn: the instrument quotes the sung phrase whose tune best fits the
-    turn's chords, a refrain's by preference."""
+    turn's chords, a refrain's by preference. A line a person composed is
+    quoted as the singer sings it; any other as the lineage sings it."""
     s = ctx.sections[section]
     rng = ctx.rand("quote", s.u0)
     bars = int(round((s.u1 - s.u0) / ctx.bar))
     under = [(c.u0 - s.u0, c.u1 - s.u0, c.symbol) for c in ctx.chords_in(section)]
     refrain_phrases = {pid for sec in ctx.genome.sections.values() if sec.lyrics == "refrain" for pid in sec.phrases}
-    best, best_score, chosen = None, -1e9, None
+    best, best_score, chosen, heard = None, -1e9, None, None
     for pid, phrase in sorted(ctx.genome.phrases.items()):
-        sung = [n for n in phrase.sung if 0 <= n.onset < bars * ctx.bar]
+        own = composed(ctx, phrase)
+        if own is not None:
+            sung = [t for t in own if 0 <= t.u0 < bars * ctx.bar]
+            line = [(t.u0, t.u1 - t.u0, t.pitch) for t in sung]
+        else:
+            sung = [n for n in phrase.sung if 0 <= n.onset < bars * ctx.bar]
+            line = [(n.onset, n.dur, ctx.tonic + degree_semitones(n.degree, ctx.mode, n.alter)) for n in sung]
         if phrase.bars < bars or len(sung) < 3:
             continue
         score = 1.5 if pid in refrain_phrases else 0.0
-        for n in sung:
-            symbol = next((sym for a, z, sym in under if a <= n.onset < z), under[-1][2])
-            pc = (ctx.tonic + degree_semitones(n.degree, ctx.mode, n.alter)) % 12
+        for onset, dur, pitch in line:
+            symbol = next((sym for a, z, sym in under if a <= onset < z), under[-1][2])
+            pc = pitch % 12
             pcs = ctx.pcs(symbol)
-            weight = n.dur * (1.5 if n.onset % ctx.beat == 0 else 1.0)
+            weight = dur * (1.5 if onset % ctx.beat == 0 else 1.0)
             if pc in pcs:
                 score += weight
             elif (pc - pcs[0]) % 12 in (2, 9):
@@ -972,9 +1004,17 @@ def quote(ctx: Context, section: int, part: str) -> list[Ev]:
                 score -= weight
         score += rng.uniform(0.0, 0.5)
         if score > best_score:
-            best, best_score, chosen = sung, score, phrase
+            best, best_score, chosen, heard = sung, score, phrase, own
     if best is None:
         return []
+    if heard is not None:  # the composed line, note for note as it's sung
+        notes = []
+        for k, t in enumerate(best):
+            u0 = s.u0 + t.u0
+            u1 = min(s.u0 + t.u1, s.u0 + best[k + 1].u0 if k + 1 < len(best) else s.u1 - ctx.sub)
+            notes.append(Tune(u0, u1, t.pitch, 0.8 if t.u0 % ctx.meter.foot == 0 else 0.68, False, section,
+                              k == 0, k == len(best) - 1, t.ornament))
+        return statement(ctx, part, notes, 0.88, section)
     variants = getattr(ctx.params, "variants", ())
     if variants:  # the phrase as this lineage sings it
         played = {id(n): v for n, v in zip(chosen.sung, variants_mod.realized(chosen, variants))}
