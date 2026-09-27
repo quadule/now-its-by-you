@@ -146,8 +146,15 @@ def head_ids(refrain: dict) -> list[str]:
 def refrain_rules_problem(refrain: dict, rr: dict) -> str | None:
     """Why a refrain's words and rules can't be kept together, in one plain sentence; None if they can: a
     slot the rules keep distinct in each refrain is one the refrain's own lines sing, other than the
-    question, and isn't also kept once a song; no head fixes a slot kept once a song; and a head that asks
-    its own question is sung at most once a song (head_repeat false), so no two refrains ask it."""
+    question, and isn't also kept once a song; no head fixes a slot kept once a song; a head that asks
+    its own question is sung at most once a song (head_repeat false), so no two refrains ask it; and the
+    words the first refrain may ask (question_first) are the refrain's own questions, but for the last
+    refrain's (the last word)."""
+    asked = [unmarked(q).replace("-", "") for q in refrain.get("slots", {}).get("question", [])]
+    first = rr.get("question_first", [])
+    if first and (not asked or set(first) - set(asked[:-1])):
+        return ("the words the first refrain may ask must be the refrain's own questions, but not the last "
+                f"refrain's: not {', '.join(sorted(set(first) - set(asked[:-1])))}")
     own = set(slot_names(refrain["lines"])) - {"question"}
     once = set(rr.get("once_per_song", ())) - {"question"}
     distinct = set(rr.get("distinct", ()))

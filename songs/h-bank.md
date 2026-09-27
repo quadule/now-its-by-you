@@ -25,9 +25,10 @@ lines are eight and ten, and the bridge's first two are ten with no pickup.
 > by everyone, no one, and now it's by you.
 
 Every refrain has words of its own. *Made* is the question: the first
-refrain asks who made it and the last who owns it, and each refrain between
-asks something else (sang, heard, kept or wrote), a different word each
-time. *While* can be when or if, drawn afresh each time round. *It goes*
+refrain asks who made, wrote or sang it (whichever no head the song sings
+asks as written, where it can), the last who owns it, and each refrain
+between asks something else (made, sang, heard, kept or wrote), a different
+word each time. *While* can be when or if, drawn afresh each time round. *It goes*
 can be who knows or it grows, and each refrain ends its own way, so three
 refrains sing all three.
 
@@ -535,9 +536,10 @@ How a song is put together from the bank; the same rules are data under
   verses go in era order, earliest first, so the song reads as time passing;
   verses with no year go anywhere. Paired verses are sung adjacent, in era
   order. No two dark verses adjacent; at most one light verse.
-- **Refrain.** Every refrain has words of its own. The first asks who made
-  it and the last who owns it; each between asks something else, a
-  different word each time while any are left. While, when or if is drawn
+- **Refrain.** Every refrain has words of its own. The first asks who made,
+  wrote or sang it (one no head the song sings asks, where it can; the
+  artist's, 2026-09-27), the last who owns it; each between asks something
+  else, a different word each time while any are left. While, when or if is drawn
   afresh each time round, and it goes, who knows or it grows too, each
   refrain a different one while any are left. The first
   and last refrains sing the knows head; a refrain between may sing another
