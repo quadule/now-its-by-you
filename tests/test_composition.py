@@ -10,7 +10,8 @@ import numpy as np
 import pytest
 
 from songbird import bank as B, composition as C, drift as D, edits as E, explain, harvest as H, pack
-from songbird.genome import load
+from songbird.genome import load, syllables
+from songbird.bank import unmarked
 from songbird.realize import Params, choose_params, realize
 from songbird.synth import master
 
@@ -23,7 +24,7 @@ DAY = D.drift(D.parse("2026-09-27"), ADA.hash)
 BANK_LINES = {verse["id"]: verse["lines"] for verse in G.source["bank"]["verses"]}
 AUTHORED = BANK_LINES["kids"][0]
 HYPHENATED = BANK_LINES["lullaby"][0]
-AUTHORED_PATH = "lyrics.verse:0.0"
+AUTHORED_PATH = "lyrics.verse:wire.0"  # wire opens every version of this song
 
 
 def editable(params=None):
@@ -166,6 +167,38 @@ def test_provenance_replays_edits_and_reset_releases_inherited_phrase():
     assert r.params.to_dict() == inherited
 
 
+def test_releasing_an_inherited_order_returns_to_the_parents_form_or_the_machines_not_the_seeds():
+    base = choose_params(G, None, ADA, DAY)
+    parent = E.resolve(G, None, ADA, DAY, {"form.order": rearranged(base.form)}).params
+    assert parent.form != tuple(G.seed_params["form"])
+    # no machine: nothing else is chosen, so the form is the parent's, no longer held as the person's
+    kept = choose_params(G, parent, overrides={"form.order": None})
+    assert kept.form == parent.form and "order" not in kept.composition
+    # a machine: its own choice for this version, as it chooses from a parent with no order
+    basil = H.fictional("basil")
+    later = D.drift(D.parse("2027-06-01"), basil.hash)
+    released = E.resolve(G, parent, basil, later, {"form.order": None})
+    own = choose_params(G, replace(parent, composition={}), basil, later)
+    assert "form.order" in released.applied and "order" not in released.params.composition
+    assert released.params.form == own.form
+    # and an order a person set only here goes back to what the machine had chosen
+    fresh = E.resolve(G, None, ADA, DAY, {"form.order": None})
+    assert fresh.params.form == base.form
+
+
+@pytest.mark.parametrize("ending", ["", "cold"])
+def test_the_view_says_how_long_the_realized_song_lasts(ending):
+    params = choose_params(G, None, ADA, DAY)
+    params = replace(params, style=replace(params.style, ending=ending))
+    from songbird.cli import words
+
+    lyrics = words(G, params, sung_by_a_machine=True)
+    score = realize(G, params, lyrics=lyrics)
+    view = C.view(G, params, explain.as_sung(G, params, lyrics))
+    assert view["duration"] == pytest.approx(score.duration, abs=1e-3)
+    assert view["duration"] > view["duration_seconds"]
+
+
 def test_composition_view_covers_every_section_phrase_and_syllable():
     ctx = explain.Context(G, None, None, ADA, "fictional:ada", "2026-09-27", D.parse("2026-09-27"))
     v = ctx.version({"tune.v1": editable()})
@@ -215,7 +248,7 @@ def test_composition_and_editor_travel_inside_the_audio(tmp_path):
         assert opened.where == "packet"
         assert opened.version({}).params.composition == params.composition
         assert opened.song({})["composition"]["edited_phrases"] == ["v1"]
-        verse = next(s for s in opened.song({})["composition"]["sections"] if s["id"] == "verse:0")
+        verse = next(s for s in opened.song({})["composition"]["sections"] if s["lyric_key"] == "verse:wire")
         assert verse["phrases"][0]["lyric_text"] == AUTHORED
     finally:
         opened.close()
@@ -242,15 +275,15 @@ def test_authored_words_follow_their_section_and_survive_a_child():
     parent = E.resolve(G, None, ADA, DAY, {AUTHORED_PATH: AUTHORED, "form.order": rearranged(base.form)})
     restored = Params.from_dict(json.loads(json.dumps(parent.params.to_dict())))
     child = choose_params(G, restored, H.fictional("basil"), D.drift(D.parse("2029-03-14"), ADA.hash))
-    assert child.composition["lyrics"] == {"verse:0": {"0": AUTHORED}}
+    assert child.composition["lines"] == {"verse:wire": {"0": AUTHORED}}
     from songbird.cli import words
 
     score = realize(G, child, lyrics=words(G, child, sung_by_a_machine=True))
     assert [n.syllable for n in score.part("voice") if n.phrase == "v1"][:11] == AUTHORED.split()
     assert child.form[0] == "refrain"
     released = choose_params(G, child, overrides={AUTHORED_PATH: None})
-    assert "lyrics" not in released.composition
-    assert "lyrics" in child.composition
+    assert "lines" not in released.composition
+    assert "lines" in child.composition
 
 
 @pytest.mark.parametrize("path,text,why", [
@@ -266,8 +299,11 @@ def test_authored_words_follow_their_section_and_survive_a_child():
     (AUTHORED_PATH, AUTHORED.replace("kids", "**kids**"), "star each side"),
     (AUTHORED_PATH, 42, "1 to 500"),
     ("lyrics.intro:0.0", AUTHORED, "instrumental"),
-    ("lyrics.verse:0.100", AUTHORED, "no such lyric line"),
-    ("lyrics.verse:999.0", AUTHORED, "no such lyric line"),
+    ("lyrics.verse:wire.100", AUTHORED, "no such lyric line"),
+    ("lyrics.verse:nowhere.0", AUTHORED, "no verse called nowhere"),
+    ("lyrics.verse:0.0", AUTHORED, "named for it, not its place"),
+    ("lyrics.refrain:999.0", AUTHORED, "no such lyric line"),
+    ("lyrics.bridge:last.0", AUTHORED, "no such lyric line"),
     ("lyrics.unknown:0.0", AUTHORED, "no section"),
 ])
 def test_invalid_authored_lyrics_are_rejected_without_changing_the_line(path, text, why):
@@ -302,7 +338,7 @@ def test_hyphenated_lyrics_keep_whole_words_for_pronunciation_and_editor():
     ctx = explain.Context(G, None, None, ADA, "fictional:ada", "2026-09-27", D.parse("2026-09-27"))
     version = ctx.version(cleaned)
     view = explain.view(ctx, version)
-    section = next(s for s in view["composition"]["sections"] if s["id"] == "verse:0")
+    section = next(s for s in view["composition"]["sections"] if s["lyric_key"] == "verse:wire")
     line = section["phrases"][0]
     assert line["lyric_text"] == text and line["lyric_path"] == AUTHORED_PATH
     assert line["syllable_count"] == 11 and line["authored"]
@@ -312,9 +348,80 @@ def test_hyphenated_lyrics_keep_whole_words_for_pronunciation_and_editor():
     assert display["authored"] == [0] and display["lines"][0] == "A woman was singing it low to a child"
 
 
-def test_new_lyric_edit_for_an_absent_section_is_reported_and_not_claimed_as_applied():
-    path = "lyrics.verse:12.0"
-    resolved = E.resolve(G, None, ADA, DAY, {path: AUTHORED})
+def first_refrain_line():
+    """The first refrain's first line as this song sings it today (a line of the song's own)."""
+    today = E.resolve(G, None, ADA, DAY, {})
+    return C.lyric_value(G, today.params, today.lyrics, "lyrics.refrain:0.0")
+
+
+def sung(score, name, nth):
+    """The syllables of the nth section called name in a score (-1: the last), phrase by phrase."""
+    spans = [s for s in score.sections if s[0] == name]
+    _, start, end = spans[nth]
+    notes = [n for n in score.part("voice") if start - 0.5 <= n.start < end - 0.05 and n.section == name]
+    return [n.syllable for n in notes]
+
+
+def child_of(params, name, date):
+    from songbird.cli import words
+
+    machine = H.fictional(name)
+    child = choose_params(G, Params.from_dict(json.loads(json.dumps(params.to_dict()))), machine,
+                          D.drift(D.parse(date), machine.hash))
+    lyrics = words(G, child, sung_by_a_machine=True)
+    return child, lyrics, realize(G, child, lyrics=lyrics)
+
+
+@pytest.mark.parametrize("path,which", [("lyrics.refrain:12.0", "refrain"), ("lyrics.verse:kids.0", "verse")])
+def test_new_lyric_edit_for_an_absent_section_is_reported_and_not_claimed_as_applied(path, which):
+    text = first_refrain_line() if which == "refrain" else AUTHORED  # kids isn't among today's verses
+    resolved = E.resolve(G, None, ADA, DAY, {path: text})
     assert path not in resolved.applied and path not in resolved.marks
     assert not resolved.params.composition
-    assert any(p["path"] == path and "no such section" in p["why"] for p in resolved.problems)
+    assert any(p["path"] == path and "doesn't sing that section" in p["why"] for p in resolved.problems)
+
+
+def test_an_authored_line_stays_with_its_verse_when_a_child_sings_another_there():
+    parent = E.resolve(G, None, ADA, DAY, {"lyrics.verse:deaf.0": AUTHORED})
+    assert parent.lyrics.verses == ("wire", "misheard", "deaf") and not parent.problems
+    assert sung(realize(G, parent.params, lyrics=parent.lyrics), "verse", 2)[:11] == AUTHORED.split()
+    child, lyrics, score = child_of(parent.params, "coral", "2029-03-14")
+    assert lyrics.verses == ("wire", "misheard", "stroke")  # deaf's place now sings stroke
+    assert child.composition["lines"] == {"verse:deaf": {"0": AUTHORED}}  # carried, for a verse not sung
+    assert AUTHORED not in pack.words_as_sung(score.to_dict())
+    stroke = syllables(next(v["lines"][0] for v in G.source["bank"]["verses"] if v["id"] == "stroke"))
+    assert [unmarked(x) for x in sung(score, "verse", 2)[:len(stroke)]] == [unmarked(x) for x in stroke]
+    # a verse sung again later brings the line back, wherever it comes
+    view = C.view(G, child, lyrics)
+    assert [s["lyric_key"] for s in view["sections"] if s["name"] == "verse"] == [
+        "verse:wire", "verse:misheard", "verse:stroke"]
+    assert not any(p["authored"] for s in view["sections"] for p in s["phrases"])
+
+
+def test_the_last_refrains_line_follows_it_when_the_count_of_refrains_changes():
+    line = first_refrain_line()
+    n = len(syllables(line))
+    last = E.resolve(G, None, ADA, DAY, {"lyrics.refrain:last.0": line})
+    third = E.resolve(G, None, ADA, DAY, {"lyrics.refrain:2.0": line})
+    assert not last.problems and not third.problems and last.params.form.count("refrain") == 4
+    assert sung(realize(G, last.params, lyrics=last.lyrics), "refrain", -1)[:n] == syllables(line)
+    assert sung(realize(G, third.params, lyrics=third.lyrics), "refrain", 2)[:n] == syllables(line)
+    child, _, score = child_of(last.params, "coral", "2030-09-01")
+    assert child.form.count("refrain") == 3
+    assert sung(score, "refrain", -1)[:n] == syllables(line)  # the last refrain, wherever it now comes
+    child, _, score = child_of(third.params, "coral", "2030-09-01")
+    assert all(sung(score, "refrain", k)[:n] != syllables(line) for k in (1, 2))  # the third is gone, and its line
+
+
+def test_lines_an_older_record_kept_by_place_are_sung_there_and_handed_down_by_verse():
+    today = E.resolve(G, None, ADA, DAY, {})
+    old = replace(today.params, composition={"lyrics": {"verse:2": {"0": AUTHORED}}})  # the third verse: deaf
+    record = Params.from_dict(json.loads(json.dumps(old.to_dict())))
+    assert sung(realize(G, record, lyrics=today.lyrics), "verse", 2)[:11] == AUTHORED.split()
+    assert C.handed_down(G, record).composition == {"lines": {"verse:deaf": {"0": AUTHORED}}}
+    child, lyrics, score = child_of(record, "coral", "2029-03-14")
+    assert child.composition == {"lines": {"verse:deaf": {"0": AUTHORED}}}
+    assert AUTHORED not in pack.words_as_sung(score.to_dict())
+    same = child_of(record, "fox", "2029-03-14")  # a child still singing deaf third sings the line there
+    assert same[1].verses == ("wire", "misheard", "deaf")
+    assert sung(same[2], "verse", 2)[:11] == AUTHORED.split()

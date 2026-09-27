@@ -64,7 +64,8 @@ records what `songbird render --parent THE_PACKET --machine here --date
 ## The musical workbench
 
 The studio opens in **Arrange**. Four workspaces keep the editing surface focused:
-Arrange, Words, Sound, and Explore. Key, scale, tempo, full sung playback,
+Arrange, Words, Sound, and Explore. Key, scale, tempo, the song's length (the
+realized score's, the last chord's ring included), full sung playback,
 performance redraw, undo and redo remain available above them. The bottom player
 always provides playback and recording. **Record & pass it on** opens the singing
 and export details without placing them in the middle of the score.
@@ -92,7 +93,9 @@ space before the following phrase's pickup, and preserve the ending's scale-degr
 class. Validation rejects overlaps, non-finite values, excessive leaps and notes
 outside the phrase. **Step**, **Soften leaps**, and **Even rhythm** offer small,
 undoable compositional transformations. **Restore phrase/order** removes the local
-override and returns to the version inherited by this studio.
+override and returns to the version inherited by this studio: a released order gives
+the form back to the machine, which chooses it from the parent's as it would with no
+order (with no machine, the parent's form stays; never the seed's in its place).
 
 **Play sketch** auditions a phrase, section or whole song immediately through a
 small Web Audio oscillator. Loop and click provide practice tools; the playhead
@@ -119,11 +122,18 @@ unapplied typing stays in place while choices refresh. The writer is responsible
 for the meaning and rhyme. **Use the song's line** releases authored text, including
 text inherited from a parent recording.
 
-Authored text belongs to a section occurrence, such as the first verse, rather
-than to every use of its tune. It follows that section through arrangement moves.
-The bank continues evolving underneath it; restoring a bank line reveals the
-current procedural words. Original lines travel in compact composition data,
-and the exported lyric sheet is taken from the actual sung score.
+Authored text belongs to the words it replaces rather than to every use of its
+tune or to a place in the form: a verse's lines to that verse (`verse:wire`, or
+`verse:seed2` in a song without a bank), a refrain's, bridge's or tag's to its time
+round (`refrain:0`, `bridge2:0`; the last refrain is `refrain:last`, which the
+bank always sings the same way). It follows that section through arrangement
+moves. The bank continues evolving underneath it: a later version that still
+sings the verse sings the line in it, wherever it now comes; one that no longer
+sings it doesn't sing the line. Restoring a bank line reveals the current
+procedural words. Original lines travel in compact composition data (`lines`),
+and the exported lyric sheet is taken from the actual sung score. A recording
+made before lines were kept this way kept them by place (`lyrics`); it still sings
+them there, and its next version takes them by the verses it sang.
 
 ### Sound
 
@@ -143,7 +153,10 @@ the same machine.
 
 ### Drafts, history and recording
 
-Edits save in browser storage on this device. Date and chance are deliberately not
+Edits save in browser storage on this device, under the song genome's fingerprint as
+a draft is, so a changed song file doesn't bring back tune or lyric edits made for the
+old one (edits saved before the fingerprint was part of the key keep only the choices
+any genome takes: key, tempo, shape, band, mix, style). Date and chance are deliberately not
 retained across reloads, so tomorrow opens on tomorrow. Undo/redo covers note drags,
 word changes, arrangements and mixer actions (100 steps during the current visit).
 Cmd/Ctrl+Z works outside text fields; text fields keep their own editing history.
@@ -171,7 +184,7 @@ server keeps nothing else but caches, so any request can be replayed.
 |---|---|---|
 | `form.order` | section occurrence IDs (`verse:0`, `refrain:0`, …) | validated arrangement order, inherited in children |
 | `tune.<phrase>` | `{degree, onset, duration}` for each note, in beats | pitch/rhythm of every appearance of that phrase |
-| `lyrics.<section-id>.<line-index>` | syllable-hyphenated text, or null to release inherited text | one original lyric line, checked against its tune |
+| `lyrics.<section>:<verse-or-round>.<line-index>` | syllable-hyphenated text, or null to release inherited text | one original lyric line (`lyrics.verse:wire.0`, `lyrics.refrain:last.2`), checked against its tune; kept only where this version sings that verse or round |
 | `date` | "YYYY-MM-DD" | the moment time is read at: noon UTC that day, as `--date` |
 | `roll` | 1, 2, 3... | chance drawn again: the day's own seed drawn again that many times (`edits.rolled`), so chance still follows the day |
 | `tonic`, `mode`, `tempo` | a MIDI note, a mode, beats a minute | `Params` |

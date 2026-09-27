@@ -45,13 +45,14 @@ function studio() {
   const context = vm.createContext({
     document, Node, console, URL, location: { hash: '' },
     window: { addEventListener() {} },
-    localStorage: { getItem: (key) => storage.get(key), setItem: (key, value) => storage.set(key, value) },
+    localStorage: { getItem: (key) => storage.get(key), setItem: (key, value) => storage.set(key, value),
+      removeItem: (key) => storage.delete(key) },
     setTimeout: () => 1, clearTimeout() {},
   });
   const source = fs.readFileSync(path.join(__dirname, '../songbird/studio/studio.js'), 'utf8');
   vm.runInContext(source.replace(/\nmain\(\);\s*$/, '\n'), context);
   const run = (source) => vm.runInContext(source, context);
-  run('state.start = {title: "Song", from: "home", machine: {label: "test"}, day: "2026-09-27"}');
+  run('state.start = {title: "Song", from: "home", machine: {label: "test"}, day: "2026-09-27", song_digest: "abc123"}');
   return { context, run, nodes, storage };
 }
 const plain = (value) => JSON.parse(JSON.stringify(value));
@@ -224,26 +225,27 @@ test('authored lines never receive bank controls and hidden bank words have no f
 
 test('Reset words releases inherited and local original lines in the selected section as one undo', () => {
   const { run } = studio();
-  run(`state.edits = {"words.verse.0": {id: "home"}, "lyrics.verse:0.2": "My new line", "lyrics.verse:1.0": "Another verse", tempo: 100};
-    state.view = {composition: {sections: [{index: 2, id: "verse:0", phrases: [
-      {lyric_path: "lyrics.verse:0.0", authored: true}, {lyric_path: "lyrics.verse:0.1", authored: false},
-      {lyric_path: "lyrics.verse:0.2", authored: true}
+  run(`state.edits = {"words.verse.0": {id: "home"}, "lyrics.verse:home.2": "My new line", "lyrics.verse:away.0": "Another verse", tempo: 100};
+    state.view = {composition: {sections: [{index: 2, id: "verse:0", lyric_key: "verse:home", phrases: [
+      {lyric_path: "lyrics.verse:home.0", authored: true}, {lyric_path: "lyrics.verse:home.1", authored: false},
+      {lyric_path: "lyrics.verse:home.2", authored: true}
     ]}]}};
     undoWords({index: 2, name: "verse", block: "verse", nth: 0, path: "words.verse.0", label: "Verse 1", authored: [0, 2]})`);
   assert.deepEqual(plain(run('state.edits')), {
-    'lyrics.verse:0.0': null, 'lyrics.verse:0.2': null, 'lyrics.verse:1.0': 'Another verse', tempo: 100,
+    'lyrics.verse:home.0': null, 'lyrics.verse:home.2': null, 'lyrics.verse:away.0': 'Another verse', tempo: 100,
   });
   assert.equal(run('state.undo.length'), 1);
   run('travelHistory("undo")');
   assert.deepEqual(plain(run('state.edits')), {
-    'words.verse.0': { id: 'home' }, 'lyrics.verse:0.2': 'My new line', 'lyrics.verse:1.0': 'Another verse', tempo: 100,
+    'words.verse.0': { id: 'home' }, 'lyrics.verse:home.2': 'My new line', 'lyrics.verse:away.0': 'Another verse', tempo: 100,
   });
 });
 
 test('Reset words uses the second bridge identity and clears pending text without touching the first bridge', () => {
   const { run } = studio();
   run(`state.edits = {"words.bridge2": "then", "lyrics.bridge:0.0": "First bridge", "lyrics.bridge2:0.1": "Pending text"};
-    state.view = {words: [{index: 0, name: "bridge"}, {index: 1, name: "bridge2"}]};
+    state.view = {words: [{index: 0, name: "bridge"}, {index: 1, name: "bridge2"}], composition: {sections: [
+      {index: 0, id: "bridge:0", lyric_key: "bridge:0", phrases: []}, {index: 1, id: "bridge2:0", lyric_key: "bridge2:0", phrases: []}]}};
     undoWords({index: 1, name: "bridge2", block: "bridge", nth: 1, path: "words.bridge2", label: "Bridge 2", authored: [0]})`);
   assert.deepEqual(plain(run('state.edits')), {
     'lyrics.bridge:0.0': 'First bridge', 'lyrics.bridge2:0.0': null, 'lyrics.bridge2:0.1': null,
@@ -278,4 +280,30 @@ test('a template part omitted from server choices is disabled rather than offere
   const toggle = nodes(tree).find((node) => node.tagName === 'BUTTON');
   assert.ok(Object.hasOwn(toggle, 'disabled'));
   assert.equal(toggle['aria-pressed'], 'true');
+});
+
+test('saved edits are kept under the song genome\'s digest, and older ones keep only choices any genome takes', () => {
+  const { run, storage } = studio();
+  run('setEdit("tempo", 100)');
+  assert.deepEqual([...storage.keys()], ['songbird-studio|Song|home|test|abc123']);
+  run('state.start.song_digest = "def456"');
+  assert.deepEqual(plain(run('restore()')), {});  // another genome: its tune and lines aren't this one's
+  storage.clear();
+  storage.set('songbird-studio|Song|home|test', JSON.stringify({
+    tempo: 90, 'band.lute': 0.5, 'tune.v1': [{degree: 1, onset: 0, duration: 1}], 'lyrics.verse:0.0': 'A line',
+    'form.order': ['verse:0'], 'words.verse.0': {id: 'home'},
+  }));
+  assert.deepEqual(plain(run('restore()')), { tempo: 90, 'band.lute': 0.5 });
+  assert.equal(storage.has('songbird-studio|Song|home|test'), false);
+  assert.deepEqual(JSON.parse(storage.get('songbird-studio|Song|home|test|def456')), { tempo: 90, 'band.lute': 0.5 });
+  assert.deepEqual(plain(run('restore()')), { tempo: 90, 'band.lute': 0.5 });
+});
+
+test('the song\'s length is shown beside the tempo and key', () => {
+  const { run, nodes } = studio();
+  run(`state.start.bounds = {tempo: {min: 60, max: 120, step: 0.5}};
+    state.view = {cards: [{id: "tempo", tempo: 96}], composition: {duration: 187.4}}; renderSessionControls()`);
+  const shown = nodes.get('sessionControls').children.at(-1);
+  assert.equal(shown.className, 'session-duration hint');
+  assert.equal(shown.children.join(''), 'Length 3:07');
 });

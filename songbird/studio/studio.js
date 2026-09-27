@@ -66,9 +66,18 @@ function toast(text) {
   toast.timer = setTimeout(() => t.classList.remove("show"), 2600);
 }
 
+// Saved edits belong to the exact song genome they were made for, as a draft does (drafts.js): a tune or lyric
+// edit made for another version of the song's file would come back as a problem on every visit.
 function storeKey() {
-  return state.start ? `songbird-studio|${state.start.title}|${state.start.from}|${state.start.machine.label}` : null;
+  const s = state.start;
+  return s ? `songbird-studio|${s.title}|${s.from}|${s.machine.label}|${s.song_digest || ""}` : null;
 }
+function olderStoreKey() {  // before the key carried the song's digest
+  const s = state.start;
+  return s ? `songbird-studio|${s.title}|${s.from}|${s.machine.label}` : null;
+}
+// Edits written for one genome's tune, lyric keys, word bank or sections: never carried over from an unknown one.
+const GENOME_BOUND = /^(tune|lyrics|words)\.|^form\.order$/;
 function save() {
   // only ever after a person's own change (edits that came in the page's address are never saved on their
   // own); the day and chance drawn again aren't kept, so tomorrow opens on tomorrow
@@ -80,7 +89,24 @@ function save() {
   renderHistory();
 }
 function restore() {
-  try { return editMap(JSON.parse(localStorage.getItem(storeKey()) || "{}")); } catch (e) { return {}; }
+  let saved = null;
+  try { saved = localStorage.getItem(storeKey()); } catch (e) { return {}; }
+  if (saved !== null && saved !== undefined) {
+    try { return editMap(JSON.parse(saved)); } catch (e) { return {}; }
+  }
+  // Edits saved before the key carried the song's digest: which genome they were made for is unknown, so
+  // only the choices that don't depend on it (key, tempo, shape, band, mix, style) come across, once.
+  let older = {};
+  try {
+    const old = olderStoreKey();
+    older = editMap(JSON.parse(localStorage.getItem(old) || "{}"));
+    localStorage.removeItem(old);
+  } catch (e) { return {}; }
+  const kept = Object.fromEntries(Object.entries(older).filter(([path]) => !GENOME_BOUND.test(path)));
+  if (Object.keys(kept).length) {
+    try { localStorage.setItem(storeKey(), JSON.stringify(kept)); } catch (e) { /* kept for this visit */ }
+  }
+  return kept;
 }
 
 function lines(texts, className) {
@@ -315,16 +341,16 @@ function undoWords(w) {
   if (w.block === "bridge" && w.nth === 0) paths.push("words.bridge");
   const next = copyEdits();
   for (const path of paths) delete next[path];
+  // A person's lines are kept by the verse (or time round) they're written for, the section's lyric_key
+  // (songbird/composition.py), not by its place in the form.
   const section = state.view?.composition?.sections.find((item) => item.index === w.index);
-  const name = w.name || w.block;
-  const occurrence = state.view?.words?.filter((item) => item.index < w.index && item.name === name).length
-    ?? w.nth ?? 0;
-  const identity = section?.id || `${name}:${occurrence}`;
-  const prefix = `lyrics.${identity}.`;
   // Null explicitly releases inherited original text. Removing a local edit alone would reveal it again.
-  for (const line of w.authored || []) next[`${prefix}${line}`] = null;
   for (const phrase of section?.phrases || []) if (phrase.authored && phrase.lyric_path) next[phrase.lyric_path] = null;
-  for (const path of Object.keys(next)) if (path.startsWith(prefix)) next[path] = null;
+  if (section?.lyric_key) {
+    const prefix = `lyrics.${section.lyric_key}.`;
+    for (const line of w.authored || []) next[`${prefix}${line}`] = null;
+    for (const path of Object.keys(next)) if (path.startsWith(prefix)) next[path] = null;
+  }
   commitEdits(next, `Reset ${w.label.toLowerCase()} words`);
 }
 
@@ -587,8 +613,9 @@ function renderSessionControls() {
     controls.push(chips("Key", notes, key.tonic, (value) => setEdit("tonic", value), { text: bounds.tonic.names }));
     controls.push(chips("Scale", bounds.mode.options, key.mode, (value) => setEdit("mode", value), { text: bounds.mode.names }));
   }
+  // the song's length as it will be recorded: the realized score's, the last chord's ring included
   const total = state.view.composition?.duration;
-  if (total) controls.push(h("span", { class: "session-duration hint" }, fmtTime(total)));
+  if (total) controls.push(h("span", { class: "session-duration hint", title: "How long the song lasts" }, `Length ${fmtTime(total)}`));
   box.replaceChildren(...controls);
 }
 

@@ -959,6 +959,10 @@ def choose(genome: Genome, parent=None, voice: Voice | None = None, drift: Drift
     from .realize import Params
 
     song = Params.from_dict(genome.seed_params)
+    if parent is not None:  # a person's lines from an older record, by verse rather than by place
+        from .composition import handed_down
+
+        parent = handed_down(genome, parent)
     # a generation on from its parent, made here and now (a child on this machine changes only what a clock has
     # turned on since); sung from the genome with no parent rendition it is, as its record counts, generation 0
     generation = int(getattr(parent, "generation", 0)) + 1 if parent is not None else 0

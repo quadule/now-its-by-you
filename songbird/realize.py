@@ -123,7 +123,14 @@ def choose_params(genome: Genome, parent: Params | None = None, voice: Voice | N
     edits.Overrides, which also says which took effect and why any didn't),
     each put in place of the choice it names, inside the table so a decision
     that reads it reads the person's. None or none at all: as without.
+
+    A parent from before a person's lines were kept by verse hands them down
+    by verse (composition.handed_down).
     """
+    if parent is not None:
+        from .composition import handed_down
+
+        parent = handed_down(genome, parent)
     if overrides is not None:
         from .edits import Overrides
 
@@ -284,7 +291,6 @@ def realize(genome: Genome, params: Params, verses=None, phrasing: Phrasing | No
     verses and fixed blocks; without them the seed's own words are sung."""
     if lyrics is not None and verses is not None:
         raise ValueError("realize sings verses or lyrics, not both")
-    authored = params.composition.get("lyrics", {})
     verses = verses if verses is not None else genome.seed_verses
     meter = genome.meter
     rng = np.random.default_rng(params.seed)
@@ -298,9 +304,11 @@ def realize(genome: Genome, params: Params, verses=None, phrasing: Phrasing | No
     rounds = {b: sum(genome.section(n).lyrics == b for n in params.form) for b in genome.fixed}
     heard = dict.fromkeys(genome.fixed, 0)
     drawn = lyrics.lines_for(genome, params.form) if lyrics is not None else None  # per section, None if no words
-    from .composition import section_ids
+    from .composition import authored
 
-    for j, (name, identity) in enumerate(zip(params.form, section_ids(params.form))):
+    # a person's own lines, each in the verse (or time round) it was written for (songbird.composition)
+    patches = authored(genome, params, lyrics)
+    for j, (name, patch) in enumerate(zip(params.form, patches)):
         section = genome.section(name)  # bridge2: the bridge again, same phrases and choir
         lines: list = [None] * len(section.phrases)
         if drawn is not None:
@@ -312,8 +320,8 @@ def realize(genome: Genome, params: Params, verses=None, phrasing: Phrasing | No
             block = section.lyrics
             lines = [turn(line, heard[block], rounds[block]) for line in genome.fixed[block]]
             heard[block] += 1
-        if identity in authored:
-            lines = [authored[identity].get(str(i), line) for i, line in enumerate(lines)]
+        if patch:
+            lines = [patch.get(str(i), line) for i, line in enumerate(lines)]
         for pid, line in zip(section.phrases, lines):
             phrase = genome.phrases[pid]
             placed.append((name, phrase, t, line))
