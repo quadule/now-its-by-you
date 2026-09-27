@@ -511,11 +511,11 @@ function decimated(samples, factor, start, count) {
   return out;
 }
 
-export function leakLag(samples, rate, guide, offset, from, maxLag = 0.4, window = 6) {
+export function leakLag(samples, rate, guide, offset, from, maxLag = 0.4, window = 20) {
   /* Where the guide, leaking from a speaker into the microphone, lies in a take: how many seconds
      later than the take's own estimate of guide time (sample 0 = guide time `from`), and how
-     strongly it correlates (0..1; under about 0.1 there is no leak to speak of). The take's first
-     `window` seconds against the guide (an AudioBuffer at the take's rate, decoded `offset`
+     strongly it correlates (0..1; a quiet speaker gives 0.1 or so). The take's first `window` seconds
+     (a leak's correlation is broad, so a long stretch is what lifts its peak clear of chance) against the guide (an AudioBuffer at the take's rate, decoded `offset`
      seconds early), both brought down to about 4 kHz, at every lag within ±maxLag. */
   const f = Math.max(1, Math.round(rate / 4000)), r = rate / f;
   const n = Math.min(Math.floor(samples.length / f), Math.round(window * r));

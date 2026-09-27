@@ -811,7 +811,7 @@ function finishTake(stoppedAt) {
   $("reviewTitle").textContent = whole ? "That take" : `That take of ${part.title}`;
   let note = S.interrupted ? ' <span class="warn">The page went into the background while you sang, so this take may have gaps: listen before you keep it.</span>' : "";
   const level = long ? K.takeLevel(samples, rate) : 0; // a phone can hand back a very quiet voice, or none at all
-  if (long && level < -40) {
+  if (long && level < -52) {  // a phone's raw microphone sits near -40 dBFS on a normal take; this is far under
     note += ` <span class="warn">Your voice came through very quietly (${Math.round(level)} dB), so you may barely hear it played back.` +
       (S.take.aec ? " Without headphones the phone may be cancelling your voice along with the guide: try headphones, or sing closer to the microphone." : " Try singing closer to the microphone.") + "</span>";
   }
