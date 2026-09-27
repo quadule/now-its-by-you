@@ -74,9 +74,9 @@ is the old way, from before singers had pages: use sync.)
 Everything below runs in `web/sing`, where `npx wrangler` is the copy `npm install` put there. You're
 logged in, the bucket `songbird-takes` exists, and the KV namespace's id is in wrangler.toml.
 
-1. **Build the site**, from the repo: `uv run python tools/sing_site.py` (every guide, song.json v2,
-   the pages; build and sync on the same machine, so the guide scores takes are measured against are
-   in `recordings/guides/`).
+1. **Build the site**, from the repo: `uv run python tools/sing_site.py` (all 90 guides, about half an
+   hour; song.json v2 and the worker's small copy of it, `song/worker.json`; the pages). Build and
+   sync on the same machine, so the guide scores takes are measured against are in `recordings/guides/`.
 2. **Check the dates** in wrangler.toml's `[vars]` against web/sing/consent.md.
 3. **The backstop**: have R2 itself delete takes and files after 30 September, in case the purge
    ever doesn't run (it acts within a day of the date, so it's a backstop, not the promise):
