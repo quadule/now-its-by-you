@@ -35,7 +35,8 @@ def test_drawing_without_choices_is_as_it_was():
     own way, and when seven more heads came (2026-09-26; the refrain's own changes moved every verse, bridge
     and tag drawn as before), and when the artist dropped the go head (2026-09-26), and when the given stanza went and owed, borrow, slow and
     four verses came (mic, search, misheard, choir; 2026-09-26), and when the first refrain came to ask who
-    made, wrote or sang it (question_first, 2026-09-27: only refrain questions moved)."""
+    made, wrote or sang it (question_first, 2026-09-27: only refrain questions moved), and when the bird verse's
+    last two lines were rewritten with a carry swap, and the wind couplet, the bone and border verses and the lyric review's six came (2026-09-27)."""
     lean = A.Leanings(mood_weights={"light": 2.0, "dark": 0.5}, era_bias=-0.4, rarity_appetite=0.6,
                       vocabulary=frozenset({"sea", "ship", "fiddle", "bird"}))
     digest = hashlib.sha256()

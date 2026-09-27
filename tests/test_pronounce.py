@@ -16,5 +16,5 @@ def test_the_song_says_its_own_readings_and_the_suspects_leave_them_out():
     assert P.said("per-fect", g.lexicon).split()[0] == "PER-fect" and P.said("per-fect", None).split()[0] == "per-FECT"
     several, two_ways = P.suspects(g)
     assert "no-bo-dy" not in several and "per-fect" not in two_ways and "rec-ord" not in two_ways
-    assert "rail-way" in several and "fif-teen" in two_ways  # still there, for a person to judge
+    assert "rail-way" in several and "des-ert" in two_ways  # still there, for a person to judge (fif-teen has its own reading)
     assert "who" in P.words(g) and "refrain" in P.words(g)["who"]
