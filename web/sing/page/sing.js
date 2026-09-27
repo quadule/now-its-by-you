@@ -724,6 +724,7 @@ document.addEventListener("keydown", e => {
   }
 });
 window.addEventListener("resize", () => { if (S.mode === "idle" && S.view) resting(); });
+K.fullScreen($("sing"), $("full"), () => { if (S.mode === "idle" && S.view) resting(); }); // the lane at its new size
 
 function finishTake(stoppedAt) {
   const rate = S.ctx.sampleRate, r = S.recording, part = r.part, whole = part.index === null;

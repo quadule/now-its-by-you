@@ -17,9 +17,10 @@
   </header>
 
   <section class="pitch" aria-label="What this is">
-    <p class="lead">Run the program and you get a new version of the song, shaped by your computer and the day.</p>
-    <p>Sing into it and it learns a little of your timing and inflection (your recording is deleted right after, and your
-      voice is never cloned).</p>
+    <p class="lead">Project Songbird is a folk song passed between people and computers that explores music's ability to take on a life of its own, in verse and by embedding the software that sang it.</p>
+    <p>Run the program and you get a new version of the song, shaped by your computer and the day. Sing into it and it
+      learns a little of your timing and inflection (your recording is deleted right after, and your voice is never
+      cloned).</p>
     <p>The piece confronts the blurred authorship of AI music through the lens of folk music and oral tradition: it wonders
       who made it, and invites you to take part.</p>
   </section>
@@ -126,6 +127,7 @@
       <div class="parts" id="parts" role="group" aria-label="What to sing"></div>
       <p class="partLabel" id="partLabel"></p>
       <div class="stage">
+        <button id="full" class="full" type="button">⛶ Full screen</button>
         <canvas class="lane" id="lane"></canvas>
         <div class="scroller"><div class="reel" id="reel"></div></div>
         <div class="bar"><div id="progress"></div></div>
@@ -166,8 +168,6 @@
       <p>Have a verse in you, a line, or an idea for the song? Write it here: early singers can help shape what it sings.</p>
       <textarea id="wordsText" rows="5" maxlength="4000" placeholder="a verse, a line, an idea…"></textarea>
       <p class="hint count" id="wordsCount"></p>
-      <p class="plain">Whatever you send is given to the song: you give up all rights to it, and you understand the song will be
-        shared.</p>
       <div class="consent" id="wordsRelease" data-digest="{{WORDS_DIGEST}}">{{WORDS_RELEASE}}</div>
       <label class="agree"><input type="checkbox" id="wordsAgree"> I've read this and I agree.</label>
       <div class="row"><button id="wordsSend">Send these words</button></div>

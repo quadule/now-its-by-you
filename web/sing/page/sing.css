@@ -109,7 +109,24 @@ button:disabled { opacity: .4; cursor: default; }
 .meter > span { display: block; height: 100%; width: 0; background: var(--ok); }
 .slide input[type=range] { flex: 1 1 160px; accent-color: var(--accent); }
 
-.stage { background: var(--stage); border-radius: 14px; padding: 10px; }
+.stage { position: relative; background: var(--stage); border-radius: 14px; padding: 10px; }
+button.full { position: absolute; top: 16px; right: 16px; z-index: 2; min-height: 32px; padding: 4px 10px; font-size: 13px;
+              border: 0; border-radius: 8px; background: rgba(21, 18, 15, .55); color: #efe6da; }
+/* a phone: the stage runs the full width of the screen (past the card's padding and the page's) */
+@media (max-width: 600px) {
+  #sing .stage { margin: 0 -33px; border-radius: 0; padding: 8px 0; }
+  #sing canvas.lane, #sing .scroller { border-radius: 0; }
+}
+/* full screen: the browser's own (:fullscreen), or the page's own on an iPhone (.fs) */
+#sing:fullscreen, #sing.fs { margin: 0; border: 0; border-radius: 0; overflow-y: auto; background: var(--card);
+                             padding: max(8px, env(safe-area-inset-top)) 10px calc(16px + env(safe-area-inset-bottom)); }
+#sing.fs { position: fixed; inset: 0; z-index: 100; }
+body.fs-on { overflow: hidden; }
+#sing:fullscreen > h2, #sing.fs > h2, #sing:fullscreen > .hint, #sing.fs > .hint { display: none; }
+#sing:fullscreen .stage, #sing.fs .stage { margin: 0 -10px; border-radius: 0; padding: 6px 0; }
+#sing:fullscreen canvas.lane, #sing.fs canvas.lane { height: 38vh; border-radius: 0; }
+#sing:fullscreen .scroller, #sing.fs .scroller { height: 30vh; border-radius: 0; }
+#sing:fullscreen .parts, #sing.fs .parts { margin-top: 4px; }
 canvas.lane { display: block; width: 100%; height: 150px; background: var(--stage-panel); border-radius: 10px; }
 .scroller { position: relative; height: 210px; overflow: hidden; margin-top: 8px; background: var(--stage-panel); border-radius: 10px;
             color: var(--stage-ink);

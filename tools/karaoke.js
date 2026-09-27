@@ -17,7 +17,8 @@
 
 export const NAMES = { intro: "Intro", verse: "Verse", refrain: "Refrain", turn: "Turn", bridge: "Bridge", tag: "Tag",
                        break: "Break", outro: "Outro" };
-export const PAST = 2.0, FUTURE = 5.0; // seconds of the lane either side of the playhead
+export const PAST = 2.0, FUTURE = 5.0; // seconds of the lane either side of the playhead, on a wide screen
+export const PX_PER_SECOND = 100; // at least this: a fifth of a second is then 20 px, room for its syllable
 export const TAIL = 0.6; // seconds a one-section take runs past its window's end, for the last note to die away
 
 /* ---------- the version sung: a set of words, a key and a speed ---------- */
@@ -155,6 +156,14 @@ export function target(notes, t) {
   return best;
 }
 
+export function laneSpan(width) {
+  // the seconds the lane shows either side of the playhead: PAST and FUTURE where the screen is wide
+  // enough, else fewer in the same proportion, so a short syllable still has room for its word (a phone
+  // held upright shows about three and a half seconds, turned sideways all seven)
+  const span = Math.min(PAST + FUTURE, Math.max(3, width / PX_PER_SECOND));
+  return { past: (span * PAST) / (PAST + FUTURE), future: (span * FUTURE) / (PAST + FUTURE), span };
+}
+
 export function drawLane(c, notes, lo, hi, pos, trail) {
   // the notes to come as bars at their pitch, the playhead, and the pitch sung as a line
   // (green on the note, amber off it), folded into the song's octave
@@ -163,7 +172,7 @@ export function drawLane(c, notes, lo, hi, pos, trail) {
   if (c.width !== Math.round(W * dpr) || c.height !== Math.round(H * dpr)) { c.width = Math.round(W * dpr); c.height = Math.round(H * dpr); }
   g.setTransform(dpr, 0, 0, dpr, 0, 0);
   g.clearRect(0, 0, W, H);
-  const span = PAST + FUTURE, px = (W * PAST) / span;
+  const { past: PAST, future: FUTURE, span } = laneSpan(W), px = (W * PAST) / span;
   const x = t => px + ((t - pos) * W) / span;
   const y = m => H - 22 - ((m - lo) / (hi - lo)) * (H - 40);
   const h = Math.max(7, ((H - 40) / (hi - lo)) * 0.72);
@@ -172,17 +181,22 @@ export function drawLane(c, notes, lo, hi, pos, trail) {
   g.lineWidth = 1;
   for (let m = Math.ceil(lo); m <= hi; m++) { g.beginPath(); g.moveTo(0, y(m)); g.lineTo(W, y(m)); g.stroke(); }
 
-  g.font = "11px -apple-system, system-ui, sans-serif";
-  for (const n of notes) {
-    if (n.end < pos - PAST - 1 || n.start > pos + FUTURE + 1) continue;
+  g.font = "12px -apple-system, system-ui, sans-serif";
+  notes.forEach((n, i) => {
+    if (n.end < pos - PAST - 1 || n.start > pos + FUTURE + 1) return;
     const x0 = x(n.start), x1 = Math.max(x(n.end) - 3, x0 + 5), yy = y(n.pitch);
     const now = pos >= n.start && pos < n.end, done = pos >= n.end;
     g.fillStyle = now ? "#f2b25c" : done ? "rgba(242,178,92,0.32)" : "rgba(239,230,218,0.5)";
     g.beginPath();
     if (g.roundRect) g.roundRect(x0, yy - h / 2, x1 - x0, h, 4); else g.rect(x0, yy - h / 2, x1 - x0, h);
     g.fill();
-    if (x1 - x0 > 12) { g.fillStyle = done ? "rgba(239,230,218,0.35)" : "rgba(239,230,218,0.75)"; g.fillText(n.text, x0 + 1, yy + h / 2 + 12); }
-  }
+    // its syllable, where it fits before the next note begins (not only under its own bar)
+    const room = (notes[i + 1] ? x(notes[i + 1].start) : W) - x0 - 2;
+    if (g.measureText(n.text).width <= room || x1 - x0 > 12) {
+      g.fillStyle = done ? "rgba(239,230,218,0.35)" : "rgba(239,230,218,0.75)";
+      g.fillText(n.text, x0 + 1, yy + h / 2 + 13);
+    }
+  });
 
   if (trail && trail.length) {
     g.lineWidth = 3;
@@ -201,6 +215,43 @@ export function drawLane(c, notes, lo, hi, pos, trail) {
   g.strokeStyle = "#e0664d";
   g.lineWidth = 2;
   g.beginPath(); g.moveTo(px, 8); g.lineTo(px, H - 8); g.stroke();
+}
+
+/* ---------- full screen ---------- */
+
+export function fullScreen(el, button, changed) {
+  // el fills the screen while singing: the browser's own full screen where it gives one to any element,
+  // else (an iPhone) the page's own, el laid over everything (class "fs"); the button goes in and out,
+  // Escape leaves the page's own; changed(on) after each change, to draw again at the new size
+  const real = () => (document.fullscreenElement || document.webkitFullscreenElement) === el;
+  const faked = () => el.classList.contains("fs");
+  const show = () => {
+    if (real()) el.classList.remove("fs"); // the browser's own came, if late: the page's own isn't needed
+    const on = real() || faked();
+    button.textContent = on ? "✕ Exit full screen" : "⛶ Full screen";
+    button.setAttribute("aria-pressed", String(on));
+    document.body.classList.toggle("fs-on", faked());
+    if (changed) requestAnimationFrame(() => changed(on));
+  };
+  const leave = () => { el.classList.remove("fs"); show(); };
+  button.addEventListener("click", async () => {
+    if (real()) return void (document.exitFullscreen || document.webkitExitFullscreen).call(document);
+    if (faked()) return leave();
+    const ask = el.requestFullscreen || el.webkitRequestFullscreen;
+    if (ask && (document.fullscreenEnabled || document.webkitFullscreenEnabled)) {
+      // some browsers never answer (an app's embedded view): wait a moment, then use the page's own
+      const moment = new Promise((_, no) => setTimeout(() => no(new Error("no answer")), 700));
+      try { await Promise.race([Promise.resolve(ask.call(el, { navigationUI: "hide" })), moment]); } catch (e) { /* below */ }
+      if (real()) return;
+    }
+    el.classList.add("fs");
+    el.scrollTop = 0;
+    show();
+  });
+  document.addEventListener("fullscreenchange", show);
+  document.addEventListener("webkitfullscreenchange", show);
+  document.addEventListener("keydown", e => { if (e.key === "Escape" && faked()) leave(); });
+  show();
 }
 
 /* ---------- the words ---------- */

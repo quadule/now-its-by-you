@@ -9,6 +9,7 @@ import {
   inWindow, keyLabel, moment, nearestSpec, nextSection, parseSpec, part, pitchAt, reelLines, restAt, sectionLabel, shifted, slug,
   specId, specText, speedLabel, sungSections, tapLags, wavBytes, yin,
 } from "../../../tools/karaoke.js";
+import * as K from "../../../tools/karaoke.js";
 
 const RATE = 48000;
 
@@ -266,4 +267,14 @@ test("when singing closes, on the artist's clock and the singer's", () => {
   assert.equal(closingTime(closes, "Europe/Lisbon"), "Sunday 27 September at 10 PM Pacific (Monday 28 September at 6 AM your time)");
   assert.equal(closingTime(closes, "Asia/Kolkata"), "Sunday 27 September at 10 PM Pacific (Monday 28 September at 10:30 AM your time)");
   assert.equal(closingTime(undefined), "");
+});
+
+test("a narrow lane shows fewer seconds, so a short syllable keeps room for its word", () => {
+  const wide = K.laneSpan(1200), phone = K.laneSpan(375), tiny = K.laneSpan(200);
+  assert.equal(wide.span, K.PAST + K.FUTURE); // a wide screen: all of it
+  assert.ok(Math.abs(phone.span - 3.75) < 1e-9 && 375 / phone.span >= K.PX_PER_SECOND); // an upright phone: 100 px a second
+  assert.equal(tiny.span, 3); // never less than three seconds
+  for (const s of [wide, phone, tiny]) {
+    assert.ok(Math.abs(s.past + s.future - s.span) < 1e-9 && Math.abs(s.past / s.future - K.PAST / K.FUTURE) < 1e-9);
+  }
 });

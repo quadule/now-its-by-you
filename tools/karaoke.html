@@ -29,6 +29,15 @@
   .partLabel { min-height: 1.4em; }
 
   canvas.lane { display: block; width: 100%; height: 190px; margin-top: 10px; background: var(--panel); border-radius: 14px; }
+  .lanebox { position: relative; }
+  button.full { position: absolute; top: 18px; right: 8px; z-index: 2; padding: 4px 10px; font-size: 13px; border: 0;
+                border-radius: 8px; background: rgba(21, 18, 15, .6); }
+  /* full screen: the browser's own (:fullscreen), or the page's own where it has none (.fs) */
+  #stagebox:fullscreen, #stagebox.fs { overflow-y: auto; background: var(--bg); padding: 12px 16px 24px; }
+  #stagebox.fs { position: fixed; inset: 0; z-index: 100; }
+  body.fs-on { overflow: hidden; }
+  #stagebox:fullscreen canvas.lane, #stagebox.fs canvas.lane { height: 40vh; }
+  #stagebox:fullscreen .scroller, #stagebox.fs .scroller { height: 32vh; }
   .scroller { position: relative; height: 240px; overflow: hidden; margin-top: 10px; background: var(--panel); border-radius: 14px;
               -webkit-mask-image: linear-gradient(transparent, #000 14%, #000 80%, transparent);
               mask-image: linear-gradient(transparent, #000 14%, #000 80%, transparent); }
@@ -87,9 +96,9 @@
   </header>
 
   <section class="pitch" aria-label="What this is">
-    <p>Run the program and you get a new version of the song, shaped by your computer and the day.</p>
-    <p>Sing into it and it learns a little of your timing and inflection (your recording is deleted right after, and your voice is
-      never cloned).</p>
+    <p>Project Songbird is a folk song passed between people and computers that explores music's ability to take on a life of its own, in verse and by embedding the software that sang it.</p>
+    <p>Run the program and you get a new version of the song, shaped by your computer and the day. Sing into it and it learns
+      a little of your timing and inflection (your recording is deleted right after, and your voice is never cloned).</p>
     <p>The piece confronts the blurred authorship of AI music through the lens of folk music and oral tradition: it wonders
       who made it, and invites you to take part.</p>
   </section>
@@ -108,10 +117,11 @@
     <div class="hint" id="setAbout"></div>
   </div>
 
+  <section class="stagebox" id="stagebox" aria-label="Sing">
   <div class="parts" id="parts" role="group" aria-label="What to sing"></div>
   <div class="hint partLabel" id="partLabel"></div>
 
-  <canvas class="lane" id="lane"></canvas>
+  <div class="lanebox"><button id="full" class="full" type="button">⛶ Full screen</button><canvas class="lane" id="lane"></canvas></div>
   <div class="scroller"><div class="reel" id="reel"></div></div>
   <div class="bar"><div id="progress"></div></div>
 
@@ -143,6 +153,8 @@
       <span class="hint" id="shiftValue">as recorded</span>
     </div>
   </div>
+
+  </section>
 
   <div class="panel">
     <h2>Singers</h2>
@@ -750,6 +762,7 @@ document.addEventListener("keydown", e => {
   if (e.code === "Space" && S.mode !== "idle" && S.mode !== "calibrating" && e.target.tagName !== "INPUT") { e.preventDefault(); stop(); }
 });
 window.addEventListener("resize", () => { if (S.mode === "idle" && S.view) resting(); });
+K.fullScreen($("stagebox"), $("full"), () => { if (S.mode === "idle" && S.view) resting(); });  // the lane at its new size
 
 function takeBuffer() {
   if (!S.take.buffer) {
