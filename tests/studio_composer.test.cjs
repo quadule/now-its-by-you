@@ -198,6 +198,17 @@ test("precise length and keyboard timing keep syllables separate and update shar
   assert.equal(s.commits.at(-1).value[0].onset, -0.25);
 });
 
+test("blocked note changes leave an inherited phrase unpinned", () => {
+  const s = setup(), before = clone(s.phrase().notes);
+  s.find('[data-note="0"]').emit("keydown", { key: "ArrowLeft" });
+  assert.equal(s.commits.length, 0, "a note already at its earliest position must not pin a phrase");
+  s.find('[data-note="0"]').emit("click");
+  s.find("#sbc-note-length").emit("change", { target: { value: "99" } });
+  assert.equal(s.commits.length, 0, "overlap protection alone must not create an authored melody");
+  assert.equal(s.find("#sbc-note-length").value, "0.5", "the inspector restores the actual clamped value");
+  assert.deepEqual(s.phrase().notes, before);
+});
+
 test("pointer moving and resizing commit notes; cancelling a drag does not", () => {
   const s = setup();
   let item = s.find('[data-note="1"]'), rect = item.getBoundingClientRect();

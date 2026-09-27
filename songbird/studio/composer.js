@@ -114,6 +114,13 @@
   function commitNotes(notes, message) {
     const p = phrase();
     if (!p || !notes.length) return;
+    if (notes.every((n, index) => n.degree === p.notes[index].degree && n.onset === p.notes[index].onset && n.duration === p.notes[index].duration)) {
+      // A guarded drag or nudge can end exactly where it started. Pinning that
+      // untouched phrase would unnecessarily stop its inherited evolution.
+      paint();
+      if (message) announce(message);
+      return;
+    }
     if (notes.some((n, index) => index && Math.abs(n.degree - notes[index - 1].degree) > Math.max(bounds(p).max_leap || 7, Math.abs(p.notes[index].degree - p.notes[index - 1].degree)))) {
       bridge().toast?.("That would make a leap wider than an octave. Try moving the neighboring note first."); return;
     }
