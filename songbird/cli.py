@@ -126,7 +126,7 @@ def render_one(genome, params: Params, out: Path, *, voice=None, drift=None, lyr
                        progress=progress)
     if progress is not None:
         progress("master")
-    mastered = master.master(mix, synth.SR)
+    mastered = master.master(mix, synth.SR, target=float(getattr(params, "loudness", master.TARGET_LUFS)))
     pcm = master.to_pcm16(mastered, seed=params.seed)
     lineage = pack_mod.lineage(parent)
     master.write_flac(out, pcm, synth.SR, tags=dict(

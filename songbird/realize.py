@@ -41,6 +41,7 @@ class Params:
     humanize: float = 0.006  # standard deviation of onset jitter, seconds
     ritardando: float = 0.35  # how much slower the final phrase ends than it began
     choir: int = 0  # voices from the lineage that join in harmony where the genome allows
+    loudness: float = -14.0  # the master's integrated loudness, LUFS (songbird.synth.master; -12 for listeners' players)
     band: Band = field(default_factory=Band)  # who plays and how (songbird.band); absent in old params: the defaults
     # Chosen by the machine and inherited; empty means the seed's own (VoiceParams' and MixParams' defaults).
     singer: dict = field(default_factory=dict)  # VoiceParams fields that differ from the seed singer's

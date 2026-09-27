@@ -95,7 +95,7 @@
   ],
 
   "seed_params": {
-    "tonic": 62, "mode": "ionian", "tempo": 96, "seed": 1,
+    "tonic": 62, "mode": "ionian", "tempo": 96, "seed": 1, "loudness": -12,
     "accomp": "0 . 2 3 4 . 3 2",
     "form": ["intro", "verse", "refrain", "turn", "verse", "refrain", "turn", "bridge", "refrain", "tag"],
     "style": {"name": "ballad", "lift": false, "entrances": true, "breakdown": true, "backing": "thirds", "ending": "rit"},

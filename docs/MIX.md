@@ -81,7 +81,8 @@ peak stage of their own.
 surroundings, never the song's arc), given a little weight (2 dB under
 180 Hz), tilted if asked, and worn if asked (below).
 
-**Mastering** (songbird/synth/master.py) brings it to −14 LUFS integrated
+**Mastering** (songbird/synth/master.py) brings it to the rendition's `loudness` (Params; −14 LUFS by default, and
+H's seed asks −12 since 2026-09-27, for players that don't normalize) integrated
 with the true peak under −1 dBTP, measured with 4× oversampling as BS.1770-4
 annex 2 asks: a player's reconstruction filter, or a lossy decoder, swings
 between the samples. A soft clip rounds off the sharpest peaks (the top
