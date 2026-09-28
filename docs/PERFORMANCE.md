@@ -6,6 +6,21 @@ here: **the output is byte-identical.** Each change was checked against the seed
 own output bit for bit against the code before it. A speed-up that changes even one sample's last bit
 was not taken; those are listed at the end as options.
 
+## In short
+
+| | before | after |
+|---|---|---|
+| H's seed render (`cli.render_one`, 151 s of audio) | 18.6 to 20.3 s | 7.0 s |
+| the same on one thread (`SONGBIRD_THREADS=1`) | 18.6 to 20.3 s | 16.0 s |
+| `songbird render songs/h-now-its-by-you.json` (process, imports and all) | 19.4 s | 8.2 s |
+| the dry voice (`voice.sing`, the learned throat, 147 s sung) | 7.9 s | 2.3 s (6.1 s on one thread) |
+| peak memory | 4.7 GB | 4.4 GB |
+
+The seed's PCM id is `b600b712e77a…` before and after every change, at any thread count; so is
+`b-refrain`'s golden, and seven more renditions (a lineage choir with a parent, a bluegrass lineup,
+a worn mix, four other seeds) render to the ids the original tree gives them, their records and FLAC
+files byte for byte. The whole test suite passes (1,362 tests, `--ignore=tests/test_site.py`).
+
 ## How it was measured
 
 - Machine: Apple M1 Max (10 cores), macOS, CPython 3.12, numpy 2.5.3, numba as locked in `uv.lock`.
@@ -109,3 +124,62 @@ Dry voice: **7.9 s** (`throat.synthesize` 5.9, `predict` 0.86, the pronouncing d
   pairwise; the last bits differ. So the voiced-only periodic part is put into an array laid out as the
   FFT would have laid it out, and a block of one pulse is never made from a chunk of more (a single
   row is summed pairwise either way).
+
+## Where the time goes now
+
+With threads, the render is three stages one after another: the stems (the voice is the longest part,
+and gates the stage), the mix, the master. On H (the stage marks of the render's progress):
+
+| stage | before | now |
+|---|---|---|
+| stems: every part at once, the voice last to finish | 13.7 to 14.1 s | about 3.5 s |
+| mix | 3.6 to 4.4 s | about 2.4 s |
+| master, the record's measures, the FLAC | 1.5 s | about 1.0 s |
+
+- **The voice beside the band.** Alone, the voice takes 2.3 to 2.6 s; beside the band's parts, about
+  3.5 s. Its pitch track is the clearest case: 0.12 s alone, about 1.0 s beside the band, of which
+  0.29 s is its own work and the rest waiting for the interpreter lock. It makes a few thousand
+  small numpy operations over the whole song's 27,500 blocks, and each lets go of the lock and has to
+  win it back from the band's per-note Python. A pitch track that worked each note over its own
+  stretch of blocks would do a tenth of the work in calls under numpy's threshold for letting go of
+  the lock; it can be made exact (every block outside a note's stretch provably gets what it got), but
+  it is a careful rewrite of `voice.pitch_track`, left for now.
+- **The mix's buses.** After the channel strips, the band bus (equalizer, compressor, what steps back,
+  the ride, the carve), the room (0.26 s of convolution, already on 4 fixed FFT threads), the return's
+  peak stage, the glue and the tone run one after another, each on the whole song: about 1.2 s.
+- **One thread.** `SONGBIRD_THREADS=1`: about 16 s (18.6 to 20.3 s before). What's left on one core is
+  mostly the vocoder's complex exponentials and FFTs (4.3 s), the band's own loops and bodies (5 s)
+  and the mix (3.4 s).
+
+## Options declined: they would change the bytes
+
+Each of these would save time and sound the same to anyone, but moves some samples' last bits, so
+the seed's id would change. Taking any of them is a decision for the artist (and a new golden).
+
+- **One complex exponential per voiced pulse** instead of two: `exp(log spectrum + i·turn)` in place of
+  `exp(log spectrum) · exp(i·turn)`. About 0.7 s of the vocoder's 4.3 s on one core. Rounding differs.
+- **Skip the vocoder where the voice is hushed.** 18,235 of H's 60,708 pulses are unvoiced, many in
+  rests that `throat.hush` multiplies by zero. Not made at all, they would save a quarter of the
+  vocoder, but the 60 Hz high-pass after the resampler carries a little of every sample into what
+  follows, so the sung stretches' last bits would move.
+- **FFT workers for the bodies' convolutions** (`scipy.fft.set_workers` around `body.resonate`, as the
+  room already does with a fixed 4): tried, and the bytes change (scipy splits the work differently
+  with more workers), so the bodies stay on one worker each.
+- **The frame drum's modes all at once.** `drum.hit` works its 196 modes one at a time in Python
+  (0.3 s of H's drum). Vectorized, `(2 f contact) ** 2` goes through numpy's array square instead of
+  the C library's `pow` that a numpy scalar uses, and the two differ in the last bit for about 1 value
+  in 1,500 (53 of 600 test strokes changed). Keeping `pow` per mode would keep most of the loop.
+- **float32** anywhere (the network, the vocoder, the mix): faster and half the memory, but different
+  bytes everywhere.
+
+## Further ideas that keep the bytes
+
+- `voice.pitch_track` per note over its own stretch (above): the voice's critical path under the band,
+  perhaps 0.7 s.
+- A body's two channels convolve the same bridge force: sharing its forward FFTs would halve the
+  bodies' convolutions (1.4 s on one core), but only by reproducing `scipy.signal.oaconvolve`'s own
+  block choice, which could drift from scipy's in a later version.
+- The pronouncing dictionary's first load (0.5 s, `cmudict.dict()`) happens once per process; the
+  studio pays it once, the command line every time.
+- Imports: 1.4 s before `songbird render` does anything (scipy.signal alone 0.74 s).
+
