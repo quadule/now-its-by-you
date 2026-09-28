@@ -57,6 +57,7 @@ import multiprocessing
 import re
 import shutil
 import subprocess
+import os
 import sys
 import time
 import warnings
@@ -345,6 +346,7 @@ def build(genome_path: Path, out: Path, rebuild: bool = False, bitrate: str = BI
                 shutil.copyfile(f, out / f.name)
     shutil.copyfile(ROOT / "tools" / "karaoke.js", out / "karaoke.js")
     shutil.copyfile(ROOT / "tools" / "karaoke-recorder.js", out / "recorder.js")
+    seed_page(out)
     versioned(out)
     (out / "robots.txt").write_text("User-agent: *\nDisallow: /\n")
     (out / "favicon.svg").write_text(FAVICON)
@@ -477,6 +479,30 @@ def earlier(song: str, title: str, now: dict[str, tuple[str, list]]) -> dict[str
     return found
 
 
+SEED_FILE = "now-its-by-you.flac"  # the seed page's file name (web/sing/src/worker.js SEED_FILE serves exactly this)
+
+
+def seed_page(out: Path) -> None:
+    """The public seed page (/seed, and the root of now.itsby.you): web/sing/page/seed.html with the song's file
+    beside it in public/seed/. The file is $SONGBIRD_SEED, else renders/review/contest.flac, else the newest
+    packed render in renders/review/; without any, the page still builds and says so."""
+    chosen = os.environ.get("SONGBIRD_SEED")
+    path = Path(chosen) if chosen else ROOT / "renders" / "review" / "contest.flac"
+    if not path.exists():
+        candidates = sorted((ROOT / "renders" / "review").glob("*.flac"), key=lambda f: f.stat().st_mtime)
+        path = candidates[-1] if candidates else None
+    (out / "seed").mkdir(exist_ok=True)
+    page = (out / "seed.html").read_text()
+    if path is None:
+        print("seed page: no render to offer (renders/review/*.flac); the page is built without a file", file=sys.stderr)
+        mb = "0"
+    else:
+        shutil.copyfile(path, out / "seed" / SEED_FILE)
+        mb = f"{path.stat().st_size / 2**20:.0f}"
+        print(f"seed page: {path.relative_to(ROOT) if path.is_relative_to(ROOT) else path} -> seed/{SEED_FILE} ({mb} MB)")
+    (out / "seed.html").write_text(page.replace("{{SEED_FILE}}", SEED_FILE).replace("{{SEED_MB}}", mb))
+
+
 def versioned(out: Path) -> None:
     """Every page asks for its scripts and styles by the digest of what they are now (?v=...), so neither a
     browser nor the domain's cache can hand a phone a page of one build with a script of another (sing.js
@@ -494,6 +520,7 @@ def versioned(out: Path) -> None:
     swap("sing.js", 'from "./karaoke.js"', f'from "./karaoke.js?v={stamp("karaoke.js")}"')
     swap("sing.js", 'addModule("/recorder.js")', f'addModule("/recorder.js?v={stamp("recorder.js")}")')
     swap("index.html", 'href="/sing.css"', f'href="/sing.css?v={stamp("sing.css")}"')
+    swap("seed.html", 'href="/sing.css"', f'href="/sing.css?v={stamp("sing.css")}"')
     swap("index.html", 'src="/sing.js"', f'src="/sing.js?v={stamp("sing.js")}"')
     swap("yours.html", 'href="/yours.css"', f'href="/yours.css?v={stamp("yours.css")}"')
     swap("yours.html", 'src="/yours.js"', f'src="/yours.js?v={stamp("yours.js")}"')

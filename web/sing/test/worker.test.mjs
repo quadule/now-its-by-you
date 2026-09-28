@@ -206,6 +206,29 @@ test("an invitation closed in R2 is closed, whatever KV still says", async () =>
   }
 });
 
+test("the seed page is public: at /seed, at the root of the seed host, with exactly its one file", async () => {
+  const w = await load();
+  const files = { ...SITE, "/seed.html": "<!doctype html><title>seed</title>", "/seed/now-its-by-you.flac": "fLaC: the song" };
+  const e = env({ files });
+  const page = await call(w, e, "/seed");
+  assert.equal(page.status, 200);
+  assert.match(await page.text(), /seed/);
+  assert.match(page.headers.get("content-type"), /text\/html/);
+  assert.ok(page.headers.get("content-security-policy"));
+  const root = await w.fetch(new Request("https://now.itsby.you/"), e); // the seed host's root is the seed page
+  assert.equal(root.status, 200);
+  assert.match(await root.text(), /seed/);
+  const other = await w.fetch(new Request("https://songbird.test/"), e); // any other host's root is the landing line
+  assert.match(await other.text(), /invitation/);
+  const file = await call(w, e, "/seed/now-its-by-you.flac");
+  assert.equal(file.status, 200);
+  assert.equal(file.headers.get("content-type"), "audio/flac");
+  assert.match(file.headers.get("content-disposition"), /attachment/);
+  assert.equal((await call(w, e, "/seed/other.flac")).status, 404); // nothing else under /seed/ is served
+  assert.equal((await call(w, e, "/seed/../song/song.json")).status, 404);
+  assert.equal((await call(w, e, "/seed", { method: "POST" })).status, 404);
+});
+
 test("unknown invitations and pages, the song's files and the admin API give nothing away", async () => {
   const w = await load(), none = env();
   assert.equal((await call(w, none, `/i/${"Z".repeat(24)}`)).status, 404);

@@ -126,6 +126,17 @@ already exists: delete it first). For that hostname turn off Rocket Loader, Emai
 Bot Fight Mode (anything injected breaks the page; a challenge breaks the upload). If the DNS is
 elsewhere, send the workers.dev links: they work the same.
 
+## The seed page (2026-09-27)
+
+`/seed` on every host, and the root of `now.itsby.you` (wrangler.toml's `SEED_HOST`), is a public page for
+anyone: the song's file to play and download (`public/seed/now-its-by-you.flac`, the one file the worker serves
+under /seed/), the three commands that run it, and the AI disclosure. `tools/sing_site.py` copies `$SONGBIRD_SEED`,
+else `renders/review/contest.flac`, else the newest FLAC in renders/review/, and fills its name and size into
+web/sing/page/seed.html. To open the domain on it: put itsby.you's DNS on Cloudflare, add
+`{ pattern = "now.itsby.you", custom_domain = true }` to `routes`, deploy. Until then the page is at
+songbird.quadule.com/seed. Every invited singer's page is unchanged; the bare root of the singing host still shows
+its one line.
+
 ## What is kept, where, and for how long
 
 | Where | What | How long |

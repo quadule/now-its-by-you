@@ -59,6 +59,8 @@ const PUBLIC = { "/sing.js": "text/javascript", "/sing.css": "text/css", "/karao
                  "/recorder.js": "text/javascript", "/yours.js": "text/javascript", "/yours.css": "text/css",
                  "/robots.txt": "text/plain", "/favicon.svg": "image/svg+xml" };
 
+const SEED_FILE = "now-its-by-you.flac"; // the seed page's file (tools/sing_site.py copies the render to public/seed/)
+
 const SECURITY = {
   "X-Content-Type-Options": "nosniff",
   "Referrer-Policy": "no-referrer",
@@ -929,6 +931,21 @@ export default {
       }
       if (Object.prototype.hasOwnProperty.call(PUBLIC, path) && request.method === "GET") {
         return asset(env, request, path, { "Content-Type": `${PUBLIC[path]}; charset=utf-8`, "Cache-Control": "public, max-age=300" });
+      }
+      // the seed page: the song's file and how to run it, for anyone, at /seed and at the root of the seed host
+      // (now.itsby.you); the file itself is the one asset under /seed/ the built site names
+      const seedHost = url.hostname === String(env.SEED_HOST || "now.itsby.you").toLowerCase();
+      if ((path === "/seed" || (path === "/" && seedHost)) && ["GET", "HEAD"].includes(request.method)) {
+        return asset(env, request, "/seed.html", { "Content-Type": "text/html; charset=utf-8", "Cache-Control": "public, max-age=300",
+                                                 "Content-Security-Policy": PAGE_CSP });
+      }
+      if (path.startsWith("/seed/") && ["GET", "HEAD"].includes(request.method)) {
+        const file = path.slice(6);
+        if (file === SEED_FILE) {
+          return asset(env, request, path, { "Content-Type": "audio/flac", "Cache-Control": "public, max-age=3600",
+                                             "Content-Disposition": `attachment; filename="${file}"` });
+        }
+        return fail(404, "unknown", "No such thing.");
       }
       if (path === "/") {
         return new Response("Songbird: a folk song that passes itself on. Singers come here by invitation.\n",

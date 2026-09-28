@@ -20,6 +20,10 @@ DELETE_BY = "2026-09-30T20:00:00-07:00"
 # Joins from one address in an hour. A choir singing together on one Wi-Fi shares an address: raise it
 # for a session like that, and deploy again.
 JOINS_AN_HOUR = "20"
+# The public seed page (the song's file and how to run it) is at /seed on every host, and at the root of this
+# host: point now.itsby.you at the worker (its DNS on Cloudflare, then a custom-domain route like the one
+# above: routes = [..., { pattern = "now.itsby.you", custom_domain = true }]) and it opens on the seed page.
+SEED_HOST = "now.itsby.you"
 
 # Every hour, on the hour: forget the addresses counted for joining, and after DELETE_BY, the purge.
 [triggers]
@@ -30,7 +34,7 @@ directory = "./public"
 binding = "ASSETS"
 # The worker sees the pages' own addresses, the API and the song (served only to open invitations);
 # the pages' scripts and styles are served straight from the assets, with public/_headers.
-run_worker_first = ["/", "/index.html", "/yours.html", "/i/*", "/y/*", "/api/*", "/song/*"]
+run_worker_first = ["/", "/index.html", "/yours.html", "/seed.html", "/seed", "/seed/*", "/i/*", "/y/*", "/api/*", "/song/*"]
 html_handling = "none"
 not_found_handling = "none"
 
