@@ -418,6 +418,9 @@ def build(genome_path: Path, out: Path, rebuild: bool = False, bitrate: str = BI
         "max_seconds": round(longest + 60),
         "built": dt.datetime.now(dt.timezone.utc).isoformat(timespec="seconds"),
     }
+    if preview is None and seed_source() is not None:  # the page's preview is the seed page's file unless told otherwise
+        preview = seed_source()
+        print(f"preview: {preview.relative_to(ROOT) if preview.is_relative_to(ROOT) else preview} (the seed page's file)")
     if preview is not None:
         song["preview"] = preview_mp3(Path(preview), out / "song" / "preview.mp3")
     (out / "song" / "song.json").write_text(json.dumps(song, separators=(",", ":")) + "\n")
@@ -482,15 +485,22 @@ def earlier(song: str, title: str, now: dict[str, tuple[str, list]]) -> dict[str
 SEED_FILE = "now-its-by-you.flac"  # the seed page's file name (web/sing/src/worker.js SEED_FILE serves exactly this)
 
 
+def seed_source() -> Path | None:
+    """The render the seed page offers, and the page's preview unless --preview says otherwise: $SONGBIRD_SEED,
+    else renders/review/contest.flac, else the newest FLAC in renders/review/; None without any."""
+    chosen = os.environ.get("SONGBIRD_SEED")
+    path = Path(chosen) if chosen else ROOT / "renders" / "review" / "contest.flac"
+    if path.exists():
+        return path
+    candidates = sorted((ROOT / "renders" / "review").glob("*.flac"), key=lambda f: f.stat().st_mtime)
+    return candidates[-1] if candidates else None
+
+
 def seed_page(out: Path) -> None:
     """The public seed page (/seed, and the root of now.itsby.you): web/sing/page/seed.html with the song's file
     beside it in public/seed/. The file is $SONGBIRD_SEED, else renders/review/contest.flac, else the newest
     packed render in renders/review/; without any, the page still builds and says so."""
-    chosen = os.environ.get("SONGBIRD_SEED")
-    path = Path(chosen) if chosen else ROOT / "renders" / "review" / "contest.flac"
-    if not path.exists():
-        candidates = sorted((ROOT / "renders" / "review").glob("*.flac"), key=lambda f: f.stat().st_mtime)
-        path = candidates[-1] if candidates else None
+    path = seed_source()
     (out / "seed").mkdir(exist_ok=True)
     page = (out / "seed.html").read_text()
     if path is None:
