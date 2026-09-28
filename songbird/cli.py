@@ -104,6 +104,9 @@ def choir_of(parent: dict | None, singer: VoiceParams) -> tuple[list[dict], list
     return lineage_singers, synth.ancestors_from(lineage_singers, learned=singer.engine == "learned")
 
 
+ARTIST = "The Volunteers"  # the FLAC tag: who the song is by (the artist's decision, 2026-09-27; the program stays Songbird)
+
+
 def render_one(genome, params: Params, out: Path, *, voice=None, drift=None, lyrics=None, phrasing_json=None,
                choir_json=(), singer_overrides=(), stems: bool = False, mix_overrides=(), parent: dict | None = None,
                packet_genome: str | Path | None = None, changes=None, chosen_by_you=None, progress=None) -> dict:
@@ -132,7 +135,7 @@ def render_one(genome, params: Params, out: Path, *, voice=None, drift=None, lyr
     pcm = master.to_pcm16(mastered, seed=params.seed)
     lineage = pack_mod.lineage(parent)
     master.write_flac(out, pcm, synth.SR, tags=dict(
-        title=genome.title, artist="Songbird", date=drift.to_dict()["at"][:10] if drift is not None else None,
+        title=genome.title, artist=ARTIST, date=drift.to_dict()["at"][:10] if drift is not None else None,
         comment=f"Generation {lineage['generation']}, id {master.pcm_sha256(pcm)[:12]}."
                 + (" This file is also the program that sang it: run it with python3, or unzip it."
                    if packet_genome is not None else "")))

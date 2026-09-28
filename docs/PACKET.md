@@ -121,7 +121,7 @@ packs again from what it carries (`songbird pack PACKET.flac`), and
 `songbird pack --parent FILE` supplies a lineage that a record lacks.
 
 **Tags.** A rendered FLAC carries Vorbis comments that players show: the song's
-title, "Songbird" as the artist, the day it was sung, and a comment giving its
+title, "The Volunteers" as the artist (songbird/cli.py ARTIST), the day it was sung, and a comment giving its
 generation and id and saying the file is also a program. They don't touch the
 samples, so the id is unchanged.
 
