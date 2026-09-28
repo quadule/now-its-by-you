@@ -12,10 +12,13 @@ run); everything else is numpy.
 
 from __future__ import annotations
 
+from functools import partial
+
 import numpy as np
 from numba import njit
 from scipy.ndimage import uniform_filter1d
 
+from . import threads
 from .iir import butter
 
 # --- equalizers: RBJ cookbook biquads as second-order sections -----------------
@@ -130,8 +133,17 @@ IDENTITY = np.array([1.0, 0.0, 0.0, 1.0, 0.0, 0.0])
 
 
 def _biquads(x: np.ndarray, sos: np.ndarray) -> np.ndarray:
-    """Second-order sections in cascade along axis 0 of a (samples, channels) array."""
-    y = x.copy()
+    """Second-order sections in cascade along axis 0 of a (samples, channels) array. A long signal's channels
+    are filtered at once, each on a thread of its own (each channel's filter is its own: the same samples
+    either way)."""
+    if x.ndim == 2 and x.shape[1] > 1 and len(x) >= 1 << 16 and threads.workers() > 1:
+        columns = [(c, partial(_cascade, np.ascontiguousarray(x[:, c: c + 1]), sos, False)) for c in range(x.shape[1])]
+        return np.concatenate([y for _, y in threads.in_order(columns)], axis=1)
+    return _cascade(x, sos)
+
+
+def _cascade(x: np.ndarray, sos: np.ndarray, copy: bool = True) -> np.ndarray:
+    y = x.copy() if copy else x
     rows = [np.ascontiguousarray(row, dtype=np.float64) for row in np.asarray(sos, dtype=np.float64)]
     while rows:
         if len(rows) >= 3:
