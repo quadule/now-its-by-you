@@ -208,9 +208,10 @@ test("an invitation closed in R2 is closed, whatever KV still says", async () =>
   }
 });
 
-test("the seed page is public: at /seed, at the root of the seed host, with exactly its one file", async () => {
+test("the seed page is public: at /seed, at the root of the seed host, with exactly its file and its words", async () => {
   const w = await load();
-  const files = { ...SITE, "/seed.html": "<!doctype html><title>seed</title>", "/seed/now-its-by-you.flac": "fLaC: the song" };
+  const files = { ...SITE, "/seed.html": "<!doctype html><title>seed</title>", "/seed/now-its-by-you.flac": "fLaC: the song",
+                  "/seed/words.json": '{"lines":[]}' };
   const e = env({ files });
   const page = await call(w, e, "/seed");
   assert.equal(page.status, 200);
@@ -231,6 +232,11 @@ test("the seed page is public: at /seed, at the root of the seed host, with exac
   assert.equal(file.status, 200);
   assert.equal(file.headers.get("content-type"), "audio/flac");
   assert.match(file.headers.get("content-disposition"), /attachment/);
+  const words = await call(w, e, "/seed/words.json?v=abc"); // the page's words, timed: read, not downloaded
+  assert.equal(words.status, 200);
+  assert.match(words.headers.get("content-type"), /application\/json/);
+  assert.equal(words.headers.get("content-disposition"), null);
+  assert.deepEqual(await words.json(), { lines: [] });
   assert.equal(file.headers.get("accept-ranges"), "bytes");
   // a player's parts of it: to seek, and for Safari to play it at all
   const range = async spec => {
@@ -244,6 +250,7 @@ test("the seed page is public: at /seed, at the root of the seed host, with exac
   assert.equal((await range("bytes=14-")).status, 416);
   assert.equal((await range("bytes=0-1,4-5")).status, 200); // more than one part: the whole of it
   assert.equal((await call(w, e, "/seed/other.flac")).status, 404); // nothing else under /seed/ is served
+  assert.equal((await call(w, e, "/seed/__proto__")).status, 404);
   assert.equal((await call(w, e, "/seed/../song/song.json")).status, 404);
   assert.equal((await call(w, e, "/seed", { method: "POST" })).status, 404);
 });

@@ -4,16 +4,41 @@
     {
       "name": "karaoke",
       "runtimeExecutable": "uv",
-      "runtimeArgs": ["run", "python", "tools/karaoke.py", "songs/h-now-its-by-you.json"],
+      "runtimeArgs": [
+        "run",
+        "python",
+        "tools/karaoke.py",
+        "songs/h-now-its-by-you.json"
+      ],
       "port": 8765,
       "url": "http://127.0.0.1:8765"
     },
     {
       "name": "studio",
       "runtimeExecutable": "uv",
-      "runtimeArgs": ["run", "songbird", "studio", "--no-open"],
+      "runtimeArgs": [
+        "run",
+        "songbird",
+        "studio",
+        "--no-open"
+      ],
       "port": 8766,
       "url": "http://127.0.0.1:8766"
+    },
+    {
+      "name": "site",
+      "runtimeExecutable": "web/sing/node_modules/.bin/wrangler",
+      "runtimeArgs": [
+        "dev",
+        "-c",
+        "web/sing/wrangler.toml",
+        "--port",
+        "8767",
+        "--ip",
+        "127.0.0.1"
+      ],
+      "port": 8767,
+      "url": "http://127.0.0.1:8767"
     }
   ]
 }

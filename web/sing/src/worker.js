@@ -57,10 +57,15 @@ const KEEP_AFTER_EXPIRY = 90 * 86400; // seconds an invite's record outlives it,
 const JOINS_AN_HOUR = 20; // joins from one address in a clock hour (a group link is as good as public); JOINS_AN_HOUR in [vars] changes it
 const PUBLIC = { "/sing.js": "text/javascript", "/sing.css": "text/css", "/karaoke.js": "text/javascript",
                  "/recorder.js": "text/javascript", "/yours.js": "text/javascript", "/yours.css": "text/css",
-                 "/identity.css": "text/css",
+                 "/identity.css": "text/css", "/seed.js": "text/javascript",
                  "/robots.txt": "text/plain", "/favicon.svg": "image/svg+xml" };
 
 const SEED_FILE = "now-its-by-you.flac"; // the seed page's file (tools/sing_site.py copies the render to public/seed/)
+// everything under /seed/: the file, and its words as it sang them, timed (tools/sing_site.py seed_words)
+const SEED_FILES = {
+  [SEED_FILE]: { "Content-Type": "audio/flac", "Content-Disposition": `attachment; filename="${SEED_FILE}"` },
+  "words.json": { "Content-Type": "application/json; charset=utf-8" },
+};
 
 const SECURITY = {
   "X-Content-Type-Options": "nosniff",
@@ -1003,7 +1008,7 @@ export default {
                                                                     "Cache-Control": "public, max-age=3600" }) });
       }
       // the seed page: the song's file and how to run it, for anyone, at /seed and at the root of the seed host
-      // (now.itsby.you); the file itself is the one asset under /seed/ the built site names
+      // (now.itsby.you); under /seed/, only the assets SEED_FILES names
       const seedHost = url.hostname === seedHostName;
       if ((path === "/seed" || (path === "/" && seedHost)) && ["GET", "HEAD"].includes(request.method)) {
         return asset(env, request, "/seed.html", { "Content-Type": "text/html; charset=utf-8", "Cache-Control": "public, max-age=300",
@@ -1011,9 +1016,8 @@ export default {
       }
       if (path.startsWith("/seed/") && ["GET", "HEAD"].includes(request.method)) {
         const file = path.slice(6);
-        if (file === SEED_FILE) {
-          return asset(env, request, path, { "Content-Type": "audio/flac", "Cache-Control": "public, max-age=3600",
-                                             "Content-Disposition": `attachment; filename="${file}"` }, { ranges: true });
+        if (Object.prototype.hasOwnProperty.call(SEED_FILES, file)) {
+          return asset(env, request, path, { ...SEED_FILES[file], "Cache-Control": "public, max-age=3600" }, { ranges: true });
         }
         return fail(404, "unknown", "No such thing.");
       }

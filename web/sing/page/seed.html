@@ -7,6 +7,15 @@
   <link rel="stylesheet" href="/identity.css">
   <link rel="stylesheet" href="/sing.css">
   <link rel="icon" href="/favicon.svg" type="image/svg+xml">
+  <meta name="description" content="A folk song passed between people and computers. Who made this song? Nobody knows.">
+  <meta property="og:type" content="music.song">
+  <meta property="og:title" content="Now It's by You">
+  <meta property="og:description" content="A folk song passed between people and computers. Who made this song? Nobody knows.">
+  <meta property="og:image" content="https://now.itsby.you/cover.jpg">
+  <meta property="og:image:width" content="800">
+  <meta property="og:image:height" content="800">
+  <meta name="twitter:card" content="summary_large_image">
+  <script src="/seed.js" defer></script>
 </head>
 <body class="leaf seed">
 <main>
@@ -16,11 +25,21 @@
   </header>
 
   <section class="pitch" aria-label="What this is">
-    <p class="lead">A folk song passed between people and computers. Who made this song? Nobody knows.</p>
-    <p>The file below is the song, and it is also the program that sang it. Play it and you hear this version. Run it and it
-      sings a new one, on your computer and your day, that carries a little of everyone who sang into it before you.</p>
+    <div class="sleeve">
+      <img class="cover" src="/cover.jpg" width="800" height="800"
+           alt="The cover: a seed packet printed The Volunteers, Now It's by You, with a daisy growing from a cracked stone, propped on a curb beside a lawn.">
+      <div>
+        <p class="lead">A folk song passed between people and computers. Who made this song? Nobody knows.</p>
+        <p>The file below is the song, and it is also the program that sang it. Play it and you hear this version. Run it and it
+          sings a new one, on your computer and your day, that carries a little of everyone who sang into it before you.</p>
+      </div>
+    </div>
     <div class="preview">
-      <audio controls preload="none" src="/seed/{{SEED_FILE}}"></audio>
+      <audio id="player" controls preload="none" src="/seed/{{SEED_FILE}}"></audio>
+      <div class="lyric" id="lyric" data-words="{{SEED_WORDS}}" role="group" aria-label="The words, as they are sung" hidden>
+        <p class="now"></p>
+        <p class="next"></p>
+      </div>
     </div>
   </section>
 
