@@ -399,3 +399,13 @@ and the presence peak at 0.5 dB the rest, landing the mixed "no" 5.8 dB down at 
 the reference. Whisper reads the darker voice the same (7.8% of H's words misheard, dry). The artist
 chose it while saying the difference was hard to hear.
 
+## Breath at the top (2026-09-28, small hours)
+
+A spectrogram of one phrase at every stage of the mix and master (renders/review/stages-*.png) showed the
+chain changing the voice hardly at all, and the dry voice's harmonics standing as clean lines to 10 kHz
+with nothing between them: the buzz the artist kept hearing as "robotic". The natural reference is half
+noise up there (aperiodicity 0.32 to 0.65 from 2 to 8 kHz against the throat's 0.18 to 0.48). So
+`VoiceParams.air` now floors the learned throat's aperiodicity, rising from 0 at 2.5 kHz to `air` at 8 kHz
+and above (`throat.air_floor`); 0.4 by default, chosen by ear ("a bit better, not perfect"). Whisper dry:
+7.5% of H's words without, 8.9% at 0.4, 9.6% at 0.6.
+

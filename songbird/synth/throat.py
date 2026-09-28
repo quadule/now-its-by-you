@@ -729,6 +729,18 @@ def articulate(y: np.ndarray, segs: list, sr: int, voice, rng: np.random.Generat
     return y * gain + added
 
 
+# A real voice is part noise at the top: in the natural reference's vowels the aperiodicity runs 0.32 to 0.65 from
+# 2 to 8 kHz, the throat's 0.18 to 0.48, and its harmonics stand as clean lines to 10 kHz (a buzz the artist heard as
+# robotic, 2026-09-27). voice.air sets a floor the aperiodicity never falls under, rising from AIR_FROM to AIR_TO Hz.
+AIR_FROM, AIR_TO = 2500.0, 8000.0
+
+
+def air_floor(air: float, points: int) -> np.ndarray:
+    """The aperiodicity floor per grid point: 0 below AIR_FROM Hz, `air` from AIR_TO Hz up, linear in mel between."""
+    f = grid(points)
+    return air * np.clip((mel(f) - mel(AIR_FROM)) / (mel(AIR_TO) - mel(AIR_FROM)), 0.0, 1.0)
+
+
 def stresses(notes, lexicon) -> list[bool]:
     """Whether each note's syllable carries dictionary stress (as the training labels do: the stress digit
     of the reading songbird.phonetics.fit chooses; little words like "the" and "a" have none)."""
@@ -782,6 +794,8 @@ def sing(notes, sr: int, voice, seed: int = 0, lexicon: dict | None = None, mix:
     sp = sharpen(sp, SHARPEN)
     factor = voice.tract / TRACT
     sp, ap = warp(sp, factor), warp(ap, factor)
+    if getattr(voice, "air", 0.0) > 0:  # the top of a real voice is part breath: the aperiodicity never below a floor that
+        ap = np.maximum(ap, air_floor(voice.air, ap.shape[1]))  # rises from AIR_FROM Hz to voice.air at AIR_TO Hz and above
     times = np.arange(n) * FRAME
     # the vibrato's swing in loudness (the network's own envelope already moves as slowly as a singer's)
     trem = np.interp(times, (np.arange(n_blocks) + 0.5) * BLOCK / RATE, parts["tremolo"])
