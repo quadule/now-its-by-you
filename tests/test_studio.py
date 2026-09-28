@@ -457,3 +457,13 @@ def test_the_render_queue_says_whats_ahead_and_refuses_a_flood():
         assert jobs.submit("k0", "preview", "x", lambda job: None) is waiting[0]  # asked again: the same one
     finally:
         gate.set()
+
+
+def test_identity_is_one_file_in_two_places():
+    """The studio and the singing pages are served apart, so each has a copy of identity.css (docs/IDENTITY.md):
+    the same bytes, loaded before each page's own stylesheet."""
+    studio, pages = ROOT / "songbird" / "studio" / "identity.css", ROOT / "web" / "sing" / "page" / "identity.css"
+    assert studio.read_bytes() == pages.read_bytes()
+    assert "/identity.css" in S.STATIC
+    html = (ROOT / "songbird" / "studio" / "index.html").read_text()
+    assert html.index('href="/identity.css"') < html.index('href="/studio.css"')

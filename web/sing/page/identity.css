@@ -1,0 +1,129 @@
+/* Songbird's identity: the tokens and the few shared pieces every page is made of (docs/IDENTITY.md).
+   Two copies, kept byte-identical by hand: web/sing/page/identity.css (the singing, singer's and seed pages,
+   served by the worker) and songbird/studio/identity.css (the studio, served by songbird/studio.py). Change
+   one, copy it over the other. Each page's own layout stays in its own file, loaded after this one.
+   System fonts and CSS only: no images, no downloaded fonts. */
+
+:root {
+  /* paper and inks: a broadside's cream, a letterpress's brown-black, a printer's red, a second hand's indigo */
+  --paper: #f4ecdc;        /* cream laid paper */
+  --card: #fbf7ee;         /* an index card, a fresh leaf */
+  --wash: #ebe0c9;         /* ochre paper, for a box set into the page */
+  --ink: #2b231d;          /* letterpress black */
+  --ink-2: #554737;        /* the same ink, lighter struck: second-order text */
+  --ink-3: #6b5c4b;        /* hints and small print */
+  --hand: #2b4474;         /* a second hand's indigo: what a person chose or wrote */
+  --hand-wash: #e3e6ea;
+  --red: #a3361f;          /* printer's red: rubrics, the kicker, a link's underline */
+  --red-rule: rgba(163, 54, 31, .38);  /* the red hairline of an index card, a copybook's margin */
+  --rule: #d6c8ae;         /* hairlines between things */
+  --rule-strong: #8f7d66;  /* the edge of something to press or fill in (3:1 against the paper) */
+  --ochre: #7f5610;        /* time and caution */
+  --green: #44683a;        /* sap green: sent, kept, done */
+  /* the stage, where the words are sung: a page lit in the dark, the same in both schemes */
+  --stage: #1b1611;
+  --stage-panel: #221c16;
+  --stage-ink: #efe6da;
+  --stage-dim: #9a8d7f;
+  --stage-red: #e0664d;
+  --sung: #f2b25c;
+
+  --serif: "Iowan Old Style", "Palatino Linotype", Palatino, "Book Antiqua", Georgia, serif;
+  --sans: -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, "Helvetica Neue", Arial, sans-serif;
+  --mono: ui-monospace, "SF Mono", Menlo, Consolas, "Liberation Mono", monospace;
+  --radius: 2px;           /* a cut card's corner, no rounder */
+  --gutter: 16px;
+  --measure: 720px;
+  color-scheme: light;
+}
+
+@media (prefers-color-scheme: dark) {
+  /* the same page by lamplight: dark paper, cream ink */
+  :root:not([data-theme="light"]) {
+    --paper: #17130e;
+    --card: #211b14;
+    --wash: #2a2219;
+    --ink: #ede3cf;
+    --ink-2: #c9bba4;
+    --ink-3: #a89985;
+    --hand: #a9c2ea;
+    --hand-wash: #1f2835;
+    --red: #e8937c;
+    --red-rule: rgba(232, 147, 124, .32);
+    --rule: #3d3429;
+    --rule-strong: #7d6d5a;
+    --ochre: #dcaa52;
+    --green: #98bd8b;
+    --stage: #0e0b08;
+    --stage-panel: #15110d;
+    color-scheme: dark;
+  }
+}
+
+body { margin: 0; background: var(--paper); color: var(--ink); }
+
+/* ---------------------------------------------------------------- the masthead: kicker, title, rule */
+/* a ballad sheet's head: a small line in red capitals, the title in the book face, then a thin-and-thick rule */
+.kicker {
+  margin: 0; color: var(--red); font: 600 15px/1.3 var(--serif);
+  font-variant-caps: all-small-caps; letter-spacing: .12em;
+}
+.masthead h1 {
+  margin: 2px 0 0; font: 600 clamp(30px, 6vw, 42px)/1.12 var(--serif); letter-spacing: -.005em; color: var(--ink);
+}
+.masthead::after {
+  content: ""; display: block; height: 4px; margin-top: 14px;
+  border-top: 1px solid var(--ink); border-bottom: 2px solid var(--ink);
+}
+
+/* a rubric: the name of a part of the song, in the copyist's red small capitals */
+.rubric { color: var(--red); font: 600 16px/1.3 var(--serif); font-variant-caps: all-small-caps; letter-spacing: .08em; }
+
+/* ---------------------------------------------------------------- links */
+a { color: var(--ink); text-decoration: underline; text-decoration-color: var(--red); text-decoration-thickness: 1px;
+    text-underline-offset: .2em; }
+a:hover { color: var(--red); }
+:focus-visible { outline: 2px solid var(--hand); outline-offset: 2px; }
+
+/* ---------------------------------------------------------------- a card: an index card with a ruled head */
+.card { background: var(--card); border: 1px solid var(--rule); border-radius: var(--radius); }
+
+/* ---------------------------------------------------------------- buttons: a letterpress's squared blocks */
+/* .btn in the studio; every plain <button> on a reading page (<body class="leaf">) */
+.btn, .leaf button, .leaf .button {
+  display: inline-flex; align-items: center; justify-content: center; gap: 8px;
+  font: 500 16px/1.2 var(--sans); color: var(--ink); background: var(--card);
+  border: 1px solid var(--rule-strong); border-radius: var(--radius); padding: 10px 16px;
+  cursor: pointer; text-decoration: none;
+}
+.btn:hover, .leaf button:hover, .leaf .button:hover { border-color: var(--ink); background: var(--paper); color: var(--ink); }
+.btn.primary, .leaf button.primary, .leaf .button.primary {
+  background: var(--ink); border-color: var(--ink); color: var(--card); font-weight: 600;
+}
+.btn.primary:hover, .leaf button.primary:hover, .leaf .button.primary:hover { background: var(--ink-2); border-color: var(--ink-2); color: var(--card); }
+.btn:disabled, .leaf button:disabled { opacity: .45; cursor: default; }
+.btn:disabled:hover, .leaf button:disabled:hover { border-color: var(--rule-strong); background: var(--card); }
+.btn.primary:disabled:hover, .leaf button.primary:disabled:hover { background: var(--ink); border-color: var(--ink); }
+
+/* ---------------------------------------------------------------- fields: a ruled box, written in the second hand */
+.field-box, .leaf input[type=text], .leaf input[type=email], .leaf input:not([type]), .leaf textarea {
+  font: 17px/1.4 var(--serif); color: var(--hand); background: var(--paper);
+  border: 1px solid var(--rule-strong); border-radius: var(--radius); padding: 10px 12px;
+}
+.field-box::placeholder, .leaf input::placeholder, .leaf textarea::placeholder { color: var(--ink-3); font-style: italic; }
+.field-box:focus, .leaf :is(input[type=text], input[type=email], input:not([type]), textarea):focus { border-color: var(--hand); outline: 1px solid var(--hand); outline-offset: 0; }
+input[type=checkbox], input[type=radio], input[type=range] { accent-color: var(--ink); }
+
+/* ---------------------------------------------------------------- the audio control: the browser's own, squared */
+audio { display: block; width: 100%; height: 40px; border: 1px solid var(--rule-strong); border-radius: var(--radius);
+        background: var(--card); }
+audio::-webkit-media-controls-enclosure { border-radius: 0; background: var(--card); }
+audio::-webkit-media-controls-panel { background: var(--card); }
+
+/* ---------------------------------------------------------------- a notice: the double rule of a seed packet's border */
+.double { border: 3px double var(--ink-2); border-radius: 0; }
+
+dialog { border: 3px double var(--ink-2); border-radius: 0; background: var(--card); color: var(--ink); }
+dialog::backdrop { background: rgba(23, 19, 14, .45); }
+
+@media (prefers-reduced-motion: reduce) { * { animation: none !important; transition: none !important; } }

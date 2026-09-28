@@ -86,7 +86,7 @@ def build_site(public: Path) -> dict:
     (public / "song" / "song.json").write_text(json.dumps(song))
     (public / "song" / "worker.json").write_text(json.dumps(W.worker_index(song)))
     (public / "index.html").write_text(f'<!doctype html><title>sing</title><div data-digest="{CONSENT}"></div>')
-    for name in ("yours.html", "yours.css", "yours.js", "sing.css"):
+    for name in ("yours.html", "yours.css", "yours.js", "sing.css", "identity.css"):
         shutil.copyfile(WEB / "page" / name, public / name)
     (public / "robots.txt").write_text("User-agent: *\nDisallow: /\n")
     (public / "_headers").write_text(W.HEADERS)

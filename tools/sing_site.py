@@ -529,6 +529,8 @@ def versioned(out: Path) -> None:
 
     swap("sing.js", 'from "./karaoke.js"', f'from "./karaoke.js?v={stamp("karaoke.js")}"')
     swap("sing.js", 'addModule("/recorder.js")', f'addModule("/recorder.js?v={stamp("recorder.js")}")')
+    for page in ("index.html", "seed.html", "yours.html"):  # identity.css: the tokens and shared pieces, first
+        swap(page, 'href="/identity.css"', f'href="/identity.css?v={stamp("identity.css")}"')
     swap("index.html", 'href="/sing.css"', f'href="/sing.css?v={stamp("sing.css")}"')
     swap("seed.html", 'href="/sing.css"', f'href="/sing.css?v={stamp("sing.css")}"')
     swap("index.html", 'src="/sing.js"', f'src="/sing.js?v={stamp("sing.js")}"')
