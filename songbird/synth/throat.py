@@ -26,12 +26,12 @@ from __future__ import annotations
 import json
 import os
 from dataclasses import dataclass
-from functools import lru_cache
+from functools import lru_cache, partial
 from pathlib import Path
 
 import numpy as np
 
-from .threads import workers
+from .threads import in_order, workers
 
 FRAME = 0.005  # seconds per envelope frame
 
@@ -441,7 +441,25 @@ def continuous(t: dict, lf0: np.ndarray) -> np.ndarray:
 
 
 def _gelu(x: np.ndarray) -> np.ndarray:
-    return 0.5 * x * (1.0 + np.tanh(0.7978845608028654 * (x + 0.044715 * x**3)))
+    """0.5 x (1 + tanh(0.7978845608028654 (x + 0.044715 x^3))), elementwise: worked out in place, a few
+    thousand rows at a time on threads (threads.in_order), each value by the same operations in the same order."""
+    out = np.empty_like(x)
+    rows = 4096
+
+    def part(r0: int) -> None:
+        v, o = x[r0: r0 + rows], out[r0: r0 + rows]
+        t = v**3
+        t *= 0.044715
+        t += v
+        t *= 0.7978845608028654
+        np.tanh(t, out=t)
+        t += 1.0
+        np.multiply(0.5, v, out=o)
+        o *= t
+
+    for _ in in_order([(r0, partial(part, r0)) for r0 in range(0, len(x), rows)]):
+        pass
+    return out
 
 
 def _linear(x: np.ndarray, w: dict, name: str) -> np.ndarray:
