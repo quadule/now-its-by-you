@@ -21,8 +21,10 @@ from __future__ import annotations
 
 import numpy as np
 from numba import njit
-from scipy.signal import butter, sosfilt
+from scipy.signal import sosfilt
 from scipy.special import jn_zeros, jv
+
+from .iir import butter
 
 STROKE_GAIN = {"bass": 1.0, "tip": 0.55, "mute": 0.5, "rim": 0.45}
 
@@ -51,7 +53,7 @@ STROKES = {
 }
 
 
-@njit(cache=True)
+@njit(cache=True, nogil=True)
 def _ring(freqs, amps, t60s, glide, glide_time, n, sr):
     """Sum of decaying modes; the two lowest start `glide` higher and fall back
     over `glide_time` seconds (the skin's tension after a hard hit)."""

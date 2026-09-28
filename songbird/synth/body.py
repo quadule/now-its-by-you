@@ -18,7 +18,9 @@ from __future__ import annotations
 from dataclasses import dataclass
 
 import numpy as np
-from scipy.signal import butter, oaconvolve, sosfilt
+from scipy.signal import oaconvolve, sosfilt
+
+from .iir import butter
 
 
 @dataclass(frozen=True)

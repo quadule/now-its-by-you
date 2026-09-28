@@ -17,7 +17,7 @@ from . import evolve, variants as variants_mod
 from .arrange import ArrangeError, Lyrics, arrange, hold, problem, sing, verse_problem
 from .composition import has_lines
 from .realize import Params, choose_params, realize
-from .synth import master
+from .synth import master, threads
 from .synth.mixing import MixParams
 from .synth.voice import VoiceParams
 
@@ -134,11 +134,19 @@ def render_one(genome, params: Params, out: Path, *, voice=None, drift=None, lyr
     mastered = master.master(mix, synth.SR, target=float(getattr(params, "loudness", master.TARGET_LUFS)))
     pcm = master.to_pcm16(mastered, seed=params.seed)
     lineage = pack_mod.lineage(parent)
-    master.write_flac(out, pcm, synth.SR, tags=dict(
+    tags = dict(
         title=genome.title, artist=ARTIST, date=drift.to_dict()["at"][:10] if drift is not None else None,
         comment=f"Generation {lineage['generation']}, id {master.pcm_sha256(pcm)[:12]}."
                 + (" This file is also the program that sang it: run it with python3, or unzip it."
-                   if packet_genome is not None else "")))
+                   if packet_genome is not None else ""))
+    # the FLAC written while the rendition's loudness, range and true peak are measured (threads.in_order)
+    heard = pcm / 32768.0
+    measured = dict(threads.in_order([
+        ("flac", lambda: master.write_flac(out, pcm, synth.SR, tags=tags)),
+        ("lufs", lambda: round(master.loudness(heard, synth.SR), 2)),
+        ("lu", lambda: round(master.loudness_range(heard, synth.SR), 2)),
+        ("dbtp", lambda: round(master.true_peak(heard), 2)),
+    ]))
 
     record = {
         "id": master.pcm_sha256(pcm),
@@ -156,9 +164,9 @@ def render_one(genome, params: Params, out: Path, *, voice=None, drift=None, lyr
         "performance": {"lead": phrasing_mod.to_json(phrasing) if phrasing is not None else None,
                         "choir": [phrasing_mod.to_json(ph) for ph in choir]},
         "mix": mixing.to_dict(),
-        "loudness_lufs": round(master.loudness(pcm / 32768.0, synth.SR), 2),
-        "loudness_range_lu": round(master.loudness_range(pcm / 32768.0, synth.SR), 2),
-        "true_peak_dbtp": round(master.true_peak(pcm / 32768.0), 2),
+        "loudness_lufs": measured["lufs"],
+        "loudness_range_lu": measured["lu"],
+        "true_peak_dbtp": measured["dbtp"],
         "peak_dbfs": round(20 * np.log10(np.max(np.abs(pcm)) / 32768.0), 2),
         "duration": round(len(pcm) / synth.SR, 3),
         "program_version": __version__,

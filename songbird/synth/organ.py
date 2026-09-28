@@ -106,9 +106,10 @@ from dataclasses import dataclass
 
 import numpy as np
 from numba import njit
-from scipy.signal import butter, sosfilt
+from scipy.signal import sosfilt
 
 from . import body, reed, touch
+from .iir import butter
 
 SPEC = {
     "organ": dict(
@@ -243,7 +244,7 @@ def _energy(reg: Registration) -> float:
     return float(np.sum(np.square(gains)))
 
 
-@njit(cache=True)
+@njit(cache=True, nogil=True)
 def _generator(n, sr, freqs, phases, h2, h3, ev_t, ev_w, ev_main, ev_perc, ev_ramp, trig_t, trig_decay):
     """The wheels, switched by the contacts: every event adds `ev_main` (busbars through the drawbars) or
     `ev_perc` (the percussion's keying) to wheel ev_w's gain at sample ev_t, over ev_ramp samples. A wheel's
@@ -330,7 +331,7 @@ def _generator(n, sr, freqs, phases, h2, h3, ev_t, ev_w, ev_main, ev_perc, ev_ra
     return main, perc
 
 
-@njit(cache=True)
+@njit(cache=True, nogil=True)
 def _scanner(x, sr, seg_t, seg_depth, seg_wet, seg_dry, phase0, lp):
     """The scanner: a delay line swept by a rounded triangle at 6.87 Hz. seg_*: from sample seg_t[i] on,
     the sweep's depth (samples each way), how much of the swept signal and of the dry one to mix; a
@@ -393,7 +394,7 @@ def _scanner(x, sr, seg_t, seg_depth, seg_wet, seg_dry, phase0, lp):
     return y
 
 
-@njit(cache=True)
+@njit(cache=True, nogil=True)
 def _expression(x, sr, ev_t, ev_target, ev_gain, s0, g0, follow, gamma, contour_hz, contour_depth):
     """The swell pedal: the volume follows the pedal (which moves to each target, and to each gain, with
     time constant `follow` s) as pedal^gamma times the gain, and as it closes the treble above contour_hz
@@ -429,7 +430,7 @@ def expression(y: np.ndarray, sr: int, swell) -> np.ndarray:
     return _expression(y, float(sr), ev_t, ev_s, ev_g, s0, g0, 0.08, touch.exponent(24.0), 800.0, 0.85)
 
 
-@njit(cache=True)
+@njit(cache=True, nogil=True)
 def _read(line, size, t, d):
     """Four-point Lagrange read from a circular line, d (>= 1) samples before sample t."""
     i = int(d)
@@ -442,7 +443,7 @@ def _read(line, size, t, d):
                                              + f * (1.5 * (x0 - x1) + 0.5 * (x2 - xm1))))
 
 
-@njit(cache=True)
+@njit(cache=True, nogil=True)
 def _rotors(x, sr, ev_t, ev_fast, fast0, speeds, times, horn, drum, mics, angles, low_sos, high_sos, horn_sos,
             out_sos):
     """The rotary speaker. x: the amplifier's output. The crossover (low_sos, high_sos: second-order

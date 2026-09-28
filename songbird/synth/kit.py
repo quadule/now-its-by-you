@@ -47,11 +47,12 @@ from functools import lru_cache
 
 import numpy as np
 from numba import njit
-from scipy.signal import butter, lfilter, sosfilt
+from scipy.signal import lfilter, sosfilt
 from scipy.special import jn_zeros, jv
 
 from . import cymbals, struck
 from .cymbals import Hit
+from .iir import butter
 from .master import _k_weighting
 
 # --- the drums -----------------------------------------------------------------------------------------
@@ -290,7 +291,7 @@ def drum_part(drum: Drum, strokes: list[Stroke], sr: int, length: int, rng: np.r
 # --- the snare's wires, hoop and a stick on its rim --------------------------------------------------------
 
 
-@njit(cache=True)
+@njit(cache=True, nogil=True)
 def _contacts(d, sr, omegas, preloads, damping):
     """Snare wire strands against the snare-side head. d: the head's displacement (down, toward the
     wires, positive; the strands below it can't pass it). A strand in contact rides with the head until
@@ -329,7 +330,7 @@ def _contacts(d, sr, omegas, preloads, damping):
     return out
 
 
-@njit(cache=True)
+@njit(cache=True, nogil=True)
 def _grains(strengths, noise, offsets, length, tau):
     """Each nonzero strength a grain of noise decaying over tau samples, laid onto one track."""
     n = strengths.shape[0]

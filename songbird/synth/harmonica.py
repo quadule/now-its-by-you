@@ -69,10 +69,11 @@ from dataclasses import dataclass, replace
 
 import numpy as np
 from numba import njit
-from scipy.signal import butter, oaconvolve, sosfilt
+from scipy.signal import oaconvolve, sosfilt
 
 from ..theory import midi_to_hz
 from . import body, reed
+from .iir import butter
 
 BLOW = (0, 4, 7, 12, 16, 19, 24, 28, 31, 36)  # semitones above hole 1's blow note, holes 1 to 10
 DRAW = (2, 7, 11, 14, 17, 21, 23, 26, 29, 33)
@@ -247,7 +248,7 @@ def _mouth(f0: float, breath: str, bent: float, size: float):
     return shape
 
 
-@njit(cache=True)
+@njit(cache=True, nogil=True)
 def _hands(x, opening, sr, shut, wide, leak, absorb):
     """The cupped hands over the harp: a gentle low-pass (a topology-preserving state-variable filter) whose
     corner rises from `shut` Hz to `wide` Hz as they open, blended with the open sound by how open they are and

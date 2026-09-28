@@ -13,15 +13,17 @@ range stays that of the mix.
 from __future__ import annotations
 
 import hashlib
-from functools import lru_cache
+from functools import lru_cache, partial
 from pathlib import Path
 
 import numpy as np
 import soundfile as sf
+from numpy.lib.stride_tricks import sliding_window_view
 from numba import njit
 from scipy.ndimage import minimum_filter1d
 from scipy.signal import firwin
 
+from . import threads
 from .fx import _biquads
 
 TARGET_LUFS = -14.0
@@ -47,7 +49,7 @@ def _k_weighting(sr: int) -> list[tuple[np.ndarray, np.ndarray]]:
     return [shelf, highpass]
 
 
-@njit(cache=True)
+@njit(cache=True, nogil=True)
 def _hop_power(y: np.ndarray, hop: int) -> np.ndarray:
     """Power summed over channels, averaged over each hop."""
     n, chans = y.shape
@@ -150,13 +152,21 @@ def true_peak_envelope(x: np.ndarray, floor: float = 0.0) -> np.ndarray:
     taps = _interpolator()
     padded = np.pad(y, ((REACH, REACH), (0, 0)))
     between = np.zeros(len(loud))
-    for start in range(0, len(loud), 1 << 16):  # a bounded amount of memory at a time
+    # sample n - k for k = -REACH..REACH sits at padded[n + REACH - k]: the window around n is a run of padded
+    # read backwards, a row of a sliding view over it reversed (copied out as the rows are picked)
+    last = len(padded) - 1
+    runs = [sliding_window_view(padded[::-1, ch], 2 * REACH + 1) for ch in range(y.shape[1])]
+
+    def swing(start: int) -> None:
         part = loud[start : start + (1 << 16)]
-        # sample n - k for k = -REACH..REACH sits at padded[n + REACH - k]
-        window = part[:, None] + REACH - np.arange(-REACH, REACH + 1)[None, :]
+        rows = last - (part + 2 * REACH)
         for ch in range(y.shape[1]):
-            points = padded[window, ch] @ taps.T  # n, n + 1/4, n + 1/2, n + 3/4
+            points = runs[ch][rows] @ taps.T  # n, n + 1/4, n + 1/2, n + 3/4
             between[start : start + len(part)] = np.maximum(between[start : start + len(part)], np.abs(points).max(axis=1))
+
+    # a bounded amount of memory at a time, each stretch its own (so they are made at once, threads.in_order)
+    for _ in threads.in_order([(start, partial(swing, start)) for start in range(0, len(loud), 1 << 16)]):
+        pass
     env[loud] = np.maximum(env[loud], between)
     env[loud + 1] = np.maximum(env[loud + 1], between)
     return env
@@ -168,7 +178,7 @@ def true_peak(x: np.ndarray) -> float:
     return float(20.0 * np.log10(np.max(true_peak_envelope(x, 0.5 * peak), initial=0.0) + 1e-12))
 
 
-@njit(cache=True)
+@njit(cache=True, nogil=True)
 def _recover(held: np.ndarray, coef: float) -> np.ndarray:
     """Follow a gain down at once and back up toward 1 exponentially."""
     out = np.empty_like(held)

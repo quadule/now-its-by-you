@@ -47,11 +47,12 @@ from itertools import combinations
 
 import numpy as np
 from numba import njit
-from scipy.signal import butter, sosfilt
+from scipy.signal import sosfilt
 
 from ..score import Note
 from ..theory import midi_to_hz
 from . import pluck, stringloop
+from .iir import butter
 
 LEGATO = ("hammer", "pull")
 CONTROL = 32  # samples between the loop delay's exact values (linear between)
@@ -247,7 +248,7 @@ def filter_gain(omega: np.ndarray, loss: float, pole: float) -> np.ndarray:
     return zero * one
 
 
-@njit(cache=True)
+@njit(cache=True, nogil=True)
 def _two_planes(xa, xb, da, db, ga, gb, loss, pole, size, heard, ad, sections):
     """Two string planes at once: y[t] = x[t] + g[t] * allpasses(lowpass(onezero(read(y, t - d[t])))), the
     read cubic Lagrange (as stringloop._run's), `sections` first-order allpasses of coefficient ad for the
@@ -340,7 +341,7 @@ def click(sr: int, hardness: float, vel: float, rng: np.random.Generator) -> np.
     return noise * np.exp(-np.arange(n) / ((0.0005 + 0.0015 * hardness) * sr)) * 0.1 * hardness**1.5 * vel
 
 
-@njit(cache=True)
+@njit(cache=True, nogil=True)
 def _combed(y, delays, weights, scale):
     """What the pickup hears: sum_i w_i (y(t) - y(t - d_i scale(t))), read by cubic Lagrange interpolation."""
     n = y.shape[0]

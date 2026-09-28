@@ -25,7 +25,7 @@ from numba import njit
 from ..theory import midi_to_hz
 
 
-@njit(cache=True)
+@njit(cache=True, nogil=True)
 def _read(buf, pos, delay):
     """Cubic Lagrange read `delay` samples behind write position `pos` in a circular buffer."""
     size = buf.shape[0]
@@ -44,7 +44,7 @@ def _read(buf, pos, delay):
     return wa * a + wb * b + wc * c + wd * d
 
 
-@njit(cache=True)
+@njit(cache=True, nogil=True)
 def run(period, bridge_len, bow_v, grip, noise, pole, gain):
     """The string's bridge force, sample by sample.
 
@@ -85,7 +85,7 @@ def run(period, bridge_len, bow_v, grip, noise, pole, gain):
     return out
 
 
-@njit(cache=True)
+@njit(cache=True, nogil=True)
 def _read_masked(buf, pos, delay):
     """_read for a buffer whose length is a power of two (a mask instead of a modulo: the same values, quicker)."""
     mask = buf.shape[0] - 1
@@ -103,7 +103,7 @@ def _read_masked(buf, pos, delay):
     return wa * a + wb * b + wc * c + wd * d
 
 
-@njit(cache=True)
+@njit(cache=True, nogil=True)
 def run_primed(period, bridge_len, bow_v, grip, noise, pole, gain, at, velocity):
     """run(), but at each sample at[k] (ascending) the string is set moving as
     in Helmholtz motion for bow velocity velocity[k]: a player's clean attack.

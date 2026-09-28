@@ -53,10 +53,11 @@ from dataclasses import dataclass, replace
 
 import numpy as np
 from scipy.ndimage import uniform_filter1d
-from scipy.signal import butter, oaconvolve, sosfilt
+from scipy.signal import oaconvolve, sosfilt
 
 from ..theory import midi_to_hz
 from . import body, bowed, fx, pluck
+from .iir import butter
 
 ARTICULATIONS = {
     "": "détaché: each note a new bow stroke",

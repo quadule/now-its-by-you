@@ -215,7 +215,7 @@ SPEC = {
 # ---------------------------------------------------------------------------------------------- circuits
 
 
-@njit(cache=True)
+@njit(cache=True, nogil=True)
 def _ring(x, sr, f0, t60, att_ratio, att_n, sigh, knee, n):
     """A bridged-T ring: a two-pole resonance at f0 Hz falling 60 dB in t60 s, driven by x (then left to ring),
     n samples. For the first att_n samples it rings att_ratio times higher, gliding back over half a
@@ -249,7 +249,7 @@ def _ring(x, sr, f0, t60, att_ratio, att_n, sigh, knee, n):
     return y
 
 
-@njit(cache=True)
+@njit(cache=True, nogil=True)
 def _square(p, d, dt, inv):
     """One sample of a zero-mean pulse wave at phase p, duty d, with osc.pulse's four-point polyBLEP edges."""
     v = 1.0 if p < d else -1.0
@@ -267,7 +267,7 @@ def _square(p, d, dt, inv):
     return v - (2.0 * d - 1.0)
 
 
-@njit(cache=True)
+@njit(cache=True, nogil=True)
 def _bank(freqs, duties, phases, n, sr):
     """Square waves summed, n samples at sr from the given phases: osc.pulse's pulses, all in one pass (the
     808's six are shared by every hat, cymbal and cowbell note)."""
@@ -287,7 +287,7 @@ def _bank(freqs, duties, phases, n, sr):
     return y
 
 
-@njit(cache=True)
+@njit(cache=True, nogil=True)
 def _hat808(freqs, duties, phases, pre, n, sr, bp, norm, env, vt, theta, lower, alpha, hp):
     """An 808 hat at the oversampled rate, in one pass: the six squares (from `pre` samples before the hit, so
     the band-pass has settled), the band-pass (a biquad, b0 b1 b2 a1 a2), the swing VCA with the envelope

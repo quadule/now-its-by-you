@@ -10,8 +10,10 @@ the true previous outputs, so a coefficient change never produces a jump.
 from __future__ import annotations
 
 import numpy as np
-from scipy.signal import butter, lfilter, sosfilt
+from scipy.signal import lfilter, sosfilt
 from scipy.special import j1, struve
+
+from .iir import butter
 
 SPEED_OF_SOUND = 35000.0  # cm/s
 

@@ -28,7 +28,7 @@ from numba import njit
 LN1000 = 6.907755278982137  # a T60 is the time to fall by a factor of 1000
 
 
-@njit(cache=True)
+@njit(cache=True, nogil=True)
 def ring(out, start, force, freqs, gain_re, gain_im, t60, t60_damped, damp_at, ramp, gains, sr, floor):
     """Add one note's modes into out[channel, start:], each channel scaled by gains[channel].
 

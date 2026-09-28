@@ -26,10 +26,12 @@ from __future__ import annotations
 import json
 import os
 from dataclasses import dataclass
-from functools import lru_cache
+from functools import lru_cache, partial
 from pathlib import Path
 
 import numpy as np
+
+from .threads import in_order, workers
 
 FRAME = 0.005  # seconds per envelope frame
 
@@ -151,15 +153,26 @@ def _spread_curve(fft: int, sr: int, start: float) -> np.ndarray:
     return -2.0 * np.pi * np.cumsum(delay) * (sr / fft)
 
 
+def _knots(sr: int) -> int:
+    """How many random values a row of _smooth_random draws."""
+    return len(np.arange(0.0, sr / 2 + SCATTER_BW, SCATTER_BW))
+
+
+def _smooth(r: np.ndarray, fft: int, sr: int) -> np.ndarray:
+    """Rows of values r at knots SCATTER_BW Hz apart, linear between them, per FFT bin."""
+    hz = np.arange(fft // 2 + 1) * sr / fft
+    pos = hz / SCATTER_BW
+    lo = np.minimum(pos.astype(int), r.shape[1] - 2)
+    w = pos - lo
+    return r[:, lo] * (1 - w) + r[:, lo + 1] * w
+
+
 def _smooth_random(rng: np.random.Generator, rows: int, fft: int, sr: int) -> np.ndarray:
     """Rows of unit-variance random values at knots SCATTER_BW Hz apart, linear between them, per FFT bin."""
-    hz = np.arange(fft // 2 + 1) * sr / fft
-    knots = np.arange(0.0, sr / 2 + SCATTER_BW, SCATTER_BW)
-    pos = hz / SCATTER_BW
-    lo = np.minimum(pos.astype(int), len(knots) - 2)
-    w = pos - lo
-    r = rng.standard_normal((rows, len(knots)))
-    return r[:, lo] * (1 - w) + r[:, lo + 1] * w
+    return _smooth(rng.standard_normal((rows, _knots(sr))), fft, sr)
+
+
+BLOCK = 512  # pulses synthesize() hands a thread at a time: a few tens of MB of spectra each
 
 
 def synthesize(f0: np.ndarray, sp: np.ndarray, ap: np.ndarray, sr: int, rng: np.random.Generator,
@@ -169,7 +182,14 @@ def synthesize(f0: np.ndarray, sp: np.ndarray, ap: np.ndarray, sr: int, rng: np.
     aperiodicity (frames, AP_MEL), all on FRAME steps. source: an optional log-power change to the
     voiced (periodic) part alone, on the envelope's grid: a different glottal source from the one
     the envelope was learned with (see source_change). texture: what breaks the pulses' regularity
-    (TEXTURE if None; PLAIN for none, WORLD's own synthesis)."""
+    (TEXTURE if None; PLAIN for none, WORLD's own synthesis).
+
+    The random values are drawn `chunk` pulses at a time, in order (so a seed gives one voice); the pulses'
+    responses are then made BLOCK at a time, on as many threads as workers() gives, each pulse's the same
+    whichever block or thread makes it, and laid into the output in order."""
+    from collections import deque
+    from concurrent.futures import ThreadPoolExecutor
+
     from scipy.signal import lfilter
 
     tx = TEXTURE if texture is None else texture
@@ -196,32 +216,39 @@ def synthesize(f0: np.ndarray, sp: np.ndarray, ap: np.ndarray, sr: int, rng: np.
     spread = _spread_curve(fft, sr, tx.spread_from) if tx.spread > 0 else None
     hann = 0.5 - 0.5 * np.cos(2 * np.pi * (np.arange(fft) + 1.0) / (fft + 1.0))
     hann /= hann.sum()  # takes a pulse's DC away smoothly over a window centred on it, as WORLD's DC remover does
-    for c0 in range(0, len(at), chunk):
-        sl = slice(c0, c0 + chunk)
+
+    def responses(sl: slice, scatter: np.ndarray | None, noise: np.ndarray) -> np.ndarray:
+        """The responses of pulses sl, each laid out from `half` samples before its pulse. scatter, noise: their
+        rows of the random values drawn for them."""
         env = to_bins(sp[k0[sl]] * (1 - w[sl]) + sp[k1[sl]] * w[sl], fft, sr, log_power=True)
         aper = to_bins(ap[k0[sl]] * (1 - w[sl]) + ap[k1[sl]] * w[sl], fft, sr, log_power=False)
         ratio = np.clip(aper, 0.001, 0.999) ** 2
-        v = voiced[sl, None]
-        ratio = np.where(v, ratio, 1.0)
+        v = voiced[sl]
+        ratio = np.where(v[:, None], ratio, 1.0)
         power = np.exp(env)
-        voiced_power = power
-        if source is not None:
-            voiced_power = power * np.exp(to_bins(source[k0[sl]] * (1 - w[sl]) + source[k1[sl]] * w[sl], fft, sr,
-                                                  log_power=False))
-        # periodic: a minimum-phase pulse, delayed by its fraction of a sample, scaled for its period
-        periodic = min_phase(0.5 * np.log(voiced_power * (1.0 - ratio) + 1e-16))
-        turn = -2 * np.pi * bins * frac[sl, None] / fft
-        if spread is not None:
-            turn = turn + (tx.spread * period[sl, None] / sr) * spread[None, :]
-        if tx.scatter > 0:
-            harmonic = hz[None, :] * period[sl, None] / sr
-            rise = np.clip((harmonic - tx.scatter_from) / max(tx.scatter_to - tx.scatter_from, 1e-9), 0.0, 1.0)
-            turn = turn + tx.scatter * rise * _smooth_random(rng, len(rise), fft, sr)
-        periodic *= np.exp(1j * turn)
-        periodic = np.fft.irfft(periodic, n=fft, axis=-1) * np.sqrt(period[sl, None]) * v
+        # periodic: a minimum-phase pulse, delayed by its fraction of a sample, scaled for its period. Made for
+        # the voiced pulses only (an unvoiced pulse's is nothing), into zeros laid out in memory as the FFT lays
+        # out its output for spectra laid out as these are, so the sum below adds each row in the same order.
+        periodic = np.fft.irfft(np.zeros_like(power, dtype=complex), n=fft, axis=-1)
+        on = np.flatnonzero(v)
+        if len(on):
+            g = sl.start + on  # the voiced pulses, by their index among all
+            voiced_power = power[on]
+            if source is not None:
+                voiced_power = voiced_power * np.exp(to_bins(source[k0[g]] * (1 - w[g]) + source[k1[g]] * w[g], fft,
+                                                             sr, log_power=False))
+            pulse = min_phase(0.5 * np.log(voiced_power * (1.0 - ratio[on]) + 1e-16))
+            turn = -2 * np.pi * bins * frac[g, None] / fft
+            if spread is not None:
+                turn = turn + (tx.spread * period[g, None] / sr) * spread[None, :]
+            if scatter is not None:
+                harmonic = hz[None, :] * period[g, None] / sr
+                rise = np.clip((harmonic - tx.scatter_from) / max(tx.scatter_to - tx.scatter_from, 1e-9), 0.0, 1.0)
+                turn = turn + tx.scatter * rise * _smooth(scatter[on], fft, sr)
+            pulse *= np.exp(1j * turn)
+            periodic[on] = np.fft.irfft(pulse, n=fft, axis=-1) * np.sqrt(period[g, None])
         # aperiodic: a period's worth of white noise through the aperiodic part of the envelope
         m = np.maximum(np.round(period[sl]).astype(int), 1)
-        noise = rng.standard_normal((len(m), fft))
         inside = np.arange(fft)[None, :] < m[:, None]
         noise = np.where(inside, noise, 0.0)
         noise -= inside * (noise.sum(axis=1, keepdims=True) / m[:, None])  # no DC, as WORLD
@@ -234,8 +261,41 @@ def synthesize(f0: np.ndarray, sp: np.ndarray, ap: np.ndarray, sr: int, rng: np.
         response[:, half - lead: half - lead + fft] = np.roll(periodic, lead, axis=1)
         response[:, half:] += aperiodic
         response[:, :fft] -= periodic.sum(axis=1, keepdims=True) * hann
+        return response
+
+    def lay(sl: slice, response: np.ndarray) -> None:
         for j, start in enumerate(at[sl]):
             y[start : start + fft + half] += response[j]
+
+    threads = workers()
+    pool = ThreadPoolExecutor(threads) if threads > 1 else None
+    pending: deque = deque()
+    try:
+        for c0 in range(0, len(at), chunk):
+            rows = len(at[c0: c0 + chunk])
+            # the chunk's random values, drawn as they always were: its scatter, then its noise
+            scatter = rng.standard_normal((rows, _knots(sr))) if tx.scatter > 0 else None
+            noise = rng.standard_normal((rows, fft))
+            # blocks of BLOCK pulses, the last taking one left over (a single row is summed in another order)
+            starts = list(range(0, rows, BLOCK))
+            if len(starts) > 1 and rows - starts[-1] == 1:
+                starts.pop()
+            for b0, b1 in zip(starts, starts[1:] + [rows]):
+                sl = slice(c0 + b0, c0 + b1)
+                args = (sl, None if scatter is None else scatter[b0:b1], noise[b0:b1])
+                if pool is None:
+                    lay(sl, responses(*args))
+                    continue
+                pending.append((sl, pool.submit(responses, *args)))
+                while len(pending) > 2 * threads:
+                    done, future = pending.popleft()
+                    lay(done, future.result())
+        while pending:
+            done, future = pending.popleft()
+            lay(done, future.result())
+    finally:
+        if pool is not None:
+            pool.shutdown(cancel_futures=True)
     return y[half : half + n]
 
 
@@ -381,7 +441,25 @@ def continuous(t: dict, lf0: np.ndarray) -> np.ndarray:
 
 
 def _gelu(x: np.ndarray) -> np.ndarray:
-    return 0.5 * x * (1.0 + np.tanh(0.7978845608028654 * (x + 0.044715 * x**3)))
+    """0.5 x (1 + tanh(0.7978845608028654 (x + 0.044715 x^3))), elementwise: worked out in place, a few
+    thousand rows at a time on threads (threads.in_order), each value by the same operations in the same order."""
+    out = np.empty_like(x)
+    rows = 4096
+
+    def part(r0: int) -> None:
+        v, o = x[r0: r0 + rows], out[r0: r0 + rows]
+        t = v**3
+        t *= 0.044715
+        t += v
+        t *= 0.7978845608028654
+        np.tanh(t, out=t)
+        t += 1.0
+        np.multiply(0.5, v, out=o)
+        o *= t
+
+    for _ in in_order([(r0, partial(part, r0)) for r0 in range(0, len(x), rows)]):
+        pass
+    return out
 
 
 def _linear(x: np.ndarray, w: dict, name: str) -> np.ndarray:

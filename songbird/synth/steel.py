@@ -67,12 +67,13 @@ from functools import lru_cache
 from itertools import combinations, product
 
 import numpy as np
-from scipy.signal import butter, sosfilt
+from scipy.signal import sosfilt
 
 from ..score import Note
 from ..theory import midi_to_hz
 from . import amp, body, electric, fretboard
 from .fretboard import Segment, Strings
+from .iir import butter
 from .master import loudness
 
 STEEL_ARTS = {

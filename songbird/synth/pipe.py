@@ -21,12 +21,14 @@ from __future__ import annotations
 
 import numpy as np
 from numba import njit
-from scipy.signal import butter, sosfilt
+from scipy.signal import sosfilt
 
 from ..theory import midi_to_hz
 
+from .iir import butter
 
-@njit(cache=True)
+
+@njit(cache=True, nogil=True)
 def run(freq, breath, chiff, drive, aim, noise, feedback, damping, sr):
     """The pipe's sound, sample by sample, from control tracks: freq (Hz),
     breath (the jet's strength, 0 silent), chiff (extra turbulence at a

@@ -37,10 +37,11 @@ and the thumb's flesh; a picked passage's the fingerpicks' and a thumbpick's.
 from __future__ import annotations
 
 import numpy as np
-from scipy.signal import butter, sosfilt, sosfreqz
+from scipy.signal import sosfilt, sosfreqz
 from scipy.special import jv
 
 from . import body, fretwork, pluck
+from .iir import butter
 
 SCALE_MM = 667.0  # the long strings' scale: 26 1/4 inches
 HEAD_RADIUS = 0.1397  # m: an 11-inch head

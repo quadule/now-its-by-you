@@ -90,7 +90,7 @@ def nose_areas(n_tract: int) -> np.ndarray:
     return nose
 
 
-@njit(cache=True)
+@njit(cache=True, nogil=True)
 def _scatter(right, left, area, out_right, out_left, lo, hi):
     """Two-port junctions i in [lo, hi): flow waves partly reflect where the area changes."""
     for i in range(lo, hi):
@@ -105,7 +105,7 @@ def _scatter(right, left, area, out_right, out_left, lo, hi):
         out_left[i] = left[i] - d
 
 
-@njit(cache=True)
+@njit(cache=True, nogil=True)
 def run(source, noise, noise_at, tract, velum, nose, nose_start, block):
     """Push a glottal source through the tract.
 

@@ -37,10 +37,11 @@ from functools import lru_cache
 
 import numpy as np
 from numba import njit
-from scipy.signal import butter, freqz, sosfilt
+from scipy.signal import freqz, sosfilt
 
 from . import master
 from . import pluck as _pluck
+from .iir import butter
 
 CONTROL = 32  # samples between the points of a string's pitch and gain tracks
 EARLY = 0.1  # seconds of a pick whose loudness sets its level
@@ -249,7 +250,7 @@ class Strings:
 # --- the string itself ---------------------------------------------------------------------------
 
 
-@njit(cache=True)
+@njit(cache=True, nogil=True)
 def _string(n, ctrl, delay, gain_a, gain_b, omega, pull, ratio_b, loss, at, first, count, amount, pool, size,
             hp):
     """One string for n samples: the plane across the top (per-trip gain gain_a) and the one along it

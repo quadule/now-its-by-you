@@ -58,12 +58,13 @@ from dataclasses import replace
 from functools import lru_cache
 
 import numpy as np
-from scipy.signal import butter, oaconvolve, sosfilt
+from scipy.signal import oaconvolve, sosfilt
 
 from ..score import Note
 from ..theory import midi_to_hz
 from . import amp, fretboard
 from .fretboard import Strings
+from .iir import butter
 from .master import loudness
 
 GUITAR_ARTS = {
