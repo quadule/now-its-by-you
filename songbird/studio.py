@@ -74,7 +74,8 @@ LOOPBACK = {"127.0.0.1", "localhost", "::1"}
 MAX_WAITING = 12  # renders waiting at once: more are refused until the queue shortens (a shared studio)
 CACHE_LIMIT = 300 * 2**20  # bytes of previews kept; the least recently heard go first
 PREVIEW_GAIN_DB = 5.3  # what mastering gives a whole rendition of H (5.1 to 5.4 dB): a section keeps its level
-STATIC = {"/studio.css": ("studio.css", "text/css; charset=utf-8"),
+STATIC = {"/identity.css": ("identity.css", "text/css; charset=utf-8"),  # the shared tokens (docs/IDENTITY.md)
+          "/studio.css": ("studio.css", "text/css; charset=utf-8"),
           "/composer.js": ("composer.js", "text/javascript; charset=utf-8"),
           "/drafts.js": ("drafts.js", "text/javascript; charset=utf-8"),
           "/author.js": ("author.js", "text/javascript; charset=utf-8"),

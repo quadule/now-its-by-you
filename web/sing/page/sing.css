@@ -1,43 +1,32 @@
-/* The page singers use anywhere: warm paper around a dark stage for the words. */
-:root {
-  --paper: #f7f1e8; --card: #fffaf3; --ink: #2b231d; --dim: #74675b; --line: #e3d7c7;
-  --accent: #c2533b; --accent-ink: #fffaf3; --ok: #5f8f58; --warn: #a8641c;
-  --stage: #1c1814; --stage-panel: #25201b; --stage-ink: #efe6da; --stage-dim: #857a6f; --sung: #f2b25c;
-}
-@media (prefers-color-scheme: dark) {
-  :root:not([data-theme="light"]) {
-    --paper: #15120f; --card: #211c18; --ink: #efe6da; --dim: #9b8f83; --line: #3a322c;
-    --accent: #e0664d; --accent-ink: #1b120e; --ok: #8cc084; --warn: #e0a04d;
-  }
-}
+/* The page singers use anywhere, and the seed page: a broadside around a lit stage for the words.
+   The tokens, masthead, cards, buttons, fields and links are identity.css's (docs/IDENTITY.md), loaded first. */
+:root { --dim: var(--ink-3); --line: var(--rule); --ok: var(--green); --warn: var(--ochre); }
 * { box-sizing: border-box; }
 [hidden] { display: none !important; }
 html { -webkit-text-size-adjust: 100%; }
-body { margin: 0; background: var(--paper); color: var(--ink);
-       font: 17px/1.5 -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif; }
-main { max-width: 720px; margin: 0 auto; padding: 20px 16px calc(64px + env(safe-area-inset-bottom)); }
-header { margin: 8px 0 18px; }
-.kicker { margin: 0; color: var(--accent); font-size: 13px; letter-spacing: .14em; text-transform: uppercase; font-weight: 650; }
+body { font: 17px/1.55 var(--serif); }
+main { max-width: var(--measure); margin: 0 auto; padding: 20px var(--gutter) calc(64px + env(safe-area-inset-bottom)); }
+header { margin: 8px 0 20px; }
 .preview { margin-top: 14px; }
-.preview audio { display: block; width: 100%; margin-top: 6px; }
-h1 { margin: 2px 0 0; font-size: 28px; line-height: 1.2; font-weight: 700; }
-h2 { font-size: 19px; margin: 0 0 10px; display: flex; align-items: center; gap: 10px; }
-h3 { font-size: 17px; margin: 0 0 10px; }
-.n { display: inline-grid; place-items: center; width: 28px; height: 28px; border-radius: 50%; background: var(--accent);
-     color: var(--accent-ink); font-size: 15px; flex: none; }
+.preview audio { margin-top: 8px; }
+h2 { font: 600 21px/1.25 var(--serif); margin: 0 0 10px; display: flex; align-items: baseline; gap: 10px; }
+h3 { font: 600 17px/1.3 var(--serif); margin: 0 0 10px; }
+/* a step's number: a red numeral, as a hymnal numbers its verses */
+.n { color: var(--red); font: 600 22px/1 var(--serif); flex: none; font-variant-numeric: oldstyle-nums; }
 p { margin: 0 0 10px; }
 .hint { color: var(--dim); font-size: 15px; }
 .status { min-height: 1.5em; color: var(--dim); }
 .warn { color: var(--warn); }
 
-.step, .card { background: var(--card); border: 1px solid var(--line); border-radius: 14px; padding: 16px; margin: 14px 0; }
+.step, .card { background: var(--card); border: 1px solid var(--line); border-radius: var(--radius); padding: 16px 18px; margin: 16px 0; }
+.step > h2, .card > h2 { padding-bottom: 8px; border-bottom: 1px solid var(--red-rule); }
 .step.waiting { opacity: .45; }
 .step.waiting button, .step.waiting input, .step.waiting textarea { pointer-events: none; }
 .closed { padding-top: 40px; }
 
-.consent { border: 1px solid var(--line); border-radius: 10px; padding: 12px 14px; margin-bottom: 12px;
-           background: var(--paper); font-size: 15px; }
-.consent h2, .consent h3 { font-size: 16px; }
+/* the releases: a document set into the page, in the double rule of a notice */
+.consent { border: 3px double var(--ink-3); padding: 12px 14px; margin-bottom: 12px; background: var(--paper); font-size: 15px; }
+.consent h2, .consent h3 { font-size: 16px; border: 0; padding: 0; }
 .consent ul { padding-left: 20px; margin: 6px 0 10px; }
 .consent li { margin: 4px 0; }
 label.agree { display: flex; gap: 10px; align-items: center; font-weight: 600; margin: 6px 0 10px; }
@@ -45,79 +34,77 @@ label.check { display: flex; gap: 10px; align-items: center; margin: 12px 0 4px;
 label.field { display: block; font-weight: 600; margin: 12px 0 0; }
 label.field:first-child { margin-top: 0; }
 .choices { display: grid; gap: 8px; margin-top: 10px; }
-.choices label { display: flex; gap: 10px; align-items: flex-start; padding: 10px 12px; border: 1px solid var(--line); border-radius: 10px; }
+.choices label { display: flex; gap: 10px; align-items: flex-start; padding: 10px 12px; border: 1px solid var(--line); border-radius: var(--radius); background: var(--card); }
 .choices label small { display: block; color: var(--dim); font-size: 14px; }
-.choices label:has(input:checked) { border-color: var(--accent); }
-input[type=checkbox], input[type=radio] { width: 20px; height: 20px; accent-color: var(--accent); flex: none; margin-top: 2px; }
-input#name, input#email, textarea { display: block; width: 100%; margin: 6px 0 4px; font: inherit; padding: 10px 12px; border-radius: 10px;
-             border: 1px solid var(--line); background: var(--paper); color: var(--ink); }
-input.missing { border-color: var(--accent); }
+.choices label:has(input:checked) { border-color: var(--ink); }
+input[type=checkbox], input[type=radio] { width: 20px; height: 20px; flex: none; margin-top: 2px; }
+input#name, input#email, textarea { display: block; width: 100%; margin: 6px 0 4px; }
+input.missing { border-color: var(--red); outline: 1px solid var(--red); }
 textarea { resize: vertical; min-height: 7em; line-height: 1.45; }
 
 /* the pitch: the first thing anyone reads, set as a short lead */
 .pitch { margin: 0 0 10px; }
 .pitch p { margin: 0 0 8px; }
-.pitch .lead { font-size: 21px; line-height: 1.35; font-weight: 600; }
-.closes { font-size: 15px; font-weight: 600; color: var(--accent); margin: 4px 0 12px; }
+.pitch .lead { font-size: 22px; line-height: 1.35; font-weight: 400; font-style: italic; }
+.closes { font-size: 15px; font-weight: 600; color: var(--red); margin: 4px 0 12px; }
 .howto { margin: 14px 0 0; }
 footer { margin: 28px 0 0; text-align: center; }
-footer a, .link a { color: var(--accent); }
 
-/* their own page's link, to keep */
+/* their own page's link, to keep: a slip tucked into the page */
 .link { display: flex; flex-wrap: wrap; gap: 8px 10px; align-items: center; padding: 10px 12px; margin: 8px 0;
-        border: 1px dashed var(--accent); border-radius: 10px; background: var(--paper); }
+        border: 1px dashed var(--rule-strong); border-radius: var(--radius); background: var(--paper); }
 .link a { flex: 1 1 200px; overflow-wrap: anywhere; font-weight: 600; }
-.link button { min-height: 40px; padding: 6px 14px; }
-button.plain { border: 0; background: none; padding: 0; min-height: 0; color: var(--accent); text-decoration: underline; font-size: inherit; }
+.leaf .link button { min-height: 40px; padding: 6px 14px; }
+.leaf button.plain { border: 0; background: none; padding: 0; min-height: 0; color: var(--ink); font: inherit; font-weight: inherit;
+                     text-decoration: underline; text-decoration-color: var(--red); text-underline-offset: .2em; display: inline; }
+.leaf button.plain:hover { color: var(--red); background: none; }
 
 /* what you'll hear */
 .pick { margin: 14px 0 0; }
 .pick:first-of-type { margin-top: 4px; }
 .pick h3 { margin: 0 0 6px; font-size: 16px; }
-.badge { display: inline-block; margin-left: 4px; padding: 1px 8px; border-radius: 999px; background: var(--accent); color: var(--accent-ink);
-         font-size: 12px; font-weight: 650; vertical-align: 2px; }
+.badge { display: inline-block; margin-left: 6px; color: var(--red); font: 600 14px/1 var(--serif);
+         font-variant-caps: all-small-caps; letter-spacing: .08em; vertical-align: 1px; }
 .stepper { display: flex; align-items: center; gap: 10px; }
-.stepper span { flex: 1; text-align: center; font-weight: 650; }
-.stepper button { flex: none; min-width: 96px; }
-.segmented { display: flex; border: 1px solid var(--line); border-radius: 12px; overflow: hidden; }
+.stepper span { flex: 1; text-align: center; font-weight: 600; }
+.leaf .stepper button { flex: none; min-width: 96px; }
+.segmented { display: flex; border: 1px solid var(--rule-strong); border-radius: var(--radius); overflow: hidden; background: var(--card); }
 .segmented label { flex: 1; position: relative; text-align: center; }
 .segmented input { position: absolute; opacity: 0; inset: 0; width: 100%; height: 100%; margin: 0; cursor: pointer; }
-.segmented span { display: flex; align-items: center; justify-content: center; min-height: 44px; padding: 6px 8px; font-size: 15px; line-height: 1.2; }
-.segmented label + label span { border-left: 1px solid var(--line); }
-.segmented input:checked + span { background: var(--accent); color: var(--accent-ink); font-weight: 650; }
-.segmented input:focus-visible + span { outline: 2px solid var(--accent); outline-offset: -4px; }
+.segmented span { display: flex; align-items: center; justify-content: center; min-height: 44px; padding: 6px 8px; font: 15px/1.2 var(--sans); }
+.segmented label + label span { border-left: 1px solid var(--rule-strong); }
+.segmented input:checked + span { background: var(--ink); color: var(--card); font-weight: 600; }
+.segmented input:focus-visible + span { outline: 2px solid var(--hand); outline-offset: -4px; }
 .segmented input:disabled + span { opacity: .5; }
 .segmented strong { font-weight: inherit; }
 
 /* what to sing: each section, or the whole song */
 .parts { display: flex; flex-wrap: wrap; gap: 8px; margin: 10px 0 6px; }
-button.chip { min-height: 40px; padding: 6px 14px; border-radius: 999px; font-size: 15px; }
-button.chip[aria-pressed="true"] { background: var(--ink); border-color: var(--ink); color: var(--paper); font-weight: 650; }
+.leaf button.chip { min-height: 40px; padding: 6px 14px; font-size: 15px; }
+.leaf button.chip[aria-pressed="true"] { background: var(--ink); border-color: var(--ink); color: var(--card); font-weight: 600; }
 .partLabel { min-height: 1.5em; font-weight: 600; margin: 4px 0 10px; }
 
-/* words for the song */
+/* words for the song: what they write is in the second hand */
 .plain { font-weight: 600; }
 .count { margin: 0; text-align: right; font-size: 13px; min-height: 1.2em; }
 #wordsRelease { max-height: 40vh; overflow: auto; }
 .wordsSent { list-style: none; padding: 0; margin: 10px 0 0; }
-.wordsSent li { white-space: pre-wrap; border-left: 3px solid var(--ok); padding: 4px 10px; margin: 8px 0; color: var(--dim); font-size: 15px; }
+.wordsSent li { white-space: pre-wrap; border-left: 2px solid var(--hand); padding: 4px 12px; margin: 8px 0; color: var(--hand); font-size: 16px; }
 
 .row { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; margin: 8px 0; }
-button { font: inherit; font-size: 16px; min-height: 44px; padding: 10px 16px; border-radius: 12px; border: 1px solid var(--line);
-         background: var(--paper); color: var(--ink); cursor: pointer; }
-button.primary { background: var(--accent); border-color: var(--accent); color: var(--accent-ink); font-weight: 650; }
-button:disabled { opacity: .4; cursor: default; }
-.meter { display: inline-block; width: 140px; height: 10px; background: var(--line); border-radius: 5px; overflow: hidden; }
-.meter > span { display: block; height: 100%; width: 0; background: var(--ok); }
-.slide input[type=range] { flex: 1 1 160px; accent-color: var(--accent); }
+.leaf button { min-height: 44px; }
+.meter { display: inline-block; width: 140px; height: 8px; background: var(--wash); border: 1px solid var(--rule); overflow: hidden; vertical-align: middle; }
+.meter > span { display: block; height: 100%; width: 0; background: var(--green); }
+.slide input[type=range] { flex: 1 1 160px; }
 
-.stage { position: relative; background: var(--stage); border-radius: 14px; padding: 10px; }
-button.full { position: absolute; top: 16px; right: 16px; z-index: 2; min-height: 32px; padding: 4px 10px; font-size: 13px;
-              border: 0; border-radius: 8px; background: rgba(21, 18, 15, .55); color: #efe6da; }
-/* a phone: the stage runs the full width of the screen (past the card's padding and the page's) */
+/* ---------------------------------------------------------------- the stage: a page lit in the dark */
+.stage { position: relative; background: var(--stage); border: 3px double rgba(239, 230, 218, .28); padding: 10px; color: var(--stage-ink); }
+.leaf button.full { position: absolute; top: 16px; right: 16px; z-index: 2; min-height: 32px; padding: 4px 10px; font-size: 13px;
+                    border: 1px solid rgba(239, 230, 218, .35); background: var(--stage); color: var(--stage-ink); }
+.leaf button.full:hover { border-color: var(--stage-ink); background: var(--stage); color: var(--stage-ink); }
+/* a phone: the stage runs the full width of the screen (past the card's padding and border, and the page's) */
 @media (max-width: 600px) {
-  #sing .stage { margin: 0 -33px; border-radius: 0; padding: 8px 0; }
-  #sing canvas.lane, #sing .scroller { border-radius: 0; }
+  #sing .stage { margin: 0 calc(-1 * (var(--gutter) + 19px)); border-width: 3px 0; padding: 8px 0; }
 }
 /* full screen: the browser's own (:fullscreen), or the page's own on an iPhone (.fs) */
 #sing:fullscreen, #sing.fs { margin: 0; border: 0; border-radius: 0; overflow-y: auto; background: var(--card);
@@ -125,33 +112,32 @@ button.full { position: absolute; top: 16px; right: 16px; z-index: 2; min-height
 #sing.fs { position: fixed; inset: 0; z-index: 100; }
 body.fs-on { overflow: hidden; }
 #sing:fullscreen > h2, #sing.fs > h2, #sing:fullscreen > .hint, #sing.fs > .hint { display: none; }
-#sing:fullscreen .stage, #sing.fs .stage { margin: 0 -10px; border-radius: 0; padding: 6px 0; }
-#sing:fullscreen canvas.lane, #sing.fs canvas.lane { height: 42vh; border-radius: 0; }
+#sing:fullscreen .stage, #sing.fs .stage { margin: 0 -10px; border-width: 3px 0; padding: 6px 0; }
+#sing:fullscreen canvas.lane, #sing.fs canvas.lane { height: 42vh; }
 #sing:fullscreen .words, #sing.fs .words { font-size: clamp(26px, 4.6vw, 52px); }
-#sing:fullscreen .scroller, #sing.fs .scroller { height: 30vh; border-radius: 0; }
+#sing:fullscreen .scroller, #sing.fs .scroller { height: 30vh; }
 #sing:fullscreen .parts, #sing.fs .parts { margin-top: 4px; }
-canvas.lane { display: block; width: 100%; height: clamp(150px, 28vh, 340px); background: var(--stage-panel); border-radius: 10px; }
-.scroller { position: relative; height: clamp(210px, 26vh, 320px); overflow: hidden; margin-top: 8px; background: var(--stage-panel); border-radius: 10px;
-            color: var(--stage-ink);
-            -webkit-mask-image: linear-gradient(transparent, #000 14%, #000 80%, transparent);
-            mask-image: linear-gradient(transparent, #000 14%, #000 80%, transparent); }
+canvas.lane { display: block; width: 100%; height: clamp(150px, 28vh, 340px); background: var(--stage-panel); }
+.scroller { position: relative; height: clamp(210px, 26vh, 320px); overflow: hidden; margin-top: 8px; background: var(--stage-panel);
+            color: var(--stage-ink); }
 .reel { position: absolute; left: 0; right: 0; top: 0; padding: 0 18px; transition: transform .5s cubic-bezier(.2, .7, .2, 1); }
 .item { padding: 6px 0; transform-origin: left center; transform: scale(.74); opacity: .42; transition: transform .5s, opacity .5s; }
 .item.current { transform: scale(1); opacity: 1; }
 .item.past { opacity: .18; }
-.label { color: #e0664d; font-size: 12px; letter-spacing: .14em; text-transform: uppercase; font-weight: 650; margin-bottom: 3px; }
-.words { font-size: clamp(21px, 5.2vw, 34px); font-weight: 650; line-height: 1.22; }
+.label { color: var(--stage-red); font: 600 15px/1.2 var(--serif); font-variant-caps: all-small-caps; letter-spacing: .1em; margin-bottom: 3px; }
+.words { font: 600 clamp(22px, 5.4vw, 35px)/1.22 var(--serif); }
+/* the sung part of a syllable, filled as it is sung (a hard edge, not a fade) */
 .syl { background: linear-gradient(90deg, var(--sung) var(--p, 0%), var(--stage-ink) var(--p, 0%));
        -webkit-background-clip: text; background-clip: text; color: transparent; }
-.gap { display: flex; align-items: center; gap: 12px; margin: 2px 0 6px; color: var(--stage-dim); font-size: 13px; transition: opacity .6s; }
+.gap { display: flex; align-items: center; gap: 12px; margin: 2px 0 6px; color: var(--stage-dim); font: 13px var(--sans); transition: opacity .6s; }
 .gap.spent { opacity: 0; }
-.track { flex: 0 1 140px; height: 4px; border-radius: 2px; background: #332b25; overflow: hidden; }
+.track { flex: 0 1 140px; height: 3px; background: #3a322c; overflow: hidden; }
 .fill { display: block; height: 100%; width: 0; background: var(--stage-dim); }
-.dots i { display: inline-block; width: 9px; height: 9px; margin-right: 6px; border-radius: 50%; background: #3a322c; }
+.dots i { display: inline-block; width: 8px; height: 8px; margin-right: 6px; border-radius: 50%; background: #3a322c; }
 .dots i.on { background: var(--sung); }
-.done { font-size: 20px; color: var(--stage-dim); padding: 16px 0; }
-.bar { height: 5px; margin-top: 8px; background: #2e2722; border-radius: 3px; overflow: hidden; }
-.bar > div { height: 100%; width: 0; background: #e0664d; }
+.done { font: italic 20px var(--serif); color: var(--stage-dim); padding: 16px 0; }
+.bar { height: 3px; margin-top: 8px; background: #2e2722; overflow: hidden; }
+.bar > div { height: 100%; width: 0; background: var(--stage-red); }
 
 .controls button { flex: 1 1 auto; }
 ol#takes { padding-left: 22px; margin: 6px 0; }
@@ -159,15 +145,16 @@ ol#takes li { margin: 6px 0; }
 ol#takes li.none { list-style: none; margin-left: -22px; }
 .sending { color: var(--dim); }
 .sent { color: var(--ok); }
-.failed { color: var(--warn); }
+.failed { color: var(--red); }
 
 /* what you sing to, in a line that opens to the choices; the optional microphone check */
-details.version { margin: 10px 0 12px; border: 1px solid var(--line); border-radius: 12px; background: var(--paper); }
+details.version { margin: 10px 0 12px; border: 1px solid var(--line); border-radius: var(--radius); background: var(--paper); }
 details.version > summary { display: flex; flex-wrap: wrap; gap: 4px 10px; align-items: baseline; justify-content: space-between;
                             padding: 10px 12px; cursor: pointer; list-style: none; }
 details.version > summary::-webkit-details-marker { display: none; }
 details.version > summary #versionSummary { font-weight: 600; }
-details.version > summary .change { color: var(--accent); font-size: 15px; text-decoration: underline; }
+details.version > summary .change { color: var(--ink); font-size: 15px; text-decoration: underline; text-decoration-color: var(--red);
+                                    text-underline-offset: .2em; }
 details.version[open] > summary .change { text-decoration: none; }
 details.version > .pick { padding: 0 12px 10px; }
 details.version > #versionNote { padding: 0 12px 10px; margin: 0; }
@@ -179,14 +166,20 @@ details.step[open] > summary { margin-bottom: 8px; }
   #sing:not(.fs):not(:fullscreen) { width: 1040px; margin-left: calc(50% - 520px); }
   #sing .words { font-size: 36px; }
 }
-/* the pitch's promise, where the eye lands */
-.promise { font-weight: 650; color: var(--ink); background: linear-gradient(transparent 58%, rgba(224, 102, 77, .22) 58%); }
+/* the pitch's promise, where the eye lands: set bold, not underlined (an underline is a link here) */
+.promise { font-weight: 600; color: var(--ink); }
 details.listen { margin: 6px 0 10px; font-size: 15px; color: var(--dim); }
 details.listen > summary { cursor: pointer; list-style: none; }
 details.listen > summary::-webkit-details-marker { display: none; }
-details.listen > summary .change { color: var(--accent); text-decoration: underline; margin-left: 4px; }
+details.listen > summary .change { color: var(--ink); text-decoration: underline; text-decoration-color: var(--red); text-underline-offset: .2em; margin-left: 4px; }
 details.listen ol { margin: 8px 0 0; padding-left: 22px; }
 details.listen li { margin: 4px 0; }
 details.listen label.speaker { display: flex; gap: 8px; align-items: center; margin-top: 6px; color: var(--ink); }
-.disclosure > h2 { font-size: 1rem; margin: 0 0 6px; }
-.disclosure > p { margin: 0; font-size: 0.95rem; }
+/* the AI disclosure: a notice, in the double rule */
+.card.disclosure { border: 3px double var(--ink-3); background: var(--card); }
+.disclosure > h2 { font-size: 17px; margin: 0 0 8px; }
+.disclosure > p { margin: 0; font-size: 16px; }
+
+/* the seed page: how to run it, set in the typewriter face of a field recordist's card */
+pre, code { font-family: var(--mono); font-size: 14px; }
+pre { margin: 0 0 10px; padding: 10px 12px; overflow-x: auto; background: var(--paper); border-left: 2px solid var(--red-rule); line-height: 1.5; }

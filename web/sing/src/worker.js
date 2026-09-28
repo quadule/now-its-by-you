@@ -57,6 +57,7 @@ const KEEP_AFTER_EXPIRY = 90 * 86400; // seconds an invite's record outlives it,
 const JOINS_AN_HOUR = 20; // joins from one address in a clock hour (a group link is as good as public); JOINS_AN_HOUR in [vars] changes it
 const PUBLIC = { "/sing.js": "text/javascript", "/sing.css": "text/css", "/karaoke.js": "text/javascript",
                  "/recorder.js": "text/javascript", "/yours.js": "text/javascript", "/yours.css": "text/css",
+                 "/identity.css": "text/css",
                  "/robots.txt": "text/plain", "/favicon.svg": "image/svg+xml" };
 
 const SEED_FILE = "now-its-by-you.flac"; // the seed page's file (tools/sing_site.py copies the render to public/seed/)
@@ -96,7 +97,7 @@ function busy() {
 function notice(status, text) {
   // a page with one thing to say: an invitation that isn't open, a private page that doesn't exist
   const html = `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Songbird</title><link rel="stylesheet" href="/sing.css"></head><body><main class="closed"><h1>Songbird</h1><p>${text}</p></main></body></html>`;
+<title>Songbird</title><link rel="stylesheet" href="/identity.css"><link rel="stylesheet" href="/sing.css"></head><body class="leaf"><main class="closed"><header class="masthead"><h1>Songbird</h1></header><p>${text}</p></main></body></html>`;
   return new Response(html, {
     status,
     headers: headers({ "Content-Type": "text/html; charset=utf-8", "Cache-Control": "no-store", "Content-Security-Policy": PAGE_CSP,

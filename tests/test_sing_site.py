@@ -131,7 +131,7 @@ def test_the_site_has_a_guide_for_every_spec(tmp_path, monkeypatch):
     assert f'data-digest="{song["words_release"]}"' in page and "{{" not in page
     assert (K.GUIDES / f"release.{song['consent']}.html").exists()  # each release as people read it
     assert (K.GUIDES / f"words-release.{song['words_release']}.html").exists()
-    for name in ("sing.js", "sing.css", "karaoke.js", "recorder.js", "robots.txt", "favicon.svg"):
+    for name in ("sing.js", "sing.css", "identity.css", "karaoke.js", "recorder.js", "robots.txt", "favicon.svg"):
         assert (out / name).exists()
     assert (out / "karaoke.js").read_text() == (ROOT / "tools" / "karaoke.js").read_text()
     assert (out / ".assetsignore").read_text().split() == [W.MARK, ".assetsignore"]
