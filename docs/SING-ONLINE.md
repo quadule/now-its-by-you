@@ -132,9 +132,8 @@ elsewhere, send the workers.dev links: they work the same.
 anyone: the song's file to play and download (`public/seed/now-its-by-you.flac`, the one file the worker serves
 under /seed/), the three commands that run it, and the AI disclosure. `tools/sing_site.py` copies `$SONGBIRD_SEED`,
 else `renders/review/contest.flac`, else the newest FLAC in renders/review/, and fills its name and size into
-web/sing/page/seed.html. To open the domain on it: put itsby.you's DNS on Cloudflare, add
-`{ pattern = "now.itsby.you", custom_domain = true }` to `routes`, deploy. Until then the page is at
-songbird.quadule.com/seed. Every invited singer's page is unchanged; the bare root of the singing host still shows
+web/sing/page/seed.html. now.itsby.you is a second custom-domain route of the same worker (itsby.you's DNS is on Cloudflare), so it
+opens on the seed page; songbird.quadule.com/seed is the same page. Every invited singer's page is unchanged; the bare root of the singing host still shows
 its one line.
 
 ## What is kept, where, and for how long
