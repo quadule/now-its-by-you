@@ -43,6 +43,42 @@ record), default here; `--out` where recordings go (default `renders/` in a
 checkout, the current folder from a packet); `--port` 8766 or the next free
 one. It prints the address and opens it in the default browser.
 
+## How it looks: a page from a copied tune book
+
+The artist: "how can an app feel more like a folk song or something passed
+down? I don't want to go overboard with this."
+
+**Direction.** The studio is a page from a tune book that has been copied by
+hand, person to person: the song set in a book face on warm paper, written in
+one ink by the hand that copied it, with *your* changes in a second ink, as a
+later hand annotates a copy it was given. Nothing is drawn to look old; it
+borrows the conventions that make such a page readable, not its wear.
+
+- **Paper and ink.** Warm off-white paper and a brown-black ink, instead of a
+  green app palette. In the dark, the same page by lamplight: dark paper,
+  cream ink. Every colour is a token; nothing else changes between the two.
+- **A second hand.** Everything a person chose is in a blue-black ink (it was
+  already its own colour; now it has a reason): the words they picked, the
+  cards they changed, the notes they moved.
+- **Rubrics.** Section names (Verse 1, Refrain 2) in small capitals, in the
+  red a copyist used for headings, as hymnals and tune books still do. The
+  same red marks the playhead.
+- **Set like a songbook.** The words are the page: book face, generous
+  leading, a copybook's single margin rule down their left. Controls stay in
+  the system's sans at a readable size; only reading text is serif.
+- **Broadside rules.** The header ends in a thin-and-thick double rule, as a
+  ballad sheet's title does; the player sits under one. Buttons are small
+  squared blocks (a letterpress's), not pills; cards are index cards with a
+  ruled heading, as a field recordist's.
+- **The line it came down.** Beside the version's name, a small row of
+  marks, one for each version before this one and a filled one for this, so
+  "passed down" is something seen.
+
+**Not done, on purpose:** no textures, images, downloaded fonts, blackletter,
+torn edges or stains (kitsch, weight, and worse to read); no change to what is
+where. System fonts and CSS only (the program aims at 8 MiB). Contrast stays at
+least 4.5:1 for text in both schemes, and phones keep the same layout rules.
+
 ## The flow
 
 ```mermaid
