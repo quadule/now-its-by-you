@@ -20,34 +20,34 @@ square, photographed like a real object on a table, not illustrated flat.
   seed page.
 - Files to renders/review/artwork/cover-3000.png etc.; the .blend beside them.
 
-## The packet's face (the texture: everything on the front)
+## The packet's face (the texture: nothing but artist, title, picture, count, address)
 
-Use `renders/review/artwork/packet-front-full.svg` as the packet's face, rasterised at 300 px/in (it is
-990 x 1440 px = 3.3 x 4.8 in). It already holds every line, in order, top to bottom:
+Use `renders/review/artwork/packet-front-full.svg` as the packet's face, rasterised at 300 px/in (990 x
+1440 px = 3.3 x 4.8 in). The artist wants no extraneous text: the face carries exactly this, top to bottom:
 
 1. kicker, red small capitals, letterspaced: THE VOLUNTEERS
 2. title, black serif, bold: Now It's by You
-3. italic line: a folk song, passed on
-4. a thick-and-thin rule
-5. the illustration: one daisy (white petals, yellow centre, two leaves), stem down into a crack in a
-   concrete slab drawn as three rows of blocks
-6. Comes up where nobody planted it. / Play it. Run it. Sing into it. Pass it on.
-7. a thin-and-thick rule
-8. bottom: the QR code (left; it encodes https://now.itsby.you, error level M, made by `segno`), and beside
-   it SOW IT in red small capitals, **now.itsby.you** in bold serif, and "the song, and the program that
-   sang it · CC0" small in grey.
-9. a double-rule border (thick outside, thin inside) around the whole face.
+3. a seed count in small grey letterspaced capitals, as a real packet prints one: MIN. 1 SEED (one file is
+   enough; alternatives if the artist prefers: MIN. 10 SEEDS for the ten who sang, MIN. 51 SEEDS for the
+   verses in the bank)
+4. the illustration, large: one daisy (white petals, yellow centre, two leaves), its stem down into a crack
+   in a concrete slab
+5. a thin-and-thick rule
+6. bottom: the QR code at the left (it encodes https://now.itsby.you, error level M, made by `segno`) and
+   beside it **now.itsby.you** in bold serif
+7. a double-rule border (thick outside, thin inside) around the whole face.
 
-Replace the daisy and the slab with a proper **woodcut**: black line, some hatching, the crack running into
-the slab, one flower only. The Gemini mockups `gemini-packet-front.png` and `gemini-cover-square.png` show
-the look wanted for the illustration (their text is wrong; ignore it). Keep the vector's type and layout;
-if the illustration needs more room, take it from the whitespace above the rule, not from the bottom block.
-Nothing else goes on the face: no logos, no dates, no extra words.
+No tagline, no instructions, no licence line, no date, no logo. Replace the daisy and the slab with a
+proper **woodcut**: black line, hatching, the crack running into the slab, one flower only. The Gemini
+mockups `gemini-packet-front.png` and `gemini-cover-square.png` show the look wanted for the illustration
+(their text is wrong; ignore it). Keep the vector's type and layout.
 
 ## Materials, light, camera
 
-- **Paper:** cream, uncoated, slightly toothy (a fine noise bump, not canvas), 0.3 mm thick with visible
-  edge; the ink slightly **pressed in** (letterpress: a shallow displacement on the printed areas, darker in
+- **Paper:** the artist's priority: it must read as real, handled paper. Cream, uncoated, toothy (a fine
+  noise bump, not canvas), 0.3 mm thick with a visible edge, and **wrinkled**: a displacement map with a few
+  soft creases across the face, a dog-eared corner, the edges very slightly frayed, a faint fold line where
+  the flap was opened once; the wrinkles must catch the raking window light. The ink slightly **pressed in** (letterpress: a shallow displacement on the printed areas, darker in
   the recess), the red a printer's vermilion (#b8432e), the black a warm ink (#2b231d), never pure black.
   A glued back seam and a folded top flap, as a real seed envelope has (the flap closed).
 - **Contents:** the envelope is slightly full: a few seeds' worth of bulge low in the packet; two or three
