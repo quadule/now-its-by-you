@@ -41,5 +41,8 @@ def test_a_choir_voice_led_from_where_it_was_holds_what_the_next_chord_shares():
     assert harmony(71, "I", d, "ionian", 0) == 66  # alone: the chord tone nearest the melody
     assert harmony(71, "I", d, "ionian", 0, previous=62) == 62  # led: it stays on D, a tone of this chord too
     assert harmony(71, "I", d, "ionian", 2) == 62
-    assert harmony(71, "I", d, "ionian", 2, previous=50) == 50  # the root holds low rather than leap up an octave
-    assert harmony(57, "I", d, "ionian", 2, previous=38) == 50  # but never below a bass's E2
+    assert harmony(79, "I", d, "ionian", 2, previous=62) == 62  # the root holds low rather than leap up an octave
+    # but never below E3 (FLOOR, where the learned throat's pulses come apart): under a low tune the root voice
+    # takes the fifth above the floor, not the note the low voice has (F#) and not a root it can't sing
+    assert harmony(57, "I", d, "ionian", 2, previous=38) == 57
+    assert harmony(57, "I", d, "ionian", 0) == 54

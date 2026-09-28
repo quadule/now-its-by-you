@@ -43,7 +43,7 @@ compressed together, 35% wider, 4 dB under the lead, and further back in
 the room (a bigger send, reaching the room 20 ms later). Its consonants
 jumped far over the rest and made the master limiter work 5 dB in the
 bridge; a peak stage rounds them off now. Its root voice sings no lower
-than D3 (`theory.FLOOR`): below about 150 Hz the learned throat's pulses
+than E3 (`theory.FLOOR`): below about 160 Hz the learned throat's pulses
 are heard one by one, like a finger tapping a microphone (docs/THROAT.md).
 
 **The band.** The arrangement sets each instrument's level and place (and

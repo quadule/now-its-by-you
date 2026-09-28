@@ -378,7 +378,7 @@ Whisper on H, the WER suite's method, two seeds dry and one in the finished mix:
 lines with these words are in renders/review/consonants-*.mp3.
 
 The same evening, the lineage choir's bass voice was heard as "tapping a mic" through the bridge:
-below about 150 Hz the vocoder's pulses are heard one by one (35 thumps a second at E2, 8 at D3, none
-from B3 up, counted as 5 ms frames jumping 12 dB over their surroundings). The choir's root now
-keeps to D3 and above (`theory.FLOOR`); the bass instrument has the register below.
+below about 160 Hz the vocoder's pulses are heard one by one (35 thumps a second at E2, 10 at D3, 2 at E3,
+none from A3 up, counted as 5 ms frames jumping 12 dB over their surroundings). The choir's root now
+keeps to E3 and above (`theory.FLOOR`); the bass instrument has the register below.
 

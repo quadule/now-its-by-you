@@ -61,9 +61,9 @@ def chord_tones(symbol: str, mode: str) -> tuple[int, int, int]:
     )
 
 
-FLOOR = 50  # D3: below about 150 Hz the learned throat's pulses are heard one by one (a "tapping" through the
-# bridge, 2026-09-27: 35 thumps a second at E2, 8 at D3, none from B3 up); real basses sing to E2 (40), and the
-# bass instrument has that register
+FLOOR = 52  # E3: below about 160 Hz the learned throat's pulses are heard one by one (a "tapping" through the
+# bridge, 2026-09-27: 35 thumps a second at E2, 10 at D3, 2 at E3, none from A3 up); real basses sing to E2 (40),
+# and the bass instrument has that register
 
 
 def harmony(melody: int, chord: str, tonic: int, mode: str, role: int, previous: int | None = None) -> int:
@@ -82,15 +82,19 @@ def harmony(melody: int, chord: str, tonic: int, mode: str, role: int, previous:
         fits = [p for p in range(melody - 3, melody - 15, -1) if p % 12 in pcs]
     elif kind == 1:
         fits = [p for p in range(melody + 3, melody + 15) if p % 12 in pcs]
-    else:  # the root: within two octaves, so it can hold its note while the tune moves, but never below
-        # a real bass voice (FLOOR), unless the tune is so low there's nowhere else
-        root = (tonic + tones[0]) % 12
-        roots = [p for p in range(melody - 5, melody - 29, -1) if p % 12 == root]
-        fits = [p for p in roots if p >= FLOOR]
-        if not fits:  # the tune so low that no root sits between the floor and a fourth under it: the lowest root
-            # at or above the floor, up to the tune's own note (doubling it), rather than one the voice can't sing
-            fits = [p for p in range(FLOOR, melody + 1) if p % 12 == root][:1] or roots[:1]
+    else:  # the root: within two octaves, so it can hold its note while the tune moves
+        fits = [p for p in range(melody - 5, melody - 29, -1) if p % 12 == (tonic + tones[0]) % 12]
     fits = [p - 12 * octave for p in fits]  # nearest the melody first, so a tie goes that way
+    # but never below a voice the throat can sing (FLOOR): where the tune is so low that nothing fits above the
+    # floor, the lowest chord tone at or above it under the tune (the root voice taking a fifth or a third
+    # rather than a note it can't sing), else the lowest up to the tune's own note
+    above = [p for p in fits if p >= FLOOR]
+    if not above:
+        avoid = harmony(melody, chord, tonic, mode, 0) if kind == 2 else None  # not the note the low voice takes
+        room = [p for p in range(FLOOR, melody + 1) if p % 12 in pcs]
+        above = ([p for p in room if p < melody and p != avoid][:1] or [p for p in room if p != avoid][:1]
+                 or room[:1] or fits[:1])
+    fits = above
     return fits[0] if previous is None else min(fits, key=lambda p: abs(p - previous))
 
 
