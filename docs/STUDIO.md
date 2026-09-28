@@ -343,7 +343,7 @@ begun halfway). It is made,
 brought up by the gain mastering gives a whole rendition (5.3 dB, measured on
 H: 5.1 to 5.4) under the same ceiling, so a quiet verse stays quiet and a turn
 isn't pushed to the loudness of a refrain, and faded in and out. A section of
-H takes about six seconds, the whole song about forty. The page calls it a
+H takes a second or two, the whole song about fifteen seconds on this Mac (the band, the choir and the vocoder now run on threads; docs/PERFORMANCE.md). The page calls it a
 preview: a part heard alone is not the record's exact samples, and the mix's
 balance is judged on the whole song.
 
