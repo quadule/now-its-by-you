@@ -291,6 +291,10 @@ REFERENCE = -20.0  # LUFS the voice is brought to before the balance is set
 # the voice's own highs on the loudest twentieth, which nothing masked (the band's highs sit 18-29 dB under
 # the voice's). That was the "roughness as the voice gets loud" the artist heard (2026-09-27). 0.05: -33 dB.
 VOICE_DRIVE = 0.05
+# The transient softener on the lead (fx.soften: dB over its own recent level a jump may reach, the fraction of the
+# excess taken off), before the saturation, which would harden what it leaves: the learned voice's consonant
+# bursts read as clipping to the artist (2026-09-27; Whisper in the mix 11.4% -> 11.9% of words, within noise). None: off.
+VOICE_SOFTEN = (6.0, 0.6)
 # The singers rise and fall with the arrangement's energy (songbird.band: each section's, 0..1, arcing across
 # the song): LEAD_ARC[0] dB per unit of energy above ENERGY_REST, held between LEAD_ARC[1] and LEAD_ARC[2] dB and
 # smoothed over LEAD_ARC[3] s. Without it the lead came out at REFERENCE in every sung section, whatever the band
@@ -431,6 +435,8 @@ def mix(stems: dict[str, np.ndarray], sr: int, seed: int = 0, params: MixParams 
             x = fx.equalize(x, fx.design(VOICE_EQ + _sizzle(x, sr), sr))
             x = fx.deess(x, sr)[0]
             x = _compressed(x, sr, VOICE_COMP)
+            if VOICE_SOFTEN:
+                x = fx.soften(x, sr, *VOICE_SOFTEN)
             return _at(_peaks(fx.saturate(x, sr, VOICE_DRIVE), sr), sr, REFERENCE)
 
         def lead_bus(voice=voice):

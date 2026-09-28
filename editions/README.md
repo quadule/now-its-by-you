@@ -33,7 +33,7 @@ uv run songbird render songs/h-now-its-by-you.json --edits editions/hand-to-hand
 ```
 
 All three use the existing learned throat. Neither new samples nor another model
-are needed. Since 2026-09-27 the seed masters to -12 LUFS (`loudness` in seed_params, not an edit; the contest's
+are needed. Since 2026-09-27 the seed masters to -14 LUFS (it was -12 for a day: the artist heard the louder master as tapping and clipping on small speakers, and the limiter was working 3.5 dB on the bridge) (`loudness` in seed_params, not an edit; the contest's
 submission guide says nothing about normalizing, so it is heard as played), still under the -1 dBTP ceiling;
 judge the changes at equal playback volume. A fuller band need not have a larger
 whole-song loudness range: listen for changes of texture and the final question's

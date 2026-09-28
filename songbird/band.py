@@ -1297,15 +1297,10 @@ def drum_part(ctx: Context) -> list[Ev]:
             rng = ctx.rand("drum", bar_u)
             hits = _drum_bar(ctx, what)
             last_bar = b == bars - 1
-            if last_bar and nxt is not None and what in ("pulse", "full", "light") and \
-                    (nxt.energy >= s.energy or nxt.role == "refrain"):  # a triplet into what comes next
-                hits = [h for h in hits if h[0] < ctx.beats - 1]
-                hits += [(ctx.beats - 1 + k / 3.0, "tip", 0.4 + 0.15 * k) for k in range(3)]
-            elif last_bar and nxt is not None and nxt.energy - s.energy >= 0.2:  # a build into a much bigger section
-                start = max(0, ctx.beats - 2)
-                steps = int(round((ctx.beats - start) * ctx.beat / ctx.sub))
-                hits = [h for h in hits if h[0] < start] + [
-                    (start + k * ctx.sub / ctx.beat, "tip", 0.3 + 0.45 * k / max(steps - 1, 1)) for k in range(steps)]
+            # (Until 2026-09-27 the last bar before a refrain or a bigger section ended in a fill: a triplet of tip
+            # strokes, or a build of eighths. Three even, identical taps on a synthesized skin read as a finger on a
+            # microphone, and the artist heard them all night; the bar keeps its pattern and the section change is
+            # the singer's to make.)
             if what == "end":
                 hits = [(0.0, "bass", 0.35)] if not last_bar else []
             for pos, stroke, v in hits:

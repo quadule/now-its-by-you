@@ -303,6 +303,23 @@ def _apply(x: np.ndarray, lin: np.ndarray, step: int, band: np.ndarray) -> np.nd
     return y
 
 
+def soften(x: np.ndarray, sr: int, over: float = 6.0, amount: float = 0.6, fast: float = 0.0005, slow: float = 0.03,
+           release: float = 0.02) -> np.ndarray:
+    """A transient softener: what jumps more than `over` dB above the signal's own recent level (a `slow` s
+    average) within `fast` s is turned down by `amount` of the excess, at once, and let go over `release` s.
+    The opposite of what saturation does to a click: a consonant's burst or a plosive keeps its place but
+    loses its edge. Nothing else is touched (a held vowel never rises that fast). amount 0 is the input."""
+    if amount <= 0:
+        return x
+    x2 = _stereo(x)
+    quick = db(_detect(x2, _coef(fast, sr))[::STEP])
+    steady = db(_detect(x2, _coef(slow, sr))[::STEP])
+    target = -amount * np.clip(quick - steady - over, 0.0, None)
+    rate = sr / STEP
+    gain = _ballistics(target, _coef(0.0002, rate), _coef(release, rate))
+    return _apply(x2, 10.0 ** (gain / 20.0), STEP, np.zeros((len(x2), 0))).reshape(x.shape)
+
+
 def gain_computer(level_db: np.ndarray, threshold: float, ratio: float, knee: float) -> np.ndarray:
     """Gain change in dB (<= 0) of a compressor with a soft knee `knee` dB wide."""
     over = level_db - threshold

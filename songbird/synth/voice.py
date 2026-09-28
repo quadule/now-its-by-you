@@ -88,7 +88,7 @@ class VoiceParams:
     reduce: float = 0.0  # how far a little word's vowel off the beat moves toward "uh" (0.3 cost the words: WER 15% -> 18%)
     mouth: float = 1.0  # cm radius of the mouth opening: small keeps the upper resonances ringing
     air: float = 0.0  # noise above 3.5 kHz pulsing with the voicing, against the harmonics (real voices are part noise up there)
-    crisp: float = 1.0  # the learned throat's consonants sharpened: its stops given their closure and release, weak fricatives their hiss, coda nasals lifted (throat.articulate; 0 leaves the throat's own, which lost the ends of words)
+    crisp: float = 0.6  # the learned throat's consonants sharpened: its stops given their closure and release, weak fricatives their hiss, coda nasals lifted (throat.articulate; 0 leaves the throat's own, which lost the ends of words; 1 read as clipping to the artist, 0.6 with the mix's transient softener chosen by ear, 2026-09-27)
     engine: str = "learned"  # "learned" (songbird.synth.throat, the default), "formant" (Klatt cascade) or "tube" (waveguide, experimental)
     timbre: str = ""  # the learned engine's singer: weights over its trained singers, "bright:2,alto:1" (default all evenly)
 

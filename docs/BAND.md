@@ -179,8 +179,10 @@ The rules, briefly:
   steps and slides into some long notes.
 - **Drum.** A low stroke where each foot starts, the tipper on the rest; light
   in the first refrain and second verse, the full pattern in the last
-  refrain, a triplet into a louder section, a crescendo into a much louder
-  one, a lub-dub under the bridge, one open stroke on the last chord.
+  refrain, a lub-dub under the bridge, one open stroke on the last chord.
+  (The fills into a louder section, a triplet of tips or a crescendo of eighths, were
+  dropped on 2026-09-27: three even taps on a synthesized skin sound like a finger on
+  a microphone.)
 - **Every bar its own, and a drift that stays small.** Each part draws its
   choices from its own random stream, one per bar, and its timing from where
   a note sits, not from how many came before. So patterns vary bar by bar
