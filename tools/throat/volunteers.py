@@ -1,6 +1,6 @@
 """The volunteers' takes as training material for the learned throat (dev only; private, temporary).
 
-    uv run python tools/throat/volunteers.py cut WORK [--min-quiet 20] [--jobs 6]
+    uv run python tools/throat/volunteers.py cut WORK [--min-quiet 20] [--jobs 6] [--takes DIR]
     uv run python tools/throat/features.py WORK/corpus --out WORK/features
     uv run python tools/throat/phones.py WORK/corpus
     uv run python tools/throat/check.py WORK --cents 200 --min-tune 0.75
@@ -32,6 +32,11 @@ kept with the takes. So each take's background is measured instead: the level of
 guide has no singing (its pre-roll and the gaps between lines, which carry any room noise and any
 leak of the backing) against the level of its singing. A take whose background is within
 --min-quiet dB of its singing is left out, and said so.
+
+--takes DIR reads the takes from DIR/<singer>/*.wav instead of recordings/ (tools/throat/clean_takes.py's
+OUT/takes: the same takes with the guide's leak and the room's noise taken out, each beside a copy of its
+sidecar). The guides' scores are still read from recordings/guides/, and each take is named, tagged and
+reported as the recordings/<singer>/<name>.wav it was made from, so its segments keep their names.
 
 `merge` adds the volunteer frames (dataset.py's output on WORK) to the house dataset as one more
 singer, "volunteers", source "human", and writes WORK/dataset-house-volunteers.npz.
@@ -83,6 +88,21 @@ LEAD, TAIL = 0.3, 0.4  # seconds kept before a line's first note and after its l
 HOUSE_LEVEL = None  # filled from the house features: the median level (dB) of their voiced frames
 
 
+def load(wav: Path) -> K.Take:
+    """A take, read from recordings/ or from a --takes directory: there, it is known by the
+    recordings/<singer>/<name>.wav it was made from (Take.rel, which names its segments)."""
+    t = K.load(wav)
+    if not t.path.is_relative_to(ROOT):
+        t = OutsideTake(t.path, t.singer, t.song, t.guide, t.use, t.info)
+    return t
+
+
+class OutsideTake(K.Take):
+    @property
+    def rel(self) -> str:
+        return f"recordings/{self.path.parent.name}/{self.path.name}"
+
+
 def counts(t: K.Take) -> str | None:
     """Why a take is left out, or None if it counts."""
     if t.path.name.startswith("sim-") or "-test-" in t.path.parent.name or "-test-" in t.path.name:
@@ -128,7 +148,7 @@ def cut_take(wav: Path, out_dir: str, min_quiet: float, target_db: float) -> dic
     import soundfile as sf
     from scipy.signal import resample_poly
 
-    t = K.load(wav)
+    t = load(wav)
     notes, lexicon = voice_notes(K.guide_score(t.song, t.guide))
     y, sr = sf.read(str(t.path), dtype="float64")
     y = y if y.ndim == 1 else y.mean(axis=1)
@@ -237,16 +257,17 @@ def cut(args) -> None:
     for f in ("quality.json", "takes.json", "dataset-volunteers.npz", "dataset-house-volunteers.npz"):
         (work / f).unlink(missing_ok=True)
     todo, report = [], []
-    for wav in sorted(K.RECORDINGS.glob("*/*.wav")):
+    takes_dir = args.takes.resolve() if args.takes else K.RECORDINGS
+    for wav in sorted(takes_dir.glob("*/*.wav")):
         if wav.parent.name in K.NOT_SINGERS:
             continue
-        t = K.load(wav)
+        t = load(wav)
         why = counts(t)
         if why:
             report.append(dict(take=t.rel, skipped=why))
         else:
             todo.append(wav)
-    for wav in sorted(K.RECORDINGS.glob("*.wav")):  # sim-*.wav and anything else loose: never a volunteer's take
+    for wav in sorted(K.RECORDINGS.glob("*.wav")) if not args.takes else ():  # sim-*.wav and anything else loose: never a volunteer's take
         report.append(dict(take=wav.relative_to(ROOT).as_posix(), skipped="not in a singer's folder (the artist's test)"))
     target = house_level()
     print(f"{len(todo)} takes count; bringing each to the house corpus's level ({target:.1f} dB)", flush=True)
@@ -302,6 +323,8 @@ def main() -> None:
     c.add_argument("--min-quiet", type=float, default=20.0,
                    help="leave out a take whose background is less than this many dB under its singing")
     c.add_argument("--jobs", type=int, default=max(1, (os.cpu_count() or 2) - 2))
+    c.add_argument("--takes", type=Path, default=None,
+                   help="read the takes from DIR/<singer>/*.wav (clean_takes.py's OUT/takes) instead of recordings/")
     m = sub.add_parser("merge", help="the house dataset plus the volunteers' frames")
     m.add_argument("work", type=Path)
     m.add_argument("--house", type=Path, default=ROOT / "renders/throat/dataset-house.npz")
