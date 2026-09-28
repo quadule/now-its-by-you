@@ -2,6 +2,7 @@
 
     ~/Code/svs/SoulX-Singer/.venv/bin/python -B tools/throat/train.py renders/throat/dataset.npz \
         --out renders/throat/model.npz [--steps 30000] [--channels 128] [--hold-out bright.a-nobody]
+        [--init renders/throat/model-house.npz]
 
 A small stack of dilated 1-D convolutions over 5 ms frames. In: what is being sung (the phone and two
 neighbours either side as learned embeddings, its role, how far through it, its length, stress, the
@@ -15,6 +16,10 @@ Every layer is a sum of shifted copies through a matrix, a tanh-GELU and additio
 songbird.synth.throat runs it in numpy from the .npz this writes: the weights, the phone, role and
 singer lists, the normalisations, and the variance of real envelopes against predicted ones (for
 the global-variance postfilter that keeps a small model's envelopes from going soft).
+
+--init starts from a model this wrote (a fine-tune): its weights, and its normalisations, so the
+envelope keeps the space the old model sang in. Singers are matched by name; a singer the old model
+didn't know starts at the mean of the ones it did. The channels must match the old model's.
 """
 
 from __future__ import annotations
@@ -99,6 +104,8 @@ def main() -> None:
                     help="scale of the noise added to the pitch (about 30 cents) and level (about 1 dB) inputs while training")
     ap.add_argument("--hold-out", nargs="*", default=None, help="segment name fragments kept out for validation")
     ap.add_argument("--seed", type=int, default=0)
+    ap.add_argument("--log-every", type=int, default=500)
+    ap.add_argument("--init", type=Path, default=None, help="start from this model's weights and normalisations")
     ap.add_argument("--device", default="mps" if torch.backends.mps.is_available() else "cpu")
     args = ap.parse_args()
     torch.manual_seed(args.seed)
@@ -116,6 +123,9 @@ def main() -> None:
     mask = d["mask"]
     sp_mean, sp_std = sp[mask].mean(0), sp[mask].std(0) + 1e-3
     ap_mean, ap_std = apr[mask].mean(0), apr[mask].std(0) + 1e-3
+    init = np.load(args.init) if args.init else None
+    if init is not None:  # a fine-tune keeps the space the old model's outputs are in
+        sp_mean, sp_std, ap_mean, ap_std = (init[k].astype(np.float32) for k in ("sp_mean", "sp_std", "ap_mean", "ap_std"))
     y_all = np.concatenate([(sp - sp_mean) / sp_std, (apr - ap_mean) / ap_std], axis=1).astype(np.float32)
     phone5 = np.stack([d["prev2"], d["prev"], d["phone"], d["next"], d["next2"]], axis=-1).astype(np.int64)
     cont_all = continuous(d, slice(None))
@@ -125,6 +135,19 @@ def main() -> None:
 
     dev = args.device
     model = Throat(len(phones), len(roles), len(singers), args.channels, sp.shape[1], apr.shape[1], args.dropout).to(dev)
+    if init is not None:
+        old = json.loads(str(init["config"]))
+        if old["channels"] != args.channels or old["phones"] != phones:
+            raise SystemExit(f"--init {args.init}: {old['channels']} channels and its phones; asked for {args.channels}")
+        state = model.state_dict()
+        for k in state:
+            w = torch.tensor(init[f"w.{k}"])
+            if k == "singer.weight":  # by name; a new singer starts at the mean of the old ones
+                rows = [w[old["singers"].index(n)] if n in old["singers"] else w.mean(0) for n in singers]
+                w = torch.stack(rows)
+            state[k] = w
+        model.load_state_dict(state)
+        print(f"from {args.init}: singers {[n for n in singers if n not in old['singers']]} new", flush=True)
     n_params = sum(p.numel() for p in model.parameters())
     print(f"{n_params / 1e6:.2f}M parameters", flush=True)
     opt = torch.optim.AdamW(model.parameters(), lr=args.lr, weight_decay=1e-4)
@@ -165,14 +188,21 @@ def main() -> None:
         nn.utils.clip_grad_norm_(model.parameters(), 1.0)
         opt.step()
         sched.step()
-        if step % 500 == 0 or step == args.steps:
+        if step % args.log_every == 0 or step == args.steps:
             msg = f"step {step}: loss {loss.item():.4f} (frames {base.item():.4f})"
             if held:
                 model.eval()
                 with torch.no_grad():
                     crop = int(min(args.crop, min(lengths[i] for i in held) - 1))
                     vals = [loss_of(batch(held, crop, jitter=0))[1].item() for _ in range(4)]
-                msg += f"; held out {np.mean(vals):.4f}"
+                    msg += f"; held out {np.mean(vals):.4f}"
+                    by_singer = {}  # and each singer's held-out segments alone, when there are several
+                    for i in held:
+                        by_singer.setdefault(singers[int(d["singer"][offsets[i]])], []).append(i)
+                    if len(by_singer) > 1:
+                        for name, ids in sorted(by_singer.items()):
+                            c = int(min(args.crop, min(lengths[i] for i in ids) - 1))
+                            msg += f" ({name} {np.mean([loss_of(batch(ids, c, jitter=0))[1].item() for _ in range(4)]):.4f})"
             print(f"{msg}; {time.time() - t0:.0f} s", flush=True)
 
     # global variance: how much real envelopes vary within a segment, against how much predicted ones do
@@ -201,7 +231,8 @@ def main() -> None:
                   dropout=args.dropout, noise=args.noise,
                   singer=SINGER, cont=CONT, phones=phones, roles=roles, singers=singers, steps=args.steps,
                   registers=registers, sources=dict(zip(singers, sources)),
-                  dataset=str(args.dataset), frames=int(len(sp)), params=int(n_params), held_out=args.hold_out or [])
+                  dataset=str(args.dataset), frames=int(len(sp)), params=int(n_params), held_out=args.hold_out or [],
+                  lr=args.lr, init=str(args.init) if args.init else None)
     args.out.parent.mkdir(parents=True, exist_ok=True)
     np.savez(args.out, config=json.dumps(config), sp_mean=sp_mean, sp_std=sp_std, ap_mean=ap_mean, ap_std=ap_std,
              gv=gv.astype(np.float32), **{f"w.{k}": v for k, v in weights.items()})
