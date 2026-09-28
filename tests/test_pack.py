@@ -212,3 +212,53 @@ def test_other_players_hear_the_same_samples(rendition):
     pack.pack(flac, record, GENOME)
     decoded = subprocess.run(["ffmpeg", "-v", "quiet", "-i", str(flac), "-f", "s16le", "-"], capture_output=True).stdout
     assert decoded == np.ascontiguousarray(pcm, dtype="<i2").tobytes()
+
+
+def test_the_bootstrap_is_the_standard_library_only():
+    import ast
+
+    tree = ast.parse((ROOT / "songbird" / "bootstrap.py").read_text())
+    names = {a.name.split(".")[0] for n in ast.walk(tree) if isinstance(n, ast.Import) for a in n.names}
+    names |= {n.module.split(".")[0] for n in ast.walk(tree) if isinstance(n, ast.ImportFrom) and n.module}
+    assert names - {"__future__"} <= set(sys.stdlib_module_names), names - set(sys.stdlib_module_names)
+
+
+def test_the_bootstrap_says_what_this_computer_lacks_before_asking(monkeypatch):
+    from songbird import bootstrap
+
+    monkeypatch.setattr(bootstrap.shutil, "which", lambda name: None)  # no uv
+    said = bootstrap.python_problem(False, (3, 9))
+    assert "3.11 or newer" in said and "3.9" in said and "python.org" in said and "uv" in said
+    assert "Nothing has been written" in said
+    assert bootstrap.python_problem(True, (3, 9)) is None  # --here: this Python as it is
+    assert bootstrap.python_problem(False, sys.version_info[:2]) is None
+    monkeypatch.setattr(bootstrap.shutil, "which", lambda name: "/usr/bin/uv")  # uv fetches a Python
+    assert bootstrap.python_problem(False, (3, 9)) is None
+
+
+def test_the_studios_first_time_has_a_page_that_says_what_it_waits_for():
+    import http.client
+
+    from songbird import bootstrap
+
+    page = bootstrap.WaitingPage(port=18820, browser=False)
+    assert page.server is not None
+
+    def get(path):
+        c = http.client.HTTPConnection("127.0.0.1", page.port, timeout=10)
+        c.request("GET", path)
+        r = c.getresponse()
+        out = r.status, r.read()
+        c.close()
+        return out
+
+    status, body = get("/")
+    assert status == 200 and b"Getting the studio ready" in body
+    page.say("Fetching what the program needs")
+    status, body = get("/status")
+    assert json.loads(body)["stage"] == "Fetching what the program needs" and not json.loads(body)["done"]
+    assert get("/api/start")[0] == 404  # it answers as the studio only once the studio is there
+    port = page.step_aside()
+    assert port == page.port
+    with pytest.raises(OSError):
+        get("/status")  # stepped aside: the studio takes the address

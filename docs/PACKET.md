@@ -69,6 +69,9 @@ audio before it is never touched.
 
 ## Running it
 
+(What running it needs, and the first time as a person meets it:
+docs/RUNNING-THE-SONG.md.)
+
 The bootstrap needs nothing but Python (`py` on Windows). For `about` and
 `unpack` it only reads the archive and writes nothing else. For `new`, `studio`
 (offered only once the program has one) and the program's own commands it

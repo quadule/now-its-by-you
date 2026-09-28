@@ -199,10 +199,13 @@ last sample; `flac -d -F` decodes it anyway). And Python runs it:
 
     python3 THIS_FILE.flac          what this is, and what you can do
     python3 THIS_FILE.flac new      sing a new version here, today
+    python3 THIS_FILE.flac studio   open the studio: hear it, change it, record it
     python3 THIS_FILE.flac unpack   unpack everything into a folder, to read it first
 
-(On Windows: py THIS_FILE.flac.) Running it runs the program inside the file.
-It says what it will do and asks before it writes anything.
+(On Windows: py THIS_FILE.flac.) It needs Python 3.11 or newer
+(python.org/downloads), or uv (docs.astral.sh/uv), which fetches one. Running
+it runs the program inside the file. It says what it will do and asks before
+it writes anything.
 
 A new version keeps the song's tune, refrain and chords and inherits from
 this one. Its singer, band, room, tempo, key and verses take their character
