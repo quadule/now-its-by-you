@@ -932,9 +932,16 @@ export default {
       if (Object.prototype.hasOwnProperty.call(PUBLIC, path) && request.method === "GET") {
         return asset(env, request, path, { "Content-Type": `${PUBLIC[path]}; charset=utf-8`, "Cache-Control": "public, max-age=300" });
       }
+      // the seed host's bare domain (and www) sends everyone to it, for good: the packet says now.itsby.you
+      const seedHostName = String(env.SEED_HOST || "now.itsby.you").toLowerCase();
+      const apex = seedHostName.split(".").slice(1).join(".");
+      if (url.hostname === apex || url.hostname === `www.${apex}`) {
+        return new Response(null, { status: 301, headers: headers({ Location: `https://${seedHostName}${path}${url.search}`,
+                                                                    "Cache-Control": "public, max-age=3600" }) });
+      }
       // the seed page: the song's file and how to run it, for anyone, at /seed and at the root of the seed host
       // (now.itsby.you); the file itself is the one asset under /seed/ the built site names
-      const seedHost = url.hostname === String(env.SEED_HOST || "now.itsby.you").toLowerCase();
+      const seedHost = url.hostname === seedHostName;
       if ((path === "/seed" || (path === "/" && seedHost)) && ["GET", "HEAD"].includes(request.method)) {
         return asset(env, request, "/seed.html", { "Content-Type": "text/html; charset=utf-8", "Cache-Control": "public, max-age=300",
                                                  "Content-Security-Policy": PAGE_CSP });

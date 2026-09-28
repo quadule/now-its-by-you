@@ -218,6 +218,11 @@ test("the seed page is public: at /seed, at the root of the seed host, with exac
   const root = await w.fetch(new Request("https://now.itsby.you/"), e); // the seed host's root is the seed page
   assert.equal(root.status, 200);
   assert.match(await root.text(), /seed/);
+  for (const host of ["itsby.you", "www.itsby.you"]) { // the bare domain sends everyone to the seed host, path kept
+    const r = await w.fetch(new Request(`https://${host}/seed/now-its-by-you.flac?x=1`), e);
+    assert.equal(r.status, 301);
+    assert.equal(r.headers.get("location"), "https://now.itsby.you/seed/now-its-by-you.flac?x=1");
+  }
   const other = await w.fetch(new Request("https://songbird.test/"), e); // any other host's root is the landing line
   assert.match(await other.text(), /invitation/);
   const file = await call(w, e, "/seed/now-its-by-you.flac");
