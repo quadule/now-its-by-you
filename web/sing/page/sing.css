@@ -188,3 +188,5 @@ details.listen > summary .change { color: var(--accent); text-decoration: underl
 details.listen ol { margin: 8px 0 0; padding-left: 22px; }
 details.listen li { margin: 4px 0; }
 details.listen label.speaker { display: flex; gap: 8px; align-items: center; margin-top: 6px; color: var(--ink); }
+.disclosure > h2 { font-size: 1rem; margin: 0 0 6px; }
+.disclosure > p { margin: 0; font-size: 0.95rem; }
