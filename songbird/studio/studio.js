@@ -10,7 +10,7 @@ const state = {
   start: null, view: null, timeline: null, edits: {}, open: {}, choose: null, options: null,
   names: [], compare: null, busy: 0, playing: null, poll: null, recordJob: null,
   optionsByKey: {}, optionsFailed: false, undo: [], redo: [], editRevision: 0, refreshSerial: 0,
-  historyGroup: null, workspace: "arrange", saveStatus: "Saved on this device", playerSub: "",
+  historyGroup: null, workspace: "arrange", saveStatus: "Saved in this browser", playerSub: "",
   solo: null, mutedLevels: {},
 };
 
@@ -84,7 +84,7 @@ function save() {
   const kept = Object.fromEntries(Object.entries(state.edits).filter(([p]) => p !== "date" && p !== "roll"));
   try {
     localStorage.setItem(storeKey(), JSON.stringify(kept));
-    state.saveStatus = "Saved on this device";
+    state.saveStatus = "Saved in this browser";
   } catch (e) { state.saveStatus = "Storage unavailable · keep this tab open"; }
   renderHistory();
 }
@@ -975,12 +975,17 @@ async function follow(job, playing) {
   playing.since = playing.since || Date.now();
   const slow = Date.now() - playing.since > 8000 && (job.progress || 0) < 0.05
     ? " (the first one takes longer, while the program warms up)" : "";
-  const where = job.state === "queued" ? "waiting its turn" : `${job.stage || "making it"}…`;
+  const where = job.state === "queued" ? waitingWords(job) : `${job.stage || "making it"}…`;
   showPlayer(title, `${where} ${Math.round((job.progress || 0) * 100)}%${slow}`, job.progress || 0, true);
   state.poll = setTimeout(async () => {
     try { await follow(await api(`/api/job/${job.id}`), playing); }
     catch (e) { if (playing === state.playing) showPlayer(title, e.message, 0, false); }
   }, 450);
+}
+
+// One song is made at a time; a shared studio's visitors wait on each other, so say how many are ahead.
+function waitingWords(job) {
+  return job.ahead ? `waiting its turn (${job.ahead} ahead)` : "waiting its turn";
 }
 
 function refreshReady(key) {
@@ -1067,7 +1072,7 @@ async function record() {
   try {
     let job = await api("/api/record", { edits });
     while (job.state === "queued" || job.state === "running") {
-      saved.replaceChildren(h("p", {}, `Recording: ${job.state === "queued" ? "waiting its turn" : job.stage || "making it"}… ${Math.round((job.progress || 0) * 100)}%`),
+      saved.replaceChildren(h("p", {}, `Recording: ${job.state === "queued" ? waitingWords(job) : job.stage || "making it"}… ${Math.round((job.progress || 0) * 100)}%`),
         h("div", { class: "bar making" }, h("div", { style: null })));
       saved.querySelector(".bar > div").style.width = `${Math.round((job.progress || 0) * 100)}%`;
       await new Promise((r) => setTimeout(r, 600));
@@ -1076,7 +1081,10 @@ async function record() {
     if (job.state === "failed") throw new Error(job.error);
     const r = job.result.recorded;
     saved.replaceChildren(
-      h("p", {}, "Saved ", h("code", {}, r.flac), ` (${fmtTime(r.duration)}): the song, the program that sang it and its record, in one file.`),
+      r.shared
+        ? h("p", {}, `Made (${fmtTime(r.duration)}): the song, the program that sang it and its record, in one file. `,
+          h("a", { class: "btn primary", href: r.download, download: r.name }, "Download it"))
+        : h("p", {}, "Saved ", h("code", {}, r.flac), ` (${fmtTime(r.duration)}): the song, the program that sang it and its record, in one file.`),
       h("p", {}, r.yours ? `${r.yours} choice${r.yours === 1 ? " is" : "s are"} marked as yours in it (what you chose, never who you are).` : "Every choice in it is the program's."),
       h("p", { class: "hint" }, "To make the next version from this one: ", h("code", {}, r.next)),
       h("button", { class: "btn", type: "button", onclick: () => play(job.url, "The recording", r.flac,
@@ -1158,6 +1166,10 @@ async function main() {
   if (hash.day) setDayQuiet(Number(hash.day));
   for (const id of (hash.open || "").split(",").filter(Boolean)) state.open[id] = true;
   $("packetNote").textContent = s.packet;
+  if (s.shared) {  // served from someone else's computer for a preview: say so where "this computer" would
+    $("whereNote").textContent = "Served from another computer for a short preview. Your changes stay in this browser; recordings are made there.";
+    $("localBadge").replaceChildren(h("i"), " Shared preview");
+  }
   $("singNote").textContent = s.sing.available ? "" : s.sing.why;
   $("sing").disabled = !s.sing.available;
   $("day").min = -s.days;

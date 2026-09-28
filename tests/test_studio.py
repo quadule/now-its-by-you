@@ -3,6 +3,7 @@ records it. Its server answers only its own page; its words never use the code's
 command line's; a packet opens as the parent; previews are made and served; a recording is a packet whose
 marks say what a person chose (never who) and which renders again byte for byte."""
 
+import dataclasses
 import http.client
 import json
 import re
@@ -344,3 +345,109 @@ def test_a_recording_is_a_packet_marked_with_a_persons_choices_and_replays(home)
     subprocess.run([sys.executable, "-m", "songbird", "render", str(B), "--replay", str(flac), "--out", str(out)],
                    check=True, cwd=ROOT, capture_output=True)
     assert json.loads(out.with_suffix(".json").read_text())["id"] == manifest["id"]
+    assert recorded["download"] == f"/audio/{Path(done['url']).stem}.flac?name={flac.name}"
+
+
+# ---------------------------------------------------------------- shared for a preview (--host, --allow-host)
+
+
+@pytest.fixture
+def shared(home):
+    studio = S.Studio(None, str(LEAD), "fictional:ada", out=home / "out", key="the-preview-key")
+    server = S.serve(studio, 18790, names=["songbird.example.test", ".trycloudflare.com"])
+    threading.Thread(target=server.serve_forever, daemon=True).start()
+    yield studio, server.server_address[1]
+    server.shutdown()
+    server.server_close()
+
+
+def test_a_shared_studio_admits_only_its_links_key(shared):
+    studio, port = shared
+    cookie = {"Cookie": f"songbird-studio-{port}=the-preview-key"}
+    status, _, page = ask(port, "GET", "/")
+    assert status == 403 and b"shared by link" in page and studio.token.encode() not in page
+    assert ask(port, "GET", "/?key=wrong-key-here")[0] == 403
+    status, head, page = ask(port, "GET", "/?key=the-preview-key")
+    assert status == 200 and studio.token.encode() in page
+    assert "the-preview-key" in head["Set-Cookie"] and "HttpOnly" in head["Set-Cookie"]
+    assert ask(port, "GET", "/api/start")[0] == 403  # the key, or nothing
+    start = json.loads(ask(port, "GET", "/api/start", headers=cookie)[2])
+    assert start["shared"] and not start["sing"]["available"]
+    assert all(p["id"] == "everyone" for p in start["phrasings"])  # never one singer's way, or name
+    assert dataclasses.replace(studio.context, machine="here").machine_label() == "the computer serving this studio"
+    # its names: a tunnel's (no port, https), a name under one given with a leading dot; not others
+    for host, code in (("songbird.example.test", 200), (f"songbird.example.test:{port}", 200),
+                       ("abc.trycloudflare.com", 200), ("trycloudflare.com", 403), ("evil.example", 403)):
+        assert ask(port, "GET", "/api/start", headers={"Host": host, **cookie})[0] == code, host
+    body, token = {"edits": {}}, {"X-Studio": studio.token}
+    tunnel = {"Host": "abc.trycloudflare.com", "Origin": "https://abc.trycloudflare.com"}
+    assert post(port, studio, "/api/song", body, **tunnel, **cookie)[0] == 200
+    assert post(port, studio, "/api/song", body, **{**tunnel, "Origin": "https://evil.example"}, **cookie)[0] == 403
+    assert post(port, studio, "/api/song", body, **token)[0] == 403  # the page's token alone isn't the key
+    assert post(port, studio, "/api/sing", {}, **cookie)[1]["error"]
+
+
+def test_this_computers_own_studio_needs_no_key(served):
+    studio, port = served
+    start = json.loads(ask(port, "GET", "/api/start")[2])
+    assert not start["shared"] and studio.share_key is None
+    assert dataclasses.replace(studio.context, machine="here").machine_label() == "this machine"
+
+
+def test_the_names_a_shared_studio_answers_to():
+    assert S.share_names("127.0.0.1", []) == [] and S.share_names("localhost", None) == []
+    assert S.share_names("192.168.5.5", []) == ["192.168.5.5"]
+    assert S.share_names("127.0.0.1", ["Songbird.Example.test"]) == ["songbird.example.test"]
+    every = S.share_names("0.0.0.0", [])
+    assert every and not any(n.startswith("127.") for n in every)
+    shares, here = S.links("127.0.0.1", 8790, [".trycloudflare.com"], [".trycloudflare.com"], "k" * 12)
+    assert shares == ["https://NAME-THE-TUNNEL-PRINTED.trycloudflare.com/?key=kkkkkkkkkkkk"]
+    assert here == "http://127.0.0.1:8790/?key=kkkkkkkkkkkk"
+    shares, here = S.links("192.168.5.5", 8790, [], ["192.168.5.5"], "k" * 12)
+    assert shares == [here] == ["http://192.168.5.5:8790/?key=kkkkkkkkkkkk"]
+    assert S.allowed_host("[::1]:8790", 8790, ()) and not S.allowed_host("127.0.0.1:8791", 8790, ())
+
+
+def test_the_command_line_shares_only_when_asked_and_checks_what_its_given():
+    import argparse
+
+    parser = argparse.ArgumentParser()
+    S.add_arguments(parser)
+    args = parser.parse_args([])
+    assert args.host == "127.0.0.1" and args.allow_host == [] and args.key is None
+    args = parser.parse_args(["--host", "0.0.0.0", "--allow-host", "a.test", "--allow-host", ".b.test",
+                              "--key", "abcdefgh", "--no-open", "--port", "8790"])
+    assert args.host == "0.0.0.0" and args.allow_host == ["a.test", ".b.test"] and args.key == "abcdefgh"
+    with pytest.raises(SystemExit, match="--allow-host"):
+        S.run(parser.parse_args(["--allow-host", "evil.test/x"]))
+    with pytest.raises(SystemExit, match="--key"):
+        S.run(parser.parse_args(["--host", "0.0.0.0", "--key", "short"]))
+
+
+def test_a_recording_downloads_under_its_own_name(served):
+    studio, port = served
+    (studio.cache / "0123456789abcdef.flac").write_bytes(b"fLaC" + bytes(64))
+    status, head, data = ask(port, "GET", "/audio/0123456789abcdef.flac?name=now-its-by-you.2026-09-27.abcdef.flac")
+    assert status == 200 and data[:4] == b"fLaC"
+    assert head["Content-Disposition"] == 'attachment; filename="now-its-by-you.2026-09-27.abcdef.flac"'
+    status, head, _ = ask(port, "GET", '/audio/0123456789abcdef.flac?name=../x".flac')
+    assert status == 200 and "Content-Disposition" not in head
+
+
+def test_the_render_queue_says_whats_ahead_and_refuses_a_flood():
+    gate = threading.Event()
+    jobs = S.Jobs()
+    first = jobs.submit("a", "preview", "a", lambda job: gate.wait(30))
+    for _ in range(100):
+        if first.state == "running":
+            break
+        time.sleep(0.02)
+    try:
+        waiting = [jobs.submit(f"k{i}", "preview", "x", lambda job: None) for i in range(S.MAX_WAITING)]
+        assert jobs.view(waiting[-1])["ahead"] == 1  # the newest preview goes next, after the one running
+        assert jobs.view(waiting[0])["ahead"] == S.MAX_WAITING
+        with pytest.raises(S.Busy):
+            jobs.submit("one-too-many", "record", "r", lambda job: None)
+        assert jobs.submit("k0", "preview", "x", lambda job: None) is waiting[0]  # asked again: the same one
+    finally:
+        gate.set()

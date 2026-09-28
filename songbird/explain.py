@@ -480,6 +480,7 @@ class Context:
     day: str  # today's date, YYYY-MM-DD
     t: float  # today's instant: noon UTC today
     quiet: bool = False  # the machine was read only in part (its languages, size and screen)
+    shared: bool = False  # served to others (studio --host/--allow-host): "this machine" is the one serving it
 
     def __post_init__(self):
         self.song = edits_mod.song_params(self.genome)
@@ -528,7 +529,7 @@ class Context:
     def machine_label(self) -> str:
         spec = self.machine
         if spec == "here":
-            return "this machine"
+            return "the computer serving this studio" if self.shared else "this machine"
         if spec in ("none", "neutral"):
             return "no machine, only time"
         if spec.startswith("fictional:"):
@@ -1372,5 +1373,5 @@ def start(ctx: Context, studio) -> dict:
         "from": ctx.from_words(), "bounds": b, "players": {n: player(n) for n in INSTRUMENTS},
         "patterns": PATTERNS, "parts": PARTS, "optional": list(edits_mod.optional(genome)), "kinds": KINDS,
         "sing": studio.sing_available(), "phrasings": studio.phrasings(), "out": studio.out_shown(),
-        "names": ["Ada", "Basil", "Coral"], "packet": studio.packet_note(),
+        "names": ["Ada", "Basil", "Coral"], "packet": studio.packet_note(), "shared": studio.shared,
     }

@@ -341,7 +341,8 @@ a person's choices among them.
 
 ## What stays on the machine
 
-Nothing leaves it. The server answers only 127.0.0.1 and only requests that
+Nothing leaves it (unless it is shared for a preview: see below). The server
+answers only 127.0.0.1 and only requests that
 name it (so no web page can reach it under another name); it takes changes
 only as JSON carrying the token its own page was given (a header no other
 page can send without asking first, which it never answers); it serves only
@@ -349,6 +350,90 @@ its page, its answers and its renders by their hashes, under a content
 policy that lets the page load nothing from anywhere else. The record keeps
 what a command-line record keeps, plus the marks of what was chosen. The
 browser's storage keeps the edits in progress on this browser only.
+
+## Sharing the studio for a preview
+
+The studio is made for one person on their own computer. It can also be
+served from one computer to a few people, for a short preview, and only when
+asked: `--host` (where it listens) or `--allow-host` (a name visitors reach it
+by through a tunnel). Either one makes it *shared*:
+
+- **A link with a key.** Every visitor needs the link it prints, ending
+  `/?key=…`. The first visit keeps the key in a cookie for that browser; a
+  visit without it gets a page saying to ask for the whole link. The key is
+  new each time the studio starts unless `--key WORD` fixes it (so links
+  survive a restart). It is the only lock: anyone holding the link can use
+  the studio, and taking it back from one person means restarting with
+  another key.
+- **Its names.** It still refuses a request that names it by any name it
+  wasn't given (the guard against a page elsewhere reaching it by
+  rebinding a name), and a change from any page but its own. Bound to
+  `0.0.0.0` it answers to this computer's addresses and its name; a
+  tunnel's name is given with `--allow-host` (a leading dot allows every
+  name under it, as a quick tunnel's names are random).
+- **It says what it means**, in the terminal, when it starts: whom the
+  link lets in, that the song is made on this computer's time, where
+  recordings go, and whose machine shapes the song.
+
+What changes for several people at once:
+
+| | With a few people | What the studio does |
+|---|---|---|
+| Their changes | each browser keeps its own, as ever; the server keeps none | nothing to share or clash |
+| Listening and recording | one renderer for everyone: a section takes seconds, a whole song about a minute | recordings first, then the newest preview; the page says how many are ahead; past 12 waiting it asks people to try again in a minute |
+| Recordings | written on the serving computer, into `renders/` (a checkout) or the folder it ran from (a packet) | the page offers each visitor **Download it**; the file is theirs to run |
+| The machine | "your machine" is the serving computer's (its languages, size, screen) for everyone | the page and the terminal say *the computer serving this studio*; `--machine fictional:NAME` or `none` if its facts shouldn't shape everyone's version |
+| Singing | the singing page listens on the serving computer only | off while shared; the singer's card offers only *everyone who has sung it*, never one singer's own way or name |
+
+Left as they are, for the artist:
+
+- **A visitor's own computer doesn't shape their version.** Reading it
+  would need the page to gather their browser's languages, screen and size
+  and send them: a second harvest, with its own consent. Worth doing only if
+  the studio goes on being shared.
+- **Plain http on a home or office network.** Anyone on that network could
+  read the link as it travels. A tunnel gives https.
+- **No limit per person.** One visitor can keep the renderer busy for
+  everyone; the queue's cap keeps it from growing without end, and
+  recordings fill the disk at about 15 MB each.
+- **Previews are shared by what they are.** Two visitors with the same
+  choices hear the same cached render; nobody can list anyone else's.
+
+### The recommended way (the artist, from the other computer)
+
+Through a Cloudflare quick tunnel, which needs no account: the studio stays
+on 127.0.0.1, so nothing on the local network sees it, and visitors get
+https. In one terminal, from the checkout:
+
+    uv run songbird studio --port 8790 --allow-host .trycloudflare.com --key pick-a-long-word --no-open
+
+(or beside a rendition: `python3 now-its-by-you.flac studio --port 8790
+--allow-host .trycloudflare.com --key pick-a-long-word --no-open`). In a
+second terminal, with `cloudflared` installed:
+
+    cloudflared tunnel --url http://127.0.0.1:8790
+
+It prints an address like `https://some-random-words.trycloudflare.com`.
+Send people that address with `/?key=pick-a-long-word` on the end. Ctrl-C in
+both terminals ends the preview; the address dies with the tunnel.
+
+Other ways, described only (nothing here was set up):
+
+- **Tailscale**, for people already on the artist's tailnet:
+  `tailscale serve --bg 8790` publishes the local port inside the tailnet
+  at `https://MACHINE.TAILNET.ts.net` (`tailscale funnel` instead opens it to
+  anyone; the command's syntax has changed between versions, so check
+  `tailscale serve --help`). Start the studio with
+  `--allow-host MACHINE.TAILNET.ts.net`.
+- **The same network** (a room, a house): `uv run songbird studio --host
+  0.0.0.0 --port 8790 --no-open` prints `http://ADDRESS:8790/?key=…` links for
+  this computer's addresses. Plain http: for people in the room. macOS asks
+  once whether Python may accept incoming connections; say yes for this.
+
+Before sending the link: render one section yourself so the first visitor
+doesn't wait on the synthesis compiling (10 to 15 s), keep the computer awake
+(`caffeinate -i` on macOS), and choose `--out` if the recordings should land
+somewhere other than `renders/`.
 
 ## How it was checked
 

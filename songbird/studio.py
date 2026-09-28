@@ -1,6 +1,7 @@
 """The studio: see how your version of the song was made, change it if you like, and record it.
 
     songbird studio [PARENT.flac|record.json] [--song GENOME] [--machine here] [--port 8766] [--out DIR]
+                    [--host 0.0.0.0] [--allow-host NAME] [--key WORD]
 
 A page on this computer only (127.0.0.1), served by the standard library,
 with plain HTML, CSS and JavaScript from songbird/studio/ and nothing from
@@ -17,6 +18,13 @@ would, with your choices marked. docs/STUDIO.md has the design.
 
 The page keeps the person's edits and sends them with every request; the
 server keeps nothing else but caches, so any request can be replayed.
+
+Shared (`--host` other than this computer, or `--allow-host` for a tunnel's
+name), it is a temporary preview for a few people: every visitor needs the
+link's key, the singing page is off, only everyone's phrasing is offered (no
+singer's name), each recording can be downloaded from the page, and the
+machine that shapes the song is the computer serving it. docs/STUDIO.md,
+"Sharing the studio for a preview".
 """
 
 from __future__ import annotations
@@ -33,6 +41,7 @@ import shutil
 import socket
 import subprocess
 import sys
+import textwrap
 import threading
 import time
 import traceback
@@ -41,10 +50,11 @@ import webbrowser
 import zipfile
 from dataclasses import dataclass, field
 from datetime import date
+from http.cookies import CookieError, SimpleCookie
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from typing import Callable
-from urllib.parse import urlsplit
+from urllib.parse import parse_qs, urlsplit
 
 import numpy as np
 
@@ -59,6 +69,9 @@ ROOT = Path(__file__).resolve().parent.parent  # the program's folder: a packet'
 LEAD = "h-now-its-by-you"  # in a checkout, the song the studio opens when nothing names one
 PORT = 8766
 KARAOKE_PORT = 8765
+HOST = "127.0.0.1"  # this computer only, unless asked to share (--host, --allow-host)
+LOOPBACK = {"127.0.0.1", "localhost", "::1"}
+MAX_WAITING = 12  # renders waiting at once: more are refused until the queue shortens (a shared studio)
 CACHE_LIMIT = 300 * 2**20  # bytes of previews kept; the least recently heard go first
 PREVIEW_GAIN_DB = 5.3  # what mastering gives a whole rendition of H (5.1 to 5.4 dB): a section keeps its level
 STATIC = {"/studio.css": ("studio.css", "text/css; charset=utf-8"),
@@ -271,9 +284,13 @@ class Job:
         self.stage = stage_words(name)
 
 
+class Busy(Exception):
+    """Too many renders waiting (a shared studio): try again when the queue has shortened."""
+
+
 class Jobs:
     """One render at a time: recordings first, oldest first; then previews, newest first (what the person
-    asked for last is what they want to hear)."""
+    asked for last is what they want to hear). At most MAX_WAITING wait at once."""
 
     def __init__(self):
         self.lock = threading.Condition()
@@ -300,6 +317,8 @@ class Jobs:
                 if then is not None:
                     job.then.append(then)
                 return job
+            if len(self.pending) >= MAX_WAITING:
+                raise Busy("The studio is busy making other songs; try again in a minute.")
             job = Job(secrets.token_hex(6), key, kind, label, work, then=[then] if then else [])
             self.jobs[job.id] = job
             self.by_key[key] = job
@@ -309,6 +328,19 @@ class Jobs:
                 self.jobs.pop(old.id, None)
             self.lock.notify()
             return job
+
+    def view(self, job: Job) -> dict:
+        """A job as the page sees it, with how many renders will run before it (the one running included)."""
+        out = job.view()
+        with self.lock:
+            if job.state == "queued":
+                running = sum(1 for j in self.jobs.values() if j.state == "running")
+                if job.kind == "record":
+                    before = [j for j in self.pending if j.kind == "record" and j.created < job.created]
+                else:
+                    before = [j for j in self.pending if j.kind == "record" or j.created > job.created]
+                out["ahead"] = running + len(before)
+        return out
 
     def cancel(self, job_id: str) -> bool:
         with self.lock:
@@ -356,7 +388,10 @@ class Studio:
     """The song, its parent, the machine and today; the caches; and everything the page asks for."""
 
     def __init__(self, parent: str | None = None, song: str | None = None, machine: str = "here",
-                 out: Path | None = None, home: Path | None = None):
+                 out: Path | None = None, home: Path | None = None, key: str | None = None):
+        # shared with others by a link carrying this key, or this computer's alone (None)
+        self.share_key = key
+        self.shared = key is not None
         self.home = Path(home or harvest.home_dir()) / "studio"
         self.cache = self.home / "cache"
         self.cache.mkdir(parents=True, exist_ok=True)
@@ -386,7 +421,7 @@ class Studio:
         self._timeline_lock = threading.Lock()
         self.karaoke: subprocess.Popen | None = None
         self.context = explain.Context(self.genome, parent_params, record, self.voice, machine, self.day, self.t,
-                                       quiet)
+                                       quiet, shared=self.shared)
         prune(self.cache, CACHE_LIMIT)
 
     # ------------------------------------------------------------ the song
@@ -462,7 +497,7 @@ class Studio:
             job = self.jobs.submit(key, "preview", label, lambda job: self._whole(job, v, key))
         else:
             job = self.jobs.submit(key, "preview", label, lambda job: self._section(job, v, key, section))
-        return job.view() | {"key": key}
+        return self.jobs.view(job) | {"key": key}
 
     def warm(self) -> None:
         """Make today's first verse while the page opens: the synthesis is compiled the first time it runs
@@ -535,7 +570,8 @@ class Studio:
                 and (self.cache / f"{key}.flac").exists():
             return {"state": "done", "progress": 1.0, "url": f"/audio/{key}.flac", "result": keep(),
                     "label": "the recording", "kind": "record"}
-        return self.jobs.submit(key, "record", "the recording", lambda job: self._whole(job, v, key), then=keep).view()
+        return self.jobs.view(self.jobs.submit(key, "record", "the recording", lambda job: self._whole(job, v, key),
+                                               then=keep))
 
     def _keep(self, folder: Path) -> dict:
         """The recording copied from the cache to where recordings go, as <song>.<day>.<its id's first six>.flac:
@@ -545,17 +581,26 @@ class Studio:
         flac = self.out / f"{slug(self.genome.title)}.{day}.{record['id'][:6]}.flac"
         self.out.mkdir(parents=True, exist_ok=True)
         shutil.copyfile(folder / "rendition.flac", flac)
-        again = f"python3 {shown(flac)} studio" if self.where == "packet" else f"uv run songbird studio {shown(flac)}"
-        return {"recorded": {"flac": shown(flac), "id": record["id"], "duration": record["duration"],
-                             "generation": record.get("generation"), "yours": len(record.get("chosen_by_you") or {}),
-                             "next": again}}
+        if self.shared:  # the visitor's copy is the download; the path is the host's
+            again = f"python3 {flac.name} studio"
+        elif self.where == "packet":
+            again = f"python3 {shown(flac)} studio"
+        else:
+            again = f"uv run songbird studio {shown(flac)}"
+        return {"recorded": {"flac": shown(flac), "name": flac.name, "id": record["id"],
+                             "duration": record["duration"], "generation": record.get("generation"),
+                             "yours": len(record.get("chosen_by_you") or {}), "next": again,
+                             "download": f"/audio/{folder.name}.flac?name={flac.name}", "shared": self.shared}}
 
     def out_shown(self) -> str:
         return shown(self.out)
 
     def packet_note(self) -> str:
-        return ("The recording is one file: it plays anywhere, and it carries the program that sang it, the song "
+        note = ("The recording is one file: it plays anywhere, and it carries the program that sang it, the song "
                 "and its record, so anyone can run it to make the next version.")
+        if self.shared:
+            note += " It is saved on the computer serving this studio; download your copy here."
+        return note
 
     # ------------------------------------------------------------ singing (from a checkout of the program)
 
@@ -567,6 +612,9 @@ class Studio:
         recordings = ROOT / "recordings"
         stem = self.genome_path.stem
         found = {}
+        if self.shared:  # shared with others: everyone's together only, never one singer's way or name
+            everyone = folder / f"{stem}.everyone.json"
+            return {"everyone": everyone} if recordings.is_dir() and everyone.exists() else {}
         if recordings.is_dir() and folder.is_dir():
             for person in sorted(p for p in recordings.iterdir() if p.is_dir() and p.name != "guides"):
                 if any(person.glob(f"{stem}-*.wav")) and (folder / f"{stem}.{person.name}.json").exists():
@@ -586,6 +634,9 @@ class Studio:
         return out
 
     def sing_available(self) -> dict:
+        if self.shared:
+            return {"available": False,
+                    "why": "The singing page opens only on the computer serving this studio, not over a shared link."}
         if (ROOT / "tools" / "karaoke.py").exists():
             return {"available": True}
         return {"available": False,
@@ -594,6 +645,8 @@ class Studio:
     def sing(self) -> dict:
         """Start the singing page (tools/karaoke.py) for this song if it isn't running, and say where it is."""
         url = f"http://127.0.0.1:{KARAOKE_PORT}"
+        if self.shared:  # a visitor can't reach it, and shouldn't start anything on this computer
+            return {"error": self.sing_available()["why"]}
         if listening(KARAOKE_PORT):
             if self.karaoke_title() == self.genome.title:
                 return {"url": url}
@@ -685,9 +738,27 @@ def prune(folder: Path, limit: int) -> None:
 # ---------------------------------------------------------------- the server
 
 
+def allowed_host(host: str, port: int, names: tuple[str, ...]) -> bool:
+    """Whether a Host header names this server: 127.0.0.1 or localhost at its port; else, shared, one of the
+    names it was given (with or without a port: a tunnel's name has none), or a name under one given with
+    a leading dot (".trycloudflare.com")."""
+    host = host.strip().lower()
+    if host in (f"127.0.0.1:{port}", f"localhost:{port}", f"[::1]:{port}"):
+        return True
+    bare = host[: -len(f":{port}")] if host.endswith(f":{port}") else host
+    for name in names:
+        if name.startswith("."):
+            if bare.endswith(name) and len(bare) > len(name) and ":" not in bare:
+                return True
+        elif bare == name:
+            return True
+    return False
+
+
 class Handler(BaseHTTPRequestHandler):
     studio: Studio
     port: int = PORT
+    names: tuple[str, ...] = ()  # the other names it answers to, when shared (lower case)
     server_version = "songbird-studio"
     sys_version = ""  # no need to say which Python
     protocol_version = "HTTP/1.1"
@@ -697,16 +768,42 @@ class Handler(BaseHTTPRequestHandler):
 
     # ------------------------------------------------------------ guards
 
-    def _hosts(self) -> set[str]:
-        return {f"127.0.0.1:{self.port}", f"localhost:{self.port}"}
-
     def _local(self) -> bool:
-        """The Host names this server, so no page elsewhere can reach it under another name; and a request
-        that says where it came from came from here."""
-        if self.headers.get("Host", "") not in self._hosts():
+        """The Host names this server, so no page elsewhere can reach it under another name (DNS rebinding);
+        and a request that says where it came from came from a page of this server's, by its own name."""
+        host = self.headers.get("Host", "")
+        if not allowed_host(host, self.port, self.names):
             return False
         origin = self.headers.get("Origin")
-        return origin is None or origin in {f"http://{h}" for h in self._hosts()}
+        return origin is None or origin.lower() in (f"http://{host.lower()}", f"https://{host.lower()}")
+
+    def _key(self) -> str | None:
+        """The key this request carries: in the link (?key=) or the cookie a first visit with it set."""
+        given = parse_qs(urlsplit(self.path).query).get("key", [""])[0]
+        if given:
+            return given
+        with contextlib.suppress(CookieError):
+            morsel = SimpleCookie(self.headers.get("Cookie", "")).get(self._cookie())
+            return morsel.value if morsel else None
+        return None
+
+    def _cookie(self) -> str:
+        return f"songbird-studio-{self.port}"
+
+    def _admitted(self) -> bool:
+        """This computer's own studio admits its own page; a shared one, only a visitor with its key."""
+        if not self.studio.shared:
+            return True
+        key = self._key() or ""
+        return secrets.compare_digest(key.encode("utf-8", "replace"), self.studio.share_key.encode())
+
+    def refuse_visitor(self) -> None:
+        page = ("<!doctype html><meta charset=utf-8><meta name=viewport content='width=device-width'>"
+                "<title>Songbird studio</title><body style='font:17px/1.5 Georgia,serif;max-width:34em;"
+                "margin:12vh auto;padding:0 16px'><h1 style='font-weight:500'>This studio is shared by link</h1>"
+                "<p>Its link carries a key: ask the person who shared it for the whole link, "
+                "ending in <code>?key=</code>.</p></body>")
+        self.send(page.encode(), "text/html; charset=utf-8", 403)
 
     # ------------------------------------------------------------ replies
 
@@ -741,10 +838,15 @@ class Handler(BaseHTTPRequestHandler):
         if not self._local():
             return self.fail(403, "this page answers only its own address")
         path = urlsplit(self.path).path
+        if not self._admitted():
+            return self.refuse_visitor() if path in ("/", "/index.html") else self.fail(403, "this studio needs its link's key")
         try:
             if path in ("/", "/index.html"):
                 page = (PAGE / "index.html").read_text().replace("{{token}}", self.studio.token)
-                return self.send(page.encode(), "text/html; charset=utf-8")
+                extra = {}
+                if self.studio.shared:  # the key, kept for this visit's other requests (the audio's among them)
+                    extra["Set-Cookie"] = f"{self._cookie()}={self.studio.share_key}; Path=/; HttpOnly; SameSite=Lax"
+                return self.send(page.encode(), "text/html; charset=utf-8", extra=extra)
             if path in STATIC:
                 name, kind = STATIC[path]
                 return self.send((PAGE / name).read_bytes(), kind)
@@ -756,19 +858,26 @@ class Handler(BaseHTTPRequestHandler):
                 return self.send_json(self.studio.phrasings())
             if path.startswith("/api/job/"):
                 job = self.studio.jobs.get(path.rsplit("/", 1)[-1])
-                return self.send_json(job.view()) if job else self.fail(404, "no such job")
+                return self.send_json(self.studio.jobs.view(job)) if job else self.fail(404, "no such job")
             match = re.fullmatch(r"/audio/([0-9a-f]{16,64})\.flac", path)
             if match:
-                return self.audio(self.studio.cache / f"{match.group(1)}.flac")
+                # ?name=song.day.id.flac: saved under that name (a recording downloaded, as a visitor keeps theirs)
+                name = parse_qs(urlsplit(self.path).query).get("name", [""])[0]
+                name = name if re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9._-]{0,120}\.flac", name) else None
+                return self.audio(self.studio.cache / f"{match.group(1)}.flac", name)
             return self.fail(404, "not found")
         except Exception as e:  # said on the page rather than dropping the connection
             traceback.print_exc()
             return self.fail(500, f"{type(e).__name__}: {e}")
 
-    def audio(self, path: Path) -> None:
-        """A rendering, with byte ranges (players seek with them; Safari won't play without)."""
+    def audio(self, path: Path, name: str | None = None) -> None:
+        """A rendering, with byte ranges (players seek with them; Safari won't play without); with a name,
+        as a file to save."""
         if not path.exists():
             return self.fail(404, "not made yet")
+        if name:
+            return self.send(path.read_bytes(), "audio/flac", 200,
+                             {"Content-Disposition": f'attachment; filename="{name}"'})
         size = path.stat().st_size
         rng = re.fullmatch(r"bytes=(\d*)-(\d*)", self.headers.get("Range", "").strip())
         if rng and (rng.group(1) or rng.group(2)):
@@ -802,6 +911,8 @@ class Handler(BaseHTTPRequestHandler):
         # can send without asking first, which this server never answers)
         if not self._local():
             return self.fail(403, "this page answers only its own address")
+        if not self._admitted():
+            return self.fail(403, "this studio needs its link's key")
         if self.headers.get("Content-Type", "").split(";")[0].strip() != "application/json":
             return self.fail(415, "send JSON")
         if not secrets.compare_digest(self.headers.get("X-Studio", "").encode("utf-8", "replace"),
@@ -835,6 +946,8 @@ class Handler(BaseHTTPRequestHandler):
             if path == "/api/sing":
                 return self.send_json(studio.sing())
             return self.fail(404, "not found")
+        except Busy as e:
+            return self.fail(503, str(e))
         except (ValueError, KeyError, TypeError) as e:
             return self.fail(400, str(e))
         except Exception as e:
@@ -853,16 +966,75 @@ class Server(ThreadingHTTPServer):
         super().handle_error(request, client_address)
 
 
-def serve(studio: Studio, port: int = PORT, tries: int = 20) -> ThreadingHTTPServer:
-    """A server for the studio on 127.0.0.1, on the port asked for or the next free one."""
+class Server6(Server):
+    address_family = socket.AF_INET6
+
+
+def serve(studio: Studio, port: int = PORT, tries: int = 20, host: str = HOST,
+          names: tuple[str, ...] | list[str] = ()) -> ThreadingHTTPServer:
+    """A server for the studio on `host` (127.0.0.1: this computer only, unless it is shared), on the port
+    asked for or the next free one; answering to its own names and, shared, to `names`."""
+    names = tuple(dict.fromkeys(n.strip().lower() for n in names if n.strip()))
+    kind = Server6 if ":" in host else Server
     for p in range(port, port + tries):
-        handler = type("StudioHandler", (Handler,), {"studio": studio, "port": p})
+        handler = type("StudioHandler", (Handler,), {"studio": studio, "port": p, "names": names})
         try:
-            server = Server(("127.0.0.1", p), handler)
+            return kind((host, p), handler)
         except OSError:
             continue
-        return server
-    raise SystemExit(f"songbird studio: no free port from {port} to {port + tries - 1}")
+    raise SystemExit(f"songbird studio: no free port from {port} to {port + tries - 1} on {host}")
+
+
+def addresses() -> list[str]:
+    """This computer's addresses on its networks (IPv4, not loopback): where people nearby reach it."""
+    found = []
+    with contextlib.suppress(OSError):
+        found += socket.gethostbyname_ex(socket.gethostname())[2]
+    for probe in ("192.168.0.1", "10.0.0.1", "8.8.8.8"):  # a UDP "connect" sends nothing: it only picks a route
+        with contextlib.suppress(OSError), contextlib.closing(socket.socket(socket.AF_INET, socket.SOCK_DGRAM)) as s:
+            s.connect((probe, 9))
+            found.append(s.getsockname()[0])
+    return list(dict.fromkeys(a for a in found if not a.startswith("127.") and a != "0.0.0.0"))
+
+
+def share_names(host: str, allow: list[str] | None) -> list[str]:
+    """The names a shared studio answers to besides 127.0.0.1: the ones given (a tunnel's), the address it
+    is bound to, and, bound to every network (0.0.0.0 or ::), this computer's addresses and its name (and
+    NAME.local for a bare name, as Bonjour has it). Empty: this computer's alone."""
+    names = [a.strip().lower() for a in allow or [] if a.strip()]
+    if host in ("0.0.0.0", "::"):
+        name = socket.gethostname().lower()
+        names += addresses() + [name] + ([f"{name}.local"] if "." not in name else [])
+    elif host.lower() not in LOOPBACK:
+        names.append(f"[{host.lower()}]" if ":" in host else host.lower())
+    return list(dict.fromkeys(names))
+
+
+def links(host: str, port: int, allow: list[str], names: list[str], key: str) -> tuple[list[str], str]:
+    """Where visitors open a shared studio (a tunnel's name by https, without a port; this computer's by
+    http at its port), and where the person serving it does."""
+    given = [a.strip().lower() for a in allow or [] if a.strip()]
+    out = [f"https://{'NAME-THE-TUNNEL-PRINTED' if n.startswith('.') else ''}{n}/?key={key}" for n in given]
+    out += [f"http://{n}:{port}/?key={key}" for n in names if n not in given]
+    here = f"http://127.0.0.1:{port}/?key={key}" if host in ("0.0.0.0", "::") or host.lower() in LOOPBACK \
+        else (out[-1] if out else f"http://127.0.0.1:{port}/?key={key}")
+    return out, here
+
+
+def shared_warning(shares: list[str], out: str, lan: bool) -> str:
+    """What sharing the studio means, said in the terminal when it starts."""
+    lock = ("The key in the link is the only lock, and on this network the link travels as plain http: send it "
+            "only to the people you mean to invite. Beyond your network, use a tunnel (docs/STUDIO.md)." if lan else
+            "The key in the link is the only lock: send it only to the people you mean to invite.")
+    points = ["Visitors hear, change and record the song with this computer's time. One song is made at a time, "
+              "so they wait on each other: a section takes seconds, a whole song about a minute.",
+              f"What they record is saved into {out}/ here, and each can download theirs from the page.",
+              "Their version is shaped by this computer (its languages, size and screen), not by theirs.",
+              lock, "The singing page is off, and no singer's name or own way of singing is offered."]
+    return "\n".join(["  SHARED, for a short preview. Anyone with one of these links can use the studio, on this "
+                      "computer:", *(f"    {link}" for link in shares), "  What that means:",
+                      *(textwrap.fill(point, 104, initial_indent="    - ", subsequent_indent="      ")
+                        for point in points), "  Stop it with Ctrl-C when the preview is over."])
 
 
 def add_arguments(parser: argparse.ArgumentParser) -> None:
@@ -876,18 +1048,43 @@ def add_arguments(parser: argparse.ArgumentParser) -> None:
     parser.add_argument("--song", metavar="GENOME", help="the song's genome, where the parent doesn't carry it")
     parser.add_argument("--machine", default="here", metavar="here|none|fictional:NAME|FILE",
                         help="who sings: this machine (default), none, a made-up one, or a voice file or record")
-    parser.add_argument("--port", type=int, default=PORT, help=f"the port on 127.0.0.1 (default {PORT})")
+    parser.add_argument("--port", type=int, default=PORT, help=f"the port (default {PORT}, or the next free one)")
     parser.add_argument("--out", metavar="DIR", help="where recordings go (default renders/)")
     parser.add_argument("--no-open", action="store_true", help="don't open the page in a browser")
+    parser.add_argument("--host", default=HOST, metavar="ADDRESS",
+                        help="where to serve it: 127.0.0.1, this computer only (the default); 0.0.0.0 for "
+                             "people on this computer's networks, as a short preview (it prints links with a "
+                             "key; docs/STUDIO.md)")
+    parser.add_argument("--allow-host", action="append", default=[], metavar="NAME",
+                        help="a name visitors reach it by through a tunnel (a leading dot allows every name "
+                             "under it: .trycloudflare.com); shares it by link, as --host does")
+    parser.add_argument("--key", metavar="WORD",
+                        help="the key a shared studio's links carry (default: a new one each time it starts)")
 
 
 def run(args: argparse.Namespace) -> int:
     parent = args.packet or args.parent or os.environ.get("SONGBIRD_PACKET") or None
-    studio = Studio(parent, args.song, args.machine, Path(args.out) if args.out else None)
-    server = serve(studio, args.port)
-    url = f"http://127.0.0.1:{server.server_address[1]}"
-    print(f"Songbird studio: {studio.genome.title}, {studio.context.opening()}\n  open {url}  (Ctrl-C to stop)",
-          flush=True)
+    host = getattr(args, "host", HOST) or HOST
+    allow = getattr(args, "allow_host", []) or []
+    for name in allow:
+        if not re.fullmatch(r"\.?[A-Za-z0-9]([A-Za-z0-9.-]{0,251}[A-Za-z0-9])?", name.strip()):
+            raise SystemExit(f"songbird studio: --allow-host takes a name like songbird.example.com, not {name!r}")
+    names = share_names(host, allow)
+    shared = bool(names) or host.lower() not in LOOPBACK
+    key = None
+    if shared:
+        key = getattr(args, "key", None) or secrets.token_urlsafe(9)
+        if not re.fullmatch(r"[A-Za-z0-9_-]{8,64}", key):
+            raise SystemExit("songbird studio: --key takes 8 to 64 letters, digits, - or _")
+    studio = Studio(parent, args.song, args.machine, Path(args.out) if args.out else None, key=key)
+    server = serve(studio, args.port, host=host, names=names)
+    port = server.server_address[1]
+    url = f"http://127.0.0.1:{port}"
+    print(f"Songbird studio: {studio.genome.title}, {studio.context.opening()}", flush=True)
+    if shared:
+        shares, url = links(host, port, allow, names, key)
+        print(shared_warning(shares, studio.out_shown(), lan=any(link.startswith("http://") for link in shares)))
+    print(f"  open {url}  (Ctrl-C to stop)", flush=True)
     threading.Thread(target=studio.timeline, daemon=True).start()  # ready by the time it's scrolled to
     studio.warm()
     if not args.no_open:
