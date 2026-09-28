@@ -2,7 +2,7 @@
 
 A render splits where its pieces don't depend on one another: the band's parts and the singers
 (synth.render_stems), the throat's pulses (throat.synthesize), the mix's buses and channel strips
-(mixing.mix).
+(mixing.mix), the true-peak envelope's stretches (master.true_peak_envelope).
 Each piece draws on its own random stream and is computed exactly as it would be alone; only the
 putting together (a sum, an overlap-add) happens in one place, in the order it always has. So a
 render is the same whichever thread makes which piece, and whatever SONGBIRD_THREADS says.

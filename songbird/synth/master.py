@@ -13,7 +13,7 @@ range stays that of the mix.
 from __future__ import annotations
 
 import hashlib
-from functools import lru_cache
+from functools import lru_cache, partial
 from pathlib import Path
 
 import numpy as np
@@ -22,6 +22,7 @@ from numba import njit
 from scipy.ndimage import minimum_filter1d
 from scipy.signal import firwin
 
+from . import threads
 from .fx import _biquads
 
 TARGET_LUFS = -14.0
@@ -150,13 +151,18 @@ def true_peak_envelope(x: np.ndarray, floor: float = 0.0) -> np.ndarray:
     taps = _interpolator()
     padded = np.pad(y, ((REACH, REACH), (0, 0)))
     between = np.zeros(len(loud))
-    for start in range(0, len(loud), 1 << 16):  # a bounded amount of memory at a time
+
+    def swing(start: int) -> None:
         part = loud[start : start + (1 << 16)]
         # sample n - k for k = -REACH..REACH sits at padded[n + REACH - k]
         window = part[:, None] + REACH - np.arange(-REACH, REACH + 1)[None, :]
         for ch in range(y.shape[1]):
             points = padded[window, ch] @ taps.T  # n, n + 1/4, n + 1/2, n + 3/4
             between[start : start + len(part)] = np.maximum(between[start : start + len(part)], np.abs(points).max(axis=1))
+
+    # a bounded amount of memory at a time, each stretch its own (so they are made at once, threads.in_order)
+    for _ in threads.in_order([(start, partial(swing, start)) for start in range(0, len(loud), 1 << 16)]):
+        pass
     env[loud] = np.maximum(env[loud], between)
     env[loud + 1] = np.maximum(env[loud + 1], between)
     return env
