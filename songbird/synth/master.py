@@ -18,6 +18,7 @@ from pathlib import Path
 
 import numpy as np
 import soundfile as sf
+from numpy.lib.stride_tricks import sliding_window_view
 from numba import njit
 from scipy.ndimage import minimum_filter1d
 from scipy.signal import firwin
@@ -151,13 +152,16 @@ def true_peak_envelope(x: np.ndarray, floor: float = 0.0) -> np.ndarray:
     taps = _interpolator()
     padded = np.pad(y, ((REACH, REACH), (0, 0)))
     between = np.zeros(len(loud))
+    # sample n - k for k = -REACH..REACH sits at padded[n + REACH - k]: the window around n is a run of padded
+    # read backwards, a row of a sliding view over it reversed (copied out as the rows are picked)
+    last = len(padded) - 1
+    runs = [sliding_window_view(padded[::-1, ch], 2 * REACH + 1) for ch in range(y.shape[1])]
 
     def swing(start: int) -> None:
         part = loud[start : start + (1 << 16)]
-        # sample n - k for k = -REACH..REACH sits at padded[n + REACH - k]
-        window = part[:, None] + REACH - np.arange(-REACH, REACH + 1)[None, :]
+        rows = last - (part + 2 * REACH)
         for ch in range(y.shape[1]):
-            points = padded[window, ch] @ taps.T  # n, n + 1/4, n + 1/2, n + 3/4
+            points = runs[ch][rows] @ taps.T  # n, n + 1/4, n + 1/2, n + 3/4
             between[start : start + len(part)] = np.maximum(between[start : start + len(part)], np.abs(points).max(axis=1))
 
     # a bounded amount of memory at a time, each stretch its own (so they are made at once, threads.in_order)
