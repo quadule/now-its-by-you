@@ -387,3 +387,15 @@ below about 160 Hz the vocoder's pulses are heard one by one (35 thumps a second
 none from A3 up, counted as 5 ms frames jumping 12 dB over their surroundings). The choir's root now
 keeps to E3 and above (`theory.FLOOR`); the bass instrument has the register below.
 
+## The top notes' harshness (2026-09-27, night)
+
+The artist, on the refrain: "a kind of harshness", the first o of "nobody" (B4, the tune's top) the
+clearest case. Measured against SoulX-Singer singing the same syllable at the same pitch, the dry
+voice sat 4.5 dB hotter at 2 to 5 kHz and 5.6 dB at 3 to 4 kHz; the same "no" an octave lower was
+not. The mix added about 4 dB more there (the lead's +2 dB presence peak at 3.5 kHz, the saturation,
+the band). Sharpening (SHARPEN 1.0) and the level fed to the network changed nothing measurable; a
+darker source did: `VoiceParams.rd` 0.7 -> 0.9 and `tilt` 0.4 -> 0.7 take 2 to 3 dB off each band,
+and the presence peak at 0.5 dB the rest, landing the mixed "no" 5.8 dB down at 2 to 5 kHz, level with
+the reference. Whisper reads the darker voice the same (7.8% of H's words misheard, dry). The artist
+chose it while saying the difference was hard to hear.
+

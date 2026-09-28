@@ -19,9 +19,9 @@ fiddle, whistle, drum, drone; anything else is treated as a plain
 instrument. Stems of any shape are taken (mono, one column, a different
 length). The tools are in songbird/synth/fx.py.
 
-**The voice.** High-passed at 80 Hz, 2 dB less honk around 900 Hz, 2 dB of
-presence at 3.5 kHz (set beside natural singers: SoulX-Singer renders of the
-same score). Its air (7–14 kHz against 0.5–2 kHz) is measured, and only a
+**The voice.** High-passed at 80 Hz, 2 dB less honk around 900 Hz, half a dB of
+presence at 3.5 kHz (2 dB until 2026-09-27, when the top notes were heard as
+harsh; set beside natural singers: SoulX-Singer renders of the same score). Its air (7–14 kHz against 0.5–2 kHz) is measured, and only a
 voice brighter than natural singers is brought back, halfway. A de-esser
 that listens to the balance of the highs (over 4.5 kHz) against the voice's
 body (the voice an octave under them, where no "s" reaches), not to how

@@ -253,7 +253,7 @@ def role_of(name: str) -> str:
 
 
 # The voice and choir, in the same terms as the band's roles.
-VOICE_EQ = (("hp", 80), ("peak", 900, -2.0, 1.2), ("peak", 3500, 2.0, 0.9))
+VOICE_EQ = (("hp", 80), ("peak", 900, -2.0, 1.2), ("peak", 3500, 0.5, 0.9))  # presence 2.0 until 2026-09-27 (the top notes were harsh)
 # The voice's air (7-14 kHz) against its body (0.5-2 kHz): natural singers (SoulX-Singer renders of our score)
 # measure -21 to -23 dB. A voice brighter than AIR is brought half way back, never by more than 3 dB.
 AIR = -20.0

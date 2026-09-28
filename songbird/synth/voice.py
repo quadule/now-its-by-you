@@ -51,8 +51,8 @@ CONSONANT_SPREAD = 0.15  # log spread of a consonant's length around its rule's,
 class VoiceParams:
     shift: int = 0  # semitones from written to sung pitch
     tract: float = 1.12  # formant scale: 1 an average adult male tract, 1.12 an alto's
-    rd: float = 0.7  # glottal shape: 0.6 pressed, 1 modal, 1.8 breathy
-    tilt: float = 0.4  # glottal closing speed: below 1 closes faster, a brighter voice
+    rd: float = 0.9  # glottal shape: 0.6 pressed, 1 modal, 1.8 breathy (0.7 until 2026-09-27: the top notes were harsh)
+    tilt: float = 0.7  # glottal closing speed: below 1 closes faster, a brighter voice (0.4 until 2026-09-27: with rd, the learned voice's "no" at B4 sat 4.5 dB hotter at 2-5 kHz than a natural singer's; these bring it level, at no cost in words)
     breath: float = 0.05  # aspiration mixed into voicing
     vibrato_rate: float = 5.6  # Hz (each note's own, around this)
     vibrato_depth: float = 22.0  # cents, a held note's vibrato once grown in (each note's own, around this)
