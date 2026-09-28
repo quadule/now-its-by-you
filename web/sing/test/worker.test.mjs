@@ -124,7 +124,9 @@ function env(extra = {}) {
     UPLOADS: new Limiter(6), REQUESTS: new Limiter(10000), UNKNOWN: new Limiter(10),
     ASSETS: { fetch: async req => {
       const path = new URL(req.url).pathname;
-      return Object.hasOwn(files, path) ? new Response(files[path]) : new Response("no", { status: 404 });
+      if (!Object.hasOwn(files, path)) return new Response("no", { status: 404 });
+      // as the static assets answer a worker: whole, with a tag, their length unsaid
+      return new Response(files[path], { headers: { ETag: `"${files[path].length}:${path}"` } });
     } },
     ...extra,
   };
@@ -229,6 +231,18 @@ test("the seed page is public: at /seed, at the root of the seed host, with exac
   assert.equal(file.status, 200);
   assert.equal(file.headers.get("content-type"), "audio/flac");
   assert.match(file.headers.get("content-disposition"), /attachment/);
+  assert.equal(file.headers.get("accept-ranges"), "bytes");
+  // a player's parts of it: to seek, and for Safari to play it at all
+  const range = async spec => {
+    const r = await call(w, e, "/seed/now-its-by-you.flac", { headers: { Range: spec } });
+    return { status: r.status, range: r.headers.get("content-range"), length: r.headers.get("content-length"), text: await r.text() };
+  };
+  assert.deepEqual(await range("bytes=0-1"), { status: 206, range: "bytes 0-1/14", length: "2", text: "fL" });
+  assert.deepEqual(await range("bytes=6-"), { status: 206, range: "bytes 6-13/14", length: "8", text: "the song" });
+  assert.deepEqual(await range("bytes=-4"), { status: 206, range: "bytes 10-13/14", length: "4", text: "song" });
+  assert.deepEqual(await range("bytes=10-99"), { status: 206, range: "bytes 10-13/14", length: "4", text: "song" });
+  assert.equal((await range("bytes=14-")).status, 416);
+  assert.equal((await range("bytes=0-1,4-5")).status, 200); // more than one part: the whole of it
   assert.equal((await call(w, e, "/seed/other.flac")).status, 404); // nothing else under /seed/ is served
   assert.equal((await call(w, e, "/seed/../song/song.json")).status, 404);
   assert.equal((await call(w, e, "/seed", { method: "POST" })).status, 404);
