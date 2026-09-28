@@ -1,7 +1,8 @@
 """How much of a render runs at once, and the rule that keeps it the same to the sample.
 
 A render splits where its pieces don't depend on one another: the band's parts and the singers
-(synth.render_stems), the throat's pulses (throat.synthesize).
+(synth.render_stems), the throat's pulses (throat.synthesize), the mix's buses and channel strips
+(mixing.mix).
 Each piece draws on its own random stream and is computed exactly as it would be alone; only the
 putting together (a sum, an overlap-add) happens in one place, in the order it always has. So a
 render is the same whichever thread makes which piece, and whatever SONGBIRD_THREADS says.
@@ -26,26 +27,42 @@ def workers() -> int:
     return max(1, wanted if wanted > 0 else min(os.cpu_count() or 1, 6))
 
 
-def made(jobs: list, progress=None, first: tuple = ()) -> dict:
-    """{name: make()} for (name, make) jobs, in the jobs' order, made on up to workers() threads; the
-    names in `first` are started first (the longest, so the rest fit around them). progress, if given,
-    is told each name in order as the render comes to it."""
+def in_order(jobs: list, first: tuple = (), ahead: int | None = None):
+    """(name, make()) for (name, make) jobs, one at a time in the jobs' order, while up to workers() threads
+    make what comes next: at most `ahead` (default: twice the threads) made and not yet handed on, so a long
+    list doesn't hold every result at once. The names in `first` are started first."""
     threads = min(workers(), len(jobs))
-    out = {}
     if threads <= 1:
         for name, make in jobs:
-            if progress is not None:
-                progress(name)
-            out[name] = make()
-        return out
+            yield name, make()
+        return
+    ahead = max(ahead or 2 * threads, threads)
+    order = sorted(range(len(jobs)), key=lambda k: jobs[k][0] not in first)  # stable: the rest in their order
     pool = ThreadPoolExecutor(threads)
+    futures: dict = {}
+    started = 0
     try:
-        order = sorted(range(len(jobs)), key=lambda k: jobs[k][0] not in first)  # stable: the rest in order
-        futures = {jobs[k][0]: pool.submit(jobs[k][1]) for k in order}
+        for k, (name, _) in enumerate(jobs):
+            while started < len(order) and (len(futures) < ahead or k not in futures):
+                j = order[started]
+                futures[j] = pool.submit(jobs[j][1])
+                started += 1
+            yield name, futures.pop(k).result()
+    finally:
+        pool.shutdown(cancel_futures=True)
+
+
+def made(jobs: list, progress=None, first: tuple = ()) -> dict:
+    """{name: make()} for (name, make) jobs, in the jobs' order, made on up to workers() threads (in_order);
+    the names in `first` are started first (the longest, so the rest fit around them). progress, if given,
+    is told each name in order as the render comes to it."""
+    out = {}
+    results = in_order(jobs, first, ahead=len(jobs))
+    try:
         for name, _ in jobs:
             if progress is not None:
                 progress(name)
-            out[name] = futures[name].result()
+            out[name] = next(results)[1]
     finally:
-        pool.shutdown(cancel_futures=True)
+        results.close()
     return out

@@ -36,7 +36,7 @@ from dataclasses import dataclass, fields
 import numpy as np
 from scipy.ndimage import minimum_filter1d, uniform_filter1d
 
-from . import fx, room
+from . import fx, room, threads
 from .master import limit, loudness
 
 # --- the knobs ------------------------------------------------------------------------
@@ -420,40 +420,46 @@ def mix(stems: dict[str, np.ndarray], sr: int, seed: int = 0, params: MixParams 
     roles = {name: role_of(name) for name in sorted(stems)}
     nudge = {name: balance.get(name, balance.get(role, 0.0)) for name, role in roles.items()}  # a name wins over its role
 
+    # Each bus's and instrument's own treatment depends on nothing but its own sound, so they are made at once
+    # (threads.in_order); they are put together below, one at a time, in the order they always were.
+    jobs = []
+
     # The lead first: everything else is placed against it.
     voice = _sum(stems, [n for n, r in roles.items() if r == "voice"])
-    singing = None
     if voice is not None:
         def lead(x):
             x = fx.equalize(x, fx.design(VOICE_EQ + _sizzle(x, sr), sr))
             x = fx.deess(x, sr)[0]
             x = _compressed(x, sr, VOICE_COMP)
             return _at(_peaks(fx.saturate(x, sr, VOICE_DRIVE), sr), sr, REFERENCE)
-        voice = _treated(voice, lead)
-        if rise is not None:  # the lead rises with the arrangement: quieter in a sparse verse, fuller at the climax
-            voice = voice * rise[:len(voice)]
-        singing = fx.activity(voice, sr, attack=MAKE_WAY[0], release=MAKE_WAY[1])
+
+        def lead_bus(voice=voice):
+            voice = _treated(voice, lead)
+            if rise is not None:  # the lead rises with the arrangement: quieter in a sparse verse, fuller at the climax
+                voice = voice * rise[:len(voice)]
+            return voice, fx.activity(voice, sr, attack=MAKE_WAY[0], release=MAKE_WAY[1])
+        jobs.append(("voice bus", lead_bus))
 
     # The lineage choir, as one group, where it sings; de-essed as the lead is (its voices say each "s" together,
     # and its sends to the room and plate are the biggest)
     choir = _sum(stems, [n for n, r in roles.items() if r == "choir"])
     if choir is not None:
-        where = fx.span(choir, sr)
-        if where.stop - where.start > sr // 2:
-            group = fx.deess(fx.equalize(choir[where], fx.design(CHOIR_EQ, sr)), sr)[0]
-            group = _peaks(_compressed(group, sr, CHOIR_COMP), sr)
-            group = fx.width(group, sr, min(CHOIR_WIDTH * p.width, 1.6))
-            choir = np.zeros((length, 2))
-            choir[where] = _at(group, sr, REFERENCE - CHOIR_UNDER + balance.get("choir", 0.0))
-            if rise is not None:
-                choir[where] *= rise[where]
-        else:
-            choir = None
+        def choir_bus(choir=choir):
+            where = fx.span(choir, sr)
+            if where.stop - where.start > sr // 2:
+                group = fx.deess(fx.equalize(choir[where], fx.design(CHOIR_EQ, sr)), sr)[0]
+                group = _peaks(_compressed(group, sr, CHOIR_COMP), sr)
+                group = fx.width(group, sr, min(CHOIR_WIDTH * p.width, 1.6))
+                choir = np.zeros((length, 2))
+                choir[where] = _at(group, sr, REFERENCE - CHOIR_UNDER + balance.get("choir", 0.0))
+                if rise is not None:
+                    choir[where] *= rise[where]
+                return choir
+            return None
+        jobs.append(("choir bus", choir_bus))
 
     # The band: each instrument to its place, then together.
-    band = np.zeros((length, 2))
-    band_send = np.zeros((length, 2))
-    stepping = np.zeros((length, 2))  # what the instruments that step back under the voice give up
+    strips = {}
     for name, role in roles.items():
         if role in ("voice", "choir"):
             continue
@@ -469,7 +475,22 @@ def mix(stems: dict[str, np.ndarray], sr: int, seed: int = 0, params: MixParams 
             if role in ("drum", "kit"):
                 x = _peaks(x, sr)
             return fx.saturate(x, sr, strip.drive)
-        x = _treated(stems[name][where], channel) * 10.0 ** ((strip.trim + nudge[name]) / 20.0)
+        strips[name] = (strip, where)
+        jobs.append((name, lambda name=name, where=where, strip=strip, channel=channel:
+                     _treated(stems[name][where], channel) * 10.0 ** ((strip.trim + nudge[name]) / 20.0)))
+
+    singing = None
+    band = np.zeros((length, 2))
+    band_send = np.zeros((length, 2))
+    stepping = np.zeros((length, 2))  # what the instruments that step back under the voice give up
+    for name, result in threads.in_order(jobs, first=("voice bus",)):
+        if name == "voice bus":
+            voice, singing = result
+            continue
+        if name == "choir bus":
+            choir = result
+            continue
+        (strip, where), x = strips[name], result
         if taps is not None:
             taps[name] = (where, x)
         band[where] += x
