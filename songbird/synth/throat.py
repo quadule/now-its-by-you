@@ -466,11 +466,25 @@ def _linear(x: np.ndarray, w: dict, name: str) -> np.ndarray:
     return x @ w[f"{name}.weight"].T + w[f"{name}.bias"]
 
 
+# The people's share of every voice: the singer trained on everyone's takes together (source "human", one
+# embedding for all of them; docs/THROAT.md "Everyone's voice") is this much of the machine's default blend and
+# of every machine's own, the rest the synthetic singers' as before. Never more: the consent promises a voice
+# blended from everyone, never set to sound like one person, and at 0.3 it is 70% synthetic by construction.
+HUMAN_SHARE = 0.3
+
+
+def humans(model: Model) -> list[str]:
+    """The model's singers learned from people (source "human"), if any."""
+    sources = model.config.get("sources") or {}
+    return [n for n in model.config["singers"] if sources.get(n) == "human"]
+
+
 def default_mix(model: Model, pitch: float | None = None) -> dict[str, float]:
-    """The trained singers blended by default: every one who sings near this pitch (MIDI; within a
+    """The trained singers blended by default: every synthetic one who sings near this pitch (MIDI; within a
     fifth of their register, the nearer the more), or all of them evenly when the model doesn't know
-    their registers."""
-    names = model.config["singers"]
+    their registers; and the people's singer, where the model has one, at HUMAN_SHARE."""
+    people = humans(model)
+    names = [n for n in model.config["singers"] if n not in people]
     if pitch is not None and model.config.get("registers"):
         away = np.array([abs(pitch - model.config["registers"][n]) for n in names])
         weights = np.clip(1.0 - away / 7.0, 0.0, None)
@@ -478,8 +492,10 @@ def default_mix(model: Model, pitch: float | None = None) -> dict[str, float]:
             weights = (away == away.min()).astype(float)
     else:
         weights = np.ones(len(names))
-    weights = weights / weights.sum()
-    return {n: float(w) for n, w in zip(names, weights) if w > 0}
+    weights = weights / weights.sum() * (1.0 - HUMAN_SHARE if people else 1.0)
+    mix = {n: float(w) for n, w in zip(names, weights) if w > 0}
+    mix.update({n: HUMAN_SHARE / len(people) for n in people})
+    return mix
 
 
 def timbre(model: Model, mix: dict[str, float] | None, pitch: float | None = None) -> np.ndarray:
@@ -529,7 +545,8 @@ def machine_mix(seed: int, pitch: float, model: Model | None = None, most: float
     the trained singers who sing near this pitch (MIDI), never more than `most` of any one of them,
     so no machine is ever one of the synthetic singers it learned from."""
     model = model or load()
-    names = model.config["singers"]
+    people = humans(model)
+    names = [n for n in model.config["singers"] if n not in people]
     registers = model.config.get("registers") or {}
     near = [n for n in names if abs(registers.get(n, pitch) - pitch) <= 7.0] or list(names)
     if len(near) < 2:
@@ -541,7 +558,8 @@ def machine_mix(seed: int, pitch: float, model: Model | None = None, most: float
             break
     else:
         w = np.full(len(near), 1.0 / len(near))
-    return ",".join(f"{n}:{x:.3f}" for n, x in zip(near, w))
+    w = w * (1.0 - HUMAN_SHARE if people else 1.0)  # the people's share first, the machine's own draw in the rest
+    return ",".join([f"{n}:{x:.3f}" for n, x in zip(near, w)] + [f"{n}:{HUMAN_SHARE / len(people):.3f}" for n in people])
 
 
 def predict(model: Model, t: dict, lf0: np.ndarray, singer: np.ndarray, gv: float = 1.0) -> tuple[np.ndarray, np.ndarray]:

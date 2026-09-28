@@ -37,7 +37,8 @@ training. Its numbers and decisions are below where they were used.
 
 ## Where the sound comes from
 
-No recording of any person was used.
+No recording of any person was used for the house model. Since 2026-09-28 the shipped model is that
+model fine-tuned once on the volunteers' takes together (below, "Everyone's voice").
 - **The teacher.** SoulX-Singer (Apache-2.0; a 2.8 GB zero-shot singing model trained on 42,000
   hours of undisclosed singers) sings our own scores. It runs beside the repo and never ships.
 - **Its timbre prompts.** Ten-second clips of seven synthetic singers that Eleven Music made
@@ -320,7 +321,7 @@ songbird/synth/throat.npz is renders/throat/model-house.npz: 886,260 parameters,
 - *The corpus:* SoulX-Singer (Apache-2.0) singing our own scores (every song, H's verse bank, the
   coverage lines; about 143 minutes) in ten timbres. Each timbre was prompted by our own formant
   singer.
-- *Provenance:* every singer in the model's config has source "formant", and no ElevenLabs audio is
+- *Provenance (as first shipped; see "Everyone's voice" for the fine-tune):* every singer in the model's config has source "formant", and no ElevenLabs audio is
   anywhere in its lineage.
 
 | On H | Formant singer | House model |
@@ -409,3 +410,23 @@ noise up there (aperiodicity 0.32 to 0.65 from 2 to 8 kHz against the throat's 0
 and above (`throat.air_floor`); 0.4 by default, chosen by ear ("a bit better, not perfect"). Whisper dry:
 7.5% of H's words without, 8.9% at 0.4, 9.6% at 0.6.
 
+## Everyone's voice (2026-09-28, 01:30)
+
+The consent lets the recordings train the voice once, after singing closed, blended from everyone and
+never set to sound like one person. So: `tools/throat/volunteers.py` and `clean_takes.py` cut the 79
+takes into sung lines by their guides' scores, cancelled the melody guide where it leaked from a speaker,
+gated the room, and kept what the check passed: 13.7 minutes by eight singers, the largest share 26%
+(David), then an open-call singer, Milo, essqao, Gorman, Talia, Geoff and another open-call singer. All
+of them are ONE singer to the network, "volunteers", source "human": there is no per-person embedding
+to find. The house model was fine-tuned 14,000 steps on the house corpus plus those frames (a 4080,
+about 15 minutes; volunteers' held-out loss 0.39) and shipped as songbird/synth/throat.npz.
+
+The people's share is fixed: `throat.HUMAN_SHARE` 0.3 of the machine's default blend and of every
+machine's own draw (`default_mix`, `machine_mix`), the other 0.7 the synthetic singers' as before.
+Against the house voice on H, everyone's way: Whisper dry 8.9% -> 8.7% of words, in the mix 11.0% ->
+10.5%, and the refrain's B4s 2.7 dB softer at 2 to 5 kHz. Measured inside the model (no recording read):
+the shipped blend's vowel envelope sits 0.9 dB RMS from the all-synthetic blend and 2.7 dB from the
+volunteers' singer alone, while each synthetic singer alone sits 1.8 to 2.8 dB from that blend; the
+people's singer alone is 3.4 dB from it. The shipped voice is nearer the synthetic blend than any one
+synthetic singer is, and the people's contribution is itself an average of eight. The training material
+(cut lines, features, datasets, the desktop's copies) is deleted with the recordings by 2026-09-30.
