@@ -359,12 +359,17 @@ The teacher's word-final consonants are soft (singers let them go) and the netwo
 5 ms a frame with a median coda t of 50 ms. What tells a listener a stop is its closure and its
 release, and a weak fricative its hiss, and those are exactly what the formant singer always made
 by rule. So `throat.articulate` lays them over the throat's own: through each stop's closure the
-throat's output is dipped (to 6% for a voiceless stop, 30% for a voiced one, whose voice bar stays),
-then the formant singer's burst (`phonetics.BURSTS`, by place; a velar's following the vowel's F2)
+throat's output is dipped (to 20% for a voiceless stop, 50% for a voiced one, whose voice bar stays),
+then the formant singer's burst (`phonetics.BURSTS`, by place, 3 dB under its levels, each burst its
+own level and length within 1.5 dB and 15% so no two are alike; a velar's following the vowel's F2)
 and, after a voiceless one, its aspiration fading to the stop's end; f, th, v and dh get the formant
-singer's frication 4 to 6 dB over its levels, the voiceless ones with the throat's rumble dipped
-under it; a coda nasal comes up 3 dB. s, sh, z and zh are left to the throat, which sings them
-well. `VoiceParams.crisp` scales all of it (1 as described; 0 the throat alone, as before).
+singer's frication 4 to 6 dB over its levels, the voiceless ones with the throat's rumble dipped to
+half under it; a coda nasal comes up 2 dB. s, sh, z and zh are left to the throat, which sings them
+well. `VoiceParams.crisp` scales all of it (1 as described; 0 the throat alone, as before). The
+first version dipped deeper (6% and 30%) with the bursts at full level; it read the same to Whisper
+(7.3% against 7.1 to 8.2% over the softer settings tried, all within the suite's noise) and the
+artist heard it as better but wanting "to soften or blend them slightly with measured
+pronunciations", so the teacher's own consonant now stays audible under the rule-made one.
 
 Whisper on H, the WER suite's method, two seeds dry and one in the finished mix:
 

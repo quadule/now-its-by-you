@@ -569,11 +569,17 @@ def parse_mix(spec: str | dict | None) -> dict[str, float] | None:
 # the formant singer's bursts and frication (songbird.phonetics BURSTS, FRICATION, as voice.sing lays them)
 # go over the throat's own, its output dipped through each stop's closure and each weak fricative, and a
 # coda nasal comes up a little. voice.crisp scales all of it; 0 leaves the throat as it was.
-CLOSURE_DIP = {True: 0.3, False: 0.06}  # what is left of the throat's output through a voiced / voiceless stop's closure
+# The blend: the throat's own consonant (the teacher's, as measured) stays under the rule-made one. Deeper dips and
+# louder bursts (0.3/0.06, +0 dB) read the same to Whisper (7.3% against 7.1% of H's words misheard, dry) and
+# sounded made; these keep more of the sung consonant (the artist: "soften or blend them slightly with measured
+# pronunciations", 2026-09-27).
+CLOSURE_DIP = {True: 0.5, False: 0.2}  # what is left of the throat's output through a voiced / voiceless stop's closure
+BURST = -3.0  # dB against the formant singer's burst levels (phonetics.BURSTS)
+BURST_SPREAD = (1.5, 0.15)  # dB of level and log length one burst differs from the next, at voice.spread 1 (no two alike)
 ASPIRATION = -8.0  # dB under its burst the aspiration after a voiceless stop's release starts, fading to the stop's end
 WEAK_FRICATIVES = {"F": 6.0, "TH": 6.0, "V": 6.0, "DH": 4.0}  # dB over the formant singer's frication levels
-FRICATIVE_DIP = 0.3  # what is left of the throat's output through a voiceless weak fricative
-NASAL_LIFT = 3.0  # dB a coda nasal comes up
+FRICATIVE_DIP = 0.5  # what is left of the throat's output through a voiceless weak fricative
+NASAL_LIFT = 2.0  # dB a coda nasal comes up
 
 
 def articulate(y: np.ndarray, segs: list, sr: int, voice, rng: np.random.Generator, ref: float) -> np.ndarray:
@@ -612,6 +618,7 @@ def articulate(y: np.ndarray, segs: list, sr: int, voice, rng: np.random.Generat
             env = env * np.clip((t1 - t[lo:hi]) / max(t1 - t0, 1e-3), 0.0, 1.0)
         added[lo:hi] += crisp * ref * 10.0 ** (level_db / 20.0) * amp * env * shaped
 
+    spread = float(getattr(voice, "spread", 0.0))
     for s in segs:
         if s.role not in ("onset", "coda"):
             continue
@@ -623,7 +630,10 @@ def articulate(y: np.ndarray, segs: list, sr: int, voice, rng: np.random.Generat
             if place == "velar":
                 f2 = _locus(s.phone, s)[1]
                 shape = [(f2, 900.0, 0.0), (3600.0, 1500.0, -8.0)]
-            hiss(release, release + (0.008 if voiced else 0.012), shape, level - (3.0 if voiced else 0.0), 0.002, s.amp)
+            z = rng.standard_normal(2) * spread  # each burst its own, a little louder or softer, longer or shorter
+            level = level + BURST - (3.0 if voiced else 0.0) + BURST_SPREAD[0] * float(z[0])
+            length = (0.008 if voiced else 0.012) * float(np.exp(BURST_SPREAD[1] * z[1]))
+            hiss(release, release + length, shape, level, 0.002, s.amp)
             if manner == "affricate":
                 sh_shape, sh_level = ph.FRICATION["ZH" if voiced else "SH"]
                 hiss(release, s.t1, sh_shape, sh_level, 0.01, s.amp)
