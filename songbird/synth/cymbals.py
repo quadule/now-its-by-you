@@ -37,9 +37,10 @@ from dataclasses import dataclass
 
 import numpy as np
 from numba import njit
-from scipy.signal import bilinear, butter, lfilter, sosfilt
+from scipy.signal import bilinear, lfilter, sosfilt
 
 from . import struck
+from .iir import butter
 
 
 @dataclass(frozen=True)

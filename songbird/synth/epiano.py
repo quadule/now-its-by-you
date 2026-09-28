@@ -76,9 +76,10 @@ from __future__ import annotations
 
 import numpy as np
 from numba import njit
-from scipy.signal import butter, sosfilt
+from scipy.signal import sosfilt
 
 from . import modal, osc
+from .iir import butter
 
 SPEC = {
     "epiano": dict(

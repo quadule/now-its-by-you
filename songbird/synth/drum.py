@@ -21,8 +21,10 @@ from __future__ import annotations
 
 import numpy as np
 from numba import njit
-from scipy.signal import butter, sosfilt
+from scipy.signal import sosfilt
 from scipy.special import jn_zeros, jv
+
+from .iir import butter
 
 STROKE_GAIN = {"bass": 1.0, "tip": 0.55, "mute": 0.5, "rim": 0.45}
 

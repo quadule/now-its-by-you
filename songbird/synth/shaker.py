@@ -48,11 +48,12 @@ from __future__ import annotations
 from functools import lru_cache
 
 import numpy as np
-from scipy.signal import butter, sosfilt
+from scipy.signal import sosfilt
 from scipy.special import jv
 
 from . import struck
 from .drum import MODES as MEMBRANE
+from .iir import butter
 from .rattle import HOP, collide, contact, early_power, late, modal_weights, vel_gain
 
 SPEC = {

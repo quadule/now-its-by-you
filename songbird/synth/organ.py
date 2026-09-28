@@ -106,9 +106,10 @@ from dataclasses import dataclass
 
 import numpy as np
 from numba import njit
-from scipy.signal import butter, sosfilt
+from scipy.signal import sosfilt
 
 from . import body, reed, touch
+from .iir import butter
 
 SPEC = {
     "organ": dict(

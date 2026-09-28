@@ -47,9 +47,10 @@ from __future__ import annotations
 from functools import lru_cache
 
 import numpy as np
-from scipy.signal import butter, lfilter, sosfilt
+from scipy.signal import lfilter, sosfilt
 
 from . import struck
+from .iir import butter
 from .rattle import add, burst, contact, early_power, modal_weights, onsets, pan, vel_gain
 
 SPEC = {

@@ -47,11 +47,12 @@ from itertools import combinations
 
 import numpy as np
 from numba import njit
-from scipy.signal import butter, sosfilt
+from scipy.signal import sosfilt
 
 from ..score import Note
 from ..theory import midi_to_hz
 from . import pluck, stringloop
+from .iir import butter
 
 LEGATO = ("hammer", "pull")
 CONTROL = 32  # samples between the loop delay's exact values (linear between)

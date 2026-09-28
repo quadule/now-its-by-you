@@ -71,10 +71,11 @@ from dataclasses import dataclass
 
 import numpy as np
 from numba import njit
-from scipy.signal import butter, oaconvolve, sosfilt
+from scipy.signal import oaconvolve, sosfilt
 
 from ..theory import midi_to_hz
 from . import body, reed
+from .iir import butter
 
 ACCORDION_ARTS = {
     "": "a key or a button, as the note lies: the treble's keys from F3 up; below them the left hand, a lone note "

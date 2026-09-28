@@ -113,9 +113,10 @@ from dataclasses import dataclass
 from functools import lru_cache
 
 import numpy as np
-from scipy.signal import butter, lfilter, oaconvolve, sosfilt
+from scipy.signal import lfilter, oaconvolve, sosfilt
 
 from . import body, modal, touch
+from .iir import butter
 
 SPEC = {
     "vibraphone": dict(

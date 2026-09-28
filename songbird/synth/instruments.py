@@ -41,11 +41,12 @@ from functools import lru_cache
 from pathlib import Path
 
 import numpy as np
-from scipy.signal import butter, sosfilt
+from scipy.signal import sosfilt
 
 from ..score import Note, Score
 from ..theory import midi_to_hz
 from . import body, bowed, drum, pipe, pluck, reed
+from .iir import butter
 
 INSTRUMENTS = ("lute", "guitar", "harp", "bass", "fiddle", "whistle", "drum", "drone")
 

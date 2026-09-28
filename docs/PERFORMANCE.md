@@ -78,6 +78,7 @@ Dry voice: **7.9 s** (`throat.synthesize` 5.9, `predict` 0.86, the pronouncing d
 | change | before | after | hash unchanged |
 |---|---|---|---|
 | Vocoder: an unvoiced pulse's periodic part is no longer made (it was multiplied by 0); the pulses' responses made 512 at a time on up to 8 threads, the random values still drawn 2,048 pulses at a time in the old order, laid into the output in pulse order | voice 7.89 s, synthesize 5.9 s, full 20.3 s | voice 2.80 s (6.16 on one thread), synthesize 0.86 s, full 13.4 s | yes (`b600b712e77a…`; synthesize's output bit for bit on H and 13 edge cases) |
+| Filter designs remembered: `songbird/synth/iir.py`'s `butter` is scipy's, cached by its arguments (a fresh copy each call), imported by every synth module in scipy's place; 3,283 designs in H came down to a few dozen | full 13.4 s (lute 1.20, guitar 1.03, harp 0.97, drone 0.54) | full 12.8 s (lute 0.62, guitar 0.82, harp 0.85, drone 0.48) | yes; `b-refrain` golden too |
 
 ### Notes on the changes
 

@@ -31,10 +31,11 @@ from __future__ import annotations
 from functools import lru_cache
 
 import numpy as np
-from scipy.signal import butter, sosfilt
+from scipy.signal import sosfilt
 
 from ..theory import midi_to_hz
 from . import body, pluck, stringloop
+from .iir import butter
 
 CLASSICAL = body.Body(  # a fan-braced classical guitar: the air near 98 Hz, the top's first modes near 190 and 240
     modes=((98.0, 18.0, 5.0), (190.0, 26.0, 7.0), (240.0, 24.0, 3.5), (390.0, 30.0, 3.0), (560.0, 32.0, 2.5),

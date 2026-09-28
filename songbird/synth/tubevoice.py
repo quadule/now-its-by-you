@@ -28,12 +28,13 @@ from __future__ import annotations
 
 import numpy as np
 from scipy.ndimage import uniform_filter1d
-from scipy.signal import butter, resample_poly, sosfilt
+from scipy.signal import resample_poly, sosfilt
 
 from .. import phonetics as ph
 from ..score import Note
 from . import glottis, tube
 from . import voice as V
+from .iir import butter
 
 OPEN = 1.2  # radius of an unconstricted section, cm
 NASAL_PORT = 0.5  # velar opening for a nasal, cm^2

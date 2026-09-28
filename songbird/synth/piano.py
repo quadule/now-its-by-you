@@ -55,9 +55,10 @@ from __future__ import annotations
 
 import numpy as np
 from numba import njit
-from scipy.signal import butter, oaconvolve, sosfilt
+from scipy.signal import oaconvolve, sosfilt
 
 from . import body, modal
+from .iir import butter
 
 SPEC = {
     "piano": dict(

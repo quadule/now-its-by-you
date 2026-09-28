@@ -26,11 +26,12 @@ from dataclasses import dataclass
 import numpy as np
 from scipy.interpolate import PchipInterpolator
 from scipy.ndimage import uniform_filter1d
-from scipy.signal import butter, fftconvolve, sosfilt
+from scipy.signal import fftconvolve, sosfilt
 
 from .. import phonetics as ph
 from ..score import Note
 from . import glottis, tract
+from .iir import butter
 
 BLOCK = 128
 # F1-F3 move with the vowels; F4 and F5 sit close together (the singer's

@@ -48,9 +48,10 @@ from functools import lru_cache
 
 import numpy as np
 from numba import njit
-from scipy.signal import bilinear, butter, ellip, firwin, oaconvolve, sosfilt, sosfreqz, tf2sos
+from scipy.signal import bilinear, ellip, firwin, oaconvolve, sosfilt, sosfreqz, tf2sos
 
 from . import fx
+from .iir import butter
 
 OS = 4  # oversampling of the nonlinear stages
 TAPS = 65  # the polyphase resampler: flat to 10 kHz, 85 dB down wherever anything could fold back into the band

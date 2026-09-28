@@ -47,11 +47,12 @@ from functools import lru_cache
 
 import numpy as np
 from numba import njit
-from scipy.signal import butter, lfilter, sosfilt
+from scipy.signal import lfilter, sosfilt
 from scipy.special import jn_zeros, jv
 
 from . import cymbals, struck
 from .cymbals import Hit
+from .iir import butter
 from .master import _k_weighting
 
 # --- the drums -----------------------------------------------------------------------------------------

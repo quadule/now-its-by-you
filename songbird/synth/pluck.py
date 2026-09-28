@@ -26,7 +26,9 @@ from functools import lru_cache
 
 import numpy as np
 from numba import njit
-from scipy.signal import butter, lfilter, sosfilt
+from scipy.signal import lfilter, sosfilt
+
+from .iir import butter
 
 LAGRANGE_ORDER = 3
 

@@ -79,9 +79,10 @@ import math
 
 import numpy as np
 from numba import njit
-from scipy.signal import butter, sosfilt
+from scipy.signal import sosfilt
 
 from . import osc
+from .iir import butter
 
 SPEC = {
     "chip": dict(

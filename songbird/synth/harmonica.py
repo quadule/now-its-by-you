@@ -69,10 +69,11 @@ from dataclasses import dataclass, replace
 
 import numpy as np
 from numba import njit
-from scipy.signal import butter, oaconvolve, sosfilt
+from scipy.signal import oaconvolve, sosfilt
 
 from ..theory import midi_to_hz
 from . import body, reed
+from .iir import butter
 
 BLOW = (0, 4, 7, 12, 16, 19, 24, 28, 31, 36)  # semitones above hole 1's blow note, holes 1 to 10
 DRAW = (2, 7, 11, 14, 17, 21, 23, 26, 29, 33)

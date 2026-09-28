@@ -15,7 +15,8 @@ from __future__ import annotations
 import numpy as np
 from numba import njit
 from scipy.ndimage import uniform_filter1d
-from scipy.signal import butter
+
+from .iir import butter
 
 # --- equalizers: RBJ cookbook biquads as second-order sections -----------------
 
