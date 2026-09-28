@@ -12,7 +12,7 @@
     { target: "toFinish", text: "When it's yours, record it: one file that plays anywhere and carries the song on. Help is always at the top." },
   ];
   const $ = (id) => document.getElementById(id);
-  let step = -1;
+  let step = -1, shared = false;
 
   function seen() {
     try { return localStorage.getItem(SEEN) === "1"; } catch (e) { return true; }  // no storage: don't nag
@@ -30,7 +30,9 @@
       remember();
       return;
     }
-    const { target, text } = STEPS[index];
+    const { target } = STEPS[index];
+    // shared for a preview, the version is the serving computer's, not the visitor's
+    const text = index === 0 && shared ? STEPS[0].text.replace("on this computer", "on the computer serving this studio") : STEPS[index].text;
     const el = $(target);
     if (el) {
       el.classList.add("tour-focus");
@@ -68,6 +70,7 @@
   // A first visit gets the walk once the song is on the page; a link into a particular view doesn't.
   document.addEventListener("studio:ready", (event) => {
     const hash = event.detail?.hash || {};
+    shared = !!event.detail?.shared;
     if (seen() || hash.scroll || hash.choose || hash.workspace) return;
     setTimeout(() => { if (!$("help").open) show(0); }, 500);
   });

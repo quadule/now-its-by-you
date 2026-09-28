@@ -1170,6 +1170,7 @@ async function main() {
   if (s.shared) {  // served from someone else's computer for a preview: say so where "this computer" would
     $("whereNote").textContent = "Served from another computer for a short preview. Your changes stay in this browser; recordings are made there.";
     $("localBadge").hidden = false;
+    $("helpShows").textContent = "This studio shows the version the computer serving it makes today, and lets you:";
     $("helpWhere").textContent = "This studio is shared from someone else's computer for a short preview: that computer makes the song, and what you record is saved there too. Download it to keep it. Your changes stay in this browser.";
   }
   $("helpSong").textContent = s.title;
@@ -1194,7 +1195,7 @@ async function main() {
   });
   if (hash.compare !== undefined) loadCompare();
   // the song is on the page: help.js may show a first visit around it
-  if (typeof CustomEvent === "function") document.dispatchEvent?.(new CustomEvent("studio:ready", { detail: { hash } }));
+  if (typeof CustomEvent === "function") document.dispatchEvent?.(new CustomEvent("studio:ready", { detail: { hash, shared: !!s.shared } }));
 }
 
 // The line this version came down: a mark for each version before it (the nearest nine), filled for this one.
