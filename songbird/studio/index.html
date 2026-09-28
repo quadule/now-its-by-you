@@ -11,103 +11,153 @@
 <script src="/author.js" defer></script>
 <script src="/studio.js" defer></script>
 <script src="/drafts.js" defer></script>
+<script src="/help.js" defer></script>
 </head>
 <body>
 <header class="top wrap">
-  <div class="studio-brand"><span class="brand-mark" aria-hidden="true">♪</span><span class="eyebrow">Songbird <span class="brand-divider">/</span> studio</span><span class="local-badge" id="localBadge"><i></i> Local &amp; yours</span></div>
-  <div class="session-heading"><h1 id="title">Your song</h1><span class="session-note">A little song. A world of possibilities.</span></div>
-  <p class="which" id="which">Making your version of the song…</p>
-  <div class="session-toolbar"><div class="actions">
-    <button class="btn primary" id="hearAll" type="button">
-      <svg class="icon" viewBox="0 0 16 16" aria-hidden="true"><path d="M4 2.5v11l9-5.5z" fill="currentColor"/></svg>
-      Hear the song
-    </button>
-    <button class="btn" id="roll" type="button" title="Draw the small details of the performance again: every strum, breath and ornament">
+  <div class="studio-brand">
+    <span class="eyebrow">Songbird <span class="brand-divider">·</span> studio</span>
+    <span class="local-badge" id="localBadge" hidden>Shared preview</span>
+    <button class="btn quiet help-open" id="helpOpen" type="button" aria-haspopup="dialog">
+      <span class="help-mark" aria-hidden="true">?</span> Help</button>
+  </div>
+  <h1 id="title">Your song</h1>
+  <div class="which-row">
+    <p class="which" id="which">Making your version of the song…</p>
+    <details class="whatis">
+      <summary title="What is this?"><span class="sr-only">What is this?</span></summary>
+      <div>This song comes out a little different on every computer and every day. This is the version this computer makes today. Nothing you change here changes the song for anyone else until you record it.</div>
+    </details>
+  </div>
+
+  <div class="session-toolbar">
+    <div class="actions">
+      <button class="btn primary" id="hearAll" type="button">
+        <svg class="icon" viewBox="0 0 16 16" aria-hidden="true"><path d="M4 2.5v11l9-5.5z" fill="currentColor"/></svg>
+        Hear the song
+      </button>
+      <button class="btn" id="toFinish" type="button">
+        <svg class="icon" viewBox="0 0 16 16" aria-hidden="true"><circle cx="8" cy="8" r="5" fill="currentColor"/></svg>
+        <span id="toFinishLabel">Record it</span>
+      </button>
+    </div>
+    <div class="edit-history" role="group" aria-label="Edit history">
+      <span class="hint" id="historyStatus" role="status">Your edits stay in this browser</span>
+      <button class="btn quiet" id="undoEdit" type="button" disabled title="Undo (⌘/Ctrl Z)">↶ Undo</button>
+      <button class="btn quiet" id="redoEdit" type="button" disabled title="Redo (⌘/Ctrl Shift Z)">↷ Redo</button>
+    </div>
+  </div>
+  <div class="simple-changes" id="simpleChanges">
+    <div id="sessionControls" class="session-controls" aria-label="Song settings"></div>
+    <button class="btn quiet" id="roll" type="button" title="Play it again with every strum, breath and ornament drawn afresh">
       <svg class="icon" viewBox="0 0 16 16" aria-hidden="true"><rect x="2" y="2" width="12" height="12" rx="3" fill="none" stroke="currentColor" stroke-width="1.5"/><circle cx="5.5" cy="5.5" r="1.2" fill="currentColor"/><circle cx="10.5" cy="10.5" r="1.2" fill="currentColor"/><circle cx="8" cy="8" r="1.2" fill="currentColor"/></svg>
       New performance
     </button>
     <span class="hint" id="draw"></span>
-  </div><div class="edit-history" role="group" aria-label="Edit history">
-    <span class="hint" id="historyStatus" role="status">Your edits stay on this computer</span>
-    <button class="btn quiet" id="undoEdit" type="button" disabled title="Undo (⌘/Ctrl Z)">↶ Undo</button>
-    <button class="btn quiet" id="redoEdit" type="button" disabled title="Redo (⌘/Ctrl Shift Z)">↷ Redo</button>
-  </div></div>
-  <div id="sessionControls" class="session-controls" aria-label="Song settings"></div>
+  </div>
   <div class="yours-bar" id="yoursBar" hidden></div>
   <div class="problems-bar" id="problemsBar" hidden></div>
 </header>
 
 <main class="wrap">
-  <div class="workspace-nav"><div class="workspace-tabs" id="studioTabs" role="tablist" aria-label="Studio workspace">
-    <button type="button" role="tab" id="tab-arrange" data-workspace="arrange" aria-controls="workspace-arrange" aria-selected="true">Arrange <span>01</span></button>
-    <button type="button" role="tab" id="tab-words" data-workspace="words" aria-controls="workspace-words" aria-selected="false" tabindex="-1">Words <span>02</span></button>
-    <button type="button" role="tab" id="tab-sound" data-workspace="sound" aria-controls="workspace-sound" aria-selected="false" tabindex="-1">Sound <span>03</span></button>
-    <button type="button" role="tab" id="tab-explore" data-workspace="explore" aria-controls="workspace-explore" aria-selected="false" tabindex="-1">Explore <span>04</span></button>
-  </div><div class="draft-actions"><button class="link small" type="button" id="openDraft">Open draft</button><button class="btn quiet" type="button" id="saveDraft">Save draft <span aria-hidden="true">↓</span></button><input type="file" id="draftFile" accept=".json,application/json" hidden aria-label="Open a Songbird draft"></div></div>
+  <div class="workspace-nav"><div class="workspace-tabs" id="studioTabs" role="tablist" aria-label="Go deeper">
+    <button type="button" role="tab" id="tab-words" data-workspace="words" aria-controls="workspace-words" aria-selected="true">Words</button>
+    <button type="button" role="tab" id="tab-arrange" data-workspace="arrange" aria-controls="workspace-arrange" aria-selected="false" tabindex="-1">Tune</button>
+    <button type="button" role="tab" id="tab-sound" data-workspace="sound" aria-controls="workspace-sound" aria-selected="false" tabindex="-1">Sound</button>
+    <button type="button" role="tab" id="tab-explore" data-workspace="explore" aria-controls="workspace-explore" aria-selected="false" tabindex="-1">Other versions</button>
+  </div></div>
 
-  <div id="workspace-arrange" data-workspace-panel="arrange" role="tabpanel" aria-labelledby="tab-arrange">
-    <div id="studio-composer"><div class="composer-loading"><span class="eyebrow">Your musical workbench</span><h2>Laying out the song…</h2><p class="hint">Arrange the sections, shape the tune, and find your own way through it.</p></div></div>
-  </div>
-  <div id="workspace-words" data-workspace-panel="words" role="tabpanel" aria-labelledby="tab-words" hidden>
-    <div class="workspace-intro"><div><span class="eyebrow">Tell your version</span><h2>Every word has a place.</h2></div><p>Choose alternate words right in the lines. The song keeps the rhythm and rhyme together.</p></div>
-    <section class="panel" aria-labelledby="wordsTitle">
-      <h2 id="wordsTitle">The words <span class="aside hint" id="wordsAside"></span></h2>
+  <div id="workspace-words" data-workspace-panel="words" role="tabpanel" aria-labelledby="tab-words">
+    <section class="panel sheet" aria-labelledby="wordsTitle">
+      <div class="area-head">
+        <h2 id="wordsTitle">The words</h2>
+        <details class="whatis">
+          <summary title="What is this?"><span class="sr-only">What is this?</span></summary>
+          <div>The words this version sings. <b>Underlined words</b> can change: pick another and the tune keeps its syllables. Under each verse you can also write your own lines, if they fit the notes. ▶ plays that part, sung.</div>
+        </details>
+      </div>
       <div class="words" id="words"></div>
     </section>
   </div>
-  <div id="workspace-sound" data-workspace-panel="sound" role="tabpanel" aria-labelledby="tab-sound" hidden>
-    <div class="workspace-intro"><div><span class="eyebrow">Find the feeling</span><h2>Your band. Your room.</h2></div><p>Shape the pace, players, and character. Open a card’s story to see where its choices came from.</p></div>
-    <div aria-label="The choices, and why they were made">
-      <div class="cards" id="cards"></div>
+
+  <div id="workspace-arrange" data-workspace-panel="arrange" role="tabpanel" aria-labelledby="tab-arrange" hidden>
+    <div class="area-head">
+      <h2>The tune</h2>
+      <details class="whatis">
+        <summary title="What is this?"><span class="sr-only">What is this?</span></summary>
+        <div><p>The song's parts in order, and the melody of each. Drag a part to move it, or pick one to see its notes.</p>
+          <p>Drag a note up or down to change its pitch, sideways to move it, or by its right edge to change its length. Arrow keys nudge a selected note; Shift with ← → changes its length. A phrase you change changes everywhere it's sung, and its last note keeps its place in the scale.</p>
+          <p><b>Play sketch</b> plays a plain guide at once. <b>Hear sung section</b> makes the singer and band sing it, which takes a few seconds.</p></div>
+      </details>
     </div>
+    <div id="studio-composer"><div class="composer-loading"><p class="hint">Laying out the song…</p></div></div>
+  </div>
+
+  <div id="workspace-sound" data-workspace-panel="sound" role="tabpanel" aria-labelledby="tab-sound" hidden>
+    <div class="area-head">
+      <h2>The sound</h2>
+      <details class="whatis">
+        <summary title="What is this?"><span class="sr-only">What is this?</span></summary>
+        <div>Who plays, how fast, the room and the singer. Each card shows what this version chose; change it if you like. <b>How this choice works</b> says why it was chosen: this computer, the time of year, chance, or the version before.</div>
+      </details>
+    </div>
+    <div class="cards" id="cards" aria-label="The choices, and why they were made"></div>
   </div>
 
   <div id="workspace-explore" data-workspace-panel="explore" role="tabpanel" aria-labelledby="tab-explore" hidden>
-  <div class="workspace-intro"><div><span class="eyebrow">Let the song wander</span><h2>A song that keeps becoming.</h2></div><p>Travel through time or hear another machine’s take. Your own choices stay with you.</p></div>
-  <section class="panel" aria-labelledby="timeTitle">
-    <h2 id="timeTitle">Through time <span class="aside hint">three years back to three years on</span></h2>
-    <p class="hint">Your machine's song changes a little from day to day, more from month to month and most from year to year. Move through time to see and hear how.</p>
-    <div id="timeline" class="timeline-box"><p class="hint">Drawing six years of your machine's song…</p></div>
-    <div class="slider">
-      <input type="range" id="day" min="-1095" max="1095" step="1" value="0" aria-label="The day the song is sung">
-      <div class="ends"><span>3 years ago</span><span id="dayLabel" class="when">today</span><span>in 3 years</span></div>
-      <div class="steps" role="group" aria-label="Move through time">
-        <button class="chip" type="button" data-step="-365">‹ year</button>
-        <button class="chip" type="button" data-step="-30">‹ month</button>
-        <button class="chip" type="button" data-step="-1">‹ day</button>
-        <button class="chip" type="button" data-step="0">today</button>
-        <button class="chip" type="button" data-step="1">day ›</button>
-        <button class="chip" type="button" data-step="30">month ›</button>
-        <button class="chip" type="button" data-step="365">year ›</button>
+    <section class="panel" aria-labelledby="timeTitle">
+      <div class="area-head">
+        <h2 id="timeTitle">Through time</h2>
+        <details class="whatis">
+          <summary title="What is this?"><span class="sr-only">What is this?</span></summary>
+          <div>The song changes a little from day to day, more from month to month and most from year to year. Move through three years back and three on to see and hear how. Your own changes stay put.</div>
+        </details>
       </div>
-    </div>
-  </section>
+      <div id="timeline" class="timeline-box"><p class="hint">Drawing six years of the song…</p></div>
+      <div class="slider">
+        <input type="range" id="day" min="-1095" max="1095" step="1" value="0" aria-label="The day the song is sung">
+        <div class="ends"><span>3 years ago</span><span id="dayLabel" class="when">today</span><span>in 3 years</span></div>
+        <div class="steps" role="group" aria-label="Move through time">
+          <button class="chip" type="button" data-step="-365">‹ year</button>
+          <button class="chip" type="button" data-step="-30">‹ month</button>
+          <button class="chip" type="button" data-step="-1">‹ day</button>
+          <button class="chip" type="button" data-step="0">today</button>
+          <button class="chip" type="button" data-step="1">day ›</button>
+          <button class="chip" type="button" data-step="30">month ›</button>
+          <button class="chip" type="button" data-step="365">year ›</button>
+        </div>
+      </div>
+    </section>
 
-  <section class="panel" aria-labelledby="othersTitle" data-gap="18">
-    <h2 id="othersTitle">Other machines <span class="aside hint">the same song, from the same version, on the same day</span></h2>
-    <div class="compare-wrap" id="compare"><p class="hint">Asking other machines…</p></div>
-    <form class="make-up" id="makeUp">
-      <label class="hint" for="machineName">Make up a machine:</label>
-      <input id="machineName" placeholder="any name" autocomplete="off" maxlength="24">
-      <button class="btn quiet" type="submit">Add it</button>
-      <span class="hint">The same name always makes the same machine.</span>
-    </form>
-  </section>
-
+    <section class="panel" aria-labelledby="othersTitle" data-gap="18">
+      <div class="area-head">
+        <h2 id="othersTitle">Other computers</h2>
+        <details class="whatis">
+          <summary title="What is this?"><span class="sr-only">What is this?</span></summary>
+          <div>The same song, from the same version, on the same day, as other computers would sing it. These are made up: type any name and the same name always makes the same one. ▶ plays theirs.</div>
+        </details>
+      </div>
+      <div class="compare-wrap" id="compare"><p class="hint">Asking other computers…</p></div>
+      <form class="make-up" id="makeUp">
+        <label class="sr-only" for="machineName">Make up a computer</label>
+        <input id="machineName" placeholder="Make one up: any name" autocomplete="off" maxlength="24">
+        <button class="btn quiet" type="submit">Add</button>
+      </form>
+    </section>
   </div>
 
-  <details class="finish-panel">
-  <summary><span><span class="finish-dot" aria-hidden="true"></span> Record &amp; pass it on</span><span class="hint">The studio travels inside your audio file <span aria-hidden="true">↗</span></span></summary>
+  <details class="finish-panel" id="finishPanel">
+  <summary><span class="finish-title">Sing, record &amp; pass it on</span><span class="hint">when you're ready</span></summary>
   <div class="two">
     <section class="panel" aria-labelledby="singTitle">
       <h2 id="singTitle">Sing it</h2>
-      <p>Sing along, and the song learns a little of your timing and inflection. Your recording stays on this computer; only a few numbers about how you sang go into the song, and never your name unless you ask.</p>
+      <p>Sing along, and the song learns a little of your timing and inflection. Your recording stays on this computer; only a few numbers about how you sang go into the song.</p>
       <div class="actions"><button class="btn" id="sing" type="button">Open the singing page</button></div>
       <p class="hint" id="singNote"></p>
     </section>
     <section class="panel" id="recordPanel" aria-labelledby="recordTitle">
       <h2 id="recordTitle">Record it</h2>
-      <p>Makes the finished recording and its record, with every choice you made marked as yours.</p>
+      <p>Makes the finished song as one file. It plays anywhere, and it carries the program that sang it, so anyone can run it to make the next version. Your choices are marked as yours; your name never is.</p>
       <div class="actions"><button class="btn primary" id="record" type="button">
         <svg class="icon" viewBox="0 0 16 16" aria-hidden="true"><circle cx="8" cy="8" r="5" fill="currentColor"/></svg>
         Record it</button></div>
@@ -115,7 +165,12 @@
       <p class="hint" id="packetNote"></p>
     </section>
   </div>
-
+  <div class="keep-for-later">
+    <span class="hint">Finish later somewhere else:</span>
+    <button class="link small" type="button" id="saveDraft">Save your changes as a file</button>
+    <button class="link small" type="button" id="openDraft">Open a saved file</button>
+    <input type="file" id="draftFile" accept=".json,application/json" hidden aria-label="Open a Songbird draft">
+  </div>
   </details>
 
   <footer><span>Made here. Heard anywhere.</span><span id="whereNote">Nothing on this page leaves this computer.</span></footer>
@@ -128,7 +183,7 @@
     </button>
     <div class="what">
       <div class="title" id="nowTitle">Nothing playing</div>
-      <div class="sub" id="nowSub">Press a play button beside any part of the song.</div>
+      <div class="sub" id="nowSub">Press Hear the song, or ▶ beside any part.</div>
       <div class="bar" id="bar"><div id="barFill"></div></div>
     </div>
     <div class="time" id="nowTime"></div>
@@ -138,6 +193,34 @@
     </button>
   </div>
 </div>
+
+<dialog class="help" id="help" aria-labelledby="helpTitle">
+  <form method="dialog" class="help-close"><button class="btn quiet" type="submit" aria-label="Close help">✕</button></form>
+  <h2 id="helpTitle">What is this?</h2>
+  <p><b id="helpSong">This song</b> is a folk song that changes as it's passed on. Each copy is a sound file that also carries the program that sings it.</p>
+  <p>This studio shows the version this computer makes today, and lets you:</p>
+  <ul>
+    <li><b>Hear it.</b> ▶ Hear the song. The first time takes a little while.</li>
+    <li><b>Change something.</b> The key, scale and tempo at the top; other words in <i>Words</i>; the melody in <i>Tune</i>; the band and room in <i>Sound</i>. Undo takes anything back.</li>
+    <li><b>Wander.</b> <i>Other versions</i> shows other days and other computers.</li>
+    <li><b>Pass it on.</b> Record it: one file to share. Anyone can run it with Python to make the next version, with yours as its parent.</li>
+  </ul>
+  <p id="helpWhere">Your changes stay in this browser. Nothing is sent anywhere.</p>
+  <p class="hint">Not sure what something is? Press the <span class="help-mark" aria-hidden="true">?</span> beside it.</p>
+  <div class="actions"><button class="btn" id="tourAgain" type="button">Show me around</button></div>
+</dialog>
+
+<div class="tour" id="tour" role="dialog" aria-modal="false" aria-labelledby="tourText" hidden>
+  <p class="tour-step" id="tourStep"></p>
+  <p id="tourText"></p>
+  <div class="tour-actions">
+    <button class="link small" type="button" id="tourSkip">Skip</button>
+    <span class="grow"></span>
+    <button class="btn quiet" type="button" id="tourBack">Back</button>
+    <button class="btn primary" type="button" id="tourNext">Next</button>
+  </div>
+</div>
+
 <div class="toast" id="toast" role="status" aria-live="polite"></div>
 <audio id="audio" preload="auto"></audio>
 </body>

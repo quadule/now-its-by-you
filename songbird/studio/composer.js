@@ -308,8 +308,8 @@
         checkbox("Loop", state.loop, (value) => { state.loop = value; }),
         checkbox("Click", state.metronome, (value) => { state.metronome = value; if (state.playback) { stop(); play(); } })),
       el("div", { class: "sbc-transport-meta" }, el("span", { class: "sbc-tempo" }, `${Math.round(c.tempo)} `, el("span", {}, "BPM")),
-        button("Hear sung section", () => { stop(); bridge().listen?.("you", section()?.index ?? state.section); }, { class: "sbc-button sbc-quiet" })),
-      el("p", { class: "sbc-transport-note" }, "Sketch plays an instant melody guide. Hear sung section renders your voice and band."));
+        // what the two players are is said on demand, in the tune's "What is this?" (index.html)
+        button("Hear sung section", () => { stop(); bridge().listen?.("you", section()?.index ?? state.section); }, { class: "sbc-button sbc-quiet" })));
   }
   function phraseStrip() {
     const s = section();
@@ -493,7 +493,6 @@
         button("Even rhythm", evenRhythm, { title: "Spread the existing syllables evenly across their current phrase span" }),
         button("Restore phrase", () => { state.note = null; commit(p.path || `tune.${p.id}`, null); }, { class: "sbc-button sbc-quiet", title: "Remove your melody override and restore this song’s inherited phrase" })),
       health(),
-      el("p", { class: "sbc-editor-help" }, "Drag notes in time or pitch. Arrow keys nudge; Shift + ←/→ changes length. The ending keeps its scale degree, and syllables stay in order."),
       el("p", { id: "sbc-drag-value", class: "sbc-visually-hidden", "aria-live": "off" }));
   }
 

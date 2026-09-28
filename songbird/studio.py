@@ -78,7 +78,8 @@ STATIC = {"/studio.css": ("studio.css", "text/css; charset=utf-8"),
           "/composer.js": ("composer.js", "text/javascript; charset=utf-8"),
           "/drafts.js": ("drafts.js", "text/javascript; charset=utf-8"),
           "/author.js": ("author.js", "text/javascript; charset=utf-8"),
-          "/studio.js": ("studio.js", "text/javascript; charset=utf-8")}
+          "/studio.js": ("studio.js", "text/javascript; charset=utf-8"),
+          "/help.js": ("help.js", "text/javascript; charset=utf-8")}
 
 
 # ---------------------------------------------------------------- where the song and its parent come from

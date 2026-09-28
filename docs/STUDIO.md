@@ -63,14 +63,31 @@ records what `songbird render --parent THE_PACKET --machine here --date
 
 ## The musical workbench
 
-The studio opens in **Arrange**. Four workspaces keep the editing surface focused:
-Arrange, Words, Sound, and Explore. Key, scale, tempo, the song's length (the
-realized score's, the last chord's ring included), full sung playback,
-performance redraw, undo and redo remain available above them. The bottom player
-always provides playback and recording. **Record & pass it on** opens the singing
-and export details without placing them in the middle of the score.
+The first screen holds only what matters most: **Hear the song**, a few simple
+changes (key, scale, tempo, a new performance), undo and redo, **Record it**
+(or **Sing or record**, where the singing page exists), and **Help**. Everything
+else is a step deeper, in four areas under them, opening on the words: **Words**,
+**Tune** (the arrangement and melody editor, called Arrange in the code and in
+links), **Sound** and **Other versions** (time and other computers). The bottom
+player always plays and records. **Sing, record & pass it on**, at the foot,
+holds singing, recording and saving the changes as a draft file.
 
-### Arrange
+Help is there when asked for and quiet otherwise (the artist: "Labeling
+everything makes it busy and confusing"):
+
+- a **?** beside each area (and beside the line saying which version this
+  is) opens two or three sentences on what it is; the longer notes that used
+  to sit under the controls (how the sketch differs from the sung preview,
+  the keyboard for notes, what mute and solo do, how a style moves) live
+  there, or in each card's *How this choice works*;
+- the **Help** button (or the ? key) opens the whole studio in plain words,
+  with **Show me around**;
+- a first visit is walked through four steps, each pointing at one thing:
+  hear it, change something simple, go deeper, record it. It is shown once
+  per browser (and never on a link into a particular view), and Skip or Esc
+  ends it. songbird/studio/help.js has both.
+
+### Tune (Arrange)
 
 A full-song overview shows every section, in proportion to its musical length.
 Select one to open it; the scrollable detail strip underneath shows its miniature
@@ -144,7 +161,7 @@ the previous band mix when released. Solo leaves the singer audible. A solo or a
 batch of mix changes is one undoable edit. A new style brings its own instruments,
 pace, feel and arrangement options.
 
-### Explore
+### Other versions (Explore)
 
 The existing six-year timeline, day/month/year controls, and other-machine
 comparison live here. Your explicit edits remain in place while the machine and
@@ -161,8 +178,8 @@ retained across reloads, so tomorrow opens on tomorrow. Undo/redo covers note dr
 word changes, arrangements and mixer actions (100 steps during the current visit).
 Cmd/Ctrl+Z works outside text fields; text fields keep their own editing history.
 
-**Save draft** downloads a small `.songbird.json` file with the song's fingerprint
-and edit map. **Open draft** validates the file and its edits before replacing the
+**Save your changes as a file** (a draft, under Sing, record & pass it on) downloads a small `.songbird.json` file with the song's fingerprint
+and edit map. **Open a saved file** validates the file and its edits before replacing the
 current draft; opening is itself undoable. Drafts contain no audio or software,
 and belong to the exact song genome they were written for. They are useful for
 saving alternatives while the finished FLAC remains the complete portable artifact.

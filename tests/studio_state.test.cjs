@@ -262,7 +262,7 @@ test('Sound shape controls defer to a custom arrangement and release it in one u
   const tree = run('shapeControls');
   const nodes = (node) => typeof node === 'object' ? [node, ...node.children.flatMap(nodes)] : [];
   const buttons = nodes(tree).filter((node) => node.tagName === 'BUTTON');
-  assert.deepEqual(buttons.map((node) => node.children.join('')), ['Open Arrange', "Use the song's shape"]);
+  assert.deepEqual(buttons.map((node) => node.children.join('')), ['Open Tune', "Use the song's shape"]);
   assert.ok(buttons.every((node) => !Object.hasOwn(node, 'aria-pressed')));
   buttons[1].listeners.click();
   assert.deepEqual(plain(run('state.edits')), { 'form.order': null, tempo: 100, 'lyrics.verse:0.0': 'My line' });

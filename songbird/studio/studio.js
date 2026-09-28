@@ -10,7 +10,7 @@ const state = {
   start: null, view: null, timeline: null, edits: {}, open: {}, choose: null, options: null,
   names: [], compare: null, busy: 0, playing: null, poll: null, recordJob: null,
   optionsByKey: {}, optionsFailed: false, undo: [], redo: [], editRevision: 0, refreshSerial: 0,
-  historyGroup: null, workspace: "arrange", saveStatus: "Saved in this browser", playerSub: "",
+  historyGroup: null, workspace: "words", saveStatus: "Saved in this browser", playerSub: "",
   solo: null, mutedLevels: {},
 };
 
@@ -294,7 +294,6 @@ function renderWords() {
   const focusKey = box.contains(active) ? active.dataset.focus : null;
   const opened = new Set([...box.querySelectorAll("details[open]")].map((d) => d.dataset.section));
   box.replaceChildren();
-  $("wordsAside").textContent = "Choose highlighted words in place. The melody keeps their syllables singable.";
   for (const w of v.words) {
     const ready = v.listen.ready.includes(v.listen.sections[w.index]);
     const play = h("button", { class: `play${ready ? " ready" : ""}`, type: "button", "aria-label": `Play ${w.label}`,
@@ -536,9 +535,11 @@ function renderCards() {
       (c.problems || []).map((p) => h("p", { class: "problem" }, `Couldn't keep your ${describePath(p.path).replace(/^your /, "")}: ${p.why}.`)));
     const controls = editor(c);
     if (controls) card.append(h("div", { class: "card-controls" }, controls));
-    if (c.detail || c.lines || c.reasons?.length) {
+    // A control's longer notes are read on demand, with the card's story, not all at once.
+    const notes = controls?.querySelectorAll ? [...controls.querySelectorAll(".aside-note")] : [];
+    if (c.detail || c.lines || c.reasons?.length || notes.length) {
       const d = h("details", { class: "card-context", "data-card": c.id }, h("summary", {}, "How this choice works"),
-        c.detail ? h("div", { class: "detail" }, c.detail) : null,
+        notes, c.detail ? h("div", { class: "detail" }, c.detail) : null,
         c.lines ? h("ul", { class: "machine-lines" }, c.lines.map((l) => h("li", {}, l))) : null, reasonsOf(c));
       d.open = openNow.has(c.id) || !!state.open[c.id];
       d.addEventListener("toggle", () => { state.open[c.id] = d.open; });
@@ -677,17 +678,17 @@ function editor(c) {
       return h("div", {},
         chips("The key's note", notes, c.tonic, (m) => setEdit("tonic", m), { text: b.tonic.names }),
         chips("Its mode", b.mode.options, c.mode, (m) => setEdit("mode", m), { text: b.mode.names, title: b.mode.glosses }),
-        h("p", { class: "hint" }, "A minor mode leans the words darker, as the machine's own would."));
+        h("p", { class: "hint aside-note" }, "A minor mode leans the words darker, as the machine's own would."));
     }
     case "tempo":
       return slider("Beats a minute", "tempo", c.tempo, b.tempo, (x) => `${Number(x).toFixed(0)}`, ["slower", "quicker"]);
     case "shape": {
       const arranged = !!v.composition?.arranged;
       if (arranged || !Object.keys(c.parts || {}).length) return h("div", {},
-        h("p", { class: "hint" }, "This section arrangement is edited in Arrange."
+        h("p", { class: "hint" }, "The order of the parts is edited in Tune."
           + (arranged ? " Use the song's shape to choose verse counts and optional sections here again." : "")),
         h("div", { class: "actions" },
-          h("button", { class: "btn quiet", type: "button", onclick: () => showWorkspace("arrange") }, "Open Arrange"),
+          h("button", { class: "btn quiet", type: "button", onclick: () => showWorkspace("arrange") }, "Open Tune"),
           arranged ? h("button", { class: "btn quiet", type: "button", onclick: () => {
             const next = copyEdits();
             for (const path of Object.keys(next)) if (path.startsWith("form.")) delete next[path];
@@ -721,8 +722,8 @@ function editor(c) {
         slider("How busy", "band.density", band.density, b["band.density"], (x) => `${Math.round(x * 100)}%`, ["sparse", "busy"]),
         slider("How bright", "band.brightness", band.brightness, b["band.brightness"], (x) => `${Math.round(x * 100)}%`, ["dark and soft", "bright"]),
         bandMixer(c),
-        h("p", { class: "hint" }, "M mutes a player. S isolates a player in the band; click again to restore the mix. The singer stays audible."),
-        h("p", { class: "hint" }, c.styled ? "The style chooses who plays and who leads; change the style to change the band. With nobody playing, the voice sings alone."
+        h("p", { class: "hint aside-note" }, "M mutes a player. S isolates a player in the band; click again to restore the mix. The singer stays audible."),
+        h("p", { class: "hint aside-note" }, c.styled ? "The style chooses who plays and who leads; change the style to change the band. With nobody playing, the voice sings alone."
           : "With nobody playing, the voice sings alone."));
     }
     case "style": {
@@ -734,7 +735,7 @@ function editor(c) {
         chips("Backing voices", Object.keys(c.backings), st.backing, (x) => setEdit("style.backing", x), { text: c.backings }),
         chips("The last refrain", ["lift", "no lift"], st.lift ? "lift" : "no lift", (x) => setEdit("style.lift", x === "lift"),
           { text: { "lift": "a whole step up", "no lift": "in the same key" } }),
-        h("p", { class: "hint" }, "A style brings its own band, its pace and its feel; a version moves one style at a time, so its children will drift back toward your machine's."));
+        h("p", { class: "hint aside-note" }, "A style brings its own band, its pace and its feel; a version moves one style at a time, so its children will drift back toward your machine's."));
     }
     case "mix": {
       const m = c.mix;
@@ -743,7 +744,7 @@ function editor(c) {
         slider("How wide", "mix.width", m.width, b["mix.width"], (x) => `${Math.round(x * 100)}%`, ["narrow", "wide"]),
         slider("The voice over the band", "mix.forward", m.forward, b["mix.forward"], (x) => `${Number(x).toFixed(1)} dB`, ["among it", "well over it"]),
         slider("How close the singer is", "mix.intimacy", m.intimacy, b["mix.intimacy"], (x) => `${Math.round(x * 100)}%`, ["further back", "at your ear"]),
-        h("p", { class: "hint" }, "Judge the voice against the band on the whole song: a part heard alone is levelled for listening."));
+        h("p", { class: "hint aside-note" }, "Judge the voice against the band on the whole song: a part heard alone is levelled for listening."));
     }
     case "singer": {
       const box = h("div", {}, h("p", { class: "hint" }, "The singer is your machine's own voice, the same in every song it sings. What you can give it is your way of singing."));
@@ -762,7 +763,7 @@ function editor(c) {
     }
     case "words":
       return h("div", {},
-        h("p", { class: "hint" }, "Choose any verse, couplet or word in the words themselves. Or hold every word as it is now, so that moving through time and rolling chance change only the music."),
+        h("p", { class: "hint" }, "Hold every word as it is now, so that time and chance change only the music."),
         h("button", { class: "btn", type: "button", onclick: keepWords }, "Keep these words"));
     case "variants":
       if (!c.variants || !c.variants.length) return null;
@@ -914,7 +915,7 @@ function renderCompare() {
       h("button", { class: "play", type: "button", "aria-label": `Play ${m.name}'s whole song`, onclick: () => listen(m.who, null) }, playIcon()))))),
     h("tbody", {}, names.map((name) => h("tr", {}, h("td", { class: "rowname" }, name),
       rows.map((m, i) => h("td", { class: i && m.rows[name] !== rows[0].rows[name] ? "differs" : null }, m.rows[name]))))));
-  $("compare").replaceChildren(table, h("p", { class: "hint" }, "Yours includes the choices you made; theirs are their own. Differences are marked."));
+  $("compare").replaceChildren(table, h("p", { class: "hint" }, "Where theirs differs from yours, it is marked."));
 }
 
 // ------------------------------------------------------------------ listening
@@ -1168,13 +1169,16 @@ async function main() {
   $("packetNote").textContent = s.packet;
   if (s.shared) {  // served from someone else's computer for a preview: say so where "this computer" would
     $("whereNote").textContent = "Served from another computer for a short preview. Your changes stay in this browser; recordings are made there.";
-    $("localBadge").replaceChildren(h("i"), " Shared preview");
+    $("localBadge").hidden = false;
+    $("helpWhere").textContent = "This studio is shared from someone else's computer for a short preview: that computer makes the song, and what you record is saved there too. Download it to keep it. Your changes stay in this browser.";
   }
+  $("helpSong").textContent = s.title;
   $("singNote").textContent = s.sing.available ? "" : s.sing.why;
   $("sing").disabled = !s.sing.available;
+  $("toFinishLabel").textContent = s.sing.available ? "Sing or record" : "Record it";
   $("day").min = -s.days;
   $("day").max = s.days;
-  showWorkspace(hash.workspace || "arrange");
+  showWorkspace(hash.workspace || "words");
   await refresh();
   if (hash.choose && state.view) {
     const [block, nth] = hash.choose.split(".");
@@ -1188,6 +1192,8 @@ async function main() {
     $("timeline").replaceChildren(h("p", { class: "hint" }, "The timeline couldn't be drawn."));
   });
   if (hash.compare !== undefined) loadCompare();
+  // the song is on the page: help.js may show a first visit around it
+  if (typeof CustomEvent === "function") document.dispatchEvent?.(new CustomEvent("studio:ready", { detail: { hash } }));
 }
 
 function setDayQuiet(offset) {
@@ -1227,6 +1233,12 @@ $("hearAll").addEventListener("click", () => listen("you", null));
 $("roll").addEventListener("click", () => setEdit("roll", (state.edits.roll || 0) + 1));
 $("record").addEventListener("click", record);
 $("recordNow").addEventListener("click", record);
+$("toFinish").addEventListener("click", () => {
+  // what singing and recording are, and the button that does it: opened, not started, from the top
+  const panel = $("finishPanel");
+  panel.open = true;
+  panel.scrollIntoView({ behavior: "smooth", block: "start" });
+});
 $("sing").addEventListener("click", sing);
 $("day").addEventListener("input", (ev) => {
   const offset = Number(ev.target.value);
