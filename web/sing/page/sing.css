@@ -180,6 +180,8 @@ details.listen label.speaker { display: flex; gap: 8px; align-items: center; mar
 .disclosure > h2 { font-size: 17px; margin: 0 0 8px; }
 .disclosure > p { margin: 0; font-size: 16px; }
 
-/* the seed page: how to run it, set in the typewriter face of a field recordist's card */
-pre, code { font-family: var(--mono); font-size: 14px; }
+/* the seed page: how to run it, set in the typewriter face of a field recordist's card; the page a little wider
+   than the singing one so the three commands sit on their lines without scrolling */
+body.seed main { max-width: 820px; }
+pre, code { font-family: var(--mono); font-size: 13.5px; }
 pre { margin: 0 0 10px; padding: 10px 12px; overflow-x: auto; background: var(--paper); border-left: 2px solid var(--red-rule); line-height: 1.5; }
