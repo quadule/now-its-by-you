@@ -47,7 +47,7 @@ def _k_weighting(sr: int) -> list[tuple[np.ndarray, np.ndarray]]:
     return [shelf, highpass]
 
 
-@njit(cache=True)
+@njit(cache=True, nogil=True)
 def _hop_power(y: np.ndarray, hop: int) -> np.ndarray:
     """Power summed over channels, averaged over each hop."""
     n, chans = y.shape
@@ -168,7 +168,7 @@ def true_peak(x: np.ndarray) -> float:
     return float(20.0 * np.log10(np.max(true_peak_envelope(x, 0.5 * peak), initial=0.0) + 1e-12))
 
 
-@njit(cache=True)
+@njit(cache=True, nogil=True)
 def _recover(held: np.ndarray, coef: float) -> np.ndarray:
     """Follow a gain down at once and back up toward 1 exponentially."""
     out = np.empty_like(held)

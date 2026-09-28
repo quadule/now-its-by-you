@@ -12,8 +12,9 @@ import numpy as np
 
 from ..score import Score
 from . import mixing
-from .instruments import INSTRUMENTS, render_band
+from .instruments import INSTRUMENTS, band_parts
 from .mixing import MixParams, lead_lift
+from .threads import made
 from .voice import VoiceParams, sing
 
 SR = 44100
@@ -39,23 +40,25 @@ def render_stems(score: Score, sr: int = SR, seed: int = 0, voice: VoiceParams |
     turn (stand-ins sing the rest). progress, if given, is told each part's
     name as it starts on it."""
     length = int(np.ceil(score.duration * sr))
-    stems = render_band(score, sr, seed, progress)
+    jobs = band_parts(score, sr, seed)
     sung = list(score.part("voice"))
     if sung:
-        if progress is not None:
-            progress("voice")
-        y = sing(sung, sr, voice or VoiceParams(), seed, score.lexicon)[:length]
-        stems["voice"] = pan(np.pad(y, (0, length - len(y))), 0.0) * VOICE_GAIN
+        def lead() -> np.ndarray:
+            y = sing(sung, sr, voice or VoiceParams(), seed, score.lexicon)[:length]
+            return pan(np.pad(y, (0, length - len(y))), 0.0) * VOICE_GAIN
+        jobs.append(("voice", lead))
     choir = sorted({n.part for n in score.notes if n.part.startswith("choir")}, key=lambda p: int(p[5:]))
     learned = (voice or VoiceParams()).engine == "learned"
     singers = [*(ancestors or [])[: len(choir)], *lineage_voices(len(choir), seed, learned=learned)]
     for name, singer in zip(choir, singers):
         i = int(name[5:]) - 1
-        if progress is not None:
-            progress(name)
-        y = sing(list(score.part(name)), sr, singer, seed + 101 * (i + 1), score.lexicon)[:length]
-        stems[name] = pan(np.pad(y, (0, length - len(y))), CHOIR_PANS[i % len(CHOIR_PANS)]) * VOICE_GAIN * CHOIR_GAIN
-    return stems
+
+        def lineage(name=name, singer=singer, i=i) -> np.ndarray:
+            y = sing(list(score.part(name)), sr, singer, seed + 101 * (i + 1), score.lexicon)[:length]
+            return pan(np.pad(y, (0, length - len(y))), CHOIR_PANS[i % len(CHOIR_PANS)]) * VOICE_GAIN * CHOIR_GAIN
+        jobs.append((name, lineage))
+    # every part at once (threads.made; each has its own random streams), the singers started first: they take longest
+    return made(jobs, progress, first=("voice", *choir))
 
 
 def lineage_voices(n: int, seed: int, learned: bool = False) -> list[VoiceParams]:

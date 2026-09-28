@@ -181,7 +181,7 @@ MAX_PARTIAL_HZ = 12000.0
 HAMMER_RATE = 4  # the contact is simulated at four times the sample rate
 
 
-@njit(cache=True)
+@njit(cache=True, nogil=True)
 def hammer_force(v0, mass, stiff, power, z, delay_left, delay_right, loss, fs, max_t):
     """The force (N) a felt hammer arriving at v0 m/s puts on a string, one value per sample at fs.
 
@@ -259,7 +259,7 @@ def hammer_force(v0, mass, stiff, power, z, delay_left, delay_right, loss, fs, m
     return force
 
 
-@njit(cache=True)
+@njit(cache=True, nogil=True)
 def _spectrum(force, freqs, sr):
     """The force's Fourier sum at each mode's frequency, sum_t F[t] exp(-i 2 pi f t / sr)."""
     out = np.zeros(freqs.shape[0], dtype=np.complex128)

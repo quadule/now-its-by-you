@@ -24,7 +24,7 @@ from numba import njit
 from scipy.signal import firwin, resample_poly
 
 
-@njit(cache=True)
+@njit(cache=True, nogil=True)
 def _blep(t, dt):
     """Residual of a band-limited unit-2 step at phase 0, for a sample at phase t (two-point)."""
     if t < dt:
@@ -36,7 +36,7 @@ def _blep(t, dt):
     return 0.0
 
 
-@njit(cache=True)
+@njit(cache=True, nogil=True)
 def _blep4(t):
     """Residual of a unit step (0 to 1) band-limited by a cubic B-spline, for a
     sample `t` samples after the step (negative: before it). Four points: its
@@ -55,7 +55,7 @@ def _blep4(t):
     return -u * u * u * u / 24.0
 
 
-@njit(cache=True)
+@njit(cache=True, nogil=True)
 def _edges(p, dt):
     """The four-point residual of a unit step at phase 0 (a wrap), for a sample at phase p."""
     r = 0.0
@@ -68,7 +68,7 @@ def _edges(p, dt):
     return r
 
 
-@njit(cache=True)
+@njit(cache=True, nogil=True)
 def _blamp(t, dt):
     """Residual of a band-limited unit ramp corner at phase 0, in samples, for a sample at phase t."""
     if t < dt:
@@ -80,7 +80,7 @@ def _blamp(t, dt):
     return 0.0
 
 
-@njit(cache=True)
+@njit(cache=True, nogil=True)
 def saw(freq, sr, phase=0.0):
     """A rising sawtooth, -1..1, from a frequency track. Returns (signal, final phase)."""
     n = freq.shape[0]
@@ -94,7 +94,7 @@ def saw(freq, sr, phase=0.0):
     return y, phase
 
 
-@njit(cache=True)
+@njit(cache=True, nogil=True)
 def pulse(freq, duty, sr, phase=0.0):
     """A pulse wave, high for `duty` of each period (a track, 0.02..0.98), zero mean. Returns (signal, phase)."""
     n = freq.shape[0]
@@ -115,7 +115,7 @@ def pulse(freq, duty, sr, phase=0.0):
     return y, phase
 
 
-@njit(cache=True)
+@njit(cache=True, nogil=True)
 def triangle(freq, sr, phase=0.0):
     """A triangle, -1..1, peak at phase 0, its corners rounded by polyBLAMP. Returns (signal, phase)."""
     n = freq.shape[0]
@@ -134,7 +134,7 @@ def triangle(freq, sr, phase=0.0):
     return y, phase
 
 
-@njit(cache=True)
+@njit(cache=True, nogil=True)
 def stepped(freq, table, sr, phase=0.0):
     """A wave read from `table` as a staircase, one step per entry (a chip's 4-bit
     triangle), each step's jump rounded by a polyBLEP. Returns (signal, phase)."""

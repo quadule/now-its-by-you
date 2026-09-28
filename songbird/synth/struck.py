@@ -33,7 +33,7 @@ CONTROL = 32  # samples between updates of the bend and the damping
 QUIET = 1e-5  # a mode is dropped once it is this far (-100 dB) under the loudest mode's strike
 
 
-@njit(cache=True)
+@njit(cache=True, nogil=True)
 def _bank(freqs, decay, phase, pos, amps, mix, bend, damp, dweight, rate, length, floor):
     """The bank at `rate` Hz for `length` samples. freqs (K,) Hz; decay (K,)
     nepers per second; phase (K,) each mode's starting phase; pos (H,) hit
@@ -104,7 +104,7 @@ _ODD = np.ascontiguousarray(2.0 * HALFBAND[0::2][::-1])  # the taps between old 
 _MIDDLE = 2.0 * HALFBAND[23]
 
 
-@njit(cache=True)
+@njit(cache=True, nogil=True)
 def _up2(x, taps, middle):
     """One channel at twice the rate, as resample_poly(x, 2, 1) with HALFBAND would give it."""
     n = x.shape[0]

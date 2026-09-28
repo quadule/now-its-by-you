@@ -291,7 +291,7 @@ def drum_part(drum: Drum, strokes: list[Stroke], sr: int, length: int, rng: np.r
 # --- the snare's wires, hoop and a stick on its rim --------------------------------------------------------
 
 
-@njit(cache=True)
+@njit(cache=True, nogil=True)
 def _contacts(d, sr, omegas, preloads, damping):
     """Snare wire strands against the snare-side head. d: the head's displacement (down, toward the
     wires, positive; the strands below it can't pass it). A strand in contact rides with the head until
@@ -330,7 +330,7 @@ def _contacts(d, sr, omegas, preloads, damping):
     return out
 
 
-@njit(cache=True)
+@njit(cache=True, nogil=True)
 def _grains(strengths, noise, offsets, length, tau):
     """Each nonzero strength a grain of noise decaying over tau samples, laid onto one track."""
     n = strengths.shape[0]

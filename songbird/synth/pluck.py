@@ -69,7 +69,7 @@ def _cached_loop(period: float, loss: float) -> tuple[int, tuple[float, ...]]:
     return whole, tuple(taps)
 
 
-@njit(cache=True)
+@njit(cache=True, nogil=True)
 def _loop(x, whole, taps, gain, release_at, release_gain, length, smooth):
     """One string plane, sample by sample: y[n] = x[n] + g[n] * sum_k taps[k] y[n - whole - k].
     The loop gain glides from `gain` to `release_gain` from sample `release_at`
@@ -218,7 +218,7 @@ def _touch(sr: int, at: int, length: int, freq: float, level: float, rng: np.ran
     return y
 
 
-@njit(cache=True)
+@njit(cache=True, nogil=True)
 def _bank(x, wholes, taps, gains, coupling):
     """Undamped open strings driven by the bridge: each a loop fed a little of x."""
     n_strings, n_taps = taps.shape

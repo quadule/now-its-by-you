@@ -265,7 +265,7 @@ def stack_ba(treble: float, middle: float, bass: float, voicing: str = "fender",
 # --- the spring -----------------------------------------------------------------------------------
 
 
-@njit(cache=True)
+@njit(cache=True, nogil=True)
 def _spring(n, start, stretch, coef, first, loop, gain, lp, damp, delay):
     """One spring's response to an impulse arriving at sample `start`, n samples long.
 
@@ -467,7 +467,7 @@ class Amp:
     master: float = 1.0  # the output's level (amp.reference_gain sets it)
 
 
-@njit(cache=True)
+@njit(cache=True, nogil=True)
 def _dot(a, b, start, count):
     """sum_k a[k] b[start + k], k < count, in four interleaved partial sums (a fixed order)."""
     s0 = 0.0
@@ -487,7 +487,7 @@ def _dot(a, b, start, count):
     return (s0 + s1) + (s2 + s3)
 
 
-@njit(cache=True)
+@njit(cache=True, nogil=True)
 def _run(x, rev, up, down, p, tab1, tab2, drop2, sos):
     """The amp from the pickup to the output transformer's secondary.
 
@@ -697,7 +697,7 @@ def play(chain: Chain, emf: np.ndarray) -> np.ndarray:
     return np.stack([oaconvolve(y, ir[:, j])[: len(y)] for j in range(ir.shape[1])], axis=1)
 
 
-@njit(cache=True)
+@njit(cache=True, nogil=True)
 def _shape(x, up, down, drive, tilt):
     """A preamp's gentle saturation, oversampled: y = (tanh(drive u + tilt) - tanh(tilt)) / (drive tanh'(tilt)),
     unity gain for small signals, a little even distortion from the tilt."""

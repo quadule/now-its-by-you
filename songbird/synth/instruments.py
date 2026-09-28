@@ -37,6 +37,7 @@ from __future__ import annotations
 import hashlib
 import importlib
 import pkgutil
+from collections.abc import Callable
 from functools import lru_cache
 from pathlib import Path
 
@@ -356,9 +357,10 @@ def _as_drum(note: Note) -> Note:
     return replace(note, art=DRUM_STROKES.get(note.art, "tip"), vel=note.vel * QUIET.get(note.art, 1.0))
 
 
-def render_band(score: Score, sr: int, seed: int, progress=None) -> dict[str, np.ndarray]:
-    """A stem for every instrument that plays in the score: the eight in their order, then any other by name.
-    progress, if given, is told the name of each instrument as it starts on it."""
+def band_parts(score: Score, sr: int, seed: int) -> list[tuple[str, Callable[[], np.ndarray]]]:
+    """The band's stems to be made, as (name, a function that makes it): every instrument that plays in the
+    score, the eight in their order, then any other by name. Each part has its own random streams, so they
+    can be made in any order, or at once."""
     length = int(np.ceil(score.duration * sr))
     # a low harp string can still be ringing when the song's last ring is over: let every stem end softly
     fade = min(length, int(0.3 * sr))
@@ -366,11 +368,19 @@ def render_band(score: Score, sr: int, seed: int, progress=None) -> dict[str, np
     ending[length - fade:] = 0.5 + 0.5 * np.cos(np.linspace(0.0, np.pi, fade))
     others = sorted({n.part for n in score.notes} - set(INSTRUMENTS) - {"voice"}
                     - {p for p in {n.part for n in score.notes} if p.startswith("choir")})
+
+    def make(name: str, notes) -> Callable[[], np.ndarray]:
+        return lambda: render_part(name, notes, sr, length, score.band, seed) * ending[:, None]
+
+    return [(name, make(name, notes)) for name in INSTRUMENTS + tuple(others) if (notes := score.part(name))]
+
+
+def render_band(score: Score, sr: int, seed: int, progress=None) -> dict[str, np.ndarray]:
+    """A stem for every instrument that plays in the score: the eight in their order, then any other by name.
+    progress, if given, is told the name of each instrument as it starts on it."""
     stems = {}
-    for name in INSTRUMENTS + tuple(others):
-        notes = score.part(name)
-        if notes:
-            if progress is not None:
-                progress(name)
-            stems[name] = render_part(name, notes, sr, length, score.band, seed) * ending[:, None]
+    for name, make in band_parts(score, sr, seed):
+        if progress is not None:
+            progress(name)
+        stems[name] = make()
     return stems

@@ -26,7 +26,7 @@ from scipy.signal import lfilter
 from . import pluck as _pluck
 
 
-@njit(cache=True)
+@njit(cache=True, nogil=True)
 def _run(x, delay, gain, loss, pole, size):
     """One string plane: y[t] = x[t] + gain[t] * onepole(onezero(read(y, t - delay[t]))).
 

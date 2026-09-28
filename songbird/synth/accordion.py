@@ -310,7 +310,7 @@ def _staff_line(key: int) -> bool:
 # --- the bellows ------------------------------------------------------------------------------------
 
 
-@njit(cache=True)
+@njit(cache=True, nogil=True)
 def _arm(x, up, down):
     """The player's arm on the bellows: the pressure follows what the playing asks, quickly as it rises and more
     slowly as it eases."""

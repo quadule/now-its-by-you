@@ -170,7 +170,7 @@ def _reach(force: np.ndarray, freqs, sr: float) -> np.ndarray:
     return np.abs((force[None, :] * np.exp(-2j * np.pi * np.asarray(freqs)[:, None] * t[None, :])).sum(axis=1))
 
 
-@njit(cache=True)
+@njit(cache=True, nogil=True)
 def _magnetic(x, u0, scale, out, start):
     """A tine's tip, x (in units of its height over the pole), swinging past an electromagnetic pickup voiced
     u0 off its axis: the flux through the coil goes as the pole's field there, (1 + u^2)^-3/2; its change
@@ -186,7 +186,7 @@ def _magnetic(x, u0, scale, out, start):
         prev = phi
 
 
-@njit(cache=True)
+@njit(cache=True, nogil=True)
 def _electrostatic(x, limit, scale, out, start):
     """A reed's tip, x (fractions of the gap to the charged plate), swinging in its slot: the capacitance
     goes as 1 / (1 - x); its change from sample to sample, times scale, is added to out. The reed never

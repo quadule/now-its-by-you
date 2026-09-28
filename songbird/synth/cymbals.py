@@ -190,7 +190,7 @@ def _one_pole_for(length: int, sr: int, t_lo: float, t_hi: float, f_lo: float = 
     return a_lo / mag(b, w_lo), b
 
 
-@njit(cache=True)
+@njit(cache=True, nogil=True)
 def _fdn(x, lines, gains, poles, taps, signs, damp, sr, size):
     """Eight absorbent delay lines mixed by a Hadamard matrix, fed x, heard by two microphones' taps.
     damp: extra decay (nepers per second) as a per-sample track, or empty."""

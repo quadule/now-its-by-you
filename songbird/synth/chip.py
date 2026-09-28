@@ -180,7 +180,7 @@ def tnd_level(t: float, n: float) -> float:
 # --- band-limited steps ------------------------------------------------------------------------
 
 
-@njit(cache=True)
+@njit(cache=True, nogil=True)
 def _staircase(times, levels, n):
     """A staircase that is levels[i] from times[i] on (samples, ascending), 0 before the first, each step
     band-limited by osc's four-point residual."""
@@ -210,7 +210,7 @@ def _staircase(times, levels, n):
 # --- the channels, as event lists: when the DAC's level changes ------------------------------------
 
 
-@njit(cache=True)
+@njit(cache=True, nogil=True)
 def _pulse_events(t0, t1, hz, vol, reset, lo, hi, table):
     """A pulse channel's changes of level from its frames: each frame a time span, a frequency, a volume
     (0..15), whether the sequencer restarts (a new note), and the high part of its period [lo, hi)."""
@@ -261,7 +261,7 @@ def _pulse_events(t0, t1, hz, vol, reset, lo, hi, table):
     return out_t[:m], out_l[:m]
 
 
-@njit(cache=True)
+@njit(cache=True, nogil=True)
 def _triangle_events(t0, t1, hz, phase):
     """The triangle channel's steps (time, value 0..15) from its running frames; between frames its
     sequencer is halted and holds its step. Returns the events and the phase (0..32) it stopped at."""
@@ -295,7 +295,7 @@ def _triangle_events(t0, t1, hz, phase):
     return out_t[:m], out_v[:m], phase
 
 
-@njit(cache=True)
+@njit(cache=True, nogil=True)
 def _lfsr(reg, short):
     """One clock of the noise channel's 15-bit shift register: feedback from bit 0 and bit 1 (long, a
     32767-step sequence) or bit 6 (short: 93 steps)."""
@@ -304,7 +304,7 @@ def _lfsr(reg, short):
     return (reg >> 1) | (fb << 14)
 
 
-@njit(cache=True)
+@njit(cache=True, nogil=True)
 def _noise_events(t0, t1, rate, short, vol, reg):
     """The noise channel's changes of level (time, 0..15) from its frames: each a span, a clock rate (Hz),
     the mode and a volume. The register runs on between frames at the last rate, as the chip's does."""
@@ -351,7 +351,7 @@ def _noise_events(t0, t1, rate, short, vol, reg):
     return out_t[:m], out_v[:m], reg
 
 
-@njit(cache=True)
+@njit(cache=True, nogil=True)
 def _mix_tnd(tt, tv, nt, nv, t_start, ref):
     """The triangle's and the noise's changes merged through the chip's shared mixer, less `ref` (the level
     the halted triangle sat at before anything played)."""

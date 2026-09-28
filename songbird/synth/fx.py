@@ -72,7 +72,7 @@ def design(spec, sr: int) -> np.ndarray:
     return np.concatenate(sections) if sections else np.zeros((0, 6))
 
 
-@njit(cache=True)
+@njit(cache=True, nogil=True)
 def _four(y: np.ndarray, p: np.ndarray, q: np.ndarray, r: np.ndarray, s: np.ndarray) -> None:
     """Four biquads in cascade (transposed direct form II) over every channel of
     y, in place. Run together, their state stays in registers and the four
@@ -97,7 +97,7 @@ def _four(y: np.ndarray, p: np.ndarray, q: np.ndarray, r: np.ndarray, s: np.ndar
             y[i, c] = k
 
 
-@njit(cache=True)
+@njit(cache=True, nogil=True)
 def _two(y: np.ndarray, p: np.ndarray, q: np.ndarray) -> None:
     n, chans = y.shape
     for c in range(chans):
@@ -113,7 +113,7 @@ def _two(y: np.ndarray, p: np.ndarray, q: np.ndarray) -> None:
             y[i, c] = u
 
 
-@njit(cache=True)
+@njit(cache=True, nogil=True)
 def _one(y: np.ndarray, p: np.ndarray) -> None:
     n, chans = y.shape
     for c in range(chans):
@@ -157,7 +157,7 @@ def equalize(x: np.ndarray, sos: np.ndarray) -> np.ndarray:
 # --- stems ---------------------------------------------------------------------------
 
 
-@njit(cache=True)
+@njit(cache=True, nogil=True)
 def _span(x: np.ndarray, floor: float) -> tuple[int, int]:
     n, chans = x.shape
     first, last = -1, -1
@@ -186,7 +186,7 @@ def span(x: np.ndarray, sr: int, pad: float = 0.5) -> slice:
     return slice(max(0, first - int(pad * sr)), min(len(x), last + 1 + int(pad * sr)))
 
 
-@njit(cache=True)
+@njit(cache=True, nogil=True)
 def _products(x: np.ndarray) -> tuple[float, float, float]:
     ll = rr = lr = 0.0
     for i in range(x.shape[0]):
@@ -214,7 +214,7 @@ def db(p):
     return 10.0 * np.log10(p + 1e-12)
 
 
-@njit(cache=True)
+@njit(cache=True, nogil=True)
 def _block_power(x: np.ndarray, block: int) -> np.ndarray:
     n, chans = x.shape
     k = n // block
@@ -246,7 +246,7 @@ def _coef(seconds: float, rate: float) -> float:
 STEP = 16  # samples between a compressor's decisions (0.36 ms): its gain is interpolated between them
 
 
-@njit(cache=True)
+@njit(cache=True, nogil=True)
 def _detect(key: np.ndarray, coef: float) -> np.ndarray:
     """Mean power over the channels, followed by a one-pole average."""
     n, chans = key.shape
@@ -261,7 +261,7 @@ def _detect(key: np.ndarray, coef: float) -> np.ndarray:
     return out
 
 
-@njit(cache=True)
+@njit(cache=True, nogil=True)
 def _ballistics(target: np.ndarray, attack: float, release: float) -> np.ndarray:
     """A one-pole follower of a gain in dB that falls at the attack rate and
     recovers at the release rate (coefficients per step)."""
@@ -275,7 +275,7 @@ def _ballistics(target: np.ndarray, attack: float, release: float) -> np.ndarray
     return out
 
 
-@njit(cache=True)
+@njit(cache=True, nogil=True)
 def _apply(x: np.ndarray, lin: np.ndarray, step: int, band: np.ndarray) -> np.ndarray:
     """x with a gain given every `step` samples (linear between); where `band` has
     channels, only that part of x is scaled: x + band * (gain - 1)."""
@@ -380,7 +380,7 @@ def dynamic_dip(x: np.ndarray, sr: int, f: float, q: float, depth_db: np.ndarray
     return _apply(x2, lin, STEP, band).reshape(x.shape)
 
 
-@njit(cache=True)
+@njit(cache=True, nogil=True)
 def _follow(x, detect, rise, fall, floor_db, span_db):
     n, chans = x.shape
     out = np.empty(n)
@@ -412,7 +412,7 @@ def activity(x: np.ndarray, sr: int, floor: float = 24.0, span: float = 12.0,
 # --- colour and space ---------------------------------------------------------------------
 
 
-@njit(cache=True)
+@njit(cache=True, nogil=True)
 def _block_peaks(x: np.ndarray, block: int) -> np.ndarray:
     n, chans = x.shape
     k = n // block
@@ -438,7 +438,7 @@ def loud_peak(x: np.ndarray, sr: int, pct: float = 90.0) -> float:
     return float(np.percentile(live, pct))
 
 
-@njit(cache=True)
+@njit(cache=True, nogil=True)
 def _soft(v: float) -> float:
     """A soft clipper shaped like tanh: x(27 + x^2) / (27 + 9x^2), flat at +-1 beyond +-3."""
     if v >= 3.0:
@@ -449,7 +449,7 @@ def _soft(v: float) -> float:
     return v * (27.0 + w) / (27.0 + 9.0 * w)
 
 
-@njit(cache=True)
+@njit(cache=True, nogil=True)
 def _saturate(x, k, bias, dc):
     n, chans = x.shape
     y = np.empty_like(x)

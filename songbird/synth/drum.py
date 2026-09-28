@@ -53,7 +53,7 @@ STROKES = {
 }
 
 
-@njit(cache=True)
+@njit(cache=True, nogil=True)
 def _ring(freqs, amps, t60s, glide, glide_time, n, sr):
     """Sum of decaying modes; the two lowest start `glide` higher and fall back
     over `glide_time` seconds (the skin's tension after a hard hit)."""

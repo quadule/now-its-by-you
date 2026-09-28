@@ -250,7 +250,7 @@ class Strings:
 # --- the string itself ---------------------------------------------------------------------------
 
 
-@njit(cache=True)
+@njit(cache=True, nogil=True)
 def _string(n, ctrl, delay, gain_a, gain_b, omega, pull, ratio_b, loss, at, first, count, amount, pool, size,
             hp):
     """One string for n samples: the plane across the top (per-trip gain gain_a) and the one along it

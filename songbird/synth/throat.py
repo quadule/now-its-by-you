@@ -31,6 +31,8 @@ from pathlib import Path
 
 import numpy as np
 
+from .threads import workers
+
 FRAME = 0.005  # seconds per envelope frame
 
 # What the throat can sing: silence, a breath, and the phones of songbird.phonetics (vowels without
@@ -168,16 +170,6 @@ def _smooth(r: np.ndarray, fft: int, sr: int) -> np.ndarray:
 def _smooth_random(rng: np.random.Generator, rows: int, fft: int, sr: int) -> np.ndarray:
     """Rows of unit-variance random values at knots SCATTER_BW Hz apart, linear between them, per FFT bin."""
     return _smooth(rng.standard_normal((rows, _knots(sr))), fft, sr)
-
-
-def workers() -> int:
-    """How many threads a render may use for work that splits (SONGBIRD_THREADS, else the machine's cores, at
-    most 8). The work is split so that every piece comes out the same whichever thread does it."""
-    try:
-        wanted = int(os.environ.get("SONGBIRD_THREADS", "0"))
-    except ValueError:
-        wanted = 0
-    return max(1, wanted if wanted > 0 else min(os.cpu_count() or 1, 8))
 
 
 BLOCK = 512  # pulses synthesize() hands a thread at a time: a few tens of MB of spectra each

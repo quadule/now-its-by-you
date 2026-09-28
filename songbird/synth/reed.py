@@ -61,7 +61,7 @@ def tables(freq: float, sr: int, rng: np.random.Generator, slopes, even: float =
     return out * (0.35 / np.sqrt(np.mean(out[int(np.argmin(slopes))] ** 2)))
 
 
-@njit(cache=True)
+@njit(cache=True, nogil=True)
 def _read_mix(dark, bright, increments, amplitude, mix, out, offset, phase):
     """_read, cross-fading from the dark period to the bright one by mix (0..1), sample by sample."""
     size = dark.shape[0]
@@ -80,7 +80,7 @@ def _read_mix(dark, bright, increments, amplitude, mix, out, offset, phase):
     return phase
 
 
-@njit(cache=True)
+@njit(cache=True, nogil=True)
 def _read(wave, increments, amplitude, out, offset, phase):
     size = wave.shape[0]
     for i in range(increments.shape[0]):

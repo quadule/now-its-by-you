@@ -135,7 +135,7 @@ def add(out: np.ndarray, y: np.ndarray, start: int) -> None:
 # --- the noise the rattles are made of -----------------------------------------------------
 
 
-@njit(cache=True)
+@njit(cache=True, nogil=True)
 def _next(state):
     """xorshift64*: the next state and a uniform number in [0, 1)."""
     x = state
@@ -157,7 +157,7 @@ def seed_of(rng: np.random.Generator) -> np.uint64:
 HOP = 32  # samples between values of the energy track
 
 
-@njit(cache=True)
+@njit(cache=True, nogil=True)
 def _collide(energy, hop, rate, gamma, decay, lp_lo, lp_hi, sb, sa1, sa2, sgain, click,
              ma1, ma2, mgain, mtilt, mstart, kick, state, out):
     """Collisions driven by an energy track, sample by sample (PhISEM).
@@ -299,7 +299,7 @@ def collide(energy: np.ndarray, length: int, rng: np.random.Generator, *, rate: 
 # --- contacts: snare wires or strings pressed against a plate ------------------------------------
 
 
-@njit(cache=True)
+@njit(cache=True, nogil=True)
 def _wires(freqs, decay, amps, shapes, spring, press, damping, bounce, sr, n_max, click, state, out, start):
     """Wires pressed against a struck plate, driven by its motion, sample by sample.
 
@@ -411,7 +411,7 @@ def wires(freqs, t60s, amps, shapes, spring, press, *, damping: float = 0.05, bo
            float(np.exp(-1.0 / (click_ms * 1e-3 * sr))), seed_of(rng), out, int(start))
 
 
-@njit(cache=True)
+@njit(cache=True, nogil=True)
 def comb(x: np.ndarray, period: int, gain: float) -> np.ndarray:
     """y[n] = x[n] + gain y[n - period]: a string's ring, its harmonics losing `gain` each pass."""
     y = x.copy()
