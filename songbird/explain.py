@@ -1359,6 +1359,15 @@ def summary(ctx: Context, v: Version, who: str, name: str | None = None) -> dict
 # ---------------------------------------------------------------- the opening
 
 
+def generation_of(parent_record: dict | None) -> int:
+    """The studio's version's place in the line: the parent's generation and one (as a render --parent
+    counts it), or 0 for a version made from the song as it began."""
+    if not parent_record:
+        return 0
+    g = parent_record.get("generation")
+    return (g if isinstance(g, int) and g >= 0 else 0) + 1
+
+
 def start(ctx: Context, studio) -> dict:
     """What the page needs once: the song, the machine, the bounds of every choice, and what's available."""
     genome = ctx.genome
@@ -1374,4 +1383,5 @@ def start(ctx: Context, studio) -> dict:
         "patterns": PATTERNS, "parts": PARTS, "optional": list(edits_mod.optional(genome)), "kinds": KINDS,
         "sing": studio.sing_available(), "phrasings": studio.phrasings(), "out": studio.out_shown(),
         "names": ["Ada", "Basil", "Coral"], "packet": studio.packet_note(), "shared": studio.shared,
+        "generation": generation_of(ctx.parent_record),
     }

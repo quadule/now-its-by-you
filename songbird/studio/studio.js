@@ -386,7 +386,7 @@ function slotSelect(w, o, slot, suffix = "") {
   slot.options.map((option) => h("option", { value: option }, (slot.labels?.[option] || option).replace(/\*/g, ""))));
   select.value = slot.sung;
   const current = (slot.labels?.[slot.sung] || slot.sung || "Choose").replace(/\*/g, "");
-  select.style.width = `${Math.max(4, current.length + 3)}ch`;
+  select.style.width = `${Math.max(3, current.length + 2)}ch`;
   select.addEventListener("change", () => chooseSlot(o, slot.slot, select.value));
   return select;
 }
@@ -1173,6 +1173,7 @@ async function main() {
     $("helpWhere").textContent = "This studio is shared from someone else's computer for a short preview: that computer makes the song, and what you record is saved there too. Download it to keep it. Your changes stay in this browser.";
   }
   $("helpSong").textContent = s.title;
+  renderLineage(s.generation || 0);
   $("singNote").textContent = s.sing.available ? "" : s.sing.why;
   $("sing").disabled = !s.sing.available;
   $("toFinishLabel").textContent = s.sing.available ? "Sing or record" : "Record it";
@@ -1194,6 +1195,20 @@ async function main() {
   if (hash.compare !== undefined) loadCompare();
   // the song is on the page: help.js may show a first visit around it
   if (typeof CustomEvent === "function") document.dispatchEvent?.(new CustomEvent("studio:ready", { detail: { hash } }));
+}
+
+// The line this version came down: a mark for each version before it (the nearest nine), filled for this one.
+function renderLineage(generation) {
+  const box = $("lineage");
+  box.hidden = !generation;  // the first version has no line yet: a lone mark would read as a bullet
+  const shown = Math.min(generation, 9);
+  const marks = generation > shown ? [h("span", { class: "more" }, "…")] : [];
+  for (let i = 0; i < shown; i++) marks.push(h("i", { class: "was" }));
+  marks.push(h("i", { class: "now" }));
+  box.replaceChildren(...marks);
+  const said = generation ? `${generation} version${generation === 1 ? "" : "s"} came before this one` : "the first version of the song";
+  box.setAttribute("aria-label", said);
+  box.setAttribute("title", said);
 }
 
 function setDayQuiet(offset) {

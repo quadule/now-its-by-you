@@ -387,6 +387,12 @@ def test_a_shared_studio_admits_only_its_links_key(shared):
     assert post(port, studio, "/api/sing", {}, **cookie)[1]["error"]
 
 
+def test_the_page_draws_the_line_a_version_came_down():
+    assert explain.generation_of(None) == 0  # from the song as it began
+    assert explain.generation_of({"generation": 0}) == 1 and explain.generation_of({"generation": 4}) == 5
+    assert explain.generation_of({"generation": "x"}) == 1  # a record that says nothing sensible: its child
+
+
 def test_this_computers_own_studio_needs_no_key(served):
     studio, port = served
     start = json.loads(ask(port, "GET", "/api/start")[2])
