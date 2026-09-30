@@ -155,6 +155,7 @@
         const degree = original.degree + 7 * octaves;
         next.degree = degree >= low && degree <= high ? degree : original.degree;
       }
+      next.pitch = pitchFor(original, next.degree); // named from its new degree, not the one it was dragged from
     }
     const latestOnset = Math.min(followingStart - original.duration, index === p.notes.length - 1 ? b.max_final_onset ?? b.max_end : b.max_end);
     // A vertical drag sends both axes. Keep untouched expressive timing exact
@@ -181,23 +182,36 @@
     }
     commitNotes(notes, Math.abs(steps) < 7 ? "Melody moved; phrase ending preserved." : "Phrase moved an octave.");
   }
+  // The grid a phrase's rhythm lives on: halves of a beat where every note sits on them, thirds where they sit
+  // on thirds (a six feel, a triplet lilt), quarters otherwise; each with the finer grids of its kind after it.
+  function feelGrids(p) {
+    const times = p.notes.flatMap((n) => [n.onset, n.duration]);
+    const on = (parts) => times.every((t) => Math.abs(t * parts - Math.round(t * parts)) < 1e-6);
+    if (on(2)) return [2, 4];
+    if (on(3)) return [3, 6];
+    return [4];
+  }
   function evenRhythm() {
     const p = phrase(), b = bounds();
     if (!p || p.notes.length < 2) return;
-    const start = p.notes[0].onset, end = p.notes.at(-1).onset + p.notes.at(-1).duration;
-    // Equal attacks are not always multiples of a quarter beat (6/8 regularly
-    // uses thirds). Leave the cadence its required pickup space and let it
-    // sustain longer when a perfectly even ending would start too late.
-    const lastStart = Math.min(start + (end - start) * (p.notes.length - 1) / p.notes.length,
-      b.max_final_onset ?? b.max_end, end - b.min_duration);
-    const step = (lastStart - start) / (p.notes.length - 1);
-    if (step < b.min_duration - 1e-9 || end - lastStart < b.min_duration - 1e-9) {
-      bridge().toast?.("This phrase is too tightly packed to space evenly while keeping every syllable singable."); return;
+    const end = p.notes.at(-1).onset + p.notes.at(-1).duration, n = p.notes.length;
+    // Every note the same number of grid steps, on the phrase's own grid (never an even share of its span:
+    // 1.2727 beats is off every grid a musician counts in); the last note held to where the line ended, and
+    // starting early enough to leave the cadence its room before the next line's pickup. Positions are counted
+    // in whole steps of the grid (parts of a beat), so a third stays exactly the third the server keeps.
+    for (const parts of feelGrids(p)) {
+      const first = Math.max(Math.ceil(b.min_onset * parts - 1e-9), Math.round(p.notes[0].onset * parts));
+      const start = first / parts;
+      const lastLimit = Math.min(start + (end - start) * (n - 1) / n, b.max_final_onset ?? b.max_end, end - b.min_duration);
+      const least = Math.ceil(b.min_duration * parts - 1e-9);
+      const step = Math.floor((lastLimit - start) * parts / (n - 1) + 1e-9);
+      const at = (i) => (first + i * step) / parts;
+      if (step < least || end - at(n - 1) < b.min_duration - 1e-9) continue;
+      const notes = p.notes.map((note, i) => ({ ...note, onset: at(i), duration: i === n - 1 ? end - at(i) : at(i + 1) - at(i) }));
+      commitNotes(notes, `Notes evened to ${fmt(round(step / parts))} of a beat each, on the phrase's grid; the ending held.`);
+      return;
     }
-    const boundaries = p.notes.map((_, i) => i === p.notes.length - 1 ? lastStart : start + i * step);
-    const notes = p.notes.map((n, i) => ({ ...n, onset: boundaries[i],
-      duration: Math.max(b.min_duration, (boundaries[i + 1] ?? end) - boundaries[i]) }));
-    commitNotes(notes, "Notes spaced evenly; the ending leaves room for the next phrase.");
+    bridge().toast?.("This phrase is too tightly packed to space evenly while keeping every syllable singable.");
   }
   function smoothMelody() {
     const p = phrase(), b = bounds();

@@ -295,6 +295,37 @@ test("even rhythm leaves an impossible layout untouched and explains why", () =>
   assert.match(s.toasts.at(-1), /too tightly packed/);
 });
 
+test("even rhythm keeps to the phrase's grid: halves for a line in eighths, thirds for one in a six feel", () => {
+  // the verse's first line of Now It's by You (eleven syllables from a half-beat pickup; the test found 1.2727...)
+  const view = score(), phrase = view.composition.sections[1].phrases[0];
+  const written = [[-2, -0.5, 0.5], [1, 0, 1], [2, 1, 0.5], [3, 1.5, 0.5], [5, 2, 1], [3, 3, 0.5], [2, 3.5, 0.5],
+    [3, 4, 1], [2, 5, 0.5], [1, 5.5, 0.5], [2, 6, 2]];
+  phrase.duration_beats = 8; phrase.pickup_beats = 0.5;
+  phrase.bounds = { ...phrase.bounds, min_degree: -4, max_degree: 8, min_onset: -0.5, max_end: 8, max_final_onset: 7.25, cadence_degree: 2 };
+  phrase.notes = written.map(([degree, onset, duration], index) => ({ degree, onset, duration, index, pitch: 62, syllable: "la", word: "la" }));
+  let s = setup(view); s.clickText("Even rhythm");
+  let notes = s.commits.at(-1).value;
+  assert(notes.every((n) => Number.isInteger(n.onset * 2) && Number.isInteger(n.duration * 2)), JSON.stringify(notes));
+  assert.deepEqual(notes.slice(0, -1).map((n) => n.duration), Array(10).fill(0.5));
+  assert.equal(notes[0].onset, -0.5);
+  assert.equal(notes.at(-1).onset + notes.at(-1).duration, 8);
+  assert.match(s.find("#sbc-status").textContent, /0\.5 of a beat/);
+  // a six feel: every note stays on a third of a beat, exactly as the server counts them
+  s = setup(score({ compound: true })); s.clickText("Even rhythm");
+  notes = s.commits.length ? s.commits.at(-1).value : s.phrase().notes;
+  assert(notes.every((n) => Math.abs(n.onset * 3 - Math.round(n.onset * 3)) < 1e-12), JSON.stringify(notes));
+});
+
+test("a note dragged to a new pitch is announced by its new name", () => {
+  const s = setup();
+  const item = s.find('[data-note="1"]'), rect = item.getBoundingClientRect();
+  item.emit("pointerdown", { clientX: rect.left + 2, clientY: 150 });
+  item.emit("pointermove", { clientX: rect.left + 2, clientY: 127 });
+  item.emit("pointerup", { clientX: rect.left + 2, clientY: 127 });
+  assert.equal(s.commits.at(-1).value[1].degree, 5);
+  assert.match(s.find("#sbc-status").textContent, /this, G4, scale degree 5/);
+});
+
 test("section moves submit stable occurrence identities and reject reversed story order", () => {
   const s = setup();
   s.clickText("Later →");
