@@ -99,10 +99,17 @@
   }
 
   // ------------------------------------------------------------------ a seam: what happens into a section
+  // a sweep may be {bars, type}: a highpass rising (the default) or a lowpass falling (sound.py)
+  const lasts = (v) => (v && typeof v === "object" ? v.bars : v);
   function seamWords(value) {
     if (!value) return "nothing: the band goes straight on";
     const parts = [];
-    for (const k of KINDS) if (value[k]) parts.push(`${KIND_WORDS[k]} over ${value[k]} ${k === "stop" ? "beat" : "bar"}${value[k] === 1 ? "" : "s"}`);
+    for (const k of KINDS) {
+      const n = lasts(value[k]);
+      if (!n) continue;
+      const how = k === "sweep" && typeof value[k] === "object" ? (value[k].type === "lowpass" ? ", falling" : ", rising") : "";
+      parts.push(`${KIND_WORDS[k]}${how} over ${n} ${k === "stop" ? "beat" : "bar"}${n === 1 ? "" : "s"}`);
+    }
     if (value.impact) parts.push("an impact on the downbeat");
     if (value.down) parts.push(`a downlifter over ${value.down} bar${value.down === 1 ? "" : "s"}`);
     return parts.join(", ") || "nothing: the band goes straight on";
@@ -116,7 +123,7 @@
   function seamOver(value, bars) {  // how long: every kind that lasts, at once
     if (!value) return null;
     const next = { ...value };
-    for (const k of [...KINDS, "down"]) if (next[k]) next[k] = bars;
+    for (const k of [...KINDS, "down"]) if (next[k]) next[k] = typeof next[k] === "object" ? { ...next[k], bars } : bars;
     return next;
   }
 

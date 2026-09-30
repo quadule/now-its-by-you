@@ -61,6 +61,7 @@
   function select(sel, options = {}) {
     S.sel = sel || null;
     S.about = false;
+    if (sel) S.songShown = false;
     if (!sel || !["note", "chord"].includes(sel.kind)) C()?.deselect?.();
     if (!S.howSet) setHow(M.defaultHow(sel), false);
     repaint();
@@ -78,10 +79,12 @@
     const i = compIndex(id);
     if (i < 0) return;
     S.open = id;
+    if (S.sel && ["note", "chord"].includes(S.sel.kind) && S.sel.section !== id) S.sel = { kind: "section", id };  // the old note's gone
     $("notes").hidden = false;
     if (S.view !== "arrange") showView("arrange");
     C()?.open?.(i);
     renderGrid();
+    renderInspector();
     if (focus) $("notesTitle")?.focus();
     $("notes").scrollIntoView?.({ block: "nearest", behavior: "smooth" });
   }
@@ -98,6 +101,10 @@
     S.how = how;
     if (chosen) S.howSet = true;
     for (const b of document.querySelectorAll("[data-how]")) b.setAttribute("aria-pressed", String(b.dataset.how === how));
+    for (const b of document.querySelectorAll(".regioncell > .play")) {  // the regions' ▶ say how they play
+      const label = b.getAttribute("aria-label").replace(/, (sung|the sketch)$/, `, ${how === "sung" ? "sung" : "the sketch"}`);
+      b.setAttribute("aria-label", label); b.title = label;
+    }
   }
   const making = () => ["queued", "running"].includes(state.playing?.job?.state) && !state.playing?.task?.cancelled;
   const sounding = () => !!C()?.playing?.() || !$("audio").paused;
@@ -315,8 +322,10 @@
       const rows = [
         row(h("div", { class: "head", role: "columnheader" }, h("span", { class: "hint" }, "bar")),
           g.sections.map((s) => h("div", { class: "rule-cell", role: "columnheader", "aria-label": `${s.label}, from bar ${s.startBar}`,
-            title: `${s.label}: bar ${s.startBar}. Click to put the playhead here.`, onclick: (e) => setPlayhead(s, e), onpointermove: (e) => { if (e.buttons & 1) setPlayhead(s, e, false); } },
-          h("b", {}, String(s.startBar)), s.seam?.value ? h("span", { class: "mark", title: `Into ${s.label}: ${M.seamWords(s.seam.value)}` }, "⤴") : null))),
+            onpointermove: (e) => { if (e.buttons & 1) setPlayhead(s, e, false); } },
+          h("button", { class: "rule", type: "button", "data-key": `rule:${s.id}`, title: `${s.label}: bar ${s.startBar}. Put the playhead here (drag along the ruler to move it).`,
+            "aria-label": `Put the playhead at bar ${s.startBar}, ${s.label}`, onclick: (e) => setPlayhead(s, e) }, h("b", {}, String(s.startBar))),
+          s.seam?.value ? h("span", { class: "mark", title: `Into ${s.label}: ${M.seamWords(s.seam.value)}` }, "⤴") : null))),
         row(h("div", { class: "head", role: "rowheader" }, h("span", { class: "rubric small" }, "Sections")), g.sections.map(regionCell)),
         ...g.tracks.map((t) => row(trackHead(t), g.sections.map((s) => cellFor(t, s)))),
       ];
@@ -329,9 +338,10 @@
     });
   }
   function problemsUnderGrid() {
-    const list = S.arr?.problems || [];
+    // only what the masthead doesn't already say (a choice kept from the version before, waiting): said once
+    const list = (S.arr?.problems || []).filter((p) => !(state.view?.problems || []).some((q) => q.path === p.path));
     let box = $("arrangeProblems");
-    if (!box) { box = h("div", { id: "arrangeProblems", role: "status" }); $("gridScroll").after(box); }
+    if (!box) { box = h("div", { id: "arrangeProblems" }); $("gridScroll").after(box); }
     box.replaceChildren(...list.map((p) => h("p", { class: "problem" }, `Waiting, not played: ${describePath(p.path)}: ${p.why}. `,
       h("button", { class: "link small", type: "button", onclick: () => clearEdits([p.path]) }, "let it go"))));
   }
@@ -359,7 +369,7 @@
     const ready = state.view?.listen?.ready.includes(state.view.listen.sections[s.index]);
     return h("div", { class: "regioncell", role: "gridcell", "data-region": s.id },
       h("button", { class: `play${ready ? " ready" : ""}`, type: "button", "data-key": `hear:${s.id}`, "aria-label": `Hear ${s.label}, ${S.how === "sung" ? "sung" : "the sketch"}`,
-        title: `Hear ${s.label} (${S.how === "sung" ? "sung" : "the sketch"})`, onclick: (e) => { e.stopPropagation(); select({ kind: "section", id: s.id }); play(S.how); } }, playIcon()),
+        title: `Hear ${s.label}, ${S.how === "sung" ? "sung" : "the sketch"}`, onclick: (e) => { e.stopPropagation(); select({ kind: "section", id: s.id }); play(S.how); } }, playIcon()),
       i > 0 ? h("button", { class: `seam${S.sel?.kind === "seam" && S.sel.id === s.id ? " selected" : ""}${s.seam?.value ? " set" : ""}`, type: "button",
         "data-key": `seam:${s.id}`, "aria-label": `The seam into ${s.label}: ${M.seamWords(s.seam?.value)}`, title: `Into ${s.label}: a riser, a sweep, a roll, a stop…`,
         onclick: (e) => { e.stopPropagation(); select({ kind: "seam", id: s.id }); } }) : null,
@@ -447,21 +457,23 @@
       h("span", { class: "e" }), l.whose === "you" ? h("span", { class: "mk", "aria-hidden": "true" }, "✎") : l.locked ? h("span", { class: "mk" }, lockIcon()) : null);
   }
   function roving() {  // one cell of the grid in the tab order: the selected one, else the first
-    const cells = [...document.querySelectorAll("#grid [role=gridcell]")];
+    const cells = [...document.querySelectorAll("#grid button[role=gridcell]")];
     const on = cells.find((c) => c.classList.contains("selected")) || cells[0];
     if (on) on.tabIndex = 0;
   }
   function setPlayhead(s, e, restart = true) {
-    const r = e.currentTarget.getBoundingClientRect();
+    const r = (e.currentTarget.closest?.(".rule-cell") || e.currentTarget).getBoundingClientRect();
     const bars = Math.floor(Math.max(0, e.clientX - r.left) / r.width * s.bars);
     S.playhead = s.startBeat + bars * S.grid.perBar;
     placeHead(S.playhead);
     if (restart && C()?.playing?.() && !S.sel) { play("sketch"); play("sketch"); }  // the song again from here
     idle();
   }
-  function stepCell(axis, step) {  // the arrow keys through the grid
-    const g = S.grid, sel = S.sel;
+  function stepCell(axis, step, from) {  // the arrow keys through the grid: from the focused cell, else the selection
+    const g = S.grid;
     if (!g) return false;
+    const focused = from?.closest?.("#grid [role=gridcell][data-track]");
+    const sel = focused && focused.dataset.track !== "chords" ? { kind: "cell", id: focused.dataset.section, player: focused.dataset.track } : S.sel;
     const tracks = g.tracks.filter((t) => t.kind !== "chords");
     if (sel?.kind === "cell") {
       let t = tracks.findIndex((x) => x.id === sel.player), s = g.sections.findIndex((x) => x.id === sel.id);
@@ -516,6 +528,8 @@
       fader, out,
       pan ? h("label", { class: `knob${panYours ? " you" : ""}` }, h("span", {}, `pan ${panWords(pan.value)}`),
         h("input", { type: "range", min: -1, max: 1, step: 0.05, value: pan.value, class: panYours ? "you" : null, "data-key": `pan:${name}`, "aria-label": `${label}: pan`,
+          "aria-valuetext": panWords(pan.value),
+          oninput: (e) => { const x = Number(e.target.value); e.target.previousSibling.textContent = `pan ${panWords(x)}`; e.target.setAttribute("aria-valuetext", panWords(x)); },
           onchange: (e) => setEdit(pan.path, Number(e.target.value), `${label}: pan`) })) : null,
       pump && PUMPED.test(name) ? h("label", { class: `knob${pump.yours ? " you" : ""}` }, h("span", {}, "pump"),
         pumpSelect(pump, `${label}: pump`)) : null,
@@ -595,13 +609,16 @@
   function shell({ kind, rubric, set, mine, body, why, release, hear, problems, extra }) {
     const box = $("inspector");
     box.classList.toggle("empty", kind === "song");
+    box.classList.toggle("shown", kind === "song" && !!S.songShown);  // on a phone, the song's summary asked for
     box.classList.toggle("tall", S.tall);
+    $("songBtn").setAttribute("aria-expanded", String(kind === "song" && !!S.songShown));
     const whyOpen = !!S.why[kind];
     box.replaceChildren(...[
       h("button", { class: "handle", type: "button", "aria-label": S.tall ? "Lower the column" : "Raise the column", onclick: () => { S.tall = !S.tall; box.classList.toggle("tall", S.tall); } }),
       h("div", { class: "top" }, h("span", { class: "rubric", id: "inspectorTitle", tabindex: "-1" }, rubric, mine ? h("span", { class: "you", "aria-label": ", yours" }, " ✎") : null),
         h("button", { class: "what", type: "button", "aria-expanded": String(S.about), "aria-label": "What is this?", title: "What is this?", onclick: () => { S.about = !S.about; renderInspector(); } }, "?"),
-        kind === "song" ? null : h("button", { class: "close", type: "button", "aria-label": "Close (Esc)", title: "Close (Esc)", onclick: () => select(null) }, "✕")),
+        kind === "song" && !S.songShown ? null : h("button", { class: "close", type: "button", "aria-label": "Close (Esc)", title: "Close (Esc)",
+          onclick: () => { S.songShown = false; select(null); } }, "✕")),
       S.about ? h("p", { class: "about" }, STATE_ABOUT[kind] || "") : null,
       set ? h("p", { class: `set${mine ? " you" : ""}` }, set) : null,
       (problems || []).map((p) => h("p", { class: "problem" }, typeof p === "string" ? p : `Couldn't keep ${describePath(p.path)}: ${p.why}.`)),
@@ -716,7 +733,7 @@
     };
     const anyMine = Object.keys(state.edits).some((p) => p.startsWith(`arrange.${s.id}.`)) || !!w?.mine || moved(s);
     shell({ kind: "section", rubric: s.label, mine,
-      set: `${s.bars} bars, ${s.sung ? `sung: “${s.first}”` : w?.sung ? `played; its words wait, unsung: “${String(w.lines[0] || "").replace(/\*/g, "")}”` : `played${w ? `: ${w.lines[0]}` : ""}`}${w?.id && w.block === "verse" ? ` (the verse “${w.id}”)` : ""}`,
+      set: `${s.bars} bars, ${s.sung ? `sung: “${s.first}”` : w?.sung ? `played; its words wait, unsung: “${String(w.lines[0] || "").replace(/\*/g, "")}”` : `played${w ? `: ${String(w.lines[0] || "").replace(/\*/g, "")}` : ""}`}${w?.id && w.block === "verse" ? ` (the verse “${w.id}”)` : ""}`,
       problems: s.problems,
       body: h("div", {},
         chipRow("Length", s.barOptions.map((n) => ({ value: n, text: `${n} bars` })), s.bars, (n) => setBars(s, n), s.by.bars === "you"),
@@ -731,6 +748,9 @@
         choosers.length && !oneChoice ? h("div", { class: "row" }, choosers) : null,
         choosers.length && oneChoice ? h("details", {}, h("summary", {}, "more"), h("div", { class: "row" }, choosers)) : null,
         rules,
+        s.seam && i > 0 ? h("div", { class: "row" }, h("span", { class: "label" }, "Into it"),  // the seam's twin, a bigger target
+          h("button", { class: `btn quiet${s.seam.value ? " you" : ""}`, type: "button", onclick: () => select({ kind: "seam", id: s.id }) },
+            s.seam.value ? M.seamWords(s.seam.value) : "a riser, a sweep, a roll…")) : null,
         h("div", { class: "row" },
           h("button", { class: "btn quiet", type: "button", disabled: i === 0, onclick: () => moveSection(s.id, i - 1), title: "Earlier (⌘/Ctrl ←)" }, "← Earlier"),
           h("button", { class: "btn quiet", type: "button", disabled: i === list.length - 1, onclick: () => moveSection(s.id, i + 1), title: "Later (⌘/Ctrl →)" }, "Later →"),
@@ -1093,17 +1113,23 @@
     if (!$("drawer").hidden) { openTime(false); return true; }
     if (S.open) { closeNotes(); return true; }
     if (S.sel) { select(null); return true; }
+    if (S.songShown) { S.songShown = false; renderInspector(); return true; }
     return false;
   }
 
   // ------------------------------------------------------------------ the keyboard (docs/STUDIO-REDESIGN.md's table)
   function key(e) {
     // Enter or Space on a control of the page's is a keyboard selection: the inspector's heading takes the focus
-    if (e.key === "Enter" && e.target.closest?.("#grid button, #page .rub, #mix .nm, .door")) S.keyed = true;
+    if (e.key === "Enter" && e.target.closest?.("#grid [role=gridcell], #grid .region, #grid .name, #page .rub, #mix .nm, .door")) {
+      S.keyed = true;
+      setTimeout(() => { S.keyed = false; }, 0);  // only for the selection this key makes
+    }
     const a = M.keyAction(e);
     if (!a || document.querySelector("dialog[open]")) return;
     if (e.target.closest?.(".sbc-note, .sbc-roll-scroll") && a.action === "step") return;  // a note's own arrows (composer.js)
-    if (a.action === "play" && e.target.matches?.("input[type=checkbox], input[type=radio], summary")) return;
+    // Space plays from the page, the grid and ▶ ■; on another button, a link or a field it presses it
+    if (a.action === "play" && e.target.closest?.("button, a, summary, select, input") && !e.target.closest("#grid") && !e.target.matches("#tPlay, #tStop")) return;
+    if (a.action === "play" && e.target.matches?.("input[type=checkbox], input[type=radio]")) return;
     switch (a.action) {
       case "play": e.preventDefault(); play(a.how); break;
       case "loop": toggle("tLoop"); break;
@@ -1127,7 +1153,7 @@
       case "move": if (S.sel?.kind === "section") { e.preventDefault(); const i = S.grid.sections.findIndex((s) => s.id === S.sel.id); moveSection(S.sel.id, i + a.step); } break;
       case "step":
         if (e.target.closest?.(".sbc-note, input, select, [role=tab]")) return;
-        if (stepCell(a.axis, a.step)) e.preventDefault();
+        if (stepCell(a.axis, a.step, e.target)) e.preventDefault();
         break;
       default: break;
     }
@@ -1191,6 +1217,8 @@
     audio.addEventListener("timeupdate", wholeSongAt);
     new ResizeObserver(() => { if (S.playhead !== null) placeHead(S.playhead); }).observe($("gridScroll"));
     showView("page");
+    setHow(M.defaultHow(null), false);  // nothing selected: the whole song, sung (decision 2)
+    $("songBtn").addEventListener("click", () => { S.songShown = !S.songShown; select(null); });
   }
 
   // ------------------------------------------------------------------ what studio.js tells the score
@@ -1211,7 +1239,7 @@
       : start.shared ? "Recordings are made, and kept, on the computer serving this studio: download yours to keep it."
         : `Recordings go into ${start.out} on this computer.`;
     if (start.version) $("versionNote").textContent = "This page is on someone's version. Opening another starts from that one instead.";
-    // a view and a selection in the address, for a link or a picture: #view=arrange&sel=cell:refrain:0:drum&open=refrain:0&panel=tools
+    // a view and a selection in the address, for a link or a picture: #view=arrange&sel=cell:drum:refrain:0&open=refrain:0&panel=tools
     if (hash.view) showView(hash.view);
     S.hash = hash;
   }

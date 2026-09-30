@@ -664,10 +664,21 @@ the seams (transitions), the chord and tune scopes and the melisma through the c
   sketch, the whole song recorded: 2:54, its record marking the 17 choices (the transition, the kit, the pump,
   the length and build, the words among them).
 
+**After a Fable review** (read-only, of the built page against this page and the mockup), its points are in:
+Space presses the button it's on (above); the switch starts on Sung with nothing selected (decision 2), and the
+regions' ▶ say which; on a phone the column stops above the views' bar and the song's summary has a way in
+(*This version's choices* on the version line), the seams are 24 px wide and the section's column has *Into
+it* as their twin; a sweep's direction said and kept; the grid's arrow keys start from the focused cell, one
+cell in the tab order; the ruler's bars are buttons (the playhead by keyboard); Esc's order said as it is;
+the keyboard's focus moved to the column only for the selection that key made; a note's state no longer
+outlives the section whose notes were closed; a refusal said once (the masthead, not also under the grid);
+the stars out of a played section's words; the pan's words follow the drag.
+
 **Decisions for the artist (the built page's own).**
 
-1. **Space plays wherever the keyboard is**, a button included (the spec's table); Enter presses buttons. A
-   keyboard user who expects Space to press a button won't find it so.
+1. **Space plays from the page, the grid and ▶ ■**; on any other button, a link or a field it presses it, as a
+   keyboard user expects (a Fable review found it pressing nothing but play). In the grid, Enter selects a cell
+   and Space plays.
 2. **A section's Moment** is *none · a build*, and the style's options that live in that section are rows of
    their own (yes · no, and Lock), rather than one row of *drop · breakdown · stripped start*: in the engine
    a drop is *Who sings: nobody* and a stripped start is the style's whole-song option shown on the last

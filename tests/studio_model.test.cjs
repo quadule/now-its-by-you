@@ -84,6 +84,10 @@ test("a seam's transitions: toggled, lengthened together, said in words", () => 
   assert.equal(M.seamToggle(M.seamToggle(v, "riser"), "impact"), null);
   assert.equal(M.seamWords(null), "nothing: the band goes straight on");
   assert.equal(M.seamWords({ stop: 1 }), "a stop over 1 beat");
+  // a sweep that says which way (sound.py's {bars, type}) keeps its way when it is lengthened
+  const sweep = { sweep: { bars: 2, type: "lowpass" } };
+  assert.equal(M.seamWords(sweep), "a sweep, falling over 2 bars");
+  assert.deepEqual(M.seamOver(sweep, 4), { sweep: { bars: 4, type: "lowpass" } });
 });
 
 test("the scope switch: everywhere first, here only, and the last one however many at the last of several", () => {

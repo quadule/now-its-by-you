@@ -38,11 +38,12 @@
     <span class="lineage" id="lineage" role="img" aria-label="the versions before this one"></span>
     <p class="which" id="which">Making your version of the song…</p>
     <p class="which short" id="whichShort" aria-hidden="true"></p>
+    <button class="btn quiet phone-only-inline" id="songBtn" type="button" aria-controls="inspector">This version's choices</button>
     <button class="btn quiet" id="timeBtn" type="button" aria-expanded="false" aria-controls="drawer" title="Other days, other computers, someone's version (T)">Time ▾</button>
     <span class="yours" id="yoursBar" hidden></span>
   </div>
   <p class="hint draw" id="draw"></p>
-  <div class="problems-bar" id="problemsBar" hidden role="status"></div>
+  <div class="problems-bar" id="problemsBar" hidden></div>
   <div class="version-bar" id="versionBar" hidden></div>
 </header>
 
@@ -251,7 +252,7 @@
       <tr><th>1 · 2 · 3</th><td>Page · Arrange · Mix</td></tr>
       <tr><th>← →</th><td>the section before or after; in the notes, move the selected note (Shift: its length)</td></tr>
       <tr><th>↑ ↓</th><td>the track above or below; in the notes, the note's pitch</td></tr>
-      <tr><th>Enter · Esc</th><td>open the selected section's notes · close the notes, then the column, then a drawer</td></tr>
+      <tr><th>Enter · Esc</th><td>open the selected section's notes · close what is open: a sheet or the Time drawer first, then the notes, then the column</td></tr>
       <tr><th>M · S</th><td>mute · solo the selected track</td></tr>
       <tr><th>⌘/Ctrl ← →</th><td>move the selected section earlier or later</td></tr>
       <tr><th>R · T · ?</th><td>record · the Time drawer · this help</td></tr>
