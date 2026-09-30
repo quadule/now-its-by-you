@@ -147,9 +147,9 @@ def read(data: bytes) -> dict:
 # ---------------------------------------------------------------- reading any file, defensively (notes in)
 
 
-MAX_FILE = 512 * 1024  # bytes: the export of a whole song is some 20 KB
+MAX_FILE = 256 * 1024  # bytes: the export of a whole song is some 20 KB; sent as base64 in a request of 1 MiB
 MAX_TRACKS = 64
-MAX_EVENTS = 200_000  # across the file
+MAX_EVENTS = 100_000  # across the file (the export of a whole song has some 2,500)
 MAX_TICK = 2**28  # a track's last tick: far past any song at any division
 MAX_TEXT = 256  # characters kept of a name, a marker, a lyric
 
@@ -332,9 +332,11 @@ class TickMap:
         return out
 
 
-def clock_map(genome, params, until: float) -> tuple[TickMap, tuple[int, int], float]:
-    """The rendition's clock as ticks, its time signature, and where bar 1 begins in seconds (at or before
-    zero: the stems are padded by minus this, so they start at bar 1 too)."""
+def tick_grid(genome, params):
+    """How a rendition's grid units become ticks: (the clock, the grid unit at tick 0, grid units a step, ticks
+    a step, the time signature, grid units a bar). Tick 0 is a bar line at or before the first sound; a step is
+    a beat (a foot of a song re-barred in three); ticks are linear in grid units, so a tick read back from a
+    file is a grid position exactly (songbird.notesin)."""
     from .realize import timeline
 
     clock = timeline(genome, params)
@@ -350,6 +352,13 @@ def clock_map(genome, params, until: float) -> tuple[TickMap, tuple[int, int], f
     origin = clock.lead
     while clock.seconds(origin) > 1e-9:  # back to a bar line at or before the first sound
         origin -= bar
+    return clock, origin, step, per, signature, bar
+
+
+def clock_map(genome, params, until: float) -> tuple[TickMap, tuple[int, int], float]:
+    """The rendition's clock as ticks, its time signature, and where bar 1 begins in seconds (at or before
+    zero: the stems are padded by minus this, so they start at bar 1 too)."""
+    clock, origin, step, per, signature, _ = tick_grid(genome, params)
     points, u = [], origin
     while u <= clock.end or len(points) < 2:
         points.append((clock.seconds(u), (u - origin) // step * per))

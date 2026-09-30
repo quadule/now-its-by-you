@@ -194,9 +194,9 @@ def test_parse_holds_its_limits():
     far = (midi.vlq(2**27) + bytes([0xC0, 1])) * 3
     with pytest.raises(midi.Unreadable, match="longer than a song"):
         midi.parse(HEAD(1) + TRACK(far))
-    struck = (midi.vlq(0) + bytes([0x90, 60, 100])) * 60000 + (midi.vlq(1) + bytes([0x80, 60, 0])) * 60000
-    began = time.perf_counter()  # one key struck 60,000 times, then ended as often: linear, not quadratic
-    assert len(midi.parse(HEAD(1) + TRACK(struck))["tracks"][0]["notes"]) == 60000
+    struck = bytes([0, 0x90, 60, 100]) + bytes([0, 60, 100]) * 39999 + bytes([1, 60, 0]) * 40000
+    began = time.perf_counter()  # one key struck 40,000 times, then ended as often: linear, not quadratic
+    assert len(midi.parse(HEAD(1) + TRACK(struck))["tracks"][0]["notes"]) == 40000
     assert time.perf_counter() - began < 2
 
 
