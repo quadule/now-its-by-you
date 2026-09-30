@@ -395,7 +395,10 @@ def test_the_pages_guards_come_before_a_byte_is_read(public, parent):
     with socket.create_connection(("127.0.0.1", port), timeout=10) as s:
         s.sendall(f"POST /api/open HTTP/1.1\r\nHost: 127.0.0.1:{port}\r\nX-Studio: {studio.token}\r\n"
                   f"Content-Length: {200 * 2**20}\r\n\r\n".encode())
-        answer = s.recv(4096).decode()
+        answer = b""
+        while chunk := s.recv(4096):  # headers and body may come apart: read until the studio closes
+            answer += chunk
+        answer = answer.decode()
     assert answer.startswith("HTTP/1.1 413") and "the most taken here is 64 MB" in answer
     # an hour's opens, counted before reading (two for this visitor: the second is refused as a file, the third
     # as one too many)
