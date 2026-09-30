@@ -14,6 +14,7 @@
 <script src="/drafts.js" defer></script>
 <script src="/help.js" defer></script>
 <script src="/export.js" defer></script>
+<script src="/perform.js" defer></script>
 </head>
 <body>
 <header class="top wrap masthead">
@@ -96,6 +97,7 @@
     </div>
     <p class="to-export"><button class="link small" id="toExport" type="button">MIDI and the parts, for your own tools ↓</button></p>
     <div id="studio-composer"><div class="composer-loading"><p class="hint">Laying out the song…</p></div></div>
+    <section class="panel perform-panel" id="performPanel" aria-label="Play a part in"></section>
   </div>
 
   <div id="workspace-sound" data-workspace-panel="sound" role="tabpanel" aria-labelledby="tab-sound" hidden>
@@ -185,6 +187,13 @@
       <button class="btn" id="exportStems" type="button">Download the parts (stems)</button>
     </div>
     <p class="hint" id="exportNote" aria-live="polite"></p>
+    <div class="notes-in-back">
+      <p>Changed it in your sequencer? Bring the MIDI file back: the studio shows what would change, and nothing does until you apply it.</p>
+      <div class="actions"><button class="btn" id="importMidi" type="button">Bring a MIDI file back</button></div>
+      <input type="file" id="importFile" accept=".mid,.midi,audio/midi,audio/x-midi" hidden aria-label="A MIDI file to bring back">
+      <p class="hint" id="importNote" aria-live="polite"></p>
+      <div id="importBox"></div>
+    </div>
   </section>
   <div class="keep-for-later">
     <span class="hint">Finish later somewhere else:</span>

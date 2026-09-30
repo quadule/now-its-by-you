@@ -641,3 +641,16 @@ dialog.help h2::after { content: ""; display: block; height: 4px; margin-top: 10
 .export-panel { margin-top: 18px; }
 .export-panel .actions { flex-wrap: wrap; }
 .to-export { margin: -4px 0 10px; text-align: right; }
+
+/* Notes in (perform.js): a part played in on a keyboard, a MIDI file brought back; what will change, in the
+   second ink */
+.perform-panel { margin-top: 18px; }
+.perform-panel h3 { margin: 0; font-size: 17px; }
+.notes-in-controls { display: flex; flex-wrap: wrap; gap: 10px 16px; align-items: center; margin: 12px 0 4px; font-size: 14px; }
+.notes-in-controls select { font: inherit; }
+.notes-in-preview { margin-top: 12px; padding-top: 10px; border-top: 1px solid var(--line); }
+.notes-in-list { margin: 6px 0 10px; padding-left: 20px; font-size: 14px; }
+.notes-in-list.yours { color: var(--you); }
+.notes-in-assign { display: block; margin: 4px 0; font-size: 14px; }
+.notes-in-back { margin-top: 14px; padding-top: 12px; border-top: 1px solid var(--line); }
+.notes-in-yours { margin-top: 12px; font-size: 14px; }
