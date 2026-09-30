@@ -309,7 +309,8 @@ def test_a_worn_mix_is_worn_as_it_was(amount):
 MALLETS = {
     ("vibraphone", 0.6): "b7cc420c5aab8cb6a38b172476dedf35407838ddd68c5128b4fd4611fedcf94c",
     ("vibraphone", 0.0): "d18f121556d248efe09c8a58ecda9d28a6ee5a9fc893d8de7122d72f3ea638a3",
-    ("vibraphone", -1.0): "cf01187aab7da47569e5ec99643c0dd45e1b83c017f3a84d980cf53aa29a5364",  # no motor at all: ornament 0 and no motor's art
+    # no motor at all: ornament 0 and no motor's art
+    ("vibraphone", -1.0): "cf01187aab7da47569e5ec99643c0dd45e1b83c017f3a84d980cf53aa29a5364",
     ("celesta", 0.5): "b5636dcc9389e721d411f30d0bf66c2839eb65778ce10ecae4913110ff72f9f1",
     ("marimba", 0.5): "fe1fdc1d1b05ffa999167c75c5a6f4cb07280cd6bbeddfe0948b154e27206dab",
 }
@@ -326,7 +327,8 @@ def mallets_made(name: str, ornament: float) -> str:
     from songbird.synth import mallets
 
     y = mallets.render(name, _struck(name, name == "vibraphone" and ornament >= 0.0), SR, int(9.0 * SR),
-                       np.random.default_rng(15), np.random.default_rng(16), {"ornament": max(0.0, ornament), "wear": 0.5})
+                       np.random.default_rng(15), np.random.default_rng(16),
+                       {"ornament": max(0.0, ornament), "wear": 0.5})
     return hashlib.sha256(np.ascontiguousarray(y).tobytes()).hexdigest()
 
 
@@ -390,3 +392,27 @@ def synth_made(name: str) -> str:
 @pytest.mark.parametrize("name", list(SYNTHS))
 def test_synthesizers_make_the_samples_they_made(name):
     assert synth_made(name) == SYNTHS[name]
+
+
+# What these made of a few bars before 2026-09-30 (the tree at 02384c8), placed and levelled as a band's stem: a
+# piano through its soundboard, a harmonica through its hands' cup, an electric guitar through its amp's spring and
+# cabinet.
+BODIES = {"piano": "b7a5c803e55f9c8f0f9dbe099f05381870245e7971199b0401144c0f3b95d095",
+          "harmonica": "ad2a71c6f459582b2779eed9362e7bee7e34ead7dc48e5973e4cf2d08704090b",
+          "electric": "87cd1ac957f42e4d8fd2eaca1fcceeceeb6b390aad50848329919684a6bab0ea"}
+
+
+def body_made(name: str) -> str:
+    from songbird.synth import instruments
+
+    rng = np.random.default_rng(24)
+    low = {"piano": 48, "harmonica": 60, "electric": 52}[name]
+    notes = tuple(_Note(0.1 + 0.45 * k, float(rng.uniform(0.2, 0.9)), float(low + rng.integers(0, 15)),
+                        float(rng.uniform(0.4, 1.0))) for k in range(16))
+    y = instruments.render_other(name, notes, SR, int(9.0 * SR), {}, 25)
+    return hashlib.sha256(np.ascontiguousarray(y).tobytes()).hexdigest()
+
+
+@pytest.mark.parametrize("name", list(BODIES))
+def test_bodies_make_the_samples_they_made(name):
+    assert body_made(name) == BODIES[name]

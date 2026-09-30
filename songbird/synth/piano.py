@@ -55,9 +55,9 @@ from __future__ import annotations
 
 import numpy as np
 from numba import njit
-from scipy.signal import oaconvolve, sosfilt
+from scipy.signal import sosfilt
 
-from . import body, modal
+from . import body, modal, oa
 from .iir import butter
 
 SPEC = {
@@ -530,7 +530,15 @@ def render(name: str, notes, sr: int, length: int, rng: np.random.Generator, mak
         level = _interp(note.pitch, KNOCK_TABLE) * (1.0 + 2.0 * piano.felt_strip) * (1.0 + 0.5 * piano.wear)
         level *= _loudness(vel) * (0.5 + vel)
         force[:, start:start + n] += (thud * level)[None, :] * chan[:, None]
+    # each channel through the soundboard, oaconvolve's a few blocks at a time, then high-passed where it lies, a
+    # stretch at a time (the filter's state carried: as along axis 0 of the whole)
     out = np.empty((length, 2))
     for ch in range(2):
-        out[:, ch] = oaconvolve(force[ch], piano.board[:, ch])[:length]
-    return sosfilt(butter(1, 20.0, btype="highpass", fs=sr, output="sos"), out, axis=0)
+        oa.convolve(force[ch], piano.board[:, ch], length, out=out[:, ch])
+    del force
+    sos = butter(1, 20.0, btype="highpass", fs=sr, output="sos")
+    for ch in range(2):
+        state = np.zeros((sos.shape[0], 2))
+        for a in range(0, length, 1 << 16):
+            out[a:a + (1 << 16), ch], state = sosfilt(sos, out[a:a + (1 << 16), ch], zi=state)
+    return out
