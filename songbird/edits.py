@@ -84,10 +84,10 @@ from .synth.mixing import RANGES, MixParams
 MIX = ("space", "width", "forward", "intimacy", "rt60", "predelay")  # the room: how long it rings, how soon it answers
 # The arrangement's options a person may set (songbird.style.Style), each as the style's own choices go
 STYLE_OPTIONS = {"feel": ("straight", "swing", "shuffle", "twelve", "half", "double", "waltz", "six"),
-                 "ending": ("ring", "rit", "cold", "amen", "repeat"), "backing": ("", "oohs", "echo", "thirds", "gang"),
+                 "ending": ("ring", "rit", "cold", "amen", "repeat"), "backing": ("", "oohs", "echo", "thirds", "gang", "hum"),
                  "lift": bool, "entrances": bool, "breakdown": bool, "coda": ("", "quote"), "motif": ("", "bridge", "chance"),
                  # how it starts, which verse is in stop-time or bare and over whom, a half-time bridge (2026-09-29)
-                 "intro": ("", "lead", "pad", "count", "voice", "quote"), "stops": int, "alone": int, "alone_with": str,
+                 "intro": ("", "lead", "pad", "count", "voice", "quote", "notes", "air"), "stops": int, "alone": int, "alone_with": str,
                  "bridge": ("", "half")}
 
 

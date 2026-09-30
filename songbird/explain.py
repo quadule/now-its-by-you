@@ -78,13 +78,16 @@ PLAYERS = {"lute": "lute", "guitar": "guitar", "harp": "harp", "bass": "bass", "
 STYLE_NAMES = {"ballad": "the ballad band, the song's own", "stringband": "a string band", "country": "country",
                "gospel": "gospel", "shanty": "a sea shanty", "songwriter": "a singer-songwriter",
                "chamber": "chamber folk", "lullaby": "a lullaby", "ambient": "ambient", "synthfolk": "synth folk",
-               "lofi": "lo-fi", "indie": "indie folk", "blues": "country blues"}
+               "lofi": "lo-fi", "indie": "indie folk", "blues": "country blues",
+               # beside the ring (docs/STYLES.md, "Two more", 2026-09-30)
+               "acappella": "a cappella"}
 FEEL_NAMES = {"straight": "played straight", "swing": "swung", "shuffle": "a shuffle", "twelve": "in twelve-eight",
               "half": "half-time", "double": "double-time", "waltz": "a waltz", "six": "in six-eight"}
 ENDING_NAMES = {"ring": "the last chord rings", "rit": "it slows broadly to the end", "cold": "it stops dead",
                 "amen": "it ends on an amen", "repeat": "the last line is sung again"}
 BACKING_NAMES = {"oohs": "backing voices on oohs", "echo": "backing voices echo the lines",
-                 "thirds": "backing voices in harmony", "gang": "everyone sings along"}
+                 "thirds": "backing voices in harmony", "gang": "everyone sings along",
+                 "hum": "voices humming open fifths under the verses"}
 PATTERNS = {"lilt": "a lilting strum", "strum": "a steady strum", "pick": "fingerpicking", "air": "a slow air"}
 PATTERN_DETAIL = {"lilt": "the strum follows the tune's long-short-short", "strum": "the old faithful strum",
                   "pick": "picked strings, no strumming", "air": "rolled chords and held notes, no drum"}
@@ -212,7 +215,10 @@ def band_words(band, style=None) -> str:
     everyone = players(band, style)
     playing = [n for n in everyone if band.plays(n)]
     if not playing:
-        return "no band: the voice alone"
+        from .style import of
+
+        alone = style is not None and of(style).group and not of(style).leads  # a style of voices alone
+        return "no instruments: the voices are the band" if alone else "no band: the voice alone"
     out = [n for n in everyone if n not in playing]
     lead = leader(band, style)
     leading = f"the {player(lead)} leading" if lead else ""
@@ -826,10 +832,14 @@ def style_card(v: Version) -> dict:
                if s.alone else "",
                f"verse {s.stops} in stop-time" if s.stops else "",
                "the last refrain starts stripped down" if s.breakdown else "",
-               "the band joins line by line in the first verse" if s.entrances else "",
+               ("the voices come in a line apart" if sdef.group else "the band joins line by line in the first verse")
+               if s.entrances else "",
                "the bridge in half-time" if s.bridge == "half" else "",
                {"lead": "", "pad": "a pad swells in to begin", "count": "a count-in to begin",
-                "voice": "the singer begins alone", "quote": "a line of an older song to begin"}.get(s.intro, ""),
+                "voice": "the singer begins alone", "quote": "a line of an older song to begin",
+                "notes": "the voices sing the tune on its notes first (fa, sol, la)",
+                "air": "a slow air to begin, out of time"}.get(s.intro, ""),
+               group_words(v.params) if sdef.group else "",
                "an older song's first notes over the last chord" if s.coda == "quote" else "",
                {"bridge": "an older song's first notes through the bridge",
                 "chance": "an older song's first notes in the bridge, in some renditions"}.get(s.motif, ""),
@@ -871,8 +881,23 @@ def style_card(v: Version) -> dict:
     return _card(v, "style", "The style", value, detail, mine + _finish(v, why, "style"), ["style."],
                  style={"name": name, "feel": feel, "ending": s.ending or "ring", "backing": s.backing,
                         "lift": s.lift},
-                 styles={k: STYLE_NAMES.get(k, k) for k in style_mod.RING}, feels={f: FEEL_NAMES.get(f, f) for f in feels},
+                 styles={k: STYLE_NAMES.get(k, k) for k in (*style_mod.RING, *style_mod.OFF_RING)}, feels={f: FEEL_NAMES.get(f, f) for f in feels},
                  endings=dict(ENDING_NAMES), backings={"": "no backing voices", **BACKING_NAMES})
+
+
+def group_words(params) -> str:
+    """Who sings the parts of a style that sings as a group: the lineage's voices, then the program's own."""
+    from .style import of
+
+    lineage = int(params.choir)
+    n = min(6, max(lineage, int(params.style.voices), of(params.style).group))
+    own = n - min(lineage, n)
+    if not own:
+        return f"{number(n)} voices from the versions before sing the parts"
+    if not lineage:
+        return f"{number(n)} voices of the program's own sing the parts"
+    return (f"{number(n)} voices sing the parts: {number(lineage)} from the versions before, "
+            f"{number(own)} of the program's own")
 
 
 def mix_card(v: Version) -> dict:
