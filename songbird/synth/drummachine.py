@@ -980,8 +980,12 @@ def render(name: str, notes, sr: int, length: int, rng: np.random.Generator, mak
     if name not in SPEC:
         raise ValueError(f"no such drum machine: {name}")
     s = {**DEFAULTS, **(settings or {})}
+    lofi = s.get("kit") == "lofi"
+    if lofi:  # a person's lofi kit: the machine soft and worn (docs/SOUND-DESIGN.md)
+        s = {**s, **LOFI}
     wear = float(np.clip(s.get("wear", 0.25), 0.0, 1.0))
     kit = TR808(sr, make, s) if name == "drums-808" else TR909(sr, make, s)
+    character(kit, s)
     mix = MIX_808 if name == "drums-808" else MIX_909
     out = np.zeros((length, 2))
     base = int(rng.integers(1 << 62))
@@ -1025,4 +1029,51 @@ def render(name: str, notes, sr: int, length: int, rng: np.random.Generator, mak
         theta = (PAN[piece] + 1.0) * np.pi / 4.0
         out[i:j, 0] += y[: j - i] * np.cos(theta) * np.sqrt(2.0)
         out[i:j, 1] += y[: j - i] * np.sin(theta) * np.sqrt(2.0)
+    if lofi:  # as a sampler keeps it: the top rolled off, the peaks rounded
+        out = sosfilt(_biquad("lp", LOFI_TOP, 0.7071, sr), out, axis=0)
+        out = np.tanh(LOFI_DRIVE * out) / LOFI_DRIVE
     return out
+
+
+# ---------------------------------------------------------------------------------------------- a person's kit
+#
+# docs/SOUND-DESIGN.md: the lofi kit (the machine soft and worn, then a sampler's top and peaks) and each piece's
+# character, moved on the machine once it is made, so its maker's tolerances are drawn as ever.
+
+LOFI = dict(brightness=0.15, body=1.25, wear=0.6)
+LOFI_TOP = 6000.0  # Hz
+LOFI_DRIVE = 1.5
+TUNE = (-12.0, 12.0)  # semitones a piece may be retuned
+DECAY = (0.25, 4.0)  # times its decay
+SNAPPY = (0.0, 2.0)  # times the snare's snappy
+PIECE_KNOBS = {"kick": ("tune", "decay"), "snare": ("tune", "decay", "snappy"), "hat": ("decay",)}
+
+
+def character(kit, s: dict) -> None:
+    """A person's kick, snare and hat (settings "kick", "snare", "hat": {"tune": semitones, "decay": times,
+    "snappy": times}) on a machine made: its drums retuned, their decays and the snare's snappy scaled."""
+    for piece, knobs in PIECE_KNOBS.items():
+        want = s.get(piece)
+        if not want:
+            continue
+        tune = 2.0 ** (float(np.clip(want.get("tune", 0.0), *TUNE)) / 12.0)
+        decay = float(np.clip(want.get("decay", 1.0), *DECAY))
+        if piece == "kick":
+            if isinstance(kit, TR808):
+                kit.bd_f0 *= tune
+            else:
+                kit.bd_f *= tune
+            kit.bd_t60 *= decay
+        elif piece == "snare":
+            kit.sd_f = tuple(f * tune for f in kit.sd_f)
+            if isinstance(kit, TR808):
+                kit.sd_t60 = tuple(t * decay for t in kit.sd_t60)
+                kit.sd_tau *= decay
+            else:
+                kit.sd_tau = tuple(t * decay for t in kit.sd_tau)
+                kit.sd_noise_tau *= decay
+            kit.sd_snappy *= float(np.clip(want.get("snappy", 1.0), *SNAPPY))
+        else:
+            kit.ch_tau *= decay
+            kit.oh_tau *= decay
+            kit.pedal_tau *= decay
