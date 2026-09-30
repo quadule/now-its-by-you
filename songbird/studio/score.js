@@ -899,8 +899,15 @@
     const phrases = state.view.composition?.sections?.find((x) => x.id === sel.id)?.phrases || [];
     const p = phrases[sel.line];
     if (!s || !p?.lyric_path) return false;
-    const anchor = h("div", { class: "lyric-author" });
-    window.SongbirdAuthor?.line(state.view, sel.id, sel.line, anchor);
+    const anchor = h("div", { class: "lyric-author", "data-whole": "" });  // author.js's own nodes: redrawn whole
+    // one line at a time: a line used, the column moves on to the next one to write (typing elsewhere stays a draft)
+    const next = () => {
+      const j = phrases.findIndex((q, k) => k > sel.line && q.lyric_path);
+      if (j < 0 || S.sel?.kind !== "line" || S.sel.id !== sel.id || S.sel.line !== sel.line) return;
+      select({ kind: "line", id: sel.id, line: j });
+      $("inspector").querySelector("textarea")?.focus({ preventScroll: true });
+    };
+    window.SongbirdAuthor?.line(state.view, sel.id, sel.line, anchor, { next });
     shell({ kind: "line", rubric: `${s.label}, line ${sel.line + 1}`, mine: !!p.authored,
       set: `${p.authored ? "yours" : w?.how ? `the song's own, ${w.how}` : "the song's own"}: ${p.syllable_count} syllables`,
       body: h("div", {},
