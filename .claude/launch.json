@@ -14,6 +14,13 @@
       "runtimeArgs": ["run", "songbird", "studio", "--no-open"],
       "port": 8766,
       "url": "http://127.0.0.1:8766"
+    },
+    {
+      "name": "studio-singing",
+      "runtimeExecutable": "uv",
+      "runtimeArgs": ["run", "songbird", "studio", "--no-open", "--web-singing", "--port", "8767"],
+      "port": 8767,
+      "url": "http://127.0.0.1:8767"
     }
   ]
 }
