@@ -448,9 +448,10 @@ def _conform(x: np.ndarray, length: int) -> np.ndarray:
 def mix_made(parts: list, length: int, sr: int, seed: int = 0, params: MixParams | None = None,
              taps: dict | None = None, lift: np.ndarray | None = None, progress=None, own: bool = True) -> np.ndarray:
     """mix(), from the stems' makers: (name, make) for each stem, none longer than `length` samples. Each
-    stem is made, treated and put into its bus as the mix comes to it, and let go: the singers first (the
-    band makes way for them), then the band's instruments in their names' order, a few made ahead on
-    threads (threads.in_order), so a song's stems are never all held at once. The same mix, to the bit,
+    stem is made, treated and put into its bus as the mix comes to it, and let go: the band's instruments in
+    their names' order, the singers before the first instrument that steps back under the voice (the band
+    makes way for it; on one or two threads, before them all), a few made ahead on threads
+    (threads.in_order, the lead started first), so a song's stems are never all held at once. The same mix, to the bit,
     as mix() of all of them. progress, if given, is told each stem's name as the mix comes to it, then
     "mix". own: each make() gives a stem of its own, which the mix may treat where it lies (mix() passes
     False: its stems are the caller's)."""
@@ -535,20 +536,30 @@ def mix_made(parts: list, length: int, sr: int, seed: int = 0, params: MixParams
     # a bus of one stem is made with its stem; a bus of several is summed as they come, then treated.
     buses = {"voice": lead_bus, "choir": choir_bus}
     groups = {bus: [n for n, r in roles.items() if r == bus] for bus in buses}
-    jobs = []
+    sung = []
     for bus, names in groups.items():
         if len(names) == 1:
-            jobs.append((names[0], lambda bus=bus, name=names[0]: buses[bus](_alone(stem(name)), own)))
+            sung.append((names[0], lambda bus=bus, name=names[0]: buses[bus](_alone(stem(name)), own)))
         else:
-            jobs += [(name, partial(stem, name)) for name in names]
-    jobs += [(name, partial(instrument, name)) for name, role in roles.items() if role not in buses]
+            sung += [(name, partial(stem, name)) for name in names]
+    played = [(name, partial(instrument, name)) for name, role in roles.items() if role not in buses]
+    # The instruments go into the band in their names' order; only those that step back under the voice need
+    # it made first (singing). On three threads or more the singers are put together just before the first
+    # of those, and started first of all: the instruments before it are made and summed while the voice is
+    # still being sung (faster; on two, 0.07 GB more at the peak). On one or two, the singers come first, and
+    # the voice is sung before the band's sums are begun (the least memory).
+    steps_back = next((i for i, (name, _) in enumerate(played) if ROLES[roles[name]].duck), len(played))
+    if threads.workers() <= 2:
+        steps_back = 0
+    jobs = played[:steps_back] + sung + played[steps_back:]
+    singers_left = len(sung)
 
     voice = choir = singing = None
     band = np.zeros((length, 2))
     band_send = np.zeros((length, 2))
     stepping = np.zeros((length, 2))  # what the instruments that step back under the voice give up
     held: dict = {}
-    results = threads.in_order(jobs, ahead=threads.workers())
+    results = threads.in_order(jobs, first=tuple(name for name, _ in sung[:1]), ahead=threads.workers())
     try:
         for name, _ in jobs:
             if progress is not None:
@@ -556,6 +567,7 @@ def mix_made(parts: list, length: int, sr: int, seed: int = 0, params: MixParams
             result = next(results)[1]
             role = roles[name]
             if role in buses:
+                singers_left -= 1
                 if len(groups[role]) > 1:
                     held[name] = result
                     if len(held) < len(groups[role]):
@@ -566,8 +578,9 @@ def mix_made(parts: list, length: int, sr: int, seed: int = 0, params: MixParams
                     voice, singing = result if result is not None else (None, None)
                 else:
                     choir = result
+                if not singers_left:
+                    rise = None  # the singers' buses are made: nothing else rises with the arrangement
                 continue
-            rise = None  # the singers are made: nothing else rises with the arrangement
             if result is None:
                 continue
             strip, (where, x) = ROLES[role], result

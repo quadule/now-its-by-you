@@ -135,13 +135,17 @@ def test_a_mix_of_stems_made_as_it_goes_is_the_mix_of_them_all(monkeypatch):
         monkeypatch.setenv("SONGBIRD_THREADS", threads)
         taps_a, taps_b = {}, {}
         given = {k: v.copy() for k, v in stems.items()}
-        a = mixing.mix(stems, SR, seed=4, taps=taps_a)
+        lift = mixing.lead_lift([("verse", 0.0, 2.0), ("refrain", 2.0, 4.0)], [0.4, 0.9], SR, length)
+        a = mixing.mix(stems, SR, seed=4, taps=taps_a, lift=lift.copy())
         assert all(same(stems[k], given[k]) for k in stems)  # the caller's stems are left as they were
         told = []
         b = mixing.mix_made([(k, lambda v=v: v.copy()) for k, v in stems.items()], length, SR, seed=4, taps=taps_b,
-                            progress=told.append)
+                            progress=told.append, lift=lift.copy())
         assert same(a, b)
-        assert told == ["voice", "choir1", "choir2", "bass", "guitar", "lute", "shaker", "mix"]
+        singers = ["voice", "choir1", "choir2"]
+        # on three threads the band's parts before the lute (which steps back under the voice) come first
+        assert told == (singers + ["bass", "guitar"] if threads == "1" else ["bass", "guitar"] + singers) + \
+            ["lute", "shaker", "mix"]
         for key in ("voice", "choir", "band", "wet", "glue", "singing"):
             assert same(taps_a[key], taps_b[key])
 
