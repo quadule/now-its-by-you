@@ -232,3 +232,147 @@ Found while building this; the bank is the other thread's to change:
 - The genome's form template has no second bridge, so the extra stanza is
   only sung in a form built outside it, and the template allows a single
   verse where the rules need two.
+
+# Taking over the arrangement (2026-09-29)
+
+The studio test that made an EDM version through the page (docs/STUDIO-EDM-TEST.md) found that the
+arrangement's dynamics came from chance, not from the person: how the song starts, the band joining line
+by line, the breakdown were drawn and couldn't be set; there was no per-section drum pattern, no
+instrumental drop, sections were fixed at their bars; and the tempo stopped at 1.3 times the song's,
+whatever the style. The artist: the program's own choices (drawn by chance, per machine and date) are the
+point of the piece, stay the default and stay visible; a person can take any of them over. This is the
+engine and the API a DAW-like page needs (sections as regions, players as tracks, a track x section grid,
+one inspector: docs/STUDIO-REDESIGN.md); the page itself is designed there. `songbird/takeover.py` holds it
+(not `arrange.py`, which draws the words).
+
+## The design, as built
+
+**One place the program's arrangement lives.** Both arrangers already decide, section by section, what
+each player does there: `band.plan` (the ballad) and `idioms.plan_style` (every other style) fill each
+`Section.parts` (player -> idiom: "walk", "strum", "machine", "half"...), and the style's options
+(`idioms.shape_plan`: entrances, a bare verse, stop-time, a breakdown, a half-time bridge, a pad intro)
+then remove players or make them come in late (`Plan.entrances`). A person's arrangement is laid over that
+by three calls in both arrangers: `takeover.prepare` before the plan (which sections of the form each of
+the band's sections holds, and a section a person had played marked so), `takeover.take_over` after the
+plan and the style's options (the program's decisions kept in `ctx.taken`, then the person's put in their
+place) and `takeover.shape` on the notes written (entrances, levels, a build, a played section's tune).
+The program decides first, always, and what it decided is kept beside the person's, so the page shows
+both and a released choice goes back to it.
+
+**The edits.** Flat paths, as every edit is (docs/STUDIO.md), by the arrangement's own section ids
+(`verse:1`, the second verse in story order, as `form.order` and `part.*` name them):
+
+| Path | Value | What |
+|---|---|---|
+| `arrange.<section>:<n>.<player>.level` | out, soft, plays, hard | in or out, and how hard (the page's words: docs/STUDIO-REDESIGN.md). out sits the player out there; soft keeps only its beats, 0.8 as loud, and plays what the style gives it with the band a little quieter (its busyness less 0.3), the ballad's players a step down from the program's (a walk to roots, a strum to a boom-chick); plays is the program's own there (the style's for the section's energy where the program had it out); hard what the style gives a fuller band (busyness plus 0.3), a step up for the ballad's, 1.15 as loud. The section's energy itself doesn't move, so a hard refrain gets no fill it wasn't getting unless `fill` asks |
+| `arrange.<section>:<n>.<player>.pattern` | an idiom of the player's | what it plays there: a kit's or a drum machine's groove, four on the floor, half time, toms, a boom-bap, winding down, a build; a bass's roots, two, walk, eighths, sub; a guitar's strum, boom-chick, Travis picking; "lead", the tune... The vocabulary (`takeover.patterns`): every idiom any style gives that instrument (or the part it stands in for), its family's own, "lead" for a pitched player, and for the drums the grooves and a build; the ballad's eight have their own writers' idioms (`BALLAD`) |
+| `arrange.<section>:<n>.<player>.from` | a line (0: from the start) | where it comes in: the band joining line by line, per player, per section, counted in the section's own lines |
+| `arrange.<section>:<n>.<player>.fill` | true, false | a drum fill in the section's last bar into the next, or none: a kit or a drum machine (`idioms.w_groove`); the frame drum's fills were taken out on 2026-09-27 and stay out |
+| `arrange.<section>:<n>.bars` | 2, 4, 8, 16 | the section's length. A played section (an intro, a break, an outro, or a sung one made played) is fitted from its own tune lines, the last ones kept (the cadence) and repeated backwards: the eight-bar break (v1 v2 v3 v2) at four is v3 v2, at sixteen itself twice. A sung section is only lengthened: its lines sung, then the band plays its last lines again, the lead on the tune (a post-refrain drop); never shortened below its lines. A turn keeps its two bars (its tune is a line quoted to fit them) |
+| `arrange.<section>:<n>.sung` | false | the section played, not sung: its words are still drawn (so no other section's words move, and a person's lines for it wait) but the singer, the lineage choir and the backing voices leave it, the fills between lines with them, and the band's lead plays the tune; the band keeps its weight under the lead (a drop, not a break: `band.Context.vel` leaves off the dimming it gives an instrumental statement) |
+| `arrange.<section>:<n>.build` | true | a build toward the next section: the players come in one after another at bar lines through its first half (the chords first, then the bass, the drums, the rest, as the band joins line by line), everything rises from 0.7 to 1.15 as loud, and a kit or a drum machine plays a build (`idioms.w_build`: a crash, the kick on every beat through the first half, the snare on beats, then half-beats, then the feel's finest steps, rising; the last beat empty) unless its pattern is set; the ballad's frame drum keeps its pattern and rises. Not on the song's last section (said) |
+
+null releases any of them (and so do `sung: true` and `build: false`, the section's own). The style's
+own options have the rest of their edits: `style.intro`, `style.stops`, `style.alone`,
+`style.alone_with` and `style.bridge`, beside the existing `style.entrances`, `style.breakdown`,
+`style.lift` and `style.ending`, so how it starts, stop-time and the breakdown can be chosen whole; a
+cell's `level` or `from` then overrides what they did to that player there (and a player a person
+arranged in a stop-time verse plays as they chose). Choosing one of these options with no machine to draw
+the rest now keeps the others as the version had them (`style.choose_style`); before, they were all drawn
+again.
+
+**A lock.** Keeping what chance drew is the same edit with the program's own value (the page's padlock,
+docs/STUDIO-REDESIGN.md "Decided"): the record marks it `locked: true` beside its value and "was" in
+`chosen_by_you`, the version is the same, and a new performance can't move it. For a cell, "was" is the
+program's own level, pattern, line and fill there (`takeover.program_cells`: the score laid out once, no
+audio, and kept for the same parameters); a lock isn't counted as a change (`explain.Version.held`).
+
+**Stored** as a person's composition is: `params.composition["arrange"]` = `{"verse:0": {"bars": 16,
+"sung": false, "build": true, "players": {"drummachine": {"level": "hard", "pattern": "four"}}}}`, so the
+record's parameters carry it and `--replay` renders from them byte for byte; `from_record` makes the
+edits again from the marks. Absent when empty: a version with no such edits is the version as before,
+byte for byte (the goldens are unchanged).
+
+**Inherited** by place, as a played part is: a child keeps the person's arrangement (decision 1 in
+docs/STUDIO.md). A choice for a section the version doesn't have, a player its band hasn't got (its style
+moved round the ring), a pattern its player doesn't play, a `from` past the section's lines or a build
+at the end is kept, silent, and waits for a version that has them; a new one is said and not kept
+(`takeover.silent`, `edits._taken_over`). A played part (`part.*`) for a line a section's new length no
+longer plays is said and waits the same way (`takeover.part_missing`).
+
+**Validated** in two steps. `edits.check` (`takeover.check`): the path's grammar, the section one of the
+song's (or `bridge2`) under 48, the player one the program knows, the level one of four, the pattern one
+that player plays in some band, `from` under 16, `fill` only a kit's or a drum machine's, `bars` 2, 4, 8 or
+16 and reachable from the section's lines, `sung` only where there are words, `build` a boolean. Then with
+the rest of the edits and what the version held (`Overrides._arrange`): a sung section shorter than its
+lines is refused ("to shorten it, have it played rather than sung"), a length held from before goes back
+to the section's own when a person has it sung again; and after the version is resolved, what it can't
+play (above).
+
+**Where the length acts.** Everything that lays the form out on the grid reads one list, a section
+occurrence's tune lines and whether each is sung (`takeover.phrase_plan`: exactly the section's own when
+nobody changed it): realize's layout and its clock (`realize.timeline`), the chord times
+(`idioms.chord_times`), the tune editor's view (`composition.view`), the notes-in line windows and layout,
+a section's preview window and the MIDI file's markers (both share a run of same-named sections by bars,
+not evenly, once their lengths differ), and a style's repeated last line (the last one sung, if the last
+lines were played). A section length is a list of the song's own tune lines, so the harmony, the chords a
+person changed, the variants and the lift all follow.
+
+**A pair of sections in a row** (verses in pairs) is one section to the band's plan. A person's
+arrangement of either splits it at the boundary only after the program's plan, the style's options and
+the backing voices have run on the program's own sections, so their indices (the first verse's table
+entry, stop-time's and a bare verse's verse numbers, the oohs) are the program's; both halves keep the
+pair's role, energy and parts, its entrances go with the half they fall in, stop-time and half-time with
+both, and no fill lands on the boundary unless a person asks for one.
+
+**Tempo, by style.** A person's range was 0.75 to 1.3 times the song's tempo, whatever the style. Now
+(`edits.tempo_range`) it is the style's own range at its feel multiplied by 0.9 and 1.1, never narrower
+than 0.75 to 1.3 of the song's, inside 0.4 to 1.6 of it: the ballad keeps 72 to 124.8 for H; synth folk
+reaches 134.1, indie 137.3, a string band 147.8; a lullaby's waltz goes down to 38 (its quarter at 57). A
+tempo is checked against the widest (`edits.bounds`: 38.4 to 153.6) and held to its style's at the end,
+once the style is chosen (a style or a feel chosen after it may hold it), said if it had to be, and marked
+as sung so it replays. The tempo card carries its style's range, and the page's tempo input and slider
+use it.
+
+**The API for the page**: `/api/arrangement` (docs/STUDIO.md, "Arrangement control").
+
+## What the review changed
+
+A read-only Fable review of the design before it was built; its points are in: the pair split after the
+program's plan, not before it (splitting first would have moved stop-time, the oohs and a fill onto the
+pair's boundary), both halves copying what the program gave the pair; the layout sites the design missed
+(the previews' and the MIDI markers' even share of a same-named run, the notes-in layout's sung flag, the
+repeated last line, parts in lines a length drops); a played section's lead and its loudness (the band's
+dimming under a lead left off); the backing voices' oohs, which sing by section, kept out of a played one;
+validation in two steps, the second with the rest of the edits, the version's own and the form; levels
+relative to the section (busyness less or more 0.3, a step down or up for the ballad) rather than fixed
+tables; a build as players coming in at bar lines with a rise, not notes left out at random, and refused
+at the song's end; `from` counted in the occurrence's own lines; the notes of the pass kept in the order
+written; the tempo rule multiplied, per feel, known only once the style is chosen, and marked as sung; the
+module named apart from `arrange.py`; the page's words. Its suggestion that the ballad's plan take a
+per-player busyness offset (so the harp would follow a guitar a person changed, as it follows the
+program's) is left: a person's cell is taken as they set it, and the ballad's players step along their own
+idioms.
+
+## How it was checked
+
+- tests/test_takeover.py: nothing arranged is the same song (three versions, and an empty arrangement);
+  thirteen kinds of refusal with why, a sung section refused shorter and allowed once played, releases;
+  four on the floor in the first verse of synth folk (a kick on every beat but the fill's) with nobody
+  else moving; a player out, soft (fewer, softer notes) and hard (harder), and the ballad's bass a step
+  down; a played refrain (no singer or choir there, the synth lead on the tune, the band as heavy, the
+  words drawn the same, the singer elsewhere as sung); lengths (a 16-bar break, an 8-bar intro, a 16-bar
+  last refrain sung then played; the clock, the tune view and the spans agree; a short break keeps its
+  cadence); a 16-bar build (snares per bar rising to sixteenths, the last beat empty, players joining, the
+  weight rising; at the song's end said); a player from a later line, a fill taken away and asked for; a
+  pair split only where arranged, the rest of the score untouched; marks with the program's values, made
+  again from the record, replayed the same, handed down, released, and a lock (the same version, marked
+  locked); silent and said where a version can't play it, and inherited ones waiting; the tempo by style;
+  the style's options chosen whole, the rest kept with no machine.
+- tests/test_studio.py: `/api/arrangement` draws the grid (every section and player, the person's cell
+  with the program's beside it, a played 16-bar refrain with the lead on the tune, reasons for every
+  program's cell, the style's tempo range, a silent choice said, a lock kept and marked), and none of its
+  words says the code's names.
+- tests/test_edits.py: the tempo checked against the widest and held to the ballad's, said.
+- The goldens (tests/test_determinism.py, test_styles.py, test_lean_render.py, test_variation.py) are
+  unchanged.

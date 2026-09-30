@@ -593,3 +593,43 @@ def test_a_musician_brings_notes_back_as_a_preview_and_nothing_changes_until_app
     status, took = post(port, studio, "/api/notes-in", {"edits": edits, "take": take})
     assert status == 200 and [c["path"] for c in took["changes"]] == [f"part.fiddle.{first['key']}"]
     assert took["changes"][0]["value"] == [[0, 96, 7, 90]]
+
+
+def test_the_arrangement_is_drawn_as_a_grid_for_a_timeline(served):
+    studio, port = served
+    edits = {"style.name": "synthfolk", "tempo": 130, "arrange.refrain:0.drummachine.pattern": "half",
+             "arrange.refrain:1.sung": False, "arrange.refrain:1.bars": 16, "arrange.verse:0.synthbass.level": "out",
+             "arrange.verse:9.guitar.level": "hard"}
+    status, grid = post(port, studio, "/api/arrangement", {"edits": edits})
+    assert status == 200, grid
+    v = studio.version(edits)
+    from songbird import composition
+    assert [s["id"] for s in grid["sections"]] == composition.section_ids(v.params.form)
+    players = [p["name"] for p in grid["players"]]
+    assert "drummachine" in players and len(grid["cells"]) == len(grid["sections"]) * len(players)
+    cell = {(c["section"], c["player"]): c for c in grid["cells"]}
+    mine = cell[("refrain:0", "drummachine")]
+    assert mine["by"] == "you" and mine["value"]["pattern"] == "half" and mine["program"]["pattern"] != "half"
+    assert mine["why"][0]["kind"] == "you" and mine["paths"]["pattern"] == "arrange.refrain:0.drummachine.pattern"
+    assert not mine["locked"]
+    assert cell[("verse:0", "synthbass")]["value"]["level"] == "out"
+    drop = next(s for s in grid["sections"] if s["id"] == "refrain:1")
+    assert not drop["sung"] and drop["bars"] == 16 and drop["by"]["sung"] == "you" and 16 in drop["bar_options"]
+    assert [ln["sung"] for ln in drop["lines"]] == [False] * 8
+    assert cell[("refrain:1", "synthlead")]["value"]["pattern"] == "lead"  # the lead plays the tune where nobody sings
+    program = [c for c in grid["cells"] if c["by"] == "program" and c["plays"]]
+    assert program and all(c["why"] for c in program)
+    # locking what the program chose keeps it, and the grid and the record say so
+    first = next(c for c in program if c["program"]["pattern"])
+    lock = {first["paths"][f]: first["program"][f] for f in ("level", "pattern", "from")}
+    status, locked = post(port, studio, "/api/arrangement", {"edits": {**edits, **lock}})
+    again = next(c for c in locked["cells"] if (c["section"], c["player"]) == (first["section"], first["player"]))
+    assert again["by"] == "you" and again["locked"] and again["value"]["pattern"] == first["value"]["pattern"]
+    marks = studio.version({**edits, **lock}).marks
+    assert all(marks[p].get("locked") for p in lock)
+    assert grid["tempo"]["value"] == 130 and grid["tempo"]["max"] > 130
+    assert any(p["path"] == "arrange.verse:9.guitar.level" for p in grid["problems"])
+    texts = [r["text"] for c in grid["cells"] for r in c["why"]] + [c["value"]["pattern_label"] for c in grid["cells"]]
+    texts += [o["text"] for s in grid["sections"] for o in s["options"]] + [p["why"] for p in grid["problems"]]
+    texts += [x["label"] for p in grid["players"] for x in p["patterns"]] + [x["label"] for x in grid["levels"]]
+    assert texts and not [t for t in texts if FORBIDDEN.search(t)]

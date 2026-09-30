@@ -640,13 +640,20 @@ def form_phrases(genome, params) -> list:
     """The phrase for each line of the form, in order: the line itself (the very object, where no place has its
     own), or a copy with its place's chords and its place (Phrase.place: where played() reads its own tune), its
     id still the line's. genome: the song as realize sings it (harmonized: a person's everywhere chords in)."""
-    lines = [(i, j, genome.phrases[pid]) for i, name in enumerate(params.form)
-             for j, pid in enumerate(genome.section(name).phrases)]
+    from .takeover import phrase_plan
+
+    # each section's lines as a person's arrangement lays them (songbird.takeover: a length of its own)
+    lines = [(i, j, genome.phrases[pid]) for i, plan in enumerate(phrase_plan(genome, params))
+             for j, (pid, _) in enumerate(plan)]
     if not places_held(params):
         return [phrase for _, _, phrase in lines]
     tune, chords = params.composition.get("tune") or {}, params.composition.get("chords") or {}
     out = []
     for i, j, phrase in lines:
+        own = genome.section(params.form[i]).phrases
+        if j >= len(own) or own[j] != phrase.id:  # a line an arrangement put here isn't that place's own line
+            out.append(phrase)
+            continue
         keys = place_keys(params.form, i, j)
         at_tune, at_chords = held_at(tune, keys), held_at(chords, keys)
         if at_tune or at_chords:
@@ -660,14 +667,36 @@ def at_place(genome, params, key: str):
     """The phrase one place of the form sings (a place key: "refrain:2.1", "refrain:last.1"), with its place's
     chords and tune where it has its own, else the line's everywhere; a place this form doesn't have: the line
     everywhere."""
+    from .takeover import phrase_plan
+
     name, which, line, pid = place_target(genome, key)
     song = harmonized(genome, params)
     where = [i for i, n in enumerate(params.form) if n == name]
     nth = len(where) - 1 if which == "last" else int(which)
-    if not 0 <= nth < len(where):
+    plan = phrase_plan(genome, params)
+    if not 0 <= nth < len(where) or line >= len(plan[where[nth]]) or plan[where[nth]][line][0] != pid:
         return song.phrases[pid]
-    k = sum(len(genome.section(n).phrases) for n in params.form[:where[nth]]) + line
+    k = sum(len(p) for p in plan[:where[nth]]) + line
     return form_phrases(song, params)[k]
+
+
+def at_line(genome, params, key: str):
+    """The phrase a line of the form sings, by its part key ("refrain:2.5": the arrangement's id and the line's
+    index as laid, a line a person's arrangement added among them), with a place's own chords and tune."""
+    from .takeover import phrase_plan
+
+    sid, _, line = key.rpartition(".")
+    ids = section_ids(params.form)
+    plan = phrase_plan(genome, params)
+    i = ids.index(sid)
+    return form_phrases(harmonized(genome, params), params)[sum(len(p) for p in plan[:i]) + int(line)]
+
+
+def notes_at(genome, params, key: str) -> list[dict]:
+    """A line of the form's notes as an edit writes them, as it is sung there (at_line)."""
+    beat = genome.meter.beat
+    return [{"degree": d, "onset": u / beat, "duration": length / beat, **({"slur": True} if slur else {})}
+            for d, _, u, length, slur, _ in flat_notes(at_line(genome, params, key), params)]
 
 
 def chords_at(genome, params, key: str) -> list[list[str]]:
@@ -690,10 +719,15 @@ def scope(params, form, index: int, line: int, pid: str, kind: str) -> dict:
 
 def place_silent(genome, params, key: str) -> str | None:
     """Why a place edit isn't heard in this version (its section doesn't come that many times), or None."""
-    name, which, _, _ = place_target(genome, key)
-    count = list(params.form).count(name)
-    if count == 0 or (which != "last" and int(which) >= count):
+    from .takeover import phrase_plan
+
+    name, which, line, pid = place_target(genome, key)
+    where = [i for i, n in enumerate(params.form) if n == name]
+    if not where or (which != "last" and int(which) >= len(where)):
         return "this version doesn't sing that section there; your change waits for one that does"
+    plan = phrase_plan(genome, params)[where[-1] if which == "last" else where[int(which)]]
+    if line >= len(plan) or plan[line][0] != pid:
+        return f"this version's {name} is arranged to other lines; your change waits for one that sings this line"
     return None
 
 
@@ -757,14 +791,20 @@ def view(genome, params, lyrics) -> dict:
     at_places = iter(form_phrases(genome, params))  # each line as its place sings it
     sections = []
     cursor = clock.lead
+    from .takeover import phrase_plan
+
+    lined = phrase_plan(genome, params)  # each section's lines as a person arranged them (songbird.takeover)
     for index, (name, identity) in enumerate(zip(params.form, section_ids(params.form))):
         section = genome.section(name)
         start = cursor
         phrases = []
-        for j, pid in enumerate(section.phrases):
+        for j, (pid, sung) in enumerate(lined[index]):
             phrase = next(at_places)
-            words = sung_words(lines[index][j]) if lines[index] else []
-            here = place_keys(params.form, index, j)  # this place's own key, and its "last" if it is the last time
+            words = sung_words(lines[index][j]) if lines[index] and sung and j < len(lines[index]) else []
+            # one place, or everywhere: this place's own key and its "last" if it is the last time; a line a person's
+            # arrangement added past the section's own (a lengthened section) has no place of its own
+            own = j < len(section.phrases) and section.phrases[j] == pid
+            here = place_keys(params.form, index, j) if own else [None]
             several = params.form.count(name) > 1
             tune_from, chords_from = scope(params, params.form, index, j, pid, "tune"), scope(
                 params, params.form, index, j, pid, "chords")
@@ -794,9 +834,10 @@ def view(genome, params, lyrics) -> dict:
                             if chords_from["from"] in ("place", "last") else None,
                             "line_notes": phrase_value(song, params, pid)
                             if tune_from["from"] in ("place", "last") else None,
-                            "appearances": sum(p == pid for n in params.form for p in genome.section(n).phrases),
-                            "lyric_path": f"lyrics.{keys[index]}.{j}" if keys[index] else None,
-                            "lyric_text": lines[index][j] if lines[index] else "",
+                            "appearances": sum(p == pid for plan in lined for p, _ in plan),
+                            "lyric_path": f"lyrics.{keys[index]}.{j}" if keys[index] and j < len(section.phrases) else None,
+                            "lyric_text": lines[index][j] if lines[index] and sung and j < len(lines[index]) else "",
+                            **({"played": True} if section.lyrics and not sung else {}),  # a person had it played
                             "syllable_count": len(phrase.sung),
                             "advice": advice(genome, params, phrase),  # a freed ending, said
                             "authored": str(j) in patches[index],
@@ -811,7 +852,7 @@ def view(genome, params, lyrics) -> dict:
         sections.append({"index": index, "id": identity, "lyric_key": keys[index], "name": name, "label": label,
                          "start_beat": start / meter.beat, "duration_beats": (cursor - start) / meter.beat,
                          "start_seconds": clock.seconds(start), "end_seconds": clock.seconds(cursor),
-                         "sung": bool(section.lyrics), "phrases": phrases})
+                         "sung": bool(section.lyrics) and any(sung for _, sung in lined[index]), "phrases": phrases})
     return {"tempo": params.tempo, "tonic": params.tonic, "mode": params.mode, "scale": list(MODES[params.mode]),
             "beats_per_bar": meter.bar / meter.beat, "grid": GRID,
             "duration_beats": clock.end / meter.beat, "duration_seconds": clock.seconds(clock.end),
@@ -1012,10 +1053,12 @@ def line_windows(genome, params, placed, lead) -> dict[str, tuple[float, float, 
     """Each line of the form by its part key ("verse:1.0"), in grid units: where a player's notes belong to
     it (from its own pickup before its first bar line to the next line's pickup, as the tune's notes do), its
     first bar line (where its notes' onsets count from) and its section's name, from realize's layout."""
+    from .takeover import phrase_plan
+
     out, k = {}, 0
     bar = genome.meter.bar
-    for sid, name in zip(section_ids(params.form), params.form):
-        for j, _ in enumerate(genome.section(name).phrases):
+    for sid, name, lines in zip(section_ids(params.form), params.form, phrase_plan(genome, params)):
+        for j, _ in enumerate(lines):  # a section's lines, as long as a person made it (songbird.takeover)
             _, phrase, start, _ = placed[k]
             after = placed[k + 1][1].pickup if k + 1 < len(placed) else 0
             k += 1

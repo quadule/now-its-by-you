@@ -190,17 +190,21 @@ def today() -> tuple[str, float]:
 # ---------------------------------------------------------------- previews
 
 
-def spans(score, form) -> list[tuple[str, float, float]]:
+def spans(score, form, bars=None) -> list[tuple[str, float, float]]:
     """Each section of the form and when it plays: the score's spans, with a run of sections of one
-    name (verse, verse), which the score keeps as one, shared out evenly (they have the same phrases)."""
+    name (verse, verse), which the score keeps as one, shared out evenly (they have the same phrases), or by
+    their bars where a person made them different lengths (songbird.takeover)."""
     out: list[tuple[str, float, float]] = []
     k = 0
     for name, a, b in score.sections:
         run = 1
         while k + run < len(form) and form[k + run] == name:
             run += 1
+        weights = [1.0] * run if bars is None else [float(x) for x in bars[k:k + run]]
+        total, done = sum(weights), 0.0
         for j in range(run):
-            out.append((name, a + (b - a) * j / run, a + (b - a) * (j + 1) / run))
+            out.append((name, a + (b - a) * done / total, a + (b - a) * (done + weights[j]) / total))
+            done += weights[j]
         k += run
     return out
 
@@ -208,12 +212,16 @@ def spans(score, form) -> list[tuple[str, float, float]]:
 def window(genome, params: Params, score, form, index: int) -> tuple[float, float]:
     """Where a section's preview starts and ends: from a breath before its first pickup (a beat of the band
     before it at least) to where the next section's pickup begins."""
-    parts = spans(score, form)
+    from .takeover import arranged, phrase_plan
+
+    lined = phrase_plan(genome, params)  # each section's lines, as long as a person made it
+    bars = [sum(genome.phrases[pid].bars for pid, _ in lines) for lines in lined] if arranged(params) else None
+    parts = spans(score, form, bars)
     _, s0, s1 = parts[index]
     unit = 60.0 / params.tempo / genome.meter.beat
 
     def pickup(k: int) -> float:
-        return genome.phrases[genome.section(form[k]).phrases[0]].pickup * unit
+        return genome.phrases[lined[k][0][0]].pickup * unit
 
     t0 = max(0.0, s0 - max(pickup(index), genome.meter.beat * unit) - 0.5)
     t1 = parts[index + 1][1] - pickup(index + 1) - 0.5 * unit if index + 1 < len(parts) else s1
@@ -842,6 +850,19 @@ class Studio:
                 "players": [p for p in parts if p["part"] != "voice"]}
 
     # ------------------------------------------------------------ recording
+
+    # ------------------------------------------------------------ the arrangement as a grid (docs/STUDIO.md, "Arrangement control")
+    # The version on the page as a timeline draws it: sections x players, each cell the program's and the person's
+    # (arrange.* edits, songbird.takeover), with the program's reasons. Made at once from the score laid out (no
+    # audio), like the MIDI file; held to a public studio's limit on requests like every other request.
+
+    def arrangement(self, edits: dict) -> dict:
+        from . import band as band_mod, takeover
+
+        v = self.version(edits)
+        with band_mod.overheard() as heard:
+            self._score(v)
+        return {"key": self.key(v, None), **takeover.grid(self.genome, v, heard)}
 
     # ------------------------------------------------------------ notes in (docs/STUDIO.md, "Notes in")
 
@@ -1606,6 +1627,9 @@ class Handler(BaseHTTPRequestHandler):
                 return self.send_json(studio.players(edits))
             if path == "/api/notes-in":  # a take or a MIDI file, as a preview of edits (notes in)
                 return self.send_json(studio.notes_in(edits, body))
+            # the arrangement as a grid, for a timeline (docs/STUDIO.md, "Arrangement control"; songbird.takeover)
+            if path == "/api/arrangement":
+                return self.send_json(studio.arrangement(edits))
             if path == "/api/open/ready":  # someone's version: would a file this size be taken now?
                 refusal = self._may_open(int(body.get("size") or 0), count=False)
                 return refusal() if refusal is not None else self.send_json({"ready": True})

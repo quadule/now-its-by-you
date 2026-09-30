@@ -601,13 +601,14 @@ function renderSessionControls() {
   const bounds = state.start.bounds;
   const controls = [];
   if (tempo) {
-    const input = h("input", { type: "number", min: bounds.tempo.min, max: bounds.tempo.max, step: bounds.tempo.step,
+    const range = { ...bounds.tempo, ...(tempo.range || {}) };  // the tempos this style takes (docs/ARRANGE.md)
+    const input = h("input", { type: "number", min: range.min, max: range.max, step: range.step,
       value: tempo.tempo, "aria-label": "Tempo in beats per minute" });
     input.addEventListener("change", () => {
       const value = Number(input.value);
-      if (!input.value || !Number.isFinite(value) || value < bounds.tempo.min || value > bounds.tempo.max) {
+      if (!input.value || !Number.isFinite(value) || value < range.min || value > range.max) {
         input.value = tempo.tempo;
-        toast(`Choose a tempo from ${bounds.tempo.min} to ${bounds.tempo.max} BPM.`);
+        toast(`Choose a tempo from ${range.min} to ${range.max} BPM.`);
         return;
       }
       setEdit("tempo", value, "Change tempo");
@@ -687,7 +688,7 @@ function editor(c) {
         h("p", { class: "hint aside-note" }, "A minor mode leans the words darker, as the machine's own would."));
     }
     case "tempo":
-      return slider("Beats a minute", "tempo", c.tempo, b.tempo, (x) => `${Number(x).toFixed(0)}`, ["slower", "quicker"]);
+      return slider("Beats a minute", "tempo", c.tempo, { ...b.tempo, ...(c.range || {}) }, (x) => `${Number(x).toFixed(0)}`, ["slower", "quicker"]);
     case "shape": {
       const arranged = !!v.composition?.arranged;
       if (arranged || !Object.keys(c.parts || {}).length) return h("div", {},

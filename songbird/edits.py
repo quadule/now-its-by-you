@@ -35,6 +35,13 @@ keeps. An edit that can't be kept is left out and said why, never bent.
     words.bridge2        the second bridge's stanza
     words.tag            the tag's syllable
     phrasing             whose way the song is sung: a phrasing made on this computer
+    arrange.<section>:<n>.<player>.level|pattern|from|fill, arrange.<section>:<n>.bars|sung|build
+                         the arrangement taken over, section by section and player by player (songbird.takeover):
+                         in or out and how hard, what it plays, the line it comes in at, a drum fill; a section's
+                         length, played rather than sung, a build; null: the program's own
+    style.intro, style.stops, style.alone, style.alone_with, style.bridge (beside style.entrances, style.breakdown...)
+                         the style's options for the whole song: how it starts, which verse is in stop-time or
+                         bare (and over whom), a half-time bridge
 
   Sound design (songbird.sound, docs/SOUND-DESIGN.md): what each player sounds like, never what it plays
     sound.<player>.patch, .cutoff, .resonance, .envelope   a synth's patch and its filter
@@ -66,6 +73,7 @@ from dataclasses import dataclass, fields, replace
 from datetime import date
 
 from . import arrange as arrange_mod
+from . import takeover
 from . import variation
 from . import composition
 from . import sound as sound_mod
@@ -77,7 +85,10 @@ MIX = ("space", "width", "forward", "intimacy", "rt60", "predelay")  # the room:
 # The arrangement's options a person may set (songbird.style.Style), each as the style's own choices go
 STYLE_OPTIONS = {"feel": ("straight", "swing", "shuffle", "twelve", "half", "double", "waltz", "six"),
                  "ending": ("ring", "rit", "cold", "amen", "repeat"), "backing": ("", "oohs", "echo", "thirds", "gang"),
-                 "lift": bool, "entrances": bool, "breakdown": bool, "coda": ("", "quote"), "motif": ("", "bridge", "chance")}
+                 "lift": bool, "entrances": bool, "breakdown": bool, "coda": ("", "quote"), "motif": ("", "bridge", "chance"),
+                 # how it starts, which verse is in stop-time or bare and over whom, a half-time bridge (2026-09-29)
+                 "intro": ("", "lead", "pad", "count", "voice", "quote"), "stops": int, "alone": int, "alone_with": str,
+                 "bridge": ("", "half")}
 
 
 def instruments() -> tuple[str, ...]:
@@ -108,11 +119,12 @@ def _knob(path: str):
 
 
 def bounds(genome: Genome) -> dict:
-    """What a person may choose, path by path: the tempo and key as far as the program's table lets any
-    machine go (0.75 to 1.3 times the song's tempo, five semitones either way), the modes the song's chords
+    """What a person may choose, path by path: the tempo as far as any style lets a person take it (0.4 to 1.6
+    times the song's; each style's own range is tempo_range's), the key as far as the program's table lets any
+    machine go (five semitones either way), the modes the song's chords
     keep their shape in, and the band's and the mix's designed ranges (wider than a machine's own)."""
     song = song_params(genome)
-    tempo = _knob("tempo").bounds(song.tempo)
+    tempo = tuple(TEMPO_REACH[k] * song.tempo for k in (0, 1))  # the widest any style allows (tempo_range)
     tonic = _knob("tonic").bounds(song.tonic)
     out = {
         "tempo": {"min": round(tempo[0], 1), "max": round(tempo[1], 1), "step": 0.5, "song": song.tempo},
@@ -319,10 +331,20 @@ def check(genome: Genome, edits: dict, phrasings=()) -> tuple[dict, list[dict]]:
                 if value not in STYLES:
                     raise LookupError(f"the styles are {', '.join(sorted(STYLES))}")
                 clean[path] = value
+            elif path.startswith("arrange."):  # the arrangement taken over (songbird.takeover)
+                clean[path] = takeover.check(genome, path, value)
             elif path.startswith("style.") and path[6:] in STYLE_OPTIONS:
                 options = STYLE_OPTIONS[path[6:]]
                 if options is bool:
                     clean[path] = bool(value)
+                elif options is int:  # which verse (1 the first), 0 none
+                    if isinstance(value, bool) or not isinstance(value, int) or not 0 <= value <= 8:
+                        raise LookupError(f"the {path[6:]} is a verse's number, 1 the first, or 0 for none")
+                    clean[path] = value
+                elif options is str:  # the one instrument under a bare verse, "" none
+                    if value and value not in instruments():
+                        raise LookupError(f"there's no player called {value}")
+                    clean[path] = str(value or "")
                 elif value not in options:
                     raise LookupError(f"the {path[6:]} is one of {', '.join(o or 'none' for o in options)}")
                 else:
@@ -348,7 +370,8 @@ def check(genome: Genome, edits: dict, phrasings=()) -> tuple[dict, list[dict]]:
         except LookupError as e:
             problems.append(Problem(path, str(e.args[0]) if e.args else "there's no such choice"))
         except (TypeError, ValueError) as e:
-            if path == "form.order" or path.startswith(("tune.", "chords.", "lyrics.", "part.")) or sound_mod.owns(path):
+            if path == "form.order" or path.startswith(("tune.", "chords.", "lyrics.", "part.", "arrange.")) \
+                    or sound_mod.owns(path):
                 problems.append(Problem(path, str(e)))
                 continue
             problems.append(Problem(path, f"{value!r} isn't a value this choice can take"))
@@ -387,6 +410,12 @@ class Overrides:
             if key in e:
                 out[key] = e[key]
                 applied.append(key)
+        if "tempo" in e:  # held to the range of the style it is played in (tempo_range), said if it had to be
+            lo, hi = tempo_range(self.genome, out.get("style"))
+            out["tempo"] = round(min(hi, max(lo, float(e["tempo"]))), 1)
+            if abs(out["tempo"] - float(e["tempo"])) > 0.05:
+                problems.append(Problem("tempo", f"this style plays the song from {lo:g} to {hi:g} beats a minute, "
+                                                 f"so {out['tempo']:g}"))
         for head in ("band", "mix"):  # (a player's channel, mix.<player>.*, is sound design's: below)
             values = {p[len(head) + 1:]: v for p, v in e.items() if p.startswith(head + ".") and not sound_mod.owns(p)}
             if values:
@@ -534,6 +563,7 @@ class Overrides:
                 applied.append("form.order")
             except (ValueError, TypeError) as ex:
                 problems.append(Problem("form.order", str(ex)))
+        held = self._arrange(out, held, applied, problems)  # the arrangement taken over (songbird.takeover)
         if held:
             out["composition"] = held
         else:
@@ -543,6 +573,38 @@ class Overrides:
         applied += done
         problems += trouble
         self.applied, self.problems = applied, problems
+
+    def _arrange(self, out: dict, held: dict, applied: list, problems: list) -> dict:
+        """The arrangement a person took over, in the composition's working copy (held): each choice checked and
+        put in place, and a sung section's length that its lines can't have with the rest said and left as it
+        was (songbird.takeover). The same dict when there are no such edits."""
+        wanted = [p for p in self.edits if p.startswith("arrange.")]
+        if not wanted:
+            return held
+        before = takeover.copy(held.get("arrange") or {})
+        mine = takeover.copy(before)
+        for path in wanted:
+            try:
+                takeover.put(mine, path, self.genome, takeover.check(self.genome, path, self.edits[path]))
+                applied.append(path)
+            except (ValueError, TypeError) as ex:
+                problems.append(Problem(path, str(ex)))
+        for path, why in takeover.shape_problems(self.genome, out["form"], mine).items():
+            # a length asked for now goes back to what the version held; one held from before (a section sung
+            # again now) goes back to the section's own
+            was = before.get(path.split(".")[1], {}).get("bars") if path in self.edits else None
+            takeover.put(mine, path, self.genome, was)
+            if takeover.shape_problems(self.genome, out["form"], mine).get(path):
+                takeover.put(mine, path, self.genome, None)
+            if path in applied:
+                applied.remove(path)
+            problems.append(Problem(path, why))
+        held = dict(held)
+        if mine:
+            held["arrange"] = mine
+        else:
+            held.pop("arrange", None)
+        return held
 
     def style(self) -> tuple[str | None, dict]:
         """The style asked for and the arrangement's options, which go in by name (choose_params(style=,
@@ -562,7 +624,10 @@ class Overrides:
                 continue
             field = path[6:]
             now = (style.name or "ballad") if field == "name" else getattr(style, field, None)
-            if now == value:
+            verses = sum(1 for n in params.form if self.genome.section(n).lyrics == "verse")
+            if field in ("stops", "alone") and value > verses:  # a verse this shape doesn't sing
+                self.problems = [*self.problems, Problem(path, f"this shape sings {verses} verses")]
+            elif now == value:
                 self.applied = [*self.applied, path]
             else:
                 self.problems = [*self.problems, Problem(path, f"the {style.name or 'ballad'} style can't play "
@@ -757,24 +822,27 @@ def resolve(genome: Genome, parent, voice, drift, edits: dict, *, seed: int | No
         # the lineage holds what is sung: the person's words among them, else its own fitted to the form
         params = replace(params, words=arrange_mod.hold(genome, lyrics) if kept
                          else evolve.fitted(genome, params, voice, drift))
-    silent = {p: composition.part_silent(genome, params, p) for p in applied
-              if p.startswith("part.") and edits.get(p) is not None}
+    silent = {p: composition.part_silent(genome, params, p) or takeover.part_missing(genome, params, p)
+              for p in applied if p.startswith("part.") and edits.get(p) is not None}
     silent = {p: why for p, why in silent.items() if why}
     if silent:  # notes played for a place this version doesn't play, or a player its band hasn't got: said, not kept
         params = _unplayed(params, generated, silent)
         applied = [p for p in applied if p not in silent]
         problems += [Problem(p, why) for p, why in silent.items()]
+    params, applied, problems, edits = _taken_over(genome, generated, params, applied, problems, edits)
+    # a change for one place this version doesn't sing (or whose section an arrangement laid to other lines): said,
+    # and put back as the version before had it (after the arrangement, which decides the lines)
     unplaced = {p: composition.place_silent(genome, params, p.split(".", 1)[1]) for p in applied
                 if p.startswith(("tune.", "chords.")) and composition.is_place(p.split(".", 1)[1])
                 and edits.get(p) is not None}
     unplaced = {p: why for p, why in unplaced.items() if why}
-    if unplaced:  # a change for a place this version doesn't sing: said, and put back as the version before had it
+    if unplaced:
         params = _unplaced(genome, params, generated, unplaced)
         applied = [p for p in applied if p not in unplaced]
         problems += [Problem(p, why) for p, why in unplaced.items()]
     if "phrasing" in edits and phrasing_json is not None:
         applied.append("phrasing")
-    marks_ = marks(genome, generated, generated_lyrics, lyrics, applied, edits, phrasing_json)
+    marks_ = marks(genome, generated, generated_lyrics, lyrics, applied, edits, phrasing_json, params=params)
     return Resolved(generated, params, generated_lyrics, lyrics, applied, problems, marks_)
 
 
@@ -833,10 +901,12 @@ def phrasing_mark(phrasing_json: dict) -> dict:
 
 
 def marks(genome: Genome, generated, generated_lyrics, final_lyrics, applied: list[str], edits: dict,
-          phrasing_json: dict | None = None) -> dict:
+          phrasing_json: dict | None = None, params=None) -> dict:
     """The record's block of a person's choices: for each edit that took effect, the value chosen and what
     the program had chosen ("was"). Replaying the values as edits (from_record) makes the same rendition
-    from the same parent, machine and day."""
+    from the same parent, machine and day. A choice of the arrangement's that keeps what the program chose
+    (a lock: the page's padlock on a cell, a section or an option) is marked locked: true; params, the version
+    as sung, says what the program had in a cell (takeover.program_cells)."""
     out: dict = {}
     generated_shape = shape(genome, generated.form) or {}
     for path in applied:
@@ -856,6 +926,10 @@ def marks(genome: Genome, generated, generated_lyrics, final_lyrics, applied: li
                                             place=key if composition.is_place(key) else None))
         elif path.startswith("chords."):
             was = composition.chords_value(genome, generated, path[7:])
+        elif path.startswith("arrange."):  # the arrangement taken over: what the version held, else the program's
+            was = takeover.value(genome, generated, path)
+            if was == "the program's own" and params is not None:
+                was = takeover.program_value(genome, params, path)
         elif path.startswith("part."):  # the notes are in the record's parameters: marked by their count
             was = composition.part_value(generated, path)
             out[path] = {"value": {"notes": len(value or [])} if value is not None else None,
@@ -883,6 +957,8 @@ def marks(genome: Genome, generated, generated_lyrics, final_lyrics, applied: li
         else:
             was = variation.read(generated, path)
         out[path] = {"value": value, "was": was}
+        if path.startswith(("arrange.", "style.")) and value == was and value is not None:
+            out[path]["locked"] = True  # a lock: the program's own choice, kept (docs/STUDIO-REDESIGN.md)
     return out
 
 
@@ -968,3 +1044,62 @@ def keep_words(genome: Genome, lyrics) -> dict:
     if lyrics.tag:
         out["words.tag"] = lyrics.tag
     return out
+
+
+# ---------------------------------------------------------------- the arrangement taken over (docs/ARRANGE.md, 2026-09-29)
+#
+# A person's arrangement (arrange.*: songbird.takeover) goes in with the composition (Overrides._arrange); what a
+# version can't play of it is said here, after the rest is resolved, as a played part's is. The tempo a person may
+# choose follows the style it is played in.
+
+TEMPO_REACH = (0.4, 1.6)  # of the song's own tempo: the widest a person may take it, in any style
+TEMPO_WIDEN = (0.9, 1.1)  # a style's own range, widened this much each way (multiplied), for a person
+
+
+def tempo_range(genome: Genome, style=None) -> tuple[float, float]:
+    """The tempos a person may choose for a version in a style (a Style, its dict, or None for the song's own):
+    the style's range at its feel, times 0.9 and 1.1, never narrower than the song's designed 0.75 to 1.3 of its
+    own tempo, inside 0.4 to 1.6 of it. The ballad keeps 0.75 to 1.3 (H: 72 to 124.8); synth folk reaches 134."""
+    from .style import STYLES, Style, of
+
+    song = song_params(genome).tempo
+    lo, hi = _knob("tempo").bounds(1.0)
+    s = style if isinstance(style, Style) else Style.from_dict(style) if style else Style()
+    if s.name and s.name != "ballad" and s.name in STYLES:
+        sdef = of(s)
+        feel = s.feel or next(iter(sdef.feels), "straight")
+        low, _, high = sdef.centre(feel)
+        lo, hi = min(lo, TEMPO_WIDEN[0] * low), max(hi, TEMPO_WIDEN[1] * high)
+    lo, hi = max(TEMPO_REACH[0], lo), min(TEMPO_REACH[1], hi)
+    return round(lo * song, 1), round(hi * song, 1)
+
+
+def _taken_over(genome: Genome, generated, params, applied: list, problems: list, edits: dict):
+    """The version with the arrangement choices it can't play (a section it doesn't sing, a player its band hasn't
+    got, a pattern its player doesn't play, a build at the end) said and put back as the version before had
+    them; and the tempo marked as it is sung, where the style held it to its range."""
+    if "tempo" in applied and abs(params.tempo - float(edits.get("tempo", params.tempo))) > 0.05:
+        edits = {**edits, "tempo": params.tempo}
+    quiet = {p: takeover.silent(genome, params, p) for p in applied
+             if p.startswith("arrange.") and edits.get(p) is not None}
+    quiet = {p: why for p, why in quiet.items() if why}
+    if not quiet:
+        return params, applied, problems, edits
+    held = takeover.copy(takeover.arranged(params))
+    for path in quiet:
+        takeover.put(held, path, genome, _held_before(genome, generated, path))
+    composition_ = dict(params.composition)
+    if held:
+        composition_["arrange"] = held
+    else:
+        composition_.pop("arrange", None)
+    params = replace(params, composition=composition_)
+    return (params, [p for p in applied if p not in quiet], problems + [Problem(p, why) for p, why in quiet.items()],
+            edits)
+
+
+def _held_before(genome: Genome, generated, path: str):
+    """What the version before held at an arrangement path (None: nothing, the program's own)."""
+    sid, _, player, field = takeover.target(genome, path)
+    entry = takeover.arranged(generated).get(sid, {})
+    return entry.get("players", {}).get(player, {}).get(field) if player else entry.get(field)

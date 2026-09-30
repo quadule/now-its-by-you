@@ -29,11 +29,13 @@ def test_each_edit_takes_its_place_within_bounds():
                                   "band.lead": "fiddle", "band.density": 1.7, "band.drum": 0, "mix.space": 1.25,
                                   "mix.forward": 30, "roll": 1})
     assert not problems
-    assert edits["tempo"] == 124.8 and edits["tonic"] == 57 and edits["band.density"] == 1.0 and edits["mix.forward"] == 15
+    # the tempo is held to the widest any style allows, then to its style's own (the ballad's 0.75 to 1.3 times)
+    assert edits["tempo"] == 153.6 and edits["tonic"] == 57 and edits["band.density"] == 1.0 and edits["mix.forward"] == 15
     o = E.Overrides(g, edits)
     p = choose_params(g, None, ADA, DAY, overrides=o)
     plain = choose_params(g, None, ADA, DAY)
     assert (p.tempo, p.tonic, p.mode) == (124.8, 57, "aeolian")
+    assert [x["path"] for x in o.problems] == ["tempo"] and "124.8" in o.problems[0]["why"]
     assert (p.band.pattern, p.band.lead, p.band.density, p.band.drum) == ("air", "fiddle", 1.0, 0.0)
     assert p.mix["space"] == 1.25 and p.mix["forward"] == 15 and p.mix["rt60"] == plain.mix["rt60"]
     assert p.seed == E.rolled(plain.seed, 1) != plain.seed
@@ -259,6 +261,27 @@ def test_a_place_is_marked_replayed_handed_down_and_follows_the_last_refrain():
     assert "refrain:last.1" not in released.params.composition["chords"]
     assert released.marks["chords.refrain:last.1"]["was"] == LAST
     assert C.chords_value(g, released.params, "refrain:last.1") == EVERYWHERE
+
+
+def test_a_place_follows_a_section_a_person_lengthened_and_waits_where_it_is_laid_to_other_lines():
+    from songbird import composition as C, idioms
+
+    # the last refrain at sixteen bars: its own four lines, then its last lines played again (songbird.takeover)
+    long = E.Overrides(g, {"arrange.refrain:2.bars": 16, "chords.refrain:last.1": LAST}).params(seed_params())
+    laid = [(ph.id, ph.chords) for ph in C.form_phrases(C.harmonized(g, long), long)]
+    last = [k for k, (pid, _) in enumerate(laid) if pid == "r2"]
+    assert laid[last[-2]][1] == tuple(map(tuple, LAST))  # the place's own line
+    assert laid[last[-1]][1] != tuple(map(tuple, LAST))  # a line the arrangement added has no place of its own
+    times = idioms.chord_times(C.harmonized(g, long), long)
+    assert [s for _, _, s in times].count("V7") == 1
+    bar = 60 / long.tempo * g.meter.bar / g.meter.beat
+    plain = idioms.chord_times(C.harmonized(g, seed_params()), seed_params())
+    assert times[-1][1] - plain[-1][1] > 7 * bar  # the chords follow the lengthened section (eight bars more)
+    # played at four bars: its last two lines only; line 1 of it is r4 there, so the change waits, said
+    r = E.resolve(g, None, None, None, {"arrange.refrain:2.bars": 4, "arrange.refrain:2.sung": False,
+                                        "chords.refrain:last.1": LAST})
+    assert [p["path"] for p in r.problems] == ["chords.refrain:last.1"]
+    assert "arranged to other lines" in r.problems[0]["why"]
 
 
 def test_a_place_this_version_doesnt_sing_is_said_and_an_inherited_one_waits():

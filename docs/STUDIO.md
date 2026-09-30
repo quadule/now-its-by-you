@@ -270,6 +270,8 @@ server keeps nothing else but caches, so any request can be replayed.
 | `words.bridge` | `{slot: words}` | the bridge's once-a-song words |
 | `words.bridge2`, `words.tag` | a stanza, a syllable | the second bridge, every tag |
 | `phrasing` | a phrasing's name on this computer | whose way it is sung |
+| `arrange.<section>:<n>.<player>.level`, `.pattern`, `.from`, `.fill`; `arrange.<section>:<n>.bars`, `.sung`, `.build` | out, soft, plays, hard; a pattern; a line; a fill; 2 to 16 bars; played; a build | the arrangement taken over, by place ("Arrangement control", below; docs/ARRANGE.md) |
+| `style.intro`, `style.stops`, `style.alone`, `style.alone_with`, `style.bridge` (and `style.entrances`, `style.breakdown`, `style.lift`, `style.ending`, `style.backing`) | as `Style` | the style's options, chosen whole |
 | `sound.<player>.patch`, `.cutoff`, `.resonance`, `.envelope` | a patch's name; Hz, 0-1, octaves | a synth's sound and its filter ("Sound design", below) |
 | `sound.<player>.kit`, `.kick`, `.snare`, `.hat` | `808`, `909`, `lofi`, `acoustic`; `{tune, decay, snappy}` | a drum player's kit and its pieces' character |
 | `mix.<player>.pan`, `.send`, `.sidechain` | -1 to 1; 0 to 3 times; a preset or `{depth, release, key, sections}` | the player's channel: its place, its send to the room, its pump on the kick or the beat |
@@ -1290,6 +1292,97 @@ with the same notes (Am7 over C6/A) is kept in the ranking.
    the song's own lowest and highest notes, not two).
 7. **The first stems of a version make its recording first** (about twice as
    long), so their name is the recording's.
+8. **A place is its section's own line.** Where an arrangement lengthens a
+   section (songbird.takeover), its added lines have no place of their own; where
+   it lays a section to other lines, a place's change waits, silent, for a
+   version that sings that line there (as a played part does).
+
+## Arrangement control (2026-09-29)
+
+The EDM test (docs/STUDIO-EDM-TEST.md) found the arrangement's dynamics drawn by chance and out of a
+person's reach. The engine now lets a person take any of it over, section by section and player by
+player, and says what the program chose and why beside it (docs/ARRANGE.md, "Taking over the
+arrangement": the edits, what each does, how it is checked, stored, replayed and handed down). This is
+the API the redesigned page draws its Arrange grid from (docs/STUDIO-REDESIGN.md); today's page uses only
+the tempo's range.
+
+**The edits** (`songbird/takeover.py`; by the form's section ids, `refrain:1` the second refrain):
+
+| Path | Value |
+|---|---|
+| `arrange.<section>:<n>.<player>.level` | out, soft, plays, hard |
+| `arrange.<section>:<n>.<player>.pattern` | one of the player's patterns (the grid lists them) |
+| `arrange.<section>:<n>.<player>.from` | the line it comes in at, 0 from the start |
+| `arrange.<section>:<n>.<player>.fill` | true or false: a kit's or a drum machine's fill into the next section |
+| `arrange.<section>:<n>.bars` | 2, 4, 8 or 16 (the grid's `bar_options` for that section) |
+| `arrange.<section>:<n>.sung` | false: played, not sung (a drop) |
+| `arrange.<section>:<n>.build` | true: a build toward the next section |
+| `style.intro`, `style.stops`, `style.alone`, `style.alone_with`, `style.bridge` | beside `style.entrances`, `style.breakdown`, `style.lift`, `style.ending`: the style's options, chosen whole |
+
+null gives any of them back to the program. **A lock** is the same edit with the program's own value (the
+cell's, section's or option's `program` below): the version doesn't change, a new performance can't move
+it, and the record marks it `locked: true` in `chosen_by_you` (beside `value` and `was`); the grid says
+`locked`. The tempo's range follows the style (`edits.tempo_range`: the style's own, a tenth wider each way,
+never narrower than 0.75 to 1.3 of the song's, inside 0.4 to 1.6): the tempo card has it as `range`, and
+the page's tempo input and slider use it.
+
+**`POST /api/arrangement`** `{"edits": {...}}` (the page's token and JSON, as every request; made at once
+from the score laid out, no audio, about half a second for H; a public studio's request limit holds):
+
+```
+{
+  "key": "…",                                   the version's render key, as /api/listen's
+  "sections": [{
+     "index": 3, "id": "refrain:1", "name": "refrain", "label": "Refrain 2", "role": "refrain",
+     "energy": 0.66,                            how full the band is there, 0..1 (the program's arc)
+     "bars": 16, "own_bars": 8, "bar_options": [8, 16],
+     "sung": false, "can_play": true, "build": false,
+     "lines": [{"index": 0, "phrase": "r1", "sung": false, "start_beat": 96.0}, …],
+     "start_beat": 96.0, "duration_beats": 64.0, "start_seconds": 46.9, "end_seconds": 76.9,
+     "pair": [],                                the other section it is one with to the band (verses in pairs)
+     "options": [{"field": "breakdown", "value": false, "path": "style.breakdown", "by": "chance",
+                  "text": "the last refrain starts stripped down"}],
+     "paths": {"bars": "arrange.refrain:1.bars", "sung": "…", "build": "…"},
+     "program": {"bars": 8, "sung": true, "build": false},
+     "by": {"bars": "you", "sung": "you", "build": "program"},
+     "problems": []
+  }, …],
+  "players": [{"name": "drummachine", "label": "drum machine", "family": "drum machine", "plays": true,
+               "patterns": [{"id": "four", "label": "four on the floor"}, …], "fills": true}, …],
+  "cells": [{
+     "section": "refrain:1", "player": "drummachine", "plays": true,
+     "value":   {"level": "hard", "pattern": "four", "pattern_label": "four on the floor", "from": 0,
+                 "fill": false, "enters_beat": 0.0},
+     "program": {"level": "plays", "pattern": "machine", "from": 0, "fill": false},
+     "by": "you",                               program, you, or before (a person's, in the version before)
+     "chance": false,                           a value chance drew (an entrance, a stripped start...): dashed
+     "locked": false,                           a person's lock: the program's own, kept
+     "why": [{"kind": "you", "text": "chosen by you; the program had the drum machine play four on the floor"},
+             {"kind": "rule", "text": "synth folk: the drum machine plays four on the floor in a refrain"}, …],
+     "paths": {"level": "arrange.refrain:1.drummachine.level", "pattern": "…", "from": "…", "fill": "…"},
+     "problems": []
+  }, …],                                        one for every section and player, in the sections' order
+  "levels": [{"id": "out", "label": "out"}, {"id": "soft", …}, {"id": "plays", …}, {"id": "hard", …}],
+  "tempo": {"value": 128.0, "min": 72.0, "max": 134.1, "song": 96, "style": "synth folk",
+            "feel": "played straight", "by": "you"},
+  "problems": [{"path": "arrange.verse:9.guitar.level", "why": "this version doesn't play that section; …"}]
+}
+```
+
+A `why` has the explain layer's kinds (`you`, `rule`: the style's own way, `chance`: drawn for this
+machine and season, `parent`/`lineage`: the version before, `song`), in the page's words, never the code's
+(tests/test_studio.py checks every text). `enters_beat` is where the player comes in, in beats from the
+section's start (a line chosen, a build's bar, or the entrance chance drew). A choice the version can't
+play (a section it hasn't got, a player its band hasn't got, a pattern its player doesn't play, a build at
+the song's end) is in `problems`, with why; one kept from the version before waits there, silent.
+
+**For the page.** A cell's energy bar is `value.level`; the second ink where `by` is `you` (a padlock where
+`locked`), a dashed outline where `chance`; its inspector shows `pattern_label`, the player's `patterns`,
+`from` against the section's `lines`, `fill` where the player `fills`, the `program` value to go back to
+(send null), and `why` folded. A region's edge offers `bar_options`; *Who sings* is `sung` where
+`can_play`; *Moment* is `build` and the section's `options` (each a `style.*` path). Changing any of them is
+one edit, undoable like every other; the grid is asked for again after each (it is made from the same edit
+map as `/api/song`, so they always agree).
 
 ## Sound design (2026-09-29)
 
@@ -1537,7 +1630,8 @@ somewhere other than `renders/`.
    new one every second.
 3. **The singer is the machine's.** Only its phrasing changes, by singing.
 4. **A person's ranges are the designed ones**, wider than a machine's own:
-   tempo 0.75 to 1.3 times, every instrument can sit out (all of them for the
+   tempo the style's own range a tenth wider (0.75 to 1.3 times for the ballad; since
+   2026-09-29, docs/ARRANGE.md), every instrument can sit out (all of them for the
    voice alone), the mix's full ranges.
 5. **A mode chosen by a person leans the words**, as the machine's own mode
    would; the rest of an edit changes only what it names.

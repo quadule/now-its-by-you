@@ -672,6 +672,9 @@ def choose_style(out: dict, ctx, forced: str | None = None, arrange: dict | None
     form = tuple(out.get("form", ctx.parent.form))
     voices = int(out.get("choir", ctx.parent.choir))
     options = choose_options(ctx.genome, form, sdef, parent, kept, voices, material, ctx.drift, c)
+    if arrange and kept and "identity" not in c.known:
+        # a person choosing one of the options with no machine to draw the rest: the rest as the version had them
+        options = {k: v for k, v in parent.to_dict().items() if k not in ("name", "lineage")}
     options.update(arrange or {})
     style = Style.from_dict({"name": name, "lineage": lineage + (name,), **options})
     out["style"] = style.to_dict()
@@ -835,6 +838,8 @@ def repeated(genome, params, placed) -> list:
     if not repeated_phrases(genome, params) or not placed:
         return []
     name, phrase, _start, line = placed[-1]
+    if line is None:  # a person had the song's last lines played (songbird.takeover): the last one sung, again
+        line = next((x for n, p, _s, x in reversed(placed) if n == name and p.id == phrase.id and x), None)
     return [(name, phrase, line)]
 
 

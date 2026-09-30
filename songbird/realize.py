@@ -274,7 +274,10 @@ def timeline(genome: Genome, params: Params) -> Clock:
     """The clock realize() puts a rendition's notes on: its form laid out on
     the grid, phrase after phrase, the song's first pickup at zero."""
     meter = genome.meter
-    phrases = [genome.phrases[pid] for name in params.form for pid in genome.section(name).phrases]
+    from .takeover import phrase_ids
+
+    # each section's tune lines: its own, or as long as a person made it (songbird.takeover)
+    phrases = [genome.phrases[pid] for pid in phrase_ids(genome, params)]
     phrases += style_mod.repeated_phrases(genome, params)  # a style's ending may sing the last line again
     lead = phrases[0].pickup + style_mod.count_in(genome, params)  # after a count-in bar, if the style has one
     sung = sum(p.bars for p in phrases) * meter.bar + lead
@@ -318,6 +321,11 @@ def realize(genome: Genome, params: Params, verses=None, phrasing: Phrasing | No
 
     # a person's own lines, each in the verse (or time round) it was written for (songbird.composition)
     patches = authored(genome, params, lyrics)
+    from .takeover import arranged_plan
+
+    # each section's tune lines, and whether each is sung, where a person arranged it (its length, or played
+    # rather than sung: songbird.takeover; None: the section's own); a line played sings no words
+    lined = arranged_plan(genome, params)
     # each line of the form as its place sings it: its own chords and tune where a person gave it some, else the
     # line everywhere (the very phrase objects, where no place has its own)
     at_places = iter(form_phrases(genome, params))
@@ -335,7 +343,9 @@ def realize(genome: Genome, params: Params, verses=None, phrasing: Phrasing | No
             heard[block] += 1
         if patch:
             lines = [patch.get(str(i), line) for i, line in enumerate(lines)]
-        for pid, line in zip(section.phrases, lines):
+        laid = zip(section.phrases, lines) if lined[j] is None else \
+            [(pid, lines[k] if sung and k < len(lines) else None) for k, (pid, sung) in enumerate(lined[j])]
+        for pid, line in laid:
             phrase = next(at_places)
             placed.append((name, phrase, t, line))
             t += phrase.bars * meter.bar

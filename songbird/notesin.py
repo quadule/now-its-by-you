@@ -54,8 +54,12 @@ def layout(genome, params) -> list[dict]:
 
     clock = timeline(genome, params)
     m = genome.meter
+    from .takeover import phrase_plan
+
+    # each section's lines, as long as a person made it and sung or played as they had it (songbird.takeover)
+    lined = phrase_plan(genome, params)
     flat = [(sid, name, i, j, pid) for i, (sid, name) in enumerate(zip(C.section_ids(params.form), params.form))
-            for j, pid in enumerate(genome.section(name).phrases)]
+            for j, (pid, _) in enumerate(lined[i])]
     repeated = repeated_phrases(genome, params)
     refrains = [i for i, name in enumerate(params.form) if genome.section(name).lyrics == "refrain"]
     lift_from = refrains[-1] if params.style.lift and len(refrains) >= 2 else None
@@ -67,8 +71,10 @@ def layout(genome, params) -> list[dict]:
         out.append({"key": f"{sid}.{j}", "sid": sid, "line": j, "pid": pid, "name": name, "index": i,
                     "where": f"{section_label(params.form, i)}, line {j + 1}", "u0": u, "u1": end,
                     "w0": u - phrase.pickup, "w1": end - after, "pickup": phrase.pickup,
-                    "sung": bool(genome.section(name).lyrics) and bool(phrase.sung),
-                    "up": 2 if lift_from is not None and i >= lift_from else 0})
+                    "sung": bool(genome.section(name).lyrics) and bool(phrase.sung) and lined[i][j][1],
+                    "up": 2 if lift_from is not None and i >= lift_from else 0,
+                    # the section's own line there: a place a change can be kept for (one an arrangement added isn't)
+                    "own": j < len(genome.section(name).phrases) and genome.section(name).phrases[j] == pid})
         u = end
     return out
 
@@ -366,7 +372,7 @@ def _same_lines(genome, params, lines, mine, ours, voice: bool) -> dict:
                               sorted((round(u * 96), 0, p, v) for u, _, p, v in b_out))}
 
 
-def _scoped(lines, found: dict, kind: str, where: list[int], what) -> dict:
+def _scoped(lines, found: dict, kind: str, where: list[int], what, said: list | None = None) -> dict:
     """Changed lines as edits, one place or everywhere (docs/STUDIO.md, "Looser harmony and melody"): a tune line
     changed the same way in every place it comes (of `where`, the lines that can be compared) is one edit for the
     line everywhere; one changed in only some of its places, or differently, an edit for each of those places.
@@ -381,6 +387,11 @@ def _scoped(lines, found: dict, kind: str, where: list[int], what) -> dict:
             out[path] = {"path": path, "value": values[0], "where": lines[mine[0]]["where"], "what": what(values[0], True)}
             continue
         for k in mine:
+            if not lines[k].get("own", True):  # a line an arrangement repeated: no place of its own to keep it for
+                if said is not None:
+                    said.append(f"{lines[k]['where']}: a line the arrangement plays again has no place of its own; "
+                                "change it where the section has it, or everywhere")
+                continue
             path = f"{kind}.{lines[k]['key']}"
             out[path] = {"path": path, "value": found[k], "where": lines[k]["where"], "what": what(found[k], False)}
     return out
@@ -402,7 +413,7 @@ def _voice(genome, params, lines, same, changed, changes, out) -> None:
             out["refused"].append({"where": f"{ln['where']} (Voice)", "why": f"the line needs {want} notes, one for "
                                    f"each syllable; the file has {len(mine)} there"})
             continue
-        written = C.phrase_value(genome, params, ln["pid"], place=ln["key"])  # as this place sings it
+        written = C.notes_at(genome, params, ln["key"])  # as this place sings it
         notes = []
         try:
             for i, ((u, z, p, _), (u0, z0, p0, _), w) in enumerate(zip(mine, ours, written)):
@@ -427,7 +438,7 @@ def _voice(genome, params, lines, same, changed, changes, out) -> None:
             found[k] = value
     sung = [k for k, ln in enumerate(lines) if ln["sung"]]
     changes.update(_scoped(lines, found, "tune", sung, lambda value, everywhere: "the tune, everywhere this line is "
-                           "sung" if everywhere else "the tune, here only"))
+                           "sung" if everywhere else "the tune, here only", out["said"]))
 
 
 # ---------------------------------------------------------------- the chords
@@ -545,7 +556,7 @@ def _chords(genome, params, score, lines, theirs, ours, scale, changes, out) -> 
         except ValueError as e:
             out["refused"].append({"where": where, "why": str(e)})
             continue
-        current = C.chords_value(genome, params, ln["key"])  # as this place sings them
+        current = [list(bar) for bar in C.at_line(genome, params, ln["key"]).chords]  # as this place sings them
         bars = [[_kept(s, old, params.mode) for s, old in zip(bar, now)] if len(bar) == len(now) else bar
                 for bar, now in zip(bars, current)]
         if bars == current:
@@ -557,7 +568,7 @@ def _chords(genome, params, score, lines, theirs, ours, scale, changes, out) -> 
         named = " | ".join(" ".join(chord_name(s, params.tonic, params.mode) for s in bar) for bar in value)
         return f"the chords: {named}, " + ("everywhere this line is sung" if everywhere else "here only")
 
-    changes.update(_scoped(lines, found, "chords", list(range(len(lines))), what))
+    changes.update(_scoped(lines, found, "chords", list(range(len(lines))), what, out["said"]))
 
 
 def _kept(symbol: str, old: str, mode: str) -> str:
