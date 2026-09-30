@@ -5,6 +5,9 @@
   const sections = new Map();
   let focus = null;
   const bridge = () => window.StudioBridge;
+  // what a line's field says on hover: the rest of how a line is written (the column says only the count's rule)
+  const STARS = "A word between stars, like *heart*, is the one the line leans on: the singer gives it a little more. " +
+    "The singer checks the syllables and the pronunciation; the story and the rhyme are yours.";
   const syllables = (text) => text.trim().split(/[\s-]+/u).filter(Boolean).length;
   function node(tag, className, text) {
     const item = document.createElement(tag);
@@ -35,7 +38,7 @@
   function apply(section, patch, row = null, done = null) {
     if (!section.busy) section.chain = check(section, patch, row, done);
     else if (row) {
-      row.status.textContent = "Waiting for the line before to be checked…";
+      row.status.textContent = "Waiting for the line before…";
       section.chain = section.chain.then(() => check(section, patch, row, done));
     }
     return section.chain;
@@ -48,7 +51,7 @@
     const submitted = new Map([...section.rows.values()].map((row) => [row.phrase.lyric_path, row.input.value]));
     section.busy = true;
     save.disabled = true;
-    status.textContent = "Checking syllables and pronunciation…";
+    status.textContent = "Checking…";
     try {
       const response = await fetch("/api/song", {
         method: "POST", headers: {"Content-Type": "application/json", "X-Studio": document.querySelector('meta[name="studio-token"]').content},
@@ -58,15 +61,15 @@
       if (!response.ok) throw new Error(view.error || "The studio couldn't check these lines. Try again.");
       const problems = (view.problems || []).filter((problem) => paths.has(problem.path));
       if (problems.length) throw new Error(problems.map((p) => `Line ${Number(p.path.split(".").at(-1)) + 1}: ${p.why}`).join(" "));
-      if (bridge().snapshot().revision !== snapshot.revision) throw new Error("Your song changed while these words were checked. Apply them again when you're ready.");
+      if (bridge().snapshot().revision !== snapshot.revision) throw new Error("The song changed while this was checked: use it again.");
       bridge().replaceEdits(next, `Write ${section.label.toLowerCase()}`);
       for (const row of section.rows.values()) if (paths.has(row.phrase.lyric_path)) {
         // Typing can continue while validation runs. Only the submitted text
         // becomes the base; newer typing must remain an unapplied draft.
         row.base = patch[row.phrase.lyric_path] ?? submitted.get(row.phrase.lyric_path);
       }
-      status.textContent = row ? "This line fits the tune: it's in your song." : "Your words fit the tune. Hear this section to listen.";
-      bridge().toast(row ? "Your line is part of the song. Undo brings the previous one back." : "Your words are part of the song. Undo brings the previous lines back.");
+      status.textContent = row ? "In your song." : "In your song. Hear the section to listen.";
+      bridge().toast(row ? "Your line is in the song. Undo takes it back." : "Your words are in the song. Undo takes them back.");
       done?.();
     } catch (error) { status.textContent = error.message; }
     finally { section.busy = false; save.disabled = false; }
@@ -75,17 +78,18 @@
     const details = node("details", "lyric-author");
     details.dataset.authorSection = s.id;
     const summary = node("summary", "", "Write your own lines");
-    const hint = node("p", "hint", "One syllable for each note. Split longer words with hyphens, like car-ry. A word between stars, like *heart*, is the one the line leans on: the singer gives it a little more. Keep, move or drop the stars. The singer checks the syllables and pronunciation; the story and rhyme are yours.");
+    const hint = node("p", "hint", "One syllable a note; split longer words with hyphens (car-ry).");
+    hint.title = STARS;
     const lines = node("div", "author-lines");
     const status = node("p", "author-status");
     status.setAttribute("role", "status");
     const section = {details, summary, lines, rows: new Map(), label: s.label, status, hint: null, busy: false};
     section.save = button("Use these lines", () => {
       const changed = [...section.rows.values()].filter((row) => row.input.value !== row.base);
-      if (!changed.length) { status.textContent = "These lines are already in your song."; return; }
+      if (!changed.length) { status.textContent = "Already in your song."; return; }
       const wrong = changed.filter((row) => syllables(row.input.value) !== row.phrase.syllable_count);
       if (wrong.length) {
-        status.textContent = "Match each line's syllable count before applying your words.";
+        status.textContent = "Each line needs its count of syllables.";
         wrong[0].input.focus();
         return;
       }
@@ -93,7 +97,7 @@
     });
     const discard = button("Discard typing", () => {
       for (const row of section.rows.values()) { row.input.value = row.base; count(row); }
-      status.textContent = "Unapplied typing discarded. Your song is unchanged.";
+      status.textContent = "";
     });
     const actions = node("div", "author-actions");
     actions.append(section.save, discard);
@@ -120,12 +124,13 @@
       const head = node("div", "author-line-head");
       const restore = button("Use the song's line", () => apply(section, {[p.lyric_path]: null}));
       restore.className = "link small";
-      restore.title = "Release your original text and sing the bank's words here, including inherited text";
+      restore.title = "Your line let go: the song's own words sung here again";
       head.append(name, tally, restore);
       wrap.append(head, input);
       row = {wrap, input, count: tally, restore, base: p.lyric_text, phrase: p};
       input.value = p.lyric_text;
-      input.addEventListener("input", () => { count(row); section.status.textContent = "Typing stays here until you use these lines."; });
+      input.title = STARS;
+      input.addEventListener("input", () => { count(row); section.status.textContent = "Not in the song until you use it."; });
       section.rows.set(p.lyric_path, row);
       section.lines.append(wrap);
     } else if (row.input.value === row.base) {
@@ -143,7 +148,7 @@
     if (!row.use) {
       row.use = button("Use this line", () => {
         const text = row.input.value;
-        if (text === row.base) { row.status.textContent = "This line is already in your song."; return; }
+        if (text === row.base) { row.status.textContent = "Already in your song."; return; }
         if (syllables(text) !== row.phrase.syllable_count) {
           row.status.textContent = `This line needs ${row.phrase.syllable_count} syllables; it has ${syllables(text)}.`;
           row.input.focus();
@@ -152,12 +157,12 @@
         apply(section, {[row.phrase.lyric_path]: text}, row, () => row.next?.());
       });
       row.use.className = "btn";
-      const discard = button("Discard typing", () => { row.input.value = row.base; count(row); row.status.textContent = "This line's typing discarded."; });
+      const discard = button("Discard typing", () => { row.input.value = row.base; count(row); row.status.textContent = ""; });
       row.actions = node("div", "author-actions");
       row.actions.append(row.use, discard);
       row.status = node("p", "author-status");
       row.status.setAttribute("role", "status");
-      row.input.addEventListener("input", () => { row.status.textContent = "Typing stays here until you use this line."; });
+      row.input.addEventListener("input", () => { row.status.textContent = "Not in the song until you use it."; });
     }
     row.next = options.next || null;  // what follows a line used: the score's next line to write
     return row;

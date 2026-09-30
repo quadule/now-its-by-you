@@ -667,7 +667,7 @@
     seam: "The moment one section turns into the next: a riser, a sweep, a snare roll or a stop over the bars before, an impact on the downbeat, a downlifter after it.",
     chord: "A chord under the tune. The band, the voices before and the backing voices follow it; the tune stays. A sung note that isn't in the chord is shown, not forbidden.",
     note: "A note of the tune: its pitch, where it starts and how long. A phrase keeps its syllables and its ending's place in the scale unless you free it.",
-    line: "A line of the words. Write your own if it fits the notes: one syllable a note, longer words split with hyphens (car-ry).",
+    line: "Write your own line: one syllable a note, longer words split with hyphens (car-ry). A word between stars, like *heart*, is the one the line leans on. The singer checks the syllables and the pronunciation before it changes the song; the story and the rhyme are yours.",
     singer: "The singer is your machine's own voice, the same in every song it sings. What you can give it is a way of singing, and where it sits against the band.",
     choir: "Voices from the versions before this one, one more for every version, up to six; they sing where the song has a choir.",
     room: "The room the song is sung in: how much of it you hear, how wide it is, how long it rings and how soon it answers.",
@@ -995,12 +995,11 @@
     };
     window.SongbirdAuthor?.line(state.view, sel.id, sel.line, anchor, { next });
     shell({ kind: "line", rubric: `${s.label}, line ${sel.line + 1}`, mine: !!p.authored,
-      set: `${p.authored ? "yours" : w?.how ? `the song's own, ${w.how}` : "the song's own"}: ${p.syllable_count} syllables`,
+      set: p.authored ? "yours" : w?.how ? `the song's own, ${w.how}` : "the song's own",
       body: h("div", {},
         phrases.length > 1 ? chipRow("Line", phrases.map((_, j) => ({ value: j, text: String(j + 1), disabled: !phrases[j].lyric_path })), sel.line,
           (j) => select({ kind: "line", id: sel.id, line: j })) : null,
-        anchor,
-        h("p", { class: "hint" }, "Checked for its count and the singer's pronunciation before it changes the song. The meaning and the rhyme are yours.")),
+        anchor),
       why: p.authored ? [["you", "your line; it follows these words wherever they are sung"]] : [["lineage", "handed down from the song as it began"], ["machine", card("words")?.detail || ""]],
       hear: () => listen("you", s.index) });
     return true;
