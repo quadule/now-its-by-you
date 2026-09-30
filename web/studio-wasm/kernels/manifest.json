@@ -188,7 +188,7 @@
    "v"
   ],
   "arrays": {},
-  "fastmath": true,
+  "fastmath": false,
   "calls": []
  },
  "synth.analog._ladder_step": {
@@ -209,7 +209,7 @@
     "C"
    ]
   },
-  "fastmath": true,
+  "fastmath": false,
   "calls": [
    "synth.analog._sat"
   ]
@@ -237,7 +237,7 @@
     "A"
    ]
   },
-  "fastmath": true,
+  "fastmath": false,
   "calls": [
    "synth.analog._ladder_step"
   ]
@@ -254,7 +254,7 @@
    "d"
   ],
   "arrays": {},
-  "fastmath": true,
+  "fastmath": false,
   "calls": [
    "synth.osc._edges"
   ]
@@ -387,7 +387,7 @@
     "C"
    ]
   },
-  "fastmath": true,
+  "fastmath": false,
   "calls": [
    "synth.analog._ladder_step",
    "synth.analog._wave"
@@ -471,7 +471,7 @@
     "C"
    ]
   },
-  "fastmath": true,
+  "fastmath": false,
   "calls": []
  },
  "synth.analog._delays": {
@@ -501,7 +501,7 @@
     "C"
    ]
   },
-  "fastmath": true,
+  "fastmath": false,
   "calls": []
  },
  "synth.bowed._read": {
@@ -1457,6 +1457,98 @@
   "fastmath": false,
   "calls": []
  },
+ "synth.fx._running_mean": {
+  "js": "k_synth$fx$_running_mean",
+  "ok": true,
+  "typed": true,
+  "ret": "array(float64, 1d, C)",
+  "params": [
+   "x",
+   "size",
+   "out"
+  ],
+  "arrays": {
+   "x": [
+    "f8",
+    1,
+    "C"
+   ],
+   "out": [
+    "f8",
+    1,
+    "C"
+   ]
+  },
+  "fastmath": false,
+  "calls": []
+ },
+ "synth.fx._extended": {
+  "js": "k_synth$fx$_extended",
+  "ok": true,
+  "typed": true,
+  "ret": "int64",
+  "params": [
+   "p",
+   "n",
+   "reflect"
+  ],
+  "arrays": {},
+  "fastmath": false,
+  "calls": []
+ },
+ "synth.fx._sliding_min": {
+  "js": "k_synth$fx$_sliding_min",
+  "ok": true,
+  "typed": true,
+  "ret": "array(float64, 1d, C)",
+  "params": [
+   "x",
+   "before",
+   "after",
+   "reflect",
+   "out"
+  ],
+  "arrays": {
+   "x": [
+    "f8",
+    1,
+    "C"
+   ],
+   "out": [
+    "f8",
+    1,
+    "C"
+   ]
+  },
+  "fastmath": false,
+  "calls": [
+   "synth.fx._extended"
+  ]
+ },
+ "synth.fx._hold": {
+  "js": "k_synth$fx$_hold",
+  "ok": true,
+  "typed": true,
+  "ret": "none",
+  "params": [
+   "playing",
+   "track"
+  ],
+  "arrays": {
+   "playing": [
+    "b1",
+    1,
+    "C"
+   ],
+   "track": [
+    "f8",
+    1,
+    "C"
+   ]
+  },
+  "fastmath": false,
+  "calls": []
+ },
  "synth.fx._block_power": {
   "js": "k_synth$fx$_block_power",
   "ok": true,
@@ -1476,14 +1568,15 @@
   "fastmath": false,
   "calls": []
  },
- "synth.fx._detect": {
-  "js": "k_synth$fx$_detect",
+ "synth.fx._detect_every": {
+  "js": "k_synth$fx$_detect_every",
   "ok": true,
   "typed": true,
   "ret": "array(float64, 1d, C)",
   "params": [
    "key",
-   "coef"
+   "coef",
+   "step"
   ],
   "arrays": {
    "key": [
@@ -1524,7 +1617,8 @@
    "x",
    "lin",
    "step",
-   "band"
+   "band",
+   "y"
   ],
   "arrays": {
    "x": [
@@ -1538,6 +1632,11 @@
     "C"
    ],
    "band": [
+    "f8",
+    2,
+    "C"
+   ],
+   "y": [
     "f8",
     2,
     "C"
@@ -1609,10 +1708,16 @@
    "x",
    "k",
    "bias",
-   "dc"
+   "dc",
+   "y"
   ],
   "arrays": {
    "x": [
+    "f8",
+    2,
+    "C"
+   ],
+   "y": [
     "f8",
     2,
     "C"
@@ -1647,6 +1752,34 @@
     "f8",
     1,
     "A"
+   ]
+  },
+  "fastmath": false,
+  "calls": []
+ },
+ "synth.instruments._placed": {
+  "js": "k_synth$instruments$_placed",
+  "ok": true,
+  "typed": true,
+  "ret": "none",
+  "params": [
+   "y",
+   "cos",
+   "sin",
+   "root2",
+   "width",
+   "out"
+  ],
+  "arrays": {
+   "y": [
+    "f8",
+    2,
+    "A"
+   ],
+   "out": [
+    "f8",
+    2,
+    "C"
    ]
   },
   "fastmath": false,
@@ -1719,8 +1852,8 @@
  "synth.master._hop_power": {
   "js": "k_synth$master$_hop_power",
   "ok": true,
-  "typed": true,
-  "ret": "array(float64, 1d, C)",
+  "typed": false,
+  "ret": null,
   "params": [
    "y",
    "hop"
@@ -1729,6 +1862,131 @@
    "y": [
     "f8",
     2,
+    "A"
+   ]
+  },
+  "fastmath": false,
+  "calls": []
+ },
+ "synth.master._weighted_hop_power": {
+  "js": "k_synth$master$_weighted_hop_power",
+  "ok": true,
+  "typed": true,
+  "ret": "array(float64, 1d, C)",
+  "params": [
+   "x",
+   "p",
+   "q",
+   "hop"
+  ],
+  "arrays": {
+   "x": [
+    "f8",
+    2,
+    "C"
+   ],
+   "p": [
+    "f8",
+    1,
+    "C"
+   ],
+   "q": [
+    "f8",
+    1,
+    "C"
+   ]
+  },
+  "fastmath": false,
+  "calls": []
+ },
+ "synth.master._abs_max": {
+  "js": "k_synth$master$_abs_max",
+  "ok": true,
+  "typed": true,
+  "ret": "array(float64, 1d, C)",
+  "params": [
+   "y"
+  ],
+  "arrays": {
+   "y": [
+    "f8",
+    2,
+    "C"
+   ]
+  },
+  "fastmath": false,
+  "calls": []
+ },
+ "synth.master._windows": {
+  "js": "k_synth$master$_windows",
+  "ok": true,
+  "typed": true,
+  "ret": "array(float64, 2d, C)",
+  "params": [
+   "y",
+   "ch",
+   "points",
+   "reach"
+  ],
+  "arrays": {
+   "y": [
+    "f8",
+    2,
+    "C"
+   ],
+   "points": [
+    "i8",
+    1,
+    "C"
+   ]
+  },
+  "fastmath": false,
+  "calls": []
+ },
+ "synth.master._over": {
+  "js": "k_synth$master$_over",
+  "ok": true,
+  "typed": true,
+  "ret": "array(bool, 1d, C)",
+  "params": [
+   "x",
+   "a"
+  ],
+  "arrays": {
+   "x": [
+    "f8",
+    2,
+    "C"
+   ]
+  },
+  "fastmath": false,
+  "calls": []
+ },
+ "synth.master._mean_ahead": {
+  "js": "k_synth$master$_mean_ahead",
+  "ok": true,
+  "typed": true,
+  "ret": "array(float64, 1d, C)",
+  "params": [
+   "recovered",
+   "ahead",
+   "need",
+   "out"
+  ],
+  "arrays": {
+   "recovered": [
+    "f8",
+    1,
+    "C"
+   ],
+   "need": [
+    "f8",
+    1,
+    "C"
+   ],
+   "out": [
+    "f8",
+    1,
     "C"
    ]
   },
@@ -1742,10 +2000,16 @@
   "ret": "array(float64, 1d, C)",
   "params": [
    "held",
-   "coef"
+   "coef",
+   "out"
   ],
   "arrays": {
    "held": [
+    "f8",
+    1,
+    "C"
+   ],
+   "out": [
     "f8",
     1,
     "C"

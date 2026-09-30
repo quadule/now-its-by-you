@@ -41,22 +41,24 @@ void pluck_loop(const double *x, int32_t nx, int32_t whole, const double *taps, 
   }
 }
 
-// pluck._bank: lines (n_strings x (pad + length), zeroed) and out (length) are the caller's
+// pluck._bank: lines (n_strings x ring, zeroed; ring a power of two at least pad) and out (length) are the
+// caller's; each string's line is a ring of its last `ring` values, as in the Python
 EXPORT(pluck_bank)
 void pluck_bank(const double *x, int32_t length, const int32_t *wholes, const double *taps, int32_t n_strings,
-                int32_t n_taps, const double *gains, double coupling, double *lines, int32_t pad, double *out) {
-  int32_t width = pad + length;
+                int32_t n_taps, const double *gains, double coupling, double *lines, int32_t pad, int32_t ring,
+                double *out) {
+  int32_t mask = ring - 1;
   for (int32_t n = 0; n < length; n++) {
     double drive = coupling * x[n];
     double total = 0.0;
     for (int32_t s = 0; s < n_strings; s++) {
       int32_t base = pad + n - wholes[s];
-      const double *line = lines + (int64_t)s * width;
+      double *line = lines + (int64_t)s * ring;
       const double *t = taps + s * n_taps;
       double fb = 0.0;
-      for (int32_t k = 0; k < n_taps; k++) fb += t[k] * line[base - k];
+      for (int32_t k = 0; k < n_taps; k++) fb += t[k] * line[(base - k) & mask];
       double v = drive + gains[s] * fb;
-      lines[(int64_t)s * width + pad + n] = v;
+      line[(pad + n) & mask] = v;
       total += v;
     }
     out[n] = total;
@@ -158,14 +160,15 @@ void drum_ring(const double *freqs, const double *amps, const double *t60s, int3
   }
 }
 
-EXPORT(fx_detect)
-void fx_detect(const double *key, int32_t n, int32_t chans, double coef, double *out) {
+// fx._detect_every: out ((n + step - 1) / step) is the caller's
+EXPORT(fx_detect_every)
+void fx_detect_every(const double *key, int32_t n, int32_t chans, double coef, int32_t step, double *out) {
   double p = 0.0;
   for (int32_t i = 0; i < n; i++) {
     double s = 0.0;
     for (int32_t c = 0; c < chans; c++) s += key[(int64_t)i * chans + c] * key[(int64_t)i * chans + c];
     p = coef * p + (1.0 - coef) * s / chans;
-    out[i] = p;
+    if (i % step == 0) out[i / step] = p;
   }
 }
 
@@ -209,13 +212,26 @@ void fx_block_power(const double *x, int32_t n, int32_t chans, int32_t block, do
   }
 }
 
-EXPORT(master_hop_power)
-void master_hop_power(const double *y, int32_t n, int32_t chans, int32_t hop, double *out) {
+// master._weighted_hop_power: state (4 x chans, zeroed: z1, z2, w1, w2) and out (n / hop, zeroed) are the
+// caller's
+EXPORT(master_weighted_hop_power)
+void master_weighted_hop_power(const double *x, int32_t n, int32_t chans, const double *p, const double *q,
+                               int32_t hop, double *state, double *out) {
+  double *z1 = state, *z2 = state + chans, *w1 = state + 2 * chans, *w2 = state + 3 * chans;
   int32_t k = n / hop;
   for (int32_t j = 0; j < k; j++) {
     double s = 0.0;
     for (int32_t i = j * hop; i < (j + 1) * hop; i++)
-      for (int32_t c = 0; c < chans; c++) s += y[(int64_t)i * chans + c] * y[(int64_t)i * chans + c];
+      for (int32_t c = 0; c < chans; c++) {
+        double v = x[(int64_t)i * chans + c];
+        double o = p[0] * v + z1[c];
+        z1[c] = p[1] * v - p[4] * o + z2[c];
+        z2[c] = p[2] * v - p[5] * o;
+        double u = q[0] * o + w1[c];
+        w1[c] = q[1] * o - q[4] * u + w2[c];
+        w2[c] = q[2] * o - q[5] * u;
+        s += u * u;
+      }
     out[j] = s / hop;
   }
 }

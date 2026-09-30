@@ -1,0 +1,16 @@
+{
+ "synth.bowed.run": "155947e8244e2290",
+ "synth.drum._ring": "688511c8a5704ef7",
+ "synth.fx._apply": "4348b2a96e38daa8",
+ "synth.fx._block_power": "926629e949e93902",
+ "synth.fx._detect_every": "90a59ba9dd36143e",
+ "synth.fx._four": "ee4b159799a508f7",
+ "synth.fx._one": "d613a4db8f6063dd",
+ "synth.fx._products": "51fbb8c80c269ac5",
+ "synth.fx._two": "d7f39fbbaae1c4a3",
+ "synth.master._recover": "c0c1df3e52e61e33",
+ "synth.master._weighted_hop_power": "ae955abcf0058e3e",
+ "synth.pipe.run": "61c277eda546710a",
+ "synth.pluck._bank": "6d85530e31849d57",
+ "synth.pluck._loop": "0719d74fac3af1ce"
+}

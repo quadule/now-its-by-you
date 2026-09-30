@@ -46,7 +46,8 @@ function playIcon() {
 }
 
 async function api(path, body) {
-  const options = body === undefined ? {} : {
+  // the token names the version the page was opened on (at /v/<id>), so the questions carry it too
+  const options = body === undefined ? { headers: { "X-Studio": TOKEN } } : {
     method: "POST",
     headers: { "Content-Type": "application/json", "X-Studio": TOKEN },
     body: JSON.stringify(body),
@@ -70,7 +71,7 @@ function toast(text) {
 // edit made for another version of the song's file would come back as a problem on every visit.
 function storeKey() {
   const s = state.start;
-  return s ? `songbird-studio|${s.title}|${s.from}|${s.machine.label}|${s.song_digest || ""}` : null;
+  return s ? `songbird-studio|${s.title}|${s.from}|${s.machine.label}|${s.song_digest || ""}${s.version ? `|${s.version.id}` : ""}` : null;
 }
 function olderStoreKey() {  // before the key carried the song's digest
   const s = state.start;
@@ -1204,6 +1205,7 @@ async function main() {
     $("helpWhere").textContent = "This studio is shared from someone else's computer for a short preview: that computer makes the song, and what you record is saved there too. Download it to keep it. Your changes stay in this browser.";
   }
   applyPublic(s);
+  applyVersion(s);
   $("helpSong").textContent = s.title;
   renderLineage(s.generation || 0);
   $("singNote").textContent = s.sing.available ? "" : s.sing.why;
@@ -1317,6 +1319,97 @@ window.addEventListener("focus", async () => {
     }
   } catch (e) { /* the studio may have stopped */ }
 });
+
+// ------------------------------------------------------------------ someone's version (/api/open, /v/<id>)
+// A version someone was sent (its .flac), dropped anywhere on the page or chosen in "Open someone's version",
+// is sent to the studio, which reads it as data (never running the program it carries) and answers with its
+// link; the page then opens there, on that version as the parent. At /v/<id> the header says whose version this
+// continues and gives the link to share. Kept here, apart; the rest of the page only learns the version through
+// its token (every request sends it). docs/WEB-STUDIO.md, "Opening someone's version".
+
+function applyVersion(s) {
+  const bar = $("versionBar");
+  const v = s.version;
+  bar.hidden = !v;
+  if (!v) return;
+  const which = ORDINAL_WORDS[v.generation] ? `the ${ORDINAL_WORDS[v.generation]} version` : `a version ${v.generation + 1} down the line`;
+  const made = v.made ? `, made ${new Date(`${v.made}T12:00:00Z`).toLocaleDateString(undefined, { day: "numeric", month: "long", year: "numeric" })}` : "";
+  const link = new URL(v.url, location.href).href;
+  const copy = h("button", { class: "link small", type: "button", onclick: async () => {
+    try { await navigator.clipboard.writeText(link); toast("The link is copied"); }
+    catch (e) { toast("Copy the link from the address bar"); }
+  } }, "copy the link");
+  bar.replaceChildren(
+    h("p", {}, tag("lineage", "someone's version"), " ",
+      `Continuing ${which}${made} (${v.rendition}…), which someone brought here. What you record is its child.`),
+    h("p", { class: "hint" }, v.program_note),
+    h("p", { class: "hint" }, "Its link, for anyone to open it here too: ", h("a", { href: v.url }, link), " · ", copy,
+      " · ", h("a", { href: "/" }, "the song as it began")),
+  );
+  $("versionNote").textContent = "This page is on someone's version. Opening another starts from that one instead.";
+}
+const ORDINAL_WORDS = ["first", "second", "third", "fourth", "fifth", "sixth", "seventh", "eighth", "ninth", "tenth",
+  "eleventh", "twelfth"];
+
+async function openVersionFile(file) {
+  const note = $("versionNote");
+  const say = (text) => { note.textContent = text; toast(text); };
+  if (!file) return;
+  if (!/\.flac$/i.test(file.name) && file.type !== "audio/flac") {
+    say(`${file.name} isn't a .flac file. A version of the song comes as one .flac file.`);
+    return;
+  }
+  const most = (state.start?.open?.upload_mb || 64) * 2 ** 20;
+  if (file.size > most) {
+    say(`${file.name} is ${Math.round(file.size / 2 ** 20)} MB; a version is about 15 to 20 (the most taken here is ${most / 2 ** 20} MB).`);
+    return;
+  }
+  if (openVersionFile.busy) return;
+  openVersionFile.busy = true;
+  $("versionChoose").disabled = true;
+  try {
+    // asked first, so a file that would be turned away (a limit reached, the studio busy) isn't sent for nothing
+    await api("/api/open/ready", { size: file.size });
+    note.textContent = `Reading ${file.name}… (it's only read, never run; this takes a few seconds)`;
+    const r = await fetch("/api/open", {
+      method: "POST", body: file,
+      headers: { "Content-Type": "application/octet-stream", "X-Studio": TOKEN },
+    });
+    let data;
+    try { data = await r.json(); } catch (e) { data = { error: r.statusText }; }
+    if (!r.ok) throw new Error(data.error || r.statusText);
+    note.textContent = "Opening that version…";
+    location.assign(data.url);
+  } catch (e) {
+    say(`Couldn't open it: ${e.message}`);
+  } finally {
+    openVersionFile.busy = false;
+    $("versionChoose").disabled = false;
+  }
+}
+
+$("versionChoose").addEventListener("click", () => $("versionFile").click());
+$("versionFile").addEventListener("change", (ev) => {
+  const file = ev.target.files && ev.target.files[0];
+  ev.target.value = "";
+  openVersionFile(file);
+});
+{
+  // a file dragged over the page: the veil says what dropping it does
+  const veil = $("dropVeil");
+  const carriesFiles = (ev) => [...(ev.dataTransfer?.types || [])].includes("Files");
+  let depth = 0;
+  document.addEventListener("dragenter", (ev) => { if (carriesFiles(ev)) { depth += 1; veil.hidden = false; } });
+  document.addEventListener("dragleave", (ev) => { if (carriesFiles(ev) && --depth <= 0) { depth = 0; veil.hidden = true; } });
+  document.addEventListener("dragover", (ev) => { if (carriesFiles(ev)) { ev.preventDefault(); ev.dataTransfer.dropEffect = "copy"; } });
+  document.addEventListener("drop", (ev) => {
+    if (!carriesFiles(ev)) return;
+    ev.preventDefault();
+    depth = 0;
+    veil.hidden = true;
+    openVersionFile(ev.dataTransfer.files[0]);
+  });
+}
 
 // ------------------------------------------------------------------ singing in the browser (webstudio/sing.js)
 // A studio that takes singing in the browser (songbird studio --web-singing, docs/WEB-SINGING.md) adds

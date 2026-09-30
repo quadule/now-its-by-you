@@ -22,6 +22,138 @@ The prototype is `web/studio-wasm/` (how to run it is at the end). Nothing in
 `test_styles::test_the_seed_of_h_renders_byte_identical`, the seed scores
 and the words golden: 22 passed).
 
+**Update, the same evening: the memory work landed, and whole songs now fit.**
+With the lean renderer (docs/PERFORMANCE.md, "Memory (2026-09-29)") the whole
+song's wasm heap is **1.12 GiB** (was 3.07 GB), a section's **387 MiB** (was
+~690), both still **byte-identical** to native, in node and in Chrome. See
+"Refreshed for the lean renderer" just below; the spike's own account follows it
+unchanged except where marked.
+
+## Refreshed for the lean renderer (2026-09-29, evening)
+
+### What changed under it, and what was done
+
+- **91 kernels now (was 81)**: the memory work added ten (`fx._sliding_min`,
+  `_running_mean`, `_hold`, `_extended`, `_detect_every` in place of `_detect`,
+  `instruments._placed`, `master._windows`, `_abs_max`, `_over`, `_mean_ahead`,
+  `_weighted_hop_power`) and changed four (`fx._apply`, `fx._saturate`,
+  `master._recover`, `pluck._bank`: in place, or a ring). Types regenerated
+  from fresh renders (`kernel_types.py --whole --gauntlet`, 77 of 91 typed; the
+  rest are helpers typed inside their callers, or unused, like the old
+  `master._hop_power`). **89 of 91 translate automatically, 2 by hand** (as
+  before). The translator learned three things: a dtype given by position
+  (`np.empty(n, np.int64)`, what stopped `fx._sliding_min`), `x.reshape(-1)` as
+  a view (`rt.flat`, what stopped `master._over`), and an array numba typed in
+  two layouts (C and F: `_placed`) as any layout. The numpy fallbacks were
+  the other option; they aren't usable (below), so the kernels it is.
+- **The numba shim** answers `numba.config.DISABLE_JIT` (songbird's `fx.JIT`
+  reads it; without it songbird didn't import at all), returns bool arrays
+  without a float64 copy 8x their size, and, the one real bug: a kernel that
+  returns one of its own arrays (`return out`, what the lean kernels do) now
+  hands back **that numpy array**, as numba does. It used to copy it, reading a
+  view of Pyodide's memory after an allocation had grown (and detached) it.
+- **The web patches**: the true-peak one is **dropped** (`master._windows`
+  gathers the rows now; no sliding view to exceed 2 GiB). The BLAS one stays,
+  now copy-free: `(x W')' = W x'` with both transposes Fortran-ordered as they
+  lie (20 MiB less heap, same time, same bytes).
+- **The C/wasm ports** (still 14, still no stack or data segment): `pluck._bank`
+  keeps the ring (the old port held seven lines the length of the song, 375 MB
+  of heap in a whole song), `_detect_every` and `_weighted_hop_power` replace
+  the kernels that went, `_apply` and `_recover` write into the `out` they're
+  given (which may be their input).
+- **A guard against drift**: `tools/transpile.py --check` is read-only; it
+  translates again in memory and compares with `kernels.gen.mjs` and
+  `manifest.json`, and compares each kernel's source digest with the one its
+  types (`types.json`) and its C port (`wasm/sources.json`) were made from, and
+  says what to run. `tests/test_browser_kernels.py` runs it with the suite
+  (3 s, no Pyodide); a one-character change to a kernel fails it (checked).
+- **The call capture** records an `out` given as its own input, so
+  `check_kernels.py` replays in-place kernels as they ran (without it they
+  looked wildly wrong).
+
+### Identity
+
+- **H's section and whole song: identical** to native, JS or wasm kernels, node
+  and Chrome: section `de0bce5b3945…`, whole song `9b0766353b73…` (the golden,
+  `tests/golden/h-seed.sha256`).
+- **Kernels, bit for bit** (166 captured numba calls of 63 kernels, H's refrain
+  and every instrument): **48 of 63 identical** in JS, including all the new
+  lean ones and, now that `fastmath` is gone, `analog._delays`,
+  `chip._staircase` and `drummachine._bank` (the `_blep4` cache bug: fixed).
+  The 15 that differ all call `sin`/`cos`/`tan`/`exp`/`log`/`log10`/`tanh`/`pow`
+  or complex `exp` (libm, as before): `amp._shape`, `analog._sub`,
+  `analog._voice`, `cymbals._fdn`, `drum._ring`, `drummachine._hat808`,
+  `fretwork._string`, `fx._follow`, `modal.ring`, `organ._expression`,
+  `organ._generator`, `pipe.run`, `rattle._collide` and the two hand ports.
+  Worst 1.2e-13 of peak. The analog synths' remaining kernels are plain
+  arithmetic and match (`_ladder`, `_wave`, `_sat` are inlined into `_voice`
+  and `_sub`, whose differences come from their `sin`/`exp`/`tan`). C/wasm: 12
+  of 14 identical; `drum._ring` and `pipe.run` call libm.
+- **Every instrument** (`bench/gauntlet.py`): all 58 render in Pyodide, JS or
+  wasm; stems within **-174 dB** of peak (the fiddle; all others -213 dB or
+  better); `chip-drums` identical. 17.5 s in all, 2.4x native (7.3 s).
+
+### The numbers (M1 Max, one thread, H's seed; machine shared with other agents)
+
+| | spike (lunchtime) | now |
+|---|---|---|
+| section, Chrome, wasm + JS (first / again) | 5.8 / 4.7 s | 5.66 / 4.78-4.90 s |
+| section, Chrome, JS only | 6.8 / - s | 5.55-5.66 s |
+| section, node, wasm (first / again) | 5.16 / 4.44 s | 6.27 / 5.02-5.12 s |
+| section, wasm heap | 660-691 MiB | **387 MiB** (node RSS 0.9 GB) |
+| whole song, Chrome, wasm + JS | 32.3 s | 35.3 s fresh (32.8 after three sections) |
+| whole song, Chrome, JS only | 40.9 s | 38.3 s |
+| whole song, node, wasm / JS | 32.4 / 37.9 s | 35.6 / 37.6 s |
+| **whole song, wasm heap** | **3.07 GB** | **1144 MiB (1.12 GiB)**, node RSS 2.0 GB (was 3.8-4.5) |
+| native (numba), section warm / whole song | 2.29 / 14.6 s | 2.19 / 15.3 s |
+| getting ready (Pyodide, numpy + scipy, program, import) | 5-6 s | 5.4-5.8 s |
+| first load | 34.0 MiB raw, 26.7 gzip | the same (34.0, 26.75) |
+
+The times are within the machine's noise of the spike's: the lean renderer
+traded a little time for memory natively too. The heap is the change. Where it
+goes in a whole song (tracemalloc in Pyodide): about 210 MiB before a render
+(Python, numpy, scipy, the kernels), the band's three sums allocated up front
+(3 x 107 MB), then **the voice is the peak**: the heap reaches 1144 MiB during
+it and never grows after. Python-level allocations peak at 0.75-0.84 GB at any
+stage; the rest is what tracemalloc doesn't see (the FFT libraries' and
+OpenBLAS's own buffers) and dlmalloc's fragmentation (wasm memory never
+shrinks, and a freed block is reused only by what fits it).
+
+Where the whole song's time goes in the browser (cProfile, wasm kernels): the
+voice's network by BLAS **6.0 s** (26 matmuls; 0.9 s natively: Pyodide's
+OpenBLAS has no SIMD), its vocoder's FFTs and responses ~8 s, the band's
+bodies and room (oaconvolve's blocks) ~3.5 s, the kernels ~6 s. The voice is
+19 of 35 s.
+
+Cheap wins tried: the copy-free dgemm (kept: -20 MiB). The numpy/scipy
+fallbacks instead of the lean kernels (`node/run.mjs --fallbacks`, `fx.JIT`
+false): a section is the same (identical, 387 MiB, 5.0 s), but **the whole song
+fails** in the voice: an array over 2 GiB, which wasm32's numpy refuses. So the
+browser needs the kernels, and has them. Not tried (not cheap): a trimmed scipy
+(half the download), SIMD OpenBLAS (the voice's 6 s), a 32-bit-pair xorshift
+for the analog synths' noise (their 4x over native, from BigInt; H doesn't use
+them).
+
+### Recommendation for the web studio
+
+- **Section previews in the browser**: as before, now at 387 MiB; that's small
+  enough to try on recent iPhones (untested; iOS kills tabs around 1-1.5 GB).
+- **Whole songs in the browser too, on desktop**: 33-38 s in Chrome at a
+  1.12 GiB heap is inside the targets (≤90 s, ≤1.5 GB) with room, and
+  identical to the server's render. Render each whole song in a **worker of
+  its own, terminated after** (the heap never shrinks: a worker that has sung
+  a whole song holds 1.1 GB until it goes), and don't keep a preview worker
+  alive beside it (two heaps).
+- **The server as the fallback**: for phones and tablets, browsers that
+  can't grow wasm memory past ~1.2 GB (catch the worker's failure and send the
+  render to the server), Safari until tested,
+  and the record's packet (FLAC + program), which is still made on the server
+  (not tried in Pyodide).
+- Keep `tests/test_browser_kernels.py` in the suite, and run `check_kernels.py`
+  and `gauntlet.py` in Pyodide whenever it asks for a regeneration: a new
+  kernel may need the translator taught, and every change to the pipeline can
+  meet a wasm32 limit (the fallbacks above did).
+
 ## What the time is spent on (native, one thread)
 
 H's first refrain (form index 2), `SONGBIRD_THREADS=1`, M1 Max
@@ -84,7 +216,8 @@ the other agent's table; it wasn't there when this was written.)
    no allocator, 6 KB. `py/wasm_kernels.py` adapts them (numba's allocations
    done with numpy first). This is what a proper Pyodide package built with
    emscripten would be, without the package.
-4. **Two browser-only patches**, same numbers (`py/web_patches.py`):
+4. **Two browser-only patches**, same numbers (`py/web_patches.py`; the first
+   retired that evening, see above):
    - `master.true_peak_envelope` gathers rows from a `sliding_window_view`;
      over a whole song that view is a virtual 6.7 M x 65 float64 array, and
      numpy on wasm32 refuses any array over 2 GiB ("array is too big"). A
@@ -279,13 +412,15 @@ songs need every second.
 ## Running the prototype
 
     cd web/studio-wasm && npm install && cd ../..                 # pyodide (numpy/scipy come from its CDN, cached beside it)
-    uv run python web/studio-wasm/tools/kernel_types.py songs/h-now-its-by-you.json web/studio-wasm/kernels/types.json --whole --gauntlet
-                                                                  # (only after kernels change; set NUMBA_CACHE_DIR to an empty folder so numba compiles and keeps types)
+    uv run python web/studio-wasm/tools/transpile.py --check      # read-only: is anything below needed? (tests/test_browser_kernels.py)
+    NUMBA_CACHE_DIR=$(mktemp -d) uv run python web/studio-wasm/tools/kernel_types.py songs/h-now-its-by-you.json web/studio-wasm/kernels/types.json --whole --gauntlet
+                                                                  # (only when types.json is stale; an empty numba cache so numba compiles and keeps types)
     uv run python web/studio-wasm/tools/transpile.py              # kernels/kernels.gen.mjs + manifest.json
-    uv run python web/studio-wasm/tools/bundle.py                 # dist/songbird.zip
-    ZIG="python -m ziglang" sh web/studio-wasm/tools/build_wasm.sh  # wasm/kernels.wasm (pip install ziglang)
+    uv run python web/studio-wasm/tools/bundle.py                 # dist/songbird.zip (again after any change to py/)
+    ZIG="uv run --with ziglang python -m ziglang" sh web/studio-wasm/tools/build_wasm.sh  # wasm/kernels.wasm
+    uv run python web/studio-wasm/tools/transpile.py --stamp-wasm # after check_kernels.py passes a changed C port
 
-    node web/studio-wasm/node/run.mjs --section 2 [--kernels js|wasm|python] [--times] [--stages] [--out x.npy]
+    node web/studio-wasm/node/run.mjs --section 2 [--kernels js|wasm|python] [--times] [--stages] [--fallbacks] [--out x.npy]
     node web/studio-wasm/node/run.mjs --whole --kernels wasm --out whole.npy
     uv run python web/studio-wasm/tools/compare.py native.npy whole.npy
     sh web/studio-wasm/bench/all.sh OUTDIR                        # the table above
@@ -296,5 +431,7 @@ songs need every second.
 Checks: `bench/native_section.py` makes the native PCM; `bench/gauntlet.py`
 (natively with an output path, then in Pyodide with `--mount DIR:/ref
 --exec`) compares every instrument; `tools/kernel_types.py ... CALLS_DIR`
-(with `CAPTURE_INSTRUMENTS=a,b` for other instruments) captures numba calls
+(with `CAPTURE_INSTRUMENTS=a,b` for other instruments, and `--gauntlet` so
+their kernels are compiled before the capture wraps them) captures numba calls
 that `tools/check_kernels.py` replays in Pyodide (`--mount CALLS_DIR:/calls`).
+Write the capture's TYPES.json somewhere other than `kernels/types.json`.
