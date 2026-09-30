@@ -920,8 +920,10 @@ def singer_card(v: Version, phrasings: list[dict]) -> dict:
     way = "sung the song's own way"
     mine = []
     if "phrasing" in v.applied:
-        who = next((p["label"] for p in phrasings if p["id"] == v.edits.get("phrasing")), "a singer")
-        way = "sung the way everyone who has sung it does" if who == "everyone who has sung it" else f"sung {who}'s way"
+        chosen = next((p for p in phrasings if p["id"] == v.edits.get("phrasing")), {})
+        who = chosen.get("label", "a singer")
+        way = ("sung the way everyone who has sung it does" if who == "everyone who has sung it"
+               else f"sung {chosen['way']}" if chosen.get("way") else f"sung {who}'s way")
         mine.append({"kind": "you", "text": "whose way it's sung: chosen by you", "path": "phrasing"})
     return _card(v, "singer", "The singer", singer_words(singer), way, mine + _finish(v, why, "singer"), ["phrasing"],
                  phrasing=v.edits.get("phrasing", ""))

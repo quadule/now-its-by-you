@@ -18,12 +18,20 @@ ENV UV_PROJECT_ENVIRONMENT=/opt/venv \
 
 WORKDIR /app
 
-# the locked dependencies first (a layer that changes only when uv.lock does), then the program
+# the locked dependencies first (a layer that changes only when uv.lock does), then the program. With them,
+# the web-singing group (pyworld, librosa: measuring a take sung in the browser, docs/WEB-SINGING.md), which
+# only this image has, never a packet; pyworld has no Linux wheel, so a compiler is lent for its build and taken
+# back in the same layer
 COPY pyproject.toml uv.lock README.md LICENSE ./
-RUN uv sync --frozen --no-dev --no-install-project
+RUN apt-get update && apt-get install -y --no-install-recommends g++ \
+    && uv sync --frozen --no-dev --group web-singing --no-install-project \
+    && apt-get purge -y g++ && apt-get autoremove -y && rm -rf /var/lib/apt/lists/*
 COPY songbird ./songbird
 COPY songs ./songs
-RUN uv sync --frozen --no-dev
+RUN uv sync --frozen --no-dev --group web-singing
+# the measuring tools and the web studio's singing (the kit they measure against is mounted: docker-compose.yml)
+COPY tools ./tools
+COPY webstudio ./webstudio
 
 # the synthesis compiled into the image, for every instrument a visitor can choose (about 30 s)
 # and the program's fingerprint, so a new image's first start clears previews the old one made

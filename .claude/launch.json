@@ -78,6 +78,24 @@
       "runtimeArgs": ["run", "songbird", "studio", "--no-open", "--port", "8784"],
       "port": 8784,
       "url": "http://127.0.0.1:8784"
+    },
+    {
+      "name": "studio-singing",
+      "runtimeExecutable": "uv",
+      "runtimeArgs": [
+        "run",
+        "songbird",
+        "studio",
+        "--public",
+        "--web-singing",
+        "--machine",
+        "fictional:wren",
+        "--port",
+        "8769",
+        "--no-open"
+      ],
+      "port": 8769,
+      "url": "http://127.0.0.1:8769"
     }
   ]
 }
