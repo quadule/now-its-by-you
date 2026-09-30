@@ -362,6 +362,8 @@ def _treated(x: np.ndarray, treat, own: bool = False) -> np.ndarray:
     if mono is None:
         return treat(x, own)
     sound, gains = mono
+    if own and x.dtype == np.float64 and x.ndim == 2 and x.shape[1] == 2:  # the panned result back into the stem
+        return np.multiply(treat(sound[:, None], True), gains[None, :], out=x)
     return treat(sound[:, None], True) * gains[None, :]
 
 
@@ -587,9 +589,16 @@ def mix_made(parts: list, length: int, sr: int, seed: int = 0, params: MixParams
             if taps is not None:
                 taps[name] = (where, x)
             band[where] += x
-            band_send[where] += x * strip.send
-            if strip.duck and singing is not None:
-                stepping[where] += x * (1.0 - 10.0 ** (-strip.duck * p.duck * singing[where] / 20.0))[:, None]
+            # band_send += x * send, stepping += x * (1 - 10 ** (-duck * singing / 20)): a stretch at a time, each
+            # product and sum as over the whole (no temporary the length of the song)
+            sent, stepped = band_send[where], stepping[where]
+            duck = -strip.duck * p.duck
+            for a in range(0, len(x), 1 << 16):
+                part = x[a: a + (1 << 16)]
+                sent[a: a + len(part)] += part * strip.send
+                if strip.duck and singing is not None:
+                    stepped[a: a + len(part)] += \
+                        part * (1.0 - 10.0 ** (duck * singing[where][a: a + len(part)] / 20.0))[:, None]
             del result, x
     finally:
         results.close()
