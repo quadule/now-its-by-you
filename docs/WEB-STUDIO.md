@@ -330,3 +330,140 @@ a day.
   file validated with `docker compose config`. **The image itself was not
   built here**: Docker's daemon wasn't running on the desktop. Build it
   with the try override before the first deploy.
+
+## Opening someone's version (2026-09-29)
+
+The artist wants a visitor to be able to drop someone's version of the song
+(a FLAC they were sent) into the studio and continue the lineage from it, and
+to share a link that opens that version for others later. Locally,
+`songbird studio renders/x.flac` already does this from the command line
+(docs/STUDIO.md); this brings it to the page, in public mode and locally.
+
+### What a visitor sees
+
+- **"Open someone's version"**: a panel (in "Other versions") with a file
+  picker, and a drop anywhere on the page. Only a `.flac` is taken, up to
+  64 MB. The page says "reading it…", and then either opens the studio on it
+  or says, in a sentence, why it can't.
+- The studio then opens at **`/v/<id>`**: the same page, on that version as
+  the parent. Everything is relative to it (edits, the cards' "kept from the
+  version before", the line of versions in the header, one more mark), and
+  Record makes its child: a packet whose record names it as the parent
+  (`parent_id`, `generation` + 1, `ancestry`), exactly as
+  `songbird studio parent.flac` records one locally.
+- The page shows the link to share (`https://…/v/<id>`) and a way back to
+  the song as it began. Anyone with the link opens the same version, until it
+  expires. The link is the only way to it: nothing lists versions.
+
+### What is kept, and for how long
+
+Never the file. The upload is written to a temporary file in the studio's own
+folder (`studio/incoming/`, a random name), read, and deleted whatever
+happens (anything left there by a crash is cleared at start). What is kept is
+the version as data, in `studio/versions/<id>/`:
+
+- `record.json`: the record as this program read and cleaned it (only the
+  fields a parent contributes: id, title, generation, parent_id, ancestry,
+  rendered_at, params, lyrics, singer, lineage_singers, performance,
+  chosen_by_you, program_sha256, program_version, duration);
+- `genome.json`: the song as that version sang it, after validation.
+
+The id is content-addressed: the first 32 hex digits (128 bits) of
+SHA-256("songbird-version" ‖ the cleaned record ‖ the genome's SHA-256).
+Opening the same file twice gives the same id. It can't be guessed: the
+rendition's own id (which its children's records carry) isn't enough; it
+takes the whole record, which only the file itself (or the link) gives.
+
+The store is capped (`--limit versions-mb=256`), and a version is kept
+`--limit version-days=30` after it was last opened, the least recently
+opened going first past the cap. A local studio keeps them the same way
+(256 MB, 90 days). This is the seed of a later lineage gallery, but nothing
+is published or listed now.
+
+### Another program's version
+
+Every rendition names the program that sang it (`program_sha256`), and
+almost every one in circulation was made by an earlier program than the one
+serving the studio. The studio **opens it with its own program, and says
+so**: "made by another version of the program (971e37bd…); this studio
+continues it with its own, so the new version is sung by this one." That is
+what the local studio does with a parent, and what `python3 parent.flac new`
+does in a newer checkout: a child is always sung by the program that makes
+it, and carries that program. The parent's audio is never re-rendered, so
+nothing needs replaying faithfully; what matters is that this program can
+*read* the record. It is refused, with the reason, when it can't: a field of
+the wrong type, a value outside what this program accepts, a section the
+genome doesn't have, a shape this program can't sing. A record without a
+`program_sha256` isn't a packet a program made, and is refused too.
+
+The song must be this studio's song: the genome's title (and the record's)
+must be the title of the song the studio serves. The genome itself may
+differ from the one in the checkout (the song file has changed since most
+versions were made); the child is sung from the parent's genome, as locally.
+
+### Threat model
+
+A packet carries a **program** (`program/`, `__main__.py`). Running it is
+running a stranger's code. The studio **never executes, imports, unpacks or
+writes to disk anything from an uploaded packet's program**, and never lets
+a name inside the archive choose a path. It reads exactly two members,
+`manifest.json` and `genome.json`, as bytes, into memory, and treats both as
+untrusted data.
+
+| Threat | Defence |
+|---|---|
+| Code execution via the packet's program (`__main__.py`, `program/songbird/*.py`, a `.pth`, an `.npz` with pickles) | Never extracted, never on `sys.path`, never imported, never decompressed. Only `manifest.json` and `genome.json` are read. The program's hash is only compared, as text, with this program's. |
+| Code execution via data the program loads | Every field is checked against what this program consumes; no field names a file, a module or a class (the voice's `timbre` and `engine` are held to a pattern and a set). JSON is parsed with the standard library, never pickle; the audio is decoded by libsndfile in a separate, short-lived process (below). |
+| Path traversal (`../`, absolute names, backslashes, NUL, duplicate names) | Nothing is ever written under a name from the archive. Such names are refused outright, as a sign of a hostile file. Our own paths are `versions/<hex id>/record.json` and `genome.json`. |
+| Zip bomb, a huge directory | The end-of-central-directory record is parsed first, by hand: at most 512 entries, a directory of at most 1 MB, no ZIP64, no multi-disk, before `zipfile` opens it. Every entry's declared size is capped (the whole archive 100 MB, as the bootstrap caps it) and its ratio (1000:1). The two members read are capped (1 MB and 512 KB) and read through a bounded stream, whatever their headers claim. Encrypted entries and methods other than stored and deflate are refused. |
+| Oversized, slow or endless upload | `Content-Length` is required and checked (64 MB) before a byte is read; the body is streamed to the temporary file with an overall deadline (2 minutes) on top of the 30 s idle timeout; at most two uploads are read at once (more: "busy, try again"); each upload counts as a request against the per-minute limit and against an hourly one (`opens`: 12 per visitor, 40 per address). |
+| Not a FLAC, truncated, a FLAC without a packet | It must begin with `fLaC`, carry a packet after the audio, and its audio must decode; each failure has its sentence. |
+| Malformed or hostile audio (libFLAC bugs, a header claiming hours) | Decoded in a separate Python process (`python -I`, this program's own code, never the packet's), with a CPU limit, an address-space limit where the OS supports one, and a timeout; it checks the stream's header (FLAC, 1 or 2 channels, up to 192 kHz, at most 20 minutes) before decoding. A crash there is a refusal, not a dead studio. |
+| A forged lineage (a record that isn't its audio's) | As `render --parent` does: the audio's samples must hash to the record's `id`, so a lineage is never taken on faith. |
+| Hostile JSON (deep nesting, huge arrays or strings, NaN, duplicate keys, huge integers) | Parsed with duplicate keys, NaN and Infinity refused; then walked with caps: depth 12, 100,000 values, strings 4 KB (the genome's 64 KB), lists 4,096, integers within ±2^53. |
+| A record that makes renders endless or enormous (a tempo of 1, a 500-section form, a singer's release of an hour) | Numbers are held to this program's own bounds where it has them (the edits' and knobs' bounds, the mix's ranges), and elsewhere to a generous envelope around the program's defaults (never more than 8 times the default's size); the form to the song's sections, at most 64; then the version is laid out as the studio would sing it and refused if it lasts more than 12 minutes or has more than 50,000 notes. |
+| A record the program chokes on | After the checks, the studio builds the page's view of the version (what `/api/start` and `/api/song` answer) before accepting it; any error is a refusal, with the reason. |
+| Enumerating other people's versions | Ids are 128 bits derived from content no one else has; no listing; an unknown id answers 404 without saying whether one ever existed. |
+| Filling the disk | The store is capped and expires; the upload is deleted in a `finally`; the preview cache and downloads keep their own caps. |
+| Cross-site upload | The upload needs the page's token (`X-Studio`), the page's own address (Host and Origin), and in a keyed studio the key, like every other change. |
+
+What this doesn't defend against: a vulnerability in libsndfile or libFLAC
+that escapes its process (the process has the server's privileges; in the
+container, those are few), and a record that is valid but unwelcome (the
+words someone chose, which the page already lets anyone write).
+
+### The pieces
+
+- **songbird/received.py** (new; the standard library, but for the audio
+  check): reading an uploaded packet as data (the archive's directory by
+  hand, the two members, strict JSON), the audio check in its own process,
+  the record cleaned to what a parent contributes and held to this program's
+  bounds, the genome validated, and the store (`Versions`).
+- **songbird/studio.py**, a section of its own ("someone's version"):
+  `Studio.receive(path)` (validate, exercise, store), `Studio.opened(id)`
+  (the studio on that parent: a light copy sharing the queue, caches,
+  limits and token, with its own genome, record and context; a few kept in
+  memory), and in the handler `POST /api/open` (the raw file) and
+  `GET /v/<id>` (the page). A preview's key names the received parent, so
+  two parents never share a render.
+- **The page names its version** through the token it was given: at
+  `/v/<id>` the page's token is `<token>.<id>`, so every request the page
+  already sends (`X-Studio`) says which version it is about, with no change
+  to the rest of the page's scripts. A token naming an unknown id is refused.
+- **songbird/public.py**: the new limits (`opens`, `opens-ip`, `upload-mb`,
+  `versions-mb`, `version-days`).
+- **songbird/studio/studio.js**, a section of its own: the panel, the drop,
+  the note on a received version, the link to share.
+
+### Open decisions for the artist
+
+1. **Other songs.** Only this studio's song is opened (by title). A packet of
+   another song could be opened too (the program sings any genome), at the
+   cost of the public studio singing songs it wasn't set up for.
+2. **How long a link lives.** 30 days after it was last opened; a gallery
+   would want "for good", with a way to take one down.
+3. **Another program's versions** open with this program, saying so. The
+   alternative, refusing them, would refuse almost every version in
+   circulation today.
+4. **Words.** A shared link can carry words someone wrote; nothing moderates
+   them. A gallery would need that decided first.
