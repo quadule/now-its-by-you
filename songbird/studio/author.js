@@ -63,7 +63,7 @@
     const details = node("details", "lyric-author");
     details.dataset.authorSection = s.id;
     const summary = node("summary", "", "Write your own lines");
-    const hint = node("p", "hint", "One syllable for each note. Split longer words with hyphens, like car-ry. The singer checks the syllables and pronunciation; the story and rhyme are yours.");
+    const hint = node("p", "hint", "One syllable for each note. Split longer words with hyphens, like car-ry. A word between stars, like *heart*, is the one the line leans on: the singer gives it a little more. Keep, move or drop the stars. The singer checks the syllables and pronunciation; the story and rhyme are yours.");
     const lines = node("div", "author-lines");
     const status = node("p", "author-status");
     status.setAttribute("role", "status");

@@ -29,7 +29,7 @@ function setup() {
   render();
   const all = () => parent.querySelectorAll('*');
   return {
-    render, view, input: () => all().find((x) => x.tag === 'textarea'),
+    all, render, view, input: () => all().find((x) => x.tag === 'textarea'),
     type: (text) => { const input = all().find((x) => x.tag === 'textarea'); input.value = text; input.listeners.input(); },
     save: () => all().find((x) => x.textContent === 'Use these lines').listeners.click(),
     status: () => all().find((x) => x.className === 'author-status').textContent,
@@ -67,4 +67,10 @@ test('an intervening song edit prevents an older validation replacing newer choi
   const s = setup(); s.type('We sing our song.'); s.save(); s.change(); s.answer(); await s.flush();
   assert.deepEqual(s.edits, {});
   assert.match(s.status(), /changed while/);
+});
+
+test('the words say what the stars around a word are for', () => {
+  const s = setup();
+  const hint = s.all().find((x) => x.className === 'hint');
+  assert.match(hint.textContent, /between stars, like \*heart\*, is the one the line leans on/);
 });
