@@ -42,6 +42,7 @@ from functools import lru_cache
 from pathlib import Path
 
 import numpy as np
+from numba import njit
 from scipy.signal import sosfilt
 
 from ..score import Note, Score
@@ -144,11 +145,34 @@ def place(y: np.ndarray, position: float, width: float) -> np.ndarray:
     """A mono or stereo signal to stereo at `position`, keeping `width` of a
     stereo source's side signal (0 collapses it to its middle)."""
     theta = (position + 1.0) * np.pi / 4.0
+    if y.dtype == np.float64 and y.ndim in (1, 2) and (y.ndim == 1 or y.shape[1] >= 2):
+        # straight into the stereo result, sample by sample, by the same operations in the same order as
+        # the expressions below (no temporaries the length of the song)
+        out = np.empty((len(y), 2))
+        _placed(y if y.ndim == 2 else y[:, None], np.cos(theta), np.sin(theta), np.sqrt(2.0), float(width), out)
+        return out
     if y.ndim == 1:
         return np.stack([y * np.cos(theta), y * np.sin(theta)], axis=1) * np.sqrt(2.0)
     mid = 0.5 * (y[:, 0] + y[:, 1])
     side = 0.5 * (y[:, 0] - y[:, 1]) * width
     return np.stack([mid * np.cos(theta) * np.sqrt(2.0) + side, mid * np.sin(theta) * np.sqrt(2.0) - side], axis=1)
+
+
+@njit(cache=True, nogil=True)
+def _placed(y: np.ndarray, cos: float, sin: float, root2: float, width: float, out: np.ndarray) -> None:
+    """place() into out: a mono y (one column) as (y cos) root2, (y sin) root2; a stereo one as its mid
+    0.5 (l + r) at the angle, (mid cos) root2 + side and (mid sin) root2 - side, side 0.5 (l - r) width."""
+    if y.shape[1] == 1:
+        for i in range(y.shape[0]):
+            v = y[i, 0]
+            out[i, 0] = (v * cos) * root2
+            out[i, 1] = (v * sin) * root2
+    else:
+        for i in range(y.shape[0]):
+            mid = 0.5 * (y[i, 0] + y[i, 1])
+            side = (0.5 * (y[i, 0] - y[i, 1])) * width
+            out[i, 0] = (mid * cos) * root2 + side
+            out[i, 1] = (mid * sin) * root2 - side
 
 
 def _strings(notes, sr: int, length: int, rng: np.random.Generator, spec: dict, tuning=None) -> np.ndarray:
@@ -250,7 +274,11 @@ def render_part(name: str, notes: tuple[Note, ...], sr: int, length: int, settin
     make = np.random.default_rng([int(s["maker"]), 29, index])
     stem = _model(name, notes, sr, length, s, rng, make)
     position, width = PLACE[name]
-    return place(stem, position, width) * LEVEL[name] * float(s[name])
+    out = place(stem, position, width)
+    del stem
+    out *= LEVEL[name]  # the level and the part's gain in the lineup, each where it lies (the same products)
+    out *= float(s[name])
+    return out
 
 
 # --- the registry -------------------------------------------------------------------------------
@@ -348,7 +376,11 @@ def render_other(name: str, notes: tuple[Note, ...], sr: int, length: int, setti
         y = _model(kind, notes, sr, length, s, rng, make)
     position, width = info["place"]
     gain = float((s.get("gains") or {}).get(name, 1.0))
-    return place(y, position, width) * info["level"] * gain
+    out = place(y, position, width)
+    del y
+    out *= info["level"]
+    out *= gain
+    return out
 
 
 def _as_drum(note: Note) -> Note:
@@ -366,11 +398,21 @@ def band_parts(score: Score, sr: int, seed: int) -> list[tuple[str, Callable[[],
     fade = min(length, int(0.3 * sr))
     ending = np.ones(length)
     ending[length - fade:] = 0.5 + 0.5 * np.cos(np.linspace(0.0, np.pi, fade))
+    ending = ending[length - fade:].copy()  # the stem's last `fade` samples: before them it multiplies by 1 (exact)
     others = sorted({n.part for n in score.notes} - set(INSTRUMENTS) - {"voice"}
                     - {p for p in {n.part for n in score.notes} if p.startswith("choir")})
 
     def make(name: str, notes) -> Callable[[], np.ndarray]:
-        return lambda: render_part(name, notes, sr, length, score.band, seed) * ending[:, None]
+        def part() -> np.ndarray:
+            y = render_part(name, notes, sr, length, score.band, seed)
+            if y.shape == (length, 2) and y.dtype == np.float64:
+                if fade:  # where it lies: the same products (every sample before the fade times 1, left as it is)
+                    y[length - fade:] *= ending[:, None]
+                return y
+            whole = np.ones(length)
+            whole[length - fade:] = ending
+            return y * whole[:, None]
+        return part
 
     return [(name, make(name, notes)) for name in INSTRUMENTS + tuple(others) if (notes := score.part(name))]
 

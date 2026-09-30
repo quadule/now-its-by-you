@@ -28,7 +28,12 @@ PARTS = INSTRUMENTS  # the band's stems, by role (songbird.synth.instruments bui
 def pan(mono: np.ndarray, position: float) -> np.ndarray:
     """Constant-power pan, position -1 (left) to 1 (right)."""
     theta = (position + 1.0) * np.pi / 4.0
-    return np.stack([mono * np.cos(theta), mono * np.sin(theta)], axis=1)
+    if mono.dtype != np.float64 or mono.ndim != 1:
+        return np.stack([mono * np.cos(theta), mono * np.sin(theta)], axis=1)
+    out = np.empty((len(mono), 2))  # each side made where it goes: the same products, no copies of the song
+    np.multiply(mono, np.cos(theta), out=out[:, 0])
+    np.multiply(mono, np.sin(theta), out=out[:, 1])
+    return out
 
 
 def render_stems(score: Score, sr: int = SR, seed: int = 0, voice: VoiceParams | None = None,
@@ -54,7 +59,9 @@ def stem_jobs(score: Score, sr: int = SR, seed: int = 0, voice: VoiceParams | No
     if sung:
         def lead() -> np.ndarray:
             y = sing(sung, sr, voice or VoiceParams(), seed, score.lexicon)[:length]
-            return pan(np.pad(y, (0, length - len(y))), 0.0) * VOICE_GAIN
+            y = pan(np.pad(y, (0, length - len(y))), 0.0)
+            y *= VOICE_GAIN  # where it lies: the same products
+            return y
         jobs.append(("voice", lead))
     choir = sorted({n.part for n in score.notes if n.part.startswith("choir")}, key=lambda p: int(p[5:]))
     learned = (voice or VoiceParams()).engine == "learned"
@@ -64,7 +71,10 @@ def stem_jobs(score: Score, sr: int = SR, seed: int = 0, voice: VoiceParams | No
 
         def lineage(name=name, singer=singer, i=i) -> np.ndarray:
             y = sing(list(score.part(name)), sr, singer, seed + 101 * (i + 1), score.lexicon)[:length]
-            return pan(np.pad(y, (0, length - len(y))), CHOIR_PANS[i % len(CHOIR_PANS)]) * VOICE_GAIN * CHOIR_GAIN
+            y = pan(np.pad(y, (0, length - len(y))), CHOIR_PANS[i % len(CHOIR_PANS)])
+            y *= VOICE_GAIN
+            y *= CHOIR_GAIN
+            return y
         jobs.append((name, lineage))
     return jobs, (("voice",) if sung else ()) + tuple(choir)
 
