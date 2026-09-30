@@ -269,6 +269,10 @@ server keeps nothing else but caches, so any request can be replayed.
 | `words.bridge` | `{slot: words}` | the bridge's once-a-song words |
 | `words.bridge2`, `words.tag` | a stanza, a syllable | the second bridge, every tag |
 | `phrasing` | a phrasing's name on this computer | whose way it is sung |
+| `sound.<player>.patch`, `.cutoff`, `.resonance`, `.envelope` | a patch's name; Hz, 0-1, octaves | a synth's sound and its filter ("Sound design", below) |
+| `sound.<player>.kit`, `.kick`, `.snare`, `.hat` | `808`, `909`, `lofi`, `acoustic`; `{tune, decay, snappy}` | a drum player's kit and its pieces' character |
+| `mix.<player>.pan`, `.send`, `.sidechain` | -1 to 1; 0 to 3 times; a preset or `{depth, release, key, sections}` | the player's channel: its place, its send to the room, its pump on the kick or the beat |
+| `transition.<section-id>` | `{riser, roll, sweep, stop, impact, down}` | what happens at the boundary into that section |
 
 Each part of the shape is its own edit, so "no intro" holds while the day
 moves the rest of the shape. The edits go in inside the program's table, not
@@ -911,6 +915,104 @@ for later: the export stays as it is, and the chord is named from its notes.
 5. **Under a re-barred feel** (a waltz or six feel on a song in four) a
    played part is placed straight within each foot, as the MIDI file's tempo
    map is; it is played against the straight sketch.
+
+## Sound design (2026-09-29)
+
+docs/STUDIO-EDM-TEST.md's first finding was that there was no electronic sound to reach for: no sidechain
+pump, no patches or filter, no risers, sweeps or rolls, one drum kit. Each is now an edit, marked as the
+person's, undoable, recorded, replayed byte for byte and handed down, as every other. The design, its Fable
+review and how it was built are in docs/SOUND-DESIGN.md; this is what a person (and the page) gets. The
+engine and its API are built; the page's controls come with the redesign (docs/STUDIO-REDESIGN.md: a mixer
+strip's pump and patch, a player's inspector, a seam's transition), so for now the edits are made by a
+draft file, `songbird render --edits`, or a page's own requests.
+
+**What can be chosen.** Names are kept apart from the arrangement's: a player's *pattern* is what it plays,
+its *patch* or *kit* what it sounds like.
+
+- **A synth's patch** (`sound.<player>.patch`), each named for its sound, the program's own first: the synth
+  bass *analog*, *sub*, *reese*, *pluck*; the synth lead *saw*, *square*, *supersaw*; the pad *warm*,
+  *glass*, *wide*; the arpeggio *pluck*, *bell*; the chip *own*, *thin*, *reedy*, *hollow* (its pulse's
+  width). Each sits within a decibel of the program's own (the sub 1.8 dB under, as K-weighting reads a sub),
+  so choosing one changes the sound and not the balance; the balance is the player's gain (`band.<player>`).
+- **Its filter** (`.cutoff` Hz, `.resonance` 0-1, `.envelope` octaves): the ladder's, in place of the
+  patch's. A person's cutoff is theirs: the band's brightness no longer moves it (the maker's trim, the key
+  tracking and the velocity still do).
+- **A drum player's kit** (`sound.<player>.kit`, for the drum machine and the drum kit): *808* (the drum
+  machine's own), *909*, *lofi* (the 808 soft and worn, its top rolled off, as a sampler keeps it),
+  *acoustic* (the kit, a drummer). A pattern written for one is played by another with its strokes renamed
+  (a hi-hat's foot is a machine's pedal hat, a brush sweep is left out). **Its pieces** (`.kick`, `.snare`,
+  `.hat`) on a machine: tune (±12 semitones), decay (a quarter to four times), the snare's snappy.
+- **A player's channel** (`mix.<player>.pan`, `.send`, `.sidechain`): its place (the stems carry it too);
+  its send to the room (0 to 3 times its designed send); and a **sidechain pump**: the channel ducks `depth`
+  dB on each kick the band's drum player really plays (or on every beat, `"key": "beat"`, for a pump with no
+  kick), in 3 ms, and comes back over `release` beats on a raised cosine, its send to the room with it. Presets
+  *subtle* (4 dB, 0.35 of a beat), *classic* (8 dB, 0.55), *heavy* (14 dB, 0.85); `sections` names where it
+  pumps (`refrain`, or `refrain:2`). The voice's own ducking (the band making way for the singer) is as it was.
+- **A transition** (`transition.<section-id>`, into that section of the form, `refrain:1` the second
+  refrain, following it when the order changes): over the bars before, a *riser* (noise through a band-pass
+  rising 250 Hz to 9 kHz, swelling 18 dB, a sine climbing under it, gone at the downbeat), a snare *roll*
+  (on the band's drum player, quarters to thirty-seconds, velocity rising; its own snares under it left out),
+  a *sweep* (the band through a high-pass rising to 1.5 kHz, or a low-pass falling to 350 Hz) and a *stop*
+  (the band silent for its last 1, 2 or 4 beats); on the downbeat an *impact* (a falling boom and a burst,
+  its low end left to a kick that lands with it); after it a *down*lifter. Bars 1, 2 or 4. Nothing builds
+  into the song's first section (said); an impact there is fine.
+
+A choice for a player this version's band hasn't got is refused with why (a style changed); one inherited
+waits, silent, for a version that has it. A transition into a section this form doesn't sing is refused.
+Every value is made canonical when checked (a preset spelled out, keys in one order, numbers held to their
+ranges and rounded), so the record, a child's seed and a replay don't depend on how the page wrote it.
+
+**The API.** `POST /api/sound {"edits": {...}}` (in its own section of studio.py; made at once, no render):
+every player of the version's band with its `gain`, `patch` (value, options with a line each), `filter`
+(cutoff, resonance, envelope, each with the patch's own), `kit` and `pieces` (where it has them), `pan`,
+`send` and `sidechain` (with its presets, keys, ranges and whether the band has a kick to key on); every
+boundary with its transition, its name ("Refrain 2") and whether anything may build into it; the problems.
+Each value carries its `path` (the edit to set), `value` (as sung), `program` (as the program has it, a
+parent's choice among it) and `yours`. Hearing and recording are the edits as ever (`/api/listen`,
+`/api/record`); a section's preview carries the pump, the sweeps and a riser begun before it, as the whole
+song has them.
+
+**Heard, by measurement** (a real run: `songbird render --edits` with synth folk at 124, a sidechained pad
+(*classic*) and bass (6 dB, 0.4 beat), the 909 with its kick 2 semitones down and 1.4 times as long, a reese
+bass, the pad a little left, the arpeggio's send up, and into the second refrain a 2-bar riser and sweep, a
+1-bar roll and an impact; 149 s, -14.0 LUFS, id 48e3e115a303, and `--replay` of the packet: the same id):
+
+- the pad's channel against the same unpumped, around the refrains' kicks: -8.0 dB 10 ms after, -5.7 at
+  100 ms, -1.3 at 200, level again by 300; its envelope's strongest modulation is at 2.07 Hz, the beat (53
+  times the median, 3 unpumped). The bass: -6.0 dB, back by 200 ms.
+- the riser (49.2 to 53.1 s), quarter by quarter: centroid 409, 878, 2,201, 5,541 Hz; level -44.7, -40.3,
+  -34.0, -26.3 dB; the impact on the refrain's first kick, its boom's low end left to it.
+- the kick: the 808's own 52 Hz, the 909's (tuned down 2) 48 Hz, brighter at its click (centroid 62 to 90 Hz).
+- the roll: 15 strokes in the bar before the refrain, velocity 0.35 to 0.93.
+- memory, the whole song on two threads (`MallocLargeCache=0`, tools/render_memory.py `--edits`): 1.13 GB,
+  against 1.07 GB for the same synth folk without the sound design; 13.2 s against 12.1 s.
+
+**Checked** by tests/test_sound.py (no sound design, no change: the parameters, the score and the preset
+object itself; canonical values and eleven refusals; the patches levelled, and the program's own to the bit;
+the filter the person's, the brightness no longer moving it; the chip's width; a kit's module, its level, the
+lofi's darker top, a kick's decay, strokes renamed both ways; the pump's shape and only on its channel; the
+key track the drum player's kicks in the sections asked, or every beat, its release following the tempo; the
+transitions on the boundary on the rendition's clock, the roll's strokes and velocities; a riser rising, a
+sweep only in its bars, the band swept and the transitions not, a stop; marks, `from_record`, the same score
+from the record, a child inheriting, a release; a preview that begins mid-riser hearing the whole song's
+riser; nothing new among the notes, the MIDI file or the band's parts but the `fx` stem; the studio's view,
+whose each value is) and the goldens (tests/test_determinism.py, the seed scores, h-seed, the lean-render
+tests: unchanged). No new compiled kernel: the transitions and the pump are numpy and scipy.
+
+**Decisions for the artist**
+
+1. **Patches are few and named by their sound**; the filter is the only raw knob. Envelopes and oscillator
+   mixes could follow.
+2. **A person's cutoff replaces the band's brightness** for that synth.
+3. **The pump keys on the kick the drum player really plays**, its human timing included: a verse with no
+   kick doesn't pump (choose `beat` for one that does).
+4. **Transitions are sound, not arrangement**: they don't change who plays or a section's length (the
+   arrangement's edits do); a roll takes the snare's place in its bars, a stop silences the band, not the
+   singer.
+5. **The kit is a sound**: a drum machine's pattern on the acoustic kit is played as a drummer would.
+6. **The key track isn't in the MIDI file yet.** A producer keying their own sidechain would want it as a
+   muted track; left for later.
+7. **Any sound edit changes the seed a child draws from its parent**, as a person's chords or parts do.
 
 ## What stays on the machine
 

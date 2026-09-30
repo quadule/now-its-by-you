@@ -238,3 +238,26 @@ A read-only review of the design above; its points are in, and change it where t
     the `mix.<player>.*` paths are checked and pinned apart from the mix's own knobs. A roll on the acoustic
     kit changes the touch of that kit's later strokes (it draws its randomness stroke by stroke), only when
     asked for.
+
+## As built
+
+As designed with the review's changes, and one more: a **stop** (`"stop": 1, 2 or 4`, in beats: the band
+silent for the last beats before the section, the singer and the transitions going on), which the redesign's
+seam offers (docs/STUDIO-REDESIGN.md). Each value in `/api/sound` also carries its `path`, the edit that sets
+it. The analog synth's patches sit after its kernels in analog.py, so each kernel keeps the line the browser's
+translation names it by (web/studio-wasm is unchanged). What a person gets, the API, the measurements of a
+real run (the pad pumping at the beat rate, the riser's centroid rising, replay exact, 1.13 GB on two threads)
+and the decisions for the artist are in docs/STUDIO.md, "Sound design (2026-09-29)"; the tests are
+tests/test_sound.py.
+
+| Where | What |
+|---|---|
+| songbird/sound.py | the catalog, `check`, `pin`, `value_of` (a mark's "was"), `produce` (realize's rolls, key track, transitions), `shifted` (a preview's), `view` and `label` (the page's) |
+| songbird/edits.py | calls sound.py where it checks, pins and marks, in marked lines; the mix's own knobs skip `mix.<player>.*` |
+| songbird/realize.py | `Params.sound`; one call to `sound.produce` before the score is made |
+| songbird/score.py | `Score.sound`, left out of `to_dict()` while empty |
+| songbird/synth/analog.py, chip.py, drummachine.py | patches and the filter; the chip's width; the lofi kit and the pieces' character |
+| songbird/synth/instruments.py | `voiced`: a player's patch, filter, pieces, kit (its module, strokes renamed, level) and pan; the `fx` stem last |
+| songbird/synth/mixing.py | `Design`: sends, the pump in each channel, the band's sweeps and stops once on its bus; the `fx` role |
+| songbird/synth/sweeps.py | risers, downlifters, impacts, a drummerless roll; the moving filter (numpy and scipy only) |
+| songbird/studio.py | `Studio.sound` and `POST /api/sound`, in their own section; `cut` moves a score's sound design |
