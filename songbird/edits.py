@@ -18,6 +18,10 @@ keeps. An edit that can't be kept is left out and said why, never bent.
     tune.<line>          a tune line's notes: [{degree, onset, duration}, ...] in beats (songbird.composition)
     chords.<line>        a tune line's chords: a list of chords a bar ([["I"], ["V/3", "vi"]]), each a function
                          of the key with a quality and a bass if named (theory.parse_symbol); null: the song's own
+    tune.<section>:<n>.<i>, chords.<section>:<n>.<i>, and <section>:last.<i>
+                         the same for one place of the form only: the i-th line of the n-th time that section comes
+                         (the arrangement's id), or of the last time it comes; over the line's everywhere edit
+                         (songbird.composition.form_phrases); null gives the place back to the line
     part.<player>.<section>:<n>.<line>
                          a person's own notes for a band player in one line of one section of the form, played in
                          or brought back from a MIDI file: [[onset, length, pitch, velocity], ...], whole numbers
@@ -423,10 +427,11 @@ class Overrides:
                 continue
             try:
                 notes = composition.check_phrase(self.genome, path[5:], value)
+                key = composition.edit_key(self.genome, path[5:])  # a line, or one place of the form
                 if notes is None:
-                    tune.pop(path[5:], None)
+                    tune.pop(key, None)
                 else:
-                    tune[path[5:]] = composition.pack_phrase(self.genome, notes)
+                    tune[key] = composition.pack_phrase(self.genome, notes)
                 applied.append(path)
             except (ValueError, TypeError) as ex:
                 problems.append(Problem(path, str(ex)))
@@ -434,17 +439,19 @@ class Overrides:
             held["tune"] = tune
         else:
             held.pop("tune", None)
-        # a person's chords for a tune line, everywhere it is sung (composition.harmonized)
+        # a person's chords for a tune line, everywhere it is sung (composition.harmonized), or at one place of the
+        # form (composition.form_phrases)
         chords = {k: [list(bar) for bar in v] for k, v in (held.get("chords") or {}).items()}
         for path, value in e.items():
             if not path.startswith("chords."):
                 continue
             try:
                 bars = composition.check_chords(self.genome, path[7:], value)
+                key = composition.edit_key(self.genome, path[7:])
                 if bars is None:
-                    chords.pop(path[7:], None)
+                    chords.pop(key, None)
                 else:
-                    chords[path[7:]] = bars
+                    chords[key] = bars
                 applied.append(path)
             except (ValueError, TypeError) as ex:
                 problems.append(Problem(path, str(ex)))
@@ -737,10 +744,37 @@ def resolve(genome: Genome, parent, voice, drift, edits: dict, *, seed: int | No
         params = _unplayed(params, generated, silent)
         applied = [p for p in applied if p not in silent]
         problems += [Problem(p, why) for p, why in silent.items()]
+    unplaced = {p: composition.place_silent(genome, params, p.split(".", 1)[1]) for p in applied
+                if p.startswith(("tune.", "chords.")) and composition.is_place(p.split(".", 1)[1])
+                and edits.get(p) is not None}
+    unplaced = {p: why for p, why in unplaced.items() if why}
+    if unplaced:  # a change for a place this version doesn't sing: said, and put back as the version before had it
+        params = _unplaced(genome, params, generated, unplaced)
+        applied = [p for p in applied if p not in unplaced]
+        problems += [Problem(p, why) for p, why in unplaced.items()]
     if "phrasing" in edits and phrasing_json is not None:
         applied.append("phrasing")
     marks_ = marks(genome, generated, generated_lyrics, lyrics, applied, edits, phrasing_json)
     return Resolved(generated, params, generated_lyrics, lyrics, applied, problems, marks_)
+
+
+def _unplaced(genome, params, generated, paths) -> object:
+    """The parameters with a person's tune or chords for these places put back as the version before had them."""
+    held = dict(params.composition)
+    for path in paths:
+        kind, key = path.split(".", 1)
+        key = composition.edit_key(genome, key)
+        now = dict(held.get(kind) or {})
+        was = (generated.composition.get(kind) or {}).get(key)
+        if was is None:
+            now.pop(key, None)
+        else:
+            now[key] = was
+        if now:
+            held[kind] = now
+        else:
+            held.pop(kind, None)
+    return replace(params, composition=held)
 
 
 def _unplayed(params, generated, paths) -> object:
@@ -795,8 +829,10 @@ def marks(genome: Genome, generated, generated_lyrics, final_lyrics, applied: li
             continue
         elif path == "form.order":
             was = composition.section_ids(generated.form)
-        elif path.startswith("tune."):
-            was = composition.phrase_value(genome, generated, path[5:])
+        elif path.startswith("tune."):  # a line everywhere, or one place of the form: what the program sang there
+            key = path[5:]
+            was = (composition.phrase_value(genome, generated, composition.line_of(genome, key),
+                                            place=key if composition.is_place(key) else None))
         elif path.startswith("chords."):
             was = composition.chords_value(genome, generated, path[7:])
         elif path.startswith("part."):  # the notes are in the record's parameters: marked by their count

@@ -49,13 +49,14 @@ def triple_ok(genome) -> bool:
 def chord_times(genome, params) -> list[tuple[float, float, str]]:
     """Every chord of a rendition as (start, end, function) in seconds, laid out as realize() lays out the
     form (a style's repeated last line and amen included), for checking what the band plays against them."""
+    from .composition import form_phrases
     from .realize import timeline
     from .style import coda, repeated_phrases
 
     clock = timeline(genome, params)
     m = genome.meter
-    phrases = [genome.phrases[pid] for name in params.form for pid in genome.section(name).phrases]
-    phrases += repeated_phrases(genome, params)
+    phrases = form_phrases(genome, params)  # each line as its place sings it (a person's chords for one place)
+    phrases += phrases[-1:] if repeated_phrases(genome, params) else []  # a style's last line again, as sung
     out, u = [], clock.lead
     for phrase in phrases:
         for b, chords in enumerate(phrase.chords):

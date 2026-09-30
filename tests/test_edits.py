@@ -173,3 +173,96 @@ def test_the_room_rings_as_long_and_answers_as_soon_as_a_person_says():
     plain = choose_params(g, None, ADA, DAY)
     assert r.params.mix["rt60"] == 2.5 and r.params.mix["predelay"] == 0.012 and r.params.mix["space"] == plain.mix["space"]
     assert r.marks["mix.rt60"] == {"value": 2.5, "was": plain.mix["rt60"]}
+
+
+# ---------------------------------------------------------------- one place, or everywhere (2026-09-29)
+
+LAST = [["vi"], ["IV", "V7"]]  # the last refrain's second line (r2, I vi | V I everywhere)
+EVERYWHERE = [["I", "iii"], ["V", "I"]]
+
+
+def seed_params(genome=g):
+    return Params.from_dict(genome.seed_params)
+
+
+def chords_sung(params, pid):
+    """The chords each place of the form sings for a line, in order."""
+    from songbird import composition as C
+
+    return [ph.chords for ph in C.form_phrases(C.harmonized(g, params), params) if ph.id == pid]
+
+
+def test_a_place_is_checked_and_kept_the_one_way():
+    clean, problems = E.check(g, {"chords.refrain:last.1": LAST, "chords.refrain:02.1": LAST, "tune.intro:0.0": None,
+                                  "chords.refrain:0.9": LAST, "chords.nope:0.0": LAST, "chords.refrain:x.1": LAST,
+                                  "chords.refrain:1.1": [["I"]], "tune.refrain:0.1": [{"degree": 1, "onset": 0, "duration": 1}]})
+    assert clean == {"chords.refrain:last.1": LAST, "chords.refrain:02.1": LAST, "tune.intro:0.0": None}
+    why = {p["path"]: p["why"] for p in problems}
+    assert why["chords.refrain:0.9"] == "the refrain has 4 lines" and why["chords.nope:0.0"] == "there is no section called nope"
+    assert "which time it comes" in why["chords.refrain:x.1"]
+    assert why["chords.refrain:1.1"] == "this line is 2 bars long: give chords for each"  # the place's line's fences
+    assert "10 notes, one for each syllable" in why["tune.refrain:0.1"]
+    p = E.Overrides(g, {"chords.refrain:02.1": LAST}).params(seed_params())
+    assert p.composition == {"chords": {"refrain:2.1": LAST}}
+
+
+def test_a_place_wins_over_everywhere_and_a_number_over_last():
+    p = E.Overrides(g, {"chords.r2": EVERYWHERE, "chords.refrain:last.1": LAST}).params(seed_params())
+    assert p.composition["chords"] == {"r2": EVERYWHERE, "refrain:last.1": LAST}
+    assert chords_sung(p, "r2") == [tuple(map(tuple, EVERYWHERE))] * 2 + [tuple(map(tuple, LAST))]
+    both = E.Overrides(g, {"chords.refrain:2.1": [["I"], ["V", "I"]], "chords.refrain:last.1": LAST}).params(seed_params())
+    assert chords_sung(both, "r2")[-1] == (("I",), ("V", "I"))  # the third refrain by number, over the last
+    from songbird import composition as C
+
+    last = next(ph for s in C.view(g, both, None)["sections"] for ph in s["phrases"] if ph["place"] == "refrain:2.1")
+    assert last["chords_scope"] == {"from": "place", "key": "refrain:2.1", "both": True} and last["place_last"] == "refrain:last.1"
+
+
+def test_one_place_sounds_and_the_rest_dont_move():
+    from songbird import composition as C, idioms
+    from songbird.realize import realize
+
+    plain = seed_params()
+    tune = C.phrase_value(g, plain, "r3")
+    tune[-1] = dict(tune[-1], degree=tune[-1]["degree"] + 1)  # the intro's first line ends a step higher
+    mine = E.Overrides(g, {"chords.refrain:last.1": LAST, "tune.intro:0.0": tune}).params(plain)
+    before, after = V.lay(realize(g, plain), plain), V.lay(realize(g, mine), mine)
+    assert [(n.start, n.pitch) for n in before.part("voice")] == [(n.start, n.pitch) for n in after.part("voice")]
+    names = [s for _, _, s in idioms.chord_times(C.harmonized(g, mine), mine)]
+    assert names.count("V7") == 1 and "V7" not in [s for _, _, s in idioms.chord_times(g, plain)]
+    last = [s for s in after.sections if s[0] == "refrain"][-1]
+    changed = [n for n, m in zip(before.notes, after.notes) if (n.part, n.pitch) != (m.part, m.pitch)]
+    intro = next(s for s in after.sections if s[0] == "intro")
+    assert changed and all(last[1] - 0.6 <= n.start or n.start < intro[2] + 0.6 for n in changed)
+
+
+def test_a_place_is_marked_replayed_handed_down_and_follows_the_last_refrain():
+    import json
+
+    from songbird import composition as C
+
+    r = E.resolve(g, None, ADA, DAY, {"chords.refrain:last.1": LAST, "chords.r2": EVERYWHERE})
+    assert not r.problems and r.marks["chords.refrain:last.1"] == {"value": LAST, "was": [["I", "vi"], ["V", "I"]]}
+    record = {"params": r.params.to_dict(), "chosen_by_you": r.marks}
+    again = E.resolve(g, None, ADA, DAY, E.from_record(json.loads(json.dumps(record))))
+    assert again.params == r.params
+    child = choose_params(g, Params.from_dict(json.loads(json.dumps(r.params.to_dict()))), H.fictional("basil"), DAY)
+    assert child.composition["chords"]["refrain:last.1"] == LAST
+    # a version singing more refrains: still the last one
+    four = E.Overrides(g, {"form.verses": 3}).params(r.params)
+    assert four.form.count("refrain") == 4 and chords_sung(four, "r2")[-1] == tuple(map(tuple, LAST))
+    assert chords_sung(four, "r2")[2] == tuple(map(tuple, EVERYWHERE))
+    released = E.resolve(g, child, None, None, {"chords.refrain:last.1": None})
+    assert "refrain:last.1" not in released.params.composition["chords"]
+    assert released.marks["chords.refrain:last.1"]["was"] == LAST
+    assert C.chords_value(g, released.params, "refrain:last.1") == EVERYWHERE
+
+
+def test_a_place_this_version_doesnt_sing_is_said_and_an_inherited_one_waits():
+    r = E.resolve(g, None, None, None, {"chords.bridge2:0.0": [["IV"], ["I"]], "chords.refrain:5.1": LAST})
+    assert {p["path"] for p in r.problems} == {"chords.bridge2:0.0", "chords.refrain:5.1"}
+    assert all("waits for one that does" in p["why"] for p in r.problems)
+    assert "chords" not in r.params.composition and not r.marks
+    held = Params.from_dict({**seed_params().to_dict(), "composition": {"chords": {"refrain:5.1": LAST}}})
+    assert chords_sung(held, "r2") == chords_sung(seed_params(), "r2")  # silent where there is no sixth refrain
+    assert E.resolve(g, held, None, None, {}).params.composition == {"chords": {"refrain:5.1": LAST}}

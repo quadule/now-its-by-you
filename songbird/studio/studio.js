@@ -281,6 +281,8 @@ function renderHeader() {
 function describePath(path) {
   const m = path.match(/^words\.(verse|refrain)\.(\d+)$/);
   if (m) return `your ${m[1]} ${Number(m[2]) + 1}`;
+  const place = path.match(/^(tune|chords)\.([A-Za-z0-9_-]+):(\d+|last)\.(\d+)$/);  // one place of the form
+  if (place) return `your ${place[1]} for ${place[3] === "last" ? `the last ${place[2]}` : `${place[2]} ${Number(place[3]) + 1}`}, line ${Number(place[4]) + 1}`;
   if (path.startsWith("chords.")) return "your chords for a line of the tune";
   const part = path.match(/^part\.([a-z0-9-]+)\.([A-Za-z0-9_-]+):(\d+)\.(\d+)$/);  // notes in (perform.js)
   if (part) return `your ${part[1]} in ${part[2]} ${Number(part[3]) + 1}, line ${Number(part[4]) + 1}`;

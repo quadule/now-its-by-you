@@ -229,6 +229,7 @@ class Context:
         self.tune: list[Tune] = []
         self.phrases: list[tuple[float, float]] = []  # each placed phrase's span, bar line to bar line
         self.phrase_ids: list[str] = []  # and which tune line it is
+        self.phrase_places: list[str | None] = []  # and the place whose own tune it sings there, if it has one
         self.choir: list[tuple[float, float, int]] = []  # the lineage voices' notes, where they sing
         self.prelude: tuple[float, float] | None = None  # the quote's bars before the song, if the lead plays one
         self._streams: dict[tuple[str, int], np.random.Generator] = {}
@@ -251,6 +252,7 @@ class Context:
             index = len(self.sections) - 1
             self.phrases.append((s0, s1))
             self.phrase_ids.append(phrase.id)
+            self.phrase_places.append(getattr(phrase, "place", None))
             beats_per_bar = meter.bar / meter.beat
             for b, chords in enumerate(phrase.chords):
                 bar_u = s0 + b * meter.bar
@@ -994,13 +996,16 @@ def composed(ctx: Context, phrase) -> list[Tune] | None:
     tune is the song's own."""
     if phrase.id not in getattr(ctx.params, "composition", {}).get("tune", {}):
         return None
-    if phrase.id not in ctx.phrase_ids:  # not sung this time: as it would be
+    # the line as it is everywhere: the first place that sings it without a tune of its own there
+    first = next((k for k, (pid, place) in enumerate(zip(ctx.phrase_ids, ctx.phrase_places))
+                  if pid == phrase.id and place is None), None)
+    if first is None:  # not sung this time (or only at places of their own): as it would be
         from .composition import played
 
-        notes = played(phrase, ctx.params)
+        notes = played(replace(phrase, place=None) if getattr(phrase, "place", None) else phrase, ctx.params)
         return [Tune(n.onset, n.onset + n.dur, ctx.tonic + degree_semitones(n.degree, ctx.mode, n.alter), 0.0,
                      True, 0, k == 0, k == len(notes) - 1, (), phrase.id, n.dur) for k, n in enumerate(notes)]
-    s0, s1 = ctx.phrases[ctx.phrase_ids.index(phrase.id)]
+    s0, s1 = ctx.phrases[first]
     # a pickup reaches back before the bar line; the line before ends its last note ahead of it
     notes = [t for t in ctx.tune if t.phrase == phrase.id and s0 - phrase.pickup - 1e-9 <= t.u0 < s1 - 1e-9]
     return [replace(t, u0=t.u0 - s0, u1=t.u0 - s0 + t.length) for t in notes]

@@ -559,6 +559,60 @@ test("a seventh from the card: the key's sevenths, a quality with a fourth tone,
   assert.deepEqual(s.commits.at(-1).value, [["Imaj7", "Vmaj"]]);
 });
 
+test("one place or everywhere: the tune and the chords are changed where the person says, and restored there", () => {
+  const view = score();
+  view.composition.chords_per_bar = [1, 2, 4];
+  view.composition.chord_choices = { diatonic: [{ symbol: "I", name: "C" }, { symbol: "vi", name: "Am" }],
+    roots: [{ numeral: "I", note: "C" }], qualities: [["", "as the key has it"]], basses: [[1, "root"]] };
+  view.composition.edited_phrases = []; view.composition.edited_chords = [];
+  view.composition.edited_places = { tune: [], chords: ["verse:last.0"] };
+  for (const s of view.composition.sections) {
+    const count = view.composition.sections.filter((x) => x.name === s.name).length;
+    const nth = view.composition.sections.slice(0, s.index).filter((x) => x.name === s.name).length;
+    for (const p of s.phrases) {
+      p.place = `${s.name}:${nth}.0`; p.place_last = count > 1 && nth === count - 1 ? `${s.name}:last.0` : null;
+      p.appearances = p.id === "a1" ? 2 : 1; p.chords_path = `chords.${p.id}`; p.song_chords = [["I", "V"]];
+      p.tune_scope = { from: null, key: null, both: false };
+      p.chords_scope = p.place_last ? { from: "last", key: p.place_last, both: false } : { from: null, key: null, both: false };
+      if (p.place_last) { p.chords = [["vi", "V"]]; p.line_chords = [["I", "V"]]; p.chords_edited = true; }
+      p.harmony = p.chords.flatMap((bar, b) => bar.map((symbol, slot) => ({ bar: b, slot, start: slot * 2, beats: 2, symbol, name: symbol, pcs: [0, 4, 7], bass: 0, rubs: [], hard: false })));
+    }
+  }
+  const s = setup(view);
+  // the first verse: everywhere by default, both verses drawn with the change at once
+  const choice = s.find("#sbc-where-tune");
+  assert.deepEqual(choice.children.map((o) => o.textContent), ["Everywhere it's sung (2 places)", "Only here (Verse 1)"]);
+  s.find('[data-note="1"]').emit("click");
+  s.find("#sbc-note-pitch").emit("change", { target: { value: "5" } });
+  assert.equal(s.commits.at(-1).path, "tune.a1");
+  assert.equal(s.view.composition.sections[3].phrases[0].notes[1].degree, 5, "the other verse follows at once");
+  // only here: the path is this place's, and the other verse isn't touched
+  s.find("#sbc-where-tune").emit("change", { target: { value: "place" } });
+  s.find('[data-note="2"]').emit("click");
+  s.find("#sbc-note-pitch").emit("change", { target: { value: "8" } });
+  assert.equal(s.commits.at(-1).path, "tune.verse:0.0");
+  assert.equal(s.view.composition.sections[3].phrases[0].notes[2].degree, 6, "the second verse keeps its note");
+  s.clickText("Restore phrase here");
+  assert.deepEqual(s.commits.at(-1), { path: "tune.verse:0.0", value: null });
+  // the last verse has chords of its own for the last time it comes: its card starts there, and offers all three
+  s.find('[data-section="3"]').emit("click");
+  s.find('[data-chord="0.0"]').emit("click");
+  const chords = s.find("#sbc-where-chords");
+  assert.equal(chords.children.length, 3);
+  assert.match(chords.children[2].textContent, /The last verse, however many there are/);
+  assert.match(s.find(".sbc-chord-card").textContent, /change in the last verse, however many there are/);
+  s.clickText("C");
+  assert.deepEqual(s.commits.at(-1), { path: "chords.verse:last.0", value: [["I", "V"]] });
+  s.find("#sbc-where-chords").emit("change", { target: { value: "line" } });
+  s.find('[data-chord="0.0"]').emit("click");
+  s.clickText("Am");
+  assert.deepEqual(s.commits.at(-1), { path: "chords.a1", value: [["vi", "V"]] }, "everywhere starts from the line's own chords");
+  s.find("#sbc-where-chords").emit("change", { target: { value: "last" } });
+  s.find('[data-chord="0.0"]').emit("click");
+  s.clickText("Restore chords here");
+  assert.deepEqual(s.commits.at(-1), { path: "chords.verse:last.0", value: null });
+});
+
 test("a browser without Web Audio keeps editing available and explains how to listen", () => {
   const s = setup(score(), { audioAvailable: false });
   s.find("#sbc-play").emit("click");

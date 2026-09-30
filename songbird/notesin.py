@@ -366,11 +366,32 @@ def _same_lines(genome, params, lines, mine, ours, voice: bool) -> dict:
                               sorted((round(u * 96), 0, p, v) for u, _, p, v in b_out))}
 
 
+def _scoped(lines, found: dict, kind: str, where: list[int], what) -> dict:
+    """Changed lines as edits, one place or everywhere (docs/STUDIO.md, "Looser harmony and melody"): a tune line
+    changed the same way in every place it comes (of `where`, the lines that can be compared) is one edit for the
+    line everywhere; one changed in only some of its places, or differently, an edit for each of those places.
+    found: {line index: its new value}. what(value, everywhere): the change in words."""
+    out: dict = {}
+    for pid in dict.fromkeys(lines[k]["pid"] for k in found):
+        places = [k for k in where if lines[k]["pid"] == pid]
+        mine = [k for k in places if k in found]
+        values = [found[k] for k in mine]
+        if len(mine) == len(places) and all(v == values[0] for v in values):
+            path = f"{kind}.{pid}"
+            out[path] = {"path": path, "value": values[0], "where": lines[mine[0]]["where"], "what": what(values[0], True)}
+            continue
+        for k in mine:
+            path = f"{kind}.{lines[k]['key']}"
+            out[path] = {"path": path, "value": found[k], "where": lines[k]["where"], "what": what(found[k], False)}
+    return out
+
+
 def _voice(genome, params, lines, same, changed, changes, out) -> None:
     """The singer's changed lines as tune edits: each note moved as the file moved it, from the line's notes as
-    written (not their performed timing); a note added or taken away is refused with the count."""
+    written there (not their performed timing); a note added or taken away is refused with the count. A line
+    changed alike wherever it's sung is changed everywhere, one changed in some places only there (_scoped)."""
     beat = genome.meter.beat
-    taken: dict[str, str] = {}
+    found: dict[int, list] = {}
     for k in changed:
         ln = lines[k]
         if not ln["sung"]:
@@ -381,7 +402,7 @@ def _voice(genome, params, lines, same, changed, changes, out) -> None:
             out["refused"].append({"where": f"{ln['where']} (Voice)", "why": f"the line needs {want} notes, one for "
                                    f"each syllable; the file has {len(mine)} there"})
             continue
-        written = C.phrase_value(genome, params, ln["pid"])
+        written = C.phrase_value(genome, params, ln["pid"], place=ln["key"])  # as this place sings it
         notes = []
         try:
             for i, ((u, z, p, _), (u0, z0, p0, _), w) in enumerate(zip(mine, ours, written)):
@@ -402,16 +423,11 @@ def _voice(genome, params, lines, same, changed, changes, out) -> None:
         except ValueError as e:
             out["refused"].append({"where": f"{ln['where']} (Voice)", "why": str(e)})
             continue
-        path = f"tune.{ln['pid']}"
-        if ln["pid"] in taken:
-            if value != changes[path]["value"]:
-                out["said"].append(f"{ln['where']} is the same tune line as {taken[ln['pid']]}, changed differently; "
-                                   "a tune line is sung the same everywhere, so the first was taken.")
-            continue
-        if value == written:
-            continue
-        taken[ln["pid"]] = ln["where"]
-        _change(changes, path, value, ln["where"], "the tune, everywhere this line is sung")
+        if value != written:
+            found[k] = value
+    sung = [k for k, ln in enumerate(lines) if ln["sung"]]
+    changes.update(_scoped(lines, found, "tune", sung, lambda value, everywhere: "the tune, everywhere this line is "
+                           "sung" if everywhere else "the tune, here only"))
 
 
 # ---------------------------------------------------------------- the chords
@@ -488,14 +504,14 @@ def _chords(genome, params, score, lines, theirs, ours, scale, changes, out) -> 
     longest = max((n[1] - n[0] for n in theirs + ours), default=0)
     beats = int(round(m.bar / m.beat))
     counts = C.chords_per_bar(genome)
-    taken: dict[str, str] = {}
+    found: dict[int, list] = {}
 
     def sounding(notes, ons, tick):
         lo = bisect_left(ons, tick - longest - 1)
         hi = bisect_left(ons, tick + 1e-9)
         return sorted(n[2] for n in notes[lo:hi] if n[0] <= tick < n[1])
 
-    for ln in lines:
+    for k, ln in enumerate(lines):
         grid = [ticks.tick(clock.seconds(ln["u0"] + b * m.bar + k * m.beat))
                 for b in range(genome.phrases[ln["pid"]].bars) for k in range(beats)]
         nudge = midi.TPQ / 8
@@ -529,24 +545,19 @@ def _chords(genome, params, score, lines, theirs, ours, scale, changes, out) -> 
         except ValueError as e:
             out["refused"].append({"where": where, "why": str(e)})
             continue
-        current = C.chords_value(genome, params, ln["pid"])
+        current = C.chords_value(genome, params, ln["key"])  # as this place sings them
         bars = [[_kept(s, old, params.mode) for s, old in zip(bar, now)] if len(bar) == len(now) else bar
                 for bar, now in zip(bars, current)]
         if bars == current:
             continue
-        path = f"chords.{ln['pid']}"
-        value = C.check_chords(genome, ln["pid"], bars)
-        if ln["pid"] in taken:
-            if value != changes[path]["value"]:
-                out["said"].append(f"{ln['where']} has the same tune line as {taken[ln['pid']]}, with other chords; a "
-                                   "line's chords are the same everywhere it's sung, so the first was taken.")
-            continue
-        taken[ln["pid"]] = ln["where"]
-        from .theory import chord_name
+        found[k] = C.check_chords(genome, ln["pid"], bars)
+    from .theory import chord_name
 
-        _change(changes, path, value, ln["where"], "the chords: " + " | ".join(
-            " ".join(chord_name(s, params.tonic, params.mode) for s in bar) for bar in value)
-                + ", everywhere this line is sung")
+    def what(value, everywhere):
+        named = " | ".join(" ".join(chord_name(s, params.tonic, params.mode) for s in bar) for bar in value)
+        return f"the chords: {named}, " + ("everywhere this line is sung" if everywhere else "here only")
+
+    changes.update(_scoped(lines, found, "chords", list(range(len(lines))), what))
 
 
 def _kept(symbol: str, old: str, mode: str) -> str:

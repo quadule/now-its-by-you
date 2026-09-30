@@ -13,6 +13,7 @@
   const state = {
     view: null, section: -1, phrase: 0, note: null, snap: 0.25, zoom: 1,
     loop: false, metronome: false, scope: "phrase", drag: null, chords: true, bass: true, chord: null,
+    where: { tune: null, chords: null }, // one place or everywhere: "line", "place" or "last" (null: as the line has it)
     context: null, playback: null, nodes: new Set(), frame: null,
   };
   const bridge = () => window.StudioBridge || {};
@@ -98,10 +99,50 @@
     return `${displayWords(n.syllable) || `Note ${index + 1}`}, ${pitchName(pitchFor(n))}, scale degree ${n.degree}, beat ${beatLabel(n.onset)}, ${fmt(n.duration)} beats${index === p.notes.length - 1 ? ", phrase ending" : ""}`;
   }
   function selectedSection(index) {
-    stop(); state.section = clamp(index, 0, sections().length - 1); state.phrase = 0; state.note = null; state.chord = null; paint();
+    stop(); state.section = clamp(index, 0, sections().length - 1); state.phrase = 0; state.note = null; state.chord = null;
+    state.where = { tune: null, chords: null }; paint();
   }
   function selectedPhrase(index) {
-    stop(); state.phrase = index; state.note = null; state.chord = null; paint();
+    stop(); state.phrase = index; state.note = null; state.chord = null; state.where = { tune: null, chords: null }; paint();
+  }
+
+  // ---- one place, or everywhere (docs/STUDIO.md, "Looser harmony and melody"): a line's tune or chords changed
+  // wherever it's sung (tune.<line>), only at this place of the form (tune.<section>:<n>.<line>), or at the last
+  // time its section comes, however many there are (tune.<section>:last.<line>). Starts on where the place's own
+  // come from; the choice is the person's, never made for them.
+  function where(kind, p = phrase()) {
+    const chosen = state.where[kind] || p?.[`${kind}_scope`]?.from || "line";
+    return chosen === "last" && !p?.place_last ? "place" : chosen === "place" && !p?.place ? "line" : chosen;
+  }
+  function scopedPath(kind, p = phrase()) {
+    const scope = where(kind, p), line = kind === "tune" ? (p.path || `tune.${p.id}`) : (p.chords_path || `chords.${p.id}`);
+    return scope === "place" ? `${kind}.${p.place}` : scope === "last" ? `${kind}.${p.place_last}` : line;
+  }
+  function ownHere(kind, p) { return ["place", "last"].includes(p?.[`${kind}_scope`]?.from); }
+  function held(kind, p) { // whether the chosen scope has a change of the person's to restore
+    const c = composition(), key = scopedPath(kind, p).slice(kind.length + 1);
+    if (where(kind, p) !== "line") return Boolean(c?.edited_places?.[kind]?.includes(key));
+    const lines = kind === "tune" ? c?.edited_phrases : c?.edited_chords;
+    return lines ? lines.includes(p.id) : kind === "tune" || Boolean(p.chords_edited);
+  }
+  function scopeChoice(kind) {
+    const p = phrase(), s = section();
+    if (!p?.place) return null;
+    const count = p.appearances || 1, name = s.name.replace("bridge2", "second bridge");
+    const options = [["line", count > 1 ? `Everywhere it's sung (${count} places)` : "Everywhere it's sung"],
+      ["place", `Only here (${s.label})`]];
+    if (p.place_last) options.push(["last", `The last ${name}, however many there are`]);
+    const both = p[`${kind}_scope`]?.both;
+    return el("div", { class: "sbc-scope" },
+      select(kind === "tune" ? "Change the tune" : "Change the chords", where(kind, p), options,
+        (value) => { state.where[kind] = value; paint(); }, { id: `sbc-where-${kind}` }),
+      both ? el("span", { class: "sbc-muted" }, `This ${name} has its own and the last ${name} has too: its own wins here.`) : null);
+  }
+  function sharesScope(kind, p, other) {
+    // which of the phrases the page shows sing what this edit changes (for drawing it at once)
+    if (other === p) return true;
+    if (other.id !== p.id || where(kind, p) !== "line") return false;
+    return !ownHere(kind, other);
   }
   function commit(path, value) {
     stop();
@@ -128,9 +169,9 @@
     }
     const updated = notes.map((n, index) => ({ ...n, pitch: pitchFor(p.notes[index], n.degree) }));
     for (const s of sections()) for (const shared of s.phrases || []) {
-      if (shared.id === p.id) shared.notes = updated.map((n, index) => ({ ...shared.notes[index], ...n, syllable: shared.notes[index]?.syllable, word: shared.notes[index]?.word, edited: true }));
+      if (sharesScope("tune", p, shared)) shared.notes = updated.map((n, index) => ({ ...shared.notes[index], ...n, syllable: shared.notes[index]?.syllable, word: shared.notes[index]?.word, edited: true }));
     }
-    commit(p.path || `tune.${p.id}`, serializeNotes(updated));
+    commit(scopedPath("tune", p), serializeNotes(updated));
     paint();
     if (message) announce(message);
   }
@@ -500,7 +541,11 @@
       : alter ? [root, root + 4, root + 7] : [at(parts.degree), at(parts.degree + 2), at(parts.degree + 4)];
     return tones.map((t) => (c?.tonic || 60) + t);
   }
-  function lineChords(p = phrase()) { return (p?.chords || []).map((bar) => [...bar]); }
+  function lineChords(p = phrase()) {
+    // an edit for everywhere starts from the line's everywhere chords, not this place's own
+    const base = where("chords", p) === "line" && p?.line_chords ? p.line_chords : p?.chords;
+    return (base || []).map((bar) => [...bar]);
+  }
   function chosenChord(p = phrase()) {
     return state.chord ? (p?.harmony || []).find((h) => h.bar === state.chord.bar && h.slot === state.chord.slot) : null;
   }
@@ -529,7 +574,7 @@
     const p = phrase();
     if (!p) return;
     if (JSON.stringify(bars) === JSON.stringify(lineChords(p))) { paint(); return; }
-    commit(p.chords_path || `chords.${p.id}`, bars);
+    commit(scopedPath("chords", p), bars);
     announce(message);
   }
   function setChord(symbol) {
@@ -538,7 +583,7 @@
     const bars = lineChords(p);
     bars[at.bar][at.slot] = symbol;
     strum(symbol);
-    commitChords(bars, `Bar ${at.bar + 1}: ${symbol}. The band, the voices and the sketch follow everywhere this line is sung.`);
+    commitChords(bars, `Bar ${at.bar + 1}: ${symbol}. The band, the voices and the sketch follow ${where("chords", p) === "line" ? "everywhere this line is sung" : "here"}.`);
   }
   function setChordsInBar(count) {
     const p = phrase(), at = state.chord;
@@ -561,8 +606,13 @@
       : "Every sung note over it is in the chord.")
       // a person's seventh (sixth, ninth) a half step from the tune: its own sharp rub
       + (h.tension?.length ? ` The chord's ${{ 9: "sixth", 14: "ninth", 2: "ninth" }[(QUALITIES[parts.quality] || [])[3]] || "seventh"} is a half step from the tune here (${p.notes.filter((_, i) => h.tension.includes(i)).map((n) => displayWords(n.syllable).replace(/[^\p{L}\p{N}'’-]+$/u, "") || pitchName(pitchFor(n))).join(", ")}): a sharp rub.` : "");
-    const repeats = sections().flatMap((s) => s.phrases || []).filter((item) => item.id === p.id).length;
+    const repeats = p.appearances || sections().flatMap((s) => s.phrases || []).filter((item) => item.id === p.id).length;
+    const scope = where("chords", p);
+    const reach = scope === "place" ? `These chords change only here, in ${section().label}.`
+      : scope === "last" ? `These chords change in the last ${section().name}, however many there are.`
+        : repeats > 1 ? `This line's chords change in all ${repeats} places it's sung${ownHere("chords", p) ? " (but this one, which has its own)" : ""}.` : "This line's chords change wherever it's sung.";
     return el("div", { class: "sbc-chord-card", role: "group", "aria-label": `Chord in bar ${h.bar + 1}` },
+      scopeChoice("chords"),
       el("div", { class: "sbc-note-heading" }, el("span", { class: "sbc-overline" }, `Bar ${h.bar + 1} · chord ${h.slot + 1} of ${p.chords[h.bar].length}`),
         el("strong", { class: chordMine(p, h) ? "is-mine" : "" }, h.name),
         el("span", { class: `sbc-muted${h.hard ? " sbc-leap-warning" : ""}` }, rub)),
@@ -581,9 +631,10 @@
         select("Chords in this bar", p.chords[h.bar].length, counts.map((n) => [n, String(n)]), (value) => setChordsInBar(Number(value)), { id: "sbc-chord-count" }),
         button("♪", () => strum(h.symbol), { class: "sbc-button sbc-audition", "aria-label": `Hear ${h.name}` })),
       el("div", { class: "sbc-chord-row" },
-        el("span", { class: "sbc-muted" }, repeats > 1 ? `This line's chords change in all ${repeats} places it's sung.` : "This line's chords change wherever it's sung."),
-        button("Restore chords", () => { state.chord = null; commit(p.chords_path || `chords.${p.id}`, null); },
-          { class: "sbc-button sbc-quiet", disabled: !p.chords_edited, title: "Give this line back the song's own chords" }),
+        el("span", { class: "sbc-muted" }, reach),
+        button(scope === "line" ? "Restore chords" : "Restore chords here", () => { state.chord = null; commit(scopedPath("chords", p), null); },
+          { class: "sbc-button sbc-quiet", disabled: !held("chords", p),
+            title: scope === "line" ? "Give this line back the song's own chords, everywhere" : "Give this place back the line's chords" }),
         button("Done", () => { state.chord = null; paint(); }, { class: "sbc-button sbc-quiet" })));
   }
 
@@ -623,17 +674,17 @@
     if (!p?.notes?.length) return el("p", { class: "sbc-muted" }, "This section has no editable melody.");
     return el("div", { class: "sbc-editor" },
       el("div", { class: "sbc-row sbc-editor-heading" },
-        el("div", {}, el("h3", {}, section().label, el("span", { class: "sbc-muted" }, " / Melody")), el("p", { class: "sbc-muted" }, "Edit a phrase once; every appearance follows.")),
+        el("div", {}, el("h3", {}, section().label, el("span", { class: "sbc-muted" }, " / Melody")), el("p", { class: "sbc-muted" }, where("tune") === "line" ? "Edit a phrase once; every appearance follows." : "This change stays in this place.")),
         el("div", { class: "sbc-editor-settings" }, select("Snap", state.snap, [[0.25, "¼ beat"], [0.5, "½ beat"], [1, "1 beat"]], (value) => { state.snap = Number(value); paint(); }, { id: "sbc-snap" }),
           select("Zoom", state.zoom, [[1, "Fit"], [1.5, "150%"], [2, "200%"], [3, "300%"]], (value) => { state.zoom = Number(value); paint(); }, { id: "sbc-zoom" }))),
-      phraseStrip(), pianoRoll(), state.chord && state.note === null ? null : inspector(), chordCard(),
+      phraseStrip(), scopeChoice("tune"), pianoRoll(), state.chord && state.note === null ? null : inspector(), chordCard(),
       el("div", { class: "sbc-tools" }, el("span", { class: "sbc-overline" }, "Shape phrase"),
         el("div", { class: "sbc-button-group", role: "group", "aria-label": "Transpose melody; keep its ending" },
           button("↓ Step", () => transpose(-1), { title: "Lower melody one scale step, keeping its phrase ending" }),
           button("↑ Step", () => transpose(1), { title: "Raise melody one scale step, keeping its phrase ending" })),
         button("Soften leaps", smoothMelody, { title: "Bring notes within two scale steps of their neighbors, preserving the ending" }),
         button("Even rhythm", evenRhythm, { title: "Spread the existing syllables evenly across their current phrase span" }),
-        button("Restore phrase", () => { state.note = null; commit(p.path || `tune.${p.id}`, null); }, { class: "sbc-button sbc-quiet", title: "Remove your melody override and restore this song’s inherited phrase" })),
+        button(where("tune", p) === "line" ? "Restore phrase" : "Restore phrase here", () => { state.note = null; commit(scopedPath("tune", p), null); }, { class: "sbc-button sbc-quiet", title: where("tune", p) === "line" ? "Remove your melody override and restore this song’s inherited phrase" : "Give this place back the line's own tune" })),
       health(),
       el("p", { id: "sbc-drag-value", class: "sbc-visually-hidden", "aria-live": "off" }));
   }

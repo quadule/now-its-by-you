@@ -51,6 +51,9 @@ class Phrase:
     notes: tuple[TuneNote, ...]
     bars: int
     chords: tuple[tuple[str, ...], ...]  # one tuple of functions per bar
+    # a line as one place in the form sings it (songbird.composition.form_phrases): the key its own tune is kept
+    # under there ("refrain:last.1"), None where it sings the line's everywhere tune; its id stays the line's
+    place: str | None = None
 
     @property
     def sung(self) -> tuple[TuneNote, ...]:

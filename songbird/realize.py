@@ -309,10 +309,13 @@ def realize(genome: Genome, params: Params, verses=None, phrasing: Phrasing | No
     rounds = {b: sum(genome.section(n).lyrics == b for n in params.form) for b in genome.fixed}
     heard = dict.fromkeys(genome.fixed, 0)
     drawn = lyrics.lines_for(genome, params.form) if lyrics is not None else None  # per section, None if no words
-    from .composition import authored
+    from .composition import authored, form_phrases, tune_key
 
     # a person's own lines, each in the verse (or time round) it was written for (songbird.composition)
     patches = authored(genome, params, lyrics)
+    # each line of the form as its place sings it: its own chords and tune where a person gave it some, else the
+    # line everywhere (the very phrase objects, where no place has its own)
+    at_places = iter(form_phrases(genome, params))
     for j, (name, patch) in enumerate(zip(params.form, patches)):
         section = genome.section(name)  # bridge2: the bridge again, same phrases and choir
         lines: list = [None] * len(section.phrases)
@@ -328,7 +331,7 @@ def realize(genome: Genome, params: Params, verses=None, phrasing: Phrasing | No
         if patch:
             lines = [patch.get(str(i), line) for i, line in enumerate(lines)]
         for pid, line in zip(section.phrases, lines):
-            phrase = genome.phrases[pid]
+            phrase = next(at_places)
             placed.append((name, phrase, t, line))
             t += phrase.bars * meter.bar
     for name, phrase, line in style_mod.repeated(genome, params, placed):  # a style's ending may sing the last line again
@@ -347,7 +350,7 @@ def realize(genome: Genome, params: Params, verses=None, phrasing: Phrasing | No
         sung = phrase.sung
         words = sung_words(line) if line else [(None, None, 1)] * len(sung)
         # the lineage's variants: a note moved to another degree, a weak note's onset moved, an ornament
-        composed = phrase.id in params.composition.get("tune", {})
+        composed = tune_key(phrase) in params.composition.get("tune", {})
         if composed:
             from .composition import played as composed_notes
 

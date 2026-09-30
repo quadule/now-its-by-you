@@ -85,9 +85,10 @@ def test_two_chords_and_a_bass_line_come_back_as_edits():
     r = notesin.from_file(G, params, score_of(params), data)
     assert not r["refused"], r["refused"]
     changes = {c["path"]: c for c in r["changes"]}
-    assert set(changes) == {"chords.v1", "part.bass.verse:1.0"}
-    assert changes["chords.v1"]["value"] == [["vi"], ["I", "IV/3"]]  # was I | I V
-    assert "Bm | D G/B" in changes["chords.v1"]["what"]
+    # changed in the first verse only: the chords of that place (the second verse sings the line as it was)
+    assert set(changes) == {"chords.verse:0.0", "part.bass.verse:1.0"}
+    assert changes["chords.verse:0.0"]["value"] == [["vi"], ["I", "IV/3"]]  # was I | I V
+    assert "Bm | D G/B" in changes["chords.verse:0.0"]["what"] and "here only" in changes["chords.verse:0.0"]["what"]
     beat = C.PPB
     assert changes["part.bass.verse:1.0"]["value"] == [[k * 2 * beat, 2 * beat, root + 12 + step - params.tonic, 90]
                                                         for k, step in enumerate((0, 4, 7, 5))]
@@ -127,14 +128,39 @@ def test_the_tune_comes_back_through_its_fences():
     r = notesin.from_file(G, params, score_of(params), moved(2))
     tune = {c["path"]: c for c in r["changes"]}
     written = C.phrase_value(G, params, "v1")
-    assert set(tune) == {"tune.v1"} and "everywhere" in tune["tune.v1"]["what"]
-    now = tune["tune.v1"]["value"]
+    assert set(tune) == {"tune.verse:0.0"} and "here only" in tune["tune.verse:0.0"]["what"]  # the first verse's
+    now = tune["tune.verse:0.0"]["value"]
     assert [n["degree"] for n in now] == [n["degree"] + (1 if i == 2 else 0) for i, n in enumerate(written)]
     assert [n["onset"] for n in now] == [n["onset"] for n in written]  # the written times, not the performed ones
     for data_, why in ((moved(0, extra=True), "needs 11 notes"),
                        (moved(0, chromatic=True), "isn't in the key's scale")):
         r = notesin.from_file(G, params, score_of(params), data_)
         assert not r["changes"] and why in r["refused"][0]["why"] and r["refused"][0]["where"].startswith("Verse 1")
+
+
+def test_a_line_changed_alike_everywhere_is_changed_everywhere_and_in_some_places_there():
+    params = seed()
+    data = export(params)
+    places = [line(params, key) for key in ("verse:0.0", "verse:1.0")]  # v1, in both verses (the break is off)
+    assert all(ln["pid"] == "v1" for ln in places) and "break" not in params.form
+
+    def moved(which):
+        def change(name, notes):
+            if name != "Voice":
+                return notes
+            for ln in [places[k] for k in which]:
+                a, b = ticks_of(params, ln["w0"]) - 60, ticks_of(params, ln["w1"]) - 60
+                [n for n in notes if a <= n[0] < b][2][3] += 2
+            return notes
+        return rewrite(data, change)
+
+    r = notesin.from_file(G, params, score_of(params), moved((0, 1)))
+    assert [c["path"] for c in r["changes"]] == ["tune.v1"] and "everywhere" in r["changes"][0]["what"]
+    r = notesin.from_file(G, params, score_of(params), moved((1,)))
+    assert [c["path"] for c in r["changes"]] == ["tune.verse:1.0"]
+    # a version with a place of its own exports it, and the file comes back as no change
+    mine = E.Overrides(G, {c["path"]: c["value"] for c in r["changes"]}).params(params)
+    assert notesin.from_file(G, mine, score_of(mine), export(mine))["changes"] == []
 
 
 def test_what_cant_be_taken_is_said():
@@ -158,7 +184,7 @@ def test_what_cant_be_taken_is_said():
         return notes
 
     r = notesin.from_file(G, params, score_of(params), rewrite(data, seventh))  # a seventh is taken: D7
-    assert [c["value"] for c in r["changes"] if c["path"] == "chords.v1"][0][0][0] == "I7" and not r["refused"]
+    assert [c["value"] for c in r["changes"] if c["path"] == "chords.verse:0.0"][0][0][0] == "I7" and not r["refused"]
     r = notesin.from_file(G, params, score_of(params), rewrite(data, ninth))  # five notes aren't, yet
     assert "ninth chord" in r["refused"][0]["why"] and "bar 1" in r["refused"][0]["why"]
     r = notesin.from_file(G, params, score_of(params), rewrite(data, off_beat))
@@ -183,10 +209,10 @@ def test_a_track_it_cant_name_is_asked_about_then_taken():
     data, _ = changed_file(params)
     renamed = data.replace(b"Bass", b"Bs 1")  # a sequencer's own name for the track
     r = notesin.from_file(G, params, score_of(params), renamed)
-    assert [c["path"] for c in r["changes"]] == ["chords.v1"]
+    assert [c["path"] for c in r["changes"]] == ["chords.verse:0.0"]
     assert r["unmatched"] and r["unmatched"][0]["name"] == "Bs 1" and "Bass" in r["tracks"]
     told = notesin.from_file(G, params, score_of(params), renamed, {r["unmatched"][0]["track"]: "Bass"})
-    assert {c["path"] for c in told["changes"]} == {"chords.v1", "part.bass.verse:1.0"}
+    assert {c["path"] for c in told["changes"]} == {"chords.verse:0.0", "part.bass.verse:1.0"}
     left = notesin.from_file(G, params, score_of(params), renamed, {r["unmatched"][0]["track"]: ""})
     assert not left["unmatched"]
 

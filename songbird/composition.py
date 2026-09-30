@@ -296,8 +296,20 @@ def _finite(value) -> float:
     return float(value)
 
 
+def edit_key(genome, key: str) -> str:
+    """The key a tune or chord edit is kept under: a line's id, or a place key written the one way (place_key)."""
+    return place_key(genome, key) if is_place(key) else key
+
+
+def line_of(genome, key: str) -> str:
+    """The tune line a tune or chord edit's key names: the line itself, or the line sung at that place."""
+    return place_target(genome, key)[3] if is_place(key) else key
+
+
 def check_phrase(genome, pid: str, value) -> list[dict] | None:
-    """Validate atomically: a rejected note leaves the entire phrase unchanged."""
+    """Validate atomically: a rejected note leaves the entire phrase unchanged. pid: a tune line, or a place of
+    the form (refrain:last.1), whose line's fences it keeps."""
+    pid = line_of(genome, pid)
     if pid not in genome.phrases:
         raise ValueError(f"there is no tune line called {pid}")
     if value is None:
@@ -372,7 +384,9 @@ def chords_per_bar(genome) -> list[int]:
 def check_chords(genome, pid: str, value) -> list[list[str]] | None:
     """A person's chords for a tune line: a list of chords for each of its bars, each bar shared evenly on
     its beats, each chord a function of the key (theory.parse_symbol: a numeral, a quality, a bass). None
-    releases the line to the song's own chords. Validated whole: a refused chord leaves the line as it was."""
+    releases the line to the song's own chords. Validated whole: a refused chord leaves the line as it was. pid: a
+    tune line, or a place of the form (refrain:last.1)."""
+    pid = line_of(genome, pid)
     if pid not in genome.phrases:
         raise ValueError(f"there is no tune line called {pid}")
     if value is None:
@@ -402,7 +416,10 @@ def check_chords(genome, pid: str, value) -> list[list[str]] | None:
 
 
 def chords_value(genome, params, pid: str) -> list[list[str]]:
-    """A tune line's chords as these parameters sing them: a person's, or the song's own."""
+    """A tune line's chords as these parameters sing them: a person's, or the song's own; at a place of the form
+    (refrain:last.1), the chords it sings there."""
+    if is_place(pid):
+        return [list(bar) for bar in at_place(genome, params, pid).chords]
     held = (params.composition.get("chords") or {}).get(pid)
     return [list(bar) for bar in held] if held else [list(bar) for bar in genome.phrases[pid].chords]
 
@@ -454,19 +471,150 @@ def chord_choices(params) -> dict:
             "with_seventh": sorted(SEVENTHS)}
 
 
+def tune_key(phrase) -> str:
+    """The key a line's own tune is kept under where it is sung: its place's, where that place has one
+    (form_phrases), else the line's."""
+    return phrase.place or phrase.id
+
+
 def played(phrase, params):
-    """Human choices take precedence over variants on this line alone."""
+    """Human choices take precedence over variants on this line alone: a place's own tune, else the line's."""
     notes = variants.realized(phrase, params.variants)
-    edited = params.composition.get("tune", {}).get(phrase.id)
+    edited = params.composition.get("tune", {}).get(tune_key(phrase))
     if not edited:
         return notes
     return tuple(replace(n, degree=d, onset=t, dur=duration, ornament=(), variant=None)
                  for n, (d, t, duration) in zip(notes, edited))
 
 
-def phrase_value(genome, params, pid):
+def phrase_value(genome, params, pid, place: str | None = None):
+    """A line's notes as an edit writes them, as these parameters sing it: everywhere, or at one place of the form
+    (a place key, "refrain:2.1"; its own tune if it has one, else the line's)."""
+    phrase = genome.phrases[pid] if place is None else at_place(genome, params, place)
     return [{"degree": n.degree, "onset": n.onset / genome.meter.beat, "duration": n.dur / genome.meter.beat}
-            for n in played(genome.phrases[pid], params)]
+            for n in played(phrase, params)]
+
+
+# ---------------------------------------------------------------- one place, or everywhere (2026-09-29)
+#
+# A chord or tune edit names a line everywhere it is sung (chords.<line>, tune.<line>), or one place of the form:
+# <section>:<n>.<i>, the i-th line of the n-th time that section comes (the arrangement's id, as form.order and a
+# played part name it), or <section>:last.<i>, of the last time it comes (docs/STUDIO.md, "Looser harmony and
+# melody"). Kept in the same maps as the lines' (composition["tune"], composition["chords"]): a place key has a
+# colon, a line's id never does. At each line of the form the place by number wins, then by last, then the line.
+
+PLACE = re.compile(r"([A-Za-z][A-Za-z0-9_-]{0,31}):(\d{1,2}|last)\.(\d{1,2})")
+
+
+def is_place(key: str) -> bool:
+    return ":" in key
+
+
+def place_target(genome, key: str) -> tuple[str, str, int, str]:
+    """A place key's section, which time ("2" or "last"), line and tune line: refrain:last.1 is the second line
+    (r2) of the last refrain. Raises with why."""
+    match = PLACE.fullmatch(key)
+    if match is None:
+        raise ValueError("a place is a section, which time it comes (a number from 0, or last) and a line: "
+                         "refrain:2.1, refrain:last.1")
+    name, which, line = match.groups()
+    try:
+        section = genome.section(name)
+    except KeyError:
+        raise ValueError(f"there is no section called {name}") from None
+    if (name not in genome.sections and name != "bridge2") or (which != "last" and int(which) >= MAX_SECTIONS):
+        raise ValueError(f"there is no section called {name}")
+    if int(line) >= len(section.phrases):
+        raise ValueError(f"the {name} has {len(section.phrases)} line{'s' if len(section.phrases) != 1 else ''}")
+    which = which if which == "last" else str(int(which))
+    return name, which, int(line), section.phrases[int(line)]
+
+
+def place_key(genome, key: str) -> str:
+    """A place key written the one way it is kept: refrain:02.1 is refrain:2.1."""
+    name, which, line, _ = place_target(genome, key)
+    return f"{name}:{which}.{line}"
+
+
+def place_keys(form, index: int, line: int) -> list[str]:
+    """The keys the index-th section of a form looks up for its line, strongest first: its own time, then last
+    (if it is the last time that section comes)."""
+    name = form[index]
+    nth = list(form[:index]).count(name)
+    keys = [f"{name}:{nth}.{line}"]
+    if nth == list(form).count(name) - 1:
+        keys.append(f"{name}:last.{line}")
+    return keys
+
+
+def held_at(held: dict, keys: list[str]) -> str | None:
+    """The first of these place keys that a map holds."""
+    return next((k for k in keys if k in held), None)
+
+
+def places_held(params) -> bool:
+    return any(is_place(k) for kind in ("tune", "chords") for k in (params.composition.get(kind) or {}))
+
+
+def form_phrases(genome, params) -> list:
+    """The phrase for each line of the form, in order: the line itself (the very object, where no place has its
+    own), or a copy with its place's chords and its place (Phrase.place: where played() reads its own tune), its
+    id still the line's. genome: the song as realize sings it (harmonized: a person's everywhere chords in)."""
+    lines = [(i, j, genome.phrases[pid]) for i, name in enumerate(params.form)
+             for j, pid in enumerate(genome.section(name).phrases)]
+    if not places_held(params):
+        return [phrase for _, _, phrase in lines]
+    tune, chords = params.composition.get("tune") or {}, params.composition.get("chords") or {}
+    out = []
+    for i, j, phrase in lines:
+        keys = place_keys(params.form, i, j)
+        at_tune, at_chords = held_at(tune, keys), held_at(chords, keys)
+        if at_tune or at_chords:
+            phrase = replace(phrase, place=at_tune,
+                             chords=tuple(tuple(bar) for bar in chords[at_chords]) if at_chords else phrase.chords)
+        out.append(phrase)
+    return out
+
+
+def at_place(genome, params, key: str):
+    """The phrase one place of the form sings (a place key: "refrain:2.1", "refrain:last.1"), with its place's
+    chords and tune where it has its own, else the line's everywhere; a place this form doesn't have: the line
+    everywhere."""
+    name, which, line, pid = place_target(genome, key)
+    song = harmonized(genome, params)
+    where = [i for i, n in enumerate(params.form) if n == name]
+    nth = len(where) - 1 if which == "last" else int(which)
+    if not 0 <= nth < len(where):
+        return song.phrases[pid]
+    k = sum(len(genome.section(n).phrases) for n in params.form[:where[nth]]) + line
+    return form_phrases(song, params)[k]
+
+
+def chords_at(genome, params, key: str) -> list[list[str]]:
+    """A place's chords as these parameters sing them (a part key, "refrain:2.1")."""
+    return [list(bar) for bar in at_place(genome, params, key).chords]
+
+
+def scope(params, form, index: int, line: int, pid: str, kind: str) -> dict:
+    """Where the tune ("tune") or chords ("chords") a line of the form sings come from: "place" (its own time),
+    "last" (the last time its section comes), "line" (the line everywhere) or None (the program's own); the key
+    it's kept under; and a place's number and last both held (the number wins)."""
+    held = params.composition.get(kind) or {}
+    keys = place_keys(form, index, line)
+    at = held_at(held, keys)
+    both = at is not None and len(keys) > 1 and all(k in held for k in keys)
+    if at is not None:
+        return {"from": "last" if at.split(":")[1].startswith("last") else "place", "key": at, "both": both}
+    return {"from": "line" if pid in held else None, "key": pid if pid in held else None, "both": False}
+
+
+def place_silent(genome, params, key: str) -> str | None:
+    """Why a place edit isn't heard in this version (its section doesn't come that many times), or None."""
+    name, which, _, _ = place_target(genome, key)
+    count = list(params.form).count(name)
+    if count == 0 or (which != "last" and int(which) >= count):
+        return "this version doesn't sing that section there; your change waits for one that does"
+    return None
 
 
 def harmony(genome, phrase, params) -> list[dict]:
@@ -525,6 +673,7 @@ def view(genome, params, lyrics) -> dict:
     lines = lyrics.lines_for(genome, params.form)
     edited = params.composition.get("tune", {})
     in_parts = performed_parts(params)
+    at_places = iter(form_phrases(genome, params))  # each line as its place sings it
     sections = []
     cursor = clock.lead
     for index, (name, identity) in enumerate(zip(params.form, section_ids(params.form))):
@@ -532,22 +681,38 @@ def view(genome, params, lyrics) -> dict:
         start = cursor
         phrases = []
         for j, pid in enumerate(section.phrases):
-            phrase = genome.phrases[pid]
+            phrase = next(at_places)
             words = sung_words(lines[index][j]) if lines[index] else []
+            here = place_keys(params.form, index, j)  # this place's own key, and its "last" if it is the last time
+            several = params.form.count(name) > 1
+            tune_from, chords_from = scope(params, params.form, index, j, pid, "tune"), scope(
+                params, params.form, index, j, pid, "chords")
             notes = []
             for k, n in enumerate(played(phrase, params)):
                 syllable, word, _ = words[k] if k < len(words) else ("", "", 0)
                 notes.append({"index": k, "degree": n.degree, "alter": n.alter,
                               "pitch": params.tonic + degree_semitones(n.degree, params.mode, n.alter),
                               "onset": n.onset / meter.beat, "duration": n.dur / meter.beat,
-                              "syllable": syllable or "", "word": word or "", "edited": pid in edited})
+                              "syllable": syllable or "", "word": word or "",
+                              "edited": tune_from["from"] is not None})
             phrases.append({"id": pid, "path": f"tune.{pid}", "start_beat": cursor / meter.beat,
                             "duration_beats": phrase.bars * meter.bar / meter.beat,
                             "pickup_beats": phrase.pickup / meter.beat, "notes": notes,
                             "chords": [list(bar) for bar in phrase.chords], "bounds": bounds(genome, phrase),
                             "harmony": harmony(genome, phrase, params),
-                            "chords_path": f"chords.{pid}", "chords_edited": pid in chorded,
+                            "chords_path": f"chords.{pid}", "chords_edited": chords_from["from"] is not None,
                             "song_chords": [list(bar) for bar in song.phrases[pid].chords],
+                            # one place, or everywhere: this place's paths, where its tune and chords come from
+                            # ("place", "last", "line" or None), and how many places sing the line
+                            "place": here[0], "place_last": here[1] if several and len(here) > 1 else None,
+                            "tune_scope": tune_from, "chords_scope": chords_from,
+                            # what the line sings everywhere, where this place has its own: what an edit for
+                            # everywhere starts from
+                            "line_chords": [list(bar) for bar in genome.phrases[pid].chords]
+                            if chords_from["from"] in ("place", "last") else None,
+                            "line_notes": phrase_value(song, params, pid)
+                            if tune_from["from"] in ("place", "last") else None,
+                            "appearances": sum(p == pid for n in params.form for p in genome.section(n).phrases),
                             "lyric_path": f"lyrics.{keys[index]}.{j}" if keys[index] else None,
                             "lyric_text": lines[index][j] if lines[index] else "",
                             "syllable_count": len(phrase.sung),
@@ -568,13 +733,17 @@ def view(genome, params, lyrics) -> dict:
             "beats_per_bar": meter.bar / meter.beat, "grid": GRID,
             "duration_beats": clock.end / meter.beat, "duration_seconds": clock.seconds(clock.end),
             "duration": round(clock.seconds(clock.end) + ring(params), 3),
-            "order": section_ids(params.form), "sections": sections, "edited_phrases": sorted(edited),
+            "order": section_ids(params.form), "sections": sections,
+            "edited_phrases": sorted(k for k in edited if not is_place(k)),
+            "edited_places": {kind: sorted(k for k in (params.composition.get(kind) or {}) if is_place(k))
+                              for kind in ("tune", "chords")},
             "edited_chords": sorted(p for p in chorded if p in song.phrases), "chords_per_bar": chords_per_bar(song),
             "chord_choices": chord_choices(params),
             "players": playable(params), "performed": {p: sorted(held) for p, held in in_parts.items()},
             "arranged": bool(params.composition.get("order")),
             "guidance": "Notes stay in the song's range. Keep one note per syllable and the final home note. "
-                        "A tune line changes everywhere it appears. Repeated sections keep their story order."}
+                        "A tune line changes everywhere it appears, or only in one place. Repeated sections keep "
+                        "their story order."}
 
 
 # ---------------------------------------------------------------- a player's notes, played in (notes in)
