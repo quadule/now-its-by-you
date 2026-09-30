@@ -577,3 +577,104 @@ pictures: Chrome won't make a window narrower than about 500 px, so those came o
 Clicking in the mockup selects and switches; nothing is edited for real and nothing is heard. It is for
 looking at and reacting to, not for testing.
 
+
+## Built (2026-09-30)
+
+The score is the studio's page now: `songbird studio` opens it at `/` (and at `/v/<id>` on someone's
+version); the tune book of four chapters it replaces is kept, unchanged, at `/classic` (and `/v/<id>/classic`)
+until the artist signs the new one off, on the same API. Help links to it. Pictures of the built page, taken
+with headless Chrome from the page's own address (a view and a selection can be put in it:
+`#view=arrange&sel=cell:drummachine:refrain:2&open=refrain:0&panel=tools`, with `e=` an edit map, as the
+classic page's links had), are `docs/design/studio-built-*.png`: the Page, Arrange (light, with the notes of a
+refrain open; dark, a chord selected), Mix, the Tools sheet, the Time drawer, and a phone (the Page with a
+section's sheet; Arrange with a cell's).
+
+**How it is made.** No libraries, no build step, system fonts; it travels in the packet.
+
+| File | What it is |
+|---|---|
+| `songbird/studio/index.html` | the page: masthead and version line, transport, view tabs, the three views, the inspector, the Tools sheet, the Time drawer, help |
+| `songbird/studio/score.css` | its look: the mockup's, on identity.css's tokens; the phone layout by container queries |
+| `songbird/studio/score.js` | the views (Page, the Arrange grid, the Mix strips), the inspector's fourteen states, the transport, the sheets, the keyboard |
+| `songbird/studio/model.js` | the pure parts: the grid from the studio's answers, a cell's look and words, a lock, moving a section in story order, a seam's transitions, the scope switch, what plays, the keyboard's table (tests/studio_model.test.cjs) |
+| `songbird/studio/renderer.js` | previews and recordings behind one interface (`preview`, `record`, `cancel`, progress), the server's queue today; the place a later step makes a section in the visitor's browser (docs/BROWSER-RENDER.md), the server as its fallback (tests/studio_renderer.test.cjs) |
+| `songbird/studio/classic.html` | the page before, served at /classic |
+
+The core is shared, not copied: studio.js keeps the edit map, undo and redo, the drafts in this browser,
+listening and recording exactly as they were (both pages load it; it skips what a page hasn't got and tells
+the score through `window.SongbirdScore`), and its words, choosers, mute and solo, the words kept, the
+timeline, other computers and someone's version are the score's too. composer.js gained a notes mode (the
+heading with the scope switch, the phrase strip, the roll) whose note and chord cards are states of the
+inspector, and sketch controls the transport drives (a section, a phrase, or the song from the playhead);
+author.js one line of words for the line's state; players.js what the player's column needs to route the
+sketch's players; perform.js a file dropped on the Tools sheet; help.js the tour's four steps re-aimed (hear
+it, the transport, select a section, record it). The server adds only the pages' routes and, on
+`/api/arrangement`, where the voices before sing in each section (`choir`). Everything else it drives was on
+main: `/api/arrangement` for the grid (cells, lengths, drops, builds, the style's options, locks, the tempo's
+range), `/api/sound` for the Mix and the player's sound (patch, filter, kit and its pieces, pan, send, pump) and
+the seams (transitions), the chord and tune scopes and the melisma through the composition view.
+
+**The parity table, as built.** Every row above has its home; these are the ones to know about.
+
+- *Kept as they were, moved*: the words and their dropdowns (the Page), the rules and refused alternatives, the
+  verse, couplet and head choosers, Write your own lines, Reset words (the section's state, and a line's);
+  the sketch, loop, click, chords and bass (the transport; chords and bass under ▾); Hear sung section
+  (Sung, or ▶ Hear it); the overview and the section strip (the regions), Earlier and Later (the section's
+  state, ⌘/Ctrl ← →), Restore order (the section's *The program's own* gives its move back with it); the
+  phrase strip, the roll, snap and zoom, the harmony lane, the chord card (with the sevenths and the scope),
+  the note card (split and join for a melisma, free the ending), the phrase tools (↑↓ Step; soften and even
+  under *more*), the health line; the Style, Band, Shape, Singer and Room cards (states of the inspector,
+  reached from the song's summary); the mixer (Mix, and M and S on every track head); Players (the player's
+  column: here · over MIDI · off, the channel, and under *more* the MIDI out, Panic, the programs, everyone to
+  MIDI, everyone here, as at first, and the sketch's own tune, chords and bass); time and other computers,
+  and opening someone's version (the Time drawer); singing, recording, the MIDI, the parts, the piano page,
+  notes in, the drafts (the Tools sheet); the player's title, progress and time (the transport's position,
+  which says a public studio's queue too); the toast, the help dialog and the tour.
+- *Lines, not cards*: the melody (its variants' ticks inside its ?), voices before, the words (*Keep these
+  words* inside its ?), loudness, your machine.
+- *New, from the engine*: the grid's cells (out · soft · plays · hard, what it plays, which line it comes in
+  at, a fill), a section's length, who sings (a drop), a build and the style's options where they live (the
+  band joining line by line, the last refrain's stripped start, the intro, stop-time, a bare verse, a
+  half-time bridge), each lockable; the seams (a riser, a sweep, a roll, a stop, an impact, a downlifter,
+  over 1, 2 or 4 bars); a player's sound (patch, filter, kit and pieces), pan, send and pump; the chord and
+  tune scope (everywhere it's sung, here only, and at the last of several the last one however many).
+- *Not built, and why*: adding, tying or deleting a note (the tune keeps a note for each syllable; only a
+  melisma, split and join, is the engine's); pan on the Voice and Room strips (the engine places the voice
+  itself; the room's width is its own control); a finer energy than three words (decision 4).
+
+**How it was checked.**
+
+- Tests: tests/studio_model.test.cjs and tests/studio_renderer.test.cjs (new), the existing node tests with
+  the renderer loaded (tests/studio_state.test.cjs), tests/test_studio.py (the score and /classic served,
+  both pages' stylesheets, every place the shared scripts write to present on both pages, the voices before in
+  the grid), tests/test_studio_received.py (/v/<id>/classic). The full suite and every node test pass; the
+  goldens are unchanged. The editor that travels in the packet is 153 KB compressed with the classic page
+  beside the score (the cap is raised to 160 KB until the classic page goes, about 137 then); the program is
+  6.16 MiB of 8 (`songbird budget`).
+- In the built-in browser (a studio on this Mac, Ada, 8811; public, Wren, 8812; with web singing, 8813): every
+  view, state and sheet; the keyboard (arrows through the grid, Enter and the Esc chain, M, ⌘Z, 1 2 3, T, L,
+  Shift+Space); light, dark and a phone's width; /v/<id> on a version someone brought; a public studio's
+  queue in the position field ("waiting its turn", "Yours is being made now…") and its limits in the Tools
+  sheet's foot. The EDM brief, done through the page's own controls: synth folk at 128 in D minor; the verse's
+  first line reharmonized i · VImaj7 | III · VII everywhere it's sung (three places); the last refrain's second
+  line changed there only (`chords.refrain:last.1`); four on the floor in every refrain; Verse 3 made 16 bars
+  and a build; Refrain 3 played, not sung (a drop); a riser over 2 bars and an impact into it; the drum
+  machine's 909; the pad pumping (classic); a new first line for Verse 2; a melisma in the verse's third
+  line; a chance-drawn entrance locked, kept through a new performance. Refrain 3 heard sung and in the
+  sketch, the whole song recorded: 2:54, its record marking the 17 choices (the transition, the kit, the pump,
+  the length and build, the words among them).
+
+**Decisions for the artist (the built page's own).**
+
+1. **Space plays wherever the keyboard is**, a button included (the spec's table); Enter presses buttons. A
+   keyboard user who expects Space to press a button won't find it so.
+2. **A section's Moment** is *none · a build*, and the style's options that live in that section are rows of
+   their own (yes · no, and Lock), rather than one row of *drop · breakdown · stripped start*: in the engine
+   a drop is *Who sings: nobody* and a stripped start is the style's whole-song option shown on the last
+   refrain.
+3. **A lock keeps a cell as chance drew it**: its level, what it plays and the line it comes in at, one
+   padlock; *Unlock* (or *The program's own*) gives all three back. The header counts locks apart from
+   choices ("17 choices are yours · 3 locked").
+4. **Sketch or Sung follows the selection** (the sketch for a section, a phrase, a note; sung for the whole
+   song) until the person flips it; then it stays as they set it for the visit.
+5. **The classic page stays at /classic** until signed off, and the packet's editor cap is 160 KB until then.
