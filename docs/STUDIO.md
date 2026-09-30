@@ -904,6 +904,255 @@ for later: the export stays as it is, and the chord is named from its notes.
    played part is placed straight within each foot, as the MIDI file's tempo
    map is; it is played against the straight sketch.
 
+## Looser harmony and melody: sevenths, one place or everywhere, melisma (2026-09-29)
+
+The musician-like test (docs/STUDIO-EDM-TEST.md) found the chords "quick and
+clear, but triads and sus only", that "a line's chords change everywhere it's
+sung", and that "the melody can be moved but not rewritten": a phrase keeps its
+syllable count and its ending, *Even rhythm* put notes off the grid (1.2727,
+2.0455… beats), a phrase edit changes every place it appears (the instrumental
+intro and break included), and after a drag the page announced the old note
+name. It also found the words' `*asterisks*` unexplained and the stems' zip
+carrying another id (8beb3d) than the recording (5beef0). This is the design
+for loosening the first three without losing what the fences are for, and the
+fixes for the rest. The engine and the API are built here; a redesign of the
+page (one inspector for a selected chord, phrase or line of words, with a clear
+"this place only / everywhere it's sung") is designed in parallel, so the page
+gets only what's needed to use them.
+
+### 1. Sevenths, sixths and added ninths
+
+**The grammar** (`theory.parse_symbol`) keeps its shape, a numeral, a quality,
+a bass, and learns the chords a lead sheet writes, each a fixed chord over its
+root whatever the mode (as the named triads are): `7` (the dominant seventh),
+`maj7`, `m7`, `m7b5` (half-diminished), `dim7`, `6`, `m6`, `add9`, `madd9`,
+`7sus4` and `7sus2`. A bass can now be `/7`, the seventh (a V7/7 falling to
+I/3), on a chord that has one. So `V7`, `iim7`, `IVmaj7`, `viim7b5`, `Iadd9`,
+`V7sus4`, `V7/7`. A plain numeral and every triad mean exactly what they
+meant (the same tones, computed the same way), so every song and record reads
+as before and the goldens hold.
+
+- *Why a fixed chord, not "the key's triad plus a seventh".* A musician reads
+  `V7` as the dominant seventh in any key; a seventh that followed the mode
+  would make `V7` in a minor song a minor seventh, and `maj7` would have to
+  mean two things. The key's own sevenths are still one press away: the card
+  offers them as a row (in D major Dmaj7, Em7, F♯m7, Gmaj7, A7, Bm7,
+  C♯m7♭5), each written as the chord it is.
+- *`I6` is a sixth chord*, not figured bass's first inversion: inversions are
+  written `/3`, as before, and the card names every chord (`D6`, `D/F♯`).
+
+**The chord's tones.** `theory.chord_tones` gives the root, the third (or the
+sus chord's second or fourth), the fifth, and then the added tone: the
+seventh, the sixth, or the ninth (as 14 semitones, a ninth above the root),
+so four for an extended chord and three, as before, for any other. Every
+reader that destructured three (the harp, the machine's mode choice, the
+piano page) takes the triad and, where it voices the chord, the fourth tone.
+
+**Who follows.** Everything that sounds from the chords, from the one place
+(`realize` sings the song with the person's chords in it):
+
+- *The band's sense of chord tone.* `band.Context.pcs()` gives all four
+  pitch classes, root first, so every player's test "is this a tone of the
+  chord" (a walking bass's passing and approach notes, a note held through a
+  rub, fills, the woven counter-line, the drone's fit, the choir-avoiding
+  voicings) counts the seventh as the chord's: a person asked for it.
+- *The guitar's shapes.* `guitar_voicing` already searches open, capoed
+  shapes whose strings sound only the chord's tones, the root on the lowest,
+  the third required; a fourth tone is now required too (as the third is), so
+  it finds the shapes a guitarist plays (G7 320001, Cmaj7 x32000, Am7 x02010,
+  D7 xx0212) and, where none fits, the plain triad on the middle strings with
+  the added tone on top. A triad's search and cost are unchanged. The bass
+  still carries an inversion; the guitar keeps root position.
+- *The harp's spread* (root, fifth, octave, tenth, twelfth) takes the added
+  tone in place of the twelfth; the high voicing climbs through all four.
+- *The bass*: roots, fifths and walks as now; a `/7` bass is the seventh.
+- *A style's players* (songbird.idioms). A chord a person made a seventh is
+  already coloured: the style's own chance colour (`COLOURS`: 7, maj7, 6,
+  add9, drawn as often as its harmony knob says) is not added on top, so a
+  person's `IVmaj7` never gains a 7 as well. Unlike a style's colour, which
+  steps aside where it would rub against the tune, a person's added tone stays
+  in the chord; the voicing (`fits()`: a chord tone always fits) keeps it off
+  the sung note itself, as it does every tone.
+- *The lineage choir* (`theory.harmony`) picks its harmony notes from all the
+  chord's tones, so a voice may sing the seventh; the lowest voice still seeks
+  the root.
+- *Rubs on the page* (`composition.harmony`): a sung note on the chord's
+  seventh is no longer a rub, and a new sharp rub is marked, a chord's added
+  tone a half step from a sung note (a maj7 under the tune's tonic), said on
+  the card as "the chord's seventh is a half step from the tune here".
+- *The sketch* plays the four pitch classes (the view's `pcs`, as now).
+- *The MIDI file*: the Chords track voices four tones (the bass below middle
+  C, the tones close above it) and names them `A7`, `Bm7`, `Gmaj7`,
+  `F♯m7♭5`, `B°7`, `D6`, `Dadd9`, `A7sus4`, `A7/G`.
+- *Notes in* (`notesin.name_chord`) names four different notes as the
+  grammar's chord with those tones and that bass (the plainest spelling, as
+  for triads; `/7` for a seventh in the bass), and refuses five or more
+  ("a chord of five notes (a ninth chord) isn't taken yet") and a four-note
+  set the grammar hasn't got, with why.
+
+**Left as it is.** Ninth, eleventh and thirteenth chords (five tones and up:
+the guitar's six strings and a harp's five would drop tones, and the choir has
+three voices); `mmaj7`, `aug7`, altered dominants; a bass that isn't a chord
+tone. The machine's own choices (its mode, the lineage's variants) still read
+the song's chords, not a person's.
+
+### 2. This place only, or everywhere
+
+A chord or tune edit can name one appearance of a line, beside the
+everywhere edit of today:
+
+| Path | Acts on |
+|---|---|
+| `chords.<line>`, `tune.<line>` | the line everywhere it's sung or played (as now) |
+| `chords.<section>:<n>.<i>`, `tune.<section>:<n>.<i>` | the i-th line (from 0) of the n-th time that section comes (the arrangement's id: `refrain:2`, the third refrain in story order, as `form.order` and a played part name it) |
+| `chords.<section>:last.<i>`, `tune.<section>:last.<i>` | the i-th line of the last time that section comes |
+
+So `chords.refrain:last.1` is the last refrain's second line and
+`tune.intro:0.0` the instrumental intro's first line (a refrain's tune the
+band plays), with the refrain itself untouched.
+
+**Which wins**, line by line of the form: the place by its number, then by
+`last` (if this is the last time), then the line everywhere, then the
+lineage's variants, then the song's own. A place edit holds the whole line
+(its chords, or its notes), so an everywhere edit made later doesn't reach a
+place a person set on its own; restoring the place gives it back to the
+everywhere edit.
+
+**Why the arrangement's id and `last`.** The id follows the section when the
+order changes, as a played part's does (`verse:1` is the second verse
+wherever it now comes). `last` is there because the last refrain is where a
+reharmonization most often goes, and a child can sing more or fewer refrains
+than its parent: a change "for the last refrain" should go on meaning that.
+The page writes `last` for the last of several times and a number otherwise.
+
+**Stored** in the same maps, `composition["chords"]` and
+`composition["tune"]`, keyed by place (`"refrain:last.1"`: a place has a
+colon, a line's id never does), so the record carries both, `--replay`
+renders them byte for byte, children inherit them, and a program from before
+this, which looks up only line ids, reads such a record as it did (the place
+keys wait unread).
+
+**Where it acts.** `composition.form_phrases(genome, params)` makes the
+phrase for each line of the form: the line itself, or a copy with the
+place's chords and a `place` tag its tune is read by (`played`). `realize`
+lays these out, so the band, the choir, the backing voices, the preview, the
+stems and a replay hear them; `idioms.chord_times` (the MIDI file's Chords
+track, and the checks against the band) and the piano page read the same
+list, and so does the page's view.
+
+**A place this version doesn't have** (a child with fewer verses, an intro
+switched off): the edit stays in the parameters and waits, silent, for a
+version that has it; made by a person there, it is said ("this version
+doesn't play that section; your change waits for one that does") and put
+back as it was, as a played part is.
+
+**Marked** in the record like the everywhere edits: `{"value": bars or
+notes, "was": what the program had at that place}`; `from_record` makes them
+edits again.
+
+**Notes in.** A MIDI file whose line changed the same way everywhere it comes
+gives the everywhere edit, as now; one changed in only some of its places
+gives place edits there (where today the first changed place was taken for
+every place, and the rest said). A take played on a keyboard still gives an
+everywhere edit for the singer's line.
+
+**The page, minimally.** In the chord card and over the phrase tools, one
+toggle: *Everywhere it's sung (n places)* or *Only here (Refrain 3, line 2)*.
+It chooses the path an edit is written to, starts on *Only here* where the
+place already has its own, and *Restore* restores the chosen scope. A line
+with a place of its own is marked as the person's in the second ink.
+
+### 3. A freer melody
+
+**What the fences are for** (the composition module's docstring and "Tune"
+above), and what that allows:
+
+| Fence | Its reason | Here |
+|---|---|---|
+| a note for each syllable, in order | the words: the singer schedules one syllable a note, its consonants and vowel (`synth.voice.schedule`), and the lyric bank's lines are counted against the tune | kept for syllables; a syllable may now carry more notes (melisma) |
+| the ending's scale-degree class | lines are recognized by their endings as the song evolves (the lineage's gate compares phrase-final targets), and the line's last chord is written under that note | kept by default; freed where the person asks, and said as advice, not refused |
+| the song's range, two steps past its lowest and highest notes | a voice the singer (and the learned throat) sings well | three steps past (in H, E3 to E5 at D; was F♯3 to D5) |
+| leaps of an octave at most, no overlaps, room before the next line's pickup, inside the line | singable lines, one voice, the next pickup's breath | kept |
+
+**Melisma.** A syllable may be sung over up to four notes: its own and up to
+three more, each starting where the one before ends (legato: the vowel goes
+on). In the edit a note continuing the syllable before is marked
+`"slur": true`:
+
+    tune.v1 = [{"degree": 5, "onset": -0.5, "duration": 0.5},
+               {"degree": 1, "onset": 0, "duration": 0.5}, {"degree": 2, "onset": 0.5, "duration": 0.5, "slur": true},
+               ...]
+
+It stays singable because it doesn't change what the singer schedules: the
+syllable is one note, held from its first note's start to its last's end,
+and its pitch moves through the others inside it, as an ornament
+(`Note.ornament`, the mechanism the lineage's turns already use:
+`synth.voice.pitch_track` moves the voice with a quick raised-cosine turn at
+each point, over the vowel). So the consonants, the word's timing, the
+breaths and a phrasing's gestures (kept by syllable) are as they were. Each
+note of a melisma is a degree of the scale, at least a quarter beat long,
+and at most a fifth from the one before; the voice drops a turn it has no
+vowel left for (`ORNAMENT_ROOM`), which a quarter beat leaves room for at
+any tempo a person may choose. *Split* on a note makes it two (the second
+slurred, on the same degree, ready to be moved); *Join* merges a slurred
+note back into the one before. Stored beside the syllables' notes, so a line
+without one is stored and sung byte for byte as before and a program from
+before this sings the syllable plain: `composition["tune"][key]` keeps each
+syllable's `[degree, onset, duration]` (the duration through its melisma) and
+`composition["melisma"][key]` its turns, `{syllable index: [[degree, onset
+from the syllable's], ...]}` in grid units.
+
+**A freed ending.** The last note may leave its line's home note when the
+edit's last note says `"free": true` (the page sets it when a person drags
+the ending off it, or picks *Free the ending*). Checked otherwise as any
+note, kept, and said beside the line as advice: "this line now ends on 2, not
+on 1, as the song's does: it sounds open, like a question; the chord under it
+(I) doesn't have it". Nothing else follows it: the lineage's variants and the
+machine's choices read the song's own line.
+
+**The MIDI file** writes a melisma's notes as notes (the lyric on the
+first), so a musician sees them; a file brought back unchanged is no edit,
+and a melisma note moved in a sequencer comes back as a tune edit. Notes
+added or taken away there are still refused with the count (the lyric
+events could say which syllable a new note belongs to: later).
+
+**Even rhythm on the grid.** It evens the notes on the phrase's own grid:
+thirds of a beat where its notes sit on thirds (a six feel, a triplet
+lilt), halves where they all sit on halves, quarters otherwise; each note
+the same number of grid steps, the last held to where the line ended, and a
+finer grid of the same kind only if the notes can't fit.
+
+### 4. The smaller things
+
+- **The note name after a drag.** The dragged note's pitch was worked out from
+  the note as it was, so the page announced the old name with the new degree;
+  it is now worked out from the new degree.
+- **The asterisks** in the words (`*sung*`) mark the word a line leans on
+  (the singer sings it a little louder and lifts it: docs/DELIVERY.md). Kept,
+  and said beside the lines: "A word between stars is the one the line leans
+  on: the singer gives it a little more. Keep, move or drop the stars."
+- **The stems' id.** The zip was named by the version's cache key, the
+  recording by its sound's id. The stems are now made after the recording of
+  the same version (made first if it isn't yet, from the same parameters and
+  score), named after it (`<song>.<day>.<id6>.stems.zip`, a folder of the
+  same name, the MIDI file too), and the README says which recording they
+  belong to, by its file name and full id.
+
+### How it will be checked
+
+tests/test_chords.py (the grammar's new kinds, their tones, names and
+refusals; the guitar, harp, bass and a style's keys voicing a seventh; the
+choir singing one; the rubs; nothing changed without an edit), tests for
+places in test_edits.py and test_composition.py (a place edit over an
+everywhere one, `last` following a child's form, marks, replay, inherit,
+release, a place the form hasn't got), melisma in test_composition.py (the
+fences, the stored form, the realized ornament, the singer's schedule
+unchanged), test_midi.py and test_notes_in.py (sevenths named both ways, a
+melisma exported and brought back unchanged, place edits from a file),
+tests/studio_composer.test.cjs (the scope toggle, even rhythm on the grid,
+the dragged note's name, split and join), the goldens, and the built-in
+browser.
+
 ## What stays on the machine
 
 Nothing leaves it (unless it is shared for a preview: see below). The server
