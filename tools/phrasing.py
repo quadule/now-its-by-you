@@ -771,7 +771,7 @@ def bounded(g: P.Gesture) -> P.Gesture:
     return P.Gesture(*[v if np.isnan(v) else min(max(v, lo), hi) for v, lo, hi in zip(astuple(g), astuple(P.LOW), astuple(P.HIGH))])
 
 
-def sung_phrasing(genome_path: Path, genome, takes):
+def sung_phrasing(genome_path: Path, genome, takes, measurements: list[dict] | None = None):
     """Gestures from one or more sung takes (paths, or kept takes): every
     sighting of every note of the tune, scaled as a phrasing keeps them, what
     each was sung to, and a portrait of each take. A note a take didn't sing
@@ -779,12 +779,14 @@ def sung_phrasing(genome_path: Path, genome, takes):
     has changed a note since a take was sung, that sighting keeps its timing,
     loudness and the rest but not its tuning. Each person counts
     once at each place in the song, however many of their takes sang it: a
-    take of the whole song sings every place, a take of one section its own."""
+    take of the whole song sings every place, a take of one section its own.
+    measurements: the takes already measured (measured()'s dicts, one for each take, in order), for takes that
+    were never kept as files (webstudio/: a take sung in the web studio is measured and its audio deleted)."""
     seen: dict[tuple[str, int], list[P.Gesture]] = defaultdict(list)
     words: dict[tuple[str, int], list[str]] = defaultdict(list)  # who sang it to what: singer|syllable
     weights: dict[tuple[str, int], list[float]] = defaultdict(list)
     who = [t.who if isinstance(t, K.Take) else "" for t in takes]
-    data = [measured(genome_path, genome, take) for take in takes]
+    data = measurements if measurements is not None else [measured(genome_path, genome, take) for take in takes]
     heard = Counter((singer, place) for singer, d in zip(who, data)
                     for n, place in zip(d["notes"], places(d)) if n["gesture"] is not None)
     portrait = []
@@ -1001,11 +1003,13 @@ def floor_for(scale: dict) -> P.Gesture:
                         for f in fields(P.Gesture)})
 
 
-def singer_phrasing(genome_path: Path, genome, takes, credit: str | None = None):
+def singer_phrasing(genome_path: Path, genome, takes, credit: str | None = None,
+                    measurements: list[dict] | None = None):
     """A phrasing from sung takes, the JSON to keep, and a portrait: one
     singer's, or, given several singers' takes, everyone's at once, each
-    person counting once and each voice's own errors averaging away."""
-    seen, (words, weights), portrait = sung_phrasing(genome_path, genome, takes)
+    person counting once and each voice's own errors averaging away.
+    measurements: as sung_phrasing's."""
+    seen, (words, weights), portrait = sung_phrasing(genome_path, genome, takes, measurements)
     if not seen:  # takes of part of the song that stopped before a note, or of a stretch with no singing
         raise ValueError("none of these takes sang a whole note of the tune")
     phrasing = gather(genome, ruled(genome, seen, words, floor_for(SUNG), weights))
