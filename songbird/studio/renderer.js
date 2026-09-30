@@ -32,7 +32,7 @@
   const IDLE = 180000;  // ms a section worker waits unused before it's let go
   // ms a worker may go without a word before it's given up on (a hidden tab's worker runs several times slower, so
   // these watch for a stall, not the whole time), and the most a render may take in all
-  const TIMEOUT = { ready: 120000, section: 150000, whole: 240000, total: 1800000 };
+  const TIMEOUT = { ready: 180000, section: 300000, whole: 600000, total: 2400000 };
   const KEEP = { section: 16, whole: 3 };  // songs made here, kept to play again at once
 
   // ---------------------------------------------------------------- where a song is made
@@ -304,8 +304,11 @@
 
     function run(kind, path, body, size, onProgress) {
       const task = { kind, size, job: null, cancelled: false, where: null };
-      const server = async () => {
-        const job = await follow(task, path, kind === "record" ? { edits: body.edits } : body, onProgress);
+      const server = async (instead = false) => {
+        // after the browser couldn't, what the server is doing says it's the server's doing
+        const hear = instead && onProgress
+          ? (job) => onProgress({ ...job, stage: `${job.stage || "making it"} on the server` }) : onProgress;
+        const job = await follow(task, path, kind === "record" ? { edits: body.edits } : body, hear);
         if (job.state === "done") note({ kind, size, key: job.key, where: "server", at: Date.now() });
         return job;
       };
@@ -337,6 +340,7 @@
             task.where = "server";
             onProgress?.({ state: "running", progress: 0, where: "server",
               stage: "this browser couldn't make it, so the server is" });
+            return server(true);
           }
         }
         return server();

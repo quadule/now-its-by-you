@@ -146,6 +146,22 @@ def whole(spec: dict, folder: Path, progress=None) -> dict:
             "duration": record["duration"], "record": pack.read_manifest(out) or record}
 
 
+def stems(spec: dict, folder: Path, out: str | Path) -> list[str]:
+    """Every part of a whole spec's rendition alone and dry, as float64 (synth.render_stems), into an .npz: where two
+    renders of the same spec part (bench/stems_diff.py compares the browser's with the server's)."""
+    import numpy as np
+
+    from songbird import explain, synth
+    from songbird.cli import choir_of
+
+    _, genome, params, lyrics = load(spec, folder)
+    singer = explain.singer_of(params)
+    parts = synth.render_stems(_score(genome, params, lyrics, spec), seed=params.seed, voice=singer,
+                               ancestors=choir_of(spec.get("parent"), singer)[1])
+    np.savez(out, **parts)
+    return list(parts)
+
+
 def check(spec: dict, program: str | None = None) -> None:
     """Refused, saying why, unless this program can make this spec: its shape, and the program it names (a
     recording carries the program's digest, so the program here must be the server's, file for file)."""

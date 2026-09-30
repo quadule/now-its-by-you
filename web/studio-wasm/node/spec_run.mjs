@@ -72,6 +72,16 @@ import songbird.cli as cli
 cli.synth = synth
 `);
 }
+if (process.argv.includes('--stems')) {  // every part alone, dry, float64: bench/stems_diff.py compares them
+  const into = process.argv[process.argv.indexOf('--stems') + 1];
+  // this checkout's studio_render.py over the bundle's, so a bundle built before it had stems() still does this
+  py.FS.writeFile('/app/studio_render.py', fs.readFileSync(new URL('../py/studio_render.py', import.meta.url)));
+  py.runPython('import importlib, json; from pathlib import Path; importlib.reload(studio_render); '
+    + 'studio_render.stems(json.loads(SPEC), Path("/tmp/render"), "/tmp/stems.npz")');
+  fs.writeFileSync(into, py.FS.readFile('/tmp/stems.npz'));
+  console.log(`stems in ${((performance.now() - t1) / 1000).toFixed(1)} s: ${into}`);
+  process.exit(0);
+}
 py.runPython('OUT = studio_render.run(SPEC, "/tmp/render", PROGRESS, PROGRAM)');
 const t2 = performance.now();
 console.log(`made in ${((t2 - t1) / 1000).toFixed(1)} s, heap ${(py._module.HEAPU8.length / 2 ** 20).toFixed(0)} MiB, id ${py.runPython('OUT["id"]')}`);
