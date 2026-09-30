@@ -492,6 +492,7 @@ def view(genome, params, lyrics) -> dict:
     lyrics = lyric_overlay(genome, params, lyrics)
     lines = lyrics.lines_for(genome, params.form)
     edited = params.composition.get("tune", {})
+    in_parts = performed_parts(params)
     sections = []
     cursor = clock.lead
     for index, (name, identity) in enumerate(zip(params.form, section_ids(params.form))):
@@ -518,7 +519,10 @@ def view(genome, params, lyrics) -> dict:
                             "lyric_path": f"lyrics.{keys[index]}.{j}" if keys[index] else None,
                             "lyric_text": lines[index][j] if lines[index] else "",
                             "syllable_count": len(phrase.sung),
-                            "authored": str(j) in patches[index]})
+                            "authored": str(j) in patches[index],
+                            # a person's own notes played in for a player here (notes in)
+                            "part_key": f"{identity}.{j}",
+                            "parts": sorted(p for p, held in in_parts.items() if f"{identity}.{j}" in held)})
             cursor += phrase.bars * meter.bar
         nth = int(identity.rsplit(":", 1)[1])
         label = name.replace("bridge2", "Bridge 2").title()
@@ -535,6 +539,7 @@ def view(genome, params, lyrics) -> dict:
             "order": section_ids(params.form), "sections": sections, "edited_phrases": sorted(edited),
             "edited_chords": sorted(p for p in chorded if p in song.phrases), "chords_per_bar": chords_per_bar(song),
             "chord_choices": chord_choices(params),
+            "players": playable(params), "performed": {p: sorted(held) for p, held in in_parts.items()},
             "arranged": bool(params.composition.get("order")),
             "guidance": "Notes stay in the song's range. Keep one note per syllable and the final home note. "
                         "A tune line changes everywhere it appears. Repeated sections keep their story order."}
@@ -572,6 +577,26 @@ def part_player(name: str) -> dict:
     if about["register"] is None or name in UNPLAYABLE:
         raise ValueError(f"the {name} plays strokes, not notes; its part can't be played in yet")
     return {"register": tuple(about["register"]), "poly": bool(about["poly"])}
+
+
+def playable(params) -> list[dict]:
+    """The players of this version's band whose notes a person can play in (the page's choices): the
+    singer's tune first, then each pitched player that plays, with its range (MIDI notes) and whether it
+    plays one note at a time."""
+    from .band import INSTRUMENTS
+    from .midi import part_name
+
+    out = [{"name": "voice", "label": "The tune (the singer's notes)", "low": 0, "high": 127, "poly": False}]
+    for name in (params.band.lineup or INSTRUMENTS):
+        if not params.band.plays(name):
+            continue
+        try:
+            about = part_player(name)
+        except ValueError:
+            continue
+        lo, hi = about["register"]
+        out.append({"name": name, "label": part_name(name), "low": lo, "high": hi, "poly": about["poly"]})
+    return out
 
 
 def part_target(genome, path: str) -> tuple[str, str, int, str]:

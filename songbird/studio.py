@@ -88,7 +88,8 @@ STATIC = {"/identity.css": ("identity.css", "text/css; charset=utf-8"),  # the s
           "/author.js": ("author.js", "text/javascript; charset=utf-8"),
           "/studio.js": ("studio.js", "text/javascript; charset=utf-8"),
           "/help.js": ("help.js", "text/javascript; charset=utf-8"),
-          "/export.js": ("export.js", "text/javascript; charset=utf-8")}
+          "/export.js": ("export.js", "text/javascript; charset=utf-8"),
+          "/perform.js": ("perform.js", "text/javascript; charset=utf-8")}  # notes in: a take, a file brought back
 
 
 # ---------------------------------------------------------------- where the song and its parent come from
@@ -725,6 +726,27 @@ class Studio:
 
     # ------------------------------------------------------------ recording
 
+    # ------------------------------------------------------------ notes in (docs/STUDIO.md, "Notes in")
+
+    def notes_in(self, edits: dict, body: dict) -> dict:
+        """A preview of notes brought in over the version on the page (songbird.notesin): a MIDI file ("file",
+        base64; "assign" names tracks it couldn't), or a take played along with the sketch ("take": its player,
+        its notes and the lines it covered). Nothing changes here: the page applies the changes it is shown.
+        Made at once, without a render; a file it can't read, or one from another version, says why."""
+        from . import notesin
+
+        v = self.version(edits)
+        if "file" in body:
+            assign = body.get("assign") or {}
+            if not isinstance(assign, dict) or len(assign) > midi.MAX_TRACKS * 16:
+                raise ValueError("name the tracks as a map")
+            data = notesin.decode(body["file"])
+            return notesin.from_file(self.genome, v.params, self._score(v), data, assign)
+        take = body.get("take")
+        if not isinstance(take, dict):
+            raise ValueError("send a file or a take")
+        return notesin.take(self.genome, v.params, str(take.get("player", "")), take.get("notes"), take.get("lines"))
+
     def record(self, edits: dict, by: tuple[str, str] | None = None) -> dict:
         v = self.version(edits)
         key = self.key(v, None)
@@ -1294,6 +1316,8 @@ class Handler(BaseHTTPRequestHandler):
                 return self.send_json(studio.export(edits, str(body.get("what", "")), by=by))
             if path == "/api/record":
                 return self.send_json(studio.record(edits, by=by))
+            if path == "/api/notes-in":  # a take or a MIDI file, as a preview of edits (notes in)
+                return self.send_json(studio.notes_in(edits, body))
             if path == "/api/sing":
                 return self.send_json(studio.sing())
             if path.startswith("/api/sing/") and studio.singing is not None:
