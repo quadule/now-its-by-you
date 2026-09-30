@@ -6,6 +6,7 @@
 :root {
   --parent: #7a4a2c; --chance: #6e6255; --note: #6b5846; --note-strong: #3f3226; --gold: #8f6a2a;
   --bar: color-mix(in srgb, var(--ink) 58%, var(--paper));  /* a cell's energy bar: 3:1 against the paper */
+  --accent: var(--ink); --time: var(--ochre);  /* the names studio.js's timeline reads */
 }
 @media (prefers-color-scheme: dark) {
   :root:not([data-theme="light"]) { --parent: #d6a784; --chance: #b3a697; --note: #6f5e4a; --note-strong: #b39d82; --gold: #c39752; }
