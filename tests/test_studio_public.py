@@ -521,9 +521,9 @@ def test_the_page_says_plainly_what_an_open_studio_keeps(opened):
     for said in ("What's kept: a random id in a cookie", "sent only to make the song", "its made-up machine's name",
                  "room its microphone heard, the leanings of its words", "carries its version's own record",
                  "only numbers are kept; the audio is deleted once it's measured",
-                 "a random id in a cookie keeps it fair (Help says what's kept)"):
+                 "Your changes stay in this browser (Help says what's kept)"):
         assert said in script, said
-    assert "What's kept" in (S.PAGE / "score.js").read_text() and "helpKept" in (S.PAGE / "classic.html").read_text()
+    assert "What's kept" in (S.PAGE / "score.js").read_text() and "helpKept" in (S.PAGE / "index.html").read_text()
 
 
 def test_the_plain_pages_carry_no_style_the_policy_would_block(home):
@@ -590,6 +590,14 @@ MEASURED = {
     "indie 4 verses, every part, slowest": (344.5, "claps ebass electric glock guitar kit organ voice", 2484),
     "shanty": (151.2, "bass claps concertina fiddle stomps voice", 1133),
     "stringband": (124.9, "banjo bass fiddle guitar mandolin voice", 1118),
+    # beside the ring (docs/STYLES.md, "Two more", 2026-09-30): voices alone, and a session
+    "acappella (waltz, three voices of its own)": (226.3, "choir1 choir2 choir3 voice", 1510),
+    "acappella, six lineage voices": (226.3, "choir1 choir2 choir3 choir4 choir5 choir6 voice", 1510),
+    "acappella, straight": (158.9, "choir1 choir2 choir3 voice", 1200),
+    "acappella 4 verses, every part, six voices, tempo 55": (495.7, "choir1 choir2 choir3 choir4 choir5 choir6 voice",
+                                                             2790),
+    "celtic (a jig, a slow air)": (120.4, "concertina drone drum fiddle guitar voice whistle", 1070),
+    "celtic 4 verses, every part, a reel at 91": (347.1, "concertina drone drum fiddle guitar voice whistle", 2340),
     # house and dub (2026-09-30; docs/STYLES.md, "House and dub"): dub's with its version after the song
     "house": (118.4, "arp drummachine piano synthbass synthpad voice", 970),
     "dub": (221.0, "ebass electric kit melodica organ voice", 1890),

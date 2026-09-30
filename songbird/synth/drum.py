@@ -14,7 +14,7 @@ the pitch and damps the ring (the tipped and muted strokes).
 
 Strokes (Note.art): "bass" open, near the centre; "tip" lighter, off-centre,
 hand on the skin; "mute" hand pressed, short; "rim" the stick on the frame's
-edge, mostly click.
+edge, mostly click; "top" (a bodhrán's) the back hand pressed high, pitch up, dry.
 """
 
 from __future__ import annotations
@@ -26,7 +26,7 @@ from scipy.special import jn_zeros, jv
 
 from .iir import butter
 
-STROKE_GAIN = {"bass": 1.0, "tip": 0.55, "mute": 0.5, "rim": 0.45}
+STROKE_GAIN = {"bass": 1.0, "tip": 0.55, "mute": 0.5, "rim": 0.45, "top": 0.5}
 
 
 def _modes(top: float = 40.0) -> tuple[tuple[int, int, float], ...]:
@@ -55,6 +55,8 @@ STROKES = {
     "tip": (0.72, 1.12, 0.22, 0.9, 0.45),
     "mute": (0.45, 1.25, 0.08, 1.1, 0.35),
     "rim": (0.95, 1.15, 0.05, 0.5, 1.0),
+    # a bodhrán's back hand pressed high on the skin: the pitch up about a third, drier (a Celtic session's accent)
+    "top": (0.6, 1.26, 0.1, 0.9, 0.4),
 }
 
 

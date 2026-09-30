@@ -82,12 +82,46 @@ def read_manifest(path: str | Path) -> dict | None:
         return None
 
 
-def samples_id(audio: bytes) -> str:
-    """A rendition's identity from its audio: the SHA-256 of its decoded 16-bit samples."""
+def samples(audio: bytes) -> np.ndarray:
+    """The audio's decoded 16-bit samples, (frames, channels)."""
     import soundfile as sf
 
     pcm, _ = sf.read(io.BytesIO(audio), dtype="int16", always_2d=True)
-    return hashlib.sha256(np.ascontiguousarray(pcm, dtype="<i2").tobytes()).hexdigest()
+    return pcm
+
+
+def samples_id(audio: bytes) -> str:
+    """A rendition's identity from its audio: the SHA-256 of its decoded 16-bit samples."""
+    return hashlib.sha256(np.ascontiguousarray(samples(audio), dtype="<i2").tobytes()).hexdigest()
+
+
+# How far a replay's samples may stray from the recording's and still be the same rendition: 64 steps of 16
+# bits, 54 dB under full scale, at the largest. Another platform's rounding (its FFT, its sin and exp in the
+# last bits of a double) moves a sample by a step or two where it lands near the middle of a step; a real
+# change (a note moved or missing, a level changed by a tenth of a dB, a part sung differently) moves the
+# loud passages by hundreds or thousands. 64 is well above the one and well below the other.
+SMALL_STEPS = 64
+
+
+def compare_samples(new: np.ndarray, recorded: np.ndarray, sr: int = 44100) -> str:
+    """How a replay's 16-bit samples compare with the recording's, in a phrase: "matches" (sample for sample),
+    "matches within N steps (largest difference −X dB)" (at most SMALL_STEPS apart), or "differs ..."
+    (another length, or further apart, and where). Only "differs" is a replay that failed."""
+    new, recorded = np.atleast_2d(new.T).T, np.atleast_2d(recorded.T).T  # a mono array as one channel
+    if new.shape[1] != recorded.shape[1]:
+        return f"differs: {new.shape[1]} channels, the recording {recorded.shape[1]}"
+    if len(new) != len(recorded):
+        return (f"differs: {len(new)} samples long ({len(new) / sr:.3f} s), "
+                f"the recording {len(recorded)} ({len(recorded) / sr:.3f} s)")
+    if np.array_equal(new, recorded):
+        return "matches"
+    gap = np.abs(new.astype(np.int32) - recorded.astype(np.int32))
+    steps = int(gap.max())
+    db = f"{20 * np.log10(steps / 32768):.1f}".replace("-", "\u2212")
+    if steps <= SMALL_STEPS:
+        return f"matches within {steps} steps (largest difference {db} dB)"
+    at = int(np.argmax(gap.max(axis=1)))
+    return f"differs by up to {steps} steps ({db} dB), the most at {at / sr:.3f} s"
 
 
 def read_record(path: str | Path, verify: bool = True) -> dict:
@@ -217,6 +251,11 @@ handful of numbers before anything uses them. Only the numbers are kept, in
 your computer back out of them.
 `python3 THIS_FILE.flac songbird harvest --show` shows exactly what is read
 and kept, and `... songbird harvest --without ...` leaves anything out.
+
+The same program and record give the same samples on the same platform. On
+another platform the samples may differ, too little to hear, and a difference
+is never carried into later versions: a new version's choices come from this
+one's record, not its audio.
 
 The first time it runs, the program needs numpy, scipy, numba, soundfile and
 cmudict. It fetches them from PyPI (about 100 MB to download, 250 MB on disk)

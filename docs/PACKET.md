@@ -123,6 +123,17 @@ gets the next generation, the parent's id and the ancestry. A packet also
 packs again from what it carries (`songbird pack PACKET.flac`), and
 `songbird pack --parent FILE` supplies a lineage that a record lacks.
 
+**Replaying.** The same program and record give the same samples on the same
+platform; on another platform the samples may differ, too little to hear, and
+a difference is never carried into later versions: a child's choices come from
+its parent's record, not its audio (see variation.Chance). The record's id is
+read as written, never decoded again, so a replay elsewhere changes no child.
+`songbird render GENOME --replay RECORD` renders again and says how it
+compares with the recording (the packet's own audio, or the FLAC beside a
+.json record): `matches`, sample for sample; `matches within N steps (largest
+difference −X dB)`, at most 64 steps (−54 dB) apart; or where it `differs`,
+and then it exits 1.
+
 **Tags.** A rendered FLAC carries Vorbis comments that players show: the song's
 title, "The Volunteers" as the artist (songbird/cli.py ARTIST), the day it was sung, and a comment giving its
 generation and id and saying the file is also a program. They don't touch the

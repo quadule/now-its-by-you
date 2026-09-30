@@ -217,6 +217,9 @@ class Clock:
     swing: float = 0.0
     ritardando: float = 0.0
     triple: str = ""  # "waltz" or "six": the song re-barred in three (songbird.style), each foot three even pulses
+    # a slow air before the song (songbird.style.air): (units from the first pickup to where it ends, how many times
+    # slower, how much each line broadens toward its end, a line's units); () none, the clock as it always ran
+    air: tuple = ()
 
     @property
     def unit(self) -> float:
@@ -239,11 +242,28 @@ class Clock:
     def seconds(self, u: float) -> float:
         """Grid units to seconds, swung (or re-barred in three), slowing linearly through the final phrase."""
         u = style_mod.rebar(u, self.lead) if self.triple else self.swung(u)
+        if self.air:  # the slow air's units, drawn out, and everything after it later by as much
+            return self._timed(u) + self.aired(u) * self.unit
+        return self._timed(u)
+
+    def _timed(self, u: float) -> float:
         if u <= self.rit_start:
             return PREROLL + u * self.unit
         x = u - self.rit_start
         span = max(self.end - self.rit_start, 1)
         return PREROLL + (self.rit_start + x + self.ritardando * x * x / (2 * span)) * self.unit
+
+    def aired(self, u: float) -> float:
+        """Units a slow air adds by u (swung or re-barred units): out of time, `slow` times as slow, each line
+        (bar line to bar line) broadening toward its end, the pickup before its first bar line as slow."""
+        end, slow, broaden, line = self.air
+        end = style_mod.rebar(end, self.lead) if self.triple else self.swung(end)
+        y = min(max(u, 0.0), end)
+        if y <= self.lead:
+            return (slow - 1.0) * y
+        n, r = divmod(y - self.lead, line)
+        drawn = self.lead + n * line * (1.0 + broaden / 3.0) + r + broaden * r ** 3 / (3.0 * line * line)
+        return slow * drawn - y
 
     def beats(self) -> list[tuple[float, bool]]:
         """Every beat of the song in seconds, and whether it begins a bar: the
@@ -285,7 +305,8 @@ def timeline(genome: Genome, params: Params) -> Clock:
     # a compound beat (three to a beat) keeps its own lilt; a style's feel sets the swing (songbird.style)
     swing = style_mod.swing(params) if meter.beat % 3 else 0.0
     rit_start = style_mod.slowing(genome, params, sung - phrases[-1].bars * meter.bar, end)  # (a dub version holds)
-    return Clock(meter, params.tempo, lead, end, rit_start, swing, params.ritardando, style_mod.triple(genome, params))
+    return Clock(meter, params.tempo, lead, end, rit_start, swing, params.ritardando,
+                 style_mod.triple(genome, params), style_mod.air(genome, params, phrases, lead))
 
 
 def realize(genome: Genome, params: Params, verses=None, phrasing: Phrasing | None = None,
@@ -360,6 +381,9 @@ def realize(genome: Genome, params: Params, verses=None, phrasing: Phrasing | No
         return float(rng.normal(0.0, params.humanize))
 
     melody: list[dict] = []
+    vocal = style_mod.vocalise(params)  # "" but for a style of voices alone (songbird.style)
+    # the lineage's variants, and a singer's own ornaments where its style leans that way (a session's: sean-nós)
+    sung_variants = params.variants + style_mod.sung_ornaments(genome, params)
 
     for section_name, phrase, start, line in placed:
         sung = phrase.sung
@@ -371,7 +395,7 @@ def realize(genome: Genome, params: Params, verses=None, phrasing: Phrasing | No
 
             played = composed_notes(phrase, params)
         else:
-            played = variants_mod.realized(phrase, params.variants) if params.variants else None
+            played = variants_mod.realized(phrase, sung_variants) if sung_variants else None
         for k, (note, (syllable, word, word_len)) in enumerate(zip(sung, words)):
             v = played[k] if played else None
             u = start + lead + (v.onset if v else note.onset)
@@ -382,6 +406,10 @@ def realize(genome: Genome, params: Params, verses=None, phrasing: Phrasing | No
             in_bar = phrase.chords[bar]
             chord = in_bar[int(min(max((onset - bar * meter.bar) * len(in_bar) // meter.bar, 0), len(in_bar) - 1))]
             degree = v.degree if v else note.degree
+            if syllable is None and vocal:  # an a cappella sings where the band would play: the notes, or "oo"
+                syllable = word = style_mod.vocalised(vocal, params.tonic + degree_semitones(degree, params.mode,
+                                                                                               note.alter), params)
+                word_len = 1
             turns = getattr(v, "melisma", ()) if v else ()  # a person's melisma: (grid units after the onset, degree)
             melody.append(
                 dict(
@@ -464,7 +492,8 @@ def realize(genome: Genome, params: Params, verses=None, phrasing: Phrasing | No
     # plucked strings and voices ring on; a bow or a breath is held a moment longer, then let go
     held = {"fiddle": 1.0, "whistle": 0.8}
     notes = [
-        replace(n, dur=n.dur + held.get(n.part, ring)) if n.start + n.dur >= final - 1e-3 and n.part != "voice" else n
+        replace(n, dur=n.dur + held.get(n.part, ring))
+        if n.start + n.dur >= final - 1e-3 and (n.part != "voice" or vocal) else n  # voices alone: the lead holds too
         for n in notes
     ]
 
@@ -485,6 +514,6 @@ def realize(genome: Genome, params: Params, verses=None, phrasing: Phrasing | No
     notes.sort(key=lambda n: (n.start, n.part, n.pitch))
     # the score's own words: the song's lexicon, and the syllables the backing voices sing ("oo", which no
     # dictionary has: a machine choosing oohs for a song without its own reading used to fail)
-    score = Score(tuple(notes), final + ring, tuple(section_spans), {**SUNG_SYLLABLES, **genome.lexicon}, band=band_settings,
+    score = Score(tuple(notes), final + ring, tuple(section_spans), {**SUNG_SYLLABLES, **style_mod.lexicon(params), **genome.lexicon}, band=band_settings,
                   sound=sound)
     return style_mod.finish(score, genome, params)  # a style's key lift for the last refrain, if it has one

@@ -75,10 +75,9 @@ def test_the_server_answers_only_its_own_page(served):
     studio, port = served
     status, _, page = ask(port, "GET", "/")
     assert status == 200 and studio.token.encode() in page and b"{{token}}" not in page
-    assert ask(port, "GET", "/studio.js")[0] == 200 and ask(port, "GET", "/studio.css")[0] == 200
-    # the page before the score, on the same API, until the artist signs the new one off
-    status, _, classic = ask(port, "GET", "/classic")
-    assert status == 200 and studio.token.encode() in classic and b'href="/studio.css"' in classic
+    assert ask(port, "GET", "/studio.js")[0] == 200 and ask(port, "GET", "/score.css")[0] == 200
+    # the page before the score is gone (the artist signed the score off, 2026-09-30)
+    assert ask(port, "GET", "/classic")[0] == 404 and ask(port, "GET", "/studio.css")[0] == 404
     for name in ("renderer.js", "model.js", "score.js", "score.css"):
         assert f"/{name}" in S.STATIC
     assert ask(port, "GET", "/", headers={"Host": "evil.example:80"})[0] == 403  # a renamed address
@@ -470,15 +469,13 @@ def test_identity_is_one_file_in_two_places():
     studio, pages = ROOT / "songbird" / "studio" / "identity.css", ROOT / "web" / "sing" / "page" / "identity.css"
     assert studio.read_bytes() == pages.read_bytes()
     assert "/identity.css" in S.STATIC
-    for page, own in (("index.html", "/score.css"), ("classic.html", "/studio.css")):  # the score, and the page before
-        html = (ROOT / "songbird" / "studio" / page).read_text()
-        assert html.index('href="/identity.css"') < html.index(f'href="{own}"')
+    html = (ROOT / "songbird" / "studio" / "index.html").read_text()
+    assert html.index('href="/identity.css"') < html.index('href="/score.css"')
 
 
 def test_the_score_has_every_place_the_shared_scripts_write_to():
-    """studio.js (the core both pages share), the drafts, the export, the piano link, notes in and the web studio's
-    singing find their places by id: the score (index.html) has each, as the classic page does, so nothing a
-    feature needs is lost in the redesign (docs/STUDIO-REDESIGN.md, "Every current feature, and where it goes")."""
+    """studio.js (the core), the drafts, the export, the piano link, notes in and the web studio's singing find
+    their places by id: the score (index.html) has each, so nothing a feature needs was lost in the redesign (docs/STUDIO-REDESIGN.md, "Every current feature, and where it goes")."""
     ids = {"title", "which", "lineage", "yoursBar", "problemsBar", "versionBar", "draw", "localBadge", "whereNote",
            "undoEdit", "redoEdit", "historyStatus", "roll", "recordNow", "record", "saved", "packetNote",
            "nowTitle", "nowSub", "nowTime", "bar", "barFill", "audio", "toast", "dropVeil",
@@ -487,12 +484,10 @@ def test_the_score_has_every_place_the_shared_scripts_write_to():
            "exportMidi", "exportStems", "exportNote", "importMidi", "importFile", "importNote", "importBox", "performPanel",
            "help", "helpOpen", "helpSong", "helpShows", "helpWhere", "tour", "tourStep", "tourText", "tourSkip", "tourBack",
            "tourNext", "tourAgain", "studio-composer"}
-    for page in ("index.html", "classic.html"):
-        html = (ROOT / "songbird" / "studio" / page).read_text()
-        found = set(re.findall(r'\bid="([^"]+)"', html))
-        missing = ids - found - ({"draw"} if page == "classic.html" else set())
-        assert not missing, (page, missing)
-        assert "data-learn-piano" in html and "data-piano-note" in html
+    html = (ROOT / "songbird" / "studio" / "index.html").read_text()
+    missing = ids - set(re.findall(r'\bid="([^"]+)"', html))
+    assert not missing, missing
+    assert "data-learn-piano" in html and "data-piano-note" in html
     score = (ROOT / "songbird" / "studio" / "index.html").read_text()
     assert re.search(r'id="finishPanel"[^>]*>.*?class="cols two"', score, re.S)  # where the web studio's singing goes
     scripts = re.findall(r'<script src="/([a-z]+\.js)"', score)

@@ -574,7 +574,8 @@ def mix_made(parts: list, length: int, sr: int, seed: int = 0, params: MixParams
     band = np.zeros((length, 2))
     band_send = np.zeros((length, 2))
     stepping = np.zeros((length, 2))  # what the instruments that step back under the voice give up
-    held: dict = {}
+    held: dict = {}  # a bus's running sum
+    counted: dict = {}
     results = threads.in_order(jobs, first=tuple(name for name, _ in sung[:1]), ahead=threads.workers())
     try:
         for name, _ in jobs:
@@ -584,12 +585,16 @@ def mix_made(parts: list, length: int, sr: int, seed: int = 0, params: MixParams
             role = roles[name]
             if role in buses:
                 singers_left -= 1
-                if len(groups[role]) > 1:
-                    held[name] = result
-                    if len(held) < len(groups[role]):
+                if len(groups[role]) > 1:  # summed as they come, in the group's order (_sum's sums, to the bit),
+                    # never all held at once: a choir of six singing a whole song held 1 GB more (docs/STYLES.md)
+                    summed = result.copy() if role not in held else np.add(held[role], result, out=held[role])
+                    held[role], counted[role] = summed, counted.get(role, 0) + 1
+                    del result, summed
+                    if counted[role] < len(groups[role]):
                         continue
-                    result = buses[role](_sum(held, groups[role]), True)
-                    held = {}
+                    whole = held.pop(role)
+                    result = buses[role](whole if np.any(whole) else None, True)
+                    del whole
                 if role == "voice":
                     voice, singing = result if result is not None else (None, None)
                 else:

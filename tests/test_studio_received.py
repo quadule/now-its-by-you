@@ -361,8 +361,6 @@ def test_a_version_brought_to_the_page_opens_at_its_own_link(public, parent):
     assert not list(studio.incoming.iterdir())  # the file, gone
     status, _, page = ask(port, "GET", f"/v/{vid}")
     assert status == 200 and f'content="{studio.token}.{vid}"'.encode() in page and b"/score.js" in page
-    status, _, classic = ask(port, "GET", f"/v/{vid}/classic")  # the page before the score, on the same version
-    assert status == 200 and f'content="{studio.token}.{vid}"'.encode() in classic and b"/studio.css" in classic
     token = f"{studio.token}.{vid}"
     status, _, start = ask(port, "GET", "/api/start", headers={"X-Studio": token})
     start = json.loads(start)

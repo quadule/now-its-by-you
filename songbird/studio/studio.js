@@ -4,9 +4,8 @@
 // them across a reload. Everything shown is built as text: nothing from an answer is read as markup.
 "use strict";
 
-// Two pages share it: the score (index.html, with score.js: views, one inspector) and the classic page
-// (classic.html, the tune book of four chapters). What either lacks is skipped; the score is told through
-// window.SongbirdScore (its render, its page of words, its inspector, where the recording shows).
+// The score (index.html, with score.js: views, one inspector) is drawn on it, told through window.SongbirdScore
+// (its render, its page of words, its inspector, where the recording shows); what the page lacks is skipped.
 const TOKEN = document.querySelector('meta[name="studio-token"]').content;
 const $ = (id) => document.getElementById(id);
 const setOn = (id, key, value) => { const el = $(id); if (el) el[key] = value; };
@@ -740,7 +739,10 @@ function mutePlayer(card, player) {
     state.mutedLevels[player] = level;
     setEdit(path, 0, `Mute ${card.players[player] || player}`);
   } else {
-    setEdit(path, state.mutedLevels[player] || 1, `Unmute ${card.players[player] || player}`);
+    // back to the level before: the program's own is given back to the program, not kept as a choice of yours
+    const to = state.mutedLevels[player] || 1, mark = state.view?.marks?.[path];
+    if (mark && typeof mark.was === "number" && Math.abs(mark.was - to) < 1e-9) releaseEdit(path, `Unmute ${card.players[player] || player}`);
+    else setEdit(path, to, `Unmute ${card.players[player] || player}`);
   }
 }
 
@@ -1010,7 +1012,8 @@ function renderCompare() {
       h("button", { class: "play", type: "button", "aria-label": `Play ${m.name}'s whole song`, onclick: () => listen(m.who, null) }, playIcon()))))),
     h("tbody", {}, names.map((name) => h("tr", {}, h("td", { class: "rowname" }, name),
       rows.map((m, i) => h("td", { class: i && m.rows[name] !== rows[0].rows[name] ? "differs" : null }, m.rows[name]))))));
-  $("compare").replaceChildren(table, h("p", { class: "hint" }, "Where theirs differs from yours, it is marked."));
+  table.title = "Where theirs differs from yours, it is marked.";
+  $("compare").replaceChildren(table);
 }
 
 // ------------------------------------------------------------------ listening
@@ -1209,14 +1212,14 @@ async function record() {
     const r = job.result.recorded;
     saved.replaceChildren(
       r.shared
-        ? h("p", {}, `Made (${fmtTime(r.duration)}): the song, the program that sang it and its record, in one file. `,
+        ? h("p", { title: "The song, the program that sang it and its record, in one file." }, `Made (${fmtTime(r.duration)}). `,
           h("a", { class: "btn primary", href: r.download, download: r.name }, "Download it"), publicKept(r))
-        : h("p", {}, "Saved ", h("code", {}, r.flac), ` (${fmtTime(r.duration)}): the song, the program that sang it and its record, in one file.`),
-      h("p", {}, r.yours ? `${r.yours} choice${r.yours === 1 ? " is" : "s are"} marked as yours in it (what you chose, never who you are).` : "Every choice in it is the program's."),
+        : h("p", { title: "The song, the program that sang it and its record, in one file." }, "Saved ", h("code", {}, r.flac), ` (${fmtTime(r.duration)}).`),
+      h("p", { title: "What you chose, never who you are." }, r.yours ? `${r.yours} choice${r.yours === 1 ? "" : "s"} marked as yours.` : "Every choice in it is the program's."),
       h("p", { class: "hint" }, "To make the next version from this one: ", h("code", {}, r.next)),
       h("button", { class: "btn", type: "button", onclick: () => play(job.url, "The recording", r.flac,
         { editsKey: JSON.stringify(edits), label: "The recording", who: "you", section: null, job }) }, "Play the recording"));
-    toast("Recording saved with your edits and the studio.");
+    toast("Recorded.");
   } catch (e) {
     saved.replaceChildren(h("p", { class: "problem" }, `Couldn't record it: ${e.message}`));
     toast(`Couldn't record it: ${e.message}`);
@@ -1240,14 +1243,14 @@ function publicWait(job) {  // the server's guess at the wait, when it makes one
 }
 
 function publicKept(r) {
-  return r.expires ? ` It waits here ${r.expires} hours; after that, the same choices make it again.` : "";
+  return r.expires ? ` Kept here ${r.expires} hours.` : "";
 }
 
 function applyPublic(s) {
   const p = s.public;
   if (!p) return;
   setOn("localBadge", "textContent", "Open studio");
-  setOn("whereNote", "textContent", "An open studio: the song is made on a small server, one at a time for everyone. Your changes stay in this browser; a random id in a cookie keeps it fair (Help says what's kept).");
+  setOn("whereNote", "textContent", "An open studio: songs are made one at a time. Your changes stay in this browser (Help says what's kept).");
   setOn("helpWhere", "textContent", `This studio is open to anyone. A small server makes the song, one at a time for everyone, so you may wait your turn; each person can have ${p.records} whole songs and ${p.previews} sections made an hour, and what's made already plays at once. What you record is yours to download (it waits ${p.download_hours} hours). Your changes stay in this browser.`);
   setOn("helpKept", "textContent", whatsKept(p, s.sing?.web));
   setOn("helpKept", "hidden", false);

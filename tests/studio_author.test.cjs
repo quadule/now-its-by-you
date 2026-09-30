@@ -69,10 +69,12 @@ test('an intervening song edit prevents an older validation replacing newer choi
   assert.match(s.status(), /changed while/);
 });
 
-test('the words say what the stars around a word are for', () => {
+test('the words say what the stars around a word are for (in the tooltip: the hint itself is one short rule)', () => {
   const s = setup();
   const hint = s.all().find((x) => x.className === 'hint');
-  assert.match(hint.textContent, /between stars, like \*heart\*, is the one the line leans on/);
+  assert.match(hint.textContent, /one syllable a note/i);
+  assert.match(hint.title, /between stars, like \*heart\*, is the one the line leans on/);
+  assert.match(s.input().title, /between stars/);
 });
 
 test('"Use this line" uses this line only; another typed stays a draft, and a refusal refuses only this one', async () => {
@@ -104,7 +106,7 @@ test('"Use this line" uses this line only; another typed stays a draft, and a re
   s.answer([{path: 'lyrics.verse:0.1', why: 'unknown pronunciation'}]); await s.flush(); await s.flush();
   assert.deepEqual(JSON.parse(JSON.stringify(s.edits)), {'lyrics.verse:0.0': 'We sing this song.'}, 'line 2 refused alone; line 1 kept');
   assert.match(second.status(), /Line 2: unknown pronunciation/);
-  assert.match(first.status(), /in your song/);
+  assert.match(first.status(), /in your song/i);
 });
 
 test('a line redrawn in the inspector keeps its hint and never writes out a null', () => {

@@ -714,3 +714,59 @@ the stars out of a played section's words; the pan's words follow the drag.
 
 The pictures above (`studio-built-*.png`, but the phone's, which show neither) were taken again with the
 EDM brief's kind of version (synth folk at 128 in D minor, a 16-bar build, a played refrain, three locks).
+
+**After the artist's second look (2026-09-30)**, from a phone's picture of the column on a line of Refrain 1's
+words. Her rule, kept for the whole page: *say the simplest thing that's true in the UI; tooltips, comments and
+the README can be more explicit.*
+
+- *The ? and the ✕ one pair*: both `.iconbtn`, 28 px squares (44 on a phone), the same glyph size, on the
+  rubric's baseline (a rubric on two lines keeps them on its first); the Tools sheet's, the Time drawer's and
+  Help's ✕ are the same button, centred on their heading's line.
+- *One grid in the column*: every row with a label is a label's column (72 px) and the controls' (whatever else
+  the row holds goes under its controls, never back under the label); sliders the same (the value at the row's
+  end, the ends under the slider); the words' choosers, a note's Pitch, Start and Length and a chord's Root,
+  Quality, Bass, In the key and Sevenths on it too. One 10 px step between rows (`--gap`); quiet buttons have
+  no inset, so they start at the content's edge. What was out of line: ▶ *Hear it* sat 24 px in because the
+  column's `.foot` took the page footer's padding (the footer's rule is `footer.foot` now); the Line chips were
+  64 px of min-width plus a flex gap from their label; *Use this line* had a status paragraph, a hint and a
+  second hint around it. A cell's Lock is in the foot beside ▶, an action on the cell as the release is.
+- *What it is now*, the line under the rubric, is one line (the whole in its tooltip), not two kept for it:
+  no gap under a short answer, and a longer one still moves nothing below.
+- *The page through a slit*: on a phone the sheet runs down to the screen's edge under the views' bar (the bar
+  over it, `z-index` 26 to its 25), its last rows clear of the bar by padding; the bar has a fixed height
+  (`--bar-h`) plus `env(safe-area-inset-bottom)` (the viewport meta asks for `viewport-fit=cover`). Checked at
+  the sheet's two heights, scrolled to the top, the middle and the end of the Page.
+- *Less text* (before → after):
+  - a line of words: "the song's own, new this time: 11 syllables" / "Line 4 11 / 11 syllables" / "One syllable
+    for each note… the story and rhyme are yours." / "Checked for its count and the singer's pronunciation… The
+    meaning and the rhyme are yours." → "the song's own, new this time" / "11 / 11 syllables" / "One syllable a
+    note; split longer words with hyphens (car-ry)." (the stars and who checks what: the field's tooltip and the
+    column's ?);
+  - the Tools sheet: "Your tools *take it out, bring it in*" → "Your tools" (the columns say it); Record it
+    "One file that plays anywhere and carries the program that sang it, so anyone can make the next version.
+    Your choices are marked as yours; your name never is." → "One file that plays anywhere and carries the
+    program, for the next version. Your name isn't in it."; MIDI → "Every part on its own track, with the words
+    and chords."; the sheet's foot no longer says again what a recording is (the server's `packet_note` says only
+    where it's kept, when not here); every longer sentence is the tool's tooltip; its rows one grid;
+  - the Time drawer: "The song changes a little from day to day, more from month to month, most from year to
+    year. Your own changes stay put." → "The song on another day. Your changes stay put."; "Where theirs differs
+    from yours, it is marked." → the table's tooltip; on a phone the day on a line of its own;
+  - Arrange's "Drag a section to move it…" and Mix's "Judge the voice against the band…" → their view's ?;
+    "the program's" under every Mix strip → nothing (a strip of yours says what it was); the Master's note, the
+    seam's, the choir's, the band's paragraphs, the key's "A minor mode leans the words darker" → the column's ?
+    or a tooltip; a section's words' reason (the Page's ochre line under a section) → its tag's tooltip;
+  - a recording made: "Saved renders/x.flac (2:54): the song, the program that sang it and its record, in one
+    file." / "3 choices are marked as yours in it (what you chose, never who you are)." → "Saved renders/x.flac
+    (2:54)." / "3 choices marked as yours." (the rest in their tooltips);
+  - where a song is made: "This browser makes the song itself, as the server would…" → "This browser makes the
+    song…". Nothing on the page qualifies byte identity or a platform any more; what replay promises is said
+    once, plainly, in docs/PACKET.md ("Replaying.") and the packet's README, and `songbird render --replay`
+    reports "matches" or "matches within N steps (largest difference −X dB)".
+- *The program's own value releases*: a chip, a shape part, a style or band chip, a slider, the tempo or the key
+  set back to the program's own value gives the choice back (`choose` in score.js, from the record's marks'
+  `was`), as *The program's own* does; so does *Everyone* in a section for a cell whose program level it is
+  (`M.levelPatch`), and an unmute to the program's level.
+
+The pictures `studio-built-*.png` were taken again (headless Chrome, the page's own address with an edit map of
+that kind: synth folk at 128 in D minor, a 16-bar build, a played refrain, a riser and an impact, four on the
+floor in two refrains, a few locks), the phone's too (390 × 844 at 2×, now possible by device emulation).

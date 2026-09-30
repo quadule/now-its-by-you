@@ -72,6 +72,8 @@ def stem_jobs(score: Score, sr: int = SR, seed: int = 0, voice: VoiceParams | No
     choir = sorted({n.part for n in score.notes if n.part.startswith("choir")}, key=lambda p: int(p[5:]))
     learned = (voice or VoiceParams()).engine == "learned"
     singers = [*(ancestors or [])[: len(choir)], *lineage_voices(len(choir), seed, learned=learned)]
+    if (score.band or {}).get("parts") == "voices":  # voices alone: each part to the singer whose range it is
+        singers = matched(score, choir, singers[: len(choir)])
     for name, singer in zip(choir, singers):
         i = int(name[5:]) - 1
 
@@ -83,6 +85,25 @@ def stem_jobs(score: Score, sr: int = SR, seed: int = 0, voice: VoiceParams | No
             return y
         jobs.append((name, lineage))
     return jobs, (("voice",) if sung else ()) + tuple(choir)
+
+
+GROUP_VIBRATO = 14.0  # cents: a group's singers held to a choir's vibrato, so open fifths held a whole song don't churn
+GROUP_DELAY = 0.35  # s into a note before it
+GROUP_SCOOP = 0.2  # semitones
+
+
+def matched(score: Score, parts: list[str], singers: list[VoiceParams]) -> list[VoiceParams]:
+    """An a cappella's singers matched to its parts by range (docs/STYLES.md, "Two more"): the lowest voices (an
+    octave-down singer, the longest tract) to the lowest part, each singing its part where it is written (a low
+    stand-in otherwise sings everything an octave down: a treble under the tune, an under voice below what the
+    throat sings cleanly), and each held to a choir's vibrato and scoops."""
+    middle = {p: float(np.median([n.pitch for n in score.part(p)])) for p in parts}
+    by_part = sorted(parts, key=lambda p: (middle[p], p))
+    by_voice = sorted(range(len(singers)), key=lambda k: (singers[k].shift, singers[k].tract, k))
+    given = {part: singers[k] for part, k in zip(by_part, by_voice)}
+    return [replace(given[p], shift=0, vibrato_depth=min(given[p].vibrato_depth, GROUP_VIBRATO),
+                    vibrato_delay=max(given[p].vibrato_delay, GROUP_DELAY), scoop=min(given[p].scoop, GROUP_SCOOP))
+            for p in parts]
 
 
 def lineage_voices(n: int, seed: int, learned: bool = False) -> list[VoiceParams]:

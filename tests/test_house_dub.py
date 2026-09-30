@@ -203,7 +203,7 @@ def test_the_drop_leaves_no_trace_while_off_and_travels_when_on():
     assert S.Style().seed
 
 
-def test_a_child_of_house_or_dub_stays_or_steps_onto_the_ring_at_its_anchor():
+def test_a_child_of_house_or_dub_keeps_it_or_steps_beside_its_anchor():
     from songbird import drift as D, harvest as HV, variation as V
 
     seen = {"house": set(), "dub": set()}
@@ -213,8 +213,8 @@ def test_a_child_of_house_or_dub_stays_or_steps_onto_the_ring_at_its_anchor():
         for name in seen:
             for day in ("2026-03-01", "2026-06-01", "2026-09-01"):
                 seen[name].add(S.place(S.Style(name=name), c, D.drift(D.parse(day), voice.hash)))
-    assert seen["house"] <= {"house", "synthfolk"} and "house" in seen["house"]
-    assert seen["dub"] <= {"dub", "lofi"} and "dub" in seen["dub"]
+    assert seen["house"] <= {"house", *S.neighbours("synthfolk")} and "house" in seen["house"]
+    assert seen["dub"] <= {"dub", *S.neighbours("lofi")} and "dub" in seen["dub"]
 
 
 @pytest.mark.parametrize("name", ["house", "dub"])
