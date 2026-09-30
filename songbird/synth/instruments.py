@@ -265,10 +265,12 @@ def _model(kind: str, notes, sr: int, length: int, s: dict, rng: np.random.Gener
     raise ValueError(f"no such instrument: {kind}")
 
 
-def render_part(name: str, notes: tuple[Note, ...], sr: int, length: int, settings: dict, seed: int) -> np.ndarray:
-    """One instrument's stem: dry, stereo, `length` samples, at its level."""
+def render_part(name: str, notes: tuple[Note, ...], sr: int, length: int, settings: dict, seed: int,
+                sound: dict | None = None) -> np.ndarray:
+    """One instrument's stem: dry, stereo, `length` samples, at its level. sound: a person's sound for this
+    player (songbird.sound: a patch, filter, kit, the pieces' character, a pan), or None for its own."""
     if name not in INSTRUMENTS:
-        return render_other(name, notes, sr, length, settings, seed)
+        return render_other(name, notes, sr, length, settings, seed, sound)
     s = {**DEFAULTS, **settings}
     # Each part has its own performance randomness, and each instrument its own maker's quirks.
     index = INSTRUMENTS.index(name)
@@ -276,6 +278,8 @@ def render_part(name: str, notes: tuple[Note, ...], sr: int, length: int, settin
     make = np.random.default_rng([int(s["maker"]), 29, index])
     stem = _model(name, notes, sr, length, s, rng, make)
     position, width = PLACE[name]
+    if sound and "pan" in sound:  # a person's place for it
+        position = float(sound["pan"])
     out = place(stem, position, width, inplace=True)  # the model's own fresh stem
     del stem
     out *= LEVEL[name]  # the level and the part's gain in the lineup, each where it lies (the same products)
@@ -359,15 +363,19 @@ def known() -> tuple[str, ...]:
     return INSTRUMENTS + tuple(sorted(set(KNOWN) | set(registry()) - set(INSTRUMENTS)))
 
 
-def render_other(name: str, notes: tuple[Note, ...], sr: int, length: int, settings: dict, seed: int) -> np.ndarray:
+def render_other(name: str, notes: tuple[Note, ...], sr: int, length: int, settings: dict, seed: int,
+                 sound: dict | None = None) -> np.ndarray:
     """A stem for an instrument beyond the eight: its module's sound, or its stand-in's, placed and
-    levelled by its SPEC and scaled by its gain in the lineup (settings["gains"])."""
+    levelled by its SPEC and scaled by its gain in the lineup (settings["gains"]). sound: a person's sound
+    for this player (songbird.sound), or None for its own."""
     s = {**DEFAULTS, **settings}
     info = spec(name)
     index = stream(name)
     rng = np.random.default_rng([seed, 17, index])
     make = np.random.default_rng([int(s["maker"]), 29, index])
     own, found = registered(name)
+    if sound:  # a person's patch, filter, pieces and kit (docs/SOUND-DESIGN.md)
+        own, found, notes, s, info = voiced(own, found, notes, s, info, sound)
     if found is not None:
         y = np.asarray(found[1].render(own, notes, sr, length, rng, make, s), dtype=np.float64)
         y = y[:length] if len(y) >= length else np.pad(y, [(0, length - len(y))] + [(0, 0)] * (y.ndim - 1))
@@ -377,12 +385,67 @@ def render_other(name: str, notes: tuple[Note, ...], sr: int, length: int, setti
             notes = tuple(_as_drum(n) for n in notes)
         y = _model(kind, notes, sr, length, s, rng, make)
     position, width = info["place"]
+    if sound and "pan" in sound:  # a person's place for it
+        position = float(sound["pan"])
     gain = float((s.get("gains") or {}).get(name, 1.0))
     out = place(y, position, width)
     del y
     out *= info["level"]
     out *= gain
     return out
+
+
+# --- a person's sound (docs/SOUND-DESIGN.md) ------------------------------------------------------------------
+#
+# A drum player's kit is the module that plays it; a drum machine's pattern on the acoustic kit, or a drummer's
+# on a machine, has its strokes named as the other knows them (a stroke neither has is left out, or the nearest).
+
+KITS = {"808": ("drums-808", None), "909": ("drums-909", None), "lofi": ("drums-808", "lofi"),
+        "acoustic": ("kit", None)}
+MACHINE_TO_KIT = {"clave": ("snare-cross", 1.0), "conga-hi": ("tom-hi", 0.8), "conga-mid": ("tom-mid", 0.8),
+                  "conga-lo": ("tom-lo", 0.8), "maracas": ("hat", 0.5), "hat-pedal": ("hat-foot", 1.0),
+                  "clap": ("snare", 0.9), "rim": ("snare-rim", 1.0), "cowbell": ("ride-bell", 1.0)}
+KIT_TO_MACHINE = {"hat-foot": ("hat-pedal", 1.0), "snare-ghost": ("snare", 0.4), "snare-rim": ("rim", 1.0),
+                  "snare-cross": ("rim", 0.8), "snare-roll": ("snare", 0.8), "brush-tap": ("snare", 0.6),
+                  "brush-sweep": (None, 0.0), "ride-bell": ("cowbell", 0.8), "ride-crash": ("crash", 1.0),
+                  "ride-roll": ("ride", 0.8), "crash-choke": ("crash", 1.0), "crash-roll": ("crash", 0.8),
+                  "hat-half": ("hat-open", 1.0), "kick-dead": ("kick", 1.0), "tom-hi-roll": ("tom-hi", 0.8),
+                  "tom-mid-roll": ("tom-mid", 0.8), "tom-lo-roll": ("tom-lo", 0.8)}
+MACHINE_KNOBS = ("kick", "snare", "hat")  # a drum machine's pieces' character
+SYNTH_KNOBS = ("patch", "cutoff", "resonance", "envelope")
+
+
+def _restroke(notes, table: dict) -> tuple[Note, ...]:
+    from dataclasses import replace
+
+    out = []
+    for n in notes:
+        art = (n.art or "").split(":")[0].strip().lower()
+        if art in table:
+            to, vel = table[art]
+            if to is None:
+                continue
+            n = replace(n, art=to, vel=n.vel * vel)
+        out.append(n)
+    return tuple(out)
+
+
+def voiced(own: str, found, notes, s: dict, info: dict, sound: dict):
+    """A player's module, notes, settings and SPEC facts with a person's sound: a synth's patch and filter (and
+    a drum machine's pieces) into its settings; a kit's module in place of its own, its strokes renamed, at
+    that module's level (its place stays the player's)."""
+    s = {**s, **{k: sound[k] for k in SYNTH_KNOBS + MACHINE_KNOBS if k in sound}}
+    kit = sound.get("kit")
+    if kit in KITS:
+        module, flavour = KITS[kit]
+        if flavour:
+            s["kit"] = flavour
+        if module != own and module in registry():
+            table = MACHINE_TO_KIT if module == "kit" else KIT_TO_MACHINE if own == "kit" else {}
+            notes = _restroke(notes, table)
+            own, found = module, registry()[module]
+            info = {**info, "level": float(found[0].get("level", info["level"]))}
+    return own, found, notes, s, info
 
 
 def _as_drum(note: Note) -> Note:
@@ -403,10 +466,12 @@ def band_parts(score: Score, sr: int, seed: int) -> list[tuple[str, Callable[[],
     ending = ending[length - fade:].copy()  # the stem's last `fade` samples: before them it multiplies by 1 (exact)
     others = sorted({n.part for n in score.notes} - set(INSTRUMENTS) - {"voice"}
                     - {p for p in {n.part for n in score.notes} if p.startswith("choir")})
+    design = getattr(score, "sound", None) or {}  # a person's sound design (songbird.sound), if any
+    players = design.get("players") or {}
 
     def make(name: str, notes) -> Callable[[], np.ndarray]:
         def part() -> np.ndarray:
-            y = render_part(name, notes, sr, length, score.band, seed)
+            y = render_part(name, notes, sr, length, score.band, seed, players.get(name))
             if y.shape == (length, 2) and y.dtype == np.float64:
                 if fade:  # where it lies: the same products (every sample before the fade times 1, left as it is)
                     y[length - fade:] *= ending[:, None]
@@ -416,7 +481,19 @@ def band_parts(score: Score, sr: int, seed: int) -> list[tuple[str, Callable[[],
             return y * whole[:, None]
         return part
 
-    return [(name, make(name, notes)) for name in INSTRUMENTS + tuple(others) if (notes := score.part(name))]
+    jobs = [(name, make(name, notes)) for name in INSTRUMENTS + tuple(others) if (notes := score.part(name))]
+    if design.get("transitions"):  # risers, impacts, downlifters: a stem of their own (synth.sweeps), last
+        from . import sweeps
+
+        def fx() -> np.ndarray:
+            y = sweeps.make_fx(design["transitions"], sr, length, seed)
+            y = np.zeros((length, 2)) if y is None else y
+            if fade:
+                y[length - fade:] *= ending[:, None]
+            return y
+        if any(t["kind"] not in sweeps.SWEEPS for t in design["transitions"]):
+            jobs.append(("fx", fx))
+    return jobs
 
 
 def render_band(score: Score, sr: int, seed: int, progress=None) -> dict[str, np.ndarray]:

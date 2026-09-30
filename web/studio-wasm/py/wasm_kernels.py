@@ -47,11 +47,27 @@ def pluck_bank(f):
         pad = 0
         for s in range(n_strings):
             pad = max(pad, int(wholes[s]) + n_taps)
-        lines = np.zeros((n_strings, pad + len(x)))
+        ring = 1
+        while ring < pad:
+            ring *= 2
+        lines = np.zeros((n_strings, ring))
         out = np.zeros(len(x))
-        W.pluck_bank(P(x), len(x), P(w32), P(taps), n_strings, n_taps, P(gains), float(coupling), P(lines), pad, P(out))
+        W.pluck_bank(P(x), len(x), P(w32), P(taps), n_strings, n_taps, P(gains), float(coupling), P(lines), pad,
+                     ring, P(out))
         return out
     return call
+
+
+def _into(out: np.ndarray, like: np.ndarray, write) -> np.ndarray:
+    """Have write(address) fill out (the kernel's own output argument, which may be one of its inputs): in
+    place when out is C-ordered float64, else through a copy put back."""
+    if out.dtype == np.float64 and out.flags.c_contiguous and out.shape == like.shape:
+        write(P(out))
+        return out
+    work = np.empty(like.shape)
+    write(P(work))
+    out[...] = work.reshape(out.shape)
+    return out
 
 
 def drum_ring(f):
@@ -63,23 +79,21 @@ def drum_ring(f):
     return call
 
 
-def fx_detect(f):
-    def call(key, coef):
+def fx_detect_every(f):
+    def call(key, coef, step):
         key = F(key)
         n, chans = key.shape
-        out = np.empty(n)
-        W.fx_detect(P(key), n, chans, float(coef), P(out))
+        out = np.empty((n + int(step) - 1) // int(step))
+        W.fx_detect_every(P(key), n, chans, float(coef), int(step), P(out))
         return out
     return call
 
 
 def fx_apply(f):
-    def call(x, lin, step, band):
+    def call(x, lin, step, band, y):
         x, lin, band = F(x), F(lin), F(band)
         n, chans = x.shape
-        y = np.empty_like(x)
-        W.fx_apply(P(x), n, chans, P(lin), len(lin), int(step), P(band), band.shape[1], P(y))
-        return y
+        return _into(y, x, lambda at: W.fx_apply(P(x), n, chans, P(lin), len(lin), int(step), P(band), band.shape[1], at))
     return call
 
 
@@ -103,10 +117,18 @@ def _blocks(kernel, divide):
 
 
 def master_recover(f):
-    def call(held, coef):
+    def call(held, coef, out):
         held = F(held)
-        out = np.empty_like(held)
-        W.master_recover(P(held), len(held), float(coef), P(out))
+        return _into(out, held, lambda at: W.master_recover(P(held), len(held), float(coef), at))
+    return call
+
+
+def master_weighted_hop_power(f):
+    def call(x, p, q, hop):
+        x, p, q = F(x), F(p), F(q)
+        n, chans = x.shape
+        state, out = np.zeros(4 * chans), np.zeros(n // int(hop))
+        W.master_weighted_hop_power(P(x), n, chans, P(p), P(q), int(hop), P(state), P(out))
         return out
     return call
 
@@ -138,11 +160,11 @@ PORTS = {
     "synth.fx._two": lambda f: _in_place(W.fx_two),
     "synth.fx._one": lambda f: _in_place(W.fx_one),
     "synth.drum._ring": drum_ring,
-    "synth.fx._detect": fx_detect,
+    "synth.fx._detect_every": fx_detect_every,
     "synth.fx._apply": fx_apply,
     "synth.fx._products": fx_products,
     "synth.fx._block_power": lambda f: _blocks(W.fx_block_power, True),
-    "synth.master._hop_power": lambda f: _blocks(W.master_hop_power, False),
+    "synth.master._weighted_hop_power": master_weighted_hop_power,
     "synth.master._recover": master_recover,
     "synth.bowed.run": bowed_run,
     "synth.pipe.run": pipe_run,

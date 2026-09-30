@@ -15,6 +15,7 @@ import os
 import re
 import time
 from collections import defaultdict
+from types import SimpleNamespace
 
 import numpy as np
 
@@ -25,6 +26,9 @@ except ImportError:  # no JS: every kernel stays Python
     _js, _MANIFEST = None, {}
 
 __version__ = "0.0-shim"
+# numba.config as songbird reads it (fx.JIT): the kernels are compiled here too (to JS or wasm), so the loops
+# written to save memory are used, unless NUMBA_DISABLE_JIT=1 asks for numpy's and scipy's own operations
+config = SimpleNamespace(DISABLE_JIT=os.environ.get("NUMBA_DISABLE_JIT") == "1")
 PORTED: dict[str, str] = {}  # kernel -> "js" | "wasm" | "python"
 TIME = defaultdict(float)
 CALLS = defaultdict(int)
@@ -35,8 +39,9 @@ DISABLED = set(filter(None, os.environ.get("SONGBIRD_JS_DISABLE", "").split(",")
 _DT = {"f8": np.float64, "i8": np.int64, "b1": np.bool_}
 
 
-def _view(a: np.ndarray, back: list, layout: str | None):
-    """A JS descriptor over a (float64, in place) or over a float64 copy of it (copied back after)."""
+def _view(a: np.ndarray, back: list, layout: str | None, k: int = -1):
+    """A JS descriptor over a (float64, in place) or over a float64 copy of it (copied back after); k: which
+    argument it is (a kernel returning it returns that array, as numba does)."""
     work = a
     if a.dtype != np.float64 or (layout == "C" and not a.flags.c_contiguous) or a.ndim > 2 \
             or any(s % 8 for s in a.strides):
@@ -49,15 +54,17 @@ def _view(a: np.ndarray, back: list, layout: str | None):
     s = [x // 8 for x in work.strides]
     t = "f8" if a.dtype == np.float64 else ("b1" if a.dtype == np.bool_ else "i8")
     if work.ndim == 1:
-        return _js.rt.view(addr, 1, work.shape[0], 0, s[0], 0, t)
-    return _js.rt.view(addr, 2, work.shape[0], work.shape[1], s[0], s[1], t)
+        return _js.rt.view(addr, 1, work.shape[0], 0, s[0], 0, t, k)
+    return _js.rt.view(addr, 2, work.shape[0], work.shape[1], s[0], s[1], t, k)
 
 
 _ARRAY = re.compile(r"array\((\w+), (\d)d")
 
 
-def _result(r, t: str | None):
-    """A JS result as numba would have returned it (by the type numba gave it, when known)."""
+def _result(r, t: str | None, args=()):
+    """A JS result as numba would have returned it (by the type numba gave it, when known). An argument
+    handed back (`return out`) is that very array, as in numba (and a view of Pyodide's memory can't be read
+    after an allocation may have grown it)."""
     if r is None:
         return None
     if isinstance(r, (int, float, bool)):
@@ -73,6 +80,8 @@ def _result(r, t: str | None):
             return bool(r)
         return r
     if hasattr(r, "d") and hasattr(r, "nd"):  # an array descriptor
+        if getattr(r, "k", -1) >= 0:
+            return args[int(r.k)]
         m = _ARRAY.match(t or "")
         dtype = {"float64": np.float64, "int64": np.int64, "bool": np.bool_}.get(m.group(1), np.float64) if m \
             else _DT.get(r.t, np.float64)
@@ -82,6 +91,11 @@ def _result(r, t: str | None):
                 _js.rt.store(out.__array_interface__["data"][0], r)
             return out
         shape = (int(r.n0),) if r.nd == 1 else (int(r.n0), int(r.n1))
+        if dtype is np.bool_:  # straight into a bool array (not through a float64 one eight times its size)
+            out = np.empty(shape, dtype=np.bool_)
+            if out.size:
+                _js.rt.store_u8(out.__array_interface__["data"][0], r)
+            return out
         out = np.empty(shape, dtype=np.float64)
         if out.size:  # copied by JS into a view of out (Pyodide's assign_to fails past 2 GiB of heap)
             _js.rt.store(out.__array_interface__["data"][0], r)
@@ -89,7 +103,7 @@ def _result(r, t: str | None):
     # a tuple (a JS array)
     items = list(r)
     inner = _tuple_types(t, len(items))
-    return tuple(_result(x, it) for x, it in zip(items, inner))
+    return tuple(_result(x, it, args) for x, it in zip(items, inner))
 
 
 def _tuple_types(t: str | None, n: int) -> list:
@@ -123,18 +137,17 @@ def _js_kernel(key: str, f, spec: dict):
     def call(*args):
         back = []
         jsargs = []
-        for p, a in zip(params, args):
+        for k, (p, a) in enumerate(zip(params, args)):
             if isinstance(a, np.ndarray):
-                jsargs.append(_view(a, back, arrays.get(p, [None, None, None])[2]))
+                jsargs.append(_view(a, back, arrays.get(p, [None, None, None])[2], k))
             elif isinstance(a, np.generic):
                 jsargs.append(a.item())
             else:
                 jsargs.append(a)
         r = fn(*jsargs)
-        out = _result(r, ret)
         for orig, work in back:
             orig[...] = work
-        return out
+        return _result(r, ret, args)
 
     call.__name__ = f.__name__
     call.py_func = f

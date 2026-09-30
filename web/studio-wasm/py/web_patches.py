@@ -1,26 +1,15 @@
 """What the browser needs changed in songbird, the same numbers either way. Installed by the loader after
 songbird is imported; natively nothing imports this.
 
-- master.true_peak_envelope reads windows of the signal through numpy's sliding_window_view, a virtual
-  (len x 65) array of float64: over a whole song (6.7 M samples) that is 3.4 GB of address space, more
-  than wasm32's 2 GB limit on an array (numpy refuses it: "array is too big"). The only thing done with
-  the view is gathering rows by an index array, so a stand-in that gathers the same elements directly
-  gives the same values with memory for the rows gathered only."""
+- throat._linear by BLAS: Pyodide's numpy has none.
+
+(Until 2026-09-29 master.true_peak_envelope was patched too: it gathered rows from a sliding_window_view,
+a virtual array over 2 GiB for a whole song, which numpy on wasm32 refuses. The memory work gathers them
+with a kernel, master._windows, so the patch went.)"""
 
 from __future__ import annotations
 
 import numpy as np
-
-
-class _Windows:
-    """sliding_window_view(x, width)[rows], without the view."""
-
-    def __init__(self, x: np.ndarray, width: int):
-        self.x, self.offsets = x, np.arange(width)
-
-    def __getitem__(self, rows):
-        rows = np.asarray(rows)
-        return self.x[rows[:, None] + self.offsets[None, :]]
 
 
 def _dgemm_linear(x: np.ndarray, w: dict, name: str) -> np.ndarray:
@@ -31,12 +20,15 @@ def _dgemm_linear(x: np.ndarray, w: dict, name: str) -> np.ndarray:
     W, b = w[f"{name}.weight"], w[f"{name}.bias"]
     if x.dtype != np.float64 or W.dtype != np.float64 or x.ndim != 2 or len(x) < 64:
         return x @ W.T + b
-    return blas.dgemm(1.0, x, W, trans_b=True) + b
+    # (x W')' = W x': x and W are C-ordered, so x' and W' are Fortran-ordered as they lie, and the result's
+    # transpose is C-ordered: no copy of x (a whole song's activations are ~100 MB each), none of the result
+    y = blas.dgemm(1.0, W.T, x.T, trans_a=True).T
+    y += b
+    return y
 
 
 def install(dgemm: bool = True) -> None:
-    from songbird.synth import master, throat
+    from songbird.synth import throat
 
-    master.sliding_window_view = _Windows
     if dgemm:
         throat._linear = _dgemm_linear

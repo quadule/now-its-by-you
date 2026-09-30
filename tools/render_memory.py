@@ -52,10 +52,18 @@ def main() -> None:
     ap = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
     ap.add_argument("genome", nargs="?", default=str(ROOT / "songs" / "h-now-its-by-you.json"))
     ap.add_argument("--form", nargs="+", help="render only these sections")
+    ap.add_argument("--edits", help="a person's edits (a JSON map, as `songbird render --edits` takes), with no machine")
     args = ap.parse_args()
 
     g = genome.load(args.genome)
     params = choose_params(g)
+    if args.edits:
+        import json
+
+        from songbird import edits as edits_mod
+
+        clean, _ = edits_mod.check(g, json.loads(Path(args.edits).read_text()))
+        params = edits_mod.resolve(g, None, None, None, clean).params
     if args.form:
         params = replace(params, form=tuple(args.form))
     stage, peaks, marks = ["start"], {}, []

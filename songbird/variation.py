@@ -29,10 +29,12 @@ Character and time through a dimension of drift.DIMENSIONS.
 
 from __future__ import annotations
 
+import collections
 import functools
 import hashlib
 import json
 import re
+import threading
 from dataclasses import dataclass, replace
 
 import numpy as np
@@ -55,18 +57,33 @@ def clip(x: float, lo: float = -1.0, hi: float = 1.0) -> float:
     return max(lo, min(hi, x))
 
 
+GENOMES_REMEMBERED = 16  # the songs per_genome keeps answers for: a studio opens other people's versions too
+
+
 def per_genome(fn):
-    """Remember fn(genome, ...) for as long as that genome object is around:
-    a genome never changes, and a year of choices asks the same things daily."""
-    memo: dict = {}
+    """Remember fn(genome, ...) for the genome objects asked about most lately (a genome never changes, and a
+    year of choices asks the same things daily); the answers for a genome no one has asked about in a while
+    are let go, and the genome with them."""
+    memo: collections.OrderedDict = collections.OrderedDict()  # id(genome) -> (genome, {args: answer})
+    lock = threading.Lock()
 
     @functools.wraps(fn)
     def remembered(genome, *args):
-        key = (id(genome), args)
-        hit = memo.get(key)
-        if hit is None or hit[0] is not genome:
-            hit = memo[key] = (genome, fn(genome, *args))
-        return hit[1]
+        with lock:
+            entry = memo.get(id(genome))
+            if entry is None or entry[0] is not genome:
+                entry = memo[id(genome)] = (genome, {})
+                while len(memo) > GENOMES_REMEMBERED:
+                    memo.popitem(last=False)
+            else:
+                memo.move_to_end(id(genome))
+            answers = entry[1]
+            if args in answers:
+                return answers[args]
+        answer = fn(genome, *args)
+        with lock:
+            answers[args] = answer
+        return answer
 
     return remembered
 

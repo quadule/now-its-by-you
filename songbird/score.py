@@ -46,6 +46,9 @@ class Score:
     sections: tuple[tuple[str, float, float], ...]  # (name, start, end) in seconds
     lexicon: dict = field(default_factory=dict)  # the song's own pronunciations
     band: dict = field(default_factory=dict)  # how the instruments are built and set up (see songbird.band)
+    # a person's sound design (songbird.sound, docs/SOUND-DESIGN.md): each player's sound, the sidechain's key
+    # track and the transitions, in seconds; read only by the synthesis. Left out of to_dict() while empty.
+    sound: dict = field(default_factory=dict)
 
     def part(self, name: str) -> tuple[Note, ...]:
         return tuple(n for n in self.notes if n.part == name)
@@ -57,4 +60,5 @@ class Score:
             "notes": [_note_dict(n) for n in self.notes],
             "lexicon": self.lexicon,
             "band": self.band,
+            **({"sound": self.sound} if self.sound else {}),
         }
