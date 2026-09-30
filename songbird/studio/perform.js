@@ -329,7 +329,7 @@
     const names = Object.keys(played);
     if (!names.length) return null;
     const where = (key) => {
-      for (const s of c.sections) for (const [j, p] of (s.phrases || []).entries()) if (p.part_key === key) return `${s.label} ${j + 1}`;
+      for (const s of c.sections) for (const [j, p] of (s.phrases || []).entries()) if (p.part_key === key) return `${s.label}, line ${j + 1}`;
       return key;
     };
     return el("div", { class: "notes-in-yours" }, el("p", {}, "Played in by you:"),
@@ -357,7 +357,7 @@
       const click = el("input", { type: "checkbox", id: "performClick" });
       click.checked = $("performClick") ? $("performClick").checked : true;
       const recording = !!state.take?.recording;
-      box.replaceChildren(
+      box.replaceChildren(...[
         el("div", { class: "area-head" }, el("h3", {}, "Play a part in"),
           el("details", { class: "whatis" }, el("summary", { title: "What is this?" }, el("span", { class: "sr-only" }, "What is this?")),
             el("div", {}, el("p", {}, "Play a player's part (or the tune) on a MIDI keyboard, along with the sketch: a bar of clicks counts you in. Only the notes are kept: when, which and how hard, never a sound."),
@@ -370,7 +370,7 @@
           el("button", { class: "btn quiet", type: "button", id: "performHear", onclick: hearBack, disabled: !state.take?.notes?.length || recording }, "Hear it back"),
           el("button", { class: "btn", type: "button", id: "performKeep", onclick: keep, disabled: !state.take?.notes || recording || state.busy }, "Keep it")),
         el("p", { class: "hint", id: "performNote", "aria-live": "polite" }, $("performNote")?.textContent || (typeof navigator !== "undefined" && navigator.requestMIDIAccess ? "Connect a MIDI keyboard, then Record." : "This browser can't listen to a MIDI keyboard. Chrome, Edge and Firefox can.")),
-        previewBox("take"), performedBox());
+        previewBox("take"), performedBox()].filter(Boolean));  // (replaceChildren would write a null as "null")
     }
     const holder = $("importBox");
     if (holder) holder.replaceChildren(previewBox("file") || "");
