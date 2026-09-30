@@ -32,6 +32,13 @@ keeps. An edit that can't be kept is left out and said why, never bent.
     words.tag            the tag's syllable
     phrasing             whose way the song is sung: a phrasing made on this computer
 
+  Sound design (songbird.sound, docs/SOUND-DESIGN.md): what each player sounds like, never what it plays
+    sound.<player>.patch, .cutoff, .resonance, .envelope   a synth's patch and its filter
+    sound.<player>.kit, .kick, .snare, .hat                a drum player's kit and its pieces' character
+    mix.<player>.pan, .send, .sidechain                    the player's channel: its place, its send to the room,
+                                                           and ducking on the kick (or every beat)
+    transition.<section-id>                                a riser, roll, sweep, impact or downlifter into it
+
 The edits go in inside the program's table (choose_params(overrides=...)),
 so a decision that reads one reads the person's: a mode chosen minor leans
 the words darker, as the machine's own minor would. That is the one knock-on
@@ -57,6 +64,7 @@ from datetime import date
 from . import arrange as arrange_mod
 from . import variation
 from . import composition
+from . import sound as sound_mod
 from .band import INSTRUMENTS, LEADS, PATTERNS
 from .genome import Genome
 from .synth.mixing import RANGES, MixParams
@@ -315,6 +323,8 @@ def check(genome: Genome, edits: dict, phrasings=()) -> tuple[dict, list[dict]]:
                     raise LookupError(f"the {path[6:]} is one of {', '.join(o or 'none' for o in options)}")
                 else:
                     clean[path] = value
+            elif sound_mod.owns(path):  # sound design: a player's sound, its channel, a transition (songbird.sound)
+                clean[path] = sound_mod.check(genome, path, value)
             elif path.startswith("mix.") and path[4:] in MIX:
                 lo, hi = RANGES[path[4:]]
                 clean[path] = round(_number(value, lo, hi), 3 if path == "mix.predelay" else 2)
@@ -334,7 +344,7 @@ def check(genome: Genome, edits: dict, phrasings=()) -> tuple[dict, list[dict]]:
         except LookupError as e:
             problems.append(Problem(path, str(e.args[0]) if e.args else "there's no such choice"))
         except (TypeError, ValueError) as e:
-            if path == "form.order" or path.startswith(("tune.", "chords.", "lyrics.", "part.")):
+            if path == "form.order" or path.startswith(("tune.", "chords.", "lyrics.", "part.")) or sound_mod.owns(path):
                 problems.append(Problem(path, str(e)))
                 continue
             problems.append(Problem(path, f"{value!r} isn't a value this choice can take"))
@@ -373,8 +383,8 @@ class Overrides:
             if key in e:
                 out[key] = e[key]
                 applied.append(key)
-        for head in ("band", "mix"):
-            values = {p[len(head) + 1:]: v for p, v in e.items() if p.startswith(head + ".")}
+        for head in ("band", "mix"):  # (a player's channel, mix.<player>.*, is sound design's: below)
+            values = {p[len(head) + 1:]: v for p, v in e.items() if p.startswith(head + ".") and not sound_mod.owns(p)}
             if values:
                 held = out.get(head)
                 held = held.to_dict() if hasattr(held, "to_dict") else dict(held or {})
@@ -515,6 +525,10 @@ class Overrides:
             out["composition"] = held
         else:
             out.pop("composition", None)
+        # sound design (songbird.sound): against the band and the form this call leaves, into out["sound"]
+        done, trouble = sound_mod.pin(self.genome, out, e)
+        applied += done
+        problems += trouble
         self.applied, self.problems = applied, problems
 
     def style(self) -> tuple[str | None, dict]:
@@ -821,6 +835,8 @@ def marks(genome: Genome, generated, generated_lyrics, final_lyrics, applied: li
         elif path.startswith("style."):
             was = getattr(generated.style, path[6:], None)
             was = (was or "ballad") if path == "style.name" else was
+        elif sound_mod.owns(path):  # sound design: what the program has there (a parent's choice among it)
+            was = sound_mod.value_of(generated, path)
         else:
             was = variation.read(generated, path)
         out[path] = {"value": value, "was": was}

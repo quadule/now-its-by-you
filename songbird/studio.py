@@ -236,9 +236,14 @@ def cut(score, t0: float, t1: float, before: float = 1.0, tail: float = 2.5):
         if n.start < start:
             n = dc_replace(n, dur=n.start + n.dur - start, start=start)
         notes.append(dc_replace(n, start=n.start - start))
+    moved = {}
+    if getattr(score, "sound", None):  # a person's key track and transitions move with the notes (songbird.sound)
+        from .sound import shifted
+
+        moved = {"sound": shifted(score.sound, start, t1)}
     return dc_replace(score, notes=tuple(notes), duration=(t1 - start) + tail,
                       sections=tuple((s, max(0.0, a - start), b - start) for s, a, b in score.sections
-                                     if b > start and a < t1)), t0 - start
+                                     if b > start and a < t1), **moved), t0 - start
 
 
 def faded(x: np.ndarray, sr: int, skip: float, fade_in: float = 0.25, fade_out: float = 1.5) -> np.ndarray:
@@ -810,6 +815,18 @@ class Studio:
         if not isinstance(take, dict):
             raise ValueError("send a file or a take")
         return notesin.take(self.genome, v.params, str(take.get("player", "")), take.get("notes"), take.get("lines"))
+
+    # ------------------------------------------------------------ sound design (docs/SOUND-DESIGN.md)
+
+    def sound(self, edits: dict) -> dict:
+        """Every player's sound and channel (patch, filter, kit and its pieces, pan, send, sidechain) and every
+        section boundary's transition, each as sung, as the program has it, and whether it is the person's
+        (songbird.sound.view). Made at once, without a render: the page sets them as edits and listens as ever."""
+        from . import sound as sound_mod
+
+        v = self.version(edits)
+        view = sound_mod.view(self.genome, v.params, v.generated, v.applied, v.problems, self._score(v))
+        return {"key": self.key(v, None), **view}
 
     def record(self, edits: dict, by: tuple[str, str] | None = None) -> dict:
         v = self.version(edits)
@@ -1537,6 +1554,8 @@ class Handler(BaseHTTPRequestHandler):
             if path == "/api/open/ready":  # someone's version: would a file this size be taken now?
                 refusal = self._may_open(int(body.get("size") or 0), count=False)
                 return refusal() if refusal is not None else self.send_json({"ready": True})
+            if path == "/api/sound":  # sound design: each player's sound and channel, each boundary's transition
+                return self.send_json(studio.sound(edits))
             if path == "/api/sing":
                 return self.send_json(studio.sing())
             if path.startswith("/api/sing/") and studio.singing is not None:

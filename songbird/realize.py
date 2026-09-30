@@ -61,6 +61,9 @@ class Params:
     made: dict = field(default_factory=dict)  # by (a machine's hash, its first 12 digits) and at (days): whose clocks it turned
     style: Style = field(default_factory=Style)  # the tradition it's played in and its arrangement (songbird.style)
     composition: dict = field(default_factory=dict)  # portable human arrangement and phrase notes (composition.py)
+    # a person's sound design (songbird.sound): players' patches, kits, filters, pans, sends and sidechains, and
+    # the transitions at section boundaries; handed down like the composition, left out of to_dict() while empty
+    sound: dict = field(default_factory=dict)
 
     @classmethod
     def from_dict(cls, data: dict) -> Params:
@@ -80,6 +83,7 @@ class Params:
         values["words"] = dict(values.get("words") or {})
         values["made"] = dict(values.get("made") or {})
         values["composition"] = dict(values.get("composition") or {})
+        values["sound"] = dict(values.get("sound") or {})
         if "style" in values and not isinstance(values["style"], Style):  # absent in old records: the seed's
             values["style"] = Style.from_dict(values["style"])
         return cls(**values)
@@ -88,7 +92,8 @@ class Params:
         data = asdict(self)
         data["form"] = list(self.form)
         data["variants"] = [v.to_dict() for v in self.variants]
-        for name, empty in (("variants", []), ("words", {}), ("generation", 0), ("made", {}), ("composition", {})):
+        for name, empty in (("variants", []), ("words", {}), ("generation", 0), ("made", {}), ("composition", {}),
+                            ("sound", {})):
             if data[name] == empty:
                 del data[name]
         # The seed's own style and band leave no trace, so a record (and the rendition seed a child draws
@@ -452,8 +457,14 @@ def realize(genome: Genome, params: Params, verses=None, phrasing: Phrasing | No
         else:
             section_spans.append((section_name, s0, s1))
 
+    # a person's sound design (songbird.sound): a roll's strokes into the notes; each player's sound, the
+    # sidechain's key track and the transitions for the synthesis. The notes as they were, and {}, with none.
+    from . import sound as sound_mod
+
+    notes, sound = sound_mod.produce(genome, params, placed, clock, notes)
     notes.sort(key=lambda n: (n.start, n.part, n.pitch))
     # the score's own words: the song's lexicon, and the syllables the backing voices sing ("oo", which no
     # dictionary has: a machine choosing oohs for a song without its own reading used to fail)
-    score = Score(tuple(notes), final + ring, tuple(section_spans), {**SUNG_SYLLABLES, **genome.lexicon}, band=band_settings)
+    score = Score(tuple(notes), final + ring, tuple(section_spans), {**SUNG_SYLLABLES, **genome.lexicon}, band=band_settings,
+                  sound=sound)
     return style_mod.finish(score, genome, params)  # a style's key lift for the last refrain, if it has one

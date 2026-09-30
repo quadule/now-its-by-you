@@ -57,6 +57,10 @@ down" (a breakdown). None of those three could be chosen.
 
 ### 1. There is no electronic sound to reach for (highest impact)
 
+(Since answered by edits, the engine and its API: patches and a filter, kits, a sidechain pump, pan and
+sends, risers, rolls, sweeps, stops, impacts and downlifters at a boundary; docs/SOUND-DESIGN.md and
+docs/STUDIO.md, "Sound design".)
+
 Synth folk is the ceiling: an analog arpeggio, a sub/eighths synth bass, a pad, a synth lead, a drum machine,
 and a strummed acoustic guitar (muted here). What a producer expects first, and could not find:
 
