@@ -61,15 +61,44 @@ def chord_times(genome, params) -> list[tuple[float, float, str]]:
     phrases = form_phrases(genome, params)
     phrases += phrases[-1:] if repeated_phrases(genome, params) else []  # a style's last line again, as sung
     out, u = [], clock.lead
+    units, bounds = [], []  # each chord in grid units, and each phrase's first chord and span (for a dub version)
     for phrase in phrases:
+        bounds.append((len(units), u, u + phrase.bars * m.bar))
         for b, chords in enumerate(phrase.chords):
             for k, symbol in enumerate(chords):
                 a = u + b * m.bar + round(k * (m.bar / m.beat) / len(chords)) * m.beat
                 z = u + b * m.bar + (round((k + 1) * (m.bar / m.beat) / len(chords)) * m.beat if k + 1 < len(chords) else m.bar)
                 out.append((clock.seconds(a), clock.seconds(z), symbol))
+                units.append((a, z, symbol))
         u += phrase.bars * m.bar
-    if coda(genome, params):
+    if params.style.ending == "version" and coda(genome, params):  # the last refrain's last bars again
+        out += [(clock.seconds(a), clock.seconds(z), s) for a, z, s in version_chords(genome, params, units, bounds, u)]
+    elif coda(genome, params):
         out += [(clock.seconds(u), clock.seconds(u + m.bar), "IV"), (clock.seconds(u + m.bar), clock.seconds(u + 2 * m.bar), "I")]
+    return out
+
+
+def version_chords(genome, params, units: list, bounds: list, u: float) -> list[tuple[float, float, str]]:
+    """A dub version's chords in grid units (as add_version lays them): the last refrain's last bars, from `u` (the
+    last line's end) to the version's end, round again as often as it takes."""
+    from .style import coda
+    from .takeover import phrase_plan
+
+    span = coda(genome, params)
+    k, last = 0, None
+    for name, lines in zip(params.form, phrase_plan(genome, params)):
+        if genome.section(name).lyrics == "refrain":
+            last = (k, k + len(lines))
+        k += len(lines)
+    if last is None or last[1] > len(bounds):
+        last = (len(bounds) - 1, len(bounds))
+    u0, u1 = bounds[last[0]][1], bounds[last[1] - 1][2]
+    a = max(u0, u1 - span)
+    source = [(x, y, s) for x, y, s in units if y > a + 1e-9 and x < u1 - 1e-9]
+    out, shift, loop = [], u - a, u1 - a
+    while shift < u - a + span - 1e-9 and loop > 0:
+        out += [(max(x, a) + shift, min(y + shift, u + span), s) for x, y, s in source if max(x, a) + shift < u + span - 1e-9]
+        shift += loop
     return out
 
 
@@ -424,6 +453,8 @@ def plan_style(ctx: StyleContext) -> None:
                 keys.append("verse1")
         if r == "refrain" and len(refrains) > 1 and i == refrains[-1]:
             keys.append("last")
+        if getattr(ctx, "drop", None) and i == ctx.drop[1]:
+            keys.insert(0, "drop")  # the refrain after a breakdown: the drop (house's "drop" parts)
         keys += [r, "*"]
         parts: dict[str, str] = {}
         if leads and r in ("intro", "outro"):
@@ -1616,6 +1647,7 @@ def _now_and_then(ctx: StyleContext, part: str, rng) -> str:
 
 
 DANCE_PIECES = {"dub-cross": _cross, "dub-open": _now_and_then}
+PADLIKE = ("synthpad",)  # held under a breakdown as a pad is (its module's family is the synths')
 
 
 def w_floor(ctx, i, part):
@@ -1729,39 +1761,41 @@ def w_pluck(ctx: StyleContext, i: int, part: str) -> list[Ev]:
 
 def w_dubbass(ctx: StyleContext, i: int, part: str) -> list[Ev]:
     """The riddim: the root long on the one, a chord tone on the off-beat of two, nothing on three (the drop is
-    the drums'), the octave (or fifth) on its off-beat, and on four a step into the next chord; deep and round."""
+    the drums'), the octave (or fifth) on its off-beat, and on four a step into the next chord; deep and round. A
+    chord that comes in on three is met on its off-beat, the drop left to the drums."""
     lo, hi = bass_range(ctx, part)
     top = _bass_top(part)
+    b = ctx.grid.beat
     out = []
     for c in ctx.chords_in(i):
         rng = ctx.rand(part, c.u0)
         pcs = ctx.pcs(c.symbol)
         root = nearest({ctx.bass(c.symbol)}, lo + 5, lo, lo + 12)
         nxt = chord_after(ctx, c)
+        fifth = nearest({pcs[2]}, root + 7, root + 1, top)
         for bar in sorted(set(ctx.grid.bars(c.u0, c.u1)) | {c.u0 - ((c.u0 - ctx.grid.origin) % ctx.grid.bar)}):
-            b = ctx.grid.beat
-            third = nearest({pcs[1]}, root + 4, root + 1, root + 12)
-            high = root + 12 if root + 12 <= top else nearest({pcs[2]}, root + 7, root + 1, top)
-            hits = [(0.0, 1.25 * b, root, 0.8), (1.5 * b, 0.4 * b, third if rng.random() < 0.5 else
-                                                  nearest({pcs[2]}, root + 7, root + 1, top), 0.62)]
-            if rng.random() < 0.75:
-                hits.append((2.5 * b, 0.4 * b, high, 0.6))
+            start = max(c.u0, bar) - bar  # where the chord begins in this bar
             walk = root
             if nxt is not None and nxt.symbol != c.symbol and c.u1 <= bar + ctx.grid.bar + 1e-9:
                 target = nearest({ctx.bass(nxt.symbol)}, root, lo, hi)
                 walk = scale_step(ctx, target, -1 if target >= root else 1)
             elif rng.random() < 0.5:
-                walk = nearest({pcs[2]}, root + 7, root + 1, top)
-            hits.append((3.0 * b, 0.8 * b, walk, 0.64))
+                walk = fifth
+            if start < 1e-9:
+                third = nearest({pcs[1]}, root + 4, root + 1, root + 12)
+                high = root + 12 if root + 12 <= top else fifth
+                hits = [(0.0, 1.25 * b, root, 0.8), (1.5 * b, 0.4 * b, third if rng.random() < 0.5 else fifth, 0.62)]
+                if rng.random() < 0.75:
+                    hits.append((2.5 * b, 0.4 * b, high, 0.6))
+            else:  # a chord from the middle of the bar: its root there (after the drop, if it falls on three)
+                first = start + (b / 2 if abs(start - 2 * b) < 1e-9 else 0.0)
+                hits = [(first, 0.9 * b, root, 0.76)]
+            if 3.0 * b > hits[-1][0] + 1e-9:
+                hits.append((3.0 * b, 0.8 * b, walk, 0.64))
             for off, length, p, v in hits:
                 u = bar + off
-                if abs(u - c.u0) > 1e-9 and not c.u0 - 1e-9 <= u < c.u1 - 1e-9:
-                    continue
-                if u < c.u0 - 1e-9:
-                    continue
-                out.append(ev(part, u, min(u + length, c.u1), p, ctx.vel(part, u, v, 0.9), i=i))
-            if c.u0 > bar + 1e-9 and not any(abs(e.u0 - c.u0) < 1e-9 for e in out):  # a chord from mid-bar: its root
-                out.append(ev(part, c.u0, min(c.u0 + 1.25 * b, c.u1), root, ctx.vel(part, c.u0, 0.76, 0.9), i=i))
+                if c.u0 - 1e-9 <= u < c.u1 - 1e-9:
+                    out.append(ev(part, u, min(u + length, c.u1), p, ctx.vel(part, u, v, 0.9), i=i))
     return sorted(out, key=lambda e: e.u0)
 
 
@@ -1805,6 +1839,166 @@ def w_bubble(ctx: StyleContext, i: int, part: str) -> list[Ev]:
 WRITERS.update({"floor": w_floor, "house": w_house, "drop": w_drop, "offbeat": w_offbeat, "rolling": w_rolling,
                 "stab": w_stab, "pluck": w_pluck, "onedrop": w_onedrop, "steppers": w_steppers,
                 "dubbass": w_dubbass, "skank": w_skank, "bubble": w_bubble})
+
+
+def mark_drop(ctx: StyleContext, style) -> None:
+    """A breakdown and a drop (Style.drop): the sections after that refrain and before the next are the breakdown
+    (ctx.drop's first, emptied to the pad by shape_plan, quieter), the next refrain the drop (its parts' "drop" key,
+    at full weight); nothing where the song has no refrain after it."""
+    ctx.drop = None
+    k = int(getattr(style, "drop", 0) or 0)
+    refrains = [i for i, s in enumerate(ctx.sections) if s.role == "refrain"]
+    if not 0 < k < len(refrains):
+        return
+    before, into = refrains[k - 1], refrains[k]
+    breakdown = list(range(before + 1, into))
+    if not breakdown:
+        return
+    ctx.drop = (breakdown, into)
+    for i in breakdown:
+        ctx.sections[i].energy = min(ctx.sections[i].energy, 0.4)
+    ctx.sections[into].energy = max(ctx.sections[into].energy, 0.95)
+
+
+def add_version(ctx: StyleContext, params, end: float, sung_end: float) -> int | None:
+    """A dub version after the song (ending "version"): a section of its own (role "version", after the score's
+    sections: the mix and the page see the song's) from the last line's end to the song's, playing the last
+    refrain's last bars again, their chords and (for a lead to fragment) their tune, nobody singing. Its index."""
+    if params.style.ending != "version" or end <= sung_end + 1e-9 or not ctx.sections:
+        return None
+    refrains = [i for i, s in enumerate(ctx.sections) if s.role == "refrain"] or [len(ctx.sections) - 1]
+    src = ctx.sections[refrains[-1]]
+    span = end - sung_end
+    a = max(src.u0, src.u1 - span)
+    i = len(ctx.sections)
+    s = B.Section(src.name, "version", 0, 1, sung_end, end, False, energy=max(0.72, src.energy))
+    s.played = True  # the band keeps its weight under the lead's fragments (band.Context.vel)
+    ctx.sections.append(s)
+    if hasattr(ctx, "sids"):
+        ctx.sids.append([])  # no section of the form begins in it
+    loop = src.u1 - a
+    chords = [c for c in ctx.chords if c.section == refrains[-1] and c.u1 > a + 1e-9]
+    tune = [t for t in ctx.tune if t.section == refrains[-1] and t.u0 >= a - 1e-9]
+    phrases = [(p0, p1) for p0, p1 in ctx.phrases if p0 >= a - 1e-9 and p1 <= src.u1 + 1e-9]
+    shift = sung_end - a
+    while shift < span + (sung_end - a) - 1e-9 and loop > 0:  # the last bars again, round as often as it takes
+        for c in chords:
+            u0, u1 = max(c.u0, a) + shift, c.u1 + shift
+            if u0 < end - 1e-9:
+                ctx.chords.append(Chord(u0, min(u1, end), c.symbol, i, c.last))
+        for t in tune:
+            if t.u0 + shift < end - 1e-9:
+                ctx.tune.append(B.Tune(t.u0 + shift, min(t.u1 + shift, end), t.pitch, t.vel, False, i, t.first, t.last,
+                                       t.ornament, t.phrase, t.length))
+        ctx.phrases += [(p0 + shift, min(p1 + shift, end)) for p0, p1 in phrases if p0 + shift < end - 1e-9]
+        shift += loop
+    return i
+
+
+def _bar_of(ctx: StyleContext, u: float) -> float:
+    g = ctx.grid
+    return g.origin + np.floor((u - g.origin) / g.bar + 1e-9) * g.bar
+
+
+def dubbed(ctx: StyleContext, events: list[Ev], desk: dict, melody: list[dict], seconds, version: int | None):
+    """The desk played over the band's notes (docs/STYLES.md, "House and dub"): bar by bar, where the section's rate
+    says, the band dropped to the drums and bass, the drums alone, or all but the drums, and back (never a section's
+    first bar, never two bars running, a person's own cells left alone); the moment before a drop-out thrown into the
+    tape echo (the skank's last chop, or the drums' hit on three), a line's last word thrown now and then, a snare
+    kicked into the spring. Each choice from the desk's own stream by bar, so it replays exactly. The notes left,
+    and {"throws": [[part, start s, end s]...], "splashes": [...]} for songbird.sound."""
+    from .style import pick
+
+    rates = desk.get("dropout", {})
+    kinds = desk.get("kinds", {"riddim": 1.0})
+    drums = {e.part for e in events if family(e.part) in DRUMS}
+    bass = {e.part for e in events if is_bass(e.part)}
+    keep_cells = getattr(ctx, "taken", {}).get("cells", set())
+    dropped: dict[float, str] = {}
+    for i, s in enumerate(ctx.sections):
+        rate = rates.get(s.role, 0.0)
+        if rate <= 0.0:
+            continue
+        bars = ctx.grid.bars(s.u0, s.u1)
+        for k, bar in enumerate(bars[1:], 1):
+            if bars[k - 1] in dropped or bar + ctx.grid.bar > s.u1 + 1e-9 and i == len(ctx.sections) - 1:
+                continue  # never two running; the song's last bar plays
+            rng = ctx.rand("desk", bar)
+            if rng.random() < rate:
+                dropped[bar] = pick(kinds, rng.random())
+
+    def out(e: Ev) -> bool:
+        kind = dropped.get(_bar_of(ctx, e.u0))
+        if kind is None or (e.section, e.part) in keep_cells:
+            return False
+        if kind == "riddim":
+            return e.part not in drums and e.part not in bass
+        if kind == "drums":
+            return e.part not in drums
+        return e.part in drums  # nodrums
+
+    kept = [e for e in events if not out(e)]
+    at = {}
+
+    def when(e: Ev) -> float:
+        return seconds(e.u0) + e.shift
+
+    throws, splashes = [], []
+    comp = ("skank", "chop", "stab", "bubble", "pulse", "strum", "lead", "fills", "quote")
+    for bar, kind in sorted(dropped.items()):
+        before = [e for e in kept if bar - ctx.grid.bar - 1e-9 <= e.u0 < bar - 1e-9]
+        if kind == "nodrums":  # the drums' last hit before they drop out, into the echo
+            hits = [e for e in before if e.part in drums and e.art not in ("hat", "hat-open", "kick")]
+            source = hits[-1:] if hits else []
+        else:  # the chords' or the lead's last note before the band drops out, into the echo
+            parts = {e.part for e in before}
+            chosen = next((p for what in comp for p in sorted(parts)
+                           if ctx.sections[ctx.section_at(bar - 1e-3)].parts.get(p) == what), None)
+            source = [e for e in before if e.part == chosen][-1:] if chosen else []
+        for e in source:
+            t = when(e)
+            length = e.length if e.length > 0 else min(0.6, seconds(e.u1) - seconds(e.u0))
+            key = (e.part, round(t, 3))
+            if key not in at:
+                at[key] = True
+                throws.append([e.part, round(t - 0.01, 6), round(t + max(0.12, length) + 0.02, 6)])
+    # the singer's lines' last words, now and then, and the last line into the version
+    voice = desk.get("voice", {})
+    ordered = sorted((m for m in melody if m.get("syllable")), key=lambda m: m["u"])
+    for k, m in enumerate(ordered):
+        if not m["line_end"]:
+            continue
+        role = ctx.sections[ctx.section_at(m["u"])].role
+        last = version is not None and k == len(ordered) - 1
+        rate = 1.0 if last else voice.get(role, 0.0)
+        if rate <= 0.0 or (not last and ctx.rand("desk-voice", m["u"]).random() >= rate):
+            continue
+        word = [x for x in ordered[max(0, k - int(m["word_len"]) + 1): k + 1] if x["word"] == m["word"]] or [m]
+        a, b = seconds(word[0]["u"]) - 0.02, seconds(m["u_end"]) + 0.12
+        if b - a <= 3.0:
+            throws.append(["voice", round(a, 6), round(b, 6)])
+    # a snare kicked into the spring, now and then, and at the version's start
+    rate = desk.get("splash", 0.0)
+    snares: dict[float, Ev] = {}  # each bar's first snare (a cross-stick, a rim, a clap), as played
+    for e in sorted(kept, key=lambda e: e.u0):
+        if e.part in drums and e.art not in ("hat", "hat-open", "kick", "hat-pedal", "ride", "crash"):
+            snares.setdefault(_bar_of(ctx, e.u0), e)
+    start = ctx.sections[version].u0 if version is not None else None
+    last_splash = None
+    for bar, e in sorted(snares.items()):
+        first = start is not None and abs(bar - start) < 1e-9
+        if not first and (last_splash is not None and bar - last_splash < 2 * ctx.grid.bar - 1e-9
+                          or rate <= 0.0 or ctx.rand("desk-spring", bar).random() >= rate):
+            continue
+        last_splash = bar
+        t = when(e)
+        splashes.append([e.part, round(t - 0.005, 6), round(t + 0.15, 6)])
+    desk_out = {}
+    if throws:
+        desk_out["throws"] = sorted(throws, key=lambda x: (x[1], x[0]))
+    if splashes:
+        desk_out["splashes"] = splashes
+    return kept, desk_out
 
 
 # --- backing voices -----------------------------------------------------------------------------------------
@@ -2014,6 +2208,13 @@ def shape_plan(ctx: Context, style, plan: Plan, rhythm, pads, chords_first) -> N
         for k, p in enumerate(order):
             if k and len(starts) > 1:
                 plan.entrances[(i, p)] = starts[min(k, len(starts) - 1)]
+    drop = getattr(ctx, "drop", None)
+    if drop:  # the breakdown before a drop: the singer left with the pad (or the chords ringing where none)
+        for i in drop[0]:
+            keep = {p: w for p, w in sections[i].parts.items() if (p in pads or p in PADLIKE) and w not in LINES}
+            if not keep and chords_first:
+                keep = {chords_first: "ring"}
+            sections[i].parts = keep
 
 
 def chords_first_all(ctx: Context) -> list[str]:
@@ -2093,6 +2294,8 @@ def arrange_style(genome, params, placed, lead, end, melody, seconds, sdef) -> t
         last = len(ctx.sections) - 1
         ctx.sections[last].u1 = end
         ctx.chords += [Chord(end - 2 * ctx.bar, end - ctx.bar, "IV", last, False), Chord(end - ctx.bar, end, "I", last, True)]
+    version = add_version(ctx, params, end, sung_end)  # a dub version after the song, a section of its own
+    mark_drop(ctx, params.style)  # a breakdown and a drop, where the style has one
     ctx.capo = B.choose_capo(ctx)
     plan_style(ctx)
     B.overhear(ctx, melody, seconds, lead, end)  # for the piano score (songbird.piano), when asked
@@ -2133,6 +2336,12 @@ def arrange_style(genome, params, placed, lead, end, melody, seconds, sdef) -> t
         events += B.coda_part(ctx, sung_end, lead_part)
     events = shape_events(ctx, ctx.plan, [e for e in events if ctx.on(e.part)], rhythm, params.style)
     events = takeover.shape(ctx, events)
+    from .style import desk_of
+
+    desk = desk_of(params)
+    thrown: dict = {}
+    if desk:  # the mixing desk as an instrument: bars dropped out, moments thrown into the echo, a spring splashed
+        events, thrown = dubbed(ctx, events, desk, melody, seconds, version)
 
     # the singer's notes are nobody else's: a chord's note on a sung pitch goes an octave down
     for e in events:
@@ -2189,6 +2398,8 @@ def arrange_style(genome, params, placed, lead, end, melody, seconds, sdef) -> t
         "style": sdef.name,
         "feel": feel,
         "sections": [{"name": s.name, "role": s.role, "energy": round(s.energy, 3), "parts": dict(sorted(s.parts.items()))}
-                     for s in ctx.sections],
+                     for k, s in enumerate(ctx.sections) if k != version],  # (the score's sections: no version)
     }
+    if thrown:
+        settings["desk"] = thrown  # for songbird.sound: realize takes it out of the band's settings
     return notes, settings

@@ -53,6 +53,7 @@ RATES = {  # MB for a second of the song, on two threads
     "harmonium": 6.9, "marimba": 6.9, "music-box": 7.1, "nylon": 6.9, "shaker": 6.4, "sub-bass": 6.9,
     "synth-arp": 6.9, "synth-bass": 6.9, "synth-pad": 6.9, "synth-solo": 6.9, "ukulele": 6.9, "vibraphone": 6.9,
     "viola": 7.0,
+    "melodica": 7.4,  # (2026-09-30: 5.9 to 7.4 over three runs; the highest)
 }
 UNMEASURED = 7.7  # a part never measured (one added since): the heaviest rate above
 MARGIN = 1.05

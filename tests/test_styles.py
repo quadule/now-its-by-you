@@ -97,7 +97,9 @@ def test_the_palette_is_whole():
     from songbird import style as S
     from songbird.synth import instruments
 
-    assert set(S.RING) == set(S.STYLES) and len(S.RING) == len(set(S.RING))
+    # the ring, and beside it house and dub, each by its anchor on the ring (2026-09-30)
+    assert set(S.RING) | set(S.OFF_RING) == set(S.STYLES) and len(S.RING) == len(set(S.RING))
+    assert not set(S.RING) & set(S.OFF_RING) and set(S.OFF_RING.values()) <= set(S.RING)
     known = set(instruments.known())
     for s in S.STYLES.values():
         assert set(s.lineup) <= known, s.name

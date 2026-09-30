@@ -23,9 +23,10 @@ import numpy as np
 
 FEELS = ("straight", "swing", "shuffle", "twelve", "half", "double", "waltz", "six")
 INTROS = ("lead", "pad", "count", "voice", "quote")
-ENDINGS = ("ring", "rit", "cold", "amen", "repeat")
+ENDINGS = ("ring", "rit", "cold", "amen", "repeat", "version")  # version: a dub after the song (2026-09-30)
 BACKINGS = ("oohs", "echo", "thirds", "gang")
 LINEAGE_MAX = 16  # generations of styles a record remembers
+QUIET_OFF = ("drop",)  # Style's options a record leaves out while they're off (added after records were made)
 
 
 @dataclass(frozen=True)
@@ -52,7 +53,9 @@ class Style:
     bridge      "half": the bridge in half-time; "" as the style plays it
     lift        the last refrain a whole step up
     ending      ring (the last chord rings), rit (a broad ritardando), cold (a dead stop), amen (a
-                plagal IV-I with the backing voices' amen), repeat (the last line sung again); "" ring
+                plagal IV-I with the backing voices' amen), repeat (the last line sung again), version (after
+                the last line the band plays the last refrain's chords again, nobody singing, and the desk dubs
+                it: drop-outs, echo throws, a spring's splash); "" ring
     entrances   the first verse builds, instruments joining line by line
     backing     what the backing voices sing: oohs (chord tones), echo (answers at the ends of lines),
                 thirds (harmony above and below), gang (everyone on the tune); "" none
@@ -63,6 +66,10 @@ class Style:
                 opening over the third phrase, the fiddle's pad resting for it (band.motif_part; only where every
                 note is a tone of the chord under it); chance:
                 about a third of renditions do, by their seed, an easter egg; "" none
+    drop        a breakdown and a drop: after this refrain (1 the first) every section before the next refrain
+                is the breakdown (the drums, the bass and the rest out, the singer with the pad; the band's
+                low-pass opening across it, a riser and a snare roll into the refrain after), and that refrain
+                is the drop; 0 none. Left out of a record while 0, so a record is as it was before it
     """
 
     name: str = ""
@@ -82,6 +89,7 @@ class Style:
     voices: int = 0
     coda: str = ""  # quote: after the last line, over the ringing last chord, the lead alone plays the quote's opening
     motif: str = ""  # bridge: the lead plays the quote's opening over the bridge's third phrase; chance: some renditions
+    drop: int = 0  # the refrain a breakdown and a drop follow (house's habit, 2026-09-30); 0 none, and no trace in a record
 
     @classmethod
     def from_dict(cls, data: dict | None) -> Style:
@@ -92,6 +100,9 @@ class Style:
     def to_dict(self) -> dict:
         data = asdict(self)
         data["lineage"] = list(self.lineage)
+        for name in QUIET_OFF:  # options added since records were made: absent while off, so a digest is as it was
+            if not data[name]:
+                del data[name]
         return data
 
     def clamped(self) -> Style:
@@ -116,6 +127,7 @@ class Style:
             voices=max(0, min(6, int(self.voices or 0))),
             coda=pick(self.coda, ("quote",)),
             motif=pick(self.motif, ("bridge", "chance")),
+            drop=max(0, min(8, int(self.drop or 0))),
         )
 
     @property
@@ -152,6 +164,12 @@ class StyleDef:
     mix: dict = field(default_factory=dict)  # offsets to the mix (MixParams fields; "choir" dB for the backing voices)
     options: dict = field(default_factory=dict)  # the arrangement's propensities (see choose_options)
     swaps: dict = field(default_factory=dict)  # a player -> {another who may play the part instead: how often}
+    # a style's own sound design, under a person's (songbird.sound.program_players): {"players": {part: {kit, patch,
+    # sidechain...}}, "intro": "open" (the band's low-pass opening across an intro)}; {}: none (house, 2026-09-30)
+    sound: dict = field(default_factory=dict)
+    # the mixing desk as an instrument (dub, 2026-09-30; songbird.idioms "the desk"): drop-outs, throws and splashes
+    # by section, the echo's time and feedback (DESK's keys); {}: the desk is left alone
+    desk: dict = field(default_factory=dict)
 
     def order(self, lineup: dict) -> list[str]:
         """The instruments of a lineup in the style's own order (one swapped in where its part is), any others
@@ -437,12 +455,105 @@ RING = ("synthfolk", "indie", "gospel", "blues", "country", "stringband", "shant
 RING_START = 15.0  # degrees on the (machine, drive) plane where the ring's first style sits
 
 
+# --- house and dub (2026-09-30; docs/STYLES.md, "House and dub") --------------------------------------------------
+#
+# Beside the ring, not on it: every machine's home is its angle divided by the ring's length, so two more styles on
+# it would move every lineage. A person chooses them, or a parent hands one down; each sits beside an anchor on the
+# ring, and a child of a parent in one is placed as if its parent were at the anchor: it keeps the style where it
+# would stay, and steps onto the ring where the drift moves it. So a lineage can leave them, never wander in.
+
+# The dub desk's habits (songbird.idioms, the desk; songbird.sound.thrown; synth/dub.py): how often a bar drops out
+# by section, which way, how often a line's end or a hit is thrown into the tape echo or splashed into the spring,
+# and the echo's time (beats), feedback and levels.
+DESK = {
+    "dropout": {"intro": 0.3, "turn": 0.5, "break": 0.4, "outro": 0.4, "version": 0.55, "verse": 0.08,
+                "refrain": 0.06, "bridge": 0.12},
+    "kinds": {"riddim": 0.5, "drums": 0.25, "nodrums": 0.25},  # drums and bass alone, the drums alone, no drums
+    "voice": {"verse": 0.3, "refrain": 0.45, "bridge": 0.3, "tag": 0.6},  # a line's last word into the echo
+    "splash": 0.12,  # a bar's snare kicked into the spring
+    "time": 0.75, "feedback": 0.6, "level": 0.55, "voice_level": 0.4, "splash_level": 0.5,
+}
+# A version after the song in a style without a desk of its own: the desk works the version only, and throws the
+# singer's last line into it.
+VERSION_DESK = {**DESK, "dropout": {"version": 0.55}, "voice": {}, "splash": 0.0}
+VERSION_BARS = 8  # the version: the last refrain's last eight bars' chords again
+VERSION_RING = 6.0  # s after the version's last chord: its echoes' tails
+
+HOUSE = _def(
+    "house", "house: a drum machine's four on the floor (a 909), claps on two and four, open hats on the off-beats, "
+             "the ride in the drop, an off-beat synth bass, piano stabs, a pluck, a pad pumping under the kick",
+    {"drummachine": 1.0, "synthbass": 0.95, "piano": 0.8, "synthpad": 0.7, "arp": 0.6},
+    {"drummachine": {"intro": "floor", "verse1": "floor", "verse": ((0.55, "house"), (0.0, "floor")),
+                     "refrain": "house", "drop": "drop", "turn": "floor", "break": "drop", "bridge": "house",
+                     "tag": "end", "outro": "floor"},
+     "synthbass": {"intro": "", "verse1": ((0.35, "offbeat"), (0.0, "")), "*": "offbeat", "drop": "rolling",
+                   "tag": "long"},
+     "piano": {"verse1": ((0.4, "stab"), (0.0, "")), "verse": ((0.45, "stab"), (0.0, "")), "*": "stab", "tag": "ring"},
+     "synthpad": {"*": "pad"},
+     "arp": {"refrain": "pluck", "drop": "pluck", "break": "pluck"}},
+    ("piano", "arp"), {"straight": 1.0}, {"*": (1.22, 1.29, 1.33)},
+    {"I": ("add9", "6"), "IV": ("add9", "maj7"), "V": ("sus4", "7"), "vi": ("7", "add9"), "ii": ("7",)}, 0.6,
+    (0.95, 0.95),
+    band={"density": 0.1, "brightness": 0.1},
+    singer={"vibrato_depth": -6.0},
+    mix={"space": -0.05, "width": 0.2, "plate": 0.25},
+    options={"intro": {"lead": 0.6, "pad": 0.4}, "alone": 0.0, "stops": 0.0, "breakdown": 0.0, "lift": 0.15,
+             "ending": {"cold": 0.35, "repeat": 0.35, "ring": 0.3}, "entrances": 0.5,
+             "backing": {"echo": 0.4, "oohs": 0.3, "": 0.3}, "drop": 0.8, "half": 0.0},
+    swaps={"piano": {"organ": 0.3}},  # the stabs are sometimes an organ's
+    sound={"players": {"drummachine": {"kit": "909"}, "synthpad": {"sidechain": "classic"},
+                       "synthbass": {"sidechain": "subtle"}, "piano": {"sidechain": "subtle"},
+                       "arp": {"sidechain": "subtle"}},
+           "intro": "open"},
+)
+
+DUB = _def(
+    "dub", "dub and roots reggae: the kit's one drop, the skank on the off-beats, an organ's bubble, a deep round bass "
+           "with space, a melodica's answers, and the mixing desk played: echoes thrown, a spring splashed, the band "
+           "dropping out and back, a version after the song",
+    {"kit": 0.9, "ebass": 1.05, "electric": 0.75, "organ": 0.6, "melodica": 0.75},
+    {"kit": {"verse1": ((0.3, "onedrop"), (0.0, "")), "*": "onedrop", "last": "steppers", "version": "onedrop"},
+     "ebass": {"*": "dubbass"},
+     "electric": {"verse1": ((0.3, "skank"), (0.0, "")), "*": "skank"},
+     "organ": {"verse1": "", "verse": ((0.45, "bubble"), (0.0, "")), "*": "bubble", "bridge": "pad"},
+     "melodica": {"verse1": "", "verse": "fills", "refrain": ((0.6, "fills"), (0.0, "")), "last": "fills",
+                  "bridge": "", "tag": "", "version": "lead"}},
+    ("melodica", "organ"), {"swing": 0.65, "straight": 0.35}, {"*": (0.72, 0.78, 0.86)},
+    {"vi": ("7",), "ii": ("7",), "iii": ("7",)}, 0.2, (0.55, -0.55),
+    band={"wear": 0.1, "brightness": -0.08},
+    singer={"vibrato_depth": -6.0, "scoop": 0.04},
+    mix={"space": 0.15, "width": 0.1, "wear": 0.08, "tilt": -0.3, "plate": 0.2},
+    options={"intro": {"lead": 0.6, "pad": 0.1, "count": 0.3}, "alone": 0.1, "stops": 0.0, "breakdown": 0.35,
+             "lift": 0.0, "ending": {"version": 0.65, "ring": 0.2, "cold": 0.15}, "entrances": 0.3,
+             "backing": {"thirds": 0.4, "echo": 0.3, "": 0.3}, "half": 0.0},
+    desk=DESK,
+)
+
+STYLES.update({s.name: s for s in (HOUSE, DUB)})
+OFF_RING = {"house": "synthfolk", "dub": "lofi"}  # each beside its anchor on the ring
+
+
+def desk_of(params) -> dict:
+    """The desk a rendition's band is dubbed with: its style's, or a version's in a style without one; {} none."""
+    sdef = of(params.style)
+    if sdef.desk:
+        return sdef.desk
+    return VERSION_DESK if params.style.ending == "version" else {}
+
+
 def of(style: Style) -> StyleDef:
     """The palette's entry for a rendition's style (the seed's own, "", is the ballad)."""
     return STYLES.get(style.name or "ballad", BALLAD)
 
 
+def on_ring(name: str) -> str:
+    """The style's place on the ring: its own, or its anchor's for one beside it (house, dub)."""
+    return OFF_RING.get(name or "ballad", name or "ballad")
+
+
 def neighbours(name: str) -> tuple[str, str]:
+    if name in OFF_RING:  # beside the ring: its one way onto it is its anchor
+        return OFF_RING[name], OFF_RING[name]
     k = RING.index(name or "ballad")
     return RING[(k - 1) % len(RING)], RING[(k + 1) % len(RING)]
 
@@ -516,16 +627,21 @@ def held_ring(drift, base: float, span: float, n: int = len(RING)) -> int:
 
 
 def place(parent: Style, c, drift) -> str:
-    """The style a child is played in: its parent's, or the neighbour its machine and the drift lean to."""
-    was = RING.index(parent.name or "ballad")
+    """The style a child is played in: its parent's, or the neighbour its machine and the drift lean to. A parent
+    beside the ring (house, dub) is placed at its anchor: the child keeps its style where it would stay, and steps
+    onto the ring at the anchor where the drift moves it."""
+    name = parent.name or "ballad"
+    was = RING.index(on_ring(name))
     own = home(c)
     if own is None:
-        return parent.name or "ballad"
+        return name
     base = was + PULL_STYLE * ring_delta(was, own)
     k = held_ring(drift, base, STYLE_SPAN)
     step = ring_delta(was, k)
     if abs(step) > 1:  # never more than a step from the parent's: the folk process, not a jump
         k = (was + int(np.sign(step))) % len(RING)
+    if name in OFF_RING:
+        return name if int(k) == was else RING[was]
     return RING[int(k)]
 
 
@@ -610,14 +726,18 @@ def choose_options(genome, form, sdef: StyleDef, parent: Style, kept: bool, voic
     ending = pick(endings, coin(material, "ending", drift))
     backing = pick(o.get("backing", {"": 1.0}), coin(material, "backing", drift)) if voices else ""
     drums = any(instruments_family(name) in ("drums", "drum machine") for name in sdef.lineup)
-    bridge = "half" if drums and coin(material, "bridge", drift) < 0.35 else ""
+    bridge = "half" if drums and coin(material, "bridge", drift) < o.get("half", 0.35) else ""
     richness = c.richness if "richness" in c.known else 0.0
     season = drift.view("season").get("arrange", 0.0) if drift is not None else 0.0
     harmony = round(max(0.0, min(1.0, sdef.harmony + 0.15 * richness + 0.12 * season)), 2)
-    return dict(feel=feel, harmony=harmony, intro=intro, alone=alone, alone_with=alone_with, stops=stops,
-                breakdown=bool(breakdown), bridge=bridge, lift=bool(lift), ending="" if ending == "ring" else ending,
-                entrances=coin(material, "entrances", drift) < o.get("entrances", 0.0), backing=backing,
-                voices=voices if backing else 0)
+    out = dict(feel=feel, harmony=harmony, intro=intro, alone=alone, alone_with=alone_with, stops=stops,
+               breakdown=bool(breakdown), bridge=bridge, lift=bool(lift), ending="" if ending == "ring" else ending,
+               entrances=coin(material, "entrances", drift) < o.get("entrances", 0.0), backing=backing,
+               voices=voices if backing else 0)
+    if o.get("drop") and len(refrains) >= 2 and coin(material, "drop", drift) < o["drop"]:
+        # a breakdown and a drop (house's habit): after the second refrain, the first where the song has two
+        out["drop"] = 2 if len(refrains) >= 3 else 1
+    return out
 
 
 # Instruments that can accompany a bare verse on their own, in the order a style's lineup is searched.
@@ -818,10 +938,21 @@ def count_in(genome, params) -> int:
 
 def coda(genome, params) -> int:
     """Grid units after the last line: two bars for a plagal amen (IV, then I), when the style ends so, or two
-    bars of the last chord ringing under the quote's opening (songbird.band.coda_part), when the style asks."""
+    bars of the last chord ringing under the quote's opening (songbird.band.coda_part), when the style asks; a
+    dub version's bars (the last refrain's chords again), when the style ends with one."""
+    if params.style.ending == "version":
+        return VERSION_BARS * genome.meter.bar
     if params.style.ending == "amen" or (params.style.coda == "quote" and getattr(genome, "quote", None) is not None):
         return 2 * genome.meter.bar
     return 0
+
+
+def slowing(genome, params, rit_start: int, end: int) -> int:
+    """Where the final ritardando begins (grid units): the last phrase's first bar line, as ever; a dub version
+    holds its tempo and slows only through its last two bars (the riddim doesn't drag under the dub)."""
+    if params.style.ending == "version":
+        return max(rit_start, end - 2 * genome.meter.bar)
+    return rit_start
 
 
 def repeated_phrases(genome, params) -> list:
@@ -844,7 +975,9 @@ def repeated(genome, params, placed) -> list:
 
 
 def ring(params) -> float:
-    """Seconds the last chord rings on: a cold ending stops short."""
+    """Seconds the last chord rings on: a cold ending stops short; a dub version's last echoes take longer."""
+    if params.style.ending == "version":
+        return VERSION_RING
     return 0.9 if params.style.ending == "cold" else 3.0
 
 

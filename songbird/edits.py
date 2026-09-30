@@ -89,6 +89,8 @@ STYLE_OPTIONS = {"feel": ("straight", "swing", "shuffle", "twelve", "half", "dou
                  # how it starts, which verse is in stop-time or bare and over whom, a half-time bridge (2026-09-29)
                  "intro": ("", "lead", "pad", "count", "voice", "quote"), "stops": int, "alone": int, "alone_with": str,
                  "bridge": ("", "half")}
+# house's and dub's (2026-09-30): a breakdown and a drop after a refrain; a dub version after the song
+STYLE_OPTIONS.update({"drop": int, "ending": STYLE_OPTIONS["ending"] + ("version",)})
 
 
 def instruments() -> tuple[str, ...]:
@@ -337,9 +339,10 @@ def check(genome: Genome, edits: dict, phrasings=()) -> tuple[dict, list[dict]]:
                 options = STYLE_OPTIONS[path[6:]]
                 if options is bool:
                     clean[path] = bool(value)
-                elif options is int:  # which verse (1 the first), 0 none
+                elif options is int:  # which verse (1 the first), 0 none; which refrain the drop follows
                     if isinstance(value, bool) or not isinstance(value, int) or not 0 <= value <= 8:
-                        raise LookupError(f"the {path[6:]} is a verse's number, 1 the first, or 0 for none")
+                        raise LookupError(f"the {path[6:]} is a {'refrain' if path == 'style.drop' else 'verse'}'s "
+                                          f"number, 1 the first, or 0 for none")
                     clean[path] = value
                 elif options is str:  # the one instrument under a bare verse, "" none
                     if value and value not in instruments():

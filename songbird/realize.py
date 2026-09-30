@@ -284,8 +284,8 @@ def timeline(genome: Genome, params: Params) -> Clock:
     end = sung + style_mod.coda(genome, params)  # and a plagal amen's bars after the last line, if it has one
     # a compound beat (three to a beat) keeps its own lilt; a style's feel sets the swing (songbird.style)
     swing = style_mod.swing(params) if meter.beat % 3 else 0.0
-    return Clock(meter, params.tempo, lead, end, sung - phrases[-1].bars * meter.bar, swing, params.ritardando,
-                 style_mod.triple(genome, params))
+    rit_start = style_mod.slowing(genome, params, sung - phrases[-1].bars * meter.bar, end)  # (a dub version holds)
+    return Clock(meter, params.tempo, lead, end, rit_start, swing, params.ritardando, style_mod.triple(genome, params))
 
 
 def realize(genome: Genome, params: Params, verses=None, phrasing: Phrasing | None = None,
@@ -480,7 +480,8 @@ def realize(genome: Genome, params: Params, verses=None, phrasing: Phrasing | No
     # sidechain's key track and the transitions for the synthesis. The notes as they were, and {}, with none.
     from . import sound as sound_mod
 
-    notes, sound = sound_mod.produce(genome, params, placed, clock, notes)
+    desk = band_settings.pop("desk", None) if isinstance(band_settings, dict) else None  # a dub desk's (idioms)
+    notes, sound = sound_mod.produce(genome, params, placed, clock, notes, desk)
     notes.sort(key=lambda n: (n.start, n.part, n.pitch))
     # the score's own words: the song's lexicon, and the syllables the backing voices sing ("oo", which no
     # dictionary has: a machine choosing oohs for a song without its own reading used to fail)

@@ -547,6 +547,8 @@ def _spec(ctx, i: int, player: str):
     refrains = [k for k, x in enumerate(ctx.sections) if x.role == "refrain"]
     if s.role == "refrain" and len(refrains) > 1 and i == refrains[-1]:
         keys.append("last")
+    if getattr(ctx, "drop", None) and i == ctx.drop[1]:
+        keys.insert(0, "drop")  # the refrain after a breakdown (idioms.plan_style)
     keys += [s.role, "*"]
     table = sdef.parts.get(player) or sdef.parts.get(sdef.part_of(player)) or DEFAULT_PARTS.get(_family(player), {})
     return next((table[k] for k in keys if k in table), "")
@@ -762,7 +764,8 @@ def shape(ctx, events: list) -> list:
 # the style's options that belong to one section, and how the page says each
 OPTION_WORDS = {"entrances": "the band joins line by line", "breakdown": "the last refrain starts stripped down",
                 "stops": "stop-time: the band hits each bar's one and leaves the words bare",
-                "alone": "sung bare", "bridge": "the bridge in half time", "intro": "how it starts"}
+                "alone": "sung bare", "bridge": "the bridge in half time", "intro": "how it starts",
+                "drop": "the breakdown before the drop: the singer with the pad, the filter opening into the refrain"}
 INTRO_WORDS = {"lead": "an instrument states the tune", "pad": "a pad swells in alone", "count": "a count-in",
                "voice": "the singer begins alone", "quote": "a line of an older song", "": "as the form has it"}
 ROLE_WORDS = {"intro": "the intro", "verse": "a verse", "refrain": "a refrain", "turn": "a turn", "break": "the break",
@@ -855,6 +858,10 @@ def grid(genome, v, heard: dict) -> dict:
         if s.role == "bridge":
             said.append({"field": "bridge", "value": style.bridge, "path": "style.bridge", "by": _kind(v, "bridge"),
                          "text": OPTION_WORDS["bridge"]})
+        drop = getattr(ctx, "drop", None)
+        if drop and i == drop[0][0] and ctx.sids[i] and ctx.sids[i][0] == sid:  # the breakdown's first section
+            said.append({"field": "drop", "value": style.drop, "path": "style.drop", "by": _kind(v, "drop"),
+                         "text": OPTION_WORDS["drop"]})
         paths = {f: f"arrange.{sid}.{f}" for f in SECTION_FIELDS}
         title = name.replace("bridge2", "Bridge 2").title()
         if params.form.count(name) > 1:
@@ -1013,6 +1020,9 @@ def _reasons(v, ctx, i: int, k: int, player: str, program: str, enters, line_in:
                         + (f"with the {explain.player(style.alone_with)} alone" if style.alone_with else "bare")})
         elif style.intro == "pad" and i == 0:
             out.append({"kind": _kind(v, "intro"), "text": "a pad swells in alone to begin"})
+        elif getattr(ctx, "drop", None) and i in ctx.drop[0]:
+            out.append({"kind": _kind(v, "drop"), "text": "the breakdown before the drop: the drums and the bass drop "
+                                                          "out, and the singer is left with the pad"})
         else:
             out.append({"kind": "rule", "text": f"{band_words} leaves the {shown} out of {where}"})
         return out

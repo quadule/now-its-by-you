@@ -83,6 +83,10 @@ FEEL_NAMES = {"straight": "played straight", "swing": "swung", "shuffle": "a shu
               "half": "half-time", "double": "double-time", "waltz": "a waltz", "six": "in six-eight"}
 ENDING_NAMES = {"ring": "the last chord rings", "rit": "it slows broadly to the end", "cold": "it stops dead",
                 "amen": "it ends on an amen", "repeat": "the last line is sung again"}
+# house and dub (2026-09-30; docs/STYLES.md, "House and dub"): beside the ring, their words here
+STYLE_NAMES.update({"house": "house", "dub": "dub"})
+PLAYERS.update({"melodica": "melodica"})
+ENDING_NAMES.update({"version": "the band plays a dub version after the song"})
 BACKING_NAMES = {"oohs": "backing voices on oohs", "echo": "backing voices echo the lines",
                  "thirds": "backing voices in harmony", "gang": "everyone sings along"}
 PATTERNS = {"lilt": "a lilting strum", "strum": "a steady strum", "pick": "fingerpicking", "air": "a slow air"}
@@ -834,7 +838,9 @@ def style_card(v: Version) -> dict:
                {"bridge": "an older song's first notes through the bridge",
                 "chance": "an older song's first notes in the bridge, in some renditions"}.get(s.motif, ""),
                BACKING_NAMES.get(s.backing, ""),
-               ENDING_NAMES.get(s.ending, "") if s.ending and s.ending != "ring" else ""]
+               ENDING_NAMES.get(s.ending, "") if s.ending and s.ending != "ring" else "",
+               f"a breakdown after the {ORDINALS[s.drop - 1]} refrain, the singer with the pad, and the drop"
+               if 0 < s.drop <= len(ORDINALS) else ""]
     about = sdef.about.split(":", 1)[-1].strip() if name != "ballad" else \
         "harp, cittern, whistle, fiddle, guitar, upright bass, frame drum and a reed drone"
     detail = "; ".join(x for x in [about, *options] if x)
@@ -844,6 +850,10 @@ def style_card(v: Version) -> dict:
         if home is None:
             return None
         at = style_mod.RING[int(round(home)) % len(style_mod.RING)]
+        if value in style_mod.OFF_RING or (v.params.style.lineage[-2:-1] and v.params.style.lineage[-2] in style_mod.OFF_RING):
+            anchor = style_mod.OFF_RING.get(value) or style_mod.OFF_RING[v.params.style.lineage[-2]]
+            return (f"{STYLE_NAMES.get(value, value)} sits beside {STYLE_NAMES.get(anchor, anchor)}: a version stays in it, "
+                    f"or steps back onto the ring there; your machine is at home in {STYLE_NAMES.get(at, at)}")
         return f"your machine is at home in {STYLE_NAMES.get(at, at)}, and a version moves one style at a time"
 
     def time(path, value, frozen):
@@ -871,7 +881,9 @@ def style_card(v: Version) -> dict:
     return _card(v, "style", "The style", value, detail, mine + _finish(v, why, "style"), ["style."],
                  style={"name": name, "feel": feel, "ending": s.ending or "ring", "backing": s.backing,
                         "lift": s.lift},
-                 styles={k: STYLE_NAMES.get(k, k) for k in style_mod.RING}, feels={f: FEEL_NAMES.get(f, f) for f in feels},
+                 styles={k: STYLE_NAMES.get(k, k) for k in (*style_mod.RING, *(n for n in style_mod.STYLES
+                                                                                 if n not in style_mod.RING))},
+                 feels={f: FEEL_NAMES.get(f, f) for f in feels},
                  endings=dict(ENDING_NAMES), backings={"": "no backing voices", **BACKING_NAMES})
 
 
