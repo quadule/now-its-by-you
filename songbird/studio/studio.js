@@ -292,6 +292,15 @@ function describePath(path) {
   if (path.startsWith("chords.")) return "your chords for a line of the tune";
   const part = path.match(/^part\.([a-z0-9-]+)\.([A-Za-z0-9_-]+):(\d+)\.(\d+)$/);  // notes in (perform.js)
   if (part) return `your ${part[1]} in ${part[2]} ${Number(part[3]) + 1}, line ${Number(part[4]) + 1}`;
+  const where = (sid) => sid.replace(/^(\w+?)(2)?:(\d+)$/, (_, name, two, n) => `${two ? "second " : ""}${name} ${Number(n) + 1}`);
+  const cell = path.match(/^arrange\.([A-Za-z0-9_-]+:\d+)\.([a-z0-9]+)\.(level|pattern|from|fill)$/);  // the score's grid
+  if (cell) return `your ${cell[2]} in ${where(cell[1])}`;
+  const sec = path.match(/^arrange\.([A-Za-z0-9_-]+:\d+)\.(bars|sung|build)$/);
+  if (sec) return `your ${{ bars: "length", sung: "drop", build: "build" }[sec[2]]} in ${where(sec[1])}`;
+  const into = path.match(/^transition\.([A-Za-z0-9_-]+:\d+)$/);
+  if (into) return `your transition into ${where(into[1])}`;
+  const sound = path.match(/^(sound|mix)\.([a-z0-9]+)\.(\w+)$/);
+  if (sound && !["space", "width", "forward", "intimacy", "rt60", "predelay"].includes(sound[2])) return `your ${sound[2]}'s ${sound[3]}`;
   return { "words.refrain": "your refrain's words", "words.bridge": "your bridge's words", "words.bridge2": "your second bridge", "words.tag": "your tag", "phrasing": "the singer's way", "date": "the day" }[path] || `your ${path.replace(/^\w+\./, "").replace(/_/g, " ")}`;
 }
 

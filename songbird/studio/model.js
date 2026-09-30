@@ -60,7 +60,8 @@
   }
   function cellLabel(track, section, cell) {
     const l = look(cell);
-    const pattern = cell?.value?.pattern_label && l.level !== "out" ? `, ${cell.value.pattern_label}` : "";
+    const pattern = (cell?.value?.pattern_label && l.level !== "out" ? `, ${cell.value.pattern_label}` : "")
+      + (cell?.value?.from && l.level !== "out" ? `, from line ${cell.value.from + 1}` : "");
     return `${track.label} in ${section.label}: ${l.level}${pattern}; ${whoseWords(l)}`;
   }
 
