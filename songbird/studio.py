@@ -64,7 +64,7 @@ from urllib.parse import parse_qs, urlsplit
 
 import numpy as np
 
-from . import __version__, drift as drift_mod, explain, genome as genome_mod, harvest, pack, synth, variation
+from . import drift as drift_mod, explain, genome as genome_mod, harvest, pack, synth, variation
 from . import public as public_mod
 from .realize import Params, realize
 from .synth import master
@@ -467,6 +467,9 @@ class Studio:
         self.genome_path = Path(genome_path).resolve()
         self.genome = genome_mod.load(self.genome_path)
         self.song_digest = hashlib.sha256(self.genome_path.read_bytes()).hexdigest()
+        # the program itself, not its version number (which stays 0.1.0), so an updated program never plays
+        # a preview an older one made
+        self.program_digest = pack.program_sha256(pack.program_files())
         self.parent_record = record
         from .cli import _parent
 
@@ -545,7 +548,7 @@ class Studio:
 
     def key(self, v: explain.Version, section: int | None) -> str:
         """What a render depends on, hashed: the same rendition and section are made once."""
-        material = {"program": __version__, "song": self.song_digest, "params": v.params.to_dict(),
+        material = {"program": self.program_digest, "song": self.song_digest, "params": v.params.to_dict(),
                     "lyrics": v.lyrics.to_dict() if v.lyrics else None, "phrasing": v.phrasing_json,
                     "choir_phrasings": v.choir_phrasings,
                     "section": section, "voice": v.voice.to_dict() if v.voice is not None else None,
