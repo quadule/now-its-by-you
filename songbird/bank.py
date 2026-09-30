@@ -32,8 +32,10 @@ from collections import Counter
 from . import phonetics
 from .genome import Genome, load, syllables, turns
 
-_SLOT = re.compile(r"\{([a-z_]+)(?:\.([a-z_]+))?\}")
-_TURN = re.compile(r"\{([^{}]*)\}")
+# a slot starts a word; braces right after a word are its say, wind{air} (songbird.heteronyms)
+_SLOT = re.compile(r"(?<![A-Za-z0-9'’-])\{([a-z_]+)(?:\.([a-z_]+))?\}")
+# a turning word starts a word, {made|sang}; braces right after a word are its say, live{verb}
+_TURN = re.compile(r"(?<![A-Za-z0-9'’-])\{([^{}]*)\}")
 
 MOODS = ("plain", "light", "dark", "tender")
 RARITIES = ("common", "rare")

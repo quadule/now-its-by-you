@@ -120,7 +120,8 @@ class Genome:
         raise KeyError(f"the genome has no section {name!r}")
 
 
-_TURN = re.compile(r"\{([^{}]*)\}")
+# a turning word starts a word, {made|sang}; braces right after a word are its say, live{verb}
+_TURN = re.compile(r"(?<![A-Za-z0-9'’-])\{([^{}]*)\}")
 
 
 def turn(line: str, i: int, n: int) -> str:

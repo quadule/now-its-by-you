@@ -17,8 +17,8 @@ Compounds keep their second stress (church-yard, rail-way): only the lists below
 
 A line a person writes in the studio is read differently: a word said two ways (bass, wind, live,
 read...) is said as the words beside it say, and a word with a say in braces (bass{fish}, bass{base},
-bass{B.EY1.S}) as its say tells (songbird/heteronyms.py). The song's own lines aren't: --heteronyms
-lists those the rules would say another way.
+bass{B.EY1.S}) as its say tells (songbird/heteronyms.py). The song's own lines aren't (a say in one
+is the song's, the wind{air}): --heteronyms lists those the rules would say another way.
 
 To fix a word, give the song its own reading, stressing only what English does:
 "nobody": "N OW1 B AA0 D IY0". Then check the words are still heard (tools/wer_suite.py --sketch h
@@ -108,6 +108,8 @@ def sung_lines(genome) -> list[tuple[str, str]]:
         lines += [(f"bridge {b['id']}", line) for sung in expansions(b["lines"], b.get("slots", {})) for line in sung]
     for i, v in enumerate(genome.seed_verses):
         lines += [(f"seed verse {i + 1}", line) for line in v]
+    for name, block in genome.fixed.items():
+        lines += [(name, line) for line in block]
     for name, section in genome.sections.items():
         for pid in section.phrases:
             if getattr(genome.phrases[pid], "lyric", None):
