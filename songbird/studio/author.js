@@ -67,7 +67,7 @@
     const lines = node("div", "author-lines");
     const status = node("p", "author-status");
     status.setAttribute("role", "status");
-    const section = {details, summary, lines, rows: new Map(), label: s.label, status, busy: false};
+    const section = {details, summary, lines, rows: new Map(), label: s.label, status, hint: null, busy: false};
     section.save = button("Use these lines", () => {
       const changed = [...section.rows.values()].filter((row) => row.input.value !== row.base);
       if (!changed.length) { status.textContent = "These lines are already in your song."; return; }
@@ -86,6 +86,7 @@
     const actions = node("div", "author-actions");
     actions.append(section.save, discard);
     details.append(summary, hint, lines, actions, status);
+    section.hint = hint;  // kept: the score's line state moves it out of the details
     return section;
   }
   function rowFor(section, p, index, label) {
@@ -136,8 +137,7 @@
     section.label = s.label;
     const row = rowFor(section, p, lineIndex, s.label);
     section.save.textContent = "Use this line";
-    const hint = section.details.querySelector(".hint");
-    anchor.append(row.wrap, section.save.parentNode, section.status, hint);
+    anchor.append(row.wrap, section.save.parentNode, section.status, section.hint);
     if (focus?.path === p.lyric_path) { row.input.focus({preventScroll: true}); row.input.setSelectionRange(focus.start, focus.end); focus = null; }
     return true;
   }

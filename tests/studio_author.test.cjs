@@ -7,7 +7,7 @@ const vm = require('node:vm');
 function setup() {
   class Element {
     constructor(tag) { this.tag = tag; this.children = []; this.dataset = {}; this.listeners = {}; this.classList = {toggle() {}}; }
-    append(...items) { this.children.push(...items); }
+    append(...items) { for (const item of items) if (item && typeof item === 'object') item.parentNode = this; this.children.push(...items); }
     setAttribute(name, value) { this[name] = value; }
     addEventListener(name, fn) { this.listeners[name] = fn; }
     focus() { doc.activeElement = this; }
@@ -29,7 +29,7 @@ function setup() {
   render();
   const all = () => parent.querySelectorAll('*');
   return {
-    all, render, view, input: () => all().find((x) => x.tag === 'textarea'),
+    all, render, view, line: (...a) => win.SongbirdAuthor.line(...a), element: (tag) => new Element(tag), input: () => all().find((x) => x.tag === 'textarea'),
     type: (text) => { const input = all().find((x) => x.tag === 'textarea'); input.value = text; input.listeners.input(); },
     save: () => all().find((x) => x.textContent === 'Use these lines').listeners.click(),
     status: () => all().find((x) => x.className === 'author-status').textContent,
@@ -73,4 +73,16 @@ test('the words say what the stars around a word are for', () => {
   const s = setup();
   const hint = s.all().find((x) => x.className === 'hint');
   assert.match(hint.textContent, /between stars, like \*heart\*, is the one the line leans on/);
+});
+
+test('a line redrawn in the inspector keeps its hint and never writes out a null', () => {
+  const s = setup();
+  for (const pass of [1, 2, 3]) {  // the score redraws the column on every change: the hint moved out stays found
+    const anchor = s.element('div');
+    s.line(s.view(), 'verse:0', 0, anchor);
+    const kids = anchor.children;
+    assert.ok(kids.every((k) => k && typeof k === 'object'), `pass ${pass}: nothing null among the line's parts`);
+    assert.ok(kids.some((k) => k.className === 'hint'), `pass ${pass}: the hint is there`);
+    assert.ok(!kids.some((k) => k.tag === 'details'), `pass ${pass}: not the whole section's editor`);
+  }
 });
