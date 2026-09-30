@@ -1,0 +1,6 @@
+/* The studio's few plain pages (a shared studio's link without its key, a version not kept here): a note, and no more.
+   A stylesheet of its own, as the pages' policy (style-src 'self') allows no style written in the page. */
+body.notice { font: 17px/1.5 Georgia, serif; max-width: 34em; margin: 12vh auto; padding: 0 16px; color: #222;
+  background: #fffdf8; }
+body.notice h1 { font-weight: 500; }
+@media (prefers-color-scheme: dark) { body.notice { color: #eee; background: #1b1a18; } body.notice a { color: #9cf; } }

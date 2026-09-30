@@ -509,6 +509,41 @@ def test_a_public_studios_day_moves_on_at_midnight_and_what_was_asked_keeps_its_
     assert not local.roll() and local.day == first  # this computer's own studio: as ever
 
 
+def test_the_page_says_plainly_what_an_open_studio_keeps(opened):
+    """The footer, Help and the Tools sheet say what's kept: a random id in a cookie, changes in the browser, a
+    recording a day, a shared link's and a file's own record, singing's numbers (only where singing is on)."""
+    studio, port, _ = opened
+    page = ask(port, "GET", "/")[2].decode()
+    assert '<p id="helpKept" hidden></p>' in page  # filled and shown in an open studio only (studio.js applyPublic)
+    script = (S.PAGE / "studio.js").read_text()
+    for said in ("What's kept: a random id in a cookie", "sent only to make the song", "its made-up machine's name",
+                 "room its microphone heard, the leanings of its words", "carries its version's own record",
+                 "only numbers are kept; the audio is deleted once it's measured",
+                 "a random id in a cookie keeps it fair (Help says what's kept)"):
+        assert said in script, said
+    assert "What's kept" in (S.PAGE / "score.js").read_text() and "helpKept" in (S.PAGE / "classic.html").read_text()
+
+
+def test_the_plain_pages_carry_no_style_the_policy_would_block(home):
+    """A shared studio's page for a visitor without its key, and a version not kept here: their look in a stylesheet
+    (style-src 'self' blocks a style written in the page), which a visitor without the key may fetch."""
+    studio = S.Studio(None, str(LEAD), "none", out=home / "out", public=P.Limits(), key="closed-beta-key")
+    server = S.serve(studio, 18880)
+    threading.Thread(target=server.serve_forever, daemon=True).start()
+    port = server.server_address[1]
+    try:
+        for path, code in (("/", 403), ("/v/" + "0" * 32 + "?key=closed-beta-key", 404)):
+            status, head, page = ask(port, "GET", path)
+            assert status == code and b"style=" not in page and b"<style" not in page, path
+            assert b"href='/notice.css'" in page and b"class=notice" in page and "style-src 'self'" in \
+                head["Content-Security-Policy"]
+        status, head, css = ask(port, "GET", "/notice.css")
+        assert status == 200 and head["Content-Type"].startswith("text/css") and b"body.notice" in css
+    finally:
+        server.shutdown()
+        server.server_close()
+
+
 def test_a_public_studio_in_its_beta_asks_search_engines_not_to_list_it(opened):
     studio, port, _ = opened
     assert "X-Robots-Tag" not in ask(port, "GET", "/")[1] and ask(port, "GET", "/robots.txt")[0] == 404  # not asked

@@ -1628,8 +1628,8 @@ class Handler(BaseHTTPRequestHandler):
 
     def refuse_visitor(self) -> None:
         page = ("<!doctype html><meta charset=utf-8><meta name=viewport content='width=device-width'>"
-                "<title>Songbird studio</title><body style='font:17px/1.5 Georgia,serif;max-width:34em;"
-                "margin:12vh auto;padding:0 16px'><h1 style='font-weight:500'>This studio is shared by link</h1>"
+                "<title>Songbird studio</title><link rel=stylesheet href='/notice.css'><body class=notice>"
+                "<h1>This studio is shared by link</h1>"
                 "<p>Its link carries a key: ask the person who shared it for the whole link, "
                 "ending in <code>?key=</code>.</p></body>")
         self.send(page.encode(), "text/html; charset=utf-8", 403)
@@ -1702,6 +1702,8 @@ class Handler(BaseHTTPRequestHandler):
                 return self.send(b"User-agent: *\nDisallow: /\n", "text/plain; charset=utf-8")
             if self._throttled():
                 return
+        if path == "/notice.css":  # the plain pages' look, for a visitor without the key too
+            return self.send((PAGE / "notice.css").read_bytes(), "text/css; charset=utf-8")
         if not self._admitted():
             return self.refuse_visitor() if path in ("/", "/index.html", "/classic") or path.startswith("/v/") \
                 else self.fail(403, "this studio needs its link's key")
@@ -1972,8 +1974,8 @@ class Handler(BaseHTTPRequestHandler):
         if not urlsplit(self.path).path.startswith("/v/"):
             return self.fail(404, why)
         page = ("<!doctype html><meta charset=utf-8><meta name=viewport content='width=device-width'>"
-                "<title>Songbird studio</title><body style='font:17px/1.5 Georgia,serif;max-width:34em;"
-                "margin:12vh auto;padding:0 16px'><h1 style='font-weight:500'>This version isn't here</h1>"
+                "<title>Songbird studio</title><link rel=stylesheet href='/notice.css'><body class=notice>"
+                "<h1>This version isn't here</h1>"
                 f"<p>{why}</p><p><a href='/'>Open the studio on the song as it began</a></p></body>")
         self.send(page.encode(), "text/html; charset=utf-8", 404)
 
