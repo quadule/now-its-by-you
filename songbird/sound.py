@@ -89,8 +89,10 @@ DEPTH = (0.0, 24.0)
 RELEASE = (0.1, 2.0)
 ATTACK = 0.003  # s: how fast a pumped channel ducks
 
+PRESETS["off"] = {"depth": 0.0, "release": 0.55, "key": "kick"}  # no pump, over a style's own (house's pumps)
 BARS = (0, 1, 2, 4)
-SWEEP_TYPES = ("highpass", "lowpass")
+SWEEP_TYPES = ("highpass", "lowpass", "open")  # open: a low-pass rising (2026-09-30)
+SWEEP_KINDS = {"highpass": "sweep-hp", "lowpass": "sweep-lp", "open": "sweep-open"}
 TRANSITION_KEYS = ("riser", "roll", "sweep", "stop", "impact", "down")  # a stop in beats, the rest in bars
 BEFORE = ("riser", "roll", "sweep", "stop")  # over the bars before the section: nothing comes before the first
 IMPACT_S = 1.6  # s an impact's span lasts
@@ -270,6 +272,8 @@ def transition(value) -> dict | None:
     true); None if nothing does."""
     if value is None:
         return None
+    if value is False:  # nothing here, not even the style's own (a house drop's riser and roll)
+        return False
     if not isinstance(value, dict):
         raise ValueError("a transition is a map of riser, roll, sweep, stop, impact and down")
     unknown = set(value) - set(TRANSITION_KEYS)
@@ -346,7 +350,7 @@ def pin(genome, out: dict, edits: dict) -> tuple[list[str], list[dict]]:
         if value is not None and sid not in ids:
             problems.append(Problem(path, "this version doesn't sing that section"))
             continue
-        if value is not None and sid == first and any(k in value for k in BEFORE):
+        if value and sid == first and any(k in value for k in BEFORE):
             problems.append(Problem(path, "the song begins there: nothing comes before it to build from "
                                           "(an impact or a downlifter can)"))
             continue
@@ -374,7 +378,7 @@ def value_of(params, path: str):
     m = SOUND.fullmatch(path) or CHANNEL.fullmatch(path)
     if m:
         player, what = m.groups()
-        held = (sound.get("players") or {}).get(player, {}).get(what)
+        held = merged_players(params).get(player, {}).get(what)  # a style's own sound under a person's
         if held is not None:
             return held
         if what == "patch":
@@ -406,10 +410,14 @@ def shifted(sound: dict, start: float, stop: float) -> dict:
     """A score's sound design for the stretch from `start` to `stop` s, moved so `start` is zero (a section's
     preview, studio.cut): the triggers inside it; every transition that reaches into it, whole (its span may
     begin before zero: synth.sweeps makes all of it and keeps what falls inside)."""
-    out = {k: v for k, v in sound.items() if k not in ("triggers", "transitions")}
+    out = {k: v for k, v in sound.items() if k not in ("triggers", "transitions", "throws")}
     triggers = [[round(t - start, 6), p] for t, p in sound.get("triggers") or () if start <= t < stop]
     if triggers:
         out["triggers"] = triggers
+    throws = [{**t, "start": t["start"] - start, "end": t["end"] - start} for t in sound.get("throws") or ()
+              if start <= t["start"] and t["end"] <= stop]  # a throw whose moment the preview plays
+    if throws:
+        out["throws"] = throws
     transitions = []
     for t in sound.get("transitions") or ():
         if t["end"] > start and t["start"] < stop:
@@ -425,21 +433,25 @@ def shifted(sound: dict, start: float, stop: float) -> dict:
 RENDER = ("patch", "cutoff", "resonance", "envelope", "kit", "kick", "snare", "hat", "pan")
 
 
-def produce(genome, params, placed, clock, notes: list) -> tuple[list, dict]:
+def produce(genome, params, placed, clock, notes: list, desk: dict | None = None) -> tuple[list, dict]:
     """The score's sound design, for realize(): the notes with a roll's strokes in them (the drum player's own
     snares, claps, rims and toms under the roll left out), and the score's `sound`: each player's sound for
     the synthesis (its patch, filter, kit, pan; its send and sidechain for the mix), the sidechain's key track
-    ([seconds, player] for each kick or beat it ducks on) and the transitions (their kind, their whole span in
-    seconds, level and key). With no sound design, the notes as given and {}."""
+    ([seconds, player] for each kick or beat it ducks on), the transitions (their kind, their whole span in
+    seconds, level and key) and a dub desk's throws (`desk`: the arranger's, songbird.idioms). A style's own
+    sound (StyleDef.sound: house's 909 and pumps) sits under a person's, and its transitions (a drop's riser,
+    roll and opening filter) under theirs at each boundary. With none of it, the notes as given and {}."""
     sound = getattr(params, "sound", None) or {}
-    if not sound:
+    asked = merged_players(params)
+    moves = style_transitions(genome, params)
+    if not sound and not asked and not moves and not (desk or {}).get("throws") and not (desk or {}).get("splashes"):
         return notes, {}
     from .score import Note
 
     band = params.band
     tempo_beat = 60.0 / params.tempo
     players: dict = {}
-    for player, mine in (sound.get("players") or {}).items():
+    for player, mine in asked.items():
         if not in_band(band, player):  # inherited for a player this band hasn't got: it waits
             continue
         entry = {k: mine[k] for k in RENDER if k in mine}
@@ -448,7 +460,7 @@ def produce(genome, params, placed, clock, notes: list) -> tuple[list, dict]:
             entry["role"] = "kit" if module == "kit" else "drum"
         if "send" in mine:
             entry["send"] = mine["send"]
-        if "sidechain" in mine:
+        if "sidechain" in mine and mine["sidechain"]["depth"] > 0:  # a pump turned off pumps nowhere
             sc = mine["sidechain"]
             entry["sidechain"] = {"depth": sc["depth"], "release": round(sc["release"] * tempo_beat, 6),
                                   "attack": ATTACK}
@@ -471,10 +483,11 @@ def produce(genome, params, placed, clock, notes: list) -> tuple[list, dict]:
     roller = next((p for p in DRUMMERS if p in ROLL_STROKE and p in playing), None)  # who plays a roll
     kicks = sorted(n.start for n in notes if n.part == drummer and is_kick(n.part, n.art)) if drummer else []
 
-    # the transitions
+    # the transitions: a person's at a boundary in place of the style's own there (false: none at all)
+    wanted = {**{sid: t for sid, t in moves.items()}, **(sound.get("transitions") or {})}
     made = []
     for k, sid in enumerate(ids):
-        want = (sound.get("transitions") or {}).get(sid)
+        want = wanted.get(sid)
         if not want or sid not in spans:
             continue
         u0 = spans[sid][0]
@@ -489,7 +502,7 @@ def produce(genome, params, placed, clock, notes: list) -> tuple[list, dict]:
             made.append({"kind": "riser", "start": a, "end": b, "level": RISER_LEVEL, "key": key + 1})
         if want.get("sweep"):
             a, b = span(want["sweep"]["bars"])
-            made.append({"kind": "sweep-hp" if want["sweep"]["type"] == "highpass" else "sweep-lp",
+            made.append({"kind": SWEEP_KINDS.get(want["sweep"]["type"], "sweep-lp"),
                          "start": a, "end": b, "level": 1.0, "key": key + 2})
         if want.get("stop"):  # the band stops for the last beats before the section (the singer and fx don't)
             made.append({"kind": "stop", "start": max(0.0, at(u0 - want["stop"] * genome.meter.beat)),
@@ -530,9 +543,9 @@ def produce(genome, params, placed, clock, notes: list) -> tuple[list, dict]:
     # the sidechain's key track: each kick of the drum player (or each beat) in the sections asked, per player
     triggers = []
     beats = None
-    for player, mine in sorted((sound.get("players") or {}).items()):
+    for player, mine in sorted(asked.items()):
         sc = mine.get("sidechain")
-        if not sc or player not in players:
+        if not sc or player not in players or "sidechain" not in players[player]:
             continue
         if sc["key"] == "beat":
             beats = beats if beats is not None else [t for t, _ in clock.beats()]
@@ -551,7 +564,115 @@ def produce(genome, params, placed, clock, notes: list) -> tuple[list, dict]:
                 last = t
     if triggers:
         out["triggers"] = sorted(triggers)
+    throws = thrown(params, desk or {})
+    if throws:
+        out["throws"] = throws
     return notes, out
+
+
+# ---------------------------------------------------------------- a style's own sound (2026-09-30)
+#
+# A style may bring a sound of its own (StyleDef.sound: house's 909, its pumping pad and bass) and a habit at its
+# boundaries (a drop's riser, roll and opening filter; a filtered intro): the program's, under a person's, path by
+# path and boundary by boundary. Nothing for a style that brings none (every style before house and dub).
+
+
+def _sdef(params):
+    from .style import STYLES
+
+    name = getattr(getattr(params, "style", None), "name", "") or ""
+    return STYLES.get(name) if name and name != "ballad" else None
+
+
+def program_players(params) -> dict:
+    """The style's own sound for each of its players in this band: {player: {kit, patch, sidechain...}}, each value
+    as check() spells it (a pump's preset spelled out), for the player playing the style's part (an organ swapped
+    in for the piano takes the piano's)."""
+    sdef = _sdef(params)
+    if sdef is None or not getattr(sdef, "sound", None):
+        return {}
+    band = params.band
+    out: dict = {}
+    for part, fields_ in sorted((sdef.sound.get("players") or {}).items()):
+        player = sdef.playing(part, band.lineup) if band.lineup else part
+        if not in_band(band, player):
+            continue
+        entry = {}
+        for what, value in sorted(fields_.items()):
+            if what == "sidechain":
+                value = sidechain(None, value)
+            elif what == "kit" and value not in kits_of(player):
+                continue
+            entry[what] = value
+        if entry:
+            out[player] = entry
+    return out
+
+
+def merged_players(params) -> dict:
+    """Each player's sound as it plays: the style's own, a person's (a parent's among them) over it, field by field."""
+    own = program_players(params)
+    mine = (getattr(params, "sound", None) or {}).get("players") or {}
+    if not own:
+        return mine
+    out = {p: dict(v) for p, v in own.items()}
+    for player, fields_ in mine.items():
+        out.setdefault(player, {}).update(fields_)
+    return {p: {w: v[w] for w in sorted(v)} for p, v in sorted(out.items())}
+
+
+def style_transitions(genome, params) -> dict:
+    """The style's own transitions, by the section they lead into (as a person's are spelled; a sweep's bars as
+    long as the span it covers): a drop (Style.drop) gets a riser over the breakdown's last two bars, a snare roll
+    over its last one (two when it is eight bars or more) and the band's low-pass opening across the whole
+    breakdown; a style whose sound asks for it opens the same filter across the intro into what follows."""
+    style = getattr(params, "style", None)
+    if style is None or not params.form:
+        return {}
+    sdef = _sdef(params)
+    drop = int(getattr(style, "drop", 0) or 0)
+    if not drop and (sdef is None or (getattr(sdef, "sound", None) or {}).get("intro") != "open"):
+        return {}
+    ids = composition.section_ids(params.form)
+    out: dict = {}
+    bars = [sum(genome.phrases[p].bars for p, _ in lines) for lines in _plan(genome, params)]
+    if sdef is not None and (getattr(sdef, "sound", None) or {}).get("intro") == "open" and len(ids) > 1 \
+            and genome.section(params.form[0]).lyrics is None and params.form[0].startswith("intro"):
+        out[ids[1]] = {"sweep": {"bars": bars[0], "type": "open"}}
+    refrains = [k for k, name in enumerate(params.form) if genome.section(name).lyrics == "refrain"]
+    if 0 < drop < len(refrains):
+        before, into = refrains[drop - 1], refrains[drop]
+        breakdown = sum(bars[before + 1: into])
+        if breakdown > 0:
+            out[ids[into]] = {"riser": min(2, breakdown), "roll": 2 if breakdown >= 8 else 1,
+                              "sweep": {"bars": breakdown, "type": "open"}}
+    return out
+
+
+def _plan(genome, params):
+    from .takeover import phrase_plan
+
+    return phrase_plan(genome, params)
+
+
+def thrown(params, desk: dict) -> list[dict]:
+    """A dub desk's throws into the tape echo and splashes into the spring, for the mix (synth/dub.py): each its
+    part, its window in seconds, and the echo's time (the style's, in beats, as seconds), feedback and level."""
+    from .style import desk_of
+
+    if not desk:
+        return []
+    d = desk_of(params)
+    beat = 60.0 / params.tempo
+    out = []
+    for k, (part, start, end) in enumerate(desk.get("throws") or ()):
+        out.append({"kind": "echo", "part": part, "start": round(float(start), 6), "end": round(float(end), 6),
+                    "time": round(d["time"] * beat, 6), "feedback": d["feedback"],
+                    "level": d["voice_level"] if part == "voice" else d["level"], "key": k})
+    for k, (part, start, end) in enumerate(desk.get("splashes") or ()):
+        out.append({"kind": "spring", "part": part, "start": round(float(start), 6), "end": round(float(end), 6),
+                    "level": d["splash_level"], "key": 1000 + k})
+    return sorted(out, key=lambda t: (t["start"], t["key"]))
 
 
 # ---------------------------------------------------------------- for the page
@@ -599,7 +720,8 @@ def view(genome, params, generated, applied, problems, score) -> dict:
     band = params.band
     names = list(band.lineup) if band.lineup else list(INSTRUMENTS)
     sound = params.sound or {}
-    mine_all = sound.get("players") or {}
+    mine_all = merged_players(params)  # a style's own sound under the person's (house's 909 and pumps)
+    moves = style_transitions(genome, params)
     kicking = any(n.part in DRUMMERS and is_kick(n.part, n.art) for n in score.notes)
 
     def entry(path: str, value, **extra) -> dict:
@@ -640,7 +762,8 @@ def view(genome, params, generated, applied, problems, score) -> dict:
     for k, sid in enumerate(ids):
         name, n = sid.split(":")
         path = f"transition.{sid}"
-        boundaries.append({**entry(path, (sound.get("transitions") or {}).get(sid)), "id": sid,
+        mine = (sound.get("transitions") or {})
+        boundaries.append({**entry(path, mine[sid] if sid in mine else moves.get(sid)), "id": sid,
                            "name": section_label(name, int(n)), "from": ids[k - 1] if k else None,
                            "before": k > 0})
     return {"players": players, "boundaries": boundaries,

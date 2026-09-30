@@ -31,9 +31,10 @@ IMPACT = (110.0, 42.0, 0.25, 1.5)  # Hz the boom falls from and to, over s, its 
 ON_A_KICK = (90.0, -6.0)  # an impact's boom where a kick lands with it: high-passed here (Hz), this much lower (dB)
 SWEEP_HP = (20.0, 1500.0)
 SWEEP_LP = (16000.0, 350.0)
+SWEEP_OPEN = (350.0, 16000.0)  # a low-pass opening: a filtered intro, a house breakdown building to its drop
 SWEEP_Q = 0.707 + 0.3  # the sweep's resonance: a little bite at the moving corner
 FADE = 0.003  # s: every sound starts and stops over this much, and a sweep hands back to the dry band
-SWEEPS = ("sweep-hp", "sweep-lp", "stop")  # what the mix does to the band's bus, not a sound here
+SWEEPS = ("sweep-hp", "sweep-lp", "stop", "sweep-open")  # what the mix does to the band's bus, not a sound here
 
 
 def _biquad(kind: str, f: float, q: float, sr: float) -> np.ndarray:
@@ -175,7 +176,7 @@ def sweep(signals: list[np.ndarray], sr: int, spans) -> None:
                 if x is not None:
                     x[a0:a0 + len(gate)] *= gate[:, None] if x.ndim == 2 else gate
             continue
-        lo, hi = SWEEP_HP if kind == "sweep-hp" else SWEEP_LP
+        lo, hi = SWEEP_HP if kind == "sweep-hp" else SWEEP_OPEN if kind == "sweep-open" else SWEEP_LP
         k = max(0, min(int(FADE * sr), n - b))  # the filter runs on past the span while it hands back
         span = b - a
 

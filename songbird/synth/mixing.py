@@ -232,7 +232,7 @@ NAMES = {
     "organ": ("organ", "synthpad", "synth-pad", "harmonium"),  # sustained keys: no drone's 6 kHz low-pass
     "reed": ("reed",),
     "squeezebox": ("accordion", "concertina", "melodeon", "bandoneon", "squeezebox"),
-    "harmonica": ("harmonica",),
+    "harmonica": ("harmonica", "melodica"),  # a melodica: a free reed blown, a lead line (2026-09-30)
     "strings": ("cello", "viola", "strings", "quartet"),  # their low strings kept: no fiddle's 180 Hz high-pass
     "synth": ("synth", "synthlead", "arp", "chip"),
     "steel": ("steel", "pedalsteel", "lapsteel"),  # its low strings kept, and no fiddle's duck: it swells by its pedal
@@ -303,6 +303,7 @@ VOICE_SOFTEN = (6.0, 0.6)
 # smoothed over LEAD_ARC[3] s. Without it the lead came out at REFERENCE in every sung section, whatever the band
 # did, so a build the band made of 6 dB reached the record as half a dB (the mix review of 2026-09-27).
 LEAD_ARC = (6.0, -2.0, 2.5, 1.0)
+THROWN_SEND = 0.5  # how much of a dub desk's echo or spring return reaches the room, against the band's send (synth.dub)
 ENERGY_REST = 0.55
 WARMTH = (("low", 180, 2.0),)  # the whole record: a little more weight under the voice, where only the band and a low singer reach
 
@@ -604,6 +605,8 @@ def mix_made(parts: list, length: int, sr: int, seed: int = 0, params: MixParams
             if taps is not None:
                 taps[name] = (where, x)
             band[where] += x
+            if design is not None:  # a dub desk's throws from this part (the echo, the spring), while it is in hand
+                design.throw(name, where, x, (band, 1.0), (band_send, THROWN_SEND))
             # band_send += x * send, stepping += x * (1 - 10 ** (-duck * singing / 20)): a stretch at a time, each
             # product and sum as over the whole (no temporary the length of the song)
             sent, stepped = band_send[where], stepping[where]
@@ -697,6 +700,8 @@ def mix_made(parts: list, length: int, sr: int, seed: int = 0, params: MixParams
     for bus in (voice, choir, band):
         if bus is not None:
             out[:length] += bus
+    if design is not None and voice is not None:  # a dub desk's throws of the singer's line ends, beside its bus
+        design.throw("voice", slice(0, len(voice)), voice, (out, 1.0))
     del wet, voice, choir, band, singing
 
     # The whole: glued, tilted, maybe worn.
@@ -741,6 +746,9 @@ class Design:
 
         self.spans = sweeps.sweep_spans(sound.get("transitions") or (), sr)
         self.swept = False
+        self.throws: dict[str, list[dict]] = {}  # a dub desk's (synth.dub), by the part each is cut from
+        for t in sound.get("throws") or ():
+            self.throws.setdefault(t["part"], []).append(t)
 
     def send(self, name: str) -> float:
         return self.sends.get(name, 1.0)
@@ -783,6 +791,24 @@ class Design:
 
         sweeps.sweep(list(signals), self.sr, self.spans)
         self.swept = True
+
+    def throw(self, name: str, where: slice, x: np.ndarray, *into: tuple[np.ndarray, float]) -> None:
+        """A dub desk's throws from this part (its samples x, the song's stretch `where`): each window's echo or
+        spring added where it comes back, into each of `into` at its weight (the band, and its send to the room at
+        a little; the record for the singer), over its own span only."""
+        if name not in self.throws:
+            return
+        from . import dub
+
+        for t in self.throws[name]:
+            back = dub.returned(t, x, where.start, self.sr)
+            if back is None:
+                continue
+            a, y = back
+            for target, weight in into:
+                b = min(len(target), a + len(y))
+                if b > a:
+                    target[a:b] += y[: b - a] * weight
 
 
 # --- wear -------------------------------------------------------------------------------------
