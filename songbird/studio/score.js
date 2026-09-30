@@ -542,7 +542,7 @@
     if (!box || !S.sound || !band) return;
     keepFocus(() => {
       const strips = S.sound.players.filter((p) => p.playing !== false).map((sp) => strip(sp, band));
-      morph(box, [...strips, voiceStrip(mix), roomStrip(mix), masterStrip()]);  // in place: a fader being moved stays put
+      morph(box, [...strips, voiceStrip(mix), roomStrip(mix)]);  // in place: a fader being moved stays put
     });
   }
   const PUMPED = /bass|pad|drone|synth|arp/;
@@ -648,11 +648,6 @@
         busSlider("how wide", "mix.width", m.width, b["mix.width"], pct, "bus:width"),
         b["mix.rt60"] ? busSlider("rings for", "mix.rt60", m.rt60, b["mix.rt60"], (x) => `${Number(x).toFixed(1)} s`, "bus:rt60") : null),
       h("div", { class: "why" }, mix.value));
-  }
-  function masterStrip() {
-    const loud = card("field.loudness");
-    return h("div", { class: "strip bus", title: "The song's own loudness, as every version has it: not a control" }, h("div", { class: "nm" }, "Master"),
-      h("div", { class: "val" }, loud ? `${loud.value} LUFS` : ""));
   }
 
   // ------------------------------------------------------------------ the inspector: one shape in every state
@@ -778,7 +773,7 @@
         line(card("choir"), "Voices before"),
         line(card("words"), "The words", card("words")?.detail, h("div", { class: "row" }, h("button", { class: "btn quiet", type: "button", onclick: keepWords,
           title: "Hold every word as it is now, so that time and chance change only the music" }, "Keep these words"))),
-        line(card("field.loudness"), "Loudness", card("field.loudness") ? `${card("field.loudness").value} LUFS` : ""), line(card("machine"), "Your machine"),
+        line(card("machine"), "Your machine"),
         null) });
     return true;
   }
