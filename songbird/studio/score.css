@@ -40,11 +40,13 @@ code { font: 12px var(--mono); background: var(--wash); padding: 0 4px; border-r
 .btn.primary.rec { color: var(--card); }
 .link { border: 0; background: none; padding: 0; color: var(--hand); text-decoration: underline; text-underline-offset: 3px; font-size: 13px; }
 .link.small { font-size: 12px; }
-.chip { border: 1px solid var(--rule); background: var(--card); border-radius: var(--radius); padding: 3px 9px; font-size: 13px; min-height: 26px; }
+/* a chip keeps its size whatever it says (on, yours): the one beside it doesn't move as an answer lands (the EDM
+   test's second attempt, bug 2). Its weight is drawn, not set (a bolder face is wider); its ✎ sits on its corner */
+.chip { position: relative; border: 1px solid var(--rule); background: var(--card); border-radius: var(--radius); padding: 3px 9px; font-size: 13px; min-height: 26px; }
 .chip:hover { border-color: var(--hand); }
-.chip.on { border-color: var(--ink); background: var(--wash); color: var(--ink); font-weight: 600; }
+.chip.on { border-color: var(--ink); background: var(--wash); color: var(--ink); text-shadow: .35px 0 0 currentColor, -.15px 0 0 currentColor; }
 .chip.on.you { border-color: var(--hand); background: var(--hand-wash); color: var(--hand); }
-.chip.on.you::after { content: " ✎"; font-weight: 400; }
+.chip.on.you::after { content: "✎"; position: absolute; top: -8px; right: -5px; font-size: 10px; line-height: 1; padding: 1px 2px; border-radius: 6px; background: var(--card); text-shadow: none; pointer-events: none; }
 .chip.drawn { border-style: dashed; border-color: var(--ink-2); }
 .chips { display: flex; flex-wrap: wrap; gap: 5px; }
 select.sel, .inspector select, .pop select { border: 1px solid var(--rule-strong); background: var(--card); border-radius: var(--radius); padding: 4px 6px; font-size: 13px; max-width: 100%; }
@@ -362,7 +364,7 @@ button.sbc-chord.is-rub::after { content: "•"; color: var(--red); margin-left:
 .inspector .top .close { border: 0; background: none; color: var(--ink-3); font-size: 14px; padding: 0 4px; min-width: 28px; min-height: 28px; }
 .inspector .top .what { flex: 0 0 auto; }
 .inspector .about { font: 13px/1.5 var(--serif); color: var(--ink-2); background: var(--paper); padding: 8px 10px; margin: 0 0 8px; }
-.inspector .set { font: 15px/1.35 var(--serif); margin: 0 0 8px; }
+.inspector .set { font: 15px/1.35 var(--serif); margin: 0 0 8px; min-height: calc(2 * 1.35em); }  /* two lines kept for it: a longer answer moves nothing below */
 .inspector .set.you { color: var(--hand); }
 .inspector h4 { margin: 12px 0 4px; font: 600 11px var(--sans); letter-spacing: .08em; text-transform: uppercase; color: var(--ink-3); }
 .inspector .row { display: flex; gap: 6px; align-items: center; flex-wrap: wrap; margin: 7px 0; }

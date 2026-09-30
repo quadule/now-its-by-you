@@ -21,8 +21,26 @@ const state = {
 
 // ------------------------------------------------------------------ small helpers
 
+// An element this page made keeps its listeners in el.__on (one dispatcher a type), so morph() can keep a node on
+// the page and give it the new drawing's listeners: a control is updated in place, not replaced under the pointer.
+// A listener must not hold on to another node of the drawing (it finds it from the event instead): that node may be
+// the one kept on the page, or the one thrown away.
+function listenable(el) {
+  const add = Object.getPrototypeOf(el).addEventListener;
+  el.__h = true;
+  el.__on = {};
+  el.addEventListener = function (type, fn) {
+    if (!el.__on[type]) {
+      el.__on[type] = [];
+      add.call(el, type, (event) => { for (const f of [...(el.__on[type] || [])]) f.call(el, event); });
+    }
+    el.__on[type].push(fn);
+  };
+  return el;
+}
+
 function h(tag, attrs, ...children) {
-  const el = document.createElement(tag);
+  const el = listenable(document.createElement(tag));
   for (const [k, v] of Object.entries(attrs || {})) {
     if (v === null || v === undefined || v === false) continue;
     if (k === "class") el.className = v;
@@ -38,10 +56,48 @@ function h(tag, attrs, ...children) {
 }
 
 function svg(tag, attrs, ...children) {
-  const el = document.createElementNS("http://www.w3.org/2000/svg", tag);
+  const el = listenable(document.createElementNS("http://www.w3.org/2000/svg", tag));
   for (const [k, v] of Object.entries(attrs || {})) if (v !== null && v !== undefined) el.setAttribute(k, v);
   for (const c of children.flat()) if (c !== null && c !== undefined) el.append(c instanceof Node ? c : document.createTextNode(String(c)));
   return el;
+}
+
+// Draw `children` into `parent` in place (docs/STUDIO-EDM-TEST.md, second attempt, bugs 1 and 2): a node already
+// there that the new drawing has in the same place (the same tag and data-key, both drawn by h) is kept and given
+// the new one's attributes, text, value and listeners, so an answer arriving mid-click neither replaces the button
+// under the pointer nor moves what didn't change; anything else is put in, or taken out. A details' open is the
+// person's; a field being typed in keeps its typing; data-whole marks a node drawn by someone else, replaced whole.
+function morph(parent, children) {
+  const next = children.flat(Infinity).filter((c) => c !== null && c !== undefined && c !== false)
+    .map((c) => (typeof c === "object" ? c : document.createTextNode(String(c))));
+  let i = 0;
+  for (; i < next.length; i++) {
+    const n = next[i], o = parent.childNodes[i];
+    if (o === n) continue;
+    if (!o) parent.appendChild(n);
+    else if (alike(o, n)) patch(o, n);
+    else parent.replaceChild(n, o);
+  }
+  while (parent.childNodes.length > i) parent.removeChild(parent.lastChild);
+}
+function alike(o, n) {
+  if (o.nodeType !== n.nodeType) return false;
+  if (o.nodeType !== 1) return o.nodeType === 3;
+  return o.nodeName === n.nodeName && !!o.__h && !!n.__h && o.getAttribute("data-key") === n.getAttribute("data-key")
+    && !o.hasAttribute("data-whole") && !n.hasAttribute("data-whole");
+}
+const MORPH_TEXT = new Set(["text", "number", "search", "email", "url", "tel", "password"]);
+function patch(o, n) {
+  if (o.nodeType === 3) { if (o.data !== n.data) o.data = n.data; return; }
+  for (const a of [...o.attributes]) if (!n.hasAttribute(a.name) && !(a.name === "open" && o.nodeName === "DETAILS")) o.removeAttribute(a.name);
+  for (const a of [...n.attributes]) if (o.getAttribute(a.name) !== a.value) o.setAttribute(a.name, a.value);
+  for (const type of Object.keys(n.__on)) if (!o.__on[type]) o.addEventListener(type, () => {});
+  o.__on = Object.fromEntries(Object.keys(o.__on).map((type) => [type, n.__on[type] || []]));
+  const value = n.value, checked = n.checked;  // before its options move
+  morph(o, [...n.childNodes]);
+  const typing = document.activeElement === o && (o.nodeName === "TEXTAREA" || (o.nodeName === "INPUT" && MORPH_TEXT.has(o.type)));
+  if (o.nodeName === "INPUT" && (o.type === "checkbox" || o.type === "radio")) o.checked = checked;
+  else if (["INPUT", "TEXTAREA", "SELECT"].includes(o.nodeName) && !typing && !(o.matches?.(":active")) && o.value !== value) o.value = value;
 }
 
 const PLAY = "M4 2.5v11l9-5.5z";
@@ -405,8 +461,8 @@ function phraseChooser(w, o) {
     "data-focus": `${w.block}.${w.nth}.phrase` }, o.choices.map((c) => h("option", {
       value: c.id, disabled: !c.allowed, title: c.why || c.lines.join(" / ").replace(/\*/g, "") }, choiceLabel(c))));
   select.value = o.sung;
-  select.addEventListener("change", () => setEdit(o.path, o.block === "verse" ? { id: select.value }
-    : o.block === "refrain" ? Object.assign(refrainEdit(o), { id: select.value }) : select.value,
+  select.addEventListener("change", (e) => setEdit(o.path, o.block === "verse" ? { id: e.target.value }  // (morph: not `select`)
+    : o.block === "refrain" ? Object.assign(refrainEdit(o), { id: e.target.value }) : e.target.value,
   `Choose ${w.label.toLowerCase()} ${name.toLowerCase()}`));
   return h("label", { class: "lyric-slot-label" }, h("span", {}, name), select);
 }
@@ -419,7 +475,7 @@ function slotSelect(w, o, slot, suffix = "") {
   select.value = slot.sung;
   const current = (slot.labels?.[slot.sung] || slot.sung || "Choose").replace(/\*/g, "");
   select.style.width = `${Math.max(3, current.length + 2)}ch`;
-  select.addEventListener("change", () => chooseSlot(o, slot.slot, select.value));
+  select.addEventListener("change", (e) => chooseSlot(o, slot.slot, e.target.value));
   return select;
 }
 
@@ -519,10 +575,10 @@ function headChooser(o, sectionLabel) {
     "data-focus": `refrain.${o.index}.head` }, o.heads.map((head) => h("option", {
       value: head.id, disabled: !head.allowed, title: head.why || head.lines.join(" / ") }, choiceLabel(head))));
   select.value = o.head;
-  select.addEventListener("change", () => {
+  select.addEventListener("change", (e) => {
     const edit = refrainEdit(o);
     delete edit.slots;
-    edit.head = select.value;
+    edit.head = e.target.value;
     setEdit(o.path, edit, "Change refrain opening");
   });
   return h("label", { class: "lyric-slot-label" }, h("span", {}, "Opening"), select);
@@ -678,7 +734,8 @@ function soloPlayer(card, player) {
 }
 
 function mutePlayer(card, player) {
-  const path = `band.${player}`, level = card.band[player] || 0;
+  // its level now: the latest edit's (a second quick M unmutes), else the answer's
+  const path = `band.${player}`, level = (Object.hasOwn(state.edits, path) && state.edits[path] !== null ? state.edits[path] : card.band[player]) || 0;
   if (level > 0.02) {
     state.mutedLevels[player] = level;
     setEdit(path, 0, `Mute ${card.players[player] || player}`);
