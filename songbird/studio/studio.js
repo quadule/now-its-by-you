@@ -260,14 +260,16 @@ function renderHeader() {
   $("which").replaceChildren("Your version ", h("b", {}, when), `, ${v.from}, sung by ${v.by}.`);
   setOn("draw", "textContent", v.roll ? `chance drawn again: draw ${v.roll + 1}` : "");
   const mine = v.changed;
-  const held = v.held.length > 0;
+  const locks = v.held.filter((p) => !p.startsWith("words.")).length;  // a lock (the score's padlock) is held, not changed
+  const held = v.held.length > locks;
   const bar = $("yoursBar");
-  bar.hidden = !mine.length && !held;
+  bar.hidden = !mine.length && !held && !locks;
   bar.replaceChildren();
-  if (mine.length || held) {
+  if (mine.length || held || locks) {
     bar.append(...[
       mine.length ? tag("you", `${mine.length} choice${mine.length === 1 ? " is" : "s are"} yours`) : null,
       held ? tag("you", "the words are kept") : null,
+      locks ? tag("you", `${locks} locked`) : null,
       mine.length ? h("button", { class: "link small", type: "button", onclick: () => listen("program", null) }, "hear it as the program would sing it") : null,
       h("button", { class: "link small", type: "button", onclick: () => {
         const keep = state.edits.date ? { date: state.edits.date } : {};

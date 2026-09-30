@@ -352,7 +352,7 @@
       ondragleave: (e) => e.currentTarget.classList.remove("drop"),
       ondrop: (e) => { const from = e.dataTransfer.getData("text/x-section"); if (!from) return; e.preventDefault(); e.stopPropagation(); moveSection(from, i); } },
     h("span", { class: `name${mine ? " hand" : ""}` }, s.label),
-    h("span", { class: "bars" }, `${s.bars} bars${s.sung ? "" : " · played"}${s.build ? " · build" : ""}`),
+    h("span", { class: "bars" }, `${s.bars} bars${s.sung ? "" : " · instr."}${s.build ? " · build" : ""}`),
     C()?.mini?.(compIndex(s.id)) || null,
     h("span", { class: "edge", title: `Drag for its length: ${s.barOptions.join(", ")} bars`, "aria-hidden": "true",
       onpointerdown: (e) => edgeDrag(e, s), onmousedown: (e) => { e.preventDefault(); e.stopPropagation(); }, onclick: (e) => e.stopPropagation() }));
@@ -708,7 +708,7 @@
     };
     const anyMine = Object.keys(state.edits).some((p) => p.startsWith(`arrange.${s.id}.`)) || !!w?.mine;
     shell({ kind: "section", rubric: s.label, mine,
-      set: `${s.bars} bars, ${s.sung ? "sung" : "played"}${w?.sung ? `: “${s.first}”` : w ? `: ${w.lines[0]}` : ""}${w?.id && w.block === "verse" ? ` (the verse “${w.id}”)` : ""}`,
+      set: `${s.bars} bars, ${s.sung ? `sung: “${s.first}”` : w?.sung ? `played; its words wait, unsung: “${String(w.lines[0] || "").replace(/\*/g, "")}”` : `played${w ? `: ${w.lines[0]}` : ""}`}${w?.id && w.block === "verse" ? ` (the verse “${w.id}”)` : ""}`,
       problems: s.problems,
       body: h("div", {},
         chipRow("Length", s.barOptions.map((n) => ({ value: n, text: `${n} bars` })), s.bars, (n) => setBars(s, n), s.by.bars === "you"),
