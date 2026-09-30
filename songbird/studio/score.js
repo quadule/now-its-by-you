@@ -334,7 +334,7 @@
     const g = S.grid, box = $("grid");
     if (!g || !box) return;
     keepFocus(() => {
-      box.style.gridTemplateColumns = `var(--head, 150px) ${g.sections.map((s) => `minmax(${s.bars < 4 ? 44 : 72}px, ${s.bars}fr)`).join(" ")}`;
+      box.style.gridTemplateColumns = `var(--head, 176px) ${g.sections.map((s) => `minmax(${s.bars < 4 ? 44 : 72}px, ${s.bars}fr)`).join(" ")}`;
       const rows = [
         row(h("div", { class: "head", role: "columnheader" }, h("span", { class: "hint" }, "bar")),
           g.sections.map((s) => h("div", { class: "rule-cell", role: "columnheader", "aria-label": `${s.label}, from bar ${s.startBar}`,
