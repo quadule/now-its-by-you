@@ -107,6 +107,12 @@ records what `songbird render --parent THE_PACKET --machine here --date
 
 ## The musical workbench
 
+Since 2026-09-30 the studio's page is **the score** (docs/STUDIO-REDESIGN.md, and its "Built" section): one
+transport, three views (Page, Arrange, Mix), one inspector for whatever is selected, *Tools* for taking it out
+and bringing it in, and *Time* as a drawer. What follows describes the page it replaced, kept at `/classic`
+until the artist signs the score off; both pages share studio.js, so the edits, history, drafts, listening
+and recording below are the score's too.
+
 The first screen holds only what matters most: **Hear the song**, a few simple
 changes (key, scale, tempo, a new performance), undo and redo, **Record it**
 (or **Sing or record**, where the singing page exists), and **Help**. Everything
@@ -1652,7 +1658,7 @@ uv run pytest tests/test_composition.py tests/test_studio.py tests/test_edits.py
     tests/test_studio_piano.py tests/test_piano_score.py
 uv run pytest tests/test_composition.py tests/test_studio.py tests/test_edits.py tests/test_evolve.py tests/test_pack.py
 uv run pytest tests/test_notes_in.py tests/test_midi_in.py tests/test_midi.py
-node --test tests/studio_*.test.cjs tests/test_studio_drafts.cjs
+node --test tests/studio_*.test.cjs tests/test_studio_drafts.cjs   # the score's model and renderer among them
 ```
 
 Composition regression tests cover validation, provenance, replay, inheritance,
