@@ -4,9 +4,8 @@
 // them across a reload. Everything shown is built as text: nothing from an answer is read as markup.
 "use strict";
 
-// Two pages share it: the score (index.html, with score.js: views, one inspector) and the classic page
-// (classic.html, the tune book of four chapters). What either lacks is skipped; the score is told through
-// window.SongbirdScore (its render, its page of words, its inspector, where the recording shows).
+// The score (index.html, with score.js: views, one inspector) is drawn on it, told through window.SongbirdScore
+// (its render, its page of words, its inspector, where the recording shows); what the page lacks is skipped.
 const TOKEN = document.querySelector('meta[name="studio-token"]').content;
 const $ = (id) => document.getElementById(id);
 const setOn = (id, key, value) => { const el = $(id); if (el) el[key] = value; };

@@ -523,7 +523,7 @@ def test_the_page_says_plainly_what_an_open_studio_keeps(opened):
                  "only numbers are kept; the audio is deleted once it's measured",
                  "a random id in a cookie keeps it fair (Help says what's kept)"):
         assert said in script, said
-    assert "What's kept" in (S.PAGE / "score.js").read_text() and "helpKept" in (S.PAGE / "classic.html").read_text()
+    assert "What's kept" in (S.PAGE / "score.js").read_text() and "helpKept" in (S.PAGE / "index.html").read_text()
 
 
 def test_the_plain_pages_carry_no_style_the_policy_would_block(home):

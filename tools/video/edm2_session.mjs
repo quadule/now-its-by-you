@@ -1,6 +1,6 @@
 // The second EDM version, made only through the studio's page (the score: Page · Arrange · Mix, one inspector,
-// Tools), filmed: docs/STUDIO-EDM-TEST.md, "Second attempt (2026-09-30)". The first attempt's session, on the
-// page before (now at /classic), is tools/video/studio_session.mjs.
+// Tools), filmed: docs/STUDIO-EDM-TEST.md, "Second attempt (2026-09-30)". (The first attempt's session drove the
+// page before the score, since removed; it is in git history, tools/video/studio_session.mjs.)
 //
 //   uv run songbird studio --no-open --port 8851 --machine fictional:vela
 //   node tools/video/edm2_session.mjs --url http://127.0.0.1:8851/ --out renders/video [--no-video] [--until PHASE]

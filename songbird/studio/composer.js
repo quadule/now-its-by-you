@@ -21,7 +21,7 @@
   const root = () => document.getElementById("studio-composer");
   // On the score (index.html) the editor is only the notes of one section, under the Arrange grid: the transport is
   // the page's, the sections are its regions, and a note's or a chord's card is a state of its inspector (score.js,
-  // told through page()). On the classic page (classic.html) it is the whole Tune area, as it was.
+  // told through page()).
   const page = () => window.SongbirdScore;
   const notesMode = () => root()?.dataset?.mode === "notes";
   const composition = () => state.view && state.view.composition;

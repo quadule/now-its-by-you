@@ -7,8 +7,8 @@
 <meta name="studio-token" content="{{token}}">
 <title>Songbird studio</title>
 <!-- The score (docs/STUDIO-REDESIGN.md): one transport, three views of the song (Page, Arrange, Mix), one inspector
-     for whatever is selected, one sheet for taking it out and bringing it in, and time as a drawer. The page before it
-     is at /classic (classic.html). studio.js is the core both share; score.js draws this one. -->
+     for whatever is selected, one sheet for taking it out and bringing it in, and time as a drawer. studio.js is the
+     core (edits, undo, drafts, the record); score.js draws the page. -->
 <link rel="stylesheet" href="/identity.css">
 <link rel="stylesheet" href="/score.css">
 <script src="/renderer.js" defer></script>
@@ -161,7 +161,7 @@
   <aside class="inspector empty" id="inspector" role="complementary" aria-labelledby="inspectorTitle"></aside>
 </div>
 
-<footer class="foot"><span>Made here. Heard anywhere.</span><span id="whereNote">Nothing on this page leaves this computer.</span></footer>
+<footer class="foot"><span id="whereNote">Nothing on this page leaves this computer.</span></footer>
 
 <nav class="bottombar" id="bottombar" aria-label="Views">
   <button type="button" data-view="page" aria-pressed="true">Page</button>
@@ -269,7 +269,7 @@
     </table>
     <p class="hint">None of them fires while you type in a field.</p>
   </details>
-  <p class="hint">Not sure what something is? The <span class="what" aria-hidden="true">?</span> by the views and at the top of the column says. The studio as it was before this page is still <a id="classicLink" href="/classic">here</a>.</p>
+  <p class="hint">Not sure what something is? The <span class="what" aria-hidden="true">?</span> by the views and at the top of the column says.</p>
   <div class="actions"><button class="btn" id="tourAgain" type="button">Show me around</button></div>
 </dialog>
 

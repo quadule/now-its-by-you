@@ -1348,8 +1348,6 @@
     if (S.hash) loadGrid().then(afterFirst); else loadGrid();
   }
   function started(start, hash) {
-    const classic = location.pathname.replace(/\/$/, "");
-    $("classicLink").href = `${classic.startsWith("/v/") ? classic : ""}/classic`;
     const p = start.public;
     $("toolsWhere").textContent = p
       ? `An open studio: each person can have ${p.records} whole songs and ${p.previews} sections made an hour, one at a time for everyone; what you record waits ${p.download_hours} hours to be downloaded.`

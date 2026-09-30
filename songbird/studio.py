@@ -74,7 +74,7 @@ from .synth import master
 from .synth.instruments import INSTRUMENTS
 from .synth.mixing import MixParams
 
-PAGE = Path(__file__).with_name("studio")  # index.html, studio.css, studio.js
+PAGE = Path(__file__).with_name("studio")  # index.html, score.css, studio.js
 ROOT = Path(__file__).resolve().parent.parent  # the program's folder: a packet's, or a checkout
 LEAD = "h-now-its-by-you"  # in a checkout, the song the studio opens when nothing names one
 PORT = 8766
@@ -86,7 +86,6 @@ MAX_WAITING = 12  # renders waiting at once: more are refused until the queue sh
 CACHE_LIMIT = 300 * 2**20  # bytes of previews kept; the least recently heard go first
 PREVIEW_GAIN_DB = 5.3  # what mastering gives a whole rendition of H (5.1 to 5.4 dB): a section keeps its level
 STATIC = {"/identity.css": ("identity.css", "text/css; charset=utf-8"),  # the shared tokens (docs/IDENTITY.md)
-          "/studio.css": ("studio.css", "text/css; charset=utf-8"),
           "/composer.js": ("composer.js", "text/javascript; charset=utf-8"),
           "/drafts.js": ("drafts.js", "text/javascript; charset=utf-8"),
           "/author.js": ("author.js", "text/javascript; charset=utf-8"),
@@ -105,12 +104,12 @@ PIANO_STATIC = {"/piano/": ("piano/index.html", "text/html; charset=utf-8"),
 STATIC["/players.js"] = ("players.js", "text/javascript; charset=utf-8")
 STATIC["/learn.js"] = ("learn.js", "text/javascript; charset=utf-8")
 # the score (docs/STUDIO-REDESIGN.md): one page, three views, one inspector (index.html); the tune book of four
-# chapters it replaces stays at /classic (classic.html) until the artist signs the new one off, on the same API
+# chapters it replaced (classic.html) was removed when the artist signed it off (2026-09-30)
 STATIC["/renderer.js"] = ("renderer.js", "text/javascript; charset=utf-8")  # previews and recordings, one interface
 STATIC["/model.js"] = ("model.js", "text/javascript; charset=utf-8")
 STATIC["/score.js"] = ("score.js", "text/javascript; charset=utf-8")
 STATIC["/score.css"] = ("score.css", "text/css; charset=utf-8")
-PAGES = {"": "index.html", "/index.html": "index.html", "/classic": "classic.html"}
+PAGES = {"": "index.html", "/index.html": "index.html"}
 
 
 # ---------------------------------------------------------------- where the song and its parent come from
@@ -1761,7 +1760,7 @@ class Handler(BaseHTTPRequestHandler):
         if path == "/notice.css":  # the plain pages' look, for a visitor without the key too
             return self.send((PAGE / "notice.css").read_bytes(), "text/css; charset=utf-8")
         if not self._admitted():
-            return self.refuse_visitor() if path in ("/", "/index.html", "/classic") or path.startswith("/v/") \
+            return self.refuse_visitor() if path in ("/", "/index.html") or path.startswith("/v/") \
                 else self.fail(403, "this studio needs its link's key")
         try:
             singing = self.studio.singing
@@ -1771,12 +1770,11 @@ class Handler(BaseHTTPRequestHandler):
                 return self.render_file(path[len("/render/"):])
             if path == "/piano" or path.startswith("/piano/"):  # learning it at the piano
                 return self.piano_page(path)
-            # someone's version: the page's token names it (the classic page too, at /v/<id>/classic)
-            version = re.fullmatch(r"/v/([0-9a-f]{32})(/classic)?", path)
+            # someone's version: the page's token names it
+            version = re.fullmatch(r"/v/([0-9a-f]{32})", path)
             if path.startswith("/v/") and (version is None or self.studio.opened(version.group(1)) is None):
                 return self.version_gone()
-            page_name = PAGES.get(path.rstrip("/") if path != "/" else "") or (
-                ("classic.html" if version.group(2) else "index.html") if version else None)
+            page_name = PAGES.get(path.rstrip("/") if path != "/" else "") or ("index.html" if version else None)
             if page_name:
                 token = f"{self.studio.token}.{version.group(1)}" if version else self.studio.token
                 page = (PAGE / page_name).read_text().replace("{{token}}", token)
