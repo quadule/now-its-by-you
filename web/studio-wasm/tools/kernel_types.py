@@ -74,7 +74,8 @@ for key, (d, f, kw) in sorted(KERNELS.items()):
     sigs = []
     for sig, cres in d.overloads.items():
         locs = {}
-        for name, t in cres.type_annotation.typemap.items():
+        typemap = getattr(cres.type_annotation, "typemap", {})  # a string when loaded from numba's cache
+        for name, t in typemap.items():
             b = base(name)
             if b is not None:
                 locs.setdefault(b, set()).add(str(t))
@@ -117,5 +118,12 @@ if calls_dir is not None:
             for attr, val in list(vars(mod).items()):
                 if id(val) in by_id:
                     setattr(mod, attr, capture(by_id[id(val)], val))
-    S.section(song, 2)
+    if os.environ.get("CAPTURE_INSTRUMENTS"):  # the calls of these instruments' parts (bench/gauntlet.py) instead
+        sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "bench"))
+        import gauntlet  # noqa: E402
+
+        for name in os.environ["CAPTURE_INSTRUMENTS"].split(","):
+            gauntlet.render(name)
+    else:
+        S.section(song, 2)
     print(f"captured {sum(seen.values())} calls of {len(seen)} kernels into {calls_dir}")

@@ -47,7 +47,9 @@ def compare(fn, z) -> tuple[bool, int]:
     same = all(np.array_equal(np.asarray(g, dtype=np.float64).view(np.int64), np.asarray(w, dtype=np.float64).view(np.int64))
                if np.asarray(g).shape == np.asarray(w).shape else False for g, w in zip(got, want))
     worst = max((ulps(g, w) for g, w in zip(got, want)), default=0)
-    return same, worst
+    rel = max((float(np.abs(np.asarray(g, float) - np.asarray(w, float)).max() / (np.abs(np.asarray(w, float)).max() + 1e-300))
+               for g, w in zip(got, want) if np.asarray(g).shape == np.asarray(w).shape and np.asarray(w).size), default=0.0)
+    return same, (worst, rel)
 
 
 rows = []
@@ -63,6 +65,6 @@ for path in sorted(glob.glob("/calls/*.npz")):
     py = "-"
     if size <= PY_LIMIT:
         s2, w2 = compare(getattr(fn, "py_func", fn), z)
-        py = "same" if s2 else f"{w2} ulp"
-    rows.append(f"{name:36s} {port:6s} {'same' if same else f'DIFFERS max {worst} ulp':22s} python: {py}")
+        py = "same" if s2 else f"{w2[0]} ulp, {w2[1]:.1e} of peak"
+    rows.append(f"{name:36s} {port:6s} {'same' if same else f'DIFFERS max {worst[0]} ulp, {worst[1]:.1e} of peak':40s} python: {py}")
 print("\n".join(rows))
