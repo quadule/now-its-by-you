@@ -54,6 +54,23 @@
       ],
       "port": 8770,
       "url": "http://127.0.0.1:8770"
+    },
+    {
+      "name": "studio-public",
+      "runtimeExecutable": "uv",
+      "runtimeArgs": [
+        "run",
+        "songbird",
+        "studio",
+        "--public",
+        "--machine",
+        "fictional:wren",
+        "--port",
+        "8768",
+        "--no-open"
+      ],
+      "port": 8768,
+      "url": "http://127.0.0.1:8768"
     }
   ]
 }

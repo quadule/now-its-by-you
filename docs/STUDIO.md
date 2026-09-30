@@ -448,7 +448,9 @@ Left as they are, for the artist:
   read the link as it travels. A tunnel gives https.
 - **No limit per person.** One visitor can keep the renderer busy for
   everyone; the queue's cap keeps it from growing without end, and
-  recordings fill the disk at about 15 MB each.
+  recordings fill the disk at about 15 MB each. (A public studio,
+  `--public`, has limits per person and keeps no recordings:
+  docs/WEB-STUDIO.md.)
 - **Previews are shared by what they are.** Two visitors with the same
   choices hear the same cached render; nobody can list anyone else's.
 
