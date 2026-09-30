@@ -1382,8 +1382,8 @@ section's start (a line chosen, a build's bar, or the entrance chance drew). A c
 play (a section it hasn't got, a player its band hasn't got, a pattern its player doesn't play, a build at
 the song's end) is in `problems`, with why; one kept from the version before waits there, silent.
 
-**For the page.** A cell's energy bar is `value.level`; the second ink where `by` is `you` (a padlock where
-`locked`), a dashed outline where `chance`; its inspector shows `pattern_label`, the player's `patterns`,
+**For the page.** A cell's energy bar is `value.level`; the second ink where `by` is `you` (the program's own
+drawing inside a second-ink line where `locked`: no glyph on a cell), a dashed outline where `chance`; its inspector shows `pattern_label`, the player's `patterns`,
 `from` against the section's `lines`, `fill` where the player `fills`, the `program` value to go back to
 (send null), and `why` folded. A region's edge offers `bar_options`; *Who sings* is `sung` where
 `can_play`; *Moment* is `build` and the section's `options` (each a `style.*` path). Changing any of them is
