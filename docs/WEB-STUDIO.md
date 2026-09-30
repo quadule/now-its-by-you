@@ -154,17 +154,19 @@ the queue is gone; each waiting page's next poll gets "no such job" and says
 so where it was waiting; asking again starts over. Finished previews and
 downloads are on the volume and survive.
 
-## Memory: not on the VPS yet
+## Memory
 
-A whole render today peaks at about 3.8 GB with 2 threads (the render-memory
-work reports that; measured here on macOS, 6.0 GB maximum resident). The
-VPS has 7.57 GB, of which mailcow and the Rails app use about 4.2 GB, so
-about 3.4 GB is free: a 2.5 GB cap would kill the studio on the first whole
-song, every time. **Deploy to the VPS only after the render-memory work
-lands and a whole render stays under about 1.5 GB**, leaving the rest of the
-2.5 GB for the server, the preview cache's pages and the measuring model.
-Until then, the desktop is the place (same compose file, with
-`STUDIO_MEMORY=8g` and `STUDIO_CPUS=4` in `.env`).
+Since 2026-09-29 (docs/PERFORMANCE.md, "Memory (2026-09-29)") a whole render
+peaks at about 1.33 GB with 2 threads and 1.13 GB with 1, the output byte for
+byte what it was (it was 3.2 GB). Those are macOS figures with
+`MallocLargeCache=0`, the nearest stand-in for Linux, which hands large freed
+arrays straight back; the compose file sets `MALLOC_ARENA_MAX=2` and
+`MALLOC_MMAP_THRESHOLD_=1048576` so glibc does. A measuring process for
+singing (under 900 MB) never runs beside a render: they share one queue. So
+the 2.5 GB cap holds a render with room for the server and its pages, on the
+VPS's ~3.4 GB free beside mailcow. **Measure it once in the container before
+opening it** (`docker stats` while a whole song is recorded, or
+`tools/render_memory.py`): these figures are from a Mac, not the VPS.
 
 To check a new program before deploying: `SONGBIRD_THREADS=2 /usr/bin/time
 -v uv run songbird render songs/h-now-its-by-you.json --machine none --out

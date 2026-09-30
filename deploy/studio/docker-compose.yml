@@ -24,6 +24,10 @@ services:
       ${STUDIO_ARGS:-}
     environment:
       SONGBIRD_THREADS: ${SONGBIRD_THREADS:-2}  # a render's threads (the same bytes whatever it says)
+      # glibc hands large freed arrays straight back (a render peaks ~1.3 GB on 2 threads, docs/PERFORMANCE.md
+      # "Memory (2026-09-29)"): few arenas, and anything over 1 MB mapped and unmapped on its own
+      MALLOC_ARENA_MAX: "2"
+      MALLOC_MMAP_THRESHOLD_: "1048576"
     mem_limit: ${STUDIO_MEMORY:-2500m}
     memswap_limit: ${STUDIO_MEMORY:-2500m}  # the same: no swap, so a runaway render ends rather than crawls
     oom_score_adj: 800  # first to go if the host itself runs short
