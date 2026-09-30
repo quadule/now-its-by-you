@@ -495,7 +495,7 @@ def mix_made(parts: list, length: int, sr: int, seed: int = 0, params: MixParams
         if where.stop - where.start > sr // 2:
             group = fx.deess(fx.equalize(choir[where], fx.design(CHOIR_EQ, sr), inplace=owned), sr, inplace=True)[0]
             group = _peaks(_compressed(group, sr, CHOIR_COMP, inplace=True), sr, inplace=True)
-            group = fx.width(group, sr, min(CHOIR_WIDTH * p.width, 1.6))
+            group = fx.width(group, sr, min(CHOIR_WIDTH * p.width, 1.6), inplace=True)
             choir = np.zeros((length, 2))
             choir[where] = _at(group, sr, REFERENCE - CHOIR_UNDER + balance.get("choir", 0.0))
             if rise is not None:
@@ -614,7 +614,7 @@ def mix_made(parts: list, length: int, sr: int, seed: int = 0, params: MixParams
             band_send *= ride[:, None]
             del ride
             band = fx.dynamic_dip(band, sr, CARVE[0], CARVE[1], CARVE_DEPTH * p.duck * singing, inplace=True)
-        band = fx.width(band, sr, p.width)
+        band = fx.width(band, sr, p.width, inplace=True)
 
     # The room, heard from each bus at its own distance; the plate for the singers.
     size = min(1.0, (1.1 / p.rt60) ** 0.25)  # a long room needs less sent to be heard as much
@@ -641,7 +641,8 @@ def mix_made(parts: list, length: int, sr: int, seed: int = 0, params: MixParams
     del send
     wet = room.convolve(given, early, tail, plates)
     del plates
-    wet = _peaks(fx.width(fx.equalize(wet, fx.design(RETURN_EQ, sr), inplace=True), sr, p.width), sr)
+    wet = _peaks(fx.width(fx.equalize(wet, fx.design(RETURN_EQ, sr), inplace=True), sr, p.width, inplace=True), sr,
+                 inplace=True)
     if singing is not None:
         # the room gives way to the lead's words, but not where the lineage sings with it: that is its space
         dip = np.zeros(len(wet))

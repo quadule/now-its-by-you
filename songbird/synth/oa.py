@@ -28,31 +28,50 @@ GROUP = 8  # blocks at a time come in multiples of this: a multiple of any SIMD 
 CALL = 1 << 22  # bytes of blocks a call works on, roughly (at least one GROUP)
 
 
-def convolve(x: np.ndarray, h: np.ndarray, n: int | None = None, out: np.ndarray | None = None) -> np.ndarray:
-    """oaconvolve(x, h)[:n] (mode "full"), for 1-D real float64 x and h, made a few blocks at a time; into
-    `out` (a float64 array of that length, which may be a column of a wider one) if given."""
+def convolve(x: np.ndarray, h: np.ndarray, n: int | None = None, out: np.ndarray | None = None,
+             workers: int = 1) -> np.ndarray:
+    """oaconvolve(x, h)[:n] (mode "full") as scipy makes it with `workers` FFT threads (inside
+    scipy.fft.set_workers(workers)), for 1-D real float64 x and h, made a few blocks at a time; into `out` (a
+    float64 array of that length, which may be a column of a wider one) if given."""
     x = np.asarray(x)
     h = np.asarray(h)
     s1, s2 = len(x), len(h)
     full = s1 + s2 - 1
     n = full if n is None else min(n, full)
-    if (x.ndim != 1 or h.ndim != 1 or x.dtype != np.float64 or h.dtype != np.float64 or s1 == 0 or s2 == 0
-            or s1 == s2 or sp_fft.get_workers() != 1):
+
+    def scipys() -> np.ndarray:
+        with sp_fft.set_workers(workers):
+            return _into(oaconvolve(x, h)[:n], out)
+
+    if sp_fft.get_workers() != 1:  # inside a caller's own set_workers: scipy's, as it asks
         return _into(oaconvolve(x, h)[:n], out)
+    if (x.ndim != 1 or h.ndim != 1 or x.dtype != np.float64 or h.dtype != np.float64 or s1 == 0 or s2 == 0
+            or s1 == s2):
+        return scipys()
     block, overlap, step1, step2 = _calc_oa_lens(s1, s2)
     if overlap is None or step2 != s2 or s1 <= step1:  # one block, or the response cut up too: scipy's own way
-        return _into(oaconvolve(x, h)[:n], out)
+        return scipys()
     # oaconvolve's block count and padding
     steps = math.ceil((s1 + 1) / step1)
     if (block - overlap) * steps < full:
         steps += 1
-    spectrum = sp_fft.rfftn(h.reshape(1, s2), [block], axes=[1])
+    spectrum = sp_fft.rfftn(h.reshape(1, s2), [block], axes=[1])  # one row: the same on any number of threads
     out = np.empty(n) if out is None else out
     carry = None  # the last block's tail, into the next block's head
-    # the blocks that reach into the first n samples, to a whole number of groups (or every block)
+    # scipy's FFT threads take the blocks as np.array_split divides them, each thread its stretch from its first
+    # block; each stretch is made here a whole number of groups at a time from its start (the last call of a
+    # stretch ending where it ends), until the blocks reach past the first n samples
     per = GROUP * max(1, CALL // (8 * block * GROUP))
-    rows = min(steps, math.ceil(math.ceil(n / step1) / GROUP) * GROUP)
-    bounds = [(a, min(a + per, rows)) for a in range(0, rows, per)]
+    needed = math.ceil(n / step1)
+    bounds = []
+    lo = 0
+    for size in (len(part) for part in np.array_split(np.arange(steps), max(1, int(workers)))):
+        hi = lo + size
+        a = lo
+        while a < hi and a < needed:
+            bounds.append((a, min(a + per, hi)))
+            a = bounds[-1][1]
+        lo = hi
     for a, b in bounds:
         blocks = np.zeros((b - a, step1))
         take = x[a * step1: min(b * step1, s1)]

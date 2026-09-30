@@ -646,16 +646,25 @@ def saturate(x: np.ndarray, sr: int, drive: float, bias: float = 0.15, inplace: 
     return y.reshape(shape)
 
 
-def width(x: np.ndarray, sr: int, amount: float, mono_below: float = 140.0) -> np.ndarray:
+def width(x: np.ndarray, sr: int, amount: float, mono_below: float = 140.0, inplace: bool = False) -> np.ndarray:
     """Scale the side (L - R) against the mid; below `mono_below` the side is
-    never widened, so the low end stays centred."""
+    never widened, so the low end stays centred. inplace: the result is written over x (a float64 (n, 2)
+    array), each step on its own copy of the mid and side as before."""
     if amount == 1.0:
         return x
     mid = (x[:, 0] + x[:, 1]) / 2.0
     side = (x[:, 0] - x[:, 1]) / 2.0
     low = equalize(side, butter(2, mono_below, btype="lowpass", fs=sr, output="sos"))
-    side = low * min(amount, 1.0) + (side - low) * amount
-    return np.stack([mid + side, mid - side], axis=1)
+    # side = low * min(amount, 1) + (side - low) * amount, each product and sum where the last left it
+    side -= low
+    side *= amount
+    low *= min(amount, 1.0)
+    low += side
+    del side
+    out = x if inplace and x.dtype == np.float64 and x.ndim == 2 and x.shape[1] == 2 else np.empty((len(x), 2))
+    np.add(mid, low, out=out[:, 0])
+    np.subtract(mid, low, out=out[:, 1])
+    return out
 
 
 def delay(x: np.ndarray, samples: int) -> np.ndarray:

@@ -174,3 +174,34 @@ def test_holding_a_track_through_rests_is_the_gather_it_replaced():
         want = track[np.maximum.accumulate(np.where(playing, np.arange(n), 0))]
         fx.hold(playing, track)
         assert same(track, want)
+
+
+@pytest.mark.parametrize("s2", [3242, 66005])
+def test_the_rooms_convolutions_are_oaconvolves_on_its_threads(s2):
+    """room.convolve's convolutions, as oaconvolve makes them on the room's fixed FFT threads."""
+    from scipy.fft import set_workers
+
+    from songbird.synth import room
+
+    rng = np.random.default_rng(s2)
+    x = rng.standard_normal(1_200_000)
+    h = rng.standard_normal(s2) * np.exp(-np.arange(s2) / (s2 / 4))
+    with set_workers(room.WORKERS):
+        want = oaconvolve(x, h)
+    assert same(oa.convolve(x, h, workers=room.WORKERS), want)
+
+
+def test_widening_is_as_it_was():
+    from songbird.synth.iir import butter
+
+    rng = np.random.default_rng(8)
+    x = rng.standard_normal((100_000, 2)) * [1.0, 0.7]
+    for amount in (0.0, 0.6, 1.3):
+        mid = (x[:, 0] + x[:, 1]) / 2.0
+        side = (x[:, 0] - x[:, 1]) / 2.0
+        low = fx.equalize(side, butter(2, 140.0, btype="lowpass", fs=SR, output="sos"))
+        side = low * min(amount, 1.0) + (side - low) * amount
+        want = np.stack([mid + side, mid - side], axis=1)
+        mine = x.copy()
+        assert same(fx.width(x, SR, amount), want)
+        assert same(fx.width(mine, SR, amount, inplace=True), want) and same(mine, want)
