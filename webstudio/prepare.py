@@ -7,8 +7,8 @@ For each version offered (a spec, tools/guides.py: the first recording set, each
 its score, the melody guide the visitor hears (the karaoke's default mix: the tune on a whistle over a pulse,
 made from the score alone, so none of the band is rendered), its words for the page, and the template singer's
 analysis of it in the guide's key and an octave either side (--octaves), which is the part that needs the
-memory: 4 GB and about a minute each on an M-series Mac. Every file is the song's or the machine's; nobody's
-voice is in the kit.
+memory: 4 GB and about a minute each on an M-series Mac, each made in a process of its own. Every file is the
+song's or the machine's; nobody's voice is in the kit.
 
 Run it with the program the server will run: the templates are kept under the measuring code's version
 (tools/phrasing.py version(), which hashes the singer), and a server whose code differs finds none and says
@@ -21,6 +21,8 @@ import argparse
 import hashlib
 import json
 import shutil
+import subprocess
+import sys
 import time
 from datetime import datetime, timezone
 from pathlib import Path
@@ -98,10 +100,11 @@ def prepare(song: Path, kit: Kit, keys=KEYS, tempos=TEMPOS, octaves=OCTAVES, set
             lyrics = words(score, genome.title, digest)
             kit.lyrics(spec.id).parent.mkdir(parents=True, exist_ok=True)
             kit.lyrics(spec.id).write_text(json.dumps(lyrics) + "\n")
-            g = tools.guide(stem, digest)
-            g.templates = {}  # making them is what this is for
-            for octave in octaves:
-                T.template(g, octave)
+            for octave in octaves:  # each in a process of its own, so its 4 GB is given back before the next
+                kept = kit.measured / "templates" / f"{digest}.{octave:+d}.{tools.extractor}.npz"
+                if not kept.exists():
+                    subprocess.run([sys.executable, "-m", "webstudio.prepare", "--kit", str(kit.root), "--template",
+                                    stem, digest, str(octave)], cwd=ROOT, check=True)
             specs.append({**spec.to_dict(), "guide": digest, "duration": round(float(lyrics["duration"]), 3),
                           "templates": list(octaves), "audio_bytes": size})
             say(f"  {spec.id}: guide {digest}, {lyrics['duration']:.0f} s, melody {size / 2**20:.1f} MB, "
@@ -124,8 +127,16 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--octaves", type=int, nargs="+", default=list(OCTAVES),
                     help="where a voice may sit against the guide (semitones): a template for each")
     ap.add_argument("--set", dest="set_id", help="the recording set to sing (default: the first)")
+    ap.add_argument("--template", nargs=3, metavar=("SONG", "GUIDE", "KEY"), help=argparse.SUPPRESS)
     args = ap.parse_args(argv)
     kit = Kit(args.kit)
+    if args.template:  # one template singer's analysis, alone (prepare() runs each in a process of its own)
+        song, digest, key = args.template
+        tools = Tools(kit)
+        g = tools.guide(song, digest)
+        g.templates = {}  # making it is what this is for
+        tools.T.template(g, int(key))
+        return 0
     print(f"Making the singing kit in {kit.root}")
     offer = prepare(Path(args.song).resolve(), kit, args.keys, args.tempos, args.octaves, args.set_id)
     print(f"{len(offer['specs'])} versions to sing to, for {offer['title']}; the studio takes takes with "
