@@ -486,7 +486,7 @@ class Singing:
         limits = {"whole": request["to_s"] - request["from_s"] > SINGLE}
         if by is not None and gate is not None:
             visitor, ip = by
-            limits.update(owner=visitor, admit=lambda: gate.render("takes", visitor, ip))
+            limits.update(owner=visitor, where=network(ip), admit=lambda: gate.render("takes", visitor, ip))
         jobs = self.studio.jobs
         with self.lock:
             for key in [k for k in self.waiting if jobs.live(k) is None]:  # cancelled or gone: its audio goes too

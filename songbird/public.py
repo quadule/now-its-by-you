@@ -35,11 +35,14 @@ class Limits:
     takes_ip: int = 30
     requests: int = 600  # requests from one address a minute (the page asks every half second while it waits)
     queue: int = 12  # renders waiting at once, for everyone
+    queue_ip: int = 3  # ... from one address (an IPv6 one by its /64), however many visitors (or none) it holds
     cache_mb: int = 300  # previews kept, shared by everyone who makes the same choices
     downloads_mb: int = 1024  # recordings waiting to be downloaded
     download_hours: float = 24.0  # how long a recording waits
     timeout: float = 30.0  # seconds a connection may send nothing before it's closed
     connections: int = 64  # connections served at once
+    connections_ip: int = 16  # ... from one address (a page asks several things at once, a player several ranges)
+    send_kb: int = 16  # the slowest a download is sent (KB a second, over its whole time, after a minute's grace)
     opens: int = 12  # versions someone was sent, opened by one visitor an hour (each read in a process of its own)
     opens_ip: int = 40
     upload_mb: int = 64  # the largest file taken as a version to open (a rendition is 15 to 20 MB)

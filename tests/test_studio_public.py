@@ -167,6 +167,80 @@ def test_the_public_queue_takes_previews_in_turn_and_one_at_a_time_for_each_visi
         gate.set()
 
 
+def test_one_address_has_a_few_renders_waiting_however_many_visitors_it_holds():
+    """A visitor is a cookie, and a client without one is a new visitor each time: the address (an IPv6 one by its
+    /64) has queue_ip renders waiting at most, so one sender can't fill the queue for everyone."""
+    jobs = S.Jobs(12, fair=True, per_address=2)
+    gate = threading.Event()
+    first = jobs.submit("run", "preview", "x", lambda job: gate.wait(30), owner="ann", where="198.51.100.1")
+    try:
+        running(type("S", (), {"jobs": jobs})(), first.id)
+        where = P.network("2001:db8:1:2::5")
+        jobs.submit("a", "preview", "a", lambda job: None, owner="ip:1", where=where)
+        jobs.submit("b", "preview", "b", lambda job: None, owner="ip:2", where=P.network("2001:db8:1:2::77"))
+        with pytest.raises(P.Limited, match="Your network has 2 songs waiting"):
+            jobs.submit("c", "preview", "c", lambda job: None, owner="ip:3", where=P.network("2001:db8:1:2:ffff::9"))
+        jobs.submit("d", "preview", "d", lambda job: None, owner="ip:4", where=P.network("2001:db8:1:3::5"))  # another
+        assert jobs.submit("a", "preview", "a", lambda job: None, owner="ip:5", where=where).key == "a"  # the same song
+        assert P.Limits().queue_ip == 3 and P.Limits.parse(["queue-ip=2"]).queue_ip == 2
+    finally:
+        gate.set()
+
+
+def test_one_address_has_a_few_connections_served_at_once_and_a_slow_reader_is_let_go(home):
+    """The studio serves `connections` at once for everyone: one address has connections_ip of them at most, and a
+    download sent slower than send_kb a second (after its grace) is ended, so a reader taking a byte at a time can't
+    hold a place for days."""
+    studio, gate = open_studio(home, connections_ip=2, send_kb=4096)
+    gate.set()
+    server = S.serve(studio, 18870, client_ip_header="CF-Connecting-IP")
+    server.RequestHandlerClass.send_grace = 0.2
+    threading.Thread(target=server.serve_forever, daemon=True).start()
+    port = server.server_address[1]
+    key = "cd" * 12
+    (studio.cache / f"{key}.flac").write_bytes(bytes(40 * 2**20))
+    try:
+        def stalled(ip):  # a download asked for and not read: the studio blocks sending it
+            s = socket.create_connection(("127.0.0.1", port), timeout=10)
+            s.setsockopt(socket.SOL_SOCKET, socket.SO_RCVBUF, 4096)
+            s.sendall(f"GET /audio/{key}.flac HTTP/1.1\r\nHost: 127.0.0.1:{port}\r\nCF-Connecting-IP: {ip}\r\n\r\n"
+                      .encode())
+            return s
+
+        held = [stalled("203.0.113.7"), stalled("203.0.113.7")]
+        for _ in range(200):
+            if studio._serving.get("203.0.113.7") == 2:
+                break
+            time.sleep(0.01)
+        status, head, _ = ask(port, "GET", "/api/start", headers={"CF-Connecting-IP": "203.0.113.7"})
+        assert status == 429 and int(head["Retry-After"]) >= 1  # a third from the same address: turned away
+        assert ask(port, "GET", "/api/start", headers={"CF-Connecting-IP": "198.51.100.3"})[0] == 200  # another
+        assert ask(port, "GET", "/healthz")[0] == 200
+        began = time.monotonic()
+        got = 0
+        for s in held:  # read slowly: far under the least rate, so each is ended
+            while True:
+                try:
+                    chunk = s.recv(4096)
+                except OSError:
+                    break
+                if not chunk:
+                    break
+                got += len(chunk)
+                time.sleep(0.005)
+            s.close()
+        assert got < 8 * 2**20 and time.monotonic() - began < 30, got  # each ended early
+        for _ in range(200):
+            if not studio._serving:
+                break
+            time.sleep(0.01)
+        assert not studio._serving  # their places given back
+        assert ask(port, "GET", "/api/start", headers={"CF-Connecting-IP": "203.0.113.7"})[0] == 200
+    finally:
+        server.shutdown()
+        server.server_close()
+
+
 def test_a_public_studio_needs_no_key_and_gives_each_visitor_a_random_id(opened):
     studio, port, _ = opened
     assert studio.shared and studio.share_key is None

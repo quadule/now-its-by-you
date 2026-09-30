@@ -313,6 +313,7 @@ class Job:
     plan: list = field(default_factory=list)  # (stage, weight), for its progress
     started: list = field(default_factory=list)  # the stages a render has begun, in its own order
     owner: str | None = None  # the visitor who asked for it (a public studio)
+    where: str | None = None  # ... and their address (public.network: an IPv6 one by its /64)
     whole: bool = False  # the whole song, not a section: how long it may take
 
     def view(self) -> dict:
@@ -373,8 +374,9 @@ class Jobs:
     Open to the public (`fair`), previews go in the order asked, each visitor has one render queued or
     running at most, and the page is told about how long it will wait."""
 
-    def __init__(self, waiting: int | None = None, fair: bool = False):
+    def __init__(self, waiting: int | None = None, fair: bool = False, per_address: int | None = None):
         self.lock = threading.Condition()
+        self.per_address = per_address  # renders waiting at once from one address (a public studio), or no limit
         self.pending: list[Job] = []
         self.jobs: dict[str, Job] = {}
         self.by_key: dict[str, Job] = {}
@@ -392,10 +394,12 @@ class Jobs:
         return job if job is not None and job.state in ("queued", "running") else None
 
     def submit(self, key: str, kind: str, label: str, work: Callable, then: Callable | None = None,
-               owner: str | None = None, whole: bool = False, admit: Callable | None = None) -> Job:
+               owner: str | None = None, whole: bool = False, admit: Callable | None = None,
+               where: str | None = None) -> Job:
         """A render, or the same one already asked for. `owner` (a public studio's visitor) may have one
-        at a time; `admit`, a public studio's count of what each visitor has had made, runs once the queue
-        has room, and may refuse (public.Limited)."""
+        at a time, and `where` (their address) `per_address` waiting at once, however many visitors it holds
+        (a visitor without a cookie is a new one each time); `admit`, a public studio's count of what each visitor
+        has had made, runs once the queue has room, and may refuse (public.Limited)."""
         with self.lock:
             job = self.live(key)
             if job is not None:  # asked for again: first among the previews; a recording waits on it
@@ -415,10 +419,16 @@ class Jobs:
                                f"time for everyone. Try again in {public_mod.about(self._eta(self.pending))}.",
                                self._eta(self.pending))
                 raise Busy("The studio is busy making other songs; try again in a minute.")
+            if where is not None and self.per_address is not None:
+                theirs = [j for j in self.pending if j.where == where]
+                if len(theirs) >= self.per_address:
+                    raise public_mod.Limited(f"Your network has {len(theirs)} songs waiting to be made already, as "
+                                             "many as one address may while everyone shares one renderer; ask again "
+                                             "when one is done.", self._eta(theirs[:1]))
             if admit is not None:
                 admit()
             job = Job(secrets.token_hex(6), key, kind, label, work, then=[then] if then else [], owner=owner,
-                      whole=whole)
+                      whole=whole, where=where)
             self.jobs[job.id] = job
             self.by_key[key] = job
             self.pending.append(job)
@@ -563,7 +573,7 @@ class Studio:
         self.day, self.t = today(self.clock)
         # a checkout records into renders/; a packet's program, into the folder it was run from
         self.out = Path(out) if out else (Path.cwd() if self.where == "packet" else Path("renders"))
-        self.jobs = Jobs(public.queue, fair=True) if public else Jobs()
+        self.jobs = Jobs(public.queue, fair=True, per_address=public.queue_ip) if public else Jobs()
         self.cache_limit = public.cache_mb * 2**20 if public else CACHE_LIMIT
         # a public studio's counts of what each visitor has had made, and its recordings waiting to be downloaded
         self.gate = public_mod.Gate(public) if public else None
@@ -573,6 +583,8 @@ class Studio:
         self._timeline = None
         self._timeline_lock = threading.Lock()
         self._roll_lock = threading.Lock()
+        self._serving: collections.Counter = collections.Counter()  # requests being served, by address (public)
+        self._serving_lock = threading.Lock()
         self.karaoke: subprocess.Popen | None = None
         self.singing = None  # singing in the browser, when asked for (enable_web_singing)
         self.context = explain.Context(self.genome, parent_params, record, self.voice, machine, self.day, self.t,
@@ -696,7 +708,7 @@ class Studio:
         if self.gate is None or by is None:
             return {"whole": whole}
         visitor, ip = by
-        return {"whole": whole, "owner": visitor,
+        return {"whole": whole, "owner": visitor, "where": public_mod.network(ip),
                 "admit": lambda: self.gate.render("records" if whole else "previews", visitor, ip)}
 
     def warm(self) -> None:
@@ -996,6 +1008,21 @@ class Studio:
         return note
 
     # ------------------------------------------------------------ open to the public
+
+    def serving_begin(self, where: str) -> bool:
+        """A request from this address being served (a public studio's), if it has fewer than connections_ip at
+        once; False if it has as many already."""
+        with self._serving_lock:
+            if self._serving[where] >= self.public.connections_ip:
+                return False
+            self._serving[where] += 1
+            return True
+
+    def serving_end(self, where: str) -> None:
+        with self._serving_lock:
+            self._serving[where] -= 1
+            if self._serving[where] <= 0:
+                del self._serving[where]
 
     def health(self) -> dict:
         """/healthz: that it answers, and how long the queue is."""
@@ -1455,6 +1482,8 @@ class Handler(BaseHTTPRequestHandler):
     log = None  # a public studio's access log: stdout as it was when serving began (a render swaps sys.stdout)
     _sent: tuple[int, int] | None = None
     _began = 0.0
+    _where: str | None = None  # a public studio's: the address this request is counted under (serving_begin)
+    send_grace = 60.0  # seconds a download may take before it's held to public.Limits.send_kb
 
     def log_message(self, fmt, *args):  # keep the terminal quiet
         pass
@@ -1463,11 +1492,27 @@ class Handler(BaseHTTPRequestHandler):
         self._began = time.monotonic()
         with contextlib.suppress(Exception):  # a public studio's day moves on at midnight (Studio.roll)
             self.studio.roll()
-        return super().parse_request()
+        if not super().parse_request():
+            return False
+        if self.studio.public is not None and urlsplit(self.path).path != "/healthz":
+            # a public studio's requests at once from one address (the connection's may be the proxy's): past
+            # connections_ip, turned away, so one address can't hold every connection the studio serves
+            where = public_mod.network(self._ip())
+            if not self.studio.serving_begin(where):
+                self.close_connection = True
+                self.too_many(429, public_mod.Limited("Too many requests from your address at once; wait a "
+                                                      "moment.", 5))
+                return False
+            self._where = where
+        return True
 
     def handle_one_request(self) -> None:
-        self._sent = None
-        super().handle_one_request()
+        self._sent, self._where = None, None
+        try:
+            super().handle_one_request()
+        finally:
+            if self._where is not None:
+                self.studio.serving_end(self._where)
         if self.studio.public is not None and self._sent is not None:  # a public studio's access log: never who
             self.log.write(public_mod.access_line(self.command, urlsplit(self.path).path, *self._sent,
                                                   time.monotonic() - self._began) + "\n")
@@ -1619,16 +1664,21 @@ class Handler(BaseHTTPRequestHandler):
             return
         if whole:
             self.wfile.write(body)
-        elif length is None:
-            shutil.copyfileobj(body, self.wfile, 2**16)
-        else:
-            left = length
-            while left:
-                chunk = body.read(min(left, 2**16))
-                if not chunk:
-                    break
-                self.wfile.write(chunk)
-                left -= len(chunk)
+            return
+        # a file, a block at a time; open to the public, no slower than send_kb a second over the whole of it (after
+        # a minute's grace), so a reader taking a byte at a time can't hold its connection for days
+        rate = self.studio.public.send_kb * 1024 if self.studio.public is not None else None
+        began, sent, left = time.monotonic(), 0, size
+        while left:
+            chunk = body.read(min(left, 2**16))
+            if not chunk:
+                break
+            self.wfile.write(chunk)
+            sent += len(chunk)
+            left -= len(chunk)
+            if rate and left and time.monotonic() - began > self.send_grace + sent / rate:
+                self.close_connection = True  # too slow: the rest isn't sent
+                return
 
     def send_json(self, data, code: int = 200) -> None:
         self.send(json.dumps(data).encode(), "application/json", code)
