@@ -176,3 +176,223 @@ refrain's. The modes on offer for this song were major, mixolydian and minor (no
 Files (gitignored, under `renders/video/`): `raw.webm` (4:21), `actions.json`, `edm-process.mp4`,
 `edm-rendition.flac`, `edm.mid`, `edm-stems.zip`, `cut-report.json` (each anchor's beat and frame),
 `session.log`, `frames/`.
+
+## Second attempt (2026-09-30)
+
+The artist: "Try another EDM video." Since the first attempt the studio gained the arrangement engine (a cell
+for every player in every section, section lengths, played sections, builds, the style's chance-drawn options
+choosable and lockable: docs/ARRANGE.md), sound design (patches, a filter, kits, a sidechain pump, transitions
+at the seams, pan and sends: docs/SOUND-DESIGN.md), sevenths with *here only* or *everywhere*, melisma and a
+freer tune (docs/STUDIO.md), and a new page, the score (one transport; Page · Arrange · Mix; one inspector; a
+Tools sheet: docs/STUDIO-REDESIGN.md). The rules were the first attempt's: only the page, as a person uses it
+(headless Chromium driven by Playwright: clicks, typing, drags), a made-up machine (`--machine
+fictional:vela`), nothing from the command line. This time the brief asked for a convincing EDM track, not the
+nearest the studio could get.
+
+### What was made
+
+`renders/now-its-by-you.2026-09-30.562cea.flac` (gitignored; a copy at `renders/video/edm2-rendition.flac`),
+2:37 (157.4 s), −14.0 LUFS, recorded from the page, its MIDI from *Tools → MIDI*. 52 choices are marked as the person's
+in its record (four of the entries are the two locks' values: a cell's lock keeps three).
+
+| | The song today (Vela) | The EDM version |
+|---|---|---|
+| Tempo | 86 | **128** (synth folk allows 72 to 134.1; typed, accepted) |
+| Key | C♯ major | **C♯ minor**; the last refrain a whole step up (the style's lift, kept) |
+| Style | chamber folk (strings, cello, piano, no drums, rubato) | **synth folk**: the drum machine on its **909** kit, a **reese** synth bass pumping (*classic*, 8 dB), a **wide** pad pumping (*heavy*, 14 dB), a **supersaw** lead, the arpeggio; the guitar sits out; it stops dead |
+| Form | V1 · R1 · Turn · V2 · R2 · Turn · V3 · R3 · Turn · Bridge · R4 · Tag (72 bars) | **Intro 8** (the lead plays the tune in; no drums) · **V1 8** (the band joins line by line) · **R1 8, a build** · **R2 16, the drop**: nobody sings, the lead on the tune, everyone hard, four on the floor · **V2 8, the breakdown**: no drums, no bass · **Bridge 8, a build** · **R3 16, the second drop**: sung, then the drop again · Tag 2 · **Outro 8** (82 bars) |
+| Seams | none | into R2: a **riser** and a **snare roll** over 2 bars, an **impact** on the downbeat; into V2: a **sweep** falling (the top closes); into R3: riser, roll, impact |
+| Chords | the song's triads | verse line 1 **C♯m7 \| Amaj7** (i7 · VImaj7); refrain line 1 **Amaj7 \| E** (VImaj7 · III), line 2 **B7sus4 \| C♯m7** (VII7sus4 · i7); everywhere those lines are sung |
+| Melody | as written | refrain line 1's "knows" a **melisma**, B4 falling to G♯4; line 3's "speak-" up to the octave (C♯5); the verse's "tune" up to the octave; the last refrain's second line a step higher **there only** |
+| Words | the bank's verses and refrains | **thirteen lines written in the column** (below); the refrains' first lines, the bridge and the last line kept |
+| Locks | | the synth pad's entrance in verse 1 (soft, held chords, from line 2: chance drew it); "the last refrain starts stripped down: no" (chance drew it; locked so the second drop lands whole) |
+
+The words written in the studio:
+
+> *Verse 1.* The lights on the ceiling went blue in the smoke, / a hum in the floorboards before someone
+> spoke; / a girl at the decks found a tune in a file, / and played it to strangers who stayed for a while.
+>
+> *Refrain 1 (the build).* Who made this song? Nobody knows. / It's down in the bass now, and up it goes. /
+> so turn up the speakers and let it come through, / and dance till the morning, and now it's by you.
+>
+> *Verse 2 (the breakdown).* Now somebody's brother is humming it low, / and somebody's mother is singing it
+> slow; / the floor is a field and the dark is in bloom, / and every last stranger is singing the tune.
+>
+> *Refrain 3 (the second drop).* Who owns this song? Nobody knows. / It's yours on the floor now, and on it
+> goes. / a beat that was borrowed, a voice that was true, / by everyone, no one, and now it's by you.
+
+**The thread kept:** "Who made this song? Nobody knows." opens the build on its own tune (only its last word
+now turns over two notes), and the drop that follows is that refrain played by the supersaw with nobody
+singing, the hook as a lead line; the second drop sings "Who owns this song? Nobody knows." and ends on the
+song's own last line, "by everyone, no one, and now it's by you"; the bridge ("Carry it over the water and
+wire") is the song's own; and every changed line keeps its tune's anapests and cadence degrees.
+
+What the version plays, from its MIDI file (the beats with a kick on them, within an eighth of a beat), set
+beside the first attempt's table above:
+
+| Section | Intro | V1 | R1, build | R2, drop | V2, breakdown | Bridge, build | R3, drop | Tag | Outro |
+|---|---|---|---|---|---|---|---|---|---|
+| Bars | 8 | 8 | 8 | 16 | 8 | 8 | 16 | 2 | 8 |
+| Beats with a kick | 0 % | 0 % | 59 % | 100 % | 0 % | 63 % | 98 % | 0 % | 94 % |
+| Synth bass notes | 1 | 10 | 57 | 127 | 0 | 13 | 127 | 4 | 63 |
+
+This time the shape is chosen, not found: the builds' kicks thicken through their bars (the drum machine's
+build pattern), both drops are four on the floor throughout, and the breakdown has neither drums nor bass.
+
+### The first findings, now
+
+| First finding (2026-09-29) | Now | |
+|---|---|---|
+| 1. No electronic sound: no pump, no patches, no filter, no FX, one kit | Patches by name (the bass's analog, sub, **reese**, pluck; the lead's saw, square, **supersaw**; the pad's warm, glass, **wide**), a filter under *more*, kits (808, **909**, lofi, acoustic) and their pieces, a **pump** on every synth (subtle, classic, heavy), pan and sends; risers, sweeps (rising or falling), snare rolls, stops, impacts and downlifters at any seam, over 1, 2 or 4 bars | **fixed** |
+| ... no dance style; the guitar is synth folk's | Synth folk is still the base: the strummed guitar has to be sat out, the arpeggio and the lead play the folk tune's lines; no clap on 2 and 4, no ride, no offbeat bass | **still missing** |
+| 2. Dynamics drawn by chance: entrances, breakdown, stripped start | Each is a row of its own in the section's column, with a Lock, and each player's cell (out · soft · plays · hard, what it plays, the line it comes in at, a fill) | **fixed** |
+| ... no per-section pattern | four on the floor, half time, a groove, a boom-bap, a build, winding down: per cell | **fixed** |
+| ... no instrumental drop | *Who sings: nobody: played*; the lead takes the tune and the band keeps its weight | **fixed** |
+| ... fixed lengths | 2, 4, 8, 16 bars per section (a sung one only lengthened: its lines, then the drop again) | **fixed** (a turn keeps its 2 bars; nothing past 16) |
+| ... (a breakdown) | made cell by cell (drums and bass out), and a *build* is a Moment; a breakdown isn't | **better** |
+| 3. Tempo stops at 124.8 | the style's own range: synth folk 72 to 134.1; 128 typed and taken | **fixed** (140/170 half-time genres still out of reach) |
+| 4. Melody moved, not rewritten: no melisma, even rhythm off the grid, a phrase edit everywhere, the old note name after a drag | *Split* and *Join* (a syllable over up to four notes), *Free the ending*, a wider range, *even rhythm* on the grid, **here only / everywhere / the last refrain** for a tune edit, the right name after a drag | **better** (no added or deleted syllable notes: a line's rhythm is still its words'; no repeated-note chops) |
+| 5. Words: flexible, rhythm the tune's, asterisks unexplained | the same, written a line at a time in the column (the typing kept per line, one *Use* for all), the stars explained beside it | **better** |
+| 6. Chords: triads only, a line's chords everywhere | a row of the key's sevenths, qualities down to 7sus4 and add9, *here only · everywhere · the last refrain* | **fixed** |
+| 7. Previews fast | the 16-bar drop made to hear in 2.1 s; the whole song recorded in 11 to 12 s | **same** |
+| ... the stems' id | the stems named after the recording they go with | **fixed** (not retested) |
+| ... native selects don't show headless | fewer: most choices are chips now; the style, the pump, *Chords in this bar*, *Quality*, snap, zoom, and the words' own dropdowns are still selects | **better** |
+| ... the page scrolls a lot at 1080p | one transport stays; Arrange and the inspector fit a 1600-wide window; the Page and the notes still scroll | **better** |
+
+### New findings, by impact
+
+1. **It can make the track now.** Every part of the brief was reachable from the page, with nothing chosen by
+   rolling the dice: a 128 BPM minor-key track with a real form (intro, verse, build, a 16-bar instrumental
+   drop, a breakdown, a second build, a 16-bar second drop, an outro), a 909, a pumping reese and pad, a
+   supersaw, risers, rolls and impacts at the seams, sevenths, a melisma, a line changed in one place only,
+   thirteen new lines, and two locks. The session was 161 actions over six and a half minutes of page time,
+   against the first attempt's 108 over four and a half for far less; the 16-bar drop was made to hear in
+   2.1 s (0.3 s once made) and the whole song recorded in 11 to 12 s.
+2. **It is still a folk band in synths.** Synth folk is the only electronic style, so the strummed guitar has
+   to be sat out, the arpeggio and lead play the tune's lines, and the drop's hook is the refrain's melody
+   note for note (a *here only* tune edit on the played refrain would give it a topline of its own; nothing
+   offers that as "the drop's hook"). No clap on 2 and 4, no ride, no offbeat bass, no chord stabs or pluck
+   patterns to choose, no filter automation (a sweep at a seam is the only movement), no vocal chop. A
+   "dance" style built on these same pieces is still the first thing a producer would ask for.
+3. **Quick clicks in the inspector are fragile** (see *Bugs* 1 and 2). An edit's answer takes about 0.7 s
+   to come back (eight requests), and until it does the column shows the old state: a second click composed
+   from that state (a seam's riser, then its roll) undid the first, and when the answer lands the column
+   reflows (a chip grows its ✎, the *Over* row appears) under a pointer already on its way. Both takes
+   filmed before this was understood lost the snare rolls without the page saying so; only the record showed
+   it.
+4. **Lengths by the edge are hard to grab** (*Bugs* 3): the next seam covers most of the 7-pixel edge, and a
+   drag from beside it moves the section instead. The column's Length chips always work.
+5. **What the page calls yours is noisy once the form changes** (*Bugs* 4): after the shape and one drag,
+   every region carries the second-ink edge, so "yours" stops meaning anything in the region row.
+6. **Sitting a player out after arranging it reads as an error** (*Bugs* 5): "Couldn't keep your guitar in
+   refrain 2: this version's band has no guitar" in the masthead, in red, for a guitar the person just sat out.
+7. **The minor key is spelled in flats** (*Bugs* 6): in C♯ minor the page writes A♭m, E♭°, E♭4 and A♭4 for
+   G♯m, D♯°, D♯4 and G♯4 (the chord lane, the chord chips, the pitch keys, the notes).
+8. **"was" is sometimes the wrong thing** (*Bugs* 7): the tempo says "the program's was 86" (chamber folk's)
+   after the style changed to synth folk, whose tempo is 122; a sat-out guitar reads "0% (was 0%)" in the
+   column and `was: 0.0` in the record.
+9. **Words: one *Use* for all the lines typed**, which is quicker than the first attempt's textareas, but the
+   button says *Use this line*, the column stays on the line just typed, and a refusal of one line (here my
+   `*some*-bo-dy's`, a star inside a hyphenated word) refuses them all, the reason said in the column only.
+10. **The seam's *Over* is one length for everything before it**: a 4-bar riser with a 1-bar roll, the usual
+    pairing, can't be made.
+11. **The pump**: offered on the drum machine's own column (a drum machine ducking on its own kick) but not
+    on its Mix strip, and where it pumps (`sections` in the API) isn't on the page: it pumps wherever the kick
+    plays, so the breakdown doesn't pump only because it has no kick.
+12. **Track heads truncate** ("synth …", "drum …", "arpegg…") with room to spare at 1920 px (1600 zoomed),
+    and three of the six start with "synth", so the grid's rows can't be told apart without the tooltip.
+13. **Smaller**: *everywhere it's sung (4)* counts the played refrain; the Moment is *none · a build* (a
+    breakdown is made cell by cell, which worked, but isn't named); native selects remain for the style, the
+    pump, *Chords in this bar*, *Quality*, *Root*, *Bass*, snap, zoom and the words' own choosers; a stray
+    "null" under the tempo (fixed here); the masthead's "4 locked" for two padlocks (a cell's lock counts
+    as three: its level, what it plays and its line).
+
+### Bugs found
+
+Seen in headless Chromium at 1920×1080 on `--machine fictional:vela`: in the filmed takes (the page at
+1.2×) and again by hand in a second browser at 1×.
+
+1. **A seam's second quick click undoes the first** (fixed in this branch: `score.js`, `seamState`). Steps:
+   Arrange → click the seam into any section → *a riser*, then within about half a second *a snare roll*.
+   Expected: a riser and a roll. Got: `{"roll": 1}`: every chip composed its value from the answer drawn
+   before the first click (`seam.value`), not from the edit just made. The fix composes on the latest edit
+   (`state.edits[path]` when present). The same shape (a control that composes an object from the drawn
+   value) is worth checking elsewhere.
+2. **The column reflows under the pointer after an answer.** Steps: the same seam, *a riser*, then move to
+   *a snare roll* and click about a second later. Expected: the roll. Got (both filmed takes before the kit
+   waited for answers): *Over: 2 bars*, which had appeared where the roll's row had been, so the drop had a
+   riser and an impact and no roll, and nothing said so. Not fixed (a layout matter: reserve the *Over* row,
+   or don't add ✎ to a chip's width).
+3. **A section's length edge is mostly covered by the next seam.** Steps: Arrange, press the middle of a
+   region's right edge (the 7 px `.edge`) and drag right. Expected: "4 → 8 bars". Got: the press lands on the
+   next section's `.seam` (10 px, `margin-left: -6px`, `z-index: 2`), or just inside it on the region, whose
+   native drag then moves the section: the first rehearsal's intro moved after verse 1 (the rendition played
+   verse 1 before the intro). Only the edge's first 1 to 3 px work. Not fixed.
+4. **Every region is marked yours after the shape changes and one move.** Steps: The shape → 2 verses, an
+   intro, no turns, an outro; Arrange → drag Verse 2 onto Refrain 2. Expected: Verse 2 (and at most the
+   section it passed) with the second-ink edge. Got: all nine regions "…; yours". `score.js` `moved()`
+   compares each section's index with `marks["form.order"].was`, which is the song's original order
+   (`verse:0, refrain:0, turn:0, …, refrain:3, tag:0`), not the program's order for the shape now chosen, so
+   every index differs. Not fixed (the program's order for the chosen shape is the server's to say).
+5. **"Couldn't keep your guitar" for a guitar sat out.** Steps: synth folk; Refrain 2 → *Everyone: hard*;
+   the guitar's track head → *Sit out everywhere*. Expected: the guitar silent everywhere, no complaint.
+   Got, in the masthead: "Couldn't keep your guitar in refrain 2: this version's band has no guitar; the
+   choice waits for one that has. let it go". It looks as if a level of 0 is taken for the band not having
+   the player. The session lets it go. Not fixed.
+6. **Sharp keys spelled flat.** Steps: the key → minor (C♯ minor). Expected: G♯m, D♯°, G♯4. Got: A♭m in the
+   chord lane and the Chords track, E♭° and E♭m7♭5 among the chord chips, A♭4 and E♭4 on the pitch keys and
+   in the notes' names (`… A♭4, scale degree 5`). Not fixed.
+7. **The wrong "was".** Steps: the style → synth folk, then the tempo → 128. Expected: "yours; the program's
+   was 122". Got: "the program's was 86" (the chamber folk it replaced); the record's `tempo.was` is 86.2.
+   And: the guitar → *Sit out everywhere*. Expected "0% (was 66%)". Got "0% (was 0%)", and `band.guitar.was`
+   0.0 in the record. Not fixed.
+8. **A stray "null" in the tempo and key popovers** whenever the value was the program's: `replaceChildren`
+   was given the missing release row as `null` and printed it. Fixed in this branch (`score.js`).
+
+### How the video was made
+
+- **Driving**: `tools/video/edm2_session.mjs`, on `tools/video/kit.mjs` (the hand, the captions, the capture
+  and the log, apart from any one session so the next film starts from them). Headless Chromium at 1920×1080,
+  the page's light scheme (paper and its two inks), the page at 1.2× (CSS zoom on the root: laid out as a
+  1600×900 window, drawn at 1920×1080, so its small text is a fifth larger in the film). The cursor glides and
+  ripples in the rubric red; before reaching for a control the hand waits for the page's answer to the last
+  edit (it counts the requests in flight) and follows a control that moved while it travelled. After two
+  rehearsals without video, three filmed takes: the first two lost the snare rolls (*Bugs* 1 and 2); the
+  third is the film.
+- **Sharper capture**: Chrome's own screencast (`Page.startScreencast`), every compositor frame a JPEG at
+  quality 95 with its timestamp (about 32 a second), put together by ffmpeg at the frames' real times into
+  `raw.mp4` (H.264, CRF 10, 30 fps), whose t = 0 is the log's; the JPEGs (3 GB for a take) are deleted
+  once it is made. Playwright's own `recordVideo` is VP8 at about 1 Mb/s; its text was soft.
+- **Captions** in the page's own type and colours: an index card at the foot, left, on the card colour with a
+  hairline border and a red double rule on top, the kicker in the rubric's red small capitals ("THE DROP ·
+  REFRAIN 2"), the line in the page's serif at 31 px; on the Page view it narrows into the gutter beside the
+  words instead of covering them.
+- **Native selects** (the style, the pump, *Chords in this bar*, *Quality*) are drawn as the page's own list
+  under the select, in its sans, the current value ticked, the pointer travelling to the choice and the
+  choice lit in the second ink before the list closes; the value is set as a person's choice would set it.
+- **The log** is the first attempt's format (`t`, `kind`, `label`, `phase`, `weight`, `hold`, `dur`), with
+  the zoom beside the viewport, so `beatcut.py` reads either.
+- **The cut**: `tools/video/beatcut.py`, the beat grid from the exported MIDI file (its bar 1 fitted to the
+  onsets at −1.028 s), each phase pinned to the section it made: the style, tempo, key and shape on the intro;
+  verse 1's words on verse 1 (typed as they are sung); the refrain's words and its build on refrain 1; the
+  drop's arrangement on the drop's downbeat and its sound halfway through it; verse 2's words on the
+  breakdown; the breakdown's cells, the second build and the lock on the bridge; the chords, the tune and the
+  last refrain's words through the second drop; the record on the tag and outro. Changed in `beatcut.py` for
+  this (it stays generic): the flash that syncs the log is found as a rising edge to all-white (the light
+  page's paper is luma 237, and the old test, any frame over 200, took the first frame for it and put every
+  action 1.6 s early); the pieces between are near lossless (CRF 4) and the result's quality is a flag
+  (`--crf`, 16 by default, x264's still-image tuning; the film used 12); the report gives the bitrate and
+  how many moments land on a bar line.
+- **Result**: `renders/video/edm2-process.mp4`, H.264 1080p30 + AAC 256k, 157.424 s, exactly the rendition's
+  length, its sound the rendition. 108 of the 161 actions are anchored on beats (30 on a bar line; the
+  rest play between them), off their beat by 8.6 ms on average and 15.8 ms at most (the 30 fps frame grid).
+  At CRF 12 the whole file is 1.3 Mb/s (the picture 1.0 on average, 6.5 in its busiest second): the page is
+  still paper most of the time, and a constant quality spends the bits where it moves. Frames pulled at
+  the typing, the grid, the chord chips, a native list, both locks, the melisma and the recording read
+  cleanly at 1:1 (`renders/video/frames/`).
+- **Awkward**: captions are drawn into the footage, so changing one means filming again; a take is six
+  minutes of page time and 3 GB of frames before they're assembled; the page's own waits (an edit's answer,
+  a preview, the recording) are short now, so most of the compression is the hand's travel and typing.
+
+Files (gitignored, under `renders/video/`): `raw.mp4` (6:31), `actions.json`, `session.log`,
+`edm2-process.mp4`, `edm2-rendition.flac`, `edm2.mid`, `cut-report.json`, `frames/`.
