@@ -260,8 +260,8 @@ function renderHeader() {
   $("which").replaceChildren("Your version ", h("b", {}, when), `, ${v.from}, sung by ${v.by}.`);
   setOn("draw", "textContent", v.roll ? `chance drawn again: draw ${v.roll + 1}` : "");
   const mine = v.changed;
-  const locks = v.held.filter((p) => !p.startsWith("words.")).length;  // a lock (the score's padlock) is held, not changed
-  const held = v.held.length > locks;
+  const locks = lockCount(v.held);  // a lock (the score's padlock) is held, not changed
+  const held = v.held.some((p) => p.startsWith("words."));
   const bar = $("yoursBar");
   bar.hidden = !mine.length && !held && !locks;
   bar.replaceChildren();
@@ -284,6 +284,12 @@ function renderHeader() {
     h("button", { class: "link small", type: "button", onclick: () => clearEdits([p.path]) }, "let it go"))));
   setOn("day", "value", v.offset);
   setOn("dayLabel", "textContent", v.offset ? `${v.date} (${v.when})` : `today, ${v.date}`);
+}
+
+// the padlocks a person sees: a cell's lock keeps its level, what it plays and its line (three paths), one padlock
+function lockCount(held) {
+  const cell = /^(arrange\.[A-Za-z0-9_-]+:\d+\.[a-z0-9]+)\.(level|pattern|from|fill)$/;
+  return new Set((held || []).filter((p) => !p.startsWith("words.")).map((p) => p.match(cell)?.[1] || p)).size;
 }
 
 function describePath(path) {

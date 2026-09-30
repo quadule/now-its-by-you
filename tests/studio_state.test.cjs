@@ -308,3 +308,12 @@ test('the song\'s length is shown beside the tempo and key', () => {
   assert.equal(shown.className, 'session-duration hint');
   assert.equal(shown.children.join(''), 'Length 3:07');
 });
+
+test('the masthead counts the padlocks a person sees: a cell\'s lock is one, not its three paths', () => {
+  const { run } = studio();
+  const held = ['arrange.verse:0.synthpad.level', 'arrange.verse:0.synthpad.pattern', 'arrange.verse:0.synthpad.from',
+    'style.stripped', 'words.verse.0'];
+  assert.equal(run(`lockCount(${JSON.stringify(held)})`), 2);  // the EDM test's two padlocks, said as four
+  assert.equal(run('lockCount(["arrange.verse:0.synthpad.level", "arrange.refrain:1.synthpad.level"])'), 2);
+  assert.equal(run('lockCount([])'), 0);
+});
