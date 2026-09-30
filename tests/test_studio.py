@@ -524,3 +524,18 @@ def test_a_musician_takes_the_version_away_as_midi_and_stems(served, monkeypatch
     assert abs(voice_audio[pad, 0] - 0.989 / 4) < 1e-3
     note = z.read(f"{stem}/README.txt").decode()
     assert "bar 1" in note and "dry" in note and "public domain" in note and not FORBIDDEN.search(note)
+
+
+def test_a_renders_progress_follows_the_parts_in_whatever_order_it_takes_them():
+    """The voice first on one or two threads, some of the band beside it on more: the bar only moves forward, by
+    the parts already begun, and names what's being made now."""
+    job = S.Job("j", "k", "preview", "a section", work=lambda job: None)
+    job.plan = [("lute", 1.0), ("fiddle", 1.0), ("voice", 4.0), ("mix", 1.0), ("master", 1.0)]
+    seen = []
+    for name in ("voice", "lute", "fiddle", "mix", "master"):
+        job.report(name)
+        seen.append(job.progress)
+    assert seen == sorted(seen) and seen[0] == 0.0
+    assert seen[1] == 0.5 and abs(seen[-1] - 7 / 8) < 1e-9  # the voice's four of eight, then everything before the master
+    job.report("lute")  # a part reported again moves nothing back
+    assert job.progress == seen[-1] and job.stage == S.stage_words("lute")

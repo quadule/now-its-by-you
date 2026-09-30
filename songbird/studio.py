@@ -276,6 +276,7 @@ class Job:
     result: dict | None = None
     then: list = field(default_factory=list)  # run after the work, with the job (a recording's copy)
     plan: list = field(default_factory=list)  # (stage, weight), for its progress
+    started: list = field(default_factory=list)  # the stages a render has begun, in its own order
     owner: str | None = None  # the visitor who asked for it (a public studio)
     whole: bool = False  # the whole song, not a section: how long it may take
 
@@ -285,14 +286,16 @@ class Job:
                 "result": self.result}
 
     def report(self, name: str) -> None:
-        """A render starting on a part: the progress up to it, and what it is making now."""
-        total = sum(w for _, w in self.plan) or 1.0
-        done = 0.0
-        for stage, weight in self.plan:
-            if stage == name:
-                self.progress = max(self.progress, min(0.99, done / total))
-                break
-            done += weight
+        """A render starting on a part: the progress up to it, and what it is making now. The parts it has
+        started before this one count as made, in whatever order the render takes them (the voice first on
+        one or two threads, some of the band beside it on more)."""
+        weights = dict(self.plan)
+        total = sum(weights.values()) or 1.0
+        before = [stage for stage in self.started if stage != name]
+        if name not in self.started:
+            self.started.append(name)
+        done = sum(weights.get(stage, 0.0) for stage in before)
+        self.progress = max(self.progress, min(0.99, done / total))
         self.stage = stage_words(name)
 
 
