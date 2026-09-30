@@ -364,8 +364,11 @@ def realize(genome: Genome, params: Params, verses=None, phrasing: Phrasing | No
             heard[block] += 1
         if patch:
             lines = [patch.get(str(i), line) for i, line in enumerate(lines)]
+        # the sung lines take the section's words in order (a style may lay played bars before them: house's drop)
         laid = zip(section.phrases, lines) if lined[j] is None else \
-            [(pid, lines[k] if sung and k < len(lines) else None) for k, (pid, sung) in enumerate(lined[j])]
+            [(pid, lines[k] if sung and k < len(lines) else None)
+             for pid, sung, k in zip([p for p, _ in lined[j]], [s for _, s in lined[j]],
+                                     np.cumsum([bool(s) for _, s in lined[j]]) - 1)]
         for pid, line in laid:
             phrase = next(at_places)
             placed.append((name, phrase, t, line))
@@ -385,9 +388,13 @@ def realize(genome: Genome, params: Params, verses=None, phrasing: Phrasing | No
     # the lineage's variants, and a singer's own ornaments where its style leans that way (a session's: sean-nós)
     sung_variants = params.variants + style_mod.sung_ornaments(genome, params)
 
-    for section_name, phrase, start, line in placed:
+    # a dub's version (songbird.style.fragments): the lines after the song dissolves sung in fragments; {} otherwise
+    kept = style_mod.fragments(genome, params, placed)
+    for j, (section_name, phrase, start, line) in enumerate(placed):
         sung = phrase.sung
         words = sung_words(line) if line else [(None, None, 1)] * len(sung)
+        if j in kept:  # the rest of the line isn't sung: the band's lead may play it (songbird.idioms)
+            words = [w if k in kept[j] else (None, None, 1) for k, w in enumerate(words)]
         # the lineage's variants: a note moved to another degree, a weak note's onset moved, an ornament
         composed = tune_key(phrase) in params.composition.get("tune", {})
         if composed:
@@ -421,7 +428,7 @@ def realize(genome: Genome, params: Params, verses=None, phrasing: Phrasing | No
                     syllable=syllable,
                     word=word,
                     word_len=word_len,
-                    line_end=k == len(sung) - 1,
+                    line_end=k == len(sung) - 1 or (j in kept and k == max(kept[j], default=-1)),  # a fragment ends
                     section=section_name,
                     phrase=phrase.id,
                     chord=chord,
@@ -481,6 +488,7 @@ def realize(genome: Genome, params: Params, verses=None, phrasing: Phrasing | No
                                 vel=0.9 * sung_note.vel, gesture=None, ornament=(), melisma=())))
 
     notes = [n for pairs in deliveries.values() for n in ordered_delivery(pairs)]
+    notes += style_mod.chops(genome, params, placed, clock, melody)  # a style's vocal chop (house's), [] otherwise
     accomp, band_settings = band_mod.arrange(genome, params, placed, lead, end, melody, seconds)
     from .composition import played_in
 
