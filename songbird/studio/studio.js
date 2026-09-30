@@ -953,13 +953,48 @@ function renderCompare() {
 // ------------------------------------------------------------------ listening
 
 const audio = $("audio");
+// A preview stopped, started or moved mid-note clicks: its volume is taken down (or up) over a few milliseconds
+// first. An <audio> has no gain ramp of its own, so the volume is stepped every 4 ms (FADE_MS in all); a new
+// fade takes over from one under way, and a pause only happens if no play came in the meantime.
+const FADE_MS = 24;
+const stopFade = () => { if (audio._fade) clearInterval(audio._fade); audio._fade = null; };
+function fadeAudio(to, ms = FADE_MS) {
+  stopFade();
+  const from = Number.isFinite(audio.volume) ? audio.volume : to;
+  return new Promise((resolve) => {
+    if (ms <= 0 || Math.abs(from - to) < 1e-3 || typeof setInterval !== "function") { audio.volume = to; resolve(); return; }
+    const t0 = performance.now();
+    audio._fade = setInterval(() => {
+      const k = Math.min(1, (performance.now() - t0) / ms);
+      audio.volume = from + (to - from) * k;
+      if (k >= 1) { clearInterval(audio._fade); audio._fade = null; resolve(); }
+    }, 4);
+  });
+}
+function quietPause() {
+  if (audio.paused !== false) { audio.pause(); return Promise.resolve(); }  // (paused, or no media here at all)
+  const asked = audio._asked = {};
+  return fadeAudio(0).then(() => { if (audio._asked !== asked) return; audio.pause(); audio.volume = 1; });
+}
+function quietPlay() {
+  audio._asked = {};
+  if (audio.paused !== false) audio.volume = 0;
+  const started = audio.play();
+  fadeAudio(1, audio.currentTime > 0.05 ? FADE_MS : 8);
+  return started;
+}
+function quietSeek(time) {
+  if (audio.paused !== false) { audio.currentTime = time; return; }
+  const asked = audio._asked = {};
+  fadeAudio(0).then(() => { if (audio._asked !== asked) return; audio.currentTime = time; fadeAudio(1); });
+}
 // every preview and recording is asked of one renderer (renderer.js: the server's queue today)
 const renderer = () => window.SongbirdRenderer.create((path, body) => api(path, body));
 
 async function listen(who = "you", section = null) {
   window.SongbirdComposer?.stop();
   if (state.playing?.task) renderer().cancel(state.playing.task);  // one still waiting its turn is dropped
-  audio.pause();
+  quietPause();
   const label = section === null ? "The whole song" : state.view.words.find((w) => w.index === section)?.label || "Song section";
   const edits = copyEdits();
   const playing = { who, section, label, job: null, editsKey: JSON.stringify(edits) };
@@ -977,7 +1012,7 @@ async function listen(who = "you", section = null) {
 
 function pauseAudio() {
   const playing = state.playing;
-  audio.pause();
+  quietPause();
   if (!playing) return;
   if (playing.task) renderer().cancel(playing.task);
   // A replacement identity invalidates both in-flight listen and job responses. Keep the edit snapshot
@@ -1025,8 +1060,9 @@ function refreshReady(key) {
 
 function play(url, title, sub, playing = null) {
   state.playing = playing || { editsKey: JSON.stringify(state.edits), label: title, who: "you", section: null, job: null };
+  stopFade();
   audio.src = url;
-  audio.play().catch(() => {});
+  quietPlay()?.catch?.(() => {});
   showPlayer(title, sub || "", 0, false);
   setOn("playPause", "disabled", false);
 }
@@ -1054,11 +1090,11 @@ audio.addEventListener("timeupdate", () => {
 });
 audio.addEventListener("play", () => { window.SongbirdComposer?.stop(); $("playShape")?.setAttribute("d", PAUSE); $("playPause")?.setAttribute("aria-label", "Pause"); });
 audio.addEventListener("pause", () => { $("playShape")?.setAttribute("d", PLAY); $("playPause")?.setAttribute("aria-label", "Play"); });
-$("playPause")?.addEventListener("click", () => (audio.paused ? audio.play() : audio.pause()));
+$("playPause")?.addEventListener("click", () => (audio.paused ? quietPlay() : quietPause()));
 $("bar")?.addEventListener("click", (ev) => {
   if (!audio.duration) return;
   const r = ev.currentTarget.getBoundingClientRect();
-  audio.currentTime = ((ev.clientX - r.left) / r.width) * audio.duration;
+  quietSeek(((ev.clientX - r.left) / r.width) * audio.duration);
 });
 
 // ------------------------------------------------------------------ singing and recording

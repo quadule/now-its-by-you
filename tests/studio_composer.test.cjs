@@ -132,19 +132,24 @@ function setup(view = score(), { audioAvailable = true } = {}) {
   document.getElementById = (id) => document.querySelector(`#${id}`);
   const root = document.createElement("div"); root.setAttribute("id", "studio-composer"); document.append(root);
   const audio = document.createElement("audio"); audio.setAttribute("id", "audio"); audio.pause = () => {}; document.append(audio);
-  const commits = [], toasts = [], oscillators = [], contexts = [], frames = new Map(), timers = [];
+  const commits = [], toasts = [], oscillators = [], contexts = [], gains = [], frames = new Map(), timers = [];
   let frameId = 0, pauseCount = 0;
   class AudioContext {
     constructor() { this.state = "running"; this.currentTime = 0; this.destination = {}; contexts.push(this); }
     createOscillator() {
       const oscillator = { frequency: { value: 0 }, connect() {}, disconnect() {},
         start(time) { assert(Number.isFinite(time)); assert(Number.isFinite(this.frequency.value) && this.frequency.value > 0); this.started = time; },
-        stop(time) { if (time !== undefined) assert(Number.isFinite(time)); this.stopped = time === undefined; } };
+        // the note's own end is scheduled as it starts; a second stop is the sketch stopping it (after the fade)
+        stop(time) { if (time !== undefined) assert(Number.isFinite(time)); this.stops = (this.stops || 0) + 1; this.stopped = this.stops > 1; this.stopAt = time; } };
       oscillators.push(oscillator); return oscillator;
     }
     createGain() {
-      const check = (value, time) => assert(Number.isFinite(value) && Number.isFinite(time));
-      return { gain: { setValueAtTime: check, linearRampToValueAtTime: check, exponentialRampToValueAtTime: check }, connect() {}, disconnect() {} };
+      const ramps = [];
+      const check = (kind) => (value, time) => { assert(Number.isFinite(value) && Number.isFinite(time)); ramps.push([kind, value, time]); };
+      const gain = { value: 1, ramps, setValueAtTime: check("set"), linearRampToValueAtTime: check("linear"), exponentialRampToValueAtTime: check("exp"),
+        cancelScheduledValues: (time) => ramps.push(["cancel", null, time]) };
+      const node = { gain, connect(to) { this.to = to; }, disconnect() { this.gone = true; } };
+      gains.push(node); return node;
     }
   }
   const window = new Element("window", document);
@@ -162,7 +167,7 @@ function setup(view = score(), { audioAvailable = true } = {}) {
     const node = root.querySelectorAll("button").find((button) => button.textContent === text);
     assert(node, `Missing button ${text}`); node.emit("click");
   };
-  return { root, document, window, view, find, clickText, commits, toasts, oscillators, contexts, frames, timers,
+  return { root, document, window, view, find, clickText, commits, toasts, oscillators, contexts, gains, frames, timers,
     phrase: () => view.composition.sections[1].phrases[0], pauseCount: () => pauseCount };
 }
 
@@ -415,6 +420,25 @@ test("audio sketch schedules finite tones, advances the full-song playhead and s
   assert.equal(s.frames.size, 0);
   assert(s.oscillators.every((oscillator) => oscillator.stopped));
   assert.equal(s.find("#sbc-song-playhead").hidden, true);
+});
+
+test("stopping the sketch fades it out before the oscillators stop, and starts it with a fade in", () => {
+  const s = setup();
+  s.find("#sbc-play").emit("click");
+  const ctx = s.contexts[0], bus = s.gains.find((g) => g.to === ctx.destination);
+  assert(bus, "the voices go through one bus to the speakers");
+  assert(s.gains.filter((g) => g !== bus).every((g) => g.to === bus), "every voice goes through the bus");
+  assert.deepEqual(bus.gain.ramps.slice(0, 2).map((r) => r.slice(0, 2)), [["set", 0], ["linear", 1]], "a fade in");
+  ctx.currentTime = 0.5;
+  s.window.SongbirdComposer.stop();
+  const down = bus.gain.ramps.filter((r) => r[0] === "linear").at(-1);
+  assert.equal(down[1], 0, "down to silence");
+  assert(down[2] > 0.5 && down[2] <= 0.54, "over a few milliseconds, not at once");
+  assert(s.oscillators.every((o) => o.stopped && o.stopAt >= down[2]), "each stops once it is silent");
+  s.timers.forEach((fn) => fn());
+  assert(bus.gone, "the old bus let go");
+  s.find("#sbc-play").emit("click");
+  assert(s.gains.some((g) => g !== bus && g.to === ctx.destination), "the next play has a bus of its own");
 });
 
 test("metronome clicks follow score downbeats after pickups in every playback scope and loop", () => {

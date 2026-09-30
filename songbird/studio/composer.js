@@ -15,7 +15,7 @@
     loop: false, metronome: false, scope: "phrase", drag: null, chords: true, bass: true, chord: null,
     where: { tune: null, chords: null }, // one place or everywhere: "line", "place" or "last" (null: as the line has it)
     freeEnding: false, // the ending may leave its home note (the program keeps it, and says so)
-    context: null, playback: null, nodes: new Set(), frame: null,
+    context: null, bus: null, playback: null, nodes: new Set(), frame: null,
   };
   const bridge = () => window.StudioBridge || {};
   const root = () => document.getElementById("studio-composer");
@@ -771,6 +771,35 @@
     if (state.context.state === "suspended") state.context.resume().catch(() => bridge().toast?.("Audio is paused by your browser. Press Play sketch again."));
     return state.context;
   }
+  // Every voice of the sketch goes through one bus, so a stop fades them all out together (a note cut mid-wave
+  // clicks): FADE seconds down to silence, then the oscillators stop. A new bus for what plays next.
+  const FADE = 0.02;
+  function bus(ctx) {
+    if (state.bus?.context === ctx) return state.bus.node;
+    const node = ctx.createGain();
+    node.gain.setValueAtTime(0, ctx.currentTime);
+    node.gain.linearRampToValueAtTime(1, ctx.currentTime + 0.005);  // and in, as gently
+    node.connect(ctx.destination);
+    state.bus = { context: ctx, node };
+    return node;
+  }
+  function fadeOut() {  // the bus to silence and every oscillator stopped after it; returns when that is
+    const ctx = state.context, b = state.bus;
+    state.bus = null;
+    const nodes = [...state.nodes];
+    state.nodes.clear();
+    if (!ctx) return 0;
+    const t = ctx.currentTime, end = t + FADE;
+    if (b) {
+      const g = b.node.gain;
+      g.cancelScheduledValues?.(t);
+      g.setValueAtTime(g.value ?? 1, t);
+      g.linearRampToValueAtTime(0, end);
+    }
+    for (const oscillator of nodes) { try { oscillator.stop(end + 0.005); } catch (_) { /* already ended */ } }
+    if (b) setTimeout(() => { try { b.node.disconnect(); } catch (_) { /* gone */ } }, (FADE + 0.05) * 1000);
+    return end;
+  }
   function tone(ctx, pitch, start, duration, click = false) {
     const oscillator = ctx.createOscillator(), gain = ctx.createGain();
     oscillator.type = click ? "sine" : "triangle";
@@ -781,7 +810,7 @@
     gain.gain.exponentialRampToValueAtTime(0.018, start + Math.min(0.12, length * 0.4));
     gain.gain.setValueAtTime(0.018, start + Math.max(0.02, length - 0.05));
     gain.gain.linearRampToValueAtTime(0.0001, start + length);
-    oscillator.connect(gain); gain.connect(ctx.destination);
+    oscillator.connect(gain); gain.connect(bus(ctx));
     state.nodes.add(oscillator);
     oscillator.onended = () => { state.nodes.delete(oscillator); oscillator.disconnect(); gain.disconnect(); };
     oscillator.start(start); oscillator.stop(start + length + 0.025);
@@ -850,7 +879,7 @@
     gain.gain.linearRampToValueAtTime(peak, start + 0.006);
     gain.gain.exponentialRampToValueAtTime(peak * 0.25, start + Math.min(0.25, duration * 0.5));
     gain.gain.linearRampToValueAtTime(0.0001, start + duration);
-    out.connect(gain); gain.connect(ctx.destination);
+    out.connect(gain); gain.connect(bus(ctx));
     state.nodes.add(oscillator);
     oscillator.onended = () => { state.nodes.delete(oscillator); oscillator.disconnect(); if (out !== oscillator) out.disconnect(); gain.disconnect(); };
     oscillator.start(start); oscillator.stop(start + duration + 0.03);
@@ -945,8 +974,7 @@
     players()?.stop?.(); // every note sent to an instrument ends with the sketch
     if (state.frame) cancelAnimationFrame(state.frame);
     state.frame = null; state.playback = null;
-    for (const oscillator of state.nodes) { try { oscillator.stop(); } catch (_) { /* already ended */ } }
-    state.nodes.clear();
+    fadeOut();
     const play = document.getElementById("sbc-play");
     if (play) { play.textContent = "▶ Play sketch"; play.setAttribute("aria-pressed", "false"); }
     const cursor = document.getElementById("sbc-playhead");
