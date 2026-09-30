@@ -89,6 +89,15 @@ STATIC = {"/identity.css": ("identity.css", "text/css; charset=utf-8"),  # the s
           "/studio.js": ("studio.js", "text/javascript; charset=utf-8"),
           "/help.js": ("help.js", "text/javascript; charset=utf-8"),
           "/export.js": ("export.js", "text/javascript; charset=utf-8")}
+# learning it at the piano (docs/PIANO.md): the page in studio/piano/ (the very files web/piano/ serves too), fed the
+# version on the studio's page by /api/piano
+PIANO_STATIC = {"/piano/": ("piano/index.html", "text/html; charset=utf-8"),
+                "/piano/index.html": ("piano/index.html", "text/html; charset=utf-8"),
+                "/piano/piano.js": ("piano/piano.js", "text/javascript; charset=utf-8"),
+                "/piano/sound.js": ("piano/sound.js", "text/javascript; charset=utf-8"),
+                "/piano/piano.css": ("piano/piano.css", "text/css; charset=utf-8"),
+                "/piano/identity.css": ("identity.css", "text/css; charset=utf-8")}
+STATIC["/learn.js"] = ("learn.js", "text/javascript; charset=utf-8")
 
 
 # ---------------------------------------------------------------- where the song and its parent come from
@@ -723,6 +732,32 @@ class Studio:
         job.url = f"/export/{key}.zip?name={name}"
         return {"url": job.url, "parts": len(order)}
 
+    # ------------------------------------------------------------ at the piano
+    # It is cheap (the score laid again, no audio: a tenth of a second or two for H), made at once like the MIDI
+    # file, and held to a public studio's limit on requests like every other request.
+
+    def piano(self, edits: dict) -> dict:
+        """The piano page's score (songbird.piano) of the version as the page has it, kept in the cache by what it
+        depends on, and where the page that teaches it is: /piano/?score=score/KEY.json."""
+        from . import phrasing as phrasing_mod, piano as piano_mod
+
+        v = self.version(edits)
+        key = self.key(v, None)
+        path = self.cache / f"{key}.piano.json"
+        if path.exists():
+            os.utime(path)
+        else:
+            phrasing = phrasing_mod.from_json(v.phrasing_json) if v.phrasing_json else None
+            choir = [phrasing_mod.from_json(ph) for ph in v.choir_phrasings]
+            laid = piano_mod.lay(self.genome, v.params, phrasing=phrasing, choir=choir, lyrics=v.lyrics)
+            data = piano_mod.export(laid, {"kind": "studio", "exporter": "songbird studio", "day": self.day,
+                                           "version": key[:6]})
+            tmp = self.cache / f"{key}.piano.part.json"
+            tmp.write_text(json.dumps(data, separators=(",", ":"), ensure_ascii=False))
+            tmp.replace(path)
+            prune(self.cache, self.cache_limit)
+        return {"url": f"/piano/?score=score/{key}.json", "score": f"/piano/score/{key}.json", "key": key}
+
     # ------------------------------------------------------------ recording
 
     def record(self, edits: dict, by: tuple[str, str] | None = None) -> dict:
@@ -1151,6 +1186,8 @@ class Handler(BaseHTTPRequestHandler):
             singing = self.studio.singing
             if singing is not None and singing.get(self, path, {k: v[0] for k, v in parse_qs(urlsplit(self.path).query).items()}):
                 return None
+            if path == "/piano" or path.startswith("/piano/"):  # learning it at the piano
+                return self.piano_page(path)
             if path in ("/", "/index.html"):
                 page = (PAGE / "index.html").read_text().replace("{{token}}", self.studio.token)
                 if singing is not None:
@@ -1211,6 +1248,24 @@ class Handler(BaseHTTPRequestHandler):
         except Exception as e:  # said on the page rather than dropping the connection
             traceback.print_exc()
             return self.fail(500, f"{type(e).__name__}: {e}")
+
+    def piano_page(self, path: str) -> None:
+        """The piano page and its files, and the scores the studio made for it (Studio.piano), by their keys."""
+        if path == "/piano":
+            query = urlsplit(self.path).query
+            query = query if re.fullmatch(r"[A-Za-z0-9=&%._/-]{0,300}", query) else ""
+            return self.send(b"", "text/plain; charset=utf-8", 301,
+                             {"Location": "/piano/" + (f"?{query}" if query else "")})
+        if path in PIANO_STATIC:
+            name, kind = PIANO_STATIC[path]
+            return self.send((PAGE / name).read_bytes(), kind)
+        match = re.fullmatch(r"/piano/score/([0-9a-f]{16,64})\.json", path)
+        if match:
+            file = self.studio.cache / f"{match.group(1)}.piano.json"
+            if not file.exists():
+                return self.fail(404, "not made, or not kept any more: open it again from the studio")
+            return self.send(file.read_bytes(), "application/json")
+        return self.fail(404, "not found")
 
     def audio(self, path: Path, name: str | None = None) -> None:
         """A rendering, with byte ranges (players seek with them; Safari won't play without); with a name,
@@ -1294,6 +1349,8 @@ class Handler(BaseHTTPRequestHandler):
                 return self.send_json(studio.export(edits, str(body.get("what", "")), by=by))
             if path == "/api/record":
                 return self.send_json(studio.record(edits, by=by))
+            if path == "/api/piano":  # the piano page's score of this version (made at once)
+                return self.send_json(studio.piano(edits))
             if path == "/api/sing":
                 return self.send_json(studio.sing())
             if path.startswith("/api/sing/") and studio.singing is not None:

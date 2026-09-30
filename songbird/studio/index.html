@@ -14,6 +14,7 @@
 <script src="/drafts.js" defer></script>
 <script src="/help.js" defer></script>
 <script src="/export.js" defer></script>
+<script src="/learn.js" defer></script>
 </head>
 <body>
 <header class="top wrap masthead">
@@ -94,7 +95,9 @@
           <p><b>Play sketch</b> plays the tune with its chords and a bass at once, in your key and tempo, so you can try a change before anyone sings it (untick Chords or Bass to hear the tune alone). <b>Hear sung section</b> makes the singer and band sing it, which takes a few seconds.</p></div>
       </details>
     </div>
-    <p class="to-export"><button class="link small" id="toExport" type="button">MIDI and the parts, for your own tools ↓</button></p>
+    <p class="to-export"><button class="link small" id="learnPiano" type="button" data-learn-piano title="Your version on a piano or a MIDI keyboard: falling notes, the chords, the words; slow it down, loop it, fit it to your keys">Learn it at the piano ↗</button>
+      <button class="link small" id="toExport" type="button">MIDI and the parts, for your own tools ↓</button></p>
+    <p class="hint piano-note" data-piano-note aria-live="polite"></p>
     <div id="studio-composer"><div class="composer-loading"><p class="hint">Laying out the song…</p></div></div>
   </div>
 
@@ -183,8 +186,10 @@
     <div class="actions">
       <button class="btn" id="exportMidi" type="button">Download MIDI</button>
       <button class="btn" id="exportStems" type="button">Download the parts (stems)</button>
+      <button class="btn" id="exportPiano" type="button" data-learn-piano>Learn it at the piano ↗</button>
     </div>
     <p class="hint" id="exportNote" aria-live="polite"></p>
+    <p class="hint" data-piano-note aria-live="polite"></p>
   </section>
   <div class="keep-for-later">
     <span class="hint">Finish later somewhere else:</span>

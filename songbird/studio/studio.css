@@ -641,3 +641,8 @@ dialog.help h2::after { content: ""; display: block; height: 4px; margin-top: 10
 .export-panel { margin-top: 18px; }
 .export-panel .actions { flex-wrap: wrap; }
 .to-export { margin: -4px 0 10px; text-align: right; }
+
+/* ---- learning it at the piano (learn.js) ---- */
+.to-export { display: flex; justify-content: flex-end; flex-wrap: wrap; gap: 6px 18px; }
+.piano-note:empty { display: none; }
+.piano-note { margin: -4px 0 10px; text-align: right; }
