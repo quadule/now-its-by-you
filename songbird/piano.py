@@ -40,7 +40,9 @@ Standard library only (and the package).
 
 from __future__ import annotations
 
-from .theory import chord_bass, chord_tones
+# bound when this module loads: tools/piano_score.py imports it before the release's own (older) program takes
+# the songbird name, and the spelling is this tree's (the release's theory has no key_signature)
+from .theory import chord_bass, chord_tones, key_signature, spelling
 
 NAMES_SHARP = ["C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B"]
 NAMES_FLAT = ["C", "Db", "D", "Eb", "E", "F", "Gb", "G", "Ab", "A", "Bb", "B"]
@@ -84,7 +86,6 @@ def chord_info(ctx, symbol: str) -> dict:
 
 def ascii_spelling(tonic: int, mode: str) -> list[str]:
     """The key's twelve names (theory.spelling: G♯ in C♯ minor, E♯ in C♯ major) as the piano page writes them."""
-    from .theory import spelling
 
     return [n.replace("𝄪", "x").replace("𝄫", "bb").replace("♯", "#").replace("♭", "b") for n in spelling(tonic, mode)]
 
@@ -137,7 +138,6 @@ def export(laid: dict, source: dict, duration: float | None = None) -> dict:
         return round(x / QUANT) * QUANT
 
     tonic_pc = params.tonic % 12
-    from .theory import key_signature
 
     flats = key_signature(params.tonic, params.mode) < 0  # spelt by the key's signature (theory.spelling)
     names = ascii_spelling(params.tonic, params.mode)
