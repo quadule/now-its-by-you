@@ -356,13 +356,14 @@
     const region = h("button", { class: `region${s.name.startsWith("refrain") ? " refrain" : ""}${chosen ? " selected" : ""}${mine ? " mine" : ""}`,
       type: "button", draggable: "true", "data-key": `region:${s.id}`, "aria-pressed": String(chosen),
       "aria-label": `${s.label}, ${s.bars} bars, ${s.sung ? "sung" : "played"}${mine ? "; yours" : ""}. Enter opens its notes.`,
+      title: `${s.label}, ${s.bars} bars${mine ? "; yours" : ""}. Double-click for its notes; drag to move it.`,
       onclick: () => select({ kind: "section", id: s.id }), ondblclick: () => openNotes(s.id),
       ondragstart: (e) => { e.dataTransfer.effectAllowed = "move"; e.dataTransfer.setData("text/x-section", s.id); e.currentTarget.classList.add("dragging"); },
       ondragend: (e) => { e.currentTarget.classList.remove("dragging"); document.querySelectorAll(".region.drop").forEach((r) => r.classList.remove("drop")); },
       ondragover: (e) => { if ([...e.dataTransfer.types].includes("text/x-section")) { e.preventDefault(); e.currentTarget.classList.add("drop"); } },
       ondragleave: (e) => e.currentTarget.classList.remove("drop"),
       ondrop: (e) => { const from = e.dataTransfer.getData("text/x-section"); if (!from) return; e.preventDefault(); e.stopPropagation(); moveSection(from, i); } },
-    h("span", { class: `name${mine ? " hand" : ""}` }, s.label),
+    h("span", { class: "name" }, s.label),
     h("span", { class: "bars" }, `${s.bars} bars${s.sung ? "" : " · instr."}${s.build ? " · build" : ""}`),
     C()?.mini?.(compIndex(s.id)) || null,
     h("span", { class: "edge", title: `Drag for its length: ${s.barOptions.join(", ")} bars`, "aria-hidden": "true",
@@ -440,8 +441,8 @@
     if (t.kind === "singer") {
       const mine = s.by.sung === "you";
       return h("button", { ...common, class: `cell words${s.wordsMine || mine ? " you" : ""}${chosen ? " selected" : ""}`,
-        "aria-label": `The singer in ${s.label}: ${s.sung ? "sings" : "nobody sings"}${mine ? "; yours" : ""}`, title: s.sung ? s.first : "played: nobody sings" },
-      s.sung ? s.first : h("i", {}, "instrumental"), mine ? h("span", { class: "mk" }, "✎") : null);
+        "aria-label": `The singer in ${s.label}: ${s.sung ? "sings" : "nobody sings"}${mine ? "; yours" : ""}`, title: `${s.sung ? s.first : "played: nobody sings"}${mine ? "; yours" : ""}` },
+      s.sung ? s.first : h("i", {}, "instrumental"));
     }
     if (t.kind === "choir") {
       return h("button", { ...common, class: `cell choir ${s.choir ? "plays" : "out"}${chosen ? " selected" : ""}`,
@@ -454,8 +455,8 @@
     }
     const cell = S.grid.cells.get(`${t.id}|${s.id}`), l = M.look(cell);
     const cls = `cell ${l.level}${l.whose === "you" ? " you" : l.locked ? " locked" : l.whose === "before" ? " before" : ""}${l.chance ? " chance" : ""}${chosen ? " selected" : ""}`;
-    return h("button", { ...common, class: cls, "aria-label": M.cellLabel(t, s, cell), title: M.cellLabel(t, s, cell) },
-      h("span", { class: "e" }), l.whose === "you" ? h("span", { class: "mk", "aria-hidden": "true" }, "✎") : l.locked ? h("span", { class: "mk" }, lockIcon()) : null);
+    // no marks on a cell (a glyph at this size gets covered): whose it is is in its drawing, and in its words
+    return h("button", { ...common, class: cls, "aria-label": M.cellLabel(t, s, cell), title: M.cellLabel(t, s, cell) }, h("span", { class: "e" }));
   }
   function roving() {  // one cell of the grid in the tab order: the selected one, else the first
     const cells = [...document.querySelectorAll("#grid button[role=gridcell]")];

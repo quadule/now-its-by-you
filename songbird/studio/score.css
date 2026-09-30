@@ -190,7 +190,8 @@ input[type=number] { width: 72px; border: 1px solid var(--rule-strong); backgrou
 .region svg { width: 100%; height: 18px; opacity: .7; align-self: end; display: block; }
 .region.refrain { background: color-mix(in srgb, var(--gold) 10%, var(--card)); }
 .region.selected { border-color: var(--ink); box-shadow: inset 0 3px 0 var(--red); background: var(--card); }
-.region.mine { border-color: color-mix(in srgb, var(--hand) 60%, var(--rule)); }
+.region.mine { border-color: var(--hand); box-shadow: inset 0 -3px 0 var(--hand); }
+.region.mine.selected { box-shadow: inset 0 3px 0 var(--red), inset 0 -3px 0 var(--hand); }
 .region.mine .name { color: var(--hand); }
 .region.dragging { opacity: .45; }
 .region.drop { outline: 2px dashed var(--hand); outline-offset: 1px; }
@@ -228,11 +229,14 @@ input[type=number] { width: 72px; border: 1px solid var(--rule-strong); backgrou
 .cell.out .e { height: 0; border-top: 1px dotted var(--rule-strong); }
 .cell.chance .e { background: transparent; border: 1.5px dashed var(--ink-2); }
 .cell.chance.out .e { height: 6px; border-color: var(--ink-3); }
-.cell.you .e, .cell.locked .e { background: var(--hand); border: 0; }
-.cell.you.soft .e, .cell.locked.soft .e { background: color-mix(in srgb, var(--hand) 60%, var(--paper)); }
-.cell.you.out .e, .cell.locked.out .e { background: none; border-top: 2px dotted var(--hand); }
+/* whose a cell is, by colour and line alone (no glyph to be covered): yours in the second ink; locked, the program's
+   own drawing in its ink inside a line of the second; drawn by chance, dashed (above) */
+.cell.you .e { background: var(--hand); border: 0; }
+.cell.you.soft .e { background: color-mix(in srgb, var(--hand) 60%, var(--paper)); }
+.cell.you.out .e { background: none; border-top: 2px dotted var(--hand); }
+.cell.locked .e { border: 0; outline: 2px solid var(--hand); outline-offset: 1px; }
+.cell.locked.out .e { height: 5px; background: none; outline-offset: 0; }
 .cell.before .e { background: var(--parent); }
-.cell .mk { position: absolute; right: 3px; top: 2px; font-size: 9px; line-height: 1; color: var(--hand); display: flex; }
 .cell.words { font: 11px/1.2 var(--serif); color: var(--ink-2); padding: 4px 5px; white-space: nowrap; text-overflow: ellipsis; }
 .cell.words i { color: var(--ink-3); }
 .cell.words.you { color: var(--hand); }
@@ -246,7 +250,7 @@ input[type=number] { width: 72px; border: 1px solid var(--rule-strong); backgrou
 .legend i { display: inline-block; width: 14px; height: 7px; background: var(--bar); vertical-align: middle; margin-right: 3px; }
 .legend i.you { background: var(--hand); }
 .legend i.chance { background: none; border: 1.5px dashed var(--ink-2); }
-.lockmark { display: inline-block; width: 9px; height: 11px; border: 1.5px solid var(--hand); border-radius: 1px; border-top-width: 5px; margin-right: 3px; vertical-align: -1px; }
+.legend i.locked { outline: 2px solid var(--hand); outline-offset: 1px; margin: 0 5px 0 2px; }
 
 /* the notes of one section, under the grid (composer.js, in its notes mode) */
 .notes { border: 1px solid var(--rule); border-radius: var(--radius); background: var(--card); overflow: hidden; }
