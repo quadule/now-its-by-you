@@ -196,6 +196,11 @@ def test_a_second_visitor_hears_where_they_are_in_line_and_a_full_queue_says_so(
         assert status == 200 and waiting["state"] == "queued" and waiting["ahead"] == n and waiting["eta"] > 0
     status, full, head = post(port, studio, "/api/listen", {"edits": {"roll": 20}, "section": 0}, **eve)
     assert status == 503 and "3 songs are waiting" in full["error"] and int(head["Retry-After"]) > 1
+    # the same song asked for by another is theirs to hear, not to cancel
+    status, shared, _ = post(port, studio, "/api/listen", {"edits": {"roll": 11}, "section": 0}, **eve)
+    assert status == 200 and shared["ahead"] == 1
+    assert not post(port, studio, "/api/cancel", {"job": shared["id"]}, **eve)[1]["cancelled"]
+    assert post(port, studio, "/api/cancel", {"job": shared["id"]}, **bob)[1]["cancelled"]
     gate.set()
 
 

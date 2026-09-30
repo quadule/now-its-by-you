@@ -401,10 +401,11 @@ class Jobs:
         left = sum(self.took[j.whole] * (1 - j.progress) for j in self.jobs.values() if j.state == "running")
         return left + sum(self.took[j.whole] for j in waiting)
 
-    def cancel(self, job_id: str) -> bool:
+    def cancel(self, job_id: str, owner: str | None = None) -> bool:
+        """A preview still waiting, dropped; in a public studio only by the visitor who asked for it."""
         with self.lock:
             job = self.jobs.get(job_id)
-            if job is None or job.state != "queued" or job.kind == "record":
+            if job is None or job.state != "queued" or job.kind == "record" or (owner and job.owner != owner):
                 return False
             self.pending.remove(job)
             job.state, job.error = "failed", "cancelled"
@@ -1141,7 +1142,8 @@ class Handler(BaseHTTPRequestHandler):
                     return self.fail(400, "no such machine")
                 return self.send_json(studio.listen(edits, who, None if section is None else int(section), by=by))
             if path == "/api/cancel":
-                return self.send_json({"cancelled": studio.jobs.cancel(str(body.get("job", "")))})
+                return self.send_json({"cancelled": studio.jobs.cancel(str(body.get("job", "")),
+                                                                       owner=by[0] if by else None)})
             if path == "/api/record":
                 return self.send_json(studio.record(edits, by=by))
             if path == "/api/sing":
