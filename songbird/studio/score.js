@@ -253,7 +253,7 @@
       h("label", { class: "field" }, h("span", { class: "label" }, "Beats a minute ", out), number),
       slider, h("div", { class: "ends hint" }, `${c.value}. This style: ${range.min} to ${range.max}.`),
       edited("tempo") ? h("div", { class: "row" }, h("span", { class: "hint" }, `yours; the program's was ${Math.round(was("tempo") || 0)}`),
-        h("button", { class: "link small", type: "button", onclick: () => releaseEdit("tempo", "The program's tempo") }, "The program's own")) : null);
+        h("button", { class: "link small", type: "button", onclick: () => releaseEdit("tempo", "The program's tempo") }, "The program's own")) : "");
   }
   function keyPop() {
     const c = card("key"), b = state.start.bounds;
@@ -264,7 +264,7 @@
       chipRow("Note", notes.map((n) => ({ value: n, text: b.tonic.names[n] })), c.tonic, (n) => setEdit("tonic", n, "Change the key"), edited("tonic")),
       chipRow("Scale", b.mode.options.map((m) => ({ value: m, text: b.mode.names[m], title: b.mode.glosses?.[m] })), c.mode, (m) => setEdit("mode", m, "Change the scale"), edited("mode")),
       h("p", { class: "hint" }, "A minor mode leans the words darker, as the machine's own would."),
-      edited("tonic") || edited("mode") ? h("button", { class: "link small", type: "button", onclick: () => clearEdits(["tonic", "mode"], "The program's key") }, "The program's own") : null);
+      edited("tonic") || edited("mode") ? h("button", { class: "link small", type: "button", onclick: () => clearEdits(["tonic", "mode"], "The program's key") }, "The program's own") : "");
   }
 
   // ------------------------------------------------------------------ Page: the words as sung
