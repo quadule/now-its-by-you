@@ -394,3 +394,42 @@ def test_a_range_of_a_large_recording_is_streamed_not_held_in_memory(opened):
     status, where, length, n, digest = fetch("bytes=-5000")  # the last 5000
     assert (status, length, digest) == (206, 5000, hashlib.sha256(data[-5000:]).hexdigest())
     assert fetch(f"bytes={len(data)}-")[0] == 416
+
+
+def test_a_public_studios_day_moves_on_at_midnight_and_what_was_asked_keeps_its_own(opened, home):
+    """A studio running for weeks sings each day's version, not its first day's: at this computer's midnight the
+    day, the machine's context and the page's timeline move on, and versions someone brought open again on it; a
+    render asked for before keeps the version (and so the day) it was asked with. A local studio keeps its day."""
+    from datetime import date, timedelta
+
+    studio, port, gate = opened
+    day = date.fromisoformat(studio.day)
+    clock = [day]
+    studio.clock = lambda: clock[0]
+    asked = []
+    slow = studio._whole
+    studio._whole = lambda job, v, key: asked.append(v.drift.to_dict()["at"][:10]) or slow(job, v, key)
+    ann = visitor(port)
+    assert json.loads(ask(port, "GET", "/api/start", headers=ann)[2])["day"] == studio.day
+    status, job, _ = post(port, studio, "/api/record", {"edits": {}}, **ann)
+    running(studio, job["id"])
+    before = post(port, studio, "/api/song", {"edits": {}}, **ann)[1]
+    studio._timeline = {"drawn": "yesterday's"}
+    studio._opened["f" * 32] = studio  # a version someone brought, opened on the old day
+    clock[0] = day + timedelta(days=1)  # midnight
+    start = json.loads(ask(port, "GET", "/api/start", headers=ann)[2])
+    assert start["day"] == studio.day == (day + timedelta(days=1)).isoformat()
+    assert studio.context.day == studio.day and studio._timeline is None and not studio._opened
+    after = post(port, studio, "/api/song", {"edits": {}}, **ann)[1]
+    assert after["listen"]["whole"] != before["listen"]["whole"]  # another day's version
+    gate.set()
+    for _ in range(200):
+        if studio.jobs.get(job["id"]).state == "done":
+            break
+        time.sleep(0.01)
+    assert asked == [day.isoformat()]  # the recording asked for yesterday is yesterday's
+    assert not studio.roll()  # the same day: nothing moves
+    local = S.Studio(None, str(LEAD), "none", out=home / "out")
+    first = local.day
+    local.clock = lambda: date.fromisoformat(first) + timedelta(days=3)
+    assert not local.roll() and local.day == first  # this computer's own studio: as ever

@@ -57,7 +57,7 @@ import traceback
 import urllib.request
 import webbrowser
 import zipfile
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace as dataclass_replace
 from datetime import date
 from http.cookies import CookieError, SimpleCookie
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
@@ -187,10 +187,10 @@ def slug(text: str) -> str:
     return re.sub(r"[^a-z0-9]+", "-", text.lower().replace("'", "").replace("’", "")).strip("-") or "song"
 
 
-def today() -> tuple[str, float]:
+def today(clock: Callable[[], date] = date.today) -> tuple[str, float]:
     """Today's date on this computer, and the instant the studio sings it: noon UTC that day, as
     `songbird render --date YYYY-MM-DD` has it, so the same machine opens on the same version all day."""
-    day = date.today().isoformat()
+    day = clock().isoformat()
     return day, drift_mod.parse(day)
 
 
@@ -560,7 +560,7 @@ class Studio:
                 quiet = cached is None or bool(json.loads(harvest.cache_path().read_text()).get("quiet"))
         self.machine = machine
         self.voice = harvest.machine_voice(machine)
-        self.day, self.t = today()
+        self.day, self.t = today(self.clock)
         # a checkout records into renders/; a packet's program, into the folder it was run from
         self.out = Path(out) if out else (Path.cwd() if self.where == "packet" else Path("renders"))
         self.jobs = Jobs(public.queue, fair=True) if public else Jobs()
@@ -572,6 +572,7 @@ class Studio:
         self.token = secrets.token_urlsafe(18)
         self._timeline = None
         self._timeline_lock = threading.Lock()
+        self._roll_lock = threading.Lock()
         self.karaoke: subprocess.Popen | None = None
         self.singing = None  # singing in the browser, when asked for (enable_web_singing)
         self.context = explain.Context(self.genome, parent_params, record, self.voice, machine, self.day, self.t,
@@ -580,6 +581,34 @@ class Studio:
         prune(self.cache, self.cache_limit)
         if public:
             threading.Thread(target=self._tidy, daemon=True, name="studio-tidy").start()
+
+    # ------------------------------------------------------------ the day
+
+    clock: Callable[[], date] = staticmethod(date.today)  # this computer's date (a test's fake clock)
+
+    def roll(self) -> bool:
+        """A public studio's day moved on at this computer's midnight, as it would be if it were started then: the
+        machine sings the new day's version and a recording is stamped with it (a studio running for weeks would
+        otherwise sing its first day for good). Asked at every request; True if it moved. What was asked before
+        keeps the day it was asked on: a render's job holds its version (and its record the day it was sung), and
+        a request under way its studio. The page's timeline is worked out again, and each version someone brought
+        is opened again on the new day. A local studio keeps the day it was started on, as ever."""
+        if self.public is None:
+            return False
+        day = self.clock().isoformat()
+        if day == self.day:
+            return False
+        with self._roll_lock:
+            if day == self.day:
+                return False
+            t = drift_mod.parse(day)
+            context = dataclass_replace(self.context, day=day, t=t)
+            with self._timeline_lock:
+                self.context, self.t, self._timeline = context, t, None
+                self.day = day
+            with self._opened_lock:
+                self._opened.clear()
+        return True
 
     # ------------------------------------------------------------ the song
 
@@ -1431,6 +1460,8 @@ class Handler(BaseHTTPRequestHandler):
 
     def parse_request(self) -> bool:
         self._began = time.monotonic()
+        with contextlib.suppress(Exception):  # a public studio's day moves on at midnight (Studio.roll)
+            self.studio.roll()
         return super().parse_request()
 
     def handle_one_request(self) -> None:
