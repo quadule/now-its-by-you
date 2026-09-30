@@ -89,6 +89,16 @@ LABELS = {
 }
 
 
+# house's and dub's (2026-09-30; docs/STYLES.md, "House and dub")
+LABELS.update({
+    "floor": "four on the floor, open hats between", "house": "a house groove: claps on two and four",
+    "drop": "the drop: the ride on every beat", "offbeat": "on the off-beats", "rolling": "a rolling bass",
+    "stab": "chord stabs", "pluck": "a pluck's figure", "onedrop": "a one drop", "steppers": "steppers: the kick on every beat",
+    "dubbass": "the riddim", "skank": "the skank on the off-beats", "bubble": "the organ bubble",
+})
+FILLED += ("onedrop", "steppers")
+
+
 def label(player: str, idiom: str) -> str:
     """What a player plays, in the page's words."""
     return PLAYER_LABELS.get((player, idiom)) or LABELS.get(idiom, idiom)

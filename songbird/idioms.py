@@ -1346,6 +1346,8 @@ def groove_bar(ctx: StyleContext, kind: str) -> list[tuple[float, str, float]]:
     n = len(beats)
     back = [b for k, b in enumerate(beats) if (k > 0 if n == 3 else k % 2 == 1)]
     out = []
+    if kind in DANCE_GROOVES:  # house's and dub's (below, "House and dub")
+        return DANCE_GROOVES[kind](ctx, beats, subs, back)
     if kind == "brushes":
         for k, b in enumerate(beats):
             out.append((b, "brush-sweep", 0.5 if k == 0 else 0.4))
@@ -1401,7 +1403,7 @@ def w_groove(ctx: StyleContext, i: int, part: str, kind: str = "groove") -> list
         last = k == len(bars) - 1
         asked = getattr(ctx, "fills", {}).get((i, part))  # a person's choice (songbird.takeover), else the band's
         fill = last and nxt is not None and nxt.energy >= s.energy if asked is None else last and asked
-        if fill and kind not in ("brushes", "lofi"):
+        if fill and kind not in ("brushes", "lofi") + UNFILLED:
             start = ctx.grid.beats[-1]
             hits = [h for h in hits if h[0] < start - 1e-9]
             fine = [f for f in ctx.grid.fine if f >= start - 1e-9]
@@ -1413,6 +1415,10 @@ def w_groove(ctx: StyleContext, i: int, part: str, kind: str = "groove") -> list
         for off, piece, v in hits:
             if piece == "hat" and v < 0.32 and rng.random() > 0.4 + 0.6 * ctx.band.density:
                 continue
+            if piece in DANCE_PIECES:  # a dance groove's own touches (below, "House and dub")
+                piece = DANCE_PIECES[piece](ctx, part, rng)
+                if not piece:
+                    continue
             u = bar + off
             if s.u0 - 1e-9 <= u < s.u1 - 1e-9:
                 out.append(hit(part, u, piece, ctx.vel(part, u, v, 0.9), i))
@@ -1551,6 +1557,254 @@ WRITERS = {
     "build": w_build,  # only where a person asked for a build (songbird.takeover)
 }
 # "fills" is written for all sections at once (band.fills), after the rest.
+
+
+# --- house and dub (2026-09-30; docs/STYLES.md, "House and dub") ------------------------------------------------
+#
+# House: a drum machine's four on the floor with the open hat on every off-beat, a clap on two and four, the ride
+# in the drop; an off-beat or rolling synth bass; piano or organ stabs; a pluck. Dub: the kit's one drop (nothing
+# on the one, the kick and a cross-stick on three) or steppers; the bass's riddim with space on three; the skank
+# on every off-beat; the organ's bubble. H's grid: a bar of 8 units, a beat of 2, so the off-beats (the "and"s)
+# are the odd eighths and the sixteenths fall on the halves.
+
+
+def _house(kind: str):
+    def bar(ctx: StyleContext, beats, subs, back) -> list[tuple[float, str, float]]:
+        g = ctx.grid
+        offs = [s for s in subs if not g.on_beat(g.origin + s)]
+        out = [(b, "kick", 0.8) for b in beats] + [(s, "hat-open", 0.5 if kind != "floor" else 0.46) for s in offs]
+        # the closed hat on the sixteenths either side of each open one (which it chokes: a short "tss")
+        closed = [f for f in g.fine if not any(abs(f - s) < 1e-9 for s in subs)] if len(g.fine) > len(subs) else []
+        if kind == "floor":
+            closed = [f for f in closed if any(abs(f + g.beat / 4 - b) < 1e-9 for b in beats[1:] + [g.bar])]
+        out += [(f, "hat", 0.34 if kind == "floor" else 0.38) for f in closed]
+        if kind != "floor":
+            out += [(b, "clap", 0.74) for b in back]
+        if kind == "drop":
+            out += [(b, "ride", 0.52) for b in beats]
+        return out
+    return bar
+
+
+def _dub(kind: str):
+    def bar(ctx: StyleContext, beats, subs, back) -> list[tuple[float, str, float]]:
+        g = ctx.grid
+        three = beats[len(beats) // 2]  # the third beat of four (the second of two)
+        if kind == "onedrop":  # nothing on the one: the drop is on three
+            out = [(three, "kick", 0.8), (three, "dub-cross", 0.72)]
+        else:  # steppers: the kick on every beat, a rim shot on three
+            out = [(b, "kick", 0.76) for b in beats] + [(three, "rim", 0.7)]
+        out += [(s, "hat", 0.42 if g.on_beat(g.origin + s) else 0.34) for s in subs]
+        if len(subs) >= 2:
+            out.append((subs[-1], "dub-open", 0.4))  # an open hat on the bar's last off-beat, now and then
+        return out
+    return bar
+
+
+DANCE_GROOVES = {"floor": _house("floor"), "house": _house("house"), "drop": _house("drop"),
+                 "onedrop": _dub("onedrop"), "steppers": _dub("steppers")}
+UNFILLED = ("floor", "house", "drop")  # a house machine rolls into a drop (the transition's), it doesn't fill
+
+
+def _cross(ctx: StyleContext, part: str, rng) -> str:
+    """A cross-stick: the kit's own; a drum machine's rim shot."""
+    return "rim" if family(part) == "drum machine" else "snare-cross"
+
+
+def _now_and_then(ctx: StyleContext, part: str, rng) -> str:
+    return "hat-open" if rng.random() < 0.45 else ""
+
+
+DANCE_PIECES = {"dub-cross": _cross, "dub-open": _now_and_then}
+
+
+def w_floor(ctx, i, part):
+    return w_groove(ctx, i, part, "floor")
+
+
+def w_house(ctx, i, part):
+    return w_groove(ctx, i, part, "house")
+
+
+def w_drop(ctx, i, part):
+    return w_groove(ctx, i, part, "drop")
+
+
+def w_onedrop(ctx, i, part):
+    return w_groove(ctx, i, part, "onedrop")
+
+
+def w_steppers(ctx, i, part):
+    return w_groove(ctx, i, part, "steppers")
+
+
+def _bass_top(part: str) -> int:
+    return B.register_of(part)[1]
+
+
+def w_offbeat(ctx: StyleContext, i: int, part: str) -> list[Ev]:
+    """House's bass: the root on every off-beat, short, leaving the beat to the kick; the octave on a bar's last
+    off-beat now and then, or a step into a new chord."""
+    lo, hi = bass_range(ctx, part)
+    out = []
+    for c in ctx.chords_in(i):
+        rng = ctx.rand(part, c.u0)
+        root = nearest({ctx.bass(c.symbol)}, lo + 7, lo, lo + 14)
+        offs = [u for u in ctx.grid.subs_in(c.u0, c.u1) if not ctx.grid.on_beat(u)]
+        nxt = chord_after(ctx, c)
+        for k, u in enumerate(offs):
+            p = root
+            if k == len(offs) - 1 and nxt is not None and nxt.symbol != c.symbol and rng.random() < 0.5:
+                target = nearest({ctx.bass(nxt.symbol)}, root, lo, hi)
+                p = scale_step(ctx, target, -1 if target >= root else 1)
+            elif (u - ctx.grid.origin) % ctx.grid.bar > ctx.grid.bar - ctx.beat and rng.random() < 0.35 \
+                    and root + 12 <= _bass_top(part):
+                p = root + 12
+            out.append(ev(part, u, u + 0.4 * ctx.beat, p, ctx.vel(part, u, 0.72, 0.9), i=i))
+    return out
+
+
+def w_rolling(ctx: StyleContext, i: int, part: str) -> list[Ev]:
+    """A rolling bass: after each kick three sixteenths, the root, the root and its octave or fifth."""
+    lo, hi = bass_range(ctx, part)
+    out = []
+    q = ctx.beat / 4
+    for c in ctx.chords_in(i):
+        rng = ctx.rand(part, c.u0)
+        pcs = ctx.pcs(c.symbol)
+        root = nearest({ctx.bass(c.symbol)}, lo + 7, lo, lo + 14)
+        top = root + 12 if root + 12 <= _bass_top(part) else nearest({pcs[2]}, root + 7, lo, hi)
+        for b in ctx.grid.beats_in(c.u0, c.u1):
+            third = top if rng.random() < 0.6 else nearest({pcs[2]}, root + 7, lo, _bass_top(part))
+            for k, p in enumerate((root, root, third)):
+                u = b + (k + 1) * q
+                if u < c.u1 - 1e-9:
+                    out.append(ev(part, u, u + 0.7 * q, p, ctx.vel(part, u, 0.66 if k == 1 else 0.58, 0.9), i=i))
+    return out
+
+
+def w_stab(ctx: StyleContext, i: int, part: str) -> list[Ev]:
+    """House stabs: the chord, its colour, short, on a figure held through the section (the off-beats, or a
+    3-3-2 across the bar), its last bar now and then the other; an organ on its percussive registration."""
+    lo, hi = comp_range(ctx, part, i)
+    s = ctx.sections[i]
+    figures = ([1.0, 3.0, 5.0, 7.0], [0.0, 3.0, 6.0])  # in eighths of a bar of eight
+    own = int(ctx.rand(part, s.u0).integers(len(figures)))
+    art = "jazz" if part == "organ" else ""
+    bars = ctx.grid.bars(s.u0, s.u1)
+    out = []
+    for c in ctx.chords_in(i):
+        rng = ctx.rand(part, c.u0)
+        for bar in sorted(set(ctx.grid.bars(c.u0, c.u1)) | {c.u0 - ((c.u0 - ctx.grid.origin) % ctx.grid.bar)}):
+            figure = figures[own if not (bars and abs(bar - bars[-1]) < 1e-9 and rng.random() < 0.4) else 1 - own]
+            for x in figure:
+                u = bar + x * ctx.grid.bar / 8.0
+                if not c.u0 - 1e-9 <= u < c.u1 - 1e-9:
+                    continue
+                end = u + 0.3 * ctx.beat
+                notes = ctx.voicing(part, ctx.tones(c, u, end), lo, hi, u, end, size=4, chord=c)
+                vel = ctx.vel(part, u, 0.66 if ctx.grid.on_beat(u) else 0.6, 0.82)
+                for j, p in enumerate(notes):
+                    out.append(ev(part, u, end, p, vel * (1.0 - 0.03 * j), art=art, i=i, shift=0.003 * j))
+    return out
+
+
+def w_pluck(ctx: StyleContext, i: int, part: str) -> list[Ev]:
+    """A pluck's one-bar figure of chord tones on the sixteenths' off-beats, above the tune."""
+    figure = ((1, 0), (3, 1), (6, 2), (9, 0), (11, 1), (14, 2))  # (sixteenth of the bar, which tone)
+    out = []
+    for c in ctx.chords_in(i):
+        lo, hi = high_range(ctx, part, i, 2, 14)
+        tones = ctx.tones(c, c.u0, c.u1)
+        ladder = [p for p in range(lo, hi + 1) if p % 12 in tones and ctx.fits(p, c, c.u0, c.u1)][:4]
+        if len(ladder) < 3:
+            continue
+        for bar in sorted(set(ctx.grid.bars(c.u0, c.u1)) | {c.u0 - ((c.u0 - ctx.grid.origin) % ctx.grid.bar)}):
+            for x, k in figure:
+                u = bar + x * ctx.grid.bar / 16.0
+                if c.u0 - 1e-9 <= u < c.u1 - 1e-9:
+                    out.append(ev(part, u, u + 0.35 * ctx.beat, ladder[k], ctx.vel(part, u, 0.44, 0.85), i=i))
+    return out
+
+
+def w_dubbass(ctx: StyleContext, i: int, part: str) -> list[Ev]:
+    """The riddim: the root long on the one, a chord tone on the off-beat of two, nothing on three (the drop is
+    the drums'), the octave (or fifth) on its off-beat, and on four a step into the next chord; deep and round."""
+    lo, hi = bass_range(ctx, part)
+    top = _bass_top(part)
+    out = []
+    for c in ctx.chords_in(i):
+        rng = ctx.rand(part, c.u0)
+        pcs = ctx.pcs(c.symbol)
+        root = nearest({ctx.bass(c.symbol)}, lo + 5, lo, lo + 12)
+        nxt = chord_after(ctx, c)
+        for bar in sorted(set(ctx.grid.bars(c.u0, c.u1)) | {c.u0 - ((c.u0 - ctx.grid.origin) % ctx.grid.bar)}):
+            b = ctx.grid.beat
+            third = nearest({pcs[1]}, root + 4, root + 1, root + 12)
+            high = root + 12 if root + 12 <= top else nearest({pcs[2]}, root + 7, root + 1, top)
+            hits = [(0.0, 1.25 * b, root, 0.8), (1.5 * b, 0.4 * b, third if rng.random() < 0.5 else
+                                                  nearest({pcs[2]}, root + 7, root + 1, top), 0.62)]
+            if rng.random() < 0.75:
+                hits.append((2.5 * b, 0.4 * b, high, 0.6))
+            walk = root
+            if nxt is not None and nxt.symbol != c.symbol and c.u1 <= bar + ctx.grid.bar + 1e-9:
+                target = nearest({ctx.bass(nxt.symbol)}, root, lo, hi)
+                walk = scale_step(ctx, target, -1 if target >= root else 1)
+            elif rng.random() < 0.5:
+                walk = nearest({pcs[2]}, root + 7, root + 1, top)
+            hits.append((3.0 * b, 0.8 * b, walk, 0.64))
+            for off, length, p, v in hits:
+                u = bar + off
+                if abs(u - c.u0) > 1e-9 and not c.u0 - 1e-9 <= u < c.u1 - 1e-9:
+                    continue
+                if u < c.u0 - 1e-9:
+                    continue
+                out.append(ev(part, u, min(u + length, c.u1), p, ctx.vel(part, u, v, 0.9), i=i))
+            if c.u0 > bar + 1e-9 and not any(abs(e.u0 - c.u0) < 1e-9 for e in out):  # a chord from mid-bar: its root
+                out.append(ev(part, c.u0, min(c.u0 + 1.25 * b, c.u1), root, ctx.vel(part, c.u0, 0.76, 0.9), i=i))
+    return sorted(out, key=lambda e: e.u0)
+
+
+def w_skank(ctx: StyleContext, i: int, part: str) -> list[Ev]:
+    """The skank: a three-note chord on the top strings struck on every off-beat and choked at once."""
+    out = []
+    lo, hi = B.register_of(part)
+    for c in ctx.chords_in(i):
+        rng = ctx.rand(part, c.u0)
+        for u in ctx.grid.subs_in(c.u0, c.u1):
+            if ctx.grid.on_beat(u):
+                continue
+            tones = ctx.tones(c, u, u + ctx.beat / 2, colour=False)
+            notes = ctx.voicing(part, tones, max(lo, ctx.tonic - 5), min(hi, ctx.tonic + 12), u, u + ctx.beat / 2, 3)
+            vel = ctx.vel(part, u, 0.62, 0.85) * rng.uniform(0.9, 1.05)
+            for j, p in enumerate(notes[::-1]):  # an up stroke: the top string first
+                out.append(ev(part, u, u, p, vel, art="up", i=i, length=0.12, shift=0.005 * j))
+    return out
+
+
+def w_bubble(ctx: StyleContext, i: int, part: str) -> list[Ev]:
+    """The organ's bubble: every beat, the chord low on its second sixteenth, high on the off-beat (with the
+    skank) and low again on its last sixteenth, short."""
+    out = []
+    q = ctx.beat / 4
+    for c in ctx.chords_in(i):
+        for b in ctx.grid.beats_in(c.u0, c.u1):
+            for k, (x, high) in enumerate(((1, False), (2, True), (3, False))):
+                u = b + x * q
+                if u >= c.u1 - 1e-9:
+                    continue
+                end = u + 0.8 * q
+                tones = ctx.tones(c, u, end)
+                lo, hi = (ctx.tonic - 5, ctx.tonic + 7) if high else (ctx.tonic - 17, ctx.tonic - 5)
+                notes = ctx.voicing(part + (":hi" if high else ":lo"), tones, lo, hi, u, end, size=3, chord=c)
+                vel = ctx.vel(part, u, 0.58 if high else 0.46, 0.85)
+                out += [ev(part, u, end, p, vel, i=i) for p in notes]
+    return out
+
+
+WRITERS.update({"floor": w_floor, "house": w_house, "drop": w_drop, "offbeat": w_offbeat, "rolling": w_rolling,
+                "stab": w_stab, "pluck": w_pluck, "onedrop": w_onedrop, "steppers": w_steppers,
+                "dubbass": w_dubbass, "skank": w_skank, "bubble": w_bubble})
 
 
 # --- backing voices -----------------------------------------------------------------------------------------
