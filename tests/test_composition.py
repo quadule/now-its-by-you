@@ -244,7 +244,7 @@ def test_composition_and_editor_travel_inside_the_audio(tmp_path):
                            if (i.filename.startswith("program/songbird/studio/")
                                and not i.filename.startswith("program/songbird/studio/piano/"))
                            or i.filename.endswith("composition.py"))
-        assert editor_bytes < 100_000
+        assert editor_bytes < 110_000  # 101 KB with sevenths, places and melisma (2026-09-29); the program 5.9 of 8 MiB
         # the piano page (docs/PIANO.md) travels with it, a page of its own, counted apart
         piano_bytes = sum(i.compress_size for i in archive.infolist()
                           if i.filename.startswith("program/songbird/studio/piano/"))
