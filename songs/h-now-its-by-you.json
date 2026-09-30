@@ -587,7 +587,7 @@
         "rarity": "common",
         "by": "fable",
         "lines": [
-          "The men in the mine used to sing it be-low;",
+          "The men in the mine used{habit} to sing it be-low;",
           "as long as they're sing-ing, the oth-ers all know.",
           "The pit's long been closed, and the vil-lage is small;",
           "the choir ev-ery Sun-day still gives it its all."
@@ -839,7 +839,7 @@
           "day": ["Tues-day", "Mon-day", "Fri-day", "Sun-day"]
         },
         "lines": [
-          "A nurse used to hum it at night on the ward,",
+          "A nurse used{habit} to hum it at night on the ward,",
           "and most of them slept, and the rest of them snored;",
           "but one lay a-wake, and {who.he} learned ev-ery note;",
           "it went home on {day} in-side of {who.his} coat."

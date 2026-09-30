@@ -249,7 +249,7 @@ tests/studio_author.test.cjs decides the lines tests/golden/say-lines.json pins
 as the Python does).
 
 The rules apply only to a line a person writes; the song's own lines are sung
-as the song says them. When the rules came, nine of those were sung wrongly
+as the song says them. When the rules came, ten of those were sung wrongly
 (the dictionary's first reading), and on 2026-09-30 the artist had them fixed
 with a say in the song's line (new goldens where a render sings one):
 
@@ -263,10 +263,9 @@ with a say in the song's line (new goldens where a render sings one):
 | K | "No one *sowed{planted}* her" | the pig (SOWD, as in cow) | planted |
 | L | "In March the *wind{air}* blew down the sleeve" | turn (WYND) | air |
 | A | "Each copy was *per-fect{perfect}*" | per-FECT | PER-fect (H has its own) |
+| H | "The men in the mine *used{habit}* to sing it", "A nurse *used{habit}* to hum it" | YOOZD | YOOST (Whisper heard "is to" before, "used to" after) |
 
-H's "The men in the mine *used* to sing it", "A nurse *used* to hum it" are
-still sung YOOZD, where the rules would say YOOST (the artist to compare). In a
-song's lines, braces that start a word are a slot (`{kin}`) or a turn
+In a song's lines, braces that start a word are a slot (`{kin}`) or a turn
 (`{made|sang}`); braces right after a word are its say.
 
 On the dry voice the learned throat now sings "The bass is a heartbeat that

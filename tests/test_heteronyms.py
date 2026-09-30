@@ -235,10 +235,9 @@ def _lines(song):
     return out
 
 
-def test_the_songs_own_lines_say_their_words_as_the_rules_would_but_used_to():
+def test_the_songs_own_lines_say_their_words_as_the_rules_would():
     """Every line a song can sing says its words said two ways as the rules would, its own says (wind{air})
-    where the dictionary's first reading was wrong; the one the rules would say another way is listed here,
-    the artist's choice (docs/STUDIO.md, "Words said two ways")."""
+    where the dictionary's first reading was wrong (docs/STUDIO.md, "Words said two ways")."""
     differ, says = set(), set()
     for stem, song, lines in _own_lines():
         for line in lines:
@@ -249,14 +248,13 @@ def test_the_songs_own_lines_say_their_words_as_the_rules_would_but_used_to():
                     says.add((stem, c["word"], c["chosen"]))
                 if rules != c["chosen"]:
                     differ.add((stem, c["word"], c["chosen"], rules))
-    assert differ == {
-        ("h-now-its-by-you", "used", "used", "habit"),  # "used to sing it", "used to hum it": sung YOOZD, as chosen
-    }, sorted(differ)
+    assert not differ, sorted(differ)
     assert says == {
         ("a-nobody-knows", "perfect", "perfect"),  # "Each copy was perfect": was per-FECT (H has its own)
         ("d-in-by-the-ear", "live", "verb"),  # "I live in your head": was LYVE
         ("e-nothing-of-you", "live", "verb"),  # "colours that live on your screen"
         ("h-now-its-by-you", "tears", "crying"),  # "why there were tears": was TAIRS
+        ("h-now-its-by-you", "used", "habit"),  # "used to sing it", "used to hum it": was YOOZD
         ("h-now-its-by-you", "wind", "air"),  # "the wind took it down": was WYND
         ("k-still-you-grew", "sowed", "planted"),  # "No one sowed her": was as the pig, SOWD
         ("k-still-you-grew", "wind", "air"),  # "half was wind and half was shoe"
