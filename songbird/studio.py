@@ -445,7 +445,13 @@ class Jobs:
                     out["eta"] = round(self._eta(before))
         return out
 
-    def _one_each(self, owner: str) -> None:
+    def one_each(self, owner: str) -> None:
+        """Whether this visitor may ask for something now (public.Limited if not), changing nothing: asked before
+        a take is read."""
+        with self.lock:
+            self._one_each(owner, drop=False)
+
+    def _one_each(self, owner: str, drop: bool = True) -> None:
         """A visitor's render at a time: a preview of theirs still waiting gives way to what they ask for
         now; one being made, or a recording waiting, is waited for."""
         for job in list(self.pending):
@@ -454,8 +460,9 @@ class Jobs:
                     what = "Your singing is waiting to be measured" if job.kind == "measure" else \
                         "Your recording is waiting its turn"
                     raise public_mod.Limited(f"{what}; the next can be asked for when it's done.", self._eta([job]))
-                self.pending.remove(job)
-                job.state, job.error = "failed", "cancelled"
+                if drop:
+                    self.pending.remove(job)
+                    job.state, job.error = "failed", "cancelled"
         for job in self.jobs.values():
             if job.owner == owner and job.state == "running":
                 raise public_mod.Limited("Yours is being made now; ask for the next when it's done (one at a time "
@@ -1493,6 +1500,50 @@ class Handler(BaseHTTPRequestHandler):
             return True
         return False
 
+    def _guard(self, kind: str, wrong_kind: str) -> Callable[[], None] | None:
+        """Why a POST can't be taken, as the reply that says so, before a byte of its body is read; None if it can.
+        Only the studio's own page: its address, its key, a public studio's limit on requests, the body's type
+        (`kind`), and the token the page was given (a header no other page can send without asking first, which
+        this server never answers)."""
+        if not self._local():
+            return lambda: self.fail(403, "this page answers only its own address")
+        if not self._admitted():
+            return lambda: self.fail(403, "this studio needs its link's key")
+        if self.studio.public is not None:
+            try:
+                self.studio.gate.request(self._ip())
+            except public_mod.Limited as e:
+                return lambda limited=e: self.too_many(429, limited)
+        if self.headers.get("Content-Type", "").split(";")[0].strip() != kind:
+            return lambda: self.fail(415, wrong_kind)
+        if not self._page_token()[0]:
+            return lambda: self.fail(403, "this page answers only the page it gave out")
+        return None
+
+    def _refuse(self, reply: Callable[[], None], length: int, most: int = 2**20, seconds: float = 5.0) -> None:
+        """A refusal before the body was read: the body, up to `most` bytes, read and dropped a block at a time
+        (nothing of it kept) for up to `seconds`, so the connection stays in step for the next request; then said
+        (and the connection closed if the body couldn't be let go of whole)."""
+        if not self._drain(length, most, seconds):
+            self.close_connection = True
+        reply()
+
+    def _read_body(self, length: int, rate: int = 32 * 1024) -> bytearray:
+        """The body, `length` bytes, read a block at a time: whole, and no slower than a slow connection sends
+        (a minute, and a second for every `rate` bytes), else ValueError."""
+        deadline = time.monotonic() + 60 + length / rate
+        buf = bytearray(length)
+        view, got = memoryview(buf), 0
+        while got < length:
+            n = self.rfile.readinto(view[got:got + 2**16])
+            if not n:
+                raise ValueError("It didn't arrive whole; send it again.")
+            got += n
+            if time.monotonic() > deadline:
+                raise ValueError("It came too slowly to take; send it again on a faster connection.")
+        view.release()
+        return buf
+
     def too_many(self, code: int, e: Exception) -> None:
         retry = getattr(e, "retry", 60)
         self.send(json.dumps({"error": str(e), "retry": retry, "busy": True}).encode(), "application/json", code,
@@ -1701,7 +1752,7 @@ class Handler(BaseHTTPRequestHandler):
             return self.studio.singing.handle_take(self)  # a take is bigger than a JSON; its own guards, the same
         if urlsplit(self.path).path == "/api/open":
             return self.open_version()  # a file someone brought: every guard before a byte of it is read
-        # the body first, so a refusal leaves the connection in step for the next request
+        # every guard before a byte of the body is read; a refusal closes the connection (its body unread)
         try:
             length = int(self.headers.get("Content-Length") or 0)
         except ValueError:
@@ -1709,20 +1760,15 @@ class Handler(BaseHTTPRequestHandler):
         if not 0 <= length <= 2**20:
             self.close_connection = True
             return self.fail(413, "too much")
-        raw = self.rfile.read(length) if length else b""
-        # only the studio's own page: its address, JSON, and the token it was given (a header no other page
-        # can send without asking first, which this server never answers)
-        if not self._local():
-            return self.fail(403, "this page answers only its own address")
-        if not self._admitted():
-            return self.fail(403, "this studio needs its link's key")
-        if self.studio.public is not None and self._throttled():
-            return
-        if self.headers.get("Content-Type", "").split(";")[0].strip() != "application/json":
-            return self.fail(415, "send JSON")
-        mine, version = self._page_token()
-        if not mine:
-            return self.fail(403, "this page answers only the page it gave out")
+        refusal = self._guard("application/json", "send JSON")
+        if refusal is not None:
+            return self._refuse(refusal, length)
+        version = self._page_token()[1]
+        try:
+            raw = self._read_body(length) if length else b""
+        except ValueError as e:
+            self.close_connection = True
+            return self.fail(400, str(e))
         path = urlsplit(self.path).path
         try:
             body = json.loads(raw or b"{}")
@@ -1921,10 +1967,32 @@ class Handler(BaseHTTPRequestHandler):
     def _linger(self, length: int) -> None:
         """After a refusal, a small body read and dropped, so the answer isn't lost to the connection's reset (a
         large one is never read: the page asks first, /api/open/ready)."""
-        if 0 < length <= 2**16:
-            with contextlib.suppress(OSError, ValueError):
-                self.connection.settimeout(2)
-                self.rfile.read(length)
+        self._drain(length, 2**16, 2.0)
+
+    def _drain(self, length: int, most: int, seconds: float) -> bool:
+        """A body of `length` bytes read a block at a time and dropped, if it's no more than `most` and comes
+        within `seconds`: whether it all was."""
+        if length <= 0:
+            return length == 0
+        if length > most:
+            return False
+        deadline = time.monotonic() + seconds
+        before = self.connection.gettimeout()
+        try:
+            self.connection.settimeout(min(before or seconds, seconds))
+            while length > 0:
+                if time.monotonic() > deadline:
+                    return False
+                chunk = self.rfile.read(min(length, 2**16))
+                if not chunk:
+                    return False
+                length -= len(chunk)
+        except (OSError, ValueError):
+            return False
+        finally:
+            with contextlib.suppress(OSError):
+                self.connection.settimeout(before)
+        return True
 
     def _arrive(self, path: Path, length: int) -> None:
         """The body, `length` bytes, streamed to `path`: whole, and no slower than a slow connection sends

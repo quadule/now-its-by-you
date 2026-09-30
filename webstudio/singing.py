@@ -44,6 +44,8 @@ import time
 from collections.abc import Mapping
 from pathlib import Path
 
+from songbird.public import network
+
 from .kit import ROOT, Kit
 
 HERE = Path(__file__).resolve().parent
@@ -55,6 +57,7 @@ CONSENT = 1  # the consent's version: the page asks again when what it says chan
 MAX_TAKE_BYTES = 40 * 2**20  # a whole song at 48 kHz, 16-bit mono, is about 23 MB
 MAX_META_BYTES = 2**20  # where it was sung, and the takes before it as numbers (about 40 kB each)
 MAX_WAITING_TAKES = 3  # takes held in memory waiting for the measuring process, at once
+ARRIVING = 2  # takes on their way here at once, for everyone (one from each address): each is read into memory
 KEEP_DAYS = 30  # a way of singing kept here, after it was last used
 MAX_PHRASING_BYTES = 256 * 2**10
 IDLE = 300.0  # seconds the measuring process waits for another take before it stops, giving its memory back
@@ -278,6 +281,7 @@ class Singing:
         # a public studio stops the measuring process after every take, so a render never runs beside its memory
         self.measurer = measurer or Measurer(self.kit, idle=0 if getattr(studio, "public", None) else IDLE)
         self.waiting: dict[str, dict] = {}  # job key -> the take (audio and where it was sung), until it's measured
+        self.arriving: set[str] = set()  # the addresses a take is on its way from now (ARRIVING at most)
         self.lock = threading.Lock()
         self.stale: str | None = None
         if check and self.kit.fits(studio.genome_path) is None:
@@ -357,9 +361,12 @@ class Singing:
     # ------------------------------------------------------------ a take
 
     def handle_take(self, handler) -> None:
-        """POST /api/sing/take, before the studio reads any body (a take is bigger than its JSON's limit): the
-        body read whole (so a refusal leaves the connection in step), the studio's own guards (its address, its
-        key, its page's token), then the take: a JSON of where it was sung, X-Sing-Meta bytes long, and its WAV."""
+        """POST /api/sing/take, before the studio reads any body (a take is bigger than its JSON's limit): every
+        guard first, before a byte of it is read (the studio's own: its address, its key, its limit on requests,
+        its page's token; then singing's: on, the visitor's takes this hour, room among the takes waiting, and
+        ARRIVING takes on their way at once, one from each address), so a crowd of senders can't have the studio
+        hold a take each; then the take, read whole: a JSON of where it was sung, X-Sing-Meta bytes long, and
+        its WAV."""
         try:
             length = int(handler.headers.get("Content-Length") or -1)
             meta_length = int(handler.headers.get("X-Sing-Meta") or -1)
@@ -368,22 +375,32 @@ class Singing:
         if not 0 < length <= MAX_META_BYTES + MAX_TAKE_BYTES:
             handler.close_connection = True
             return handler.fail(413, "That take is too long to measure here.")
-        raw = handler.rfile.read(length)
-        if not handler._local():
-            return handler.fail(403, "this page answers only its own address")
-        if not handler._admitted():
-            return handler.fail(403, "this studio needs its link's key")
         public = getattr(self.studio, "public", None) is not None
-        if public and handler._throttled():
-            return None
-        if handler.headers.get("Content-Type", "").split(";")[0].strip() != "application/x-songbird-take":
-            return handler.fail(415, "send a take")
-        # the page's token, or at /v/<id> '<token>.<id>' (someone's version: the singing is the song's own)
-        token = handler.headers.get("X-Studio", "").partition(".")[0]
-        if not secrets.compare_digest(token.encode("utf-8", "replace"), self.studio.token.encode()):
-            return handler.fail(403, "this page answers only the page it gave out")
+        refusal = handler._guard("application/x-songbird-take", "send a take")
+        if refusal is None:
+            refusal = self._may_take(handler, public)
+        where = None
+        if refusal is None:
+            where = network(handler._ip())
+            with self.lock:
+                if where in self.arriving or len(self.arriving) >= ARRIVING:
+                    refusal = lambda: handler.too_many(503, Busy(  # noqa: E731
+                        "Other people's singing is on its way here; send yours again in a moment."))
+                else:
+                    self.arriving.add(where)
+        if refusal is not None:  # the take read and dropped as it comes (a while), so the page hears why
+            return handler._refuse(refusal, length, most=length, seconds=30.0)
         try:
-            if len(raw) != length or not 0 < meta_length <= min(MAX_META_BYTES, length - 44):
+            try:
+                raw = handler._read_body(length)
+            except (ValueError, TimeoutError, ConnectionError):
+                handler.close_connection = True
+                return handler.fail(400, "That take was cut short: send it again.")
+        finally:
+            with self.lock:
+                self.arriving.discard(where)
+        try:
+            if not 0 < meta_length <= min(MAX_META_BYTES, length - 44):
                 raise Refused("That take was cut short: send it again.")
             try:
                 meta = json.loads(raw[:meta_length])
@@ -391,7 +408,7 @@ class Singing:
                 meta = None
             if not isinstance(meta, dict):
                 raise Refused("That take didn't say where it was sung: reload the page.")
-            audio = raw[meta_length:]
+            audio = bytes(raw[meta_length:])
             del raw
             return handler.send_json(self.take(meta, audio, handler._by() if public else None))
         except Refused as e:
@@ -401,6 +418,29 @@ class Singing:
                 raise
             code = 429 if type(e).__name__ == "Limited" else 503
             return handler.too_many(code, e) if public else handler.fail(code, str(e))
+
+    def _may_take(self, handler, public: bool):
+        """Why a take can't be taken now, before it's read, as the reply that says so; None if it can: singing
+        off, the visitor's takes this hour (asked, not counted), or the takes waiting to be measured already."""
+        why = self.why_not()
+        if why:
+            return lambda: handler.fail(400, why)
+        gate = getattr(self.studio, "gate", None)
+        if public and gate is not None:
+            try:
+                self.studio.jobs.one_each(handler._by()[0])
+                gate.render("takes", *handler._by(), count=False)
+            except Exception as e:  # noqa: BLE001 - Limited
+                if type(e).__name__ != "Limited":
+                    raise
+                return lambda limited=e: handler.too_many(429, limited)
+        jobs = self.studio.jobs
+        with self.lock:
+            waiting = sum(1 for k in self.waiting if jobs.live(k) is not None)
+        if waiting >= MAX_WAITING_TAKES:
+            busy = Busy("Other people's singing is waiting to be measured; try again in a minute.")
+            return lambda: handler.too_many(503, busy) if public else handler.fail(503, str(busy))
+        return None
 
     def where(self, meta: dict, audio: bytes) -> dict:
         """What the measuring process needs to know about a take, each part checked: the version and guide it
