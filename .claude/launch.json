@@ -39,6 +39,21 @@
       ],
       "port": 8767,
       "url": "http://127.0.0.1:8767"
+    },
+    {
+      "name": "piano",
+      "runtimeExecutable": "python3",
+      "runtimeArgs": [
+        "-m",
+        "http.server",
+        "8770",
+        "--bind",
+        "127.0.0.1",
+        "--directory",
+        "web"
+      ],
+      "port": 8770,
+      "url": "http://127.0.0.1:8770"
     }
   ]
 }
