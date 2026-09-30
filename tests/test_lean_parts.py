@@ -366,3 +366,27 @@ def reeds_made(name: str) -> str:
 @pytest.mark.parametrize("name", list(REEDS))
 def test_free_reeds_make_the_samples_they_made(name):
     assert reeds_made(name) == REEDS[name]
+
+
+# What the synthesizers made of a few chords and a line before 2026-09-30 (the tree at 02384c8): the pad through its
+# chorus, a lead and a bass without one.
+SYNTHS = {"synth-pad": "e415c0b1bde133b756bae34a326b280787cc53d76d38f25c5769291c1eb77a9a",
+          "synth-solo": "a099e0dba87b9242bca0a84ead121534efba57ccd46bb3ded16499ee0c75a415",
+          "synth-bass": "04298617de207b032130a9c6515eb092153ee04083a03c7f162056eff3c1201b"}
+
+
+def synth_made(name: str) -> str:
+    from songbird.synth import analog
+
+    rng = np.random.default_rng(21)
+    low = 36.0 if name == "synth-bass" else 60.0
+    notes = [_Note(0.1 + 0.8 * k, float(rng.uniform(0.3, 1.2)), low + float(rng.integers(0, 12)) + j,
+                   float(rng.uniform(0.4, 1.0))) for k in range(10) for j in ((0.0, 4.0, 7.0) if name == "synth-pad"
+                                                                                   else (0.0,))]
+    y = analog.render(name, notes, SR, int(9.0 * SR), np.random.default_rng(22), np.random.default_rng(23), {})
+    return hashlib.sha256(np.ascontiguousarray(y).tobytes()).hexdigest()
+
+
+@pytest.mark.parametrize("name", list(SYNTHS))
+def test_synthesizers_make_the_samples_they_made(name):
+    assert synth_made(name) == SYNTHS[name]

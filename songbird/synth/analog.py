@@ -96,6 +96,8 @@ from scipy.signal import sosfilt
 from . import osc, touch
 from .iir import butter
 
+BLOCK = 1 << 16  # samples a stretch, where what is worked sample by sample is worked a stretch at a time
+
 SPEC = {
     "synth-pad": dict(
         family="synth",
@@ -580,10 +582,15 @@ def _triangle_lfo(t: np.ndarray, rate: float, phase: float) -> np.ndarray:
 def chorus_delays(n: int, sr: float, centre: float, depth: float, rates=(0.5, 0.85), mix=0.6,
                   phases=(0.0, 0.0)) -> tuple[np.ndarray, np.ndarray]:
     """The two delay tracks (samples): centre ± depth (s), swept by two triangle LFOs, the second line in
-    antiphase to the first. `mix` is the share of the first LFO."""
-    t = np.arange(n) / sr
-    sweep = mix * _triangle_lfo(t, rates[0], phases[0]) + (1.0 - mix) * _triangle_lfo(t, rates[1], phases[1])
-    return (centre + depth * sweep) * sr, (centre - depth * sweep) * sr
+    antiphase to the first. `mix` is the share of the first LFO. (A stretch at a time: each sample by the same
+    operations, without the song-long times and sweep.)"""
+    first, second = np.empty(n), np.empty(n)
+    for a in range(0, n, BLOCK):
+        t = np.arange(a, min(n, a + BLOCK)) / sr
+        sweep = mix * _triangle_lfo(t, rates[0], phases[0]) + (1.0 - mix) * _triangle_lfo(t, rates[1], phases[1])
+        first[a:a + BLOCK] = (centre + depth * sweep) * sr
+        second[a:a + BLOCK] = (centre - depth * sweep) * sr
+    return first, second
 
 
 def chorus(x: np.ndarray, sr: float, centre: float = 0.004, depth: float = 0.0008, rates=(0.5, 0.85),
@@ -593,8 +600,17 @@ def chorus(x: np.ndarray, sr: float, centre: float = 0.004, depth: float = 0.000
     clock filters are. Returns (n, 2)."""
     d1, d2 = chorus_delays(len(x), sr, centre, depth, rates, mix, phases)
     w = _delays(np.ascontiguousarray(x, dtype=np.float64), d1, d2)
-    w = sosfilt(butter(2, 9000.0, fs=sr, output="sos"), w, axis=0)
-    return (x[:, None] + wet * w) / (1.0 + 0.5 * wet)
+    del d1, d2
+    # the clock filters a channel at a time, a stretch at a time (the state carried: as along axis 0 of the whole),
+    # then (x + wet * w) / (1 + 0.5 wet) a stretch at a time, where w lies
+    sos = butter(2, 9000.0, fs=sr, output="sos")
+    for c in range(w.shape[1]):
+        state = np.zeros((sos.shape[0], 2))
+        for a in range(0, len(w), BLOCK):
+            w[a:a + BLOCK, c], state = sosfilt(sos, w[a:a + BLOCK, c], zi=state)
+    for a in range(0, len(w), BLOCK):
+        w[a:a + BLOCK] = (x[a:a + BLOCK, None] + wet * w[a:a + BLOCK]) / (1.0 + 0.5 * wet)
+    return w
 
 
 # --- patches: a person's choice of sound for a synth (docs/SOUND-DESIGN.md) ---------------------------------
@@ -1014,8 +1030,13 @@ def render(name: str, notes, sr: int, length: int, rng: np.random.Generator, mak
         if not playing:
             return np.zeros((length, 2)) if preset["chorus"] else np.zeros(length)
         y = _render_voiced(name, playing, sr, length, rng, machine)
-    # the output stage is AC-coupled: a note's first and last part-periods leave a little DC, which goes
-    y = sosfilt(butter(1, AC_HZ, btype="highpass", fs=sr, output="sos"), y)
+    # the output stage is AC-coupled: a note's first and last part-periods leave a little DC, which goes (where it
+    # lies, a stretch at a time, the filter's state carried)
+    y = np.ascontiguousarray(y, dtype=np.float64)
+    ac = butter(1, AC_HZ, btype="highpass", fs=sr, output="sos")
+    state = np.zeros((ac.shape[0], 2))
+    for a in range(0, len(y), BLOCK):
+        y[a:a + BLOCK], state = sosfilt(ac, y[a:a + BLOCK], zi=state)
     if not sub and preset["chorus"]:
         phases = tuple(rng.uniform(0.0, 1.0, 2))
         y = chorus(y, sr, machine.chorus_centre, machine.chorus_depth, machine.chorus_rates, machine.chorus_mix,
