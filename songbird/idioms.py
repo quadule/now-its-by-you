@@ -1844,6 +1844,9 @@ def arrange_style(genome, params, placed, lead, end, melody, seconds, sdef) -> t
         if family(e.part) not in PERCUSSION and e.length <= 0 and e.u1 >= hold - ctx.sub - 1e-9 \
                 and params.style.ending != "cold":
             e.u1 = ctx.end
+    from .composition import make_room
+
+    events = make_room(genome, params, placed, lead, events, seconds)  # a person's played parts (notes in)
 
     wobble = params.humanize * (1.0 + 1.5 * ctx.band.wear)
     jitters: dict[tuple[str, int], float] = {}

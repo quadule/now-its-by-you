@@ -538,3 +538,253 @@ def view(genome, params, lyrics) -> dict:
             "arranged": bool(params.composition.get("order")),
             "guidance": "Notes stay in the song's range. Keep one note per syllable and the final home note. "
                         "A tune line changes everywhere it appears. Repeated sections keep their story order."}
+
+
+# ---------------------------------------------------------------- a player's notes, played in (notes in)
+#
+# A person's own notes for one band player in one line of one section of the form (docs/STUDIO.md, "Notes
+# in"): part.<player>.<section>:<n>.<line>, a list of [onset, length, pitch, velocity], whole numbers: onset
+# and length in PPB-ths of a beat from the line's first bar line, pitch in semitones from the key's note,
+# velocity 1..127. Kept in params.composition["parts"][player]["<section>:<n>.<line>"]; realize plays them in
+# place of that player's own notes there (performed()), on the rendition's clock beat by beat.
+
+PPB = 96  # parts of a beat a played note's times are counted in
+PART_PATH = re.compile(r"part\.([a-z][a-z0-9-]{0,31})\.([A-Za-z][A-Za-z0-9_-]{0,31}):(\d{1,3})\.(\d{1,2})")
+PART_LINE_NOTES = 512  # notes a line
+PART_NOTES = 4096  # notes across every line of a version played in
+PART_BEAT_ONSETS = 32  # notes starting in any one beat
+PART_SOUNDING = 10  # notes sounding at once (ten fingers)
+PART_LONGEST = 32  # beats a note may be held
+PART_SLACK = 5  # semitones a note may go past its player's range, for the key moving (the table's own reach)
+EARLY = 1 / 8  # of a beat: a band note this much before a line's first bar line belongs to that line
+UNPLAYABLE = ("drum", "voice")  # the drums' strokes aren't pitches; the singer's notes are the tune
+
+
+def part_player(name: str) -> dict:
+    """What a player that can be played in is: its range and whether it plays one note at a time (its
+    synth's own spec), or why it can't be."""
+    from .synth.instruments import known, spec
+
+    if name == "voice" or name.startswith("choir") or name not in known():
+        raise ValueError(f"{name} isn't a player whose notes can be played in"
+                         + ("; the tune is changed as the tune" if name == "voice" else ""))
+    about = spec(name)
+    if about["register"] is None or name in UNPLAYABLE:
+        raise ValueError(f"the {name} plays strokes, not notes; its part can't be played in yet")
+    return {"register": tuple(about["register"]), "poly": bool(about["poly"])}
+
+
+def part_target(genome, path: str) -> tuple[str, str, int, str]:
+    """A part path's player, section id, line number and tune line: part.fiddle.verse:1.0 is the fiddle in
+    the first line of the second verse (tune line v1)."""
+    match = PART_PATH.fullmatch(path)
+    if match is None:
+        raise ValueError("a played part needs its player, its section and which time it comes, and its line")
+    player, name, nth, line = match.groups()
+    part_player(player)
+    try:
+        section = genome.section(name)
+    except KeyError:
+        raise ValueError(f"there is no section called {name}") from None
+    if (name not in genome.sections and name != "bridge2") or int(nth) >= MAX_SECTIONS:
+        raise ValueError(f"there is no section called {name}")
+    if int(line) >= len(section.phrases):
+        raise ValueError(f"the {name} has {len(section.phrases)} lines")
+    return player, f"{name}:{int(nth)}", int(line), section.phrases[int(line)]
+
+
+def _whole(value, what: str) -> int:
+    if isinstance(value, bool) or not isinstance(value, int):
+        if isinstance(value, float) and value.is_integer() and abs(value) < 2**31:
+            return int(value)
+        raise ValueError(f"{what} must be whole numbers")
+    return value
+
+
+def check_part(genome, path: str, value) -> list[list[int]] | None:
+    """A person's notes for one player in one line, checked whole (a refused note leaves the line as it was):
+    each note starting inside the line (or its pickup) and held at most PART_LONGEST beats, in the player's
+    range at the song's key (PART_SLACK either side, for the key moving), velocity 1..127, no more than the
+    caps; sorted, an exact
+    repeat dropped, and a one-note player's overlaps trimmed (each note ends where the next begins), so the
+    numbers kept are the numbers played. [] rests the player through the line; None gives it back."""
+    player, _, _, pid = part_target(genome, path)
+    if value is None:
+        return None
+    if not isinstance(value, list):
+        raise ValueError("a played part is a list of notes")
+    if len(value) > PART_LINE_NOTES:
+        raise ValueError(f"a line takes at most {PART_LINE_NOTES} notes; this has {len(value)}")
+    about = part_player(player)
+    lo, hi = about["register"]
+    tonic = int(genome.seed_params["tonic"])
+    phrase = genome.phrases[pid]
+    span = int(round(phrase.bars * genome.meter.bar / genome.meter.beat * PPB))
+    pickup = int(round(phrase.pickup / genome.meter.beat * PPB))  # a note may lead in from the line's pickup
+    notes = []
+    for i, item in enumerate(value):
+        if not isinstance(item, (list, tuple)) or len(item) != 4:
+            raise ValueError(f"note {i + 1} needs its onset, length, pitch and velocity")
+        onset, length, pitch, vel = (_whole(x, f"note {i + 1}'s numbers") for x in item)
+        if not -pickup <= onset < span:
+            raise ValueError(f"note {i + 1} starts outside the line")
+        if not 1 <= length <= PART_LONGEST * PPB:
+            raise ValueError(f"note {i + 1} is held longer than {PART_LONGEST} beats, or not at all")
+        if not lo - PART_SLACK <= tonic + pitch <= hi + PART_SLACK or not 0 <= tonic + pitch <= 127:
+            raise ValueError(f"note {i + 1} is outside what the {player} plays")
+        if not 1 <= vel <= 127:
+            raise ValueError(f"note {i + 1}'s velocity must be 1 to 127")
+        notes.append([onset, length, pitch, vel])
+    notes.sort(key=lambda n: (n[0], n[2], -n[1]))
+    unique = [n for k, n in enumerate(notes) if not k or (n[0], n[2]) != (notes[k - 1][0], notes[k - 1][2])]
+    starts = Counter(n[0] // PPB for n in unique)
+    if starts and max(starts.values()) > PART_BEAT_ONSETS:
+        beat = max(starts, key=starts.get)
+        raise ValueError(f"more than {PART_BEAT_ONSETS} notes start in beat {beat + 1}")
+    if not about["poly"]:
+        for k in range(1, len(unique)):
+            if unique[k][0] == unique[k - 1][0]:
+                raise ValueError(f"the {player} plays one note at a time; notes {k} and {k + 1} start together")
+        for k in range(len(unique) - 1):
+            unique[k][1] = min(unique[k][1], unique[k + 1][0] - unique[k][0])
+    else:
+        ends: list[int] = []
+        for n in unique:
+            ends = [e for e in ends if e > n[0]] + [n[0] + n[1]]
+            if len(ends) > PART_SOUNDING:
+                raise ValueError(f"more than {PART_SOUNDING} notes sound at once in beat {n[0] // PPB + 1}")
+    return unique
+
+
+def performed_parts(params) -> dict:
+    """{player: {"<section>:<n>.<line>": notes}} as these parameters carry them."""
+    return {p: dict(lines) for p, lines in (params.composition.get("parts") or {}).items() if lines}
+
+
+def part_key(path: str) -> tuple[str, str]:
+    """A part path's player and the key its notes are kept under: part.fiddle.verse:1.0 -> fiddle, verse:1.0."""
+    match = PART_PATH.fullmatch(path)
+    return match.group(1), f"{match.group(2)}:{int(match.group(3))}.{int(match.group(4))}"
+
+
+def part_value(params, path: str):
+    """What a part path holds in these parameters: a person's notes, or "the program's own part"."""
+    player, key = part_key(path)
+    held = performed_parts(params).get(player, {}).get(key)
+    return [list(n) for n in held] if held is not None else "the program's own part"
+
+
+def part_silent(genome, params, path: str) -> str | None:
+    """Why a person's notes at this path aren't heard in this version, or None if they are."""
+    player, sid, _, _ = part_target(genome, path)
+    if sid not in section_ids(params.form):
+        return "this version doesn't play that section; your notes wait for one that does"
+    if not params.band.plays(player):
+        return f"this version's band has no {player}; your notes wait for one that has"
+    return None
+
+
+def beat_clock(clock):
+    """Grid units to seconds along a rendition's clock, beat by beat and straight within a beat (a foot of a
+    song re-barred in three), as a MIDI file's tempo map has it: where a person's played notes go."""
+    m = clock.meter
+    step = m.foot if clock.triple else m.beat
+
+    def at(u: float) -> float:
+        k = math.floor((u - clock.lead) / step)
+        a = clock.lead + k * step
+        s0, s1 = clock.seconds(a), clock.seconds(a + step)
+        return s0 + (u - a) / step * (s1 - s0)
+
+    return at
+
+
+def line_windows(genome, params, placed, lead) -> dict[str, tuple[float, float, float, str]]:
+    """Each line of the form by its part key ("verse:1.0"), in grid units: where a player's notes belong to
+    it (from its own pickup before its first bar line to the next line's pickup, as the tune's notes do), its
+    first bar line (where its notes' onsets count from) and its section's name, from realize's layout."""
+    out, k = {}, 0
+    bar = genome.meter.bar
+    for sid, name in zip(section_ids(params.form), params.form):
+        for j, _ in enumerate(genome.section(name).phrases):
+            _, phrase, start, _ = placed[k]
+            after = placed[k + 1][1].pickup if k + 1 < len(placed) else 0
+            k += 1
+            u0 = start + lead
+            out[f"{sid}.{j}"] = (u0 - phrase.pickup, u0 + phrase.bars * bar - after, u0, name)
+    return out
+
+
+def _runs(genome, params, placed, lead):
+    """For each player a person played in (and this version's band has), the lines of the form they played
+    (key, window) and the runs those make (lines played one after another make one run), in grid units."""
+    parts = performed_parts(params)
+    if not parts:
+        return {}
+    windows = line_windows(genome, params, placed, lead)
+    out = {}
+    for player, lines in sorted(parts.items()):
+        if player in UNPLAYABLE or not params.band.plays(player):
+            continue
+        here = sorted((windows[k][0], windows[k][1], k) for k in lines if k in windows)
+        runs: list[list[float]] = []
+        for w0, w1, _ in here:
+            if runs and abs(runs[-1][1] - w0) < 1e-9:
+                runs[-1][1] = w1
+            else:
+                runs.append([w0, w1])
+        if here:
+            out[player] = (here, runs, windows)
+    return out
+
+
+def make_room(genome, params, placed, lead, events: list, seconds) -> list:
+    """The band's notes (band.Ev, in grid units, before they are placed in time) with room made for a
+    person's played parts: each such player's own notes starting in a line they played are left out, and one
+    started before and sounding into it (a held pad, a ringing harp string) stops where their notes begin.
+    The same list when nobody played any in (band.arrange and idioms.arrange_style call this last)."""
+    played = _runs(genome, params, placed, lead)
+    if not played:
+        return events
+    kept = []
+    for e in events:
+        runs = played[e.part][1] if e.part in played else ()
+        if any(a - 1e-9 <= e.u0 < b - 1e-9 for a, b in runs):
+            continue
+        for a, _ in runs:
+            if e.u0 < a - 1e-9:
+                if e.length > 0:
+                    e.length = min(e.length, max(0.03, seconds(a) - seconds(e.u0) - e.shift))
+                else:
+                    e.u1 = min(e.u1, a)
+        kept.append(e)
+    return kept
+
+
+def played_in(genome, params, placed, clock) -> list:
+    """A person's played parts as notes (score.Note): each on the rendition's clock beat by beat (beat_clock:
+    as the MIDI file's tempo map places a tick), its onset from its line's first bar line, held as played but
+    not past the run of lines played in, at the key's note plus its pitch, as hard as it was played. None
+    when nobody played any in."""
+    played = _runs(genome, params, placed, clock.lead)
+    if not played:
+        return []
+    from .score import Note
+
+    beat = genome.meter.beat
+    at = beat_clock(clock)
+    out = []
+    lines = performed_parts(params)
+    for player, (here, runs, windows) in played.items():
+        for w0, _, key in here:
+            end = next(b for a, b in runs if a - 1e-9 <= w0 < b)
+            _, _, u0, name = windows[key]
+            for onset, length, pitch, vel in lines[player][key]:
+                u = u0 + onset / PPB * beat
+                start = at(u)
+                stop = at(min(u + length / PPB * beat, end))
+                out.append(Note(part=player, start=start, dur=max(stop - start, 0.03),
+                                pitch=float(params.tonic + pitch), vel=vel / 127, section=name))
+    return out
+
+
