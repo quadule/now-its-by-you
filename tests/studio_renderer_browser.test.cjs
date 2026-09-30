@@ -52,6 +52,8 @@ function studioServer(extra = {}) {
     if (path === "/render/bundle.json") return extra.bundle === undefined ? BUNDLE : extra.bundle;
     if (path === "/api/render/spec") {
       if (extra.made) return { key: "k", label: "made", made: true };
+      if (extra.server && body.section === null) return { key: "k", label: "long", server: true };
+      if (extra.tooLong && body.section === null) return { key: "k", label: "long", too_long: extra.tooLong };
       const whole = body.section === null;
       const key = whole ? `w${body.edits.tempo || 0}` : `s${body.section}-${body.edits.tempo || 0}`;
       return SPEC(key, whole ? "whole" : "section", whole ? { name: { song: "now-its-by-you", day: "2026-09-30" } } : {});
@@ -146,6 +148,27 @@ test("what the server has made already is asked of it, and plays from there", as
   assert.equal(job.url, "/audio/server-1.flac");
   assert.equal(fake.made.length, 0);
   assert.deepEqual(server.asked.map((a) => a[0]), ["/render/bundle.json", "/api/render/spec", "/api/listen"]);
+});
+
+test("a whole song too long for a browser's memory: the server's if it fits there, else said, and made nowhere", async () => {
+  let { r, fake, server } = browser({}, {}, { server: true });
+  let job = await r.record({ edits: {} }).done;
+  assert.equal(job.where, "server");
+  assert.equal(fake.made.length, 0);
+  assert.deepEqual(server.asked.map((a) => a[0]), ["/render/bundle.json", "/api/render/spec", "/api/record"]);
+  const why = "This version is 8.5 minutes long, too long for this small server or a browser to make in one go";
+  ({ r, fake, server } = browser({}, {}, { tooLong: why }));
+  job = await r.preview({ edits: {}, section: null }).done;
+  assert.equal(job.state, "failed");
+  assert.equal(job.error, why);
+  assert.equal(fake.made.length, 0);
+  assert.ok(!server.asked.some((a) => a[0] === "/api/listen"));  // never sent to the server to fail there
+  assert.equal(R.shared.failures.count, 0);  // not the browser's failure: nothing moves to the server
+  job = await r.record({ edits: {} }).done;
+  assert.equal(job.state, "failed");
+  assert.ok(!server.asked.some((a) => a[0] === "/api/record"));
+  job = await r.preview({ edits: {}, section: 2 }).done;  // a section of it is made in the browser as ever
+  assert.equal(job.where, "browser");
 });
 
 test("a render the browser can't make is made by the server, said quietly; after two, the server for the visit", async () => {

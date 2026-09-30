@@ -696,12 +696,58 @@ class Studio:
             os.utime(flac)
             return {"state": "done", "url": f"/audio/{key}.flac", "label": label, "progress": 1.0, "key": key}
         if section is None:
+            self.check_whole(v)
             job = self.jobs.submit(key, "preview", label, lambda job: self._whole(job, v, key),
                                    **self._limits(by, whole=True))
         else:
             job = self.jobs.submit(key, "preview", label, lambda job: self._section(job, v, key, section),
                                    **self._limits(by, whole=False))
         return self.jobs.view(job) | {"key": key}
+
+    # ---- a whole song's memory (a public studio): a render past the container's memory would kill the studio, and
+    # its queue with it, so a whole song estimated past it (public.render_mb: its length and its players) is refused
+    # before it's queued, with a sentence; a browser makes it instead where one can (render_spec)
+
+    def whole_cost(self, v: explain.Version) -> tuple[float, set[str]]:
+        """A whole render of this version: its length (seconds, laid out as it would be sung) and its parts."""
+        score = self._score(v)
+        return score.duration, {n.part for n in score.notes}
+
+    def fits_here(self, seconds: float, parts: set[str], stems: bool = False) -> tuple[bool, float]:
+        """Whether this server makes a whole song this long with these parts within its budget (render_mb, on its
+        threads), and the longest it would make with them (seconds)."""
+        from .synth.threads import workers
+
+        threads = workers()
+        mb = public_mod.render_mb(seconds, parts, threads, stems)
+        per_second = public_mod.render_mb(1.0, parts, threads, stems) - public_mod.BASE_MB
+        return mb <= self.public.render_mb, (self.public.render_mb - public_mod.BASE_MB) / per_second
+
+    @staticmethod
+    def fits_browser(seconds: float, parts: set[str]) -> bool:
+        """Whether a browser makes a whole song this long with these parts (its heap kept under BROWSER_MB)."""
+        return public_mod.BROWSER_FACTOR * public_mod.render_mb(seconds, parts) <= public_mod.BROWSER_MB
+
+    def most_minutes(self) -> float | None:
+        """The longest whole song made for a visitor somewhere (this server, or a browser where the studio serves the
+        bundle), with the lightest band: received.MINUTES for a public studio (a version someone brings is refused
+        if its child would be longer). None for a local studio, which makes what it's asked."""
+        if self.public is None:
+            return None
+        browser = public_mod.BROWSER_MB / public_mod.BROWSER_FACTOR if self.browser is not None else 0.0
+        most = max(float(self.public.render_mb), browser)
+        return min(received.MINUTES, (most - public_mod.BASE_MB) / min(public_mod.RATES.values()) / 60)
+
+    def check_whole(self, v: explain.Version, stems: bool = False) -> None:
+        """A public studio's whole render (or its stems), refused before it's queued (public.TooLong, saying why and
+        what to do) if it wouldn't fit in the studio's memory; nothing for a local studio."""
+        if self.public is None:
+            return
+        seconds, parts = self.whole_cost(v)
+        fits, most = self.fits_here(seconds, parts, stems)
+        if not fits:
+            browser = None if stems or self.browser is None else self.fits_browser(seconds, parts)
+            raise public_mod.TooLong(public_mod.too_long(seconds, most, browser))
 
     def _limits(self, by: tuple[str, str] | None, whole: bool) -> dict:
         """What the queue needs to hold a public studio's visitor to its limits (nothing for anyone else)."""
@@ -800,6 +846,7 @@ class Studio:
         if (self.cache / f"{key}.zip").exists():
             url = f"/export/{key}.zip?name={self.stems_name(key)}.stems.zip"
             return {"state": "done", "progress": 1.0, "url": url, "label": "the stems", "kind": "export"}
+        self.check_whole(v, stems=True)
         job = self.jobs.submit(f"{key}-stems", "preview", "the stems", lambda job: self._stems(job, v, key),
                                **self._limits(by, whole=True))
         return self.jobs.view(job) | {"download": f"/export/{key}.zip?name={self.export_name(v, '.stems.zip')}"}
@@ -964,6 +1011,7 @@ class Studio:
                 and (self.cache / f"{key}.flac").exists():
             return {"state": "done", "progress": 1.0, "url": f"/audio/{key}.flac", "result": keep(),
                     "label": "the recording", "kind": "record"}
+        self.check_whole(v)
         return self.jobs.view(self.jobs.submit(key, "record", "the recording", lambda job: self._whole(job, v, key),
                                                then=keep, **self._limits(by, whole=True)))
 
@@ -1070,11 +1118,12 @@ class Studio:
         self._genomes: collections.OrderedDict = collections.OrderedDict()  # song digest -> Genome, shared
         self._opened_lock = threading.Lock()
 
-    def receive(self, path: Path) -> dict:
+    def receive(self, path: Path, timeout: float | None = None) -> dict:
         """A file someone brought (in a folder of its own, which the caller removes), read as data by a process
-        of its own and kept, if this program can continue it, as a version this studio opens at /v/<id>.
-        Raises received.Refused, saying why, if not."""
-        out = received.examine_apart(path, self.genome.title, self.machine, self.day, ROOT, path.parent)
+        of its own (given `timeout` seconds at most) and kept, if this program can continue it, as a version this
+        studio opens at /v/<id>. Raises received.Refused, saying why, if not."""
+        out = received.examine_apart(path, self.genome.title, self.machine, self.day, ROOT, path.parent,
+                                     timeout=timeout, minutes=self.most_minutes())
         record, song = out.get("record"), out.get("genome")
         if not isinstance(record, dict) or not isinstance(song, str):
             raise received.Refused("It couldn't be read here: the reader stopped on it.")
@@ -1279,6 +1328,13 @@ class Studio:
         label = explain.listen_label(self.context, v, section, who)
         if (self.cache / f"{key}.flac").exists():
             return {"key": key, "label": label, "made": True}
+        if section is None and self.public is not None:  # too long for a browser's heap: the server, if it can
+            seconds, parts = self.whole_cost(v)
+            if not self.fits_browser(seconds, parts):
+                fits, most = self.fits_here(seconds, parts)
+                if not fits:
+                    return {"key": key, "label": label, "too_long": public_mod.too_long(seconds, most, False)}
+                return {"key": key, "label": label, "server": True}
         spec = {"v": RENDER_SPEC, "kind": "section" if section is not None else "whole", "key": key,
                 "program": self.program_digest,
                 "genome": (self.genome_bytes or self.genome_path.read_bytes()).decode("utf-8"),
@@ -1918,6 +1974,8 @@ class Handler(BaseHTTPRequestHandler):
             return self.too_many(503, e) if self.studio.public is not None else self.fail(503, str(e))
         except public_mod.Limited as e:
             return self.too_many(429, e)
+        except public_mod.TooLong as e:  # a whole song past this studio's memory: said, never queued
+            return self.send_json({"error": str(e), "too_long": True}, 422)
         except (ValueError, KeyError, TypeError) as e:
             return self.fail(400, str(e))
         except Exception as e:
@@ -1995,6 +2053,8 @@ class Handler(BaseHTTPRequestHandler):
             with studio._arriving_lock:
                 if where in studio.arriving or len(studio.arriving) >= ARRIVING:
                     refusal = self._busy
+                elif not studio.reading.acquire(blocking=False):  # its reader's place, held from now: never waited for
+                    refusal = self._reading
                 else:
                     studio.arriving.add(where)
         if refusal is not None:
@@ -2004,18 +2064,20 @@ class Handler(BaseHTTPRequestHandler):
         try:
             path = folder / "brought.flac"
             self._arrive(path, length)
-            if not studio.reading.acquire(timeout=90):
-                return self.too_many(503, Busy("The studio is reading other files; send it again in a moment.", 30))
-            try:
-                answer = studio.receive(path)
-            finally:
-                studio.reading.release()
+            # answered within OPEN_SECONDS of being asked (a proxy gives up on an answer after 100): the reader's
+            # time is what's left of them, and a file that took most of them to arrive is refused
+            left = OPEN_SECONDS - (time.monotonic() - self._began)
+            if left < received.SECONDS / 2:
+                raise received.Refused("The file came too slowly to read in time; send it again on a faster "
+                                       "connection.")
+            answer = studio.receive(path, timeout=left)
         except received.Refused as e:
             return self.fail(422, str(e))
         except (TimeoutError, ConnectionError):
             return None  # the sender went quiet, or away: no one to answer
         finally:
             shutil.rmtree(folder, ignore_errors=True)
+            studio.reading.release()
             with studio._arriving_lock:
                 studio.arriving.discard(where)
         return self.send_json(answer)
@@ -2046,7 +2108,14 @@ class Handler(BaseHTTPRequestHandler):
         with studio._arriving_lock:
             if public_mod.network(self._ip()) in studio.arriving or len(studio.arriving) >= ARRIVING:
                 return self._busy
+            if not count:  # the page asking first: whether a reader is free now (open_version holds one from the start)
+                if not studio.reading.acquire(blocking=False):
+                    return self._reading
+                studio.reading.release()
         return None
+
+    def _reading(self) -> None:
+        self.too_many(503, Busy("The studio is reading other versions just now; send it again in a minute.", 60))
 
     def _busy(self) -> None:
         self.too_many(503, Busy("A file is on its way here from you already, or several from others; send it "
@@ -2099,6 +2168,7 @@ class Handler(BaseHTTPRequestHandler):
 
 
 ARRIVING = 4  # files on their way at once, for everyone (one from each address)
+OPEN_SECONDS = 88.0  # a file brought is answered within this long of being asked: Cloudflare gives up after 100
 
 
 class Server(ThreadingHTTPServer):

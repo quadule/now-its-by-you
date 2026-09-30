@@ -36,6 +36,7 @@ B = ROOT / "songs" / "b-coal-from-the-fire.json"
 @pytest.fixture
 def home(tmp_path, monkeypatch):
     monkeypatch.setenv("SONGBIRD_HOME", str(tmp_path / "home"))
+    monkeypatch.setenv("STUDIO_MEMORY", "16g")  # a public studio with room for any whole song (its budget: public.render_mb)
     return tmp_path
 
 
@@ -412,6 +413,47 @@ def test_the_pages_guards_come_before_a_byte_is_read(public, parent):
     status, _, body = ask(port, "POST", "/api/open/ready", {"size": 17 * 2**20}, json_head)
     assert status == 429 and "versions opened" in json.loads(body)["error"]
     assert not list(studio.incoming.iterdir())
+
+
+def test_a_file_brought_is_answered_within_a_proxys_patience(public, parent, monkeypatch):
+    """Cloudflare gives up on an answer after 100 s: a file brought is never left waiting for a reader (both busy:
+    "send it again in a minute", at once, and the page asking first hears so too), and its reader is given what is
+    left of S.OPEN_SECONDS since it was asked."""
+    studio, port, _ = public
+    json_head = {"Content-Type": "application/json", "X-Studio": studio.token}
+    for _ in range(2):  # both readers busy with others' files
+        assert studio.reading.acquire(blocking=False)
+    try:
+        began = time.monotonic()
+        status, why = send(port, b"fLaC" + bytes(2000), studio.token)
+        assert status == 503 and "reading other versions" in why["error"] and time.monotonic() - began < 5
+        status, _, body = ask(port, "POST", "/api/open/ready", {"size": 17 * 2**20}, json_head)
+        assert status == 503 and "send it again in a minute" in json.loads(body)["error"]
+    finally:
+        studio.reading.release()
+        studio.reading.release()
+    given = []
+    real = studio.receive
+    monkeypatch.setattr(studio, "receive", lambda path, timeout=None: given.append(timeout) or real(path, timeout))
+    assert send(port, parent.read_bytes(), studio.token)[0] == 200
+    assert S.OPEN_SECONDS - 5 < given[0] <= S.OPEN_SECONDS < 100
+    assert studio.reading.acquire(blocking=False) and studio.reading.acquire(blocking=False)  # both given back
+    studio.reading.release()
+    studio.reading.release()
+
+
+def test_a_public_studio_opens_no_version_whose_next_would_be_too_long_to_make_there(parent, home):
+    """received.MINUTES (12) is any studio's; a public one holds a version's next to what it can make in one go, with
+    the lightest band (Studio.most_minutes), since a longer one couldn't be made there or in a browser."""
+    studio = S.Studio(None, str(LEAD), "none", out=home / "out", public=P.Limits(render_mb=2100))
+    most = studio.most_minutes()
+    assert 5 < most < R.MINUTES and S.Studio(None, str(LEAD), "none").most_minutes() is None
+    record = R.examine(parent, "Now It's by You", "none")["record"]
+    song = load(LEAD)
+    assert R.exercise(record, song, "none", minutes=most)["minutes"] < most  # this one: opened
+    with pytest.raises(R.Refused, match=r"Its next version would play for \d+\.\d minutes, longer than this studio "
+                                        r"makes in one go \(0\.5\)"):
+        R.exercise(record, song, "none", minutes=0.5)
 
 
 def test_a_version_not_kept_answers_the_same_as_one_never_made(public):

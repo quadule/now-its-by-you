@@ -738,11 +738,14 @@ def samples_id(audio: bytes, most_minutes: float = AUDIO_MINUTES) -> str:
 # ---------------------------------------------------------------- trying it as the studio would
 
 
-def exercise(record: dict, genome, machine: str = "none", day: str | None = None) -> dict:
+def exercise(record: dict, genome, machine: str = "none", day: str | None = None,
+             minutes: float | None = None) -> dict:
     """The version as the studio would open it on `day` (the page's view of its child, and its timeline, by a
     neutral machine or the studio's made-up one) and as it would sing it: refused if the program can't, if it
-    wouldn't end, or if reading it takes the program far longer than the song as it is. Returns what the page
-    says of it, and its timeline (the page's heaviest answer, kept with it so the studio needn't work it out)."""
+    wouldn't end, if reading it takes the program far longer than the song as it is, or if its child would play
+    longer than `minutes` (a public studio's longest whole song, with the lightest band: Studio.most_minutes).
+    Returns what the page says of it, and its timeline (the page's heaviest answer, kept with it so the studio
+    needn't work it out)."""
     from . import drift as drift_mod, explain, harvest, phrasing as phrasing_mod, variation
     from .cli import _parent
     from .realize import realize
@@ -765,6 +768,10 @@ def exercise(record: dict, genome, machine: str = "none", day: str | None = None
             if score.duration > MINUTES * 60 or any(not (0 <= n.start <= MINUTES * 60 and 0 <= n.dur <= NOTE_SECONDS
                                                         and 0 <= n.pitch <= 127) for n in score.notes):
                 raise Refused(f"It would play for longer than {MINUTES:g} minutes, or hold a note too long.")
+        if minutes is not None and scores[0].duration > minutes * 60:  # a public studio: made there in one go
+            raise Refused(f"Its next version would play for {scores[0].duration / 60:.1f} minutes, longer than this "
+                          f"studio makes in one go ({minutes:.1f}). Open it in the studio on your own computer "
+                          "(python3 the-file.flac studio).")
         drawn = explain.timeline(ctx)
     except Refused:
         raise
@@ -777,7 +784,8 @@ def exercise(record: dict, genome, machine: str = "none", day: str | None = None
             "timeline": {"day": day, "machine": machine, "drawn": drawn} if reproducible else None}
 
 
-def examine(path: str | Path, title: str | None, machine: str = "none", day: str | None = None) -> dict:
+def examine(path: str | Path, title: str | None, machine: str = "none", day: str | None = None,
+            minutes: float | None = None) -> dict:
     """Everything a received file is checked for, in order, cheapest first: the file and its archive, its two
     members as strict JSON, the song, the record, the audio against the record's id, and the version tried as
     the studio would open it. Returns the cleaned record and the song's bytes (as text), or raises Refused."""
@@ -790,7 +798,7 @@ def examine(path: str | Path, title: str | None, machine: str = "none", day: str
     if samples_id(audio) != record["id"]:
         raise Refused("Its audio isn't the rendition its record describes, so its place in the line can't be "
                       "trusted.")
-    tried = exercise(record, genome, machine, day)
+    tried = exercise(record, genome, machine, day, minutes)
     return {"record": record, "genome": song.decode("utf-8"), **tried}
 
 
@@ -804,8 +812,9 @@ def main() -> None:
         with contextlib.suppress(ValueError, OSError):
             resource.setrlimit(resource.RLIMIT_AS, (MEMORY, MEMORY))
     path, title, machine, day = sys.argv[1:5]
+    minutes = float(sys.argv[5]) if len(sys.argv) > 5 and sys.argv[5] else None
     try:
-        out = examine(path, title or None, machine, day or None)
+        out = examine(path, title or None, machine, day or None, minutes)
     except Refused as e:
         out = {"refused": str(e)}
     except MemoryError:
@@ -820,17 +829,20 @@ READER = ("import sys; sys.path.insert(0, sys.argv.pop(1)); sys.dont_write_bytec
           "from songbird.received import main; main()")
 
 
-def examine_apart(path: str | Path, title: str | None, machine: str, day: str, root: Path, cwd: Path) -> dict:
-    """`examine`, run in a process of its own (and its own process group, stopped whole if it overstays):
-    whatever the file does to the reader, only a refusal comes back."""
+def examine_apart(path: str | Path, title: str | None, machine: str, day: str, root: Path, cwd: Path,
+                  timeout: float | None = None, minutes: float | None = None) -> dict:
+    """`examine`, run in a process of its own (and its own process group, stopped whole if it overstays: after
+    `timeout` seconds, at most its own time and a little more): whatever the file does to the reader, only a
+    refusal comes back."""
     env = {k: v for k, v in os.environ.items() if k in ("PATH", "HOME", "LANG", "LC_ALL", "SONGBIRD_HOME", "TMPDIR",
                                                           "SYSTEMROOT", "NUMBA_CACHE_DIR", "SONGBIRD_THREADS")}
     env |= {"OPENBLAS_NUM_THREADS": "1", "OMP_NUM_THREADS": "1", "MKL_NUM_THREADS": "1", "NUMBA_NUM_THREADS": "1"}
-    reader = subprocess.Popen([sys.executable, "-I", "-c", READER, str(root), str(path), title or "", machine, day],
+    reader = subprocess.Popen([sys.executable, "-I", "-c", READER, str(root), str(path), title or "", machine, day,
+                               "" if minutes is None else f"{minutes:.3f}"],
                               stdout=subprocess.PIPE, stderr=subprocess.DEVNULL, stdin=subprocess.DEVNULL, cwd=cwd,
                               env=env, start_new_session=os.name == "posix")
     try:
-        stdout, _ = reader.communicate(timeout=SECONDS + 15)
+        stdout, _ = reader.communicate(timeout=min(SECONDS + 15, timeout or SECONDS + 15))
     except subprocess.TimeoutExpired:
         with contextlib.suppress(OSError):
             os.killpg(reader.pid, 9) if os.name == "posix" else reader.kill()

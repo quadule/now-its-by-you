@@ -9,6 +9,7 @@ import contextlib
 import http.client
 import io
 import json
+import re
 import socket
 import threading
 import time
@@ -25,6 +26,7 @@ LEAD = ROOT / "songs" / "h-now-its-by-you.json"
 @pytest.fixture
 def home(tmp_path, monkeypatch):
     monkeypatch.setenv("SONGBIRD_HOME", str(tmp_path / "home"))
+    monkeypatch.setenv("STUDIO_MEMORY", "16g")  # a public studio with room for any whole song (its budget: public.render_mb)
     return tmp_path
 
 
@@ -556,3 +558,94 @@ def test_a_public_studio_in_its_beta_asks_search_engines_not_to_list_it(opened):
     S.add_arguments(parser)
     with pytest.raises(SystemExit, match="--noindex"):
         S.run(parser.parse_args(["--noindex"]))  # for a public studio only
+
+
+# ---------------------------------------------------------------- a whole song's memory
+
+# Measured on 30 September (tools/render_memory.py, two threads, MallocLargeCache=0; docs/WEB-STUDIO.md, "A whole
+# song's memory"): H with each style's own band as the program sings it (no edits but the style), and chamber and
+# the ballad drawn out to 3 to 7 minutes. (seconds, the render's parts, its peak in MB)
+MEASURED = {
+    "seed": (151.4, "bass drone drum fiddle guitar harp lute voice whistle", 1390),
+    "ballad": (151.7, "bass drone drum fiddle guitar harp lute voice whistle", 1350),
+    "ballad 3 verses": (286.8, "bass drone drum fiddle guitar harp lute voice whistle", 2000),
+    "ballad 4 verses": (346.8, "bass drone drum fiddle guitar harp lute voice whistle", 2370),
+    "chamber": (189.0, "cello piano strings voice", 2160),
+    "chamber, 2 verses, tempo 60": (198.8, "cello piano strings voice", 2310),
+    "chamber, 3 verses, tempo 48.4": (341.6, "cello piano strings voice", 3800),
+    "chamber, 4 verses, tempo 48.4": (413.0, "cello piano strings voice", 4060),
+    "lullaby": (298.2, "celesta harp musicbox synthpad voice", 2050),
+    "ambient": (213.8, "drone strings synthpad vibes voice", 2070),
+    "synthfolk": (132.2, "arp drummachine guitar synthbass synthlead synthpad voice", 1160),
+    "lofi": (186.0, "drummachine epiano synthbass vibes voice", 1990),
+    "songwriter": (160.6, "bass guitar harmonica voice", 1090),
+    "country": (151.7, "bass guitar kit piano steel voice", 2810),
+    "blues": (165.3, "guitar harmonica slide stomps voice", 1810),
+    "gospel": (225.2, "claps ebass kit organ piano tambourine voice", 3660),
+    "indie": (127.9, "claps ebass electric glock guitar kit organ voice", 2160),
+    "shanty": (151.2, "bass claps concertina fiddle stomps voice", 1660),
+    "stringband": (124.9, "banjo bass fiddle guitar mandolin voice", 1130),
+}
+
+
+def test_a_whole_songs_memory_is_estimated_from_its_length_and_players_never_under_what_was_measured(monkeypatch):
+    for name, (seconds, parts, peak) in MEASURED.items():
+        estimate = P.render_mb(seconds, parts.split(), threads=2)
+        assert peak <= estimate <= peak * 1.3, (name, estimate, peak)
+    assert P.render_mb(100, ["voice", "kit"]) > P.render_mb(100, ["voice", "guitar"])  # the heaviest part sets it
+    from songbird.synth.instruments import known
+
+    assert set(known()) <= set(P.RATES)  # every instrument measured (tools/part_memory.py for a new one)
+    assert P.render_mb(100, ["voice", "theremin"]) == P.BASE_MB + 100 * P.UNMEASURED * P.MARGIN  # never measured
+    assert P.render_mb(100, ["voice"], threads=6) > P.render_mb(100, ["voice"], threads=1) == P.render_mb(100, ["voice"])
+    assert P.render_mb(100, ["voice", "guitar"], stems=True) == pytest.approx(P.render_mb(100, ["voice", "guitar"])
+                                                                               + 200 * P.STEM)
+    # the budget: the studio's memory (the compose passes STUDIO_MEMORY in), less 400 MB
+    for given, mb in (("2500m", 2500), ("2g", 2048), ("8G", 8192), ("2621440000", 2500)):
+        monkeypatch.setenv("STUDIO_MEMORY", given)
+        assert P.memory_mb() == mb and P.Limits().render_mb == mb - 400
+    assert P.Limits.parse(["render-mb=1500"]).render_mb == 1500
+    assert P.minutes(413.0) == "6.9 minutes" and P.minutes(180) == "3 minutes"
+
+
+@pytest.fixture
+def budget(home, monkeypatch):
+    """A public studio of the VPS's size (2.5 GB, two threads), its renders faked, and a version seven minutes long:
+    chamber at its slowest, four verses, every part the song can have (the review's)."""
+    from songbird import edits as E, genome
+
+    monkeypatch.setenv("SONGBIRD_THREADS", "2")
+    monkeypatch.setenv("STUDIO_MEMORY", "2500m")
+    studio, gate = open_studio(home)
+    gate.set()
+    song = genome.load(LEAD)
+    long = {"style.name": "chamber", "tempo": 48.4, "form.verses": 4, **{f"form.{n}": True for n in E.optional(song)}}
+    server = S.serve(studio, 18860)
+    threading.Thread(target=server.serve_forever, daemon=True).start()
+    yield studio, server.server_address[1], long
+    server.shutdown()
+    server.server_close()
+
+
+def test_a_whole_song_too_long_for_the_servers_memory_is_refused_before_its_queued(budget):
+    studio, port, long = budget
+    assert studio.public.render_mb == 2100
+    seconds, parts = studio.whole_cost(studio.version(long))
+    assert seconds > 400 and "cello" in parts and not studio.fits_here(seconds, parts)[0]
+    ann = visitor(port)
+    for path, body in (("/api/record", {"edits": long}), ("/api/listen", {"edits": long, "section": None}),
+                       ("/api/export", {"edits": long, "what": "stems"})):
+        status, refused, _ = post(port, studio, path, body, **ann)
+        assert status == 422 and refused["too_long"], (path, refused)
+        assert re.match(r"This version is \d+(\.\d)? minutes long, too long for this small server to make in one "
+                        r"go \(about 2(\.\d)? minutes at most with these players\): shorten it \(fewer verses, a "
+                        r"quicker tempo\)\.$", refused["error"]), refused
+    assert not studio.jobs.pending and not studio.jobs.jobs  # nothing queued, nothing counted
+    status, job, _ = post(port, studio, "/api/listen", {"edits": long, "section": 3}, **ann)
+    assert status == 200  # a section of it is made as ever
+    status, job, _ = post(port, studio, "/api/record", {"edits": {}}, **ann)
+    assert status == 200 and job["kind"] == "record"  # the song as the program has it fits
+    studio.public.render_mb = 10**6
+    assert post(port, studio, "/api/record", {"edits": {**long, "roll": 1}}, **ann)[0] != 422  # a bigger server
+    local = S.Studio(None, str(LEAD), "none")
+    local.check_whole(local.version(long))  # a local studio makes what it's asked, as ever

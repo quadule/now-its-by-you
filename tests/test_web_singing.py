@@ -30,6 +30,7 @@ SPEC, GUIDE = "a.k0.t90", "0123456789ab"
 @pytest.fixture
 def home(tmp_path, monkeypatch):
     monkeypatch.setenv("SONGBIRD_HOME", str(tmp_path / "home"))
+    monkeypatch.setenv("STUDIO_MEMORY", "16g")  # a public studio with room for any whole song (its budget: public.render_mb)
     return tmp_path
 
 

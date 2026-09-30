@@ -270,7 +270,11 @@
 
     async function inBrowser(task, body, size, onProgress) {
       const answer = await ask("/api/render/spec", body);
-      if (answer.made) return null;  // the server has made it already: it plays at once from there
+      // the server has made it already (it plays at once from there), or it's too long for a browser's memory
+      // and the server can make it: the server's, as ever
+      if (answer.made || answer.server) return null;
+      // too long for a browser and for the server: said, and made nowhere (never sent to the server to fail there)
+      if (answer.too_long) return { state: "failed", error: answer.too_long, key: answer.key, where: "browser", size };
       const hit = shared.cache.get(answer.key);
       if (hit) return hit;
       if (!shared.browser) shared.browser = workers({ spawn, bundle: shared.bundle, storage, ...(options.workers || {}) });
@@ -326,6 +330,7 @@
           try {
             const job = await inBrowser(task, { edits: body.edits, who: body.who || "you", section: body.section ?? null },
               size, onProgress);
+            if (job?.state === "failed") return (task.job = job);  // too long to make anywhere: said
             if (job) {
               note({ kind, size, key: job.key, where: "browser", id: job.id, seconds: job.seconds, at: began });
               return (task.job = job);
