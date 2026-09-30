@@ -1450,7 +1450,7 @@ def w_build(ctx: StyleContext, i: int, part: str) -> list[Ev]:
         for b in g.beats if x < 0.5 else g.beats[:1]:
             u = bar + b
             if s.u0 - 1e-9 <= u < s.u1 - g.beat - 1e-9:
-                out.append(hit(part, u, "kick", ctx.vel(part, u, 0.6 + 0.2 * x, 0.9), i))
+                out.append(hit(part, u, "kick", ctx.vel(part, u, 0.8 + 0.1 * x, 0.9), i))
         for off in steps:
             u = bar + off
             if not s.u0 - 1e-9 <= u < s.u1 - g.beat - 1e-9:

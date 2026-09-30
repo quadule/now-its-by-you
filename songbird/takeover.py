@@ -78,7 +78,7 @@ LABELS = {
     "quote": "quoting the tune", "counter": "a counter-melody", "descant": "a descant", "under": "a line under the tune",
     "tone": "one held tone a line", "double": "doubling the tune", "hook": "the tune's strong notes, high",
     "fills": "answers between the lines", "groove": "a groove", "brushes": "brushes", "four": "four on the floor",
-    "toms": "on the floor toms", "half": "half time", "lofi": "a boom-bap", "machine": "four on the floor",
+    "toms": "on the floor toms", "half": "half time", "lofi": "a boom-bap", "machine": "four on the floor (the machine's own)",
     "end": "winding down", "stomp": "stamping on one and three", "stomp4": "stamping every beat",
     "claps": "claps on the backbeat", "tambourine": "tambourine on the backbeat", "shaker": "shaking",
     "cajon": "a cajon's groove", "build": "a build", "light": "lightly", "full": "the full pattern",
