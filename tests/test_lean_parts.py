@@ -317,3 +317,36 @@ def mallets_made(name: str, ornament: float) -> str:
 @pytest.mark.parametrize("name,ornament", list(MALLETS))
 def test_mallets_make_the_samples_they_made(name, ornament):
     assert mallets_made(name, ornament) == MALLETS[name, ornament]
+
+
+# What the free reeds made of _squeezed() before 2026-09-30 (the tree at 02384c8).
+REEDS = {"concertina": "13d20cc061053d358894742644fa76c2c495adb937356a88af4d5d94845ee544",
+         "accordion": "bfef14f8e614caad493862368d1791a048f7e000530a74199f5530a8aefb1558"}
+
+
+def _squeezed():
+    """A tune in both hands with slurs, a shake, a swell, basses and chords, legato and detached, some notes
+    touching (a thud as one key comes up where the next goes down)."""
+    rng = np.random.default_rng(17)
+    notes, t = [], 0.1
+    for k, art in enumerate(["", "slur", "slur", "", "shake", "", "swell", "slur", "", "", "slur", ""]):
+        dur = float(rng.uniform(0.15, 0.8))
+        notes.append(_Note(t, dur, float(62 + rng.integers(0, 12)), float(rng.uniform(0.4, 1.0)), art))
+        if k % 3 == 0:
+            notes.append(_Note(t, dur, 43.0, 0.7, "bass"))
+            notes.append(_Note(t + dur / 2, dur / 2, 55.0, 0.6, "chord"))
+        t += dur if k % 4 else dur + 0.3
+    return notes
+
+
+def reeds_made(name: str) -> str:
+    from songbird.synth import accordion
+
+    y = accordion.render(name, _squeezed(), SR, int(8.0 * SR), np.random.default_rng(18), np.random.default_rng(19),
+                         {"ornament": 0.7, "wear": 0.5, "tempo": 112.0})
+    return hashlib.sha256(np.ascontiguousarray(y).tobytes()).hexdigest()
+
+
+@pytest.mark.parametrize("name", list(REEDS))
+def test_free_reeds_make_the_samples_they_made(name):
+    assert reeds_made(name) == REEDS[name]
