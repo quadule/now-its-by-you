@@ -1,7 +1,9 @@
 // A recorded studio session, driven as a person would: clicks, typing, drags, with a visible cursor and
-// a log of every action's moment in the raw footage. Used for the EDM test (docs/STUDIO-EDM-TEST.md).
+// a log of every action's moment in the raw footage. Used for the EDM test (docs/STUDIO-EDM-TEST.md), on the page
+// before the redesign, which the studio keeps at /classic; the second attempt, on the score, is edm2_session.mjs
+// (with kit.mjs: sharper capture, captions, native selects drawn).
 //
-//   node tools/video/studio_session.mjs --url http://127.0.0.1:8791/ --out renders/video [--no-video] [--script edm]
+//   node tools/video/studio_session.mjs --url http://127.0.0.1:8791/classic --out renders/video [--no-video] [--script edm]
 //
 // Needs Node >= 22 and the playwright package (npm i playwright; npx playwright install chromium): run it from a
 // folder where playwright is installed, or with NODE_PATH pointing at one. Writes <out>/raw.webm, <out>/actions.json
@@ -14,7 +16,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 
 const arg = (name, dflt) => { const i = process.argv.indexOf('--' + name); return i > 0 ? process.argv[i + 1] : dflt; };
-const URL = arg('url', 'http://127.0.0.1:8791/');
+const URL = arg('url', 'http://127.0.0.1:8791/classic');
 const OUT = path.resolve(arg('out', 'renders/video'));
 const VIDEO = !process.argv.includes('--no-video');
 const SKIP_RECORD = process.argv.includes('--skip-record');
