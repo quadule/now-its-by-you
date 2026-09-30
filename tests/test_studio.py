@@ -500,8 +500,16 @@ def test_a_musician_takes_the_version_away_as_midi_and_stems(served, monkeypatch
         n = int(score.duration * 1000)
         return {"voice": np.full((n, 2), 0.5), "guitar": np.full((n, 2), 2.0)}
 
+    def fake_whole(job, v, key):  # the recording the stems belong to (made first; its own making is tested elsewhere)
+        job.report("voice")
+        (studio.cache / key).mkdir(parents=True, exist_ok=True)
+        (studio.cache / key / "rendition.json").write_text(json.dumps({"id": "5beef0" + "a" * 58}))
+        (studio.cache / f"{key}.flac").write_bytes(b"fLaC")
+        return {"id": "5beef0" + "a" * 58}
+
     monkeypatch.setattr(S.synth, "SR", 1000)
     monkeypatch.setattr(S.synth, "render_stems", fake_stems)
+    monkeypatch.setattr(studio, "_whole", fake_whole)
     status, job = post(port, studio, "/api/export", {"edits": edits, "what": "stems"})
     assert status == 200 and job["download"].startswith("/export/")
     for _ in range(300):
@@ -515,6 +523,9 @@ def test_a_musician_takes_the_version_away_as_midi_and_stems(served, monkeypatch
     z = zipfile.ZipFile(io.BytesIO(data))
     names = sorted(z.namelist())
     stem = names[0].split("/")[0]
+    # named after the recording they are the parts of (the same version), not the version's cache key
+    assert re.fullmatch(r"now-its-by-you\.\d{4}-\d\d-\d\d\.5beef0", stem), stem
+    assert job["url"].endswith(f"name={stem}.stems.zip")
     assert [n.split("/")[1] for n in names] == ["01-voice.flac", "02-guitar.flac", "README.txt", f"{stem}.mid"]
     _, lead_in = midi.from_score(studio.genome, v.params, studio._score(v))
     audio, sr = sf.read(io.BytesIO(z.read(f"{stem}/02-guitar.flac")))
@@ -524,6 +535,9 @@ def test_a_musician_takes_the_version_away_as_midi_and_stems(served, monkeypatch
     assert abs(voice_audio[pad, 0] - 0.989 / 4) < 1e-3
     note = z.read(f"{stem}/README.txt").decode()
     assert "bar 1" in note and "dry" in note and "public domain" in note and not FORBIDDEN.search(note)
+    assert f"the parts of the recording {stem}.flac (its id 5beef0" in " ".join(note.split())
+    status, again = post(port, studio, "/api/export", {"edits": edits, "what": "stems"})  # made: named the same
+    assert again["state"] == "done" and again["url"].endswith(f"name={stem}.stems.zip")
 
 
 def test_a_renders_progress_follows_the_parts_in_whatever_order_it_takes_them():

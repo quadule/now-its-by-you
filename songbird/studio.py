@@ -310,6 +310,30 @@ class Job:
         self.stage = stage_words(name)
 
 
+class Within:
+    """A share of a job's progress, from lo to hi, for a render made inside it (the recording the stems belong to,
+    made first): what that render reports moves the job's bar within its share, and says what it makes."""
+
+    def __init__(self, job: Job, lo: float, hi: float, prefix: str = ""):
+        object.__setattr__(self, "_job", job)
+        object.__setattr__(self, "_inner", Job(job.id, job.key, job.kind, job.label, work=lambda job: None))
+        object.__setattr__(self, "_span", (lo, hi, prefix))
+
+    def report(self, name: str) -> None:
+        self._inner.report(name)
+        lo, hi, prefix = self._span
+        self._job.progress = max(self._job.progress, lo + (hi - lo) * self._inner.progress)
+        self._job.stage = prefix + self._inner.stage
+
+    def __setattr__(self, name: str, value) -> None:
+        setattr(self._inner, name, value)
+        if name == "stage":
+            self._job.stage = self._span[2] + value
+
+    def __getattr__(self, name: str):
+        return getattr(self._inner, name)
+
+
 class Busy(Exception):
     """Too many renders waiting (a shared studio): try again when the queue has shortened."""
 
@@ -693,30 +717,53 @@ class Studio:
                     "url": f"/export/{key}.mid?name={self.export_name(v, '.mid')}", "label": "the MIDI file"}
         if what != "stems":
             raise ValueError("export midi or stems")
-        name = self.export_name(v, ".stems.zip")
-        url = f"/export/{key}.zip?name={name}"
         if (self.cache / f"{key}.zip").exists():
+            url = f"/export/{key}.zip?name={self.stems_name(key)}.stems.zip"
             return {"state": "done", "progress": 1.0, "url": url, "label": "the stems", "kind": "export"}
-        job = self.jobs.submit(f"{key}-stems", "preview", "the stems", lambda job: self._stems(job, v, key, name),
+        job = self.jobs.submit(f"{key}-stems", "preview", "the stems", lambda job: self._stems(job, v, key),
                                **self._limits(by, whole=True))
-        return self.jobs.view(job) | {"download": url}
+        return self.jobs.view(job) | {"download": f"/export/{key}.zip?name={self.export_name(v, '.stems.zip')}"}
 
-    def _stems(self, job: Job, v: explain.Version, key: str, name: str) -> dict:
+    # ---- the stems belong to a recording (docs/STUDIO.md, "The smaller things"): made after the recording of the
+    # same version, from the same choices and score, and named after it, as <song>.<day>.<its id's first six>
+
+    def recorded(self, job, v: explain.Version, key: str) -> dict:
+        """The record of this version's recording, made first if it isn't yet (as Record it makes it: the same
+        rendition, which Record it then only copies)."""
+        folder = self.cache / key
+        if not ((folder / "rendition.json").exists() and (self.cache / f"{key}.flac").exists()):
+            self._whole(job, v, key)
+        return json.loads((folder / "rendition.json").read_text())
+
+    def recording_name(self, record: dict) -> str:
+        """A recording's file name without its extension, as Record it names it (_keep)."""
+        return f"{slug(self.genome.title)}.{(record.get('rendered_at') or self.day)[:10]}.{record['id'][:6]}"
+
+    def stems_name(self, key: str) -> str:
+        """The name the stems of the version cached under key go by: their recording's."""
+        return self.recording_name(json.loads((self.cache / key / "rendition.json").read_text()))
+
+    def _stems(self, job: Job, v: explain.Version, key: str) -> dict:
         """Every part of the rendition rendered alone and dry (synth.render_stems, as the command line's
         --stems), each padded to start at the MIDI file's bar 1, as 24-bit FLAC; the MIDI file and a note on
-        what they are beside them, in one zip."""
+        what they are beside them, in one zip named after the recording they belong to (made first if it
+        isn't yet: then it takes the first half of the job's progress)."""
         import soundfile as sf
 
         from .cli import choir_of
 
-        job.stage = stage_words("score")
+        fresh = not ((self.cache / key / "rendition.json").exists() and (self.cache / f"{key}.flac").exists())
+        record = self.recorded(Within(job, 0.0, 0.5, "the recording first: ") if fresh else job, v, key)
+        name = f"{self.recording_name(record)}.stems.zip"
+        share = Within(job, 0.5, 1.0, "") if fresh else job
+        share.stage = stage_words("score")
         score = self._score(v)
-        job.plan = [p for p in stages(score) if p[0] not in ("mix", "master")] + [("master", 1.0)]
+        share.plan = [p for p in stages(score) if p[0] not in ("mix", "master")] + [("master", 1.0)]
         data, lead_in = midi.from_score(self.genome, v.params, score, title=self.genome.title)
         singer = explain.singer_of(v.params)
         stems = synth.render_stems(score, seed=v.params.seed, voice=singer,
-                                   ancestors=choir_of(self.parent_record, singer)[1], progress=job.report)
-        job.report("master")
+                                   ancestors=choir_of(self.parent_record, singer)[1], progress=share.report)
+        share.report("master")
         job.stage = "packing the stems"
         pad = int(round(-lead_in * synth.SR))
         peak = max((float(np.max(np.abs(x))) for x in stems.values() if x.size), default=0.0)
@@ -731,7 +778,8 @@ class Studio:
                          subtype="PCM_24")
                 z.writestr(f"{stem}/{i:02d}-{part}.flac", buffer.getvalue())
             z.writestr(f"{stem}/{stem}.mid", data)
-            z.writestr(f"{stem}/README.txt", stems_note(self.genome.title, v.params, -lead_in, gain, order))
+            z.writestr(f"{stem}/README.txt", stems_note(self.genome.title, v.params, -lead_in, gain, order,
+                                                        recording=(f"{stem}.flac", record["id"])))
         tmp.replace(self.cache / f"{key}.zip")
         prune(self.cache, CACHE_LIMIT)
         job.url = f"/export/{key}.zip?name={name}"
@@ -981,15 +1029,22 @@ def singer_name(who: str) -> str:
     return who.replace("-", " ").title()
 
 
-def stems_note(title: str, params: Params, pad: float, gain: float, parts: list[str]) -> str:
-    """What the stems are, for the person who unzips them."""
+def stems_note(title: str, params: Params, pad: float, gain: float, parts: list[str],
+               recording: tuple[str, str] | None = None) -> str:
+    """What the stems are, for the person who unzips them; recording: the file name and id of the rendition they
+    are the parts of."""
     level = ("" if gain >= 1.0 else
              f"\n\nAll of them were turned down together by {-20 * np.log10(gain):.1f} dB, so none clips "
              "and they keep their balance.")
+    which = "" if recording is None else textwrap.fill(
+        f"These are the parts of the recording {recording[0]} (its id {recording[1]}): the same version, made "
+        "from the same choices and the same notes. Record it in the studio saves that recording (at once: it is "
+        "already made); its record says every choice in it.", 100) + "\n\n"
     return textwrap.dedent(f"""\
         {title}: the parts, for your own tools
         Made by Songbird's studio: {midi.key_name(params.tonic, params.mode)}, {params.tempo:g} beats a minute.
 
+        {{which}}
         Each part is rendered alone and dry, as the program plays it before the mix: no room, no mix's
         balance, no mastering (the recording has those, so these don't add up to it exactly).{{level}}
 
@@ -1001,7 +1056,7 @@ def stems_note(title: str, params: Params, pad: float, gain: float, parts: list[
         Parts: {", ".join(parts)}. 24-bit FLAC, 44.1 kHz, stereo.
 
         The song and the program are public domain (CC0): do what you like with them.
-        """).replace("{level}", level)
+        """).replace("{level}", level).replace("{which}\n", which)
 
 
 def link(src: Path, dst: Path) -> None:

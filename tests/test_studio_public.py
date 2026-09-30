@@ -314,7 +314,7 @@ def test_a_visitors_stems_wait_their_turn_and_count_as_a_whole_song(opened):
     for each visitor, and count against the whole songs a visitor may have made an hour. MIDI is made at once."""
     studio, port, gate = opened
     ann = visitor(port)
-    studio._stems = lambda job, v, key, name: gate.wait(30) and {"url": None}
+    studio._stems = lambda job, v, key: gate.wait(30) and {"url": None}
     status, made, _ = post(port, studio, "/api/export", {"edits": {}, "what": "midi"}, **ann)
     assert status == 200 and made["state"] == "done" and ask(port, "GET", made["url"], headers=ann)[0] == 200
     status, job, _ = post(port, studio, "/api/export", {"edits": {}, "what": "stems"}, **ann)
