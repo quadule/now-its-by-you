@@ -433,6 +433,10 @@ button:disabled, input:disabled, select:disabled { cursor: not-allowed; }
 .sbc-note.is-cadence.is-selected { background: var(--sbc-gold); box-shadow: 0 0 0 2px var(--card), 0 0 0 3px var(--sbc-gold); }
 .sbc-note.is-dragging { cursor: grabbing; opacity: .85; }
 .sbc-note-word { display: block; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; pointer-events: none; }
+/* a note slurred on from the one before (a melisma): the same syllable, drawn joined to it */
+.sbc-note.is-slur { border-top-left-radius: 0; border-bottom-left-radius: 0; border-left: 2px dotted var(--card); }
+.sbc-advice { flex-basis: 100%; color: var(--ink); }
+.sbc-scope { display: flex; flex-wrap: wrap; align-items: end; gap: 6px 14px; padding: 6px 18px; }
 .sbc-resize { position: absolute; top: 0; right: 0; width: 9px; height: 100%; cursor: ew-resize; border-right: 2px solid #ffffff40; border-radius: 0 3px 3px 0; }
 .sbc-playhead { width: 2px; background: var(--rubric); z-index: 6; pointer-events: none; }
 .sbc-playhead::before { content: ''; position: absolute; top: -5px; left: -3px; width: 8px; height: 8px; background: var(--rubric); transform: rotate(45deg); }

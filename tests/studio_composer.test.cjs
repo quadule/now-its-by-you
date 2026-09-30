@@ -613,6 +613,43 @@ test("one place or everywhere: the tune and the chords are changed where the per
   assert.deepEqual(s.commits.at(-1), { path: "chords.verse:last.0", value: null });
 });
 
+test("a melisma: a note split sings its syllable on, moved and joined again; the ending freed when asked", () => {
+  const view = score();
+  const s = setup(view);
+  s.find('[data-note="1"]').emit("click"); // "this", a whole beat
+  s.clickText("Split");
+  let notes = s.commits.at(-1).value;
+  assert.deepEqual(notes.slice(1, 3), [{ degree: 4, onset: 0, duration: 0.5 }, { degree: 4, onset: 0.5, duration: 0.5, slur: true }]);
+  assert.equal(notes.filter((n) => !n.slur).length, 5, "a note for each syllable still");
+  const drawn = s.root.querySelectorAll(".sbc-note");
+  assert.equal(drawn.length, 6);
+  assert(drawn[2].classList.contains("is-slur") && drawn[2].textContent === "‿", "the slurred note is drawn joined");
+  assert.match(drawn[2].getAttribute("aria-label"), /^this, held on/);
+  assert.match(s.find(".sbc-health").textContent, /5 syllable slots preserved, 1 notes slurred on/);
+  // the slurred note moved up a step, and its start moved: the boundary with the note before moves with it
+  s.find('[data-note="2"]').emit("click");
+  s.find("#sbc-note-pitch").emit("change", { target: { value: "5" } });
+  assert.deepEqual(s.commits.at(-1).value[2], { degree: 5, onset: 0.5, duration: 0.5, slur: true });
+  s.find("#sbc-note-start").emit("change", { target: { value: "0.75" } });
+  notes = s.commits.at(-1).value;
+  assert.deepEqual([notes[1].duration, notes[2].onset, notes[2].duration], [0.75, 0.75, 0.25]);
+  // a melisma moves a fifth at most
+  const pitches = s.find("#sbc-note-pitch").children.map((o) => Number(o.value));
+  assert(Math.max(...pitches) <= 4 + 4 && Math.min(...pitches) >= 4 - 4, JSON.stringify(pitches));
+  s.clickText("Join");
+  notes = s.commits.at(-1).value;
+  assert.equal(notes.length, 5);
+  assert.deepEqual(notes[1], { degree: 4, onset: 0, duration: 1 });
+  // the ending keeps its home note unless it is freed
+  s.find('[data-note="4"]').emit("click");
+  assert(s.find("#sbc-note-pitch").children.every((o) => (Number(o.value) - 1) % 7 === 0));
+  s.find("#sbc-option-free the ending").emit("change", { target: { checked: true } });
+  s.find('[data-note="4"]').emit("click");
+  assert(s.find("#sbc-note-pitch").children.some((o) => Number(o.value) === 2));
+  s.find("#sbc-note-pitch").emit("change", { target: { value: "2" } });
+  assert.equal(s.commits.at(-1).value.at(-1).degree, 2);
+});
+
 test("a browser without Web Audio keeps editing available and explains how to listen", () => {
   const s = setup(score(), { audioAvailable: false });
   s.find("#sbc-play").emit("click");
