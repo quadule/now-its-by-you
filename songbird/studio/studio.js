@@ -396,8 +396,8 @@ function renderWords() {
     if (options) {
       const allAuthored = (w.authored || []).length >= w.lines.length;
       const selects = h("div", { class: "section-selects" });
+      if (!allAuthored && (options.heads || []).length > 1) selects.append(headChooser(options, w.label));  // sung first
       if (!allAuthored && options.choices.length) selects.append(phraseChooser(w, options));
-      if (!allAuthored && (options.heads || []).length > 1) selects.append(headChooser(options, w.label));
       if (selects.childNodes.length) sec.append(selects);
       sec.append(inlineLyrics(w, options));
       const rules = allAuthored ? null : chooser(w, options);

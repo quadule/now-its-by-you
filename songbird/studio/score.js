@@ -294,8 +294,8 @@
         title: `Select ${w.label}: its length, who sings, its words`, onclick: () => select({ kind: "section", id: sid }) },
       h("span", { class: `rubric${w.mine ? " hand" : ""}` }, w.label)),
       w.sung ? Object.assign(tag(kind, (w.authored || []).length ? "your lines" : w.mine ? "your words" : w.how), { title: w.note || "" }) : null,
+      o && w.sung && !allAuthored && (o.heads || []).length > 1 ? headChooser(o, w.label) : null,  // sung first
       o && w.sung && !allAuthored && o.choices.length > 1 ? phraseChooser(w, o) : null,
-      o && w.sung && !allAuthored && (o.heads || []).length > 1 ? headChooser(o, w.label) : null,
       h("span", { class: "sectools" }, h("button", { class: `play${ready ? " ready" : ""}`, type: "button", "aria-label": `Hear ${w.label}, sung`,
         title: ready ? "ready to play" : "sung (it will be made first)", onclick: () => { setHow("sung", false); listen("you", w.index); } }, playIcon())));
     let body;
@@ -794,7 +794,7 @@
     const phrases = state.view.composition?.sections?.find((x) => x.id === s.id)?.phrases || [];
     const writable = phrases.some((p) => p.lyric_path);
     const allAuthored = w && (w.authored || []).length >= w.lines.length;
-    const choosers = o && w.sung && !allAuthored ? [o.choices.length ? phraseChooser(w, o) : null, (o.heads || []).length > 1 ? headChooser(o, w.label) : null].filter(Boolean) : [];
+    const choosers = o && w.sung && !allAuthored ? [(o.heads || []).length > 1 ? headChooser(o, w.label) : null, o.choices.length ? phraseChooser(w, o) : null].filter(Boolean) : [];
     const oneChoice = o && o.choices.filter((c) => c.allowed).length <= 1 && (o.heads || []).filter((c) => c.allowed).length <= 1;
     const rules = o && w.sung && !allAuthored ? chooser(w, o) : null;
     if (rules) rules.querySelector("summary").textContent = "Refused here, and why";
