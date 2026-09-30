@@ -16,11 +16,13 @@ run() {  # name song which edits
   grep "made in" "$OUT/$1.browser.txt"
   uv run python web/studio-wasm/tools/pcm_diff.py "$OUT/$1.native.flac" "$OUT/$1.browser.flac" | sed -n 2,4p
 }
-run h-refrain h-now-its-by-you.json 2 '{}'
-run h-verse-92 h-now-its-by-you.json 1 '{"tempo": 92}'
-run h-refrain-roll2 h-now-its-by-you.json 5 '{"roll": 2}'
-run b-verse b-coal-from-the-fire.json 1 '{}'
+run h-turn h-now-its-by-you.json 2 '{}'
+run h-refrain1-92 h-now-its-by-you.json 1 '{"tempo": 92}'
+run h-turn2-roll2 h-now-its-by-you.json 5 '{"roll": 2}'
+run b-section1 b-coal-from-the-fire.json 1 '{}'
 run h-whole h-now-its-by-you.json whole '{}'
 run h-whole-roll2 h-now-its-by-you.json whole '{"roll": 2}'
 run b-whole b-coal-from-the-fire.json whole '{}'
 run b-whole-70 b-coal-from-the-fire.json whole '{"tempo": 70, "band.pattern": "pick"}'
+run h-refrain1-synthfolk h-now-its-by-you.json 1 '{"style.name": "synthfolk"}'
+run b-whole-synthfolk b-coal-from-the-fire.json whole '{"style.name": "synthfolk"}'
