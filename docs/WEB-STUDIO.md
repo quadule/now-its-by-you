@@ -886,6 +886,11 @@ it rendered to before, at one thread and two). Two threads unless said:
 | indie, 4 verses, every part, slowest | 345 s | the same | (past the container) → 2.48 GB | |
 | shanty | 151 s | bass claps concertina fiddle stomps voice | 1.66 → 1.13 GB | 1.56 → 1.10 GB |
 | string band | 125 s | banjo bass fiddle guitar mandolin voice | 1.12 → 1.12 GB | 0.99 → 0.97 GB |
+| a cappella (added 30 September: docs/STYLES.md, "Two more") | 226 s | voice and three voices of the program's own | 1.85 → 1.51 GB | |
+| a cappella, six lineage voices | 226 s | voice, choir1-6 | 2.33 → 1.51 GB | |
+| a cappella, 4 verses, every part, six voices, tempo 55 | 496 s | the same | → 2.79 GB | |
+| a Celtic session (a jig, a slow air) | 120 s | concertina drone drum fiddle guitar voice whistle | 1.07 GB | |
+| a Celtic session, 4 verses, every part, a reel at 91 | 347 s | the same | 2.34 GB | |
 
 (The "before" column is the same measure taken again on the tree as the review found it; a few differ from the
 review's own figures by a few percent, and two of its drawn-out versions are measured here at the lengths these edits
@@ -924,6 +929,11 @@ go, on two threads, before → now:
 | synth folk (arp) | 6.5 → 6.4 | 4.4 → 4.5 |
 | lullaby (synthpad, musicbox) | 5.9 → 4.7 | 4.8 → **6.1** |
 | songwriter (harmonica) | 4.9 → 5.0 | 5.8 → 5.7 |
+| a cappella (the group's voices) | 6.0 | 5.0 |
+| a Celtic session (whistle, drum) | 7.4 | 4.1 |
+
+(An a cappella's peak grew with its voices until the group's bus was summed as its voices came rather than
+held until the last, 30 September, to the bit: 1.85 and 2.33 GB before, for three and six voices, 1.51 after.)
 
 Every style's own default now fits (country's 2.5 minutes and gospel's 3.75 were refused before: they would have
 killed the studio). `STUDIO_MEMORY=3g`, if the VPS can spare it, is about a quarter longer each.

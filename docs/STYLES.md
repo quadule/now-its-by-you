@@ -465,6 +465,10 @@ is already a Celtic ballad band, and the first review folded "a Celtic session" 
 session itself, played the way a session plays: the tune in unison, round twice, ornamented, in a jig's
 six-eight or a reel's drive.
 
+(What follows is the design as it went to review; "What the review changed" and "As built, and measured",
+at the end, say where the build differs: the parts are a treble, an under voice and an alto, not a bass;
+the jig is quicker, the reel in double time, the slow air the first time round.)
+
 ## Where they sit: beside the ring, not on it
 
 Every style is on the ring, and a machine's home is an angle on the ring's plane (`home()`, one slot a
@@ -651,3 +655,62 @@ A read-only Fable review of the design above, before a line was built. Its point
   later onset, scoops at most 0.2) at synthesis, as the singer matching is.
 - **Its cost** is to be measured with six voices over a whole song, and the a cappella built first (voices
   only), the session second.
+
+## As built, and measured (2026-09-30)
+
+`songbird render --style acappella` or `--style celtic`, or the studio's style card (it lists them after the
+ring's). Nobody has listened; everything here is measured.
+
+**What stays as it was.** The seed, both machines' own renditions (ada on 2026-09-27, bob on 2026-03-14),
+gospel, the string band, the ballad, the shanty and lo-fi render to the PCM ids they rendered to before
+(after each of the three builds), and a gospel choir of three too after the choir's bus was made lean; the
+goldens and the whole suite pass. The packet: 6.31 MiB of 8.
+
+**A cappella**, measured on ada's (2026-09-27) with its stems: every part in tune with its written notes
+(each note's f0 over its middle, against the note: the median 0.8 to 1.3 cents flat, 95% to 97% within 25
+cents, for the lead and all three parts: the choir's vibrato held to 14 cents does what it was for); the
+parts where they sing with the lead: fifths 19%, fourths 16%, octaves 13%, thirds 29% (minor 17, major 12),
+sixths 12%, and the passing tones' seconds and sevenths 11%: open, with thirds. Every part between E3 and
+E5, never on the lead's note or a semitone from it (tests/test_acappella.py). Words misheard (Whisper, a
+verse and a refrain, three voices): 15.2%, beside the ballad's 14.3% in the same run.
+
+**A Celtic session**, measured from its scores and stems: a reel (ada: double time at 114.8, its eighths at
+230 a minute) has the bodhrán's strokes a median 1.09 sixteenths apart (148 open, 575 tipped, 83 with the
+back hand high), 780 onsets heard in its stem against 806 written; a jig (bob: 150.4, a dotted beat at 75)
+has them 1.03 eighths apart, the bar down-up-down, down-up-down. The whistle cuts 16 to 26 of its notes, the
+fiddle 5 to 18; the singer's own ornaments sit on 6 of 376 and 9 of 250 notes. The voice stands 14 dB over
+the band in a verse and 8 in a refrain (the ballad: 10.6 and 7.8); words misheard 17.1%. With a slow air,
+the whistle alone over the drones plays the intro's first four bars in about twice their time, and the
+session comes in on the second four.
+
+**Memory**, on two threads (tools/render_memory.py's measure, `MallocLargeCache=0`), every one under the
+studio's estimate (`public.render_mb`) and within 1.3 of it (tests/test_studio_public.py, MEASURED):
+
+| version | length | peak |
+|---|---|---|
+| a cappella, three voices of the program's own (a waltz) | 226 s | 1.51 GB (1.85 before the choir's bus was made lean) |
+| a cappella, six lineage voices | 226 s | 1.51 GB (2.33 before) |
+| a cappella, straight | 159 s | 1.20 GB |
+| a cappella, four verses, every part, six voices, tempo 55 | 496 s | 2.79 GB |
+| a Celtic session, a jig with a slow air | 120 s | 1.07 GB |
+| a Celtic session, four verses, every part, a reel at 91 | 347 s | 2.34 GB |
+
+The group's bus used to hold every voice until the last was sung, so an a cappella's peak grew with its
+voices; now it sums them as they come, in the same order (the same bits). In 2100 MB the studio makes about
+5.0 minutes of an a cappella in one go and 4.1 of a session. A render of the a cappella takes about 25 s for
+226 s of song (40 s with six voices), a session about 10 s for 120 s.
+
+**For the artist**: renders/styles/acappella-*.flac (ada and bob as their machines choose; coral with five
+lineage voices, the notes and a hum; dmitri answering the lines) and celtic-*.flac (ada's reel, bob's jig
+with the concertina, coral's slow air into a jig, dmitri's reel), each with its record and score beside it.
+
+**Left open**
+
+- On the ring or beside it (above). Beside it, they are reached only by a person's choice, and a lineage
+  in one stays in it or steps to its anchor's neighbours.
+- The a cappella's under voice is an under voice, not a bass: the learned throat thins below E3. A real bass
+  (roots an octave down, D3 and under) waits for a throat that sings there.
+- The bodhrán is the frame drum's model with a fifth stroke; its tipper's roll (the triplet "treble") is
+  left out, as the ballad's triplet fills were (three even taps on a synthesized skin read as a finger on a
+  microphone).
+- The session's jig is a sung jig (a dotted beat at 65 to 77), not a dance's; the singer sets its pace.
