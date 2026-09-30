@@ -471,7 +471,7 @@ DESK = {
     "kinds": {"riddim": 0.5, "drums": 0.25, "nodrums": 0.25},  # drums and bass alone, the drums alone, no drums
     "voice": {"verse": 0.3, "refrain": 0.45, "bridge": 0.3, "tag": 0.6},  # a line's last word into the echo
     "splash": 0.12,  # a bar's snare kicked into the spring
-    "time": 0.75, "feedback": 0.6, "level": 0.55, "voice_level": 0.4, "splash_level": 0.5,
+    "time": 0.75, "feedback": 0.6, "level": 2.0, "voice_level": 0.5, "splash_level": 3.0,
 }
 # A version after the song in a style without a desk of its own: the desk works the version only, and throws the
 # singer's last line into it.

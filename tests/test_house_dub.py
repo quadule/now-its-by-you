@@ -220,3 +220,44 @@ def test_a_style_can_be_chosen_as_an_edit(name):
     g = G.load(H)
     p = choose_params(g, overrides=Overrides(g, {"style.name": name, "style.ending": "version", "style.drop": 1}))
     assert p.style.name == name and p.style.ending == "version" and p.style.drop == 1
+
+
+# --- the page -----------------------------------------------------------------------------------------------------
+
+
+@pytest.fixture
+def home(tmp_path, monkeypatch):
+    monkeypatch.setenv("SONGBIRD_HOME", str(tmp_path / "home"))
+    return tmp_path
+
+
+def test_the_studio_offers_both_and_shows_their_patterns_sound_and_options(home):
+    import re
+
+    from songbird import explain, studio as ST
+
+    studio = ST.Studio(None, str(H), "fictional:ada", out=home / "out")
+    forbidden = re.compile(r"\b(genome|drift|harvest|hash|knob|params?|seed)\b", re.I)
+    v = studio.version({"style.name": "house", "style.drop": 2})
+    view = explain.view(studio.context, v)
+    card = next(c for c in view["cards"] if c["id"] == "style")
+    assert {"house", "dub"} <= set(card["styles"]) and "version" in card["endings"]
+    assert "the drop" in card["detail"]
+    for c in view["cards"]:
+        for text in [c["value"], c.get("detail") or ""] + [r["text"] for r in c["reasons"]]:
+            assert not forbidden.search(text), text
+    grid = studio.arrangement({"style.name": "house", "style.drop": 2})
+    machine = next(p for p in grid["players"] if p["name"] == "drummachine")
+    assert {"floor", "house", "drop"} <= {x["id"] for x in machine["patterns"]}
+    assert any(o["field"] == "drop" for s in grid["sections"] for o in s["options"])
+    out = [c for c in grid["cells"] if c["player"] == "drummachine" and c["value"]["pattern"] is None]
+    assert any("breakdown before the drop" in r["text"] for c in out for r in c["why"])
+    sound = studio.sound({"style.name": "house"})
+    dm = next(p for p in sound["players"] if p["player"] == "drummachine")
+    pad = next(p for p in sound["players"] if p["player"] == "synthpad")
+    assert dm["kit"]["value"] == "909" and not dm["kit"]["yours"]
+    assert pad["sidechain"]["value"]["depth"] == 8.0 and not pad["sidechain"]["yours"]
+    grid = studio.arrangement({"style.name": "dub"})
+    kit = next(p for p in grid["players"] if p["name"] == "kit")
+    assert {"onedrop", "steppers"} <= {x["id"] for x in kit["patterns"]}
+    assert "melodica" in {p["name"] for p in grid["players"]}

@@ -590,6 +590,9 @@ MEASURED = {
     "indie 4 verses, every part, slowest": (344.5, "claps ebass electric glock guitar kit organ voice", 2484),
     "shanty": (151.2, "bass claps concertina fiddle stomps voice", 1133),
     "stringband": (124.9, "banjo bass fiddle guitar mandolin voice", 1118),
+    # house and dub (2026-09-30; docs/STYLES.md, "House and dub"): dub's with its version after the song
+    "house": (118.4, "arp drummachine piano synthbass synthpad voice", 970),
+    "dub": (221.0, "ebass electric kit melodica organ voice", 1890),
 }
 
 
