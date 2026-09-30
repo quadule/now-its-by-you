@@ -53,10 +53,10 @@ from dataclasses import dataclass, replace
 
 import numpy as np
 from scipy.ndimage import uniform_filter1d
-from scipy.signal import oaconvolve, sosfilt
+from scipy.signal import sosfilt
 
 from ..theory import midi_to_hz
-from . import body, bowed, fx, pluck
+from . import body, bowed, fx, oa, pluck
 from .iir import butter
 
 ARTICULATIONS = {
@@ -120,6 +120,7 @@ BRIGHTER = (8.0, 10.0, -6.0)  # dB above 1 kHz per unit of brightness and of vel
 PIZZ = 0.55  # a pizzicato's force against a bowed note's
 HISS = (0.15, 700.0, 0.6)  # the bow's noise: its level against the motion, its high-pass (Hz), how much it pulses
 BITE = (20.0, 0.012)  # a fresh stroke's burst of it: against the steady hiss, and s it dies away over
+BLOCK = 1 << 16  # samples a stretch, where what is worked sample by sample is worked a stretch at a time
 SWELL = 0.5  # a swell's bow speed at its ends against its middle, on top of bowed.tracks' 0.7 (9 dB in all)
 FINGER = 0.9  # s a stopped string rings (T60) once the bow has left it before a rest
 RING = 2.5  # the longest a pizzicato rings, s, before the hand stops it (the next note on its string stops it sooner)
@@ -178,10 +179,30 @@ def _vibrato(notes, sr: int, length: int, rng: np.random.Generator, depth: float
         width[i0:i1] = env
         last_end, level = note.start + note.dur, float(env[-1])
     width = uniform_filter1d(width, max(1, int(0.03 * sr)))
+    # width * breathe * sin(2 pi cumsum(wobble) / sr + phase), with wobble = rate (1 + 0.04 sin(2 pi 0.7 t + phase))
+    # and breathe = 1 + 0.05 sin(2 pi f t + phase): each worked where it lies, by the same operations in order
     t = np.arange(length) / sr
-    wobble = rate * (1.0 + 0.04 * np.sin(2.0 * np.pi * 0.7 * t + rng.uniform(0.0, 2.0 * np.pi)))
-    breathe = 1.0 + 0.05 * np.sin(2.0 * np.pi * rng.uniform(0.3, 0.7) * t + rng.uniform(0.0, 2.0 * np.pi))
-    return width * breathe * np.sin(2.0 * np.pi * np.cumsum(wobble) / sr + rng.uniform(0.0, 2.0 * np.pi))
+    wobble = 2.0 * np.pi * 0.7 * t
+    wobble += rng.uniform(0.0, 2.0 * np.pi)
+    np.sin(wobble, out=wobble)
+    wobble *= 0.04
+    wobble += 1.0
+    wobble *= rate
+    breathe = t  # (t isn't wanted again)
+    breathe *= 2.0 * np.pi * rng.uniform(0.3, 0.7)
+    breathe += rng.uniform(0.0, 2.0 * np.pi)
+    np.sin(breathe, out=breathe)
+    breathe *= 0.05
+    breathe += 1.0
+    width *= breathe
+    del t, breathe
+    np.cumsum(wobble, out=wobble)
+    wobble *= 2.0 * np.pi
+    wobble /= sr
+    wobble += rng.uniform(0.0, 2.0 * np.pi)
+    np.sin(wobble, out=wobble)
+    width *= wobble
+    return width
 
 
 def lines(notes, overlap: float = 0.08) -> list[list]:
@@ -258,6 +279,8 @@ def _tremolo(notes, bow_v, sr: int, rng: np.random.Generator) -> list[tuple[int,
 
 def _bowed(kind: Kind, notes, sr: int, length: int, rng: np.random.Generator, s: dict, q: dict) -> np.ndarray:
     """One player's bowed notes: the bridge force over `length` samples (notes in seconds from 0)."""
+    # (Every track the length of the stretch is made where it lies and let go once used, and what is worked
+    # sample by sample is worked a stretch at a time: the same operations on the same values, in the same order.)
     wear, bright = float(s["wear"]), float(s["brightness"])
     home = kind.dark * (kind.bright / kind.dark) ** bright * q["position"]
     home_pole = POLES[0] + (POLES[1] - POLES[0]) * bright
@@ -280,11 +303,20 @@ def _bowed(kind: Kind, notes, sr: int, length: int, rng: np.random.Generator, s:
             deeper = SWELL + (1.0 - SWELL) * np.sin(np.pi * np.linspace(0.0, 1.0, i1 - i0))
             bow_v[i0:i1] *= deeper
             grip[i0:i1] *= deeper
-    # the vibrato, carried through the notes (bowed.tracks' own starts afresh on every note, a fiddler's)
+    # the vibrato, carried through the notes (bowed.tracks' own starts afresh on every note, a fiddler's):
+    # period = (period + FILTER_DELAY - SLIP_EARLY) * 2 ** (-cents / 1200) - FILTER_DELAY + SLIP_EARLY
     cents = _vibrato(notes, sr, length, rng, vibrato(kind, float(s["ornament"])) * q["depth"], kind.rate * q["rate"],
                      kind.shift, q["wait"], q["onset"])
-    period = (period + bowed._FILTER_DELAY - bowed._SLIP_EARLY) * 2.0 ** (-cents / 1200.0) \
-        - bowed._FILTER_DELAY + bowed._SLIP_EARLY
+    np.negative(cents, out=cents)
+    cents /= 1200.0
+    scale = 2.0 ** cents
+    del cents
+    period += bowed._FILTER_DELAY
+    period -= bowed._SLIP_EARLY
+    period *= scale
+    del scale
+    period -= bowed._FILTER_DELAY
+    period += bowed._SLIP_EARLY
     # The corner's rounding, the bow's weight and how far toward sul ponticello's surface sound, note by note
     # (each held from its note's start to the next's): a heavier, faster bow keeps the corner sharper, so louder
     # is brighter.
@@ -294,18 +326,22 @@ def _bowed(kind: Kind, notes, sr: int, length: int, rng: np.random.Generator, s:
     corners = [np.clip({"tasto": POLES[2], "pont": POLES[3]}.get(n.art, home_pole + LOUDER * (0.6 - n.vel)),
                        POLES[3], POLES[2]) for n in ordered]
     pole = np.repeat([home_pole] + corners, runs)
-    weight = np.repeat([0.6] + [n.vel + 0.4 / 0.6 * wear for n in ordered], runs)
-    shelf = np.repeat([0.0] + [10.0 ** ((BRIGHTER[0] * (bright - 0.5) + BRIGHTER[1] * (n.vel - 0.6)
-                                         + (BRIGHTER[2] if n.art == "tasto" else 0.0)) / 20.0) - 1.0
-                               for n in ordered], runs)
-    glass = np.repeat([0.0] + [float(n.art == "pont") for n in ordered], runs)
+    weights = np.array([0.6] + [n.vel + 0.4 / 0.6 * wear for n in ordered])  # (held note by note, as np.repeat)
     # the pitch kept: the loss filter's delay at the note's frequency and the early slip taken off (worked out every
     # 32 samples: they move with the vibrato, slowly)
-    loop = period + bowed._FILTER_DELAY - bowed._SLIP_EARLY
+    loop = period  # period + FILTER_DELAY - SLIP_EARLY, where it lies (the period itself isn't wanted again)
+    loop += bowed._FILTER_DELAY
+    loop -= bowed._SLIP_EARLY
+    del period
     beta = bridge_len / loop
     grid = np.arange(0, length, 32)
-    fix = _delay(pole[grid], sr / loop[grid], sr) + _excess(pole[grid], beta[grid], weight[grid])
-    period = loop + bowed._SLIP_EARLY - np.interp(np.arange(length), grid, fix)
+    weight = weights[np.searchsorted(np.cumsum(runs), grid, side="right")]  # the held weight at each grid point
+    fix = _delay(pole[grid], sr / loop[grid], sr) + _excess(pole[grid], beta[grid], weight)
+    period = loop  # loop + SLIP_EARLY - interp(fix), where it lies
+    del loop
+    period += bowed._SLIP_EARLY
+    for a in range(0, length, BLOCK):
+        period[a:a + BLOCK] -= np.interp(np.arange(a, min(length, a + BLOCK)), grid, fix)
     # where each stroke is up to speed, the string is set moving
     primes = _tremolo(notes, bow_v, sr, rng)
     strokes = []  # where each fresh stroke lands, the motion it is heading for, and how hard it bites
@@ -333,26 +369,44 @@ def _bowed(kind: Kind, notes, sr: int, length: int, rng: np.random.Generator, s:
     primes.sort()
     at = np.array([p[0] for p in primes], dtype=np.int64)
     velocity = np.array([p[1] for p in primes], dtype=np.float64)
-    # the hair's noise in proportion to the motion it rides on (speed over bow position), not to the speed alone
+    # the hair's noise in proportion to the motion it rides on (speed over bow position), not to the speed alone;
+    # the catch added to it, and the grip's floor, where they lie
     hair = np.zeros(length)
-    on = np.flatnonzero(bow_v)
-    hair[on] = rng.standard_normal(len(on)) * (0.3 + 0.8 * wear) * 0.02 * np.abs(bow_v[on]) * REF / beta[on]
-    force = bowed.run_primed(period, bridge_len, bow_v, np.maximum(grip, 1e-4), hair + catch, pole,
-                             _damping(kind, notes, sr, length), at, velocity)
-    force = force + _hiss(force, bow_v, beta, sr, rng, wear, strokes)
+    for a in range(0, length, BLOCK):  # (the draws in the same order: the bowed samples' one after another)
+        on = a + np.flatnonzero(bow_v[a:a + BLOCK])
+        hair[on] = rng.standard_normal(len(on)) * (0.3 + 0.8 * wear) * 0.02 * np.abs(bow_v[on]) * REF / beta[on]
+    hair += catch
+    del catch
+    np.maximum(grip, 1e-4, out=grip)
+    force = bowed.run_primed(period, bridge_len, bow_v, grip, hair, pole, _damping(kind, notes, sr, length), at,
+                             velocity)
+    del period, bridge_len, grip, hair, pole
+    force += _hiss(force, bow_v, beta, sr, rng, wear, strokes)
+    del bow_v, beta
     # The friction re-sharpens the corner every period, so the loop's rounding moves the tone only a little (about
     # 1 dB at 2 kHz over its whole range). What makes a heavier bow brighter is the corner's rounding at the bow,
     # which shrinks as the force grows (Cremer): stood in for by a shelf on the force above 1 kHz, a few dB up
     # for a loud note or a bright player, down for a soft one; eased from note to note over 20 ms.
     ease = int(0.02 * sr)
+    shelf = np.repeat([0.0] + [10.0 ** ((BRIGHTER[0] * (bright - 0.5) + BRIGHTER[1] * (n.vel - 0.6)
+                                         + (BRIGHTER[2] if n.art == "tasto" else 0.0)) / 20.0) - 1.0
+                               for n in ordered], runs)
     shelf = uniform_filter1d(shelf, ease)
-    force = force + shelf * fx.equalize(force, fx.design((("hp", 1000.0, 1),), sr))
+    brighter = fx.equalize(force, fx.design((("hp", 1000.0, 1),), sr))
+    brighter *= shelf  # (shelf * the equalized force)
+    del shelf
+    force += brighter
+    del brighter
+    glass = np.repeat([0.0] + [float(n.art == "pont") for n in ordered], runs)
     if glass.any():
         # Sul ponticello is brighter than any Helmholtz motion: a light bow near the bridge sets the string's upper
         # modes going too (Schelleng's surface sound), which one waveguide can't. Stood in for by tilting the
         # force: the fundamental region down, the upper partials up.
         glass = uniform_filter1d(glass, ease)
-        force = force + glass * (fx.equalize(force, fx.design(GLASS, sr)) - force)
+        tilt = fx.equalize(force, fx.design(GLASS, sr))
+        tilt -= force
+        tilt *= glass
+        force += tilt
     return force
 
 
@@ -367,25 +421,48 @@ def _hiss(force: np.ndarray, bow_v: np.ndarray, beta: np.ndarray, sr: int, rng: 
     pre-Helmholtz slips) is a burst of the same noise, BITE times the steady hiss of the stroke's own speed as the
     bow lands (strokes: (sample, that motion, how hard: 1 after a rest, less at a bow change)), dying away over
     BITE[1] s."""
+    # (What is worked sample by sample is worked a stretch at a time, the noise drawn and filtered a stretch at a
+    # time too (its draws in order, the filter's state carried): the same values as whole tracks gave.)
     level, cut, pulse = HISS
     on = bow_v != 0.0
     if not on.any():
         return np.zeros_like(force)
-    burst = np.zeros(len(force))
+    total = len(force)
     n = int(4 * BITE[1] * sr)
     fall = np.exp(-np.arange(n) / (BITE[1] * sr))
-    for at, motion, hard in strokes:
-        m = min(n, len(force) - at)
-        if m > 0:
-            burst[at: at + m] += BITE[0] * hard * motion * fall[:m]
-    edge = np.abs(np.diff(force, prepend=force[0]))
+    edge = np.empty(total)  # |diff(force, prepend=force[0])|
+    edge[0] = abs(force[0] - force[0])
+    np.subtract(force[1:], force[:-1], out=edge[1:])
+    np.abs(edge, out=edge)
     edge = uniform_filter1d(edge, max(1, int(0.0004 * sr)))
-    mean = uniform_filter1d(edge, max(1, int(0.03 * sr))) + 1e-12
-    gate = (1.0 - pulse) + pulse * np.minimum(edge / mean, 4.0)
-    noise = sosfilt(butter(2, cut, btype="highpass", fs=sr, output="sos"), rng.standard_normal(len(force)))
-    motion = np.where(on, np.abs(bow_v) * REF / beta, 0.0)
-    steady = uniform_filter1d(motion, max(1, int(0.005 * sr))) * gate
-    return level * (1.0 + 2.0 * wear) * (steady + burst) * noise
+    gate = uniform_filter1d(edge, max(1, int(0.03 * sr)))
+    for a in range(0, total, BLOCK):  # the mean + 1e-12, then the gate, where the mean lies
+        mean = gate[a:a + BLOCK] + 1e-12
+        gate[a:a + BLOCK] = (1.0 - pulse) + pulse * np.minimum(edge[a:a + BLOCK] / mean, 4.0)
+    del edge
+    motion = np.empty(total)
+    for a in range(0, total, BLOCK):
+        b = min(total, a + BLOCK)
+        motion[a:b] = np.where(on[a:b], np.abs(bow_v[a:b]) * REF / beta[a:b], 0.0)
+    del on
+    steady = uniform_filter1d(motion, max(1, int(0.005 * sr)))
+    del motion
+    steady *= gate  # (steady * gate)
+    del gate
+    sos = butter(2, cut, btype="highpass", fs=sr, output="sos")
+    state = np.zeros((sos.shape[0], 2))
+    scale = level * (1.0 + 2.0 * wear)
+    for a in range(0, total, BLOCK):
+        b = min(total, a + BLOCK)
+        noise, state = sosfilt(sos, rng.standard_normal(b - a), zi=state)
+        burst = np.zeros(b - a)  # each stroke's bite, laid on as a whole track of them was: in order, from 0.0
+        for at, motion_at, hard in strokes:
+            m = min(n, total - at)
+            lo, hi = max(a, at), min(b, at + m)
+            if m > 0 and lo < hi:
+                burst[lo - a:hi - a] += BITE[0] * hard * motion_at * fall[lo - at:hi - at]
+        steady[a:b] = scale * (steady[a:b] + burst) * noise
+    return steady
 
 
 def _damping(kind: Kind, notes, sr: int, length: int) -> np.ndarray:
@@ -466,9 +543,16 @@ def _solo(name: str, notes, sr: int, length: int, rng: np.random.Generator, make
     tuning = {o: float(make.normal(0.0, 0.5 + 3.0 * wear)) for o in kind.strings}
     notes = [replace(n, pitch=n.pitch + tuning[int(round(n.pitch))] / 100.0)
              if abs(n.pitch - round(n.pitch)) < 0.01 and int(round(n.pitch)) in tuning else n for n in notes]
-    force = np.zeros(length)
+    force = None
     for line in lines(notes):
-        force += player(kind, line, sr, length, rng, s, q)
+        played = player(kind, line, sr, length, rng, s, q)
+        if force is None:  # the first line added to silence: itself, + 0.0
+            force = played
+            force += 0.0
+        else:
+            force += played
+        del played
+    force = np.zeros(length) if force is None else force
     force = sosfilt(butter(1, 25.0, btype="highpass", fs=sr, output="sos"), force)
     ir = voiced(body.impulse_response(kind.box, sr, seed=seed, size=float(s["body"])), sr)
     return body.resonate(force, ir)
@@ -541,15 +625,20 @@ def _section(notes, sr: int, length: int, rng: np.random.Generator, make: np.ran
                 desks[k % 2] += player(kind, played, sr, length, rng, s, way)
                 k += 1
         box = replace(kind.box, length=SECTION_IR)
-        for d, force in enumerate(desks):
+        for d in range(2):
+            force, desks[d] = desks[d], None  # (each desk let go once it is heard)
             if not force.any():
                 continue
             force = sosfilt(butter(1, 25.0, btype="highpass", fs=sr, output="sos"), force)
             # each microphone hears its own mix of the desk's plate modes (the box breathing as a whole reaches
             # both alike), so the section is as wide above a few hundred hertz as a real one sounds
             ir = voiced(body.impulse_response(box, sr, seed=seeds[name][d], size=size, channels=2), sr)
-            y = oaconvolve(force[:, None], ir, axes=0)[:length]  # the force transformed once for both
-            out += _spread(y, seat + (SEAT_SPREAD if d else -SEAT_SPREAD))
+            # the force transformed once for both: oaconvolve(force[:, None], ir, axes=0), a few blocks at a time
+            y = oa.convolve_columns(force, ir, length)
+            del force
+            for a in range(0, length, BLOCK):  # out += _spread(y, ...), a stretch at a time
+                out[a:a + BLOCK] += _spread(y[a:a + BLOCK], seat + (SEAT_SPREAD if d else -SEAT_SPREAD))
+            del y
     return out
 
 

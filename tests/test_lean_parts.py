@@ -201,3 +201,54 @@ def made(which: str) -> str:
 @pytest.mark.parametrize("which", list(CASES))
 def test_a_whole_kit_makes_the_samples_it_made(which):
     assert made(which) == MADE[which]
+
+
+@pytest.mark.parametrize("s1,s2", [(5000, 3), (100_000, 15435), (2_000_000, 15435), (70_000, 15435), (40_000, 30_000),
+                                   (4096, 4096)])
+def test_a_signal_through_a_two_microphone_body_blockwise_is_oaconvolves(s1, s2):
+    from scipy.signal import oaconvolve
+
+    from songbird.synth import oa
+
+    rng = np.random.default_rng(s1 + s2)
+    x = rng.standard_normal(s1)
+    h = rng.standard_normal((s2, 2)) * np.exp(-np.arange(s2) / (s2 / 4 + 1))[:, None]
+    whole = oaconvolve(x[:, None], h, axes=0)
+    for n in (None, s1, s1 // 3 + 17):
+        assert same(oa.convolve_columns(x, h, n), whole[: len(whole) if n is None else n])
+
+
+def _bowing(seconds: float = 10.0, up: float = 0.0):
+    """A line for a bowed string with every way of bowing it, a double stop, a rest long enough to part two
+    stretches, and plucks among the bowed notes."""
+    arts = ["", "slur", "slide", "swell", "trem", "tasto", "pont", "slur", "", "pizz", "pizz", ""]
+    notes, t, rng = [], 0.1, np.random.default_rng(9)
+    for k, art in enumerate(arts * 2):
+        dur = float(rng.uniform(0.2, 0.9))
+        notes.append(_Note(t, dur, float(48 + rng.integers(0, 14)) + up, float(rng.uniform(0.3, 0.95)), art))
+        if k == 5:
+            notes.append(_Note(t, dur, float(60 + rng.integers(0, 5)) + up, 0.6, ""))  # a double stop
+        t += dur + (3.0 if k == 11 else 0.0)
+    return [n for n in notes if n.start < seconds - 1.0]
+
+
+# What the bowed strings made of _bowing() before 2026-09-30 (the tree at 02384c8).
+BOWED = {
+    "cello": "8ae2c85148929a492e1f925ba2e751f3cebf657a1639681af7cdb025ea5675d5",
+    "viola": "f1bf4b3c73e5248078ebb36fb1cc0925afd9d38b823b6392134ce5644f3362e0",
+    "strings": "6514f9b8a9ef6eca3849ab7c75518fbf29aee39b6c60fd12685e10af1c1cc8fb",
+}
+
+
+def bowed_made(name: str) -> str:
+    from songbird.synth import cello
+
+    y = cello.render(name, _bowing(up=12.0 if name == "viola" else 0.0), SR, int(10.0 * SR),
+                     np.random.default_rng(10), np.random.default_rng(11), {"brightness": 0.6, "wear": 0.3,
+                                                                            "ornament": 0.7})
+    return hashlib.sha256(np.ascontiguousarray(y).tobytes()).hexdigest()
+
+
+@pytest.mark.parametrize("name", list(BOWED))
+def test_bowed_strings_make_the_samples_they_made(name):
+    assert bowed_made(name) == BOWED[name]

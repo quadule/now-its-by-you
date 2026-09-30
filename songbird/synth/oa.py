@@ -112,3 +112,53 @@ def _into(y: np.ndarray, out: np.ndarray | None) -> np.ndarray:
         return y
     out[...] = y
     return out
+
+
+def convolve_columns(x: np.ndarray, h: np.ndarray, n: int | None = None, out: np.ndarray | None = None) -> np.ndarray:
+    """oaconvolve(x[:, None], h, axes=0)[:n] (mode "full"), one FFT worker, for a 1-D real float64 x and a
+    (samples, channels) h: one signal through a response with a column for each channel (a body's two
+    microphones), each block of it transformed once for them all, as scipy does it: its blocks shaped as
+    scipy shapes them ((blocks, step, 1) against (1, samples, channels)), a whole number of GROUPs of them at a
+    time, so each of the inverse transforms' rows, a block's channel, is made beside the same neighbours as in
+    scipy's single call; into `out` (float64, (n, channels)) if given."""
+    x = np.asarray(x)
+    h = np.asarray(h)
+    s1, s2 = len(x), len(h)
+    full = s1 + s2 - 1
+    n = full if n is None else min(n, full)
+
+    def scipys() -> np.ndarray:
+        return _into(oaconvolve(x[:, None], h, axes=0)[:n], out)
+
+    if (sp_fft.get_workers() != 1 or x.ndim != 1 or h.ndim != 2 or x.dtype != np.float64 or h.dtype != np.float64
+            or s1 == 0 or s2 == 0 or h.shape[1] == 1):
+        return scipys()
+    block, overlap, step1, step2 = _calc_oa_lens(s1, s2)
+    if overlap is None or step2 != s2 or s1 <= step1:  # one block, or the response cut up too: scipy's own way
+        return scipys()
+    steps = math.ceil((s1 + 1) / step1)
+    if (block - overlap) * steps < full:
+        steps += 1
+    channels = h.shape[1]
+    spectrum = sp_fft.rfftn(h.reshape(1, s2, channels), [block], axes=[1])
+    out = np.empty((n, channels)) if out is None else out
+    per = GROUP * max(1, CALL // (8 * block * channels * GROUP))
+    needed = min(steps, math.ceil(n / step1))
+    carry = None
+    for a in range(0, needed, per):
+        b = min(a + per, steps)
+        blocks = np.zeros((b - a, step1, 1))
+        take = x[a * step1: min(b * step1, s1)]
+        blocks.reshape(-1)[: len(take)] = take
+        spectra = sp_fft.rfftn(blocks, [block], axes=[1])
+        del blocks
+        y = sp_fft.irfftn(spectra * spectrum, [block], axes=[1])
+        del spectra
+        if carry is not None:
+            y[0, :overlap] += carry
+        y[1:, :overlap] += y[:-1, step1:]
+        carry = y[-1, step1:].copy()
+        flat = y[:, :step1].reshape(-1, channels)
+        start = a * step1
+        out[start: min(n, start + len(flat))] = flat[: n - start]
+    return out
