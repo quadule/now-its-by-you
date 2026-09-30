@@ -745,6 +745,9 @@ function editor(c) {
         slider("How wide", "mix.width", m.width, b["mix.width"], (x) => `${Math.round(x * 100)}%`, ["narrow", "wide"]),
         slider("The voice over the band", "mix.forward", m.forward, b["mix.forward"], (x) => `${Number(x).toFixed(1)} dB`, ["among it", "well over it"]),
         slider("How close the singer is", "mix.intimacy", m.intimacy, b["mix.intimacy"], (x) => `${Math.round(x * 100)}%`, ["further back", "at your ear"]),
+        // the room itself (a musician's reverb time and pre-delay), where the page's bounds offer it
+        b["mix.rt60"] ? slider("How long the room rings", "mix.rt60", m.rt60, b["mix.rt60"], (x) => `${Number(x).toFixed(2)} s`, ["a small room", "a hall"]) : null,
+        b["mix.predelay"] ? slider("How soon the room answers", "mix.predelay", m.predelay, b["mix.predelay"], (x) => `${Math.round(x * 1000)} ms`, ["at once", "later"]) : null,
         h("p", { class: "hint aside-note" }, "Judge the voice against the band on the whole song: a part heard alone is levelled for listening."));
     }
     case "singer": {

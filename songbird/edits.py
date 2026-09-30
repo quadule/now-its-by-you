@@ -13,7 +13,7 @@ keeps. An edit that can't be kept is left out and said why, never bent.
     form.verses          how many verses; form.pairs, form.intro, form.turn, form.break,
                          form.tag, form.outro, form.bridge2: each part of the shape on or off
     band.pattern, band.lead, band.density, band.brightness, band.<instrument> (0: it sits out)
-    mix.space, mix.width, mix.forward, mix.intimacy
+    mix.space, mix.width, mix.forward, mix.intimacy, mix.rt60 (s), mix.predelay (s)
     variants.<name>      a melody variant, once a rendition carries them (Params.variants)
     tune.<line>          a tune line's notes: [{degree, onset, duration}, ...] in beats (songbird.composition)
     chords.<line>        a tune line's chords: a list of chords a bar ([["I"], ["V/3", "vi"]]), each a function
@@ -56,7 +56,7 @@ from .band import INSTRUMENTS, LEADS, PATTERNS
 from .genome import Genome
 from .synth.mixing import RANGES, MixParams
 
-MIX = ("space", "width", "forward", "intimacy")
+MIX = ("space", "width", "forward", "intimacy", "rt60", "predelay")  # the room: how long it rings, how soon it answers
 # The arrangement's options a person may set (songbird.style.Style), each as the style's own choices go
 STYLE_OPTIONS = {"feel": ("straight", "swing", "shuffle", "twelve", "half", "double", "waltz", "six"),
                  "ending": ("ring", "rit", "cold", "amen", "repeat"), "backing": ("", "oohs", "echo", "thirds", "gang"),
@@ -111,7 +111,7 @@ def bounds(genome: Genome) -> dict:
     }
     for name in MIX:
         lo, hi = RANGES[name]
-        out[f"mix.{name}"] = {"min": lo, "max": hi, "step": 0.1 if name == "forward" else 0.01,
+        out[f"mix.{name}"] = {"min": lo, "max": hi, "step": {"forward": 0.1, "rt60": 0.05, "predelay": 0.001}.get(name, 0.01),
                               "song": getattr(MixParams(), name)}
     return out
 
@@ -305,7 +305,7 @@ def check(genome: Genome, edits: dict, phrasings=()) -> tuple[dict, list[dict]]:
                     clean[path] = value
             elif path.startswith("mix.") and path[4:] in MIX:
                 lo, hi = RANGES[path[4:]]
-                clean[path] = round(_number(value, lo, hi), 2)
+                clean[path] = round(_number(value, lo, hi), 3 if path == "mix.predelay" else 2)
             elif path.startswith("variants."):  # a variant of the tune the lineage carries: kept (true) or dropped
                 if not path[9:].isdigit():
                     raise LookupError("a variant is named by its place among the tune's variants")

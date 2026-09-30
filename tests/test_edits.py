@@ -161,3 +161,15 @@ def test_a_refrains_own_head_and_words_are_marked_and_replay():
     assert again.lyrics == done.lyrics
     refused = E.resolve(g, None, ADA, DAY, {"words.refrain.0": {"head": "so"}})
     assert refused.problems and "always sings the knows head" in refused.problems[0]["why"]
+
+
+def test_the_room_rings_as_long_and_answers_as_soon_as_a_person_says():
+    """A musician's reverb time and pre-delay, held to the mix's ranges, in the table as the room's own would be,
+    marked with what the machine's room had."""
+    edits, problems = E.check(g, {"mix.rt60": 4.0, "mix.predelay": 0.0123})
+    assert not problems and edits == {"mix.rt60": 2.5, "mix.predelay": 0.012}
+    assert E.bounds(g)["mix.rt60"]["step"] == 0.05 and E.bounds(g)["mix.predelay"]["max"] == 0.08
+    r = E.resolve(g, None, ADA, DAY, edits)
+    plain = choose_params(g, None, ADA, DAY)
+    assert r.params.mix["rt60"] == 2.5 and r.params.mix["predelay"] == 0.012 and r.params.mix["space"] == plain.mix["space"]
+    assert r.marks["mix.rt60"] == {"value": 2.5, "was": plain.mix["rt60"]}

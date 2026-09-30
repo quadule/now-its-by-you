@@ -898,11 +898,13 @@ def mix_card(v: Version) -> dict:
     why = choice_reasons(v, ["mix.rt60"], lambda path, value, blind: f"your machine's room: {room_words(value)}",
                          None, lambda path, value: room_words(value)) + why
     labels = {"mix.space": "how much room", "mix.width": "how wide", "mix.forward": "the voice over the band",
-              "mix.intimacy": "how close the singer is"}
+              "mix.intimacy": "how close the singer is", "mix.rt60": "how long the room rings",
+              "mix.predelay": "how soon the room answers"}
     mine = [{"kind": "you", "text": f"{labels.get(p, p)}: chosen by you", "path": p} for p in v.mine("mix.")]
     return _card(v, "mix", "The room and the mix", mix_words(mix), f"the room takes {mix.rt60:.1f} s to fall quiet",
                  mine + _finish(v, why, "mix"), ["mix."],
-                 mix={k: getattr(mix, k) for k in ("space", "width", "forward", "intimacy", "rt60", "tilt", "wear")})
+                 mix={k: getattr(mix, k) for k in ("space", "width", "forward", "intimacy", "rt60", "predelay", "tilt",
+                                                   "wear")})
 
 
 def singer_card(v: Version, phrasings: list[dict]) -> dict:
