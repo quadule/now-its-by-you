@@ -21,7 +21,7 @@ import soundfile as sf
 from numba import njit
 from scipy.signal import firwin
 
-from . import threads
+from . import fx, threads
 from .fx import _biquads, sliding_min
 
 TARGET_LUFS = -14.0
@@ -235,7 +235,7 @@ def true_peak_envelope(x: np.ndarray, floor: float = 0.0) -> np.ndarray:
     own magnitude: music never swings 6 dB between samples, so with a floor
     6 dB under what matters the envelope is exact where it counts."""
     y = np.ascontiguousarray(x.reshape(len(x), -1), dtype=np.float64)
-    env = _abs_max(y)  # np.abs(y).max(axis=1), without the copy
+    env = _abs_max(y) if fx.JIT else np.abs(y).max(axis=1)  # np.abs(y).max(axis=1), without the copy
     near = env >= floor
     near[:-1] |= near[1:]  # the stretch on either side of each loud sample
     near[-1] = False
@@ -248,10 +248,19 @@ def true_peak_envelope(x: np.ndarray, floor: float = 0.0) -> np.ndarray:
     # copied out of the signal as the rows of a sliding view over it zero-padded and reversed were (the same
     # matrix, value for value, into the same product; the padded copy of the song is never made)
 
+    if not fx.JIT:  # the same rows, from a sliding view over the signal zero-padded and reversed
+        padded = np.pad(y, ((REACH, REACH), (0, 0)))
+        runs = [np.lib.stride_tricks.sliding_window_view(padded[::-1, ch], 2 * REACH + 1) for ch in range(y.shape[1])]
+
+    def rows(ch: int, part: np.ndarray) -> np.ndarray:
+        if fx.JIT:
+            return _windows(y, ch, part, REACH)
+        return runs[ch][len(padded) - 1 - (part + 2 * REACH)]
+
     def swing(start: int) -> None:
         part = loud[start : start + (1 << 16)]
         for ch in range(y.shape[1]):
-            points = _windows(y, ch, part, REACH) @ taps.T  # n, n + 1/4, n + 1/2, n + 3/4
+            points = rows(ch, part) @ taps.T  # n, n + 1/4, n + 1/2, n + 3/4
             between[start : start + len(part)] = np.maximum(between[start : start + len(part)], np.abs(points).max(axis=1))
 
     # a bounded amount of memory at a time, each stretch its own (so they are made at once, threads.in_order)
@@ -308,7 +317,11 @@ def limit(x: np.ndarray, sr: int, ceiling_db: float = CEILING_DB, lookahead: flo
     recovered = _recover(held, float(np.exp(-1.0 / (release * sr))), held)
     # the mean of recovered[n - ahead .. n] (the first value standing in before it), by the running sum
     # np.cumsum made of it, never above the need: gain = min((c[n + ahead + 1] - c[n]) / (ahead + 1), need)
-    gain = _mean_ahead(recovered, ahead, need, recovered)
+    if fx.JIT:
+        gain = _mean_ahead(recovered, ahead, need, recovered)
+    else:
+        c = np.concatenate([[0.0], np.cumsum(np.concatenate([np.full(ahead, recovered[0]), recovered]))])
+        gain = np.minimum((c[ahead + 1 :] - c[: -ahead - 1]) / (ahead + 1), need)
     del need
     if inplace and x.dtype == np.float64:
         x *= gain[:, None]
@@ -329,7 +342,8 @@ def clip(x: np.ndarray, ceiling_db: float, below: float = CLIP[0], above: float 
     a = 10.0 ** ((ceiling_db - below) / 20.0)
     b = 10.0 ** ((ceiling_db + above) / 20.0)
     out = x if inplace and x.dtype == np.float64 else x.copy()
-    over = _over(np.ascontiguousarray(x, dtype=np.float64), a).reshape(x.shape)  # np.abs(x) > a, without the copy
+    over = (_over(np.ascontiguousarray(x, dtype=np.float64), a).reshape(x.shape) if fx.JIT
+            else np.abs(x) > a)  # np.abs(x) > a, without the copy
     bent = x[over]
     out[over] = np.sign(bent) * (a + (b - a) * np.tanh((np.abs(bent) - a) / (b - a)))
     return out

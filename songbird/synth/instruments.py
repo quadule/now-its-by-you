@@ -47,7 +47,7 @@ from scipy.signal import sosfilt
 
 from ..score import Note, Score
 from ..theory import midi_to_hz
-from . import body, bowed, drum, pipe, pluck, reed
+from . import body, bowed, drum, fx, pipe, pluck, reed
 from .iir import butter
 
 INSTRUMENTS = ("lute", "guitar", "harp", "bass", "fiddle", "whistle", "drum", "drone")
@@ -146,7 +146,7 @@ def place(y: np.ndarray, position: float, width: float, inplace: bool = False) -
     stereo source's side signal (0 collapses it to its middle). inplace: a stereo y (float64, two columns)
     is placed where it lies, and returned."""
     theta = (position + 1.0) * np.pi / 4.0
-    if y.dtype == np.float64 and y.ndim in (1, 2) and (y.ndim == 1 or y.shape[1] >= 2):
+    if fx.JIT and y.dtype == np.float64 and y.ndim in (1, 2) and (y.ndim == 1 or y.shape[1] >= 2):
         # straight into the stereo result, sample by sample, by the same operations in the same order as
         # the expressions below (no temporaries the length of the song); each sample's pair is read before
         # it is written, so the result may be y itself

@@ -15,11 +15,16 @@ from __future__ import annotations
 from functools import partial
 
 import numpy as np
+from numba import config as _numba
 from numba import njit
 from scipy.ndimage import uniform_filter1d
 
 from . import threads
 from .iir import butter
+
+# With numba's compiler off (NUMBA_DISABLE_JIT=1: a port, or a browser without it), the loops written to save
+# memory would run as Python; there numpy's and scipy's own whole-array operations, the same values, are used.
+JIT = not _numba.DISABLE_JIT
 
 # --- equalizers: RBJ cookbook biquads as second-order sections -----------------
 
@@ -262,7 +267,16 @@ def running_mean(x: np.ndarray, size: int, out: np.ndarray | None = None) -> np.
     x = np.ascontiguousarray(x, dtype=np.float64)
     if not len(x):
         return x.copy() if out is None else out
+    if not JIT:
+        return _given(uniform_filter1d(x, max(int(size), 1), mode="nearest"), out)
     return _running_mean(x, max(int(size), 1), np.empty_like(x) if out is None else out)
+
+
+def _given(y: np.ndarray, out: np.ndarray | None) -> np.ndarray:
+    if out is None:
+        return y
+    out[...] = y
+    return out
 
 
 @njit(cache=True, nogil=True)
@@ -313,6 +327,10 @@ def sliding_min(x: np.ndarray, size: int, origin: int = 0, out: np.ndarray | Non
     x = np.ascontiguousarray(x, dtype=np.float64)
     if not len(x):
         return x.copy() if out is None else out
+    if not JIT:
+        from scipy.ndimage import minimum_filter1d
+
+        return _given(minimum_filter1d(x, size, mode=mode, origin=origin), out)
     before = size // 2 + origin
     after = size - 1 - before
     if out is x and (after < 0 or mode != "nearest"):
@@ -335,6 +353,11 @@ def hold(playing: np.ndarray, *tracks: np.ndarray) -> None:
     before any): track[np.maximum.accumulate(np.where(playing, np.arange(n), 0))], made where it lies (a
     held sample is copied from one that never changes)."""
     playing = np.ascontiguousarray(playing, dtype=np.bool_)
+    if not JIT:
+        idx = np.maximum.accumulate(np.where(playing, np.arange(len(playing)), 0))
+        for track in tracks:
+            track[...] = track[idx]
+        return
     for track in tracks:
         _hold(playing, track)
 
