@@ -149,9 +149,10 @@ editing grid. The harmony lane shows the chords beneath the tune. A shared phras
 edit updates every appearance, including instrumental echoes; the interface shows
 how many places share it.
 
-Notes retain their syllable count and order, stay within the song's range, keep
-space before the following phrase's pickup, and preserve the ending's scale-degree
-class. Validation rejects overlaps, non-finite values, excessive leaps and notes
+Notes retain their syllable count and order (a syllable may be sung over up to
+four notes, a melisma), stay within the song's range (three steps past its own),
+keep space before the following phrase's pickup, and keep the ending's scale-degree
+class unless the person frees it ("Looser harmony and melody", below). Validation rejects overlaps, non-finite values, excessive leaps and notes
 outside the phrase. **Step**, **Soften leaps**, and **Even rhythm** offer small,
 undoable compositional transformations. **Restore phrase/order** removes the local
 override and returns to the version inherited by this studio: a released order gives
@@ -544,13 +545,12 @@ sus chord's fourth can sit a minor ninth over a sung third.
 
 - *Per tune line, not per place*: a line's chords change everywhere it is sung,
   as its melody does (the arrangement moves sections; a line is the unit the
-  song is made of). Reharmonizing only the last refrain would need chords kept
-  by the section's place; left for later.
-- *Triads (and sus) only, for now*: the guitar's shapes, the harp's spread and
-  the choir voice three tones. Sevenths are a musician's first move (V7,
-  ii–V7) and the likely next step: the styles already add a fourth tone as a
-  colour (`idioms.COLOURS`: 7, maj7, 6, add9), so a `7` quality could ride that
-  path, with the guitar, harp and choir taught it.
+  song is made of). Since 2026-09-29 a change can also be kept for one place
+  (the last refrain's second line, `chords.refrain:last.1`): "Looser harmony
+  and melody", below.
+- *Triads (and sus) only, for now*: since 2026-09-29 sevenths, sixths and
+  added ninths too (`V7`, `iim7`, `IVmaj7`, `Iadd9`...), taught to the guitar,
+  the harp, the choir and a style's players: "Looser harmony and melody", below.
 - *Changes on beats, a bar shared evenly*: the band lays a bar's chords on its
   beats; half-beat anticipations and a line's length are the tune's.
 - *A bass from the chord*: root, third or fifth. A bass that isn't a chord tone
@@ -828,10 +828,12 @@ MIDI File (the one exported, changed in a sequencer). The server:
      tones a triad or sus chord on one of the twelve roots: the key's own
      quality if it is that, else named: A major in D minor is `Vmaj`, not
      `bVI`; the bass the root, third or fifth, which also tells a sus2 from
-     the sus4 with the same notes). A seventh, a bass outside the chord or a
-     change off the beat is refused with the bar; a chord voiced differently
-     but the same is no change.
-   A line changed in two places takes the first, and says so. Lineage voices,
+     the sus4 with the same notes; four different notes a seventh, a sixth or
+     an added ninth, the seventh possibly in the bass, `/7`). Five notes or
+     more, a bass outside the chord or a change off the beat is refused with
+     the bar; a chord voiced differently but the same is no change.
+   A line changed alike in every place it comes is changed everywhere; one
+   changed in some of its places only, there (place edits). Lineage voices,
    the drums, the words, the tempo and the key in the file are not taken, and
    said.
 5. **Shows a preview**: what will change, place by place, and what couldn't
@@ -1191,20 +1193,57 @@ becomes even eighths and a held ending.
   *Record it* afterwards only copies the file. It isn't saved into the
   recordings' folder until the person records it.
 
-### How it will be checked
+### How it was checked
 
-tests/test_chords.py (the grammar's new kinds, their tones, names and
-refusals; the guitar, harp, bass and a style's keys voicing a seventh; the
-choir singing one; the rubs; nothing changed without an edit), tests for
-places in test_edits.py and test_composition.py (a place edit over an
-everywhere one, `last` following a child's form, marks, replay, inherit,
-release, a place the form hasn't got), melisma in test_composition.py (the
-fences, the stored form, the realized ornament, the singer's schedule
-unchanged), test_midi.py and test_notes_in.py (sevenths named both ways, a
-melisma exported and brought back unchanged, place edits from a file),
-tests/studio_composer.test.cjs (the scope toggle, even rhythm on the grid,
-the dragged note's name, split and join), the goldens, and the built-in
-browser.
+- tests/test_chords.py: the grammar's new kinds, their tones and names, `/7`
+  only on a chord with a seventh, the key's own sevenths offered; a person's
+  seventh required in the guitar's shape (G7 320001, and every shape holding
+  all four tones at capos 0 and 2) while a triad's and a style's colour are
+  found as before; the guitar, harp and lute playing the seventh, sixth or
+  ninth, the bass on a `V7/7`'s seventh, the choir singing a seventh's tones;
+  a gospel band's keys voicing a person's maj7 with no colour on top; a maj7
+  under the tune's tonic marked as a rub; the MIDI file voicing five notes
+  and naming Dmaj7 and A7.
+- tests/test_edits.py: places checked and kept one way (`refrain:02.1` is
+  `refrain:2.1`); a place over the everywhere edit and a number over `last`;
+  one place heard (the intro's tune and the last refrain's chords) and nothing
+  between them moving; marked, made again from the record, handed down, still
+  the last refrain in a version with four; released; a place a version doesn't
+  sing said, and one inherited waiting silent.
+- tests/test_composition.py: a melisma kept beside the syllables and given
+  back as written, restored with its line; its fences (four notes, legato, a
+  fifth, a quarter beat); sung as one note a syllable, its turns on the grid,
+  the singer's schedule (every consonant and vowel) unchanged, the pitch
+  turning at each note's moment and never swallowed; the band hearing its
+  notes and the MIDI file writing them (a lyric a syllable), brought back as no
+  change; an ending off its home note kept and said; the range.
+- tests/test_midi_in.py: sevenths read back (a D7 over the first verse), five
+  notes refused; a line changed in one verse only comes back as that place,
+  changed in both verses as the line; a version with a place of its own comes
+  back unchanged.
+- tests/studio_composer.test.cjs: even rhythm on halves (the verse line the test
+  put at 1.2727...) and on thirds; a dragged note announced by its new name; the
+  sevenths row, a seventh strummed with four tones, `/7` offered only with a
+  seventh; the scope choice (everywhere by default, both verses drawn at once;
+  only here; the last verse, however many; restore here); split, a slurred
+  note's boundary moved, a melisma's fifth, join, the ending freed. And
+  tests/studio_author.test.cjs (the stars explained), tests/test_studio.py (the
+  stems named after their recording, the README saying which).
+- The goldens (tests/test_determinism.py and the others) unchanged; the
+  program 5.91 MiB of 8 (`songbird budget`).
+- In the built-in browser (a studio on this Mac, on 8801): the first verse's
+  first line reharmonized from the card's *Sevenths* row, Dmaj7 | Bm7 A,
+  everywhere it's sung (three places, the break among them); in the last
+  refrain, *Only here (Refrain 3)* and A7 for the second line's A: the card
+  said "These chords change only here, in Refrain 3", the other refrains kept
+  A; "song?" in the refrain's first line split and its second half moved down
+  a step (announced as G4: the stale name fixed), heard in *Hear sung section*
+  for the verse and the last refrain. Sung dry, the learned voice holds A4 on
+  "song?" and turns to G4 at 0.62 s of its 1.25, where the beat is. The MIDI
+  file made from those edits names Dmaj7 and Bm7 three times each and A7
+  once, has three more voice notes than syllables, and brought back to
+  `/api/notes-in` is no change. `songbird render --edits` with the same edits,
+  packed, and `--replay` of it: the same id (6150c25db8b4).
 
 ### After a Fable review
 
@@ -1224,6 +1263,33 @@ colour drawn only for three-tone chords and the rootless voicing leaving out
 the bass's tone; the stems' cost and the record's day said. Its note that
 `notesin.name_chord`'s table must prefer the root in the bass among chords
 with the same notes (Am7 over C6/A) is kept in the ranking.
+
+### Open decisions for the artist
+
+1. **A seventh is a lead sheet's**, fixed whatever the mode: `V7` is the
+   dominant seventh in a minor song too (the key's own sevenths are offered as
+   a row). The alternative, a seventh that follows the mode, would make `V7`
+   in minor a minor seventh.
+2. **"Only here" or "the last refrain".** At the last of several times the page
+   offers both; "only here" is kept by number (the third refrain), "the last"
+   follows the last refrain in versions with more or fewer. Whether the
+   redesign's two-way switch (*here only · everywhere*) should write the number
+   or `last` for the last refrain is open; the engine takes either.
+3. **The scope starts on everywhere** (the redesign's decision), except on a
+   place that already has its own, where it starts on that place's scope, so a
+   change there is heard there.
+4. **A freed ending is taken from anyone**: a MIDI file or a keyboard take with
+   another ending is kept and said, not refused, as a drag is once *Free the
+   ending* is ticked. The page keeps the ending unless asked.
+5. **A melisma's limits**: four notes a syllable, a fifth between them, a
+   quarter beat each; the choir holds its harmony note under the syllable. A
+   take played on a keyboard gives one note a syllable (a melisma is made on
+   the page, or moved in a MIDI file), and the piano page shows a melisma's
+   syllable on its first note only.
+6. **The range is a step and a half wider** each way (three scale steps past
+   the song's own lowest and highest notes, not two).
+7. **The first stems of a version make its recording first** (about twice as
+   long), so their name is the recording's.
 
 ## Sound design (2026-09-29)
 
