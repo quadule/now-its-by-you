@@ -67,7 +67,7 @@ from urllib.parse import parse_qs, urlsplit
 
 import numpy as np
 
-from . import drift as drift_mod, explain, genome as genome_mod, harvest, midi, pack, synth, variation
+from . import artwork, drift as drift_mod, explain, genome as genome_mod, harvest, midi, pack, synth, variation
 from . import public as public_mod, received
 from .realize import Params, realize
 from .synth import master
@@ -902,7 +902,7 @@ class Studio:
                 buffer = io.BytesIO()
                 sf.write(buffer, np.pad(stems[part] * gain, [(pad, 0), (0, 0)]), synth.SR, format="FLAC",
                          subtype="PCM_24")
-                z.writestr(f"{stem}/{i:02d}-{part}.flac", buffer.getvalue())
+                z.writestr(f"{stem}/{i:02d}-{part}.flac", artwork.embed(buffer.getvalue(), self.genome.title))
             z.writestr(f"{stem}/{stem}.mid", data)
             z.writestr(f"{stem}/README.txt", stems_note(self.genome.title, v.params, -lead_in, gain, order,
                                                         recording=(f"{stem}.flac", record["id"])))
