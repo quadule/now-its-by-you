@@ -251,13 +251,15 @@ def test_composition_and_editor_travel_inside_the_audio(tmp_path):
         # visitor's browser"); about 143 KB once the classic page goes. 169 KB with the column drawn in place and the
         # second EDM test's fixes (docs/STUDIO-EDM-TEST.md, "Fixed after the test": morph, a seam's lengths, where a pump
         # pumps, a line at a time; about 3 KB). 154 KB once the classic page and its stylesheet went (2026-09-30).
+        # The artist (2026-09-30): no tight cap; the packet's budget (`songbird budget`, 8 MiB goal) is what counts,
+        # so this is only a tripwire for something that doesn't belong (an image, the browser's render bundle).
         assert "program/songbird/studio/score.js" in archive.namelist()
         assert "program/songbird/studio/classic.html" not in archive.namelist()
-        assert editor_bytes < 160_000
+        assert editor_bytes < 400_000
         # the piano page (docs/PIANO.md) travels with it, a page of its own, counted apart
         piano_bytes = sum(i.compress_size for i in archive.infolist()
                           if i.filename.startswith("program/songbird/studio/piano/"))
-        assert 0 < piano_bytes < 30_000
+        assert 0 < piano_bytes < 100_000  # a tripwire too
     assert len(json.dumps(params.composition)) < 4096
     opened = Studio(str(flac), machine="none", home=tmp_path / "home")
     try:
