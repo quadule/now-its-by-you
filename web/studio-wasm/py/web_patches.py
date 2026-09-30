@@ -20,7 +20,11 @@ def _dgemm_linear(x: np.ndarray, w: dict, name: str) -> np.ndarray:
     W, b = w[f"{name}.weight"], w[f"{name}.bias"]
     if x.dtype != np.float64 or W.dtype != np.float64 or x.ndim != 2 or len(x) < 64:
         return x @ W.T + b
-    return blas.dgemm(1.0, x, W, trans_b=True) + b
+    # (x W')' = W x': x and W are C-ordered, so x' and W' are Fortran-ordered as they lie, and the result's
+    # transpose is C-ordered: no copy of x (a whole song's activations are ~100 MB each), none of the result
+    y = blas.dgemm(1.0, W.T, x.T, trans_a=True).T
+    y += b
+    return y
 
 
 def install(dgemm: bool = True) -> None:
