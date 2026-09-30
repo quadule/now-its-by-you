@@ -36,7 +36,9 @@ docs/WEB-STUDIO.md.
 from __future__ import annotations
 
 import argparse
+import collections
 import contextlib
+import copy
 import hashlib
 import io
 import json
@@ -47,6 +49,7 @@ import shutil
 import socket
 import subprocess
 import sys
+import tempfile
 import textwrap
 import threading
 import time
@@ -65,7 +68,7 @@ from urllib.parse import parse_qs, urlsplit
 import numpy as np
 
 from . import drift as drift_mod, explain, genome as genome_mod, harvest, midi, pack, synth, variation
-from . import public as public_mod
+from . import public as public_mod, received
 from .realize import Params, realize
 from .synth import master
 from .synth.instruments import INSTRUMENTS
@@ -78,6 +81,7 @@ PORT = 8766
 KARAOKE_PORT = 8765
 HOST = "127.0.0.1"  # this computer only, unless asked to share (--host, --allow-host)
 LOOPBACK = {"127.0.0.1", "localhost", "::1"}
+LOCAL_VERSION_DAYS = 90  # how long this computer's own studio keeps a version someone opened in it
 MAX_WAITING = 12  # renders waiting at once: more are refused until the queue shortens (a shared studio)
 CACHE_LIMIT = 300 * 2**20  # bytes of previews kept; the least recently heard go first
 PREVIEW_GAIN_DB = 5.3  # what mastering gives a whole rendition of H (5.1 to 5.4 dB): a section keeps its level
@@ -521,6 +525,7 @@ class Studio:
         self.singing = None  # singing in the browser, when asked for (enable_web_singing)
         self.context = explain.Context(self.genome, parent_params, record, self.voice, machine, self.day, self.t,
                                        quiet, shared=self.shared)
+        self._versions_setup(public)
         prune(self.cache, self.cache_limit)
         if public:
             threading.Thread(target=self._tidy, daemon=True, name="studio-tidy").start()
@@ -577,6 +582,8 @@ class Studio:
                     "section": section, "voice": v.voice.to_dict() if v.voice is not None else None,
                     "drift": v.drift.to_dict() if v.drift is not None else None,
                     "marks": v.marks if section is None else None, "gain": PREVIEW_GAIN_DB}
+        if self.version_id is not None:  # someone's version: its lineage sings the choir and names the parent
+            material["parent"] = self.version_id
         return hashlib.sha256(json.dumps(material, sort_keys=True, default=str).encode()).hexdigest()[:24]
 
     def listen_keys(self, v: explain.Version) -> dict:
@@ -660,11 +667,16 @@ class Studio:
         job.stage = stage_words("score")
         job.plan = stages(self._score(v))
         folder = self.cache / key
+        genome_file = self.genome_path
+        if self.version_id is not None:  # someone's version: the song it sang, beside its child, whatever becomes of it
+            folder.mkdir(parents=True, exist_ok=True)
+            genome_file = folder / "genome.json"
+            genome_file.write_bytes(self.genome_bytes)
         with contextlib.redirect_stdout(io.StringIO()):
             record = render_one(self.genome, v.params, folder / "rendition.flac", voice=v.voice, drift=v.drift,
                                 lyrics=v.lyrics, phrasing_json=v.phrasing_json, choir_json=v.choir_phrasings,
                                 parent=self.parent_record,
-                                packet_genome=self.genome_path, changes=v.changes if v.drift is not None else None,
+                                packet_genome=genome_file, changes=v.changes if v.drift is not None else None,
                                 chosen_by_you=v.marks or None, progress=job.report)
         (folder / "rendition.json").write_text(json.dumps(record, indent=2) + "\n")
         link(folder / "rendition.flac", self.cache / f"{key}.flac")
@@ -868,6 +880,113 @@ class Studio:
                 prune(self.cache, self.cache_limit)
                 self.gate.purge()
 
+    # ------------------------------------------------------------ someone's version (songbird.received)
+    #
+    # A person opens a rendition they were sent (its FLAC) and the studio continues from it, as `songbird studio
+    # parent.flac` does from the command line. POST /api/open brings the file; `receive` has it read, as data and
+    # never as the program it carries, in a process of its own (received.examine_apart), and keeps what a parent
+    # gives its child under an id; `opened` is this studio on that parent, which the page reaches at /v/<id>.
+    # docs/WEB-STUDIO.md, "Opening someone's version".
+
+    version_id: str | None = None  # the version this studio was opened on, when someone brought it (opened)
+    genome_bytes: bytes | None = None  # ... and the song it sang, as it came
+
+    def _versions_setup(self, public: public_mod.Limits | None) -> None:
+        limits = public or public_mod.Limits()
+        self.versions = received.Versions(self.home / "versions", limits.versions_mb * 2**20,
+                                          limits.version_days if public else LOCAL_VERSION_DAYS)
+        self.upload_limit = min(limits.upload_mb * 2**20, received.UPLOAD)
+        # each file brought is written to a folder of its own here, read, and removed; a folder older than an
+        # hour is one a stopped studio left
+        self.incoming = self.home / "incoming"
+        self.incoming.mkdir(parents=True, exist_ok=True)
+        for old in self.incoming.iterdir():
+            with contextlib.suppress(OSError):
+                if time.time() - old.stat().st_mtime > 3600:
+                    shutil.rmtree(old, ignore_errors=True)
+        self.reading = threading.BoundedSemaphore(2)  # files read at once, each by a process of its own
+        self.arriving: set[str] = set()  # the addresses sending a file now: one each, and a few in all
+        self._arriving_lock = threading.Lock()
+        self._opened: collections.OrderedDict = collections.OrderedDict()  # id -> Studio, the latest few
+        self._genomes: collections.OrderedDict = collections.OrderedDict()  # song digest -> Genome, shared
+        self._opened_lock = threading.Lock()
+
+    def receive(self, path: Path) -> dict:
+        """A file someone brought (in a folder of its own, which the caller removes), read as data by a process
+        of its own and kept, if this program can continue it, as a version this studio opens at /v/<id>.
+        Raises received.Refused, saying why, if not."""
+        out = received.examine_apart(path, self.genome.title, self.machine, self.day, ROOT, path.parent)
+        record, song = out.get("record"), out.get("genome")
+        if not isinstance(record, dict) or not isinstance(song, str):
+            raise received.Refused("It couldn't be read here: the reader stopped on it.")
+        timeline = out.get("timeline")
+        timeline = timeline if isinstance(timeline, dict) and timeline.get("day") == self.day \
+            and timeline.get("machine") == self.machine else None
+        vid = self.versions.put(record, song.encode("utf-8"), timeline)
+        other = self.opened(vid)
+        if other is None:
+            raise received.Refused("It was read, but couldn't be kept here; try again in a moment.")
+        return {"id": vid, "url": f"/v/{vid}", "version": other.version_view(), "minutes": out.get("minutes")}
+
+    def opened(self, vid: str) -> Studio | None:
+        """This studio on a version someone brought (by its id), as `songbird studio parent.flac` would open
+        on it: its own song, record and context; the queue, caches, limits, counts and token shared. The
+        latest few are kept; None if there's no such version kept here."""
+        with self._opened_lock:
+            hit = self._opened.get(vid)
+            if hit is not None:
+                self._opened.move_to_end(vid)
+                return hit
+        kept = self.versions.get(vid)
+        if kept is None:
+            return None
+        record, genome_path, timeline = kept
+        try:
+            data = genome_path.read_bytes()
+        except OSError:
+            return None
+        digest = hashlib.sha256(data).hexdigest()
+        from .cli import _parent
+
+        with self._opened_lock:
+            genome = self.genome if digest == self.song_digest else self._genomes.get(digest)
+        if genome is None:  # checked when it was brought; parsed again from this studio's own store
+            genome = genome_mod.from_dict(json.loads(data))
+        other = copy.copy(self)
+        other.version_id, other.parent_record, other.genome_bytes = vid, record, data
+        other.genome, other.song_digest = genome, digest
+        # the song as this studio has it, if it's the same (its phrasings are found by its file's name)
+        other.genome_path = self.genome_path if digest == self.song_digest else genome_path
+        other.context = explain.Context(genome, _parent(record, genome), record, self.voice, self.machine, self.day,
+                                        self.t, self.context.quiet, shared=self.shared)
+        other._timeline = timeline.get("drawn") if timeline and timeline.get("day") == self.day \
+            and timeline.get("machine") == self.machine else None
+        other._timeline_lock = threading.Lock()
+        other.karaoke = None
+        with self._opened_lock:
+            if digest != self.song_digest:
+                self._genomes[digest] = genome
+                while len(self._genomes) > 8:
+                    self._genomes.popitem(last=False)
+            other = self._opened.setdefault(vid, other)
+            while len(self._opened) > 16:
+                self._opened.popitem(last=False)
+        return other
+
+    def version_view(self) -> dict | None:
+        """What the page says of the version it was opened on, when someone brought it."""
+        if self.version_id is None:
+            return None
+        r = self.parent_record
+        theirs = r["program_sha256"]
+        other = theirs != self.program_digest
+        return {"id": self.version_id, "url": f"/v/{self.version_id}", "generation": generation(r),
+                "made": (r.get("rendered_at") or "")[:10] or None, "rendition": r["id"][:12],
+                "program": theirs[:12], "other_program": other,
+                "program_note": (f"It was made by another version of the program ({theirs[:8]}…); this studio "
+                                 f"continues it with its own ({self.program_digest[:8]}…), so the new version is "
+                                 "sung by this one." if other else "It was made by the same program as this studio.")}
+
     # ------------------------------------------------------------ singing (from a checkout of the program)
 
     def phrasing_files(self) -> dict[str, Path]:
@@ -969,6 +1088,11 @@ class Studio:
     def sung_phrasings(self, edits: dict) -> list[dict]:
         """For the singer's card: the way of singing in the browser these edits chose, if they chose one."""
         return self.singing.listed(edits) if self.singing is not None else []
+
+
+def generation(record: dict) -> int:
+    g = record.get("generation")
+    return g if isinstance(g, int) and g >= 0 else 0
 
 
 def singer_name(who: str) -> str:
@@ -1220,15 +1344,20 @@ class Handler(BaseHTTPRequestHandler):
             if self._throttled():
                 return
         if not self._admitted():
-            return self.refuse_visitor() if path in ("/", "/index.html") else self.fail(403, "this studio needs its link's key")
+            return self.refuse_visitor() if path in ("/", "/index.html") or path.startswith("/v/") \
+                else self.fail(403, "this studio needs its link's key")
         try:
             singing = self.studio.singing
             if singing is not None and singing.get(self, path, {k: v[0] for k, v in parse_qs(urlsplit(self.path).query).items()}):
                 return None
             if path == "/piano" or path.startswith("/piano/"):  # learning it at the piano
                 return self.piano_page(path)
-            if path in ("/", "/index.html"):
-                page = (PAGE / "index.html").read_text().replace("{{token}}", self.studio.token)
+            version = re.fullmatch(r"/v/([0-9a-f]{32})", path)  # someone's version: the page's token names it
+            if path.startswith("/v/") and (version is None or self.studio.opened(version.group(1)) is None):
+                return self.version_gone()
+            if path in ("/", "/index.html") or version:
+                token = f"{self.studio.token}.{version.group(1)}" if version else self.studio.token
+                page = (PAGE / "index.html").read_text().replace("{{token}}", token)
                 if singing is not None:
                     page = singing.page(page)
                 extra = []
@@ -1243,15 +1372,21 @@ class Handler(BaseHTTPRequestHandler):
             if path in STATIC:
                 name, kind = STATIC[path]
                 return self.send((PAGE / name).read_bytes(), kind)
+            studio = self._asked() if path in ("/api/start", "/api/timeline", "/api/phrasings") else self.studio
+            if studio is None:  # the version the page was opened on (someone brought it) isn't kept any more
+                return self.version_gone()
             if path == "/api/start":
-                start = explain.start(self.studio.context, self.studio)
-                if self.studio.public is not None:
-                    start["public"] = self.studio.public.view()
+                start = explain.start(studio.context, studio)
+                if studio.public is not None:
+                    start["public"] = studio.public.view()
+                start["open"] = {"upload_mb": studio.upload_limit // 2**20}
+                if studio.version_id is not None:
+                    start["version"] = studio.version_view()
                 return self.send_json(start)
             if path == "/api/timeline":
-                return self.send_json(self.studio.timeline())
+                return self.send_json(studio.timeline())
             if path == "/api/phrasings":
-                return self.send_json(self.studio.phrasings())
+                return self.send_json(studio.phrasings())
             if path.startswith("/api/job/"):
                 job = self.studio.jobs.get(path.rsplit("/", 1)[-1])
                 return self.send_json(self.studio.jobs.view(job)) if job else self.fail(404, "no such job")
@@ -1337,6 +1472,8 @@ class Handler(BaseHTTPRequestHandler):
     def do_POST(self) -> None:
         if self.studio.singing is not None and urlsplit(self.path).path == "/api/sing/take":
             return self.studio.singing.handle_take(self)  # a take is bigger than a JSON; its own guards, the same
+        if urlsplit(self.path).path == "/api/open":
+            return self.open_version()  # a file someone brought: every guard before a byte of it is read
         # the body first, so a refusal leaves the connection in step for the next request
         try:
             length = int(self.headers.get("Content-Length") or 0)
@@ -1356,8 +1493,8 @@ class Handler(BaseHTTPRequestHandler):
             return
         if self.headers.get("Content-Type", "").split(";")[0].strip() != "application/json":
             return self.fail(415, "send JSON")
-        if not secrets.compare_digest(self.headers.get("X-Studio", "").encode("utf-8", "replace"),
-                                      self.studio.token.encode()):
+        mine, version = self._page_token()
+        if not mine:
             return self.fail(403, "this page answers only the page it gave out")
         path = urlsplit(self.path).path
         try:
@@ -1365,7 +1502,10 @@ class Handler(BaseHTTPRequestHandler):
             if not isinstance(body, dict) or not isinstance(body.get("edits") or {}, dict):
                 return self.fail(400, "send a map, with the edits a map of choices")
             edits = body.get("edits") or {}
-            studio = self.studio
+            # the studio on the version the page was opened on, if someone brought it (singing is the song's own)
+            studio = self.studio if version is None or path.startswith("/api/sing") else self.studio.opened(version)
+            if studio is None:
+                return self.version_gone()
             by = self._by() if studio.public is not None else None
             if path == "/api/song":
                 return self.send_json(studio.song(edits))
@@ -1394,6 +1534,9 @@ class Handler(BaseHTTPRequestHandler):
                 return self.send_json(studio.players(edits))
             if path == "/api/notes-in":  # a take or a MIDI file, as a preview of edits (notes in)
                 return self.send_json(studio.notes_in(edits, body))
+            if path == "/api/open/ready":  # someone's version: would a file this size be taken now?
+                refusal = self._may_open(int(body.get("size") or 0), count=False)
+                return refusal() if refusal is not None else self.send_json({"ready": True})
             if path == "/api/sing":
                 return self.send_json(studio.sing())
             if path.startswith("/api/sing/") and studio.singing is not None:
@@ -1408,6 +1551,138 @@ class Handler(BaseHTTPRequestHandler):
         except Exception as e:
             traceback.print_exc()
             return self.fail(500, f"{type(e).__name__}: {e}")
+
+
+    # ------------------------------------------------------------ someone's version: the page's, and the file brought
+    #
+    # The page at /v/<id> was given the token '<token>.<id>', so every request it sends (X-Studio) says which version
+    # it is about, and nothing else on the page needs to know. A file brought is guarded before a byte of it is
+    # read, streamed to a folder of its own, read in a process of its own (Studio.receive) and removed.
+
+    def _page_token(self) -> tuple[bool, str | None]:
+        """The token the page sends back (X-Studio): whether it's the one this studio gave out, and the version
+        the page was opened on, if someone brought it."""
+        token, _, version = self.headers.get("X-Studio", "").partition(".")
+        mine = secrets.compare_digest(token.encode("utf-8", "replace"), self.studio.token.encode())
+        return mine, version or None
+
+    def _asked(self) -> Studio | None:
+        """For the page's questions that change nothing (GET /api/start...): the studio on the version its token
+        names, or this one; None for a version that isn't kept here."""
+        mine, version = self._page_token()
+        return self.studio.opened(version) if mine and version is not None else self.studio
+
+    def version_gone(self) -> None:
+        """A version that isn't kept here: never saying whether it ever was."""
+        days = self.studio.versions.days
+        why = (f"This version isn't kept here (any more): a version someone opens is kept {days:g} days after it "
+               "was last opened. Open its file again to continue from it.")
+        if not urlsplit(self.path).path.startswith("/v/"):
+            return self.fail(404, why)
+        page = ("<!doctype html><meta charset=utf-8><meta name=viewport content='width=device-width'>"
+                "<title>Songbird studio</title><body style='font:17px/1.5 Georgia,serif;max-width:34em;"
+                "margin:12vh auto;padding:0 16px'><h1 style='font-weight:500'>This version isn't here</h1>"
+                f"<p>{why}</p><p><a href='/'>Open the studio on the song as it began</a></p></body>")
+        self.send(page.encode(), "text/html; charset=utf-8", 404)
+
+    def open_version(self) -> None:
+        """POST /api/open: a rendition's FLAC, as the body. Refused before a byte of it is read unless it comes
+        from this studio's own page (its address, its key, its token), within the limits and the size; then
+        written to a folder of its own, read as data, never run (Studio.receive), and removed whatever happens."""
+        studio = self.studio
+        self.close_connection = True  # the body may go unread, so the connection isn't used again
+        try:
+            length = int(self.headers.get("Content-Length") or -1)
+        except ValueError:
+            length = -1
+        refusal = self._may_open(length, count=True)
+        where = public_mod.network(self._ip())
+        if refusal is None:
+            with studio._arriving_lock:
+                if where in studio.arriving or len(studio.arriving) >= ARRIVING:
+                    refusal = self._busy
+                else:
+                    studio.arriving.add(where)
+        if refusal is not None:
+            refusal()
+            return self._linger(length)
+        folder = Path(tempfile.mkdtemp(prefix="open-", dir=studio.incoming))
+        try:
+            path = folder / "brought.flac"
+            self._arrive(path, length)
+            if not studio.reading.acquire(timeout=90):
+                return self.too_many(503, Busy("The studio is reading other files; send it again in a moment.", 30))
+            try:
+                answer = studio.receive(path)
+            finally:
+                studio.reading.release()
+        except received.Refused as e:
+            return self.fail(422, str(e))
+        except (TimeoutError, ConnectionError):
+            return None  # the sender went quiet, or away: no one to answer
+        finally:
+            shutil.rmtree(folder, ignore_errors=True)
+            with studio._arriving_lock:
+                studio.arriving.discard(where)
+        return self.send_json(answer)
+
+    def _may_open(self, length: int, count: bool) -> Callable[[], None] | None:
+        """Why a file of `length` bytes can't be brought now, as the reply that says so; None if it can. `count`:
+        the file itself, counted (a request, and one of the hour's opens); or the page asking first
+        (/api/open/ready, before it sends a file that would only be turned away)."""
+        studio = self.studio
+        if not self._local():
+            return lambda: self.fail(403, "this page answers only its own address")
+        if not self._admitted():
+            return lambda: self.fail(403, "this studio needs its link's key")
+        if not self._page_token()[0]:
+            return lambda: self.fail(403, "this page answers only the page it gave out")
+        if length <= 0:
+            return lambda: self.fail(411, "Send the file whole, with its length.")
+        if length > studio.upload_limit:
+            return lambda: self.fail(413, f"It's {length / 2**20:.0f} MB; a rendition is about 15 to 20 (the most "
+                                          f"taken here is {studio.upload_limit // 2**20} MB).")
+        if studio.gate is not None:
+            try:
+                if count:
+                    studio.gate.request(self._ip())
+                studio.gate.render("opens", *self._by(), count=count)
+            except public_mod.Limited as e:
+                return lambda limited=e: self.too_many(429, limited)
+        with studio._arriving_lock:
+            if public_mod.network(self._ip()) in studio.arriving or len(studio.arriving) >= ARRIVING:
+                return self._busy
+        return None
+
+    def _busy(self) -> None:
+        self.too_many(503, Busy("A file is on its way here from you already, or several from others; send it "
+                                "again in a moment.", 30))
+
+    def _linger(self, length: int) -> None:
+        """After a refusal, a small body read and dropped, so the answer isn't lost to the connection's reset (a
+        large one is never read: the page asks first, /api/open/ready)."""
+        if 0 < length <= 2**16:
+            with contextlib.suppress(OSError, ValueError):
+                self.connection.settimeout(2)
+                self.rfile.read(length)
+
+    def _arrive(self, path: Path, length: int) -> None:
+        """The body, `length` bytes, streamed to `path`: whole, and no slower than a slow connection sends
+        (a minute, and a second for every 32 KB), or refused."""
+        deadline = time.monotonic() + 60 + length / (32 * 1024)
+        left = length
+        with path.open("wb") as f:
+            while left:
+                chunk = self.rfile.read(min(left, 2**16))
+                if not chunk:
+                    raise received.Refused("The file didn't arrive whole; send it again.")
+                f.write(chunk)
+                left -= len(chunk)
+                if time.monotonic() > deadline:
+                    raise received.Refused("The file came too slowly to take; send it again on a faster connection.")
+
+
+ARRIVING = 4  # files on their way at once, for everyone (one from each address)
 
 
 class Server(ThreadingHTTPServer):

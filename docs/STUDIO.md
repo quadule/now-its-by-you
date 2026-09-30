@@ -43,6 +43,14 @@ record), default here; `--out` where recordings go (default `renders/` in a
 checkout, the current folder from a packet); `--port` 8766 or the next free
 one. It prints the address and opens it in the default browser.
 
+The page opens someone's version too (2026-09-29): a rendition's .flac
+dropped anywhere on it, or chosen under Other versions, "Open someone's
+version". The studio reads it as data (never running the program it carries,
+in a process of its own), keeps its record and song, and the page moves to
+`/v/<id>`, the studio on that version as the parent, as if it had been
+given on the command line. docs/WEB-STUDIO.md, "Opening someone's version",
+has the design, the threat model and the limits.
+
 ## How it looks: a page from a copied tune book
 
 The artist: "how can an app feel more like a folk song or something passed

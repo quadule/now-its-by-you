@@ -63,6 +63,7 @@
   </div>
   <div class="yours-bar" id="yoursBar" hidden></div>
   <div class="problems-bar" id="problemsBar" hidden></div>
+  <div class="version-bar" id="versionBar" hidden></div>
 </header>
 
 <main class="wrap">
@@ -160,6 +161,22 @@
         <input id="machineName" placeholder="Make one up: any name" autocomplete="off" maxlength="24">
         <button class="btn quiet" type="submit">Add</button>
       </form>
+    </section>
+
+    <section class="panel open-version" id="openVersion" aria-labelledby="openVersionTitle" data-gap="18">
+      <div class="area-head">
+        <h2 id="openVersionTitle">Open someone's version</h2>
+        <details class="whatis">
+          <summary title="What is this?"><span class="sr-only">What is this?</span></summary>
+          <div>Every version of the song is one file, a .flac, that plays anywhere and carries its whole line. Open one someone sent you and the studio continues from it: what you change is changed from theirs, and what you record is its child, the next in its line. The file is only read here, never run. The studio keeps what it needs to open that version again (its record and its song, not the file), so a link to it can be shared.</div>
+        </details>
+      </div>
+      <div class="version-drop" id="versionDrop">
+        <p>Drop a version's <b>.flac</b> file here, anywhere on the page, or</p>
+        <button class="btn" id="versionChoose" type="button">Choose a file…</button>
+        <input type="file" id="versionFile" accept=".flac,audio/flac" hidden>
+      </div>
+      <p class="hint" id="versionNote" role="status" aria-live="polite"></p>
     </section>
   </div>
 
@@ -264,6 +281,7 @@
 </div>
 
 <div class="toast" id="toast" role="status" aria-live="polite"></div>
+<div class="drop-veil" id="dropVeil" hidden><p>Drop the file to open that version</p></div>
 <audio id="audio" preload="auto"></audio>
 </body>
 </html>
