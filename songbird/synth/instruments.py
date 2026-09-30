@@ -141,14 +141,16 @@ NOT_INSTRUMENTS = {"__init__", "instruments", "body", "bowed", "drum", "pipe", "
                    "mixing", "fx", "room", "throat", "tract", "tube", "tubevoice", "voice"}
 
 
-def place(y: np.ndarray, position: float, width: float) -> np.ndarray:
+def place(y: np.ndarray, position: float, width: float, inplace: bool = False) -> np.ndarray:
     """A mono or stereo signal to stereo at `position`, keeping `width` of a
-    stereo source's side signal (0 collapses it to its middle)."""
+    stereo source's side signal (0 collapses it to its middle). inplace: a stereo y (float64, two columns)
+    is placed where it lies, and returned."""
     theta = (position + 1.0) * np.pi / 4.0
     if y.dtype == np.float64 and y.ndim in (1, 2) and (y.ndim == 1 or y.shape[1] >= 2):
         # straight into the stereo result, sample by sample, by the same operations in the same order as
-        # the expressions below (no temporaries the length of the song)
-        out = np.empty((len(y), 2))
+        # the expressions below (no temporaries the length of the song); each sample's pair is read before
+        # it is written, so the result may be y itself
+        out = y if inplace and y.ndim == 2 and y.shape[1] == 2 else np.empty((len(y), 2))
         _placed(y if y.ndim == 2 else y[:, None], np.cos(theta), np.sin(theta), np.sqrt(2.0), float(width), out)
         return out
     if y.ndim == 1:
@@ -274,7 +276,7 @@ def render_part(name: str, notes: tuple[Note, ...], sr: int, length: int, settin
     make = np.random.default_rng([int(s["maker"]), 29, index])
     stem = _model(name, notes, sr, length, s, rng, make)
     position, width = PLACE[name]
-    out = place(stem, position, width)
+    out = place(stem, position, width, inplace=True)  # the model's own fresh stem
     del stem
     out *= LEVEL[name]  # the level and the part's gain in the lineup, each where it lies (the same products)
     out *= float(s[name])

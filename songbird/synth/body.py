@@ -18,8 +18,9 @@ from __future__ import annotations
 from dataclasses import dataclass
 
 import numpy as np
-from scipy.signal import oaconvolve, sosfilt
+from scipy.signal import sosfilt
 
+from . import oa
 from .iir import butter
 
 
@@ -205,7 +206,7 @@ def resonate(force: np.ndarray, ir: np.ndarray) -> np.ndarray:
     their own tails)."""
     out = np.empty((len(force), ir.shape[1]))
     for ch in range(ir.shape[1]):
-        out[:, ch] = oaconvolve(force, ir[:, ch])[: len(force)]
+        oa.convolve(force, ir[:, ch], len(force), out=out[:, ch])  # oaconvolve's, a few blocks at a time
     return out
 
 
