@@ -411,6 +411,8 @@ def chord_choices(params) -> dict:
     every root a chord can have (the twelve numerals, each with its note)."""
     from .theory import NOTE_NAMES
 
+    sharps = ("C", "C♯", "D", "D♯", "E", "F", "F♯", "G", "G♯", "A", "A♯", "B")  # a raised root is spelt sharp
+
     roots = ["I", "bII", "II", "bIII", "III", "IV", "#IV", "V", "bVI", "VI", "bVII", "VII"]
     diatonic = []
     for numeral in ("I", "II", "III", "IV", "V", "VI", "VII"):
@@ -418,8 +420,8 @@ def chord_choices(params) -> dict:
         minor = name.endswith(("m", "°")) and not name.endswith("sus4")
         diatonic.append({"symbol": numeral.lower() if minor else numeral, "name": name})
     return {"diatonic": diatonic,
-            "roots": [{"numeral": r, "note": NOTE_NAMES[(params.tonic + chord_tones(r + "maj", params.mode)[0]) % 12]}
-                      for r in roots],
+            "roots": [{"numeral": r, "note": (sharps if r.startswith("#") else NOTE_NAMES)[
+                (params.tonic + chord_tones(r + "maj", params.mode)[0]) % 12]} for r in roots],
             "qualities": [["", "as the key has it"], ["maj", "major"], ["m", "minor"], ["dim", "diminished"],
                           ["aug", "augmented"], ["sus2", "sus2"], ["sus4", "sus4"]],
             "basses": [[1, "root"], [3, "third"], [5, "fifth"]]}

@@ -489,6 +489,10 @@ test("a chord is changed from its card: in the key, by root, quality and bass, s
   s.clickText("Restore chords");
   assert.deepEqual(s.commits.at(-1), { path: "chords.a1", value: null });
   assert(s.oscillators.some((o) => o.type === "sawtooth"), "choosing a chord strums it at once");
+  s.find('[data-chord="0.1"]').emit("click");
+  assert(s.find(".sbc-chord-card") && !s.root.querySelector(".sbc-inspector"), "the chord's card in the note inspector's place");
+  s.find('[data-note="2"]').emit("click");
+  assert(!s.root.querySelector(".sbc-chord-card") && s.find(".sbc-inspector"), "a note selected: its inspector again");
 });
 
 test("a browser without Web Audio keeps editing available and explains how to listen", () => {

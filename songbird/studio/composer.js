@@ -399,7 +399,8 @@
     state.note = index;
     root().querySelectorAll(".sbc-note").forEach((node) => { const chosen = Number(node.dataset.note) === index; node.classList.toggle("is-selected", chosen); node.setAttribute("aria-pressed", String(chosen)); });
     const old = root().querySelector(".sbc-inspector");
-    if (old) old.replaceWith(inspector());
+    if (state.chord) { state.chord = null; root().querySelector(".sbc-chord-card")?.replaceWith(inspector()); root().querySelectorAll(".sbc-chord.is-selected, .sbc-note.is-rub").forEach((node) => node.classList.remove("is-selected", "is-rub")); }
+    else if (old) old.replaceWith(inspector());
     announce(noteTitle(phrase().notes[index], index));
   }
   function startNoteDrag(event, index, geometry) {
@@ -533,7 +534,8 @@
     if (!p || !h || !choices) return null;
     const parts = parseChord(h.symbol) || { root: "I", quality: "", bass: 1 };
     const counts = c.chords_per_bar || [1];
-    const words = p.notes.filter((_, i) => h.rubs?.includes(i)).map((n) => displayWords(n.syllable) || pitchName(pitchFor(n)));
+    const words = p.notes.filter((_, i) => h.rubs?.includes(i))
+      .map((n) => displayWords(n.syllable).replace(/[^\p{L}\p{N}'’-]+$/u, "") || pitchName(pitchFor(n)));
     const rub = h.rubs?.length
       ? `${h.rubs.length} sung note${h.rubs.length === 1 ? "" : "s"} over it ${h.rubs.length === 1 ? "isn't" : "aren't"} in the chord (${words.join(", ")})${h.hard ? ", one a half step from it: a sharp rub" : ": passing notes, as folk harmony has them"}.`
       : "Every sung note over it is in the chord.";
@@ -598,7 +600,7 @@
         el("div", {}, el("h3", {}, section().label, el("span", { class: "sbc-muted" }, " / Melody")), el("p", { class: "sbc-muted" }, "Edit a phrase once; every appearance follows.")),
         el("div", { class: "sbc-editor-settings" }, select("Snap", state.snap, [[0.25, "¼ beat"], [0.5, "½ beat"], [1, "1 beat"]], (value) => { state.snap = Number(value); paint(); }, { id: "sbc-snap" }),
           select("Zoom", state.zoom, [[1, "Fit"], [1.5, "150%"], [2, "200%"], [3, "300%"]], (value) => { state.zoom = Number(value); paint(); }, { id: "sbc-zoom" }))),
-      phraseStrip(), pianoRoll(), inspector(), chordCard(),
+      phraseStrip(), pianoRoll(), state.chord && state.note === null ? null : inspector(), chordCard(),
       el("div", { class: "sbc-tools" }, el("span", { class: "sbc-overline" }, "Shape phrase"),
         el("div", { class: "sbc-button-group", role: "group", "aria-label": "Transpose melody; keep its ending" },
           button("↓ Step", () => transpose(-1), { title: "Lower melody one scale step, keeping its phrase ending" }),
