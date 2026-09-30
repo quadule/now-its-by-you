@@ -77,7 +77,7 @@ function olderStoreKey() {  // before the key carried the song's digest
   return s ? `songbird-studio|${s.title}|${s.from}|${s.machine.label}` : null;
 }
 // Edits written for one genome's tune, lyric keys, word bank or sections: never carried over from an unknown one.
-const GENOME_BOUND = /^(tune|lyrics|words)\.|^form\.order$/;
+const GENOME_BOUND = /^(tune|lyrics|words|part)\.|^form\.order$/;
 function save() {
   // only ever after a person's own change (edits that came in the page's address are never saved on their
   // own); the day and chance drawn again aren't kept, so tomorrow opens on tomorrow
@@ -282,6 +282,8 @@ function describePath(path) {
   const m = path.match(/^words\.(verse|refrain)\.(\d+)$/);
   if (m) return `your ${m[1]} ${Number(m[2]) + 1}`;
   if (path.startsWith("chords.")) return "your chords for a line of the tune";
+  const part = path.match(/^part\.([a-z0-9-]+)\.([A-Za-z0-9_-]+):(\d+)\.(\d+)$/);  // notes in (perform.js)
+  if (part) return `your ${part[1]} in ${part[2]} ${Number(part[3]) + 1}, line ${Number(part[4]) + 1}`;
   return { "words.refrain": "your refrain's words", "words.bridge": "your bridge's words", "words.bridge2": "your second bridge", "words.tag": "your tag", "phrasing": "the singer's way", "date": "the day" }[path] || `your ${path.replace(/^\w+\./, "").replace(/_/g, " ")}`;
 }
 
@@ -1138,6 +1140,7 @@ function render() {
   renderSessionControls();
   renderHistory();
   window.SongbirdComposer?.render(state.view);
+  window.SongbirdPerform?.render(state.view);  // notes in: a part played in, a MIDI file brought back
 }
 
 function showWorkspace(name, focus = false) {

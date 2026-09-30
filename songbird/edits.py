@@ -18,6 +18,11 @@ keeps. An edit that can't be kept is left out and said why, never bent.
     tune.<line>          a tune line's notes: [{degree, onset, duration}, ...] in beats (songbird.composition)
     chords.<line>        a tune line's chords: a list of chords a bar ([["I"], ["V/3", "vi"]]), each a function
                          of the key with a quality and a bass if named (theory.parse_symbol); null: the song's own
+    part.<player>.<section>:<n>.<line>
+                         a person's own notes for a band player in one line of one section of the form, played in
+                         or brought back from a MIDI file: [[onset, length, pitch, velocity], ...], whole numbers
+                         (96ths of a beat from the line's first bar line; semitones from the key's note; 1..127),
+                         in place of that player's own notes there; [] it rests; null: the program's own part
     words.verse.<i>      {"id": verse, "slots": {slot: words}}, or just the verse: the i-th verse (from 0)
     words.refrain.<i>    the i-th refrain's own words: {"id": couplet, "head": head, "slots": {slot: words}},
                          any of the three, or just a couplet (never the last's: it always sings the canon)
@@ -242,6 +247,7 @@ def check(genome: Genome, edits: dict, phrasings=()) -> tuple[dict, list[dict]]:
     b = bounds(genome)
     clean: dict = {}
     problems: list[dict] = []
+    played = 0  # notes played in so far (part.*), against composition.PART_NOTES
     for path, value in (edits or {}).items():
         try:
             if path == "date":
@@ -267,6 +273,12 @@ def check(genome: Genome, edits: dict, phrasings=()) -> tuple[dict, list[dict]]:
                 clean[path] = composition.check_phrase(genome, path[5:], value)
             elif path.startswith("chords."):
                 clean[path] = composition.check_chords(genome, path[7:], value)
+            elif path.startswith("part."):
+                notes = composition.check_part(genome, path, value)
+                if notes and played + len(notes) > composition.PART_NOTES:
+                    raise ValueError(f"a version takes at most {composition.PART_NOTES:,} notes played in")
+                played += len(notes or ())
+                clean[path] = notes
             elif path.startswith("lyrics."):
                 clean[path] = composition.check_lyric(genome, path, value)
             elif path.startswith("form."):
@@ -322,7 +334,7 @@ def check(genome: Genome, edits: dict, phrasings=()) -> tuple[dict, list[dict]]:
         except LookupError as e:
             problems.append(Problem(path, str(e.args[0]) if e.args else "there's no such choice"))
         except (TypeError, ValueError) as e:
-            if path == "form.order" or path.startswith(("tune.", "chords.", "lyrics.")):
+            if path == "form.order" or path.startswith(("tune.", "chords.", "lyrics.", "part.")):
                 problems.append(Problem(path, str(e)))
                 continue
             problems.append(Problem(path, f"{value!r} isn't a value this choice can take"))
@@ -440,6 +452,28 @@ class Overrides:
             held["chords"] = chords
         else:
             held.pop("chords", None)
+        # a person's own notes for a player in one line of the form, played in (composition.performed)
+        parts = {k: dict(v) for k, v in (held.get("parts") or {}).items()}
+        for path, value in e.items():
+            if not path.startswith("part."):
+                continue
+            try:
+                notes = composition.check_part(self.genome, path, value)
+                player, key = composition.part_key(path)
+                lines = parts.setdefault(player, {})
+                if notes is None:
+                    lines.pop(key, None)
+                else:
+                    lines[key] = notes
+                if not lines:
+                    parts.pop(player, None)
+                applied.append(path)
+            except (ValueError, TypeError) as ex:
+                problems.append(Problem(path, str(ex)))
+        if parts:
+            held["parts"] = parts
+        else:
+            held.pop("parts", None)
         # a person's own lines, each kept by the verse (or time round) it's written for (songbird.composition)
         lines = {k: dict(v) for k, v in held.get("lines", {}).items()}
         if self._lines_before is None:
@@ -696,10 +730,39 @@ def resolve(genome: Genome, parent, voice, drift, edits: dict, *, seed: int | No
         # the lineage holds what is sung: the person's words among them, else its own fitted to the form
         params = replace(params, words=arrange_mod.hold(genome, lyrics) if kept
                          else evolve.fitted(genome, params, voice, drift))
+    silent = {p: composition.part_silent(genome, params, p) for p in applied
+              if p.startswith("part.") and edits.get(p) is not None}
+    silent = {p: why for p, why in silent.items() if why}
+    if silent:  # notes played for a place this version doesn't play, or a player its band hasn't got: said, not kept
+        params = _unplayed(params, generated, silent)
+        applied = [p for p in applied if p not in silent]
+        problems += [Problem(p, why) for p, why in silent.items()]
     if "phrasing" in edits and phrasing_json is not None:
         applied.append("phrasing")
     marks_ = marks(genome, generated, generated_lyrics, lyrics, applied, edits, phrasing_json)
     return Resolved(generated, params, generated_lyrics, lyrics, applied, problems, marks_)
+
+
+def _unplayed(params, generated, paths) -> object:
+    """The parameters with a person's parts at these paths put back as the version before had them."""
+    held = dict(params.composition)
+    parts = {k: dict(v) for k, v in (held.get("parts") or {}).items()}
+    before = composition.performed_parts(generated)
+    for path in paths:
+        player, key = composition.part_key(path)
+        was = before.get(player, {}).get(key)
+        lines = parts.setdefault(player, {})
+        if was is None:
+            lines.pop(key, None)
+        else:
+            lines[key] = was
+        if not lines:
+            parts.pop(player, None)
+    if parts:
+        held["parts"] = parts
+    else:
+        held.pop("parts", None)
+    return replace(params, composition=held)
 
 
 # ---------------------------------------------------------------- what the record keeps
@@ -736,6 +799,11 @@ def marks(genome: Genome, generated, generated_lyrics, final_lyrics, applied: li
             was = composition.phrase_value(genome, generated, path[5:])
         elif path.startswith("chords."):
             was = composition.chords_value(genome, generated, path[7:])
+        elif path.startswith("part."):  # the notes are in the record's parameters: marked by their count
+            was = composition.part_value(generated, path)
+            out[path] = {"value": {"notes": len(value or [])} if value is not None else None,
+                         "was": {"notes": len(was)} if isinstance(was, list) else was}
+            continue
         elif path.startswith("lyrics."):
             was = composition.lyric_value(genome, generated, generated_lyrics, path)
         elif path.startswith("form."):
@@ -797,7 +865,13 @@ def from_record(data: dict) -> dict:
     again with --phrasing."""
     if "chosen_by_you" not in data and "params" not in data:
         return dict(data)
-    return {path: mark["value"] for path, mark in (data.get("chosen_by_you") or {}).items() if path != "phrasing"}
+    out = {path: mark["value"] for path, mark in (data.get("chosen_by_you") or {}).items() if path != "phrasing"}
+    parts = ((data.get("params") or {}).get("composition") or {}).get("parts") or {}
+    for path in [p for p in out if p.startswith("part.")]:  # a part's notes, from the parameters they were sung with
+        if out[path] is not None:
+            player, key = composition.part_key(path)
+            out[path] = parts.get(player, {}).get(key, [])
+    return out
 
 
 def keep_words(genome: Genome, lyrics) -> dict:

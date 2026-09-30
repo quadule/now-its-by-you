@@ -246,6 +246,7 @@ server keeps nothing else but caches, so any request can be replayed.
 | `form.order` | section occurrence IDs (`verse:0`, `refrain:0`, …) | validated arrangement order, inherited in children |
 | `tune.<phrase>` | `{degree, onset, duration}` for each note, in beats | pitch/rhythm of every appearance of that phrase |
 | `chords.<phrase>` | a list of chords a bar (`[["vi"], ["IV/3", "Vsus4"]]`), or null for the song's own | the harmony of every appearance of that phrase: the band, the choir, the backing voices ("Changing the chords") |
+| `part.<player>.<section>:<n>.<line>` | `[[onset, length, pitch, velocity], ...]`, whole numbers (96ths of a beat, semitones from the key's note), `[]` to rest, or null for the program's own | one player's notes in one line of one place in the form, played in or brought back from a MIDI file ("Notes in") |
 | `lyrics.<section>:<verse-or-round>.<line-index>` | syllable-hyphenated text, or null to release inherited text | one original lyric line (`lyrics.verse:wire.0`, `lyrics.refrain:last.2`), checked against its tune; kept only where this version sings that verse or round |
 | `date` | "YYYY-MM-DD" | the moment time is read at: noon UTC that day, as `--date` |
 | `roll` | 1, 2, 3... | chance drawn again: the day's own seed drawn again that many times (`edits.rolled`), so chance still follows the day |
@@ -447,7 +448,8 @@ Left as they are: stems are dry (the room, the mix's balance and mastering are
 in the recording, so the parts don't sum to it exactly); the MIDI is not
 quantized (a musician's sequencer quantizes if wanted, and what is heard is
 kept); lyrics are syllables with a trailing hyphen inside words, the karaoke
-convention most sequencers read.
+convention most sequencers read. Changed in a sequencer, the file comes back
+in: "Notes in", below.
 
 ## Changing the chords (2026-09-29)
 
@@ -640,6 +642,267 @@ parts on the MIDI file's channels and programs, on the view's grid; the piano pa
 public limits) and tests/test_piano_score.py; and in the built-in browser with a stand-in output: the tune,
 lute, bass and harp sent in step (the lute's first note 0 ms from the tune's, the bass's 1 ms), every
 note-on ended.
+## Notes in: playing a part, and bringing a MIDI file back (2026-09-29)
+
+The export sends a version out to a musician's own tools. This is the way back
+in: a musician plays a part on their own keyboard along with the sketch, or
+brings the MIDI file back from their sequencer after changing it. What comes in
+is notes as numbers (when, how long, which, how hard), never a sound; each
+change is an edit in the second ink, undoable, recorded and replayed like any
+other.
+
+### A part's notes: the new edit
+
+`part.<player>.<section>:<n>.<line>`: the notes one player plays in one line of
+one section of the form (`part.fiddle.verse:1.0`: the fiddle in the first line
+of the second verse). The value is a list of notes, each four whole numbers:
+
+    [onset, length, pitch, velocity]
+
+onset and length in 96ths of a beat (the composition's beat, the one the tune
+editor and the sketch count in), onset from the line's first bar line (back to
+its pickup, as the tune's notes may start); pitch in
+semitones from the key's note (`params.tonic`), so the part moves with a key
+change as the song's own chords do; velocity 1 to 127, as played. `[]` is the
+player resting through the line; null gives the line back to the program.
+About 16 bytes a note in JSON.
+
+- **By place, a line at a time.** A section is its lines, the whole song every
+  line, taken in one undoable step. Unlike a tune line (changed everywhere it
+  is sung), a performance belongs to one place: the fiddle's second verse
+  isn't its first. The place is the arrangement's own id (`verse:1`, the
+  second verse in story order, as `form.order` names it: not a lyric key, whose
+  `verse:wire` names the verse's words), which follows the section when the
+  order changes. The bars before the song (a count-in, a quoted older song),
+  a style's ending bars (an amen, the last line sung again) have no place, and
+  can't be played in.
+- **What it replaces.** That player's own notes in the line, found where the
+  band writes them, in grid units before they are placed in time (so no
+  timing wobble moves one across a line's edge): every note it was given from
+  the line's pickup to the next line's (a line's notes belong to it as the
+  tune's do), left out; and one it began before and still sounding into the
+  person's run of lines (a held pad, a ringing harp string, the drone) stops
+  where the run begins. `composition.make_room`, called last by
+  `band.arrange` and `idioms.arrange_style`. The other players' notes, the
+  choir and the mix are as they were (each note's timing is drawn from where
+  it is, so nothing else moves).
+- **Where it acts.** The person's notes join in `realize`, after the band and
+  before the last chord's ring, so the render, a section's preview, the stems,
+  the MIDI file and a replay all hear the same notes. A note is placed on the
+  rendition's clock beat by beat (the tempo,
+  the final ritardando), straight within a beat, as the MIDI file's tempo map
+  is: a style's swing is not laid over a person's own timing. It lasts as
+  held, but not past the end of the run of lines the person played (where the
+  program's part comes back), and the last line's notes ring out with the
+  rest. A style's key lift for the last refrain lifts them too. The MIDI
+  file's ticks are linear in grid units (`midi.tick_grid`), so a tick read
+  back is a grid position exactly, and a part exported and brought back lands
+  where it was.
+- **What the instrument keeps.** Its sound and its own way of playing a plain
+  note: the synth plays the person's notes as it plays the band's unmarked
+  ones (no strum direction, slur or cut is invented). An instrument that
+  plays one note at a time (the synth's `poly` is false: the fiddle, whistle,
+  lute, bass, and some of the styles' players) has each note end where the
+  next begins, done once when the edit is checked, so the numbers kept are
+  the numbers played.
+- **Who can be played.** Every pitched player in this version's band: the
+  eight, and a style's (the piano, the organ, a synth bass...). Not the drums
+  (their strokes aren't pitches; later), not the lineage voices (they are
+  harmony made from the tune and the chords), and not the singer, whose notes
+  are the tune (below). A performance for a player this version's band hasn't
+  got (a style changed, the player sat out) or for a section this form
+  doesn't sing is kept, silent, and said, as a line written for a verse this
+  version doesn't sing is.
+- **What it doesn't follow.** The chords and the mode: a part played is played
+  as it was; a chord changed under it rubs. The key and the tempo it follows.
+
+**Checked** (`composition.check_part`, through `edits.check`), whole, a line
+at a time: the player known and pitched; the section in the song, its
+occurrence under 48, the line one it has; whole numbers only; each onset
+inside the line or its pickup, each length from a 96th to 32 beats; each pitch in the
+instrument's range at the song's key, with five semitones either side for the
+key moving; velocity 1 to 127; at most 512 notes a line, 32 starting in any
+one beat, 10 sounding at once (a one-note player: two starting together is
+refused, overlaps trimmed); sorted, exact duplicates dropped. At most 4,096
+notes across all of a version's performances (about 70 KB of edits, sent with
+every request under the server's 1 MiB; the record carries them once, in its
+parameters). A refusal says which note and why.
+
+**Recorded** as the tune is: `params.composition["parts"][player]["verse:1.0"]`,
+in the record's parameters, so `--replay` renders from them byte for byte and
+children inherit them (a person's part passes on, as their melody does); the
+record's `chosen_by_you` marks each by its count (`{"value": {"notes": 8},
+"was": "the program's own part"}`: the notes are already in the parameters),
+and `from_record` makes the edits again from the parameters. A person's notes
+for a place this version doesn't play, or a player its band hasn't got, are
+said and put back as the version before had them; ones inherited wait,
+silent, for a version that plays them. With no part edits every function
+returns what it was given: the goldens hold.
+
+### The tune, played
+
+A take on the singer's line becomes tune edits (`tune.<line>`), never a part:
+each note a syllable, so the tune's fences hold. Its pitches are read as
+degrees of the key's scale (a note outside the scale is refused: the tune
+editor's notes are degrees), its times as beats, and the line goes through
+`check_phrase`: the count of syllables, the range, the leaps, the home note,
+room before the next pickup. A line that doesn't pass is refused with the
+reason ("this line needs 11 notes, one for each syllable"). A note held into
+the next ends where it begins (one singer), and one too short for its
+syllable is given its quarter beat where there's room. A line is sung
+everywhere it comes, so the first place it was played is taken, and a later
+place played differently is said.
+
+### Playing a part in (the page)
+
+In the Tune area, under the editor, **Play a part in**: pick a player (or the
+tune), how much (this line, this section, the whole song), whether to keep the
+timing as played or tidy it to the nearest eighth, sixteenth or eighth-note
+triplet, and press Record. A bar of clicks counts in, then the sketch plays the
+tune and its chords (not the player being replaced), with a click if wanted,
+and the keyboard is listened to through Web MIDI (the browser asks first).
+Nothing is recorded but the notes: the key, the moment it went down and up
+(the event's own timestamp, moved by the audio's output latency so the note is
+where it was heard), and how hard. It stops at the end of the last line (or
+at Stop); **Hear it back** plays it over the sketch; **Keep it** sends it to
+the server, which checks each line and says what it takes (lines covered where
+nothing was played: the player rests there) and what it can't; **Apply** puts
+them in as one undoable step, in the second ink, and **Hear sung section**
+plays them with the real instrument. *Played in by you* lists each player's
+lines, with **give it back**. `songbird/studio/perform.js`, a module of its
+own (its one hook in studio.js: the page's render hands it the score): its
+capture, timing and quantizing are pure functions, tested with synthetic
+events (tests/studio_perform.test.cjs).
+
+### Bringing a MIDI file back
+
+Under *Take it into your own tools*, **Bring a MIDI file back**: a Standard
+MIDI File (the one exported, changed in a sequencer). The server:
+
+1. **Reads it defensively** (`midi.parse`, standard library, beside the
+   writer): at most 256 KiB (the export of H is 21 KB; sent as base64 in a
+   request of at most 1 MiB), 64 tracks, 100,000 events; header, chunk and
+   event lengths checked against what is there; a variable-length number at
+   most four bytes; running status only after a status; a note-off paired
+   with the earliest unended note-on of its channel and key (kept in order,
+   never searched: a key struck 40,000 times is read as fast as once); format
+   0 (split by channel) or 1 at any division by ticks (SMPTE refused);
+   everything in one pass, linear in the file. A file it can't read is
+   refused with why, and nothing changes.
+2. **Knows the version it came from.** It makes the MIDI file of the version
+   on the page again and compares: the section markers (one for each section
+   of the form, where it begins), the time signature and the key must match
+   (else "it was made from another version of the song: download the MIDI
+   again from this version, change that, and bring it back", since the numbers
+   would land in the wrong places). A file without markers is read against
+   this version's bars, and said.
+3. **Matches tracks** by the names the export writes (Voice, Chords, Fiddle,
+   Lineage voice 1...); a track it can't name is listed and the page asks
+   which part it is (or to leave it). Two tracks of one name: the first.
+4. **Compares line by line** against the export, both sides' notes turned into
+   the numbers an edit keeps: a line whose notes are the same (pitch exact,
+   onset within a 48th of a beat, length within a 24th, velocity within 2) is
+   no change, so a file brought back unchanged is no edits at all, even saved
+   again at another division with its note-offs as note-ons. A changed line
+   becomes:
+   - a band track's: a part edit, its notes as they are in the file;
+   - the Voice's: a tune edit, each note moved as the file moved it (pitch to
+     a degree, onset and length by as much as they moved in beats) from the
+     line's written notes, not from the performed timing, then through the
+     fences; a note added or taken away is refused with the count;
+   - the Chords': chord edits in the grammar (`chords.<line>`): the chord
+     sounding at each beat, the bar shared as evenly as the changes allow (1,
+     2 or 4 in 4/4), each named from its notes (the lowest the bass; the
+     tones a triad or sus chord on one of the twelve roots: the key's own
+     quality if it is that, else named: A major in D minor is `Vmaj`, not
+     `bVI`; the bass the root, third or fifth, which also tells a sus2 from
+     the sus4 with the same notes). A seventh, a bass outside the chord or a
+     change off the beat is refused with the bar; a chord voiced differently
+     but the same is no change.
+   A line changed in two places takes the first, and says so. Lineage voices,
+   the drums, the words, the tempo and the key in the file are not taken, and
+   said.
+5. **Shows a preview**: what will change, place by place, and what couldn't
+   be taken and why. **Apply** puts them in as one undoable step; nothing
+   changes before.
+
+The endpoint is `/api/notes-in` (JSON: the edits, and the file as base64 or a
+take's notes), the same for a take and a file; in a public studio it is
+throttled with every other request and makes no render.
+
+### Built after a Fable review
+
+A read-only review of this design before it was built; its points are in:
+the band makes room in grid units, inside both of its arrangers, not by
+seconds after the fact (a fiddle's early lean and its timing wobble could
+have left the band's own first note doubling the person's); a note of the
+player's own that rings into the run is cut, not left under it (a pad would
+have played under the whole performance); a line's notes run from its pickup
+to the next line's, both ways, so a played pickup belongs to the line it
+leads into; one clock both ways (ticks linear in grid units); both sides
+compared as the numbers an edit keeps; the marks by count, not the notes
+twice; the file at 256 KiB, under the 1 MiB request with the edits; the
+section id named apart from a lyric key; the unaddressable bars said. Its
+suggestion to write each chord's numeral into the MIDI file beside its name
+(so a file brought back names chords the way the song does, verbatim) is left
+for later: the export stays as it is, and the chord is named from its notes.
+
+### How it was checked
+
+- tests/test_notes_in.py: no part played in changes nothing; refusals say
+  why; a one-note player's overlaps trimmed; the player makes room and nobody
+  else moves; a held note rings to the end of the run and no further; the
+  notes follow the key and the tempo; marked by count, made again from the
+  record, the same score from it, handed down, released; silent and said where
+  this version can't play them; a style's player (country, gospel) played in.
+- tests/test_midi_in.py: the export brought back unchanged is no change, saved
+  again at 960 and 96 ticks a beat with note-offs as note-ons; two chords and
+  a bass line come back as `chords.v1` and `part.bass.verse:1.0`, and the
+  version with them exports a file that comes back unchanged; the tune
+  through its fences (a note moved a step; one added, one chromatic,
+  refused); a seventh and an off-beat change refused; another version's file
+  or key refused whole; an unnamed track asked about, then taken or left; the
+  chord namer; a take as a part (a pickup; lines covered with nothing played
+  rest) and as the tune.
+- tests/test_midi.py: the reader reads the export as written, pairs notes as
+  sequencers do, refuses twelve kinds of broken file with why, holds its caps
+  (size, events, length, a key struck 40,000 times in linear time), and 2,000
+  exports damaged at random are read or refused as unreadable, nothing else.
+- tests/test_studio.py: `/api/notes-in` previews a file (unchanged: nothing;
+  harder bass notes: part edits in the page's words) and a take, changes
+  nothing until applied, and refuses what isn't a file with why.
+- tests/studio_perform.test.cjs: a key's moment through the audio clock and
+  its latency, notes paired from synthetic MIDI messages, quantizing from a bar
+  line, the lines a take covers, the backing and its count-in, a preview
+  applied as one undoable step.
+- In the built-in browser (a studio on this Mac): the export changed in code as
+  a sequencer would (two chords of the first verse's first line, and its bass
+  line) and brought back: the preview said "Bm | D G/B" and "the bass: 8
+  notes"; applied as one step ("Bring the MIDI file back"), heard in *Hear
+  sung section*, undone in one; the version with them exported and brought
+  back: "Nothing in it differs from this version". Web MIDI can't be played
+  into there. `songbird render --edits` with two parts and a chord change,
+  packed, then `--replay`: the same samples (id 5493b552c2d4 both times).
+- The goldens (tests/test_determinism.py and the others) are unchanged.
+
+### Open decisions for the artist
+
+1. **Is a played part a composition or a way of playing?** It is kept as a
+   composition, like a melody edit: the notes travel in the record and pass to
+   children, timing and dynamics included. A singer's phrasing, by contrast,
+   stays on the computer it was made on (decision 6). A player's unquantized
+   timing is a little of how a person plays; quantizing is offered, not
+   imposed.
+2. **By place**, where tune and chords are by line everywhere: the fiddle's
+   second verse isn't its first. A part for "every verse" would be the next
+   step, if wanted.
+3. **Drums aren't taken yet** (their strokes would need the kit's own names
+   for them); nor lineage voices, words, tempo or key from a file.
+4. **A played part doesn't follow a chord or mode change** made after it:
+   what was played is kept as played, and rubs.
+5. **Under a re-barred feel** (a waltz or six feel on a song in four) a
+   played part is placed straight within each foot, as the MIDI file's tempo
+   map is; it is played against the straight sketch.
 
 ## What stays on the machine
 
@@ -808,6 +1071,8 @@ somewhere other than `renders/`.
 ```sh
 uv run pytest tests/test_composition.py tests/test_studio.py tests/test_edits.py tests/test_evolve.py tests/test_pack.py \
     tests/test_studio_piano.py tests/test_piano_score.py
+uv run pytest tests/test_composition.py tests/test_studio.py tests/test_edits.py tests/test_evolve.py tests/test_pack.py
+uv run pytest tests/test_notes_in.py tests/test_midi_in.py tests/test_midi.py
 node --test tests/studio_*.test.cjs tests/test_studio_drafts.cjs
 ```
 

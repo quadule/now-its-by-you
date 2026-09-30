@@ -430,6 +430,10 @@ def realize(genome: Genome, params: Params, verses=None, phrasing: Phrasing | No
 
     notes = [n for pairs in deliveries.values() for n in ordered_delivery(pairs)]
     accomp, band_settings = band_mod.arrange(genome, params, placed, lead, end, melody, seconds)
+    from .composition import played_in
+
+    # a person's own notes for a player, played in where the band made room (docs/STUDIO.md, "Notes in")
+    accomp += played_in(genome, params, placed, clock)
     ring = style_mod.ring(params)  # the last chord rings out (3 s; a cold ending stops short)
     final = seconds(end)
     notes += accomp

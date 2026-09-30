@@ -1570,6 +1570,9 @@ def arrange(genome, params, placed, lead, end, melody, seconds) -> tuple[list[No
     for e in events:
         if e.part != "drum" and e.length <= 0 and e.u1 >= hold - ctx.sub - 1e-9:
             e.u1 = ctx.end
+    from .composition import make_room
+
+    events = make_room(genome, params, placed, lead, events, seconds)  # a person's played parts (notes in)
 
     # Each part's timing wobbles around the grid, the same for everything it plays at one moment
     # (a strum, a rolled chord, a note and its grace), and drawn from where it is, not from how

@@ -16,6 +16,7 @@
 <script src="/export.js" defer></script>
 <script src="/players.js" defer></script>
 <script src="/learn.js" defer></script>
+<script src="/perform.js" defer></script>
 </head>
 <body>
 <header class="top wrap masthead">
@@ -106,6 +107,7 @@
       <p class="hint">Play sketch can send each player to a channel of a synth or a sequencer, in time with it: the tune, its chords and bass, and every part of the band, on the MIDI file's channels and sounds. Stop ends every note; Panic quiets every channel.</p>
       <div id="players"></div>
     </details>
+    <section class="panel perform-panel" id="performPanel" aria-label="Play a part in"></section>
   </div>
 
   <div id="workspace-sound" data-workspace-panel="sound" role="tabpanel" aria-labelledby="tab-sound" hidden>
@@ -197,6 +199,13 @@
     </div>
     <p class="hint" id="exportNote" aria-live="polite"></p>
     <p class="hint" data-piano-note aria-live="polite"></p>
+    <div class="notes-in-back">
+      <p>Changed it in your sequencer? Bring the MIDI file back: the studio shows what would change, and nothing does until you apply it.</p>
+      <div class="actions"><button class="btn" id="importMidi" type="button">Bring a MIDI file back</button></div>
+      <input type="file" id="importFile" accept=".mid,.midi,audio/midi,audio/x-midi" hidden aria-label="A MIDI file to bring back">
+      <p class="hint" id="importNote" aria-live="polite"></p>
+      <div id="importBox"></div>
+    </div>
   </section>
   <div class="keep-for-later">
     <span class="hint">Finish later somewhere else:</span>
