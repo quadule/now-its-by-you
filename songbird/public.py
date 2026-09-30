@@ -26,43 +26,42 @@ from pathlib import Path
 
 # ---------------------------------------------------------------- a whole song's memory
 #
-# A whole render's peak memory grows with the song's length, and with who plays it. Measured on 30 September
-# (tools/render_memory.py: H with each style's own band, and chamber and the ballad at 3 to 7 minutes; two threads,
-# MallocLargeCache=0, which hands freed arrays back as Linux does; docs/WEB-STUDIO.md, "A whole song's memory"), it
-# is about BASE_MB and so many MB for every second of the song. A part's rate is the lightest band's it plays in
-# (the ballad's 7.2, the songwriter's 4.9), except the kit's, which alone puts country, gospel and indie at 14.5 to
-# 16.5 (stage by stage, the kit is 9 of it: the others in those bands are counted without it). A part in none of
-# those bands: the ballad's band with it playing the whistle's line or the drum's strokes (tools/part_memory.py), and
-# a little more. A song's rate is its heaviest part's, and MARGIN more; every measurement is at or under it
-# (tests/test_studio_public.py, MEASURED).
+# A whole render's peak memory grows with the song's length, and with who plays it. Measured on 30 September, after
+# the heaviest parts were made lean (docs/PERFORMANCE.md, "The heaviest parts"; tools/render_memory.py: H with each
+# style's own band, and the ballad, chamber and the kit's bands at 3 to 8 minutes; two threads, MallocLargeCache=0,
+# which hands freed arrays back as Linux does; docs/WEB-STUDIO.md, "A whole song's memory"), it is about BASE_MB and
+# so many MB for every second of the song. A part's rate is the lightest band's it plays in (the lullaby's 4.7, the
+# songwriter's 5.0), and a band none of whose parts reaches its own rate that way gives it to its own part (the
+# kit its band's, the steel country's). A part in none of those bands: the ballad's band with it playing the whistle's
+# line or the drum's strokes (tools/part_memory.py), and a little more. A song's rate is its heaviest part's, and
+# MARGIN more; every measurement is at or under it (tests/test_studio_public.py, MEASURED).
 
 BASE_MB = 300  # the program and its imports, and the page's work beside a render
 RATES = {  # MB for a second of the song, on two threads
-    "voice": 4.9, "guitar": 4.9, "bass": 4.9, "harmonica": 4.9,
-    "harp": 5.9, "celesta": 5.9, "musicbox": 5.9, "synthpad": 5.9, "tambourine": 5.9, "piano": 5.9,
-    "ebass": 5.9, "organ": 5.9, "electric": 5.5, "glock": 5.5,
-    "arp": 6.5, "drummachine": 6.5, "synthbass": 6.5, "synthlead": 6.5,
-    "fiddle": 6.6, "banjo": 6.6, "mandolin": 6.6,
-    "drone": 7.2, "drum": 7.2, "lute": 7.2, "whistle": 7.2, "steel": 7.5,
-    "strings": 8.3, "vibes": 8.3,
-    "claps": 9.0, "stomps": 9.0, "concertina": 9.0, "epiano": 9.1, "slide": 9.2,
-    "cello": 10.3,
-    "kit": 16.5,
+    "voice": 4.7, "harp": 4.7, "celesta": 4.7, "musicbox": 4.7, "synthpad": 4.7,
+    "bass": 5.0, "guitar": 5.0, "harmonica": 5.0,
+    "fiddle": 5.6, "claps": 5.6, "stomps": 5.6, "concertina": 5.6,
+    "cello": 5.8, "strings": 5.8, "piano": 5.8, "drone": 5.9, "vibes": 5.9,
+    "drummachine": 6.2, "synthbass": 6.2, "epiano": 6.2,
+    "slide": 6.4, "synthlead": 6.4, "arp": 6.4, "banjo": 6.6, "mandolin": 6.6,
+    "lute": 7.0, "drum": 7.0, "whistle": 7.0,
+    "kit": 7.1, "organ": 7.1, "ebass": 7.1, "tambourine": 7.1, "electric": 7.2, "glock": 7.2,
+    "steel": 7.5,
     # in no band as the program sings H: measured in the ballad's (tools/part_memory.py), 0.3 more
-    "accordion": 6.8, "cajon": 6.5, "chip": 7.3, "chip-bass": 7.0, "chip-drums": 7.7, "drums-808": 6.3,
-    "drums-909": 7.1, "electric-crunch": 5.9, "electric-tremolo": 7.4, "epiano-reed": 7.0, "glockenspiel": 7.0,
-    "harmonium": 6.8, "marimba": 7.0, "music-box": 6.7, "nylon": 6.7, "shaker": 6.5, "sub-bass": 6.9,
-    "synth-arp": 7.0, "synth-bass": 7.0, "synth-pad": 6.9, "synth-solo": 5.9, "ukulele": 6.9, "vibraphone": 8.9,
+    "accordion": 7.2, "cajon": 6.8, "chip": 7.2, "chip-bass": 7.0, "chip-drums": 7.7, "drums-808": 6.3,
+    "drums-909": 7.2, "electric-crunch": 6.9, "electric-tremolo": 7.0, "epiano-reed": 6.8, "glockenspiel": 7.2,
+    "harmonium": 6.9, "marimba": 6.9, "music-box": 7.1, "nylon": 6.9, "shaker": 6.4, "sub-bass": 6.9,
+    "synth-arp": 6.9, "synth-bass": 6.9, "synth-pad": 6.9, "synth-solo": 6.9, "ukulele": 6.9, "vibraphone": 6.9,
     "viola": 7.0,
 }
-UNMEASURED = 16.5  # a part never measured (one added since): the heaviest band's rate
+UNMEASURED = 7.7  # a part never measured (one added since): the heaviest rate above
 MARGIN = 1.05
 CHOIR = 1.0  # a voice from before, more than the voice's (not measured apart: a guess)
 STEM = 0.71  # a stereo stem held whole until the stems' zip is packed (float64, 44.1 kHz), for each part
 MORE_THREADS = 0.12  # each thread past two makes this much more at once (H's seed: 1.33 GB on 2, 1.92 on 6)
 # a browser's heap (renderer.js: one thread, wasm32) is 2.0 to 2.3 GiB for H with a voice before it, about 1.7 times
 # the estimate here; Chrome's ceiling is 4 GiB (4295 MB), and a whole song made in a browser is kept under BROWSER_MB
-# of it (a ballad of about 4.3 minutes; one past it goes to the server, or is refused with the same sentence)
+# of it (a ballad of about 4.4 minutes; one past it goes to the server, or is refused with the same sentence)
 BROWSER_MB = 3800
 BROWSER_FACTOR = 1.7
 

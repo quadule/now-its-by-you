@@ -562,29 +562,34 @@ def test_a_public_studio_in_its_beta_asks_search_engines_not_to_list_it(opened):
 
 # ---------------------------------------------------------------- a whole song's memory
 
-# Measured on 30 September (tools/render_memory.py, two threads, MallocLargeCache=0; docs/WEB-STUDIO.md, "A whole
-# song's memory"): H with each style's own band as the program sings it (no edits but the style), and chamber and
-# the ballad drawn out to 3 to 7 minutes. (seconds, the render's parts, its peak in MB)
+# Measured on 30 September, after the heaviest parts were made lean (tools/render_memory.py, two threads,
+# MallocLargeCache=0; docs/WEB-STUDIO.md, "A whole song's memory"): H with each style's own band as the program sings
+# it (no edits but the style), and the ballad, chamber and the kit's bands drawn out to 4 to 8.5 minutes (more
+# verses, every part, the slowest tempo). (seconds, the render's parts, its peak in MB)
+BALLAD = "bass drone drum fiddle guitar harp lute voice whistle"
 MEASURED = {
-    "seed": (151.4, "bass drone drum fiddle guitar harp lute voice whistle", 1390),
-    "ballad": (151.7, "bass drone drum fiddle guitar harp lute voice whistle", 1350),
-    "ballad 3 verses": (286.8, "bass drone drum fiddle guitar harp lute voice whistle", 2000),
-    "ballad 4 verses": (346.8, "bass drone drum fiddle guitar harp lute voice whistle", 2370),
-    "chamber": (189.0, "cello piano strings voice", 2160),
-    "chamber, 2 verses, tempo 60": (198.8, "cello piano strings voice", 2310),
-    "chamber, 3 verses, tempo 48.4": (341.6, "cello piano strings voice", 3800),
-    "chamber, 4 verses, tempo 48.4": (413.0, "cello piano strings voice", 4060),
-    "lullaby": (298.2, "celesta harp musicbox synthpad voice", 2050),
-    "ambient": (213.8, "drone strings synthpad vibes voice", 2070),
-    "synthfolk": (132.2, "arp drummachine guitar synthbass synthlead synthpad voice", 1160),
-    "lofi": (186.0, "drummachine epiano synthbass vibes voice", 1990),
-    "songwriter": (160.6, "bass guitar harmonica voice", 1090),
-    "country": (151.7, "bass guitar kit piano steel voice", 2810),
-    "blues": (165.3, "guitar harmonica slide stomps voice", 1810),
-    "gospel": (225.2, "claps ebass kit organ piano tambourine voice", 3660),
-    "indie": (127.9, "claps ebass electric glock guitar kit organ voice", 2160),
-    "shanty": (151.2, "bass claps concertina fiddle stomps voice", 1660),
-    "stringband": (124.9, "banjo bass fiddle guitar mandolin voice", 1130),
+    "seed": (151.4, BALLAD, 1303),
+    "ballad": (151.7, BALLAD, 1348),
+    "ballad 3 verses, every part": (216.7, BALLAD, 1567),
+    "ballad 4 verses, every part, slowest": (347.2, BALLAD, 2360),
+    "chamber": (189.0, "cello piano strings voice", 1298),
+    "chamber, 2 verses, tempo 60": (238.5, "cello piano strings voice", 1567),
+    "chamber, 3 verses, tempo 48.4, every part": (341.6, "cello piano strings voice", 2263),
+    "chamber, 4 verses, tempo 48.4, every part": (413.0, "cello piano strings voice", 2527),
+    "lullaby": (298.2, "celesta harp musicbox synthpad voice", 1689),
+    "ambient": (213.8, "drone strings synthpad vibes voice", 1558),
+    "synthfolk": (132.2, "arp drummachine guitar synthbass synthlead synthpad voice", 1145),
+    "lofi": (186.0, "drummachine epiano synthbass vibes voice", 1451),
+    "songwriter": (160.6, "bass guitar harmonica voice", 1097),
+    "country": (151.7, "bass guitar kit piano steel voice", 1430),
+    "country 4 verses, every part, slowest": (347.2, "bass guitar kit piano steel voice", 2407),
+    "blues": (165.3, "guitar harmonica slide stomps voice", 1342),
+    "gospel": (225.2, "claps ebass kit organ piano tambourine voice", 1897),
+    "gospel 4 verses, every part, slowest": (506.6, "claps ebass kit organ piano tambourine voice", 3867),
+    "indie": (127.9, "claps ebass electric glock guitar kit organ voice", 1220),
+    "indie 4 verses, every part, slowest": (344.5, "claps ebass electric glock guitar kit organ voice", 2484),
+    "shanty": (151.2, "bass claps concertina fiddle stomps voice", 1133),
+    "stringband": (124.9, "banjo bass fiddle guitar mandolin voice", 1118),
 }
 
 
@@ -638,7 +643,7 @@ def test_a_whole_song_too_long_for_the_servers_memory_is_refused_before_its_queu
         status, refused, _ = post(port, studio, path, body, **ann)
         assert status == 422 and refused["too_long"], (path, refused)
         assert re.match(r"This version is \d+(\.\d)? minutes long, too long for this small server to make in one "
-                        r"go \(about 2(\.\d)? minutes at most with these players\): shorten it \(fewer verses, a "
+                        r"go \(about \d+(\.\d)? minutes at most with these players\): shorten it \(fewer verses, a "
                         r"quicker tempo\)\.$", refused["error"]), refused
     assert not studio.jobs.pending and not studio.jobs.jobs  # nothing queued, nothing counted
     status, job, _ = post(port, studio, "/api/listen", {"edits": long, "section": 3}, **ann)
