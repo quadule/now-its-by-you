@@ -134,3 +134,14 @@ test("the keyboard: none fires in a text field; the table's keys", () => {
   assert.deepEqual(M.keyAction({ key: " ", target: { tagName: "INPUT", type: "range" } }), { action: "play", how: "sketch" });
   assert.equal(M.saidCell({ label: "lute" }, { label: "Verse 1" }, "hard"), "Verse 1: the lute now plays hard");
 });
+
+test("a moved region is one a person moved, not every one whose place a move shifted (EDM test 2, bug 4)", () => {
+  const program = ["intro:0", "verse:0", "refrain:0", "verse:1", "refrain:1", "bridge:0", "refrain:2", "tag:0", "outro:0"];
+  const now = ["intro:0", "verse:0", "refrain:0", "refrain:1", "verse:1", "bridge:0", "refrain:2", "tag:0", "outro:0"];
+  assert.deepEqual([...M.movedIds(program, now, ["verse:1"])], ["verse:1"]);  // verse 2 dragged after refrain 2
+  assert.equal(M.movedIds(program, now).size, 1);  // one of the two, whichever, without the hint
+  assert.equal(M.movedIds(program, program).size, 0);
+  const far = ["verse:0", "refrain:0", "verse:1", "refrain:1", "bridge:0", "refrain:2", "tag:0", "outro:0", "intro:0"];
+  assert.deepEqual([...M.movedIds(program, far)], ["intro:0"]);  // the intro to the end: only it
+  assert.equal(M.movedIds(undefined, now).size, 0);  // no order of the person's: nothing moved
+});

@@ -13,6 +13,7 @@
   const S = {
     view: "page", sel: null, how: "sung", howSet: false, open: null, arr: null, sound: null, grid: null, serial: 0,
     keyed: false, about: false, playhead: null, sketch: false, recording: null, why: {}, tall: false, pop: null,
+    dragged: new Set(), moved: new Set(), movedKey: null,
   };
   const card = (id) => state.view?.cards?.find((c) => c.id === id);
   const edited = (path) => Object.prototype.hasOwnProperty.call(state.edits, path) && state.edits[path] !== null;
@@ -360,9 +361,12 @@
     box.replaceChildren(...list.map((p) => h("p", { class: "problem" }, `Waiting, not played: ${describePath(p.path)}: ${p.why}. `,
       h("button", { class: "link small", type: "button", onclick: () => clearEdits([p.path]) }, "let it go"))));
   }
-  function moved(s) {  // a region a person moved: its place differs from the program's order
-    const before = was("form.order");
-    return Array.isArray(before) && before.indexOf(s.id) !== S.grid.sections.findIndex((x) => x.id === s.id);
+  // a region a person moved: one of the fewest whose moves make this order from the program's (for the shape now
+  // chosen, the record's "was"), not every region whose index a move shifted
+  function moved(s) {
+    const before = was("form.order"), now = S.grid.sections.map((x) => x.id), key = `${JSON.stringify(before)}|${now}|${[...S.dragged]}`;
+    if (S.movedKey !== key) { S.movedKey = key; S.moved = M.movedIds(before, now, [...S.dragged]); }
+    return S.moved.has(s.id);
   }
   function regionCell(s, i) {
     const chosen = S.sel?.kind === "section" && S.sel.id === s.id;
@@ -395,6 +399,7 @@
     const list = S.grid.sections, from = list.findIndex((s) => s.id === id);
     const r = M.moveOrder(list, from, to);
     if (r.error) { if (from !== to) toast(r.error); return; }
+    S.dragged.add(id);
     setEdit("form.order", r.order, `Move ${list[from].label}`);
     say(`${list[from].label} moved to place ${to + 1}`);
   }
