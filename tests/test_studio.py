@@ -199,7 +199,7 @@ def test_a_packet_opens_as_the_parent(home):
     studio = S.Studio(str(flac), None, "fictional:ada", out=home / "out")
     assert studio.where == "packet" and studio.genome.title == genome.title
     assert studio.context.parent == parent
-    assert studio.context.from_words() == "from the first version, made Saturday 1 August 2026"
+    assert studio.context.from_words() == "from the first version, made Saturday, August 1, 2026"
     v = studio.version({})
     tempo = next(c for c in explain.view(studio.context, v)["cards"] if c["id"] == "tempo")
     if v.params.tempo == parent.tempo:
@@ -232,7 +232,7 @@ def test_the_studio_runs_from_an_unpacked_packet_alone(home):
                               stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True)
     try:
         opened = server.stdout.readline()
-        assert "from the first version, made Tuesday 1 September 2026" in opened, opened
+        assert "from the first version, made Tuesday, September 1, 2026" in opened, opened
         status, _, page = ask(port, "GET", "/")
         token = re.search(rb'name="studio-token" content="([^"]+)"', page).group(1).decode()
         start = json.loads(ask(port, "GET", "/api/start")[2])

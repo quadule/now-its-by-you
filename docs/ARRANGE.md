@@ -249,7 +249,7 @@ one inspector: docs/STUDIO-REDESIGN.md); the page itself is designed there. `son
 
 **One place the program's arrangement lives.** Both arrangers already decide, section by section, what
 each player does there: `band.plan` (the ballad) and `idioms.plan_style` (every other style) fill each
-`Section.parts` (player -> idiom: "walk", "strum", "machine", "half"...), and the style's options
+`Section.parts` (player -> idiom: "walk", "strum", "four", "half"...), and the style's options
 (`idioms.shape_plan`: entrances, a bare verse, stop-time, a breakdown, a half-time bridge, a pad intro)
 then remove players or make them come in late (`Plan.entrances`). A person's arrangement is laid over that
 by three calls in both arrangers: `takeover.prepare` before the plan (which sections of the form each of
@@ -265,7 +265,7 @@ both and a released choice goes back to it.
 | Path | Value | What |
 |---|---|---|
 | `arrange.<section>:<n>.<player>.level` | out, soft, plays, hard | in or out, and how hard (the page's words: docs/STUDIO-REDESIGN.md). out sits the player out there; soft keeps only its beats, 0.8 as loud, and plays what the style gives it with the band a little quieter (its busyness less 0.3), the ballad's players a step down from the program's (a walk to roots, a strum to a boom-chick); plays is the program's own there (the style's for the section's energy where the program had it out); hard what the style gives a fuller band (busyness plus 0.3), a step up for the ballad's, 1.15 as loud. The section's energy itself doesn't move, so a hard refrain gets no fill it wasn't getting unless `fill` asks |
-| `arrange.<section>:<n>.<player>.pattern` | an idiom of the player's | what it plays there: a kit's or a drum machine's groove, four on the floor, half time, toms, a boom-bap, winding down, a build; a bass's roots, two, walk, eighths, sub; a guitar's strum, boom-chick, Travis picking; "lead", the tune... The vocabulary (`takeover.patterns`): every idiom any style gives that instrument (or the part it stands in for), its family's own, "lead" for a pitched player, and for the drums the grooves and a build; the ballad's eight have their own writers' idioms (`BALLAD`) |
+| `arrange.<section>:<n>.<player>.pattern` | an idiom of the player's | what it plays there: a kit's or a drum machine's groove, four on the floor, half time, toms, a boom-bap, winding down, a build; a bass's roots, two, walk, eighths, sub; a guitar's strum, boom-chick, Travis picking; "lead", the tune... The vocabulary (`takeover.patterns`): every idiom any style gives that instrument (or the part it stands in for), its family's own, "lead" for a pitched player, and for the drums the grooves and a build; the ballad's eight have their own writers' idioms (`BALLAD`). One that plays the same as another is offered once (`takeover.ALIASES`: the drum machine's "machine", its own four on the floor until 2026-09-30, is "four"; an edit, a record or a lock that says "machine" reads as "four") |
 | `arrange.<section>:<n>.<player>.from` | a line (0: from the start) | where it comes in: the band joining line by line, per player, per section, counted in the section's own lines |
 | `arrange.<section>:<n>.<player>.fill` | true, false | a drum fill in the section's last bar into the next, or none: a kit or a drum machine (`idioms.w_groove`); the frame drum's fills were taken out on 2026-09-27 and stay out |
 | `arrange.<section>:<n>.bars` | 2, 4, 8, 16 | the section's length. A played section (an intro, a break, an outro, or a sung one made played) is fitted from its own tune lines, the last ones kept (the cadence) and repeated backwards: the eight-bar break (v1 v2 v3 v2) at four is v3 v2, at sixteen itself twice. A sung section is only lengthened: its lines sung, then the band plays its last lines again, the lead on the tune (a post-refrain drop); never shortened below its lines. A turn keeps its two bars (its tune is a line quoted to fit them) |
@@ -333,6 +333,18 @@ tempo is checked against the widest (`edits.bounds`: 38.4 to 153.6) and held to 
 once the style is chosen (a style or a feel chosen after it may hold it), said if it had to be, and marked
 as sung so it replays. The tempo card carries its style's range, and the page's tempo input and slider
 use it.
+
+**A drum machine is the rhythm, as a kit is** (2026-09-30). Its module gives it a family of its own ("drum
+machine"), and the style arranger counted only "drums" (with percussion and bass) as the rhythm, so a
+chance-drawn breakdown held the drum machine back with the pads and leads until the last refrain's third line:
+half that refrain went without its kick (the arrangement agent measured it in a synth folk render).
+`idioms.DRUMS` is both families now, and `PERCUSSION` holds it: the drum machine plays through a breakdown,
+waits with the rhythm after a quoted intro, joins with the drums in the band's entrances, goes half-time in a
+half-time bridge (which a style with a drum machine may now draw, as one with a kit could), and its last hit
+isn't held to the end. That changes default renders of synth folk and lo-fi where those options fall (for
+three machines on three days, ten of eighteen: seven of synth folk's nine, three of lo-fi's); the ballad, H's seed and the goldens are unchanged.
+The synth bass has the same kind of name ("synth", its role "bass") and is still not counted with the bass,
+so it too waits through a breakdown: a decision for the artist.
 
 **The API for the page**: `/api/arrangement` (docs/STUDIO.md, "Arrangement control").
 

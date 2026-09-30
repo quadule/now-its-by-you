@@ -1359,7 +1359,7 @@ from the score laid out, no audio, about half a second for H; a public studio's 
      "section": "refrain:1", "player": "drummachine", "plays": true,
      "value":   {"level": "hard", "pattern": "four", "pattern_label": "four on the floor", "from": 0,
                  "fill": false, "enters_beat": 0.0},
-     "program": {"level": "plays", "pattern": "machine", "from": 0, "fill": false},
+     "program": {"level": "plays", "pattern": "four", "from": 0, "fill": false},
      "by": "you",                               program, you, or before (a person's, in the version before)
      "chance": false,                           a value chance drew (an entrance, a stripped start...): dashed
      "locked": false,                           a person's lock: the program's own, kept
@@ -1382,8 +1382,8 @@ section's start (a line chosen, a build's bar, or the entrance chance drew). A c
 play (a section it hasn't got, a player its band hasn't got, a pattern its player doesn't play, a build at
 the song's end) is in `problems`, with why; one kept from the version before waits there, silent.
 
-**For the page.** A cell's energy bar is `value.level`; the second ink where `by` is `you` (a padlock where
-`locked`), a dashed outline where `chance`; its inspector shows `pattern_label`, the player's `patterns`,
+**For the page.** A cell's energy bar is `value.level`; the second ink where `by` is `you` (the program's own
+drawing inside a second-ink line where `locked`: no glyph on a cell), a dashed outline where `chance`; its inspector shows `pattern_label`, the player's `patterns`,
 `from` against the section's `lines`, `fill` where the player `fills`, the `program` value to go back to
 (send null), and `why` folded. A region's edge offers `bar_options`; *Who sings* is `sung` where
 `can_play`; *Moment* is `build` and the section's `options` (each a `style.*` path). Changing any of them is

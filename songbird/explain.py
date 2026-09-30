@@ -36,6 +36,7 @@ from . import arrange as arrange_mod
 from . import drift as drift_mod
 from . import edits as edits_mod
 from . import harvest, phrasing as phrasing_mod, variation
+from .dates import long_date
 from .arrange import options as word_choices, seed_lyrics
 from .band import INSTRUMENTS
 from .synth.mixing import MixParams
@@ -324,11 +325,6 @@ def plain(value) -> str:
     if isinstance(value, float):
         return f"{value:.2f}".rstrip("0").rstrip(".")
     return str(value).replace("_", " ")
-
-
-def long_date(day: str) -> str:
-    d = _date.fromisoformat(day)
-    return f"{d.strftime('%A')} {d.day} {d.strftime('%B %Y')}"
 
 
 def distance(days: int) -> str:

@@ -92,7 +92,7 @@
   // ---------------------------------------------------------------- the page
 
   const state = {
-    view: null, access: null, inputs: [], take: null, capture: null, context: null, nodes: new Set(), timer: null,
+    view: null, access: null, inputs: [], take: null, capture: null, context: null, bus: null, nodes: new Set(), timer: null,
     preview: null, previewFrom: null, file: null, assign: {}, busy: false,
   };
 
@@ -160,6 +160,16 @@
     if (state.context.state === "suspended") state.context.resume().catch(() => {});
     return state.context;
   }
+  // one bus for the backing, so stopping fades it (20 ms) instead of cutting its notes mid-wave, which clicks
+  function bus(ctx) {
+    if (state.bus?.context === ctx) return state.bus.node;
+    const node = ctx.createGain();
+    node.gain.setValueAtTime(0, ctx.currentTime);
+    node.gain.linearRampToValueAtTime(1, ctx.currentTime + 0.005);
+    node.connect(ctx.destination);
+    state.bus = { context: ctx, node };
+    return node;
+  }
   function tone(ctx, pitch, start, length, peak, type = "triangle", hz = null) {
     const o = ctx.createOscillator(), g = ctx.createGain();
     o.type = type; o.frequency.value = hz || 440 * 2 ** ((pitch - 69) / 12);
@@ -167,7 +177,7 @@
     g.gain.linearRampToValueAtTime(peak, start + 0.008);
     g.gain.exponentialRampToValueAtTime(Math.max(0.0001, peak * 0.3), start + Math.max(0.03, Math.min(0.2, length * 0.5)));
     g.gain.linearRampToValueAtTime(0.0001, start + Math.max(0.05, length));
-    o.connect(g); g.connect(ctx.destination);
+    o.connect(g); g.connect(bus(ctx));
     state.nodes.add(o);
     o.onended = () => { state.nodes.delete(o); o.disconnect(); g.disconnect(); };
     o.start(start); o.stop(start + Math.max(0.05, length) + 0.03);
@@ -181,7 +191,16 @@
     for (const [beat, length, key, velocity] of take || []) tone(ctx, key, at(beat), length * spb, 0.03 + 0.09 * velocity / 127, "square");
   }
   function silence() {
-    for (const o of state.nodes) { try { o.stop(); } catch (_) { /* ended */ } }
+    const ctx = state.context, b = state.bus, end = ctx ? ctx.currentTime + 0.02 : 0;
+    state.bus = null;
+    if (b) {
+      const g = b.node.gain;
+      g.cancelScheduledValues?.(ctx.currentTime);
+      g.setValueAtTime(g.value ?? 1, ctx.currentTime);
+      g.linearRampToValueAtTime(0, end);
+      setTimeout(() => { try { b.node.disconnect(); } catch (_) { /* gone */ } }, 80);
+    }
+    for (const o of state.nodes) { try { o.stop(end + 0.005); } catch (_) { /* ended */ } }
     state.nodes.clear();
     clearTimeout(state.timer);
   }

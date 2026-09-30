@@ -16,6 +16,7 @@ from . import __version__, drift as drift_mod, genome as genome_mod, harvest, pa
 from . import evolve, variants as variants_mod
 from .arrange import ArrangeError, Lyrics, arrange, hold, problem, sing, verse_problem
 from .composition import has_lines
+from .dates import us_date
 from .realize import Params, choose_params, realize
 from .synth import master, threads
 from .synth.mixing import MixParams
@@ -515,7 +516,7 @@ def year_command(args: argparse.Namespace) -> int:
     start = drift_mod.parse(args.start) if args.start else drift_mod.parse(drift_mod.when(drift_mod.now()).date().isoformat())
     label = args.machine.split(":", 1)[-1] if args.machine.startswith("fictional:") else Path(args.machine).stem
     print(f"{genome.title}: machine {args.machine} (voice {voice.hash}), {args.days} days from "
-          f"{drift_mod.when(start).date()}, every {args.step:g}")
+          f"{us_date(drift_mod.when(start).date())}, every {args.step:g}")
     print(f"form: {', '.join(f'{v}={k}' for k, v in FORM_LETTERS.items())}\n")
     head = f"{'date':10s}  {'key':3s} {'mode':10s} {'bpm':>5s}  {'form':16s} {'band':14s} {'dens':>4s} {'brt':>4s} " \
            f"{'harp':16s} {'hum':>5s} {'rit':>4s} {'breath':>6s} {'vib':>4s}  {'mood (p l d t)':19s} {'era':>5s} " \

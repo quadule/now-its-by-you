@@ -60,7 +60,7 @@ tracks, a playhead, a fader) and refuses the rest (below).
 ```
 ┌──────────────────────────────────────────────────────────────────────────────────────────┐
 │ SONGBIRD · STUDIO      Now It's by You                                          ? Help    │
-│ ○─○─●  today, Tuesday 29 September 2026 · from the song as it began · Ada  [Time ▾]      │
+│ ○─○─●  today, Tuesday, September 29, 2026 · from the song as it began · Ada  [Time ▾]    │
 ├──────────────────────────────────────────────────────────────────────────────────────────┤
 │ ▶ ■ ⟳ ♩  Refrain 1 · bar 13   ♩= 94  D major   ⚄ New performance   ↶ ↷   ● Record  Tools│  the transport
 ├───────────────────────────────────────────────────────────────┬──────────────────────────┤
@@ -101,7 +101,7 @@ One row, always in view, left to right:
 | **● Record** | Records the whole rendition (opens the *Your tools* sheet on its *Take it out* side, with the recording's progress and the file when it is done). | Record it (three places) |
 | **Tools** | Opens *Your tools*. | Sing, record & pass it on; Take it into your own tools; the Learn-at-the-piano links |
 
-Under the masthead, the **version line** stays as it is ("Your version today, Tuesday 29 September 2026,
+Under the masthead, the **version line** stays as it is ("Your version today, Tuesday, September 29, 2026,
 from the song as it began, sung by a made-up machine called Ada", with the lineage marks), and gains one
 control at its end, **Time ▾**, which drops the *Through time* timeline and the *Other computers* table
 down as a drawer over the body (the same six-year picture, the day slider and steps, the machine table with
@@ -689,3 +689,28 @@ the stars out of a played section's words; the pan's words follow the drag.
 4. **Sketch or Sung follows the selection** (the sketch for a section, a phrase, a note; sung for the whole
    song) until the person flips it; then it stays as they set it for the visit.
 5. **The classic page stays at /classic** until signed off, and the packet's editor cap is 160 KB until then.
+
+**After the artist's first look (2026-09-30).** Her list, each done and seen in the built-in browser:
+
+- *A stray "null" under "Use this line"*: the words' hint was looked for again inside the section's editor
+  it had been moved out of, and not found on a redraw; the section keeps it now (tests/studio_author.test.cjs).
+- *From a section to editing it*: the section's column starts with **Edit its words** (the Page, scrolled to
+  it, its first line ready to write in the column) and **Edit its notes** (its piano roll under the grid);
+  a double-click opens a region's notes, as before, and the singer's cell's words. *Open the notes* and
+  *Write your own lines* are those two now; *Close the notes* stays while they're open.
+- *Play and Stop together*: one button, ▶ becoming ■ while anything plays or is being made (Space either
+  way), back to where it started; the separate ■ is gone.
+- *Static on stopping*: the sketch's voices (and the MIDI keyboard's backing) go through one bus that fades
+  to silence over 20 ms before its oscillators stop, and in over 5 ms; a preview's audio is stepped down over
+  24 ms before it pauses, up as it starts, and down and up around a jump. The piano page already faded (its
+  `silence()`).
+- *The pencil and the padlock covered the cells*: no glyph on a cell or a region. Yours is the second ink;
+  locked is the program's own drawing inside a line of the second ink; chance is dashed; a region of yours
+  has a second-ink edge and foot. The words (yours, locked by you, drawn by chance) are in every cell's label
+  and tooltip; the column and the masthead keep ✎ and the padlock, where there is room.
+- *Dates the American way*: "Wednesday, September 30, 2026" (`songbird/dates.py`), and the one date the
+  page formatted itself said in en-US whatever the viewer's locale.
+- *The drum machine in a breakdown* and *two four on the floors*: docs/ARRANGE.md.
+
+The pictures above (`studio-built-*.png`, but the phone's, which show neither) were taken again with the
+EDM brief's kind of version (synth folk at 128 in D minor, a 16-bar build, a played refrain, three locks).

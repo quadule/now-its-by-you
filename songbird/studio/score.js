@@ -40,7 +40,7 @@
   // ------------------------------------------------------------------ views
   const ABOUT = {
     page: "The words as this version sings them. A word with a dashed line under it can change: pick another and the tune keeps its syllables. Select a section's name or a line to change more; ▶ plays that part, sung.",
-    arrange: "The song as a timeline: its sections over a ruler of bars, and under them a row for each player. A cell says whether that player plays there and how hard. Select a section, a player, a cell, or the seam between two; open a section's notes to change its tune and chords.",
+    arrange: "The song as a timeline: its sections over a ruler of bars, and under them a row for each player. A cell says whether that player plays there and how hard. Select a section, a player, a cell, or the seam between two. Double-click a section for its notes (its tune and chords), or the singer's row for its words; the section's column has both.",
     mix: "A strip for each player (its level, where it sits, how it pumps), then the voice and the room. Judge the voice against the band on the whole song.",
   };
   function showView(v, focus = false) {
@@ -88,6 +88,20 @@
     if (focus) $("notesTitle")?.focus();
     $("notes").scrollIntoView?.({ block: "nearest", behavior: "smooth" });
   }
+  // a section's words, to edit: the Page, scrolled to it, its first line that can be written in the column, ready
+  function editWords(id, line = null) {
+    const s = sectionAt(id), phrases = state.view?.composition?.sections?.find((x) => x.id === id)?.phrases || [];
+    const j = line ?? phrases.findIndex((p) => p.lyric_path);
+    if (!s || j < 0 || !phrases[j]?.lyric_path) return false;
+    showView("page");
+    select({ kind: "line", id, line: j });
+    $(`sec-${s.index}`)?.scrollIntoView?.({ block: "start", behavior: "smooth" });
+    const input = $("inspector").querySelector("textarea");
+    input?.focus({ preventScroll: true });
+    say(`${s.label}, line ${j + 1}: write it here`);
+    return true;
+  }
+  const canWrite = (id) => (state.view?.composition?.sections?.find((x) => x.id === id)?.phrases || []).some((p) => p.lyric_path);
   function closeNotes() {
     C()?.stop?.(); C()?.deselect?.();
     S.open = null;
@@ -128,6 +142,7 @@
     b.textContent = on ? "■" : "▶";
     b.classList.toggle("playing", on);
     b.setAttribute("aria-label", on ? "Stop (Space)" : "Play (Space)");
+    b.title = on ? "Stop (Space): back to where it started" : "Play what is selected (Space; Shift+Space sung); press again to stop";
   }
   function tick(beat, fraction) {  // composer.js, as the sketch plays (null when it stops)
     const head = $("gridHead");
@@ -355,13 +370,14 @@
     const region = h("button", { class: `region${s.name.startsWith("refrain") ? " refrain" : ""}${chosen ? " selected" : ""}${mine ? " mine" : ""}`,
       type: "button", draggable: "true", "data-key": `region:${s.id}`, "aria-pressed": String(chosen),
       "aria-label": `${s.label}, ${s.bars} bars, ${s.sung ? "sung" : "played"}${mine ? "; yours" : ""}. Enter opens its notes.`,
+      title: `${s.label}, ${s.bars} bars${mine ? "; yours" : ""}. Double-click for its notes; drag to move it.`,
       onclick: () => select({ kind: "section", id: s.id }), ondblclick: () => openNotes(s.id),
       ondragstart: (e) => { e.dataTransfer.effectAllowed = "move"; e.dataTransfer.setData("text/x-section", s.id); e.currentTarget.classList.add("dragging"); },
       ondragend: (e) => { e.currentTarget.classList.remove("dragging"); document.querySelectorAll(".region.drop").forEach((r) => r.classList.remove("drop")); },
       ondragover: (e) => { if ([...e.dataTransfer.types].includes("text/x-section")) { e.preventDefault(); e.currentTarget.classList.add("drop"); } },
       ondragleave: (e) => e.currentTarget.classList.remove("drop"),
       ondrop: (e) => { const from = e.dataTransfer.getData("text/x-section"); if (!from) return; e.preventDefault(); e.stopPropagation(); moveSection(from, i); } },
-    h("span", { class: `name${mine ? " hand" : ""}` }, s.label),
+    h("span", { class: "name" }, s.label),
     h("span", { class: "bars" }, `${s.bars} bars${s.sung ? "" : " · instr."}${s.build ? " · build" : ""}`),
     C()?.mini?.(compIndex(s.id)) || null,
     h("span", { class: "edge", title: `Drag for its length: ${s.barOptions.join(", ")} bars`, "aria-hidden": "true",
@@ -438,9 +454,9 @@
       onclick: () => (t.kind === "chords" ? openNotes(s.id) : select({ kind: "cell", id: s.id, player: t.id })) };
     if (t.kind === "singer") {
       const mine = s.by.sung === "you";
-      return h("button", { ...common, class: `cell words${s.wordsMine || mine ? " you" : ""}${chosen ? " selected" : ""}`,
-        "aria-label": `The singer in ${s.label}: ${s.sung ? "sings" : "nobody sings"}${mine ? "; yours" : ""}`, title: s.sung ? s.first : "played: nobody sings" },
-      s.sung ? s.first : h("i", {}, "instrumental"), mine ? h("span", { class: "mk" }, "✎") : null);
+      return h("button", { ...common, ondblclick: () => editWords(s.id), class: `cell words${s.wordsMine || mine ? " you" : ""}${chosen ? " selected" : ""}`,
+        "aria-label": `The singer in ${s.label}: ${s.sung ? "sings" : "nobody sings"}${mine ? "; yours" : ""}`, title: `${s.sung ? s.first : "played: nobody sings"}${mine ? "; yours" : ""}${canWrite(s.id) ? ". Double-click to edit its words" : ""}` },
+      s.sung ? s.first : h("i", {}, "instrumental"));
     }
     if (t.kind === "choir") {
       return h("button", { ...common, class: `cell choir ${s.choir ? "plays" : "out"}${chosen ? " selected" : ""}`,
@@ -453,8 +469,8 @@
     }
     const cell = S.grid.cells.get(`${t.id}|${s.id}`), l = M.look(cell);
     const cls = `cell ${l.level}${l.whose === "you" ? " you" : l.locked ? " locked" : l.whose === "before" ? " before" : ""}${l.chance ? " chance" : ""}${chosen ? " selected" : ""}`;
-    return h("button", { ...common, class: cls, "aria-label": M.cellLabel(t, s, cell), title: M.cellLabel(t, s, cell) },
-      h("span", { class: "e" }), l.whose === "you" ? h("span", { class: "mk", "aria-hidden": "true" }, "✎") : l.locked ? h("span", { class: "mk" }, lockIcon()) : null);
+    // no marks on a cell (a glyph at this size gets covered): whose it is is in its drawing, and in its words
+    return h("button", { ...common, class: cls, "aria-label": M.cellLabel(t, s, cell), title: M.cellLabel(t, s, cell) }, h("span", { class: "e" }));
   }
   function roving() {  // one cell of the grid in the tab order: the selected one, else the first
     const cells = [...document.querySelectorAll("#grid button[role=gridcell]")];
@@ -736,6 +752,9 @@
       set: `${s.bars} bars, ${s.sung ? `sung: “${s.first}”` : w?.sung ? `played; its words wait, unsung: “${String(w.lines[0] || "").replace(/\*/g, "")}”` : `played${w ? `: ${String(w.lines[0] || "").replace(/\*/g, "")}` : ""}`}${w?.id && w.block === "verse" ? ` (the verse “${w.id}”)` : ""}`,
       problems: s.problems,
       body: h("div", {},
+        h("div", { class: "row edit-it" },  // the ways into the section's own material, first
+          writable ? h("button", { class: "btn", type: "button", onclick: () => editWords(s.id), title: "Its words on the Page, a line ready to write in the column" }, "Edit its words") : null,
+          h("button", { class: "btn", type: "button", onclick: () => openNotes(s.id, true), title: "Its tune and chords, under the grid (Enter, or double-click the section)" }, "Edit its notes")),
         chipRow("Length", s.barOptions.map((n) => ({ value: n, text: `${n} bars` })), s.bars, (n) => setBars(s, n), s.by.bars === "you"),
         s.canPlay ? chipRow("Who sings", [{ value: true, text: "the singer" }, { value: false, text: "nobody: played" }], s.sung,
           (v) => (v ? releaseEdit(s.paths.sung, `${s.label} sung again`) : setEdit(s.paths.sung, false, `${s.label} played, not sung`)), s.by.sung === "you") : null,
@@ -754,9 +773,7 @@
         h("div", { class: "row" },
           h("button", { class: "btn quiet", type: "button", disabled: i === 0, onclick: () => moveSection(s.id, i - 1), title: "Earlier (⌘/Ctrl ←)" }, "← Earlier"),
           h("button", { class: "btn quiet", type: "button", disabled: i === list.length - 1, onclick: () => moveSection(s.id, i + 1), title: "Later (⌘/Ctrl →)" }, "Later →"),
-          S.open === s.id ? h("button", { class: "btn quiet", type: "button", onclick: closeNotes }, "Close the notes")
-            : h("button", { class: "btn quiet", type: "button", onclick: () => openNotes(s.id, true), title: "Enter" }, "Open the notes"),
-          writable && w?.sung ? h("button", { class: "btn quiet", type: "button", onclick: () => select({ kind: "line", id: s.id, line: 0 }) }, "Write your own lines") : null)),
+          S.open === s.id ? h("button", { class: "btn quiet", type: "button", onclick: closeNotes }, "Close the notes") : null)),
       why: [
         w?.sung ? { kind: w.mine ? "you" : { "handed down": "lineage", "new this time": "time", "drawn by chance": "chance" }[w.how] || "song", text: w.mine ? "these words are yours" : `the words: ${w.how}${(w.tags || []).length ? ` (${w.tags.join(", ")})` : ""}` } : null,
         s.by.bars === "you" ? { kind: "you", text: `${s.bars} bars; the program had ${s.program.bars}` } : null,
@@ -1128,7 +1145,7 @@
     if (!a || document.querySelector("dialog[open]")) return;
     if (e.target.closest?.(".sbc-note, .sbc-roll-scroll") && a.action === "step") return;  // a note's own arrows (composer.js)
     // Space plays from the page, the grid and ▶ ■; on another button, a link or a field it presses it
-    if (a.action === "play" && e.target.closest?.("button, a, summary, select, input") && !e.target.closest("#grid") && !e.target.matches("#tPlay, #tStop")) return;
+    if (a.action === "play" && e.target.closest?.("button, a, summary, select, input") && !e.target.closest("#grid") && !e.target.matches("#tPlay")) return;
     if (a.action === "play" && e.target.matches?.("input[type=checkbox], input[type=radio]")) return;
     switch (a.action) {
       case "play": e.preventDefault(); play(a.how); break;
@@ -1181,7 +1198,6 @@
     $("viewWhat").addEventListener("click", () => { const a = $("viewAbout"); a.hidden = !a.hidden; $("viewWhat").setAttribute("aria-expanded", String(!a.hidden)); });
     for (const b of document.querySelectorAll("[data-how]")) b.addEventListener("click", () => setHow(b.dataset.how));
     $("tPlay").addEventListener("click", () => play());
-    $("tStop").addEventListener("click", stopAll);
     $("tLoop").addEventListener("click", () => toggle("tLoop"));
     $("tClick").addEventListener("click", () => toggle("tClick"));
     $("popLoop").addEventListener("change", () => toggle("tLoop"));

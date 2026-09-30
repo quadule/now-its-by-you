@@ -357,7 +357,7 @@ SYNTHFOLK = _def(
      "arp": {"verse1": ((0.35, "arp"), (0.0, "")), "*": "arp", "bridge": "", "tag": "arp"},
      "guitar": {"*": "strum", "tag": "ring"},
      "synthpad": {"*": "pad"},
-     "drummachine": {"verse1": ((0.45, "half"), (0.0, "")), "verse": ((0.45, "machine"), (0.0, "half")), "*": "machine",
+     "drummachine": {"verse1": ((0.45, "half"), (0.0, "")), "verse": ((0.45, "four"), (0.0, "half")), "*": "four",
                      "bridge": "half", "tag": "end"}},
     ("synthlead", "arp"), {"straight": 1.0}, {"*": (1.04, 1.15, 1.27)},
     {"*": ("add9", "sus2"), "V": ("sus4",)}, 0.5, (1.0, 0.3),
@@ -609,7 +609,7 @@ def choose_options(genome, form, sdef: StyleDef, parent: Style, kept: bool, voic
         endings.pop("repeat", None)
     ending = pick(endings, coin(material, "ending", drift))
     backing = pick(o.get("backing", {"": 1.0}), coin(material, "backing", drift)) if voices else ""
-    drums = any(instruments_family(name) in ("drums",) for name in sdef.lineup)
+    drums = any(instruments_family(name) in ("drums", "drum machine") for name in sdef.lineup)
     bridge = "half" if drums and coin(material, "bridge", drift) < 0.35 else ""
     richness = c.richness if "richness" in c.known else 0.0
     season = drift.view("season").get("arrange", 0.0) if drift is not None else 0.0
