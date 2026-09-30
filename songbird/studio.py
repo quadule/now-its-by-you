@@ -1185,6 +1185,52 @@ class Studio:
         """For the singer's card: the way of singing in the browser these edits chose, if they chose one."""
         return self.singing.listed(edits) if self.singing is not None else []
 
+    # ------------------------------------------------------------ rendering in the visitor's browser (--browser-render)
+    #
+    # A public studio given a built bundle (web/studio-wasm/tools/build_render.py: Pyodide, numpy and scipy, the
+    # kernels in JS and wasm, and this very program) serves it under /render/, and the page's renderer
+    # (songbird/studio/renderer.js) makes previews and recordings in a worker in the visitor's browser, the
+    # server's queue as its fallback. The page asks for a render spec: the version resolved here, exactly as
+    # _section and _whole would sing it (the song's file, the params, the words, the phrasing, the parent, the
+    # machine and day), so the browser works nothing out again and makes the same samples, and the same packet.
+    # Nothing a browser makes is sent back or kept here. docs/WEB-STUDIO.md, "Made in the visitor's browser".
+
+    browser = None  # the bundle served (BrowserBundle), when --browser-render gave one
+
+    def enable_browser_render(self, folder: str | Path) -> None:
+        if self.public is None:
+            raise ValueError("rendering in the browser is for a public studio (--public); this computer's own "
+                             "studio sings the song itself")
+        self.browser = BrowserBundle(Path(folder), self.program_digest)
+
+    def render_spec(self, edits: dict, who: str = "you", section: int | None = None) -> dict:
+        """What the browser needs to make a preview (a section) or the whole song (the recording) exactly as this
+        studio would: the key it would be cached under, the words the player says, and the spec (as JSON text,
+        so the page never reads its 64-bit seeds as floats). What this studio has made already is said instead
+        ("made"): the page then asks for it as ever, and it plays at once."""
+        v = self.version(edits, who)
+        if section is not None and not 0 <= section < len(v.params.form):
+            raise ValueError("no such section")
+        key = self.key(v, section)
+        label = explain.listen_label(self.context, v, section, who)
+        if (self.cache / f"{key}.flac").exists():
+            return {"key": key, "label": label, "made": True}
+        spec = {"v": RENDER_SPEC, "kind": "section" if section is not None else "whole", "key": key,
+                "program": self.program_digest,
+                "genome": (self.genome_bytes or self.genome_path.read_bytes()).decode("utf-8"),
+                "params": v.params.to_dict(), "lyrics": v.lyrics.to_dict() if v.lyrics else None,
+                "phrasing": v.phrasing_json, "choir": v.choir_phrasings, "parent": self.parent_record}
+        if section is not None:
+            spec["section"] = section
+        else:  # as _whole hands them to render_one, and as the packet names what the program runs with
+            spec |= {"voice": v.voice.to_dict() if v.voice is not None else None,
+                     "drift": v.drift.to_dict() if v.drift is not None else None,
+                     "changes": v.changes if v.drift is not None else None, "marks": v.marks or None,
+                     "packet": {"python": f"{sys.version_info.major}.{sys.version_info.minor}",
+                                "requirements": pack.requirements()},
+                     "name": {"song": slug(self.genome.title), "day": self.day}}
+        return {"key": key, "label": label, "kind": spec["kind"], "spec": json.dumps(spec, default=str)}
+
 
 def generation(record: dict) -> int:
     g = record.get("generation")
@@ -1277,6 +1323,65 @@ def prune(folder: Path, limit: int) -> None:
         total -= size
         with contextlib.suppress(OSError):
             shutil.rmtree(p) if p.is_dir() else p.unlink()
+
+
+# ---------------------------------------------------------------- rendering in the visitor's browser: the bundle
+#
+# What web/studio-wasm/tools/build_render.py makes: bundle.json, naming two folders named by their contents' hash,
+# py-<hash>/ (Pyodide and its packages: changes with Pyodide) and app-<hash>/ (the worker, the kernels, this
+# program: changes with every program), so each file is cached by the visitor for good and a new program fetches
+# only its own few megabytes. Served only if it was built from this very program (its digest), since a recording
+# made in the browser carries it.
+
+RENDER_SPEC = 1  # the render spec's shape, as web/studio-wasm/py/studio_render.py makes it (its VERSION)
+RENDER_TYPES = {".mjs": "text/javascript; charset=utf-8", ".js": "text/javascript; charset=utf-8",
+                ".wasm": "application/wasm", ".json": "application/json", ".zip": "application/zip",
+                ".whl": "application/zip"}
+# the worker's own policy (a worker keeps the one its script came with): scripts and data from here only, and
+# WebAssembly compiled, which Pyodide is; Emscripten also evals the small JS its libraries carry (EM_JS), so the
+# worker, and only the worker, may eval. The page keeps its own policy, which allows neither.
+RENDER_POLICY = ("default-src 'none'; script-src 'self' 'wasm-unsafe-eval' 'unsafe-eval'; connect-src 'self'; "
+                 "frame-ancestors 'none'")
+
+
+class BrowserBundle:
+    """A built bundle, checked: its manifest, its two folders, and that it carries this program."""
+
+    def __init__(self, folder: Path, program: str):
+        folder = Path(folder).resolve()
+        try:
+            manifest = json.loads((folder / "bundle.json").read_text())
+        except (OSError, ValueError) as e:
+            raise ValueError(f"{folder} has no bundle.json (build it with web/studio-wasm/tools/build_render.py): "
+                             f"{e}") from None
+        dirs = {manifest.get("pyodide"), manifest.get("app")}
+        if not all(isinstance(d, str) and re.fullmatch(r"(py|app)-[0-9a-f]{12,64}", d) and (folder / d).is_dir()
+                   for d in dirs) or len(dirs) != 2:
+            raise ValueError(f"{folder}/bundle.json names folders it hasn't got; build it again")
+        if manifest.get("program_sha256") != program:
+            raise ValueError(f"the bundle in {folder} was built from another program "
+                             f"({str(manifest.get('program_sha256'))[:12]}; this one is {program[:12]}): a recording "
+                             "made in the browser carries its program, so build it again from this one")
+        self.folder, self.manifest, self.dirs = folder, manifest, dirs
+
+    def view(self) -> dict:
+        """What the page is told (GET /render/bundle.json): where the two folders are, and how much a first visit
+        fetches."""
+        m = self.manifest
+        return {"v": RENDER_SPEC, "base": "/render/", "pyodide": m["pyodide"], "app": m["app"],
+                "packages": m.get("packages", []), "bytes": m.get("bytes"), "transfer": m.get("transfer"),
+                "program": m["program_sha256"]}
+
+    def file(self, rel: str) -> Path | None:
+        """A file of the bundle by its path under /render/ ("app-1234…/kernels/rt.mjs"), or None: only in its two
+        folders, only plain names (no dot files, no climbing), only the types it serves."""
+        parts = rel.split("/")
+        if len(parts) < 2 or parts[0] not in self.dirs or len(rel) > 200 \
+                or not all(re.fullmatch(r"[A-Za-z0-9_][A-Za-z0-9._+-]{0,120}", p) for p in parts[1:]) \
+                or Path(parts[-1]).suffix not in RENDER_TYPES:
+            return None
+        path = self.folder.joinpath(*parts)
+        return path if path.is_file() and path.resolve().is_relative_to(self.folder) else None
 
 
 # ---------------------------------------------------------------- the server
@@ -1402,7 +1507,7 @@ class Handler(BaseHTTPRequestHandler):
     # ------------------------------------------------------------ replies
 
     def send(self, body: bytes | io.BufferedReader, kind: str, code: int = 200,
-             extra: dict | list | None = None) -> None:
+             extra: dict | list | None = None, cache: str = "no-store", policy: str | None = None) -> None:
         """A reply: bytes, or an open file's (sent as it's read, not held whole)."""
         whole = isinstance(body, (bytes, bytearray))
         size = len(body) if whole else os.fstat(body.fileno()).st_size
@@ -1410,11 +1515,13 @@ class Handler(BaseHTTPRequestHandler):
         self.send_response(code)
         self.send_header("Content-Type", kind)
         self.send_header("Content-Length", str(size))
-        self.send_header("Cache-Control", "no-store")
+        self.send_header("Cache-Control", cache)
         self.send_header("X-Content-Type-Options", "nosniff")
         self.send_header("Referrer-Policy", "no-referrer")
-        self.send_header("Content-Security-Policy",
-                         "default-src 'self'; media-src 'self'; img-src 'self' data:; style-src 'self'; "
+        # a song made in this browser plays from a blob: URL (--browser-render); nothing else changes
+        media = "'self' blob:" if self.studio.browser is not None else "'self'"
+        self.send_header("Content-Security-Policy", policy or
+                         f"default-src 'self'; media-src {media}; img-src 'self' data:; style-src 'self'; "
                          "script-src 'self'; connect-src 'self'; frame-ancestors 'none'; form-action 'none'")
         for k, v in (extra.items() if isinstance(extra, dict) else extra or ()):
             self.send_header(k, v)
@@ -1453,6 +1560,8 @@ class Handler(BaseHTTPRequestHandler):
             singing = self.studio.singing
             if singing is not None and singing.get(self, path, {k: v[0] for k, v in parse_qs(urlsplit(self.path).query).items()}):
                 return None
+            if path.startswith("/render/") and self.studio.browser is not None:  # the bundle (--browser-render)
+                return self.render_file(path[len("/render/"):])
             if path == "/piano" or path.startswith("/piano/"):  # learning it at the piano
                 return self.piano_page(path)
             # someone's version: the page's token names it (the classic page too, at /v/<id>/classic)
@@ -1648,6 +1757,12 @@ class Handler(BaseHTTPRequestHandler):
                 return refusal() if refusal is not None else self.send_json({"ready": True})
             if path == "/api/sound":  # sound design: each player's sound and channel, each boundary's transition
                 return self.send_json(studio.sound(edits))
+            if path == "/api/render/spec" and studio.browser is not None:  # to make it in the visitor's browser
+                section = body.get("section")
+                who = str(body.get("who", "you"))
+                if who not in ("you", "program") and not re.fullmatch(r"fictional:[a-z0-9 _-]{1,24}", who):
+                    return self.fail(400, "no such machine")
+                return self.send_json(studio.render_spec(edits, who, None if section is None else int(section)))
             if path == "/api/sing":
                 return self.send_json(studio.sing())
             if path.startswith("/api/sing/") and studio.singing is not None:
@@ -1663,6 +1778,28 @@ class Handler(BaseHTTPRequestHandler):
             traceback.print_exc()
             return self.fail(500, f"{type(e).__name__}: {e}")
 
+
+    # ------------------------------------------------------------ rendering in the visitor's browser: its files
+    #
+    # /render/bundle.json says where the bundle's two folders are (asked each visit, never cached for long);
+    # everything under them is named by its folder's hash, so it's cached for good. A file built compressed too
+    # (NAME.gz beside it) is sent so to a browser that takes it. The worker's script carries the worker's policy
+    # (RENDER_POLICY); nothing here is a page.
+
+    def render_file(self, rel: str) -> None:
+        bundle = self.studio.browser
+        if rel == "bundle.json":
+            return self.send(json.dumps(bundle.view()).encode(), "application/json", cache="no-cache")
+        path = bundle.file(rel)
+        if path is None:
+            return self.fail(404, "not found")
+        extra = {"Cross-Origin-Resource-Policy": "same-origin", "Vary": "Accept-Encoding"}
+        packed = path.with_name(path.name + ".gz")
+        if packed.is_file() and "gzip" in self.headers.get("Accept-Encoding", "").lower():
+            path, extra["Content-Encoding"] = packed, "gzip"
+        with path.open("rb") as f:
+            return self.send(f, RENDER_TYPES[Path(rel).suffix], 200, extra,
+                             cache="public, max-age=31536000, immutable", policy=RENDER_POLICY)
 
     # ------------------------------------------------------------ someone's version: the page's, and the file brought
     #
@@ -1958,6 +2095,10 @@ def add_arguments(parser: argparse.ArgumentParser) -> None:
     parser.add_argument("--sing-kit", metavar="DIR",
                         help="the singing kit, made by python -m webstudio.prepare (default $SONGBIRD_SING_KIT, else "
                              "renders/sing-kit)")
+    parser.add_argument("--browser-render", metavar="DIR",
+                        help="public: serve the bundle built in DIR (web/studio-wasm/tools/build_render.py), so a "
+                             "desktop browser makes the song itself and this server only when it can't "
+                             "(docs/WEB-STUDIO.md)")
 
 
 def run(args: argparse.Namespace) -> int:
@@ -1989,6 +2130,11 @@ def run(args: argparse.Namespace) -> int:
     studio = Studio(parent, args.song, machine, Path(args.out) if args.out else None, key=key, public=limits)
     if getattr(args, "web_singing", False):
         studio.enable_web_singing(getattr(args, "sing_kit", None), check=True)
+    if getattr(args, "browser_render", None):
+        try:
+            studio.enable_browser_render(args.browser_render)
+        except ValueError as e:
+            raise SystemExit(f"songbird studio: --browser-render: {e}") from None
     server = serve(studio, args.port, host=host, names=names, client_ip_header=header)
     port = server.server_address[1]
     url = f"http://127.0.0.1:{port}"
@@ -2003,6 +2149,10 @@ def run(args: argparse.Namespace) -> int:
         why = studio.singing.why_not()
         print("  Singing in the browser: " + (why or "on. Each take is measured here and its audio deleted at once; "
                                               "only numbers stay (docs/WEB-SINGING.md)."), flush=True)
+    if studio.browser is not None:
+        view = studio.browser.view()
+        print(f"  Made in the visitor's browser where it can be ({(view['transfer'] or 0) / 2**20:.0f} MB on a first "
+              "visit), here where it can't.", flush=True)
     print(f"  open {url}  (Ctrl-C to stop)", flush=True)
     threading.Thread(target=studio.timeline, daemon=True).start()  # ready by the time it's scrolled to
     studio.warm()
