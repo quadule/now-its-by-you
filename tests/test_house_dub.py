@@ -85,7 +85,11 @@ def test_a_house_drop_breaks_down_opens_the_filter_and_hits_with_the_ride():
     breakdown = (refrains[1][1], refrains[2][0])
     band = [n for n in score.notes if n.part not in ("voice",) and not n.part.startswith("choir")]
     held = {n.part for n in band if breakdown[0] + 0.05 <= n.start < breakdown[1] - 0.05}
-    assert held <= {"synthpad", "drummachine"}  # the singer with the pad (and the roll into the drop)
+    assert "synthpad" in held and "synthbass" not in held  # the singer with the pad, no bass
+    sung = [(a, b) for name, a, b in score.sections if breakdown[0] - 0.05 <= a < breakdown[1] - 0.05
+            and g.section(name).lyrics]
+    under = {n.part for n in band if any(a + 0.05 <= n.start < b - 0.05 for a, b in sung)}
+    assert under <= {"synthpad", "drummachine"}  # where the singer sings it, the pad alone (and the roll)
     rolled = [n for n in band if n.part == "drummachine" and breakdown[0] + 0.05 <= n.start < breakdown[1]]
     assert rolled and {n.art for n in rolled} == {"snare"}  # only the roll's strokes, in its last bars
     kinds = {t["kind"]: t for t in score.sound["transitions"]}

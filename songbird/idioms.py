@@ -2209,9 +2209,11 @@ def shape_plan(ctx: Context, style, plan: Plan, rhythm, pads, chords_first) -> N
             if k and len(starts) > 1:
                 plan.entrances[(i, p)] = starts[min(k, len(starts) - 1)]
     drop = getattr(ctx, "drop", None)
-    if drop:  # the breakdown before a drop: the singer left with the pad (or the chords ringing where none)
+    if drop:  # the breakdown before a drop: the singer left with the pad (or the chords ringing where none); where
+        # nobody sings, the lead on the tune over the pad (a piano breakdown)
         for i in drop[0]:
-            keep = {p: w for p, w in sections[i].parts.items() if (p in pads or p in PADLIKE) and w not in LINES}
+            keep = {p: w for p, w in sections[i].parts.items() if (p in pads or p in PADLIKE) and w not in LINES
+                    or not sections[i].sung and w in ("lead", "quote")}
             if not keep and chords_first:
                 keep = {chords_first: "ring"}
             sections[i].parts = keep
