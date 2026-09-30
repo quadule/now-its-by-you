@@ -999,7 +999,10 @@ What they play (the stems, dry, and the scores):
   gospel's long ones are ("shorten it").
 - **Nothing else moved**: nine renders in six styles and the seed (lo-fi, synth folk, indie, gospel, the string
   band, chamber for ada; juno's own style; lo-fi for vela; H's seed) render to the ids they did before; the goldens
-  hold; `--replay` of a house and a dub record renders them to the same ids.
+  hold; `--replay` of a house and a dub record renders them to the same ids. Merged with main's a cappella and
+  session: seven renders (lo-fi, synth folk, gospel, a cappella and the session for ada, juno's own, the seed)
+  render to main's ids, the house and dub renders above replay to theirs ("replay: matches"), and the suite passes
+  (1697).
 
 ## Decisions for the artist (as built)
 
