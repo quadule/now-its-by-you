@@ -132,14 +132,20 @@ def _one(y: np.ndarray, p: np.ndarray) -> None:
 IDENTITY = np.array([1.0, 0.0, 0.0, 1.0, 0.0, 0.0])
 
 
-def _biquads(x: np.ndarray, sos: np.ndarray) -> np.ndarray:
+def _biquads(x: np.ndarray, sos: np.ndarray, inplace: bool = False) -> np.ndarray:
     """Second-order sections in cascade along axis 0 of a (samples, channels) array. A long signal's channels
     are filtered at once, each on a thread of its own (each channel's filter is its own: the same samples
-    either way)."""
+    either way). inplace: x (float64, C-contiguous) is filtered where it is, and returned."""
     if x.ndim == 2 and x.shape[1] > 1 and len(x) >= 1 << 16 and threads.workers() > 1:
-        columns = [(c, partial(_cascade, np.ascontiguousarray(x[:, c: c + 1]), sos, False)) for c in range(x.shape[1])]
-        return np.concatenate([y for _, y in threads.in_order(columns)], axis=1)
-    return _cascade(x, sos)
+        def column(c: int) -> np.ndarray:
+            return _cascade(np.ascontiguousarray(x[:, c: c + 1]), sos, False)
+        if inplace:
+            for c, y in threads.in_order([(c, partial(column, c)) for c in range(x.shape[1])]):
+                x[:, c: c + 1] = y
+            return x
+        return np.concatenate([y for _, y in threads.in_order([(c, partial(column, c)) for c in range(x.shape[1])])],
+                              axis=1)
+    return _cascade(x, sos, not inplace)
 
 
 def _cascade(x: np.ndarray, sos: np.ndarray, copy: bool = True) -> np.ndarray:
@@ -158,11 +164,14 @@ def _cascade(x: np.ndarray, sos: np.ndarray, copy: bool = True) -> np.ndarray:
     return y
 
 
-def equalize(x: np.ndarray, sos: np.ndarray) -> np.ndarray:
-    """x through the sections of `sos` (fx.design); x may be mono."""
+def equalize(x: np.ndarray, sos: np.ndarray, inplace: bool = False) -> np.ndarray:
+    """x through the sections of `sos` (fx.design); x may be mono. inplace: x itself is filtered (when it is a
+    float64, C-contiguous array; otherwise a copy is, as without) and returned: the same samples, without a
+    second copy of a long signal held."""
     if not len(sos) or not len(x):
         return x
-    y = _biquads(np.ascontiguousarray(x.reshape(len(x), -1), dtype=np.float64), np.ascontiguousarray(sos, dtype=np.float64))
+    y = np.ascontiguousarray(x.reshape(len(x), -1), dtype=np.float64)
+    y = _biquads(y, np.ascontiguousarray(sos, dtype=np.float64), inplace=inplace and np.shares_memory(y, x))
     return y.reshape(x.shape)
 
 
@@ -259,17 +268,19 @@ STEP = 16  # samples between a compressor's decisions (0.36 ms): its gain is int
 
 
 @njit(cache=True, nogil=True)
-def _detect(key: np.ndarray, coef: float) -> np.ndarray:
-    """Mean power over the channels, followed by a one-pole average."""
+def _detect_every(key: np.ndarray, coef: float, step: int) -> np.ndarray:
+    """Mean power over the channels, followed by a one-pole average: every step-th value of it (the average
+    runs over every sample; only the values the compressors read are kept)."""
     n, chans = key.shape
-    out = np.empty(n)
+    out = np.empty((n + step - 1) // step)
     p = 0.0
     for i in range(n):
         s = 0.0
         for c in range(chans):
             s += key[i, c] * key[i, c]
         p = coef * p + (1.0 - coef) * s / chans
-        out[i] = p
+        if i % step == 0:
+            out[i // step] = p
     return out
 
 
@@ -288,11 +299,10 @@ def _ballistics(target: np.ndarray, attack: float, release: float) -> np.ndarray
 
 
 @njit(cache=True, nogil=True)
-def _apply(x: np.ndarray, lin: np.ndarray, step: int, band: np.ndarray) -> np.ndarray:
-    """x with a gain given every `step` samples (linear between); where `band` has
-    channels, only that part of x is scaled: x + band * (gain - 1)."""
+def _apply(x: np.ndarray, lin: np.ndarray, step: int, band: np.ndarray, y: np.ndarray) -> np.ndarray:
+    """x with a gain given every `step` samples (linear between), into y (which may be x itself); where `band`
+    has channels, only that part of x is scaled: x + band * (gain - 1)."""
     n, chans = x.shape
-    y = np.empty_like(x)
     split = band.shape[1] == chans
     for i in range(n):
         k = i // step
@@ -312,12 +322,12 @@ def soften(x: np.ndarray, sr: int, over: float = 6.0, amount: float = 0.6, fast:
     if amount <= 0:
         return x
     x2 = _stereo(x)
-    quick = db(_detect(x2, _coef(fast, sr))[::STEP])
-    steady = db(_detect(x2, _coef(slow, sr))[::STEP])
+    quick = db(_detect_every(x2, _coef(fast, sr), STEP))
+    steady = db(_detect_every(x2, _coef(slow, sr), STEP))
     target = -amount * np.clip(quick - steady - over, 0.0, None)
     rate = sr / STEP
     gain = _ballistics(target, _coef(0.0002, rate), _coef(release, rate))
-    return _apply(x2, 10.0 ** (gain / 20.0), STEP, np.zeros((len(x2), 0))).reshape(x.shape)
+    return _apply(x2, 10.0 ** (gain / 20.0), STEP, np.zeros((len(x2), 0)), np.empty_like(x2)).reshape(x.shape)
 
 
 def gain_computer(level_db: np.ndarray, threshold: float, ratio: float, knee: float) -> np.ndarray:
@@ -335,7 +345,7 @@ def _stereo(x: np.ndarray) -> np.ndarray:
 
 def compress(x: np.ndarray, sr: int, threshold: float, ratio: float, attack: float, release: float,
              knee: float = 6.0, window: float = 0.01, key: np.ndarray | None = None,
-             ride: float = 0.0, above: float = 0.0) -> tuple[np.ndarray, np.ndarray]:
+             ride: float = 0.0, above: float = 0.0, inplace: bool = False) -> tuple[np.ndarray, np.ndarray]:
     """A feed-forward compressor, channels linked: it listens to the power of
     `key` (x itself by default) averaged over about `window` seconds, has a
     soft knee `knee` dB wide, and attack and release times in seconds.
@@ -346,21 +356,25 @@ def compress(x: np.ndarray, sr: int, threshold: float, ratio: float, attack: flo
     (a syllable against its phrase, a pluck against its bar) but leaves a
     quiet verse quiet and a full refrain full: the song's arc is kept.
 
-    Returns the output and the gain it applied (dB, every STEP samples)."""
+    Returns the output and the gain it applied (dB, every STEP samples). inplace: the output is written over x
+    (when x is a float64, C-contiguous array; otherwise it is new, as without)."""
     x2 = _stereo(x)
-    power = _detect(x2 if key is None else _stereo(key), _coef(window, sr))[::STEP]
+    power = _detect_every(x2 if key is None else _stereo(key), _coef(window, sr), STEP)
     level = db(power)
     if ride > 0:
         around = db(uniform_filter1d(power, max(1, int(ride * sr / STEP)), mode="nearest"))
         threshold = np.maximum(around + above, threshold)
     rate = sr / STEP
     gain = _ballistics(gain_computer(level, threshold, ratio, knee), _coef(attack, rate), _coef(release, rate))
-    return apply_gain(x, gain), gain
+    return apply_gain(x, gain, inplace), gain
 
 
-def apply_gain(x: np.ndarray, gain_db: np.ndarray) -> np.ndarray:
-    """x through a gain given in dB every STEP samples (as compress returns it), linear in between."""
-    return _apply(_stereo(x), 10.0 ** (gain_db / 20.0), STEP, np.zeros((0, 0))).reshape(x.shape)
+def apply_gain(x: np.ndarray, gain_db: np.ndarray, inplace: bool = False) -> np.ndarray:
+    """x through a gain given in dB every STEP samples (as compress returns it), linear in between. inplace: the
+    result is written over x (when x is a float64, C-contiguous array; otherwise it is new, as without)."""
+    x2 = _stereo(x)
+    out = x2 if inplace and np.shares_memory(x2, x) else np.empty_like(x2)
+    return _apply(x2, 10.0 ** (gain_db / 20.0), STEP, np.zeros((0, 0)), out).reshape(x.shape)
 
 
 def _both_ways(x2: np.ndarray, sos: np.ndarray) -> np.ndarray:
@@ -390,23 +404,25 @@ def deess(x: np.ndarray, sr: int, split: float = 4500.0, excess: float = 3.0, ra
     highs = x2 - _both_ways(x2, butter(2, split, btype="lowpass", fs=sr, output="sos"))
     body = _both_ways(x2, butter(2, split / 2.0, btype="lowpass", fs=sr, output="sos"))
     coef = _coef(0.004, sr)
-    high = db(_detect(highs, coef)[::STEP])
-    over = high - db(_detect(body, coef)[::STEP]) - excess
+    high = db(_detect_every(highs, coef, STEP))
+    over = high - db(_detect_every(body, coef, STEP)) - excess
     target = np.clip(-over * (1.0 - 1.0 / ratio), -most, 0.0)
     target[high < loud_level(x2, sr) - 40.0] = 0.0
     rate = sr / STEP
     gain = _ballistics(target, _coef(0.001, rate), _coef(0.06, rate))
-    y = _apply(x2, 10.0 ** (gain / 20.0), STEP, highs)
+    y = _apply(x2, 10.0 ** (gain / 20.0), STEP, highs, np.empty_like(x2))
     return y.reshape(x.shape), gain
 
 
-def dynamic_dip(x: np.ndarray, sr: int, f: float, q: float, depth_db: np.ndarray) -> np.ndarray:
+def dynamic_dip(x: np.ndarray, sr: int, f: float, q: float, depth_db: np.ndarray, inplace: bool = False) -> np.ndarray:
     """A peaking cut at f whose depth (dB, >= 0, per sample) moves: the band is
-    taken out in proportion, x + (g - 1) * bandpass(x), which at g = 1 is x."""
+    taken out in proportion, x + (g - 1) * bandpass(x), which at g = 1 is x. inplace: written over x (when x
+    is a float64, C-contiguous array)."""
     x2 = _stereo(x)
     band = _biquads(x2, bandpass(f, q, sr)[None])
     lin = np.exp(-np.maximum(depth_db[::STEP], 0.0) * (np.log(10.0) / 20.0))
-    return _apply(x2, lin, STEP, band).reshape(x.shape)
+    out = x2 if inplace and np.shares_memory(x2, x) else np.empty_like(x2)
+    return _apply(x2, lin, STEP, band, out).reshape(x.shape)
 
 
 @njit(cache=True, nogil=True)

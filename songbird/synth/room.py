@@ -210,11 +210,17 @@ def convolve(send: np.ndarray, early: np.ndarray | None, tail: np.ndarray, extra
     centred early reflections and the tail at once; the side through what
     differs between a player on the left and one on the right, which in a
     room symmetric about the listener reaches the two ears with opposite
-    signs. Three convolutions instead of six."""
+    signs. Three convolutions instead of six.
+
+    send may be given as a list holding it alone: it is taken out of the list, and let go once its mid and
+    side are made (a long song's send is not held through the convolutions)."""
+    if isinstance(send, list):
+        send = send.pop()
     longest = max([len(tail)] + ([early.shape[1]] if early is not None else []) + [len(r) for _, r in extra])
     out = np.zeros((len(send) + longest - 1, 2))
     mid = (send[:, 0] + send[:, 1]) * np.sqrt(0.5)
     side = (send[:, 0] - send[:, 1]) * np.sqrt(0.5)
+    del send
     response = np.zeros((max(len(tail), early.shape[1] if early is not None else 0), 2))
     response[: len(tail)] += tail
     with set_workers(WORKERS):
@@ -224,13 +230,18 @@ def convolve(send: np.ndarray, early: np.ndarray | None, tail: np.ndarray, extra
             y = oaconvolve(side, (differs[:, 0] - differs[:, 1]) / 2.0) if np.any(side) else np.zeros(0)
             out[: len(y), 0] += y
             out[: len(y), 1] -= y
+            del y
+        del side
         for ear in range(2):
             y = oaconvolve(mid, response[:, ear])
             out[: len(y), ear] += y
+            del y
+        del mid
         for mono, r in extra:
             for ear in range(2):
                 y = oaconvolve(mono, r[:, ear])
                 out[: len(y), ear] += y
+                del y
     return out
 
 

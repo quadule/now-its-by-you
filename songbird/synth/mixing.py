@@ -562,18 +562,22 @@ def mix_made(parts: list, length: int, sr: int, seed: int = 0, params: MixParams
         results.close()
     if progress is not None:
         progress("mix")
+    # from here each long signal is let go as soon as it has been used, and treated where it lies when nothing
+    # else holds it (the same samples as a treated copy)
+    del rise, lift
     gain = 1.0
     if np.any(band):
         eq = fx.design(BAND_EQ, sr)
-        band = fx.equalize(band, eq)
-        band, squeeze = _compressor(band, sr, BAND_COMP)
+        band = fx.equalize(band, eq, inplace=True)
+        band, squeeze = _compressor(band, sr, BAND_COMP, inplace=True)
         # the band under the voice, measured where the voice sings, before it makes way for it
         sung = singing is not None and np.mean(singing > 0.5) > 0.05
         level = quick_loudness(band[singing > 0.5], sr) if sung else quick_loudness(band, sr)
         if np.isfinite(level):
             gain = 10.0 ** ((REFERENCE - (p.forward if sung else 3.0) - level) / 20.0)
         if np.any(stepping):  # the lead lines step back, through the same equalizer and compressor
-            band -= fx.apply_gain(fx.equalize(stepping, eq), squeeze)
+            band -= fx.apply_gain(fx.equalize(stepping, eq, inplace=True), squeeze, inplace=True)
+        del stepping
         band *= gain
         band_send *= gain
         if singing is not None:
@@ -581,16 +585,20 @@ def mix_made(parts: list, length: int, sr: int, seed: int = 0, params: MixParams
             # the ride goes up and comes back down inside the rest, so the band is down again before the voice returns
             resting = minimum_filter1d((singing < 0.05).astype(float), int(RIDE[1] * sr), mode="nearest")
             rest = uniform_filter1d(resting, int(RIDE[1] * sr / 2), mode="nearest")
+            del resting
             ride = 10.0 ** (RIDE[0] * p.duck * rest / 20.0)
+            del rest
             band *= ride[:, None]
             band_send *= ride[:, None]
-            band = fx.dynamic_dip(band, sr, CARVE[0], CARVE[1], CARVE_DEPTH * p.duck * singing)
+            del ride
+            band = fx.dynamic_dip(band, sr, CARVE[0], CARVE[1], CARVE_DEPTH * p.duck * singing, inplace=True)
         band = fx.width(band, sr, p.width)
 
     # The room, heard from each bus at its own distance; the plate for the singers.
     size = min(1.0, (1.1 / p.rt60) ** 0.25)  # a long room needs less sent to be heard as much
     near = 2.0 ** (1.0 - 2.0 * p.intimacy)  # the voice's own sends: 2 far back, 1 as designed, 0.5 at the ear
-    send = band_send * BAND_ROOM
+    band_send *= BAND_ROOM
+    send, band_send = band_send, None
     plate_send = np.zeros(length)
     if voice is not None:
         send += voice * (VOICE_ROOM * near)
@@ -600,14 +608,24 @@ def mix_made(parts: list, length: int, sr: int, seed: int = 0, params: MixParams
         plate_send += choir.sum(axis=1) * (CHOIR_PLATE * p.plate * np.sqrt(0.5))
     # the room is its numbers: the same numbers (a machine's harvested room) give the same room every rendition
     early, tail = room.responses(sr, p.rt60, p.tone, p.predelay, room.seed_of(p.rt60, p.tone, p.predelay))
-    plates = [(plate_send * p.space, room.plate(sr, PLATE_RT60, 0))] if np.any(plate_send) else []
-    wet = room.convolve(send * (p.space * size), early, tail, plates)
-    wet = _peaks(fx.width(fx.equalize(wet, fx.design(RETURN_EQ, sr)), sr, p.width), sr)
+    if np.any(plate_send):
+        plate_send *= p.space
+        plates = [(plate_send, room.plate(sr, PLATE_RT60, 0))]
+    else:
+        plates = []
+    del plate_send
+    send *= p.space * size
+    given = [send]  # room.convolve takes the send out of the list: it is let go once its mid and side are made
+    del send
+    wet = room.convolve(given, early, tail, plates)
+    del plates
+    wet = _peaks(fx.width(fx.equalize(wet, fx.design(RETURN_EQ, sr), inplace=True), sr, p.width), sr)
     if singing is not None:
         # the room gives way to the lead's words, but not where the lineage sings with it: that is its space
         dip = np.zeros(len(wet))
         dip[:length] = RETURN_DIP * p.duck * singing * (1.0 - fx.activity(choir, sr) if choir is not None else 1.0)
         wet *= (10.0 ** (-dip / 20.0))[:, None]
+        del dip
 
     if taps is not None:
         taps.update(voice=voice, choir=choir, band=band, wet=wet.copy(), singing=singing, band_gain=gain)
@@ -615,15 +633,16 @@ def mix_made(parts: list, length: int, sr: int, seed: int = 0, params: MixParams
     for bus in (voice, choir, band):
         if bus is not None:
             out[:length] += bus
+    del wet, voice, choir, band, singing
 
     # The whole: glued, tilted, maybe worn.
-    out, glue = _compressor(out, sr, GLUE, knee=8.0, window=0.05)
+    out, glue = _compressor(out, sr, GLUE, knee=8.0, window=0.05, inplace=True)
     if taps is not None:
         taps["glue"] = glue
     tone = WARMTH
     if p.tilt:  # shelves reach their gain only well past their corners: these give +-tilt at 60 Hz and 12 kHz
         tone = tone + (("low", 300, -1.15 * p.tilt), ("high", 3000, 1.15 * p.tilt))
-    out = fx.equalize(out, fx.design(tone, sr))
+    out = fx.equalize(out, fx.design(tone, sr), inplace=True)
     if p.wear > 0:
         out = wear(out, sr, p.wear, seed)
     return out
