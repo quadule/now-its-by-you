@@ -473,3 +473,19 @@ def test_an_address_is_counted_by_its_network_and_a_version_never_logged():
     with pytest.raises(P.Limited, match="versions opened"):
         gate.render("opens", "cat", "2001:db8:1:2::3", now=2)
     assert "/v/…" in P.access_line("GET", "/v/0123456789abcdef0123456789abcdef", 200, 1, 0.1)
+
+
+def test_this_computers_own_studio_takes_a_version_the_same_way(home, parent):
+    studio = S.Studio(None, str(LEAD), "none", out=home / "out")
+    server = S.serve(studio, 18870)
+    threading.Thread(target=server.serve_forever, daemon=True).start()
+    try:
+        port = server.server_address[1]
+        status, why = send(port, b"fLaC" + bytes(100), studio.token)
+        assert status == 422 and "carries no packet" in why["error"]
+        status, answer = send(port, parent.read_bytes(), studio.token)
+        assert status == 200 and answer["version"]["generation"] == 2
+        assert send(port, b"fLaC" + bytes(100), None)[0] == 403  # still only its own page
+    finally:
+        server.shutdown()
+        server.server_close()

@@ -641,3 +641,15 @@ dialog.help h2::after { content: ""; display: block; height: 4px; margin-top: 10
 .export-panel { margin-top: 18px; }
 .export-panel .actions { flex-wrap: wrap; }
 .to-export { margin: -4px 0 10px; text-align: right; }
+
+/* ---- someone's version: the panel that opens one, the veil a dragged file brings, and the note at /v/<id> ---- */
+.version-drop { display: flex; flex-wrap: wrap; align-items: center; gap: 10px 14px; margin-top: 10px; padding: 18px 16px;
+  border: 1.5px dashed var(--rule-strong); border-radius: var(--radius); background: var(--paper); }
+.version-drop p { margin: 0; }
+.drop-veil { position: fixed; inset: 0; z-index: 40; display: grid; place-items: center; pointer-events: none;
+  background: color-mix(in srgb, var(--paper) 82%, transparent); border: 3px dashed var(--hand); }
+.drop-veil[hidden] { display: none; }
+.drop-veil p { font: 22px var(--serif); color: var(--hand); background: var(--card); padding: 12px 20px; border: 1px solid var(--line); }
+.version-bar { margin-top: 12px; padding: 10px 14px; border-left: 3px solid var(--parent); background: var(--wash); border-radius: var(--radius); }
+.version-bar p { margin: 2px 0; }
+.version-bar a { color: var(--hand); overflow-wrap: anywhere; }
