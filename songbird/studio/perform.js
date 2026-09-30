@@ -389,7 +389,7 @@
     $("importFile")?.addEventListener("change", (e) => { bringBack(e.target.files[0]); e.target.value = ""; });
   }
 
-  const api = { beatOf, Capture, quantize, linesFor, backingFor, patchOf, render, apply, show, state };
+  const api = { beatOf, Capture, quantize, linesFor, backingFor, patchOf, render, apply, show, state, bringBack };
   if (typeof module === "object" && module.exports) module.exports = api;
   if (typeof window !== "undefined") window.SongbirdPerform = api;
   if (doc) {

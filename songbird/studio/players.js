@@ -349,7 +349,7 @@
   }
   function paint() {
     const root = box();
-    if (!root) return;
+    if (!root) { window.SongbirdScore?.playersChanged?.(); return; } // the score draws its own
     const devices = outputs();
     const outputRow = el("div", { class: "players-row" },
       el("label", { for: "players-output" }, "MIDI out"),
@@ -376,8 +376,8 @@
 
   function wire() {
     const root = box();
-    if (!root) return;
-    const details = root.closest?.("details");
+    if (!root && !window.SongbirdScore) return;
+    const details = root?.closest?.("details");
     details?.addEventListener("toggle", () => { if (details.open) { paint(); if (viewKey && band?.key !== viewKey) fetchBand(viewKey); } });
     if (!hasMidi()) note("This browser has no Web MIDI (Chrome, Edge and Firefox have it; Safari doesn't), so the sketch plays here.");
     paint();
@@ -395,6 +395,11 @@
   if (typeof window !== "undefined") {
     window.addEventListener?.("pagehide", stop);
     window.SongbirdPlayers = { route, start, stop, panic, viewChanged, connect, choose,
+      // for the score's player inspector and track heads (it draws them; the choices are the same, this browser's)
+      ui: { setRoute, everyone, fileChannel, outputs, hasMidi, midi, set, OWN,
+        own: (part) => (Object.prototype.hasOwnProperty.call(set.routes, part) ? set.routes[part] : defaultRoute(part)),
+        parts: () => band?.players || [], fetch: () => viewKey && fetchBand(viewKey), note: () => status,
+        programs: (on) => { set.programs = !!on; changed(); } },
       // for tests and the console
       _core: { occurrences, bandNotes, scheduler, routeOf, set, midi, get band() { return band; }, set band(v) { band = v; } } };
   }

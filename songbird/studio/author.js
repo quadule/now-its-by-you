@@ -88,6 +88,59 @@
     details.append(summary, hint, lines, actions, status);
     return section;
   }
+  function rowFor(section, p, index, label) {
+    let row = section.rows.get(p.lyric_path);
+    if (!row) {
+      const wrap = node("div", "author-line");
+      const input = node("textarea", "author-input");
+      input.rows = 2;
+      input.maxLength = 500;
+      input.spellcheck = true;
+      input.dataset.lyricPath = p.lyric_path;
+      input.id = `author-${p.lyric_path}`;
+      input.setAttribute("aria-label", `${label}: write line ${index + 1}`);
+      const name = node("label", "", `Line ${index + 1}`);
+      name.htmlFor = input.id;
+      const tally = node("span", "author-count");
+      tally.id = `${input.id}-count`;
+      input.setAttribute("aria-describedby", tally.id);
+      const head = node("div", "author-line-head");
+      const restore = button("Use the song's line", () => apply(section, {[p.lyric_path]: null}));
+      restore.className = "link small";
+      restore.title = "Release your original text and sing the bank's words here, including inherited text";
+      head.append(name, tally, restore);
+      wrap.append(head, input);
+      row = {wrap, input, count: tally, restore, base: p.lyric_text, phrase: p};
+      input.value = p.lyric_text;
+      input.addEventListener("input", () => { count(row); section.status.textContent = "Typing stays here until you use these lines."; });
+      section.rows.set(p.lyric_path, row);
+      section.lines.append(wrap);
+    } else if (row.input.value === row.base) {
+      row.input.value = p.lyric_text;
+      row.base = p.lyric_text;
+    }
+    row.phrase = p;
+    row.restore.hidden = !p.authored;
+    count(row);
+    return row;
+  }
+  // One line of a section, in the score's inspector (docs/STUDIO-REDESIGN.md, "A line of words"): the same rows,
+  // counts, checks and apply as the section's own editor; the nodes are kept, so typing survives a redraw.
+  function line(view, sectionId, lineIndex, anchor) {
+    const s = (view.composition?.sections || []).find((x) => x.id === sectionId);
+    const p = s?.phrases?.[lineIndex];
+    if (!s || !p?.lyric_path) return false;
+    capture();
+    let section = sections.get(s.id);
+    if (!section) { section = makeSection(s); sections.set(s.id, section); }
+    section.label = s.label;
+    const row = rowFor(section, p, lineIndex, s.label);
+    section.save.textContent = "Use this line";
+    const hint = section.details.querySelector(".hint");
+    anchor.append(row.wrap, section.save.parentNode, section.status, hint);
+    if (focus?.path === p.lyric_path) { row.input.focus({preventScroll: true}); row.input.setSelectionRange(focus.start, focus.end); focus = null; }
+    return true;
+  }
   function decorate(view, parent) {
     for (const s of view.composition?.sections || []) {
       const phrases = s.phrases.filter((p) => p.lyric_path);
@@ -97,41 +150,7 @@
       if (!section) { section = makeSection(s); sections.set(s.id, section); }
       section.label = s.label;
       section.summary.textContent = phrases.some((p) => p.authored) ? "Edit your original lines" : "Write your own lines";
-      for (const [index, p] of phrases.entries()) {
-        let row = section.rows.get(p.lyric_path);
-        if (!row) {
-          const wrap = node("div", "author-line");
-          const input = node("textarea", "author-input");
-          input.rows = 2;
-          input.maxLength = 500;
-          input.spellcheck = true;
-          input.dataset.lyricPath = p.lyric_path;
-          input.id = `author-${p.lyric_path}`;
-          input.setAttribute("aria-label", `${s.label}: write line ${index + 1}`);
-          const label = node("label", "", `Line ${index + 1}`);
-          label.htmlFor = input.id;
-          const tally = node("span", "author-count");
-          tally.id = `${input.id}-count`;
-          input.setAttribute("aria-describedby", tally.id);
-          const head = node("div", "author-line-head");
-          const restore = button("Use the song's line", () => apply(section, {[p.lyric_path]: null}));
-          restore.className = "link small";
-          restore.title = "Release your original text and sing the bank's words here, including inherited text";
-          head.append(label, tally, restore);
-          wrap.append(head, input);
-          row = {wrap, input, count: tally, restore, base: p.lyric_text, phrase: p};
-          input.value = p.lyric_text;
-          input.addEventListener("input", () => { count(row); section.status.textContent = "Typing stays here until you use these lines."; });
-          section.rows.set(p.lyric_path, row);
-          section.lines.append(wrap);
-        } else if (row.input.value === row.base) {
-          row.input.value = p.lyric_text;
-          row.base = p.lyric_text;
-        }
-        row.phrase = p;
-        row.restore.hidden = !p.authored;
-        count(row);
-      }
+      for (const [index, p] of phrases.entries()) rowFor(section, p, index, s.label);
       // Reuse the nodes so asynchronous option responses never discard typing.
       anchor.append(section.details);
     }
@@ -141,5 +160,5 @@
       focus = null;
     }
   }
-  window.SongbirdAuthor = {capture, decorate};
+  window.SongbirdAuthor = {capture, decorate, line};
 })();

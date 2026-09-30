@@ -207,6 +207,20 @@
       "url": "http://127.0.0.1:8799"
     },
     {
+      "name": "studio-score",
+      "runtimeExecutable": "uv",
+      "runtimeArgs": ["run", "songbird", "studio", "--no-open", "--port", "8811", "--machine", "fictional:ada"],
+      "port": 8811,
+      "url": "http://127.0.0.1:8811"
+    },
+    {
+      "name": "studio-score-public",
+      "runtimeExecutable": "uv",
+      "runtimeArgs": ["run", "songbird", "studio", "--public", "--machine", "fictional:wren", "--port", "8812", "--no-open"],
+      "port": 8812,
+      "url": "http://127.0.0.1:8812"
+    },
+    {
       "name": "design-mockups",
       "runtimeExecutable": "python3",
       "runtimeArgs": [

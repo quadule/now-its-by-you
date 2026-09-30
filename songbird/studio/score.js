@@ -1,0 +1,1225 @@
+// The score (docs/STUDIO-REDESIGN.md): one transport, three views of the song (Page, Arrange, Mix), one inspector
+// that shows whatever is selected, Your tools as a sheet and Time as a drawer. It draws; studio.js keeps the edits,
+// the history, the drafts and the listening (its globals: state, h, api, setEdit, listen, record...), composer.js the
+// notes and the sketch, author.js a line of words, players.js where the sketch's players go, perform.js notes in.
+// Pure parts are model.js's. Everything shown is built as text: nothing from an answer is read as markup.
+"use strict";
+
+(() => {
+  const M = window.SongbirdModel;
+  const $ = (id) => document.getElementById(id);
+  const C = () => window.SongbirdComposer;
+  const P = () => window.SongbirdPlayers?.ui;
+  const S = {
+    view: "page", sel: null, how: "sung", howSet: false, open: null, arr: null, sound: null, grid: null, serial: 0,
+    keyed: false, about: false, playhead: null, sketch: false, recording: null, why: {}, tall: false, pop: null,
+  };
+  const card = (id) => state.view?.cards?.find((c) => c.id === id);
+  const edited = (path) => Object.prototype.hasOwnProperty.call(state.edits, path) && state.edits[path] !== null;
+  const was = (path) => state.view?.marks?.[path]?.was;
+  const pct = (x) => `${Math.round((x || 0) * 100)}%`;
+  const narrow = () => ($("app")?.clientWidth || innerWidth) <= 620;
+  const compIndex = (id) => (state.view?.composition?.sections || []).findIndex((s) => s.id === id);
+  const sectionAt = (id) => S.grid?.sections.find((s) => s.id === id);
+  const wordsOf = (s) => state.view?.words?.find((w) => w.index === s?.index);
+  function say(text) { const el = $("said"); if (el) { el.textContent = ""; setTimeout(() => { el.textContent = text; }, 40); } }
+  function lockIcon() {
+    return svg("svg", { class: "lock", viewBox: "0 0 9 11", "aria-hidden": "true" },
+      svg("path", { d: "M2 5V3.4a2.5 2.5 0 0 1 5 0V5", fill: "none", stroke: "currentColor", "stroke-width": "1.4" }),
+      svg("rect", { x: "0.5", y: "5", width: "8", height: "5.5", rx: "1", fill: "currentColor" }));
+  }
+  // redraw without losing the keyboard's place: the focused element is found again by its data-key or id
+  function keepFocus(draw) {
+    const a = document.activeElement, key = a?.dataset?.key, id = a?.id;
+    draw();
+    if (!a || document.activeElement === a || !(key || id)) return;
+    const again = key ? document.querySelector(`[data-key="${CSS.escape(key)}"]`) : $(id);
+    again?.focus({ preventScroll: true });
+  }
+
+  // ------------------------------------------------------------------ views
+  const ABOUT = {
+    page: "The words as this version sings them. A word with a dashed line under it can change: pick another and the tune keeps its syllables. Select a section's name or a line to change more; ▶ plays that part, sung.",
+    arrange: "The song as a timeline: its sections over a ruler of bars, and under them a row for each player. A cell says whether that player plays there and how hard. Select a section, a player, a cell, or the seam between two; open a section's notes to change its tune and chords.",
+    mix: "A strip for each player (its level, where it sits, how it pumps), then the voice and the room. Judge the voice against the band on the whole song.",
+  };
+  function showView(v, focus = false) {
+    if (!["page", "arrange", "mix"].includes(v)) return;
+    S.view = v;
+    for (const t of document.querySelectorAll("#tabs [role=tab]")) {
+      const on = t.dataset.view === v;
+      t.setAttribute("aria-selected", String(on)); t.tabIndex = on ? 0 : -1;
+      if (on && focus) t.focus();
+    }
+    for (const b of document.querySelectorAll("#bottombar [data-view]")) b.setAttribute("aria-pressed", String(b.dataset.view === v));
+    for (const m of document.querySelectorAll("main.view")) m.hidden = m.dataset.view !== v;
+    $("viewAbout").textContent = ABOUT[v];
+    if (v !== "arrange") C()?.stop?.();
+  }
+
+  // ------------------------------------------------------------------ what is selected
+  function select(sel, options = {}) {
+    S.sel = sel || null;
+    S.about = false;
+    if (!sel || !["note", "chord"].includes(sel.kind)) C()?.deselect?.();
+    if (!S.howSet) setHow(M.defaultHow(sel), false);
+    repaint();
+    const keyed = S.keyed || options.keyboard;
+    S.keyed = false;
+    if (keyed && sel) $("inspectorTitle")?.focus({ preventScroll: false });
+    idle();
+  }
+  function repaint() { renderPage(); renderGrid(); renderMix(); renderInspector(); }
+  function composerSelected(kind) {  // composer.js: a note or a chord chosen in the roll, or let go
+    if (kind) select({ kind, section: S.open });
+    else if (S.sel && ["note", "chord"].includes(S.sel.kind)) select({ kind: "section", id: S.open });
+  }
+  function openNotes(id, focus = false) {
+    const i = compIndex(id);
+    if (i < 0) return;
+    S.open = id;
+    $("notes").hidden = false;
+    if (S.view !== "arrange") showView("arrange");
+    C()?.open?.(i);
+    renderGrid();
+    if (focus) $("notesTitle")?.focus();
+    $("notes").scrollIntoView?.({ block: "nearest", behavior: "smooth" });
+  }
+  function closeNotes() {
+    C()?.stop?.(); C()?.deselect?.();
+    S.open = null;
+    $("notes").hidden = true;
+    if (S.sel && ["note", "chord"].includes(S.sel.kind)) select({ kind: "section", id: S.sel.section });
+    else renderGrid();
+  }
+
+  // ------------------------------------------------------------------ the transport
+  function setHow(how, chosen = true) {
+    S.how = how;
+    if (chosen) S.howSet = true;
+    for (const b of document.querySelectorAll("[data-how]")) b.setAttribute("aria-pressed", String(b.dataset.how === how));
+  }
+  const making = () => ["queued", "running"].includes(state.playing?.job?.state) && !state.playing?.task?.cancelled;
+  const sounding = () => !!C()?.playing?.() || !$("audio").paused;
+  function stopAll() { C()?.stop?.(); pauseAudio(); paintPlay(); idle(); }
+  function play(how = S.how) {
+    if (sounding() || making() || (state.playing?.task && !state.playing.job)) { stopAll(); return; }
+    const secs = S.grid?.sections || [];
+    const t = M.playTarget(S.sel, secs);
+    if (how === "sketch") {
+      if (!state.view?.composition?.sections?.length) return;
+      const s = secs.find((x) => x.index === t.section);
+      if (t.phrase && S.open) C().sketch({ scope: "phrase", index: compIndex(S.open) });
+      else if (s) C().sketch({ scope: "section", index: compIndex(s.id) });
+      else C().sketch({ scope: "song", from: S.playhead });
+    } else listen("you", t.section);
+    paintPlay();
+  }
+  function paintPlay() {
+    const on = sounding() || making();
+    const b = $("tPlay");
+    b.textContent = on ? "■" : "▶";
+    b.classList.toggle("playing", on);
+    b.setAttribute("aria-label", on ? "Stop (Space)" : "Play (Space)");
+  }
+  function tick(beat, fraction) {  // composer.js, as the sketch plays (null when it stops)
+    const head = $("gridHead");
+    if (beat === null) {
+      S.sketch = false;
+      document.querySelectorAll(".cell.playing").forEach((c) => c.classList.remove("playing"));
+      if (head && S.playhead === null) head.hidden = true;
+      paintPlay(); idle();
+      return;
+    }
+    S.sketch = true;
+    const g = S.grid;
+    if (!g) return;
+    const where = M.position(beat, g.sections, g.perBar);
+    $("nowTitle").textContent = `${where.label} · bar ${where.bar}`;
+    $("nowSub").textContent = "the sketch";
+    $("barFill").style.width = `${Math.round((fraction || 0) * 1000) / 10}%`;
+    placeHead(beat);
+    paintPlay();
+  }
+  function placeHead(beat) {
+    const head = $("gridHead"), g = S.grid;
+    if (!head || !g || beat === null) return;
+    const s = g.sections.find((x) => beat >= x.startBeat - 1e-9 && beat < x.startBeat + x.beats) || g.sections.at(-1);
+    const cell = document.querySelector(`[data-region="${CSS.escape(s.id)}"]`);
+    if (!cell) return;
+    head.hidden = false;
+    head.style.left = `${cell.offsetLeft + cell.offsetWidth * Math.min(1, Math.max(0, (beat - s.startBeat) / s.beats))}px`;
+  }
+  function idle() {  // the position field when nothing is being made or heard: where the selection is, the length
+    if (S.sketch || S.recording || making() || !$("audio").paused) return;
+    const s = S.sel?.id ? sectionAt(S.sel.id) : S.sel?.section ? sectionAt(S.sel.section) : null;
+    const g = S.grid, total = state.view?.composition?.duration;
+    const at = S.playhead !== null && g ? M.position(S.playhead, g.sections, g.perBar) : null;
+    $("nowTitle").textContent = s ? s.label : at ? at.label : "The whole song";
+    $("nowSub").textContent = s ? `bar ${s.startBar}, ${s.bars} bars` : at ? `bar ${at.bar}` : g ? `${g.bars} bars` : "";
+    $("nowTime").textContent = total ? fmtTime(total) : "";
+    $("barFill").style.width = "0";
+    $("bar").classList.remove("making");
+    $("position").classList.remove("stale");
+  }
+  function playerChanged(title, sub, busy) {  // studio.js's player: a preview being made, or playing
+    $("position").classList.toggle("stale", /^Earlier version/.test($("nowSub").textContent));
+    paintPlay();
+  }
+  function recording(words, progress) {  // studio.js: a recording on its way (null when done)
+    S.recording = words;
+    if (!words) { idle(); return; }
+    $("nowTitle").textContent = "Recording";
+    $("nowSub").textContent = words.replace(/^Recording: /, "");
+    $("bar").classList.add("making");
+    $("barFill").style.width = pct(progress);
+  }
+  function wholeSongAt() {  // the whole song heard: say which section the audio is in
+    const g = S.grid, a = $("audio");
+    if (!g || state.playing?.section !== null || !a.duration) return;
+    const t = a.currentTime;
+    const s = g.sections.find((x) => t >= x.startSeconds && t < x.endSeconds);
+    if (s) { $("nowTitle").textContent = `${s.label}`; $("nowSub").textContent = "sung"; }
+  }
+
+  function renderTransport() {
+    const v = state.view, tempo = card("tempo"), key = card("key");
+    if (tempo) {
+      $("tempoValue").textContent = Math.round(tempo.tempo);
+      $("tempoBtn").classList.toggle("you", edited("tempo"));
+      $("tempoBtn").title = `Tempo: ${tempo.value}${edited("tempo") && was("tempo") ? `; was ${Math.round(was("tempo"))}` : ""}. This style: ${tempo.range?.min} to ${tempo.range?.max}`;
+      $("tempoBtn").setAttribute("aria-label", `Tempo ${Math.round(tempo.tempo)} beats a minute${edited("tempo") ? ", yours" : ""}`);
+    }
+    if (key) {
+      $("keyBtn").textContent = key.value;
+      $("keyBtn").classList.toggle("you", edited("tonic") || edited("mode"));
+      $("keyBtn").setAttribute("aria-label", `Key: ${key.value}${edited("tonic") || edited("mode") ? ", yours" : ""}`);
+    }
+    const by = v.by.replace(/^a made-up machine called /, "");
+    $("whichShort").textContent = `${v.offset ? v.date : "today"} · ${by}`;
+    if (S.pop === "tempoPop") tempoPop();
+    if (S.pop === "keyPop") keyPop();
+  }
+  const opener = (id) => ({ howPop: narrow() ? "positionNow" : "howMore", tempoPop: "tempoBtn", keyPop: "keyBtn" })[id];
+  function togglePop(id) {
+    const open = S.pop !== id;
+    for (const p of ["howPop", "tempoPop", "keyPop"]) $(p).hidden = true;
+    for (const b of ["howMore", "tempoBtn", "keyBtn", "positionNow"]) $(b).setAttribute("aria-expanded", "false");
+    S.pop = open ? id : null;
+    if (!open) return;
+    if (id === "tempoPop") tempoPop();
+    if (id === "keyPop") keyPop();
+    $(id).hidden = false;
+    $(opener(id)).setAttribute("aria-expanded", "true");
+    $(id).querySelector("input, button, select")?.focus();
+  }
+  function tempoPop() {
+    const c = card("tempo");
+    if (!c) return;
+    const range = { ...state.start.bounds.tempo, ...(c.range || {}) };
+    const out = h("output", { class: edited("tempo") ? "you" : null }, `${Math.round(c.tempo)}`);
+    const number = h("input", { type: "number", id: "tempoNumber", min: range.min, max: range.max, step: 1, value: Math.round(c.tempo), "aria-label": "Tempo in beats a minute" });
+    const slider = h("input", { type: "range", min: range.min, max: range.max, step: 1, value: c.tempo, class: edited("tempo") ? "you" : null, "aria-label": "Tempo" });
+    const commit = (value) => {
+      if (!Number.isFinite(value) || value < range.min || value > range.max) { number.value = Math.round(c.tempo); toast(`Choose a tempo from ${range.min} to ${range.max} for this style.`); return; }
+      setEdit("tempo", value, "Change tempo");
+    };
+    number.addEventListener("change", () => commit(Number(number.value)));
+    slider.addEventListener("input", () => { out.textContent = slider.value; number.value = slider.value; });
+    slider.addEventListener("change", () => commit(Number(slider.value)));
+    $("tempoPop").replaceChildren(
+      h("label", { class: "field" }, h("span", { class: "label" }, "Beats a minute ", out), number),
+      slider, h("div", { class: "ends hint" }, `${c.value}. This style: ${range.min} to ${range.max}.`),
+      edited("tempo") ? h("div", { class: "row" }, h("span", { class: "hint" }, `yours; the program's was ${Math.round(was("tempo") || 0)}`),
+        h("button", { class: "link small", type: "button", onclick: () => releaseEdit("tempo", "The program's tempo") }, "The program's own")) : null);
+  }
+  function keyPop() {
+    const c = card("key"), b = state.start.bounds;
+    if (!c) return;
+    const notes = [];
+    for (let n = b.tonic.min; n <= b.tonic.max; n++) notes.push(n);
+    $("keyPop").replaceChildren(
+      chipRow("Note", notes.map((n) => ({ value: n, text: b.tonic.names[n] })), c.tonic, (n) => setEdit("tonic", n, "Change the key"), edited("tonic")),
+      chipRow("Scale", b.mode.options.map((m) => ({ value: m, text: b.mode.names[m], title: b.mode.glosses?.[m] })), c.mode, (m) => setEdit("mode", m, "Change the scale"), edited("mode")),
+      h("p", { class: "hint" }, "A minor mode leans the words darker, as the machine's own would."),
+      edited("tonic") || edited("mode") ? h("button", { class: "link small", type: "button", onclick: () => clearEdits(["tonic", "mode"], "The program's key") }, "The program's own") : null);
+  }
+
+  // ------------------------------------------------------------------ Page: the words as sung
+  function renderPage() {
+    const v = state.view, box = $("page");
+    if (!v || !box) return;
+    keepFocus(() => box.replaceChildren(...v.words.map(pageSection)));
+  }
+  function pageSection(w) {
+    const v = state.view, o = state.optionsByKey[`${w.block}.${w.nth}`];
+    const sid = v.composition?.sections?.find((s) => s.index === w.index)?.id || `${w.name}:${w.nth}`;
+    const chosen = S.sel && ["section", "line"].includes(S.sel.kind) && S.sel.id === sid;
+    const ready = v.listen.ready.includes(v.listen.sections[w.index]);
+    const arranged = S.grid && [...S.grid.cells.values()].some((c) => c.section === sid && (c.by === "you" || c.locked));
+    const kind = w.mine ? "you" : { "handed down": "lineage", "new this time": "time", "drawn by chance": "chance" }[w.how] || "song";
+    const allAuthored = (w.authored || []).length >= w.lines.length;
+    const head = h("div", { class: "sec-head" },
+      h("button", { class: "rub", type: "button", "data-key": `rub:${sid}`, "aria-pressed": String(chosen && S.sel.kind === "section"),
+        title: `Select ${w.label}: its length, who sings, its words`, onclick: () => select({ kind: "section", id: sid }) },
+      h("span", { class: `rubric${w.mine ? " hand" : ""}` }, w.label)),
+      w.sung ? tag(kind, (w.authored || []).length ? "your lines" : w.mine ? "your words" : w.how) : null,
+      o && w.sung && !allAuthored && o.choices.length > 1 ? phraseChooser(w, o) : null,
+      o && w.sung && !allAuthored && (o.heads || []).length > 1 ? headChooser(o, w.label) : null,
+      h("span", { class: "sectools" }, h("button", { class: `play${ready ? " ready" : ""}`, type: "button", "aria-label": `Hear ${w.label}, sung`,
+        title: ready ? "ready to play" : "sung (it will be made first)", onclick: () => { setHow("sung", false); listen("you", w.index); } }, playIcon())));
+    let body;
+    if (o && w.sung) {
+      body = inlineLyrics(w, o);
+      [...body.querySelectorAll("p")].forEach((p, j) => {
+        p.classList.add("pick");
+        if (S.sel?.kind === "line" && S.sel.id === sid && S.sel.line === j) p.classList.add("selected");
+        p.title = "Select this line to write your own";
+        p.addEventListener("click", (e) => { if (!e.target.closest("select")) select({ kind: "line", id: sid, line: j }); });
+      });
+    } else body = lines(w.lines);
+    const sec = h("div", { class: `sec${w.sung ? "" : " instrumental"}${w.mine ? " mine" : ""}${chosen ? " selected" : ""}`, id: `sec-${w.index}` }, head, body,
+      !w.sung && arranged ? h("p", { class: "hint you" }, "arranged by you ✎") : null,
+      w.note ? h("p", { class: "sec-note" }, w.note) : null);
+    return sec;
+  }
+
+  // ------------------------------------------------------------------ Arrange: the grid, from /api/arrangement and /api/sound
+  async function loadGrid() {
+    const edits = copyEdits(), revision = state.editRevision, serial = ++S.serial;
+    try {
+      const [arr, sound] = await Promise.all([api("/api/arrangement", { edits }), api("/api/sound", { edits })]);
+      if (serial !== S.serial || revision !== state.editRevision) return;
+      S.arr = arr; S.sound = sound; S.grid = M.grid(arr, state.view, sound);
+      if (S.sel && !stillThere(S.sel)) S.sel = null;
+      repaint();
+      idle();
+      P()?.parts().length || (S.sel?.kind === "player" && P()?.fetch());
+    } catch (e) {
+      if (serial === S.serial) $("grid").replaceChildren(h("p", { class: "problem" }, `The arrangement couldn't be drawn: ${e.message}`));
+    }
+  }
+  function stillThere(sel) {
+    const g = S.grid;
+    if (sel.id && ["section", "seam", "line", "cell"].includes(sel.kind) && !sectionAt(sel.id)) return false;
+    if (sel.kind === "cell" && !g.tracks.some((t) => t.id === sel.player)) return false;
+    if (sel.kind === "player" && !g.tracks.some((t) => t.id === sel.id)) return false;
+    return true;
+  }
+  const row = (...kids) => h("div", { role: "row" }, ...kids);
+  function renderGrid() {
+    const g = S.grid, box = $("grid");
+    if (!g || !box) return;
+    keepFocus(() => {
+      box.style.gridTemplateColumns = `var(--head, 150px) ${g.sections.map((s) => `minmax(${s.bars < 4 ? 44 : 72}px, ${s.bars}fr)`).join(" ")}`;
+      const rows = [
+        row(h("div", { class: "head", role: "columnheader" }, h("span", { class: "hint" }, "bar")),
+          g.sections.map((s) => h("div", { class: "rule-cell", role: "columnheader", "aria-label": `${s.label}, from bar ${s.startBar}`,
+            title: `${s.label}: bar ${s.startBar}. Click to put the playhead here.`, onclick: (e) => setPlayhead(s, e) },
+          h("b", {}, String(s.startBar)), s.seam?.value ? h("span", { class: "mark", title: `Into ${s.label}: ${M.seamWords(s.seam.value)}` }, "⤴") : null))),
+        row(h("div", { class: "head", role: "rowheader" }, h("span", { class: "rubric small" }, "Sections")), g.sections.map(regionCell)),
+        ...g.tracks.map((t) => row(trackHead(t), g.sections.map((s) => cellFor(t, s)))),
+      ];
+      box.setAttribute("aria-rowcount", String(rows.length));
+      box.setAttribute("aria-colcount", String(g.sections.length + 1));
+      box.replaceChildren(...rows, h("div", { class: "playhead", id: "gridHead", "aria-hidden": "true", hidden: true }));
+      roving();
+      if (S.playhead !== null) requestAnimationFrame(() => placeHead(S.playhead));
+      problemsUnderGrid();
+    });
+  }
+  function problemsUnderGrid() {
+    const list = S.arr?.problems || [];
+    let box = $("arrangeProblems");
+    if (!box) { box = h("div", { id: "arrangeProblems", role: "status" }); $("gridScroll").after(box); }
+    box.replaceChildren(...list.map((p) => h("p", { class: "problem" }, `Waiting, not played: ${describePath(p.path)}: ${p.why}. `,
+      h("button", { class: "link small", type: "button", onclick: () => clearEdits([p.path]) }, "let it go"))));
+  }
+  function moved(s) {  // a region a person moved: its place differs from the program's order
+    const before = was("form.order");
+    return Array.isArray(before) && before.indexOf(s.id) !== S.grid.sections.findIndex((x) => x.id === s.id);
+  }
+  function regionCell(s, i) {
+    const chosen = S.sel?.kind === "section" && S.sel.id === s.id;
+    const mine = moved(s) || Object.values(s.by).includes("you");
+    const region = h("button", { class: `region${s.name.startsWith("refrain") ? " refrain" : ""}${chosen ? " selected" : ""}${mine ? " mine" : ""}`,
+      type: "button", draggable: "true", "data-key": `region:${s.id}`, "aria-pressed": String(chosen),
+      "aria-label": `${s.label}, ${s.bars} bars, ${s.sung ? "sung" : "played"}${mine ? "; yours" : ""}. Enter opens its notes.`,
+      onclick: () => select({ kind: "section", id: s.id }), ondblclick: () => openNotes(s.id),
+      ondragstart: (e) => { e.dataTransfer.effectAllowed = "move"; e.dataTransfer.setData("text/x-section", s.id); e.currentTarget.classList.add("dragging"); },
+      ondragend: (e) => { e.currentTarget.classList.remove("dragging"); document.querySelectorAll(".region.drop").forEach((r) => r.classList.remove("drop")); },
+      ondragover: (e) => { if ([...e.dataTransfer.types].includes("text/x-section")) { e.preventDefault(); e.currentTarget.classList.add("drop"); } },
+      ondragleave: (e) => e.currentTarget.classList.remove("drop"),
+      ondrop: (e) => { const from = e.dataTransfer.getData("text/x-section"); if (!from) return; e.preventDefault(); e.stopPropagation(); moveSection(from, i); } },
+    h("span", { class: `name${mine ? " hand" : ""}` }, s.label),
+    h("span", { class: "bars" }, `${s.bars} bars${s.sung ? "" : " · played"}${s.build ? " · build" : ""}`),
+    C()?.mini?.(compIndex(s.id)) || null,
+    h("span", { class: "edge", title: `Drag for its length: ${s.barOptions.join(", ")} bars`, "aria-hidden": "true",
+      onpointerdown: (e) => edgeDrag(e, s), onmousedown: (e) => { e.preventDefault(); e.stopPropagation(); }, onclick: (e) => e.stopPropagation() }));
+    return h("div", { class: "regioncell", role: "gridcell", "data-region": s.id },
+      i > 0 ? h("button", { class: `seam${S.sel?.kind === "seam" && S.sel.id === s.id ? " selected" : ""}${s.seam?.value ? " set" : ""}`, type: "button",
+        "data-key": `seam:${s.id}`, "aria-label": `The seam into ${s.label}: ${M.seamWords(s.seam?.value)}`, title: `Into ${s.label}: a riser, a sweep, a roll, a stop…`,
+        onclick: (e) => { e.stopPropagation(); select({ kind: "seam", id: s.id }); } }) : null,
+      region);
+  }
+  function moveSection(id, to) {
+    const list = S.grid.sections, from = list.findIndex((s) => s.id === id);
+    const r = M.moveOrder(list, from, to);
+    if (r.error) { if (from !== to) toast(r.error); return; }
+    setEdit("form.order", r.order, `Move ${list[from].label}`);
+    say(`${list[from].label} moved to place ${to + 1}`);
+  }
+  function edgeDrag(e, s) {
+    e.preventDefault(); e.stopPropagation();
+    const edge = e.currentTarget, region = edge.parentNode, label = region.querySelector(".bars");
+    const perBar = region.getBoundingClientRect().width / s.bars, x0 = e.clientX;
+    let pick = s.bars;
+    edge.setPointerCapture(e.pointerId); edge.classList.add("active");
+    const move = (ev) => {
+      const want = s.bars + (ev.clientX - x0) / perBar;
+      pick = s.barOptions.reduce((a, b) => (Math.abs(b - want) < Math.abs(a - want) ? b : a), s.bars);
+      label.textContent = pick === s.bars ? `${s.bars} bars` : `${s.bars} → ${pick} bars`;
+    };
+    const up = () => {
+      edge.removeEventListener("pointermove", move); edge.removeEventListener("pointerup", up); edge.removeEventListener("pointercancel", up);
+      edge.classList.remove("active");
+      if (pick !== s.bars) setBars(s, pick);
+    };
+    edge.addEventListener("pointermove", move); edge.addEventListener("pointerup", up); edge.addEventListener("pointercancel", up);
+  }
+  function setBars(s, n) {
+    if (n === s.program.bars) releaseEdit(s.paths.bars, `${s.label} as long as the program had it`);
+    else setEdit(s.paths.bars, n, `${s.label}: ${n} bars`);
+    say(`${s.label}: ${n} bars`);
+  }
+  function trackHead(t) {
+    const chosen = (S.sel?.kind === "player" && S.sel.id === t.id) || (S.sel?.kind === t.kind && ["singer", "choir"].includes(t.kind));
+    const target = t.kind === "player" ? { kind: "player", id: t.id } : t.kind === "chords" ? null : { kind: t.kind };
+    return h("div", { class: `head track-head ${t.kind}${chosen ? " selected" : ""}`, role: "rowheader" },
+      target ? h("button", { class: "name", type: "button", "data-key": `track:${t.id}`, title: t.kind === "player" ? `${t.label} everywhere` : t.label,
+        onclick: () => select(target) }, t.label) : h("span", { class: "name" }, t.label),
+      t.kind === "player" ? muteSolo(t.id, t.label) : null,
+      t.kind === "player" ? routeMark(t.id) : null);
+  }
+  function muteSolo(name, label) {
+    const band = card("band"), players = band ? { ...band.players } : {};
+    if (!band) return null;
+    if (!players[name]) players[name] = label;
+    const bc = { ...band, players };
+    const level = band.band?.[name] ?? 1, muted = level <= 0.02, solo = currentSolo()?.player === name;
+    return h("span", { class: "ms" },
+      h("button", { type: "button", "aria-pressed": String(muted), "aria-label": `${muted ? "Unmute" : "Mute"} ${label}`, title: "Mute (M)", onclick: () => { mutePlayer(bc, name); say(`${label} ${muted ? "back in" : "muted"}`); } }, "M"),
+      h("button", { type: "button", "aria-pressed": String(solo), "aria-label": `Solo ${label}`, title: "Solo (S): the singer stays", onclick: () => { soloPlayer(bc, name); say(`${label} ${solo ? "back in the band" : "alone with the singer"}`); } }, "S"));
+  }
+  function routeMark(name) {
+    const ui = P();
+    if (!ui) return null;
+    const r = ui.own(name);
+    if (r === "off" && !Object.prototype.hasOwnProperty.call(ui.set.routes, name)) return h("span", { class: "route" });
+    const text = r === "page" ? "here" : r === "off" ? "off" : `MIDI ${r + 1}`;
+    return h("span", { class: `route${Number.isInteger(r) ? " midi" : ""}`, title: "Where the sketch sends it: here, over MIDI, or off" }, text);
+  }
+  function cellFor(t, s) {
+    const chosen = S.sel?.kind === "cell" && S.sel.id === s.id && S.sel.player === t.id;
+    const common = { type: "button", role: "gridcell", "data-key": `cell:${t.id}:${s.id}`, "data-track": t.id, "data-section": s.id, tabindex: "-1",
+      onclick: () => (t.kind === "chords" ? openNotes(s.id) : select({ kind: "cell", id: s.id, player: t.id })) };
+    if (t.kind === "singer") {
+      const mine = s.by.sung === "you";
+      return h("button", { ...common, class: `cell words${s.wordsMine || mine ? " you" : ""}${chosen ? " selected" : ""}`,
+        "aria-label": `The singer in ${s.label}: ${s.sung ? "sings" : "nobody sings"}${mine ? "; yours" : ""}`, title: s.sung ? s.first : "played: nobody sings" },
+      s.sung ? s.first : h("i", {}, "instrumental"), mine ? h("span", { class: "mk" }, "✎") : null);
+    }
+    if (t.kind === "choir") {
+      return h("button", { ...common, class: `cell choir ${s.choir ? "plays" : "out"}${chosen ? " selected" : ""}`,
+        "aria-label": `The voices before in ${s.label}: ${s.choir ? "sing" : "out"}; the program's choice` }, h("span", { class: "e" }));
+    }
+    if (t.kind === "chords") {
+      const names = s.chords.filter((c, i, all) => i === 0 || c !== all[i - 1]);
+      return h("button", { ...common, class: `cell chord-cell${s.chordsMine ? " you" : ""}`, "aria-label": `Chords in ${s.label}: ${names.join(", ") || "none"}${s.chordsMine ? "; some yours" : ""}. Opens its notes.`,
+        title: `${s.label}: ${names.join(" ")}` }, names.slice(0, 4).join(" · ") + (names.length > 4 ? " …" : ""));
+    }
+    const cell = S.grid.cells.get(`${t.id}|${s.id}`), l = M.look(cell);
+    const cls = `cell ${l.level}${l.whose === "you" ? " you" : l.locked ? " locked" : l.whose === "before" ? " before" : ""}${l.chance ? " chance" : ""}${chosen ? " selected" : ""}`;
+    return h("button", { ...common, class: cls, "aria-label": M.cellLabel(t, s, cell), title: M.cellLabel(t, s, cell) },
+      h("span", { class: "e" }), l.whose === "you" ? h("span", { class: "mk", "aria-hidden": "true" }, "✎") : l.locked ? h("span", { class: "mk" }, lockIcon()) : null);
+  }
+  function roving() {  // one cell of the grid in the tab order: the selected one, else the first
+    const cells = [...document.querySelectorAll("#grid [role=gridcell]")];
+    const on = cells.find((c) => c.classList.contains("selected")) || cells[0];
+    if (on) on.tabIndex = 0;
+  }
+  function setPlayhead(s, e) {
+    const r = e.currentTarget.getBoundingClientRect();
+    const bars = Math.floor(Math.max(0, e.clientX - r.left) / r.width * s.bars);
+    S.playhead = s.startBeat + bars * S.grid.perBar;
+    placeHead(S.playhead);
+    if (C()?.playing?.()) play("sketch"), play("sketch");  // stop, then again from here
+    idle();
+  }
+  function stepCell(axis, step) {  // the arrow keys through the grid
+    const g = S.grid, sel = S.sel;
+    if (!g) return false;
+    const tracks = g.tracks.filter((t) => t.kind !== "chords");
+    if (sel?.kind === "cell") {
+      let t = tracks.findIndex((x) => x.id === sel.player), s = g.sections.findIndex((x) => x.id === sel.id);
+      if (axis === "track") t = Math.max(0, Math.min(tracks.length - 1, t + step)); else s = Math.max(0, Math.min(g.sections.length - 1, s + step));
+      S.keyed = false;
+      select({ kind: "cell", id: g.sections[s].id, player: tracks[t].id });
+      document.querySelector(`[data-key="cell:${CSS.escape(tracks[t].id)}:${CSS.escape(g.sections[s].id)}"]`)?.focus();
+      return true;
+    }
+    if (axis === "section" && ["section", "seam", "line"].includes(sel?.kind)) {
+      const next = M.neighbour(g.sections, sel.id, step);
+      select({ kind: "section", id: next.id }, { keyboard: false });
+      (document.querySelector(`[data-key="region:${CSS.escape(next.id)}"]`) || document.querySelector(`[data-key="rub:${CSS.escape(next.id)}"]`))?.focus();
+      return true;
+    }
+    if (axis === "track" && ["player", "singer", "choir"].includes(sel?.kind)) {
+      const heads = g.tracks.filter((t) => t.kind !== "chords");
+      const i = heads.findIndex((t) => (sel.kind === "player" ? t.id === sel.id : t.kind === sel.kind));
+      const t = heads[Math.max(0, Math.min(heads.length - 1, i + step))];
+      select(t.kind === "player" ? { kind: "player", id: t.id } : { kind: t.kind });
+      document.querySelector(`[data-key="track:${CSS.escape(t.id)}"]`)?.focus();
+      return true;
+    }
+    return false;
+  }
+
+  // ------------------------------------------------------------------ Mix: a strip for each player, the voice, the room
+  function renderMix() {
+    const box = $("mix"), band = card("band"), mix = card("mix");
+    if (!box || !S.sound || !band) return;
+    keepFocus(() => {
+      const strips = S.sound.players.filter((p) => p.playing !== false).map((sp) => strip(sp, band));
+      box.replaceChildren(...strips, voiceStrip(mix), roomStrip(mix), masterStrip());
+    });
+  }
+  const PUMPED = /bass|pad|drone|synth|arp/;
+  function strip(sp, band) {
+    const name = sp.player, label = sp.name || name, gain = sp.gain?.value ?? band.band?.[name] ?? 1;
+    const yours = !!sp.gain?.yours || edited(`band.${name}`), program = was(`band.${name}`);
+    const chosen = S.sel?.kind === "player" && S.sel.id === name;
+    const out = h("div", { class: `val${yours ? " you" : ""}` }, pct(gain));
+    const input = h("input", { type: "range", min: 0, max: 2, step: 0.01, value: gain, "data-key": `fader:${name}`, "aria-label": `${label}: level`, "aria-valuetext": pct(gain),
+      oninput: (e) => { out.textContent = pct(Number(e.target.value)); e.target.setAttribute("aria-valuetext", pct(Number(e.target.value))); },
+      onchange: (e) => setEdit(`band.${name}`, Number(e.target.value), `${label}: level`) });
+    const fader = h("div", { class: `fader${yours ? " you" : ""}` }, input,
+      yours && typeof program === "number" ? tickAt(program) : null);
+    const pan = sp.pan, panYours = !!pan?.yours;
+    const pump = sp.sidechain, pumpNow = presetOf(pump?.value);
+    return h("div", { class: `strip${chosen ? " selected" : ""}${gain <= 0.02 ? " muted" : ""}` },
+      h("button", { class: "nm", type: "button", "data-key": `strip:${name}`, onclick: () => select({ kind: "player", id: name }), title: `${label}: open it in the column` }, label),
+      muteSolo(name, label),
+      fader, out,
+      pan ? h("label", { class: `knob${panYours ? " you" : ""}` }, h("span", {}, `pan ${panWords(pan.value)}`),
+        h("input", { type: "range", min: -1, max: 1, step: 0.05, value: pan.value, class: panYours ? "you" : null, "data-key": `pan:${name}`, "aria-label": `${label}: pan`,
+          onchange: (e) => setEdit(pan.path, Number(e.target.value), `${label}: pan`) })) : null,
+      pump && PUMPED.test(name) ? h("label", { class: `knob${pump.yours ? " you" : ""}` }, h("span", {}, "pump"),
+        pumpSelect(pump, `${label}: pump`)) : null,
+      sp.patch || sp.kit ? h("button", { class: "patch", type: "button", onclick: () => select({ kind: "player", id: name }), title: "Its sound: open it in the column" },
+        (sp.patch || sp.kit).value) : null,
+      h("div", { class: "why" }, yours && typeof program === "number" ? `was ${pct(program)}` : "the program's"));
+  }
+  function tickAt(program) {  // the program's level, a faint mark beside a fader a person moved
+    const tick = h("span", { class: "tick", title: `the program's: ${pct(program)}` });
+    tick.style.top = `${(1 - Math.min(2, program) / 2) * 150}px`;
+    return tick;
+  }
+  function presetOf(value) {
+    if (!value) return "none";
+    const hit = Object.entries((S.sound?.players?.[0]?.sidechain?.presets) || {}).find(([, p]) => p.depth === value.depth && p.release === value.release && p.key === value.key);
+    return hit ? hit[0] : "yours";
+  }
+  function pumpSelect(pump, label) {
+    const now = presetOf(pump.value);
+    const s = h("select", { "aria-label": label, "data-key": `pump:${label}` },
+      ["none", ...Object.keys(pump.presets || {})].map((k) => h("option", { value: k }, k === "none" ? "none" : k)),
+      now === "yours" ? h("option", { value: "yours" }, "yours") : null);
+    s.value = now;
+    s.addEventListener("change", () => (s.value === "none" ? releaseEdit(pump.path, `${label}: none`) : s.value !== "yours" && setEdit(pump.path, s.value, `${label}: ${s.value}`)));
+    return s;
+  }
+  const panWords = (x) => (Math.abs(x) < 0.05 ? "middle" : `${Math.round(Math.abs(x) * 100)}% ${x < 0 ? "left" : "right"}`);
+  function busSlider(label, path, value, bounds, show, key) {
+    const out = h("span", {}, show(value));
+    return h("label", {}, h("span", {}, label), out,
+      h("input", { type: "range", min: bounds.min, max: bounds.max, step: bounds.step || 0.01, value, class: edited(path) ? "you" : null, "data-key": key, "aria-label": label,
+        oninput: (e) => { out.textContent = show(Number(e.target.value)); }, onchange: (e) => setEdit(path, Number(e.target.value), label) }));
+  }
+  function voiceStrip(mix) {
+    const b = state.start.bounds, m = mix.mix;
+    return h("div", { class: `strip bus${S.sel?.kind === "singer" ? " selected" : ""}` },
+      h("button", { class: "nm", type: "button", onclick: () => select({ kind: "singer" }) }, "Voice"),
+      h("div", { class: "sliders" },
+        busSlider("over the band", "mix.forward", m.forward, b["mix.forward"], (x) => `${Number(x).toFixed(1)} dB`, "bus:forward"),
+        busSlider("how close", "mix.intimacy", m.intimacy, b["mix.intimacy"], pct, "bus:intimacy")),
+      h("div", { class: "why" }, edited("mix.forward") || edited("mix.intimacy") ? "yours ✎" : "the machine's own"));
+  }
+  function roomStrip(mix) {
+    const b = state.start.bounds, m = mix.mix;
+    return h("div", { class: `strip bus${S.sel?.kind === "room" ? " selected" : ""}` },
+      h("button", { class: "nm", type: "button", onclick: () => select({ kind: "room" }) }, "Room"),
+      h("div", { class: "sliders" },
+        busSlider("how much", "mix.space", m.space, b["mix.space"], pct, "bus:space"),
+        busSlider("how wide", "mix.width", m.width, b["mix.width"], pct, "bus:width"),
+        b["mix.rt60"] ? busSlider("rings for", "mix.rt60", m.rt60, b["mix.rt60"], (x) => `${Number(x).toFixed(1)} s`, "bus:rt60") : null),
+      h("div", { class: "why" }, mix.value));
+  }
+  function masterStrip() {
+    const loud = card("field.loudness");
+    return h("div", { class: "strip bus" }, h("div", { class: "nm" }, "Master"),
+      h("div", { class: "val" }, loud ? `${loud.value} LUFS` : ""),
+      h("div", { class: "why" }, "the song's own loudness, as every version has it; not a control"));
+  }
+
+  // ------------------------------------------------------------------ the inspector: one shape in every state
+  const STATE_ABOUT = {
+    song: "This version in five doors: its style, its singer, its band, its shape and its room. Select anything on the page to see what it is, why the program chose it, and change it.",
+    section: "A part of the song. Its length, who sings, how hard everyone plays and its moment are yours to choose; so are its words. The program's own gives back everything you set here.",
+    player: "One player, everywhere it plays: its level, its sound, where it sits, how it pumps, and where the sketch sends it.",
+    cell: "One player in one section: out, soft, plays or hard, and what it plays there. What chance drew is drawn dashed; Lock keeps it through a new performance.",
+    seam: "The moment one section turns into the next: a riser, a sweep, a snare roll or a stop over the bars before, an impact on the downbeat, a downlifter after it.",
+    chord: "A chord under the tune. The band, the voices before and the backing voices follow it; the tune stays. A sung note that isn't in the chord is shown, not forbidden.",
+    note: "A note of the tune: its pitch, where it starts and how long. A phrase keeps its syllables and its ending's place in the scale unless you free it.",
+    line: "A line of the words. Write your own if it fits the notes: one syllable a note, longer words split with hyphens (car-ry).",
+    singer: "The singer is your machine's own voice, the same in every song it sings. What you can give it is a way of singing, and where it sits against the band.",
+    choir: "Voices from the versions before this one, one more for every version, up to six; they sing where the song has a choir.",
+    room: "The room the song is sung in: how much of it you hear, how wide it is, how long it rings and how soon it answers.",
+    style: "A style brings its own band, its pace and its feel; a version moves one style at a time, so its children drift back toward your machine's.",
+    band: "How the band plays everywhere: its pattern, who leads where nobody sings, how busy and how bright. Each player's own is in Arrange and Mix.",
+    shape: "The parts of the song and how many verses. Their order is the regions in Arrange: drag them there.",
+  };
+  function shell({ kind, rubric, set, mine, body, why, release, hear, problems, extra }) {
+    const box = $("inspector");
+    box.classList.toggle("empty", kind === "song");
+    box.classList.toggle("tall", S.tall);
+    const whyOpen = !!S.why[kind];
+    box.replaceChildren(...[
+      h("button", { class: "handle", type: "button", "aria-label": S.tall ? "Lower the column" : "Raise the column", onclick: () => { S.tall = !S.tall; box.classList.toggle("tall", S.tall); } }),
+      h("div", { class: "top" }, h("span", { class: "rubric", id: "inspectorTitle", tabindex: "-1" }, rubric, mine ? h("span", { class: "you", "aria-label": ", yours" }, " ✎") : null),
+        h("button", { class: "what", type: "button", "aria-expanded": String(S.about), "aria-label": "What is this?", title: "What is this?", onclick: () => { S.about = !S.about; renderInspector(); } }, "?"),
+        kind === "song" ? null : h("button", { class: "close", type: "button", "aria-label": "Close (Esc)", title: "Close (Esc)", onclick: () => select(null) }, "✕")),
+      S.about ? h("p", { class: "about" }, STATE_ABOUT[kind] || "") : null,
+      set ? h("p", { class: `set${mine ? " you" : ""}` }, set) : null,
+      (problems || []).map((p) => h("p", { class: "problem" }, typeof p === "string" ? p : `Couldn't keep ${describePath(p.path)}: ${p.why}.`)),
+      body || null,
+      why?.length ? reasonsFold(kind, why, whyOpen) : null,
+      hear || release || extra ? h("div", { class: "foot" },
+        hear ? h("button", { class: "btn", type: "button", onclick: hear }, "▶ Hear it") : null, extra || null,
+        release ? h("button", { class: "link small release", type: "button", disabled: !!release.disabled, title: "Give it back to the program: your choice released",
+          onclick: release.action }, release.label || "The program's own") : null) : null].flat().filter(Boolean));  // (replaceChildren writes a null out as text)
+  }
+  function reasonsFold(kind, why, open) {
+    const list = why.map((r) => (Array.isArray(r) ? { kind: r[0], text: r[1] } : r)).filter((r) => r.text);
+    list.sort((a, b) => (b.kind === "you") - (a.kind === "you"));
+    const d = h("details", {}, h("summary", {}, "Why the program chose this"),
+      list.map((r) => h("div", { class: "reason" }, tag(r.kind === "program" ? "song" : r.kind), h("span", {}, r.text))));
+    d.open = open;
+    d.addEventListener("toggle", () => { S.why[kind] = d.open; });
+    return d;
+  }
+  function chipRow(label, options, current, pick, yours = false, extra = {}) {
+    return h("div", { class: "row" }, label ? h("span", { class: "label" }, label) : null,
+      h("span", { class: "chips", role: "group", "aria-label": label || extra.aria || "" }, options.map((o) => {
+        const on = String(o.value) === String(current);
+        return h("button", { class: `chip${on ? " on" : ""}${on && yours ? " you" : ""}${on && extra.drawn ? " drawn" : ""}`, type: "button", "aria-pressed": String(on),
+          disabled: !!o.disabled, title: o.title || null, onclick: () => { if (!on) pick(o.value); } }, o.text);
+      })));
+  }
+  // a slider in the inspector: its value in the ink that set it; `log` for a cutoff (moved on octaves), `commit` for
+  // a value that is part of a larger one (a drum's tune inside its piece)
+  function field(label, path, value, bounds, show, ends, { log = false, commit = null, yours = edited(path) } = {}) {
+    const to = (x) => (log ? Math.log2(x) : x), from = (x) => (log ? Math.round(2 ** x) : x);
+    const out = h("output", { class: yours ? "you" : null }, show(value));
+    return h("div", { class: "field" }, h("span", { class: "label" }, h("span", {}, label), out),
+      h("input", { type: "range", min: to(bounds.min), max: to(bounds.max), step: log ? 0.01 : bounds.step || 0.01, value: to(value), class: yours ? "you" : null,
+        id: `f-${path}`, "aria-label": label, "aria-valuetext": show(value),
+        oninput: (e) => { const x = from(Number(e.target.value)); out.textContent = show(x); e.target.setAttribute("aria-valuetext", show(x)); },
+        onchange: (e) => (commit || ((x) => setEdit(path, x, label)))(from(Number(e.target.value))) }),
+      ends ? h("div", { class: "ends" }, h("span", {}, ends[0]), h("span", {}, ends[1])) : null);
+  }
+  function releasing(paths, label) {  // "The program's own": each path the person set, released in one step
+    const mine = paths.filter((p) => Object.prototype.hasOwnProperty.call(state.edits, p));
+    return { disabled: !mine.length, action: () => clearEdits(mine, label) };
+  }
+  const hearHow = () => play(S.how);
+
+  function renderInspector() {
+    if (!state.view || !$("inspector")) return;
+    keepFocus(() => {
+      const kind = S.sel?.kind || "song";
+      const draw = { section: sectionState, player: playerState, cell: cellState, seam: seamState, chord: composerState, note: composerState,
+        line: lineState, singer: singerState, choir: choirState, room: roomState, style: styleState, band: bandState, shape: shapeState }[kind] || songState;
+      if (!draw(S.sel)) { S.sel = null; songState(); }
+    });
+  }
+
+  function songState() {
+    const v = state.view, style = card("style"), singer = card("singer"), band = card("band"), shape = card("shape"), mix = card("mix");
+    const yoursCells = S.grid ? [...S.grid.cells.values()].filter((c) => c.by === "you" || c.locked) : [];
+    const who = [...new Set(yoursCells.map((c) => S.grid.tracks.find((t) => t.id === c.player)?.label))];
+    const off = shape?.parts ? state.start.optional.filter((p) => !shape.parts[p]).map((p) => state.start.parts[p]) : [];
+    const door = (rubric, value, detail, sel, mine) => h("button", { class: "door", type: "button", onclick: () => select(sel) },
+      h("span", { class: "rubric" }, rubric), h("span", { class: `v${mine ? " you" : ""}` }, value, mine ? " ✎" : ""), detail ? h("span", { class: `d${mine ? " you" : ""}` }, detail) : null);
+    const line = (c, label, value) => {
+      if (!c) return null;
+      const more = h("p", { class: "hint", hidden: true }, [c.detail, ...(c.lines || []), ...(c.reasons || []).map((r) => r.text)].filter(Boolean).join(" · "));
+      return h("div", {}, h("div", { class: "lineitem" }, h("span", {}, label), h("b", {}, value || c.value),
+        h("button", { class: "what", type: "button", "aria-label": `About ${label}`, "aria-expanded": "false",
+          onclick: (e) => { more.hidden = !more.hidden; e.currentTarget.setAttribute("aria-expanded", String(!more.hidden)); } }, "?")), more);
+    };
+    shell({ kind: "song", rubric: "This version",
+      body: h("div", {},
+        h("div", { class: "doors" },
+          style ? door("The style", style.value, style.detail, { kind: "style" }, style.mine) : null,
+          singer ? door("The singer", singer.value, singer.detail, { kind: "singer" }, singer.mine) : null,
+          band ? door("The band", band.value, who.length ? `${who.join(", ")}: yours in ${yoursCells.length} place${yoursCells.length === 1 ? "" : "s"} ✎` : band.detail, { kind: "band" }, band.mine || yoursCells.length > 0) : null,
+          shape ? door("The shape", shape.value, off.length ? `add: ${off.slice(0, 4).join(" · ")}` : null, { kind: "shape" }, shape.mine || !!v.edits["form.order"]) : null,
+          mix ? door("The room", mix.value, mix.detail, { kind: "room" }, mix.mine) : null),
+        h("h4", {}, "And"),
+        line(card("variants"), "The melody"), line(card("choir"), "Voices before"), line(card("words"), "The words", card("words")?.detail),
+        line(card("field.loudness"), "Loudness", card("field.loudness") ? `${card("field.loudness").value} LUFS` : ""), line(card("machine"), "Your machine"),
+        h("p", { class: "hint later" }, "Every value on this page has a reason. Select a section, a player, a cell, a chord, a note or a line to see it and change it.")) });
+    return true;
+  }
+
+  function sectionState(sel) {
+    const s = sectionAt(sel.id), w = wordsOf(s);
+    if (!s) return false;
+    const o = w ? state.optionsByKey[`${w.block}.${w.nth}`] : null;
+    const cells = [...S.grid.cells.values()].filter((c) => c.section === s.id && c.plays !== false);
+    const levels = new Set(cells.map((c) => c.value?.level));
+    const everyone = levels.size === 1 ? [...levels][0] : null;
+    const list = S.grid.sections, i = list.findIndex((x) => x.id === s.id);
+    const mine = Object.values(s.by).includes("you") || !!w?.mine || moved(s);
+    const phrases = state.view.composition?.sections?.find((x) => x.id === s.id)?.phrases || [];
+    const writable = phrases.some((p) => p.lyric_path);
+    const allAuthored = w && (w.authored || []).length >= w.lines.length;
+    const choosers = o && w.sung && !allAuthored ? [o.choices.length ? phraseChooser(w, o) : null, (o.heads || []).length > 1 ? headChooser(o, w.label) : null].filter(Boolean) : [];
+    const oneChoice = o && o.choices.filter((c) => c.allowed).length <= 1 && (o.heads || []).filter((c) => c.allowed).length <= 1;
+    const rules = o && w.sung && !allAuthored ? chooser(w, o) : null;
+    if (rules) rules.querySelector("summary").textContent = "Refused here, and why";
+    const options = s.options.map((opt) => optionRow(opt));
+    const release = () => {
+      const next = copyEdits();
+      for (const p of Object.keys(next)) if (p.startsWith(`arrange.${s.id}.`)) delete next[p];
+      if (w) releaseWords(w, next);
+      commitEdits(next, `${s.label} as the program had it`);
+    };
+    const anyMine = Object.keys(state.edits).some((p) => p.startsWith(`arrange.${s.id}.`)) || !!w?.mine;
+    shell({ kind: "section", rubric: s.label, mine,
+      set: `${s.bars} bars, ${s.sung ? "sung" : "played"}${w?.sung ? `: “${s.first}”` : w ? `: ${w.lines[0]}` : ""}${w?.id && w.block === "verse" ? ` (the verse “${w.id}”)` : ""}`,
+      problems: s.problems,
+      body: h("div", {},
+        chipRow("Length", s.barOptions.map((n) => ({ value: n, text: `${n} bars` })), s.bars, (n) => setBars(s, n), s.by.bars === "you"),
+        s.canPlay ? chipRow("Who sings", [{ value: true, text: "the singer" }, { value: false, text: "nobody: played" }], s.sung,
+          (v) => (v ? releaseEdit(s.paths.sung, `${s.label} sung again`) : setEdit(s.paths.sung, false, `${s.label} played, not sung`)), s.by.sung === "you") : null,
+        chipRow("Everyone", [{ value: "soft", text: "soft" }, { value: "plays", text: "plays" }, { value: "hard", text: "hard" }], everyone,
+          (lv) => { setEdits(M.levelPatch(cells, lv), `Everyone in ${s.label}: ${lv}`); say(`${s.label}: everyone plays ${lv === "plays" ? "as the style has it" : lv}`); },
+          cells.some((c) => c.by === "you")),
+        chipRow("Moment", [{ value: false, text: "none" }, { value: true, text: "a build", disabled: i === list.length - 1, title: i === list.length - 1 ? "Nothing comes after the last section to build toward" : "The players come in one after another and rise toward the next section" }],
+          s.build, (v) => (v ? setEdit(s.paths.build, true, `A build in ${s.label}`) : releaseEdit(s.paths.build, `No build in ${s.label}`)), s.by.build === "you"),
+        options,
+        choosers.length && !oneChoice ? h("div", { class: "row" }, choosers) : null,
+        choosers.length && oneChoice ? h("details", {}, h("summary", {}, "more"), h("div", { class: "row" }, choosers)) : null,
+        rules,
+        h("div", { class: "row" },
+          h("button", { class: "btn quiet", type: "button", disabled: i === 0, onclick: () => moveSection(s.id, i - 1), title: "Earlier (⌘/Ctrl ←)" }, "← Earlier"),
+          h("button", { class: "btn quiet", type: "button", disabled: i === list.length - 1, onclick: () => moveSection(s.id, i + 1), title: "Later (⌘/Ctrl →)" }, "Later →"),
+          S.open === s.id ? h("button", { class: "btn quiet", type: "button", onclick: closeNotes }, "Close the notes")
+            : h("button", { class: "btn quiet", type: "button", onclick: () => openNotes(s.id, true), title: "Enter" }, "Open the notes"),
+          writable && w?.sung ? h("button", { class: "btn quiet", type: "button", onclick: () => select({ kind: "line", id: s.id, line: 0 }) }, "Write your own lines") : null)),
+      why: [
+        w?.sung ? { kind: w.mine ? "you" : { "handed down": "lineage", "new this time": "time", "drawn by chance": "chance" }[w.how] || "song", text: w.mine ? "these words are yours" : `the words: ${w.how}${(w.tags || []).length ? ` (${w.tags.join(", ")})` : ""}` } : null,
+        s.by.bars === "you" ? { kind: "you", text: `${s.bars} bars; the program had ${s.program.bars}` } : null,
+        s.by.sung === "you" ? { kind: "you", text: "played, not sung: a drop" } : null,
+        s.by.build === "you" ? { kind: "you", text: "a build toward the next section" } : null,
+        moved(s) ? { kind: "you", text: "moved here by you" } : null,
+        ...s.options.map((opt) => ({ kind: opt.by === "you" ? "you" : opt.by === "chance" ? "chance" : opt.by === "song" ? "song" : "rule", text: opt.text })),
+        { kind: "rule", text: `the band's weight here: ${Math.round((S.arr.sections.find((x) => x.id === s.id)?.energy || 0) * 100)}% of its fullest, the program's arc for a ${s.role}` },
+      ].filter(Boolean),
+      hear: hearHow,
+      release: { disabled: !anyMine, action: release } });
+    return true;
+  }
+  // a style's option that lives in this section (the stripped start, the band joining line by line...): choosable,
+  // lockable (the same value, kept), said with where it came from
+  function optionRow(opt) {
+    const yours = opt.by === "you", locked = yours && was(opt.path) === opt.value && state.view.marks?.[opt.path]?.locked;
+    const bool = typeof opt.value === "boolean";
+    const controls = bool
+      ? chipRow(null, [{ value: true, text: "yes" }, { value: false, text: "no" }], opt.value, (v) => setEdit(opt.path, v, opt.text), yours, { drawn: opt.by === "chance", aria: opt.text })
+      : typeof opt.value === "number" && opt.value > 0 ? h("button", { class: "btn quiet", type: "button", onclick: () => setEdit(opt.path, 0, `Not: ${opt.text}`) }, "none here") : null;
+    return h("div", { class: "row" }, h("span", { class: `label${yours ? " you" : ""}` }, opt.text, opt.by === "chance" && !yours ? h("span", { class: "hint" }, " · drawn by chance") : null),
+      controls,
+      yours ? h("button", { class: "link small", type: "button", onclick: () => releaseEdit(opt.path, `${opt.text}: the program's`) }, locked ? "unlock" : "the program's")
+        : h("button", { class: "btn quiet", type: "button", title: "Keep it as it is through a new performance", onclick: () => { setEdits(M.optionLock(opt), `Lock: ${opt.text}`); say(`Locked: ${opt.text}`); } }, lockIcon(), " Lock"));
+  }
+
+  function cellState(sel) {
+    const s = sectionAt(sel.id), t = S.grid.tracks.find((x) => x.id === sel.player);
+    if (!s || !t) return false;
+    if (t.kind === "singer") {
+      const mine = s.by.sung === "you";
+      shell({ kind: "cell", rubric: `The singer · ${s.label}`, mine, set: s.sung ? `sings: “${s.first}”` : "nobody sings here: played",
+        body: s.canPlay ? chipRow("Here", [{ value: true, text: "sings" }, { value: false, text: "nobody: an instrumental" }], s.sung,
+          (v) => (v ? releaseEdit(s.paths.sung, `${s.label} sung again`) : setEdit(s.paths.sung, false, `${s.label} played, not sung`)), mine)
+          : h("p", { class: "hint" }, "Nobody sings here: this part of the song has no words."),
+        why: [mine ? ["you", "played, not sung: the band keeps its weight and the lead takes the tune (a drop)"] : ["song", s.sung ? "sung, as the song has it" : "a part of the song without words"]],
+        hear: hearHow, release: mine ? { action: () => releaseEdit(s.paths.sung, `${s.label} sung again`) } : null });
+      return true;
+    }
+    if (t.kind === "choir") return choirState();
+    const cell = S.grid.cells.get(`${t.id}|${s.id}`), l = M.look(cell);
+    if (!cell) return false;
+    const v = cell.value || {}, mine = l.whose === "you" || l.locked;
+    const lineChoices = s.lines.map((_, j) => ({ value: j, text: j === 0 ? "from the start" : `line ${j + 1}` }));
+    shell({ kind: "cell", rubric: `${t.label} · ${s.label}`, mine,
+      set: `${l.level === "out" ? "out" : `${l.level}${v.pattern_label && v.pattern_label !== "out" ? `, ${v.pattern_label}` : ""}`}${v.from ? `, from line ${v.from + 1}` : ""}; ${M.whoseWords(l)}`,
+      problems: cell.problems,
+      body: h("div", {},
+        chipRow("Here", M.LEVELS.map((x) => ({ value: x, text: x })), l.level, (lv) => {
+          if (lv === cell.program?.level && cell.by === "you") releaseEdit(cell.paths.level, M.saidCell(t, s, lv)); else setEdit(cell.paths.level, lv, M.saidCell(t, s, lv));
+          say(M.saidCell(t, s, lv)); },
+          cell.by === "you" && !l.locked, { drawn: l.chance }),
+        l.level !== "out" && t.patterns.length ? chipRow("Plays", t.patterns.map((p) => ({ value: p.id, text: p.label })), v.pattern,
+          (p) => setEdit(cell.paths.pattern, p, `${t.label} in ${s.label}: ${t.patterns.find((x) => x.id === p)?.label}`), edited(cell.paths.pattern)) : null,
+        l.level !== "out" && lineChoices.length > 1 ? chipRow("Comes in", lineChoices, v.from || 0,
+          (j) => (j === (cell.program?.from || 0) ? releaseEdit(cell.paths.from) : setEdit(cell.paths.from, j, `${t.label} comes in at line ${j + 1} of ${s.label}`)), edited(cell.paths.from), { drawn: l.chance }) : null,
+        t.fills && l.level !== "out" ? chipRow("A fill into the next", [{ value: true, text: "yes" }, { value: false, text: "no" }], !!v.fill,
+          (f) => setEdit(cell.paths.fill, f, `${t.label}: ${f ? "a fill" : "no fill"} at the end of ${s.label}`), edited(cell.paths.fill)) : null,
+        h("div", { class: "row" },
+          l.locked ? h("button", { class: "btn quiet", type: "button", onclick: () => clearEdits(Object.keys(M.releasePatch(cell)), `Unlock ${t.label} in ${s.label}`) }, lockIcon(), " Unlock")
+            : cell.by !== "you" ? h("button", { class: "btn quiet", type: "button", title: "Keep what the program drew here, through a new performance",
+              onclick: () => { setEdits(M.lockPatch(cell), `Lock ${t.label} in ${s.label}`); say(`${t.label} in ${s.label}: locked`); } }, lockIcon(), " Lock") : null),
+        h("div", { class: "row" },
+          h("button", { class: "btn quiet", type: "button", onclick: () => select({ kind: "player", id: t.id }) }, `${t.label} everywhere`),
+          h("button", { class: "btn quiet", type: "button", onclick: () => select({ kind: "section", id: s.id }) }, `everyone in ${s.label}`))),
+      why: (cell.why || []).map((r) => ({ kind: r.kind === "before" ? "parent" : r.kind, text: r.text })),
+      hear: hearHow,
+      release: { disabled: !(cell.by === "you" || l.locked), action: () => clearEdits(Object.keys(M.releasePatch(cell)), `${t.label} in ${s.label}: the program's`) } });
+    return true;
+  }
+
+  function seamState(sel) {
+    const s = sectionAt(sel.id), seam = s?.seam;
+    if (!s || !seam) return false;
+    const value = seam.value || null, yours = seam.yours;
+    const kinds = seam.before ? ["riser", "sweep", "roll", "stop"] : [];
+    const over = value ? Math.max(...["riser", "sweep", "roll", "stop", "down"].map((k) => (typeof value[k] === "object" ? value[k].bars : value[k]) || 0)) : 0;
+    const bars = S.sound?.transition?.bars || [1, 2, 4];
+    const put = (next, label) => (next ? setEdit(seam.path, next, label) : releaseEdit(seam.path, label));
+    const from = seam.from ? sectionAt(seam.from) : null;
+    shell({ kind: "seam", rubric: `Into ${s.label}`, mine: yours,
+      set: `${from ? `from ${from.label}: ` : ""}${M.seamWords(value)}${yours ? ", yours" : ""}`,
+      body: h("div", {},
+        kinds.length ? h("div", { class: "row" }, h("span", { class: "label" }, "Before it"), h("span", { class: "chips", role: "group", "aria-label": "Before it" },
+          kinds.map((k) => h("button", { class: `chip${value?.[k] ? " on you" : ""}`, type: "button", "aria-pressed": String(!!value?.[k]),
+            onclick: () => put(M.seamToggle(value, k, over || 1), `Into ${s.label}: ${M.KIND_WORDS[k]}`) }, M.KIND_WORDS[k])))) : h("p", { class: "hint" }, "Nothing comes before the first section, so nothing builds into it; an impact on its downbeat can."),
+        kinds.length && value && over ? chipRow("Over", bars.map((n) => ({ value: n, text: `${n} bar${n === 1 ? "" : "s"}` })), over, (n) => put(M.seamOver(value, n), `Into ${s.label}: over ${n} bars`), yours) : null,
+        h("div", { class: "row" }, h("span", { class: "label" }, "On the downbeat"),
+          h("button", { class: `chip${value?.impact ? " on you" : ""}`, type: "button", "aria-pressed": String(!!value?.impact), onclick: () => put(M.seamToggle(value, "impact"), `Into ${s.label}: an impact`) }, "an impact"),
+          h("button", { class: `chip${value?.down ? " on you" : ""}`, type: "button", "aria-pressed": String(!!value?.down), onclick: () => put(M.seamToggle(value, "down", over || 1), `Into ${s.label}: a downlifter`) }, "a downlifter after")),
+        value?.sweep ? chipRow("The sweep", [{ value: "highpass", text: "rising (the bass thins out)" }, { value: "lowpass", text: "falling (the top closes)" }],
+          typeof value.sweep === "object" ? value.sweep.type : "highpass", (type) => put({ ...value, sweep: { bars: typeof value.sweep === "object" ? value.sweep.bars : value.sweep, type } }, `Into ${s.label}: the sweep ${type === "lowpass" ? "falling" : "rising"}`), yours) : null,
+        h("p", { class: "hint" }, "A transition is sound, not arrangement: it doesn't change who plays or how long a section is; a roll takes the snare's place in its bars, a stop quiets the band and not the singer.")),
+      why: yours ? [["you", `yours: ${M.seamWords(value)}`]] : [["song", "the song's own seams are plain: the band goes straight on, and a turn is how this song breathes between parts"]],
+      hear: () => listen("you", s.index),
+      release: { disabled: !edited(seam.path), action: () => releaseEdit(seam.path, `Into ${s.label}: the program's`) } });
+    return true;
+  }
+
+  function composerState(sel) {
+    const st = sel.kind === "chord" ? C()?.chordState?.() : C()?.noteState?.();
+    if (!st) return sectionState({ kind: "section", id: sel.section || S.open });
+    shell({ kind: sel.kind, rubric: st.rubric, set: st.set, mine: st.mine,
+      body: h("div", {}, sel.kind === "chord" && st.scope ? h("div", { class: "row" }, h("span", { class: "label" }, "Applies"), st.scope) : null, st.body),
+      why: st.why, hear: st.hear, release: st.release });
+    return true;
+  }
+
+  function lineState(sel) {
+    const s = sectionAt(sel.id), w = wordsOf(s);
+    const phrases = state.view.composition?.sections?.find((x) => x.id === sel.id)?.phrases || [];
+    const p = phrases[sel.line];
+    if (!s || !p?.lyric_path) return false;
+    const anchor = h("div", { class: "lyric-author" });
+    window.SongbirdAuthor?.line(state.view, sel.id, sel.line, anchor);
+    shell({ kind: "line", rubric: `${s.label}, line ${sel.line + 1}`, mine: !!p.authored,
+      set: `${p.authored ? "yours" : w?.how ? `the song's own, ${w.how}` : "the song's own"}: ${p.syllable_count} syllables`,
+      body: h("div", {},
+        phrases.length > 1 ? chipRow("Line", phrases.map((_, j) => ({ value: j, text: String(j + 1), disabled: !phrases[j].lyric_path })), sel.line,
+          (j) => select({ kind: "line", id: sel.id, line: j })) : null,
+        anchor,
+        h("p", { class: "hint" }, "Checked for its count and the singer's pronunciation before it changes the song. The meaning and the rhyme are yours.")),
+      why: p.authored ? [["you", "your line; it follows these words wherever they are sung"]] : [["lineage", "handed down from the song as it began"], ["machine", card("words")?.detail || ""]],
+      hear: () => listen("you", s.index) });
+    return true;
+  }
+
+  function playerState(sel) {
+    const t = S.grid?.tracks.find((x) => x.id === sel.id);
+    if (!t || t.kind !== "player") return false;
+    const sp = S.sound?.players.find((p) => p.player === t.id), band = card("band"), b = state.start.bounds;
+    const gain = sp?.gain?.value ?? band?.band?.[t.id] ?? 1;
+    const program = was(`band.${t.id}`);
+    const row = S.grid.sections.map((s) => {
+      const cell = S.grid.cells.get(`${t.id}|${s.id}`), l = M.look(cell);
+      return h("i", { class: `${l.level !== "out" ? "on" : ""}${l.level === "hard" ? " hard" : ""}${l.whose === "you" || l.locked ? " you" : ""}`, title: `${s.label}: ${l.level}` });
+    });
+    const paths = [`band.${t.id}`, ...Object.keys(state.edits).filter((p) => p.startsWith(`sound.${t.id}.`) || p.startsWith(`mix.${t.id}.`))];
+    const leads = band && !band.styled && (state.start.bounds["band.lead"]?.options || []).includes(t.id);
+    shell({ kind: "player", rubric: t.label, mine: paths.some(edited),
+      set: `${pct(gain)}${edited(`band.${t.id}`) && typeof program === "number" ? ` (was ${pct(program)})` : ""}; ${t.family || ""}${sp?.patch ? `, ${sp.patch.value}` : sp?.kit ? `, the ${sp.kit.value} kit` : ""}`,
+      body: h("div", {},
+        h("div", { class: "row" }, h("span", { class: "label" }, "Plays in"), h("span", { class: "minisec", title: "Each section, left to right" }, row)),
+        field("Level", `band.${t.id}`, gain, b["band.gain"] || { min: 0, max: 2, step: 0.01 }, pct, ["out", "200%"]),
+        soundControls(t, sp),
+        leads ? chipRow("Leads where nobody sings", [{ value: true, text: "this one" }], band.band.lead === t.id, () => setEdit("band.lead", t.id, `${t.label} leads where nobody sings`), edited("band.lead")) : null,
+        routeControls(t.id, t.label),
+        h("div", { class: "row" }, h("button", { class: "btn quiet", type: "button", onclick: () => setEdit(`band.${t.id}`, 0, `${t.label} sits out`) }, "Sit out everywhere"))),
+      why: [edited(`band.${t.id}`) ? ["you", `${pct(gain)}; the program had ${pct(program)}`] : null, ...(band?.reasons || []).filter((r) => r.kind !== "you").slice(0, 3)].filter(Boolean),
+      hear: hearHow,
+      release: releasing(paths, `${t.label}: the program's`) });
+    return true;
+  }
+  function soundControls(t, sp) {
+    if (!sp) return null;
+    const out = [];
+    if (sp.patch) out.push(chipRow("Sound", sp.patch.options.map((o) => ({ value: o.name, text: o.name, title: o.about })), sp.patch.value,
+      (v) => (v === sp.patch.program ? releaseEdit(sp.patch.path, `${t.label}: its own sound`) : setEdit(sp.patch.path, v, `${t.label}: ${v}`)), sp.patch.yours));
+    if (sp.kit) out.push(chipRow("Kit", sp.kit.options.map((o) => ({ value: o.name, text: o.name, title: o.about })), sp.kit.value,
+      (v) => (v === sp.kit.program ? releaseEdit(sp.kit.path, `${t.label}: its own kit`) : setEdit(sp.kit.path, v, `${t.label}: the ${v} kit`)), sp.kit.yours));
+    if (sp.sidechain) out.push(h("div", { class: "row" }, h("span", { class: "label" }, "Pump"), pumpSelect(sp.sidechain, `${t.label}: pump`),
+      h("span", { class: "hint" }, sp.sidechain.has_kick ? "ducks on the kick" : "no kick here: it pumps on the beat")));
+    if (sp.pan) out.push(field("Where it sits", sp.pan.path, sp.pan.value, { min: -1, max: 1, step: 0.05 }, panWords, ["left", "right"]));
+    const more = [];
+    if (sp.send) more.push(field("How much reaches the room", sp.send.path, sp.send.value, { min: sp.send.min, max: sp.send.max, step: 0.05 }, (x) => `${Number(x).toFixed(2)}×`, ["dry", "3×"]));
+    if (sp.filter) {
+      const f = sp.filter;
+      more.push(field("Filter: how open", f.cutoff.path, f.cutoff.value, f.cutoff, (x) => `${Math.round(x)} Hz`, ["dark", "open"], { log: true, yours: !!f.cutoff.yours }));
+      if (f.resonance) more.push(field("Filter: resonance", f.resonance.path, f.resonance.value, { min: 0, max: 1, step: 0.01 }, pct, ["none", "sings"], { yours: !!f.resonance.yours }));
+      if (f.envelope) more.push(field("Filter: envelope", f.envelope.path, f.envelope.value, { min: 0, max: 6, step: 0.1 }, (x) => `${Number(x).toFixed(1)} oct`, ["still", "wide"], { yours: !!f.envelope.yours }));
+    }
+    if (sp.pieces) for (const [piece, v] of Object.entries(sp.pieces)) {
+      if (!v) continue;
+      const now = v.value || {};
+      for (const [knob, r] of Object.entries(v.knobs || {})) {
+        more.push(field(`The ${piece}: ${knob}`, `${v.path}.${knob}`, now[knob] ?? r.own ?? 0, { min: r.min, max: r.max, step: knob === "tune" ? 1 : 0.05 },
+          (x) => (knob === "tune" ? `${x > 0 ? "+" : ""}${x} st` : `${Number(x).toFixed(2)}×`), knob === "tune" ? ["lower", "higher"] : ["shorter", "longer"],
+          { yours: !!v.yours, commit: (x) => setEdit(v.path, { ...now, [knob]: x }, `${t.label}: the ${piece}'s ${knob}`) }));
+      }
+    }
+    if (more.length) out.push(h("details", {}, h("summary", {}, "more"), more));
+    return h("div", {}, out);
+  }
+  function routeControls(part, label) {
+    const ui = P();
+    if (!ui) return null;
+    if (!ui.parts().length) ui.fetch();
+    const r = ui.own(part), file = ui.fileChannel(part), midi = ui.midi;
+    const now = Number.isInteger(r) ? "midi" : r;
+    const pick = (to) => {
+      if (to === "midi") { if (!midi.access) ui.fetch(); window.SongbirdPlayers.connect(false).then(() => ui.setRoute(part, String(file))); }
+      else ui.setRoute(part, to);
+    };
+    return h("div", {},
+      chipRow("In the sketch", [{ value: "page", text: "here" }, { value: "midi", text: "over MIDI", disabled: !ui.hasMidi(), title: ui.hasMidi() ? "To a channel of your synth or sequencer" : "This browser has no Web MIDI" }, { value: "off", text: "off" }],
+        now, pick, Object.prototype.hasOwnProperty.call(ui.set.routes, part)),
+      Number.isInteger(r) ? h("div", { class: "row" }, h("span", { class: "label" }, "Channel"),
+        h("span", { class: "stepper" }, h("button", { type: "button", "aria-label": "Channel down", onclick: () => ui.setRoute(part, String(Math.max(0, r - 1))) }, "−"),
+          h("output", {}, `${r + 1}${r === file ? " (the file's)" : ""}`), h("button", { type: "button", "aria-label": "Channel up", onclick: () => ui.setRoute(part, String(Math.min(15, r + 1))) }, "+"))) : null,
+      h("details", {}, h("summary", {}, "more: MIDI out"),
+        h("div", { class: "row" }, midi.access
+          ? h("select", { "aria-label": "MIDI out", onchange: (e) => { window.SongbirdPlayers.choose(e.target.value); renderInspector(); } },
+            h("option", { value: "" }, "none: everything plays here"), ui.outputs().map((o) => h("option", { value: o.id, selected: midi.output === o }, o.name || o.id)))
+          : h("button", { class: "btn quiet", type: "button", disabled: !ui.hasMidi(), onclick: () => window.SongbirdPlayers.connect(false) }, "Connect MIDI"),
+          h("button", { class: "btn quiet", type: "button", onclick: () => window.SongbirdPlayers.panic(), title: "Every channel of the output told to stop" }, "Panic")),
+        h("label", { class: "check" }, h("input", { type: "checkbox", checked: ui.set.programs, onchange: (e) => ui.programs(e.target.checked) }), " send its General MIDI sound"),
+        h("div", { class: "row" },
+          h("button", { class: "link small", type: "button", disabled: !midi.output, onclick: () => ui.everyone("midi") }, "Everyone to MIDI, as the file"),
+          h("button", { class: "link small", type: "button", onclick: () => ui.everyone("page") }, "Everyone here"),
+          h("button", { class: "link small", type: "button", onclick: () => { ui.set.routes = {}; ui.setRoute("tune", "page"); } }, "As at first")),
+        h("p", { class: "hint", "aria-live": "polite" }, ui.note())));
+  }
+
+  function singerState() {
+    const c = card("singer"), mix = card("mix"), b = state.start.bounds, m = mix?.mix || {};
+    const phrasings = phrasingChoices(state.start.phrasings);
+    const sel = h("select", { "aria-label": "Whose way it is sung", id: "singerWay" }, h("option", { value: "" }, "the song's own way"),
+      phrasings.map((p) => h("option", { value: p.id }, `${p.way || `${p.label}'s way`}${p.detail ? ` (${p.detail})` : ""}`)));
+    sel.value = c?.phrasing || "";
+    sel.addEventListener("change", () => setEdit("phrasing", sel.value || null, "The singer's way"));
+    const sung = S.grid?.sections.map((s) => h("i", { class: s.sung ? "on" : "", title: `${s.label}: ${s.sung ? "sung" : "played"}` })) || [];
+    shell({ kind: "singer", rubric: "The singer", mine: edited("phrasing") || edited("mix.forward") || edited("mix.intimacy"),
+      set: `${c?.value || ""}${c?.detail ? `; ${c.detail}` : ""}`,
+      body: h("div", {},
+        h("div", { class: "row" }, h("span", { class: "label" }, "Sings in"), h("span", { class: "minisec" }, sung)),
+        phrasings.length ? h("div", { class: "row" }, h("span", { class: "label" }, "Whose way"), sel)
+          : h("p", { class: "hint" }, state.start.sing.available ? "Sing it (under Tools) and the song can be sung your way here." : state.start.sing.why),
+        field("Over the band", "mix.forward", m.forward, b["mix.forward"], (x) => `${Number(x).toFixed(1)} dB`, ["among it", "well over it"]),
+        field("How close", "mix.intimacy", m.intimacy, b["mix.intimacy"], pct, ["further back", "at your ear"])),
+      why: c?.reasons || [], hear: () => listen("you", null),
+      release: releasing(["phrasing", "mix.forward", "mix.intimacy"], "The singer as the program has it") });
+    return true;
+  }
+  function choirState() {
+    const c = card("choir");
+    const where = S.grid?.sections.map((s) => h("i", { class: s.choir ? "on" : "", title: `${s.label}: ${s.choir ? "they sing" : "out"}` })) || [];
+    shell({ kind: "choir", rubric: "Voices before", set: `${c?.value || ""}${c?.detail ? `; ${c.detail}` : ""}`,
+      body: h("div", {}, h("div", { class: "row" }, h("span", { class: "label" }, "Sing in"), h("span", { class: "minisec" }, where)),
+        routeControls("choir1", "the first voice before"),
+        h("p", { class: "hint" }, "How many there are follows the versions before; where they sing is the song's.")),
+      why: c?.reasons || [], hear: hearHow });
+    return true;
+  }
+  function roomState() {
+    const c = card("mix"), b = state.start.bounds, m = c?.mix || {};
+    shell({ kind: "room", rubric: "The room", mine: ["mix.space", "mix.width", "mix.rt60", "mix.predelay"].some(edited), set: `${c?.value}; ${c?.detail}`,
+      body: h("div", {},
+        field("How much of the room", "mix.space", m.space, b["mix.space"], pct, ["dry", "roomy"]),
+        field("How wide", "mix.width", m.width, b["mix.width"], pct, ["narrow", "wide"]),
+        b["mix.rt60"] ? h("details", {}, h("summary", {}, "more"),
+          field("How long it rings", "mix.rt60", m.rt60, b["mix.rt60"], (x) => `${Number(x).toFixed(2)} s`, ["a small room", "a hall"]),
+          b["mix.predelay"] ? field("How soon it answers", "mix.predelay", m.predelay, b["mix.predelay"], (x) => `${Math.round(x * 1000)} ms`, ["at once", "later"]) : null) : null),
+      why: c?.reasons || [], hear: () => listen("you", null),
+      release: releasing(["mix.space", "mix.width", "mix.rt60", "mix.predelay"], "The room as the program has it") });
+    return true;
+  }
+  function styleState() {
+    const c = card("style");
+    if (!c) return false;
+    const st = c.style, opts = (map) => Object.entries(map || {}).map(([value, text]) => ({ value, text }));
+    const styles = h("select", { "aria-label": "The style", id: "styleName" }, opts(c.styles).map((o) => h("option", { value: o.value }, o.text)));
+    styles.value = st.name;
+    styles.addEventListener("change", () => setEdit("style.name", styles.value, `The style: ${c.styles[styles.value]}`));
+    shell({ kind: "style", rubric: "The style", mine: c.mine, set: `${c.value}${c.detail ? `: ${c.detail}` : ""}`,
+      body: h("div", {},
+        h("div", { class: "row" }, h("span", { class: "label" }, "The style"), styles),
+        chipRow("Its feel", opts(c.feels), st.feel, (x) => setEdit("style.feel", x, "The feel"), edited("style.feel")),
+        chipRow("How it ends", opts(c.endings), st.ending, (x) => setEdit("style.ending", x, "The ending"), edited("style.ending")),
+        chipRow("Backing voices", opts(c.backings), st.backing, (x) => setEdit("style.backing", x, "The backing voices"), edited("style.backing")),
+        chipRow("The last refrain", [{ value: true, text: "a whole step up" }, { value: false, text: "in the same key" }], !!st.lift, (x) => setEdit("style.lift", x, "The last refrain"), edited("style.lift"))),
+      why: c.reasons, hear: () => listen("you", null), release: releasing(allPaths(c).concat(Object.keys(state.edits).filter((p) => p.startsWith("style."))), "The program's style") });
+    return true;
+  }
+  function bandState() {
+    const c = card("band"), b = state.start.bounds, s = state.start;
+    if (!c) return false;
+    const band = c.band;
+    shell({ kind: "band", rubric: "The band", mine: ["band.pattern", "band.lead", "band.density", "band.brightness"].some(edited), set: `${c.value}${c.detail ? `: ${c.detail}` : ""}`,
+      body: h("div", {},
+        c.styled ? null : chipRow("How it plays", b["band.pattern"].options.map((x) => ({ value: x, text: s.patterns[x] || x })), band.pattern, (x) => setEdit("band.pattern", x, "How the band plays"), edited("band.pattern")),
+        c.styled ? null : chipRow("Who leads where nobody sings", b["band.lead"].options.map((x) => ({ value: x, text: c.players[x] || x })), band.lead, (x) => setEdit("band.lead", x, "Who leads"), edited("band.lead")),
+        field("How busy", "band.density", band.density, b["band.density"], pct, ["sparse", "busy"]),
+        field("How bright", "band.brightness", band.brightness, b["band.brightness"], pct, ["dark and soft", "bright"]),
+        h("p", { class: "hint" }, c.styled ? "The style chooses who plays and who leads; each player's part is theirs to change in Arrange, its level and sound in Mix." : "Each player's part is in Arrange; its level in Mix."),
+        h("div", { class: "row" }, h("button", { class: "btn quiet", type: "button", onclick: () => showView("arrange") }, "Arrange"), h("button", { class: "btn quiet", type: "button", onclick: () => showView("mix") }, "Mix"))),
+      why: c.reasons, hear: () => listen("you", null), release: releasing(["band.pattern", "band.lead", "band.density", "band.brightness"], "The band as the program has it") });
+    return true;
+  }
+  function shapeState() {
+    const c = card("shape"), s = state.start, v = state.view;
+    if (!c) return false;
+    const arranged = !!v.composition?.arranged;
+    const byPart = {};
+    for (const ch of c.choices || []) (byPart[ch.part] = byPart[ch.part] || []).push(ch);
+    const toggles = s.optional.map((part) => {
+      const on = !!c.parts?.[part], flip = (byPart[part] || []).find((x) => x.value === !on);
+      return h("button", { class: `chip${on ? " on" : ""}${on && edited(`form.${part}`) ? " you" : ""}`, type: "button", "aria-pressed": String(on), disabled: !flip || !flip.allowed,
+        title: !flip ? "This part can't be changed in this arrangement" : !flip.allowed ? flip.why : null, onclick: () => setEdit(`form.${part}`, !on, `${on ? "No" : "With"} ${s.parts[part]}`) }, s.parts[part]);
+    });
+    const release = () => { const next = copyEdits(); for (const p of Object.keys(next)) if (p.startsWith("form.")) delete next[p]; next["form.order"] = null; commitEdits(next, "Use the song's shape"); };
+    shell({ kind: "shape", rubric: "The shape", mine: c.mine || !!v.edits["form.order"], set: c.value,
+      body: arranged ? h("div", {}, h("p", { class: "hint" }, "The parts are in the order you set in Arrange. Use the song's shape to choose the verses and parts here again."),
+        h("button", { class: "btn quiet", type: "button", onclick: release }, "Use the song's shape"))
+        : h("div", {},
+          byPart.verses ? chipRow("Verses", byPart.verses.map((x) => ({ value: x.value, text: String(x.value), disabled: !x.allowed, title: x.why })), c.parts.verses, (n) => setEdit("form.verses", n, `${n} verses`), edited("form.verses")) : null,
+          h("div", { class: "row" }, h("span", { class: "label" }, "Parts"), h("span", { class: "chips" }, toggles)),
+          h("p", { class: "hint" }, "Their order is the regions in Arrange: drag them there, or ← → on a section.")),
+      why: c.reasons, hear: () => listen("you", null), release: { disabled: !c.mine && !v.edits["form.order"], action: release } });
+    return true;
+  }
+
+  // ------------------------------------------------------------------ sheets: Your tools, the Time drawer
+  function openTools(on, side) {
+    const sheet = $("finishPanel");
+    if (on === undefined) on = sheet.hidden;
+    sheet.hidden = !on;
+    $("scrim").hidden = !on && $("drawer").hidden;
+    $("toolsBtn").setAttribute("aria-expanded", String(on));
+    if (on) {
+      if (side === "record") $("recordPanel").scrollIntoView({ block: "nearest" });
+      else $("toolsTitle").focus();
+      sayTarget();
+    } else $("toolsBtn").focus({ preventScroll: true });
+  }
+  function reveal(what, scroll) { if ($("finishPanel").hidden) openTools(true, what); else if (scroll) $("recordPanel").scrollIntoView({ block: "nearest" }); }
+  function sayTarget() {  // what "Play a part in" plays over: the selection
+    const s = S.open || S.sel?.id || S.sel?.section;
+    const label = s ? sectionAt(s)?.label : null;
+    $("performWhat").textContent = `A MIDI keyboard, live, over the sketch as the guide: only the notes are kept. It starts on ${label || "the whole song"}; choose the player and the lines in it.`;
+    const where = $("performWhere");
+    if (where && s) { const i = compIndex(s); if (i >= 0 && where.value !== String(i)) { where.value = String(i); where.dispatchEvent(new Event("change")); } }
+  }
+  function openTime(on) {
+    const d = $("drawer");
+    if (on === undefined) on = d.hidden;
+    d.hidden = !on;
+    $("timeBtn").setAttribute("aria-expanded", String(on));
+    $("timeBtn").textContent = on ? "Time ▴" : "Time ▾";
+    $("scrim").hidden = !on && $("finishPanel").hidden;
+    if (on) { d.style.top = `${$("transport").offsetTop + $("transport").offsetHeight}px`; renderTimeline(); loadCompare(); d.querySelector("h2")?.setAttribute("tabindex", "-1"); d.querySelector("h2")?.focus(); }
+    else $("timeBtn").focus({ preventScroll: true });
+  }
+  function escape() {
+    if (S.pop) { const back = opener(S.pop); togglePop(S.pop); $(back)?.focus(); return true; }
+    if (!$("finishPanel").hidden) { openTools(false); return true; }
+    if (!$("drawer").hidden) { openTime(false); return true; }
+    if (S.open) { closeNotes(); return true; }
+    if (S.sel) { select(null); return true; }
+    return false;
+  }
+
+  // ------------------------------------------------------------------ the keyboard (docs/STUDIO-REDESIGN.md's table)
+  function key(e) {
+    // Enter or Space on a control of the page's is a keyboard selection: the inspector's heading takes the focus
+    if (e.key === "Enter" && e.target.closest?.("#grid button, #page .rub, #mix .nm, .door")) S.keyed = true;
+    const a = M.keyAction(e);
+    if (!a || document.querySelector("dialog[open]")) return;
+    if (e.target.closest?.(".sbc-note, .sbc-roll-scroll") && a.action === "step") return;  // a note's own arrows (composer.js)
+    if (a.action === "play" && e.target.matches?.("input[type=checkbox], input[type=radio], summary")) return;
+    const grid = S.view === "arrange";
+    switch (a.action) {
+      case "play": e.preventDefault(); play(a.how); break;
+      case "loop": toggle("tLoop"); break;
+      case "click": toggle("tClick"); break;
+      case "view": showView(a.view, e.target.getAttribute?.("role") === "tab"); break;
+      case "open": {
+        const region = e.target.closest?.(".region");
+        const id = region ? region.dataset.key.slice(7) : S.sel?.kind === "section" && !e.target.closest?.("button, a, input, select, summary") ? S.sel.id : null;
+        if (id) { e.preventDefault(); S.keyed = false; if (S.sel?.id !== id) select({ kind: "section", id }); openNotes(id, true); }
+        break;
+      }
+      case "escape": if (escape()) e.preventDefault(); break;
+      case "mute": case "solo": {
+        const name = S.sel?.kind === "player" ? S.sel.id : S.sel?.kind === "cell" ? S.sel.player : null;
+        const t = S.grid?.tracks.find((x) => x.id === name && x.kind === "player");
+        if (t) { e.preventDefault(); const band = card("band"); const bc = { ...band, players: { ...band.players, [t.id]: t.label } }; (a.action === "mute" ? mutePlayer : soloPlayer)(bc, t.id); }
+        break;
+      }
+      case "record": e.preventDefault(); record(); break;
+      case "time": e.preventDefault(); openTime(); break;
+      case "move": if (S.sel?.kind === "section") { e.preventDefault(); const i = S.grid.sections.findIndex((s) => s.id === S.sel.id); moveSection(S.sel.id, i + a.step); } break;
+      case "step":
+        if (e.target.closest?.(".sbc-note, input, select, [role=tab]")) return;
+        if ((grid || S.view === "page") && stepCell(a.axis, a.step)) e.preventDefault();
+        break;
+      default: break;
+    }
+  }
+  function toggle(id) {
+    const b = $(id), on = b.getAttribute("aria-pressed") !== "true";
+    b.setAttribute("aria-pressed", String(on));
+    if (id === "tLoop") { C()?.options?.({ loop: on }); $("popLoop").checked = on; }
+    if (id === "tClick") { C()?.options?.({ metronome: on }); $("popClick").checked = on; }
+    say(`${id === "tLoop" ? "Loop" : "Click"} ${on ? "on" : "off"}`);
+  }
+
+  // ------------------------------------------------------------------ wiring
+  function wire() {
+    for (const t of document.querySelectorAll("#tabs [role=tab]")) {
+      t.addEventListener("click", () => showView(t.dataset.view));
+      t.addEventListener("keydown", (e) => {
+        const tabs = [...document.querySelectorAll("#tabs [role=tab]")], i = tabs.indexOf(t);
+        const next = { ArrowRight: (i + 1) % tabs.length, ArrowLeft: (i + tabs.length - 1) % tabs.length, Home: 0, End: tabs.length - 1 }[e.key];
+        if (next === undefined) return;
+        e.preventDefault(); e.stopPropagation(); showView(tabs[next].dataset.view, true);
+      });
+    }
+    for (const b of document.querySelectorAll("#bottombar [data-view]")) b.addEventListener("click", () => showView(b.dataset.view));
+    $("viewWhat").addEventListener("click", () => { const a = $("viewAbout"); a.hidden = !a.hidden; $("viewWhat").setAttribute("aria-expanded", String(!a.hidden)); });
+    for (const b of document.querySelectorAll("[data-how]")) b.addEventListener("click", () => setHow(b.dataset.how));
+    $("tPlay").addEventListener("click", () => play());
+    $("tStop").addEventListener("click", stopAll);
+    $("tLoop").addEventListener("click", () => toggle("tLoop"));
+    $("tClick").addEventListener("click", () => toggle("tClick"));
+    $("popLoop").addEventListener("change", () => toggle("tLoop"));
+    $("popClick").addEventListener("change", () => toggle("tClick"));
+    $("sketchChords").addEventListener("change", (e) => C()?.options?.({ chords: e.target.checked }));
+    $("sketchBass").addEventListener("change", (e) => C()?.options?.({ bass: e.target.checked }));
+    $("howMore").addEventListener("click", () => togglePop("howPop"));
+    $("positionNow").addEventListener("click", () => { if (narrow()) togglePop("howPop"); });
+    $("tempoBtn").addEventListener("click", () => togglePop("tempoPop"));
+    $("keyBtn").addEventListener("click", () => togglePop("keyPop"));
+    for (const b of document.querySelectorAll("#howPop [data-do]")) b.addEventListener("click", () => {
+      if (b.dataset.do === "roll") $("roll").click(); else travelHistory(b.dataset.do);
+    });
+    $("toolsBtn").addEventListener("click", () => openTools());
+    $("timeBtn").addEventListener("click", () => openTime());
+    $("scrim").addEventListener("click", () => { openTools(false); openTime(false); });
+    for (const b of document.querySelectorAll("[data-close]")) b.addEventListener("click", () => (b.closest("#drawer") ? openTime(false) : openTools(false)));
+    $("performOpen").addEventListener("click", () => {
+      const p = $("performPanel"); p.hidden = !p.hidden; $("performOpen").setAttribute("aria-expanded", String(!p.hidden));
+      if (!p.hidden) { window.SongbirdPerform?.render(state.view); sayTarget(); }
+    });
+    const drop = $("midiDrop");
+    drop.addEventListener("click", () => $("importFile").click());
+    for (const ev of ["dragenter", "dragover"]) drop.addEventListener(ev, (e) => { e.preventDefault(); e.stopPropagation(); drop.classList.add("over"); $("dropVeil").hidden = true; });
+    drop.addEventListener("dragleave", () => drop.classList.remove("over"));
+    drop.addEventListener("drop", (e) => { e.preventDefault(); e.stopPropagation(); drop.classList.remove("over"); $("dropVeil").hidden = true; window.SongbirdPerform?.bringBack(e.dataTransfer.files[0]); });
+    document.addEventListener("keydown", key);
+    document.addEventListener("click", (e) => {  // a popover closes when something else is pressed
+      if (S.pop && !e.target.closest(".pop, #howMore, #tempoBtn, #keyBtn, #positionNow")) togglePop(S.pop);
+    });
+    const audio = $("audio");
+    for (const ev of ["play", "pause", "ended"]) audio.addEventListener(ev, () => { paintPlay(); if (ev !== "play") setTimeout(idle, 1200); });
+    audio.addEventListener("timeupdate", wholeSongAt);
+    new ResizeObserver(() => { if (S.playhead !== null) placeHead(S.playhead); }).observe($("gridScroll"));
+    showView("page");
+  }
+
+  // ------------------------------------------------------------------ what studio.js tells the score
+  // its render has already set the words (renderPage) and the inspector (renderInspector); the grid and the mix
+  // come from the arrangement and the sound, asked for again with the same edits
+  function render(view) {
+    if (!view) return;
+    renderTransport();
+    idle();
+    if (S.hash) loadGrid().then(afterFirst); else loadGrid();
+  }
+  function started(start, hash) {
+    const classic = location.pathname.replace(/\/$/, "");
+    $("classicLink").href = `${classic.startsWith("/v/") ? classic : ""}/classic`;
+    const p = start.public;
+    $("toolsWhere").textContent = p
+      ? `An open studio: each person can have ${p.records} whole songs and ${p.previews} sections made an hour, one at a time for everyone; what you record waits ${p.download_hours} hours to be downloaded.`
+      : start.shared ? "Recordings are made, and kept, on the computer serving this studio: download yours to keep it."
+        : `Recordings go into ${start.out} on this computer.`;
+    if (start.version) $("versionNote").textContent = "This page is on someone's version. Opening another starts from that one instead.";
+    // a view and a selection in the address, for a link or a picture: #view=arrange&sel=cell:refrain:0:drum&open=refrain:0&panel=tools
+    if (hash.view) showView(hash.view);
+    S.hash = hash;
+  }
+  function afterFirst() {  // once the grid is drawn: the address's selection, notes and sheet
+    const hash = S.hash;
+    if (!hash) return;
+    S.hash = null;
+    if (hash.open) openNotes(hash.open);
+    if (hash.sel) {
+      const [kind, ...rest] = hash.sel.split(":");
+      const parts = rest.join(":");
+      const sel = kind === "cell" ? { kind, player: rest[0], id: rest.slice(1).join(":") } : kind === "line" ? { kind, id: rest.slice(0, 2).join(":"), line: Number(rest[2] || 0) }
+        : ["section", "seam"].includes(kind) ? { kind, id: parts } : kind === "player" ? { kind, id: parts } : { kind };
+      select(sel);
+    }
+    if (hash.panel === "tools") openTools(true);
+    if (hash.panel === "time") openTime(true);
+  }
+  window.SongbirdScore = {
+    render, renderPage, renderInspector, started, reveal, recording, playerChanged, tick, composerSelected, closeNotes, narrow,
+    playersChanged: () => { if (S.sel?.kind === "player" || S.sel?.kind === "choir") renderInspector(); renderGrid(); },
+    _state: S,
+  };
+  document.addEventListener("DOMContentLoaded", wire);  // after studio.js, whose globals it uses
+})();

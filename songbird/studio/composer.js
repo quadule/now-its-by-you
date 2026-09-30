@@ -19,6 +19,11 @@
   };
   const bridge = () => window.StudioBridge || {};
   const root = () => document.getElementById("studio-composer");
+  // On the score (index.html) the editor is only the notes of one section, under the Arrange grid: the transport is
+  // the page's, the sections are its regions, and a note's or a chord's card is a state of its inspector (score.js,
+  // told through page()). On the classic page (classic.html) it is the whole Tune area, as it was.
+  const page = () => window.SongbirdScore;
+  const notesMode = () => root()?.dataset?.mode === "notes";
   const composition = () => state.view && state.view.composition;
   const sections = () => composition()?.sections || [];
   const section = () => sections()[state.section];
@@ -102,11 +107,12 @@
   }
   function selectedSection(index) {
     stop(); state.section = clamp(index, 0, sections().length - 1); state.phrase = 0; state.note = null; state.chord = null;
-    state.where = { tune: null, chords: null }; paint();
+    state.where = { tune: null, chords: null }; paint(); told();
   }
   function selectedPhrase(index) {
-    stop(); state.phrase = index; state.note = null; state.chord = null; state.where = { tune: null, chords: null }; paint();
+    stop(); state.phrase = index; state.note = null; state.chord = null; state.where = { tune: null, chords: null }; paint(); told();
   }
+  function told() { if (notesMode()) page()?.composerSelected?.(state.chord ? "chord" : state.note !== null ? "note" : null); }
 
   // ---- one place, or everywhere (docs/STUDIO.md, "Looser harmony and melody"): a line's tune or chords changed
   // wherever it's sung (tune.<line>), only at this place of the form (tune.<section>:<n>.<line>), or at the last
@@ -516,10 +522,11 @@
     const old = root().querySelector(".sbc-inspector");
     if (state.chord) { state.chord = null; root().querySelector(".sbc-chord-card")?.replaceWith(inspector()); root().querySelectorAll(".sbc-chord.is-selected, .sbc-note.is-rub").forEach((node) => node.classList.remove("is-selected", "is-rub")); }
     else if (old) old.replaceWith(inspector());
-    announce(noteTitle(phrase().notes[index], index));
+    announce(noteTitle(phrase().notes[index], index)); told();
   }
   function startNoteDrag(event, index, geometry) {
     if (event.button !== 0) return;
+    if (notesMode() && page()?.narrow?.()) return; // on a phone the roll is read, and a tap selects: the inspector edits
     stop();
     const target = event.currentTarget, p = phrase(), original = { ...p.notes[index] };
     const rect = target.getBoundingClientRect();
@@ -617,7 +624,7 @@
   }
   function selectChord(h) {
     state.chord = { bar: h.bar, slot: h.slot }; state.note = null;
-    paint(); strum(h.symbol);
+    paint(); strum(h.symbol); told();
     root()?.querySelector(`[data-chord="${h.bar}.${h.slot}"]`)?.focus({ preventScroll: true });
   }
   function strum(symbol) {
@@ -855,17 +862,26 @@
     if (ctx) tone(ctx, pitch, ctx.currentTime + 0.005, 0.3);
   }
   function playbackSequence() {
-    const chosen = state.scope === "song" ? sections() : [section()];
+    // the score's transport may play a section it hasn't opened (playIndex), or the song from its playhead (from)
+    const target = sections()[state.playIndex ?? state.section] || section();
+    const chosen = state.scope === "song" ? sections() : [target];
     const phrases = state.scope === "phrase" ? [phrase()] : chosen.flatMap((s) => s.phrases || []);
-    const origin = state.scope === "phrase" ? phrase().start_beat + bounds().min_onset
+    let origin = state.scope === "phrase" ? phrase().start_beat + bounds().min_onset
       : Math.min(chosen[0].start_beat, ...phrases.map((p) => p.start_beat - (p.pickup_beats || 0)));
     const end = state.scope === "phrase" ? phrase().start_beat + bounds().max_end
       : chosen.at(-1).start_beat + chosen.at(-1).duration_beats;
-    const events = phrases.flatMap((p) => p.notes.map((n) => ({ beat: p.start_beat + n.onset - origin, duration: n.duration,
+    let events = phrases.flatMap((p) => p.notes.map((n) => ({ beat: p.start_beat + n.onset - origin, duration: n.duration,
       pitch: pitchFor(n), phrase: p.id }))).sort((a, b) => a.beat - b.beat);
     // the chords under the tune as the band lays them out: each where it starts in its line, for how long
-    const harmony = phrases.flatMap((p) => (p.harmony || []).map((h) => ({ beat: p.start_beat + h.start - origin,
+    let harmony = phrases.flatMap((p) => (p.harmony || []).map((h) => ({ beat: p.start_beat + h.start - origin,
       duration: h.beats, pcs: h.pcs || [], bass: h.bass }))).filter((h) => h.beat >= -1e-9 && h.beat < end - origin - 1e-9);
+    const cut = state.scope === "song" && state.from !== null && state.from !== undefined ? state.from - origin : 0;
+    if (cut > 0 && cut < end - origin - 0.25) { // from the playhead: what starts before it is left out, a chord ringing across it shortened
+      events = events.filter((e) => e.beat >= cut - 1e-9).map((e) => ({ ...e, beat: e.beat - cut }));
+      harmony = harmony.filter((h) => h.beat + h.duration > cut + 1e-9)
+        .map((h) => ({ ...h, beat: Math.max(0, h.beat - cut), duration: h.duration - Math.max(0, cut - h.beat) }));
+      origin += cut;
+    }
     return { origin, duration: Math.max(0.25, end - origin), events, harmony };
   }
   function togglePlay() { if (state.playback) { stop(); paint(); } else play(); }
@@ -922,6 +938,7 @@
     root()?.querySelectorAll(".sbc-overview-section").forEach((node) => node.classList.toggle("is-playing", Number(node.dataset.overviewSection) === currentSection));
     const songCursor = document.getElementById("sbc-song-playhead"), span = songSpan();
     if (songCursor) { songCursor.hidden = false; songCursor.style.left = `${clamp((absoluteBeat - span.start) / span.duration * 100, 0, 100)}%`; }
+    page()?.tick?.(absoluteBeat, (elapsed % duration) / duration);
     state.frame = requestAnimationFrame(schedule);
   }
   function stop() {
@@ -937,7 +954,84 @@
     const songCursor = document.getElementById("sbc-song-playhead");
     if (songCursor) songCursor.hidden = true;
     root()?.querySelectorAll(".is-playing").forEach((node) => node.classList.remove("is-playing"));
+    page()?.tick?.(null);
   }
+  // ---- the score's notes (index.html): the heading with the scope switch, snap and zoom, the phrase strip, the
+  // roll; the selected note's or chord's card is drawn by the page's inspector from noteState() and chordState()
+  function scopeSwitch(kind) {
+    const p = phrase(), s = section();
+    const options = window.SongbirdModel?.scopeOptions(p, s) || [];
+    if (!options.length) return null;
+    const now = where(kind, p);
+    return el("span", { class: "switch scope", role: "group", "aria-label": kind === "tune" ? "Where a change to the tune applies" : "Where a change to the chords applies" },
+      options.map((o) => el("button", { type: "button", "aria-pressed": String(o.id === now), id: `sbc-scope-${kind}-${o.id}`,
+        onclick: () => { state.where[kind] = o.id; paint(); told(); } }, o.label)));
+  }
+  function notesPanel() {
+    const s = section(), p = phrase();
+    return el("div", { class: "sbc-notes" },
+      el("div", { class: "notes-head" },
+        el("h3", { id: "notesTitle", tabindex: "-1" }, `${s.label} `, el("small", {}, where("tune") === "line"
+          ? "/ the notes. Edit a phrase once; every appearance follows." : "/ the notes. This change stays in this place.")),
+        scopeSwitch("tune"),
+        el("span", { class: "settings" }, select("Snap", state.snap, [[0.25, "¼"], [0.5, "½"], [1, "1"]], (value) => { state.snap = Number(value); paint(); }, { id: "sbc-snap" }),
+          select("Zoom", state.zoom, [[1, "fit"], [1.5, "150%"], [2, "200%"], [3, "300%"]], (value) => { state.zoom = Number(value); paint(); }, { id: "sbc-zoom" })),
+        button("Close", () => page()?.closeNotes?.(), { class: "sbc-button sbc-quiet", id: "sbc-close", title: "Close the notes (Esc)" }),
+        p?.notes?.length ? health() : null),
+      (s.phrases || []).length ? phraseStrip() : null,
+      p?.notes?.length ? pianoRoll() : el("p", { class: "sbc-muted notes-foot" }, "This section has no melody to change."),
+      el("p", { class: "readonly hint notes-foot" }, "On a phone the notes are for reading: tap one, and change its pitch, start and length in the column below."),
+      el("div", { class: "notes-foot" }, el("span", {}, "Drag a note up or down for its pitch, sideways to move it, by its right edge for its length. Arrow keys nudge; ⇧ ← → its length."),
+        p?.notes?.length ? button("▶ Hear this phrase", () => { state.scope = "phrase"; state.playIndex = null; play(); }, { class: "sbc-button" }) : null),
+      el("p", { id: "sbc-drag-value", class: "sbc-visually-hidden", "aria-live": "off" }));
+  }
+  function reasons(mine, yours, theirs) { return mine ? [["you", yours]] : theirs; }
+  function noteState() {
+    const p = phrase(), n = note();
+    if (!p || !n) return null;
+    const index = state.note, last = index === p.notes.length - 1;
+    const name = pitchName(pitchFor(n));
+    const scope = where("tune", p);
+    return {
+      rubric: `Note ${index + 1} of ${p.notes.length}`,
+      set: `“${displayWords(n.slur ? n.word : n.syllable) || "♪"}”${n.slur ? ", held on" : ""} · ${name} · scale degree ${n.degree}${last ? " · the phrase's ending" : ""}${n.edited ? " · yours" : ""}`,
+      mine: !!n.edited,
+      body: el("div", { class: "sbc-note-state" }, inspector(),
+        el("h4", {}, "The phrase"),
+        el("div", { class: "sbc-chord-row" },
+          button("↓ Step", () => transpose(-1), { title: "Lower the phrase a scale step, keeping its ending" }),
+          button("↑ Step", () => transpose(1), { title: "Raise the phrase a scale step, keeping its ending" }),
+          scopeSwitch("tune")),
+        el("details", {}, el("summary", {}, "more"),
+          el("div", { class: "sbc-chord-row" },
+            button("Soften leaps", smoothMelody, { title: "Bring notes within two scale steps of their neighbours, keeping the ending" }),
+            button("Even rhythm", evenRhythm, { title: `Even the notes on the phrase's own grid (the snap: ${fmt(state.snap)} beat)` })))),
+      why: reasons(n.edited, scope === "line" ? "yours: this line is sung this way everywhere" : "yours, in this place only",
+        [["song", "the tune as it was written, and as the versions before have sung it"], ["rule", "a phrase keeps its syllables, their order and its ending's place in the scale"]]),
+      release: { label: scope === "line" ? "The program's own" : "The line's own, here", disabled: !held("tune", p),
+        action: () => { state.note = null; commit(scopedPath("tune", p), null); told(); } },
+      hear: () => audition(pitchFor(n)),
+    };
+  }
+  function chordState() {
+    const p = phrase(), h = chosenChord(p);
+    if (!p || !h) return null;
+    const card = chordCard(), mine = chordMine(p, h), scope = where("chords", p);
+    const body = card ? el("div", { class: "sbc-chord-state" }, ...[...card.children].filter((x) => !x.classList.contains("sbc-scope") && !x.classList.contains("sbc-note-heading"))) : null;
+    body?.querySelectorAll("button").forEach((b) => { if (b.textContent === "Done" || /^Restore chords/.test(b.textContent)) b.remove(); });
+    const rub = card?.querySelector(".sbc-note-heading .sbc-muted")?.textContent || "";
+    return {
+      rubric: `Bar ${h.bar + 1} · chord ${h.slot + 1} of ${p.chords[h.bar].length}`,
+      set: `${h.name}${mine ? ", yours" : ", the song's own"}. ${rub}`,
+      mine, scope: scopeSwitch("chords"), body,
+      why: reasons(mine, scope === "line" ? "yours: this line's chords, everywhere it's sung" : "yours, in this place only",
+        [["song", "the song's own harmony, as it was written"], ["rule", "the band, the voices before and the backing voices follow it; the tune stays"]]),
+      release: { label: scope === "line" ? "The program's own" : "The line's own, here", disabled: !held("chords", p),
+        action: () => { state.chord = null; commit(scopedPath("chords", p), null); told(); } },
+      hear: () => strum(h.symbol),
+    };
+  }
+
   function paint() {
     const box = root(), c = composition();
     if (!box || !c) return;
@@ -946,7 +1040,9 @@
     const scroll = box.querySelector(".sbc-roll-scroll")?.scrollLeft || 0;
     const arrangeScroll = box.querySelector(".sbc-arrangement-scroll")?.scrollLeft || 0;
     box.classList.add("sbc-composer");
-    box.replaceChildren(transport(), arrangement(), section() ? editor() : null,
+    if (notesMode()) box.replaceChildren(section() ? notesPanel() : "",
+      el("div", { id: "sbc-status", class: "sbc-visually-hidden", role: "status", "aria-live": "polite" }));
+    else box.replaceChildren(transport(), arrangement(), section() ? editor() : null,
       el("div", { id: "sbc-status", class: "sbc-visually-hidden", role: "status", "aria-live": "polite" }));
     const roll = box.querySelector(".sbc-roll-scroll"); if (roll) roll.scrollLeft = scroll;
     const arrange = box.querySelector(".sbc-arrangement-scroll"); if (arrange) arrange.scrollLeft = arrangeScroll;
@@ -973,5 +1069,23 @@
   }
   window.addEventListener("pagehide", stop);
   document.addEventListener("visibilitychange", () => { if (document.hidden) stop(); });
-  window.SongbirdComposer = { render, stop, replay };
+  // for the score: open a section's notes, the selection's card, the sketch the transport drives
+  function open(index) {
+    if (index === state.section && sections()[index]) { paint(); return; }
+    stop(); state.section = clamp(index, 0, sections().length - 1); state.phrase = 0; state.note = null; state.chord = null;
+    state.where = { tune: null, chords: null }; paint();
+  }
+  function deselect() { if (state.note !== null || state.chord) { state.note = null; state.chord = null; paint(); } }
+  function sketch({ scope = "section", index = null, from = null } = {}) {
+    stop(); state.scope = scope; state.playIndex = index; state.from = from; play();
+  }
+  function options(o) {
+    for (const k of ["loop", "metronome", "chords", "bass"]) if (k in o) state[k] = !!o[k];
+    replay();
+  }
+  function selection() {
+    return { section: sections()[state.section]?.id || null, phrase: state.phrase, note: state.note, chord: state.chord };
+  }
+  window.SongbirdComposer = { render, stop, replay, open, deselect, sketch, options, selection, noteState, chordState,
+    playing: () => !!state.playback, mini: (index) => (sections()[index] ? miniNotes(sections()[index]) : null) };
 })();

@@ -137,14 +137,14 @@
   }
 
   // ------------------------------------------------------------------ what is selected, and what plays
-  const SELECTIONS = ["song", "section", "player", "cell", "seam", "chord", "note", "line", "singer", "room", "style", "band", "shape"];
+  const SELECTIONS = ["song", "section", "player", "cell", "seam", "chord", "note", "line", "singer", "choir", "room", "style", "band", "shape"];
   function selectionKey(sel) {
     if (!sel) return "song";
     if (!SELECTIONS.includes(sel.kind)) throw new Error(`nothing to select called ${sel.kind}`);
     return [sel.kind, sel.id, sel.player, sel.line].filter((x) => x !== undefined && x !== null).join(":");
   }
   // decision 2: the sketch for a section, a phrase, a note, a chord; the singing for the whole song
-  function defaultHow(sel) { return !sel || ["song", "singer", "room", "style", "band", "shape"].includes(sel.kind) ? "sung" : "sketch"; }
+  function defaultHow(sel) { return !sel || ["song", "singer", "choir", "room", "style", "band", "shape"].includes(sel.kind) ? "sung" : "sketch"; }
   // what ▶ plays: a section's index, or the whole song (null); with the notes open, the phrase for the sketch
   function playTarget(sel, sections) {
     const id = sel?.section || (sel && ["section", "seam", "line"].includes(sel.kind) ? sel.id : null);

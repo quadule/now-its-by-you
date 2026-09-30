@@ -347,10 +347,13 @@ function renderWords() {
 }
 
 function undoWords(w) {
+  commitEdits(releaseWords(w, copyEdits()), `Reset ${w.label.toLowerCase()} words`);
+}
+
+function releaseWords(w, next) {  // a section's words back to the bank's, its original lines released (into `next`)
   const paths = [w.path];
   if (w.block === "refrain") paths.push("words.refrain");
   if (w.block === "bridge" && w.nth === 0) paths.push("words.bridge");
-  const next = copyEdits();
   for (const path of paths) delete next[path];
   // A person's lines are kept by the verse (or time round) they're written for, the section's lyric_key
   // (songbird/composition.py), not by its place in the form.
@@ -362,7 +365,7 @@ function undoWords(w) {
     for (const line of w.authored || []) next[`${prefix}${line}`] = null;
     for (const path of Object.keys(next)) if (path.startsWith(prefix)) next[path] = null;
   }
-  commitEdits(next, `Reset ${w.label.toLowerCase()} words`);
+  return next;
 }
 
 // Retain old deep links, while choices are now loaded and visible in every sung section.
