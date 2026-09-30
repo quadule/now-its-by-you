@@ -318,7 +318,8 @@ class Jobs:
         self.by_key: dict[str, Job] = {}
         self.waiting = waiting or MAX_WAITING
         self.fair = fair
-        self.took = {True: 90.0, False: 15.0}  # seconds a whole song and a section take: guesses, then measured
+        self.took = {True: 90.0, False: 15.0, "measure": 30.0}  # seconds a whole song, a section and a sung take take:
+        # guesses, then measured (each its own, so measuring takes never skews the renders' estimate)
         threading.Thread(target=self._run, daemon=True, name="studio-renderer").start()
 
     def get(self, job_id: str) -> Job | None:
@@ -400,8 +401,13 @@ class Jobs:
 
     def _eta(self, waiting: list[Job]) -> float:
         """Seconds until the renders in `waiting` are made, with the one running now."""
-        left = sum(self.took[j.whole] * (1 - j.progress) for j in self.jobs.values() if j.state == "running")
-        return left + sum(self.took[j.whole] for j in waiting)
+        left = sum(self.took[self._sort(j)] * (1 - j.progress) for j in self.jobs.values() if j.state == "running")
+        return left + sum(self.took[self._sort(j)] for j in waiting)
+
+    @staticmethod
+    def _sort(job: Job):
+        """Which estimate a job's time is: a sung take's measuring, else a whole song's or a section's."""
+        return "measure" if job.kind == "measure" else job.whole
 
     def cancel(self, job_id: str, owner: str | None = None) -> bool:
         """A preview still waiting, dropped; in a public studio only by the visitor who asked for it."""
@@ -438,7 +444,7 @@ class Jobs:
                         todo = job.then[done:]
                         if not todo:
                             job.result, job.progress, job.stage, job.state = result, 1.0, "", "done"
-                            self.took[job.whole] = 0.7 * self.took[job.whole] + 0.3 * (time.monotonic() - began)
+                            self.took[self._sort(job)] = 0.7 * self.took[self._sort(job)] + 0.3 * (time.monotonic() - began)
                             break
                     for then in todo:
                         result.update(then(job) or {})
@@ -1408,7 +1414,8 @@ def shared_warning(shares: list[str], out: str, lan: bool) -> str:
                         for point in points), "  Stop it with Ctrl-C when the preview is over."])
 
 
-def public_warning(shares: list[str], limits: public_mod.Limits, key: str | None, machine: str) -> str:
+def public_warning(shares: list[str], limits: public_mod.Limits, key: str | None, machine: str,
+                   singing: bool = False) -> str:
     """What opening the studio to the public means, said when it starts."""
     points = [("Anyone who reaches it can use it" if key is None else "Anyone with the key can use it")
               + f"; the song is shaped by the machine '{machine}' for everyone.",
@@ -1418,7 +1425,8 @@ def public_warning(shares: list[str], limits: public_mod.Limits, key: str | None
               f"Recordings aren't kept here: each is offered for download for {limits.download_hours:g} hours "
               f"(up to {limits.downloads_mb} MB); previews are cached up to {limits.cache_mb} MB.",
               "Each request is logged on one line (when, what, the answer), never by whom; visitors are counted "
-              "under a key kept only in memory.", "The singing page is off."]
+              "under a key kept only in memory.",
+              "Singing in the browser is on (below)." if singing else "Singing is off: start with --web-singing to take it."]
     return "\n".join(["  PUBLIC. Open at:", *(f"    {link}" for link in shares), "  What that means:",
                       *(textwrap.fill(point, 104, initial_indent="    - ", subsequent_indent="      ")
                         for point in points)])
@@ -1501,7 +1509,7 @@ def run(args: argparse.Namespace) -> int:
     print(f"Songbird studio: {studio.genome.title}, {studio.context.opening()}", flush=True)
     if limits:
         shares, url = links(host, port, allow, names, key)
-        print(public_warning(shares or [url], limits, key, machine), flush=True)
+        print(public_warning(shares or [url], limits, key, machine, singing=studio.singing is not None), flush=True)
     elif shared:
         shares, url = links(host, port, allow, names, key)
         print(shared_warning(shares, studio.out_shown(), lan=any(link.startswith("http://") for link in shares)))
