@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="color-scheme" content="light dark">
 <meta name="studio-token" content="{{token}}">
 <title>Songbird studio</title>
@@ -108,7 +108,7 @@
 </div>
 
 <section class="drawer" id="drawer" hidden aria-label="Other days, other computers">
-  <button class="btn quiet close" type="button" data-close aria-label="Close (Esc)">✕</button>
+  <button class="iconbtn close" type="button" data-close aria-label="Close (Esc)" title="Close (Esc)">✕</button>
   <div class="two-cols">
     <div>
       <h2>Through time</h2>
@@ -171,7 +171,7 @@
 
 <div class="scrim" id="scrim" hidden></div>
 <section class="tools" id="finishPanel" hidden role="dialog" aria-modal="false" aria-labelledby="toolsTitle">
-  <button class="btn quiet close" type="button" data-close aria-label="Close (Esc)">✕</button>
+  <button class="iconbtn close" type="button" data-close aria-label="Close (Esc)" title="Close (Esc)">✕</button>
   <h2 id="toolsTitle" tabindex="-1">Your tools <small>take it out, bring it in</small></h2>
   <div class="cols two">
     <div class="col" id="toolsOut">
@@ -242,7 +242,7 @@
 </section>
 
 <dialog class="help" id="help" aria-labelledby="helpTitle">
-  <form method="dialog" class="help-close"><button class="btn quiet" type="submit" aria-label="Close help">✕</button></form>
+  <form method="dialog" class="help-close"><button class="iconbtn" type="submit" aria-label="Close help" title="Close (Esc)">✕</button></form>
   <h2 id="helpTitle">What is this?</h2>
   <p><b id="helpSong">This song</b> is a folk song that changes as it's passed on. Each copy is a sound file that also carries the program that sings it.</p>
   <p id="helpShows">This studio shows the version this computer makes today, and lets you:</p>

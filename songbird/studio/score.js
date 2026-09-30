@@ -685,11 +685,11 @@
     morph(box, [  // in place, not redrawn whole: what the pointer is on stays where it is (studio.js morph)
       h("button", { class: "handle", type: "button", "aria-label": S.tall ? "Lower the column" : "Raise the column", onclick: () => { S.tall = !S.tall; box.classList.toggle("tall", S.tall); } }),
       h("div", { class: "top" }, h("span", { class: "rubric", id: "inspectorTitle", tabindex: "-1" }, rubric, mine ? h("span", { class: "you", "aria-label": ", yours" }, " ✎") : null),
-        h("button", { class: "what", type: "button", "aria-expanded": String(S.about), "aria-label": "What is this?", title: "What is this?", onclick: () => { S.about = !S.about; renderInspector(); } }, "?"),
-        kind === "song" && !S.songShown ? null : h("button", { class: "close", type: "button", "aria-label": "Close (Esc)", title: "Close (Esc)",
+        h("button", { class: "iconbtn q", type: "button", "aria-expanded": String(S.about), "aria-label": "What is this?", title: "What is this?", onclick: () => { S.about = !S.about; renderInspector(); } }, "?"),
+        kind === "song" && !S.songShown ? null : h("button", { class: "iconbtn close", type: "button", "aria-label": "Close (Esc)", title: "Close (Esc)",
           onclick: () => { S.songShown = false; select(null); } }, "✕")),
       S.about ? h("p", { class: "about" }, STATE_ABOUT[kind] || "") : null,
-      set ? h("p", { class: `set${mine ? " you" : ""}` }, set) : null,
+      set ? h("p", { class: `set${mine ? " you" : ""}`, title: typeof set === "string" ? set : null }, set) : null,
       (problems || []).map((p) => h("p", { class: "problem" }, typeof p === "string" ? p : `Couldn't keep ${describePath(p.path)}: ${p.why}.`)),
       body || null,
       why?.length ? reasonsFold(kind, why, whyOpen) : null,
@@ -908,15 +908,15 @@
         t.fills ? chipRow("A fill into the next", [{ value: true, text: "yes", disabled: l.level === "out" }, { value: false, text: "no", disabled: l.level === "out" }], l.level === "out" ? null : !!v.fill,
           (f) => choose(cell.paths.fill, f, `${t.label}: ${f ? "a fill" : "no fill"} at the end of ${s.label}`), edited(cell.paths.fill)) : null,
         h("div", { class: "row" },
-          l.locked ? h("button", { class: "btn quiet", type: "button", onclick: () => clearEdits(Object.keys(M.releasePatch(cell)), `Unlock ${t.label} in ${s.label}`) }, lockIcon(), " Unlock")
-            : cell.by !== "you" ? h("button", { class: "btn quiet", type: "button", title: "Keep what the program drew here, through a new performance",
-              onclick: () => { setEdits(M.lockPatch(cell), `Lock ${t.label} in ${s.label}`); say(`${t.label} in ${s.label}: locked`); } }, lockIcon(), " Lock")
-            : h("button", { class: "btn quiet", type: "button", disabled: true, title: "Yours: nothing of chance's here to lock" }, lockIcon(), " Lock")),
-        h("div", { class: "row" },
           h("button", { class: "btn quiet", type: "button", onclick: () => select({ kind: "player", id: t.id }) }, `${t.label} everywhere`),
           h("button", { class: "btn quiet", type: "button", onclick: () => select({ kind: "section", id: s.id }) }, `everyone in ${s.label}`))),
       why: (cell.why || []).map((r) => ({ kind: r.kind === "before" ? "parent" : r.kind, text: r.text })),
       hear: hearHow,
+      // the lock beside ▶ in the foot: an action on the cell, as the release is
+      extra: l.locked ? h("button", { class: "btn quiet", type: "button", onclick: () => clearEdits(Object.keys(M.releasePatch(cell)), `Unlock ${t.label} in ${s.label}`) }, lockIcon(), " Unlock")
+        : cell.by !== "you" ? h("button", { class: "btn quiet", type: "button", title: "Keep what the program drew here, through a new performance",
+          onclick: () => { setEdits(M.lockPatch(cell), `Lock ${t.label} in ${s.label}`); say(`${t.label} in ${s.label}: locked`); } }, lockIcon(), " Lock")
+        : h("button", { class: "btn quiet", type: "button", disabled: true, title: "Yours: nothing of chance's here to lock" }, lockIcon(), " Lock"),
       release: { disabled: !(cell.by === "you" || l.locked), action: () => clearEdits(Object.keys(M.releasePatch(cell)), `${t.label} in ${s.label}: the program's`) } });
     return true;
   }
