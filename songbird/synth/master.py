@@ -21,7 +21,6 @@ import soundfile as sf
 from numba import njit
 from scipy.signal import firwin
 
-from .. import artwork
 from . import fx, threads
 from .fx import _biquads, sliding_min
 
@@ -415,5 +414,7 @@ def write_flac(path: str | Path, pcm: np.ndarray, sr: int, tags: dict | None = N
                 if value:
                     setattr(f, key, str(value))
             f.write(pcm)
-    if cover:
+    if cover:  # (imported here: a line more at the top would move the browser's kernels' references)
+        from .. import artwork
+
         artwork.embed_file(path, (tags or {}).get("title"))
