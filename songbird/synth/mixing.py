@@ -208,6 +208,8 @@ ROLES: dict[str, Strip] = {
     "slide": Strip(eq=(("hp", 70), ("peak", 250, -1.5, 1.0), ("peak", 2800, -2.0, 0.9), ("high", 9000, -0.5)),
                    comp=(10.0, 2.0, 0.015, 0.2, 1.5, 3.0), send=1.1, duck=1.5),
     "band": Strip(eq=(("hp", 60), ("peak", 2800, -1.5, 0.9))),  # anything else
+    # A person's transitions (synth.sweeps: risers, impacts, downlifters): nothing under 30 Hz, no step back.
+    "fx": Strip(eq=(("hp", 30),)),
 }
 
 NAMES = {
@@ -235,6 +237,7 @@ NAMES = {
     "synth": ("synth", "synthlead", "arp", "chip"),
     "steel": ("steel", "pedalsteel", "lapsteel"),  # its low strings kept, and no fiddle's duck: it swells by its pedal
     "slide": ("slide", "bottleneck"),
+    "fx": ("fx",),  # a person's transitions (docs/SOUND-DESIGN.md)
 }
 SINGERS = ("voice", "choir")  # stems sung by the singers: matched by their whole names only
 
@@ -448,7 +451,8 @@ def _conform(x: np.ndarray, length: int) -> np.ndarray:
 
 
 def mix_made(parts: list, length: int, sr: int, seed: int = 0, params: MixParams | None = None,
-             taps: dict | None = None, lift: np.ndarray | None = None, progress=None, own: bool = True) -> np.ndarray:
+             taps: dict | None = None, lift: np.ndarray | None = None, progress=None, own: bool = True,
+             sound: dict | None = None) -> np.ndarray:
     """mix(), from the stems' makers: (name, make) for each stem, none longer than `length` samples. Each
     stem is made, treated and put into its bus as the mix comes to it, and let go: the band's instruments in
     their names' order, the singers before the first instrument that steps back under the voice (the band
@@ -456,7 +460,8 @@ def mix_made(parts: list, length: int, sr: int, seed: int = 0, params: MixParams
     (threads.in_order, the lead started first), so a song's stems are never all held at once. The same mix, to the bit,
     as mix() of all of them. progress, if given, is told each stem's name as the mix comes to it, then
     "mix". own: each make() gives a stem of its own, which the mix may treat where it lies (mix() passes
-    False: its stems are the caller's)."""
+    False: its stems are the caller's). sound: a person's sound design (the score's `sound`, songbird.sound:
+    each player's send, sidechain and the role its kit mixes as; the band's filter sweeps), or None."""
     p = (params or MixParams()).clamped()
     if not parts:
         return np.zeros((0, 2))
@@ -465,6 +470,9 @@ def mix_made(parts: list, length: int, sr: int, seed: int = 0, params: MixParams
     lift = None
     balance = dict(p.balance)
     roles = {name: role_of(name) for name in sorted(makers)}
+    design = Design(sound, sr) if sound else None
+    if design is not None:  # a kit swapped in is mixed as what it is
+        roles.update({name: role for name, role in design.roles.items() if name in roles})
     nudge = {name: balance.get(name, balance.get(role, 0.0)) for name, role in roles.items()}  # a name wins over its role
 
     def stem(name: str) -> np.ndarray:
@@ -530,8 +538,11 @@ def mix_made(parts: list, length: int, sr: int, seed: int = 0, params: MixParams
         gain = 10.0 ** ((strip.trim + nudge[name]) / 20.0)
         if own or not np.shares_memory(y, x):
             y *= gain  # where it lies: the same products
-            return where, y
-        return where, y * gain
+        else:
+            y = y * gain
+        if design is not None:  # a person's sidechain: the channel ducks on its key, its send with it
+            design.pump(name, where, y)
+        return where, y
 
     # Each bus's and instrument's own treatment depends on nothing but its own sound, so they are made at once
     # (threads.in_order, a few ahead); they are put together below, one at a time, in the order they always were:
@@ -545,6 +556,8 @@ def mix_made(parts: list, length: int, sr: int, seed: int = 0, params: MixParams
         else:
             sung += [(name, partial(stem, name)) for name in names]
     played = [(name, partial(instrument, name)) for name, role in roles.items() if role not in buses]
+    if design is not None:  # a person's transitions come last: the band's filter sweeps are made before they join
+        played = [job for job in played if roles[job[0]] != "fx"] + [job for job in played if roles[job[0]] == "fx"]
     # The instruments go into the band in their names' order; only those that step back under the voice need
     # it made first (singing). On three threads or more the singers are put together just before the first
     # of those, and started first of all: the instruments before it are made and summed while the voice is
@@ -583,6 +596,8 @@ def mix_made(parts: list, length: int, sr: int, seed: int = 0, params: MixParams
                 if not singers_left:
                     rise = None  # the singers' buses are made: nothing else rises with the arrangement
                 continue
+            if design is not None and role == "fx":  # the band's filter sweeps, before the transitions join it
+                design.sweep(band, band_send, stepping)
             if result is None:
                 continue
             strip, (where, x) = ROLES[role], result
@@ -593,9 +608,10 @@ def mix_made(parts: list, length: int, sr: int, seed: int = 0, params: MixParams
             # product and sum as over the whole (no temporary the length of the song)
             sent, stepped = band_send[where], stepping[where]
             duck = -strip.duck * p.duck
+            send = strip.send if design is None else strip.send * design.send(name)  # a person's send
             for a in range(0, len(x), 1 << 16):
                 part = x[a: a + (1 << 16)]
-                sent[a: a + len(part)] += part * strip.send
+                sent[a: a + len(part)] += part * send
                 if strip.duck and singing is not None:
                     stepped[a: a + len(part)] += \
                         part * (1.0 - 10.0 ** (duck * singing[where][a: a + len(part)] / 20.0))[:, None]
@@ -603,6 +619,8 @@ def mix_made(parts: list, length: int, sr: int, seed: int = 0, params: MixParams
             part = None  # (a stretch of x: x is let go with it)
     finally:
         results.close()
+    if design is not None:  # the band's filter sweeps, if no transition stem came to make them
+        design.sweep(band, band_send, stepping)
     if progress is not None:
         progress("mix")
     # from here each long signal is let go as soon as it has been used, and treated where it lies when nothing
@@ -692,6 +710,77 @@ def mix_made(parts: list, length: int, sr: int, seed: int = 0, params: MixParams
     if p.wear > 0:
         out = wear(out, sr, p.wear, seed)
     return out
+
+
+# --- a person's channels: sends, sidechains, the band's filter sweeps (docs/SOUND-DESIGN.md) ------------------------
+
+
+class Design:
+    """A person's sound design as the mix reads it (the score's `sound`, songbird.sound): each player's send (times
+    its strip's), its sidechain (a dip of `depth` dB at each of its triggers, reached in `attack` s and gone over
+    `release` s on a raised cosine; where two overlap, the deeper), the role a swapped kit mixes as, and the band's
+    filter sweeps (synth.sweeps), made once on the band's bus, its send and what steps back under the voice."""
+
+    def __init__(self, sound: dict, sr: int):
+        self.sr = sr
+        players = sound.get("players") or {}
+        self.sends = {name: float(p["send"]) for name, p in players.items() if "send" in p}
+        self.roles = {name: p["role"] for name, p in players.items() if p.get("role") in ROLES}
+        triggers: dict[str, list[int]] = {}
+        for t, player in sound.get("triggers") or ():
+            triggers.setdefault(player, []).append(int(round(float(t) * sr)))
+        self.pumps = {}
+        for name, p in players.items():
+            sc = p.get("sidechain")
+            if sc and triggers.get(name):
+                self.pumps[name] = (np.array(sorted(triggers[name]), dtype=np.int64), float(sc["depth"]),
+                                    max(1.0, float(sc["attack"]) * sr), max(1.0, float(sc["release"]) * sr))
+        from . import sweeps
+
+        self.spans = sweeps.sweep_spans(sound.get("transitions") or (), sr)
+        self.swept = False
+
+    def send(self, name: str) -> float:
+        return self.sends.get(name, 1.0)
+
+    @staticmethod
+    def _dip(d: np.ndarray, attack: float, release: float) -> np.ndarray:
+        """How far down (0..1) a channel is d samples after a trigger."""
+        out = np.zeros(len(d))
+        rising = (d >= 0) & (d < attack)
+        out[rising] = d[rising] / attack
+        falling = (d >= attack) & (d < attack + release)
+        out[falling] = 0.5 + 0.5 * np.cos(np.pi * (d[falling] - attack) / release)
+        return out
+
+    def gain(self, name: str, start: int, stop: int) -> np.ndarray | None:
+        """The sidechain's gain on samples start..stop of the song, or None if this channel isn't pumped."""
+        if name not in self.pumps:
+            return None
+        times, depth, attack, release = self.pumps[name]
+        idx = np.arange(start, stop)
+        k = np.searchsorted(times, idx, side="right") - 1
+        last = np.where(k >= 0, idx - times[np.maximum(k, 0)], -1)
+        before = np.where(k >= 1, idx - times[np.maximum(k - 1, 0)], -1)
+        dip = np.maximum(self._dip(last.astype(np.float64), attack, release),
+                         self._dip(before.astype(np.float64), attack, release))
+        return 10.0 ** (-depth * dip / 20.0)
+
+    def pump(self, name: str, where: slice, x: np.ndarray) -> None:
+        """x (the channel's stretch `where` of the song) ducked where it lies, a stretch at a time."""
+        if name not in self.pumps:
+            return
+        for a in range(0, len(x), 1 << 16):
+            b = min(len(x), a + (1 << 16))
+            x[a:b] *= self.gain(name, where.start + a, where.start + b)[:, None]
+
+    def sweep(self, *signals) -> None:
+        if self.swept or not self.spans:
+            return
+        from . import sweeps
+
+        sweeps.sweep(list(signals), self.sr, self.spans)
+        self.swept = True
 
 
 # --- wear -------------------------------------------------------------------------------------

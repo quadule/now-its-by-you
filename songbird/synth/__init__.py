@@ -122,7 +122,8 @@ def render(score: Score, sr: int = SR, seed: int = 0, voice: VoiceParams | None 
     # each part is made as the mix comes to it, treated and let go (mixing.mix_made): never all held at once
     jobs, _ = stem_jobs(score, sr, seed, voice, ancestors)
     length = int(np.ceil(score.duration * sr)) if jobs else 0
-    return mixing.mix_made(jobs, length, sr, seed, mix_params, lift=lift_of(score, sr, length), progress=progress)
+    return mixing.mix_made(jobs, length, sr, seed, mix_params, lift=lift_of(score, sr, length), progress=progress,
+                           sound=getattr(score, "sound", None) or None)  # a person's sound design, if any
 
 
 def lift_of(score: Score, sr: int, stems: dict | int) -> np.ndarray | None:
