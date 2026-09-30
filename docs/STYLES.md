@@ -1287,10 +1287,12 @@ In `renders/styles/` of the main checkout (gitignored), H as the same made-up ma
   the song) or the second of four (ada 54%, vela 57%). The singer keeps 37 to 56 syllables of the version's lines
   (outside the bridge), in 11 to 13 fragments, e.g. juno's: "The whole world was watching", "way", "along", "but
   nobody hummed", "Nobody knows", "grows", "through", "Nobody knows", "It's yours while you sing", "one, and now
-  it's by you"; Whisper hears 10 of those 11 in the mix, as sung. The bridge comes back whole with the choir. 8 to 11
+  it's by you" (and the tag's "la"); Whisper, on the mix, writes 7 of those 11 as sung and the rest near ("brows"
+  for grows, "one and now it's fire"). The bridge comes back whole with the choir. 8 to 11
   fragments a song are thrown into the echo with the version's feedback (0.72: 19 repeats to 50 dB down, about 11.5 s
   of tail at 74, against the song's 13 repeats, 7.9 s), two of ada's into the spring too; the band's low-pass is
-  swept closed and open two to four times; the melodica plays 56 to 123 notes of the tune the singer left out.
+  swept closed and open two to four times; the melodica takes the notes the singer left out, half its lines resting
+  (56 to 123 melodica notes a song).
   The riddim: juno's and ada's the plagal (IV, I), vela's the roots (I, IV); the minor (vi, IV) was drawn by none of
   the three.
 - **Memory** (tools/render_memory.py, two threads, `MallocLargeCache=0`, the style chosen with no machine): house
