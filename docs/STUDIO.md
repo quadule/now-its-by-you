@@ -248,23 +248,26 @@ same rules as the singer to a line as it's typed (the view sends the table;
 tests/studio_author.test.cjs decides the lines tests/golden/say-lines.json pins
 as the Python does).
 
-The song's own lines are sung exactly as before (no render changes; the
-goldens stand): the rules apply only to a line a person writes. The editor
-shows a song's own line the way the song sings it. That keeps a few of the
-songs' own words said wrongly, listed by the test (decisions for the artist:
-each is a line in the song with a say, and a new golden):
+The rules apply only to a line a person writes; the song's own lines are sung
+as the song says them. When the rules came, nine of those were sung wrongly
+(the dictionary's first reading), and on 2026-09-30 the artist had them fixed
+with a say in the song's line (new goldens where a render sings one):
 
-| Song | Line | Sung now | The rules |
+| Song | Line | Was | Now |
 | --- | --- | --- | --- |
-| D | "I *live* in your head" | alive (LYVE) | to live |
-| E | "colours that *live* on your screen" | alive (LYVE) | to live |
-| H | "the *wind* took it down to the farms" | turn (WYND) | air |
-| H | "why there were *tears*" | rips (TAIRS) | crying |
-| H | "The men in the mine *used* to sing it", "A nurse *used* to hum it" | YOOZD | YOOST |
-| K | "half was *wind* and half was shoe" | turn (WYND) | air |
-| K | "No one *sowed* her" | the pig (SOWD, as in cow) | planted |
-| L | "In March the *wind* blew down the sleeve" | turn (WYND) | air |
-| A | "Each copy was *per-fect*" | per-FECT | PER-fect (H has its own) |
+| D | "I *live{verb}* in your head" | alive (LYVE) | to live |
+| E | "colours that *live{verb}* on your screen" | alive (LYVE) | to live |
+| H | "the *wind{air}* took it down to the farms" | turn (WYND) | air |
+| H | "why there were *tears{crying}*" | rips (TAIRS) | crying |
+| K | "half was *wind{air}* and half was shoe" | turn (WYND) | air |
+| K | "No one *sowed{planted}* her" | the pig (SOWD, as in cow) | planted |
+| L | "In March the *wind{air}* blew down the sleeve" | turn (WYND) | air |
+| A | "Each copy was *per-fect{perfect}*" | per-FECT | PER-fect (H has its own) |
+
+H's "The men in the mine *used* to sing it", "A nurse *used* to hum it" are
+still sung YOOZD, where the rules would say YOOST (the artist to compare). In a
+song's lines, braces that start a word are a slot (`{kin}`) or a turn
+(`{made|sang}`); braces right after a word are its say.
 
 On the dry voice the learned throat now sings "The bass is a heartbeat that
 nobody wrote" with EY (F1 580 Hz, F2 2220 Hz early in the vowel; Whisper:

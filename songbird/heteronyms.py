@@ -19,9 +19,9 @@ whose words are all there wins; with none, the word's first sense. A rule's word
 They're deliberately few and conservative: a rule that misfires is worse than the song's usual sense.
 
 Which lines they apply to: a line a person writes (songbird.realize, docs/STUDIO.md "Words"). The song's
-own lines keep the dictionary's first reading or their lexicon, so every render made before stays
-exactly as it was (tools/pronounce.py --heteronyms lists the song's own that the rules would say
-another way).
+own lines are said as the song says them: its says (the wind{air} took it down), else its lexicon,
+else the dictionary's first reading, so the rules never change a render made before
+(tools/pronounce.py --heteronyms lists the song's own that the rules would say another way).
 
 A person has the last say: a word followed by braces is said that way, and the braces are never shown
 or sung:
@@ -383,7 +383,7 @@ def choices(line: str) -> list[dict]:
 
 def as_sung(line: str, lexicon: dict | None, authored: bool) -> list[dict]:
     """choices() as the line is sung: a person's line as the rules (or its says) choose; the song's own
-    line as the song has always said it (its lexicon, else the dictionary's first reading), "by": "song",
+    line as the song says it (its says, else its lexicon, else the dictionary's first reading), "by": "song",
     "chosen" the sense that reading is (None if it's neither)."""
     if authored:
         return choices(line)
@@ -395,7 +395,7 @@ def as_sung(line: str, lexicon: dict | None, authored: bool) -> list[dict]:
         exact = [r for r in readings if sum(p.rstrip("012") in ph.VOWELS for p in r) == n] or readings
         said = " ".join(exact[0]) if exact else ""
         sense = next((s["name"] for s in TABLE["words"][c["word"]]["senses"] if s["phones"] == said), None)
-        out.append({**c, "chosen": sense, "by": "song"} if c["by"] == "rules" else c)
+        out.append({**c, "chosen": sense, "by": "song"} if c["by"] == "rules" else {**c, "by": "song"})
     return out
 
 

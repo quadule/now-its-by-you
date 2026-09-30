@@ -37,7 +37,9 @@ def test_drawing_without_choices_is_as_it_was():
     four verses came (mic, search, misheard, choir; 2026-09-26), and when the first refrain came to ask who
     made, wrote or sang it (question_first, 2026-09-27: only refrain questions moved), and when the bird verse's
     last two lines were rewritten with a carry swap, and the wind couplet, the bone and border verses and the lyric review's six came, and the refrain came to ask about this, that or the song (2026-09-27), and when the daisy verse and the grew
-    head came, two heads asking the same question as written never sharing a song (2026-09-27)."""
+    head came, two heads asking the same question as written never sharing a song (2026-09-27), and when the
+    shepherd and names verses came to say wind{air} and tears{crying} (2026-09-30: every draw as before, the says
+    stripped)."""
     lean = A.Leanings(mood_weights={"light": 2.0, "dark": 0.5}, era_bias=-0.4, rarity_appetite=0.6,
                       vocabulary=frozenset({"sea", "ship", "fiddle", "bird"}))
     digest = hashlib.sha256()

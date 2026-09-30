@@ -235,29 +235,33 @@ def _lines(song):
     return out
 
 
-def test_the_songs_own_lines_are_sung_as_before_and_these_the_rules_would_change():
-    """Every line a song can sing is sung as it was (no say, the first reading); the ones the rules would
-    say another way are listed here, for the artist to decide (docs/STUDIO.md, "Words said two ways")."""
-    differ = set()
+def test_the_songs_own_lines_say_their_words_as_the_rules_would_but_used_to():
+    """Every line a song can sing says its words said two ways as the rules would, its own says (wind{air})
+    where the dictionary's first reading was wrong; the one the rules would say another way is listed here,
+    the artist's choice (docs/STUDIO.md, "Words said two ways")."""
+    differ, says = set(), set()
     for stem, song, lines in _own_lines():
         for line in lines:
-            assert "{" not in line
             for c in H.as_sung(line, song.lexicon, authored=False):
                 assert c["by"] == "song"
                 rules = next(x for x in H.choices(line) if x["index"] == c["index"])["chosen"]
+                if "{" in line:
+                    says.add((stem, c["word"], c["chosen"]))
                 if rules != c["chosen"]:
                     differ.add((stem, c["word"], c["chosen"], rules))
     assert differ == {
-        ("a-nobody-knows", "perfect", "verb", "perfect"),  # "Each copy was perfect": sung per-FECT (H has its own)
-        ("h-now-its-by-you", "used", "used", "habit"),  # "used to sing it", "used to hum it": sung YOOZD
-        ("k-still-you-grew", "sowed", None, "planted"),  # "No one sowed her": sung as the pig, SOWD
-        ("d-in-by-the-ear", "live", "alive", "verb"),  # "I live in your head": sung LYVE
-        ("e-nothing-of-you", "live", "alive", "verb"),  # "colours that live on your screen"
-        ("h-now-its-by-you", "tears", "rips", "crying"),  # "why there were tears": sung TAIRS
-        ("h-now-its-by-you", "wind", "turn", "air"),  # "the wind took it down": sung WYND
-        ("k-still-you-grew", "wind", "turn", "air"),  # "half was wind and half was shoe"
-        ("l-sticky-burr", "wind", "turn", "air"),  # "In March the wind blew down the sleeve"
+        ("h-now-its-by-you", "used", "used", "habit"),  # "used to sing it", "used to hum it": sung YOOZD, as chosen
     }, sorted(differ)
+    assert says == {
+        ("a-nobody-knows", "perfect", "perfect"),  # "Each copy was perfect": was per-FECT (H has its own)
+        ("d-in-by-the-ear", "live", "verb"),  # "I live in your head": was LYVE
+        ("e-nothing-of-you", "live", "verb"),  # "colours that live on your screen"
+        ("h-now-its-by-you", "tears", "crying"),  # "why there were tears": was TAIRS
+        ("h-now-its-by-you", "wind", "air"),  # "the wind took it down": was WYND
+        ("k-still-you-grew", "sowed", "planted"),  # "No one sowed her": was as the pig, SOWD
+        ("k-still-you-grew", "wind", "air"),  # "half was wind and half was shoe"
+        ("l-sticky-burr", "wind", "air"),  # "In March the wind blew down the sleeve"
+    }, sorted(says)
 
 
 def test_the_table_is_pinned_for_the_words_editor():

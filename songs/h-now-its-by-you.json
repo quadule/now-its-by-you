@@ -819,7 +819,7 @@
         "lines": [
           "A {who} would sing it to {flock} on a hill;",
           "the {flock} nev-er learned it, and nev-er stood still;",
-          "the wind took it down to the farms in the vale,",
+          "the wind{air} took it down to the farms in the vale,",
           "and that's how it came to be sung o-ver ale."
         ]
       },
@@ -858,7 +858,7 @@
         },
         "lines": [
           "An old wom-an lost all the names and the years,",
-          "and who was her {kin}, and why there were tears;",
+          "and who was her {kin}, and why there were tears{crying};",
           "but some-bo-dy hummed the first line, and she smiled,",
           "and sang all the rest as she did as a child."
         ]
