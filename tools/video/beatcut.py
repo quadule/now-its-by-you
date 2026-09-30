@@ -179,7 +179,9 @@ def probe_duration(path: Path) -> float:
 
 
 def flash_time(video: Path, near: float, window: float = 6.0) -> float | None:
-    """The first bright frame (mean luma over 200) within `window` seconds of `near`, from a small decode."""
+    """The flash: the first frame within `window` seconds of `near` that is white all over (mean luma over 248,
+    little spread) after one that isn't, from a small decode. A rising edge, so neither a light page (the
+    studio's paper is luma 237) nor the blank white of a page still loading is taken for it."""
     start = max(0.0, near - window / 2)
     cmd = [FFMPEG, "-v", "error", "-ss", f"{start:.3f}", "-t", f"{window:.3f}", "-i", str(video),
            "-vf", "scale=64:36,format=gray", "-f", "rawvideo", "-fps_mode", "passthrough", "-"]
@@ -187,8 +189,9 @@ def flash_time(video: Path, near: float, window: float = 6.0) -> float | None:
     frames = np.frombuffer(raw, np.uint8).reshape(-1, 36 * 64)
     # timestamps: decode again with showinfo would be exact; frame index / fps is enough at the recorder's constant rate
     fps = video_fps(video)
-    for k, f in enumerate(frames):
-        if f.mean() > 200:
+    white = [bool(f.mean() > 248 and f.std() < 8) for f in frames.astype(np.float32)]
+    for k in range(1, len(frames)):
+        if white[k] and not white[k - 1]:
             return start + k / fps
     return None
 
