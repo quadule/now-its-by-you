@@ -1,4 +1,5 @@
-# The image needs the program, its songs and its locked dependencies; nothing else of the checkout
+# The image needs the program, its songs, its locked dependencies and the tools that measure a take sung in
+# the browser (tools/, webstudio/); nothing else of the checkout
 # (no renders, recordings, volunteers' takes, harvested voices, or the site).
 *
 !pyproject.toml
@@ -7,6 +8,8 @@
 !LICENSE
 !songbird/
 !songs/
+!tools/
+!webstudio/
 !deploy/studio/warm.py
 !deploy/studio/entrypoint.sh
 **/__pycache__

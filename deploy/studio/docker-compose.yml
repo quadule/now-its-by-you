@@ -20,6 +20,7 @@ services:
       --allow-host ${STUDIO_HOST:-studio.itsby.you}
       --machine ${STUDIO_MACHINE:-none}
       --client-ip-header CF-Connecting-IP
+      ${STUDIO_SINGING:---web-singing --sing-kit /kit}
       ${STUDIO_ARGS:-}
     environment:
       SONGBIRD_THREADS: ${SONGBIRD_THREADS:-2}  # a render's threads (the same bytes whatever it says)
@@ -32,7 +33,10 @@ services:
     tmpfs:
       - /tmp:size=64m
     volumes:
-      - studio-data:/data  # previews, recordings waiting to be downloaded, the compiled synthesis
+      - studio-data:/data  # previews, recordings waiting to be downloaded, the compiled synthesis, ways of singing
+      # the singing kit (python -m webstudio.prepare, made on a computer with the memory; docs/WEB-SINGING.md):
+      # the guides and the template singer's analyses. Missing or stale, singing says so and the rest works.
+      - ${SING_KIT:-../../renders/sing-kit}:/kit:ro
     cap_drop: [ALL]
     security_opt: ["no-new-privileges:true"]
     networks: [inside]

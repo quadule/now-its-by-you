@@ -1960,6 +1960,12 @@ dev = [
     { name = "pyworld" },
     { name = "setuptools" },
 ]
+web-singing = [
+    { name = "librosa", version = "0.11.0", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version < '3.12'" },
+    { name = "librosa", version = "1.0.0", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version >= '3.12'" },
+    { name = "pyworld" },
+    { name = "setuptools" },
+]
 
 [package.metadata]
 requires-dist = [
@@ -1976,6 +1982,11 @@ dev = [
     { name = "librosa", specifier = ">=0.10" },
     { name = "matplotlib", specifier = ">=3.8" },
     { name = "pytest", specifier = ">=8" },
+    { name = "pyworld", specifier = ">=0.3.5" },
+    { name = "setuptools", specifier = "<81" },
+]
+web-singing = [
+    { name = "librosa", specifier = ">=0.10" },
     { name = "pyworld", specifier = ">=0.3.5" },
     { name = "setuptools", specifier = "<81" },
 ]
