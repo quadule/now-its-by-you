@@ -82,8 +82,15 @@ def chord_info(ctx, symbol: str) -> dict:
     return info
 
 
-def chord_name(root: int, quality: str, flats: bool, bass: int | None = None) -> str:
-    names = NAMES_FLAT if flats else NAMES_SHARP
+def ascii_spelling(tonic: int, mode: str) -> list[str]:
+    """The key's twelve names (theory.spelling: G♯ in C♯ minor, E♯ in C♯ major) as the piano page writes them."""
+    from .theory import spelling
+
+    return [n.replace("𝄪", "x").replace("𝄫", "bb").replace("♯", "#").replace("♭", "b") for n in spelling(tonic, mode)]
+
+
+def chord_name(root: int, quality: str, flats: bool | list, bass: int | None = None) -> str:
+    names = flats if isinstance(flats, list) else NAMES_FLAT if flats else NAMES_SHARP
     return names[root % 12] + SUFFIX[quality] + (f"/{names[bass % 12]}" if bass is not None else "")
 
 
@@ -130,8 +137,10 @@ def export(laid: dict, source: dict, duration: float | None = None) -> dict:
         return round(x / QUANT) * QUANT
 
     tonic_pc = params.tonic % 12
-    flats = tonic_pc in (5, 10, 3, 8, 1)  # F, Bb, Eb, Ab, Db
-    names = NAMES_FLAT if flats else NAMES_SHARP
+    from .theory import key_signature
+
+    flats = key_signature(params.tonic, params.mode) < 0  # spelt by the key's signature (theory.spelling)
+    names = ascii_spelling(params.tonic, params.mode)
     mode = {"ionian": "major", "aeolian": "minor"}.get(params.mode, params.mode)
     score_notes = laid["score"].notes
 
@@ -160,7 +169,7 @@ def export(laid: dict, source: dict, duration: float | None = None) -> dict:
         if shift:
             info = {k: (v + shift) % 12 if k in ("root", "bass") else v for k, v in info.items()}
         chords.append({"start": b(c.u0), "end": b(c.u1), "roman": c.symbol, **info,
-                       "name": chord_name(info["root"], info["quality"], flats, info.get("bass"))})
+                       "name": chord_name(info["root"], info["quality"], names, info.get("bass"))})
 
     # The tune: realize()'s melody entries (the same notes as the band's Context has them, with their words).
     melody, lines = [], []

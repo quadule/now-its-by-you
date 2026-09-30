@@ -149,8 +149,11 @@ def note(midi: int) -> str:
 
 
 def key_words(tonic: int, mode: str) -> str:
-    """'D major', 'E mixolydian', 'B minor'."""
-    return f"{note(tonic)} {MODES.get(mode, (mode, ''))[0]}"
+    """'D major', 'E mixolydian', 'B minor'; a key that would need more than seven sharps or flats by its tonic's
+    usual name by its other (D♭ lydian, not C♯)."""
+    from .theory import scale_names
+
+    return f"{scale_names(tonic, mode)[0]} {MODES.get(mode, (mode, ''))[0]}"
 
 
 def mode_gloss(mode: str) -> str:

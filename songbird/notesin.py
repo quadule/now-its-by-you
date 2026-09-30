@@ -120,10 +120,11 @@ def degree_of(semitones: int, mode: str) -> int | None:
     return octave * 7 + steps.index(step) + 1 if step in steps else None
 
 
-def pitch_name(pitch: int) -> str:
-    from .theory import NOTE_NAMES
+def pitch_name(pitch: int, tonic: int | None = None, mode: str | None = None) -> str:
+    """A MIDI pitch named, as the key writes it when there is one (theory.note_name)."""
+    from .theory import NOTE_NAMES, note_name
 
-    return f"{NOTE_NAMES[pitch % 12]}{pitch // 12 - 1}"
+    return note_name(pitch, tonic, mode) if mode else f"{NOTE_NAMES[pitch % 12]}{pitch // 12 - 1}"
 
 
 def tune_notes(genome, params, line: dict, notes) -> list[dict]:
@@ -135,7 +136,7 @@ def tune_notes(genome, params, line: dict, notes) -> list[dict]:
     for k, (u, u_end, pitch, _) in enumerate(notes):
         degree = degree_of(int(pitch) - params.tonic - line["up"], params.mode)
         if degree is None:
-            raise ValueError(f"note {k + 1} ({pitch_name(int(pitch))}) isn't in the key's scale")
+            raise ValueError(f"note {k + 1} ({pitch_name(int(pitch), params.tonic, params.mode)}) isn't in the key's scale")
         onset = round((u - line["u0"]) / beat * C.PPB) / C.PPB
         length = max(C.GRID, round((u_end - u) / beat * C.PPB) / C.PPB)
         out.append({"degree": degree, "onset": onset, "duration": length})
@@ -422,7 +423,7 @@ def _voice(genome, params, lines, same, changed, changes, out) -> None:
                     semis = degree_semitones(degree, params.mode) + (p - p0)
                     degree = degree_of(semis, params.mode)
                     if degree is None:
-                        raise ValueError(f"note {i + 1} ({pitch_name(p)}) isn't in the key's scale")
+                        raise ValueError(f"note {i + 1} ({pitch_name(p, params.tonic, params.mode)}) isn't in the key's scale")
                 moved = (u - u0) / beat
                 held = ((z - u) - (z0 - u0)) / beat
                 onset = w["onset"] + (round(moved * C.PPB) / C.PPB if abs(moved) > 1 / 48 else 0)

@@ -708,3 +708,15 @@ test("the sketch hands its players to players.js: one sent to MIDI isn't played 
   s.window.SongbirdComposer.render(clone(view));
   assert(calls.views >= 1, "a new version is told to players.js");
 });
+
+test("a note is named as the key writes it: the composition's names, G♯ in C♯ minor rather than A♭", () => {
+  const view = score();
+  // the server's spelling (songbird/theory.py) comes with the composition: C♯ minor's here
+  view.composition.names = ["C", "C♯", "D", "D♯", "E", "F", "F♯", "G", "G♯", "A", "A♯", "B"];
+  const phrase = view.composition.sections[1].phrases[0];
+  phrase.notes = phrase.notes.map((n) => ({ ...n, pitch: 68 }));
+  const s = setup(view);
+  const label = s.find('[data-note="1"]').getAttribute("aria-label");
+  assert.match(label, /G♯4/);
+  assert.doesNotMatch(label, /A♭/);
+});
