@@ -15,6 +15,7 @@ import os
 import re
 import time
 from collections import defaultdict
+from types import SimpleNamespace
 
 import numpy as np
 
@@ -25,6 +26,9 @@ except ImportError:  # no JS: every kernel stays Python
     _js, _MANIFEST = None, {}
 
 __version__ = "0.0-shim"
+# numba.config as songbird reads it (fx.JIT): the kernels are compiled here too (to JS or wasm), so the loops
+# written to save memory are used, unless NUMBA_DISABLE_JIT=1 asks for numpy's and scipy's own operations
+config = SimpleNamespace(DISABLE_JIT=os.environ.get("NUMBA_DISABLE_JIT") == "1")
 PORTED: dict[str, str] = {}  # kernel -> "js" | "wasm" | "python"
 TIME = defaultdict(float)
 CALLS = defaultdict(int)
@@ -82,6 +86,11 @@ def _result(r, t: str | None):
                 _js.rt.store(out.__array_interface__["data"][0], r)
             return out
         shape = (int(r.n0),) if r.nd == 1 else (int(r.n0), int(r.n1))
+        if dtype is np.bool_:  # straight into a bool array (not through a float64 one eight times its size)
+            out = np.empty(shape, dtype=np.bool_)
+            if out.size:
+                _js.rt.store_u8(out.__array_interface__["data"][0], r)
+            return out
         out = np.empty(shape, dtype=np.float64)
         if out.size:  # copied by JS into a view of out (Pyodide's assign_to fails past 2 GiB of heap)
             _js.rt.store(out.__array_interface__["data"][0], r)

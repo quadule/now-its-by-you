@@ -54,6 +54,21 @@ export function store(addr, a) {
   new Float64Array(heap(), addr, src.length).set(src);
 }
 
+// a.reshape(-1): the elements in C order as a 1-d array, a view when they lie so (numba's reshape needs a
+// contiguous array), a copy otherwise
+export function flat(a) {
+  if (a.nd === 1) return a;
+  const contiguous = a.s1 === 1 && a.s0 === a.n1;
+  const d = contiguous ? a.d : copy(a).d;
+  return { d, nd: 1, n0: a.n0 * a.n1, n1: 0, s0: 1, s1: 1, t: a.t };
+}
+
+// the same for a bool array (numpy's bool_: a byte each, 0 or 1)
+export function store_u8(addr, a) {
+  const src = packed(a);
+  new Uint8Array(heap(), addr, src.length).set(src);
+}
+
 export function row(a, i) {
   if (i < 0) i += a.n0;
   return { d: a.d.subarray(i * a.s0), nd: 1, n0: a.n1, n1: 0, s0: a.s1, s1: 1, t: a.t };

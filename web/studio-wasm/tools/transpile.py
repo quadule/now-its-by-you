@@ -67,6 +67,10 @@ class Types:
             self.ret = sig["return"]
             for p, t in zip(params, sig["args"]):
                 self.vars[p] = t
+            for other in spec["signatures"][1:]:  # the same array in another layout (C and F): any layout
+                for p, t in zip(params, other["args"]):
+                    if t != self.vars.get(p) and array_info(t) and array_info(self.vars.get(p)):
+                        self.vars[p] = re.sub(r", \w\)$", ", A)", self.vars[p])
             for name, ts in sig["locals"].items():
                 arr = [t for t in ts if t.startswith("array(")]
                 self.vars.setdefault(name, arr[0] if arr else ("float64" if "float64" in ts else ts[0]))
@@ -559,6 +563,8 @@ class Kernel:
                 return f"{n}_n0" if self.arrays[n][1] == 1 else f"({n}_n0 * {n}_n1)"
             if e.attr == "ndim":
                 return str(self.arrays[e.value.id][1])
+            if base in ("np", "numpy") and e.attr in DTYPES:  # a dtype given by position (np.empty(n, np.int64))
+                return f"'{DTYPES[e.attr]}'"
             raise Unsupported("attribute " + ast.unparse(e))
         if isinstance(e, ast.Call):
             return self.call(e)
@@ -686,6 +692,12 @@ class Kernel:
             return f"rt.alloc(1, {E(shape)}, 0, '{dtype}', {fill})"
         if isinstance(e.func, ast.Attribute) and e.func.attr == "copy" and not e.args:
             return f"rt.copy({E(e.func.value)})"
+        if isinstance(e.func, ast.Attribute) and e.func.attr in ("reshape", "ravel") \
+                and isinstance(e.func.value, ast.Name) and e.func.value.id in self.arrays:
+            # x.reshape(-1) (or to its size), x.ravel(): numba's, a view of a contiguous array (rt.flat)
+            if e.func.attr == "reshape" and (len(e.args) != 1 or ast.unparse(e.args[0]) != "-1"):
+                raise Unsupported("reshape " + ast.unparse(e))
+            return f"rt.flat({E(e.func.value)})"
         if f in ("np.float64", "float64"):
             return f"(+{args[0]})"
         if f in ("np.int64", "np.intp", "np.int32"):
