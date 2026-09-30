@@ -18,11 +18,14 @@ more, scipy divides the rows among its threads differently.
 from __future__ import annotations
 
 import math
+from functools import partial
 
 import numpy as np
 from scipy import fft as sp_fft
 from scipy.signal import oaconvolve
 from scipy.signal._signaltools import _calc_oa_lens
+
+from . import threads
 
 GROUP = 8  # blocks at a time come in multiples of this: a multiple of any SIMD width the FFT groups rows by
 CALL = 1 << 22  # bytes of blocks a call works on, roughly (at least one GROUP)
@@ -57,38 +60,50 @@ def convolve(x: np.ndarray, h: np.ndarray, n: int | None = None, out: np.ndarray
         steps += 1
     spectrum = sp_fft.rfftn(h.reshape(1, s2), [block], axes=[1])  # one row: the same on any number of threads
     out = np.empty(n) if out is None else out
-    carry = None  # the last block's tail, into the next block's head
     # scipy's FFT threads take the blocks as np.array_split divides them, each thread its stretch from its first
     # block; each stretch is made here a whole number of groups at a time from its start (the last call of a
-    # stretch ending where it ends), until the blocks reach past the first n samples
+    # stretch ending where it ends), until the blocks reach past the first n samples. The stretches are made
+    # on up to threads.workers() threads, as scipy's own threads made them side by side; each block's tail goes
+    # into the next block's head, within a stretch as it is made, across stretches once both are.
     per = GROUP * max(1, CALL // (8 * block * GROUP))
     needed = math.ceil(n / step1)
-    bounds = []
+    stretches = []
     lo = 0
     for size in (len(part) for part in np.array_split(np.arange(steps), max(1, int(workers)))):
-        hi = lo + size
+        if size and lo < needed:
+            stretches.append((lo, lo + size))
+        lo += size
+
+    def stretch(lo: int, hi: int) -> np.ndarray:
+        """Blocks lo..hi into out; returns the last one's tail."""
+        carry = None
         a = lo
         while a < hi and a < needed:
-            bounds.append((a, min(a + per, hi)))
-            a = bounds[-1][1]
-        lo = hi
-    for a, b in bounds:
-        blocks = np.zeros((b - a, step1))
-        take = x[a * step1: min(b * step1, s1)]
-        blocks.reshape(-1)[: len(take)] = take
-        spectra = sp_fft.rfftn(blocks, [block], axes=[1])
-        del blocks
-        spectra *= spectrum  # the same products, where they lie
-        y = sp_fft.irfftn(spectra, [block], axes=[1])
-        del spectra
-        if carry is not None:
-            y[0, :overlap] += carry
-        y[1:, :overlap] += y[:-1, step1:]
-        carry = y[-1, step1:].copy()
-        flat = y[:, :step1].reshape(-1)
-        lo = a * step1
-        if lo < n:
-            out[lo: min(n, lo + len(flat))] = flat[: n - lo]
+            b = min(a + per, hi)
+            blocks = np.zeros((b - a, step1))
+            take = x[a * step1: min(b * step1, s1)]
+            blocks.reshape(-1)[: len(take)] = take
+            spectra = sp_fft.rfftn(blocks, [block], axes=[1])
+            del blocks
+            spectra *= spectrum  # the same products, where they lie
+            y = sp_fft.irfftn(spectra, [block], axes=[1])
+            del spectra
+            if carry is not None:
+                y[0, :overlap] += carry
+            y[1:, :overlap] += y[:-1, step1:]
+            carry = y[-1, step1:].copy()
+            flat = y[:, :step1].reshape(-1)
+            start = a * step1
+            if start < n:
+                out[start: min(n, start + len(flat))] = flat[: n - start]
+            a = b
+        return carry
+
+    tails = [tail for _, tail in threads.in_order([(k, partial(stretch, *bounds)) for k, bounds in enumerate(stretches)])]
+    for (lo, _), tail in zip(stretches[1:], tails[:-1]):  # the tail of each stretch's last block into the next's first
+        start = lo * step1
+        if start < n:
+            out[start: min(n, start + overlap)] += tail[: n - start]
     return out
 
 

@@ -599,7 +599,8 @@ def mix_made(parts: list, length: int, sr: int, seed: int = 0, params: MixParams
                 if strip.duck and singing is not None:
                     stepped[a: a + len(part)] += \
                         part * (1.0 - 10.0 ** (duck * singing[where][a: a + len(part)] / 20.0))[:, None]
-            del result, x
+            del result, x, sent, stepped
+            part = None  # (a stretch of x: x is let go with it)
     finally:
         results.close()
     if progress is not None:
