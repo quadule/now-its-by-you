@@ -28,8 +28,8 @@ BACKINGS = ("oohs", "echo", "thirds", "gang", "hum")  # hum: an a cappella's ope
 LINEAGE_MAX = 16  # generations of styles a record remembers
 QUIET_OFF = ("drop",)  # Style's options a record leaves out while they're off (added after records were made)
 # Values retired since records were made, read as what replaced them: an a cappella's intro sung on shape-note
-# syllables (2026-09-30) is now the lead humming the tune over the group
-RENAMED = {"intro": {"notes": "lead"}}
+# syllables (2026-09-30) is now the lead humming the tune over the group; the Celtic session is the jig
+RENAMED = {"intro": {"notes": "lead"}, "name": {"celtic": "jig"}}
 
 
 def renamed(option: str, value):
@@ -118,8 +118,8 @@ class Style:
             return v if v in options else ""
 
         return Style(
-            name=str(self.name or ""),
-            lineage=tuple(str(x) for x in (self.lineage or ()))[-LINEAGE_MAX:],
+            name=str(renamed("name", self.name) or ""),
+            lineage=tuple(str(renamed("name", x)) for x in (self.lineage or ()))[-LINEAGE_MAX:],
             feel=pick(self.feel, FEELS),
             harmony=float(min(1.0, max(0.0, float(self.harmony or 0.0)))),
             intro=pick(renamed("intro", self.intro), INTROS),
@@ -174,8 +174,8 @@ class StyleDef:
     swaps: dict = field(default_factory=dict)  # a player -> {another who may play the part instead: how often}
     optional: dict = field(default_factory=dict)  # a player -> how often it comes at all (else it sits in at gain 0)
     group: int = 0  # the fewest backing voices the style sings with: the lineage's, then the program's own
-    rounds: int = 0  # how many times round a short played section's tune goes (a session's set); 0 as the form has it
-    ornaments: float = 0.0  # how often the singer ornaments a long stressed note of its own accord (sean-nós)
+    rounds: int = 0  # how many times round a short played section's tune goes (the jig's); 0 as the form has it
+    ornaments: float = 0.0  # how often the singer ornaments a long stressed note of its own accord (the jig's)
     # a style's own sound design, under a person's (songbird.sound.program_players): {"players": {part: {kit, patch,
     # sidechain...}}, "intro": "open" (the band's low-pass opening across an intro)}; {}: none (house, 2026-09-30)
     sound: dict = field(default_factory=dict)
@@ -487,7 +487,7 @@ def neighbours(name: str) -> tuple[str, str]:
     return RING[(k - 1) % len(RING)], RING[(k + 1) % len(RING)]
 
 
-# --- beside the ring: a cappella (docs/STYLES.md, "Two more: a cappella and a Celtic session", 2026-09-30) ---------
+# --- beside the ring: a cappella (docs/STYLES.md, "Two more", 2026-09-30; "A cappella and the jig, revised") ---
 #
 # Only voices: the lead on the tune and a group in harmony around it, the lineage's own voices first and then the
 # program's own harmony voices, at least three (group); the parts are idioms.shape_parts. Everyone on the refrains'
@@ -531,19 +531,20 @@ def vocalise(params) -> str:
     return "oo" if voices_alone(params) else ""
 
 
-# --- beside the ring: a Celtic session (docs/STYLES.md, "Two more: a cappella and a Celtic session", 2026-09-30) ----
+# --- beside the ring: the jig (docs/STYLES.md, "Two more", 2026-09-30; "A cappella and the jig, revised") --------
 #
-# An Irish session: the whistle and the fiddle (and a concertina, when it comes) play the tune together where nobody
-# sings, each its own way (cuts and rolls, slides and slurs, plain), a short played section round twice (rounds:
-# songbird.takeover.phrase_plan), the first time the lead and the guitar, the second everyone; the frame drum
-# played as a bodhrán with a tipper, a guitar in DADGAD, the pipes' drones when they come. A jig (the song
-# re-barred in six-eight: H's long-short-short feet are a jig's dotted beat) or a reel (double time: the bodhrán's
-# and the guitar's strokes on the sixteenths, a reel's eighths, the singer at the song's pace). The singer keeps
-# the song, with a few ornaments of its own (sean-nós: ornaments).
+# The song as a jig, always in six-eight (H's long-short-short feet are a jig's dotted beat; a song that can't be
+# re-barred keeps its beats and plays them in threes: feels_for). The whistle and the fiddle (and a concertina, when
+# it comes) play the tune together where nobody sings, each its own way (cuts and rolls, slides and slurs, plain),
+# a short played section round twice (rounds: songbird.takeover.phrase_plan), the first time the lead and the
+# guitar, the second everyone; the frame drum tipped, down-up-down on each dotted beat; a guitar in an open tuning
+# (DADGAD); a reed drone when it comes. The singer keeps the song, with a few turns of its own (ornaments). Named
+# for what it plays, not for a tradition it would claim: it was "celtic", a session, with a reel, until the artist
+# asked for "jig" (2026-09-30); records and edits that say "celtic" are read as the jig (RENAMED).
 
-CELTIC = _def(
-    "celtic", "an Irish session: the whistle and the fiddle on the tune together, round twice between the verses, "
-              "a bodhrán's tipper, a guitar in DADGAD, a concertina or the pipes' drones when they come",
+JIG = _def(
+    "jig", "jig: the song in six-eight, the whistle and the fiddle on the tune together, round twice between the "
+           "verses, a tipped frame drum, a guitar in DADGAD, a concertina or a reed drone when they come",
     {"whistle": 1.0, "fiddle": 0.95, "guitar": 0.85, "drum": 0.8, "concertina": 0.75, "drone": 0.5},
     {"whistle": {"intro": "lead", "outro": "lead", "break": "lead", "turn": "quote", "verse1": "",
                  "verse": ((0.35, "fills"), (0.0, "")), "refrain": "", "last": "descant", "bridge": "", "tag": "double"},
@@ -553,13 +554,15 @@ CELTIC = _def(
      "concertina": {"intro": "lead", "outro": "lead", "break": "lead", "turn": "quote", "verse1": "", "verse": "",
                     "refrain": ((0.6, "pad"), (0.0, "")), "bridge": "pad", "tag": "pad"},
      "guitar": {"*": "dadgad"},
-     "drum": {"intro": "bodhran", "verse1": ((0.4, "bodhran-light"), (0.0, "")), "verse": "bodhran-light",
-              "refrain": "bodhran", "turn": "bodhran", "break": "bodhran", "outro": "bodhran", "bridge": "bodhran-light",
-              "tag": "bodhran"},
+     "drum": {"intro": "tipped", "verse1": ((0.4, "tipped-light"), (0.0, "")), "verse": "tipped-light",
+              "refrain": "tipped", "turn": "tipped", "break": "tipped", "outro": "tipped", "bridge": "tipped-light",
+              "tag": "tipped"},
      "drone": {"intro": "drone", "turn": "drone", "break": "drone", "outro": "drone", "bridge": "drone",
                "tag": "drone"}},
-    ("whistle", "fiddle", "concertina"), {"six": 0.55, "double": 0.45},
-    {"six": (1.35, 1.5, 1.6), "double": (1.05, 1.2, 1.35)},
+    ("whistle", "fiddle", "concertina"), {"six": 1.0},
+    # six-eight re-barred; twelve-eight (a song that can't be: each beat in threes, a dotted beat at about 72 for a
+    # song at 96); a song already in threes (six-eight) in its own time, a little brisker
+    {"six": (1.35, 1.5, 1.6), "twelve": (0.7, 0.75, 0.8), "*": (0.95, 1.05, 1.15)},
     {"*": ("sus2", "power")}, 0.35, (-0.9, 0.3),
     band={"ornament": 0.3, "brightness": 0.05, "wear": 0.05},
     singer={"vibrato_depth": -8.0, "rd": -0.05},
@@ -571,17 +574,17 @@ CELTIC = _def(
     rounds=2,
     ornaments=0.125,
 )
-STYLES[CELTIC.name] = CELTIC
-OFF_RING[CELTIC.name] = "ballad"  # the seed's own band is a Celtic ballad band
+STYLES[JIG.name] = JIG
+OFF_RING[JIG.name] = "ballad"  # the seed's own band: whistle, fiddle, frame drum and drone
 
-SET_BARS = 4  # a played section this long or shorter goes round a session's `rounds` times (the break, eight, once)
-AIR_SLOW = 1.7  # a slow air's pace against the song's: this many times as slow...
+SET_BARS = 4  # a played section this long or shorter goes round a jig's `rounds` times (the break, eight, once)
+AIR_SLOW = 1.7  # a slow air's pace against the song's (the tune slow and free, the lead alone): this many times as slow...
 AIR_BROADEN = 0.6  # ...and each line broadening toward its end, its last beat this much slower again
 
 
 def rounds(genome, params, name: str) -> int:
-    """How many times round a section of the form goes as its style plays it: a session plays a short tune where
-    nobody sings round twice (a set); every other section, and every other style, once."""
+    """How many times round a section of the form goes as its style plays it: the jig plays a short tune where
+    nobody sings round twice; every other section, and every other style, once."""
     sdef = STYLES.get(params.style.name) if params.style.name else None
     if sdef is None or sdef.rounds < 2:
         return 1
@@ -607,7 +610,7 @@ def air(genome, params, phrases, lead: float) -> tuple:
 
 
 def sung_ornaments(genome, params) -> tuple:
-    """A singer's own ornaments where its style leans that way (a session's singer, sean-nós): on some long stressed
+    """A singer's own ornaments where its style leans that way (the jig's singer): on some long stressed
     notes the lineage hasn't ornamented, a grace, a mordent or a turn from the song's own vocabulary
     (variants.candidates: always a degree of its scale, on a note long enough to hold it), fixed by the rendition's
     seed and never handed down; () for every other style."""
@@ -856,6 +859,9 @@ def feels_for(genome, sdef: StyleDef) -> dict:
 
     ok = triple_ok(genome)
     feels = {f: w for f, w in sdef.feels.items() if ok or f not in ("waltz", "six")}
+    if not feels and set(sdef.feels) == {"six"}:  # the jig on a song that can't be re-barred: its beats in threes
+        m = genome.meter
+        return {"straight": 1.0} if m.beat % 3 == 0 and m.beat > 1 else {"twelve": 1.0}
     return feels or {"straight": 1.0}
 
 
@@ -955,7 +961,7 @@ def choose_style(out: dict, ctx, forced: str | None = None, arrange: dict | None
     if forced is None and "identity" not in c.known:
         out["style"] = Style.from_dict({**parent.to_dict(), "lineage": (lineage + (parent.name or "ballad",))}).to_dict()
         return
-    name = forced or place(parent, c, ctx.drift)
+    name = renamed("name", forced) or place(parent, c, ctx.drift)
     sdef, pdef = STYLES[name], of(parent)
     kept = name == (parent.name or "ballad")
     digest = hashlib.sha256(json.dumps(ctx.parent.to_dict(), sort_keys=True).encode()).hexdigest()[:16]

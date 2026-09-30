@@ -1,4 +1,4 @@
-"""A Celtic session (docs/STYLES.md, "Two more: a cappella and a Celtic session")."""
+"""The jig (docs/STYLES.md, "Two more", and "A cappella and the jig, revised": it was a Celtic session)."""
 
 from collections import Counter
 from dataclasses import replace
@@ -16,7 +16,7 @@ SONG = 96.0
 
 def session(**arrange):
     g = G.load(H)
-    p = replace(choose_params(g, style="celtic", arrange=arrange or None), choir=0)
+    p = replace(choose_params(g, style="jig", arrange=arrange or None), choir=0)
     return g, p, realize(g, p)
 
 
@@ -27,19 +27,28 @@ def spans(score):
     return out
 
 
-def test_a_jig_or_a_reel():
-    g, p, _ = session(feel="six")
+def test_always_a_jig():
+    """Six-eight, re-barred; a song that can't be re-barred keeps its beats and plays each in three (its own six-eight
+    in a song already in it); "celtic", the style's old name, is read as the jig everywhere."""
+    g, p, _ = session()
+    assert p.style.feel == "six" and set(S.JIG.feels) == {"six"}
     assert 1.35 * SONG - 0.1 <= p.tempo <= 1.6 * SONG + 0.1  # a sung jig: a dotted beat at 65 to 77
-    g, p, _ = session(feel="double")
-    assert 1.05 * SONG - 0.1 <= p.tempo <= 1.35 * SONG + 0.1  # a reel's eighths on the sixteenths, at 200 to 260
-    assert set(S.CELTIC.feels) == {"six", "double"}
     assert set(p.band.lineup) == {"whistle", "fiddle", "guitar", "drum", "concertina", "drone"}
+    assert "celtic" not in S.STYLES and choose_params(g, style="celtic").style.name == "jig"
+    old = S.Style.from_dict({"name": "celtic", "lineage": ["ballad", "celtic"], "feel": "double"})
+    assert (old.name, old.lineage) == ("jig", ("ballad", "jig"))
+    assert S.feels_for(G.load(ROOT / "songs" / "f-the-long-count.json"), S.JIG) == {"twelve": 1.0}
+    assert S.feels_for(G.load(ROOT / "songs" / "b-coal-from-the-fire.json"), S.JIG) == {"straight": 1.0}
+    from songbird import edits as E
+
+    clean, problems = E.check(g, {"style.name": "celtic"})
+    assert clean == {"style.name": "jig"} and not problems
 
 
 def test_the_tunes_go_round_twice_the_lead_first_then_everyone():
     """The intro's four bars are eight and a turn's two are four (the same line quoted both times), the break's
     eight once; the first time round the lead and the guitar, the second the rest; a person's length wins."""
-    g, p, score = session(intro="lead", feel="double")
+    g, p, score = session(intro="lead")
     bar = 4 * 60.0 / p.tempo
     s = spans(score)
     (a, b), = s["intro"]
@@ -78,21 +87,23 @@ def test_everyone_on_the_tune_together():
         assert same >= 0.7 * len(lead), (other, same, len(lead))
 
 
-def test_the_bodhran():
-    """A jig's down-up-down on each dotted beat (the bar's first stroke open); a reel's sixteenths, open on one and
-    three, the back hand high after two and four."""
-    g, p, score = session(feel="six")
+def test_the_frame_drum_tipped():
+    """Down-up-down on each dotted beat (the bar's first stroke open), in six-eight or, in a song that can't be
+    re-barred, on each of its beats in three."""
+    g, p, score = session()
     drum = [n for n in score.notes if n.part == "drum"]
     assert {n.art for n in drum} <= {"bass", "tip"}
     eighth = 2.0 / 3.0 * 60.0 / p.tempo
     gaps = np.diff(sorted({round(n.start, 3) for n in drum}))
     assert abs(np.median(gaps) / eighth - 1.0) < 0.1
-    g, p, score = session(feel="double")
-    drum = [n for n in score.notes if n.part == "drum"]
+    f = G.load(ROOT / "songs" / "f-the-long-count.json")
+    q = replace(choose_params(f, style="jig"), choir=0)
+    assert q.style.feel == "twelve"
+    drum = [n for n in realize(f, q).notes if n.part == "drum"]
     arts = Counter(n.art for n in drum)
-    assert arts["top"] > 0 and arts["tip"] > arts["bass"] > arts["top"] / 2
+    assert set(arts) <= {"bass", "tip"} and arts["tip"] > arts["bass"]
     gaps = np.diff(sorted({round(n.start, 3) for n in drum}))
-    assert abs(np.median(gaps) / (15.0 / p.tempo) - 1.0) < 0.2
+    assert abs(np.median(gaps) / (20.0 / q.tempo) - 1.0) < 0.15  # a third of a beat
 
 
 def test_the_guitar_is_in_dadgad():
@@ -138,14 +149,14 @@ def test_the_singer_ornaments_some_notes_of_its_own():
     assert not S.sung_ornaments(g, choose_params(g, style="shanty"))
 
 
-def test_a_sessions_child_stays_or_steps_to_the_ballads_neighbours():
+def test_a_jigs_child_stays_or_steps_to_the_ballads_neighbours():
     from songbird import drift as D, harvest as HV, variation as V
 
-    parent = S.Style(name="celtic", lineage=("ballad", "celtic"))
+    parent = S.Style(name="jig", lineage=("ballad", "jig"))
     seen = set()
     for k in range(6):
         voice = HV.fictional(f"m{k}")
         c = V.character(voice)
         for t in np.arange(D.parse("2026-01-01"), D.parse("2027-01-01"), 7.0):
             seen.add(S.place(parent, c, D.drift(t, voice.hash)))
-    assert seen <= {"celtic", *S.neighbours("ballad")} and "celtic" in seen
+    assert seen <= {"jig", *S.neighbours("ballad")} and "jig" in seen

@@ -44,7 +44,7 @@ DRUMS = ("drums", "drum machine")  # the families that play a kit's grooves (son
 FILLED = ("groove", "four", "toms", "half", "machine")  # the grooves that end a section with a fill (w_groove)
 # Idioms that play the same as another, offered once: the drum machine's own four on the floor was "machine" until
 # 2026-09-30 (idioms.w_machine is w_four); a record, a draft or a lock that says it is read as the one kept.
-ALIASES = {"machine": "four"}
+ALIASES = {"machine": "four", "bodhran": "tipped", "bodhran-light": "tipped-light"}  # (the jig's drum, renamed)
 LINES = ("lead", "quote", "counter", "descant", "under", "tone", "double", "hook", "fills")  # idioms.LINES
 
 # The ballad band's players (songbird.band) and what their own writers play
@@ -86,6 +86,7 @@ LABELS = {
     "claps": "claps on the backbeat", "tambourine": "tambourine on the backbeat", "shaker": "shaking",
     "cajon": "a cajon's groove", "build": "a build", "light": "lightly", "full": "the full pattern",
     "heart": "a heartbeat", "hold": "a held note", "high": "picking high", "pick": "fingerpicked",
+    "tipped": "tipped: down-up-down on each beat", "tipped-light": "tipped, lightly", "dadgad": "strummed in DADGAD",
 }
 
 
@@ -415,7 +416,7 @@ def phrase_plan(genome, params) -> list[list[tuple[str, bool]]]:
             lines = fit(genome, name, entry.get("bars"), sung and entry.get("sung", True) is not False)
             if lines is None:  # a length it can't have (said by shape_problems): its own
                 lines = fit(genome, name, None, sung and entry.get("sung", True) is not False)
-        elif rounds(genome, params, name) > 1:  # a session's tune round twice: the style's own length, a person's wins
+        elif rounds(genome, params, name) > 1:  # the jig's tune round twice: the style's own length, a person's wins
             lines = [(pid, False) for pid in section.phrases] * rounds(genome, params, name)
         out.append(lines if lines is not None else [(pid, sung) for pid in section.phrases])
     return out
@@ -428,7 +429,7 @@ def arranged_plan(genome, params) -> list[list[tuple[str, bool]] | None]:
     from .style import rounds
 
     held = arranged(params)
-    twice = [rounds(genome, params, name) > 1 for name in params.form]  # a session's set: its own length
+    twice = [rounds(genome, params, name) > 1 for name in params.form]  # the jig's round twice: its own length
     if not held and not any(twice):
         return [None] * len(params.form)
     return [lines if sid in held or again else None
@@ -777,7 +778,8 @@ OPTION_WORDS = {"entrances": "the band joins line by line", "breakdown": "the la
                 "alone": "sung bare", "bridge": "the bridge in half time", "intro": "how it starts",
                 "drop": "the breakdown before the drop: the singer with the pad, the filter opening into the refrain"}
 INTRO_WORDS = {"lead": "an instrument states the tune", "pad": "a pad swells in alone", "count": "a count-in",
-               "voice": "the singer begins alone", "quote": "a line of an older song", "": "as the form has it"}
+               "voice": "the singer begins alone", "quote": "a line of an older song",
+               "air": "the tune slow and free, the lead alone", "": "as the form has it"}
 # ...and in a style of voices alone (a cappella)
 VOICES_INTRO_WORDS = {**INTRO_WORDS, "lead": "the lead hums the tune over the voices' chords",
                       "pad": "the voices' chords swell in alone"}

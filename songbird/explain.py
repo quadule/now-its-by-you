@@ -79,12 +79,12 @@ STYLE_NAMES = {"ballad": "the ballad band, the song's own", "stringband": "a str
                "gospel": "gospel", "shanty": "a sea shanty", "songwriter": "a singer-songwriter",
                "chamber": "chamber folk", "lullaby": "a lullaby", "ambient": "ambient", "synthfolk": "synth folk",
                "lofi": "lo-fi", "indie": "indie folk", "blues": "country blues",
-               # beside the ring (docs/STYLES.md, "Two more", 2026-09-30)
-               "acappella": "a cappella", "celtic": "a Celtic session"}
-# A player as a style's own tradition names it (a session's frame drum is a bodhrán)
-STYLE_PLAYERS = {"celtic": {"drum": "bodhrán", "drone": "pipes' drones", "guitar": "guitar in DADGAD"}}
-# A feel as a style's own tradition names it (a session's six-eight is a jig, its double time a reel)
-STYLE_FEELS = {"celtic": {"six": "a jig, in six-eight", "double": "a reel, in double time"}}
+               # beside the ring (docs/STYLES.md, "Two more", 2026-09-30; the jig was "a Celtic session")
+               "acappella": "a cappella", "jig": "jig"}
+# A player as a style names it (the jig's guitar is in an open tuning, DADGAD, which the style's detail says)
+STYLE_PLAYERS = {"jig": {"guitar": "open-tuned guitar", "drone": "reed drone"}}
+# A feel as a style names it (the jig is always in threes: re-barred in six-eight, or each beat of the song in three)
+STYLE_FEELS = {"jig": {"six": "in six-eight", "twelve": "each beat in three", "straight": "in the song's own six-eight"}}
 FEEL_NAMES = {"straight": "played straight", "swing": "swung", "shuffle": "a shuffle", "twelve": "in twelve-eight",
               "half": "half-time", "double": "double-time", "waltz": "a waltz", "six": "in six-eight"}
 ENDING_NAMES = {"ring": "the last chord rings", "rit": "it slows broadly to the end", "cold": "it stops dead",
@@ -849,7 +849,7 @@ def style_card(v: Version) -> dict:
                  "pad": "the voices' chords swell in to begin"} if sdef.group and not sdef.leads else
                 {"lead": "", "pad": "a pad swells in to begin", "count": "a count-in to begin",
                  "voice": "the singer begins alone", "quote": "a line of an older song to begin",
-                 "air": "a slow air to begin, out of time"}).get(s.intro, ""),
+                 "air": "the tune slow and free to begin, the lead alone"}).get(s.intro, ""),
                group_words(v.params) if sdef.group else "",
                "an older song's first notes over the last chord" if s.coda == "quote" else "",
                {"bridge": "an older song's first notes through the bridge",
@@ -868,7 +868,7 @@ def style_card(v: Version) -> dict:
         if home is None:
             return None
         at = style_mod.RING[int(round(home)) % len(style_mod.RING)]
-        if value in style_mod.OFF_RING:  # beside the ring (house, dub, a cappella, a session): kept, or left
+        if value in style_mod.OFF_RING:  # beside the ring (house, dub, a cappella, the jig): kept, or left
             anchor = style_mod.OFF_RING[value]
             return (f"{STYLE_NAMES.get(value, value)} sits beside {STYLE_NAMES.get(anchor, anchor)}: a version keeps it, "
                     f"or moves on to a style next to that one; your machine is at home in {STYLE_NAMES.get(at, at)}")

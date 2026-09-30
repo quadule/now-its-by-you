@@ -1,4 +1,4 @@
-"""A cappella: the voices are the band (docs/STYLES.md, "Two more: a cappella and a Celtic session")."""
+"""A cappella: the voices are the band (docs/STYLES.md, "Two more", and "A cappella and the jig, revised")."""
 
 from dataclasses import replace
 from pathlib import Path

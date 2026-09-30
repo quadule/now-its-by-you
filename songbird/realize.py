@@ -382,7 +382,7 @@ def realize(genome: Genome, params: Params, verses=None, phrasing: Phrasing | No
 
     melody: list[dict] = []
     vocal = style_mod.vocalise(params)  # "" but for a style of voices alone (songbird.style)
-    # the lineage's variants, and a singer's own ornaments where its style leans that way (a session's: sean-nós)
+    # the lineage's variants, and a singer's own ornaments where its style leans that way (the jig's)
     sung_variants = params.variants + style_mod.sung_ornaments(genome, params)
 
     for section_name, phrase, start, line in placed:

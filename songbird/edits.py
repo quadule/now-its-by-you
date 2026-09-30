@@ -328,8 +328,9 @@ def check(genome: Genome, edits: dict, phrasings=()) -> tuple[dict, list[dict]]:
             elif path.startswith("band.") and path[5:] in instruments():
                 clean[path] = round(_number(value, 0.0, 2.0), 2)
             elif path == "style.name":
-                from .style import STYLES
+                from .style import STYLES, renamed
 
+                value = renamed("name", value)  # a style renamed since the edits were made (celtic: the jig)
                 if value not in STYLES:
                     raise LookupError(f"the styles are {', '.join(sorted(STYLES))}")
                 clean[path] = value
