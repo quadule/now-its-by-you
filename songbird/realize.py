@@ -406,10 +406,9 @@ def realize(genome: Genome, params: Params, verses=None, phrasing: Phrasing | No
             in_bar = phrase.chords[bar]
             chord = in_bar[int(min(max((onset - bar * meter.bar) * len(in_bar) // meter.bar, 0), len(in_bar) - 1))]
             degree = v.degree if v else note.degree
-            if syllable is None and vocal:  # an a cappella sings where the band would play: the notes, or "oo"
-                syllable = word = style_mod.vocalised(vocal, params.tonic + degree_semitones(degree, params.mode,
-                                                                                               note.alter), params)
-                word_len = 1
+            if syllable is None and vocal and not (params.style.intro == "pad" and section_name == placed[0][0]):
+                syllable = word = vocal  # an a cappella's lead hums the tune where a band would play it (not
+                word_len = 1  # under an intro whose chords swell in alone)
             turns = getattr(v, "melisma", ()) if v else ()  # a person's melisma: (grid units after the onset, degree)
             melody.append(
                 dict(
@@ -514,6 +513,6 @@ def realize(genome: Genome, params: Params, verses=None, phrasing: Phrasing | No
     notes.sort(key=lambda n: (n.start, n.part, n.pitch))
     # the score's own words: the song's lexicon, and the syllables the backing voices sing ("oo", which no
     # dictionary has: a machine choosing oohs for a song without its own reading used to fail)
-    score = Score(tuple(notes), final + ring, tuple(section_spans), {**SUNG_SYLLABLES, **style_mod.lexicon(params), **genome.lexicon}, band=band_settings,
+    score = Score(tuple(notes), final + ring, tuple(section_spans), {**SUNG_SYLLABLES, **genome.lexicon}, band=band_settings,
                   sound=sound)
     return style_mod.finish(score, genome, params)  # a style's key lift for the last refrain, if it has one

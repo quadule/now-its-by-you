@@ -778,6 +778,9 @@ OPTION_WORDS = {"entrances": "the band joins line by line", "breakdown": "the la
                 "drop": "the breakdown before the drop: the singer with the pad, the filter opening into the refrain"}
 INTRO_WORDS = {"lead": "an instrument states the tune", "pad": "a pad swells in alone", "count": "a count-in",
                "voice": "the singer begins alone", "quote": "a line of an older song", "": "as the form has it"}
+# ...and in a style of voices alone (a cappella)
+VOICES_INTRO_WORDS = {**INTRO_WORDS, "lead": "the lead hums the tune over the voices' chords",
+                      "pad": "the voices' chords swell in alone"}
 ROLE_WORDS = {"intro": "the intro", "verse": "a verse", "refrain": "a refrain", "turn": "a turn", "break": "the break",
               "bridge": "the bridge", "tag": "the tag", "outro": "the outro"}
 
@@ -813,7 +816,7 @@ def grid(genome, v, heard: dict) -> dict:
     from .edits import tempo_range
     from .idioms import busy as busy_of
     from .realize import timeline
-    from .style import of as style_of
+    from .style import of as style_of, voices_alone
 
     params = v.params
     ctx = heard["ctx"]
@@ -852,7 +855,7 @@ def grid(genome, v, heard: dict) -> dict:
         said = []  # the style's options that live here
         if k == 0:
             said.append({"field": "intro", "value": style.intro, "path": "style.intro", "by": _kind(v, "intro"),
-                         "text": INTRO_WORDS.get(style.intro, "")})
+                         "text": (VOICES_INTRO_WORDS if voices_alone(v.params) else INTRO_WORDS).get(style.intro, "")})
         if verses and k == verses[0]:
             said.append({"field": "entrances", "value": style.entrances, "path": "style.entrances",
                          "by": _kind(v, "entrances"), "text": OPTION_WORDS["entrances"]})

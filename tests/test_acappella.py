@@ -52,20 +52,50 @@ def test_the_parts_are_open_and_keep_clear_of_the_tune():
     assert sum(together.get(k, 0) for k in (5, 7, 0)) > sum(together.get(k, 0) for k in (3, 4))
 
 
-def test_the_notes_are_sung_before_the_words():
-    """Where the band would play the tune, the lead and the parts sing it on its shape-note syllables (each part its
-    own note's), and only an a cappella's score reads them."""
-    g, p, score = sung(intro="notes")
-    intro = [n for n in score.notes if n.section == "intro" and (n.part == "voice" or n.part.startswith("choir"))]
-    assert intro and {n.syllable for n in intro} <= {"fa", "sol", "la", "mi"}
-    for n in intro:
-        assert n.syllable == S.shape_note(n.pitch, p.tonic, p.mode)
-    assert S.shape_note(p.tonic, p.tonic, "ionian") == "fa" and S.shape_note(p.tonic, p.tonic, "aeolian") == "la"
-    assert {"fa", "sol"} <= set(score.lexicon)
+def test_the_tune_hummed_where_a_band_would_play_it():
+    """Where a band would play the tune, the lead hums it on "oo" and the group hums the chords under it (the treble
+    resting); or the group's chords swell in alone and the lead comes in with the words. No shape-note syllables
+    (revised 2026-09-30), and an old record's intro sung on them is read as the hummed one."""
     g, p, score = sung(intro="lead")
-    assert {n.syllable for n in score.notes if n.section == "intro" and n.part == "voice"} == {"oo"}
+    lead = [n for n in score.notes if n.section == "intro" and n.part == "voice"]
+    group = [n for n in score.notes if n.section == "intro" and n.part.startswith("choir")]
+    assert lead and group and {n.syllable for n in lead + group} == {"oo"}
+    assert {n.part for n in group} == {"choir1", "choir3"}  # the under voice and the alto; the treble rests
+    for n in group:  # never in unison with the tune it holds under
+        assert all(n.pitch != v.pitch for v in lead if v.start < n.start + n.dur - 0.05 and n.start < v.start + v.dur)
+    g, p, score = sung(intro="pad")
+    assert not [n for n in score.notes if n.section == "intro" and n.part == "voice"]
+    assert {n.syllable for n in score.notes if n.section == "intro" and n.part.startswith("choir")} == {"oo"}
+    assert Style.from_dict({"name": "acappella", "intro": "notes"}).intro == "lead"
+    assert not {"fa", "sol", "mi"} & set(score.lexicon) and not hasattr(S, "shape_note")
     seed = realize(g, choose_params(g))
-    assert "fa" not in seed.lexicon and set(SUNG_SYLLABLES) <= set(seed.lexicon)
+    assert set(SUNG_SYLLABLES) <= set(seed.lexicon)
+
+
+def test_the_refrains_are_everyone_on_the_words():
+    """Every part sings the refrains' words with the lead, syllable for syllable."""
+    g, p, score = sung()
+    lead = {round(n.start, 2): n for n in score.notes if n.part == "voice" and n.section == "refrain"}
+    group = [n for n in score.notes if n.part.startswith("choir") and n.section == "refrain"]
+    assert len({n.part for n in group}) == 3
+    words = [n for n in group if n.syllable != "oo"]
+    assert len(words) > 0.9 * len(group)
+    matched = [n for n in words if any(abs(n.start - t) < 0.06 and v.syllable == n.syllable for t, v in lead.items())]
+    assert len(matched) > 0.9 * len(words)
+
+
+def test_the_line_ends_answered_in_words():
+    """Echo: under the verses the group is silent but for each line's last word, which it sings with the lead in
+    parts; a voice comes in only once its line has come round in the first verse built line by line."""
+    g, p, score = sung(backing="echo", alone=1, entrances=False)
+    verses = [s for s in score.sections if s[0] == "verse"]
+    _, a, b = verses[1]
+    lead = [n for n in score.notes if n.part == "voice" and a <= n.start < b - 0.05]
+    group = [n for n in score.notes if n.part.startswith("choir") and a <= n.start < b - 0.05]
+    ends = [n for n in lead if n.line_end]
+    assert group and {n.syllable for n in group} <= {n.syllable for n in lead} and "oo" not in {n.syllable for n in group}
+    assert all(any(abs(x.start - e.start) < 0.06 for x in group) for e in ends)  # every line's end answered
+    assert len(group) <= 3 * 2 * len(ends)  # and nothing else
 
 
 def test_the_verses_hum_and_the_voices_come_in_by_line():

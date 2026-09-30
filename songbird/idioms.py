@@ -2221,10 +2221,12 @@ def shape_pitch(ctx: Context, role: str, tune: int, symbol: str, prev: int | Non
 
 
 def shape_parts(ctx: Context, melody: list[dict], style) -> list[Sung]:
-    """An a cappella's voices, section by section (see above): all the parts on the refrains' words and on the
-    notes where nobody else plays; under the verses a hum (the under voice and the alto on each chord's root and
-    fifth, "oo"), oohs (every part on the chord) or an echo of each line's end; the turns' chords held on "oo";
-    in the bridge and the tag the lineage's harmony, with the program's own voices under it."""
+    """An a cappella's voices, section by section (see above): all the parts on the refrains' words; under the
+    verses a hum (the under voice and the alto on each chord's root and fifth, "oo"), oohs (every part on the
+    chord) or the lines' ends answered (echo: the group joins the lead's last word of each line, in parts); where a band would play the tune (an intro, a break, an outro)
+    the lead hums it on "oo" and the group hums the chords under it, the treble resting; a turn's chords, and an
+    intro's that swell in before the lead, held by everyone on "oo"; in the bridge and the tag the lineage's
+    harmony, with the program's own voices under it."""
     params = ctx.params
     lineage = int(getattr(params, "choir", 0))
     n = min(6, max(lineage, int(style.voices), int(ctx.sdef.group)))
@@ -2236,9 +2238,6 @@ def shape_parts(ctx: Context, melody: list[dict], style) -> list[Sung]:
     padded = [i for i in verses if i != bare]
     kind = style.backing or "hum"
     own_harmony = {i for i, s in enumerate(secs) if genome.section(s.name).choir}
-    from .style import vocalise, vocalised
-
-    vocal = vocalise(params)
     prev: dict[int, int] = {}
     out: list[Sung] = []
 
@@ -2260,15 +2259,25 @@ def shape_parts(ctx: Context, melody: list[dict], style) -> list[Sung]:
         return got
 
     everyone = {v: SHAPE_ROLES[v % 3] for v in range(n)}
+    first = padded[0] if padded else None
+    starts = phrase_starts(ctx, first) if first is not None else []
+
+    def late(v: int, i: int, u: float) -> bool:  # before this voice comes in, in a first verse built line by line
+        return i == first and style.entrances and bool(starts) and u < starts[min(v, len(starts) - 1)] - 1e-9
+
+    # the verses' line ends answered (echo): the group joins the lead on each line's last word, in parts
+    ends: set[int] = set()
+    for k, m in enumerate(ordered):
+        if kind == "echo" and m["line_end"] and ctx.section_at(m["u"]) in padded:
+            ends.update(j for j in range(max(0, k - m["word_len"] + 1), k + 1) if ordered[j]["word"] == m["word"])
     # the homophonic sections: all the parts on each syllable
     for k, m in enumerate(ordered):
         i = ctx.section_at(m["u"])
         s = secs[i]
         chorus = s.role == "refrain" and i not in own_harmony
-        played = genome.section(s.name).lyrics is None or not s.sung  # sung on the notes, or on "oo"
         if i in own_harmony:
             roles = everyone if lineage == 0 else {v: "under" for v in range(lineage, n)}
-        elif chorus or played:
+        elif chorus or k in ends:
             roles = everyone
         else:
             continue
@@ -2279,27 +2288,31 @@ def shape_parts(ctx: Context, melody: list[dict], style) -> list[Sung]:
         got = voicing(int(m["pitch"]), m["chord"], m["u"], last, roles)
         for v, q in got.items():
             prev[v] = q
-            syl = vocalised(vocal, q, params) if played and vocal else m["syllable"]
-            word = syl if played and vocal else m["word"]
-            out.append(Sung(v, m["u"], u1, q, 0.8 * m["vel"], syl, word, 1 if played and vocal else m["word_len"],
-                            last, m["section"], m["phrase"]))
-    # under the verses, and through the turns
-    first = padded[0] if padded else None
-    starts = phrase_starts(ctx, first) if first is not None else []
+            if k in ends and late(v, i, m["u"]):
+                continue
+            out.append(Sung(v, m["u"], u1, q, 0.8 * m["vel"], m["syllable"], m["word"], m["word_len"], last,
+                            m["section"], m["phrase"]))
+    # under the verses, under the lead's hummed tune, and through the turns
     median = int(np.median([t.pitch for t in ctx.tune])) if ctx.tune else ctx.tonic + 7
+    hummed = {m["u"] for m in melody if m["syllable"] == "oo" and m["word"] == "oo"}  # the lead's tune on "oo"
     for c in ctx.chords:
         s = secs[c.section]
+        sung =[t.pitch for t in ctx.tune if t.sung and t.u0 < c.u1 - 1e-9 and t.u1 > c.u0 + 1e-9]
+        mine = [t.pitch for t in ctx.tune if t.u0 in hummed and t.u0 < c.u1 - 1e-9 and t.u1 > c.u0 + 1e-9]
+        wordless = (genome.section(s.name).lyrics is None or not s.sung) and c.section not in own_harmony
         if c.section in padded:
-            sung = [t.pitch for t in ctx.tune if t.sung and t.u0 < c.u1 - 1e-9 and t.u1 > c.u0 + 1e-9]
             if not sung or kind == "echo":
                 continue
             roles = {v: r for v, r in everyone.items() if kind == "oohs" or r != "treble"}
             low, high = min(sung), max(sung)
-        elif s.role == "turn" and not any(t.section == c.section for t in ctx.tune):
-            roles, low, high = everyone, median, median
+        elif wordless and mine:  # the lead hums the tune: the group hums the chords under it
+            roles = {v: r for v, r in everyone.items() if r != "treble"}
+            low, high = min(mine), max(mine)
+        elif wordless:
+            roles, low, high = everyone, median, median  # nobody on the tune: a turn, an intro swelling in
         else:
             continue
-        taken: set[int] = set()
+        taken: set[int] = set(sung)  # never in unison with a note of the tune it holds under
         third = thirds(c.u0, c.last)
         end_of_phrase = any(abs(c.u1 - p1) < 1e-9 for _p0, p1 in ctx.phrases)
         got: dict[int, int] = {}
@@ -2312,18 +2325,12 @@ def shape_parts(ctx: Context, melody: list[dict], style) -> list[Sung]:
             got[v] = prev[v] = q
             taken.add(q)
             u0 = c.u0
-            if c.section == first and style.entrances and starts:
-                u0 = max(u0, starts[min(v, len(starts) - 1)])  # the voices come in a line apart
+            if late(v, c.section, u0):
+                u0 = starts[min(v, len(starts) - 1)]  # the voices come in a line apart
             if u0 >= c.u1 - 1e-9:
                 continue
             out.append(Sung(v, u0, c.u1 - (ctx.sub if end_of_phrase else 0.0), q, 0.42 if roles[v] == "treble" else 0.55,
                             "oo", "oo", 1, end_of_phrase, s.name, ""))
-    if kind == "echo":  # call and response: the group answers each line's end in the verses
-        for k, m in enumerate(ordered):
-            i = ctx.section_at(m["u"])
-            if i in padded and m["line_end"]:
-                out += [x for x in echo(ctx, ordered, k, n)
-                        if not (i == first and style.entrances and starts and x.u0 < starts[min(x.voice, len(starts) - 1)])]
     return sorted(out, key=lambda x: (x.u0, x.voice))
 
 

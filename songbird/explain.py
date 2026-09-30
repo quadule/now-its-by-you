@@ -95,7 +95,7 @@ PLAYERS.update({"melodica": "melodica"})
 ENDING_NAMES.update({"version": "the band plays a dub version after the song"})
 BACKING_NAMES = {"oohs": "backing voices on oohs", "echo": "backing voices echo the lines",
                  "thirds": "backing voices in harmony", "gang": "everyone sings along",
-                 "hum": "voices humming open fifths under the verses"}
+                 "hum": "voices humming under the verses"}
 PATTERNS = {"lilt": "a lilting strum", "strum": "a steady strum", "pick": "fingerpicking", "air": "a slow air"}
 PATTERN_DETAIL = {"lilt": "the strum follows the tune's long-short-short", "strum": "the old faithful strum",
                   "pick": "picked strings, no strumming", "air": "rolled chords and held notes, no drum"}
@@ -845,15 +845,17 @@ def style_card(v: Version) -> dict:
                ("the voices come in a line apart" if sdef.group else "the band joins line by line in the first verse")
                if s.entrances else "",
                "the bridge in half-time" if s.bridge == "half" else "",
-               {"lead": "", "pad": "a pad swells in to begin", "count": "a count-in to begin",
-                "voice": "the singer begins alone", "quote": "a line of an older song to begin",
-                "notes": "the voices sing the tune on its notes first (fa, sol, la)",
-                "air": "a slow air to begin, out of time"}.get(s.intro, ""),
+               ({"lead": "the tune hummed over the voices' chords to begin",
+                 "pad": "the voices' chords swell in to begin"} if sdef.group and not sdef.leads else
+                {"lead": "", "pad": "a pad swells in to begin", "count": "a count-in to begin",
+                 "voice": "the singer begins alone", "quote": "a line of an older song to begin",
+                 "air": "a slow air to begin, out of time"}).get(s.intro, ""),
                group_words(v.params) if sdef.group else "",
                "an older song's first notes over the last chord" if s.coda == "quote" else "",
                {"bridge": "an older song's first notes through the bridge",
                 "chance": "an older song's first notes in the bridge, in some renditions"}.get(s.motif, ""),
-               BACKING_NAMES.get(s.backing, ""),
+               ("the voices join each line's last word in the verses" if s.backing == "echo" and sdef.group
+                and not sdef.leads else BACKING_NAMES.get(s.backing, "")),
                ENDING_NAMES.get(s.ending, "") if s.ending and s.ending != "ring" else "",
                f"a breakdown after the {ORDINALS[s.drop - 1]} refrain, the singer with the pad, and the drop"
                if 0 < s.drop <= len(ORDINALS) else ""]
