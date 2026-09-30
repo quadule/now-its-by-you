@@ -38,7 +38,7 @@ from pathlib import Path
 
 BASE_MB = 300  # the program and its imports, and the page's work beside a render
 RATES = {  # MB for a second of the song, on two threads
-    "voice": 4.7, "harp": 4.7, "celesta": 4.7, "musicbox": 4.7, "synthpad": 4.7,
+    "voice": 4.7, "chop": 4.7, "harp": 4.7, "celesta": 4.7, "musicbox": 4.7, "synthpad": 4.7,  # chop: house's sung hook
     "bass": 5.0, "guitar": 5.0, "harmonica": 5.0,
     "fiddle": 5.6, "claps": 5.6, "stomps": 5.6, "concertina": 5.6,
     "cello": 5.8, "strings": 5.8, "piano": 5.8, "drone": 5.9, "vibes": 5.9,

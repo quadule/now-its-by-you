@@ -208,6 +208,9 @@ ROLES: dict[str, Strip] = {
     "slide": Strip(eq=(("hp", 70), ("peak", 250, -1.5, 1.0), ("peak", 2800, -2.0, 0.9), ("high", 9000, -0.5)),
                    comp=(10.0, 2.0, 0.015, 0.2, 1.5, 3.0), send=1.1, duck=1.5),
     "band": Strip(eq=(("hp", 60), ("peak", 2800, -1.5, 0.9))),  # anything else
+    # A style's vocal chop (house's): the singer's voice as the band's instrument, its low end cleared as the lead's
+    # is, its presence kept (it is the hook), a little more room than the band.
+    "chop": Strip(eq=(("hp", 120), ("peak", 900, -2.0, 1.2)), comp=(10.0, 2.0, 0.005, 0.1, 1.5, 3.0), send=1.3),
     # A person's transitions (synth.sweeps: risers, impacts, downlifters): nothing under 30 Hz, no step back.
     "fx": Strip(eq=(("hp", 30),)),
 }
@@ -238,6 +241,7 @@ NAMES = {
     "steel": ("steel", "pedalsteel", "lapsteel"),  # its low strings kept, and no fiddle's duck: it swells by its pedal
     "slide": ("slide", "bottleneck"),
     "fx": ("fx",),  # a person's transitions (docs/SOUND-DESIGN.md)
+    "chop": ("chop",),  # a style's vocal chop (house's, 2026-09-30)
 }
 SINGERS = ("voice", "choir")  # stems sung by the singers: matched by their whole names only
 
