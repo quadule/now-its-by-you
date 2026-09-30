@@ -208,7 +208,9 @@ them (the goldens hold either way), but a lineage that picks those
 instruments could get different ids on two machines. Removing `fastmath`
 from `analog.py` fixes it: done 2026-09-29 (checked: `_blep4` matches its
 source at 20000 of 20000 points whichever renders first; a note on it in
-osc.py retires the old caches). The synth styles' renders changed once then.
+osc.py retires the old caches). The synth styles' renders changed once then. Its cost: none measurable
+(H in synthfolk, 132 s of audio, one thread, warm cache, three runs each: 18.9-21.6 s with fastmath,
+17.7-21.9 s without, on a machine shared with other agents).
 
 ## The effort to port all 81
 

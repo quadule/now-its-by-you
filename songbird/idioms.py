@@ -1783,6 +1783,7 @@ def arrange_style(genome, params, placed, lead, end, melody, seconds, sdef) -> t
         ctx.chords += [Chord(end - 2 * ctx.bar, end - ctx.bar, "IV", last, False), Chord(end - ctx.bar, end, "I", last, True)]
     ctx.capo = B.choose_capo(ctx)
     plan_style(ctx)
+    B.overhear(ctx, melody, seconds, lead, end)  # for the piano score (songbird.piano), when asked
     if params.style.intro == "quote":  # the lead's quote of an older song before the song (songbird.band)
         ctx.prelude = B.prelude_span(ctx)
     rhythm = {p for p in ctx.lineup if family(p) in PERCUSSION + ("bass",)}
@@ -1844,6 +1845,9 @@ def arrange_style(genome, params, placed, lead, end, melody, seconds, sdef) -> t
         if family(e.part) not in PERCUSSION and e.length <= 0 and e.u1 >= hold - ctx.sub - 1e-9 \
                 and params.style.ending != "cold":
             e.u1 = ctx.end
+    from .composition import make_room
+
+    events = make_room(genome, params, placed, lead, events, seconds)  # a person's played parts (notes in)
 
     wobble = params.humanize * (1.0 + 1.5 * ctx.band.wear)
     jitters: dict[tuple[str, int], float] = {}

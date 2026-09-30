@@ -73,6 +73,25 @@
       "url": "http://127.0.0.1:8768"
     },
     {
+      "name": "studio-public-versions",
+      "runtimeExecutable": "env",
+      "runtimeArgs": [
+        "SONGBIRD_HOME=/tmp/songbird-studio-versions-home",
+        "uv",
+        "run",
+        "songbird",
+        "studio",
+        "--public",
+        "--machine",
+        "fictional:wren",
+        "--port",
+        "8791",
+        "--no-open"
+      ],
+      "port": 8791,
+      "url": "http://127.0.0.1:8791"
+    },
+    {
       "name": "studio-musician",
       "runtimeExecutable": "uv",
       "runtimeArgs": ["run", "songbird", "studio", "--no-open", "--port", "8784"],
@@ -98,11 +117,32 @@
       "url": "http://127.0.0.1:8769"
     },
     {
+      "name": "studio-notes-in",
+      "runtimeExecutable": "uv",
+      "runtimeArgs": ["run", "songbird", "studio", "--no-open", "--port", "8793"],
+      "port": 8793,
+      "url": "http://127.0.0.1:8793"
+    },
+    {
       "name": "studio-wasm",
       "runtimeExecutable": "python3",
       "runtimeArgs": ["-m", "http.server", "8790", "--bind", "127.0.0.1", "--directory", "web/studio-wasm"],
       "port": 8790,
       "url": "http://127.0.0.1:8790"
+    },
+    {
+      "name": "studio-piano",
+      "runtimeExecutable": "uv",
+      "runtimeArgs": ["run", "songbird", "studio", "--no-open", "--port", "8795"],
+      "port": 8795,
+      "url": "http://127.0.0.1:8795"
+    },
+    {
+      "name": "studio-piano-public",
+      "runtimeExecutable": "uv",
+      "runtimeArgs": ["run", "songbird", "studio", "--public", "--machine", "fictional:wren", "--port", "8797", "--no-open"],
+      "port": 8797,
+      "url": "http://127.0.0.1:8797"
     }
   ]
 }

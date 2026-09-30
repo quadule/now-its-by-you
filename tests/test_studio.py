@@ -539,3 +539,43 @@ def test_a_renders_progress_follows_the_parts_in_whatever_order_it_takes_them():
     assert seen[1] == 0.5 and abs(seen[-1] - 7 / 8) < 1e-9  # the voice's four of eight, then everything before the master
     job.report("lute")  # a part reported again moves nothing back
     assert job.progress == seen[-1] and job.stage == S.stage_words("lute")
+def test_a_musician_brings_notes_back_as_a_preview_and_nothing_changes_until_applied(served):
+    """Notes in: the MIDI file downloaded, brought back unchanged, is no change; changed (the bass played harder
+    in a few notes), a preview of part edits, in the page's words; applied, the page shows the player's notes as
+    the person's. A file that isn't one, or that didn't arrive whole, says why. A take is previewed the same way."""
+    import base64
+
+    from _midi_edit import rewrite
+
+    from songbird import notesin
+
+    studio, port = served
+    edits = {"tempo": 90}
+    status, made = post(port, studio, "/api/export", {"edits": edits, "what": "midi"})
+    data = ask(port, "GET", made["url"])[2]
+    b64 = lambda b: base64.b64encode(b).decode()  # noqa: E731
+    status, same = post(port, studio, "/api/notes-in", {"edits": edits, "file": b64(data)})
+    assert status == 200 and same["changes"] == [] and same["refused"] == [] and "Bass" in same["tracks"]
+    harder = rewrite(data, lambda name, notes: [n[:4] + [min(127, n[4] + 20)] if name == "Bass" and k < 3 else n
+                                                for k, n in enumerate(notes)])
+    status, preview = post(port, studio, "/api/notes-in", {"edits": edits, "file": b64(harder)})
+    assert status == 200 and preview["changes"] and not preview["refused"]
+    assert all(c["path"].startswith("part.bass.") and c["what"].startswith("the bass: ") for c in preview["changes"])
+    assert not any(FORBIDDEN.search(c["where"] + c["what"]) for c in preview["changes"])
+    assert studio.version(edits).params.composition == {}  # a preview changes nothing
+    mine = {**edits, **{c["path"]: c["value"] for c in preview["changes"]}}
+    status, song = post(port, studio, "/api/song", {"edits": mine})
+    assert status == 200 and not song["problems"]
+    assert set(song["composition"]["performed"]["bass"]) == {c["path"][len("part.bass."):] for c in preview["changes"]}
+    assert set(song["applied"]) >= {c["path"] for c in preview["changes"]}
+    for body, why in (({"file": "not base64 at all!"}, "arrive whole"), ({"file": b64(b"hello")}, "Standard MIDI"),
+                      ({"file": "A" * 400_000}, "bigger"), ({}, "a file or a take")):
+        status, said = post(port, studio, "/api/notes-in", {"edits": edits, **body})
+        assert status == 400 and why in said["error"], said
+    v = studio.version(edits)
+    first = next(ln for ln in notesin.layout(studio.genome, v.params) if ln["sung"])
+    beat = studio.genome.meter.beat
+    take = {"player": "fiddle", "notes": [[first["u0"] / beat, 1, v.params.tonic + 7, 90]], "lines": [first["key"]]}
+    status, took = post(port, studio, "/api/notes-in", {"edits": edits, "take": take})
+    assert status == 200 and [c["path"] for c in took["changes"]] == [f"part.fiddle.{first['key']}"]
+    assert took["changes"][0]["value"] == [[0, 96, 7, 90]]

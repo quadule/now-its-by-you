@@ -378,8 +378,9 @@ class Singing:
             return None
         if handler.headers.get("Content-Type", "").split(";")[0].strip() != "application/x-songbird-take":
             return handler.fail(415, "send a take")
-        if not secrets.compare_digest(handler.headers.get("X-Studio", "").encode("utf-8", "replace"),
-                                      self.studio.token.encode()):
+        # the page's token, or at /v/<id> '<token>.<id>' (someone's version: the singing is the song's own)
+        token = handler.headers.get("X-Studio", "").partition(".")[0]
+        if not secrets.compare_digest(token.encode("utf-8", "replace"), self.studio.token.encode()):
             return handler.fail(403, "this page answers only the page it gave out")
         try:
             if len(raw) != length or not 0 < meta_length <= min(MAX_META_BYTES, length - 44):
