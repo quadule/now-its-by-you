@@ -469,6 +469,10 @@ six-eight or a reel's drive.
 at the end, say where the build differs: the parts are a treble, an under voice and an alto, not a bass;
 the jig is quicker, the reel in double time, the slow air the first time round.)
 
+(**Revised the same evening, after the artist listened**: the shape-note syllables are gone from the a
+cappella, and the session is now **the jig**, always in six-eight, with no reel and no tradition's names.
+See "A cappella and the jig, revised" at the end; this section is kept as it was built.)
+
 ## Where they sit: beside the ring, not on it
 
 Every style is on the ring, and a machine's home is an angle on the ring's plane (`home()`, one slot a
@@ -1020,3 +1024,120 @@ What they play (the stems, dry, and the scores):
    only house and dub draw them.
 7. **A preview** (a section heard alone) keeps the throws whose windows it plays; one that begins inside an echo's
    tail doesn't hear the tail.
+
+# A cappella and the jig, revised (2026-09-30, evening)
+
+The artist listened to the renders of "Two more": "A cappella is just okay. fa, sol, la, mi sounds seem a bit like
+gibberish." And: "Celtic sounds better to me, but maybe we just call it jig? Open to ideas, just don't want to claim
+any false authenticity." The page says the simplest thing that's true; details go in its tooltips and here.
+
+## A cappella: the words, not the notes
+
+**What went.** The shape-note syllables, everywhere: `SHAPE_SYLLABLES`, the readings they pinned ("fa" F AA1, "sol"
+S OW1 L: nothing else used them), `shape_note`, the "notes" intro. A record or a draft whose intro is "notes" is read
+as "lead" (`style.RENAMED`).
+
+**How it sings now**, section by section:
+
+- *Where a band would play the tune* (an intro, a break, an outro): the lead hums it on "oo" and the group hums the
+  chords under it (the under voice and the alto, each chord's root and fifth; the treble rests, so the tune stays the
+  top line and the treble's entrance at the refrain is heard). Or, a third of the time (`intro=pad`), the group's
+  chords swell in alone on "oo" and the lead comes in with the words.
+- *The first verse*: often the lead alone (lined out), as before.
+- *The verses*: the lead with the group humming (`hum`), on "oo"s (`oohs`), or answering the line ends
+  (`echo`), which is now the group **joining the lead on each line's last word, in parts**. The old echo sang the
+  word again after the line, and in H there is room for that once or twice a verse: ada's, bob's and dmitri's
+  verses (all three drew `echo`) were the lead alone.
+- *The refrains*: everyone on the words, homophonic, the parts' own notes on each syllable (as built); the last
+  refrain everyone.
+- *A turn*: its chords held by everyone on "oo". As built, a turn with the next verse's pickup in it was silent
+  (in ada's, five seconds of nothing, twice).
+- *The bridge and the tag*: the lineage's harmony, with the program's voices under it (as built).
+- A held chord is never in unison with a note of the tune it sits under.
+
+**What stays**: the group (three voices at least), the parts (treble, under voice, alto; open, a third about a
+third of the time), the matching of singers to parts, the feet and hands by chance, the room. **No true bass**: the
+learned throat still thins below E3, and nothing here changes that; a bass waits for a throat that sings there.
+
+**Measured** (ada, 2026-09-27, the whole song with its stems; pYIN over each note's middle): every part in tune,
+the median within 0.1 cent, 98% (the lead) to 99% (the three parts) of notes within 25 cents. Where the parts sing
+with the lead: fifths 20%, fourths 16%, octaves 14% (open: 50%), thirds 27% (minor 16, major 11), sixths 12%,
+seconds and sevenths 10%: as built (48% and 29%). **Words misheard** (Whisper base.en on the mix, a verse that
+isn't bare and a refrain, four machines: ada, bob, coral, dmitri on their dates): the verse hummed 14.2% (41 of
+289 words), the line ends joined 17.3% (50 of 289), the ballad in the same run 10.7% (30 of 280). The joined
+last words cost a little: their consonants arrive from four voices a hair apart. **Memory** (tools/render_memory.py,
+two threads, `MallocLargeCache=0`): with no machine, a waltz, three voices of its own, 225 s, 1.54 GB (the studio's
+estimate 1.65); six lineage voices, 1.53 GB; four verses, every part, six voices, tempo 55, 450 s, 2.56 GB
+(estimated 3.00). In the studio's 2100 MB, about five minutes of an a cappella in one go, as before.
+
+## The jig
+
+**The name.** The style's id and name are **jig** (the page: "jig, in six-eight"). It was `celtic`, "a Celtic
+session". Everywhere a name is read, "celtic" is read as "jig" (`style.RENAMED`: a record's name and lineage, a
+person's edits and drafts, `--style celtic`; the takeover's old names for the drum's patterns, `bodhran` and
+`bodhran-light`, are `tipped` and `tipped-light`), so yesterday's renders and records load.
+
+**Always a jig.** Six-eight, the song re-barred (H's long-short-short feet are a jig's dotted beat), at 1.35 to
+1.6 of the song's tempo (a dotted beat at 65 to 77). The reel and its double time are gone: a jig-named style
+can't honestly carry one. A song that can't be re-barred keeps its beats and plays each in three: its own time
+where it is already in six-eight (b, l), twelve-eight otherwise (a, c, f: a dotted beat at 0.75 of the song's
+tempo); `feels_for` says so for a style whose only feel is six-eight, and no other style has one.
+
+**The words on the page** claim no tradition: the frame drum is a frame drum, played with a tipper (no bodhrán),
+the drone a reed drone (no pipes), the guitar an open-tuned guitar (DADGAD is in the style's detail and here, as a
+tuning), the slow air "the tune slow and free to begin, the lead alone", the singer's own ornaments "turns" (no
+sean-nós), and no "session": the whistle and the fiddle play the tune round twice. The code's comments say the same.
+
+**What it plays**, as built but for the reel: the whistle and the fiddle (and a concertina, 0.45) on the tune
+together where nobody sings, round twice, the lead and the guitar the first time and everyone the second; the drum
+tipped, down-up-down on each dotted beat, the bar's first stroke open (in twelve-eight or a song's own six-eight,
+the same on each of its beats); the guitar's DADGAD strum down-down-up; a reed drone (0.35); the slow air (0.25 of
+intros). The reel's sixteenth strokes and its back-hand-high stroke ("top") went with it; the drum model keeps the
+stroke's one row of data, unused (no kernel changed).
+
+**Measured** from the four renders' scores: tempo 137 to 150 (a dotted beat at 69 to 75); the drum's strokes a
+median 1.01 to 1.02 eighths apart, about a fifth of them open; the whistle cuts 12 to 26 of its notes, the fiddle 5 to 18;
+the singer's own turns on 6 to 15 notes of 250 to 387. **Words misheard**: 21.1% (59 of 280, the same four
+machines) beside the ballad's 10.7%: a jig sings the song half as fast again (as built: 17.1% in one run). **Memory**:
+H's jig with no machine, 112 s, 0.99 GB (estimated 1.12); four verses, every part, tempo 130, 213 s, 1.56 GB
+(estimated 1.86).
+
+## Byte for byte, and yesterday's records
+
+Every other style is as it was: the scores of the seed, four machines' own choices (ada, bob, coral, dmitri on
+their dates) and every other style for each (with three voices for ada), 80 in all, are identical before and after
+both changes; five renders made on main before them (the seed; gospel, lo-fi and synth folk for ada; indie for
+vela) replay to their ids ("replay: matches"); the goldens pass.
+
+**The two styles' own renders from before this change now render differently**, as expected: they were a day old
+and unreleased. Their records still load (the eight in renders/styles, acappella-* and celtic-*): an a cappella's
+intro "notes" is read as "lead", a Celtic one's name and lineage as "jig"; a record made as a reel keeps its
+recorded feel (double time) when replayed, under the jig's name, its drum on the triplet strokes. `--replay` of any
+of them says "differs".
+
+## Renders for the artist
+
+In renders/styles/ (ids in ids-acappella2-jig.txt), the same machines and dates as before, each as its machine
+chooses unless named:
+
+- acappella2-ada-2026-09-27 (228 s): the tune hummed over the group to begin, verse 1 lined out, the line ends
+  joined, the voices coming in a line apart, the last line again. Id ef4e10a46970.
+- acappella2-bob-2026-03-14 (142 s): the same way, a shorter shape with an outro hummed. Id 9722a2cbfa3a.
+- acappella2-coral-2026-11-02-five-voices-pad-hum (222 s): five lineage voices, `--arrange intro=pad backing=hum`:
+  the chords swelling in alone, the verses hummed, the lineage's own harmony in the bridges and the tag.
+  Id 7ca8f0e8ad80.
+- acappella2-dmitri-2026-06-21 (208 s): dmitri's own choice, the verses on "oo"s. Id ae4508d32a26.
+- jig-ada-2026-09-27 (166 s, 143.5): a slow air to begin. Id 604f8504cc67.
+- jig-bob-2026-03-14 (108 s, 150.4): a slow air, harmony in thirds from the one lineage voice. Id 9922285407fe.
+- jig-coral-2026-11-02-slow-air (156 s, 137.2): `--arrange intro=air` (its own choice too). Id 66c9026b5950.
+- jig-dmitri-2026-06-21 (154 s, 143.5): the tune played to begin, the concertina with the whistle and the fiddle
+  (dmitri's was the reel). Id 2d0736279ef7.
+
+## Left open
+
+- **The answered line ends** cost about three words in a hundred against a hummed verse. If the artist hears it
+  too, the join can be the last syllable only, or the answer after the line where there is room (as before).
+- **The jig's words**: a fifth of them misheard, twice the ballad's, from the pace. Its tempo floor (1.35 of the
+  song's) is one number; lower is a slower jig.
+- **The slow air**: three of the four machines drew it (0.25 of intros; the draws moved with the name, which is
+  part of every choice's material). Nothing to change, but the renders show it more than it will be.
