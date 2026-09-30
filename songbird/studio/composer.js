@@ -729,7 +729,7 @@
     const largest = Math.max(0, ...degrees.slice(1).map((degree, i) => Math.abs(degree - degrees[i])));
     const repeats = sections().flatMap((s) => s.phrases || []).filter((item) => item.id === p.id).length;
     return el("div", { class: "sbc-health" },
-      el("span", {}, el("span", { class: "sbc-health-dot", "aria-hidden": "true" }, "●"), `${notes.filter((n) => !n.slur).length} syllable slots preserved${notes.some((n) => n.slur) ? `, ${notes.filter((n) => n.slur).length} notes slurred on` : ""}`),
+      el("span", {}, el("span", { class: "sbc-health-dot", "aria-hidden": "true" }, "●"), `${notes.filter((n) => !n.slur).length} syllable slots preserved${notes.some((n) => n.slur) ? `, ${notes.filter((n) => n.slur).length} slurred on (a melisma)` : ""}`),
       el("span", {}, `Range ${pitchName(Math.min(...pitches))}–${pitchName(Math.max(...pitches))}`),
       el("span", { class: largest > 4 ? "sbc-leap-warning" : "" }, largest > 4 ? `Wide leap: ${largest} scale steps` : "Comfortable melodic steps"),
       el("span", {}, `${repeats} shared ${repeats === 1 ? "appearance" : "appearances"}`),

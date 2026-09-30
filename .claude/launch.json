@@ -138,6 +138,13 @@
       "url": "http://127.0.0.1:8793"
     },
     {
+      "name": "studio-harmony",
+      "runtimeExecutable": "uv",
+      "runtimeArgs": ["run", "songbird", "studio", "--no-open", "--port", "8801"],
+      "port": 8801,
+      "url": "http://127.0.0.1:8801"
+    },
+    {
       "name": "studio-wasm",
       "runtimeExecutable": "python3",
       "runtimeArgs": [

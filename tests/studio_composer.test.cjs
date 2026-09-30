@@ -625,7 +625,7 @@ test("a melisma: a note split sings its syllable on, moved and joined again; the
   assert.equal(drawn.length, 6);
   assert(drawn[2].classList.contains("is-slur") && drawn[2].textContent === "‿", "the slurred note is drawn joined");
   assert.match(drawn[2].getAttribute("aria-label"), /^this, held on/);
-  assert.match(s.find(".sbc-health").textContent, /5 syllable slots preserved, 1 notes slurred on/);
+  assert.match(s.find(".sbc-health").textContent, /5 syllable slots preserved, 1 slurred on \(a melisma\)/);
   // the slurred note moved up a step, and its start moved: the boundary with the note before moves with it
   s.find('[data-note="2"]').emit("click");
   s.find("#sbc-note-pitch").emit("change", { target: { value: "5" } });
