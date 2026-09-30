@@ -182,6 +182,16 @@
         <p>One file that plays anywhere and carries the program that sang it, so anyone can make the next version. Your choices are marked as yours; your name never is.</p>
         <div class="saved" id="saved" aria-live="polite"></div>
       </div>
+      <!-- where the song is made (renderer.js shows it where the studio serves the singer for browsers) -->
+      <fieldset class="tool make-where" id="makeWhere" hidden>
+        <legend>Make the song</legend>
+        <div class="make-where-choices">
+          <label><input type="radio" name="makeWhere" value="auto" checked> automatically</label>
+          <label><input type="radio" name="makeWhere" value="browser"> in this browser</label>
+          <label><input type="radio" name="makeWhere" value="server"> on the server</label>
+        </div>
+        <p class="hint" id="makeWhereNote" aria-live="polite"></p>
+      </fieldset>
       <div class="tool">
         <button class="btn" id="exportMidi" type="button">MIDI</button>
         <p>At once: the singer's notes with the words, each voice and player on its own track, the chords named, the tempo, key and sections.</p>

@@ -552,3 +552,10 @@ dialog.help .keys td { padding: 3px 0; }
   .foot { padding: 14px; }
 }
 @media (prefers-reduced-motion: reduce) { * { animation: none !important; transition: none !important; } }
+
+/* where the song is made (renderer.js; a public studio serving the singer for browsers) */
+.make-where { margin: 0; min-inline-size: 0; border: 0; border-top: 1px solid var(--rule); display: block; }
+.make-where legend { float: left; font-size: 13px; font-weight: 600; margin-right: 12px; padding: 0; }
+.make-where-choices { display: flex; flex-wrap: wrap; gap: 4px 14px; font-size: 13px; }
+.make-where-choices label { display: inline-flex; gap: 5px; align-items: center; }
+.make-where > .hint { clear: both; margin: 6px 0 0; }

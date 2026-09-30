@@ -1227,9 +1227,11 @@ class Studio:
                      "drift": v.drift.to_dict() if v.drift is not None else None,
                      "changes": v.changes if v.drift is not None else None, "marks": v.marks or None,
                      "packet": {"python": f"{sys.version_info.major}.{sys.version_info.minor}",
-                                "requirements": pack.requirements()},
-                     "name": {"song": slug(self.genome.title), "day": self.day}}
-        return {"key": key, "label": label, "kind": spec["kind"], "spec": json.dumps(spec, default=str)}
+                                "requirements": pack.requirements()}}
+        answer = {"key": key, "label": label, "kind": spec["kind"], "spec": json.dumps(spec, default=str)}
+        if section is None:  # what the recording is called, as _keep names it (the day, then its id's first six)
+            answer["name"] = {"song": slug(self.genome.title), "day": self.day}
+        return answer
 
 
 def generation(record: dict) -> int:
@@ -1340,7 +1342,7 @@ RENDER_TYPES = {".mjs": "text/javascript; charset=utf-8", ".js": "text/javascrip
 # the worker's own policy (a worker keeps the one its script came with): scripts and data from here only, and
 # WebAssembly compiled, which Pyodide is; Emscripten also evals the small JS its libraries carry (EM_JS), so the
 # worker, and only the worker, may eval. The page keeps its own policy, which allows neither.
-RENDER_POLICY = ("default-src 'none'; script-src 'self' 'wasm-unsafe-eval' 'unsafe-eval'; connect-src 'self'; "
+RENDER_POLICY = ("default-src 'none'; script-src 'self' 'wasm-unsafe-eval'; connect-src 'self'; "
                  "frame-ancestors 'none'")
 
 
