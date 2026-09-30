@@ -195,13 +195,17 @@ input[type=number] { width: 72px; border: 1px solid var(--rule-strong); backgrou
 .region.mine .name { color: var(--hand); }
 .region.dragging { opacity: .45; }
 .region.drop { outline: 2px dashed var(--hand); outline-offset: 1px; }
-.region .edge { position: absolute; right: 0; top: 0; bottom: 0; width: 7px; cursor: ew-resize; border-right: 2px solid transparent; touch-action: none; }
-.region:hover .edge, .region .edge.active { border-right-color: var(--rule-strong); }
+/* a region's length: its own handle at the cell's right end (the region's last 8 px and the gap after it), over the
+   region and clear of the next seam, which begins where this cell ends */
+.regioncell > .edge { position: absolute; right: 0; top: 2px; height: 66px; width: 10px; cursor: col-resize; z-index: 3; touch-action: none; }
+.regioncell > .edge::after { content: ""; position: absolute; right: 2px; top: 6px; bottom: 6px; width: 3px; border-radius: 2px; background: transparent; }
+.regioncell:hover > .edge::after { background: var(--rule-strong); }
+.regioncell > .edge:hover::after, .regioncell > .edge.active::after { background: var(--hand); }
 .regioncell > .play { position: absolute; right: 8px; top: 42px; width: 20px; height: 20px; z-index: 2; opacity: .75; }
 .regioncell > .play:hover, .regioncell > .play:focus-visible { opacity: 1; }
 .regioncell > .play svg { width: 9px; height: 9px; }
-.seam { position: absolute; left: 0; top: 0; bottom: 6px; width: 10px; margin-left: -6px; z-index: 2; background: none; border: 0; padding: 0; }
-.seam::after { content: ""; position: absolute; left: 4px; top: 0; bottom: 0; width: 2px; background: transparent; }
+.seam { position: absolute; left: 0; top: 0; bottom: 6px; width: 10px; z-index: 2; background: none; border: 0; padding: 0; cursor: pointer; }
+.seam::after { content: ""; position: absolute; left: 1px; top: 0; bottom: 0; width: 2px; background: transparent; }
 .seam:hover::after, .seam.selected::after, .seam:focus-visible::after { background: var(--hand); }
 .seam.set::after { background: color-mix(in srgb, var(--hand) 55%, transparent); }
 /* a player's whole name ("synth bass", "drum machine"): the head is wide enough, and a longer name wraps to a second line */
@@ -533,8 +537,9 @@ dialog.help .keys td { padding: 3px 0; }
   .inspector { bottom: 50px; }  /* over the page, under nothing: the views' bar stays in reach below it */
   .inspector.empty:not(.shown) { display: none; }
   .phone-only-inline { display: inline-flex; }
-  .seam { width: 24px; margin-left: -13px; }
-  .seam::after { left: 11px; }
+  .seam { width: 20px; }
+  .seam::after { left: 1px; }
+  .regioncell > .edge { height: 52px; }
   .regioncell > .play { display: none; }  /* the Page's ▶, and the section's ▶ Hear it */
   .inspector .link, .stepper button { min-height: 44px; min-width: 44px; }
   .inspector .handle { display: block; width: 100%; height: 22px; border: 0; background: none; padding: 0; }

@@ -383,9 +383,11 @@
       ondrop: (e) => { const from = e.dataTransfer.getData("text/x-section"); if (!from) return; e.preventDefault(); e.stopPropagation(); moveSection(from, i); } },
     h("span", { class: "name" }, s.label),
     h("span", { class: "bars" }, `${s.bars} bars${s.sung ? "" : " · instr."}${s.build ? " · build" : ""}`),
-    C()?.mini?.(compIndex(s.id)) || null,
-    h("span", { class: "edge", title: `Drag for its length: ${s.barOptions.join(", ")} bars`, "aria-hidden": "true",
-      onpointerdown: (e) => edgeDrag(e, s), onmousedown: (e) => { e.preventDefault(); e.stopPropagation(); }, onclick: (e) => e.stopPropagation() }));
+    C()?.mini?.(compIndex(s.id)) || null);
+  // its length by its right edge: a handle of its own beside the region (not inside it, where a press began the
+  // region's drag), 10 px, above and clear of the next section's seam (which starts where this cell ends)
+  const edge = s.barOptions.length > 1 ? h("span", { class: "edge", title: `${s.label}: drag for its length (${s.barOptions.join(", ")} bars)`, "aria-hidden": "true",
+    "data-edge": s.id, onpointerdown: (e) => edgeDrag(e, s), onmousedown: (e) => { e.preventDefault(); e.stopPropagation(); }, onclick: (e) => e.stopPropagation() }) : null;
     const ready = state.view?.listen?.ready.includes(state.view.listen.sections[s.index]);
     return h("div", { class: "regioncell", role: "gridcell", "data-region": s.id },
       h("button", { class: `play${ready ? " ready" : ""}`, type: "button", "data-key": `hear:${s.id}`, "aria-label": `Hear ${s.label}, ${S.how === "sung" ? "sung" : "the sketch"}`,
@@ -393,7 +395,7 @@
       i > 0 ? h("button", { class: `seam${S.sel?.kind === "seam" && S.sel.id === s.id ? " selected" : ""}${s.seam?.value ? " set" : ""}`, type: "button",
         "data-key": `seam:${s.id}`, "aria-label": `The seam into ${s.label}: ${M.seamWords(s.seam?.value)}`, title: `Into ${s.label}: a riser, a sweep, a roll, a stop…`,
         onclick: (e) => { e.stopPropagation(); select({ kind: "seam", id: s.id }); } }) : null,
-      region);
+      region, edge);
   }
   function moveSection(id, to) {
     const list = S.grid.sections, from = list.findIndex((s) => s.id === id);
@@ -405,7 +407,7 @@
   }
   function edgeDrag(e, s) {
     e.preventDefault(); e.stopPropagation();
-    const edge = e.currentTarget, region = edge.parentNode, label = region.querySelector(".bars");
+    const edge = e.currentTarget, region = edge.parentNode.querySelector(".region"), label = region.querySelector(".bars");
     const perBar = region.getBoundingClientRect().width / s.bars, x0 = e.clientX;
     let pick = s.bars;
     edge.setPointerCapture(e.pointerId); edge.classList.add("active");
