@@ -2,6 +2,7 @@
 
     songbird studio [PARENT.flac|record.json] [--song GENOME] [--machine here] [--port 8766] [--out DIR]
                     [--host 0.0.0.0] [--allow-host NAME] [--key WORD]
+                    [--public [--limit NAME=N] [--client-ip-header CF-Connecting-IP]]
 
 A page on this computer only (127.0.0.1), served by the standard library,
 with plain HTML, CSS and JavaScript from songbird/studio/ and nothing from
@@ -25,6 +26,11 @@ link's key, the singing page is off, only everyone's phrasing is offered (no
 singer's name), each recording can be downloaded from the page, and the
 machine that shapes the song is the computer serving it. docs/STUDIO.md,
 "Sharing the studio for a preview".
+
+Public (`--public`), it is open to anyone who reaches it, for good: shared as above but with no key
+unless one is given, each visitor held to one render at a time and a few an hour (songbird.public),
+recordings offered for download a while and not kept, and an access log that never says who.
+docs/WEB-STUDIO.md.
 """
 
 from __future__ import annotations
@@ -58,7 +64,8 @@ from urllib.parse import parse_qs, urlsplit
 
 import numpy as np
 
-from . import __version__, drift as drift_mod, explain, genome as genome_mod, harvest, midi, pack, synth, variation
+from . import drift as drift_mod, explain, genome as genome_mod, harvest, midi, pack, synth, variation
+from . import public as public_mod
 from .realize import Params, realize
 from .synth import master
 from .synth.instruments import INSTRUMENTS
@@ -269,6 +276,8 @@ class Job:
     result: dict | None = None
     then: list = field(default_factory=list)  # run after the work, with the job (a recording's copy)
     plan: list = field(default_factory=list)  # (stage, weight), for its progress
+    owner: str | None = None  # the visitor who asked for it (a public studio)
+    whole: bool = False  # the whole song, not a section: how long it may take
 
     def view(self) -> dict:
         return {"id": self.id, "kind": self.kind, "label": self.label, "state": self.state,
@@ -290,16 +299,26 @@ class Job:
 class Busy(Exception):
     """Too many renders waiting (a shared studio): try again when the queue has shortened."""
 
+    def __init__(self, message: str, retry: float = 60.0):
+        super().__init__(message)
+        self.retry = max(1, int(retry + 0.999))
+
 
 class Jobs:
     """One render at a time: recordings first, oldest first; then previews, newest first (what the person
-    asked for last is what they want to hear). At most MAX_WAITING wait at once."""
+    asked for last is what they want to hear). At most MAX_WAITING wait at once.
 
-    def __init__(self):
+    Open to the public (`fair`), previews go in the order asked, each visitor has one render queued or
+    running at most, and the page is told about how long it will wait."""
+
+    def __init__(self, waiting: int | None = None, fair: bool = False):
         self.lock = threading.Condition()
         self.pending: list[Job] = []
         self.jobs: dict[str, Job] = {}
         self.by_key: dict[str, Job] = {}
+        self.waiting = waiting or MAX_WAITING
+        self.fair = fair
+        self.took = {True: 90.0, False: 15.0}  # seconds a whole song and a section take: guesses, then measured
         threading.Thread(target=self._run, daemon=True, name="studio-renderer").start()
 
     def get(self, job_id: str) -> Job | None:
@@ -309,20 +328,34 @@ class Jobs:
         job = self.by_key.get(key)
         return job if job is not None and job.state in ("queued", "running") else None
 
-    def submit(self, key: str, kind: str, label: str, work: Callable, then: Callable | None = None) -> Job:
+    def submit(self, key: str, kind: str, label: str, work: Callable, then: Callable | None = None,
+               owner: str | None = None, whole: bool = False, admit: Callable | None = None) -> Job:
+        """A render, or the same one already asked for. `owner` (a public studio's visitor) may have one
+        at a time; `admit`, a public studio's count of what each visitor has had made, runs once the queue
+        has room, and may refuse (public.Limited)."""
         with self.lock:
             job = self.live(key)
             if job is not None:  # asked for again: first among the previews; a recording waits on it
-                job.created = time.time()
+                if not self.fair:
+                    job.created = time.time()
                 if kind == "record":
                     job.kind = "record"
                     job.label = label
                 if then is not None:
                     job.then.append(then)
                 return job
-            if len(self.pending) >= MAX_WAITING:
+            if owner is not None:
+                self._one_each(owner)
+            if len(self.pending) >= self.waiting:
+                if self.fair:
+                    raise Busy(f"The studio is busy: {len(self.pending)} songs are waiting to be made, one at a "
+                               f"time for everyone. Try again in {public_mod.about(self._eta(self.pending))}.",
+                               self._eta(self.pending))
                 raise Busy("The studio is busy making other songs; try again in a minute.")
-            job = Job(secrets.token_hex(6), key, kind, label, work, then=[then] if then else [])
+            if admit is not None:
+                admit()
+            job = Job(secrets.token_hex(6), key, kind, label, work, then=[then] if then else [], owner=owner,
+                      whole=whole)
             self.jobs[job.id] = job
             self.by_key[key] = job
             self.pending.append(job)
@@ -340,15 +373,40 @@ class Jobs:
                 running = sum(1 for j in self.jobs.values() if j.state == "running")
                 if job.kind == "record":
                     before = [j for j in self.pending if j.kind == "record" and j.created < job.created]
+                elif self.fair:
+                    before = [j for j in self.pending if j.kind == "record" or j.created < job.created]
                 else:
                     before = [j for j in self.pending if j.kind == "record" or j.created > job.created]
                 out["ahead"] = running + len(before)
+                if self.fair:
+                    out["eta"] = round(self._eta(before))
         return out
 
-    def cancel(self, job_id: str) -> bool:
+    def _one_each(self, owner: str) -> None:
+        """A visitor's render at a time: a preview of theirs still waiting gives way to what they ask for
+        now; one being made, or a recording waiting, is waited for."""
+        for job in list(self.pending):
+            if job.owner == owner:
+                if job.kind != "preview":
+                    raise public_mod.Limited("Your recording is waiting its turn; the next can be asked for when "
+                                         "it's made.", self._eta([job]))
+                self.pending.remove(job)
+                job.state, job.error = "failed", "cancelled"
+        for job in self.jobs.values():
+            if job.owner == owner and job.state == "running":
+                raise public_mod.Limited("Yours is being made now; ask for the next when it's done (one at a time "
+                                     "for each person, so everyone gets a turn).", self._eta([]))
+
+    def _eta(self, waiting: list[Job]) -> float:
+        """Seconds until the renders in `waiting` are made, with the one running now."""
+        left = sum(self.took[j.whole] * (1 - j.progress) for j in self.jobs.values() if j.state == "running")
+        return left + sum(self.took[j.whole] for j in waiting)
+
+    def cancel(self, job_id: str, owner: str | None = None) -> bool:
+        """A preview still waiting, dropped; in a public studio only by the visitor who asked for it."""
         with self.lock:
             job = self.jobs.get(job_id)
-            if job is None or job.state != "queued" or job.kind == "record":
+            if job is None or job.state != "queued" or job.kind == "record" or (owner and job.owner != owner):
                 return False
             self.pending.remove(job)
             job.state, job.error = "failed", "cancelled"
@@ -356,7 +414,10 @@ class Jobs:
 
     def _next(self) -> Job:
         records = [j for j in self.pending if j.kind == "record"]
-        job = min(records, key=lambda j: j.created) if records else max(self.pending, key=lambda j: j.created)
+        if records or self.fair:
+            job = min(records or self.pending, key=lambda j: j.created)
+        else:
+            job = max(self.pending, key=lambda j: j.created)
         self.pending.remove(job)
         return job
 
@@ -367,6 +428,7 @@ class Jobs:
                     self.lock.wait()
                 job = self._next()
                 job.state = "running"
+            began = time.monotonic()
             try:
                 result = job.work(job) or {}
                 done = 0
@@ -375,6 +437,7 @@ class Jobs:
                         todo = job.then[done:]
                         if not todo:
                             job.result, job.progress, job.stage, job.state = result, 1.0, "", "done"
+                            self.took[job.whole] = 0.7 * self.took[job.whole] + 0.3 * (time.monotonic() - began)
                             break
                     for then in todo:
                         result.update(then(job) or {})
@@ -391,10 +454,13 @@ class Studio:
     """The song, its parent, the machine and today; the caches; and everything the page asks for."""
 
     def __init__(self, parent: str | None = None, song: str | None = None, machine: str = "here",
-                 out: Path | None = None, home: Path | None = None, key: str | None = None):
-        # shared with others by a link carrying this key, or this computer's alone (None)
+                 out: Path | None = None, home: Path | None = None, key: str | None = None,
+                 public: public_mod.Limits | None = None):
+        # shared with others by a link carrying this key, or this computer's alone (None); or open to anyone
+        # who reaches it, with limits (--public: a key is then optional)
         self.share_key = key
-        self.shared = key is not None
+        self.public = public
+        self.shared = key is not None or public is not None
         self.home = Path(home or harvest.home_dir()) / "studio"
         self.cache = self.home / "cache"
         self.cache.mkdir(parents=True, exist_ok=True)
@@ -402,6 +468,9 @@ class Studio:
         self.genome_path = Path(genome_path).resolve()
         self.genome = genome_mod.load(self.genome_path)
         self.song_digest = hashlib.sha256(self.genome_path.read_bytes()).hexdigest()
+        # the program itself, not its version number (which stays 0.1.0), so an updated program never plays
+        # a preview an older one made
+        self.program_digest = pack.program_sha256(pack.program_files())
         self.parent_record = record
         from .cli import _parent
 
@@ -418,14 +487,21 @@ class Studio:
         self.day, self.t = today()
         # a checkout records into renders/; a packet's program, into the folder it was run from
         self.out = Path(out) if out else (Path.cwd() if self.where == "packet" else Path("renders"))
-        self.jobs = Jobs()
+        self.jobs = Jobs(public.queue, fair=True) if public else Jobs()
+        self.cache_limit = public.cache_mb * 2**20 if public else CACHE_LIMIT
+        # a public studio's counts of what each visitor has had made, and its recordings waiting to be downloaded
+        self.gate = public_mod.Gate(public) if public else None
+        self.downloads = public_mod.Downloads(self.home / "downloads", public.downloads_mb * 2**20,
+                                              public.download_hours) if public else None
         self.token = secrets.token_urlsafe(18)
         self._timeline = None
         self._timeline_lock = threading.Lock()
         self.karaoke: subprocess.Popen | None = None
         self.context = explain.Context(self.genome, parent_params, record, self.voice, machine, self.day, self.t,
                                        quiet, shared=self.shared)
-        prune(self.cache, CACHE_LIMIT)
+        prune(self.cache, self.cache_limit)
+        if public:
+            threading.Thread(target=self._tidy, daemon=True, name="studio-tidy").start()
 
     # ------------------------------------------------------------ the song
 
@@ -473,7 +549,7 @@ class Studio:
 
     def key(self, v: explain.Version, section: int | None) -> str:
         """What a render depends on, hashed: the same rendition and section are made once."""
-        material = {"program": __version__, "song": self.song_digest, "params": v.params.to_dict(),
+        material = {"program": self.program_digest, "song": self.song_digest, "params": v.params.to_dict(),
                     "lyrics": v.lyrics.to_dict() if v.lyrics else None, "phrasing": v.phrasing_json,
                     "choir_phrasings": v.choir_phrasings,
                     "section": section, "voice": v.voice.to_dict() if v.voice is not None else None,
@@ -486,7 +562,9 @@ class Studio:
         keys["ready"] = [k for k in [keys["whole"], *keys["sections"]] if (self.cache / f"{k}.flac").exists()]
         return keys
 
-    def listen(self, edits: dict, who: str, section: int | None) -> dict:
+    def listen(self, edits: dict, who: str, section: int | None, by: tuple[str, str] | None = None) -> dict:
+        """A preview (a section, or the whole song) made or on its way. `by`: the visitor and address asking,
+        in a public studio, for its limits."""
         v = self.version(edits, who)
         if section is not None and not 0 <= section < len(v.params.form):
             raise ValueError("no such section")
@@ -497,10 +575,20 @@ class Studio:
             os.utime(flac)
             return {"state": "done", "url": f"/audio/{key}.flac", "label": label, "progress": 1.0, "key": key}
         if section is None:
-            job = self.jobs.submit(key, "preview", label, lambda job: self._whole(job, v, key))
+            job = self.jobs.submit(key, "preview", label, lambda job: self._whole(job, v, key),
+                                   **self._limits(by, whole=True))
         else:
-            job = self.jobs.submit(key, "preview", label, lambda job: self._section(job, v, key, section))
+            job = self.jobs.submit(key, "preview", label, lambda job: self._section(job, v, key, section),
+                                   **self._limits(by, whole=False))
         return self.jobs.view(job) | {"key": key}
+
+    def _limits(self, by: tuple[str, str] | None, whole: bool) -> dict:
+        """What the queue needs to hold a public studio's visitor to its limits (nothing for anyone else)."""
+        if self.gate is None or by is None:
+            return {"whole": whole}
+        visitor, ip = by
+        return {"whole": whole, "owner": visitor,
+                "admit": lambda: self.gate.render("records" if whole else "previews", visitor, ip)}
 
     def warm(self) -> None:
         """Make today's first verse while the page opens: the synthesis is compiled the first time it runs
@@ -538,7 +626,7 @@ class Studio:
         master.write_flac(tmp, pcm, synth.SR)
         tmp.replace(self.cache / f"{key}.flac")
         job.url = f"/audio/{key}.flac"
-        prune(self.cache, CACHE_LIMIT)
+        prune(self.cache, self.cache_limit)
         return {"url": job.url, "duration": round(len(pcm) / synth.SR, 2)}
 
     def _whole(self, job: Job, v: explain.Version, key: str) -> dict:
@@ -559,7 +647,7 @@ class Studio:
         (folder / "rendition.json").write_text(json.dumps(record, indent=2) + "\n")
         link(folder / "rendition.flac", self.cache / f"{key}.flac")
         job.url = f"/audio/{key}.flac"
-        prune(self.cache, CACHE_LIMIT)
+        prune(self.cache, self.cache_limit)
         return {"url": job.url, "id": record["id"], "duration": record["duration"]}
 
     # ------------------------------------------------------------ exporting for musicians
@@ -567,10 +655,11 @@ class Studio:
     def export_name(self, v: explain.Version, suffix: str) -> str:
         return f"{slug(self.genome.title)}.{self.day}.{self.key(v, None)[:6]}{suffix}"
 
-    def export(self, edits: dict, what: str) -> dict:
+    def export(self, edits: dict, what: str, by: tuple[str, str] | None = None) -> dict:
         """Files for a musician's own tools, of the version as the page has it: "midi", every part as MIDI
         (made at once, from the score the render sings); "stems", every part rendered alone, dry, as
-        `songbird render --stems` makes them, with the MIDI, in one zip (a render, so a job)."""
+        `songbird render --stems` makes them, with the MIDI, in one zip (a render, so a job: in a public
+        studio it waits its turn and counts as a whole song made for the visitor, `by`)."""
         v = self.version(edits)
         key = self.key(v, None)
         if what == "midi":
@@ -586,7 +675,8 @@ class Studio:
         url = f"/export/{key}.zip?name={name}"
         if (self.cache / f"{key}.zip").exists():
             return {"state": "done", "progress": 1.0, "url": url, "label": "the stems", "kind": "export"}
-        job = self.jobs.submit(f"{key}-stems", "preview", "the stems", lambda job: self._stems(job, v, key, name))
+        job = self.jobs.submit(f"{key}-stems", "preview", "the stems", lambda job: self._stems(job, v, key, name),
+                               **self._limits(by, whole=True))
         return self.jobs.view(job) | {"download": url}
 
     def _stems(self, job: Job, v: explain.Version, key: str, name: str) -> dict:
@@ -627,7 +717,7 @@ class Studio:
 
     # ------------------------------------------------------------ recording
 
-    def record(self, edits: dict) -> dict:
+    def record(self, edits: dict, by: tuple[str, str] | None = None) -> dict:
         v = self.version(edits)
         key = self.key(v, None)
         folder = self.cache / key
@@ -637,7 +727,7 @@ class Studio:
             return {"state": "done", "progress": 1.0, "url": f"/audio/{key}.flac", "result": keep(),
                     "label": "the recording", "kind": "record"}
         return self.jobs.view(self.jobs.submit(key, "record", "the recording", lambda job: self._whole(job, v, key),
-                                               then=keep))
+                                               then=keep, **self._limits(by, whole=True)))
 
     def _keep(self, folder: Path) -> dict:
         """The recording copied from the cache to where recordings go, as <song>.<day>.<its id's first six>.flac:
@@ -645,6 +735,14 @@ class Studio:
         record = json.loads((folder / "rendition.json").read_text())
         day = (record.get("rendered_at") or self.day)[:10]
         flac = self.out / f"{slug(self.genome.title)}.{day}.{record['id'][:6]}.flac"
+        if self.downloads is not None:  # open to the public: kept a while to download, not here for good
+            self.downloads.keep(folder / "rendition.flac", folder.name)
+            return {"recorded": {"flac": flac.name, "name": flac.name, "id": record["id"],
+                                 "duration": record["duration"], "generation": record.get("generation"),
+                                 "yours": len(record.get("chosen_by_you") or {}),
+                                 "next": f"python3 {flac.name} studio", "shared": True,
+                                 "download": f"/download/{folder.name}.flac?name={flac.name}",
+                                 "expires": self.public.download_hours}}
         self.out.mkdir(parents=True, exist_ok=True)
         shutil.copyfile(folder / "rendition.flac", flac)
         if self.shared:  # the visitor's copy is the download; the path is the host's
@@ -659,14 +757,34 @@ class Studio:
                              "download": f"/audio/{folder.name}.flac?name={flac.name}", "shared": self.shared}}
 
     def out_shown(self) -> str:
-        return shown(self.out)
+        return "" if self.public else shown(self.out)  # the serving computer's folders are its own
 
     def packet_note(self) -> str:
         note = ("The recording is one file: it plays anywhere, and it carries the program that sang it, the song "
                 "and its record, so anyone can run it to make the next version.")
-        if self.shared:
+        if self.public:
+            hours = self.public.download_hours
+            note += f" Download your copy here: the studio keeps it for {hours:g} hours, then lets it go."
+        elif self.shared:
             note += " It is saved on the computer serving this studio; download your copy here."
         return note
+
+    # ------------------------------------------------------------ open to the public
+
+    def health(self) -> dict:
+        """/healthz: that it answers, and how long the queue is."""
+        with self.jobs.lock:
+            return {"ok": True, "waiting": len(self.jobs.pending),
+                    "running": any(j.state == "running" for j in self.jobs.jobs.values())}
+
+    def _tidy(self, every: float = 600.0) -> None:
+        """Now and then: recordings past their time let go, the cache kept to its size, old counts forgotten."""
+        while True:
+            time.sleep(every)
+            with contextlib.suppress(Exception):
+                self.downloads.prune()
+                prune(self.cache, self.cache_limit)
+                self.gate.purge()
 
     # ------------------------------------------------------------ singing (from a checkout of the program)
 
@@ -852,8 +970,25 @@ class Handler(BaseHTTPRequestHandler):
     sys_version = ""  # no need to say which Python
     protocol_version = "HTTP/1.1"
 
+    client_ip_header: str | None = None  # behind a proxy (--client-ip-header CF-Connecting-IP): who it says asked
+    log = None  # a public studio's access log: stdout as it was when serving began (a render swaps sys.stdout)
+    _sent: tuple[int, int] | None = None
+    _began = 0.0
+
     def log_message(self, fmt, *args):  # keep the terminal quiet
         pass
+
+    def parse_request(self) -> bool:
+        self._began = time.monotonic()
+        return super().parse_request()
+
+    def handle_one_request(self) -> None:
+        self._sent = None
+        super().handle_one_request()
+        if self.studio.public is not None and self._sent is not None:  # a public studio's access log: never who
+            self.log.write(public_mod.access_line(self.command, urlsplit(self.path).path, *self._sent,
+                                                  time.monotonic() - self._began) + "\n")
+            self.log.flush()
 
     # ------------------------------------------------------------ guards
 
@@ -880,11 +1015,44 @@ class Handler(BaseHTTPRequestHandler):
         return f"songbird-studio-{self.port}"
 
     def _admitted(self) -> bool:
-        """This computer's own studio admits its own page; a shared one, only a visitor with its key."""
-        if not self.studio.shared:
+        """This computer's own studio admits its own page; a shared one, only a visitor with its key (a
+        public one without a key, anyone)."""
+        if not self.studio.shared or self.studio.share_key is None:
             return True
         key = self._key() or ""
         return secrets.compare_digest(key.encode("utf-8", "replace"), self.studio.share_key.encode())
+
+    def _ip(self) -> str:
+        return public_mod.client_ip(self.client_address[0], self.headers, self.client_ip_header)
+
+    def _visitor(self) -> str | None:
+        """A public studio's visitor: the random id its page's cookie carries (nothing else is known of them)."""
+        with contextlib.suppress(CookieError):
+            morsel = SimpleCookie(self.headers.get("Cookie", "")).get(f"songbird-visitor-{self.port}")
+            if morsel and re.fullmatch(r"[A-Za-z0-9_-]{16,64}", morsel.value):
+                return morsel.value
+        return None
+
+    def _by(self) -> tuple[str, str]:
+        """Who is asking, for a public studio's limits: the visitor (or, with no cookie, their address) and
+        their address."""
+        ip = self._ip()
+        return self._visitor() or f"ip:{ip}", ip
+
+    def _throttled(self) -> bool:
+        """A public studio's limit on requests from one address: said, and True, if it's past."""
+        try:
+            self.studio.gate.request(self._ip())
+        except public_mod.Limited as e:
+            self.close_connection = True
+            self.too_many(429, e)
+            return True
+        return False
+
+    def too_many(self, code: int, e: Exception) -> None:
+        retry = getattr(e, "retry", 60)
+        self.send(json.dumps({"error": str(e), "retry": retry, "busy": True}).encode(), "application/json", code,
+                  {"Retry-After": str(retry)})
 
     def refuse_visitor(self) -> None:
         page = ("<!doctype html><meta charset=utf-8><meta name=viewport content='width=device-width'>"
@@ -896,21 +1064,30 @@ class Handler(BaseHTTPRequestHandler):
 
     # ------------------------------------------------------------ replies
 
-    def send(self, body: bytes, kind: str, code: int = 200, extra: dict | None = None) -> None:
+    def send(self, body: bytes | io.BufferedReader, kind: str, code: int = 200,
+             extra: dict | list | None = None) -> None:
+        """A reply: bytes, or an open file's (sent as it's read, not held whole)."""
+        whole = isinstance(body, (bytes, bytearray))
+        size = len(body) if whole else os.fstat(body.fileno()).st_size
+        self._sent = (code, size)
         self.send_response(code)
         self.send_header("Content-Type", kind)
-        self.send_header("Content-Length", str(len(body)))
+        self.send_header("Content-Length", str(size))
         self.send_header("Cache-Control", "no-store")
         self.send_header("X-Content-Type-Options", "nosniff")
         self.send_header("Referrer-Policy", "no-referrer")
         self.send_header("Content-Security-Policy",
                          "default-src 'self'; media-src 'self'; img-src 'self' data:; style-src 'self'; "
                          "script-src 'self'; connect-src 'self'; frame-ancestors 'none'; form-action 'none'")
-        for k, v in (extra or {}).items():
+        for k, v in (extra.items() if isinstance(extra, dict) else extra or ()):
             self.send_header(k, v)
         self.end_headers()
-        if self.command != "HEAD":
+        if self.command == "HEAD":
+            return
+        if whole:
             self.wfile.write(body)
+        else:
+            shutil.copyfileobj(body, self.wfile, 2**16)
 
     def send_json(self, data, code: int = 200) -> None:
         self.send(json.dumps(data).encode(), "application/json", code)
@@ -927,20 +1104,33 @@ class Handler(BaseHTTPRequestHandler):
         if not self._local():
             return self.fail(403, "this page answers only its own address")
         path = urlsplit(self.path).path
+        if self.studio.public is not None:
+            if path == "/healthz":
+                return self.send_json(self.studio.health())
+            if self._throttled():
+                return
         if not self._admitted():
             return self.refuse_visitor() if path in ("/", "/index.html") else self.fail(403, "this studio needs its link's key")
         try:
             if path in ("/", "/index.html"):
                 page = (PAGE / "index.html").read_text().replace("{{token}}", self.studio.token)
-                extra = {}
-                if self.studio.shared:  # the key, kept for this visit's other requests (the audio's among them)
-                    extra["Set-Cookie"] = f"{self._cookie()}={self.studio.share_key}; Path=/; HttpOnly; SameSite=Lax"
+                extra = []
+                secure = "; Secure" if self.headers.get("X-Forwarded-Proto", "").lower() == "https" else ""
+                if self.studio.share_key:  # the key, kept for this visit's other requests (the audio's among them)
+                    extra.append(("Set-Cookie", f"{self._cookie()}={self.studio.share_key}; Path=/; HttpOnly; "
+                                                f"SameSite=Lax{secure}"))
+                if self.studio.public is not None and self._visitor() is None:  # a random id for the limits
+                    extra.append(("Set-Cookie", f"songbird-visitor-{self.port}={secrets.token_urlsafe(18)}; Path=/; "
+                                                f"Max-Age=86400; HttpOnly; SameSite=Lax{secure}"))
                 return self.send(page.encode(), "text/html; charset=utf-8", extra=extra)
             if path in STATIC:
                 name, kind = STATIC[path]
                 return self.send((PAGE / name).read_bytes(), kind)
             if path == "/api/start":
-                return self.send_json(explain.start(self.studio.context, self.studio))
+                start = explain.start(self.studio.context, self.studio)
+                if self.studio.public is not None:
+                    start["public"] = self.studio.public.view()
+                return self.send_json(start)
             if path == "/api/timeline":
                 return self.send_json(self.studio.timeline())
             if path == "/api/phrasings":
@@ -957,13 +1147,25 @@ class Handler(BaseHTTPRequestHandler):
                 if not file.exists():
                     return self.fail(404, "not made yet")
                 kind = "audio/midi" if match.group(2) == "mid" else "application/zip"
-                return self.send(file.read_bytes(), kind, 200, {"Content-Disposition": f'attachment; filename="{name}"'})
+                with file.open("rb") as f:  # streamed: a song's stems are tens of megabytes
+                    return self.send(f, kind, 200, {"Content-Disposition": f'attachment; filename="{name}"'})
             match = re.fullmatch(r"/audio/([0-9a-f]{16,64})\.flac", path)
             if match:
                 # ?name=song.day.id.flac: saved under that name (a recording downloaded, as a visitor keeps theirs)
                 name = parse_qs(urlsplit(self.path).query).get("name", [""])[0]
                 name = name if re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9._-]{0,120}\.flac", name) else None
                 return self.audio(self.studio.cache / f"{match.group(1)}.flac", name)
+            match = re.fullmatch(r"/download/([0-9a-f]{16,64})\.flac", path)
+            if match and self.studio.downloads is not None:  # a public studio's recording, while it's kept
+                name = parse_qs(urlsplit(self.path).query).get("name", [""])[0]
+                name = name if re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9._-]{0,120}\.flac", name) else "song.flac"
+                kept = self.studio.downloads.path(match.group(1))
+                if kept is None:
+                    hours = self.studio.public.download_hours
+                    return self.fail(404, f"This recording isn't kept here any more (the studio keeps each for "
+                                          f"{hours:g} hours). Make it again from the studio: the same choices make "
+                                          f"the same song.")
+                return self.audio(kept, name)
             return self.fail(404, "not found")
         except Exception as e:  # said on the page rather than dropping the connection
             traceback.print_exc()
@@ -975,8 +1177,8 @@ class Handler(BaseHTTPRequestHandler):
         if not path.exists():
             return self.fail(404, "not made yet")
         if name:
-            return self.send(path.read_bytes(), "audio/flac", 200,
-                             {"Content-Disposition": f'attachment; filename="{name}"'})
+            with path.open("rb") as f:
+                return self.send(f, "audio/flac", 200, {"Content-Disposition": f'attachment; filename="{name}"'})
         size = path.stat().st_size
         rng = re.fullmatch(r"bytes=(\d*)-(\d*)", self.headers.get("Range", "").strip())
         if rng and (rng.group(1) or rng.group(2)):
@@ -992,7 +1194,8 @@ class Handler(BaseHTTPRequestHandler):
                 part = f.read(end + 1 - start)
             return self.send(part, "audio/flac", 206,
                              {"Content-Range": f"bytes {start}-{end}/{size}", "Accept-Ranges": "bytes"})
-        self.send(path.read_bytes(), "audio/flac", 200, {"Accept-Ranges": "bytes"})
+        with path.open("rb") as f:
+            self.send(f, "audio/flac", 200, {"Accept-Ranges": "bytes"})
 
     # ------------------------------------------------------------ POST
 
@@ -1012,6 +1215,8 @@ class Handler(BaseHTTPRequestHandler):
             return self.fail(403, "this page answers only its own address")
         if not self._admitted():
             return self.fail(403, "this studio needs its link's key")
+        if self.studio.public is not None and self._throttled():
+            return
         if self.headers.get("Content-Type", "").split(";")[0].strip() != "application/json":
             return self.fail(415, "send JSON")
         if not secrets.compare_digest(self.headers.get("X-Studio", "").encode("utf-8", "replace"),
@@ -1024,6 +1229,7 @@ class Handler(BaseHTTPRequestHandler):
                 return self.fail(400, "send a map, with the edits a map of choices")
             edits = body.get("edits") or {}
             studio = self.studio
+            by = self._by() if studio.public is not None else None
             if path == "/api/song":
                 return self.send_json(studio.song(edits))
             if path == "/api/options":
@@ -1037,18 +1243,21 @@ class Handler(BaseHTTPRequestHandler):
                 who = str(body.get("who", "you"))
                 if who not in ("you", "program") and not re.fullmatch(r"fictional:[a-z0-9 _-]{1,24}", who):
                     return self.fail(400, "no such machine")
-                return self.send_json(studio.listen(edits, who, None if section is None else int(section)))
+                return self.send_json(studio.listen(edits, who, None if section is None else int(section), by=by))
             if path == "/api/cancel":
-                return self.send_json({"cancelled": studio.jobs.cancel(str(body.get("job", "")))})
+                return self.send_json({"cancelled": studio.jobs.cancel(str(body.get("job", "")),
+                                                                       owner=by[0] if by else None)})
             if path == "/api/export":
-                return self.send_json(studio.export(edits, str(body.get("what", ""))))
+                return self.send_json(studio.export(edits, str(body.get("what", "")), by=by))
             if path == "/api/record":
-                return self.send_json(studio.record(edits))
+                return self.send_json(studio.record(edits, by=by))
             if path == "/api/sing":
                 return self.send_json(studio.sing())
             return self.fail(404, "not found")
         except Busy as e:
-            return self.fail(503, str(e))
+            return self.too_many(503, e) if self.studio.public is not None else self.fail(503, str(e))
+        except public_mod.Limited as e:
+            return self.too_many(429, e)
         except (ValueError, KeyError, TypeError) as e:
             return self.fail(400, str(e))
         except Exception as e:
@@ -1059,6 +1268,20 @@ class Handler(BaseHTTPRequestHandler):
 class Server(ThreadingHTTPServer):
     request_queue_size = 128  # the page asks for several things at once, and a player many ranges
     daemon_threads = True
+    slots: threading.BoundedSemaphore | None = None  # a public studio's connections at once
+
+    def process_request(self, request, client_address) -> None:
+        if self.slots is not None and not self.slots.acquire(blocking=False):
+            self.shutdown_request(request)  # as many as it serves at once already: this one is turned away
+            return
+        super().process_request(request, client_address)
+
+    def process_request_thread(self, request, client_address) -> None:
+        try:
+            super().process_request_thread(request, client_address)
+        finally:
+            if self.slots is not None:
+                self.slots.release()
 
     def handle_error(self, request, client_address) -> None:
         """A browser closing a connection it kept open (a player seeking, a tab closing) is no error."""
@@ -1072,17 +1295,24 @@ class Server6(Server):
 
 
 def serve(studio: Studio, port: int = PORT, tries: int = 20, host: str = HOST,
-          names: tuple[str, ...] | list[str] = ()) -> ThreadingHTTPServer:
+          names: tuple[str, ...] | list[str] = (), client_ip_header: str | None = None) -> ThreadingHTTPServer:
     """A server for the studio on `host` (127.0.0.1: this computer only, unless it is shared), on the port
-    asked for or the next free one; answering to its own names and, shared, to `names`."""
+    asked for or the next free one; answering to its own names and, shared, to `names`. Public, behind a
+    proxy: the visitor's address from `client_ip_header`."""
     names = tuple(dict.fromkeys(n.strip().lower() for n in names if n.strip()))
     kind = Server6 if ":" in host else Server
+    attrs = {"studio": studio, "names": names}
+    if studio.public is not None:  # a connection that sends nothing for this long is closed
+        attrs |= {"timeout": studio.public.timeout, "client_ip_header": client_ip_header, "log": sys.stdout}
     for p in range(port, port + tries):
-        handler = type("StudioHandler", (Handler,), {"studio": studio, "port": p, "names": names})
+        handler = type("StudioHandler", (Handler,), attrs | {"port": p})
         try:
-            return kind((host, p), handler)
+            server = kind((host, p), handler)
         except OSError:
             continue
+        if studio.public is not None:
+            server.slots = threading.BoundedSemaphore(studio.public.connections)
+        return server
     raise SystemExit(f"songbird studio: no free port from {port} to {port + tries - 1} on {host}")
 
 
@@ -1111,14 +1341,15 @@ def share_names(host: str, allow: list[str] | None) -> list[str]:
     return list(dict.fromkeys(names))
 
 
-def links(host: str, port: int, allow: list[str], names: list[str], key: str) -> tuple[list[str], str]:
+def links(host: str, port: int, allow: list[str], names: list[str], key: str | None) -> tuple[list[str], str]:
     """Where visitors open a shared studio (a tunnel's name by https, without a port; this computer's by
-    http at its port), and where the person serving it does."""
+    http at its port), and where the person serving it does. A public studio without a key: bare links."""
+    q = f"/?key={key}" if key else "/"
     given = [a.strip().lower() for a in allow or [] if a.strip()]
-    out = [f"https://{'NAME-THE-TUNNEL-PRINTED' if n.startswith('.') else ''}{n}/?key={key}" for n in given]
-    out += [f"http://{n}:{port}/?key={key}" for n in names if n not in given]
-    here = f"http://127.0.0.1:{port}/?key={key}" if host in ("0.0.0.0", "::") or host.lower() in LOOPBACK \
-        else (out[-1] if out else f"http://127.0.0.1:{port}/?key={key}")
+    out = [f"https://{'NAME-THE-TUNNEL-PRINTED' if n.startswith('.') else ''}{n}{q}" for n in given]
+    out += [f"http://{n}:{port}{q}" for n in names if n not in given]
+    here = f"http://127.0.0.1:{port}{q}" if host in ("0.0.0.0", "::") or host.lower() in LOOPBACK \
+        else (out[-1] if out else f"http://127.0.0.1:{port}{q}")
     return out, here
 
 
@@ -1138,6 +1369,22 @@ def shared_warning(shares: list[str], out: str, lan: bool) -> str:
                         for point in points), "  Stop it with Ctrl-C when the preview is over."])
 
 
+def public_warning(shares: list[str], limits: public_mod.Limits, key: str | None, machine: str) -> str:
+    """What opening the studio to the public means, said when it starts."""
+    points = [("Anyone who reaches it can use it" if key is None else "Anyone with the key can use it")
+              + f"; the song is shaped by the machine '{machine}' for everyone.",
+              f"One song is made at a time: {limits.queue} may wait; each visitor has one at a time, "
+              f"{limits.records} whole songs and {limits.previews} sections an hour ({limits.records_ip} and "
+              f"{limits.previews_ip} for an address), {limits.requests} requests a minute from an address.",
+              f"Recordings aren't kept here: each is offered for download for {limits.download_hours:g} hours "
+              f"(up to {limits.downloads_mb} MB); previews are cached up to {limits.cache_mb} MB.",
+              "Each request is logged on one line (when, what, the answer), never by whom; visitors are counted "
+              "under a key kept only in memory.", "The singing page is off."]
+    return "\n".join(["  PUBLIC. Open at:", *(f"    {link}" for link in shares), "  What that means:",
+                      *(textwrap.fill(point, 104, initial_indent="    - ", subsequent_indent="      ")
+                        for point in points)])
+
+
 def add_arguments(parser: argparse.ArgumentParser) -> None:
     parser.add_argument("parent", nargs="?",
                         help="the rendition to make a new version of: a seed packet, a FLAC with its record "
@@ -1147,8 +1394,9 @@ def add_arguments(parser: argparse.ArgumentParser) -> None:
                         help="the packet this program came in (the file's own bootstrap passes it): the rendition "
                              "to open, as the parent of the new version")
     parser.add_argument("--song", metavar="GENOME", help="the song's genome, where the parent doesn't carry it")
-    parser.add_argument("--machine", default="here", metavar="here|none|fictional:NAME|FILE",
-                        help="who sings: this machine (default), none, a made-up one, or a voice file or record")
+    parser.add_argument("--machine", metavar="here|none|fictional:NAME|FILE",
+                        help="who sings: this machine (the default; public, none), none, a made-up one, or a "
+                             "voice file or record")
     parser.add_argument("--port", type=int, default=PORT, help=f"the port (default {PORT}, or the next free one)")
     parser.add_argument("--out", metavar="DIR", help="where recordings go (default renders/)")
     parser.add_argument("--no-open", action="store_true", help="don't open the page in a browser")
@@ -1160,7 +1408,17 @@ def add_arguments(parser: argparse.ArgumentParser) -> None:
                         help="a name visitors reach it by through a tunnel (a leading dot allows every name "
                              "under it: .trycloudflare.com); shares it by link, as --host does")
     parser.add_argument("--key", metavar="WORD",
-                        help="the key a shared studio's links carry (default: a new one each time it starts)")
+                        help="the key a shared studio's links carry (default: a new one each time it starts; "
+                             "public, none)")
+    parser.add_argument("--public", action="store_true",
+                        help="open to anyone who reaches it, for good, with limits for each visitor: no link key "
+                             "needed (unless --key), recordings offered for download and not kept, an access "
+                             "log that never says who (docs/WEB-STUDIO.md)")
+    parser.add_argument("--limit", action="append", default=[], metavar="NAME=N",
+                        help=f"a public studio's limit: {', '.join(public_mod.names())} (docs/WEB-STUDIO.md)")
+    parser.add_argument("--client-ip-header", metavar="HEADER",
+                        help="public, behind a proxy on this machine or its private network: the header that "
+                             "names the visitor's address (CF-Connecting-IP for a Cloudflare tunnel)")
 
 
 def run(args: argparse.Namespace) -> int:
@@ -1171,18 +1429,33 @@ def run(args: argparse.Namespace) -> int:
         if not re.fullmatch(r"\.?[A-Za-z0-9]([A-Za-z0-9.-]{0,251}[A-Za-z0-9])?", name.strip()):
             raise SystemExit(f"songbird studio: --allow-host takes a name like songbird.example.com, not {name!r}")
     names = share_names(host, allow)
-    shared = bool(names) or host.lower() not in LOOPBACK
+    limits = None
+    if getattr(args, "public", False):
+        try:
+            limits = public_mod.Limits.parse(getattr(args, "limit", []))
+        except ValueError as e:
+            raise SystemExit(f"songbird studio: {e}") from None
+    elif getattr(args, "limit", []) or getattr(args, "client_ip_header", None):
+        raise SystemExit("songbird studio: --limit and --client-ip-header are for a public studio (--public)")
+    header = getattr(args, "client_ip_header", None)
+    if header and not re.fullmatch(r"[A-Za-z0-9-]{1,64}", header):
+        raise SystemExit("songbird studio: --client-ip-header takes a header's name, like CF-Connecting-IP")
+    shared = limits is not None or bool(names) or host.lower() not in LOOPBACK
     key = None
     if shared:
-        key = getattr(args, "key", None) or secrets.token_urlsafe(9)
-        if not re.fullmatch(r"[A-Za-z0-9_-]{8,64}", key):
+        key = getattr(args, "key", None) or (None if limits else secrets.token_urlsafe(9))
+        if key is not None and not re.fullmatch(r"[A-Za-z0-9_-]{8,64}", key):
             raise SystemExit("songbird studio: --key takes 8 to 64 letters, digits, - or _")
-    studio = Studio(parent, args.song, args.machine, Path(args.out) if args.out else None, key=key)
-    server = serve(studio, args.port, host=host, names=names)
+    machine = args.machine or ("none" if limits else "here")  # public: never the serving computer's own
+    studio = Studio(parent, args.song, machine, Path(args.out) if args.out else None, key=key, public=limits)
+    server = serve(studio, args.port, host=host, names=names, client_ip_header=header)
     port = server.server_address[1]
     url = f"http://127.0.0.1:{port}"
     print(f"Songbird studio: {studio.genome.title}, {studio.context.opening()}", flush=True)
-    if shared:
+    if limits:
+        shares, url = links(host, port, allow, names, key)
+        print(public_warning(shares or [url], limits, key, machine), flush=True)
+    elif shared:
         shares, url = links(host, port, allow, names, key)
         print(shared_warning(shares, studio.out_shown(), lan=any(link.startswith("http://") for link in shares)))
     print(f"  open {url}  (Ctrl-C to stop)", flush=True)

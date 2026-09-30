@@ -57,10 +57,15 @@ const KEEP_AFTER_EXPIRY = 90 * 86400; // seconds an invite's record outlives it,
 const JOINS_AN_HOUR = 20; // joins from one address in a clock hour (a group link is as good as public); JOINS_AN_HOUR in [vars] changes it
 const PUBLIC = { "/sing.js": "text/javascript", "/sing.css": "text/css", "/karaoke.js": "text/javascript",
                  "/recorder.js": "text/javascript", "/yours.js": "text/javascript", "/yours.css": "text/css",
-                 "/identity.css": "text/css",
+                 "/identity.css": "text/css", "/seed.js": "text/javascript",
                  "/robots.txt": "text/plain", "/favicon.svg": "image/svg+xml" };
 
 const SEED_FILE = "now-its-by-you.flac"; // the seed page's file (tools/sing_site.py copies the render to public/seed/)
+// everything under /seed/: the file, and its words as it sang them, timed (tools/sing_site.py seed_words)
+const SEED_FILES = {
+  [SEED_FILE]: { "Content-Type": "audio/flac", "Content-Disposition": `attachment; filename="${SEED_FILE}"` },
+  "words.json": { "Content-Type": "application/json; charset=utf-8" },
+};
 
 const SECURITY = {
   "X-Content-Type-Options": "nosniff",
@@ -119,17 +124,79 @@ function shut(state) {
   return fail(state === "unknown" ? 404 : 410, state, "This invitation isn't open.");
 }
 
-async function asset(env, request, path, extra = {}) {
-  // a static file from the built site, whatever the request's own path
+async function asset(env, request, path, extra = {}, { ranges = false } = {}) {
+  // a static file from the built site, whatever the request's own path; with ranges, the part a player asks for
   const url = new URL(request.url);
   url.pathname = path;
   url.search = "";
   const pass = {};
   for (const h of ["Range", "If-None-Match", "If-Modified-Since"]) if (request.headers.get(h)) pass[h] = request.headers.get(h);
   const r = await env.ASSETS.fetch(new Request(url.toString(), { headers: pass }));
-  const out = new Response(r.body, r);
+  const out = (ranges && await ranged(env, request, url, r)) || new Response(r.body, r);
   for (const [k, v] of Object.entries(headers(extra))) out.headers.set(k, v);
   return out;
+}
+
+const SIZES = new Map(); // the files' lengths, by ETag, as this isolate learnt them (sizeOf)
+
+async function sizeOf(env, url, r) {
+  // a static file's length: the static assets don't say it, to a worker; read whole once and remembered
+  const said = Number(r.headers.get("Content-Length")), tag = r.headers.get("ETag");
+  if (said > 0) return said;
+  if (tag && SIZES.has(tag)) return SIZES.get(tag);
+  const size = (await (await env.ASSETS.fetch(new Request(url.toString()))).arrayBuffer()).byteLength;
+  if (tag) SIZES.set(tag, size);
+  return size;
+}
+
+async function ranged(env, request, url, r) {
+  // the part of a file a player asks for (Range: bytes=a-b, a- or -n): the static assets answer every request
+  // whole, and then nothing can seek in the seed page's song, and Safari won't play it at all. null: send it whole
+  if (r.status !== 200 || !r.body || r.headers.get("Content-Encoding")) return null;
+  const m = /^bytes=(\d*)-(\d*)$/.exec((request.headers.get("Range") || "").trim());
+  if (!m || (m[1] === "" && m[2] === "")) {
+    const whole = new Response(r.body, r);
+    whole.headers.set("Accept-Ranges", "bytes");
+    return whole;
+  }
+  const size = await sizeOf(env, url, r);
+  if (!(size > 0)) return null;
+  const start = m[1] === "" ? Math.max(0, size - Number(m[2])) : Number(m[1]);
+  const end = m[1] === "" || m[2] === "" ? size - 1 : Math.min(Number(m[2]), size - 1);
+  if (start > end) {
+    r.body.cancel().catch(() => {});
+    return new Response(null, { status: 416, headers: { "Content-Range": `bytes */${size}`, "Accept-Ranges": "bytes" } });
+  }
+  // from the start to the end (a browser's first ask) passes straight through; any other part is cut from it
+  const out = new Response(start === 0 && end === size - 1 ? r.body : part(r.body, start, end), { status: 206, headers: r.headers });
+  out.headers.set("Content-Range", `bytes ${start}-${end}/${size}`);
+  out.headers.set("Content-Length", String(end - start + 1));
+  out.headers.set("Accept-Ranges", "bytes");
+  return out;
+}
+
+function part(body, start, end) {
+  // bytes start..end of a stream, read no further than needed (a phone asks for the first two bytes to begin)
+  const length = end - start + 1;
+  // eslint-disable-next-line no-undef
+  const { readable, writable } = typeof FixedLengthStream === "function" ? new FixedLengthStream(length) : new TransformStream();
+  (async () => {
+    const reader = body.getReader(), writer = writable.getWriter();
+    try {
+      for (let at = 0; at <= end;) { // at: where this chunk starts in the file
+        const { done, value } = await reader.read();
+        if (done) break;
+        const from = Math.max(start - at, 0), to = Math.min(end + 1 - at, value.byteLength);
+        if (to > from) await writer.write(value.subarray(from, to));
+        at += value.byteLength;
+      }
+      await writer.close();
+    } catch (e) {
+      await writer.abort(e).catch(() => {});
+    }
+    reader.cancel().catch(() => {});
+  })();
+  return readable;
 }
 
 /* ---------- the song ---------- */
@@ -930,18 +997,23 @@ export default {
         if (parts[0] === "yours" && parts.length >= 2 && parts.length <= 4) return await yours(request, env, parts, ip, now);
         return fail(404, "unknown", "No such thing.");
       }
+      // robots.txt keeps crawlers off the singing site (songbird.quadule.com), not off the song: the seed
+      // host and its bare domain have none, so the seed page can be found
+      const seedHostName = String(env.SEED_HOST || "now.itsby.you").toLowerCase();
+      const apex = seedHostName.split(".").slice(1).join(".");
+      if (path === "/robots.txt" && [seedHostName, apex, `www.${apex}`].includes(url.hostname)) {
+        return fail(404, "unknown", "No such thing.");
+      }
       if (Object.prototype.hasOwnProperty.call(PUBLIC, path) && request.method === "GET") {
         return asset(env, request, path, { "Content-Type": `${PUBLIC[path]}; charset=utf-8`, "Cache-Control": "public, max-age=300" });
       }
       // the seed host's bare domain (and www) sends everyone to it, for good: the packet says now.itsby.you
-      const seedHostName = String(env.SEED_HOST || "now.itsby.you").toLowerCase();
-      const apex = seedHostName.split(".").slice(1).join(".");
       if (url.hostname === apex || url.hostname === `www.${apex}`) {
         return new Response(null, { status: 301, headers: headers({ Location: `https://${seedHostName}${path}${url.search}`,
                                                                     "Cache-Control": "public, max-age=3600" }) });
       }
       // the seed page: the song's file and how to run it, for anyone, at /seed and at the root of the seed host
-      // (now.itsby.you); the file itself is the one asset under /seed/ the built site names
+      // (now.itsby.you); under /seed/, only the assets SEED_FILES names
       const seedHost = url.hostname === seedHostName;
       if ((path === "/seed" || (path === "/" && seedHost)) && ["GET", "HEAD"].includes(request.method)) {
         return asset(env, request, "/seed.html", { "Content-Type": "text/html; charset=utf-8", "Cache-Control": "public, max-age=300",
@@ -949,9 +1021,8 @@ export default {
       }
       if (path.startsWith("/seed/") && ["GET", "HEAD"].includes(request.method)) {
         const file = path.slice(6);
-        if (file === SEED_FILE) {
-          return asset(env, request, path, { "Content-Type": "audio/flac", "Cache-Control": "public, max-age=3600",
-                                             "Content-Disposition": `attachment; filename="${file}"` });
+        if (Object.prototype.hasOwnProperty.call(SEED_FILES, file)) {
+          return asset(env, request, path, { ...SEED_FILES[file], "Cache-Control": "public, max-age=3600" }, { ranges: true });
         }
         return fail(404, "unknown", "No such thing.");
       }

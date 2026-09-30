@@ -1,0 +1,106 @@
+/* The piano page's own layout, after web/sing/page/identity.css (the tokens, both schemes). The roll is the
+   identity's stage: a page lit in the dark, the same in both schemes. */
+
+/* the theme picker's forced dark: identity.css only follows the system, so its dark tokens again */
+:root[data-theme="dark"] {
+  --paper: #17130e; --card: #211b14; --wash: #2a2219; --ink: #ede3cf; --ink-2: #c9bba4; --ink-3: #a89985;
+  --hand: #a9c2ea; --hand-wash: #1f2835; --red: #e8937c; --red-rule: rgba(232, 147, 124, .32); --rule: #3d3429;
+  --rule-strong: #7d6d5a; --ochre: #dcaa52; --green: #98bd8b; --stage: #0e0b08; --stage-panel: #15110d;
+  color-scheme: dark;
+}
+:root {
+  /* the two hands on the stage: the tune in the lamplight's amber, the accompaniment in the second hand's blue */
+  --right: #f2b25c;
+  --left: #8fb3e8;
+  --good: #8ccf7e;
+  --bad: #e0664d;
+}
+
+body.piano { font: 16px/1.45 var(--sans); }
+.piano main { max-width: 1180px; margin: 0 auto; padding: 18px var(--gutter) 40px; }
+.piano .masthead { margin-bottom: 10px; }
+.piano .lead { margin: 10px 0 14px; color: var(--ink-2); font: 17px/1.45 var(--serif); max-width: 62em; }
+.piano .hint { color: var(--ink-3); font-size: 14px; }
+
+/* ---------------------------------------------------------------- the transport */
+.transport { display: flex; flex-wrap: wrap; align-items: center; gap: 10px 14px; padding: 10px 12px; margin-bottom: 10px; }
+.transport .btn { min-width: 44px; min-height: 44px; padding: 8px 14px; }
+.transport .btn.primary { min-width: 104px; }
+.transport .where { font: 15px/1.3 var(--sans); color: var(--ink-2); min-width: 12em; }
+.transport .where b { color: var(--ink); font-weight: 600; }
+.transport .scrub { flex: 1 1 260px; display: flex; align-items: center; }
+.transport .scrub input { width: 100%; }
+.tally { font: 14px/1.3 var(--sans); color: var(--ink-2); white-space: nowrap; }
+.tally .ok { color: var(--green); font-weight: 600; }
+.tally .miss { color: var(--red); font-weight: 600; }
+
+/* ---------------------------------------------------------------- the stage: chord, roll, keyboard, words */
+.stage { background: var(--stage); color: var(--stage-ink); border-radius: var(--radius); overflow: hidden;
+         border: 1px solid var(--rule); }
+.stage-head { display: flex; align-items: baseline; gap: 18px; padding: 8px 14px 6px; background: var(--stage-panel);
+              min-height: 46px; flex-wrap: wrap; }
+.stage-head .section { color: var(--stage-red); font: 600 17px/1.2 var(--serif); font-variant-caps: all-small-caps;
+                       letter-spacing: .08em; min-width: 7em; }
+.stage-head .chord { font: 600 30px/1 var(--serif); color: var(--stage-ink); min-width: 2.6em; }
+.stage-head .chord small { font: 15px/1 var(--sans); color: var(--stage-dim); margin-left: 6px; }
+.stage-head .then { color: var(--stage-dim); font: 16px/1.2 var(--sans); }
+.stage-head .then b { color: var(--stage-ink); font: 600 19px/1 var(--serif); }
+.stage-head .status { margin-left: auto; font: 15px/1.2 var(--sans); color: var(--stage-dim); }
+.stage-head .status.waiting { color: var(--sung); }
+.stage-head .legend { font: 13px/1.2 var(--sans); color: var(--stage-dim); display: flex; gap: 12px; }
+.legend i { display: inline-block; width: 11px; height: 11px; border-radius: 2px; vertical-align: -1px; margin-right: 5px; }
+.legend .r { background: var(--right); }
+.legend .l { background: var(--left); }
+#roll { display: block; width: 100%; height: min(58vh, 520px); min-height: 300px; touch-action: none; cursor: default; }
+.words { padding: 8px 14px 12px; background: var(--stage-panel); min-height: 64px; text-align: center; }
+.words p { margin: 0; }
+.words .now { font: 23px/1.35 var(--serif); color: var(--stage-dim); }
+.words .now span.sung { color: var(--stage-ink); }
+.words .now span.here { color: var(--sung); }
+.words .next { font: 17px/1.35 var(--serif); color: var(--stage-dim); opacity: .75; margin-top: 2px; }
+
+/* ---------------------------------------------------------------- the controls: index cards in a row */
+.panel { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 10px; margin-top: 10px; }
+.panel fieldset { margin: 0; padding: 10px 12px 12px; min-width: 0; }
+.panel legend { padding: 0 4px; }
+.row { display: flex; align-items: center; flex-wrap: wrap; gap: 6px 10px; margin: 8px 0 0; }
+.row > label:first-child, .row > .label { min-width: 5.6em; color: var(--ink-2); font-size: 15px; }
+.row input[type=range] { flex: 1 1 120px; min-width: 100px; }
+.row output, .val { font: 600 15px/1.2 var(--sans); min-width: 3.4em; color: var(--ink); }
+.panel select, .panel input[type=number] {
+  font: 15px/1.2 var(--sans); color: var(--ink); background: var(--paper); border: 1px solid var(--rule-strong);
+  border-radius: var(--radius); padding: 7px 8px; min-height: 36px; max-width: 100%;
+}
+.panel input[type=number] { width: 4.2em; }
+.panel .btn { padding: 7px 11px; font-size: 15px; min-height: 36px; }
+.check { display: inline-flex; align-items: center; gap: 7px; font-size: 15px; cursor: pointer; }
+.check input { width: 18px; height: 18px; }
+
+/* a segmented choice: radios drawn as squared blocks side by side */
+.seg { display: inline-flex; border: 1px solid var(--rule-strong); border-radius: var(--radius); overflow: hidden; }
+.seg label { position: relative; }
+.seg input { position: absolute; opacity: 0; pointer-events: none; }
+.seg span { display: block; padding: 7px 11px; font: 500 15px/1.2 var(--sans); cursor: pointer; background: var(--card);
+            border-left: 1px solid var(--rule); min-height: 20px; }
+.seg label:first-child span { border-left: 0; }
+.seg input:checked + span { background: var(--ink); color: var(--card); }
+.seg input:focus-visible + span { outline: 2px solid var(--hand); outline-offset: -2px; }
+
+.keyname { font: 600 18px/1.2 var(--serif); color: var(--ink); min-width: 6.5em; }
+.midi-note { font-size: 14px; color: var(--ink-3); margin: 6px 0 0; }
+.shortcuts { margin-top: 12px; padding: 10px 14px; }
+.shortcuts h2 { margin: 0 0 4px; }
+.shortcuts dl { display: grid; grid-template-columns: max-content 1fr; gap: 3px 14px; margin: 6px 0 0; font-size: 14px; }
+.shortcuts dt { font: 13px/1.5 var(--mono); color: var(--ink); }
+.shortcuts dd { margin: 0; color: var(--ink-2); }
+kbd { font: 13px var(--mono); border: 1px solid var(--rule-strong); border-bottom-width: 2px; border-radius: 3px;
+      padding: 0 4px; background: var(--card); }
+.about { margin-top: 12px; font-size: 14px; color: var(--ink-3); }
+.about p { margin: 4px 0; }
+
+@media (max-width: 640px) {
+  .stage-head .chord { font-size: 24px; }
+  .words .now { font-size: 19px; }
+  .transport .where { min-width: 0; }
+  #roll { height: 50vh; }
+}

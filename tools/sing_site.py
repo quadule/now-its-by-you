@@ -8,7 +8,10 @@
 What it writes, all served by web/sing/src/worker.js:
 
     index.html, sing.css, sing.js...  the pages (web/sing/page/), with the releases in them: for recording
-                                      (web/sing/consent.md) and for words people send (words-release.md)
+                                      (web/sing/consent.md) and for words people send (words-release.md);
+                                      and the seed page's cover.jpg and seed.js
+    seed/now-its-by-you.flac          the seed page's file (seed_source()), and seed/words.json its words
+                                      as it sang them, timed (seed_words()), shown as it plays
     karaoke.js, recorder.js           the timing core they share with the karaoke here (tools/karaoke.js)
     song/song.json                    what's on offer (v2): the sets, keys and speeds, and for every spec
                                       its guide score's digest, its words' file, and each mix's MP3 and
@@ -498,19 +501,68 @@ def seed_source() -> Path | None:
 
 def seed_page(out: Path) -> None:
     """The public seed page (/seed, and the root of now.itsby.you): web/sing/page/seed.html with the song's file
-    beside it in public/seed/. The file is $SONGBIRD_SEED, else renders/review/contest.flac, else the newest
-    packed render in renders/review/; without any, the page still builds and says so."""
+    beside it in public/seed/, and its words as sung, timed (seed_words), for the page to show as it plays. The
+    file is $SONGBIRD_SEED, else renders/review/contest.flac, else the newest packed render in renders/review/;
+    without any, the page still builds and says so (and shows no words)."""
     path = seed_source()
     (out / "seed").mkdir(exist_ok=True)
     page = (out / "seed.html").read_text()
     if path is None:
         print("seed page: no render to offer (renders/review/*.flac); the page is built without a file", file=sys.stderr)
-        mb = "0"
+        mb, words = "0", ""
     else:
         shutil.copyfile(path, out / "seed" / SEED_FILE)
         mb = f"{path.stat().st_size / 2**20:.0f}"
         print(f"seed page: {path.relative_to(ROOT) if path.is_relative_to(ROOT) else path} -> seed/{SEED_FILE} ({mb} MB)")
-    (out / "seed.html").write_text(page.replace("{{SEED_FILE}}", SEED_FILE).replace("{{SEED_MB}}", mb))
+        timed, words = seed_words(path), ""
+        if timed is None:
+            print("seed page: the file's words can't be timed (not a packed render, or its score doesn't come out as "
+                  "it sang); the page plays it without them", file=sys.stderr)
+        else:
+            text = json.dumps(timed, separators=(",", ":")) + "\n"
+            (out / "seed" / SEED_WORDS).write_text(text)
+            words = f"/seed/{SEED_WORDS}?v={digest(text)}"  # a new render's words, never an old one's from a cache
+    (out / "seed.html").write_text(page.replace("{{SEED_FILE}}", SEED_FILE).replace("{{SEED_MB}}", mb)
+                                   .replace("{{SEED_WORDS}}", words))
+
+
+SEED_WORDS = "words.json"  # the seed file's words, timed (web/sing/src/worker.js SEED_FILES serves it)
+
+
+def seed_words(flac: Path) -> dict | None:
+    """A packed render's words as it sang them, line by line, each syllable's start and end (seconds):
+    {"duration", "lines": [[start, end, [[text, start, end, word_end], ...]], ...]}. Its score is laid again
+    from the record and the genome it carries, as `songbird render --replay` lays it (realize, then
+    variation.lay: no audio), and trusted only if its words come out exactly as the packet's lyrics.txt;
+    else None. The times match the audio: the master adds nothing in front."""
+    import tempfile
+    from dataclasses import replace
+
+    import karaoke  # tools/karaoke.py
+    from songbird import genome as G, pack as P, phrasing as PH, variation
+    from songbird.arrange import Lyrics
+    from songbird.realize import Params, realize
+
+    record = P.read_manifest(flac)
+    genome_json, sung = P.read_member(flac, "genome.json"), P.read_member(flac, "lyrics.txt")
+    if not record or not genome_json or not sung:
+        return None
+    with tempfile.TemporaryDirectory() as tmp:
+        (Path(tmp) / "genome.json").write_text(genome_json)
+        genome = G.load(Path(tmp) / "genome.json")
+    params = Params.from_dict(record["params"])
+    params = replace(params, singer=record.get("singer") or params.singer, mix=record.get("mix") or params.mix)
+    lyrics = Lyrics.from_dict(record["lyrics"]) if record.get("lyrics") else None
+    lead, choir = PH.inherited(genome.source, record)
+    score = variation.lay(realize(genome, params, phrasing=PH.from_json(lead) if lead else None,
+                                  choir=[PH.from_json(d) for d in choir], lyrics=lyrics), params).to_dict()
+    if P.words_as_sung(score, genome.title) != sung:
+        return None
+    lines = karaoke.lyrics(score, genome.title, params.tempo)["lines"]
+    return {"duration": round(float(record.get("duration") or score["duration"]), 3),
+            "lines": [[round(line["start"], 3), round(line["end"], 3),
+                       [[s["text"], round(s["start"], 3), round(s["end"], 3), int(s["word_end"])] for s in line["syllables"]]]
+                      for line in lines]}
 
 
 def versioned(out: Path) -> None:
@@ -533,6 +585,7 @@ def versioned(out: Path) -> None:
         swap(page, 'href="/identity.css"', f'href="/identity.css?v={stamp("identity.css")}"')
     swap("index.html", 'href="/sing.css"', f'href="/sing.css?v={stamp("sing.css")}"')
     swap("seed.html", 'href="/sing.css"', f'href="/sing.css?v={stamp("sing.css")}"')
+    swap("seed.html", 'src="/seed.js"', f'src="/seed.js?v={stamp("seed.js")}"')
     swap("index.html", 'src="/sing.js"', f'src="/sing.js?v={stamp("sing.js")}"')
     swap("yours.html", 'href="/yours.css"', f'href="/yours.css?v={stamp("yours.css")}"')
     swap("yours.html", 'src="/yours.js"', f'src="/yours.js?v={stamp("yours.js")}"')

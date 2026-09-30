@@ -211,3 +211,29 @@ def test_a_site_being_built_never_replaces_the_one_there_until_it_is_whole(tmp_p
     W.clear(built)
     W.publish(built, site)  # the one there before goes
     assert not (site / "new.txt").exists() and (site / W.MARK).exists() and not site.with_name("site.old").exists()
+
+
+def test_the_seed_pages_words_are_timed_as_the_file_sang_them(tmp_path):
+    """The seed page shows a packed render's words as it plays: its score laid again from what the packet
+    carries, a person's phrasing (sung early) and all, matching the score the render itself wrote."""
+    import karaoke  # tools/karaoke.py
+    from songbird import cli, phrasing as P
+    from songbird.genome import load
+
+    H = ROOT / "songs" / "h-now-its-by-you.json"
+    genome = load(H)
+    way = {pid: tuple(P.Gesture(early=-0.0625) for _ in phrase.sung) for pid, phrase in genome.phrases.items()}
+    phrasing = tmp_path / "early.json"
+    phrasing.write_text(json.dumps(P.to_json(way)))
+    packed, plain = tmp_path / "packed.flac", tmp_path / "plain.flac"
+    for out, pack in ((packed, ["--pack"]), (plain, [])):
+        assert cli.main(["render", str(H), "--form", "tag", "--out", str(out), "--phrasing", str(phrasing), *pack]) == 0
+    phrasing.unlink()  # the packet carries what it needs
+    timed = W.seed_words(packed)
+    score = json.loads(plain.with_suffix(".score.json").read_text())
+    lines = karaoke.lyrics(score, genome.title, 0)["lines"]
+    assert [[s[0] for s in line[2]] for line in timed["lines"]] == [[s["text"] for s in line["syllables"]] for line in lines]
+    assert [s[1] for line in timed["lines"] for s in line[2]] == pytest.approx(
+        [s["start"] for line in lines for s in line["syllables"]], abs=1e-3)
+    assert timed["duration"] == pytest.approx(json.loads(plain.with_suffix(".json").read_text())["duration"], abs=1e-3)
+    assert W.seed_words(plain) is None  # no packet, nothing to lay it from

@@ -431,6 +431,12 @@ exactly that, so the stems and the MIDI file dropped at the start of a project
 line up. `songbird render --midi` writes the same file beside a render and says
 where bar 1 falls against its FLAC.
 
+In a public studio (docs/WEB-STUDIO.md) the MIDI file is made at once, as
+here; the stems wait their turn in the one queue, one at a time for each
+visitor, and count as a whole song against the visitor's and the address's
+hourly limits. Both are served from the previews' cache, streamed, so the
+stems' zip (75 MB for H) goes first when the cache is full.
+
 Left as they are: stems are dry (the room, the mix's balance and mastering are
 in the recording, so the parts don't sum to it exactly); the MIDI is not
 quantized (a musician's sequencer quantizes if wanted, and what is heard is
@@ -626,7 +632,9 @@ Left as they are, for the artist:
   read the link as it travels. A tunnel gives https.
 - **No limit per person.** One visitor can keep the renderer busy for
   everyone; the queue's cap keeps it from growing without end, and
-  recordings fill the disk at about 15 MB each.
+  recordings fill the disk at about 15 MB each. (A public studio,
+  `--public`, has limits per person and keeps no recordings:
+  docs/WEB-STUDIO.md.)
 - **Previews are shared by what they are.** Two visitors with the same
   choices hear the same cached render; nobody can list anyone else's.
 
