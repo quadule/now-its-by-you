@@ -336,3 +336,27 @@ def test_a_breakdown_keeps_the_drum_machine_as_it_keeps_a_kit():
         kicks = [n.start for n in realize(G, params).notes if n.part == "drummachine" and n.art == "kick" and a - 0.1 <= n.start < b]
         first, second = sum(k < (a + b) / 2 for k in kicks), sum(k >= (a + b) / 2 for k in kicks)
         assert first >= 0.8 * second > 0, (style, first, second)
+
+
+def test_the_drum_machines_four_on_the_floor_is_one_choice_and_the_old_name_still_reads():
+    """"four" and "machine" (four on the floor, the machine's own) played the same bars (idioms.w_machine is
+    w_four): offered once since 2026-09-30, as four; a record, a draft or a lock made with "machine" reads as it."""
+    offered = T.patterns("drummachine", False)
+    assert "four" in offered and "machine" not in offered
+    labels = [T.label("drummachine", x) for x in offered]
+    assert labels.count("four on the floor") == 1 and not any("machine's own" in x for x in labels)
+    old = "arrange.refrain:0.drummachine.pattern"
+    clean, problems = E.check(G, {old: "machine"})
+    assert not problems and clean[old] == "four"
+    base = synthfolk()
+    # yesterday's record, its parameters saying "machine", replays as it did
+    said_old = replace(base, composition={"arrange": {"verse:1": {"players": {"drummachine": {"pattern": "machine"}}}}})
+    said_new = replace(base, composition={"arrange": {"verse:1": {"players": {"drummachine": {"pattern": "four"}}}}})
+    assert realize(G, said_old) == realize(G, said_new)
+    assert not T.silent(G, said_old, "arrange.verse:1.drummachine.pattern")
+    # a lock made yesterday (the program's own then was "machine") is still a lock of the program's own
+    style = {"style.name": "synthfolk"}
+    plain = E.resolve(G, None, ADA, DAY, E.check(G, style)[0])
+    kept = E.resolve(G, None, ADA, DAY, E.check(G, {**style, old: "machine"})[0])
+    assert kept.marks[old] == {"value": "four", "was": "four", "locked": True}, kept.marks[old]
+    assert realize(G, kept.params, lyrics=kept.lyrics) == realize(G, plain.params, lyrics=plain.lyrics)  # the same song

@@ -357,7 +357,7 @@ SYNTHFOLK = _def(
      "arp": {"verse1": ((0.35, "arp"), (0.0, "")), "*": "arp", "bridge": "", "tag": "arp"},
      "guitar": {"*": "strum", "tag": "ring"},
      "synthpad": {"*": "pad"},
-     "drummachine": {"verse1": ((0.45, "half"), (0.0, "")), "verse": ((0.45, "machine"), (0.0, "half")), "*": "machine",
+     "drummachine": {"verse1": ((0.45, "half"), (0.0, "")), "verse": ((0.45, "four"), (0.0, "half")), "*": "four",
                      "bridge": "half", "tag": "end"}},
     ("synthlead", "arp"), {"straight": 1.0}, {"*": (1.04, 1.15, 1.27)},
     {"*": ("add9", "sus2"), "V": ("sus4",)}, 0.5, (1.0, 0.3),

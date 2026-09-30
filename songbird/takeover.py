@@ -42,6 +42,9 @@ LEVEL_VEL = {"soft": 0.8, "plays": 1.0, "hard": 1.15}
 LEVEL_SHIFT = {"soft": -0.3, "hard": 0.3}
 DRUMS = ("drums", "drum machine")  # the families that play a kit's grooves (songbird.idioms.groove_bar)
 FILLED = ("groove", "four", "toms", "half", "machine")  # the grooves that end a section with a fill (w_groove)
+# Idioms that play the same as another, offered once: the drum machine's own four on the floor was "machine" until
+# 2026-09-30 (idioms.w_machine is w_four); a record, a draft or a lock that says it is read as the one kept.
+ALIASES = {"machine": "four"}
 LINES = ("lead", "quote", "counter", "descant", "under", "tone", "double", "hook", "fills")  # idioms.LINES
 
 # The ballad band's players (songbird.band) and what their own writers play
@@ -129,7 +132,7 @@ def style_patterns(player: str) -> tuple[str, ...]:
                                                                                    "synth-bass", "chip-bass"):
         found.add("lead")
     found.discard("")
-    return tuple(sorted(found))
+    return tuple(sorted({ALIASES.get(x, x) for x in found}))
 
 
 def patterns(player: str, ballad: bool) -> tuple[str, ...]:
@@ -237,6 +240,7 @@ def check(genome, path: str, value):
         return value
     if field == "pattern":
         options = known_patterns(player)
+        value = ALIASES.get(value, value)
         if value not in options:
             raise ValueError(f"the {player} plays {', '.join(options) or 'only its own part'}, not {value!r}")
         return value
@@ -332,7 +336,7 @@ def silent(genome, params, path: str) -> str | None:
         return f"this version's band has no {player}; the choice waits for one that has"
     ballad = not params.band.lineup
     cell = entry.get("players", {}).get(player, {})
-    if field == "pattern" and cell.get("pattern") not in patterns(player, ballad):
+    if field == "pattern" and ALIASES.get(cell.get("pattern"), cell.get("pattern")) not in patterns(player, ballad):
         return f"this version's {player} doesn't play {LABELS.get(cell.get('pattern'), cell.get('pattern'))}"
     if field == "fill" and ballad:
         return "the ballad band's drum plays no fills"
@@ -625,7 +629,7 @@ def take_over(ctx, plan=None) -> None:
         for player, cell in sorted(cells.items()):
             if not ctx.on(player):
                 continue
-            level, pattern = cell.get("level"), cell.get("pattern")
+            level, pattern = cell.get("level"), ALIASES.get(cell.get("pattern"), cell.get("pattern"))
             if pattern not in patterns(player, ballad):
                 pattern = None
             if (level or "from" in cell) and plan is not None:

@@ -1359,7 +1359,7 @@ from the score laid out, no audio, about half a second for H; a public studio's 
      "section": "refrain:1", "player": "drummachine", "plays": true,
      "value":   {"level": "hard", "pattern": "four", "pattern_label": "four on the floor", "from": 0,
                  "fill": false, "enters_beat": 0.0},
-     "program": {"level": "plays", "pattern": "machine", "from": 0, "fill": false},
+     "program": {"level": "plays", "pattern": "four", "from": 0, "fill": false},
      "by": "you",                               program, you, or before (a person's, in the version before)
      "chance": false,                           a value chance drew (an entrance, a stripped start...): dashed
      "locked": false,                           a person's lock: the program's own, kept
