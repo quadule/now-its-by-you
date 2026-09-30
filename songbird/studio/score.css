@@ -375,7 +375,7 @@ button.sbc-chord.is-rub::after { content: "•"; color: var(--red); margin-left:
 
 /* ---------------------------------------------------------------- the inspector */
 .inspector { --lab: 72px; --gap: 10px; border-left: 1px solid var(--rule); background: var(--card); padding: 14px 16px 24px; position: sticky; top: 47px; align-self: start; max-height: calc(100vh - 47px); overflow: auto; min-width: 0; }
-.inspector .top { display: flex; align-items: center; gap: 2px; border-bottom: 1px solid var(--red-rule); padding-bottom: 6px; margin-bottom: var(--gap); }
+.inspector .top { display: flex; align-items: baseline; gap: 2px; border-bottom: 1px solid var(--red-rule); padding-bottom: 6px; margin-bottom: var(--gap); }
 .inspector .top .rubric { font-size: 16px; flex: 1; min-width: 0; outline-offset: 2px; }
 .inspector .about { font: 13px/1.5 var(--serif); color: var(--ink-2); background: var(--paper); padding: 8px 10px; margin: 0 0 var(--gap); }
 /* what it is now, one line (the whole in its tooltip): a longer answer moves nothing below, and leaves no gap */
@@ -395,7 +395,8 @@ button.sbc-chord.is-rub::after { content: "•"; color: var(--red); margin-left:
 .inspector p { margin: 0 0 var(--gap); }
 .inspector .btn.quiet { padding-left: 0; padding-right: 0; border: 0; }
 .inspector .btn.quiet:hover:not(:disabled) { background: none; text-decoration: underline; text-underline-offset: 3px; }
-.inspector .btn.quiet + .btn.quiet { margin-left: 10px; }
+.inspector .row:not(:has(> .label)) { column-gap: 16px; }  /* quiet buttons side by side, or wrapped, start where the row does */
+.inspector .row:has(> .label) > span > .btn.quiet + .btn.quiet { margin-left: 16px; }
 /* a seam's kinds, each with its own length beside it (a 4-bar riser, a 1-bar roll); every row always there */
 .inspector .seamkinds { display: grid; grid-template-columns: max-content 1fr; gap: 5px 8px; align-items: center; margin: 8px 0; }
 .inspector .seamkinds > .label.wide { grid-column: 1 / -1; font-size: 12px; color: var(--ink-2); }
@@ -619,6 +620,8 @@ dialog.help .keys td { padding: 3px 0; }
   .tools .cols { grid-template-columns: 1fr; }
   .drawer { padding: 14px; }
   .drawer .two-cols { grid-template-columns: 1fr; }
+  .drawer .ends { flex-wrap: wrap; }
+  .drawer .ends .when { order: -1; flex-basis: 100%; margin-bottom: 2px; }  /* the day on a line of its own, the ends under it */
   .notes-head .scope { margin-left: 0; }
   .notes .sbc-roll-scroll { pointer-events: none; }
   .notes .readonly { display: block; }

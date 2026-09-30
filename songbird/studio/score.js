@@ -902,7 +902,7 @@
           (p) => choose(cell.paths.pattern, p, `${t.label} in ${s.label}: ${t.patterns.find((x) => x.id === p)?.label}`), edited(cell.paths.pattern)) : null,
         lineChoices.length > 1 ? chipRow("Comes in", lineChoices.map((c) => ({ ...c, disabled: l.level === "out" })), l.level === "out" ? null : v.from || 0,
           (j) => (j === (cell.program?.from || 0) ? releaseEdit(cell.paths.from) : setEdit(cell.paths.from, j, `${t.label} comes in at line ${j + 1} of ${s.label}`)), edited(cell.paths.from), { drawn: l.chance }) : null,
-        t.fills ? chipRow("A fill into the next", [{ value: true, text: "yes", disabled: l.level === "out" }, { value: false, text: "no", disabled: l.level === "out" }], l.level === "out" ? null : !!v.fill,
+        t.fills ? chipRow("A fill", [{ value: true, text: "yes", disabled: l.level === "out" }, { value: false, text: "no", disabled: l.level === "out" }], l.level === "out" ? null : !!v.fill,
           (f) => choose(cell.paths.fill, f, `${t.label}: ${f ? "a fill" : "no fill"} at the end of ${s.label}`), edited(cell.paths.fill)) : null,
         h("div", { class: "row" },
           h("button", { class: "btn quiet", type: "button", onclick: () => select({ kind: "player", id: t.id }) }, `${t.label} everywhere`),
