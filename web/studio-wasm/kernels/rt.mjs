@@ -47,6 +47,12 @@ export function packed(a) {
   return copy(a).d;
 }
 
+// copy array a's elements, in order, to Pyodide's memory at addr (a new numpy array's data)
+export function store(addr, a) {
+  const src = packed(a);
+  new Float64Array(heap(), addr, src.length).set(src);
+}
+
 export function row(a, i) {
   if (i < 0) i += a.n0;
   return { d: a.d.subarray(i * a.s0), nd: 1, n0: a.n1, n1: 0, s0: a.s1, s1: 1, t: a.t };

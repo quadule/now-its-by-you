@@ -76,8 +76,8 @@ def _result(r, t: str | None):
             else _DT.get(r.t, np.float64)
         shape = (int(r.n0),) if r.nd == 1 else (int(r.n0), int(r.n1))
         out = np.empty(shape, dtype=np.float64)
-        if out.size:
-            _js.rt.packed(r).assign_to(out)
+        if out.size:  # copied by JS into a view of out (Pyodide's assign_to fails past 2 GiB of heap)
+            _js.rt.store(out.__array_interface__["data"][0], r)
         return out if dtype is np.float64 else out.astype(dtype)
     # a tuple (a JS array)
     items = list(r)

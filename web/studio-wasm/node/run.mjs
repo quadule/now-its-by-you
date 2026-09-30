@@ -60,6 +60,8 @@ import numba
 import section as S
 from songbird.synth import instruments
 instruments.registry()
+import web_patches
+web_patches.install()
 IMPORT_S = time.perf_counter() - t
 `);
 const tImp = performance.now();
@@ -69,12 +71,28 @@ log('ported:', py.runPython(`
 from collections import Counter
 str(dict(Counter(numba.PORTED.values())))`));
 
+// told each part's name as the render starts it: the wasm heap then (it only grows: its size is the peak)
+let t = 0;
+py.registerJsModule('probe', {
+  stage: (name) => {
+    const heap = py._module.HEAPU8.length / 2 ** 20;
+    if (args.includes('--stages')) log(`    ${((performance.now() - t) / 1000).toFixed(2)}s ${name}: wasm heap ${heap.toFixed(0)} MiB`);
+  },
+});
 for (let r = 0; r < reps; r++) {
   const a = performance.now();
-  py.runPython(`
+  t = a;
+  try {
+    py.runPython(`
+import probe
 numba.TIME.clear(); numba.CALLS.clear()
-PCM, INFO = S.whole(${JSON.stringify(song)}) if ${JSON.stringify(which)} == 'whole' else S.section(${JSON.stringify(song)}, int(${JSON.stringify(which)}))
+PCM, INFO = S.whole(${JSON.stringify(song)}, progress=probe.stage) if ${JSON.stringify(which)} == 'whole' else S.section(${JSON.stringify(song)}, int(${JSON.stringify(which)}), progress=probe.stage)
 `);
+  } catch (err) {
+    log(`FAILED after ${((performance.now() - a) / 1000).toFixed(2)}s, wasm heap ${(py._module.HEAPU8.length / 2 ** 20).toFixed(0)} MiB:`);
+    log(String(err.message).split('\n').slice(-3).join('\n'));
+    process.exit(1);
+  }
   const b = performance.now();
   const heap = py._module.HEAPU8.length / 2 ** 20;
   const mu = process.memoryUsage();
