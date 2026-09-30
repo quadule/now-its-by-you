@@ -144,16 +144,20 @@ def turns(line: str) -> list[str]:
     return [line[: match.start()] + o + line[match.end() :] for o in options] if match else [line]
 
 
+_SAY = re.compile(r"\{[^{}]*\}")  # a word's say, bass{fish} (songbird.heteronyms): never sung or shown
+
+
 def syllables(line: str) -> list[str]:
     """Sung syllables of a lyric line; hyphens split words into syllables."""
-    return [piece for word in line.split() for piece in word.split("-") if piece]
+    return [piece for word in _SAY.sub("", line).split() for piece in word.split("-") if piece]
 
 
 def sung_words(line: str) -> list[tuple[str, str, int]]:
-    """(syllable, whole word, syllables in the word) for each sung syllable."""
+    """(syllable, whole word, syllables in the word) for each sung syllable. A word's say stays with the whole
+    word, for the singer (bass{fish}), and never with its syllables, which are shown."""
     out = []
     for word in line.split():
-        pieces = [p for p in word.split("-") if p]
+        pieces = [p for p in _SAY.sub("", word).split("-") if p]
         out += [(piece, word, len(pieces)) for piece in pieces]
     return out
 

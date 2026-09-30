@@ -309,7 +309,9 @@ def test_authored_words_follow_their_section_and_survive_a_child():
     (AUTHORED_PATH, " ", "1 to 500"),
     (AUTHORED_PATH, "x" * 501, "1 to 500"),
     (AUTHORED_PATH, AUTHORED.replace("They", "zzqx", 1), "pronounce"),
-    (AUTHORED_PATH, AUTHORED.replace("fire", "{fire}"), "punctuation"),
+    (AUTHORED_PATH, AUTHORED.replace("fire", "{fire}"), "right after its word"),  # a say in braces needs its word
+    (AUTHORED_PATH, AUTHORED.replace("fire", "fire{zzz}"), "can't read {zzz}"),
+    (AUTHORED_PATH, AUTHORED.replace("fire", "fire<"), "punctuation"),
     (AUTHORED_PATH, AUTHORED.replace("fire", "fi-re"), "11 syllables"),
     (AUTHORED_PATH, AUTHORED.replace("They sang", "They--sang", 1), "inside words"),
     (AUTHORED_PATH, AUTHORED.replace("fire", "*fire"), "star each side"),

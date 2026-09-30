@@ -138,7 +138,7 @@ def written(word: str, lexicon: dict | None = None) -> str:
     it knows that cover the syllables (half-invented, ninety-odd, half-asleep)."""
     from songbird import phonetics as ph
 
-    pieces = [p for p in word.replace("*", "").split("-") if p]
+    pieces = [p for p in ph.shown(word).replace("*", "").split("-") if p]  # without its say, bass{fish}
     if len(pieces) < 2:
         return "".join(pieces)
     words, own = ph._dictionary(), {ph.clean(k.replace("-", "")) for k in lexicon or {}}

@@ -23,7 +23,7 @@ from scipy.signal import resample_poly
 sys.path.insert(0, str(Path(__file__).parent))
 from intelligibility import align, normalize  # noqa: E402
 
-from songbird import genome as G  # noqa: E402
+from songbird import genome as G, phonetics as ph  # noqa: E402
 from songbird.realize import choose_params, realize  # noqa: E402
 from songbird import synth  # noqa: E402
 from songbird.synth import master  # noqa: E402
@@ -53,7 +53,7 @@ def collapse_loops(tokens: list[str], most: int = 4) -> list[str]:
 def words_of(notes) -> list[str]:
     out, i = [], 0
     while i < len(notes):
-        out.append(notes[i].word.replace("-", ""))
+        out.append(ph.shown(notes[i].word).replace("-", ""))  # without its say, bass{fish}
         i += notes[i].word_len
     return normalize(" ".join(out))
 

@@ -1,0 +1,2685 @@
+{
+ "not_past": [
+  "aged",
+  "bed",
+  "beloved",
+  "blessed",
+  "crooked",
+  "cursed",
+  "hundred",
+  "jagged",
+  "kindred",
+  "learned",
+  "naked",
+  "ragged",
+  "red",
+  "rugged",
+  "sacred",
+  "shed",
+  "wed",
+  "wicked",
+  "wretched"
+ ],
+ "past": [
+  "ate",
+  "became",
+  "began",
+  "bit",
+  "blew",
+  "bore",
+  "bought",
+  "broke",
+  "brought",
+  "burnt",
+  "came",
+  "caught",
+  "chose",
+  "did",
+  "drank",
+  "dreamt",
+  "drew",
+  "drove",
+  "dug",
+  "fed",
+  "fell",
+  "felt",
+  "fled",
+  "flew",
+  "forgot",
+  "fought",
+  "found",
+  "froze",
+  "gave",
+  "got",
+  "grew",
+  "had",
+  "heard",
+  "held",
+  "hid",
+  "hung",
+  "kept",
+  "knelt",
+  "knew",
+  "laid",
+  "lay",
+  "leapt",
+  "learnt",
+  "led",
+  "left",
+  "lit",
+  "lost",
+  "made",
+  "meant",
+  "met",
+  "paid",
+  "ran",
+  "rang",
+  "rode",
+  "rose",
+  "said",
+  "sang",
+  "sank",
+  "sat",
+  "saw",
+  "sent",
+  "shone",
+  "shook",
+  "shot",
+  "slept",
+  "slid",
+  "sold",
+  "spent",
+  "spilt",
+  "split",
+  "spoke",
+  "sprang",
+  "stole",
+  "stood",
+  "struck",
+  "stuck",
+  "swam",
+  "swore",
+  "swung",
+  "taught",
+  "thought",
+  "threw",
+  "told",
+  "took",
+  "tore",
+  "understood",
+  "was",
+  "went",
+  "wept",
+  "were",
+  "woke",
+  "won",
+  "wore",
+  "wrote"
+ ],
+ "words": {
+  "abuse": {
+   "rules": [
+    {
+     "before": [
+      "can",
+      "can't",
+      "cannot",
+      "could",
+      "couldn't",
+      "didn't",
+      "doesn't",
+      "don't",
+      "gonna",
+      "gotta",
+      "he",
+      "he'll",
+      "i",
+      "i'll",
+      "let's",
+      "may",
+      "might",
+      "must",
+      "never",
+      "please",
+      "shall",
+      "she",
+      "she'll",
+      "should",
+      "they",
+      "they'll",
+      "to",
+      "wanna",
+      "we",
+      "we'll",
+      "who",
+      "will",
+      "won't",
+      "would",
+      "wouldn't",
+      "you",
+      "you'll"
+     ],
+     "sense": "verb"
+    }
+   ],
+   "senses": [
+    {
+     "label": "abuse",
+     "like": "juice",
+     "name": "noun",
+     "phones": "AH0 B Y UW1 S"
+    },
+    {
+     "label": "to abuse",
+     "like": "news",
+     "name": "verb",
+     "phones": "AH0 B Y UW1 Z"
+    }
+   ]
+  },
+  "bass": {
+   "rules": [
+    {
+     "near": [
+      "bait",
+      "boat",
+      "carp",
+      "catch",
+      "catching",
+      "caught",
+      "fish",
+      "fished",
+      "fisherman",
+      "fishing",
+      "hook",
+      "hooked",
+      "lake",
+      "net",
+      "perch",
+      "pike",
+      "pond",
+      "river",
+      "rod",
+      "sea",
+      "stream",
+      "striped",
+      "trout"
+     ],
+     "sense": "fish"
+    }
+   ],
+   "senses": [
+    {
+     "label": "low note",
+     "like": "base",
+     "name": "low",
+     "phones": "B EY1 S"
+    },
+    {
+     "label": "fish",
+     "like": "mass",
+     "name": "fish",
+     "phones": "B AE1 S"
+    }
+   ]
+  },
+  "bow": {
+   "rules": [
+    {
+     "before": [
+      "take a",
+      "takes a",
+      "taking a",
+      "took a"
+     ],
+     "sense": "bend"
+    },
+    {
+     "near": [
+      "archer",
+      "arrow",
+      "arrows",
+      "cello",
+      "fiddle",
+      "fiddler",
+      "fiddles",
+      "hair",
+      "quiver",
+      "ribbon",
+      "ribbons",
+      "rosin",
+      "string",
+      "strings",
+      "tie",
+      "tied",
+      "tying",
+      "viola",
+      "violin",
+      "violins"
+     ],
+     "sense": "ribbon"
+    }
+   ],
+   "senses": [
+    {
+     "label": "bend",
+     "like": "now",
+     "name": "bend",
+     "phones": "B AW1"
+    },
+    {
+     "label": "ribbon",
+     "like": "go",
+     "name": "ribbon",
+     "phones": "B OW1"
+    }
+   ]
+  },
+  "bowed": {
+   "rules": [
+    {
+     "near": [
+      "bass",
+      "cello",
+      "fiddle",
+      "fiddler",
+      "fiddles",
+      "rosin",
+      "string",
+      "strings",
+      "viola",
+      "violin",
+      "violins"
+     ],
+     "sense": "played"
+    }
+   ],
+   "senses": [
+    {
+     "label": "bent",
+     "like": "loud",
+     "name": "bent",
+     "phones": "B AW1 D"
+    },
+    {
+     "label": "played",
+     "like": "road",
+     "name": "played",
+     "phones": "B OW1 D"
+    }
+   ]
+  },
+  "bowing": {
+   "rules": [
+    {
+     "near": [
+      "bass",
+      "cello",
+      "fiddle",
+      "fiddler",
+      "fiddles",
+      "rosin",
+      "string",
+      "strings",
+      "viola",
+      "violin",
+      "violins"
+     ],
+     "sense": "playing"
+    }
+   ],
+   "senses": [
+    {
+     "label": "bending",
+     "like": "now",
+     "name": "bending",
+     "phones": "B AW1 IH0 NG"
+    },
+    {
+     "label": "playing",
+     "like": "go",
+     "name": "playing",
+     "phones": "B OW1 IH0 NG"
+    }
+   ]
+  },
+  "bows": {
+   "rules": [
+    {
+     "near": [
+      "archer",
+      "arrow",
+      "arrows",
+      "cello",
+      "fiddle",
+      "fiddler",
+      "fiddles",
+      "hair",
+      "quiver",
+      "ribbon",
+      "ribbons",
+      "rosin",
+      "string",
+      "strings",
+      "tie",
+      "tied",
+      "tying",
+      "viola",
+      "violin",
+      "violins"
+     ],
+     "sense": "ribbons"
+    }
+   ],
+   "senses": [
+    {
+     "label": "bends",
+     "like": "now",
+     "name": "bends",
+     "phones": "B AW1 Z"
+    },
+    {
+     "label": "ribbons",
+     "like": "goes",
+     "name": "ribbons",
+     "phones": "B OW1 Z"
+    }
+   ]
+  },
+  "close": {
+   "rules": [
+    {
+     "before": [
+      "are",
+      "as",
+      "be",
+      "been",
+      "came",
+      "come",
+      "draw",
+      "drew",
+      "get",
+      "got",
+      "he's",
+      "held",
+      "her",
+      "him",
+      "hold",
+      "how",
+      "i'm",
+      "is",
+      "it",
+      "it's",
+      "keep",
+      "kept",
+      "me",
+      "more",
+      "most",
+      "quite",
+      "real",
+      "she's",
+      "so",
+      "stay",
+      "them",
+      "they're",
+      "too",
+      "us",
+      "very",
+      "was",
+      "we're",
+      "were",
+      "you",
+      "you're"
+     ],
+     "sense": "near"
+    },
+    {
+     "after": [
+      "of"
+     ],
+     "before": [
+      "a",
+      "the"
+     ],
+     "sense": "shut"
+    },
+    {
+     "after": [
+      "down",
+      "her",
+      "him",
+      "his",
+      "in",
+      "it",
+      "its",
+      "me",
+      "my",
+      "off",
+      "our",
+      "out",
+      "that",
+      "the",
+      "their",
+      "them",
+      "these",
+      "this",
+      "those",
+      "up",
+      "your"
+     ],
+     "sense": "shut"
+    }
+   ],
+   "senses": [
+    {
+     "label": "near",
+     "like": "dose",
+     "name": "near",
+     "phones": "K L OW1 S"
+    },
+    {
+     "label": "shut",
+     "like": "doze",
+     "name": "shut",
+     "phones": "K L OW1 Z"
+    }
+   ]
+  },
+  "console": {
+   "rules": [
+    {
+     "before": [
+      "a",
+      "an",
+      "any",
+      "each",
+      "every",
+      "her",
+      "his",
+      "its",
+      "my",
+      "no",
+      "one",
+      "our",
+      "some",
+      "that",
+      "the",
+      "their",
+      "these",
+      "this",
+      "those",
+      "whose",
+      "your"
+     ],
+     "sense": "noun"
+    }
+   ],
+   "senses": [
+    {
+     "label": "comfort",
+     "like": "con-SOLE",
+     "name": "comfort",
+     "phones": "K AH0 N S OW1 L"
+    },
+    {
+     "label": "a console",
+     "like": "CON-sole",
+     "name": "noun",
+     "phones": "K AA1 N S OW0 L"
+    }
+   ]
+  },
+  "content": {
+   "rules": [
+    {
+     "before": [
+      "her",
+      "his",
+      "its",
+      "my",
+      "our",
+      "that",
+      "the",
+      "their",
+      "this",
+      "whose",
+      "your"
+     ],
+     "sense": "inside"
+    }
+   ],
+   "senses": [
+    {
+     "label": "happy",
+     "like": "con-TENT",
+     "name": "happy",
+     "phones": "K AH0 N T EH1 N T"
+    },
+    {
+     "label": "what's inside",
+     "like": "CON-tent",
+     "name": "inside",
+     "phones": "K AA1 N T EH0 N T"
+    }
+   ]
+  },
+  "desert": {
+   "rules": [
+    {
+     "before": [
+      "a",
+      "an",
+      "any",
+      "burning",
+      "cold",
+      "dry",
+      "each",
+      "empty",
+      "endless",
+      "every",
+      "her",
+      "his",
+      "hot",
+      "its",
+      "my",
+      "no",
+      "one",
+      "open",
+      "our",
+      "painted",
+      "some",
+      "that",
+      "the",
+      "their",
+      "these",
+      "this",
+      "those",
+      "whose",
+      "wide",
+      "your"
+     ],
+     "sense": "sand"
+    },
+    {
+     "before": [
+      "can",
+      "can't",
+      "cannot",
+      "could",
+      "couldn't",
+      "didn't",
+      "doesn't",
+      "don't",
+      "gonna",
+      "gotta",
+      "he",
+      "he'll",
+      "i",
+      "i'll",
+      "let's",
+      "may",
+      "might",
+      "must",
+      "never",
+      "please",
+      "shall",
+      "she",
+      "she'll",
+      "should",
+      "they",
+      "they'll",
+      "to",
+      "wanna",
+      "we",
+      "we'll",
+      "who",
+      "will",
+      "won't",
+      "would",
+      "wouldn't",
+      "you",
+      "you'll"
+     ],
+     "sense": "leave"
+    },
+    {
+     "after": [
+      "her",
+      "him",
+      "me",
+      "them",
+      "us",
+      "you"
+     ],
+     "sense": "leave"
+    }
+   ],
+   "senses": [
+    {
+     "label": "sand",
+     "like": "DEZ-ert",
+     "name": "sand",
+     "phones": "D EH1 Z ER0 T"
+    },
+    {
+     "label": "leave",
+     "like": "dessert",
+     "name": "leave",
+     "phones": "D IH0 Z ER1 T"
+    }
+   ]
+  },
+  "does": {
+   "rules": [
+    {
+     "near": [
+      "buck",
+      "bucks",
+      "deer",
+      "doe",
+      "fawn",
+      "fawns",
+      "hart",
+      "harts",
+      "herd",
+      "hinds",
+      "stag",
+      "stags"
+     ],
+     "sense": "deer"
+    }
+   ],
+   "senses": [
+    {
+     "label": "does",
+     "like": "fuzz",
+     "name": "does",
+     "phones": "D AH1 Z"
+    },
+    {
+     "label": "deer",
+     "like": "doze",
+     "name": "deer",
+     "phones": "D OW1 Z"
+    }
+   ]
+  },
+  "dove": {
+   "rules": [
+    {
+     "before": [
+      "a",
+      "gray",
+      "grey",
+      "like",
+      "little",
+      "mourning",
+      "my",
+      "of",
+      "paper",
+      "the",
+      "turtle",
+      "white",
+      "your"
+     ],
+     "sense": "bird"
+    },
+    {
+     "after": [
+      "below",
+      "beneath",
+      "deep",
+      "down",
+      "for",
+      "headfirst",
+      "in",
+      "into",
+      "off",
+      "through",
+      "under"
+     ],
+     "sense": "dived"
+    },
+    {
+     "before": [
+      "he",
+      "i",
+      "she",
+      "then",
+      "they",
+      "we",
+      "who",
+      "you"
+     ],
+     "sense": "dived"
+    }
+   ],
+   "senses": [
+    {
+     "label": "bird",
+     "like": "love",
+     "name": "bird",
+     "phones": "D AH1 V"
+    },
+    {
+     "label": "dived",
+     "like": "drove",
+     "name": "dived",
+     "phones": "D OW1 V"
+    }
+   ]
+  },
+  "excuse": {
+   "rules": [
+    {
+     "before": [
+      "a",
+      "an",
+      "any",
+      "each",
+      "every",
+      "good",
+      "her",
+      "his",
+      "its",
+      "lame",
+      "my",
+      "no",
+      "one",
+      "our",
+      "poor",
+      "some",
+      "that",
+      "the",
+      "their",
+      "these",
+      "this",
+      "those",
+      "whose",
+      "your"
+     ],
+     "sense": "noun"
+    }
+   ],
+   "senses": [
+    {
+     "label": "excuse me",
+     "like": "news",
+     "name": "verb",
+     "phones": "IH0 K S K Y UW1 Z"
+    },
+    {
+     "label": "an excuse",
+     "like": "juice",
+     "name": "noun",
+     "phones": "IH0 K S K Y UW1 S"
+    }
+   ]
+  },
+  "house": {
+   "rules": [
+    {
+     "after": [
+      "a",
+      "all",
+      "an",
+      "any",
+      "each",
+      "every",
+      "her",
+      "him",
+      "his",
+      "it",
+      "its",
+      "me",
+      "my",
+      "no",
+      "one",
+      "our",
+      "some",
+      "that",
+      "the",
+      "their",
+      "them",
+      "these",
+      "this",
+      "those",
+      "us",
+      "whose",
+      "you",
+      "your"
+     ],
+     "before": [
+      "can",
+      "could",
+      "i'll",
+      "may",
+      "might",
+      "to",
+      "we'll",
+      "will",
+      "would"
+     ],
+     "sense": "verb"
+    }
+   ],
+   "senses": [
+    {
+     "label": "a house",
+     "like": "mouse",
+     "name": "noun",
+     "phones": "HH AW1 S"
+    },
+    {
+     "label": "to house",
+     "like": "rouse",
+     "name": "verb",
+     "phones": "HH AW1 Z"
+    }
+   ]
+  },
+  "incense": {
+   "rules": [
+    {
+     "before": [
+      "to",
+      "will",
+      "would"
+     ],
+     "sense": "anger"
+    }
+   ],
+   "senses": [
+    {
+     "label": "smoke",
+     "like": "IN-cense",
+     "name": "smoke",
+     "phones": "IH1 N S EH0 N S"
+    },
+    {
+     "label": "anger",
+     "like": "in-CENSE",
+     "name": "anger",
+     "phones": "IH0 N S EH1 N S"
+    }
+   ]
+  },
+  "insult": {
+   "rules": [
+    {
+     "before": [
+      "can",
+      "can't",
+      "cannot",
+      "could",
+      "couldn't",
+      "didn't",
+      "doesn't",
+      "don't",
+      "gonna",
+      "gotta",
+      "he",
+      "he'll",
+      "i",
+      "i'll",
+      "let's",
+      "may",
+      "might",
+      "must",
+      "never",
+      "please",
+      "shall",
+      "she",
+      "she'll",
+      "should",
+      "they",
+      "they'll",
+      "to",
+      "wanna",
+      "we",
+      "we'll",
+      "who",
+      "will",
+      "won't",
+      "would",
+      "wouldn't",
+      "you",
+      "you'll"
+     ],
+     "sense": "verb"
+    }
+   ],
+   "senses": [
+    {
+     "label": "an insult",
+     "like": "IN-sult",
+     "name": "noun",
+     "phones": "IH1 N S AH0 L T"
+    },
+    {
+     "label": "to insult",
+     "like": "in-SULT",
+     "name": "verb",
+     "phones": "IH0 N S AH1 L T"
+    }
+   ]
+  },
+  "lead": {
+   "rules": [
+    {
+     "near": [
+      "balloon",
+      "bullet",
+      "bullets",
+      "paint",
+      "pencil",
+      "pencils",
+      "pipe",
+      "pipes",
+      "poison",
+      "sinker"
+     ],
+     "sense": "metal"
+    },
+    {
+     "after": [
+      "into"
+     ],
+     "near": [
+      "gold"
+     ],
+     "sense": "metal"
+    },
+    {
+     "before": [
+      "into"
+     ],
+     "near": [
+      "gold"
+     ],
+     "sense": "metal"
+    },
+    {
+     "before": [
+      "as",
+      "like",
+      "of"
+     ],
+     "end": true,
+     "sense": "metal"
+    }
+   ],
+   "senses": [
+    {
+     "label": "guide",
+     "like": "need",
+     "name": "guide",
+     "phones": "L IY1 D"
+    },
+    {
+     "label": "metal",
+     "like": "red",
+     "name": "metal",
+     "phones": "L EH1 D"
+    }
+   ]
+  },
+  "live": {
+   "rules": [
+    {
+     "before": [
+      "a"
+     ],
+     "sense": "alive"
+    },
+    {
+     "after": [
+      "action",
+      "album",
+      "ammo",
+      "audience",
+      "bait",
+      "band",
+      "broadcast",
+      "coal",
+      "coals",
+      "crowd",
+      "feed",
+      "footage",
+      "gig",
+      "gigs",
+      "grenade",
+      "music",
+      "oak",
+      "performance",
+      "radio",
+      "recording",
+      "round",
+      "rounds",
+      "set",
+      "show",
+      "shows",
+      "stream",
+      "tv",
+      "version",
+      "wire",
+      "wires"
+     ],
+     "sense": "alive"
+    },
+    {
+     "before": [
+      "are",
+      "gone",
+      "is",
+      "was",
+      "went",
+      "were"
+     ],
+     "end": true,
+     "sense": "alive"
+    }
+   ],
+   "senses": [
+    {
+     "label": "to live",
+     "like": "give",
+     "name": "verb",
+     "phones": "L IH1 V"
+    },
+    {
+     "label": "alive",
+     "like": "five",
+     "name": "alive",
+     "phones": "L AY1 V"
+    }
+   ]
+  },
+  "lives": {
+   "rules": [
+    {
+     "before": [
+      "all",
+      "changed",
+      "different",
+      "five",
+      "four",
+      "her",
+      "his",
+      "its",
+      "many",
+      "my",
+      "nine",
+      "ordinary",
+      "other",
+      "our",
+      "own",
+      "ruined",
+      "save",
+      "saved",
+      "separate",
+      "six",
+      "the",
+      "their",
+      "these",
+      "those",
+      "three",
+      "two",
+      "whole",
+      "whose",
+      "your"
+     ],
+     "sense": "plural"
+    },
+    {
+     "before": [
+      "anyone",
+      "everybody",
+      "everyone",
+      "he",
+      "it",
+      "love",
+      "nobody",
+      "one",
+      "she",
+      "somebody",
+      "someone",
+      "song",
+      "tune",
+      "which",
+      "who"
+     ],
+     "sense": "verb"
+    },
+    {
+     "after": [
+      "again",
+      "alone",
+      "at",
+      "by",
+      "forever",
+      "here",
+      "in",
+      "inside",
+      "near",
+      "on",
+      "still",
+      "there",
+      "with"
+     ],
+     "sense": "verb"
+    }
+   ],
+   "senses": [
+    {
+     "label": "our lives",
+     "like": "fives",
+     "name": "plural",
+     "phones": "L AY1 V Z"
+    },
+    {
+     "label": "she lives",
+     "like": "gives",
+     "name": "verb",
+     "phones": "L IH1 V Z"
+    }
+   ]
+  },
+  "minute": {
+   "rules": [
+    {
+     "after": [
+      "amount",
+      "amounts",
+      "change",
+      "changes",
+      "crack",
+      "cracks",
+      "detail",
+      "details",
+      "fraction",
+      "grain",
+      "grains",
+      "part",
+      "particle",
+      "particles",
+      "parts",
+      "piece",
+      "pieces",
+      "speck",
+      "specks"
+     ],
+     "sense": "tiny"
+    },
+    {
+     "before": [
+      "a",
+      "any",
+      "each",
+      "every",
+      "few",
+      "last",
+      "next",
+      "one",
+      "that",
+      "the",
+      "this"
+     ],
+     "sense": "time"
+    },
+    {
+     "before": [
+      "most",
+      "so",
+      "too",
+      "very"
+     ],
+     "sense": "tiny"
+    }
+   ],
+   "senses": [
+    {
+     "label": "time",
+     "like": "in it",
+     "name": "time",
+     "phones": "M IH1 N AH0 T"
+    },
+    {
+     "label": "tiny",
+     "like": "my newt",
+     "name": "tiny",
+     "phones": "M AY0 N UW1 T"
+    }
+   ]
+  },
+  "object": {
+   "rules": [
+    {
+     "before": [
+      "a",
+      "an",
+      "any",
+      "each",
+      "every",
+      "her",
+      "his",
+      "its",
+      "my",
+      "no",
+      "one",
+      "our",
+      "some",
+      "that",
+      "the",
+      "their",
+      "these",
+      "this",
+      "those",
+      "whose",
+      "your"
+     ],
+     "sense": "noun"
+    },
+    {
+     "after": [
+      "to"
+     ],
+     "sense": "verb"
+    },
+    {
+     "before": [
+      "can",
+      "can't",
+      "cannot",
+      "could",
+      "couldn't",
+      "didn't",
+      "doesn't",
+      "don't",
+      "gonna",
+      "gotta",
+      "he",
+      "he'll",
+      "i",
+      "i'll",
+      "let's",
+      "may",
+      "might",
+      "must",
+      "never",
+      "please",
+      "shall",
+      "she",
+      "she'll",
+      "should",
+      "they",
+      "they'll",
+      "to",
+      "wanna",
+      "we",
+      "we'll",
+      "who",
+      "will",
+      "won't",
+      "would",
+      "wouldn't",
+      "you",
+      "you'll"
+     ],
+     "sense": "verb"
+    }
+   ],
+   "senses": [
+    {
+     "label": "a thing",
+     "like": "ob-ject",
+     "name": "noun",
+     "phones": "AA1 B JH EH0 K T"
+    },
+    {
+     "label": "to object",
+     "like": "ob-JECT",
+     "name": "verb",
+     "phones": "AH0 B JH EH1 K T"
+    }
+   ]
+  },
+  "perfect": {
+   "rules": [
+    {
+     "before": [
+      "can",
+      "could",
+      "must",
+      "shall",
+      "to",
+      "will",
+      "would"
+     ],
+     "sense": "verb"
+    }
+   ],
+   "senses": [
+    {
+     "label": "perfect",
+     "like": "PER-fect",
+     "name": "perfect",
+     "phones": "P ER1 F IH0 K T"
+    },
+    {
+     "label": "to perfect",
+     "like": "per-FECT",
+     "name": "verb",
+     "phones": "P ER0 F EH1 K T"
+    }
+   ]
+  },
+  "polish": {
+   "rules": [
+    {
+     "capital": true,
+     "sense": "poland"
+    },
+    {
+     "near": [
+      "gdansk",
+      "krakow",
+      "poland",
+      "warsaw"
+     ],
+     "sense": "poland"
+    }
+   ],
+   "senses": [
+    {
+     "label": "shine",
+     "like": "POL-ish",
+     "name": "shine",
+     "phones": "P AA1 L IH0 SH"
+    },
+    {
+     "label": "from Poland",
+     "like": "POLE-ish",
+     "name": "poland",
+     "phones": "P OW1 L IH0 SH"
+    }
+   ]
+  },
+  "present": {
+   "rules": [
+    {
+     "before": [
+      "can",
+      "humbly",
+      "i",
+      "i'll",
+      "may",
+      "might",
+      "proudly",
+      "shall",
+      "we",
+      "we'll",
+      "will"
+     ],
+     "sense": "verb"
+    }
+   ],
+   "senses": [
+    {
+     "label": "a present",
+     "like": "pleasant",
+     "name": "noun",
+     "phones": "P R EH1 Z AH0 N T"
+    },
+    {
+     "label": "to present",
+     "like": "pre-zent",
+     "name": "verb",
+     "phones": "P R IY0 Z EH1 N T"
+    }
+   ]
+  },
+  "produce": {
+   "rules": [
+    {
+     "before": [
+      "farm",
+      "fresh",
+      "local",
+      "the"
+     ],
+     "sense": "noun"
+    }
+   ],
+   "senses": [
+    {
+     "label": "to produce",
+     "like": "pro-DUCE",
+     "name": "verb",
+     "phones": "P R AH0 D UW1 S"
+    },
+    {
+     "label": "fruit and veg",
+     "like": "PRO-duce",
+     "name": "noun",
+     "phones": "P R OW1 D UW0 S"
+    }
+   ]
+  },
+  "progress": {
+   "rules": [
+    {
+     "before": [
+      "can",
+      "can't",
+      "cannot",
+      "could",
+      "couldn't",
+      "didn't",
+      "doesn't",
+      "don't",
+      "gonna",
+      "gotta",
+      "let's",
+      "may",
+      "might",
+      "must",
+      "never",
+      "please",
+      "shall",
+      "should",
+      "to",
+      "wanna",
+      "will",
+      "won't",
+      "would",
+      "wouldn't"
+     ],
+     "sense": "verb"
+    }
+   ],
+   "senses": [
+    {
+     "label": "progress",
+     "like": "PRO-gress",
+     "name": "noun",
+     "phones": "P R AA1 G R EH0 S"
+    },
+    {
+     "label": "to progress",
+     "like": "pro-GRESS",
+     "name": "verb",
+     "phones": "P R AH0 G R EH1 S"
+    }
+   ]
+  },
+  "project": {
+   "rules": [
+    {
+     "before": [
+      "can",
+      "can't",
+      "cannot",
+      "could",
+      "couldn't",
+      "didn't",
+      "doesn't",
+      "don't",
+      "gonna",
+      "gotta",
+      "let's",
+      "may",
+      "might",
+      "must",
+      "never",
+      "please",
+      "shall",
+      "should",
+      "to",
+      "wanna",
+      "will",
+      "won't",
+      "would",
+      "wouldn't"
+     ],
+     "sense": "verb"
+    }
+   ],
+   "senses": [
+    {
+     "label": "a project",
+     "like": "PRO-ject",
+     "name": "noun",
+     "phones": "P R AA1 JH EH0 K T"
+    },
+    {
+     "label": "to project",
+     "like": "pro-JECT",
+     "name": "verb",
+     "phones": "P R AH0 JH EH1 K T"
+    }
+   ]
+  },
+  "read": {
+   "rules": [
+    {
+     "before": [
+      "can",
+      "can't",
+      "cannot",
+      "could",
+      "couldn't",
+      "didn't",
+      "doesn't",
+      "don't",
+      "gonna",
+      "gotta",
+      "i'd",
+      "let's",
+      "may",
+      "might",
+      "must",
+      "never",
+      "please",
+      "shall",
+      "should",
+      "they'd",
+      "to",
+      "wanna",
+      "we'd",
+      "will",
+      "won't",
+      "would",
+      "wouldn't",
+      "you'd"
+     ],
+     "sense": "now"
+    },
+    {
+     "before": [
+      "are",
+      "be",
+      "been",
+      "being",
+      "had",
+      "has",
+      "have",
+      "i've",
+      "is",
+      "they've",
+      "was",
+      "we've",
+      "were",
+      "you've"
+     ],
+     "sense": "past"
+    },
+    {
+     "near": [
+      "ago",
+      "already",
+      "last",
+      "once",
+      "yesterday"
+     ],
+     "sense": "past"
+    },
+    {
+     "past": true,
+     "sense": "past"
+    }
+   ],
+   "senses": [
+    {
+     "label": "now",
+     "like": "reed",
+     "name": "now",
+     "phones": "R IY1 D"
+    },
+    {
+     "label": "past",
+     "like": "red",
+     "name": "past",
+     "phones": "R EH1 D"
+    }
+   ]
+  },
+  "rebel": {
+   "rules": [
+    {
+     "before": [
+      "can",
+      "could",
+      "don't",
+      "i",
+      "must",
+      "never",
+      "shall",
+      "they",
+      "to",
+      "we",
+      "will",
+      "would"
+     ],
+     "sense": "verb"
+    }
+   ],
+   "senses": [
+    {
+     "label": "a rebel",
+     "like": "REB-el",
+     "name": "noun",
+     "phones": "R EH1 B AH0 L"
+    },
+    {
+     "label": "to rebel",
+     "like": "re-BEL",
+     "name": "verb",
+     "phones": "R IH0 B EH1 L"
+    }
+   ]
+  },
+  "rebels": {
+   "rules": [
+    {
+     "before": [
+      "he",
+      "heart",
+      "it",
+      "she",
+      "soul",
+      "who"
+     ],
+     "sense": "verb"
+    }
+   ],
+   "senses": [
+    {
+     "label": "rebels",
+     "like": "REB-els",
+     "name": "noun",
+     "phones": "R EH1 B AH0 L Z"
+    },
+    {
+     "label": "she rebels",
+     "like": "re-BELS",
+     "name": "verb",
+     "phones": "R IH0 B EH1 L Z"
+    }
+   ]
+  },
+  "record": {
+   "rules": [
+    {
+     "before": [
+      "a",
+      "an",
+      "any",
+      "each",
+      "every",
+      "her",
+      "his",
+      "its",
+      "my",
+      "no",
+      "off",
+      "one",
+      "our",
+      "some",
+      "that",
+      "the",
+      "their",
+      "these",
+      "this",
+      "those",
+      "whose",
+      "your"
+     ],
+     "sense": "noun"
+    },
+    {
+     "before": [
+      "can",
+      "can't",
+      "cannot",
+      "could",
+      "couldn't",
+      "didn't",
+      "doesn't",
+      "don't",
+      "gonna",
+      "gotta",
+      "he",
+      "he'll",
+      "i",
+      "i'll",
+      "let's",
+      "may",
+      "might",
+      "must",
+      "never",
+      "please",
+      "shall",
+      "she",
+      "she'll",
+      "should",
+      "they",
+      "they'll",
+      "to",
+      "wanna",
+      "we",
+      "we'll",
+      "who",
+      "will",
+      "won't",
+      "would",
+      "wouldn't",
+      "you",
+      "you'll"
+     ],
+     "sense": "verb"
+    }
+   ],
+   "senses": [
+    {
+     "label": "a record",
+     "like": "wreck word",
+     "name": "noun",
+     "phones": "R EH1 K ER0 D"
+    },
+    {
+     "label": "to record",
+     "like": "ree-cord",
+     "name": "verb",
+     "phones": "R IH0 K AO1 R D"
+    }
+   ]
+  },
+  "records": {
+   "rules": [
+    {
+     "before": [
+      "a",
+      "an",
+      "any",
+      "each",
+      "every",
+      "her",
+      "his",
+      "its",
+      "my",
+      "no",
+      "old",
+      "one",
+      "our",
+      "some",
+      "that",
+      "the",
+      "their",
+      "these",
+      "this",
+      "those",
+      "whose",
+      "your"
+     ],
+     "sense": "noun"
+    },
+    {
+     "before": [
+      "he",
+      "it",
+      "she",
+      "which",
+      "who"
+     ],
+     "sense": "verb"
+    }
+   ],
+   "senses": [
+    {
+     "label": "records",
+     "like": "wreck words",
+     "name": "noun",
+     "phones": "R EH1 K ER0 D Z"
+    },
+    {
+     "label": "she records",
+     "like": "ree-cords",
+     "name": "verb",
+     "phones": "R IH0 K AO1 R D Z"
+    }
+   ]
+  },
+  "refuse": {
+   "rules": [
+    {
+     "before": [
+      "household",
+      "of",
+      "the"
+     ],
+     "sense": "rubbish"
+    }
+   ],
+   "senses": [
+    {
+     "label": "to refuse",
+     "like": "news",
+     "name": "verb",
+     "phones": "R IH0 F Y UW1 Z"
+    },
+    {
+     "label": "rubbish",
+     "like": "REF-use",
+     "name": "rubbish",
+     "phones": "R EH1 F Y UW0 S"
+    }
+   ]
+  },
+  "row": {
+   "rules": [
+    {
+     "near": [
+      "argue",
+      "argued",
+      "arguing",
+      "argument",
+      "blazing",
+      "fight",
+      "furious",
+      "quarrel",
+      "quarrels",
+      "screaming",
+      "shouting"
+     ],
+     "sense": "fight"
+    }
+   ],
+   "senses": [
+    {
+     "label": "a line",
+     "like": "go",
+     "name": "line",
+     "phones": "R OW1"
+    },
+    {
+     "label": "a fight",
+     "like": "now",
+     "name": "fight",
+     "phones": "R AW1"
+    }
+   ]
+  },
+  "rows": {
+   "rules": [
+    {
+     "near": [
+      "argue",
+      "argued",
+      "arguing",
+      "argument",
+      "blazing",
+      "fight",
+      "furious",
+      "quarrel",
+      "quarrels",
+      "screaming",
+      "shouting"
+     ],
+     "sense": "fights"
+    }
+   ],
+   "senses": [
+    {
+     "label": "lines",
+     "like": "goes",
+     "name": "lines",
+     "phones": "R OW1 Z"
+    },
+    {
+     "label": "fights",
+     "like": "now's",
+     "name": "fights",
+     "phones": "R AW1 Z"
+    }
+   ]
+  },
+  "sewer": {
+   "rules": [
+    {
+     "near": [
+      "hem",
+      "needle",
+      "needles",
+      "seam",
+      "seams",
+      "sewing",
+      "stitch",
+      "stitches",
+      "thread"
+     ],
+     "sense": "sews"
+    }
+   ],
+   "senses": [
+    {
+     "label": "drain",
+     "like": "doer",
+     "name": "drain",
+     "phones": "S UW1 ER0"
+    },
+    {
+     "label": "who sews",
+     "like": "goer",
+     "name": "sews",
+     "phones": "S OW1 ER0"
+    }
+   ]
+  },
+  "sow": {
+   "rules": [
+    {
+     "near": [
+      "boar",
+      "farrow",
+      "hog",
+      "hogs",
+      "pig",
+      "piglet",
+      "piglets",
+      "pigs",
+      "sty",
+      "swine",
+      "trough"
+     ],
+     "sense": "pig"
+    },
+    {
+     "before": [
+      "a",
+      "big",
+      "fat",
+      "old",
+      "the"
+     ],
+     "sense": "pig"
+    }
+   ],
+   "senses": [
+    {
+     "label": "plant",
+     "like": "go",
+     "name": "plant",
+     "phones": "S OW1"
+    },
+    {
+     "label": "pig",
+     "like": "now",
+     "name": "pig",
+     "phones": "S AW1"
+    }
+   ]
+  },
+  "sowed": {
+   "rules": [],
+   "senses": [
+    {
+     "label": "planted",
+     "like": "road",
+     "name": "planted",
+     "phones": "S OW1 D"
+    }
+   ]
+  },
+  "subject": {
+   "rules": [
+    {
+     "before": [
+      "can",
+      "could",
+      "must",
+      "shall",
+      "to",
+      "will",
+      "would"
+     ],
+     "sense": "verb"
+    }
+   ],
+   "senses": [
+    {
+     "label": "a subject",
+     "like": "SUB-ject",
+     "name": "noun",
+     "phones": "S AH1 B JH IH0 K T"
+    },
+    {
+     "label": "to subject",
+     "like": "sub-JECT",
+     "name": "verb",
+     "phones": "S AH0 B JH EH1 K T"
+    }
+   ]
+  },
+  "suspect": {
+   "rules": [
+    {
+     "before": [
+      "a",
+      "an",
+      "any",
+      "each",
+      "every",
+      "her",
+      "his",
+      "its",
+      "main",
+      "my",
+      "no",
+      "one",
+      "our",
+      "prime",
+      "some",
+      "that",
+      "the",
+      "their",
+      "these",
+      "this",
+      "those",
+      "usual",
+      "whose",
+      "your"
+     ],
+     "sense": "noun"
+    }
+   ],
+   "senses": [
+    {
+     "label": "to suspect",
+     "like": "sus-PECT",
+     "name": "verb",
+     "phones": "S AH0 S P EH1 K T"
+    },
+    {
+     "label": "a suspect",
+     "like": "SUS-pect",
+     "name": "noun",
+     "phones": "S AH1 S P EH0 K T"
+    }
+   ]
+  },
+  "tear": {
+   "rules": [
+    {
+     "before": [
+      "a",
+      "each",
+      "every",
+      "first",
+      "last",
+      "lonely",
+      "no",
+      "one",
+      "salty",
+      "silent",
+      "single",
+      "that",
+      "the",
+      "this"
+     ],
+     "sense": "crying"
+    },
+    {
+     "before": [
+      "wear and"
+     ],
+     "sense": "rip"
+    },
+    {
+     "near": [
+      "apart",
+      "cloth",
+      "dress",
+      "envelope",
+      "fabric",
+      "page",
+      "pages",
+      "paper",
+      "seam",
+      "seams",
+      "shirt",
+      "sleeve"
+     ],
+     "sense": "rip"
+    },
+    {
+     "before": [
+      "can",
+      "can't",
+      "cannot",
+      "could",
+      "couldn't",
+      "didn't",
+      "doesn't",
+      "don't",
+      "gonna",
+      "gotta",
+      "he",
+      "he'll",
+      "i",
+      "i'll",
+      "let's",
+      "may",
+      "might",
+      "must",
+      "never",
+      "please",
+      "shall",
+      "she",
+      "she'll",
+      "should",
+      "they",
+      "they'll",
+      "to",
+      "wanna",
+      "we",
+      "we'll",
+      "who",
+      "will",
+      "won't",
+      "would",
+      "wouldn't",
+      "you",
+      "you'll"
+     ],
+     "sense": "rip"
+    },
+    {
+     "after": [
+      "a",
+      "an",
+      "any",
+      "at",
+      "away",
+      "down",
+      "each",
+      "every",
+      "her",
+      "him",
+      "his",
+      "into",
+      "it",
+      "its",
+      "me",
+      "my",
+      "no",
+      "off",
+      "one",
+      "open",
+      "our",
+      "out",
+      "some",
+      "that",
+      "the",
+      "their",
+      "them",
+      "these",
+      "this",
+      "those",
+      "through",
+      "us",
+      "whose",
+      "you",
+      "your"
+     ],
+     "sense": "rip"
+    }
+   ],
+   "senses": [
+    {
+     "label": "crying",
+     "like": "here",
+     "name": "crying",
+     "phones": "T IH1 R"
+    },
+    {
+     "label": "rip",
+     "like": "bear",
+     "name": "rip",
+     "phones": "T EH1 R"
+    }
+   ]
+  },
+  "tears": {
+   "rules": [
+    {
+     "before": [
+      "he",
+      "it",
+      "she",
+      "which",
+      "who"
+     ],
+     "sense": "rips"
+    },
+    {
+     "after": [
+      "apart",
+      "off",
+      "open"
+     ],
+     "sense": "rips"
+    }
+   ],
+   "senses": [
+    {
+     "label": "crying",
+     "like": "here",
+     "name": "crying",
+     "phones": "T IH1 R Z"
+    },
+    {
+     "label": "rips",
+     "like": "bears",
+     "name": "rips",
+     "phones": "T EH1 R Z"
+    }
+   ]
+  },
+  "use": {
+   "rules": [
+    {
+     "before": [
+      "a",
+      "any",
+      "good",
+      "in",
+      "its",
+      "little",
+      "make",
+      "more",
+      "much",
+      "my",
+      "no",
+      "of",
+      "some",
+      "the",
+      "their",
+      "what",
+      "what's",
+      "your"
+     ],
+     "sense": "noun"
+    }
+   ],
+   "senses": [
+    {
+     "label": "to use",
+     "like": "news",
+     "name": "verb",
+     "phones": "Y UW1 Z"
+    },
+    {
+     "label": "a use",
+     "like": "juice",
+     "name": "noun",
+     "phones": "Y UW1 S"
+    }
+   ]
+  },
+  "used": {
+   "rules": [
+    {
+     "after": [
+      "to"
+     ],
+     "sense": "habit"
+    }
+   ],
+   "senses": [
+    {
+     "label": "used it",
+     "like": "fused",
+     "name": "used",
+     "phones": "Y UW1 Z D"
+    },
+    {
+     "label": "used to",
+     "like": "juiced",
+     "name": "habit",
+     "phones": "Y UW1 S T"
+    }
+   ]
+  },
+  "uses": {
+   "rules": [
+    {
+     "before": [
+      "a",
+      "an",
+      "any",
+      "each",
+      "every",
+      "her",
+      "his",
+      "its",
+      "many",
+      "my",
+      "no",
+      "one",
+      "other",
+      "our",
+      "some",
+      "that",
+      "the",
+      "their",
+      "these",
+      "this",
+      "those",
+      "whose",
+      "your"
+     ],
+     "sense": "noun"
+    }
+   ],
+   "senses": [
+    {
+     "label": "she uses",
+     "like": "news-es",
+     "name": "verb",
+     "phones": "Y UW1 Z IH0 Z"
+    },
+    {
+     "label": "its uses",
+     "like": "juices",
+     "name": "noun",
+     "phones": "Y UW1 S IH0 Z"
+    }
+   ]
+  },
+  "wind": {
+   "rules": [
+    {
+     "before": [
+      "a",
+      "an",
+      "bitter",
+      "cold",
+      "east",
+      "icy",
+      "in",
+      "like",
+      "north",
+      "of",
+      "south",
+      "that",
+      "the",
+      "this",
+      "warm",
+      "west",
+      "wild"
+     ],
+     "sense": "air"
+    },
+    {
+     "near": [
+      "bobbin",
+      "clock",
+      "crank",
+      "spool",
+      "thread",
+      "watch",
+      "yarn"
+     ],
+     "sense": "turn"
+    },
+    {
+     "after": [
+      "a",
+      "an",
+      "any",
+      "around",
+      "back",
+      "down",
+      "each",
+      "every",
+      "her",
+      "him",
+      "his",
+      "it",
+      "its",
+      "me",
+      "my",
+      "no",
+      "one",
+      "our",
+      "round",
+      "some",
+      "that",
+      "the",
+      "their",
+      "them",
+      "these",
+      "this",
+      "those",
+      "up",
+      "us",
+      "whose",
+      "you",
+      "your"
+     ],
+     "before": [
+      "can",
+      "can't",
+      "cannot",
+      "could",
+      "couldn't",
+      "didn't",
+      "doesn't",
+      "don't",
+      "gonna",
+      "gotta",
+      "he",
+      "he'll",
+      "i",
+      "i'll",
+      "let's",
+      "may",
+      "might",
+      "must",
+      "never",
+      "please",
+      "shall",
+      "she",
+      "she'll",
+      "should",
+      "they",
+      "they'll",
+      "to",
+      "wanna",
+      "we",
+      "we'll",
+      "who",
+      "will",
+      "won't",
+      "would",
+      "wouldn't",
+      "you",
+      "you'll"
+     ],
+     "sense": "turn"
+    }
+   ],
+   "senses": [
+    {
+     "label": "air",
+     "like": "pinned",
+     "name": "air",
+     "phones": "W IH1 N D"
+    },
+    {
+     "label": "turn",
+     "like": "kind",
+     "name": "turn",
+     "phones": "W AY1 N D"
+    }
+   ]
+  },
+  "winds": {
+   "rules": [
+    {
+     "before": [
+      "a",
+      "an",
+      "bitter",
+      "cold",
+      "east",
+      "four",
+      "icy",
+      "in",
+      "like",
+      "north",
+      "of",
+      "south",
+      "that",
+      "the",
+      "this",
+      "warm",
+      "west",
+      "wild"
+     ],
+     "sense": "air"
+    },
+    {
+     "before": [
+      "creek",
+      "he",
+      "it",
+      "lane",
+      "path",
+      "river",
+      "road",
+      "she",
+      "stream",
+      "track",
+      "trail",
+      "vine",
+      "which",
+      "who"
+     ],
+     "sense": "turns"
+    },
+    {
+     "after": [
+      "around",
+      "back",
+      "down",
+      "her",
+      "his",
+      "its",
+      "round",
+      "through",
+      "up"
+     ],
+     "sense": "turns"
+    }
+   ],
+   "senses": [
+    {
+     "label": "air",
+     "like": "pinned",
+     "name": "air",
+     "phones": "W IH1 N D Z"
+    },
+    {
+     "label": "turns",
+     "like": "kinds",
+     "name": "turns",
+     "phones": "W AY1 N D Z"
+    }
+   ]
+  },
+  "wound": {
+   "rules": [
+    {
+     "before": [
+      "a",
+      "an",
+      "any",
+      "deep",
+      "each",
+      "every",
+      "fresh",
+      "her",
+      "his",
+      "its",
+      "my",
+      "no",
+      "old",
+      "one",
+      "open",
+      "our",
+      "some",
+      "that",
+      "the",
+      "their",
+      "these",
+      "this",
+      "those",
+      "whose",
+      "your"
+     ],
+     "sense": "injury"
+    },
+    {
+     "after": [
+      "about",
+      "around",
+      "down",
+      "round",
+      "through",
+      "tight",
+      "tighter",
+      "up"
+     ],
+     "sense": "turned"
+    },
+    {
+     "before": [
+      "been",
+      "get",
+      "got",
+      "had",
+      "has",
+      "have",
+      "he",
+      "i",
+      "it",
+      "she",
+      "they",
+      "was",
+      "we",
+      "were",
+      "who",
+      "you"
+     ],
+     "sense": "turned"
+    }
+   ],
+   "senses": [
+    {
+     "label": "injury",
+     "like": "swooned",
+     "name": "injury",
+     "phones": "W UW1 N D"
+    },
+    {
+     "label": "wound up",
+     "like": "round",
+     "name": "turned",
+     "phones": "W AW1 N D"
+    }
+   ]
+  }
+ }
+}

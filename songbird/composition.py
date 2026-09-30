@@ -142,12 +142,19 @@ def check_lyric(genome, path: str, value) -> str | None:
         return None
     if not isinstance(value, str) or not value.strip() or len(value) > 500:
         raise ValueError("write a lyric line of 1 to 500 characters")
-    if any(ord(c) < 32 and c not in "\t\n\r" for c in value) or any(c in value for c in "{}<>|\\"):
+    from . import heteronyms
+
+    if any(ord(c) < 32 and c not in "\t\n\r" for c in value) or any(c in value for c in "<>|\\"):
         raise ValueError("use words and punctuation; split syllables with hyphens")
-    text = " ".join(value.replace("’", "'").split())
-    if any(not part for word in text.split() for part in word.split("-")):
+    # a word's say in braces, bass{fish} (songbird.heteronyms): its ARPAbet's spaces become dots
+    text = " ".join(heteronyms.normalized(value.replace("’", "'")).split())
+    if any(not part for word in text.split() for part in heteronyms.bare(word).split("-")):
         raise ValueError("put syllable hyphens inside words, like car-ry")
     target = len(genome.phrases[pid].sung)
+    for word in text.split():
+        why = heteronyms.problem(word, len([p for p in heteronyms.bare(word).split("-") if p]))
+        if why:
+            raise ValueError(why)
     problem = line_problem(text, target, genome.lexicon)
     if problem is None:
         return text
@@ -766,6 +773,20 @@ def harmony(genome, phrase, params) -> list[dict]:
     return out
 
 
+def _say_table() -> dict:
+    from .heteronyms import TABLE
+
+    return TABLE
+
+
+def _said(genome, text: str, authored: bool) -> dict:
+    """{"said": [...]} for a line with a word said two ways, as it's sung; {} for any other."""
+    from .heteronyms import as_sung
+
+    said = as_sung(text, genome.lexicon, authored) if text else []
+    return {"said": said} if said else {}
+
+
 def view(genome, params, lyrics) -> dict:
     """The editor's complete arrangement and piano roll without rendering audio. duration: the realized
     score's length in seconds, the last chord's ring included, which the rendered audio lasts."""
@@ -838,6 +859,9 @@ def view(genome, params, lyrics) -> dict:
                             "syllable_count": len(phrase.sung),
                             "advice": advice(genome, params, phrase),  # a freed ending, said
                             "authored": str(j) in patches[index],
+                            # its words said two ways, as sung (songbird.heteronyms.as_sung): only where it has one
+                            **_said(genome, lines[index][j] if lines[index] and sung and j < len(lines[index]) else "",
+                                    str(j) in patches[index]),
                             # a person's own notes played in for a player here (notes in)
                             "part_key": f"{identity}.{j}",
                             "parts": sorted(p for p, held in in_parts.items() if f"{identity}.{j}" in held)})
@@ -863,7 +887,9 @@ def view(genome, params, lyrics) -> dict:
             "chord_choices": chord_choices(params),
             "players": playable(params), "performed": {p: sorted(held) for p, held in in_parts.items()},
             "arranged": bool(params.composition.get("order")),
-            "guidance": "Notes stay in the song's range. Keep one note per syllable and the final home note. "
+            # the words said two ways, and the rules that choose (songbird.heteronyms): the words editor's toggles
+            "say": _say_table(),
+            "guidance":"Notes stay in the song's range. Keep one note per syllable and the final home note. "
                         "A tune line changes everywhere it appears, or only in one place. Repeated sections keep "
                         "their story order."}
 

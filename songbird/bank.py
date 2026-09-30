@@ -196,14 +196,14 @@ def line_problem(line: str, notes: int, lexicon: dict | None) -> tuple | None:
         ("unknown", word, n)          a word the singer can't pronounce
         ("fit", word, n, pronounced)  a word split into n syllables that's pronounced in another number
     """
-    token = misplaced_mark(line)
+    token = misplaced_mark(re.sub(r"\{[^{}]*\}", "", line))  # a word's say (bass{fish}) is no part of its mark
     if token is not None:
         return ("mark", token)
     got = len(syllables(line))
     if got != notes:
         return ("count", got)
     for word in line.split():
-        n = len([p for p in word.split("-") if p])
+        n = len([p for p in re.sub(r"\{[^{}]*\}", "", word).split("-") if p])
         try:
             pronounced = len(phonetics.fit(word, n, lexicon))
         except (KeyError, ValueError):  # not in the dictionary, or no vowel to sing

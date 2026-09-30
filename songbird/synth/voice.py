@@ -208,7 +208,7 @@ def schedule(notes: list[Note], voice: VoiceParams, lexicon: dict[str, str] | No
         for j in range(n):
             in_word.append(j)
             word_len.append(n)
-            word.append((notes[k].word or "").replace("-", "").lower().strip(".,;:!?\"'*"))
+            word.append(ph.shown(notes[k].word or "").replace("-", "").lower().strip(".,;:!?\"'*"))
         k += n
 
     segs: list[Segment] = []

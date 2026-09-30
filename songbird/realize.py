@@ -14,6 +14,7 @@ from typing import TYPE_CHECKING
 import numpy as np
 
 from . import band as band_mod
+from . import heteronyms
 from . import variants as variants_mod
 from .band import Band
 from .genome import Genome, Meter, Phrase, sung_words, turn
@@ -362,8 +363,9 @@ def realize(genome: Genome, params: Params, verses=None, phrasing: Phrasing | No
             block = section.lyrics
             lines = [turn(line, heard[block], rounds[block]) for line in genome.fixed[block]]
             heard[block] += 1
-        if patch:
-            lines = [patch.get(str(i), line) for i, line in enumerate(lines)]
+        if patch:  # a person's line, each heteronym in it said as the words around it say (songbird.heteronyms)
+            lines = [heteronyms.decide(patch[str(i)]) if isinstance(patch.get(str(i)), str) else patch.get(str(i), line)
+                     for i, line in enumerate(lines)]
         laid = zip(section.phrases, lines) if lined[j] is None else \
             [(pid, lines[k] if sung and k < len(lines) else None) for k, (pid, sung) in enumerate(lined[j])]
         for pid, line in laid:
