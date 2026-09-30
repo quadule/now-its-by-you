@@ -92,8 +92,9 @@ membrane up to 16 times the fundamental (196 of them, at the zeros of Bessel
 functions), weighted by where the tipper lands (a boom near the middle, a
 drier knock near the rim), filtered by the stick's contact time, with a hard
 hit's pitch glide, the skin's slap above the modes, and the stick's click.
-Strokes (a Celtic session's bodhrán adds a fifth, top: the back hand pressed high, the pitch up a
-third and drier, 2026-09-30): bass (T60 0.35 s), tip (0.22 s, the back hand on the skin), mute
+Strokes (a fifth, top, the back hand pressed high, the pitch up a third and drier, was added for the
+Celtic session's reel on 2026-09-30 and has been unused since the reel went; the jig plays bass and
+tip): bass (T60 0.35 s), tip (0.22 s, the back hand on the skin), mute
 (0.08 s), rim, each scaled by the loudness of its first 30 ms (not its peak,
 which the click would set), the tips 9 dB and the mutes 12 dB under the
 open boom, as a bodhrán player plays them. A frame drum has no back, so its

@@ -87,7 +87,7 @@ STYLE_OPTIONS = {"feel": ("straight", "swing", "shuffle", "twelve", "half", "dou
                  "ending": ("ring", "rit", "cold", "amen", "repeat"), "backing": ("", "oohs", "echo", "thirds", "gang", "hum"),
                  "lift": bool, "entrances": bool, "breakdown": bool, "coda": ("", "quote"), "motif": ("", "bridge", "chance"),
                  # how it starts, which verse is in stop-time or bare and over whom, a half-time bridge (2026-09-29)
-                 "intro": ("", "lead", "pad", "count", "voice", "quote", "notes", "air"), "stops": int, "alone": int, "alone_with": str,
+                 "intro": ("", "lead", "pad", "count", "voice", "quote", "air"), "stops": int, "alone": int, "alone_with": str,
                  "bridge": ("", "half")}
 # house's and dub's (2026-09-30): a breakdown and a drop after a refrain; a dub version after the song
 STYLE_OPTIONS.update({"drop": int, "ending": STYLE_OPTIONS["ending"] + ("version",)})
@@ -328,15 +328,19 @@ def check(genome: Genome, edits: dict, phrasings=()) -> tuple[dict, list[dict]]:
             elif path.startswith("band.") and path[5:] in instruments():
                 clean[path] = round(_number(value, 0.0, 2.0), 2)
             elif path == "style.name":
-                from .style import STYLES
+                from .style import STYLES, renamed
 
+                value = renamed("name", value)  # a style renamed since the edits were made (celtic: the jig)
                 if value not in STYLES:
                     raise LookupError(f"the styles are {', '.join(sorted(STYLES))}")
                 clean[path] = value
             elif path.startswith("arrange."):  # the arrangement taken over (songbird.takeover)
                 clean[path] = takeover.check(genome, path, value)
             elif path.startswith("style.") and path[6:] in STYLE_OPTIONS:
+                from .style import renamed
+
                 options = STYLE_OPTIONS[path[6:]]
+                value = renamed(path[6:], value)  # a value retired since the edits were made, as it is now called
                 if options is bool:
                     clean[path] = bool(value)
                 elif options is int:  # which verse (1 the first), 0 none; which refrain the drop follows

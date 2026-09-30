@@ -889,8 +889,13 @@ it rendered to before, at one thread and two). Two threads unless said:
 | a cappella (added 30 September: docs/STYLES.md, "Two more") | 226 s | voice and three voices of the program's own | 1.85 → 1.51 GB | |
 | a cappella, six lineage voices | 226 s | voice, choir1-6 | 2.33 → 1.51 GB | |
 | a cappella, 4 verses, every part, six voices, tempo 55 | 496 s | the same | → 2.79 GB | |
+| a cappella revised (evening: hummed, not sung on shape-notes), three voices of its own | 225 s | voice, choir1-3 | 1.54 GB | |
+| a cappella revised, six lineage voices | 225 s | voice, choir1-6 | 1.53 GB | |
+| a cappella revised, 4 verses, every part, six voices, tempo 55 | 450 s | the same | 2.56 GB | |
 | a Celtic session (a jig, a slow air) | 120 s | concertina drone drum fiddle guitar voice whistle | 1.07 GB | |
 | a Celtic session, 4 verses, every part, a reel at 91 | 347 s | the same | 2.34 GB | |
+| the jig (the session renamed, evening; always six-eight, no reel) | 112 s | concertina drum fiddle guitar voice whistle | 0.99 GB | |
+| the jig, 4 verses, every part, tempo 130 | 213 s | the same | 1.56 GB | |
 | house (2026-09-30, new) | 118 s | arp drummachine (a 909) piano synthbass synthpad voice | 0.97 GB | |
 | dub, with its version after the song (new) | 221 s | ebass electric kit melodica organ voice | 1.89 GB | |
 
@@ -932,7 +937,7 @@ go, on two threads, before → now:
 | lullaby (synthpad, musicbox) | 5.9 → 4.7 | 4.8 → **6.1** |
 | songwriter (harmonica) | 4.9 → 5.0 | 5.8 → 5.7 |
 | a cappella (the group's voices) | 6.0 | 5.0 |
-| a Celtic session (whistle, drum) | 7.4 | 4.1 |
+| the jig, was a Celtic session (whistle, drum) | 7.4 | 4.1 |
 | house (arp) | 6.4 | 4.5 |
 | dub (melodica, 2026-09-30) | 7.4 | 3.9 (a dub version of H's own shape is 3.7: it fits; a machine's longer shape, three verses and the bridge twice, is 5 minutes and doesn't) |
 

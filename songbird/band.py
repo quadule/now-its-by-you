@@ -1029,7 +1029,7 @@ def quote(ctx: Context, section: int, part: str, start: float | None = None, bar
     """A turn: the instrument quotes the sung phrase whose tune best fits the
     turn's chords, a refrain's by preference. A line a person composed is
     quoted as the singer sings it; any other as the lineage sings it. start,
-    bars: a stretch of the section (a session's turn goes round twice, the
+    bars: a stretch of the section (the jig's turn goes round twice, the
     line quoted each time, rng choosing it the same way); else all of it."""
     whole = ctx.sections[section]
     rng = ctx.rand("quote", whole.u0) if rng is None else rng

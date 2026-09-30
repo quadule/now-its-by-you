@@ -721,6 +721,10 @@ def strokes(ctx: StyleContext, kind: str) -> list[tuple[float, str, float]]:
     if feel == "six":
         return [(0.0, "D", 1.0), (2.0, "d", 0.55), (3.0, "U", 0.5), (4.0, "D", 0.85), (6.0, "d", 0.55), (7.0, "U", 0.5)]
     beats = g.beats
+    m = ctx.meter
+    if kind == "dadgad" and m.beat % 3 == 0 and m.beat > 1:  # the jig in a song already in six-eight: the same
+        return [x for k, b in enumerate(beats)  # down-down-up on each dotted beat
+                for x in ((b, "D", 1.0 if k == 0 else 0.85), (b + m.beat / 3, "d", 0.55), (b + 2 * m.beat / 3, "U", 0.5))]
     if kind == "ring":
         return [(0.0, "D", 0.9)]
     if feel in ("shuffle", "twelve"):
@@ -780,7 +784,7 @@ def w_strum(ctx: StyleContext, i: int, part: str, kind: str = "strum") -> list[E
     return ring_on(out)
 
 
-# --- a session's guitar: DADGAD ------------------------------------------------------------------------------
+# --- the jig's guitar: DADGAD ----------------------------------------------------------------------------------
 
 def dadgad_strings(ctx: StyleContext) -> list[int]:
     """A guitar in an open D tuning (D A D G A D) put in the song's key as a player would: a capo up to six frets,
@@ -817,7 +821,7 @@ def dadgad(ctx: StyleContext, c: Chord, u0: float, u1: float) -> list[int]:
 
 
 def w_dadgad(ctx: StyleContext, i: int, part: str) -> list[Ev]:
-    """A session guitar strummed in DADGAD: in a jig down-down-up on each dotted beat, in a reel down-up eighths."""
+    """The jig's guitar strummed in DADGAD: down-down-up on each dotted beat."""
     return w_strum(ctx, i, part, "dadgad")
 
 
@@ -1357,7 +1361,7 @@ def w_quote(ctx: StyleContext, i: int, part: str) -> list[Ev]:
     own = sum(ctx.genome.phrases[p].bars for p in ctx.genome.section(s.name).phrases)
     if own <= 0 or s.u1 - s.u0 <= own * ctx.bar + 1e-9:
         return sliding(ctx, part, B.quote(ctx, i, part))
-    # a session's turn round twice (style.rounds): the same line quoted each time, played its own way each time
+    # the jig's turn round twice (style.rounds): the same line quoted each time, played its own way each time
     out = []
     key = int(np.floor((s.u0 - ctx.sections[0].u0) / ctx.bar + 1e-9))
     for start in np.arange(s.u0, s.u1 - 1e-9, own * ctx.bar):
@@ -1569,42 +1573,35 @@ def w_build(ctx: StyleContext, i: int, part: str) -> list[Ev]:
     return out
 
 
-def bodhran_bar(ctx: StyleContext, light: bool) -> list[tuple[float, str, float]]:
-    """(offset in the bar, stroke, velocity) for a bodhrán's bar: the frame drum's own strokes (bass: the tipper's
-    open stroke near the middle; tip: lighter, the back hand on the skin; top: the back hand pressed high, pitch up
-    and dry). A jig: down-up-down on each dotted beat, the bar's first open. A reel (double time): down-up on every
-    sixteenth, open on one and three, the up stroke after two and four lifted with the back hand high. Light: the
-    beats and a stroke before the next."""
-    g = ctx.grid
+def tipped_bar(ctx: StyleContext, light: bool) -> list[tuple[float, str, float]]:
+    """(offset in the bar, stroke, velocity) for the jig's frame drum, played with a tipper: the drum's own strokes
+    (bass: the open stroke near the middle; tip: lighter, the back hand on the skin). Down-up-down on each dotted
+    beat, the bar's first open: in six-eight the song re-barred, else each beat of the song in threes (its own
+    eighths in a six-eight song, twelve-eight's swung ones in another). Light: the beats and a stroke before the
+    next. (The reel's down-up sixteenths and its back-hand-high "top" stroke went with the reel, 2026-09-30.)"""
     if ctx.feel == "six":
         if light:
             return [(0.0, "bass", 0.72), (4.0, "tip", 0.5), (7.0, "tip", 0.36)]
         return [x for b in (0.0, 4.0) for x in ((b, "bass" if b == 0.0 else "tip", 0.85 if b == 0.0 else 0.62),
                                                 (b + 2.0, "tip", 0.38), (b + 3.0, "tip", 0.5))]
-    beats = g.beats
-    if light or ctx.feel != "double":
-        out = [(b, "bass" if k % 2 == 0 else "tip", 0.72 if k == 0 else 0.55) for k, b in enumerate(beats)]
-        return out + [(b + ctx.beat / 2, "tip", 0.34) for b in beats]
-    out = []
-    for f in g.fine:  # sixteenths
-        k, x = divmod(f, ctx.beat)
-        if x < 1e-9:
-            out.append((f, "bass" if int(k) % 2 == 0 else "tip", 0.8 if k == 0 else 0.62))
-        elif abs(x - ctx.beat / 2) < 1e-9:
-            out.append((f, "top" if int(k) % 2 == 1 else "tip", 0.66 if int(k) % 2 == 1 else 0.42))
-        else:
-            out.append((f, "tip", 0.3))
-    return out
+    m = ctx.meter
+    third = m.beat / 3 if m.beat % 3 == 0 and m.beat > 1 else m.beat / 4  # (twelve-eight swings a quarter to a third)
+    beats = ctx.grid.beats
+    if light:
+        return [(b, "bass" if k == 0 else "tip", 0.72 if k == 0 else 0.5) for k, b in enumerate(beats)] + \
+            [(beats[-1] + 2 * third, "tip", 0.36)]
+    return [x for k, b in enumerate(beats) for x in ((b, "bass" if k == 0 else "tip", 0.85 if k == 0 else 0.62),
+                                                     (b + third, "tip", 0.38), (b + 2 * third, "tip", 0.5))]
 
 
-def w_bodhran(ctx: StyleContext, i: int, part: str, light: bool = False) -> list[Ev]:
-    """The frame drum played as a bodhrán, bar by bar: ghost strokes left out when the band is sparse, and one
-    open stroke on the song's last chord."""
+def w_tipped(ctx: StyleContext, i: int, part: str, light: bool = False) -> list[Ev]:
+    """The jig's frame drum, bar by bar: ghost strokes left out when the band is sparse, and one open stroke on
+    the song's last chord."""
     s = ctx.sections[i]
     out = []
     for bar in ctx.grid.bars(s.u0, s.u1):
         rng = ctx.rand(part, bar)
-        for off, stroke, v in bodhran_bar(ctx, light):
+        for off, stroke, v in tipped_bar(ctx, light):
             u = bar + off
             if not s.u0 - 1e-9 <= u < s.u1 - 1e-9:
                 continue
@@ -1618,8 +1615,8 @@ def w_bodhran(ctx: StyleContext, i: int, part: str, light: bool = False) -> list
     return out
 
 
-def w_bodhran_light(ctx, i, part):
-    return w_bodhran(ctx, i, part, light=True)
+def w_tipped_light(ctx, i, part):
+    return w_tipped(ctx, i, part, light=True)
 
 
 def on_beats(ctx: StyleContext, i: int, part: str, which, piece: str, vel: float) -> list[Ev]:
@@ -1690,8 +1687,9 @@ WRITERS = {
     "machine": w_machine, "end": w_end, "stomp": w_stomp, "stomp4": w_stomp4, "claps": w_claps,
     "tambourine": w_tambourine, "shaker": w_shaker, "cajon": w_cajon,
     "build": w_build,  # only where a person asked for a build (songbird.takeover)
-    # a Celtic session's (docs/STYLES.md, "Two more", 2026-09-30)
-    "bodhran": w_bodhran, "bodhran-light": w_bodhran_light, "dadgad": w_dadgad,
+    # the jig's (docs/STYLES.md, "Two more", 2026-09-30), its drum's by their old names too (takeover.ALIASES)
+    "tipped": w_tipped, "tipped-light": w_tipped_light, "dadgad": w_dadgad,
+    "bodhran": w_tipped, "bodhran-light": w_tipped_light,
 }
 # "fills" is written for all sections at once (band.fills), after the rest.
 
@@ -2221,10 +2219,12 @@ def shape_pitch(ctx: Context, role: str, tune: int, symbol: str, prev: int | Non
 
 
 def shape_parts(ctx: Context, melody: list[dict], style) -> list[Sung]:
-    """An a cappella's voices, section by section (see above): all the parts on the refrains' words and on the
-    notes where nobody else plays; under the verses a hum (the under voice and the alto on each chord's root and
-    fifth, "oo"), oohs (every part on the chord) or an echo of each line's end; the turns' chords held on "oo";
-    in the bridge and the tag the lineage's harmony, with the program's own voices under it."""
+    """An a cappella's voices, section by section (see above): all the parts on the refrains' words; under the
+    verses a hum (the under voice and the alto on each chord's root and fifth, "oo"), oohs (every part on the
+    chord) or the lines' ends answered (echo: the group joins the lead's last word of each line, in parts); where a band would play the tune (an intro, a break, an outro)
+    the lead hums it on "oo" and the group hums the chords under it, the treble resting; a turn's chords, and an
+    intro's that swell in before the lead, held by everyone on "oo"; in the bridge and the tag the lineage's
+    harmony, with the program's own voices under it."""
     params = ctx.params
     lineage = int(getattr(params, "choir", 0))
     n = min(6, max(lineage, int(style.voices), int(ctx.sdef.group)))
@@ -2236,9 +2236,6 @@ def shape_parts(ctx: Context, melody: list[dict], style) -> list[Sung]:
     padded = [i for i in verses if i != bare]
     kind = style.backing or "hum"
     own_harmony = {i for i, s in enumerate(secs) if genome.section(s.name).choir}
-    from .style import vocalise, vocalised
-
-    vocal = vocalise(params)
     prev: dict[int, int] = {}
     out: list[Sung] = []
 
@@ -2260,15 +2257,25 @@ def shape_parts(ctx: Context, melody: list[dict], style) -> list[Sung]:
         return got
 
     everyone = {v: SHAPE_ROLES[v % 3] for v in range(n)}
+    first = padded[0] if padded else None
+    starts = phrase_starts(ctx, first) if first is not None else []
+
+    def late(v: int, i: int, u: float) -> bool:  # before this voice comes in, in a first verse built line by line
+        return i == first and style.entrances and bool(starts) and u < starts[min(v, len(starts) - 1)] - 1e-9
+
+    # the verses' line ends answered (echo): the group joins the lead on each line's last word, in parts
+    ends: set[int] = set()
+    for k, m in enumerate(ordered):
+        if kind == "echo" and m["line_end"] and ctx.section_at(m["u"]) in padded:
+            ends.update(j for j in range(max(0, k - m["word_len"] + 1), k + 1) if ordered[j]["word"] == m["word"])
     # the homophonic sections: all the parts on each syllable
     for k, m in enumerate(ordered):
         i = ctx.section_at(m["u"])
         s = secs[i]
         chorus = s.role == "refrain" and i not in own_harmony
-        played = genome.section(s.name).lyrics is None or not s.sung  # sung on the notes, or on "oo"
         if i in own_harmony:
             roles = everyone if lineage == 0 else {v: "under" for v in range(lineage, n)}
-        elif chorus or played:
+        elif chorus or k in ends:
             roles = everyone
         else:
             continue
@@ -2279,27 +2286,31 @@ def shape_parts(ctx: Context, melody: list[dict], style) -> list[Sung]:
         got = voicing(int(m["pitch"]), m["chord"], m["u"], last, roles)
         for v, q in got.items():
             prev[v] = q
-            syl = vocalised(vocal, q, params) if played and vocal else m["syllable"]
-            word = syl if played and vocal else m["word"]
-            out.append(Sung(v, m["u"], u1, q, 0.8 * m["vel"], syl, word, 1 if played and vocal else m["word_len"],
-                            last, m["section"], m["phrase"]))
-    # under the verses, and through the turns
-    first = padded[0] if padded else None
-    starts = phrase_starts(ctx, first) if first is not None else []
+            if k in ends and late(v, i, m["u"]):
+                continue
+            out.append(Sung(v, m["u"], u1, q, 0.8 * m["vel"], m["syllable"], m["word"], m["word_len"], last,
+                            m["section"], m["phrase"]))
+    # under the verses, under the lead's hummed tune, and through the turns
     median = int(np.median([t.pitch for t in ctx.tune])) if ctx.tune else ctx.tonic + 7
+    hummed = {m["u"] for m in melody if m["syllable"] == "oo" and m["word"] == "oo"}  # the lead's tune on "oo"
     for c in ctx.chords:
         s = secs[c.section]
+        sung =[t.pitch for t in ctx.tune if t.sung and t.u0 < c.u1 - 1e-9 and t.u1 > c.u0 + 1e-9]
+        mine = [t.pitch for t in ctx.tune if t.u0 in hummed and t.u0 < c.u1 - 1e-9 and t.u1 > c.u0 + 1e-9]
+        wordless = (genome.section(s.name).lyrics is None or not s.sung) and c.section not in own_harmony
         if c.section in padded:
-            sung = [t.pitch for t in ctx.tune if t.sung and t.u0 < c.u1 - 1e-9 and t.u1 > c.u0 + 1e-9]
             if not sung or kind == "echo":
                 continue
             roles = {v: r for v, r in everyone.items() if kind == "oohs" or r != "treble"}
             low, high = min(sung), max(sung)
-        elif s.role == "turn" and not any(t.section == c.section for t in ctx.tune):
-            roles, low, high = everyone, median, median
+        elif wordless and mine:  # the lead hums the tune: the group hums the chords under it
+            roles = {v: r for v, r in everyone.items() if r != "treble"}
+            low, high = min(mine), max(mine)
+        elif wordless:
+            roles, low, high = everyone, median, median  # nobody on the tune: a turn, an intro swelling in
         else:
             continue
-        taken: set[int] = set()
+        taken: set[int] = set(sung)  # never in unison with a note of the tune it holds under
         third = thirds(c.u0, c.last)
         end_of_phrase = any(abs(c.u1 - p1) < 1e-9 for _p0, p1 in ctx.phrases)
         got: dict[int, int] = {}
@@ -2312,18 +2323,12 @@ def shape_parts(ctx: Context, melody: list[dict], style) -> list[Sung]:
             got[v] = prev[v] = q
             taken.add(q)
             u0 = c.u0
-            if c.section == first and style.entrances and starts:
-                u0 = max(u0, starts[min(v, len(starts) - 1)])  # the voices come in a line apart
+            if late(v, c.section, u0):
+                u0 = starts[min(v, len(starts) - 1)]  # the voices come in a line apart
             if u0 >= c.u1 - 1e-9:
                 continue
             out.append(Sung(v, u0, c.u1 - (ctx.sub if end_of_phrase else 0.0), q, 0.42 if roles[v] == "treble" else 0.55,
                             "oo", "oo", 1, end_of_phrase, s.name, ""))
-    if kind == "echo":  # call and response: the group answers each line's end in the verses
-        for k, m in enumerate(ordered):
-            i = ctx.section_at(m["u"])
-            if i in padded and m["line_end"]:
-                out += [x for x in echo(ctx, ordered, k, n)
-                        if not (i == first and style.entrances and starts and x.u0 < starts[min(x.voice, len(starts) - 1)])]
     return sorted(out, key=lambda x: (x.u0, x.voice))
 
 
@@ -2481,7 +2486,7 @@ def shape_plan(ctx: Context, style, plan: Plan, rhythm, pads, chords_first) -> N
 
 
 def sets(ctx: StyleContext, style) -> None:
-    """A session's tunes where nobody sings: a section going round twice (style.rounds) has the lead and the guitar
+    """The jig's tunes where nobody sings: a section going round twice (style.rounds) has the lead and the guitar
     the first time and everyone the second; a slow air (intro=air) is the lead alone over the drones, the first
     time round (all of the intro, if it goes round once), the band coming in after it."""
     for i, s in enumerate(ctx.sections):
