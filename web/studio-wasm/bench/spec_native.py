@@ -2,7 +2,7 @@
 same edits: the same samples, and for the whole song the same record and packet. The native half of the browser's
 identity check; tests/test_studio_browser.py does it for a section and a recording in the suite.
 
-usage: uv run python web/studio-wasm/bench/spec_native.py SONG.json SECTION|whole ['{"tempo": 92}'] [--spec OUT.json]"""
+usage: uv run python web/studio-wasm/bench/spec_native.py SONG.json SECTION|whole ['{"tempo": 92}'] [--spec OUT.json] [--out SERVER.flac]"""
 
 import importlib.util
 import json
@@ -54,6 +54,8 @@ def main():
         pcm, _ = sf.read(server, dtype="int16", always_2d=True)
         print(f"the server's   {time.time() - t:5.1f} s  {master.pcm_sha256(pcm)}")
     print("file the same:", Path(out["flac"]).read_bytes() == server.read_bytes())
+    if "--out" in sys.argv:  # the server's file, to compare with the browser's (tools/compare.py, or pcm_diff)
+        Path(sys.argv[sys.argv.index("--out") + 1]).write_bytes(server.read_bytes())
 
 
 if __name__ == "__main__":

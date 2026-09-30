@@ -139,8 +139,11 @@ def whole(spec: dict, folder: Path, progress=None) -> dict:
                             phrasing_json=spec.get("phrasing"), choir_json=spec.get("choir") or [],
                             parent=spec.get("parent"), packet_genome=song, changes=spec.get("changes"),
                             chosen_by_you=spec.get("marks") or None, progress=job.report)
+    from songbird import pack
+
+    # the record as it travels (the packet's manifest: with the program's digest and what it runs with)
     return {"kind": "whole", "key": spec["key"], "flac": str(out), "id": record["id"],
-            "duration": record["duration"], "record": record}
+            "duration": record["duration"], "record": pack.read_manifest(out) or record}
 
 
 def check(spec: dict, program: str | None = None) -> None:
