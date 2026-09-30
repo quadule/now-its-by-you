@@ -40,7 +40,12 @@ def _blep(t, dt):
 def _blep4(t):
     """Residual of a unit step (0 to 1) band-limited by a cubic B-spline, for a
     sample `t` samples after the step (negative: before it). Four points: its
-    folding falls 24 dB an octave, where the two-point residual's falls 12."""
+    folding falls 24 dB an octave, where the two-point residual's falls 12.
+
+    No kernel that calls it may be compiled with fastmath: numba would compile
+    and cache this one fastmath too, for every later caller, so a synth part's
+    bits would depend on what the machine rendered first (analog.py's kernels
+    were, until 2026-09-29; this note also retires any cache made then)."""
     if t <= -2.0 or t >= 2.0:
         return 0.0
     if t <= -1.0:

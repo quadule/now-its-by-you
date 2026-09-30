@@ -52,10 +52,10 @@ Kernels added on 2026-09-29 to save memory (`fx._sliding_min`, `fx._running_mean
 together compiled) have numpy or scipy equivalents that give the same values; with the compiler off
 (`fx.JIT` false) those are used instead, so they cost nothing interpreted and need no port.
 
-Other styles and instruments bring their own kernels (91 in all under songbird/synth/, in 27 modules). Seven
-in songbird/synth/analog.py (the analog synths of the synth styles) are compiled with `fastmath=True`: their
-output depends on how the compiler reorders and fuses their arithmetic, so no port (and no other compiler
-version) can be expected to reproduce them bit for bit.
+Other styles and instruments bring their own kernels (91 in all under songbird/synth/, in 27 modules). None is
+compiled with `fastmath` since 2026-09-29: the seven in songbird/synth/analog.py (the analog synths of the synth
+styles) were, so their output depended on how the compiler reordered and fused their arithmetic, and they
+leaked fastmath into `osc._blep4`'s cached code (docs/BROWSER-RENDER.md); they are ordinary kernels now.
 
 ## What it means for a port
 

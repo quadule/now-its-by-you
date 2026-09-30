@@ -184,8 +184,8 @@ So the artist's question ("may the web version differ in the last bits?")
 comes to this: as built, it doesn't, for H's seed; it could, rarely, and
 inaudibly. To make identity *guaranteed* rather than probable:
 
-- Drop `fastmath=True` from `analog.py`'s 7 kernels (their speed cost
-  natively is to be measured; they're the synth voices, not the seed band).
+- ~~Drop `fastmath=True` from `analog.py`'s 7 kernels~~: done 2026-09-29
+  (with the bug below).
 - Give the kernels deterministic transcendental functions: `sin`, `cos`,
   `exp`, `log`, `tanh`, `pow` written as njit Python from plain arithmetic
   (an fdlibm or CORE-MATH port), used natively and translated like the rest.
@@ -206,7 +206,9 @@ used a synth, the chip, drum-machine and analog instruments sing slightly
 different bits than on one whose first render didn't. H's seed doesn't use
 them (the goldens hold either way), but a lineage that picks those
 instruments could get different ids on two machines. Removing `fastmath`
-from `analog.py` fixes it.
+from `analog.py` fixes it: done 2026-09-29 (checked: `_blep4` matches its
+source at 20000 of 20000 points whichever renders first; a note on it in
+osc.py retires the old caches). The synth styles' renders changed once then.
 
 ## The effort to port all 81
 

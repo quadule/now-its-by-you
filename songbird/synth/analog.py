@@ -240,7 +240,7 @@ ATTACK_TARGET = 1.3  # an attack is an RC charge aimed past the peak, so it rise
 # --- the ladder -----------------------------------------------------------------------------
 
 
-@njit(cache=True, fastmath=True, nogil=True)
+@njit(cache=True, nogil=True)
 def _sat(v):
     """A soft saturator shaped like tanh: slope 1 at 0, reaching ±1 smoothly at ±3 (a rational fit)."""
     if v >= 3.0:
@@ -251,7 +251,7 @@ def _sat(v):
     return v * (27.0 + v2) / (27.0 + 9.0 * v2)
 
 
-@njit(cache=True, fastmath=True, nogil=True)
+@njit(cache=True, nogil=True)
 def _ladder_step(x, G, k, st):
     """One sample of the four-pole ladder with zero-delay feedback; st holds the four integrators.
 
@@ -289,7 +289,7 @@ def _ladder_step(x, G, k, st):
     return y4
 
 
-@njit(cache=True, fastmath=True, nogil=True)
+@njit(cache=True, nogil=True)
 def _ladder(x, G, k, drive):
     n = x.shape[0]
     y = np.empty(n)
@@ -311,7 +311,7 @@ def ladder(x: np.ndarray, cutoff, resonance: float, sr: float, drive: float = 0.
 # --- the voice ------------------------------------------------------------------------------
 
 
-@njit(cache=True, fastmath=True, nogil=True)
+@njit(cache=True, nogil=True)
 def _wave(kind, q, dt, d):
     """One sample of a saw (kind 0) or a pulse of width d (kind 1) at phase q, dt of a cycle a sample:
     exactly what osc.saw and osc.pulse draw there."""
@@ -330,7 +330,7 @@ def _wave(kind, q, dt, d):
     return y - (2.0 * d - 1.0)
 
 
-@njit(cache=True, fastmath=True, nogil=True)
+@njit(cache=True, nogil=True)
 def _voice(buf, at, n, on, off, pitch, retrig, glide, bend, amp, env, famt, fbase, kinds, levels, shifted, ratio,
            pw, phases, gcoef, bcoef, vib, track, pref, k, drive, noise, seed, inv_sr2):
     """One voice's phrase, sample by sample at twice the rate, added into buf from `at`; returns the samples
@@ -475,7 +475,7 @@ def _voice(buf, at, n, on, off, pitch, retrig, glide, bend, amp, env, famt, fbas
 # --- the sub bass -------------------------------------------------------------------------------
 
 
-@njit(cache=True, fastmath=True, nogil=True)
+@njit(cache=True, nogil=True)
 def _sub(buf, at, n, on, off, pitch, retrig, glide, amp, env, thump, gcoef, tcoef, h2, h3, drift, dstep, fade,
          inv_sr):
     """A sub bass phrase at the plain rate: a sine and a little of its 2nd and 3rd harmonics, the phase set to
@@ -549,7 +549,7 @@ def _sub(buf, at, n, on, off, pitch, retrig, glide, amp, env, thump, gcoef, tcoe
 # --- the chorus ---------------------------------------------------------------------------------
 
 
-@njit(cache=True, fastmath=True, nogil=True)
+@njit(cache=True, nogil=True)
 def _delays(x, d1, d2):
     """x read through two time-varying delays (samples), cubic Hermite interpolation."""
     n = x.shape[0]
