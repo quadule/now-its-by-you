@@ -246,9 +246,11 @@ def test_composition_and_editor_travel_inside_the_audio(tmp_path):
                            or i.filename.endswith("composition.py"))
         # 101 KB with sevenths, places and melisma (2026-09-29); 153 KB with the score (docs/STUDIO-REDESIGN.md: its
         # page, views and inspector, 47 KB) beside the classic page it replaces (16 KB of its own), kept at /classic
-        # until the artist signs the score off; about 137 KB once it goes. The program 5.9 of 8 MiB.
+        # until the artist signs the score off; about 137 KB once it goes. The program 5.9 of 8 MiB. 163 KB with the
+        # renderer's way to make the song in a visitor's browser (renderer.js, 6 KB: docs/WEB-STUDIO.md, "Made in the
+        # visitor's browser"); about 143 KB once the classic page goes.
         assert "program/songbird/studio/score.js" in archive.namelist()
-        assert editor_bytes < 160_000
+        assert editor_bytes < 166_000
         # the piano page (docs/PIANO.md) travels with it, a page of its own, counted apart
         piano_bytes = sum(i.compress_size for i in archive.infolist()
                           if i.filename.startswith("program/songbird/studio/piano/"))
