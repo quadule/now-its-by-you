@@ -524,6 +524,25 @@ Designed for, so the page doesn't grow another card when each arrives:
 12. **What "Tools" is called.** *Your tools*, *In and out*, *Pass it on* (the finish panel's old title)?
     The mockup says *Tools* on the button and *Your tools: take it out, bring it in* on the sheet.
 
+## Decided (the artist, 2026-09-29)
+
+All twelve recommendations above are taken: **Page** first; **one play button** with the Sketch / Sung
+switch; the tabs named **Page · Arrange · Mix**; **three energy words** in a cell (out · soft · plays ·
+hard); scope defaults to **everywhere this line is sung**, the switch on the heading; notes **read-only on a
+phone**; **M and S on the track heads** as well as in Mix; **Time as a drawer**; **the seams as controls**;
+the button is **Tools**. Pan: the sound-design work gives each player a real pan and reverb send, so the Mix
+strips carry pan after all (decision 8's reason is gone).
+
+Two changes from the mockup:
+
+- **No dice mark.** ⚄ doesn't read at a cell's size. What chance drew is shown by the cell's own drawing
+  instead (a dashed outline in the program's ink, "drawn by chance" in the legend and the inspector), and
+  the transport's button is words only: *New performance*.
+- **Locked, not kept.** Pinning what chance drew is **Lock**: a small padlock (an inline SVG, not an
+  emoji) on the cell, the section or the value, in the second ink; the inspector says "locked by you", and
+  the record marks it `locked: true` under `chosen_by_you` (a lock keeps the program's value; a choice
+  sets another). *New performance* redraws everything not locked or chosen.
+
 ## The mockup
 
 `docs/design/studio-redesign.html`: one file, no network, plain HTML, CSS and JavaScript, the studio's own
