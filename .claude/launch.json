@@ -4,119 +4,30 @@
     {
       "name": "karaoke",
       "runtimeExecutable": "uv",
-      "runtimeArgs": [
-        "run",
-        "python",
-        "tools/karaoke.py",
-        "songs/h-now-its-by-you.json"
-      ],
+      "runtimeArgs": ["run", "python", "tools/karaoke.py", "songs/h-now-its-by-you.json"],
       "port": 8765,
       "url": "http://127.0.0.1:8765"
     },
     {
       "name": "studio",
       "runtimeExecutable": "uv",
-      "runtimeArgs": [
-        "run",
-        "songbird",
-        "studio",
-        "--no-open"
-      ],
+      "runtimeArgs": ["run", "songbird", "studio", "--no-open"],
       "port": 8766,
       "url": "http://127.0.0.1:8766"
     },
     {
-      "name": "site",
-      "runtimeExecutable": "web/sing/node_modules/.bin/wrangler",
-      "runtimeArgs": [
-        "dev",
-        "-c",
-        "web/sing/wrangler.toml",
-        "--port",
-        "8767",
-        "--ip",
-        "127.0.0.1"
-      ],
-      "port": 8767,
-      "url": "http://127.0.0.1:8767"
+      "name": "studio-ada",
+      "runtimeExecutable": "uv",
+      "runtimeArgs": ["run", "songbird", "studio", "--no-open", "--port", "8799", "--machine", "fictional:ada"],
+      "port": 8799,
+      "url": "http://127.0.0.1:8799"
     },
     {
-      "name": "piano",
+      "name": "design-mockups",
       "runtimeExecutable": "python3",
-      "runtimeArgs": [
-        "-m",
-        "http.server",
-        "8770",
-        "--bind",
-        "127.0.0.1",
-        "--directory",
-        "web"
-      ],
-      "port": 8770,
-      "url": "http://127.0.0.1:8770"
-    },
-    {
-      "name": "studio-public",
-      "runtimeExecutable": "uv",
-      "runtimeArgs": [
-        "run",
-        "songbird",
-        "studio",
-        "--public",
-        "--machine",
-        "fictional:wren",
-        "--port",
-        "8768",
-        "--no-open"
-      ],
-      "port": 8768,
-      "url": "http://127.0.0.1:8768"
-    },
-    {
-      "name": "studio-musician",
-      "runtimeExecutable": "uv",
-      "runtimeArgs": ["run", "songbird", "studio", "--no-open", "--port", "8784"],
-      "port": 8784,
-      "url": "http://127.0.0.1:8784"
-    },
-    {
-      "name": "studio-singing",
-      "runtimeExecutable": "uv",
-      "runtimeArgs": [
-        "run",
-        "songbird",
-        "studio",
-        "--public",
-        "--web-singing",
-        "--machine",
-        "fictional:wren",
-        "--port",
-        "8769",
-        "--no-open"
-      ],
-      "port": 8769,
-      "url": "http://127.0.0.1:8769"
-    },
-    {
-      "name": "studio-wasm",
-      "runtimeExecutable": "python3",
-      "runtimeArgs": ["-m", "http.server", "8790", "--bind", "127.0.0.1", "--directory", "web/studio-wasm"],
-      "port": 8790,
-      "url": "http://127.0.0.1:8790"
-    },
-    {
-      "name": "studio-piano",
-      "runtimeExecutable": "uv",
-      "runtimeArgs": ["run", "songbird", "studio", "--no-open", "--port", "8795"],
-      "port": 8795,
-      "url": "http://127.0.0.1:8795"
-    },
-    {
-      "name": "studio-piano-public",
-      "runtimeExecutable": "uv",
-      "runtimeArgs": ["run", "songbird", "studio", "--public", "--machine", "fictional:wren", "--port", "8797", "--no-open"],
-      "port": 8797,
-      "url": "http://127.0.0.1:8797"
+      "runtimeArgs": ["-m", "http.server", "8798", "--bind", "127.0.0.1", "--directory", "docs/design"],
+      "port": 8798,
+      "url": "http://127.0.0.1:8798"
     }
   ]
 }
