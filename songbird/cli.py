@@ -132,7 +132,9 @@ def render_one(genome, params: Params, out: Path, *, voice=None, drift=None, lyr
     if progress is not None:
         progress("master")
     mastered = master.master(mix, synth.SR, target=float(getattr(params, "loudness", master.TARGET_LUFS)))
+    del mix  # (each let go once the next is made: a whole song is a tenth of a gigabyte a copy)
     pcm = master.to_pcm16(mastered, seed=params.seed)
+    del mastered
     lineage = pack_mod.lineage(parent)
     tags = dict(
         title=genome.title, artist=ARTIST, date=drift.to_dict()["at"][:10] if drift is not None else None,

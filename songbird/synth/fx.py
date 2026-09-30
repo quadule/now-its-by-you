@@ -266,45 +266,58 @@ def running_mean(x: np.ndarray, size: int, out: np.ndarray | None = None) -> np.
 
 
 @njit(cache=True, nogil=True)
-def _sliding_min(x: np.ndarray, before: int, after: int, out: np.ndarray) -> np.ndarray:
-    """out[i] = the least of x[i - before .. i + after] (clipped to the signal, as mode "nearest" extends it),
-    by a queue of the candidates (their values kept, so out may be x itself when after >= 0)."""
+def _extended(p: int, n: int, reflect: bool) -> int:
+    """The sample a position past either end stands for: the end itself ("nearest"), or mirrored ("reflect",
+    d c b a | a b c d | d c b a), as scipy.ndimage extends a line."""
+    if not reflect:
+        return min(max(p, 0), n - 1)
+    while p < 0 or p >= n:
+        p = -p - 1 if p < 0 else 2 * n - 1 - p
+    return p
+
+
+@njit(cache=True, nogil=True)
+def _sliding_min(x: np.ndarray, before: int, after: int, reflect: bool, out: np.ndarray) -> np.ndarray:
+    """out[i] = the least of the extended line's x[i - before .. i + after], by a queue of the candidates
+    (their values kept: out may be x itself when nothing read comes from behind the sample written)."""
     n = x.shape[0]
     cap = before + after + 2
     qi = np.empty(cap, np.int64)
     qv = np.empty(cap)
     head = 0
     count = 0
-    nxt = 0
+    nxt = -before
     for i in range(n):
-        hi = min(max(i + after, 0), n - 1)
-        lo = min(max(i - before, 0), n - 1)
-        while nxt <= hi:
-            v = x[nxt]
+        while nxt <= i + after:
+            v = x[_extended(nxt, n, reflect)]
             while count > 0 and qv[(head + count - 1) % cap] >= v:
                 count -= 1
             qi[(head + count) % cap] = nxt
             qv[(head + count) % cap] = v
             count += 1
             nxt += 1
-        while qi[head] < lo:
+        while qi[head] < i - before:
             head = (head + 1) % cap
             count -= 1
         out[i] = qv[head]
     return out
 
 
-def sliding_min(x: np.ndarray, size: int, origin: int = 0, out: np.ndarray | None = None) -> np.ndarray:
-    """minimum_filter1d(x, size, mode="nearest", origin=origin) of a 1-D float64 signal (a least value is the
-    same value however it is found), without scipy's copies of the line; out may be x itself."""
+def sliding_min(x: np.ndarray, size: int, origin: int = 0, out: np.ndarray | None = None,
+                mode: str = "nearest") -> np.ndarray:
+    """minimum_filter1d(x, size, mode=mode, origin=origin) of a 1-D float64 signal, mode "nearest" or
+    "reflect" (a least value is the same value however it is found), without scipy's copies of the line; out
+    may be x itself in mode "nearest"."""
+    if mode not in ("nearest", "reflect"):
+        raise ValueError(f"sliding_min: no mode {mode!r}")
     x = np.ascontiguousarray(x, dtype=np.float64)
     if not len(x):
         return x.copy() if out is None else out
     before = size // 2 + origin
     after = size - 1 - before
-    if out is x and after < 0:
+    if out is x and (after < 0 or mode != "nearest"):
         out = None
-    return _sliding_min(x, before, after, np.empty_like(x) if out is None else out)
+    return _sliding_min(x, before, after, mode == "reflect", np.empty_like(x) if out is None else out)
 
 
 @njit(cache=True, nogil=True)

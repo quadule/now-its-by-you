@@ -161,6 +161,8 @@ def test_running_filters_are_scipys():
                     want = minimum_filter1d(x, size, mode="nearest", origin=origin)
                     assert same(fx.sliding_min(x, size, origin), want)
                     assert same(fx.sliding_min(mine, size, origin, out=mine), want)
+                    want = minimum_filter1d(x, size, origin=origin)  # its default: mode "reflect"
+                    assert same(fx.sliding_min(x, size, origin, mode="reflect"), want)
 
 
 def test_holding_a_track_through_rests_is_the_gather_it_replaced():
