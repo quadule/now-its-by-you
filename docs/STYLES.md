@@ -1047,7 +1047,7 @@ differently (said below, with the ids).
   intro and outro, its four-bar turns, eight bars of the hook after the drop's refrain and the last), laid out by
   `takeover.phrase_plan` as a session's rounds are: the style's own length, a person's `arrange.*.bars` over it.
 - `StyleDef.hook`: a vocal chop (house): which words of the song, the rhythms it may take, where it sings.
-- `Style.dub` (dub): the refrain after which the song dissolves into its version; 0 none. Left out while 0.
+- `Style.dissolve` (dub): the refrain after which the song dissolves into its version; 0 none. Left out while 0.
 - the desk's new habits (dub): fragments' echoes with a longer feedback, the whole band's filter swept, the
   spring kicked more often, in the dissolved sections.
 
@@ -1117,7 +1117,7 @@ the loop there; `style.loop` chooses another, or the song's own.
 
 ### Dub (70 to 78)
 
-- **The version is the song's second half**: `Style.dub` (drawn 0.9 of the time) is the refrain after which the
+- **The version is the song's second half**: `Style.dissolve` (drawn 0.9 of the time) is the refrain after which the
   song dissolves: half the refrains, at least the first (H's three refrains: after the first; four: after the
   second). Up to there the song is sung straight, over the song's own chords, with the desk working as before.
   After it every section is the version:
@@ -1156,7 +1156,164 @@ the loop there; `style.loop` chooses another, or the song's own.
 - Every other style: none of the new fields, so nothing new is called; checked by the goldens and PCM ids (the
   seed, lo-fi, synth folk, gospel and the session for ada, juno's own, indie for vela).
 - House's and dub's records from before: they load, and replay as far as they carry their choices: a house record
-  has no `loop` (the default: the best-fitting loop) and gets the lengths and the chop; a dub record has no `dub`
+  has no `loop` (the default: the best-fitting loop) and gets the lengths and the chop; a dub record has no `dissolve`
   (not dissolved) and gets the riddim nowhere but the dub-out. Their ids change; said so.
 - Memory: house's shape is longer (ada's with a drop about 3.5 minutes at 124), dub's about as long as before;
   measured with tools/render_memory.py, and MEASURED updated.
+
+## What the review changed (2026-09-30, evening)
+
+A read-only Fable review of the design above, before it was built (the loop table recomputed in its own scripts).
+Its points, and what was done:
+
+1. **The loop's sevenths must be the mode's own**: a named quality is fixed whatever the mode (`vi7` is B-D♯-F♯-A),
+   so a loop is spelled per rendition from its degrees in the rendition's mode (`vim7`, `IVmaj7`, `V7`; in aeolian
+   `VImaj7`, `ivm7`), as the chord card's row of the key's sevenths is. Built so (`style.loop_symbols`), and tested.
+2. **The tonic's maj7 grinds under the singer's home note**: I is voiced `Iadd9`, not `Imaj7` (a loop's other
+   sevenths stay). The fit counts a sung note on a chord's seventh as a chord tone (the tune on a maj7 is its
+   colour), a semitone from its triad as a clash; the table above is recomputed so (vamp 0.5, lift 0, home 0.5,
+   deep 1.3, royal 2.7 in D major: all five fit; pop 8.5 and minor 12.2 don't).
+3. **A droppable seventh needs a mechanism**: the band's `tones()` leaves a loop chord's seventh out wherever a sung
+   note is a semitone from it (its symbol one of the rendition's loop's), as a style's colour steps aside; the
+   MIDI file and the page still name the chord. Tested (Gmaj7's F♯ never under a sung G).
+4. **Where nothing fits, the song's own chords**, not the closest loop (which in aeolian puts iv under a sung 5):
+   `fitting_loops` gives "song" then, and the style's form, bass and hook carry it. For H, house in aeolian still
+   has two that fit (vamp 5.3 and pop 6.3 against the song's 4.3 and two); dub's riddims are allowed four beats of
+   slack (a riddim under fragments), and in aeolian none fits: the song's own.
+5. **Inject the loop in `composition.form_phrases`**, between a person's everywhere chords and a place's own, so the
+   band, the choir's and backing voices' chords (melody's chord), the MIDI file's chords and the page follow from one
+   place: as built. The page shows the loop's chords in the lane, in the program's ink (a person's are marked by
+   their edits, not by differing from the song's).
+6. **Drop on the hook, not on a sung folk refrain**: the drop's refrain now opens with **eight bars of the chop over
+   the full groove** (the ride, the rolling bass, the pluck: the drop), and the singer's refrain follows as the
+   release; the last refrain keeps its eight hook bars after it. The chop's rhythm changes at the drop (the next of
+   the three figures), and there the call alternates with the answer ("now it's by you"). The hook's bars are laid
+   on the song's turn line (a line with no tune), so no lead plays a tune under the chop; the sung lines take the
+   refrain's words in order after them (realize, the page's words and places count the lines a style laid first:
+   `takeover.leading`, `own_line`).
+7. **The chop is a part of its own** (`chop`), not the singer's `voice`: the lyric sheet and the synced words don't
+   gain its syllables, `variation.lay` doesn't move it off the grid, it draws on no rendition stream but its own,
+   and it has its own stem and channel (the singer's voice as one of the band's instruments: its low end cleared, a
+   gentle compressor, a little more room; `mixing.ROLES["chop"]`). Its memory rate is the voice's.
+8. **The voice would breathe before every chop syllable** (an in-breath wherever a gap passes 0.12 s): the chop is
+   sung by the singer's own settings with breaths off, each syllable held 85% of its slot (a tenth of a second at
+   least), each "knows" the phrase's end. Whisper hears "Nobody knows, nobody knows" in the chop's stem.
+9. **The style's lengths in `phrase_plan`**, under a person's (`own_lines`, as a session's rounds): `arranged_plan`
+   returns them so realize lays the lines as the style does; `takeover.value` and the page's grid give the style's
+   length as the program's own. A person's entry for a section that doesn't set its bars (a player's level, say)
+   keeps the style's length.
+10. **A turn's length a person can't change** (the turn's own line quotes a sung one to fit two bars): left as it
+    was: house lays its turns at four bars itself; a person's `bars` on a turn is still refused. Said below.
+11. **The pad intro would strip house's layered intro**: in a style that builds its intro in layers the pad-only
+    intro is not applied; `intro=pad` in house means the chop takes the intro's last four bars instead of the
+    piano's tune. The layers: `plan.entrances` at their bars (scaled with a person's length), and the outro's layers
+    leave by `plan.exits` (a field the plan had and nothing used).
+12. **Dub's fragments**: a fragment's last syllable is marked a line's end (the singer releases it; the desk finds
+    it); fragments keep whole words (they break at word boundaries); the melodica takes the version's sections as
+    `lead` (a `dubbed` key in the parts, set by `mark_dissolved` as the drop's is by `mark_drop`), rests half its
+    lines (the desk's coin), and the dissolved sections keep their weight under it (`played`).
+13. **The bridge comes back whole** in the version: sung, with the lineage's choir, on the song's own chords (the
+    vocal dropping back in is itself a dub's move; the bridge is the song's idea). The chop's words stay the first
+    refrain's last words ("nobody knows") rather than `genome.hooks` (whose first hook is the question: the chop
+    is the answer).
+14. **Replay**: the loop's name is stored when drawn (`""` only in records from before: the best fit); the chop's
+    rhythm and each fragment come from the rendition's seed, each by a stream of its own; drop-outs, throws, sweeps
+    by the desk's streams by bar. `Style.dub` was renamed `dissolve`. With `dissolve` 0 the desk's choices are as
+    they were (a version after the song in any style: the same throws).
+15. **Desk sweeps mid-section** go to `produce()` as transitions of their own (`sweep-lp`, then `sweep-open`),
+    applied to the band's bus as a person's sweeps are; the echo's returns join the band before it, so a sweep
+    darkens them too.
+16. **Memory**: the outro is sixteen bars only where the form has one; the last refrain's hook bars are laid only
+    where the form ends on a refrain. Measured below.
+17. Small ones: house draws `repeat` never (the hook is its tag; `repeat` stays valid); the octave bass has its page
+    label; tempo ranges as designed. Coupling a thrown fragment to a drop-out after it (the throw into silence) is
+    left for later.
+
+## As built, and measured (2026-09-30, evening)
+
+| Where | What |
+|---|---|
+| songbird/style.py | `Style.loop`, `Style.dissolve` (both left out of a record while off); `StyleDef.loops`, `.looped`, `.form`, `.hook`; house's loops, lengths, layers and chop rhythms; dub's riddims and the version's desk (`DUB_DESK["dissolved"]`); the fit (`tune_clash`, `loop_clash`, `fitting_loops`, `loop_symbols`, `loop_of`); the lengths (`own_lines`, `hook_lines`); the chop (`hook_bars`, `hook_words`, `chops`); the version (`dissolved_from`, `dissolves`, `fragments`); both drawn in `choose_options` by coins of their own |
+| songbird/composition.py | the loop laid in `form_phrases` (`_looped`), under a person's chords; a line a style lays before a section's own has no place (`at_place`, `view`) |
+| songbird/takeover.py | the style's lengths in `phrase_plan`/`arranged_plan` under a person's; `leading`, `own_line`; the style's length as the program's own on the page |
+| songbird/realize.py | the sung lines take the words in order; a dub's fragments; the chop's notes |
+| songbird/idioms.py | a loop's seventh left out where it rubs; `w_octave`; the layers (`layers`, `plan.exits`); no quote in a hooked turn, no tune in its outro; `mark_dissolved` and the `dubbed` parts; the desk in the version (drop-outs, the bass leading, the melodica's rests, the fragments' long throws and the spring, the sweeps) |
+| songbird/sound.py | a throw's longer feedback; the desk's sweeps as transitions |
+| songbird/synth (\_\_init\_\_, instruments, mixing), midi.py, studio.py, public.py | the chop as a part: sung without breaths, its channel, its MIDI track, its preview, its memory rate |
+| songbird/explain.py, edits.py | the loop and the dissolving in words; `style.loop` and `style.dissolve` as a person's |
+| tests/test_house_dub.py | the loop and where it plays, the lengths, the chop, the octave bass and layers, dub dissolving, the options' traces, an old record singing |
+
+No new numba kernel (the browser's kernels as they were: tests/test_browser_kernels.py); the packet 6.35 MiB of 8.
+
+**Nothing else moved.** Seven renders against the tree before, to the bit: H's seed (9b0766353b73), lo-fi
+(bcce8df33538), synth folk (9b6962b8c7f0), gospel (68d78e888360) and the session (0bf8ab5ce7ba) for ada on
+30 September, juno's own style on 15 October (a4e81b19490a), indie for vela (a4d33d7a148b); the goldens hold and
+the suite passes (1697 before these tests).
+
+**Replay.** A new house and dub record replay to themselves (house2-otto, dub2-juno: "replay: matches"). The records
+from this morning load: a dub record (no `dissolve`) even replays to its own id (dub-juno, fb893109e68e: its desk's
+choices are as they were); a house record renders differently, as said: house-otto's is 170.7 s now (117.9 s
+then: the 16-bar intro and outro, the loop, the chop).
+
+### The renders, for listening
+
+In `renders/styles/` of the main checkout (gitignored), H as the same made-up machines sing it:
+
+| render | tempo | what the program chose | length | id |
+|---|---|---|---|---|
+| house2-ada-2026-09-30 | 124.6 | the home loop (Dadd9, Gmaj7); the piano's tune in the intro's last four bars; a drop after the second refrain (its breakdown a hook turn and the third verse); the last refrain's eight hook bars | 229.5 s | e50ed3ac0179 |
+| house2-juno-2026-10-15 | 122.5 | the deep loop (Em7, A7, Dadd9, Bm7); the chop teasing the intro's last four bars; a drop after the second refrain (a turn, the break, the bridge); a cold stop after the tag | 180.2 s | ea3dd6966ff2 |
+| house2-otto-2026-09-30 | 121.9 | the royal loop (Gmaj7, A7, F♯m7, Bm7); two verses, no drop; a 16-bar outro, the chop for eight bars and the band leaving in layers | 165.4 s | 476f84b160b6 |
+| dub2-juno-2026-09-30 | 74.1 | dissolving after the first refrain (the version 73% of the song) over the plagal riddim (G, D); the dub-out | 249.0 s | f2353ce33e3d |
+| dub2-vela-2026-09-30 | 77.8 | a count-in; three verses sung straight to the second refrain, then the version (57%) over the roots riddim (D, G); the dub-out | 259.0 s | 0d7214151808 |
+| dub2-ada-2026-09-30 | 74.4 | dissolving after the second of four refrains (54%), plagal; both bridges whole; a cold stop | 269.0 s | e99be44058d2 |
+
+### What they play (the scores, the stems, the MIDI files)
+
+- **House's loop.** The MIDI files' chord track names the loop: ada 50 Dadd9 and 50 Gmaj7, and in the bridges 6
+  each of Bm, D and A (the song's own); juno 20 to 21 each of Em7, A7, Dadd9, Bm7; otto 18 to 19 each of Gmaj7,
+  A7, F♯m7, Bm7. The stabs sit on the chord under them: 996 of 1040 of ada's piano notes (the rest the piano's tune
+  in the intro and break), all 638 of juno's, 626 of 648 of otto's.
+- **The lengths.** ada: intro 16 bars, turns 4, the drop's refrain 16 (eight bars of the hook, then sung), the last
+  refrain 16 (sung, then eight of the hook). The layered intro: the drum machine from its first beat, the bass from
+  bar five, the pad and stabs from nine, the tune (or the chop) from thirteen (tested).
+- **The hook.** The chop sings 127 syllables in ada (59 in otto, 85 in juno): each four-bar turn "nobody knows" three
+  or four times, the drop's eight bars the call three times and "now it's by you" four, the last refrain's eight the
+  same; in a breakdown's turn once in two bars, soft. Every note on a sixteenth of the clock (no jitter, no lay), none
+  over a sung note. Whisper, listening to the finished mix two bars at a time, hears "nobody knows" in 21 of the
+  30 two-bar stretches of the three house renders (10 of 14, 6 of 10, 5 of 6); where it doesn't, the drop's full
+  band is as loud as the chop (the chop's stem 0.4 to 3 dB over the band's dry stems there, 4 to 9 in the turns).
+- **Dub's version.** It dissolves after the first refrain of three (juno: 65.8 s into 241.4, the version 73% of
+  the song) or the second of four (ada 54%, vela 57%). The singer keeps 37 to 56 syllables of the version's lines
+  (outside the bridge), in 11 to 13 fragments, e.g. juno's: "The whole world was watching", "way", "along", "but
+  nobody hummed", "Nobody knows", "grows", "through", "Nobody knows", "It's yours while you sing", "one, and now
+  it's by you"; Whisper hears 10 of those 11 in the mix, as sung. The bridge comes back whole with the choir. 8 to 11
+  fragments a song are thrown into the echo with the version's feedback (0.72: 19 repeats to 50 dB down, about 11.5 s
+  of tail at 74, against the song's 13 repeats, 7.9 s), two of ada's into the spring too; the band's low-pass is
+  swept closed and open two to four times; the melodica plays 56 to 123 notes of the tune the singer left out.
+  The riddim: juno's and ada's the plagal (IV, I), vela's the roots (I, IV); the minor (vi, IV) was drawn by none of
+  the three.
+- **Memory** (tools/render_memory.py, two threads, `MallocLargeCache=0`, the style chosen with no machine): house
+  163 s, 1.27 GB (estimated 1.40); dub dissolving with its dub-out 222 s, 1.91 GB (estimated 2.04); MEASURED
+  updated. In the VPS's 2100 MB a house version fits to 4.5 minutes (ada's long shape is 3.8), a dub one to 3.9
+  (H's own shape fits; a machine's long shape, ada's 4.5 minutes, is refused on the server as before).
+
+## Decisions for the artist (house and dub, again)
+
+1. **The loops** (house: vamp, lift, home, deep, royal, pop, minor; dub: roots, minor, plagal) and the fit's
+   slack (two beats for house, four for dub). In D major every loop but pop and minor fits; in aeolian house has two
+   and dub none (the song's own chords). `style.loop` picks one, or `song`.
+2. **The bridge keeps the song's own chords** in house (the breakdown's heart) and comes back whole in dub's
+   version: the folk song surfacing inside the reinterpretation. Either could go the other way.
+3. **The drop is the hook first**, eight bars, then the sung refrain; the last refrain ends on eight bars of the
+   hook. The chop in a full drop is about as loud as the band (Whisper misses it there more than in the turns); a
+   louder chop is one number (`CHOP_GAIN`, or the hook's `drop` level).
+4. **The chop's words** are the first refrain's last words ("nobody knows") and the last refrain's ("now it's by
+   you"), at their own pitches; not pitched up (the throat stops at B4).
+5. **Dub dissolves 0.9 of the time**, after half the refrains; the lyric sheet still prints every line (the words
+   were drawn for them). Coupling a throw to a drop-out after it (the throw into silence) is left for later.
+6. **Verses stay** in house: the bank needs two at least, and each has its story; a shorter house would need the
+   form to change (and so the words), which a style doesn't do.
+7. **A turn's length** stays the style's (four bars in house); a person can't set it, as before.
+8. **The records from this morning** render differently for house (not for dub without `dissolve`); none was
+   released.

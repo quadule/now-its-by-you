@@ -599,8 +599,9 @@ MEASURED = {
     "celtic (a jig, a slow air)": (120.4, "concertina drone drum fiddle guitar voice whistle", 1070),
     "celtic 4 verses, every part, a reel at 91": (347.1, "concertina drone drum fiddle guitar voice whistle", 2340),
     # house and dub (2026-09-30; docs/STYLES.md, "House and dub"): dub's with its version after the song
-    "house": (118.4, "arp drummachine piano synthbass synthpad voice", 970),
-    "dub": (221.0, "ebass electric kit melodica organ voice", 1890),
+    # again (2026-09-30, evening; "House and dub, again"): house's own lengths and its chop, dub dissolving
+    "house": (163.3, "arp chop drummachine piano synthbass synthpad voice", 1270),
+    "dub": (222.2, "ebass electric kit melodica organ voice", 1910),
 }
 
 
