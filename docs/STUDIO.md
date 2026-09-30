@@ -436,6 +436,90 @@ quantized (a musician's sequencer quantizes if wanted, and what is heard is
 kept); lyrics are syllables with a trailing hyphen inside words, the karaoke
 convention most sequencers read.
 
+## Changing the chords (2026-09-29, design)
+
+A musician's first move with a folk tune is often to reharmonize it. Until now
+the harmony lane only showed the chords. This is how a person changes them.
+
+**Where the chords live.** Each tune line (a phrase of the genome) carries its
+chords as roman-numeral functions, a bar at a time, the bar's chords sharing it
+out on its beats (`I | V I`: a bar of I, then V and I two beats each). Their
+quality comes from the mode (vi is minor in major and becomes a major VI in
+minor: `theory.chord_tones`); an accidental borrows a major chord (bVII).
+`realize` hands the phrases to the band (`band.Context`: every player's chords,
+the bass's roots, the guitar's shapes, the harp's spread), the lineage choir's
+harmony (`theory.choir_voicing`: each voice takes a tone of the chord under the
+note) and the backing voices, so one place feeds everything that sounds.
+
+**What a person may change.** A tune line's chords, bar by bar, with the same
+shape the genome has: `chords.<line>` = one list of chords a bar, as many bars
+as the line has, 1 to a beat's worth of chords a bar (so a change always falls
+on a beat; four in 4/4, two in 6/8). Each chord is:
+
+- a **root**, as a function of the key: I, bII, II, bIII, III, IV, #IV, V, bVI,
+  VI, bVII, VII (so the chords move with a key change, as the song's own do);
+- a **quality**: as the key has it (the default, which follows a mode change,
+  as the song's own chords do), or major, minor, diminished, augmented, sus2,
+  sus4 (kept whatever the mode: a V major in a minor song stays a dominant);
+- a **bass**: the root, the third or the fifth (G/B, C/G).
+
+Written as the genome writes chords, extended: `V`, `Vmaj`, `ivm`, `viidim`,
+`IVsus4`, `I/3` (first inversion), `V/5`. A plain numeral means exactly what it
+meant, so every song and record reads as before. Adding a passing chord is
+splitting a bar (`I` becomes `I V`); taking one away is joining it.
+
+**How it is stored and replayed.** As the tune is: `params.composition["chords"]`
+maps a line to its bars, carried in the record's parameters and handed down to
+children (a person's chords pass on, like a person's melody). `realize` sings
+from the song with those lines' chords in place (`composition.harmonized`: the
+very same genome, untouched, when nobody changed one; goldens hold). The record
+marks `chords.<line>` with the chords chosen and what the program had
+(`edits.marks`); `from_record` makes them edits again; `--replay` renders from
+the record's parameters, so byte for byte. A null releases the line's chords,
+inherited ones included, to the song's own (as Restore phrase does for a tune).
+
+**Who follows.** Everything that sounds from the chords: every band part (the
+bass takes the chosen bass note: a slash chord's bass leads its line, the
+guitar's lowest string with it), the lineage choir's harmony and the backing
+voices (they take its tones), the sketch, the MIDI file's Chords track and its
+names. The singer's melody does not move.
+
+**The melody against the new chord: allowed, and shown.** A sung note that
+isn't a tone of its chord (a rub) is allowed: passing tones, suspensions and
+modal rubs are how folk harmony works, and the band already keeps out of the
+singer's way (a chord tone held over a passing note; the choir only ever sings
+chord tones). The chord lane marks a chord with the sung notes on its beats
+that rub, so a musician sees it and hears it in the sketch before rendering.
+Refusing would forbid most reharmonizations; changing the tune to fit would
+change what the person didn't ask to change.
+
+**Fenced, and why.**
+
+- *Per tune line, not per place*: a line's chords change everywhere it is sung,
+  as its melody does (the arrangement moves sections; a line is the unit the
+  song is made of). Reharmonizing only the last refrain would need chords kept
+  by the section's place; left for later.
+- *Triads (and sus) only*: every player voices three tones; sevenths and
+  extensions would need each player's voicing to learn a fourth (the MIDI and
+  the sketch would be easy; the band is the work).
+- *Changes on beats, a bar shared evenly*: the band lays a bar's chords on its
+  beats; half-beat anticipations and a line's length are the tune's.
+- *The tune's own evolution reads the song's chords*: the lineage's melodic
+  variants (songbird.variants, evolve) are chosen against the chords the song
+  was written with, so a reharmonized line can gain a variant note that rubs,
+  shown like any rub. Which modes a machine may choose also stays the song's
+  (`variation.allowed_modes`); a person's chord with a quality keeps it in any
+  mode, one "as the key has it" follows the mode.
+- *No new tune lines, no chords under the quote or a style's amen*: those are
+  the song's and the style's.
+
+**The page.** The harmony lane's chords become buttons (a person's in the
+second ink, as their notes are). Selecting one opens a small chord card beside
+the note inspector: the chords in the key as one-press choices (I ii iii IV V
+vi vii° with their names), then root, quality and bass, the bar's number of
+chords (to add a passing chord), and Restore chords. Each change is one undoable
+edit, heard at once in Play sketch and sung with Hear sung section.
+
 ## What stays on the machine
 
 Nothing leaves it (unless it is shared for a preview: see below). The server
