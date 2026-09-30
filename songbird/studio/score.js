@@ -13,7 +13,7 @@
   const S = {
     view: "page", sel: null, how: "sung", howSet: false, open: null, arr: null, sound: null, grid: null, serial: 0,
     keyed: false, about: false, playhead: null, sketch: false, recording: null, why: {}, tall: false, pop: null,
-    dragged: new Set(), moved: new Set(), movedKey: null,
+    lastOptions: {}, dragged: new Set(), moved: new Set(), movedKey: null,
   };
   const card = (id) => state.view?.cards?.find((c) => c.id === id);
   const edited = (path) => Object.prototype.hasOwnProperty.call(state.edits, path) && state.edits[path] !== null;
@@ -781,7 +781,11 @@
   function sectionState(sel) {
     const s = sectionAt(sel.id), w = wordsOf(s);
     if (!s) return false;
-    const o = w ? state.optionsByKey[`${w.block}.${w.nth}`] : null;
+    // its words' choosers: while this version's are on their way, the last ones, drawn and not to be used, so the
+    // rows under them don't jump out and back as an answer lands
+    const key = w ? `${w.block}.${w.nth}` : null, fresh = key ? state.optionsByKey[key] : null;
+    if (fresh) S.lastOptions[key] = fresh;
+    const o = fresh || (key && !state.optionsFailed ? S.lastOptions[key] : null) || null, stale = !!o && !fresh;
     const cells = [...S.grid.cells.values()].filter((c) => c.section === s.id && c.plays !== false);
     const levels = new Set(cells.map((c) => c.value?.level));
     const everyone = levels.size === 1 ? [...levels][0] : null;
@@ -794,6 +798,7 @@
     const oneChoice = o && o.choices.filter((c) => c.allowed).length <= 1 && (o.heads || []).filter((c) => c.allowed).length <= 1;
     const rules = o && w.sung && !allAuthored ? chooser(w, o) : null;
     if (rules) rules.querySelector("summary").textContent = "Refused here, and why";
+    if (stale) for (const c of choosers) c.querySelectorAll("select").forEach((x) => { x.disabled = true; x.setAttribute("disabled", ""); });
     const options = s.options.map((opt) => optionRow(opt));
     const release = () => {
       const next = copyEdits();
@@ -810,7 +815,10 @@
         h("div", { class: "row edit-it" },  // the ways into the section's own material, first
           writable ? h("button", { class: "btn", type: "button", onclick: () => editWords(s.id), title: "Its words on the Page, a line ready to write in the column" }, "Edit its words") : null,
           h("button", { class: "btn", type: "button", onclick: () => openNotes(s.id, true), title: "Its tune and chords, under the grid (Enter, or double-click the section)" }, "Edit its notes")),
-        chipRow("Length", s.barOptions.map((n) => ({ value: n, text: `${n} bars` })), s.bars, (n) => setBars(s, n), s.by.bars === "you"),
+        // every length drawn, the ones this section can't have disabled: a drop's shorter lengths don't push the rows
+        chipRow("Length", [...new Set([2, 4, 8, 16, ...s.barOptions])].sort((a, b) => a - b).map((n) => ({ value: n, text: `${n} bars`,
+          disabled: !s.barOptions.includes(n), title: s.barOptions.includes(n) ? null : s.sung ? "A sung section is as long as its lines; played, it can be shorter" : "Not this section's" })),
+          s.bars, (n) => setBars(s, n), s.by.bars === "you"),
         s.canPlay ? chipRow("Who sings", [{ value: true, text: "the singer" }, { value: false, text: "nobody: played" }], s.sung,
           (v) => (v ? releaseEdit(s.paths.sung, `${s.label} sung again`) : setEdit(s.paths.sung, false, `${s.label} played, not sung`)), s.by.sung === "you") : null,
         chipRow("Everyone", [{ value: "soft", text: "soft" }, { value: "plays", text: "plays" }, { value: "hard", text: "hard" }], everyone,
@@ -818,17 +826,18 @@
           cells.some((c) => c.by === "you")),
         chipRow("Moment", [{ value: false, text: "none" }, { value: true, text: "a build", disabled: i === list.length - 1, title: i === list.length - 1 ? "Nothing comes after the last section to build toward" : "The players come in one after another and rise toward the next section" }],
           s.build, (v) => (v ? setEdit(s.paths.build, true, `A build in ${s.label}`) : releaseEdit(s.paths.build, `No build in ${s.label}`)), s.by.build === "you"),
-        options,
-        choosers.length && !oneChoice ? h("div", { class: "row" }, choosers) : null,
-        choosers.length && oneChoice ? h("details", {}, h("summary", {}, "more"), h("div", { class: "row" }, choosers)) : null,
-        rules,
         s.seam && i > 0 ? h("div", { class: "row" }, h("span", { class: "label" }, "Into it"),  // the seam's twin, a bigger target
-          h("button", { class: `btn quiet${s.seam.value ? " you" : ""}`, type: "button", onclick: () => select({ kind: "seam", id: s.id }) },
-            s.seam.value ? M.seamWords(s.seam.value) : "a riser, a sweep, a roll…")) : null,
+          h("button", { class: `btn quiet${s.seam.value ? " you" : ""}`, type: "button", title: M.seamWords(s.seam.value), onclick: () => select({ kind: "seam", id: s.id }) },
+            s.seam.value ? M.seamLengths(s.seam.value).map((x) => x.kind).concat(s.seam.value.impact ? ["impact"] : []).map((k) => ({ down: "downlifter" })[k] || k).join(" · ") : "a riser, a sweep, a roll…")) : null,
         h("div", { class: "row" },
           h("button", { class: "btn quiet", type: "button", disabled: i === 0, onclick: () => moveSection(s.id, { step: -1 }), title: "Earlier (⌘/Ctrl ←)" }, "← Earlier"),
           h("button", { class: "btn quiet", type: "button", disabled: i === list.length - 1, onclick: () => moveSection(s.id, { step: 1 }), title: "Later (⌘/Ctrl →)" }, "Later →"),
-          S.open === s.id ? h("button", { class: "btn quiet", type: "button", onclick: closeNotes }, "Close the notes") : null)),
+          h("button", { class: "btn quiet", type: "button", hidden: S.open !== s.id, onclick: closeNotes }, "Close the notes")),
+        // what the style and the words offer here last: rows that come and go with an answer push only what's below
+        options,
+        choosers.length && !oneChoice ? h("div", { class: "row" }, choosers) : null,
+        choosers.length && oneChoice ? h("details", {}, h("summary", {}, "more"), h("div", { class: "row" }, choosers)) : null,
+        rules),
       why: [
         w?.sung ? { kind: w.mine ? "you" : { "handed down": "lineage", "new this time": "time", "drawn by chance": "chance" }[w.how] || "song", text: w.mine ? "these words are yours" : `the words: ${w.how}${(w.tags || []).length ? ` (${w.tags.join(", ")})` : ""}` } : null,
         s.by.bars === "you" ? { kind: "you", text: `${s.bars} bars; the program had ${s.program.bars}` } : null,
