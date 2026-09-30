@@ -1392,7 +1392,7 @@ function applyVersion(s) {
   if (bar) bar.hidden = !v;
   if (!v || !bar) return;
   const which = ORDINAL_WORDS[v.generation] ? `the ${ORDINAL_WORDS[v.generation]} version` : `a version ${v.generation + 1} down the line`;
-  const made = v.made ? `, made ${new Date(`${v.made}T12:00:00Z`).toLocaleDateString(undefined, { day: "numeric", month: "long", year: "numeric" })}` : "";
+  const made = v.made ? `, made ${new Date(`${v.made}T12:00:00Z`).toLocaleDateString("en-US", { timeZone: "UTC", month: "long", day: "numeric", year: "numeric" })}` : "";
   const link = new URL(v.url, location.href).href;
   const copy = h("button", { class: "link small", type: "button", onclick: async () => {
     try { await navigator.clipboard.writeText(link); toast("The link is copied"); }

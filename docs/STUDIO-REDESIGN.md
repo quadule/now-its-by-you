@@ -60,7 +60,7 @@ tracks, a playhead, a fader) and refuses the rest (below).
 ```
 ┌──────────────────────────────────────────────────────────────────────────────────────────┐
 │ SONGBIRD · STUDIO      Now It's by You                                          ? Help    │
-│ ○─○─●  today, Tuesday 29 September 2026 · from the song as it began · Ada  [Time ▾]      │
+│ ○─○─●  today, Tuesday, September 29, 2026 · from the song as it began · Ada  [Time ▾]    │
 ├──────────────────────────────────────────────────────────────────────────────────────────┤
 │ ▶ ■ ⟳ ♩  Refrain 1 · bar 13   ♩= 94  D major   ⚄ New performance   ↶ ↷   ● Record  Tools│  the transport
 ├───────────────────────────────────────────────────────────────┬──────────────────────────┤
@@ -101,7 +101,7 @@ One row, always in view, left to right:
 | **● Record** | Records the whole rendition (opens the *Your tools* sheet on its *Take it out* side, with the recording's progress and the file when it is done). | Record it (three places) |
 | **Tools** | Opens *Your tools*. | Sing, record & pass it on; Take it into your own tools; the Learn-at-the-piano links |
 
-Under the masthead, the **version line** stays as it is ("Your version today, Tuesday 29 September 2026,
+Under the masthead, the **version line** stays as it is ("Your version today, Tuesday, September 29, 2026,
 from the song as it began, sung by a made-up machine called Ada", with the lineage marks), and gains one
 control at its end, **Time ▾**, which drops the *Through time* timeline and the *Other computers* table
 down as a drawer over the body (the same six-year picture, the day slider and steps, the machine table with

@@ -36,6 +36,7 @@ from pathlib import Path
 import numpy as np
 
 from . import __version__
+from .dates import us_date
 
 ROOT = Path(__file__).resolve().parents[1]  # the program's tree: songbird/ and pyproject.toml beside it
 RUNTIME = ("numpy", "scipy", "numba", "soundfile", "cmudict")  # pyproject's dependencies, what the program needs
@@ -190,7 +191,7 @@ def readme(m: dict) -> str:
         f"generation {generation}, the child of {str(m.get('parent_id'))[:12]}"
     return f"""{title}
 
-{where}; id {str(m.get('id'))[:12]}{', sung ' + m['rendered_at'][:10] if m.get('rendered_at') else ''}.
+{where}; id {str(m.get('id'))[:12]}{', sung ' + us_date(m['rendered_at']) if m.get('rendered_at') else ''}.
 
 This file is a song and the program that sang it. It plays as music in any
 audio player. It is also a zip archive: unzip, bsdtar, 7-Zip and Python open
