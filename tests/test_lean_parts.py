@@ -416,3 +416,48 @@ def body_made(name: str) -> str:
 @pytest.mark.parametrize("name", list(BODIES))
 def test_bodies_make_the_samples_they_made(name):
     assert body_made(name) == BODIES[name]
+
+
+def test_the_voices_pulses_found_a_stretch_at_a_time_are_those_the_whole_tracks_gave():
+    from songbird.synth import throat
+
+    def whole(f0, sr, n):  # throat.pulse_times before 2026-09-30
+        frames = np.arange(n) / sr / throat.FRAME
+        f = np.interp(frames, np.arange(len(f0)), np.where(f0 > 0, f0, throat.UNVOICED_RATE))
+        phase = np.cumsum(f / sr)
+        whole = np.floor(phase)
+        at = np.flatnonzero(np.diff(whole) > 0) + 1
+        exact = at - (phase[at] - whole[at]) / np.maximum(f[at] / sr, 1e-9)
+        start = np.floor(exact).astype(int)
+        return np.maximum(start, 0), exact - start, sr / f[at]
+
+    rng = np.random.default_rng(26)
+    for frames in (1, 7, 400, 3000):
+        f0 = np.where(rng.random(frames) < 0.3, 0.0, 110.0 * 2.0 ** rng.uniform(0.0, 2.5, frames))
+        n = int(round(frames * throat.FRAME * 24000))
+        want = whole(f0, 24000, n)
+        for block in (1, 37, 1000, 1 << 16):
+            got = throat.pulse_times(f0, 24000, n, block=block)
+            assert all(same(a, b) for a, b in zip(got, want)), (frames, block)
+
+
+def test_the_throats_network_predicts_what_it_did():
+    """The layers worked where each step left the last (the same matrices into the same products): the
+    envelope and aperiodicity for a timeline, against their hash from the tree before (02384c8)."""
+    from songbird.synth import throat
+
+    if not throat.available():
+        pytest.skip("no learned throat here")
+    model = throat.load()
+    rng = np.random.default_rng(27)
+    frames = 700
+    t = {k: rng.integers(0, 40, frames) for k in ("prev2", "prev", "phone", "next", "next2")}
+    t |= {"role": rng.integers(0, 4, frames), "pos": rng.random(frames), "dur": rng.random(frames),
+          "stress": rng.integers(0, 2, frames).astype(float), "level": rng.uniform(-12.0, 0.0, frames)}
+    sp, ap = throat.predict(model, t, np.log(rng.uniform(100.0, 400.0, frames)), throat.timbre(model, None, 60.0))
+    digest = hashlib.sha256(np.ascontiguousarray(sp).data)
+    digest.update(np.ascontiguousarray(ap).data)
+    assert digest.hexdigest() == NETWORK
+
+
+NETWORK = "f53d33a4761fc4c67f30425960c914cdc51a98f7aedc369b861e130b162fee89"

@@ -25,6 +25,12 @@ CHOIR_PANS = (-0.45, 0.45, -0.25, 0.25, -0.65, 0.65)
 PARTS = INSTRUMENTS  # the band's stems, by role (songbird.synth.instruments builds each)
 
 
+def _filled(y: np.ndarray, length: int) -> np.ndarray:
+    """A sung line to the song's length: np.pad(y, (0, length - len(y))) where it falls short, else itself (the
+    same values, without a copy)."""
+    return np.pad(y, (0, length - len(y))) if len(y) < length else y
+
+
 def pan(mono: np.ndarray, position: float) -> np.ndarray:
     """Constant-power pan, position -1 (left) to 1 (right)."""
     theta = (position + 1.0) * np.pi / 4.0
@@ -59,7 +65,7 @@ def stem_jobs(score: Score, sr: int = SR, seed: int = 0, voice: VoiceParams | No
     if sung:
         def lead() -> np.ndarray:
             y = sing(sung, sr, voice or VoiceParams(), seed, score.lexicon)[:length]
-            y = pan(np.pad(y, (0, length - len(y))), 0.0)
+            y = pan(_filled(y, length), 0.0)
             y *= VOICE_GAIN  # where it lies: the same products
             return y
         jobs.append(("voice", lead))
@@ -71,7 +77,7 @@ def stem_jobs(score: Score, sr: int = SR, seed: int = 0, voice: VoiceParams | No
 
         def lineage(name=name, singer=singer, i=i) -> np.ndarray:
             y = sing(list(score.part(name)), sr, singer, seed + 101 * (i + 1), score.lexicon)[:length]
-            y = pan(np.pad(y, (0, length - len(y))), CHOIR_PANS[i % len(CHOIR_PANS)])
+            y = pan(_filled(y, length), CHOIR_PANS[i % len(CHOIR_PANS)])
             y *= VOICE_GAIN
             y *= CHOIR_GAIN
             return y
