@@ -96,6 +96,13 @@
       ],
       "port": 8769,
       "url": "http://127.0.0.1:8769"
+    },
+    {
+      "name": "studio-wasm",
+      "runtimeExecutable": "python3",
+      "runtimeArgs": ["-m", "http.server", "8790", "--bind", "127.0.0.1", "--directory", "web/studio-wasm"],
+      "port": 8790,
+      "url": "http://127.0.0.1:8790"
     }
   ]
 }
