@@ -433,3 +433,17 @@ def test_a_public_studios_day_moves_on_at_midnight_and_what_was_asked_keeps_its_
     first = local.day
     local.clock = lambda: date.fromisoformat(first) + timedelta(days=3)
     assert not local.roll() and local.day == first  # this computer's own studio: as ever
+
+
+def test_a_public_studio_in_its_beta_asks_search_engines_not_to_list_it(opened):
+    studio, port, _ = opened
+    assert "X-Robots-Tag" not in ask(port, "GET", "/")[1] and ask(port, "GET", "/robots.txt")[0] == 404  # not asked
+    studio.noindex = True  # --noindex
+    for path in ("/", "/studio.js", "/api/start", "/audio/" + "a" * 16 + ".flac"):
+        assert ask(port, "GET", path)[1]["X-Robots-Tag"] == "noindex, nofollow", path
+    status, head, data = ask(port, "GET", "/robots.txt")
+    assert status == 200 and data == b"User-agent: *\nDisallow: /\n" and head["X-Robots-Tag"]
+    parser = argparse.ArgumentParser()
+    S.add_arguments(parser)
+    with pytest.raises(SystemExit, match="--noindex"):
+        S.run(parser.parse_args(["--noindex"]))  # for a public studio only

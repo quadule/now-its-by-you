@@ -1232,6 +1232,7 @@ class Studio:
     # Nothing a browser makes is sent back or kept here. docs/WEB-STUDIO.md, "Made in the visitor's browser".
 
     browser = None  # the bundle served (BrowserBundle), when --browser-render gave one
+    noindex = False  # a public studio asks search engines not to list it (--noindex: its beta)
 
     def enable_browser_render(self, folder: str | Path) -> None:
         if self.public is None:
@@ -1609,6 +1610,8 @@ class Handler(BaseHTTPRequestHandler):
         self.send_header("Content-Security-Policy", policy or
                          f"default-src 'self'; media-src {media}; img-src 'self' data:; style-src 'self'; "
                          "script-src 'self'; connect-src 'self'; frame-ancestors 'none'; form-action 'none'")
+        if self.studio.noindex:  # a public studio in its beta: no search engine lists it
+            self.send_header("X-Robots-Tag", "noindex, nofollow")
         for k, v in (extra.items() if isinstance(extra, dict) else extra or ()):
             self.send_header(k, v)
         self.end_headers()
@@ -1645,6 +1648,8 @@ class Handler(BaseHTTPRequestHandler):
         if self.studio.public is not None:
             if path == "/healthz":
                 return self.send_json(self.studio.health())
+            if path == "/robots.txt" and self.studio.noindex:
+                return self.send(b"User-agent: *\nDisallow: /\n", "text/plain; charset=utf-8")
             if self._throttled():
                 return
         if not self._admitted():
@@ -2206,6 +2211,9 @@ def add_arguments(parser: argparse.ArgumentParser) -> None:
     parser.add_argument("--sing-kit", metavar="DIR",
                         help="the singing kit, made by python -m webstudio.prepare (default $SONGBIRD_SING_KIT, else "
                              "renders/sing-kit)")
+    parser.add_argument("--noindex", action="store_true",
+                        help="public: ask search engines not to list it (X-Robots-Tag: noindex on every reply, and a "
+                             "robots.txt that disallows everything), as for a beta")
     parser.add_argument("--browser-render", metavar="DIR",
                         help="public: serve the bundle built in DIR (web/studio-wasm/tools/build_render.py), so a "
                              "desktop browser makes the song itself and this server only when it can't "
@@ -2226,8 +2234,9 @@ def run(args: argparse.Namespace) -> int:
             limits = public_mod.Limits.parse(getattr(args, "limit", []))
         except ValueError as e:
             raise SystemExit(f"songbird studio: {e}") from None
-    elif getattr(args, "limit", []) or getattr(args, "client_ip_header", None):
-        raise SystemExit("songbird studio: --limit and --client-ip-header are for a public studio (--public)")
+    elif getattr(args, "limit", []) or getattr(args, "client_ip_header", None) or getattr(args, "noindex", False):
+        raise SystemExit("songbird studio: --limit, --client-ip-header and --noindex are for a public studio "
+                         "(--public)")
     header = getattr(args, "client_ip_header", None)
     if header and not re.fullmatch(r"[A-Za-z0-9-]{1,64}", header):
         raise SystemExit("songbird studio: --client-ip-header takes a header's name, like CF-Connecting-IP")
@@ -2239,6 +2248,7 @@ def run(args: argparse.Namespace) -> int:
             raise SystemExit("songbird studio: --key takes 8 to 64 letters, digits, - or _")
     machine = args.machine or ("none" if limits else "here")  # public: never the serving computer's own
     studio = Studio(parent, args.song, machine, Path(args.out) if args.out else None, key=key, public=limits)
+    studio.noindex = bool(limits) and getattr(args, "noindex", False)
     if getattr(args, "web_singing", False):
         studio.enable_web_singing(getattr(args, "sing_kit", None), check=True)
     if getattr(args, "browser_render", None):
