@@ -70,6 +70,7 @@ HAT = Plate(size=14.0, lowest=300.0, spacing=26.0, top=3000.0, t60=2.8, slope=0.
             lines=(0.0015, 0.009), stick=0.9, bloom=0.4, drain=2.0, correlation=0.7, gain=1.4)
 
 WASH = 12.0  # the wash's scale against the modes, for a plate with gain 1
+BLOCK = 1 << 16  # samples worked at a time where every operation is on each sample alone
 
 # Where a stick lands: (modes' level, wash's level, nonlinear feed, bell partials' level, tick)
 ZONES = {
@@ -236,10 +237,9 @@ def play(plate: Plate, hits: list[Hit], sr: int, length: int, rng: np.random.Gen
          brightness: float = 0.5, wear: float = 0.0, damp: np.ndarray | None = None) -> np.ndarray:
     """A cymbal played: every hit, as stereo (length, 2), each channel a microphone hearing its own mix.
     damp: a per-sample track of extra damping (nepers per second): a hi-hat's pedal, a hand's choke."""
-    out = np.zeros((length, 2))
     hits = sorted((h for h in hits if 0.0 <= h.time < length / sr), key=lambda h: h.time)
     if not hits:
-        return out
+        return np.zeros((length, 2))
     freqs, bell = cymbal.freqs, cymbal.bell
     k = len(freqs)
     all_freqs = np.concatenate([freqs, bell])
@@ -266,16 +266,21 @@ def play(plate: Plate, hits: list[Hit], sr: int, length: int, rng: np.random.Gen
     # climbs first; the ride's ping rings down into its wash while its gong stays): extra damping that follows
     # the plate's energy, weighted by frequency. A hand or a pedal damps every mode alike, on a track of its own.
     energy = _energy(times, np.array([h.vel * ZONES[h.zone][2] for h in hits]) ** 2, sr, length, 0.08)
+    energy *= plate.drain  # (plate.drain * energy, where it lies)
     # three outputs: the two microphones, and the plate's motion as a whole (for the nonlinear feed)
     mix = np.concatenate([cymbal.mix, np.ones((len(all_freqs), 1))], axis=1)
-    rung = struck.ring(all_freqs, all_t60, times, amps, sr, length, mix=mix, damp=plate.drain * energy,
+    rung = struck.ring(all_freqs, all_t60, times, amps, sr, length, mix=mix, damp=energy,
                        dweight=all_freqs / 1000.0, damp2=damp)
-    out += rung[:, :2]
-    feed = _feed(plate, hits, rung[:, 2] / cymbal.reference, burst_levels, sr, length, rng, brightness)
-    wash = _wash(plate, cymbal, feed, sr, length, damp, wear, brightness)
-    out += wash
-    out += _ticks(hits, sr, length, rng, brightness)
-    return out
+    del energy
+    # (each song-long signal let go once the next is made; the wash and the ticks added where the sound lies)
+    out = rung[:, :2] + 0.0  # what adding the microphones to zeros made
+    motion = rung[:, 2] / cymbal.reference
+    del rung
+    feed = _feed(plate, hits, motion, burst_levels, sr, length, rng, brightness)
+    del motion
+    _wash(plate, cymbal, feed, sr, length, damp, wear, brightness, into=out)
+    del feed
+    return _ticks(hits, sr, length, rng, brightness, into=out)
 
 
 def _energy(times: np.ndarray, levels: np.ndarray, sr: int, length: int, tau: float) -> np.ndarray:
@@ -285,7 +290,7 @@ def _energy(times: np.ndarray, levels: np.ndarray, sr: int, length: int, tau: fl
     impulses = np.zeros(frames)
     np.add.at(impulses, np.clip((times * sr / hop).astype(int), 0, frames - 1), levels)
     env = lfilter([1.0], [1.0, -np.exp(-hop / (tau * sr))], impulses)
-    return np.interp(np.arange(length) / hop, np.arange(frames), env)
+    return struck.per_sample(env, hop, length)
 
 
 def _feed(plate: Plate, hits: list[Hit], motion: np.ndarray, burst_levels: np.ndarray, sr: int, length: int,
@@ -309,16 +314,19 @@ def _feed(plate: Plate, hits: list[Hit], motion: np.ndarray, burst_levels: np.nd
         pole = np.exp(-2.0 * np.pi * cut / sr)
         feed[i:i + m] += lfilter([1.0 - pole], [1.0, -pole], grain) * level * plate.stick
     if plate.bloom > 0.0 and np.any(motion):
-        u = motion / np.sqrt(1.0 + (motion / 2.5) ** 2)
-        v = 0.6 * u * u + 0.4 * u * u * u
-        feed += plate.bloom * (v + 0.5 * v * v) * 0.5
+        for a in range(0, length, BLOCK):  # a stretch at a time (each sample by the same operations, alone)
+            m = motion[a:a + BLOCK]
+            u = m / np.sqrt(1.0 + (m / 2.5) ** 2)
+            v = 0.6 * u * u + 0.4 * u * u * u
+            feed[a:a + BLOCK] += plate.bloom * (v + 0.5 * v * v) * 0.5
     # nothing below the modes' reach enters the wash
     sos = butter(2, 2500.0 + 1000.0 * brightness, btype="highpass", fs=sr, output="sos")
     return sosfilt(sos, feed)
 
 
 def _wash(plate: Plate, cymbal: Cymbal, feed: np.ndarray, sr: int, length: int, damp: np.ndarray | None,
-          wear: float, brightness: float = 0.5) -> np.ndarray:
+          wear: float, brightness: float = 0.5, into: np.ndarray | None = None) -> np.ndarray:
+    """The wash, stereo; into: added to it where it lies (into + the wash), and it returned."""
     gains, poles = np.zeros(8), np.zeros(8)
     t_lo, t_hi = plate.wash_t60
     for i, line in enumerate(cymbal.lines):
@@ -327,19 +335,36 @@ def _wash(plate: Plate, cymbal: Cymbal, feed: np.ndarray, sr: int, length: int, 
     size = 1 << int(np.ceil(np.log2(cymbal.lines.max() + 2)))
     track = np.zeros(0) if damp is None else np.ascontiguousarray(damp, dtype=np.float64)
     wet = _fdn(np.ascontiguousarray(feed), cymbal.lines, gains, poles, cymbal.taps, cymbal.signs, track, float(sr), size)
-    # the strike's own burst is heard at once, the plate's reverberation after it
-    wet += feed[:, None] * np.array([0.5, 0.5])
-    wet = sosfilt(butter(2, 2200.0, btype="highpass", fs=sr, output="sos"), wet, axis=0)
+    # the strike's own burst is heard at once, the plate's reverberation after it (feed[:, None] * [0.5, 0.5]:
+    # each channel's feed * 0.5)
+    half = feed * 0.5
+    wet[:, 0] += half
+    wet[:, 1] += half
+    del half
+    sos = butter(2, 2200.0, btype="highpass", fs=sr, output="sos")
     # the plate radiates its top better and better up to about 10 kHz: a shelf rising 6 dB an octave from 3.5 kHz
     upper = 6000.0 + 6000.0 * brightness
     b, a = bilinear([1.0 / (2 * np.pi * 3500.0), 1.0], [1.0 / (2 * np.pi * upper), 1.0], fs=sr)
-    return lfilter(b, a, wet, axis=0) * plate.gain * WASH * (1.0 + 0.4 * wear)
+    for c in range(2):  # a channel at a time, where it lies: a channel filtered alone is filtered as along axis 0
+        wet[:, c] = lfilter(b, a, sosfilt(sos, wet[:, c]))
+    wet *= plate.gain  # the gains in the order they were multiplied
+    wet *= WASH
+    wet *= 1.0 + 0.4 * wear
+    if into is None:
+        return wet
+    into += wet
+    return into
 
 
-def _ticks(hits: list[Hit], sr: int, length: int, rng: np.random.Generator, brightness: float) -> np.ndarray:
-    """The stick's own tick on the bronze: a fraction of a millisecond of bright noise."""
-    out = np.zeros((length, 2))
+def _ticks(hits: list[Hit], sr: int, length: int, rng: np.random.Generator, brightness: float,
+           into: np.ndarray | None = None) -> np.ndarray:
+    """The stick's own tick on the bronze: a fraction of a millisecond of bright noise. hits in time order.
+    into: the ticks added to it (and it returned), a run of touching ticks at a time, each run's samples
+    summed from 0.0 in the hits' order as a whole track of them was; between runs that track is 0.0, and adding
+    0.0 leaves every value but -0.0 as it was (into is a sum begun from 0.0: it holds no -0.0)."""
+    out = np.zeros((length, 2)) if into is None else into
     n = int(0.003 * sr)
+    run, lo, hi = [], 0, 0
     sos = butter(2, 2500.0 + 2500.0 * brightness, btype="highpass", fs=sr, output="sos")
     for h in hits:
         level = ZONES[h.zone][4] * IMPLEMENTS[h.implement][2]
@@ -351,9 +376,31 @@ def _ticks(hits: list[Hit], sr: int, length: int, rng: np.random.Generator, brig
             continue
         burst = sosfilt(sos, rng.standard_normal(m + 32))[32:] * np.exp(-np.arange(m) / (0.0003 * sr))
         pan = rng.uniform(0.35, 0.65)
-        out[i:i + m, 0] += burst * level * h.vel ** 1.5 * 2.0 * np.sqrt(2 * (1 - pan))
-        out[i:i + m, 1] += burst * level * h.vel ** 1.5 * 2.0 * np.sqrt(2 * pan)
+        tick = (i, burst * level * h.vel ** 1.5 * 2.0 * np.sqrt(2 * (1 - pan)),
+                burst * level * h.vel ** 1.5 * 2.0 * np.sqrt(2 * pan))
+        if into is None:
+            out[i:i + m, 0] += tick[1]
+            out[i:i + m, 1] += tick[2]
+            continue
+        if run and i >= hi:  # (in time order, a tick starting past the run's end touches none before it)
+            _lay(out, lo, hi, run)
+            run = []
+        if not run:
+            lo, hi = i, i
+        run.append(tick)
+        hi = max(hi, i + m)
+    if run:
+        _lay(out, lo, hi, run)
     return out
+
+
+def _lay(out: np.ndarray, lo: int, hi: int, run: list) -> None:
+    """Touching ticks (i, left, right) summed from 0.0 in their order over lo..hi, and that added to out."""
+    local = np.zeros((hi - lo, 2))
+    for i, left, right in run:
+        local[i - lo:i - lo + len(left), 0] += left
+        local[i - lo:i - lo + len(right), 1] += right
+    out[lo:hi] += local
 
 
 def sizzle(times_open: list[tuple[float, float, float]], strikes: list[Hit], sr: int, rng: np.random.Generator,
