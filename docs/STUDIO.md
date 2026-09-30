@@ -151,8 +151,15 @@ the form back to the machine, which chooses it from the parent's as it would wit
 order (with no machine, the parent's form stays; never the seed's in its place).
 
 **Play sketch** auditions a phrase, section or whole song immediately through a
-small Web Audio oscillator. Loop and click provide practice tools; the playhead
-follows the score. This is a melody guide. **Hear sung section** and **Hear the
+few Web Audio oscillators: the tune, and under it its chords (a soft strum on
+each beat, the triad between G3 and F♯4) and a bass (each chord's bass note on
+its first beat, its fifth halfway through a four-beat chord), with **Chords**
+and **Bass** to leave either out. It reads the page's own score (each tune line's
+`harmony`, from `composition.view`: every chord where the band lays it, its
+name and pitch classes, bass first), so a key, mode, tempo or chord change is
+heard as soon as the page has it, with no render. Loop and click provide
+practice tools; the playhead follows the score. It is a sketch: no swing, no
+style, no singer. **Hear sung section** and **Hear the
 song** use the real singer, phrasing, arrangement and mix, rendering locally when
 needed. The two players stop each other. Existing audio is marked when it belongs
 to earlier edits.

@@ -47,7 +47,7 @@ from dataclasses import replace
 
 from . import variants
 from .genome import sung_words
-from .theory import MODES, degree_semitones
+from .theory import MODES, chord_bass, chord_name, chord_tones, degree_semitones
 
 GRID = 0.25  # a sixteenth note in a quarter-note beat
 MAX_SECTIONS = 48
@@ -364,6 +364,24 @@ def phrase_value(genome, params, pid):
             for n in played(genome.phrases[pid], params)]
 
 
+def harmony(genome, phrase, params) -> list[dict]:
+    """A tune line's chords as the band plays them: each where it starts in the line (beats from its first
+    bar line) and how long it lasts (a bar's chords share it out on its beats, as songbird.band lays them),
+    with its name in this key and its pitch classes, bass first."""
+    per_bar = genome.meter.bar / genome.meter.beat
+    out = []
+    for b, bar in enumerate(phrase.chords):
+        for k, symbol in enumerate(bar):
+            a = round(k * per_bar / len(bar))
+            z = round((k + 1) * per_bar / len(bar)) if k + 1 < len(bar) else per_bar
+            tones = chord_tones(symbol, params.mode)
+            out.append({"bar": b, "slot": k, "start": b * per_bar + a, "beats": z - a, "symbol": symbol,
+                        "name": chord_name(symbol, params.tonic, params.mode),
+                        "pcs": [(params.tonic + t) % 12 for t in tones],
+                        "bass": (params.tonic + chord_bass(symbol, params.mode)) % 12})
+    return out
+
+
 def view(genome, params, lyrics) -> dict:
     """The editor's complete arrangement and piano roll without rendering audio. duration: the realized
     score's length in seconds, the last chord's ring included, which the rendered audio lasts."""
@@ -373,6 +391,7 @@ def view(genome, params, lyrics) -> dict:
 
     clock = timeline(genome, params)
     meter = genome.meter
+    genome = harmonized(genome, params)  # a person's chords, where they changed any
     lyrics = lyrics if lyrics is not None else seed_lyrics(genome, params.form)
     keys = lyric_keys(genome, params.form, lyrics)
     patches = authored(genome, params, lyrics)
@@ -399,6 +418,7 @@ def view(genome, params, lyrics) -> dict:
                             "duration_beats": phrase.bars * meter.bar / meter.beat,
                             "pickup_beats": phrase.pickup / meter.beat, "notes": notes,
                             "chords": [list(bar) for bar in phrase.chords], "bounds": bounds(genome, phrase),
+                            "harmony": harmony(genome, phrase, params),
                             "lyric_path": f"lyrics.{keys[index]}.{j}" if keys[index] else None,
                             "lyric_text": lines[index][j] if lines[index] else "",
                             "syllable_count": len(phrase.sung),

@@ -418,6 +418,36 @@ test("metronome clicks follow score downbeats after pickups in every playback sc
   s.window.SongbirdComposer.stop();
 });
 
+test("the sketch plays the chords and a bass under the tune, from the score, and each can be left out", () => {
+  const view = score();
+  for (const s of view.composition.sections) for (const p of s.phrases) {
+    p.harmony = [{ bar: 0, slot: 0, start: 0, beats: 2, symbol: "I", name: "C", pcs: [0, 4, 7], bass: 0 },
+      { bar: 0, slot: 1, start: 2, beats: 2, symbol: "V", name: "G/B", pcs: [7, 11, 2], bass: 11 }];
+  }
+  const hz = (pitch) => 440 * 2 ** ((pitch - 69) / 12);
+  const near = (a, b) => Math.abs(a - b) < 1e-6;
+  const s = setup(view);
+  s.find("#sbc-play").emit("click");
+  const strums = s.oscillators.filter((o) => o.type === "sawtooth");
+  const basses = s.oscillators.filter((o) => o.type === "triangle" && o.frequency.value < hz(48));
+  assert.equal(strums.length, 12, "two chords, a strum on each of their two beats, three strings each");
+  assert.deepEqual(strums.slice(0, 3).map((o) => o.frequency.value), [55, 60, 64].map(hz), "C major between G3 and F#4: G, C, E");
+  assert.deepEqual(strums.slice(6, 9).map((o) => o.frequency.value), [55, 59, 62].map(hz), "G major keeps the G");
+  assert.deepEqual(basses.map((o) => o.frequency.value), [hz(36), hz(47)], "the bass takes each chord's own bass note");
+  const origin = s.phrase().start_beat - 0.5;
+  assert(near(strums[0].started, 0.04 + (s.phrase().start_beat - origin) * 0.6), "a chord starts on its bar line");
+  assert(near(basses[1].started, 0.04 + (s.phrase().start_beat + 2 - origin) * 0.6));
+  s.window.SongbirdComposer.stop();
+  assert(s.oscillators.every((o) => o.stopped));
+  s.find("#sbc-option-chords").emit("change", { target: { checked: false } });
+  const before = s.oscillators.length;
+  s.find("#sbc-play").emit("click");
+  const added = s.oscillators.slice(before);
+  assert.equal(added.filter((o) => o.type === "sawtooth").length, 0);
+  assert.equal(added.filter((o) => o.type === "triangle" && o.frequency.value < hz(48)).length, 2);
+  s.window.SongbirdComposer.stop();
+});
+
 test("a browser without Web Audio keeps editing available and explains how to listen", () => {
   const s = setup(score(), { audioAvailable: false });
   s.find("#sbc-play").emit("click");

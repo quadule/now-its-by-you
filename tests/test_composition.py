@@ -425,3 +425,16 @@ def test_lines_an_older_record_kept_by_place_are_sung_there_and_handed_down_by_v
     same = child_of(record, "fox", "2029-03-14")  # a child still singing deaf third sings the line there
     assert same[1].verses == ("wire", "misheard", "deaf")
     assert sung(same[2], "verse", 2)[:11] == AUTHORED.split()
+
+
+def test_the_page_gets_each_lines_chords_where_the_band_plays_them():
+    """The sketch plays the chords from the view: each where the band lays it (a bar's chords share its beats),
+    named in the key, its pitch classes and its bass, following a key or mode chosen."""
+    params = Params.from_dict(G.seed_params)
+    view = C.view(G, params, None)
+    v2 = next(p for s in view["sections"] for p in s["phrases"] if p["id"] == "v2")  # I | V I
+    assert [(h["start"], h["beats"], h["name"], h["pcs"], h["bass"]) for h in v2["harmony"]] == [
+        (0, 4, "D", [2, 6, 9], 2), (4, 2, "A", [9, 1, 4], 9), (6, 2, "D", [2, 6, 9], 2)]
+    minor = C.view(G, replace(params, tonic=57, mode="aeolian"), None)
+    r3 = next(p for s in minor["sections"] for p in s["phrases"] if p["id"] == "r3")  # vi IV | I V
+    assert [h["name"] for h in r3["harmony"]] == ["F", "Dm", "Am", "Em"]

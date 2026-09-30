@@ -1,5 +1,6 @@
 /* A small, portable score editor. No samples, libraries, or network requests: the
- * piano sketch uses the browser's oscillator; the song's own renderer sings it. */
+ * sketch plays the tune, its chords and a bass on the browser's oscillators, at once;
+ * the song's own renderer sings it. */
 (() => {
   "use strict";
 
@@ -11,7 +12,7 @@
   };
   const state = {
     view: null, section: -1, phrase: 0, note: null, snap: 0.25, zoom: 1,
-    loop: false, metronome: false, scope: "phrase", drag: null,
+    loop: false, metronome: false, scope: "phrase", drag: null, chords: true, bass: true,
     context: null, playback: null, nodes: new Set(), frame: null,
   };
   const bridge = () => window.StudioBridge || {};
@@ -306,7 +307,10 @@
         { id: "sbc-play", class: "sbc-button sbc-primary", "aria-pressed": state.playback ? "true" : "false" }),
         select("Play", state.scope, [["phrase", "This phrase"], ["section", "This section"], ["song", "Whole song"]], (value) => { stop(); state.scope = value; paint(); }, { id: "sbc-play-scope" }),
         checkbox("Loop", state.loop, (value) => { state.loop = value; }),
-        checkbox("Click", state.metronome, (value) => { state.metronome = value; if (state.playback) { stop(); play(); } })),
+        checkbox("Click", state.metronome, (value) => { state.metronome = value; if (state.playback) { stop(); play(); } }),
+        // the sketch's band: the chords and a bass under the tune, from the score (a person's harmony included)
+        checkbox("Chords", state.chords, (value) => { state.chords = value; if (state.playback) { stop(); play(); } }),
+        checkbox("Bass", state.bass, (value) => { state.bass = value; if (state.playback) { stop(); play(); } })),
       el("div", { class: "sbc-transport-meta" }, el("span", { class: "sbc-tempo" }, `${Math.round(c.tempo)} `, el("span", {}, "BPM")),
         // what the two players are is said on demand, in the tune's "What is this?" (index.html)
         button("Hear sung section", () => { stop(); bridge().listen?.("you", section()?.index ?? state.section); }, { class: "sbc-button sbc-quiet" })));
@@ -520,6 +524,45 @@
     oscillator.onended = () => { state.nodes.delete(oscillator); oscillator.disconnect(); gain.disconnect(); };
     oscillator.start(start); oscillator.stop(start + length + 0.025);
   }
+  // The sketch's band: a plain strum on each beat of a chord (the first one fuller) and a bass on its first
+  // beat, the fifth halfway through a long one. Voiced from the chord's pitch classes: the triad between G3
+  // and F#4, the bass between C2 and B2.
+  const within = (pc, low) => low + (((pc - low) % 12) + 12) % 12;
+  function backing(ctx, chord, offset, seconds) {
+    const beats = Math.max(1, Math.round(chord.duration));
+    for (let k = 0; k < beats; k++) {
+      const start = offset + (chord.beat + k) * seconds;
+      if (start < ctx.currentTime - 0.01) continue;
+      const at = Math.max(ctx.currentTime, start), length = Math.min(chord.duration - k, 1) * seconds;
+      if (state.chords && chord.pcs.length) {
+        chord.pcs.map((pc) => within(pc, 55)).sort((a, b) => a - b).forEach((pitch, i) =>
+          pluck(ctx, pitch, at + i * 0.012, Math.max(0.12, length * 0.95), k ? 0.013 : 0.02));
+      }
+      if (state.bass && chord.bass !== undefined && (k === 0 || (beats >= 4 && k === beats / 2))) {
+        const pc = k === 0 ? chord.bass : chord.pcs[2] ?? chord.bass;
+        pluck(ctx, within(pc, 36), at, Math.max(0.2, Math.min(2, chord.duration - k) * seconds * 0.9), 0.07, "bass");
+      }
+    }
+  }
+  function pluck(ctx, pitch, start, duration, peak, kind = "strum") {
+    const oscillator = ctx.createOscillator(), gain = ctx.createGain();
+    oscillator.type = kind === "bass" ? "triangle" : "sawtooth";
+    oscillator.frequency.value = 440 * 2 ** ((pitch - 69) / 12);
+    let out = oscillator;
+    if (ctx.createBiquadFilter) {  // soften the strings' edge; the bass stays round
+      const filter = ctx.createBiquadFilter();
+      filter.type = "lowpass"; filter.frequency.value = kind === "bass" ? 700 : 1500;
+      oscillator.connect(filter); out = filter;
+    }
+    gain.gain.setValueAtTime(0, start);
+    gain.gain.linearRampToValueAtTime(peak, start + 0.006);
+    gain.gain.exponentialRampToValueAtTime(peak * 0.25, start + Math.min(0.25, duration * 0.5));
+    gain.gain.linearRampToValueAtTime(0.0001, start + duration);
+    out.connect(gain); gain.connect(ctx.destination);
+    state.nodes.add(oscillator);
+    oscillator.onended = () => { state.nodes.delete(oscillator); oscillator.disconnect(); if (out !== oscillator) out.disconnect(); gain.disconnect(); };
+    oscillator.start(start); oscillator.stop(start + duration + 0.03);
+  }
   function audition(pitch) {
     if (bridge().pauseAudio) bridge().pauseAudio();
     else document.getElementById("audio")?.pause();
@@ -535,7 +578,10 @@
       : chosen.at(-1).start_beat + chosen.at(-1).duration_beats;
     const events = phrases.flatMap((p) => p.notes.map((n) => ({ beat: p.start_beat + n.onset - origin, duration: n.duration,
       pitch: pitchFor(n), phrase: p.id }))).sort((a, b) => a.beat - b.beat);
-    return { origin, duration: Math.max(0.25, end - origin), events };
+    // the chords under the tune as the band lays them out: each where it starts in its line, for how long
+    const harmony = phrases.flatMap((p) => (p.harmony || []).map((h) => ({ beat: p.start_beat + h.start - origin,
+      duration: h.beats, pcs: h.pcs || [], bass: h.bass }))).filter((h) => h.beat >= -1e-9 && h.beat < end - origin - 1e-9);
+    return { origin, duration: Math.max(0.25, end - origin), events, harmony };
   }
   function togglePlay() { if (state.playback) { stop(); paint(); } else play(); }
   function play() {
@@ -564,6 +610,7 @@
         const start = offset + event.beat * playback.seconds;
         if (start >= ctx.currentTime - 0.01) tone(ctx, event.pitch, Math.max(ctx.currentTime, start), Math.max(0.07, event.duration * playback.seconds * 0.88));
       }
+      for (const chord of playback.harmony || []) backing(ctx, chord, offset, playback.seconds);
       if (state.metronome) {
         // The pickup precedes beat one. Anchor clicks to the score's bar grid,
         // rather than treating the first playback instant as a downbeat.
