@@ -105,7 +105,8 @@ def test_moving_and_resizing_notes_changes_the_sung_score_in_beats():
     (lambda n: n[0].update(onset=-1), "inside"),
     (lambda n: n[1].update(duration=0.1), "inside"),
     (lambda n: n[1].update(duration=2), "overlap"),
-    (lambda n: n[-1].update(degree=3), "home note"),
+    (lambda n: n.insert(0, {"degree": 1, "onset": -0.5, "duration": 0.25, "slur": True}), "first note begins"),
+    (lambda n: n[1].update(slur="yes"), "slurred (true) or not"),
     (lambda n: n[-1].update(duration=4), "inside"),
     (lambda n: n[-1].update(onset=7.5, duration=0.5), "pickup"),
     (lambda n: n[1].update(extra="unknown"), "each note needs"),
@@ -449,3 +450,117 @@ def test_the_page_gets_each_lines_chords_where_the_band_plays_them():
     minor = C.view(G, replace(params, tonic=57, mode="aeolian"), None)
     r3 = next(p for s in minor["sections"] for p in s["phrases"] if p["id"] == "r3")  # vi IV | I V
     assert [h["name"] for h in r3["harmony"]] == ["F", "Dm", "Am", "Em"]
+
+
+# ---------------------------------------------------------------- a freer melody (2026-09-29)
+
+
+def melisma(params=None):
+    """The refrain's first line, "Who made this song?", with "song" sung over three notes: 5, then 4 and 3."""
+    notes = C.phrase_value(G, params or choose_params(G), "r1")
+    notes[3] = dict(notes[3], duration=1.0)  # song: 5 at beat 2, for a beat...
+    notes[4:4] = [{"degree": 4, "onset": 3.0, "duration": 0.5, "slur": True},  # ...then 4 and 3 on the same vowel
+                  {"degree": 3, "onset": 3.5, "duration": 0.5, "slur": True}]
+    return notes
+
+
+def test_a_syllable_can_be_sung_over_several_notes_and_is_kept_beside_the_others():
+    notes = melisma()
+    clean, problems = E.check(G, {"tune.r1": notes})
+    assert not problems and clean["tune.r1"] == notes
+    mine = E.Overrides(G, clean).params(choose_params(G))
+    assert mine.composition["tune"]["r1"][3] == [5, 4.0, 4.0]  # the syllable held through its melisma
+    assert mine.composition["melisma"] == {"r1": {"3": [[4, 2.0], [3, 3.0]]}}
+    assert C.phrase_value(G, mine, "r1") == notes  # given back as the edit wrote it
+    view = next(p for s in C.view(G, mine, None)["sections"] for p in s["phrases"] if p["id"] == "r1")
+    assert [n.get("slur", False) for n in view["notes"]] == [False] * 4 + [True, True] + [False] * 4
+    assert [n["syllable"] for n in view["notes"]][3:6] == ["song?", "", ""] and view["notes"][4]["syllable_index"] == 3
+    released = E.Overrides(G, {"tune.r1": None}).params(mine)  # restored: the melisma goes with the line
+    assert "tune" not in released.composition and "melisma" not in released.composition
+
+
+def five(notes):  # "song" over five notes: its own and four slurred on
+    notes[3:6] = [{"degree": 5, "onset": 2.0, "duration": 0.25}] + [
+        {"degree": d, "onset": 2.25 + 0.25 * k, "duration": 0.25 if k < 3 else 1.0, "slur": True}
+        for k, d in enumerate((4, 3, 2, 3))]
+
+
+@pytest.mark.parametrize("change,why", [
+    (five, "at most 4 notes"),
+    (lambda n: n[4].update(onset=3.25, duration=0.25), "starts where note 4 ends"),
+    (lambda n: n[5].update(degree=9), "a fifth at most"),
+    (lambda n: n[5].update(duration=0.2), "at least a quarter beat"),
+])
+def test_a_melisma_keeps_its_fences(change, why):
+    notes = melisma()
+    change(notes)
+    cleaned, problems = E.check(G, {"tune.r1": notes})
+    assert cleaned == {} and why in problems[0]["why"], problems
+
+
+def test_a_melisma_is_sung_as_one_syllable_turning_on_the_grid():
+    from songbird.synth.voice import BLOCK, VoiceParams, pitch_track, schedule
+
+    base = replace(choose_params(G), humanize=0)
+    mine = E.Overrides(G, {"tune.r1": melisma(base)}).params(base)
+    plain_score, score = realize(G, base), realize(G, mine)
+    assert len(score.part("voice")) == len(plain_score.part("voice"))  # a note a syllable, still
+    song = [n for n in score.part("voice") if n.melisma]
+    assert len(song) == 3 and all(n.syllable == "song?" for n in song)  # every refrain's first line
+    beat = 60 / base.tempo
+    assert [t for t, _ in song[0].melisma] == pytest.approx([1.0 * beat, 1.5 * beat])  # a beat and a beat and a half in
+    assert [s for _, s in song[0].melisma] == [-2.0, -3.0]  # 4 and 3 under the 5
+    assert song[0].dur == pytest.approx(2.0 * beat, abs=0.02)
+    # the consonants and vowels are scheduled as without it
+    voice = VoiceParams(engine="formant", jitter=0.0, wander=0.0, glide_spread=0.0)
+    line = [n for n in score.part("voice") if n.phrase == "r1"][:8]
+    plain_line = [n for n in plain_score.part("voice") if n.phrase == "r1"][:8]
+    assert [(s.phone, round(s.t0, 6), round(s.t1, 6)) for s in schedule(line, voice, score.lexicon)] == \
+        [(s.phone, round(s.t0, 6), round(s.t1, 6)) for s in schedule(plain_line, voice, score.lexicon)]
+    # and the pitch turns at each note's moment, even where the vowel is short
+    t0 = line[0].start
+    shifted = [replace(n, start=n.start - t0 + 0.5) for n in line]
+    n_blocks = int((shifted[-1].start + shifted[-1].dur + 1.0) * 44100 / BLOCK)
+    tb = (np.arange(n_blocks) + 0.5) * BLOCK / 44100
+    f = 12 * np.log2(pitch_track(shifted, n_blocks, 44100, voice, np.random.default_rng(0)) / 440) + 69
+    s = shifted[3]
+    for (t, semis), until in zip(s.melisma, (s.melisma[1][0], s.dur)):
+        window = (tb > s.start + t + 0.06) & (tb < s.start + until - 0.06)
+        assert abs(np.median(f[window]) - (s.pitch + semis)) < 0.35, (t, semis)
+    quick = [replace(n, melisma=((0.1, -2.0), (0.16, -3.0))) if n.melisma else n for n in shifted]
+    turned = pitch_track(quick, n_blocks, 44100, voice, np.random.default_rng(0))
+    assert not np.allclose(turned, pitch_track([replace(n, melisma=()) for n in quick], n_blocks, 44100, voice,
+                                               np.random.default_rng(0)))  # never swallowed
+
+
+def test_the_band_hears_a_melisma_as_notes_and_the_midi_file_writes_them():
+    from songbird import band, midi, notesin, variation as V
+
+    base = choose_params(G)
+    mine = E.Overrides(G, {"tune.r1": melisma(base), "tune.intro:0.0": None}).params(base)
+    with band.overheard() as heard:
+        score = V.lay(realize(G, mine), mine)
+    ctx = heard["ctx"]
+    song = [t for t in ctx.tune if t.phrase == "r1" and t.sung]
+    assert len(song) == 3 * (len(G.phrases["r1"].sung) + 2)  # the tune the band keeps clear of: every note
+    data, _ = midi.from_score(G, mine, score)
+    voice = next(t for t in midi.parse(data)["tracks"] if t["name"] == "Voice")
+    assert len(voice["notes"]) == len(score.part("voice")) + 2 * 3  # two more notes in each refrain's first line
+    lyrics = [x for x in voice["texts"] if x[1] == 0x05]
+    assert len(lyrics) == len(score.part("voice"))  # a lyric a syllable, on its first note
+    assert notesin.from_file(G, mine, score, data)["changes"] == []  # brought back unchanged: no change
+
+
+def test_an_ending_off_its_home_note_is_kept_and_said():
+    notes = C.phrase_value(G, choose_params(G), "r4")  # ...and now it's by you: ends on 1
+    notes[-1] = dict(notes[-1], degree=2)
+    clean, problems = E.check(G, {"tune.r4": notes})
+    assert not problems
+    mine = E.Overrides(G, clean).params(choose_params(G))
+    r4 = next(p for s in C.view(G, mine, None)["sections"] for p in s["phrases"] if p["id"] == "r4")
+    assert r4["advice"] == ["This line now ends on 2, not on 1 as the song's does: it sounds open, like a question; "
+                            "the chord under it, D, doesn't have it."]
+    assert not next(p for s in C.view(G, choose_params(G), None)["sections"] for p in s["phrases"]
+                    if p["id"] == "r4")["advice"]
+    bounds = C.bounds(G, G.phrases["r4"])
+    assert (bounds["min_degree"], bounds["max_degree"]) == (-5, 9)  # three steps past the song's own notes

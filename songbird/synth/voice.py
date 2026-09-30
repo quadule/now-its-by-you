@@ -653,7 +653,11 @@ def pitch_track(notes: list[Note], n_blocks: int, sr: int, voice: VoiceParams, r
         heard = min(sounding[k], end) if sounding is not None else end  # the vowel's own end
         zk = z[k]
         orn = note.ornament
-        if orn:  # sung over the vowel, and done before the voice moves on to the next note
+        melisma = bool(note.melisma)
+        if melisma:  # a person's melisma: its turns at their own moments (seconds after the note's start), never
+            # dropped for want of vowel (a short one turns quicker), as ornament breakpoints over a one-second span
+            orn = tuple((float(t), float(s)) for t, s in note.melisma)
+        elif orn:  # sung over the vowel, and done before the voice moves on to the next note
             span_end = heard
             nxt = notes[k + 1] if k + 1 < len(notes) else None
             if nxt is not None and not note.line_end and nxt.start - end <= 0.05:
@@ -699,7 +703,8 @@ def pitch_track(notes: list[Note], n_blocks: int, sr: int, voice: VoiceParams, r
         left = 0.0
         turning = None
         if orn:  # sung inside the note, over its vowel
-            bend, moving, settled = ornament_bend(orn, note.start, max(span_end, note.start + 0.05), tb, move_time)
+            bend, moving, settled = ornament_bend(orn, note.start, note.start + 1.0 if melisma
+                                                  else max(span_end, note.start + 0.05), tb, move_time)
             target[after] += bend[after]
             turning = np.clip((tb - moving + 0.05) / 0.05, 0.0, 1.0) * np.clip((settled + 0.1 - tb) / 0.05, 0.0, 1.0)
             left = float(orn[-1][1])

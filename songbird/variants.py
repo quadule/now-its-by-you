@@ -240,6 +240,9 @@ class Played:
     dur: float
     ornament: tuple  # ((fraction of the note, scale steps), ...), () for none
     variant: Variant | None  # the variant sung on this note, if any
+    # a person's melisma on this syllable (songbird.composition): ((grid units after the note's onset, degree), ...),
+    # each a note of its own the syllable's vowel moves to there; () for none
+    melisma: tuple = ()
 
 
 def realized(phrase: Phrase, variants=()) -> tuple[Played, ...]:

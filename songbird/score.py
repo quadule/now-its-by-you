@@ -25,12 +25,17 @@ class Note:
     # an ornament sung inside the note (songbird.variants): ((fraction of the sung note, semitones from it), ...),
     # each the pitch the voice turns to at that point; () for a plain note
     ornament: tuple = ()
+    # a melisma a person wrote on this syllable (songbird.composition): ((seconds after the note's start, semitones
+    # from it), ...), each a note its vowel moves on to at that moment, on the grid; () for none
+    melisma: tuple = ()
 
 
 def _note_dict(note: Note) -> dict:
     data = asdict(note)
     if not note.ornament:  # a plain note's record is as it always was
         del data["ornament"]
+    if not note.melisma:
+        del data["melisma"]
     return data
 
 

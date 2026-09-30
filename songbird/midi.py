@@ -556,8 +556,15 @@ def from_score(genome, params, score, title: str | None = None) -> tuple[bytes, 
                 events.append((on, 2, text(0x05, shown + ("-" if syllable < word_len else " "))))
                 if syllable >= word_len:
                     syllable = 0
-            events.append((on, 4, bytes([0x90 | channel, key, vel])))
-            events.append((max(off, on + 1), 3, bytes([0x80 | channel, key, 0])))
+            # a person's melisma: each of its notes a note of its own (the syllable's lyric on the first), at its
+            # moment on the grid
+            turns = [(t, s) for t, s in getattr(n, "melisma", ()) if t < n.dur - 1e-6] if part == "voice" else []
+            starts = [on] + [ticks.tick(n.start + t) for t, _ in turns]
+            keys = [key] + [max(0, min(127, key + int(round(s)))) for _, s in turns]
+            ends = starts[1:] + [off]
+            for a, z, k in zip(starts, ends, keys):
+                events.append((a, 4, bytes([0x90 | channel, k, vel])))
+                events.append((max(z, a + 1), 3, bytes([0x80 | channel, k, 0])))
         tracks.append(events)
 
     # the chords under the tune (a person's own harmony among them), each named where it starts

@@ -367,6 +367,7 @@ def realize(genome: Genome, params: Params, verses=None, phrasing: Phrasing | No
             in_bar = phrase.chords[bar]
             chord = in_bar[int(min(max((onset - bar * meter.bar) * len(in_bar) // meter.bar, 0), len(in_bar) - 1))]
             degree = v.degree if v else note.degree
+            turns = getattr(v, "melisma", ()) if v else ()  # a person's melisma: (grid units after the onset, degree)
             melody.append(
                 dict(
                     u=u,
@@ -385,6 +386,8 @@ def realize(genome: Genome, params: Params, verses=None, phrasing: Phrasing | No
                     index=k,
                     composed=composed,
                     gesture=gesture(phrasing, phrase.id, k),
+                    **({"melisma": tuple((off, params.tonic + degree_semitones(d, params.mode)) for off, d in turns)}
+                       if turns else {}),
                 )
             )
 
@@ -414,6 +417,9 @@ def realize(genome: Genome, params: Params, verses=None, phrasing: Phrasing | No
                 section=m["section"],
                 phrase=m["phrase"],
                 ornament=m["ornament"],
+                # its turns at their own moments on the grid, as seconds after the note's written start
+                melisma=tuple((seconds(m["u"] + off) - seconds(m["u"]), float(p - m["pitch"]))
+                              for off, p in m.get("melisma", ())),
             )
             sung_note = sung_as(unphrased, m["gesture"], beat)
             deliveries["voice"].append((unphrased, sung_note))
@@ -423,13 +429,13 @@ def realize(genome: Genome, params: Params, verses=None, phrasing: Phrasing | No
                 if own:  # sung that voice's way, from its own phrasing
                     g = gesture(own, m["phrase"], m["index"])
                     base = replace(unphrased, part=f"choir{v + 1}", pitch=float(pitch), vel=0.9 * unphrased.vel,
-                                   ornament=())
+                                   ornament=(), melisma=())
                     deliveries.setdefault(base.part, []).append((base, sung_as(base, g, beat)))
                 else:  # together with the lead in time, but each with its own way with pitch
                     part = f"choir{v + 1}"
                     deliveries.setdefault(part, []).append((unphrased,
                         replace(sung_note, part=part, pitch=float(pitch),
-                                vel=0.9 * sung_note.vel, gesture=None, ornament=())))
+                                vel=0.9 * sung_note.vel, gesture=None, ornament=(), melisma=())))
 
     notes = [n for pairs in deliveries.values() for n in ordered_delivery(pairs)]
     accomp, band_settings = band_mod.arrange(genome, params, placed, lead, end, melody, seconds)

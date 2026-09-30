@@ -422,23 +422,29 @@ class Overrides:
         # called repeatedly while the machine makes the dependent decisions.
         held = dict(out.get("composition") or {})
         tune = dict(held.get("tune") or {})
+        melisma = dict(held.get("melisma") or {})  # a line's melismas, beside its syllables' notes
         for path, value in e.items():
             if not path.startswith("tune."):
                 continue
             try:
                 notes = composition.check_phrase(self.genome, path[5:], value)
                 key = composition.edit_key(self.genome, path[5:])  # a line, or one place of the form
+                melisma.pop(key, None)  # a line changed or restored takes its melismas with it
                 if notes is None:
                     tune.pop(key, None)
                 else:
                     tune[key] = composition.pack_phrase(self.genome, notes)
+                    turns = composition.pack_melisma(self.genome, notes)
+                    if turns:
+                        melisma[key] = turns
                 applied.append(path)
             except (ValueError, TypeError) as ex:
                 problems.append(Problem(path, str(ex)))
-        if tune:
-            held["tune"] = tune
-        else:
-            held.pop("tune", None)
+        for kind, now in (("tune", tune), ("melisma", melisma)):
+            if now:
+                held[kind] = now
+            else:
+                held.pop(kind, None)
         # a person's chords for a tune line, everywhere it is sung (composition.harmonized), or at one place of the
         # form (composition.form_phrases)
         chords = {k: [list(bar) for bar in v] for k, v in (held.get("chords") or {}).items()}
@@ -764,16 +770,17 @@ def _unplaced(genome, params, generated, paths) -> object:
     for path in paths:
         kind, key = path.split(".", 1)
         key = composition.edit_key(genome, key)
-        now = dict(held.get(kind) or {})
-        was = (generated.composition.get(kind) or {}).get(key)
-        if was is None:
-            now.pop(key, None)
-        else:
-            now[key] = was
-        if now:
-            held[kind] = now
-        else:
-            held.pop(kind, None)
+        for kind in (kind, "melisma") if kind == "tune" else (kind,):
+            now = dict(held.get(kind) or {})
+            was = (generated.composition.get(kind) or {}).get(key)
+            if was is None:
+                now.pop(key, None)
+            else:
+                now[key] = was
+            if now:
+                held[kind] = now
+            else:
+                held.pop(kind, None)
     return replace(params, composition=held)
 
 

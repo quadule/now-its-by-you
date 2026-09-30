@@ -51,6 +51,9 @@ from .genome import sung_words
 from .theory import MODES, SEVENTHS, chord_bass, chord_name, chord_tones, degree_semitones, parse_symbol
 
 GRID = 0.25  # a sixteenth note in a quarter-note beat
+MELISMA = 4  # notes a syllable may be sung over: its own and three more, slurred (docs/STUDIO.md, "A freer melody")
+MELISMA_STEP = 4  # scale steps a melisma may move from one of its notes to the next (a fifth)
+RANGE = 3  # scale steps a person's tune may go past the song's own lowest and highest notes
 MAX_SECTIONS = 48
 LYRIC_PATH = re.compile(r"lyrics\.([A-Za-z][A-Za-z0-9_-]*):([A-Za-z0-9_-]+)\.(\d+)")
 LAST = "last"  # the last refrain's round, which the bank's rules always sing the same way
@@ -278,7 +281,7 @@ def order(genome, value) -> list[str] | None:
 
 def bounds(genome, phrase) -> dict:
     degrees = [n.degree for p in genome.phrases.values() for n in p.sung]
-    low, high = min(degrees) - 2, max(degrees) + 2
+    low, high = min(degrees) - RANGE, max(degrees) + RANGE
     end = phrase.bars * genome.meter.bar / genome.meter.beat
     pickup = max(p.pickup for p in genome.phrases.values()) / genome.meter.beat
     last = phrase.sung[-1].onset / genome.meter.beat if phrase.sung else end
@@ -287,7 +290,7 @@ def bounds(genome, phrase) -> dict:
             "min_onset": -phrase.pickup / genome.meter.beat,
             "max_end": end, "max_final_onset": max(last, end - pickup - GRID),
             "min_duration": GRID, "grid": GRID, "cadence_degree": phrase.sung[-1].degree if phrase.sung else None,
-            "max_leap": 7}
+            "max_leap": 7, "melisma": MELISMA, "melisma_step": MELISMA_STEP}
 
 
 def _finite(value) -> float:
@@ -317,14 +320,23 @@ def check_phrase(genome, pid: str, value) -> list[dict] | None:
     phrase = genome.phrases[pid]
     if not phrase.sung:
         raise ValueError("this line is a rest; it has no melody notes to move")
-    if not isinstance(value, list) or len(value) != len(phrase.sung):
-        raise ValueError(f"this line needs {len(phrase.sung)} notes, one for each syllable")
+    want = len(phrase.sung)
+    if not isinstance(value, list) or not want <= len(value) <= want * MELISMA:
+        raise ValueError(f"this line needs {want} notes, one for each syllable")
+    if sum(not (isinstance(item, dict) and item.get("slur") is True) for item in value) != want:
+        raise ValueError(f"this line needs {want} notes, one for each syllable (and any more slurred onto them)")
     limits = bounds(genome, phrase)
     result = []
+    k, run = -1, 0  # the syllable each note sings, and how many notes it has so far
     for i, item in enumerate(value):
-        if not isinstance(item, dict) or set(item) != {"degree", "onset", "duration"}:
-            raise ValueError("each note needs degree, onset and duration")
-        degree, onset, duration = (_finite(item[k]) for k in ("degree", "onset", "duration"))
+        if not isinstance(item, dict) or not {"degree", "onset", "duration"} <= set(item) <= {
+                "degree", "onset", "duration", "slur"}:
+            raise ValueError("each note needs degree, onset and duration (and slur, for a note sung on the "
+                             "syllable before)")
+        slur = item.get("slur", False)
+        if not isinstance(slur, bool):
+            raise ValueError("a note is slurred (true) or not")
+        degree, onset, duration = (_finite(item[key]) for key in ("degree", "onset", "duration"))
         if not degree.is_integer() or not limits["min_degree"] <= degree <= limits["max_degree"]:
             raise ValueError(f"note {i + 1} is outside this song's singing range")
         if duration < GRID or onset < limits["min_onset"] or onset + duration > limits["max_end"] + 1e-8:
@@ -333,22 +345,86 @@ def check_phrase(genome, pid: str, value) -> list[dict] | None:
         # those exact values when submitted; newly dragged notes snap in the UI.
         if result and onset < result[-1]["onset"] + result[-1]["duration"] - 1e-8:
             raise ValueError(f"notes {i} and {i + 1} overlap; each syllable needs its own time")
-        if result and abs(degree - result[-1]["degree"]) > max(7, abs(phrase.sung[i].degree - phrase.sung[i - 1].degree)):
-            raise ValueError(f"the leap into note {i + 1} is wider than an octave")
-        result.append({"degree": int(degree), "onset": onset, "duration": duration})
-    if (result[-1]["degree"] - phrase.sung[-1].degree) % 7:
-        raise ValueError("the last note keeps the line's home note; try moving it an octave")
+        if slur:  # a melisma: the syllable's vowel goes on to this note (docs/STUDIO.md, "A freer melody")
+            if not result:
+                raise ValueError("the first note begins its syllable; a slurred note goes on from the one before")
+            run += 1
+            if run >= MELISMA:
+                raise ValueError(f"a syllable is sung over at most {MELISMA} notes")
+            if abs(onset - (result[-1]["onset"] + result[-1]["duration"])) > 1e-8:
+                raise ValueError(f"note {i + 1} is slurred, so it starts where note {i} ends: the vowel goes on")
+            if abs(degree - result[-1]["degree"]) > MELISMA_STEP:
+                raise ValueError(f"a melisma moves a fifth at most; note {i + 1} leaps further")
+        else:
+            k, run = k + 1, 0
+            if result and abs(degree - result[-1]["degree"]) > max(7, abs(phrase.sung[k].degree - phrase.sung[k - 1].degree)):
+                raise ValueError(f"the leap into note {i + 1} is wider than an octave")
+        result.append({"degree": int(degree), "onset": onset, "duration": duration, **({"slur": True} if slur else {})})
+    # the ending may leave its home note: said as advice (advice()), not refused
     if result[-1]["onset"] > limits["max_final_onset"] + 1e-8:
         raise ValueError("the last syllable needs room before the next line's pickup")
     return result
+
+
+def advice(genome, params, phrase) -> list[str]:
+    """What a line as a person changed it does that the song's own fences would have kept (said, not refused):
+    an ending off the line's home note."""
+    if not phrase.sung:
+        return []
+    notes = flat_notes(phrase, params)
+    if not notes or tune_key(phrase) not in (params.composition.get("tune") or {}):
+        return []
+    home, now = phrase.sung[-1].degree, notes[-1][0]
+    if not (now - home) % 7:
+        return []
+    fold = lambda d: (d - 1) % 7 + 1  # noqa: E731
+    bar = phrase.chords[-1]
+    tones = {(params.tonic + t) % 12 for t in chord_tones(bar[-1], params.mode)}
+    pitch = (params.tonic + degree_semitones(now, params.mode)) % 12
+    mood = "it sounds open, like a question" if fold(home) == 1 else "it ends somewhere new"
+    chord = "" if pitch in tones else (f"; the chord under it, {chord_name(bar[-1], params.tonic, params.mode)}, "
+                                       "doesn't have it")
+    return [f"This line now ends on {fold(now)}, not on {fold(home)} as the song's does: {mood}{chord}."]
 
 
 def pack_phrase(genome, notes) -> list[list]:
     # Independent rounding can turn touching notes into overlaps in compound
     # meters, so the next edit rejects a rhythm we already accepted. Preserve
     # floating-point timing through the compact representation and JSON.
-    return [[n["degree"], n["onset"] * genome.meter.beat,
-             n["duration"] * genome.meter.beat] for n in notes]
+    # A syllable sung over a melisma is one note here, held to its last note's end (its turns: pack_melisma).
+    out = []
+    for n in notes:
+        if n.get("slur"):
+            out[-1][2] = n["onset"] * genome.meter.beat + n["duration"] * genome.meter.beat - out[-1][1]
+            continue
+        out.append([n["degree"], n["onset"] * genome.meter.beat, n["duration"] * genome.meter.beat])
+    return out
+
+
+def pack_melisma(genome, notes) -> dict | None:
+    """A line's melismas as they are kept beside its syllables' notes: {syllable index: [[degree, grid units after
+    the syllable's onset], ...]}; None for a line without one."""
+    out: dict = {}
+    k, start = -1, 0.0
+    for n in notes:
+        if not n.get("slur"):
+            k, start = k + 1, n["onset"] * genome.meter.beat
+            continue
+        out.setdefault(str(k), []).append([n["degree"], n["onset"] * genome.meter.beat - start])
+    return out or None
+
+
+def flat_notes(phrase, params) -> list[tuple]:
+    """A line's notes as sung, a melisma's each its own: (degree, alter, onset, duration in grid units, slurred,
+    the syllable it sings)."""
+    out = []
+    for k, n in enumerate(played(phrase, params)):
+        starts = [0.0] + [off for off, _ in n.melisma]
+        degrees = [n.degree] + [deg for _, deg in n.melisma]
+        ends = starts[1:] + [n.dur]
+        for j, (a, z, d) in enumerate(zip(starts, ends, degrees)):
+            out.append((d, n.alter if not j else 0, n.onset + a, z - a, bool(j), k))
+    return out
 
 
 _HARMONIZED: dict = {}  # (the song, a person's chords) -> the song with them: one object each, so caches keyed by it hit
@@ -480,19 +556,23 @@ def tune_key(phrase) -> str:
 def played(phrase, params):
     """Human choices take precedence over variants on this line alone: a place's own tune, else the line's."""
     notes = variants.realized(phrase, params.variants)
-    edited = params.composition.get("tune", {}).get(tune_key(phrase))
+    key = tune_key(phrase)
+    edited = params.composition.get("tune", {}).get(key)
     if not edited:
         return notes
-    return tuple(replace(n, degree=d, onset=t, dur=duration, ornament=(), variant=None)
-                 for n, (d, t, duration) in zip(notes, edited))
+    turns = (params.composition.get("melisma") or {}).get(key) or {}
+    return tuple(replace(n, degree=d, onset=t, dur=duration, ornament=(), variant=None,
+                         melisma=tuple((float(off), int(deg)) for deg, off in turns.get(str(k), ())))
+                 for k, (n, (d, t, duration)) in enumerate(zip(notes, edited)))
 
 
 def phrase_value(genome, params, pid, place: str | None = None):
     """A line's notes as an edit writes them, as these parameters sing it: everywhere, or at one place of the form
     (a place key, "refrain:2.1"; its own tune if it has one, else the line's)."""
     phrase = genome.phrases[pid] if place is None else at_place(genome, params, place)
-    return [{"degree": n.degree, "onset": n.onset / genome.meter.beat, "duration": n.dur / genome.meter.beat}
-            for n in played(phrase, params)]
+    beat = genome.meter.beat
+    return [{"degree": d, "onset": u / beat, "duration": length / beat, **({"slur": True} if slur else {})}
+            for d, _, u, length, slur, _ in flat_notes(phrase, params)]
 
 
 # ---------------------------------------------------------------- one place, or everywhere (2026-09-29)
@@ -625,13 +705,14 @@ def harmony(genome, phrase, params) -> list[dict]:
     it), "hard" where one is a semitone from a tone of the chord."""
     per_bar = genome.meter.bar / genome.meter.beat
     m = genome.meter
-    notes = [n for n in played(phrase, params) if n.degree is not None]
     under: dict = {}
-    for k, n in enumerate(notes):
-        bar = int(min(max(n.onset // m.bar, 0), phrase.bars - 1))
+    for k, (degree, alter, onset, _, _, _) in enumerate(flat_notes(phrase, params)):  # a melisma's notes each
+        if degree is None:
+            continue
+        bar = int(min(max(onset // m.bar, 0), phrase.bars - 1))
         in_bar = phrase.chords[bar]
-        slot = int(min(max((n.onset - bar * m.bar) * len(in_bar) // m.bar, 0), len(in_bar) - 1))
-        pitch = params.tonic + degree_semitones(n.degree, params.mode, n.alter)
+        slot = int(min(max((onset - bar * m.bar) * len(in_bar) // m.bar, 0), len(in_bar) - 1))
+        pitch = params.tonic + degree_semitones(degree, params.mode, alter)
         under.setdefault((bar, slot), []).append((k, pitch % 12))
     out = []
     for b, bar in enumerate(phrase.chords):
@@ -688,13 +769,14 @@ def view(genome, params, lyrics) -> dict:
             tune_from, chords_from = scope(params, params.form, index, j, pid, "tune"), scope(
                 params, params.form, index, j, pid, "chords")
             notes = []
-            for k, n in enumerate(played(phrase, params)):
-                syllable, word, _ = words[k] if k < len(words) else ("", "", 0)
-                notes.append({"index": k, "degree": n.degree, "alter": n.alter,
-                              "pitch": params.tonic + degree_semitones(n.degree, params.mode, n.alter),
-                              "onset": n.onset / meter.beat, "duration": n.dur / meter.beat,
-                              "syllable": syllable or "", "word": word or "",
-                              "edited": tune_from["from"] is not None})
+            for i, (degree, alter, onset, length, slur, k) in enumerate(flat_notes(phrase, params)):
+                syllable, word, _ = words[k] if k < len(words) and not slur else ("", "", 0)
+                notes.append({"index": i, "degree": degree, "alter": alter,
+                              "pitch": params.tonic + degree_semitones(degree, params.mode, alter),
+                              "onset": onset / meter.beat, "duration": length / meter.beat,
+                              "syllable": syllable or "", "word": word or (words[k][1] if k < len(words) else ""),
+                              "edited": tune_from["from"] is not None,
+                              **({"slur": True, "syllable_index": k} if slur else {})})
             phrases.append({"id": pid, "path": f"tune.{pid}", "start_beat": cursor / meter.beat,
                             "duration_beats": phrase.bars * meter.bar / meter.beat,
                             "pickup_beats": phrase.pickup / meter.beat, "notes": notes,
@@ -716,6 +798,7 @@ def view(genome, params, lyrics) -> dict:
                             "lyric_path": f"lyrics.{keys[index]}.{j}" if keys[index] else None,
                             "lyric_text": lines[index][j] if lines[index] else "",
                             "syllable_count": len(phrase.sung),
+                            "advice": advice(genome, params, phrase),  # a freed ending, said
                             "authored": str(j) in patches[index],
                             # a person's own notes played in for a player here (notes in)
                             "part_key": f"{identity}.{j}",

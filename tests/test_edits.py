@@ -231,9 +231,12 @@ def test_one_place_sounds_and_the_rest_dont_move():
     names = [s for _, _, s in idioms.chord_times(C.harmonized(g, mine), mine)]
     assert names.count("V7") == 1 and "V7" not in [s for _, _, s in idioms.chord_times(g, plain)]
     last = [s for s in after.sections if s[0] == "refrain"][-1]
-    changed = [n for n, m in zip(before.notes, after.notes) if (n.part, n.pitch) != (m.part, m.pitch)]
     intro = next(s for s in after.sections if s[0] == "intro")
-    assert changed and all(last[1] - 0.6 <= n.start or n.start < intro[2] + 0.6 for n in changed)
+    between = lambda score: [(n.part, round(n.start, 6), n.pitch) for n in score.notes  # noqa: E731
+                             if intro[2] + 0.6 <= n.start < last[1] - 0.6]
+    assert between(before) == between(after)  # nothing between the two places moves
+    inside = lambda score, a, z: [(n.part, n.pitch) for n in score.notes if a <= n.start < z]  # noqa: E731
+    assert inside(before, *intro[1:]) != inside(after, *intro[1:]) and inside(before, *last[1:]) != inside(after, *last[1:])
 
 
 def test_a_place_is_marked_replayed_handed_down_and_follows_the_last_refrain():

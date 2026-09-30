@@ -267,10 +267,22 @@ class Context:
         choirs = choir_voicing(ordered, int(getattr(self.params, "choir", 0)), self.tonic, self.mode)
         for i, m in enumerate(ordered):
             u1 = min(m["u_end"], ordered[i + 1]["u"]) if i + 1 < len(ordered) else self.end
-            self.tune.append(Tune(m["u"], u1, int(m["pitch"]), float(m["vel"]), bool(m["syllable"]),
-                                  self.section_at(m["u"]), m["index"] == 0, bool(m["line_end"]),
-                                  tuple(m.get("ornament", ())), str(m.get("phrase", "")),
-                                  float(m["u_end"] - m["u"])))
+            if m.get("melisma"):  # a person's melisma: each of its notes a note of the tune, for keeping clear of
+                # and for a lead playing the line where nobody sings (the choir holds its note under the syllable)
+                starts = [m["u"]] + [m["u"] + off for off, _ in m["melisma"]]
+                pitches = [int(m["pitch"])] + [int(p) for _, p in m["melisma"]]
+                ends = starts[1:] + [u1]
+                for j, (a, z, p) in enumerate(zip(starts, ends, pitches)):
+                    if a < u1 - 1e-9:
+                        self.tune.append(Tune(a, min(z, u1), p, float(m["vel"]), bool(m["syllable"]),
+                                              self.section_at(a), m["index"] == 0 and not j,
+                                              bool(m["line_end"]) and z >= u1 - 1e-9, (), str(m.get("phrase", "")),
+                                              float(min(z, m["u"] + (m["u_end"] - m["u"])) - a)))
+            else:
+                self.tune.append(Tune(m["u"], u1, int(m["pitch"]), float(m["vel"]), bool(m["syllable"]),
+                                      self.section_at(m["u"]), m["index"] == 0, bool(m["line_end"]),
+                                      tuple(m.get("ornament", ())), str(m.get("phrase", "")),
+                                      float(m["u_end"] - m["u"])))
             for pitch in choirs[i]:  # each lineage voice's harmony, as realize() sings it
                 self.choir.append((m["u"], u1, pitch))
 
