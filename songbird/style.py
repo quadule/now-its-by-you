@@ -609,7 +609,7 @@ def choose_options(genome, form, sdef: StyleDef, parent: Style, kept: bool, voic
         endings.pop("repeat", None)
     ending = pick(endings, coin(material, "ending", drift))
     backing = pick(o.get("backing", {"": 1.0}), coin(material, "backing", drift)) if voices else ""
-    drums = any(instruments_family(name) in ("drums",) for name in sdef.lineup)
+    drums = any(instruments_family(name) in ("drums", "drum machine") for name in sdef.lineup)
     bridge = "half" if drums and coin(material, "bridge", drift) < 0.35 else ""
     richness = c.richness if "richness" in c.known else 0.0
     season = drift.view("season").get("arrange", 0.0) if drift is not None else 0.0

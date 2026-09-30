@@ -353,7 +353,10 @@ class StyleContext(Context):
 
 # --- who does what where -----------------------------------------------------------------------------
 
-PERCUSSION = ("drums", "percussion")
+# A drum machine is the rhythm as a kit is (its module's family is its own, "drum machine"): it keeps playing
+# through a breakdown, waits with the rhythm after an intro's quote, joins with the drums, goes half-time.
+DRUMS = ("drums", "drum machine")
+PERCUSSION = DRUMS + ("percussion",)
 
 
 def family(part: str) -> str:
@@ -1710,7 +1713,7 @@ def shape_plan(ctx: Context, style, plan: Plan, rhythm, pads, chords_first) -> N
         starts = phrase_starts(ctx, 0)  # after the quote, the intro's rhythm waits for its second phrase
         if len(starts) > 1:
             for p in sections[0].parts:
-                if p in rhythm or p == "guitar" or family(p) in ("drums", "percussion", "bass"):
+                if p in rhythm or p == "guitar" or family(p) in PERCUSSION + ("bass",):
                     plan.entrances[(0, p)] = starts[1]
     if style.alone and len(verses) >= style.alone:
         i = verses[style.alone - 1]
@@ -1835,7 +1838,7 @@ def arrange_style(genome, params, placed, lead, end, melody, seconds, sdef) -> t
     shape_plan(ctx, params.style, ctx.plan, rhythm, pads, chords_first)
     for i in ctx.plan.half:
         for p, what in list(ctx.sections[i].parts.items()):
-            if family(p) == "drums":
+            if family(p) in DRUMS:
                 ctx.sections[i].parts[p] = "half"
             elif family(p) == "bass" and what in ("walk", "eighths", "two"):
                 ctx.sections[i].parts[p] = "roots"

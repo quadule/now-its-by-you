@@ -320,3 +320,19 @@ def test_the_styles_options_can_be_chosen_whole():
     assert others(params.style) == others(base.style)
     r = E.resolve(G, base, None, None, {"style.alone": 6})
     assert "verses" in r.problems[0]["why"]
+
+
+def test_a_breakdown_keeps_the_drum_machine_as_it_keeps_a_kit():
+    """The style's breakdown brings the band in on the last refrain's third line, the rhythm playing from the
+    start: a drum machine is the rhythm as a kit is (its module's family is "drum machine"; the arranger
+    counted only "drums", so half the last refrain went without its kick; the artist, 2026-09-30)."""
+    from songbird import idioms
+
+    assert {"drums", "drum machine"} <= set(idioms.PERCUSSION) and idioms.family("drummachine") in idioms.DRUMS
+    for style in ("synthfolk", "lofi"):
+        base = choose_params(G, None, None, None, style=style)
+        params = replace(base, form=tuple(FORM), style=replace(base.style, breakdown=True, entrances=False))
+        a, b = span(params, "refrain:2")
+        kicks = [n.start for n in realize(G, params).notes if n.part == "drummachine" and n.art == "kick" and a - 0.1 <= n.start < b]
+        first, second = sum(k < (a + b) / 2 for k in kicks), sum(k >= (a + b) / 2 for k in kicks)
+        assert first >= 0.8 * second > 0, (style, first, second)
