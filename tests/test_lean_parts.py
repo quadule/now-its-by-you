@@ -286,3 +286,34 @@ def worn(amount: float) -> str:
 @pytest.mark.parametrize("amount", list(WORN))
 def test_a_worn_mix_is_worn_as_it_was(amount):
     assert worn(amount) == WORN[amount]
+
+
+# What the mallets made of _struck() before 2026-09-30 (the tree at 02384c8): a vibraphone's motor on, changing
+# speed and off, and with no motor at all; a celesta through its case; a marimba.
+MALLETS = {
+    ("vibraphone", 0.6): "b7cc420c5aab8cb6a38b172476dedf35407838ddd68c5128b4fd4611fedcf94c",
+    ("vibraphone", 0.0): "d18f121556d248efe09c8a58ecda9d28a6ee5a9fc893d8de7122d72f3ea638a3",
+    ("vibraphone", -1.0): "cf01187aab7da47569e5ec99643c0dd45e1b83c017f3a84d980cf53aa29a5364",  # no motor at all: ornament 0 and no motor's art
+    ("celesta", 0.5): "b5636dcc9389e721d411f30d0bf66c2839eb65778ce10ecae4913110ff72f9f1",
+    ("marimba", 0.5): "fe1fdc1d1b05ffa999167c75c5a6f4cb07280cd6bbeddfe0948b154e27206dab",
+}
+
+
+def _struck(name: str, motor: bool = True):
+    rng = np.random.default_rng(14)
+    arts = ["", "", "motor-fast", "", "motor-slow", "", "motor-off", "", "motor-fast", ""] if motor else [""] * 10
+    return [_Note(0.2 + 0.7 * k, float(rng.uniform(0.2, 1.5)), float(60 + rng.integers(0, 19)),
+                  float(rng.uniform(0.3, 1.0)), art) for k, art in enumerate(arts)]
+
+
+def mallets_made(name: str, ornament: float) -> str:
+    from songbird.synth import mallets
+
+    y = mallets.render(name, _struck(name, name == "vibraphone" and ornament >= 0.0), SR, int(9.0 * SR),
+                       np.random.default_rng(15), np.random.default_rng(16), {"ornament": max(0.0, ornament), "wear": 0.5})
+    return hashlib.sha256(np.ascontiguousarray(y).tobytes()).hexdigest()
+
+
+@pytest.mark.parametrize("name,ornament", list(MALLETS))
+def test_mallets_make_the_samples_they_made(name, ornament):
+    assert mallets_made(name, ornament) == MALLETS[name, ornament]

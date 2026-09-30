@@ -113,9 +113,9 @@ from dataclasses import dataclass
 from functools import lru_cache
 
 import numpy as np
-from scipy.signal import lfilter, oaconvolve, sosfilt
+from scipy.signal import lfilter, sosfilt
 
-from . import body, modal, touch
+from . import body, modal, oa, touch
 from .iir import butter
 
 SPEC = {
@@ -706,28 +706,59 @@ def _motor_track(notes, sr: int, length: int, kit: Kit) -> tuple[np.ndarray, np.
                 depth[i:] = 1.0
     a = np.exp(-1.0 / (0.4 * sr))
     rate = lfilter([1.0 - a], [1.0, -a], target, zi=[a * target[0]])[0]
+    del target
     depth = lfilter([1.0 - a], [1.0, -a], depth, zi=[a * depth[0]])[0]
-    phase = kit.motor_phase + 2.0 * np.pi * np.cumsum(rate) / sr
-    return phase, np.clip(rate / 1.5, 0.0, 1.0) * depth, rate
+    # motor_phase + 2 pi cumsum(rate) / sr and clip(rate / 1.5, 0, 1) * depth, each where the last step left it
+    phase = np.cumsum(rate)
+    phase *= 2.0 * np.pi
+    phase /= sr
+    phase += kit.motor_phase
+    engaged = rate / 1.5
+    np.clip(engaged, 0.0, 1.0, out=engaged)
+    engaged *= depth
+    return phase, engaged, rate
 
 
 def _tremolo(tube: np.ndarray, sr: int, phase: np.ndarray, engaged: np.ndarray, rate: np.ndarray,
-             kit: Kit) -> np.ndarray:
+             kit: Kit, into: np.ndarray | None = None) -> np.ndarray:
     """The discs at work on what the resonators radiate: as each disc turns, the tube's mouth opens and closes
     twice a turn, so what the tube adds to the fundamental swings by 11 dB (the bar's own sound, a quarter
     cycle apart, keeps the note's swing to about 9 dB and turns part of it into a swing of pitch, ±2 to 3
-    cents); the disc also moves the tube's effective length a little, another cent."""
+    cents); the disc also moves the tube's effective length a little, another cent. into: what the tube
+    makes added to it (into + it, a stretch at a time), and it returned. phase is used up."""
     depth_db = 11.0 + 1.0 * kit.disc_depth - 3.0 * kit.wear
     floor = 10.0 ** (-depth_db / 20.0)
-    opening = 0.5 + 0.5 * np.cos(phase)
-    gain = 1.0 - engaged * (1.0 - floor) * (1.0 - opening)
+    # (each track made where the last step left it, by the same operations in the same order:
+    # gain = 1 - engaged (1 - floor) (1 - opening), opening = 0.5 + 0.5 cos(phase); delay = 3 + wobble sin(phase),
+    # wobble = (cents / 1731.2) / (2 pi max(rate, 0.5)) sr engaged)
+    delay = np.sin(phase)
+    gain = np.cos(phase, out=phase)
+    gain *= 0.5
+    gain += 0.5
+    np.subtract(1.0, gain, out=gain)
+    gain *= engaged * (1.0 - floor)
+    np.subtract(1.0, gain, out=gain)
     cents = 1.0
-    wobble = (cents / 1731.2) / (2.0 * np.pi * np.maximum(rate, 0.5)) * sr * engaged  # samples of delay swing
-    delay = 3.0 + wobble * np.sin(phase)
-    idx = np.arange(tube.shape[1]) - delay
-    out = np.empty_like(tube)
-    for ch in range(tube.shape[0]):
-        out[ch] = np.interp(idx, np.arange(tube.shape[1]), tube[ch], left=0.0) * gain
+    wobble = np.maximum(rate, 0.5)  # samples of delay swing
+    wobble *= 2.0 * np.pi
+    np.divide(cents / 1731.2, wobble, out=wobble)
+    wobble *= sr
+    wobble *= engaged
+    delay *= wobble
+    del wobble
+    delay += 3.0
+    n = tube.shape[1]
+    at = np.arange(n, dtype=np.float64)  # the tube's samples' places, as interp takes them
+    out = np.empty_like(tube) if into is None else into
+    block = 1 << 16
+    for a in range(0, n, block):
+        idx = np.arange(a, min(n, a + block)) - delay[a:a + block]
+        for ch in range(tube.shape[0]):
+            y = np.interp(idx, at, tube[ch], left=0.0) * gain[a:a + block]
+            if into is None:
+                out[ch, a:a + block] = y
+            else:
+                out[ch, a:a + block] += y
     return out
 
 
@@ -778,15 +809,23 @@ def _bars(name: str, notes, sr: int, length: int, rng: np.random.Generator, make
                 out[:, start:start + n] += thud[None, :] * chan[:, None] * peak * 0.04 * (0.5 + stroke.vel)
     if tube is not None:
         phase, engaged, rate = _motor_track(notes, sr, length, kit)
-        if np.any(engaged > 0.0):
-            tube = _tremolo(tube, sr, phase, engaged, rate, kit)
-        out += tube
-    if name == "celesta":
-        case = body.impulse_response(CELESTA_CASE, sr, seed=kit.seed, size=kit.size)
-        for ch in range(2):
-            out[ch] = oaconvolve(out[ch], case[:, ch])[:length]
-    y = out.T.copy()
-    return sosfilt(butter(1, 20.0, btype="highpass", fs=sr, output="sos"), y, axis=0)
+        if np.any(engaged > 0.0):  # out + the tube through the discs, a stretch at a time
+            _tremolo(tube, sr, phase, engaged, rate, kit, into=out)
+        else:
+            out += tube
+        del tube, phase, engaged, rate
+    # the stem, a channel at a time (through the celesta's case: oaconvolve's, a few blocks at a time), each
+    # channel high-passed alone, as along axis 0
+    y = np.empty((length, 2))
+    case = body.impulse_response(CELESTA_CASE, sr, seed=kit.seed, size=kit.size) if name == "celesta" else None
+    sos = butter(1, 20.0, btype="highpass", fs=sr, output="sos")
+    for ch in range(2):
+        if case is not None:
+            y[:, ch] = oa.convolve(out[ch], case[:, ch], length)
+        else:
+            y[:, ch] = out[ch]
+        y[:, ch] = sosfilt(sos, y[:, ch])
+    return y
 
 
 # --- the music box -------------------------------------------------------------------------------
