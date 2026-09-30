@@ -494,3 +494,15 @@ def test_this_computers_own_studio_takes_a_version_the_same_way(home, parent):
     finally:
         server.shutdown()
         server.server_close()
+
+
+def test_a_section_sung_again_as_its_own_is_one_the_song_has(parent):
+    """A version that sings the bridge twice has bridge2 in its form (Genome.section): the song has it, so a record
+    that sings it is read; a name that isn't a section, or a section's name with letters after it, still isn't."""
+    record = pack.read_manifest(parent)
+    genome = load(LEAD)
+    params = dict(record["params"], form=[*record["params"]["form"], "bridge", "bridge2"])
+    assert R.clean_params(params, genome)["form"][-1] == "bridge2"
+    for bad in ("bridge2x", "coda2"):
+        with pytest.raises(R.Refused, match="doesn't have"):
+            R.clean_params(dict(params, form=[*params["form"], bad]), genome)

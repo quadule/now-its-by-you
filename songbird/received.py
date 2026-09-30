@@ -537,7 +537,14 @@ def clean_params(data, genome) -> dict:
     form = data["form"]
     if not isinstance(form, list) or not 1 <= len(form) <= 64 or not all(isinstance(s, str) for s in form):
         raise Refused("Its record's form isn't one this program reads.")
-    missing = [s for s in form if s.rstrip("?*") not in genome.sections]
+    def sung(name: str) -> bool:  # a section of the song, or one sung again as its own (bridge2: Genome.section)
+        try:
+            genome.section(name)
+        except KeyError:
+            return False
+        return True
+
+    missing = [s for s in form if not sung(s.rstrip("?*"))]
     if missing:
         raise Refused(f"Its record's form sings a section its song doesn't have ({missing[0][:30]}).")
     out["form"] = list(form)
