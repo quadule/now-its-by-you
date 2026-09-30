@@ -355,10 +355,15 @@ def first_refrain_line():
 
 
 def sung(score, name, nth):
-    """The syllables of the nth section called name in a score (-1: the last), phrase by phrase."""
+    """The syllables of the nth section called name in a score (-1: the last), phrase by phrase. Its pickup (the
+    first words, sung before its first bar) is its own however slow the tempo: notes named for it from the start of
+    the section before, unless that one has the same name (then half a second, as they can't be told apart)."""
     spans = [s for s in score.sections if s[0] == name]
     _, start, end = spans[nth]
-    notes = [n for n in score.part("voice") if start - 0.5 <= n.start < end - 0.05 and n.section == name]
+    k = score.sections.index(spans[nth])
+    before = score.sections[k - 1] if k > 0 else None
+    since = before[1] if before is not None and before[0] != name else start - 0.5
+    notes = [n for n in score.part("voice") if since <= n.start < end - 0.05 and n.section == name]
     return [n.syllable for n in notes]
 
 
