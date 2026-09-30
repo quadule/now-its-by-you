@@ -74,16 +74,17 @@ a gain that dips `depth` dB at each trigger within 3 ms and comes back over `rel
 its send to the room pumps too, as a sidechain on the channel does. The voice's own ducking (the band making
 way for the singer) is kept as it is, after.
 
-The triggers are notes of a silent **key track** (`sidechain`, a "ghost kick" as producers keep one): realize
-writes one for each kick the band's drum player plays (or each beat of the clock, for `"key": "beat"`) in
-the sections asked, its `art` the player it ducks. It is never rendered or exported (MIDI) and it moves with
-the score, so a section's preview (`studio.cut`) pumps where the whole song does. The depth and release (in
-seconds, from the tempo) ride in `score.band["sound"]`.
+The triggers are a silent **key track** (a "ghost kick" as producers keep one): realize writes one for each
+kick the band's drum player plays (or each beat of the clock, for `"key": "beat"`) in the sections asked,
+with the player it ducks, into `Score.sound["triggers"]` (see the review, point 1). It is never rendered or
+exported, and it moves with the score, so a section's preview (`studio.cut`) pumps where the whole song
+does. The depth and release (in seconds, from the tempo) ride in `Score.sound["players"]`.
 
 ### The transitions
 
-Also written into the score by realize, after the band and a person's parts, from the section's first bar
-line on the rendition's clock, straight within each beat (`composition.beat_clock`):
+Also written into the score by realize (`Score.sound["transitions"]`, each its kind, span and level; the
+review's points 1 and 2), after the band and a person's parts, from the section's first bar line on the
+rendition's clock, straight within each beat (`composition.beat_clock`):
 
 - **riser**: an `fx` note over the bars before: noise through a band-pass rising exponentially from 250 Hz
   to 9 kHz, swelling (level up 18 dB), a sine an octave up under it, wider as it rises; it stops at the
@@ -119,16 +120,16 @@ and its sides kept), so the stems (`--stems`) carry it too. A send multiplies th
   sidechain}}, "transitions": {section-id: {...}}}`. Children inherit it (`variation.choose` starts from the
   parent's dict), as a person's chords and parts pass on.
 - `songbird/sound.py` (new): the catalog (players' synths, patches, kits, presets), `check()` for each path,
-  `pin()` into the table's dict, `marks`' "was", the score's additions (`produce()`: the key track, the
-  transitions, the rolls) and the per-player settings for the synth (`settings()` into `score.band["sound"]`),
-  and `view()` for the page.
+  `pin()` into the table's dict, `marks`' "was", the score's additions (`produce()`: the rolls into the
+  notes; the key track, the transitions and the per-player settings for the synth into `Score.sound`), and
+  `view()` for the page.
 - `songbird/edits.py`: a clearly separated "sound design" section that calls sound.py (check, pin, marks);
   the generic `mix.` pin skips the per-player paths.
 - `songbird/realize.py`: two calls, both returning what they were given when `params.sound` is empty.
 - `songbird/synth/`: `instruments.render_part/render_other` read the player's sound (patch and filter into
   the module's settings, a kit's module, a pan); `analog.py` and `chip.py` take a patch; `drummachine.py` the
   lofi kit and pieces' character; `sweeps.py` the `fx` stem; `mixing.mix_made(..., sound=None)` the sends,
-  sidechain and sweeps; `synth.render` passes `score.band.get("sound")`.
+  sidechain and sweeps; `synth.render` reads `score.sound`.
 - `songbird/studio.py`: a "Sound design" section: `POST /api/sound` with the edits, returning each player's
   sound (below) and the boundaries; everything else (hearing, recording) is the edits as ever.
 
@@ -162,8 +163,8 @@ ever.
 
 ### Byte for byte
 
-With no such edits: `Params.to_dict()` unchanged (no `sound` key), `score.band` unchanged (no `sound` key),
-no `fx` or `sidechain` notes, every changed function taking its old path when the sound is empty (a patch
+With no such edits: `Params.to_dict()` unchanged (no `sound` key), `Score.to_dict()` unchanged (no `sound` key), `score.band` untouched,
+no new notes, every changed function taking its old path when the sound is empty (a patch
 of None is the preset object itself; `mix_made` with `sound=None` runs the same code). The goldens
 (tests/golden/*.sha256, tests/test_determinism.py, the seed scores) and the lean-render tests hold. No new
 numba kernel; no fastmath anywhere. Memory: the pump gain is made a stretch at a time (65,536 samples) like
@@ -182,3 +183,58 @@ when a transition is asked for.
    (the arrangement's work); a roll takes the snare's place in its bars.
 5. **The kit is a sound**: an acoustic kit playing a drum machine's pattern plays it as a drummer would
    (with its own touch).
+
+## After a Fable review (read-only, before building)
+
+A read-only review of the design above; its points are in, and change it where they say:
+
+1. **The key track and the transitions are not notes.** As notes in `score.notes` every part-enumerator would
+   have met them (the band's stems, the render's stages, the MIDI file and the sketch's players, notes in,
+   the piano page, a style's key lift). They are a field of their own, `Score.sound` (left out of
+   `to_dict()` while empty, so the seed scores' hashes hold): `{"players": {...}, "triggers": [[seconds,
+   player], ...], "transitions": [[kind, start, end, level, key], ...]}`. Only the synthesis reads it, and
+   `studio.cut` shifts and trims it with the notes (one place). A roll's strokes are real notes on the drum
+   player, as its own are.
+2. **A transition is its whole span.** A section's preview may begin in the middle of a riser: it is made
+   over its whole span, from its own noise stream (the render's seed and the transition's `key`, not where
+   it starts), and only the part inside the preview is kept, so it sounds as it does in the whole song.
+3. **The sweep is on the band bus**, once over its span: the band's sum, what steps back under the voice and
+   the band's send to the room, all three (else the voice's duck would take away unswept sound). The `fx`
+   stem comes last and joins after it, unswept.
+4. **The pump is in the mix's stretch loop**: each stretch of a pumped channel is scaled before it goes into
+   the band, its send and what steps back. Overlapping triggers: the deeper of the two envelopes. The trigger
+   is the kick as played (after its human timing), not the grid: the pump follows the drummer.
+5. **One drum player** for the pump's key, the roll and the page's "has a kick": the first of the band's
+   `kit`, `drummachine`, `chip`'s drums, `claps`, `stomps`, `cajon`, `drum` that plays (idioms' own order for a
+   count-in). A kick is read through each module's names: the drum machine's `piece_of` (`kick`, `bd`,
+   `bass`...), the kit's `kick` and `kick-dead`, the cajon's `cajon-bass`, a stomp, the frame drum's `bass`.
+6. **A kit swap maps the strokes both ways** (a drum machine's pattern on the acoustic kit, a drummer's on a
+   machine: `hat-foot` to `hat-pedal`, `snare-ghost` a soft `snare`, `brush-tap` a soft `snare`, a brush
+   sweep left out, `ride-bell` to `cowbell`...), and the mix treats the channel as the module it now is (a
+   machine as `drum`, the acoustic kit as `kit`), not as its player's name.
+7. **`fx` is a role of its own** in the mix (a 30 Hz high-pass, the band's send, no step back), and the `fx`
+   stem is among `--stems`.
+8. **No riser, roll or sweep into the first section** (nothing comes before it: refused with why); an impact
+   or a downlifter there is fine. The rolls are written after realize's last ring is added.
+9. **A bar is the meter's** (`meter.bar` grid units on `composition.beat_clock`, straight within a beat, or a
+   foot in a re-barred feel); a roll replaces the snares under the previous line's cadence and a singer's
+   pickup (said). Under the final ritardando a riser stretches with the clock and still ends on the downbeat.
+10. **Dict values are made canonical by `check()`** (fixed keys in a fixed order, numbers rounded, a preset
+    expanded to its numbers, unknown keys refused), so the record, `from_record` and a child's seed don't
+    depend on how the page wrote them. As with a person's chords or parts, any sound edit changes the seed
+    each child draws from its parent's record (`variation.Chance` hashes it).
+11. **Patches levelled by loudness** (BS.1770, a typical part at velocity 0.6, each patch's `out`): all within
+    0.1 dB of the program's own, the sub 1.8 dB under by design (K-weighting reads a sub quieter than it is).
+12. **Cutoff**: a person's replaces the patch's, and only the brightness's ±0.8 octave is dropped; the maker's
+    trim, the key tracking, the velocity and the envelope's velocity scaling stay. `envelope` replaces the
+    amount before its velocity scaling. A piece's decay at most 4 times (an 808 kick under 4 s).
+13. **An impact on a kick**: where the drum player has a kick within 30 ms of the downbeat, the impact's boom
+    is high-passed at 90 Hz and 6 dB lower, so the two don't fight.
+14. Its suggestion to cut the lofi and acoustic kits, the low-pass sweep, the downlifter and `"key": "beat"`
+    was weighed against the brief, which asks for each; all are small and kept. Its suggestion to export the
+    key track as a muted MIDI track (for a producer's own sidechain) is left for later.
+15. **Robust to the other work going on**: everything is read from the score after the band and a person's
+    parts are laid (a pump where a section has no kick is silent; a roll where it has no snare is added), and
+    the `mix.<player>.*` paths are checked and pinned apart from the mix's own knobs. A roll on the acoustic
+    kit changes the touch of that kit's later strokes (it draws its randomness stroke by stroke), only when
+    asked for.
