@@ -253,7 +253,7 @@
       h("label", { class: "field" }, h("span", { class: "label" }, "Beats a minute ", out), number),
       slider, h("div", { class: "ends hint" }, `${c.value}. This style: ${range.min} to ${range.max}.`),
       edited("tempo") ? h("div", { class: "row" }, h("span", { class: "hint" }, `yours; the program's was ${Math.round(was("tempo") || 0)}`),
-        h("button", { class: "link small", type: "button", onclick: () => releaseEdit("tempo", "The program's tempo") }, "The program's own")) : null);
+        h("button", { class: "link small", type: "button", onclick: () => releaseEdit("tempo", "The program's tempo") }, "The program's own")) : "");
   }
   function keyPop() {
     const c = card("key"), b = state.start.bounds;
@@ -264,7 +264,7 @@
       chipRow("Note", notes.map((n) => ({ value: n, text: b.tonic.names[n] })), c.tonic, (n) => setEdit("tonic", n, "Change the key"), edited("tonic")),
       chipRow("Scale", b.mode.options.map((m) => ({ value: m, text: b.mode.names[m], title: b.mode.glosses?.[m] })), c.mode, (m) => setEdit("mode", m, "Change the scale"), edited("mode")),
       h("p", { class: "hint" }, "A minor mode leans the words darker, as the machine's own would."),
-      edited("tonic") || edited("mode") ? h("button", { class: "link small", type: "button", onclick: () => clearEdits(["tonic", "mode"], "The program's key") }, "The program's own") : null);
+      edited("tonic") || edited("mode") ? h("button", { class: "link small", type: "button", onclick: () => clearEdits(["tonic", "mode"], "The program's key") }, "The program's own") : "");
   }
 
   // ------------------------------------------------------------------ Page: the words as sung
@@ -854,19 +854,23 @@
     const over = value ? Math.max(...["riser", "sweep", "roll", "stop", "down"].map((k) => (typeof value[k] === "object" ? value[k].bars : value[k]) || 0)) : 0;
     const bars = S.sound?.transition?.bars || [1, 2, 4];
     const put = (next, label) => (next ? setEdit(seam.path, next, label) : releaseEdit(seam.path, label));
+    // a click composes on the latest edit, not on the answer drawn before it: two quick clicks (a riser, then a
+    // roll) otherwise both start from the same drawn value, and the second undoes the first
+    const latest = () => (Object.prototype.hasOwnProperty.call(state.edits, seam.path) ? state.edits[seam.path] : value) || null;
+    const lastOver = (v) => (v ? Math.max(0, ...["riser", "sweep", "roll", "stop", "down"].map((k) => (typeof v[k] === "object" ? v[k].bars : v[k]) || 0)) : 0);
     const from = seam.from ? sectionAt(seam.from) : null;
     shell({ kind: "seam", rubric: `Into ${s.label}`, mine: yours,
       set: `${from ? `from ${from.label}: ` : ""}${M.seamWords(value)}${yours ? ", yours" : ""}`,
       body: h("div", {},
         kinds.length ? h("div", { class: "row" }, h("span", { class: "label" }, "Before it"), h("span", { class: "chips", role: "group", "aria-label": "Before it" },
           kinds.map((k) => h("button", { class: `chip${value?.[k] ? " on you" : ""}`, type: "button", "aria-pressed": String(!!value?.[k]),
-            onclick: () => put(M.seamToggle(value, k, over || 1), `Into ${s.label}: ${M.KIND_WORDS[k]}`) }, M.KIND_WORDS[k])))) : h("p", { class: "hint" }, "Nothing comes before the first section, so nothing builds into it; an impact on its downbeat can."),
-        kinds.length && value && over ? chipRow("Over", bars.map((n) => ({ value: n, text: `${n} bar${n === 1 ? "" : "s"}` })), over, (n) => put(M.seamOver(value, n), `Into ${s.label}: over ${n} bars`), yours) : null,
+            onclick: () => put(M.seamToggle(latest(), k, lastOver(latest()) || 1), `Into ${s.label}: ${M.KIND_WORDS[k]}`) }, M.KIND_WORDS[k])))) : h("p", { class: "hint" }, "Nothing comes before the first section, so nothing builds into it; an impact on its downbeat can."),
+        kinds.length && value && over ? chipRow("Over", bars.map((n) => ({ value: n, text: `${n} bar${n === 1 ? "" : "s"}` })), over, (n) => put(M.seamOver(latest(), n), `Into ${s.label}: over ${n} bars`), yours) : null,
         h("div", { class: "row" }, h("span", { class: "label" }, "On the downbeat"),
-          h("button", { class: `chip${value?.impact ? " on you" : ""}`, type: "button", "aria-pressed": String(!!value?.impact), onclick: () => put(M.seamToggle(value, "impact"), `Into ${s.label}: an impact`) }, "an impact"),
-          h("button", { class: `chip${value?.down ? " on you" : ""}`, type: "button", "aria-pressed": String(!!value?.down), onclick: () => put(M.seamToggle(value, "down", over || 1), `Into ${s.label}: a downlifter`) }, "a downlifter after")),
+          h("button", { class: `chip${value?.impact ? " on you" : ""}`, type: "button", "aria-pressed": String(!!value?.impact), onclick: () => put(M.seamToggle(latest(), "impact"), `Into ${s.label}: an impact`) }, "an impact"),
+          h("button", { class: `chip${value?.down ? " on you" : ""}`, type: "button", "aria-pressed": String(!!value?.down), onclick: () => put(M.seamToggle(latest(), "down", lastOver(latest()) || 1), `Into ${s.label}: a downlifter`) }, "a downlifter after")),
         value?.sweep ? chipRow("The sweep", [{ value: "highpass", text: "rising (the bass thins out)" }, { value: "lowpass", text: "falling (the top closes)" }],
-          typeof value.sweep === "object" ? value.sweep.type : "highpass", (type) => put({ ...value, sweep: { bars: typeof value.sweep === "object" ? value.sweep.bars : value.sweep, type } }, `Into ${s.label}: the sweep ${type === "lowpass" ? "falling" : "rising"}`), yours) : null,
+          typeof value.sweep === "object" ? value.sweep.type : "highpass", (type) => { const v = latest() || value; put({ ...v, sweep: { bars: typeof v.sweep === "object" ? v.sweep.bars : v.sweep, type } }, `Into ${s.label}: the sweep ${type === "lowpass" ? "falling" : "rising"}`); }, yours) : null,
         h("p", { class: "hint" }, "A transition is sound, not arrangement: it doesn't change who plays or how long a section is; a roll takes the snare's place in its bars, a stop quiets the band and not the singer.")),
       why: yours ? [["you", `yours: ${M.seamWords(value)}`]] : [["song", "the song's own seams are plain: the band goes straight on, and a turn is how this song breathes between parts"]],
       hear: () => listen("you", s.index),
