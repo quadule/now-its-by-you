@@ -542,8 +542,18 @@ chords in D, the words as sung). It shows:
 - **Your tools** as a sheet, **Time** as a drawer;
 - **Phone**, a 390 px frame of the same page with the bottom bar and the inspector as a sheet.
 
-The pictures: `studio-redesign-desktop-light.png`, `studio-redesign-desktop-dark.png`,
-`studio-redesign-phone.png`, taken in the built-in browser.
+A state can be put in the address, so any view and selection can be linked to or pictured:
+`studio-redesign.html#s={"view":"arrange","sel":{"kind":"cell","id":"drum","sec":"refrain:0"},"theme":"dark"}`
+(`view`, `sel`, `theme`, `open` tools or drawer, `frame` phone, `scroll`).
+
+The pictures, under docs/design/: `studio-redesign-desktop-light.png` (Arrange, a cell selected, the notes
+open), `studio-redesign-desktop-dark.png` (the same by lamplight, a chord selected), `studio-redesign-phone.png`
+(the Page with a section's sheet) and `studio-redesign-phone-arrange.png`, taken in the built-in browser
+(its pane is about 1070 px wide, so the desktop pictures are scaled; the phone ones are at the phone's own
+size); the desktop `-2x` files beside them are the same states at full resolution from headless Chrome
+(1440 px wide, 2×), with `-page-`, `-mix-`, `-tools-` and `-time-` for the other views (no headless phone
+pictures: Chrome won't make a window narrower than about 500 px, so those came out cropped). To serve the mockup for a browser, `.claude/launch.json` has `design-mockups`
+(a static server on docs/design, port 8798) and `studio-ada` (the studio itself, Ada, port 8799).
 
 Clicking in the mockup selects and switches; nothing is edited for real and nothing is heard. It is for
 looking at and reacting to, not for testing.
