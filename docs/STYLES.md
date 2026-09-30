@@ -1020,3 +1020,143 @@ What they play (the stems, dry, and the scores):
    only house and dub draw them.
 7. **A preview** (a section heard alone) keeps the throws whose windows it plays; one that begins inside an echo's
    tail doesn't hear the tail.
+
+# House and dub, again: reinterpretations, not a folk band in new clothes (2026-09-30, evening)
+
+The artist, on the renders above: "House is a fun reinterpretation but I don't know if it's really that
+recognizable." "Dub has some cool elements but doesn't seem like enough of a transformation." Both styles kept
+the folk song's form, its harmony and its phrasing, and changed only the band. A genre lives as much in its
+harmony, its form and what it does with a voice: house is a loop, a groove that builds and drops, and a hook
+chopped out of a vocal; dub is a version, the song taken apart on the desk. This is the design for making both
+real reinterpretations while the song stays recognizable (its hook, its tune in pieces, its words where sung).
+Both are a day old and unreleased: house's and dub's records made before this still load, and may render
+differently (said below, with the ids).
+
+## The design
+
+### What a style may now bring (both new, both empty for every other style)
+
+- `StyleDef.loops`: chord loops of the style's own, by name, each a list of scale degrees a bar (`(6, 4)`: vi,
+  then IV, round again), with whether they are voiced as sevenths. The chords are the mode's own on those degrees
+  (vi in a major key is a minor chord, in aeolian the major VI), their added tone the mode's seventh; so a loop
+  follows the key and the mode as the song's own chords do. Which sections take the loop is the style's (house:
+  every section but the bridge; dub: the version).
+- `Style.loop`: the rendition's loop (a name of the style's, "song" for the song's own chords, "" for the style's
+  default: the best-fitting loop for the key and mode). Left out of a record while "", as `drop` is.
+- `StyleDef.form`: the style's own section lengths and the bars it plays after a sung section (house's 16-bar
+  intro and outro, its four-bar turns, eight bars of the hook after the drop's refrain and the last), laid out by
+  `takeover.phrase_plan` as a session's rounds are: the style's own length, a person's `arrange.*.bars` over it.
+- `StyleDef.hook`: a vocal chop (house): which words of the song, the rhythms it may take, where it sings.
+- `Style.dub` (dub): the refrain after which the song dissolves into its version; 0 none. Left out while 0.
+- the desk's new habits (dub): fragments' echoes with a longer feedback, the whole band's filter swept, the
+  spring kicked more often, in the dissolved sections.
+
+A plain `Style()` and every one of the thirteen, the a cappella and the session have none of them: nothing moves
+(the goldens; a few renders' PCM ids against the tree before).
+
+### The loop, and fitting it to the tune
+
+A loop is chosen per rendition from the style's, by how it sits under the tune in the rendition's key and mode:
+each candidate is laid under every sung line of the verse and the refrain (the loop restarts with each section,
+so a line of two bars sits on the loop's first or second half), and each sung note that is not a tone of its
+chord and is a semitone from one (a minor second, or a major seventh) counts its length, a long or strong note
+(a beat or more, or on a foot) fully and a passing one a third. The song's own chords score about 0.75 beats
+of the 101 H sings in a verse and a refrain (ionian and mixolydian), 4 in aeolian. A loop fits if it scores no
+more than the song's own chords do and two beats more; the rendition draws one of the fitting loops (a coin of
+its own, as every style option is), and where none fits (aeolian), takes the closest. So the loop is chosen per
+key to fit, and the band's own rules deal with what rubs (the comping holds a chord tone through a sung note that
+isn't one of its tones; a colour steps aside where it would rub).
+
+What H gives (clashing beats of 101, triads; degrees, sevenths as the mode has them):
+
+| loop | chords (D major) | ionian | mixolydian | aeolian |
+|---|---|---|---|---|
+| vamp: vi7, IVmaj7 | Bm7, Gmaj7 | 0.4 | 0.4 | 9.5 |
+| lift: IVmaj7, Imaj7 | Gmaj7, Dmaj7 | 0.0 | 0.0 | 29.3 |
+| home: Imaj7, IVmaj7 | Dmaj7, Gmaj7 | 0.4 | 0.4 | 16.5 |
+| deep: ii7, V7, Imaj7, vi7 | Em7, A7, Dmaj7, Bm7 | 2.6 | 4.4 | 27.4 |
+| royal: IVmaj7, V7, iii7, vi7 | Gmaj7, A7, F♯m7, Bm7 | 2.7 | 5.4 | 24.7 |
+| pop: vi7, IVmaj7, I, V | Bm7, Gmaj7, D, A | 8.6 | 0.6 | 9.2 |
+| minor: VII, iv7, i7, v7 | (aeolian: C, Gm7, Dm7, Am7) | | | 6.4 |
+
+So in D major house plays one of vamp, lift and home (Bm7 to Gmaj7 is the deep-house two-chord vamp), in
+mixolydian also pop, in aeolian the minor loop. A loop's seventh is its colour: the chord's own (the MIDI file
+names Bm7, Gmaj7), but where a sung note is a semitone from it the players leave it out there, as they do a
+style's colour (so a maj7's C♯ never grinds against a sung D). A person's chords for a line or a place win over
+the loop there; `style.loop` chooses another, or the song's own.
+
+### House (122 to 126)
+
+- **Harmony**: the loop under everything but the bridge (the breakdown's heart keeps the song's own chords: the
+  folk harmony comes back in the breakdown, and the drop slams back into the loop).
+- **Form** (the style's lengths, a person's over them): a **16-bar intro** (the kick and hats alone for four bars,
+  the bass in at five, the pad and the stabs at nine, and at thirteen the piano's tune, or the chop where the
+  intro is the pad's; the band's filter opening across all sixteen), the verses and refrains as the song has
+  them, every **turn four bars of the hook** (the chop over the full groove, the lead's quote left out), the
+  **drop's refrain** followed by **eight bars of the hook**, the **last refrain** too (so every house version ends
+  on the hook), and a **16-bar outro** where the form has one (the hook over the groove for eight bars, then the
+  band leaving layer by layer, the drums alone last). The break stays the piano's (or organ's) solo on the verse
+  tune: the tune's plainest statement, over the loop.
+- **The vocal hook**: the singer sings a chop, a short phrase of the song's own words on the grid: the first
+  refrain's first line's last words ("No-bo-dy knows", on its own notes la so mi so) and, in the last hook, the
+  last refrain's last words ("now it's by you"). Short and staccato (each syllable a sixteenth or an eighth, the
+  last held a beat), on a two-bar rhythm drawn per rendition from a few (the call on the beat, one on the
+  off-beats, a stutter "no, no, no-bo-dy knows"), over and over. In a breakdown's turn it sings once in two bars,
+  soft. The singer's own voice, not a sample: the program sings it (voice notes in the score, so the stems, the
+  MIDI file, a preview and a replay all have it). Not pitched up: an octave up is past what the throat sings
+  (it is measured to B4; la is B4 already); the chop's pitch is the tune's.
+- **The bassline as a riff**: the off-beat bass in the verses, an **octave** riff in the refrains and the hook
+  bars (the root on the beat's second sixteenth and its octave on the off-beat, eighths, the disco-house octave
+  bass: new idiom `octave`), the rolling sixteenths in the drop. The stabs voice the loop's sevenths.
+- **Tempo**: 1.27 to 1.31 of the song's (122 to 126 for H), centre 124.
+- **The breakdown, build and drop**: as built (after the second refrain, the pad and the singer, the filter
+  opening, a riser and the snare roll), and now the drop is the refrain over the loop with the ride, the singer
+  on the hook line, then the chop's eight bars. The breakdown holds the song's own harmony (the bridge) and the
+  hook turn before it softly.
+- Endings: cold or ringing on the last chop (repeating the last line is left out: the hook is the tag).
+
+### Dub (70 to 78)
+
+- **The version is the song's second half**: `Style.dub` (drawn 0.9 of the time) is the refrain after which the
+  song dissolves: half the refrains, at least the first (H's three refrains: after the first; four: after the
+  second). Up to there the song is sung straight, over the song's own chords, with the desk working as before.
+  After it every section is the version:
+  - the **riddim**: the style's loop, two chords (dub's: roots, I and IV; minor, vi and IV; or the song's own
+    chords as triads), no colour; the bass leading (its notes a little louder, the others' a little softer);
+  - the **singer's lines reduced to fragments**: each line, by its own coin, keeps its last word, its first half
+    or its second half (a half line), all of it now and then, or nothing; a refrain's first line always keeps at
+    least "nobody knows" (its second half) and the last refrain's last line its last half ("now it's by you"),
+    so the hook stays recognizable in pieces. A fragment is sung where it falls in the tune, on its own notes;
+    the rest of the line is not sung;
+  - **every fragment thrown**: its last word (or the whole fragment, up to a second and a half) into the tape
+    echo with a longer tail (feedback 0.72 against the song's 0.6, a little louder), and now and then into the
+    spring;
+  - the **melodica takes the tune in pieces**: it plays the notes the singer left out (the lead where nobody
+    sings, `lead`), a line's pieces resting now and then (the desk's coin), so voice and melodica answer each
+    other;
+  - **the desk harder**: bars dropping out at 0.45 (the riddim alone, the drums alone, the band without drums),
+    the snare kicked into the spring every few bars, the whole band's **low-pass swept** closed and open again
+    over four bars now and then (sweeps on the band's bus: `sweep-lp` then `sweep-open`, the transitions the mix
+    already has);
+  - **one drop into steppers**: the last refrain (in the version) goes to the kick on every beat, as built.
+- The **dub-out** after the song (ending `version`, drawn 0.75 now) stays: the riddim's eight bars, the last
+  fragment thrown into it.
+- **Tempo**: 0.73 to 0.81 of the song's (70 to 78 for H), centre 75.
+- The lyric sheet is the whole lyric (the words were drawn for every section); the score sings the fragments.
+
+### What is the style's own (fixed) and what chance draws per machine
+
+| | house | dub |
+|---|---|---|
+| fixed | the loop's use and where; the lengths (16-bar intro and outro, four-bar hook turns, eight hook bars after the drop and the last refrain); the chop and its words; the octave bass; the tempo range | the version's form (fragments, throws, melodica pieces, riddim) whenever it dissolves; the tempo range; steppers in the last refrain |
+| drawn | which fitting loop; the chop's rhythm; the drop (0.8) and the rest of the options as before; the intro's piano tune or the chop | whether it dissolves (0.9); which fitting riddim; each line's fragment; each drop-out, throw, splash and sweep; the dub-out (0.75) |
+
+### Byte for byte, the records, memory
+
+- Every other style: none of the new fields, so nothing new is called; checked by the goldens and PCM ids (the
+  seed, lo-fi, synth folk, gospel and the session for ada, juno's own, indie for vela).
+- House's and dub's records from before: they load, and replay as far as they carry their choices: a house record
+  has no `loop` (the default: the best-fitting loop) and gets the lengths and the chop; a dub record has no `dub`
+  (not dissolved) and gets the riddim nowhere but the dub-out. Their ids change; said so.
+- Memory: house's shape is longer (ada's with a drop about 3.5 minutes at 124), dub's about as long as before;
+  measured with tools/render_memory.py, and MEASURED updated.
