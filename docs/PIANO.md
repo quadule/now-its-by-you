@@ -30,6 +30,14 @@ To make the score again, after a new release:
 - **Speed** 25% to 125%, in 5% steps. The last phrase slows as it's sung (the rendition's ritardando);
   "slow down at the end" can turn that off.
 - **Key**: -6 to +6 semitones, with the key's name, and every chord and note name spelt for it.
+- **Your keyboard**: say how many keys it has (25, 37, 49, 61, 88; a C-to-C board's lowest C can be moved
+  an octave either way) or press "Learn it" and play its lowest key, then its highest. The page then draws
+  only those keys and moves each hand by whole octaves so the song fits: fewest notes off the keys first,
+  then the hands kept apart (the left below the right), then as near as written. "Fit" does it again after
+  a nudge; changing the key or the left-hand part refits. A note still off the keys is moved an octave in
+  and outlined. On 37 keys (C3 to C6) every left-hand part fits in every key with nothing moved (both hands
+  go up an octave in the song's own key); on 25 keys most keys fit, a few move a handful of notes. "Any
+  octave counts" accepts the right note in any octave, for a keyboard's own octave buttons.
 - **Hands**: practise the right, the left, both, or just listen. The left hand can be the band's bass line
   (an octave up), root and fifth, broken chords (root, fifth, octave, fifth) or block chords. Each hand has
   a volume and a mute; the other hand plays along (or not), and the practised hand can sound too, as a guide.

@@ -7,12 +7,17 @@
   const $ = (id) => document.getElementById(id);
   const S = window.PianoSound;
 
+  // the player's own keyboard: its keys and, for a C-to-C one, its lowest C as it usually starts (a learned one
+  // keeps the two notes pressed)
+  const KEYBOARDS = { any: null, 25: [25, 48], 37: [37, 48], 49: [49, 36], 61: [61, 36], 88: [88, 21], mine: null };
+
   // ------------------------------------------------------------------ settings, remembered in localStorage
   const DEFAULTS = {
     speed: 100, transpose: 0, rit: true, hands: "right", leftpart: "fifths", volRight: 80, volLeft: 65,
     muteRight: false, muteLeft: false, along: true, guide: false, wait: false, countin: true, metro: false,
     loop: "off", lastLoop: "custom", loopA: 1, loopB: 4, theme: "auto", names: true, midiIn: "*", midiOut: "",
     echo: true, octave: 0,
+    kb: "any", kbLo: 48, kbHi: 84, octR: 0, octL: 0, anyOct: false,
   };
   const set = Object.assign({}, DEFAULTS);
   try {
@@ -33,6 +38,9 @@
   set.octave = clamp(Math.round(set.octave), -3, 3);
   if (!["right", "left", "both", "none"].includes(set.hands)) set.hands = "right";
   if (!["auto", "light", "dark"].includes(set.theme)) set.theme = "auto";
+  if (!Object.prototype.hasOwnProperty.call(KEYBOARDS, set.kb)) set.kb = "any";
+  set.kbLo = clamp(Math.round(set.kbLo), 21, 96); set.kbHi = clamp(Math.round(set.kbHi), set.kbLo + 12, 108);
+  set.octR = clamp(Math.round(set.octR), -3, 3); set.octL = clamp(Math.round(set.octL), -3, 3);
 
   function clamp(x, lo, hi) { return Math.max(lo, Math.min(hi, x)); }
 
@@ -83,16 +91,56 @@
     }
     for (const n of left) notes.push({ p: n.pitch, s: n.start, d: n.dur, h: "L", state: 0 });
     notes.sort((a, b) => a.s - b.s || a.p - b.p);
+    folded = 0;
+    const kb = keyboard();
+    for (const n of notes) { // q: the key it's played on, in the key chosen, each hand moved by its octaves
+      n.q = n.p + set.transpose + 12 * (n.h === "R" ? set.octR : set.octL);
+      n.folded = false;
+      if (kb) { // a note still off the player's keyboard goes an octave (or two) in, marked
+        while (n.q < kb[0]) { n.q += 12; n.folded = true; }
+        while (n.q > kb[1]) { n.q -= 12; n.folded = true; }
+        if (n.folded) folded++;
+      }
+    }
     maxDur = Math.max(...notes.map((n) => n.d));
     songStart = Math.min(0, notes[0].s);
     songEnd = score.end;
     fitRange();
   }
 
+  // the keys the player has, if they said: [lowest, highest]
+  function keyboard() {
+    if (set.kb === "any") return null;
+    if (set.kb === "mine") return [set.kbLo, set.kbHi];
+    const [count, lo] = KEYBOARDS[set.kb];
+    const from = set.kbLo % 12 === lo % 12 ? set.kbLo : lo; // a C-to-C board keeps where it was moved to
+    return [from, from + count - 1];
+  }
+  let folded = 0; // notes moved an octave in to fit the player's keyboard
+
+  // each hand's octaves so the song fits the player's keyboard: fewest notes off it, then the hands apart
+  // (the left below the right), then as near as written
+  function fitHands() {
+    const kb = keyboard();
+    if (!kb) { set.octR = 0; set.octL = 0; return; }
+    const left = (score.left[set.leftpart] || score.left.fifths).notes.map((n) => n.pitch + set.transpose);
+    const right = score.melody.map((n) => n.pitch + set.transpose);
+    const off = (ps, o) => ps.reduce((k, p) => k + (p + 12 * o < kb[0] || p + 12 * o > kb[1] ? 1 : 0), 0);
+    let best = null;
+    for (let r = -3; r <= 3; r++) for (let l = -3; l <= 3; l++) {
+      const clash = Math.max(0, Math.max(...left) + 12 * l - (Math.min(...right) + 12 * r));
+      const cost = 1000 * (off(right, r) + off(left, l)) + 10 * clash + Math.abs(r) + Math.abs(l);
+      if (!best || cost < best.cost) best = { cost, r, l };
+    }
+    set.octR = best.r; set.octL = best.l;
+  }
+
   function fitRange() {
+    const kb = keyboard();
+    if (kb) { range = kb.slice(); return; }
     let lo = Infinity, hi = -Infinity;
-    for (const n of notes) { lo = Math.min(lo, n.p); hi = Math.max(hi, n.p); }
-    lo += set.transpose - 2; hi += set.transpose + 2;
+    for (const n of notes) { lo = Math.min(lo, n.q); hi = Math.max(hi, n.q); }
+    lo -= 2; hi += 2;
     while (!(lo % 12 === 0 || lo % 12 === 5)) lo--;   // from a C or an F
     while (!(hi % 12 === 4 || hi % 12 === 11)) hi++;  // to an E or a B
     if (hi - lo < 24) hi += 12;
@@ -249,8 +297,8 @@
   function arrive() {
     T.waiting = true;
     const here = gateNotes();
-    T.need = new Set(here.map((n) => n.p + set.transpose));
-    T.got = new Set(here.filter((n) => n.state === 1).map((n) => n.p + set.transpose));
+    T.need = new Set(here.map((n) => n.q));
+    T.got = new Set(here.filter((n) => n.state === 1).map((n) => n.q));
     if ([...T.need].every((p) => T.got.has(p))) release();
   }
   function release() {
@@ -297,7 +345,7 @@
       const gain = heard(n.h);
       if (gain <= 0) continue;
       const t0 = audioAt(n.s, a), t1 = audioAt(Math.min(n.s + n.d, loop ? loop[1] : n.s + n.d), a);
-      const p = n.p + set.transpose, vel = n.h === "R" ? 0.72 : 0.6;
+      const p = n.q, vel = n.h === "R" ? 0.72 : 0.6;
       if (midi.out) midiOutNote(p, vel * gain, t0, t1, n.h === "R" ? 0 : 1);
       else S.note(p, vel, t0, t1 - t0 + (n.h === "L" ? 0.15 : 0.05), gain);
     }
@@ -317,13 +365,18 @@
   const flash = new Map();  // pitch -> {good, until}
   function tolerance() { return clamp(0.2 * speed() / SPB, 0.12, 0.5); } // beats either side of a note
 
+  // a key played for a note: the same key, or with "any octave counts" the same note in any octave
+  const same = (q, p) => (set.anyOct ? ((q - p) % 12 + 12) % 12 === 0 : q === p);
+
   function judge(p) {
     if (!judging()) return;
-    const good = (ok) => flash.set(p, { good: ok, until: performance.now() + 260 });
+    const key = p, good = (ok) => flash.set(key, { good: ok, until: performance.now() + 260 });
     if (T.waiting) {
-      if (T.need.has(p)) {
+      const q = [...T.need].find((q) => same(q, p)); // the note it stands for (itself, or in any octave)
+      if (q !== undefined) {
+        p = q;
         T.got.add(p);
-        for (const n of gateNotes()) if (n.p + set.transpose === p && n.state !== 1) { n.state = 1; T.tally.right++; }
+        for (const n of gateNotes()) if (n.q === p && n.state !== 1) { n.state = 1; T.tally.right++; }
         good(true);
         if ([...T.need].every((q) => T.got.has(q))) release();
       } else { T.tally.wrong++; good(false); }
@@ -331,7 +384,7 @@
       return;
     }
     if (!T.playing) { // stopped: say whether it's a note the practised hand plays here
-      const here = notes.some((n) => practised(n.h) && n.p + set.transpose === p && n.s <= T.beat + 0.01 && n.s + n.d > T.beat);
+      const here = notes.some((n) => practised(n.h) && same(n.q, p) && n.s <= T.beat + 0.01 && n.s + n.d > T.beat);
       good(here);
       return;
     }
@@ -340,7 +393,7 @@
     let best = null;
     for (let i = firstFrom(b - tol); i < notes.length && notes[i].s <= b + tol + (set.wait ? 0.35 : 0); i++) {
       const n = notes[i];
-      if (n.state === 0 && practised(n.h) && n.p + set.transpose === p && n.s >= T.songFrom - 1e-9) {
+      if (n.state === 0 && practised(n.h) && same(n.q, p) && n.s >= T.songFrom - 1e-9) {
         if (!best || Math.abs(n.s - b) < Math.abs(best.s - b)) best = n;
       }
     }
@@ -361,8 +414,20 @@
     if (changed) ui.tally();
   }
 
+  // learning the player's keyboard: the lowest key pressed first, then the highest
+  let learning = null; // null, "low", or the lowest key's pitch while waiting for the highest
+  function learn(p) {
+    if (learning === "low") { learning = p; status("Now press its highest key."); return; }
+    const lo = Math.min(learning, p), hi = Math.max(learning, p);
+    learning = null;
+    if (hi - lo < 12) { status("That's less than an octave: press Learn and try again."); ui.settings(); return; }
+    change(() => { set.kb = "mine"; set.kbLo = lo; set.kbHi = hi; fitHands(); }, "build");
+    status(`Your keyboard: ${noteName(lo, true)} to ${noteName(hi, true)}, ${hi - lo + 1} keys.`);
+  }
+
   function noteOn(p, vel, source) {
     S.start();
+    if (learning !== null) { learn(p); return; }
     const k = source + ":" + p;
     if (source !== "midi" || set.echo) S.down(k, p, vel, 0.9);
     down.set(p, (down.get(p) || 0) + 1);
@@ -445,7 +510,7 @@
     const kh = kbH(), top = H - kh, look = clamp(top / 46, 5, 10); // beats in view above the keyboard
     const ppb = top / look;
     const y = (beat) => top - (beat - b) * ppb;
-    const tp = set.transpose, pulse = 0.5 + 0.5 * Math.sin(performance.now() / 160);
+    const pulse = 0.5 + 0.5 * Math.sin(performance.now() / 160);
     g.fillStyle = C.stage; g.fillRect(0, 0, W, H);
 
     // lanes: the black keys' a shade darker, a line at every C
@@ -497,7 +562,7 @@
       const n = notes[i];
       if (n.s > b + look + 0.1) break;
       if (n.s + n.d < b - 0.001) continue;
-      const k = keyOf(n.p + tp);
+      const k = keyOf(n.q);
       if (!k) continue;
       const y1 = y(n.s), y0 = y(n.s + n.d), hgt = Math.max(3, y1 - y0 - 2);
       const col = n.h === "R" ? C.R : C.L, mine = practised(n.h);
@@ -508,12 +573,13 @@
       else g.fillStyle = mine || !judging() ? col : alpha(col, 0.45);
       g.fill();
       if (n.state === 2) { g.strokeStyle = C.bad; g.lineWidth = 2; g.stroke(); }
-      if (T.waiting && mine && Math.abs(n.s - T.gate) < 1e-6 && !T.got.has(n.p + tp)) {
+      else if (n.folded) { g.setLineDash([3, 2]); g.strokeStyle = C.ink; g.lineWidth = 1.5; g.stroke(); g.setLineDash([]); }
+      if (T.waiting && mine && Math.abs(n.s - T.gate) < 1e-6 && !T.got.has(n.q)) {
         g.strokeStyle = alpha("#ffffff", 0.4 + 0.5 * pulse); g.lineWidth = 2.5; g.stroke();
       }
       if (set.names && hgt >= 14 && w >= 13) {
         g.fillStyle = "rgba(27,22,17,.85)"; g.font = `600 ${w >= 20 ? 11 : 9}px ${C.sans}`;
-        g.fillText(noteName(n.p + tp), x + w / 2, y1 - Math.min(hgt / 2, 9));
+        g.fillText(noteName(n.q), x + w / 2, y1 - Math.min(hgt / 2, 9));
       }
       if (n.lyric && hgt >= 10) {
         g.fillStyle = mine || !judging() ? C.ink : C.dim; g.font = `italic 13px ${C.serif}`; g.textAlign = "left";
@@ -526,9 +592,9 @@
     const sounding = new Map(); // pitch -> hand sounding in the score now
     for (let i = i0; i < notes.length && notes[i].s <= b + 1e-6; i++) {
       const n = notes[i];
-      if (n.s <= b + 1e-6 && n.s + n.d > b + 1e-6) sounding.set(n.p + tp, n);
+      if (n.s <= b + 1e-6 && n.s + n.d > b + 1e-6) sounding.set(n.q, n);
     }
-    if (T.waiting) for (const p of T.need) { const n = gateNotes().find((m) => m.p + tp === p); if (n) sounding.set(p, n); }
+    if (T.waiting) for (const p of T.need) { const n = gateNotes().find((m) => m.q === p); if (n) sounding.set(p, n); }
     const now = performance.now();
     g.fillStyle = C.panel; g.fillRect(0, top, W, kh);
     const keyFill = (k) => {
@@ -690,6 +756,16 @@
         $(id).classList.toggle("primary", on);
       }
       for (const id of ["along", "guide", "wait", "countin", "metro", "echo", "names"]) $(id).checked = set[id];
+      const kb = keyboard();
+      $("kb").value = set.kb;
+      $("kb-range").textContent = kb ? `${noteName(kb[0], true)} to ${noteName(kb[1], true)}` : "whatever the song needs";
+      $("kb-down").disabled = $("kb-up").disabled = !kb || set.kb === "mine";
+      const oct = (o) => (o === 0 ? "as written" : `${Math.abs(o)} octave${Math.abs(o) > 1 ? "s" : ""} ${o > 0 ? "up" : "down"}`);
+      $("oct-r").textContent = oct(set.octR); $("oct-l").textContent = oct(set.octL);
+      $("anyoct").checked = set.anyOct;
+      $("fit-note").textContent = !kb ? "" : folded ? `${folded} note${folded > 1 ? "s" : ""} of the song moved an octave to stay on your keys (outlined).` :
+        "Every note of the song is on your keys.";
+      $("kb-learn").textContent = learning === null ? "Learn it" : "Cancel";
       $("loopsel").value = set.loop;
       $("loop-a").value = set.loopA; $("loop-b").value = set.loopB;
       if (set.theme === "auto") delete document.documentElement.dataset.theme;
@@ -800,14 +876,35 @@
 
   $("speed").addEventListener("input", (e) => change(() => { set.speed = +e.target.value; }, "resync"));
   $("rit").addEventListener("change", (e) => change(() => { set.rit = e.target.checked; }, "resync"));
-  const transpose = (d) => change(() => { set.transpose = clamp(set.transpose + d, -6, 6); }, "build");
+  const refit = () => { if (keyboard()) fitHands(); };
+  const transpose = (d) => change(() => { set.transpose = clamp(set.transpose + d, -6, 6); refit(); }, "build");
   $("down").addEventListener("click", () => transpose(-1));
   $("up").addEventListener("click", () => transpose(1));
-  $("home-key").addEventListener("click", () => change(() => { set.transpose = 0; }, "build"));
+  $("home-key").addEventListener("click", () => change(() => { set.transpose = 0; refit(); }, "build"));
+  $("kb").addEventListener("change", (e) => change(() => {
+    set.kb = e.target.value;
+    if (KEYBOARDS[set.kb]) set.kbLo = KEYBOARDS[set.kb][1];
+    fitHands();
+  }, "build"));
+  const moveKb = (d) => change(() => { set.kbLo = clamp(set.kbLo + 12 * d, 12, 96); fitHands(); }, "build");
+  $("kb-down").addEventListener("click", () => moveKb(-1));
+  $("kb-up").addEventListener("click", () => moveKb(1));
+  $("kb-learn").addEventListener("click", () => {
+    learning = learning === null ? "low" : null;
+    status(learning ? "Press your keyboard's lowest key." : "");
+    ui.settings();
+  });
+  const nudge = (h, d) => change(() => { if (h === "R") set.octR = clamp(set.octR + d, -3, 3); else set.octL = clamp(set.octL + d, -3, 3); }, "build");
+  $("oct-r-down").addEventListener("click", () => nudge("R", -1));
+  $("oct-r-up").addEventListener("click", () => nudge("R", 1));
+  $("oct-l-down").addEventListener("click", () => nudge("L", -1));
+  $("oct-l-up").addEventListener("click", () => nudge("L", 1));
+  $("fit").addEventListener("click", () => change(fitHands, "build"));
+  $("anyoct").addEventListener("change", (e) => change(() => { set.anyOct = e.target.checked; }));
   const setHands = (v) => change(() => { set.hands = v; T.tally = { right: 0, missed: 0, wrong: 0 }; }, "build");
   for (const r of document.querySelectorAll("input[name=hands]")) r.addEventListener("change", () => setHands(r.value));
   for (const r of document.querySelectorAll("input[name=theme]")) r.addEventListener("change", () => change(() => { set.theme = r.value; }));
-  $("leftpart").addEventListener("change", (e) => change(() => { set.leftpart = e.target.value; }, "build"));
+  $("leftpart").addEventListener("change", (e) => change(() => { set.leftpart = e.target.value; refit(); }, "build"));
   $("vol-right").addEventListener("input", (e) => change(() => { set.volRight = +e.target.value; set.muteRight = false; }));
   $("vol-left").addEventListener("input", (e) => change(() => { set.volLeft = +e.target.value; set.muteLeft = false; }));
   $("vol-right").addEventListener("change", () => resync());

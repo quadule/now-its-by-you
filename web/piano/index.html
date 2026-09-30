@@ -62,6 +62,44 @@
     </fieldset>
 
     <fieldset class="card">
+      <legend class="rubric">Your keyboard</legend>
+      <div class="row">
+        <label for="kb">Keys</label>
+        <select id="kb">
+          <option value="any">any: show what the song needs</option>
+          <option value="25">25 keys</option>
+          <option value="37">37 keys</option>
+          <option value="49">49 keys</option>
+          <option value="61">61 keys</option>
+          <option value="88">88 keys</option>
+          <option value="mine">mine, as learned</option>
+        </select>
+        <button class="btn" id="kb-learn" type="button" title="Press your keyboard's lowest key, then its highest">Learn it</button>
+      </div>
+      <div class="row">
+        <span class="label">From</span>
+        <button class="btn" id="kb-down" type="button" aria-label="Your keyboard an octave lower">&minus;</button>
+        <span class="val" id="kb-range">whatever the song needs</span>
+        <button class="btn" id="kb-up" type="button" aria-label="Your keyboard an octave higher">+</button>
+      </div>
+      <div class="row">
+        <span class="label">Right</span>
+        <button class="btn" id="oct-r-down" type="button" aria-label="Right hand an octave down">&minus;</button>
+        <span class="val" id="oct-r">as written</span>
+        <button class="btn" id="oct-r-up" type="button" aria-label="Right hand an octave up">+</button>
+      </div>
+      <div class="row">
+        <span class="label">Left</span>
+        <button class="btn" id="oct-l-down" type="button" aria-label="Left hand an octave down">&minus;</button>
+        <span class="val" id="oct-l">as written</span>
+        <button class="btn" id="oct-l-up" type="button" aria-label="Left hand an octave up">+</button>
+        <button class="btn" id="fit" type="button" title="Each hand's octaves so the song fits your keys">Fit</button>
+      </div>
+      <div class="row"><label class="check"><input type="checkbox" id="anyoct"> any octave counts (for a keyboard's octave buttons)</label></div>
+      <p class="midi-note" id="fit-note"></p>
+    </fieldset>
+
+    <fieldset class="card">
       <legend class="rubric">Hands</legend>
       <div class="row">
         <span class="label">Practise</span>
