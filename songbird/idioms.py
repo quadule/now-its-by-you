@@ -52,9 +52,11 @@ def chord_times(genome, params) -> list[tuple[float, float, str]]:
     from .realize import timeline
     from .style import coda, repeated_phrases
 
+    from .takeover import phrase_ids
+
     clock = timeline(genome, params)
     m = genome.meter
-    phrases = [genome.phrases[pid] for name in params.form for pid in genome.section(name).phrases]
+    phrases = [genome.phrases[pid] for pid in phrase_ids(genome, params)]  # as a person arranged them, if they did
     phrases += repeated_phrases(genome, params)
     out, u = [], clock.lead
     for phrase in phrases:
@@ -1376,7 +1378,9 @@ def w_groove(ctx: StyleContext, i: int, part: str, kind: str = "groove") -> list
         rng = ctx.rand(part, bar)
         hits = groove_bar(ctx, kind)
         last = k == len(bars) - 1
-        if last and nxt is not None and nxt.energy >= s.energy and kind not in ("brushes", "lofi"):
+        asked = getattr(ctx, "fills", {}).get((i, part))  # a person's choice (songbird.takeover), else the band's
+        fill = last and nxt is not None and nxt.energy >= s.energy if asked is None else last and asked
+        if fill and kind not in ("brushes", "lofi"):
             start = ctx.grid.beats[-1]
             hits = [h for h in hits if h[0] < start - 1e-9]
             fine = [f for f in ctx.grid.fine if f >= start - 1e-9]
@@ -1425,6 +1429,34 @@ def w_end(ctx: StyleContext, i: int, part: str) -> list[Ev]:
     if i == len(ctx.sections) - 1 and ctx.chords:
         final = ctx.chords[-1].u0
         out += [hit(part, final, "kick", 0.6, i), hit(part, final, "crash", 0.5, i)]
+    return out
+
+
+def w_build(ctx: StyleContext, i: int, part: str) -> list[Ev]:
+    """A build into the next section, as a person asked for one (songbird.takeover): a crash where it
+    starts, the kick on every beat through its first half, and the snare filling in, beats, then
+    half-beats, then the finest steps of the feel, rising in weight; the last beat left empty, a breath
+    before what comes next."""
+    s = ctx.sections[i]
+    g = ctx.grid
+    bars = g.bars(s.u0, s.u1)
+    n = len(bars)
+    out = []
+    for k, bar in enumerate(bars):
+        x = k / max(n - 1, 1)
+        steps = g.beats if x < 0.5 else g.subs if x < 0.75 else g.fine
+        if k == 0:
+            out.append(hit(part, bar, "crash", ctx.vel(part, bar, 0.55, 0.9), i))
+        for b in g.beats if x < 0.5 else g.beats[:1]:
+            u = bar + b
+            if s.u0 - 1e-9 <= u < s.u1 - g.beat - 1e-9:
+                out.append(hit(part, u, "kick", ctx.vel(part, u, 0.6 + 0.2 * x, 0.9), i))
+        for off in steps:
+            u = bar + off
+            if not s.u0 - 1e-9 <= u < s.u1 - g.beat - 1e-9:
+                continue
+            v = 0.3 + 0.55 * (k + off / g.bar) / n
+            out.append(hit(part, u, "snare", ctx.vel(part, u, v, 0.9), i))
     return out
 
 
@@ -1495,6 +1527,7 @@ WRITERS = {
     "groove": w_groove, "brushes": w_brushes, "four": w_four, "toms": w_toms, "half": w_half, "lofi": w_lofi,
     "machine": w_machine, "end": w_end, "stomp": w_stomp, "stomp4": w_stomp4, "claps": w_claps,
     "tambourine": w_tambourine, "shaker": w_shaker, "cajon": w_cajon,
+    "build": w_build,  # only where a person asked for a build (songbird.takeover)
 }
 # "fills" is written for all sections at once (band.fills), after the rest.
 
@@ -1539,7 +1572,7 @@ def backing(ctx: Context, melody: list[dict], style) -> list[Sung]:
         where = set(refrains[1:] if len(refrains) > 2 else refrains)
     else:
         where = set(refrains)
-    where = {i for i in where if not genome.section(ctx.sections[i].name).choir}
+    where = {i for i in where if not genome.section(ctx.sections[i].name).choir and ctx.sections[i].sung}
     out: list[Sung] = []
     for k, m in enumerate(ordered):
         if not m["syllable"]:
@@ -1725,7 +1758,8 @@ def shape_events(ctx: Context, plan: Plan, events: list[Ev], rhythm, style) -> l
         start = plan.entrances.get((e.section, e.part))
         if start is not None and e.u0 < start - 1e-9:
             continue
-        if e.section in plan.stops and ctx.sections[e.section].parts.get(e.part, "fills") not in LINES:
+        if e.section in plan.stops and ctx.sections[e.section].parts.get(e.part, "fills") not in LINES \
+                and (e.section, e.part) not in getattr(ctx, "taken", {}).get("cells", ()):
             s = ctx.sections[e.section]
             at_bar = abs(((e.u0 - s.u0) % ctx.bar)) < 1e-6 and e.shift < 0.06
             if not at_bar:
@@ -1774,7 +1808,10 @@ def arrange_style(genome, params, placed, lead, end, melody, seconds, sdef) -> t
     feel = params.style.feel or next(iter(sdef.feels))
     if feel in ("waltz", "six") and not rebarred(genome, params):
         feel = "straight"
+    from . import takeover
+
     ctx = StyleContext(genome, params, placed, lead, end, melody, sdef, feel)
+    takeover.prepare(ctx, lead)  # which section of the form each is, as a person may have arranged it
     sung_end = max((m["u_end"] for m in melody), default=end)
     if params.style.ending == "amen" and end > sung_end + 1e-9 and ctx.sections:
         # the coda: a bar of IV and a bar of I after the last line, in the last section's hands
@@ -1801,6 +1838,7 @@ def arrange_style(genome, params, placed, lead, end, melody, seconds, sdef) -> t
     if params.style.ending == "amen":
         sung += amen(ctx, end - 2 * ctx.bar, int(params.choir))
     ctx.backing = [(s.u0, s.u1, s.pitch) for s in sung]
+    takeover.take_over(ctx, ctx.plan)  # a person's arrangement over the program's (and chance's), if any
 
     events: list[Ev] = []
     for i, s in enumerate(ctx.sections):
@@ -1819,6 +1857,7 @@ def arrange_style(genome, params, placed, lead, end, melody, seconds, sdef) -> t
     if lead_part and params.style.ending != "amen":  # ...or its opening after the last chord, as a coda
         events += B.coda_part(ctx, sung_end, lead_part)
     events = shape_events(ctx, ctx.plan, [e for e in events if ctx.on(e.part)], rhythm, params.style)
+    events = takeover.shape(ctx, events)
 
     # the singer's notes are nobody else's: a chord's note on a sung pitch goes an octave down
     for e in events:

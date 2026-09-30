@@ -423,9 +423,10 @@ def key_signature(tonic: int, mode: str) -> bytes:
     return meta(0x59, struct.pack(">bB", sharps, minor))
 
 
-def section_labels(genome, form, sections) -> list[tuple[str, float]]:
+def section_labels(genome, form, sections, bars=None) -> list[tuple[str, float]]:
     """Each section of the form and when it starts: the score keeps a run of sections of one name as one
-    (verse, verse), shared out evenly (they have the same phrases), as the studio's previews cut them."""
+    (verse, verse), shared out evenly (they have the same phrases), or by their bars where a person made them
+    different lengths (songbird.takeover), as the studio's previews cut them."""
     out, k = [], 0
     counts: dict[str, int] = {}
     total = {name: list(form).count(name) for name in form}
@@ -433,12 +434,15 @@ def section_labels(genome, form, sections) -> list[tuple[str, float]]:
         run = 1
         while k + run < len(form) and form[k + run] == name:
             run += 1
+        weights = [1.0] * run if bars is None else [float(x) for x in bars[k:k + run]]
+        done = 0.0
         for j in range(run):
             counts[name] = counts.get(name, 0) + 1
             label = name.replace("bridge2", "Bridge 2").title()
             if total.get(name, 1) > 1:
                 label += f" {counts[name]}"
-            out.append((label, a + (b - a) * j / run))
+            out.append((label, a + (b - a) * j / run if bars is None else a + (b - a) * done / sum(weights)))
+            done += weights[j]
         k += run
     return out
 
@@ -533,7 +537,10 @@ def from_score(genome, params, score, title: str | None = None) -> tuple[bytes, 
                           f"{params.tempo:g} beats a minute.")),
     ]
     head += [(tick, 4, meta(0x51, us.to_bytes(3, "big"))) for tick, us in ticks.tempos()]
-    for label, start in section_labels(genome, params.form, score.sections):
+    from .takeover import arranged, phrase_plan
+
+    bars = [sum(genome.phrases[p].bars for p, _ in lines) for lines in phrase_plan(genome, params)]         if arranged(params) else None  # sections a person made other lengths (songbird.takeover)
+    for label, start in section_labels(genome, params.form, score.sections, bars):
         head.append((ticks.tick(start), 5, text(0x06, label)))
     tracks = [head]
 

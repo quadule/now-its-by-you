@@ -53,8 +53,12 @@ def layout(genome, params) -> list[dict]:
 
     clock = timeline(genome, params)
     m = genome.meter
+    from .takeover import phrase_plan
+
+    # each section's lines, as long as a person made it and sung or played as they had it (songbird.takeover)
+    lined = phrase_plan(genome, params)
     flat = [(sid, name, i, j, pid) for i, (sid, name) in enumerate(zip(C.section_ids(params.form), params.form))
-            for j, pid in enumerate(genome.section(name).phrases)]
+            for j, (pid, _) in enumerate(lined[i])]
     repeated = repeated_phrases(genome, params)
     refrains = [i for i, name in enumerate(params.form) if genome.section(name).lyrics == "refrain"]
     lift_from = refrains[-1] if params.style.lift and len(refrains) >= 2 else None
@@ -66,7 +70,7 @@ def layout(genome, params) -> list[dict]:
         out.append({"key": f"{sid}.{j}", "sid": sid, "line": j, "pid": pid, "name": name, "index": i,
                     "where": f"{section_label(params.form, i)}, line {j + 1}", "u0": u, "u1": end,
                     "w0": u - phrase.pickup, "w1": end - after, "pickup": phrase.pickup,
-                    "sung": bool(genome.section(name).lyrics) and bool(phrase.sung),
+                    "sung": bool(genome.section(name).lyrics) and bool(phrase.sung) and lined[i][j][1],
                     "up": 2 if lift_from is not None and i >= lift_from else 0})
         u = end
     return out

@@ -29,11 +29,13 @@ def test_each_edit_takes_its_place_within_bounds():
                                   "band.lead": "fiddle", "band.density": 1.7, "band.drum": 0, "mix.space": 1.25,
                                   "mix.forward": 30, "roll": 1})
     assert not problems
-    assert edits["tempo"] == 124.8 and edits["tonic"] == 57 and edits["band.density"] == 1.0 and edits["mix.forward"] == 15
+    # the tempo is held to the widest any style allows, then to its style's own (the ballad's 0.75 to 1.3 times)
+    assert edits["tempo"] == 153.6 and edits["tonic"] == 57 and edits["band.density"] == 1.0 and edits["mix.forward"] == 15
     o = E.Overrides(g, edits)
     p = choose_params(g, None, ADA, DAY, overrides=o)
     plain = choose_params(g, None, ADA, DAY)
     assert (p.tempo, p.tonic, p.mode) == (124.8, 57, "aeolian")
+    assert [x["path"] for x in o.problems] == ["tempo"] and "124.8" in o.problems[0]["why"]
     assert (p.band.pattern, p.band.lead, p.band.density, p.band.drum) == ("air", "fiddle", 1.0, 0.0)
     assert p.mix["space"] == 1.25 and p.mix["forward"] == 15 and p.mix["rt60"] == plain.mix["rt60"]
     assert p.seed == E.rolled(plain.seed, 1) != plain.seed

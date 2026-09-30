@@ -186,17 +186,21 @@ def today() -> tuple[str, float]:
 # ---------------------------------------------------------------- previews
 
 
-def spans(score, form) -> list[tuple[str, float, float]]:
+def spans(score, form, bars=None) -> list[tuple[str, float, float]]:
     """Each section of the form and when it plays: the score's spans, with a run of sections of one
-    name (verse, verse), which the score keeps as one, shared out evenly (they have the same phrases)."""
+    name (verse, verse), which the score keeps as one, shared out evenly (they have the same phrases), or by
+    their bars where a person made them different lengths (songbird.takeover)."""
     out: list[tuple[str, float, float]] = []
     k = 0
     for name, a, b in score.sections:
         run = 1
         while k + run < len(form) and form[k + run] == name:
             run += 1
+        weights = [1.0] * run if bars is None else [float(x) for x in bars[k:k + run]]
+        total, done = sum(weights), 0.0
         for j in range(run):
-            out.append((name, a + (b - a) * j / run, a + (b - a) * (j + 1) / run))
+            out.append((name, a + (b - a) * done / total, a + (b - a) * (done + weights[j]) / total))
+            done += weights[j]
         k += run
     return out
 
@@ -204,12 +208,16 @@ def spans(score, form) -> list[tuple[str, float, float]]:
 def window(genome, params: Params, score, form, index: int) -> tuple[float, float]:
     """Where a section's preview starts and ends: from a breath before its first pickup (a beat of the band
     before it at least) to where the next section's pickup begins."""
-    parts = spans(score, form)
+    from .takeover import arranged, phrase_plan
+
+    lined = phrase_plan(genome, params)  # each section's lines, as long as a person made it
+    bars = [sum(genome.phrases[pid].bars for pid, _ in lines) for lines in lined] if arranged(params) else None
+    parts = spans(score, form, bars)
     _, s0, s1 = parts[index]
     unit = 60.0 / params.tempo / genome.meter.beat
 
     def pickup(k: int) -> float:
-        return genome.phrases[genome.section(form[k]).phrases[0]].pickup * unit
+        return genome.phrases[lined[k][0][0]].pickup * unit
 
     t0 = max(0.0, s0 - max(pickup(index), genome.meter.beat * unit) - 0.5)
     t1 = parts[index + 1][1] - pickup(index + 1) - 0.5 * unit if index + 1 < len(parts) else s1

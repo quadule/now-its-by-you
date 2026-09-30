@@ -369,7 +369,8 @@ class Context:
         v = base * (0.62 + 0.5 * self.energy_at(u)) * self.breath(u)
         if self.sung_at(u):
             v *= under_words
-        elif any(what in ("lead", "quote") for what in self.sections[self.section_at(u)].parts.values()):
+        elif any(what in ("lead", "quote") for what in self.sections[self.section_at(u)].parts.values()) \
+                and not getattr(self.sections[self.section_at(u)], "played", False):  # a drop keeps its weight
             v *= 0.7
         return float(np.clip(v * (1.0 + self.rand(part, u).uniform(-0.06, 0.06)), 0.03, 1.0))
 
@@ -1528,7 +1529,10 @@ def arrange(genome, params, placed, lead, end, melody, seconds) -> tuple[list[No
         from .style import of
 
         return arrange_style(genome, params, placed, lead, end, melody, seconds, of(style))
+    from . import takeover
+
     ctx = Context(genome, params, placed, lead, end, melody)
+    takeover.prepare(ctx, lead)  # which section of the form each is, as a person may have arranged it
     plan(ctx)
     overhear(ctx, melody, seconds, lead, end)
     if style is not None and style.intro == "quote":  # the lead's quote of an older song before the song
@@ -1543,6 +1547,7 @@ def arrange(genome, params, placed, lead, end, melody, seconds) -> tuple[list[No
         idioms.shape_plan(ctx, style, shape, rhythm, {"drone"}, "guitar" if ctx.on("guitar") else "harp")
         sung = idioms.backing(ctx, melody, style)
         ctx.choir += [(v.u0, v.u1, v.pitch) for v in sung]  # the band keeps clear of the backing voices too
+    takeover.take_over(ctx, shape if shaped else None)  # a person's arrangement over the program's, if any
     capo = choose_capo(ctx)
     events: list[Ev] = []
     if ctx.on("bass"):
@@ -1562,6 +1567,7 @@ def arrange(genome, params, placed, lead, end, melody, seconds) -> tuple[list[No
     events = [e for e in events if ctx.band.plays(e.part)]
     if shaped:
         events = idioms.shape_events(ctx, shape, events, rhythm, style)
+    events = takeover.shape(ctx, events)
     harp = let_ring(ctx, [e for e in events if e.part == "harp"])
     events = [e for e in events if e.part != "harp"] + harp
     # whatever sounds through the last chord holds to the end, and rings on from there (through a coda's bars too)

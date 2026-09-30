@@ -495,13 +495,16 @@ def view(genome, params, lyrics) -> dict:
     in_parts = performed_parts(params)
     sections = []
     cursor = clock.lead
+    from .takeover import phrase_plan
+
+    lined = phrase_plan(genome, params)  # each section's lines as a person arranged them (songbird.takeover)
     for index, (name, identity) in enumerate(zip(params.form, section_ids(params.form))):
         section = genome.section(name)
         start = cursor
         phrases = []
-        for j, pid in enumerate(section.phrases):
+        for j, (pid, sung) in enumerate(lined[index]):
             phrase = genome.phrases[pid]
-            words = sung_words(lines[index][j]) if lines[index] else []
+            words = sung_words(lines[index][j]) if lines[index] and sung and j < len(lines[index]) else []
             notes = []
             for k, n in enumerate(played(phrase, params)):
                 syllable, word, _ = words[k] if k < len(words) else ("", "", 0)
@@ -516,8 +519,9 @@ def view(genome, params, lyrics) -> dict:
                             "harmony": harmony(genome, phrase, params),
                             "chords_path": f"chords.{pid}", "chords_edited": pid in chorded,
                             "song_chords": [list(bar) for bar in song.phrases[pid].chords],
-                            "lyric_path": f"lyrics.{keys[index]}.{j}" if keys[index] else None,
-                            "lyric_text": lines[index][j] if lines[index] else "",
+                            "lyric_path": f"lyrics.{keys[index]}.{j}" if keys[index] and j < len(section.phrases) else None,
+                            "lyric_text": lines[index][j] if lines[index] and sung and j < len(lines[index]) else "",
+                            **({"played": True} if section.lyrics and not sung else {}),  # a person had it played
                             "syllable_count": len(phrase.sung),
                             "authored": str(j) in patches[index],
                             # a person's own notes played in for a player here (notes in)
@@ -531,7 +535,7 @@ def view(genome, params, lyrics) -> dict:
         sections.append({"index": index, "id": identity, "lyric_key": keys[index], "name": name, "label": label,
                          "start_beat": start / meter.beat, "duration_beats": (cursor - start) / meter.beat,
                          "start_seconds": clock.seconds(start), "end_seconds": clock.seconds(cursor),
-                         "sung": bool(section.lyrics), "phrases": phrases})
+                         "sung": bool(section.lyrics) and any(sung for _, sung in lined[index]), "phrases": phrases})
     return {"tempo": params.tempo, "tonic": params.tonic, "mode": params.mode, "scale": list(MODES[params.mode]),
             "beats_per_bar": meter.bar / meter.beat, "grid": GRID,
             "duration_beats": clock.end / meter.beat, "duration_seconds": clock.seconds(clock.end),
@@ -728,10 +732,12 @@ def line_windows(genome, params, placed, lead) -> dict[str, tuple[float, float, 
     """Each line of the form by its part key ("verse:1.0"), in grid units: where a player's notes belong to
     it (from its own pickup before its first bar line to the next line's pickup, as the tune's notes do), its
     first bar line (where its notes' onsets count from) and its section's name, from realize's layout."""
+    from .takeover import phrase_plan
+
     out, k = {}, 0
     bar = genome.meter.bar
-    for sid, name in zip(section_ids(params.form), params.form):
-        for j, _ in enumerate(genome.section(name).phrases):
+    for sid, name, lines in zip(section_ids(params.form), params.form, phrase_plan(genome, params)):
+        for j, _ in enumerate(lines):  # a section's lines, as long as a person made it (songbird.takeover)
             _, phrase, start, _ = placed[k]
             after = placed[k + 1][1].pickup if k + 1 < len(placed) else 0
             k += 1
