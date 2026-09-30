@@ -584,6 +584,16 @@ def _add(out: np.ndarray, place, y: np.ndarray, *args) -> None:
         out[a:a + BLOCK] += place(y[a:a + BLOCK], *args)
 
 
+def _place_pair(out: np.ndarray, pair, gain: float, position: float, width: float) -> None:
+    """out += _placed(a cymbal's stereo * gain, position, width): its two channels (cymbals.microphones) scaled where
+    they lie, and placed a stretch at a time."""
+    left, right = pair
+    left *= gain
+    right *= gain
+    for a in range(0, len(left), BLOCK):
+        out[a:a + BLOCK] += _placed(np.stack([left[a:a + BLOCK], right[a:a + BLOCK]], axis=1), position, width)
+
+
 def early(y: np.ndarray, sr: int, seconds: float = 0.1) -> float:
     """The K-weighted RMS of a stroke's first `seconds` (its loudness as the ear takes a hit)."""
     seg = y[: int(seconds * sr)]
@@ -739,14 +749,22 @@ def render(name, notes, sr: int, length: int, rng: np.random.Generator, make: np
             rings += list(ring * (lowest / lowest[0]) ** -drum.slope)
             mix[4 * k: 4 * k + 4, k] = gains.get(piece) or _gain(piece, drum, f0, reso0, reso, ring, sr, bright)
         amps = np.array([st.vel for st in loud])[:, None] * np.tile([1.0, 0.6, 0.4, 0.3], 3)[None, :] * 0.03
-        ringing = struck.ring(low, rings, np.array([st.time + 0.001 for st in loud]), amps, sr, length, mix=mix)
+        # one bank of the twelve modes, a channel a tom: rung a tom at a time (each channel hears only its own four
+        # modes, the others adding 0.0 to it), each with the whole bank's floor, so each drops a mode where the
+        # whole bank did
+        loudest = np.max(np.abs(amps), axis=0) * np.max(np.abs(mix), axis=1)
+        floor = float((struck.QUIET * loudest.max()) ** 2)
+        at = np.array([st.time + 0.001 for st in loud])
         for k, piece in enumerate(("tom-hi", "tom-mid", "tom-lo")):
-            if tracks[piece] is None:  # silence and its ringing: the ringing's own channel, + 0.0
-                tracks[piece] = ringing[:, k]
+            own = slice(4 * k, 4 * k + 4)
+            ringing = struck.ring(np.array(low[own]), np.array(rings[own]), at, amps[:, own], sr, length,
+                                  mix=mix[own, k:k + 1], floor=floor)[:, 0]
+            if tracks[piece] is None:  # silence and its ringing: the ringing, + 0.0
+                tracks[piece] = ringing
                 tracks[piece] += 0.0
             else:
-                tracks[piece] += ringing[:, k]
-        del ringing
+                tracks[piece] += ringing
+            del ringing
     if played:
         # the wires ride on the snare-side head, which also answers the kick and the toms (the air pushing
         # it): the sympathetic buzz of any kit
@@ -807,17 +825,17 @@ def render(name, notes, sr: int, length: int, rng: np.random.Generator, make: np
         damp, chicks, halves = _hat_track(sorted(hat_notes), sr, length)
         cymbal = _cymbal(cymbals.HAT, cymbal_seeds["hat"], sr, size)
         rattles = cymbals.sizzle(halves, hits["hat"], sr, rng)
-        y = cymbals.play(cymbals.HAT, hits["hat"] + chicks + rattles, sr, length, rng, cymbal, brightness=bright,
-                         wear=wear, damp=damp)
+        y = cymbals.microphones(cymbals.HAT, hits["hat"] + chicks + rattles, sr, length, rng, cymbal,
+                                brightness=bright, wear=wear, damp=damp)
         del damp
-        y *= _cymbal_gain("hat", cymbals.HAT, cymbal_seeds["hat"], sr, size, bright, closed=True)
-        _add(out, _placed, y, PAN["hat"], 0.5)
+        _place_pair(out, y, _cymbal_gain("hat", cymbals.HAT, cymbal_seeds["hat"], sr, size, bright, closed=True),
+                    PAN["hat"], 0.5)
         del y
     if hits["ride"]:
         cymbal = _cymbal(cymbals.RIDE, cymbal_seeds["ride"], sr, size)
-        y = cymbals.play(cymbals.RIDE, hits["ride"], sr, length, rng, cymbal, brightness=bright, wear=wear)
-        y *= _cymbal_gain("ride", cymbals.RIDE, cymbal_seeds["ride"], sr, size, bright)
-        _add(out, _placed, y, PAN["ride"], 0.6)
+        y = cymbals.microphones(cymbals.RIDE, hits["ride"], sr, length, rng, cymbal, brightness=bright, wear=wear)
+        _place_pair(out, y, _cymbal_gain("ride", cymbals.RIDE, cymbal_seeds["ride"], sr, size, bright), PAN["ride"],
+                    0.6)
         del y
     if hits["crash"]:
         damp = None
@@ -827,11 +845,11 @@ def render(name, notes, sr: int, length: int, rng: np.random.Generator, make: np
                 later = [h.time for h in hits["crash"] if h.time > t]
                 damp[int(round(t * sr)):int(round(min(later) * sr)) if later else length] = 60.0  # the hand grabs it
         cymbal = _cymbal(cymbals.CRASH, cymbal_seeds["crash"], sr, size)
-        y = cymbals.play(cymbals.CRASH, hits["crash"], sr, length, rng, cymbal, brightness=bright, wear=wear,
-                         damp=damp)
+        y = cymbals.microphones(cymbals.CRASH, hits["crash"], sr, length, rng, cymbal, brightness=bright, wear=wear,
+                                damp=damp)
         del damp
-        y *= _cymbal_gain("crash", cymbals.CRASH, cymbal_seeds["crash"], sr, size, bright)
-        _add(out, _placed, y, PAN["crash"], 0.7)
+        _place_pair(out, y, _cymbal_gain("crash", cymbals.CRASH, cymbal_seeds["crash"], sr, size, bright),
+                    PAN["crash"], 0.7)
         del y
     # A struck head's ring swings about its rest a little off centre, which the impact's own pulse balances in
     # the air; the modes leave that pulse out, so a gentle high-pass under the kick takes the offset away. The

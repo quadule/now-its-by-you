@@ -103,6 +103,22 @@ def test_a_bank_of_modes_rings_as_it_did():
         assert same(struck.ring(*args, **kw), _ring_as_it_was(*args, **kw)), trial
 
 
+def test_doubling_a_stretch_at_a_time_is_doubling_the_whole():
+    rng = np.random.default_rng(20)
+    for n in (0, 1, 5, 23, 24, 47, 100, 1000, 70_001):
+        x = rng.standard_normal(n)
+        whole = struck._up2(x, struck._ODD, struck._MIDDLE)
+        for block in (1, 2, 7, 23, 100, 1 << 16):
+            out = np.empty(2 * n)
+            struck._up2_into(x, out, block=block)
+            base = rng.standard_normal(2 * n)
+            added = base.copy()
+            struck._up2_into(x, added, add=True, block=block)
+            assert same(out, whole) and same(added, base + whole), (n, block)
+        column = np.stack([x, -x], axis=1)
+        assert same(struck._double(column)[:, 1], struck._up2(-x, struck._ODD, struck._MIDDLE))
+
+
 def test_a_track_at_every_sample_is_interp():
     rng = np.random.default_rng(2)
     for frames, length in ((10, 500), (3000, 3000 * 64 - 5), (5000, 200_000), (2, 64)):
