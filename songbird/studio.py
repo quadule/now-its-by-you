@@ -878,6 +878,7 @@ class Handler(BaseHTTPRequestHandler):
     protocol_version = "HTTP/1.1"
 
     client_ip_header: str | None = None  # behind a proxy (--client-ip-header CF-Connecting-IP): who it says asked
+    log = None  # a public studio's access log: stdout as it was when serving began (a render swaps sys.stdout)
     _sent: tuple[int, int] | None = None
     _began = 0.0
 
@@ -892,9 +893,9 @@ class Handler(BaseHTTPRequestHandler):
         self._sent = None
         super().handle_one_request()
         if self.studio.public is not None and self._sent is not None:  # a public studio's access log: never who
-            sys.stdout.write(public_mod.access_line(self.command, urlsplit(self.path).path, *self._sent,
-                                                    time.monotonic() - self._began) + "\n")
-            sys.stdout.flush()
+            self.log.write(public_mod.access_line(self.command, urlsplit(self.path).path, *self._sent,
+                                                  time.monotonic() - self._began) + "\n")
+            self.log.flush()
 
     # ------------------------------------------------------------ guards
 
@@ -1195,7 +1196,7 @@ def serve(studio: Studio, port: int = PORT, tries: int = 20, host: str = HOST,
     kind = Server6 if ":" in host else Server
     attrs = {"studio": studio, "names": names}
     if studio.public is not None:  # a connection that sends nothing for this long is closed
-        attrs |= {"timeout": studio.public.timeout, "client_ip_header": client_ip_header}
+        attrs |= {"timeout": studio.public.timeout, "client_ip_header": client_ip_header, "log": sys.stdout}
     for p in range(port, port + tries):
         handler = type("StudioHandler", (Handler,), attrs | {"port": p})
         try:
@@ -1346,7 +1347,7 @@ def run(args: argparse.Namespace) -> int:
     print(f"Songbird studio: {studio.genome.title}, {studio.context.opening()}", flush=True)
     if limits:
         shares, url = links(host, port, allow, names, key)
-        print(public_warning(shares, limits, key, machine), flush=True)
+        print(public_warning(shares or [url], limits, key, machine), flush=True)
     elif shared:
         shares, url = links(host, port, allow, names, key)
         print(shared_warning(shares, studio.out_shown(), lan=any(link.startswith("http://") for link in shares)))

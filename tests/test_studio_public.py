@@ -5,7 +5,9 @@ address believed from a proxy's header only when the proxy is near, and a log th
 local studio is as it was."""
 
 import argparse
+import contextlib
 import http.client
+import io
 import json
 import socket
 import threading
@@ -286,8 +288,10 @@ def test_a_silent_connection_is_closed_and_the_log_never_says_who(home, capsys):
             began = time.monotonic()
             assert s.recv(1) == b""  # nothing sent: closed after the timeout, not held open
             assert time.monotonic() - began < 5
-        for _ in range(3):
+        for _ in range(2):
             ask(port, "GET", "/api/start?secret=1", headers={"Cookie": f"songbird-visitor-{port}=" + "v" * 24})
+        with contextlib.redirect_stdout(io.StringIO()):  # as a whole song's render does, for every thread
+            ask(port, "GET", "/api/start")  # logged all the same
         status, head, _ = ask(port, "GET", "/api/start")
         assert status == 429 and int(head["Retry-After"]) >= 1
         assert ask(port, "GET", "/healthz")[0] == 200  # never limited
