@@ -390,8 +390,7 @@
     const mode = modeOf(storageOf({}));
     const choice = choose(mode, env, bundle, shared.failures, "section");
     const now = choice.where === "browser"
-      ? "This browser makes the song itself, as the server would (the first time it fetches the singer: about " +
-        `${Math.round((bundle.transfer || bundle.bytes || 0) / 2 ** 20)} MB, kept after).`
+      ? `This browser makes the song (the first time, it fetches the singer: about ${Math.round((bundle.transfer || bundle.bytes || 0) / 2 ** 20)} MB).`
       : `The server makes the song${choice.why ? `: ${choice.why}` : ""}.`;
     if (!last) return now;
     const what = last.size === "whole" ? "The last whole song" : "The last section";

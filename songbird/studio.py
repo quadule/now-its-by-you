@@ -1045,14 +1045,12 @@ class Studio:
         return "" if self.public else shown(self.out)  # the serving computer's folders are its own
 
     def packet_note(self) -> str:
-        note = ("The recording is one file: it plays anywhere, and it carries the program that sang it, the song "
-                "and its record, so anyone can run it to make the next version.")
+        # what a recording is, the Tools sheet's Record it says; this is only where it's kept, when not here
         if self.public:
-            hours = self.public.download_hours
-            note += f" Download your copy here: the studio keeps it for {hours:g} hours, then lets it go."
-        elif self.shared:
-            note += " It is saved on the computer serving this studio; download your copy here."
-        return note
+            return f"Download your copy: the studio keeps it for {self.public.download_hours:g} hours."
+        if self.shared:
+            return "It is saved on the computer serving this studio: download your copy."
+        return ""
 
     # ------------------------------------------------------------ open to the public
 

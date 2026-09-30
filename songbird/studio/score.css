@@ -459,7 +459,11 @@ button.sbc-chord.is-rub::after { content: "•"; color: var(--red); margin-left:
 .tools h2 small { font-weight: 400; font-size: 14px; color: var(--ink-2); }
 .tools .cols { display: grid; grid-template-columns: 1fr 1fr; gap: 22px; margin-top: 14px; }
 .tools h3 { font: 600 15px var(--serif); font-variant-caps: all-small-caps; letter-spacing: .08em; color: var(--red); margin: 0 0 8px; border-bottom: 1px solid var(--red-rule); padding-bottom: 4px; }
-.tool { display: grid; grid-template-columns: auto 1fr; gap: 4px 12px; align-items: start; padding: 10px 0; border-top: 1px solid var(--rule); }
+/* each tool a row of one grid: its button in a column of its own (one width for all), what it does beside it */
+.tool { display: grid; grid-template-columns: 136px minmax(0, 1fr); gap: 4px 12px; align-items: baseline; padding: 10px 0; border-top: 1px solid var(--rule); }
+.tool > .btn { justify-self: start; max-width: 100%; white-space: normal; text-align: left; }
+.tools .btn.quiet { padding-left: 0; padding-right: 0; border: 0; }
+.tools .btn.quiet:hover { background: none; text-decoration: underline; text-underline-offset: 3px; }
 .col > h3 + .tool { border-top: 0; }
 .tool > p { margin: 0; font-size: 12px; color: var(--ink-2); }
 .tool > :not(.btn):not(p:first-of-type) { grid-column: 1 / -1; }
@@ -473,8 +477,8 @@ button.sbc-chord.is-rub::after { content: "•"; color: var(--red); margin-left:
 .sheet-foot p { margin: 3px 0; }
 .sheet-foot, .drawer .foot { margin-top: 18px; font: italic 13px var(--serif); color: var(--ink-3); border-top: 1px solid var(--rule); padding-top: 10px; }
 /* a sheet's ✕ level with its heading */
-.tools .close { position: absolute; right: 16px; top: 22px; }
-.drawer .close { position: absolute; right: 16px; top: 16px; }
+.tools .close { position: absolute; right: 16px; top: 24px; }  /* centred on the heading's line (22 px of padding, a 32 px line) */
+.drawer .close { position: absolute; right: 16px; top: 18px; }
 .perform-panel h3 { border: 0; margin: 8px 0 0; }
 .perform-panel .area-head details { display: none; }
 .notes-in-controls { display: flex; flex-wrap: wrap; gap: 8px 12px; align-items: center; margin: 8px 0 4px; font-size: 13px; }
@@ -601,6 +605,8 @@ dialog.help .keys td { padding: 3px 0; }
   .region svg { display: none; }
   .strip { flex-basis: 76px; }
   .tools { width: 100%; border-left: 0; padding: 18px 14px; }
+  .tools .close { top: 12px; right: 8px; }
+  .drawer .close { top: 6px; right: 8px; }
   .tools .cols { grid-template-columns: 1fr; }
   .drawer { padding: 14px; }
   .drawer .two-cols { grid-template-columns: 1fr; }

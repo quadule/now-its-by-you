@@ -1010,8 +1010,8 @@
         p?.notes?.length ? health() : null),
       (s.phrases || []).length ? phraseStrip() : null,
       p?.notes?.length ? pianoRoll() : el("p", { class: "sbc-muted notes-foot" }, "This section has no melody to change."),
-      el("p", { class: "readonly hint notes-foot" }, "On a phone the notes are for reading: tap one, and change its pitch, start and length in the column below."),
-      el("div", { class: "notes-foot" }, el("span", {}, "Drag a note up or down for its pitch, sideways to move it, by its right edge for its length. Arrow keys nudge; ⇧ ← → its length."),
+      el("p", { class: "readonly hint notes-foot" }, "Tap a note to change it in the column."),
+      el("div", { class: "notes-foot" }, el("span", { title: "Arrow keys nudge the selected note; ⇧ ← → its length." }, "Drag a note for its pitch and place, its right edge for its length."),
         p?.notes?.length ? button("▶ Hear this phrase", () => { state.scope = "phrase"; state.playIndex = null; play(); }, { class: "sbc-button" }) : null),
       el("p", { id: "sbc-drag-value", class: "sbc-visually-hidden", "aria-live": "off" }));
   }
