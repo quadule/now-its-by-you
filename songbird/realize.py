@@ -360,6 +360,7 @@ def realize(genome: Genome, params: Params, verses=None, phrasing: Phrasing | No
         return float(rng.normal(0.0, params.humanize))
 
     melody: list[dict] = []
+    vocal = style_mod.vocalise(params)  # "" but for a style of voices alone (songbird.style)
 
     for section_name, phrase, start, line in placed:
         sung = phrase.sung
@@ -382,6 +383,10 @@ def realize(genome: Genome, params: Params, verses=None, phrasing: Phrasing | No
             in_bar = phrase.chords[bar]
             chord = in_bar[int(min(max((onset - bar * meter.bar) * len(in_bar) // meter.bar, 0), len(in_bar) - 1))]
             degree = v.degree if v else note.degree
+            if syllable is None and vocal:  # an a cappella sings where the band would play: the notes, or "oo"
+                syllable = word = style_mod.vocalised(vocal, params.tonic + degree_semitones(degree, params.mode,
+                                                                                               note.alter), params)
+                word_len = 1
             turns = getattr(v, "melisma", ()) if v else ()  # a person's melisma: (grid units after the onset, degree)
             melody.append(
                 dict(
@@ -464,7 +469,8 @@ def realize(genome: Genome, params: Params, verses=None, phrasing: Phrasing | No
     # plucked strings and voices ring on; a bow or a breath is held a moment longer, then let go
     held = {"fiddle": 1.0, "whistle": 0.8}
     notes = [
-        replace(n, dur=n.dur + held.get(n.part, ring)) if n.start + n.dur >= final - 1e-3 and n.part != "voice" else n
+        replace(n, dur=n.dur + held.get(n.part, ring))
+        if n.start + n.dur >= final - 1e-3 and (n.part != "voice" or vocal) else n  # voices alone: the lead holds too
         for n in notes
     ]
 
@@ -484,6 +490,6 @@ def realize(genome: Genome, params: Params, verses=None, phrasing: Phrasing | No
     notes.sort(key=lambda n: (n.start, n.part, n.pitch))
     # the score's own words: the song's lexicon, and the syllables the backing voices sing ("oo", which no
     # dictionary has: a machine choosing oohs for a song without its own reading used to fail)
-    score = Score(tuple(notes), final + ring, tuple(section_spans), {**SUNG_SYLLABLES, **genome.lexicon}, band=band_settings,
+    score = Score(tuple(notes), final + ring, tuple(section_spans), {**SUNG_SYLLABLES, **style_mod.lexicon(params), **genome.lexicon}, band=band_settings,
                   sound=sound)
     return style_mod.finish(score, genome, params)  # a style's key lift for the last refrain, if it has one

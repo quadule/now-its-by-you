@@ -22,9 +22,9 @@ from dataclasses import asdict, dataclass, field, fields
 import numpy as np
 
 FEELS = ("straight", "swing", "shuffle", "twelve", "half", "double", "waltz", "six")
-INTROS = ("lead", "pad", "count", "voice", "quote")
+INTROS = ("lead", "pad", "count", "voice", "quote", "notes", "air")  # notes: an a cappella's fa-sol-la; air: a slow air
 ENDINGS = ("ring", "rit", "cold", "amen", "repeat")
-BACKINGS = ("oohs", "echo", "thirds", "gang")
+BACKINGS = ("oohs", "echo", "thirds", "gang", "hum")  # hum: an a cappella's open-fifth drone under the verses
 LINEAGE_MAX = 16  # generations of styles a record remembers
 
 
@@ -152,6 +152,8 @@ class StyleDef:
     mix: dict = field(default_factory=dict)  # offsets to the mix (MixParams fields; "choir" dB for the backing voices)
     options: dict = field(default_factory=dict)  # the arrangement's propensities (see choose_options)
     swaps: dict = field(default_factory=dict)  # a player -> {another who may play the part instead: how often}
+    optional: dict = field(default_factory=dict)  # a player -> how often it comes at all (else it sits in at gain 0)
+    group: int = 0  # the fewest backing voices the style sings with: the lineage's, then the program's own
 
     def order(self, lineup: dict) -> list[str]:
         """The instruments of a lineup in the style's own order (one swapped in where its part is), any others
@@ -435,6 +437,16 @@ STYLES = {s.name: s for s in (BALLAD, CHAMBER, LULLABY, AMBIENT, SYNTHFOLK, LOFI
 RING = ("synthfolk", "indie", "gospel", "blues", "country", "stringband", "shanty", "ballad", "chamber", "songwriter",
         "lullaby", "ambient", "lofi")
 RING_START = 15.0  # degrees on the (machine, drive) plane where the ring's first style sits
+# Styles beside the ring (docs/STYLES.md, "Two more"): each at a ring style's place, its anchor. A person chooses
+# one; a lineage in it travels from its anchor's place (keeping its own style where it would keep the anchor's),
+# and nothing steps into one by chance, so adding one moves no lineage's way round the ring.
+OFF_RING: dict[str, str] = {}
+
+
+def on_ring(name: str) -> str:
+    """The ring style a style sits at: itself, or the anchor of one beside the ring."""
+    name = name or "ballad"
+    return OFF_RING.get(name, name)
 
 
 def of(style: Style) -> StyleDef:
@@ -443,8 +455,75 @@ def of(style: Style) -> StyleDef:
 
 
 def neighbours(name: str) -> tuple[str, str]:
-    k = RING.index(name or "ballad")
+    k = RING.index(on_ring(name))
     return RING[(k - 1) % len(RING)], RING[(k + 1) % len(RING)]
+
+
+# --- beside the ring: a cappella (docs/STYLES.md, "Two more: a cappella and a Celtic session", 2026-09-30) ---------
+#
+# Only voices: the lead on the tune (the tenor, as in shape-note singing) and a group around it, the lineage's own
+# voices first and then the program's own harmony voices, at least three (group); the parts are idioms.shape_parts.
+# Feet or hands come now and then (optional); a player that doesn't come sits in the lineup at gain 0, so the
+# lineup is never empty (empty is the seed's eight).
+
+ACAPPELLA = _def(
+    "acappella", "a cappella, voices alone: shape-note and folk harmony singing, the lead on the tune and a group in "
+                 "open parts around it, a hum under the verses, the notes sung before the words, feet or hands now "
+                 "and then",
+    {"stomps": 0.9, "claps": 0.7},
+    {"stomps": {"verse1": "", "verse": ((0.5, "stomp"), (0.0, "")), "refrain": "stomp", "turn": "stomp", "bridge": "",
+                "tag": "stomp"},
+     "claps": {"refrain": ((0.6, "claps"), (0.0, "")), "last": "claps", "tag": "claps"}},
+    (), {"straight": 0.7, "waltz": 0.3}, {"straight": (0.85, 0.95, 1.1), "waltz": (0.6, 0.66, 0.76)},
+    {"*": ("power",)}, 0.4, (-0.7, 0.9),
+    singer={"vibrato_depth": -6.0, "rd": -0.05},
+    mix={"space": 0.25, "plate": 0.2, "width": 0.15, "choir": 1.5},
+    options={"intro": {"notes": 0.6, "lead": 0.4, "voice": 0.5}, "alone": 0.6, "stops": 0.0, "breakdown": 0.0,
+             "lift": 0.0, "ending": {"ring": 0.6, "repeat": 0.25, "rit": 0.15}, "entrances": 0.6,
+             "backing": {"hum": 0.4, "oohs": 0.35, "echo": 0.25}},
+    optional={"stomps": 0.35, "claps": 0.25},
+    group=3,
+)
+STYLES[ACAPPELLA.name] = ACAPPELLA
+OFF_RING[ACAPPELLA.name] = "shanty"  # the gang, the crowd singing
+
+# The four shapes: a shape-note singer's syllables for the degrees of the major scale (in a minor mode, of its
+# relative major's: the minor tonic is la), which a class sings a tune through on before its words.
+SHAPES = {0: "fa", 2: "sol", 4: "la", 5: "fa", 7: "sol", 9: "la", 11: "mi"}
+SHAPE_SYLLABLES = {"fa": "F AA1", "sol": "S OW1 L", "la": "L AA1", "mi": "M IY1"}  # "sol" as Sacred Harp says it
+MAJOR_OF = {"ionian": 0, "dorian": 10, "phrygian": 8, "lydian": 7, "mixolydian": 5, "aeolian": 3, "locrian": 1}
+
+
+def voices_alone(params) -> bool:
+    """Whether a rendition's band is its voices (a style that sings as a group, with no instrument on the tune)."""
+    sdef = STYLES.get(params.style.name) if params.style.name else None
+    return sdef is not None and sdef.group > 0 and not sdef.leads
+
+
+def vocalise(params) -> str:
+    """What the voices sing where the band would play the tune (an intro, a break, an outro, a line played): "notes"
+    (its shape-note syllables) or "oo"; "" where a band plays it (every style but a cappella)."""
+    if not voices_alone(params):
+        return ""
+    return "notes" if params.style.intro == "notes" else "oo"
+
+
+def shape_note(pitch: float, tonic: int, mode: str) -> str:
+    """A pitch's syllable in the four shapes (fa, sol, la, mi), counted from the mode's relative major; a note
+    outside the scale takes the shape below it."""
+    step = (int(round(pitch)) - tonic - MAJOR_OF.get(mode, 0)) % 12
+    while step not in SHAPES:
+        step -= 1
+    return SHAPES[step]
+
+
+def vocalised(how: str, pitch: float, params) -> str:
+    return shape_note(pitch, params.tonic, params.mode) if how == "notes" else "oo"
+
+
+def lexicon(params) -> dict:
+    """Readings a style's score adds to the song's: the shape-note syllables, for voices alone; else nothing."""
+    return dict(SHAPE_SYLLABLES) if voices_alone(params) else {}
 
 
 # --- how a rendition's style is chosen ---------------------------------------------------------------
@@ -517,7 +596,7 @@ def held_ring(drift, base: float, span: float, n: int = len(RING)) -> int:
 
 def place(parent: Style, c, drift) -> str:
     """The style a child is played in: its parent's, or the neighbour its machine and the drift lean to."""
-    was = RING.index(parent.name or "ballad")
+    was = RING.index(on_ring(parent.name))
     own = home(c)
     if own is None:
         return parent.name or "ballad"
@@ -526,6 +605,8 @@ def place(parent: Style, c, drift) -> str:
     step = ring_delta(was, k)
     if abs(step) > 1:  # never more than a step from the parent's: the folk process, not a jump
         k = (was + int(np.sign(step))) % len(RING)
+    if int(k) == was and (parent.name or "ballad") in OFF_RING:  # kept: a style beside the ring keeps itself
+        return parent.name
     return RING[int(k)]
 
 
@@ -550,6 +631,14 @@ def player(sdef: StyleDef, part: str, parent: dict, material: str) -> str:
     if had is not None:
         return had
     return pick({part: 1.0 - sum(swaps.values()), **swaps}, coin(material, f"swap:{part}"))
+
+
+def comes(sdef: StyleDef, part: str, inst: str, was: dict, kept: bool, material: str) -> bool:
+    """Whether a style's optional player comes this time (StyleDef.optional): as it did for a parent in the same
+    style, else by chance, fixed by the machine and the parent."""
+    if kept and inst in was:
+        return was[inst] > 0.02
+    return coin(material, f"comes:{part}") < sdef.optional[part]
 
 
 def pick(weights: dict, u: float) -> str:
@@ -590,7 +679,8 @@ def choose_options(genome, form, sdef: StyleDef, parent: Style, kept: bool, voic
     has_intro = any(genome.section(name).lyrics is None and name.startswith("intro") for name in form[:1])
     intros = o.get("intro", {"lead": 1.0})
     if has_intro:
-        intro = pick({k: w for k, w in intros.items() if k in ("lead", "pad")} or {"lead": 1.0}, coin(material, "intro", drift))
+        intro = pick({k: w for k, w in intros.items() if k in ("lead", "pad", "notes", "air")} or {"lead": 1.0},
+                     coin(material, "intro", drift))
     else:
         intro = pick({k: w for k, w in intros.items() if k in ("count", "voice")} | {"": 0.5}, coin(material, "intro", drift))
     alone = alone_with = stops = 0
@@ -608,6 +698,8 @@ def choose_options(genome, form, sdef: StyleDef, parent: Style, kept: bool, voic
     if last != "refrain":
         endings.pop("repeat", None)
     ending = pick(endings, coin(material, "ending", drift))
+    if sdef.group:  # a style that sings as a group: the lineage's voices, then the program's own (docs/STYLES.md)
+        voices = max(voices, min(6, sdef.group))
     backing = pick(o.get("backing", {"": 1.0}), coin(material, "backing", drift)) if voices else ""
     drums = any(instruments_family(name) in ("drums", "drum machine") for name in sdef.lineup)
     bridge = "half" if drums and coin(material, "bridge", drift) < 0.35 else ""
@@ -704,8 +796,12 @@ def choose_style(out: dict, ctx, forced: str | None = None, arrange: dict | None
         lineup = {}
         for part, gain in sdef.lineup.items():
             inst = player(sdef, part, was, material)
+            if part in sdef.optional and not comes(sdef, part, inst, was, kept, material):
+                lineup[inst] = 0.0  # it doesn't come this time: in the lineup, sitting out (a person may bring it in)
+                continue
             own = gain * 2 ** (0.3 * c.id(f"gain:{inst}")) * (1 + 0.25 * c.id(f"balance:{inst}") * drift.get("balance", 0.0))
-            g = was[inst] + PULL * (own - was[inst]) if inst in was else own
+            known = inst in was and (part not in sdef.optional or was[inst] > 0.02)  # (one that sat out comes anew)
+            g = was[inst] + PULL * (own - was[inst]) if known else own
             lineup[inst] = round(max(0.5 * gain, min(1.5 * gain, g)), 2)
         band["lineup"] = lineup
     for field_name in ("density", "brightness", "wear", "ornament", "arc"):
