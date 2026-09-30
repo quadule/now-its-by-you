@@ -328,7 +328,7 @@ def pieces_between(a: Anchor, b: Anchor, beat: float, ff_max: float = 8.0) -> li
 
 
 def render(pieces: list[Piece], video: Path, audio: Path, out: Path, length: float, fps: int, work: Path,
-           size: tuple[int, int] | None) -> None:
+           size: tuple[int, int] | None, crf: int = 16) -> None:
     """Each piece as a short intermediate at the output's frame rate, then one concat with the audio."""
     files = []
     clock = 0.0
@@ -349,14 +349,14 @@ def render(pieces: list[Piece], video: Path, audio: Path, out: Path, length: flo
             speed = (p.src1 - p.src0) / p.out
             vf = f"trim=start={s0:.4f}:end={s1:.4f},setpts=(PTS-STARTPTS)/{speed:.6f},fps={fps},tpad=stop_mode=clone:stop=-1{scale}"
         subprocess.run([FFMPEG, "-v", "error", "-y", "-ss", f"{base:.3f}", "-i", str(video), "-vf", vf,
-                        "-frames:v", str(frames), "-an", "-c:v", "libx264", "-preset", "veryfast", "-crf", "12",
+                        "-frames:v", str(frames), "-an", "-c:v", "libx264", "-preset", "veryfast", "-crf", "4",
                         "-pix_fmt", "yuv420p", str(f)], check=True)
         files.append(f)
     lst = work / "list.txt"
     lst.write_text("".join(f"file '{f}'\n" for f in files))
     subprocess.run([FFMPEG, "-v", "error", "-y", "-f", "concat", "-safe", "0", "-i", str(lst), "-i", str(audio),
                     "-map", "0:v", "-map", "1:a", "-vf", f"trim=end_frame={int(length * fps)}",  # never past the audio
-                    "-c:v", "libx264", "-preset", "slow", "-crf", "18", "-pix_fmt", "yuv420p",
+                    "-c:v", "libx264", "-preset", "slow", "-crf", str(crf), "-tune", "stillimage", "-pix_fmt", "yuv420p",
                     "-r", str(fps), "-c:a", "aac", "-b:a", "256k",
                     "-t", f"{length:.6f}", "-movflags", "+faststart",
                     str(out)], check=True)
@@ -374,6 +374,8 @@ def main() -> None:
     ap.add_argument("--bpm", type=float, help="a tempo hint for beat tracking")
     ap.add_argument("--fps", type=int, default=30)
     ap.add_argument("--size", default="1920x1080", help="output size, WxH (default 1920x1080)")
+    ap.add_argument("--crf", type=int, default=16, help="the H.264 quality of the result (lower is sharper; 16 keeps "
+                                                        "small text crisp at 1080p; the pieces between are near lossless)")
     ap.add_argument("--from", dest="first", help="start at the first action whose label contains this")
     ap.add_argument("--to", dest="last", help="end at the first action (after --from) whose label contains this")
     ap.add_argument("--min-weight", type=int, default=1)
@@ -478,7 +480,7 @@ def main() -> None:
     try:
         wav = work / "audio.wav"  # decoded once: a file that carries more than audio (a packet) muxes cleanly
         sf.write(str(wav), audio, sr, subtype="PCM_24")
-        render(pieces, args.video, wav, args.out, length, args.fps, work, (w, h))
+        render(pieces, args.video, wav, args.out, length, args.fps, work, (w, h), args.crf)
     finally:
         if not args.keep:
             shutil.rmtree(work, ignore_errors=True)
@@ -493,7 +495,9 @@ def main() -> None:
         on_bar = bool(np.min(np.abs(grid.downbeats - a.o)) < 1e-3)
         rows.append({"label": a.label, "kind": a.kind, "weight": a.weight, "raw": round(a.t, 3), "out": round(a.o, 3),
                      "frame": round(frame_t * args.fps), "off_beat_ms": round(off * 1000, 1), "on_bar": on_bar})
+    bitrate = 8 * args.out.stat().st_size / probe_duration(args.out) / 1e6
     report = {"audio": str(args.audio), "length": length, "grid": source, "beat": beat, "log_offset": offset,
+              "mbps": round(bitrate, 2), "on_bar": sum(r["on_bar"] for r in rows),
               "anchors": len(anchors), "actions_in_log": len(acts), "mean_off_ms": round(1000 * float(np.mean(offs)), 2),
               "max_off_ms": round(1000 * float(np.max(offs)), 2), "video_duration": probe_duration(args.out),
               "sections": grid.sections, "placed": rows}
@@ -501,7 +505,7 @@ def main() -> None:
         args.report.write_text(json.dumps(report, indent=1))
     print(f"{args.out}: {report['video_duration']:.3f} s for {length:.3f} s of audio; {len(anchors)} of {len(acts)} "
           f"actions on the beat ({source}); moments off the beat by {report['mean_off_ms']} ms on average, "
-          f"{report['max_off_ms']} ms at most (the frame grid)")
+          f"{report['max_off_ms']} ms at most (the frame grid); {report['on_bar']} on a bar line; {bitrate:.1f} Mb/s")
 
 
 if __name__ == "__main__":
