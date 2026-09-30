@@ -748,11 +748,11 @@ function editor(c) {
     }
     case "singer": {
       const box = h("div", {}, h("p", { class: "hint" }, "The singer is your machine's own voice, the same in every song it sings. What you can give it is your way of singing."));
-      const phrasings = s.phrasings || [];
+      const phrasings = phrasingChoices(s.phrasings);  // with the one sung in this browser, if any
       if (phrasings.length) {
         const select = h("select", { "aria-label": "Whose way it is sung" },
           h("option", { value: "" }, "the song's own way"),
-          phrasings.map((p) => h("option", { value: p.id }, `${p.label}'s way${p.detail ? ` (${p.detail})` : ""}`)));
+          phrasings.map((p) => h("option", { value: p.id }, `${p.way || `${p.label}'s way`}${p.detail ? ` (${p.detail})` : ""}`)));
         select.value = c.phrasing || "";
         select.addEventListener("change", () => setEdit("phrasing", select.value || null));
         box.append(h("div", { class: "control" }, h("label", {}, "Whose way it is sung"), select));
@@ -1286,5 +1286,17 @@ window.addEventListener("focus", async () => {
     }
   } catch (e) { /* the studio may have stopped */ }
 });
+
+// ------------------------------------------------------------------ singing in the browser (webstudio/sing.js)
+// A studio that takes singing in the browser (songbird studio --web-singing, docs/WEB-SINGING.md) adds
+// webstudio/sing.js to this page, from outside the song's program. It reaches the studio only through this: the
+// ways of singing it made (offered with the singer card's own) and a few of the page's functions. Without it,
+// nothing here does anything.
+const ownPhrasings = [];
+function phrasingChoices(list) {
+  const have = list || [];
+  return [...have, ...ownPhrasings.filter((p) => !have.some((q) => q.id === p.id))];
+}
+window.songbirdStudio = { state, api, h, toast, setEdit, refresh, renderCards, listen, revealRecording, ownPhrasings };
 
 main();

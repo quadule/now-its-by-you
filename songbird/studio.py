@@ -422,6 +422,7 @@ class Studio:
         self._timeline = None
         self._timeline_lock = threading.Lock()
         self.karaoke: subprocess.Popen | None = None
+        self.singing = None  # singing in the browser, when asked for (enable_web_singing)
         self.context = explain.Context(self.genome, parent_params, record, self.voice, machine, self.day, self.t,
                                        quiet, shared=self.shared)
         prune(self.cache, CACHE_LIMIT)
@@ -435,14 +436,14 @@ class Studio:
         edits = dict(edits or {})
         day = {"date": edits["date"]} if "date" in edits else {}
         if who == "program":
-            return self.context.version(day, phrasings=self.phrasing_files())
+            return self.context.version(day, phrasings=self.phrasing_choices())
         if who.startswith("fictional:"):
             return self.context.version(day, voice=harvest.fictional(who.split(":", 1)[1]))
-        return self.context.version(edits, phrasings=self.phrasing_files())
+        return self.context.version(edits, phrasings=self.phrasing_choices())
 
     def song(self, edits: dict) -> dict:
         v = self.version(edits)
-        view = explain.view(self.context, v, self.phrasings())
+        view = explain.view(self.context, v, self.phrasings() + self.sung_phrasings(edits))
         view["listen"] = self.listen_keys(v)
         return view
 
@@ -636,6 +637,8 @@ class Studio:
         return out
 
     def sing_available(self) -> dict:
+        if self.singing is not None:  # singing in the browser, here (webstudio/): the karaoke page isn't needed
+            return self.singing.available()
         if self.shared:
             return {"available": False,
                     "why": "The singing page opens only on the computer serving this studio, not over a shared link."}
@@ -677,6 +680,32 @@ class Studio:
     def close(self) -> None:
         if self.karaoke is not None and self.karaoke.poll() is None:
             self.karaoke.terminate()
+        if self.singing is not None:
+            self.singing.close()
+
+    # ------------------------------------------------------------ singing in the browser (webstudio/, --web-singing)
+    #
+    # A visitor sings to a guide on the studio's own page; the take is measured here and its audio deleted, and
+    # the song can be sung their way (docs/WEB-SINGING.md). All of it lives in webstudio/, outside the song's
+    # program (a packet never carries it): it needs a checkout's tools, their dev dependencies and the singing
+    # kit. These are the studio's only hooks into it.
+
+    def enable_web_singing(self, kit: str | Path | None = None) -> None:
+        if str(ROOT) not in sys.path:
+            sys.path.insert(0, str(ROOT))
+        from webstudio.singing import Singing
+
+        self.singing = Singing(self, kit)
+
+    def phrasing_choices(self):
+        """The ways of singing a version may name: those made on this computer, and, with singing in the
+        browser, the one a page made there (by its fingerprint, never listed)."""
+        made = self.phrasing_files()
+        return self.singing.lookup(made) if self.singing is not None else made
+
+    def sung_phrasings(self, edits: dict) -> list[dict]:
+        """For the singer's card: the way of singing in the browser these edits chose, if they chose one."""
+        return self.singing.listed(edits) if self.singing is not None else []
 
 
 def singer_name(who: str) -> str:
@@ -843,8 +872,13 @@ class Handler(BaseHTTPRequestHandler):
         if not self._admitted():
             return self.refuse_visitor() if path in ("/", "/index.html") else self.fail(403, "this studio needs its link's key")
         try:
+            singing = self.studio.singing
+            if singing is not None and singing.get(self, path, {k: v[0] for k, v in parse_qs(urlsplit(self.path).query).items()}):
+                return None
             if path in ("/", "/index.html"):
                 page = (PAGE / "index.html").read_text().replace("{{token}}", self.studio.token)
+                if singing is not None:
+                    page = singing.page(page)
                 extra = {}
                 if self.studio.shared:  # the key, kept for this visit's other requests (the audio's among them)
                     extra["Set-Cookie"] = f"{self._cookie()}={self.studio.share_key}; Path=/; HttpOnly; SameSite=Lax"
@@ -900,6 +934,8 @@ class Handler(BaseHTTPRequestHandler):
     # ------------------------------------------------------------ POST
 
     def do_POST(self) -> None:
+        if self.studio.singing is not None and urlsplit(self.path).path == "/api/sing/take":
+            return self.studio.singing.handle_take(self)  # a take is bigger than a JSON; its own guards, the same
         # the body first, so a refusal leaves the connection in step for the next request
         try:
             length = int(self.headers.get("Content-Length") or 0)
@@ -947,6 +983,8 @@ class Handler(BaseHTTPRequestHandler):
                 return self.send_json(studio.record(edits))
             if path == "/api/sing":
                 return self.send_json(studio.sing())
+            if path.startswith("/api/sing/") and studio.singing is not None:
+                return self.send_json(studio.singing.post(path, body))
             return self.fail(404, "not found")
         except Busy as e:
             return self.fail(503, str(e))
@@ -1062,6 +1100,12 @@ def add_arguments(parser: argparse.ArgumentParser) -> None:
                              "under it: .trycloudflare.com); shares it by link, as --host does")
     parser.add_argument("--key", metavar="WORD",
                         help="the key a shared studio's links carry (default: a new one each time it starts)")
+    parser.add_argument("--web-singing", action="store_true",
+                        help="take singing in the browser, measured here and its audio deleted (a checkout with the "
+                             "dev tools and a singing kit: docs/WEB-SINGING.md)")
+    parser.add_argument("--sing-kit", metavar="DIR",
+                        help="the singing kit, made by python -m webstudio.prepare (default $SONGBIRD_SING_KIT, else "
+                             "renders/sing-kit)")
 
 
 def run(args: argparse.Namespace) -> int:
@@ -1079,6 +1123,8 @@ def run(args: argparse.Namespace) -> int:
         if not re.fullmatch(r"[A-Za-z0-9_-]{8,64}", key):
             raise SystemExit("songbird studio: --key takes 8 to 64 letters, digits, - or _")
     studio = Studio(parent, args.song, args.machine, Path(args.out) if args.out else None, key=key)
+    if getattr(args, "web_singing", False):
+        studio.enable_web_singing(getattr(args, "sing_kit", None))
     server = serve(studio, args.port, host=host, names=names)
     port = server.server_address[1]
     url = f"http://127.0.0.1:{port}"
@@ -1086,6 +1132,10 @@ def run(args: argparse.Namespace) -> int:
     if shared:
         shares, url = links(host, port, allow, names, key)
         print(shared_warning(shares, studio.out_shown(), lan=any(link.startswith("http://") for link in shares)))
+    if studio.singing is not None:
+        why = studio.singing.why_not()
+        print("  Singing in the browser: " + (why or "on. Each take is measured here and its audio deleted at once; "
+                                              "only numbers stay (docs/WEB-SINGING.md)."), flush=True)
     print(f"  open {url}  (Ctrl-C to stop)", flush=True)
     threading.Thread(target=studio.timeline, daemon=True).start()  # ready by the time it's scrolled to
     studio.warm()

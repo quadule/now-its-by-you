@@ -19,8 +19,10 @@ The audio arrives as bytes, is decoded in memory, and each piece measured is wri
 system's temporary folder, readable by this user alone, and removed as soon as it has been read, whatever
 happens. Only numbers come back.
 
-    serve(conn, kit)     the loop: ("measure", {...}) -> the take's measurement; ("phrasing", {...}) -> a
-                         phrasing from measurements; ("hello", {}) -> what this process can do
+    python -m webstudio.worker KIT      the loop, on its standard input and output: one (op, request) at a
+                                        time, each a length and a pickle (the studio is its only reader):
+                                        "take" -> the take's measurement and the phrasing made with it;
+                                        "measure", "phrasing" -> each alone; "hello" -> what this process is
 """
 
 from __future__ import annotations
@@ -28,6 +30,7 @@ from __future__ import annotations
 import contextlib
 import io
 import os
+import pickle
 import resource
 import sys
 import tempfile
@@ -363,22 +366,61 @@ def hello(tools: Tools, request: dict) -> dict:
 OPS = {"measure": measure, "phrasing": phrasing, "take": take, "hello": hello}
 
 
-def serve(conn, kit_root: str) -> None:
+def send(f, message) -> None:
+    """One message on a pipe: its length, then its pickle."""
+    data = pickle.dumps(message, protocol=pickle.HIGHEST_PROTOCOL)
+    f.write(len(data).to_bytes(8, "big"))
+    f.write(data)
+    f.flush()
+
+
+def _read(f, size: int) -> bytes:
+    """Exactly size bytes from a pipe (a raw one hands them over as they come); EOFError if it ends first."""
+    parts, left = [], size
+    while left:
+        part = f.read(left)
+        if not part:
+            raise EOFError
+        parts.append(part)
+        left -= len(part)
+    return b"".join(parts)
+
+
+def receive(f):
+    """One message from a pipe (send()'s); EOFError when the other end has gone."""
+    return pickle.loads(_read(f, int.from_bytes(_read(f, 8), "big")))
+
+
+def serve(inp, out, kit_root: str) -> None:
     """The loop the studio's Measurer talks to: one (op, request) at a time, answered ("ok", result),
     ("refused", why: the singer's to act on) or ("error", what went wrong)."""
     sweep()
     tools = Tools(Kit(kit_root))
     while True:
         try:
-            op, request = conn.recv()
+            op, request = receive(inp)
         except (EOFError, OSError, KeyboardInterrupt):
             return
         try:
-            conn.send(("ok", OPS[op](tools, request)))
+            answer = ("ok", OPS[op](tools, request))
         except Refused as e:
-            conn.send(("refused", str(e)))
+            answer = ("refused", str(e))
         except Exception as e:  # noqa: BLE001  (said to the studio, which says it on the page)
             traceback.print_exc()
-            conn.send(("error", f"{type(e).__name__}: {e}"))
-        finally:
-            request = None  # the audio, if it's still held, goes now
+            answer = ("error", f"{type(e).__name__}: {e}")
+        request = None  # the audio, if anything still held it, goes now
+        send(out, answer)
+
+
+def main(argv: list[str] | None = None) -> int:
+    """python -m webstudio.worker KIT: the loop on this process's standard input and output. Anything the
+    tools print goes to standard error, so the answers' pipe carries answers alone."""
+    kit = (argv if argv is not None else sys.argv[1:])[0]
+    out = os.fdopen(os.dup(1), "wb")
+    os.dup2(2, 1)
+    serve(sys.stdin.buffer, out, kit)
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())
