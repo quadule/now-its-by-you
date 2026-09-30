@@ -455,9 +455,10 @@ class Version:
 
     @property
     def held(self) -> set[str]:
-        """Word edits that hold the words as the program drew them ("keep these words"): kept, not changed."""
-        return {p for p in self.applied if p.startswith("words.") and p in self.marks
-                and self.marks[p].get("value") == self.marks[p].get("was")}
+        """Word edits that hold the words as the program drew them ("keep these words"), and the arrangement's
+        choices locked as the program made them (a lock, docs/ARRANGE.md): kept, not changed."""
+        return {p for p in self.applied if p in self.marks and (self.marks[p].get("locked") or p.startswith("words.")
+                and self.marks[p].get("value") == self.marks[p].get("was"))}
 
     @property
     def changed(self) -> list[str]:
@@ -711,8 +712,9 @@ def tempo_card(v: Version) -> dict:
                 "text": f"{STYLE_NAMES.get(name, name)} takes the song {pace}"
                         + (" than it began" if pace in ("quicker", "slower") else "")}] + why
     mine = _mine(v, ["tempo"], lambda path, was: f"{was:.0f}")
+    low, high = edits_mod.tempo_range(v.context.genome, p.style)  # a person's range in this style (docs/ARRANGE.md)
     return _card(v, "tempo", "Tempo", tempo_words(p.tempo), "", mine + _finish(v, why, "tempo"), ["tempo"],
-                 tempo=p.tempo)
+                 tempo=p.tempo, range={"min": low, "max": high})
 
 
 def shape_card(v: Version) -> dict:

@@ -786,6 +786,19 @@ class Studio:
 
     # ------------------------------------------------------------ recording
 
+    # ------------------------------------------------------------ the arrangement as a grid (docs/STUDIO.md, "Arrangement control")
+    # The version on the page as a timeline draws it: sections x players, each cell the program's and the person's
+    # (arrange.* edits, songbird.takeover), with the program's reasons. Made at once from the score laid out (no
+    # audio), like the MIDI file; held to a public studio's limit on requests like every other request.
+
+    def arrangement(self, edits: dict) -> dict:
+        from . import band as band_mod, takeover
+
+        v = self.version(edits)
+        with band_mod.overheard() as heard:
+            self._score(v)
+        return {"key": self.key(v, None), **takeover.grid(self.genome, v, heard)}
+
     # ------------------------------------------------------------ notes in (docs/STUDIO.md, "Notes in")
 
     def notes_in(self, edits: dict, body: dict) -> dict:
@@ -1402,6 +1415,9 @@ class Handler(BaseHTTPRequestHandler):
                 return self.send_json(studio.players(edits))
             if path == "/api/notes-in":  # a take or a MIDI file, as a preview of edits (notes in)
                 return self.send_json(studio.notes_in(edits, body))
+            # the arrangement as a grid, for a timeline (docs/STUDIO.md, "Arrangement control"; songbird.takeover)
+            if path == "/api/arrangement":
+                return self.send_json(studio.arrangement(edits))
             if path == "/api/sing":
                 return self.send_json(studio.sing())
             if path.startswith("/api/sing/") and studio.singing is not None:

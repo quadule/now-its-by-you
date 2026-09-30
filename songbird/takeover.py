@@ -6,7 +6,7 @@ style) decide what each player does in each section of the form, from the sectio
 style's own way and what chance drew for this machine and season (the band joining line by line, a bare verse,
 stop-time, the breakdown). That stays the default and stays visible. A person may take any of it over:
 
-    arrange.<section>:<n>.<player>.level     rest, sparse, normal or full: in or out, and how hard
+    arrange.<section>:<n>.<player>.level     out, soft, plays or hard: in or out, and how hard
     arrange.<section>:<n>.<player>.pattern   what it plays there (an idiom of the player's: four, half, walk...)
     arrange.<section>:<n>.<player>.from      the line it comes in at (0: from the start)
     arrange.<section>:<n>.<player>.fill      a drum fill into the next section, or none (a kit, a drum machine)
@@ -15,7 +15,7 @@ stop-time, the breakdown). That stays the default and stays visible. A person ma
     arrange.<section>:<n>.build              true: its players fill in bar by bar toward the next section
 
 kept in params.composition["arrange"] ({"verse:0": {"bars": 16, "sung": False, "build": True, "players":
-{"kit": {"level": "full"}}}}), by the arrangement's own section ids as form.order and part.* name them. Absent,
+{"kit": {"level": "hard"}}}}), by the arrangement's own section ids as form.order and part.* name them. Absent,
 everything is as it was: every function here gives back what it was given.
 
 The program decides first, always: take_over() is called by both arrangers right after their own plan (and the
@@ -28,9 +28,7 @@ from __future__ import annotations
 import re
 from functools import lru_cache
 
-import numpy as np
-
-LEVELS = ("rest", "sparse", "normal", "full")
+LEVELS = ("out", "soft", "plays", "hard")  # the page's words for a cell (docs/STUDIO-REDESIGN.md)
 BARS = (2, 4, 8, 16)
 SECTION_FIELDS = ("bars", "sung", "build")
 CELL_FIELDS = ("level", "pattern", "from", "fill")
@@ -39,9 +37,9 @@ MAX_LINES = 16  # lines a section can have (a 16-bar section of two-bar lines, o
 PATH = re.compile(r"arrange\.([A-Za-z][A-Za-z0-9_-]{0,31}):(\d{1,2})\."
                   r"(?:([a-z][a-z0-9-]{0,31})\.)?(bars|sung|build|level|pattern|from|fill)")
 # how hard a level plays, against the program's own (1); the section's energy itself doesn't change
-LEVEL_VEL = {"sparse": 0.8, "normal": 1.0, "full": 1.15}
-# where sparse and full read a style's table: the section's own busyness (songbird.idioms.busy), less or more
-LEVEL_SHIFT = {"sparse": -0.3, "full": 0.3}
+LEVEL_VEL = {"soft": 0.8, "plays": 1.0, "hard": 1.15}
+# where soft and hard read a style's table: the section's own busyness (songbird.idioms.busy), less or more
+LEVEL_SHIFT = {"soft": -0.3, "hard": 0.3}
 DRUMS = ("drums", "drum machine")  # the families that play a kit's grooves (songbird.idioms.groove_bar)
 FILLED = ("groove", "four", "toms", "half", "machine")  # the grooves that end a section with a fill (w_groove)
 LINES = ("lead", "quote", "counter", "descant", "under", "tone", "double", "hook", "fills")  # idioms.LINES
@@ -51,8 +49,8 @@ BALLAD = {"bass": ("roots", "walk", "long"), "guitar": ("light", "strum", "ring"
           "harp": ("arp", "high", "roll"), "drum": ("light", "pulse", "full", "heart", "end"), "drone": ("hold",),
           "lute": ("fills", "double", "lead", "quote"), "fiddle": ("pad", "counter", "fills", "lead", "quote"),
           "whistle": ("counter", "double", "fills", "lead", "quote")}
-# ...and each one's steps from sparest to fullest: sparse is a step down from what the program has it play there,
-# full a step up (the ends where it plays nothing there), normal the program's own (the middle where it has none)
+# ...and each one's steps from sparest to fullest: soft is a step down from what the program has it play there,
+# hard a step up (the ends where it plays nothing there), plays the program's own (the middle where it has none)
 BALLAD_STEPS = {"bass": ("long", "roots", "walk"), "guitar": ("ring", "light", "strum"), "harp": ("arp", "high"),
                 "drum": ("light", "pulse", "full"), "drone": ("hold",), "lute": ("fills", "double"),
                 "fiddle": ("pad", "counter"), "whistle": ("double", "counter")}
@@ -83,10 +81,20 @@ LABELS = {
     "toms": "on the floor toms", "half": "half time", "lofi": "a boom-bap", "machine": "four on the floor",
     "end": "winding down", "stomp": "stamping on one and three", "stomp4": "stamping every beat",
     "claps": "claps on the backbeat", "tambourine": "tambourine on the backbeat", "shaker": "shaking",
-    "cajon": "a cajon's groove", "build": "a build", "light": "light", "full": "the full pattern",
-    "heart": "a heartbeat", "hold": "held", "high": "picking high", "pick": "fingerpicked",
+    "cajon": "a cajon's groove", "build": "a build", "light": "lightly", "full": "the full pattern",
+    "heart": "a heartbeat", "hold": "a held note", "high": "picking high", "pick": "fingerpicked",
 }
-LEVEL_WORDS = {"rest": "sits out", "sparse": "sparse", "normal": "as the band has it", "full": "full"}
+
+
+def label(player: str, idiom: str) -> str:
+    """What a player plays, in the page's words."""
+    return PLAYER_LABELS.get((player, idiom)) or LABELS.get(idiom, idiom)
+# where one player's idiom has its own name (the ballad's harp picks; its guitar's light is a boom-chick)
+PLAYER_LABELS = {("harp", "arp"): "picked chords", ("harp", "high"): "picking high above the tune",
+                 ("harp", "roll"): "rolled chords", ("guitar", "light"): "a boom-chick", ("guitar", "pick"): "fingerpicking",
+                 ("drum", "light"): "a light pulse", ("drum", "pulse"): "the pulse on the foot",
+                 ("drone", "hold"): "a held drone", ("fiddle", "pad"): "long held notes"}
+LEVEL_WORDS = {"out": "out", "soft": "soft", "plays": "plays", "hard": "hard"}
 
 
 # ---------------------------------------------------------------- what can be asked
@@ -199,7 +207,7 @@ def check(genome, path: str, value):
     (so does the value that is the program's own shape: sung, no build)."""
     from .synth.instruments import known
 
-    sid, name, player, field = target(genome, path)
+    _, name, player, field = target(genome, path)
     if value is None:
         return None
     section = genome.section(name)
@@ -519,24 +527,24 @@ def _spec(ctx, i: int, player: str):
 
 def _idiom(ctx, i: int, player: str, level: str) -> str:
     """What a player plays at a level a person chose where they didn't choose the pattern: normal, the
-    program's own there; sparse and full, what the style gives it with the band a little quieter or fuller
+    program's own there; soft and hard, what the style gives it with the band a little quieter or fuller
     than here (the ballad's players: a step down or up from the program's); else what it plays elsewhere."""
     program = ctx.taken["program"][i].get(player, "")
     if _ballad(ctx):
         steps = BALLAD_STEPS.get(player, ())
         if not steps or (program and program not in steps):
             return program  # a line or a colour of its own (the tune, a quote, rolled chords, a heartbeat)
-        if level == "normal":
+        if level == "plays":
             return program or steps[len(steps) // 2]
         if not program:
-            return steps[0] if level == "sparse" else steps[-1]
-        k = steps.index(program) + (-1 if level == "sparse" else 1)
+            return steps[0] if level == "soft" else steps[-1]
+        k = steps.index(program) + (-1 if level == "soft" else 1)
         return steps[min(max(k, 0), len(steps) - 1)]
     from .idioms import busy, idiom_of
 
     spec = _spec(ctx, i, player)
     here = busy(ctx, ctx.sections[i])
-    if level == "normal":
+    if level == "plays":
         found = program or idiom_of(spec, here)
     else:
         found = idiom_of(spec, here + LEVEL_SHIFT[level]) or program
@@ -551,7 +559,7 @@ def _idiom(ctx, i: int, player: str, level: str) -> str:
 
 def lead_of(ctx, i: int) -> str | None:
     """Who plays the tune where nobody sings it in a section: the band's lead, the next if a person sat it out."""
-    rested = {p for p, c in _entry(ctx, i).get("players", {}).items() if c.get("level") == "rest"}
+    rested = {p for p, c in _entry(ctx, i).get("players", {}).items() if c.get("level") == "out"}
     if _ballad(ctx):
         from .band import LEADS
 
@@ -622,7 +630,7 @@ def take_over(ctx, plan=None) -> None:
                 pattern = None
             if (level or "from" in cell) and plan is not None:
                 plan.entrances.pop((i, player), None)
-            if level == "rest":
+            if level == "out":
                 s.parts.pop(player, None)
                 continue
             if pattern:
@@ -663,7 +671,7 @@ def _on_beat(ctx, s, u: float) -> bool:
 
 def shape(ctx, events: list) -> list:
     """The person's arrangement on the notes the band wrote (band.Ev), in the order written: a player coming in
-    at the line a person chose (or, through a build, at its bar), each level's weight (a sparse player keeps
+    at the line a person chose (or, through a build, at its bar), each level's weight (a soft player keeps
     only its beats), a build rising from soft to full, and the tune played in the bars a sung section plays
     after its lines. The same list where nobody arranged anything."""
     taken = getattr(ctx, "taken", None)
@@ -697,7 +705,7 @@ def shape(ctx, events: list) -> list:
         what = s.parts.get(e.part, "")
         level = cells.get(key, {}).get("level")
         if level in LEVEL_VEL:
-            if level == "sparse" and what not in LINES and not _on_beat(ctx, s, e.u0):
+            if level == "soft" and what not in LINES and not _on_beat(ctx, s, e.u0):
                 continue
             e.vel = float(min(1.0, e.vel * LEVEL_VEL[level]))
         if e.section in builds and what != "build":
@@ -715,4 +723,286 @@ def shape(ctx, events: list) -> list:
 
             mine = sliding(ctx, lead, mine)
         out += mine
+    return out
+
+
+# ---------------------------------------------------------------- the grid, for the page (docs/STUDIO.md, "Arrangement control")
+#
+# The version as a timeline draws it: the sections of the form as regions, the band's players as tracks, and in
+# each cell what the player does there, how hard, from where, whose choice it is (the program's, the person's,
+# or a person's from the version before) and why the program chose what it did, in the page's own words.
+
+# the style's options that belong to one section, and how the page says each
+OPTION_WORDS = {"entrances": "the band joins line by line", "breakdown": "the last refrain starts stripped down",
+                "stops": "stop-time: the band hits each bar's one and leaves the words bare",
+                "alone": "sung bare", "bridge": "the bridge in half time", "intro": "how it starts"}
+INTRO_WORDS = {"lead": "an instrument states the tune", "pad": "a pad swells in alone", "count": "a count-in",
+               "voice": "the singer begins alone", "quote": "a line of an older song", "": "as the form has it"}
+ROLE_WORDS = {"intro": "the intro", "verse": "a verse", "refrain": "a refrain", "turn": "a turn", "break": "the break",
+              "bridge": "the bridge", "tag": "the tag", "outro": "the outro"}
+
+
+def level_of(busy: float, playing: bool) -> str:
+    """How hard the program has a player play, in the grid's four words: from how busy the band is there."""
+    if not playing:
+        return "out"
+    return "soft" if busy < 0.42 else "plays" if busy < 0.72 else "hard"
+
+
+def _kind(v, option: str) -> str:
+    """Whose an option of the style is: the person's, drawn this time (chance, for this machine and season), or
+    kept (from the version before, or the song's own)."""
+    if f"style.{option}" in v.applied:
+        return "you"
+    now, base = getattr(v.generated.style, option, None), getattr(v.context.base.style, option, None)
+    if now != base:
+        return "chance"
+    return "parent" if v.context.parent is not None else "song"
+
+
+def _whose(v, paths: list[str], inherited: bool) -> str:
+    if any(p in v.applied for p in paths):
+        return "you"
+    return "before" if inherited else "program"
+
+
+def grid(genome, v, heard: dict) -> dict:
+    """The version (an explain.Version) as a grid: sections x players, each cell the program's and the person's,
+    with the program's reasons; `heard` is what band.overheard() caught of its score (the band's layout)."""
+    from . import explain
+    from .edits import tempo_range
+    from .idioms import busy as busy_of
+    from .realize import timeline
+    from .style import of as style_of
+
+    params = v.params
+    ctx = heard["ctx"]
+    taken = getattr(ctx, "taken", None) or {"program": [dict(s.parts) for s in ctx.sections], "from": {},
+                                            "stops": set(), "half": set(), "played": {}, "cells": set(), "build": {}}
+    clock = timeline(genome, params)
+    beat = genome.meter.beat
+    ballad = not params.band.lineup
+    held, before = arranged(params), arranged(v.generated)
+    style = params.style
+    sname = style.name or "ballad"
+    band_words = explain.STYLE_NAMES.get(sname, sname).split(",")[0]
+    everyone = explain.players(params.band, style)
+    plan = phrase_plan(genome, params)
+    verses = [k for k, n in enumerate(params.form) if genome.section(n).lyrics == "verse"]
+    refrains = [k for k, n in enumerate(params.form) if genome.section(n).lyrics == "refrain"]
+
+    def band_index(sid: str) -> int:
+        return next(i for i, sids in enumerate(ctx.sids) if sid in sids)
+
+    sections, cells = [], []
+    for k, (sid, name, a, b) in enumerate(spans(genome, params, clock.lead)):
+        section = genome.section(name)
+        entry, was = held.get(sid, {}), before.get(sid, {})
+        i = band_index(sid)
+        s = ctx.sections[i]
+        own = sum(genome.phrases[p].bars for p in section.phrases)
+        bars = sum(genome.phrases[p].bars for p, _ in plan[k])
+        sung_now = any(sung for _, sung in plan[k])
+        played = bool(section.lyrics) and entry.get("sung") is False
+        options = sorted({own} | {n for n in BARS if fit(genome, name, n, bool(section.lyrics) and not played)})
+        lines, u = [], a
+        for j, (pid, sung) in enumerate(plan[k]):
+            lines.append({"index": j, "phrase": pid, "sung": sung, "start_beat": (u - clock.lead) / beat})
+            u += genome.phrases[pid].bars * genome.meter.bar
+        said = []  # the style's options that live here
+        if k == 0:
+            said.append({"field": "intro", "value": style.intro, "path": "style.intro", "by": _kind(v, "intro"),
+                         "text": INTRO_WORDS.get(style.intro, "")})
+        if verses and k == verses[0]:
+            said.append({"field": "entrances", "value": style.entrances, "path": "style.entrances",
+                         "by": _kind(v, "entrances"), "text": OPTION_WORDS["entrances"]})
+        if style.stops and len(verses) >= style.stops and k == verses[style.stops - 1]:
+            said.append({"field": "stops", "value": style.stops, "path": "style.stops", "by": _kind(v, "stops"),
+                         "text": OPTION_WORDS["stops"]})
+        if style.alone and len(verses) >= style.alone and k == verses[style.alone - 1]:
+            said.append({"field": "alone", "value": style.alone, "path": "style.alone", "by": _kind(v, "alone"),
+                         "text": f"sung {'with the ' + explain.player(style.alone_with) + ' alone' if style.alone_with else 'bare'}"})
+        if len(refrains) >= 2 and k == refrains[-1]:
+            said.append({"field": "breakdown", "value": style.breakdown, "path": "style.breakdown",
+                         "by": _kind(v, "breakdown"), "text": OPTION_WORDS["breakdown"]})
+        if s.role == "bridge":
+            said.append({"field": "bridge", "value": style.bridge, "path": "style.bridge", "by": _kind(v, "bridge"),
+                         "text": OPTION_WORDS["bridge"]})
+        paths = {f: f"arrange.{sid}.{f}" for f in SECTION_FIELDS}
+        title = name.replace("bridge2", "Bridge 2").title()
+        if params.form.count(name) > 1:
+            title += f" {int(sid.split(':')[1]) + 1}"
+        sections.append({
+            "index": k, "id": sid, "name": name, "label": title, "role": s.role, "energy": round(s.energy, 3),
+            "bars": bars, "bar_options": options, "own_bars": own, "sung": sung_now, "can_play": bool(section.lyrics),
+            "build": bool(entry.get("build")), "lines": lines,
+            "start_beat": (a - clock.lead) / beat, "duration_beats": (b - a) / beat,
+            "start_seconds": clock.seconds(a), "end_seconds": clock.seconds(b),
+            "pair": [x for x in ctx.sids[i] if x != sid], "options": said, "paths": paths,
+            "program": {"bars": own, "sung": bool(section.lyrics), "build": False},
+            "by": {f: _whose(v, [p], f in was) for f, p in paths.items()},
+            "problems": [p for p in v.problems if p["path"].startswith(f"arrange.{sid}.")
+                         and p["path"].count(".") == 2],
+        })
+        starts = [ln["start_beat"] * beat + clock.lead for ln in lines]  # each line's first bar line, in grid units
+        for player in everyone:
+            cell_now, cell_was = entry.get("players", {}).get(player, {}), was.get("players", {}).get(player, {})
+            plays = params.band.plays(player)
+            program, enters = _program_cell(ctx, taken, i, player, starts, ballad, plays)
+            now = s.parts.get(player, "") if plays else ""
+            why = _reasons(v, ctx, i, k, player, program["pattern"] or "", enters, program["from"], band_words,
+                           ballad, taken)
+            chance = any(r["kind"] == "chance" for r in why)
+            mine = [f"arrange.{sid}.{player}.{f}" for f in CELL_FIELDS]
+            whose = _whose(v, mine, bool(cell_was))
+            locked = whose == "you" and all(program.get(f) == x for f, x in cell_now.items())
+            if whose != "program":
+                shown = explain.player(player)
+                had = label(player, program["pattern"]) if program["pattern"] else "nothing here"
+                said = ("locked by you: the program's own, kept" if locked
+                        else f"chosen by you; the program had the {shown} play {had}" if whose == "you"
+                        else "kept from the version before, where a person chose it")
+                why.insert(0, {"kind": "you" if whose == "you" else "lineage", "text": said})
+            if entry.get("build") and whose == "program" and now:
+                why.insert(0, {"kind": "you", "text": "the section builds, as you chose: the players come in one "
+                                                    "after another and it grows louder toward what follows"})
+            late = (cell_now.get("from") and starts[min(cell_now["from"], len(starts) - 1)]) \
+                or taken["build"].get((i, player)) or (enters if enters is not None and a - 1e-9 <= enters < b else None)
+            fills = fills_for(player) and not ballad
+            quiet = [{"path": p, "why": said} for p in mine if cell_now.get(p.rsplit(".", 1)[1]) is not None
+                     for said in [silent(genome, params, p)] if said]
+            cells.append({
+                "section": sid, "player": player, "plays": plays,
+                "value": {"level": cell_now.get("level") or level_of(busy_of(ctx, s), bool(now)), "pattern": now or None,
+                          "pattern_label": label(player, now) if now else "out",
+                          "from": cell_now.get("from", program["from"]),
+                          "fill": cell_now.get("fill") if "fill" in cell_now
+                          else (_fills_here(ctx, i, player, now) if fills else None),
+                          "enters_beat": ((late - a) / beat) if now and late else 0.0},
+                "program": program, "by": whose, "chance": chance, "locked": locked, "why": why,
+                "paths": dict(zip(CELL_FIELDS, mine)),
+                "problems": [x for x in v.problems if x["path"] in mine] + quiet,
+            })
+    low, high = tempo_range(genome, style)
+    feel = style.feel or next(iter(style_of(style).feels), "straight")
+    return {
+        "sections": sections,
+        "players": [{"name": p, "label": explain.player(p), "family": _family(p), "plays": params.band.plays(p),
+                     "patterns": [{"id": x, "label": label(p, x)} for x in patterns(p, ballad)],
+                     "fills": fills_for(p) and not ballad} for p in everyone],
+        "cells": cells,
+        "levels": [{"id": x, "label": LEVEL_WORDS[x]} for x in LEVELS],
+        "tempo": {"value": params.tempo, "min": low, "max": high, "song": genome.seed_params["tempo"],
+                  "style": band_words, "feel": explain.FEEL_NAMES.get(feel, feel), "by": "you" if "tempo" in v.applied else "program"},
+        "problems": [p for p in v.problems if p["path"].startswith(("arrange.", "tempo"))],
+    }
+
+
+def _program_cell(ctx, taken: dict, i: int, player: str, starts: list[float], ballad: bool, plays: bool):
+    """What the program has a player do in a section of the band's layout, before any person's choice: its
+    level, pattern, the line it comes in at and a fill; and where it comes in (grid units, None from the start)."""
+    program = taken["program"][i].get(player, "") if plays else ""
+    enters = taken["from"].get((i, player))
+    line_in = next((j for j, x in enumerate(starts) if enters is not None and abs(x - enters) < 1e-6), 0)
+    from .idioms import busy as busy_of
+
+    fill = _fills_here(ctx, i, player, program, False) if fills_for(player) and not ballad else None
+    return ({"level": level_of(busy_of(ctx, ctx.sections[i]), bool(program)), "pattern": program or None,
+             "from": line_in, "fill": fill}, enters)
+
+
+_PROGRAM: dict = {}  # the program's cells for a version's parameters (program_cells), the last few
+
+
+def program_cells(genome, params) -> dict[tuple[str, str], dict]:
+    """The program's own choice in every cell of a version (section id, player) -> {level, pattern, from, fill},
+    before any person's: what a record's marks say the program had ("was"), and what a lock keeps. The score
+    laid out once (no audio) and kept for the same parameters."""
+    import hashlib
+    import json
+
+    from .band import INSTRUMENTS, overheard
+    from .realize import realize
+
+    key = hashlib.sha256(json.dumps([genome.title, params.to_dict()], sort_keys=True, default=str).encode()).hexdigest()
+    if key in _PROGRAM:
+        return _PROGRAM[key]
+    with overheard() as heard:
+        realize(genome, params)
+    ctx = heard["ctx"]
+    taken = ctx.taken
+    ballad = not params.band.lineup
+    out: dict = {}
+    lines = dict(zip([o[0] for o in ctx.spans], phrase_plan(genome, params)))
+    for sid, _, a, _b in ctx.spans:
+        i = next(j for j, sids in enumerate(ctx.sids) if sid in sids)
+        u, starts = a, []
+        for pid, _ in lines[sid]:
+            starts.append(u)
+            u += genome.phrases[pid].bars * genome.meter.bar
+        for player in (list(params.band.lineup) or list(INSTRUMENTS)):
+            out[(sid, player)] = _program_cell(ctx, taken, i, player, starts, ballad, params.band.plays(player))[0]
+    if len(_PROGRAM) > 32:
+        _PROGRAM.clear()
+    _PROGRAM[key] = out
+    return out
+
+
+def program_value(genome, params, path: str):
+    """The program's own value at a cell's path in this version (program_cells), "out" for a player it has
+    playing nowhere there."""
+    sid, _, player, field = target(genome, path)
+    cell = program_cells(genome, params).get((sid, player))
+    if cell is None:
+        return {"level": "out", "pattern": None, "from": 0, "fill": None}.get(field)
+    return cell.get(field)
+
+
+def _fills_here(ctx, i: int, player: str, idiom: str, mine: bool = True) -> bool:
+    """Whether a kit's or a drum machine's groove ends this section with a fill, as it is (idioms.w_groove)."""
+    if idiom not in FILLED or i + 1 >= len(ctx.sections):
+        return False
+    asked = getattr(ctx, "fills", {}).get((i, player)) if mine else None
+    nxt, s = ctx.sections[i + 1], ctx.sections[i]
+    return bool(asked) if asked is not None else nxt.energy >= s.energy
+
+
+def _reasons(v, ctx, i: int, k: int, player: str, program: str, enters, line_in: int, band_words: str,
+             ballad: bool, taken: dict) -> list[dict]:
+    """Why the program has a player do what it does in a section, in the page's words."""
+    from . import explain
+
+    s = ctx.sections[i]
+    shown = explain.player(player)
+    style = v.params.style
+    where = ROLE_WORDS.get(s.role, s.role)
+    out = []
+    if not v.params.band.plays(player):
+        return [{"kind": "rule", "text": f"the {shown} sits out the whole song: its level in the band is at 0"}]
+    if not program:
+        verses = [j for j, x in enumerate(ctx.sections) if x.role == "verse"]
+        if style.alone and len(verses) >= style.alone and i == verses[style.alone - 1]:
+            out.append({"kind": _kind(v, "alone"), "text": f"verse {style.alone} is sung "
+                        + (f"with the {explain.player(style.alone_with)} alone" if style.alone_with else "bare")})
+        elif style.intro == "pad" and i == 0:
+            out.append({"kind": _kind(v, "intro"), "text": "a pad swells in alone to begin"})
+        else:
+            out.append({"kind": "rule", "text": f"{band_words} leaves the {shown} out of {where}"})
+        return out
+    out.append({"kind": "rule", "text": f"{band_words}: the {shown} plays {label(player, program)} in {where}"})
+    busy = "busier" if s.energy >= 0.6 else "quieter" if s.energy < 0.42 else "in between"
+    out.append({"kind": "rule", "text": f"the band builds from the first verse to the last refrain; here it is {busy}"})
+    if enters is not None and line_in:
+        if style.breakdown and s.role == "refrain" and i == max(j for j, x in enumerate(ctx.sections) if x.role == "refrain"):
+            out.append({"kind": _kind(v, "breakdown"), "text": f"the last refrain starts stripped down; the {shown} "
+                                                              f"comes back at line {line_in + 1}"})
+        elif style.intro == "voice" and i == 0:
+            out.append({"kind": _kind(v, "intro"), "text": f"the singer begins alone; the {shown} comes in at line 2"})
+        else:
+            out.append({"kind": _kind(v, "entrances"), "text": f"the band joins line by line; the {shown} comes in "
+                                                              f"at line {line_in + 1}"})
+    if i in taken["stops"] and program not in LINES:
+        out.append({"kind": _kind(v, "stops"), "text": "stop-time: it hits each bar's one with the band"})
+    if i in taken["half"] and _family(player) in DRUMS + ("drums", "bass"):
+        out.append({"kind": _kind(v, "bridge"), "text": "the bridge in half time"})
     return out

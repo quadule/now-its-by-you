@@ -1,6 +1,6 @@
 """Taking over the arrangement (docs/ARRANGE.md, "Taking over the arrangement"): a person's choices, section by
 section and player by player, over the program's. With none, nothing changes (the goldens say so too). Each is
-checked and refused with why; a player sits out, plays sparse or full, plays another pattern, comes in late, has
+checked and refused with why; a player sits out, plays soft or hard, plays another pattern, comes in late, has
 a fill or none; a section is played rather than sung (a drop), made longer or shorter, or builds; what was chosen
 is marked, made again from the record, replayed the same and handed down; silent and said where a version can't
 play it; the tempo follows the style; the page's grid shows the program's and the person's."""
@@ -65,9 +65,9 @@ def test_nothing_arranged_is_the_same_song():
 
 def test_choices_are_checked_and_refused_with_why():
     bad = {
-        "arrange.chorus:0.kit.level": "full",  # no such section
+        "arrange.chorus:0.kit.level": "hard",  # no such section
         "arrange.verse:0.kit.level": "loud",
-        "arrange.verse:0.kazoo.level": "full",
+        "arrange.verse:0.kazoo.level": "hard",
         "arrange.verse:0.drummachine.pattern": "polka",
         "arrange.verse:0.fiddle.fill": True,  # a fiddle plays no fills
         "arrange.verse:0.kit.from": -1,
@@ -75,15 +75,15 @@ def test_choices_are_checked_and_refused_with_why():
         "arrange.turn:0.bars": 8,  # its quote fits its two bars
         "arrange.intro:0.sung": False,  # nothing to sing there
         "arrange.verse:0.build": "yes",
-        "arrange.verse:0.level": "full",  # a player's, not the section's
+        "arrange.verse:0.level": "hard",  # a player's, not the section's
         "arrange.verse:0.kit.bars": 8,
-        "arrange.verse.kit.level": "full",
+        "arrange.verse.kit.level": "hard",
     }
     clean, problems = E.check(G, bad)
     assert clean == {} and {p["path"] for p in problems} == set(bad)
     said = {p["path"]: p["why"] for p in problems}
     assert "no section called chorus" in said["arrange.chorus:0.kit.level"]
-    assert "rest, sparse, normal or full" in said["arrange.verse:0.kit.level"]
+    assert "out, soft, plays or hard" in said["arrange.verse:0.kit.level"]
     assert "four" in said["arrange.verse:0.drummachine.pattern"]  # it says what it can play
     assert "quoted" in said["arrange.turn:0.bars"] and "played already" in said["arrange.intro:0.sung"]
     # a sung section can't be shorter than its lines, unless it's played
@@ -115,20 +115,20 @@ def test_four_on_the_floor_in_a_refrain():
     assert outside(after) == outside(before)
 
 
-def test_a_player_sits_out_plays_sparse_or_full():
+def test_a_player_sits_out_plays_soft_or_hard():
     base = synthfolk()
     score = realize(G, base)
     own = notes_in(score, base, "refrain:0", "guitar")
-    rest, _ = taken({"arrange.refrain:0.guitar.level": "rest"}, base)
+    rest, _ = taken({"arrange.refrain:0.guitar.level": "out"}, base)
     assert own and not notes_in(realize(G, rest), rest, "refrain:0", "guitar")
-    sparse, _ = taken({"arrange.refrain:0.guitar.level": "sparse"}, base)
+    sparse, _ = taken({"arrange.refrain:0.guitar.level": "soft"}, base)
     thin = notes_in(realize(G, sparse), sparse, "refrain:0", "guitar")
     assert 0 < len(thin) < len(own) and np.mean([n.vel for n in thin]) < np.mean([n.vel for n in own])
-    full, _ = taken({"arrange.refrain:0.guitar.level": "full"}, base)
+    full, _ = taken({"arrange.refrain:0.guitar.level": "hard"}, base)
     loud = notes_in(realize(G, full), full, "refrain:0", "guitar")
     assert np.mean([n.vel for n in loud]) > np.mean([n.vel for n in own])
     # the ballad's players step down and up from what the program has them play
-    ballad, _ = taken({"arrange.refrain:0.bass.level": "sparse", "arrange.refrain:2.drum.level": "rest"})
+    ballad, _ = taken({"arrange.refrain:0.bass.level": "soft", "arrange.refrain:2.drum.level": "out"})
     with B.overheard() as heard:
         realize(G, ballad)
     ctx = heard["ctx"]
@@ -153,9 +153,9 @@ def test_a_played_refrain_is_a_drop():
     # the band keeps its weight under the lead (a drop, not a break)
     band = lambda notes: np.mean([n.vel for n in notes if n.part in ("guitar", "synthbass", "synthpad")])  # noqa: E731
     assert band(drop) >= band(notes_in(sung, base, "refrain:1")) - 0.02
-    assert [n for n in score.notes if n.part == "voice"] == \
-           [n for n in sung.notes if n.part == "voice" and not n.section == "refrain" or
-            n.part == "voice" and not span(base, "refrain:1")[0] - 1 <= n.start < span(base, "refrain:1")[1]]
+    a, b = span(base, "refrain:1")
+    outside = lambda s: [n for n in s.notes if n.part == "voice" and not a - 1 <= n.start < b]  # noqa: E731
+    assert outside(score) == outside(sung)  # the singer elsewhere as sung
 
 
 def test_section_lengths():
@@ -245,7 +245,7 @@ def _lines(params):
 
 def test_a_pair_is_split_only_where_a_person_arranged_it():
     base = synthfolk(PAIRS)
-    params, _ = taken({"arrange.verse:1.synthbass.level": "rest"}, base)
+    params, _ = taken({"arrange.verse:1.synthbass.level": "out"}, base)
     before, after = realize(G, base), realize(G, params)
     a, b = span(params, "verse:1")
     assert notes_in(before, base, "verse:1", "synthbass") and not notes_in(after, params, "verse:1", "synthbass")
@@ -253,11 +253,11 @@ def test_a_pair_is_split_only_where_a_person_arranged_it():
 
 
 def test_marked_made_again_from_the_record_replayed_and_handed_down():
-    edits = {"arrange.refrain:0.guitar.level": "full", "arrange.refrain:1.sung": False,
+    edits = {"arrange.refrain:0.guitar.level": "hard", "arrange.refrain:1.sung": False,
              "arrange.refrain:1.bars": 16, "arrange.verse:0.bass.from": 1}
     r = E.resolve(G, None, ADA, DAY, E.check(G, edits)[0])
     assert set(edits) <= set(r.applied), r.problems
-    assert r.marks["arrange.refrain:0.guitar.level"] == {"value": "full", "was": "the program's own"}
+    assert r.marks["arrange.refrain:0.guitar.level"] == {"value": "hard", "was": "plays"}
     assert r.marks["arrange.refrain:1.sung"] == {"value": False, "was": True}
     assert r.marks["arrange.refrain:1.bars"] == {"value": 16, "was": 8}
     record = json.loads(json.dumps({"params": r.params.to_dict(), "chosen_by_you": r.marks}))
@@ -267,6 +267,11 @@ def test_marked_made_again_from_the_record_replayed_and_handed_down():
     assert realize(G, replayed, lyrics=r.lyrics) == realize(G, r.params, lyrics=r.lyrics)
     child = choose_params(G, replayed, H.fictional("basil"), DAY)
     assert T.arranged(child) == T.arranged(r.params)  # a person's arrangement passes on
+    # a lock keeps what chance drew: the same version, marked locked
+    plain = E.resolve(G, None, ADA, DAY, {})
+    lock = {"style.entrances": plain.params.style.entrances, "style.breakdown": plain.params.style.breakdown}
+    kept = E.resolve(G, None, ADA, DAY, lock)
+    assert kept.params == plain.params and all(kept.marks[p]["locked"] for p in lock)
     released = E.resolve(G, child, None, None, {"arrange.refrain:1.sung": None, "arrange.refrain:1.bars": None})
     assert "refrain:1" not in T.arranged(released.params)
     assert released.marks["arrange.refrain:1.bars"] == {"value": None, "was": 16}
@@ -274,7 +279,7 @@ def test_marked_made_again_from_the_record_replayed_and_handed_down():
 
 def test_silent_where_this_version_cant_play_it_and_said():
     base = replace(seed(), form=tuple(FORM))
-    edits = {"arrange.verse:3.guitar.level": "rest", "arrange.refrain:0.kit.level": "full",
+    edits = {"arrange.verse:3.guitar.level": "out", "arrange.refrain:0.kit.level": "hard",
              "arrange.refrain:0.guitar.pattern": "travis"}
     r = E.resolve(G, base, None, None, E.check(G, edits)[0])
     said = {p["path"]: p["why"] for p in r.problems}
@@ -284,7 +289,7 @@ def test_silent_where_this_version_cant_play_it_and_said():
     assert "doesn't play Travis-picked" in said["arrange.refrain:0.guitar.pattern"]
     assert T.arranged(r.params) == {} and not set(edits) & set(r.applied)
     # one inherited waits, silent, for a version that plays it
-    held = replace(base, composition={"arrange": {"verse:3": {"players": {"guitar": {"level": "rest"}}}}})
+    held = replace(base, composition={"arrange": {"verse:3": {"players": {"guitar": {"level": "out"}}}}})
     assert realize(G, held) == realize(G, base)
 
 

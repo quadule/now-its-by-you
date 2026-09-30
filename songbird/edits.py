@@ -804,7 +804,7 @@ def resolve(genome: Genome, parent, voice, drift, edits: dict, *, seed: int | No
     params, applied, problems, edits = _taken_over(genome, generated, params, applied, problems, edits)
     if "phrasing" in edits and phrasing_json is not None:
         applied.append("phrasing")
-    marks_ = marks(genome, generated, generated_lyrics, lyrics, applied, edits, phrasing_json)
+    marks_ = marks(genome, generated, generated_lyrics, lyrics, applied, edits, phrasing_json, params=params)
     return Resolved(generated, params, generated_lyrics, lyrics, applied, problems, marks_)
 
 
@@ -843,10 +843,12 @@ def phrasing_mark(phrasing_json: dict) -> dict:
 
 
 def marks(genome: Genome, generated, generated_lyrics, final_lyrics, applied: list[str], edits: dict,
-          phrasing_json: dict | None = None) -> dict:
+          phrasing_json: dict | None = None, params=None) -> dict:
     """The record's block of a person's choices: for each edit that took effect, the value chosen and what
     the program had chosen ("was"). Replaying the values as edits (from_record) makes the same rendition
-    from the same parent, machine and day."""
+    from the same parent, machine and day. A choice of the arrangement's that keeps what the program chose
+    (a lock: the page's padlock on a cell, a section or an option) is marked locked: true; params, the version
+    as sung, says what the program had in a cell (takeover.program_cells)."""
     out: dict = {}
     generated_shape = shape(genome, generated.form) or {}
     for path in applied:
@@ -866,6 +868,8 @@ def marks(genome: Genome, generated, generated_lyrics, final_lyrics, applied: li
             was = composition.chords_value(genome, generated, path[7:])
         elif path.startswith("arrange."):  # the arrangement taken over: what the version held, else the program's
             was = takeover.value(genome, generated, path)
+            if was == "the program's own" and params is not None:
+                was = takeover.program_value(genome, params, path)
         elif path.startswith("part."):  # the notes are in the record's parameters: marked by their count
             was = composition.part_value(generated, path)
             out[path] = {"value": {"notes": len(value or [])} if value is not None else None,
@@ -891,6 +895,8 @@ def marks(genome: Genome, generated, generated_lyrics, final_lyrics, applied: li
         else:
             was = variation.read(generated, path)
         out[path] = {"value": value, "was": was}
+        if path.startswith(("arrange.", "style.")) and value == was and value is not None:
+            out[path]["locked"] = True  # a lock: the program's own choice, kept (docs/STUDIO-REDESIGN.md)
     return out
 
 
