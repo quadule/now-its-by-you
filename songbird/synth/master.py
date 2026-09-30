@@ -401,15 +401,20 @@ def pcm_sha256(pcm: np.ndarray) -> str:
     return hashlib.sha256(np.ascontiguousarray(pcm, dtype="<i2").tobytes()).hexdigest()
 
 
-def write_flac(path: str | Path, pcm: np.ndarray, sr: int, tags: dict | None = None) -> None:
-    """16-bit FLAC; with tags (title, artist, date, comment, album...), as Vorbis comments players show.
-    Tags never touch the samples, so a rendition's id (their hash) is the same with or without them."""
+def write_flac(path: str | Path, pcm: np.ndarray, sr: int, tags: dict | None = None, cover: bool = True) -> None:
+    """16-bit FLAC; with tags (title, artist, date, comment, album...), as Vorbis comments players show, and the
+    song's cover as its front-cover picture (songbird/artwork.py; described by the title). Neither touches the
+    samples, so a rendition's id (their hash) is the same with or without them."""
     if not tags:
         sf.write(str(path), pcm, sr, format="FLAC", subtype="PCM_16")
-        return
-    channels = pcm.shape[1] if pcm.ndim > 1 else 1
-    with sf.SoundFile(str(path), "w", samplerate=sr, channels=channels, format="FLAC", subtype="PCM_16") as f:
-        for key, value in tags.items():
-            if value:
-                setattr(f, key, str(value))
-        f.write(pcm)
+    else:
+        channels = pcm.shape[1] if pcm.ndim > 1 else 1
+        with sf.SoundFile(str(path), "w", samplerate=sr, channels=channels, format="FLAC", subtype="PCM_16") as f:
+            for key, value in tags.items():
+                if value:
+                    setattr(f, key, str(value))
+            f.write(pcm)
+    if cover:  # (imported here: a line more at the top would move the browser's kernels' references)
+        from .. import artwork
+
+        artwork.embed_file(path, (tags or {}).get("title"))

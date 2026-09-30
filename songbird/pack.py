@@ -19,8 +19,9 @@ Inside the archive (docs/PACKET.md):
     program/          the program itself: songbird/ (source and data) and pyproject.toml
 
 The archive's offsets are absolute (it is written onto the end of the audio), so readers need no
-adjustment; the audio before it is left byte for byte as it was, and packing again replaces the
-archive rather than stacking a second one.
+adjustment; the audio before it is left as it was but for its front cover (songbird/artwork.py: the
+song's cover, a metadata block that never touches the samples, so never the id), and packing again
+replaces the archive rather than stacking a second one.
 """
 
 from __future__ import annotations
@@ -29,13 +30,14 @@ import hashlib
 import io
 import json
 import re
+import struct
 import sys
 import zipfile
 from pathlib import Path
 
 import numpy as np
 
-from . import __version__
+from . import __version__, artwork
 from .dates import us_date
 
 ROOT = Path(__file__).resolve().parents[1]  # the program's tree: songbird/ and pyproject.toml beside it
@@ -292,6 +294,7 @@ def pack(flac: str | Path, record: dict, genome: str | Path, lyrics: str | None 
     sha = samples_id(audio)
     if record.get("id") and record["id"] != sha:
         raise ValueError(f"the record is for {record['id'][:12]}, but {flac.name} holds {sha[:12]}")
+    audio = artwork.embed(audio, record.get("title"))  # the cover, whatever wrote the FLAC (a render's has it already)
     program = program_files(root)
     m = {**record, "id": sha, **{k: record[k] for k in ("generation", "parent_id", "ancestry") if k in record}}
     m.setdefault("generation", 0)
@@ -332,6 +335,48 @@ def pack(flac: str | Path, record: dict, genome: str | Path, lyrics: str | None 
         raise ValueError(f"the attached archive exceeds the {LIMIT / 2**20:g} MiB limit (audio excluded)")
     tmp = out.with_name(out.name + ".part")
     tmp.write_bytes(buffer.getvalue())
+    tmp.replace(out)
+    return out
+
+
+def _moved(archive: bytes, by: int) -> bytes:
+    """An attached archive with its absolute offsets moved `by` bytes (the audio before it grew or shrank): each
+    central directory entry's local header offset and the end record's directory offset. The entries' bytes are
+    left as they were. A packet has no ZIP64 and no archive comment (pack writes neither)."""
+    end = archive.rfind(b"PK\x05\x06")
+    if end < 0 or end + 22 != len(archive):
+        raise ValueError("the attached archive doesn't end as a packet's does")
+    out = bytearray(archive)
+    total, cd_size, cd_start = struct.unpack("<HII", archive[end + 10:end + 20])
+    at = end - cd_size
+    for _ in range(total):
+        if archive[at:at + 4] != b"PK\x01\x02":
+            raise ValueError("the attached archive's directory is damaged")
+        name, extra, comment = struct.unpack("<HHH", archive[at + 28:at + 34])
+        (offset,) = struct.unpack("<I", archive[at + 42:at + 46])
+        if offset == 0xFFFFFFFF:
+            raise ValueError("the attached archive is ZIP64, which no packet is")
+        out[at + 42:at + 46] = struct.pack("<I", offset + by)
+        at += 46 + name + extra + comment
+    if at != end:
+        raise ValueError("the attached archive's directory is damaged")
+    out[end + 16:end + 20] = struct.pack("<I", cd_start + by)
+    return bytes(out)
+
+
+def with_cover(path: str | Path, out: str | Path, description: str | None = None) -> Path:
+    """A copy of a rendition's file with the song's cover as its front cover (artwork.embed), its packet (if it
+    carries one) kept byte for byte, only moved along: the same audio, the same record, the same id. For a file
+    made before the program embedded the cover."""
+    path, out = Path(path), Path(out)
+    data = path.read_bytes()
+    start = packet_start(path)
+    audio, archive = (data, b"") if start is None else (data[:start], data[start:])
+    if description is None and start is not None:
+        description = (read_manifest(path) or {}).get("title")
+    covered = artwork.embed(audio, description)
+    tmp = out.with_name(out.name + ".part")
+    tmp.write_bytes(covered + (_moved(archive, len(covered) - len(audio)) if archive else b""))
     tmp.replace(out)
     return out
 

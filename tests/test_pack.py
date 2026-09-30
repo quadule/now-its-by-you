@@ -312,3 +312,104 @@ def test_the_studios_first_time_has_a_page_that_says_what_it_waits_for():
     assert port == page.port
     with pytest.raises(OSError):
         get("/status")  # stepped aside: the studio takes the address
+
+
+# ---------------------------------------------------------------- the song's cover, in every file (songbird/artwork.py)
+
+
+def front_covers(data: bytes) -> list[dict]:
+    from songbird import artwork
+
+    return [p for p in artwork.pictures(data) if p["type"] == 3]
+
+
+def test_the_cover_is_the_songs_art_at_a_size_a_packet_carries():
+    from songbird import artwork
+
+    jpeg = artwork.COVER.read_bytes()
+    assert artwork._jpeg_size(jpeg) == (600, 600, 24) and len(jpeg) < 100 * 1024
+    assert "program/songbird/cover.jpg" in pack.program_files()  # every child can embed it
+
+
+def test_a_packed_file_carries_one_front_cover_and_the_same_samples(rendition, tmp_path):
+    from songbird import artwork, received
+
+    flac, pcm, record = rendition
+    bare = tmp_path / "bare.flac"
+    master.write_flac(bare, pcm, 44100, cover=False)
+    assert artwork.pictures(bare.read_bytes()) == [] and front_covers(flac.read_bytes())  # write_flac's own
+    pack.pack(bare, record, GENOME, lyrics="la la\n")  # whatever wrote the FLAC, the packet has the cover
+    pack.pack(flac, record, GENOME, lyrics="la la\n")
+    for f in (flac, bare):
+        (cover,) = front_covers(pack.audio_bytes(f))
+        assert (cover["mime"], cover["width"], cover["height"], cover["depth"]) == ("image/jpeg", 600, 600, 24)
+        assert cover["data"] == artwork.COVER.read_bytes() and cover["description"] == "Now It's by You"
+        assert np.array_equal(sf.read(str(f), dtype="int16", always_2d=True)[0], pcm)  # it plays
+        with zipfile.ZipFile(f) as z:
+            assert z.testzip() is None and json.loads(z.read("manifest.json"))["id"] == record["id"]
+        assert pack.samples_id(pack.audio_bytes(f)) == record["id"] == pack.read_record(f)["id"]
+        audio_end, manifest, _ = received.read_packet(f)  # the studio's strict reader takes it
+        assert audio_end == len(pack.audio_bytes(f)) and json.loads(manifest)["id"] == record["id"]
+        assert received.samples_id(pack.audio_bytes(f)) == record["id"]
+    assert flac.read_bytes() == bare.read_bytes()
+
+
+def test_embedding_keeps_the_tags_and_replaces_a_cover_rather_than_stacking_one(tmp_path):
+    from songbird import artwork
+
+    pcm = np.zeros((4410, 2), dtype="<i2")
+    tagged = tmp_path / "tagged.flac"
+    master.write_flac(tagged, pcm, 44100, tags={"title": "Coal from the Fire", "artist": "The Volunteers"})
+    data = tagged.read_bytes()
+    assert [k for k, _ in artwork.blocks(data)[0]] == [artwork.STREAMINFO, artwork.VORBIS_COMMENT, artwork.PICTURE]
+    assert front_covers(data)[0]["description"] == "Coal from the Fire"
+    assert artwork.embed(data, "Coal from the Fire") == data  # once is enough
+    again = artwork.embed(data, "Another")
+    assert [p["description"] for p in front_covers(again)] == ["Another"]
+    assert sf.info(str(tagged)).frames == 4410 and sf.SoundFile(str(tagged)).title == "Coal from the Fire"
+    with pytest.raises(ValueError):
+        artwork.embed(b"fLaC" + bytes(64))
+    with pytest.raises(ValueError):
+        artwork.embed(b"RIFF" + bytes(64))
+
+
+def test_an_older_file_is_given_the_cover_with_its_packet_kept_byte_for_byte(rendition, tmp_path, monkeypatch):
+    from songbird import artwork, received
+
+    _, pcm, record = rendition
+    old = tmp_path / "old.flac"
+    master.write_flac(old, pcm, 44100, cover=False)
+    with monkeypatch.context() as m:  # a file packed before the program embedded the cover
+        m.setattr(pack.artwork, "embed", lambda audio, description=None: audio)
+        pack.pack(old, record, GENOME, lyrics="la la\n")
+    assert artwork.pictures(pack.audio_bytes(old)) == []
+    new = pack.with_cover(old, tmp_path / "new.flac")
+    assert len(front_covers(pack.audio_bytes(new))) == 1
+    assert new.read_bytes()[len(pack.audio_bytes(new)):] != old.read_bytes()[len(pack.audio_bytes(old)):]  # moved
+    with zipfile.ZipFile(old) as a, zipfile.ZipFile(new) as b:
+        assert b.testzip() is None and a.namelist() == b.namelist()
+        assert all(a.read(n) == b.read(n) for n in a.namelist())
+        assert [i.compress_size for i in a.infolist()] == [i.compress_size for i in b.infolist()]
+    assert pack.read_record(new)["id"] == record["id"] == pack.samples_id(pack.audio_bytes(new))
+    assert received.read_packet(new)[0] == len(pack.audio_bytes(new))
+    assert pack.with_cover(new, tmp_path / "again.flac").read_bytes() == new.read_bytes()
+    if shutil.which("unzip"):
+        assert subprocess.run(["unzip", "-tq", str(new)], capture_output=True).returncode == 0
+    plain = tmp_path / "plain.flac"  # no packet: only the cover added
+    master.write_flac(plain, pcm, 44100, cover=False)
+    assert len(front_covers(pack.with_cover(plain, tmp_path / "plain2.flac").read_bytes())) == 1
+
+
+def test_a_render_carries_the_cover_and_replays_to_the_same_samples(tmp_path, capsys):
+    from songbird import cli
+
+    out, again = tmp_path / "tag.flac", tmp_path / "again.flac"
+    assert cli.main(["render", str(GENOME), "--form", "tag", "--out", str(out), "--pack"]) == 0
+    (cover,) = front_covers(pack.audio_bytes(out))
+    assert (cover["width"], cover["height"], cover["description"]) == (600, 600, "Now It's by You")
+    assert sf.SoundFile(str(out)).title == "Now It's by You"  # the Vorbis comments kept beside it
+    record = pack.read_record(out)
+    capsys.readouterr()
+    assert cli.main(["render", str(GENOME), "--replay", str(out), "--out", str(again)]) == 0
+    assert "replay: matches" in capsys.readouterr().out
+    assert len(front_covers(again.read_bytes())) == 1 and pack.samples_id(again.read_bytes()) == record["id"]

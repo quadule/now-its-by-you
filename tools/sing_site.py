@@ -10,7 +10,8 @@ What it writes, all served by web/sing/src/worker.js:
     index.html, sing.css, sing.js...  the pages (web/sing/page/), with the releases in them: for recording
                                       (web/sing/consent.md) and for words people send (words-release.md);
                                       and the seed page's cover.jpg and seed.js
-    seed/now-its-by-you.flac          the seed page's file (seed_source()), and seed/words.json its words
+    seed/now-its-by-you.flac          the seed page's file (seed_source(), with the song's cover embedded:
+                                      pack.with_cover, the same audio, packet and id), and seed/words.json its words
                                       as it sang them, timed (seed_words()), shown as it plays
     karaoke.js, recorder.js           the timing core they share with the karaoke here (tools/karaoke.js)
     song/song.json                    what's on offer (v2): the sets, keys and speeds, and for every spec
@@ -511,8 +512,14 @@ def seed_page(out: Path) -> None:
         print("seed page: no render to offer (renders/review/*.flac); the page is built without a file", file=sys.stderr)
         mb, words = "0", ""
     else:
-        shutil.copyfile(path, out / "seed" / SEED_FILE)
-        mb = f"{path.stat().st_size / 2**20:.0f}"
+        from songbird import pack as P
+
+        try:  # the song's cover as its front cover, if the render hasn't it: the same audio, packet and id
+            P.with_cover(path, out / "seed" / SEED_FILE)
+        except ValueError as e:
+            print(f"seed page: the file is offered without the cover ({e})", file=sys.stderr)
+            shutil.copyfile(path, out / "seed" / SEED_FILE)
+        mb = f"{(out / 'seed' / SEED_FILE).stat().st_size / 2**20:.0f}"
         print(f"seed page: {path.relative_to(ROOT) if path.is_relative_to(ROOT) else path} -> seed/{SEED_FILE} ({mb} MB)")
         timed, words = seed_words(path), ""
         if timed is None:

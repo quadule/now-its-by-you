@@ -65,7 +65,7 @@ archive. H's seed packet is 16 MB in all. Sung cold from it with `--here`, a
 child took 38 s. A rendition's archive is deterministic: the same rendition
 packs to the same bytes, with its entries dated by the rendition's own day.
 Packing again replaces the archive rather than stacking a second one, and the
-audio before it is never touched.
+audio before it is never touched but for its cover (below).
 
 ## Running it
 
@@ -139,6 +139,19 @@ title, "The Volunteers" as the artist (songbird/cli.py ARTIST), the day it was s
 generation and id and saying the file is also a program. They don't touch the
 samples, so the id is unchanged.
 
+**Cover.** Every FLAC the program writes (a render, a packet, the studio's
+previews, recording and stems, the browser's render) carries the song's cover as
+its front-cover PICTURE block: songbird/cover.jpg (600 by 600, 68 KB, so every
+child can embed it too), written by songbird/artwork.py after the Vorbis
+comments and before the first audio frame, and before the archive is appended,
+so the archive's offsets and the id are untouched (a packet carries about 140 KB
+for it: the block and program/songbird/cover.jpg). `pack.with_cover` gives an
+older file the cover, its archive kept byte for byte and only moved along;
+that is how tools/sing_site.py makes the public seed file from the submitted
+render. ffprobe shows it as an attached picture and metaflac lists it; macOS's
+Finder and QuickLook show no art for any FLAC (not even one made by metaflac),
+so there it shows as a plain audio file.
+
 ## Checked
 
 For the seed as a packet, and for a child sung by running the seed cold with a
@@ -158,6 +171,9 @@ cache):
 
 tests/test_pack.py checks:
 - the audio is kept byte for byte;
+- the cover: exactly one front cover, the same samples, record and id, the
+  studio's strict reader (songbird/received.py) taking the file, a replay
+  matching, and an older file given the cover with its archive intact;
 - the archive's contents and its manifest;
 - packing is deterministic, and packing again replaces the archive;
 - a record for other audio is refused;
