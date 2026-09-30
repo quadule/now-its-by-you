@@ -220,13 +220,19 @@ def _touch(sr: int, at: int, length: int, freq: float, level: float, rng: np.ran
 
 @njit(cache=True, nogil=True)
 def _bank(x, wholes, taps, gains, coupling):
-    """Undamped open strings driven by the bridge: each a loop fed a little of x."""
+    """Undamped open strings driven by the bridge: each a loop fed a little of x. Each string's line is a ring
+    of the last `ring` values (a power of two at least `pad`): its loop reads only the last `pad`, so the ring
+    gives exactly what the whole history would, and never holds the song."""
     n_strings, n_taps = taps.shape
     length = x.shape[0]
     pad = 0
     for s in range(n_strings):
         pad = max(pad, wholes[s] + n_taps)
-    lines = np.zeros((n_strings, pad + length))
+    ring = 1
+    while ring < pad:
+        ring *= 2
+    mask = ring - 1
+    lines = np.zeros((n_strings, ring))
     out = np.zeros(length)
     for n in range(length):
         drive = coupling * x[n]
@@ -235,9 +241,9 @@ def _bank(x, wholes, taps, gains, coupling):
             base = pad + n - wholes[s]
             fb = 0.0
             for k in range(n_taps):
-                fb += taps[s, k] * lines[s, base - k]
+                fb += taps[s, k] * lines[s, (base - k) & mask]
             v = drive + gains[s] * fb
-            lines[s, pad + n] = v
+            lines[s, (pad + n) & mask] = v
             total += v
         out[n] = total
     return out

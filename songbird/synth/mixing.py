@@ -32,9 +32,9 @@ from __future__ import annotations
 
 import re
 from dataclasses import dataclass, fields
+from functools import partial
 
 import numpy as np
-from scipy.ndimage import minimum_filter1d, uniform_filter1d
 
 from . import fx, room, threads
 from .master import limit, loudness
@@ -340,23 +340,31 @@ def _sizzle(x: np.ndarray, sr: int) -> tuple:
     return (("high", 9000, -min(3.0, 0.5 * over)),) if over > 0 else ()
 
 
-def _compressed(x: np.ndarray, sr: int, setting) -> np.ndarray:
-    return _compressor(x, sr, setting)[0]
+def _compressed(x: np.ndarray, sr: int, setting, inplace: bool = False) -> np.ndarray:
+    return _compressor(x, sr, setting, inplace=inplace)[0]
 
 
-def _at(x: np.ndarray, sr: int, target: float) -> np.ndarray:
-    """x scaled so its loudness is `target` LUFS."""
+def _at(x: np.ndarray, sr: int, target: float, inplace: bool = False) -> np.ndarray:
+    """x scaled so its loudness is `target` LUFS (inplace: where it lies, when x is float64)."""
     measured = quick_loudness(x, sr)
-    return x * 10.0 ** ((target - measured) / 20.0) if np.isfinite(measured) else x
+    if not np.isfinite(measured):
+        return x
+    if inplace and x.dtype == np.float64:
+        x *= 10.0 ** ((target - measured) / 20.0)
+        return x
+    return x * 10.0 ** ((target - measured) / 20.0)
 
 
-def _treated(x: np.ndarray, treat) -> np.ndarray:
-    """treat(x), done once on the sound itself when the stem is one mono sound panned."""
+def _treated(x: np.ndarray, treat, own: bool = False) -> np.ndarray:
+    """treat(x, own), done once on the sound itself (its own: treat may work on it where it lies) when the
+    stem is one mono sound panned. own: x is the treatment's to overwrite."""
     mono = fx.as_mono(x)
     if mono is None:
-        return treat(x)
+        return treat(x, own)
     sound, gains = mono
-    return treat(sound[:, None]) * gains[None, :]
+    if own and x.dtype == np.float64 and x.ndim == 2 and x.shape[1] == 2:  # the panned result back into the stem
+        return np.multiply(treat(sound[:, None], True), gains[None, :], out=x)
+    return treat(sound[:, None], True) * gains[None, :]
 
 
 def _conformed(stems: dict[str, np.ndarray]) -> dict[str, np.ndarray]:
@@ -373,12 +381,12 @@ def _conformed(stems: dict[str, np.ndarray]) -> dict[str, np.ndarray]:
     return {k: (np.pad(x, ((0, length - len(x)), (0, 0))) if len(x) < length else x) for k, x in out.items()}
 
 
-def _peaks(x: np.ndarray, sr: int) -> np.ndarray:
+def _peaks(x: np.ndarray, sr: int, inplace: bool = False) -> np.ndarray:
     """A peak stage for parts whose onsets jump far over the rest (a choir's
     consonants, a drum's strike, the room's first echoes of them): what
     swings past PEAKS dB over the part's loud peaks is rounded off by a
     look-ahead limiter, so the master's limiter hardly has to work."""
-    return limit(x, sr, 20.0 * np.log10(fx.loud_peak(x, sr) + 1e-12) + PEAKS)
+    return limit(x, sr, 20.0 * np.log10(fx.loud_peak(x, sr) + 1e-12) + PEAKS, inplace=inplace)
 
 
 def _sum(stems: dict[str, np.ndarray], names: list[str]) -> np.ndarray | None:
@@ -386,6 +394,11 @@ def _sum(stems: dict[str, np.ndarray], names: list[str]) -> np.ndarray | None:
     for name in names:
         out = stems[name].copy() if out is None else out + stems[name]
     return out if out is not None and np.any(out) else None
+
+
+def _alone(x: np.ndarray) -> np.ndarray | None:
+    """_sum of one stem, without its copy where the copy would be laid out as it is."""
+    return (x if x.flags.c_contiguous else x.copy()) if np.any(x) else None
 
 
 def lead_lift(sections, energies, sr: int, length: int) -> np.ndarray | None:
@@ -402,7 +415,7 @@ def lead_lift(sections, energies, sr: int, length: int) -> np.ndarray | None:
             lift[a:b] = np.clip(LEAD_ARC[0] * (float(energy) - ENERGY_REST), LEAD_ARC[1], LEAD_ARC[2])
     lift[int(float(sections[-1][2]) * sr):] = lift[min(int(float(sections[-1][2]) * sr), length) - 1]  # the ring holds
     lift[: int(max(0.0, float(sections[0][1])) * sr)] = lift[min(int(max(0.0, float(sections[0][1])) * sr), length - 1)]
-    return uniform_filter1d(lift, max(int(LEAD_ARC[3] * sr), 1), mode="nearest")
+    return fx.running_mean(lift, max(int(LEAD_ARC[3] * sr), 1), out=lift)  # uniform_filter1d's, where it lies
 
 
 # --- the mix --------------------------------------------------------------------------------
@@ -414,124 +427,223 @@ def mix(stems: dict[str, np.ndarray], sr: int, seed: int = 0, params: MixParams 
     included. taps: a dict to receive the buses and each treated stem as they
     go into the sum (for analysis). lift: dB per sample the singers rise and
     fall with the arrangement (lead_lift), or None for level singers."""
-    p = (params or MixParams()).clamped()
     stems = _conformed(stems)
     if not stems:
         return np.zeros((0, 2))
     length = len(next(iter(stems.values())))
+    return mix_made([(name, lambda x=x: x) for name, x in stems.items()], length, sr, seed, params, taps, lift,
+                    own=False)
+
+
+def _conform(x: np.ndarray, length: int) -> np.ndarray:
+    """One stem as _conformed makes it, for a mix `length` samples long."""
+    x = np.asarray(x, dtype=np.float64)
+    x = x.reshape(len(x), -1)
+    if x.shape[1] == 1:
+        x = np.repeat(x * np.sqrt(0.5), 2, axis=1)
+    x = x[:, :2]
+    if len(x) > length:
+        raise ValueError(f"a stem of {len(x)} samples for a mix of {length}")
+    return np.pad(x, ((0, length - len(x)), (0, 0))) if len(x) < length else x
+
+
+def mix_made(parts: list, length: int, sr: int, seed: int = 0, params: MixParams | None = None,
+             taps: dict | None = None, lift: np.ndarray | None = None, progress=None, own: bool = True) -> np.ndarray:
+    """mix(), from the stems' makers: (name, make) for each stem, none longer than `length` samples. Each
+    stem is made, treated and put into its bus as the mix comes to it, and let go: the band's instruments in
+    their names' order, the singers before the first instrument that steps back under the voice (the band
+    makes way for it; on one or two threads, before them all), a few made ahead on threads
+    (threads.in_order, the lead started first), so a song's stems are never all held at once. The same mix, to the bit,
+    as mix() of all of them. progress, if given, is told each stem's name as the mix comes to it, then
+    "mix". own: each make() gives a stem of its own, which the mix may treat where it lies (mix() passes
+    False: its stems are the caller's)."""
+    p = (params or MixParams()).clamped()
+    if not parts:
+        return np.zeros((0, 2))
+    makers = dict(parts)
     rise = None if lift is None else (10.0 ** (np.asarray(lift, dtype=float)[:length] / 20.0))[:, None]
+    lift = None
     balance = dict(p.balance)
-    roles = {name: role_of(name) for name in sorted(stems)}
+    roles = {name: role_of(name) for name in sorted(makers)}
     nudge = {name: balance.get(name, balance.get(role, 0.0)) for name, role in roles.items()}  # a name wins over its role
 
-    # Each bus's and instrument's own treatment depends on nothing but its own sound, so they are made at once
-    # (threads.in_order); they are put together below, one at a time, in the order they always were.
-    jobs = []
+    def stem(name: str) -> np.ndarray:
+        return _conform(makers[name](), length)
 
-    # The lead first: everything else is placed against it.
-    voice = _sum(stems, [n for n, r in roles.items() if r == "voice"])
-    if voice is not None:
-        def lead(x):
-            x = fx.equalize(x, fx.design(VOICE_EQ + _sizzle(x, sr), sr))
-            x = fx.deess(x, sr)[0]
-            x = _compressed(x, sr, VOICE_COMP)
-            if VOICE_SOFTEN:
-                x = fx.soften(x, sr, *VOICE_SOFTEN)
-            return _at(_peaks(fx.saturate(x, sr, VOICE_DRIVE), sr), sr, REFERENCE)
+    # The lead: everything else is placed against it.
+    # Each treatment works on its sound where it lies once the sound is its own (a copy made by the first step
+    # that makes one, or a stem the mix was given to keep): the same samples as treated copies.
+    def lead(x, owned):
+        x = fx.equalize(x, fx.design(VOICE_EQ + _sizzle(x, sr), sr), inplace=owned)  # VOICE_EQ: a copy if not
+        x = fx.deess(x, sr, inplace=True)[0]
+        x = _compressed(x, sr, VOICE_COMP, inplace=True)
+        if VOICE_SOFTEN:
+            x = fx.soften(x, sr, *VOICE_SOFTEN, inplace=True)
+        return _at(_peaks(fx.saturate(x, sr, VOICE_DRIVE, inplace=True), sr, inplace=True), sr, REFERENCE, inplace=True)
 
-        def lead_bus(voice=voice):
-            voice = _treated(voice, lead)
-            if rise is not None:  # the lead rises with the arrangement: quieter in a sparse verse, fuller at the climax
-                voice = voice * rise[:len(voice)]
-            return voice, fx.activity(voice, sr, attack=MAKE_WAY[0], release=MAKE_WAY[1])
-        jobs.append(("voice bus", lead_bus))
+    def lead_bus(voice, owned):
+        if voice is None:
+            return None
+        voice = _treated(voice, lead, owned)
+        if rise is not None:  # the lead rises with the arrangement: quieter in a sparse verse, fuller at the climax
+            voice *= rise[:len(voice)]
+        return voice, fx.activity(voice, sr, attack=MAKE_WAY[0], release=MAKE_WAY[1])
 
     # The lineage choir, as one group, where it sings; de-essed as the lead is (its voices say each "s" together,
     # and its sends to the room and plate are the biggest)
-    choir = _sum(stems, [n for n, r in roles.items() if r == "choir"])
-    if choir is not None:
-        def choir_bus(choir=choir):
-            where = fx.span(choir, sr)
-            if where.stop - where.start > sr // 2:
-                group = fx.deess(fx.equalize(choir[where], fx.design(CHOIR_EQ, sr)), sr)[0]
-                group = _peaks(_compressed(group, sr, CHOIR_COMP), sr)
-                group = fx.width(group, sr, min(CHOIR_WIDTH * p.width, 1.6))
-                choir = np.zeros((length, 2))
-                choir[where] = _at(group, sr, REFERENCE - CHOIR_UNDER + balance.get("choir", 0.0))
-                if rise is not None:
-                    choir[where] *= rise[where]
-                return choir
+    def choir_bus(choir, owned):
+        if choir is None:
             return None
-        jobs.append(("choir bus", choir_bus))
+        where = fx.span(choir, sr)
+        if where.stop - where.start > sr // 2:
+            group = fx.deess(fx.equalize(choir[where], fx.design(CHOIR_EQ, sr), inplace=owned), sr, inplace=True)[0]
+            group = _peaks(_compressed(group, sr, CHOIR_COMP, inplace=True), sr, inplace=True)
+            group = fx.width(group, sr, min(CHOIR_WIDTH * p.width, 1.6), inplace=True)
+            choir = np.zeros((length, 2))
+            choir[where] = _at(group, sr, REFERENCE - CHOIR_UNDER + balance.get("choir", 0.0))
+            if rise is not None:
+                choir[where] *= rise[where]
+            return choir
+        return None
 
     # The band: each instrument to its place, then together.
-    strips = {}
-    for name, role in roles.items():
-        if role in ("voice", "choir"):
-            continue
-        strip = ROLES[role]
-        where = fx.span(stems[name], sr)
+    def channel(x, owned, strip, role):
+        sos = fx.design(strip.eq, sr)
+        x = fx.equalize(x, sos, inplace=owned)
+        owned = owned or len(sos) > 0  # a copy, if not where it lay
+        if strip.comp:
+            x = _compressed(x, sr, strip.comp, inplace=owned)
+            owned = True
+        if role in ("drum", "kit"):
+            y = _peaks(x, sr, inplace=owned)
+            owned = owned or y is not x
+            x = y
+        return fx.saturate(x, sr, strip.drive, inplace=owned)
+
+    def instrument(name: str):
+        x = stem(name)
+        where = fx.span(x, sr)
         if where.stop <= where.start:
-            continue
+            return None
+        strip = ROLES[roles[name]]
+        y = _treated(x[where], partial(channel, strip=strip, role=roles[name]), own)
+        gain = 10.0 ** ((strip.trim + nudge[name]) / 20.0)
+        if own or not np.shares_memory(y, x):
+            y *= gain  # where it lies: the same products
+            return where, y
+        return where, y * gain
 
-        def channel(x, strip=strip, role=role):
-            x = fx.equalize(x, fx.design(strip.eq, sr))
-            if strip.comp:
-                x = _compressed(x, sr, strip.comp)
-            if role in ("drum", "kit"):
-                x = _peaks(x, sr)
-            return fx.saturate(x, sr, strip.drive)
-        strips[name] = (strip, where)
-        jobs.append((name, lambda name=name, where=where, strip=strip, channel=channel:
-                     _treated(stems[name][where], channel) * 10.0 ** ((strip.trim + nudge[name]) / 20.0)))
+    # Each bus's and instrument's own treatment depends on nothing but its own sound, so they are made at once
+    # (threads.in_order, a few ahead); they are put together below, one at a time, in the order they always were:
+    # a bus of one stem is made with its stem; a bus of several is summed as they come, then treated.
+    buses = {"voice": lead_bus, "choir": choir_bus}
+    groups = {bus: [n for n, r in roles.items() if r == bus] for bus in buses}
+    sung = []
+    for bus, names in groups.items():
+        if len(names) == 1:
+            sung.append((names[0], lambda bus=bus, name=names[0]: buses[bus](_alone(stem(name)), own)))
+        else:
+            sung += [(name, partial(stem, name)) for name in names]
+    played = [(name, partial(instrument, name)) for name, role in roles.items() if role not in buses]
+    # The instruments go into the band in their names' order; only those that step back under the voice need
+    # it made first (singing). On three threads or more the singers are put together just before the first
+    # of those, and started first of all: the instruments before it are made and summed while the voice is
+    # still being sung (faster; on two, 0.07 GB more at the peak). On one or two, the singers come first, and
+    # the voice is sung before the band's sums are begun (the least memory).
+    steps_back = next((i for i, (name, _) in enumerate(played) if ROLES[roles[name]].duck), len(played))
+    if threads.workers() <= 2:
+        steps_back = 0
+    jobs = played[:steps_back] + sung + played[steps_back:]
+    singers_left = len(sung)
 
-    singing = None
+    voice = choir = singing = None
     band = np.zeros((length, 2))
     band_send = np.zeros((length, 2))
     stepping = np.zeros((length, 2))  # what the instruments that step back under the voice give up
-    for name, result in threads.in_order(jobs, first=("voice bus",)):
-        if name == "voice bus":
-            voice, singing = result
-            continue
-        if name == "choir bus":
-            choir = result
-            continue
-        (strip, where), x = strips[name], result
-        if taps is not None:
-            taps[name] = (where, x)
-        band[where] += x
-        band_send[where] += x * strip.send
-        if strip.duck and singing is not None:
-            stepping[where] += x * (1.0 - 10.0 ** (-strip.duck * p.duck * singing[where] / 20.0))[:, None]
+    held: dict = {}
+    results = threads.in_order(jobs, first=tuple(name for name, _ in sung[:1]), ahead=threads.workers())
+    try:
+        for name, _ in jobs:
+            if progress is not None:
+                progress(name)
+            result = next(results)[1]
+            role = roles[name]
+            if role in buses:
+                singers_left -= 1
+                if len(groups[role]) > 1:
+                    held[name] = result
+                    if len(held) < len(groups[role]):
+                        continue
+                    result = buses[role](_sum(held, groups[role]), True)
+                    held = {}
+                if role == "voice":
+                    voice, singing = result if result is not None else (None, None)
+                else:
+                    choir = result
+                if not singers_left:
+                    rise = None  # the singers' buses are made: nothing else rises with the arrangement
+                continue
+            if result is None:
+                continue
+            strip, (where, x) = ROLES[role], result
+            if taps is not None:
+                taps[name] = (where, x)
+            band[where] += x
+            # band_send += x * send, stepping += x * (1 - 10 ** (-duck * singing / 20)): a stretch at a time, each
+            # product and sum as over the whole (no temporary the length of the song)
+            sent, stepped = band_send[where], stepping[where]
+            duck = -strip.duck * p.duck
+            for a in range(0, len(x), 1 << 16):
+                part = x[a: a + (1 << 16)]
+                sent[a: a + len(part)] += part * strip.send
+                if strip.duck and singing is not None:
+                    stepped[a: a + len(part)] += \
+                        part * (1.0 - 10.0 ** (duck * singing[where][a: a + len(part)] / 20.0))[:, None]
+            del result, x, sent, stepped
+            part = None  # (a stretch of x: x is let go with it)
+    finally:
+        results.close()
+    if progress is not None:
+        progress("mix")
+    # from here each long signal is let go as soon as it has been used, and treated where it lies when nothing
+    # else holds it (the same samples as a treated copy)
+    rise = None
     gain = 1.0
     if np.any(band):
         eq = fx.design(BAND_EQ, sr)
-        band = fx.equalize(band, eq)
-        band, squeeze = _compressor(band, sr, BAND_COMP)
+        band = fx.equalize(band, eq, inplace=True)
+        band, squeeze = _compressor(band, sr, BAND_COMP, inplace=True)
         # the band under the voice, measured where the voice sings, before it makes way for it
         sung = singing is not None and np.mean(singing > 0.5) > 0.05
         level = quick_loudness(band[singing > 0.5], sr) if sung else quick_loudness(band, sr)
         if np.isfinite(level):
             gain = 10.0 ** ((REFERENCE - (p.forward if sung else 3.0) - level) / 20.0)
         if np.any(stepping):  # the lead lines step back, through the same equalizer and compressor
-            band -= fx.apply_gain(fx.equalize(stepping, eq), squeeze)
+            band -= fx.apply_gain(fx.equalize(stepping, eq, inplace=True), squeeze, inplace=True)
+        del stepping
         band *= gain
         band_send *= gain
         if singing is not None:
             # where the voice rests a while (the intro, the turns), the band is ridden up, as an engineer would;
             # the ride goes up and comes back down inside the rest, so the band is down again before the voice returns
-            resting = minimum_filter1d((singing < 0.05).astype(float), int(RIDE[1] * sr), mode="nearest")
-            rest = uniform_filter1d(resting, int(RIDE[1] * sr / 2), mode="nearest")
-            ride = 10.0 ** (RIDE[0] * p.duck * rest / 20.0)
+            # (minimum_filter1d's and uniform_filter1d's, and the ride's gain, each where the last left it)
+            ride = (singing < 0.05).astype(float)
+            fx.sliding_min(ride, int(RIDE[1] * sr), out=ride)
+            fx.running_mean(ride, int(RIDE[1] * sr / 2), out=ride)
+            ride *= RIDE[0] * p.duck
+            ride /= 20.0
+            np.power(10.0, ride, out=ride)
             band *= ride[:, None]
             band_send *= ride[:, None]
-            band = fx.dynamic_dip(band, sr, CARVE[0], CARVE[1], CARVE_DEPTH * p.duck * singing)
-        band = fx.width(band, sr, p.width)
+            del ride
+            band = fx.dynamic_dip(band, sr, CARVE[0], CARVE[1], CARVE_DEPTH * p.duck * singing, inplace=True)
+        band = fx.width(band, sr, p.width, inplace=True)
 
     # The room, heard from each bus at its own distance; the plate for the singers.
     size = min(1.0, (1.1 / p.rt60) ** 0.25)  # a long room needs less sent to be heard as much
     near = 2.0 ** (1.0 - 2.0 * p.intimacy)  # the voice's own sends: 2 far back, 1 as designed, 0.5 at the ear
-    send = band_send * BAND_ROOM
+    band_send *= BAND_ROOM
+    send, band_send = band_send, None
     plate_send = np.zeros(length)
     if voice is not None:
         send += voice * (VOICE_ROOM * near)
@@ -541,14 +653,25 @@ def mix(stems: dict[str, np.ndarray], sr: int, seed: int = 0, params: MixParams 
         plate_send += choir.sum(axis=1) * (CHOIR_PLATE * p.plate * np.sqrt(0.5))
     # the room is its numbers: the same numbers (a machine's harvested room) give the same room every rendition
     early, tail = room.responses(sr, p.rt60, p.tone, p.predelay, room.seed_of(p.rt60, p.tone, p.predelay))
-    plates = [(plate_send * p.space, room.plate(sr, PLATE_RT60, 0))] if np.any(plate_send) else []
-    wet = room.convolve(send * (p.space * size), early, tail, plates)
-    wet = _peaks(fx.width(fx.equalize(wet, fx.design(RETURN_EQ, sr)), sr, p.width), sr)
+    if np.any(plate_send):
+        plate_send *= p.space
+        plates = [(plate_send, room.plate(sr, PLATE_RT60, 0))]
+    else:
+        plates = []
+    del plate_send
+    send *= p.space * size
+    given = [send]  # room.convolve takes the send out of the list: it is let go once its mid and side are made
+    del send
+    wet = room.convolve(given, early, tail, plates)
+    del plates
+    wet = _peaks(fx.width(fx.equalize(wet, fx.design(RETURN_EQ, sr), inplace=True), sr, p.width, inplace=True), sr,
+                 inplace=True)
     if singing is not None:
         # the room gives way to the lead's words, but not where the lineage sings with it: that is its space
         dip = np.zeros(len(wet))
         dip[:length] = RETURN_DIP * p.duck * singing * (1.0 - fx.activity(choir, sr) if choir is not None else 1.0)
         wet *= (10.0 ** (-dip / 20.0))[:, None]
+        del dip
 
     if taps is not None:
         taps.update(voice=voice, choir=choir, band=band, wet=wet.copy(), singing=singing, band_gain=gain)
@@ -556,15 +679,16 @@ def mix(stems: dict[str, np.ndarray], sr: int, seed: int = 0, params: MixParams 
     for bus in (voice, choir, band):
         if bus is not None:
             out[:length] += bus
+    del wet, voice, choir, band, singing
 
     # The whole: glued, tilted, maybe worn.
-    out, glue = _compressor(out, sr, GLUE, knee=8.0, window=0.05)
+    out, glue = _compressor(out, sr, GLUE, knee=8.0, window=0.05, inplace=True)
     if taps is not None:
         taps["glue"] = glue
     tone = WARMTH
     if p.tilt:  # shelves reach their gain only well past their corners: these give +-tilt at 60 Hz and 12 kHz
         tone = tone + (("low", 300, -1.15 * p.tilt), ("high", 3000, 1.15 * p.tilt))
-    out = fx.equalize(out, fx.design(tone, sr))
+    out = fx.equalize(out, fx.design(tone, sr), inplace=True)
     if p.wear > 0:
         out = wear(out, sr, p.wear, seed)
     return out

@@ -42,6 +42,11 @@ def _modes(top: float = 40.0) -> tuple[tuple[int, int, float], ...]:
 
 
 MODES = _modes()
+_M = np.array([m for m, _, _ in MODES])
+_J = np.array([j for _, _, j in MODES], dtype=float)
+_EDGE = np.array([max(abs(jv(m + 1, j)), 1e-3) for m, _, j in MODES])  # each mode's normalization, as it was made
+_TWO = np.full(len(MODES), 2.0)
+_SEVEN_TENTHS = np.full(len(MODES), 0.7)
 
 STROKES = {
     # radius (0 centre, 1 rim), pitch factor (the hand behind the skin), ring (seconds, the fundamental's T60),
@@ -103,17 +108,18 @@ def hit(stroke: str, vel: float, sr: int, rng: np.random.Generator, *, pitch: fl
     theta = rng.uniform(0.0, np.pi)
     f0 = pitch * lift * (1.0 - 0.06 * wear) * np.exp(rng.normal(0.0, 0.01))  # a worn skin sits lower
     contact = contact_ms * 1e-3 * (1.4 - 0.6 * vel) * (1.3 - 0.6 * brightness)  # harder: shorter, brighter
-    freqs, amps, t60s = [], [], []
-    for m, n, j in MODES:
-        f = f0 * j / MODES[0][2]
-        shape = jv(m, j * radius) / max(abs(jv(m + 1, j)), 1e-3)
-        radiate = 1.0 if m == 0 else 0.45  # modes with nodal diameters radiate worse
-        spectrum = 1.0 / (1.0 + (2.0 * f * contact) ** 2)  # a half-sine contact's envelope: -12 dB/octave past 1/2τ
-        freqs.append(f)
-        amps.append(shape * np.cos(m * theta) * radiate * spectrum * rng.uniform(0.8, 1.2))
-        t60s.append(ring * (f0 / f) ** 0.7 * (1.0 + 0.3 * wear))
+    # every mode at once, each value by the same operations as one at a time: the powers through np.power with an
+    # array of exponents (the C library's pow, as a scalar ** uses; an array ** 2 would square instead), the
+    # modes' random spread drawn together (the same draws in the same order)
+    m, j = _M, _J
+    freqs = f0 * j / MODES[0][2]
+    shape = jv(m, j * radius) / _EDGE
+    radiate = np.where(m == 0, 1.0, 0.45)  # modes with nodal diameters radiate worse
+    spectrum = 1.0 / (1.0 + np.power(2.0 * freqs * contact, _TWO))  # a half-sine contact's envelope: -12 dB/octave past 1/2τ
+    amps = shape * np.cos(m * theta) * radiate * spectrum * rng.uniform(0.8, 1.2, len(MODES))
+    t60s = ring * np.power(f0 / freqs, _SEVEN_TENTHS) * (1.0 + 0.3 * wear)
     length = int((max(t60s) + 0.05) * sr)
-    y = _ring(np.array(freqs), np.array(amps), np.array(t60s), 0.06 * vel ** 2, 0.03, length, float(sr))
+    y = _ring(freqs, amps, t60s, 0.06 * vel ** 2, 0.03, length, float(sr))
     level = np.max(np.abs(y[: int(0.01 * sr)])) + 1e-9
     # above the modes listed the skin's modes crowd into a band of noise, the slap, gone in a few hundredths
     n = min(length, int(0.06 * sr))

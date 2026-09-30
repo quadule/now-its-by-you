@@ -18,13 +18,11 @@ from pathlib import Path
 
 import numpy as np
 import soundfile as sf
-from numpy.lib.stride_tricks import sliding_window_view
 from numba import njit
-from scipy.ndimage import minimum_filter1d
 from scipy.signal import firwin
 
-from . import threads
-from .fx import _biquads
+from . import fx, threads
+from .fx import _biquads, sliding_min
 
 TARGET_LUFS = -14.0
 CEILING_DB = -1.0  # dBTP
@@ -64,10 +62,42 @@ def _hop_power(y: np.ndarray, hop: int) -> np.ndarray:
     return out
 
 
+@njit(cache=True, nogil=True)
+def _weighted_hop_power(x: np.ndarray, p: np.ndarray, q: np.ndarray, hop: int) -> np.ndarray:
+    """_hop_power of x through the two K-weighting sections (fx._two's arithmetic, each channel's filter its
+    own), sample by sample: the same sums, without the filtered copy of the song."""
+    n, chans = x.shape
+    k = n // hop
+    out = np.zeros(k)
+    z1 = np.zeros(chans)
+    z2 = np.zeros(chans)
+    w1 = np.zeros(chans)
+    w2 = np.zeros(chans)
+    for j in range(k):
+        s = 0.0
+        for i in range(j * hop, (j + 1) * hop):
+            for c in range(chans):
+                v = x[i, c]
+                o = p[0] * v + z1[c]
+                z1[c] = p[1] * v - p[4] * o + z2[c]
+                z2[c] = p[2] * v - p[5] * o
+                u = q[0] * o + w1[c]
+                w1[c] = q[1] * o - q[4] * u + w2[c]
+                w2[c] = q[2] * o - q[5] * u
+                s += u * u
+        out[j] = s / hop
+    return out
+
+
 def _powers(x: np.ndarray, sr: int, window: float, step: float = 0.1) -> np.ndarray:
     """K-weighted power, summed over channels, of every `window`-second block starting each `step`."""
     sos = np.array([np.concatenate([b, a]) for b, a in _k_weighting(sr)])
-    hops = _hop_power(_biquads(np.ascontiguousarray(x.reshape(len(x), -1), dtype=np.float64), sos), int(step * sr))
+    x2 = np.ascontiguousarray(x.reshape(len(x), -1), dtype=np.float64)
+    hop = int(step * sr)
+    if len(sos) == 2 and hop > 0:  # (fx._biquads filters two sections with fx._two: the same operations)
+        hops = _weighted_hop_power(x2, np.ascontiguousarray(sos[0]), np.ascontiguousarray(sos[1]), hop)
+    else:
+        hops = _hop_power(_biquads(x2, sos), hop)
     per = int(round(window / step))
     if len(hops) < per:
         return np.zeros(0)
@@ -134,6 +164,67 @@ def _interpolator() -> np.ndarray:
     return taps
 
 
+@njit(cache=True, nogil=True)
+def _abs_max(y: np.ndarray) -> np.ndarray:
+    """np.abs(y).max(axis=1): each sample's largest magnitude over the channels."""
+    n, chans = y.shape
+    out = np.empty(n)
+    for i in range(n):
+        m = abs(y[i, 0])
+        for c in range(1, chans):
+            m = max(m, abs(y[i, c]))
+        out[i] = m
+    return out
+
+
+@njit(cache=True, nogil=True)
+def _windows(y: np.ndarray, ch: int, points: np.ndarray, reach: int) -> np.ndarray:
+    """For each point n, channel ch's samples n + reach down to n - reach (0.0 past either end), a row each."""
+    n = y.shape[0]
+    out = np.empty((len(points), 2 * reach + 1))
+    for r in range(len(points)):
+        top = points[r] + reach
+        for j in range(2 * reach + 1):
+            i = top - j
+            out[r, j] = y[i, ch] if 0 <= i < n else 0.0
+    return out
+
+
+@njit(cache=True, nogil=True)
+def _over(x: np.ndarray, a: float) -> np.ndarray:
+    """np.abs(x) > a, flat."""
+    flat = x.reshape(-1)
+    out = np.empty(len(flat), np.bool_)
+    for i in range(len(flat)):
+        out[i] = abs(flat[i]) > a
+    return out
+
+
+@njit(cache=True, nogil=True)
+def _mean_ahead(recovered: np.ndarray, ahead: int, need: np.ndarray, out: np.ndarray) -> np.ndarray:
+    """min((c[n + ahead + 1] - c[n]) / (ahead + 1), need[n]) for c = [0, np.cumsum(ahead copies of recovered[0],
+    then recovered)], summed in the same order; out may be recovered (each value is read before it is
+    written over)."""
+    n = len(recovered)
+    size = ahead + 2
+    ring = np.empty(size)  # c[m] for the last ahead + 2 m
+    ring[0] = 0.0
+    first = recovered[0]
+    s = 0.0
+    for m in range(ahead):
+        s = first if m == 0 else s + first
+        ring[(m + 1) % size] = s
+    width = float(ahead + 1)
+    for i in range(n):
+        m = i + ahead  # the value this step adds: recovered[i]
+        v = recovered[i]
+        s = v if m == 0 else s + v
+        ring[(m + 1) % size] = s
+        g = (s - ring[i % size]) / width
+        out[i] = min(need[i], g)
+    return out
+
+
 def true_peak_envelope(x: np.ndarray, floor: float = 0.0) -> np.ndarray:
     """For each sample, the largest magnitude the signal swings to, over every
     channel, at it or between it and its neighbours, oversampled 4x: what a
@@ -141,8 +232,8 @@ def true_peak_envelope(x: np.ndarray, floor: float = 0.0) -> np.ndarray:
     Samples quieter than `floor` whose neighbours are too are left at their
     own magnitude: music never swings 6 dB between samples, so with a floor
     6 dB under what matters the envelope is exact where it counts."""
-    y = x.reshape(len(x), -1)
-    env = np.abs(y).max(axis=1)
+    y = np.ascontiguousarray(x.reshape(len(x), -1), dtype=np.float64)
+    env = _abs_max(y) if fx.JIT else np.abs(y).max(axis=1)  # np.abs(y).max(axis=1), without the copy
     near = env >= floor
     near[:-1] |= near[1:]  # the stretch on either side of each loud sample
     near[-1] = False
@@ -150,18 +241,24 @@ def true_peak_envelope(x: np.ndarray, floor: float = 0.0) -> np.ndarray:
     if not len(loud):
         return env
     taps = _interpolator()
-    padded = np.pad(y, ((REACH, REACH), (0, 0)))
     between = np.zeros(len(loud))
-    # sample n - k for k = -REACH..REACH sits at padded[n + REACH - k]: the window around n is a run of padded
-    # read backwards, a row of a sliding view over it reversed (copied out as the rows are picked)
-    last = len(padded) - 1
-    runs = [sliding_window_view(padded[::-1, ch], 2 * REACH + 1) for ch in range(y.shape[1])]
+    # the window around n, samples n + REACH down to n - REACH (zero past either end), a row for each point,
+    # copied out of the signal as the rows of a sliding view over it zero-padded and reversed were (the same
+    # matrix, value for value, into the same product; the padded copy of the song is never made)
+
+    if not fx.JIT:  # the same rows, from a sliding view over the signal zero-padded and reversed
+        padded = np.pad(y, ((REACH, REACH), (0, 0)))
+        runs = [np.lib.stride_tricks.sliding_window_view(padded[::-1, ch], 2 * REACH + 1) for ch in range(y.shape[1])]
+
+    def rows(ch: int, part: np.ndarray) -> np.ndarray:
+        if fx.JIT:
+            return _windows(y, ch, part, REACH)
+        return runs[ch][len(padded) - 1 - (part + 2 * REACH)]
 
     def swing(start: int) -> None:
         part = loud[start : start + (1 << 16)]
-        rows = last - (part + 2 * REACH)
         for ch in range(y.shape[1]):
-            points = runs[ch][rows] @ taps.T  # n, n + 1/4, n + 1/2, n + 3/4
+            points = rows(ch, part) @ taps.T  # n, n + 1/4, n + 1/2, n + 3/4
             between[start : start + len(part)] = np.maximum(between[start : start + len(part)], np.abs(points).max(axis=1))
 
     # a bounded amount of memory at a time, each stretch its own (so they are made at once, threads.in_order)
@@ -179,9 +276,8 @@ def true_peak(x: np.ndarray) -> float:
 
 
 @njit(cache=True, nogil=True)
-def _recover(held: np.ndarray, coef: float) -> np.ndarray:
-    """Follow a gain down at once and back up toward 1 exponentially."""
-    out = np.empty_like(held)
+def _recover(held: np.ndarray, coef: float, out: np.ndarray) -> np.ndarray:
+    """Follow a gain down at once and back up toward 1 exponentially (into out, which may be held)."""
     g = 1.0
     for i in range(len(held)):
         g = 1.0 - (1.0 - g) * coef
@@ -192,7 +288,7 @@ def _recover(held: np.ndarray, coef: float) -> np.ndarray:
 
 
 def limit(x: np.ndarray, sr: int, ceiling_db: float = CEILING_DB, lookahead: float = 0.005, release: float = 0.08,
-          envelope: np.ndarray | None = None) -> np.ndarray:
+          envelope: np.ndarray | None = None, inplace: bool = False) -> np.ndarray:
     """A look-ahead limiter that keeps the true peak under the ceiling.
 
     Each sample's need (the gain that brings its true-peak envelope to the
@@ -200,37 +296,54 @@ def limit(x: np.ndarray, sr: int, ceiling_db: float = CEILING_DB, lookahead: flo
     exponentially over `release`, then averaged over the look-ahead. Every
     value averaged at a peak was held at or under that peak's need, so the
     peak comes out at the ceiling, reached by a smooth 5 ms fade. envelope:
-    x's true-peak envelope, if already known.
+    x's true-peak envelope, if already known. inplace: the gain is applied to x where it lies (a float64
+    array), and x returned.
     """
     ceiling = 10.0 ** (ceiling_db / 20.0)
-    env = true_peak_envelope(x, 0.5 * ceiling) if envelope is None else envelope
-    need = np.minimum(1.0, ceiling / np.maximum(env, 1e-12))
+    if envelope is None:  # our own envelope: the need is worked out where it lies
+        need = true_peak_envelope(x, 0.5 * ceiling)
+        np.maximum(need, 1e-12, out=need)
+    else:
+        need = np.maximum(envelope, 1e-12)
+    np.divide(ceiling, need, out=need)
+    np.minimum(1.0, need, out=need)
     if need.min() >= 1.0:
         return x
     ahead = max(1, int(lookahead * sr))
-    held = minimum_filter1d(need, size=ahead + 1, origin=-((ahead + 1) // 2))  # min of need[n .. n + ahead]
-    recovered = _recover(held, float(np.exp(-1.0 / (release * sr))))
-    c = np.concatenate([[0.0], np.cumsum(np.concatenate([np.full(ahead, recovered[0]), recovered]))])
-    gain = (c[ahead + 1 :] - c[: -ahead - 1]) / (ahead + 1)  # mean of recovered[n - ahead .. n]
-    gain = np.minimum(gain, need)  # never above it, not even by rounding
+    # min of need[n .. n + ahead] (minimum_filter1d's, its default mode: the line mirrored past its end)
+    held = sliding_min(need, ahead + 1, origin=-((ahead + 1) // 2), mode="reflect")
+    recovered = _recover(held, float(np.exp(-1.0 / (release * sr))), held)
+    # the mean of recovered[n - ahead .. n] (the first value standing in before it), by the running sum
+    # np.cumsum made of it, never above the need: gain = min((c[n + ahead + 1] - c[n]) / (ahead + 1), need)
+    if fx.JIT:
+        gain = _mean_ahead(recovered, ahead, need, recovered)
+    else:
+        c = np.concatenate([[0.0], np.cumsum(np.concatenate([np.full(ahead, recovered[0]), recovered]))])
+        gain = np.minimum((c[ahead + 1 :] - c[: -ahead - 1]) / (ahead + 1), need)
+    del need
+    if inplace and x.dtype == np.float64:
+        x *= gain[:, None]
+        return x
     return x * gain[:, None]
 
 
 CLIP = (2.0, 1.0)  # the soft clip's knee starts this many dB under the ceiling and flattens this many over it
 
 
-def clip(x: np.ndarray, ceiling_db: float, below: float = CLIP[0], above: float = CLIP[1]) -> np.ndarray:
+def clip(x: np.ndarray, ceiling_db: float, below: float = CLIP[0], above: float = CLIP[1],
+         inplace: bool = False) -> np.ndarray:
     """Round off only the sharpest peaks: samples within `below` dB of the
     ceiling bend smoothly toward `above` dB past it (a tanh knee); everything
     quieter passes untouched. On H it touches under 0.2% of samples, and
     spares the limiter the few peaks that would have made it duck the whole
-    band for a moment."""
+    band for a moment. inplace: x itself is clipped (a float64 array) and returned."""
     a = 10.0 ** ((ceiling_db - below) / 20.0)
     b = 10.0 ** ((ceiling_db + above) / 20.0)
-    out = x.copy()
-    mag = np.abs(x)
-    over = mag > a
-    out[over] = np.sign(x[over]) * (a + (b - a) * np.tanh((mag[over] - a) / (b - a)))
+    out = x if inplace and x.dtype == np.float64 else x.copy()
+    over = (_over(np.ascontiguousarray(x, dtype=np.float64), a).reshape(x.shape) if fx.JIT
+            else np.abs(x) > a)  # np.abs(x) > a, without the copy
+    bent = x[over]
+    out[over] = np.sign(bent) * (a + (b - a) * np.tanh((np.abs(bent) - a) / (b - a)))
     return out
 
 
@@ -246,16 +359,17 @@ def master(x: np.ndarray, sr: int, target: float = TARGET_LUFS, ceiling_db: floa
         return x
     ceiling = ceiling_db - MARGIN_DB
     gain = 10.0 ** ((target - level) / 20.0)
-    y = x * gain
+    y = None
     for _ in range(8):
-        y = limit(clip(x * gain, ceiling), sr, ceiling)
+        y = None  # (the last try let go before the next is made; each is made and treated where it lies)
+        y = limit(clip(x * gain, ceiling, inplace=True), sr, ceiling, inplace=True)
         level = loudness(y, sr)
         if abs(level - target) < 0.05:
             break
         gain *= 10.0 ** ((target - level) / 20.0)
     over = true_peak(y) - ceiling
     if over > 0:  # the limiter's own gain changes can swing a little past: once more, lower
-        y = limit(y, sr, ceiling - over)
+        y = limit(y, sr, ceiling - over, inplace=True)
     if taps is not None:
         taps["gain_db"] = 20.0 * np.log10(gain)
         with np.errstate(divide="ignore", invalid="ignore"):
@@ -267,8 +381,19 @@ def master(x: np.ndarray, sr: int, target: float = TARGET_LUFS, ceiling_db: floa
 def to_pcm16(x: np.ndarray, seed: int = 0) -> np.ndarray:
     """Quantize to 16-bit with seeded TPDF dither."""
     rng = np.random.default_rng(seed)
-    dither = rng.uniform(-0.5, 0.5, x.shape) + rng.uniform(-0.5, 0.5, x.shape)
-    return np.clip(np.round(x * 32767.0 + dither), -32768, 32767).astype("<i2")
+    # x * 32767 + (u1 + u2), rounded and clipped: the second draw and the scaled signal added a stretch at a
+    # time (the same draws in the same order, the same sums), rounded and clipped where they lie
+    x = np.asarray(x)
+    dither = rng.uniform(-0.5, 0.5, x.shape)
+    flat = dither.reshape(-1)
+    scaled = np.ascontiguousarray(x).reshape(-1)
+    for a in range(0, len(flat), 1 << 18):
+        flat[a: a + (1 << 18)] += rng.uniform(-0.5, 0.5, len(flat[a: a + (1 << 18)]))
+    for a in range(0, len(flat), 1 << 18):
+        flat[a: a + (1 << 18)] += scaled[a: a + (1 << 18)] * 32767.0
+    np.round(dither, out=dither)
+    np.clip(dither, -32768, 32767, out=dither)
+    return dither.astype("<i2")
 
 
 def pcm_sha256(pcm: np.ndarray) -> str:

@@ -24,8 +24,10 @@ from __future__ import annotations
 import zlib
 
 import numpy as np
-from scipy.fft import irfft, next_fast_len, rfft, rfftfreq, set_workers
+from scipy.fft import irfft, next_fast_len, rfft, rfftfreq
 from scipy.signal import oaconvolve
+
+from . import oa
 
 BANDS = ((40.0, 250.0), (250.0, 700.0), (700.0, 2000.0), (2000.0, 5600.0), (5600.0, 16000.0))
 AIR = (1.2, 1.1, 1.0, 0.8, 0.55)  # relative decay time per band: highs die first
@@ -210,27 +212,38 @@ def convolve(send: np.ndarray, early: np.ndarray | None, tail: np.ndarray, extra
     centred early reflections and the tail at once; the side through what
     differs between a player on the left and one on the right, which in a
     room symmetric about the listener reaches the two ears with opposite
-    signs. Three convolutions instead of six."""
+    signs. Three convolutions instead of six.
+
+    send may be given as a list holding it alone: it is taken out of the list, and let go once its mid and
+    side are made (a long song's send is not held through the convolutions)."""
+    if isinstance(send, list):
+        send = send.pop()
     longest = max([len(tail)] + ([early.shape[1]] if early is not None else []) + [len(r) for _, r in extra])
     out = np.zeros((len(send) + longest - 1, 2))
     mid = (send[:, 0] + send[:, 1]) * np.sqrt(0.5)
     side = (send[:, 0] - send[:, 1]) * np.sqrt(0.5)
+    del send
     response = np.zeros((max(len(tail), early.shape[1] if early is not None else 0), 2))
     response[: len(tail)] += tail
-    with set_workers(WORKERS):
-        if early is not None:
-            response[: early.shape[1]] += (early[0] + early[1]) * np.sqrt(0.5)
-            differs = (early[0] - early[1]) * np.sqrt(0.5)
-            y = oaconvolve(side, (differs[:, 0] - differs[:, 1]) / 2.0) if np.any(side) else np.zeros(0)
-            out[: len(y), 0] += y
-            out[: len(y), 1] -= y
+    # each convolution as oaconvolve makes it on WORKERS FFT threads, a few blocks at a time (oa.convolve)
+    if early is not None:
+        response[: early.shape[1]] += (early[0] + early[1]) * np.sqrt(0.5)
+        differs = (early[0] - early[1]) * np.sqrt(0.5)
+        y = oa.convolve(side, (differs[:, 0] - differs[:, 1]) / 2.0, workers=WORKERS) if np.any(side) else np.zeros(0)
+        out[: len(y), 0] += y
+        out[: len(y), 1] -= y
+        del y
+    del side
+    for ear in range(2):
+        y = oa.convolve(mid, response[:, ear], workers=WORKERS)
+        out[: len(y), ear] += y
+        del y
+    del mid
+    for mono, r in extra:
         for ear in range(2):
-            y = oaconvolve(mid, response[:, ear])
+            y = oa.convolve(mono, r[:, ear], workers=WORKERS)
             out[: len(y), ear] += y
-        for mono, r in extra:
-            for ear in range(2):
-                y = oaconvolve(mono, r[:, ear])
-                out[: len(y), ear] += y
+            del y
     return out
 
 

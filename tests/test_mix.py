@@ -205,7 +205,7 @@ def test_the_choir_is_de_essed_as_a_group():
             mixing.mix(stems, SR, 0, MixParams(), taps=taps)
         vowels = 10 * np.log10(np.mean(taps["choir"][int(0.8 * SR): int(1.3 * SR)] ** 2))
         return 10 * np.log10(np.mean(sosfilt(band, taps["choir"], axis=0)[int(1.42 * SR): int(1.53 * SR)] ** 2)) - vowels
-    assert choir_s(deess=lambda x, sr: (x, None)) - choir_s() > 3.0
+    assert choir_s(deess=lambda x, sr, **_: (x, None)) - choir_s() > 3.0
 
 
 def test_a_riding_compressor_keeps_the_arc():

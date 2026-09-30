@@ -24,7 +24,7 @@ from numba import njit
 from scipy.signal import sosfilt
 
 from ..theory import midi_to_hz
-
+from .fx import hold
 from .iir import butter
 
 
@@ -127,10 +127,7 @@ def tracks(notes, sr: int, length: int, rng: np.random.Generator, *, brightness:
     # hold the last pitch through rests so the bore rings down in tune
     sounding = breath > 0.0
     if sounding.any():
-        idx = np.maximum.accumulate(np.where(sounding, np.arange(length), 0))
-        freq = freq[idx]
-        drive = drive[idx]
-        aim = aim[idx]
+        hold(sounding, freq, drive, aim)  # each where it lies: track[the last sounding sample]
     return freq, breath, chiff, drive, aim
 
 
@@ -144,5 +141,6 @@ def blow(notes, sr: int, length: int, rng: np.random.Generator, *, brightness: f
     noise = sosfilt(butter(2, 350.0, btype="highpass", fs=sr, output="sos"), rng.standard_normal(length))
     noise *= 1.6 * breathiness * (1.0 + 0.5 * wear)
     y = run(freq, breath, chiff, drive, aim, noise, 0.65, 0.35, float(sr))
+    del freq, breath, chiff, drive, aim, noise
     # radiation from the open holes and the embouchure favours the highs a little; no DC leaves the pipe
     return sosfilt(butter(1, 180.0, btype="highpass", fs=sr, output="sos"), y)

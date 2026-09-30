@@ -28,7 +28,12 @@ PARTS = INSTRUMENTS  # the band's stems, by role (songbird.synth.instruments bui
 def pan(mono: np.ndarray, position: float) -> np.ndarray:
     """Constant-power pan, position -1 (left) to 1 (right)."""
     theta = (position + 1.0) * np.pi / 4.0
-    return np.stack([mono * np.cos(theta), mono * np.sin(theta)], axis=1)
+    if mono.dtype != np.float64 or mono.ndim != 1:
+        return np.stack([mono * np.cos(theta), mono * np.sin(theta)], axis=1)
+    out = np.empty((len(mono), 2))  # each side made where it goes: the same products, no copies of the song
+    np.multiply(mono, np.cos(theta), out=out[:, 0])
+    np.multiply(mono, np.sin(theta), out=out[:, 1])
+    return out
 
 
 def render_stems(score: Score, sr: int = SR, seed: int = 0, voice: VoiceParams | None = None,
@@ -39,13 +44,24 @@ def render_stems(score: Score, sr: int = SR, seed: int = 0, voice: VoiceParams |
     the earlier versions, the parent's first, who sing the choir's parts in
     turn (stand-ins sing the rest). progress, if given, is told each part's
     name as it starts on it."""
+    jobs, singers = stem_jobs(score, sr, seed, voice, ancestors)
+    # every part at once (threads.made; each has its own random streams), the singers started first: they take longest
+    return made(jobs, progress, first=singers)
+
+
+def stem_jobs(score: Score, sr: int = SR, seed: int = 0, voice: VoiceParams | None = None,
+              ancestors: list[VoiceParams] | None = None) -> tuple[list, tuple[str, ...]]:
+    """What render_stems makes, not yet made: (name, make) for each part in its order, and the singers'
+    names. Each part has its own random streams, so they can be made in any order, or at once."""
     length = int(np.ceil(score.duration * sr))
     jobs = band_parts(score, sr, seed)
     sung = list(score.part("voice"))
     if sung:
         def lead() -> np.ndarray:
             y = sing(sung, sr, voice or VoiceParams(), seed, score.lexicon)[:length]
-            return pan(np.pad(y, (0, length - len(y))), 0.0) * VOICE_GAIN
+            y = pan(np.pad(y, (0, length - len(y))), 0.0)
+            y *= VOICE_GAIN  # where it lies: the same products
+            return y
         jobs.append(("voice", lead))
     choir = sorted({n.part for n in score.notes if n.part.startswith("choir")}, key=lambda p: int(p[5:]))
     learned = (voice or VoiceParams()).engine == "learned"
@@ -55,10 +71,12 @@ def render_stems(score: Score, sr: int = SR, seed: int = 0, voice: VoiceParams |
 
         def lineage(name=name, singer=singer, i=i) -> np.ndarray:
             y = sing(list(score.part(name)), sr, singer, seed + 101 * (i + 1), score.lexicon)[:length]
-            return pan(np.pad(y, (0, length - len(y))), CHOIR_PANS[i % len(CHOIR_PANS)]) * VOICE_GAIN * CHOIR_GAIN
+            y = pan(np.pad(y, (0, length - len(y))), CHOIR_PANS[i % len(CHOIR_PANS)])
+            y *= VOICE_GAIN
+            y *= CHOIR_GAIN
+            return y
         jobs.append((name, lineage))
-    # every part at once (threads.made; each has its own random streams), the singers started first: they take longest
-    return made(jobs, progress, first=("voice", *choir))
+    return jobs, (("voice",) if sung else ()) + tuple(choir)
 
 
 def lineage_voices(n: int, seed: int, learned: bool = False) -> list[VoiceParams]:
@@ -101,16 +119,16 @@ def render(score: Score, sr: int = SR, seed: int = 0, voice: VoiceParams | None 
            progress=None) -> np.ndarray:
     """The unmastered stereo mix, in its room. progress, if given, is told each
     part's name as it starts on it, then "mix"."""
-    stems = render_stems(score, sr, seed, voice, ancestors, progress)
-    if progress is not None:
-        progress("mix")
-    return mix(stems, sr, seed, mix_params, lift=lift_of(score, sr, stems))
+    # each part is made as the mix comes to it, treated and let go (mixing.mix_made): never all held at once
+    jobs, _ = stem_jobs(score, sr, seed, voice, ancestors)
+    length = int(np.ceil(score.duration * sr)) if jobs else 0
+    return mixing.mix_made(jobs, length, sr, seed, mix_params, lift=lift_of(score, sr, length), progress=progress)
 
 
-def lift_of(score: Score, sr: int, stems: dict) -> np.ndarray | None:
+def lift_of(score: Score, sr: int, stems: dict | int) -> np.ndarray | None:
     """How the singers rise and fall with the arrangement (mixing.lead_lift): from the score's sections and the
-    energy the band gave each (score.band["sections"], in the same order)."""
-    length = max((len(x) for x in stems.values()), default=0)
+    energy the band gave each (score.band["sections"], in the same order). stems: the stems, or their length."""
+    length = stems if isinstance(stems, int) else max((len(x) for x in stems.values()), default=0)
     band_sections = (score.band or {}).get("sections") or []
     return lead_lift(list(score.sections), [s.get("energy", 0.55) for s in band_sections], sr, length)
 

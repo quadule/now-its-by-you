@@ -15,11 +15,16 @@ from __future__ import annotations
 from functools import partial
 
 import numpy as np
+from numba import config as _numba
 from numba import njit
 from scipy.ndimage import uniform_filter1d
 
 from . import threads
 from .iir import butter
+
+# With numba's compiler off (NUMBA_DISABLE_JIT=1: a port, or a browser without it), the loops written to save
+# memory would run as Python; there numpy's and scipy's own whole-array operations, the same values, are used.
+JIT = not _numba.DISABLE_JIT
 
 # --- equalizers: RBJ cookbook biquads as second-order sections -----------------
 
@@ -132,14 +137,20 @@ def _one(y: np.ndarray, p: np.ndarray) -> None:
 IDENTITY = np.array([1.0, 0.0, 0.0, 1.0, 0.0, 0.0])
 
 
-def _biquads(x: np.ndarray, sos: np.ndarray) -> np.ndarray:
+def _biquads(x: np.ndarray, sos: np.ndarray, inplace: bool = False) -> np.ndarray:
     """Second-order sections in cascade along axis 0 of a (samples, channels) array. A long signal's channels
     are filtered at once, each on a thread of its own (each channel's filter is its own: the same samples
-    either way)."""
+    either way). inplace: x (float64, C-contiguous) is filtered where it is, and returned."""
     if x.ndim == 2 and x.shape[1] > 1 and len(x) >= 1 << 16 and threads.workers() > 1:
-        columns = [(c, partial(_cascade, np.ascontiguousarray(x[:, c: c + 1]), sos, False)) for c in range(x.shape[1])]
-        return np.concatenate([y for _, y in threads.in_order(columns)], axis=1)
-    return _cascade(x, sos)
+        def column(c: int) -> np.ndarray:
+            return _cascade(np.ascontiguousarray(x[:, c: c + 1]), sos, False)
+        if inplace:
+            for c, y in threads.in_order([(c, partial(column, c)) for c in range(x.shape[1])]):
+                x[:, c: c + 1] = y
+            return x
+        return np.concatenate([y for _, y in threads.in_order([(c, partial(column, c)) for c in range(x.shape[1])])],
+                              axis=1)
+    return _cascade(x, sos, not inplace)
 
 
 def _cascade(x: np.ndarray, sos: np.ndarray, copy: bool = True) -> np.ndarray:
@@ -158,11 +169,14 @@ def _cascade(x: np.ndarray, sos: np.ndarray, copy: bool = True) -> np.ndarray:
     return y
 
 
-def equalize(x: np.ndarray, sos: np.ndarray) -> np.ndarray:
-    """x through the sections of `sos` (fx.design); x may be mono."""
+def equalize(x: np.ndarray, sos: np.ndarray, inplace: bool = False) -> np.ndarray:
+    """x through the sections of `sos` (fx.design); x may be mono. inplace: x itself is filtered (when it is a
+    float64, C-contiguous array; otherwise a copy is, as without) and returned: the same samples, without a
+    second copy of a long signal held."""
     if not len(sos) or not len(x):
         return x
-    y = _biquads(np.ascontiguousarray(x.reshape(len(x), -1), dtype=np.float64), np.ascontiguousarray(sos, dtype=np.float64))
+    y = np.ascontiguousarray(x.reshape(len(x), -1), dtype=np.float64)
+    y = _biquads(y, np.ascontiguousarray(sos, dtype=np.float64), inplace=inplace and np.shares_memory(y, x))
     return y.reshape(x.shape)
 
 
@@ -219,6 +233,135 @@ def as_mono(x: np.ndarray) -> tuple[np.ndarray, np.ndarray] | None:
     return x @ gains, gains
 
 
+# --- running filters over a whole song ------------------------------------------------------------------
+
+
+@njit(cache=True, nogil=True)
+def _running_mean(x: np.ndarray, size: int, out: np.ndarray) -> np.ndarray:
+    """scipy.ndimage's uniform_filter1d, mode "nearest", as it computes it: a running sum over the extended
+    line (each value in, the one `size` back out), divided by size at every sample. The values leaving the
+    sum are kept in a ring, so out may be x itself."""
+    n = x.shape[0]
+    size1 = size // 2
+    ring = np.empty(size)
+    total = 0.0
+    for j in range(size):
+        v = x[min(max(j - size1, 0), n - 1)]
+        ring[j] = v
+        total += v
+    fs = float(size)
+    out[0] = total / fs
+    for i in range(1, n):
+        k = (i - 1) % size
+        gone = ring[k]
+        v = x[min(max(i - 1 + size - size1, 0), n - 1)]
+        ring[k] = v
+        total += v - gone
+        out[i] = total / fs
+    return out
+
+
+def running_mean(x: np.ndarray, size: int, out: np.ndarray | None = None) -> np.ndarray:
+    """uniform_filter1d(x, size, mode="nearest") of a 1-D float64 signal, to the bit, without the two copies
+    of the line scipy makes; out may be x itself (the mean where it lies)."""
+    x = np.ascontiguousarray(x, dtype=np.float64)
+    if not len(x):
+        return x.copy() if out is None else out
+    if not JIT:
+        return _given(uniform_filter1d(x, max(int(size), 1), mode="nearest"), out)
+    return _running_mean(x, max(int(size), 1), np.empty_like(x) if out is None else out)
+
+
+def _given(y: np.ndarray, out: np.ndarray | None) -> np.ndarray:
+    if out is None:
+        return y
+    out[...] = y
+    return out
+
+
+@njit(cache=True, nogil=True)
+def _extended(p: int, n: int, reflect: bool) -> int:
+    """The sample a position past either end stands for: the end itself ("nearest"), or mirrored ("reflect",
+    d c b a | a b c d | d c b a), as scipy.ndimage extends a line."""
+    if not reflect:
+        return min(max(p, 0), n - 1)
+    while p < 0 or p >= n:
+        p = -p - 1 if p < 0 else 2 * n - 1 - p
+    return p
+
+
+@njit(cache=True, nogil=True)
+def _sliding_min(x: np.ndarray, before: int, after: int, reflect: bool, out: np.ndarray) -> np.ndarray:
+    """out[i] = the least of the extended line's x[i - before .. i + after], by a queue of the candidates
+    (their values kept: out may be x itself when nothing read comes from behind the sample written)."""
+    n = x.shape[0]
+    cap = before + after + 2
+    qi = np.empty(cap, np.int64)
+    qv = np.empty(cap)
+    head = 0
+    count = 0
+    nxt = -before
+    for i in range(n):
+        while nxt <= i + after:
+            v = x[_extended(nxt, n, reflect)]
+            while count > 0 and qv[(head + count - 1) % cap] >= v:
+                count -= 1
+            qi[(head + count) % cap] = nxt
+            qv[(head + count) % cap] = v
+            count += 1
+            nxt += 1
+        while qi[head] < i - before:
+            head = (head + 1) % cap
+            count -= 1
+        out[i] = qv[head]
+    return out
+
+
+def sliding_min(x: np.ndarray, size: int, origin: int = 0, out: np.ndarray | None = None,
+                mode: str = "nearest") -> np.ndarray:
+    """minimum_filter1d(x, size, mode=mode, origin=origin) of a 1-D float64 signal, mode "nearest" or
+    "reflect" (a least value is the same value however it is found), without scipy's copies of the line; out
+    may be x itself in mode "nearest"."""
+    if mode not in ("nearest", "reflect"):
+        raise ValueError(f"sliding_min: no mode {mode!r}")
+    x = np.ascontiguousarray(x, dtype=np.float64)
+    if not len(x):
+        return x.copy() if out is None else out
+    if not JIT:
+        from scipy.ndimage import minimum_filter1d
+
+        return _given(minimum_filter1d(x, size, mode=mode, origin=origin), out)
+    before = size // 2 + origin
+    after = size - 1 - before
+    if out is x and (after < 0 or mode != "nearest"):
+        out = None
+    return _sliding_min(x, before, after, mode == "reflect", np.empty_like(x) if out is None else out)
+
+
+@njit(cache=True, nogil=True)
+def _hold(playing: np.ndarray, track: np.ndarray) -> None:
+    last = 0
+    for i in range(playing.shape[0]):
+        if playing[i]:
+            last = i
+        else:
+            track[i] = track[last]
+
+
+def hold(playing: np.ndarray, *tracks: np.ndarray) -> None:
+    """Each track, where `playing` is false, holds its value at the last sample that was (the first sample's
+    before any): track[np.maximum.accumulate(np.where(playing, np.arange(n), 0))], made where it lies (a
+    held sample is copied from one that never changes)."""
+    playing = np.ascontiguousarray(playing, dtype=np.bool_)
+    if not JIT:
+        idx = np.maximum.accumulate(np.where(playing, np.arange(len(playing)), 0))
+        for track in tracks:
+            track[...] = track[idx]
+        return
+    for track in tracks:
+        _hold(playing, track)
+
+
 # --- levels and dynamics ---------------------------------------------------------------
 
 
@@ -259,17 +402,19 @@ STEP = 16  # samples between a compressor's decisions (0.36 ms): its gain is int
 
 
 @njit(cache=True, nogil=True)
-def _detect(key: np.ndarray, coef: float) -> np.ndarray:
-    """Mean power over the channels, followed by a one-pole average."""
+def _detect_every(key: np.ndarray, coef: float, step: int) -> np.ndarray:
+    """Mean power over the channels, followed by a one-pole average: every step-th value of it (the average
+    runs over every sample; only the values the compressors read are kept)."""
     n, chans = key.shape
-    out = np.empty(n)
+    out = np.empty((n + step - 1) // step)
     p = 0.0
     for i in range(n):
         s = 0.0
         for c in range(chans):
             s += key[i, c] * key[i, c]
         p = coef * p + (1.0 - coef) * s / chans
-        out[i] = p
+        if i % step == 0:
+            out[i // step] = p
     return out
 
 
@@ -288,11 +433,10 @@ def _ballistics(target: np.ndarray, attack: float, release: float) -> np.ndarray
 
 
 @njit(cache=True, nogil=True)
-def _apply(x: np.ndarray, lin: np.ndarray, step: int, band: np.ndarray) -> np.ndarray:
-    """x with a gain given every `step` samples (linear between); where `band` has
-    channels, only that part of x is scaled: x + band * (gain - 1)."""
+def _apply(x: np.ndarray, lin: np.ndarray, step: int, band: np.ndarray, y: np.ndarray) -> np.ndarray:
+    """x with a gain given every `step` samples (linear between), into y (which may be x itself); where `band`
+    has channels, only that part of x is scaled: x + band * (gain - 1)."""
     n, chans = x.shape
-    y = np.empty_like(x)
     split = band.shape[1] == chans
     for i in range(n):
         k = i // step
@@ -304,7 +448,7 @@ def _apply(x: np.ndarray, lin: np.ndarray, step: int, band: np.ndarray) -> np.nd
 
 
 def soften(x: np.ndarray, sr: int, over: float = 6.0, amount: float = 0.6, fast: float = 0.0005, slow: float = 0.03,
-           release: float = 0.02) -> np.ndarray:
+           release: float = 0.02, inplace: bool = False) -> np.ndarray:
     """A transient softener: what jumps more than `over` dB above the signal's own recent level (a `slow` s
     average) within `fast` s is turned down by `amount` of the excess, at once, and let go over `release` s.
     The opposite of what saturation does to a click: a consonant's burst or a plosive keeps its place but
@@ -312,12 +456,13 @@ def soften(x: np.ndarray, sr: int, over: float = 6.0, amount: float = 0.6, fast:
     if amount <= 0:
         return x
     x2 = _stereo(x)
-    quick = db(_detect(x2, _coef(fast, sr))[::STEP])
-    steady = db(_detect(x2, _coef(slow, sr))[::STEP])
+    quick = db(_detect_every(x2, _coef(fast, sr), STEP))
+    steady = db(_detect_every(x2, _coef(slow, sr), STEP))
     target = -amount * np.clip(quick - steady - over, 0.0, None)
     rate = sr / STEP
     gain = _ballistics(target, _coef(0.0002, rate), _coef(release, rate))
-    return _apply(x2, 10.0 ** (gain / 20.0), STEP, np.zeros((len(x2), 0))).reshape(x.shape)
+    out = x2 if inplace and np.shares_memory(x2, x) else np.empty_like(x2)
+    return _apply(x2, 10.0 ** (gain / 20.0), STEP, np.zeros((len(x2), 0)), out).reshape(x.shape)
 
 
 def gain_computer(level_db: np.ndarray, threshold: float, ratio: float, knee: float) -> np.ndarray:
@@ -335,7 +480,7 @@ def _stereo(x: np.ndarray) -> np.ndarray:
 
 def compress(x: np.ndarray, sr: int, threshold: float, ratio: float, attack: float, release: float,
              knee: float = 6.0, window: float = 0.01, key: np.ndarray | None = None,
-             ride: float = 0.0, above: float = 0.0) -> tuple[np.ndarray, np.ndarray]:
+             ride: float = 0.0, above: float = 0.0, inplace: bool = False) -> tuple[np.ndarray, np.ndarray]:
     """A feed-forward compressor, channels linked: it listens to the power of
     `key` (x itself by default) averaged over about `window` seconds, has a
     soft knee `knee` dB wide, and attack and release times in seconds.
@@ -346,31 +491,36 @@ def compress(x: np.ndarray, sr: int, threshold: float, ratio: float, attack: flo
     (a syllable against its phrase, a pluck against its bar) but leaves a
     quiet verse quiet and a full refrain full: the song's arc is kept.
 
-    Returns the output and the gain it applied (dB, every STEP samples)."""
+    Returns the output and the gain it applied (dB, every STEP samples). inplace: the output is written over x
+    (when x is a float64, C-contiguous array; otherwise it is new, as without)."""
     x2 = _stereo(x)
-    power = _detect(x2 if key is None else _stereo(key), _coef(window, sr))[::STEP]
+    power = _detect_every(x2 if key is None else _stereo(key), _coef(window, sr), STEP)
     level = db(power)
     if ride > 0:
         around = db(uniform_filter1d(power, max(1, int(ride * sr / STEP)), mode="nearest"))
         threshold = np.maximum(around + above, threshold)
     rate = sr / STEP
     gain = _ballistics(gain_computer(level, threshold, ratio, knee), _coef(attack, rate), _coef(release, rate))
-    return apply_gain(x, gain), gain
+    return apply_gain(x, gain, inplace), gain
 
 
-def apply_gain(x: np.ndarray, gain_db: np.ndarray) -> np.ndarray:
-    """x through a gain given in dB every STEP samples (as compress returns it), linear in between."""
-    return _apply(_stereo(x), 10.0 ** (gain_db / 20.0), STEP, np.zeros((0, 0))).reshape(x.shape)
+def apply_gain(x: np.ndarray, gain_db: np.ndarray, inplace: bool = False) -> np.ndarray:
+    """x through a gain given in dB every STEP samples (as compress returns it), linear in between. inplace: the
+    result is written over x (when x is a float64, C-contiguous array; otherwise it is new, as without)."""
+    x2 = _stereo(x)
+    out = x2 if inplace and np.shares_memory(x2, x) else np.empty_like(x2)
+    return _apply(x2, 10.0 ** (gain_db / 20.0), STEP, np.zeros((0, 0)), out).reshape(x.shape)
 
 
 def _both_ways(x2: np.ndarray, sos: np.ndarray) -> np.ndarray:
     """x through sos forward and then backward: the response's magnitude squared and no phase at all (a
-    render has the whole signal at hand)."""
-    return np.ascontiguousarray(_biquads(np.ascontiguousarray(_biquads(x2, sos)[::-1]), sos)[::-1])
+    render has the whole signal at hand). (The backward pass filters its reversed copy where it lies.)"""
+    back = np.ascontiguousarray(_biquads(x2, sos)[::-1])
+    return np.ascontiguousarray(_biquads(back, sos, inplace=True)[::-1])
 
 
 def deess(x: np.ndarray, sr: int, split: float = 4500.0, excess: float = 3.0, ratio: float = 3.0,
-          most: float = 8.0) -> tuple[np.ndarray, np.ndarray]:
+          most: float = 8.0, inplace: bool = False) -> tuple[np.ndarray, np.ndarray]:
     """Turn the highs down while they outweigh the voice's body: a split-band
     de-esser whose threshold is the voice's own balance, so it hears an "s"
     by its spectrum, not by how loud the singer is. It listens to the band
@@ -390,23 +540,27 @@ def deess(x: np.ndarray, sr: int, split: float = 4500.0, excess: float = 3.0, ra
     highs = x2 - _both_ways(x2, butter(2, split, btype="lowpass", fs=sr, output="sos"))
     body = _both_ways(x2, butter(2, split / 2.0, btype="lowpass", fs=sr, output="sos"))
     coef = _coef(0.004, sr)
-    high = db(_detect(highs, coef)[::STEP])
-    over = high - db(_detect(body, coef)[::STEP]) - excess
+    high = db(_detect_every(highs, coef, STEP))
+    over = high - db(_detect_every(body, coef, STEP)) - excess
+    del body
     target = np.clip(-over * (1.0 - 1.0 / ratio), -most, 0.0)
     target[high < loud_level(x2, sr) - 40.0] = 0.0
     rate = sr / STEP
     gain = _ballistics(target, _coef(0.001, rate), _coef(0.06, rate))
-    y = _apply(x2, 10.0 ** (gain / 20.0), STEP, highs)
+    out = x2 if inplace and np.shares_memory(x2, x) else np.empty_like(x2)
+    y = _apply(x2, 10.0 ** (gain / 20.0), STEP, highs, out)
     return y.reshape(x.shape), gain
 
 
-def dynamic_dip(x: np.ndarray, sr: int, f: float, q: float, depth_db: np.ndarray) -> np.ndarray:
+def dynamic_dip(x: np.ndarray, sr: int, f: float, q: float, depth_db: np.ndarray, inplace: bool = False) -> np.ndarray:
     """A peaking cut at f whose depth (dB, >= 0, per sample) moves: the band is
-    taken out in proportion, x + (g - 1) * bandpass(x), which at g = 1 is x."""
+    taken out in proportion, x + (g - 1) * bandpass(x), which at g = 1 is x. inplace: written over x (when x
+    is a float64, C-contiguous array)."""
     x2 = _stereo(x)
     band = _biquads(x2, bandpass(f, q, sr)[None])
     lin = np.exp(-np.maximum(depth_db[::STEP], 0.0) * (np.log(10.0) / 20.0))
-    return _apply(x2, lin, STEP, band).reshape(x.shape)
+    out = x2 if inplace and np.shares_memory(x2, x) else np.empty_like(x2)
+    return _apply(x2, lin, STEP, band, out).reshape(x.shape)
 
 
 @njit(cache=True, nogil=True)
@@ -479,9 +633,9 @@ def _soft(v: float) -> float:
 
 
 @njit(cache=True, nogil=True)
-def _saturate(x, k, bias, dc):
+def _saturate(x, k, bias, dc, y):
+    """The curve over every sample of x, into y (which may be x: each sample is read before it is written)."""
     n, chans = x.shape
-    y = np.empty_like(x)
     th = _soft(bias)
     w = bias * bias
     slope = (729.0 - 162.0 * w + 9.0 * w * w) / (27.0 + 9.0 * w) ** 2  # the curve's slope at the bias
@@ -498,31 +652,42 @@ def _saturate(x, k, bias, dc):
     return y
 
 
-def saturate(x: np.ndarray, sr: int, drive: float, bias: float = 0.15) -> np.ndarray:
+def saturate(x: np.ndarray, sr: int, drive: float, bias: float = 0.15, inplace: bool = False) -> np.ndarray:
     """Soft saturation that thickens rather than distorts: the signal's loud
     peaks reach `drive` on a tanh-like curve (0.25 a whisper, about 0.5%
     distortion on them; 1 plainly driven), whatever its level. `bias` tilts
     the curve for even harmonics, like a tube or tape. Small signals pass
-    at unity gain; the offset the tilt makes is blocked below 8 Hz."""
+    at unity gain; the offset the tilt makes is blocked below 8 Hz. inplace: written over x (when x is a
+    float64, C-contiguous array)."""
     if drive <= 0:
         return x
     ref = loud_peak(x, sr) + 1e-12
     shape = x.shape
-    y = _saturate(np.ascontiguousarray(x.reshape(len(x), -1), dtype=np.float64), drive / ref, bias,
-                  float(np.exp(-2.0 * np.pi * 8.0 / sr)))
+    x2 = np.ascontiguousarray(x.reshape(len(x), -1), dtype=np.float64)
+    out = x2 if inplace and np.shares_memory(x2, x) else np.empty_like(x2)
+    y = _saturate(x2, drive / ref, bias, float(np.exp(-2.0 * np.pi * 8.0 / sr)), out)
     return y.reshape(shape)
 
 
-def width(x: np.ndarray, sr: int, amount: float, mono_below: float = 140.0) -> np.ndarray:
+def width(x: np.ndarray, sr: int, amount: float, mono_below: float = 140.0, inplace: bool = False) -> np.ndarray:
     """Scale the side (L - R) against the mid; below `mono_below` the side is
-    never widened, so the low end stays centred."""
+    never widened, so the low end stays centred. inplace: the result is written over x (a float64 (n, 2)
+    array), each step on its own copy of the mid and side as before."""
     if amount == 1.0:
         return x
     mid = (x[:, 0] + x[:, 1]) / 2.0
     side = (x[:, 0] - x[:, 1]) / 2.0
     low = equalize(side, butter(2, mono_below, btype="lowpass", fs=sr, output="sos"))
-    side = low * min(amount, 1.0) + (side - low) * amount
-    return np.stack([mid + side, mid - side], axis=1)
+    # side = low * min(amount, 1) + (side - low) * amount, each product and sum where the last left it
+    side -= low
+    side *= amount
+    low *= min(amount, 1.0)
+    low += side
+    del side
+    out = x if inplace and x.dtype == np.float64 and x.ndim == 2 and x.shape[1] == 2 else np.empty((len(x), 2))
+    np.add(mid, low, out=out[:, 0])
+    np.subtract(mid, low, out=out[:, 1])
+    return out
 
 
 def delay(x: np.ndarray, samples: int) -> np.ndarray:

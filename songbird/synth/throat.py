@@ -31,6 +31,7 @@ from pathlib import Path
 
 import numpy as np
 
+from .fx import running_mean
 from .threads import in_order, workers
 
 FRAME = 0.005  # seconds per envelope frame
@@ -364,8 +365,6 @@ def hush(phones: np.ndarray, sr: int, n: int) -> np.ndarray:
     """Per sample (n of them), 1 where something is sung and HUSH's margins around it, 0 in the silence
     between, with a raised-cosine fade: the throat is quiet where nothing is sung. phones: the timeline's
     phone for every frame."""
-    from scipy.ndimage import uniform_filter1d
-
     before, after, fade = HUSH
     sung = phones != PHONES.index("sil")
     if not sung.any():
@@ -374,9 +373,17 @@ def hush(phones: np.ndarray, sr: int, n: int) -> np.ndarray:
     last = np.maximum.accumulate(np.where(sung, idx, -len(sung) - 1))  # the latest sung frame at or before each
     ahead = np.minimum.accumulate(np.where(sung, idx, 2 * len(sung) + 1)[::-1])[::-1]  # the next one at or after
     keep = ((idx - last) * FRAME <= after) | ((ahead - idx) * FRAME <= before)
-    frame = np.minimum((np.arange(n) / (FRAME * sr)).astype(np.int64), len(keep) - 1)
-    ramp = uniform_filter1d(keep[frame].astype(np.float64), max(1, int(fade * sr)), mode="nearest")
-    return 0.5 - 0.5 * np.cos(np.pi * np.clip(ramp, 0.0, 1.0))
+    # (each step where the last left it: the same values, without a second copy of the song's length)
+    frame = (np.arange(n) / (FRAME * sr)).astype(np.int64)
+    np.minimum(frame, len(keep) - 1, out=frame)
+    ramp = keep[frame].astype(np.float64)
+    del frame
+    running_mean(ramp, max(1, int(fade * sr)), out=ramp)  # uniform_filter1d's, where it lies
+    np.clip(ramp, 0.0, 1.0, out=ramp)
+    ramp *= np.pi
+    np.cos(ramp, out=ramp)
+    ramp *= 0.5
+    return np.subtract(0.5, ramp, out=ramp)
 
 
 # ---- the glottal source, relative to the one the throat learned -------------------------------------
@@ -681,8 +688,6 @@ NASAL_LIFT = 2.0  # dB a coda nasal comes up
 def articulate(y: np.ndarray, segs: list, sr: int, voice, rng: np.random.Generator, ref: float) -> np.ndarray:
     """The throat's output (vowels at RMS ref) with its stops given a closure and a release, its weak
     fricatives their hiss and its coda nasals a lift (see above), scaled by voice.crisp."""
-    from scipy.ndimage import uniform_filter1d
-
     from .. import phonetics as ph
     from . import tract
     from .voice import _locus, _stop_times
@@ -691,7 +696,6 @@ def articulate(y: np.ndarray, segs: list, sr: int, voice, rng: np.random.Generat
     if crisp <= 0:
         return y
     n = len(y)
-    t = (np.arange(n) + 0.5) / sr
     gain = np.ones(n)
     added = np.zeros(n)
     noise = rng.standard_normal(n)
@@ -709,9 +713,10 @@ def articulate(y: np.ndarray, segs: list, sr: int, voice, rng: np.random.Generat
         lo, hi = max(i0 - pad, 0), min(i1 + pad, n)
         shaped = tract.noise_band(noise[lo:hi], [(c * voice.tract, b, g) for c, b, g in shape], sr)
         shaped /= np.sqrt(np.mean(shaped[i0 - lo: i1 - lo] ** 2)) + 1e-12
-        env = np.clip(np.minimum((t[lo:hi] - t0) / ramp, (t1 - t[lo:hi]) / ramp), 0.0, 1.0)
+        t = (np.arange(lo, hi) + 0.5) / sr  # the samples' times, as (np.arange(n) + 0.5) / sr gives them
+        env = np.clip(np.minimum((t - t0) / ramp, (t1 - t) / ramp), 0.0, 1.0)
         if fading:
-            env = env * np.clip((t1 - t[lo:hi]) / max(t1 - t0, 1e-3), 0.0, 1.0)
+            env = env * np.clip((t1 - t) / max(t1 - t0, 1e-3), 0.0, 1.0)
         added[lo:hi] += crisp * ref * 10.0 ** (level_db / 20.0) * amp * env * shaped
 
     spread = float(getattr(voice, "spread", 0.0))
@@ -743,8 +748,11 @@ def articulate(y: np.ndarray, segs: list, sr: int, voice, rng: np.random.Generat
         elif manner == "nasal" and s.role == "coda":
             i0, i1 = max(int(s.t0 * sr), 0), min(int(s.t1 * sr), n)
             gain[i0:i1] *= 10.0 ** (crisp * NASAL_LIFT / 20.0)
-    gain = uniform_filter1d(gain, max(int(0.004 * sr), 1), mode="nearest")  # no step in the gain: a step is a click
-    return y * gain + added
+    noise = None  # (let go: the hisses are made)
+    running_mean(gain, max(int(0.004 * sr), 1), out=gain)  # no step in the gain: a step is a click (uniform_filter1d's)
+    gain *= y  # y * gain + added, made where the gain lies: the same products and sums
+    gain += added
+    return gain
 
 
 # A real voice is part noise at the top: in the natural reference's vowels the aperiodicity runs 0.32 to 0.65 from
@@ -827,12 +835,21 @@ def sing(notes, sr: int, voice, seed: int = 0, lexicon: dict | None = None, mix:
     y = synthesize(np.where(voiced, f0, 0.0), sp, ap, RATE, rng, source=source)
     y = resample_poly(y, sr // np.gcd(sr, RATE), RATE // np.gcd(sr, RATE)) if sr != RATE else y
     y = sosfilt(butter(1, 60.0, btype="highpass", fs=sr, output="sos"), y)
-    y = np.concatenate([y, np.zeros(max(0, int(np.ceil(duration * sr)) - len(y)))])[: int(np.ceil(duration * sr))]
+    if len(y) < int(np.ceil(duration * sr)):
+        y = np.concatenate([y, np.zeros(int(np.ceil(duration * sr)) - len(y))])
+    y = y[: int(np.ceil(duration * sr))]
     mask = np.zeros(len(y), dtype=bool)
     for s in vowels:
         mask[int(s.t0 * sr): int(s.t1 * sr)] = True
     ref = np.sqrt(np.mean(y[mask] ** 2)) if mask.any() else 1.0
     y = articulate(y, segs, sr, voice, rng, ref)
-    y = y * hush(t["phone"], sr, len(y))
-    y = y + ref * breaths(segs, len(y), sr, voice, seed)
-    return 0.3 * y / ref / np.sqrt(2.0)
+    # y * hush, + ref * breaths, then 0.3 y / ref / sqrt 2: each where y lies (the same products, in the same order)
+    y *= hush(t["phone"], sr, len(y))
+    inhaled = breaths(segs, len(y), sr, voice, seed)
+    inhaled *= ref
+    y += inhaled
+    del inhaled
+    y *= 0.3
+    y /= ref
+    y /= np.sqrt(2.0)
+    return y
