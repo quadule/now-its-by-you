@@ -32,6 +32,7 @@ from __future__ import annotations
 
 import re
 from dataclasses import dataclass, fields
+from functools import partial
 
 import numpy as np
 from scipy.ndimage import minimum_filter1d, uniform_filter1d
@@ -388,6 +389,11 @@ def _sum(stems: dict[str, np.ndarray], names: list[str]) -> np.ndarray | None:
     return out if out is not None and np.any(out) else None
 
 
+def _alone(x: np.ndarray) -> np.ndarray | None:
+    """_sum of one stem, without its copy where the copy would be laid out as it is."""
+    return (x if x.flags.c_contiguous else x.copy()) if np.any(x) else None
+
+
 def lead_lift(sections, energies, sr: int, length: int) -> np.ndarray | None:
     """dB per sample the singers rise with the arrangement: from each section's (name, start, end) and its
     energy (0..1, the band's, in the same order), LEAD_ARC dB per unit above ENERGY_REST, held within the
@@ -414,95 +420,148 @@ def mix(stems: dict[str, np.ndarray], sr: int, seed: int = 0, params: MixParams 
     included. taps: a dict to receive the buses and each treated stem as they
     go into the sum (for analysis). lift: dB per sample the singers rise and
     fall with the arrangement (lead_lift), or None for level singers."""
-    p = (params or MixParams()).clamped()
     stems = _conformed(stems)
     if not stems:
         return np.zeros((0, 2))
     length = len(next(iter(stems.values())))
+    return mix_made([(name, lambda x=x: x) for name, x in stems.items()], length, sr, seed, params, taps, lift)
+
+
+def _conform(x: np.ndarray, length: int) -> np.ndarray:
+    """One stem as _conformed makes it, for a mix `length` samples long."""
+    x = np.asarray(x, dtype=np.float64)
+    x = x.reshape(len(x), -1)
+    if x.shape[1] == 1:
+        x = np.repeat(x * np.sqrt(0.5), 2, axis=1)
+    x = x[:, :2]
+    if len(x) > length:
+        raise ValueError(f"a stem of {len(x)} samples for a mix of {length}")
+    return np.pad(x, ((0, length - len(x)), (0, 0))) if len(x) < length else x
+
+
+def mix_made(parts: list, length: int, sr: int, seed: int = 0, params: MixParams | None = None,
+             taps: dict | None = None, lift: np.ndarray | None = None, progress=None) -> np.ndarray:
+    """mix(), from the stems' makers: (name, make) for each stem, none longer than `length` samples. Each
+    stem is made, treated and put into its bus as the mix comes to it, and let go: the singers first (the
+    band makes way for them), then the band's instruments in their names' order, a few made ahead on
+    threads (threads.in_order), so a song's stems are never all held at once. The same mix, to the bit,
+    as mix() of all of them. progress, if given, is told each stem's name as the mix comes to it, then
+    "mix"."""
+    p = (params or MixParams()).clamped()
+    if not parts:
+        return np.zeros((0, 2))
+    makers = dict(parts)
     rise = None if lift is None else (10.0 ** (np.asarray(lift, dtype=float)[:length] / 20.0))[:, None]
     balance = dict(p.balance)
-    roles = {name: role_of(name) for name in sorted(stems)}
+    roles = {name: role_of(name) for name in sorted(makers)}
     nudge = {name: balance.get(name, balance.get(role, 0.0)) for name, role in roles.items()}  # a name wins over its role
 
-    # Each bus's and instrument's own treatment depends on nothing but its own sound, so they are made at once
-    # (threads.in_order); they are put together below, one at a time, in the order they always were.
-    jobs = []
+    def stem(name: str) -> np.ndarray:
+        return _conform(makers[name](), length)
 
-    # The lead first: everything else is placed against it.
-    voice = _sum(stems, [n for n, r in roles.items() if r == "voice"])
-    if voice is not None:
-        def lead(x):
-            x = fx.equalize(x, fx.design(VOICE_EQ + _sizzle(x, sr), sr))
-            x = fx.deess(x, sr)[0]
-            x = _compressed(x, sr, VOICE_COMP)
-            if VOICE_SOFTEN:
-                x = fx.soften(x, sr, *VOICE_SOFTEN)
-            return _at(_peaks(fx.saturate(x, sr, VOICE_DRIVE), sr), sr, REFERENCE)
+    # The lead: everything else is placed against it.
+    def lead(x):
+        x = fx.equalize(x, fx.design(VOICE_EQ + _sizzle(x, sr), sr))
+        x = fx.deess(x, sr)[0]
+        x = _compressed(x, sr, VOICE_COMP)
+        if VOICE_SOFTEN:
+            x = fx.soften(x, sr, *VOICE_SOFTEN)
+        return _at(_peaks(fx.saturate(x, sr, VOICE_DRIVE), sr), sr, REFERENCE)
 
-        def lead_bus(voice=voice):
-            voice = _treated(voice, lead)
-            if rise is not None:  # the lead rises with the arrangement: quieter in a sparse verse, fuller at the climax
-                voice = voice * rise[:len(voice)]
-            return voice, fx.activity(voice, sr, attack=MAKE_WAY[0], release=MAKE_WAY[1])
-        jobs.append(("voice bus", lead_bus))
+    def lead_bus(voice):
+        if voice is None:
+            return None
+        voice = _treated(voice, lead)
+        if rise is not None:  # the lead rises with the arrangement: quieter in a sparse verse, fuller at the climax
+            voice = voice * rise[:len(voice)]
+        return voice, fx.activity(voice, sr, attack=MAKE_WAY[0], release=MAKE_WAY[1])
 
     # The lineage choir, as one group, where it sings; de-essed as the lead is (its voices say each "s" together,
     # and its sends to the room and plate are the biggest)
-    choir = _sum(stems, [n for n, r in roles.items() if r == "choir"])
-    if choir is not None:
-        def choir_bus(choir=choir):
-            where = fx.span(choir, sr)
-            if where.stop - where.start > sr // 2:
-                group = fx.deess(fx.equalize(choir[where], fx.design(CHOIR_EQ, sr)), sr)[0]
-                group = _peaks(_compressed(group, sr, CHOIR_COMP), sr)
-                group = fx.width(group, sr, min(CHOIR_WIDTH * p.width, 1.6))
-                choir = np.zeros((length, 2))
-                choir[where] = _at(group, sr, REFERENCE - CHOIR_UNDER + balance.get("choir", 0.0))
-                if rise is not None:
-                    choir[where] *= rise[where]
-                return choir
+    def choir_bus(choir):
+        if choir is None:
             return None
-        jobs.append(("choir bus", choir_bus))
+        where = fx.span(choir, sr)
+        if where.stop - where.start > sr // 2:
+            group = fx.deess(fx.equalize(choir[where], fx.design(CHOIR_EQ, sr)), sr)[0]
+            group = _peaks(_compressed(group, sr, CHOIR_COMP), sr)
+            group = fx.width(group, sr, min(CHOIR_WIDTH * p.width, 1.6))
+            choir = np.zeros((length, 2))
+            choir[where] = _at(group, sr, REFERENCE - CHOIR_UNDER + balance.get("choir", 0.0))
+            if rise is not None:
+                choir[where] *= rise[where]
+            return choir
+        return None
 
     # The band: each instrument to its place, then together.
-    strips = {}
-    for name, role in roles.items():
-        if role in ("voice", "choir"):
-            continue
-        strip = ROLES[role]
-        where = fx.span(stems[name], sr)
+    def channel(x, strip, role):
+        x = fx.equalize(x, fx.design(strip.eq, sr))
+        if strip.comp:
+            x = _compressed(x, sr, strip.comp)
+        if role in ("drum", "kit"):
+            x = _peaks(x, sr)
+        return fx.saturate(x, sr, strip.drive)
+
+    def instrument(name: str):
+        x = stem(name)
+        where = fx.span(x, sr)
         if where.stop <= where.start:
-            continue
+            return None
+        strip = ROLES[roles[name]]
+        return where, _treated(x[where], partial(channel, strip=strip, role=roles[name])) * \
+            10.0 ** ((strip.trim + nudge[name]) / 20.0)
 
-        def channel(x, strip=strip, role=role):
-            x = fx.equalize(x, fx.design(strip.eq, sr))
-            if strip.comp:
-                x = _compressed(x, sr, strip.comp)
-            if role in ("drum", "kit"):
-                x = _peaks(x, sr)
-            return fx.saturate(x, sr, strip.drive)
-        strips[name] = (strip, where)
-        jobs.append((name, lambda name=name, where=where, strip=strip, channel=channel:
-                     _treated(stems[name][where], channel) * 10.0 ** ((strip.trim + nudge[name]) / 20.0)))
+    # Each bus's and instrument's own treatment depends on nothing but its own sound, so they are made at once
+    # (threads.in_order, a few ahead); they are put together below, one at a time, in the order they always were:
+    # a bus of one stem is made with its stem; a bus of several is summed as they come, then treated.
+    buses = {"voice": lead_bus, "choir": choir_bus}
+    groups = {bus: [n for n, r in roles.items() if r == bus] for bus in buses}
+    jobs = []
+    for bus, names in groups.items():
+        if len(names) == 1:
+            jobs.append((names[0], lambda bus=bus, name=names[0]: buses[bus](_alone(stem(name)))))
+        else:
+            jobs += [(name, partial(stem, name)) for name in names]
+    jobs += [(name, partial(instrument, name)) for name, role in roles.items() if role not in buses]
 
-    singing = None
+    voice = choir = singing = None
     band = np.zeros((length, 2))
     band_send = np.zeros((length, 2))
     stepping = np.zeros((length, 2))  # what the instruments that step back under the voice give up
-    for name, result in threads.in_order(jobs, first=("voice bus",)):
-        if name == "voice bus":
-            voice, singing = result
-            continue
-        if name == "choir bus":
-            choir = result
-            continue
-        (strip, where), x = strips[name], result
-        if taps is not None:
-            taps[name] = (where, x)
-        band[where] += x
-        band_send[where] += x * strip.send
-        if strip.duck and singing is not None:
-            stepping[where] += x * (1.0 - 10.0 ** (-strip.duck * p.duck * singing[where] / 20.0))[:, None]
+    held: dict = {}
+    results = threads.in_order(jobs, ahead=threads.workers())
+    try:
+        for name, _ in jobs:
+            if progress is not None:
+                progress(name)
+            result = next(results)[1]
+            role = roles[name]
+            if role in buses:
+                if len(groups[role]) > 1:
+                    held[name] = result
+                    if len(held) < len(groups[role]):
+                        continue
+                    result = buses[role](_sum(held, groups[role]))
+                    held = {}
+                if role == "voice":
+                    voice, singing = result if result is not None else (None, None)
+                else:
+                    choir = result
+                continue
+            if result is None:
+                continue
+            strip, (where, x) = ROLES[role], result
+            if taps is not None:
+                taps[name] = (where, x)
+            band[where] += x
+            band_send[where] += x * strip.send
+            if strip.duck and singing is not None:
+                stepping[where] += x * (1.0 - 10.0 ** (-strip.duck * p.duck * singing[where] / 20.0))[:, None]
+            del result, x
+    finally:
+        results.close()
+    if progress is not None:
+        progress("mix")
     gain = 1.0
     if np.any(band):
         eq = fx.design(BAND_EQ, sr)
