@@ -1104,7 +1104,6 @@
     if (!a || document.querySelector("dialog[open]")) return;
     if (e.target.closest?.(".sbc-note, .sbc-roll-scroll") && a.action === "step") return;  // a note's own arrows (composer.js)
     if (a.action === "play" && e.target.matches?.("input[type=checkbox], input[type=radio], summary")) return;
-    const grid = S.view === "arrange";
     switch (a.action) {
       case "play": e.preventDefault(); play(a.how); break;
       case "loop": toggle("tLoop"); break;
@@ -1128,7 +1127,7 @@
       case "move": if (S.sel?.kind === "section") { e.preventDefault(); const i = S.grid.sections.findIndex((s) => s.id === S.sel.id); moveSection(S.sel.id, i + a.step); } break;
       case "step":
         if (e.target.closest?.(".sbc-note, input, select, [role=tab]")) return;
-        if ((grid || S.view === "page") && stepCell(a.axis, a.step)) e.preventDefault();
+        if (stepCell(a.axis, a.step)) e.preventDefault();
         break;
       default: break;
     }

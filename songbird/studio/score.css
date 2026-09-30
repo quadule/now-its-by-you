@@ -485,7 +485,7 @@ dialog.help .keys td { padding: 3px 0; }
 
 .inspector .handle, .notes .readonly { display: none; }
 @container app (max-width: 1180px) { .transport .sep { display: none; } #roll { padding: 6px 6px; } }
-@container app (max-width: 1020px) { .body { grid-template-columns: minmax(0, 1fr) 290px; } .transport .switch.wide, #howMore { display: none; } .transport .phone-when-narrow { display: inline-flex; } }
+@container app (max-width: 1020px) { .body { grid-template-columns: minmax(0, 1fr) 290px; } .transport { flex-wrap: wrap; row-gap: 4px; } .position { order: 5; flex-basis: 100%; } }
 
 /* ---------------------------------------------------------------- narrow: a phone, or a narrow window */
 @container app (max-width: 620px) {
@@ -504,7 +504,8 @@ dialog.help .keys td { padding: 3px 0; }
   .transport .right .btn { padding: 6px 8px; min-height: 36px; }
   .tbtn.play { width: 44px; height: 38px; }
   .tempo { padding: 3px 6px; min-height: 36px; }
-  .position { flex: 1 1 auto; min-width: 0; padding: 0 2px; }
+  .position { flex: 1 1 auto; min-width: 0; padding: 0 2px; order: 0; }
+  .transport { flex-wrap: nowrap; }
   .position .now { cursor: pointer; }
   .position .now .sub, .position .now .time { display: none; }
   #howPop { left: 8px; right: 8px; }
