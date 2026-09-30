@@ -48,9 +48,9 @@ from functools import lru_cache
 
 import numpy as np
 from numba import njit
-from scipy.signal import bilinear, ellip, firwin, oaconvolve, sosfilt, sosfreqz, tf2sos
+from scipy.signal import bilinear, ellip, firwin, sosfilt, sosfreqz, tf2sos
 
-from . import fx
+from . import fx, oa
 from .iir import butter
 
 OS = 4  # oversampling of the nonlinear stages
@@ -691,10 +691,15 @@ def play(chain: Chain, emf: np.ndarray) -> np.ndarray:
     amp, sr = chain.amp, chain.sr
     rev = None
     if amp.reverb > 0:
-        rev = oaconvolve(chain.send(emf), spring_ir(amp.tank, sr))[: len(emf)] * amp.reverb
+        rev = oa.convolve(chain.send(emf), spring_ir(amp.tank, sr), len(emf))  # (oaconvolve's, blockwise)
+        rev *= amp.reverb
     y = chain.run(emf, rev)
+    del rev
     ir = cabinet_ir(amp.cabinet, sr)
-    return np.stack([oaconvolve(y, ir[:, j])[: len(y)] for j in range(ir.shape[1])], axis=1)
+    out = np.empty((len(y), ir.shape[1]))  # each microphone through the cabinet, into its column
+    for j in range(ir.shape[1]):
+        oa.convolve(y, ir[:, j], len(y), out=out[:, j])
+    return out
 
 
 @njit(cache=True, nogil=True)

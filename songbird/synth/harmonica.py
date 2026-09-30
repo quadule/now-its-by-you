@@ -69,10 +69,10 @@ from dataclasses import dataclass, replace
 
 import numpy as np
 from numba import njit
-from scipy.signal import oaconvolve, sosfilt
+from scipy.signal import sosfilt
 
 from ..theory import midi_to_hz
-from . import body, reed
+from . import body, oa, reed
 from .iir import butter
 
 BLOW = (0, 4, 7, 12, 16, 19, 24, 28, 31, 36)  # semitones above hole 1's blow note, holes 1 to 10
@@ -493,7 +493,8 @@ def render(name: str, notes, sr: int, length: int, rng: np.random.Generator, mak
         out[i0:end] += sound[: end - i0]
         last_reed = played
     ir = body.impulse_response(body.HARMONICA, sr, seed=seed, size=float(s["body"]), channels=1)[:, 0]
-    y = oaconvolve(out, ir)[:length]
+    y = oa.convolve(out, ir, length)  # (oaconvolve's, a few blocks at a time)
+    del out
     # a reed's pulses of air aren't zero-mean: no DC leaves the harp
     return sosfilt(butter(1, 20.0, btype="highpass", fs=sr, output="sos"), y)
 

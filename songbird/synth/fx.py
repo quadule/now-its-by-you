@@ -699,12 +699,19 @@ def delay(x: np.ndarray, samples: int) -> np.ndarray:
     return out
 
 
-def warp(x: np.ndarray, offset: np.ndarray) -> np.ndarray:
+def warp(x: np.ndarray, offset: np.ndarray, block: int = 1 << 16) -> np.ndarray:
     """Read x at n + offset[n] (a time-varying delay, in samples) by cubic
-    Hermite interpolation: a tape transport's wow and flutter."""
+    Hermite interpolation: a tape transport's wow and flutter. (A stretch of the result at a time: each sample
+    by the same operations on the same four neighbours, without the song-long positions and gathers.)"""
     n = len(x)
-    pos = np.clip(np.arange(n) + offset, 1.0, n - 3.0)
-    i = np.floor(pos).astype(np.int64)
-    t = (pos - i)[:, None] if x.ndim == 2 else pos - i
-    p0, p1, p2, p3 = x[i - 1], x[i], x[i + 1], x[i + 2]
-    return p1 + 0.5 * t * (p2 - p0 + t * (2 * p0 - 5 * p1 + 4 * p2 - p3 + t * (3 * (p1 - p2) + p3 - p0)))
+    out = None
+    for a in range(0, n, block):
+        pos = np.clip(np.arange(a, min(n, a + block)) + offset[a:a + block], 1.0, n - 3.0)
+        i = np.floor(pos).astype(np.int64)
+        t = (pos - i)[:, None] if x.ndim == 2 else pos - i
+        p0, p1, p2, p3 = x[i - 1], x[i], x[i + 1], x[i + 2]
+        y = p1 + 0.5 * t * (p2 - p0 + t * (2 * p0 - 5 * p1 + 4 * p2 - p3 + t * (3 * (p1 - p2) + p3 - p0)))
+        if out is None:
+            out = np.empty((n,) + y.shape[1:], dtype=y.dtype)
+        out[a:a + len(y)] = y
+    return np.empty((0,) + x.shape[1:]) if out is None else out

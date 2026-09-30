@@ -125,8 +125,54 @@ def _up2(x, taps, middle):
 def _double(y: np.ndarray) -> np.ndarray:
     y = np.asarray(y, dtype=np.float64)
     if y.ndim == 1:
-        return _up2(np.ascontiguousarray(y), _ODD, _MIDDLE)
-    return np.stack([_up2(np.ascontiguousarray(y[:, c]), _ODD, _MIDDLE) for c in range(y.shape[1])], axis=1)
+        out = np.empty(2 * len(y))
+        _up2_into(y, out)
+        return out
+    out = np.empty((2 * y.shape[0], y.shape[1]))  # each channel doubled into its column, one at a time
+    for c in range(y.shape[1]):
+        _up2_into(y[:, c], out[:, c])
+    return out
+
+
+def _up2_into(x: np.ndarray, into: np.ndarray, add: bool = False, block: int = 1 << 16) -> None:
+    """into = _up2(x) (or into += it: each sample added to as ever), a stretch at a time: each stretch of x with the
+    taps' reach either side (zeros past its ends, as _up2 pads it) doubled by _up2 itself, and the samples of the
+    stretch kept: every sample made by the same products summed in the same order."""
+    n = len(x)
+    m = len(_ODD)
+    half = m // 2
+    for a in range(0, n, block):
+        b = min(n, a + block)
+        lo, hi = a - (half - 1), b + (m - half)
+        near = np.zeros(hi - lo)
+        s0, s1 = max(lo, 0), min(hi, n)
+        near[s0 - lo: s1 - lo] = x[s0:s1]
+        y = _up2(near, _ODD, _MIDDLE)[2 * (half - 1): 2 * (half - 1 + b - a)]
+        if add:
+            into[2 * a: 2 * b] += y
+        else:
+            into[2 * a: 2 * b] = y
+
+
+def _track(x, factor: int, into: np.ndarray) -> np.ndarray:
+    """A per-sample track at 1/factor of the rate into `into` (its first samples; zeros past the track's end):
+    what np.pad(x[::factor], (0, n))[:n] made, without the padded copy."""
+    x = np.asarray(x, dtype=np.float64)[::factor]
+    m = min(len(into), len(x))
+    into[:m] = x[:m]
+    return into
+
+
+def per_sample(values: np.ndarray, hop: int, length: int, block: int = 1 << 16) -> np.ndarray:
+    """A track kept a value every `hop` samples, at every sample: np.interp(np.arange(length) / hop,
+    np.arange(len(values)), values), a block at a time (each sample's value is its own: the same interpolation,
+    without the song-long index and positions)."""
+    frames = np.arange(len(values))
+    out = np.empty(length)
+    for a in range(0, length, block):
+        b = min(length, a + block)
+        out[a:b] = np.interp(np.arange(a, b) / hop, frames, values)
+    return out
 
 
 def _factor(freq: float, sr: int) -> int:
@@ -137,7 +183,8 @@ def _factor(freq: float, sr: int) -> int:
 
 
 def ring(freqs, t60s, times, amps, sr: int, length: int, *, mix=None, bend=None, damp=None, dweight=None,
-         damp2=None, dweight2=None, phase=None, multirate: bool = True) -> np.ndarray:
+         damp2=None, dweight2=None, phase=None, multirate: bool = True, floor: float | None = None,
+         apart: bool = False) -> np.ndarray:
     """Modes at `freqs` Hz, each falling 60 dB in its t60 seconds, struck at
     `times` (seconds) with amps[h, k] for hit h and mode k, rendered
     `length` samples long.
@@ -149,7 +196,9 @@ def ring(freqs, t60s, times, amps, sr: int, length: int, *, mix=None, bend=None,
     in nepers per second, that mode k feels times dweight[k] (default 1);
     damp2 and dweight2 a second such track (a hand's, beside a cymbal's own
     loud-phase drain). phase: each mode's starting phase (default 0, a sine:
-    no click)."""
+    no click). floor: the squared level under which a mode is dropped (default: QUIET under the loudest
+    mode's strike here; a bank rung a channel at a time gives each part the whole bank's). apart: a list of the
+    channels, each its own 1-D array, instead of (length, C)."""
     freqs = np.asarray(freqs, dtype=np.float64)
     k = len(freqs)
     t60s = np.broadcast_to(np.asarray(t60s, dtype=np.float64), (k,))
@@ -165,36 +214,62 @@ def ring(freqs, t60s, times, amps, sr: int, length: int, *, mix=None, bend=None,
         if track_ is not None:
             tracks.append(np.asarray(track_, dtype=np.float64))
             weights.append(np.ones(k) if weight is None else np.broadcast_to(np.asarray(weight, dtype=np.float64), (k,)))
-    out = np.zeros((length, mix.shape[1]))
     if k == 0 or len(times) == 0 or length == 0:
+        out = np.zeros((length, mix.shape[1]))
         return out[:, 0] if mono else out
     decay = 6.907755 / t60s
     loudest = np.max(np.abs(amps), axis=0) * np.max(np.abs(mix), axis=1)
-    floor = float((QUIET * loudest.max()) ** 2)
+    floor = float((QUIET * loudest.max()) ** 2) if floor is None else float(floor)
     audible = (freqs < 0.47 * sr) & (freqs > 0.0) & (loudest > 0.0)
     factors = np.array([_factor(f, sr) if multirate else 1 for f in freqs])
     # The slowest modes first; their sum is doubled in rate and joined by the next, and so on: one short
     # filter a doubling, whatever the number of groups or channels.
     base = -(-length // 8) + 16
+    # (Each group's bank is made before the sum below it is brought up to its rate, and that sum's last doubling
+    # is added into it a channel at a time, doubled + y as ever: the sum at twice the rate is never held whole.)
     acc, at = None, 8
     for factor in (8, 4, 2, 1):
-        while acc is not None and at > factor:
-            acc, at = _double(acc), at // 2
         sel = np.flatnonzero(audible & (factors == factor))
         if not len(sel):
             continue
         rate = sr / factor
         n = base * (8 // factor)
-        track = lambda x: np.zeros(0) if x is None else np.ascontiguousarray(  # noqa: E731
-            np.pad(np.asarray(x, dtype=np.float64)[::factor], (0, n)))[:n]
-        damps = np.stack([track(t) for t in tracks]) if tracks else np.zeros((0, n))
+        damps = np.zeros((len(tracks), n))
+        for row, t in zip(damps, tracks):
+            _track(t, factor, row)
         dweights = np.stack([w[sel] for w in weights]) if weights else np.zeros((0, len(sel)))
         y = _bank(freqs[sel], decay[sel], np.ascontiguousarray(phase[sel]), times * rate,
-                  np.ascontiguousarray(amps[:, sel]), np.ascontiguousarray(mix[sel]), track(bend),
-                  np.ascontiguousarray(damps), np.ascontiguousarray(dweights), float(rate), n, floor)
-        acc, at = (y if acc is None else acc + y), factor
+                  np.ascontiguousarray(amps[:, sel]), np.ascontiguousarray(mix[sel]),
+                  np.zeros(0) if bend is None else _track(bend, factor, np.zeros(n)),
+                  damps, np.ascontiguousarray(dweights), float(rate), n, floor)
+        del damps
+        if acc is not None:
+            while at > 2 * factor:
+                acc, at = _double(acc), at // 2
+            for c in range(y.shape[1]):
+                _up2_into(acc[:, c], y[:, c], add=True)
+        acc, at = y, factor
+        del y
+    # (the banks are rung: their tracks are let go before the last doublings, where a caller hands them over)
+    tracks = weights = bend = damp = damp2 = track_ = t = None
+    if apart and acc is not None and at > 1:  # each channel doubled up to the rate on its own, one at a time
+        channels = []
+        for c in range(acc.shape[1]):
+            x, rate_at = acc[:, c], at
+            while rate_at > 1:
+                x, rate_at = _double(x), rate_at // 2
+            x = x[:length]
+            x += 0.0
+            channels.append(x)
+            del x
+        return channels
     while acc is not None and at > 1:
         acc, at = _double(acc), at // 2
-    if acc is not None:
-        out += acc[:length]
+    if acc is None:
+        out = np.zeros((length, mix.shape[1]))
+    else:  # the sum as it lies, a view of its first `length` samples: + 0.0 is what adding it to zeros did
+        out = acc[:length]
+        out += 0.0
+    if apart:
+        return [out[:, c] for c in range(out.shape[1])]
     return out[:, 0] if mono else out

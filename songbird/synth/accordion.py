@@ -71,11 +71,13 @@ from dataclasses import dataclass
 
 import numpy as np
 from numba import njit
-from scipy.signal import oaconvolve, sosfilt
+from scipy.signal import sosfilt
 
 from ..theory import midi_to_hz
-from . import body, reed
+from . import body, oa, reed
 from .iir import butter
+
+BLOCK = 1 << 16  # samples a stretch, where what is worked sample by sample is worked a stretch at a time
 
 ACCORDION_ARTS = {
     "": "a key or a button, as the note lies: the treble's keys from F3 up; below them the left hand, a lone note "
@@ -423,7 +425,8 @@ def bellows(notes, reeds: list[list[Voice]], sr: int, length: int, kind: Kind, s
         lo, hi = max(0, t - w // 2), min(length, t + w // 2)
         x = (np.arange(lo, hi) - (t - w // 2)) / w
         dip[lo:hi] = np.minimum(dip[lo:hi], 1.0 - (1.0 - DIP) * np.sin(np.pi * x) ** 2)
-    return pressure * dip, turns
+    dip *= pressure  # (pressure * dip, where it lies)
+    return dip, turns
 
 
 # --- the sound -----------------------------------------------------------------------------------------
@@ -493,7 +496,7 @@ def render(name: str, notes, sr: int, length: int, rng: np.random.Generator, mak
     sides = ("left", "right") if name == "concertina" else ("treble", "bass")
     out = {side: np.zeros(length) for side in sides}
     air = {side: np.zeros(length) for side in sides}
-    clicks = {side: np.zeros(length) for side in sides}
+    clicks = {side: [] for side in sides}  # (sample, burst) in the order they were made: short, and far apart
     cache: dict = {}
     seed = made["seeds"][0]
     down_sos = butter(2, (1500.0, 5000.0), btype="bandpass", fs=sr, output="sos")
@@ -529,25 +532,62 @@ def render(name: str, notes, sr: int, length: int, rng: np.random.Generator, mak
             loud = CLICK * (1.0 + 2.0 * wear) * (1.6 if side == "bass" else 0.6 if name == "concertina" else 1.0)
             burst = sosfilt(down_sos, rng.standard_normal(c + 32))[32:] * np.exp(-np.arange(c) / (0.0008 * sr))
             if not legato:
-                clicks[side][i0: i0 + c] += burst * loud
+                clicks[side].append((i0, burst * loud))
             j = i0 + m
             c = min(length - j, int(0.008 * sr))
             if c > 0:
                 thud = sosfilt(up_sos, rng.standard_normal(c + 32))[32:] * np.exp(-np.arange(c) / (0.002 * sr))
-                clicks[side][j: j + c] += 0.7 * thud * loud
+                clicks[side].append((j, 0.7 * thud * loud))
+    del pressure
     stereo = np.zeros((length, 2))
     hiss_sos = butter(2, (800.0, 8000.0), btype="bandpass", fs=sr, output="sos")
     dc = butter(1, 20.0, btype="highpass", fs=sr, output="sos")
     places = {"treble": (-0.3, 1.0), "bass": (0.3, 1.3), "left": (-0.25, 1.0), "right": (0.25, 1.0)}
+    # Each side's dry sound, out + clicks + the hiss (the filtered noise * air * HISS * (1 + 3 wear)), made where the
+    # reeds lie: the clicks a touching run at a time (each run summed from 0.0 in the order they were made, as a
+    # whole track of them was; between runs that track is 0.0, which adds nothing to a sum begun from 0.0), the hiss
+    # a stretch at a time (the noise drawn and filtered a stretch at a time, in order, the filter's state carried).
     for k, side in enumerate(sides):
-        if not out[side].any():
+        dry, air_side, bursts = out[side], air[side], clicks[side]
+        out[side] = air[side] = clicks[side] = None
+        if not dry.any():
             continue
-        noise = np.random.default_rng([made["seeds"][1], k]).standard_normal(length)
-        dry = out[side] + clicks[side] + sosfilt(hiss_sos, noise) * air[side] * HISS * (1.0 + 3.0 * wear)
+        _lay_runs(dry, bursts)
+        noise_rng = np.random.default_rng([made["seeds"][1], k])
+        state = np.zeros((hiss_sos.shape[0], 2))
+        for a in range(0, length, BLOCK):
+            b = min(length, a + BLOCK)
+            hiss, state = sosfilt(hiss_sos, noise_rng.standard_normal(b - a), zi=state)
+            dry[a:b] += hiss * air_side[a:b] * HISS * (1.0 + 3.0 * wear)
+        del air_side
         position, bigger = places[side]
         ir = body.impulse_response(kind.box, sr, seed=made["seeds"][2] + k, size=size * bigger, channels=1)[:, 0]
-        y = sosfilt(dc, oaconvolve(dry, ir)[:length])  # a reed's pulses of air carry DC: none leaves the box
+        # oaconvolve(dry, ir)[:length], a few blocks at a time; a reed's pulses of air carry DC: none leaves the box
+        y = sosfilt(dc, oa.convolve(dry, ir, length))
+        del dry
         theta = (position + 1.0) * np.pi / 4.0
-        stereo[:, 0] += y * np.cos(theta) * np.sqrt(2.0)
-        stereo[:, 1] += y * np.sin(theta) * np.sqrt(2.0)
+        for a in range(0, length, BLOCK):
+            stereo[a:a + BLOCK, 0] += y[a:a + BLOCK] * np.cos(theta) * np.sqrt(2.0)
+            stereo[a:a + BLOCK, 1] += y[a:a + BLOCK] * np.sin(theta) * np.sqrt(2.0)
+        del y
     return stereo
+
+
+def _lay_runs(into: np.ndarray, bursts: list) -> None:
+    """Short bursts (start, values), in the order they were made, added into `into` as a whole track of them would
+    have been: each run of touching bursts summed from 0.0 in that order, then added."""
+    spans = sorted(range(len(bursts)), key=lambda k: bursts[k][0])
+    run, hi = [], -1
+    for k in spans + [None]:
+        start = None if k is None else bursts[k][0]
+        if run and (k is None or start >= hi):
+            lo = min(bursts[j][0] for j in run)
+            local = np.zeros(hi - lo)
+            for j in sorted(run):  # in the order they were made
+                at, values = bursts[j]
+                local[at - lo: at - lo + len(values)] += values
+            into[lo:hi] += local
+            run, hi = [], -1
+        if k is not None:
+            run.append(k)
+            hi = max(hi, start + len(bursts[k][1]))

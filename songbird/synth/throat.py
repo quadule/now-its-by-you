@@ -87,18 +87,34 @@ def min_phase(log_mag: np.ndarray) -> np.ndarray:
     return np.exp(np.fft.rfft(cep * fold, n=fft, axis=-1))
 
 
-def pulse_times(f0: np.ndarray, sr: int, n: int) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
+def pulse_times(f0: np.ndarray, sr: int, n: int, block: int = 1 << 16) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
     """Where the pulses go: the sample each starts in, its fractional delay past that sample, and
     the local period (samples). f0 per 5 ms frame, 0 where unvoiced; unvoiced stretches are paced
-    at UNVOICED_RATE."""
-    frames = np.arange(n) / sr / FRAME
-    f = np.interp(frames, np.arange(len(f0)), np.where(f0 > 0, f0, UNVOICED_RATE))
-    phase = np.cumsum(f / sr)  # periods elapsed
-    whole = np.floor(phase)
-    at = np.flatnonzero(np.diff(whole) > 0) + 1
-    exact = at - (phase[at] - whole[at]) / np.maximum(f[at] / sr, 1e-9)  # where the period turned over
-    start = np.floor(exact).astype(int)
-    return np.maximum(start, 0), exact - start, sr / f[at]
+    at UNVOICED_RATE. (A stretch of samples at a time: the running phase carried from one to the next and added
+    on in order, as np.cumsum adds, each turn found against the sample before it: the same pulses as the whole
+    song's tracks gave, without them.)"""
+    paced = np.where(f0 > 0, f0, UNVOICED_RATE)
+    known = np.arange(len(f0))
+    ats, fracs, periods = [], [], []
+    carry = before = None
+    for a in range(0, n, block):
+        frames = np.arange(a, min(n, a + block)) / sr / FRAME
+        f = np.interp(frames, known, paced)
+        steps = f / sr
+        phase = np.cumsum(steps) if carry is None else np.cumsum(np.concatenate([[carry], steps]))[1:]  # periods
+        whole = np.floor(phase)
+        turned = (np.flatnonzero(np.diff(whole) > 0) + 1 if before is None
+                  else np.flatnonzero(np.diff(np.concatenate([[before], whole])) > 0))
+        at = a + turned
+        exact = at - (phase[turned] - whole[turned]) / np.maximum(f[turned] / sr, 1e-9)  # where the period turned over
+        start = np.floor(exact).astype(int)
+        ats.append(np.maximum(start, 0))
+        fracs.append(exact - start)
+        periods.append(sr / f[turned])
+        carry, before = phase[-1], whole[-1]
+    if not ats:
+        return np.zeros(0, dtype=int), np.zeros(0), np.zeros(0)
+    return np.concatenate(ats), np.concatenate(fracs), np.concatenate(periods)
 
 
 @dataclass(frozen=True)
@@ -447,10 +463,11 @@ def continuous(t: dict, lf0: np.ndarray) -> np.ndarray:
                      (lf0 - np.log(220.0)) / 0.6, slope], axis=-1)
 
 
-def _gelu(x: np.ndarray) -> np.ndarray:
+def _gelu(x: np.ndarray, out: np.ndarray | None = None) -> np.ndarray:
     """0.5 x (1 + tanh(0.7978845608028654 (x + 0.044715 x^3))), elementwise: worked out in place, a few
-    thousand rows at a time on threads (threads.in_order), each value by the same operations in the same order."""
-    out = np.empty_like(x)
+    thousand rows at a time on threads (threads.in_order), each value by the same operations in the same order.
+    out may be x itself (each row's tanh term is made before the row is written)."""
+    out = np.empty_like(x) if out is None else out
     rows = 4096
 
     def part(r0: int) -> None:
@@ -577,10 +594,27 @@ def predict(model: Model, t: dict, lf0: np.ndarray, singer: np.ndarray, gv: floa
     x = _linear(np.concatenate([e, w["role.weight"][t["role"].astype(int)], continuous(t, lf0)], axis=1), w, "inp")
     for i, d in enumerate(model.config["dilations"]):
         gamma, beta = np.split(_linear(singer[None], w, f"films.{i}"), 2, axis=1)
-        p = np.pad(x, ((d, d), (0, 0)))
-        stacked = np.concatenate([p[: len(x)], p[d: d + len(x)], p[2 * d: 2 * d + len(x)]], axis=1)
-        h = _linear(stacked, w, f"convs.{i}") * (1.0 + gamma) + beta
-        x = x + _linear(_gelu(h), w, f"mixes.{i}")
+        # [x d frames back, x, x d frames on] side by side, zeros past either end: what concatenating the three
+        # windows of x padded by d each side made, laid out straight
+        stacked = np.zeros((len(x), 3 * x.shape[1]))
+        width = x.shape[1]
+        stacked[:, width: 2 * width] = x
+        if d < len(x):
+            stacked[d:, :width] = x[: len(x) - d]
+            stacked[: len(x) - d, 2 * width:] = x[d:]
+        # _linear(stacked) * (1 + gamma) + beta, then x + _linear(gelu(h)): the same products and sums, each where
+        # the last left it (the same matrices into the same products), each input let go once used
+        h = stacked @ w[f"convs.{i}.weight"].T
+        del stacked
+        h += w[f"convs.{i}.bias"]
+        h *= 1.0 + gamma
+        h += beta
+        h = _gelu(h, out=h)
+        m = h @ w[f"mixes.{i}.weight"].T
+        del h
+        m += w[f"mixes.{i}.bias"]
+        x += m
+        del m
     y = _linear(x, w, "out")
     n_sp = len(model.sp_mean)
     sp, ap = y[:, :n_sp], y[:, n_sp:]
@@ -833,8 +867,13 @@ def sing(notes, sr: int, voice, seed: int = 0, lexicon: dict | None = None, mix:
     voiced = np.array([PHONES[p] not in UNVOICED for p in t["phone"]])
     source = source_change(f0, voice.rd, voice.tilt, sp.shape[1])
     y = synthesize(np.where(voiced, f0, 0.0), sp, ap, RATE, rng, source=source)
+    del sp, ap, source  # (the envelopes sung, they go)
     y = resample_poly(y, sr // np.gcd(sr, RATE), RATE // np.gcd(sr, RATE)) if sr != RATE else y
-    y = sosfilt(butter(1, 60.0, btype="highpass", fs=sr, output="sos"), y)
+    # the high-pass where the song lies, a stretch at a time (its state carried: the same samples as the whole)
+    high = butter(1, 60.0, btype="highpass", fs=sr, output="sos")
+    state = np.zeros((high.shape[0], 2))
+    for a in range(0, len(y), 1 << 16):
+        y[a:a + (1 << 16)], state = sosfilt(high, y[a:a + (1 << 16)], zi=state)
     if len(y) < int(np.ceil(duration * sr)):
         y = np.concatenate([y, np.zeros(int(np.ceil(duration * sr)) - len(y))])
     y = y[: int(np.ceil(duration * sr))]

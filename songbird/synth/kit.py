@@ -175,11 +175,12 @@ def drum_part(drum: Drum, strokes: list[Stroke], sr: int, length: int, rng: np.r
               f0: float, reso0: float, reso: float, t60: float, brightness: float = 0.5,
               wear: float = 0.0, motion: bool = False, hoop: float = 1.0, stick: float = 1.0
               ) -> tuple[np.ndarray, np.ndarray]:
-    """A drum's strokes as one mono track, and (if asked) its resonant head's motion, for a snare's wires.
-    The shell's modes ring in the same bank, and a snare's hoop and a stick knocked on it (hoop, stick:
-    their makers' tunings) when a stroke is a rim shot or a cross-stick."""
-    out = np.zeros(length)
+    """A drum's strokes as one mono track, and (if asked) its resonant head's motion, for a snare's wires
+    (else None; the two, if asked, are the channels of one array, each where it lies). The shell's modes ring
+    in the same bank, and a snare's hoop and a stick knocked on it (hoop, stick: their makers' tunings) when a
+    stroke is a rim shot or a cross-stick."""
     if not strokes:
+        out = np.zeros(length)
         return out, out
     freqs, which, batter, share, first = _modes(drum, f0, reso0, reso, drum.coupling)
     t60s = t60 * (freqs / freqs[0]) ** -drum.slope
@@ -270,16 +271,18 @@ def drum_part(drum: Drum, strokes: list[Stroke], sr: int, length: int, rng: np.r
         np.add.at(impulses, np.clip((np.array(energy_times) * sr / hop).astype(int), 0, frames - 1), energy_levels)
         energy = lfilter([1.0], [1.0, -np.exp(-hop / (tau * sr))], impulses)
         bend_frames = drum.glide * (1.0 - np.exp(-energy)) / (1.0 - np.exp(-1.0)) * (1.0 - 0.3 * wear)
-        bend = np.interp(np.arange(length) / hop, np.arange(frames), bend_frames)
+        bend = struck.per_sample(bend_frames, hop, length)
     # (the shell, hoop and stick share the head's bend: they are small and short, and a bank of their own
     # would cost a whole upsampling)
     if motion:  # a second channel hears the resonant head's modes alone: its motion, for the wires to ride on
         heard = np.arange(len(all_f))
         both = struck.ring(all_f, all_t, times_arr, amps_arr, sr, length, bend=bend, damp=damp,
                            mix=np.stack([np.ones(len(all_f)), (heard >= first) & (heard < n_drum)], axis=1))
-        mono, head = both[:, 0].copy(), both[:, 1].copy()
+        mono, head = both[:, 0], both[:, 1]
+        del both
     else:
-        mono, head = struck.ring(all_f, all_t, times_arr, amps_arr, sr, length, bend=bend, damp=damp), np.zeros(length)
+        mono, head = struck.ring(all_f, all_t, times_arr, amps_arr, sr, length, bend=bend, damp=damp), None
+    del bend, damp
     for t, level, band, tau_click in extra:
         i = max(0, int(round(t * sr)))
         n = min(int(0.03 * sr), length - i)
@@ -354,34 +357,44 @@ def _grains(strengths, noise, offsets, length, tau):
 
 
 def wires(motion: np.ndarray, sr: int, rng: np.random.Generator, *, reference: float, sensitivity: float,
-          strands: np.ndarray, brightness: float = 0.5) -> np.ndarray:
+          strands: np.ndarray, brightness: float = 0.5, inplace: bool = False) -> np.ndarray:
     """The snare wires' rattle from the snare-side head's motion. sensitivity 0..1: loose wires (1) rattle
     at a touch, tight ones (0) need a firm stroke. strands: the coiled strands' own ringing partials (Hz),
     this maker's; every collision is a grain of rattle and a blow to them, so after the head settles the
-    wires ring on a moment as themselves."""
+    wires ring on a moment as themselves. inplace: the motion is scaled where it lies (it is used up)."""
     if not np.any(motion):
         return np.zeros_like(motion)
-    d = motion / reference  # a full-force stroke moves the head about 1
+    if inplace:  # a full-force stroke moves the head about 1
+        motion /= reference
+        d = motion
+    else:
+        d = motion / reference
     f_head = 330.0
     count = 8
     # the head's acceleration at full force is about (2 pi f)^2; a strand lets go at a small fraction of it
     omegas = 2.0 * np.pi * rng.uniform(60.0, 140.0, count)
     let_go = (2.0 * np.pi * f_head) ** 2 * (0.0003 + 0.03 * (1.0 - sensitivity) ** 2) * rng.uniform(0.7, 1.3, count)
     preloads = let_go / omegas ** 2
+    n = len(motion)
     hits = _contacts(np.ascontiguousarray(d), float(sr), omegas, preloads, 0.3)
+    del d, motion  # (handed over whole, it goes now)
     hits /= 2.0 * np.pi * f_head  # in units of the head's speed at full force
     noise = rng.standard_normal(1 << 14)
     offsets = rng.integers(0, 1 << 14, 4096)
     rattle = _grains(hits, noise, offsets, int(0.002 * sr), 0.00035 * sr)
     lo, hi = 2000.0 + 600.0 * brightness, min(9000.0 + 3000.0 * brightness, 0.45 * sr)
     band = sosfilt(_sos(2, (lo, hi), "bandpass", sr), rattle)
+    del rattle
     at = np.flatnonzero(hits)
     if not len(at):
         return band
     # each collision strikes the strands' partials, a little differently each time
     blows = hits[at][:, None] * rng.uniform(0.3, 1.0, (len(at), len(strands)))
-    ring = struck.ring(strands, 0.35 + 0.2 * rng.random(len(strands)), at / sr, blows, sr, len(motion))
-    return band + 0.25 * ring
+    del hits
+    ring = struck.ring(strands, 0.35 + 0.2 * rng.random(len(strands)), at / sr, blows, sr, n)
+    ring *= 0.25  # (band + 0.25 * ring, where they lie)
+    band += ring
+    return band
 
 
 def splat(times, vels, sr: int, length: int, rng: np.random.Generator) -> np.ndarray:
@@ -396,15 +409,16 @@ def splat(times, vels, sr: int, length: int, rng: np.random.Generator) -> np.nda
 
 
 def sweep(start: float, dur: float, vel: float, sr: int, length: int, rng: np.random.Generator,
-          circling: bool = False) -> tuple[np.ndarray, list[float], list[float]]:
+          circling: bool = False, into: np.ndarray | None = None) -> tuple[np.ndarray, list[float], list[float]]:
     """A brush swept across the coated head for `dur` seconds: its bristles catching and slipping, a dense
     stream of tiny catches, more of them and harder the faster the brush moves round its arc (fastest a
     little past the middle of the sweep). circling: sweeps follow one another, the brush never stopping, so
     it slows between them but not to rest. Returns the catches' sound, and the times and strengths of the
-    few that shake the head enough to count as strikes."""
+    few that shake the head enough to count as strikes. into: the sound added to it (a sum begun from 0.0,
+    so the silence around the sweep adds nothing), and it returned."""
     i0 = int(round(start * sr))
     n = min(int(round(dur * sr)), length - i0)
-    out = np.zeros(length)
+    out = np.zeros(length) if into is None else into
     if n < 64:
         return out, [], []
     step = 0.0005
@@ -430,7 +444,10 @@ def sweep(start: float, dur: float, vel: float, sr: int, length: int, rng: np.ra
     shaped += 0.7 * sosfilt(_sos(1, (2500.0, 5000.0), "bandpass", sr), grains)
     ramp = 0.03 if circling else 0.004  # a lone sweep starts and stops; a circling one flows on
     edge = np.minimum(1.0, np.minimum(np.arange(n), n - np.arange(n)) / (ramp * sr))
-    out[i0:i0 + n] = shaped * edge * vel * 0.06
+    if into is None:
+        out[i0:i0 + n] = shaped * edge * vel * 0.06
+    else:
+        out[i0:i0 + n] += shaped * edge * vel * 0.06
     return out, head_t, head_v
 
 
@@ -557,6 +574,26 @@ def _placed(y: np.ndarray, position: float, width: float) -> np.ndarray:
     return np.stack([mid * np.cos(theta) * np.sqrt(2.0) + side, mid * np.sin(theta) * np.sqrt(2.0) - side], axis=1)
 
 
+BLOCK = 1 << 16  # samples a stretch, where every operation is on each sample alone
+
+
+def _add(out: np.ndarray, place, y: np.ndarray, *args) -> None:
+    """out += place(y, *args) (_pan, _placed), a stretch at a time: the same operations on each sample, without
+    the song-long copies they make."""
+    for a in range(0, len(y), BLOCK):
+        out[a:a + BLOCK] += place(y[a:a + BLOCK], *args)
+
+
+def _place_pair(out: np.ndarray, pair, gain: float, position: float, width: float) -> None:
+    """out += _placed(a cymbal's stereo * gain, position, width): its two channels (cymbals.microphones) scaled where
+    they lie, and placed a stretch at a time."""
+    left, right = pair
+    left *= gain
+    right *= gain
+    for a in range(0, len(left), BLOCK):
+        out[a:a + BLOCK] += _placed(np.stack([left[a:a + BLOCK], right[a:a + BLOCK]], axis=1), position, width)
+
+
 def early(y: np.ndarray, sr: int, seconds: float = 0.1) -> float:
     """The K-weighted RMS of a stroke's first `seconds` (its loudness as the ear takes a hit)."""
     seg = y[: int(seconds * sr)]
@@ -597,13 +634,17 @@ def _hat_track(hat_notes, sr: int, length: int) -> tuple[np.ndarray, list[Hit], 
             chicks.append(Hit(t, vel, "chick"))
     smooth = np.exp(-1.0 / (0.004 * sr))  # the pedal moves in a few milliseconds, not at once
     openness = lfilter([1.0 - smooth], [1.0, -smooth], openness)
-    return closed * (1.0 - np.clip(openness, 0.0, 1.0)) ** 2, chicks, halves
+    # closed * (1 - clip(openness, 0, 1)) ** 2, where it lies (an array's ** 2 is its square)
+    np.clip(openness, 0.0, 1.0, out=openness)
+    np.subtract(1.0, openness, out=openness)
+    np.square(openness, out=openness)
+    openness *= closed
+    return openness, chicks, halves
 
 
 def render(name, notes, sr: int, length: int, rng: np.random.Generator, make: np.random.Generator,
            settings: dict) -> np.ndarray:
     """A kit part: every stroke, stereo, from the drummer's seat, before its place and level."""
-    out = np.zeros((length, 2))
     bright = float(settings.get("brightness", 0.5))
     wear = float(settings.get("wear", 0.25))
     size = float(settings.get("body", 1.0))
@@ -659,13 +700,16 @@ def render(name, notes, sr: int, length: int, rng: np.random.Generator, make: np
                 hits["crash"].append(Hit(note.start, vel, "edge", implement))
                 if piece == "crash-choke":
                     chokes.append(note.start + max(note.dur, 0.05))
-    swept = np.zeros(length)
+    # Every song-long signal is let go as soon as what follows has used it, and treated where it lies: the same
+    # operations on the same values as ever (a drum that isn't played is silence, None, and adding silence to a
+    # sum begun from 0.0 changes nothing).
+    swept = None
     for k, (start, dur, vel) in enumerate(sweeps):
         # sweeps that follow on one another within a few hundredths of a second are one brush circling
         joined = any(abs(o_start + o_dur - start) < 0.05 or abs(start + dur - o_start) < 0.05
                      for j, (o_start, o_dur, _) in enumerate(sweeps) if j != k)
-        sound, head_t, head_v = sweep(start, dur, vel, sr, length, rng, circling=joined)
-        swept += sound
+        swept = np.zeros(length) if swept is None else swept
+        swept, head_t, head_v = sweep(start, dur, vel, sr, length, rng, circling=joined, into=swept)
         drums["snare"] += [Stroke(t, v, "tick") for t, v in zip(head_t, head_v)]
     drums["snare"].sort(key=lambda s: s.time)
     # --- drums ---
@@ -678,7 +722,7 @@ def render(name, notes, sr: int, length: int, rng: np.random.Generator, make: np
     for k, piece in enumerate(("tom-hi", "tom-mid", "tom-lo")):
         tunings[piece] = (TOM, kit.toms[k], kit.tom_reso[k], kit.tom_reso[k], kit.tom_ring[k])
     played = [piece for piece in tunings if drums[piece]]
-    tracks, motions = {p: np.zeros(length) for p in tunings}, {p: np.zeros(length) for p in tunings}
+    tracks, head = dict.fromkeys(tunings), None  # each drum's track (None: silent), the snare-side head's motion
     gains = {}
     for piece in played + (["snare"] if played and "snare" not in played else []):
         drum, f0, reso0, reso, ring = tunings[piece]
@@ -687,7 +731,12 @@ def render(name, notes, sr: int, length: int, rng: np.random.Generator, make: np
         drum, f0, reso0, reso, ring = tunings[piece]
         y, motion = drum_part(drum, drums[piece], sr, length, rng, f0=f0, reso0=reso0, reso=reso, t60=ring,
                               brightness=bright, wear=wear, motion=piece == "snare", hoop=kit.hoop, stick=kit.stick)
-        tracks[piece], motions[piece] = y * gains[piece], motion * gains[piece]
+        y *= gains[piece]  # (y * its gain, where it lies)
+        tracks[piece] = y
+        if piece == "snare":
+            motion *= gains[piece]
+            head = motion
+        del y, motion
     # the toms answer the kick and the snare, faintly, through the air (a kit rings as one instrument): their
     # lowest few modes, driven by every firm stroke, one channel a tom
     loud = [st for st in drums["kick"] + drums["snare"] if st.implement != "tick" and st.vel > 0.2]
@@ -700,41 +749,94 @@ def render(name, notes, sr: int, length: int, rng: np.random.Generator, make: np
             rings += list(ring * (lowest / lowest[0]) ** -drum.slope)
             mix[4 * k: 4 * k + 4, k] = gains.get(piece) or _gain(piece, drum, f0, reso0, reso, ring, sr, bright)
         amps = np.array([st.vel for st in loud])[:, None] * np.tile([1.0, 0.6, 0.4, 0.3], 3)[None, :] * 0.03
-        ringing = struck.ring(low, rings, np.array([st.time + 0.001 for st in loud]), amps, sr, length, mix=mix)
+        # one bank of the twelve modes, a channel a tom: rung a tom at a time (each channel hears only its own four
+        # modes, the others adding 0.0 to it), each with the whole bank's floor, so each drops a mode where the
+        # whole bank did
+        loudest = np.max(np.abs(amps), axis=0) * np.max(np.abs(mix), axis=1)
+        floor = float((struck.QUIET * loudest.max()) ** 2)
+        at = np.array([st.time + 0.001 for st in loud])
         for k, piece in enumerate(("tom-hi", "tom-mid", "tom-lo")):
-            tracks[piece] = tracks[piece] + ringing[:, k]
-    snare = tracks["snare"]
+            own = slice(4 * k, 4 * k + 4)
+            ringing = struck.ring(np.array(low[own]), np.array(rings[own]), at, amps[:, own], sr, length,
+                                  mix=mix[own, k:k + 1], floor=floor)[:, 0]
+            if tracks[piece] is None:  # silence and its ringing: the ringing, + 0.0
+                tracks[piece] = ringing
+                tracks[piece] += 0.0
+            else:
+                tracks[piece] += ringing
+            del ringing
     if played:
         # the wires ride on the snare-side head, which also answers the kick and the toms (the air pushing
         # it): the sympathetic buzz of any kit
         g = gains["snare"]
         reference = _reference_motion(sr, kit) * g
-        others = tracks["kick"] * 0.5 + (tracks["tom-hi"] + tracks["tom-mid"] + tracks["tom-lo"]) * 0.8
+        others = np.empty(length)
+        for a in range(0, length, BLOCK):  # kick * 0.5 + (the toms) * 0.8, a stretch at a time
+            part = {p: np.zeros(min(length, a + BLOCK) - a) if tracks[p] is None else tracks[p][a:a + BLOCK]
+                    for p in ("kick", "tom-hi", "tom-mid", "tom-lo")}
+            others[a:a + BLOCK] = part["kick"] * 0.5 + (part["tom-hi"] + part["tom-mid"] + part["tom-lo"]) * 0.8
+            del part  # (its views would keep the tracks alive)
         reso_hz = kit.snare * SNARE.reso0
         band = butter(2, [reso_hz * 0.7, reso_hz * 1.4], btype="bandpass", fs=sr, output="sos")
-        motion = motions["snare"] + sosfilt(band, others) * (0.25 + 0.4 * wear) * reference
-        snare = snare + wires(motion, sr, rng, reference=reference, sensitivity=kit.sensitivity,
-                              strands=np.array(kit.strands), brightness=bright) * g * 0.35
+        sympathy = sosfilt(band, others)
+        del others
+        sympathy *= 0.25 + 0.4 * wear
+        sympathy *= reference
+        # the head's own motion and what the others give it (head + sympathy), in the sympathy's own array; the
+        # snare's track then copied out of the channel it shared with its head, and that let go
+        sympathy += 0.0 if head is None else head  # (a snare not played: its head moves only as the others push it)
+        head = sympathy
+        del sympathy
+        if tracks["snare"] is not None:
+            tracks["snare"] = np.ascontiguousarray(tracks["snare"])
+        held = [head]  # handed over whole (wires scales it where it lies, and lets it go once heard)
+        del head
+        rattle = wires(held.pop(), sr, rng, reference=reference, sensitivity=kit.sensitivity,
+                       strands=np.array(kit.strands), brightness=bright, inplace=True)
+        rattle *= g
+        rattle *= 0.35
+        snare = tracks["snare"]
+        if snare is None:  # (silence + the rattle)
+            snare = rattle
+            snare += 0.0
+        else:
+            snare += rattle
+        del rattle
         if taps:
-            snare = snare + splat([t for t, _ in taps], [v for _, v in taps], sr, length, rng) * g
-        snare = snare + swept * g
-    out += _pan(tracks["kick"], PAN["kick"])
-    out += _pan(snare, PAN["snare"])
-    for piece in ("tom-hi", "tom-mid", "tom-lo"):
-        out += _pan(tracks[piece], PAN[piece])
+            tapped = splat([t for t, _ in taps], [v for _, v in taps], sr, length, rng)
+            tapped *= g
+            snare += tapped
+            del tapped
+        if swept is None:
+            snare += 0.0  # (+ silence * g)
+        else:
+            swept *= g
+            snare += swept
+        tracks["snare"] = snare
+        del snare
+    del swept
+    out = np.zeros((length, 2))
+    for piece in ("kick", "snare", "tom-hi", "tom-mid", "tom-lo"):
+        if tracks[piece] is not None:  # (a drum never heard would add 0.0 to a sum begun from 0.0: nothing)
+            _add(out, _pan, tracks[piece], PAN[piece])
+        tracks[piece] = None
     # --- cymbals ---
     if hits["hat"] or hat_notes:
         damp, chicks, halves = _hat_track(sorted(hat_notes), sr, length)
         cymbal = _cymbal(cymbals.HAT, cymbal_seeds["hat"], sr, size)
         rattles = cymbals.sizzle(halves, hits["hat"], sr, rng)
-        y = cymbals.play(cymbals.HAT, hits["hat"] + chicks + rattles, sr, length, rng, cymbal, brightness=bright,
-                         wear=wear, damp=damp)
-        gain = _cymbal_gain("hat", cymbals.HAT, cymbal_seeds["hat"], sr, size, bright, closed=True)
-        out += _placed(y * gain, PAN["hat"], 0.5)
+        y = cymbals.microphones(cymbals.HAT, hits["hat"] + chicks + rattles, sr, length, rng, cymbal,
+                                brightness=bright, wear=wear, damp=damp)
+        del damp
+        _place_pair(out, y, _cymbal_gain("hat", cymbals.HAT, cymbal_seeds["hat"], sr, size, bright, closed=True),
+                    PAN["hat"], 0.5)
+        del y
     if hits["ride"]:
         cymbal = _cymbal(cymbals.RIDE, cymbal_seeds["ride"], sr, size)
-        y = cymbals.play(cymbals.RIDE, hits["ride"], sr, length, rng, cymbal, brightness=bright, wear=wear)
-        out += _placed(y * _cymbal_gain("ride", cymbals.RIDE, cymbal_seeds["ride"], sr, size, bright), PAN["ride"], 0.6)
+        y = cymbals.microphones(cymbals.RIDE, hits["ride"], sr, length, rng, cymbal, brightness=bright, wear=wear)
+        _place_pair(out, y, _cymbal_gain("ride", cymbals.RIDE, cymbal_seeds["ride"], sr, size, bright), PAN["ride"],
+                    0.6)
+        del y
     if hits["crash"]:
         damp = None
         if chokes:
@@ -743,14 +845,21 @@ def render(name, notes, sr: int, length: int, rng: np.random.Generator, make: np
                 later = [h.time for h in hits["crash"] if h.time > t]
                 damp[int(round(t * sr)):int(round(min(later) * sr)) if later else length] = 60.0  # the hand grabs it
         cymbal = _cymbal(cymbals.CRASH, cymbal_seeds["crash"], sr, size)
-        y = cymbals.play(cymbals.CRASH, hits["crash"], sr, length, rng, cymbal, brightness=bright, wear=wear,
-                         damp=damp)
-        out += _placed(y * _cymbal_gain("crash", cymbals.CRASH, cymbal_seeds["crash"], sr, size, bright), PAN["crash"],
-                       0.7)
+        y = cymbals.microphones(cymbals.CRASH, hits["crash"], sr, length, rng, cymbal, brightness=bright, wear=wear,
+                                damp=damp)
+        del damp
+        _place_pair(out, y, _cymbal_gain("crash", cymbals.CRASH, cymbal_seeds["crash"], sr, size, bright),
+                    PAN["crash"], 0.7)
+        del y
     # A struck head's ring swings about its rest a little off centre, which the impact's own pulse balances in
     # the air; the modes leave that pulse out, so a gentle high-pass under the kick takes the offset away. The
     # kit comes out 6 dB under its balance's own scale, so even coincident accents stay under full scale dry.
-    return sosfilt(butter(2, 22.0, btype="highpass", fs=sr, output="sos"), out, axis=0) * 0.5
+    # (A channel at a time, where it lies: a channel filtered alone is filtered as along axis 0.)
+    sos = butter(2, 22.0, btype="highpass", fs=sr, output="sos")
+    for c in range(2):
+        out[:, c] = sosfilt(sos, out[:, c])
+    out *= 0.5
+    return out
 
 
 @lru_cache(maxsize=32)
