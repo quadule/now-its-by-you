@@ -30,6 +30,8 @@ class Limits:
     records_ip: int = 10  # ... for one address (a household or a school shares one)
     previews: int = 60  # sections made for one visitor an hour
     previews_ip: int = 150
+    takes: int = 12  # takes sung in the browser and measured, for one visitor an hour (--web-singing)
+    takes_ip: int = 30
     requests: int = 600  # requests from one address a minute (the page asks every half second while it waits)
     queue: int = 12  # renders waiting at once, for everyone
     cache_mb: int = 300  # previews kept, shared by everyone who makes the same choices
@@ -120,7 +122,7 @@ class Gate:
         self.limits = limits
         self.salt = secrets.token_bytes(16)
         self.lock = threading.Lock()
-        self.hour = {"records": Counter(3600), "previews": Counter(3600)}
+        self.hour = {"records": Counter(3600), "previews": Counter(3600), "takes": Counter(3600)}
         self.minute = Counter(60)
 
     def who(self, text: str) -> str:
@@ -136,12 +138,12 @@ class Gate:
             self.minute.add(who, now)
 
     def render(self, kind: str, visitor: str, ip: str, now: float | None = None) -> None:
-        """A new render for this visitor ("records": a whole song, "previews": a section), counted if it's
-        allowed; else Limited, saying why and when."""
+        """A new render for this visitor ("records": a whole song, "previews": a section; "takes": a take sung in
+        the browser, measured in the same queue), counted if it's allowed; else Limited, saying why and when."""
         now = time.monotonic() if now is None else now
         mine, theirs = self.who("v:" + visitor), self.who("ip:" + ip)
         each, shared = getattr(self.limits, kind), getattr(self.limits, kind + "_ip")
-        what = "whole songs" if kind == "records" else "new sections"
+        what = {"records": "whole songs", "previews": "new sections", "takes": "takes measured"}[kind]
         with self.lock:
             counter = self.hour[kind]
             wait = counter.wait(mine, each, now)

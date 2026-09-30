@@ -238,6 +238,36 @@ def test_the_queue_refuses_a_flood_of_takes(singing):
     assert not studio.singing.waiting
 
 
+def test_a_public_studio_counts_takes_against_each_visitors_limits(home):
+    from songbird import public as P
+
+    studio = S.Studio(None, str(LEAD), "none", out=home / "out", public=P.Limits(takes=1))
+    a_kit(home / "kit")
+    studio.enable_web_singing(home / "kit")
+    assert studio.singing.measurer.idle == 0  # public: the measuring process goes after every take
+    fake = studio.singing.measurer = FakeMeasurer()
+    server = S.serve(studio, 18781)
+    threading.Thread(target=server.serve_forever, daemon=True).start()
+    port = server.server_address[1]
+    try:
+        cookie = {"Cookie": f"songbird-visitor-{port}=someone-singing-here"}
+        offer = json.loads(ask(port, "GET", "/api/sing/offer", headers=cookie)[2])
+        assert offer["takes_an_hour"] == 1
+        fake.release.clear()
+        status, job = take(port, studio, **cookie)
+        assert status == 200
+        status, body = take(port, studio, **cookie)  # one thing in the queue at a time for each visitor
+        assert status == 429 and ("being made" in body["error"] or "waiting to be measured" in body["error"])
+        fake.release.set()
+        assert wait(port, job)["state"] == "done"
+        status, body = take(port, studio, **cookie)  # and a few takes an hour
+        assert status == 429 and "takes measured" in body["error"] and body["retry"] > 0
+        assert take(port, studio, **{"Cookie": f"songbird-visitor-{port}=someone-else"})[0] == 200
+    finally:
+        server.shutdown()
+        server.server_close()
+
+
 # ------------------------------------------------------------ the way it's sung
 
 

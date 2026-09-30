@@ -387,8 +387,9 @@ class Jobs:
         for job in list(self.pending):
             if job.owner == owner:
                 if job.kind != "preview":
-                    raise public_mod.Limited("Your recording is waiting its turn; the next can be asked for when "
-                                         "it's made.", self._eta([job]))
+                    what = "Your singing is waiting to be measured" if job.kind == "measure" else \
+                        "Your recording is waiting its turn"
+                    raise public_mod.Limited(f"{what}; the next can be asked for when it's done.", self._eta([job]))
                 self.pending.remove(job)
                 job.state, job.error = "failed", "cancelled"
         for job in self.jobs.values():
@@ -806,12 +807,12 @@ class Studio:
     # program (a packet never carries it): it needs a checkout's tools, their dev dependencies and the singing
     # kit. These are the studio's only hooks into it.
 
-    def enable_web_singing(self, kit: str | Path | None = None) -> None:
+    def enable_web_singing(self, kit: str | Path | None = None, check: bool = False) -> None:
         if str(ROOT) not in sys.path:
             sys.path.insert(0, str(ROOT))
         from webstudio.singing import Singing
 
-        self.singing = Singing(self, kit)
+        self.singing = Singing(self, kit, check=check)
 
     def phrasing_choices(self):
         """The ways of singing a version may name: those made on this computer, and, with singing in the
@@ -1391,7 +1392,7 @@ def run(args: argparse.Namespace) -> int:
     machine = args.machine or ("none" if limits else "here")  # public: never the serving computer's own
     studio = Studio(parent, args.song, machine, Path(args.out) if args.out else None, key=key, public=limits)
     if getattr(args, "web_singing", False):
-        studio.enable_web_singing(getattr(args, "sing_kit", None))
+        studio.enable_web_singing(getattr(args, "sing_kit", None), check=True)
     server = serve(studio, args.port, host=host, names=names, client_ip_header=header)
     port = server.server_address[1]
     url = f"http://127.0.0.1:{port}"

@@ -520,7 +520,8 @@ async function measure() {
   $("singReview").hidden = true;
   for (;;) {
     if (job.state === "queued") {
-      say(job.ahead ? `Waiting its turn: ${job.ahead} ahead of it (this studio makes one thing at a time). Then about ${estimate} s.`
+      const wait = job.eta ? `, about ${job.eta < 90 ? `${Math.max(5, Math.round(job.eta / 5) * 5)} s` : `${Math.round(job.eta / 60)} minutes`} in all` : "";
+      say(job.ahead ? `Waiting its turn: ${job.ahead} ahead of it${wait} (this studio makes one thing at a time). Then about ${estimate} s.`
         : `Measuring starts in a moment, and takes about ${estimate} s.`);
     } else if (job.state === "running") {
       say(`Listening to how you sang (about ${estimate} s)…`);

@@ -60,6 +60,7 @@ MAX_PHRASING_BYTES = 256 * 2**10
 IDLE = 300.0  # seconds the measuring process waits for another take before it stops, giving its memory back
 TIMEOUT = 600.0  # seconds a request to it may take before it's stopped
 NAME = re.compile(r"^sung-[0-9a-f]{16}$")
+SINGLE = 40.0  # seconds: a take longer than this is measured in pieces (webstudio/worker.py), as long as a song
 # measuring seconds for every second of a take, and a start: from this Mac (29 s for a four-minute take in pieces,
 # 4.5 s for a section of 31 s) and a process's start (3 s); learned as takes are measured
 PER_SECOND, START, COLD = 0.13, 1.5, 4.0
@@ -111,6 +112,8 @@ class Measurer:
                 self._end()
                 raise RuntimeError("the measuring process stopped halfway (perhaps for want of memory)") from None
             self.last = time.time()
+            if self.idle <= 0:  # a public studio: its memory back at once, before the next render
+                self._end()
         if status == "ok":
             return value
         if status == "refused":
@@ -143,8 +146,8 @@ class Measurer:
 
     def _reap(self) -> None:
         while True:
-            time.sleep(min(30.0, max(self.idle / 4, 0.05)))
-            if self.running and time.time() - self.last > self.idle and self.lock.acquire(blocking=False):
+            time.sleep(min(30.0, max(self.idle / 4, 1.0)))
+            if self.idle > 0 and self.running and time.time() - self.last > self.idle and self.lock.acquire(blocking=False):
                 try:
                     if time.time() - self.last > self.idle:
                         self._end()
@@ -268,18 +271,36 @@ class Phrasings(Mapping):
 
 
 class Singing:
-    def __init__(self, studio, kit: str | Path | None = None, measurer: Measurer | None = None):
+    def __init__(self, studio, kit: str | Path | None = None, measurer: Measurer | None = None, check: bool = False):
         self.studio = studio
         self.kit = Kit(kit)
         self.store = Store(Path(studio.home) / "sung", studio.genome)
-        self.measurer = measurer or Measurer(self.kit)
+        # a public studio stops the measuring process after every take, so a render never runs beside its memory
+        self.measurer = measurer or Measurer(self.kit, idle=0 if getattr(studio, "public", None) else IDLE)
         self.waiting: dict[str, dict] = {}  # job key -> the take (audio and where it was sung), until it's measured
         self.lock = threading.Lock()
+        self.stale: str | None = None
+        if check and self.kit.fits(studio.genome_path) is None:
+            threading.Thread(target=self.check, daemon=True, name="songbird-singing-check").start()
+
+    def check(self) -> None:
+        """Whether the kit's templates were made by this program's measuring code (they're kept under its
+        version): if not, singing is off, and says why, rather than refusing every take."""
+        try:
+            said = self.measurer.call("hello", {})
+        except Exception as e:  # noqa: BLE001
+            self.stale = f"Singing here couldn't start its measuring ({e})."
+        else:
+            if said["extractor"] != said["kit_extractor"]:
+                self.stale = ("The singing kit was made by another version of the measuring code; it needs making "
+                              "again (python -m webstudio.prepare).")
+        if self.measurer.idle > 0:
+            self.measurer.stop()
 
     # ------------------------------------------------------------ what it offers
 
     def why_not(self) -> str | None:
-        return self.kit.fits(self.studio.genome_path)
+        return self.kit.fits(self.studio.genome_path) or self.stale
 
     def available(self) -> dict:
         why = self.why_not()
@@ -293,6 +314,7 @@ class Singing:
         return {"available": True, "title": offer["title"], "set": offer.get("set"), "default": offer["default"],
                 "specs": [{k: s[k] for k in ("id", "key", "tempo", "duration")} for s in offer["specs"]],
                 "consent": CONSENT, "keep_days": KEEP_DAYS, "max_seconds": 360, "max_bytes": MAX_TAKE_BYTES,
+                "takes_an_hour": getattr(getattr(self.studio, "public", None), "takes", None),
                 "measuring": {"per_second": round(self.measurer.per_second, 3), "start": self.measurer.start,
                               "cold": COLD}}
 
@@ -351,6 +373,9 @@ class Singing:
             return handler.fail(403, "this page answers only its own address")
         if not handler._admitted():
             return handler.fail(403, "this studio needs its link's key")
+        public = getattr(self.studio, "public", None) is not None
+        if public and handler._throttled():
+            return None
         if handler.headers.get("Content-Type", "").split(";")[0].strip() != "application/x-songbird-take":
             return handler.fail(415, "send a take")
         if not secrets.compare_digest(handler.headers.get("X-Studio", "").encode("utf-8", "replace"),
@@ -367,11 +392,14 @@ class Singing:
                 raise Refused("That take didn't say where it was sung: reload the page.")
             audio = raw[meta_length:]
             del raw
-            return handler.send_json(self.take(meta, audio))
+            return handler.send_json(self.take(meta, audio, handler._by() if public else None))
         except Refused as e:
             return handler.fail(400, str(e))
-        except Busy as e:
-            return handler.fail(503, str(e))
+        except Exception as e:  # the studio's own refusals: its queue full (Busy), a visitor's limit (Limited)
+            if type(e).__name__ not in ("Busy", "Limited"):
+                raise
+            code = 429 if type(e).__name__ == "Limited" else 503
+            return handler.too_many(code, e) if public else handler.fail(code, str(e))
 
     def where(self, meta: dict, audio: bytes) -> dict:
         """What the measuring process needs to know about a take, each part checked: the version and guide it
@@ -408,10 +436,16 @@ class Singing:
                 "earlier": earlier, "offered": [s["guide"] for s in self.kit.offer()["specs"]],
                 "seconds": float(info.duration)}
 
-    def take(self, meta: dict, audio: bytes) -> dict:
+    def take(self, meta: dict, audio: bytes, by: tuple[str, str] | None = None) -> dict:
         """A take waiting to be measured, in the studio's queue: the job, how many are ahead of it and about
-        how long measuring it takes once it starts."""
+        how long measuring it takes once it starts. by: a public studio's visitor and address, who may have one
+        thing in the queue at a time and a few takes an hour (songbird/public.py "takes"), as for renders."""
         request = self.where(meta, audio)
+        gate = getattr(self.studio, "gate", None)
+        limits = {"whole": request["to_s"] - request["from_s"] > SINGLE}
+        if by is not None and gate is not None:
+            visitor, ip = by
+            limits.update(owner=visitor, admit=lambda: gate.render("takes", visitor, ip))
         jobs = self.studio.jobs
         with self.lock:
             for key in [k for k in self.waiting if jobs.live(k) is None]:  # cancelled or gone: its audio goes too
@@ -422,7 +456,7 @@ class Singing:
             self.waiting[key] = {**request, "audio": audio}
         del audio
         try:
-            job = jobs.submit(key, "measure", "your singing", lambda job, key=key: self._measure(job, key))
+            job = jobs.submit(key, "measure", "your singing", lambda job, key=key: self._measure(job, key), **limits)
         except Exception:
             with self.lock:
                 self.waiting.pop(key, None)
