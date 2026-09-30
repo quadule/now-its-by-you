@@ -78,7 +78,7 @@ function olderStoreKey() {  // before the key carried the song's digest
   return s ? `songbird-studio|${s.title}|${s.from}|${s.machine.label}` : null;
 }
 // Edits written for one genome's tune, lyric keys, word bank or sections: never carried over from an unknown one.
-const GENOME_BOUND = /^(tune|lyrics|words|part)\.|^form\.order$/;
+const GENOME_BOUND = /^(tune|lyrics|words|part|transition)\.|^form\.order$/;
 function save() {
   // only ever after a person's own change (edits that came in the page's address are never saved on their
   // own); the day and chance drawn again aren't kept, so tomorrow opens on tomorrow
