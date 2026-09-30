@@ -340,23 +340,29 @@ def _sizzle(x: np.ndarray, sr: int) -> tuple:
     return (("high", 9000, -min(3.0, 0.5 * over)),) if over > 0 else ()
 
 
-def _compressed(x: np.ndarray, sr: int, setting) -> np.ndarray:
-    return _compressor(x, sr, setting)[0]
+def _compressed(x: np.ndarray, sr: int, setting, inplace: bool = False) -> np.ndarray:
+    return _compressor(x, sr, setting, inplace=inplace)[0]
 
 
-def _at(x: np.ndarray, sr: int, target: float) -> np.ndarray:
-    """x scaled so its loudness is `target` LUFS."""
+def _at(x: np.ndarray, sr: int, target: float, inplace: bool = False) -> np.ndarray:
+    """x scaled so its loudness is `target` LUFS (inplace: where it lies, when x is float64)."""
     measured = quick_loudness(x, sr)
-    return x * 10.0 ** ((target - measured) / 20.0) if np.isfinite(measured) else x
+    if not np.isfinite(measured):
+        return x
+    if inplace and x.dtype == np.float64:
+        x *= 10.0 ** ((target - measured) / 20.0)
+        return x
+    return x * 10.0 ** ((target - measured) / 20.0)
 
 
-def _treated(x: np.ndarray, treat) -> np.ndarray:
-    """treat(x), done once on the sound itself when the stem is one mono sound panned."""
+def _treated(x: np.ndarray, treat, own: bool = False) -> np.ndarray:
+    """treat(x, own), done once on the sound itself (its own: treat may work on it where it lies) when the
+    stem is one mono sound panned. own: x is the treatment's to overwrite."""
     mono = fx.as_mono(x)
     if mono is None:
-        return treat(x)
+        return treat(x, own)
     sound, gains = mono
-    return treat(sound[:, None]) * gains[None, :]
+    return treat(sound[:, None], True) * gains[None, :]
 
 
 def _conformed(stems: dict[str, np.ndarray]) -> dict[str, np.ndarray]:
@@ -373,12 +379,12 @@ def _conformed(stems: dict[str, np.ndarray]) -> dict[str, np.ndarray]:
     return {k: (np.pad(x, ((0, length - len(x)), (0, 0))) if len(x) < length else x) for k, x in out.items()}
 
 
-def _peaks(x: np.ndarray, sr: int) -> np.ndarray:
+def _peaks(x: np.ndarray, sr: int, inplace: bool = False) -> np.ndarray:
     """A peak stage for parts whose onsets jump far over the rest (a choir's
     consonants, a drum's strike, the room's first echoes of them): what
     swings past PEAKS dB over the part's loud peaks is rounded off by a
     look-ahead limiter, so the master's limiter hardly has to work."""
-    return limit(x, sr, 20.0 * np.log10(fx.loud_peak(x, sr) + 1e-12) + PEAKS)
+    return limit(x, sr, 20.0 * np.log10(fx.loud_peak(x, sr) + 1e-12) + PEAKS, inplace=inplace)
 
 
 def _sum(stems: dict[str, np.ndarray], names: list[str]) -> np.ndarray | None:
@@ -423,7 +429,8 @@ def mix(stems: dict[str, np.ndarray], sr: int, seed: int = 0, params: MixParams 
     if not stems:
         return np.zeros((0, 2))
     length = len(next(iter(stems.values())))
-    return mix_made([(name, lambda x=x: x) for name, x in stems.items()], length, sr, seed, params, taps, lift)
+    return mix_made([(name, lambda x=x: x) for name, x in stems.items()], length, sr, seed, params, taps, lift,
+                    own=False)
 
 
 def _conform(x: np.ndarray, length: int) -> np.ndarray:
@@ -439,13 +446,14 @@ def _conform(x: np.ndarray, length: int) -> np.ndarray:
 
 
 def mix_made(parts: list, length: int, sr: int, seed: int = 0, params: MixParams | None = None,
-             taps: dict | None = None, lift: np.ndarray | None = None, progress=None) -> np.ndarray:
+             taps: dict | None = None, lift: np.ndarray | None = None, progress=None, own: bool = True) -> np.ndarray:
     """mix(), from the stems' makers: (name, make) for each stem, none longer than `length` samples. Each
     stem is made, treated and put into its bus as the mix comes to it, and let go: the singers first (the
     band makes way for them), then the band's instruments in their names' order, a few made ahead on
     threads (threads.in_order), so a song's stems are never all held at once. The same mix, to the bit,
     as mix() of all of them. progress, if given, is told each stem's name as the mix comes to it, then
-    "mix"."""
+    "mix". own: each make() gives a stem of its own, which the mix may treat where it lies (mix() passes
+    False: its stems are the caller's)."""
     p = (params or MixParams()).clamped()
     if not parts:
         return np.zeros((0, 2))
@@ -460,31 +468,33 @@ def mix_made(parts: list, length: int, sr: int, seed: int = 0, params: MixParams
         return _conform(makers[name](), length)
 
     # The lead: everything else is placed against it.
-    def lead(x):
-        x = fx.equalize(x, fx.design(VOICE_EQ + _sizzle(x, sr), sr))
-        x = fx.deess(x, sr)[0]
-        x = _compressed(x, sr, VOICE_COMP)
+    # Each treatment works on its sound where it lies once the sound is its own (a copy made by the first step
+    # that makes one, or a stem the mix was given to keep): the same samples as treated copies.
+    def lead(x, owned):
+        x = fx.equalize(x, fx.design(VOICE_EQ + _sizzle(x, sr), sr), inplace=owned)  # VOICE_EQ: a copy if not
+        x = fx.deess(x, sr, inplace=True)[0]
+        x = _compressed(x, sr, VOICE_COMP, inplace=True)
         if VOICE_SOFTEN:
-            x = fx.soften(x, sr, *VOICE_SOFTEN)
-        return _at(_peaks(fx.saturate(x, sr, VOICE_DRIVE), sr), sr, REFERENCE)
+            x = fx.soften(x, sr, *VOICE_SOFTEN, inplace=True)
+        return _at(_peaks(fx.saturate(x, sr, VOICE_DRIVE, inplace=True), sr, inplace=True), sr, REFERENCE, inplace=True)
 
-    def lead_bus(voice):
+    def lead_bus(voice, owned):
         if voice is None:
             return None
-        voice = _treated(voice, lead)
+        voice = _treated(voice, lead, owned)
         if rise is not None:  # the lead rises with the arrangement: quieter in a sparse verse, fuller at the climax
-            voice = voice * rise[:len(voice)]
+            voice *= rise[:len(voice)]
         return voice, fx.activity(voice, sr, attack=MAKE_WAY[0], release=MAKE_WAY[1])
 
     # The lineage choir, as one group, where it sings; de-essed as the lead is (its voices say each "s" together,
     # and its sends to the room and plate are the biggest)
-    def choir_bus(choir):
+    def choir_bus(choir, owned):
         if choir is None:
             return None
         where = fx.span(choir, sr)
         if where.stop - where.start > sr // 2:
-            group = fx.deess(fx.equalize(choir[where], fx.design(CHOIR_EQ, sr)), sr)[0]
-            group = _peaks(_compressed(group, sr, CHOIR_COMP), sr)
+            group = fx.deess(fx.equalize(choir[where], fx.design(CHOIR_EQ, sr), inplace=owned), sr, inplace=True)[0]
+            group = _peaks(_compressed(group, sr, CHOIR_COMP, inplace=True), sr, inplace=True)
             group = fx.width(group, sr, min(CHOIR_WIDTH * p.width, 1.6))
             choir = np.zeros((length, 2))
             choir[where] = _at(group, sr, REFERENCE - CHOIR_UNDER + balance.get("choir", 0.0))
@@ -494,13 +504,18 @@ def mix_made(parts: list, length: int, sr: int, seed: int = 0, params: MixParams
         return None
 
     # The band: each instrument to its place, then together.
-    def channel(x, strip, role):
-        x = fx.equalize(x, fx.design(strip.eq, sr))
+    def channel(x, owned, strip, role):
+        sos = fx.design(strip.eq, sr)
+        x = fx.equalize(x, sos, inplace=owned)
+        owned = owned or len(sos) > 0  # a copy, if not where it lay
         if strip.comp:
-            x = _compressed(x, sr, strip.comp)
+            x = _compressed(x, sr, strip.comp, inplace=owned)
+            owned = True
         if role in ("drum", "kit"):
-            x = _peaks(x, sr)
-        return fx.saturate(x, sr, strip.drive)
+            y = _peaks(x, sr, inplace=owned)
+            owned = owned or y is not x
+            x = y
+        return fx.saturate(x, sr, strip.drive, inplace=owned)
 
     def instrument(name: str):
         x = stem(name)
@@ -508,8 +523,12 @@ def mix_made(parts: list, length: int, sr: int, seed: int = 0, params: MixParams
         if where.stop <= where.start:
             return None
         strip = ROLES[roles[name]]
-        return where, _treated(x[where], partial(channel, strip=strip, role=roles[name])) * \
-            10.0 ** ((strip.trim + nudge[name]) / 20.0)
+        y = _treated(x[where], partial(channel, strip=strip, role=roles[name]), own)
+        gain = 10.0 ** ((strip.trim + nudge[name]) / 20.0)
+        if own or not np.shares_memory(y, x):
+            y *= gain  # where it lies: the same products
+            return where, y
+        return where, y * gain
 
     # Each bus's and instrument's own treatment depends on nothing but its own sound, so they are made at once
     # (threads.in_order, a few ahead); they are put together below, one at a time, in the order they always were:
@@ -519,7 +538,7 @@ def mix_made(parts: list, length: int, sr: int, seed: int = 0, params: MixParams
     jobs = []
     for bus, names in groups.items():
         if len(names) == 1:
-            jobs.append((names[0], lambda bus=bus, name=names[0]: buses[bus](_alone(stem(name)))))
+            jobs.append((names[0], lambda bus=bus, name=names[0]: buses[bus](_alone(stem(name)), own)))
         else:
             jobs += [(name, partial(stem, name)) for name in names]
     jobs += [(name, partial(instrument, name)) for name, role in roles.items() if role not in buses]
@@ -541,7 +560,7 @@ def mix_made(parts: list, length: int, sr: int, seed: int = 0, params: MixParams
                     held[name] = result
                     if len(held) < len(groups[role]):
                         continue
-                    result = buses[role](_sum(held, groups[role]))
+                    result = buses[role](_sum(held, groups[role]), True)
                     held = {}
                 if role == "voice":
                     voice, singing = result if result is not None else (None, None)

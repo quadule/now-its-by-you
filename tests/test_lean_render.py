@@ -134,7 +134,9 @@ def test_a_mix_of_stems_made_as_it_goes_is_the_mix_of_them_all(monkeypatch):
     for threads in ("1", "3"):
         monkeypatch.setenv("SONGBIRD_THREADS", threads)
         taps_a, taps_b = {}, {}
+        given = {k: v.copy() for k, v in stems.items()}
         a = mixing.mix(stems, SR, seed=4, taps=taps_a)
+        assert all(same(stems[k], given[k]) for k in stems)  # the caller's stems are left as they were
         told = []
         b = mixing.mix_made([(k, lambda v=v: v.copy()) for k, v in stems.items()], length, SR, seed=4, taps=taps_b,
                             progress=told.append)

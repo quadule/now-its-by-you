@@ -191,7 +191,7 @@ def _recover(held: np.ndarray, coef: float) -> np.ndarray:
 
 
 def limit(x: np.ndarray, sr: int, ceiling_db: float = CEILING_DB, lookahead: float = 0.005, release: float = 0.08,
-          envelope: np.ndarray | None = None) -> np.ndarray:
+          envelope: np.ndarray | None = None, inplace: bool = False) -> np.ndarray:
     """A look-ahead limiter that keeps the true peak under the ceiling.
 
     Each sample's need (the gain that brings its true-peak envelope to the
@@ -199,7 +199,8 @@ def limit(x: np.ndarray, sr: int, ceiling_db: float = CEILING_DB, lookahead: flo
     exponentially over `release`, then averaged over the look-ahead. Every
     value averaged at a peak was held at or under that peak's need, so the
     peak comes out at the ceiling, reached by a smooth 5 ms fade. envelope:
-    x's true-peak envelope, if already known.
+    x's true-peak envelope, if already known. inplace: the gain is applied to x where it lies (a float64
+    array), and x returned.
     """
     ceiling = 10.0 ** (ceiling_db / 20.0)
     env = true_peak_envelope(x, 0.5 * ceiling) if envelope is None else envelope
@@ -212,6 +213,9 @@ def limit(x: np.ndarray, sr: int, ceiling_db: float = CEILING_DB, lookahead: flo
     c = np.concatenate([[0.0], np.cumsum(np.concatenate([np.full(ahead, recovered[0]), recovered]))])
     gain = (c[ahead + 1 :] - c[: -ahead - 1]) / (ahead + 1)  # mean of recovered[n - ahead .. n]
     gain = np.minimum(gain, need)  # never above it, not even by rounding
+    if inplace and x.dtype == np.float64:
+        x *= gain[:, None]
+        return x
     return x * gain[:, None]
 
 

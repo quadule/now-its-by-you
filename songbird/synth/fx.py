@@ -412,7 +412,7 @@ def _apply(x: np.ndarray, lin: np.ndarray, step: int, band: np.ndarray, y: np.nd
 
 
 def soften(x: np.ndarray, sr: int, over: float = 6.0, amount: float = 0.6, fast: float = 0.0005, slow: float = 0.03,
-           release: float = 0.02) -> np.ndarray:
+           release: float = 0.02, inplace: bool = False) -> np.ndarray:
     """A transient softener: what jumps more than `over` dB above the signal's own recent level (a `slow` s
     average) within `fast` s is turned down by `amount` of the excess, at once, and let go over `release` s.
     The opposite of what saturation does to a click: a consonant's burst or a plosive keeps its place but
@@ -425,7 +425,8 @@ def soften(x: np.ndarray, sr: int, over: float = 6.0, amount: float = 0.6, fast:
     target = -amount * np.clip(quick - steady - over, 0.0, None)
     rate = sr / STEP
     gain = _ballistics(target, _coef(0.0002, rate), _coef(release, rate))
-    return _apply(x2, 10.0 ** (gain / 20.0), STEP, np.zeros((len(x2), 0)), np.empty_like(x2)).reshape(x.shape)
+    out = x2 if inplace and np.shares_memory(x2, x) else np.empty_like(x2)
+    return _apply(x2, 10.0 ** (gain / 20.0), STEP, np.zeros((len(x2), 0)), out).reshape(x.shape)
 
 
 def gain_computer(level_db: np.ndarray, threshold: float, ratio: float, knee: float) -> np.ndarray:
@@ -477,12 +478,13 @@ def apply_gain(x: np.ndarray, gain_db: np.ndarray, inplace: bool = False) -> np.
 
 def _both_ways(x2: np.ndarray, sos: np.ndarray) -> np.ndarray:
     """x through sos forward and then backward: the response's magnitude squared and no phase at all (a
-    render has the whole signal at hand)."""
-    return np.ascontiguousarray(_biquads(np.ascontiguousarray(_biquads(x2, sos)[::-1]), sos)[::-1])
+    render has the whole signal at hand). (The backward pass filters its reversed copy where it lies.)"""
+    back = np.ascontiguousarray(_biquads(x2, sos)[::-1])
+    return np.ascontiguousarray(_biquads(back, sos, inplace=True)[::-1])
 
 
 def deess(x: np.ndarray, sr: int, split: float = 4500.0, excess: float = 3.0, ratio: float = 3.0,
-          most: float = 8.0) -> tuple[np.ndarray, np.ndarray]:
+          most: float = 8.0, inplace: bool = False) -> tuple[np.ndarray, np.ndarray]:
     """Turn the highs down while they outweigh the voice's body: a split-band
     de-esser whose threshold is the voice's own balance, so it hears an "s"
     by its spectrum, not by how loud the singer is. It listens to the band
@@ -504,11 +506,13 @@ def deess(x: np.ndarray, sr: int, split: float = 4500.0, excess: float = 3.0, ra
     coef = _coef(0.004, sr)
     high = db(_detect_every(highs, coef, STEP))
     over = high - db(_detect_every(body, coef, STEP)) - excess
+    del body
     target = np.clip(-over * (1.0 - 1.0 / ratio), -most, 0.0)
     target[high < loud_level(x2, sr) - 40.0] = 0.0
     rate = sr / STEP
     gain = _ballistics(target, _coef(0.001, rate), _coef(0.06, rate))
-    y = _apply(x2, 10.0 ** (gain / 20.0), STEP, highs, np.empty_like(x2))
+    out = x2 if inplace and np.shares_memory(x2, x) else np.empty_like(x2)
+    y = _apply(x2, 10.0 ** (gain / 20.0), STEP, highs, out)
     return y.reshape(x.shape), gain
 
 
@@ -593,9 +597,9 @@ def _soft(v: float) -> float:
 
 
 @njit(cache=True, nogil=True)
-def _saturate(x, k, bias, dc):
+def _saturate(x, k, bias, dc, y):
+    """The curve over every sample of x, into y (which may be x: each sample is read before it is written)."""
     n, chans = x.shape
-    y = np.empty_like(x)
     th = _soft(bias)
     w = bias * bias
     slope = (729.0 - 162.0 * w + 9.0 * w * w) / (27.0 + 9.0 * w) ** 2  # the curve's slope at the bias
@@ -612,18 +616,20 @@ def _saturate(x, k, bias, dc):
     return y
 
 
-def saturate(x: np.ndarray, sr: int, drive: float, bias: float = 0.15) -> np.ndarray:
+def saturate(x: np.ndarray, sr: int, drive: float, bias: float = 0.15, inplace: bool = False) -> np.ndarray:
     """Soft saturation that thickens rather than distorts: the signal's loud
     peaks reach `drive` on a tanh-like curve (0.25 a whisper, about 0.5%
     distortion on them; 1 plainly driven), whatever its level. `bias` tilts
     the curve for even harmonics, like a tube or tape. Small signals pass
-    at unity gain; the offset the tilt makes is blocked below 8 Hz."""
+    at unity gain; the offset the tilt makes is blocked below 8 Hz. inplace: written over x (when x is a
+    float64, C-contiguous array)."""
     if drive <= 0:
         return x
     ref = loud_peak(x, sr) + 1e-12
     shape = x.shape
-    y = _saturate(np.ascontiguousarray(x.reshape(len(x), -1), dtype=np.float64), drive / ref, bias,
-                  float(np.exp(-2.0 * np.pi * 8.0 / sr)))
+    x2 = np.ascontiguousarray(x.reshape(len(x), -1), dtype=np.float64)
+    out = x2 if inplace and np.shares_memory(x2, x) else np.empty_like(x2)
+    y = _saturate(x2, drive / ref, bias, float(np.exp(-2.0 * np.pi * 8.0 / sr)), out)
     return y.reshape(shape)
 
 
