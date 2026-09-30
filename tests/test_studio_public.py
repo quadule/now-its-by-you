@@ -350,3 +350,47 @@ def test_the_local_studio_is_as_it_was(home, capsys):
     finally:
         server.shutdown()
         server.server_close()
+
+
+def test_a_range_of_a_large_recording_is_streamed_not_held_in_memory(opened):
+    """A player asks for `bytes=0-` (the whole of a 17 MB song) on every connection it opens: each range is sent
+    as it's read, a block at a time, so a few dozen players never hold a few dozen songs in the studio's memory."""
+    import hashlib
+    import os
+    import tracemalloc
+
+    studio, port, _ = opened
+    key = "ab" * 12
+    data = os.urandom(20 * 2**20)
+    (studio.cache / f"{key}.flac").write_bytes(data)
+
+    def fetch(rng):
+        c = http.client.HTTPConnection("127.0.0.1", port, timeout=60)
+        c.request("GET", f"/audio/{key}.flac", headers={"Host": f"127.0.0.1:{port}", "Range": rng})
+        r = c.getresponse()
+        h, n = hashlib.sha256(), 0
+        while True:
+            chunk = r.read(2**16)
+            if not chunk:
+                break
+            h.update(chunk)
+            n += len(chunk)
+        out = r.status, r.getheader("Content-Range"), int(r.getheader("Content-Length")), n, h.hexdigest()
+        c.close()
+        return out
+
+    tracemalloc.start()
+    try:
+        status, where, length, n, digest = fetch("bytes=0-")
+        peak = tracemalloc.get_traced_memory()[1]
+    finally:
+        tracemalloc.stop()
+    assert status == 206 and where == f"bytes 0-{len(data) - 1}/{len(data)}" and length == n == len(data)
+    assert digest == hashlib.sha256(data).hexdigest()
+    assert peak < 4 * 2**20  # blocks of 64 KB, never the 20 MB
+    status, where, length, n, digest = fetch("bytes=1000-2000047")
+    assert (status, where, length, n) == (206, f"bytes 1000-2000047/{len(data)}", 1999048, 1999048)
+    assert digest == hashlib.sha256(data[1000:2000048]).hexdigest()
+    status, where, length, n, digest = fetch("bytes=-5000")  # the last 5000
+    assert (status, length, digest) == (206, 5000, hashlib.sha256(data[-5000:]).hexdigest())
+    assert fetch(f"bytes={len(data)}-")[0] == 416

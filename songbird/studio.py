@@ -1509,10 +1509,12 @@ class Handler(BaseHTTPRequestHandler):
     # ------------------------------------------------------------ replies
 
     def send(self, body: bytes | io.BufferedReader, kind: str, code: int = 200,
-             extra: dict | list | None = None, cache: str = "no-store", policy: str | None = None) -> None:
-        """A reply: bytes, or an open file's (sent as it's read, not held whole)."""
+             extra: dict | list | None = None, cache: str = "no-store", policy: str | None = None,
+             length: int | None = None) -> None:
+        """A reply: bytes, or an open file's from where it stands (sent as it's read, not held whole; `length`
+        bytes of it, for a range)."""
         whole = isinstance(body, (bytes, bytearray))
-        size = len(body) if whole else os.fstat(body.fileno()).st_size
+        size = len(body) if whole else length if length is not None else os.fstat(body.fileno()).st_size
         self._sent = (code, size)
         self.send_response(code)
         self.send_header("Content-Type", kind)
@@ -1532,8 +1534,16 @@ class Handler(BaseHTTPRequestHandler):
             return
         if whole:
             self.wfile.write(body)
-        else:
+        elif length is None:
             shutil.copyfileobj(body, self.wfile, 2**16)
+        else:
+            left = length
+            while left:
+                chunk = body.read(min(left, 2**16))
+                if not chunk:
+                    break
+                self.wfile.write(chunk)
+                left -= len(chunk)
 
     def send_json(self, data, code: int = 200) -> None:
         self.send(json.dumps(data).encode(), "application/json", code)
@@ -1676,11 +1686,11 @@ class Handler(BaseHTTPRequestHandler):
                 start, end = max(0, size - int(rng.group(2))), size - 1
             if start >= size or start > end:
                 return self.send(b"", "audio/flac", 416, {"Content-Range": f"bytes */{size}"})
-            with path.open("rb") as f:  # just the part asked for, not the whole file each time
+            with path.open("rb") as f:  # just the part asked for, streamed: never a whole song in memory
                 f.seek(start)
-                part = f.read(end + 1 - start)
-            return self.send(part, "audio/flac", 206,
-                             {"Content-Range": f"bytes {start}-{end}/{size}", "Accept-Ranges": "bytes"})
+                return self.send(f, "audio/flac", 206,
+                                 {"Content-Range": f"bytes {start}-{end}/{size}", "Accept-Ranges": "bytes"},
+                                 length=end + 1 - start)
         with path.open("rb") as f:
             self.send(f, "audio/flac", 200, {"Accept-Ranges": "bytes"})
 
