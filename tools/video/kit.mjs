@@ -117,6 +117,11 @@ function overlay([Z, avoid]) {
     window.__pwListOff = () => { const l = document.getElementById('pw-list'); if (!l) return; l.classList.remove('on'); setTimeout(() => l.remove(), 250); };
   };
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', install); else install();
+  // requests in flight: an edit's answer redraws the page (chips grow a mark, rows appear), so the hand waits
+  // for it before reaching for the next control, as an eye would
+  window.__pwPending = 0;
+  const f0 = window.fetch;
+  window.fetch = function (...a) { window.__pwPending++; return f0.apply(this, a).finally(() => { window.__pwPending--; }); };
   window.__toasts = [];
   new MutationObserver(() => {
     for (const el of document.querySelectorAll('#toast, [role=alert]')) {
@@ -182,9 +187,23 @@ export async function session({ url, out, video = true, zoom = 1.2, width = 1920
     }
     return loc.boundingBox();
   }
+  async function settle(timeout = 8000) {  // no request in flight for a moment: the page has drawn its answer
+    const t = Date.now();
+    let quiet = 0;
+    while (Date.now() - t < timeout && quiet < 3) {
+      quiet = (await page.evaluate(() => window.__pwPending || 0).catch(() => 0)) ? 0 : quiet + 1;
+      await pause(100);
+    }
+  }
   async function over(loc, fx = 0.5, fy = 0.5, o = {}) {
-    const b = await show(loc, o);
+    await settle();
+    let b = await show(loc, o);
     await glide(b.x + b.width * fx, b.y + b.height * fy, o.ms);
+    const again = await loc.boundingBox();  // it moved while the hand travelled (a late redraw): follow it
+    if (again && (Math.abs(again.x - b.x) > 2 || Math.abs(again.y - b.y) > 2)) {
+      b = again;
+      await glide(b.x + b.width * fx, b.y + b.height * fy, 200);
+    }
     return b;
   }
   async function click(loc, label, o = {}) {
@@ -283,7 +302,7 @@ export async function session({ url, out, video = true, zoom = 1.2, width = 1920
     while (writing) await new Promise((r) => setTimeout(r, 50));
     assemble(frames, tEnd, out, extra.fps || 30);
   }
-  return { page, ctx, browser, mark, pause, glide, show, over, click, dbl, choose, type, slide, dragTo, caption, setPhase, flash, finish,
+  return { page, ctx, browser, mark, pause, settle, glide, show, over, click, dbl, choose, type, slide, dragTo, caption, setPhase, flash, finish,
     now, get phase() { return phase; }, set phase(p) { phase = p; } };
 }
 
