@@ -465,7 +465,7 @@ def band_parts(score: Score, sr: int, seed: int) -> list[tuple[str, Callable[[],
     ending = np.ones(length)
     ending[length - fade:] = 0.5 + 0.5 * np.cos(np.linspace(0.0, np.pi, fade))
     ending = ending[length - fade:].copy()  # the stem's last `fade` samples: before them it multiplies by 1 (exact)
-    others = sorted({n.part for n in score.notes} - set(INSTRUMENTS) - {"voice"}
+    others = sorted({n.part for n in score.notes} - set(INSTRUMENTS) - {"voice", "chop"}
                     - {p for p in {n.part for n in score.notes} if p.startswith("choir")})
     design = getattr(score, "sound", None) or {}  # a person's sound design (songbird.sound), if any
     players = design.get("players") or {}

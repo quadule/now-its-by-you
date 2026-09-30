@@ -94,7 +94,8 @@ LABELS = {
 LABELS.update({
     "floor": "four on the floor, open hats between", "house": "a house groove: claps on two and four",
     "drop": "the drop: the ride on every beat", "offbeat": "on the off-beats", "rolling": "a rolling bass",
-    "stab": "chord stabs", "pluck": "a pluck's figure", "onedrop": "a one drop", "steppers": "steppers: the kick on every beat",
+    "octave": "octaves, the root and its octave", "stab": "chord stabs", "pluck": "a pluck's figure",
+    "onedrop": "a one drop", "steppers": "steppers: the kick on every beat",
     "dubbass": "the riddim", "skank": "the skank on the off-beats", "bubble": "the organ bubble",
 })
 FILLED += ("onedrop", "steppers")
@@ -305,9 +306,14 @@ def value(genome, params, path: str):
         return held if held is not None else "the program's own"
     if field in entry:
         return entry[field]
-    if field == "bars":  # its own, as many times round as its style plays it
-        from .style import rounds
+    if field == "bars":  # its own, as many times round as its style plays it, or as long as its style lays it
+        from .composition import section_ids
+        from .style import own_lines, rounds
 
+        ids = section_ids(params.form)
+        styled = own_lines(genome, params)[ids.index(sid)] if sid in ids else None
+        if styled is not None:
+            return sum(genome.phrases[p].bars for p, _ in styled)
         return sum(genome.phrases[p].bars for p in genome.section(name).phrases) * rounds(genome, params, name)
     return bool(genome.section(name).lyrics) if field == "sung" else False
 
@@ -403,33 +409,63 @@ def phrase_plan(genome, params) -> list[list[tuple[str, bool]]]:
     where it has words) unless a person changed its length or had it played."""
     from .composition import section_ids
 
-    from .style import rounds
+    from .style import own_lines, rounds
 
     held = arranged(params)
+    styled = own_lines(genome, params)  # a style's own lengths (house's), under a person's
     out = []
-    for sid, name in zip(section_ids(params.form), params.form):
+    for k, (sid, name) in enumerate(zip(section_ids(params.form), params.form)):
         section = genome.section(name)
         sung = section.lyrics is not None
         entry = held.get(sid)
         lines = None
-        if entry and (entry.get("bars") is not None or rounds(genome, params, name) == 1):
-            lines = fit(genome, name, entry.get("bars"), sung and entry.get("sung", True) is not False)
-            if lines is None:  # a length it can't have (said by shape_problems): its own
-                lines = fit(genome, name, None, sung and entry.get("sung", True) is not False)
+
+        def fitted():
+            laid = fit(genome, name, entry.get("bars"), sung and entry.get("sung", True) is not False)
+            if laid is None:  # a length it can't have (said by shape_problems): its own
+                laid = fit(genome, name, None, sung and entry.get("sung", True) is not False)
+            return laid
+
+        if entry and entry.get("bars") is not None:
+            lines = fitted()
+        elif styled[k] is not None and not (entry and entry.get("sung") is False):
+            lines = styled[k]
+        elif entry and (entry.get("bars") is not None or rounds(genome, params, name) == 1):
+            lines = fitted()
         elif rounds(genome, params, name) > 1:  # the jig's tune round twice: the style's own length, a person's wins
             lines = [(pid, False) for pid in section.phrases] * rounds(genome, params, name)
         out.append(lines if lines is not None else [(pid, sung) for pid in section.phrases])
     return out
 
 
+def leading(genome, name: str, lines) -> int:
+    """How many lines a style laid before a section's own lines (house's drop: the hook's bars before its refrain,
+    on a line that isn't the section's): 0 for every other section, whose own lines (if it sings them) come first."""
+    own = genome.section(name).phrases
+    k = 0
+    while k < len(lines) and lines[k][0] not in own:
+        k += 1
+    return k if k < len(lines) else 0
+
+
+def own_line(genome, name: str, lines, j: int) -> int | None:
+    """Which of the section's own lines the j-th line laid is (its place: `refrain:2.1`), or None for a line an
+    arrangement or a style put there."""
+    own = genome.section(name).phrases
+    k = j - leading(genome, name, lines)
+    return k if 0 <= k < len(own) and own[k] == lines[j][0] else None
+
+
 def arranged_plan(genome, params) -> list[list[tuple[str, bool]] | None]:
     """phrase_plan() where a person arranged a section of the form, None where the section is its own."""
     from .composition import section_ids
 
-    from .style import rounds
+    from .style import own_lines, rounds
 
     held = arranged(params)
-    twice = [rounds(genome, params, name) > 1 for name in params.form]  # the jig's round twice: its own length
+    styled = own_lines(genome, params)  # a style's own lengths (house's)
+    twice = [rounds(genome, params, name) > 1 or lines is not None  # the jig's round twice, a style's: its own length
+             for name, lines in zip(params.form, styled)]
     if not held and not any(twice):
         return [None] * len(params.form)
     return [lines if sid in held or again else None
@@ -560,6 +596,8 @@ def _spec(ctx, i: int, player: str):
         keys.append("last")
     if getattr(ctx, "drop", None) and i == ctx.drop[1]:
         keys.insert(0, "drop")  # the refrain after a breakdown (idioms.plan_style)
+    if i in getattr(ctx, "dissolved", ()):
+        keys.insert(0, "dubbed")  # a dub's version (idioms.plan_style)
     keys += [s.role, "*"]
     table = sdef.parts.get(player) or sdef.parts.get(sdef.part_of(player)) or DEFAULT_PARTS.get(_family(player), {})
     return next((table[k] for k in keys if k in table), "")
@@ -833,6 +871,9 @@ def grid(genome, v, heard: dict) -> dict:
     band_words = explain.STYLE_NAMES.get(sname, sname).split(",")[0]
     everyone = explain.players(params.band, style)
     plan = phrase_plan(genome, params)
+    from .style import own_lines
+
+    styled = own_lines(genome, params)  # a style's own lengths (house's): the program's
     verses = [k for k, n in enumerate(params.form) if genome.section(n).lyrics == "verse"]
     refrains = [k for k, n in enumerate(params.form) if genome.section(n).lyrics == "refrain"]
 
@@ -846,6 +887,8 @@ def grid(genome, v, heard: dict) -> dict:
         i = band_index(sid)
         s = ctx.sections[i]
         own = sum(genome.phrases[p].bars for p in section.phrases)
+        if styled[k] is not None:
+            own = sum(genome.phrases[p].bars for p, _ in styled[k])
         bars = sum(genome.phrases[p].bars for p, _ in plan[k])
         sung_now = any(sung for _, sung in plan[k])
         played = bool(section.lyrics) and entry.get("sung") is False

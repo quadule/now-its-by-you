@@ -22,6 +22,7 @@ SR = 44100
 VOICE_GAIN = 1.6  # about +4 dB: the words sit clear of the band
 CHOIR_GAIN = 0.55  # each lineage voice about 5 dB under the lead
 CHOIR_PANS = (-0.45, 0.45, -0.25, 0.25, -0.65, 0.65)
+CHOP_GAIN = 1.0  # a style's vocal chop (house's), sung by the singer into the band, at the lead's level
 PARTS = INSTRUMENTS  # the band's stems, by role (songbird.synth.instruments builds each)
 
 
@@ -69,6 +70,15 @@ def stem_jobs(score: Score, sr: int = SR, seed: int = 0, voice: VoiceParams | No
             y *= VOICE_GAIN  # where it lies: the same products
             return y
         jobs.append(("voice", lead))
+    chopped = list(score.part("chop"))
+    if chopped:  # a style's vocal chop (house's: songbird.style.chops): the singer's own voice, no breaths between
+        def chop() -> np.ndarray:
+            singer = replace(voice or VoiceParams(), breathe=1e9)
+            y = sing(chopped, sr, singer, seed + 7, score.lexicon)[:length]
+            y = pan(_filled(y, length), 0.0)
+            y *= VOICE_GAIN * CHOP_GAIN
+            return y
+        jobs.append(("chop", chop))
     choir = sorted({n.part for n in score.notes if n.part.startswith("choir")}, key=lambda p: int(p[5:]))
     learned = (voice or VoiceParams()).engine == "learned"
     singers = [*(ancestors or [])[: len(choir)], *lineage_voices(len(choir), seed, learned=learned)]

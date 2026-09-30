@@ -444,7 +444,7 @@ def produce(genome, params, placed, clock, notes: list, desk: dict | None = None
     sound = getattr(params, "sound", None) or {}
     asked = merged_players(params)
     moves = style_transitions(genome, params)
-    if not sound and not asked and not moves and not (desk or {}).get("throws") and not (desk or {}).get("splashes"):
+    if not sound and not asked and not moves and not any((desk or {}).get(k) for k in ("throws", "splashes", "sweeps")):
         return notes, {}
     from .score import Note
 
@@ -537,6 +537,8 @@ def produce(genome, params, placed, clock, notes: list, desk: dict | None = None
             else:
                 made.append({"kind": "roll", "start": a, "end": b, "level": 1.0, "key": key + 5,
                              "hits": [[t, v] for t, v in hits]})
+    for k, (kind, start, end) in enumerate((desk or {}).get("sweeps") or ()):  # a dub desk's filter on the band
+        made.append({"kind": kind, "start": float(start), "end": float(end), "level": 1.0, "key": 5000 + k})
     if made:
         out["transitions"] = made
 
@@ -665,10 +667,14 @@ def thrown(params, desk: dict) -> list[dict]:
     d = desk_of(params)
     beat = 60.0 / params.tempo
     out = []
-    for k, (part, start, end) in enumerate(desk.get("throws") or ()):
+    long = d.get("dissolved", {})  # a dub's version: a fragment's echo longer and louder
+    for k, (part, start, end, *how) in enumerate(desk.get("throws") or ()):
+        tail = "long" in how
+        level = d["voice_level"] if part == "voice" else d["level"]
         out.append({"kind": "echo", "part": part, "start": round(float(start), 6), "end": round(float(end), 6),
-                    "time": round(d["time"] * beat, 6), "feedback": d["feedback"],
-                    "level": d["voice_level"] if part == "voice" else d["level"], "key": k})
+                    "time": round(d["time"] * beat, 6),
+                    "feedback": long.get("feedback", d["feedback"]) if tail else d["feedback"],
+                    "level": long.get("voice_level", level) if tail and part == "voice" else level, "key": k})
     for k, (part, start, end) in enumerate(desk.get("splashes") or ()):
         out.append({"kind": "spring", "part": part, "start": round(float(start), 6), "end": round(float(end), 6),
                     "level": d["splash_level"], "key": 1000 + k})

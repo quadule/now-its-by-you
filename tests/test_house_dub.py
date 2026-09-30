@@ -55,9 +55,12 @@ def test_house_refrains_are_four_on_the_floor_with_claps_and_off_beat_hats():
     assert claps and all((i - first) % 4 in (1, 3) for i in index)  # on two and four
     opens = [n.start for n in machine if n.art == "hat-open" and inside(n.start, refrains)]
     assert opens and all(min(abs(o - (t + beat / 2)) for t in ks) < 0.04 for o in opens)  # on the off-beats
-    # the bass on the off-beats, never on a kick
-    bass = [n.start for n in score.notes if n.part == "synthbass" and inside(n.start, refrains)]
-    assert bass and sum(min(abs(b - (t + beat / 2)) for t in ks) < 0.04 for b in bass) > 0.8 * len(bass)
+    # the bass in octaves on the eighths (2026-09-30, evening: the refrains' riff), its octave on the off-beats
+    bass = [n for n in score.notes if n.part == "synthbass" and inside(n.start, refrains)]
+    offs = [n for n in bass if min(abs(n.start - (t + beat / 2)) for t in ks) < 0.04]
+    ons = [n for n in bass if min(abs(n.start - t) for t in ks) < 0.04]
+    assert bass and len(offs) + len(ons) > 0.95 * len(bass) and len(offs) > 0.4 * len(bass)
+    assert np.mean([n.pitch for n in offs]) > np.mean([n.pitch for n in ons]) + 6
 
 
 def test_house_brings_its_909_and_pumps_and_a_person_can_turn_them_off():
@@ -265,3 +268,159 @@ def test_the_studio_offers_both_and_shows_their_patterns_sound_and_options(home)
     kit = next(p for p in grid["players"] if p["name"] == "kit")
     assert {"onedrop", "steppers"} <= {x["id"] for x in kit["patterns"]}
     assert "melodica" in {p["name"] for p in grid["players"]}
+
+
+# --- house and dub, again (2026-09-30, evening; docs/STYLES.md, "House and dub, again") -------------------------
+
+
+def chords_by_section(g, p):
+    """Each section's chords as realize lays them (idioms.chord_times), by the score's sections."""
+    from songbird.idioms import chord_times
+
+    score = realize(g, p)
+    out: dict = {}
+    for a, b, symbol in chord_times(g, p):
+        name = next((n for n, s0, s1 in score.sections if s0 - 1e-6 <= a < s1 - 1e-6), None)
+        out.setdefault(name, []).append(symbol)
+    return out
+
+
+def test_house_plays_a_loop_of_its_own_fitted_to_the_tune():
+    g, p = styled("house", drop=0, loop="vamp")
+    by = chords_by_section(g, p)
+    for name, symbols in by.items():
+        if name and name.startswith("bridge"):
+            assert set(symbols) <= {"vi", "I", "V"}  # the breakdown's heart keeps the song's own
+        elif name:
+            assert set(symbols) == {"vim7", "IVmaj7"}, (name, symbols)  # Bm7 and Gmaj7, round and round
+    assert S.loop_symbols((6, 4, 1, 5), True, "ionian") == ["vim7", "IVmaj7", "Iadd9", "V7"]  # the mode's own
+    assert S.loop_symbols((6, 4), True, "aeolian") == ["VImaj7", "ivm7"]
+    fit = S.fitting_loops(g, S.HOUSE, "ionian")
+    assert {"vamp", "lift", "home"} <= set(fit) and "pop" not in fit and "minor" not in fit
+    assert S.fitting_loops(g, S.DUB, "aeolian") == ["song"]  # nothing fits: the song's own chords
+    # the song's own chords, asked for; a person's chords for a line win over the loop there
+    g, own = styled("house", drop=0, loop="song")
+    assert "vim7" not in {s for v in chords_by_section(g, own).values() for s in v}
+    mine = replace(p, composition={"chords": {"r1": [["I"], ["V"]]}})
+    from songbird.composition import form_phrases, harmonized
+
+    lines = form_phrases(harmonized(g, mine), mine)
+    assert all(ph.chords == (("I",), ("V",)) for ph in lines if ph.id == "r1")
+    assert any(ph.chords == (("vim7",), ("IVmaj7",)) for ph in lines if ph.id == "r2")
+    # the seventh a colour: where a sung note is a semitone off it, the stabs leave it out (Gmaj7's F♯ under a G)
+    from songbird.idioms import chord_times
+
+    score = realize(g, p)
+    sung = [n for n in score.notes if n.part == "voice"]
+    seventh = (p.tonic + 4) % 12
+    under = [(a, b) for a, b, symbol in chord_times(g, p) if symbol == "IVmaj7"]
+    for n in score.notes:
+        if n.part == "piano" and round(n.pitch) % 12 == seventh and inside(n.start, under, 0.0):
+            near = [s for s in sung if s.start - 0.01 <= n.start < s.start + s.dur]
+            assert not any(round(s.pitch) % 12 == (seventh + 1) % 12 for s in near)
+
+
+def test_house_lays_its_own_lengths_and_a_person_can_change_them():
+    from songbird.takeover import phrase_plan
+
+    g, p = styled("house", drop=2)
+    plan = phrase_plan(g, p)
+    bars = [sum(g.phrases[x].bars for x, _ in lines) for lines in plan]
+    form = list(p.form)
+    assert bars[form.index("intro")] == 16 and all(bars[k] == 4 for k, n in enumerate(form) if n == "turn")
+    refrains = [k for k, n in enumerate(form) if n == "refrain"]
+    drop = plan[refrains[2]]
+    assert [s for _, s in drop[:4]] == [False] * 4 and all(s for _, s in drop[4:8])  # the hook first, then sung
+    assert {x for x, _ in drop[:4]} == {"t1"}
+    # the words still sung in order: every refrain's first line asks its question
+    score = realize(g, p)
+    firsts = [n for n in score.part("voice") if n.syllable == "Who"]
+    assert len(firsts) == len(refrains)
+    mine = replace(p, composition={"arrange": {"intro:0": {"bars": 4}}})
+    assert sum(g.phrases[x].bars for x, _ in phrase_plan(g, mine)[0]) == 4
+
+
+def test_house_chops_its_hook_on_the_grid():
+    g, p = styled("house", drop=2)
+    score = realize(g, p)
+    chop = list(score.part("chop"))
+    assert chop and {n.word for n in chop} <= {"No-bo-dy", "knows.", "now", "it's", "by", "*you*."}
+    assert sum(n.word == "knows." for n in chop) >= 12  # the hook, over and over
+    voice = list(score.part("voice"))
+    assert not [c for c in chop for v in voice if c.start < v.start + v.dur and v.start < c.start + c.dur]
+    beat = 60.0 / p.tempo
+    clock = timeline(g, p)
+    grid = [clock.seconds(clock.lead + k * g.meter.beat / 4) for k in range(-8, 2000)]
+    assert all(min(abs(n.start - t) for t in grid) < 1e-6 for n in chop)  # on the sixteenths, no jitter or lay
+    assert all(n.dur <= beat for n in chop)  # short
+    refrains = spans_of(score, "refrain")
+    drop = [n for n in chop if inside(n.start, refrains[2:3], 0.0)]
+    assert {n.word for n in drop} >= {"No-bo-dy", "now"}  # the drop: the call and "now it's by you"
+    again = realize(g, p)
+    assert list(again.part("chop")) == chop
+
+
+def test_house_bass_riffs_in_octaves_and_its_intro_builds_in_layers():
+    g, p = styled("house", drop=0, intro="lead")
+    score = realize(g, p)
+    refrains = spans_of(score, "refrain")
+    bass = [n for n in score.notes if n.part == "synthbass" and inside(n.start, refrains)]
+    pitches = sorted({round(n.pitch) for n in bass})
+    assert any(q - r == 12 for r in pitches for q in pitches)  # the root and its octave
+    intro = spans_of(score, "intro")[0]
+    bar = 4 * 60.0 / p.tempo
+
+    def first(part):
+        return min(n.start for n in score.notes if n.part == part and inside(n.start, [intro], 0.0))
+
+    assert first("drummachine") < intro[0] + 0.2
+    assert first("synthbass") >= intro[0] + 4 * bar - 0.05
+    assert first("synthpad") >= intro[0] + 8 * bar - 0.05
+    assert first("piano") >= intro[0] + 12 * bar - 0.05  # the tune at thirteen
+
+
+def test_dub_dissolves_into_its_version_after_the_first_refrain():
+    from songbird.takeover import spans
+
+    g, p = styled("dub", dissolve=1, ending="version", loop="minor")
+    score = realize(g, p)
+    clock = timeline(g, p)
+    sp = spans(g, p, clock.lead)
+    start = S.dissolved_from(g, p)
+    assert start == list(p.form).index("refrain") + 1
+    t0 = clock.seconds(sp[start][2])
+    bridge = [(clock.seconds(a), clock.seconds(b)) for k, (_, n, a, b) in enumerate(sp) if n == "bridge" and k >= start]
+    voice = list(score.part("voice"))
+    before = [n for n in voice if n.start < t0 - 0.5]
+    after = [n for n in voice if n.start >= t0 and not inside(n.start, bridge, -1.0)]
+    own = sum(len(g.phrases[x].sung) for k in range(start, len(p.form)) if p.form[k] != "bridge"
+              for x in g.section(p.form[k]).phrases)
+    assert before and len(after) < 0.6 * own  # fragments
+    assert " ".join(n.word for n in after).count("No-bo-dy") >= 2  # every refrain in the version keeps "nobody knows"
+    inbridge = [n for n in voice if inside(n.start, bridge, 0.0)]
+    assert len(inbridge) >= sum(len(g.phrases[x].sung) for x in g.section("bridge").phrases) - 1  # the bridge whole
+    melodica = [n for n in score.notes if n.part == "melodica" and n.start >= t0]
+    assert melodica  # the tune in pieces where the singer leaves it
+    throws = score.sound["throws"]
+    assert any(t["part"] == "voice" and t["feedback"] == 0.72 for t in throws)  # the fragments' long tails
+    assert any(t["kind"].startswith("sweep") for t in score.sound.get("transitions", []))
+    by = chords_by_section(g, p)
+    assert set(by["intro"]) | set(by["verse"]) >= {"I", "IV", "V"}  # sung straight over the song's chords
+    assert {"vi", "IV"} <= set(by["refrain"])  # the riddim in the version's refrains
+    assert realize(g, p).sound == score.sound
+
+
+def test_the_new_options_leave_no_trace_while_off_and_travel_when_on():
+    plain = S.Style(name="house", drop=2)
+    assert "loop" not in plain.to_dict() and "dissolve" not in plain.to_dict()
+    on = S.Style(name="dub", loop="minor", dissolve=1)
+    assert S.Style.from_dict(on.to_dict()) == on
+    for name in [*S.RING, "acappella", "jig"]:
+        sdef = S.STYLES[name]
+        assert not sdef.loops and not sdef.form and not sdef.hook and "dissolve" not in sdef.options
+    # a house record from before (no loop) still loads and sings, its loop the best fit
+    g = G.load(H)
+    old = choose_params(g, style="house", arrange={**OFF, "drop": 2}).to_dict()
+    old["style"].pop("loop", None)
+    p = Params.from_dict(old)
+    assert p.style.loop == "" and S.loop_of(g, p) is not None and realize(g, p).part("chop")

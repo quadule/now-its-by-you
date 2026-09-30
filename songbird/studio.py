@@ -245,7 +245,7 @@ def cut(score, t0: float, t1: float, before: float = 1.0, tail: float = 2.5):
     for n in score.notes:
         if n.start >= t1 or n.start + n.dur <= start:
             continue
-        if (n.part == "voice" or n.part.startswith("choir")) and n.start < t0:
+        if (n.part in ("voice", "chop") or n.part.startswith("choir")) and n.start < t0:  # (a chop sung too)
             continue
         if n.start < start:
             n = dc_replace(n, dur=n.start + n.dur - start, start=start)

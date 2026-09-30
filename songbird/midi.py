@@ -29,7 +29,7 @@ PERCUSSION_CHANNEL = 9  # MIDI channel 10
 # The nearest General MIDI program for each instrument (0-based): only a starting point, for a musician to
 # change; an instrument not named here takes its family's.
 PROGRAMS = {
-    "voice": 52, "choir": 53, "chords": 0,
+    "voice": 52, "choir": 53, "chords": 0, "chop": 54,  # a style's vocal chop (house's): synth voice
     "lute": 24, "guitar": 25, "harp": 46, "bass": 32, "fiddle": 40, "whistle": 78, "drone": 109,
     "piano": 0, "epiano": 4, "epiano-reed": 4, "organ": 19, "harmonium": 20, "accordion": 21, "concertina": 21,
     "harmonica": 22, "nylon": 24, "steel": 25, "electric": 27, "electric-crunch": 29, "electric-tremolo": 27,
@@ -400,6 +400,8 @@ def part_name(part: str) -> str:
         return "Voice"
     if part.startswith("choir"):
         return f"Lineage voice {part[5:]}"
+    if part == "chop":
+        return "Vocal chop"
     return part.replace("-", " ").capitalize()
 
 

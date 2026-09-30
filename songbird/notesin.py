@@ -58,6 +58,7 @@ def layout(genome, params) -> list[dict]:
 
     # each section's lines, as long as a person made it and sung or played as they had it (songbird.takeover)
     lined = phrase_plan(genome, params)
+    from .takeover import own_line
     flat = [(sid, name, i, j, pid) for i, (sid, name) in enumerate(zip(C.section_ids(params.form), params.form))
             for j, (pid, _) in enumerate(lined[i])]
     repeated = repeated_phrases(genome, params)
@@ -74,7 +75,7 @@ def layout(genome, params) -> list[dict]:
                     "sung": bool(genome.section(name).lyrics) and bool(phrase.sung) and lined[i][j][1],
                     "up": 2 if lift_from is not None and i >= lift_from else 0,
                     # the section's own line there: a place a change can be kept for (one an arrangement added isn't)
-                    "own": j < len(genome.section(name).phrases) and genome.section(name).phrases[j] == pid})
+                    "own": own_line(genome, name, lined[i], j) is not None})
         u = end
     return out
 

@@ -17,6 +17,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import re
 from dataclasses import asdict, dataclass, field, fields
 
 import numpy as np
@@ -26,7 +27,8 @@ INTROS = ("lead", "pad", "count", "voice", "quote", "air")  # air: the tune slow
 ENDINGS = ("ring", "rit", "cold", "amen", "repeat", "version")  # version: a dub after the song (2026-09-30)
 BACKINGS = ("oohs", "echo", "thirds", "gang", "hum")  # hum: an a cappella's open-fifth drone under the verses
 LINEAGE_MAX = 16  # generations of styles a record remembers
-QUIET_OFF = ("drop",)  # Style's options a record leaves out while they're off (added after records were made)
+# Style's options a record leaves out while they're off (added after records were made)
+QUIET_OFF = ("drop", "loop", "dissolve")
 # Values retired since records were made, read as what replaced them: an a cappella's intro sung on shape-note
 # syllables (2026-09-30) is now the lead humming the tune over the group; the Celtic session is the jig
 RENAMED = {"intro": {"notes": "lead"}, "name": {"celtic": "jig"}}
@@ -78,6 +80,12 @@ class Style:
                 is the breakdown (the drums, the bass and the rest out, the singer with the pad; the band's
                 low-pass opening across it, a riser and a snare roll into the refrain after), and that refrain
                 is the drop; 0 none. Left out of a record while 0, so a record is as it was before it
+    loop        a chord loop of the style's own (StyleDef.loops, by name) under the sections the style loops, in place
+                of the song's chords; "song" the song's own; "" the style's default (the loop that best fits the tune
+                in this key and mode, for a style with loops). Left out of a record while ""
+    dissolve    the song dissolved into its version after this refrain (1 the first): every section after it the
+                version (the singer's lines in fragments thrown into the echo, the riddim, the melodica's pieces,
+                the desk harder); 0 none. Left out of a record while 0
     """
 
     name: str = ""
@@ -98,6 +106,8 @@ class Style:
     coda: str = ""  # quote: after the last line, over the ringing last chord, the lead alone plays the quote's opening
     motif: str = ""  # bridge: the lead plays the quote's opening over the bridge's third phrase; chance: some renditions
     drop: int = 0  # the refrain a breakdown and a drop follow (house's habit, 2026-09-30); 0 none, and no trace in a record
+    loop: str = ""  # a loop of the style's own under the song (house's, dub's riddim; 2026-09-30, evening)
+    dissolve: int = 0  # the refrain after which the song dissolves into its version (dub's); 0 none
 
     @classmethod
     def from_dict(cls, data: dict | None) -> Style:
@@ -136,6 +146,8 @@ class Style:
             coda=pick(self.coda, ("quote",)),
             motif=pick(self.motif, ("bridge", "chance")),
             drop=max(0, min(8, int(self.drop or 0))),
+            loop=str(self.loop or "") if re.fullmatch(r"[a-z]{1,16}", str(self.loop or "")) else "",
+            dissolve=max(0, min(8, int(self.dissolve or 0))),
         )
 
     @property
@@ -182,6 +194,15 @@ class StyleDef:
     # the mixing desk as an instrument (dub, 2026-09-30; songbird.idioms "the desk"): drop-outs, throws and splashes
     # by section, the echo's time and feedback (DESK's keys); {}: the desk is left alone
     desk: dict = field(default_factory=dict)
+    # chord loops of the style's own (house's, dub's riddims; 2026-09-30, evening): {name: (degrees a bar, sevenths)},
+    # the mode's own chords on those degrees; and the sections that take one ("version": dub's dissolved sections)
+    loops: dict = field(default_factory=dict)
+    looped: tuple = ()
+    # the style's own section lengths and the bars it plays after a sung one (house's): {"bars": {role: bars},
+    # "after": {"drop": bars, "last": bars}, "layers": {...}}; {}: the form's own
+    form: dict = field(default_factory=dict)
+    # a vocal chop (house's): the singer sings a short phrase of the song's words on the grid, in the style's hook bars
+    hook: dict = field(default_factory=dict)
 
     def order(self, lineup: dict) -> list[str]:
         """The instruments of a lineup in the style's own order (one swapped in where its part is), any others
@@ -660,54 +681,89 @@ VERSION_DESK = {**DESK, "dropout": {"version": 0.55}, "voice": {}, "splash": 0.0
 VERSION_BARS = 8  # the version: the last refrain's last eight bars' chords again
 VERSION_RING = 6.0  # s after the version's last chord: its echoes' tails
 
+# House's loops (2026-09-30, evening): degrees a bar, voiced as sevenths; the rendition plays one that fits its tune
+HOUSE_LOOPS = {"vamp": ((6, 4), True), "lift": ((4, 1), True), "home": ((1, 4), True), "deep": ((2, 5, 1, 6), True),
+               "royal": ((4, 5, 3, 6), True), "pop": ((6, 4, 1, 5), True), "minor": ((7, 4, 1, 5), True)}
+# The chop's rhythms: a two-bar figure, each bar (sixteenth of the bar, syllable, sixteenths long); drawn per rendition
+HOUSE_HOOK = {
+    "syllables": 4, "vel": 0.85, "drop": 1.0, "soft": 0.6, "staccato": 0.85,
+    "rhythms": {"beat": ([(0, 0, 2), (2, 1, 1), (3, 2, 1), (4, 3, 4)],
+                         [(0, 0, 2), (2, 1, 1), (3, 2, 1), (4, 3, 2), (8, 3, 1), (10, 3, 2)]),
+                "off": ([(2, 0, 1), (3, 1, 1), (4, 2, 2), (6, 3, 3)],
+                        [(2, 0, 1), (3, 1, 1), (4, 2, 2), (6, 3, 2), (10, 3, 1), (14, 3, 2)]),
+                "stutter": ([(0, 0, 1), (1, 1, 1), (2, 2, 1), (3, 3, 2), (6, 3, 1), (7, 3, 1)],
+                            [(0, 0, 1), (1, 1, 1), (2, 2, 1), (3, 3, 4)])},
+}
+
 HOUSE = _def(
     "house", "house: a drum machine's four on the floor (a 909), claps on two and four, open hats on the off-beats, "
-             "the ride in the drop, an off-beat synth bass, piano stabs, a pluck, a pad pumping under the kick",
+             "the ride in the drop, a chord loop of its own in piano stabs, an off-beat and octave synth bass, a "
+             "pluck, a pad pumping under the kick, and the song's hook chopped and sung on the grid",
     {"drummachine": 1.0, "synthbass": 0.95, "piano": 0.8, "synthpad": 0.7, "arp": 0.6},
     {"drummachine": {"intro": "floor", "verse1": "floor", "verse": ((0.55, "house"), (0.0, "floor")),
-                     "refrain": "house", "drop": "drop", "turn": "floor", "break": "drop", "bridge": "house",
-                     "tag": "end", "outro": "floor"},
-     "synthbass": {"intro": "", "verse1": ((0.35, "offbeat"), (0.0, "")), "*": "offbeat", "drop": "rolling",
-                   "tag": "long"},
+                     "refrain": "house", "drop": "drop", "turn": "house", "break": "drop", "bridge": "house",
+                     "tag": "end", "outro": "house"},
+     "synthbass": {"verse1": ((0.35, "offbeat"), (0.0, "")), "*": "offbeat", "refrain": "octave", "turn": "octave",
+                   "outro": "octave", "drop": "rolling", "tag": "long"},
      "piano": {"verse1": ((0.4, "stab"), (0.0, "")), "verse": ((0.45, "stab"), (0.0, "")), "*": "stab", "tag": "ring"},
      "synthpad": {"*": "pad"},
-     "arp": {"refrain": "pluck", "drop": "pluck", "break": "pluck"}},
-    ("piano", "arp"), {"straight": 1.0}, {"*": (1.22, 1.29, 1.33)},
+     "arp": {"refrain": "pluck", "drop": "pluck", "break": "pluck", "turn": "pluck", "outro": "pluck"}},
+    ("piano", "arp"), {"straight": 1.0}, {"*": (1.27, 1.29, 1.31)},
     {"I": ("add9", "6"), "IV": ("add9", "maj7"), "V": ("sus4", "7"), "vi": ("7", "add9"), "ii": ("7",)}, 0.6,
     (0.95, 0.95),
     band={"density": 0.1, "brightness": 0.1},
     singer={"vibrato_depth": -6.0},
     mix={"space": -0.05, "width": 0.2, "plate": 0.25},
-    options={"intro": {"lead": 0.6, "pad": 0.4}, "alone": 0.0, "stops": 0.0, "breakdown": 0.0, "lift": 0.15,
-             "ending": {"cold": 0.35, "repeat": 0.35, "ring": 0.3}, "entrances": 0.5,
+    options={"intro": {"lead": 0.5, "pad": 0.5}, "alone": 0.0, "stops": 0.0, "breakdown": 0.0, "lift": 0.15,
+             "ending": {"cold": 0.5, "ring": 0.5}, "entrances": 0.5,
              "backing": {"echo": 0.4, "oohs": 0.3, "": 0.3}, "drop": 0.8, "half": 0.0},
     swaps={"piano": {"organ": 0.3}},  # the stabs are sometimes an organ's
     sound={"players": {"drummachine": {"kit": "909"}, "synthpad": {"sidechain": "classic"},
                        "synthbass": {"sidechain": "subtle"}, "piano": {"sidechain": "subtle"},
                        "arp": {"sidechain": "subtle"}},
            "intro": "open"},
+    loops=HOUSE_LOOPS,
+    looped=("intro", "verse", "refrain", "turn", "break", "tag", "outro"),  # the bridge keeps the song's own chords
+    # the intro builds in layers (bars in: the drums, the bass at five, the pad and stabs at nine, the tune or the
+    # chop at thirteen), the outro leaves in layers (bars out: the stabs, pad and pluck at nine, the bass at thirteen)
+    form={"bars": {"intro": 16, "turn": 4, "outro": 16}, "after": {"drop": 8, "last": 8},
+          "layers": {"intro": {"bass": 4, "chords": 8, "lead": 12}, "outro": {"chords": 8, "bass": 12}}},
+    hook=HOUSE_HOOK,
 )
+
+DUB_DESK = {
+    **DESK,
+    # the version (Style.dissolve): bars dropping out more, a fragment's echo longer and louder, the spring kicked more,
+    # the band's low-pass swept closed and open now and then, the bass leading, the melodica resting a line now and then
+    "dissolved": {"dropout": 0.45, "feedback": 0.72, "voice_level": 0.8, "voice_throw": 0.9, "voice_spring": 0.2,
+                  "splash": 0.3, "sweep": 0.5, "sweep_bars": 2, "bass": 1.12, "others": 0.9, "rest": 0.5},
+}
 
 DUB = _def(
     "dub", "dub and roots reggae: the kit's one drop, the skank on the off-beats, an organ's bubble, a deep round bass "
-           "with space, a melodica's answers, and the mixing desk played: echoes thrown, a spring splashed, the band "
-           "dropping out and back, a version after the song",
+           "with space, a melodica's answers, and the mixing desk played: the song sung, then taken apart into "
+           "its version over a riddim, the singer's lines in fragments thrown into the echo, the band dropping out "
+           "and back",
     {"kit": 0.9, "ebass": 1.05, "electric": 0.95, "organ": 0.6, "melodica": 0.75},
     {"kit": {"verse1": ((0.3, "onedrop"), (0.0, "")), "*": "onedrop", "last": "steppers", "version": "onedrop"},
      "ebass": {"*": "dubbass"},
-     "electric": {"verse1": ((0.3, "skank"), (0.0, "")), "*": "skank"},
-     "organ": {"verse1": "", "verse": ((0.45, "bubble"), (0.0, "")), "*": "bubble", "bridge": "pad"},
+     "electric": {"verse1": ((0.3, "skank"), (0.0, "")), "*": "skank", "dubbed": "skank"},
+     "organ": {"verse1": "", "verse": ((0.45, "bubble"), (0.0, "")), "*": "bubble", "bridge": "pad",
+               "dubbed": "bubble"},
      "melodica": {"verse1": "", "verse": "fills", "refrain": ((0.6, "fills"), (0.0, "")), "last": "fills",
-                  "bridge": "", "tag": "", "version": "lead"}},
-    ("melodica", "organ"), {"swing": 0.65, "straight": 0.35}, {"*": (0.72, 0.78, 0.86)},
+                  "bridge": "", "tag": "", "version": "lead", "dubbed": "lead"}},
+    ("melodica", "organ"), {"swing": 0.65, "straight": 0.35}, {"*": (0.73, 0.77, 0.81)},
     {"vi": ("7",), "ii": ("7",), "iii": ("7",)}, 0.2, (0.55, -0.55),
     band={"wear": 0.1, "brightness": -0.08},
     singer={"vibrato_depth": -6.0, "scoop": 0.04},
     mix={"space": 0.15, "width": 0.1, "wear": 0.08, "tilt": -0.3, "plate": 0.2},
     options={"intro": {"lead": 0.6, "pad": 0.1, "count": 0.3}, "alone": 0.1, "stops": 0.0, "breakdown": 0.35,
-             "lift": 0.0, "ending": {"version": 0.65, "ring": 0.2, "cold": 0.15}, "entrances": 0.3,
-             "backing": {"thirds": 0.4, "echo": 0.3, "": 0.3}, "half": 0.0},
-    desk=DESK,
+             "lift": 0.0, "ending": {"version": 0.75, "ring": 0.15, "cold": 0.1}, "entrances": 0.3,
+             "backing": {"thirds": 0.4, "echo": 0.3, "": 0.3}, "half": 0.0, "dissolve": 0.9,
+             "slack": 4.0},  # a riddim under fragments may rub a little more than a loop under the whole tune
+    desk=DUB_DESK,
+    loops={"roots": ((1, 4), False), "minor": ((6, 4), False), "plagal": ((4, 1), False)},  # the riddims
+    looped=("version",),  # the version's sections (Style.dissolve), and so the dub-out after the song
 )
 
 STYLES[HOUSE.name] = HOUSE
@@ -722,6 +778,391 @@ def desk_of(params) -> dict:
     if sdef.desk:
         return sdef.desk
     return VERSION_DESK if params.style.ending == "version" else {}
+
+
+# --- a loop of the style's own (2026-09-30, evening; docs/STYLES.md, "House and dub, again") ------------------------
+#
+# A loop is scale degrees a bar, the mode's own chords on them (a seventh where the style voices sevenths), laid
+# under the sections the style loops from each section's first bar, round and round, in place of the song's chords
+# (composition.form_phrases). Which loop: the rendition's (Style.loop), or the one that best fits the tune.
+
+NUMERALS = ("I", "II", "III", "IV", "V", "VI", "VII")
+SEVENTH_NAMES = {(4, 7, 11): "maj7", (3, 7, 10): "m7", (4, 7, 10): "7", (3, 6, 10): "m7b5", (3, 6, 9): "dim7"}
+LOOP_SLACK = 2.0  # beats: a loop fits if it clashes with the tune no more than the song's own chords and this much
+
+
+def loop_symbols(degrees, sevenths: bool, mode: str) -> list[str]:
+    """A loop's chords in a mode, one a bar, as the genome writes chords: the mode's triad on each degree (a plain
+    numeral, lower case where it is minor), or its seventh chord (vim7, IVmaj7, V7) where the style voices sevenths;
+    a major tonic an added ninth instead (Iadd9: a maj7's leading tone would sit a semitone under the tune's home)."""
+    from .theory import degree_semitones
+
+    out = []
+    for d in degrees:
+        tones = [degree_semitones(d + 2 * k, mode) for k in range(4)]
+        steps = tuple(t - tones[0] for t in tones[1:])
+        numeral = NUMERALS[d - 1] if steps[0] == 4 else NUMERALS[d - 1].lower()
+        quality = SEVENTH_NAMES.get(steps, "") if sevenths else ""
+        if sevenths and d == 1 and steps[0] == 4:
+            quality = "add9"
+        out.append(numeral + quality)
+    return out
+
+
+def _chord_pcs(symbol: str, mode: str, triad: bool = True) -> set:
+    from .theory import chord_tones
+
+    tones = chord_tones(symbol, mode)
+    return {t % 12 for t in (tones[:3] if triad else tones)}
+
+
+def tune_clash(genome, mode: str, chord_at) -> float:
+    """How much of the song's verse and refrain tune clashes with the chords `chord_at(section, line, bar, onset)`
+    gives (a symbol): the beats of sung notes that aren't tones of their chord (a seventh counts: the tune on a maj7 is
+    its colour; a seventh a semitone from a sung note steps aside) and are a semitone from one of its triad,
+    a long or strong note (a beat or more, or on a foot) counted whole and a passing one a third."""
+    from .theory import degree_semitones
+
+    m = genome.meter
+    bad = 0.0
+    for name in ("verse", "refrain"):
+        if name not in genome.sections:
+            continue
+        for line, pid in enumerate(genome.section(name).phrases):
+            p = genome.phrases[pid]
+            for n in p.sung:
+                bar = int(min(max(n.onset // m.bar, 0), p.bars - 1))
+                symbol = chord_at(name, line, bar, n.onset)
+                chord, whole = _chord_pcs(symbol, mode), _chord_pcs(symbol, mode, triad=False)
+                pc = degree_semitones(n.degree, mode, n.alter) % 12
+                if pc in whole or not any(min((pc - t) % 12, (t - pc) % 12) == 1 for t in chord):
+                    continue
+                w = n.dur / m.beat
+                bad += w if n.dur >= m.beat or n.onset % m.foot == 0 else w / 3.0
+    return round(bad, 4)
+
+
+def _own_chord(genome, name, line, bar, onset) -> str:
+    p = genome.phrases[genome.section(name).phrases[line]]
+    in_bar = p.chords[bar]
+    return in_bar[int(min(max((onset - bar * genome.meter.bar) * len(in_bar) // genome.meter.bar, 0), len(in_bar) - 1))]
+
+
+def loop_clash(genome, degrees, sevenths: bool, mode: str) -> float:
+    """tune_clash() for a loop laid from each section's first bar."""
+    symbols = loop_symbols(degrees, sevenths, mode)
+
+    def at(name, line, bar, onset):
+        before = sum(genome.phrases[q].bars for q in genome.section(name).phrases[:line])
+        return symbols[(before + bar) % len(symbols)]
+
+    return tune_clash(genome, mode, at)
+
+
+def fitting_loops(genome, sdef: StyleDef, mode: str) -> list[str]:
+    """The style's loops that fit the tune in this mode (no more clash than the song's own chords and the style's
+    slack, LOOP_SLACK by default), in the style's order; where none does, ["song"]: the song's own chords (the style's
+    form, bass and hook carry it there)."""
+    if not sdef.loops:
+        return []
+    own = tune_clash(genome, mode, lambda n, line, bar, onset: _own_chord(genome, n, line, bar, onset))
+    scores = {name: loop_clash(genome, d, s, mode) for name, (d, s) in sdef.loops.items()}
+    fit = [name for name in sdef.loops if scores[name] <= own + sdef.options.get("slack", LOOP_SLACK) + 1e-9]
+    return fit or ["song"]
+
+
+def loop_of(genome, params) -> list[str] | None:
+    """The rendition's loop as chords a bar in its mode (Style.loop, or the style's best-fitting one), or None: the
+    song's own chords (a style without loops, or "song")."""
+    name = params.style.name
+    sdef = STYLES.get(name) if name else None
+    if sdef is None or not sdef.loops or params.style.loop == "song":
+        return None
+    chosen = params.style.loop if params.style.loop in sdef.loops else fitting_loops(genome, sdef, params.mode)[0]
+    if chosen not in sdef.loops:
+        return None
+    degrees, sevenths = sdef.loops[chosen]
+    return loop_symbols(degrees, sevenths, params.mode)
+
+
+def section_role(genome, name: str) -> str:
+    """A section's role as the band names it (songbird.band): intro, verse, refrain, turn, break, bridge, tag, outro."""
+    from .band import _role
+
+    return _role(name, genome.section(name))
+
+
+def dissolved_from(genome, params) -> int | None:
+    """The first section of the form that is the version (Style.dissolve: the section after that refrain), or None."""
+    k = int(getattr(params.style, "dissolve", 0) or 0)
+    refrains = [i for i, name in enumerate(params.form) if genome.section(name).lyrics == "refrain"]
+    if not 0 < k <= len(refrains) or refrains[k - 1] + 1 >= len(params.form):
+        return None
+    return refrains[k - 1] + 1
+
+
+def own_lines(genome, params) -> list:
+    """Each section of the form's tune lines as the style lays them where it has lengths of its own (StyleDef.form:
+    house's 16-bar intro and outro, its four-bar turns, the drop's eight bars of the hook before its refrain is sung,
+    the last refrain's eight after it), each (line, sung); None where the section is the form's own. The hook's bars
+    are laid on the song's turn (a line with no tune: the chop has them to itself), or where it has none, on the
+    section's last lines, played. A person's length is laid over this (songbird.takeover)."""
+    sdef = STYLES.get(params.style.name) if params.style.name else None
+    if sdef is None or not sdef.form:
+        return [None] * len(params.form)
+    from .takeover import fit
+
+    bars, after = sdef.form.get("bars", {}), sdef.form.get("after", {})
+    refrains = [k for k, name in enumerate(params.form) if genome.section(name).lyrics == "refrain"]
+    drop = int(getattr(params.style, "drop", 0) or 0)
+    into = refrains[drop] if 0 < drop < len(refrains) else None
+    out = []
+    for k, name in enumerate(params.form):
+        section = genome.section(name)
+        role = section_role(genome, name)
+        own = list(section.phrases)
+        size = sum(genome.phrases[p].bars for p in own)
+        lines = None
+        if role in bars and not section.lyrics and bars[role] != size:
+            if any(genome.phrases[p].sung for p in own):
+                lines = fit(genome, name, bars[role], False)
+            elif bars[role] % size == 0:  # a turn: its own line (a quote, or the style's hook) round again
+                lines = [(p, False) for p in own] * (bars[role] // size)
+        if section.lyrics == "refrain" and (k == into or k == len(params.form) - 1):
+            before = hook_lines(genome, own, after.get("drop", 0)) if k == into else []
+            behind = hook_lines(genome, own, after.get("last", 0)) if k == len(params.form) - 1 else []
+            if before or behind:
+                lines = [(p, False) for p in before] + [(p, True) for p in own] + [(p, False) for p in behind]
+        out.append(lines)
+    return out
+
+
+def hook_lines(genome, own: list, bars: int) -> list:
+    """Lines making `bars` bars for a style's hook: the song's turn round again (a line with no tune) where it has one
+    that fits, else the section's own last lines (takeover.tail); [] for none."""
+    from .takeover import tail
+
+    if bars <= 0:
+        return []
+    turn = [p for p in (genome.sections["turn"].phrases if "turn" in genome.sections else ())]
+    size = sum(genome.phrases[p].bars for p in turn)
+    if turn and size and bars % size == 0 and not any(genome.phrases[p].sung for p in turn):
+        return turn * (bars // size)
+    return tail(genome, own, bars) or []
+
+
+def breakdown_of(genome, params) -> tuple[int, int] | None:
+    """The sections of the form a drop's breakdown holds (Style.drop), as (first, the drop's refrain), or None."""
+    drop = int(getattr(params.style, "drop", 0) or 0)
+    refrains = [k for k, name in enumerate(params.form) if genome.section(name).lyrics == "refrain"]
+    if not 0 < drop < len(refrains) or refrains[drop] - refrains[drop - 1] < 2:
+        return None
+    return refrains[drop - 1] + 1, refrains[drop]
+
+
+def hook_bars(genome, params, lead: float) -> list[tuple[float, float, str]]:
+    """Where a style's vocal chop sings (StyleDef.hook, house's), in grid units: (from, to, how): its turns whole, the
+    bars the style lays in a refrain before or after its lines (own_lines: the drop's before, the last's after), the
+    intro's last bars where no instrument states the tune there, the outro's first half; "soft" in a breakdown, "drop"
+    at the drop and "last" after the last refrain (the answer, "now it's by you", joins the call in both)."""
+    sdef = STYLES.get(params.style.name) if params.style.name else None
+    if sdef is None or not sdef.hook:
+        return []
+    from .takeover import phrase_plan, spans
+
+    bar = genome.meter.bar
+    down = breakdown_of(genome, params)
+    refrains = [k for k, name in enumerate(params.form) if genome.section(name).lyrics == "refrain"]
+    styled = own_lines(genome, params)
+    out = []
+    for k, ((sid, name, a, b), lines) in enumerate(zip(spans(genome, params, lead), phrase_plan(genome, params))):
+        role = section_role(genome, name)
+        soft = down is not None and down[0] <= k < down[1]
+        how = "soft" if soft else "full"
+        if role == "turn":
+            out.append((a, b, how))
+        elif role == "refrain" and lines == styled[k] and any(not sung for _p, sung in lines):  # the style's bars
+            u, run = a, None
+            for pid, sung in lines + [("", True)]:
+                if not sung and run is None:
+                    run = u
+                elif sung and run is not None:
+                    drop = down is not None and k == down[1] and run == a  # the drop: the hook before the refrain
+                    out.append((run, u, "drop" if drop else "last" if k == refrains[-1] else how))
+                    run = None
+                u += genome.phrases[pid].bars * bar if pid else 0
+        elif role == "intro" and params.style.intro != "lead" and b - a >= 8 * bar:
+            out.append((b - 4 * bar, b, how))
+        elif role == "outro" and b - a >= 8 * bar:
+            out.append((a, a + (b - a) / 2, how))
+    return [(a, z, how) for a, z, how in out if z > a + 1e-9]
+
+
+def hook_words(genome, placed, which: str, n: int) -> list[tuple[str, str, int, int]]:
+    """The chop's words and notes: the last words (up to n syllables, the last word at least) of the first refrain's
+    first line ("call") or the last refrain's last line ("answer"), as sung there: (syllable, word, syllables in the
+    word, pitch degree index in the line)."""
+    from .genome import sung_words
+
+    refrains = [(name, phrase, line) for name, phrase, _s, line in placed
+                if genome.section(name).lyrics == "refrain" and line]
+    if not refrains:
+        return []
+    firsts = [r for r in refrains if r[1].id == genome.section(r[0]).phrases[0]]
+    lasts = [r for r in refrains if r[1].id == genome.section(r[0]).phrases[-1]]
+    pick = (firsts[:1] if which == "call" else lasts[-1:]) or refrains[:1]
+    name, phrase, line = pick[0]
+    words = sung_words(line)[: len(phrase.sung)]
+    groups, j = [], 0
+    while j < len(words):  # the syllables word by word
+        groups.append(j)
+        j += max(1, words[j][2])
+    k = groups[-1]
+    for g in reversed(groups[:-1]):  # back a whole word at a time, as far as n syllables
+        if len(words) - g > n:
+            break
+        k = g
+    return [(s, w, c, j) for j, (s, w, c) in enumerate(words) if j >= k]
+
+
+def chops(genome, params, placed, clock, melody) -> list:
+    """A style's vocal chop (house's): the singer singing a short phrase of the song's own words, short and on the grid,
+    over and over in the hook's bars (hook_bars), on a two-bar rhythm drawn for the rendition; the song's own notes.
+    The chop's own part ("chop": the singer's voice, made without breaths and mixed into the band, on the grid,
+    not with the singer's lay), clear of anything sung; [] for a style without a hook."""
+    sdef = STYLES.get(params.style.name) if params.style.name else None
+    if sdef is None or not sdef.hook or not placed:
+        return []
+    from .score import Note
+    from .theory import degree_semitones
+
+    hook = sdef.hook
+    bars = hook_bars(genome, params, clock.lead)
+    if not bars:
+        return []
+    m = genome.meter
+    sixteenth = m.beat / 4.0
+    rhythms = hook["rhythms"]
+    names = sorted(rhythms)
+    rng = np.random.default_rng([int(params.seed) & 0xFFFFFFFF, 0xC409])
+    first = int(rng.integers(len(names)))  # the rendition's rhythm; the drop takes the next (a change of figure)
+    sung = sorted((m_["u"], m_["u_end"]) for m_ in melody if m_.get("syllable"))
+
+    def voiced(which):
+        words = hook_words(genome, placed, which, hook.get("syllables", 4))
+        if not words:
+            return []
+        phrase = next(p for name, p, _s, line in placed if line and genome.section(name).lyrics == "refrain"
+                      and (p.id == genome.section(name).phrases[0 if which == "call" else -1]))
+        notes = phrase.sung
+        out = [(s, w, c, params.tonic + degree_semitones(notes[j].degree, params.mode, notes[j].alter))
+               for s, w, c, j in words if j < len(notes)]
+        while 0 < len(out) < 4:  # a short phrase stutters its first syllable in
+            out.insert(0, out[0])
+        return out
+
+    call, answer = voiced("call"), voiced("answer")
+    if not call:
+        return []
+    from .takeover import spans
+
+    where = spans(genome, params, clock.lead)
+    level = {"soft": hook["soft"], "drop": hook["drop"]}
+    out = []
+    for u0, u1, how in bars:
+        k = 0
+        start = u0
+        while start < u1 - 1e-9:
+            second = k % 2 == 1
+            if how == "soft" and second:
+                start += m.bar
+                k += 1
+                continue
+            words = answer if how in ("last", "drop") and second and answer else call
+            rhythm = rhythms[names[(first + (how == "drop")) % len(names)]]
+            figure = rhythm[1] if second else rhythm[0]
+            for step, j, length in figure:
+                j = min(j, len(words) - 1)
+                u = start + step * sixteenth
+                end = min(u + length * sixteenth, u1)
+                if u >= u1 - 1e-9 or any(a < end + sixteenth - 1e-9 and u - 1e-9 < z for a, z in sung):
+                    continue
+                s, w, c, pitch = words[j]
+                t0, t1 = clock.seconds(u), clock.seconds(end)
+                section = next((name for _sid, name, a, b in where if a - 1e-9 <= u < b - 1e-9), params.form[-1])
+                out.append(Note(part="chop", start=t0, dur=max(0.1, hook.get("staccato", 0.85) * (t1 - t0)),
+                                pitch=float(pitch), vel=level.get(how, hook["vel"]), syllable=s, word=w,
+                                word_len=c, line_end=j == len(words) - 1, section=section, phrase=""))
+            start += m.bar
+            k += 1
+    return out
+
+
+FRAGMENTS = {"end": 0.4, "head": 0.2, "tail": 0.2, "whole": 0.05, "none": 0.15}  # a dissolved line's, by its coin
+HOOK_LINE = {"whole": 0.5, "tail": 0.5}  # a refrain's first line in the version: the hook at least
+
+
+def fragments(genome, params, placed) -> dict[int, set]:
+    """The syllables the singer keeps of each line in the version (Style.dissolve): {placed index: the syllables'
+    indices sung}, for the lines after the song dissolves (but the bridge's: it comes back whole); every other line
+    sung whole (absent). Each line by its own coin: its last word, its first or second half (at the word nearest the
+    middle), all of it now and then, or nothing; a refrain's first line keeps at least its second half ("nobody
+    knows"), the last refrain's last line its second half ("now it's by you")."""
+    start = dissolved_from(genome, params)
+    if start is None:
+        return {}
+    from .genome import sung_words
+    from .takeover import phrase_plan
+
+    owner = [k for k, lines in enumerate(phrase_plan(genome, params)) for _ in lines]
+    refrains = [k for k, name in enumerate(params.form) if genome.section(name).lyrics == "refrain"]
+    out: dict[int, set] = {}
+    for j, (name, phrase, _s, line) in enumerate(placed):
+        if j >= len(owner) or not dissolves(genome, params, owner[j], start) or not line:
+            continue
+        n = len(phrase.sung)
+        words = sung_words(line)[:n]
+        groups, g = [], 0
+        while g < len(words):
+            groups.append(g)
+            g += max(1, words[g][2])
+        inner = [g for g in groups if 0 < g < n] or [n // 2]
+        middle = min(inner, key=lambda g: (abs(g - n / 2.0), g))
+        own = genome.section(name).phrases
+        rng = np.random.default_rng([int(params.seed) & 0xFFFFFFFF, 0xD0B, j])
+        u = float(rng.random())
+        if genome.section(name).lyrics == "refrain" and phrase.id == own[0]:
+            kind = pick(HOOK_LINE, u)
+        elif owner[j] == refrains[-1] and phrase.id == own[-1]:
+            kind = "tail"
+        else:
+            kind = pick(FRAGMENTS, u)
+        keep = {"end": range(groups[-1] if groups else 0, n), "head": range(0, middle), "tail": range(middle, n),
+                "whole": range(0, n), "none": range(0)}[kind]
+        out[j] = set(keep)
+    return out
+
+
+def looped(genome, params) -> list[bool]:
+    """Whether each section of the form takes the style's loop: its role is one the style loops, or, for "version",
+    it is after the song dissolves (Style.dissolve)."""
+    sdef = STYLES.get(params.style.name) if params.style.name else None
+    if sdef is None or not sdef.loops:
+        return [False] * len(params.form)
+    start = dissolved_from(genome, params)
+    out = []
+    for k, name in enumerate(params.form):
+        role = section_role(genome, name)
+        out.append(role in sdef.looped or ("version" in sdef.looped and dissolves(genome, params, k, start)))
+    return out
+
+
+def dissolves(genome, params, k: int, start: int | None = None) -> bool:
+    """Whether the k-th section of the form is the version (Style.dissolve): after the song dissolves, but for the
+    bridge, which comes back whole (sung, the lineage's choir with it, on the song's own chords: the vocal dropping
+    back in is a dub's move too)."""
+    start = dissolved_from(genome, params) if start is None else start
+    return start is not None and k >= start and section_role(genome, params.form[k]) != "bridge"
 
 
 # --- how a rendition's style is chosen ---------------------------------------------------------------
@@ -866,7 +1307,7 @@ def feels_for(genome, sdef: StyleDef) -> dict:
 
 
 def choose_options(genome, form, sdef: StyleDef, parent: Style, kept: bool, voices: int, material: str,
-                   drift, c) -> dict:
+                   drift, c, mode: str = "") -> dict:
     """The arrangement's options for a rendition in this style: its feel, how much colour, how it starts and
     ends, which verse is bare or in stop-time, a breakdown, a lift, entrances, what the backing voices sing."""
     o = sdef.options
@@ -914,6 +1355,12 @@ def choose_options(genome, form, sdef: StyleDef, parent: Style, kept: bool, voic
     if o.get("drop") and len(refrains) >= 2 and coin(material, "drop", drift) < o["drop"]:
         # a breakdown and a drop (house's habit): after the second refrain, the first where the song has two
         out["drop"] = 2 if len(refrains) >= 3 else 1
+    if sdef.loops and mode:  # a loop of the style's own, one that fits the tune in this mode (a coin of its own)
+        fit = fitting_loops(genome, sdef, mode)
+        out["loop"] = fit[min(len(fit) - 1, int(coin(material, "loop") * len(fit)))]
+    if o.get("dissolve") and refrains and coin(material, "dissolve", drift) < o["dissolve"]:
+        # the song dissolves into its version after half its refrains (at least the first)
+        out["dissolve"] = max(1, len(refrains) // 2) if len(refrains) >= 2 else 0
     return out
 
 
@@ -968,7 +1415,8 @@ def choose_style(out: dict, ctx, forced: str | None = None, arrange: dict | None
     material = f"{c.hash or 'no-voice'}|{digest}|{name}"
     form = tuple(out.get("form", ctx.parent.form))
     voices = int(out.get("choir", ctx.parent.choir))
-    options = choose_options(ctx.genome, form, sdef, parent, kept, voices, material, ctx.drift, c)
+    options = choose_options(ctx.genome, form, sdef, parent, kept, voices, material, ctx.drift, c,
+                             out.get("mode", ctx.parent.mode))
     if arrange and kept and "identity" not in c.known:
         # a person choosing one of the options with no machine to draw the rest: the rest as the version had them
         options = {k: v for k, v in parent.to_dict().items() if k not in ("name", "lineage")}
