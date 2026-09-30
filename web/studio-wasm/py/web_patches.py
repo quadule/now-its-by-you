@@ -23,7 +23,20 @@ class _Windows:
         return self.x[rows[:, None] + self.offsets[None, :]]
 
 
-def install() -> None:
-    from songbird.synth import master
+def _dgemm_linear(x: np.ndarray, w: dict, name: str) -> np.ndarray:
+    """throat._linear (x @ W.T + b) by BLAS: Pyodide's numpy has none (its matmul is a plain loop, ~1 GFLOP/s,
+    4x slower than scipy's OpenBLAS here). Summed in another order, as native numpy's BLAS also does."""
+    from scipy.linalg import blas
+
+    W, b = w[f"{name}.weight"], w[f"{name}.bias"]
+    if x.dtype != np.float64 or W.dtype != np.float64 or x.ndim != 2 or len(x) < 64:
+        return x @ W.T + b
+    return blas.dgemm(1.0, x, W, trans_b=True) + b
+
+
+def install(dgemm: bool = True) -> None:
+    from songbird.synth import master, throat
 
     master.sliding_window_view = _Windows
+    if dgemm:
+        throat._linear = _dgemm_linear

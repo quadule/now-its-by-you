@@ -33,7 +33,7 @@ const tPk = performance.now();
 rt.setHeap(() => py._module.HEAPU8.buffer);
 let manifest = fs.readFileSync(path.join(root, 'kernels/manifest.json'), 'utf8');
 if (mode === 'python') manifest = '{}';
-const env = { SONGBIRD_THREADS: '1', SONGBIRD_KERNEL_TIMES: args.includes('--times') ? '1' : '0' };
+const env = { SONGBIRD_THREADS: '1', SONGBIRD_WEB_DGEMM: args.includes('--no-dgemm') ? '0' : '1', SONGBIRD_KERNEL_TIMES: args.includes('--times') ? '1' : '0' };
 if (mode !== 'wasm') py.registerJsModule('songbird_kernels', { kernels, rt, manifest });
 if (mode === 'wasm') {
   const { loadWasmKernels } = await import('../wasm/kernels.mjs');
@@ -61,7 +61,7 @@ import section as S
 from songbird.synth import instruments
 instruments.registry()
 import web_patches
-web_patches.install()
+web_patches.install(dgemm=os.environ.get("SONGBIRD_WEB_DGEMM", "1") == "1")
 IMPORT_S = time.perf_counter() - t
 `);
 const tImp = performance.now();
@@ -70,6 +70,12 @@ log(`load: pyodide ${((tPy - t0) / 1000).toFixed(2)}s, numpy+scipy ${((tPk - tPy
 log('ported:', py.runPython(`
 from collections import Counter
 str(dict(Counter(numba.PORTED.values())))`));
+
+if (opt('--exec', null)) {  // a Python file run in the prepared Pyodide instead of a render
+  const code = fs.readFileSync(opt('--exec'), 'utf8');
+  try { await py.runPythonAsync(code); } catch (err) { log(String(err.message).split('\n').slice(-12).join('\n')); }
+  process.exit(0);
+}
 
 // told each part's name as the render starts it: the wasm heap then (it only grows: its size is the peak)
 let t = 0;
@@ -106,6 +112,17 @@ for k, v in sorted(numba.TIME.items(), key=lambda kv: -kv[1])[:25]:
     lines.append(f"  {k:32s} {v:8.3f}s {numba.CALLS[k]:6d} calls  {numba.PORTED.get(k)}")
 "\\n".join(lines)`));
   }
+}
+if (args.includes('--profile')) {  // where the Python side's time goes (cProfile, by own time)
+  log(py.runPython(`
+import cProfile, pstats, io
+pr = cProfile.Profile()
+pr.enable()
+S.whole(${JSON.stringify(song)}) if ${JSON.stringify(which)} == 'whole' else S.section(${JSON.stringify(song)}, int(${JSON.stringify(which)}))
+pr.disable()
+buf = io.StringIO()
+pstats.Stats(pr, stream=buf).sort_stats('tottime').print_stats(35)
+buf.getvalue()`));
 }
 if (out) {
   py.runPython(`import numpy as np; np.save('/tmp/out.npy', PCM)`);
