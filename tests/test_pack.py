@@ -101,6 +101,56 @@ def test_a_record_for_other_audio_is_refused(rendition):
         pack.pack(flac, {**record, "id": "0" * 64}, GENOME)
 
 
+def test_a_replay_is_compared_with_its_recording_sample_by_sample():
+    rng = np.random.default_rng(5)
+    a = rng.integers(-20000, 20000, (44100, 2)).astype("<i2")
+    assert pack.compare_samples(a, a.copy()) == "matches"
+    near = a.copy()
+    near[100, 0] += 3  # another platform's rounding: a step or three here and there
+    near[200, 1] -= 1
+    assert pack.compare_samples(near, a) == "matches within 3 steps (largest difference −80.8 dB)"
+    edge = a.copy()
+    edge[7, 0] += pack.SMALL_STEPS
+    assert pack.compare_samples(edge, a).startswith(f"matches within {pack.SMALL_STEPS} steps")
+    far = a.copy()
+    far[22050, 1] += 1000  # a real change, half a second in
+    assert pack.compare_samples(far, a) == "differs by up to 1000 steps (−30.3 dB), the most at 0.500 s"
+    assert pack.compare_samples(a[:-10], a).startswith("differs: 44090 samples long")
+    assert pack.compare_samples(a[:, :1], a) == "differs: 1 channels, the recording 2"
+    assert pack.compare_samples(a[:, 0], a[:, 0]) == "matches"  # mono, as one channel
+
+
+def test_replay_says_how_it_compares_with_the_recording_at_hand(rendition, tmp_path):
+    from songbird import cli
+
+    flac, pcm, record = rendition
+    near = pcm.copy()
+    near[10, 0] += 2
+    out = tmp_path / "again.flac"
+    master.write_flac(out, near, 44100)
+    made = {"id": master.pcm_sha256(near)}
+    # a render record, its FLAC beside it (render_one writes NAME.flac and NAME.json)
+    (tmp_path / "song.json").write_text(json.dumps(record))
+    recorded, beside = cli.recording_of(tmp_path / "song.json")
+    assert beside and cli.replayed(record, made, out, recorded, beside) == \
+        "matches within 2 steps (largest difference −84.3 dB)"
+    assert cli.replayed(record, {"id": record["id"]}, out, recorded, beside) == "matches"  # the same id
+    # a packet carries its own recording
+    packet = tmp_path / "packet.flac"
+    pack.pack(flac, record, GENOME, out=packet)
+    recorded, beside = cli.recording_of(packet)
+    assert not beside and cli.replayed(record, made, out, recorded, beside).startswith("matches within 2 steps")
+    # no recording at hand (or the one beside is another rendition's): only the ids can be compared
+    alone = tmp_path / "alone" / "song.json"
+    alone.parent.mkdir()
+    alone.write_text(json.dumps(record))
+    assert cli.recording_of(alone) == (None, False)
+    assert cli.replayed(record, made, out, None, False).startswith("differs from the record's id")
+    other = {**record, "id": "0" * 64}
+    recorded, beside = cli.recording_of(tmp_path / "song.json")
+    assert cli.replayed(other, made, out, recorded, beside).startswith("differs from the record's id")
+
+
 def test_lineage_counts_generations():
     seed = {"id": "a" * 64, **pack.lineage(None)}
     child = {"id": "b" * 64, **pack.lineage(seed)}

@@ -235,12 +235,40 @@ def parent_of(record: dict) -> dict | None:
             "singer": sang[0].get("singer") if sang else None, "lineage_singers": sang[1:]}
 
 
+def recording_of(path: str | Path) -> tuple[bytes | None, bool]:
+    """The audio a record describes, if it is at hand: a packet's own, or the FLAC a render wrote beside its
+    .json record (render_one writes NAME.flac and NAME.json); and whether it came from beside the record."""
+    path = Path(path)
+    if pack_mod.read_manifest(path) is not None:
+        return pack_mod.audio_bytes(path), False
+    beside = path.with_suffix(".flac")
+    return (pack_mod.audio_bytes(beside), True) if beside.is_file() and beside != path else (None, False)
+
+
+def replayed(record: dict, made: dict, out: Path, recorded: bytes | None, beside: bool) -> str:
+    """How a replay (its record made, its audio at out) compares with the rendition the record describes, in
+    pack.compare_samples' words: by their samples when the recording is at hand, else by their ids. A FLAC
+    beside the record that holds other samples (rendered again since) is no recording of it."""
+    if record.get("id") and made["id"] == record["id"]:
+        return "matches"
+    if recorded is not None:
+        heard = pack_mod.samples(recorded)
+        if not (beside and record.get("id") and master.pcm_sha256(heard) != record["id"]):
+            return pack_mod.compare_samples(pack_mod.samples(pack_mod.audio_bytes(out)), heard, synth.SR)
+    if not record.get("id"):
+        return "can't say: the record names no samples to compare with"
+    return (f"differs from the record's id ({made['id'][:12]}, the record {record['id'][:12]}); no recording "
+            f"of it is at hand to compare the samples with")
+
+
 def replay_command(args: argparse.Namespace, genome) -> int:
     """A rendition rendered again exactly as its record says: its parameters, the words it recorded (not
-    drawn again), its machine and moment, and the small performance it carries."""
+    drawn again), its machine and moment, and the small performance it carries. Then it says how the replay
+    compares with the recording (replayed): 0 if it matches, sample for sample or within a few steps, 1 if not."""
     from .arrange import Lyrics
 
     record = pack_mod.read_record(args.replay)
+    recorded, beside = recording_of(args.replay)  # read now: the replay may be written over it
     params = Params.from_dict(record["params"])
     # The final singer and mix include any overrides used for the original.
     # They can differ from the machine's choices stored in params.
@@ -258,11 +286,13 @@ def replay_command(args: argparse.Namespace, genome) -> int:
         choir_json = [json.loads(Path(f).read_text()) for f in args.choir_phrasing]
     parent = parent_of(record)
     out = Path(args.out or Path("renders") / (Path(args.genome).stem + ".replay.flac"))
-    render_one(genome, params, out, voice=voice, drift=drift, lyrics=lyrics, phrasing_json=phrasing_json,
-               choir_json=choir_json, singer_overrides=args.voice, stems=args.stems, midi_file=args.midi, mix_overrides=args.mix,
-               parent=parent, packet_genome=args.genome if args.pack else None,
-               chosen_by_you=record.get("chosen_by_you"))
-    return 0
+    made = render_one(genome, params, out, voice=voice, drift=drift, lyrics=lyrics, phrasing_json=phrasing_json,
+                      choir_json=choir_json, singer_overrides=args.voice, stems=args.stems, midi_file=args.midi,
+                      mix_overrides=args.mix, parent=parent, packet_genome=args.genome if args.pack else None,
+                      chosen_by_you=record.get("chosen_by_you"))
+    said = replayed(record, made, out, recorded, beside)
+    print(f"replay: {said}")
+    return 1 if said.startswith("differs") else 0
 
 
 def render_command(args: argparse.Namespace) -> int:
