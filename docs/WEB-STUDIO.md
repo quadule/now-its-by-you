@@ -886,6 +886,8 @@ it rendered to before, at one thread and two). Two threads unless said:
 | indie, 4 verses, every part, slowest | 345 s | the same | (past the container) → 2.48 GB | |
 | shanty | 151 s | bass claps concertina fiddle stomps voice | 1.66 → 1.13 GB | 1.56 → 1.10 GB |
 | string band | 125 s | banjo bass fiddle guitar mandolin voice | 1.12 → 1.12 GB | 0.99 → 0.97 GB |
+| house (2026-09-30, new) | 118 s | arp drummachine (a 909) piano synthbass synthpad voice | 0.97 GB | |
+| dub, with its version after the song (new) | 221 s | ebass electric kit melodica organ voice | 1.89 GB | |
 
 (The "before" column is the same measure taken again on the tree as the review found it; a few differ from the
 review's own figures by a few percent, and two of its drawn-out versions are measured here at the lengths these edits
@@ -924,6 +926,8 @@ go, on two threads, before → now:
 | synth folk (arp) | 6.5 → 6.4 | 4.4 → 4.5 |
 | lullaby (synthpad, musicbox) | 5.9 → 4.7 | 4.8 → **6.1** |
 | songwriter (harmonica) | 4.9 → 5.0 | 5.8 → 5.7 |
+| house (arp) | 6.4 | 4.5 |
+| dub (melodica, 2026-09-30) | 7.4 | 3.9 (a dub version of H's own shape is 3.7: it fits; a machine's longer shape, three verses and the bridge twice, is 5 minutes and doesn't) |
 
 Every style's own default now fits (country's 2.5 minutes and gospel's 3.75 were refused before: they would have
 killed the studio). `STUDIO_MEMORY=3g`, if the VPS can spare it, is about a quarter longer each.

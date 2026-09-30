@@ -475,8 +475,9 @@ So house and dub are **off the ring**: a person chooses them (`--style house`, t
 list), or a parent played in one hands it down. Each has an **anchor** on the ring, the style it sits
 beside (`OFF_RING`: house by synth folk, dub by lo-fi). A child of a house or dub parent is placed as
 if its parent were at the anchor: where it would stay, it keeps its parent's style; where the drift
-takes it a step, it steps onto the ring (house to indie or lo-fi, dub to ambient or synth folk). So a
-lineage can leave, never wander in by itself. Where they would go on the ring (house between synth
+takes it a step, it steps onto the ring at the anchor (house to synth folk, dub to lo-fi; as built,
+after the review: the nearest style, not a neighbour of it). So a lineage can leave, never wander in
+by itself. Where they would go on the ring (house between synth
 folk and indie, dub between ambient and lo-fi) is a decision for the artist, below.
 
 ### House (about 124 bpm)
@@ -637,3 +638,123 @@ tail (a few seconds), the spring the same; the version adds eight bars (about 25
 3. **The version** is eight bars after the song, the last refrain's chords; it could be sixteen, or a
    version of the verse.
 4. **The melodica** is new; the whistle could have taken the answers.
+
+## What the review changed
+
+A read-only Fable review of the design above, before it was built. Its points, and what was done:
+
+1. **The version would have dragged under the ritardando** (the slowing runs from the last line's first bar to
+   the song's end, which the version's bars join). A version holds its tempo and slows through its last two bars
+   only (`style.slowing`); the last line isn't slowed at all.
+2. **The version is a section of its own** (role "version"), not the last section stretched as the amen is: a
+   tag's winding-down parts would have played it, and a version counted as a refrain would have taken the "last"
+   parts and the lift from the sung refrain. It is left out of the band's sections the mix pairs with the score's
+   (the singer's arc), and out of the arrangement grid; a key lift still carries it.
+3. **`drop` in every record would have moved every child's seed** (`Style.to_dict` is every field, and a child's
+   seed hashes its parent's record): it is left out while 0 (`QUIET_OFF`), held to 0..8, and `version` and
+   `drop` are among a person's style options.
+4. **The ring is indexed by name in three places and pinned by a test**: `place()` and `neighbours()` find an
+   off-ring style's anchor first; the page's style list is built from every style (the ring's, then house and
+   dub), and a child stepping off one is said so; the palette's test is the ring and the pair beside it.
+5. **A person couldn't take the style's sound away**: a pump's preset **off**, and **false** at a boundary for
+   none of the style's transitions there; `/api/sound` and the record's "was" read the style's as the program's.
+6. **The style's transitions stay out of the person's table** (a breakdown's sweep is ten bars, which a person's
+   can't be): they are made in the score, under the person's, and the opening filter is a third sweep kind.
+7. **A drop needs a refrain after it**, and the old breakdown (the last refrain stripped to the rhythm) would
+   contradict it: house draws that one never, and the page words them apart ("the breakdown before the drop").
+8. **The grid checked**: kicks on the beats, claps on two and four, bass and skank on the odd eighths, the one
+   drop's kick on three, the bubble on the sixteenths. With dub's swing the bubble and the skank shuffle (the
+   off-beats land late, as the clock swings them): as reggae's do. House's soft hats are set over the velocity
+   below which a sparse band thins them, so the machine keeps its pattern.
+9. **Drop-outs belong to the score** (the notes left out, bar by bar), so the stems, the piano score, the browser
+   and a replay all agree: as designed; only the echo and the spring are the mix's.
+10. **No song-long throw bus**: each throw's return is added where it lands, window and tail only; and a version's
+    last chord rings six seconds, not three, so its last echoes aren't cut.
+11. **Each throw names its part**, cut from that part's channel while the mix has it in hand (the singer's from its
+    bus, before the record's sum).
+12. **The melodica as a harmonica patch** was weighed: the harmonica's player is a Richter harp's (holes, bends,
+    a harp's key chosen per part); a melodica shares only its reeds, so it is a small module of its own on the
+    harmonica's pieces (reed tables and their read kernel), with no new kernel.
+
+Two more came from measuring what was built: a style may set the odds of its half-time bridge (house and dub never:
+a half-time one drop is a crawl), and the desk's returns were set by mixing a render's stems with its throws and
+without (below). And one from reading a render's arrangement: where a breakdown holds a section nobody sings (a turn,
+a break), the lead plays the tune there over the pad (a piano breakdown), not eight bars of the pad alone.
+
+## As built
+
+| Where | What |
+|---|---|
+| songbird/style.py | `HOUSE`, `DUB`, `DESK`, `OFF_RING` in a block of their own; `Style.drop`, the ending `version`, `StyleDef.sound` and `.desk`; `coda`, `slowing` and `ring` for a version; `desk_of`, `on_ring`; `place` and `neighbours` by the anchor; a style's odds of a half-time bridge (`options["half"]`) |
+| songbird/idioms.py | the patterns (floor, house, drop, offbeat, rolling, stab, pluck; onedrop, steppers, dubbass, skank, bubble), in a block of their own; `mark_drop`, `add_version`, `dubbed` (the desk); the drop in `plan_style` and `shape_plan`; a version's chords in `chord_times` |
+| songbird/sound.py | a style's sound under a person's (`program_players`, `merged_players`), its transitions (`style_transitions`), the desk's throws for the mix (`thrown`); the pump preset off, a boundary false |
+| songbird/synth/sweeps.py, dub.py, mixing.py | the opening sweep; the tape echo and the spring; each throw cut from its part (`Design.throw`) |
+| songbird/synth/melodica.py | the melodica (built by a helper agent to the instrument contract, on the harmonica's pieces) |
+| songbird/takeover.py, explain.py, edits.py, cli.py, public.py | the grid's patterns and words, the drop's option and reasons; the style list, the drop and the version in words; `style.drop` and `ending: version` as a person's; the melodica's memory rate |
+| tests/test_house_dub.py | where every part lands, the program's sound and a person's over it, the drop, the version and its throws, the echo and the spring, the opening filter, the record, the anchor, the studio's page |
+
+No new numba kernel: the echo is scipy's filters a repeat at a time, the spring the electric's own
+(amp.spring_ir, oa.convolve), the melodica the harmonica's reed tables and their read kernel. The browser's
+kernels are as they were (tests/test_browser_kernels.py).
+
+## Measured (2026-09-30)
+
+Renders for listening, in `renders/styles/` of the main checkout (gitignored), H as made-up machines sing it:
+
+| render | tempo | what chance drew | length | id |
+|---|---|---|---|---|
+| house-ada-2026-09-30 | 124.6 | the tune on the piano to begin, the filter opening; a drop after the second refrain (the breakdown a turn and a verse); the last line again | 167.8 s | f1326f4d51db |
+| house-juno-2026-10-15 | 122.5 | a pad swelling in alone, filtered; a drop after the second refrain (the breakdown a turn, the break and the bridge, 35 s: the pluck on the tune in the break); a cold stop | 133.2 s | 9b4aecbd376e |
+| house-otto-2026-09-30 | 118.0 | a short shape (two verses, an outro), no drop; a cold stop | 117.9 s | 32f101111ad7 |
+| dub-juno-2026-09-30 | 75.1 | the band joining line by line; the last refrain starting on the riddim alone; the version | 245.8 s | fb893109e68e |
+| dub-vela-2026-09-30 | 82.6 | a count-in on the rim; the voices echoing the lines' ends; the version | 244.4 s | f968e42743a3 |
+| dub-ada-2026-09-30 | 75.4 | three verses, the bridge twice; a cold stop, no version | 265.4 s | fb6e426a1234 |
+
+What they play (the stems, dry, and the scores):
+
+- **House**: a kick on every beat of every refrain (132 of 132, 93 of 93: the kick's band jumps 9 dB within 80 ms
+  of the beat), of every verse but the breakdown's, of the intro unless a pad begins it alone; the open hat on 129 of
+  136 off-beats of ada's refrains (otto: 94 of 96); claps on two and four only (50 and 50); the ride only in the
+  drop (32 strokes, eight bars); the synth bass starting a note on every off-beat of the refrains (104 of 104) and on
+  no beat (0 of 101). The breakdown: the drum machine, the bass and the pluck silent (under -125 dB) until the roll,
+  the pad at -37 dB, the piano on the turn's quote; the mix's spectral centroid rising through it as the filter
+  opens, 446 Hz, 1.4 kHz, 1.5 kHz, 6.4 kHz (juno's 35 s one: 415 Hz to 5.0 kHz). The pumps: 1152 triggers on the
+  kicks for the pad, bass, stabs and pluck (none in the breakdown: no kick).
+- **Dub**: the kick only on three (the score: 47 of 48 bars of ada's verses and refrains, the other dropped out by the
+  desk, with the cross-stick on every one; nothing on the one); the skank struck on the (swung) off-beats, never on a
+  beat (173 of 192 off-beats, 0 of 186 beats: the rest dropped out; vela's 192 of 192); the bass starting a note on the
+  one (40 of 42) and the fourth beat (37 of 48), never on two or three. The desk: 17 to 26 throws a song (a third of
+  the voice's line ends, the skank or the drums before a drop-out), 5 to 14 splashes. Mixed with and without them,
+  the difference (the returns) has its first repeat at the echo's time (a dotted eighth: 0.60 s at 75, 0.54 at 82.6),
+  a median 9 to 11 dB under the mix around it (one skank in vela's version 9 dB over it, the band dropped out), each
+  next repeat 4.5 dB under the last (feedback 0.6), 14 to 34 dB of quiet between the repeats of a short throw; a
+  splash 11 to 39 dB under the mix over the second after. The version: eight bars after the last line (juno: 211.9 to
+  238.0 s), the riddim with the skank, the bubble and the melodica dropping in and out, the last line thrown into it.
+- **The voice over the band** (tools/stylemeter.py, ada, 2026-09-27, a verse and a refrain, three voices): house 7.7
+  to 10.9 dB, Whisper mishearing 21.5% of the words (synth folk on the same meter: 30%); dub 7.5 to 10.0 dB, 7.1%;
+  true peaks -1.9 dBTP; nothing on a sung pitch.
+- **Memory** (tools/render_memory.py, two threads, `MallocLargeCache=0`, the style chosen with no machine): house,
+  118.4 s, 0.97 GB (estimated 1.10); dub with its version, 221.0 s, 1.89 GB (estimated 2.02). In the VPS's 2100 MB a
+  house song fits up to 4.5 minutes, a dub one 3.9: H's own shape in dub with its version (3.7 minutes) fits; a
+  machine's longer shape (three verses, the bridge twice: ada's, 4.4 to 5 minutes) is refused on the server as
+  gospel's long ones are ("shorten it").
+- **Nothing else moved**: nine renders in six styles and the seed (lo-fi, synth folk, indie, gospel, the string
+  band, chamber for ada; juno's own style; lo-fi for vela; H's seed) render to the ids they did before; the goldens
+  hold; `--replay` of a house and a dub record renders them to the same ids.
+
+## Decisions for the artist (as built)
+
+1. **Off the ring** (above): chosen, or handed down; a lineage steps off at the anchor. Putting them on the ring
+   would move every lineage's future.
+2. **House's drop after the second refrain**, drawn 0.8 of the time; its breakdown is every section before the next
+   refrain, which in a machine's shape can be long (juno's: 35 s). A cap (the breakdown's last eight bars only) is a
+   line in `mark_drop`.
+3. **The version** (0.65 of dub's renditions) is eight bars; sixteen would be `VERSION_BARS`. It makes dub the
+   longest style but one (a whole song at 75 with its version is 3.7 to 5 minutes).
+4. **The desk's loudness**: the returns' levels (`DESK`: level 2, the singer's 0.5, the spring 3) were set by
+   measurement, not by ear; a louder desk is one number.
+5. **The melodica** is new, not the whistle.
+6. **The drop and the version are any style's** (`--arrange drop=2`, `ending=version`, and the studio's options):
+   only house and dub draw them.
+7. **A preview** (a section heard alone) keeps the throws whose windows it plays; one that begins inside an echo's
+   tail doesn't hear the tail.

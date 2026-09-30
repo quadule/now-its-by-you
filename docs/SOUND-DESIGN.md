@@ -261,3 +261,25 @@ tests/test_sound.py.
 | songbird/synth/mixing.py | `Design`: sends, the pump in each channel, the band's sweeps and stops once on its bus; the `fx` role |
 | songbird/synth/sweeps.py | risers, downlifters, impacts, a drummerless roll; the moving filter (numpy and scipy only) |
 | songbird/studio.py | `Studio.sound` and `POST /api/sound`, in their own section; `cut` moves a score's sound design |
+
+## A style's own sound, and the dub desk (2026-09-30)
+
+House and dub (docs/STYLES.md, "House and dub") bring sound design of their own, the program's, under a person's:
+
+- **A style's sound** (`StyleDef.sound`; `sound.program_players`, `merged_players`): house's drum machine on its 909,
+  a classic pump on the pad and a subtle one on the synth bass, the stabs and the pluck. A person's `sound.*` and
+  `mix.<player>.*` sit over it path by path; `/api/sound` and a record's "was" show it as the program's. To take a
+  pump away: the preset **off** (depth 0: no pump, and no triggers for it); a kit: choose another.
+- **A style's transitions** (`sound.style_transitions`), made straight into the score, never into the person's table:
+  a drop (`Style.drop`) gets a riser over the breakdown's last two bars, a snare roll over its last one (two when the
+  breakdown is eight bars or more) and the band's low-pass **opening** across the whole breakdown; house opens the
+  same filter across an intro. A person's transition at that boundary replaces the style's; **false** there silences
+  both.
+- **The sweep that opens** (`"sweep": {"bars": n, "type": "open"}`, kind `sweep-open`): a low-pass rising from 350 Hz
+  to 16 kHz over its span, snapping open at the downbeat; also a person's third sweep.
+- **The desk's throws** (`Score.sound["throws"]`, from the arranger's desk: songbird/idioms.py `dubbed`;
+  `sound.thrown`): each its part, its window in seconds, and for an echo its time, feedback and level. The mix
+  (`Design.throw`) cuts the window from the part's channel while it is in hand (the singer's from its bus at the end)
+  and adds what `synth/dub.py` returns: a tape echo (the window again at its time, each repeat darker and saturated,
+  to 50 dB down) or a spring tank's splash, into the band and a little into its send to the room (the singer's
+  beside its bus). A section's preview keeps the throws whose windows it plays. The stems stay dry.
