@@ -291,6 +291,11 @@ def realize(genome: Genome, params: Params, verses=None, phrasing: Phrasing | No
     verses and fixed blocks; without them the seed's own words are sung."""
     if lyrics is not None and verses is not None:
         raise ValueError("realize sings verses or lyrics, not both")
+    from .composition import harmonized
+
+    # a person's chords in place of a tune line's own (songbird.composition), for everything that sounds from
+    # them: the band, the choir's harmony, the backing voices; the same genome when nobody changed one
+    genome = harmonized(genome, params)
     verses = verses if verses is not None else genome.seed_verses
     meter = genome.meter
     rng = np.random.default_rng(params.seed)

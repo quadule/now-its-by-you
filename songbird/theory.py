@@ -17,7 +17,9 @@ MODES: dict[str, tuple[int, ...]] = {
 }
 
 _ROMAN = {"i": 1, "ii": 2, "iii": 3, "iv": 4, "v": 5, "vi": 6, "vii": 7}
-_CHORD = re.compile(r"([#b]?)(i{1,3}|iv|vi{0,2}|v)", re.IGNORECASE)
+_CHORD = re.compile(r"([#b]?)(?i:(i{1,3}|iv|vi{0,2}|v))(maj|m|dim|aug|sus2|sus4)?(?:/([35]))?")
+# A quality a person names, over the chord's root; case never carries one (a genome's "v" and "V" are one function)
+QUALITIES = {"maj": (0, 4, 7), "m": (0, 3, 7), "dim": (0, 3, 6), "aug": (0, 4, 8), "sus2": (0, 2, 7), "sus4": (0, 5, 7)}
 
 
 def degree_semitones(degree: int, mode: str, alter: int = 0) -> int:
@@ -30,27 +32,40 @@ def degree_semitones(degree: int, mode: str, alter: int = 0) -> int:
     return 12 * octave + steps[index] + alter
 
 
-def parse_chord(symbol: str) -> tuple[int, int]:
-    """A roman numeral to (degree 1-7, alteration in semitones).
+def parse_symbol(symbol: str) -> tuple[int, int, str, int]:
+    """A chord function in full: (degree 1-7, alteration in semitones, quality, bass).
 
-    Case is ignored: a chord's quality comes from the mode it is realized in,
-    so the genome stores functions, not chords.
+    The genome writes roman numerals (vi, bVII) whose case is ignored: a chord's
+    quality comes from the mode it is realized in, so the genome stores
+    functions, not chords. A person may name a quality after the numeral (maj,
+    m, dim, aug, sus2, sus4: lower case, "" for the mode's own) and a bass other
+    than the root (/3 its third, /5 its fifth; 1 for the root): Vmaj, ivm/5.
     """
     match = _CHORD.fullmatch(symbol.strip())
     if not match:
         raise ValueError(f"not a chord function: {symbol!r}")
-    accidental, numeral = match.groups()
-    alter = {"": 0, "#": 1, "b": -1}[accidental]
-    return _ROMAN[numeral.lower()], alter
+    accidental, numeral, quality, bass = match.groups()
+    return _ROMAN[numeral.lower()], {"": 0, "#": 1, "b": -1}[accidental], quality or "", int(bass or 1)
+
+
+def parse_chord(symbol: str) -> tuple[int, int]:
+    """A roman numeral to (degree 1-7, alteration in semitones), whatever quality or bass it names."""
+    degree, alter, _, _ = parse_symbol(symbol)
+    return degree, alter
 
 
 def chord_tones(symbol: str, mode: str) -> tuple[int, int, int]:
     """Semitone offsets from the tonic of the chord's root, third and fifth.
 
     A plain numeral is the diatonic triad on that degree of the mode. A numeral
-    with an accidental (bVII, bVI) is borrowed and always major.
+    with an accidental (bVII, bVI) is borrowed and always major. A quality named
+    (Vmaj, iim, IVsus4) is that triad over the root, whatever the mode; the sus
+    chords' second or fourth stands where the third would.
     """
-    degree, alter = parse_chord(symbol)
+    degree, alter, quality, _ = parse_symbol(symbol)
+    if quality:
+        root = degree_semitones(degree, mode) + alter
+        return tuple(root + t for t in QUALITIES[quality])
     if alter:
         root = degree_semitones(degree, mode) + alter
         return root, root + 4, root + 7
@@ -65,8 +80,10 @@ NOTE_NAMES = ("C", "C♯", "D", "E♭", "E", "F", "F♯", "G", "A♭", "A", "B�
 
 
 def chord_bass(symbol: str, mode: str) -> int:
-    """Semitone offset from the tonic of the chord's lowest note: its root."""
-    return chord_tones(symbol, mode)[0]
+    """Semitone offset from the tonic of the chord's lowest note: its root, or the third or fifth a person
+    put in the bass (I/3, V/5)."""
+    tones = chord_tones(symbol, mode)
+    return tones[{1: 0, 3: 1, 5: 2}[parse_symbol(symbol)[3]]]
 
 
 def chord_name(symbol: str, tonic: int, mode: str) -> str:

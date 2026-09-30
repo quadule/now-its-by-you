@@ -12,7 +12,7 @@
   };
   const state = {
     view: null, section: -1, phrase: 0, note: null, snap: 0.25, zoom: 1,
-    loop: false, metronome: false, scope: "phrase", drag: null, chords: true, bass: true,
+    loop: false, metronome: false, scope: "phrase", drag: null, chords: true, bass: true, chord: null,
     context: null, playback: null, nodes: new Set(), frame: null,
   };
   const bridge = () => window.StudioBridge || {};
@@ -98,10 +98,10 @@
     return `${displayWords(n.syllable) || `Note ${index + 1}`}, ${pitchName(pitchFor(n))}, scale degree ${n.degree}, beat ${beatLabel(n.onset)}, ${fmt(n.duration)} beats${index === p.notes.length - 1 ? ", phrase ending" : ""}`;
   }
   function selectedSection(index) {
-    stop(); state.section = clamp(index, 0, sections().length - 1); state.phrase = 0; state.note = null; paint();
+    stop(); state.section = clamp(index, 0, sections().length - 1); state.phrase = 0; state.note = null; state.chord = null; paint();
   }
   function selectedPhrase(index) {
-    stop(); state.phrase = index; state.note = null; paint();
+    stop(); state.phrase = index; state.note = null; state.chord = null; paint();
   }
   function commit(path, value) {
     stop();
@@ -342,10 +342,16 @@
     const roll = el("div", { class: "sbc-roll", style: { width: `${g.width}px`, height: `${g.height}px` }, "aria-label": "Melody piano roll" });
     if (p.chords?.length) {
       roll.append(el("span", { class: "sbc-harmony-label" }, "Harmony"));
-      p.chords.forEach((chords, bar) => {
-        const span = c.beats_per_bar / chords.length;
-        chords.forEach((chord, index) => roll.append(el("div", { class: "sbc-chord", title: `Bar ${bar + 1}, chord ${chord}`,
-          style: { left: `${g.left + (bar * c.beats_per_bar + index * span - g.start) * g.unit}px`, width: `${Math.max(1, span * g.unit - 2)}px` } }, chord)));
+      const lane = p.harmony?.length ? p.harmony : p.chords.flatMap((chords, bar) => chords.map((symbol, slot) => ({
+        bar, slot, symbol, name: symbol, start: bar * c.beats_per_bar + slot * c.beats_per_bar / chords.length, beats: c.beats_per_bar / chords.length })));
+      lane.forEach((h) => {
+        const chosen = state.chord && state.chord.bar === h.bar && state.chord.slot === h.slot;
+        const rub = h.rubs?.length ? `; ${h.rubs.length} sung note${h.rubs.length === 1 ? "" : "s"} not in it${h.hard ? ", one a half step off" : ""}` : "";
+        roll.append(el("button", { type: "button", "data-chord": `${h.bar}.${h.slot}`,
+          class: `sbc-chord${chordMine(p, h) ? " is-edited" : ""}${chosen ? " is-selected" : ""}${h.hard ? " is-rub" : ""}`,
+          "aria-pressed": chosen ? "true" : "false", "aria-label": `Bar ${h.bar + 1}, chord ${h.name}${rub}. Select to change it.`,
+          title: `Bar ${h.bar + 1}: ${h.name}${rub}. Select to change it.`, onclick: () => selectChord(h),
+          style: { left: `${g.left + (h.start - g.start) * g.unit}px`, width: `${Math.max(1, h.beats * g.unit - 2)}px` } }, h.name));
       });
     }
     const plot = el("div", { class: "sbc-grid", style: { left: `${g.left}px`, top: `${g.ruler}px`, width: `${g.width - g.left}px`, height: `${g.height - g.ruler}px`,
@@ -371,7 +377,7 @@
       el("div", { class: `sbc-grid-line${bar ? " is-bar" : ""}`, style: { left: `${x}px`, top: `${g.ruler}px`, height: `${g.height - g.ruler}px` } }));
     }
     p.notes.forEach((n, index) => {
-      const item = el("button", { type: "button", class: `sbc-note${index === state.note ? " is-selected" : ""}${index === p.notes.length - 1 ? " is-cadence" : ""}${n.edited ? " is-edited" : ""}`,
+      const item = el("button", { type: "button", class: `sbc-note${index === state.note ? " is-selected" : ""}${index === p.notes.length - 1 ? " is-cadence" : ""}${n.edited ? " is-edited" : ""}${chosenChord()?.rubs?.includes(index) ? " is-rub" : ""}`,
         "aria-label": noteTitle(n, index, p), "aria-pressed": index === state.note ? "true" : "false", "data-note": index,
         title: `${noteTitle(n, index, p)}. Drag to move; drag right edge to resize. Arrow keys move; Shift + left/right changes length.`,
         style: noteStyle(n, g), onclick: () => {
@@ -449,6 +455,110 @@
     }
     root()?.querySelector(`[data-note="${index}"]`)?.focus({ preventScroll: true });
   }
+  // ---- the chords (docs/STUDIO.md, "Changing the chords"): a tune line's chords, a list a bar, each a function
+  // of the key (a numeral, a quality if named, a bass if not the root), changed everywhere the line is sung.
+  const CHORD = /^([#b]?)([iIvV]{1,3})(maj|m|dim|aug|sus2|sus4)?(?:\/([35]))?$/;
+  const NUMERALS = { i: 1, ii: 2, iii: 3, iv: 4, v: 5, vi: 6, vii: 7 };
+  const QUALITIES = { maj: [0, 4, 7], m: [0, 3, 7], dim: [0, 3, 6], aug: [0, 4, 8], sus2: [0, 2, 7], sus4: [0, 5, 7] };
+  function parseChord(symbol) {
+    const m = CHORD.exec(String(symbol || "").trim());
+    if (!m || !NUMERALS[m[2].toLowerCase()]) return null;
+    return { root: m[1] + m[2].toUpperCase(), accidental: m[1], degree: NUMERALS[m[2].toLowerCase()], quality: m[3] || "", bass: Number(m[4] || 1) };
+  }
+  function chordSymbol(parts) {
+    return `${parts.root}${parts.quality || ""}${parts.bass && parts.bass !== 1 ? `/${parts.bass}` : ""}`;
+  }
+  function chordPitches(symbol) {
+    // as theory.chord_tones: the mode's triad on a plain numeral, major on a borrowed one, a named quality as named
+    const parts = parseChord(symbol), c = composition();
+    if (!parts) return [];
+    const alter = parts.accidental === "#" ? 1 : parts.accidental === "b" ? -1 : 0;
+    const at = (degree) => scaleOffset(degree);
+    const root = at(parts.degree) + alter;
+    const tones = parts.quality ? QUALITIES[parts.quality].map((t) => root + t)
+      : alter ? [root, root + 4, root + 7] : [at(parts.degree), at(parts.degree + 2), at(parts.degree + 4)];
+    return tones.map((t) => (c?.tonic || 60) + t);
+  }
+  function lineChords(p = phrase()) { return (p?.chords || []).map((bar) => [...bar]); }
+  function chosenChord(p = phrase()) {
+    return state.chord ? (p?.harmony || []).find((h) => h.bar === state.chord.bar && h.slot === state.chord.slot) : null;
+  }
+  function chordMine(p, h) {
+    // a person's chord, in the second ink: one that differs from the song's own at that place
+    if (!p.chords_edited) return false;
+    const own = p.song_chords?.[h.bar];
+    return !own || own.length !== p.chords[h.bar].length || own[h.slot] !== h.symbol;
+  }
+  function selectChord(h) {
+    state.chord = { bar: h.bar, slot: h.slot }; state.note = null;
+    paint(); strum(h.symbol);
+    root()?.querySelector(`[data-chord="${h.bar}.${h.slot}"]`)?.focus({ preventScroll: true });
+  }
+  function strum(symbol) {
+    if (bridge().pauseAudio) bridge().pauseAudio();
+    const ctx = audioContext();
+    if (!ctx) return;
+    const pitches = chordPitches(symbol).map((pitch) => within(pitch % 12, 55)).sort((a, b) => a - b);
+    const bass = parseChord(symbol);
+    pitches.forEach((pitch, i) => pluck(ctx, pitch, ctx.currentTime + 0.01 + i * 0.03, 1.1, 0.03));
+    const tones = chordPitches(symbol);
+    if (tones.length) pluck(ctx, within(tones[{ 1: 0, 3: 1, 5: 2 }[bass.bass] || 0] % 12, 36), ctx.currentTime + 0.01, 1.2, 0.08, "bass");
+  }
+  function commitChords(bars, message) {
+    const p = phrase();
+    if (!p) return;
+    if (JSON.stringify(bars) === JSON.stringify(lineChords(p))) { paint(); return; }
+    commit(p.chords_path || `chords.${p.id}`, bars);
+    announce(message);
+  }
+  function setChord(symbol) {
+    const p = phrase(), at = state.chord;
+    if (!p || !at || !parseChord(symbol)) return;
+    const bars = lineChords(p);
+    bars[at.bar][at.slot] = symbol;
+    strum(symbol);
+    commitChords(bars, `Bar ${at.bar + 1}: ${symbol}. The band, the voices and the sketch follow everywhere this line is sung.`);
+  }
+  function setChordsInBar(count) {
+    const p = phrase(), at = state.chord;
+    if (!p || !at) return;
+    const bars = lineChords(p), old = bars[at.bar];
+    // each new chord is the one sounding where it starts: splitting a bar adds a chord to change; joining keeps the first
+    bars[at.bar] = Array.from({ length: count }, (_, j) => old[Math.floor(j * old.length / count)]);
+    state.chord = { bar: at.bar, slot: Math.min(at.slot * count / old.length | 0, count - 1) };
+    commitChords(bars, count > old.length ? "Bar split: change the new chord to add a passing chord." : "Bar joined.");
+  }
+  function chordCard() {
+    const p = phrase(), h = chosenChord(p), c = composition(), choices = c?.chord_choices;
+    if (!p || !h || !choices) return null;
+    const parts = parseChord(h.symbol) || { root: "I", quality: "", bass: 1 };
+    const counts = c.chords_per_bar || [1];
+    const words = p.notes.filter((_, i) => h.rubs?.includes(i)).map((n) => displayWords(n.syllable) || pitchName(pitchFor(n)));
+    const rub = h.rubs?.length
+      ? `${h.rubs.length} sung note${h.rubs.length === 1 ? "" : "s"} over it ${h.rubs.length === 1 ? "isn't" : "aren't"} in the chord (${words.join(", ")})${h.hard ? ", one a half step from it: a sharp rub" : ": passing notes, as folk harmony has them"}.`
+      : "Every sung note over it is in the chord.";
+    const repeats = sections().flatMap((s) => s.phrases || []).filter((item) => item.id === p.id).length;
+    return el("div", { class: "sbc-chord-card", role: "group", "aria-label": `Chord in bar ${h.bar + 1}` },
+      el("div", { class: "sbc-note-heading" }, el("span", { class: "sbc-overline" }, `Bar ${h.bar + 1} · chord ${h.slot + 1} of ${p.chords[h.bar].length}`),
+        el("strong", { class: chordMine(p, h) ? "is-mine" : "" }, h.name),
+        el("span", { class: `sbc-muted${h.hard ? " sbc-leap-warning" : ""}` }, rub)),
+      el("div", { class: "sbc-chord-row" }, el("span", { class: "sbc-overline" }, "In the key"),
+        el("div", { class: "sbc-button-group", role: "group", "aria-label": "Chords in the key" },
+          choices.diatonic.map((d) => button(d.name, () => setChord(d.symbol), { class: `sbc-button${d.symbol.toUpperCase() === h.symbol.toUpperCase() ? " is-on" : ""}`,
+            title: `${d.symbol}: ${d.name}`, "aria-pressed": d.symbol.toUpperCase() === h.symbol.toUpperCase() ? "true" : "false" })))),
+      el("div", { class: "sbc-chord-row" },
+        select("Root", parts.root, choices.roots.map((r) => [r.numeral, `${r.numeral} · ${r.note}`]), (value) => setChord(chordSymbol({ ...parts, root: value })), { id: "sbc-chord-root" }),
+        select("Quality", parts.quality, choices.qualities, (value) => setChord(chordSymbol({ ...parts, quality: value })), { id: "sbc-chord-quality" }),
+        select("Bass", parts.bass, choices.basses, (value) => setChord(chordSymbol({ ...parts, bass: Number(value) })), { id: "sbc-chord-bass" }),
+        select("Chords in this bar", p.chords[h.bar].length, counts.map((n) => [n, String(n)]), (value) => setChordsInBar(Number(value)), { id: "sbc-chord-count" }),
+        button("♪", () => strum(h.symbol), { class: "sbc-button sbc-audition", "aria-label": `Hear ${h.name}` })),
+      el("div", { class: "sbc-chord-row" },
+        el("span", { class: "sbc-muted" }, repeats > 1 ? `This line's chords change in all ${repeats} places it's sung.` : "This line's chords change wherever it's sung."),
+        button("Restore chords", () => { state.chord = null; commit(p.chords_path || `chords.${p.id}`, null); },
+          { class: "sbc-button sbc-quiet", disabled: !p.chords_edited, title: "Give this line back the song's own chords" }),
+        button("Done", () => { state.chord = null; paint(); }, { class: "sbc-button sbc-quiet" })));
+  }
+
   function inspector() {
     const p = phrase(), n = note(), b = bounds();
     if (!n) return el("div", { class: "sbc-inspector sbc-inspector-empty" }, el("span", { class: "sbc-inspector-icon", "aria-hidden": "true" }, "↖"),
@@ -488,7 +598,7 @@
         el("div", {}, el("h3", {}, section().label, el("span", { class: "sbc-muted" }, " / Melody")), el("p", { class: "sbc-muted" }, "Edit a phrase once; every appearance follows.")),
         el("div", { class: "sbc-editor-settings" }, select("Snap", state.snap, [[0.25, "¼ beat"], [0.5, "½ beat"], [1, "1 beat"]], (value) => { state.snap = Number(value); paint(); }, { id: "sbc-snap" }),
           select("Zoom", state.zoom, [[1, "Fit"], [1.5, "150%"], [2, "200%"], [3, "300%"]], (value) => { state.zoom = Number(value); paint(); }, { id: "sbc-zoom" }))),
-      phraseStrip(), pianoRoll(), inspector(),
+      phraseStrip(), pianoRoll(), inspector(), chordCard(),
       el("div", { class: "sbc-tools" }, el("span", { class: "sbc-overline" }, "Shape phrase"),
         el("div", { class: "sbc-button-group", role: "group", "aria-label": "Transpose melody; keep its ending" },
           button("↓ Step", () => transpose(-1), { title: "Lower melody one scale step, keeping its phrase ending" }),
@@ -678,6 +788,7 @@
     state.section = clamp(state.section, 0, sections().length - 1);
     state.phrase = clamp(state.phrase, 0, Math.max(0, (section().phrases?.length || 0) - 1));
     if (state.note !== null && state.note >= (phrase()?.notes?.length || 0)) state.note = null;
+    if (state.chord && !(phrase()?.chords?.[state.chord.bar]?.length > state.chord.slot)) state.chord = null;
     paint();
   }
   window.addEventListener("pagehide", stop);

@@ -40,6 +40,7 @@ order() still asks arrange.problem whether the bank can fill it.
 
 from __future__ import annotations
 
+import json
 import math
 import re
 from collections import Counter
@@ -47,7 +48,7 @@ from dataclasses import replace
 
 from . import variants
 from .genome import sung_words
-from .theory import MODES, chord_bass, chord_name, chord_tones, degree_semitones
+from .theory import MODES, chord_bass, chord_name, chord_tones, degree_semitones, parse_symbol
 
 GRID = 0.25  # a sixteenth note in a quarter-note beat
 MAX_SECTIONS = 48
@@ -338,15 +339,90 @@ def pack_phrase(genome, notes) -> list[list]:
              n["duration"] * genome.meter.beat] for n in notes]
 
 
+_HARMONIZED: dict = {}  # (the song, a person's chords) -> the song with them: one object each, so caches keyed by it hit
+
+
 def harmonized(genome, params):
     """The song with a person's chords in place of the tune lines' own (params.composition["chords"]), for
-    realizing it: the same genome, untouched, when nobody changed a chord."""
-    chords = params.composition.get("chords")
+    realizing it: the same genome, untouched, when nobody changed a chord. The same chords give the same
+    object back (a few dozen kept), so what is cached per song isn't made again for every request."""
+    chords = {pid: bars for pid, bars in (params.composition.get("chords") or {}).items() if pid in genome.phrases}
     if not chords:
         return genome
+    key = (id(genome), json.dumps(chords, sort_keys=True))
+    held = _HARMONIZED.get(key)
+    if held is not None and held[0] is genome:
+        return held[1]
     phrases = {pid: replace(p, chords=tuple(tuple(bar) for bar in chords[pid])) if pid in chords else p
                for pid, p in genome.phrases.items()}
-    return replace(genome, phrases=phrases)
+    out = replace(genome, phrases=phrases)
+    if len(_HARMONIZED) >= 64:
+        _HARMONIZED.pop(next(iter(_HARMONIZED)))
+    _HARMONIZED[key] = (genome, out)
+    return out
+
+
+def chords_per_bar(genome) -> list[int]:
+    """How many chords a bar may have: each a whole number of beats, the bar shared evenly (1, 2 or 4 in
+    4/4; 1 or 2 in 6/8), as the band lays a bar's chords on its beats."""
+    beats = max(1, int(round(genome.meter.bar / genome.meter.beat)))
+    return [n for n in range(1, beats + 1) if beats % n == 0]
+
+
+def check_chords(genome, pid: str, value) -> list[list[str]] | None:
+    """A person's chords for a tune line: a list of chords for each of its bars, each bar shared evenly on
+    its beats, each chord a function of the key (theory.parse_symbol: a numeral, a quality, a bass). None
+    releases the line to the song's own chords. Validated whole: a refused chord leaves the line as it was."""
+    if pid not in genome.phrases:
+        raise ValueError(f"there is no tune line called {pid}")
+    if value is None:
+        return None
+    phrase = genome.phrases[pid]
+    if not isinstance(value, list) or len(value) != phrase.bars:
+        raise ValueError(f"this line is {phrase.bars} bar{'s' if phrase.bars > 1 else ''} long: give chords for each")
+    counts = chords_per_bar(genome)
+    out = []
+    for b, bar in enumerate(value):
+        if not isinstance(bar, list) or len(bar) not in counts:
+            raise ValueError(f"bar {b + 1} takes {', '.join(map(str, counts[:-1]))} or {counts[-1]} chords, "
+                             "sharing it evenly on its beats")
+        chords = []
+        for symbol in bar:
+            if not isinstance(symbol, str) or len(symbol) > 16:
+                raise ValueError(f"bar {b + 1} has a chord that isn't one")
+            try:
+                parse_symbol(symbol)
+            except ValueError:
+                raise ValueError(f"{symbol.strip()!r} isn't a chord this song can name: a numeral of the key "
+                                 "(I to VII, b or # before it), then maj, m, dim, aug, sus2 or sus4, then /3 or /5") from None
+            chords.append(symbol.strip())
+        out.append(chords)
+    return out
+
+
+def chords_value(genome, params, pid: str) -> list[list[str]]:
+    """A tune line's chords as these parameters sing them: a person's, or the song's own."""
+    held = (params.composition.get("chords") or {}).get(pid)
+    return [list(bar) for bar in held] if held else [list(bar) for bar in genome.phrases[pid].chords]
+
+
+def chord_choices(params) -> dict:
+    """What the chord card offers in this key: the chords of the key (a numeral each, with its name) and
+    every root a chord can have (the twelve numerals, each with its note)."""
+    from .theory import NOTE_NAMES
+
+    roots = ["I", "bII", "II", "bIII", "III", "IV", "#IV", "V", "bVI", "VI", "bVII", "VII"]
+    diatonic = []
+    for numeral in ("I", "II", "III", "IV", "V", "VI", "VII"):
+        name = chord_name(numeral, params.tonic, params.mode)
+        minor = name.endswith(("m", "°")) and not name.endswith("sus4")
+        diatonic.append({"symbol": numeral.lower() if minor else numeral, "name": name})
+    return {"diatonic": diatonic,
+            "roots": [{"numeral": r, "note": NOTE_NAMES[(params.tonic + chord_tones(r + "maj", params.mode)[0]) % 12]}
+                      for r in roots],
+            "qualities": [["", "as the key has it"], ["maj", "major"], ["m", "minor"], ["dim", "diminished"],
+                          ["aug", "augmented"], ["sus2", "sus2"], ["sus4", "sus4"]],
+            "basses": [[1, "root"], [3, "third"], [5, "fifth"]]}
 
 
 def played(phrase, params):
@@ -367,18 +443,32 @@ def phrase_value(genome, params, pid):
 def harmony(genome, phrase, params) -> list[dict]:
     """A tune line's chords as the band plays them: each where it starts in the line (beats from its first
     bar line) and how long it lasts (a bar's chords share it out on its beats, as songbird.band lays them),
-    with its name in this key and its pitch classes, bass first."""
+    with its name in this key, its pitch classes (root first) and its bass; and the sung notes under it that
+    aren't its tones (rubs, as the band hears them: a pickup under the first bar's chord, as realize puts
+    it), "hard" where one is a semitone from a tone of the chord."""
     per_bar = genome.meter.bar / genome.meter.beat
+    m = genome.meter
+    notes = [n for n in played(phrase, params) if n.degree is not None]
+    under: dict = {}
+    for k, n in enumerate(notes):
+        bar = int(min(max(n.onset // m.bar, 0), phrase.bars - 1))
+        in_bar = phrase.chords[bar]
+        slot = int(min(max((n.onset - bar * m.bar) * len(in_bar) // m.bar, 0), len(in_bar) - 1))
+        pitch = params.tonic + degree_semitones(n.degree, params.mode, n.alter)
+        under.setdefault((bar, slot), []).append((k, pitch % 12))
     out = []
     for b, bar in enumerate(phrase.chords):
         for k, symbol in enumerate(bar):
             a = round(k * per_bar / len(bar))
             z = round((k + 1) * per_bar / len(bar)) if k + 1 < len(bar) else per_bar
             tones = chord_tones(symbol, params.mode)
+            pcs = [(params.tonic + t) % 12 for t in tones]
+            rubs = [(i, pc) for i, pc in under.get((b, k), []) if pc not in pcs]
             out.append({"bar": b, "slot": k, "start": b * per_bar + a, "beats": z - a, "symbol": symbol,
-                        "name": chord_name(symbol, params.tonic, params.mode),
-                        "pcs": [(params.tonic + t) % 12 for t in tones],
-                        "bass": (params.tonic + chord_bass(symbol, params.mode)) % 12})
+                        "name": chord_name(symbol, params.tonic, params.mode), "pcs": pcs,
+                        "bass": (params.tonic + chord_bass(symbol, params.mode)) % 12,
+                        "rubs": [i for i, _ in rubs],
+                        "hard": any(min((pc - t) % 12, (t - pc) % 12) == 1 for _, pc in rubs for t in pcs)})
     return out
 
 
@@ -391,7 +481,9 @@ def view(genome, params, lyrics) -> dict:
 
     clock = timeline(genome, params)
     meter = genome.meter
+    song = genome
     genome = harmonized(genome, params)  # a person's chords, where they changed any
+    chorded = params.composition.get("chords") or {}
     lyrics = lyrics if lyrics is not None else seed_lyrics(genome, params.form)
     keys = lyric_keys(genome, params.form, lyrics)
     patches = authored(genome, params, lyrics)
@@ -419,6 +511,8 @@ def view(genome, params, lyrics) -> dict:
                             "pickup_beats": phrase.pickup / meter.beat, "notes": notes,
                             "chords": [list(bar) for bar in phrase.chords], "bounds": bounds(genome, phrase),
                             "harmony": harmony(genome, phrase, params),
+                            "chords_path": f"chords.{pid}", "chords_edited": pid in chorded,
+                            "song_chords": [list(bar) for bar in song.phrases[pid].chords],
                             "lyric_path": f"lyrics.{keys[index]}.{j}" if keys[index] else None,
                             "lyric_text": lines[index][j] if lines[index] else "",
                             "syllable_count": len(phrase.sung),
@@ -437,6 +531,8 @@ def view(genome, params, lyrics) -> dict:
             "duration_beats": clock.end / meter.beat, "duration_seconds": clock.seconds(clock.end),
             "duration": round(clock.seconds(clock.end) + ring(params), 3),
             "order": section_ids(params.form), "sections": sections, "edited_phrases": sorted(edited),
+            "edited_chords": sorted(p for p in chorded if p in song.phrases), "chords_per_bar": chords_per_bar(song),
+            "chord_choices": chord_choices(params),
             "arranged": bool(params.composition.get("order")),
             "guidance": "Notes stay in the song's range. Keep one note per syllable and the final home note. "
                         "A tune line changes everywhere it appears. Repeated sections keep their story order."}

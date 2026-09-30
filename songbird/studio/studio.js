@@ -281,6 +281,7 @@ function renderHeader() {
 function describePath(path) {
   const m = path.match(/^words\.(verse|refrain)\.(\d+)$/);
   if (m) return `your ${m[1]} ${Number(m[2]) + 1}`;
+  if (path.startsWith("chords.")) return "your chords for a line of the tune";
   return { "words.refrain": "your refrain's words", "words.bridge": "your bridge's words", "words.bridge2": "your second bridge", "words.tag": "your tag", "phrasing": "the singer's way", "date": "the day" }[path] || `your ${path.replace(/^\w+\./, "").replace(/_/g, " ")}`;
 }
 

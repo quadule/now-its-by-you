@@ -244,6 +244,7 @@ server keeps nothing else but caches, so any request can be replayed.
 |---|---|---|
 | `form.order` | section occurrence IDs (`verse:0`, `refrain:0`, …) | validated arrangement order, inherited in children |
 | `tune.<phrase>` | `{degree, onset, duration}` for each note, in beats | pitch/rhythm of every appearance of that phrase |
+| `chords.<phrase>` | a list of chords a bar (`[["vi"], ["IV/3", "Vsus4"]]`), or null for the song's own | the harmony of every appearance of that phrase: the band, the choir, the backing voices ("Changing the chords") |
 | `lyrics.<section>:<verse-or-round>.<line-index>` | syllable-hyphenated text, or null to release inherited text | one original lyric line (`lyrics.verse:wire.0`, `lyrics.refrain:last.2`), checked against its tune; kept only where this version sings that verse or round |
 | `date` | "YYYY-MM-DD" | the moment time is read at: noon UTC that day, as `--date` |
 | `roll` | 1, 2, 3... | chance drawn again: the day's own seed drawn again that many times (`edits.rolled`), so chance still follows the day |
@@ -436,7 +437,7 @@ quantized (a musician's sequencer quantizes if wanted, and what is heard is
 kept); lyrics are syllables with a trailing hyphen inside words, the karaoke
 convention most sequencers read.
 
-## Changing the chords (2026-09-29, design)
+## Changing the chords (2026-09-29)
 
 A musician's first move with a folk tune is often to reharmonize it. Until now
 the harmony lane only showed the chords. This is how a person changes them.
@@ -453,8 +454,12 @@ note) and the backing voices, so one place feeds everything that sounds.
 
 **What a person may change.** A tune line's chords, bar by bar, with the same
 shape the genome has: `chords.<line>` = one list of chords a bar, as many bars
-as the line has, 1 to a beat's worth of chords a bar (so a change always falls
-on a beat; four in 4/4, two in 6/8). Each chord is:
+as the line has, and a bar shared evenly on its beats: 1, 2 or 4 chords in 4/4,
+1 or 2 in 6/8, 1 or 3 in 3/4 (three in 4/4 would be 1 + 2 + 1 beats as the
+band lays them, and the singer's chord under a note is found by an even
+split: the two would disagree). A change on a weak beat is written with
+repeats (`I I I V`), which the band plays as a new strike of the same chord.
+A pickup sings over its line's first chord, as it always has. Each chord is:
 
 - a **root**, as a function of the key: I, bII, II, bIII, III, IV, #IV, V, bVI,
   VI, bVII, VII (so the chords move with a key change, as the song's own do);
@@ -463,10 +468,14 @@ on a beat; four in 4/4, two in 6/8). Each chord is:
   sus4 (kept whatever the mode: a V major in a minor song stays a dominant);
 - a **bass**: the root, the third or the fifth (G/B, C/G).
 
-Written as the genome writes chords, extended: `V`, `Vmaj`, `ivm`, `viidim`,
-`IVsus4`, `I/3` (first inversion), `V/5`. A plain numeral means exactly what it
-meant, so every song and record reads as before. Adding a passing chord is
-splitting a bar (`I` becomes `I V`); taking one away is joining it.
+Written as the genome writes chords, extended (`theory.parse_symbol`): `V`,
+`Vmaj`, `ivm`, `viidim`, `IVsus4`, `I/3` (first inversion), `V/5`. The
+numeral's case never carries a quality (the genome's `v` and `V` are one
+function, as before); the quality is a lower-case suffix, so `IM` is refused
+rather than read as minor. A plain numeral means exactly what it meant, the
+same tones computed the same way, so every song and record reads as before.
+Adding a passing chord is splitting a bar (`I` becomes `I I`, then change the
+second); taking one away is joining it.
 
 **How it is stored and replayed.** As the tune is: `params.composition["chords"]`
 maps a line to its bars, carried in the record's parameters and handed down to
@@ -478,20 +487,32 @@ marks `chords.<line>` with the chords chosen and what the program had
 the record's parameters, so byte for byte. A null releases the line's chords,
 inherited ones included, to the song's own (as Restore phrase does for a tune).
 
-**Who follows.** Everything that sounds from the chords: every band part (the
-bass takes the chosen bass note: a slash chord's bass leads its line, the
-guitar's lowest string with it), the lineage choir's harmony and the backing
-voices (they take its tones), the sketch, the MIDI file's Chords track and its
-names. The singer's melody does not move.
+**Who follows.** Everything that sounds from the chords: every band part, the
+lineage choir's harmony and the backing voices (they take its tones), the
+sketch, the MIDI file's Chords track and its names. The singer's melody does
+not move. An inversion's bass is taken by whatever plays the bass line and
+nothing else (`band.Context.bass()`: the bass part's roots and walks, every
+style's bass idiom, a pedal, the thumb's bass string, the harp's lowest
+string); `pcs()` and `root()` stay the chord's own, root first, so every other
+player's sense of root, third and fifth (colour tones, the guitar's "the third
+must be there", the drone's fit) is unchanged, and the guitar keeps its open
+root-position shape (and the song's capo): the bass carries the inversion.
 
 **The melody against the new chord: allowed, and shown.** A sung note that
 isn't a tone of its chord (a rub) is allowed: passing tones, suspensions and
 modal rubs are how folk harmony works, and the band already keeps out of the
 singer's way (a chord tone held over a passing note; the choir only ever sings
-chord tones). The chord lane marks a chord with the sung notes on its beats
-that rub, so a musician sees it and hears it in the sketch before rendering.
-Refusing would forbid most reharmonizations; changing the tune to fit would
-change what the person didn't ask to change.
+chord tones). The chord card names the sung notes under a chord that aren't
+its tones, by the band's own test (pitch class not in the chord), and marks the
+chord in the lane where one is a half step from a chord tone (a sharp rub);
+selecting it outlines those notes in the roll. Refusing would forbid most
+reharmonizations; changing the tune to fit would change what the person didn't
+ask to change. What a chord chosen against the tune does to the band, said so
+nobody is surprised: the comping holds its last chord tone through each note
+that rubs (`held_through`), so a chord fighting the tune gives long holds; the
+woven counter-line drops out where its notes stop being chord tones; the
+choir's lowest voice seeks the chord's root, not an inversion's bass, and a
+sus chord's fourth can sit a minor ninth over a sung third.
 
 **Fenced, and why.**
 
@@ -499,26 +520,55 @@ change what the person didn't ask to change.
   as its melody does (the arrangement moves sections; a line is the unit the
   song is made of). Reharmonizing only the last refrain would need chords kept
   by the section's place; left for later.
-- *Triads (and sus) only*: every player voices three tones; sevenths and
-  extensions would need each player's voicing to learn a fourth (the MIDI and
-  the sketch would be easy; the band is the work).
+- *Triads (and sus) only, for now*: the guitar's shapes, the harp's spread and
+  the choir voice three tones. Sevenths are a musician's first move (V7,
+  ii–V7) and the likely next step: the styles already add a fourth tone as a
+  colour (`idioms.COLOURS`: 7, maj7, 6, add9), so a `7` quality could ride that
+  path, with the guitar, harp and choir taught it.
 - *Changes on beats, a bar shared evenly*: the band lays a bar's chords on its
   beats; half-beat anticipations and a line's length are the tune's.
+- *A bass from the chord*: root, third or fifth. A bass that isn't a chord tone
+  (IV over a tonic pedal, the other classic folk move, or a walking line's
+  passing bass) is out of scope for now.
 - *The tune's own evolution reads the song's chords*: the lineage's melodic
   variants (songbird.variants, evolve) are chosen against the chords the song
-  was written with, so a reharmonized line can gain a variant note that rubs,
-  shown like any rub. Which modes a machine may choose also stays the song's
+  was written with (the person's chords never reach choose_params), so a
+  reharmonized line can gain a variant note that rubs, shown like any rub.
+  Which modes a machine may choose also stays the song's
   (`variation.allowed_modes`); a person's chord with a quality keeps it in any
-  mode, one "as the key has it" follows the mode.
+  mode, one "as the key has it" follows the mode, and the card names each chord
+  as the current mode makes it (a plain `vi` a dorian machine chose is shown as
+  the diminished chord it has become).
 - *No new tune lines, no chords under the quote or a style's amen*: those are
   the song's and the style's.
 
-**The page.** The harmony lane's chords become buttons (a person's in the
-second ink, as their notes are). Selecting one opens a small chord card beside
-the note inspector: the chords in the key as one-press choices (I ii iii IV V
-vi vii° with their names), then root, quality and bass, the bar's number of
-chords (to add a passing chord), and Restore chords. Each change is one undoable
-edit, heard at once in Play sketch and sung with Hear sung section.
+**The page.** The harmony lane's chords are buttons, named in the key (`Bm`,
+`G/B`), laid where the band plays them; a person's (where the line differs
+from the song's own) in the second ink, as their notes are. Selecting one
+strums it and opens a chord card under the note inspector: the chords in the
+key as one-press choices (with their names), then root (each numeral with its
+note), quality, bass, the bar's number of chords (to add a passing chord), ♪ to
+hear it, and Restore chords (the song's own, inherited ones included). Each
+change is one undoable edit, heard at once in Play sketch (the page redraws
+from the server in a few milliseconds) and sung with Hear sung section.
+
+**Built as designed, after a Fable review** (read-only, before building),
+whose points are in: an inversion's bass through a named `bass()`, not by
+reordering the chord's tones (which would have made every player read a C/E as
+E minor); the guitar and the capo keep root position; `realize` itself sings
+the harmonized song, so the render, the MIDI and the sketch agree; the
+harmonized song is made once per set of chords and kept (the per-song caches
+key on the object, and a fresh one per request would have grown without end);
+qualities lower case and case-sensitive; a bar shared evenly (1, 2 or 4, not
+3); the rub test the band's own; the fences said plainly (pickups, a
+non-chord bass, sevenths as the next step).
+
+Checked by tests/test_chords.py (the grammar, nothing changed without an edit,
+refusals, the band and choir following and the melody not, the bass on an
+inversion's note, rubs, marks, replay from the record, a child inheriting, a
+release), tests/studio_composer.test.cjs (the card: in the key, root, quality,
+bass, split and join, restore, second ink, the rub outlined, the strum) and the
+goldens (tests/test_determinism.py, unchanged).
 
 ## What stays on the machine
 

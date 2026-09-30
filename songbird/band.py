@@ -38,7 +38,7 @@ import numpy as np
 
 from . import variants as variants_mod
 from .score import Note
-from .theory import MODES, choir_voicing, chord_tones, degree_semitones
+from .theory import MODES, choir_voicing, chord_bass, chord_tones, degree_semitones
 
 INSTRUMENTS = ("lute", "guitar", "harp", "bass", "fiddle", "whistle", "drum", "drone")
 PATTERNS = ("lilt", "strum", "pick", "air")
@@ -334,6 +334,11 @@ class Context:
     def root(self, symbol: str) -> int:
         return self.pcs(symbol)[0]
 
+    def bass(self, symbol: str) -> int:
+        """The chord's lowest note (a pitch class): its root, or the third or fifth a person put under it (I/3).
+        Whatever plays the bass line takes it; pcs() and root() stay the chord's own, root first."""
+        return (self.tonic + chord_bass(symbol, self.mode)) % 12
+
     def energy_at(self, u: float) -> float:
         """The section's energy, leaning toward a louder next section over the last bar."""
         i = self.section_at(u)
@@ -503,13 +508,13 @@ def bass_part(ctx: Context) -> list[Ev]:
         e = ctx.energy_at(c.u0) + 0.3 * (density - 0.5)
         pcs = ctx.pcs(c.symbol)
         walking = what == "walk" and e >= 0.5
-        root = nearest({pcs[0]}, prev if walking and prev is not None else home, lo, hi if walking else lo + 12)
+        root = nearest({ctx.bass(c.symbol)}, prev if walking and prev is not None else home, lo, hi if walking else lo + 12)
         fifth = nearest({pcs[2]}, root - 5 if root - 5 >= lo else root + 7, lo, hi)
         third = nearest({pcs[1]}, root + 4, lo, hi)
         nxt = chords[k + 1] if k + 1 < len(chords) else None
         nxt_root = None
         if nxt is not None and ctx.sections[nxt.section].parts.get("bass"):
-            nxt_root = nearest({ctx.root(nxt.symbol)}, root, lo, hi)
+            nxt_root = nearest({ctx.bass(nxt.symbol)}, root, lo, hi)
         span = c.u1 - c.u0
         beat = ctx.beat
         if what == "long" or span < beat:
@@ -586,7 +591,13 @@ def harp_voicing(ctx: Context, symbol: str, high: bool) -> list[int]:
         return [p for p in range(ctx.tonic + 10, ctx.tonic + 25) if p % 12 in pcs][:5]
     low = ctx.tonic - 22
     bass = low + (ctx.tonic + root_i - low) % 12
-    return [bass, bass + (fifth_i - root_i), bass + 12, bass + 12 + (third_i - root_i), bass + 12 + (fifth_i - root_i)]
+    spread = [bass, bass + (fifth_i - root_i), bass + 12, bass + 12 + (third_i - root_i), bass + 12 + (fifth_i - root_i)]
+    under = chord_bass(symbol, ctx.mode)
+    if under == root_i:
+        return spread
+    # a person's inversion (I/3): its bass on the low string, the spread's strings above it
+    lowest = low + (ctx.tonic + under - low) % 12
+    return [lowest] + [p for p in spread if p > lowest][:4]
 
 
 def harp_part(ctx: Context) -> list[Ev]:

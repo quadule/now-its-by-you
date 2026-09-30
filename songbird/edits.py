@@ -15,6 +15,9 @@ keeps. An edit that can't be kept is left out and said why, never bent.
     band.pattern, band.lead, band.density, band.brightness, band.<instrument> (0: it sits out)
     mix.space, mix.width, mix.forward, mix.intimacy
     variants.<name>      a melody variant, once a rendition carries them (Params.variants)
+    tune.<line>          a tune line's notes: [{degree, onset, duration}, ...] in beats (songbird.composition)
+    chords.<line>        a tune line's chords: a list of chords a bar ([["I"], ["V/3", "vi"]]), each a function
+                         of the key with a quality and a bass if named (theory.parse_symbol); null: the song's own
     words.verse.<i>      {"id": verse, "slots": {slot: words}}, or just the verse: the i-th verse (from 0)
     words.refrain.<i>    the i-th refrain's own words: {"id": couplet, "head": head, "slots": {slot: words}},
                          any of the three, or just a couplet (never the last's: it always sings the canon)
@@ -27,7 +30,11 @@ keeps. An edit that can't be kept is left out and said why, never bent.
 The edits go in inside the program's table (choose_params(overrides=...)),
 so a decision that reads one reads the person's: a mode chosen minor leans
 the words darker, as the machine's own minor would. That is the one knock-on
-so far; any added later should be listed here. Each part of the shape is its
+so far; any added later should be listed here. A tune line's chords reach
+everything that sounds from them (the band, the choir's harmony, the backing
+voices: realize sings composition.harmonized), but not the choices the
+program makes about the tune (its variants and the modes a machine may take
+read the song's own chords). Each part of the shape is its
 own edit, so "no intro" holds while the day moves the rest of the shape.
 
 A rendition's record marks each edit that took effect with what the program
@@ -258,6 +265,8 @@ def check(genome: Genome, edits: dict, phrasings=()) -> tuple[dict, list[dict]]:
                 clean[path] = composition.section_ids(names) if names is not None else None
             elif path.startswith("tune."):
                 clean[path] = composition.check_phrase(genome, path[5:], value)
+            elif path.startswith("chords."):
+                clean[path] = composition.check_chords(genome, path[7:], value)
             elif path.startswith("lyrics."):
                 clean[path] = composition.check_lyric(genome, path, value)
             elif path.startswith("form."):
@@ -313,7 +322,7 @@ def check(genome: Genome, edits: dict, phrasings=()) -> tuple[dict, list[dict]]:
         except LookupError as e:
             problems.append(Problem(path, str(e.args[0]) if e.args else "there's no such choice"))
         except (TypeError, ValueError) as e:
-            if path == "form.order" or path.startswith(("tune.", "lyrics.")):
+            if path == "form.order" or path.startswith(("tune.", "chords.", "lyrics.")):
                 problems.append(Problem(path, str(e)))
                 continue
             problems.append(Problem(path, f"{value!r} isn't a value this choice can take"))
@@ -413,6 +422,24 @@ class Overrides:
             held["tune"] = tune
         else:
             held.pop("tune", None)
+        # a person's chords for a tune line, everywhere it is sung (composition.harmonized)
+        chords = {k: [list(bar) for bar in v] for k, v in (held.get("chords") or {}).items()}
+        for path, value in e.items():
+            if not path.startswith("chords."):
+                continue
+            try:
+                bars = composition.check_chords(self.genome, path[7:], value)
+                if bars is None:
+                    chords.pop(path[7:], None)
+                else:
+                    chords[path[7:]] = bars
+                applied.append(path)
+            except (ValueError, TypeError) as ex:
+                problems.append(Problem(path, str(ex)))
+        if chords:
+            held["chords"] = chords
+        else:
+            held.pop("chords", None)
         # a person's own lines, each kept by the verse (or time round) it's written for (songbird.composition)
         lines = {k: dict(v) for k, v in held.get("lines", {}).items()}
         if self._lines_before is None:
@@ -707,6 +734,8 @@ def marks(genome: Genome, generated, generated_lyrics, final_lyrics, applied: li
             was = composition.section_ids(generated.form)
         elif path.startswith("tune."):
             was = composition.phrase_value(genome, generated, path[5:])
+        elif path.startswith("chords."):
+            was = composition.chords_value(genome, generated, path[7:])
         elif path.startswith("lyrics."):
             was = composition.lyric_value(genome, generated, generated_lyrics, path)
         elif path.startswith("form."):

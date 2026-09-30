@@ -480,7 +480,7 @@ def w_roots(ctx: StyleContext, i: int, part: str) -> list[Ev]:
     for c in ctx.chords_in(i):
         rng = ctx.rand(part, c.u0)
         pcs = ctx.pcs(c.symbol)
-        root = nearest({pcs[0]}, lo + 7, lo, lo + 14)
+        root = nearest({ctx.bass(c.symbol)}, lo + 7, lo, lo + 14)
         beats = ctx.grid.beats_in(c.u0, c.u1)
         out.append(ev(part, c.u0, c.u1, root, ctx.vel(part, c.u0, 0.8, 0.85), i=i))
         if len(beats) >= 3 and rng.random() < 0.6:
@@ -493,7 +493,7 @@ def w_roots(ctx: StyleContext, i: int, part: str) -> list[Ev]:
 
 def w_long(ctx: StyleContext, i: int, part: str) -> list[Ev]:
     lo, hi = bass_range(ctx, part)
-    return [ev(part, c.u0, c.u1, nearest({ctx.root(c.symbol)}, lo + 7, lo, lo + 14), ctx.vel(part, c.u0, 0.7, 0.85), i=i)
+    return [ev(part, c.u0, c.u1, nearest({ctx.bass(c.symbol)}, lo + 7, lo, lo + 14), ctx.vel(part, c.u0, 0.7, 0.85), i=i)
             for c in ctx.chords_in(i)]
 
 
@@ -506,7 +506,7 @@ def w_two(ctx: StyleContext, i: int, part: str) -> list[Ev]:
     for c in ctx.chords_in(i):
         rng = ctx.rand(part, c.u0)
         pcs = ctx.pcs(c.symbol)
-        root = nearest({pcs[0]}, lo + 7, lo, lo + 14)
+        root = nearest({ctx.bass(c.symbol)}, lo + 7, lo, lo + 14)
         fifth = nearest({pcs[2]}, root - 5 if root - 5 >= lo else root + 7, lo, hi)
         beats = ctx.grid.beats_in(c.u0, c.u1)
         hits = []
@@ -522,7 +522,7 @@ def w_two(ctx: StyleContext, i: int, part: str) -> list[Ev]:
                 hits.append((u, fifth))
         nxt = chord_after(ctx, c)
         if nxt is not None and nxt.symbol != c.symbol and len(beats) >= 2 and rng.random() < 0.3 + 0.35 * density:
-            target = nearest({ctx.root(nxt.symbol)}, root, lo, hi)
+            target = nearest({ctx.bass(nxt.symbol)}, root, lo, hi)
             walk = [scale_step(ctx, target, -2), scale_step(ctx, target, -1)] if target > root else \
                 [scale_step(ctx, target, 2), scale_step(ctx, target, 1)]
             hits = [h for h in hits if h[0] < beats[-2] - 1e-9] + list(zip(beats[-2:], walk))
@@ -540,7 +540,7 @@ def w_walk(ctx: StyleContext, i: int, part: str) -> list[Ev]:
     for c in ctx.chords_in(i):
         rng = ctx.rand(part, c.u0)
         pcs = ctx.pcs(c.symbol)
-        root = nearest({pcs[0]}, prev if prev is not None else lo + 7, lo, hi)
+        root = nearest({ctx.bass(c.symbol)}, prev if prev is not None else lo + 7, lo, hi)
         tones = [nearest({pcs[2]}, root + 7, lo, hi), nearest({pcs[1]}, root + 4, lo, hi), root + 12 if root + 12 <= hi else root]
         beats = ctx.grid.beats_in(c.u0, c.u1)
         nxt = chord_after(ctx, c)
@@ -548,7 +548,7 @@ def w_walk(ctx: StyleContext, i: int, part: str) -> list[Ev]:
             if k == 0:
                 p = root
             elif k == len(beats) - 1 and nxt is not None:
-                target = nearest({ctx.root(nxt.symbol)}, root, lo, hi)
+                target = nearest({ctx.bass(nxt.symbol)}, root, lo, hi)
                 p = scale_step(ctx, target, -1 if rng.random() < 0.6 else 1)
                 if clashes(p % 12, [x for x in ctx.sung_in(u, u + ctx.beat) if x[3]]):
                     p = tones[0]
@@ -566,7 +566,7 @@ def w_eighths(ctx: StyleContext, i: int, part: str) -> list[Ev]:
     out = []
     for c in ctx.chords_in(i):
         rng = ctx.rand(part, c.u0)
-        root = nearest({ctx.root(c.symbol)}, lo + 7, lo, lo + 14)
+        root = nearest({ctx.bass(c.symbol)}, lo + 7, lo, lo + 14)
         subs = ctx.grid.subs_in(c.u0, c.u1)
         nxt = chord_after(ctx, c)
         for k, u in enumerate(subs):
@@ -574,7 +574,7 @@ def w_eighths(ctx: StyleContext, i: int, part: str) -> list[Ev]:
             if k % 2 == 1 and rng.random() < 0.18 and root + 12 <= hi + 12:
                 p = root + 12
             if nxt is not None and k == len(subs) - 1 and nxt.symbol != c.symbol:
-                target = nearest({ctx.root(nxt.symbol)}, root, lo, hi)
+                target = nearest({ctx.bass(nxt.symbol)}, root, lo, hi)
                 p = scale_step(ctx, target, -1 if target >= root else 1)
             out.append(ev(part, u, u + 0.8 * (until(subs, k, c.u1) - u), p,
                           ctx.vel(part, u, 0.66 if ctx.grid.on_beat(u) else 0.5, 0.85), i=i))
@@ -587,7 +587,7 @@ def w_boogie(ctx: StyleContext, i: int, part: str) -> list[Ev]:
     lo = max(lo, ctx.tonic - 24)
     out = []
     for c in ctx.chords_in(i):
-        root = nearest({ctx.root(c.symbol)}, lo + 4, lo, lo + 12)
+        root = nearest({ctx.bass(c.symbol)}, lo + 4, lo, lo + 12)
         subs = ctx.grid.subs_in(c.u0, c.u1)
         for k, u in enumerate(subs):
             on = ctx.grid.on_beat(u)
@@ -608,7 +608,7 @@ def w_sub(ctx: StyleContext, i: int, part: str) -> list[Ev]:
     out = []
     for c in ctx.chords_in(i):
         rng = ctx.rand(part, c.u0)
-        root = nearest({ctx.root(c.symbol)}, lo + 5, lo, lo + 12)
+        root = nearest({ctx.bass(c.symbol)}, lo + 5, lo, lo + 12)
         starts = sorted(set([c.u0] + [b for b in ctx.grid.bars(c.u0, c.u1)]))
         for k, u in enumerate(starts):
             end = starts[k + 1] if k + 1 < len(starts) else c.u1
@@ -628,7 +628,7 @@ def w_oom(ctx: StyleContext, i: int, part: str) -> list[Ev]:
     out = []
     for c in ctx.chords_in(i):
         pcs = ctx.pcs(c.symbol)
-        root = nearest({pcs[0]}, lo + 7, lo, lo + 14)
+        root = nearest({ctx.bass(c.symbol)}, lo + 7, lo, lo + 14)
         fifth = nearest({pcs[2]}, root - 5 if root - 5 >= lo else root + 7, lo, hi)
         bars = sorted(set([c.u0] + ctx.grid.bars(c.u0, c.u1)))
         for k, u in enumerate(bars):
@@ -645,7 +645,7 @@ def w_pedal(ctx: StyleContext, i: int, part: str) -> list[Ev]:
     out = []
     for c in ctx.chords_in(i):
         strong = [x for x in ctx.sung_in(c.u0, c.u1) if x[3]]
-        p = tonic if not clashes(tonic % 12, strong) else nearest({ctx.root(c.symbol)}, tonic, lo, hi)
+        p = tonic if not clashes(tonic % 12, strong) else nearest({ctx.bass(c.symbol)}, tonic, lo, hi)
         if out and out[-1].pitch == p and abs(out[-1].u1 - c.u0) < 1e-9:
             out[-1].u1 = c.u1
         else:
@@ -751,7 +751,7 @@ def w_ring(ctx: StyleContext, i: int, part: str) -> list[Ev]:
 def bass_string(ctx: StyleContext, part: str, c: Chord, lo: int) -> tuple[int, int]:
     """A chord's root and fifth on a guitar's (or banjo's, a piano's left hand's) low strings."""
     pcs = ctx.pcs(c.symbol)
-    root = nearest({pcs[0]}, lo + 5, lo, lo + 11)
+    root = nearest({ctx.bass(c.symbol)}, lo + 5, lo, lo + 11)
     return root, nearest({pcs[2]}, root + 7 if root + 7 <= lo + 16 else root - 5, lo, lo + 16)
 
 
@@ -781,7 +781,7 @@ def w_boom(ctx: StyleContext, i: int, part: str) -> list[Ev]:
                                   shift=0.012 * j))
         nxt = chord_after(ctx, c)
         if c.last and ctx.sections[i].sung and nxt is not None and len(beats) >= 2 and rng.random() < 0.55:
-            target = nearest({ctx.root(nxt.symbol)}, root, lo, lo + 12)
+            target = nearest({ctx.bass(nxt.symbol)}, root, lo, lo + 12)
             start = beats[-2]
             run = [scale_step(ctx, target, -k) for k in (3, 2, 1)] + [target]
             subs = [u for u in ctx.grid.subs_in(start, c.u1)][:3]

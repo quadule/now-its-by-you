@@ -448,6 +448,49 @@ test("the sketch plays the chords and a bass under the tune, from the score, and
   s.window.SongbirdComposer.stop();
 });
 
+test("a chord is changed from its card: in the key, by root, quality and bass, split, restored; mine in the second ink", () => {
+  const view = score();
+  view.composition.chords_per_bar = [1, 2, 4];
+  view.composition.chord_choices = {
+    diatonic: [["I", "C"], ["ii", "Dm"], ["iii", "Em"], ["IV", "F"], ["V", "G"], ["vi", "Am"], ["vii", "B°"]].map(([symbol, name]) => ({ symbol, name })),
+    roots: ["I", "bII", "II", "bIII", "III", "IV", "#IV", "V", "bVI", "VI", "bVII", "VII"].map((numeral) => ({ numeral, note: "?" })),
+    qualities: [["", "as the key has it"], ["maj", "major"], ["m", "minor"], ["dim", "diminished"], ["aug", "augmented"], ["sus2", "sus2"], ["sus4", "sus4"]],
+    basses: [[1, "root"], [3, "third"], [5, "fifth"]],
+  };
+  for (const s of view.composition.sections) for (const p of s.phrases) {
+    p.chords_path = `chords.${p.id}`; p.chords_edited = p.id === "a1"; p.song_chords = [["I", "IV"]];
+    p.harmony = [{ bar: 0, slot: 0, start: 0, beats: 2, symbol: "I", name: "C", pcs: [0, 4, 7], bass: 0, rubs: [1], hard: false },
+      { bar: 0, slot: 1, start: 2, beats: 2, symbol: "V", name: "G", pcs: [7, 11, 2], bass: 7, rubs: [], hard: false }];
+  }
+  const s = setup(view);
+  const chords = s.root.querySelectorAll(".sbc-chord");
+  assert.deepEqual(chords.map((c) => c.textContent), ["C", "G"]);
+  assert(chords[1].classList.contains("is-edited"), "the V where the song has IV is the person's");
+  assert(!chords[0].classList.contains("is-edited"));
+  chords[0].emit("click");
+  assert(s.find('[data-chord="0.0"]').classList.contains("is-selected"));
+  assert(s.find('[data-note="1"]').classList.contains("is-rub"), "the sung note that isn't in the chord is shown");
+  assert.match(s.find(".sbc-chord-card").textContent, /1 sung note over it isn't in the chord \(this\)/);
+  s.clickText("Am");
+  assert.deepEqual(s.commits.at(-1), { path: "chords.a1", value: [["vi", "V"]] });
+  s.find("#sbc-chord-quality").emit("change", { target: { value: "maj" } });
+  assert.deepEqual(s.commits.at(-1).value, [["Imaj", "V"]]);
+  s.find("#sbc-chord-bass").emit("change", { target: { value: "3" } });
+  assert.deepEqual(s.commits.at(-1).value, [["I/3", "V"]]);
+  s.find("#sbc-chord-root").emit("change", { target: { value: "bVII" } });
+  assert.deepEqual(s.commits.at(-1).value, [["bVII", "V"]]);
+  s.find("#sbc-chord-count").emit("change", { target: { value: "4" } });
+  assert.deepEqual(s.commits.at(-1).value, [["I", "I", "V", "V"]], "a split bar keeps what sounds, ready for a passing chord");
+  s.find("#sbc-chord-count").emit("change", { target: { value: "1" } });
+  assert.deepEqual(s.commits.at(-1).value, [["I"]]);
+  const before = s.commits.length;
+  s.clickText("C");  // the chord it already is: nothing to keep
+  assert.equal(s.commits.length, before);
+  s.clickText("Restore chords");
+  assert.deepEqual(s.commits.at(-1), { path: "chords.a1", value: null });
+  assert(s.oscillators.some((o) => o.type === "sawtooth"), "choosing a chord strums it at once");
+});
+
 test("a browser without Web Audio keeps editing available and explains how to listen", () => {
   const s = setup(score(), { audioAvailable: false });
   s.find("#sbc-play").emit("click");

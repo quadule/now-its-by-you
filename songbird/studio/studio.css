@@ -487,6 +487,19 @@ button:disabled, input:disabled, select:disabled { cursor: not-allowed; }
 .sbc-song-playhead { position: absolute; top: 0; bottom: 0; width: 2px; background: var(--rubric); pointer-events: none; z-index: 2; }
 .sbc-chord { position: absolute; top: 27px; height: 21px; padding-left: 6px; font-size: 9px; color: var(--sbc-gold); background: color-mix(in srgb, var(--sbc-gold) 8%, var(--card)); border-left: 1px solid var(--line); line-height: 21px; overflow: hidden; }
 .sbc-harmony-label { position: absolute; left: 4px; top: 29px; font-size: 9px; color: var(--faint); }
+/* the chords are a person's to change: each a button; theirs in the second ink */
+button.sbc-chord { border: 0; border-left: 1px solid var(--line); border-radius: 0; text-align: left; font: 600 10px/21px var(--sans); cursor: pointer; white-space: nowrap; z-index: 1; }
+button.sbc-chord:hover { background: color-mix(in srgb, var(--you) 10%, var(--card)); color: var(--you); }
+button.sbc-chord.is-edited { color: var(--you); background: var(--you-wash); }
+button.sbc-chord.is-selected { box-shadow: inset 0 0 0 1.5px var(--you); color: var(--you); }
+button.sbc-chord.is-rub::after { content: "•"; color: var(--rubric); margin-left: 3px; }
+.sbc-note.is-rub { outline: 2px dotted var(--rubric); outline-offset: 1px; }
+.sbc-chord-card { display: flex; flex-direction: column; gap: 12px; padding: 14px 19px; border-top: 1px solid var(--line); background: color-mix(in srgb, var(--you-wash) 40%, var(--card)); }
+.sbc-chord-card .sbc-note-heading > strong.is-mine { color: var(--you); }
+.sbc-chord-row { display: flex; flex-wrap: wrap; gap: 10px 14px; align-items: flex-end; }
+.sbc-chord-row > .sbc-overline { align-self: center; margin-right: 4px; }
+.sbc-button.is-on { border-color: var(--you); background: var(--you-wash); color: var(--you); font-weight: 600; }
+@media (max-width: 640px) { .sbc-chord-card { padding: 12px; } }
 .band-mixer { display: grid; gap: 8px; margin-top: 10px; }
 .mixer-strip { border: 1px solid var(--line); border-radius: var(--radius); padding: 8px 10px; }
 .mixer-strip.muted { opacity: .6; background: var(--paper); }
