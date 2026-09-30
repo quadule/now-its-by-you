@@ -726,11 +726,16 @@ on this Mac, machine `fictional:wren`).
 | B, whole song (a recording) | identical: samples, record, every packet member | `288c16ecbdef…` |
 | B, whole song, tempo 70, picking | identical, the same | `27e40e44abd4…` |
 | H, whole song | identical, the same | `417585a8574b…` |
+| H, whole song, recorded in Chrome (after merging main's drum machine and synth bass) | identical | `417585a8574b…` |
+| H, verse 2, tempo 98, Chrome, from the page's ▶ | identical | `24433351e24b…` |
+| H, refrain 1, synth folk (the drum machine, the analog synths), node and Chrome | identical | `8405f26c4c5c…` |
+| B, whole song, synth folk | identical | `b6fb5e07d050…` |
 | H, whole song, roll 2 | **23 of 7.66 M samples differ, by 1 LSB** | `95f79249…` vs the server's |
 | H, whole song, tempo 92, roll 1 (Chrome and node) | **1 of 8.47 M samples, 1 LSB** | `73df8752…` vs `f040fd7d…` |
 | H, whole song, tempo 98, recorded from the Tools sheet in Chrome | **differs** | `47770304…` vs `24b99913…` |
 
-So: every section tried and half the whole songs are the server's to the last bit, and where the samples are the
+(Run again on main after the drum machine and the synth bass joined the rhythm, 5974a66: the same.) So: every
+section tried and four of the seven whole-song versions are the server's to the last bit, and where the samples are the
 same, the record is too (every packet member identical, `program_sha256` the server's). The FLAC's own bytes differ
 by the encoder (Pyodide's libFLAC 1.4.2, the server's 1.4.3), not in what they decode to: the id is the samples'.
 
@@ -741,7 +746,7 @@ voice before to -197 and -192 dB, **the fiddle only to -116 dB**. Pyodide's `sin
 spike found; everywhere else that stays a -190 dB whisper, but the bowed string's friction is a feedback loop that
 grows a last-bit difference in its vibrato (`bowed.tracks`, `np.sin`) into one about 1/20 of an LSB: enough to tip
 a sample's rounding now and then in a long song (0, 1, 23 samples). The versions this machine (Wren) sings put the
-fiddle in most whole songs. The same will be true between the Linux server and a Mac, whose libm differ too.
+fiddle in most whole songs. The Linux server and a Mac very likely part the same way, their libm differing too.
 
 What a difference means: the browser's recording is a valid packet (its record's id is its own audio's), plays the
 same (1 LSB is -96 dBFS, a handful of samples), and continues the lineage the same; but it isn't the file the server
@@ -807,9 +812,9 @@ kernels must be current (build_render.py refuses stale ones, as tests/test_brows
 ### Decisions for the artist
 
 1. **Byte identity for fiddle versions.** As built, a recording made in the browser is the server's to the last
-   bit for most versions, and differs by a few samples at 1 LSB for some with the fiddle (above). Three ways: (a)
-   accept it (built; the packet is valid and self-consistent, the difference inaudible, and the Linux server vs a
-   Mac already differ the same way); (b) have the server make every *recording*, the browser only previews and
+   bit for every section tried and four of the seven whole songs, and differs by 1 to 23 samples at 1 LSB for the other three (all H with Wren's fiddle; above). Three ways: (a)
+   accept it (built; the packet is valid and self-consistent, the difference inaudible, and the Linux server and a
+   Mac very likely differ the same way already); (b) have the server make every *recording*, the browser only previews and
    hearing the whole song (a line in renderer.js's `choose`: `kind === "record"` → server; the VPS then does the
    heavy work only when someone records); (c) the determinism work: deterministic transcendental functions in the
    engine, starting with the bowed string's vibrato, changing fiddle, steel and cello renders once (new goldens if
