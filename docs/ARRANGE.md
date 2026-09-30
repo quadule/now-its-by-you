@@ -232,3 +232,100 @@ Found while building this; the bank is the other thread's to change:
 - The genome's form template has no second bridge, so the extra stanza is
   only sung in a form built outside it, and the template allows a single
   verse where the rules need two.
+
+# Taking over the arrangement (2026-09-29)
+
+The studio test that made an EDM version through the page (docs/STUDIO-EDM-TEST.md) found that the
+arrangement's dynamics come from chance, not from the person: how the song starts, the band joining line
+by line, the breakdown are drawn and can't be set; there is no per-section drum pattern, no instrumental
+drop, sections are fixed at their bars; and the tempo stops at 1.3 times the song's, whatever the style.
+The artist: the program's own choices (drawn by chance, per machine and date) are the point of the piece,
+stay the default and stay visible; a person can take any of them over. This is the engine and the API a
+DAW-like page needs (sections as regions, players as tracks, a track x section grid, one inspector); the
+page itself is being designed separately.
+
+## Design
+
+**One place the program's arrangement lives.** Both arrangers already decide, section by section, what
+each player does there: `band.plan` (the ballad) and `idioms.plan_style` (every other style) fill each
+`Section.parts` (player -> idiom: "walk", "strum", "machine", "half"...), and the style's options
+(`idioms.shape_plan`: entrances, a bare verse, stop-time, a breakdown, a half-time bridge, a pad intro)
+then remove players or make them come in late (`Plan.entrances`). A person's arrangement is laid over that,
+in one function called by both arrangers right after the program's plan (`arrangement.take_over`), and one
+pass over the written notes (`arrangement.shape`): the program decides first, always, and what it decided
+is kept beside the person's (so the page shows both, and a released choice goes back to it).
+
+**The edits.** Flat paths, as every edit is (docs/STUDIO.md), by the arrangement's own section ids
+(`verse:1`, the second verse in story order, as `form.order` and `part.*` name them):
+
+| Path | Value | What |
+|---|---|---|
+| `arrange.<section>:<n>.<player>.level` | rest, sparse, normal, full | in or out, and how hard: rest sits the player out there; sparse keeps its beats and plays softer (the idiom the style gives a quiet band); normal is the program's idiom at the section's own energy; full the idiom the style gives a full band, harder |
+| `arrange.<section>:<n>.<player>.pattern` | an idiom from the player's vocabulary | what it plays there: the drums' groove, four on the floor, half time, a build...; a bass's roots, walk, eighths; a guitar's strum, boom-chick, travis...; "lead": it plays the tune |
+| `arrange.<section>:<n>.<player>.from` | a line number (0: from the start) | where it comes in: the band joining line by line, per player, per section |
+| `arrange.<section>:<n>.<player>.fill` | true, false | a drum fill in the section's last bar, or none (a kit or a drum machine; the frame drum's fills were taken out on 2026-09-27 and stay out) |
+| `arrange.<section>:<n>.bars` | 2, 4, 8, 16 | the section's length: an instrumental section (an intro, a break, an outro, or a sung section made played) fitted to it from its own tune lines, the last ones kept (the cadence) and repeated backwards from there; a sung section only lengthened (its lines sung, then the band plays its last lines again: a post-refrain drop), never shortened below its lines |
+| `arrange.<section>:<n>.sung` | false | the section played, not sung: its words are still drawn (so no other section's words move) but the singer, the choir and the backing voices leave it, and the band's lead plays the tune: an instrumental drop |
+| `arrange.<section>:<n>.build` | true | a build: the section's players thin out at its start and fill in bar by bar toward the next section, softer to louder; a kit or drum machine plays a build (quarters, eighths, then sixteenths on the snare, the last beat left empty before the next section) unless its pattern is set |
+
+null releases any of them. The style's own options get the rest of their edits (`style.intro`,
+`style.stops`, `style.alone`, `style.alone_with`, `style.bridge`, beside the existing `style.entrances`,
+`style.breakdown`, `style.lift`, `style.ending`...), so how it starts, stop-time and the breakdown can be
+chosen as a whole; the per-cell edits then refine or override them (a player's `level` or `from` set by a
+person clears the entrance chance drew for it).
+
+**Stored** as a person's composition is (`params.composition["arrange"]`: `{"verse:0": {"bars": 16,
+"sung": false, "build": true, "players": {"drummachine": {"level": "full", "pattern": "four"}}}}`), so the
+record's parameters carry it, `--replay` renders from them byte for byte, and `chosen_by_you` marks each
+path with the value chosen and what the program had (a cell's "was": the program's own, as for `part.*`;
+the page's grid has the program's actual idiom and level). Absent when empty: a version with no such
+edits is the version as before, byte for byte (goldens unchanged).
+
+**Inherited** by place, as a played part is: a child keeps the person's arrangement (decision 1 in
+docs/STUDIO.md: a person's choices pass to children). A cell for a section the child's form doesn't have,
+or a player its band hasn't got (its style moved round the ring), or a pattern its band's player doesn't
+play, is kept, silent, and said, and waits for a version that has them; a new edit that can't be heard is
+said and not kept, as `part.*` is.
+
+**Validated** (`edits.check` -> `arrangement.check`): the section a section of the song (or `bridge2`),
+its occurrence under 48; the player one the program knows; the level one of four; the pattern one the
+player can play (its vocabulary: every idiom any style gives that instrument, the family's own, "lead"
+for a pitched player, and for the drums groove, four, half, end and build; the ballad's eight have their
+own writers' idioms); `from` under the section's lines; `fill` only for a kit or a drum machine; `bars`
+one of 2, 4, 8, 16 reachable from its tune lines (a turn, whose tune is a quote fitted to its two bars,
+keeps them); `sung` only on a sung section; `build` a boolean. Whether a sung section may take a length
+is checked with the rest of the edits (a section made played may be shortened).
+
+**Where the length acts.** Everything that lays the form out on the grid reads one list, a section
+occurrence's tune lines (`arrangement.phrase_plan`: the section's own when nobody changed it): realize's
+layout and clock, the chord times, the tune editor's view, the notes-in line windows and layout, a
+section's preview window. A section length is a list of the song's own tune lines, so the harmony, the
+chords a person changed, the variants and the lift all follow.
+
+**Two occurrences in a row** (verses in pairs) are one section to the band; a person's arrangement of
+either splits them at the boundary for this version (both halves keep the pair's role and energy, so
+nothing else in the band moves).
+
+**Tempo, by style.** A person's range was 0.75 to 1.3 times the song's tempo, whatever the style. Now it is
+the style's own range at its feel, widened a tenth each way, never narrower than 0.75 to 1.3 of the song,
+inside a global 0.4 to 1.6 (for H: 38 to 154). So the ballad keeps 72 to 124.8; synth folk reaches 134, a
+string band 148, indie 137; a lullaby's waltz goes down to 38 (its quarter at 57). A value outside the
+style's range is held to it at the end and said (the style is known only once chosen).
+
+**The API for the page** (`/api/arrangement`, its own section of studio.py): the version as a grid:
+
+    {"key", "sections": [{index, id, name, label, role, bars, bar_options, sung, can_play, build, start_beat,
+                          duration_beats, energy, options: [{field, value, by, path, text}], by, paths}],
+     "players": [{name, label, family, patterns: [{id, label}], fills}],
+     "cells": [{section, player, level, pattern, pattern_label, from, fill, by: program|you|lineage,
+                program: {level, pattern, from}, reasons: [{kind, text}], paths: {level, pattern, from, fill}}],
+     "tempo": {min, max, song, style}, "levels", "problems"}
+
+where a cell's reasons are the program's in plain words (the style's own part for a verse, the band's arc,
+and what chance drew: the band joining line by line, a bare verse, stop-time, the breakdown, a half-time
+bridge), and "you" where a person took it over. Made from one layout of the score (no audio), as the MIDI
+file is.
+
+**Left out, on purpose.** Sections repeated or added (the form's order already does that), a section's
+own chords (the harmony agent's), drum strokes played in (notes in says why), a riser or a sidechain (the
+sound agent's), and a UI beyond the tempo's range: the redesign will draw the grid.
