@@ -1,19 +1,35 @@
 # Learning the song at the piano (2026-09-29)
 
-A page for learning "Now It's by You" on a piano or a MIDI keyboard, note for note as the released version
-sings it: falling notes over a keyboard, the chord above, the words below. It is dev-only for now: it isn't
-part of the public site and nothing deploys it.
+A page for learning "Now It's by You" on a piano or a MIDI keyboard, note for note: falling notes over a
+keyboard, the chord above, the words below. It teaches two things: the released version (web/piano/, as the
+release sings it; dev-only for now, nothing deploys it), and, from the studio, **your version**: the one on
+the studio's page, with its key, tempo, chords, words, form and tune (docs/STUDIO.md, "Learning it at the
+piano").
 
 ## Running it
+
+In the studio: **Learn it at the piano**, in the Tune area or under *Take it into your own tools*. It opens
+in a tab of its own; after a change, press it again and the same tab follows.
+
+The released version, on its own:
 
     python3 -m http.server 8770 --bind 127.0.0.1 --directory web
     open http://127.0.0.1:8770/piano/
 
 (or `piano` in .claude/launch.json). It serves `web/` rather than `web/piano/` so the page can use the
-site's own `web/sing/page/identity.css` instead of a third copy of it. Chrome, Edge and Firefox have Web
-MIDI; Safari doesn't, so there the page plays from the screen's keys and the computer's.
+site's own `web/sing/page/identity.css` (web/piano/identity.css is a link to it). Chrome, Edge and Firefox
+have Web MIDI; Safari doesn't, so there the page plays from the screen's keys and the computer's.
 
-To make the score again, after a new release:
+**One page, two places.** The page's files live in `songbird/studio/piano/` (so they travel in the song's
+packet with the studio: 77 KB, 23 KB compressed); `web/piano/index.html`, `piano.js`, `piano.css` and
+`sound.js` are links to them, so there is nothing to keep in step by hand. The page reads `score.json` beside
+it, or the score its address names: `?score=score/KEY.json`, a path on the same site (the studio's). A
+studio's score says so (`source.kind: "studio"`), and the page then calls it your version and shows the way
+back. The settings are the browser's, per site; a score in another key than the settings were made for
+(the studio's version after a key change) starts the page's own key change again from 0 and fits the hands
+to the keyboard again, if one is set.
+
+To make the release's score again, after a new release:
 
     uv run python tools/piano_score.py --check     # renders/review/contest.flac -> web/piano/score.json
 
@@ -90,15 +106,48 @@ on the grid through the rendition's clock, inverted, and snapped to a sixteenth.
 A key profile alone would call the recording A major: a major pentatonic tune's notes all sit in the key a
 fifth above too. The chords (G and Bm are there, G# isn't) and the note-by-note checks settle it as D.
 
+### Your version, from the studio
+
+The same export (`songbird.piano.export`, moved into the package from the tool, which now calls it and
+still writes `score.json` byte for byte) makes the studio's score, from `songbird.piano.lay`: the version on
+the studio's page laid out with this program, realize() and `variation.lay` as a render has them, no audio
+(a tenth of a second or two). This program's band hands over its Context itself when asked
+(`band.overheard()`, on the asking thread only, so a render on another of the server's threads is never
+listened in on; a style's band too); the release's older program is still listened in on by wrapping
+`band.plan` and `band.arrange`, which only a one-off script may do. What a person's version adds:
+
+- **Chords** a person chose: an inversion's bass (`"bass"`, named `C#m/E`) and sus chords (`sus2`, `sus4`);
+  the root-and-fifth and broken-chord left hands take the inversion's bass as their lowest note. A plain
+  chord has no `bass`, so the release's score is unchanged.
+- **A style's band**: the bass line is the style's bass part (an electric or a synth bass); a style's lift
+  (the last refrain a whole step up) is in the notes (the refrain's pickup too) and the chords, and said as
+  `lift`.
+- **Key, tempo, form, words and tune** are simply the version's.
+
+`source` says `{"kind": "studio", "exporter": "songbird studio", "day", "version"}`. The studio keeps each
+score in its cache under the version's key (`Studio.piano`, `/api/piano`) and serves it at
+`/piano/score/KEY.json`, the page at `/piano/`; a score dropped from the cache says to open it again from
+the studio.
+
+Checked by tests/test_piano_score.py (the sung notes are the render's, in order; a key, tempo and chords
+change; a lift; listening in on one thread only; the release's score again, byte for byte, where the release
+is in the checkout) and tests/test_studio_piano.py (the page served from the studio, one source with
+web/piano/, a public studio's limits), and in the built-in browser: the key and a chord changed in the
+studio (E major, C#m/E) shown on the page, the keyboard fitted (25 keys: 11 notes moved an octave; 37: none),
+and a later key change (G) starting the page's key again and refitting.
+
 ## What's where
 
 | File | What |
 |---|---|
-| `tools/piano_score.py` | the exporter, and `--check` |
+| `songbird/piano.py` | `lay` (a version laid out, no audio) and `export` (the page's score.json) |
+| `tools/piano_score.py` | the release's score, laid with the release's own program, and `--check` |
 | `web/piano/score.json` | its output: tempo, ritardando, key, sections, chords, melody with syllables, lines, left-hand parts (in beats from the first bar line) |
-| `web/piano/index.html`, `piano.css` | the page, on `web/sing/page/identity.css`'s tokens |
-| `web/piano/piano.js` | the page's workings: clock, scheduler, judging, roll, MIDI, keys |
-| `web/piano/sound.js` | the page's own piano-ish voice, click and room (Web Audio, no samples) |
+| `songbird/studio/piano/index.html`, `piano.css` | the page, on the identity's tokens (`identity.css` beside it: the studio's, or a link to the site's in web/piano/) |
+| `songbird/studio/piano/piano.js` | the page's workings: clock, scheduler, judging, roll, MIDI, keys |
+| `songbird/studio/piano/sound.js` | the page's own piano-ish voice, click and room (Web Audio, no samples) |
+| `web/piano/*` | links to those, and the release's `score.json` |
+| `songbird/studio/learn.js` | the studio's Learn it at the piano |
 
 `window.pianoPage` in the browser's console exposes the state and `noteOn(pitch, velocity, source)` for testing.
 

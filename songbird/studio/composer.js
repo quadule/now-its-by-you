@@ -640,21 +640,51 @@
   // beat, the fifth halfway through a long one. Voiced from the chord's pitch classes: the triad between G3
   // and F#4, the bass between C2 and B2.
   const within = (pc, low) => low + (((pc - low) % 12) + 12) % 12;
-  function backing(ctx, chord, offset, seconds) {
-    const beats = Math.max(1, Math.round(chord.duration));
+  // The band's notes for one chord, in seconds from its cycle's start: what this page plucks and what
+  // players.js sends to a MIDI channel are the same notes.
+  function backingNotes(chord, seconds) {
+    const out = [], beats = Math.max(1, Math.round(chord.duration));
     for (let k = 0; k < beats; k++) {
-      const start = offset + (chord.beat + k) * seconds;
-      if (start < ctx.currentTime - 0.01) continue;
-      const at = Math.max(ctx.currentTime, start), length = Math.min(chord.duration - k, 1) * seconds;
-      if (state.chords && chord.pcs.length) {
+      const t = (chord.beat + k) * seconds, length = Math.min(chord.duration - k, 1) * seconds;
+      if (chord.pcs.length) {
         chord.pcs.map((pc) => within(pc, 55)).sort((a, b) => a - b).forEach((pitch, i) =>
-          pluck(ctx, pitch, at + i * 0.012, Math.max(0.12, length * 0.95), k ? 0.013 : 0.02));
+          out.push({ player: "chords", t, spread: i * 0.012, d: Math.max(0.12, length * 0.95), pitch, peak: k ? 0.013 : 0.02 }));
       }
-      if (state.bass && chord.bass !== undefined && (k === 0 || (beats >= 4 && k === beats / 2))) {
+      if (chord.bass !== undefined && (k === 0 || (beats >= 4 && k === beats / 2))) {
         const pc = k === 0 ? chord.bass : chord.pcs[2] ?? chord.bass;
-        pluck(ctx, within(pc, 36), at, Math.max(0.2, Math.min(2, chord.duration - k) * seconds * 0.9), 0.07, "bass");
+        out.push({ player: "bass", t, spread: 0, d: Math.max(0.2, Math.min(2, chord.duration - k) * seconds * 0.9),
+          pitch: within(pc, 36), peak: 0.07, kind: "bass" });
       }
     }
+    return out;
+  }
+  function backing(ctx, chord, offset, seconds) {
+    for (const n of backingNotes(chord, seconds)) {
+      if (!included(n.player) || route(n.player) !== "page") continue;
+      const start = offset + n.t;
+      if (start < ctx.currentTime - 0.01) continue;
+      pluck(ctx, n.pitch, Math.max(ctx.currentTime, start) + n.spread, n.d, n.peak, n.kind);
+    }
+  }
+  // ---- the sketch's players on a musician's own instruments (players.js: MIDI out), when it is on the page
+  const players = () => window.SongbirdPlayers;
+  const route = (player) => players()?.route?.(player) || "page"; // "page", "midi" or "off"
+  const included = (player) => (player === "chords" ? state.chords : player === "bass" ? state.bass : true);
+  function sketchNotes(sequence, seconds) { // everything the sketch plays itself, for players.js to send
+    const out = sequence.events.map((e) => ({ player: "tune", t: e.beat * seconds,
+      d: Math.max(0.07, e.duration * seconds * 0.88), key: e.pitch, vel: 96 }));
+    for (const chord of sequence.harmony || []) {
+      for (const n of backingNotes(chord, seconds)) {
+        if (included(n.player)) out.push({ player: n.player, t: n.t + n.spread, d: n.d, key: n.pitch, vel: n.player === "bass" ? 96 : n.peak > 0.015 ? 84 : 64 });
+      }
+    }
+    return out;
+  }
+  function bandSound(note, when) { // a band part players.js has this page play: a pluck, or a drum's tap
+    const ctx = state.context;
+    if (!ctx || !state.playback) return;
+    if (note.drums) tone(ctx, note.key < 40 ? 90 : note.key < 50 ? 220 : 2400, when, 0.05, true);
+    else pluck(ctx, note.key, when, Math.max(0.08, note.d), 0.012 * (note.vel / 100), note.key < 48 ? "bass" : "strum");
   }
   function pluck(ctx, pitch, start, duration, peak, kind = "strum") {
     const oscillator = ctx.createOscillator(), gain = ctx.createGain();
@@ -705,8 +735,11 @@
     else document.getElementById("audio")?.pause();
     const sequence = playbackSequence(), seconds = 60 / composition().tempo;
     state.playback = { ...sequence, seconds, started: ctx.currentTime + 0.04, nextCycle: 0 };
+    players()?.start?.({ ctx, started: state.playback.started, cycle: sequence.duration * seconds, loop: () => state.loop,
+      seconds, origin: sequence.origin, span: sequence.duration, notes: sketchNotes(sequence, seconds), sound: bandSound });
     paint(); schedule();
   }
+  function replay() { if (state.playback) { stop(); play(); } }
   function schedule() {
     const playback = state.playback, ctx = state.context;
     if (!playback || !ctx) return;
@@ -718,7 +751,7 @@
     // of live nodes even when the user leaves the editor open for hours.
     while (playback.nextCycle <= cycle + (state.loop ? 1 : 0)) {
       const offset = playback.started + playback.nextCycle * duration;
-      for (const event of playback.events) {
+      for (const event of route("tune") === "page" ? playback.events : []) {
         const start = offset + event.beat * playback.seconds;
         if (start >= ctx.currentTime - 0.01) tone(ctx, event.pitch, Math.max(ctx.currentTime, start), Math.max(0.07, event.duration * playback.seconds * 0.88));
       }
@@ -749,6 +782,7 @@
     state.frame = requestAnimationFrame(schedule);
   }
   function stop() {
+    players()?.stop?.(); // every note sent to an instrument ends with the sketch
     if (state.frame) cancelAnimationFrame(state.frame);
     state.frame = null; state.playback = null;
     for (const oscillator of state.nodes) { try { oscillator.stop(); } catch (_) { /* already ended */ } }
@@ -781,6 +815,7 @@
   function render(view) {
     if (state.view !== view) stop();
     state.view = view;
+    players()?.viewChanged?.(view);
     const box = root();
     if (!view?.composition?.sections?.length) {
       if (box) box.replaceChildren(el("p", { class: "sbc-muted" }, "The arrangement will appear when the song is ready."));
@@ -795,5 +830,5 @@
   }
   window.addEventListener("pagehide", stop);
   document.addEventListener("visibilitychange", () => { if (document.hidden) stop(); });
-  window.SongbirdComposer = { render, stop };
+  window.SongbirdComposer = { render, stop, replay };
 })();

@@ -1,4 +1,4 @@
-"""The released rendition's score, for learning it on the piano: web/piano/score.json (dev-only).
+"""The released rendition's score, for learning it on the piano: web/piano/score.json (the public page).
 
     uv run python tools/piano_score.py                   # renders/review/contest.flac -> web/piano/score.json
     uv run python tools/piano_score.py --check           # ...and check the score against the recording itself
@@ -12,29 +12,10 @@ variation.lay, with no audio. It runs the packet's *own* program (unzipped to a 
 ahead of this tree's songbird/, after checking it against the record's program_sha256), so later changes to
 songbird/ can't move a note. The score is trusted only if its words come out exactly as the packet's lyrics.txt.
 
-realize() works on a grid (here an eighth note a unit) and then turns it into seconds with the rendition's
-clock, adding the phrasing's pushes and pulls and a little human jitter. For a player the grid is the truth,
-so this takes the grid itself: it listens in on songbird.band.plan (which is handed the band's Context, the
-song laid out in grid units: sections, the chord under every beat, the tune note by note) and
-songbird.band.arrange (handed realize()'s melody entries, with each syllable). Nothing is changed; the
-listening only keeps references.
-
-What goes in (positions and lengths in beats, a beat a quarter note, 0 at the first bar line of the song; the
-pickup before it is negative; bar n starts at beat 4(n-1)):
-- tempo, time signature, key (the record's tonic and mode), and the final phrase's ritardando: the clock's
-  seconds(b) = 60/bpm * (b + amount * x^2 / (2 * span)), x = beats past its start (songbird.realize.Clock);
-- sections (name, bars) and the chords (roman numeral, root, quality, name in the song's key) as the band plays
-  them: the genome's chords split evenly through each bar, as songbird.band lays them;
-- the melody: every tune note with its syllable. Where nobody sings, the band's lead states the tune (the intro,
-  on the whistle an octave up) and it is given at the sung pitch; the turns' instrumental quotes (the fiddle,
-  then the lute, an octave above the voice) are taken from the band's notes, quantized back onto the grid (a
-  sixteenth) through the inverse clock, their grace notes ("cut") left out, and given an octave down too;
-- left-hand parts. The band has no keyboard (lute, guitar, harp, bass, fiddle, whistle, drum, drone), so:
-  "bass": the band's bass line as heard, quantized the same way, an octave up (in reach of a 61-key keyboard);
-  "fifths": root and fifth together at each chord and on beat 3 of a bar-long chord;
-  "folk": a broken-chord pattern, root-fifth-octave-fifth in quarters (root-fifth over a two-beat chord);
-  "block": the chord's triad held, each voiced nearest the last, between A2 and B3.
-Every part is the notes as written, in the song's own key; the page transposes.
+The packet's program is older than songbird.band.overheard, so this listens in on songbird.band.plan (handed the
+band's Context) and songbird.band.arrange (handed realize()'s melody entries) by wrapping them, which is safe in
+a one-off script. The score.json itself is written by this tree's songbird.piano.export, the same code the
+studio's piano page is fed by (its docstring says what goes in); `--check` holds it up against the recording.
 """
 
 from __future__ import annotations
@@ -49,13 +30,14 @@ from dataclasses import replace
 from pathlib import Path
 
 ROOT = Path(__file__).parent.parent
+sys.path.insert(0, str(ROOT))
+from songbird import piano  # noqa: E402  (this tree's, imported before the packet's program replaces songbird)
+
 RELEASE = ROOT / "renders" / "review" / "contest.flac"
 OUT = ROOT / "web" / "piano" / "score.json"
 COMMAND = ("uv run python tools/everyone.py --render renders/review/contest.flac "
            "--arrange motif=bridge lift=false ending=ring")
-NAMES_SHARP = ["C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B"]
-NAMES_FLAT = ["C", "Db", "D", "Eb", "E", "F", "Gb", "G", "Ab", "A", "Bb", "B"]
-QUANT = 0.25  # beats: a sixteenth, what the band's notes are snapped back to
+NAMES_SHARP = piano.NAMES_SHARP
 
 
 def unpack_program(flac: Path, into: Path) -> dict:
@@ -119,187 +101,16 @@ def lay(flac: Path, tmp: Path) -> dict:
             "clock": timeline(genome, params), "preroll": PREROLL, "program": songbird.__file__}
 
 
-def chord_info(ctx, symbol: str) -> dict:
-    from songbird.theory import chord_tones
-
-    r, t, f = chord_tones(symbol, ctx.mode)
-    quality = {(4, 7): "maj", (3, 7): "min", (3, 6): "dim", (4, 8): "aug"}.get(((t - r) % 12, (f - r) % 12), "maj")
-    return {"root": (ctx.tonic + r) % 12, "quality": quality}
-
-
-def chord_name(root: int, quality: str, flats: bool) -> str:
-    return (NAMES_FLAT if flats else NAMES_SHARP)[root % 12] + {"maj": "", "min": "m", "dim": "dim", "aug": "+"}[quality]
-
-
-def r4(x: float) -> float:
-    return round(x * 4) / 4 if abs(x * 4 - round(x * 4)) < 1e-6 else round(x, 4)
-
-
 def export(laid: dict) -> dict:
-    ctx, clock, params, genome = laid["ctx"], laid["clock"], laid["params"], laid["genome"]
-    lead, beat, bar = laid["lead"], ctx.beat, ctx.bar  # grid units: a beat is 2, a bar 8
-    per_beat = bar // beat
-
-    def b(u: float) -> float:  # grid units -> beats from the first bar line
-        return (u - lead) / beat
-
-    seconds = laid["seconds"]
-
-    def unit_at(t: float) -> float:  # seconds -> grid units (the clock's inverse; it only ever moves forward)
-        lo, hi = -4.0 * bar, laid["end"] + 4.0 * bar
-        for _ in range(60):
-            mid = (lo + hi) / 2
-            lo, hi = (mid, hi) if seconds(mid) < t else (lo, mid)
-        return (lo + hi) / 2
-
-    def q(x: float) -> float:
-        return round(x / QUANT) * QUANT
-
-    tonic_pc = params.tonic % 12
-    flats = tonic_pc in (5, 10, 3, 8, 1)  # F, Bb, Eb, Ab, Db
-    names = NAMES_FLAT if flats else NAMES_SHARP
-    mode = {"ionian": "major", "aeolian": "minor"}.get(params.mode, params.mode)
-
-    sections = [{"name": s.name, "role": s.role, "start": b(s.u0), "end": b(s.u1),
-                 "bars": [int(b(s.u0) // per_beat) + 1, int(b(s.u1) // per_beat)], "parts": s.parts}
-                for s in ctx.sections]
-    chords = []
-    for c in ctx.chords:
-        info = chord_info(ctx, c.symbol)
-        chords.append({"start": b(c.u0), "end": b(c.u1), "roman": c.symbol, **info,
-                       "name": chord_name(info["root"], info["quality"], flats)})
-
-    # The tune: realize()'s melody entries (the same notes as the band's Context has them, with their words).
-    melody, lines = [], []
-    k, line = 0, None
-    for m, t in zip(laid["melody"], ctx.tune):
-        assert abs(m["u"] - t.u0) < 1e-9 and int(m["pitch"]) == t.pitch
-        note = {"pitch": int(t.pitch), "start": b(t.u0), "dur": r4((t.u1 - t.u0) / beat), "section": ctx.sections[t.section].name}
-        if t.first:  # a phrase's first note: before its bar line, a pickup (a loop starts there)
-            note["phraseStart"] = True
-        if m["syllable"]:
-            text = m["syllable"].replace("*", "")
-            word_end = k == m["word_len"] - 1
-            k = 0 if word_end else k + 1
-            note.update(lyric=text + ("" if word_end else "-"), wordEnd=word_end)
-            if line is None:
-                line = {"start": note["start"], "words": []}
-            line["words"].append(text + ("" if word_end else "-"))
-            if m["line_end"]:
-                note["lineEnd"] = True
-                line["end"] = note["start"] + note["dur"]
-                lines.append({"start": line["start"], "end": line["end"],
-                              "text": " ".join(line["words"]).replace("- ", "")})
-                line = None
-        else:
-            k = 0
-            played = [p for p, what in ctx.sections[t.section].parts.items() if what == "lead"]
-            note["by"] = played[0] if played else "band"
-            note["octave"] = 12 if played and played[0] in ("whistle", "fiddle", "lute") else 0
-        melody.append(note)
-
-    # The turns: no tune of their own; an instrument quotes a line (songbird.band's "quote"), which the right
-    # hand takes, an octave down, snapped back onto the grid.
-    score_notes = laid["score"].notes
-    for i, s in enumerate(ctx.sections):
-        quoting = [p for p, what in s.parts.items() if what == "quote"]
-        if not quoting:
-            continue
-        part = quoting[0]
-        tune = [(t.u0, t.u1) for t in ctx.tune if t.section == i]  # the next section's pickup may sit here
-        found = [n for n in score_notes if n.part == part and n.section == s.name and n.art != "cut" and n.dur > 0.08
-                 and s.u0 - 0.5 <= unit_at(n.start) < s.u1]
-        for n in found:
-            u0 = unit_at(n.start)
-            if any(a - 0.5 <= u0 < z for a, z in tune):
-                continue
-            start = q(b(u0))
-            dur = max(QUANT, q(b(unit_at(n.start + n.dur)) - b(u0)))
-            melody.append({"pitch": int(round(n.pitch)) - 12, "start": start, "dur": dur, "section": s.name,
-                           "by": part, "octave": 12, **({"phraseStart": True} if n is found[0] else {})})
-    melody.sort(key=lambda n: n["start"])
-
-    # Left hand: the band's bass as heard, an octave up.
-    bass = []
-    for n in score_notes:
-        if n.part != "bass" or n.art == "cut":
-            continue
-        start = q(b(unit_at(n.start)))
-        dur = max(QUANT, q(b(unit_at(n.start + n.dur)) - b(unit_at(n.start))))
-        bass.append({"pitch": int(round(n.pitch)) + 12, "start": start, "dur": dur})
-    end_beat = b(ctx.end)
-    for n in bass:  # the last notes ring to the end, not into the ring-out's seconds
-        n["dur"] = r4(min(n["dur"], end_beat - n["start"])) or QUANT
-
-    # ...and parts made from the chords.
-    def root_in(pc: int, lo: int = 43) -> int:  # the root between G2 and F#3
-        return lo + (pc - lo) % 12
-
-    fifths, folk, block = [], [], []
-    prev = None
-    for c in chords:
-        root = root_in(c["root"])
-        third = root + (3 if c["quality"] in ("min", "dim") else 4)
-        fifth = root + (6 if c["quality"] == "dim" else 8 if c["quality"] == "aug" else 7)
-        span = c["end"] - c["start"]
-        hits = [c["start"]] + ([c["start"] + 2] if span >= 4 else [])
-        for i, h in enumerate(hits):
-            d = (hits[i + 1] if i + 1 < len(hits) else c["end"]) - h
-            fifths += [{"pitch": root, "start": h, "dur": d}, {"pitch": fifth, "start": h, "dur": d}]
-        pattern = [root, fifth, root + 12, fifth] if span >= 4 else [root, fifth]
-        for j in range(int(span)):
-            folk.append({"pitch": pattern[j % len(pattern)], "start": c["start"] + j, "dur": 1})
-        # block: the triad's inversion nearest the last chord's, between A2 and B3 (under the tune's low A3-B3)
-        options = []
-        for inv in range(3):
-            tones = sorted([root, third, fifth])
-            for _ in range(inv):
-                tones = tones[1:] + [tones[0] + 12]
-            for shift in (-12, 0, 12):
-                v = [p + shift for p in tones]
-                if 45 <= v[0] and v[-1] <= 59:
-                    options.append(v)
-        voicing = min(options, key=lambda v: (sum(abs(a - p) for a, p in zip(v, prev)) if prev else abs(v[0] - 50), v[0]))
-        prev = voicing
-        block += [{"pitch": p, "start": c["start"], "dur": span} for p in voicing]
-    for part in (fifths, folk, block):
-        for n in part:
-            n["dur"] = r4(n["dur"])
-
-    rit = {"from": b(clock.rit_start), "to": b(clock.end), "amount": params.ritardando}
+    """The page's score.json (songbird.piano.export), saying it is the release laid again with its own program."""
     record = laid["record"]
-    first_bar = clock.seconds(clock.lead)
-    return {
-        "title": genome.title,
-        "source": {
-            "file": "renders/review/contest.flac", "id": record.get("id"), "program_sha256": record.get("program_sha256"),
-            "rendered": COMMAND, "exporter": "tools/piano_score.py",
-            "note": "laid again from the packet with its own program (grid positions, before the phrasing and the "
-                    "human jitter); see the exporter's docstring",
-        },
-        "tempo": params.tempo,
-        "timeSignature": [per_beat, 4],
-        "key": {"tonic": names[tonic_pc], "tonicPc": tonic_pc, "tonicMidi": params.tonic, "mode": mode,
-                "flats": flats},
-        "ritardando": rit,
-        "tempos": [[r4(x), round(params.tempo / (1 + rit["amount"] * (x - rit["from"]) / (rit["to"] - rit["from"])), 2)]
-                   for x in [rit["from"] + i for i in range(int(rit["to"] - rit["from"]) + 1)]],
-        "audio": {"firstBarSeconds": round(first_bar, 4), "duration": record.get("duration"),
-                  "ring": round(laid["score"].duration - clock.seconds(clock.end), 3)},
-        "bars": int(round(end_beat / per_beat)),
-        "pickup": -melody[0]["start"] if melody and melody[0]["start"] < 0 else 0,
-        "end": end_beat,
-        "sections": sections,
-        "chords": chords,
-        "melody": melody,
-        "lines": lines,
-        "left": {
-            "bass": {"label": "Bass line (the band's, an octave up)", "notes": bass},
-            "fifths": {"label": "Root and fifth", "notes": fifths},
-            "folk": {"label": "Broken chords (root, fifth, octave)", "notes": folk},
-            "block": {"label": "Block chords", "notes": block},
-        },
+    source = {
+        "file": "renders/review/contest.flac", "id": record.get("id"), "program_sha256": record.get("program_sha256"),
+        "rendered": COMMAND, "exporter": "tools/piano_score.py",
+        "note": "laid again from the packet with its own program (grid positions, before the phrasing and the "
+                "human jitter); see the exporter's docstring",
     }
+    return piano.export(laid, source, record.get("duration"))
 
 
 # --- checking the score against the recording ---------------------------------------------------------------

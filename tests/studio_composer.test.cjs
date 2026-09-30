@@ -503,3 +503,29 @@ test("a browser without Web Audio keeps editing available and explains how to li
   s.find('[data-note="1"]').emit("keydown", { key: "ArrowUp" });
   assert.equal(s.commits.at(-1).path, "tune.a1");
 });
+
+test("the sketch hands its players to players.js: one sent to MIDI isn't played here, and a stop reaches it", () => {
+  const view = score();
+  for (const s of view.composition.sections) for (const p of s.phrases) {
+    p.harmony = [{ bar: 0, slot: 0, start: 0, beats: 4, symbol: "I", name: "C", pcs: [0, 4, 7], bass: 0 }];
+  }
+  const s = setup(view);
+  const hz = (pitch) => 440 * 2 ** ((pitch - 69) / 12);
+  const calls = { start: [], stop: 0, views: 0 };
+  s.window.SongbirdPlayers = { route: (p) => (p === "tune" ? "midi" : p === "bass" ? "off" : "page"),
+    start: (o) => calls.start.push(o), stop: () => { calls.stop++; }, viewChanged: () => { calls.views++; } };
+  s.find("#sbc-play").emit("click");
+  const o = calls.start[0];
+  assert(o && o.ctx === s.contexts[0] && typeof o.loop === "function" && o.sound, "players.js starts with the sketch");
+  const tune = o.notes.filter((n) => n.player === "tune");
+  assert.equal(tune.length, s.phrase().notes.length, "every tune note goes to players.js");
+  assert(Math.abs(o.started - 0.04) < 1e-9 && Math.abs(o.seconds - 0.6) < 1e-9);
+  assert.equal(s.oscillators.filter((x) => x.type === "triangle" && x.frequency.value >= hz(48)).length, 0, "the tune isn't played here too");
+  assert.equal(s.oscillators.filter((x) => x.type === "triangle" && x.frequency.value < hz(48)).length, 0, "a player set off is silent");
+  assert(s.oscillators.some((x) => x.type === "sawtooth"), "the chords still play here");
+  assert(o.notes.some((n) => n.player === "chords") && o.notes.some((n) => n.player === "bass"), "players.js decides where each goes");
+  s.window.SongbirdComposer.stop();
+  assert(calls.stop >= 1, "a stop ends what was sent");
+  s.window.SongbirdComposer.render(clone(view));
+  assert(calls.views >= 1, "a new version is told to players.js");
+});

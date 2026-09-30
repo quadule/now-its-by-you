@@ -30,7 +30,9 @@ arc), with defaults that are the seed's arrangement.
 
 from __future__ import annotations
 
+import contextlib
 import re
+import threading
 from dataclasses import asdict, dataclass, field, fields, replace
 from functools import lru_cache
 
@@ -1487,6 +1489,32 @@ def coda_part(ctx: Context, sung_end: float, part: str | None = None) -> list[Ev
 # --- putting it together -----------------------------------------------------------
 
 
+# ---------------------------------------------------------------- listening in (songbird.piano)
+# The piano score is written from the band's own view of the song on the grid (its Context: the sections and who
+# plays what in them, the chord under every beat, the tune note by note) and realize()'s melody entries. Asked
+# for with `overheard()`, arrange (and a style's, songbird.idioms) hands them over as it lays them, on the
+# asking thread only, so a render on another thread never sees it. Nothing it plays changes.
+_ears = threading.local()
+
+
+@contextlib.contextmanager
+def overheard():
+    """A dict that the band's arrangement, made on this thread inside the block, fills with its Context
+    (`ctx`), realize()'s melody entries (`melody`), the clock (`seconds`), `lead` and `end`."""
+    heard: dict = {}
+    _ears.heard = heard
+    try:
+        yield heard
+    finally:
+        _ears.heard = None
+
+
+def overhear(ctx, melody, seconds, lead, end) -> None:
+    heard = getattr(_ears, "heard", None)
+    if heard is not None:
+        heard.update(ctx=ctx, melody=melody, seconds=seconds, lead=lead, end=end)
+
+
 def arrange(genome, params, placed, lead, end, melody, seconds) -> tuple[list[Note], dict]:
     """The band's notes for a realized song, and the settings its instruments are built with.
 
@@ -1502,6 +1530,7 @@ def arrange(genome, params, placed, lead, end, melody, seconds) -> tuple[list[No
         return arrange_style(genome, params, placed, lead, end, melody, seconds, of(style))
     ctx = Context(genome, params, placed, lead, end, melody)
     plan(ctx)
+    overhear(ctx, melody, seconds, lead, end)
     if style is not None and style.intro == "quote":  # the lead's quote of an older song before the song
         ctx.prelude = prelude_span(ctx)
     # the ballad chosen as a style (not the seed's own): its arrangement's options and the backing voices

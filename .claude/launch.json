@@ -103,6 +103,20 @@
       "runtimeArgs": ["-m", "http.server", "8790", "--bind", "127.0.0.1", "--directory", "web/studio-wasm"],
       "port": 8790,
       "url": "http://127.0.0.1:8790"
+    },
+    {
+      "name": "studio-piano",
+      "runtimeExecutable": "uv",
+      "runtimeArgs": ["run", "songbird", "studio", "--no-open", "--port", "8795"],
+      "port": 8795,
+      "url": "http://127.0.0.1:8795"
+    },
+    {
+      "name": "studio-piano-public",
+      "runtimeExecutable": "uv",
+      "runtimeArgs": ["run", "songbird", "studio", "--public", "--machine", "fictional:wren", "--port", "8797", "--no-open"],
+      "port": 8797,
+      "url": "http://127.0.0.1:8797"
     }
   ]
 }

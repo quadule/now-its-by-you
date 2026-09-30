@@ -240,8 +240,14 @@ def test_composition_and_editor_travel_inside_the_audio(tmp_path):
         # The editor's assets remain normal package data, with no network dependency.
         assert "program/songbird/studio/studio.js" in archive.namelist()
         editor_bytes = sum(i.compress_size for i in archive.infolist()
-                           if i.filename.startswith("program/songbird/studio/") or i.filename.endswith("composition.py"))
+                           if (i.filename.startswith("program/songbird/studio/")
+                               and not i.filename.startswith("program/songbird/studio/piano/"))
+                           or i.filename.endswith("composition.py"))
         assert editor_bytes < 100_000
+        # the piano page (docs/PIANO.md) travels with it, a page of its own, counted apart
+        piano_bytes = sum(i.compress_size for i in archive.infolist()
+                          if i.filename.startswith("program/songbird/studio/piano/"))
+        assert 0 < piano_bytes < 30_000
     assert len(json.dumps(params.composition)) < 4096
     opened = Studio(str(flac), machine="none", home=tmp_path / "home")
     try:

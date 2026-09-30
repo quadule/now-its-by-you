@@ -159,7 +159,8 @@ and **Bass** to leave either out. It reads the page's own score (each tune line'
 name and pitch classes, bass first), so a key, mode, tempo or chord change is
 heard as soon as the page has it, with no render. Loop and click provide
 practice tools; the playhead follows the score. It is a sketch: no swing, no
-style, no singer. **Hear sung section** and **Hear the
+style, no singer. Its players, and the band's parts, can go to a musician's own
+instruments over MIDI ("Learning it at the piano, and the sketch's players" below). **Hear sung section** and **Hear the
 song** use the real singer, phrasing, arrangement and mix, rendering locally when
 needed. The two players stop each other. Existing audio is marked when it belongs
 to earlier edits.
@@ -581,6 +582,65 @@ release), tests/studio_composer.test.cjs (the card: in the key, root, quality,
 bass, split and join, restore, second ink, the rub outlined, the strum) and the
 goldens (tests/test_determinism.py, unchanged).
 
+## Learning it at the piano, and the sketch's players on your own instruments (2026-09-29)
+
+Two ways to take the version on the page to a keyboard, neither of which renders anything.
+
+**Learn it at the piano.** In the Tune area (beside *MIDI and the parts*) and under *Take it into your own
+tools*. It opens the piano page (docs/PIANO.md: falling notes, the chord above, the words below; speed,
+key, hands, loops, wait-for-me, Web MIDI in and out, fitting the song to the player's keyboard) teaching
+*your* version: its key, tempo, chords (an inversion and a sus chord named as such), words, form and tune,
+a style's band and lift. The page is the very one web/piano/ serves (its files live in
+`songbird/studio/piano/`; web/piano/'s are links to them), fed a score the studio lays out at once
+(`Studio.piano`, `/api/piano`: `songbird.piano`, the same export tools/piano_score.py writes the release's
+score with) and keeps in its cache under the version's key, at `/piano/?score=score/KEY.json`, so the tab
+can be reloaded. It opens in a tab of its own; after a change, pressing it again sends that same tab the new
+version (where a browser won't open a tab, a link says so). The page's own settings (speed, keyboard,
+hands) stay in the browser; a version in another key starts the page's key change again from 0 and refits
+the hands. In a public studio it is made at once, like the MIDI file, and held to the requests limit.
+
+**Players: here, on your own instruments (MIDI), or off.** Under the tune editor. Play sketch's players
+(the tune, its chords, its bass) and every part of the band (the lineage voices among them) can each play
+on this page, go to a channel of a MIDI output (a synth, a sequencer; a virtual port such as the IAC
+driver for a DAW on the same computer), or sit out, in time with the sketch, looped with it, at its
+tempo. The band's parts come from the studio at once (`Studio.players`, `/api/players`: the score the render
+sings, laid out as the MIDI file lays it, `midi.layout`), so the channels and General MIDI programs are the
+MIDI file's: a musician whose instruments are set up for the file hears the sketch on the same ones.
+Program changes are sent unless unticked; drums go to channel 10. Each note is in beats of the song's grid
+(`midi.in_beats` reads the rendition's clock backwards, so the final slowing, a swing and a re-barring come
+back to the grid, while the band's small human timing stays), the grid the composition view and the sketch
+count, and a note a moment early still starts a playback. "Everyone to MIDI, as the file" sends every
+player to its file channel (the sketch's bass to the band's bass channel), "Everyone here", "As at
+first" (the sketch's own players here, the band off). The choices are this browser's.
+
+How it keeps time and keeps quiet (songbird/studio/players.js): notes go out 0.2 s ahead, stamped on the MIDI
+clock with the page's audio output latency added, so the synth and the page's sound meet; a key sounding
+again ends its last note just before; every note-on's note-off is kept until it's sent. Stop sketch (and a
+new version, the tab hidden, the page left) ends every note sent, each after its own note-on even if that
+was still ahead, then sends all-notes-off and the sustain pedal up on each channel used; **Panic** tells all
+16 channels to stop, note by note (for an instrument that ignores all-notes-off). Connect MIDI asks the
+browser once; a browser that already allowed it connects by itself. Without Web MIDI (Safari), with it
+refused, with no output chosen, or with the output unplugged mid-song, a player set to MIDI plays on the
+page instead and nothing breaks. The Chords and Bass ticks still leave those out wherever they'd go.
+
+composer.js only asks players.js where its own players go (the page's chords and bass come from
+`backingNotes`, the same notes that go to MIDI) and hands it the rest; without players.js it plays as before.
+
+**Left as they are.** The tune the sketch sends is the grid's (as the sketch plays it), not the singer's
+phrased timing: the MIDI file has that. The page plays the band's parts plainly (a pluck, a drum's tap):
+MIDI is where they sound as instruments. Web MIDI needs a secure page (https, or this computer), so a studio
+shared over plain http on a network plays everything on the page. Sending MIDI *in* (playing along, a
+performance) is another piece of work.
+
+Checked by tests/studio_players.test.cjs (when notes go out, across a loop's turns; note-offs at the end,
+at a stop with a note-on still ahead, when a key sounds again; program changes; the fallbacks without
+Web MIDI, refused, or with the output gone; Panic; the remembered choices), tests/studio_composer.test.cjs
+(the sketch hands its players over and doesn't also play one sent away), tests/test_studio_piano.py (the
+parts on the MIDI file's channels and programs, on the view's grid; the piano page served and fed; the
+public limits) and tests/test_piano_score.py; and in the built-in browser with a stand-in output: the tune,
+lute, bass and harp sent in step (the lute's first note 0 ms from the tune's, the bass's 1 ms), every
+note-on ended.
+
 ## What stays on the machine
 
 Nothing leaves it (unless it is shared for a preview: see below). The server
@@ -746,7 +806,8 @@ somewhere other than `renders/`.
 ## Verification
 
 ```sh
-uv run pytest tests/test_composition.py tests/test_studio.py tests/test_edits.py tests/test_evolve.py tests/test_pack.py
+uv run pytest tests/test_composition.py tests/test_studio.py tests/test_edits.py tests/test_evolve.py tests/test_pack.py \
+    tests/test_studio_piano.py tests/test_piano_score.py
 node --test tests/studio_*.test.cjs tests/test_studio_drafts.cjs
 ```
 

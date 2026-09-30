@@ -14,6 +14,8 @@
 <script src="/drafts.js" defer></script>
 <script src="/help.js" defer></script>
 <script src="/export.js" defer></script>
+<script src="/players.js" defer></script>
+<script src="/learn.js" defer></script>
 </head>
 <body>
 <header class="top wrap masthead">
@@ -91,11 +93,19 @@
         <div><p>The song's parts in order, and the melody of each. Drag a part to move it, or pick one to see its notes.</p>
           <p>Drag a note up or down to change its pitch, sideways to move it, or by its right edge to change its length. Arrow keys nudge a selected note; Shift with ← → changes its length. A phrase you change changes everywhere it's sung, and its last note keeps its place in the scale.</p>
           <p>The chords above the notes are yours to change too: pick one to choose another from the key, or any root, quality and bass note, or to split a bar for a passing chord. The band and the harmony voices follow; the tune stays as it is, and a sung note that isn't in its chord is shown, not forbidden.</p>
-          <p><b>Play sketch</b> plays the tune with its chords and a bass at once, in your key and tempo, so you can try a change before anyone sings it (untick Chords or Bass to hear the tune alone). <b>Hear sung section</b> makes the singer and band sing it, which takes a few seconds.</p></div>
+          <p><b>Play sketch</b> plays the tune with its chords and a bass at once, in your key and tempo, so you can try a change before anyone sings it (untick Chords or Bass to hear the tune alone). <b>Hear sung section</b> makes the singer and band sing it, which takes a few seconds.</p>
+          <p><b>Players</b>, under the tune, sends any of the sketch's players, and the band's parts too, to your own synth or sequencer over MIDI, in time with it. <b>Learn it at the piano</b> opens your version on a page for learning it on a keyboard.</p></div>
       </details>
     </div>
-    <p class="to-export"><button class="link small" id="toExport" type="button">MIDI and the parts, for your own tools ↓</button></p>
+    <p class="to-export"><button class="link small" id="learnPiano" type="button" data-learn-piano title="Your version on a piano or a MIDI keyboard: falling notes, the chords, the words; slow it down, loop it, fit it to your keys">Learn it at the piano ↗</button>
+      <button class="link small" id="toExport" type="button">MIDI and the parts, for your own tools ↓</button></p>
+    <p class="hint piano-note" data-piano-note aria-live="polite"></p>
     <div id="studio-composer"><div class="composer-loading"><p class="hint">Laying out the song…</p></div></div>
+    <details class="players-panel" id="playersPanel">
+      <summary>Players: here, on your own instruments (MIDI), or off</summary>
+      <p class="hint">Play sketch can send each player to a channel of a synth or a sequencer, in time with it: the tune, its chords and bass, and every part of the band, on the MIDI file's channels and sounds. Stop ends every note; Panic quiets every channel.</p>
+      <div id="players"></div>
+    </details>
   </div>
 
   <div id="workspace-sound" data-workspace-panel="sound" role="tabpanel" aria-labelledby="tab-sound" hidden>
@@ -183,8 +193,10 @@
     <div class="actions">
       <button class="btn" id="exportMidi" type="button">Download MIDI</button>
       <button class="btn" id="exportStems" type="button">Download the parts (stems)</button>
+      <button class="btn" id="exportPiano" type="button" data-learn-piano>Learn it at the piano ↗</button>
     </div>
     <p class="hint" id="exportNote" aria-live="polite"></p>
+    <p class="hint" data-piano-note aria-live="polite"></p>
   </section>
   <div class="keep-for-later">
     <span class="hint">Finish later somewhere else:</span>

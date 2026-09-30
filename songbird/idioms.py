@@ -1783,6 +1783,7 @@ def arrange_style(genome, params, placed, lead, end, melody, seconds, sdef) -> t
         ctx.chords += [Chord(end - 2 * ctx.bar, end - ctx.bar, "IV", last, False), Chord(end - ctx.bar, end, "I", last, True)]
     ctx.capo = B.choose_capo(ctx)
     plan_style(ctx)
+    B.overhear(ctx, melody, seconds, lead, end)  # for the piano score (songbird.piano), when asked
     if params.style.intro == "quote":  # the lead's quote of an older song before the song (songbird.band)
         ctx.prelude = B.prelude_span(ctx)
     rhythm = {p for p in ctx.lineup if family(p) in PERCUSSION + ("bass",)}

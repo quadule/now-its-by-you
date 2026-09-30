@@ -641,3 +641,17 @@ dialog.help h2::after { content: ""; display: block; height: 4px; margin-top: 10
 .export-panel { margin-top: 18px; }
 .export-panel .actions { flex-wrap: wrap; }
 .to-export { margin: -4px 0 10px; text-align: right; }
+
+/* ---- learning it at the piano (learn.js) and the sketch's players, here or on MIDI (players.js) ---- */
+.to-export { display: flex; justify-content: flex-end; flex-wrap: wrap; gap: 6px 18px; }
+.piano-note:empty { display: none; }
+.piano-note { margin: -4px 0 10px; text-align: right; }
+.players-panel { margin-top: 14px; border-top: 1px solid var(--line); padding-top: 10px; }
+.players-panel > summary { cursor: pointer; font: 15px var(--serif); color: var(--ink); }
+.players-panel .hint { margin: 8px 0; max-width: 70ch; }
+.players-row { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; margin: 8px 0; font-size: 14px; }
+.players-row select { max-width: 100%; min-width: 0; }
+.players-list { display: grid; grid-template-columns: repeat(auto-fill, minmax(230px, 1fr)); gap: 6px 18px; margin: 10px 0; }
+.players-player { display: flex; align-items: center; justify-content: space-between; gap: 8px; font-size: 14px; }
+.players-player select { font-size: 13px; padding: 3px 5px; width: 13em; max-width: 60%; }
+.players-player small { color: var(--soft); }
