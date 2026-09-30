@@ -1,0 +1,14 @@
+# The image needs the program, its songs and its locked dependencies; nothing else of the checkout
+# (no renders, recordings, volunteers' takes, harvested voices, or the site).
+*
+!pyproject.toml
+!uv.lock
+!README.md
+!LICENSE
+!songbird/
+!songs/
+!deploy/studio/warm.py
+!deploy/studio/entrypoint.sh
+**/__pycache__
+**/*.pyc
+**/.DS_Store

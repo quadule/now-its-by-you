@@ -1,0 +1,6 @@
+# Try the image on this computer without the tunnel, at http://127.0.0.1:8766 (this computer only):
+#   docker compose -f deploy/studio/docker-compose.yml -f deploy/studio/docker-compose.try.yml up --build studio
+services:
+  studio:
+    ports: ["127.0.0.1:8766:8766"]
+    networks: [inside, outside]  # a published port needs a network that isn't internal
