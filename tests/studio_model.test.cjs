@@ -90,6 +90,21 @@ test("a seam's transitions: toggled, lengthened together, said in words", () => 
   assert.deepEqual(M.seamOver(sweep, 4), { sweep: { bars: 4, type: "lowpass" } });
 });
 
+test("a seam's kinds each last their own length: a 4-bar riser with a 1-bar roll (EDM test 2)", () => {
+  // two quick clicks, each built on the edit before (the page's latest()), then a length for one kind alone
+  let v = M.seamToggle(null, "riser", 2);
+  v = M.seamToggle(v, "roll", 2);
+  v = M.seamLength(v, "riser", 4);
+  v = M.seamLength(v, "roll", 1);
+  v = M.seamToggle(v, "impact");
+  assert.deepEqual(v, { riser: 4, roll: 1, impact: true });  // sound.py's transition takes each kind's bars
+  assert.equal(M.seamWords(v), "a riser over 4 bars, a snare roll over 1 bar, an impact on the downbeat");
+  assert.deepEqual(M.seamLengths(v).map((x) => [x.kind, x.bars]), [["riser", 4], ["roll", 1]]);
+  assert.deepEqual(M.seamLength({ sweep: { bars: 2, type: "lowpass" } }, "sweep", 1), { sweep: { bars: 1, type: "lowpass" } });
+  assert.deepEqual(M.seamLength(v, "sweep", 2), v);  // a kind that's off isn't put on by a length alone here
+  assert.equal(M.seamLengths({ stop: 2 })[0].unit, "beat");
+});
+
 test("the scope switch: everywhere first, here only, and the last one however many at the last of several", () => {
   const p = { place: "refrain:3.1", place_last: "refrain:last.1", appearances: 4, tune_scope: { from: null }, chords_scope: { from: "last" } };
   const opts = M.scopeOptions(p, { name: "refrain", label: "Refrain 4" });

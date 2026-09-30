@@ -138,6 +138,15 @@
     else next[kind] = kind === "impact" ? true : bars;
     return Object.keys(next).length ? next : null;
   }
+  // how long one kind lasts, the others as they are (a 4-bar riser with a 1-bar roll); a sweep keeps its direction
+  function seamLength(value, kind, bars) {
+    if (!value?.[kind] || kind === "impact") return value || null;
+    return { ...value, [kind]: typeof value[kind] === "object" ? { ...value[kind], bars } : bars };
+  }
+  // the kinds that last, each with its length, in the order the page lists them (a stop's in beats)
+  function seamLengths(value) {
+    return [...KINDS, "down"].filter((k) => value?.[k]).map((k) => ({ kind: k, bars: lasts(value[k]), unit: k === "stop" ? "beat" : "bar" }));
+  }
   function seamOver(value, bars) {  // how long: every kind that lasts, at once
     if (!value) return null;
     const next = { ...value };
@@ -215,7 +224,7 @@
   }
 
   const api = { LEVELS, KIND_WORDS, grid, look, whoseWords, cellLabel, lockPatch, releasePatch, levelPatch, optionLock,
-    moveOrder, movedIds, seamWords, seamToggle, seamOver, scopeOptions, scopeStart, selectionKey, defaultHow, playTarget,
+    moveOrder, movedIds, seamWords, seamToggle, seamOver, seamLength, seamLengths, scopeOptions, scopeStart, selectionKey, defaultHow, playTarget,
     neighbour, position, inField, keyAction, saidCell };
   if (typeof window !== "undefined") window.SongbirdModel = api;
   if (typeof module === "object" && module.exports) module.exports = api;

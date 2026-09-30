@@ -911,31 +911,48 @@
     // in place), and a quick second click (a riser, then a roll) builds on the first instead of undoing it
     const latest = () => (Object.prototype.hasOwnProperty.call(state.edits, seam.path) ? state.edits[seam.path] : seam.value) || null;
     const value = latest(), yours = edited(seam.path) || seam.yours;
-    const kinds = seam.before ? ["riser", "sweep", "roll", "stop"] : [];
-    const over = value ? Math.max(...["riser", "sweep", "roll", "stop", "down"].map((k) => (typeof value[k] === "object" ? value[k].bars : value[k]) || 0)) : 0;
     const bars = S.sound?.transition?.bars || [1, 2, 4];
     const put = (next, label) => { if (next) setEdit(seam.path, next, label); else releaseEdit(seam.path, label); renderInspector(); };
-    const lastOver = (v) => (v ? Math.max(0, ...["riser", "sweep", "roll", "stop", "down"].map((k) => (typeof v[k] === "object" ? v[k].bars : v[k]) || 0)) : 0);
+    const longest = (v) => Math.max(0, ...M.seamLengths(v).filter((x) => x.kind !== "stop").map((x) => x.bars));
+    // each kind on its own row with its own length (a 4-bar riser with a 1-bar roll); every row always drawn, so a
+    // choice adds no row under the pointer. A length pressed for a kind that's off puts it on at that length.
+    const kindRow = (k) => {
+      const on = !!value?.[k], n = on ? M.seamLengths(value).find((x) => x.kind === k).bars : 0, unit = k === "stop" ? "beat" : "bar";
+      return [
+        h("button", { class: `chip${on ? " on you" : ""}`, type: "button", "aria-pressed": String(on), "data-key": `seam:${k}`,
+          onclick: () => put(M.seamToggle(latest(), k, k === "stop" ? 2 : longest(latest()) || 1), `Into ${s.label}: ${on ? `no ${M.KIND_WORDS[k].replace(/^an? /, "")}` : M.KIND_WORDS[k]}`) }, M.KIND_WORDS[k]),
+        h("span", { class: "chips lengths", role: "group", "aria-label": `${M.KIND_WORDS[k]}: how long` }, bars.map((b) => h("button", {
+          class: `chip small${on && n === b ? " on you" : ""}${on ? "" : " off"}`, type: "button", "aria-pressed": String(on && n === b),
+          title: on ? null : `${M.KIND_WORDS[k]} over ${b} ${unit}${b === 1 ? "" : "s"}`,
+          onclick: () => { if (on && n === b) return; const v = latest(); put(v?.[k] ? M.seamLength(v, k, b) : M.seamToggle(v, k, b), `Into ${s.label}: ${M.KIND_WORDS[k]} over ${b} ${unit}${b === 1 ? "" : "s"}`); } },
+        `${b} ${unit}${b === 1 ? "" : "s"}`)))];
+    };
+    const sweepType = typeof value?.sweep === "object" ? value.sweep.type : "highpass";
     const from = seam.from ? sectionAt(seam.from) : null;
     shell({ kind: "seam", rubric: `Into ${s.label}`, mine: yours,
-      set: `${from ? `from ${from.label}: ` : ""}${M.seamWords(value)}${yours ? ", yours" : ""}`,
+      // short, so it keeps its two lines as kinds are added (the chips say which, and how long; the tooltip, in words)
+      set: h("span", { title: M.seamWords(value) }, `${from ? `From ${from.label}` : "At the start"}: ${value
+        ? `${["riser", "sweep", "roll", "stop", "impact", "down"].filter((k) => value[k]).map((k) => ({ down: "downlifter" })[k] || k).join(" · ")}${yours ? " (yours)" : ""}`
+        : "nothing, the band goes straight on"}`),
       body: h("div", {},
-        kinds.length ? h("div", { class: "row" }, h("span", { class: "label" }, "Before it"), h("span", { class: "chips", role: "group", "aria-label": "Before it" },
-          kinds.map((k) => h("button", { class: `chip${value?.[k] ? " on you" : ""}`, type: "button", "aria-pressed": String(!!value?.[k]),
-            onclick: () => put(M.seamToggle(latest(), k, lastOver(latest()) || 1), `Into ${s.label}: ${M.KIND_WORDS[k]}`) }, M.KIND_WORDS[k])))) : h("p", { class: "hint" }, "Nothing comes before the first section, so nothing builds into it; an impact on its downbeat can."),
-        kinds.length && value && over ? chipRow("Over", bars.map((n) => ({ value: n, text: `${n} bar${n === 1 ? "" : "s"}` })), over, (n) => put(M.seamOver(latest(), n), `Into ${s.label}: over ${n} bars`), yours) : null,
-        h("div", { class: "row" }, h("span", { class: "label" }, "On the downbeat"),
-          h("button", { class: `chip${value?.impact ? " on you" : ""}`, type: "button", "aria-pressed": String(!!value?.impact), onclick: () => put(M.seamToggle(latest(), "impact"), `Into ${s.label}: an impact`) }, "an impact"),
-          h("button", { class: `chip${value?.down ? " on you" : ""}`, type: "button", "aria-pressed": String(!!value?.down), onclick: () => put(M.seamToggle(latest(), "down", lastOver(latest()) || 1), `Into ${s.label}: a downlifter`) }, "a downlifter after")),
-        value?.sweep ? chipRow("The sweep", [{ value: "highpass", text: "rising (the bass thins out)" }, { value: "lowpass", text: "falling (the top closes)" }],
-          typeof value.sweep === "object" ? value.sweep.type : "highpass", (type) => { const v = latest() || value; put({ ...v, sweep: { bars: typeof v.sweep === "object" ? v.sweep.bars : v.sweep, type } }, `Into ${s.label}: the sweep ${type === "lowpass" ? "falling" : "rising"}`); }, yours) : null,
+        seam.before ? h("div", { class: "seamkinds", role: "group", "aria-label": "Before it" }, h("span", { class: "label wide" }, "Before it"),
+          ["riser", "sweep", "roll", "stop"].flatMap(kindRow))
+          : h("p", { class: "hint" }, "Nothing comes before the first section, so nothing builds into it; an impact on its downbeat can."),
+        h("div", { class: "seamkinds", role: "group", "aria-label": "On the downbeat" }, h("span", { class: "label wide" }, "On the downbeat and after"),
+          h("button", { class: `chip${value?.impact ? " on you" : ""}`, type: "button", "aria-pressed": String(!!value?.impact), "data-key": "seam:impact",
+            onclick: () => put(M.seamToggle(latest(), "impact"), `Into ${s.label}: an impact`) }, "an impact"), h("span", {}),
+          kindRow("down")),
+        seam.before ? h("div", { class: "row" }, h("span", { class: "label" }, "The sweep"), h("span", { class: "chips", role: "group", "aria-label": "The sweep" },
+          [["highpass", "rising (the bass thins out)"], ["lowpass", "falling (the top closes)"]].map(([type, text]) => h("button", {
+            class: `chip${value?.sweep && sweepType === type ? " on you" : ""}`, type: "button", disabled: !value?.sweep, "aria-pressed": String(!!value?.sweep && sweepType === type),
+            title: value?.sweep ? null : "Choose a sweep first",
+            onclick: () => { const v = latest(); if (!v?.sweep || sweepType === type) return; put({ ...v, sweep: { bars: typeof v.sweep === "object" ? v.sweep.bars : v.sweep, type } }, `Into ${s.label}: the sweep ${type === "lowpass" ? "falling" : "rising"}`); } }, text)))) : null,
         h("p", { class: "hint" }, "A transition is sound, not arrangement: it doesn't change who plays or how long a section is; a roll takes the snare's place in its bars, a stop quiets the band and not the singer.")),
       why: yours ? [["you", `yours: ${M.seamWords(value)}`]] : [["song", "the song's own seams are plain: the band goes straight on, and a turn is how this song breathes between parts"]],
       hear: () => listen("you", s.index),
-      release: { disabled: !edited(seam.path), action: () => releaseEdit(seam.path, `Into ${s.label}: the program's`) } });
+      release: { disabled: !edited(seam.path), action: () => { releaseEdit(seam.path, `Into ${s.label}: the program's`); renderInspector(); } } });
     return true;
   }
-
 
   function composerState(sel) {
     const st = sel.kind === "chord" ? C()?.chordState?.() : C()?.noteState?.();
