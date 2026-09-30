@@ -37,7 +37,7 @@ const env = { SONGBIRD_THREADS: '1', SONGBIRD_WEB_DGEMM: args.includes('--no-dge
 if (mode !== 'wasm') py.registerJsModule('songbird_kernels', { kernels, rt, manifest });
 if (mode === 'wasm') {
   const { loadWasmKernels } = await import('../wasm/kernels.mjs');
-  const wasm = await loadWasmKernels(fs.readFileSync(path.join(root, 'wasm/kernels.wasm')));
+  const wasm = await loadWasmKernels(fs.readFileSync(path.join(root, 'wasm/kernels.wasm')), py._module.memory);
   py.registerJsModule('songbird_kernels', { kernels, rt, manifest });
   py.registerJsModule('songbird_wasm', wasm);
 }
