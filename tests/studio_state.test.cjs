@@ -49,6 +49,7 @@ function studio() {
       removeItem: (key) => storage.delete(key) },
     setTimeout: () => 1, clearTimeout() {},
   });
+  vm.runInContext(fs.readFileSync(path.join(__dirname, '../songbird/studio/renderer.js'), 'utf8'), context);
   const source = fs.readFileSync(path.join(__dirname, '../songbird/studio/studio.js'), 'utf8');
   vm.runInContext(source.replace(/\nmain\(\);\s*$/, '\n'), context);
   const run = (source) => vm.runInContext(source, context);

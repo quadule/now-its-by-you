@@ -4,8 +4,13 @@
 // them across a reload. Everything shown is built as text: nothing from an answer is read as markup.
 "use strict";
 
+// Two pages share it: the score (index.html, with score.js: views, one inspector) and the classic page
+// (classic.html, the tune book of four chapters). What either lacks is skipped; the score is told through
+// window.SongbirdScore (its render, its page of words, its inspector, where the recording shows).
 const TOKEN = document.querySelector('meta[name="studio-token"]').content;
 const $ = (id) => document.getElementById(id);
+const setOn = (id, key, value) => { const el = $(id); if (el) el[key] = value; };
+const score = () => window.SongbirdScore;
 const state = {
   start: null, view: null, timeline: null, edits: {}, open: {}, choose: null, options: null,
   names: [], compare: null, busy: 0, playing: null, poll: null, recordJob: null,
@@ -253,7 +258,7 @@ function renderHeader() {
   document.title = `${v.title} · Songbird studio`;
   const when = v.offset ? `on ${v.date} (${v.when})` : `today, ${v.date}`;
   $("which").replaceChildren("Your version ", h("b", {}, when), `, ${v.from}, sung by ${v.by}.`);
-  $("draw").textContent = v.roll ? `chance drawn again: draw ${v.roll + 1}` : "";
+  setOn("draw", "textContent", v.roll ? `chance drawn again: draw ${v.roll + 1}` : "");
   const mine = v.changed;
   const held = v.held.length > 0;
   const bar = $("yoursBar");
@@ -275,8 +280,8 @@ function renderHeader() {
   pbar.hidden = !problems.length;
   pbar.replaceChildren(...problems.map((p) => h("p", { class: "problem" }, `Couldn't keep ${describePath(p.path)}: ${p.why}. `,
     h("button", { class: "link small", type: "button", onclick: () => clearEdits([p.path]) }, "let it go"))));
-  $("day").value = v.offset;
-  $("dayLabel").textContent = v.offset ? `${v.date} (${v.when})` : `today, ${v.date}`;
+  setOn("day", "value", v.offset);
+  setOn("dayLabel", "textContent", v.offset ? `${v.date} (${v.when})` : `today, ${v.date}`);
 }
 
 function describePath(path) {
@@ -295,6 +300,7 @@ function describePath(path) {
 function renderWords() {
   const v = state.view;
   const box = $("words");
+  if (!box) return score()?.renderPage?.();  // the score sets the words on its own Page
   window.SongbirdAuthor?.capture();
   const active = document.activeElement;
   const focusKey = box.contains(active) ? active.dataset.focus : null;
@@ -530,6 +536,7 @@ function capital(s) { return s.charAt(0).toUpperCase() + s.slice(1); }
 
 function renderCards() {
   const box = $("cards");
+  if (!box) return score()?.renderInspector?.();  // the score's cards are states of its inspector
   const openNow = new Set([...box.querySelectorAll("details.card-context[open]")].map((d) => d.dataset.card));
   box.replaceChildren();
   for (const c of state.view.cards) {
@@ -818,7 +825,7 @@ function segments(values) {
 function renderTimeline() {
   const tl = state.timeline;
   const box = $("timeline");
-  if (!tl) return;
+  if (!tl || !box) return;
   const width = Math.max(320, box.clientWidth || 800);
   const n = tl.dates.length;
   const left = 70, right = 10, laneH = 22, gap = 8;
@@ -896,8 +903,8 @@ function dateAt(offset) {
 
 function setDay(offset, group = null) {
   setEdits({ date: dateAt(offset) }, "Move through time", group);
-  $("day").value = offset;
-  $("dayLabel").textContent = offset ? `${dateAt(offset)} · ${offset > 0 ? "+" : ""}${offset} days` : "today";
+  setOn("day", "value", offset);
+  setOn("dayLabel", "textContent", offset ? `${dateAt(offset)} · ${offset > 0 ? "+" : ""}${offset} days` : "today");
 }
 
 // ------------------------------------------------------------------ other machines
@@ -918,6 +925,7 @@ function loadCompare() {
 }
 
 function renderCompare() {
+  if (!$("compare")) return;
   const rows = state.compare.machines;
   const names = Object.keys(rows[0].rows);
   const table = h("table", { class: "compare" },
@@ -931,24 +939,23 @@ function renderCompare() {
 // ------------------------------------------------------------------ listening
 
 const audio = $("audio");
+// every preview and recording is asked of one renderer (renderer.js: the server's queue today)
+const renderer = () => window.SongbirdRenderer.create((path, body) => api(path, body));
 
 async function listen(who = "you", section = null) {
   window.SongbirdComposer?.stop();
-  if (state.poll && state.playing && state.playing.job && state.playing.job.state === "queued") {
-    api("/api/cancel", { job: state.playing.job.id }).catch(() => {});
-  }
-  clearTimeout(state.poll);
+  if (state.playing?.task) renderer().cancel(state.playing.task);  // one still waiting its turn is dropped
   audio.pause();
   const label = section === null ? "The whole song" : state.view.words.find((w) => w.index === section)?.label || "Song section";
   const edits = copyEdits();
   const playing = { who, section, label, job: null, editsKey: JSON.stringify(edits) };
   state.playing = playing;
-  $("playPause").disabled = true;
-  $("nowTime").textContent = "";
+  setOn("playPause", "disabled", true);
+  setOn("nowTime", "textContent", "");
   showPlayer(label, "getting it ready…", 0, true);
   try {
-    const job = await api("/api/listen", { edits, who, section });
-    await follow(job, playing);
+    playing.task = renderer().preview({ edits, who, section }, (job) => making(job, playing));
+    finished(await playing.task.done, playing);
   } catch (e) {
     if (playing === state.playing) showPlayer(label, e.message, 0, false);
   }
@@ -957,21 +964,29 @@ async function listen(who = "you", section = null) {
 function pauseAudio() {
   const playing = state.playing;
   audio.pause();
-  clearTimeout(state.poll);
-  state.poll = null;
   if (!playing) return;
-  if (playing.job?.state === "queued") api("/api/cancel", { job: playing.job.id }).catch(() => {});
+  if (playing.task) renderer().cancel(playing.task);
   // A replacement identity invalidates both in-flight listen and job responses. Keep the edit snapshot
   // so resuming a finished audio track still says when its choices differ from the current song.
   state.playing = { ...playing };
   if (!playing.job || ["queued", "running"].includes(playing.job.state)) {
     showPlayer(playing.label, "Preview stopped while the melody sketch plays", 0, false);
-    $("playPause").disabled = true;
+    setOn("playPause", "disabled", true);
   }
 }
 
-async function follow(job, playing) {
+function making(job, playing) {  // a preview on its way: waiting its turn, or being made
   if (playing !== state.playing) return;
+  playing.job = job;
+  playing.since = playing.since || Date.now();
+  const slow = Date.now() - playing.since > 8000 && (job.progress || 0) < 0.05
+    ? " (the first one takes longer, while the program warms up)" : "";
+  const where = job.state === "queued" ? waitingWords(job) : `${job.stage || "making it"}…`;
+  showPlayer(job.label || playing.label, `${where} ${Math.round((job.progress || 0) * 100)}%${slow}`, job.progress || 0, true);
+}
+
+function finished(job, playing) {
+  if (playing !== state.playing || playing.task?.cancelled) return;
   playing.job = job;
   const title = job.label || playing.label;
   if (job.state === "done") {
@@ -979,19 +994,7 @@ async function follow(job, playing) {
     refreshReady(job.key);
     return;
   }
-  if (job.state === "failed") {
-    showPlayer(title, job.error === "cancelled" ? "stopped" : `couldn't make it: ${job.error}`, 0, false);
-    return;
-  }
-  playing.since = playing.since || Date.now();
-  const slow = Date.now() - playing.since > 8000 && (job.progress || 0) < 0.05
-    ? " (the first one takes longer, while the program warms up)" : "";
-  const where = job.state === "queued" ? waitingWords(job) : `${job.stage || "making it"}…`;
-  showPlayer(title, `${where} ${Math.round((job.progress || 0) * 100)}%${slow}`, job.progress || 0, true);
-  state.poll = setTimeout(async () => {
-    try { await follow(await api(`/api/job/${job.id}`), playing); }
-    catch (e) { if (playing === state.playing) showPlayer(title, e.message, 0, false); }
-  }, 450);
+  showPlayer(title, job.error === "cancelled" ? "stopped" : `couldn't make it: ${job.error}`, 0, false);
 }
 
 // One song is made at a time; a shared studio's visitors wait on each other, so say how many are ahead.
@@ -1008,19 +1011,19 @@ function refreshReady(key) {
 
 function play(url, title, sub, playing = null) {
   state.playing = playing || { editsKey: JSON.stringify(state.edits), label: title, who: "you", section: null, job: null };
-  clearTimeout(state.poll);
   audio.src = url;
   audio.play().catch(() => {});
   showPlayer(title, sub || "", 0, false);
-  $("playPause").disabled = false;
+  setOn("playPause", "disabled", false);
 }
 
 function showPlayer(title, sub, progress, making) {
-  $("nowTitle").textContent = title;
+  setOn("nowTitle", "textContent", title);
   state.playerSub = sub;
   markAudioState();
-  $("bar").classList.toggle("making", !!making);
-  $("barFill").style.width = `${Math.round((progress || 0) * 100)}%`;
+  $("bar")?.classList.toggle("making", !!making);
+  if ($("barFill")) $("barFill").style.width = `${Math.round((progress || 0) * 100)}%`;
+  score()?.playerChanged?.(title, sub, making);
 }
 
 function markAudioState() {
@@ -1032,13 +1035,13 @@ function markAudioState() {
 
 audio.addEventListener("timeupdate", () => {
   if (!audio.duration) return;
-  $("barFill").style.width = `${(audio.currentTime / audio.duration) * 100}%`;
-  $("nowTime").textContent = `${fmtTime(audio.currentTime)} / ${fmtTime(audio.duration)}`;
+  if ($("barFill")) $("barFill").style.width = `${(audio.currentTime / audio.duration) * 100}%`;
+  setOn("nowTime", "textContent", `${fmtTime(audio.currentTime)} / ${fmtTime(audio.duration)}`);
 });
-audio.addEventListener("play", () => { window.SongbirdComposer?.stop(); $("playShape").setAttribute("d", PAUSE); $("playPause").setAttribute("aria-label", "Pause"); });
-audio.addEventListener("pause", () => { $("playShape").setAttribute("d", PLAY); $("playPause").setAttribute("aria-label", "Play"); });
-$("playPause").addEventListener("click", () => (audio.paused ? audio.play() : audio.pause()));
-$("bar").addEventListener("click", (ev) => {
+audio.addEventListener("play", () => { window.SongbirdComposer?.stop(); $("playShape")?.setAttribute("d", PAUSE); $("playPause")?.setAttribute("aria-label", "Pause"); });
+audio.addEventListener("pause", () => { $("playShape")?.setAttribute("d", PLAY); $("playPause")?.setAttribute("aria-label", "Play"); });
+$("playPause")?.addEventListener("click", () => (audio.paused ? audio.play() : audio.pause()));
+$("bar")?.addEventListener("click", (ev) => {
   if (!audio.duration) return;
   const r = ev.currentTarget.getBoundingClientRect();
   audio.currentTime = ((ev.clientX - r.left) / r.width) * audio.duration;
@@ -1047,7 +1050,7 @@ $("bar").addEventListener("click", (ev) => {
 // ------------------------------------------------------------------ singing and recording
 
 async function sing() {
-  const note = $("singNote");
+  const note = $("singNote") || { set textContent(text) { toast(text); } };
   const tab = window.open("about:blank", "_blank");
   note.textContent = "Opening the singing page…";
   try {
@@ -1066,6 +1069,7 @@ async function sing() {
 }
 
 function revealRecording(scroll = false) {
+  if (score()?.reveal) return score().reveal("record", scroll);  // the score's Tools sheet, its Take it out side
   const panel = $("recordPanel");
   const details = panel.closest("details.finish-panel") || panel.closest("details");
   if (details) details.open = true;
@@ -1076,19 +1080,18 @@ async function record() {
   const saved = $("saved");
   if (state.recording) return;
   state.recording = true;
-  for (const id of ["record", "recordNow"]) $(id).disabled = true;
+  for (const id of ["record", "recordNow"]) setOn(id, "disabled", true);
   saved.replaceChildren(h("p", {}, "Recording…"));
   revealRecording(true);
   const edits = copyEdits();
   try {
-    let job = await api("/api/record", { edits });
-    while (job.state === "queued" || job.state === "running") {
-      saved.replaceChildren(h("p", {}, `Recording: ${job.state === "queued" ? waitingWords(job) : job.stage || "making it"}… ${Math.round((job.progress || 0) * 100)}%`),
-        h("div", { class: "bar making" }, h("div", { style: null })));
+    const task = renderer().record({ edits }, (job) => {
+      const words = `Recording: ${job.state === "queued" ? waitingWords(job) : job.stage || "making it"}… ${Math.round((job.progress || 0) * 100)}%`;
+      saved.replaceChildren(h("p", {}, words), h("div", { class: "bar making" }, h("div", { style: null })));
       saved.querySelector(".bar > div").style.width = `${Math.round((job.progress || 0) * 100)}%`;
-      await new Promise((r) => setTimeout(r, 600));
-      job = await api(`/api/job/${job.id}`);
-    }
+      score()?.recording?.(words, job.progress || 0);
+    });
+    const job = await task.done;
     if (job.state === "failed") throw new Error(job.error);
     const r = job.result.recorded;
     saved.replaceChildren(
@@ -1107,7 +1110,8 @@ async function record() {
   } finally {
     revealRecording();
     state.recording = false;
-    for (const id of ["record", "recordNow"]) $(id).disabled = false;
+    for (const id of ["record", "recordNow"]) setOn(id, "disabled", false);
+    score()?.recording?.(null);
   }
 }
 
@@ -1129,9 +1133,9 @@ function publicKept(r) {
 function applyPublic(s) {
   const p = s.public;
   if (!p) return;
-  $("localBadge").textContent = "Open studio";
-  $("whereNote").textContent = "An open studio: the song is made on a small server, one at a time for everyone. Your changes stay in this browser.";
-  $("helpWhere").textContent = `This studio is open to anyone. A small server makes the song, one at a time for everyone, so you may wait your turn; each person can have ${p.records} whole songs and ${p.previews} sections made an hour, and what's made already plays at once. What you record is yours to download (it waits ${p.download_hours} hours). Your changes stay in this browser.`;
+  setOn("localBadge", "textContent", "Open studio");
+  setOn("whereNote", "textContent", "An open studio: the song is made on a small server, one at a time for everyone. Your changes stay in this browser.");
+  setOn("helpWhere", "textContent", `This studio is open to anyone. A small server makes the song, one at a time for everyone, so you may wait your turn; each person can have ${p.records} whole songs and ${p.previews} sections made an hour, and what's made already plays at once. What you record is yours to download (it waits ${p.download_hours} hours). Your changes stay in this browser.`);
 }
 
 // ------------------------------------------------------------------ putting it together
@@ -1145,6 +1149,7 @@ function render() {
   renderHistory();
   window.SongbirdComposer?.render(state.view);
   window.SongbirdPerform?.render(state.view);  // notes in: a part played in, a MIDI file brought back
+  score()?.render(state.view);  // the score's views and inspector
 }
 
 function showWorkspace(name, focus = false) {
@@ -1200,22 +1205,23 @@ async function main() {
   }
   if (hash.day) setDayQuiet(Number(hash.day));
   for (const id of (hash.open || "").split(",").filter(Boolean)) state.open[id] = true;
-  $("packetNote").textContent = s.packet;
+  setOn("packetNote", "textContent", s.packet);
   if (s.shared) {  // served from someone else's computer for a preview: say so where "this computer" would
-    $("whereNote").textContent = "Served from another computer for a short preview. Your changes stay in this browser; recordings are made there.";
-    $("localBadge").hidden = false;
-    $("helpShows").textContent = "This studio shows the version the computer serving it makes today, and lets you:";
-    $("helpWhere").textContent = "This studio is shared from someone else's computer for a short preview: that computer makes the song, and what you record is saved there too. Download it to keep it. Your changes stay in this browser.";
+    setOn("whereNote", "textContent", "Served from another computer for a short preview. Your changes stay in this browser; recordings are made there.");
+    setOn("localBadge", "hidden", false);
+    setOn("helpShows", "textContent", "This studio shows the version the computer serving it makes today, and lets you:");
+    setOn("helpWhere", "textContent", "This studio is shared from someone else's computer for a short preview: that computer makes the song, and what you record is saved there too. Download it to keep it. Your changes stay in this browser.");
   }
   applyPublic(s);
   applyVersion(s);
-  $("helpSong").textContent = s.title;
+  setOn("helpSong", "textContent", s.title);
   renderLineage(s.generation || 0);
-  $("singNote").textContent = s.sing.available ? "" : s.sing.why;
-  $("sing").disabled = !s.sing.available;
-  $("toFinishLabel").textContent = s.sing.available ? "Sing or record" : "Record it";
-  $("day").min = -s.days;
-  $("day").max = s.days;
+  setOn("singNote", "textContent", s.sing.available ? "" : s.sing.why);
+  setOn("sing", "disabled", !s.sing.available);
+  setOn("toFinishLabel", "textContent", s.sing.available ? "Sing or record" : "Record it");
+  setOn("day", "min", -s.days);
+  setOn("day", "max", s.days);
+  score()?.started?.(s, hash);
   showWorkspace(hash.workspace || "words");
   await refresh();
   if (hash.choose && state.view) {
@@ -1227,7 +1233,7 @@ async function main() {
   const scroll = () => { const el = hash.scroll && $(hash.scroll); if (el) el.scrollIntoView({ block: "start" }); };
   scroll();
   api("/api/timeline").then((tl) => { state.timeline = tl; renderTimeline(); scroll(); }).catch(() => {
-    $("timeline").replaceChildren(h("p", { class: "hint" }, "The timeline couldn't be drawn."));
+    $("timeline")?.replaceChildren(h("p", { class: "hint" }, "The timeline couldn't be drawn."));
   });
   if (hash.compare !== undefined) loadCompare();
   // the song is on the page: help.js may show a first visit around it
@@ -1281,22 +1287,22 @@ document.addEventListener("keydown", (event) => {
   travelHistory(key === "y" || event.shiftKey ? "redo" : "undo");
 });
 
-$("hearAll").addEventListener("click", () => listen("you", null));
-$("roll").addEventListener("click", () => setEdit("roll", (state.edits.roll || 0) + 1));
-$("record").addEventListener("click", record);
-$("recordNow").addEventListener("click", record);
-$("toFinish").addEventListener("click", () => {
+$("hearAll")?.addEventListener("click", () => listen("you", null));
+$("roll")?.addEventListener("click", () => setEdit("roll", (state.edits.roll || 0) + 1));
+$("record")?.addEventListener("click", record);
+$("recordNow")?.addEventListener("click", record);
+$("toFinish")?.addEventListener("click", () => {
   // what singing and recording are, and the button that does it: opened, not started, from the top
   const panel = $("finishPanel");
   panel.open = true;
   panel.scrollIntoView({ behavior: "smooth", block: "start" });
 });
-$("sing").addEventListener("click", sing);
-$("day").addEventListener("input", (ev) => {
+$("sing")?.addEventListener("click", sing);
+$("day")?.addEventListener("input", (ev) => {
   const offset = Number(ev.target.value);
   setDay(offset, "day");
 });
-$("day").addEventListener("change", () => { state.historyGroup = null; });
+$("day")?.addEventListener("change", () => { state.historyGroup = null; });
 for (const b of document.querySelectorAll("[data-step]")) {
   b.addEventListener("click", () => {
     const step = Number(b.dataset.step);
@@ -1304,7 +1310,7 @@ for (const b of document.querySelectorAll("[data-step]")) {
     setDay(step === 0 ? 0 : Math.max(-state.start.days, Math.min(state.start.days, now + step)));
   });
 }
-$("makeUp").addEventListener("submit", (ev) => {
+$("makeUp")?.addEventListener("submit", (ev) => {
   ev.preventDefault();
   const name = $("machineName").value.trim();
   if (name && !state.names.includes(name)) state.names.push(name);
@@ -1333,8 +1339,8 @@ window.addEventListener("focus", async () => {
 function applyVersion(s) {
   const bar = $("versionBar");
   const v = s.version;
-  bar.hidden = !v;
-  if (!v) return;
+  if (bar) bar.hidden = !v;
+  if (!v || !bar) return;
   const which = ORDINAL_WORDS[v.generation] ? `the ${ORDINAL_WORDS[v.generation]} version` : `a version ${v.generation + 1} down the line`;
   const made = v.made ? `, made ${new Date(`${v.made}T12:00:00Z`).toLocaleDateString(undefined, { day: "numeric", month: "long", year: "numeric" })}` : "";
   const link = new URL(v.url, location.href).href;
@@ -1349,13 +1355,13 @@ function applyVersion(s) {
     h("p", { class: "hint" }, "Its link, for anyone to open it here too: ", h("a", { href: v.url }, link), " · ", copy,
       " · ", h("a", { href: "/" }, "the song as it began")),
   );
-  $("versionNote").textContent = "This page is on someone's version. Opening another starts from that one instead.";
+  setOn("versionNote", "textContent", "This page is on someone's version. Opening another starts from that one instead.");
 }
 const ORDINAL_WORDS = ["first", "second", "third", "fourth", "fifth", "sixth", "seventh", "eighth", "ninth", "tenth",
   "eleventh", "twelfth"];
 
 async function openVersionFile(file) {
-  const note = $("versionNote");
+  const note = $("versionNote") || {};
   const say = (text) => { note.textContent = text; toast(text); };
   if (!file) return;
   if (!/\.flac$/i.test(file.name) && file.type !== "audio/flac") {
@@ -1369,7 +1375,7 @@ async function openVersionFile(file) {
   }
   if (openVersionFile.busy) return;
   openVersionFile.busy = true;
-  $("versionChoose").disabled = true;
+  setOn("versionChoose", "disabled", true);
   try {
     // asked first, so a file that would be turned away (a limit reached, the studio busy) isn't sent for nothing
     await api("/api/open/ready", { size: file.size });
@@ -1387,12 +1393,12 @@ async function openVersionFile(file) {
     say(`Couldn't open it: ${e.message}`);
   } finally {
     openVersionFile.busy = false;
-    $("versionChoose").disabled = false;
+    setOn("versionChoose", "disabled", false);
   }
 }
 
-$("versionChoose").addEventListener("click", () => $("versionFile").click());
-$("versionFile").addEventListener("change", (ev) => {
+$("versionChoose")?.addEventListener("click", () => $("versionFile").click());
+$("versionFile")?.addEventListener("change", (ev) => {
   const file = ev.target.files && ev.target.files[0];
   ev.target.value = "";
   openVersionFile(file);

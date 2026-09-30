@@ -104,6 +104,13 @@ PIANO_STATIC = {"/piano/": ("piano/index.html", "text/html; charset=utf-8"),
                 "/piano/identity.css": ("identity.css", "text/css; charset=utf-8")}
 STATIC["/players.js"] = ("players.js", "text/javascript; charset=utf-8")
 STATIC["/learn.js"] = ("learn.js", "text/javascript; charset=utf-8")
+# the score (docs/STUDIO-REDESIGN.md): one page, three views, one inspector (index.html); the tune book of four
+# chapters it replaces stays at /classic (classic.html) until the artist signs the new one off, on the same API
+STATIC["/renderer.js"] = ("renderer.js", "text/javascript; charset=utf-8")  # previews and recordings, one interface
+STATIC["/model.js"] = ("model.js", "text/javascript; charset=utf-8")
+STATIC["/score.js"] = ("score.js", "text/javascript; charset=utf-8")
+STATIC["/score.css"] = ("score.css", "text/css; charset=utf-8")
+PAGES = {"": "index.html", "/index.html": "index.html", "/classic": "classic.html"}
 
 
 # ---------------------------------------------------------------- where the song and its parent come from
@@ -862,7 +869,10 @@ class Studio:
         v = self.version(edits)
         with band_mod.overheard() as heard:
             self._score(v)
-        return {"key": self.key(v, None), **takeover.grid(self.genome, v, heard)}
+        grid = takeover.grid(self.genome, v, heard)
+        for s in grid["sections"]:  # where the voices before sing (the score's track for them): a choir section, sung
+            s["choir"] = bool(v.params.choir and s["sung"] and self.genome.section(s["name"]).choir)
+        return {"key": self.key(v, None), **grid}
 
     # ------------------------------------------------------------ notes in (docs/STUDIO.md, "Notes in")
 
@@ -1437,7 +1447,7 @@ class Handler(BaseHTTPRequestHandler):
             if self._throttled():
                 return
         if not self._admitted():
-            return self.refuse_visitor() if path in ("/", "/index.html") or path.startswith("/v/") \
+            return self.refuse_visitor() if path in ("/", "/index.html", "/classic") or path.startswith("/v/") \
                 else self.fail(403, "this studio needs its link's key")
         try:
             singing = self.studio.singing
@@ -1445,12 +1455,15 @@ class Handler(BaseHTTPRequestHandler):
                 return None
             if path == "/piano" or path.startswith("/piano/"):  # learning it at the piano
                 return self.piano_page(path)
-            version = re.fullmatch(r"/v/([0-9a-f]{32})", path)  # someone's version: the page's token names it
+            # someone's version: the page's token names it (the classic page too, at /v/<id>/classic)
+            version = re.fullmatch(r"/v/([0-9a-f]{32})(/classic)?", path)
             if path.startswith("/v/") and (version is None or self.studio.opened(version.group(1)) is None):
                 return self.version_gone()
-            if path in ("/", "/index.html") or version:
+            page_name = PAGES.get(path.rstrip("/") if path != "/" else "") or (
+                ("classic.html" if version.group(2) else "index.html") if version else None)
+            if page_name:
                 token = f"{self.studio.token}.{version.group(1)}" if version else self.studio.token
-                page = (PAGE / "index.html").read_text().replace("{{token}}", token)
+                page = (PAGE / page_name).read_text().replace("{{token}}", token)
                 if singing is not None:
                     page = singing.page(page)
                 extra = []

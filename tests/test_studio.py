@@ -76,6 +76,11 @@ def test_the_server_answers_only_its_own_page(served):
     status, _, page = ask(port, "GET", "/")
     assert status == 200 and studio.token.encode() in page and b"{{token}}" not in page
     assert ask(port, "GET", "/studio.js")[0] == 200 and ask(port, "GET", "/studio.css")[0] == 200
+    # the page before the score, on the same API, until the artist signs the new one off
+    status, _, classic = ask(port, "GET", "/classic")
+    assert status == 200 and studio.token.encode() in classic and b'href="/studio.css"' in classic
+    for name in ("renderer.js", "model.js", "score.js", "score.css"):
+        assert f"/{name}" in S.STATIC
     assert ask(port, "GET", "/", headers={"Host": "evil.example:80"})[0] == 403  # a renamed address
     assert ask(port, "GET", "/api/start", headers={"Host": f"songbird.local:{port}"})[0] == 403
     body = {"edits": {}}
