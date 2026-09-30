@@ -78,9 +78,12 @@
   function releasePatch(cell) {
     return Object.fromEntries(Object.values(cell?.paths || {}).map((path) => [path, null]));
   }
-  function levelPatch(cells, level) {  // everyone in a section, or one player everywhere
+  // everyone in a section, or one player everywhere: a cell whose program's own level this is is given back to the
+  // program (null), not kept as a choice of the same value
+  function levelPatch(cells, level) {
     if (!LEVELS.includes(level)) throw new Error(`a level is ${LEVELS.join(", ")}`);
-    return Object.fromEntries(cells.filter((cell) => cell?.paths?.level && cell.plays !== false).map((cell) => [cell.paths.level, level]));
+    return Object.fromEntries(cells.filter((cell) => cell?.paths?.level && cell.plays !== false)
+      .map((cell) => [cell.paths.level, cell.program?.level === level ? null : level]));
   }
   function optionLock(option) { return { [option.path]: option.value }; }
 

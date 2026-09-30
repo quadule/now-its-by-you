@@ -739,7 +739,10 @@ function mutePlayer(card, player) {
     state.mutedLevels[player] = level;
     setEdit(path, 0, `Mute ${card.players[player] || player}`);
   } else {
-    setEdit(path, state.mutedLevels[player] || 1, `Unmute ${card.players[player] || player}`);
+    // back to the level before: the program's own is given back to the program, not kept as a choice of yours
+    const to = state.mutedLevels[player] || 1, mark = state.view?.marks?.[path];
+    if (mark && typeof mark.was === "number" && Math.abs(mark.was - to) < 1e-9) releaseEdit(path, `Unmute ${card.players[player] || player}`);
+    else setEdit(path, to, `Unmute ${card.players[player] || player}`);
   }
 }
 

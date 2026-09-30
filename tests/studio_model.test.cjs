@@ -62,8 +62,13 @@ test("a lock writes the program's own value (the entrance chance drew among it);
 
 test("everyone in a section at one level is one patch; a level is one of four", () => {
   const cells = arrangement.cells;
-  assert.deepEqual(Object.values(M.levelPatch(cells, "hard")), ["hard", "hard", "hard"]);
+  // (the third is the program's own hard already: nothing of yours is kept there)
+  assert.deepEqual(Object.values(M.levelPatch(cells, "hard")), ["hard", "hard", null]);
   assert.throws(() => M.levelPatch(cells, "loud"), /out, soft, plays, hard/);
+  // the program's own level for a cell releases that cell's choice rather than storing the same value as yours
+  const mine = { ...cells[0], by: "you", value: { level: "hard" }, program: { level: "soft" } };
+  assert.deepEqual(M.levelPatch([mine], "soft"), { [mine.paths.level]: null });
+  assert.deepEqual(M.levelPatch([mine], "plays"), { [mine.paths.level]: "plays" });
 });
 
 test("a section moves, but repeated sections keep their story order", () => {
