@@ -722,9 +722,9 @@
     return el("div", { class: "sbc-inspector" },
       el("div", { class: "sbc-note-heading" }, el("span", { class: "sbc-overline" }, `Note ${index + 1} of ${p.notes.length}`),
         el("strong", {}, displayWords(n.word || n.syllable) || "Melody note"), last ? el("span", { class: "sbc-cadence-label" }, "Phrase ending") : null),
-      select("Pitch · scale degree", n.degree, degrees, (value) => changeNote({ degree: Number(value) }), { id: "sbc-note-pitch" }),
-      number("Start · beats", n.onset, previous, round(Math.min(n.slur ? n.onset + n.duration - b.min_duration : next - n.duration, last ? b.max_final_onset ?? b.max_end : b.max_end)), b.grid, (value) => changeNote({ onset: value }, b.grid), { id: "sbc-note-start" }),
-      number("Length · beats", n.duration, b.min_duration, round(next - n.onset), b.grid, (value) => changeNote({ duration: value }, b.grid), { id: "sbc-note-length" }),
+      select("Pitch", n.degree, degrees, (value) => changeNote({ degree: Number(value) }), { id: "sbc-note-pitch", "aria-label": "Pitch · scale degree" }),
+      number("Start", n.onset, previous, round(Math.min(n.slur ? n.onset + n.duration - b.min_duration : next - n.duration, last ? b.max_final_onset ?? b.max_end : b.max_end)), b.grid, (value) => changeNote({ onset: value }, b.grid), { id: "sbc-note-start", "aria-label": "Start · beats" }),
+      number("Length", n.duration, b.min_duration, round(next - n.onset), b.grid, (value) => changeNote({ duration: value }, b.grid), { id: "sbc-note-length", "aria-label": "Length · beats" }),
       button("♪", () => audition(pitchFor(n)), { class: "sbc-button sbc-audition", "aria-label": `Hear ${pitchName(pitchFor(n))}` }),
       // a melisma: a note split in two sings its syllable on, and a slurred note joins the one before again
       el("div", { class: "sbc-button-group", role: "group", "aria-label": "Notes on one syllable" },
@@ -1026,7 +1026,7 @@
       rubric: `Note ${index + 1} of ${p.notes.length}`,
       set: `“${displayWords(n.slur ? n.word : n.syllable) || "♪"}”${n.slur ? ", held on" : ""} · ${name} · scale degree ${n.degree}${last ? " · the phrase's ending" : ""}${n.edited ? " · yours" : ""}`,
       mine: !!n.edited,
-      body: el("div", { class: "sbc-note-state" }, inspector(),
+      body: el("div", { class: "sbc-note-state" }, (() => { const box = inspector(); box.querySelector(".sbc-audition")?.remove(); return box; })(),  // ▶ Hear it plays the note
         el("h4", {}, "The phrase"),
         el("div", { class: "sbc-chord-row" },
           button("↓ Step", () => transpose(-1), { title: "Lower the phrase a scale step, keeping its ending" }),
@@ -1049,6 +1049,9 @@
     const card = chordCard(), mine = chordMine(p, h), scope = where("chords", p);
     const body = card ? el("div", { class: "sbc-chord-state" }, ...[...card.children].filter((x) => !x.classList.contains("sbc-scope") && !x.classList.contains("sbc-note-heading"))) : null;
     body?.querySelectorAll("button").forEach((b) => { if (b.textContent === "Done" || /^Restore chords/.test(b.textContent)) b.remove(); });
+    // where the change reaches is the scope's own row (Applies): its sentence, alone once its buttons went, goes
+    body?.querySelectorAll(".sbc-audition").forEach((b) => b.remove());  // ▶ Hear it, in the foot, strums it
+    body?.querySelectorAll(".sbc-chord-row").forEach((r) => { if (!r.querySelector("button, select")) r.remove(); });
     const rub = card?.querySelector(".sbc-note-heading .sbc-muted")?.textContent || "";
     return {
       rubric: `Bar ${h.bar + 1} · chord ${h.slot + 1} of ${p.chords[h.bar].length}`,
