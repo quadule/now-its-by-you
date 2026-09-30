@@ -115,7 +115,7 @@ Dry voice: **7.9 s** (`throat.synthesize` 5.9, `predict` 0.86, the pronouncing d
   in the order they always were, and everything after (the mix) sees exactly what it saw.
 - **Memory.** Peak resident memory of the seed render: 4.7 GB before any of this, 3.7 to 4.5 GB now depending on the
   threads (most of it is the mix's full-length stereo buffers, 107 MB each). `SONGBIRD_THREADS=2` keeps
-  it at 3.8 GB and renders in 10.1 s.
+  it at 3.8 GB and renders in 10.1 s. (Brought to 1.1 to 1.3 GB on 2026-09-29: "Memory", below.)
 - **Why each pulse comes out the same.** Every operation on a pulse's row is elementwise or along that
   row alone, so which block or thread makes it doesn't matter, with one catch found on the way: a
   row's sum depends on how the array is laid out in memory. numpy lays the FFT's output out column by
@@ -183,3 +183,126 @@ the seed's id would change. Taking any of them is a decision for the artist (and
   studio pays it once, the command line every time.
 - Imports: 1.4 s before `songbird render` does anything (scipy.signal alone 0.74 s).
 
+
+# Memory (2026-09-29)
+
+The studio is going on the web. The server is an 8 GB machine beside a mail server, a render's container
+capped near 2.5 GB and shared with a speech model, so a whole song rendered on two threads has to peak at
+1.5 GB or less; a browser tab gets about 2 GB. H's seed peaked at 3.2 GB (4.2 to 4.9 GB as macOS counts
+it). The rule stayed: **every change is byte-identical**, at any thread count.
+
+## In short
+
+H's seed rendition (`cli.render_one`, 151 s of audio), M1 Max, before (10dc1e0) and after, run alternately
+(the machine was shared with other work, so times vary by half a second either way).
+
+| | before | after |
+|---|---|---|
+| peak, one thread (freed memory returned: `MallocLargeCache=0`, as Linux returns large blocks) | 3.18 GB | **1.13 GB** |
+| peak, two threads (the same) | 3.21 GB | **1.33 GB** |
+| peak, six threads (the same) | 3.23 GB | 1.92 GB |
+| heap high-water (memray, every allocation; one thread / two) | 3.06 GB / – | 1.01 GB / 1.28 GB |
+| resident peak as macOS's own allocator leaves it (1 / 2 / 6 threads) | 4.9 / 4.2 / 4.6 GB | 2.0 / 2.2 / 2.7 GB |
+| `songbird render songs/h-now-its-by-you.json` (the whole process, `MallocLargeCache=0`, 1 / 2 threads) | 3.18 / 3.21 GB | 1.13 / 1.33 GB |
+| time, one thread (macOS allocator / `MallocLargeCache=0`) | 16.5 / 22.5 s | 15.7 / 19.7 s |
+| time, two threads | 8.8 to 9.5 / 12.3 to 13.1 s | 10.4 to 10.7 / 12.6 to 13.2 s |
+| time, six threads (the default here) | 7.6 / 10.7 s | 6.8 to 7.0 / 8.7 to 9.0 s |
+
+On two threads the render is a second slower with macOS's allocator: the voice is sung before the band's
+sums begin, and the second thread waits for it (see "Order", below). Letting the band's first parts be
+made beside the voice, as on three threads or more, gives 9.1 s at 1.40 GB.
+
+## How it was measured
+
+- `tools/render_memory.py`: the PCM id, the wall time, the process's resident high-water mark and each
+  stage's (the render's progress marks). macOS's allocator keeps freed large blocks for reuse (a freed
+  107 MB array stays resident, and differently sized ones fragment), so its resident peak runs far above
+  what is ever in use at once; `MallocLargeCache=0` makes it return them at once, as glibc does for anything
+  over 32 MB. That is the figure a Linux server's limit sees (it costs macOS about a fifth in time: every
+  large array is fresh pages).
+- memray (`uv run --with memray memray run`, then `memray summary`) and tracemalloc snapshots taken where a
+  stage peaks, for where the memory is.
+
+## Where it went (before)
+
+One thread, `MallocLargeCache=0`: 0.23 GB after the imports; every part's stem kept until the mix (nine
+stereo stems, 107 MB each, about 1 GB), each part making several more copies of the song while it was made
+(a plucked part 420 MB: its open strings kept their whole history, 8 strings x 6.7 M samples; its body's
+`oaconvolve` about 250 MB of blocks and spectra; the stereo placement, level and fade each a new copy); the
+mix 3.2 GB at its peak (the stems, the buses, and each treatment's result a new copy of the song:
+equalizers, compressors, detectors keeping every sample, the room's padded blocks); the master 1.1 GB (a
+filtered copy for every loudness measurement, a padded copy for every true-peak envelope, the clip's and the
+limiter's copies, three copies for the dither).
+
+## What was done
+
+| change | effect | how it stays the same |
+|---|---|---|
+| The stems are made as the mix comes to them (`mixing.mix_made`): each part made, treated through its channel strip and summed into the band, its send and what steps back, then let go; `synth.render` uses it, and `mix()` of given stems is the same function | peak 3.2 to 2.1 GB | every sum is made in the same order (the parts' names); the singers' buses are made before any part that steps back under the voice needs them |
+| Long signals let go once used, and treated in place when nothing else holds them: `fx.equalize`, `compress`, `apply_gain`, `dynamic_dip`, `saturate`, `soften`, `deess`, `width`, `master.limit` and `clip` take `inplace`; the compressors' detectors keep only the values they read (`fx._detect_every`) | 2.1 to 1.4 GB | each kernel reads a sample before it writes it; the same ufuncs on the same values |
+| Parts placed straight into their stereo stem (`instruments._placed`), level, gain and fade in place; a treated mono part panned back into its stem | a part 420 to 280 MB | the same expressions sample by sample (numba adds no fused multiply-adds without fastmath: checked) |
+| The open strings keep a ring of their last few hundred samples (`pluck._bank`) | 420 MB less in a plucked part | the loop only ever read that far back |
+| `oaconvolve` a few blocks at a time (`synth/oa.py`): the bodies, and the room as on its four FFT threads | a body 250 MB less, the room about 200 MB less | the same blocks, FFTs, products and overlap-adds. The FFT library transforms rows a SIMD width at a time from a call's first row, and a row alone differently, so each call starts on a multiple of 8 blocks; scipy's workers divide the rows as `np.array_split` does, each worker's stretch from its own first row, so the room's four stretches are made that way (on the render's threads) |
+| `uniform_filter1d` and `minimum_filter1d` over a whole song as scipy computes them, without its two copies of the line (`fx.running_mean`, `fx.sliding_min`), in place | the voice's articulation 360 to 200 MB; the ride; the limiter | scipy's uniform filter is a running sum divided at each sample (found by trying the candidates against it bit for bit); a minimum is the same value however found (its mode, "nearest" or "reflect", honoured) |
+| The voice's articulation, hush, breaths and scaling in place; the bowed and blown parts' tracks held through rests where they lie (`fx.hold`) | the voice 450 to about 300 MB | the same products and sums; a held value is a copy |
+| The master: loudness K-weighted and summed sample by sample (`master._weighted_hop_power`, no filtered copy); the true-peak windows gathered from the signal (no padded copy); the limiter's need, hold, recovery and look-ahead mean in place (`_mean_ahead`: `np.cumsum`'s running sum); the clip and the dither in place (the second draw and the scaled signal added a stretch at a time); `render_one` lets go of the mix once mastered | the master 1.1 to 0.65 GB, and 1.0 to 0.3 s | the same filter and sums in the same order; the same matrix into the same product; `np.cumsum` adds in order (checked); the same draws in the same order |
+| Order: on one or two threads the voice first (the least memory); on three or more, the band's parts before the first that steps back under the voice are made and summed while the voice is sung | six threads 7.6 to 6.9 s | the band's sums are in the same order either way |
+| The frame drum's 196 modes at once, the powers through `np.power` with an array of exponents | `drum.hit` a quarter faster | an array `** 2` squares, which differs from the C library's `pow` (why the loop was kept, above); `np.power(x, array of 2.0)` calls `pow`, as a scalar `**` does (checked) |
+| With `NUMBA_DISABLE_JIT=1` the new loops give way to the numpy and scipy operations they replace (`fx.JIT`) | no interpreted cost from them (docs/PORTABILITY.md) | the same values |
+
+### How it was verified
+
+- The goldens: H's seed (`9b0766353b73…`), `b-refrain` (`2bdb6de271be…`) and `h-words`, after every change,
+  at `SONGBIRD_THREADS=1` and the default.
+- Eleven more renditions through the command line against the original tree, at 1 and 6 threads, each
+  FLAC decoded back to its id: a choir with a worn, wide, tilted mix; stringband, synthfolk, country, chamber
+  (with `--stems`: the stems' samples compared too), blues, lofi, gospel with a three-voice choir, a machine
+  with a date, K, and G with wear and space.
+- Each piece against what it replaced, bit for bit (`tests/test_lean_render.py`: the blockwise convolution
+  against `oaconvolve` on one thread and on the room's four, the running filters against scipy's, the ring
+  against the whole history, placement and width against their old expressions, the in-place treatments
+  against the copies, `mix_made` against `mix` with a lift, a choir and taps at 1 and 3 threads, the caller's
+  stems left untouched); the master's functions against the original's on noise, tones and silence, with
+  the compiler and without.
+- The suite: 1,388 passed, 11 skipped, 1 failed
+  (`test_composition.py::test_lines_an_older_record_kept_by_place_are_sung_there_and_handed_down_by_verse`,
+  which fails the same way on the tree before these changes).
+
+## Where it is now
+
+One thread, `MallocLargeCache=0`: the voice 0.71 GB, the band's parts 0.8 to 1.13 GB, the mix 0.94 GB, the
+master 0.63 GB. The band's stage holds the process itself (0.26 GB: Python, numpy, scipy, numba's kernels,
+the pronouncing dictionary, the throat's network), the band's three sums (the band, its send to the room,
+what steps back under the voice: 3 x 107 MB), the voice's bus (107 MB, and its activity, 53 MB) and the part
+being made (100 to 400 MB: a whistle's five control tracks and its noise, a fiddle's). On two threads two
+parts are made at once.
+
+For the server: glibc returns blocks over 32 MB to the system at once, but smaller ones (the FFT blocks, the
+vocoder's) stay in its arenas, one per thread. For a render worker `MALLOC_ARENA_MAX=2` and a fixed
+`MALLOC_MMAP_THRESHOLD_=1048576` should keep the resident size near the heap figure; not measured here (no
+Linux at hand): `tools/render_memory.py` measures it. A browser (one thread; WebAssembly memory only grows)
+needs the one-thread heap high-water, about 1.0 GB, plus its allocator's fragmentation.
+
+## Further ideas that keep the bytes
+
+- The voice's bus kept as its mono sound and two gains until the room and the sum (53 MB through the band's
+  stage).
+- A part's control tracks made a note at a time inside its loop (the whistle's and the fiddle's five tracks,
+  265 MB while they play).
+- A body's two channels share the bridge force's forward FFTs: `synth/oa.py` makes oaconvolve's own blocks,
+  so one stretch's spectra can serve both ears (the bodies' convolutions nearly halved).
+- The singers and the band's first parts side by side on two threads too (9.1 s instead of 10.5 s, at
+  1.40 GB instead of 1.33 GB): a choice for the server's budget (`steps_back` in `mixing.mix_made`).
+
+## Options declined: they would change the bytes
+
+- **float32** for the stems, the sums and the buses (the network and the vocoder too): every buffer halved,
+  a peak near 0.6 GB, and faster where memory bandwidth bounds it; every sample's last bits move.
+- **The mix in blocks** (a stretch of the song at a time through every strip, bus and the room): memory
+  independent of the song's length (a few hundred MB), but the loud levels, percentiles and loudness each
+  strip measures over its whole stem would need a first pass, and the room's convolution other blocks.
+- **fastmath** on the biquads and the strings' loops (a quarter to a third off their time, 1.5 s of kernel
+  time on one thread): the compiler may reorder and fuse their arithmetic.
+- **The vocoder's pulse delay as `cos` and `sin`** in place of `exp(1j * turn)`: equal on this Mac (checked)
+  and 30% faster for that step, but whether numpy's complex exponential and its real `cos` and `sin` agree
+  to the bit depends on the platform's builds, so it could split a server's renders from a Mac's.
