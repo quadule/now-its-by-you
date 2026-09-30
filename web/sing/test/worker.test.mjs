@@ -124,7 +124,9 @@ function env(extra = {}) {
     UPLOADS: new Limiter(6), REQUESTS: new Limiter(10000), UNKNOWN: new Limiter(10),
     ASSETS: { fetch: async req => {
       const path = new URL(req.url).pathname;
-      return Object.hasOwn(files, path) ? new Response(files[path]) : new Response("no", { status: 404 });
+      if (!Object.hasOwn(files, path)) return new Response("no", { status: 404 });
+      // as the static assets answer a worker: whole, with a tag, their length unsaid
+      return new Response(files[path], { headers: { ETag: `"${files[path].length}:${path}"` } });
     } },
     ...extra,
   };
@@ -206,9 +208,10 @@ test("an invitation closed in R2 is closed, whatever KV still says", async () =>
   }
 });
 
-test("the seed page is public: at /seed, at the root of the seed host, with exactly its one file", async () => {
+test("the seed page is public: at /seed, at the root of the seed host, with exactly its file and its words", async () => {
   const w = await load();
-  const files = { ...SITE, "/seed.html": "<!doctype html><title>seed</title>", "/seed/now-its-by-you.flac": "fLaC: the song" };
+  const files = { ...SITE, "/seed.html": "<!doctype html><title>seed</title>", "/seed/now-its-by-you.flac": "fLaC: the song",
+                  "/seed/words.json": '{"lines":[]}', "/robots.txt": "User-agent: *\nDisallow: /\n" };
   const e = env({ files });
   const page = await call(w, e, "/seed");
   assert.equal(page.status, 200);
@@ -223,13 +226,37 @@ test("the seed page is public: at /seed, at the root of the seed host, with exac
     assert.equal(r.status, 301);
     assert.equal(r.headers.get("location"), "https://now.itsby.you/seed/now-its-by-you.flac?x=1");
   }
+  for (const host of ["now.itsby.you", "itsby.you", "www.itsby.you"]) { // the song's hosts have no robots.txt
+    assert.equal((await w.fetch(new Request(`https://${host}/robots.txt`), e)).status, 404, host);
+  }
+  const robots = await w.fetch(new Request("https://songbird.quadule.com/robots.txt"), e); // the singing site keeps its own
+  assert.equal(robots.status, 200);
+  assert.match(await robots.text(), /Disallow: \//);
   const other = await w.fetch(new Request("https://songbird.test/"), e); // any other host's root is the landing line
   assert.match(await other.text(), /invitation/);
   const file = await call(w, e, "/seed/now-its-by-you.flac");
   assert.equal(file.status, 200);
   assert.equal(file.headers.get("content-type"), "audio/flac");
   assert.match(file.headers.get("content-disposition"), /attachment/);
+  const words = await call(w, e, "/seed/words.json?v=abc"); // the page's words, timed: read, not downloaded
+  assert.equal(words.status, 200);
+  assert.match(words.headers.get("content-type"), /application\/json/);
+  assert.equal(words.headers.get("content-disposition"), null);
+  assert.deepEqual(await words.json(), { lines: [] });
+  assert.equal(file.headers.get("accept-ranges"), "bytes");
+  // a player's parts of it: to seek, and for Safari to play it at all
+  const range = async spec => {
+    const r = await call(w, e, "/seed/now-its-by-you.flac", { headers: { Range: spec } });
+    return { status: r.status, range: r.headers.get("content-range"), length: r.headers.get("content-length"), text: await r.text() };
+  };
+  assert.deepEqual(await range("bytes=0-1"), { status: 206, range: "bytes 0-1/14", length: "2", text: "fL" });
+  assert.deepEqual(await range("bytes=6-"), { status: 206, range: "bytes 6-13/14", length: "8", text: "the song" });
+  assert.deepEqual(await range("bytes=-4"), { status: 206, range: "bytes 10-13/14", length: "4", text: "song" });
+  assert.deepEqual(await range("bytes=10-99"), { status: 206, range: "bytes 10-13/14", length: "4", text: "song" });
+  assert.equal((await range("bytes=14-")).status, 416);
+  assert.equal((await range("bytes=0-1,4-5")).status, 200); // more than one part: the whole of it
   assert.equal((await call(w, e, "/seed/other.flac")).status, 404); // nothing else under /seed/ is served
+  assert.equal((await call(w, e, "/seed/__proto__")).status, 404);
   assert.equal((await call(w, e, "/seed/../song/song.json")).status, 404);
   assert.equal((await call(w, e, "/seed", { method: "POST" })).status, 404);
 });

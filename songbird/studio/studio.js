@@ -986,7 +986,7 @@ async function follow(job, playing) {
 
 // One song is made at a time; a shared studio's visitors wait on each other, so say how many are ahead.
 function waitingWords(job) {
-  return job.ahead ? `waiting its turn (${job.ahead} ahead)` : "waiting its turn";
+  return job.ahead ? `waiting its turn (${job.ahead} ahead${publicWait(job)})` : "waiting its turn";
 }
 
 function refreshReady(key) {
@@ -1084,7 +1084,7 @@ async function record() {
     saved.replaceChildren(
       r.shared
         ? h("p", {}, `Made (${fmtTime(r.duration)}): the song, the program that sang it and its record, in one file. `,
-          h("a", { class: "btn primary", href: r.download, download: r.name }, "Download it"))
+          h("a", { class: "btn primary", href: r.download, download: r.name }, "Download it"), publicKept(r))
         : h("p", {}, "Saved ", h("code", {}, r.flac), ` (${fmtTime(r.duration)}): the song, the program that sang it and its record, in one file.`),
       h("p", {}, r.yours ? `${r.yours} choice${r.yours === 1 ? " is" : "s are"} marked as yours in it (what you chose, never who you are).` : "Every choice in it is the program's."),
       h("p", { class: "hint" }, "To make the next version from this one: ", h("code", {}, r.next)),
@@ -1099,6 +1099,29 @@ async function record() {
     state.recording = false;
     for (const id of ["record", "recordNow"]) $(id).disabled = false;
   }
+}
+
+// ------------------------------------------------------------------ open to the public (studio --public)
+// A public studio's waits, limits and downloads, in words; kept here, apart, so the rest reads as it did.
+// Its refusals (a full queue, a limit reached) come from the server as sentences with when to try again,
+// and show where any other trouble does: in the player, or under Record.
+
+function publicWait(job) {  // the server's guess at the wait, when it makes one (only a public studio does)
+  if (!job.eta) return "";
+  const minutes = Math.round(job.eta / 60);
+  return minutes <= 1 ? ", about a minute" : `, about ${minutes} minutes`;
+}
+
+function publicKept(r) {
+  return r.expires ? ` It waits here ${r.expires} hours; after that, the same choices make it again.` : "";
+}
+
+function applyPublic(s) {
+  const p = s.public;
+  if (!p) return;
+  $("localBadge").textContent = "Open studio";
+  $("whereNote").textContent = "An open studio: the song is made on a small server, one at a time for everyone. Your changes stay in this browser.";
+  $("helpWhere").textContent = `This studio is open to anyone. A small server makes the song, one at a time for everyone, so you may wait your turn; each person can have ${p.records} whole songs and ${p.previews} sections made an hour, and what's made already plays at once. What you record is yours to download (it waits ${p.download_hours} hours). Your changes stay in this browser.`;
 }
 
 // ------------------------------------------------------------------ putting it together
@@ -1173,6 +1196,7 @@ async function main() {
     $("helpShows").textContent = "This studio shows the version the computer serving it makes today, and lets you:";
     $("helpWhere").textContent = "This studio is shared from someone else's computer for a short preview: that computer makes the song, and what you record is saved there too. Download it to keep it. Your changes stay in this browser.";
   }
+  applyPublic(s);
   $("helpSong").textContent = s.title;
   renderLineage(s.generation || 0);
   $("singNote").textContent = s.sing.available ? "" : s.sing.why;

@@ -1,0 +1,71 @@
+# The public studio and the tunnel that reaches it: docs/WEB-STUDIO.md.
+#
+#   cp deploy/studio/studio.env.example deploy/studio/.env    # then fill in TUNNEL_TOKEN
+#   docker compose -f deploy/studio/docker-compose.yml up -d --build
+#
+# No port is opened on the host (mailcow keeps 80 and 443): cloudflared dials out to Cloudflare, and
+# Cloudflare sends visitors down that connection to the studio. The studio's own network has no way out.
+# Its memory is capped with no swap, and the kernel is told to kill it before anything else on the host:
+# if a render runs out, the studio dies and restarts, never the mail server.
+
+name: songbird-studio
+
+services:
+  studio:
+    build:
+      context: ../..
+      dockerfile: deploy/studio/Dockerfile
+    image: songbird-studio
+    command: >-
+      --allow-host ${STUDIO_HOST:-studio.itsby.you}
+      --machine ${STUDIO_MACHINE:-none}
+      --client-ip-header CF-Connecting-IP
+      ${STUDIO_ARGS:-}
+    environment:
+      SONGBIRD_THREADS: ${SONGBIRD_THREADS:-2}  # a render's threads (the same bytes whatever it says)
+    mem_limit: ${STUDIO_MEMORY:-2500m}
+    memswap_limit: ${STUDIO_MEMORY:-2500m}  # the same: no swap, so a runaway render ends rather than crawls
+    oom_score_adj: 800  # first to go if the host itself runs short
+    cpus: ${STUDIO_CPUS:-2}
+    pids_limit: 256
+    read_only: true
+    tmpfs:
+      - /tmp:size=64m
+    volumes:
+      - studio-data:/data  # previews, recordings waiting to be downloaded, the compiled synthesis
+    cap_drop: [ALL]
+    security_opt: ["no-new-privileges:true"]
+    networks: [inside]
+    restart: unless-stopped
+    init: true
+    stop_grace_period: 5s
+    logging:
+      driver: json-file
+      options: {max-size: "10m", max-file: "3"}  # the access log: about 30 MB at most
+
+  tunnel:
+    image: cloudflare/cloudflared:${CLOUDFLARED_VERSION:-2025.8.1}
+    command: tunnel --no-autoupdate run
+    environment:
+      TUNNEL_TOKEN: ${TUNNEL_TOKEN:-}  # deploy/studio/.env (docs/WEB-STUDIO.md)
+    depends_on:
+      studio:
+        condition: service_healthy
+    mem_limit: 128m
+    cpus: 0.5
+    read_only: true
+    cap_drop: [ALL]
+    security_opt: ["no-new-privileges:true"]
+    networks: [inside, outside]
+    restart: unless-stopped
+    logging:
+      driver: json-file
+      options: {max-size: "5m", max-file: "2"}
+
+networks:
+  inside:
+    internal: true  # the studio's only network: the tunnel reaches it, it reaches nothing
+  outside: {}
+
+volumes:
+  studio-data: {}
