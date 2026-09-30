@@ -11,7 +11,8 @@
 // timestamp, assembled by ffmpeg at the frames' real times into <out>/raw.mp4 (H.264, CRF 10, 30 fps) whose t = 0 is
 // the log's t = 0. Playwright's recordVideo is VP8 at about 1 Mb/s, which blurs small text; this is about 20 times
 // that and keeps it sharp. The page is shown at `zoom` (CSS zoom on the root: the same 1920x1080 frame, the page's
-// text 1.2 times larger, laid out as a 1600 px window would be).
+// text 1.2 times larger, laid out as a 1600 px window would be). Captions sit on an index card at the foot, left;
+// `avoid` (a selector: the studio's words, '#page') keeps them to the gutter beside such a column when it shows.
 //
 // The log: <out>/actions.json, {t0, url, viewport, zoom, actions: [{t, kind, label, phase, weight 0-3, hold (beats),
 // dur?}]}, t in seconds of the raw video. A white flash (kind "sync") lets beatcut.py check the offset to the frame.
@@ -23,7 +24,7 @@ import { spawnSync } from 'node:child_process';
 const FFMPEG = ['/opt/homebrew/bin/ffmpeg', '/usr/local/bin/ffmpeg', '/usr/bin/ffmpeg'].find((p) => fs.existsSync(p)) || 'ffmpeg';
 
 // drawn in the page, in a layer that undoes the page's zoom so its numbers are the frame's pixels
-function overlay(Z) {
+function overlay([Z, avoid]) {
   const install = () => {
     if (document.getElementById('pw-layer')) return;
     if (Z !== 1) document.documentElement.style.zoom = String(Z);
@@ -43,6 +44,9 @@ function overlay(Z) {
         box-shadow: 0 8px 28px rgba(43,35,29,.18); border-radius: 2px;
         opacity: 0; transform: translateY(8px); transition: opacity .35s ease, transform .35s ease; z-index: 3; }
       #pw-caption.on { opacity: 1; transform: none; }
+      #pw-caption.narrow { padding: 12px 16px 14px; }
+      #pw-caption.narrow .k { font-size: 16px; }
+      #pw-caption.narrow .t { font-size: 23px; }
       #pw-caption .k { font-family: var(--serif); font-variant: small-caps; text-transform: lowercase; letter-spacing: .16em;
         color: var(--red); font-size: 21px; line-height: 1; margin-bottom: 8px; }
       #pw-caption .k b { font-weight: 400; color: var(--ink); opacity: .55; letter-spacing: .08em; }
@@ -77,6 +81,13 @@ function overlay(Z) {
       setTimeout(() => r.remove(), 650);
     };
     window.addEventListener('mousedown', (e) => window.__pwRipple(e.clientX, e.clientY), true);
+    // the caption keeps to the gutter beside a column it would cover (the studio's Page: the words)
+    setInterval(() => {
+      const col = avoid && [...document.querySelectorAll(avoid)].find((el) => el.getClientRects().length && el.getBoundingClientRect().width > 0);
+      const room = col ? col.getBoundingClientRect().left - 36 - 18 : Infinity;
+      cap.classList.toggle('narrow', room < 640);
+      cap.style.maxWidth = room < 640 ? Math.max(220, room) + 'px' : '';
+    }, 200);
     window.__pwCaption = (kicker, text, where) => {
       cap.classList.remove('on');
       setTimeout(() => {
@@ -115,14 +126,14 @@ function overlay(Z) {
   }).observe(document, { subtree: true, childList: true, characterData: true });
 }
 
-export async function session({ url, out, video = true, zoom = 1.2, width = 1920, height = 1080, scheme = 'light', quality = 95 }) {
+export async function session({ url, out, video = true, zoom = 1.2, width = 1920, height = 1080, scheme = 'light', quality = 95, avoid = null }) {
   fs.mkdirSync(out, { recursive: true });
   const framesDir = path.join(out, 'frames-raw');
   if (video) { fs.rmSync(framesDir, { recursive: true, force: true }); fs.mkdirSync(framesDir, { recursive: true }); }
   const browser = await chromium.launch({ headless: true, args: ['--autoplay-policy=no-user-gesture-required', '--hide-scrollbars'] });
   // bypassCSP: the studio's content policy refuses inline <style>, and the overlay's is one (the page's own is untouched)
   const ctx = await browser.newContext({ viewport: { width, height }, colorScheme: scheme, acceptDownloads: true, bypassCSP: true });
-  await ctx.addInitScript(overlay, zoom);
+  await ctx.addInitScript(overlay, [zoom, avoid]);
   const page = await ctx.newPage();
   const T0 = Date.now();
   const log = [];
@@ -295,4 +306,6 @@ export function assemble(frames, tEnd, out, fps = 30) {
     '-c:v', 'libx264', '-preset', 'medium', '-crf', '10', '-pix_fmt', 'yuv420p', '-movflags', '+faststart', path.join(out, 'raw.mp4')], { stdio: 'inherit' });
   if (r.status !== 0) throw new Error('ffmpeg failed assembling the frames');
   console.log(`raw.mp4: ${list.length} frames over ${tEnd.toFixed(1)} s`);
+  // the JPEGs are some 3 GB for five minutes; raw.mp4 at CRF 10 keeps what they show (SONGBIRD_KEEP_FRAMES=1 keeps them)
+  if (!process.env.SONGBIRD_KEEP_FRAMES) fs.rmSync(path.join(out, 'frames-raw'), { recursive: true, force: true });
 }

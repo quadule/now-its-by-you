@@ -24,7 +24,7 @@ const UNTIL = arg('until', null);
 const VIDEO = !process.argv.includes('--no-video');
 const SKIP_RECORD = process.argv.includes('--skip-record');
 
-const s = await session({ url: URL, out: OUT, video: VIDEO, zoom: 1.2 });
+const s = await session({ url: URL, out: OUT, video: VIDEO, zoom: 1.2, avoid: '#page' });
 const { page, pause, mark, click, dbl, choose, type, dragTo, show } = s;
 const byRole = (role, name, exact = false) => page.getByRole(role, { name, exact }).first();
 const insp = () => page.getByRole('complementary').first();
@@ -215,6 +215,13 @@ await click(track('synth lead'), 'the synth lead', { after: 700 });
 await click(chip('Sound', 'supersaw'), 'a supersaw lead', { weight: 3, after: 1100 });
 await click(track('guitar'), 'the guitar', { after: 700 });
 await click(insp().getByRole('button', { name: 'Sit out everywhere' }), 'the guitar sits out', { weight: 2, after: 1600 });
+{ // the drop's "everyone hard" had set the guitar there too; with it sat out the page says it can't keep that
+  const go = page.getByRole('button', { name: 'let it go' }).first();
+  if (await go.isVisible().catch(() => false)) {
+    await page.evaluate(() => scrollTo({ top: 0, behavior: 'smooth' })); await pause(500);
+    await click(go, "“couldn't keep your guitar in refrain 2”: let it go", { weight: 2, after: 1400 });
+  }
+}
 await click(region('Refrain 2'), 'refrain 2: select', { after: 500 });
 await hearSung('hear the drop', 7, { weight: 3 });
 
@@ -235,7 +242,8 @@ await click(chip('Here', 'out'), 'no drums in the breakdown', { weight: 2, after
 await click(cell('synth bass', 'Verse 2'), 'synth bass in verse 2', { after: 600 });
 await click(chip('Here', 'out'), 'no bass in the breakdown', { weight: 2, after: 1100 });
 await click(seam('Verse 2'), 'the seam into the breakdown', { after: 600 });
-await click(chip('Before it', 'a sweep'), 'a sweep down into it', { after: 900 });
+await click(chip('Before it', 'a sweep'), 'a sweep into it', { after: 1200 });
+await click(insp().getByRole('group', { name: 'The sweep', exact: true }).getByRole('button', { name: /^falling/ }), 'the sweep falling: the top closes', { weight: 2, after: 1100 });
 await click(region('Bridge'), 'the bridge: select', { after: 600 });
 await click(chip('Moment', 'a build'), 'the bridge: a build', { weight: 3, after: 1800 });
 await click(seam('Refrain 3'), 'the seam into the second drop', { after: 600 });
