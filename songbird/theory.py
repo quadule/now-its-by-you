@@ -17,9 +17,18 @@ MODES: dict[str, tuple[int, ...]] = {
 }
 
 _ROMAN = {"i": 1, "ii": 2, "iii": 3, "iv": 4, "v": 5, "vi": 6, "vii": 7}
-_CHORD = re.compile(r"([#b]?)(?i:(i{1,3}|iv|vi{0,2}|v))(maj|m|dim|aug|sus2|sus4)?(?:/([35]))?")
-# A quality a person names, over the chord's root; case never carries one (a genome's "v" and "V" are one function)
-QUALITIES = {"maj": (0, 4, 7), "m": (0, 3, 7), "dim": (0, 3, 6), "aug": (0, 4, 8), "sus2": (0, 2, 7), "sus4": (0, 5, 7)}
+# A quality a person names, over the chord's root; case never carries one (a genome's "v" and "V" are one function).
+# The triads, then the chords a lead sheet writes with a fourth tone (docs/STUDIO.md, "Looser harmony and melody"):
+# each a fixed chord over its root whatever the mode, root, third (or the sus chord's second or fourth), fifth,
+# then the added tone: the seventh, the sixth, or the ninth (14, a ninth above the root)
+QUALITIES = {"maj": (0, 4, 7), "m": (0, 3, 7), "dim": (0, 3, 6), "aug": (0, 4, 8), "sus2": (0, 2, 7), "sus4": (0, 5, 7),
+             "7": (0, 4, 7, 10), "maj7": (0, 4, 7, 11), "m7": (0, 3, 7, 10), "m7b5": (0, 3, 6, 10),
+             "dim7": (0, 3, 6, 9), "6": (0, 4, 7, 9), "m6": (0, 3, 7, 9), "add9": (0, 4, 7, 14), "madd9": (0, 3, 7, 14),
+             "7sus4": (0, 5, 7, 10), "7sus2": (0, 2, 7, 10)}
+SEVENTHS = frozenset(q for q, tones in QUALITIES.items() if len(tones) == 4 and tones[3] in (9, 10, 11)
+                     and q not in ("6", "m6"))  # the chords with a seventh, which may stand in the bass (/7)
+_CHORD = re.compile(r"([#b]?)(?i:(i{1,3}|iv|vi{0,2}|v))("
+                    + "|".join(sorted(QUALITIES, key=len, reverse=True)) + r")?(?:/([357]))?")
 
 
 def degree_semitones(degree: int, mode: str, alter: int = 0) -> int:
@@ -38,13 +47,17 @@ def parse_symbol(symbol: str) -> tuple[int, int, str, int]:
     The genome writes roman numerals (vi, bVII) whose case is ignored: a chord's
     quality comes from the mode it is realized in, so the genome stores
     functions, not chords. A person may name a quality after the numeral (maj,
-    m, dim, aug, sus2, sus4: lower case, "" for the mode's own) and a bass other
-    than the root (/3 its third, /5 its fifth; 1 for the root): Vmaj, ivm/5.
+    m, dim, aug, sus2, sus4, or a chord with a fourth tone: 7, maj7, m7, m7b5,
+    dim7, 6, m6, add9, madd9, 7sus4, 7sus2; lower case, "" for the mode's own)
+    and a bass other than the root (/3 its third, /5 its fifth, /7 the seventh
+    of a chord that has one; 1 for the root): Vmaj, ivm/5, V7/7.
     """
     match = _CHORD.fullmatch(symbol.strip())
     if not match:
         raise ValueError(f"not a chord function: {symbol!r}")
     accidental, numeral, quality, bass = match.groups()
+    if bass == "7" and quality not in SEVENTHS:
+        raise ValueError(f"only a chord with a seventh has a seventh to put in the bass: {symbol!r}")
     return _ROMAN[numeral.lower()], {"": 0, "#": 1, "b": -1}[accidental], quality or "", int(bass or 1)
 
 
@@ -54,13 +67,15 @@ def parse_chord(symbol: str) -> tuple[int, int]:
     return degree, alter
 
 
-def chord_tones(symbol: str, mode: str) -> tuple[int, int, int]:
-    """Semitone offsets from the tonic of the chord's root, third and fifth.
+def chord_tones(symbol: str, mode: str) -> tuple[int, ...]:
+    """Semitone offsets from the tonic of the chord's root, third and fifth, and
+    its added tone if it has one (a seventh, a sixth, a ninth).
 
     A plain numeral is the diatonic triad on that degree of the mode. A numeral
     with an accidental (bVII, bVI) is borrowed and always major. A quality named
-    (Vmaj, iim, IVsus4) is that triad over the root, whatever the mode; the sus
-    chords' second or fourth stands where the third would.
+    (Vmaj, iim, IVsus4, V7, iim7, IVmaj7) is that chord over the root, whatever
+    the mode; the sus chords' second or fourth stands where the third would.
+    Three tones for a triad, as ever; four for a chord with an added tone.
     """
     degree, alter, quality, _ = parse_symbol(symbol)
     if quality:
@@ -83,14 +98,22 @@ def chord_bass(symbol: str, mode: str) -> int:
     """Semitone offset from the tonic of the chord's lowest note: its root, or the third or fifth a person
     put in the bass (I/3, V/5)."""
     tones = chord_tones(symbol, mode)
-    return tones[{1: 0, 3: 1, 5: 2}[parse_symbol(symbol)[3]]]
+    return tones[{1: 0, 3: 1, 5: 2, 7: 3}[parse_symbol(symbol)[3]]]
+
+
+# A chord's kind by its tones above the root (pitch classes), as a lead sheet writes it after the root's name
+KINDS = {(4, 7): "", (3, 7): "m", (3, 6): "°", (4, 8): "+", (5, 7): "sus4", (2, 7): "sus2",
+         (4, 7, 10): "7", (4, 7, 11): "maj7", (3, 7, 10): "m7", (3, 6, 10): "m7♭5", (3, 6, 9): "°7",
+         (4, 7, 9): "6", (3, 7, 9): "m6", (4, 7, 2): "add9", (3, 7, 2): "m(add9)", (5, 7, 10): "7sus4",
+         (2, 7, 10): "7sus2"}
 
 
 def chord_name(symbol: str, tonic: int, mode: str) -> str:
-    """A chord function as a musician reads it in this key: vi in D major is Bm, bVII is C, V in D is A."""
-    root, third, fifth = chord_tones(symbol, mode)
-    kind = {(4, 7): "", (3, 7): "m", (3, 6): "°", (4, 8): "+", (5, 7): "sus4", (2, 7): "sus2"}.get(
-        ((third - root) % 12, (fifth - root) % 12), "")
+    """A chord function as a musician reads it in this key: vi in D major is Bm, bVII is C, V in D is A, V7 A7,
+    viim7b5 C♯m7♭5, V7/7 A7/G."""
+    tones = chord_tones(symbol, mode)
+    root = tones[0]
+    kind = KINDS.get(tuple((t - root) % 12 for t in tones[1:]), "")
     name = NOTE_NAMES[(tonic + root) % 12] + kind
     bass = chord_bass(symbol, mode)
     return name if bass == root else f"{name}/{NOTE_NAMES[(tonic + bass) % 12]}"

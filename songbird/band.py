@@ -330,7 +330,9 @@ class Context:
         sung = self.sung_at(u)
         return ([sung.pitch] if sung else []) + [p for u0, u1, p in self.choir if u0 - 1e-9 <= u < u1 - 1e-9]
 
-    def pcs(self, symbol: str) -> tuple[int, int, int]:
+    def pcs(self, symbol: str) -> tuple[int, ...]:
+        """The chord's pitch classes, root first: its root, third (or sus) and fifth, and a person's added tone
+        (a seventh, a sixth, a ninth: theory.chord_tones), which every player counts as the chord's own."""
         return tuple((self.tonic + t) % 12 for t in chord_tones(symbol, self.mode))
 
     def root(self, symbol: str) -> int:
@@ -587,13 +589,17 @@ def harp_voicing(ctx: Context, symbol: str, high: bool) -> list[int]:
     """Five strings for a chord: low, spread root, fifth, octave, tenth,
     twelfth; or, high, the chord's tones climbing from just above the tune's
     usual top, out of the singer's way."""
-    root_i, third_i, fifth_i = chord_tones(symbol, ctx.mode)
+    tones = chord_tones(symbol, ctx.mode)
+    root_i, third_i, fifth_i = tones[:3]
     if high:
         pcs = ctx.pcs(symbol)
         return [p for p in range(ctx.tonic + 10, ctx.tonic + 25) if p % 12 in pcs][:5]
     low = ctx.tonic - 22
     bass = low + (ctx.tonic + root_i - low) % 12
     spread = [bass, bass + (fifth_i - root_i), bass + 12, bass + 12 + (third_i - root_i), bass + 12 + (fifth_i - root_i)]
+    if len(tones) > 3:  # a person's added tone (a seventh, a sixth, a ninth) in place of the twelfth, over the octave
+        added = bass + 12 + (tones[3] - root_i) % 12
+        spread = spread[:3] + sorted([spread[3], added + (12 if added <= bass + 12 else 0)])
     under = chord_bass(symbol, ctx.mode)
     if under == root_i:
         return spread
@@ -688,11 +694,14 @@ def let_ring(ctx: Context, events: list[Ev]) -> list[Ev]:
 
 
 @lru_cache(maxsize=512)
-def guitar_voicing(pcs: tuple[int, ...], capo: int) -> tuple[tuple[tuple[int, int], ...], float]:
+def guitar_voicing(pcs: tuple[int, ...], capo: int, need: int = 3) -> tuple[tuple[tuple[int, int], ...], float]:
     """An open-position guitar chord, capoed: (string, pitch) low to high, and
     how awkward it is to finger. The lowest string sounding carries the root
-    (pcs[0]); the third must be there; open strings are welcome; the hand
-    spans at most three frets; no muted string inside the chord."""
+    (pcs[0]); the third must be there, and with need 4 the chord's fourth tone
+    too (a person's seventh, sixth or ninth: G7 320001, Am7 x02010; a style's
+    chance colour, passed as a fourth tone with need 3, is welcome but not
+    required); open strings are welcome; the hand spans at most three frets;
+    no muted string inside the chord."""
     options = []
     for open_pitch in GUITAR_TUNING:
         base = open_pitch + capo
@@ -715,6 +724,8 @@ def guitar_voicing(pcs: tuple[int, ...], capo: int) -> tuple[tuple[tuple[int, in
             have = {p % 12 for _, p in sounding}
             cost = 0.35 * span + 0.05 * sum(frets) - 0.25 * frets.count(0) - 0.3 * len(sounding)
             cost += (6.0 if pcs[1] not in have else 0.0) + (0.8 if pcs[2] not in have else 0.0)
+            if need > 3 and pcs[3] not in have:
+                cost += 6.0
             if cost < best_cost:
                 best, best_cost = tuple(sounding), cost
             return
@@ -722,17 +733,29 @@ def guitar_voicing(pcs: tuple[int, ...], capo: int) -> tuple[tuple[tuple[int, in
             walk(i + 1, chosen + [option])
 
     walk(0, [])
-    if best is None:  # a plain triad on the middle strings
+    whole = need > 3 and best is not None and {pcs[1], pcs[3]} <= {p % 12 for _, p in best}
+    if best is None or (need > 3 and not whole):  # a plain triad on the middle strings (a person's seventh: with it)
         root = nearest({pcs[0]}, 48 + capo, 45 + capo, 57 + capo)
         best = ((2, root), (3, root + (pcs[2] - pcs[0]) % 12), (4, root + 12), (5, root + 12 + (pcs[1] - pcs[0]) % 12))
+        if need > 3:  # the added tone in place of the octave: root, fifth, the added tone above it, the third
+            fifth = root + (pcs[2] - pcs[0]) % 12
+            added = root + (pcs[3] - pcs[0]) % 12
+            added += 12 if added <= fifth else 0
+            best = tuple((k + 2, q) for k, q in enumerate(sorted((root, fifth, added, root + 12 + (pcs[1] - pcs[0]) % 12))))
         best_cost = 5.0
     return best, best_cost
+
+
+def shape(ctx: Context, symbol: str, capo: int) -> tuple[tuple[tuple[int, int], ...], float]:
+    """The guitar's shape for a chord: every tone of a person's seventh (sixth, ninth) required, as the third is."""
+    pcs = ctx.pcs(symbol)
+    return guitar_voicing(pcs, capo, len(pcs))
 
 
 def choose_capo(ctx: Context) -> int:
     """The capo that lets every chord of the song fall in open shapes."""
     symbols = sorted({c.symbol for c in ctx.chords})
-    costs = [(sum(guitar_voicing(ctx.pcs(sym), capo)[1] for sym in symbols) + 0.4 * capo, capo) for capo in range(7)]
+    costs = [(sum(shape(ctx, sym, capo)[1] for sym in symbols) + 0.4 * capo, capo) for capo in range(7)]
     return min(costs)[1]
 
 
@@ -816,7 +839,7 @@ def guitar_part(ctx: Context, capo: int) -> list[Ev]:
     for u, stroke, accent, c in strokes:
         s = ctx.sections[c.section]
         rng = ctx.rand("guitar", u)
-        voicing, _ = guitar_voicing(ctx.pcs(c.symbol), capo)
+        voicing, _ = shape(ctx, c.symbol, capo)
         if stroke == "U":
             order = list(voicing)[::-1][: max(3, len(voicing) - 2)]  # an upstroke catches the top strings
         elif stroke == "B":
@@ -851,7 +874,7 @@ def guitar_part(ctx: Context, capo: int) -> list[Ev]:
 
 def _fingerpick(ctx: Context, rng: np.random.Generator, c: Chord, capo: int) -> list[Ev]:
     """Thumb on the beats (the root string, then the next), fingers on the off-beats."""
-    voicing, _ = guitar_voicing(ctx.pcs(c.symbol), capo)
+    voicing, _ = shape(ctx, c.symbol, capo)
     pitches = [p for _, p in voicing]
     out = []
     for b in range(int(round((c.u1 - c.u0) / ctx.beat))):

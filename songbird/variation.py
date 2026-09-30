@@ -421,7 +421,7 @@ MINOR = {"dorian", "aeolian", "phrygian", "locrian"}
 
 
 def quality(symbol: str, mode: str) -> str:
-    root, third, fifth = chord_tones(symbol, mode)
+    root, third, fifth = chord_tones(symbol, mode)[:3]
     return {(4, 7): "major", (3, 7): "minor", (3, 6): "diminished", (4, 8): "augmented"}.get(
         ((third - root) % 12, (fifth - root) % 12), "other")
 

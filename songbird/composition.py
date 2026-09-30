@@ -48,7 +48,7 @@ from dataclasses import replace
 
 from . import variants
 from .genome import sung_words
-from .theory import MODES, chord_bass, chord_name, chord_tones, degree_semitones, parse_symbol
+from .theory import MODES, SEVENTHS, chord_bass, chord_name, chord_tones, degree_semitones, parse_symbol
 
 GRID = 0.25  # a sixteenth note in a quarter-note beat
 MAX_SECTIONS = 48
@@ -394,7 +394,8 @@ def check_chords(genome, pid: str, value) -> list[list[str]] | None:
                 parse_symbol(symbol)
             except ValueError:
                 raise ValueError(f"{symbol.strip()!r} isn't a chord this song can name: a numeral of the key "
-                                 "(I to VII, b or # before it), then maj, m, dim, aug, sus2 or sus4, then /3 or /5") from None
+                                 "(I to VII, b or # before it), then maj, m, dim, aug, sus2, sus4, 7, maj7, m7, m7b5, "
+                                 "dim7, 6, m6, add9, madd9, 7sus4 or 7sus2, then /3, /5 or (with a seventh) /7") from None
             chords.append(symbol.strip())
         out.append(chords)
     return out
@@ -406,9 +407,30 @@ def chords_value(genome, params, pid: str) -> list[list[str]]:
     return [list(bar) for bar in held] if held else [list(bar) for bar in genome.phrases[pid].chords]
 
 
+SEVENTH_KINDS = {(4, 7, 11): "maj7", (3, 7, 10): "m7", (4, 7, 10): "7", (3, 6, 10): "m7b5", (3, 6, 9): "dim7",
+                 (3, 7, 11): None, (4, 8, 11): None}  # a mode's own sevenths as the grammar writes them (None: not one)
+
+
+def key_sevenths(params) -> list[dict]:
+    """The key's own seventh chords (the triad on each degree and the scale's seventh above it), each written as
+    the chord it is (Imaj7, iim7, V7, viim7b5 in major; the mode's own in any other), with its name; a degree
+    whose seventh the grammar has no name for (a minor-major seventh) is left out."""
+    out = []
+    for d in range(1, 8):
+        tones = [degree_semitones(d + k, params.mode) for k in (0, 2, 4, 6)]
+        kind = SEVENTH_KINDS.get(tuple((t - tones[0]) % 12 for t in tones[1:]))
+        if kind is None:
+            continue
+        numeral = ("I", "II", "III", "IV", "V", "VI", "VII")[d - 1]
+        numeral = numeral.lower() if kind in ("m7", "m7b5", "dim7") else numeral
+        symbol = numeral + kind
+        out.append({"symbol": symbol, "name": chord_name(symbol, params.tonic, params.mode)})
+    return out
+
+
 def chord_choices(params) -> dict:
-    """What the chord card offers in this key: the chords of the key (a numeral each, with its name) and
-    every root a chord can have (the twelve numerals, each with its note)."""
+    """What the chord card offers in this key: the chords of the key (a numeral each, with its name), its seventh
+    chords, and every root a chord can have (the twelve numerals, each with its note)."""
     from .theory import NOTE_NAMES
 
     sharps = ("C", "C♯", "D", "D♯", "E", "F", "F♯", "G", "G♯", "A", "A♯", "B")  # a raised root is spelt sharp
@@ -419,12 +441,17 @@ def chord_choices(params) -> dict:
         name = chord_name(numeral, params.tonic, params.mode)
         minor = name.endswith(("m", "°")) and not name.endswith("sus4")
         diatonic.append({"symbol": numeral.lower() if minor else numeral, "name": name})
-    return {"diatonic": diatonic,
+    return {"diatonic": diatonic, "sevenths": key_sevenths(params),
             "roots": [{"numeral": r, "note": (sharps if r.startswith("#") else NOTE_NAMES)[
                 (params.tonic + chord_tones(r + "maj", params.mode)[0]) % 12]} for r in roots],
             "qualities": [["", "as the key has it"], ["maj", "major"], ["m", "minor"], ["dim", "diminished"],
-                          ["aug", "augmented"], ["sus2", "sus2"], ["sus4", "sus4"]],
-            "basses": [[1, "root"], [3, "third"], [5, "fifth"]]}
+                          ["aug", "augmented"], ["sus2", "sus2"], ["sus4", "sus4"],
+                          ["7", "7 (dominant seventh)"], ["maj7", "maj7 (major seventh)"], ["m7", "m7 (minor seventh)"],
+                          ["m7b5", "m7♭5 (half-diminished)"], ["dim7", "°7 (diminished seventh)"], ["6", "6 (sixth)"],
+                          ["m6", "m6 (minor sixth)"], ["add9", "add9"], ["madd9", "m(add9)"], ["7sus4", "7sus4"],
+                          ["7sus2", "7sus2"]],
+            "basses": [[1, "root"], [3, "third"], [5, "fifth"], [7, "seventh"]],
+            "with_seventh": sorted(SEVENTHS)}
 
 
 def played(phrase, params):
@@ -466,11 +493,16 @@ def harmony(genome, phrase, params) -> list[dict]:
             tones = chord_tones(symbol, params.mode)
             pcs = [(params.tonic + t) % 12 for t in tones]
             rubs = [(i, pc) for i, pc in under.get((b, k), []) if pc not in pcs]
-            out.append({"bar": b, "slot": k, "start": b * per_bar + a, "beats": z - a, "symbol": symbol,
-                        "name": chord_name(symbol, params.tonic, params.mode), "pcs": pcs,
-                        "bass": (params.tonic + chord_bass(symbol, params.mode)) % 12,
-                        "rubs": [i for i, _ in rubs],
-                        "hard": any(min((pc - t) % 12, (t - pc) % 12) == 1 for _, pc in rubs for t in pcs)})
+            entry = {"bar": b, "slot": k, "start": b * per_bar + a, "beats": z - a, "symbol": symbol,
+                     "name": chord_name(symbol, params.tonic, params.mode), "pcs": pcs,
+                     "bass": (params.tonic + chord_bass(symbol, params.mode)) % 12,
+                     "rubs": [i for i, _ in rubs],
+                     "hard": any(min((pc - t) % 12, (t - pc) % 12) == 1 for _, pc in rubs for t in pcs)}
+            if len(pcs) > 3:  # a person's seventh (sixth, ninth) a half step from a sung note: a sharp rub of its own
+                entry["tension"] = [i for i, pc in under.get((b, k), [])
+                                    if min((pc - pcs[3]) % 12, (pcs[3] - pc) % 12) == 1]
+                entry["hard"] = entry["hard"] or bool(entry["tension"])
+            out.append(entry)
     return out
 
 

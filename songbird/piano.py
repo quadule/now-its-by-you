@@ -45,8 +45,14 @@ from .theory import chord_bass, chord_tones
 NAMES_SHARP = ["C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B"]
 NAMES_FLAT = ["C", "Db", "D", "Eb", "E", "F", "Gb", "G", "Ab", "A", "Bb", "B"]
 QUANT = 0.25  # beats: a sixteenth, what the band's notes are snapped back to
-QUALITY = {(4, 7): "maj", (3, 7): "min", (3, 6): "dim", (4, 8): "aug", (5, 7): "sus4", (2, 7): "sus2"}
-SUFFIX = {"maj": "", "min": "m", "dim": "dim", "aug": "+", "sus4": "sus4", "sus2": "sus2"}
+QUALITY = {(4, 7): "maj", (3, 7): "min", (3, 6): "dim", (4, 8): "aug", (5, 7): "sus4", (2, 7): "sus2",
+           # a person's chords with a fourth tone (theory.QUALITIES), by their tones above the root
+           (4, 7, 10): "7", (4, 7, 11): "maj7", (3, 7, 10): "m7", (3, 6, 10): "m7b5", (3, 6, 9): "dim7",
+           (4, 7, 9): "6", (3, 7, 9): "m6", (4, 7, 2): "add9", (3, 7, 2): "madd9", (5, 7, 10): "7sus4",
+           (2, 7, 10): "7sus2"}
+SUFFIX = {"maj": "", "min": "m", "dim": "dim", "aug": "+", "sus4": "sus4", "sus2": "sus2", "7": "7", "maj7": "maj7",
+          "m7": "m7", "m7b5": "m7b5", "dim7": "dim7", "6": "6", "m6": "m6", "add9": "add9", "madd9": "m(add9)",
+          "7sus4": "7sus4", "7sus2": "7sus2"}
 BASS_LEFT = "Bass line (the band's, an octave up)"
 
 
@@ -67,8 +73,9 @@ def lay(genome, params, phrasing=None, choir=(), lyrics=None) -> dict:
 
 def chord_info(ctx, symbol: str) -> dict:
     """A chord's root (a pitch class) and quality; its bass too, where a person put another tone there."""
-    r, t, f = chord_tones(symbol, ctx.mode)
-    info = {"root": (ctx.tonic + r) % 12, "quality": QUALITY.get(((t - r) % 12, (f - r) % 12), "maj")}
+    tones = chord_tones(symbol, ctx.mode)
+    r = tones[0]
+    info = {"root": (ctx.tonic + r) % 12, "quality": QUALITY.get(tuple((x - r) % 12 for x in tones[1:]), "maj")}
     bass = chord_bass(symbol, ctx.mode)
     if bass % 12 != r % 12:
         info["bass"] = (ctx.tonic + bass) % 12
@@ -229,7 +236,7 @@ def export(laid: dict, source: dict, duration: float | None = None) -> dict:
     prev = None
     for c in chords:
         root = root_in(c["root"])
-        r, t, f = chord_tones(c["roman"], ctx.mode)
+        r, t, f = chord_tones(c["roman"], ctx.mode)[:3]  # the triad, a person's seventh named on the chord
         third, fifth = root + (t - r) % 12, root + (f - r) % 12
         under = root_in(c["bass"]) if "bass" in c else root  # an inversion's bass, below the chord
         span = c["end"] - c["start"]

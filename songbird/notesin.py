@@ -25,12 +25,13 @@ from bisect import bisect_left, bisect_right
 
 from . import composition as C
 from . import midi
-from .theory import MODES, chord_bass, chord_tones, degree_semitones
+from .theory import MODES, SEVENTHS, chord_bass, chord_tones, degree_semitones
 
 MAX_TAKE = 4096  # notes in one take
 MAX_CHORD_NOTES = 20_000  # notes in a file's Chords track
 ROOTS = ("I", "bII", "II", "bIII", "III", "IV", "#IV", "V", "bVI", "VI", "bVII", "VII")
-QUALITIES = ("", "maj", "m", "dim", "aug", "sus2", "sus4")
+QUALITIES = ("", "maj", "m", "dim", "aug", "sus2", "sus4",  # the plainest first: the triads, then a fourth tone
+             "7", "m7", "maj7", "m7b5", "dim7", "6", "m6", "add9", "madd9", "7sus4", "7sus2")
 
 
 # ---------------------------------------------------------------- the version's lines
@@ -422,12 +423,13 @@ _NAMED: dict[str, dict] = {}
 def chord_table(mode: str) -> dict:
     """Every chord the grammar can write in this mode, by its tones and bass (pitch classes above the key's
     note): the plainest way to write each (the root in the bass, a numeral of the mode, the key's own quality
-    first: A major in D minor is Vmaj, not bVI)."""
+    first: A major in D minor is Vmaj, not bVI). The root in the bass is plainest of all, so the notes A C E G
+    over A are Am7, and over C C6 (a person's inversion, /3 /5 /7, only where the bass is another tone)."""
     if mode not in _NAMED:
         table: dict = {}
         for quality_rank, quality in enumerate(QUALITIES):
             for root in ROOTS:
-                for bass in ("", "/3", "/5"):
+                for bass in ("", "/3", "/5") + (("/7",) if quality in SEVENTHS else ()):
                     symbol = root + quality + bass
                     tones = frozenset(t % 12 for t in chord_tones(symbol, mode))
                     if len(tones) < 3:
@@ -445,21 +447,28 @@ def name_chord(pitches, tonic: int, mode: str) -> str:
     if not pitches:
         raise ValueError("no chord sounds there")
     tones = frozenset((p - tonic) % 12 for p in pitches)
-    if len(tones) > 3:
-        raise ValueError("a chord of four notes or more (a seventh) isn't taken yet")
+    if len(tones) > 4:
+        raise ValueError(f"a chord of {len(tones)} different notes (a ninth chord or more) isn't taken yet")
     if len(tones) < 3:
         raise ValueError("a chord needs three different notes")
     symbol = chord_table(mode).get((tones, (min(pitches) - tonic) % 12))
     if symbol is None:
         bass_in = (min(pitches) - tonic) % 12 in tones
-        raise ValueError("that chord isn't a major, minor, diminished, augmented or sus chord" if bass_in
-                         else "its bass isn't a note of the chord")
+        raise ValueError(("that chord isn't a major, minor, diminished, augmented or sus chord" if len(tones) == 3 else
+                          "that chord isn't one the chords can write: a seventh (7, maj7, m7, m7♭5, °7, 7sus4, "
+                          "7sus2), a sixth (6, m6) or an added ninth") if bass_in
+                         else "its bass isn't a note of the chord" if len(tones) == 3 or bass_in
+                         else "its bass isn't a note of the chord, or not one it can have (a sixth or a ninth)")
     root = symbol.split("/")[0]
     plain = root.lstrip("b#")
     if plain.isupper() and not any(root.endswith(q) for q in QUALITIES[1:]):  # a plain numeral: as the key has it
         third = (chord_tones(symbol, mode)[1] - chord_tones(symbol, mode)[0]) % 12
         if third == 3:
             symbol = symbol.replace(plain, plain.lower(), 1)
+    elif plain.endswith(("m7", "m7b5", "dim7", "m6", "madd9")):  # a minor seventh (sixth, ninth) written as one: vim7
+        kind = next(q for q in ("m7b5", "madd9", "dim7", "m7", "m6") if plain.endswith(q))
+        numeral = plain[: -len(kind)]
+        symbol = symbol.replace(numeral + kind, numeral.lower() + kind, 1)
     return symbol
 
 

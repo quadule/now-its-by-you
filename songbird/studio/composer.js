@@ -472,16 +472,22 @@
   }
   // ---- the chords (docs/STUDIO.md, "Changing the chords"): a tune line's chords, a list a bar, each a function
   // of the key (a numeral, a quality if named, a bass if not the root), changed everywhere the line is sung.
-  const CHORD = /^([#b]?)([iIvV]{1,3})(maj|m|dim|aug|sus2|sus4)?(?:\/([35]))?$/;
+  // as theory.QUALITIES: the triads, and the chords a lead sheet writes with a fourth tone (a seventh, a sixth, a ninth)
+  const QUALITIES = { maj: [0, 4, 7], m: [0, 3, 7], dim: [0, 3, 6], aug: [0, 4, 8], sus2: [0, 2, 7], sus4: [0, 5, 7],
+    7: [0, 4, 7, 10], maj7: [0, 4, 7, 11], m7: [0, 3, 7, 10], m7b5: [0, 3, 6, 10], dim7: [0, 3, 6, 9], 6: [0, 4, 7, 9],
+    m6: [0, 3, 7, 9], add9: [0, 4, 7, 14], madd9: [0, 3, 7, 14], "7sus4": [0, 5, 7, 10], "7sus2": [0, 2, 7, 10] };
+  const KINDS = Object.keys(QUALITIES).sort((a, b) => b.length - a.length).join("|");
+  const CHORD = new RegExp(`^([#b]?)([iIvV]{1,3})(${KINDS})?(?:\\/([357]))?$`);
   const NUMERALS = { i: 1, ii: 2, iii: 3, iv: 4, v: 5, vi: 6, vii: 7 };
-  const QUALITIES = { maj: [0, 4, 7], m: [0, 3, 7], dim: [0, 3, 6], aug: [0, 4, 8], sus2: [0, 2, 7], sus4: [0, 5, 7] };
+  const WITH_SEVENTH = new Set(["7", "maj7", "m7", "m7b5", "dim7", "7sus4", "7sus2"]); // may put its seventh in the bass
   function parseChord(symbol) {
     const m = CHORD.exec(String(symbol || "").trim());
     if (!m || !NUMERALS[m[2].toLowerCase()]) return null;
     return { root: m[1] + m[2].toUpperCase(), accidental: m[1], degree: NUMERALS[m[2].toLowerCase()], quality: m[3] || "", bass: Number(m[4] || 1) };
   }
   function chordSymbol(parts) {
-    return `${parts.root}${parts.quality || ""}${parts.bass && parts.bass !== 1 ? `/${parts.bass}` : ""}`;
+    const bass = parts.bass === 7 && !WITH_SEVENTH.has(parts.quality) ? 1 : parts.bass; // no seventh: no seventh below
+    return `${parts.root}${parts.quality || ""}${bass && bass !== 1 ? `/${bass}` : ""}`;
   }
   function chordPitches(symbol) {
     // as theory.chord_tones: the mode's triad on a plain numeral, major on a borrowed one, a named quality as named
@@ -517,7 +523,7 @@
     const bass = parseChord(symbol);
     pitches.forEach((pitch, i) => pluck(ctx, pitch, ctx.currentTime + 0.01 + i * 0.03, 1.1, 0.03));
     const tones = chordPitches(symbol);
-    if (tones.length) pluck(ctx, within(tones[{ 1: 0, 3: 1, 5: 2 }[bass.bass] || 0] % 12, 36), ctx.currentTime + 0.01, 1.2, 0.08, "bass");
+    if (tones.length) pluck(ctx, within(tones[{ 1: 0, 3: 1, 5: 2, 7: 3 }[bass.bass] || 0] % 12, 36), ctx.currentTime + 0.01, 1.2, 0.08, "bass");
   }
   function commitChords(bars, message) {
     const p = phrase();
@@ -550,9 +556,11 @@
     const counts = c.chords_per_bar || [1];
     const words = p.notes.filter((_, i) => h.rubs?.includes(i))
       .map((n) => displayWords(n.syllable).replace(/[^\p{L}\p{N}'’-]+$/u, "") || pitchName(pitchFor(n)));
-    const rub = h.rubs?.length
-      ? `${h.rubs.length} sung note${h.rubs.length === 1 ? "" : "s"} over it ${h.rubs.length === 1 ? "isn't" : "aren't"} in the chord (${words.join(", ")})${h.hard ? ", one a half step from it: a sharp rub" : ": passing notes, as folk harmony has them"}.`
-      : "Every sung note over it is in the chord.";
+    const rub = (h.rubs?.length
+      ? `${h.rubs.length} sung note${h.rubs.length === 1 ? "" : "s"} over it ${h.rubs.length === 1 ? "isn't" : "aren't"} in the chord (${words.join(", ")})${h.hard && !h.tension?.length ? ", one a half step from it: a sharp rub" : ": passing notes, as folk harmony has them"}.`
+      : "Every sung note over it is in the chord.")
+      // a person's seventh (sixth, ninth) a half step from the tune: its own sharp rub
+      + (h.tension?.length ? ` The chord's ${{ 9: "sixth", 14: "ninth", 2: "ninth" }[(QUALITIES[parts.quality] || [])[3]] || "seventh"} is a half step from the tune here (${p.notes.filter((_, i) => h.tension.includes(i)).map((n) => displayWords(n.syllable).replace(/[^\p{L}\p{N}'’-]+$/u, "") || pitchName(pitchFor(n))).join(", ")}): a sharp rub.` : "");
     const repeats = sections().flatMap((s) => s.phrases || []).filter((item) => item.id === p.id).length;
     return el("div", { class: "sbc-chord-card", role: "group", "aria-label": `Chord in bar ${h.bar + 1}` },
       el("div", { class: "sbc-note-heading" }, el("span", { class: "sbc-overline" }, `Bar ${h.bar + 1} · chord ${h.slot + 1} of ${p.chords[h.bar].length}`),
@@ -562,10 +570,14 @@
         el("div", { class: "sbc-button-group", role: "group", "aria-label": "Chords in the key" },
           choices.diatonic.map((d) => button(d.name, () => setChord(d.symbol), { class: `sbc-button${d.symbol.toUpperCase() === h.symbol.toUpperCase() ? " is-on" : ""}`,
             title: `${d.symbol}: ${d.name}`, "aria-pressed": d.symbol.toUpperCase() === h.symbol.toUpperCase() ? "true" : "false" })))),
+      choices.sevenths?.length ? el("div", { class: "sbc-chord-row" }, el("span", { class: "sbc-overline" }, "Sevenths"),
+        el("div", { class: "sbc-button-group", role: "group", "aria-label": "Seventh chords in the key" },
+          choices.sevenths.map((d) => button(d.name, () => setChord(d.symbol), { class: `sbc-button${d.symbol.toUpperCase() === h.symbol.toUpperCase() ? " is-on" : ""}`,
+            title: `${d.symbol}: ${d.name}`, "aria-pressed": d.symbol.toUpperCase() === h.symbol.toUpperCase() ? "true" : "false" })))) : null,
       el("div", { class: "sbc-chord-row" },
         select("Root", parts.root, choices.roots.map((r) => [r.numeral, `${r.numeral} · ${r.note}`]), (value) => setChord(chordSymbol({ ...parts, root: value })), { id: "sbc-chord-root" }),
         select("Quality", parts.quality, choices.qualities, (value) => setChord(chordSymbol({ ...parts, quality: value })), { id: "sbc-chord-quality" }),
-        select("Bass", parts.bass, choices.basses, (value) => setChord(chordSymbol({ ...parts, bass: Number(value) })), { id: "sbc-chord-bass" }),
+        select("Bass", parts.bass, choices.basses.filter(([b]) => b !== 7 || WITH_SEVENTH.has(parts.quality)), (value) => setChord(chordSymbol({ ...parts, bass: Number(value) })), { id: "sbc-chord-bass" }),
         select("Chords in this bar", p.chords[h.bar].length, counts.map((n) => [n, String(n)]), (value) => setChordsInBar(Number(value)), { id: "sbc-chord-count" }),
         button("♪", () => strum(h.symbol), { class: "sbc-button sbc-audition", "aria-label": `Hear ${h.name}` })),
       el("div", { class: "sbc-chord-row" },

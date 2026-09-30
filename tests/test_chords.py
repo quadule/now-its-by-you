@@ -39,7 +39,8 @@ def test_a_chord_names_a_quality_and_a_bass_and_a_plain_numeral_means_what_it_di
     assert chord_bass("I/3", "ionian") == 4 and chord_bass("V/5", "ionian") == 14 and chord_bass("vi", "ionian") == 9
     assert [chord_name(s, 62, "ionian") for s in ("I/3", "viidim", "Vsus4", "bVII", "iiim")] == [
         "D/F♯", "C♯°", "Asus4", "C", "F♯m"]
-    for bad in ("IM", "Vmin", "V7", "I/4", "VIII", "V/V"):  # case never carries a quality; no sevenths yet
+    for bad in ("IM", "Vmin", "V9", "I/4", "VIII", "V/V", "I6/7", "Vmaj/7"):  # case never carries a quality; no ninth
+        # chords; a seventh in the bass only where there is one
         with pytest.raises(ValueError):
             parse_symbol(bad)
 
@@ -58,13 +59,13 @@ def MINE_BARS():
 
 def test_chords_are_checked_whole_and_refused_with_why():
     clean, problems = E.check(G, {**MINE, "chords.v2": [["I"]], "chords.nope": [["I"]],
-                                  "chords.v3": [["I"], ["IV", "V", "I"]], "chords.r1": [["I"], ["V7"]],
+                                  "chords.v3": [["I"], ["IV", "V", "I"]], "chords.r1": [["I"], ["V9"]],
                                   "chords.r2": "I V"})
     assert clean == MINE
     why = {p["path"]: p["why"] for p in problems}
     assert why["chords.v2"] == "this line is 2 bars long: give chords for each"
     assert why["chords.nope"] == "there is no tune line called nope"
-    assert "1, 2 or 4 chords" in why["chords.v3"] and "'V7' isn't a chord" in why["chords.r1"]
+    assert "1, 2 or 4 chords" in why["chords.v3"] and "'V9' isn't a chord" in why["chords.r1"]
     assert "chords.r2" in why
     assert E.check(G, {"chords.v1": None}) == ({"chords.v1": None}, [])
 
@@ -124,3 +125,107 @@ def test_marked_as_yours_made_again_from_the_record_and_handed_down():
     assert child.composition.get("chords") == MINE_BARS()  # a person's chords pass on, as a person's melody does
     released = E.resolve(G, child, None, None, {"chords.v1": None})
     assert "chords" not in released.params.composition and released.marks["chords.v1"]["was"] == MINE["chords.v1"]
+
+
+# ---------------------------------------------------------------- sevenths, sixths and added ninths (2026-09-29)
+
+SEVENTHS = {"chords.r1": [["Imaj7"], ["IVmaj7", "V7"]], "chords.r2": [["I6", "vim7"], ["V7/7", "Iadd9"]]}
+
+
+def spans_of(params, symbol):
+    return [(a, z) for a, z, s in idioms.chord_times(C.harmonized(G, params), params) if s == symbol]
+
+
+def test_a_chord_can_have_a_seventh_a_sixth_or_an_added_ninth():
+    assert parse_symbol("V7") == (5, 0, "7", 1) and parse_symbol("V7/7") == (5, 0, "7", 7)
+    assert chord_tones("V7", "ionian") == (7, 11, 14, 17)  # the dominant seventh: A C# E G in D
+    assert chord_tones("V7", "aeolian") == (7, 11, 14, 17)  # the same in a minor song: a lead sheet's V7
+    assert chord_tones("iim7", "ionian") == (2, 5, 9, 12) and chord_tones("viim7b5", "ionian") == (11, 14, 17, 21)
+    assert chord_tones("Iadd9", "ionian") == (0, 4, 7, 14) and chord_tones("I6", "ionian") == (0, 4, 7, 9)
+    assert chord_bass("V7/7", "ionian") == 17  # the seventh in the bass
+    assert [chord_name(s, 62, "ionian") for s in ("V7", "iim7", "IVmaj7", "viim7b5", "viidim7", "I6", "vim6",
+                                                  "Iadd9", "iimadd9", "V7sus4", "V7sus2", "V7/7")] == [
+        "A7", "Em7", "Gmaj7", "C♯m7♭5", "C♯°7", "D6", "Bm6", "Dadd9", "Em(add9)", "A7sus4", "A7sus2", "A7/G"]
+    clean, problems = E.check(G, {**SEVENTHS, "chords.r3": [["vi", "IV6/7"], ["I", "V"]]})
+    assert clean == SEVENTHS and problems[0]["path"] == "chords.r3" and "/7" in problems[0]["why"]
+    choices = C.chord_choices(seed())
+    assert [c["name"] for c in choices["sevenths"]] == ["Dmaj7", "Em7", "F♯m7", "Gmaj7", "A7", "Bm7", "C♯m7♭5"]
+    assert [7, "seventh"] in choices["basses"] and "7" in choices["with_seventh"] and "6" not in choices["with_seventh"]
+
+
+def test_a_persons_seventh_is_required_in_the_guitars_shape_and_a_styles_colour_stays_optional():
+    from songbird import band
+
+    # a triad's shape, and a style's colour (passed as a fourth tone, need 3), are found exactly as before
+    assert band.guitar_voicing((2, 6, 9), 0) == band.guitar_voicing((2, 6, 9), 0, 3)
+    g7, _ = band.guitar_voicing((7, 11, 2, 5), 0, 4)  # a person's G7: required, the open shape 320001
+    assert [p for _, p in g7] == [43, 47, 50, 55, 59, 65]
+    cmaj7, _ = band.guitar_voicing((0, 4, 7, 11), 0, 4)
+    assert {p % 12 for _, p in cmaj7} == {0, 4, 7, 11} and cmaj7[0][1] % 12 == 0
+    for pcs in ((2, 6, 9, 0), (9, 0, 4, 7), (4, 7, 11, 2), (2, 6, 9, 11), (2, 6, 9, 4), (11, 2, 5, 9)):
+        for capo in (0, 2):
+            shape, _ = band.guitar_voicing(pcs, capo, 4)
+            assert {p % 12 for _, p in shape} == set(pcs) and shape[0][1] % 12 == pcs[0], (pcs, capo, shape)
+
+
+def test_the_band_and_the_choir_play_and_sing_the_seventh():
+    plain = replace(seed(), choir=2)
+    mine = E.Overrides(G, SEVENTHS).params(plain)
+    score = score_of(mine)
+    for symbol in ("IVmaj7", "V7", "vim7", "I6", "Iadd9"):
+        added = (mine.tonic + chord_tones(symbol, mine.mode)[3]) % 12
+        spans = spans_of(mine, symbol)
+        heard = {round(n.pitch) % 12 for n in score.notes if n.part in ("guitar", "harp", "lute")
+                 and any(a - 0.05 <= n.start < z - 0.05 for a, z in spans)}
+        assert added in heard, symbol  # the seventh (sixth, ninth) is played, not only named
+    # the bass takes the seventh where a person put it in the bass (A7/G: a G under it)
+    firsts = [next((n for n in score.part("bass") if a - 0.05 <= n.start < z - 0.05), None)
+              for a, z in spans_of(mine, "V7/7")]
+    assert [n for n in firsts if n] and all(round(n.pitch) % 12 == (mine.tonic + 5) % 12 for n in firsts if n)
+    # the choir sings the chords' tones, the seventh among them
+    bridge = E.Overrides(G, {"chords.b1": [["vim7"], ["Imaj7"]]}).params(plain)
+    sung = score_of(bridge)
+    for symbol in ("vim7", "Imaj7"):
+        tones = {(bridge.tonic + t) % 12 for t in chord_tones(symbol, bridge.mode)}
+        spans = spans_of(bridge, symbol)
+        choir = [n for n in sung.notes if n.part.startswith("choir")
+                 and any(a - 0.3 <= n.start < z - 0.3 for a, z in spans) and not any(z - 0.3 <= n.start < z for a, z in spans)]
+        assert choir and all(round(n.pitch) % 12 in tones for n in choir), symbol
+
+
+def test_a_styles_keys_voice_a_persons_seventh_and_draw_no_colour_on_top():
+    from songbird import style as style_mod
+
+    styled = choose_params(G, None, None, None, style="gospel")
+    mine = E.Overrides(G, {"chords.r1": [["Imaj7"], ["IVmaj7", "V7"]]}).params(styled)
+    score = score_of(mine)
+    lift = style_mod.lifted(G, score) if mine.style.lift else None
+    for symbol in ("Imaj7", "IVmaj7", "V7"):
+        chord = chord_tones(symbol, mine.mode)
+        tones = {(mine.tonic + t) % 12 for t in chord}
+        spans = [(a, z) for a, z in spans_of(mine, symbol) if lift is None or a < lift - 0.1]  # before a key lift
+        held = [n for n in score.notes if n.part in ("piano", "organ") and n.dur > 0.4
+                and any(a + 0.05 <= n.start < z - 0.05 for a, z in spans)]  # the comping's chords, not a fill's notes
+        assert held and (mine.tonic + chord[3]) % 12 in {round(n.pitch) % 12 for n in held}, symbol
+        assert {round(n.pitch) % 12 for n in held} <= tones, symbol  # no style colour drawn on top of it
+
+
+def test_a_seventh_against_the_tune_is_marked_and_the_midi_file_voices_and_names_it():
+    from songbird import midi
+
+    mine = E.Overrides(G, {"chords.r1": [["Imaj7"], ["IV", "V7"]]}).params(seed())  # r1 sings D over Imaj7
+    view = C.view(G, mine, None)
+    r1 = next(p for s in view["sections"] for p in s["phrases"] if p["id"] == "r1")
+    first = r1["harmony"][0]
+    assert first["name"] == "Dmaj7" and len(first["pcs"]) == 4
+    assert first["tension"] and first["hard"]  # its C# a half step under the sung D
+    assert all(r1["notes"][i]["degree"] % 7 == 1 for i in first["tension"])
+    data, _ = midi.from_score(G, mine, score_of(mine))
+    read = midi.parse(data)
+    chords = next(t for t in read["tracks"] if t["name"] == "Chords")
+    names = [x[2] for x in chords["texts"]]
+    assert "Dmaj7" in names and "A7" in names
+    ons: dict = {}
+    for on, _off, _ch, key, _vel in chords["notes"]:
+        ons.setdefault(on, set()).add(key)
+    assert max(len(keys) for keys in ons.values()) == 5  # the bass and the four tones

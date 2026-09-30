@@ -526,6 +526,39 @@ test("a chord is changed from its card: in the key, by root, quality and bass, s
   assert(!s.root.querySelector(".sbc-chord-card") && s.find(".sbc-inspector"), "a note selected: its inspector again");
 });
 
+test("a seventh from the card: the key's sevenths, a quality with a fourth tone, the seventh in the bass, the rub it makes", () => {
+  const view = score();
+  view.composition.chords_per_bar = [1, 2, 4];
+  view.composition.chord_choices = {
+    diatonic: [{ symbol: "I", name: "C" }, { symbol: "V", name: "G" }],
+    sevenths: [["Imaj7", "Cmaj7"], ["iim7", "Dm7"], ["V7", "G7"], ["viim7b5", "Bm7♭5"]].map(([symbol, name]) => ({ symbol, name })),
+    roots: ["I", "IV", "V"].map((numeral) => ({ numeral, note: "?" })),
+    qualities: [["", "as the key has it"], ["maj", "major"], ["7", "7"], ["maj7", "maj7"], ["6", "6"]],
+    basses: [[1, "root"], [3, "third"], [5, "fifth"], [7, "seventh"]],
+  };
+  for (const s of view.composition.sections) for (const p of s.phrases) {
+    p.chords_path = `chords.${p.id}`; p.chords_edited = true; p.song_chords = [["I", "V"]]; p.chords = [["Imaj7", "V7"]];
+    p.harmony = [{ bar: 0, slot: 0, start: 0, beats: 2, symbol: "Imaj7", name: "Cmaj7", pcs: [0, 4, 7, 11], bass: 0, rubs: [], hard: true, tension: [4] },
+      { bar: 0, slot: 1, start: 2, beats: 2, symbol: "V7", name: "G7", pcs: [7, 11, 2, 5], bass: 7, rubs: [], hard: false, tension: [] }];
+  }
+  const s = setup(view);
+  s.find('[data-chord="0.0"]').emit("click");
+  const card = s.find(".sbc-chord-card").textContent;
+  assert.match(card, /The chord's seventh is a half step from the tune here \(way\)/);
+  assert.equal(s.oscillators.filter((o) => o.type === "sawtooth").length, 4, "a seventh chord is strummed with its four tones");
+  const bass = s.find("#sbc-chord-bass");
+  assert.equal(bass.children.length, 4, "a seventh chord may put its seventh in the bass");
+  s.clickText("Dm7");
+  assert.deepEqual(s.commits.at(-1), { path: "chords.a1", value: [["iim7", "V7"]] });
+  s.find("#sbc-chord-bass").emit("change", { target: { value: "7" } });
+  assert.deepEqual(s.commits.at(-1).value, [["Imaj7/7", "V7"]]);
+  s.find("#sbc-chord-quality").emit("change", { target: { value: "6" } });
+  assert.deepEqual(s.commits.at(-1).value, [["I6", "V7"]], "a sixth has no seventh to put in the bass");
+  s.find('[data-chord="0.1"]').emit("click");
+  s.find("#sbc-chord-quality").emit("change", { target: { value: "maj" } });
+  assert.deepEqual(s.commits.at(-1).value, [["Imaj7", "Vmaj"]]);
+});
+
 test("a browser without Web Audio keeps editing available and explains how to listen", () => {
   const s = setup(score(), { audioAvailable: false });
   s.find("#sbc-play").emit("click");

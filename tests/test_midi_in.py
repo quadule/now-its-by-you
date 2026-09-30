@@ -146,6 +146,9 @@ def test_what_cant_be_taken_is_said():
     def seventh(name, notes):
         return notes + [[a, a + 480, 15, 72, 64]] if name == "Chords" else notes
 
+    def ninth(name, notes):
+        return notes + [[a, a + 480, 15, 72, 64], [a, a + 480, 15, 76, 64]] if name == "Chords" else notes
+
     def off_beat(name, notes):
         return notes + [[a + 240, a + 480, 15, 50, 64]] if name == "Chords" else notes
 
@@ -154,8 +157,10 @@ def test_what_cant_be_taken_is_said():
             return notes[1:]
         return notes
 
-    r = notesin.from_file(G, params, score_of(params), rewrite(data, seventh))
-    assert "seventh" in r["refused"][0]["why"] and "bar 1" in r["refused"][0]["why"]
+    r = notesin.from_file(G, params, score_of(params), rewrite(data, seventh))  # a seventh is taken: D7
+    assert [c["value"] for c in r["changes"] if c["path"] == "chords.v1"][0][0][0] == "I7" and not r["refused"]
+    r = notesin.from_file(G, params, score_of(params), rewrite(data, ninth))  # five notes aren't, yet
+    assert "ninth chord" in r["refused"][0]["why"] and "bar 1" in r["refused"][0]["why"]
     r = notesin.from_file(G, params, score_of(params), rewrite(data, off_beat))
     assert "off the beat in bar 1" in r["refused"][0]["why"]
     r = notesin.from_file(G, params, score_of(params), rewrite(data, drums_and_choir))
@@ -192,8 +197,13 @@ def test_a_chord_is_named_as_the_grammar_writes_it():
     assert name([57, 61, 64]) == "V" and name([60, 64, 67]) == "bVII"  # A; C, borrowed
     assert name([57, 61, 64], "aeolian") == "Vmaj"  # a dominant in a minor song
     assert name([62, 64, 69]) == "Isus2" and name([57, 62, 64]) == "Vsus4"
-    for pitches, why in (([62, 66, 69, 72], "seventh"), ([62, 69], "three"), ([], "no chord"),
-                         ([61, 62, 66, 69], "seventh"), ([60, 62, 66], "isn't a major")):
+    # four notes: a seventh, a sixth, an added ninth, the seventh in the bass; the root in the bass named first
+    assert name([62, 66, 69, 72]) == "I7" and name([61, 62, 66, 69]) == "Imaj7/7" and name([62, 66, 69, 73]) == "Imaj7"
+    assert name([59, 62, 66, 69]) == "vim7" and name([62, 66, 69, 71]) == "I6" and name([62, 64, 66, 69]) == "Iadd9"
+    assert name([55, 61, 64, 69]) == "V7/7" and name([61, 64, 67, 71]) == "viim7b5"
+    assert name([57, 61, 64, 67], "aeolian") == "V7"  # the dominant seventh in a minor song
+    for pitches, why in (([62, 66, 69, 72, 76], "ninth chord"), ([62, 69], "three"), ([], "no chord"),
+                         ([62, 63, 66, 69], "a seventh .* a sixth"), ([60, 62, 66], "isn't a major")):
         with pytest.raises(ValueError, match=why):
             name(pitches)
 

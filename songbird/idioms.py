@@ -258,6 +258,9 @@ class StyleContext(Context):
         """The colour this chord is meant to have (the style's vocabulary, as often as its harmony
         knob says), before the tune has its say at each moment."""
         if c.u0 not in self._colour:
+            if len(self.pcs(c.symbol)) > 3:  # a person's seventh (sixth, ninth) is its colour: none drawn on top
+                self._colour[c.u0] = None
+                return None
             rng = self.rand("colour", c.u0)
             options = self.sdef.colours_for(c.symbol)
             pick = None
@@ -299,8 +302,9 @@ class StyleContext(Context):
         never on a pitch being sung (moved an octave down, or left out), and with `chord`, a colour tone
         that would rub against the tune where it lands moved an octave down, or left for the third."""
         tones = list(dict.fromkeys(pcs))
-        if not root and len(tones) > 3:
-            tones = tones[1:]  # the bass has the root; the hands take the colour
+        if not root and len(tones) > 3:  # the bass has its note (the root, or a person's inversion's); the hands the rest
+            under = self.bass(chord.symbol) if chord is not None else tones[0]
+            tones = [t for t in tones if t != under] if under in tones else tones[1:]
         options = []
         for start in range(len(tones)):
             order = tones[start:] + tones[:start]
@@ -689,7 +693,7 @@ def fingering(ctx: StyleContext, part: str, c: Chord, u0: float, u1: float, i: i
     if part in GUITARS:
         capo = ctx.capo
         pcs = tuple(tones) if len(tones) >= 3 else (tones[0], tones[1], tones[1])
-        shape, _ = B.guitar_voicing(pcs, capo)
+        shape, _ = B.guitar_voicing(pcs, capo, len(ctx.pcs(c.symbol)))  # a person's added tone required
         sung = {p for _a, _b, p, _s in ctx.sung_in(u0, u1)}
         notes = [p - 12 if p in sung and p - 12 >= 40 + capo else p for _, p in shape]
         kept = [p for p in notes if ctx.fits(p, c, u0, u1)]  # a colour's string that would rub is left unplayed

@@ -51,7 +51,8 @@
   const FLAT = ["C", "Db", "D", "Eb", "E", "F", "Gb", "G", "Ab", "A", "Bb", "B"];
   const FLAT_KEYS = new Set([5, 10, 3, 8, 1]); // F, Bb, Eb, Ab, Db major: spelled with flats
   const WHITE = new Set([0, 2, 4, 5, 7, 9, 11]);
-  const QUAL = { maj: "", min: "m", dim: "dim", aug: "+", sus2: "sus2", sus4: "sus4" };
+  const QUAL = { maj: "", min: "m", dim: "dim", aug: "+", sus2: "sus2", sus4: "sus4", 7: "7", maj7: "maj7", m7: "m7",
+    m7b5: "m7b5", dim7: "dim7", 6: "6", m6: "m6", add9: "add9", madd9: "m(add9)", "7sus4": "7sus4", "7sus2": "7sus2" };
 
   let score = null;
   const keyPc = () => (((score.key.tonicPc + set.transpose) % 12) + 12) % 12;
