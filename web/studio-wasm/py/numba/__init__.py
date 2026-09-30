@@ -65,6 +65,8 @@ def _result(r, t: str | None):
             return r
         if t.startswith(("float", "Literal[float]")):
             return float(r)
+        if t == "uint64":
+            return np.uint64(int(r))
         if t.startswith(("int", "uint", "Literal[int]")):
             return int(r)
         if t == "bool":
@@ -74,6 +76,11 @@ def _result(r, t: str | None):
         m = _ARRAY.match(t or "")
         dtype = {"float64": np.float64, "int64": np.int64, "bool": np.bool_}.get(m.group(1), np.float64) if m \
             else _DT.get(r.t, np.float64)
+        if r.t == "c16":  # complex128, interleaved (re, im)
+            out = np.empty(int(r.n0), dtype=np.complex128)
+            if out.size:
+                _js.rt.store(out.__array_interface__["data"][0], r)
+            return out
         shape = (int(r.n0),) if r.nd == 1 else (int(r.n0), int(r.n1))
         out = np.empty(shape, dtype=np.float64)
         if out.size:  # copied by JS into a view of out (Pyodide's assign_to fails past 2 GiB of heap)
@@ -153,6 +160,7 @@ def njit(*args, **kw):
         spec = _MANIFEST.get(key)
         if key in OVERRIDES:
             fn, PORTED[key] = OVERRIDES[key](f), "wasm"
+            fn.py_func = f
         elif spec and spec.get("ok") and key not in DISABLED:
             fn, PORTED[key] = _js_kernel(key, f, spec), "js"
         else:

@@ -2,7 +2,7 @@
 be typed exactly as numba typed it; and keep a few real calls (arguments and results) of each kernel, to
 check a port against numba bit for bit.
 
-usage: uv run python web/studio-wasm/tools/kernel_types.py SONG TYPES.json [CALLS_DIR] [--whole]
+usage: uv run python web/studio-wasm/tools/kernel_types.py SONG TYPES.json [CALLS_DIR] [--whole] [--gauntlet]
   TYPES.json: {kernel: {"file", "line", "fastmath", "signatures": [{"args", "return", "locals"}]}}
   CALLS_DIR:  kernel.N.npz with a0..ak (the arguments, before the call), r (the result, or r0..rk for a
               tuple), and after_a0.. for arrays the kernel changed in place.
@@ -43,6 +43,15 @@ calls_dir = Path(sys.argv[3]) if len(sys.argv) > 3 and not sys.argv[3].startswit
 S.section(song, 2)
 if "--whole" in sys.argv:
     S.whole(song)
+if "--gauntlet" in sys.argv:  # every instrument, so every kernel is typed
+    sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "bench"))
+    import gauntlet  # noqa: E402
+
+    for name in gauntlet.I.known():
+        try:
+            gauntlet.render(name)
+        except Exception as err:  # noqa: BLE001
+            print(f"gauntlet {name}: {type(err).__name__}: {err}")
 
 # import every module with kernels, so the ones this song doesn't play are listed (untyped)
 import importlib  # noqa: E402

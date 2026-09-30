@@ -39,7 +39,7 @@ ALLOC = {"zeros": 0.0, "empty": 0.0, "ones": 1.0}
 RESERVED = {"var", "new", "in", "delete", "default", "function", "this", "case", "class", "const", "let",
             "switch", "typeof", "void", "instanceof", "do", "export", "import", "super", "throw", "catch",
             "enum", "arguments", "eval", "static", "yield", "await", "package", "private", "public"}
-DTYPES = {"float64": "f8", "int64": "i8", "int32": "i8", "intp": "i8", "bool_": "b1", "uint8": "i8",
+DTYPES = {"float64": "f8", "int64": "i8", "int32": "i8", "intp": "i8", "bool_": "b1", "bool": "b1", "uint8": "i8",
           "float32": "f4"}
 
 
@@ -95,6 +95,8 @@ class Kernel:
         self.tmp = 0
         self.consts: dict[str, str] = {}
         self.calls: set[str] = set()
+        self.big: set[str] = set()
+        self.global_arrays: dict[str, str] = {}  # name -> module constant  # uint64 scalars: BigInt, wrapped to 64 bits after each op
 
     # ---------------------------------------------------------------- analysis
     def analyse(self):
@@ -106,16 +108,18 @@ class Kernel:
                 self.arrays[name] = info
             elif t.startswith(("UniTuple", "Tuple")):
                 self.tuples.add(name)
+            elif t == "uint64":
+                self.big.add(name)
             elif re.match(r"u?int\d+|bool", t):
                 self.ints.add(name)
-            if "uint64" in t or "complex" in t:
+            if ("uint64" in t and t != "uint64") or "complex" in t:
                 raise Unsupported(f"{name}: {t}")
         if not self.types.known:
             self.guess()
         for node in ast.walk(self.fn):
             if isinstance(node, ast.Call):
                 f = ast.unparse(node.func)
-                if f in ("complex", "np.uint64", "np.complex128"):
+                if f in ("complex", "np.complex128") or (f == "np.uint64" and not self.types.known):
                     raise Unsupported(f"calls {f}")
 
     def guess(self):
@@ -191,7 +195,7 @@ class Kernel:
         locs -= set(self.params)
         decl = sorted(ident(n) for n in locs) + [f"$t{i}" for i in range(1, self.tmp + 1)]
         for n in sorted(self.arrays):
-            if n in locs or n in self.params:
+            if n in locs or n in self.params or n in self.global_arrays:
                 decl += [f"{n}_d", f"{n}_n0", f"{n}_n1", f"{n}_s0", f"{n}_s1"]
         out = []
         args = []
@@ -204,9 +208,13 @@ class Kernel:
         out.append(f"export function {js_name(self.key)}({', '.join(args)}) {{")
         if decl:
             out.append(f"  let {', '.join(decl)};")
+        for n, cname in sorted(self.global_arrays.items()):
+            out.append(f"  {n}_d = {cname}.d; {n}_n0 = {cname}.n0; {n}_n1 = {cname}.n1; {n}_s0 = {cname}.s0; {n}_s1 = {cname}.s1;")
         for p in self.params:
             if p in self.arrays:
                 out.append("  " + self.unpack(p))
+            if p in self.big:
+                out.append(f"  {ident(p)} = BigInt({ident(p)});")
         out.extend(body)
         out.append("}")
         return "\n".join(out)
@@ -320,15 +328,18 @@ class Kernel:
         a = [self.expr(x) for x in it.args]
         start, stop, step = ("0", a[0], "1") if len(a) == 1 else (a[0], a[1], a[2] if len(a) > 2 else "1")
         neg = len(it.args) > 2 and ast.unparse(it.args[2]).startswith("-")
-        if len(it.args) > 2 and not isinstance(it.args[2], (ast.Constant, ast.UnaryOp)):
-            raise Unsupported("range with a variable step")
         if not isinstance(s.target, ast.Name):
             raise Unsupported("for target")
         i = self.new_tmp()
         e = self.new_tmp()
         var = ident(s.target.id)
         cmp = ">" if neg else "<"
-        lines = [f"{pad}for ({i} = {start}, {e} = {stop}; {i} {cmp} {e}; {i} += {step}) {{", f"{pad}  {var} = {i};"]
+        if len(it.args) > 2 and not isinstance(it.args[2], (ast.Constant, ast.UnaryOp)):
+            st = self.new_tmp()  # a step known only when the loop starts: its sign decides the test
+            lines = [f"{pad}for ({i} = {start}, {e} = {stop}, {st} = {step}; ({st} > 0 ? {i} < {e} : {i} > {e}); {i} += {st}) {{",
+                     f"{pad}  {var} = {i};"]
+        else:
+            lines = [f"{pad}for ({i} = {start}, {e} = {stop}; {i} {cmp} {e}; {i} += {step}) {{", f"{pad}  {var} = {i};"]
         for b in s.body:
             lines += self.stmt(b, depth + 1)
         return lines + [f"{pad}}}"]
@@ -385,7 +396,51 @@ class Kernel:
         raise Unsupported("slice " + ast.unparse(sub))
 
     # ---------------------------------------------------------------- expressions
+    def is_big(self, e) -> bool:
+        if isinstance(e, ast.Name):
+            return e.id in self.big
+        if isinstance(e, ast.Call):
+            return ast.unparse(e.func) == "np.uint64"
+        if isinstance(e, ast.BinOp):
+            return (self.is_big(e.left) or self.is_big(e.right)) and not (self.is_floaty(e.left) or self.is_floaty(e.right))
+        return False
+
+    def is_floaty(self, e) -> bool:
+        if isinstance(e, ast.Constant):
+            return isinstance(e.value, float)
+        if isinstance(e, ast.Name):
+            return (self.types.get(e.id) or "").startswith("float")
+        if isinstance(e, ast.BinOp):
+            return isinstance(e.op, ast.Div) or self.is_floaty(e.left) or self.is_floaty(e.right)
+        if isinstance(e, ast.Subscript) and isinstance(e.value, ast.Name) and e.value.id in self.arrays:
+            return self.arrays[e.value.id][0] == "f8"
+        if isinstance(e, ast.Call):
+            return ast.unparse(e.func).partition(".")[2] in MATH or ast.unparse(e.func) == "float"
+        return False
+
+    def big_binop(self, op, l, r) -> str:
+        if self.is_floaty(l) or self.is_floaty(r):  # uint64 with a float: numba works in float64
+            L = f"Number({self.expr(l)})" if self.is_big(l) else self.expr(l)
+            R = f"Number({self.expr(r)})" if self.is_big(r) else self.expr(r)
+            ops = {ast.Add: "+", ast.Sub: "-", ast.Mult: "*", ast.Div: "/"}
+            if type(op) not in ops:
+                raise Unsupported("uint64 with float " + type(op).__name__)
+            return f"({L} {ops[type(op)]} {R})"
+        L = self.expr(l) if self.is_big(l) else f"BigInt({self.expr(l)})"
+        R = self.expr(r) if self.is_big(r) else f"BigInt({self.expr(r)})"
+        wrap = {ast.Add: "+", ast.Sub: "-", ast.Mult: "*", ast.LShift: "<<"}
+        plain = {ast.RShift: ">>", ast.BitAnd: "&", ast.BitOr: "|", ast.BitXor: "^", ast.FloorDiv: "/", ast.Mod: "%"}
+        if type(op) in wrap:
+            return f"BigInt.asUintN(64, {L} {wrap[type(op)]} {R})"
+        if type(op) in plain:
+            return f"({L} {plain[type(op)]} {R})"
+        if isinstance(op, ast.Div):
+            return f"(Number({L}) / Number({R}))"
+        raise Unsupported("uint64 " + type(op).__name__)
+
     def binop(self, op, l, r) -> str:
+        if self.is_big(l) or self.is_big(r):
+            return self.big_binop(op, l, r)
         L, R = self.expr(l), self.expr(r)
         if isinstance(op, ast.Add):
             return f"({L} + {R})"
@@ -446,6 +501,8 @@ class Kernel:
                 return e.id.lower()
             return self.name(e.id)
         if isinstance(e, ast.BinOp):
+            if self.is_array_expr(e):  # arrays, elementwise (1.0 / dts)
+                return self.vector(e)
             return self.binop(e.op, e.left, e.right)
         if isinstance(e, ast.UnaryOp):
             if isinstance(e.op, ast.USub):
@@ -465,7 +522,10 @@ class Kernel:
             for op, right in zip(e.ops, e.comparators):
                 if type(op) not in ops:
                     raise Unsupported(type(op).__name__)
-                parts.append(f"({E(left)} {ops[type(op)]} {E(right)})")
+                o = ops[type(op)]
+                if (self.is_big(left) or self.is_big(right)) and o in ("===", "!=="):
+                    o = o[:-1]  # BigInt == Number compares values
+                parts.append(f"({E(left)} {o} {E(right)})")
                 left = right
             return "(" + " && ".join(parts) + ")"
         if isinstance(e, ast.IfExp):
@@ -479,11 +539,11 @@ class Kernel:
                 if k is None:
                     raise Unsupported("shape index")
                 return f"{arr}_n{k}"
-            if isinstance(e.value, ast.Name) and (e.value.id in self.tuples or e.value.id not in self.arrays):
-                if e.value.id in self.arrays:
-                    pass
-                elif e.value.id in self.consts or e.value.id in self.tuples or self.global_value(e.value.id) is not None:
-                    return f"{E(e.value)}[{E(e.slice)}]"
+            if isinstance(e.value, ast.Name) and e.value.id not in self.arrays:
+                n = e.value.id
+                if n in self.tuples or (n not in self.params and not self.is_local(n)
+                                        and self.global_value(n) is not None and n not in self.arrays):
+                    return f"{E(e.value)}[{E(e.slice)}]"  # a tuple (a JS array), not an ndarray
             if self.has_slice(e):
                 return self.slice_view(e)
             n = e.value.id if isinstance(e.value, ast.Name) else None
@@ -539,6 +599,7 @@ class Kernel:
             MODULE_CONSTS[cname] = (f"const {cname} = rt.array([{data}], {nd}, {v.shape[0]}, {n1}, "
                                     f"'{'f8' if v.dtype.kind == 'f' else 'i8'}');")
             self.arrays[n] = ("f8" if v.dtype.kind == "f" else "i8", nd, "C")
+            self.global_arrays[n] = cname
             js = cname
         elif isinstance(v, tuple) and all(isinstance(x, (int, float)) for x in v):
             js = "[" + ", ".join(self.expr(ast.Constant(x)) for x in v) + "]"
@@ -571,7 +632,12 @@ class Kernel:
         if f in ("int",):
             return f"Math.trunc({args[0]})"
         if f == "float":
-            return f"(+{args[0]})"
+            return f"Number({args[0]})" if self.is_big(e.args[0]) else f"(+{args[0]})"
+        if f == "np.uint64":
+            a = e.args[0]
+            if isinstance(a, ast.Constant) and isinstance(a.value, int):
+                return f"{a.value}n"
+            return f"BigInt.asUintN(64, BigInt({args[0]}))"
         if f == "bool":
             return f"(!!{args[0]})"
         if f == "abs":
@@ -588,11 +654,12 @@ class Kernel:
         if f == "round":
             return f"rt.pyround({args[0]})"
         mod, _, attr = f.partition(".")
+        if mod in ("np", "numpy") and (attr in MATH or attr in ("minimum", "maximum")) \
+                and any(self.is_array_expr(a) for a in e.args):
+            return self.vector(e)
         if mod in ("np", "math", "numpy") and attr in MATH:
-            if len(e.args) == 1 and self.is_array_expr(e.args[0]):
-                raise Unsupported(f"{f} of an array")
             return f"{MATH[attr]}({', '.join(args)})"
-        if mod in ("np", "numpy") and attr in ("minimum", "maximum") and not any(self.is_array_expr(a) for a in e.args):
+        if mod in ("np", "numpy") and attr in ("minimum", "maximum"):
             return f"rt.{'pmin' if attr == 'minimum' else 'pmax'}({', '.join(args)})"
         if mod in ("np", "numpy") and attr in (*ALLOC, "full", "empty_like", "zeros_like"):
             dtype = "f8"
@@ -625,6 +692,46 @@ class Kernel:
             return f"Math.trunc({args[0]})"
         raise Unsupported(f"call {f}")
 
+    def vector(self, e) -> str:
+        """A numpy expression over 1-d arrays (np.cos(2 * np.pi * freqs / sr), np.minimum(a / sr, 0.25)), as
+        numba's ufunc loops work it out: element by element, the same scalar operations."""
+        length = self.vector_length(e)
+        return f"rt.vec({length}, ($i) => {self.elem(e)})"
+
+    def vector_length(self, e) -> str:
+        for node in ast.walk(e):
+            if isinstance(node, ast.Name) and node.id in self.arrays and self.arrays[node.id][1] == 1:
+                return f"{node.id}_n0"
+            if isinstance(node, ast.Subscript) and isinstance(node.value, ast.Name) and node.value.id in self.arrays \
+                    and self.arrays[node.value.id][1] == 2 and len(self.indices(node)) == 1:
+                return f"{node.value.id}_n1"
+        raise Unsupported("array expression " + ast.unparse(e))
+
+    def elem(self, e) -> str:
+        if isinstance(e, ast.Name) and e.id in self.arrays:
+            if self.arrays[e.id][1] != 1:
+                raise Unsupported("2d array expression")
+            return f"{e.id}_d[$i * {e.id}_s0]"
+        if isinstance(e, ast.Subscript) and isinstance(e.value, ast.Name) and e.value.id in self.arrays \
+                and self.arrays[e.value.id][1] == 2 and len(self.indices(e)) == 1:
+            n = e.value.id
+            return f"{n}_d[({self.expr(e.slice)}) * {n}_s0 + $i * {n}_s1]"
+        if isinstance(e, ast.BinOp) and self.is_array_expr(e):
+            ops = {ast.Add: "+", ast.Sub: "-", ast.Mult: "*", ast.Div: "/"}
+            if type(e.op) not in ops:
+                raise Unsupported("array " + type(e.op).__name__)
+            return f"({self.elem(e.left)} {ops[type(e.op)]} {self.elem(e.right)})"
+        if isinstance(e, ast.Call) and any(self.is_array_expr(a) for a in e.args):
+            f = ast.unparse(e.func)
+            attr = f.partition(".")[2]
+            inner = ", ".join(self.elem(a) for a in e.args)
+            if attr in MATH:
+                return f"{MATH[attr]}({inner})"
+            if attr in ("minimum", "maximum"):  # numpy's: NaN wins; otherwise the lesser (greater)
+                return f"rt.{'npmin' if attr == 'minimum' else 'npmax'}({inner})"
+            raise Unsupported("array call " + f)
+        return self.expr(e)
+
     def is_array_expr(self, a) -> bool:
         if isinstance(a, ast.Name):
             return a.id in self.arrays
@@ -633,10 +740,15 @@ class Kernel:
                                          and len(self.indices(a)) < self.arrays[a.value.id][1])
         if isinstance(a, ast.BinOp):
             return self.is_array_expr(a.left) or self.is_array_expr(a.right)
+        if isinstance(a, ast.Call):
+            f = ast.unparse(a.func)
+            if f.startswith(("np.", "numpy.")) and f.partition(".")[2] in (*MATH, "minimum", "maximum"):
+                return any(self.is_array_expr(x) for x in a.args)
         return False
 
 
 ALL: dict[str, tuple] = {}
+HAND = ("synth.piano._spectrum", "synth.struck._bank")  # complex numbers: ported by hand, kernels/hand.mjs
 MODULE_CONSTS: dict[str, str] = {}
 
 
@@ -671,6 +783,11 @@ def main():
     for key, (fn, modname, names, fastmath, path) in ALL.items():
         module = importlib.import_module(modname)
         k = Kernel(key, fn, module, {n: v for n, v in names.items()}, types, fastmath)
+        if key in HAND:
+            arrays = {p: array_info(k.types.get(p)) for p in k.params if array_info(k.types.get(p) or "")}
+            manifest[key] = {"js": js_name(key), "ok": True, "typed": k.types.known, "ret": k.types.ret,
+                             "params": k.params, "arrays": arrays, "fastmath": fastmath, "calls": [], "hand": True}
+            continue
         try:
             src = k.translate()
             chunks.append(f"// {path.relative_to(ROOT)}:{fn.lineno}{'  (fastmath in numba)' if fastmath else ''}\n{src}\n")
@@ -690,7 +807,7 @@ def main():
     ok = {m["js"] for m in manifest.values() if m["ok"]}
     kept = [c for c in chunks if re.search(r"export function (\S+)\(", c).group(1) in ok]
     head = ("// Generated by web/studio-wasm/tools/transpile.py from songbird's @njit kernels. Do not edit.\n"
-            "import * as rt from './rt.mjs';\n")
+            "import * as rt from './rt.mjs';\nexport * from './hand.mjs';\n")
     (KERNELS / "kernels.gen.mjs").write_text(head + "\n".join(MODULE_CONSTS.values()) + "\n\n" + "\n".join(kept))
     (KERNELS / "manifest.json").write_text(json.dumps(manifest, indent=1) + "\n")
     good = sum(m["ok"] for m in manifest.values())

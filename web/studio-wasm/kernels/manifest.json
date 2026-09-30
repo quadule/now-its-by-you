@@ -2,8 +2,8 @@
  "synth.accordion._arm": {
   "js": "k_synth$accordion$_arm",
   "ok": true,
-  "typed": false,
-  "ret": null,
+  "typed": true,
+  "ret": "array(float64, 1d, C)",
   "params": [
    "x",
    "up",
@@ -13,7 +13,7 @@
    "x": [
     "f8",
     1,
-    "A"
+    "C"
    ]
   },
   "fastmath": false,
@@ -22,8 +22,8 @@
  "synth.amp._spring": {
   "js": "k_synth$amp$_spring",
   "ok": true,
-  "typed": false,
-  "ret": null,
+  "typed": true,
+  "ret": "array(float64, 1d, C)",
   "params": [
    "n",
    "start",
@@ -40,12 +40,12 @@
    "lp": [
     "f8",
     2,
-    "A"
+    "C"
    ],
    "delay": [
     "f8",
     1,
-    "A"
+    "C"
    ]
   },
   "fastmath": false,
@@ -54,8 +54,8 @@
  "synth.amp._dot": {
   "js": "k_synth$amp$_dot",
   "ok": true,
-  "typed": false,
-  "ret": null,
+  "typed": true,
+  "ret": "float64",
   "params": [
    "a",
    "b",
@@ -66,12 +66,12 @@
    "a": [
     "f8",
     1,
-    "A"
+    "C"
    ],
    "b": [
     "f8",
     1,
-    "A"
+    "C"
    ]
   },
   "fastmath": false,
@@ -80,8 +80,8 @@
  "synth.amp._run": {
   "js": "k_synth$amp$_run",
   "ok": true,
-  "typed": false,
-  "ret": null,
+  "typed": true,
+  "ret": "array(float64, 1d, C)",
   "params": [
    "x",
    "rev",
@@ -97,47 +97,47 @@
    "x": [
     "f8",
     1,
-    "A"
+    "C"
    ],
    "rev": [
     "f8",
     1,
-    "A"
+    "C"
    ],
    "up": [
     "f8",
-    1,
-    "A"
+    2,
+    "C"
    ],
    "down": [
     "f8",
     1,
-    "A"
+    "C"
    ],
    "p": [
     "f8",
     1,
-    "A"
+    "C"
    ],
    "tab1": [
     "f8",
     1,
-    "A"
+    "C"
    ],
    "tab2": [
     "f8",
     1,
-    "A"
+    "C"
    ],
    "drop2": [
     "f8",
     1,
-    "A"
+    "C"
    ],
    "sos": [
     "f8",
     2,
-    "A"
+    "C"
    ]
   },
   "fastmath": false,
@@ -148,8 +148,8 @@
  "synth.amp._shape": {
   "js": "k_synth$amp$_shape",
   "ok": true,
-  "typed": false,
-  "ret": null,
+  "typed": true,
+  "ret": "array(float64, 1d, C)",
   "params": [
    "x",
    "up",
@@ -161,17 +161,17 @@
    "x": [
     "f8",
     1,
-    "A"
+    "C"
    ],
    "up": [
     "f8",
-    1,
-    "A"
+    2,
+    "C"
    ],
    "down": [
     "f8",
     1,
-    "A"
+    "C"
    ]
   },
   "fastmath": false,
@@ -182,8 +182,8 @@
  "synth.analog._sat": {
   "js": "k_synth$analog$_sat",
   "ok": true,
-  "typed": false,
-  "ret": null,
+  "typed": true,
+  "ret": "float64",
   "params": [
    "v"
   ],
@@ -194,8 +194,8 @@
  "synth.analog._ladder_step": {
   "js": "k_synth$analog$_ladder_step",
   "ok": true,
-  "typed": false,
-  "ret": null,
+  "typed": true,
+  "ret": "float64",
   "params": [
    "x",
    "G",
@@ -206,7 +206,7 @@
    "st": [
     "f8",
     1,
-    "A"
+    "C"
    ]
   },
   "fastmath": true,
@@ -245,8 +245,8 @@
  "synth.analog._wave": {
   "js": "k_synth$analog$_wave",
   "ok": true,
-  "typed": false,
-  "ret": null,
+  "typed": true,
+  "ret": "float64",
   "params": [
    "kind",
    "q",
@@ -260,17 +260,144 @@
   ]
  },
  "synth.analog._voice": {
-  "js": null,
-  "ok": false,
-  "why": "calls np.uint64",
-  "typed": false,
-  "fastmath": true
+  "js": "k_synth$analog$_voice",
+  "ok": true,
+  "typed": true,
+  "ret": "int64",
+  "params": [
+   "buf",
+   "at",
+   "n",
+   "on",
+   "off",
+   "pitch",
+   "retrig",
+   "glide",
+   "bend",
+   "amp",
+   "env",
+   "famt",
+   "fbase",
+   "kinds",
+   "levels",
+   "shifted",
+   "ratio",
+   "pw",
+   "phases",
+   "gcoef",
+   "bcoef",
+   "vib",
+   "track",
+   "pref",
+   "k",
+   "drive",
+   "noise",
+   "seed",
+   "inv_sr2"
+  ],
+  "arrays": {
+   "buf": [
+    "f8",
+    1,
+    "C"
+   ],
+   "on": [
+    "i8",
+    1,
+    "C"
+   ],
+   "off": [
+    "i8",
+    1,
+    "C"
+   ],
+   "pitch": [
+    "f8",
+    1,
+    "C"
+   ],
+   "retrig": [
+    "b1",
+    1,
+    "C"
+   ],
+   "glide": [
+    "b1",
+    1,
+    "C"
+   ],
+   "bend": [
+    "b1",
+    1,
+    "C"
+   ],
+   "amp": [
+    "f8",
+    1,
+    "C"
+   ],
+   "env": [
+    "f8",
+    2,
+    "C"
+   ],
+   "famt": [
+    "f8",
+    1,
+    "C"
+   ],
+   "fbase": [
+    "f8",
+    1,
+    "C"
+   ],
+   "kinds": [
+    "i8",
+    1,
+    "C"
+   ],
+   "levels": [
+    "f8",
+    1,
+    "C"
+   ],
+   "shifted": [
+    "b1",
+    1,
+    "C"
+   ],
+   "ratio": [
+    "f8",
+    2,
+    "C"
+   ],
+   "pw": [
+    "f8",
+    2,
+    "C"
+   ],
+   "phases": [
+    "f8",
+    1,
+    "C"
+   ],
+   "vib": [
+    "f8",
+    1,
+    "C"
+   ]
+  },
+  "fastmath": true,
+  "calls": [
+   "synth.analog._ladder_step",
+   "synth.analog._wave"
+  ]
  },
  "synth.analog._sub": {
   "js": "k_synth$analog$_sub",
   "ok": true,
-  "typed": false,
-  "ret": null,
+  "typed": true,
+  "ret": "int64",
   "params": [
    "buf",
    "at",
@@ -296,52 +423,52 @@
    "buf": [
     "f8",
     1,
-    "A"
+    "C"
    ],
    "on": [
-    "f8",
+    "i8",
     1,
-    "A"
+    "C"
    ],
    "off": [
-    "f8",
+    "i8",
     1,
-    "A"
+    "C"
    ],
    "pitch": [
     "f8",
     1,
-    "A"
+    "C"
    ],
    "retrig": [
-    "f8",
+    "b1",
     1,
-    "A"
+    "C"
    ],
    "glide": [
-    "f8",
+    "b1",
     1,
-    "A"
+    "C"
    ],
    "amp": [
     "f8",
     1,
-    "A"
+    "C"
    ],
    "env": [
     "f8",
     2,
-    "A"
+    "C"
    ],
    "thump": [
     "f8",
     1,
-    "A"
+    "C"
    ],
    "drift": [
     "f8",
     1,
-    "A"
+    "C"
    ]
   },
   "fastmath": true,
@@ -350,8 +477,8 @@
  "synth.analog._delays": {
   "js": "k_synth$analog$_delays",
   "ok": true,
-  "typed": false,
-  "ret": null,
+  "typed": true,
+  "ret": "array(float64, 2d, C)",
   "params": [
    "x",
    "d1",
@@ -361,17 +488,17 @@
    "x": [
     "f8",
     1,
-    "A"
+    "C"
    ],
    "d1": [
     "f8",
     1,
-    "A"
+    "C"
    ],
    "d2": [
     "f8",
     1,
-    "A"
+    "C"
    ]
   },
   "fastmath": true,
@@ -446,8 +573,8 @@
  "synth.bowed._read_masked": {
   "js": "k_synth$bowed$_read_masked",
   "ok": true,
-  "typed": false,
-  "ret": null,
+  "typed": true,
+  "ret": "float64",
   "params": [
    "buf",
    "pos",
@@ -457,7 +584,7 @@
    "buf": [
     "f8",
     1,
-    "A"
+    "C"
    ]
   },
   "fastmath": false,
@@ -466,8 +593,8 @@
  "synth.bowed.run_primed": {
   "js": "k_synth$bowed$run_primed",
   "ok": true,
-  "typed": false,
-  "ret": null,
+  "typed": true,
+  "ret": "array(float64, 1d, C)",
   "params": [
    "period",
    "bridge_len",
@@ -483,47 +610,47 @@
    "period": [
     "f8",
     1,
-    "A"
+    "C"
    ],
    "bridge_len": [
     "f8",
     1,
-    "A"
+    "C"
    ],
    "bow_v": [
     "f8",
     1,
-    "A"
+    "C"
    ],
    "grip": [
     "f8",
     1,
-    "A"
+    "C"
    ],
    "noise": [
     "f8",
     1,
-    "A"
+    "C"
    ],
    "pole": [
     "f8",
     1,
-    "A"
+    "C"
    ],
    "gain": [
     "f8",
     1,
-    "A"
+    "C"
    ],
    "at": [
-    "f8",
+    "i8",
     1,
-    "A"
+    "C"
    ],
    "velocity": [
     "f8",
     1,
-    "A"
+    "C"
    ]
   },
   "fastmath": false,
@@ -534,8 +661,8 @@
  "synth.chip._staircase": {
   "js": "k_synth$chip$_staircase",
   "ok": true,
-  "typed": false,
-  "ret": null,
+  "typed": true,
+  "ret": "array(float64, 1d, C)",
   "params": [
    "times",
    "levels",
@@ -545,12 +672,12 @@
    "times": [
     "f8",
     1,
-    "A"
+    "C"
    ],
    "levels": [
     "f8",
     1,
-    "A"
+    "C"
    ]
   },
   "fastmath": false,
@@ -561,8 +688,8 @@
  "synth.chip._pulse_events": {
   "js": "k_synth$chip$_pulse_events",
   "ok": true,
-  "typed": false,
-  "ret": null,
+  "typed": true,
+  "ret": "UniTuple(array(float64, 1d, C) x 2)",
   "params": [
    "t0",
    "t1",
@@ -577,42 +704,42 @@
    "t0": [
     "f8",
     1,
-    "A"
+    "C"
    ],
    "t1": [
     "f8",
     1,
-    "A"
+    "C"
    ],
    "hz": [
     "f8",
     1,
-    "A"
+    "C"
    ],
    "vol": [
-    "f8",
+    "i8",
     1,
-    "A"
+    "C"
    ],
    "reset": [
-    "f8",
+    "b1",
     1,
-    "A"
+    "C"
    ],
    "lo": [
     "f8",
     1,
-    "A"
+    "C"
    ],
    "hi": [
     "f8",
     1,
-    "A"
+    "C"
    ],
    "table": [
     "f8",
     1,
-    "A"
+    "C"
    ]
   },
   "fastmath": false,
@@ -621,8 +748,8 @@
  "synth.chip._triangle_events": {
   "js": "k_synth$chip$_triangle_events",
   "ok": true,
-  "typed": false,
-  "ret": null,
+  "typed": true,
+  "ret": "Tuple(array(float64, 1d, C), array(float64, 1d, C), float64)",
   "params": [
    "t0",
    "t1",
@@ -633,17 +760,17 @@
    "t0": [
     "f8",
     1,
-    "A"
+    "C"
    ],
    "t1": [
     "f8",
     1,
-    "A"
+    "C"
    ],
    "hz": [
     "f8",
     1,
-    "A"
+    "C"
    ]
   },
   "fastmath": false,
@@ -710,8 +837,8 @@
  "synth.chip._mix_tnd": {
   "js": "k_synth$chip$_mix_tnd",
   "ok": true,
-  "typed": false,
-  "ret": null,
+  "typed": true,
+  "ret": "UniTuple(array(float64, 1d, C) x 2)",
   "params": [
    "tt",
    "tv",
@@ -724,33 +851,82 @@
    "tt": [
     "f8",
     1,
-    "A"
+    "C"
    ],
    "tv": [
     "f8",
     1,
-    "A"
+    "C"
    ],
    "nt": [
     "f8",
     1,
-    "A"
+    "C"
    ],
    "nv": [
     "f8",
     1,
-    "A"
+    "C"
    ]
   },
   "fastmath": false,
   "calls": []
  },
  "synth.cymbals._fdn": {
-  "js": null,
-  "ok": false,
-  "why": "range with a variable step",
-  "typed": false,
-  "fastmath": false
+  "js": "k_synth$cymbals$_fdn",
+  "ok": true,
+  "typed": true,
+  "ret": "array(float64, 2d, C)",
+  "params": [
+   "x",
+   "lines",
+   "gains",
+   "poles",
+   "taps",
+   "signs",
+   "damp",
+   "sr",
+   "size"
+  ],
+  "arrays": {
+   "x": [
+    "f8",
+    1,
+    "C"
+   ],
+   "lines": [
+    "i8",
+    1,
+    "C"
+   ],
+   "gains": [
+    "f8",
+    1,
+    "C"
+   ],
+   "poles": [
+    "f8",
+    1,
+    "C"
+   ],
+   "taps": [
+    "f8",
+    2,
+    "C"
+   ],
+   "signs": [
+    "f8",
+    1,
+    "C"
+   ],
+   "damp": [
+    "f8",
+    1,
+    "C"
+   ]
+  },
+  "fastmath": false,
+  "calls": []
  },
  "synth.drum._ring": {
   "js": "k_synth$drum$_ring",
@@ -815,8 +991,8 @@
  "synth.drummachine._square": {
   "js": "k_synth$drummachine$_square",
   "ok": true,
-  "typed": false,
-  "ret": null,
+  "typed": true,
+  "ret": "float64",
   "params": [
    "p",
    "d",
@@ -830,24 +1006,102 @@
   ]
  },
  "synth.drummachine._bank": {
-  "js": null,
-  "ok": false,
-  "why": "call np.minimum",
-  "typed": false,
-  "fastmath": false
+  "js": "k_synth$drummachine$_bank",
+  "ok": true,
+  "typed": true,
+  "ret": "array(float64, 1d, C)",
+  "params": [
+   "freqs",
+   "duties",
+   "phases",
+   "n",
+   "sr"
+  ],
+  "arrays": {
+   "freqs": [
+    "f8",
+    1,
+    "C"
+   ],
+   "duties": [
+    "f8",
+    1,
+    "C"
+   ],
+   "phases": [
+    "f8",
+    1,
+    "C"
+   ]
+  },
+  "fastmath": false,
+  "calls": [
+   "synth.drummachine._square"
+  ]
  },
  "synth.drummachine._hat808": {
-  "js": null,
-  "ok": false,
-  "why": "call np.minimum",
-  "typed": false,
-  "fastmath": false
+  "js": "k_synth$drummachine$_hat808",
+  "ok": true,
+  "typed": true,
+  "ret": "array(float64, 1d, C)",
+  "params": [
+   "freqs",
+   "duties",
+   "phases",
+   "pre",
+   "n",
+   "sr",
+   "bp",
+   "norm",
+   "env",
+   "vt",
+   "theta",
+   "lower",
+   "alpha",
+   "hp"
+  ],
+  "arrays": {
+   "freqs": [
+    "f8",
+    1,
+    "C"
+   ],
+   "duties": [
+    "f8",
+    1,
+    "C"
+   ],
+   "phases": [
+    "f8",
+    1,
+    "C"
+   ],
+   "bp": [
+    "f8",
+    1,
+    "C"
+   ],
+   "env": [
+    "f8",
+    1,
+    "C"
+   ],
+   "hp": [
+    "f8",
+    1,
+    "C"
+   ]
+  },
+  "fastmath": false,
+  "calls": [
+   "synth.drummachine._square"
+  ]
  },
  "synth.epiano._magnetic": {
   "js": "k_synth$epiano$_magnetic",
   "ok": true,
-  "typed": false,
-  "ret": null,
+  "typed": true,
+  "ret": "none",
   "params": [
    "x",
    "u0",
@@ -859,12 +1113,12 @@
    "x": [
     "f8",
     1,
-    "A"
+    "C"
    ],
    "out": [
     "f8",
     1,
-    "A"
+    "C"
    ]
   },
   "fastmath": false,
@@ -873,8 +1127,8 @@
  "synth.epiano._electrostatic": {
   "js": "k_synth$epiano$_electrostatic",
   "ok": true,
-  "typed": false,
-  "ret": null,
+  "typed": true,
+  "ret": "none",
   "params": [
    "x",
    "limit",
@@ -886,12 +1140,12 @@
    "x": [
     "f8",
     1,
-    "A"
+    "C"
    ],
    "out": [
     "f8",
     1,
-    "A"
+    "C"
    ]
   },
   "fastmath": false,
@@ -900,8 +1154,8 @@
  "synth.fretboard._two_planes": {
   "js": "k_synth$fretboard$_two_planes",
   "ok": true,
-  "typed": false,
-  "ret": null,
+  "typed": true,
+  "ret": "array(float64, 1d, C)",
   "params": [
    "xa",
    "xb",
@@ -920,32 +1174,32 @@
    "xa": [
     "f8",
     1,
-    "A"
+    "C"
    ],
    "xb": [
     "f8",
     1,
-    "A"
+    "C"
    ],
    "da": [
     "f8",
     1,
-    "A"
+    "C"
    ],
    "db": [
     "f8",
     1,
-    "A"
+    "C"
    ],
    "ga": [
     "f8",
     1,
-    "A"
+    "C"
    ],
    "gb": [
     "f8",
     1,
-    "A"
+    "C"
    ]
   },
   "fastmath": false,
@@ -954,8 +1208,8 @@
  "synth.fretboard._combed": {
   "js": "k_synth$fretboard$_combed",
   "ok": true,
-  "typed": false,
-  "ret": null,
+  "typed": true,
+  "ret": "array(float64, 1d, C)",
   "params": [
    "y",
    "delays",
@@ -966,22 +1220,22 @@
    "y": [
     "f8",
     1,
-    "A"
+    "C"
    ],
    "delays": [
     "f8",
     1,
-    "A"
+    "C"
    ],
    "weights": [
     "f8",
     1,
-    "A"
+    "C"
    ],
    "scale": [
     "f8",
     1,
-    "A"
+    "C"
    ]
   },
   "fastmath": false,
@@ -990,8 +1244,8 @@
  "synth.fretwork._string": {
   "js": "k_synth$fretwork$_string",
   "ok": true,
-  "typed": false,
-  "ret": null,
+  "typed": true,
+  "ret": "array(float64, 1d, C)",
   "params": [
    "n",
    "ctrl",
@@ -1014,57 +1268,57 @@
    "delay": [
     "f8",
     1,
-    "A"
+    "C"
    ],
    "gain_a": [
     "f8",
     1,
-    "A"
+    "C"
    ],
    "gain_b": [
     "f8",
     1,
-    "A"
+    "C"
    ],
    "omega": [
     "f8",
     1,
-    "A"
+    "C"
    ],
    "pull": [
     "f8",
     1,
-    "A"
+    "C"
    ],
    "at": [
-    "f8",
+    "i8",
     1,
-    "A"
+    "C"
    ],
    "first": [
-    "f8",
+    "i8",
     1,
-    "A"
+    "C"
    ],
    "count": [
-    "f8",
+    "i8",
     1,
-    "A"
+    "C"
    ],
    "amount": [
     "f8",
     1,
-    "A"
+    "C"
    ],
    "pool": [
     "f8",
     1,
-    "A"
+    "C"
    ],
    "hp": [
     "f8",
     1,
-    "A"
+    "C"
    ]
   },
   "fastmath": false,
@@ -1401,8 +1655,8 @@
  "synth.kit._contacts": {
   "js": "k_synth$kit$_contacts",
   "ok": true,
-  "typed": false,
-  "ret": null,
+  "typed": true,
+  "ret": "array(float64, 1d, C)",
   "params": [
    "d",
    "sr",
@@ -1414,17 +1668,17 @@
    "d": [
     "f8",
     1,
-    "A"
+    "C"
    ],
    "omegas": [
     "f8",
     1,
-    "A"
+    "C"
    ],
    "preloads": [
     "f8",
     1,
-    "A"
+    "C"
    ]
   },
   "fastmath": false,
@@ -1433,8 +1687,8 @@
  "synth.kit._grains": {
   "js": "k_synth$kit$_grains",
   "ok": true,
-  "typed": false,
-  "ret": null,
+  "typed": true,
+  "ret": "array(float64, 1d, C)",
   "params": [
    "strengths",
    "noise",
@@ -1446,17 +1700,17 @@
    "strengths": [
     "f8",
     1,
-    "A"
+    "C"
    ],
    "noise": [
     "f8",
     1,
-    "A"
+    "C"
    ],
    "offsets": [
-    "f8",
+    "i8",
     1,
-    "A"
+    "C"
    ]
   },
   "fastmath": false,
@@ -1503,8 +1757,8 @@
  "synth.modal.ring": {
   "js": "k_synth$modal$ring",
   "ok": true,
-  "typed": false,
-  "ret": null,
+  "typed": true,
+  "ret": "int64",
   "params": [
    "out",
    "start",
@@ -1524,7 +1778,7 @@
    "out": [
     "f8",
     2,
-    "A"
+    "C"
    ],
    "force": [
     "f8",
@@ -1534,49 +1788,122 @@
    "freqs": [
     "f8",
     1,
-    "A"
+    "C"
    ],
    "gain_re": [
     "f8",
     1,
-    "A"
+    "C"
    ],
    "gain_im": [
     "f8",
     1,
-    "A"
+    "C"
    ],
    "t60": [
     "f8",
     1,
-    "A"
+    "C"
    ],
    "t60_damped": [
     "f8",
     1,
-    "A"
+    "C"
    ],
    "gains": [
     "f8",
     1,
-    "A"
+    "C"
    ]
   },
   "fastmath": false,
   "calls": []
  },
  "synth.organ._generator": {
-  "js": null,
-  "ok": false,
-  "why": "np.cos of an array",
-  "typed": false,
-  "fastmath": false
+  "js": "k_synth$organ$_generator",
+  "ok": true,
+  "typed": true,
+  "ret": "UniTuple(array(float64, 1d, C) x 2)",
+  "params": [
+   "n",
+   "sr",
+   "freqs",
+   "phases",
+   "h2",
+   "h3",
+   "ev_t",
+   "ev_w",
+   "ev_main",
+   "ev_perc",
+   "ev_ramp",
+   "trig_t",
+   "trig_decay"
+  ],
+  "arrays": {
+   "freqs": [
+    "f8",
+    1,
+    "C"
+   ],
+   "phases": [
+    "f8",
+    1,
+    "C"
+   ],
+   "h2": [
+    "f8",
+    1,
+    "C"
+   ],
+   "h3": [
+    "f8",
+    1,
+    "C"
+   ],
+   "ev_t": [
+    "i8",
+    1,
+    "C"
+   ],
+   "ev_w": [
+    "i8",
+    1,
+    "C"
+   ],
+   "ev_main": [
+    "f8",
+    1,
+    "C"
+   ],
+   "ev_perc": [
+    "f8",
+    1,
+    "C"
+   ],
+   "ev_ramp": [
+    "i8",
+    1,
+    "C"
+   ],
+   "trig_t": [
+    "i8",
+    1,
+    "C"
+   ],
+   "trig_decay": [
+    "f8",
+    1,
+    "C"
+   ]
+  },
+  "fastmath": false,
+  "calls": []
  },
  "synth.organ._scanner": {
   "js": "k_synth$organ$_scanner",
   "ok": true,
-  "typed": false,
-  "ret": null,
+  "typed": true,
+  "ret": "array(float64, 1d, C)",
   "params": [
    "x",
    "sr",
@@ -1591,27 +1918,27 @@
    "x": [
     "f8",
     1,
-    "A"
+    "C"
    ],
    "seg_t": [
-    "f8",
+    "i8",
     1,
-    "A"
+    "C"
    ],
    "seg_depth": [
     "f8",
     1,
-    "A"
+    "C"
    ],
    "seg_wet": [
     "f8",
     1,
-    "A"
+    "C"
    ],
    "seg_dry": [
     "f8",
     1,
-    "A"
+    "C"
    ]
   },
   "fastmath": false,
@@ -1620,8 +1947,8 @@
  "synth.organ._expression": {
   "js": "k_synth$organ$_expression",
   "ok": true,
-  "typed": false,
-  "ret": null,
+  "typed": true,
+  "ret": "array(float64, 1d, C)",
   "params": [
    "x",
    "sr",
@@ -1639,22 +1966,22 @@
    "x": [
     "f8",
     1,
-    "A"
+    "C"
    ],
    "ev_t": [
-    "f8",
+    "i8",
     1,
-    "A"
+    "C"
    ],
    "ev_target": [
     "f8",
     1,
-    "A"
+    "C"
    ],
    "ev_gain": [
     "f8",
     1,
-    "A"
+    "C"
    ]
   },
   "fastmath": false,
@@ -1663,8 +1990,8 @@
  "synth.organ._read": {
   "js": "k_synth$organ$_read",
   "ok": true,
-  "typed": false,
-  "ret": null,
+  "typed": true,
+  "ret": "float64",
   "params": [
    "line",
    "size",
@@ -1675,7 +2002,7 @@
    "line": [
     "f8",
     1,
-    "A"
+    "C"
    ]
   },
   "fastmath": false,
@@ -1684,8 +2011,8 @@
  "synth.organ._rotors": {
   "js": "k_synth$organ$_rotors",
   "ok": true,
-  "typed": false,
-  "ret": null,
+  "typed": true,
+  "ret": "array(float64, 2d, C)",
   "params": [
    "x",
    "sr",
@@ -1707,62 +2034,67 @@
    "x": [
     "f8",
     1,
-    "A"
+    "C"
    ],
    "ev_t": [
-    "f8",
+    "i8",
     1,
-    "A"
+    "C"
    ],
    "ev_fast": [
-    "f8",
+    "b1",
     1,
-    "A"
+    "C"
    ],
    "speeds": [
     "f8",
     1,
-    "A"
+    "C"
    ],
    "times": [
     "f8",
     1,
-    "A"
+    "C"
    ],
    "horn": [
     "f8",
     1,
-    "A"
+    "C"
    ],
    "drum": [
     "f8",
     1,
-    "A"
+    "C"
+   ],
+   "mics": [
+    "f8",
+    1,
+    "C"
    ],
    "angles": [
     "f8",
     1,
-    "A"
+    "C"
    ],
    "low_sos": [
     "f8",
     1,
-    "A"
+    "C"
    ],
    "high_sos": [
     "f8",
     1,
-    "A"
+    "C"
    ],
    "horn_sos": [
     "f8",
     1,
-    "A"
+    "C"
    ],
    "out_sos": [
     "f8",
     1,
-    "A"
+    "C"
    ]
   },
   "fastmath": false,
@@ -1786,8 +2118,8 @@
  "synth.osc._blep4": {
   "js": "k_synth$osc$_blep4",
   "ok": true,
-  "typed": false,
-  "ret": null,
+  "typed": true,
+  "ret": "float64",
   "params": [
    "t"
   ],
@@ -1798,8 +2130,8 @@
  "synth.osc._edges": {
   "js": "k_synth$osc$_edges",
   "ok": true,
-  "typed": false,
-  "ret": null,
+  "typed": true,
+  "ret": "float64",
   "params": [
    "p",
    "dt"
@@ -1924,8 +2256,8 @@
  "synth.piano.hammer_force": {
   "js": "k_synth$piano$hammer_force",
   "ok": true,
-  "typed": false,
-  "ret": null,
+  "typed": true,
+  "ret": "array(float64, 1d, C)",
   "params": [
    "v0",
    "mass",
@@ -1943,11 +2275,30 @@
   "calls": []
  },
  "synth.piano._spectrum": {
-  "js": null,
-  "ok": false,
-  "why": "dtype np.complex128",
-  "typed": false,
-  "fastmath": false
+  "js": "k_synth$piano$_spectrum",
+  "ok": true,
+  "typed": true,
+  "ret": "array(complex128, 1d, C)",
+  "params": [
+   "force",
+   "freqs",
+   "sr"
+  ],
+  "arrays": {
+   "force": [
+    "f8",
+    1,
+    "C"
+   ],
+   "freqs": [
+    "f8",
+    1,
+    "C"
+   ]
+  },
+  "fastmath": false,
+  "calls": [],
+  "hand": true
  },
  "synth.pipe.run": {
   "js": "k_synth$pipe$run",
@@ -2068,17 +2419,22 @@
   "calls": []
  },
  "synth.rattle._next": {
-  "js": null,
-  "ok": false,
-  "why": "calls np.uint64",
-  "typed": false,
-  "fastmath": false
+  "js": "k_synth$rattle$_next",
+  "ok": true,
+  "typed": true,
+  "ret": "Tuple(uint64, float64)",
+  "params": [
+   "state"
+  ],
+  "arrays": {},
+  "fastmath": false,
+  "calls": []
  },
  "synth.rattle._collide": {
   "js": "k_synth$rattle$_collide",
-  "ok": false,
-  "typed": false,
-  "ret": null,
+  "ok": true,
+  "typed": true,
+  "ret": "uint64",
   "params": [
    "energy",
    "hop",
@@ -2105,70 +2461,69 @@
    "energy": [
     "f8",
     1,
-    "A"
+    "C"
    ],
    "sb": [
     "f8",
     1,
-    "A"
+    "C"
    ],
    "sa1": [
     "f8",
     1,
-    "A"
+    "C"
    ],
    "sa2": [
     "f8",
     1,
-    "A"
+    "C"
    ],
    "sgain": [
     "f8",
     1,
-    "A"
+    "C"
    ],
    "ma1": [
     "f8",
     1,
-    "A"
+    "C"
    ],
    "ma2": [
     "f8",
     1,
-    "A"
+    "C"
    ],
    "mgain": [
     "f8",
     1,
-    "A"
+    "C"
    ],
    "mtilt": [
     "f8",
     1,
-    "A"
+    "C"
    ],
    "mstart": [
-    "f8",
+    "i8",
     1,
-    "A"
+    "C"
    ],
    "out": [
     "f8",
     1,
-    "A"
+    "C"
    ]
   },
   "fastmath": false,
   "calls": [
    "synth.rattle._next"
-  ],
-  "why": "calls synth.rattle._next"
+  ]
  },
  "synth.rattle._wires": {
   "js": "k_synth$rattle$_wires",
-  "ok": false,
-  "typed": false,
-  "ret": null,
+  "ok": true,
+  "typed": true,
+  "ret": "uint64",
   "params": [
    "freqs",
    "decay",
@@ -2189,50 +2544,49 @@
    "freqs": [
     "f8",
     1,
-    "A"
+    "C"
    ],
    "decay": [
     "f8",
     1,
-    "A"
+    "C"
    ],
    "amps": [
     "f8",
     1,
-    "A"
+    "C"
    ],
    "shapes": [
     "f8",
     2,
-    "A"
+    "C"
    ],
    "spring": [
     "f8",
     1,
-    "A"
+    "C"
    ],
    "press": [
     "f8",
     1,
-    "A"
+    "C"
    ],
    "out": [
     "f8",
     1,
-    "A"
+    "C"
    ]
   },
   "fastmath": false,
   "calls": [
    "synth.rattle._next"
-  ],
-  "why": "calls synth.rattle._next"
+  ]
  },
  "synth.rattle.comb": {
   "js": "k_synth$rattle$comb",
   "ok": true,
-  "typed": false,
-  "ret": null,
+  "typed": true,
+  "ret": "array(float64, 1d, C)",
   "params": [
    "x",
    "period",
@@ -2242,7 +2596,7 @@
    "x": [
     "f8",
     1,
-    "A"
+    "C"
    ]
   },
   "fastmath": false,
@@ -2251,8 +2605,8 @@
  "synth.reed._read_mix": {
   "js": "k_synth$reed$_read_mix",
   "ok": true,
-  "typed": false,
-  "ret": null,
+  "typed": true,
+  "ret": "float64",
   "params": [
    "dark",
    "bright",
@@ -2267,32 +2621,32 @@
    "dark": [
     "f8",
     1,
-    "A"
+    "C"
    ],
    "bright": [
     "f8",
     1,
-    "A"
+    "C"
    ],
    "increments": [
     "f8",
     1,
-    "A"
+    "C"
    ],
    "amplitude": [
     "f8",
     1,
-    "A"
+    "C"
    ],
    "mix": [
     "f8",
     1,
-    "A"
+    "C"
    ],
    "out": [
     "f8",
     1,
-    "A"
+    "C"
    ]
   },
   "fastmath": false,
@@ -2339,8 +2693,8 @@
  "synth.stringloop._run": {
   "js": "k_synth$stringloop$_run",
   "ok": true,
-  "typed": false,
-  "ret": null,
+  "typed": true,
+  "ret": "array(float64, 1d, C)",
   "params": [
    "x",
    "delay",
@@ -2353,34 +2707,97 @@
    "x": [
     "f8",
     1,
-    "A"
+    "C"
    ],
    "delay": [
     "f8",
     1,
-    "A"
+    "C"
    ],
    "gain": [
     "f8",
     1,
-    "A"
+    "C"
    ]
   },
   "fastmath": false,
   "calls": []
  },
  "synth.struck._bank": {
-  "js": null,
-  "ok": false,
-  "why": "calls complex",
-  "typed": false,
-  "fastmath": false
+  "js": "k_synth$struck$_bank",
+  "ok": true,
+  "typed": true,
+  "ret": "array(float64, 2d, C)",
+  "params": [
+   "freqs",
+   "decay",
+   "phase",
+   "pos",
+   "amps",
+   "mix",
+   "bend",
+   "damp",
+   "dweight",
+   "rate",
+   "length",
+   "floor"
+  ],
+  "arrays": {
+   "freqs": [
+    "f8",
+    1,
+    "C"
+   ],
+   "decay": [
+    "f8",
+    1,
+    "C"
+   ],
+   "phase": [
+    "f8",
+    1,
+    "C"
+   ],
+   "pos": [
+    "f8",
+    1,
+    "C"
+   ],
+   "amps": [
+    "f8",
+    2,
+    "C"
+   ],
+   "mix": [
+    "f8",
+    2,
+    "C"
+   ],
+   "bend": [
+    "f8",
+    1,
+    "C"
+   ],
+   "damp": [
+    "f8",
+    2,
+    "C"
+   ],
+   "dweight": [
+    "f8",
+    2,
+    "C"
+   ]
+  },
+  "fastmath": false,
+  "calls": [],
+  "hand": true
  },
  "synth.struck._up2": {
   "js": "k_synth$struck$_up2",
   "ok": true,
-  "typed": false,
-  "ret": null,
+  "typed": true,
+  "ret": "array(float64, 1d, C)",
   "params": [
    "x",
    "taps",
@@ -2390,12 +2807,12 @@
    "x": [
     "f8",
     1,
-    "A"
+    "C"
    ],
    "taps": [
     "f8",
     1,
-    "A"
+    "C"
    ]
   },
   "fastmath": false,

@@ -1,447 +1,4 @@
 {
- "numba.typed.typeddict._contains": {
-  "file": ".claude/worktrees/agent-ae096237f50be0ce5/.venv/lib/python3.12/site-packages/numba/typed/typeddict.py",
-  "line": 47,
-  "fastmath": false,
-  "params": [
-   "d",
-   "key"
-  ],
-  "signatures": []
- },
- "numba.typed.typeddict._copy": {
-  "file": ".claude/worktrees/agent-ae096237f50be0ce5/.venv/lib/python3.12/site-packages/numba/typed/typeddict.py",
-  "line": 72,
-  "fastmath": false,
-  "params": [
-   "d"
-  ],
-  "signatures": []
- },
- "numba.typed.typeddict._delitem": {
-  "file": ".claude/worktrees/agent-ae096237f50be0ce5/.venv/lib/python3.12/site-packages/numba/typed/typeddict.py",
-  "line": 42,
-  "fastmath": false,
-  "params": [
-   "d",
-   "key"
-  ],
-  "signatures": []
- },
- "numba.typed.typeddict._get": {
-  "file": ".claude/worktrees/agent-ae096237f50be0ce5/.venv/lib/python3.12/site-packages/numba/typed/typeddict.py",
-  "line": 52,
-  "fastmath": false,
-  "params": [
-   "d",
-   "key",
-   "default"
-  ],
-  "signatures": []
- },
- "numba.typed.typeddict._getitem": {
-  "file": ".claude/worktrees/agent-ae096237f50be0ce5/.venv/lib/python3.12/site-packages/numba/typed/typeddict.py",
-  "line": 37,
-  "fastmath": false,
-  "params": [
-   "d",
-   "key"
-  ],
-  "signatures": []
- },
- "numba.typed.typeddict._iter": {
-  "file": ".claude/worktrees/agent-ae096237f50be0ce5/.venv/lib/python3.12/site-packages/numba/typed/typeddict.py",
-  "line": 62,
-  "fastmath": false,
-  "params": [
-   "d"
-  ],
-  "signatures": []
- },
- "numba.typed.typeddict._length": {
-  "file": ".claude/worktrees/agent-ae096237f50be0ce5/.venv/lib/python3.12/site-packages/numba/typed/typeddict.py",
-  "line": 27,
-  "fastmath": false,
-  "params": [
-   "d"
-  ],
-  "signatures": []
- },
- "numba.typed.typeddict._make_dict": {
-  "file": ".claude/worktrees/agent-ae096237f50be0ce5/.venv/lib/python3.12/site-packages/numba/typed/typeddict.py",
-  "line": 21,
-  "fastmath": false,
-  "params": [
-   "keyty",
-   "valty",
-   "n_keys"
-  ],
-  "signatures": []
- },
- "numba.typed.typeddict._popitem": {
-  "file": ".claude/worktrees/agent-ae096237f50be0ce5/.venv/lib/python3.12/site-packages/numba/typed/typeddict.py",
-  "line": 67,
-  "fastmath": false,
-  "params": [
-   "d"
-  ],
-  "signatures": []
- },
- "numba.typed.typeddict._setdefault": {
-  "file": ".claude/worktrees/agent-ae096237f50be0ce5/.venv/lib/python3.12/site-packages/numba/typed/typeddict.py",
-  "line": 57,
-  "fastmath": false,
-  "params": [
-   "d",
-   "key",
-   "default"
-  ],
-  "signatures": []
- },
- "numba.typed.typeddict._setitem": {
-  "file": ".claude/worktrees/agent-ae096237f50be0ce5/.venv/lib/python3.12/site-packages/numba/typed/typeddict.py",
-  "line": 32,
-  "fastmath": false,
-  "params": [
-   "d",
-   "key",
-   "value"
-  ],
-  "signatures": []
- },
- "numba.typed.typedlist._allocated": {
-  "file": ".claude/worktrees/agent-ae096237f50be0ce5/.venv/lib/python3.12/site-packages/numba/typed/typedlist.py",
-  "line": 60,
-  "fastmath": false,
-  "params": [
-   "l"
-  ],
-  "signatures": []
- },
- "numba.typed.typedlist._append": {
-  "file": ".claude/worktrees/agent-ae096237f50be0ce5/.venv/lib/python3.12/site-packages/numba/typed/typedlist.py",
-  "line": 80,
-  "fastmath": false,
-  "params": [
-   "l",
-   "item"
-  ],
-  "signatures": []
- },
- "numba.typed.typedlist._clear": {
-  "file": ".claude/worktrees/agent-ae096237f50be0ce5/.venv/lib/python3.12/site-packages/numba/typed/typedlist.py",
-  "line": 130,
-  "fastmath": false,
-  "params": [
-   "l"
-  ],
-  "signatures": []
- },
- "numba.typed.typedlist._contains": {
-  "file": ".claude/worktrees/agent-ae096237f50be0ce5/.venv/lib/python3.12/site-packages/numba/typed/typedlist.py",
-  "line": 95,
-  "fastmath": false,
-  "params": [
-   "l",
-   "item"
-  ],
-  "signatures": []
- },
- "numba.typed.typedlist._copy": {
-  "file": ".claude/worktrees/agent-ae096237f50be0ce5/.venv/lib/python3.12/site-packages/numba/typed/typedlist.py",
-  "line": 140,
-  "fastmath": false,
-  "params": [
-   "l"
-  ],
-  "signatures": []
- },
- "numba.typed.typedlist._count": {
-  "file": ".claude/worktrees/agent-ae096237f50be0ce5/.venv/lib/python3.12/site-packages/numba/typed/typedlist.py",
-  "line": 100,
-  "fastmath": false,
-  "params": [
-   "l",
-   "item"
-  ],
-  "signatures": []
- },
- "numba.typed.typedlist._delitem": {
-  "file": ".claude/worktrees/agent-ae096237f50be0ce5/.venv/lib/python3.12/site-packages/numba/typed/typedlist.py",
-  "line": 110,
-  "fastmath": false,
-  "params": [
-   "l",
-   "i"
-  ],
-  "signatures": []
- },
- "numba.typed.typedlist._eq": {
-  "file": ".claude/worktrees/agent-ae096237f50be0ce5/.venv/lib/python3.12/site-packages/numba/typed/typedlist.py",
-  "line": 145,
-  "fastmath": false,
-  "params": [
-   "t",
-   "o"
-  ],
-  "signatures": []
- },
- "numba.typed.typedlist._extend": {
-  "file": ".claude/worktrees/agent-ae096237f50be0ce5/.venv/lib/python3.12/site-packages/numba/typed/typedlist.py",
-  "line": 115,
-  "fastmath": false,
-  "params": [
-   "l",
-   "iterable"
-  ],
-  "signatures": []
- },
- "numba.typed.typedlist._ge": {
-  "file": ".claude/worktrees/agent-ae096237f50be0ce5/.venv/lib/python3.12/site-packages/numba/typed/typedlist.py",
-  "line": 170,
-  "fastmath": false,
-  "params": [
-   "t",
-   "o"
-  ],
-  "signatures": []
- },
- "numba.typed.typedlist._getitem": {
-  "file": ".claude/worktrees/agent-ae096237f50be0ce5/.venv/lib/python3.12/site-packages/numba/typed/typedlist.py",
-  "line": 90,
-  "fastmath": false,
-  "params": [
-   "l",
-   "i"
-  ],
-  "signatures": []
- },
- "numba.typed.typedlist._gt": {
-  "file": ".claude/worktrees/agent-ae096237f50be0ce5/.venv/lib/python3.12/site-packages/numba/typed/typedlist.py",
-  "line": 165,
-  "fastmath": false,
-  "params": [
-   "t",
-   "o"
-  ],
-  "signatures": []
- },
- "numba.typed.typedlist._index": {
-  "file": ".claude/worktrees/agent-ae096237f50be0ce5/.venv/lib/python3.12/site-packages/numba/typed/typedlist.py",
-  "line": 175,
-  "fastmath": false,
-  "params": [
-   "l",
-   "item",
-   "start",
-   "end"
-  ],
-  "signatures": []
- },
- "numba.typed.typedlist._insert": {
-  "file": ".claude/worktrees/agent-ae096237f50be0ce5/.venv/lib/python3.12/site-packages/numba/typed/typedlist.py",
-  "line": 120,
-  "fastmath": false,
-  "params": [
-   "l",
-   "i",
-   "item"
-  ],
-  "signatures": []
- },
- "numba.typed.typedlist._is_mutable": {
-  "file": ".claude/worktrees/agent-ae096237f50be0ce5/.venv/lib/python3.12/site-packages/numba/typed/typedlist.py",
-  "line": 65,
-  "fastmath": false,
-  "params": [
-   "l"
-  ],
-  "signatures": []
- },
- "numba.typed.typedlist._le": {
-  "file": ".claude/worktrees/agent-ae096237f50be0ce5/.venv/lib/python3.12/site-packages/numba/typed/typedlist.py",
-  "line": 160,
-  "fastmath": false,
-  "params": [
-   "t",
-   "o"
-  ],
-  "signatures": []
- },
- "numba.typed.typedlist._length": {
-  "file": ".claude/worktrees/agent-ae096237f50be0ce5/.venv/lib/python3.12/site-packages/numba/typed/typedlist.py",
-  "line": 55,
-  "fastmath": false,
-  "params": [
-   "l"
-  ],
-  "signatures": []
- },
- "numba.typed.typedlist._lt": {
-  "file": ".claude/worktrees/agent-ae096237f50be0ce5/.venv/lib/python3.12/site-packages/numba/typed/typedlist.py",
-  "line": 155,
-  "fastmath": false,
-  "params": [
-   "t",
-   "o"
-  ],
-  "signatures": []
- },
- "numba.typed.typedlist._make_immutable": {
-  "file": ".claude/worktrees/agent-ae096237f50be0ce5/.venv/lib/python3.12/site-packages/numba/typed/typedlist.py",
-  "line": 75,
-  "fastmath": false,
-  "params": [
-   "l"
-  ],
-  "signatures": []
- },
- "numba.typed.typedlist._make_list": {
-  "file": ".claude/worktrees/agent-ae096237f50be0ce5/.venv/lib/python3.12/site-packages/numba/typed/typedlist.py",
-  "line": 49,
-  "fastmath": false,
-  "params": [
-   "itemty",
-   "allocated"
-  ],
-  "signatures": []
- },
- "numba.typed.typedlist._make_mutable": {
-  "file": ".claude/worktrees/agent-ae096237f50be0ce5/.venv/lib/python3.12/site-packages/numba/typed/typedlist.py",
-  "line": 70,
-  "fastmath": false,
-  "params": [
-   "l"
-  ],
-  "signatures": []
- },
- "numba.typed.typedlist._ne": {
-  "file": ".claude/worktrees/agent-ae096237f50be0ce5/.venv/lib/python3.12/site-packages/numba/typed/typedlist.py",
-  "line": 150,
-  "fastmath": false,
-  "params": [
-   "t",
-   "o"
-  ],
-  "signatures": []
- },
- "numba.typed.typedlist._pop": {
-  "file": ".claude/worktrees/agent-ae096237f50be0ce5/.venv/lib/python3.12/site-packages/numba/typed/typedlist.py",
-  "line": 105,
-  "fastmath": false,
-  "params": [
-   "l",
-   "i"
-  ],
-  "signatures": []
- },
- "numba.typed.typedlist._remove": {
-  "file": ".claude/worktrees/agent-ae096237f50be0ce5/.venv/lib/python3.12/site-packages/numba/typed/typedlist.py",
-  "line": 125,
-  "fastmath": false,
-  "params": [
-   "l",
-   "item"
-  ],
-  "signatures": []
- },
- "numba.typed.typedlist._reverse": {
-  "file": ".claude/worktrees/agent-ae096237f50be0ce5/.venv/lib/python3.12/site-packages/numba/typed/typedlist.py",
-  "line": 135,
-  "fastmath": false,
-  "params": [
-   "l"
-  ],
-  "signatures": []
- },
- "numba.typed.typedlist._setitem": {
-  "file": ".claude/worktrees/agent-ae096237f50be0ce5/.venv/lib/python3.12/site-packages/numba/typed/typedlist.py",
-  "line": 85,
-  "fastmath": false,
-  "params": [
-   "l",
-   "i",
-   "item"
-  ],
-  "signatures": []
- },
- "numba.typed.typedlist._sort": {
-  "file": ".claude/worktrees/agent-ae096237f50be0ce5/.venv/lib/python3.12/site-packages/numba/typed/typedlist.py",
-  "line": 180,
-  "fastmath": false,
-  "params": [
-   "l",
-   "key",
-   "reverse"
-  ],
-  "signatures": []
- },
- "numba.typed.typedset._additem": {
-  "file": ".claude/worktrees/agent-ae096237f50be0ce5/.venv/lib/python3.12/site-packages/numba/typed/typedset.py",
-  "line": 36,
-  "fastmath": false,
-  "params": [
-   "s",
-   "key"
-  ],
-  "signatures": []
- },
- "numba.typed.typedset._copy": {
-  "file": ".claude/worktrees/agent-ae096237f50be0ce5/.venv/lib/python3.12/site-packages/numba/typed/typedset.py",
-  "line": 31,
-  "fastmath": false,
-  "params": [
-   "s"
-  ],
-  "signatures": []
- },
- "numba.typed.typedset._discarditem": {
-  "file": ".claude/worktrees/agent-ae096237f50be0ce5/.venv/lib/python3.12/site-packages/numba/typed/typedset.py",
-  "line": 46,
-  "fastmath": false,
-  "params": [
-   "s",
-   "key"
-  ],
-  "signatures": []
- },
- "numba.typed.typedset._iter": {
-  "file": ".claude/worktrees/agent-ae096237f50be0ce5/.venv/lib/python3.12/site-packages/numba/typed/typedset.py",
-  "line": 51,
-  "fastmath": false,
-  "params": [
-   "s"
-  ],
-  "signatures": []
- },
- "numba.typed.typedset._length": {
-  "file": ".claude/worktrees/agent-ae096237f50be0ce5/.venv/lib/python3.12/site-packages/numba/typed/typedset.py",
-  "line": 26,
-  "fastmath": false,
-  "params": [
-   "s"
-  ],
-  "signatures": []
- },
- "numba.typed.typedset._make_set": {
-  "file": ".claude/worktrees/agent-ae096237f50be0ce5/.venv/lib/python3.12/site-packages/numba/typed/typedset.py",
-  "line": 21,
-  "fastmath": false,
-  "params": [
-   "keyty"
-  ],
-  "signatures": []
- },
- "numba.typed.typedset._set_contains": {
-  "file": ".claude/worktrees/agent-ae096237f50be0ce5/.venv/lib/python3.12/site-packages/numba/typed/typedset.py",
-  "line": 41,
-  "fastmath": false,
-  "params": [
-   "s",
-   "key"
-  ],
-  "signatures": []
- },
  "synth.accordion._arm": {
   "file": ".claude/worktrees/agent-ae096237f50be0ce5/songbird/synth/accordion.py",
   "line": 313,
@@ -451,7 +8,39 @@
    "up",
    "down"
   ],
-  "signatures": []
+  "signatures": [
+   {
+    "args": [
+     "array(float64, 1d, C)",
+     "float64",
+     "float64"
+    ],
+    "return": "array(float64, 1d, C)",
+    "locals": {
+     "a": [
+      "float64"
+     ],
+     "down": [
+      "float64"
+     ],
+     "i": [
+      "int64"
+     ],
+     "up": [
+      "float64"
+     ],
+     "v": [
+      "float64"
+     ],
+     "x": [
+      "array(float64, 1d, C)"
+     ],
+     "y": [
+      "array(float64, 1d, C)"
+     ]
+    }
+   }
+  ]
  },
  "synth.amp._dot": {
   "file": ".claude/worktrees/agent-ae096237f50be0ce5/songbird/synth/amp.py",
@@ -463,7 +52,47 @@
    "start",
    "count"
   ],
-  "signatures": []
+  "signatures": [
+   {
+    "args": [
+     "array(float64, 1d, C)",
+     "array(float64, 1d, C)",
+     "int64",
+     "int64"
+    ],
+    "return": "float64",
+    "locals": {
+     "a": [
+      "array(float64, 1d, C)"
+     ],
+     "b": [
+      "array(float64, 1d, C)"
+     ],
+     "count": [
+      "int64"
+     ],
+     "k": [
+      "Literal[int](0)",
+      "int64"
+     ],
+     "s0": [
+      "float64"
+     ],
+     "s1": [
+      "float64"
+     ],
+     "s2": [
+      "float64"
+     ],
+     "s3": [
+      "float64"
+     ],
+     "start": [
+      "int64"
+     ]
+    }
+   }
+  ]
  },
  "synth.amp._run": {
   "file": ".claude/worktrees/agent-ae096237f50be0ce5/songbird/synth/amp.py",
@@ -480,7 +109,263 @@
    "drop2",
    "sos"
   ],
-  "signatures": []
+  "signatures": [
+   {
+    "args": [
+     "array(float64, 1d, C)",
+     "array(float64, 1d, C)",
+     "array(float64, 2d, C)",
+     "array(float64, 1d, C)",
+     "array(float64, 1d, C)",
+     "array(float64, 1d, C)",
+     "array(float64, 1d, C)",
+     "array(float64, 1d, C)",
+     "array(float64, 2d, C)"
+    ],
+    "return": "array(float64, 1d, C)",
+    "locals": {
+     "a": [
+      "float64"
+     ],
+     "a2": [
+      "float64"
+     ],
+     "a4": [
+      "float64"
+     ],
+     "bias1": [
+      "float64"
+     ],
+     "bias2": [
+      "float64"
+     ],
+     "c_im": [
+      "float64"
+     ],
+     "c_re": [
+      "float64"
+     ],
+     "cf": [
+      "float64"
+     ],
+     "charge": [
+      "float64"
+     ],
+     "d": [
+      "float64"
+     ],
+     "dc": [
+      "float64"
+     ],
+     "dc_x": [
+      "float64"
+     ],
+     "dc_y": [
+      "float64"
+     ],
+     "depth": [
+      "float64"
+     ],
+     "down": [
+      "array(float64, 1d, C)"
+     ],
+     "drop2": [
+      "array(float64, 1d, C)"
+     ],
+     "env": [
+      "float64"
+     ],
+     "f": [
+      "float64"
+     ],
+     "hp": [
+      "float64"
+     ],
+     "hp_x": [
+      "float64"
+     ],
+     "hp_y": [
+      "float64"
+     ],
+     "i": [
+      "int64"
+     ],
+     "j": [
+      "int64"
+     ],
+     "kind": [
+      "float64"
+     ],
+     "knee": [
+      "float64"
+     ],
+     "lag": [
+      "int64"
+     ],
+     "lamp": [
+      "float64"
+     ],
+     "ldr": [
+      "float64"
+     ],
+     "ldr_a": [
+      "float64"
+     ],
+     "ldr_r": [
+      "float64"
+     ],
+     "leakc": [
+      "float64"
+     ],
+     "level": [
+      "float64"
+     ],
+     "lo": [
+      "float64"
+     ],
+     "lp": [
+      "float64"
+     ],
+     "lp_y": [
+      "float64"
+     ],
+     "mag": [
+      "float64"
+     ],
+     "master": [
+      "float64"
+     ],
+     "n": [
+      "int64"
+     ],
+     "nr": [
+      "float64"
+     ],
+     "nsec": [
+      "int64"
+     ],
+     "o": [
+      "float64"
+     ],
+     "os_": [
+      "int64"
+     ],
+     "p": [
+      "array(float64, 1d, C)"
+     ],
+     "pa": [
+      "float64"
+     ],
+     "per": [
+      "int64"
+     ],
+     "ph": [
+      "int64"
+     ],
+     "ptr": [
+      "Literal[int](0)",
+      "int64"
+     ],
+     "q2": [
+      "float64"
+     ],
+     "r": [
+      "float64"
+     ],
+     "r_a": [
+      "float64"
+     ],
+     "r_b": [
+      "float64"
+     ],
+     "rate": [
+      "float64"
+     ],
+     "rev": [
+      "array(float64, 1d, C)"
+     ],
+     "rot_im": [
+      "float64"
+     ],
+     "rot_re": [
+      "float64"
+     ],
+     "s": [
+      "int64"
+     ],
+     "sag": [
+      "float64"
+     ],
+     "sag_a": [
+      "float64"
+     ],
+     "sag_r": [
+      "float64"
+     ],
+     "sos": [
+      "array(float64, 2d, C)"
+     ],
+     "step": [
+      "float64"
+     ],
+     "sup": [
+      "float64"
+     ],
+     "t": [
+      "float64"
+     ],
+     "tab1": [
+      "array(float64, 1d, C)"
+     ],
+     "tab2": [
+      "array(float64, 1d, C)"
+     ],
+     "taps": [
+      "int64"
+     ],
+     "tilt": [
+      "float64"
+     ],
+     "tilt_out": [
+      "float64"
+     ],
+     "top": [
+      "int64"
+     ],
+     "u": [
+      "float64"
+     ],
+     "up": [
+      "array(float64, 2d, C)"
+     ],
+     "v": [
+      "float64"
+     ],
+     "vol": [
+      "float64"
+     ],
+     "x": [
+      "array(float64, 1d, C)"
+     ],
+     "xb": [
+      "array(float64, 1d, C)"
+     ],
+     "y": [
+      "array(float64, 1d, C)"
+     ],
+     "zb": [
+      "array(float64, 1d, C)"
+     ],
+     "zptr": [
+      "Literal[int](0)",
+      "int64"
+     ],
+     "zs": [
+      "array(float64, 1d, C)"
+     ]
+    }
+   }
+  ]
  },
  "synth.amp._shape": {
   "file": ".claude/worktrees/agent-ae096237f50be0ce5/songbird/synth/amp.py",
@@ -493,7 +378,82 @@
    "drive",
    "tilt"
   ],
-  "signatures": []
+  "signatures": [
+   {
+    "args": [
+     "array(float64, 1d, C)",
+     "array(float64, 2d, C)",
+     "array(float64, 1d, C)",
+     "float64",
+     "float64"
+    ],
+    "return": "array(float64, 1d, C)",
+    "locals": {
+     "down": [
+      "array(float64, 1d, C)"
+     ],
+     "drive": [
+      "float64"
+     ],
+     "i": [
+      "int64"
+     ],
+     "n": [
+      "int64"
+     ],
+     "norm": [
+      "float64"
+     ],
+     "os_": [
+      "int64"
+     ],
+     "per": [
+      "int64"
+     ],
+     "ph": [
+      "int64"
+     ],
+     "ptr": [
+      "Literal[int](0)",
+      "int64"
+     ],
+     "t0": [
+      "float64"
+     ],
+     "taps": [
+      "int64"
+     ],
+     "tilt": [
+      "float64"
+     ],
+     "u": [
+      "float64"
+     ],
+     "up": [
+      "array(float64, 2d, C)"
+     ],
+     "v": [
+      "float64"
+     ],
+     "x": [
+      "array(float64, 1d, C)"
+     ],
+     "xb": [
+      "array(float64, 1d, C)"
+     ],
+     "y": [
+      "array(float64, 1d, C)"
+     ],
+     "zb": [
+      "array(float64, 1d, C)"
+     ],
+     "zptr": [
+      "Literal[int](0)",
+      "int64"
+     ]
+    }
+   }
+  ]
  },
  "synth.amp._spring": {
   "file": ".claude/worktrees/agent-ae096237f50be0ce5/songbird/synth/amp.py",
@@ -511,7 +471,123 @@
    "damp",
    "delay"
   ],
-  "signatures": []
+  "signatures": [
+   {
+    "args": [
+     "int64",
+     "int64",
+     "int64",
+     "float64",
+     "int64",
+     "int64",
+     "float64",
+     "array(float64, 2d, C)",
+     "float64",
+     "array(float64, 1d, C)"
+    ],
+    "return": "array(float64, 1d, C)",
+    "locals": {
+     "arrival": [
+      "float64"
+     ],
+     "coef": [
+      "float64"
+     ],
+     "damp": [
+      "float64"
+     ],
+     "delay": [
+      "array(float64, 1d, C)"
+     ],
+     "f": [
+      "float64"
+     ],
+     "first": [
+      "int64"
+     ],
+     "gain": [
+      "float64"
+     ],
+     "held": [
+      "float64"
+     ],
+     "i": [
+      "int64"
+     ],
+     "k": [
+      "int64"
+     ],
+     "line": [
+      "array(float64, 1d, C)"
+     ],
+     "loop": [
+      "int64"
+     ],
+     "lp": [
+      "array(float64, 2d, C)"
+     ],
+     "n": [
+      "int64"
+     ],
+     "nsec": [
+      "int64"
+     ],
+     "o": [
+      "float64"
+     ],
+     "out": [
+      "array(float64, 1d, C)"
+     ],
+     "pos": [
+      "float64"
+     ],
+     "ptr": [
+      "Literal[int](0)",
+      "int64"
+     ],
+     "s": [
+      "int64"
+     ],
+     "size": [
+      "Literal[int](1)",
+      "int64"
+     ],
+     "start": [
+      "int64"
+     ],
+     "stretch": [
+      "int64"
+     ],
+     "t": [
+      "int64"
+     ],
+     "total": [
+      "int64"
+     ],
+     "v": [
+      "float64"
+     ],
+     "xs": [
+      "array(float64, 2d, C)"
+     ],
+     "y": [
+      "float64"
+     ],
+     "ys": [
+      "array(float64, 2d, C)"
+     ],
+     "yv": [
+      "float64"
+     ],
+     "z0": [
+      "array(float64, 2d, C)"
+     ],
+     "z1": [
+      "array(float64, 2d, C)"
+     ]
+    }
+   }
+  ]
  },
  "synth.analog._delays": {
   "file": ".claude/worktrees/agent-ae096237f50be0ce5/songbird/synth/analog.py",
@@ -522,7 +598,69 @@
    "d1",
    "d2"
   ],
-  "signatures": []
+  "signatures": [
+   {
+    "args": [
+     "array(float64, 1d, C)",
+     "array(float64, 1d, C)",
+     "array(float64, 1d, C)"
+    ],
+    "return": "array(float64, 2d, C)",
+    "locals": {
+     "c": [
+      "int64"
+     ],
+     "c1": [
+      "float64"
+     ],
+     "c2": [
+      "float64"
+     ],
+     "c3": [
+      "float64"
+     ],
+     "d1": [
+      "array(float64, 1d, C)"
+     ],
+     "d2": [
+      "array(float64, 1d, C)"
+     ],
+     "f": [
+      "float64"
+     ],
+     "i": [
+      "int64"
+     ],
+     "k": [
+      "int64"
+     ],
+     "n": [
+      "int64"
+     ],
+     "pos": [
+      "float64"
+     ],
+     "w": [
+      "array(float64, 2d, C)"
+     ],
+     "x": [
+      "array(float64, 1d, C)"
+     ],
+     "x0": [
+      "float64"
+     ],
+     "x1": [
+      "float64"
+     ],
+     "x2": [
+      "float64"
+     ],
+     "xm": [
+      "float64"
+     ]
+    }
+   }
+  ]
  },
  "synth.analog._ladder": {
   "file": ".claude/worktrees/agent-ae096237f50be0ce5/songbird/synth/analog.py",
@@ -546,7 +684,88 @@
    "k",
    "st"
   ],
-  "signatures": []
+  "signatures": [
+   {
+    "args": [
+     "float64",
+     "float64",
+     "float64",
+     "array(float64, 1d, C)"
+    ],
+    "return": "float64",
+    "locals": {
+     "G": [
+      "float64"
+     ],
+     "a1": [
+      "float64"
+     ],
+     "a2": [
+      "float64"
+     ],
+     "a3": [
+      "float64"
+     ],
+     "a4": [
+      "float64"
+     ],
+     "c": [
+      "float64"
+     ],
+     "d": [
+      "float64"
+     ],
+     "g2": [
+      "float64"
+     ],
+     "g3": [
+      "float64"
+     ],
+     "g4": [
+      "float64"
+     ],
+     "h": [
+      "float64"
+     ],
+     "k": [
+      "float64"
+     ],
+     "p2": [
+      "float64"
+     ],
+     "p3": [
+      "float64"
+     ],
+     "p4": [
+      "float64"
+     ],
+     "st": [
+      "array(float64, 1d, C)"
+     ],
+     "t": [
+      "float64"
+     ],
+     "u": [
+      "float64"
+     ],
+     "x": [
+      "float64"
+     ],
+     "y1": [
+      "float64"
+     ],
+     "y2": [
+      "float64"
+     ],
+     "y3": [
+      "float64"
+     ],
+     "y4": [
+      "float64"
+     ]
+    }
+   }
+  ]
  },
  "synth.analog._sat": {
   "file": ".claude/worktrees/agent-ae096237f50be0ce5/songbird/synth/analog.py",
@@ -555,7 +774,22 @@
   "params": [
    "v"
   ],
-  "signatures": []
+  "signatures": [
+   {
+    "args": [
+     "float64"
+    ],
+    "return": "float64",
+    "locals": {
+     "v": [
+      "float64"
+     ],
+     "v2": [
+      "float64"
+     ]
+    }
+   }
+  ]
  },
  "synth.analog._sub": {
   "file": ".claude/worktrees/agent-ae096237f50be0ce5/songbird/synth/analog.py",
@@ -582,7 +816,159 @@
    "fade",
    "inv_sr"
   ],
-  "signatures": []
+  "signatures": [
+   {
+    "args": [
+     "array(float64, 1d, C)",
+     "int64",
+     "int64",
+     "array(int64, 1d, C)",
+     "array(int64, 1d, C)",
+     "array(float64, 1d, C)",
+     "array(bool, 1d, C)",
+     "array(bool, 1d, C)",
+     "array(float64, 1d, C)",
+     "array(float64, 2d, C)",
+     "array(float64, 1d, C)",
+     "float64",
+     "float64",
+     "float64",
+     "float64",
+     "array(float64, 1d, C)",
+     "float64",
+     "float64",
+     "float64"
+    ],
+    "return": "int64",
+    "locals": {
+     "amp": [
+      "array(float64, 1d, C)"
+     ],
+     "at": [
+      "int64"
+     ],
+     "buf": [
+      "array(float64, 1d, C)"
+     ],
+     "c": [
+      "float64"
+     ],
+     "cents": [
+      "float64"
+     ],
+     "co": [
+      "float64"
+     ],
+     "coef": [
+      "float64"
+     ],
+     "cur": [
+      "Literal[int](0)",
+      "int64"
+     ],
+     "cur_p": [
+      "float64"
+     ],
+     "drift": [
+      "array(float64, 1d, C)"
+     ],
+     "dstep": [
+      "float64"
+     ],
+     "ea": [
+      "float64"
+     ],
+     "env": [
+      "array(float64, 2d, C)"
+     ],
+     "f": [
+      "float64"
+     ],
+     "fade": [
+      "float64"
+     ],
+     "fr": [
+      "float64"
+     ],
+     "gate": [
+      "Literal[int](0)",
+      "Literal[int](1)",
+      "int64"
+     ],
+     "gcoef": [
+      "float64"
+     ],
+     "glide": [
+      "array(bool, 1d, C)"
+     ],
+     "h2": [
+      "float64"
+     ],
+     "h3": [
+      "float64"
+     ],
+     "i": [
+      "int64"
+     ],
+     "inv_sr": [
+      "float64"
+     ],
+     "j": [
+      "Literal[int](0)",
+      "int64"
+     ],
+     "kk": [
+      "int64"
+     ],
+     "n": [
+      "int64"
+     ],
+     "nev": [
+      "int64"
+     ],
+     "off": [
+      "array(int64, 1d, C)"
+     ],
+     "on": [
+      "array(int64, 1d, C)"
+     ],
+     "phase": [
+      "float64"
+     ],
+     "pitch": [
+      "array(float64, 1d, C)"
+     ],
+     "retrig": [
+      "array(bool, 1d, C)"
+     ],
+     "s": [
+      "float64"
+     ],
+     "stage": [
+      "Literal[int](0)",
+      "Literal[int](1)",
+      "Literal[int](2)",
+      "Literal[int](3)",
+      "int64"
+     ],
+     "target": [
+      "float64"
+     ],
+     "tcoef": [
+      "float64"
+     ],
+     "thump": [
+      "array(float64, 1d, C)"
+     ],
+     "w": [
+      "float64"
+     ],
+     "y": [
+      "float64"
+     ]
+    }
+   }
+  ]
  },
  "synth.analog._voice": {
   "file": ".claude/worktrees/agent-ae096237f50be0ce5/songbird/synth/analog.py",
@@ -619,7 +1005,277 @@
    "seed",
    "inv_sr2"
   ],
-  "signatures": []
+  "signatures": [
+   {
+    "args": [
+     "array(float64, 1d, C)",
+     "int64",
+     "int64",
+     "array(int64, 1d, C)",
+     "array(int64, 1d, C)",
+     "array(float64, 1d, C)",
+     "array(bool, 1d, C)",
+     "array(bool, 1d, C)",
+     "array(bool, 1d, C)",
+     "array(float64, 1d, C)",
+     "array(float64, 2d, C)",
+     "array(float64, 1d, C)",
+     "array(float64, 1d, C)",
+     "array(int64, 1d, C)",
+     "array(float64, 1d, C)",
+     "array(bool, 1d, C)",
+     "array(float64, 2d, C)",
+     "array(float64, 2d, C)",
+     "array(float64, 1d, C)",
+     "float64",
+     "float64",
+     "array(float64, 1d, C)",
+     "float64",
+     "float64",
+     "float64",
+     "float64",
+     "float64",
+     "uint64",
+     "float64"
+    ],
+    "return": "int64",
+    "locals": {
+     "amp": [
+      "array(float64, 1d, C)"
+     ],
+     "astg": [
+      "Literal[int](0)",
+      "Literal[int](1)",
+      "Literal[int](2)",
+      "Literal[int](3)",
+      "int64"
+     ],
+     "at": [
+      "int64"
+     ],
+     "base": [
+      "float64"
+     ],
+     "bcoef": [
+      "float64"
+     ],
+     "bend": [
+      "array(bool, 1d, C)"
+     ],
+     "big_g": [
+      "float64"
+     ],
+     "buf": [
+      "array(float64, 1d, C)"
+     ],
+     "c": [
+      "float64"
+     ],
+     "coef": [
+      "float64"
+     ],
+     "cur": [
+      "Literal[int](0)",
+      "int64"
+     ],
+     "cur_p": [
+      "float64"
+     ],
+     "delay": [
+      "float64"
+     ],
+     "depth": [
+      "float64"
+     ],
+     "dg": [
+      "float64"
+     ],
+     "drive": [
+      "float64"
+     ],
+     "dt": [
+      "float64"
+     ],
+     "duty": [
+      "array(float64, 1d, C)"
+     ],
+     "ea": [
+      "float64"
+     ],
+     "ef": [
+      "float64"
+     ],
+     "env": [
+      "array(float64, 2d, C)"
+     ],
+     "f": [
+      "float64"
+     ],
+     "fade": [
+      "float64"
+     ],
+     "famt": [
+      "array(float64, 1d, C)"
+     ],
+     "fbase": [
+      "array(float64, 1d, C)"
+     ],
+     "fc": [
+      "float64"
+     ],
+     "fr": [
+      "float64"
+     ],
+     "fstg": [
+      "Literal[int](0)",
+      "Literal[int](1)",
+      "Literal[int](2)",
+      "Literal[int](3)",
+      "int64"
+     ],
+     "g": [
+      "float64"
+     ],
+     "gain": [
+      "float64"
+     ],
+     "gate": [
+      "Literal[int](0)",
+      "Literal[int](1)",
+      "int64"
+     ],
+     "gcoef": [
+      "float64"
+     ],
+     "glide": [
+      "array(bool, 1d, C)"
+     ],
+     "hz": [
+      "array(float64, 1d, C)"
+     ],
+     "i": [
+      "int64"
+     ],
+     "inv_sr2": [
+      "float64"
+     ],
+     "j": [
+      "Literal[int](0)",
+      "int64"
+     ],
+     "k": [
+      "float64"
+     ],
+     "kc": [
+      "int64"
+     ],
+     "kinds": [
+      "array(int64, 1d, C)"
+     ],
+     "lad": [
+      "array(float64, 1d, C)"
+     ],
+     "last_p": [
+      "float64"
+     ],
+     "levels": [
+      "array(float64, 1d, C)"
+     ],
+     "lf": [
+      "float64"
+     ],
+     "n": [
+      "int64"
+     ],
+     "n_w": [
+      "int64"
+     ],
+     "nev": [
+      "int64"
+     ],
+     "noise": [
+      "float64"
+     ],
+     "off": [
+      "array(int64, 1d, C)"
+     ],
+     "on": [
+      "array(int64, 1d, C)"
+     ],
+     "p": [
+      "float64"
+     ],
+     "ph": [
+      "array(float64, 1d, C)"
+     ],
+     "phases": [
+      "array(float64, 1d, C)"
+     ],
+     "pitch": [
+      "array(float64, 1d, C)"
+     ],
+     "pref": [
+      "float64"
+     ],
+     "pw": [
+      "array(float64, 2d, C)"
+     ],
+     "q": [
+      "float64"
+     ],
+     "rate": [
+      "float64"
+     ],
+     "ratio": [
+      "array(float64, 2d, C)"
+     ],
+     "retrig": [
+      "array(bool, 1d, C)"
+     ],
+     "rr": [
+      "uint64"
+     ],
+     "seed": [
+      "uint64"
+     ],
+     "shifted": [
+      "array(bool, 1d, C)"
+     ],
+     "since": [
+      "Literal[int](0)",
+      "int64"
+     ],
+     "target": [
+      "float64"
+     ],
+     "tg": [
+      "float64"
+     ],
+     "track": [
+      "float64"
+     ],
+     "tt": [
+      "float64"
+     ],
+     "vg": [
+      "float64"
+     ],
+     "vib": [
+      "array(float64, 1d, C)"
+     ],
+     "w": [
+      "float64",
+      "int64"
+     ],
+     "x": [
+      "float64"
+     ],
+     "x_state": [
+      "uint64"
+     ]
+    }
+   }
+  ]
  },
  "synth.analog._wave": {
   "file": ".claude/worktrees/agent-ae096237f50be0ce5/songbird/synth/analog.py",
@@ -631,7 +1287,37 @@
    "dt",
    "d"
   ],
-  "signatures": []
+  "signatures": [
+   {
+    "args": [
+     "int64",
+     "float64",
+     "float64",
+     "float64"
+    ],
+    "return": "float64",
+    "locals": {
+     "d": [
+      "float64"
+     ],
+     "dt": [
+      "float64"
+     ],
+     "kind": [
+      "int64"
+     ],
+     "q": [
+      "float64"
+     ],
+     "r": [
+      "float64"
+     ],
+     "y": [
+      "float64"
+     ]
+    }
+   }
+  ]
  },
  "synth.bowed._read": {
   "file": ".claude/worktrees/agent-ae096237f50be0ce5/songbird/synth/bowed.py",
@@ -709,7 +1395,63 @@
    "pos",
    "delay"
   ],
-  "signatures": []
+  "signatures": [
+   {
+    "args": [
+     "array(float64, 1d, C)",
+     "int64",
+     "float64"
+    ],
+    "return": "float64",
+    "locals": {
+     "a": [
+      "float64"
+     ],
+     "b": [
+      "float64"
+     ],
+     "buf": [
+      "array(float64, 1d, C)"
+     ],
+     "c": [
+      "float64"
+     ],
+     "d": [
+      "float64"
+     ],
+     "delay": [
+      "float64"
+     ],
+     "f": [
+      "float64"
+     ],
+     "i": [
+      "int64"
+     ],
+     "mask": [
+      "int64"
+     ],
+     "pos": [
+      "int64"
+     ],
+     "wa": [
+      "float64"
+     ],
+     "wb": [
+      "float64"
+     ],
+     "wc": [
+      "float64"
+     ],
+     "wd": [
+      "float64"
+     ],
+     "x": [
+      "float64"
+     ]
+    }
+   }
+  ]
  },
  "synth.bowed.run": {
   "file": ".claude/worktrees/agent-ae096237f50be0ce5/songbird/synth/bowed.py",
@@ -825,7 +1567,121 @@
    "at",
    "velocity"
   ],
-  "signatures": []
+  "signatures": [
+   {
+    "args": [
+     "array(float64, 1d, C)",
+     "array(float64, 1d, C)",
+     "array(float64, 1d, C)",
+     "array(float64, 1d, C)",
+     "array(float64, 1d, C)",
+     "array(float64, 1d, C)",
+     "array(float64, 1d, C)",
+     "array(int64, 1d, C)",
+     "array(float64, 1d, C)"
+    ],
+    "return": "array(float64, 1d, C)",
+    "locals": {
+     "arriving": [
+      "float64"
+     ],
+     "at": [
+      "array(int64, 1d, C)"
+     ],
+     "bow_v": [
+      "array(float64, 1d, C)"
+     ],
+     "bridge_len": [
+      "array(float64, 1d, C)"
+     ],
+     "dv": [
+      "float64"
+     ],
+     "e": [
+      "Literal[int](0)",
+      "int64"
+     ],
+     "from_bridge": [
+      "float64"
+     ],
+     "from_nut": [
+      "float64"
+     ],
+     "gain": [
+      "array(float64, 1d, C)"
+     ],
+     "grip": [
+      "array(float64, 1d, C)"
+     ],
+     "height": [
+      "float64"
+     ],
+     "j": [
+      "int64"
+     ],
+     "lb": [
+      "float64"
+     ],
+     "ln": [
+      "float64"
+     ],
+     "lp": [
+      "float64"
+     ],
+     "mask": [
+      "int64"
+     ],
+     "n": [
+      "int64"
+     ],
+     "noise": [
+      "array(float64, 1d, C)"
+     ],
+     "out": [
+      "array(float64, 1d, C)"
+     ],
+     "p": [
+      "float64"
+     ],
+     "period": [
+      "array(float64, 1d, C)"
+     ],
+     "pl": [
+      "float64"
+     ],
+     "pole": [
+      "array(float64, 1d, C)"
+     ],
+     "r": [
+      "float64"
+     ],
+     "size": [
+      "Literal[int](4096)"
+     ],
+     "t": [
+      "int64"
+     ],
+     "to_bridge": [
+      "array(float64, 1d, C)"
+     ],
+     "to_nut": [
+      "array(float64, 1d, C)"
+     ],
+     "v": [
+      "float64"
+     ],
+     "v_string": [
+      "float64"
+     ],
+     "velocity": [
+      "array(float64, 1d, C)"
+     ],
+     "x": [
+      "float64"
+     ]
+    }
+   }
+  ]
  },
  "synth.chip._lfsr": {
   "file": ".claude/worktrees/agent-ae096237f50be0ce5/songbird/synth/chip.py",
@@ -849,7 +1705,69 @@
    "t_start",
    "ref"
   ],
-  "signatures": []
+  "signatures": [
+   {
+    "args": [
+     "array(float64, 1d, C)",
+     "array(float64, 1d, C)",
+     "array(float64, 1d, C)",
+     "array(float64, 1d, C)",
+     "float64",
+     "float64"
+    ],
+    "return": "UniTuple(array(float64, 1d, C) x 2)",
+    "locals": {
+     "i": [
+      "Literal[int](0)",
+      "int64"
+     ],
+     "j": [
+      "Literal[int](0)",
+      "int64"
+     ],
+     "level": [
+      "float64"
+     ],
+     "m": [
+      "Literal[int](0)",
+      "int64"
+     ],
+     "n_val": [
+      "float64"
+     ],
+     "nt": [
+      "array(float64, 1d, C)"
+     ],
+     "nv": [
+      "array(float64, 1d, C)"
+     ],
+     "out_l": [
+      "array(float64, 1d, C)"
+     ],
+     "out_t": [
+      "array(float64, 1d, C)"
+     ],
+     "ref": [
+      "float64"
+     ],
+     "t_start": [
+      "float64"
+     ],
+     "t_val": [
+      "float64"
+     ],
+     "time": [
+      "float64"
+     ],
+     "tt": [
+      "array(float64, 1d, C)"
+     ],
+     "tv": [
+      "array(float64, 1d, C)"
+     ]
+    }
+   }
+  ]
  },
  "synth.chip._noise_events": {
   "file": ".claude/worktrees/agent-ae096237f50be0ce5/songbird/synth/chip.py",
@@ -879,7 +1797,104 @@
    "hi",
    "table"
   ],
-  "signatures": []
+  "signatures": [
+   {
+    "args": [
+     "array(float64, 1d, C)",
+     "array(float64, 1d, C)",
+     "array(float64, 1d, C)",
+     "array(int64, 1d, C)",
+     "array(bool, 1d, C)",
+     "array(float64, 1d, C)",
+     "array(float64, 1d, C)",
+     "array(float64, 1d, C)"
+    ],
+    "return": "UniTuple(array(float64, 1d, C) x 2)",
+    "locals": {
+     "a": [
+      "float64"
+     ],
+     "b": [
+      "float64"
+     ],
+     "cap": [
+      "Literal[int](16)",
+      "int64"
+     ],
+     "dist": [
+      "float64"
+     ],
+     "end": [
+      "float64"
+     ],
+     "f": [
+      "float64"
+     ],
+     "frac": [
+      "float64"
+     ],
+     "hi": [
+      "array(float64, 1d, C)"
+     ],
+     "high": [
+      "Literal[bool](False)",
+      "bool"
+     ],
+     "hz": [
+      "array(float64, 1d, C)"
+     ],
+     "k": [
+      "int64"
+     ],
+     "level": [
+      "float64"
+     ],
+     "lo": [
+      "array(float64, 1d, C)"
+     ],
+     "m": [
+      "Literal[int](0)",
+      "int64"
+     ],
+     "new": [
+      "float64"
+     ],
+     "out_l": [
+      "array(float64, 1d, C)"
+     ],
+     "out_t": [
+      "array(float64, 1d, C)"
+     ],
+     "reset": [
+      "array(bool, 1d, C)"
+     ],
+     "t": [
+      "float64"
+     ],
+     "t0": [
+      "array(float64, 1d, C)"
+     ],
+     "t1": [
+      "array(float64, 1d, C)"
+     ],
+     "table": [
+      "array(float64, 1d, C)"
+     ],
+     "target": [
+      "float64"
+     ],
+     "te": [
+      "float64"
+     ],
+     "top": [
+      "float64"
+     ],
+     "vol": [
+      "array(int64, 1d, C)"
+     ]
+    }
+   }
+  ]
  },
  "synth.chip._staircase": {
   "file": ".claude/worktrees/agent-ae096237f50be0ce5/songbird/synth/chip.py",
@@ -890,7 +1905,58 @@
    "levels",
    "n"
   ],
-  "signatures": []
+  "signatures": [
+   {
+    "args": [
+     "array(float64, 1d, C)",
+     "array(float64, 1d, C)",
+     "int64"
+    ],
+    "return": "array(float64, 1d, C)",
+    "locals": {
+     "cur": [
+      "float64"
+     ],
+     "h": [
+      "float64"
+     ],
+     "i": [
+      "int64"
+     ],
+     "j": [
+      "Literal[int](0)",
+      "int64"
+     ],
+     "k": [
+      "int64"
+     ],
+     "k0": [
+      "int64"
+     ],
+     "levels": [
+      "array(float64, 1d, C)"
+     ],
+     "n": [
+      "int64"
+     ],
+     "ne": [
+      "int64"
+     ],
+     "prev": [
+      "float64"
+     ],
+     "t": [
+      "float64"
+     ],
+     "times": [
+      "array(float64, 1d, C)"
+     ],
+     "y": [
+      "array(float64, 1d, C)"
+     ]
+    }
+   }
+  ]
  },
  "synth.chip._triangle_events": {
   "file": ".claude/worktrees/agent-ae096237f50be0ce5/songbird/synth/chip.py",
@@ -902,7 +1968,72 @@
    "hz",
    "phase"
   ],
-  "signatures": []
+  "signatures": [
+   {
+    "args": [
+     "array(float64, 1d, C)",
+     "array(float64, 1d, C)",
+     "array(float64, 1d, C)",
+     "float64"
+    ],
+    "return": "Tuple(array(float64, 1d, C), array(float64, 1d, C), float64)",
+    "locals": {
+     "cap": [
+      "Literal[int](16)",
+      "int64"
+     ],
+     "dist": [
+      "float64"
+     ],
+     "end": [
+      "float64"
+     ],
+     "hz": [
+      "array(float64, 1d, C)"
+     ],
+     "k": [
+      "int64"
+     ],
+     "m": [
+      "Literal[int](0)",
+      "int64"
+     ],
+     "out_t": [
+      "array(float64, 1d, C)"
+     ],
+     "out_v": [
+      "array(float64, 1d, C)"
+     ],
+     "phase": [
+      "float64"
+     ],
+     "prev": [
+      "int64"
+     ],
+     "rate": [
+      "float64"
+     ],
+     "step": [
+      "int64"
+     ],
+     "t": [
+      "float64"
+     ],
+     "t0": [
+      "array(float64, 1d, C)"
+     ],
+     "t1": [
+      "array(float64, 1d, C)"
+     ],
+     "te": [
+      "float64"
+     ],
+     "v": [
+      "int64"
+     ]
+    }
+   }
+  ]
  },
  "synth.cymbals._fdn": {
   "file": ".claude/worktrees/agent-ae096237f50be0ce5/songbird/synth/cymbals.py",
@@ -919,7 +2050,106 @@
    "sr",
    "size"
   ],
-  "signatures": []
+  "signatures": [
+   {
+    "args": [
+     "array(float64, 1d, C)",
+     "array(int64, 1d, C)",
+     "array(float64, 1d, C)",
+     "array(float64, 1d, C)",
+     "array(float64, 2d, C)",
+     "array(float64, 1d, C)",
+     "array(float64, 1d, C)",
+     "float64",
+     "int64"
+    ],
+    "return": "array(float64, 2d, C)",
+    "locals": {
+     "a": [
+      "float64"
+     ],
+     "b": [
+      "float64"
+     ],
+     "bufs": [
+      "array(float64, 2d, C)"
+     ],
+     "damp": [
+      "array(float64, 1d, C)"
+     ],
+     "g": [
+      "array(float64, 1d, C)"
+     ],
+     "gains": [
+      "array(float64, 1d, C)"
+     ],
+     "h": [
+      "Literal[int](1)",
+      "int64"
+     ],
+     "i": [
+      "int64"
+     ],
+     "j": [
+      "int64"
+     ],
+     "left": [
+      "float64"
+     ],
+     "lines": [
+      "array(int64, 1d, C)"
+     ],
+     "lp": [
+      "array(float64, 1d, C)"
+     ],
+     "mask": [
+      "int64"
+     ],
+     "n": [
+      "int64"
+     ],
+     "out": [
+      "array(float64, 2d, C)"
+     ],
+     "poles": [
+      "array(float64, 1d, C)"
+     ],
+     "r": [
+      "float64"
+     ],
+     "right": [
+      "float64"
+     ],
+     "scale": [
+      "float64"
+     ],
+     "signs": [
+      "array(float64, 1d, C)"
+     ],
+     "size": [
+      "int64"
+     ],
+     "sr": [
+      "float64"
+     ],
+     "t": [
+      "int64"
+     ],
+     "taps": [
+      "array(float64, 2d, C)"
+     ],
+     "v": [
+      "array(float64, 1d, C)"
+     ],
+     "varying": [
+      "bool"
+     ],
+     "x": [
+      "array(float64, 1d, C)"
+     ]
+    }
+   }
+  ]
  },
  "synth.drum._ring": {
   "file": ".claude/worktrees/agent-ae096237f50be0ce5/songbird/synth/drum.py",
@@ -1031,7 +2261,59 @@
    "n",
    "sr"
   ],
-  "signatures": []
+  "signatures": [
+   {
+    "args": [
+     "array(float64, 1d, C)",
+     "array(float64, 1d, C)",
+     "array(float64, 1d, C)",
+     "int64",
+     "float64"
+    ],
+    "return": "array(float64, 1d, C)",
+    "locals": {
+     "count": [
+      "int64"
+     ],
+     "dts": [
+      "array(float64, 1d, C)"
+     ],
+     "duties": [
+      "array(float64, 1d, C)"
+     ],
+     "freqs": [
+      "array(float64, 1d, C)"
+     ],
+     "i": [
+      "int64"
+     ],
+     "invs": [
+      "array(float64, 1d, C)"
+     ],
+     "k": [
+      "int64"
+     ],
+     "n": [
+      "int64"
+     ],
+     "ph": [
+      "array(float64, 1d, C)"
+     ],
+     "phases": [
+      "array(float64, 1d, C)"
+     ],
+     "sr": [
+      "float64"
+     ],
+     "total": [
+      "float64"
+     ],
+     "y": [
+      "array(float64, 1d, C)"
+     ]
+    }
+   }
+  ]
  },
  "synth.drummachine._hat808": {
   "file": ".claude/worktrees/agent-ae096237f50be0ce5/songbird/synth/drummachine.py",
@@ -1053,7 +2335,134 @@
    "alpha",
    "hp"
   ],
-  "signatures": []
+  "signatures": [
+   {
+    "args": [
+     "array(float64, 1d, C)",
+     "array(float64, 1d, C)",
+     "array(float64, 1d, C)",
+     "int64",
+     "int64",
+     "float64",
+     "array(float64, 1d, C)",
+     "float64",
+     "array(float64, 1d, C)",
+     "float64",
+     "float64",
+     "float64",
+     "float64",
+     "array(float64, 1d, C)"
+    ],
+    "return": "array(float64, 1d, C)",
+    "locals": {
+     "alpha": [
+      "float64"
+     ],
+     "bp": [
+      "array(float64, 1d, C)"
+     ],
+     "ceiling": [
+      "float64"
+     ],
+     "count": [
+      "int64"
+     ],
+     "current": [
+      "float64"
+     ],
+     "dts": [
+      "array(float64, 1d, C)"
+     ],
+     "duties": [
+      "array(float64, 1d, C)"
+     ],
+     "e": [
+      "float64"
+     ],
+     "env": [
+      "array(float64, 1d, C)"
+     ],
+     "freqs": [
+      "array(float64, 1d, C)"
+     ],
+     "hp": [
+      "array(float64, 1d, C)"
+     ],
+     "i": [
+      "int64"
+     ],
+     "invs": [
+      "array(float64, 1d, C)"
+     ],
+     "j": [
+      "int64"
+     ],
+     "k": [
+      "int64"
+     ],
+     "lower": [
+      "float64"
+     ],
+     "n": [
+      "int64"
+     ],
+     "norm": [
+      "float64"
+     ],
+     "o": [
+      "float64"
+     ],
+     "ph": [
+      "array(float64, 1d, C)"
+     ],
+     "phases": [
+      "array(float64, 1d, C)"
+     ],
+     "pre": [
+      "int64"
+     ],
+     "root": [
+      "float64"
+     ],
+     "s1": [
+      "float64"
+     ],
+     "s2": [
+      "float64"
+     ],
+     "sr": [
+      "float64"
+     ],
+     "sw": [
+      "float64"
+     ],
+     "t1": [
+      "float64"
+     ],
+     "t2": [
+      "float64"
+     ],
+     "theta": [
+      "float64"
+     ],
+     "total": [
+      "float64"
+     ],
+     "u": [
+      "float64"
+     ],
+     "vt": [
+      "float64"
+     ],
+     "x": [
+      "float64"
+     ],
+     "y": [
+      "array(float64, 1d, C)"
+     ]
+    }
+   }
+  ]
  },
  "synth.drummachine._ring": {
   "file": ".claude/worktrees/agent-ae096237f50be0ce5/songbird/synth/drummachine.py",
@@ -1082,7 +2491,37 @@
    "dt",
    "inv"
   ],
-  "signatures": []
+  "signatures": [
+   {
+    "args": [
+     "float64",
+     "float64",
+     "float64",
+     "float64"
+    ],
+    "return": "float64",
+    "locals": {
+     "d": [
+      "float64"
+     ],
+     "dt": [
+      "float64"
+     ],
+     "inv": [
+      "float64"
+     ],
+     "p": [
+      "float64"
+     ],
+     "q": [
+      "float64"
+     ],
+     "v": [
+      "float64"
+     ]
+    }
+   }
+  ]
  },
  "synth.epiano._electrostatic": {
   "file": ".claude/worktrees/agent-ae096237f50be0ce5/songbird/synth/epiano.py",
@@ -1095,7 +2534,56 @@
    "out",
    "start"
   ],
-  "signatures": []
+  "signatures": [
+   {
+    "args": [
+     "array(float64, 1d, C)",
+     "float64",
+     "float64",
+     "array(float64, 1d, C)",
+     "int64"
+    ],
+    "return": "none",
+    "locals": {
+     "c": [
+      "float64"
+     ],
+     "end": [
+      "int64"
+     ],
+     "i": [
+      "int64"
+     ],
+     "knee": [
+      "float64"
+     ],
+     "limit": [
+      "float64"
+     ],
+     "out": [
+      "array(float64, 1d, C)"
+     ],
+     "prev": [
+      "float64"
+     ],
+     "room": [
+      "float64"
+     ],
+     "scale": [
+      "float64"
+     ],
+     "start": [
+      "int64"
+     ],
+     "x": [
+      "array(float64, 1d, C)"
+     ],
+     "xi": [
+      "float64"
+     ]
+    }
+   }
+  ]
  },
  "synth.epiano._magnetic": {
   "file": ".claude/worktrees/agent-ae096237f50be0ce5/songbird/synth/epiano.py",
@@ -1108,7 +2596,53 @@
    "out",
    "start"
   ],
-  "signatures": []
+  "signatures": [
+   {
+    "args": [
+     "array(float64, 1d, C)",
+     "float64",
+     "float64",
+     "array(float64, 1d, C)",
+     "int64"
+    ],
+    "return": "none",
+    "locals": {
+     "end": [
+      "int64"
+     ],
+     "i": [
+      "int64"
+     ],
+     "out": [
+      "array(float64, 1d, C)"
+     ],
+     "phi": [
+      "float64"
+     ],
+     "prev": [
+      "float64"
+     ],
+     "q": [
+      "float64"
+     ],
+     "scale": [
+      "float64"
+     ],
+     "start": [
+      "int64"
+     ],
+     "u": [
+      "float64"
+     ],
+     "u0": [
+      "float64"
+     ],
+     "x": [
+      "array(float64, 1d, C)"
+     ]
+    }
+   }
+  ]
  },
  "synth.fretboard._combed": {
   "file": ".claude/worktrees/agent-ae096237f50be0ce5/songbird/synth/fretboard.py",
@@ -1120,7 +2654,70 @@
    "weights",
    "scale"
   ],
-  "signatures": []
+  "signatures": [
+   {
+    "args": [
+     "array(float64, 1d, C)",
+     "array(float64, 1d, C)",
+     "array(float64, 1d, C)",
+     "array(float64, 1d, C)"
+    ],
+    "return": "array(float64, 1d, C)",
+    "locals": {
+     "acc": [
+      "float64"
+     ],
+     "c": [
+      "UniTuple(float64 x 4)"
+     ],
+     "delays": [
+      "array(float64, 1d, C)"
+     ],
+     "f": [
+      "float64"
+     ],
+     "i": [
+      "int64"
+     ],
+     "j": [
+      "int64"
+     ],
+     "k": [
+      "int64"
+     ],
+     "m": [
+      "int64"
+     ],
+     "n": [
+      "int64"
+     ],
+     "out": [
+      "array(float64, 1d, C)"
+     ],
+     "pos": [
+      "float64"
+     ],
+     "r": [
+      "float64"
+     ],
+     "scale": [
+      "array(float64, 1d, C)"
+     ],
+     "t": [
+      "int64"
+     ],
+     "total": [
+      "float64"
+     ],
+     "weights": [
+      "array(float64, 1d, C)"
+     ],
+     "y": [
+      "array(float64, 1d, C)"
+     ]
+    }
+   }
+  ]
  },
  "synth.fretboard._two_planes": {
   "file": ".claude/worktrees/agent-ae096237f50be0ce5/songbird/synth/fretboard.py",
@@ -1140,7 +2737,147 @@
    "ad",
    "sections"
   ],
-  "signatures": []
+  "signatures": [
+   {
+    "args": [
+     "array(float64, 1d, C)",
+     "array(float64, 1d, C)",
+     "array(float64, 1d, C)",
+     "array(float64, 1d, C)",
+     "array(float64, 1d, C)",
+     "array(float64, 1d, C)",
+     "float64",
+     "float64",
+     "int64",
+     "float64",
+     "float64",
+     "int64"
+    ],
+    "return": "array(float64, 1d, C)",
+    "locals": {
+     "ad": [
+      "float64"
+     ],
+     "ba": [
+      "array(float64, 1d, C)"
+     ],
+     "bb": [
+      "array(float64, 1d, C)"
+     ],
+     "c0": [
+      "float64"
+     ],
+     "c1": [
+      "float64"
+     ],
+     "c2": [
+      "float64"
+     ],
+     "c3": [
+      "float64"
+     ],
+     "da": [
+      "array(float64, 1d, C)"
+     ],
+     "db": [
+      "array(float64, 1d, C)"
+     ],
+     "f": [
+      "float64"
+     ],
+     "ga": [
+      "array(float64, 1d, C)"
+     ],
+     "gb": [
+      "array(float64, 1d, C)"
+     ],
+     "heard": [
+      "float64"
+     ],
+     "i": [
+      "int64"
+     ],
+     "la": [
+      "float64"
+     ],
+     "lb": [
+      "float64"
+     ],
+     "loss": [
+      "float64"
+     ],
+     "mask": [
+      "int64"
+     ],
+     "n": [
+      "int64"
+     ],
+     "o": [
+      "float64"
+     ],
+     "out": [
+      "array(float64, 1d, C)"
+     ],
+     "pa": [
+      "float64"
+     ],
+     "pb": [
+      "float64"
+     ],
+     "pole": [
+      "float64"
+     ],
+     "pos": [
+      "float64"
+     ],
+     "r": [
+      "float64"
+     ],
+     "s": [
+      "int64"
+     ],
+     "sections": [
+      "int64"
+     ],
+     "size": [
+      "int64"
+     ],
+     "t": [
+      "int64"
+     ],
+     "v": [
+      "float64"
+     ],
+     "w": [
+      "float64"
+     ],
+     "xa": [
+      "array(float64, 1d, C)"
+     ],
+     "xa1": [
+      "array(float64, 1d, C)"
+     ],
+     "xb": [
+      "array(float64, 1d, C)"
+     ],
+     "xb1": [
+      "array(float64, 1d, C)"
+     ],
+     "ya": [
+      "float64"
+     ],
+     "ya1": [
+      "array(float64, 1d, C)"
+     ],
+     "yb": [
+      "float64"
+     ],
+     "yb1": [
+      "array(float64, 1d, C)"
+     ]
+    }
+   }
+  ]
  },
  "synth.fretwork._string": {
   "file": ".claude/worktrees/agent-ae096237f50be0ce5/songbird/synth/fretwork.py",
@@ -1164,7 +2901,224 @@
    "size",
    "hp"
   ],
-  "signatures": []
+  "signatures": [
+   {
+    "args": [
+     "int64",
+     "int64",
+     "array(float64, 1d, C)",
+     "array(float64, 1d, C)",
+     "array(float64, 1d, C)",
+     "array(float64, 1d, C)",
+     "array(float64, 1d, C)",
+     "float64",
+     "float64",
+     "array(int64, 1d, C)",
+     "array(int64, 1d, C)",
+     "array(int64, 1d, C)",
+     "array(float64, 1d, C)",
+     "array(float64, 1d, C)",
+     "int64",
+     "array(float64, 1d, C)"
+    ],
+    "return": "array(float64, 1d, C)",
+    "locals": {
+     "amount": [
+      "array(float64, 1d, C)"
+     ],
+     "at": [
+      "array(int64, 1d, C)"
+     ],
+     "b0": [
+      "float64"
+     ],
+     "buf_a": [
+      "array(float64, 1d, C)"
+     ],
+     "buf_b": [
+      "array(float64, 1d, C)"
+     ],
+     "c": [
+      "int64"
+     ],
+     "c1": [
+      "array(float64, 1d, C)"
+     ],
+     "c2": [
+      "float64"
+     ],
+     "count": [
+      "array(int64, 1d, C)"
+     ],
+     "ctrl": [
+      "int64"
+     ],
+     "d": [
+      "float64"
+     ],
+     "delay": [
+      "array(float64, 1d, C)"
+     ],
+     "e": [
+      "int64"
+     ],
+     "f": [
+      "float64"
+     ],
+     "first": [
+      "array(int64, 1d, C)"
+     ],
+     "frac": [
+      "float64"
+     ],
+     "g1": [
+      "float64"
+     ],
+     "g2": [
+      "float64"
+     ],
+     "ga": [
+      "float64"
+     ],
+     "gain_a": [
+      "array(float64, 1d, C)"
+     ],
+     "gain_b": [
+      "array(float64, 1d, C)"
+     ],
+     "gb": [
+      "float64"
+     ],
+     "h": [
+      "int64"
+     ],
+     "h1": [
+      "float64"
+     ],
+     "h2": [
+      "float64"
+     ],
+     "hp": [
+      "array(float64, 1d, C)"
+     ],
+     "hv": [
+      "float64"
+     ],
+     "i": [
+      "int64"
+     ],
+     "j": [
+      "int64"
+     ],
+     "k": [
+      "Literal[int](0)",
+      "int64"
+     ],
+     "live": [
+      "array(float64, 1d, C)"
+     ],
+     "loss": [
+      "float64"
+     ],
+     "mask": [
+      "int64"
+     ],
+     "n": [
+      "int64"
+     ],
+     "n_exc": [
+      "int64"
+     ],
+     "o": [
+      "int64"
+     ],
+     "oa": [
+      "float64"
+     ],
+     "ob": [
+      "float64"
+     ],
+     "omega": [
+      "array(float64, 1d, C)"
+     ],
+     "pool": [
+      "array(float64, 1d, C)"
+     ],
+     "pos": [
+      "float64"
+     ],
+     "prev_a": [
+      "float64"
+     ],
+     "prev_b": [
+      "float64"
+     ],
+     "pull": [
+      "array(float64, 1d, C)"
+     ],
+     "q": [
+      "float64"
+     ],
+     "r": [
+      "float64"
+     ],
+     "ra": [
+      "float64"
+     ],
+     "ratio_b": [
+      "float64"
+     ],
+     "rb": [
+      "float64"
+     ],
+     "s": [
+      "float64"
+     ],
+     "s1": [
+      "array(float64, 1d, C)"
+     ],
+     "s2": [
+      "array(float64, 1d, C)"
+     ],
+     "size": [
+      "int64"
+     ],
+     "t": [
+      "int64"
+     ],
+     "tension": [
+      "float64"
+     ],
+     "v": [
+      "float64"
+     ],
+     "va": [
+      "float64"
+     ],
+     "vb": [
+      "float64"
+     ],
+     "w": [
+      "float64"
+     ],
+     "x1": [
+      "float64"
+     ],
+     "x2": [
+      "float64"
+     ],
+     "xa": [
+      "float64"
+     ],
+     "xb": [
+      "float64"
+     ],
+     "y": [
+      "array(float64, 1d, C)"
+     ]
+    }
+   }
+  ]
  },
  "synth.fx._apply": {
   "file": ".claude/worktrees/agent-ae096237f50be0ce5/songbird/synth/fx.py",
@@ -1911,7 +3865,82 @@
    "preloads",
    "damping"
   ],
-  "signatures": []
+  "signatures": [
+   {
+    "args": [
+     "array(float64, 1d, C)",
+     "float64",
+     "array(float64, 1d, C)",
+     "array(float64, 1d, C)",
+     "float64"
+    ],
+    "return": "array(float64, 1d, C)",
+    "locals": {
+     "a": [
+      "float64"
+     ],
+     "ad": [
+      "float64"
+     ],
+     "d": [
+      "array(float64, 1d, C)"
+     ],
+     "damping": [
+      "float64"
+     ],
+     "dt": [
+      "float64"
+     ],
+     "n": [
+      "int64"
+     ],
+     "omegas": [
+      "array(float64, 1d, C)"
+     ],
+     "out": [
+      "array(float64, 1d, C)"
+     ],
+     "preloads": [
+      "array(float64, 1d, C)"
+     ],
+     "prev_v": [
+      "float64"
+     ],
+     "rest": [
+      "float64"
+     ],
+     "s": [
+      "int64"
+     ],
+     "sr": [
+      "float64"
+     ],
+     "t": [
+      "int64"
+     ],
+     "touching": [
+      "Literal[bool](False)",
+      "Literal[bool](True)",
+      "bool"
+     ],
+     "v": [
+      "float64"
+     ],
+     "vd": [
+      "float64"
+     ],
+     "w": [
+      "float64"
+     ],
+     "w2": [
+      "float64"
+     ],
+     "zeta": [
+      "float64"
+     ]
+    }
+   }
+  ]
  },
  "synth.kit._grains": {
   "file": ".claude/worktrees/agent-ae096237f50be0ce5/songbird/synth/kit.py",
@@ -1924,7 +3953,66 @@
    "length",
    "tau"
   ],
-  "signatures": []
+  "signatures": [
+   {
+    "args": [
+     "array(float64, 1d, C)",
+     "array(float64, 1d, C)",
+     "array(int64, 1d, C)",
+     "int64",
+     "float64"
+    ],
+    "return": "array(float64, 1d, C)",
+    "locals": {
+     "a": [
+      "float64"
+     ],
+     "decay": [
+      "float64"
+     ],
+     "g": [
+      "float64"
+     ],
+     "j": [
+      "int64"
+     ],
+     "k": [
+      "Literal[int](0)",
+      "int64"
+     ],
+     "length": [
+      "int64"
+     ],
+     "n": [
+      "int64"
+     ],
+     "noise": [
+      "array(float64, 1d, C)"
+     ],
+     "o": [
+      "int64"
+     ],
+     "offsets": [
+      "array(int64, 1d, C)"
+     ],
+     "out": [
+      "array(float64, 1d, C)"
+     ],
+     "size": [
+      "int64"
+     ],
+     "strengths": [
+      "array(float64, 1d, C)"
+     ],
+     "t": [
+      "int64"
+     ],
+     "tau": [
+      "float64"
+     ]
+    }
+   }
+  ]
  },
  "synth.master._hop_power": {
   "file": ".claude/worktrees/agent-ae096237f50be0ce5/songbird/synth/master.py",
@@ -2030,7 +4118,167 @@
    "sr",
    "floor"
   ],
-  "signatures": []
+  "signatures": [
+   {
+    "args": [
+     "array(float64, 2d, C)",
+     "int64",
+     "array(float64, 1d, C)",
+     "array(float64, 1d, C)",
+     "array(float64, 1d, C)",
+     "array(float64, 1d, C)",
+     "array(float64, 1d, C)",
+     "array(float64, 1d, C)",
+     "int64",
+     "float64",
+     "array(float64, 1d, C)",
+     "float64",
+     "float64"
+    ],
+    "return": "int64",
+    "locals": {
+     "a": [
+      "float64"
+     ],
+     "b": [
+      "float64"
+     ],
+     "block": [
+      "Literal[int](32)"
+     ],
+     "c": [
+      "int64"
+     ],
+     "channels": [
+      "int64"
+     ],
+     "count": [
+      "Literal[int](0)",
+      "int64"
+     ],
+     "cw": [
+      "array(float64, 1d, C)"
+     ],
+     "damp_at": [
+      "int64"
+     ],
+     "driven": [
+      "int64"
+     ],
+     "end": [
+      "int64"
+     ],
+     "f": [
+      "float64"
+     ],
+     "floor": [
+      "float64"
+     ],
+     "force": [
+      "array(float64, 1d, C)"
+     ],
+     "freqs": [
+      "array(float64, 1d, C)"
+     ],
+     "gain_im": [
+      "array(float64, 1d, C)"
+     ],
+     "gain_re": [
+      "array(float64, 1d, C)"
+     ],
+     "gains": [
+      "array(float64, 1d, C)"
+     ],
+     "gi": [
+      "array(float64, 1d, C)"
+     ],
+     "gr": [
+      "array(float64, 1d, C)"
+     ],
+     "i": [
+      "Literal[int](0)",
+      "int64"
+     ],
+     "j": [
+      "Literal[int](0)",
+      "int64"
+     ],
+     "k": [
+      "int64"
+     ],
+     "last": [
+      "int64"
+     ],
+     "length": [
+      "int64"
+     ],
+     "mi": [
+      "array(float64, 1d, C)"
+     ],
+     "mr": [
+      "array(float64, 1d, C)"
+     ],
+     "n": [
+      "int64"
+     ],
+     "out": [
+      "array(float64, 2d, C)"
+     ],
+     "r": [
+      "float64"
+     ],
+     "r0": [
+      "array(float64, 1d, C)"
+     ],
+     "r1": [
+      "array(float64, 1d, C)"
+     ],
+     "ramp": [
+      "float64"
+     ],
+     "s": [
+      "float64"
+     ],
+     "span": [
+      "int64"
+     ],
+     "sr": [
+      "float64"
+     ],
+     "start": [
+      "int64"
+     ],
+     "sw": [
+      "array(float64, 1d, C)"
+     ],
+     "t": [
+      "int64"
+     ],
+     "t60": [
+      "array(float64, 1d, C)"
+     ],
+     "t60_damped": [
+      "array(float64, 1d, C)"
+     ],
+     "u": [
+      "float64"
+     ],
+     "w": [
+      "float64"
+     ],
+     "written": [
+      "Literal[int](0)",
+      "int64"
+     ],
+     "zi": [
+      "array(float64, 1d, C)"
+     ],
+     "zr": [
+      "array(float64, 1d, C)"
+     ]
+    }
+   }
+  ]
  },
  "synth.organ._expression": {
   "file": ".claude/worktrees/agent-ae096237f50be0ce5/songbird/synth/organ.py",
@@ -2049,7 +4297,99 @@
    "contour_hz",
    "contour_depth"
   ],
-  "signatures": []
+  "signatures": [
+   {
+    "args": [
+     "array(float64, 1d, C)",
+     "float64",
+     "array(int64, 1d, C)",
+     "array(float64, 1d, C)",
+     "array(float64, 1d, C)",
+     "float64",
+     "float64",
+     "float64",
+     "float64",
+     "float64",
+     "float64"
+    ],
+    "return": "array(float64, 1d, C)",
+    "locals": {
+     "a": [
+      "float64"
+     ],
+     "contour_depth": [
+      "float64"
+     ],
+     "contour_hz": [
+      "float64"
+     ],
+     "e": [
+      "Literal[int](0)",
+      "int64"
+     ],
+     "ev_gain": [
+      "array(float64, 1d, C)"
+     ],
+     "ev_t": [
+      "array(int64, 1d, C)"
+     ],
+     "ev_target": [
+      "array(float64, 1d, C)"
+     ],
+     "events": [
+      "int64"
+     ],
+     "follow": [
+      "float64"
+     ],
+     "g": [
+      "float64"
+     ],
+     "g0": [
+      "float64"
+     ],
+     "g_target": [
+      "float64"
+     ],
+     "gamma": [
+      "float64"
+     ],
+     "k": [
+      "float64"
+     ],
+     "level": [
+      "float64"
+     ],
+     "low": [
+      "float64"
+     ],
+     "n": [
+      "int64"
+     ],
+     "s": [
+      "float64"
+     ],
+     "s0": [
+      "float64"
+     ],
+     "sr": [
+      "float64"
+     ],
+     "t": [
+      "int64"
+     ],
+     "target": [
+      "float64"
+     ],
+     "x": [
+      "array(float64, 1d, C)"
+     ],
+     "y": [
+      "array(float64, 1d, C)"
+     ]
+    }
+   }
+  ]
  },
  "synth.organ._generator": {
   "file": ".claude/worktrees/agent-ae096237f50be0ce5/songbird/synth/organ.py",
@@ -2070,7 +4410,170 @@
    "trig_t",
    "trig_decay"
   ],
-  "signatures": []
+  "signatures": [
+   {
+    "args": [
+     "int64",
+     "float64",
+     "array(float64, 1d, C)",
+     "array(float64, 1d, C)",
+     "array(float64, 1d, C)",
+     "array(float64, 1d, C)",
+     "array(int64, 1d, C)",
+     "array(int64, 1d, C)",
+     "array(float64, 1d, C)",
+     "array(float64, 1d, C)",
+     "array(int64, 1d, C)",
+     "array(int64, 1d, C)",
+     "array(float64, 1d, C)"
+    ],
+    "return": "UniTuple(array(float64, 1d, C) x 2)",
+    "locals": {
+     "acc_m": [
+      "float64"
+     ],
+     "acc_p": [
+      "float64"
+     ],
+     "active": [
+      "array(int64, 1d, C)"
+     ],
+     "c": [
+      "array(float64, 1d, C)"
+     ],
+     "cc": [
+      "float64"
+     ],
+     "count": [
+      "Literal[int](0)",
+      "int64"
+     ],
+     "cur_m": [
+      "array(float64, 1d, C)"
+     ],
+     "cur_p": [
+      "array(float64, 1d, C)"
+     ],
+     "cw": [
+      "array(float64, 1d, C)"
+     ],
+     "decay": [
+      "float64"
+     ],
+     "e": [
+      "Literal[int](0)",
+      "int64"
+     ],
+     "env": [
+      "float64"
+     ],
+     "ev_main": [
+      "array(float64, 1d, C)"
+     ],
+     "ev_perc": [
+      "array(float64, 1d, C)"
+     ],
+     "ev_ramp": [
+      "array(int64, 1d, C)"
+     ],
+     "ev_t": [
+      "array(int64, 1d, C)"
+     ],
+     "ev_w": [
+      "array(int64, 1d, C)"
+     ],
+     "events": [
+      "int64"
+     ],
+     "freqs": [
+      "array(float64, 1d, C)"
+     ],
+     "h2": [
+      "array(float64, 1d, C)"
+     ],
+     "h3": [
+      "array(float64, 1d, C)"
+     ],
+     "is_active": [
+      "array(bool, 1d, C)"
+     ],
+     "j": [
+      "Literal[int](0)",
+      "int64"
+     ],
+     "left": [
+      "array(int64, 1d, C)"
+     ],
+     "main": [
+      "array(float64, 1d, C)"
+     ],
+     "n": [
+      "int64"
+     ],
+     "perc": [
+      "array(float64, 1d, C)"
+     ],
+     "phases": [
+      "array(float64, 1d, C)"
+     ],
+     "ramp": [
+      "int64"
+     ],
+     "s": [
+      "array(float64, 1d, C)"
+     ],
+     "sr": [
+      "float64"
+     ],
+     "ss": [
+      "float64"
+     ],
+     "step_m": [
+      "array(float64, 1d, C)"
+     ],
+     "step_p": [
+      "array(float64, 1d, C)"
+     ],
+     "sw": [
+      "array(float64, 1d, C)"
+     ],
+     "t": [
+      "int64"
+     ],
+     "tgt_m": [
+      "array(float64, 1d, C)"
+     ],
+     "tgt_p": [
+      "array(float64, 1d, C)"
+     ],
+     "theta": [
+      "float64"
+     ],
+     "tr": [
+      "Literal[int](0)",
+      "int64"
+     ],
+     "trig_decay": [
+      "array(float64, 1d, C)"
+     ],
+     "trig_t": [
+      "array(int64, 1d, C)"
+     ],
+     "triggers": [
+      "int64"
+     ],
+     "w": [
+      "int64"
+     ],
+     "w_count": [
+      "int64"
+     ],
+     "wave": [
+      "float64"
+     ]
+    }
+   }
+  ]
  },
  "synth.organ._read": {
   "file": ".claude/worktrees/agent-ae096237f50be0ce5/songbird/synth/organ.py",
@@ -2082,7 +4585,49 @@
    "t",
    "d"
   ],
-  "signatures": []
+  "signatures": [
+   {
+    "args": [
+     "array(float64, 1d, C)",
+     "Literal[int](1024)",
+     "int64",
+     "float64"
+    ],
+    "return": "float64",
+    "locals": {
+     "d": [
+      "float64"
+     ],
+     "f": [
+      "float64"
+     ],
+     "i": [
+      "int64"
+     ],
+     "line": [
+      "array(float64, 1d, C)"
+     ],
+     "size": [
+      "Literal[int](1024)"
+     ],
+     "t": [
+      "int64"
+     ],
+     "x0": [
+      "float64"
+     ],
+     "x1": [
+      "float64"
+     ],
+     "x2": [
+      "float64"
+     ],
+     "xm1": [
+      "float64"
+     ]
+    }
+   }
+  ]
  },
  "synth.organ._rotors": {
   "file": ".claude/worktrees/agent-ae096237f50be0ce5/songbird/synth/organ.py",
@@ -2105,7 +4650,214 @@
    "horn_sos",
    "out_sos"
   ],
-  "signatures": []
+  "signatures": [
+   {
+    "args": [
+     "array(float64, 1d, C)",
+     "float64",
+     "array(int64, 1d, C)",
+     "array(bool, 1d, C)",
+     "bool",
+     "array(float64, 1d, C)",
+     "array(float64, 1d, C)",
+     "array(float64, 1d, C)",
+     "array(float64, 1d, C)",
+     "array(float64, 1d, C)",
+     "array(float64, 1d, C)",
+     "array(float64, 1d, C)",
+     "array(float64, 1d, C)",
+     "array(float64, 1d, C)",
+     "array(float64, 1d, C)"
+    ],
+    "return": "array(float64, 2d, C)",
+    "locals": {
+     "a": [
+      "float64"
+     ],
+     "angles": [
+      "array(float64, 1d, C)"
+     ],
+     "base": [
+      "float64"
+     ],
+     "bd": [
+      "float64"
+     ],
+     "bh": [
+      "float64"
+     ],
+     "c": [
+      "float64"
+     ],
+     "ca": [
+      "float64"
+     ],
+     "cd": [
+      "float64"
+     ],
+     "ch": [
+      "float64"
+     ],
+     "cm": [
+      "array(float64, 1d, C)"
+     ],
+     "dkd": [
+      "float64"
+     ],
+     "dku": [
+      "float64"
+     ],
+     "drum": [
+      "array(float64, 1d, C)"
+     ],
+     "e": [
+      "Literal[int](0)",
+      "int64"
+     ],
+     "ev_fast": [
+      "array(bool, 1d, C)"
+     ],
+     "ev_t": [
+      "array(int64, 1d, C)"
+     ],
+     "events": [
+      "int64"
+     ],
+     "fast": [
+      "bool"
+     ],
+     "fast0": [
+      "bool"
+     ],
+     "gd": [
+      "float64"
+     ],
+     "gh": [
+      "float64"
+     ],
+     "high_sos": [
+      "array(float64, 1d, C)"
+     ],
+     "horn": [
+      "array(float64, 1d, C)"
+     ],
+     "horn_sos": [
+      "array(float64, 1d, C)"
+     ],
+     "k": [
+      "int64"
+     ],
+     "kd": [
+      "float64"
+     ],
+     "ku": [
+      "float64"
+     ],
+     "line_d": [
+      "array(float64, 1d, C)"
+     ],
+     "line_h": [
+      "array(float64, 1d, C)"
+     ],
+     "low": [
+      "float64"
+     ],
+     "low_sos": [
+      "array(float64, 1d, C)"
+     ],
+     "m": [
+      "int64"
+     ],
+     "mics": [
+      "array(float64, 1d, C)"
+     ],
+     "n": [
+      "int64"
+     ],
+     "nd": [
+      "float64"
+     ],
+     "nh": [
+      "float64"
+     ],
+     "out": [
+      "array(float64, 2d, C)"
+     ],
+     "out_sos": [
+      "array(float64, 1d, C)"
+     ],
+     "r": [
+      "float64"
+     ],
+     "rd": [
+      "float64"
+     ],
+     "rh": [
+      "float64"
+     ],
+     "sa": [
+      "float64"
+     ],
+     "sd": [
+      "float64"
+     ],
+     "sh": [
+      "float64"
+     ],
+     "size": [
+      "Literal[int](1024)"
+     ],
+     "sm": [
+      "array(float64, 1d, C)"
+     ],
+     "speeds": [
+      "array(float64, 1d, C)"
+     ],
+     "sr": [
+      "float64"
+     ],
+     "t": [
+      "int64"
+     ],
+     "target_d": [
+      "float64"
+     ],
+     "target_h": [
+      "float64"
+     ],
+     "times": [
+      "array(float64, 1d, C)"
+     ],
+     "v": [
+      "float64"
+     ],
+     "w": [
+      "float64"
+     ],
+     "wd": [
+      "float64"
+     ],
+     "wh": [
+      "float64"
+     ],
+     "x": [
+      "array(float64, 1d, C)"
+     ],
+     "xd": [
+      "float64"
+     ],
+     "xh": [
+      "float64"
+     ],
+     "y": [
+      "float64"
+     ],
+     "z": [
+      "array(float64, 2d, C)"
+     ]
+    }
+   }
+  ]
  },
  "synth.organ._scanner": {
   "file": ".claude/worktrees/agent-ae096237f50be0ce5/songbird/synth/organ.py",
@@ -2121,7 +4873,141 @@
    "phase0",
    "lp"
   ],
-  "signatures": []
+  "signatures": [
+   {
+    "args": [
+     "array(float64, 1d, C)",
+     "float64",
+     "array(int64, 1d, C)",
+     "array(float64, 1d, C)",
+     "array(float64, 1d, C)",
+     "array(float64, 1d, C)",
+     "float64",
+     "float64"
+    ],
+    "return": "array(float64, 1d, C)",
+    "locals": {
+     "base": [
+      "float64"
+     ],
+     "d": [
+      "float64"
+     ],
+     "depth": [
+      "float64"
+     ],
+     "depth_to": [
+      "float64"
+     ],
+     "dry": [
+      "float64"
+     ],
+     "dry_now": [
+      "float64"
+     ],
+     "dry_to": [
+      "float64"
+     ],
+     "eps": [
+      "float64"
+     ],
+     "f": [
+      "float64"
+     ],
+     "glide": [
+      "float64"
+     ],
+     "i": [
+      "int64"
+     ],
+     "inc": [
+      "float64"
+     ],
+     "k": [
+      "Literal[int](0)",
+      "int64"
+     ],
+     "line": [
+      "array(float64, 1d, C)"
+     ],
+     "lp": [
+      "float64"
+     ],
+     "n": [
+      "int64"
+     ],
+     "p": [
+      "float64"
+     ],
+     "phase0": [
+      "float64"
+     ],
+     "q": [
+      "float64"
+     ],
+     "r": [
+      "float64"
+     ],
+     "seg_depth": [
+      "array(float64, 1d, C)"
+     ],
+     "seg_dry": [
+      "array(float64, 1d, C)"
+     ],
+     "seg_t": [
+      "array(int64, 1d, C)"
+     ],
+     "seg_wet": [
+      "array(float64, 1d, C)"
+     ],
+     "segs": [
+      "int64"
+     ],
+     "size": [
+      "Literal[int](256)"
+     ],
+     "sr": [
+      "float64"
+     ],
+     "t": [
+      "int64"
+     ],
+     "tri": [
+      "float64"
+     ],
+     "v": [
+      "float64"
+     ],
+     "wet": [
+      "float64"
+     ],
+     "wet_lp": [
+      "float64"
+     ],
+     "wet_to": [
+      "float64"
+     ],
+     "x": [
+      "array(float64, 1d, C)"
+     ],
+     "x0": [
+      "float64"
+     ],
+     "x1": [
+      "float64"
+     ],
+     "x2": [
+      "float64"
+     ],
+     "xm1": [
+      "float64"
+     ],
+     "y": [
+      "array(float64, 1d, C)"
+     ]
+    }
+   }
+  ]
  },
  "synth.osc._blamp": {
   "file": ".claude/worktrees/agent-ae096237f50be0ce5/songbird/synth/osc.py",
@@ -2150,7 +5036,25 @@
   "params": [
    "t"
   ],
-  "signatures": []
+  "signatures": [
+   {
+    "args": [
+     "float64"
+    ],
+    "return": "float64",
+    "locals": {
+     "s": [
+      "float64"
+     ],
+     "t": [
+      "float64"
+     ],
+     "u": [
+      "float64"
+     ]
+    }
+   }
+  ]
  },
  "synth.osc._edges": {
   "file": ".claude/worktrees/agent-ae096237f50be0ce5/songbird/synth/osc.py",
@@ -2160,7 +5064,32 @@
    "p",
    "dt"
   ],
-  "signatures": []
+  "signatures": [
+   {
+    "args": [
+     "float64",
+     "float64"
+    ],
+    "return": "float64",
+    "locals": {
+     "after": [
+      "float64"
+     ],
+     "before": [
+      "float64"
+     ],
+     "dt": [
+      "float64"
+     ],
+     "p": [
+      "float64"
+     ],
+     "r": [
+      "float64"
+     ]
+    }
+   }
+  ]
  },
  "synth.osc.pulse": {
   "file": ".claude/worktrees/agent-ae096237f50be0ce5/songbird/synth/osc.py",
@@ -2217,7 +5146,57 @@
    "freqs",
    "sr"
   ],
-  "signatures": []
+  "signatures": [
+   {
+    "args": [
+     "array(float64, 1d, C)",
+     "array(float64, 1d, C)",
+     "float64"
+    ],
+    "return": "array(complex128, 1d, C)",
+    "locals": {
+     "acc_i": [
+      "float64"
+     ],
+     "acc_r": [
+      "float64"
+     ],
+     "force": [
+      "array(float64, 1d, C)"
+     ],
+     "freqs": [
+      "array(float64, 1d, C)"
+     ],
+     "k": [
+      "int64"
+     ],
+     "out": [
+      "array(complex128, 1d, C)"
+     ],
+     "pi": [
+      "float64"
+     ],
+     "pr": [
+      "float64"
+     ],
+     "sr": [
+      "float64"
+     ],
+     "step_i": [
+      "float64"
+     ],
+     "step_r": [
+      "float64"
+     ],
+     "t": [
+      "int64"
+     ],
+     "w": [
+      "float64"
+     ]
+    }
+   }
+  ]
  },
  "synth.piano.hammer_force": {
   "file": ".claude/worktrees/agent-ae096237f50be0ce5/songbird/synth/piano.py",
@@ -2235,7 +5214,152 @@
    "fs",
    "max_t"
   ],
-  "signatures": []
+  "signatures": [
+   {
+    "args": [
+     "float64",
+     "float64",
+     "float64",
+     "float64",
+     "float64",
+     "float64",
+     "float64",
+     "float64",
+     "float64",
+     "float64"
+    ],
+    "return": "array(float64, 1d, C)",
+    "locals": {
+     "_": [
+      "int64"
+     ],
+     "a": [
+      "float64"
+     ],
+     "b": [
+      "float64"
+     ],
+     "c": [
+      "float64"
+     ],
+     "d": [
+      "float64"
+     ],
+     "d0": [
+      "float64"
+     ],
+     "delay_left": [
+      "float64"
+     ],
+     "delay_right": [
+      "float64"
+     ],
+     "eta": [
+      "float64"
+     ],
+     "eta_next": [
+      "float64"
+     ],
+     "f": [
+      "float64"
+     ],
+     "force": [
+      "array(float64, 1d, C)"
+     ],
+     "fs": [
+      "float64"
+     ],
+     "g": [
+      "float64"
+     ],
+     "half": [
+      "float64"
+     ],
+     "hi": [
+      "float64"
+     ],
+     "i": [
+      "int64"
+     ],
+     "in_left": [
+      "float64"
+     ],
+     "in_right": [
+      "float64"
+     ],
+     "left_contact": [
+      "Literal[int](0)",
+      "int64"
+     ],
+     "lo": [
+      "float64"
+     ],
+     "loss": [
+      "float64"
+     ],
+     "mass": [
+      "float64"
+     ],
+     "max_t": [
+      "float64"
+     ],
+     "n": [
+      "int64"
+     ],
+     "out_left": [
+      "array(float64, 1d, C)"
+     ],
+     "out_right": [
+      "array(float64, 1d, C)"
+     ],
+     "power": [
+      "float64"
+     ],
+     "push": [
+      "float64"
+     ],
+     "size": [
+      "Literal[int](1)",
+      "int64"
+     ],
+     "slope": [
+      "float64"
+     ],
+     "step": [
+      "float64"
+     ],
+     "stiff": [
+      "float64"
+     ],
+     "t": [
+      "int64"
+     ],
+     "touched": [
+      "Literal[bool](False)",
+      "Literal[bool](True)",
+      "bool"
+     ],
+     "u": [
+      "float64"
+     ],
+     "v0": [
+      "float64"
+     ],
+     "v_string": [
+      "float64"
+     ],
+     "x": [
+      "float64"
+     ],
+     "y": [
+      "float64"
+     ],
+     "z": [
+      "float64"
+     ]
+    }
+   }
+  ]
  },
  "synth.pipe.run": {
   "file": ".claude/worktrees/agent-ae096237f50be0ce5/songbird/synth/pipe.py",
@@ -2551,7 +5675,200 @@
    "state",
    "out"
   ],
-  "signatures": []
+  "signatures": [
+   {
+    "args": [
+     "array(float64, 1d, C)",
+     "int64",
+     "float64",
+     "float64",
+     "float64",
+     "float64",
+     "float64",
+     "array(float64, 1d, C)",
+     "array(float64, 1d, C)",
+     "array(float64, 1d, C)",
+     "array(float64, 1d, C)",
+     "float64",
+     "array(float64, 1d, C)",
+     "array(float64, 1d, C)",
+     "array(float64, 1d, C)",
+     "array(float64, 1d, C)",
+     "array(int64, 1d, C)",
+     "float64",
+     "uint64",
+     "array(float64, 1d, C)"
+    ],
+    "return": "uint64",
+    "locals": {
+     "a_lp": [
+      "float64"
+     ],
+     "b": [
+      "int64"
+     ],
+     "c": [
+      "int64"
+     ],
+     "click": [
+      "float64"
+     ],
+     "cut": [
+      "float64"
+     ],
+     "decay": [
+      "float64"
+     ],
+     "e": [
+      "float64"
+     ],
+     "energy": [
+      "array(float64, 1d, C)"
+     ],
+     "gamma": [
+      "float64"
+     ],
+     "hit": [
+      "bool"
+     ],
+     "hop": [
+      "int64"
+     ],
+     "i": [
+      "int64"
+     ],
+     "i0": [
+      "int64"
+     ],
+     "i1": [
+      "int64"
+     ],
+     "j": [
+      "int64"
+     ],
+     "k": [
+      "int64"
+     ],
+     "kick": [
+      "float64"
+     ],
+     "last": [
+      "float64"
+     ],
+     "level": [
+      "float64"
+     ],
+     "lp": [
+      "float64"
+     ],
+     "lp1": [
+      "float64"
+     ],
+     "lp2": [
+      "float64"
+     ],
+     "lp_hi": [
+      "float64"
+     ],
+     "lp_lo": [
+      "float64"
+     ],
+     "m1": [
+      "array(float64, 1d, C)"
+     ],
+     "m2": [
+      "array(float64, 1d, C)"
+     ],
+     "ma1": [
+      "array(float64, 1d, C)"
+     ],
+     "ma2": [
+      "array(float64, 1d, C)"
+     ],
+     "mgain": [
+      "array(float64, 1d, C)"
+     ],
+     "mstart": [
+      "array(int64, 1d, C)"
+     ],
+     "mtilt": [
+      "array(float64, 1d, C)"
+     ],
+     "n": [
+      "int64"
+     ],
+     "nb": [
+      "int64"
+     ],
+     "nk": [
+      "int64"
+     ],
+     "objects": [
+      "int64"
+     ],
+     "out": [
+      "array(float64, 1d, C)"
+     ],
+     "p": [
+      "float64"
+     ],
+     "peak": [
+      "float64"
+     ],
+     "rate": [
+      "float64"
+     ],
+     "root": [
+      "float64"
+     ],
+     "s1": [
+      "array(float64, 1d, C)"
+     ],
+     "s2": [
+      "array(float64, 1d, C)"
+     ],
+     "sa1": [
+      "array(float64, 1d, C)"
+     ],
+     "sa2": [
+      "array(float64, 1d, C)"
+     ],
+     "sb": [
+      "array(float64, 1d, C)"
+     ],
+     "sgain": [
+      "array(float64, 1d, C)"
+     ],
+     "sound": [
+      "float64"
+     ],
+     "state": [
+      "uint64"
+     ],
+     "strength": [
+      "float64"
+     ],
+     "u": [
+      "float64"
+     ],
+     "v": [
+      "float64"
+     ],
+     "w": [
+      "float64"
+     ],
+     "x": [
+      "float64"
+     ],
+     "y": [
+      "array(float64, 1d, C)"
+     ],
+     "yb": [
+      "float64"
+     ]
+    }
+   }
+  ]
  },
  "synth.rattle._next": {
   "file": ".claude/worktrees/agent-ae096237f50be0ce5/songbird/synth/rattle.py",
@@ -2560,7 +5877,25 @@
   "params": [
    "state"
   ],
-  "signatures": []
+  "signatures": [
+   {
+    "args": [
+     "uint64"
+    ],
+    "return": "Tuple(uint64, float64)",
+    "locals": {
+     "out": [
+      "uint64"
+     ],
+     "state": [
+      "uint64"
+     ],
+     "x": [
+      "uint64"
+     ]
+    }
+   }
+  ]
  },
  "synth.rattle._wires": {
   "file": ".claude/worktrees/agent-ae096237f50be0ce5/songbird/synth/rattle.py",
@@ -2582,7 +5917,173 @@
    "out",
    "start"
   ],
-  "signatures": []
+  "signatures": [
+   {
+    "args": [
+     "array(float64, 1d, C)",
+     "array(float64, 1d, C)",
+     "array(float64, 1d, C)",
+     "array(float64, 2d, C)",
+     "array(float64, 1d, C)",
+     "array(float64, 1d, C)",
+     "float64",
+     "float64",
+     "float64",
+     "int64",
+     "float64",
+     "uint64",
+     "array(float64, 1d, C)",
+     "int64"
+    ],
+    "return": "uint64",
+    "locals": {
+     "a": [
+      "float64"
+     ],
+     "acc": [
+      "float64"
+     ],
+     "amps": [
+      "array(float64, 1d, C)"
+     ],
+     "bounce": [
+      "float64"
+     ],
+     "bound": [
+      "float64"
+     ],
+     "c1": [
+      "array(float64, 1d, C)"
+     ],
+     "c2": [
+      "array(float64, 1d, C)"
+     ],
+     "click": [
+      "float64"
+     ],
+     "cur": [
+      "array(float64, 1d, C)"
+     ],
+     "damping": [
+      "float64"
+     ],
+     "decay": [
+      "array(float64, 1d, C)"
+     ],
+     "dt": [
+      "float64"
+     ],
+     "freqs": [
+      "array(float64, 1d, C)"
+     ],
+     "held": [
+      "float64"
+     ],
+     "i": [
+      "int64"
+     ],
+     "j": [
+      "int64"
+     ],
+     "j_n": [
+      "int64"
+     ],
+     "k": [
+      "int64"
+     ],
+     "k_n": [
+      "int64"
+     ],
+     "left": [
+      "float64"
+     ],
+     "level": [
+      "float64"
+     ],
+     "n": [
+      "int64"
+     ],
+     "n_max": [
+      "int64"
+     ],
+     "n_out": [
+      "int64"
+     ],
+     "nxt": [
+      "float64"
+     ],
+     "out": [
+      "array(float64, 1d, C)"
+     ],
+     "press": [
+      "array(float64, 1d, C)"
+     ],
+     "prev": [
+      "array(float64, 1d, C)"
+     ],
+     "pull": [
+      "array(float64, 1d, C)"
+     ],
+     "r": [
+      "float64"
+     ],
+     "rel": [
+      "float64"
+     ],
+     "rest": [
+      "float64"
+     ],
+     "settled": [
+      "bool"
+     ],
+     "shapes": [
+      "array(float64, 2d, C)"
+     ],
+     "spring": [
+      "array(float64, 1d, C)"
+     ],
+     "sr": [
+      "float64"
+     ],
+     "start": [
+      "int64"
+     ],
+     "state": [
+      "uint64"
+     ],
+     "th": [
+      "float64"
+     ],
+     "top": [
+      "float64"
+     ],
+     "touching": [
+      "array(bool, 1d, C)"
+     ],
+     "u": [
+      "float64"
+     ],
+     "u1": [
+      "array(float64, 1d, C)"
+     ],
+     "u2": [
+      "array(float64, 1d, C)"
+     ],
+     "vel": [
+      "float64"
+     ],
+     "w": [
+      "array(float64, 1d, C)"
+     ],
+     "wv": [
+      "array(float64, 1d, C)"
+     ],
+     "x": [
+      "float64"
+     ]
+    }
+   }
+  ]
  },
  "synth.rattle.comb": {
   "file": ".claude/worktrees/agent-ae096237f50be0ce5/songbird/synth/rattle.py",
@@ -2593,7 +6094,33 @@
    "period",
    "gain"
   ],
-  "signatures": []
+  "signatures": [
+   {
+    "args": [
+     "array(float64, 1d, C)",
+     "int64",
+     "float64"
+    ],
+    "return": "array(float64, 1d, C)",
+    "locals": {
+     "gain": [
+      "float64"
+     ],
+     "n": [
+      "int64"
+     ],
+     "period": [
+      "int64"
+     ],
+     "x": [
+      "array(float64, 1d, C)"
+     ],
+     "y": [
+      "array(float64, 1d, C)"
+     ]
+    }
+   }
+  ]
  },
  "synth.reed._read": {
   "file": ".claude/worktrees/agent-ae096237f50be0ce5/songbird/synth/reed.py",
@@ -2670,7 +6197,74 @@
    "offset",
    "phase"
   ],
-  "signatures": []
+  "signatures": [
+   {
+    "args": [
+     "array(float64, 1d, C)",
+     "array(float64, 1d, C)",
+     "array(float64, 1d, C)",
+     "array(float64, 1d, C)",
+     "array(float64, 1d, C)",
+     "array(float64, 1d, C)",
+     "int64",
+     "float64"
+    ],
+    "return": "float64",
+    "locals": {
+     "a": [
+      "float64"
+     ],
+     "amplitude": [
+      "array(float64, 1d, C)"
+     ],
+     "b": [
+      "float64"
+     ],
+     "bright": [
+      "array(float64, 1d, C)"
+     ],
+     "dark": [
+      "array(float64, 1d, C)"
+     ],
+     "f": [
+      "float64"
+     ],
+     "i": [
+      "int64"
+     ],
+     "increments": [
+      "array(float64, 1d, C)"
+     ],
+     "j": [
+      "int64"
+     ],
+     "j0": [
+      "int64"
+     ],
+     "j1": [
+      "int64"
+     ],
+     "mix": [
+      "array(float64, 1d, C)"
+     ],
+     "offset": [
+      "int64"
+     ],
+     "out": [
+      "array(float64, 1d, C)"
+     ],
+     "phase": [
+      "float64"
+     ],
+     "size": [
+      "int64"
+     ],
+     "x": [
+      "float64"
+     ]
+    }
+   }
+  ]
  },
  "synth.stringloop._run": {
   "file": ".claude/worktrees/agent-ae096237f50be0ce5/songbird/synth/stringloop.py",
@@ -2684,7 +6278,90 @@
    "pole",
    "size"
   ],
-  "signatures": []
+  "signatures": [
+   {
+    "args": [
+     "array(float64, 1d, C)",
+     "array(float64, 1d, C)",
+     "array(float64, 1d, C)",
+     "float64",
+     "float64",
+     "int64"
+    ],
+    "return": "array(float64, 1d, C)",
+    "locals": {
+     "a": [
+      "float64"
+     ],
+     "b": [
+      "float64"
+     ],
+     "buf": [
+      "array(float64, 1d, C)"
+     ],
+     "c": [
+      "float64"
+     ],
+     "d": [
+      "float64"
+     ],
+     "delay": [
+      "array(float64, 1d, C)"
+     ],
+     "f": [
+      "float64"
+     ],
+     "gain": [
+      "array(float64, 1d, C)"
+     ],
+     "i": [
+      "int64"
+     ],
+     "loss": [
+      "float64"
+     ],
+     "lp": [
+      "float64"
+     ],
+     "mask": [
+      "int64"
+     ],
+     "n": [
+      "int64"
+     ],
+     "out": [
+      "float64"
+     ],
+     "pole": [
+      "float64"
+     ],
+     "pos": [
+      "float64"
+     ],
+     "prev": [
+      "float64"
+     ],
+     "r": [
+      "float64"
+     ],
+     "size": [
+      "int64"
+     ],
+     "t": [
+      "int64"
+     ],
+     "v": [
+      "float64"
+     ],
+     "x": [
+      "array(float64, 1d, C)"
+     ],
+     "y": [
+      "array(float64, 1d, C)"
+     ]
+    }
+   }
+  ]
  },
  "synth.struck._bank": {
   "file": ".claude/worktrees/agent-ae096237f50be0ce5/songbird/synth/struck.py",
@@ -2704,7 +6381,145 @@
    "length",
    "floor"
   ],
-  "signatures": []
+  "signatures": [
+   {
+    "args": [
+     "array(float64, 1d, C)",
+     "array(float64, 1d, C)",
+     "array(float64, 1d, C)",
+     "array(float64, 1d, C)",
+     "array(float64, 2d, C)",
+     "array(float64, 2d, C)",
+     "array(float64, 1d, C)",
+     "array(float64, 2d, C)",
+     "array(float64, 2d, C)",
+     "float64",
+     "int64",
+     "float64"
+    ],
+    "return": "array(float64, 2d, C)",
+    "locals": {
+     "a": [
+      "float64"
+     ],
+     "ahead": [
+      "float64"
+     ],
+     "alive": [
+      "array(bool, 1d, C)"
+     ],
+     "amps": [
+      "array(float64, 2d, C)"
+     ],
+     "b0": [
+      "int64"
+     ],
+     "b1": [
+      "int64"
+     ],
+     "bend": [
+      "array(float64, 1d, C)"
+     ],
+     "c": [
+      "int64"
+     ],
+     "channels": [
+      "int64"
+     ],
+     "d": [
+      "int64"
+     ],
+     "damp": [
+      "array(float64, 2d, C)"
+     ],
+     "decay": [
+      "array(float64, 1d, C)"
+     ],
+     "dweight": [
+      "array(float64, 2d, C)"
+     ],
+     "first": [
+      "Literal[int](0)",
+      "int64"
+     ],
+     "fixed": [
+      "array(complex128, 1d, C)"
+     ],
+     "floor": [
+      "float64"
+     ],
+     "freqs": [
+      "array(float64, 1d, C)"
+     ],
+     "gain": [
+      "float64"
+     ],
+     "h": [
+      "int64"
+     ],
+     "k": [
+      "int64"
+     ],
+     "last": [
+      "int64"
+     ],
+     "length": [
+      "int64"
+     ],
+     "m": [
+      "complex128"
+     ],
+     "mix": [
+      "array(float64, 2d, C)"
+     ],
+     "moving": [
+      "bool"
+     ],
+     "n": [
+      "int64"
+     ],
+     "n_hits": [
+      "int64"
+     ],
+     "n_modes": [
+      "int64"
+     ],
+     "omega": [
+      "array(float64, 1d, C)"
+     ],
+     "out": [
+      "array(float64, 2d, C)"
+     ],
+     "phase": [
+      "array(float64, 1d, C)"
+     ],
+     "pos": [
+      "array(float64, 1d, C)"
+     ],
+     "rate": [
+      "float64"
+     ],
+     "s0": [
+      "int64"
+     ],
+     "s1": [
+      "int64"
+     ],
+     "v": [
+      "float64"
+     ],
+     "w": [
+      "float64"
+     ],
+     "z": [
+      "array(complex128, 1d, C)"
+     ],
+     "zk": [
+      "complex128"
+     ]
+    }
+   }
+  ]
  },
  "synth.struck._up2": {
   "file": ".claude/worktrees/agent-ae096237f50be0ce5/songbird/synth/struck.py",
@@ -2715,7 +6530,51 @@
    "taps",
    "middle"
   ],
-  "signatures": []
+  "signatures": [
+   {
+    "args": [
+     "array(float64, 1d, C)",
+     "array(float64, 1d, C)",
+     "float64"
+    ],
+    "return": "array(float64, 1d, C)",
+    "locals": {
+     "acc": [
+      "float64"
+     ],
+     "half": [
+      "int64"
+     ],
+     "i": [
+      "int64"
+     ],
+     "m": [
+      "int64"
+     ],
+     "middle": [
+      "float64"
+     ],
+     "n": [
+      "int64"
+     ],
+     "padded": [
+      "array(float64, 1d, C)"
+     ],
+     "t": [
+      "int64"
+     ],
+     "taps": [
+      "array(float64, 1d, C)"
+     ],
+     "x": [
+      "array(float64, 1d, C)"
+     ],
+     "y": [
+      "array(float64, 1d, C)"
+     ]
+    }
+   }
+  ]
  },
  "synth.tube._scatter": {
   "file": ".claude/worktrees/agent-ae096237f50be0ce5/songbird/synth/tube.py",

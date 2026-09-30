@@ -44,6 +44,11 @@ if (mode === 'wasm') {
 const zip = fs.readFileSync(path.join(root, 'dist/songbird.zip'));
 py.unpackArchive(new Uint8Array(zip), 'zip', { extractDir: '/app' });
 const tZip = performance.now();
+if (opt('--mount', null)) {  // host:guest, a host folder in Pyodide's file system (e.g. captured kernel calls)
+  const [host, guest] = opt('--mount').split(':');
+  py.FS.mkdirTree(guest);
+  py.FS.mount(py.FS.filesystems.NODEFS, { root: host }, guest);
+}
 
 py.globals.set('ENV', py.toPy(env));
 py.globals.set('WASM', mode === 'wasm');

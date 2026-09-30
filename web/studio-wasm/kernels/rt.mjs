@@ -41,6 +41,7 @@ export function copy(a) {
 
 // a contiguous typed array of exactly the array's elements (a copy only if it is a strided view)
 export function packed(a) {
+  if (a.t === 'c16') return a.d;  // complex: interleaved and contiguous
   const n = a.nd === 1 ? a.n0 : a.n0 * a.n1;
   const contiguous = a.nd === 1 ? a.s0 === 1 : (a.s1 === 1 && a.s0 === a.n1);
   if (contiguous) return a.d.length === n ? a.d : a.d.subarray(0, n);
@@ -121,3 +122,14 @@ export function pyround(x) {
   if (d < 0.5) return f;
   return f % 2 === 0 ? f : f + 1;
 }
+
+// an elementwise array expression's result: a new 1-d array with f(i) at i
+export function vec(n, f) {
+  const a = alloc(1, n, 0, 'f8', 0);
+  for (let i = 0; i < n; i++) a.d[i] = f(i);
+  return a;
+}
+
+// numpy's minimum and maximum: NaN propagates; otherwise the lesser (greater)
+export function npmin(a, b) { return (a !== a || a <= b) ? a : b; }
+export function npmax(a, b) { return (a !== a || a >= b) ? a : b; }
