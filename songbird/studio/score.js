@@ -13,6 +13,7 @@
   const S = {
     view: "page", sel: null, how: "sung", howSet: false, open: null, arr: null, sound: null, grid: null, serial: 0,
     keyed: false, about: false, playhead: null, sketch: false, recording: null, why: {}, tall: false, pop: null,
+    lastOptions: {}, dragged: new Set(), moved: new Set(), movedKey: null,
   };
   const card = (id) => state.view?.cards?.find((c) => c.id === id);
   const edited = (path) => Object.prototype.hasOwnProperty.call(state.edits, path) && state.edits[path] !== null;
@@ -333,7 +334,7 @@
     const g = S.grid, box = $("grid");
     if (!g || !box) return;
     keepFocus(() => {
-      box.style.gridTemplateColumns = `var(--head, 150px) ${g.sections.map((s) => `minmax(${s.bars < 4 ? 44 : 72}px, ${s.bars}fr)`).join(" ")}`;
+      box.style.gridTemplateColumns = `var(--head, 176px) ${g.sections.map((s) => `minmax(${s.bars < 4 ? 44 : 72}px, ${s.bars}fr)`).join(" ")}`;
       const rows = [
         row(h("div", { class: "head", role: "columnheader" }, h("span", { class: "hint" }, "bar")),
           g.sections.map((s) => h("div", { class: "rule-cell", role: "columnheader", "aria-label": `${s.label}, from bar ${s.startBar}`,
@@ -346,7 +347,7 @@
       ];
       box.setAttribute("aria-rowcount", String(rows.length));
       box.setAttribute("aria-colcount", String(g.sections.length + 1));
-      box.replaceChildren(...rows, h("div", { class: "playhead", id: "gridHead", "aria-hidden": "true", hidden: true }));
+      morph(box, [...rows, h("div", { class: "playhead", id: "gridHead", "aria-hidden": "true", hidden: true })]);  // in place: a cell clicked as an answer lands stays the one clicked
       roving();
       if (S.playhead !== null) requestAnimationFrame(() => placeHead(S.playhead));
       problemsUnderGrid();
@@ -360,9 +361,12 @@
     box.replaceChildren(...list.map((p) => h("p", { class: "problem" }, `Waiting, not played: ${describePath(p.path)}: ${p.why}. `,
       h("button", { class: "link small", type: "button", onclick: () => clearEdits([p.path]) }, "let it go"))));
   }
-  function moved(s) {  // a region a person moved: its place differs from the program's order
-    const before = was("form.order");
-    return Array.isArray(before) && before.indexOf(s.id) !== S.grid.sections.findIndex((x) => x.id === s.id);
+  // a region a person moved: one of the fewest whose moves make this order from the program's (for the shape now
+  // chosen, the record's "was"), not every region whose index a move shifted
+  function moved(s) {
+    const before = was("form.order"), now = S.grid.sections.map((x) => x.id), key = `${JSON.stringify(before)}|${now}|${[...S.dragged]}`;
+    if (S.movedKey !== key) { S.movedKey = key; S.moved = M.movedIds(before, now, [...S.dragged]); }
+    return S.moved.has(s.id);
   }
   function regionCell(s, i) {
     const chosen = S.sel?.kind === "section" && S.sel.id === s.id;
@@ -376,12 +380,14 @@
       ondragend: (e) => { e.currentTarget.classList.remove("dragging"); document.querySelectorAll(".region.drop").forEach((r) => r.classList.remove("drop")); },
       ondragover: (e) => { if ([...e.dataTransfer.types].includes("text/x-section")) { e.preventDefault(); e.currentTarget.classList.add("drop"); } },
       ondragleave: (e) => e.currentTarget.classList.remove("drop"),
-      ondrop: (e) => { const from = e.dataTransfer.getData("text/x-section"); if (!from) return; e.preventDefault(); e.stopPropagation(); moveSection(from, i); } },
+      ondrop: (e) => { const from = e.dataTransfer.getData("text/x-section"); if (!from) return; e.preventDefault(); e.stopPropagation(); moveSection(from, { onto: s.id }); } },
     h("span", { class: "name" }, s.label),
     h("span", { class: "bars" }, `${s.bars} bars${s.sung ? "" : " · instr."}${s.build ? " · build" : ""}`),
-    C()?.mini?.(compIndex(s.id)) || null,
-    h("span", { class: "edge", title: `Drag for its length: ${s.barOptions.join(", ")} bars`, "aria-hidden": "true",
-      onpointerdown: (e) => edgeDrag(e, s), onmousedown: (e) => { e.preventDefault(); e.stopPropagation(); }, onclick: (e) => e.stopPropagation() }));
+    C()?.mini?.(compIndex(s.id)) || null);
+  // its length by its right edge: a handle of its own beside the region (not inside it, where a press began the
+  // region's drag), 10 px, above and clear of the next section's seam (which starts where this cell ends)
+  const edge = s.barOptions.length > 1 ? h("span", { class: "edge", title: `${s.label}: drag for its length (${s.barOptions.join(", ")} bars)`, "aria-hidden": "true",
+    "data-edge": s.id, onpointerdown: (e) => edgeDrag(e, s), onmousedown: (e) => { e.preventDefault(); e.stopPropagation(); }, onclick: (e) => e.stopPropagation() }) : null;
     const ready = state.view?.listen?.ready.includes(state.view.listen.sections[s.index]);
     return h("div", { class: "regioncell", role: "gridcell", "data-region": s.id },
       h("button", { class: `play${ready ? " ready" : ""}`, type: "button", "data-key": `hear:${s.id}`, "aria-label": `Hear ${s.label}, ${S.how === "sung" ? "sung" : "the sketch"}`,
@@ -389,18 +395,26 @@
       i > 0 ? h("button", { class: `seam${S.sel?.kind === "seam" && S.sel.id === s.id ? " selected" : ""}${s.seam?.value ? " set" : ""}`, type: "button",
         "data-key": `seam:${s.id}`, "aria-label": `The seam into ${s.label}: ${M.seamWords(s.seam?.value)}`, title: `Into ${s.label}: a riser, a sweep, a roll, a stop…`,
         onclick: (e) => { e.stopPropagation(); select({ kind: "seam", id: s.id }); } }) : null,
-      region);
+      region, edge);
   }
-  function moveSection(id, to) {
-    const list = S.grid.sections, from = list.findIndex((s) => s.id === id);
+  // the order a move starts from: the latest edit's, when it has these sections, not the one drawn before it (two
+  // quick ← Earlier move a section two places, not one)
+  function latestOrder() {
+    const drawn = S.grid.sections, o = state.edits["form.order"];
+    return Array.isArray(o) && o.length === drawn.length && drawn.every((s) => o.includes(s.id)) ? o.map((x) => drawn.find((s) => s.id === x)) : drawn;
+  }
+  function moveSection(id, where) {  // where: {step: ±1}, or {onto: the section it was dropped on}
+    const list = latestOrder(), from = list.findIndex((s) => s.id === id);
+    const to = where.step !== undefined ? from + where.step : list.findIndex((s) => s.id === where.onto);
     const r = M.moveOrder(list, from, to);
     if (r.error) { if (from !== to) toast(r.error); return; }
+    S.dragged.add(id);
     setEdit("form.order", r.order, `Move ${list[from].label}`);
     say(`${list[from].label} moved to place ${to + 1}`);
   }
   function edgeDrag(e, s) {
     e.preventDefault(); e.stopPropagation();
-    const edge = e.currentTarget, region = edge.parentNode, label = region.querySelector(".bars");
+    const edge = e.currentTarget, region = edge.parentNode.querySelector(".region"), label = region.querySelector(".bars");
     const perBar = region.getBoundingClientRect().width / s.bars, x0 = e.clientX;
     let pick = s.bars;
     edge.setPointerCapture(e.pointerId); edge.classList.add("active");
@@ -522,7 +536,7 @@
     if (!box || !S.sound || !band) return;
     keepFocus(() => {
       const strips = S.sound.players.filter((p) => p.playing !== false).map((sp) => strip(sp, band));
-      box.replaceChildren(...strips, voiceStrip(mix), roomStrip(mix), masterStrip());
+      morph(box, [...strips, voiceStrip(mix), roomStrip(mix), masterStrip()]);  // in place: a fader being moved stays put
     });
   }
   const PUMPED = /bass|pad|drone|synth|arp/;
@@ -532,12 +546,12 @@
     const chosen = S.sel?.kind === "player" && S.sel.id === name;
     const out = h("div", { class: `val${yours ? " you" : ""}` }, pct(gain));
     const input = h("input", { type: "range", min: 0, max: 2, step: 0.01, value: gain, "data-key": `fader:${name}`, "aria-label": `${label}: level`, "aria-valuetext": pct(gain),
-      oninput: (e) => { out.textContent = pct(Number(e.target.value)); e.target.setAttribute("aria-valuetext", pct(Number(e.target.value))); },
+      oninput: (e) => { e.target.closest(".strip").querySelector(".val").textContent = pct(Number(e.target.value)); e.target.setAttribute("aria-valuetext", pct(Number(e.target.value))); },
       onchange: (e) => setEdit(`band.${name}`, Number(e.target.value), `${label}: level`) });
     const fader = h("div", { class: `fader${yours ? " you" : ""}` }, input,
       yours && typeof program === "number" ? tickAt(program) : null);
     const pan = sp.pan, panYours = !!pan?.yours;
-    const pump = sp.sidechain, pumpNow = presetOf(pump?.value);
+    const pump = sp.sidechain;
     return h("div", { class: `strip${chosen ? " selected" : ""}${gain <= 0.02 ? " muted" : ""}` },
       h("button", { class: "nm", type: "button", "data-key": `strip:${name}`, onclick: () => select({ kind: "player", id: name }), title: `${label}: open it in the column` }, label),
       muteSolo(name, label),
@@ -547,7 +561,7 @@
           "aria-valuetext": panWords(pan.value),
           oninput: (e) => { const x = Number(e.target.value); e.target.previousSibling.textContent = `pan ${panWords(x)}`; e.target.setAttribute("aria-valuetext", panWords(x)); },
           onchange: (e) => setEdit(pan.path, Number(e.target.value), `${label}: pan`) })) : null,
-      pump && PUMPED.test(name) ? h("label", { class: `knob${pump.yours ? " you" : ""}` }, h("span", {}, "pump"),
+      pump && PUMPED.test(name) && !pump.is_key ? h("label", { class: `knob${pump.yours ? " you" : ""}` }, h("span", {}, "pump"),
         pumpSelect(pump, `${label}: pump`)) : null,
       sp.patch || sp.kit ? h("button", { class: "patch", type: "button", onclick: () => select({ kind: "player", id: name }), title: "Its sound: open it in the column" },
         (sp.patch || sp.kit).value) : null,
@@ -558,26 +572,57 @@
     tick.style.top = `${(1 - Math.min(2, program) / 2) * 150}px`;
     return tick;
   }
+  // a pump's value: the server's spelled out {depth, release, key, sections}, or an edit's (a preset's name, or
+  // {preset, sections}); what it is now is the latest edit's, so a quick second choice builds on the first
+  const pumpNow = (pump) => (Object.prototype.hasOwnProperty.call(state.edits, pump.path) ? state.edits[pump.path] : pump.value) || null;
   function presetOf(value) {
     if (!value) return "none";
+    if (typeof value === "string") return value;
+    if (value.preset && value.depth === undefined) return value.preset;
     const hit = Object.entries((S.sound?.players?.[0]?.sidechain?.presets) || {}).find(([, p]) => p.depth === value.depth && p.release === value.release && p.key === value.key);
     return hit ? hit[0] : "yours";
   }
+  function pumpWith(pump, preset, sections) {  // the edit for a preset (or the person's own) over some sections
+    if (preset === "none") return null;
+    const v = pumpNow(pump), where = sections?.length ? { sections } : {};
+    if (preset !== "yours") return where.sections ? { preset, ...where } : preset;
+    return { depth: v.depth, release: v.release, key: v.key, ...where };
+  }
   function pumpSelect(pump, label) {
-    const now = presetOf(pump.value);
+    const now = presetOf(pumpNow(pump));
     const s = h("select", { "aria-label": label, "data-key": `pump:${label}` },
       ["none", ...Object.keys(pump.presets || {})].map((k) => h("option", { value: k }, k === "none" ? "none" : k)),
       now === "yours" ? h("option", { value: "yours" }, "yours") : null);
     s.value = now;
-    s.addEventListener("change", () => (s.value === "none" ? releaseEdit(pump.path, `${label}: none`) : s.value !== "yours" && setEdit(pump.path, s.value, `${label}: ${s.value}`)));
+    s.addEventListener("change", (e) => { const to = e.target.value;  // (not `s`: morph may keep the one on the page)
+      if (to === "none") releaseEdit(pump.path, `${label}: none`);
+      else if (to !== "yours") setEdit(pump.path, pumpWith(pump, to, pumpNow(pump)?.sections), `${label}: ${to}`); });
     return s;
+  }
+  // where it pumps: everywhere (wherever the kick plays), or the sections chosen (a drop, not the breakdown);
+  // always drawn, so choosing a pump adds no row under the pointer
+  function pumpWhere(pump, label) {
+    const v = pumpNow(pump), on = presetOf(v) !== "none", chosen = new Set(v?.sections || []);
+    const pick = (id) => {
+      const now = pumpNow(pump), has = new Set(now?.sections || []);
+      if (id === null) has.clear(); else if (has.has(id)) has.delete(id); else has.add(id);
+      const list = S.grid.sections.map((x) => x.id).filter((x) => has.has(x));
+      setEdit(pump.path, pumpWith(pump, presetOf(now), list), `${label}: ${list.length ? `in ${list.length} section${list.length === 1 ? "" : "s"}` : "everywhere"}`);
+    };
+    const chip = (id, text) => {
+      const pressed = id === null ? !chosen.size : chosen.has(id);
+      return h("button", { class: `chip${pressed && on ? " on" : ""}${pressed && on && pump.yours ? " you" : ""}`, type: "button", "aria-pressed": String(pressed && on),
+        disabled: !on, title: on ? null : "Choose a pump first", onclick: () => pick(id) }, text);
+    };
+    return h("div", { class: "row" }, h("span", { class: "label" }, "Where"),
+      h("span", { class: "chips", role: "group", "aria-label": `${label}: where` }, chip(null, "everywhere"), (S.grid?.sections || []).map((x) => chip(x.id, x.label))));
   }
   const panWords = (x) => (Math.abs(x) < 0.05 ? "middle" : `${Math.round(Math.abs(x) * 100)}% ${x < 0 ? "left" : "right"}`);
   function busSlider(label, path, value, bounds, show, key) {
     const out = h("span", {}, show(value));
     return h("label", {}, h("span", {}, label), out,
       h("input", { type: "range", min: bounds.min, max: bounds.max, step: bounds.step || 0.01, value, class: edited(path) ? "you" : null, "data-key": key, "aria-label": label,
-        oninput: (e) => { out.textContent = show(Number(e.target.value)); }, onchange: (e) => setEdit(path, Number(e.target.value), label) }));
+        oninput: (e) => { e.target.previousSibling.textContent = show(Number(e.target.value)); }, onchange: (e) => setEdit(path, Number(e.target.value), label) }));
   }
   function voiceStrip(mix) {
     const b = state.start.bounds, m = mix.mix;
@@ -629,7 +674,7 @@
     box.classList.toggle("tall", S.tall);
     $("songBtn").setAttribute("aria-expanded", String(kind === "song" && !!S.songShown));
     const whyOpen = !!S.why[kind];
-    box.replaceChildren(...[
+    morph(box, [  // in place, not redrawn whole: what the pointer is on stays where it is (studio.js morph)
       h("button", { class: "handle", type: "button", "aria-label": S.tall ? "Lower the column" : "Raise the column", onclick: () => { S.tall = !S.tall; box.classList.toggle("tall", S.tall); } }),
       h("div", { class: "top" }, h("span", { class: "rubric", id: "inspectorTitle", tabindex: "-1" }, rubric, mine ? h("span", { class: "you", "aria-label": ", yours" }, " ✎") : null),
         h("button", { class: "what", type: "button", "aria-expanded": String(S.about), "aria-label": "What is this?", title: "What is this?", onclick: () => { S.about = !S.about; renderInspector(); } }, "?"),
@@ -643,7 +688,7 @@
       hear || release || extra ? h("div", { class: "foot" },
         hear ? h("button", { class: "btn", type: "button", onclick: hear }, "▶ Hear it") : null, extra || null,
         release ? h("button", { class: "link small release", type: "button", disabled: !!release.disabled, title: "Give it back to the program: your choice released",
-          onclick: release.action }, release.label || "The program's own") : null) : null].flat().filter(Boolean));  // (replaceChildren writes a null out as text)
+          onclick: release.action }, release.label || "The program's own") : null) : null]);
   }
   function reasonsFold(kind, why, open) {
     const list = why.map((r) => (Array.isArray(r) ? { kind: r[0], text: r[1] } : r)).filter((r) => r.text);
@@ -651,7 +696,7 @@
     const d = h("details", {}, h("summary", {}, "Why the program chose this"),
       list.map((r) => h("div", { class: "reason" }, tag(r.kind === "program" ? "song" : r.kind), h("span", {}, r.text))));
     d.open = open;
-    d.addEventListener("toggle", () => { S.why[kind] = d.open; });
+    d.addEventListener("toggle", (e) => { S.why[kind] = e.target.open; });
     return d;
   }
   function chipRow(label, options, current, pick, yours = false, extra = {}) {
@@ -659,7 +704,17 @@
       h("span", { class: "chips", role: "group", "aria-label": label || extra.aria || "" }, options.map((o) => {
         const on = String(o.value) === String(current);
         return h("button", { class: `chip${on ? " on" : ""}${on && yours ? " you" : ""}${on && extra.drawn ? " drawn" : ""}`, type: "button", "aria-pressed": String(on),
-          disabled: !!o.disabled, title: o.title || null, onclick: () => { if (!on) pick(o.value); } }, o.text);
+          disabled: !!o.disabled, title: o.title || null, onclick: (e) => {
+            // what's pressed now is the row's, not the answer drawn before (a second quick click is judged by the first),
+            // and it shows at once: the answer, when it comes, draws the same in place
+            const b = e.currentTarget;
+            if (b.getAttribute("aria-pressed") === "true") return;
+            for (const x of b.parentNode.children) {
+              const me = x === b;
+              x.setAttribute("aria-pressed", String(me)); x.classList.toggle("on", me); x.classList.toggle("you", me); x.classList.remove("drawn");
+            }
+            pick(o.value);
+          } }, o.text);
       })));
   }
   // a slider in the inspector: its value in the ink that set it; `log` for a cutoff (moved on octaves), `commit` for
@@ -670,7 +725,7 @@
     return h("div", { class: "field" }, h("span", { class: "label" }, h("span", {}, label), out),
       h("input", { type: "range", min: to(bounds.min), max: to(bounds.max), step: log ? 0.01 : bounds.step || 0.01, value: to(value), class: yours ? "you" : null,
         id: `f-${path}`, "aria-label": label, "aria-valuetext": show(value),
-        oninput: (e) => { const x = from(Number(e.target.value)); out.textContent = show(x); e.target.setAttribute("aria-valuetext", show(x)); },
+        oninput: (e) => { const x = from(Number(e.target.value)); e.target.closest(".field").querySelector("output").textContent = show(x); e.target.setAttribute("aria-valuetext", show(x)); },
         onchange: (e) => (commit || ((x) => setEdit(path, x, label)))(from(Number(e.target.value))) }),
       ends ? h("div", { class: "ends" }, h("span", {}, ends[0]), h("span", {}, ends[1])) : null);
   }
@@ -702,7 +757,7 @@
       const more = h("div", { class: "hint", hidden: true }, [c.detail, ...(c.lines || []), ...(c.reasons || []).map((r) => r.text)].filter(Boolean).join(" · "), extra);
       return h("div", {}, h("div", { class: "lineitem" }, h("span", {}, label), h("b", {}, value || c.value),
         h("button", { class: "what", type: "button", "aria-label": `About ${label}`, "aria-expanded": "false",
-          onclick: (e) => { more.hidden = !more.hidden; e.currentTarget.setAttribute("aria-expanded", String(!more.hidden)); } }, "?")), more);
+          onclick: (e) => { const box = e.currentTarget.parentNode.nextSibling; box.hidden = !box.hidden; e.currentTarget.setAttribute("aria-expanded", String(!box.hidden)); } }, "?")), more);
     };
     shell({ kind: "song", rubric: "This version",
       body: h("div", {},
@@ -726,7 +781,11 @@
   function sectionState(sel) {
     const s = sectionAt(sel.id), w = wordsOf(s);
     if (!s) return false;
-    const o = w ? state.optionsByKey[`${w.block}.${w.nth}`] : null;
+    // its words' choosers: while this version's are on their way, the last ones, drawn and not to be used, so the
+    // rows under them don't jump out and back as an answer lands
+    const key = w ? `${w.block}.${w.nth}` : null, fresh = key ? state.optionsByKey[key] : null;
+    if (fresh) S.lastOptions[key] = fresh;
+    const o = fresh || (key && !state.optionsFailed ? S.lastOptions[key] : null) || null, stale = !!o && !fresh;
     const cells = [...S.grid.cells.values()].filter((c) => c.section === s.id && c.plays !== false);
     const levels = new Set(cells.map((c) => c.value?.level));
     const everyone = levels.size === 1 ? [...levels][0] : null;
@@ -739,6 +798,7 @@
     const oneChoice = o && o.choices.filter((c) => c.allowed).length <= 1 && (o.heads || []).filter((c) => c.allowed).length <= 1;
     const rules = o && w.sung && !allAuthored ? chooser(w, o) : null;
     if (rules) rules.querySelector("summary").textContent = "Refused here, and why";
+    if (stale) for (const c of choosers) c.querySelectorAll("select").forEach((x) => { x.disabled = true; x.setAttribute("disabled", ""); });
     const options = s.options.map((opt) => optionRow(opt));
     const release = () => {
       const next = copyEdits();
@@ -755,7 +815,10 @@
         h("div", { class: "row edit-it" },  // the ways into the section's own material, first
           writable ? h("button", { class: "btn", type: "button", onclick: () => editWords(s.id), title: "Its words on the Page, a line ready to write in the column" }, "Edit its words") : null,
           h("button", { class: "btn", type: "button", onclick: () => openNotes(s.id, true), title: "Its tune and chords, under the grid (Enter, or double-click the section)" }, "Edit its notes")),
-        chipRow("Length", s.barOptions.map((n) => ({ value: n, text: `${n} bars` })), s.bars, (n) => setBars(s, n), s.by.bars === "you"),
+        // every length drawn, the ones this section can't have disabled: a drop's shorter lengths don't push the rows
+        chipRow("Length", [...new Set([2, 4, 8, 16, ...s.barOptions])].sort((a, b) => a - b).map((n) => ({ value: n, text: `${n} bars`,
+          disabled: !s.barOptions.includes(n), title: s.barOptions.includes(n) ? null : s.sung ? "A sung section is as long as its lines; played, it can be shorter" : "Not this section's" })),
+          s.bars, (n) => setBars(s, n), s.by.bars === "you"),
         s.canPlay ? chipRow("Who sings", [{ value: true, text: "the singer" }, { value: false, text: "nobody: played" }], s.sung,
           (v) => (v ? releaseEdit(s.paths.sung, `${s.label} sung again`) : setEdit(s.paths.sung, false, `${s.label} played, not sung`)), s.by.sung === "you") : null,
         chipRow("Everyone", [{ value: "soft", text: "soft" }, { value: "plays", text: "plays" }, { value: "hard", text: "hard" }], everyone,
@@ -763,17 +826,18 @@
           cells.some((c) => c.by === "you")),
         chipRow("Moment", [{ value: false, text: "none" }, { value: true, text: "a build", disabled: i === list.length - 1, title: i === list.length - 1 ? "Nothing comes after the last section to build toward" : "The players come in one after another and rise toward the next section" }],
           s.build, (v) => (v ? setEdit(s.paths.build, true, `A build in ${s.label}`) : releaseEdit(s.paths.build, `No build in ${s.label}`)), s.by.build === "you"),
+        s.seam && i > 0 ? h("div", { class: "row" }, h("span", { class: "label" }, "Into it"),  // the seam's twin, a bigger target
+          h("button", { class: `btn quiet${s.seam.value ? " you" : ""}`, type: "button", title: M.seamWords(s.seam.value), onclick: () => select({ kind: "seam", id: s.id }) },
+            s.seam.value ? M.seamLengths(s.seam.value).map((x) => x.kind).concat(s.seam.value.impact ? ["impact"] : []).map((k) => ({ down: "downlifter" })[k] || k).join(" · ") : "a riser, a sweep, a roll…")) : null,
+        h("div", { class: "row" },
+          h("button", { class: "btn quiet", type: "button", disabled: i === 0, onclick: () => moveSection(s.id, { step: -1 }), title: "Earlier (⌘/Ctrl ←)" }, "← Earlier"),
+          h("button", { class: "btn quiet", type: "button", disabled: i === list.length - 1, onclick: () => moveSection(s.id, { step: 1 }), title: "Later (⌘/Ctrl →)" }, "Later →"),
+          h("button", { class: "btn quiet", type: "button", hidden: S.open !== s.id, onclick: closeNotes }, "Close the notes")),
+        // what the style and the words offer here last: rows that come and go with an answer push only what's below
         options,
         choosers.length && !oneChoice ? h("div", { class: "row" }, choosers) : null,
         choosers.length && oneChoice ? h("details", {}, h("summary", {}, "more"), h("div", { class: "row" }, choosers)) : null,
-        rules,
-        s.seam && i > 0 ? h("div", { class: "row" }, h("span", { class: "label" }, "Into it"),  // the seam's twin, a bigger target
-          h("button", { class: `btn quiet${s.seam.value ? " you" : ""}`, type: "button", onclick: () => select({ kind: "seam", id: s.id }) },
-            s.seam.value ? M.seamWords(s.seam.value) : "a riser, a sweep, a roll…")) : null,
-        h("div", { class: "row" },
-          h("button", { class: "btn quiet", type: "button", disabled: i === 0, onclick: () => moveSection(s.id, i - 1), title: "Earlier (⌘/Ctrl ←)" }, "← Earlier"),
-          h("button", { class: "btn quiet", type: "button", disabled: i === list.length - 1, onclick: () => moveSection(s.id, i + 1), title: "Later (⌘/Ctrl →)" }, "Later →"),
-          S.open === s.id ? h("button", { class: "btn quiet", type: "button", onclick: closeNotes }, "Close the notes") : null)),
+        rules),
       why: [
         w?.sung ? { kind: w.mine ? "you" : { "handed down": "lineage", "new this time": "time", "drawn by chance": "chance" }[w.how] || "song", text: w.mine ? "these words are yours" : `the words: ${w.how}${(w.tags || []).length ? ` (${w.tags.join(", ")})` : ""}` } : null,
         s.by.bars === "you" ? { kind: "you", text: `${s.bars} bars; the program had ${s.program.bars}` } : null,
@@ -824,19 +888,22 @@
       problems: cell.problems,
       body: h("div", {},
         chipRow("Here", M.LEVELS.map((x) => ({ value: x, text: x })), l.level, (lv) => {
-          if (lv === cell.program?.level && cell.by === "you") releaseEdit(cell.paths.level, M.saidCell(t, s, lv)); else setEdit(cell.paths.level, lv, M.saidCell(t, s, lv));
+          if (lv === cell.program?.level && edited(cell.paths.level)) releaseEdit(cell.paths.level, M.saidCell(t, s, lv)); else setEdit(cell.paths.level, lv, M.saidCell(t, s, lv));
           say(M.saidCell(t, s, lv)); },
           cell.by === "you" && !l.locked, { drawn: l.chance }),
-        l.level !== "out" && t.patterns.length ? chipRow("Plays", t.patterns.map((p) => ({ value: p.id, text: p.label })), v.pattern,
+        // the rows under Here are drawn whether it plays or not (out: not to choose), so choosing out, or back in,
+        // moves nothing under the pointer
+        t.patterns.length ? chipRow("Plays", t.patterns.map((p) => ({ value: p.id, text: p.label, disabled: l.level === "out" })), l.level === "out" ? null : v.pattern,
           (p) => setEdit(cell.paths.pattern, p, `${t.label} in ${s.label}: ${t.patterns.find((x) => x.id === p)?.label}`), edited(cell.paths.pattern)) : null,
-        l.level !== "out" && lineChoices.length > 1 ? chipRow("Comes in", lineChoices, v.from || 0,
+        lineChoices.length > 1 ? chipRow("Comes in", lineChoices.map((c) => ({ ...c, disabled: l.level === "out" })), l.level === "out" ? null : v.from || 0,
           (j) => (j === (cell.program?.from || 0) ? releaseEdit(cell.paths.from) : setEdit(cell.paths.from, j, `${t.label} comes in at line ${j + 1} of ${s.label}`)), edited(cell.paths.from), { drawn: l.chance }) : null,
-        t.fills && l.level !== "out" ? chipRow("A fill into the next", [{ value: true, text: "yes" }, { value: false, text: "no" }], !!v.fill,
+        t.fills ? chipRow("A fill into the next", [{ value: true, text: "yes", disabled: l.level === "out" }, { value: false, text: "no", disabled: l.level === "out" }], l.level === "out" ? null : !!v.fill,
           (f) => setEdit(cell.paths.fill, f, `${t.label}: ${f ? "a fill" : "no fill"} at the end of ${s.label}`), edited(cell.paths.fill)) : null,
         h("div", { class: "row" },
           l.locked ? h("button", { class: "btn quiet", type: "button", onclick: () => clearEdits(Object.keys(M.releasePatch(cell)), `Unlock ${t.label} in ${s.label}`) }, lockIcon(), " Unlock")
             : cell.by !== "you" ? h("button", { class: "btn quiet", type: "button", title: "Keep what the program drew here, through a new performance",
-              onclick: () => { setEdits(M.lockPatch(cell), `Lock ${t.label} in ${s.label}`); say(`${t.label} in ${s.label}: locked`); } }, lockIcon(), " Lock") : null),
+              onclick: () => { setEdits(M.lockPatch(cell), `Lock ${t.label} in ${s.label}`); say(`${t.label} in ${s.label}: locked`); } }, lockIcon(), " Lock")
+            : h("button", { class: "btn quiet", type: "button", disabled: true, title: "Yours: nothing of chance's here to lock" }, lockIcon(), " Lock")),
         h("div", { class: "row" },
           h("button", { class: "btn quiet", type: "button", onclick: () => select({ kind: "player", id: t.id }) }, `${t.label} everywhere`),
           h("button", { class: "btn quiet", type: "button", onclick: () => select({ kind: "section", id: s.id }) }, `everyone in ${s.label}`))),
@@ -849,32 +916,50 @@
   function seamState(sel) {
     const s = sectionAt(sel.id), seam = s?.seam;
     if (!s || !seam) return false;
-    const value = seam.value || null, yours = seam.yours;
-    const kinds = seam.before ? ["riser", "sweep", "roll", "stop"] : [];
-    const over = value ? Math.max(...["riser", "sweep", "roll", "stop", "down"].map((k) => (typeof value[k] === "object" ? value[k].bars : value[k]) || 0)) : 0;
+    // drawn from the latest edit, not the answer drawn before it: a click shows at once (the column is drawn again
+    // in place), and a quick second click (a riser, then a roll) builds on the first instead of undoing it
+    const latest = () => (Object.prototype.hasOwnProperty.call(state.edits, seam.path) ? state.edits[seam.path] : seam.value) || null;
+    const value = latest(), yours = edited(seam.path) || seam.yours;
     const bars = S.sound?.transition?.bars || [1, 2, 4];
-    const put = (next, label) => (next ? setEdit(seam.path, next, label) : releaseEdit(seam.path, label));
-    // a click composes on the latest edit, not on the answer drawn before it: two quick clicks (a riser, then a
-    // roll) otherwise both start from the same drawn value, and the second undoes the first
-    const latest = () => (Object.prototype.hasOwnProperty.call(state.edits, seam.path) ? state.edits[seam.path] : value) || null;
-    const lastOver = (v) => (v ? Math.max(0, ...["riser", "sweep", "roll", "stop", "down"].map((k) => (typeof v[k] === "object" ? v[k].bars : v[k]) || 0)) : 0);
+    const put = (next, label) => { if (next) setEdit(seam.path, next, label); else releaseEdit(seam.path, label); renderInspector(); };
+    const longest = (v) => Math.max(0, ...M.seamLengths(v).filter((x) => x.kind !== "stop").map((x) => x.bars));
+    // each kind on its own row with its own length (a 4-bar riser with a 1-bar roll); every row always drawn, so a
+    // choice adds no row under the pointer. A length pressed for a kind that's off puts it on at that length.
+    const kindRow = (k) => {
+      const on = !!value?.[k], n = on ? M.seamLengths(value).find((x) => x.kind === k).bars : 0, unit = k === "stop" ? "beat" : "bar";
+      return [
+        h("button", { class: `chip${on ? " on you" : ""}`, type: "button", "aria-pressed": String(on), "data-key": `seam:${k}`,
+          onclick: () => put(M.seamToggle(latest(), k, k === "stop" ? 2 : longest(latest()) || 1), `Into ${s.label}: ${on ? `no ${M.KIND_WORDS[k].replace(/^an? /, "")}` : M.KIND_WORDS[k]}`) }, M.KIND_WORDS[k]),
+        h("span", { class: "chips lengths", role: "group", "aria-label": `${M.KIND_WORDS[k]}: how long` }, bars.map((b) => h("button", {
+          class: `chip small${on && n === b ? " on you" : ""}${on ? "" : " off"}`, type: "button", "aria-pressed": String(on && n === b),
+          title: on ? null : `${M.KIND_WORDS[k]} over ${b} ${unit}${b === 1 ? "" : "s"}`,
+          onclick: () => { if (on && n === b) return; const v = latest(); put(v?.[k] ? M.seamLength(v, k, b) : M.seamToggle(v, k, b), `Into ${s.label}: ${M.KIND_WORDS[k]} over ${b} ${unit}${b === 1 ? "" : "s"}`); } },
+        `${b} ${unit}${b === 1 ? "" : "s"}`)))];
+    };
+    const sweepType = typeof value?.sweep === "object" ? value.sweep.type : "highpass";
     const from = seam.from ? sectionAt(seam.from) : null;
     shell({ kind: "seam", rubric: `Into ${s.label}`, mine: yours,
-      set: `${from ? `from ${from.label}: ` : ""}${M.seamWords(value)}${yours ? ", yours" : ""}`,
+      // short, so it keeps its two lines as kinds are added (the chips say which, and how long; the tooltip, in words)
+      set: h("span", { title: M.seamWords(value) }, `${from ? `From ${from.label}` : "At the start"}: ${value
+        ? `${["riser", "sweep", "roll", "stop", "impact", "down"].filter((k) => value[k]).map((k) => ({ down: "downlifter" })[k] || k).join(" · ")}${yours ? " (yours)" : ""}`
+        : "nothing, the band goes straight on"}`),
       body: h("div", {},
-        kinds.length ? h("div", { class: "row" }, h("span", { class: "label" }, "Before it"), h("span", { class: "chips", role: "group", "aria-label": "Before it" },
-          kinds.map((k) => h("button", { class: `chip${value?.[k] ? " on you" : ""}`, type: "button", "aria-pressed": String(!!value?.[k]),
-            onclick: () => put(M.seamToggle(latest(), k, lastOver(latest()) || 1), `Into ${s.label}: ${M.KIND_WORDS[k]}`) }, M.KIND_WORDS[k])))) : h("p", { class: "hint" }, "Nothing comes before the first section, so nothing builds into it; an impact on its downbeat can."),
-        kinds.length && value && over ? chipRow("Over", bars.map((n) => ({ value: n, text: `${n} bar${n === 1 ? "" : "s"}` })), over, (n) => put(M.seamOver(latest(), n), `Into ${s.label}: over ${n} bars`), yours) : null,
-        h("div", { class: "row" }, h("span", { class: "label" }, "On the downbeat"),
-          h("button", { class: `chip${value?.impact ? " on you" : ""}`, type: "button", "aria-pressed": String(!!value?.impact), onclick: () => put(M.seamToggle(latest(), "impact"), `Into ${s.label}: an impact`) }, "an impact"),
-          h("button", { class: `chip${value?.down ? " on you" : ""}`, type: "button", "aria-pressed": String(!!value?.down), onclick: () => put(M.seamToggle(latest(), "down", lastOver(latest()) || 1), `Into ${s.label}: a downlifter`) }, "a downlifter after")),
-        value?.sweep ? chipRow("The sweep", [{ value: "highpass", text: "rising (the bass thins out)" }, { value: "lowpass", text: "falling (the top closes)" }],
-          typeof value.sweep === "object" ? value.sweep.type : "highpass", (type) => { const v = latest() || value; put({ ...v, sweep: { bars: typeof v.sweep === "object" ? v.sweep.bars : v.sweep, type } }, `Into ${s.label}: the sweep ${type === "lowpass" ? "falling" : "rising"}`); }, yours) : null,
+        seam.before ? h("div", { class: "seamkinds", role: "group", "aria-label": "Before it" }, h("span", { class: "label wide" }, "Before it"),
+          ["riser", "sweep", "roll", "stop"].flatMap(kindRow))
+          : h("p", { class: "hint" }, "Nothing comes before the first section, so nothing builds into it; an impact on its downbeat can."),
+        h("div", { class: "seamkinds", role: "group", "aria-label": "On the downbeat" }, h("span", { class: "label wide" }, "On the downbeat and after"),
+          h("button", { class: `chip${value?.impact ? " on you" : ""}`, type: "button", "aria-pressed": String(!!value?.impact), "data-key": "seam:impact",
+            onclick: () => put(M.seamToggle(latest(), "impact"), `Into ${s.label}: an impact`) }, "an impact"), h("span", {}),
+          kindRow("down")),
+        seam.before ? h("div", { class: "row" }, h("span", { class: "label" }, "The sweep"), h("span", { class: "chips", role: "group", "aria-label": "The sweep" },
+          [["highpass", "rising (the bass thins out)"], ["lowpass", "falling (the top closes)"]].map(([type, text]) => h("button", {
+            class: `chip${value?.sweep && sweepType === type ? " on you" : ""}`, type: "button", disabled: !value?.sweep, "aria-pressed": String(!!value?.sweep && sweepType === type),
+            title: value?.sweep ? null : "Choose a sweep first",
+            onclick: () => { const v = latest(); if (!v?.sweep || sweepType === type) return; put({ ...v, sweep: { bars: typeof v.sweep === "object" ? v.sweep.bars : v.sweep, type } }, `Into ${s.label}: the sweep ${type === "lowpass" ? "falling" : "rising"}`); } }, text)))) : null,
         h("p", { class: "hint" }, "A transition is sound, not arrangement: it doesn't change who plays or how long a section is; a roll takes the snare's place in its bars, a stop quiets the band and not the singer.")),
       why: yours ? [["you", `yours: ${M.seamWords(value)}`]] : [["song", "the song's own seams are plain: the band goes straight on, and a turn is how this song breathes between parts"]],
       hear: () => listen("you", s.index),
-      release: { disabled: !edited(seam.path), action: () => releaseEdit(seam.path, `Into ${s.label}: the program's`) } });
+      release: { disabled: !edited(seam.path), action: () => { releaseEdit(seam.path, `Into ${s.label}: the program's`); renderInspector(); } } });
     return true;
   }
 
@@ -892,8 +977,15 @@
     const phrases = state.view.composition?.sections?.find((x) => x.id === sel.id)?.phrases || [];
     const p = phrases[sel.line];
     if (!s || !p?.lyric_path) return false;
-    const anchor = h("div", { class: "lyric-author" });
-    window.SongbirdAuthor?.line(state.view, sel.id, sel.line, anchor);
+    const anchor = h("div", { class: "lyric-author", "data-whole": "" });  // author.js's own nodes: redrawn whole
+    // one line at a time: a line used, the column moves on to the next one to write (typing elsewhere stays a draft)
+    const next = () => {
+      const j = phrases.findIndex((q, k) => k > sel.line && q.lyric_path);
+      if (j < 0 || S.sel?.kind !== "line" || S.sel.id !== sel.id || S.sel.line !== sel.line) return;
+      select({ kind: "line", id: sel.id, line: j });
+      $("inspector").querySelector("textarea")?.focus({ preventScroll: true });
+    };
+    window.SongbirdAuthor?.line(state.view, sel.id, sel.line, anchor, { next });
     shell({ kind: "line", rubric: `${s.label}, line ${sel.line + 1}`, mine: !!p.authored,
       set: `${p.authored ? "yours" : w?.how ? `the song's own, ${w.how}` : "the song's own"}: ${p.syllable_count} syllables`,
       body: h("div", {},
@@ -939,8 +1031,11 @@
       (v) => (v === sp.patch.program ? releaseEdit(sp.patch.path, `${t.label}: its own sound`) : setEdit(sp.patch.path, v, `${t.label}: ${v}`)), sp.patch.yours));
     if (sp.kit) out.push(chipRow("Kit", sp.kit.options.map((o) => ({ value: o.name, text: o.name, title: o.about })), sp.kit.value,
       (v) => (v === sp.kit.program ? releaseEdit(sp.kit.path, `${t.label}: its own kit`) : setEdit(sp.kit.path, v, `${t.label}: the ${v} kit`)), sp.kit.yours));
-    if (sp.sidechain) out.push(h("div", { class: "row" }, h("span", { class: "label" }, "Pump"), pumpSelect(sp.sidechain, `${t.label}: pump`),
-      h("span", { class: "hint" }, sp.sidechain.has_kick ? "ducks on the kick" : "no kick here: it pumps on the beat")));
+    if (sp.sidechain && (!sp.sidechain.is_key || sp.sidechain.yours)) {  // not on the drummer: it's the kick it ducks on
+      out.push(h("div", { class: "row" }, h("span", { class: "label" }, "Pump"), pumpSelect(sp.sidechain, `${t.label}: pump`),
+        h("span", { class: "hint" }, sp.sidechain.has_kick ? "ducks on the kick" : "no kick here: it pumps on the beat")));
+      out.push(pumpWhere(sp.sidechain, `${t.label}: pump`));
+    }
     if (sp.pan) out.push(field("Where it sits", sp.pan.path, sp.pan.value, { min: -1, max: 1, step: 0.05 }, panWords, ["left", "right"]));
     const more = [];
     if (sp.send) more.push(field("How much reaches the room", sp.send.path, sp.send.value, { min: sp.send.min, max: sp.send.max, step: 0.05 }, (x) => `${Number(x).toFixed(2)}×`, ["dry", "3×"]));
@@ -956,7 +1051,7 @@
       for (const [knob, r] of Object.entries(v.knobs || {})) {
         more.push(field(`The ${piece}: ${knob}`, `${v.path}.${knob}`, now[knob] ?? r.own ?? 0, { min: r.min, max: r.max, step: knob === "tune" ? 1 : 0.05 },
           (x) => (knob === "tune" ? `${x > 0 ? "+" : ""}${x} st` : `${Number(x).toFixed(2)}×`), knob === "tune" ? ["lower", "higher"] : ["shorter", "longer"],
-          { yours: !!v.yours, commit: (x) => setEdit(v.path, { ...now, [knob]: x }, `${t.label}: the ${piece}'s ${knob}`) }));
+          { yours: !!v.yours, commit: (x) => setEdit(v.path, { ...(edited(v.path) ? state.edits[v.path] : now), [knob]: x }, `${t.label}: the ${piece}'s ${knob}`) }));
       }
     }
     if (more.length) out.push(h("details", {}, h("summary", {}, "more"), more));
@@ -1004,7 +1099,7 @@
     const sel = h("select", { "aria-label": "Whose way it is sung", id: "singerWay" }, h("option", { value: "" }, "the song's own way"),
       phrasings.map((p) => h("option", { value: p.id }, `${p.way || `${p.label}'s way`}${p.detail ? ` (${p.detail})` : ""}`)));
     sel.value = c?.phrasing || "";
-    sel.addEventListener("change", () => setEdit("phrasing", sel.value || null, "The singer's way"));
+    sel.addEventListener("change", (e) => setEdit("phrasing", e.target.value || null, "The singer's way"));
     const sung = S.grid?.sections.map((s) => h("i", { class: s.sung ? "on" : "", title: `${s.label}: ${s.sung ? "sung" : "played"}` })) || [];
     shell({ kind: "singer", rubric: "The singer", mine: edited("phrasing") || edited("mix.forward") || edited("mix.intimacy"),
       set: `${c?.value || ""}${c?.detail ? `; ${c.detail}` : ""}`,
@@ -1048,7 +1143,7 @@
     const st = c.style, opts = (map) => Object.entries(map || {}).map(([value, text]) => ({ value, text }));
     const styles = h("select", { "aria-label": "The style", id: "styleName" }, opts(c.styles).map((o) => h("option", { value: o.value }, o.text)));
     styles.value = st.name;
-    styles.addEventListener("change", () => setEdit("style.name", styles.value, `The style: ${c.styles[styles.value]}`));
+    styles.addEventListener("change", (e) => setEdit("style.name", e.target.value, `The style: ${c.styles[e.target.value]}`));
     shell({ kind: "style", rubric: "The style", mine: c.mine, set: `${c.value}${c.detail ? `: ${c.detail}` : ""}`,
       body: h("div", {},
         h("div", { class: "row" }, h("span", { class: "label" }, "The style"), styles),
@@ -1081,9 +1176,11 @@
     const byPart = {};
     for (const ch of c.choices || []) (byPart[ch.part] = byPart[ch.part] || []).push(ch);
     const toggles = s.optional.map((part) => {
-      const on = !!c.parts?.[part], flip = (byPart[part] || []).find((x) => x.value === !on);
+      const drawn = !!c.parts?.[part], flip = (byPart[part] || []).find((x) => x.value === !drawn);
+      const now = () => (edited(`form.${part}`) ? !!state.edits[`form.${part}`] : drawn);  // a second quick click undoes the first
+      const on = now();
       return h("button", { class: `chip${on ? " on" : ""}${on && edited(`form.${part}`) ? " you" : ""}`, type: "button", "aria-pressed": String(on), disabled: !flip || !flip.allowed,
-        title: !flip ? "This part can't be changed in this arrangement" : !flip.allowed ? flip.why : null, onclick: () => setEdit(`form.${part}`, !on, `${on ? "No" : "With"} ${s.parts[part]}`) }, s.parts[part]);
+        title: !flip ? "This part can't be changed in this arrangement" : !flip.allowed ? flip.why : null, onclick: () => { const was = now(); setEdit(`form.${part}`, !was, was ? `No ${s.parts[part].replace(/^(an?|the) /, "")}` : `With ${s.parts[part]}`); } }, s.parts[part]);
     });
     const release = () => { const next = copyEdits(); for (const p of Object.keys(next)) if (p.startsWith("form.")) delete next[p]; next["form.order"] = null; commitEdits(next, "Use the song's shape"); };
     shell({ kind: "shape", rubric: "The shape", mine: c.mine || !!v.edits["form.order"], set: c.value,
@@ -1171,7 +1268,7 @@
       }
       case "record": e.preventDefault(); record(); break;
       case "time": e.preventDefault(); openTime(); break;
-      case "move": if (S.sel?.kind === "section") { e.preventDefault(); const i = S.grid.sections.findIndex((s) => s.id === S.sel.id); moveSection(S.sel.id, i + a.step); } break;
+      case "move": if (S.sel?.kind === "section") { e.preventDefault(); moveSection(S.sel.id, { step: a.step }); } break;
       case "step":
         if (e.target.closest?.(".sbc-note, input, select, [role=tab]")) return;
         if (stepCell(a.axis, a.step, e.target)) e.preventDefault();

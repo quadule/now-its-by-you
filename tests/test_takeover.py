@@ -138,6 +138,20 @@ def test_a_player_sits_out_plays_soft_or_hard():
     assert "drum" in ctx.taken["program"][last] and "drum" not in ctx.sections[last].parts
 
 
+def test_a_player_sat_out_after_its_cells_were_set_is_silent_and_nothing_is_wrong():
+    """docs/STUDIO-EDM-TEST.md, second attempt, bug 5: everyone hard in refrain 2, then the guitar sat out
+    everywhere; the guitar is silent and the page isn't told "this version's band has no guitar"."""
+    edits = {"style.name": "synthfolk", "arrange.refrain:1.guitar.level": "hard", "band.guitar": 0}
+    r = E.resolve(G, None, ADA, DAY, E.check(G, edits)[0])
+    assert not r.problems and set(edits) <= set(r.applied)
+    assert not [n for n in realize(G, r.params).notes if n.part == "guitar"]  # silent everywhere
+    assert T.silent(G, r.params, "arrange.refrain:1.guitar.level", edits) is None
+    # a player the band hasn't got still waits, said
+    assert "has no fiddle" in T.silent(G, r.params, "arrange.refrain:1.fiddle.level", {"band.fiddle": 0})
+    back = E.resolve(G, None, ADA, DAY, E.check(G, {**edits, "band.guitar": 1.0})[0])  # back in: hard there, as set
+    assert T.arranged(back.params)["refrain:1"]["players"]["guitar"]["level"] == "hard" and not back.problems
+
+
 def test_a_played_refrain_is_a_drop():
     base = synthfolk()
     r0 = E.resolve(G, base, None, None, {})

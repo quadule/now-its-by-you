@@ -98,6 +98,24 @@
     return { order: next.map((s) => s.id) };
   }
 
+  // Which sections a person moved: the fewest whose moving turns the program's order (for the shape now chosen,
+  // the record's "was") into this one, the rest keeping their order (a longest common subsequence). One section
+  // dragged past another could be either; `hint`, the ones the person dragged on this page, settles it.
+  function movedIds(before, now, hint = []) {
+    if (!Array.isArray(before) || !Array.isArray(now)) return new Set();
+    const a = before.filter((id) => now.includes(id)), b = now.filter((id) => before.includes(id));
+    const held = new Set(hint), w = (id) => (held.has(id) ? 1 - 1e-6 : 1);
+    const t = Array.from({ length: a.length + 1 }, () => new Array(b.length + 1).fill(0));
+    for (let i = a.length - 1; i >= 0; i--) for (let j = b.length - 1; j >= 0; j--)
+      t[i][j] = a[i] === b[j] ? w(a[i]) + t[i + 1][j + 1] : Math.max(t[i + 1][j], t[i][j + 1]);
+    const kept = new Set();
+    for (let i = 0, j = 0; i < a.length && j < b.length;) {
+      if (a[i] === b[j] && Math.abs(t[i][j] - (w(a[i]) + t[i + 1][j + 1])) < 1e-12) { kept.add(a[i]); i++; j++; }
+      else if (t[i + 1][j] >= t[i][j + 1]) i++; else j++;
+    }
+    return new Set(b.filter((id) => !kept.has(id)));
+  }
+
   // ------------------------------------------------------------------ a seam: what happens into a section
   // a sweep may be {bars, type}: a highpass rising (the default) or a lowpass falling (sound.py)
   const lasts = (v) => (v && typeof v === "object" ? v.bars : v);
@@ -119,6 +137,15 @@
     if (next[kind]) delete next[kind];
     else next[kind] = kind === "impact" ? true : bars;
     return Object.keys(next).length ? next : null;
+  }
+  // how long one kind lasts, the others as they are (a 4-bar riser with a 1-bar roll); a sweep keeps its direction
+  function seamLength(value, kind, bars) {
+    if (!value?.[kind] || kind === "impact") return value || null;
+    return { ...value, [kind]: typeof value[kind] === "object" ? { ...value[kind], bars } : bars };
+  }
+  // the kinds that last, each with its length, in the order the page lists them (a stop's in beats)
+  function seamLengths(value) {
+    return [...KINDS, "down"].filter((k) => value?.[k]).map((k) => ({ kind: k, bars: lasts(value[k]), unit: k === "stop" ? "beat" : "bar" }));
   }
   function seamOver(value, bars) {  // how long: every kind that lasts, at once
     if (!value) return null;
@@ -197,7 +224,7 @@
   }
 
   const api = { LEVELS, KIND_WORDS, grid, look, whoseWords, cellLabel, lockPatch, releasePatch, levelPatch, optionLock,
-    moveOrder, seamWords, seamToggle, seamOver, scopeOptions, scopeStart, selectionKey, defaultHow, playTarget,
+    moveOrder, movedIds, seamWords, seamToggle, seamOver, seamLength, seamLengths, scopeOptions, scopeStart, selectionKey, defaultHow, playTarget,
     neighbour, position, inField, keyAction, saidCell };
   if (typeof window !== "undefined") window.SongbirdModel = api;
   if (typeof module === "object" && module.exports) module.exports = api;

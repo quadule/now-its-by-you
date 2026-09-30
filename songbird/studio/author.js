@@ -29,15 +29,26 @@
     row.input.setAttribute("aria-invalid", String(n !== row.phrase.syllable_count));
     row.input.classList.toggle("is-dirty", row.input.value !== row.base);
   }
-  async function apply(section, patch) {
-    if (section.busy) return;
+  // `row`: one line used on its own (the score's column): its refusal, its status and what follows are its own.
+  // A section's checks run one after another (a line used while the one before is checked waits its turn), each on
+  // the song as the one before left it.
+  function apply(section, patch, row = null, done = null) {
+    if (!section.busy) section.chain = check(section, patch, row, done);
+    else if (row) {
+      row.status.textContent = "Waiting for the line before to be checked…";
+      section.chain = section.chain.then(() => check(section, patch, row, done));
+    }
+    return section.chain;
+  }
+  async function check(section, patch, row, done) {
+    const status = row?.status || section.status, save = row?.use || section.save;
     const snapshot = bridge().snapshot();
     const next = {...snapshot.edits, ...patch};
     const paths = new Set(Object.keys(patch));
     const submitted = new Map([...section.rows.values()].map((row) => [row.phrase.lyric_path, row.input.value]));
     section.busy = true;
-    section.save.disabled = true;
-    section.status.textContent = "Checking syllables and pronunciation…";
+    save.disabled = true;
+    status.textContent = "Checking syllables and pronunciation…";
     try {
       const response = await fetch("/api/song", {
         method: "POST", headers: {"Content-Type": "application/json", "X-Studio": document.querySelector('meta[name="studio-token"]').content},
@@ -54,10 +65,11 @@
         // becomes the base; newer typing must remain an unapplied draft.
         row.base = patch[row.phrase.lyric_path] ?? submitted.get(row.phrase.lyric_path);
       }
-      section.status.textContent = "Your words fit the tune. Hear this section to listen.";
-      bridge().toast("Your words are part of the song. Undo brings the previous lines back.");
-    } catch (error) { section.status.textContent = error.message; }
-    finally { section.busy = false; section.save.disabled = false; }
+      status.textContent = row ? "This line fits the tune: it's in your song." : "Your words fit the tune. Hear this section to listen.";
+      bridge().toast(row ? "Your line is part of the song. Undo brings the previous one back." : "Your words are part of the song. Undo brings the previous lines back.");
+      done?.();
+    } catch (error) { status.textContent = error.message; }
+    finally { section.busy = false; save.disabled = false; }
   }
   function makeSection(s) {
     const details = node("details", "lyric-author");
@@ -125,9 +137,35 @@
     count(row);
     return row;
   }
+  // A line's own Use and Discard, for the score's column: one line at a time, as the column is (a draft typed in
+  // another line stays a draft there, and a refusal of this one refuses only this one)
+  function lineActions(section, row, options) {
+    if (!row.use) {
+      row.use = button("Use this line", () => {
+        const text = row.input.value;
+        if (text === row.base) { row.status.textContent = "This line is already in your song."; return; }
+        if (syllables(text) !== row.phrase.syllable_count) {
+          row.status.textContent = `This line needs ${row.phrase.syllable_count} syllables; it has ${syllables(text)}.`;
+          row.input.focus();
+          return;
+        }
+        apply(section, {[row.phrase.lyric_path]: text}, row, () => row.next?.());
+      });
+      row.use.className = "btn";
+      const discard = button("Discard typing", () => { row.input.value = row.base; count(row); row.status.textContent = "This line's typing discarded."; });
+      row.actions = node("div", "author-actions");
+      row.actions.append(row.use, discard);
+      row.status = node("p", "author-status");
+      row.status.setAttribute("role", "status");
+      row.input.addEventListener("input", () => { row.status.textContent = "Typing stays here until you use this line."; });
+    }
+    row.next = options.next || null;  // what follows a line used: the score's next line to write
+    return row;
+  }
   // One line of a section, in the score's inspector (docs/STUDIO-REDESIGN.md, "A line of words"): the same rows,
-  // counts, checks and apply as the section's own editor; the nodes are kept, so typing survives a redraw.
-  function line(view, sectionId, lineIndex, anchor) {
+  // counts and checks as the section's own editor, one line used at a time; the nodes are kept, so typing survives a
+  // redraw.
+  function line(view, sectionId, lineIndex, anchor, options = {}) {
     const s = (view.composition?.sections || []).find((x) => x.id === sectionId);
     const p = s?.phrases?.[lineIndex];
     if (!s || !p?.lyric_path) return false;
@@ -136,8 +174,8 @@
     if (!section) { section = makeSection(s); sections.set(s.id, section); }
     section.label = s.label;
     const row = rowFor(section, p, lineIndex, s.label);
-    section.save.textContent = "Use this line";
-    anchor.append(row.wrap, section.save.parentNode, section.status, section.hint);
+    lineActions(section, row, options);
+    anchor.append(row.wrap, row.actions, row.status, section.hint);
     if (focus?.path === p.lyric_path) { row.input.focus({preventScroll: true}); row.input.setSelectionRange(focus.start, focus.end); focus = null; }
     return true;
   }

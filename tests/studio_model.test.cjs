@@ -90,6 +90,21 @@ test("a seam's transitions: toggled, lengthened together, said in words", () => 
   assert.deepEqual(M.seamOver(sweep, 4), { sweep: { bars: 4, type: "lowpass" } });
 });
 
+test("a seam's kinds each last their own length: a 4-bar riser with a 1-bar roll (EDM test 2)", () => {
+  // two quick clicks, each built on the edit before (the page's latest()), then a length for one kind alone
+  let v = M.seamToggle(null, "riser", 2);
+  v = M.seamToggle(v, "roll", 2);
+  v = M.seamLength(v, "riser", 4);
+  v = M.seamLength(v, "roll", 1);
+  v = M.seamToggle(v, "impact");
+  assert.deepEqual(v, { riser: 4, roll: 1, impact: true });  // sound.py's transition takes each kind's bars
+  assert.equal(M.seamWords(v), "a riser over 4 bars, a snare roll over 1 bar, an impact on the downbeat");
+  assert.deepEqual(M.seamLengths(v).map((x) => [x.kind, x.bars]), [["riser", 4], ["roll", 1]]);
+  assert.deepEqual(M.seamLength({ sweep: { bars: 2, type: "lowpass" } }, "sweep", 1), { sweep: { bars: 1, type: "lowpass" } });
+  assert.deepEqual(M.seamLength(v, "sweep", 2), v);  // a kind that's off isn't put on by a length alone here
+  assert.equal(M.seamLengths({ stop: 2 })[0].unit, "beat");
+});
+
 test("the scope switch: everywhere first, here only, and the last one however many at the last of several", () => {
   const p = { place: "refrain:3.1", place_last: "refrain:last.1", appearances: 4, tune_scope: { from: null }, chords_scope: { from: "last" } };
   const opts = M.scopeOptions(p, { name: "refrain", label: "Refrain 4" });
@@ -133,4 +148,15 @@ test("the keyboard: none fires in a text field; the table's keys", () => {
   assert.equal(M.keyAction({ key: "m", target: { tagName: "TEXTAREA" } }), null);
   assert.deepEqual(M.keyAction({ key: " ", target: { tagName: "INPUT", type: "range" } }), { action: "play", how: "sketch" });
   assert.equal(M.saidCell({ label: "lute" }, { label: "Verse 1" }, "hard"), "Verse 1: the lute now plays hard");
+});
+
+test("a moved region is one a person moved, not every one whose place a move shifted (EDM test 2, bug 4)", () => {
+  const program = ["intro:0", "verse:0", "refrain:0", "verse:1", "refrain:1", "bridge:0", "refrain:2", "tag:0", "outro:0"];
+  const now = ["intro:0", "verse:0", "refrain:0", "refrain:1", "verse:1", "bridge:0", "refrain:2", "tag:0", "outro:0"];
+  assert.deepEqual([...M.movedIds(program, now, ["verse:1"])], ["verse:1"]);  // verse 2 dragged after refrain 2
+  assert.equal(M.movedIds(program, now).size, 1);  // one of the two, whichever, without the hint
+  assert.equal(M.movedIds(program, program).size, 0);
+  const far = ["verse:0", "refrain:0", "verse:1", "refrain:1", "bridge:0", "refrain:2", "tag:0", "outro:0", "intro:0"];
+  assert.deepEqual([...M.movedIds(program, far)], ["intro:0"]);  // the intro to the end: only it
+  assert.equal(M.movedIds(undefined, now).size, 0);  // no order of the person's: nothing moved
 });

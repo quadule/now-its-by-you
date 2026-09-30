@@ -292,3 +292,28 @@ def test_a_place_this_version_doesnt_sing_is_said_and_an_inherited_one_waits():
     held = Params.from_dict({**seed_params().to_dict(), "composition": {"chords": {"refrain:5.1": LAST}}})
     assert chords_sung(held, "r2") == chords_sung(seed_params(), "r2")  # silent where there is no sixth refrain
     assert E.resolve(g, held, None, None, {}).params.composition == {"chords": {"refrain:5.1": LAST}}
+
+
+def test_was_is_the_programs_own_for_the_style_and_shape_the_person_chose():
+    """docs/STUDIO-EDM-TEST.md, second attempt, bug 7: after the style changed, a tempo's "was" is that style's
+    tempo, not the one it replaced; a player sat out was playing in that style; the order was the program's for
+    the shape chosen (bug 4: not the song's first order, so a region isn't called moved when only the shape
+    changed)."""
+    from songbird import composition as C
+
+    vela = H.fictional("vela")
+    day = D.drift(D.parse("2026-09-30"), vela.hash)
+    shape = {"style.name": "synthfolk", "form.verses": 2, "form.intro": True}
+    own = E.resolve(g, None, vela, day, shape).params
+    order = C.section_ids(own.form)
+    moved = order[:]
+    moved.insert(moved.index("refrain:1") + 1, moved.pop(moved.index("verse:1")))  # verse 2 after refrain 2
+    edits, problems = E.check(g, {**shape, "tempo": 128, "band.guitar": 0, "form.order": moved})
+    assert not problems
+    r = E.resolve(g, None, vela, day, edits)
+    assert r.generated.style.name != "synthfolk" and r.generated.tempo != own.tempo  # the program's own was another
+    assert r.marks["tempo"] == {"value": 128.0, "was": own.tempo}
+    assert r.marks["band.guitar"]["was"] == own.band.gain("guitar") > 0.02
+    assert r.marks["form.order"]["was"] == order
+    assert r.marks["style.name"]["was"] == r.generated.style.name  # the style's own "was" is the program's style
+    assert E.resolve(g, None, vela, day, {"tempo": 90}).marks["tempo"]["was"] == r.generated.tempo  # no style: as before

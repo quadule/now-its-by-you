@@ -75,6 +75,38 @@ test('the words say what the stars around a word are for', () => {
   assert.match(hint.textContent, /between stars, like \*heart\*, is the one the line leans on/);
 });
 
+test('"Use this line" uses this line only; another typed stays a draft, and a refusal refuses only this one', async () => {
+  const s = setup();
+  const two = {composition: {sections: [{id: 'verse:0', index: 1, label: 'Verse 1', phrases: [
+    {lyric_path: 'lyrics.verse:0.0', lyric_text: 'I sing this song.', syllable_count: 4},
+    {lyric_path: 'lyrics.verse:0.1', lyric_text: 'You hear it now.', syllable_count: 4}]}]}};
+  const find = (anchor, pred) => anchor.children.flatMap((k) => [k, ...(k.children || [])]).find(pred);
+  const ui = (j, next = null) => {
+    const anchor = s.element('div');
+    s.line(two, 'verse:0', j, anchor, {next});
+    return {anchor, input: find(anchor, (k) => k.tag === 'textarea'), use: find(anchor, (k) => k.textContent === 'Use this line'),
+      status: () => find(anchor, (k) => k.className === 'author-status').textContent};
+  };
+  let moved = 0;
+  const first = ui(0, () => moved++), second = ui(1);
+  assert.ok(!find(first.anchor, (k) => k.textContent === 'Use these lines'), 'one line, one button');
+  second.input.value = 'They hear it now.'; second.input.listeners.input();  // a draft in line 2
+  first.input.value = 'We sing this song.'; first.input.listeners.input();
+  first.use.listeners.click();
+  assert.equal(s.requests, 1);
+  second.use.listeners.click();  // used while line 1 is checked: waits its turn
+  assert.equal(s.requests, 1);
+  assert.match(second.status(), /Waiting/);
+  s.answer(); await s.flush(); await s.flush();
+  assert.deepEqual(JSON.parse(JSON.stringify(s.edits)), {'lyrics.verse:0.0': 'We sing this song.'}, 'line 1 alone, not line 2 with it');
+  assert.equal(moved, 1, 'the column moves on to the next line');
+  assert.equal(s.requests, 2);
+  s.answer([{path: 'lyrics.verse:0.1', why: 'unknown pronunciation'}]); await s.flush(); await s.flush();
+  assert.deepEqual(JSON.parse(JSON.stringify(s.edits)), {'lyrics.verse:0.0': 'We sing this song.'}, 'line 2 refused alone; line 1 kept');
+  assert.match(second.status(), /Line 2: unknown pronunciation/);
+  assert.match(first.status(), /in your song/);
+});
+
 test('a line redrawn in the inspector keeps its hint and never writes out a null', () => {
   const s = setup();
   for (const pass of [1, 2, 3]) {  // the score redraws the column on every change: the hint moved out stays found

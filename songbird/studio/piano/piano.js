@@ -47,18 +47,36 @@
   function clamp(x, lo, hi) { return Math.max(lo, Math.min(hi, x)); }
 
   // ------------------------------------------------------------------ names
-  const SHARP = ["C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B"];
-  const FLAT = ["C", "Db", "D", "Eb", "E", "F", "Gb", "G", "Ab", "A", "Bb", "B"];
-  const FLAT_KEYS = new Set([5, 10, 3, 8, 1]); // F, Bb, Eb, Ab, Db major: spelled with flats
+  // spelt by the key's signature, as the studio spells (songbird/theory.py spelling): each of the key's notes on its
+  // own letter (G# in C# minor, E# in C# major), another natural if it can be, else sharp or flat as the key is
+  const LETTERS = "CDEFGAB", NATURAL = [0, 2, 4, 5, 7, 9, 11];
+  const MODES = { major: [0, 2, 4, 5, 7, 9, 11], ionian: [0, 2, 4, 5, 7, 9, 11], dorian: [0, 2, 3, 5, 7, 9, 10],
+    phrygian: [0, 1, 3, 5, 7, 8, 10], lydian: [0, 2, 4, 6, 7, 9, 11], mixolydian: [0, 2, 4, 5, 7, 9, 10],
+    minor: [0, 2, 3, 5, 7, 8, 10], aeolian: [0, 2, 3, 5, 7, 8, 10], locrian: [0, 1, 3, 5, 6, 8, 10] };
+  const ACC = { "-2": "bb", "-1": "b", 0: "", 1: "#", 2: "x" };
+  const alter = (pc, letter) => ((((pc - NATURAL[letter % 7]) % 12) + 18) % 12) - 6;
+  function spelling(pc0, mode) {
+    const steps = MODES[mode] || MODES.major, base = ["C", "C#", "D", "Eb", "E", "F", "F#", "G", "Ab", "A", "Bb", "B"];
+    const sig = (l) => steps.reduce((n, s, d) => n + alter(pc0 + s, l + d), 0);
+    let l = LETTERS.indexOf(base[pc0][0]);
+    if (Math.abs(sig(l)) > 7) l = (l + (alter(pc0, l) > 0 ? 1 : 6)) % 7;  // no key of eight sharps: D♭ lydian
+    const s = sig(l), own = new Set(steps.map((x) => (pc0 + x) % 12)), out = base.slice();
+    for (let pc = 0; pc < 12; pc++) {
+      if (NATURAL.includes(pc) && !own.has(pc)) out[pc] = LETTERS[NATURAL.indexOf(pc)];
+      else if (s > 0 && NATURAL.includes((pc + 11) % 12)) out[pc] = LETTERS[NATURAL.indexOf((pc + 11) % 12)] + "#";
+      else if (s < 0 && NATURAL.includes((pc + 1) % 12)) out[pc] = LETTERS[NATURAL.indexOf((pc + 1) % 12)] + "b";
+    }
+    steps.forEach((x, d) => { out[(pc0 + x) % 12] = LETTERS[(l + d) % 7] + ACC[alter(pc0 + x, l + d)]; });
+    return out;
+  }
   const WHITE = new Set([0, 2, 4, 5, 7, 9, 11]);
   const QUAL = { maj: "", min: "m", dim: "dim", aug: "+", sus2: "sus2", sus4: "sus4", 7: "7", maj7: "maj7", m7: "m7",
     m7b5: "m7b5", dim7: "dim7", 6: "6", m6: "m6", add9: "add9", madd9: "m(add9)", "7sus4": "7sus4", "7sus2": "7sus2" };
 
   let score = null;
   const keyPc = () => (((score.key.tonicPc + set.transpose) % 12) + 12) % 12;
-  const flats = () => (score.key.mode === "major" ? FLAT_KEYS.has(keyPc()) : FLAT_KEYS.has((keyPc() + 3) % 12));
-  const spell = (pc) => (flats() ? FLAT : SHARP)[((pc % 12) + 12) % 12];
-  const noteName = (p, octave) => spell(p) + (octave ? Math.floor(p / 12) - 1 : "");
+  const spell = (pc) => spelling(keyPc(), score.key.mode)[((pc % 12) + 12) % 12];
+  const noteName = (p, octave) => { const n = spell(p); return n + (octave ? Math.floor(p / 12) - 1 + (n[0] === "B" && p % 12 === 0 ? -1 : n[0] === "C" && p % 12 === 11 ? 1 : 0) : ""); };
   const keyName = () => `${spell(keyPc())} ${score.key.mode}`;
   const chordName = (c) => spell(c.root + set.transpose) + (QUAL[c.quality] || "") +
     (c.bass !== undefined && c.bass !== c.root ? "/" + spell(c.bass + set.transpose) : ""); // a person's inversion

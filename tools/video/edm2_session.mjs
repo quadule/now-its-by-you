@@ -4,7 +4,11 @@
 //
 //   uv run songbird studio --no-open --port 8851 --machine fictional:vela
 //   node tools/video/edm2_session.mjs --url http://127.0.0.1:8851/ --out renders/video [--no-video] [--until PHASE]
-//     [--skip-record]
+//     [--skip-record] [--no-wait]
+//
+// --no-wait: the hand doesn't wait for the page's answer to an edit before reaching for the next control, nor follow
+// one that moved (it says so): a quick person. The page keeps its controls still and each click builds on the last,
+// so the session runs the same either way (the first filmed takes lost their snare rolls before it did).
 //
 // Needs Node >= 22 and playwright (npm i playwright; npx playwright install chromium) where Node resolves it from
 // this file (a node_modules beside or above it). Writes <out>/raw.mp4 (tools/video/kit.mjs), <out>/actions.json
@@ -23,8 +27,9 @@ const OUT = path.resolve(arg('out', 'renders/video'));
 const UNTIL = arg('until', null);
 const VIDEO = !process.argv.includes('--no-video');
 const SKIP_RECORD = process.argv.includes('--skip-record');
+const WAIT = !process.argv.includes('--no-wait');
 
-const s = await session({ url: URL, out: OUT, video: VIDEO, zoom: 1.2, avoid: '#page' });
+const s = await session({ url: URL, out: OUT, video: VIDEO, zoom: 1.2, avoid: '#page', wait: WAIT });
 const { page, pause, mark, click, dbl, choose, type, dragTo, show } = s;
 const byRole = (role, name, exact = false) => page.getByRole(role, { name, exact }).first();
 const insp = () => page.getByRole('complementary').first();
@@ -76,18 +81,21 @@ async function sketch(label, seconds, o = {}) {  // the page's own sketch: at on
   await pause(seconds * 1000);
   await click(page.locator('#tPlay'), 'stop', { weight: 1, hold: 1, after: 300 });
 }
-// a section's words, written in the column a line at a time and used at once (the page keeps typing per line)
+// a section's words, written in the column a line at a time, each used as it's written (the column moves on)
 async function writeLines(section, lines, label) {
   await toView('Page');
   await click(page.getByRole('tabpanel', { name: 'Page' }).getByRole('button', { name: section, exact: true }), `${section}: select it`, { after: 600 });
   await click(byRole('button', 'Edit its words', true), `${section}: edit its words`, { after: 900 });
   for (const [k, text] of lines) {
-    await click(chip('Line', String(k)), `${section} line ${k}`, { after: 350 });
+    if ((await chip('Line', String(k)).getAttribute('aria-pressed')) !== 'true') await click(chip('Line', String(k)), `${section} line ${k}`, { after: 350 });
     await type(insp().getByRole('textbox'), text, `${label} line ${k}: ${text.replace(/-/g, '').replace(/\*/g, '')}`, { weight: 2 });
+    const status = insp().locator('.author-status');
+    await click(insp().getByRole('button', { name: 'Use this line', exact: true }), `${section} line ${k}: use it`, { weight: 1, hold: 2, after: 300 });
+    await page.waitForFunction(() => !/Checking|Waiting/.test(document.querySelector('#inspector .author-status')?.textContent || ''), null, { timeout: 30000 });
+    const said = await status.innerText().catch(() => '');
+    if (/Line \d+:|isn't|can't|doesn't|needs|changed while/i.test(said)) { console.log('REFUSED', said); throw new Error(`${section} line ${k}: refused: ${said}`); }
+    await pause(900);
   }
-  await click(insp().getByRole('button', { name: /^Use / }).first(), `${section}: use these lines`, { weight: 2, hold: 3, after: 2200 });
-  const said = await insp().innerText();
-  if (/isn't|can't|doesn't|refus/i.test(said.split('One syllable')[0])) { console.log('REFUSED', said); throw new Error(`${section}: lines refused`); }
 }
 async function openNotes(section) {
   await toView('Arrange');
@@ -151,15 +159,14 @@ await toView('Arrange');
   const to = await show(region('Refrain 2'));
   await dragTo(region('Verse 2'), to.x + to.width * 0.3, to.y + to.height / 2, 'drag verse 2 after refrain 2', { weight: 3, ms: 1000, after: 2000 });
 }
-{ // the intro twice as long, by its edge (the next seam covers most of the edge: take it by its left pixels);
-  // the outro from the column
+{ // the intro twice as long, by the middle of its edge (a handle of its own now, clear of the next seam); the outro
+  // from the column
   const edge = page.locator('[data-region="intro:0"] .edge').first();
   const r = await show(region('Intro'));
   const e = await edge.boundingBox();
-  const fx = 1.5 / e.width;
-  const onEdge = await page.evaluate(([x, y]) => document.elementFromPoint(x, y)?.classList.contains('edge'), [e.x + 1.5, e.y + e.height / 2]);
-  if (onEdge) await dragTo(edge, r.x + r.width * 2, e.y + e.height / 2, 'the intro: drag its edge to 8 bars', { fx, weight: 2, ms: 800, after: 1800 });
-  else { await click(region('Intro'), 'the intro: select', { after: 600 }); await click(chip('Length', '8 bars'), 'the intro: 8 bars', { weight: 2, after: 1600 }); }
+  await dragTo(edge, r.x + r.width * 2, e.y + e.height / 2, 'the intro: drag its edge to 8 bars', { weight: 2, ms: 800, after: 1800 });
+  const bars = await region('Intro').getAttribute('aria-label');
+  if (!/^Intro, 8 bars/.test(bars)) throw new Error(`the intro's edge: ${bars}`);
   await click(region('Outro'), 'the outro: select', { after: 600 });
   await click(chip('Length', '8 bars'), 'the outro: 8 bars', { weight: 2, after: 1600 });
 }
@@ -199,7 +206,8 @@ await click(cell('drum machine', 'Refrain 2'), 'drum machine in the drop', { aft
 await click(seam('Refrain 2'), 'the seam into the drop', { after: 600 });
 await click(chip('Before it', 'a riser'), 'a riser', { weight: 2, after: 900 });
 await click(chip('Before it', 'a snare roll'), 'a snare roll', { weight: 2, after: 900 });
-await click(chip('Over', '2 bars'), 'over two bars', { after: 900 });
+await click(chip('a riser: how long', '4 bars'), 'the riser over four bars', { after: 900 });  // each its own length
+await click(chip('a snare roll: how long', '1 bar'), 'the roll over the last bar', { after: 900 });
 await click(insp().getByRole('button', { name: 'an impact', exact: true }), 'an impact on the downbeat', { weight: 2, after: 1200 });
 
 await phase('sound', 'the sound · the drop', 'A 909, a reese bass, a supersaw, the pad and bass pumping');
@@ -215,12 +223,10 @@ await click(track('synth lead'), 'the synth lead', { after: 700 });
 await click(chip('Sound', 'supersaw'), 'a supersaw lead', { weight: 3, after: 1100 });
 await click(track('guitar'), 'the guitar', { after: 700 });
 await click(insp().getByRole('button', { name: 'Sit out everywhere' }), 'the guitar sits out', { weight: 2, after: 1600 });
-{ // the drop's "everyone hard" had set the guitar there too; with it sat out the page says it can't keep that
-  const go = page.getByRole('button', { name: 'let it go' }).first();
-  if (await go.isVisible().catch(() => false)) {
-    await page.evaluate(() => scrollTo({ top: 0, behavior: 'smooth' })); await pause(500);
-    await click(go, "“couldn't keep your guitar in refrain 2”: let it go", { weight: 2, after: 1400 });
-  }
+{ // the drop's "everyone hard" set the guitar there too; sat out, it's silent there, and nothing is said to be wrong
+  await pause(1500);
+  const said = await page.locator('#problemsBar').innerText().catch(() => '');
+  if (/guitar/.test(said)) throw new Error(`sitting the guitar out: ${said}`);
 }
 await click(region('Refrain 2'), 'refrain 2: select', { after: 500 });
 await hearSung('hear the drop', 7, { weight: 3 });
@@ -249,7 +255,8 @@ await click(chip('Moment', 'a build'), 'the bridge: a build', { weight: 3, after
 await click(seam('Refrain 3'), 'the seam into the second drop', { after: 600 });
 await click(chip('Before it', 'a riser'), 'a riser', { weight: 2, after: 900 });
 await click(chip('Before it', 'a snare roll'), 'a snare roll', { after: 900 });
-await click(chip('Over', '2 bars'), 'over two bars', { after: 900 });
+await click(chip('a riser: how long', '2 bars'), 'the riser over two bars', { after: 900 });
+await click(chip('a snare roll: how long', '2 bars'), 'the roll over two bars', { after: 900 });
 await click(insp().getByRole('button', { name: 'an impact', exact: true }), 'an impact', { weight: 2, after: 1200 });
 await s.caption('a lock', 'What chance drew for verse 1, locked: a new performance can’t move it');
 {
@@ -310,6 +317,16 @@ await writeLines('Refrain 3', [
   [2, "It's yours on the floor now, and *on* it goes."],
   [3, 'a beat that was bor-rowed, a voice that was *true*,'],
 ], 'refrain 3');
+
+// ---- what the page now holds, said before the record (a quick hand's clicks each as meant)
+{
+  await s.settle();
+  const held = await page.evaluate(() => ({ edits: state.edits, problems: document.getElementById('problemsBar')?.innerText || '',
+    locks: document.getElementById('yoursBar')?.innerText || '', mine: [...document.querySelectorAll('.region.mine')].map((r) => r.dataset.key) }));
+  console.log('CHECK into the drop:', JSON.stringify(held.edits['transition.refrain:1']), '· into the second drop:', JSON.stringify(held.edits['transition.refrain:2']));
+  console.log('CHECK the breakdown:', JSON.stringify(held.edits['transition.verse:1']), '· masthead:', held.locks.replace(/\n/g, ' · '), '· problems:', JSON.stringify(held.problems));
+  console.log('CHECK regions marked yours:', held.mine, '· controls moved under the hand:', s.moves.length);
+}
 
 // ---- record it, and take the MIDI
 await phase('record', 'record it', 'One file: the song, the program that sang it, your choices marked');

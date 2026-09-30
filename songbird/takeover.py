@@ -319,8 +319,19 @@ def shape_problems(genome, form, held: dict) -> dict[str, str]:
     return out
 
 
-def silent(genome, params, path: str) -> str | None:
-    """Why a person's arrangement choice at this path isn't heard in this version, or None if it is."""
+def sat_out(params, player: str, edits: dict | None) -> bool:
+    """The band has this player and the person sat it out (its level at nothing): its cells are kept, silent until
+    it plays again, and nothing is wrong with them."""
+    from .band import INSTRUMENTS
+
+    has = player in params.band.lineup if params.band.lineup else player in INSTRUMENTS
+    level = (edits or {}).get(f"band.{player}")
+    return has and isinstance(level, (int, float)) and level <= 0.02
+
+
+def silent(genome, params, path: str, edits: dict | None = None) -> str | None:
+    """Why a person's arrangement choice at this path isn't heard in this version, or None if it is (or it waits,
+    unsaid, for a player the person sat out: `edits`, sat_out)."""
     from .composition import section_ids
 
     sid, name, player, field = target(genome, path)
@@ -333,6 +344,8 @@ def silent(genome, params, path: str) -> str | None:
             return "a build leads into the next section, and this one ends the song"
         return None
     if not params.band.plays(player):
+        if sat_out(params, player, edits):
+            return None
         return f"this version's band has no {player}; the choice waits for one that has"
     ballad = not params.band.lineup
     cell = entry.get("players", {}).get(player, {})
@@ -874,7 +887,7 @@ def grid(genome, v, heard: dict) -> dict:
                 or taken["build"].get((i, player)) or (enters if enters is not None and a - 1e-9 <= enters < b else None)
             fills = fills_for(player) and not ballad
             quiet = [{"path": p, "why": said} for p in mine if cell_now.get(p.rsplit(".", 1)[1]) is not None
-                     for said in [silent(genome, params, p)] if said]
+                     for said in [silent(genome, params, p, v.edits)] if said]
             cells.append({
                 "section": sid, "player": player, "plays": plays,
                 "value": {"level": cell_now.get("level") or level_of(busy_of(ctx, s), bool(now)), "pattern": now or None,

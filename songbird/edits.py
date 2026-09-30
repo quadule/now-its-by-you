@@ -842,8 +842,26 @@ def resolve(genome: Genome, parent, voice, drift, edits: dict, *, seed: int | No
         problems += [Problem(p, why) for p, why in unplaced.items()]
     if "phrasing" in edits and phrasing_json is not None:
         applied.append("phrasing")
-    marks_ = marks(genome, generated, generated_lyrics, lyrics, applied, edits, phrasing_json, params=params)
+    marks_ = marks(genome, generated, generated_lyrics, lyrics, applied, edits, phrasing_json, params=params,
+                   program=_program_for(genome, parent, voice, drift, seed, generated, body))
     return Resolved(generated, params, generated_lyrics, lyrics, applied, problems, marks_)
+
+
+# The choices that decide what the program's own is for the rest: the style (its band, its tempo, its sound) and
+# the shape (its order). "was" for a tempo after the style changed is that style's tempo, not the one it replaced.
+CONTEXT = re.compile(r"style\.\w+|form\.(?!order$)\w+")
+
+
+def _program_for(genome, parent, voice, drift, seed, generated, body: dict):
+    """The program's own choices for this version as the person has set its style and shape: what a tempo, a
+    player's level, a sound or the order would be had the person not set them too (`generated` when neither is
+    set)."""
+    from .realize import choose_params
+
+    context = {p: v for p, v in body.items() if CONTEXT.fullmatch(p)}
+    if not context:
+        return generated
+    return choose_params(genome, parent, voice, drift, seed, overrides=Overrides(genome, context))
 
 
 def _unplaced(genome, params, generated, paths) -> object:
@@ -901,12 +919,14 @@ def phrasing_mark(phrasing_json: dict) -> dict:
 
 
 def marks(genome: Genome, generated, generated_lyrics, final_lyrics, applied: list[str], edits: dict,
-          phrasing_json: dict | None = None, params=None) -> dict:
+          phrasing_json: dict | None = None, params=None, program=None) -> dict:
     """The record's block of a person's choices: for each edit that took effect, the value chosen and what
     the program had chosen ("was"). Replaying the values as edits (from_record) makes the same rendition
     from the same parent, machine and day. A choice of the arrangement's that keeps what the program chose
     (a lock: the page's padlock on a cell, a section or an option) is marked locked: true; params, the version
-    as sung, says what the program had in a cell (takeover.program_cells)."""
+    as sung, says what the program had in a cell (takeover.program_cells); program, the program's own for the style
+    and shape the person chose (_program_for), what a tempo, a level, a sound or the order was in that version."""
+    program = program if program is not None else generated
     out: dict = {}
     generated_shape = shape(genome, generated.form) or {}
     for path in applied:
@@ -918,8 +938,8 @@ def marks(genome: Genome, generated, generated_lyrics, final_lyrics, applied: li
         elif path == "phrasing":
             out[path] = phrasing_mark(phrasing_json or {})
             continue
-        elif path == "form.order":
-            was = composition.section_ids(generated.form)
+        elif path == "form.order":  # the program's order for the shape chosen
+            was = composition.section_ids(program.form)
         elif path.startswith("tune."):  # a line everywhere, or one place of the form: what the program sang there
             key = path[5:]
             was = (composition.phrase_value(genome, generated, composition.line_of(genome, key),
@@ -948,14 +968,14 @@ def marks(genome: Genome, generated, generated_lyrics, final_lyrics, applied: li
         elif path.startswith("variants."):  # every variant the program chose was sung: dropping one changes it
             was = int(path[9:]) < len(getattr(generated, "variants", None) or ())
         elif path.startswith("band.") and path[5:] in instruments():  # a player's gain, in a lineup or of the eight
-            was = generated.band.gain(path[5:])
+            was = program.band.gain(path[5:])
         elif path.startswith("style."):
             was = getattr(generated.style, path[6:], None)
             was = (was or "ballad") if path == "style.name" else was
         elif sound_mod.owns(path):  # sound design: what the program has there (a parent's choice among it)
-            was = sound_mod.value_of(generated, path)
+            was = sound_mod.value_of(program, path)
         else:
-            was = variation.read(generated, path)
+            was = variation.read(program, path)
         out[path] = {"value": value, "was": was}
         if path.startswith(("arrange.", "style.")) and value == was and value is not None:
             out[path]["locked"] = True  # a lock: the program's own choice, kept (docs/STUDIO-REDESIGN.md)
@@ -1080,7 +1100,7 @@ def _taken_over(genome: Genome, generated, params, applied: list, problems: list
     them; and the tempo marked as it is sung, where the style held it to its range."""
     if "tempo" in applied and abs(params.tempo - float(edits.get("tempo", params.tempo))) > 0.05:
         edits = {**edits, "tempo": params.tempo}
-    quiet = {p: takeover.silent(genome, params, p) for p in applied
+    quiet = {p: takeover.silent(genome, params, p, edits) for p in applied
              if p.startswith("arrange.") and edits.get(p) is not None}
     quiet = {p: why for p, why in quiet.items() if why}
     if not quiet:

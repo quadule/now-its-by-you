@@ -91,7 +91,110 @@ def chord_tones(symbol: str, mode: str) -> tuple[int, ...]:
     )
 
 
-NOTE_NAMES = ("C", "C♯", "D", "E♭", "E", "F", "F♯", "G", "A♭", "A", "B♭", "B")
+NOTE_NAMES = ("C", "C♯", "D", "E♭", "E", "F", "F♯", "G", "A♭", "A", "B♭", "B")  # a tonic's name, out of any key
+
+# Spelling in a key (its signature): each degree of the scale on its own letter, so C♯ minor has G♯ and D♯, not
+# A♭ and E♭, and a chord's root is spelt by its numeral's degree (bVII in C♯ minor is B, in C major B♭).
+LETTERS = "CDEFGAB"
+_NATURAL = (0, 2, 4, 5, 7, 9, 11)
+_SIGN = {-2: "𝄫", -1: "♭", 0: "", 1: "♯", 2: "𝄪"}
+
+
+def _alter(pc: int, letter: int) -> int:
+    """The accidental (semitones, -6..5) that puts this letter on this pitch class."""
+    return (pc - _NATURAL[letter % 7] + 6) % 12 - 6
+
+
+def _spelt(letter: int, alter: int) -> str:
+    return LETTERS[letter % 7] + _SIGN[alter]
+
+
+def tonic_letter(tonic: int, mode: str) -> tuple[int, int]:
+    """The tonic's letter and accidental: its usual name (NOTE_NAMES), unless that key would need more than seven
+    sharps or flats (C♯ lydian, G♭ locrian), where the other name is the key's."""
+    pc = tonic % 12
+    name = NOTE_NAMES[pc]
+    letter = LETTERS.index(name[0])
+    alter = _alter(pc, letter)
+    if abs(signature_of(pc, letter, mode)) > 7:
+        letter = (letter + (1 if alter > 0 else -1)) % 7
+        alter = _alter(pc, letter)
+    return letter, alter
+
+
+def signature_of(pc: int, letter: int, mode: str) -> int:
+    """Sharps (positive) or flats (negative) in the key signature of a tonic spelt on this letter."""
+    return sum(_alter(pc + MODES[mode][d], letter + d) for d in range(7))
+
+
+def key_signature(tonic: int, mode: str) -> int:
+    """The key's signature: its sharps (positive) or flats (negative), -7..7."""
+    letter, _ = tonic_letter(tonic, mode)
+    return signature_of(tonic % 12, letter, mode)
+
+
+def scale_names(tonic: int, mode: str) -> tuple[str, ...]:
+    """The key's seven notes, from its tonic, each on its own letter: C♯ minor is C♯ D♯ E F♯ G♯ A B."""
+    letter, _ = tonic_letter(tonic, mode)
+    pc = tonic % 12
+    return tuple(_spelt(letter + d, _alter(pc + MODES[mode][d], letter + d)) for d in range(7))
+
+
+def spelling(tonic: int, mode: str) -> tuple[str, ...]:
+    """The twelve pitch classes (C first) as this key writes them: its own seven on their letters; a note outside
+    it natural if a natural is that note, else sharp in a sharp key and flat in a flat one (NOTE_NAMES' own in a
+    key with neither)."""
+    letter, _ = tonic_letter(tonic, mode)
+    pc0, sig = tonic % 12, key_signature(tonic, mode)
+    out = list(NOTE_NAMES)
+    for pc in range(12):
+        if pc in _NATURAL and not any((pc0 + MODES[mode][d]) % 12 == pc for d in range(7)):
+            out[pc] = LETTERS[_NATURAL.index(pc)]
+        elif sig > 0:
+            out[pc] = _spelt(_NATURAL.index((pc - 1) % 12), 1) if (pc - 1) % 12 in _NATURAL else out[pc]
+        elif sig < 0:
+            out[pc] = _spelt(_NATURAL.index((pc + 1) % 12), -1) if (pc + 1) % 12 in _NATURAL else out[pc]
+    for d in range(7):  # the key's own last, on their letters (E♯ in C♯ major, C♭ in A♭ minor)
+        out[(pc0 + MODES[mode][d]) % 12] = _spelt(letter + d, _alter(pc0 + MODES[mode][d], letter + d))
+    return tuple(out)
+
+
+def note_name(pitch: int, tonic: int, mode: str, octave: bool = True) -> str:
+    """A MIDI pitch as this key writes it, with its octave (C4 is 60): G♯4 in C♯ minor. B♯ and C♭ keep the
+    octave of their letter (B♯3 sounds as C4)."""
+    name = spelling(tonic, mode)[pitch % 12]
+    if not octave:
+        return name
+    n = pitch // 12 - 1
+    n += -1 if name[0] == "B" and pitch % 12 == 0 else 1 if name[0] == "C" and pitch % 12 == 11 else 0
+    return f"{name}{n}"
+
+
+def _root_letter(symbol: str, tonic: int, mode: str) -> tuple[int, int]:
+    """A chord's root spelt by its numeral: the degree's letter, with the accidental that puts it on the root."""
+    degree, alter, _, _ = parse_symbol(symbol)
+    letter, _ = tonic_letter(tonic, mode)
+    root = (tonic + degree_semitones(degree, mode) + alter) % 12
+    return letter + degree - 1, _alter(root, letter + degree - 1)
+
+
+def root_name(symbol: str, tonic: int, mode: str) -> str:
+    """A chord's root named by its numeral in this key: bVII in C♯ minor is B♭, #IV in F major B."""
+    letter, _ = _root_letter(symbol, tonic, mode)
+    return _chord_note(tonic + chord_tones(symbol, mode)[0], letter, tonic, mode)
+
+
+# how many letters above the root each of a chord's tones is written (its third a third, a sus4's fourth a fourth)
+_TONE_LETTER = {0: 0, 1: 1, 2: 1, 3: 2, 4: 2, 5: 3, 6: 4, 7: 4, 8: 4, 9: 5, 10: 6, 11: 6, 14: 1}
+
+
+def _chord_note(pc: int, letter: int, tonic: int, mode: str) -> str:
+    """A chord's note: one of the key's own on the key's letter; another on the letter its numeral or its place in
+    the chord gives it (bVII in C♯ minor B♭, V7/7 in C A7/G), unless that takes a double sharp or flat."""
+    alter = _alter(pc, letter)
+    if abs(alter) > 1 or any((tonic + MODES[mode][d] - pc) % 12 == 0 for d in range(7)):
+        return spelling(tonic, mode)[pc % 12]
+    return _spelt(letter, alter)
 
 
 def chord_bass(symbol: str, mode: str) -> int:
@@ -114,9 +217,14 @@ def chord_name(symbol: str, tonic: int, mode: str) -> str:
     tones = chord_tones(symbol, mode)
     root = tones[0]
     kind = KINDS.get(tuple((t - root) % 12 for t in tones[1:]), "")
-    name = NOTE_NAMES[(tonic + root) % 12] + kind
+    letter, alter = _root_letter(symbol, tonic, mode)
+    name = _chord_note(tonic + root, letter, tonic, mode) + kind
     bass = chord_bass(symbol, mode)
-    return name if bass == root else f"{name}/{NOTE_NAMES[(tonic + bass) % 12]}"
+    if bass == root:
+        return name
+    step = (bass - root) % 12
+    up = 6 if step == 9 and parse_symbol(symbol)[2] == "dim7" else _TONE_LETTER[step]  # a °7's seventh, diminished
+    return f"{name}/{_chord_note(tonic + bass, letter + up, tonic, mode)}"
 
 
 FLOOR = 52  # E3: below about 160 Hz the learned throat's pulses are heard one by one (a "tapping" through the

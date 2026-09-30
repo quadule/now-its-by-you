@@ -47,11 +47,6 @@ DRUM_KEYS = {
     "snare": 38, "rim": 37, "clap": 39, "cajon-slap": 38, "crash": 49, "ride": 51, "hat": 42, "hat-open": 46,
     "shaker": 70, "tambourine": 54, "brush-tap": 38, "brush-sweep": 40, "ghost": 38, "tip": 60, "mute": 61,
 }
-KEY_NAMES = ("C", "C♯", "D", "E♭", "E", "F", "F♯", "G", "A♭", "A", "B♭", "B")
-# a major key's sharps (+) or flats (-), by its tonic's pitch class
-SHARPS = {0: 0, 7: 1, 2: 2, 9: 3, 4: 4, 11: 5, 6: 6, 1: -5, 8: -4, 3: -3, 10: -2, 5: -1}
-# how far above each mode's tonic its relative major's is
-RELATIVE = {"ionian": 0, "dorian": 10, "phrygian": 8, "lydian": 7, "mixolydian": 5, "aeolian": 3, "locrian": 1}
 
 
 # ---------------------------------------------------------------- the file format
@@ -409,18 +404,18 @@ def part_name(part: str) -> str:
 
 
 def key_name(tonic: int, mode: str) -> str:
-    """The key as a musician says it: D major, A minor, E dorian."""
-    return f"{KEY_NAMES[tonic % 12]} {({'ionian': 'major', 'aeolian': 'minor'}).get(mode, mode)}"
+    """The key as a musician says it: D major, A minor, E dorian (D♭ lydian: no key of eight sharps)."""
+    from .theory import scale_names
+
+    return f"{scale_names(tonic, mode)[0]} {({'ionian': 'major', 'aeolian': 'minor'}).get(mode, mode)}"
 
 
 def key_signature(tonic: int, mode: str) -> bytes:
-    """The key as MIDI has it (major or minor): a mode other than those two by its relative major's."""
-    pc = tonic % 12
-    if mode == "aeolian":
-        sharps, minor = SHARPS[(pc + 3) % 12], 1
-    else:
-        sharps, minor = SHARPS[(pc + RELATIVE.get(mode, 0)) % 12], 0
-    return meta(0x59, struct.pack(">bB", sharps, minor))
+    """The key as MIDI has it (major or minor): a mode other than those two by its relative major's; its sharps
+    or flats the ones the key is named and spelt by (theory.key_signature: C♯ major seven sharps, not D♭'s five)."""
+    from .theory import key_signature as signature
+
+    return meta(0x59, struct.pack(">bB", signature(tonic, mode), 1 if mode == "aeolian" else 0))
 
 
 def section_labels(genome, form, sections, bars=None) -> list[tuple[str, float]]:

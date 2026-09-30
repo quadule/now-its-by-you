@@ -93,9 +93,11 @@
   function pitchFor(n, degree = n.degree) {
     return (n.pitch ?? ((composition()?.tonic || 60) + scaleOffset(n.degree))) + scaleOffset(degree) - scaleOffset(n.degree);
   }
-  function pitchName(pitch) {
-    const names = ["C", "C♯", "D", "E♭", "E", "F", "F♯", "G", "A♭", "A", "B♭", "B"];
-    return `${names[((Math.round(pitch) % 12) + 12) % 12]}${Math.floor(pitch / 12) - 1}`;
+  function pitchName(pitch) {  // as the key writes it (the server's spelling: G♯4 in C♯ minor, not A♭4)
+    const names = composition()?.names || ["C", "C♯", "D", "E♭", "E", "F", "F♯", "G", "A♭", "A", "B♭", "B"];
+    const p = Math.round(pitch), pc = ((p % 12) + 12) % 12, name = names[pc];
+    const octave = Math.floor(p / 12) - 1 + (name[0] === "B" && pc === 0 ? -1 : name[0] === "C" && pc === 11 ? 1 : 0);  // B♯3, C♭5
+    return `${name}${octave}`;
   }
   function degreeName(degree) {
     const octave = Math.floor((degree - 1) / 7);

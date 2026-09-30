@@ -370,6 +370,10 @@ def test_the_studio_says_each_players_sound_and_whose_it_is(studio):
     assert bass["sidechain"]["value"]["depth"] == 6.0 and bass["sidechain"]["yours"] and bass["sidechain"]["has_kick"]
     drums = players["drummachine"]
     assert drums["kit"]["value"] == "909" and drums["kit"]["program"] == "808" and drums["pieces"]["kick"]["knobs"]
+    assert drums["sidechain"]["is_key"] and not bass["sidechain"]["is_key"]  # the page offers no pump on the key
+    where = {p["player"]: p for p in studio.sound({**EDM, "mix.synthpad.sidechain": {"preset": "heavy", "sections": [
+        "refrain:1", "refrain:2"]}})["players"]}["synthpad"]["sidechain"]["value"]  # the page's "where" choice
+    assert where["sections"] == ["refrain:1", "refrain:2"] and where["depth"] == 14.0
     assert players["synthpad"]["pan"] == {**players["synthpad"]["pan"], "value": -0.3, "yours": True}
     assert players["guitar"]["patch"] is None and players["guitar"]["kit"] is None and not players["guitar"]["send"]["yours"]
     into = {b["id"]: b for b in view["boundaries"]}

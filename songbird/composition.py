@@ -48,7 +48,7 @@ from dataclasses import replace
 
 from . import variants
 from .genome import sung_words
-from .theory import MODES, SEVENTHS, chord_bass, chord_name, chord_tones, degree_semitones, parse_symbol
+from .theory import MODES, SEVENTHS, chord_bass, chord_name, chord_tones, degree_semitones, parse_symbol, spelling
 
 GRID = 0.25  # a sixteenth note in a quarter-note beat
 MELISMA = 4  # notes a syllable may be sung over: its own and three more, slurred (docs/STUDIO.md, "A freer melody")
@@ -524,9 +524,7 @@ def key_sevenths(params) -> list[dict]:
 def chord_choices(params) -> dict:
     """What the chord card offers in this key: the chords of the key (a numeral each, with its name), its seventh
     chords, and every root a chord can have (the twelve numerals, each with its note)."""
-    from .theory import NOTE_NAMES
-
-    sharps = ("C", "C♯", "D", "D♯", "E", "F", "F♯", "G", "G♯", "A", "A♯", "B")  # a raised root is spelt sharp
+    from .theory import root_name
 
     roots = ["I", "bII", "II", "bIII", "III", "IV", "#IV", "V", "bVI", "VI", "bVII", "VII"]
     diatonic = []
@@ -535,8 +533,7 @@ def chord_choices(params) -> dict:
         minor = name.endswith(("m", "°")) and not name.endswith("sus4")
         diatonic.append({"symbol": numeral.lower() if minor else numeral, "name": name})
     return {"diatonic": diatonic, "sevenths": key_sevenths(params),
-            "roots": [{"numeral": r, "note": (sharps if r.startswith("#") else NOTE_NAMES)[
-                (params.tonic + chord_tones(r + "maj", params.mode)[0]) % 12]} for r in roots],
+            "roots": [{"numeral": r, "note": root_name(r + "maj", params.tonic, params.mode)} for r in roots],
             "qualities": [["", "as the key has it"], ["maj", "major"], ["m", "minor"], ["dim", "diminished"],
                           ["aug", "augmented"], ["sus2", "sus2"], ["sus4", "sus4"],
                           ["7", "7 (dominant seventh)"], ["maj7", "maj7 (major seventh)"], ["m7", "m7 (minor seventh)"],
@@ -854,6 +851,7 @@ def view(genome, params, lyrics) -> dict:
                          "start_seconds": clock.seconds(start), "end_seconds": clock.seconds(cursor),
                          "sung": bool(section.lyrics) and any(sung for _, sung in lined[index]), "phrases": phrases})
     return {"tempo": params.tempo, "tonic": params.tonic, "mode": params.mode, "scale": list(MODES[params.mode]),
+            "names": list(spelling(params.tonic, params.mode)),  # the twelve pitch classes as this key writes them
             "beats_per_bar": meter.bar / meter.beat, "grid": GRID,
             "duration_beats": clock.end / meter.beat, "duration_seconds": clock.seconds(clock.end),
             "duration": round(clock.seconds(clock.end) + ring(params), 3),

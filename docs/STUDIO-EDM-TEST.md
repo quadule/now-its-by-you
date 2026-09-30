@@ -349,6 +349,43 @@ Seen in headless Chromium at 1920×1080 on `--machine fictional:vela`: in the fi
 8. **A stray "null" in the tempo and key popovers** whenever the value was the program's: `replaceChildren`
    was given the missing release row as `null` and printed it. Fixed in this branch (`score.js`).
 
+### Fixed after the test (2026-09-30)
+
+Each of the bugs above and the findings that were the page's, with a test; seen in the built-in browser and in
+headless Chrome at 1600 px; the goldens unchanged.
+
+- **Quick clicks** (*Bugs* 1, 2; finding 3): the column, the grid and the Mix are drawn again in place
+  (`studio.js` `morph`: a node the new drawing has in the same place is kept and given its attributes, text,
+  value and listeners), so an answer landing mid-click neither replaces the button pressed nor moves what didn't
+  change. Nothing grows as an answer lands: a chip's weight is drawn, its ✎ sits on its corner, the line saying
+  what's set keeps two lines, rows that come and go (a cell's pattern, a pump's sections, a section's options)
+  are drawn always or drawn last. What a click builds on is the latest edit, not the answer drawn before it:
+  chip rows, a seam's kinds, ← Earlier twice, M twice, a shape's part twice, a drum piece's knobs. Quick clicks
+  on a seam, a cell, a section and a player move nothing between the first click and the last answer.
+- **The length edge** (*Bugs* 3; finding 4): a 10 px handle of its own at the cell's right end, over the
+  region and clear of the next seam, with a resize cursor; a drag from its middle lengthens.
+- **Yours after a shape change** (*Bugs* 4; finding 5): the record's `form.order` "was" is the program's order
+  for the shape chosen, and a region is marked moved only if it's one of the fewest whose moves make the order
+  (`model.js` `movedIds`).
+- **A player sat out** (*Bugs* 5; finding 6): its cells are kept, silent, and nothing is said to be wrong
+  (`takeover.sat_out`).
+- **Spelling** (*Bugs* 6; finding 7): by the key's signature everywhere (`theory.py` `spelling`: chord names,
+  the chord card's roots, the pitch keys and notes, the key's name, the MIDI key signature and names, the piano
+  page); every major and minor key tested. C♯ major now reads E♯m and B♯° where it read Fm and C°.
+- **"was"** (*Bugs* 7; finding 8): the program's own for the style and shape chosen: "the program's was 122",
+  "0% (was 66%)".
+- **Use this line** (finding 9): one line at a time, as the column is: its own Use, its own refusal, a line used
+  while the one before is checked waits its turn, and the column moves on to the next line.
+- **A seam's lengths** (finding 10): each kind its own (the engine already took them): a 4-bar riser with a 1-bar
+  roll.
+- **The pump** (finding 11): not offered on the drummer (it's the key), and *Where* in its row: everywhere, or
+  the sections chosen.
+- **Track heads** (finding 12): the whole name ("synth bass", "drum machine"), a wider head that wraps.
+- **The lock count** (finding 13): padlocks, not paths ("2 locked").
+
+`tools/video/edm2_session.mjs` runs without its workarounds (the edge taken by its left pixels, "let it go",
+the one Use for all), and with `--no-wait` its hand doesn't wait for answers or follow a control that moved.
+
 ### How the video was made
 
 - **Driving**: `tools/video/edm2_session.mjs`, on `tools/video/kit.mjs` (the hand, the captions, the capture
