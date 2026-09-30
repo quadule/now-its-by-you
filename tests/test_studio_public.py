@@ -590,6 +590,14 @@ MEASURED = {
     "indie 4 verses, every part, slowest": (344.5, "claps ebass electric glock guitar kit organ voice", 2484),
     "shanty": (151.2, "bass claps concertina fiddle stomps voice", 1133),
     "stringband": (124.9, "banjo bass fiddle guitar mandolin voice", 1118),
+    # beside the ring (docs/STYLES.md, "Two more", 2026-09-30): voices alone, and a session
+    "acappella (waltz, three voices of its own)": (226.3, "choir1 choir2 choir3 voice", 1510),
+    "acappella, six lineage voices": (226.3, "choir1 choir2 choir3 choir4 choir5 choir6 voice", 1510),
+    "acappella, straight": (158.9, "choir1 choir2 choir3 voice", 1200),
+    "acappella 4 verses, every part, six voices, tempo 55": (495.7, "choir1 choir2 choir3 choir4 choir5 choir6 voice",
+                                                             2790),
+    "celtic (a jig, a slow air)": (120.4, "concertina drone drum fiddle guitar voice whistle", 1070),
+    "celtic 4 verses, every part, a reel at 91": (347.1, "concertina drone drum fiddle guitar voice whistle", 2340),
 }
 
 

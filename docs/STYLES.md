@@ -455,3 +455,262 @@ modules and the learned voice landed on main. Whisper's words misheard on the fi
 Every master is -14.0 LUFS with true peak at -1.1 dBTP or below. What was the open problem is
 mostly the old voice. Indie and country, with the kit and electric guitar under the voice, are
 where to look next.
+
+# Two more: a cappella and a Celtic session (2026-09-30)
+
+The artist asked for two traditions the song was always close to: **a cappella** (shape-note and folk
+harmony singing: the song's idea, communal singing, with nothing but voices) and a **Celtic session**
+(Irish traditional: whistle and fiddle on the tune together, a bodhrán, an open-tuned guitar). The ballad
+is already a Celtic ballad band, and the first review folded "a Celtic session" into it; this one is the
+session itself, played the way a session plays: the tune in unison, round twice, ornamented, in a jig's
+six-eight or a reel's drive.
+
+(What follows is the design as it went to review; "What the review changed" and "As built, and measured",
+at the end, say where the build differs: the parts are a treble, an under voice and an alto, not a bass;
+the jig is quicker, the reel in double time, the slow air the first time round.)
+
+## Where they sit: beside the ring, not on it
+
+Every style is on the ring, and a machine's home is an angle on the ring's plane (`home()`, one slot a
+style). Putting two more on it would move every slot, and so the style every existing lineage steps into
+next: renders that are byte-identical today would not be tomorrow. So the two sit **beside** the ring
+(`OFF_RING`), each at a ring style's place: a cappella at the shanty's (the gang, the crowd singing), the
+session at the ballad's. They are reached by a person choosing them (`--style`, the studio's style card,
+which lists them after the ring's) and a lineage in one of them travels from its anchor's place: a child
+that would have kept the anchor's style keeps its own (a session's child stays a session), one that moves
+steps to the anchor's neighbour. Nothing ever steps *into* them by chance, which is the one thing to decide
+(below). The other agent's house and dub can sit the same way; `OFF_RING` is shared.
+
+## A cappella (`acappella`)
+
+**The band is the choir.** The lead sings the tune (as in shape-note singing, the tune is the tenor: the
+middle of the sound, with a part above it) and a **group** of voices sings the rest: the lineage's own
+voices first (params.choir), then the program's own harmony voices (the stand-ins `lineage_voices()`
+already draws) to make at least three parts, up to six (`Style.voices`, which already said "stand-ins
+where a style wants a group"). No instruments. Hand claps or foot stomps come by chance (about a third of
+renditions stomp, a quarter clap), in the refrains; a style's player that doesn't come sits in the lineup
+at gain 0 (a new `StyleDef.optional`: part -> the chance it plays, drawn per machine and parent, a lineage
+keeping what it had), so the lineup is never empty (empty is the seed's eight) and the studio can bring
+one in.
+
+**The parts** (a new writer, `idioms.shape_parts`), each voice a role in turn (bass, alto, treble; a
+fourth voice doubles the bass, a fifth the alto...), homophonic, every voice on the lead's syllables:
+
+- *bass*: the chord's root, else its fifth, as low as the learned throat sings cleanly (theory.FLOOR, E3:
+  below it its pulses come apart), under the tune;
+- *alto*: the open fifth over the bass (or the root), between the bass and the tune; a third only where
+  neither fits;
+- *treble*: above the tune, a fourth or fifth up on the chord's root or fifth (open), the third only where
+  those don't fit; at most G5;
+- every part led from its last note (the nearest that fits), parallel fifths allowed (they are the
+  sound), never a semitone from the tune's note or on it.
+
+**Section by section:**
+
+- *intro, break, outro* (no words): **singing the notes**: the lead and the parts sing the tune on its
+  shape-note syllables (four-shape fa, sol, la, mi, from each note's degree in the relative major; each
+  part its own note's), as a Sacred Harp class sings a tune through once before the words (`intro=notes`);
+  or hummed on "oo" (`intro=lead`);
+- *verse 1*: lined out, the lead alone (`alone=1`, often), or with the pads;
+- *verses*: under the lead, by the drawn **backing**: `hum` (a new kind: the bass and alto hold each
+  chord's root and fifth on "oo", an open-fifth drone), `oohs` (all the parts on "oo", a chord each), or
+  `echo` (the group answers the end of each line: call and response); in the first verse the group sings,
+  the voices come in a line apart (bass, then alto, then treble: `entrances`);
+- *refrains*: all the parts, on the words;
+- *turns*: the group holds the turn's chords on "oo" (there is no line to quote);
+- *bridge and tag* (the genome's own lineage harmony): the lineage's voices sing it as always; the
+  program's own voices (those past params.choir) add the bass under it;
+- *the end*: the final chord held, the lead with it (a fermata: the ring), or the last line again.
+
+**Who sings which part.** A lineage stand-in drawn "low" sings everything an octave down (VoiceParams.shift
+-12), so a treble part would land under the tune and a bass part below what the throat can sing. In an a
+cappella score (its band settings say so) the singers are matched to the parts by range at synthesis: the
+lowest voices (a low stand-in, the longest tract) to the lowest part, each at the written pitch
+(`shift` 0). Nothing changes for any other style.
+
+**Feel, tempo, mix.** Straight (0.7) or a waltz (0.3); shape-note singing is brisk: straight at 0.85 to
+1.1 of the song's tempo (centre 0.95), a waltz at 0.6 to 0.76. The harmony vocabulary is the open fifth.
+The singer leans plainer (less vibrato, pressed a little: rd -0.05); the mix a big room (space +0.25, the
+plate +0.2, width +0.15) with the group 1.5 dB forward of where a choir sits (`mix.choir`). Its options:
+the intro sung on the notes (0.6) or hummed (0.4); verse 1 lined out (0.6); entrances (0.6); the backing
+hum (0.4), oohs (0.35) or echo (0.25); the ending ring (0.6), the last line again (0.25) or broad (0.15);
+no breakdown, no lift, no stop-time.
+
+**Its cost.** Each voice is a learned-throat part; the group sings the whole song where a lineage choir
+sings the bridge, so a render is slower (about one voice's time per part, on two threads two at once).
+Memory is set by the heaviest part (a choir voice: 5.7 MB a second on two threads) and should sit near a
+light band's, to be measured with tools/render_memory.py (a whole song, three and six voices).
+
+## A Celtic session (`celtic`)
+
+**The lineup**: the whistle and the fiddle (the tune), the frame drum played as a **bodhrán** (tipper
+patterns), a guitar in an **open tuning** (DADGAD, moved to the song's key), and by chance a
+**concertina** (0.45: on the tune with the others) and the pipes' **drones** (0.35: the reed drone, the
+tonic and fifth, under the tunes and the bridge).
+
+**Feels.** A **jig** (the song re-barred in six-eight: H's long-short-short feet are already a jig's
+dotted beat, da-da-da, the "six" feel) at 1.25 to 1.5 of the song's tempo (centre 1.38: 132 for H, a
+dotted beat at 66: a sung jig, not a dance's 116), 0.55; or a **reel** (straight, a machine's small lilt
+at most) at 1.1 to 1.4 (centre 1.25), 0.45.
+
+**The tunes as a set.** Where nobody sings (the intro, the turns, an outro), everyone on the tune plays it
+together in unison (each in its own octave: the whistle an octave up, the fiddle and the concertina where
+they sit), a heterophony: the whistle cuts and rolls, the fiddle slides and slurs, the concertina plays it
+plain. A played section of four bars or less goes **round twice** (the intro's four bars become eight, a
+turn's two four, the second time the turn's line is quoted again): the first time the lead with the
+guitar, the second the others join and the bodhrán comes in. The break (already eight bars) goes round
+once. A person's `arrange.<section>.bars` wins over it.
+
+**Or a slow air** (`intro=air`, 0.25 of intros): the lead alone (the whistle, or the fiddle), over the
+drones if they came, plays the intro's tune out of time: about 1.8 times as slow, each line broadening
+towards its end; the band comes in with the singer. The clock (realize.Clock) gets an optional stretched
+span at the start; every other rendition's clock is as it was.
+
+**The players, section by section**: the guitar's DADGAD strum (a new idiom `dadgad`: the open strings
+ringing the tonic and fifth under every chord, fretted to the chord tones within four frets, an open
+string that would rub a chord tone or the sung note fretted to the nearest chord tone; the jig's
+down-down-up per dotted beat, the reel's down-up eighths, accents on the beats); the bodhrán (a new idiom
+`bodhran`: in the jig, down-up-down on each dotted beat, the bar's first stroke open and low, the
+others the tipper; in the reel, down-up eighths, the open stroke on one and three, the backbeat's up
+stroke accented with the back hand high on the skin (a new stroke, `top`: the drum's own model, the hand
+pressed high: pitch up a third, drier), ghost strokes left out when the band is sparse; `light` in the
+verses); in the verses the fiddle and the whistle take turns at fills between the lines, sitting out the
+first verse; the refrains the fiddle's counter-line and the whistle's descant in the last; the bridge the
+fiddle's held tone and the drone.
+
+**The singer.** Kept, with a sean-nós lean: plainer vibrato (-8 cents), a little pressed, and a few
+ornaments of its own: on some long stressed notes with no ornament of the lineage's, a turn or a grace
+from the song's own ornament vocabulary (variants.candidates: always a degree of the song's scale,
+long enough to hold it), about one note in eight, fixed by the rendition's seed and not handed down
+(the lineage's own variants are). The band's doubling follows the singer's ornaments as it always has.
+
+**Its leans**: the band a little brighter and much more ornamented (ornament +0.3: cuts and rolls come
+twice as often), wear +0.05; a pub's room, not a hall (space -0.1, intimacy +0.08). Options: intro lead
+(0.75) or air (0.25), verse 1 alone 0.1, entrances 0.3, a lift 0.1, endings ring 0.4, cold 0.35 (a
+session stops together), rit 0.25; backing voices thirds (0.3) or none; no stop-time, no breakdown. Its
+colours: sus2 and the open fifth (the drones' sound).
+
+## What's new, and what stays as it was
+
+- style.py: the two entries, in their own block, `OFF_RING` and the step from an anchor; `StyleDef.optional`;
+  `INTROS` + "notes", "air"; `BACKINGS` + "hum". No new Style field.
+- idioms.py: `shape_parts` (the a cappella's voices), `w_dadgad`, `w_bodhran`, the set's unison and its
+  round-twice entrances; band.quote takes a span shorter than its section (a turn round twice).
+- realize.py: the shape-note syllables in an a cappella's unsung sections; the lead's last note held with
+  the group's; the slow air's stretch in the Clock; the sean-nós ornaments merged with the lineage's for
+  the singer. Each only for its style or option.
+- takeover.py: a Celtic set's default length for a short played section (a person's length wins).
+- synth: the drum's `top` stroke (one row of data, no new kernel); the guitar's open strings at DADGAD
+  when the style says so (its sympathetic strings); an a cappella's singers matched to parts.
+- explain.py: the names (a cappella, voices alone; a Celtic session), the backing, the intros, the
+  optional players, the group; the style card lists every style, the ring's and those beside it.
+- No numba kernel is added or changed, so the browser's translation (docs/BROWSER-RENDER.md) is as it was.
+
+Every existing render stays byte-identical: the seed and the goldens, and each style's own renders (a few
+machines and dates, compared by PCM id against the tree before); `--replay` exact; the packet within 8 MiB.
+
+## Decisions for the artist
+
+- **On the ring or beside it.** Beside it keeps every lineage where it was going; on it, one line in `RING`
+  each, every lineage's next step would be redrawn once.
+- **The program's own voices in an a cappella**: at least three parts even at the first generation, where
+  the other styles' backing is only ever the lineage's own. Communal singing needs a group; the lineage's
+  voices take the parts first.
+- **Singing the notes** (fa-sol-la) before the words in the intro, or humming.
+
+## What the review changed (2026-09-30)
+
+A read-only Fable review of the design above, before a line was built. Its points, and what they changed:
+
+- **The lexicon.** The seed scores' golden hashes each score's lexicon, so the shape-note syllables (fa, sol,
+  la, mi) go only into an a cappella's score, never into `SUNG_SYLLABLES`; "fa" has no dictionary reading and
+  "sol" two, so both are pinned (F AA1; S OW1 L, as Sacred Harp singers say it).
+- **Off the ring, everywhere.** `place()` and the style card index `RING` directly; every such place maps an
+  off-ring style to its anchor first, and the card lists the styles beside the ring.
+- **Round twice is the style's own length**, inside `takeover.phrase_plan` (so the layout, the chord times,
+  the spans, karaoke and the piano score agree), past `fit`'s "a turn keeps its bars" only for that default:
+  a person still can't lengthen a turn. The quote's choice of line is seeded from the section's start both
+  times round, so the same line is played twice (its ornaments differ).
+- **The group is read**: `Style.voices` was recorded but the backing read only params.choir; the a cappella's
+  parts read the larger.
+- **No bass on roots.** The lead's lowest note is about a fourth under the tonic, and the throat's floor is
+  E3: under H's A3 there is no room for a bass. The parts are the **treble** (a fourth, fifth or octave over
+  the tune: the sound of shape-note singing when the tenor has the tune), the **under** voice (the root where
+  it fits between the floor and the tune, else a chord tone there) and the **alto** (between, or over the
+  tune where there is no room under it); the third is allowed about a third of the time, never at a line's
+  cadence, so it is open but not organum. The treble tops out at E5 (the throat is measured to B4).
+- **The jig's tempo.** A dotted beat at 66 is a march, not a jig; the six-eight is now 1.35 to 1.6 of the
+  song's tempo (centre 1.5: a dotted beat at 72, the eighths 0.28 s apart, a sung jig, still singable).
+  The palette's ceiling rises from 1.5 to 1.6 of the song's tempo, which is the studio's own bound.
+- **The reel is double time**: at 115 quarter notes a straight strum is a folk strum, not a reel; the reel is
+  the "double" feel, the bodhrán's down-up and the guitar's strokes on the sixteenths (a reel's eighths at
+  230), the singer at the song's pace over it.
+- **The slow air is the first time round**: the intro's first pass out of time, its second in time with the
+  band joining (an air into a tune), then the singer; never eight bars of solo whistle.
+- **DADGAD stays DADGAD**: an open D tuning with a capo up to six frets, or tuned down up to five, never
+  retuned so its low string falls under what a guitar has; its sus4 on V is its sound (fitted away from a
+  sung third, as every colour is).
+- **The stand-ins in a group**: their vibrato (15 to 40 cents), scoops and slow wander churn against open
+  fifths held a whole song; an a cappella's singers are held to a choir's (vibrato at most 14 cents, a
+  later onset, scoops at most 0.2) at synthesis, as the singer matching is.
+- **Its cost** is to be measured with six voices over a whole song, and the a cappella built first (voices
+  only), the session second.
+
+## As built, and measured (2026-09-30)
+
+`songbird render --style acappella` or `--style celtic`, or the studio's style card (it lists them after the
+ring's). Nobody has listened; everything here is measured.
+
+**What stays as it was.** The seed, both machines' own renditions (ada on 2026-09-27, bob on 2026-03-14),
+gospel, the string band, the ballad, the shanty and lo-fi render to the PCM ids they rendered to before
+(after each of the three builds), and a gospel choir of three too after the choir's bus was made lean; the
+goldens and the whole suite pass. The packet: 6.31 MiB of 8.
+
+**A cappella**, measured on ada's (2026-09-27) with its stems: every part in tune with its written notes
+(each note's f0 over its middle, against the note: the median 0.8 to 1.3 cents flat, 95% to 97% within 25
+cents, for the lead and all three parts: the choir's vibrato held to 14 cents does what it was for); the
+parts where they sing with the lead: fifths 19%, fourths 16%, octaves 13%, thirds 29% (minor 17, major 12),
+sixths 12%, and the passing tones' seconds and sevenths 11%: open, with thirds. Every part between E3 and
+E5, never on the lead's note or a semitone from it (tests/test_acappella.py). Words misheard (Whisper, a
+verse and a refrain, three voices): 15.2%, beside the ballad's 14.3% in the same run.
+
+**A Celtic session**, measured from its scores and stems: a reel (ada: double time at 114.8, its eighths at
+230 a minute) has the bodhrán's strokes a median 1.09 sixteenths apart (148 open, 575 tipped, 83 with the
+back hand high), 780 onsets heard in its stem against 806 written; a jig (bob: 150.4, a dotted beat at 75)
+has them 1.03 eighths apart, the bar down-up-down, down-up-down. The whistle cuts 16 to 26 of its notes, the
+fiddle 5 to 18; the singer's own ornaments sit on 6 of 376 and 9 of 250 notes. The voice stands 14 dB over
+the band in a verse and 8 in a refrain (the ballad: 10.6 and 7.8); words misheard 17.1%. With a slow air,
+the whistle alone over the drones plays the intro's first four bars in about twice their time, and the
+session comes in on the second four.
+
+**Memory**, on two threads (tools/render_memory.py's measure, `MallocLargeCache=0`), every one under the
+studio's estimate (`public.render_mb`) and within 1.3 of it (tests/test_studio_public.py, MEASURED):
+
+| version | length | peak |
+|---|---|---|
+| a cappella, three voices of the program's own (a waltz) | 226 s | 1.51 GB (1.85 before the choir's bus was made lean) |
+| a cappella, six lineage voices | 226 s | 1.51 GB (2.33 before) |
+| a cappella, straight | 159 s | 1.20 GB |
+| a cappella, four verses, every part, six voices, tempo 55 | 496 s | 2.79 GB |
+| a Celtic session, a jig with a slow air | 120 s | 1.07 GB |
+| a Celtic session, four verses, every part, a reel at 91 | 347 s | 2.34 GB |
+
+The group's bus used to hold every voice until the last was sung, so an a cappella's peak grew with its
+voices; now it sums them as they come, in the same order (the same bits). In 2100 MB the studio makes about
+5.0 minutes of an a cappella in one go and 4.1 of a session. A render of the a cappella takes about 25 s for
+226 s of song (40 s with six voices), a session about 10 s for 120 s.
+
+**For the artist**: renders/styles/acappella-*.flac (ada and bob as their machines choose; coral with five
+lineage voices, the notes and a hum; dmitri answering the lines) and celtic-*.flac (ada's reel, bob's jig
+with the concertina, coral's slow air into a jig, dmitri's reel), each with its record and score beside it.
+
+**Left open**
+
+- On the ring or beside it (above). Beside it, they are reached only by a person's choice, and a lineage
+  in one stays in it or steps to its anchor's neighbours.
+- The a cappella's under voice is an under voice, not a bass: the learned throat thins below E3. A real bass
+  (roots an octave down, D3 and under) waits for a throat that sings there.
+- The bodhrán is the frame drum's model with a fifth stroke; its tipper's roll (the triplet "treble") is
+  left out, as the ballad's triplet fills were (three even taps on a synthesized skin read as a finger on a
+  microphone).
+- The session's jig is a sung jig (a dotted beat at 65 to 77), not a dance's; the singer sets its pace.

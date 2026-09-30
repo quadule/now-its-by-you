@@ -232,7 +232,8 @@ def _model(kind: str, notes, sr: int, length: int, s: dict, rng: np.random.Gener
             spec = dict(brightness=0.45 + 0.35 * bright, decay=3.2, pick=0.22, hardness=0.7, planes=0.35,
                         touch=0.15, damp=0.05)
             capo = int(s["capo"])
-            box, opens, coupling = body.GUITAR, [p + capo for p in (40, 45, 50, 55, 59, 64)], 0.001
+            opens = [int(p) for p in s["tuning"]] if s.get("tuning") else [p + capo for p in (40, 45, 50, 55, 59, 64)]
+            box, coupling = body.GUITAR, 0.001  # (tuning: an open tuning's strings, a session's DADGAD)
         elif kind == "harp":
             spec = dict(brightness=0.3 + 0.35 * bright, decay=4.5, pick=0.36, hardness=0.25, planes=0.4,
                         touch=0.25, damp=0.12)

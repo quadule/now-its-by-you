@@ -97,7 +97,9 @@ def test_the_palette_is_whole():
     from songbird import style as S
     from songbird.synth import instruments
 
-    assert set(S.RING) == set(S.STYLES) and len(S.RING) == len(set(S.RING))
+    # every style on the ring, or beside it at a ring style's place (docs/STYLES.md, "Two more")
+    assert set(S.RING) | set(S.OFF_RING) == set(S.STYLES) and len(S.RING) == len(set(S.RING))
+    assert not set(S.RING) & set(S.OFF_RING) and set(S.OFF_RING.values()) <= set(S.RING)
     known = set(instruments.known())
     for s in S.STYLES.values():
         assert set(s.lineup) <= known, s.name
@@ -105,7 +107,7 @@ def test_the_palette_is_whole():
         assert abs(sum(s.feels.values()) - 1.0) < 1e-9 and set(s.feels) <= set(S.FEELS), s.name
         for feel in s.feels:
             lo, centre, hi = s.centre(feel)
-            assert 0.4 <= lo < centre < hi <= 1.5, (s.name, feel)
+            assert 0.4 <= lo < centre < hi <= 1.6, (s.name, feel)  # 1.6: the studio's own bound (a session's jig)
         for key in ("intro", "ending", "backing"):
             assert sum(s.options.get(key, {"": 1}).values()) > 0, (s.name, key)
 

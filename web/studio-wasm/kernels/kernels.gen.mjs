@@ -1221,7 +1221,7 @@ export function k_synth$cymbals$_fdn(x, lines, gains, poles, taps, signs, damp, 
   return out;
 }
 
-// songbird/synth/drum.py:62
+// songbird/synth/drum.py:64
 export function k_synth$drum$_ring(freqs, amps, t60s, glide, glide_time, n, sr) {
   let a, bend, c, d, decay, f, fall, g, i, k, out, phase, w, y0, y1, y2, $t1, $t2, $t3, $t4, $t5, $t6, amps_d, amps_n0, amps_n1, amps_s0, amps_s1, freqs_d, freqs_n0, freqs_n1, freqs_s0, freqs_s1, out_d, out_n0, out_n1, out_s0, out_s1, t60s_d, t60s_n0, t60s_n1, t60s_s0, t60s_s1;
   freqs_d = freqs.d; freqs_n0 = freqs.n0; freqs_n1 = freqs.n1; freqs_s0 = freqs.s0; freqs_s1 = freqs.s1;
