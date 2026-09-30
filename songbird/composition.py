@@ -338,6 +338,17 @@ def pack_phrase(genome, notes) -> list[list]:
              n["duration"] * genome.meter.beat] for n in notes]
 
 
+def harmonized(genome, params):
+    """The song with a person's chords in place of the tune lines' own (params.composition["chords"]), for
+    realizing it: the same genome, untouched, when nobody changed a chord."""
+    chords = params.composition.get("chords")
+    if not chords:
+        return genome
+    phrases = {pid: replace(p, chords=tuple(tuple(bar) for bar in chords[pid])) if pid in chords else p
+               for pid, p in genome.phrases.items()}
+    return replace(genome, phrases=phrases)
+
+
 def played(phrase, params):
     """Human choices take precedence over variants on this line alone."""
     notes = variants.realized(phrase, params.variants)

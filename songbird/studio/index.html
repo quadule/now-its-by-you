@@ -13,6 +13,7 @@
 <script src="/studio.js" defer></script>
 <script src="/drafts.js" defer></script>
 <script src="/help.js" defer></script>
+<script src="/export.js" defer></script>
 </head>
 <body>
 <header class="top wrap masthead">
@@ -92,6 +93,7 @@
           <p><b>Play sketch</b> plays a plain guide at once. <b>Hear sung section</b> makes the singer and band sing it, which takes a few seconds.</p></div>
       </details>
     </div>
+    <p class="to-export"><button class="link small" id="toExport" type="button">MIDI and the parts, for your own tools ↓</button></p>
     <div id="studio-composer"><div class="composer-loading"><p class="hint">Laying out the song…</p></div></div>
   </div>
 
@@ -167,6 +169,22 @@
       <p class="hint" id="packetNote"></p>
     </section>
   </div>
+  <section class="panel export-panel" id="exportPanel" aria-labelledby="exportTitle">
+    <div class="area-head">
+      <h2 id="exportTitle">Take it into your own tools</h2>
+      <details class="whatis">
+        <summary title="What is this?"><span class="sr-only">What is this?</span></summary>
+        <div><p><b>MIDI</b> is ready at once: the singer's notes with the words as lyrics, each voice and player on its own track, and a track of the chords with their names. The tempo (with the ending's slowing), the key, the bars and the sections come with it, and it keeps the timing as it's played.</p>
+          <p><b>The parts</b> plays each voice and instrument alone, dry, before the mix and its room: it takes about as long as making the whole song. They come zipped with the MIDI file, and all of them start at bar 1, so they line up in any sequencer.</p></div>
+      </details>
+    </div>
+    <p>Your version, as it stands with your changes, for a sequencer or a notation program.</p>
+    <div class="actions">
+      <button class="btn" id="exportMidi" type="button">Download MIDI</button>
+      <button class="btn" id="exportStems" type="button">Download the parts (stems)</button>
+    </div>
+    <p class="hint" id="exportNote" aria-live="polite"></p>
+  </section>
   <div class="keep-for-later">
     <span class="hint">Finish later somewhere else:</span>
     <button class="link small" type="button" id="saveDraft">Save your changes as a file</button>

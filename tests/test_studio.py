@@ -467,3 +467,60 @@ def test_identity_is_one_file_in_two_places():
     assert "/identity.css" in S.STATIC
     html = (ROOT / "songbird" / "studio" / "index.html").read_text()
     assert html.index('href="/identity.css"') < html.index('href="/studio.css"')
+
+
+def test_a_musician_takes_the_version_away_as_midi_and_stems(served, monkeypatch):
+    """Download MIDI: at once, of the score the render sings (a person's key and tempo in it), under the song's
+    name. Download the parts: a job whose zip holds each part as it renders alone, padded to the MIDI file's
+    bar 1, with the MIDI file and a note on them."""
+    import io
+    import zipfile
+
+    import soundfile as sf
+
+    from songbird import midi
+
+    studio, port = served
+    edits = {"tempo": 90, "tonic": 64}
+    status, made = post(port, studio, "/api/export", {"edits": edits, "what": "midi"})
+    assert status == 200 and made["state"] == "done" and made["url"].startswith("/export/")
+    status, head, data = ask(port, "GET", made["url"])
+    assert status == 200 and head["Content-Type"] == "audio/midi" and data[:4] == b"MThd"
+    assert re.fullmatch(r'attachment; filename="now-its-by-you\.\d{4}-\d\d-\d\d\.[0-9a-f]{6}\.mid"',
+                        head["Content-Disposition"])
+    v = studio.version(edits)
+    voice = studio._score(v).part("voice")
+    track = midi.read(data)["tracks"][1]
+    assert [e["args"][0] for _, e in track if e.get("status") == 0x90] == [round(n.pitch) for n in voice]
+    assert v.params.tonic == 64 and v.params.tempo == 90
+    assert post(port, studio, "/api/export", {"edits": edits, "what": "nonsense"})[0] == 400
+    assert ask(port, "GET", "/export/0123456789abcdef.zip")[0] == 404
+
+    def fake_stems(score, seed=0, voice=None, ancestors=None, progress=None):  # the parts' own sound is tested elsewhere
+        n = int(score.duration * 1000)
+        return {"voice": np.full((n, 2), 0.5), "guitar": np.full((n, 2), 2.0)}
+
+    monkeypatch.setattr(S.synth, "SR", 1000)
+    monkeypatch.setattr(S.synth, "render_stems", fake_stems)
+    status, job = post(port, studio, "/api/export", {"edits": edits, "what": "stems"})
+    assert status == 200 and job["download"].startswith("/export/")
+    for _ in range(300):
+        job = json.loads(ask(port, "GET", f"/api/job/{job['id']}")[2])
+        if job["state"] in ("done", "failed"):
+            break
+        time.sleep(0.05)
+    assert job["state"] == "done", job
+    status, head, data = ask(port, "GET", job["url"])
+    assert status == 200 and head["Content-Type"] == "application/zip"
+    z = zipfile.ZipFile(io.BytesIO(data))
+    names = sorted(z.namelist())
+    stem = names[0].split("/")[0]
+    assert [n.split("/")[1] for n in names] == ["01-voice.flac", "02-guitar.flac", "README.txt", f"{stem}.mid"]
+    _, lead_in = midi.from_score(studio.genome, v.params, studio._score(v))
+    audio, sr = sf.read(io.BytesIO(z.read(f"{stem}/02-guitar.flac")))
+    pad = int(round(-lead_in * sr))
+    assert sr == 1000 and not audio[:pad].any() and abs(audio[pad, 0] - 0.989) < 1e-3  # all turned down together
+    voice_audio, _ = sf.read(io.BytesIO(z.read(f"{stem}/01-voice.flac")))
+    assert abs(voice_audio[pad, 0] - 0.989 / 4) < 1e-3
+    note = z.read(f"{stem}/README.txt").decode()
+    assert "bar 1" in note and "dry" in note and "public domain" in note and not FORBIDDEN.search(note)

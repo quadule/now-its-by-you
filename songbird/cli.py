@@ -109,6 +109,7 @@ ARTIST = "The Volunteers"  # the FLAC tag: who the song is by (the artist's deci
 
 def render_one(genome, params: Params, out: Path, *, voice=None, drift=None, lyrics=None, phrasing_json=None,
                choir_json=(), singer_overrides=(), stems: bool = False, mix_overrides=(), parent: dict | None = None,
+               midi_file: bool = False,
                packet_genome: str | Path | None = None, changes=None, chosen_by_you=None, progress=None) -> dict:
     """Render one rendition to out (FLAC), with its record (.json), score (.score.json) and, if its words were
     drawn or held, its lyric sheet (.txt) beside it. With packet_genome (the genome file sung), the FLAC carries
@@ -193,6 +194,12 @@ def render_one(genome, params: Params, out: Path, *, voice=None, drift=None, lyr
 
         for name, stem in synth.render_stems(score, seed=params.seed, voice=singer, ancestors=ancestors).items():
             sf.write(str(out.with_name(f"{out.stem}.{name}.wav")), stem, synth.SR, subtype="FLOAT")
+    if midi_file:  # every part, the words and the chords, for a musician's own tools (songbird/midi.py)
+        from . import midi
+
+        data, lead_in = midi.from_score(genome, params, score)
+        out.with_suffix(".mid").write_bytes(data)
+        print(f"{out.with_suffix('.mid')}  bar 1 begins {-lead_in:.3f}s before the audio's first sample")
 
     print(f"{out}  {record['duration']:.1f}s  {record['loudness_lufs']} LUFS  id {record['id'][:12]}")
     return record
@@ -249,7 +256,7 @@ def replay_command(args: argparse.Namespace, genome) -> int:
     parent = parent_of(record)
     out = Path(args.out or Path("renders") / (Path(args.genome).stem + ".replay.flac"))
     render_one(genome, params, out, voice=voice, drift=drift, lyrics=lyrics, phrasing_json=phrasing_json,
-               choir_json=choir_json, singer_overrides=args.voice, stems=args.stems, mix_overrides=args.mix,
+               choir_json=choir_json, singer_overrides=args.voice, stems=args.stems, midi_file=args.midi, mix_overrides=args.mix,
                parent=parent, packet_genome=args.genome if args.pack else None,
                chosen_by_you=record.get("chosen_by_you"))
     return 0
@@ -328,7 +335,7 @@ def render_command(args: argparse.Namespace) -> int:
             params = replace(params, words=evolve.fitted(genome, params, voice, drift))
     out = Path(args.out or Path("renders") / (Path(args.genome).stem + ".flac"))
     render_one(genome, params, out, voice=voice, drift=drift, lyrics=lyrics, phrasing_json=phrasing_json,
-               choir_json=choir_json, singer_overrides=args.voice, stems=args.stems, mix_overrides=args.mix,
+               choir_json=choir_json, singer_overrides=args.voice, stems=args.stems, midi_file=args.midi, mix_overrides=args.mix,
                parent=parent, packet_genome=args.genome if args.pack else None,
                changes=changes if sung_by_a_machine else None, chosen_by_you=chosen)
     return 0
@@ -590,6 +597,8 @@ def main(argv: list[str] | None = None) -> int:
                              "beside the render (default: when a machine or a date sings, with the rendition's "
                              "own seed; otherwise the seed's own words)")
     render.add_argument("--stems", action="store_true", help="also write each part, dry, as WAV")
+    render.add_argument("--midi", action="store_true",
+                        help="also write every part, the words and the chords as a MIDI file (.mid) beside it")
     render.add_argument("--voice", nargs="*", default=[], metavar="FIELD=VALUE",
                         help="override the singer, e.g. --voice tract=1.0 shift=-12 rd=1.3")
     render.add_argument("--mix", nargs="*", default=[], metavar="FIELD=VALUE",

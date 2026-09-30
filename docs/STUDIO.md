@@ -392,6 +392,43 @@ FILE` renders it again byte for byte (tests/test_studio.py does). Run with
 Python, the file makes the next version: its children inherit what was sung,
 a person's choices among them.
 
+## Taking it into your own tools (2026-09-29)
+
+For a musician who wants to keep going somewhere else: **Take it into your own
+tools**, under *Sing, record & pass it on* (and linked from the Tune area), makes
+two files of the version on the page, with every change in it:
+
+- **Download MIDI**, at once: a format 1 file (songbird/midi.py, standard library
+  only, some 360 lines) made from the very score the render sings
+  (realize, `variation.lay`, a style's lift), so it is what is heard. The singer's
+  notes with the words as lyric events (`num-` `bers`), each lineage voice, every
+  band part on its own track with the nearest General MIDI program (percussion on
+  channel 10, its strokes on GM drum keys), and a **Chords** track: each chord
+  voiced plainly (its bass below middle C, the triad above), named (`Bm`, `G/B`,
+  `Dsus4`) as a text event, a person's own harmony included. The first track has
+  the time signature, the key (a mode by its relative major; a style's lift as a
+  key change), the sections as markers and the tempo map.
+- **Download the parts (stems)**, a render (about as long as the whole song):
+  each part rendered alone and dry by `synth.render_stems`, as `songbird render
+  --stems` makes them, as 24-bit FLAC, with the MIDI file and a README, zipped.
+  One gain for all of them if any would clip, so they keep their balance.
+
+**Time.** The notes keep their performed timing (a phrasing's pushes, swing, the
+band's small human timing); the tempo map follows the rendition's clock
+(`realize.timeline`) beat by beat, so the final ritardando is tempo changes and a
+song re-barred in three (a waltz feel) is written in 3/4 (6/8 for a slow six),
+a foot to a bar. Bar 1 is the bar the first pickup sits in, which begins a
+little before the audio's first sample (1.6 s for H); the stems are padded by
+exactly that, so the stems and the MIDI file dropped at the start of a project
+line up. `songbird render --midi` writes the same file beside a render and says
+where bar 1 falls against its FLAC.
+
+Left as they are: stems are dry (the room, the mix's balance and mastering are
+in the recording, so the parts don't sum to it exactly); the MIDI is not
+quantized (a musician's sequencer quantizes if wanted, and what is heard is
+kept); lyrics are syllables with a trailing hyphen inside words, the karaoke
+convention most sequencers read.
+
 ## What stays on the machine
 
 Nothing leaves it (unless it is shared for a preview: see below). The server

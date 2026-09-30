@@ -61,6 +61,24 @@ def chord_tones(symbol: str, mode: str) -> tuple[int, int, int]:
     )
 
 
+NOTE_NAMES = ("C", "C♯", "D", "E♭", "E", "F", "F♯", "G", "A♭", "A", "B♭", "B")
+
+
+def chord_bass(symbol: str, mode: str) -> int:
+    """Semitone offset from the tonic of the chord's lowest note: its root."""
+    return chord_tones(symbol, mode)[0]
+
+
+def chord_name(symbol: str, tonic: int, mode: str) -> str:
+    """A chord function as a musician reads it in this key: vi in D major is Bm, bVII is C, V in D is A."""
+    root, third, fifth = chord_tones(symbol, mode)
+    kind = {(4, 7): "", (3, 7): "m", (3, 6): "°", (4, 8): "+", (5, 7): "sus4", (2, 7): "sus2"}.get(
+        ((third - root) % 12, (fifth - root) % 12), "")
+    name = NOTE_NAMES[(tonic + root) % 12] + kind
+    bass = chord_bass(symbol, mode)
+    return name if bass == root else f"{name}/{NOTE_NAMES[(tonic + bass) % 12]}"
+
+
 FLOOR = 52  # E3: below about 160 Hz the learned throat's pulses are heard one by one (a "tapping" through the
 # bridge, 2026-09-27: 35 thumps a second at E2, 10 at D3, 2 at E3, none from A3 up); real basses sing to E2 (40),
 # and the bass instrument has that register

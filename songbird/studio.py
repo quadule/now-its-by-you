@@ -58,7 +58,7 @@ from urllib.parse import parse_qs, urlsplit
 
 import numpy as np
 
-from . import __version__, drift as drift_mod, explain, genome as genome_mod, harvest, pack, synth, variation
+from . import __version__, drift as drift_mod, explain, genome as genome_mod, harvest, midi, pack, synth, variation
 from .realize import Params, realize
 from .synth import master
 from .synth.instruments import INSTRUMENTS
@@ -80,7 +80,8 @@ STATIC = {"/identity.css": ("identity.css", "text/css; charset=utf-8"),  # the s
           "/drafts.js": ("drafts.js", "text/javascript; charset=utf-8"),
           "/author.js": ("author.js", "text/javascript; charset=utf-8"),
           "/studio.js": ("studio.js", "text/javascript; charset=utf-8"),
-          "/help.js": ("help.js", "text/javascript; charset=utf-8")}
+          "/help.js": ("help.js", "text/javascript; charset=utf-8"),
+          "/export.js": ("export.js", "text/javascript; charset=utf-8")}
 
 
 # ---------------------------------------------------------------- where the song and its parent come from
@@ -561,6 +562,69 @@ class Studio:
         prune(self.cache, CACHE_LIMIT)
         return {"url": job.url, "id": record["id"], "duration": record["duration"]}
 
+    # ------------------------------------------------------------ exporting for musicians
+
+    def export_name(self, v: explain.Version, suffix: str) -> str:
+        return f"{slug(self.genome.title)}.{self.day}.{self.key(v, None)[:6]}{suffix}"
+
+    def export(self, edits: dict, what: str) -> dict:
+        """Files for a musician's own tools, of the version as the page has it: "midi", every part as MIDI
+        (made at once, from the score the render sings); "stems", every part rendered alone, dry, as
+        `songbird render --stems` makes them, with the MIDI, in one zip (a render, so a job)."""
+        v = self.version(edits)
+        key = self.key(v, None)
+        if what == "midi":
+            path = self.cache / f"{key}.mid"
+            if not path.exists():
+                data, _ = midi.from_score(self.genome, v.params, self._score(v), title=self.genome.title)
+                path.write_bytes(data)
+            return {"state": "done", "progress": 1.0,
+                    "url": f"/export/{key}.mid?name={self.export_name(v, '.mid')}", "label": "the MIDI file"}
+        if what != "stems":
+            raise ValueError("export midi or stems")
+        name = self.export_name(v, ".stems.zip")
+        url = f"/export/{key}.zip?name={name}"
+        if (self.cache / f"{key}.zip").exists():
+            return {"state": "done", "progress": 1.0, "url": url, "label": "the stems", "kind": "export"}
+        job = self.jobs.submit(f"{key}-stems", "preview", "the stems", lambda job: self._stems(job, v, key, name))
+        return self.jobs.view(job) | {"download": url}
+
+    def _stems(self, job: Job, v: explain.Version, key: str, name: str) -> dict:
+        """Every part of the rendition rendered alone and dry (synth.render_stems, as the command line's
+        --stems), each padded to start at the MIDI file's bar 1, as 24-bit FLAC; the MIDI file and a note on
+        what they are beside them, in one zip."""
+        import soundfile as sf
+
+        from .cli import choir_of
+
+        job.stage = stage_words("score")
+        score = self._score(v)
+        job.plan = [p for p in stages(score) if p[0] not in ("mix", "master")] + [("master", 1.0)]
+        data, lead_in = midi.from_score(self.genome, v.params, score, title=self.genome.title)
+        singer = explain.singer_of(v.params)
+        stems = synth.render_stems(score, seed=v.params.seed, voice=singer,
+                                   ancestors=choir_of(self.parent_record, singer)[1], progress=job.report)
+        job.report("master")
+        job.stage = "packing the stems"
+        pad = int(round(-lead_in * synth.SR))
+        peak = max((float(np.max(np.abs(x))) for x in stems.values() if x.size), default=0.0)
+        gain = min(1.0, 0.989 / peak) if peak > 0 else 1.0  # one gain for all, so they keep their balance
+        order = sorted(stems, key=lambda p: (p != "voice", not p.startswith("choir"), list(stems).index(p)))
+        stem = name[: -len(".stems.zip")]
+        tmp = self.cache / f"{key}.part.zip"
+        with zipfile.ZipFile(tmp, "w", zipfile.ZIP_STORED) as z:
+            for i, part in enumerate(order, 1):
+                buffer = io.BytesIO()
+                sf.write(buffer, np.pad(stems[part] * gain, [(pad, 0), (0, 0)]), synth.SR, format="FLAC",
+                         subtype="PCM_24")
+                z.writestr(f"{stem}/{i:02d}-{part}.flac", buffer.getvalue())
+            z.writestr(f"{stem}/{stem}.mid", data)
+            z.writestr(f"{stem}/README.txt", stems_note(self.genome.title, v.params, -lead_in, gain, order))
+        tmp.replace(self.cache / f"{key}.zip")
+        prune(self.cache, CACHE_LIMIT)
+        job.url = f"/export/{key}.zip?name={name}"
+        return {"url": job.url, "parts": len(order)}
+
     # ------------------------------------------------------------ recording
 
     def record(self, edits: dict) -> dict:
@@ -687,6 +751,28 @@ def singer_name(who: str) -> str:
             if name:
                 return str(name)
     return who.replace("-", " ").title()
+
+
+def stems_note(title: str, params: Params, pad: float, gain: float, parts: list[str]) -> str:
+    """What the stems are, for the person who unzips them."""
+    from .theory import NOTE_NAMES
+
+    level = "" if gain >= 1.0 else f" All of them were turned down together by {-20 * np.log10(gain):.1f} dB so none clips."
+    return textwrap.dedent(f"""\
+        {title}: the parts, for your own tools
+        Made by Songbird's studio: {NOTE_NAMES[params.tonic % 12]} {params.mode}, {params.tempo:g} beats a minute.
+
+        Each part is rendered alone and dry, as the program plays it before the mix: no room, no mix's
+        balance, no mastering (the recording has those, so these don't add up to it exactly).{level}
+        Every file starts at bar 1 of the MIDI file beside them ({pad:.3f} s of silence before the
+        song's first sound), so put them all at the start of a project with the MIDI file and they line
+        up: the MIDI file carries the tempo (with the ending's slowing), the bars, the key, the
+        sections, the words as lyrics and the chords.
+
+        Parts: {", ".join(parts)}. 24-bit FLAC, 44.1 kHz, stereo.
+
+        The song and the program are public domain (CC0): do what you like with them.
+        """)
 
 
 def link(src: Path, dst: Path) -> None:
@@ -861,6 +947,16 @@ class Handler(BaseHTTPRequestHandler):
             if path.startswith("/api/job/"):
                 job = self.studio.jobs.get(path.rsplit("/", 1)[-1])
                 return self.send_json(self.studio.jobs.view(job)) if job else self.fail(404, "no such job")
+            match = re.fullmatch(r"/export/([0-9a-f]{16,64})\.(mid|zip)", path)
+            if match:  # a file for a musician's own tools (Studio.export), saved under its name
+                name = parse_qs(urlsplit(self.path).query).get("name", [""])[0]
+                if not re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9._-]{0,120}\.(mid|zip)", name):
+                    name = f"song.{match.group(2)}"
+                file = self.studio.cache / f"{match.group(1)}.{match.group(2)}"
+                if not file.exists():
+                    return self.fail(404, "not made yet")
+                kind = "audio/midi" if match.group(2) == "mid" else "application/zip"
+                return self.send(file.read_bytes(), kind, 200, {"Content-Disposition": f'attachment; filename="{name}"'})
             match = re.fullmatch(r"/audio/([0-9a-f]{16,64})\.flac", path)
             if match:
                 # ?name=song.day.id.flac: saved under that name (a recording downloaded, as a visitor keeps theirs)
@@ -943,6 +1039,8 @@ class Handler(BaseHTTPRequestHandler):
                 return self.send_json(studio.listen(edits, who, None if section is None else int(section)))
             if path == "/api/cancel":
                 return self.send_json({"cancelled": studio.jobs.cancel(str(body.get("job", "")))})
+            if path == "/api/export":
+                return self.send_json(studio.export(edits, str(body.get("what", ""))))
             if path == "/api/record":
                 return self.send_json(studio.record(edits))
             if path == "/api/sing":

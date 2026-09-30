@@ -623,3 +623,8 @@ dialog.help h2::after { content: ""; display: block; height: 4px; margin-top: 10
 .author-input.is-dirty, .author-input:focus, .make-up input:focus { border-color: var(--hand); outline: 1px solid var(--hand); outline-offset: 0; }
 .author-input[aria-invalid=true] { border-color: var(--red); }
 .make-up input::placeholder { color: var(--ink-3); font-style: italic; }
+
+/* ---- files for a musician's own tools (export.js) ---- */
+.export-panel { margin-top: 18px; }
+.export-panel .actions { flex-wrap: wrap; }
+.to-export { margin: -4px 0 10px; text-align: right; }
