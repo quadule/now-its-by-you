@@ -211,7 +211,7 @@ test("an invitation closed in R2 is closed, whatever KV still says", async () =>
 test("the seed page is public: at /seed, at the root of the seed host, with exactly its file and its words", async () => {
   const w = await load();
   const files = { ...SITE, "/seed.html": "<!doctype html><title>seed</title>", "/seed/now-its-by-you.flac": "fLaC: the song",
-                  "/seed/words.json": '{"lines":[]}' };
+                  "/seed/words.json": '{"lines":[]}', "/robots.txt": "User-agent: *\nDisallow: /\n" };
   const e = env({ files });
   const page = await call(w, e, "/seed");
   assert.equal(page.status, 200);
@@ -226,6 +226,12 @@ test("the seed page is public: at /seed, at the root of the seed host, with exac
     assert.equal(r.status, 301);
     assert.equal(r.headers.get("location"), "https://now.itsby.you/seed/now-its-by-you.flac?x=1");
   }
+  for (const host of ["now.itsby.you", "itsby.you", "www.itsby.you"]) { // the song's hosts have no robots.txt
+    assert.equal((await w.fetch(new Request(`https://${host}/robots.txt`), e)).status, 404, host);
+  }
+  const robots = await w.fetch(new Request("https://songbird.quadule.com/robots.txt"), e); // the singing site keeps its own
+  assert.equal(robots.status, 200);
+  assert.match(await robots.text(), /Disallow: \//);
   const other = await w.fetch(new Request("https://songbird.test/"), e); // any other host's root is the landing line
   assert.match(await other.text(), /invitation/);
   const file = await call(w, e, "/seed/now-its-by-you.flac");

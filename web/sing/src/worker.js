@@ -997,12 +997,17 @@ export default {
         if (parts[0] === "yours" && parts.length >= 2 && parts.length <= 4) return await yours(request, env, parts, ip, now);
         return fail(404, "unknown", "No such thing.");
       }
+      // robots.txt keeps crawlers off the singing site (songbird.quadule.com), not off the song: the seed
+      // host and its bare domain have none, so the seed page can be found
+      const seedHostName = String(env.SEED_HOST || "now.itsby.you").toLowerCase();
+      const apex = seedHostName.split(".").slice(1).join(".");
+      if (path === "/robots.txt" && [seedHostName, apex, `www.${apex}`].includes(url.hostname)) {
+        return fail(404, "unknown", "No such thing.");
+      }
       if (Object.prototype.hasOwnProperty.call(PUBLIC, path) && request.method === "GET") {
         return asset(env, request, path, { "Content-Type": `${PUBLIC[path]}; charset=utf-8`, "Cache-Control": "public, max-age=300" });
       }
       // the seed host's bare domain (and www) sends everyone to it, for good: the packet says now.itsby.you
-      const seedHostName = String(env.SEED_HOST || "now.itsby.you").toLowerCase();
-      const apex = seedHostName.split(".").slice(1).join(".");
       if (url.hostname === apex || url.hostname === `www.${apex}`) {
         return new Response(null, { status: 301, headers: headers({ Location: `https://${seedHostName}${path}${url.search}`,
                                                                     "Cache-Control": "public, max-age=3600" }) });
