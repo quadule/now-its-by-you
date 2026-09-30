@@ -290,6 +290,15 @@ def test_the_mix_sweeps_the_band_and_not_the_transitions():
     b = mixing.mix_made(parts, length, SR, taps=swept, sound=sound)
     assert not np.array_equal(a, b)
     assert np.array_equal(plain["fx"][1], swept["fx"][1])  # the transitions' own stem joins unswept
+    # a stop: the band silent over its beats, back at the downbeat, the transitions going on
+    stop = {"transitions": [{"kind": "stop", "start": 1.0, "end": 1.5, "level": 1.0, "key": 6}]}
+    band = np.zeros((length, 2))
+    x = noise.copy()
+    sweeps.sweep([x, band], SR, sweeps.sweep_spans(stop["transitions"], SR))
+    assert not np.any(x[int(1.01 * SR): int(1.5 * SR)]) and np.array_equal(x[int(1.5 * SR):], noise[int(1.5 * SR):])
+    assert np.array_equal(x[:SR], noise[:SR])
+    clean, problems = E.check(G, {"transition.refrain:0": {"stop": 2}, "transition.refrain:1": {"stop": 3}})
+    assert clean["transition.refrain:0"] == {"stop": 2} and "lasts 1, 2, 4 beats" in problems[0]["why"]
 
 
 # --- the record ------------------------------------------------------------------------------------------------

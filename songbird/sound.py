@@ -10,7 +10,7 @@ plays, is the arrangement's, never this module's):
     mix.<player>.pan           -1..1, in place of the player's own place
     mix.<player>.send          0..3 times the channel's designed send to the room
     mix.<player>.sidechain     a preset (subtle, classic, heavy) or {depth dB, release beats, key, sections}
-    transition.<section-id>    {riser, down, roll: bars; impact: bool; sweep: {bars, type}}, into that section
+    transition.<section-id>    {riser, down, roll: bars; stop: beats; impact: bool; sweep: {bars, type}}, into it
 
 They live in Params.sound ({"players": {player: {...}}, "transitions": {section-id: {...}}}), recorded,
 handed down and replayed like the composition. realize() calls produce(): the drum player's roll strokes go
@@ -91,8 +91,8 @@ ATTACK = 0.003  # s: how fast a pumped channel ducks
 
 BARS = (0, 1, 2, 4)
 SWEEP_TYPES = ("highpass", "lowpass")
-TRANSITION_KEYS = ("riser", "roll", "sweep", "impact", "down")
-BEFORE = ("riser", "roll", "sweep")  # over the bars before the section: nothing comes before the first
+TRANSITION_KEYS = ("riser", "roll", "sweep", "stop", "impact", "down")  # a stop in beats, the rest in bars
+BEFORE = ("riser", "roll", "sweep", "stop")  # over the bars before the section: nothing comes before the first
 IMPACT_S = 1.6  # s an impact's span lasts
 RISER_LEVEL = 1.0
 
@@ -271,7 +271,7 @@ def transition(value) -> dict | None:
     if value is None:
         return None
     if not isinstance(value, dict):
-        raise ValueError("a transition is a map of riser, roll, sweep, impact and down")
+        raise ValueError("a transition is a map of riser, roll, sweep, stop, impact and down")
     unknown = set(value) - set(TRANSITION_KEYS)
     if unknown:
         raise ValueError(f"a transition has {', '.join(TRANSITION_KEYS)}, not {', '.join(sorted(unknown))}")
@@ -294,7 +294,7 @@ def transition(value) -> dict | None:
                 raise LookupError("a sweep is a highpass (rising) or a lowpass (falling)")
             v = v.get("bars", 0)
         if isinstance(v, bool) or not isinstance(v, (int, float)) or v not in BARS:
-            raise ValueError(f"a {key} lasts {', '.join(str(b) for b in BARS[1:])} bars")
+            raise ValueError(f"a {key} lasts {', '.join(str(b) for b in BARS[1:])} {'beats' if key == 'stop' else 'bars'}")
         if v:
             out[key] = {"bars": int(v), "type": kind} if key == "sweep" else int(v)
     return out or None
@@ -491,6 +491,9 @@ def produce(genome, params, placed, clock, notes: list) -> tuple[list, dict]:
             a, b = span(want["sweep"]["bars"])
             made.append({"kind": "sweep-hp" if want["sweep"]["type"] == "highpass" else "sweep-lp",
                          "start": a, "end": b, "level": 1.0, "key": key + 2})
+        if want.get("stop"):  # the band stops for the last beats before the section (the singer and fx don't)
+            made.append({"kind": "stop", "start": max(0.0, at(u0 - want["stop"] * genome.meter.beat)),
+                         "end": downbeat, "level": 1.0, "key": key + 6})
         if want.get("impact"):
             on_kick = any(abs(t - downbeat) < 0.03 for t in kicks)
             made.append({"kind": "impact", "start": downbeat, "end": downbeat + IMPACT_S, "level": 1.0,

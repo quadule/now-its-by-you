@@ -6,7 +6,8 @@ octaves under it, wider as it rises, stopping at the downbeat); an impact on the
 from 110 to 42 Hz in a quarter second and ringing a second and a half, over a burst of dark noise; where a
 kick lands with it, its boom high-passed and lower, so the two don't fight); a downlifter over the bars
 after (noise through a band-pass falling from 6 kHz to 200 Hz, fading); and a filter sweep on the band over
-the bars before (a high-pass rising from 20 Hz to 1.5 kHz, or a low-pass falling from 16 kHz to 350 Hz),
+the bars before (a high-pass rising from 20 Hz to 1.5 kHz, or a low-pass falling from 16 kHz to 350 Hz), and
+a stop (the band silent for the last beats before the downbeat, the singer and the transitions going on),
 which the mix applies to the band's bus.
 
 They come from the score's `sound["transitions"]` (songbird.sound writes them): each its kind, its span in
@@ -32,7 +33,7 @@ SWEEP_HP = (20.0, 1500.0)
 SWEEP_LP = (16000.0, 350.0)
 SWEEP_Q = 0.707 + 0.3  # the sweep's resonance: a little bite at the moving corner
 FADE = 0.003  # s: every sound starts and stops over this much, and a sweep hands back to the dry band
-SWEEPS = ("sweep-hp", "sweep-lp")
+SWEEPS = ("sweep-hp", "sweep-lp", "stop")  # what the mix does to the band's bus, not a sound here
 
 
 def _biquad(kind: str, f: float, q: float, sr: float) -> np.ndarray:
@@ -164,6 +165,15 @@ def sweep(signals: list[np.ndarray], sr: int, spans) -> None:
         a0, b = max(0, a), b
         n = len(signals[0])
         if b - a0 < BLOCK or a0 >= n:
+            continue
+        if kind == "stop":  # the band stops: out over FADE where the span begins, back at once at its end
+            k = min(int(FADE * sr), b - a0)
+            gate = np.zeros(min(b, n) - a0)
+            if a0 == a:
+                gate[:k] = 0.5 + 0.5 * np.cos(np.linspace(0.0, np.pi, k))
+            for x in signals:
+                if x is not None:
+                    x[a0:a0 + len(gate)] *= gate[:, None] if x.ndim == 2 else gate
             continue
         lo, hi = SWEEP_HP if kind == "sweep-hp" else SWEEP_LP
         k = max(0, min(int(FADE * sr), n - b))  # the filter runs on past the span while it hands back
