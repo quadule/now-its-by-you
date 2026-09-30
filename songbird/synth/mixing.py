@@ -708,7 +708,9 @@ def mix_made(parts: list, length: int, sr: int, seed: int = 0, params: MixParams
         tone = tone + (("low", 300, -1.15 * p.tilt), ("high", 3000, 1.15 * p.tilt))
     out = fx.equalize(out, fx.design(tone, sr), inplace=True)
     if p.wear > 0:
-        out = wear(out, sr, p.wear, seed)
+        held = [out]  # handed over whole: wear lets it go once it has read it
+        del out
+        out = wear(held.pop(), sr, p.wear, seed)
     return out
 
 
@@ -820,18 +822,21 @@ def wear(x: np.ndarray, sr: int, amount: float, seed: int = 0) -> np.ndarray:
     speed = a * (WOW * wow + FLUTTER * _band_noise(rng, k, rate, 5.0, 14.0))
     lag = np.cumsum(speed) / rate * sr  # samples read ahead (+) or behind (-)
     y = fx.warp(x, np.interp(np.arange(n) / sr, t, lag - lag.mean()))
+    del x  # (the tape read, the song as it was is let go; each step below where the last left it)
 
     # The tape itself: saturation, a narrower band, the head bump.
-    y = fx.saturate(y, sr, 0.1 + 0.9 * a, bias=0.12)
+    y = fx.saturate(y, sr, 0.1 + 0.9 * a, bias=0.12, inplace=True)
     top = 20000.0 * (1.0 - 0.62 * a)
-    y = fx.equalize(y, fx.design((("hp", 20.0 + 60.0 * a), ("low", 90.0, 2.0 * a), ("lp", top)), sr))
+    y = fx.equalize(y, fx.design((("hp", 20.0 + 60.0 * a), ("low", 90.0, 2.0 * a), ("lp", top)), sr), inplace=True)
 
     # Hiss under everything, each channel its own, brighter than pink, through the same narrow band.
     if np.isfinite(level):
         hiss = rng.standard_normal((n, 2))
-        hiss = fx.equalize(hiss, fx.design((("hp", 400.0), ("high", 6000.0, 4.0), ("lp", top)), sr))
+        hiss = fx.equalize(hiss, fx.design((("hp", 400.0), ("high", 6000.0, 4.0), ("lp", top)), sr), inplace=True)
         target = level + HISS[0] + (HISS[1] - HISS[0]) * a
-        y = y + hiss * 10.0 ** ((target - quick_loudness(hiss, sr)) / 20.0)
+        hiss *= 10.0 ** ((target - quick_loudness(hiss, sr)) / 20.0)
+        y += hiss  # (y + hiss * its level)
+        del hiss
 
     # Crackle: sparse clicks, each a tiny ring somewhere between 1.5 and 5 kHz, mostly toward one side or the other.
     if a > CRACKLE and np.isfinite(level):

@@ -252,3 +252,37 @@ def bowed_made(name: str) -> str:
 @pytest.mark.parametrize("name", list(BOWED))
 def test_bowed_strings_make_the_samples_they_made(name):
     assert bowed_made(name) == BOWED[name]
+
+
+def test_a_tape_read_a_stretch_at_a_time_is_read_as_whole():
+    from songbird.synth import fx
+
+    rng = np.random.default_rng(12)
+    for n, shape in ((200_003, (2,)), (70_000, ()), (4, (2,))):
+        x = rng.standard_normal((n,) + shape)
+        offset = np.cumsum(rng.standard_normal(n)) * 0.01 + 3.0 * np.sin(np.arange(n) / 500.0)
+        pos = np.clip(np.arange(n) + offset, 1.0, n - 3.0)
+        i = np.floor(pos).astype(np.int64)
+        t = (pos - i)[:, None] if x.ndim == 2 else pos - i
+        p0, p1, p2, p3 = x[i - 1], x[i], x[i + 1], x[i + 2]
+        whole = p1 + 0.5 * t * (p2 - p0 + t * (2 * p0 - 5 * p1 + 4 * p2 - p3 + t * (3 * (p1 - p2) + p3 - p0)))
+        assert same(fx.warp(x, offset), whole) and same(fx.warp(x, offset, block=777), whole)
+
+
+# What mixing.wear made of _worn() before 2026-09-30 (the tree at 02384c8), at a little and a lot of wear.
+WORN = {0.3: "e51c1f5f9b8ec0e2246423f3b230ef6222446118d965b63ba6bc7b4fb3872690",
+        0.8: "c64f9890e63a66229f9176a80c11afcfebcafaf387ae38ae36387ccbc6b1a928"}
+
+
+def worn(amount: float) -> str:
+    from songbird.synth import mixing
+
+    rng = np.random.default_rng(13)
+    n = 44100 * 6 + 11
+    x = rng.standard_normal((n, 2)) * 0.1 * np.sin(np.arange(n) / 3000.0)[:, None]
+    return hashlib.sha256(np.ascontiguousarray(mixing.wear(x, SR, amount, seed=4)).tobytes()).hexdigest()
+
+
+@pytest.mark.parametrize("amount", list(WORN))
+def test_a_worn_mix_is_worn_as_it_was(amount):
+    assert worn(amount) == WORN[amount]
