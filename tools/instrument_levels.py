@@ -40,7 +40,7 @@ from songbird.score import Note  # noqa: E402
 from songbird.synth import instruments, master  # noqa: E402
 
 SR = 44100
-MODULES = ("piano", "epiano", "organ", "mallets", "analog", "chip", "drummachine")
+MODULES = ("piano", "epiano", "organ", "mallets", "analog", "chip", "drummachine", "melodica")
 TARGETS = {"comping": -23.7, "lead": -20.7, "bass": -24.1, "percussion": -28.4, "colour": -26.5}
 
 
