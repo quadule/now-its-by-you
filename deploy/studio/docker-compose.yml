@@ -20,7 +20,7 @@ services:
       --allow-host ${STUDIO_HOST:-studio.itsby.you}
       --machine ${STUDIO_MACHINE:-none}
       --client-ip-header CF-Connecting-IP
-      ${STUDIO_LIMITS:-}
+      ${STUDIO_ARGS:-}
     environment:
       SONGBIRD_THREADS: ${SONGBIRD_THREADS:-2}  # a render's threads (the same bytes whatever it says)
     mem_limit: ${STUDIO_MEMORY:-2500m}

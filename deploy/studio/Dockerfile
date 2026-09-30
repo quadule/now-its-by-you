@@ -26,8 +26,10 @@ COPY songs ./songs
 RUN uv sync --frozen --no-dev
 
 # the synthesis compiled into the image, for every instrument a visitor can choose (about 30 s)
+# and the program's fingerprint, so a new image's first start clears previews the old one made
 COPY deploy/studio/warm.py deploy/studio/entrypoint.sh /opt/studio/
-RUN python /opt/studio/warm.py && chmod -R a+rX /opt/numba-cache && chmod a+rx /opt/studio/entrypoint.sh
+RUN find songbird songs -type f | LC_ALL=C sort | xargs sha256sum | sha256sum > /opt/studio/program.sha \
+    && python /opt/studio/warm.py && chmod -R a+rX /opt/numba-cache /opt/studio && chmod a+rx /opt/studio/entrypoint.sh
 
 # no one in particular: the studio runs as this user, on a read-only root, writing only to /data
 RUN useradd --system --uid 10001 --home-dir /data --no-create-home songbird \
