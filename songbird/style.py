@@ -511,7 +511,7 @@ DUB = _def(
     "dub", "dub and roots reggae: the kit's one drop, the skank on the off-beats, an organ's bubble, a deep round bass "
            "with space, a melodica's answers, and the mixing desk played: echoes thrown, a spring splashed, the band "
            "dropping out and back, a version after the song",
-    {"kit": 0.9, "ebass": 1.05, "electric": 0.75, "organ": 0.6, "melodica": 0.75},
+    {"kit": 0.9, "ebass": 1.05, "electric": 0.95, "organ": 0.6, "melodica": 0.75},
     {"kit": {"verse1": ((0.3, "onedrop"), (0.0, "")), "*": "onedrop", "last": "steppers", "version": "onedrop"},
      "ebass": {"*": "dubbass"},
      "electric": {"verse1": ((0.3, "skank"), (0.0, "")), "*": "skank"},

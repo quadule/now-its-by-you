@@ -1810,7 +1810,7 @@ def w_skank(ctx: StyleContext, i: int, part: str) -> list[Ev]:
                 continue
             tones = ctx.tones(c, u, u + ctx.beat / 2, colour=False)
             notes = ctx.voicing(part, tones, max(lo, ctx.tonic - 5), min(hi, ctx.tonic + 12), u, u + ctx.beat / 2, 3)
-            vel = ctx.vel(part, u, 0.62, 0.85) * rng.uniform(0.9, 1.05)
+            vel = ctx.vel(part, u, 0.7, 0.85) * rng.uniform(0.9, 1.05)
             for j, p in enumerate(notes[::-1]):  # an up stroke: the top string first
                 out.append(ev(part, u, u, p, vel, art="up", i=i, length=0.12, shift=0.005 * j))
     return out
