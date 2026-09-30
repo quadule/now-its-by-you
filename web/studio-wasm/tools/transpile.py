@@ -811,7 +811,8 @@ def main():
     (KERNELS / "kernels.gen.mjs").write_text(head + "\n".join(MODULE_CONSTS.values()) + "\n\n" + "\n".join(kept))
     (KERNELS / "manifest.json").write_text(json.dumps(manifest, indent=1) + "\n")
     good = sum(m["ok"] for m in manifest.values())
-    print(f"{good}/{len(manifest)} kernels translated")
+    hand = sum(bool(m.get("hand")) for m in manifest.values())
+    print(f"{good - hand}/{len(manifest)} kernels translated, {hand} ported by hand (kernels/hand.mjs)")
     for key, m in manifest.items():
         if not m["ok"]:
             print(f"  {key}: {m['why']}")
