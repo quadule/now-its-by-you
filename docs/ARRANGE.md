@@ -343,8 +343,11 @@ waits with the rhythm after a quoted intro, joins with the drums in the band's e
 half-time bridge (which a style with a drum machine may now draw, as one with a kit could), and its last hit
 isn't held to the end. That changes default renders of synth folk and lo-fi where those options fall (for
 three machines on three days, ten of eighteen: seven of synth folk's nine, three of lo-fi's); the ballad, H's seed and the goldens are unchanged.
-The synth bass has the same kind of name ("synth", its role "bass") and is still not counted with the bass,
-so it too waits through a breakdown: a decision for the artist.
+**So is the synth bass the bass** (2026-09-30, the artist: fix the bugs). Its module registers it with the
+synths (family "synth", for the mixer), so it sat out the first half of a breakdown's last refrain (synth folk:
+0 + 32 notes across its halves; now 32 + 32). `idioms.is_bass` counts it, and `idioms.rhythmic` is the rhythm
+section wherever the style arranger groups it (the breakdown's players, the entrances' order, the leads it
+isn't, a half-time bridge's roots). Synth folk's and lo-fi's renders change again where those options fall.
 
 **The API for the page**: `/api/arrangement` (docs/STUDIO.md, "Arrangement control").
 

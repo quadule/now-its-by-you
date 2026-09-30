@@ -357,6 +357,18 @@ class StyleContext(Context):
 # through a breakdown, waits with the rhythm after an intro's quote, joins with the drums, goes half-time.
 DRUMS = ("drums", "drum machine")
 PERCUSSION = DRUMS + ("percussion",)
+# The synth bass is the bass as the bass is (its module registers it with the synths, family "synth", for the
+# mixer's sake): the arranger groups it with the rhythm, so it plays through a breakdown and joins with the bass.
+BASSES = ("synthbass",)
+
+
+def is_bass(part: str) -> bool:
+    return part in BASSES or family(part) == "bass"
+
+
+def rhythmic(part: str) -> bool:
+    """The rhythm section as the style arranger groups it: the drums, a drum machine, percussion and the bass."""
+    return family(part) in PERCUSSION or is_bass(part)
 
 
 def family(part: str) -> str:
@@ -400,7 +412,7 @@ def plan_style(ctx: StyleContext) -> None:
     """Decide, for every section, what each of the style's players does there."""
     sdef = ctx.sdef
     leads = [x for x in (sdef.playing(x, ctx.lineup) for x in sdef.leads) if ctx.on(x)] \
-        or [x for x in ctx.lineup if family(x) not in PERCUSSION + ("bass",)]
+        or [x for x in ctx.lineup if not rhythmic(x)]
     refrains = [i for i, s in enumerate(ctx.sections) if s.role == "refrain"]
     breaks = turns = verses = 0
     for i, s in enumerate(ctx.sections):
@@ -1713,7 +1725,7 @@ def shape_plan(ctx: Context, style, plan: Plan, rhythm, pads, chords_first) -> N
         starts = phrase_starts(ctx, 0)  # after the quote, the intro's rhythm waits for its second phrase
         if len(starts) > 1:
             for p in sections[0].parts:
-                if p in rhythm or p == "guitar" or family(p) in PERCUSSION + ("bass",):
+                if p in rhythm or p == "guitar" or rhythmic(p):
                     plan.entrances[(0, p)] = starts[1]
     if style.alone and len(verses) >= style.alone:
         i = verses[style.alone - 1]
@@ -1744,7 +1756,7 @@ def shape_plan(ctx: Context, style, plan: Plan, rhythm, pads, chords_first) -> N
         first = chords_first if chords_first in sections[i].parts else next(
             (p for p in chords_first_all(ctx) if p in sections[i].parts), chords_first)
         order = sorted(sections[i].parts, key=lambda p: (0 if p == first else 1 if p in rhythm and
-                                                        family(p) == "bass" else 2 if p in rhythm else 3, p))
+                                                        is_bass(p) else 2 if p in rhythm else 3, p))
         for k, p in enumerate(order):
             if k and len(starts) > 1:
                 plan.entrances[(i, p)] = starts[min(k, len(starts) - 1)]
@@ -1832,7 +1844,7 @@ def arrange_style(genome, params, placed, lead, end, melody, seconds, sdef) -> t
     B.overhear(ctx, melody, seconds, lead, end)  # for the piano score (songbird.piano), when asked
     if params.style.intro == "quote":  # the lead's quote of an older song before the song (songbird.band)
         ctx.prelude = B.prelude_span(ctx)
-    rhythm = {p for p in ctx.lineup if family(p) in PERCUSSION + ("bass",)}
+    rhythm = {p for p in ctx.lineup if rhythmic(p)}
     pads = {p for p in ctx.lineup if family(p) in ("pad", "organ") or p in ("strings", "drone")}
     chords_first = next((p for p in chords_first_all(ctx)), None)
     shape_plan(ctx, params.style, ctx.plan, rhythm, pads, chords_first)
@@ -1840,7 +1852,7 @@ def arrange_style(genome, params, placed, lead, end, melody, seconds, sdef) -> t
         for p, what in list(ctx.sections[i].parts.items()):
             if family(p) in DRUMS:
                 ctx.sections[i].parts[p] = "half"
-            elif family(p) == "bass" and what in ("walk", "eighths", "two"):
+            elif is_bass(p) and what in ("walk", "eighths", "two"):
                 ctx.sections[i].parts[p] = "roots"
 
     sung = backing(ctx, melody, params.style)
