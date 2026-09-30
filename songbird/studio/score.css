@@ -459,6 +459,13 @@ button.sbc-chord.is-rub::after { content: "•"; color: var(--red); margin-left:
 .author-actions .btn:first-child { background: var(--ink); color: var(--card); border-color: var(--ink); }
 .author-status { font-size: 12px; color: var(--ink-2); min-height: 16px; margin: 6px 0 0; }
 .lyric-author > .hint { font-size: 12px; }
+/* a line's words said two ways, under it: "bass: low note · fish" (author.js says()) */
+.author-say { display: flex; flex-wrap: wrap; gap: 6px 14px; margin-top: 6px; font-size: 12px; color: var(--ink-2); }
+.author-say[hidden] { display: none; }
+.say-word { display: inline-flex; align-items: center; gap: 4px; }
+.say-name { font-family: var(--serif); color: var(--ink); }
+.say-word .chip { min-height: 22px; padding: 1px 7px; font-size: 12px; }
+.say-own { font-style: italic; }
 
 /* ---------------------------------------------------------------- sheets: Your tools, the Time drawer */
 .scrim { position: fixed; inset: 0; background: rgba(23, 19, 14, .35); z-index: 30; }

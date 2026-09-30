@@ -211,7 +211,8 @@ def words_as_sung(score: dict, title: str | None = None) -> str:
             out.append("")
         section = n.get("section")
         step = max(1, int(n.get("word_len") or 1))
-        line.append((n.get("word") or n["syllable"]).replace("*", "").replace("-", ""))  # focus marks, syllable breaks
+        # focus marks, syllable breaks, and a word's say (bass{fish}: songbird.heteronyms)
+        line.append(re.sub(r"\{[^{}]*\}", "", n.get("word") or n["syllable"]).replace("*", "").replace("-", ""))
         last = notes[min(k + step, len(notes)) - 1]
         k += step
         if last.get("line_end") or k >= len(notes):

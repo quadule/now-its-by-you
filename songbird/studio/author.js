@@ -7,8 +7,126 @@
   const bridge = () => window.StudioBridge;
   // what a line's field says on hover: the rest of how a line is written (the column says only the count's rule)
   const STARS = "A word between stars, like *heart*, is the one the line leans on: the singer gives it a little more. " +
+    "A word said two ways, like bass, shows its ways under the line: choose one. To say any word your own way, " +
+    "write how it sounds in braces after it, like bass{base}, or in ARPAbet, like bass{B.EY1.S}. " +
     "The singer checks the syllables and the pronunciation; the story and the rhyme are yours.";
-  const syllables = (text) => text.trim().split(/[\s-]+/u).filter(Boolean).length;
+  // A word's say in braces, bass{fish} (songbird/heteronyms.py): never a syllable, never shown.
+  const SAY = /\{[^{}]*\}/g;
+  const bare = (text) => String(text).replace(SAY, "");
+  const syllables = (text) => bare(text).trim().split(/[\s-]+/u).filter(Boolean).length;
+
+  // Words said two ways: the rules of songbird/heteronyms.py over the table the view sends (view.composition.say),
+  // so a line shows its choices as it's typed. choose(), choices() and decide() are the Python's, line for line
+  // (tests/studio_author.test.cjs reads the same lines as tests/test_heteronyms.py).
+  let table = null, past = new Set(), notPast = new Set();
+  function useTable(say) {
+    if (!say || say === table) return;
+    table = say;
+    past = new Set(say.past);
+    notPast = new Set(say.not_past);
+  }
+  const clean = (w) => w.toLowerCase().replace(/’/g, "'").replace(/[^a-z']/g, "").replace(/^'+|'+$/g, "");
+  function wordsOf(line) {
+    const parts = String(line).split(/(\s+)/), words = [];
+    parts.forEach((token, at) => {
+      if (!token || /^\s+$/u.test(token)) return;
+      const shown = bare(token).replace(/\*/g, "");
+      const word = clean(shown.replace(/-/g, ""));
+      if (!word) { if (words.length) words[words.length - 1].stop = true; return; }
+      const letters = shown.replace(/^["'“‘(]+/u, "");
+      words.push({token, at, word, capital: /^\p{Lu}/u.test(letters),
+        stop: /[,.;:!?—–)"”]$/u.test(shown.replace(/['’]+$/u, ""))});
+    });
+    return {parts, words};
+  }
+  const isPast = (w) => past.has(w) || (w.length >= 5 && w.endsWith("ed") && !w.endsWith("eed") && !notPast.has(w));
+  function matches(rule, words, i) {
+    const w = words[i];
+    if (rule.before && !rule.before.some((entry) => {
+      const want = entry.split(" "), k = want.length, got = words.slice(i - k, i);
+      return i - k >= 0 && got.every((x, j) => x.word === want[j]) && !got.some((x) => x.stop);
+    })) return false;
+    if (rule.after && (i + 1 >= words.length || w.stop || !rule.after.includes(words[i + 1].word))) return false;
+    if (rule.near && !words.some((x, j) => j !== i && rule.near.includes(x.word))) return false;
+    if (rule.end && !(w.stop || i === words.length - 1)) return false;
+    if (rule.past && !words.some((x, j) => j !== i && isPast(x.word))) return false;
+    if (rule.capital && !(w.capital && i > 0)) return false;
+    return true;
+  }
+  function choose(words, i) {
+    const entry = table?.words?.[words[i].word];
+    if (!entry) return null;
+    const rule = entry.rules.find((r) => matches(r, words, i));
+    return rule ? rule.sense : entry.senses[0].name;
+  }
+  const sayOf = (token) => /\{([^{}]*)\}/.exec(token)?.[1] ?? null;
+  function choices(line) {
+    const {words} = wordsOf(line), out = [];
+    words.forEach((w, i) => {
+      if (!table?.words?.[w.word]) return;
+      const own = sayOf(w.token);
+      out.push({index: i, word: w.word, chosen: own ?? choose(words, i), by: own === null ? "rules" : "you"});
+    });
+    return out;
+  }
+  function withSay(token, say) {
+    const m = /^(.*?[A-Za-z0-9'’])([^A-Za-z0-9'’]*)$/u.exec(token);
+    return m ? `${m[1]}{${say}}${m[2]}` : `${token}{${say}}`;
+  }
+  function decide(line) {
+    const {words} = wordsOf(line);
+    let k = 0;  // the token's place among the words (a dash standing alone isn't one)
+    return String(line).split(/\s+/u).filter(Boolean).map((token) => {
+      if (!clean(bare(token).replace(/\*/g, "").replace(/-/g, ""))) return token;
+      const i = k++;
+      const sense = sayOf(token) === null ? choose(words, i) : null;
+      return sense === null ? token : withSay(token, sense);
+    }).join(" ");
+  }
+  // The ways each word said two ways can go, under its line: "bass: low note · fish". The line as it's sung (the
+  // view's, for the text in the song) or as typed (the rules here); a choice writes its say into the line.
+  const WHY = {
+    rules: "The singer chose this from the words around it. Choose the other to change it.",
+    song: "As the song sings it. Choose the other to sing it that way in your line.",
+    you: "Your choice, kept with the line in braces.",
+  };
+  function says(row) {
+    if (!row.say) return;
+    const text = row.input.value;
+    const said = text === row.base && row.phrase.said ? row.phrase.said : choices(text);
+    const groups = [];
+    for (const c of said) {
+      const entry = table?.words?.[c.word];
+      if (!entry || entry.senses.length < 2) continue;
+      const group = node("span", "say-word");
+      group.title = c.by === "you" ? `${WHY.you} ${c.word}{${c.chosen}}` : WHY[c.by] || WHY.rules;
+      group.append(node("span", "say-name", `${c.word}:`));
+      entry.senses.forEach((s, k) => {
+        if (k) group.append(node("span", "say-dot", "·"));
+        const on = s.name === c.chosen;
+        const chip = node("button", `chip${on ? " on" : ""}${on && c.by === "you" ? " you" : ""}`, s.label);
+        chip.type = "button";
+        chip.setAttribute("aria-pressed", String(on));
+        chip.title = `Sung like “${s.like}”`;
+        chip.addEventListener("click", () => pick(row, c.index, s.name));
+        group.append(chip);
+      });
+      if (c.by === "you" && !entry.senses.some((s) => s.name === c.chosen)) group.append(node("span", "say-own", `your way: {${c.chosen}}`));
+      groups.push(group);
+    }
+    row.say.replaceChildren(...groups);
+    row.say.hidden = !groups.length;
+  }
+  function pick(row, index, name) {
+    const {parts, words} = wordsOf(row.input.value);
+    const w = words[index];
+    if (!w) return;
+    parts[w.at] = withSay(bare(w.token), name);
+    row.input.value = parts.join("");
+    count(row);
+    row.section.status.textContent = "Not in the song until you use it.";
+    if (row.status) row.status.textContent = "Not in the song until you use it.";
+  }
   function node(tag, className, text) {
     const item = document.createElement(tag);
     if (className) item.className = className;
@@ -31,6 +149,7 @@
     row.count.classList.toggle("is-valid", n === row.phrase.syllable_count);
     row.input.setAttribute("aria-invalid", String(n !== row.phrase.syllable_count));
     row.input.classList.toggle("is-dirty", row.input.value !== row.base);
+    says(row);
   }
   // `row`: one line used on its own (the score's column): its refusal, its status and what follows are its own.
   // A section's checks run one after another (a line used while the one before is checked waits its turn), each on
@@ -126,8 +245,10 @@
       restore.className = "link small";
       restore.title = "Your line let go: the song's own words sung here again";
       head.append(name, tally, restore);
-      wrap.append(head, input);
-      row = {wrap, input, count: tally, restore, base: p.lyric_text, phrase: p};
+      const say = node("div", "author-say");  // its words said two ways, and which way
+      say.setAttribute("aria-label", "Words said two ways");
+      wrap.append(head, input, say);
+      row = {wrap, input, count: tally, restore, say, section, base: p.lyric_text, phrase: p};
       input.value = p.lyric_text;
       input.title = STARS;
       input.addEventListener("input", () => { count(row); section.status.textContent = "Not in the song until you use it."; });
@@ -174,6 +295,7 @@
     const s = (view.composition?.sections || []).find((x) => x.id === sectionId);
     const p = s?.phrases?.[lineIndex];
     if (!s || !p?.lyric_path) return false;
+    useTable(view.composition?.say);
     capture();
     let section = sections.get(s.id);
     if (!section) { section = makeSection(s); sections.set(s.id, section); }
@@ -185,6 +307,7 @@
     return true;
   }
   function decorate(view, parent) {
+    useTable(view.composition?.say);
     for (const s of view.composition?.sections || []) {
       const phrases = s.phrases.filter((p) => p.lyric_path);
       const anchor = parent.querySelector(`#sec-${s.index}`);
@@ -203,5 +326,5 @@
       focus = null;
     }
   }
-  window.SongbirdAuthor = {capture, decorate, line};
+  window.SongbirdAuthor = {capture, decorate, line, say: {useTable, choices, decide, bare, syllables}};
 })();

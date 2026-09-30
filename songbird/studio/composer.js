@@ -33,7 +33,7 @@
   const clamp = (n, lo, hi) => Math.min(hi, Math.max(lo, n));
   const fmt = (n) => Number.isInteger(n) ? String(n) : String(round(n));
   const beatLabel = (n) => n < 0 ? `pickup ${fmt(-n)}` : fmt(n + 1);
-  const displayWords = (value) => String(value || "").replace(/\*/g, "");
+  const displayWords = (value) => String(value || "").replace(/\*/g, "").replace(/\{[^{}]*\}/g, "");  // no focus marks, no says
   const announce = (message) => {
     const status = document.getElementById("sbc-status");
     if (status) status.textContent = message;

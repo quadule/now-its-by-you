@@ -156,6 +156,11 @@ def _dictionary() -> dict[str, list[list[str]]]:
     return cmudict.dict()
 
 
+def shown(word: str) -> str:
+    """A word as written without its say: 'bass{fish},' -> 'bass,' (songbird.heteronyms)."""
+    return re.sub(r"\{[^{}]*\}", "", word) if "{" in word else word
+
+
 def clean(word: str) -> str:
     return re.sub(r"[^a-z']", "", word.lower().replace("’", "'")).strip("'")
 
@@ -167,7 +172,16 @@ def pronunciations(word: str, lexicon: dict[str, str] | None = None) -> list[lis
     has. 'Car-ry' is looked up as 'carry'. A real compound like 'hun-dred-odd'
     isn't in the dictionary whole, so its syllables are regrouped into the
     fewest dictionary words that cover them: 'hundred' + 'odd'.
+
+    A word with a say of its own in braces, 'bass{fish}', is read as its say
+    tells (songbird.heteronyms), before the lexicon: a person's say is the last.
     """
+    if "{" in word:
+        from .heteronyms import readings
+
+        said = readings(word)
+        if said is not None:
+            return said
     d = _dictionary()
     w = clean(word.replace("-", ""))
     if lexicon and w in {clean(k.replace("-", "")) for k in lexicon}:

@@ -14,6 +14,7 @@ function setup() {
     setSelectionRange() {}
     querySelectorAll(selector) { return this.children.flatMap((item) => [item, ...item.querySelectorAll(selector)]).filter((item) => selector.includes('textarea') ? item.tag === 'textarea' : true); }
     querySelector() { return this; }
+    replaceChildren(...items) { this.children = []; this.append(...items); }
   }
   const parent = new Element('root');
   const doc = {activeElement: null, createElement: (tag) => new Element(tag), querySelector: () => ({content: 'token'})};
@@ -29,7 +30,7 @@ function setup() {
   render();
   const all = () => parent.querySelectorAll('*');
   return {
-    all, render, view, line: (...a) => win.SongbirdAuthor.line(...a), element: (tag) => new Element(tag), input: () => all().find((x) => x.tag === 'textarea'),
+    all, render, view, line: (...a) => win.SongbirdAuthor.line(...a), get say() { return win.SongbirdAuthor.say; }, element: (tag) => new Element(tag), input: () => all().find((x) => x.tag === 'textarea'),
     type: (text) => { const input = all().find((x) => x.tag === 'textarea'); input.value = text; input.listeners.input(); },
     save: () => all().find((x) => x.textContent === 'Use these lines').listeners.click(),
     status: () => all().find((x) => x.className === 'author-status').textContent,
@@ -119,4 +120,65 @@ test('a line redrawn in the inspector keeps its hint and never writes out a null
     assert.ok(kids.some((k) => k.className === 'hint'), `pass ${pass}: the hint is there`);
     assert.ok(!kids.some((k) => k.tag === 'details'), `pass ${pass}: not the whole section's editor`);
   }
+});
+
+// Words said two ways (songbird/heteronyms.py): the editor applies the Python's rules to a line as it's typed, from the
+// table the view sends; both read tests/golden/say-*.json (tests/test_heteronyms.py pins them to the Python).
+const TABLE = JSON.parse(readFileSync(join(__dirname, 'golden/say-table.json'), 'utf8'));
+const DECIDED = JSON.parse(readFileSync(join(__dirname, 'golden/say-lines.json'), 'utf8'));
+const withSay = (text, said, authored = false) => ({composition: {say: TABLE, sections: [{id: 'verse:0', index: 1, label: 'Verse 1',
+  phrases: [{lyric_path: 'lyrics.verse:0.0', lyric_text: text, syllable_count: 11, authored, ...(said ? {said} : {})}]}]}});
+const chips = (s) => s.all().filter((x) => typeof x.className === 'string' && x.className.startsWith('chip'));
+const shown = (s) => chips(s).map((c) => `${c.textContent}${c['aria-pressed'] === 'true' ? '*' : ''}`).join(' ');
+
+test('the rules in the editor are the singer\'s: every line decided as songbird/heteronyms.py decides it', () => {
+  const s = setup(); s.render(withSay('I sing this song.'));
+  for (const [line, want] of Object.entries(DECIDED)) assert.equal(s.say.decide(line), want, line);
+  assert.equal(s.say.syllables('The bass{fish} is a heart-beat'), 6, 'a say is no syllable');
+  assert.equal(s.say.syllables('min-ute{my-newt} to go'), 4);
+});
+
+test('a typed line shows its word said two ways, the rules\' way chosen; choosing the other writes it into the line', async () => {
+  const s = setup(); s.render(withSay('I sing this song.'));
+  assert.equal(chips(s).length, 0, 'no word said two ways: nothing shown');
+  s.type('The bass is a heart-beat that no-bo-dy wrote');
+  assert.equal(shown(s), 'low note* fish');
+  const group = s.all().find((x) => x.className === 'say-word');
+  assert.match(group.title, /chose this from the words around it/);
+  assert.equal(s.all().find((x) => x.className === 'say-name').textContent, 'bass:');
+  assert.match(chips(s)[1].title, /Sung like “mass”/);
+  chips(s)[1].listeners.click();  // fish
+  assert.equal(s.input().value, 'The bass{fish} is a heart-beat that no-bo-dy wrote');
+  assert.equal(shown(s), 'low note fish*');
+  assert.match(chips(s)[1].className, /\bon you\b/, 'a person\'s choice is marked theirs');
+  assert.match(s.status(), /Not in the song until you use it/);
+  s.save();
+  s.answer(); await s.flush();
+  assert.equal(s.edits['lyrics.verse:0.0'], 'The bass{fish} is a heart-beat that no-bo-dy wrote', 'stored with the line');
+  chips(s)[0].listeners.click();  // back to the low note: the say is replaced, not added
+  assert.equal(s.input().value, 'The bass{low} is a heart-beat that no-bo-dy wrote');
+});
+
+test('the rules follow the words: a fish in the line makes it the fish; punctuation and stars stay put', () => {
+  const s = setup(); s.render(withSay('I sing this song.'));
+  s.type('The fish that he caught was a *bass*, by the sea');
+  assert.equal(shown(s), 'low note fish*');
+  chips(s)[0].listeners.click();
+  assert.equal(s.input().value, 'The fish that he caught was a *bass{low}*, by the sea');
+});
+
+test('the song\'s own line shows the way the song sings it, until it\'s typed over', () => {
+  const s = setup();
+  s.render(withSay('the wind took it down to the farms in the vale,', [{index: 1, word: 'wind', chosen: 'turn', by: 'song'}]));
+  assert.equal(shown(s), 'air turn*');
+  assert.match(s.all().find((x) => x.className === 'say-word').title, /As the song sings it/);
+  s.type('the wind took it down to the farms in the dale,');
+  assert.equal(shown(s), 'air* turn', 'typed: the rules choose');
+});
+
+test('a say of the person\'s own that is no sense shows as theirs', () => {
+  const s = setup(); s.render(withSay('I sing this song.'));
+  s.type('The bass{base} is a heart-beat that no-bo-dy wrote');
+  assert.equal(shown(s), 'low note fish');
+  assert.equal(s.all().find((x) => x.className === 'say-own').textContent, 'your way: {base}');
 });

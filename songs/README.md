@@ -13,6 +13,16 @@ every song here: each lyric line must fit its phrase's notes, and every word
 must be pronounceable (the CMU dictionary, a regular inflection, or the song's
 own `lexicon`).
 
+A word spelt one way and said two (bass, wind, live, read, tear...) is sung in
+a song's own lines as it always was: the lexicon's reading, else the
+dictionary's first. `uv run python tools/pronounce.py --heteronyms --song
+songs/<name>.json` lists the lines where that's not the sense the words around
+it mean (H's "the wind took it down", K's "No one sowed her"). A line a person
+writes in the studio is said as the words beside it say, and any word there can
+carry its own say in braces: `bass{fish}`, `bass{base}`, `bass{B.EY1.S}`
+(songbird/heteronyms.py, docs/STUDIO.md "Words said two ways"). Braces in a
+song's own lines are its slots and turns, not says.
+
 ## The songs so far, with the artist's ratings (2026-09-25)
 
 | | Song | Shape | Rating | Note |

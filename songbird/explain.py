@@ -35,6 +35,7 @@ import numpy as np
 from . import arrange as arrange_mod
 from . import drift as drift_mod
 from . import edits as edits_mod
+from .heteronyms import bare  # a word's say, bass{fish}, is never shown
 from . import harvest, phrasing as phrasing_mod, variation
 from .dates import long_date
 from .arrange import options as word_choices, seed_lyrics
@@ -1244,7 +1245,7 @@ def words_view(v: Version) -> list[dict]:
                       "tag": ["tag", "the tag's syllable"]}.get(block, [])
             note = next((text for where, text in changed_at.items()
                          if any(where == p or where.startswith(p) for p in places)), "")
-        item.update({"block": block, "nth": nth, "id": s.id, "lines": [readable(line) for line in s.lines],
+        item.update({"block": block, "nth": nth, "id": s.id, "lines": [readable(bare(line)) for line in s.lines],
                      "tags": [t for t in tags if t], "how": how, "note": note, "mine": mine, "kept": kept,
                      "path": path, "changeable": bool(drawn and bank)})
         authored = own[k]
@@ -1390,7 +1391,7 @@ def summary(ctx: Context, v: Version, who: str, name: str | None = None) -> dict
     """One machine's version in a few plain words, for comparing machines side by side."""
     p = v.params
     lyrics = as_sung(ctx.genome, p, v.lyrics)
-    first = next((readable(s.lines[0]).replace("*", "") for s in lyrics.sections if s.block == "verse" and s.lines), "")
+    first = next((readable(bare(s.lines[0])).replace("*", "") for s in lyrics.sections if s.block == "verse" and s.lines), "")
     mix = MixParams.from_dict(p.mix or {})
     singer = singer_of(p)
     style = p.style.name or "ballad"

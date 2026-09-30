@@ -50,7 +50,7 @@ def lyric(score_path: str) -> list[str]:
     notes = sorted((n for n in json.load(open(score_path))["notes"] if n["part"] == "voice"), key=lambda n: n["start"])
     words, i = [], 0
     while i < len(notes):
-        words.append(notes[i]["word"].replace("-", ""))
+        words.append(re.sub(r"\{[^{}]*\}", "", notes[i]["word"]).replace("-", ""))  # without its say, bass{fish}
         i += notes[i]["word_len"]
     return normalize(" ".join(words))
 

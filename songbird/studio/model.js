@@ -7,7 +7,7 @@
   const LEVELS = ["out", "soft", "plays", "hard"];
   const KINDS = ["riser", "sweep", "roll", "stop"];  // a seam's transitions over the bars before (a stop in beats)
   const KIND_WORDS = { riser: "a riser", sweep: "a sweep", roll: "a snare roll", stop: "a stop", impact: "an impact", down: "a downlifter" };
-  const words = (line) => String(line || "").replace(/\*/g, "");
+  const words = (line) => String(line || "").replace(/\*/g, "").replace(/\{[^{}]*\}/g, "");  // no focus marks, no says (bass{fish})
 
   // ------------------------------------------------------------------ the grid
   // From /api/arrangement (sections, players, cells), the song's view (its words, its composition) and
