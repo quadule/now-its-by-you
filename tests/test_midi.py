@@ -2,6 +2,8 @@
 at the time it sounds (the tempo map follows the clock: the ending's slowing, a count-in, a waltz's re-barring),
 the singer's syllables as lyrics, the chords named, the key, the bars and the sections."""
 
+import random
+import time
 from dataclasses import replace
 from pathlib import Path
 
@@ -120,3 +122,105 @@ def test_long_lengths_are_written_as_midi_counts_them():
     for n in (0, 1, 127, 128, 16383, 16384, 2**21 - 1, 2**27):
         track = midi.write([[(n, 0, midi.text(0x01, "x"))]])
         assert midi.read(track)["tracks"][0][0][0] == n
+
+
+# ---------------------------------------------------------------- reading any file back (notes in)
+
+
+def test_parse_reads_the_export_as_written():
+    params = Params.from_dict(H.seed_params)
+    score = score_of(H, params)
+    data, _ = midi.from_score(H, params, score)
+    read = midi.parse(data)
+    assert read["format"] == 1 and read["tpq"] == midi.TPQ
+    by_name = {t["name"]: t for t in read["tracks"]}
+    for part in {n.part for n in score.notes}:
+        notes = by_name[midi.part_name(part)]["notes"]
+        assert len(notes) == len(score.part(part))
+    voice = by_name["Voice"]["notes"]
+    assert [k for _, _, _, k, _ in voice] == [round(n.pitch) for n in score.part("voice")]
+    assert all(off > on for on, off, *_ in voice)
+    markers = [t for _, kind, t in read["tracks"][0]["texts"] if kind == 0x06]
+    assert markers[:2] == ["Intro", "Verse 1"]
+    assert read["tracks"][0]["tempos"][0] == (0, round(60e6 / params.tempo))
+
+
+def test_parse_pairs_notes_as_sequencers_do():
+    """Running status, a note-on at velocity 0 as its end, the same key struck twice before either ends (the
+    first struck ends first), a note never ended (it ends with its track), an alien chunk passed over."""
+    body = (midi.vlq(0) + bytes([0x90, 60, 100]) + midi.vlq(10) + bytes([60, 90])  # running status: struck again
+            + midi.vlq(10) + bytes([60, 0]) + midi.vlq(10) + bytes([0x80, 60, 0])  # both end
+            + midi.vlq(0) + bytes([0x91, 64, 80]) + midi.vlq(5) + midi.meta(0x2F, b""))
+    track = b"MTrk" + len(body).to_bytes(4, "big") + body
+    alien = b"XFIH" + (3).to_bytes(4, "big") + b"abc"
+    data = HEAD(1) + alien + track
+    notes = midi.parse(data)["tracks"][0]["notes"]
+    assert notes == [(0, 20, 0, 60, 100), (10, 30, 0, 60, 90), (30, 35, 1, 64, 80)]
+
+
+def HEAD(tracks: int, fmt: int = 1, division: int = 480) -> bytes:
+    return b"MThd" + (6).to_bytes(4, "big") + fmt.to_bytes(2, "big") + tracks.to_bytes(2, "big") + division.to_bytes(2, "big")
+
+
+def TRACK(body: bytes, length: int | None = None) -> bytes:
+    return b"MTrk" + (len(body) if length is None else length).to_bytes(4, "big") + body
+
+
+@pytest.mark.parametrize("data, why", [
+    (b"", "isn't a Standard MIDI File"),
+    (b"RIFF" + bytes(20), "isn't a Standard MIDI File"),
+    (HEAD(1, fmt=2), "format 2"),
+    (HEAD(1, division=0xE728), "frames"),
+    (HEAD(256), "256 tracks"),
+    (HEAD(2) + TRACK(bytes([0, 0xFF, 0x2F, 0])), "holds 1"),
+    (HEAD(1) + TRACK(bytes(4), length=99), "cut short"),
+    (HEAD(1) + TRACK(bytes([0xFF, 0xFF, 0xFF, 0xFF, 0x7F])), "longer than four bytes"),
+    (HEAD(1) + TRACK(bytes([0, 60, 100])), "no status"),
+    (HEAD(1) + TRACK(bytes([0, 0xFF, 0x01, 0x40, 65])), "longer than its track"),
+    (HEAD(1) + TRACK(bytes([0, 0xF8])), "doesn't belong"),
+    (HEAD(1) + TRACK(bytes([0, 0x90, 60, 200])), "out of range"),
+])
+def test_parse_refuses_with_why(data, why):
+    with pytest.raises(midi.Unreadable, match=why):
+        midi.parse(data)
+
+
+def test_parse_holds_its_limits():
+    with pytest.raises(midi.Unreadable, match="bigger"):
+        midi.parse(HEAD(1) + bytes(midi.MAX_FILE))
+    many = bytes([0, 0xC0, 1]) + bytes([0, 1]) * midi.MAX_EVENTS  # small events (running status), each counted
+    with pytest.raises(midi.Unreadable, match="events"):
+        midi.parse(HEAD(1) + TRACK(many))
+    far = (midi.vlq(2**27) + bytes([0xC0, 1])) * 3
+    with pytest.raises(midi.Unreadable, match="longer than a song"):
+        midi.parse(HEAD(1) + TRACK(far))
+    struck = (midi.vlq(0) + bytes([0x90, 60, 100])) * 60000 + (midi.vlq(1) + bytes([0x80, 60, 0])) * 60000
+    began = time.perf_counter()  # one key struck 60,000 times, then ended as often: linear, not quadratic
+    assert len(midi.parse(HEAD(1) + TRACK(struck))["tracks"][0]["notes"]) == 60000
+    assert time.perf_counter() - began < 2
+
+
+def test_parse_of_damaged_files_says_why_and_only_that():
+    """Fuzz: thousands of exports damaged at random (bytes changed, cut short, lengths lied about) are read or
+    refused as Unreadable, never anything else, and quickly."""
+    params = Params.from_dict(H.seed_params)
+    data, _ = midi.from_score(H, params, score_of(H, params))
+    rng = random.Random(7)
+    began, read = time.perf_counter(), 0
+    for _ in range(2000):
+        b = bytearray(data)
+        for _ in range(rng.randint(1, 12)):
+            b[rng.randrange(len(b))] = rng.randrange(256)
+        if rng.random() < 0.3:
+            b = b[:rng.randrange(len(b))]
+        if rng.random() < 0.2:  # a track's length made a lie
+            at = b.find(b"MTrk", rng.randrange(max(1, len(b))))
+            if at >= 0:
+                b[at + 4:at + 8] = rng.randrange(2**32).to_bytes(4, "big")
+        try:
+            midi.parse(bytes(b))
+            read += 1
+        except midi.Unreadable:
+            pass
+    assert time.perf_counter() - began < 20
+    assert read  # some damage leaves a readable file (a changed velocity, a changed key)

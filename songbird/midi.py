@@ -144,6 +144,157 @@ def read(data: bytes) -> dict:
     return {"format": fmt, "tpq": tpq, "tracks": tracks}
 
 
+# ---------------------------------------------------------------- reading any file, defensively (notes in)
+
+
+MAX_FILE = 512 * 1024  # bytes: the export of a whole song is some 20 KB
+MAX_TRACKS = 64
+MAX_EVENTS = 200_000  # across the file
+MAX_TICK = 2**28  # a track's last tick: far past any song at any division
+MAX_TEXT = 256  # characters kept of a name, a marker, a lyric
+
+
+class Unreadable(ValueError):
+    """A file that isn't a MIDI file Songbird can read, and why, in plain words."""
+
+
+def parse(data: bytes) -> dict:
+    """Any Standard MIDI File, read defensively for bringing notes in: a file from anywhere (a sequencer, a
+    stranger in a public studio) is held to its size, its track and event counts, and every length it gives
+    is checked against what is there; one pass, linear in the file. Format 0 or 1, ticks a quarter note
+    (SMPTE time refused). Each track: its name, its notes paired (a note-off, or a note-on at velocity 0,
+    ends the earliest note still sounding on that channel and key; one never ended ends with its track),
+    its texts (text, lyric, marker) and the tempo, time and key signatures. Unreadable says why."""
+    if not isinstance(data, (bytes, bytearray)):
+        raise Unreadable("no file was sent")
+    if len(data) > MAX_FILE:
+        raise Unreadable(f"it is bigger than a song's MIDI file can be ({MAX_FILE // 1024} KB)")
+    if len(data) < 14 or data[:4] != b"MThd":
+        raise Unreadable("it isn't a Standard MIDI File")
+    size, fmt, count, division = struct.unpack(">IHHH", data[4:14])
+    if size < 6 or 8 + size > len(data):
+        raise Unreadable("its header is broken")
+    if fmt not in (0, 1):
+        raise Unreadable("it is a format 2 file (separate songs); save it as format 1")
+    if division & 0x8000 or division == 0:
+        raise Unreadable("it counts time in frames (SMPTE); save it counting beats")
+    if count > MAX_TRACKS:
+        raise Unreadable(f"it has {count} tracks; a song's file has at most {MAX_TRACKS}")
+    pos, tracks, events = 8 + size, [], 0
+    while pos + 8 <= len(data) and len(tracks) < count:
+        kind, length = data[pos:pos + 4], struct.unpack(">I", data[pos + 4:pos + 8])[0]
+        start, pos = pos + 8, pos + 8 + length
+        if pos > len(data):
+            raise Unreadable(f"track {len(tracks) + 1} is cut short")
+        if kind != b"MTrk":  # a chunk of another kind: the standard says to pass over it
+            continue
+        track, used = _track(memoryview(data)[start:pos], len(tracks) + 1, MAX_EVENTS - events)
+        events += used
+        tracks.append(track)
+    if len(tracks) < count:
+        raise Unreadable(f"it says it has {count} tracks but holds {len(tracks)}")
+    return {"format": fmt, "tpq": division, "tracks": tracks}
+
+
+def _track(body: memoryview, which: int, budget: int) -> tuple[dict, int]:
+    end, i, tick, status, used = len(body), 0, 0, 0, 0
+    name, notes, texts, tempos, meters, keys, programs = None, [], [], [], [], [], []
+    sounding: dict[tuple[int, int], list] = {}  # (channel, key) -> [(tick, velocity), ...], oldest first
+    heads: dict[tuple[int, int], int] = {}  # where each list's oldest unended note is (no quadratic pops)
+
+    def broken(why: str) -> Unreadable:
+        return Unreadable(f"track {which} is broken: {why}")
+
+    def number() -> int:
+        nonlocal i
+        n = 0
+        for _ in range(4):
+            if i >= end:
+                raise broken("it ends inside a number")
+            b = body[i]
+            i += 1
+            n = (n << 7) | (b & 0x7F)
+            if not b & 0x80:
+                return n
+        raise broken("a number is longer than four bytes")
+
+    def text(payload) -> str:
+        return bytes(payload).decode("utf-8", "replace").replace("\x00", "")[:MAX_TEXT]
+
+    while i < end:
+        used += 1
+        if used > budget:
+            raise Unreadable(f"it has more than {MAX_EVENTS:,} events")
+        tick += number()
+        if tick > MAX_TICK:
+            raise broken("it goes on far longer than a song")
+        if i >= end:
+            raise broken("it ends inside an event")
+        if body[i] & 0x80:
+            status = body[i]
+            i += 1
+        elif not status:
+            raise broken("an event has no status")
+        if status == 0xFF:
+            if i >= end:
+                raise broken("it ends inside an event")
+            kind = body[i]
+            i += 1
+            size = number()
+            if i + size > end:
+                raise broken("an event is longer than its track")
+            payload = body[i:i + size]
+            i += size
+            status = 0  # running status doesn't carry over a meta event
+            if kind == 0x2F:
+                break
+            if kind == 0x03 and name is None:
+                name = text(payload)
+            elif kind in (0x01, 0x05, 0x06):
+                texts.append((tick, kind, text(payload)))
+            elif kind == 0x51 and size == 3:
+                tempos.append((tick, int.from_bytes(bytes(payload), "big")))
+            elif kind == 0x58 and size >= 2:
+                meters.append((tick, payload[0], 2 ** min(payload[1], 6)))
+            elif kind == 0x59 and size == 2:
+                keys.append((tick, struct.unpack(">bB", bytes(payload))))
+            continue
+        if status in (0xF0, 0xF7):
+            size = number()
+            if i + size > end:
+                raise broken("an event is longer than its track")
+            i += size
+            status = 0
+            continue
+        if status >= 0xF0:
+            raise broken("it holds a message that doesn't belong in a file")
+        kind, channel = status & 0xF0, status & 0x0F
+        width = 1 if kind in (0xC0, 0xD0) else 2
+        if i + width > end:
+            raise broken("it ends inside an event")
+        args = bytes(body[i:i + width])
+        i += width
+        if any(b & 0x80 for b in args):
+            raise broken("an event's data is out of range")
+        if kind == 0x90 and args[1]:
+            sounding.setdefault((channel, args[0]), []).append((tick, args[1]))
+        elif kind in (0x80, 0x90):
+            k = (channel, args[0])
+            waiting, head = sounding.get(k), heads.get(k, 0)
+            if waiting and head < len(waiting):
+                on, vel = waiting[head]
+                heads[k] = head + 1
+                notes.append((on, tick, channel, args[0], vel))
+        elif kind == 0xC0:
+            programs.append((tick, channel, args[0]))
+    for (channel, key), waiting in sounding.items():  # a note never ended ends with its track
+        for on, vel in waiting[heads.get((channel, key), 0):]:
+            notes.append((on, max(tick, on), channel, key, vel))
+    notes.sort()
+    return ({"name": name, "notes": notes, "texts": texts, "tempos": tempos, "meters": meters, "keys": keys,
+             "programs": programs, "end": tick}, used)
+
+
 # ---------------------------------------------------------------- the rendition's clock, as ticks
 
 
