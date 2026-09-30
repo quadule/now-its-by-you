@@ -455,3 +455,185 @@ modules and the learned voice landed on main. Whisper's words misheard on the fi
 Every master is -14.0 LUFS with true peak at -1.1 dBTP or below. What was the open problem is
 mostly the old voice. Indie and country, with the kit and electric guitar under the voice, are
 where to look next.
+
+# House and dub (2026-09-30)
+
+The artist: "a real dance style, and dub." The two studio tests that made EDM through the page
+(docs/STUDIO-EDM-TEST.md) ended the same way: "still a folk band in synths: no dance style, no clap
+on two and four, no ride, no off-beat bass, no filter automation." And dub, because Jamaican version
+culture is this song's own idea: the B-side that re-cuts the same song, the dub plate, the riddim
+sung over again by the next singer. A version is a song passed on and remade.
+
+## The design
+
+### Where they sit: beside the ring, not on it
+
+Every existing machine's home is an angle on the ring divided by the ring's length, so putting two
+more styles on it would move every machine's home and change which style a child of any parent is
+played in: lineages already made (the piece was submitted on 28 September) would wander differently.
+So house and dub are **off the ring**: a person chooses them (`--style house`, the studio's style
+list), or a parent played in one hands it down. Each has an **anchor** on the ring, the style it sits
+beside (`OFF_RING`: house by synth folk, dub by lo-fi). A child of a house or dub parent is placed as
+if its parent were at the anchor: where it would stay, it keeps its parent's style; where the drift
+takes it a step, it steps onto the ring (house to indie or lo-fi, dub to ambient or synth folk). So a
+lineage can leave, never wander in by itself. Where they would go on the ring (house between synth
+folk and indie, dub between ambient and lo-fi) is a decision for the artist, below.
+
+### House (about 124 bpm)
+
+| | |
+|---|---|
+| lineup | drum machine (a **909**, the style's own kit), synth bass, piano stabs (an **organ** for about three machines in ten: the style swaps it in, as the shanty's accordion), synth pad, the arpeggio as a **pluck** |
+| feel, tempo | straight; 1.22 to 1.33 of the song's (H: 117 to 128, centre 124) |
+| harmony | added ninths, sixths, a seventh on V and vi, a suspension (0.6): the house piano's colours |
+| leads | the piano (the tune in the intro, the break and the outro), then the pluck |
+
+The patterns (new idioms in songbird/idioms.py):
+
+- **drum machine**: `floor` (the kick on every beat, an open hat on every off-beat, a soft closed
+  hat on the sixteenths between: the verse groove), `house` (floor and a clap on two and four, the
+  closed hats a little firmer: the refrain), `drop` (house and the ride on every beat, a crash on the
+  first one: the drop). Intro and outro `floor`, the first verse `floor`, later verses `floor` or
+  `house` as the band fills, refrains `house`, the drop `drop`, the tag `end`. A fill into a bigger
+  section is the groove's own (`w_groove`), a clap and snare roll into the drop is the transition's.
+- **synth bass**: `offbeat` (the root on every off-beat, short; an octave up on the last off-beat of a
+  bar now and then, a step into a new chord), `rolling` (three sixteenths after each kick, the root,
+  the root, the octave or the fifth: the drop's).
+- **piano / organ**: `stab` (the chord, its colour, short, on the off-beats of a bar, or a 3-3-2
+  across it; which, bar by bar, from the part's own stream; above the bass and under the tune as
+  comping is). The organ plays it on its percussive registration.
+- **pad**: held chords (`pad`), pumping.
+- **pluck** (the arpeggio's own pluck patch): `pluck`, a one-bar figure of chord tones on the
+  sixteenths' off-beats above the tune, in the refrains.
+
+Its **program sound** (a style's own sound design, under a person's, `StyleDef.sound`): the drum
+machine on its 909 kit; a sidechain on the pad (classic, 8 dB), the synth bass, the stabs and the
+pluck (subtle, 4 dB), all keyed on the kick; so where the kick drops out, nothing pumps. A person's
+`sound.*` and `mix.<player>.*` edits sit over it path by path, and `/api/sound` shows it as the
+program's.
+
+Its **habits**, drawn by chance per machine and season as every style's options are:
+
+- **a breakdown and a drop** (`Style.drop`, new: which refrain the breakdown follows, 0 none; house
+  draws it 0.8 of the time): after the second refrain (the first where the song has two), every
+  section before the next refrain is the breakdown: the drums, the bass, the stabs and the pluck drop
+  out, the singer (and in H's bridge the lineage) is left with the pad; over the breakdown the band's
+  **low-pass opens** from 350 Hz to wide open (a new sweep, `open`, spanning the breakdown), a
+  **riser** over its last two bars and a **snare and clap roll** over its last one or two (two when
+  the breakdown is eight bars or more), and the refrain after it is **the drop**: the parts' `drop`
+  key (the ride), everyone at full weight, a crash on the one. Any style can take it (`--arrange
+  drop=2`, the studio's style options); only house draws it.
+- **the filtered intro**: where the form has an intro, the band's low-pass opens across it (the same
+  `open` sweep) into the first verse: kick, pad and the piano on the tune, dark, then bright.
+- a **lift** now and then (0.15), **entrances** (the band joining line by line: house builds in
+  layers, 0.5), endings cold, the last line again, or ringing; backing voices echoing the lines' ends
+  or oohs (the house vocal's answers).
+
+The singer is kept: a house vocal, a little less vibrato, a plate. Mix: a little drier room, wider,
+the plate up.
+
+### Dub (about 75 bpm)
+
+| | |
+|---|---|
+| lineup | the kit, an electric bass, an electric guitar (the skank), the organ (the bubble), a **melodica** (new) |
+| feel, tempo | swung (0.65) or straight; 0.72 to 0.86 of the song's (H: 69 to 83, centre 75). A 140 half-time is the same pulse at 70: the singer's quarter is the tempo, so 70 to 80 is the one groove |
+| harmony | triads, a minor seventh on vi and ii (0.2): roots reggae keeps its chords plain |
+| leads | the melodica (the tune in the intro and the breaks, answers between the lines), then the organ |
+
+The patterns:
+
+- **kit**: `onedrop` (nothing on the one; the kick and a cross-stick together on three; the closed
+  hat on the eighths, an open hat on the last off-beat of a bar now and then), `steppers` (the kick on
+  every beat, a rim shot on three: the last refrain's drive). A fill of a few rim shots and toms into
+  a bigger section, the groove's own.
+- **bass**: `dubbass`, the riddim: the root long on the one, a chord tone on the off-beat of two,
+  nothing on three (the drop is the drums'), the octave or fifth on its off-beat and a step into the
+  next chord on four; low (it sits an octave under the guitar's bass), round, with space.
+- **guitar**: `skank`, a three-note chord on the top strings, struck and choked at once on every
+  off-beat (the "and"s), up strokes; the electric's `mute` for the choke's damping.
+- **organ**: `bubble`, the organ shuffle: per beat the chord low on its second sixteenth, high on the
+  off-beat (with the skank), low again on its last sixteenth, soft and short.
+- **melodica**: `fills` (the answers between lines the band's fills give every style) and the tune
+  where nobody sings.
+
+The **melodica** is a new instrument (songbird/synth/melodica.py): free reeds blown through a tube,
+one reed a key (no bends, chromatic, chords possible), the reed tables and read kernel the harmonica
+already uses (reed.tables, reed._read_mix: no new kernel), a plastic case's hollow body, breath noise
+strongest as each note is tongued; placed and levelled as a lead, held to the instrument contract
+(tests/test_instrument_specs.py).
+
+The **mixing desk as an instrument** (the style's `desk`, new; the choices drawn from each part's own
+random stream, so a render replays exactly):
+
+- **drop-outs** (the dub): bar by bar, in the sections the desk works (the intro, the turns, the
+  break, the version most; a verse or a refrain now and then, never its first bar), the band cut to
+  the drums and bass alone, the bass out (the drums alone), or the drums out for a bar, and back;
+- **echo throws**: a tape echo (a delay of a dotted eighth, its repeats fed back at 0.6, each repeat
+  darker and a little saturated, as a Roland Space Echo's tape and heads do) that the engineer sends
+  a moment to: the **singer's line ends** (the last word of about a third of the lines, more in the
+  refrains), a **cross-stick or snare** hit before a drop-out or a section's end, the **skank's** last
+  chop before the band drops out; the repeats land in the gap after the line, at the delay's time;
+- **spring splashes**: a hit on the snare (every eight bars or so, and at the version's start) sent
+  hard into a spring tank (amp.spring_ir: the same springs the electric's amp has), its crash and
+  boing on the return;
+- **the version** (`ending: version`, new; dub draws it 0.65 of the time): after the last line, the
+  band plays the last refrain's chords again, eight bars, with nobody singing: the singer's last line
+  thrown into the echo as it ends, the riddim (drums and bass) steady, the skank, the bubble and the
+  melodica's fragments of the tune dropping in and out, a splash at its start, and the song ends on
+  the echo's tail. A discomix: the vocal, then its dub. It's an ending any style can take.
+
+Throws and splashes are made in the mix (songbird/synth/dub.py, numpy and scipy only: the echo's
+feedback a delay's length at a time, the spring by oa.convolve; no new kernel), each over its window
+and its tail only, from the score's `sound["throws"]` (the arranger's choices, in seconds), added to
+the band's bus and its send to the room. Dub's mix otherwise: a little tape wear, a darker top, more
+room, and the plate.
+
+### What a style may now bring (both new, both empty for the thirteen)
+
+- `StyleDef.sound`: the style's own sound design ({"players": {player: {kit, patch, sidechain...}}}),
+  merged under a person's by songbird/sound.py (`program_sound`), so with none (every other style)
+  `produce()` returns what it was given, exactly as before.
+- `StyleDef.desk`: the dub desk's habits (drop-out, throw and splash rates by section, the echo's
+  time and feedback); empty: no drop-outs, no throws.
+- `Style.drop` (an int) and the ending `version`. Records keep `drop` out while it is 0, so a record's
+  digest (and the seed its child draws) is as it was.
+- the sweep type `open` (a low-pass rising, 350 Hz to 16 kHz), also for a person's transitions.
+- new idioms: floor, house, drop, offbeat, rolling, stab, pluck (house); onedrop, steppers, dubbass,
+  skank, bubble (dub); each with its page label, so the arrangement grid offers them to those players
+  in every style (they're the vocabulary of that player, as every idiom is).
+
+### The page, and the words
+
+The style list offers both (explain.STYLE_NAMES, beside the ring's); the arrangement grid gives each
+player its patterns; the section's options show the drop (on the breakdown's first section) and the
+version (in the style card's endings); the sound inspector shows the house's 909 and pumps as the
+program's; a cell sitting out the breakdown says why ("the breakdown before the drop: the drums and
+bass drop out and the singer is left with the pad"). explain's words for the style card: "a breakdown
+after the second refrain, and the drop", "the band plays a dub version after the song".
+
+### Byte for byte
+
+The thirteen styles' renders are unchanged: none draws `drop` or `version`, none has a sound or a
+desk, the new idioms are only called where a table names them, and `choose_options` draws from coins
+of their own names (a new coin never moves an old one). The goldens (tests/golden/*.sha256, the seed
+scores) hold; a few renders in other styles are checked against the tree before by their PCM ids.
+`--replay` renders a house or dub record exactly (every choice is in its params, every random one
+from the render's seed).
+
+### Memory
+
+Each style's default measured with tools/render_memory.py (H, two threads); the melodica's rate by
+tools/part_memory.py into songbird/public.py's RATES. The echo holds only a throw's window and its
+tail (a few seconds), the spring the same; the version adds eight bars (about 25 s of song at 75).
+
+### Decisions for the artist
+
+1. **Off the ring**: chosen, or inherited; a lineage steps off them onto the ring, never onto them.
+   Putting them on the ring (house between synth folk and indie, dub between ambient and lo-fi)
+   would let machines wander into them, and move every lineage's future.
+2. **House's drop is after the second refrain**, a breakdown with the singer and the pad alone, and
+   the filter opening across it; a riser and a roll into it.
+3. **The version** is eight bars after the song, the last refrain's chords; it could be sixteen, or a
+   version of the verse.
+4. **The melodica** is new; the whistle could have taken the answers.
