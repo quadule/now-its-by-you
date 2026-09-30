@@ -294,8 +294,10 @@ def value(genome, params, path: str):
         return held if held is not None else "the program's own"
     if field in entry:
         return entry[field]
-    if field == "bars":
-        return sum(genome.phrases[p].bars for p in genome.section(name).phrases)
+    if field == "bars":  # its own, as many times round as its style plays it
+        from .style import rounds
+
+        return sum(genome.phrases[p].bars for p in genome.section(name).phrases) * rounds(genome, params, name)
     return bool(genome.section(name).lyrics) if field == "sung" else False
 
 
@@ -390,6 +392,8 @@ def phrase_plan(genome, params) -> list[list[tuple[str, bool]]]:
     where it has words) unless a person changed its length or had it played."""
     from .composition import section_ids
 
+    from .style import rounds
+
     held = arranged(params)
     out = []
     for sid, name in zip(section_ids(params.form), params.form):
@@ -397,10 +401,12 @@ def phrase_plan(genome, params) -> list[list[tuple[str, bool]]]:
         sung = section.lyrics is not None
         entry = held.get(sid)
         lines = None
-        if entry:
+        if entry and (entry.get("bars") is not None or rounds(genome, params, name) == 1):
             lines = fit(genome, name, entry.get("bars"), sung and entry.get("sung", True) is not False)
             if lines is None:  # a length it can't have (said by shape_problems): its own
                 lines = fit(genome, name, None, sung and entry.get("sung", True) is not False)
+        elif rounds(genome, params, name) > 1:  # a session's tune round twice: the style's own length, a person's wins
+            lines = [(pid, False) for pid in section.phrases] * rounds(genome, params, name)
         out.append(lines if lines is not None else [(pid, sung) for pid in section.phrases])
     return out
 
@@ -409,10 +415,14 @@ def arranged_plan(genome, params) -> list[list[tuple[str, bool]] | None]:
     """phrase_plan() where a person arranged a section of the form, None where the section is its own."""
     from .composition import section_ids
 
+    from .style import rounds
+
     held = arranged(params)
-    if not held:
+    twice = [rounds(genome, params, name) > 1 for name in params.form]  # a session's set: its own length
+    if not held and not any(twice):
         return [None] * len(params.form)
-    return [lines if sid in held else None for sid, lines in zip(section_ids(params.form), phrase_plan(genome, params))]
+    return [lines if sid in held or again else None
+            for sid, lines, again in zip(section_ids(params.form), phrase_plan(genome, params), twice)]
 
 
 def phrase_ids(genome, params, k: int | None = None):

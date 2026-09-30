@@ -734,7 +734,7 @@ def w_strum(ctx: StyleContext, i: int, part: str, kind: str = "strum") -> list[E
                     continue
                 if stroke == "U" and (density < 0.3 or rng.random() < 0.15 + 0.3 * max(0.0, 0.5 - density)):
                     continue
-                notes = fingering(ctx, part, c, u, c.u1, i)
+                notes = dadgad(ctx, c, u, c.u1) if kind == "dadgad" else fingering(ctx, part, c, u, c.u1, i)
                 if not notes:
                     continue
                 if stroke in ("U", "d"):
@@ -747,6 +747,47 @@ def w_strum(ctx: StyleContext, i: int, part: str, kind: str = "strum") -> list[E
                                   art="up" if stroke == "U" else "down", i=i,
                                   shift=spread * j / max(len(notes) - 1, 1)))
     return ring_on(out)
+
+
+# --- a session's guitar: DADGAD ------------------------------------------------------------------------------
+
+def dadgad_strings(ctx: StyleContext) -> list[int]:
+    """A guitar in an open D tuning (D A D G A D) put in the song's key as a player would: a capo up to six frets,
+    or the strings tuned down up to five semitones."""
+    k = (ctx.tonic - 38) % 12
+    low = 38 + (k if k <= 6 else k - 12)
+    return [low, low + 7, low + 12, low + 17, low + 19, low + 24]
+
+
+def dadgad(ctx: StyleContext, c: Chord, u0: float, u1: float) -> list[int]:
+    """A chord in DADGAD: the open strings ringing wherever they are the key's tonic or fifth and rub no tone of the
+    chord (its sus2 and sus4 are the tuning's sound), the others fretted to the nearest chord tone within four
+    frets; the low strings the chord's bass (else muted); a string that would rub the sung note left out."""
+    tones = ctx.tones(c, u0, u1)
+    triad = ctx.pcs(c.symbol)
+    drones = {ctx.tonic % 12, (ctx.tonic + 7) % 12}
+    bass = ctx.bass(c.symbol)
+    out = []
+    for k, open_ in enumerate(dadgad_strings(ctx)):
+        low = k < 2
+        choice = None
+        for f in range(0, 6 if low else 5):
+            q = open_ + f
+            pc = q % 12
+            if low and pc not in (bass, (bass + 7) % 12) and not (f == 0 and pc == bass):
+                continue
+            ringing = f == 0 and pc in drones and not any(min((pc - t) % 12, (t - pc) % 12) == 1 for t in triad)
+            if pc in tones or ringing:
+                choice = q
+                break
+        if choice is not None and ctx.fits(choice, c, u0, u1) and choice not in {p for *_x, p, _s in ctx.sung_in(u0, u1)}:
+            out.append(choice)
+    return out if len(out) >= 3 else fingering(ctx, "guitar", c, u0, u1, c.section)
+
+
+def w_dadgad(ctx: StyleContext, i: int, part: str) -> list[Ev]:
+    """A session guitar strummed in DADGAD: in a jig down-down-up on each dotted beat, in a reel down-up eighths."""
+    return w_strum(ctx, i, part, "dadgad")
 
 
 def ring_on(events: list[Ev]) -> list[Ev]:
@@ -1281,7 +1322,17 @@ def w_lead(ctx: StyleContext, i: int, part: str) -> list[Ev]:
 
 
 def w_quote(ctx: StyleContext, i: int, part: str) -> list[Ev]:
-    return sliding(ctx, part, B.quote(ctx, i, part))
+    s = ctx.sections[i]
+    own = sum(ctx.genome.phrases[p].bars for p in ctx.genome.section(s.name).phrases)
+    if own <= 0 or s.u1 - s.u0 <= own * ctx.bar + 1e-9:
+        return sliding(ctx, part, B.quote(ctx, i, part))
+    # a session's turn round twice (style.rounds): the same line quoted each time, played its own way each time
+    out = []
+    key = int(np.floor((s.u0 - ctx.sections[0].u0) / ctx.bar + 1e-9))
+    for start in np.arange(s.u0, s.u1 - 1e-9, own * ctx.bar):
+        rng = np.random.default_rng([ctx.seed & 0xFFFFFFFF, 0x5E7, B.stream_of("quote"), key])
+        out += B.quote(ctx, i, part, float(start), own, rng)
+    return sliding(ctx, part, out)
 
 
 def w_counter(ctx: StyleContext, i: int, part: str) -> list[Ev]:
@@ -1481,6 +1532,59 @@ def w_build(ctx: StyleContext, i: int, part: str) -> list[Ev]:
     return out
 
 
+def bodhran_bar(ctx: StyleContext, light: bool) -> list[tuple[float, str, float]]:
+    """(offset in the bar, stroke, velocity) for a bodhrán's bar: the frame drum's own strokes (bass: the tipper's
+    open stroke near the middle; tip: lighter, the back hand on the skin; top: the back hand pressed high, pitch up
+    and dry). A jig: down-up-down on each dotted beat, the bar's first open. A reel (double time): down-up on every
+    sixteenth, open on one and three, the up stroke after two and four lifted with the back hand high. Light: the
+    beats and a stroke before the next."""
+    g = ctx.grid
+    if ctx.feel == "six":
+        if light:
+            return [(0.0, "bass", 0.72), (4.0, "tip", 0.5), (7.0, "tip", 0.36)]
+        return [x for b in (0.0, 4.0) for x in ((b, "bass" if b == 0.0 else "tip", 0.85 if b == 0.0 else 0.62),
+                                                (b + 2.0, "tip", 0.38), (b + 3.0, "tip", 0.5))]
+    beats = g.beats
+    if light or ctx.feel != "double":
+        out = [(b, "bass" if k % 2 == 0 else "tip", 0.72 if k == 0 else 0.55) for k, b in enumerate(beats)]
+        return out + [(b + ctx.beat / 2, "tip", 0.34) for b in beats]
+    out = []
+    for f in g.fine:  # sixteenths
+        k, x = divmod(f, ctx.beat)
+        if x < 1e-9:
+            out.append((f, "bass" if int(k) % 2 == 0 else "tip", 0.8 if k == 0 else 0.62))
+        elif abs(x - ctx.beat / 2) < 1e-9:
+            out.append((f, "top" if int(k) % 2 == 1 else "tip", 0.66 if int(k) % 2 == 1 else 0.42))
+        else:
+            out.append((f, "tip", 0.3))
+    return out
+
+
+def w_bodhran(ctx: StyleContext, i: int, part: str, light: bool = False) -> list[Ev]:
+    """The frame drum played as a bodhrán, bar by bar: ghost strokes left out when the band is sparse, and one
+    open stroke on the song's last chord."""
+    s = ctx.sections[i]
+    out = []
+    for bar in ctx.grid.bars(s.u0, s.u1):
+        rng = ctx.rand(part, bar)
+        for off, stroke, v in bodhran_bar(ctx, light):
+            u = bar + off
+            if not s.u0 - 1e-9 <= u < s.u1 - 1e-9:
+                continue
+            if v < 0.35 and rng.random() > 0.35 + 0.65 * ctx.band.density:
+                continue
+            out.append(Ev(part, u, u + ctx.sub, ctx.tonic - 24, ctx.vel(part, u, v, 0.85), art=stroke, section=i))
+    if i == len(ctx.sections) - 1 and ctx.chords:
+        final = ctx.chords[-1].u0
+        out = [e for e in out if e.u0 < final - 1e-9] + [Ev(part, final, final + ctx.beat, ctx.tonic - 24, 0.6,
+                                                             art="bass", section=i)]
+    return out
+
+
+def w_bodhran_light(ctx, i, part):
+    return w_bodhran(ctx, i, part, light=True)
+
+
 def on_beats(ctx: StyleContext, i: int, part: str, which, piece: str, vel: float) -> list[Ev]:
     s = ctx.sections[i]
     out = []
@@ -1549,6 +1653,8 @@ WRITERS = {
     "machine": w_machine, "end": w_end, "stomp": w_stomp, "stomp4": w_stomp4, "claps": w_claps,
     "tambourine": w_tambourine, "shaker": w_shaker, "cajon": w_cajon,
     "build": w_build,  # only where a person asked for a build (songbird.takeover)
+    # a Celtic session's (docs/STYLES.md, "Two more", 2026-09-30)
+    "bodhran": w_bodhran, "bodhran-light": w_bodhran_light, "dadgad": w_dadgad,
 }
 # "fills" is written for all sections at once (band.fills), after the rest.
 
@@ -1917,6 +2023,26 @@ def shape_plan(ctx: Context, style, plan: Plan, rhythm, pads, chords_first) -> N
                 plan.entrances[(i, p)] = starts[min(k, len(starts) - 1)]
 
 
+def sets(ctx: StyleContext, style) -> None:
+    """A session's tunes where nobody sings: a section going round twice (style.rounds) has the lead and the guitar
+    the first time and everyone the second; a slow air (intro=air) is the lead alone over the drones, the first
+    time round (all of the intro, if it goes round once), the band coming in after it."""
+    for i, s in enumerate(ctx.sections):
+        own = sum(ctx.genome.phrases[p].bars for p in ctx.genome.section(s.name).phrases) * ctx.bar
+        twice = s.u1 - s.u0 > own + 1e-9 and ctx.genome.section(s.name).lyrics is None
+        air = style.intro == "air" and i == 0 and s.role == "intro"
+        if not (twice or air) or not s.parts:
+            continue
+        first = next(iter(s.parts))  # the lead the plan gave the section first
+        if s.parts[first] not in ("lead", "quote"):
+            continue
+        again = s.u0 + own if twice else s.u1
+        stays = {first, "drone"} if air else {first, "guitar"}
+        for p in s.parts:
+            if p not in stays:
+                ctx.plan.entrances[(i, p)] = max(ctx.plan.entrances.get((i, p), s.u0), again)
+
+
 def chords_first_all(ctx: Context) -> list[str]:
     from .style import CHORDS_FIRST
 
@@ -2010,6 +2136,8 @@ def arrange_style(genome, params, placed, lead, end, melody, seconds, sdef) -> t
             elif is_bass(p) and what in ("walk", "eighths", "two"):
                 ctx.sections[i].parts[p] = "roots"
 
+    if sdef.rounds > 1 or params.style.intro == "air":
+        sets(ctx, params.style)
     sung = backing(ctx, melody, params.style)
     if params.style.ending == "amen":
         sung += amen(ctx, end - 2 * ctx.bar, int(params.choir))
@@ -2094,4 +2222,6 @@ def arrange_style(genome, params, placed, lead, end, melody, seconds, sdef) -> t
     }
     if sdef.group and not sdef.leads:  # voices alone: the synthesis matches its singers to the parts by range
         settings["parts"] = "voices"
+    if any(w == "dadgad" for s in ctx.sections for w in s.parts.values()):  # its open strings ring in sympathy
+        settings["tuning"] = dadgad_strings(ctx)
     return notes, settings

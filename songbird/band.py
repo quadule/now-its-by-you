@@ -1024,14 +1024,22 @@ def composed(ctx: Context, phrase) -> list[Tune] | None:
     return [replace(t, u0=t.u0 - s0, u1=t.u0 - s0 + t.length) for t in notes]
 
 
-def quote(ctx: Context, section: int, part: str) -> list[Ev]:
+def quote(ctx: Context, section: int, part: str, start: float | None = None, bars: int | None = None,
+          rng: np.random.Generator | None = None) -> list[Ev]:
     """A turn: the instrument quotes the sung phrase whose tune best fits the
     turn's chords, a refrain's by preference. A line a person composed is
-    quoted as the singer sings it; any other as the lineage sings it."""
-    s = ctx.sections[section]
-    rng = ctx.rand("quote", s.u0)
-    bars = int(round((s.u1 - s.u0) / ctx.bar))
-    under = [(c.u0 - s.u0, c.u1 - s.u0, c.symbol) for c in ctx.chords_in(section)]
+    quoted as the singer sings it; any other as the lineage sings it. start,
+    bars: a stretch of the section (a session's turn goes round twice, the
+    line quoted each time, rng choosing it the same way); else all of it."""
+    whole = ctx.sections[section]
+    rng = ctx.rand("quote", whole.u0) if rng is None else rng
+    if start is None:
+        s = whole
+        bars = int(round((s.u1 - s.u0) / ctx.bar))
+    else:
+        s = replace(whole, u0=start, u1=start + bars * ctx.bar)
+    under = [(c.u0 - s.u0, c.u1 - s.u0, c.symbol) for c in ctx.chords_in(section)
+             if s.u0 - 1e-9 <= c.u0 < s.u1 - 1e-9]
     refrain_phrases = {pid for sec in ctx.genome.sections.values() if sec.lyrics == "refrain" for pid in sec.phrases}
     best, best_score, chosen, heard = None, -1e9, None, None
     for pid, phrase in sorted(ctx.genome.phrases.items()):
