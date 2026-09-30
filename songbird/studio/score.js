@@ -315,7 +315,7 @@
       const rows = [
         row(h("div", { class: "head", role: "columnheader" }, h("span", { class: "hint" }, "bar")),
           g.sections.map((s) => h("div", { class: "rule-cell", role: "columnheader", "aria-label": `${s.label}, from bar ${s.startBar}`,
-            title: `${s.label}: bar ${s.startBar}. Click to put the playhead here.`, onclick: (e) => setPlayhead(s, e) },
+            title: `${s.label}: bar ${s.startBar}. Click to put the playhead here.`, onclick: (e) => setPlayhead(s, e), onpointermove: (e) => { if (e.buttons & 1) setPlayhead(s, e, false); } },
           h("b", {}, String(s.startBar)), s.seam?.value ? h("span", { class: "mark", title: `Into ${s.label}: ${M.seamWords(s.seam.value)}` }, "⤴") : null))),
         row(h("div", { class: "head", role: "rowheader" }, h("span", { class: "rubric small" }, "Sections")), g.sections.map(regionCell)),
         ...g.tracks.map((t) => row(trackHead(t), g.sections.map((s) => cellFor(t, s)))),
@@ -356,7 +356,10 @@
     C()?.mini?.(compIndex(s.id)) || null,
     h("span", { class: "edge", title: `Drag for its length: ${s.barOptions.join(", ")} bars`, "aria-hidden": "true",
       onpointerdown: (e) => edgeDrag(e, s), onmousedown: (e) => { e.preventDefault(); e.stopPropagation(); }, onclick: (e) => e.stopPropagation() }));
+    const ready = state.view?.listen?.ready.includes(state.view.listen.sections[s.index]);
     return h("div", { class: "regioncell", role: "gridcell", "data-region": s.id },
+      h("button", { class: `play${ready ? " ready" : ""}`, type: "button", "data-key": `hear:${s.id}`, "aria-label": `Hear ${s.label}, ${S.how === "sung" ? "sung" : "the sketch"}`,
+        title: `Hear ${s.label} (${S.how === "sung" ? "sung" : "the sketch"})`, onclick: (e) => { e.stopPropagation(); select({ kind: "section", id: s.id }); play(S.how); } }, playIcon()),
       i > 0 ? h("button", { class: `seam${S.sel?.kind === "seam" && S.sel.id === s.id ? " selected" : ""}${s.seam?.value ? " set" : ""}`, type: "button",
         "data-key": `seam:${s.id}`, "aria-label": `The seam into ${s.label}: ${M.seamWords(s.seam?.value)}`, title: `Into ${s.label}: a riser, a sweep, a roll, a stop…`,
         onclick: (e) => { e.stopPropagation(); select({ kind: "seam", id: s.id }); } }) : null,
@@ -448,12 +451,12 @@
     const on = cells.find((c) => c.classList.contains("selected")) || cells[0];
     if (on) on.tabIndex = 0;
   }
-  function setPlayhead(s, e) {
+  function setPlayhead(s, e, restart = true) {
     const r = e.currentTarget.getBoundingClientRect();
     const bars = Math.floor(Math.max(0, e.clientX - r.left) / r.width * s.bars);
     S.playhead = s.startBeat + bars * S.grid.perBar;
     placeHead(S.playhead);
-    if (C()?.playing?.()) play("sketch"), play("sketch");  // stop, then again from here
+    if (restart && C()?.playing?.() && !S.sel) { play("sketch"); play("sketch"); }  // the song again from here
     idle();
   }
   function stepCell(axis, step) {  // the arrow keys through the grid
@@ -661,9 +664,9 @@
     const off = shape?.parts ? state.start.optional.filter((p) => !shape.parts[p]).map((p) => state.start.parts[p]) : [];
     const door = (rubric, value, detail, sel, mine) => h("button", { class: "door", type: "button", onclick: () => select(sel) },
       h("span", { class: "rubric" }, rubric), h("span", { class: `v${mine ? " you" : ""}` }, value, mine ? " ✎" : ""), detail ? h("span", { class: `d${mine ? " you" : ""}` }, detail) : null);
-    const line = (c, label, value) => {
+    const line = (c, label, value, extra = null) => {
       if (!c) return null;
-      const more = h("p", { class: "hint", hidden: true }, [c.detail, ...(c.lines || []), ...(c.reasons || []).map((r) => r.text)].filter(Boolean).join(" · "));
+      const more = h("div", { class: "hint", hidden: true }, [c.detail, ...(c.lines || []), ...(c.reasons || []).map((r) => r.text)].filter(Boolean).join(" · "), extra);
       return h("div", {}, h("div", { class: "lineitem" }, h("span", {}, label), h("b", {}, value || c.value),
         h("button", { class: "what", type: "button", "aria-label": `About ${label}`, "aria-expanded": "false",
           onclick: (e) => { more.hidden = !more.hidden; e.currentTarget.setAttribute("aria-expanded", String(!more.hidden)); } }, "?")), more);
@@ -677,7 +680,11 @@
           shape ? door("The shape", shape.value, off.length ? `add: ${off.slice(0, 4).join(" · ")}` : null, { kind: "shape" }, shape.mine || !!v.edits["form.order"]) : null,
           mix ? door("The room", mix.value, mix.detail, { kind: "room" }, mix.mine) : null),
         h("h4", {}, "And"),
-        line(card("variants"), "The melody"), line(card("choir"), "Voices before"), line(card("words"), "The words", card("words")?.detail),
+        line(card("variants"), "The melody", null, (card("variants")?.variants || []).length ? h("div", { class: "row" }, card("variants").variants.map((x) =>
+          h("label", { class: "check" }, h("input", { type: "checkbox", checked: !!x.value, onchange: (e) => setEdit(x.path, e.target.checked, x.label) }), ` ${x.label}`))) : null),
+        line(card("choir"), "Voices before"),
+        line(card("words"), "The words", card("words")?.detail, h("div", { class: "row" }, h("button", { class: "btn quiet", type: "button", onclick: keepWords,
+          title: "Hold every word as it is now, so that time and chance change only the music" }, "Keep these words"))),
         line(card("field.loudness"), "Loudness", card("field.loudness") ? `${card("field.loudness").value} LUFS` : ""), line(card("machine"), "Your machine"),
         h("p", { class: "hint later" }, "Every value on this page has a reason. Select a section, a player, a cell, a chord, a note or a line to see it and change it.")) });
     return true;
@@ -703,10 +710,11 @@
     const release = () => {
       const next = copyEdits();
       for (const p of Object.keys(next)) if (p.startsWith(`arrange.${s.id}.`)) delete next[p];
+      if (moved(s)) next["form.order"] = null;  // its place: the order is one choice, given back whole
       if (w) releaseWords(w, next);
       commitEdits(next, `${s.label} as the program had it`);
     };
-    const anyMine = Object.keys(state.edits).some((p) => p.startsWith(`arrange.${s.id}.`)) || !!w?.mine;
+    const anyMine = Object.keys(state.edits).some((p) => p.startsWith(`arrange.${s.id}.`)) || !!w?.mine || moved(s);
     shell({ kind: "section", rubric: s.label, mine,
       set: `${s.bars} bars, ${s.sung ? `sung: “${s.first}”` : w?.sung ? `played; its words wait, unsung: “${String(w.lines[0] || "").replace(/\*/g, "")}”` : `played${w ? `: ${w.lines[0]}` : ""}`}${w?.id && w.block === "verse" ? ` (the verse “${w.id}”)` : ""}`,
       problems: s.problems,
@@ -936,6 +944,12 @@
           : h("button", { class: "btn quiet", type: "button", disabled: !ui.hasMidi(), onclick: () => window.SongbirdPlayers.connect(false) }, "Connect MIDI"),
           h("button", { class: "btn quiet", type: "button", onclick: () => window.SongbirdPlayers.panic(), title: "Every channel of the output told to stop" }, "Panic")),
         h("label", { class: "check" }, h("input", { type: "checkbox", checked: ui.set.programs, onchange: (e) => ui.programs(e.target.checked) }), " send its General MIDI sound"),
+        // the sketch's own players (the tune, its chords, its bass): where each goes, as the band's parts do
+        ui.OWN.filter((o) => o.part !== part).map((o) => {
+          const own = ui.own(o.part), at = Number.isInteger(own) ? "midi" : own;
+          return chipRow(o.name, [{ value: "page", text: "here" }, { value: "midi", text: "MIDI", disabled: !midi.output }, { value: "off", text: "off" }], at,
+            (to) => ui.setRoute(o.part, to === "midi" ? String(ui.fileChannel(o.part)) : to), Object.prototype.hasOwnProperty.call(ui.set.routes, o.part));
+        }),
         h("div", { class: "row" },
           h("button", { class: "link small", type: "button", disabled: !midi.output, onclick: () => ui.everyone("midi") }, "Everyone to MIDI, as the file"),
           h("button", { class: "link small", type: "button", onclick: () => ui.everyone("page") }, "Everyone here"),
@@ -958,7 +972,8 @@
         phrasings.length ? h("div", { class: "row" }, h("span", { class: "label" }, "Whose way"), sel)
           : h("p", { class: "hint" }, state.start.sing.available ? "Sing it (under Tools) and the song can be sung your way here." : state.start.sing.why),
         field("Over the band", "mix.forward", m.forward, b["mix.forward"], (x) => `${Number(x).toFixed(1)} dB`, ["among it", "well over it"]),
-        field("How close", "mix.intimacy", m.intimacy, b["mix.intimacy"], pct, ["further back", "at your ear"])),
+        field("How close", "mix.intimacy", m.intimacy, b["mix.intimacy"], pct, ["further back", "at your ear"]),
+        routeControls("tune", "the tune")),
       why: c?.reasons || [], hear: () => listen("you", null),
       release: releasing(["phrasing", "mix.forward", "mix.intimacy"], "The singer as the program has it") });
     return true;

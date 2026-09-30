@@ -475,6 +475,31 @@ def test_identity_is_one_file_in_two_places():
         assert html.index('href="/identity.css"') < html.index(f'href="{own}"')
 
 
+def test_the_score_has_every_place_the_shared_scripts_write_to():
+    """studio.js (the core both pages share), the drafts, the export, the piano link, notes in and the web studio's
+    singing find their places by id: the score (index.html) has each, as the classic page does, so nothing a
+    feature needs is lost in the redesign (docs/STUDIO-REDESIGN.md, "Every current feature, and where it goes")."""
+    ids = {"title", "which", "lineage", "yoursBar", "problemsBar", "versionBar", "draw", "localBadge", "whereNote",
+           "undoEdit", "redoEdit", "historyStatus", "roll", "recordNow", "record", "saved", "packetNote",
+           "nowTitle", "nowSub", "nowTime", "bar", "barFill", "audio", "toast", "dropVeil",
+           "day", "dayLabel", "timeline", "compare", "makeUp", "machineName", "versionChoose", "versionFile", "versionNote",
+           "sing", "singNote", "singTitle", "finishPanel", "saveDraft", "openDraft", "draftFile",
+           "exportMidi", "exportStems", "exportNote", "importMidi", "importFile", "importNote", "importBox", "performPanel",
+           "help", "helpOpen", "helpSong", "helpShows", "helpWhere", "tour", "tourStep", "tourText", "tourSkip", "tourBack",
+           "tourNext", "tourAgain", "studio-composer"}
+    for page in ("index.html", "classic.html"):
+        html = (ROOT / "songbird" / "studio" / page).read_text()
+        found = set(re.findall(r'\bid="([^"]+)"', html))
+        missing = ids - found - ({"draw"} if page == "classic.html" else set())
+        assert not missing, (page, missing)
+        assert "data-learn-piano" in html and "data-piano-note" in html
+    score = (ROOT / "songbird" / "studio" / "index.html").read_text()
+    assert re.search(r'id="finishPanel"[^>]*>.*?class="cols two"', score, re.S)  # where the web studio's singing goes
+    scripts = re.findall(r'<script src="/([a-z]+\.js)"', score)
+    assert scripts.index("score.js") < scripts.index("studio.js")  # the score is told; the core calls it
+    assert all(f"/{s}" in S.STATIC for s in scripts)
+
+
 def test_a_musician_takes_the_version_away_as_midi_and_stems(served, monkeypatch):
     """Download MIDI: at once, of the score the render sings (a person's key and tempo in it), under the song's
     name. Download the parts: a job whose zip holds each part as it renders alone, padded to the MIDI file's

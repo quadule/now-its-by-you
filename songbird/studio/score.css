@@ -194,7 +194,9 @@ input[type=number] { width: 72px; border: 1px solid var(--rule-strong); backgrou
 .region.drop { outline: 2px dashed var(--hand); outline-offset: 1px; }
 .region .edge { position: absolute; right: 0; top: 0; bottom: 0; width: 7px; cursor: ew-resize; border-right: 2px solid transparent; touch-action: none; }
 .region:hover .edge, .region .edge.active { border-right-color: var(--rule-strong); }
-.region .play { position: absolute; right: 9px; top: 4px; width: 22px; height: 22px; }
+.regioncell > .play { position: absolute; right: 8px; top: 42px; width: 20px; height: 20px; z-index: 2; opacity: .75; }
+.regioncell > .play:hover, .regioncell > .play:focus-visible { opacity: 1; }
+.regioncell > .play svg { width: 9px; height: 9px; }
 .seam { position: absolute; left: 0; top: 0; bottom: 6px; width: 10px; margin-left: -6px; z-index: 2; background: none; border: 0; padding: 0; }
 .seam::after { content: ""; position: absolute; left: 4px; top: 0; bottom: 0; width: 2px; background: transparent; }
 .seam:hover::after, .seam.selected::after, .seam:focus-visible::after { background: var(--hand); }
@@ -521,7 +523,10 @@ dialog.help .keys td { padding: 3px 0; }
   .inspector.empty { display: none; }
   .inspector .handle { display: block; width: 100%; height: 22px; border: 0; background: none; padding: 0; }
   .inspector .handle::before { content: ""; display: block; width: 36px; height: 4px; border-radius: 2px; background: var(--rule-strong); margin: 0 auto; }
-  .inspector .chip, .inspector .btn, .inspector .switch button { min-height: 36px; }
+  .inspector .chip, .inspector .btn, .inspector .switch button, .inspector .close, .inspector .what, .pop .chip, .pop .btn, .tools .btn,
+  .transport .right .btn, .tempo, .notes .switch button { min-height: 44px; }
+  .inspector .what, .inspector .close { min-width: 44px; }
+  .tbtn.play { width: 48px; height: 44px; }
   .grid { --head: 96px; }
   .track-head .ms, .track-head .route { display: none; }
   .cell { height: 28px; }
