@@ -248,6 +248,11 @@ def part_name(part: str) -> str:
     return part.replace("-", " ").capitalize()
 
 
+def key_name(tonic: int, mode: str) -> str:
+    """The key as a musician says it: D major, A minor, E dorian."""
+    return f"{KEY_NAMES[tonic % 12]} {({'ionian': 'major', 'aeolian': 'minor'}).get(mode, mode)}"
+
+
 def key_signature(tonic: int, mode: str) -> bytes:
     """The key as MIDI has it (major or minor): a mode other than those two by its relative major's."""
     pc = tonic % 12
@@ -300,7 +305,7 @@ def from_score(genome, params, score, title: str | None = None) -> tuple[bytes, 
         (0, 0, text(0x03, title or genome.title)),
         (0, 1, meta(0x58, bytes([top, max(0, bottom.bit_length() - 1), 24, 8]))),
         (0, 2, key_signature(params.tonic, params.mode)),
-        (0, 3, text(0x01, f"Made by Songbird: {KEY_NAMES[params.tonic % 12]} {params.mode}, "
+        (0, 3, text(0x01, f"Made by Songbird: {key_name(params.tonic, params.mode)}, "
                           f"{params.tempo:g} beats a minute.")),
     ]
     head += [(tick, 4, meta(0x51, us.to_bytes(3, "big"))) for tick, us in ticks.tempos()]

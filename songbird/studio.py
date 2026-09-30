@@ -755,15 +755,16 @@ def singer_name(who: str) -> str:
 
 def stems_note(title: str, params: Params, pad: float, gain: float, parts: list[str]) -> str:
     """What the stems are, for the person who unzips them."""
-    from .theory import NOTE_NAMES
-
-    level = "" if gain >= 1.0 else f" All of them were turned down together by {-20 * np.log10(gain):.1f} dB so none clips."
+    level = ("" if gain >= 1.0 else
+             f"\n\nAll of them were turned down together by {-20 * np.log10(gain):.1f} dB, so none clips "
+             "and they keep their balance.")
     return textwrap.dedent(f"""\
         {title}: the parts, for your own tools
-        Made by Songbird's studio: {NOTE_NAMES[params.tonic % 12]} {params.mode}, {params.tempo:g} beats a minute.
+        Made by Songbird's studio: {midi.key_name(params.tonic, params.mode)}, {params.tempo:g} beats a minute.
 
         Each part is rendered alone and dry, as the program plays it before the mix: no room, no mix's
-        balance, no mastering (the recording has those, so these don't add up to it exactly).{level}
+        balance, no mastering (the recording has those, so these don't add up to it exactly).{{level}}
+
         Every file starts at bar 1 of the MIDI file beside them ({pad:.3f} s of silence before the
         song's first sound), so put them all at the start of a project with the MIDI file and they line
         up: the MIDI file carries the tempo (with the ending's slowing), the bars, the key, the
@@ -772,7 +773,7 @@ def stems_note(title: str, params: Params, pad: float, gain: float, parts: list[
         Parts: {", ".join(parts)}. 24-bit FLAC, 44.1 kHz, stereo.
 
         The song and the program are public domain (CC0): do what you like with them.
-        """)
+        """).replace("{level}", level)
 
 
 def link(src: Path, dst: Path) -> None:
