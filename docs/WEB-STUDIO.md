@@ -845,7 +845,7 @@ A Fable review of the public studio as built found four launch blockers and a fe
 
 | | found | now |
 |---|---|---|
-| 1 | **A long whole song kills the studio.** Chamber at its slowest, four verses, every part on: 7 minutes, peaking at 4.1 GB on 2 threads against the container's 2.5 GB. The kernel kills the studio mid-render; the queue is lost | Every whole render (hearing the whole song, recording, the stems) is estimated before it's queued, from its laid-out length and its players, and refused past the studio's budget with a sentence: "This version is 6.9 minutes long, too long for this small server to make in one go (about 2.8 minutes at most with these players): make it in your browser, or shorten it (fewer verses, a quicker tempo)." Below, "A whole song's memory" (test_studio_public, test_studio_browser, studio_renderer_browser) |
+| 1 | **A long whole song kills the studio.** Chamber at its slowest, four verses, every part on: 7 minutes, peaking at 4.1 GB on 2 threads against the container's 2.5 GB. The kernel kills the studio mid-render; the queue is lost (since made lean, byte for byte, it peaks at 2.5 GB: still past the budget) | Every whole render (hearing the whole song, recording, the stems) is estimated before it's queued, from its laid-out length and its players, and refused past the studio's budget with a sentence: "This version is 6.9 minutes long, too long for this small server to make in one go (about 4.9 minutes at most with these players): make it in your browser, or shorten it (fewer verses, a quicker tempo)." Below, "A whole song's memory" (test_studio_public, test_studio_browser, studio_renderer_browser) |
 | 2 | **Bodies read before their guards**: a take (up to 41 MB) read whole before its Host, token or limits were asked; 64 connections could have the studio hold 2.6 GB | Every POST asks every guard first (the studio's JSON, a take, a file brought). A take also asks, before a byte is read, whether singing is on, the visitor's turn and takes this hour, and room among the takes waiting; two takes are on their way at once, one from each address. A refused body is read and dropped a block at a time (nothing of it held), so the answer still arrives and the connection stays in step (test_web_singing) |
 | 3 | **A range read into memory**: a player's `bytes=0-` held the whole song (17 MB) per connection | Ranges are streamed a block at a time, as a whole file is (test_studio_public, with a 20 MB file under tracemalloc) |
 | 4 | **The studio's day was fixed at start**: a container up for weeks would sing, and stamp, every version as its first day's | A public studio's day moves on at this computer's midnight (`Studio.roll`, asked at every request): the machine's context, the timeline, the versions someone brought, all opened again on the new day. A render asked for before keeps the version it was asked with, and its record the day it was sung. A local studio keeps its day, as ever (test_studio_public, with a fake clock) |
@@ -859,67 +859,92 @@ A Fable review of the public studio as built found four launch blockers and a fe
 ### A whole song's memory
 
 Measured on 30 September on the M1 Max, `tools/render_memory.py` (the whole process's resident high-water mark,
-`MallocLargeCache=0` as the stand-in for Linux), two threads unless said:
+`MallocLargeCache=0` as the stand-in for Linux): first as the review found it, then after the heaviest parts were made
+lean the same day, byte for byte (docs/PERFORMANCE.md, "The heaviest parts"; every rendition below renders to the id
+it rendered to before, at one thread and two). Two threads unless said:
 
-| version | length | parts | peak, 2 threads | 1 thread |
+| version | length | parts | peak, 2 threads (before → now) | 1 thread (before → now) |
 |---|---|---|---|---|
-| H's seed (the ballad) | 151 s | bass drone drum fiddle guitar harp lute voice whistle | 1.39 GB | 1.13 GB |
-| the ballad, 3 verses, every part | 287 s | the same | 2.00 GB | |
-| the ballad, 4 verses, every part, slowest | 347 s | the same | 2.37 GB | |
-| chamber | 189 s | cello piano strings voice | 2.16 GB | 1.89 GB |
-| chamber, 2 verses, tempo 60 | 199 s | the same | 2.31 GB | 2.06 GB |
-| chamber, 3 verses, slowest, every part | 342 s | the same | 3.80 GB | 3.03 GB |
-| chamber, 4 verses, slowest, every part (the review's) | 413 s | the same | 4.06 GB | 3.60 GB |
-| lullaby | 298 s | celesta harp musicbox synthpad voice | 2.05 GB | |
-| ambient | 214 s | drone strings synthpad vibes voice | 2.07 GB | |
-| synth folk | 132 s | arp drummachine guitar synthbass synthlead synthpad voice | 1.16 GB | |
-| lo-fi | 186 s | drummachine epiano synthbass vibes voice | 1.99 GB | 1.96 GB |
-| songwriter | 161 s | bass guitar harmonica voice | 1.09 GB | |
-| **country** | 152 s | bass guitar **kit** piano steel voice | **2.81 GB** | 2.38 GB |
-| blues | 165 s | guitar harmonica slide stomps voice | 1.81 GB | |
-| **gospel** | 225 s | claps ebass **kit** organ piano tambourine voice | **3.66 GB** | 3.31 GB |
-| indie | 128 s | claps ebass electric glock guitar **kit** organ voice | 2.16 GB | 2.05 GB |
-| shanty | 151 s | bass claps concertina fiddle stomps voice | 1.66 GB | |
-| string band | 125 s | banjo bass fiddle guitar mandolin voice | 1.13 GB | |
+| H's seed (the ballad) | 151 s | bass drone drum fiddle guitar harp lute voice whistle | 1.30 → 1.30 GB | 1.13 → 1.13 GB |
+| the ballad, 3 verses, every part | 217 s | the same | 1.61 → 1.57 GB | |
+| the ballad, 4 verses, every part, slowest | 347 s | the same | 2.38 → 2.36 GB | |
+| chamber | 189 s | cello piano strings voice | 2.16 → **1.30 GB** | 1.91 → 1.26 GB |
+| chamber, 2 verses, tempo 60 | 239 s | the same | 2.66 → 1.57 GB | |
+| chamber, 3 verses, slowest, every part | 342 s | the same | 3.82 → 2.26 GB | |
+| chamber, 4 verses, slowest, every part (the review's) | 413 s | the same | 4.27 → **2.53 GB** | |
+| lullaby | 298 s | celesta harp musicbox synthpad voice | 2.01 → 1.69 GB | 2.03 → 1.57 GB |
+| ambient | 214 s | drone strings synthpad vibes voice | 2.07 → 1.56 GB | 2.05 → 1.51 GB |
+| synth folk | 132 s | arp drummachine guitar synthbass synthlead synthpad voice | 1.14 → 1.15 GB | 1.15 → 0.95 GB |
+| lo-fi | 186 s | drummachine epiano synthbass vibes voice | 1.98 → 1.45 GB | 1.97 → 1.36 GB |
+| songwriter | 161 s | bass guitar harmonica voice | 1.09 → 1.10 GB | 1.01 → 0.98 GB |
+| **country** | 152 s | bass guitar **kit** piano steel voice | 2.36 → **1.43 GB** | 2.09 → 1.29 GB |
+| country, 4 verses, every part, slowest | 347 s | the same | (past the container) → 2.41 GB | |
+| blues | 165 s | guitar harmonica slide stomps voice | 1.81 → 1.34 GB | 1.69 → 1.11 GB |
+| **gospel** | 225 s | claps ebass **kit** organ piano tambourine voice | 2.90 → **1.90 GB** | 2.77 → 1.41 GB |
+| gospel, 4 verses, every part, slowest | 507 s | the same | (past the container) → 3.87 GB | |
+| indie | 128 s | claps ebass electric glock guitar **kit** organ voice | 2.16 → 1.22 GB | 2.02 → 0.99 GB |
+| indie, 4 verses, every part, slowest | 345 s | the same | (past the container) → 2.48 GB | |
+| shanty | 151 s | bass claps concertina fiddle stomps voice | 1.66 → 1.13 GB | 1.56 → 1.10 GB |
+| string band | 125 s | banjo bass fiddle guitar mandolin voice | 1.12 → 1.12 GB | 0.99 → 0.97 GB |
 
-So memory grows with length (about 1 GB for every 100 s of chamber on two threads, 0.6 to 0.7 of the ballad) and
-with the players: **the drum kit alone** takes country, gospel and indie to 15-16.5 MB for every second of song
-(stage by stage on one thread, the kit's is 9 of it: `songbird/synth/kit.py` holds a whole-length track and motion for
-each of its five drums, and more). Country as the program sings it (2.81 GB) and gospel (3.66 GB) are past the
-2.5 GB container already, whatever their length. That is where the next memory work is (the kit's arrays, as
-docs/PERFORMANCE.md did for the others, byte for byte); until then the budget keeps them off the server.
+(The "before" column is the same measure taken again on the tree as the review found it; a few differ from the
+review's own figures by a few percent, and two of its drawn-out versions are measured here at the lengths these edits
+give: the ballad's 3 verses at 217 s, chamber's 2 verses at tempo 60 at 239 s.)
+
+So the drum kit no longer sets its bands apart: country, gospel and indie are now 7.1 to 7.5 MB for every second of
+song on two threads, beside the ballad's 7.0, and chamber's 5.8. What's left is mostly what every render holds (the
+program, the band's sums and the voice's bus, two parts being made at once on two threads), which is why the bands
+whose heaviest parts were already light (the ballad, the songwriter, the string band, synth folk) are where they were.
 
 **The estimate** (`songbird/public.py`, `render_mb`): 300 MB, and for every second of the song the rate of its
 heaviest part, 5% more; more threads more (12% a thread past two, from H's seed on six). A part's rate is the
-lightest band's it was measured in (the ballad's 7.2, the songwriter's 4.9), except in the kit's bands, where the
-others are counted without the kit's 9; a part in no band above, its rate in the ballad's band
-(`tools/part_memory.py`: H's seed with the whistle's line, or the drum's strokes, played by it), and a little more;
-a part never measured, the heaviest rate (16.5). A voice from before adds 1 (a guess); the stems hold every part
-whole until the zip is packed (0.71 MB a second each). Every measurement above is at or under its estimate, none
-by more than a quarter (tests/test_studio_public.py, `MEASURED`).
+lightest band's it plays in (the lullaby's 4.7, the songwriter's 5.0), and a band none of whose parts reaches its own
+rate that way gives it to its signature part (the kit 7.1, the steel 7.5, the lute 7.0, the cello 5.8...); a part in
+no band above, its rate in the ballad's band (`tools/part_memory.py`: H's seed with the whistle's line, or the drum's
+strokes, played by it), and a little more; a part never measured, the heaviest rate (7.7). A voice from before adds 1
+(a guess); the stems hold every part whole until the zip is packed (0.71 MB a second each). Every measurement above is
+at or under its estimate, none by more than 26% (tests/test_studio_public.py, `MEASURED`).
 
 **The budget**: `--limit render-mb`, by default the container's memory less 400 MB (the compose passes
 `STUDIO_MEMORY` in; else the cgroup's limit; else 2500 MB): **2100 MB** on the VPS. What it lets the server make in one
-go, on two threads: the ballad up to about 4 minutes, the songwriter's band nearly 6, synth folk 4.4, lo-fi 3.1,
-chamber 2.8 (its own default, 3.1 minutes, is refused), anything with a kit about 1.7 (country's and gospel's
-defaults are refused: they would kill the studio). `STUDIO_MEMORY=3g`, if the VPS can spare it, is about a quarter
-longer each.
+go, on two threads, before → now:
+
+| band | rate before → now (MB/s) | minutes in 2100 MB, before → now |
+|---|---|---|
+| country (kit, steel) | 16.5 → 7.5 | 1.7 → **3.8** |
+| gospel (kit) | 16.5 → 7.1 | 1.7 → **4.0** |
+| indie (kit) | 16.5 → 7.2 | 1.7 → **4.0** |
+| chamber (cello) | 10.3 → 5.8 | 2.8 → **4.9** |
+| blues (slide) | 9.2 → 6.4 | 3.1 → 4.5 |
+| lo-fi (epiano) | 9.1 → 6.2 | 3.1 → 4.6 |
+| shanty (concertina) | 9.0 → 5.6 | 3.2 → 5.1 |
+| ambient (strings, vibes) | 8.3 → 5.9 | 3.4 → 4.8 |
+| the ballad (lute, whistle, drum) | 7.2 → 7.0 | 4.0 → 4.1 |
+| string band (banjo, mandolin) | 6.6 → 6.6 | 4.3 → 4.3 |
+| synth folk (arp) | 6.5 → 6.4 | 4.4 → 4.5 |
+| lullaby (synthpad, musicbox) | 5.9 → 4.7 | 4.8 → **6.1** |
+| songwriter (harmonica) | 4.9 → 5.0 | 5.8 → 5.7 |
+
+Every style's own default now fits (country's 2.5 minutes and gospel's 3.75 were refused before: they would have
+killed the studio). `STUDIO_MEMORY=3g`, if the VPS can spare it, is about a quarter longer each.
 
 **In a browser** (renderer.js, one thread, wasm32): H's whole song with a voice before it took 2.0-2.3 GiB of heap in
 Chrome, about 1.7 times its estimate here, and Chrome's ceiling is 4 GiB; a whole song estimated past 3800 MB of heap
-(`BROWSER_MB`: the ballad at about 4.3 minutes) isn't given to the browser. The render spec says `server` when the
+(`BROWSER_MB`: the ballad at about 4.4 minutes) isn't given to the browser. The render spec says `server` when the
 server can make it instead, or `too_long` with the same sentence ("…too long for this small server or a browser…:
 shorten it…") when neither can; the page says it and sends it nowhere. The server, refusing a whole song a browser
-could make, says "make it in your browser". Sections are made as ever, in either.
+could make, says "make it in your browser". Sections are made as ever, in either. (The factor is H's, whose band
+changed least; the lean parts are lean in a browser too, one thread and the same code, so the kit's and chamber's
+bands should now sit near it as well: worth a measurement in Chrome.)
 
 **A version someone brings**: a public studio opens it only if its next version plays no longer than the longest it
-makes in one go with the lightest band (`Studio.most_minutes`: 6.6 minutes on the VPS with the bundle, received.MINUTES' 12
+makes in one go with the lightest band (`Studio.most_minutes`: 6.9 minutes on the VPS with the bundle, received.MINUTES' 12
 elsewhere), and says so otherwise: "Open it in the studio on your own computer."
 
 Decisions for the artist: the budget's headroom (400 MB for the pages, a take or two on its way, and the reader of a
-version brought, which runs beside a render); the browser's factor (1.7, from one version: measure a long ballad in
-Chrome to tighten it); and whether to fix the kit's memory before launch, since every style with a kit is refused on
-the server past about 1.7 minutes (a desktop browser makes most of them).
+version brought, which runs beside a render); the browser's factor (1.7, from one version: measure a long ballad, and
+now a kit's band, in Chrome to tighten it). The kit's memory, the open question here before, is fixed: every style
+with a kit makes about 4 minutes on the server.
 
 ### Cloudflare: cache the bundle
 

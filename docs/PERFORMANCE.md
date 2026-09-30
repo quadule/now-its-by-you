@@ -306,3 +306,123 @@ needs the one-thread heap high-water, about 1.0 GB, plus its allocator's fragmen
 - **The vocoder's pulse delay as `cos` and `sin`** in place of `exp(1j * turn)`: equal on this Mac (checked)
   and 30% faster for that step, but whether numpy's complex exponential and its real `cos` and `sin` agree
   to the bit depends on the platform's builds, so it could split a server's renders from a Mac's.
+
+
+# The heaviest parts (2026-09-30)
+
+The public studio renders in a 2.5 GB container with a 2100 MB budget for a whole song (docs/WEB-STUDIO.md, "Before
+launch"), and measured band by band the drum kit held about 9 MB for every second of song on its own: every style
+with a kit was refused on the server past about 1.7 minutes, and country's and gospel's own defaults were past the
+container. This made the heaviest parts lean by the rule above: **every change byte-identical**, at any thread count.
+
+## In short
+
+Each style's default H (`tools/render_memory.py`'s measure, `MallocLargeCache=0`), the tree before (02384c8) and after,
+peak resident memory:
+
+| | 2 threads, before → after | 1 thread, before → after |
+|---|---|---|
+| country (152 s, kit) | 2.36 → 1.43 GB | 2.09 → 1.29 GB |
+| gospel (225 s, kit) | 2.90 → 1.90 GB | 2.77 → 1.41 GB |
+| indie (128 s, kit) | 2.16 → 1.22 GB | 2.02 → 0.99 GB |
+| chamber (189 s) | 2.16 → 1.30 GB | 1.91 → 1.26 GB |
+| chamber, 4 verses, slowest, every part (413 s) | 4.27 → 2.53 GB | |
+| lo-fi (186 s) | 1.98 → 1.45 GB | 1.97 → 1.36 GB |
+| ambient (214 s) | 2.07 → 1.56 GB | 2.05 → 1.51 GB |
+| lullaby (298 s) | 2.01 → 1.69 GB | 2.03 → 1.57 GB |
+| blues (165 s) | 1.81 → 1.34 GB | 1.69 → 1.11 GB |
+| shanty (151 s) | 1.66 → 1.13 GB | 1.56 → 1.10 GB |
+| H's seed, the ballad, songwriter, string band, synth folk | unchanged (1.10 to 1.35 GB) | unchanged or a little less |
+| gospel with a three-voice choir (`--choir 3 --seed 7`, the whole process) | 3.93 → 2.46 GB | 3.15 → 1.92 GB |
+| country with `--stems` (the whole process) | 3.69 → 2.05 GB | 2.85 → 1.65 GB |
+
+Rendering takes the same time to within the machine's noise (a second or two either way, the machine shared). What
+that buys the server, in minutes of song a whole render may be (docs/WEB-STUDIO.md has the table): the kit's bands
+1.7 → 3.8 to 4.0 minutes, chamber 2.8 → 4.9, lo-fi and blues 3.1 → 4.6 and 4.5, shanty 3.2 → 5.1, ambient 3.4 → 4.8,
+the lullaby 4.8 → 6.1.
+
+Each part made alone (its `band_parts` job in its style's H, one thread; the process's resident peak above where it
+stood before the part began, which counts the part's stem and its kernels' first loading):
+
+| part | before | after |
+|---|---|---|
+| gospel's kit (224 s) | 2.49 GB | 0.67 GB |
+| country's kit (150 s) | 1.45 GB | 0.44 GB |
+| indie's kit (126 s) | 1.46 GB | 0.39 GB |
+| chamber's cello (187 s) | 1.43 GB | 0.60 GB |
+| chamber's strings (187 s) | 1.17 GB | 0.55 GB |
+| ambient's vibes (212 s) | 1.25 GB | 0.71 GB |
+| lo-fi's vibes (184 s) | 1.06 GB | 0.62 GB |
+| lullaby's synth pad (297 s) | 0.98 GB | 0.57 GB |
+| shanty's concertina (150 s) | 0.91 GB | 0.32 GB |
+| lullaby's voice (the learned throat, 297 s) | 0.83 GB | 0.55 GB |
+| country's voice (150 s) | 0.45 GB | 0.34 GB |
+| gospel's piano (224 s) | 0.71 GB | 0.47 GB |
+| chamber's piano (187 s) | 0.61 GB | 0.42 GB |
+| lullaby's celesta (297 s) | 0.71 GB | 0.61 GB |
+| blues's harmonica (164 s) | 0.35 GB | 0.19 GB |
+| country's steel (150 s) | 0.61 GB | 0.59 GB |
+| lo-fi's epiano, gospel's organ | 0.55, 0.51 GB | the same (not touched) |
+
+## How it was measured
+
+- The styles: `tools/render_memory.py`'s measure through `edits.resolve` with `{"style.name": ...}` (and the drawn-out
+  versions with more verses, every optional part and the slowest tempo), each in a fresh process, on the tree before
+  (a worktree at 02384c8) and after.
+- A part alone: its job from `instruments.band_parts` (or `synth.stem_jobs` for the voice) in a fresh process, a
+  sampler thread reading the resident size every 2 ms; where the memory went, memray's allocations at the high-water
+  mark (`memray run`, then `FileReader.get_high_watermark_allocation_records`).
+
+## Where it went, and what was done
+
+| part | where the memory was | what was done | how it stays the same |
+|---|---|---|---|
+| A bank of modes (`struck.ring`: the kit's drums and cymbals, the cajon, shaker and hands) | every per-sample track padded whole for each rate and stacked; each group's sum doubled whole beside its copy, added to the next group's bank, then added to zeros for the result | tracks copied straight into their rate's length; each doubling a channel at a time and a stretch at a time (`_up2_into`: each stretch with the taps' reach either side, zeros past the ends, doubled by `_up2` itself); a group's bank made first and the sum below doubled into it where it lies; the sum returned as it lies (+ 0.0); its tracks let go before the last doublings; its channels given apart (`apart=`), or rung a channel at a time with the whole bank's floor (`floor=`) | the same products summed in the same order: a doubled stretch's every sample is the same 24 taps over the same values; `acc + y` added where `y` lies is `y + acc`; + 0.0 is what adding to zeros did (-0.0 to 0.0); a channel hears only its own modes (the others add 0.0 to a sum begun from 0.0) and drops each mode where the whole bank did |
+| A cymbal (`cymbals.play`) | three channels, a second copy of the microphones, the motion, the feed and its bloom's temporaries, the wash's stereo filtered whole twice, the ticks as a whole stereo track | the microphones and the motion kept apart (`cymbals.microphones`), each handed on and let go once used; the bloom a stretch at a time; the wash's filters a channel at a time and a stretch at a time, their state carried; the ticks laid a touching run at a time | elementwise operations are the same on any stretch; a filter's state carried across stretches (`zi`) gives the samples of the whole along axis 0 (checked); outside the ticks' runs their track is 0.0, and the sum it's added to holds no -0.0 |
+| The kit (`kit.render`) | a track and a motion for each of five drums whether played or not; every sum, pan and placement a new stereo copy; the snare's head and track copies | a drum not played is None; each track scaled where it lies; the others' push on the snare's head made a stretch at a time; the head handed to the wires whole; the toms' ringing a tom at a time; the drums panned and the cymbals placed into the kit's stereo a stretch at a time; the high-pass a channel at a time | the same expressions on each sample, the sums in the same order (kick, snare, toms, hat, ride, crash); a silent drum's pan would add 0.0 |
+| The cello, viola and string section (`cello._bowed`, `_hiss`, `_section`) | the vibrato, the period through three fixes, the hair and hiss (scipy's running means, the gate, the motion, the noise) each a new copy; each desk's two-microphone body through `oaconvolve` whole | each step where the last left it; the weight read only at the fixes' grid; the hair's noise, the hiss's noise (drawn and filtered) and every elementwise step a stretch at a time; a desk through `oa.convolve_columns`: `oaconvolve(x[:, None], h, axes=0)`'s own blocks and shapes, a whole number of groups at a time | normal draws made a stretch at a time are the same draws; the interpolations' spacings (1 and 32) make their slopes exact whether numpy precomputes them or not; the two-column convolution against scipy's on the lengths used (tests) |
+| The mallets (`mallets._bars`: vibes, celesta, marimba, glockenspiel) | the motor's tracks and the discs' gain and delay a dozen copies; the tube through the discs as a second pair of channels; the stem transposed and high-passed whole | the tracks where each step left the last; the tube through the discs added into the bars a stretch at a time; the stem a channel at a time (the celesta's case through `oa.convolve`) | as above |
+| The concertina and accordion | a whole click track for each side, the hiss's noise, `oaconvolve` | the clicks as their short bursts, laid a touching run at a time; the hiss a stretch at a time with the filter's state; `oa.convolve`; each side let go when done | as above |
+| The synth pad's chorus (`analog.chorus`) | the delay tracks' temporaries, the wet pair filtered whole, the mix a new pair | the tracks a stretch at a time and let go once read; the clock filters and the mix a stretch at a time where the wet lies | as above |
+| The piano's soundboard, the harmonica's hands, the electric guitar's spring and cabinet | scipy's `oaconvolve` whole, a channel at a time into new arrays | `oa.convolve` into each channel's column; the piano's high-pass a stretch at a time | `oa.convolve` makes oaconvolve's blocks exactly (2026-09-29) |
+| A worn mix (`mixing.wear`: blues, lo-fi, a machine's worn copy) | `fx.warp`'s positions, gathers and Hermite terms (a dozen copies of the stereo song); every step after a new copy | `fx.warp` a stretch at a time; the song handed to `wear` and let go once read; saturation, the tape's band and the hiss where they lie | each output sample from the same four neighbours by the same expression |
+| The learned voice (`throat`) | each network layer's padded copy, product, gains and GELU each a new array; the pulses' whole-song phase, floors and differences; the envelopes kept through the vocoder; a padded copy before the pan | the three windows laid side by side without the padding; the layers' bias, gains, sums and GELU where they lie (the same matrices into the same products); `pulse_times` a stretch at a time (the running phase carried and added on in order, as `np.cumsum` adds); the envelopes let go once sung; the high-pass a stretch at a time | the matrices multiplied are the same arrays in the same layout; a cumulative sum carried into the next stretch adds the same numbers in the same order |
+
+No kernel changed; the browser's translation needed only its references to the kernels' lines regenerated
+(`web/studio-wasm/tools/transpile.py`).
+
+## How it was verified
+
+- The goldens: H's seed, `b-refrain`, `h-words`, at `SONGBIRD_THREADS=1` and the default.
+- Every style's default H at 1 and 2 threads, the ballad and chamber drawn out (217 to 413 s): each rendition's PCM id
+  the same as the tree before gave it. (The kit's bands drawn out to 345 to 507 s were measured after only: before,
+  they were past the container.)
+- A whole-song choir (gospel, `--choir 3 --seed 7`) and a `--stems` run (country, `--seed 7`) through the command line,
+  at 1 and 2 threads: the records' ids and every stem's samples the same as before (the WAV files differ only in the
+  PEAK chunk's timestamp libsndfile writes).
+- Each part made alone in its style's band (18 of them, the table above): its samples' hash the same as before.
+- `tests/test_lean_parts.py`: a bank of modes against the one it replaced (150 random banks: channels, bends, damping,
+  phases, one rate or many), doubling a stretch at a time against the whole, the interpolated tracks against `np.interp`,
+  the wash and the ticks against whole tracks, the two-column blockwise convolution against scipy's, the tape read
+  against the whole expression, the voice's pulses against the whole tracks'; and against hashes the tree before made:
+  four kits (every piece and implement, brushed, with no snare, cymbals alone), a cello, a viola and a section, two worn
+  mixes, five mallets, a concertina and an accordion, three synthesizers, a piano, a harmonica and an electric guitar,
+  and the throat's network.
+- The suite: 1,624 passed, 12 skipped (`--ignore=tests/test_site.py`).
+
+## Where it is now
+
+On two threads a render holds the program (about 0.3 GB with the throat and the dictionary), the band's sums and the
+voice's bus, and two parts being made at once, each now 2 to 4 MB a second at most (the kit 3, the cello 3.2, the
+steel 3.9 with its spring's long convolution): 5 to 7.5 MB for every second of song, band by band. The heaviest left:
+
+- **The steel's spring** (and the electric guitar's): a spring's impulse response is long enough that oaconvolve's
+  block is a third of the song, so its three or four blocks are one call; made a block at a time, the FFT library
+  would transform a lone row differently. Byte-identical only by keeping scipy's call.
+- **A bowed part's control tracks**: `bowed.run_primed` reads seven per-sample tracks (period, bow position, speed,
+  grip, hair, pole, damping); two are constant from note to note. A kernel that took them as runs would hold two
+  fewer (a kernel change, and the browser's translation with it).
+- **The voice's network**: its matrices are the whole song's frames at once; made a few thousand frames at a time,
+  the BLAS might choose another kernel for the smaller matrices and sum in another order.
+- **The mix's sums**: the voice's bus kept as its mono sound and two gains (above), and the parts' stems through their
+  channel strips a stretch at a time where the strip allows, would each save a stereo copy of the song.
