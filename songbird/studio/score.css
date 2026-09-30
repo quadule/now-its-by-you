@@ -46,7 +46,7 @@ code { font: 12px var(--mono); background: var(--wash); padding: 0 4px; border-r
 .chip:hover { border-color: var(--hand); }
 .chip.on { border-color: var(--ink); background: var(--wash); color: var(--ink); text-shadow: .35px 0 0 currentColor, -.15px 0 0 currentColor; }
 .chip.on.you { border-color: var(--hand); background: var(--hand-wash); color: var(--hand); }
-.chip.on.you::after { content: "✎"; position: absolute; top: -8px; right: -5px; font-size: 10px; line-height: 1; padding: 1px 2px; border-radius: 6px; background: var(--card); text-shadow: none; pointer-events: none; }
+.chip.on.you::after { content: "✎" / ""; position: absolute; top: -8px; right: -5px; font-size: 10px; line-height: 1; padding: 1px 2px; border-radius: 6px; background: var(--card); text-shadow: none; pointer-events: none; }
 .chip.drawn { border-style: dashed; border-color: var(--ink-2); }
 .chips { display: flex; flex-wrap: wrap; gap: 5px; }
 select.sel, .inspector select, .pop select { border: 1px solid var(--rule-strong); background: var(--card); border-radius: var(--radius); padding: 4px 6px; font-size: 13px; max-width: 100%; }
