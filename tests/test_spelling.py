@@ -20,9 +20,13 @@ G = load(Path(__file__).parent.parent / "songs" / "h-now-its-by-you.json")
 PC = {"C": 0, "D": 2, "E": 4, "F": 5, "G": 7, "A": 9, "B": 11}
 ACC = {"": 0, "♯": 1, "♭": -1, "𝄪": 2, "𝄫": -2}
 KEYS = [(t, m) for t in range(12) for m in ("ionian", "aeolian")]
-# the signatures a musician expects of each named key (C♯ major seven sharps, A♭ minor seven flats)
-MAJOR = {"C": 0, "C♯": 7, "D": 2, "E♭": -3, "E": 4, "F": -1, "F♯": 6, "G": 1, "A♭": -4, "A": 3, "B♭": -2, "B": 5}
-MINOR = {"C": -3, "C♯": 4, "D": -1, "E♭": -6, "E": 1, "F": -4, "F♯": 3, "G": -2, "A♭": -7, "A": 0, "B♭": -5, "B": 2}
+# the name and signature a musician writes each key by: of its two names the one with the fewer sharps or flats
+# (D♭ major's five flats, not C♯ major's seven sharps; G♯ minor's five sharps, not A♭ minor's seven flats), the
+# usual name on a tie (F♯ major, E♭ minor); by the tonic's pitch class
+MAJOR = {0: ("C", 0), 1: ("D♭", -5), 2: ("D", 2), 3: ("E♭", -3), 4: ("E", 4), 5: ("F", -1), 6: ("F♯", 6),
+         7: ("G", 1), 8: ("A♭", -4), 9: ("A", 3), 10: ("B♭", -2), 11: ("B", 5)}
+MINOR = {0: ("C", -3), 1: ("C♯", 4), 2: ("D", -1), 3: ("E♭", -6), 4: ("E", 1), 5: ("F", -4), 6: ("F♯", 3),
+         7: ("G", -2), 8: ("G♯", 5), 9: ("A", 0), 10: ("B♭", -5), 11: ("B", 2)}
 
 
 def pc_of(name: str) -> int:
@@ -32,12 +36,12 @@ def pc_of(name: str) -> int:
 @pytest.mark.parametrize("tonic,mode", KEYS)
 def test_every_major_and_minor_key_writes_its_notes_on_seven_letters(tonic, mode):
     names = scale_names(tonic, mode)
-    assert names[0] == NOTE_NAMES[tonic]  # the key keeps the name it has always had
+    assert names[0] == (MAJOR if mode == "ionian" else MINOR)[tonic][0]  # the name a musician writes it by
     assert [n[0] for n in names] == [("CDEFGAB" * 2)["CDEFGAB".index(names[0][0]) + d] for d in range(7)]
     assert [pc_of(n) for n in names] == [(tonic + s) % 12 for s in MODES[mode]]
     assert all(ACC[n[1:]] in (-1, 0, 1) for n in names)  # no double sharps or flats in a major or minor key
     signature = sum(ACC[n[1:]] for n in names)
-    assert signature == key_signature(tonic, mode) == (MAJOR if mode == "ionian" else MINOR)[NOTE_NAMES[tonic]]
+    assert signature == key_signature(tonic, mode) == (MAJOR if mode == "ionian" else MINOR)[tonic][1]
     twelve = spelling(tonic, mode)
     assert [pc_of(n) for n in twelve] == list(range(12))
     for d, n in enumerate(names):  # the key's own notes as the scale has them
@@ -61,7 +65,8 @@ def test_c_sharp_minor_is_spelt_with_sharps_where_the_page_had_flats():
     assert chord_name("iim7b5", 61, "aeolian") == "D♯m7♭5" and chord_name("VII7sus4", 61, "aeolian") == "B7sus4"
     assert chord_name("V7/7", 61, "aeolian") == "G♯7/F♯"
     assert note_name(68, 61, "aeolian") == "G♯4" and note_name(63, 61, "aeolian") == "D♯4"
-    assert note_name(60, 61, "ionian") == "B♯3"  # C♯ major's seventh: B♯, in the octave below C4
+    assert note_name(59, 63, "aeolian") == "C♭4"  # E♭ minor's sixth: C♭, in the octave of its letter above B3
+    assert note_name(60, 61, "ionian") == "C4" and chord_name("V", 61, "ionian") == "A♭"  # D♭ major, not C♯
     assert [n for n in spelling(61, "aeolian")] == ["C", "C♯", "D", "D♯", "E", "F", "F♯", "G", "G♯", "A", "A♯", "B"]
     assert root_name("bVII", 60, "ionian") == "B♭" and root_name("#IV", 65, "ionian") == "B"
     assert piano.ascii_spelling(61, "aeolian")[8] == "G#"

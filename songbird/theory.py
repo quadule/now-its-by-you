@@ -110,15 +110,18 @@ def _spelt(letter: int, alter: int) -> str:
 
 
 def tonic_letter(tonic: int, mode: str) -> tuple[int, int]:
-    """The tonic's letter and accidental: its usual name (NOTE_NAMES), unless that key would need more than seven
-    sharps or flats (C♯ lydian, G♭ locrian), where the other name is the key's."""
+    """The tonic's letter and accidental: the name a musician writes the key by, the one of its two names with the
+    fewer sharps or flats (D♭ major's five flats, not C♯ major's seven sharps; G♯ minor's five sharps, not A♭
+    minor's seven flats; the artist, 2026-09-30), its usual name (NOTE_NAMES) when they tie (F♯ major, E♭ minor)
+    or it has only one."""
     pc = tonic % 12
     name = NOTE_NAMES[pc]
     letter = LETTERS.index(name[0])
     alter = _alter(pc, letter)
-    if abs(signature_of(pc, letter, mode)) > 7:
-        letter = (letter + (1 if alter > 0 else -1)) % 7
-        alter = _alter(pc, letter)
+    if alter:
+        other = (letter + (1 if alter > 0 else -1)) % 7
+        if abs(signature_of(pc, other, mode)) < abs(signature_of(pc, letter, mode)):
+            letter, alter = other, _alter(pc, other)
     return letter, alter
 
 

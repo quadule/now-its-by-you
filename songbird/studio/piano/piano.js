@@ -48,7 +48,7 @@
 
   // ------------------------------------------------------------------ names
   // spelt by the key's signature, as the studio spells (songbird/theory.py spelling): each of the key's notes on its
-  // own letter (G# in C# minor, E# in C# major), another natural if it can be, else sharp or flat as the key is
+  // own letter (G# in C# minor, E# in F# major), another natural if it can be, else sharp or flat as the key is
   const LETTERS = "CDEFGAB", NATURAL = [0, 2, 4, 5, 7, 9, 11];
   const MODES = { major: [0, 2, 4, 5, 7, 9, 11], ionian: [0, 2, 4, 5, 7, 9, 11], dorian: [0, 2, 3, 5, 7, 9, 10],
     phrygian: [0, 1, 3, 5, 7, 8, 10], lydian: [0, 2, 4, 6, 7, 9, 11], mixolydian: [0, 2, 4, 5, 7, 9, 10],
@@ -59,7 +59,10 @@
     const steps = MODES[mode] || MODES.major, base = ["C", "C#", "D", "Eb", "E", "F", "F#", "G", "Ab", "A", "Bb", "B"];
     const sig = (l) => steps.reduce((n, s, d) => n + alter(pc0 + s, l + d), 0);
     let l = LETTERS.indexOf(base[pc0][0]);
-    if (Math.abs(sig(l)) > 7) l = (l + (alter(pc0, l) > 0 ? 1 : 6)) % 7;  // no key of eight sharps: D♭ lydian
+    if (alter(pc0, l)) {  // of the key's two names the one with the fewer sharps or flats: Db major, G# minor
+      const other = (l + (alter(pc0, l) > 0 ? 1 : 6)) % 7;
+      if (Math.abs(sig(other)) < Math.abs(sig(l))) l = other;
+    }
     const s = sig(l), own = new Set(steps.map((x) => (pc0 + x) % 12)), out = base.slice();
     for (let pc = 0; pc < 12; pc++) {
       if (NATURAL.includes(pc) && !own.has(pc)) out[pc] = LETTERS[NATURAL.indexOf(pc)];

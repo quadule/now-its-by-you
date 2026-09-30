@@ -12,10 +12,12 @@ const end = source.indexOf('    return out;\n  }\n', start) + '    return out;\n
 const inPage = vm.runInNewContext(`${source.slice(start, end)}; spelling`);
 const spelling = (pc, mode) => [...inPage(pc, mode)];  // an array of this realm, to compare
 
-test('the piano page spells by the key signature: G# in C# minor, E# in C# major, flats in a flat key', () => {
+test('the piano page spells by the key signature: G# in C# minor, E# in F# major, flats in a flat key', () => {
   assert.deepEqual(spelling(1, 'minor'), ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B']);
-  const cSharp = spelling(1, 'major');
-  assert.equal(cSharp[5], 'E#'); assert.equal(cSharp[0], 'B#'); assert.equal(cSharp[8], 'G#');
+  const dFlat = spelling(1, 'major');  // D flat major (five flats), not C sharp major (seven sharps)
+  assert.equal(dFlat[1], 'Db'); assert.equal(dFlat[0], 'C'); assert.equal(dFlat[8], 'Ab');
+  assert.equal(spelling(6, 'major')[5], 'E#');  // F sharp major's seventh
+  assert.equal(spelling(8, 'minor')[8], 'G#');  // G sharp minor (five sharps), not A flat minor (seven flats)
   assert.equal(spelling(3, 'minor')[11], 'Cb');  // E flat minor's sixth
   assert.equal(spelling(1, 'lydian')[1], 'Db');  // no key of eight sharps: D flat lydian
   assert.deepEqual(spelling(0, 'major'), ['C', 'C#', 'D', 'Eb', 'E', 'F', 'F#', 'G', 'Ab', 'A', 'Bb', 'B']);

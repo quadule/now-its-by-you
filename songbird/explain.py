@@ -47,6 +47,7 @@ TIMELINE_DAYS = 1095  # three years either way
 # ---------------------------------------------------------------- the page's words
 
 NOTES = ("C", "C♯", "D", "E♭", "E", "F", "F♯", "G", "A♭", "A", "B♭", "B")
+NOTES_BOTH = ("C", "C♯/D♭", "D", "D♯/E♭", "E", "F", "F♯/G♭", "G", "G♯/A♭", "A", "A♯/B♭", "B")
 MODES = {
     "ionian": ("major", "the plain major"),
     "mixolydian": ("mixolydian", "a major with a softer seventh: the old folk major"),
@@ -149,8 +150,8 @@ def note(midi: int) -> str:
 
 
 def key_words(tonic: int, mode: str) -> str:
-    """'D major', 'E mixolydian', 'B minor'; a key that would need more than seven sharps or flats by its tonic's
-    usual name by its other (D♭ lydian, not C♯)."""
+    """'D major', 'E mixolydian', 'B minor': the tonic by the name with the fewer sharps or flats (D♭ major, G♯
+    minor; theory.tonic_letter)."""
     from .theory import scale_names
 
     return f"{scale_names(tonic, mode)[0]} {MODES.get(mode, (mode, ''))[0]}"
@@ -1379,7 +1380,8 @@ def start(ctx: Context, studio) -> dict:
     """What the page needs once: the song, the machine, the bounds of every choice, and what's available."""
     genome = ctx.genome
     b = edits_mod.bounds(genome)
-    b["tonic"]["names"] = {str(m): note(m) for m in range(b["tonic"]["min"], b["tonic"]["max"] + 1)}
+    # a black key by both its names (C♯/D♭): the key it makes takes whichever a musician writes it by (theory.tonic_letter)
+    b["tonic"]["names"] = {str(m): NOTES_BOTH[m % 12] for m in range(b["tonic"]["min"], b["tonic"]["max"] + 1)}
     b["mode"]["names"] = {m: MODES.get(m, (m, ""))[0] for m in b["mode"]["options"]}
     b["mode"]["glosses"] = {m: mode_gloss(m) for m in b["mode"]["options"]}
     return {
