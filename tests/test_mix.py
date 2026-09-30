@@ -261,7 +261,7 @@ def test_every_instrument_finds_its_strip():
     # reed strip that keeps their left hand's bass; a kit, a banjo and a mandolin have strips of their own
     specific = {"organ": "organ", "harmonium": "organ", "synth-pad": "organ", "accordion": "squeezebox",
                 "concertina": "squeezebox", "kit": "kit", "banjo": "banjo", "mandolin": "mandolin",
-                "harmonica": "harmonica"}
+                "harmonica": "harmonica", "melodica": "harmonica"}  # (a melodica: a lead reed, as a harmonica is)
     for name in instruments.known():
         role = mixing.role_of(name)
         assert role in mixing.ROLES and role not in ("voice", "choir"), name
