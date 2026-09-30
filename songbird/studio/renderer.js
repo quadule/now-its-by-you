@@ -212,7 +212,13 @@
     } catch (e) { return "auto"; }
   }
 
-  function discover(get) {  // the bundle the studio serves, asked once (a local studio has none: 404)
+  // whether the studio serves the browser's bundle at all (the server marks its page: studio.py); a local studio
+  // doesn't, and isn't asked
+  function offered() {
+    if (typeof document === "undefined") return true;  // not a page (the tests): ask as told
+    try { return !!document.querySelector('meta[name="studio-render"]'); } catch (e) { return false; }
+  }
+  function discover(get) {  // the bundle the studio serves, asked once
     if (!shared.found) {
       shared.found = Promise.resolve().then(get).then((b) => (b && b.app && b.pyodide ? b : null), () => null)
         .then((b) => { shared.bundle = b; changed(); return b; });
@@ -264,7 +270,7 @@
       if (!spawn || !env.worker) return { where: "server", why: "this browser can't run the singer" };
       const mode = modeOf(storage);
       if (mode === "server") return { where: "server", why: "you chose the server" };
-      const bundle = await discover(() => ask("/render/bundle.json"));
+      const bundle = offered() ? await discover(() => ask("/render/bundle.json")) : null;
       return choose(mode, env, bundle, shared.failures, size);
     }
 
@@ -411,7 +417,7 @@
     };
     shared.listeners.add(show);
     box.addEventListener("change", (e) => { if (e.target?.name === "makeWhere") setMode(e.target.value); });
-    discover(() => fetch("/render/bundle.json", { credentials: "same-origin" }).then((r) => (r.ok ? r.json() : null)));
+    if (offered()) discover(() => fetch("/render/bundle.json", { credentials: "same-origin" }).then((r) => (r.ok ? r.json() : null)));
     show();
   }
 

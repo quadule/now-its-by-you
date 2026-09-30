@@ -112,6 +112,7 @@ def test_the_page_may_play_what_the_browser_made_and_is_otherwise_as_strict(publ
     studio, port = public
     status, head, page = ask(port, "GET", "/")
     assert status == 200 and b'id="makeWhere"' in page
+    assert b'<meta name="studio-render" content="bundle">' in page  # so the page asks for the bundle
     policy = head["Content-Security-Policy"]
     assert "media-src 'self' blob:" in policy and "script-src 'self';" in policy and "eval" not in policy
     local = S.Studio(None, str(LEAD), "fictional:ada", out=home / "out2")
@@ -119,8 +120,9 @@ def test_the_page_may_play_what_the_browser_made_and_is_otherwise_as_strict(publ
     threading.Thread(target=server.serve_forever, daemon=True).start()
     try:
         port2 = server.server_address[1]
-        status, head, _ = ask(port2, "GET", "/")
+        status, head, page2 = ask(port2, "GET", "/")
         assert "media-src 'self';" in head["Content-Security-Policy"]
+        assert b'name="studio-render"' not in page2  # a local studio's page doesn't ask for a bundle it hasn't got
         assert ask(port2, "GET", "/render/bundle.json")[0] == 404  # a local studio sings the song itself
         assert post(port2, local, "/api/render/spec", {"edits": {}, "section": 1})[0] == 404
     finally:

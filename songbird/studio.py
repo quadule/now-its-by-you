@@ -1776,6 +1776,8 @@ class Handler(BaseHTTPRequestHandler):
             if page_name:
                 token = f"{self.studio.token}.{version.group(1)}" if version else self.studio.token
                 page = (PAGE / page_name).read_text().replace("{{token}}", token)
+                if self.studio.browser is not None:  # the page asks for the browser's bundle only when there is one
+                    page = page.replace('<meta name="studio-token"', '<meta name="studio-render" content="bundle">\n<meta name="studio-token"', 1)
                 if singing is not None:
                     page = singing.page(page)
                 extra = []
