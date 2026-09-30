@@ -360,3 +360,22 @@ def test_the_drum_machines_four_on_the_floor_is_one_choice_and_the_old_name_stil
     kept = E.resolve(G, None, ADA, DAY, E.check(G, {**style, old: "machine"})[0])
     assert kept.marks[old] == {"value": "four", "was": "four", "locked": True}, kept.marks[old]
     assert realize(G, kept.params, lyrics=kept.lyrics) == realize(G, plain.params, lyrics=plain.lyrics)  # the same song
+
+
+def test_a_breakdown_keeps_the_synth_bass_as_it_keeps_a_bass():
+    """The synth bass is registered with the synths (family "synth"), so the arranger left it out of the rhythm
+    and it sat out the first half of a breakdown's last refrain; it is the bass as the bass is (the artist,
+    2026-09-30: fix the bugs)."""
+    from songbird import idioms
+
+    assert idioms.is_bass("synthbass") and idioms.rhythmic("synthbass") and idioms.rhythmic("drummachine")
+    assert not idioms.rhythmic("synthlead") and not idioms.rhythmic("arp")
+    for style in ("synthfolk", "lofi"):
+        base = choose_params(G, None, None, None, style=style)
+        params = replace(base, form=tuple(FORM), style=replace(base.style, breakdown=True, entrances=False))
+        a, b = span(params, "refrain:2")
+        notes = [n.start for n in realize(G, params).notes if n.part == "synthbass" and a - 0.1 <= n.start < b]
+        if not notes:
+            continue  # this style's band has no synth bass
+        first, second = sum(t < (a + b) / 2 for t in notes), sum(t >= (a + b) / 2 for t in notes)
+        assert first >= 0.5 * second > 0, (style, first, second)
