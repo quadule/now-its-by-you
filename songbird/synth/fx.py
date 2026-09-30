@@ -228,6 +228,104 @@ def as_mono(x: np.ndarray) -> tuple[np.ndarray, np.ndarray] | None:
     return x @ gains, gains
 
 
+# --- running filters over a whole song ------------------------------------------------------------------
+
+
+@njit(cache=True, nogil=True)
+def _running_mean(x: np.ndarray, size: int, out: np.ndarray) -> np.ndarray:
+    """scipy.ndimage's uniform_filter1d, mode "nearest", as it computes it: a running sum over the extended
+    line (each value in, the one `size` back out), divided by size at every sample. The values leaving the
+    sum are kept in a ring, so out may be x itself."""
+    n = x.shape[0]
+    size1 = size // 2
+    ring = np.empty(size)
+    total = 0.0
+    for j in range(size):
+        v = x[min(max(j - size1, 0), n - 1)]
+        ring[j] = v
+        total += v
+    fs = float(size)
+    out[0] = total / fs
+    for i in range(1, n):
+        k = (i - 1) % size
+        gone = ring[k]
+        v = x[min(max(i - 1 + size - size1, 0), n - 1)]
+        ring[k] = v
+        total += v - gone
+        out[i] = total / fs
+    return out
+
+
+def running_mean(x: np.ndarray, size: int, out: np.ndarray | None = None) -> np.ndarray:
+    """uniform_filter1d(x, size, mode="nearest") of a 1-D float64 signal, to the bit, without the two copies
+    of the line scipy makes; out may be x itself (the mean where it lies)."""
+    x = np.ascontiguousarray(x, dtype=np.float64)
+    if not len(x):
+        return x.copy() if out is None else out
+    return _running_mean(x, max(int(size), 1), np.empty_like(x) if out is None else out)
+
+
+@njit(cache=True, nogil=True)
+def _sliding_min(x: np.ndarray, before: int, after: int, out: np.ndarray) -> np.ndarray:
+    """out[i] = the least of x[i - before .. i + after] (clipped to the signal, as mode "nearest" extends it),
+    by a queue of the candidates (their values kept, so out may be x itself when after >= 0)."""
+    n = x.shape[0]
+    cap = before + after + 2
+    qi = np.empty(cap, np.int64)
+    qv = np.empty(cap)
+    head = 0
+    count = 0
+    nxt = 0
+    for i in range(n):
+        hi = min(max(i + after, 0), n - 1)
+        lo = min(max(i - before, 0), n - 1)
+        while nxt <= hi:
+            v = x[nxt]
+            while count > 0 and qv[(head + count - 1) % cap] >= v:
+                count -= 1
+            qi[(head + count) % cap] = nxt
+            qv[(head + count) % cap] = v
+            count += 1
+            nxt += 1
+        while qi[head] < lo:
+            head = (head + 1) % cap
+            count -= 1
+        out[i] = qv[head]
+    return out
+
+
+def sliding_min(x: np.ndarray, size: int, origin: int = 0, out: np.ndarray | None = None) -> np.ndarray:
+    """minimum_filter1d(x, size, mode="nearest", origin=origin) of a 1-D float64 signal (a least value is the
+    same value however it is found), without scipy's copies of the line; out may be x itself."""
+    x = np.ascontiguousarray(x, dtype=np.float64)
+    if not len(x):
+        return x.copy() if out is None else out
+    before = size // 2 + origin
+    after = size - 1 - before
+    if out is x and after < 0:
+        out = None
+    return _sliding_min(x, before, after, np.empty_like(x) if out is None else out)
+
+
+@njit(cache=True, nogil=True)
+def _hold(playing: np.ndarray, track: np.ndarray) -> None:
+    last = 0
+    for i in range(playing.shape[0]):
+        if playing[i]:
+            last = i
+        else:
+            track[i] = track[last]
+
+
+def hold(playing: np.ndarray, *tracks: np.ndarray) -> None:
+    """Each track, where `playing` is false, holds its value at the last sample that was (the first sample's
+    before any): track[np.maximum.accumulate(np.where(playing, np.arange(n), 0))], made where it lies (a
+    held sample is copied from one that never changes)."""
+    playing = np.ascontiguousarray(playing, dtype=np.bool_)
+    for track in tracks:
+        _hold(playing, track)
+
+
 # --- levels and dynamics ---------------------------------------------------------------
 
 

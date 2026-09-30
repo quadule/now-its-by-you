@@ -35,7 +35,6 @@ from dataclasses import dataclass, fields
 from functools import partial
 
 import numpy as np
-from scipy.ndimage import minimum_filter1d, uniform_filter1d
 
 from . import fx, room, threads
 from .master import limit, loudness
@@ -408,7 +407,7 @@ def lead_lift(sections, energies, sr: int, length: int) -> np.ndarray | None:
             lift[a:b] = np.clip(LEAD_ARC[0] * (float(energy) - ENERGY_REST), LEAD_ARC[1], LEAD_ARC[2])
     lift[int(float(sections[-1][2]) * sr):] = lift[min(int(float(sections[-1][2]) * sr), length) - 1]  # the ring holds
     lift[: int(max(0.0, float(sections[0][1])) * sr)] = lift[min(int(max(0.0, float(sections[0][1])) * sr), length - 1)]
-    return uniform_filter1d(lift, max(int(LEAD_ARC[3] * sr), 1), mode="nearest")
+    return fx.running_mean(lift, max(int(LEAD_ARC[3] * sr), 1), out=lift)  # uniform_filter1d's, where it lies
 
 
 # --- the mix --------------------------------------------------------------------------------
@@ -452,6 +451,7 @@ def mix_made(parts: list, length: int, sr: int, seed: int = 0, params: MixParams
         return np.zeros((0, 2))
     makers = dict(parts)
     rise = None if lift is None else (10.0 ** (np.asarray(lift, dtype=float)[:length] / 20.0))[:, None]
+    lift = None
     balance = dict(p.balance)
     roles = {name: role_of(name) for name in sorted(makers)}
     nudge = {name: balance.get(name, balance.get(role, 0.0)) for name, role in roles.items()}  # a name wins over its role
@@ -548,6 +548,7 @@ def mix_made(parts: list, length: int, sr: int, seed: int = 0, params: MixParams
                 else:
                     choir = result
                 continue
+            rise = None  # the singers are made: nothing else rises with the arrangement
             if result is None:
                 continue
             strip, (where, x) = ROLES[role], result
@@ -564,7 +565,7 @@ def mix_made(parts: list, length: int, sr: int, seed: int = 0, params: MixParams
         progress("mix")
     # from here each long signal is let go as soon as it has been used, and treated where it lies when nothing
     # else holds it (the same samples as a treated copy)
-    del rise, lift
+    rise = None
     gain = 1.0
     if np.any(band):
         eq = fx.design(BAND_EQ, sr)
@@ -583,11 +584,13 @@ def mix_made(parts: list, length: int, sr: int, seed: int = 0, params: MixParams
         if singing is not None:
             # where the voice rests a while (the intro, the turns), the band is ridden up, as an engineer would;
             # the ride goes up and comes back down inside the rest, so the band is down again before the voice returns
-            resting = minimum_filter1d((singing < 0.05).astype(float), int(RIDE[1] * sr), mode="nearest")
-            rest = uniform_filter1d(resting, int(RIDE[1] * sr / 2), mode="nearest")
-            del resting
-            ride = 10.0 ** (RIDE[0] * p.duck * rest / 20.0)
-            del rest
+            # (minimum_filter1d's and uniform_filter1d's, and the ride's gain, each where the last left it)
+            ride = (singing < 0.05).astype(float)
+            fx.sliding_min(ride, int(RIDE[1] * sr), out=ride)
+            fx.running_mean(ride, int(RIDE[1] * sr / 2), out=ride)
+            ride *= RIDE[0] * p.duck
+            ride /= 20.0
+            np.power(10.0, ride, out=ride)
             band *= ride[:, None]
             band_send *= ride[:, None]
             del ride

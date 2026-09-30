@@ -20,11 +20,10 @@ import numpy as np
 import soundfile as sf
 from numpy.lib.stride_tricks import sliding_window_view
 from numba import njit
-from scipy.ndimage import minimum_filter1d
 from scipy.signal import firwin
 
 from . import threads
-from .fx import _biquads
+from .fx import _biquads, sliding_min
 
 TARGET_LUFS = -14.0
 CEILING_DB = -1.0  # dBTP
@@ -208,7 +207,7 @@ def limit(x: np.ndarray, sr: int, ceiling_db: float = CEILING_DB, lookahead: flo
     if need.min() >= 1.0:
         return x
     ahead = max(1, int(lookahead * sr))
-    held = minimum_filter1d(need, size=ahead + 1, origin=-((ahead + 1) // 2))  # min of need[n .. n + ahead]
+    held = sliding_min(need, ahead + 1, origin=-((ahead + 1) // 2))  # min of need[n .. n + ahead] (minimum_filter1d's)
     recovered = _recover(held, float(np.exp(-1.0 / (release * sr))))
     c = np.concatenate([[0.0], np.cumsum(np.concatenate([np.full(ahead, recovered[0]), recovered]))])
     gain = (c[ahead + 1 :] - c[: -ahead - 1]) / (ahead + 1)  # mean of recovered[n - ahead .. n]

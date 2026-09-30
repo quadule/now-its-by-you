@@ -142,3 +142,31 @@ def test_a_mix_of_stems_made_as_it_goes_is_the_mix_of_them_all(monkeypatch):
         assert told == ["voice", "choir1", "choir2", "bass", "guitar", "lute", "shaker", "mix"]
         for key in ("voice", "choir", "band", "wet", "glue", "singing"):
             assert same(taps_a[key], taps_b[key])
+
+
+def test_running_filters_are_scipys():
+    from scipy.ndimage import minimum_filter1d, uniform_filter1d
+
+    rng = np.random.default_rng(6)
+    for n in (1, 2, 5, 101, 30_011):
+        for size in (1, 2, 3, 7, 176, 2205, 66150):
+            for x in (rng.standard_normal(n), (rng.random(n) < 0.3).astype(float), np.cumsum(rng.standard_normal(n))):
+                mine = x.copy()
+                assert same(fx.running_mean(x, size), uniform_filter1d(x, size, mode="nearest"))
+                assert same(fx.running_mean(mine, size, out=mine), uniform_filter1d(x, size, mode="nearest"))
+                for origin in {0, -(size // 2), -1 if size > 2 else 0}:
+                    mine = x.copy()
+                    want = minimum_filter1d(x, size, mode="nearest", origin=origin)
+                    assert same(fx.sliding_min(x, size, origin), want)
+                    assert same(fx.sliding_min(mine, size, origin, out=mine), want)
+
+
+def test_holding_a_track_through_rests_is_the_gather_it_replaced():
+    rng = np.random.default_rng(7)
+    for n in (1, 10, 5000):
+        playing = rng.random(n) < 0.4
+        playing[: n // 10] = False
+        track = rng.standard_normal(n)
+        want = track[np.maximum.accumulate(np.where(playing, np.arange(n), 0))]
+        fx.hold(playing, track)
+        assert same(track, want)

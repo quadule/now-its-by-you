@@ -23,6 +23,7 @@ import numpy as np
 from numba import njit
 
 from ..theory import midi_to_hz
+from .fx import hold
 
 
 @njit(cache=True, nogil=True)
@@ -277,9 +278,7 @@ def tracks(notes, sr: int, length: int, rng: np.random.Generator, *, vibrato: fl
     # the free string rings on at its last pitch.
     playing = bow_v != 0.0
     if playing.any():
-        idx = np.maximum.accumulate(np.where(playing, np.arange(length), 0))
-        period = period[idx]
-        bridge_len = bridge_len[idx]
+        hold(playing, period, bridge_len)  # each where it lies: track[the last playing sample]
     return period, bridge_len, bow_v, bow_f, jolt
 
 
@@ -295,5 +294,12 @@ def bow(notes, sr: int, length: int, rng: np.random.Generator, *, vibrato: float
     if not notes:
         return np.zeros(length)
     period, bridge_len, bow_v, grip, catch = tracks(notes, sr, length, rng, vibrato=vibrato, wear=wear)
-    hair = rng.standard_normal(length) * noise * 0.02 * np.abs(bow_v) + catch
-    return run(period, bridge_len, bow_v, np.maximum(grip, 1e-4), hair, POLE, GAIN)
+    # the hair's noise and the grip's floor, each made where it lies: the same products, sums and maxima
+    hair = rng.standard_normal(length)
+    hair *= noise
+    hair *= 0.02
+    hair *= np.abs(bow_v)
+    hair += catch
+    del catch
+    np.maximum(grip, 1e-4, out=grip)
+    return run(period, bridge_len, bow_v, grip, hair, POLE, GAIN)
