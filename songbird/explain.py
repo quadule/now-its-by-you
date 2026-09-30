@@ -826,6 +826,22 @@ def band_card(v: Version) -> dict:
                  styled=bool(band.lineup))
 
 
+def loop_words(genome, params) -> str:
+    """A style's loop (house's, dub's riddim) in words, its chords named in the key: "a loop of its own, Bm7 and
+    Gmaj7, under the song"; or that the song's own chords are kept."""
+    from . import style as style_mod
+    from .theory import chord_name
+
+    loop = style_mod.loop_of(genome, params)
+    sdef = style_mod.of(params.style)
+    where = "under the version" if sdef.looped == ("version",) else "under the song"
+    if loop is None:
+        return "the song's own chords"
+    names = [chord_name(symbol, params.tonic, params.mode) for symbol in loop]
+    said = ", ".join(names[:-1]) + " and " + names[-1] if len(names) > 1 else names[0]
+    return f"a {'riddim' if sdef.looped == ('version',) else 'loop'} of its own, {said}, {where}"
+
+
 def style_card(v: Version) -> dict:
     """The tradition the song is played in (songbird.style): its feel and the arrangement's options, why,
     and every style and feel a person could choose."""
@@ -856,7 +872,11 @@ def style_card(v: Version) -> dict:
                BACKING_NAMES.get(s.backing, ""),
                ENDING_NAMES.get(s.ending, "") if s.ending and s.ending != "ring" else "",
                f"a breakdown after the {ORDINALS[s.drop - 1]} refrain, the singer with the pad, and the drop"
-               if 0 < s.drop <= len(ORDINALS) else ""]
+               if 0 < s.drop <= len(ORDINALS) else "",
+               loop_words(v.context.genome, v.params) if sdef.loops else "",
+               f"after the {ORDINALS[s.dissolve - 1]} refrain the song dissolves into its version: the singer in "
+               f"fragments thrown into the echo, the melodica taking the tune in pieces"
+               if 0 < s.dissolve <= len(ORDINALS) else ""]
     about = sdef.about.split(":", 1)[-1].strip() if name != "ballad" else \
         "harp, cittern, whistle, fiddle, guitar, upright bass, frame drum and a reed drone"
     detail = "; ".join(x for x in [about, *options] if x)
