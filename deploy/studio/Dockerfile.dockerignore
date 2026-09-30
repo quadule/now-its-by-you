@@ -1,6 +1,7 @@
 # The image needs the program, its songs, its locked dependencies and the tools that measure a take sung in
 # the browser (tools/, webstudio/); nothing else of the checkout
-# (no renders, recordings, volunteers' takes, harvested voices, or the site).
+# (no renders, recordings, volunteers' takes, harvested voices, or the site); and, for the bundle a browser makes the
+# song with (built in the image's first stage), web/studio-wasm without what npm and its own tools fetch or build.
 *
 !pyproject.toml
 !uv.lock
@@ -12,6 +13,9 @@
 !webstudio/
 !deploy/studio/warm.py
 !deploy/studio/entrypoint.sh
+!web/studio-wasm/
+web/studio-wasm/node_modules
+web/studio-wasm/dist
 **/__pycache__
 **/*.pyc
 **/.DS_Store

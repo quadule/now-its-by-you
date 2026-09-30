@@ -21,6 +21,7 @@ services:
       --machine ${STUDIO_MACHINE:-none}
       --client-ip-header CF-Connecting-IP
       ${STUDIO_SINGING:---web-singing --sing-kit /kit}
+      ${STUDIO_BROWSER:---browser-render /opt/studio/render}
       ${STUDIO_ARGS:-}
     environment:
       SONGBIRD_THREADS: ${SONGBIRD_THREADS:-2}  # a render's threads (the same bytes whatever it says)
