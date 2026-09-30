@@ -128,6 +128,7 @@
     b.textContent = on ? "■" : "▶";
     b.classList.toggle("playing", on);
     b.setAttribute("aria-label", on ? "Stop (Space)" : "Play (Space)");
+    b.title = on ? "Stop (Space): back to where it started" : "Play what is selected (Space; Shift+Space sung); press again to stop";
   }
   function tick(beat, fraction) {  // composer.js, as the sketch plays (null when it stops)
     const head = $("gridHead");
@@ -1128,7 +1129,7 @@
     if (!a || document.querySelector("dialog[open]")) return;
     if (e.target.closest?.(".sbc-note, .sbc-roll-scroll") && a.action === "step") return;  // a note's own arrows (composer.js)
     // Space plays from the page, the grid and ▶ ■; on another button, a link or a field it presses it
-    if (a.action === "play" && e.target.closest?.("button, a, summary, select, input") && !e.target.closest("#grid") && !e.target.matches("#tPlay, #tStop")) return;
+    if (a.action === "play" && e.target.closest?.("button, a, summary, select, input") && !e.target.closest("#grid") && !e.target.matches("#tPlay")) return;
     if (a.action === "play" && e.target.matches?.("input[type=checkbox], input[type=radio]")) return;
     switch (a.action) {
       case "play": e.preventDefault(); play(a.how); break;
@@ -1181,7 +1182,6 @@
     $("viewWhat").addEventListener("click", () => { const a = $("viewAbout"); a.hidden = !a.hidden; $("viewWhat").setAttribute("aria-expanded", String(!a.hidden)); });
     for (const b of document.querySelectorAll("[data-how]")) b.addEventListener("click", () => setHow(b.dataset.how));
     $("tPlay").addEventListener("click", () => play());
-    $("tStop").addEventListener("click", stopAll);
     $("tLoop").addEventListener("click", () => toggle("tLoop"));
     $("tClick").addEventListener("click", () => toggle("tClick"));
     $("popLoop").addEventListener("change", () => toggle("tLoop"));

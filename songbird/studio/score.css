@@ -500,7 +500,7 @@ dialog.help .keys td { padding: 3px 0; }
   .yours .link { display: none; }
   .brand .help > span:last-child { display: none; }
   .transport { padding: 6px 8px; gap: 4px; }
-  .transport .wide, .transport .keychip, #tStop { display: none !important; }
+  .transport .wide, .transport .keychip { display: none !important; }
   .transport .right { margin-left: 0; gap: 4px; }
   .transport .right .btn { padding: 6px 8px; min-height: 36px; }
   .tbtn.play { width: 44px; height: 38px; }
