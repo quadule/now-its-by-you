@@ -237,3 +237,30 @@ def test_the_seed_pages_words_are_timed_as_the_file_sang_them(tmp_path):
         [s["start"] for line in lines for s in line["syllables"]], abs=1e-3)
     assert timed["duration"] == pytest.approx(json.loads(plain.with_suffix(".json").read_text())["duration"], abs=1e-3)
     assert W.seed_words(plain) is None  # no packet, nothing to lay it from
+
+
+def test_the_seed_pages_file_carries_the_cover_with_its_packet_and_id(tmp_path, monkeypatch):
+    """The public file is a copy of the render given the song's cover (pack.with_cover): the render itself is
+    left alone, and the copy has the same samples, the same packet and so the same id."""
+    from songbird import artwork, pack
+    from songbird.synth import master
+
+    pcm = (np.random.default_rng(1).normal(0, 3000, (22050, 2))).astype("<i2")
+    render = tmp_path / "contest.flac"
+    master.write_flac(render, pcm, 44100, cover=False)
+    record = {"id": master.pcm_sha256(pcm), "title": "Now It's by You", **pack.lineage(None)}
+    with monkeypatch.context() as m:  # packed before the program embedded the cover
+        m.setattr(pack.artwork, "embed", lambda audio, description=None: audio)
+        pack.pack(render, record, ROOT / "songs" / "h-now-its-by-you.json")
+    before = render.read_bytes()
+    out = tmp_path / "public"
+    out.mkdir()
+    (out / "seed.html").write_text("{{SEED_FILE}} {{SEED_MB}} {{SEED_WORDS}}")
+    monkeypatch.setenv("SONGBIRD_SEED", str(render))
+    monkeypatch.setattr(W, "seed_words", lambda flac: None)
+    W.seed_page(out)
+    served = out / "seed" / W.SEED_FILE
+    assert render.read_bytes() == before
+    assert [p["type"] for p in artwork.pictures(served.read_bytes())] == [artwork.FRONT]
+    assert pack.read_record(served)["id"] == record["id"] == pack.samples_id(pack.audio_bytes(served))
+    assert pack.read_member(served, "genome.json") == pack.read_member(render, "genome.json")

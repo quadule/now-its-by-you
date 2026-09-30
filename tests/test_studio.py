@@ -559,6 +559,10 @@ def test_a_musician_takes_the_version_away_as_midi_and_stems(served, monkeypatch
     assert sr == 1000 and not audio[:pad].any() and abs(audio[pad, 0] - 0.989) < 1e-3  # all turned down together
     voice_audio, _ = sf.read(io.BytesIO(z.read(f"{stem}/01-voice.flac")))
     assert abs(voice_audio[pad, 0] - 0.989 / 4) < 1e-3
+    from songbird import artwork
+
+    for part in ("01-voice", "02-guitar"):  # each carries the song's cover
+        assert [p["type"] for p in artwork.pictures(z.read(f"{stem}/{part}.flac"))] == [artwork.FRONT]
     note = z.read(f"{stem}/README.txt").decode()
     assert "bar 1" in note and "dry" in note and "public domain" in note and not FORBIDDEN.search(note)
     assert f"the parts of the recording {stem}.flac (its id 5beef0" in " ".join(note.split())
