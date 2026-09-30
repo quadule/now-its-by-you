@@ -631,6 +631,7 @@ def view(genome, params, generated, applied, problems, score) -> dict:
         out["send"] = {**entry(f"mix.{p}.send", mine.get("send", 1.0)), "min": SEND[0], "max": SEND[1]}
         out["sidechain"] = {**entry(f"mix.{p}.sidechain", mine.get("sidechain")), "presets": PRESETS,
                             "keys": list(KEYS), "has_kick": kicking,
+                            "is_key": p in DRUMMERS,  # the drummer keys the pump: it isn't one to duck on itself
                             "depth": {"min": DEPTH[0], "max": DEPTH[1]},
                             "release": {"min": RELEASE[0], "max": RELEASE[1]}}
         players.append(out)

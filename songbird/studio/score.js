@@ -544,7 +544,7 @@
     const fader = h("div", { class: `fader${yours ? " you" : ""}` }, input,
       yours && typeof program === "number" ? tickAt(program) : null);
     const pan = sp.pan, panYours = !!pan?.yours;
-    const pump = sp.sidechain, pumpNow = presetOf(pump?.value);
+    const pump = sp.sidechain;
     return h("div", { class: `strip${chosen ? " selected" : ""}${gain <= 0.02 ? " muted" : ""}` },
       h("button", { class: "nm", type: "button", "data-key": `strip:${name}`, onclick: () => select({ kind: "player", id: name }), title: `${label}: open it in the column` }, label),
       muteSolo(name, label),
@@ -554,7 +554,7 @@
           "aria-valuetext": panWords(pan.value),
           oninput: (e) => { const x = Number(e.target.value); e.target.previousSibling.textContent = `pan ${panWords(x)}`; e.target.setAttribute("aria-valuetext", panWords(x)); },
           onchange: (e) => setEdit(pan.path, Number(e.target.value), `${label}: pan`) })) : null,
-      pump && PUMPED.test(name) ? h("label", { class: `knob${pump.yours ? " you" : ""}` }, h("span", {}, "pump"),
+      pump && PUMPED.test(name) && !pump.is_key ? h("label", { class: `knob${pump.yours ? " you" : ""}` }, h("span", {}, "pump"),
         pumpSelect(pump, `${label}: pump`)) : null,
       sp.patch || sp.kit ? h("button", { class: "patch", type: "button", onclick: () => select({ kind: "player", id: name }), title: "Its sound: open it in the column" },
         (sp.patch || sp.kit).value) : null,
@@ -565,19 +565,49 @@
     tick.style.top = `${(1 - Math.min(2, program) / 2) * 150}px`;
     return tick;
   }
+  // a pump's value: the server's spelled out {depth, release, key, sections}, or an edit's (a preset's name, or
+  // {preset, sections}); what it is now is the latest edit's, so a quick second choice builds on the first
+  const pumpNow = (pump) => (Object.prototype.hasOwnProperty.call(state.edits, pump.path) ? state.edits[pump.path] : pump.value) || null;
   function presetOf(value) {
     if (!value) return "none";
+    if (typeof value === "string") return value;
+    if (value.preset && value.depth === undefined) return value.preset;
     const hit = Object.entries((S.sound?.players?.[0]?.sidechain?.presets) || {}).find(([, p]) => p.depth === value.depth && p.release === value.release && p.key === value.key);
     return hit ? hit[0] : "yours";
   }
+  function pumpWith(pump, preset, sections) {  // the edit for a preset (or the person's own) over some sections
+    if (preset === "none") return null;
+    const v = pumpNow(pump), where = sections?.length ? { sections } : {};
+    if (preset !== "yours") return where.sections ? { preset, ...where } : preset;
+    return { depth: v.depth, release: v.release, key: v.key, ...where };
+  }
   function pumpSelect(pump, label) {
-    const now = presetOf(pump.value);
+    const now = presetOf(pumpNow(pump));
     const s = h("select", { "aria-label": label, "data-key": `pump:${label}` },
       ["none", ...Object.keys(pump.presets || {})].map((k) => h("option", { value: k }, k === "none" ? "none" : k)),
       now === "yours" ? h("option", { value: "yours" }, "yours") : null);
     s.value = now;
-    s.addEventListener("change", () => (s.value === "none" ? releaseEdit(pump.path, `${label}: none`) : s.value !== "yours" && setEdit(pump.path, s.value, `${label}: ${s.value}`)));
+    s.addEventListener("change", () => (s.value === "none" ? releaseEdit(pump.path, `${label}: none`)
+      : s.value !== "yours" && setEdit(pump.path, pumpWith(pump, s.value, pumpNow(pump)?.sections), `${label}: ${s.value}`)));
     return s;
+  }
+  // where it pumps: everywhere (wherever the kick plays), or the sections chosen (a drop, not the breakdown);
+  // always drawn, so choosing a pump adds no row under the pointer
+  function pumpWhere(pump, label) {
+    const v = pumpNow(pump), on = presetOf(v) !== "none", chosen = new Set(v?.sections || []);
+    const pick = (id) => {
+      const now = pumpNow(pump), has = new Set(now?.sections || []);
+      if (id === null) has.clear(); else if (has.has(id)) has.delete(id); else has.add(id);
+      const list = S.grid.sections.map((x) => x.id).filter((x) => has.has(x));
+      setEdit(pump.path, pumpWith(pump, presetOf(now), list), `${label}: ${list.length ? `in ${list.length} section${list.length === 1 ? "" : "s"}` : "everywhere"}`);
+    };
+    const chip = (id, text) => {
+      const pressed = id === null ? !chosen.size : chosen.has(id);
+      return h("button", { class: `chip${pressed && on ? " on" : ""}${pressed && on && pump.yours ? " you" : ""}`, type: "button", "aria-pressed": String(pressed && on),
+        disabled: !on, title: on ? null : "Choose a pump first", onclick: () => pick(id) }, text);
+    };
+    return h("div", { class: "row" }, h("span", { class: "label" }, "Where"),
+      h("span", { class: "chips", role: "group", "aria-label": `${label}: where` }, chip(null, "everywhere"), (S.grid?.sections || []).map((x) => chip(x.id, x.label))));
   }
   const panWords = (x) => (Math.abs(x) < 0.05 ? "middle" : `${Math.round(Math.abs(x) * 100)}% ${x < 0 ? "left" : "right"}`);
   function busSlider(label, path, value, bounds, show, key) {
@@ -953,8 +983,11 @@
       (v) => (v === sp.patch.program ? releaseEdit(sp.patch.path, `${t.label}: its own sound`) : setEdit(sp.patch.path, v, `${t.label}: ${v}`)), sp.patch.yours));
     if (sp.kit) out.push(chipRow("Kit", sp.kit.options.map((o) => ({ value: o.name, text: o.name, title: o.about })), sp.kit.value,
       (v) => (v === sp.kit.program ? releaseEdit(sp.kit.path, `${t.label}: its own kit`) : setEdit(sp.kit.path, v, `${t.label}: the ${v} kit`)), sp.kit.yours));
-    if (sp.sidechain) out.push(h("div", { class: "row" }, h("span", { class: "label" }, "Pump"), pumpSelect(sp.sidechain, `${t.label}: pump`),
-      h("span", { class: "hint" }, sp.sidechain.has_kick ? "ducks on the kick" : "no kick here: it pumps on the beat")));
+    if (sp.sidechain && (!sp.sidechain.is_key || sp.sidechain.yours)) {  // not on the drummer: it's the kick it ducks on
+      out.push(h("div", { class: "row" }, h("span", { class: "label" }, "Pump"), pumpSelect(sp.sidechain, `${t.label}: pump`),
+        h("span", { class: "hint" }, sp.sidechain.has_kick ? "ducks on the kick" : "no kick here: it pumps on the beat")));
+      out.push(pumpWhere(sp.sidechain, `${t.label}: pump`));
+    }
     if (sp.pan) out.push(field("Where it sits", sp.pan.path, sp.pan.value, { min: -1, max: 1, step: 0.05 }, panWords, ["left", "right"]));
     const more = [];
     if (sp.send) more.push(field("How much reaches the room", sp.send.path, sp.send.value, { min: sp.send.min, max: sp.send.max, step: 0.05 }, (x) => `${Number(x).toFixed(2)}×`, ["dry", "3×"]));
