@@ -1100,7 +1100,7 @@ def _taken_over(genome: Genome, generated, params, applied: list, problems: list
     them; and the tempo marked as it is sung, where the style held it to its range."""
     if "tempo" in applied and abs(params.tempo - float(edits.get("tempo", params.tempo))) > 0.05:
         edits = {**edits, "tempo": params.tempo}
-    quiet = {p: takeover.silent(genome, params, p) for p in applied
+    quiet = {p: takeover.silent(genome, params, p, edits) for p in applied
              if p.startswith("arrange.") and edits.get(p) is not None}
     quiet = {p: why for p, why in quiet.items() if why}
     if not quiet:
