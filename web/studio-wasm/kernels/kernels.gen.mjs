@@ -3,7 +3,7 @@ import * as rt from './rt.mjs';
 export * from './hand.mjs';
 const C_synth$chip$_triangle_events_TRIANGLE_STEPS = rt.array([15.0, 14.0, 13.0, 12.0, 11.0, 10.0, 9.0, 8.0, 7.0, 6.0, 5.0, 4.0, 3.0, 2.0, 1.0, 0.0, 0.0, 1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0, 8.0, 9.0, 10.0, 11.0, 12.0, 13.0, 14.0, 15.0], 1, 32, 0, 'i8');
 
-// songbird/synth/accordion.py:314
+// songbird/synth/accordion.py:316
 export function k_synth$accordion$_arm(x, up, down) {
   let a, i, v, y, $t1, $t2, x_d, x_n0, x_n1, x_s0, x_s1, y_d, y_n0, y_n1, y_s0, y_s1;
   x_d = x.d; x_n0 = x.n0; x_n1 = x.n1; x_s0 = x.s0; x_s1 = x.s1;
@@ -311,7 +311,7 @@ export function k_synth$amp$_run(x, rev, up, down, p, tab1, tab2, drop2, sos) {
   return y;
 }
 
-// songbird/synth/amp.py:701
+// songbird/synth/amp.py:706
 export function k_synth$amp$_shape(x, up, down, drive, tilt) {
   let i, n, norm, os_, per, ph, ptr, t0, taps, u, v, xb, y, zb, zptr, $t1, $t2, $t3, $t4, down_d, down_n0, down_n1, down_s0, down_s1, up_d, up_n0, up_n1, up_s0, up_s1, x_d, x_n0, x_n1, x_s0, x_s1, xb_d, xb_n0, xb_n1, xb_s0, xb_s1, y_d, y_n0, y_n1, y_s0, y_s1, zb_d, zb_n0, zb_n1, zb_s0, zb_s1;
   x_d = x.d; x_n0 = x.n0; x_n1 = x.n1; x_s0 = x.s0; x_s1 = x.s1;
@@ -354,7 +354,7 @@ export function k_synth$amp$_shape(x, up, down, drive, tilt) {
   return y;
 }
 
-// songbird/synth/analog.py:244
+// songbird/synth/analog.py:246
 export function k_synth$analog$_sat(v) {
   let v2;
   if (((v >= 3.0))) {
@@ -367,7 +367,7 @@ export function k_synth$analog$_sat(v) {
   return ((v * (27.0 + v2)) / (27.0 + (9.0 * v2)));
 }
 
-// songbird/synth/analog.py:255
+// songbird/synth/analog.py:257
 export function k_synth$analog$_ladder_step(x, G, k, st) {
   let a1, a2, a3, a4, c, d, g2, g3, g4, h, p2, p3, p4, t, u, y1, y2, y3, y4, st_d, st_n0, st_n1, st_s0, st_s1;
   st_d = st.d; st_n0 = st.n0; st_n1 = st.n1; st_s0 = st.s0; st_s1 = st.s1;
@@ -400,7 +400,7 @@ export function k_synth$analog$_ladder_step(x, G, k, st) {
   return y4;
 }
 
-// songbird/synth/analog.py:293
+// songbird/synth/analog.py:295
 export function k_synth$analog$_ladder(x, G, k, drive) {
   let gain, i, n, st, y, $t1, $t2, G_d, G_n0, G_n1, G_s0, G_s1, st_d, st_n0, st_n1, st_s0, st_s1, x_d, x_n0, x_n1, x_s0, x_s1, y_d, y_n0, y_n1, y_s0, y_s1;
   x_d = x.d; x_n0 = x.n0; x_n1 = x.n1; x_s0 = x.s0; x_s1 = x.s1;
@@ -416,7 +416,7 @@ export function k_synth$analog$_ladder(x, G, k, drive) {
   return y;
 }
 
-// songbird/synth/analog.py:315
+// songbird/synth/analog.py:317
 export function k_synth$analog$_wave(kind, q, dt, d) {
   let r, y;
   if (((kind === 0))) {
@@ -439,7 +439,7 @@ export function k_synth$analog$_wave(kind, q, dt, d) {
   return (y - ((2.0 * d) - 1.0));
 }
 
-// songbird/synth/analog.py:334
+// songbird/synth/analog.py:336
 export function k_synth$analog$_voice(buf, at, n, on, off, pitch, retrig, glide, bend, amp, env, famt, fbase, kinds, levels, shifted, ratio, pw, phases, gcoef, bcoef, vib, track, pref, k, drive, noise, seed, inv_sr2) {
   let astg, base, big_g, c, coef, cur, cur_p, delay, depth, dg, dt, duty, ea, ef, f, fade, fc, fr, fstg, g, gain, gate, hz, i, j, kc, lad, last_p, lf, n_w, nev, p, ph, q, rate, rr, since, target, tg, tt, vg, w, x, x_state, $t1, $t2, $t3, $t4, $t5, $t6, $t7, $t8, $t9, $t10, amp_d, amp_n0, amp_n1, amp_s0, amp_s1, bend_d, bend_n0, bend_n1, bend_s0, bend_s1, buf_d, buf_n0, buf_n1, buf_s0, buf_s1, duty_d, duty_n0, duty_n1, duty_s0, duty_s1, env_d, env_n0, env_n1, env_s0, env_s1, famt_d, famt_n0, famt_n1, famt_s0, famt_s1, fbase_d, fbase_n0, fbase_n1, fbase_s0, fbase_s1, glide_d, glide_n0, glide_n1, glide_s0, glide_s1, hz_d, hz_n0, hz_n1, hz_s0, hz_s1, kinds_d, kinds_n0, kinds_n1, kinds_s0, kinds_s1, lad_d, lad_n0, lad_n1, lad_s0, lad_s1, levels_d, levels_n0, levels_n1, levels_s0, levels_s1, off_d, off_n0, off_n1, off_s0, off_s1, on_d, on_n0, on_n1, on_s0, on_s1, ph_d, ph_n0, ph_n1, ph_s0, ph_s1, phases_d, phases_n0, phases_n1, phases_s0, phases_s1, pitch_d, pitch_n0, pitch_n1, pitch_s0, pitch_s1, pw_d, pw_n0, pw_n1, pw_s0, pw_s1, ratio_d, ratio_n0, ratio_n1, ratio_s0, ratio_s1, retrig_d, retrig_n0, retrig_n1, retrig_s0, retrig_s1, shifted_d, shifted_n0, shifted_n1, shifted_s0, shifted_s1, vib_d, vib_n0, vib_n1, vib_s0, vib_s1;
   buf_d = buf.d; buf_n0 = buf.n0; buf_n1 = buf.n1; buf_s0 = buf.s0; buf_s1 = buf.s1;
@@ -632,7 +632,7 @@ export function k_synth$analog$_voice(buf, at, n, on, off, pitch, retrig, glide,
   return n;
 }
 
-// songbird/synth/analog.py:479
+// songbird/synth/analog.py:481
 export function k_synth$analog$_sub(buf, at, n, on, off, pitch, retrig, glide, amp, env, thump, gcoef, tcoef, h2, h3, drift, dstep, fade, inv_sr) {
   let c, cents, co, coef, cur, cur_p, ea, f, fr, gate, i, j, kk, nev, phase, s, stage, target, w, y, $t1, $t2, amp_d, amp_n0, amp_n1, amp_s0, amp_s1, buf_d, buf_n0, buf_n1, buf_s0, buf_s1, drift_d, drift_n0, drift_n1, drift_s0, drift_s1, env_d, env_n0, env_n1, env_s0, env_s1, glide_d, glide_n0, glide_n1, glide_s0, glide_s1, off_d, off_n0, off_n1, off_s0, off_s1, on_d, on_n0, on_n1, on_s0, on_s1, pitch_d, pitch_n0, pitch_n1, pitch_s0, pitch_s1, retrig_d, retrig_n0, retrig_n1, retrig_s0, retrig_s1, thump_d, thump_n0, thump_n1, thump_s0, thump_s1;
   buf_d = buf.d; buf_n0 = buf.n0; buf_n1 = buf.n1; buf_s0 = buf.s0; buf_s1 = buf.s1;
@@ -729,7 +729,7 @@ export function k_synth$analog$_sub(buf, at, n, on, off, pitch, retrig, glide, a
   return n;
 }
 
-// songbird/synth/analog.py:553
+// songbird/synth/analog.py:555
 export function k_synth$analog$_delays(x, d1, d2) {
   let c, c1, c2, c3, f, i, k, n, pos, w, x0, x1, x2, xm, $t1, $t2, $t3, $t4, d1_d, d1_n0, d1_n1, d1_s0, d1_s1, d2_d, d2_n0, d2_n1, d2_s0, d2_s1, w_d, w_n0, w_n1, w_s0, w_s1, x_d, x_n0, x_n1, x_s0, x_s1;
   x_d = x.d; x_n0 = x.n0; x_n1 = x.n1; x_s0 = x.s0; x_s1 = x.s1;
@@ -1160,7 +1160,7 @@ export function k_synth$chip$_mix_tnd(tt, tv, nt, nv, t_start, ref) {
   return [rt.slice1(out_t, 0, m), rt.slice1(out_l, 0, m)];
 }
 
-// songbird/synth/cymbals.py:194
+// songbird/synth/cymbals.py:195
 export function k_synth$cymbals$_fdn(x, lines, gains, poles, taps, signs, damp, sr, size) {
   let a, b, bufs, g, h, i, j, left, lp, mask, n, out, r, right, scale, t, v, varying, $t1, $t2, $t3, $t4, $t5, $t6, $t7, $t8, $t9, $t10, $t11, $t12, $t13, bufs_d, bufs_n0, bufs_n1, bufs_s0, bufs_s1, damp_d, damp_n0, damp_n1, damp_s0, damp_s1, g_d, g_n0, g_n1, g_s0, g_s1, gains_d, gains_n0, gains_n1, gains_s0, gains_s1, lines_d, lines_n0, lines_n1, lines_s0, lines_s1, lp_d, lp_n0, lp_n1, lp_s0, lp_s1, out_d, out_n0, out_n1, out_s0, out_s1, poles_d, poles_n0, poles_n1, poles_s0, poles_s1, signs_d, signs_n0, signs_n1, signs_s0, signs_s1, taps_d, taps_n0, taps_n1, taps_s0, taps_s1, v_d, v_n0, v_n1, v_s0, v_s1, x_d, x_n0, x_n1, x_s0, x_s1;
   x_d = x.d; x_n0 = x.n0; x_n1 = x.n1; x_s0 = x.s0; x_s1 = x.s1;
@@ -2147,7 +2147,7 @@ export function k_synth$instruments$_placed(y, cos, sin, root2, width, out) {
   }
 }
 
-// songbird/synth/kit.py:295
+// songbird/synth/kit.py:298
 export function k_synth$kit$_contacts(d, sr, omegas, preloads, damping) {
   let a, ad, dt, n, out, prev_v, rest, s, t, touching, v, vd, w, w2, zeta, $t1, $t2, $t3, $t4, d_d, d_n0, d_n1, d_s0, d_s1, omegas_d, omegas_n0, omegas_n1, omegas_s0, omegas_s1, out_d, out_n0, out_n1, out_s0, out_s1, preloads_d, preloads_n0, preloads_n1, preloads_s0, preloads_s1;
   d_d = d.d; d_n0 = d.n0; d_n1 = d.n1; d_s0 = d.s0; d_s1 = d.s1;
@@ -2192,7 +2192,7 @@ export function k_synth$kit$_contacts(d, sr, omegas, preloads, damping) {
   return out;
 }
 
-// songbird/synth/kit.py:334
+// songbird/synth/kit.py:337
 export function k_synth$kit$_grains(strengths, noise, offsets, length, tau) {
   let a, decay, g, j, k, n, o, out, size, t, $t1, $t2, $t3, $t4, noise_d, noise_n0, noise_n1, noise_s0, noise_s1, offsets_d, offsets_n0, offsets_n1, offsets_s0, offsets_s1, out_d, out_n0, out_n1, out_s0, out_s1, strengths_d, strengths_n0, strengths_n1, strengths_s0, strengths_s1;
   strengths_d = strengths.d; strengths_n0 = strengths.n0; strengths_n1 = strengths.n1; strengths_s0 = strengths.s0; strengths_s1 = strengths.s1;
