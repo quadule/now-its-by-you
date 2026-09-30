@@ -3,9 +3,11 @@ be typed exactly as numba typed it; and keep a few real calls (arguments and res
 check a port against numba bit for bit.
 
 usage: uv run python web/studio-wasm/tools/kernel_types.py SONG TYPES.json [CALLS_DIR] [--whole] [--gauntlet]
-  TYPES.json: {kernel: {"file", "line", "fastmath", "signatures": [{"args", "return", "locals"}]}}
+  TYPES.json: {kernel: {"file", "line", "fastmath", "signatures": [{"args", "return", "locals"}], "source"}}
+              ("source": the digest of the kernel's source typed, transpile.source_digest)
   CALLS_DIR:  kernel.N.npz with a0..ak (the arguments, before the call), r (the result, or r0..rk for a
-              tuple), and after_a0.. for arrays the kernel changed in place.
+              tuple), after_a0.. for arrays the kernel changed in place, and alias ((j, i) rows: argument j
+              was argument i itself, an out given as its input).
 Renders the section at index 2 (and with --whole the whole song, for types only)."""
 
 import inspect
@@ -84,6 +86,12 @@ for key, (d, f, kw) in sorted(KERNELS.items()):
     out[key] = {"file": inspect.getsourcefile(f).split("songbird/", 1)[1], "line": f.__code__.co_firstlineno,
                 "fastmath": bool(kw.get("fastmath")), "params": list(inspect.signature(f).parameters),
                 "signatures": sigs}
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+import transpile  # noqa: E402
+
+transpile.collect()
+for key, v in out.items():  # the source typed, so transpile.py --check can tell when these types are stale
+    v["source"] = transpile.source_digest(transpile.ALL[key][0])
 Path(types_path).write_text(json.dumps(out, indent=1) + "\n")
 print(f"{len(out)} kernels, {sum(1 for v in out.values() if v['signatures'])} typed by these renders")
 
@@ -102,6 +110,11 @@ if calls_dir is not None:
             r = d(*a)
             seen[key] = k + 1
             arrays = {f"a{i}": np.asarray(x) for i, x in enumerate(before)}
+            same = [(j, i) for j, y in enumerate(a) for i, x in enumerate(a[:j])  # out given as an input itself
+                    if isinstance(x, np.ndarray) and isinstance(y, np.ndarray)
+                    and x.__array_interface__ == y.__array_interface__]
+            if same:
+                arrays["alias"] = np.array(same)
             arrays.update({f"after_a{i}": x for i, x in enumerate(a)
                            if isinstance(x, np.ndarray) and not np.array_equal(x, before[i], equal_nan=True)})
             if isinstance(r, tuple):

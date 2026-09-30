@@ -40,7 +40,8 @@
      ]
     }
    }
-  ]
+  ],
+  "source": "6a85430bb29b1e76"
  },
  "synth.amp._dot": {
   "file": ".claude/worktrees/agent-a87462c6205be2634/songbird/synth/amp.py",
@@ -92,7 +93,8 @@
      ]
     }
    }
-  ]
+  ],
+  "source": "0724ff2827b6c3c2"
  },
  "synth.amp._run": {
   "file": ".claude/worktrees/agent-a87462c6205be2634/songbird/synth/amp.py",
@@ -365,7 +367,8 @@
      ]
     }
    }
-  ]
+  ],
+  "source": "7bedec7f6a7312ec"
  },
  "synth.amp._shape": {
   "file": ".claude/worktrees/agent-a87462c6205be2634/songbird/synth/amp.py",
@@ -453,7 +456,8 @@
      ]
     }
    }
-  ]
+  ],
+  "source": "f9963fc7f8e78b9a"
  },
  "synth.amp._spring": {
   "file": ".claude/worktrees/agent-a87462c6205be2634/songbird/synth/amp.py",
@@ -587,7 +591,8 @@
      ]
     }
    }
-  ]
+  ],
+  "source": "795ee2193d3903e9"
  },
  "synth.analog._delays": {
   "file": ".claude/worktrees/agent-a87462c6205be2634/songbird/synth/analog.py",
@@ -660,7 +665,8 @@
      ]
     }
    }
-  ]
+  ],
+  "source": "43ab093f1d53c994"
  },
  "synth.analog._ladder": {
   "file": ".claude/worktrees/agent-a87462c6205be2634/songbird/synth/analog.py",
@@ -672,7 +678,8 @@
    "k",
    "drive"
   ],
-  "signatures": []
+  "signatures": [],
+  "source": "5ea65db7c57a63e1"
  },
  "synth.analog._ladder_step": {
   "file": ".claude/worktrees/agent-a87462c6205be2634/songbird/synth/analog.py",
@@ -765,7 +772,8 @@
      ]
     }
    }
-  ]
+  ],
+  "source": "b51b3a9c8b837850"
  },
  "synth.analog._sat": {
   "file": ".claude/worktrees/agent-a87462c6205be2634/songbird/synth/analog.py",
@@ -789,7 +797,8 @@
      ]
     }
    }
-  ]
+  ],
+  "source": "174f76a7233e45e5"
  },
  "synth.analog._sub": {
   "file": ".claude/worktrees/agent-a87462c6205be2634/songbird/synth/analog.py",
@@ -968,7 +977,8 @@
      ]
     }
    }
-  ]
+  ],
+  "source": "5b40a5c5b8f96f55"
  },
  "synth.analog._voice": {
   "file": ".claude/worktrees/agent-a87462c6205be2634/songbird/synth/analog.py",
@@ -1275,7 +1285,8 @@
      ]
     }
    }
-  ]
+  ],
+  "source": "4fafc6a01e7db003"
  },
  "synth.analog._wave": {
   "file": ".claude/worktrees/agent-a87462c6205be2634/songbird/synth/analog.py",
@@ -1317,7 +1328,8 @@
      ]
     }
    }
-  ]
+  ],
+  "source": "3e88174958d3bfd3"
  },
  "synth.bowed._read": {
   "file": ".claude/worktrees/agent-a87462c6205be2634/songbird/synth/bowed.py",
@@ -1384,7 +1396,8 @@
      ]
     }
    }
-  ]
+  ],
+  "source": "5403f64c2025e331"
  },
  "synth.bowed._read_masked": {
   "file": ".claude/worktrees/agent-a87462c6205be2634/songbird/synth/bowed.py",
@@ -1451,7 +1464,8 @@
      ]
     }
    }
-  ]
+  ],
+  "source": "a1672b35a7144830"
  },
  "synth.bowed.run": {
   "file": ".claude/worktrees/agent-a87462c6205be2634/songbird/synth/bowed.py",
@@ -1550,7 +1564,8 @@
      ]
     }
    }
-  ]
+  ],
+  "source": "155947e8244e2290"
  },
  "synth.bowed.run_primed": {
   "file": ".claude/worktrees/agent-a87462c6205be2634/songbird/synth/bowed.py",
@@ -1681,7 +1696,8 @@
      ]
     }
    }
-  ]
+  ],
+  "source": "2f46ac4339620a8d"
  },
  "synth.chip._lfsr": {
   "file": ".claude/worktrees/agent-a87462c6205be2634/songbird/synth/chip.py",
@@ -1691,7 +1707,8 @@
    "reg",
    "short"
   ],
-  "signatures": []
+  "signatures": [],
+  "source": "d8efd651f3efec72"
  },
  "synth.chip._mix_tnd": {
   "file": ".claude/worktrees/agent-a87462c6205be2634/songbird/synth/chip.py",
@@ -1767,7 +1784,8 @@
      ]
     }
    }
-  ]
+  ],
+  "source": "771b0bd280854992"
  },
  "synth.chip._noise_events": {
   "file": ".claude/worktrees/agent-a87462c6205be2634/songbird/synth/chip.py",
@@ -1781,7 +1799,8 @@
    "vol",
    "reg"
   ],
-  "signatures": []
+  "signatures": [],
+  "source": "659d1fdca08aa073"
  },
  "synth.chip._pulse_events": {
   "file": ".claude/worktrees/agent-a87462c6205be2634/songbird/synth/chip.py",
@@ -1894,7 +1913,8 @@
      ]
     }
    }
-  ]
+  ],
+  "source": "f3e0105df1f8265b"
  },
  "synth.chip._staircase": {
   "file": ".claude/worktrees/agent-a87462c6205be2634/songbird/synth/chip.py",
@@ -1956,7 +1976,8 @@
      ]
     }
    }
-  ]
+  ],
+  "source": "5ee3b48f79716e2f"
  },
  "synth.chip._triangle_events": {
   "file": ".claude/worktrees/agent-a87462c6205be2634/songbird/synth/chip.py",
@@ -2033,7 +2054,8 @@
      ]
     }
    }
-  ]
+  ],
+  "source": "11acdc4e0d766151"
  },
  "synth.cymbals._fdn": {
   "file": ".claude/worktrees/agent-a87462c6205be2634/songbird/synth/cymbals.py",
@@ -2149,7 +2171,8 @@
      ]
     }
    }
-  ]
+  ],
+  "source": "8708628613a24753"
  },
  "synth.drum._ring": {
   "file": ".claude/worktrees/agent-a87462c6205be2634/songbird/synth/drum.py",
@@ -2248,7 +2271,8 @@
      ]
     }
    }
-  ]
+  ],
+  "source": "688511c8a5704ef7"
  },
  "synth.drummachine._bank": {
   "file": ".claude/worktrees/agent-a87462c6205be2634/songbird/synth/drummachine.py",
@@ -2313,7 +2337,8 @@
      ]
     }
    }
-  ]
+  ],
+  "source": "b5ca0593c986644a"
  },
  "synth.drummachine._hat808": {
   "file": ".claude/worktrees/agent-a87462c6205be2634/songbird/synth/drummachine.py",
@@ -2462,7 +2487,8 @@
      ]
     }
    }
-  ]
+  ],
+  "source": "30b25884a9bd211d"
  },
  "synth.drummachine._ring": {
   "file": ".claude/worktrees/agent-a87462c6205be2634/songbird/synth/drummachine.py",
@@ -2479,7 +2505,8 @@
    "knee",
    "n"
   ],
-  "signatures": []
+  "signatures": [],
+  "source": "993b490707ccc826"
  },
  "synth.drummachine._square": {
   "file": ".claude/worktrees/agent-a87462c6205be2634/songbird/synth/drummachine.py",
@@ -2521,7 +2548,8 @@
      ]
     }
    }
-  ]
+  ],
+  "source": "06706a2b9f821b01"
  },
  "synth.epiano._electrostatic": {
   "file": ".claude/worktrees/agent-a87462c6205be2634/songbird/synth/epiano.py",
@@ -2583,7 +2611,8 @@
      ]
     }
    }
-  ]
+  ],
+  "source": "61d09c2d27c0edaf"
  },
  "synth.epiano._magnetic": {
   "file": ".claude/worktrees/agent-a87462c6205be2634/songbird/synth/epiano.py",
@@ -2642,7 +2671,8 @@
      ]
     }
    }
-  ]
+  ],
+  "source": "0d7cbe768c54ff99"
  },
  "synth.fretboard._combed": {
   "file": ".claude/worktrees/agent-a87462c6205be2634/songbird/synth/fretboard.py",
@@ -2717,7 +2747,8 @@
      ]
     }
    }
-  ]
+  ],
+  "source": "064ef5416c81fe61"
  },
  "synth.fretboard._two_planes": {
   "file": ".claude/worktrees/agent-a87462c6205be2634/songbird/synth/fretboard.py",
@@ -2877,7 +2908,8 @@
      ]
     }
    }
-  ]
+  ],
+  "source": "17ab6c8de54eb19d"
  },
  "synth.fretwork._string": {
   "file": ".claude/worktrees/agent-a87462c6205be2634/songbird/synth/fretwork.py",
@@ -3118,7 +3150,8 @@
      ]
     }
    }
-  ]
+  ],
+  "source": "e779813d8a77def4"
  },
  "synth.fx._apply": {
   "file": ".claude/worktrees/agent-a87462c6205be2634/songbird/synth/fx.py",
@@ -3183,7 +3216,8 @@
      ]
     }
    }
-  ]
+  ],
+  "source": "4348b2a96e38daa8"
  },
  "synth.fx._ballistics": {
   "file": ".claude/worktrees/agent-a87462c6205be2634/songbird/synth/fx.py",
@@ -3229,7 +3263,8 @@
      ]
     }
    }
-  ]
+  ],
+  "source": "a43c94053907dd20"
  },
  "synth.fx._block_peaks": {
   "file": ".claude/worktrees/agent-a87462c6205be2634/songbird/synth/fx.py",
@@ -3282,7 +3317,8 @@
      ]
     }
    }
-  ]
+  ],
+  "source": "fe30b6155a2cdb5a"
  },
  "synth.fx._block_power": {
   "file": ".claude/worktrees/agent-a87462c6205be2634/songbird/synth/fx.py",
@@ -3332,7 +3368,8 @@
      ]
     }
    }
-  ]
+  ],
+  "source": "926629e949e93902"
  },
  "synth.fx._detect_every": {
   "file": ".claude/worktrees/agent-a87462c6205be2634/songbird/synth/fx.py",
@@ -3384,7 +3421,8 @@
      ]
     }
    }
-  ]
+  ],
+  "source": "90a59ba9dd36143e"
  },
  "synth.fx._extended": {
   "file": ".claude/worktrees/agent-a87462c6205be2634/songbird/synth/fx.py",
@@ -3415,7 +3453,8 @@
      ]
     }
    }
-  ]
+  ],
+  "source": "3f3a1c2f0e97417f"
  },
  "synth.fx._follow": {
   "file": ".claude/worktrees/agent-a87462c6205be2634/songbird/synth/fx.py",
@@ -3491,7 +3530,8 @@
      ]
     }
    }
-  ]
+  ],
+  "source": "534d8f5d7b68dbe1"
  },
  "synth.fx._four": {
   "file": ".claude/worktrees/agent-a87462c6205be2634/songbird/synth/fx.py",
@@ -3583,7 +3623,8 @@
      ]
     }
    }
-  ]
+  ],
+  "source": "ee4b159799a508f7"
  },
  "synth.fx._hold": {
   "file": ".claude/worktrees/agent-a87462c6205be2634/songbird/synth/fx.py",
@@ -3616,7 +3657,8 @@
      ]
     }
    }
-  ]
+  ],
+  "source": "7864ed53f577f9ea"
  },
  "synth.fx._one": {
   "file": ".claude/worktrees/agent-a87462c6205be2634/songbird/synth/fx.py",
@@ -3666,7 +3708,8 @@
      ]
     }
    }
-  ]
+  ],
+  "source": "d613a4db8f6063dd"
  },
  "synth.fx._products": {
   "file": ".claude/worktrees/agent-a87462c6205be2634/songbird/synth/fx.py",
@@ -3699,7 +3742,8 @@
      ]
     }
    }
-  ]
+  ],
+  "source": "51fbb8c80c269ac5"
  },
  "synth.fx._running_mean": {
   "file": ".claude/worktrees/agent-a87462c6205be2634/songbird/synth/fx.py",
@@ -3760,7 +3804,8 @@
      ]
     }
    }
-  ]
+  ],
+  "source": "4cf787d234d992bd"
  },
  "synth.fx._saturate": {
   "file": ".claude/worktrees/agent-a87462c6205be2634/songbird/synth/fx.py",
@@ -3837,7 +3882,8 @@
      ]
     }
    }
-  ]
+  ],
+  "source": "d7ca094d45220af7"
  },
  "synth.fx._sliding_min": {
   "file": ".claude/worktrees/agent-a87462c6205be2634/songbird/synth/fx.py",
@@ -3907,7 +3953,8 @@
      ]
     }
    }
-  ]
+  ],
+  "source": "61fc57f131e2cf81"
  },
  "synth.fx._soft": {
   "file": ".claude/worktrees/agent-a87462c6205be2634/songbird/synth/fx.py",
@@ -3931,7 +3978,8 @@
      ]
     }
    }
-  ]
+  ],
+  "source": "bfa091d7c3231c4e"
  },
  "synth.fx._span": {
   "file": ".claude/worktrees/agent-a87462c6205be2634/songbird/synth/fx.py",
@@ -3977,7 +4025,8 @@
      ]
     }
    }
-  ]
+  ],
+  "source": "b3a1e0241449a824"
  },
  "synth.fx._two": {
   "file": ".claude/worktrees/agent-a87462c6205be2634/songbird/synth/fx.py",
@@ -4041,7 +4090,8 @@
      ]
     }
    }
-  ]
+  ],
+  "source": "d7f39fbbaae1c4a3"
  },
  "synth.harmonica._hands": {
   "file": ".claude/worktrees/agent-a87462c6205be2634/songbird/synth/harmonica.py",
@@ -4056,7 +4106,8 @@
    "leak",
    "absorb"
   ],
-  "signatures": []
+  "signatures": [],
+  "source": "d3fe27e0b1d8fbad"
  },
  "synth.instruments._placed": {
   "file": ".claude/worktrees/agent-a87462c6205be2634/songbird/synth/instruments.py",
@@ -4157,7 +4208,8 @@
      ]
     }
    }
-  ]
+  ],
+  "source": "2da4983ae00cf554"
  },
  "synth.kit._contacts": {
   "file": ".claude/worktrees/agent-a87462c6205be2634/songbird/synth/kit.py",
@@ -4245,7 +4297,8 @@
      ]
     }
    }
-  ]
+  ],
+  "source": "7217b56d9ca2c3f7"
  },
  "synth.kit._grains": {
   "file": ".claude/worktrees/agent-a87462c6205be2634/songbird/synth/kit.py",
@@ -4317,7 +4370,8 @@
      ]
     }
    }
-  ]
+  ],
+  "source": "874700ba08655085"
  },
  "synth.master._abs_max": {
   "file": ".claude/worktrees/agent-a87462c6205be2634/songbird/synth/master.py",
@@ -4356,7 +4410,8 @@
      ]
     }
    }
-  ]
+  ],
+  "source": "60632c430fdb1f14"
  },
  "synth.master._hop_power": {
   "file": ".claude/worktrees/agent-a87462c6205be2634/songbird/synth/master.py",
@@ -4366,7 +4421,8 @@
    "y",
    "hop"
   ],
-  "signatures": []
+  "signatures": [],
+  "source": "2809d5bf0c9a67ac"
  },
  "synth.master._mean_ahead": {
   "file": ".claude/worktrees/agent-a87462c6205be2634/songbird/synth/master.py",
@@ -4432,7 +4488,8 @@
      ]
     }
    }
-  ]
+  ],
+  "source": "1eb25e425f79273a"
  },
  "synth.master._over": {
   "file": ".claude/worktrees/agent-a87462c6205be2634/songbird/synth/master.py",
@@ -4467,7 +4524,8 @@
      ]
     }
    }
-  ]
+  ],
+  "source": "505beaa8f46dae01"
  },
  "synth.master._recover": {
   "file": ".claude/worktrees/agent-a87462c6205be2634/songbird/synth/master.py",
@@ -4504,7 +4562,8 @@
      ]
     }
    }
-  ]
+  ],
+  "source": "c0c1df3e52e61e33"
  },
  "synth.master._weighted_hop_power": {
   "file": ".claude/worktrees/agent-a87462c6205be2634/songbird/synth/master.py",
@@ -4585,7 +4644,8 @@
      ]
     }
    }
-  ]
+  ],
+  "source": "ae955abcf0058e3e"
  },
  "synth.master._windows": {
   "file": ".claude/worktrees/agent-a87462c6205be2634/songbird/synth/master.py",
@@ -4639,7 +4699,8 @@
      ]
     }
    }
-  ]
+  ],
+  "source": "593db61817e2062a"
  },
  "synth.modal.ring": {
   "file": ".claude/worktrees/agent-a87462c6205be2634/songbird/synth/modal.py",
@@ -4820,7 +4881,8 @@
      ]
     }
    }
-  ]
+  ],
+  "source": "766a21d8320cd9d2"
  },
  "synth.organ._expression": {
   "file": ".claude/worktrees/agent-a87462c6205be2634/songbird/synth/organ.py",
@@ -4931,7 +4993,8 @@
      ]
     }
    }
-  ]
+  ],
+  "source": "f31a8a8762f31d9c"
  },
  "synth.organ._generator": {
   "file": ".claude/worktrees/agent-a87462c6205be2634/songbird/synth/organ.py",
@@ -5115,7 +5178,8 @@
      ]
     }
    }
-  ]
+  ],
+  "source": "322c357b904f6bfe"
  },
  "synth.organ._read": {
   "file": ".claude/worktrees/agent-a87462c6205be2634/songbird/synth/organ.py",
@@ -5169,7 +5233,8 @@
      ]
     }
    }
-  ]
+  ],
+  "source": "c1d4d8af0f62a3a1"
  },
  "synth.organ._rotors": {
   "file": ".claude/worktrees/agent-a87462c6205be2634/songbird/synth/organ.py",
@@ -5399,7 +5464,8 @@
      ]
     }
    }
-  ]
+  ],
+  "source": "a54f93afb34c5d5d"
  },
  "synth.organ._scanner": {
   "file": ".claude/worktrees/agent-a87462c6205be2634/songbird/synth/organ.py",
@@ -5549,7 +5615,8 @@
      ]
     }
    }
-  ]
+  ],
+  "source": "4a9801a0566ba413"
  },
  "synth.osc._blamp": {
   "file": ".claude/worktrees/agent-a87462c6205be2634/songbird/synth/osc.py",
@@ -5559,7 +5626,8 @@
    "t",
    "dt"
   ],
-  "signatures": []
+  "signatures": [],
+  "source": "36a23560de67577f"
  },
  "synth.osc._blep": {
   "file": ".claude/worktrees/agent-a87462c6205be2634/songbird/synth/osc.py",
@@ -5569,7 +5637,8 @@
    "t",
    "dt"
   ],
-  "signatures": []
+  "signatures": [],
+  "source": "ef16b19eaf9bc9dd"
  },
  "synth.osc._blep4": {
   "file": ".claude/worktrees/agent-a87462c6205be2634/songbird/synth/osc.py",
@@ -5596,7 +5665,8 @@
      ]
     }
    }
-  ]
+  ],
+  "source": "f5f0a3d44a281719"
  },
  "synth.osc._edges": {
   "file": ".claude/worktrees/agent-a87462c6205be2634/songbird/synth/osc.py",
@@ -5631,7 +5701,8 @@
      ]
     }
    }
-  ]
+  ],
+  "source": "67b6951750376b56"
  },
  "synth.osc.pulse": {
   "file": ".claude/worktrees/agent-a87462c6205be2634/songbird/synth/osc.py",
@@ -5643,7 +5714,8 @@
    "sr",
    "phase"
   ],
-  "signatures": []
+  "signatures": [],
+  "source": "7092bf85872ac7c9"
  },
  "synth.osc.saw": {
   "file": ".claude/worktrees/agent-a87462c6205be2634/songbird/synth/osc.py",
@@ -5654,7 +5726,8 @@
    "sr",
    "phase"
   ],
-  "signatures": []
+  "signatures": [],
+  "source": "2d204240dda979c3"
  },
  "synth.osc.stepped": {
   "file": ".claude/worktrees/agent-a87462c6205be2634/songbird/synth/osc.py",
@@ -5666,7 +5739,8 @@
    "sr",
    "phase"
   ],
-  "signatures": []
+  "signatures": [],
+  "source": "b4c43396c4dfa508"
  },
  "synth.osc.triangle": {
   "file": ".claude/worktrees/agent-a87462c6205be2634/songbird/synth/osc.py",
@@ -5677,7 +5751,8 @@
    "sr",
    "phase"
   ],
-  "signatures": []
+  "signatures": [],
+  "source": "f2a825ad03c46a53"
  },
  "synth.piano._spectrum": {
   "file": ".claude/worktrees/agent-a87462c6205be2634/songbird/synth/piano.py",
@@ -5738,7 +5813,8 @@
      ]
     }
    }
-  ]
+  ],
+  "source": "1078ee5ccf84330d"
  },
  "synth.piano.hammer_force": {
   "file": ".claude/worktrees/agent-a87462c6205be2634/songbird/synth/piano.py",
@@ -5901,7 +5977,8 @@
      ]
     }
    }
-  ]
+  ],
+  "source": "754462db264b07a3"
  },
  "synth.pipe.run": {
   "file": ".claude/worktrees/agent-a87462c6205be2634/songbird/synth/pipe.py",
@@ -6022,7 +6099,8 @@
      ]
     }
    }
-  ]
+  ],
+  "source": "61c277eda546710a"
  },
  "synth.pluck._bank": {
   "file": ".claude/worktrees/agent-a87462c6205be2634/songbird/synth/pluck.py",
@@ -6113,7 +6191,8 @@
      ]
     }
    }
-  ]
+  ],
+  "source": "6d85530e31849d57"
  },
  "synth.pluck._loop": {
   "file": ".claude/worktrees/agent-a87462c6205be2634/songbird/synth/pluck.py",
@@ -6196,7 +6275,8 @@
      ]
     }
    }
-  ]
+  ],
+  "source": "0719d74fac3af1ce"
  },
  "synth.rattle._collide": {
   "file": ".claude/worktrees/agent-a87462c6205be2634/songbird/synth/rattle.py",
@@ -6417,7 +6497,8 @@
      ]
     }
    }
-  ]
+  ],
+  "source": "bf1e0f275ea803b7"
  },
  "synth.rattle._next": {
   "file": ".claude/worktrees/agent-a87462c6205be2634/songbird/synth/rattle.py",
@@ -6444,7 +6525,8 @@
      ]
     }
    }
-  ]
+  ],
+  "source": "eeea19c7ebe207ce"
  },
  "synth.rattle._wires": {
   "file": ".claude/worktrees/agent-a87462c6205be2634/songbird/synth/rattle.py",
@@ -6632,7 +6714,8 @@
      ]
     }
    }
-  ]
+  ],
+  "source": "eda9c2ba1b51d1f7"
  },
  "synth.rattle.comb": {
   "file": ".claude/worktrees/agent-a87462c6205be2634/songbird/synth/rattle.py",
@@ -6669,7 +6752,8 @@
      ]
     }
    }
-  ]
+  ],
+  "source": "b4053ae9575194f5"
  },
  "synth.reed._read": {
   "file": ".claude/worktrees/agent-a87462c6205be2634/songbird/synth/reed.py",
@@ -6730,7 +6814,8 @@
      ]
     }
    }
-  ]
+  ],
+  "source": "c42464deab0cc168"
  },
  "synth.reed._read_mix": {
   "file": ".claude/worktrees/agent-a87462c6205be2634/songbird/synth/reed.py",
@@ -6813,7 +6898,8 @@
      ]
     }
    }
-  ]
+  ],
+  "source": "a43ec03a11baddc8"
  },
  "synth.stringloop._run": {
   "file": ".claude/worktrees/agent-a87462c6205be2634/songbird/synth/stringloop.py",
@@ -6910,7 +6996,8 @@
      ]
     }
    }
-  ]
+  ],
+  "source": "841b18abd483230d"
  },
  "synth.struck._bank": {
   "file": ".claude/worktrees/agent-a87462c6205be2634/songbird/synth/struck.py",
@@ -7068,7 +7155,8 @@
      ]
     }
    }
-  ]
+  ],
+  "source": "a565241774d4cc82"
  },
  "synth.struck._up2": {
   "file": ".claude/worktrees/agent-a87462c6205be2634/songbird/synth/struck.py",
@@ -7123,7 +7211,8 @@
      ]
     }
    }
-  ]
+  ],
+  "source": "2e49de4498e5cfc9"
  },
  "synth.tube._scatter": {
   "file": ".claude/worktrees/agent-a87462c6205be2634/songbird/synth/tube.py",
@@ -7138,7 +7227,8 @@
    "lo",
    "hi"
   ],
-  "signatures": []
+  "signatures": [],
+  "source": "b47517c1149fdd3e"
  },
  "synth.tube.run": {
   "file": ".claude/worktrees/agent-a87462c6205be2634/songbird/synth/tube.py",
@@ -7154,6 +7244,7 @@
    "nose_start",
    "block"
   ],
-  "signatures": []
+  "signatures": [],
+  "source": "b0462ab4676a9f4a"
  }
 }

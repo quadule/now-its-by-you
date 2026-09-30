@@ -33,6 +33,8 @@ def ulps(a: np.ndarray, b: np.ndarray) -> int:
 def compare(fn, z) -> tuple[bool, int]:
     n_args = len([k for k in z.files if k.startswith("a") and k[1:].isdigit()])
     args = [arg(z[f"a{i}"]) for i in range(n_args)]
+    for j, i in (z["alias"] if "alias" in z.files else ()):  # an out that was an input itself (in place)
+        args[j] = args[i]
     r = fn(*args)
     got, want = [], []
     if "r" in z.files:
