@@ -958,21 +958,27 @@ piano page) takes the triad and, where it voices the chord, the fourth tone.
   voicings) counts the seventh as the chord's: a person asked for it.
 - *The guitar's shapes.* `guitar_voicing` already searches open, capoed
   shapes whose strings sound only the chord's tones, the root on the lowest,
-  the third required; a fourth tone is now required too (as the third is), so
-  it finds the shapes a guitarist plays (G7 320001, Cmaj7 x32000, Am7 x02010,
-  D7 xx0212) and, where none fits, the plain triad on the middle strings with
-  the added tone on top. A triad's search and cost are unchanged. The bass
-  still carries an inversion; the guitar keeps root position.
+  the third required. A person's added tone is required too (as the third is:
+  `guitar_voicing(pcs, capo, need=4)`), so it finds the shapes a guitarist
+  plays (G7 320001, Cmaj7 x32000, Am7 x02010, D7 xx0212) and, where none fits,
+  the plain triad on the middle strings with the added tone on top. A style's
+  chance colour, which the styles' guitars already pass as a fourth tone, stays
+  optional in the shape (need 3), so a triad's search and cost, and every
+  style's coloured shapes, are unchanged. The bass still carries an
+  inversion; the guitar keeps root position.
 - *The harp's spread* (root, fifth, octave, tenth, twelfth) takes the added
   tone in place of the twelfth; the high voicing climbs through all four.
 - *The bass*: roots, fifths and walks as now; a `/7` bass is the seventh.
 - *A style's players* (songbird.idioms). A chord a person made a seventh is
   already coloured: the style's own chance colour (`COLOURS`: 7, maj7, 6,
-  add9, drawn as often as its harmony knob says) is not added on top, so a
-  person's `IVmaj7` never gains a 7 as well. Unlike a style's colour, which
-  steps aside where it would rub against the tune, a person's added tone stays
-  in the chord; the voicing (`fits()`: a chord tone always fits) keeps it off
-  the sung note itself, as it does every tone.
+  add9, drawn as often as its harmony knob says) is drawn only for a chord of
+  three tones, so a person's `IVmaj7` never gains a 7 as well. Unlike a
+  style's colour, which steps aside where it would rub against the tune, a
+  person's added tone stays in the chord; the voicing (`fits()`: a chord tone
+  always fits) keeps it off the sung note itself, as it does every tone. The
+  keys' rootless voicing over a bass (four tones: the hands leave out the one
+  the bass plays) leaves out the bass's own tone, so a `IVmaj7/3` keeps its
+  root in the hands.
 - *The lineage choir* (`theory.harmony`) picks its harmony notes from all the
   chord's tones, so a voice may sing the seventh; the lowest voice still seeks
   the root.
@@ -1023,7 +1029,11 @@ order changes, as a played part's does (`verse:1` is the second verse
 wherever it now comes). `last` is there because the last refrain is where a
 reharmonization most often goes, and a child can sing more or fewer refrains
 than its parent: a change "for the last refrain" should go on meaning that.
-The page writes `last` for the last of several times and a number otherwise.
+But "the second of two refrains" and "the last refrain" are different wishes
+once a child sings three, so the page never picks one for the person: at the
+last of several times it offers both, *Only here (Refrain 2)* and *The last
+refrain, however many there are*. Where a place has both a number and `last`
+(one version's second of two), the number wins and the card says so.
 
 **Stored** in the same maps, `composition["chords"]` and
 `composition["tune"]`, keyed by place (`"refrain:last.1"`: a place has a
@@ -1033,12 +1043,19 @@ this, which looks up only line ids, reads such a record as it did (the place
 keys wait unread).
 
 **Where it acts.** `composition.form_phrases(genome, params)` makes the
-phrase for each line of the form: the line itself, or a copy with the
-place's chords and a `place` tag its tune is read by (`played`). `realize`
-lays these out, so the band, the choir, the backing voices, the preview, the
-stems and a replay hear them; `idioms.chord_times` (the MIDI file's Chords
-track, and the checks against the band) and the piano page read the same
-list, and so does the page's view.
+phrase for each line of the form: the line itself (the very object, where
+no place has its own), or a copy with the place's chords and its place in a
+new field, `Phrase.place` (its `id` stays the line's, so a phrasing's
+gestures, the lineage's variants and everything else keyed by the line still
+find it); `played` reads a place's notes by it. `realize` lays these out, so
+the band, the choir, the backing voices, the preview, the stems and a replay
+hear them; `idioms.chord_times` (the MIDI file's Chords track, and the checks
+against the band) and the piano page read the same list, and so does the
+page's view. `composition.harmonized` stays what it is, the song with the
+everywhere chords, under the places. A style that ends by singing the last
+line again sings it as the last place has it (a `last` change covers the
+repeat too). A turn that quotes a sung line (`band.quote`) quotes it as it
+is everywhere: a turn is its own place.
 
 **A place this version doesn't have** (a child with fewer verses, an intro
 switched off): the edit stays in the parameters and waits, silent, for a
@@ -1050,17 +1067,21 @@ back as it was, as a played part is.
 notes, "was": what the program had at that place}`; `from_record` makes them
 edits again.
 
-**Notes in.** A MIDI file whose line changed the same way everywhere it comes
-gives the everywhere edit, as now; one changed in only some of its places
-gives place edits there (where today the first changed place was taken for
-every place, and the rest said). A take played on a keyboard still gives an
-everywhere edit for the singer's line.
+**Notes in.** Each line of a file is compared with that place as the version
+has it (its place's notes and chords, not the line's everywhere ones, or a
+file from a version with a place of its own would show the place as a
+change). A line changed the same way everywhere it comes gives the everywhere
+edit, as now; one changed in only some of its places gives place edits there
+(where today the first changed place was taken for every place, and the rest
+said). A take played on a keyboard still gives an everywhere edit for the
+singer's line.
 
 **The page, minimally.** In the chord card and over the phrase tools, one
-toggle: *Everywhere it's sung (n places)* or *Only here (Refrain 3, line 2)*.
-It chooses the path an edit is written to, starts on *Only here* where the
-place already has its own, and *Restore* restores the chosen scope. A line
-with a place of its own is marked as the person's in the second ink.
+choice: *Everywhere it's sung (n places)*, *Only here (Refrain 3)*, and at
+the last of several times *The last refrain, however many there are*. It
+chooses the path an edit is written to, starts on the place's own scope
+where it has one, and *Restore* restores the chosen scope. A line with a
+place of its own is marked as the person's in the second ink.
 
 ### 3. A freer melody
 
@@ -1070,7 +1091,7 @@ above), and what that allows:
 | Fence | Its reason | Here |
 |---|---|---|
 | a note for each syllable, in order | the words: the singer schedules one syllable a note, its consonants and vowel (`synth.voice.schedule`), and the lyric bank's lines are counted against the tune | kept for syllables; a syllable may now carry more notes (melisma) |
-| the ending's scale-degree class | lines are recognized by their endings as the song evolves (the lineage's gate compares phrase-final targets), and the line's last chord is written under that note | kept by default; freed where the person asks, and said as advice, not refused |
+| the ending's scale-degree class | lines are recognized by their endings as the song evolves (the lineage's gate compares phrase-final targets), and the line's last chord is written under that note | the page keeps it unless the person frees it; the program takes any ending and says it as advice, not a refusal |
 | the song's range, two steps past its lowest and highest notes | a voice the singer (and the learned throat) sings well | three steps past (in H, E3 to E5 at D; was F♯3 to D5) |
 | leaps of an octave at most, no overlaps, room before the next line's pickup, inside the line | singable lines, one voice, the next pickup's breath | kept |
 
@@ -1085,42 +1106,57 @@ on). In the edit a note continuing the syllable before is marked
 
 It stays singable because it doesn't change what the singer schedules: the
 syllable is one note, held from its first note's start to its last's end,
-and its pitch moves through the others inside it, as an ornament
-(`Note.ornament`, the mechanism the lineage's turns already use:
-`synth.voice.pitch_track` moves the voice with a quick raised-cosine turn at
-each point, over the vowel). So the consonants, the word's timing, the
-breaths and a phrasing's gestures (kept by syllable) are as they were. Each
-note of a melisma is a degree of the scale, at least a quarter beat long,
-and at most a fifth from the one before; the voice drops a turn it has no
-vowel left for (`ORNAMENT_ROOM`), which a quarter beat leaves room for at
-any tempo a person may choose. *Split* on a note makes it two (the second
-slurred, on the same degree, ready to be moved); *Join* merges a slurred
-note back into the one before. Stored beside the syllables' notes, so a line
-without one is stored and sung byte for byte as before and a program from
-before this sings the syllable plain: `composition["tune"][key]` keeps each
-syllable's `[degree, onset, duration]` (the duration through its melisma) and
-`composition["melisma"][key]` its turns, `{syllable index: [[degree, onset
-from the syllable's], ...]}` in grid units.
+and its pitch moves through the others inside it (`synth.voice.pitch_track`
+moves the voice with a quick raised-cosine turn at each point, as it does
+for the lineage's ornaments). So the consonants, the word's timing, the
+breaths and a phrasing's gestures (kept by syllable) are as they were. The
+turns are carried as times, not as fractions of the vowel: a new field,
+`Note.melisma`, holds each turn's seconds after the syllable's written start
+and its semitones, set by `realize` from the grid (so a coda consonant or a
+phrasing's holding a note shorter doesn't move them; a phrasing that sings
+the syllable early takes its turns with it, as a singer would). Where the
+vowel is short the turns get quicker; unlike an ornament, a melisma is never
+dropped for want of room. The band hears the melisma's notes as notes (the
+tune it keeps clear of, and the lead playing the line where nobody sings, as
+in an intro), the choir holds its harmony note under the syllable, and the
+page's rubs count every note. Each note of a melisma is a degree of the
+scale, at least a quarter beat long, and at most a fifth from the one before.
+*Split* on a note makes it two (the second slurred, on the same degree, ready
+to be moved); *Join* merges a slurred note back into the one before. Stored
+beside the syllables' notes, so a line without one is stored and sung byte
+for byte as before, and a program from before this sings the syllable plain:
+`composition["tune"][key]` keeps each syllable's `[degree, onset, duration]`
+(the duration through its melisma) and `composition["melisma"][key]` its
+turns, `{syllable index: [[degree, onset], ...]}` in grid units from the
+syllable's onset. `phrase_value` gives the notes back as the edit wrote them,
+slurs and all, so the record's marks, undo, a replay and notes in agree; a
+line restored loses its melisma with it.
 
-**A freed ending.** The last note may leave its line's home note when the
-edit's last note says `"free": true` (the page sets it when a person drags
-the ending off it, or picks *Free the ending*). Checked otherwise as any
-note, kept, and said beside the line as advice: "this line now ends on 2, not
-on 1, as the song's does: it sounds open, like a question; the chord under it
-(I) doesn't have it". Nothing else follows it: the lineage's variants and the
-machine's choices read the song's own line.
+**A freed ending.** The program no longer refuses an ending off the line's
+home note: it keeps it and says so beside the line, as advice ("this line now
+ends on 2, not on 1 as the song's does: it sounds open, like a question; the
+chord under it, D, doesn't have it"). Asking is the page's part: a dragged
+ending keeps its home note (moving by octaves) unless *Free the ending* is
+ticked. Nothing is stored for it (the notes say it), so a MIDI file with a
+moved ending, a replay and a child all take it the same way. Nothing else
+follows it: the lineage's variants and the machine's choices read the song's
+own line.
 
 **The MIDI file** writes a melisma's notes as notes (the lyric on the
-first), so a musician sees them; a file brought back unchanged is no edit,
-and a melisma note moved in a sequencer comes back as a tune edit. Notes
-added or taken away there are still refused with the count (the lyric
-events could say which syllable a new note belongs to: later).
+first), at their times from the grid, so a musician sees them; a file brought
+back unchanged is no edit, and a melisma note moved in a sequencer comes back
+as a tune edit. Notes added or taken away there are still refused with the
+count (the lyric events could say which syllable a new note belongs to:
+later).
 
-**Even rhythm on the grid.** It evens the notes on the phrase's own grid:
-thirds of a beat where its notes sit on thirds (a six feel, a triplet
-lilt), halves where they all sit on halves, quarters otherwise; each note
-the same number of grid steps, the last held to where the line ended, and a
-finer grid of the same kind only if the notes can't fit.
+**Even rhythm on the grid** (built: `composer.js`, `feelGrids` and
+`evenRhythm`). It evens the notes on the phrase's own grid: thirds of a beat
+where its notes sit on thirds (a six feel, a triplet lilt), halves where
+they all sit on halves, quarters otherwise; each note the same number of
+grid steps, counted in whole steps so a third stays exactly a third, the
+last held to where the line ended, and a finer grid of the same kind only if
+the notes can't fit. The verse's first line of H, which it put at 1.2727…,
+becomes even eighths and a held ending.
 
 ### 4. The smaller things
 
@@ -1132,11 +1168,16 @@ finer grid of the same kind only if the notes can't fit.
   and said beside the lines: "A word between stars is the one the line leans
   on: the singer gives it a little more. Keep, move or drop the stars."
 - **The stems' id.** The zip was named by the version's cache key, the
-  recording by its sound's id. The stems are now made after the recording of
-  the same version (made first if it isn't yet, from the same parameters and
-  score), named after it (`<song>.<day>.<id6>.stems.zip`, a folder of the
-  same name, the MIDI file too), and the README says which recording they
-  belong to, by its file name and full id.
+  recording by its sound's id (a hash of its samples, known only once it is
+  made). The stems are now made after the recording of the same version,
+  named after it (`<song>.<day>.<id6>.stems.zip`, the day the record's, a
+  folder of the same name, the MIDI file too), and the README says which
+  recording they belong to, by its file name and full id. Where the
+  recording isn't made yet, the stems' job makes it first, in the same place
+  in the queue (in a public studio, still one whole song against a visitor's
+  limits), so the first stems of a version take about twice as long, and
+  *Record it* afterwards only copies the file. It isn't saved into the
+  recordings' folder until the person records it.
 
 ### How it will be checked
 
@@ -1152,6 +1193,25 @@ melisma exported and brought back unchanged, place edits from a file),
 tests/studio_composer.test.cjs (the scope toggle, even rhythm on the grid,
 the dragged note's name, split and join), the goldens, and the built-in
 browser.
+
+### After a Fable review
+
+A read-only review before building; its points are in: a person's added tone
+required in the guitar's shape but a style's colour left optional (the
+styles' guitars already pass a colour as a fourth tone, and requiring it
+would have changed every coloured shape); the melisma's turns as times from
+the grid, not fractions of the vowel (a coda consonant or a phrasing's hold
+would have moved them), never dropped for want of room, and heard by the band
+and the lead as notes; `phrase_value` the exact inverse of what is stored,
+and Restore clearing the melisma with the line; no stored flag for a freed
+ending (the fence is advice for everyone; asking is the page's); the place as
+its own field, the line's id kept, and `band.quote`'s choice said; notes in
+compared place by place; `last` offered beside the number, never chosen for
+the person, and its covering a style's repeated last line said; the style's
+colour drawn only for three-tone chords and the rootless voicing leaving out
+the bass's tone; the stems' cost and the record's day said. Its note that
+`notesin.name_chord`'s table must prefer the root in the bass among chords
+with the same notes (Am7 over C6/A) is kept in the ranking.
 
 ## What stays on the machine
 
