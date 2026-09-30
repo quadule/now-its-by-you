@@ -613,3 +613,41 @@ machines and dates, compared by PCM id against the tree before); `--replay` exac
   the other styles' backing is only ever the lineage's own. Communal singing needs a group; the lineage's
   voices take the parts first.
 - **Singing the notes** (fa-sol-la) before the words in the intro, or humming.
+
+## What the review changed (2026-09-30)
+
+A read-only Fable review of the design above, before a line was built. Its points, and what they changed:
+
+- **The lexicon.** The seed scores' golden hashes each score's lexicon, so the shape-note syllables (fa, sol,
+  la, mi) go only into an a cappella's score, never into `SUNG_SYLLABLES`; "fa" has no dictionary reading and
+  "sol" two, so both are pinned (F AA1; S OW1 L, as Sacred Harp singers say it).
+- **Off the ring, everywhere.** `place()` and the style card index `RING` directly; every such place maps an
+  off-ring style to its anchor first, and the card lists the styles beside the ring.
+- **Round twice is the style's own length**, inside `takeover.phrase_plan` (so the layout, the chord times,
+  the spans, karaoke and the piano score agree), past `fit`'s "a turn keeps its bars" only for that default:
+  a person still can't lengthen a turn. The quote's choice of line is seeded from the section's start both
+  times round, so the same line is played twice (its ornaments differ).
+- **The group is read**: `Style.voices` was recorded but the backing read only params.choir; the a cappella's
+  parts read the larger.
+- **No bass on roots.** The lead's lowest note is about a fourth under the tonic, and the throat's floor is
+  E3: under H's A3 there is no room for a bass. The parts are the **treble** (a fourth, fifth or octave over
+  the tune: the sound of shape-note singing when the tenor has the tune), the **under** voice (the root where
+  it fits between the floor and the tune, else a chord tone there) and the **alto** (between, or over the
+  tune where there is no room under it); the third is allowed about a third of the time, never at a line's
+  cadence, so it is open but not organum. The treble tops out at E5 (the throat is measured to B4).
+- **The jig's tempo.** A dotted beat at 66 is a march, not a jig; the six-eight is now 1.35 to 1.6 of the
+  song's tempo (centre 1.5: a dotted beat at 72, the eighths 0.28 s apart, a sung jig, still singable).
+  The palette's ceiling rises from 1.5 to 1.6 of the song's tempo, which is the studio's own bound.
+- **The reel is double time**: at 115 quarter notes a straight strum is a folk strum, not a reel; the reel is
+  the "double" feel, the bodhrán's down-up and the guitar's strokes on the sixteenths (a reel's eighths at
+  230), the singer at the song's pace over it.
+- **The slow air is the first time round**: the intro's first pass out of time, its second in time with the
+  band joining (an air into a tune), then the singer; never eight bars of solo whistle.
+- **DADGAD stays DADGAD**: an open D tuning with a capo up to six frets, or tuned down up to five, never
+  retuned so its low string falls under what a guitar has; its sus4 on V is its sound (fitted away from a
+  sung third, as every colour is).
+- **The stand-ins in a group**: their vibrato (15 to 40 cents), scoops and slow wander churn against open
+  fifths held a whole song; an a cappella's singers are held to a choir's (vibrato at most 14 cents, a
+  later onset, scoops at most 0.2) at synthesis, as the singer matching is.
+- **Its cost** is to be measured with six voices over a whole song, and the a cappella built first (voices
+  only), the session second.
