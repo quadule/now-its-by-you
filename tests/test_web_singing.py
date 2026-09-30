@@ -30,6 +30,7 @@ SPEC, GUIDE = "a.k0.t90", "0123456789ab"
 @pytest.fixture
 def home(tmp_path, monkeypatch):
     monkeypatch.setenv("SONGBIRD_HOME", str(tmp_path / "home"))
+    monkeypatch.setenv("STUDIO_MEMORY", "16g")  # a public studio with room for any whole song (its budget: public.render_mb)
     return tmp_path
 
 
@@ -264,6 +265,111 @@ def test_a_public_studio_counts_takes_against_each_visitors_limits(home):
         assert status == 429 and "takes measured" in body["error"] and body["retry"] > 0
         assert take(port, studio, **{"Cookie": f"songbird-visitor-{port}=someone-else"})[0] == 200
     finally:
+        server.shutdown()
+        server.server_close()
+
+
+def test_a_take_is_guarded_before_a_byte_of_it_is_read_and_only_a_few_arrive_at_once(home):
+    """Every guard is asked before a take's body is read (up to 41 MB each): a take from elsewhere, without the
+    page's token or past a limit is read and dropped a block at a time (nothing of it held) and answered; and only
+    W.ARRIVING takes are on their way at once, one from each address, so a crowd of senders can't have the studio
+    hold one each."""
+    import socket
+    import tracemalloc
+
+    from songbird import public as P
+
+    studio = S.Studio(None, str(LEAD), "none", out=home / "out", public=P.Limits(takes=1))
+    a_kit(home / "kit")
+    studio.enable_web_singing(home / "kit")
+    studio.singing.measurer = FakeMeasurer()
+    server = S.serve(studio, 18782, client_ip_header="CF-Connecting-IP")
+    threading.Thread(target=server.serve_forever, daemon=True).start()
+    port = server.server_address[1]
+    meta = json.dumps({"spec": SPEC, "guide": GUIDE, "from_s": 6.0, "to_s": 14.0}).encode()
+    big = meta + bytes(30 * 2**20)  # made before memory is watched
+    try:
+        tracemalloc.start()
+        try:
+            for headers in ({"X-Studio": "not-the-token"}, {"Host": "evil.example"}):
+                status, _, data = ask(port, "POST", "/api/sing/take", big, {
+                    "Content-Type": "application/x-songbird-take", "X-Studio": studio.token,
+                    "X-Sing-Meta": str(len(meta)), **headers})
+                assert status == 403, data
+            peak = tracemalloc.get_traced_memory()[1]
+        finally:
+            tracemalloc.stop()
+        assert peak < 4 * 2**20  # read and dropped, never held
+        cookie = {"Cookie": f"songbird-visitor-{port}=someone-singing-here"}
+        assert take(port, studio, **cookie)[0] == 200
+        status, body = take(port, studio, **cookie)  # one at a time for each visitor: said before it's read
+        assert status == 429
+
+        def sender(ip):  # a take on its way, slowly: its headers and a little of its body
+            s = socket.create_connection(("127.0.0.1", port), timeout=10)
+            meta = b'{"spec": "a.k0.t90"}'
+            s.sendall((f"POST /api/sing/take HTTP/1.1\r\nHost: 127.0.0.1:{port}\r\nContent-Type: "
+                       f"application/x-songbird-take\r\nX-Studio: {studio.token}\r\nX-Sing-Meta: {len(meta)}\r\n"
+                       f"CF-Connecting-IP: {ip}\r\nCookie: songbird-visitor-{port}=visitor-{ip.replace('.', '-')}xx"
+                       f"\r\nContent-Length: {10 * 2**20}\r\n\r\n").encode() + meta)
+            return s
+
+        slow = [sender("203.0.113.1")]
+        for _ in range(100):
+            if studio.singing.arriving:
+                break
+            time.sleep(0.01)
+        status, body = take(port, studio, **{"CF-Connecting-IP": "203.0.113.1",
+                                             "Cookie": f"songbird-visitor-{port}=another-one-here"})
+        assert status == 503 and "on its way" in body["error"]  # one from each address
+        slow.append(sender("203.0.113.2"))
+        for _ in range(100):
+            if len(studio.singing.arriving) == W.ARRIVING:
+                break
+            time.sleep(0.01)
+        status, body = take(port, studio, **{"CF-Connecting-IP": "203.0.113.3",
+                                             "Cookie": f"songbird-visitor-{port}=a-third-one-here"})
+        assert status == 503 and "on its way" in body["error"]  # a few in all
+        for s in slow:
+            s.close()
+        for _ in range(200):
+            if not studio.singing.arriving:
+                break
+            time.sleep(0.01)
+        assert not studio.singing.arriving  # a sender gone lets its place go
+    finally:
+        server.shutdown()
+        server.server_close()
+
+
+def test_a_json_body_is_read_only_after_its_guards(home):
+    """The studio's own POSTs (up to 1 MB of JSON: a MIDI file brought in, edits) are guarded before they're read,
+    and a refusal still keeps the connection in step (the body read and dropped)."""
+    studio = S.Studio(None, str(LEAD), "none", out=home / "out")
+    server = S.serve(studio, 18783)
+    threading.Thread(target=server.serve_forever, daemon=True).start()
+    port = server.server_address[1]
+    seen = []
+    real = S.Handler._read_body
+
+    def spy(self, length, *a, **k):
+        seen.append(length)
+        return real(self, length, *a, **k)
+
+    S.Handler._read_body = spy
+    try:
+        c = http.client.HTTPConnection("127.0.0.1", port, timeout=30)
+        body = json.dumps({"edits": {}, "pad": "x" * 900_000}).encode()
+        for headers, code in (({"X-Studio": "wrong"}, 403), ({"X-Studio": studio.token, "Content-Type": "text/plain"}, 415),
+                              ({"X-Studio": studio.token}, 200)):
+            c.request("POST", "/api/song", body=body, headers={"Host": f"127.0.0.1:{port}",
+                                                                "Content-Type": "application/json", **headers})
+            r = c.getresponse()
+            r.read()
+            assert r.status == code
+        assert seen == [len(body)]  # read once: for the request that passed its guards
+    finally:
+        S.Handler._read_body = real
         server.shutdown()
         server.server_close()
 

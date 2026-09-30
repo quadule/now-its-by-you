@@ -1184,8 +1184,19 @@ function applyPublic(s) {
   const p = s.public;
   if (!p) return;
   setOn("localBadge", "textContent", "Open studio");
-  setOn("whereNote", "textContent", "An open studio: the song is made on a small server, one at a time for everyone. Your changes stay in this browser.");
+  setOn("whereNote", "textContent", "An open studio: the song is made on a small server, one at a time for everyone. Your changes stay in this browser; a random id in a cookie keeps it fair (Help says what's kept).");
   setOn("helpWhere", "textContent", `This studio is open to anyone. A small server makes the song, one at a time for everyone, so you may wait your turn; each person can have ${p.records} whole songs and ${p.previews} sections made an hour, and what's made already plays at once. What you record is yours to download (it waits ${p.download_hours} hours). Your changes stay in this browser.`);
+  setOn("helpKept", "textContent", whatsKept(p, s.sing?.web));
+  setOn("helpKept", "hidden", false);
+}
+
+function whatsKept(p, singing) {  // what an open studio keeps, said plainly (docs/WEB-STUDIO.md, "What is logged, and kept")
+  const hours = p.download_hours === 24 ? "a day" : `${p.download_hours} hours`;
+  return "What's kept: a random id in a cookie, so everyone gets a fair share (it names nobody). Your changes stay in " +
+    "this browser, sent only to make the song. A recording waits here " + hours + " to be downloaded, then goes. A " +
+    "shared /v/ link, and any file you download, carries its version's own record: its made-up machine's name, the " +
+    "room its microphone heard, the leanings of its words." +
+    (singing ? " Singing: only numbers are kept; the audio is deleted once it's measured." : "");
 }
 
 // ------------------------------------------------------------------ putting it together

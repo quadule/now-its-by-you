@@ -211,6 +211,7 @@ one's own computer it waits five idle minutes for the next take.
 | a take's size | 40 MB (a whole song at 48 kHz is 23 MB) | 413 |
 | its length | 3 s to 6 minutes, and no more than 10 s past what it says it sang | 400, said |
 | takes waiting in memory | 3 at once | 503 "try again in a minute" |
+| takes on their way | 2 at once, one from each address (each is read into memory) | 503 "send yours again in a moment" |
 | a public visitor | one thing in the queue at a time (a take or a render); `--limit takes=12` an hour, `takes-ip=30` for an address | 429 with Retry-After, as for renders |
 | a way of singing | 12 takes; 256 kB; only this song's phrases, every gesture rounded and bounded | 400, said |
 | kept ways | 30 days after last use | |
@@ -218,6 +219,11 @@ one's own computer it waits five idle minutes for the next take.
 The take is guarded as the studio's own requests are: its address (Host,
 Origin), a shared studio's key, the page's token, a content type of its own
 (`application/x-songbird-take`), and a public studio's requests-a-minute.
+Since 2026-09-30 every one of them, and singing's own (on, the visitor's
+turn and takes this hour, room among the takes waiting, and the takes on
+their way), is asked before a byte of the take is read; a refused take is
+read and dropped a block at a time, nothing of it held (docs/WEB-STUDIO.md,
+"Before launch").
 
 ## In the code
 

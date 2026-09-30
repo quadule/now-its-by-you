@@ -9,6 +9,7 @@ import contextlib
 import http.client
 import io
 import json
+import re
 import socket
 import threading
 import time
@@ -25,6 +26,7 @@ LEAD = ROOT / "songs" / "h-now-its-by-you.json"
 @pytest.fixture
 def home(tmp_path, monkeypatch):
     monkeypatch.setenv("SONGBIRD_HOME", str(tmp_path / "home"))
+    monkeypatch.setenv("STUDIO_MEMORY", "16g")  # a public studio with room for any whole song (its budget: public.render_mb)
     return tmp_path
 
 
@@ -165,6 +167,80 @@ def test_the_public_queue_takes_previews_in_turn_and_one_at_a_time_for_each_visi
         assert jobs.submit("b", "preview", "b", lambda job: None, owner="fay") is b  # the same song: no new work
     finally:
         gate.set()
+
+
+def test_one_address_has_a_few_renders_waiting_however_many_visitors_it_holds():
+    """A visitor is a cookie, and a client without one is a new visitor each time: the address (an IPv6 one by its
+    /64) has queue_ip renders waiting at most, so one sender can't fill the queue for everyone."""
+    jobs = S.Jobs(12, fair=True, per_address=2)
+    gate = threading.Event()
+    first = jobs.submit("run", "preview", "x", lambda job: gate.wait(30), owner="ann", where="198.51.100.1")
+    try:
+        running(type("S", (), {"jobs": jobs})(), first.id)
+        where = P.network("2001:db8:1:2::5")
+        jobs.submit("a", "preview", "a", lambda job: None, owner="ip:1", where=where)
+        jobs.submit("b", "preview", "b", lambda job: None, owner="ip:2", where=P.network("2001:db8:1:2::77"))
+        with pytest.raises(P.Limited, match="Your network has 2 songs waiting"):
+            jobs.submit("c", "preview", "c", lambda job: None, owner="ip:3", where=P.network("2001:db8:1:2:ffff::9"))
+        jobs.submit("d", "preview", "d", lambda job: None, owner="ip:4", where=P.network("2001:db8:1:3::5"))  # another
+        assert jobs.submit("a", "preview", "a", lambda job: None, owner="ip:5", where=where).key == "a"  # the same song
+        assert P.Limits().queue_ip == 3 and P.Limits.parse(["queue-ip=2"]).queue_ip == 2
+    finally:
+        gate.set()
+
+
+def test_one_address_has_a_few_connections_served_at_once_and_a_slow_reader_is_let_go(home):
+    """The studio serves `connections` at once for everyone: one address has connections_ip of them at most, and a
+    download sent slower than send_kb a second (after its grace) is ended, so a reader taking a byte at a time can't
+    hold a place for days."""
+    studio, gate = open_studio(home, connections_ip=2, send_kb=4096)
+    gate.set()
+    server = S.serve(studio, 18870, client_ip_header="CF-Connecting-IP")
+    server.RequestHandlerClass.send_grace = 0.2
+    threading.Thread(target=server.serve_forever, daemon=True).start()
+    port = server.server_address[1]
+    key = "cd" * 12
+    (studio.cache / f"{key}.flac").write_bytes(bytes(40 * 2**20))
+    try:
+        def stalled(ip):  # a download asked for and not read: the studio blocks sending it
+            s = socket.create_connection(("127.0.0.1", port), timeout=10)
+            s.setsockopt(socket.SOL_SOCKET, socket.SO_RCVBUF, 4096)
+            s.sendall(f"GET /audio/{key}.flac HTTP/1.1\r\nHost: 127.0.0.1:{port}\r\nCF-Connecting-IP: {ip}\r\n\r\n"
+                      .encode())
+            return s
+
+        held = [stalled("203.0.113.7"), stalled("203.0.113.7")]
+        for _ in range(200):
+            if studio._serving.get("203.0.113.7") == 2:
+                break
+            time.sleep(0.01)
+        status, head, _ = ask(port, "GET", "/api/start", headers={"CF-Connecting-IP": "203.0.113.7"})
+        assert status == 429 and int(head["Retry-After"]) >= 1  # a third from the same address: turned away
+        assert ask(port, "GET", "/api/start", headers={"CF-Connecting-IP": "198.51.100.3"})[0] == 200  # another
+        assert ask(port, "GET", "/healthz")[0] == 200
+        began = time.monotonic()
+        got = 0
+        for s in held:  # read slowly: far under the least rate, so each is ended
+            while True:
+                try:
+                    chunk = s.recv(4096)
+                except OSError:
+                    break
+                if not chunk:
+                    break
+                got += len(chunk)
+                time.sleep(0.005)
+            s.close()
+        assert got < 8 * 2**20 and time.monotonic() - began < 30, got  # each ended early
+        for _ in range(200):
+            if not studio._serving:
+                break
+            time.sleep(0.01)
+        assert not studio._serving  # their places given back
+        assert ask(port, "GET", "/api/start", headers={"CF-Connecting-IP": "203.0.113.7"})[0] == 200
+    finally:
+        server.shutdown()
+        server.server_close()
 
 
 def test_a_public_studio_needs_no_key_and_gives_each_visitor_a_random_id(opened):
@@ -350,3 +426,226 @@ def test_the_local_studio_is_as_it_was(home, capsys):
     finally:
         server.shutdown()
         server.server_close()
+
+
+def test_a_range_of_a_large_recording_is_streamed_not_held_in_memory(opened):
+    """A player asks for `bytes=0-` (the whole of a 17 MB song) on every connection it opens: each range is sent
+    as it's read, a block at a time, so a few dozen players never hold a few dozen songs in the studio's memory."""
+    import hashlib
+    import os
+    import tracemalloc
+
+    studio, port, _ = opened
+    key = "ab" * 12
+    data = os.urandom(20 * 2**20)
+    (studio.cache / f"{key}.flac").write_bytes(data)
+
+    def fetch(rng):
+        c = http.client.HTTPConnection("127.0.0.1", port, timeout=60)
+        c.request("GET", f"/audio/{key}.flac", headers={"Host": f"127.0.0.1:{port}", "Range": rng})
+        r = c.getresponse()
+        h, n = hashlib.sha256(), 0
+        while True:
+            chunk = r.read(2**16)
+            if not chunk:
+                break
+            h.update(chunk)
+            n += len(chunk)
+        out = r.status, r.getheader("Content-Range"), int(r.getheader("Content-Length")), n, h.hexdigest()
+        c.close()
+        return out
+
+    tracemalloc.start()
+    try:
+        status, where, length, n, digest = fetch("bytes=0-")
+        peak = tracemalloc.get_traced_memory()[1]
+    finally:
+        tracemalloc.stop()
+    assert status == 206 and where == f"bytes 0-{len(data) - 1}/{len(data)}" and length == n == len(data)
+    assert digest == hashlib.sha256(data).hexdigest()
+    assert peak < 4 * 2**20  # blocks of 64 KB, never the 20 MB
+    status, where, length, n, digest = fetch("bytes=1000-2000047")
+    assert (status, where, length, n) == (206, f"bytes 1000-2000047/{len(data)}", 1999048, 1999048)
+    assert digest == hashlib.sha256(data[1000:2000048]).hexdigest()
+    status, where, length, n, digest = fetch("bytes=-5000")  # the last 5000
+    assert (status, length, digest) == (206, 5000, hashlib.sha256(data[-5000:]).hexdigest())
+    assert fetch(f"bytes={len(data)}-")[0] == 416
+
+
+def test_a_public_studios_day_moves_on_at_midnight_and_what_was_asked_keeps_its_own(opened, home):
+    """A studio running for weeks sings each day's version, not its first day's: at this computer's midnight the
+    day, the machine's context and the page's timeline move on, and versions someone brought open again on it; a
+    render asked for before keeps the version (and so the day) it was asked with. A local studio keeps its day."""
+    from datetime import date, timedelta
+
+    studio, port, gate = opened
+    day = date.fromisoformat(studio.day)
+    clock = [day]
+    studio.clock = lambda: clock[0]
+    asked = []
+    slow = studio._whole
+    studio._whole = lambda job, v, key: asked.append(v.drift.to_dict()["at"][:10]) or slow(job, v, key)
+    ann = visitor(port)
+    assert json.loads(ask(port, "GET", "/api/start", headers=ann)[2])["day"] == studio.day
+    status, job, _ = post(port, studio, "/api/record", {"edits": {}}, **ann)
+    running(studio, job["id"])
+    before = post(port, studio, "/api/song", {"edits": {}}, **ann)[1]
+    studio._timeline = {"drawn": "yesterday's"}
+    studio._opened["f" * 32] = studio  # a version someone brought, opened on the old day
+    clock[0] = day + timedelta(days=1)  # midnight
+    start = json.loads(ask(port, "GET", "/api/start", headers=ann)[2])
+    assert start["day"] == studio.day == (day + timedelta(days=1)).isoformat()
+    assert studio.context.day == studio.day and studio._timeline is None and not studio._opened
+    after = post(port, studio, "/api/song", {"edits": {}}, **ann)[1]
+    assert after["listen"]["whole"] != before["listen"]["whole"]  # another day's version
+    gate.set()
+    for _ in range(200):
+        if studio.jobs.get(job["id"]).state == "done":
+            break
+        time.sleep(0.01)
+    assert asked == [day.isoformat()]  # the recording asked for yesterday is yesterday's
+    assert not studio.roll()  # the same day: nothing moves
+    local = S.Studio(None, str(LEAD), "none", out=home / "out")
+    first = local.day
+    local.clock = lambda: date.fromisoformat(first) + timedelta(days=3)
+    assert not local.roll() and local.day == first  # this computer's own studio: as ever
+
+
+def test_the_page_says_plainly_what_an_open_studio_keeps(opened):
+    """The footer, Help and the Tools sheet say what's kept: a random id in a cookie, changes in the browser, a
+    recording a day, a shared link's and a file's own record, singing's numbers (only where singing is on)."""
+    studio, port, _ = opened
+    page = ask(port, "GET", "/")[2].decode()
+    assert '<p id="helpKept" hidden></p>' in page  # filled and shown in an open studio only (studio.js applyPublic)
+    script = (S.PAGE / "studio.js").read_text()
+    for said in ("What's kept: a random id in a cookie", "sent only to make the song", "its made-up machine's name",
+                 "room its microphone heard, the leanings of its words", "carries its version's own record",
+                 "only numbers are kept; the audio is deleted once it's measured",
+                 "a random id in a cookie keeps it fair (Help says what's kept)"):
+        assert said in script, said
+    assert "What's kept" in (S.PAGE / "score.js").read_text() and "helpKept" in (S.PAGE / "classic.html").read_text()
+
+
+def test_the_plain_pages_carry_no_style_the_policy_would_block(home):
+    """A shared studio's page for a visitor without its key, and a version not kept here: their look in a stylesheet
+    (style-src 'self' blocks a style written in the page), which a visitor without the key may fetch."""
+    studio = S.Studio(None, str(LEAD), "none", out=home / "out", public=P.Limits(), key="closed-beta-key")
+    server = S.serve(studio, 18880)
+    threading.Thread(target=server.serve_forever, daemon=True).start()
+    port = server.server_address[1]
+    try:
+        for path, code in (("/", 403), ("/v/" + "0" * 32 + "?key=closed-beta-key", 404)):
+            status, head, page = ask(port, "GET", path)
+            assert status == code and b"style=" not in page and b"<style" not in page, path
+            assert b"href='/notice.css'" in page and b"class=notice" in page and "style-src 'self'" in \
+                head["Content-Security-Policy"]
+        status, head, css = ask(port, "GET", "/notice.css")
+        assert status == 200 and head["Content-Type"].startswith("text/css") and b"body.notice" in css
+    finally:
+        server.shutdown()
+        server.server_close()
+
+
+def test_a_public_studio_in_its_beta_asks_search_engines_not_to_list_it(opened):
+    studio, port, _ = opened
+    assert "X-Robots-Tag" not in ask(port, "GET", "/")[1] and ask(port, "GET", "/robots.txt")[0] == 404  # not asked
+    studio.noindex = True  # --noindex
+    for path in ("/", "/studio.js", "/api/start", "/audio/" + "a" * 16 + ".flac"):
+        assert ask(port, "GET", path)[1]["X-Robots-Tag"] == "noindex, nofollow", path
+    status, head, data = ask(port, "GET", "/robots.txt")
+    assert status == 200 and data == b"User-agent: *\nDisallow: /\n" and head["X-Robots-Tag"]
+    parser = argparse.ArgumentParser()
+    S.add_arguments(parser)
+    with pytest.raises(SystemExit, match="--noindex"):
+        S.run(parser.parse_args(["--noindex"]))  # for a public studio only
+
+
+# ---------------------------------------------------------------- a whole song's memory
+
+# Measured on 30 September (tools/render_memory.py, two threads, MallocLargeCache=0; docs/WEB-STUDIO.md, "A whole
+# song's memory"): H with each style's own band as the program sings it (no edits but the style), and chamber and
+# the ballad drawn out to 3 to 7 minutes. (seconds, the render's parts, its peak in MB)
+MEASURED = {
+    "seed": (151.4, "bass drone drum fiddle guitar harp lute voice whistle", 1390),
+    "ballad": (151.7, "bass drone drum fiddle guitar harp lute voice whistle", 1350),
+    "ballad 3 verses": (286.8, "bass drone drum fiddle guitar harp lute voice whistle", 2000),
+    "ballad 4 verses": (346.8, "bass drone drum fiddle guitar harp lute voice whistle", 2370),
+    "chamber": (189.0, "cello piano strings voice", 2160),
+    "chamber, 2 verses, tempo 60": (198.8, "cello piano strings voice", 2310),
+    "chamber, 3 verses, tempo 48.4": (341.6, "cello piano strings voice", 3800),
+    "chamber, 4 verses, tempo 48.4": (413.0, "cello piano strings voice", 4060),
+    "lullaby": (298.2, "celesta harp musicbox synthpad voice", 2050),
+    "ambient": (213.8, "drone strings synthpad vibes voice", 2070),
+    "synthfolk": (132.2, "arp drummachine guitar synthbass synthlead synthpad voice", 1160),
+    "lofi": (186.0, "drummachine epiano synthbass vibes voice", 1990),
+    "songwriter": (160.6, "bass guitar harmonica voice", 1090),
+    "country": (151.7, "bass guitar kit piano steel voice", 2810),
+    "blues": (165.3, "guitar harmonica slide stomps voice", 1810),
+    "gospel": (225.2, "claps ebass kit organ piano tambourine voice", 3660),
+    "indie": (127.9, "claps ebass electric glock guitar kit organ voice", 2160),
+    "shanty": (151.2, "bass claps concertina fiddle stomps voice", 1660),
+    "stringband": (124.9, "banjo bass fiddle guitar mandolin voice", 1130),
+}
+
+
+def test_a_whole_songs_memory_is_estimated_from_its_length_and_players_never_under_what_was_measured(monkeypatch):
+    for name, (seconds, parts, peak) in MEASURED.items():
+        estimate = P.render_mb(seconds, parts.split(), threads=2)
+        assert peak <= estimate <= peak * 1.3, (name, estimate, peak)
+    assert P.render_mb(100, ["voice", "kit"]) > P.render_mb(100, ["voice", "guitar"])  # the heaviest part sets it
+    from songbird.synth.instruments import known
+
+    assert set(known()) <= set(P.RATES)  # every instrument measured (tools/part_memory.py for a new one)
+    assert P.render_mb(100, ["voice", "theremin"]) == P.BASE_MB + 100 * P.UNMEASURED * P.MARGIN  # never measured
+    assert P.render_mb(100, ["voice"], threads=6) > P.render_mb(100, ["voice"], threads=1) == P.render_mb(100, ["voice"])
+    assert P.render_mb(100, ["voice", "guitar"], stems=True) == pytest.approx(P.render_mb(100, ["voice", "guitar"])
+                                                                               + 200 * P.STEM)
+    # the budget: the studio's memory (the compose passes STUDIO_MEMORY in), less 400 MB
+    for given, mb in (("2500m", 2500), ("2g", 2048), ("8G", 8192), ("2621440000", 2500)):
+        monkeypatch.setenv("STUDIO_MEMORY", given)
+        assert P.memory_mb() == mb and P.Limits().render_mb == mb - 400
+    assert P.Limits.parse(["render-mb=1500"]).render_mb == 1500
+    assert P.minutes(413.0) == "6.9 minutes" and P.minutes(180) == "3 minutes"
+
+
+@pytest.fixture
+def budget(home, monkeypatch):
+    """A public studio of the VPS's size (2.5 GB, two threads), its renders faked, and a version seven minutes long:
+    chamber at its slowest, four verses, every part the song can have (the review's)."""
+    from songbird import edits as E, genome
+
+    monkeypatch.setenv("SONGBIRD_THREADS", "2")
+    monkeypatch.setenv("STUDIO_MEMORY", "2500m")
+    studio, gate = open_studio(home)
+    gate.set()
+    song = genome.load(LEAD)
+    long = {"style.name": "chamber", "tempo": 48.4, "form.verses": 4, **{f"form.{n}": True for n in E.optional(song)}}
+    server = S.serve(studio, 18860)
+    threading.Thread(target=server.serve_forever, daemon=True).start()
+    yield studio, server.server_address[1], long
+    server.shutdown()
+    server.server_close()
+
+
+def test_a_whole_song_too_long_for_the_servers_memory_is_refused_before_its_queued(budget):
+    studio, port, long = budget
+    assert studio.public.render_mb == 2100
+    seconds, parts = studio.whole_cost(studio.version(long))
+    assert seconds > 400 and "cello" in parts and not studio.fits_here(seconds, parts)[0]
+    ann = visitor(port)
+    for path, body in (("/api/record", {"edits": long}), ("/api/listen", {"edits": long, "section": None}),
+                       ("/api/export", {"edits": long, "what": "stems"})):
+        status, refused, _ = post(port, studio, path, body, **ann)
+        assert status == 422 and refused["too_long"], (path, refused)
+        assert re.match(r"This version is \d+(\.\d)? minutes long, too long for this small server to make in one "
+                        r"go \(about 2(\.\d)? minutes at most with these players\): shorten it \(fewer verses, a "
+                        r"quicker tempo\)\.$", refused["error"]), refused
+    assert not studio.jobs.pending and not studio.jobs.jobs  # nothing queued, nothing counted
+    status, job, _ = post(port, studio, "/api/listen", {"edits": long, "section": 3}, **ann)
+    assert status == 200  # a section of it is made as ever
+    status, job, _ = post(port, studio, "/api/record", {"edits": {}}, **ann)
+    assert status == 200 and job["kind"] == "record"  # the song as the program has it fits
+    studio.public.render_mb = 10**6
+    assert post(port, studio, "/api/record", {"edits": {**long, "roll": 1}}, **ann)[0] != 422  # a bigger server
+    local = S.Studio(None, str(LEAD), "none")
+    local.check_whole(local.version(long))  # a local studio makes what it's asked, as ever

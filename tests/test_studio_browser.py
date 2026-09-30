@@ -34,6 +34,7 @@ def studio_render():
 @pytest.fixture
 def home(tmp_path, monkeypatch):
     monkeypatch.setenv("SONGBIRD_HOME", str(tmp_path / "home"))
+    monkeypatch.setenv("STUDIO_MEMORY", "16g")  # a public studio with room for any whole song (its budget: public.render_mb)
     return tmp_path
 
 
@@ -178,3 +179,33 @@ def test_a_recording_from_its_spec_is_the_studios_own_packet_byte_for_byte(home)
         render.run(answer["spec"], home / "again", program="f" * 64)
     with pytest.raises(render.Refused, match="shape"):
         render.run(json.dumps({**spec, "v": 99}), home / "again", program=studio.program_digest)
+
+
+def test_a_whole_song_too_long_for_a_browsers_heap_goes_to_the_server_or_is_said_to_be_too_long(public, monkeypatch):
+    """A browser's wasm heap tops out at 4 GiB: a whole song estimated past public.BROWSER_MB of it isn't given to the
+    browser; the server makes it if it fits there, and if it doesn't either the page is told why, the same sentence,
+    and nothing is sent anywhere. One that fits the browser but not the server: the server says "make it in your
+    browser"."""
+    from songbird import edits as E, genome
+
+    monkeypatch.setenv("SONGBIRD_THREADS", "2")
+    studio, port = public
+    song = genome.load(LEAD)
+    long = {"style.name": "chamber", "tempo": 48.4, "form.verses": 4, **{f"form.{n}": True for n in E.optional(song)}}
+    status, answer = post(port, studio, "/api/render/spec", {"edits": {}})
+    assert status == 200 and answer["kind"] == "whole" and "spec" in answer  # the song as the program has it: here
+    status, answer = post(port, studio, "/api/render/spec", {"edits": long})
+    assert status == 200 and answer["server"] and "spec" not in answer  # past a browser; a server with 16 GB makes it
+    studio.public.render_mb = 2100  # the VPS's
+    status, answer = post(port, studio, "/api/render/spec", {"edits": long})
+    assert status == 200 and "spec" not in answer and not answer.get("server")
+    assert answer["too_long"].startswith("This version is ") and "too long for this small server or a browser" in \
+        answer["too_long"] and answer["too_long"].endswith("shorten it (fewer verses, a quicker tempo).")
+    assert post(port, studio, "/api/render/spec", {"edits": long, "section": 2})[1]["kind"] == "section"  # a section: yes
+    # a version the browser can make but this server can't: the server says so, and where to make it
+    seconds, parts = studio.whole_cost(studio.version({}))
+    assert S.Studio.fits_browser(seconds, parts)
+    studio.public.render_mb = 600
+    status, refused = post(port, studio, "/api/record", {"edits": {}})
+    assert status == 422 and refused["too_long"] and "make it in your browser, or shorten it" in refused["error"]
+    assert post(port, studio, "/api/render/spec", {"edits": {}})[1]["kind"] == "whole"  # and the browser is given it

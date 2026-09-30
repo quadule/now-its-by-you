@@ -20,8 +20,104 @@ import shutil
 import threading
 import time
 from collections import deque
-from dataclasses import dataclass, fields
+from dataclasses import dataclass, field, fields
 from pathlib import Path
+
+
+# ---------------------------------------------------------------- a whole song's memory
+#
+# A whole render's peak memory grows with the song's length, and with who plays it. Measured on 30 September
+# (tools/render_memory.py: H with each style's own band, and chamber and the ballad at 3 to 7 minutes; two threads,
+# MallocLargeCache=0, which hands freed arrays back as Linux does; docs/WEB-STUDIO.md, "A whole song's memory"), it
+# is about BASE_MB and so many MB for every second of the song. A part's rate is the lightest band's it plays in
+# (the ballad's 7.2, the songwriter's 4.9), except the kit's, which alone puts country, gospel and indie at 14.5 to
+# 16.5 (stage by stage, the kit is 9 of it: the others in those bands are counted without it). A part in none of
+# those bands: the ballad's band with it playing the whistle's line or the drum's strokes (tools/part_memory.py), and
+# a little more. A song's rate is its heaviest part's, and MARGIN more; every measurement is at or under it
+# (tests/test_studio_public.py, MEASURED).
+
+BASE_MB = 300  # the program and its imports, and the page's work beside a render
+RATES = {  # MB for a second of the song, on two threads
+    "voice": 4.9, "guitar": 4.9, "bass": 4.9, "harmonica": 4.9,
+    "harp": 5.9, "celesta": 5.9, "musicbox": 5.9, "synthpad": 5.9, "tambourine": 5.9, "piano": 5.9,
+    "ebass": 5.9, "organ": 5.9, "electric": 5.5, "glock": 5.5,
+    "arp": 6.5, "drummachine": 6.5, "synthbass": 6.5, "synthlead": 6.5,
+    "fiddle": 6.6, "banjo": 6.6, "mandolin": 6.6,
+    "drone": 7.2, "drum": 7.2, "lute": 7.2, "whistle": 7.2, "steel": 7.5,
+    "strings": 8.3, "vibes": 8.3,
+    "claps": 9.0, "stomps": 9.0, "concertina": 9.0, "epiano": 9.1, "slide": 9.2,
+    "cello": 10.3,
+    "kit": 16.5,
+    # in no band as the program sings H: measured in the ballad's (tools/part_memory.py), 0.3 more
+    "accordion": 6.8, "cajon": 6.5, "chip": 7.3, "chip-bass": 7.0, "chip-drums": 7.7, "drums-808": 6.3,
+    "drums-909": 7.1, "electric-crunch": 5.9, "electric-tremolo": 7.4, "epiano-reed": 7.0, "glockenspiel": 7.0,
+    "harmonium": 6.8, "marimba": 7.0, "music-box": 6.7, "nylon": 6.7, "shaker": 6.5, "sub-bass": 6.9,
+    "synth-arp": 7.0, "synth-bass": 7.0, "synth-pad": 6.9, "synth-solo": 5.9, "ukulele": 6.9, "vibraphone": 8.9,
+    "viola": 7.0,
+}
+UNMEASURED = 16.5  # a part never measured (one added since): the heaviest band's rate
+MARGIN = 1.05
+CHOIR = 1.0  # a voice from before, more than the voice's (not measured apart: a guess)
+STEM = 0.71  # a stereo stem held whole until the stems' zip is packed (float64, 44.1 kHz), for each part
+MORE_THREADS = 0.12  # each thread past two makes this much more at once (H's seed: 1.33 GB on 2, 1.92 on 6)
+# a browser's heap (renderer.js: one thread, wasm32) is 2.0 to 2.3 GiB for H with a voice before it, about 1.7 times
+# the estimate here; Chrome's ceiling is 4 GiB (4295 MB), and a whole song made in a browser is kept under BROWSER_MB
+# of it (a ballad of about 4.3 minutes; one past it goes to the server, or is refused with the same sentence)
+BROWSER_MB = 3800
+BROWSER_FACTOR = 1.7
+
+
+def render_rate(parts, threads: int = 2) -> float:
+    """MB for a second of a song these parts play (the score's part names), on `threads`."""
+    rates = [CHOIR + RATES["voice"] if p.startswith("choir") else RATES.get(p, UNMEASURED) for p in parts]
+    return max(rates or [RATES["voice"]]) * MARGIN * (1.0 + MORE_THREADS * max(0, threads - 2))
+
+
+def render_mb(seconds: float, parts, threads: int = 2, stems: bool = False) -> float:
+    """About the most memory a whole render of a song this long, with these parts, takes (MB); `stems`: every part
+    made alone and held for the zip, after the recording."""
+    parts = sorted(set(parts))
+    return BASE_MB + seconds * (render_rate(parts, threads) + (STEM * len(parts) if stems else 0.0))
+
+
+def memory_mb() -> int:
+    """The memory this studio is given, in MB: STUDIO_MEMORY as Docker takes it (2500m, 2g; the compose passes it
+    in), else the container's own limit (cgroup v2), else 2500 (the VPS's)."""
+    text = os.environ.get("STUDIO_MEMORY", "").strip().lower()
+    match = re.fullmatch(r"(\d+(?:\.\d+)?)\s*([kmg]?)b?", text)
+    if match:
+        scale = {"": 1 / 2**20, "k": 1 / 1024, "m": 1, "g": 1024}[match.group(2)]
+        return int(float(match.group(1)) * scale)
+    with contextlib.suppress(OSError, ValueError):
+        return int(Path("/sys/fs/cgroup/memory.max").read_text().strip()) // 2**20
+    return 2500
+
+
+def default_render_mb() -> int:
+    """What a whole render may take: the studio's memory, less 400 MB for everything else (the server, the pages'
+    requests, a take or two on its way)."""
+    return max(500, memory_mb() - 400)
+
+
+def minutes(seconds: float) -> str:
+    """A song's length in words: "6.9 minutes"."""
+    return f"{seconds / 60:.1f}".rstrip("0").rstrip(".") + " minutes"
+
+
+class TooLong(ValueError):
+    """A whole song too long (with its players) for this studio to make in one go: said to the person."""
+
+
+def too_long(seconds: float, most: float, browser: bool | None) -> str:
+    """Why a whole song isn't made here, in a sentence: `most`, the longest it makes with these players; `browser`,
+    whether a browser may make it instead (None: the studio has none to offer)."""
+    if browser:
+        return (f"This version is {minutes(seconds)} long, too long for this small server to make in one go (about "
+                f"{minutes(most)} at most with these players): make it in your browser, or shorten it (fewer "
+                "verses, a quicker tempo).")
+    where = "this small server" if browser is None else "this small server or a browser"
+    return (f"This version is {minutes(seconds)} long, too long for {where} to make in one go (about "
+            f"{minutes(most)} at most with these players): shorten it (fewer verses, a quicker tempo).")
 
 
 @dataclass
@@ -35,16 +131,22 @@ class Limits:
     takes_ip: int = 30
     requests: int = 600  # requests from one address a minute (the page asks every half second while it waits)
     queue: int = 12  # renders waiting at once, for everyone
+    queue_ip: int = 3  # ... from one address (an IPv6 one by its /64), however many visitors (or none) it holds
     cache_mb: int = 300  # previews kept, shared by everyone who makes the same choices
     downloads_mb: int = 1024  # recordings waiting to be downloaded
     download_hours: float = 24.0  # how long a recording waits
     timeout: float = 30.0  # seconds a connection may send nothing before it's closed
     connections: int = 64  # connections served at once
+    connections_ip: int = 16  # ... from one address (a page asks several things at once, a player several ranges)
+    send_kb: int = 16  # the slowest a download is sent (KB a second, over its whole time, after a minute's grace)
     opens: int = 12  # versions someone was sent, opened by one visitor an hour (each read in a process of its own)
     opens_ip: int = 40
     upload_mb: int = 64  # the largest file taken as a version to open (a rendition is 15 to 20 MB)
     versions_mb: int = 256  # versions opened, kept as data (a record and a song, about 150 KB each)
     version_days: float = 30.0  # how long a version is kept after it was last opened (its link works that long)
+    # the most a whole render may take, MB (the container's memory less 400): a whole song estimated past it (its
+    # length and players: render_mb, above) is refused before it's queued, and made in a browser where one can
+    render_mb: int = field(default_factory=default_render_mb)
 
     @classmethod
     def parse(cls, items: list[str] | None) -> "Limits":

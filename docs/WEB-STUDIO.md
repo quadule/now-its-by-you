@@ -92,11 +92,15 @@ studio (`songbird budget`: 5.45 MiB of 8).
 | `previews-ip` | 150 | the same, for one address |
 | `requests` | 600 | requests from one address a minute (the page asks every half second while it waits, and a player asks for ranges) |
 | `queue` | 12 | renders waiting at once, for everyone |
+| `queue-ip` | 3 | renders waiting at once from one address (an IPv6 one by its /64), however many visitors or none it holds |
+| `render-mb` | STUDIO_MEMORY less 400 | the most a whole song may take to make here: one estimated past it is refused before it's queued ("A whole song's memory", below) |
 | `cache-mb` | 300 | previews kept (shared: the same choices are made once for everyone) |
 | `downloads-mb` | 1024 | recordings waiting to be downloaded (about 17 MB each: 60 or so) |
 | `download-hours` | 24 | how long a recording waits after it was last asked for |
 | `timeout` | 30 | seconds a connection may send nothing |
 | `connections` | 64 | connections served at once |
+| `connections-ip` | 16 | requests served at once from one address (past it: 429) |
+| `send-kb` | 16 | the slowest a download is sent, KB a second over its whole time, after a minute's grace (a slower reader is let go) |
 | `opens` | 12 | versions someone was sent, opened by one visitor an hour (each is read in a process of its own: about 9 s) |
 | `opens-ip` | 40 | the same, for one address (an IPv6 address counted by its /64) |
 | `upload-mb` | 64 | the largest file taken as a version to open (a rendition is 15 to 20 MB) |
@@ -169,8 +173,10 @@ byte what it was (it was 3.2 GB). Those are macOS figures with
 arrays straight back; the compose file sets `MALLOC_ARENA_MAX=2` and
 `MALLOC_MMAP_THRESHOLD_=1048576` so glibc does. A measuring process for
 singing (under 900 MB) never runs beside a render: they share one queue. So
-the 2.5 GB cap holds a render with room for the server and its pages, on the
-VPS's ~3.4 GB free beside mailcow. **Measure it once in the container before
+the 2.5 GB cap holds H's seed with room for the server and its pages, on the
+VPS's ~3.4 GB free beside mailcow; but not every version (a long one, or one
+with a drum kit): "A whole song's memory", below, is how the studio keeps a
+render inside the cap. **Measure it once in the container before
 opening it** (`docker stats` while a whole song is recorded, or
 `tools/render_memory.py`): these figures are from a Mac, not the VPS.
 
@@ -270,10 +276,13 @@ the same by link, with the link as the only lock.
   keeps its analytics per its own policy; cloudflared logs its connections,
   not requests. Cloudflare Access, if used, knows each signed-in email.
 
-A privacy note on the page would say: an open studio; your changes stay in
-your browser and are sent only to make the song; a random id in a cookie
-counts your songs per hour; nothing names you; recordings are deleted after
-a day.
+The page says it (since 2026-09-30: the footer, Help's "What's kept", a word
+in the Tools sheet that opens it): a random id in a cookie, so everyone gets
+a fair share (it names nobody); your changes stay in this browser, sent only
+to make the song; a recording waits a day to be downloaded, then goes; a
+shared /v/ link, and any file downloaded, carries its version's own record
+(its made-up machine's name, the room its microphone heard, the leanings of
+its words); singing keeps only numbers, the audio deleted once measured.
 
 ## Costs
 
@@ -828,3 +837,124 @@ kernels must be current (build_render.py refuses stale ones, as tests/test_brows
 5. **A browser's recordings aren't counted** against the hourly limits (they cost the server nothing). Someone
    could make many; only their own computer pays.
 6. **Safari** qualifies automatically but is untested; if it misbehaves, a line in `capable` sends it to the server.
+
+## Before launch (2026-09-30)
+
+A Fable review of the public studio as built found four launch blockers and a few smaller things. What came of each
+(tests in brackets):
+
+| | found | now |
+|---|---|---|
+| 1 | **A long whole song kills the studio.** Chamber at its slowest, four verses, every part on: 7 minutes, peaking at 4.1 GB on 2 threads against the container's 2.5 GB. The kernel kills the studio mid-render; the queue is lost | Every whole render (hearing the whole song, recording, the stems) is estimated before it's queued, from its laid-out length and its players, and refused past the studio's budget with a sentence: "This version is 6.9 minutes long, too long for this small server to make in one go (about 2.8 minutes at most with these players): make it in your browser, or shorten it (fewer verses, a quicker tempo)." Below, "A whole song's memory" (test_studio_public, test_studio_browser, studio_renderer_browser) |
+| 2 | **Bodies read before their guards**: a take (up to 41 MB) read whole before its Host, token or limits were asked; 64 connections could have the studio hold 2.6 GB | Every POST asks every guard first (the studio's JSON, a take, a file brought). A take also asks, before a byte is read, whether singing is on, the visitor's turn and takes this hour, and room among the takes waiting; two takes are on their way at once, one from each address. A refused body is read and dropped a block at a time (nothing of it held), so the answer still arrives and the connection stays in step (test_web_singing) |
+| 3 | **A range read into memory**: a player's `bytes=0-` held the whole song (17 MB) per connection | Ranges are streamed a block at a time, as a whole file is (test_studio_public, with a 20 MB file under tracemalloc) |
+| 4 | **The studio's day was fixed at start**: a container up for weeks would sing, and stamp, every version as its first day's | A public studio's day moves on at this computer's midnight (`Studio.roll`, asked at every request): the machine's context, the timeline, the versions someone brought, all opened again on the new day. A render asked for before keeps the version it was asked with, and its record the day it was sung. A local studio keeps its day, as ever (test_studio_public, with a fake clock) |
+| 5 | A client without a cookie is a new visitor each time, so one sender could fill the queue | `queue-ip` (3): renders waiting at once from one address, an IPv6 one by its /64 |
+| 6 | A slow reader held one of the 64 connections for days | `connections-ip` (16): requests served at once from one address (the real one, from CF-Connecting-IP; past it, 429); and a download is sent no slower than `send-kb` (16 KB/s over its whole time, after a minute) or let go |
+| 7 | The page didn't say what an open studio keeps | The footer, Help's "What's kept", and a "What's kept" button in the Tools sheet ("What is logged, and kept", above) |
+| 8 | `/api/open` could hold a request 90 s waiting for a reader and 75 s reading, past Cloudflare's 100 s | A file brought takes its reader's place before a byte is read, or is answered at once: "The studio is reading other versions just now; send it again in a minute" (the page, asking first, hears it too); its reader has what's left of 88 s since it was asked, and a file that took most of them to arrive is refused (test_studio_received) |
+| 9 | Search engines would list the beta | `--noindex` (the compose passes it: `STUDIO_NOINDEX`, a space to drop it): `X-Robots-Tag: noindex, nofollow` on every reply, and a robots.txt that disallows everything |
+| 10 | The plain pages' inline styles were blocked by `style-src 'self'` | In `notice.css`, served to a visitor without the key too |
+
+### A whole song's memory
+
+Measured on 30 September on the M1 Max, `tools/render_memory.py` (the whole process's resident high-water mark,
+`MallocLargeCache=0` as the stand-in for Linux), two threads unless said:
+
+| version | length | parts | peak, 2 threads | 1 thread |
+|---|---|---|---|---|
+| H's seed (the ballad) | 151 s | bass drone drum fiddle guitar harp lute voice whistle | 1.39 GB | 1.13 GB |
+| the ballad, 3 verses, every part | 287 s | the same | 2.00 GB | |
+| the ballad, 4 verses, every part, slowest | 347 s | the same | 2.37 GB | |
+| chamber | 189 s | cello piano strings voice | 2.16 GB | 1.89 GB |
+| chamber, 2 verses, tempo 60 | 199 s | the same | 2.31 GB | 2.06 GB |
+| chamber, 3 verses, slowest, every part | 342 s | the same | 3.80 GB | 3.03 GB |
+| chamber, 4 verses, slowest, every part (the review's) | 413 s | the same | 4.06 GB | 3.60 GB |
+| lullaby | 298 s | celesta harp musicbox synthpad voice | 2.05 GB | |
+| ambient | 214 s | drone strings synthpad vibes voice | 2.07 GB | |
+| synth folk | 132 s | arp drummachine guitar synthbass synthlead synthpad voice | 1.16 GB | |
+| lo-fi | 186 s | drummachine epiano synthbass vibes voice | 1.99 GB | 1.96 GB |
+| songwriter | 161 s | bass guitar harmonica voice | 1.09 GB | |
+| **country** | 152 s | bass guitar **kit** piano steel voice | **2.81 GB** | 2.38 GB |
+| blues | 165 s | guitar harmonica slide stomps voice | 1.81 GB | |
+| **gospel** | 225 s | claps ebass **kit** organ piano tambourine voice | **3.66 GB** | 3.31 GB |
+| indie | 128 s | claps ebass electric glock guitar **kit** organ voice | 2.16 GB | 2.05 GB |
+| shanty | 151 s | bass claps concertina fiddle stomps voice | 1.66 GB | |
+| string band | 125 s | banjo bass fiddle guitar mandolin voice | 1.13 GB | |
+
+So memory grows with length (about 1 GB for every 100 s of chamber on two threads, 0.6 to 0.7 of the ballad) and
+with the players: **the drum kit alone** takes country, gospel and indie to 15-16.5 MB for every second of song
+(stage by stage on one thread, the kit's is 9 of it: `songbird/synth/kit.py` holds a whole-length track and motion for
+each of its five drums, and more). Country as the program sings it (2.81 GB) and gospel (3.66 GB) are past the
+2.5 GB container already, whatever their length. That is where the next memory work is (the kit's arrays, as
+docs/PERFORMANCE.md did for the others, byte for byte); until then the budget keeps them off the server.
+
+**The estimate** (`songbird/public.py`, `render_mb`): 300 MB, and for every second of the song the rate of its
+heaviest part, 5% more; more threads more (12% a thread past two, from H's seed on six). A part's rate is the
+lightest band's it was measured in (the ballad's 7.2, the songwriter's 4.9), except in the kit's bands, where the
+others are counted without the kit's 9; a part in no band above, its rate in the ballad's band
+(`tools/part_memory.py`: H's seed with the whistle's line, or the drum's strokes, played by it), and a little more;
+a part never measured, the heaviest rate (16.5). A voice from before adds 1 (a guess); the stems hold every part
+whole until the zip is packed (0.71 MB a second each). Every measurement above is at or under its estimate, none
+by more than a quarter (tests/test_studio_public.py, `MEASURED`).
+
+**The budget**: `--limit render-mb`, by default the container's memory less 400 MB (the compose passes
+`STUDIO_MEMORY` in; else the cgroup's limit; else 2500 MB): **2100 MB** on the VPS. What it lets the server make in one
+go, on two threads: the ballad up to about 4 minutes, the songwriter's band nearly 6, synth folk 4.4, lo-fi 3.1,
+chamber 2.8 (its own default, 3.1 minutes, is refused), anything with a kit about 1.7 (country's and gospel's
+defaults are refused: they would kill the studio). `STUDIO_MEMORY=3g`, if the VPS can spare it, is about a quarter
+longer each.
+
+**In a browser** (renderer.js, one thread, wasm32): H's whole song with a voice before it took 2.0-2.3 GiB of heap in
+Chrome, about 1.7 times its estimate here, and Chrome's ceiling is 4 GiB; a whole song estimated past 3800 MB of heap
+(`BROWSER_MB`: the ballad at about 4.3 minutes) isn't given to the browser. The render spec says `server` when the
+server can make it instead, or `too_long` with the same sentence ("…too long for this small server or a browser…:
+shorten it…") when neither can; the page says it and sends it nowhere. The server, refusing a whole song a browser
+could make, says "make it in your browser". Sections are made as ever, in either.
+
+**A version someone brings**: a public studio opens it only if its next version plays no longer than the longest it
+makes in one go with the lightest band (`Studio.most_minutes`: 6.6 minutes on the VPS with the bundle, received.MINUTES' 12
+elsewhere), and says so otherwise: "Open it in the studio on your own computer."
+
+Decisions for the artist: the budget's headroom (400 MB for the pages, a take or two on its way, and the reader of a
+version brought, which runs beside a render); the browser's factor (1.7, from one version: measure a long ballad in
+Chrome to tighten it); and whether to fix the kit's memory before launch, since every style with a kit is refused on
+the server past about 1.7 minutes (a desktop browser makes most of them).
+
+### Cloudflare: cache the bundle
+
+Cloudflare caches by extension, and `.wasm`, `.mjs`, `.whl` aren't among its defaults: without a rule, every first
+visit's 28 MB comes from the VPS. Rules > Cache Rules > Create rule: *When* `URI Path` *starts with* `/render/`, *then*
+Cache eligibility: **Eligible for cache**, Edge TTL: **Use cache-control header if present** (the bundle's files say
+`public, max-age=31536000, immutable`; `bundle.json` says `no-cache`, so it isn't kept, and a new program is seen at
+once). Browser TTL: respect the origin. Check with `curl -sI https://studio.itsby.you/render/<app-…>/<a file>`
+twice: `cf-cache-status: HIT` the second time.
+
+### The checklist
+
+Before opening it (Cloudflare Access first, for the beta: "A closed beta first", above):
+
+1. **Build with the try override** and open it on 127.0.0.1:8766:
+   `docker compose -f deploy/studio/docker-compose.yml -f deploy/studio/docker-compose.try.yml up --build studio`.
+   The bundle stage runs; the studio's start says "Made in the visitor's browser…" and "Singing in the browser: on".
+2. **`docker stats`** while recording H's seed (under 1.5 GB), then while asking for the review's long chamber
+   version (refused at once, nothing queued) and a chamber version just under the budget (under 2.1 GB). If Linux
+   peaks higher than the Mac, lower `render-mb` or raise `STUDIO_MEMORY`.
+3. **Disk**: `df -h` on the VPS, and `docker builder prune` after the build (the bundle's stage leaves ~2 GB of
+   layers); the volume grows to about 1.5 GB (previews, downloads, versions, the compiled synthesis).
+4. **The compiled synthesis built on the VPS**: the image's numba cache is for the build machine's CPU; the first
+   render after a start compiles what doesn't match (10-15 s, kept in the volume). Let `warm` run once (the start
+   message, then the first verse), then record once before inviting anyone.
+5. **The Secure cookie**: cloudflared must pass `X-Forwarded-Proto: https` (it does by default); check the page's
+   `Set-Cookie` carries `Secure` through the tunnel (`curl -sI https://studio.itsby.you/`).
+6. **CF-Connecting-IP believed**: the studio believes it only from a private network; check the compose network's
+   subnet (`docker network inspect songbird-studio_inside`, usually 172.16.0.0/12) is among the private ranges
+   (`public.NEAR`), and that two devices on different networks are counted apart (a 429 on one isn't on the other).
+7. **/dev/shm with a read-only root**: numba and the measuring process use shared memory; `docker compose exec studio
+   df -h /dev/shm` (Docker gives 64 MB by default; `shm_size: 256m` if a take's measuring fails with "no space").
+8. **The seed's id in the container**: render H's seed there
+   (`docker compose exec studio songbird render songs/h-now-its-by-you.json --machine none --out /tmp/h.flac`, if the
+   read-only root allows /tmp) and compare its id with the Mac's (`9b0766353b73…`): whether Linux and macOS already
+   part (the fiddle's last bits, "Byte identity" above).
+9. **Cloudflare Access** in front for the beta (Zero Trust > Access > Applications), the cache rule above, and
+   `STUDIO_NOINDEX` left as `--noindex`.

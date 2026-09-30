@@ -1258,6 +1258,12 @@
       ? `An open studio: each person can have ${p.records} whole songs and ${p.previews} sections made an hour, one at a time for everyone; what you record waits ${p.download_hours} hours to be downloaded.`
       : start.shared ? "Recordings are made, and kept, on the computer serving this studio: download yours to keep it."
         : `Recordings go into ${start.out} on this computer.`;
+    if (p) {  // what an open studio keeps: in Help, a word away
+      const kept = document.createElement("button");
+      Object.assign(kept, { type: "button", className: "btn quiet", textContent: "What's kept" });
+      kept.addEventListener("click", () => { window.SongbirdHelp?.open(); $("helpKept")?.scrollIntoView?.({ block: "nearest" }); });
+      $("toolsWhere").append(" ", kept);
+    }
     if (start.version) $("versionNote").textContent = "This page is on someone's version. Opening another starts from that one instead.";
     // a view and a selection in the address, for a link or a picture: #view=arrange&sel=cell:drum:refrain:0&open=refrain:0&panel=tools
     if (hash.view) showView(hash.view);
