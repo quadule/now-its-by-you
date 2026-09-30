@@ -368,6 +368,11 @@ preview is where to hear your version sung your way. A packet's program has
 no singing page yet (songbird.quadule.com will take takes online), and the
 card says so.
 
+Started with `--web-singing` (a checkout, with the singing kit), the studio
+takes singing on its own page instead, for the web studio: the visitor sings
+to the guide in the browser, the take is measured on the server and its audio
+deleted there, and the singer's card offers *your way*. docs/WEB-SINGING.md.
+
 ## Recording
 
 *Record it* renders the whole rendition as `songbird render --pack` does

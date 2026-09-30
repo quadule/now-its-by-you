@@ -121,11 +121,11 @@ back. These are guesses to be tuned from the log (the 429s and 503s in it).
   song, the parameters, the words, the voice, the section) and shared: two
   visitors with the same choices hear one render. Nobody can list them.
 - **One heavy job at a time.** A render uses up to SONGBIRD_THREADS threads
-  (the same bytes whatever it says). Measuring a visitor's singing in the web
-  studio, when it comes (another agent's work), should submit its work
-  through the same queue (`studio.jobs`), so a render and a measurement never
-  run at once, and its model (faster-whisper) must fit in the same memory
-  cap beside a render.
+  (the same bytes whatever it says). Measuring a visitor's singing
+  (`--web-singing`, docs/WEB-SINGING.md) is a job in the same queue
+  (`studio.jobs`), so a render and a measurement never run at once; it runs
+  in a process of its own that peaks under 900 MB and is stopped after each
+  take. It loads no speech model: sung takes don't need one.
 - **The container** (deploy/studio/Dockerfile): Python 3.12 slim, uv, the
   locked dependencies (`uv sync --frozen --no-dev`), the program and the
   songs, and nothing else of the checkout (no renders, recordings,
@@ -296,9 +296,10 @@ a day.
    for listening) costs the same renderer time.
 5. **Downloads wait a day.** Longer means more disk; shorter, more "make it
    again".
-6. **The singing card** is still shown (disabled, saying it opens only on
-   the serving computer) in public mode; whether singing comes to the web
-   studio is the singing agent's work.
+6. **The singing card** is disabled in public mode, saying it opens only on
+   the serving computer, unless the studio takes singing in the browser
+   (`--web-singing`, on in deploy/studio/): then it opens the singing on the
+   page itself. Its own decisions are in docs/WEB-SINGING.md.
 7. **VPS or desktop first.** The VPS must wait for the render-memory work;
    the desktop can serve today, while it's awake.
 
