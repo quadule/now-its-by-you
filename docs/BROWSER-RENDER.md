@@ -17,6 +17,11 @@ as the native peak (4.7 GB RSS at one thread). Recommendation below:
 **hybrid** now (previews in the browser, records on the server), whole songs
 in the browser once the memory work lands.
 
+**In the studio since 2026-09-30**: `songbird studio --public --browser-render DIR` serves a bundle built from
+this prototype, and a desktop visitor's browser makes their previews and recordings from the server's render spec,
+the server as the fallback (docs/WEB-STUDIO.md, "Made in the visitor's browser": what was built, the identity
+checked version by version, the fiddle that parts by a sample or two, the times and the heap).
+
 The prototype is `web/studio-wasm/` (how to run it is at the end). Nothing in
 `songbird/` changed; the goldens hold (`test_determinism`,
 `test_styles::test_the_seed_of_h_renders_byte_identical`, the seed scores

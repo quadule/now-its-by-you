@@ -15,6 +15,7 @@ mode is a third way, built on the shared one.
 
     songbird studio --public [--allow-host studio.itsby.you] [--host 0.0.0.0]
                     [--client-ip-header CF-Connecting-IP] [--limit NAME=N ...] [--key WORD] [--machine none]
+                    [--browser-render DIR]     (the song made in desktop browsers: "Made in the visitor's browser")
 
 It is *shared* (everything the shared preview does: the Host and Origin
 checks, the page's token on every change, the singing page off, only
@@ -283,6 +284,10 @@ a day.
   1 GB for the image and up to 1.5 GB for the volume (previews, downloads,
   logs). Traffic: a section is about 1.6 MB, a recording about 17 MB, so
   1,000 recordings a month is about 20 GB out, within any VPS's allowance.
+  With the song made in visitors' browsers (below, "Made in the visitor's
+  browser"), the VPS mostly serves files: each new desktop visitor fetches
+  the singer once (about 28 MB), and the renderer works only for phones,
+  tablets and fallbacks.
 - **The desktop**: electricity, and the Mac kept awake.
 
 ## Decisions for the artist
@@ -604,3 +609,217 @@ main points, and what came of them (all are in the design as it stands):
 5. **What a link shows of the maker** (the privacy note above): the same as
    the file, to whoever has the link. Blurring the machine's pseudonym and
    room for shared links would change what the child inherits.
+
+## Made in the visitor's browser (2026-09-30)
+
+The feasibility spike (docs/BROWSER-RENDER.md) showed the program itself running in a browser: Pyodide, the numba
+kernels translated to JavaScript and a few to C/wasm, the same samples as native. This puts it behind the studio's
+page, so a desktop visitor's own browser makes their previews and their recording, and the VPS mostly serves files.
+The server stays the fallback for everything the browser can't do. The local studio is unchanged: it renders
+natively, and the bundle never goes into the song's packet.
+
+    songbird studio --public --browser-render DIR      DIR: built by web/studio-wasm/tools/build_render.py
+
+### What a visitor sees
+
+- **Nothing new, at first.** On a desktop browser the first ▶ or *Record it* says "getting the singer ready (once:
+  12 of 35 MB)" in the player, then what the program is doing ("singing", "playing the fiddle", "mastering"), as
+  a server render does. This happens once per visitor: the files are cached for good after that, and later visits
+  say only "getting the singer ready" for the 5 or 6 seconds Python takes to start.
+- **The Tools sheet** has *Make the song: automatically · in this browser · on the server* under *Record it*, with a
+  line saying what automatically means here ("This browser makes the song itself…", or "The server makes the song:
+  phones and tablets have the server make it") and where the last one was made ("The last section was made in this
+  browser (5.1 s)"). The choice is kept in this browser. The setting is shown only where the studio serves the
+  bundle.
+- **A recording made in the browser** is downloaded straight from the page (*Download it*, a Blob with the file's
+  own name, `now-its-by-you.2026-09-30.477703.flac`). The server never sees it and keeps nothing: no download
+  store, no hourly count.
+- **When the browser can't**, the render goes to the server and the player says so in passing ("this browser
+  couldn't make it, so the server is", then "mixing on the server…"). Nothing else changes.
+
+### How it works
+
+1. **The render spec.** The page asks `POST /api/render/spec` (edits, who, section) and the studio answers with
+   what its own renderer would be handed: the key it would cache the render under, the player's words, and the spec
+   (JSON, sent as a string so the page never reads its 64-bit seeds as floats): the song's file as it is, the
+   version's resolved params (`Params.to_dict`), its words (`Lyrics.to_dict`), the phrasing and the voices before,
+   the parent's record; for the whole song also the machine, the day (drift), the changes and the person's marks,
+   the Python and pinned dependencies the packet names, and the recording's name. If the studio has made it
+   already, it says `made` instead, and the page asks for it as ever (it plays at once, and costs nothing).
+2. **The worker** (web/studio-wasm/studio-worker.mjs, a module Web Worker) loads Pyodide, numpy, scipy and
+   soundfile, the kernels (JS, and the 14 C ports as wasm), and the program, and runs
+   web/studio-wasm/py/studio_render.py: a section exactly as `Studio._section` makes it (the same `window`, `cut`,
+   gain, limiter, `faded`, `to_pcm16`, FLAC), the whole song exactly as `Studio._whole` does (`cli.render_one`,
+   packed). Its progress is the server's own (`Job.report` over `stages`). It hands back the FLAC and the record.
+3. **The program in the bundle is the server's**, file for file (`pack.program_files`), so a recording made in the
+   browser names the same `program_sha256`. The studio checks the bundle's digest against its own at start and
+   refuses a bundle built from another program; the worker checks the spec's digest against its own before
+   making anything.
+4. **The renderer** (songbird/studio/renderer.js) decides where each render is made, keeps what it made (16
+   sections, 3 whole songs, as Blob URLs) so asking again plays at once, and reports where each was made
+   (`job.where`, `SongbirdRenderer.made`). studio.js and score.js didn't change: they ask the renderer as before.
+
+### When the browser makes it
+
+- **Automatically** (the default): when the studio serves the bundle, and this is a browser with WebAssembly and
+  Web Workers, not a phone or a tablet (`navigator.userAgentData.mobile`, the user agent, an iPad calling itself a
+  Mac, a screen under 600 px), and `navigator.deviceMemory` (where the browser says: Chrome and Edge) is 4 GB or
+  more. Desktop Chrome, Edge, Firefox and Safari qualify; Safari is untested.
+- **In this browser**: the visitor's choice, phones included.
+- **On the server**: always the server.
+- **After a failure**: that render goes to the server. Two failures in a visit send the rest of the visit to the
+  server; a whole song that runs out of memory sends whole songs to the server (sections stay in the browser).
+  A failure is the worker's error (a Python exception, `MemoryError`, a RangeError from wasm memory, something the
+  policy blocked), the worker dying (`onerror`), or a stall: no word from the worker for 3 minutes while getting ready, 5 for a section, 10
+  for a whole song (a hidden tab's worker runs several times slower, so a render isn't timed as a whole), and 40
+  minutes in all.
+
+**Workers.** A whole song is made in a worker of its own, terminated when it's done (wasm memory never shrinks:
+a worker that has sung a whole song holds its 1-2 GB until it goes), and the section worker is terminated before
+it starts (two heaps at once is too much). Sections share one worker, replaced after four (its heap only grows)
+or after three minutes unused. Cancelling a whole song being made terminates its worker; a section being made
+finishes and is kept (as the server's queue does).
+
+**First use: a quiet default, not a prompt.** Decided: the browser makes it without asking. The download is
+about 28 MB on the wire (35 MB unpacked), once; a prompt would ask every desktop visitor a question they can't
+weigh, before their first note, and the Tools sheet says what happens and lets them choose the server. The
+progress in the player makes the one slow first time visible.
+
+### Serving the bundle
+
+- `GET /render/bundle.json`: which two folders are current, the program, the sizes. `Cache-Control: no-cache`.
+- `GET /render/py-<hash>/…` (Pyodide 314.0.7 and five packages: numpy, scipy, soundfile, cffi, pycparser; 29.9
+  MiB, 23.1 on the wire) and `GET /render/app-<hash>/…` (the worker, the kernels, the program; 5.2 MiB, 5.0 on
+  the wire). Each folder is named by a hash of its files, so every file is `public, max-age=31536000,
+  immutable`: fetched once per visitor, from the HTTP cache after. A new program fetches only its 5 MB; a new
+  Pyodide, the rest. Text and wasm files are stored gzipped beside themselves and sent so to a browser that takes
+  gzip (pyodide.asm.wasm 9.2 MiB, 3.4 sent). Only the two folders, only plain names (no dot files, no climbing,
+  no directory listings), only `.mjs .js .wasm .json .zip .whl`.
+- **The policies.** The page's is as strict as before, with `media-src 'self' blob:` added (a song made in the
+  browser plays from a Blob) only when the bundle is served. The bundle's files carry their own policy, which the
+  worker keeps (a dedicated worker takes its script's): `default-src 'none'; script-src 'self' 'wasm-unsafe-eval';
+  connect-src 'self'`. Pyodide compiles WebAssembly, so `'wasm-unsafe-eval'`; `'unsafe-eval'` isn't needed (tried
+  in Chrome 152: Pyodide, numpy and scipy load without it). Chrome enforces it in the worker (tried: without
+  `'wasm-unsafe-eval'` Pyodide can't compile; the worker reports the violation and the server makes the song within
+  a second). No cross-origin isolation is needed (no
+  SharedArrayBuffer). Workers come from `'self'` under the page's `script-src`.
+- **Limits.** A browser's render isn't counted against `records` or `previews` and never waits in the queue; the
+  spec is a request like `/api/song` (tens of milliseconds, within `requests`), and so is every file of the bundle.
+  The queue and the hourly limits now hold only what the server makes: phones, tablets, fallbacks, and visitors
+  who chose the server.
+
+### Byte identity
+
+Checked three ways: natively (tests/test_studio_browser.py, a section and a recording made from their specs are
+the studio's own, byte for byte), in Pyodide under node from the built bundle (web/studio-wasm/bench/identity.sh,
+the same Python, packages and kernels as the worker), and in Chrome 152 (the built-in browser, the public studio
+on this Mac, machine `fictional:wren`).
+
+| what | browser (Pyodide) vs server | id |
+|---|---|---|
+| H, turn (section 2) | identical | `1a107628c193…` |
+| H, refrain 1 (section 1), tempo 92 | identical | `80c694a9ec06…` |
+| H, refrain 1, Chrome, from the page's ▶ | identical | `d320a6020835…` |
+| H, turn, tempo 92 and 95, Chrome | identical | `096114786424…`, `ae2bdb6fdda8…` |
+| H, turn 2 (section 5), roll 2 | identical | `3908c953318e…` |
+| B, section 1 | identical | `1605ac5b672d…` |
+| B, whole song (a recording) | identical: samples, record, every packet member | `288c16ecbdef…` |
+| B, whole song, tempo 70, picking | identical, the same | `27e40e44abd4…` |
+| H, whole song | identical, the same | `417585a8574b…` |
+| H, whole song, roll 2 | **23 of 7.66 M samples differ, by 1 LSB** | `95f79249…` vs the server's |
+| H, whole song, tempo 92, roll 1 (Chrome and node) | **1 of 8.47 M samples, 1 LSB** | `73df8752…` vs `f040fd7d…` |
+| H, whole song, tempo 98, recorded from the Tools sheet in Chrome | **differs** | `47770304…` vs `24b99913…` |
+
+So: every section tried and half the whole songs are the server's to the last bit, and where the samples are the
+same, the record is too (every packet member identical, `program_sha256` the server's). The FLAC's own bytes differ
+by the encoder (Pyodide's libFLAC 1.4.2, the server's 1.4.3), not in what they decode to: the id is the samples'.
+
+**Where they part: the fiddle.** Every part alone and dry, browser against server (bench/stems_diff.py, H whole,
+roll 2): the bass, accordion, claps and stomps agree to -243 dB or better below their peaks, the voice and the
+voice before to -197 and -192 dB, **the fiddle only to -116 dB**. Pyodide's `sin`, `cos`, `exp`, `tanh`, `log1p`
+(musl's, and V8's in the kernels) differ from macOS's in the last bit (all five, on a million values), as the
+spike found; everywhere else that stays a -190 dB whisper, but the bowed string's friction is a feedback loop that
+grows a last-bit difference in its vibrato (`bowed.tracks`, `np.sin`) into one about 1/20 of an LSB: enough to tip
+a sample's rounding now and then in a long song (0, 1, 23 samples). The versions this machine (Wren) sings put the
+fiddle in most whole songs. The same will be true between the Linux server and a Mac, whose libm differ too.
+
+What a difference means: the browser's recording is a valid packet (its record's id is its own audio's), plays the
+same (1 LSB is -96 dBFS, a handful of samples), and continues the lineage the same; but it isn't the file the server
+would have made, and rendering its record again natively gives the server's id, not its own. The cure is the one
+docs/BROWSER-RENDER.md names: deterministic `sin`, `cos`, `exp`… in the kernels and on the few hot numpy paths
+(here, the bowed string's vibrato), which changes the native renders of fiddle versions once (decision 1 below).
+
+### Time and memory
+
+In Chrome 152 on the M1 Max (a machine shared with other agents), while the page was visible:
+
+- **Getting ready**: 4.8-5.0 s from the cache (Python, numpy, scipy and soundfile, the program, importing every
+  instrument); the first time, from a local server, the same plus the download (35 MB in ~2 s here; ~20 s at
+  15 Mbit/s).
+- **A section**: 2.0 s for a turn (no voice); H's refrain with the voice and a voice before it, 7.7 s in Pyodide
+  under node (Chrome within 20% of node in the spike). Native: 1.2 s.
+- **A whole song**: 55-62 s for H (Wren's versions: the voice, a voice before it, the band), 18 s for B; native
+  9-10 s for H. The spike's 35 s was H's seed with no voice before it.
+- **The wasm heap**: a section 224-464 MiB; a whole song 1.14 GiB (B) and **2.0-2.3 GiB for H** with a voice
+  before it (the heap grows during the two voices and never shrinks). Chrome's wasm32 ceiling is 4 GB, so it
+  fits, but it is past the spike's 1.5 GB target: modest laptops and Safari may fail it, and fall back.
+- **A hidden tab is several times slower**: with the page hidden (another tab in front, the window covered), H's
+  refrain took 52-72 s and a whole song 333 s. The worker keeps going, and the stall watch is generous for it.
+
+### The deploy
+
+deploy/studio/Dockerfile builds the bundle in a stage of its own (`node:22-bookworm-slim` with uv: the locked
+dependencies, `npm ci` for Pyodide, numpy and scipy from Pyodide's CDN checked against its lock file, then
+build_render.py from the same program files as the image), and copies only its output (about 35 MB) into
+`/opt/studio/render`. Node never reaches the runtime image, and zig isn't needed (the C kernels are committed).
+docker-compose.yml passes `--browser-render /opt/studio/render` (`STUDIO_BROWSER` in `.env`; a space turns it
+off). The image wasn't built here: Docker's daemon (OrbStack) wasn't running. `docker compose config` checks.
+
+Outside Docker:
+
+    cd web/studio-wasm && npm ci && cd ../..
+    uv run python web/studio-wasm/tools/build_render.py renders/render-bundle     # again after any change to songbird/
+    uv run songbird studio --public --machine none --browser-render renders/render-bundle
+
+The bundle must be rebuilt with every change to the program (the studio refuses it otherwise, saying so), and the
+kernels must be current (build_render.py refuses stale ones, as tests/test_browser_kernels.py does).
+
+### How it was checked
+
+- tests/studio_renderer_browser.test.cjs (node, 11 tests, a stand-in worker): who makes the song (a desktop, not a
+  phone, a small memory, no workers; the setting; earlier failures); a section made in the browser (the spec
+  asked, the worker's URLs, the first-visit progress, a Blob, kept to play again); a section worker replaced after
+  its few, a whole song's worker of its own and terminated, the section's first; a recording's name and download;
+  what the server has made asked of it; a crash, running out of memory, a stall and a killed worker each sending the
+  render to the server, two failures the visit; cancelling a whole song terminating its worker; the server chosen,
+  no bundle, a phone: the queue as ever. tests/studio_renderer.test.cjs and the other node tests unchanged, passing.
+- tests/test_studio_browser.py (5): the bundle served for good under its folders, compressed, as wasm, with the
+  worker's policy, and nothing else (dot files, other types, climbing, the .gz by name, directories); the page's
+  policy with `blob:` only when the bundle is served; a local studio serves none and refuses the flag; a bundle
+  from another program refused; a section and a recording from their specs the studio's own byte for byte (the
+  recording's packet file too), a spec of another program or shape refused. test_browser_kernels passes.
+- In the built-in browser (Chrome 152), `--public --machine fictional:wren --browser-render`: sections from the
+  page's ▶ and a recording from the Tools sheet made in the browser, their ids above; the recording's *Download
+  it* a Blob under its name, 3:00, one choice marked; the worker killed mid-render (`SongbirdRenderer.debug.kill()`)
+  and the section made by the server instead, playing from `/audio/…`; at a phone's width (the mobile preset:
+  an Android user agent) the server made it and the Tools sheet said why.
+
+### Decisions for the artist
+
+1. **Byte identity for fiddle versions.** As built, a recording made in the browser is the server's to the last
+   bit for most versions, and differs by a few samples at 1 LSB for some with the fiddle (above). Three ways: (a)
+   accept it (built; the packet is valid and self-consistent, the difference inaudible, and the Linux server vs a
+   Mac already differ the same way); (b) have the server make every *recording*, the browser only previews and
+   hearing the whole song (a line in renderer.js's `choose`: `kind === "record"` → server; the VPS then does the
+   heavy work only when someone records); (c) the determinism work: deterministic transcendental functions in the
+   engine, starting with the bowed string's vibrato, changing fiddle, steel and cello renders once (new goldens if
+   a golden plays them), after which the browser, Linux and macOS agree. Recommended: (c), with (a) meanwhile.
+2. **Whole songs' memory.** 2.0-2.3 GiB of wasm heap for H with a voice before it, past the 1.5 GB target. It works
+   in desktop Chrome and falls back elsewhere; the voices' memory (the learned throat run twice) is where to cut.
+3. **First use is quiet** (above): no prompt, the progress says "once: 12 of 35 MB". A prompt is a small change
+   if wanted.
+4. **What the packet says it runs with.** A browser-made packet names the server's Python and pinned dependencies
+   (the render is the server's, byte for byte, where it is), not Pyodide's, which no one would run it with.
+5. **A browser's recordings aren't counted** against the hourly limits (they cost the server nothing). Someone
+   could make many; only their own computer pays.
+6. **Safari** qualifies automatically but is untested; if it misbehaves, a line in `capable` sends it to the server.

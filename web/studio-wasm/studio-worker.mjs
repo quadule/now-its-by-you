@@ -40,6 +40,12 @@ globalThis.fetch = async (...args) => {
     { status: response.status, statusText: response.statusText, headers: response.headers });
 };
 
+// something the policy blocked (WebAssembly compiled without 'wasm-unsafe-eval', say): Pyodide only warns and waits,
+// so say so, and the renderer asks the server at once rather than after a stall
+addEventListener('securitypolicyviolation', (e) => {
+  postMessage({ kind: 'error', message: `blocked by the page's policy (${e.violatedDirective})`, memory: false });
+});
+
 async function init({ pyodide, app, bytes }) {
   const t0 = performance.now();
   total = bytes || 0;
