@@ -470,8 +470,9 @@ def test_identity_is_one_file_in_two_places():
     studio, pages = ROOT / "songbird" / "studio" / "identity.css", ROOT / "web" / "sing" / "page" / "identity.css"
     assert studio.read_bytes() == pages.read_bytes()
     assert "/identity.css" in S.STATIC
-    html = (ROOT / "songbird" / "studio" / "index.html").read_text()
-    assert html.index('href="/identity.css"') < html.index('href="/studio.css"')
+    for page, own in (("index.html", "/score.css"), ("classic.html", "/studio.css")):  # the score, and the page before
+        html = (ROOT / "songbird" / "studio" / page).read_text()
+        assert html.index('href="/identity.css"') < html.index(f'href="{own}"')
 
 
 def test_a_musician_takes_the_version_away_as_midi_and_stems(served, monkeypatch):
@@ -621,6 +622,10 @@ def test_the_arrangement_is_drawn_as_a_grid_for_a_timeline(served):
     drop = next(s for s in grid["sections"] if s["id"] == "refrain:1")
     assert not drop["sung"] and drop["bars"] == 16 and drop["by"]["sung"] == "you" and 16 in drop["bar_options"]
     assert [ln["sung"] for ln in drop["lines"]] == [False] * 8
+    # the score's track for the voices before: where the song has a choir and it is sung, never a drop
+    assert {s["id"] for s in grid["sections"] if s["choir"]} == {s["id"] for s in grid["sections"]
+                                                               if s["sung"] and v.context.genome.section(s["name"]).choir}
+    assert not drop["choir"] and any(s["choir"] for s in grid["sections"])
     assert cell[("refrain:1", "synthlead")]["value"]["pattern"] == "lead"  # the lead plays the tune where nobody sings
     program = [c for c in grid["cells"] if c["by"] == "program" and c["plays"]]
     assert program and all(c["why"] for c in program)
