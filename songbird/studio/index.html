@@ -14,6 +14,7 @@
 <script src="/drafts.js" defer></script>
 <script src="/help.js" defer></script>
 <script src="/export.js" defer></script>
+<script src="/players.js" defer></script>
 <script src="/learn.js" defer></script>
 </head>
 <body>
@@ -99,6 +100,11 @@
       <button class="link small" id="toExport" type="button">MIDI and the parts, for your own tools ↓</button></p>
     <p class="hint piano-note" data-piano-note aria-live="polite"></p>
     <div id="studio-composer"><div class="composer-loading"><p class="hint">Laying out the song…</p></div></div>
+    <details class="players-panel" id="playersPanel">
+      <summary>Players: here, on your own instruments (MIDI), or off</summary>
+      <p class="hint">Play sketch can send each player to a channel of a synth or a sequencer, in time with it: the tune, its chords and bass, and every part of the band, on the MIDI file's channels and sounds. Stop ends every note; Panic quiets every channel.</p>
+      <div id="players"></div>
+    </details>
   </div>
 
   <div id="workspace-sound" data-workspace-panel="sound" role="tabpanel" aria-labelledby="tab-sound" hidden>

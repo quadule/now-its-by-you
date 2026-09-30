@@ -1,4 +1,4 @@
-"""The studio's piano page. "Learn it at the piano" lays the version on the page out
+"""The studio's piano page and the sketch's players. "Learn it at the piano" lays the version on the page out
 for the piano page (a person's key, tempo and chords in it) and serves that page from the studio, the very
 files web/piano/ serves; the sketch's players are the MIDI file's parts, its channels and programs, in beats of
 the song's grid. Both are made at once, and a public studio holds them to its limit on requests."""
@@ -88,6 +88,29 @@ def test_learn_it_at_the_piano_teaches_the_version_on_the_page(served):
     assert ask(port, "GET", "/piano/../studio.py")[0] == 404
 
 
+def test_the_sketchs_players_are_the_midi_files_parts_in_beats(served):
+    """Every part but the singer's (the sketch's tune is its own), on the MIDI file's channels with its programs,
+    each note in beats of the grid the composition view counts: the band's lute doubles the tune on its beats."""
+    studio, port = served
+    status, data = post(port, studio, "/api/players", {"edits": {"tonic": 64}})
+    assert status == 200 and data["key"] == studio.key(studio.version({"tonic": 64}), None)
+    v = studio.version({"tonic": 64})
+    layout = {t["part"]: t for t in midi.layout(studio._score(v))}
+    assert data["tune"]["channel"] == layout["voice"]["channel"] and data["chords"]["channel"] == midi.CHORDS_CHANNEL
+    parts = {p["part"]: p for p in data["players"]}
+    assert "voice" not in parts and set(parts) == set(layout) - {"voice"}
+    for part, p in parts.items():
+        assert (p["channel"], p["program"], p["drums"]) == (layout[part]["channel"], layout[part]["program"], layout[part]["drums"])
+        assert all(0 <= key <= 127 and 1 <= vel <= 127 and length > 0 for _, length, key, vel in p["notes"])
+    assert parts["drum"]["channel"] == 9 and parts["drum"]["program"] is None
+    # on the view's grid: every tune note's beat, and the band's notes land within a sixteenth of the grid
+    view = studio.song({"tonic": 64})["composition"]
+    beats = [p["start_beat"] + n["onset"] for s in view["sections"] for p in s["phrases"] for n in p["notes"]]
+    on_grid = [b for part in ("bass", "harp", "lute") for b, *_ in parts[part]["notes"]]
+    assert sum(abs(b * 4 - round(b * 4)) < 0.2 for b in on_grid) > 0.9 * len(on_grid)
+    assert min(beats) - 1 <= min(on_grid) and max(b for b, *_ in parts["bass"]["notes"]) <= view["duration_beats"] + 1
+
+
 def test_a_public_studio_serves_them_under_its_limits(home):
     studio = S.Studio(None, str(LEAD), "none", out=home / "out", public=P.Limits(requests=4))
     server, port = running(studio)
@@ -95,7 +118,7 @@ def test_a_public_studio_serves_them_under_its_limits(home):
         status, made = post(port, studio, "/api/piano", {"edits": {}})
         assert status == 200
         assert ask(port, "GET", made["url"])[0] == 200
-        assert ask(port, "GET", made["score"])[0] == 200
+        assert post(port, studio, "/api/players", {"edits": {}})[0] == 200
         assert ask(port, "GET", made["score"])[0] == 200
         assert ask(port, "GET", made["score"])[0] == 429  # past the address's requests a minute, like any other
     finally:

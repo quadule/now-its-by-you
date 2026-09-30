@@ -90,13 +90,14 @@ STATIC = {"/identity.css": ("identity.css", "text/css; charset=utf-8"),  # the s
           "/help.js": ("help.js", "text/javascript; charset=utf-8"),
           "/export.js": ("export.js", "text/javascript; charset=utf-8")}
 # learning it at the piano (docs/PIANO.md): the page in studio/piano/ (the very files web/piano/ serves too), fed the
-# version on the studio's page by /api/piano
+# version on the studio's page by /api/piano; and the sketch's players, sent to a musician's instruments (MIDI out)
 PIANO_STATIC = {"/piano/": ("piano/index.html", "text/html; charset=utf-8"),
                 "/piano/index.html": ("piano/index.html", "text/html; charset=utf-8"),
                 "/piano/piano.js": ("piano/piano.js", "text/javascript; charset=utf-8"),
                 "/piano/sound.js": ("piano/sound.js", "text/javascript; charset=utf-8"),
                 "/piano/piano.css": ("piano/piano.css", "text/css; charset=utf-8"),
                 "/piano/identity.css": ("identity.css", "text/css; charset=utf-8")}
+STATIC["/players.js"] = ("players.js", "text/javascript; charset=utf-8")
 STATIC["/learn.js"] = ("learn.js", "text/javascript; charset=utf-8")
 
 
@@ -732,8 +733,8 @@ class Studio:
         job.url = f"/export/{key}.zip?name={name}"
         return {"url": job.url, "parts": len(order)}
 
-    # ------------------------------------------------------------ at the piano
-    # It is cheap (the score laid again, no audio: a tenth of a second or two for H), made at once like the MIDI
+    # ------------------------------------------------------------ at the piano, and the sketch's players (MIDI out)
+    # Both are cheap (the score laid again, no audio: a tenth of a second or two for H), made at once like the MIDI
     # file, and held to a public studio's limit on requests like every other request.
 
     def piano(self, edits: dict) -> dict:
@@ -757,6 +758,19 @@ class Studio:
             tmp.replace(path)
             prune(self.cache, self.cache_limit)
         return {"url": f"/piano/?score=score/{key}.json", "score": f"/piano/score/{key}.json", "key": key}
+
+    def players(self, edits: dict) -> dict:
+        """Every part of the version as the MIDI file has it (midi.layout: the same channels and programs), each
+        part's notes in beats of the song's grid, for the sketch to play or send to a musician's instruments in
+        step with its tune (songbird/studio/players.js). The singer's part is the sketch's own tune, so only its
+        channel and program are given; the chords' are the MIDI file's Chords track's."""
+        v = self.version(edits)
+        parts = midi.in_beats(self.genome, v.params, self._score(v))
+        voice = next((p for p in parts if p["part"] == "voice"), None)
+        return {"key": self.key(v, None), "tempo": v.params.tempo,
+                "tune": {"channel": voice["channel"] if voice else 0, "program": midi.PROGRAMS["voice"]},
+                "chords": {"channel": midi.CHORDS_CHANNEL, "program": midi.PROGRAMS["chords"]},
+                "players": [p for p in parts if p["part"] != "voice"]}
 
     # ------------------------------------------------------------ recording
 
@@ -1351,6 +1365,8 @@ class Handler(BaseHTTPRequestHandler):
                 return self.send_json(studio.record(edits, by=by))
             if path == "/api/piano":  # the piano page's score of this version (made at once)
                 return self.send_json(studio.piano(edits))
+            if path == "/api/players":  # every part in beats, for the sketch's players (MIDI out)
+                return self.send_json(studio.players(edits))
             if path == "/api/sing":
                 return self.send_json(studio.sing())
             if path.startswith("/api/sing/") and studio.singing is not None:

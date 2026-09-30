@@ -294,6 +294,70 @@ def chord_notes(symbol: str, tonic: int, mode: str) -> list[int]:
     return [48 + (tonic + chord_bass(symbol, mode)) % 12, *upper]
 
 
+def layout(score) -> list[dict]:
+    """Each part of the score as the file lays it out, in its track order: the singer, the lineage voices, then
+    the band as it first sounds; each with its name, its channel (0-based: percussion on 9, the chords keep 15)
+    and General MIDI program (None for percussion). The studio's sketch sends its players by the same
+    (songbird/studio/players.js), so a musician's instruments set up for the file answer the sketch too."""
+    parts = []
+    for n in score.notes:
+        if n.part not in parts:
+            parts.append(n.part)
+    order = sorted(parts, key=lambda p: (p != "voice", not p.startswith("choir"), parts.index(p)))
+    channels = [c for c in range(15) if c != PERCUSSION_CHANNEL]  # 16 is the chords'
+    out, used = [], 0
+    for part in order:
+        drums = percussive(part)
+        channel = PERCUSSION_CHANNEL if drums else channels[used % len(channels)]
+        used += 0 if drums else 1
+        out.append({"part": part, "name": part_name(part), "channel": channel,
+                    "program": None if drums else program(part), "drums": drums})
+    return out
+
+
+CHORDS_CHANNEL = 15  # the Chords track's (MIDI channel 16), program PROGRAMS["chords"]
+
+
+def note_key(n, drums: bool) -> int:
+    """The key a note is written on: its pitch, or a drum stroke's General MIDI drum key."""
+    return DRUM_KEYS.get(n.art, 38) if drums else int(round(n.pitch))
+
+
+def in_beats(genome, params, score) -> list[dict]:
+    """The file's parts (`layout`, the same channels, programs and keys) with their notes in beats of the song's
+    grid instead of ticks: [beat, length, key, velocity 1-127], a beat as the song counts them and 0 where its
+    grid starts, as the studio's composition view counts (a phrase's start_beat). The rendition's clock is read
+    backwards, so the final slowing, a swing and a re-barring come back to the grid, and the band's small human
+    timing stays. For the studio's sketch, which plays at the song's tempo and sends these to a musician's own
+    instruments in step with its tune (songbird/studio/players.js)."""
+    from bisect import bisect_left
+
+    from .realize import timeline
+
+    clock = timeline(genome, params)
+    unit = genome.meter.beat
+    lo, hi, step = -8.0 * genome.meter.bar, clock.end + 8.0 * genome.meter.bar, 0.25
+    us = [lo + k * step for k in range(int((hi - lo) / step) + 1)]
+    ts = [clock.seconds(u) for u in us]
+
+    def beat(t: float) -> float:
+        i = min(max(bisect_left(ts, t), 1), len(ts) - 1)
+        t0, t1 = ts[i - 1], ts[i]
+        return (us[i - 1] + (t - t0) * (us[i] - us[i - 1]) / max(t1 - t0, 1e-9)) / unit
+
+    out = []
+    for track in layout(score):
+        notes = []
+        for n in score.part(track["part"]):
+            key = note_key(n, track["drums"])
+            if 0 <= key <= 127:
+                b0 = beat(n.start)
+                notes.append([round(b0, 3), round(max(beat(n.start + n.dur) - b0, 0.01), 3), key,
+                              max(1, min(127, int(round(n.vel * 127))))])
+        out.append({**track, "notes": notes})
+    return out
+
+
 def from_score(genome, params, score, title: str | None = None) -> tuple[bytes, float]:
     """The MIDI file of a rendition's score (as rendered), and where its bar 1 begins in seconds (at or
     before zero)."""
@@ -313,24 +377,15 @@ def from_score(genome, params, score, title: str | None = None) -> tuple[bytes, 
         head.append((ticks.tick(start), 5, text(0x06, label)))
     tracks = [head]
 
-    parts = []
-    for n in score.notes:
-        if n.part not in parts:
-            parts.append(n.part)
-    order = sorted(parts, key=lambda p: (p != "voice", not p.startswith("choir"), parts.index(p)))
-    channels = [c for c in range(15) if c != PERCUSSION_CHANNEL]  # 16 is the chords'
-    used = 0
-    for part in order:
-        drums = percussive(part)
-        channel = PERCUSSION_CHANNEL if drums else channels[used % len(channels)]
-        used += 0 if drums else 1
-        events: list[tuple[int, int, bytes]] = [(0, 0, text(0x03, part_name(part)))]
+    for track in layout(score):
+        part, channel, drums = track["part"], track["channel"], track["drums"]
+        events: list[tuple[int, int, bytes]] = [(0, 0, text(0x03, track["name"]))]
         if not drums:
-            events.append((0, 1, bytes([0xC0 | channel, program(part)])))
+            events.append((0, 1, bytes([0xC0 | channel, track["program"]])))
         syllable = 0
         for n in score.part(part):
             on, off = ticks.tick(n.start), ticks.tick(n.start + n.dur)
-            key = DRUM_KEYS.get(n.art, 38) if drums else int(round(n.pitch))
+            key = note_key(n, drums)
             if not 0 <= key <= 127:
                 continue
             vel = max(1, min(127, int(round(n.vel * 127))))
@@ -348,14 +403,14 @@ def from_score(genome, params, score, title: str | None = None) -> tuple[bytes, 
     # the chords under the tune (a person's own harmony among them), each named where it starts
     harmony = composition.harmonized(genome, params)
     lift = style_mod.lifted(genome, score) if params.style.lift else None
-    events = [(0, 0, text(0x03, "Chords")), (0, 1, bytes([0xC0 | 15, PROGRAMS["chords"]]))]
+    events = [(0, 0, text(0x03, "Chords")), (0, 1, bytes([0xC0 | CHORDS_CHANNEL, PROGRAMS["chords"]]))]
     for a, z, symbol in idioms.chord_times(harmony, params):
         up = 2 if lift is not None and a >= lift - 1e-6 else 0
         on, off = ticks.tick(a), ticks.tick(z)
         events.append((on, 2, text(0x01, chord_name(symbol, params.tonic + up, params.mode))))
         for key in chord_notes(symbol, params.tonic + up, params.mode):
-            events.append((on, 4, bytes([0x9F, key, 64])))
-            events.append((max(off, on + 1), 3, bytes([0x8F, key, 0])))
+            events.append((on, 4, bytes([0x90 | CHORDS_CHANNEL, key, 64])))
+            events.append((max(off, on + 1), 3, bytes([0x80 | CHORDS_CHANNEL, key, 0])))
     if lift is not None:
         head.append((ticks.tick(lift), 2, key_signature(params.tonic + 2, params.mode)))
     tracks.append(events)
