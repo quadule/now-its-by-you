@@ -131,7 +131,9 @@ function overlay([Z, avoid]) {
   }).observe(document, { subtree: true, childList: true, characterData: true });
 }
 
-export async function session({ url, out, video = true, zoom = 1.2, width = 1920, height = 1080, scheme = 'light', quality = 95, avoid = null }) {
+// wait: false, the hand reaches for the next control without waiting for the page's answer to the last edit or
+// following a control that moved, as a quick person would (the page keeps its controls still: no workaround needed)
+export async function session({ url, out, video = true, zoom = 1.2, width = 1920, height = 1080, scheme = 'light', quality = 95, avoid = null, wait = true }) {
   fs.mkdirSync(out, { recursive: true });
   const framesDir = path.join(out, 'frames-raw');
   if (video) { fs.rmSync(framesDir, { recursive: true, force: true }); fs.mkdirSync(framesDir, { recursive: true }); }
@@ -168,6 +170,7 @@ export async function session({ url, out, video = true, zoom = 1.2, width = 1920
 
   // ---------------------------------------------------------------------------------------------- the hand
   let mx = width / 2, my = height / 2;
+  const handMoves = [];  // with wait: false, the controls that moved between the hand's look and its arrival
   async function glide(x, y, ms = 420) {
     const n = Math.max(8, Math.round(ms / 16)), x0 = mx, y0 = my;
     for (let k = 1; k <= n; k++) {
@@ -188,6 +191,7 @@ export async function session({ url, out, video = true, zoom = 1.2, width = 1920
     return loc.boundingBox();
   }
   async function settle(timeout = 8000) {  // no request in flight for a moment: the page has drawn its answer
+    if (!wait) return;
     const t = Date.now();
     let quiet = 0;
     while (Date.now() - t < timeout && quiet < 3) {
@@ -200,7 +204,11 @@ export async function session({ url, out, video = true, zoom = 1.2, width = 1920
     let b = await show(loc, o);
     await glide(b.x + b.width * fx, b.y + b.height * fy, o.ms);
     const again = await loc.boundingBox();  // it moved while the hand travelled (a late redraw): follow it
-    if (again && (Math.abs(again.x - b.x) > 2 || Math.abs(again.y - b.y) > 2)) {
+    if (!wait && again && (Math.abs(again.x - b.x) > 2 || Math.abs(again.y - b.y) > 2)) {  // said, not followed
+      console.log(`  moved under the hand: ${Math.round(b.x)},${Math.round(b.y)} → ${Math.round(again.x)},${Math.round(again.y)}`);
+      handMoves.push({ t: +now().toFixed(3), from: [b.x, b.y], to: [again.x, again.y] });
+    }
+    if (wait && again && (Math.abs(again.x - b.x) > 2 || Math.abs(again.y - b.y) > 2)) {
       b = again;
       await glide(b.x + b.width * fx, b.y + b.height * fy, 200);
     }
@@ -303,7 +311,7 @@ export async function session({ url, out, video = true, zoom = 1.2, width = 1920
     assemble(frames, tEnd, out, extra.fps || 30);
   }
   return { page, ctx, browser, mark, pause, settle, glide, show, over, click, dbl, choose, type, slide, dragTo, caption, setPhase, flash, finish,
-    now, get phase() { return phase; }, set phase(p) { phase = p; } };
+    now, moves: handMoves, get phase() { return phase; }, set phase(p) { phase = p; } };
 }
 
 // the frames at their real times, t = 0 the log's t = 0 (the first frame held back to it), into a constant-rate video
