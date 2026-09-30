@@ -24,7 +24,6 @@ from numba import njit
 from scipy.signal import sosfilt
 
 from ..theory import midi_to_hz
-
 from .fx import hold
 from .iir import butter
 

@@ -172,9 +172,7 @@ def _abs_max(y: np.ndarray) -> np.ndarray:
     for i in range(n):
         m = abs(y[i, 0])
         for c in range(1, chans):
-            v = abs(y[i, c])
-            if v > m:
-                m = v
+            m = max(m, abs(y[i, c]))
         out[i] = m
     return out
 
@@ -223,7 +221,7 @@ def _mean_ahead(recovered: np.ndarray, ahead: int, need: np.ndarray, out: np.nda
         s = v if m == 0 else s + v
         ring[(m + 1) % size] = s
         g = (s - ring[i % size]) / width
-        out[i] = g if g < need[i] else need[i]
+        out[i] = min(need[i], g)
     return out
 
 
