@@ -34,6 +34,9 @@ rt.setHeap(() => py._module.HEAPU8.buffer);
 let manifest = fs.readFileSync(path.join(root, 'kernels/manifest.json'), 'utf8');
 if (mode === 'python') manifest = '{}';
 const env = { SONGBIRD_THREADS: '1', SONGBIRD_WEB_DGEMM: args.includes('--no-dgemm') ? '0' : '1', SONGBIRD_KERNEL_TIMES: args.includes('--times') ? '1' : '0' };
+// --fallbacks: numpy's and scipy's own operations where songbird has them for the loops written to save memory
+// (fx.JIT false, as natively with NUMBA_DISABLE_JIT=1); the kernels themselves stay JS or wasm
+if (args.includes('--fallbacks')) env.NUMBA_DISABLE_JIT = '1';
 if (mode !== 'wasm') py.registerJsModule('songbird_kernels', { kernels, rt, manifest });
 if (mode === 'wasm') {
   const { loadWasmKernels } = await import('../wasm/kernels.mjs');

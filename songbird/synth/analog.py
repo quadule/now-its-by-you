@@ -597,6 +597,103 @@ def chorus(x: np.ndarray, sr: float, centre: float = 0.004, depth: float = 0.000
     return (x[:, None] + wet * w) / (1.0 + 0.5 * wet)
 
 
+# --- patches: a person's choice of sound for a synth (docs/SOUND-DESIGN.md) ---------------------------------
+#
+# Each synth's own preset is its program's patch, named first; the others are variations of the same dictionary,
+# played by the same voice (any number of saws and pulses, each at any ratio: an octave value of 19/12 is an
+# octave and a fifth). "sub" on the synth bass is the sub bass's sine. Each is levelled (its "out") so a typical
+# part at velocity 0.6 sits within 2 dB of the program's own (tests/test_sound.py measures it), so choosing one
+# changes the sound and not the balance.
+
+PATCHES = {
+    "synth-bass": {
+        "analog": PRESETS["synth-bass"],
+        "sub": "sub-bass",
+        "reese": dict(
+            oscs=(("saw", 0, -1.0, 1.0, 0.5, 0.0), ("saw", 0, 1.0, 1.0, 0.5, 0.0), ("saw", 0, 0.35, 0.6, 0.5, 0.0),
+                  ("pulse", -1, 0.0, 0.45, 0.5, 0.0)),
+            detune=(16.0, 4.0), drift=(0.15, 5.0), pwm_rate=0.0,
+            cutoff=420.0, ref=36.0, track=0.3, resonance=0.2, drive=0.8,
+            aenv=(0.004, 1.0, 1.0, 0.12), fenv=(0.01, 0.6, 0.8, 0.2), famount=0.4, fvel=(0.6, 0.6), vcut=0.4,
+            span=10.0, voices=1, chorus=False, glide=0.04, noise=0.006, out=0.212,
+        ),
+        "pluck": dict(
+            oscs=(("saw", 0, 0.0, 1.0, 0.5, 0.0), ("pulse", 0, 1.0, 0.5, 0.5, 0.0)),
+            detune=(2.0, 6.0), drift=(0.15, 5.0), pwm_rate=0.0,
+            cutoff=260.0, ref=36.0, track=0.6, resonance=0.45, drive=0.5,
+            aenv=(0.002, 0.35, 0.0, 0.06), fenv=(0.001, 0.12, 0.0, 0.08), famount=3.6, fvel=(0.4, 1.1), vcut=1.0,
+            span=14.0, voices=1, chorus=False, glide=0.0, noise=0.006, out=0.678,
+        ),
+    },
+    "synth-solo": {
+        "saw": PRESETS["synth-solo"],
+        "square": dict(
+            oscs=(("pulse", 0, 0.0, 1.0, 0.5, 0.0), ("pulse", -1, 1.0, 0.35, 0.25, 0.0)),
+            detune=(1.5, 6.0), drift=(0.15, 5.0), pwm_rate=0.0,
+            cutoff=1600.0, ref=60.0, track=0.75, resonance=0.2, drive=0.35,
+            aenv=(0.006, 0.4, 0.88, 0.18), fenv=(0.004, 0.45, 0.45, 0.2), famount=1.2, fvel=(0.45, 0.9), vcut=0.4,
+            span=12.0, voices=1, chorus=False, glide=0.07, noise=0.006, out=0.205,
+            vibrato=(30.0, 5.5, 0.3, 0.4),
+        ),
+        "supersaw": dict(
+            oscs=tuple(("saw", 0, share, 1.0 if share == 0.0 else 0.7, 0.5, 0.0)
+                       for share in (-1.0, -0.66, -0.33, 0.0, 0.33, 0.66, 1.0)),
+            detune=(22.0, 6.0), drift=(0.15, 5.0), pwm_rate=0.0,
+            cutoff=3200.0, ref=60.0, track=0.6, resonance=0.1, drive=0.3,
+            aenv=(0.01, 0.4, 0.9, 0.25), fenv=(0.005, 0.5, 0.6, 0.25), famount=1.0, fvel=(0.45, 0.9), vcut=0.4,
+            span=12.0, voices=1, chorus=False, glide=0.05, noise=0.006, out=0.167,
+            vibrato=(12.0, 5.5, 0.35, 0.4),
+        ),
+    },
+    "synth-pad": {
+        "warm": PRESETS["synth-pad"],
+        "glass": dict(
+            oscs=(("pulse", 0, 0.0, 1.0, 0.25, 0.0), ("saw", 1, 0.5, 0.45, 0.5, 0.0), ("saw", 0, -0.5, 0.4, 0.5, 0.0)),
+            detune=(4.0, 8.0), drift=(0.15, 5.0), pwm_rate=0.0,
+            cutoff=2600.0, ref=60.0, track=0.6, resonance=0.42, drive=0.35,
+            aenv=(0.6, 1.5, 0.8, 1.2), fenv=(0.8, 2.0, 0.55, 1.0), famount=0.8, fvel=(0.5, 0.8), vcut=0.5,
+            span=10.0, voices=8, chorus=True, glide=0.0, noise=0.006, out=0.15,
+        ),
+        "wide": dict(PRESETS["synth-pad"], detune=(22.0, 8.0), chorus_depth=2.0),
+    },
+    "synth-arp": {
+        "pluck": PRESETS["synth-arp"],
+        "bell": dict(
+            oscs=(("saw", 0, 0.0, 0.7, 0.5, 0.0), ("pulse", 19.0 / 12.0, 0.0, 0.6, 0.5, 0.0),
+                  ("pulse", 1, 1.0, 0.3, 0.3, 0.0)),
+            detune=(0.5, 4.0), drift=(0.15, 3.0), pwm_rate=0.0,
+            cutoff=1400.0, ref=60.0, track=1.0, resonance=0.55, drive=0.3,
+            aenv=(0.001, 0.5, 0.0, 0.5), fenv=(0.001, 0.3, 0.1, 0.3), famount=2.2, fvel=(0.3, 1.2), vcut=1.0,
+            span=16.0, voices=6, chorus=False, glide=0.0, noise=0.004, out=0.238,
+        ),
+    },
+}
+SUB_AS_BASS = 0.314 / 0.6  # the sub's level (its SPEC's) against the synth bass's, when the synth bass plays it
+FILTER = {"cutoff": (40.0, 16000.0), "resonance": (0.0, 1.0), "envelope": (0.0, 6.0)}  # a person's knobs' ranges
+
+
+def patched(name: str, s: dict):
+    """The preset a synth plays with a person's patch and filter (settings "patch", "cutoff", "resonance",
+    "envelope"): the preset itself, the same object, when none is chosen; "sub-bass" for the sub; else a new
+    dictionary, "fixed" when the cutoff is the person's (the band's brightness no longer moves it)."""
+    own = PRESETS.get(name)
+    patch = s.get("patch")
+    chosen = PATCHES.get(name, {}).get(patch, own) if patch else own
+    if isinstance(chosen, str) or chosen is None:
+        return chosen
+    knobs = {k: s[k] for k in FILTER if s.get(k) is not None}
+    if not knobs:
+        return chosen
+    out = dict(chosen)
+    if "cutoff" in knobs:
+        out["cutoff"], out["fixed"] = float(np.clip(knobs["cutoff"], *FILTER["cutoff"])), True
+    if "resonance" in knobs:
+        out["resonance"] = float(np.clip(knobs["resonance"], *FILTER["resonance"]))
+    if "envelope" in knobs:
+        out["famount"] = float(np.clip(knobs["envelope"], *FILTER["envelope"]))
+    return out
+
+
 # --- playing a part -----------------------------------------------------------------------------
 
 
@@ -612,13 +709,13 @@ def _arts(note) -> set:
 class _Machine:
     """One machine's synthesizer: its preset set up by the band's settings, with the maker's own tolerances."""
 
-    def __init__(self, name: str, make: np.random.Generator, settings: dict):
+    def __init__(self, name: str, make: np.random.Generator, settings: dict, preset: dict | None = None):
         s = {**DEFAULTS, **settings}
         self.name = name
         self.brightness = float(np.clip(s.get("brightness", 0.5), 0.0, 1.0))
         self.wear = float(np.clip(s.get("wear", 0.25), 0.0, 1.0))
         self.ornament = float(np.clip(s.get("ornament", 0.5), 0.0, 1.0))
-        p = PRESETS.get(name)
+        p = preset if preset is not None else PRESETS.get(name)
         self.p = p
         if p is None:
             return
@@ -638,6 +735,8 @@ class _Machine:
         self.chorus_depth = (0.55 + 0.4 * self.wear) * 1e-3 * float(np.exp(make.normal(0.0, 0.1)))
         self.chorus_rates = (0.5 * float(np.exp(make.normal(0.0, 0.06))), 0.85 * float(np.exp(make.normal(0.0, 0.06))))
         self.chorus_mix = make.uniform(0.5, 0.7)
+        if "chorus_depth" in p:  # a patch's deeper chorus (after the draws: the maker's machine is the same)
+            self.chorus_depth *= p["chorus_depth"]
         detune = p["detune"][0] + p["detune"][1] * self.wear
         self.offsets = np.array([o[2] * detune for o in p["oscs"]]) + self.trim
         self.octaves = np.array([o[1] for o in p["oscs"]], dtype=np.float64)
@@ -702,7 +801,8 @@ class _Machine:
             _coef(f_rel * tt[5], sr2, np.log(1000.0)),
         ])
         amount *= p["fvel"][0] + p["fvel"][1] * vel
-        base = (np.log2(p["cutoff"]) + 1.6 * (self.brightness - 0.5) + self.cutoff_trim
+        bright = 0.0 if p.get("fixed") else 1.6 * (self.brightness - 0.5)  # a person's cutoff is theirs
+        base = (np.log2(p["cutoff"]) + bright + self.cutoff_trim
                 + p["vcut"] * (vel - 0.6))
         return gain, env, amount, base
 
@@ -903,16 +1003,20 @@ def render(name: str, notes, sr: int, length: int, rng: np.random.Generator, mak
         raise ValueError(f"no such instrument: {name}")
     s = {**DEFAULTS, **(settings or {})}
     playing = sorted((n for n in notes if n.dur > 0 and 0 <= n.start * sr < length), key=lambda n: (n.start, n.pitch))
-    if name == "sub-bass":
+    preset = patched(name, s) if name != "sub-bass" else None  # a person's patch and filter, else the preset itself
+    sub = name == "sub-bass" or preset == "sub-bass"
+    if sub:
         y = _render_sub(playing, sr, length, rng, make, s)
+        if name != "sub-bass":  # the synth bass played as the sub: at the sub's own level against its own
+            y *= SUB_AS_BASS
     else:
-        machine = _Machine(name, make, s)
+        machine = _Machine(name, make, s, preset)
         if not playing:
-            return np.zeros((length, 2)) if PRESETS[name]["chorus"] else np.zeros(length)
+            return np.zeros((length, 2)) if preset["chorus"] else np.zeros(length)
         y = _render_voiced(name, playing, sr, length, rng, machine)
     # the output stage is AC-coupled: a note's first and last part-periods leave a little DC, which goes
     y = sosfilt(butter(1, AC_HZ, btype="highpass", fs=sr, output="sos"), y)
-    if name != "sub-bass" and PRESETS[name]["chorus"]:
+    if not sub and preset["chorus"]:
         phases = tuple(rng.uniform(0.0, 1.0, 2))
         y = chorus(y, sr, machine.chorus_centre, machine.chorus_depth, machine.chorus_rates, machine.chorus_mix,
                    phases)

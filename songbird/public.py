@@ -14,6 +14,7 @@ import contextlib
 import hmac
 import ipaddress
 import os
+import re
 import secrets
 import shutil
 import threading
@@ -39,6 +40,11 @@ class Limits:
     download_hours: float = 24.0  # how long a recording waits
     timeout: float = 30.0  # seconds a connection may send nothing before it's closed
     connections: int = 64  # connections served at once
+    opens: int = 12  # versions someone was sent, opened by one visitor an hour (each read in a process of its own)
+    opens_ip: int = 40
+    upload_mb: int = 64  # the largest file taken as a version to open (a rendition is 15 to 20 MB)
+    versions_mb: int = 256  # versions opened, kept as data (a record and a song, about 150 KB each)
+    version_days: float = 30.0  # how long a version is kept after it was last opened (its link works that long)
 
     @classmethod
     def parse(cls, items: list[str] | None) -> "Limits":
@@ -122,7 +128,7 @@ class Gate:
         self.limits = limits
         self.salt = secrets.token_bytes(16)
         self.lock = threading.Lock()
-        self.hour = {"records": Counter(3600), "previews": Counter(3600), "takes": Counter(3600)}
+        self.hour = {"records": Counter(3600), "previews": Counter(3600), "takes": Counter(3600), "opens": Counter(3600)}
         self.minute = Counter(60)
 
     def who(self, text: str) -> str:
@@ -130,33 +136,36 @@ class Gate:
 
     def request(self, ip: str, now: float | None = None) -> None:
         now = time.monotonic() if now is None else now
-        who = self.who("ip:" + ip)
+        who = self.who("ip:" + network(ip))
         with self.lock:
             wait = self.minute.wait(who, self.limits.requests, now)
             if wait:
                 raise Limited("Too many requests from your address at once; wait a moment.", wait)
             self.minute.add(who, now)
 
-    def render(self, kind: str, visitor: str, ip: str, now: float | None = None) -> None:
+    def render(self, kind: str, visitor: str, ip: str, now: float | None = None, count: bool = True) -> None:
         """A new render for this visitor ("records": a whole song, "previews": a section; "takes": a take sung in
-        the browser, measured in the same queue), counted if it's allowed; else Limited, saying why and when."""
+        the browser, measured in the same queue; "opens": a version someone was sent, read), counted if it's
+        allowed (or, with `count` False, only asked about); else Limited, saying why and when."""
         now = time.monotonic() if now is None else now
-        mine, theirs = self.who("v:" + visitor), self.who("ip:" + ip)
+        mine, theirs = self.who("v:" + visitor), self.who("ip:" + network(ip))
         each, shared = getattr(self.limits, kind), getattr(self.limits, kind + "_ip")
-        what = {"records": "whole songs", "previews": "new sections", "takes": "takes measured"}[kind]
+        what = {"records": "whole songs", "previews": "new sections", "takes": "takes measured",
+                "opens": "versions opened"}[kind]
+        made, after = ("", "") if kind == "opens" else (" made", "; what's made already plays at once")
         with self.lock:
             counter = self.hour[kind]
             wait = counter.wait(mine, each, now)
             if wait:
-                raise Limited(f"You've had {each} {what} made this hour, as many as one person may while "
-                              f"everyone shares one renderer. Try again in {about(wait)}; what's made already "
-                              f"plays at once.", wait)
+                raise Limited(f"You've had {each} {what}{made} this hour, as many as one person may while "
+                              f"everyone shares one renderer. Try again in {about(wait)}{after}.", wait)
             wait = counter.wait(theirs, shared, now)
             if wait:
-                raise Limited(f"Your network has had {shared} {what} made this hour, as many as one address may "
+                raise Limited(f"Your network has had {shared} {what}{made} this hour, as many as one address may "
                               f"while everyone shares one renderer. Try again in {about(wait)}.", wait)
-            counter.add(mine, now)
-            counter.add(theirs, now)
+            if count:
+                counter.add(mine, now)
+                counter.add(theirs, now)
 
     def purge(self) -> None:
         now = time.monotonic()
@@ -232,7 +241,19 @@ def client_ip(peer: str, headers, header: str | None) -> str:
     return peer
 
 
+def network(ip: str) -> str:
+    """An address as the limits count it: an IPv4 address itself; an IPv6 one by its /64, the network one
+    household or phone is given (and can pick any address in)."""
+    with contextlib.suppress(ValueError):
+        address = ipaddress.ip_address(ip.split("%")[0])
+        if address.version == 6 and address.ipv4_mapped is None:
+            return str(ipaddress.ip_network(f"{address}/64", strict=False))
+    return ip
+
+
 def access_line(method: str, path: str, code: int, size: int, seconds: float) -> str:
-    """One request, as the log keeps it: when, what, how it was answered. Never who."""
+    """One request, as the log keeps it: when, what, how it was answered. Never who, and never a version's id
+    (/v/<id>: its link is the only key to it)."""
     when = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
+    path = re.sub(r"^/v/[^/?#]*", "/v/…", path)
     return f"{when} {method} {path[:120]} {code} {size} {seconds * 1000:.0f}ms"

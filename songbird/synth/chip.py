@@ -413,10 +413,15 @@ def _console(y: np.ndarray, sr: int) -> np.ndarray:
     return sosfilt(sos, y)
 
 
+# A person's patch for the pulse channel: its width, in place of the one the band's brightness picks ("own").
+PATCHES = {"thin": "12", "reedy": "25", "hollow": "50"}
+
+
 def _pulse_part(notes, sr: int, length: int, s: dict, make: np.random.Generator) -> np.ndarray:
     bright = float(np.clip(s.get("brightness", 0.5), 0.0, 1.0))
     ornament = float(np.clip(s.get("ornament", 0.5), 0.0, 1.0))
     default = "50" if bright < 0.35 else "12" if bright > 0.7 else "25"
+    default = PATCHES.get(s.get("patch"), default)  # a person's patch: the pulse's width (docs/SOUND-DESIGN.md)
     # a machine's sound driver: its envelope's shape, its vibrato's speed and delay
     sag = make.uniform(0.7, 0.85)  # where the held volume settles
     vib_rate = make.uniform(5.5, 6.5)

@@ -9,11 +9,12 @@ let heap = () => { throw new Error('rt.setHeap was not called'); };
 // replaced when memory grows, so it is asked for each call).
 export function setHeap(f) { heap = f; }
 
-// A view of a numpy array in Pyodide's memory (no copy): its data address, shape and strides (elements).
-export function view(addr, nd, n0, n1, s0, s1, t) {
+// A view of a numpy array in Pyodide's memory (no copy): its data address, shape and strides (elements); k:
+// which argument of the kernel it is (-1: none), so a kernel that returns it hands back the numpy array itself.
+export function view(addr, nd, n0, n1, s0, s1, t, k = -1) {
   const extent = nd === 1 ? (n0 > 0 ? (n0 - 1) * s0 + 1 : 0)
     : (n0 > 0 && n1 > 0 ? (n0 - 1) * s0 + (n1 - 1) * s1 + 1 : 0);
-  return { d: new Float64Array(heap(), addr, extent), nd, n0, n1, s0, s1, t };
+  return { d: new Float64Array(heap(), addr, extent), nd, n0, n1, s0, s1, t, k };
 }
 
 export function alloc(nd, n0, n1, t, fill) {
@@ -52,6 +53,21 @@ export function packed(a) {
 export function store(addr, a) {
   const src = packed(a);
   new Float64Array(heap(), addr, src.length).set(src);
+}
+
+// a.reshape(-1): the elements in C order as a 1-d array, a view when they lie so (numba's reshape needs a
+// contiguous array), a copy otherwise
+export function flat(a) {
+  if (a.nd === 1) return a;
+  const contiguous = a.s1 === 1 && a.s0 === a.n1;
+  const d = contiguous ? a.d : copy(a).d;
+  return { d, nd: 1, n0: a.n0 * a.n1, n1: 0, s0: 1, s1: 1, t: a.t };
+}
+
+// the same for a bool array (numpy's bool_: a byte each, 0 or 1)
+export function store_u8(addr, a) {
+  const src = packed(a);
+  new Uint8Array(heap(), addr, src.length).set(src);
 }
 
 export function row(a, i) {
