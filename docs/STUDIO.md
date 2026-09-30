@@ -211,6 +211,67 @@ and the exported lyric sheet is taken from the actual sung score. A recording
 made before lines were kept this way kept them by place (`lyrics`); it still sings
 them there, and its next version takes them by the verses it sang.
 
+#### Words said two ways (2026-09-30)
+
+"The bass is a heartbeat that nobody wrote" was sung as the fish. The singer
+looks each word up in the CMU dictionary, which lists both readings of *bass*,
+and took the first (B AE1 S); it did the same to *wind*, *live*, *read*,
+*tear*, *lead*, *bow*, *close*, *sow*, *record* and the rest.
+
+Now a line a person writes has each such word (a heteronym) said as the words
+beside it say (songbird/heteronyms.py, 48 words). Each word has its senses, the
+one most common in songs first, and a few rules: *bass* is the low note unless
+a fish, a hook, a lake or a boat is in the line; *live* is "to live" unless
+it's a live show, a live wire, "a live one"; *read* is "reed" after
+to/will/can/don't and "red" after had/was/been or in a line told in the past
+("I read your papers and dropped every name"); *wind* is the air unless someone
+winds a clock or winds it up; *tear* is crying unless it's torn apart or wear
+and tear; *close* is near unless it closes your eyes or the door. The rules are
+data (a word just before, a word just after, a word anywhere in the line, a
+line in the past, a capital), deliberately few: where none speaks, the common
+sense. They're checked over example lines in tests/test_heteronyms.py.
+
+Under the line the editor shows each such word and its ways, the one that will
+be sung chosen: **bass: low note · fish**. Choosing the other writes it into the
+line, `The bass{fish} is a heartbeat…`, marked yours. The say is kept with the
+line's text, so the record replays it exactly and a child inherits it with the
+line; it's never a syllable and never shown (the score, the arrangement, the
+file's words). Any word can be said your own way the same way, checked before
+the line is used:
+
+- `bass{fish}`: one of the word's ways, as the toggle writes it
+- `bass{base}`: said like another word; `min-ute{my-newt}` for several
+- `bass{B.EY1.S}` (or `bass{B EY1 S}`): ARPAbet, a stress digit on every vowel
+
+A say is the last word, over the song's own lexicon too. The editor applies the
+same rules as the singer to a line as it's typed (the view sends the table;
+tests/studio_author.test.cjs decides the lines tests/golden/say-lines.json pins
+as the Python does).
+
+The song's own lines are sung exactly as before (no render changes; the
+goldens stand): the rules apply only to a line a person writes. The editor
+shows a song's own line the way the song sings it. That keeps a few of the
+songs' own words said wrongly, listed by the test (decisions for the artist:
+each is a line in the song with a say, and a new golden):
+
+| Song | Line | Sung now | The rules |
+| --- | --- | --- | --- |
+| D | "I *live* in your head" | alive (LYVE) | to live |
+| E | "colours that *live* on your screen" | alive (LYVE) | to live |
+| H | "the *wind* took it down to the farms" | turn (WYND) | air |
+| H | "why there were *tears*" | rips (TAIRS) | crying |
+| H | "The men in the mine *used* to sing it", "A nurse *used* to hum it" | YOOZD | YOOST |
+| K | "half was *wind* and half was shoe" | turn (WYND) | air |
+| K | "No one *sowed* her" | the pig (SOWD, as in cow) | planted |
+| L | "In March the *wind* blew down the sleeve" | turn (WYND) | air |
+| A | "Each copy was *per-fect*" | per-FECT | PER-fect (H has its own) |
+
+On the dry voice the learned throat now sings "The bass is a heartbeat that
+nobody wrote" with EY (F1 580 Hz, F2 2220 Hz early in the vowel; Whisper:
+"The *base* is the heartbeat…"), where before it sang AE (F1 870, F2 1260;
+Whisper: "The *bass* is my heartbeat…"); "The fish that he caught was a bass by
+the sea" keeps AE.
+
 ### Sound
 
 Cards expose the style, form, players, room, vocal presence and other choices.

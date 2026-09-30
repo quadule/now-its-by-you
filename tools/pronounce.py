@@ -3,6 +3,9 @@
     uv run python tools/pronounce.py                        # every word H can sing that may be stressed wrongly
     uv run python tools/pronounce.py no-bo-dy per-fect      # how the singer says these now
     uv run python tools/pronounce.py --song songs/b-....json
+    uv run python tools/pronounce.py --heteronyms            # its own lines with a word said two ways, sung
+                                                             # as the rules for a person's line wouldn't
+    uv run python tools/pronounce.py "bass{fish}"            # a word with a say (songbird/heteronyms.py)
 
 The singer reads each word from the song's own lexicon ("lexicon" in its genome: the word without
 hyphens, then ARPAbet with a stress digit on every vowel), else the CMU dictionary, taking the first
@@ -11,6 +14,11 @@ sung stressed: leaned on a little (voice.lean), and an AH not reduced to a schwa
 two ways: the dictionary gives it secondary stresses where English has none (no-bo-dy came out
 NO-BO-DY), or reads it two ways and the first is the wrong one (per-fect as the verb, per-FECT).
 Compounds keep their second stress (church-yard, rail-way): only the lists below are suspects.
+
+A line a person writes in the studio is read differently: a word said two ways (bass, wind, live,
+read...) is said as the words beside it say, and a word with a say in braces (bass{fish}, bass{base},
+bass{B.EY1.S}) as its say tells (songbird/heteronyms.py). The song's own lines aren't: --heteronyms
+lists those the rules would say another way.
 
 To fix a word, give the song its own reading, stressing only what English does:
 "nobody": "N OW1 B AA0 D IY0". Then check the words are still heard (tools/wer_suite.py --sketch h
@@ -41,19 +49,48 @@ def vowels(reading: list[str]) -> list[str]:
 def said(word: str, lexicon: dict | None) -> str:
     """The word as the singer says it: its syllables, the stressed ones in capitals, and where the
     reading came from."""
-    n = len([p for p in word.split("-") if p]) or 1
+    n = len([p for p in ph.shown(word).split("-") if p]) or 1
     syllables = ph.fit(word, n, lexicon)
-    parts = [p for p in word.split("-") if p] if len(syllables) == n else [s.nucleus for s in syllables]
+    parts = [p for p in ph.shown(word).split("-") if p] if len(syllables) == n else [s.nucleus for s in syllables]
     shown = "-".join(p.upper() if s.stressed else p.lower() for p, s in zip(parts, syllables))
     own = lexicon and ph.clean(word.replace("-", "")) in {ph.clean(k.replace("-", "")) for k in lexicon}
     reading = " ".join(ph.pronunciations(word, lexicon)[0])
-    return f"{shown:22s} {reading:30s} {'the song' if own else 'the dictionary'}"
+    return f"{shown:22s} {reading:30s} {'its say' if '{' in word else 'the song' if own else 'the dictionary'}"
 
 
 def words(genome) -> dict[str, set[str]]:
     """Every word the song can sing (its seed verses and phrases, and every way the bank's lines can be
     sung), and where."""
-    from songbird.bank import expansions, head_slots, unmarked
+    from songbird.bank import unmarked
+
+    where: dict[str, set[str]] = defaultdict(set)
+    for what, line in sung_lines(genome):
+        for w in unmarked(line).split():
+            w = w.strip('.,;:!?"()—“”').lower()
+            if re.search(r"[a-z]", w):
+                where[w].add(what)
+    return where
+
+
+def heteronyms(genome) -> list[tuple[str, str, str, str | None, str]]:
+    """The song's own lines with a word said two ways that the rules for a person's line would say another
+    way (songbird/heteronyms.py): (where, line, word, as the song sings it, as the rules would)."""
+    from songbird import heteronyms as het
+
+    out, seen = [], set()
+    for what, line in sung_lines(genome):
+        for c in het.as_sung(line, genome.lexicon, authored=False):
+            rules = next(x for x in het.choices(line) if x["index"] == c["index"])["chosen"]
+            if rules != c["chosen"] and (line, c["index"]) not in seen:
+                seen.add((line, c["index"]))
+                out.append((what, line, c["word"], c["chosen"], rules))
+    return out
+
+
+def sung_lines(genome) -> list[tuple[str, str]]:
+    """Every line the song can sing, and where: its seed verses and phrases, and every way the bank's lines
+    can be sung."""
+    from songbird.bank import expansions, head_slots
 
     lines = []
     bank = genome.source.get("bank") or {}
@@ -75,13 +112,7 @@ def words(genome) -> dict[str, set[str]]:
         for pid in section.phrases:
             if getattr(genome.phrases[pid], "lyric", None):
                 lines.append((f"{name} {pid}", genome.phrases[pid].lyric))
-    where: dict[str, set[str]] = defaultdict(set)
-    for what, line in lines:
-        for w in unmarked(line).split():
-            w = w.strip('.,;:!?"()—“”').lower()
-            if re.search(r"[a-z]", w):
-                where[w].add(what)
-    return where
+    return lines
 
 
 def suspects(genome) -> tuple[list[str], list[str]]:
@@ -110,11 +141,21 @@ def main() -> None:
     ap = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
     ap.add_argument("words", nargs="*", help="words as the lyrics hyphenate them (no-bo-dy); none: the suspects")
     ap.add_argument("--song", default=str(H), help="the genome (default H)")
+    ap.add_argument("--heteronyms", action="store_true",
+                    help="the song's own lines with a word said two ways the rules for a person's line would say "
+                         "another way (songbird/heteronyms.py)")
     args = ap.parse_args()
 
     from songbird import genome as G
 
     genome = G.load(args.song)
+    if args.heteronyms:
+        found = heteronyms(genome)
+        print(f"{len(found)} of the song's own lines sing a word said two ways as the rules wouldn't "
+              "(the song's way is kept: a say in braces changes it, bass{fish}):")
+        for what, line, word, song, rules in found:
+            print(f"  {word:8s} sung {song or 'neither sense'}, the rules: {rules}   {what}: {line}")
+        return
     if args.words:
         for w in args.words:
             print(f"{w:18s} {said(w, genome.lexicon)}")
