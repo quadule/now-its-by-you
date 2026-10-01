@@ -441,6 +441,19 @@ H takes a second or two, the whole song about fifteen seconds on this Mac (the b
 preview: a part heard alone is not the record's exact samples, and the mix's
 balance is judged on the whole song.
 
+The whole song heard sung starts at the score's playhead, as the sketch does:
+on the bar line of the ruler's bar it was put at, found in the audio by the
+rendition's own clock. A whole song's job ends with that clock (`bar_seconds`:
+each bar line of the ruler in seconds of its audio, by `realize.timeline`, so a
+count-in, a slow air and the final ritardando are counted), whether it was made
+now, made before or made in the visitor's browser (from the render spec). Bar 1,
+or no playhead, is the very start, with the breath and the first pickup; at a
+later bar a pickup sung just before its bar line isn't heard, as with any
+playhead. The audio is silent until it sounds there, then comes up over 24 ms,
+since a bar line mid-song isn't silence. A selected section is previewed from
+its own start, as ever (tests/studio_playhead.test.cjs, from the ruler's button
+to the audio's time; tests/test_studio.py, the clock against the ruler).
+
 One renderer works at a time: recordings first, then the newest preview (a
 preview still waiting is dropped when another is asked for). Every render is
 cached by what it depends on (the parameters, the words, the phrasing, the

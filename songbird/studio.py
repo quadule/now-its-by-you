@@ -234,6 +234,16 @@ def window(genome, params: Params, score, form, index: int) -> tuple[float, floa
     return t0, max(t1, s0 + unit)
 
 
+def bar_seconds(genome, params: Params) -> list[float]:
+    """Where each bar line of the score's ruler falls in the whole song's audio, in seconds (bar 1's first, the
+    song's last bar line last), by the rendition's own clock (realize.timeline: its preroll and any count-in, a slow
+    air, the final ritardando): the page starts the whole song at its playhead's bar with them."""
+    from .realize import timeline
+
+    clock, bar = timeline(genome, params), genome.meter.bar
+    return [round(clock.seconds(clock.lead + k * bar), 3) for k in range((clock.end - clock.lead) // bar + 1)]
+
+
 def cut(score, t0: float, t1: float, before: float = 1.0, tail: float = 2.5):
     """The notes sounding between t0 and t1, moved so that t0 - before is zero: an instrument's note already
     ringing starts at zero (held that much shorter), so the second of lead-in gives it time to settle before
@@ -693,7 +703,10 @@ class Studio:
         flac = self.cache / f"{key}.flac"
         if flac.exists():
             os.utime(flac)
-            return {"state": "done", "url": f"/audio/{key}.flac", "label": label, "progress": 1.0, "key": key}
+            done = {"state": "done", "url": f"/audio/{key}.flac", "label": label, "progress": 1.0, "key": key}
+            if section is None:  # as a whole song's job ends (_whole)
+                done["result"] = {"bar_seconds": bar_seconds(self.genome, v.params)}
+            return done
         if section is None:
             self.check_whole(v)
             job = self.jobs.submit(key, "preview", label, lambda job: self._whole(job, v, key),
@@ -819,7 +832,8 @@ class Studio:
         link(folder / "rendition.flac", self.cache / f"{key}.flac")
         job.url = f"/audio/{key}.flac"
         prune(self.cache, self.cache_limit)
-        return {"url": job.url, "id": record["id"], "duration": record["duration"]}
+        return {"url": job.url, "id": record["id"], "duration": record["duration"],
+                "bar_seconds": bar_seconds(self.genome, v.params)}
 
     # ------------------------------------------------------------ exporting for musicians
 
@@ -1348,6 +1362,7 @@ class Studio:
         answer = {"key": key, "label": label, "kind": spec["kind"], "spec": json.dumps(spec, default=str)}
         if section is None:  # what the recording is called, as _keep names it (the day, then its id's first six)
             answer["name"] = {"song": slug(self.genome.title), "day": self.day}
+            answer["bar_seconds"] = bar_seconds(self.genome, v.params)  # its clock, as _whole's job ends with it
         return answer
 
 

@@ -9,6 +9,7 @@ const now = () => Promise.resolve();
 const DESKTOP = { wasm: true, worker: true, mobile: false, memory: 8 };
 const BUNDLE = { v: 1, base: "/render/", pyodide: "py-0123456789abcdef", app: "app-0123456789abcdef", bytes: 36e6, transfer: 29e6 };
 const SPEC = (key, kind, extra = {}) => ({ key, label: `label ${key}`, kind, spec: `{"v":1,"kind":"${kind}","key":"${key}"}`, ...extra });
+const CLOCK = [0.911, 3.395, 5.88, 8.364];  // a whole song's bar lines in seconds (the studio's bar_seconds)
 const tick = () => new Promise((resolve) => setImmediate(resolve));
 
 // A stand-in for the worker: answers init with loading then ready, and a render with its progress then the file,
@@ -56,7 +57,7 @@ function studioServer(extra = {}) {
       if (extra.tooLong && body.section === null) return { key: "k", label: "long", too_long: extra.tooLong };
       const whole = body.section === null;
       const key = whole ? `w${body.edits.tempo || 0}` : `s${body.section}-${body.edits.tempo || 0}`;
-      return SPEC(key, whole ? "whole" : "section", whole ? { name: { song: "now-its-by-you", day: "2026-09-30" } } : {});
+      return SPEC(key, whole ? "whole" : "section", whole ? { name: { song: "now-its-by-you", day: "2026-09-30" }, bar_seconds: CLOCK } : {});
     }
     if (path === "/api/listen" || path === "/api/record") {
       jobs += 1;
@@ -139,6 +140,17 @@ test("a section's worker makes a few, then is replaced; a whole song gets its ow
   assert.equal(rec.browser, true);
   assert.equal(rec.yours, 3);
   assert.equal(rec.next, "python3 now-its-by-you.2026-09-30.id-w92.flac studio");
+});
+
+test("a whole song made here ends with its clock, as the server's job does: the page starts it at the playhead's bar", async () => {
+  const { r } = browser({});
+  const heard = await r.preview({ edits: { tempo: 93 }, section: null }).done;
+  assert.equal(heard.where, "browser");
+  assert.deepEqual(heard.result.bar_seconds, CLOCK);
+  const recorded = await r.record({ edits: { tempo: 94 } }).done;
+  assert.deepEqual(recorded.result.bar_seconds, CLOCK);
+  assert.equal(recorded.result.recorded.browser, true);
+  assert.equal((await r.preview({ edits: { tempo: 93 }, section: 2 }).done).result.bar_seconds, undefined);
 });
 
 test("what the server has made already is asked of it, and plays from there", async () => {

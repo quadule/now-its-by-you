@@ -132,6 +132,8 @@
   const making = () => ["queued", "running"].includes(state.playing?.job?.state) && !state.playing?.task?.cancelled;
   const sounding = () => !!C()?.playing?.() || !$("audio").paused;
   function stopAll() { C()?.stop?.(); pauseAudio(); paintPlay(); idle(); }
+  // the whole song sung, from the playhead as the sketch is: the bar of the ruler it's at (none: from the start)
+  const hearSong = () => listen("you", null, S.playhead !== null && S.grid ? M.position(S.playhead, S.grid.sections, S.grid.perBar).bar : null);
   function play(how = S.how) {
     if (sounding() || making() || (state.playing?.task && !state.playing.job)) { stopAll(); return; }
     const secs = S.grid?.sections || [];
@@ -142,7 +144,8 @@
       if (t.phrase && S.open) C().sketch({ scope: "phrase", index: compIndex(S.open) });
       else if (s) C().sketch({ scope: "section", index: compIndex(s.id) });
       else C().sketch({ scope: "song", from: S.playhead });
-    } else listen("you", t.section);
+    } else if (t.section === null) hearSong();
+    else listen("you", t.section);
     paintPlay();
   }
   function paintPlay() {
@@ -1109,7 +1112,7 @@
         field("Over the band", "mix.forward", m.forward, b["mix.forward"], (x) => `${Number(x).toFixed(1)} dB`, ["among it", "well over it"]),
         field("How close", "mix.intimacy", m.intimacy, b["mix.intimacy"], pct, ["further back", "at your ear"]),
         routeControls("tune", "the tune")),
-      why: c?.reasons || [], hear: () => listen("you", null),
+      why: c?.reasons || [], hear: hearSong,
       release: releasing(["phrasing", "mix.forward", "mix.intimacy"], "The singer as the program has it") });
     return true;
   }
@@ -1131,7 +1134,7 @@
         b["mix.rt60"] ? h("details", {}, h("summary", {}, "more"),
           field("How long it rings", "mix.rt60", m.rt60, b["mix.rt60"], (x) => `${Number(x).toFixed(2)} s`, ["a small room", "a hall"]),
           b["mix.predelay"] ? field("How soon it answers", "mix.predelay", m.predelay, b["mix.predelay"], (x) => `${Math.round(x * 1000)} ms`, ["at once", "later"]) : null) : null),
-      why: c?.reasons || [], hear: () => listen("you", null),
+      why: c?.reasons || [], hear: hearSong,
       release: releasing(["mix.space", "mix.width", "mix.rt60", "mix.predelay"], "The room as the program has it") });
     return true;
   }
@@ -1149,7 +1152,7 @@
         chipRow("How it ends", opts(c.endings), st.ending, (x) => choose("style.ending", x, "The ending"), edited("style.ending")),
         chipRow("Backing voices", opts(c.backings), st.backing, (x) => choose("style.backing", x, "The backing voices"), edited("style.backing")),
         chipRow("The last refrain", [{ value: true, text: "a whole step up" }, { value: false, text: "in the same key" }], !!st.lift, (x) => choose("style.lift", x, "The last refrain"), edited("style.lift"))),
-      why: c.reasons, hear: () => listen("you", null), release: releasing(allPaths(c).concat(Object.keys(state.edits).filter((p) => p.startsWith("style."))), "The program's style") });
+      why: c.reasons, hear: hearSong, release: releasing(allPaths(c).concat(Object.keys(state.edits).filter((p) => p.startsWith("style."))), "The program's style") });
     return true;
   }
   function bandState() {
@@ -1165,7 +1168,7 @@
         h("div", { class: "row", title: c.styled ? "The style chooses who plays and who leads; each player's part is in Arrange, its level and sound in Mix." : null },
           h("span", { class: "label" }, "Each player"),
           h("span", {}, h("button", { class: "btn quiet", type: "button", onclick: () => showView("arrange") }, "Arrange"), h("button", { class: "btn quiet", type: "button", onclick: () => showView("mix") }, "Mix")))),
-      why: c.reasons, hear: () => listen("you", null), release: releasing(["band.pattern", "band.lead", "band.density", "band.brightness"], "The band as the program has it") });
+      why: c.reasons, hear: hearSong, release: releasing(["band.pattern", "band.lead", "band.density", "band.brightness"], "The band as the program has it") });
     return true;
   }
   function shapeState() {
@@ -1189,7 +1192,7 @@
           byPart.verses ? chipRow("Verses", byPart.verses.map((x) => ({ value: x.value, text: String(x.value), disabled: !x.allowed, title: x.why })), c.parts.verses, (n) => choose("form.verses", n, `${n} verses`), edited("form.verses")) : null,
           h("div", { class: "row" }, h("span", { class: "label" }, "Parts"), h("span", { class: "chips" }, toggles)),
           h("p", { class: "hint" }, "Their order: drag the sections in Arrange.")),
-      why: c.reasons, hear: () => listen("you", null), release: { disabled: !c.mine && !v.edits["form.order"], action: release } });
+      why: c.reasons, hear: hearSong, release: { disabled: !c.mine && !v.edits["form.order"], action: release } });
     return true;
   }
 
