@@ -468,7 +468,9 @@ def plan_style(ctx: StyleContext) -> None:
         keys += [r, "*"]
         parts: dict[str, str] = {}
         hooked = bool(sdef.hook)  # a style whose hook the singer chops (house): no tune in its turns and outro
-        if leads and r in ("intro", "outro") and not (hooked and (r == "outro" or ctx.style.intro != "lead")):
+        if sdef.name == "hymn":
+            pass  # a hymn's organ plays its own table everywhere: the tune given out in four parts (songbird.hymn)
+        elif leads and r in ("intro", "outro") and not (hooked and (r == "outro" or ctx.style.intro != "lead")):
             parts[leads[0]] = "lead"
         elif leads and r == "break":
             parts[leads[(breaks + 1) % len(leads)]] = "lead"
@@ -1705,6 +1707,16 @@ WRITERS = {
 # "fills" is written for all sections at once (band.fills), after the rest.
 
 
+def w_hymn(ctx: StyleContext, i: int, part: str) -> list[Ev]:
+    """A hymn's organ: the four lines with the singers, or alone giving the tune out (songbird.hymn)."""
+    from . import hymn
+
+    return hymn.w_hymn(ctx, i, part)
+
+
+WRITERS.update({"hymn": w_hymn, "givingout": w_hymn})  # a hymn's (docs/STYLES.md, "A hymn", 2026-09-30, night)
+
+
 # --- house and dub (2026-09-30; docs/STYLES.md, "House and dub") ------------------------------------------------
 #
 # House: a drum machine's four on the floor with the open hat on every off-beat, a clap on two and four, the ride
@@ -2236,6 +2248,10 @@ class Sung:
 
 def backing(ctx: Context, melody: list[dict], style) -> list[Sung]:
     sdef = getattr(ctx, "sdef", None)
+    if sdef is not None and sdef.group and sdef.name == "hymn":  # a hymn's parts over its own setting (songbird.hymn)
+        from . import hymn
+
+        return hymn.parts(ctx, melody, style)
     if sdef is not None and sdef.group:  # a style that sings as a group: its voices are its band
         return shape_parts(ctx, melody, style)
     n = int(getattr(ctx.params, "choir", 0))
@@ -2738,8 +2754,8 @@ def arrange_style(genome, params, placed, lead, end, melody, seconds, sdef) -> t
     if sdef.rounds > 1 or params.style.intro == "air":
         sets(ctx, params.style)
     sung = backing(ctx, melody, params.style)
-    if params.style.ending == "amen":
-        sung += amen(ctx, end - 2 * ctx.bar, int(params.choir))
+    if params.style.ending == "amen":  # (a hymn's amen is sung by its whole group)
+        sung += amen(ctx, end - 2 * ctx.bar, len({s.voice for s in sung}) if sdef.name == "hymn" else int(params.choir))
     ctx.backing = [(s.u0, s.u1, s.pitch) for s in sung]
     takeover.take_over(ctx, ctx.plan)  # a person's arrangement over the program's (and chance's), if any
     mark_dissolved(ctx)  # (again: a pair a person arranged is split in two)
@@ -2774,7 +2790,8 @@ def arrange_style(genome, params, placed, lead, end, melody, seconds, sdef) -> t
         if e.part in rhythm or family(e.part) in ("lead",) or e.length > 0:
             continue
         what = ctx.sections[e.section].parts.get(e.part, "")
-        if what in ("lead", "quote", "counter", "descant", "under", "tone", "double", "hook", "fills"):
+        if what in ("lead", "quote", "counter", "descant", "under", "tone", "double", "hook", "fills", "hymn",
+                    "givingout"):  # (a hymn's organ plays the singers' own lines with them)
             continue
         while int(round(e.pitch)) in ctx.voices_at(e.u0) + [p for u0, u1, p in ctx.backing if u0 - 1e-9 <= e.u0 < u1 - 1e-9]:
             e.pitch -= 12
@@ -2826,7 +2843,7 @@ def arrange_style(genome, params, placed, lead, end, melody, seconds, sdef) -> t
         "sections": [{"name": s.name, "role": s.role, "energy": round(s.energy, 3), "parts": dict(sorted(s.parts.items()))}
                      for k, s in enumerate(ctx.sections) if k != version],  # (the score's sections: no version)
     }
-    if sdef.group and not sdef.leads:  # voices alone: the synthesis matches its singers to the parts by range
+    if sdef.group:  # a group's voices (an a cappella's, a hymn's): the synthesis matches its singers to the parts by range
         settings["parts"] = "voices"
     if any(w == "dadgad" for s in ctx.sections for w in s.parts.values()):  # its open strings ring in sympathy
         settings["tuning"] = dadgad_strings(ctx)

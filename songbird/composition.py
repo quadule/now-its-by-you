@@ -673,8 +673,10 @@ def _looped(genome, params, lines, phrases) -> list:
     """The phrases with a style's own loop under the sections it loops (songbird.style.loop_of: house's, dub's
     riddim), laid from each section's first bar, round and round; a line whose chords a person set (everywhere, or
     at its place) keeps theirs. The same list where the style has no loop."""
+    from .hymn import setting
     from .style import loop_of, looped
 
+    phrases = setting(genome, params, lines, phrases)  # a hymn's own harmonization (songbird.hymn); the same list else
     loop = loop_of(genome, params)
     if loop is None:
         return phrases

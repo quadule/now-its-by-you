@@ -788,6 +788,35 @@ def desk_of(params) -> dict:
     return VERSION_DESK if params.style.ending == "version" else {}
 
 
+# --- beside the ring: a hymn (docs/STYLES.md, "A hymn", 2026-09-30, night) ---------------------------------------
+#
+# An organ (a pipe organ, or for some machines a harmonium) under everyone singing the tune in parts: the lead on the
+# tune, a group of at least three (the lineage's voices, then the program's own) on the tenor, the alto and the tune,
+# a descant over the last refrain in some renditions; the organ gives the tune out first, plays the four lines with
+# the singers, and its pedal takes the bass no voice can sing. The style's own harmonization of the tune, a chord a
+# beat or a half bar, and its parts are songbird/hymn.py. Named for what plays, claiming no tradition.
+
+HYMN = _def(
+    "hymn", "hymn: organ, and everyone singing in parts: the organ gives the tune out, then plays the four lines "
+            "with the singers, its pedal under them; verses in unison and in parts, a descant over the last refrain "
+            "now and then, a plagal amen",
+    {"pipeorgan": 1.0},
+    {"pipeorgan": {"*": "hymn", "intro": "givingout", "break": "givingout", "outro": "givingout"}},
+    ("pipeorgan",), {"straight": 1.0}, {"*": (0.66, 0.75, 0.84)},
+    {}, 0.0, (-0.45, -0.85),
+    feel={"humanize": 1.3, "ritardando": 0.15},
+    singer={"vibrato_depth": -6.0, "rd": -0.03},
+    mix={"space": 0.3, "width": 0.1, "intimacy": -0.08, "choir": 1.0},
+    options={"intro": {"lead": 1.0}, "alone": 0.0, "stops": 0.0, "breakdown": 0.0, "lift": 0.0,
+             "ending": {"ring": 0.25, "rit": 0.35, "amen": 0.4}, "entrances": 0.0, "backing": {"gang": 1.0},
+             "half": 0.0},
+    swaps={"pipeorgan": {"harmonium": 0.35}},  # a reed organ for some machines (a lineage keeps the one it had)
+    group=3,
+)
+STYLES[HYMN.name] = HYMN
+OFF_RING[HYMN.name] = "chamber"  # no drums, sustained, stately and broadening; a lineage leaving it goes home to folk
+
+
 # --- a loop of the style's own (2026-09-30, evening; docs/STYLES.md, "House and dub, again") ------------------------
 #
 # A loop is scale degrees a bar, the mode's own chords on them (a seventh where the style voices sevenths), laid
