@@ -7,6 +7,9 @@ import numpy as np
 import pytest
 from scipy.signal import hilbert, welch
 
+from songbird import genome as G
+from songbird import style as S
+from songbird.realize import Params, choose_params, realize, timeline
 from songbird.synth import disc as DISC
 from songbird.synth.mixing import MixParams
 
@@ -74,7 +77,7 @@ def test_the_turntable_wavers_once_a_revolution():
     m = taps["music"][int(2 * SR): int(12 * SR)]
     inst = np.diff(np.unwrap(np.angle(hilbert(m)))) * SR / (2 * np.pi)
     k = int(0.01 * SR)
-    inst = np.convolve(inst, np.ones(k) / k, mode="valid")
+    inst = np.convolve(inst, np.ones(k) / k, mode="valid")[SR // 2: -SR // 2]
     dev = inst / 1000.0 - 1.0
     assert DISC.WOW[0] * 0.8 < taps["eccentric"] < DISC.WOW[1] * 1.05
     assert 0.8 * taps["eccentric"] < np.max(np.abs(dev - np.median(dev))) < 1.5 * (1 + DISC.WOW_SECOND) * taps["eccentric"]
@@ -108,3 +111,113 @@ def test_a_section_heard_alone_has_no_needle_drop_and_no_run_out():
     taps = {}
     y = DISC.record(x.copy(), SR, 1.0, 4, taps)
     assert not taps["dropped"] and taps["runout"] is None and len(y) == len(x)
+
+
+# --- the style ---------------------------------------------------------------------------------------------------
+
+OFF = {"intro": "", "alone": 0, "stops": 0, "breakdown": False, "bridge": "", "lift": False, "ending": "",
+       "entrances": False, "backing": ""}
+
+
+def styled(**options):
+    g = G.load(H)
+    return g, choose_params(g, style="old78", arrange={**OFF, **options})
+
+
+def test_an_old_78_is_a_parlour_piano_or_a_guitar_with_a_fiddle_by_chance_recorded_as_a_78():
+    g, p = styled(feel="straight")
+    assert p.mix["disc"] == 1.0 and p.mix["plate"] == 0.0 and p.mix["wear"] == 0.0
+    assert set(p.band.lineup) <= {"piano", "guitar", "fiddle"} and len({"piano", "guitar"} & set(p.band.lineup)) == 1
+    assert "intro" in p.form and "break" in p.form  # the style's own shape
+    assert 0.86 * 96 <= p.tempo <= 1.0 * 96
+    sections = realize(g, p).band["sections"]
+    keys = next(k for k in ("piano", "guitar") if k in p.band.lineup)
+    assert all(s["parts"].get(keys) in ("stride", "travis", "parlour", "quote", "arpeggio", "ring") for s in sections)
+    assert next(s for s in sections if s["name"] == "break")["parts"][keys] == "parlour"  # its own hand under the tune
+    assert not {"kit", "drum", "bass", "ebass"} & {x for s in sections for x in s["parts"]}
+
+
+def test_the_piano_s_oom_pah_has_its_bass_on_the_strong_beats_in_the_tenor_and_its_chords_between():
+    g, p = styled(feel="straight")
+    score = realize(g, p)
+    clock = timeline(g, p)
+    beats = clock.beats()
+    first = min(i for i, (_t, bar) in enumerate(beats) if bar)
+    verses = [(a, b) for n, a, b in score.sections if n == "verse"]
+    piano = [n for n in score.notes if n.part == "piano" and any(a + 0.05 <= n.start < b - 0.05 for a, b in verses)]
+    assert piano
+    strong, weak = [], []
+    for n in piano:
+        i = int(np.argmin([abs(n.start - t) for t, _ in beats]))
+        if abs(beats[i][0] - n.start) < 0.06:
+            (strong if (i - first) % 2 == 0 else weak).append(n.pitch)
+    assert strong and weak and min(strong) >= p.tonic - 19 - 2  # the bass in the tenor, where the horn takes it
+    assert np.median(weak) >= np.median(strong) + 4 and min(weak) > min(strong)  # the chords above the bass
+
+
+def test_a_person_s_shape_wins_and_a_form_set_by_hand_stays():
+    from songbird.edits import Overrides
+
+    g = G.load(H)
+    p = choose_params(g, overrides=Overrides(g, {"style.name": "old78", "form.break": False}))
+    assert p.style.name == "old78" and "break" not in p.form and "intro" in p.form
+
+
+def test_nothing_steps_into_an_old_78_and_a_child_keeps_it_or_steps_beside_the_songwriter():
+    from songbird import drift as D, harvest as HV, variation as V
+
+    assert S.OFF_RING["old78"] == "songwriter" and "old78" not in S.RING and "old78" in S.offered()
+    seen = set()
+    for k in range(10):
+        voice = HV.fictional(f"m{k}")
+        c = V.character(voice)
+        for day in ("2026-03-01", "2026-06-01", "2026-09-01"):
+            d = D.drift(D.parse(day), voice.hash)
+            assert S.place(S.Style(name="songwriter"), c, d) != "old78"
+            seen.add(S.place(S.Style(name="old78"), c, d))
+    assert seen <= {"old78", *S.neighbours("songwriter")} and "old78" in seen
+
+
+def test_the_disc_is_handed_down_with_the_style_and_left_behind_without_it():
+    from songbird import drift as D, harvest as HV
+
+    g = G.load(H)
+    voice = HV.fictional("ada")
+    parent = choose_params(g, None, voice, D.drift(D.parse("2026-09-27"), voice.hash), style="old78")
+    assert parent.mix["disc"] == 1.0 and Params.from_dict(parent.to_dict()).mix["disc"] == 1.0
+    kept = choose_params(g, parent, voice, D.drift(D.parse("2026-10-27"), voice.hash), style="old78")
+    left = choose_params(g, parent, voice, D.drift(D.parse("2026-10-27"), voice.hash), style="songwriter")
+    assert kept.mix["disc"] == 1.0 and MixParams.from_dict(left.mix).disc == 0.0
+    assert MixParams.from_dict(left.mix).plate == pytest.approx(MixParams.from_dict(parent.mix).plate + 1.0)
+
+
+@pytest.fixture
+def home(tmp_path, monkeypatch):
+    monkeypatch.setenv("SONGBIRD_HOME", str(tmp_path / "home"))
+    return tmp_path
+
+
+def test_the_studio_offers_it_in_plain_words_and_shows_its_players(home):
+    import re
+
+    from songbird import explain, studio as ST
+
+    studio = ST.Studio(None, str(H), "fictional:ada", out=home / "out")
+    forbidden = re.compile(r"\b(genome|drift|harvest|hash|knob|params?|seed|label|19\d0s?)\b", re.I)
+    v = studio.version({"style.name": "old78"})
+    view = explain.view(studio.context, v)
+    card = next(c for c in view["cards"] if c["id"] == "style")
+    assert card["styles"]["old78"] == "old 78" and card["value"].startswith("old 78")
+    assert "recorded as a 78" in card["detail"]
+    mix = next(c for c in view["cards"] if c["id"] == "mix")
+    assert mix["value"].startswith("recorded as a 78")
+    shape = next(c for c in view["cards"] if c["id"] == "shape")
+    assert any("old 78 always has one" in r["text"] for r in shape["reasons"]) or "break" in v.params.form
+    for c in view["cards"]:
+        for text in [c["value"], c.get("detail") or ""] + [r["text"] for r in c["reasons"]]:
+            assert not forbidden.search(text), text
+    grid = studio.arrangement({"style.name": "old78"})
+    keys = next(p for p in grid["players"] if p["name"] in ("piano", "guitar"))
+    assert {"stride", "parlour"} & {x["id"] for x in keys["patterns"]}
+    sound = studio.sound({"style.name": "old78"})
+    assert {p["player"] for p in sound["players"]} & {"piano", "guitar"}

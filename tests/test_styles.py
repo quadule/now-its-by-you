@@ -103,7 +103,8 @@ def test_the_palette_is_whole():
     known = set(instruments.known())
     for s in S.STYLES.values():
         assert set(s.lineup) <= known, s.name
-        assert set(s.parts) <= set(s.lineup) and all(lead in s.lineup for lead in s.leads), s.name
+        swapped = {who for swaps in s.swaps.values() for who in swaps}  # one swapped in may have a table of its own
+        assert set(s.parts) <= set(s.lineup) | swapped and all(lead in s.lineup for lead in s.leads), s.name
         assert abs(sum(s.feels.values()) - 1.0) < 1e-9 and set(s.feels) <= set(S.FEELS), s.name
         for feel in s.feels:
             lo, centre, hi = s.centre(feel)
@@ -391,7 +392,8 @@ def test_every_style_renders(name):
     p = replace(choose_params(g, style=name), form=("verse", "refrain"), choir=1)
     score = realize(g, p)
     stems = synth.render_stems(score, seed=p.seed)
-    assert "voice" in stems and len(stems) >= 3
+    playing = sum(1 for gain in p.band.lineup.values() if gain > 0.02)  # (the old 78's piano may play alone)
+    assert "voice" in stems and len(stems) >= min(3, 1 + playing)
     for stem_name, stem in stems.items():
         assert stem.ndim == 2 and stem.shape[1] == 2 and np.all(np.isfinite(stem)), stem_name
         assert np.abs(stem).max() < 4.0, (stem_name, float(np.abs(stem).max()))

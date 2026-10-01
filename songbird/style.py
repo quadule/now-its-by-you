@@ -203,6 +203,9 @@ class StyleDef:
     form: dict = field(default_factory=dict)
     # a vocal chop (house's): the singer sings a short phrase of the song's words on the grid, in the style's hook bars
     hook: dict = field(default_factory=dict)
+    # parts of the form the style always plays where the song has them (the old 78's: {"intro": True, "break": True}),
+    # put into a machine's form (shaped); {}: the form as chosen
+    shape: dict = field(default_factory=dict)
 
     def order(self, lineup: dict) -> list[str]:
         """The instruments of a lineup in the style's own order (one swapped in where its part is), any others
@@ -656,6 +659,55 @@ def sung_ornaments(genome, params) -> tuple:
             if V.fits(genome, (*params.variants, *chosen), v):
                 chosen.append(v)
     return tuple(chosen)
+
+
+# --- beside the ring: an old 78 (2026-09-30; docs/STYLES.md, "An old 78") ---------------------------------------------
+#
+# The song says nobody knows who made it; this version sounds found. The singer sings the tune straight with a parlour
+# piano (a guitar for about a third of machines: the swap), a fiddle now and then (optional), the piano's oom-pah in the
+# tenor (idioms.w_stride) and the tune over its own hand where nobody sings (idioms.w_parlour: the table's "solo"); an
+# intro and a break always (StyleDef.shape); and the whole mix recorded as a 78 (MixParams.disc, synth/disc.py: mono,
+# a horn's band, the turntable's wow, the surface, the needle), which the style leans to 1. Chosen by a person, never
+# drawn: it sits beside the songwriter (a singer and one accompanist). Its words name a format, not a provenance.
+
+OLD78 = _def(
+    "old78", "old 78: a parlour piano, recorded as a 78",
+    {"piano": 1.0, "fiddle": 0.8},
+    {"piano": {"*": "stride", "bridge": "arpeggio", "tag": "ring", "solo": "parlour"},
+     "guitar": {"*": "travis", "tag": "ring", "solo": "parlour"},  # (in for the piano: swaps)
+     "fiddle": {"verse1": "", "verse": ((0.45, "fills"), (0.0, "")), "refrain": ((0.55, "counter"), (0.0, "")),
+                "last": "counter", "break": "", "bridge": "tone", "tag": "double"}},
+    ("fiddle", "piano"), {"straight": 0.6, "waltz": 0.25, "swing": 0.15},
+    {"straight": (0.86, 0.92, 1.0), "swing": (0.86, 0.92, 1.0), "waltz": (0.64, 0.7, 0.8)},
+    {"I": ("6",), "IV": ("6",), "V": ("7",), "ii": ("7",)}, 0.4, (-0.6, -0.6),
+    band={"wear": 0.1, "brightness": -0.05},
+    singer={"vibrato_depth": 6.0, "rd": -0.06, "breath": -0.01},
+    # a dead recording room (the room itself stays the machine's), the singer close to the horn, no plate, no tape's
+    # wear (mix.wear isn't handed down: a machine's own comes back in another style), and the disc
+    mix={"space": -0.25, "intimacy": 0.1, "plate": -1.0, "wear": -1.0, "disc": 1.0},
+    options={"intro": {"lead": 1.0}, "alone": 0.0, "stops": 0.0, "breakdown": 0.0, "lift": 0.1,
+             "ending": {"ring": 0.45, "rit": 0.45, "cold": 0.1}, "entrances": 0.0,
+             "backing": {"": 0.8, "thirds": 0.2}, "half": 0.0},
+    swaps={"piano": {"guitar": 0.35}},
+    optional={"fiddle": 0.5},
+    shape={"intro": True, "break": True},
+)
+STYLES[OLD78.name] = OLD78
+OFF_RING[OLD78.name] = "songwriter"  # a singer and one accompanist, close
+
+
+def shaped(genome, out: dict) -> None:
+    """The parts of the form a style always plays (StyleDef.shape: the old 78's intro and break), put into the form a
+    machine chose (edits.reshape: each only where the song can sing it); a form set by hand, or a person's section
+    order, stays as it is, and a person's own form.* edits are pinned over this."""
+    name = (out.get("style") or {}).get("name") or ""
+    sdef = STYLES.get(name)
+    if sdef is None or not sdef.shape or (out.get("composition") or {}).get("order") or not out.get("form"):
+        return
+    from .edits import reshape
+
+    form, _problems, _done = reshape(genome, out["form"], dict(sdef.shape))
+    out["form"] = list(form)
 
 
 # --- house and dub (2026-09-30; docs/STYLES.md, "House and dub") --------------------------------------------------

@@ -94,6 +94,17 @@ ENDING_NAMES = {"ring": "the last chord rings", "rit": "it slows broadly to the 
 STYLE_NAMES.update({"house": "house", "dub": "dub"})
 PLAYERS.update({"melodica": "melodica"})
 ENDING_NAMES.update({"version": "the band plays a dub version after the song"})
+
+
+# the old 78 (2026-09-30; docs/STYLES.md, "An old 78"): beside the ring; its detail says who plays this time
+def _old78(params) -> str:
+    lineup = dict(params.band.lineup or {})
+    who = "a guitar" if lineup.get("guitar", 0) > 0.02 and lineup.get("piano", 0) <= 0.02 else "a parlour piano"
+    return f"{who}{' and a fiddle' if lineup.get('fiddle', 0) > 0.02 else ''}, recorded as a 78"
+
+
+STYLE_NAMES.update({"old78": "old 78"})
+STYLE_ABOUT = {"old78": _old78}  # a style's detail drawn from what plays this time, in place of its `about`
 BACKING_NAMES = {"oohs": "backing voices on oohs", "echo": "backing voices echo the lines",
                  "thirds": "backing voices in harmony", "gang": "everyone sings along",
                  "hum": "voices humming under the verses"}
@@ -257,6 +268,8 @@ def mix_words(mix) -> str:
     wear = "worn like an old tape" if mix.wear > 0.3 else "a little worn" if mix.wear > 0.12 else ""
     voice = f"the voice {listed([near, over])}"
     room = f"{room_words(mix.rt60)}, {space}" if space else room_words(mix.rt60)
+    if getattr(mix, "disc", 0.0) > 0:  # recorded as a 78: mono, so no width (synth/disc.py)
+        return "; ".join(x for x in ("recorded as a 78", room, voice, wear) if x)
     return "; ".join(x for x in (room, voice, width, wear) if x)
 
 
@@ -748,6 +761,13 @@ def shape_card(v: Version) -> dict:
             continue
         what = (f"{number(value)} verses, not {number(parent.get(name, 0))}" if name == "verses"
                 else f"{'with' if value else 'without'} {SHORT.get(name, PARTS[name])}")
+        from .style import of as style_of
+
+        shape = style_of(v.params.style).shape  # a part the style always plays (the old 78's intro and break)
+        if shape.get(name) is not None and value == shape[name]:
+            why.append({"kind": "rule", "text": f"{what}: {STYLE_NAMES.get(v.params.style.name, v.params.style.name)} "
+                                                f"always has one"})
+            continue
         machine = value != blind.get(name)
         time = value != frozen.get(name)
         if machine:
@@ -880,7 +900,8 @@ def style_card(v: Version) -> dict:
                f"after the {ORDINALS[s.dissolve - 1]} refrain the song dissolves into its version: the singer in "
                f"fragments thrown into the echo, the melodica taking the tune in pieces"
                if 0 < s.dissolve <= len(ORDINALS) else ""]
-    about = sdef.about.split(":", 1)[-1].strip() if name != "ballad" else \
+    about = STYLE_ABOUT[name](v.params) if name in STYLE_ABOUT else sdef.about.split(":", 1)[-1].strip() \
+        if name != "ballad" else \
         "harp, cittern, whistle, fiddle, guitar, upright bass, frame drum and a reed drone"
     detail = "; ".join(x for x in [about, *options] if x)
 
@@ -964,6 +985,10 @@ def mix_card(v: Version) -> dict:
         why += number_reasons(v, path, machine, time)
     why = choice_reasons(v, ["mix.rt60"], lambda path, value, blind: f"your machine's room: {room_words(value)}",
                          None, lambda path, value: room_words(value)) + why
+    if mix.disc > 0 and v.params.style.name == "old78":  # the style's recording (synth/disc.py)
+        why.append({"kind": "rule", "text": "an old 78 is recorded as a 78: mono, through a horn's narrow band, with "
+                                            "the turntable's wobble, the surface's noise and clicks, the needle's "
+                                            "drop and the run-out groove"})
     labels = {"mix.space": "how much room", "mix.width": "how wide", "mix.forward": "the voice over the band",
               "mix.intimacy": "how close the singer is", "mix.rt60": "how long the room rings",
               "mix.predelay": "how soon the room answers"}
