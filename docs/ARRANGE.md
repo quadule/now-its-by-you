@@ -391,3 +391,153 @@ idioms.
 - tests/test_edits.py: the tempo checked against the widest and held to the ballad's, said.
 - The goldens (tests/test_determinism.py, test_styles.py, test_lean_render.py, test_variation.py) are
   unchanged.
+
+# A round (2026-09-30)
+
+The song is about a song handed from person to person and changed; a round enacts it: the singer starts a
+section, a second voice comes in a line later on the same tune and the same words, then a third, the song passed
+from voice to voice. The voices are the lineage's (the choir: the parent's first), else the program's own.
+
+## Measured first: where H's tune takes a round
+
+A round needs a tune whose lines sit over each other's harmony, and most folk tunes don't at every distance.
+`songbird/canon.py` scores every way of singing a section as a round, and `tools/round_fit.py` prints the tables:
+
+- **the clash between the voices**: the beats where two of them are a semitone (or a major seventh) or a tritone
+  apart, a note on a strong beat (a foot) or held a beat or more counted whole, a passing one a third, as
+  `style.tune_clash` counts a loop against the tune (house's `fitting_loops`);
+- **the clash with the band**: the beats where a later voice's note is a semitone off the chord the band plays
+  under it (and not one of its tones), beyond what the tune has with its own chords; the band follows the voice
+  furthest along, so after the section's own lines it plays, line by line, the line that voice is singing;
+- **whole tones** between the voices (milder: said, not counted), and how many beats they sing together.
+
+A round **fits** when its voices clash for at most a beat (and at most one beat in sixteen of what they sing
+together) and the band no more than two beats beyond the tune's own (`style.LOOP_SLACK`). Distances: the whole
+section a line apart (two bars), two lines apart (four), and half a line (one bar) for its last line only (below).
+
+**H in its own mode (D ionian)**, each section's four lines:
+
+| section | sung as | voices | band (the tune's own) | whole tones | together | fits |
+|---|---|---|---|---|---|---|
+| verse | the whole, 4 voices a line apart | 1.67 | 4.00 (1.50) | 22.7 | 80.3 | |
+| verse | the whole, 3 voices a line apart | 1.00 | 3.50 (1.00) | 13.0 | 45.8 | |
+| verse | the whole, 2 voices a line apart | 0.50 | 2.17 (0.50) | 6.5 | 17.2 | yes |
+| verse | the whole, 2 voices 2 lines apart | 0.00 | 1.50 (0.50) | 0.0 | 11.5 | yes |
+| verse | its last line, 3 voices half a line apart | 0.00 | 1.33 (0.33) | 2.7 | 5.8 | yes |
+| refrain | the whole, 4 voices a line apart | 0.00 | 2.17 (1.00) | 24.0 | 80.3 | yes |
+| refrain | the whole, 3 voices a line apart | 0.00 | 2.00 (0.67) | 14.7 | 45.8 | yes |
+| refrain | the whole, 2 voices a line apart | 0.00 | 1.83 (0.33) | 6.5 | 17.2 | yes |
+| refrain | the whole, 2 voices 2 lines apart | 0.00 | 0.17 (0.33) | 1.7 | 11.5 | yes |
+| refrain | its last line, 3 voices half a line apart | 0.00 | 0.00 (0.00) | 0.3 | 5.8 | yes |
+| bridge | the whole, 4 voices a line apart | 0.00 | 1.00 (0.50) | 23.3 | 79.7 | yes |
+| bridge | the whole, 3 voices a line apart | 0.00 | 0.67 (0.33) | 13.5 | 45.3 | yes |
+| bridge | the whole, 2 voices a line apart | 0.00 | 0.33 (0.17) | 4.7 | 17.0 | yes |
+| bridge | the whole, 2 voices 2 lines apart | 0.00 | 0.17 (0.17) | 4.2 | 11.3 | yes |
+| bridge | its last line, 3 voices half a line apart | 0.00 | 0.17 (0.33) | 0.7 | 5.8 | yes |
+
+The refrain and the bridge go round with **no semitone or tritone between the voices at any distance**: in a
+major mode H's tune is pentatonic (it sings 1, 2, 3, 5, 6 and touches 4 twice in passing), and a pentatonic tune
+has neither interval in it. Half a line apart (one bar, the whole section) was scored too and fits as cleanly
+(the bridge 0.00 between the voices, the refrain 0.67 for three); it isn't offered for a whole section because
+its tail would end halfway through a line (below). What is left is whole tones: 14.7 beats of 45.8 in a
+three-voice refrain, the open, ringing sound of a pentatonic round.
+
+**The minor modes take it away.** The same degrees in D aeolian are D E F A B♭: two semitones (E F, A B♭) and a
+tritone (E B♭) appear in the tune itself, and every whole-section round of the refrain and the bridge clashes:
+
+| section | sung as | voices | band (the tune's own) | whole tones | together | fits |
+|---|---|---|---|---|---|---|
+| verse | the whole, 2 voices a line apart | 3.83 | 6.67 (1.83) | 5.2 | 17.2 | |
+| verse | the whole, 2 voices 2 lines apart | 0.00 | 1.67 (1.83) | 0.0 | 11.5 | yes |
+| verse | its last line, 3 voices half a line apart | 0.67 | 2.00 (0.67) | 2.0 | 5.8 | |
+| refrain | the whole, 3 voices a line apart | 8.50 | 19.83 (5.00) | 6.5 | 45.8 | |
+| refrain | the whole, 2 voices 2 lines apart | 1.50 | 6.33 (2.50) | 0.2 | 11.5 | |
+| refrain | its last line, 3 voices half a line apart | 0.00 | 1.00 (1.00) | 0.3 | 5.8 | yes |
+| bridge | the whole, 3 voices a line apart | 13.33 | 15.67 (4.33) | 0.5 | 45.3 | |
+| bridge | its last line, 3 voices half a line apart | 0.67 | 3.17 (1.33) | 0.0 | 5.8 | |
+
+What a round of H chooses in each mode a machine may sing it in (`tools/round_fit.py --summary`; "at 1": a line
+apart):
+
+| mode | verse | refrain | bridge |
+|---|---|---|---|
+| ionian | whole, 2 at 1 | whole, 3 at 1 | whole, 3 at 1 |
+| mixolydian | whole, 2 at 1 | whole, 3 at 1 | whole, 3 at 1 |
+| lydian | whole, 3 at 1 | whole, 2 at 1 | whole, 3 at 1 |
+| dorian | none | last line, 3 at ½ | last line, 3 at ½ |
+| aeolian | whole, 2 at 2 | last line, 3 at ½ | none |
+| phrygian | whole, 2 at 2 | none | none |
+
+The other sketches, each in its own mode: B's refrain, K's refrain and L's verse take three voices; A, D, E, F, G,
+I and J two, or the last line; C none.
+
+## The choice: an arrangement option, not a style
+
+So the round is **(b), an arrangement option**: `arrange.<section>:<n>.round`, for any style, the ballad among
+them. What decides it is the tune, section by section and mode by mode, not a band: H's refrain and bridge take a
+round in the major modes, its verse barely, a minor mode only the refrain's last line. A style of its own would
+be a song sung round from beginning to end, which this tune can't carry in half the modes a machine sings it in,
+and a round is a moment, the last refrain or the bridge, not a whole song's texture. Voices alone are already a
+style (the a cappella): a round in an a cappella is (a) where a person wants it. No style changes, so the three
+styles being added beside this (in style.py) and this merge without touching each other.
+
+## The design
+
+**The edit.** `arrange.<section>:<n>.round`: `true` (a round: three voices where the tune takes three, else two),
+or a number of voices, 2 to 4, the singer among them; null gives the section back. Checked (`takeover.check`): a
+section with words on two or more lines of one length, and a round that fits it in the song's own mode; refused
+with why otherwise ("the verse's tune doesn't sit over itself as a round"). With the rest of the edits
+(`shape_problems`): not with a length of its own (`bars`) or played (`sung: false`), each said. Stored and handed
+down as every arrangement choice is (`params.composition["arrange"]`); a version whose mode the round doesn't fit
+keeps it, silent, said ("in this version's mode its tune doesn't sit over itself"), as a choice for a player its
+band hasn't got waits.
+
+**How it is sung** (`canon.choose`, in the version's mode): the whole section a line apart if that fits, else two
+lines apart, with the voices asked for (true: three, else two); where no whole round fits, **its last line as a
+round**: the singer sings the section as always, and on its last line two more voices come in half a line apart,
+singing that line ("by everyone, no one, and now it's by you"), a tag over the section's end, three voices
+whatever was asked. The free round the brief allowed for, and the only round a minor mode leaves H.
+
+**The ending: the voices drop out in turn.** Each voice sings the section once and stops at the end of its own
+last line, held as the singer holds it; the section is longer by the later voices' tail, `(voices - 1)` times the
+distance (a three-voice refrain a line apart: 8 bars and 4 more, 12). Under the tail the band plays, line by
+line, the line the voice furthest along is singing (`canon.under`: three voices a line apart, the last line
+twice; the tag, its last line once), so each voice's "now it's by you" lands on the chords it was written over,
+and the last one ends the section alone on the tonic, with the band. In the layout (`takeover.phrase_plan`) the
+tail is lines the section plays after its own, as a sung section made longer is (`bars`): the tune lines, chord
+times, spans, karaoke, MIDI markers and the piano score all follow; the singer is silent there and no instrument
+plays the tune (realize lays no melody notes on those lines). A held chord at the end (everyone stopping at once)
+was the other way: it cuts the later voices off before their last line, and the last line is the hook.
+
+**The voices.** The singer is the first; each later entry is a choir part, `choir1` the second voice, `choir2`
+the third: the lineage's voices where it has them (params.choir; the parent first), else the program's own
+stand-ins (as the a cappella's group is made up), each its own singer, panned apart as the choir is (the singer in
+the middle, `choir1` left at -0.45, `choir2` right at 0.45, a fourth -0.25). Each sings the singer's own notes
+in the section (its variants, the words of that verse or refrain) at the written pitch, shifted by its entry,
+each a hair off the beat its own way (as backing voices are, `idioms.sung_notes`). A stand-in drawn "low" sings an
+octave down everywhere else; in the round it sings where the tune is written (an octave down, H's tune goes under
+the throat's floor, E3), as the a cappella's singers do. The entries are made as backing voices are
+(`idioms.backing`), so the band keeps clear of their notes as it does of the backing.
+
+**Everything else in a round section steps aside.** No backing voices there (the gang, thirds, oohs, an a
+cappella's parts), no lineage harmony (a round of the bridge is the lineage passing its tune instead of
+harmonizing it), no fills between the lines and no player on a line of its own (a counter-melody, a descant,
+the tune doubled: `takeover.LINES`); the band's chords, bass and drums play as the program has them.
+
+**How loud.** A lineage voice sits about 9 dB under the singer (CHOIR_GAIN and the choir's bus). An entry of a
+round is a voice singing the tune, not a backing; in a round section the entries are lifted (`ROUND_GAIN` at
+synthesis, over their own notes, faded in and out) to sit a few dB under the singer. To be measured on the stems.
+
+**The page.** In the section's inspector, "Who sings": the singer · a round · nobody: played. "A round" has the
+tooltip "the voices come in one after another" (where it is the last line: "on its last line"); where the tune
+can't take one, it is disabled with why. The region's label says "· a round". The section's line in the grid's
+"Voices before" row shows the round there.
+
+**Nothing else moves.** Absent, nothing here runs: every function gives back what it was given, and every
+render is byte for byte as before. No style, no kernel, no numba.
+
+## Open before the review
+
+- Whether the singer comes first (as built) or last: the ancestors starting and the singer ending it "and now
+  it's by you" is the other reading, and moves the singer's own notes in the layout.
+- Whether a minor version's tag round is enough, or the whole round should be offered with its clash said.
