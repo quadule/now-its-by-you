@@ -276,13 +276,16 @@ def reading(word: str) -> list[str] | None:
         r = P.pronunciations(stem + "g")
         return list(r[0][:-1]) + ["N"] if r and r[0][-1] == "NG" else None
 
+    def sung(r: list[str] | None) -> list[str] | None:  # a reading with no vowel ("hm", "sh") has nothing to sing
+        return r if r and any(p[-1:].isdigit() for p in r) else None
+
     if dropped and ing(w):  # rollin' (rollin alone is a name in the dictionary)
-        return ing(w)
+        return sung(ing(w))
     for candidate in (w, w.replace("'", "")):
         r = P.pronunciations(candidate)
         if r:
-            return list(r[0])
-    return ing(w) if w.endswith("in") else None
+            return sung(list(r[0]))
+    return sung(ing(w)) if w.endswith("in") else None
 
 
 def corrected(words: list[dict], lyrics: str | None) -> list[dict]:
@@ -473,11 +476,14 @@ def token_for(word: str, phones: tuple, seen: dict) -> str:
     return seen[key]
 
 
-def lowered(x: np.ndarray, sr: int) -> np.ndarray:
-    """The audio an octave down with its spectral envelope kept (WORLD), for the aligner."""
+def lowered(x: np.ndarray, sr: int, f0: np.ndarray) -> np.ndarray:
+    """The audio an octave down with its spectral envelope kept (WORLD), for the aligner; f0 is the pitch already
+    tracked for it (FRAME apart from its first sample)."""
     import pyworld as pw
 
-    f0, t = pw.harvest(x, sr, f0_floor=70.0, f0_ceil=1000.0, frame_period=FRAME * 1000)
+    n = int(len(x) / sr / FRAME) + 1
+    f0 = np.ascontiguousarray(np.pad(f0[:n], (0, max(0, n - len(f0))))).astype(np.float64)
+    t = np.arange(n) * FRAME
     sp = pw.cheaptrick(x, f0, t, sr)
     ap = pw.d4c(x, f0, t, sr)
     return pw.synthesize(f0 / 2, sp, ap, sr, FRAME * 1000)
@@ -528,6 +534,10 @@ def prepare(work: Path, it: dict, target_db: float, min_quiet: float, band_db: f
             why = "a word no dictionary has: " + ", ".join(w["word"] for w, p in zip(ln, ph) if p is None)
         if why is None and any(re.search(r"\d", w["word"]) for w in ln):
             why = "a number"
+        if why is None and t1 - t0 > LINE_MAX + 4.0:  # a few words spread over too long: their times are wrong
+            why = f"{t1 - t0:.0f} s for {len(ln)} words"
+        if why is None and t1 - t0 < 0.3:
+            why = f"a span of {t1 - t0:.2f} s ({t0:.2f}-{t1:.2f})"
         if why:
             lines.append(dict(line=li, text=text, skipped=why))
             continue
@@ -536,7 +546,11 @@ def prepare(work: Path, it: dict, target_db: float, min_quiet: float, band_db: f
         fl = f0[int(t0 / FRAME): int(t1 / FRAME)]
         med = 69 + 12 * np.log2(np.median(fl[fl > 0]) / 440.0) if (fl > 0).sum() > 10 else 60.0
         high = med >= HIGH
-        y = lowered(seg, SR) if high else seg
+        try:
+            y = lowered(seg, SR, f0[int(round(t0 / FRAME)):]) if high else seg
+        except MemoryError:  # pyworld on a degenerate stretch
+            lines.append(dict(line=li, text=text, skipped=f"WORLD failed on {t0:.2f}-{t1:.2f} s"))
+            continue
         y16 = resample_poly(y, 16000, SR)
         y16 = 0.9 * y16 / max(float(np.max(np.abs(y16))), 1e-9)
         lines.append(dict(line=li, text=text, t0=round(t0, 4), t1=round(t1, 4), high=bool(high),
@@ -688,7 +702,11 @@ def build(work: Path, r: dict, it: dict) -> dict:
     for ln in r.get("lines", []):
         if ln.get("skipped"):
             continue
-        notes = notes_of(ln, f0)
+        try:
+            notes = notes_of(ln, f0)
+        except (StopIteration, ValueError, IndexError) as e:  # one odd line never stops the rest
+            ln["skipped"] = f"labelling failed: {type(e).__name__}"
+            continue
         if notes is None:
             ln["skipped"] = "a word the aligner couldn't place"
             continue
