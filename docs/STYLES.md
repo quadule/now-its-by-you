@@ -1454,3 +1454,121 @@ In `renders/styles/` of the main checkout (gitignored), H as the same made-up ma
 7. **A turn's length** stays the style's (four bars in house); a person can't set it, as before.
 8. **The records from this morning** render differently for house (not for dub without `dissolve`); none was
    released.
+
+# A jazz trio (September 30, 2026)
+
+The artist, after the jig and the a cappella convinced and house and dub didn't: a style convinces when a singer
+delivers the folk tune straight over instruments the program synthesizes well, and fails when it needs another kind of
+singer or heavy sound design. A **jazz trio** is that kind of style: a piano, an upright bass and brushes, all three
+instruments the program already plays well (the modelled piano, the upright, the kit's swept brushes), the singer on
+the tune as written, and the change carried by the harmony, the comping and the time feel. The page calls it "jazz
+trio" and says what plays, "piano, upright bass and brushes"; it claims no tradition beyond that.
+
+(What follows is the design as it went to review; "What the review changed" and "As built" below say where the
+build differs.)
+
+## The design
+
+**Where it sits.** Beside the ring, at chamber's place (`OFF_RING["jazz"] = "chamber"`: the piano, the waltz, the
+sevenths), as the a cappella, the jig, house and dub do. A person chooses it (`--style jazz`, the studio's style card);
+nothing steps into it by chance; a child of a jazz version keeps it or steps to chamber's neighbours. The artist
+decides later whether it joins the ring.
+
+**The feel and the tempo.** A jazz waltz (the song re-barred in three, as chamber's and country's waltzes already are:
+every stressed syllable on a downbeat), 0.55, or a ballad swung, 0.45. The waltz at 0.72 to 0.88 of the song's tempo
+(centre 0.8: 77 for H, a waltz quarter at 115), the ballad at 0.7 to 0.88 (centre 0.78: 75, swung). Slow enough that
+the singer's words sit as they do in the ballad; the waltz makes the song half again as long, as chamber's does.
+
+**The trio's changes** (`style.trio_changes`; new, and empty for every other style). The song's chords stay the
+song's functions (I is still I), played as a jazz pianist would read them off a lead sheet, and fitted to the tune the
+way house's loops are, but stricter: a chord the trio plays may rub a semitone against **no sung note that the song's
+own chord there doesn't** (`style.sits`: the song's own passing notes, such as the 4 over I in the second verse line,
+rub as they always did; the trio adds no rub of its own). What is sung over a chord is every note of the line in its
+span, and over a line's last chord the pickups of whatever line follows it in this form.
+
+- **Colour, always where it sits.** Each chord the richest of its colours that sits: a major chord its maj7, else a
+  6, else an added ninth, else the triad; a dominant its 7, else an added ninth; a minor chord its m7, else an added
+  ninth. In the mode's own spelling (`trio_chord`, as house's loops are spelled: vim7, IVmaj7, V7; in aeolian im7,
+  ivm7, VImaj7, vm7).
+- **Passing chords, as often as `Style.harmony` says** (0.7 for the style, a machine's richness and the season moving
+  it as for every style; each chord its own coin from the rendition's seed, so one's choice moves no other's):
+  - *ii-V*: a V that resolves to I, or ends a line (a half cadence), takes its ii for its first half (two beats of
+    a bar, or one of a half bar: `iim7 V7 I6`);
+  - *a fifth above*: a chord held a whole bar before another gives its second half to the chord a fifth above what
+    the next one starts on, the mode's own seventh or else a dominant (I7 before IV, iiim7 before vi, vim7 before a
+    ii-V's ii: the circle of fifths walking into the cadence).
+  The lines are decided from the end back, so a chord approaches what the next one actually plays.
+- A chord held over two shares of a bar is written twice (`I6 I6 iim7 V7`), as the genome writes a bar of four
+  chords; the players hold it as one.
+- **Where it goes in.** Between a person's chords and the band, in `composition.form_phrases` (after a style's loop,
+  which the trio has none of), so the band, the choir's and backing voices' harmony, the MIDI file's chord track and
+  the page's chord lane all read the same changes. A line whose chords a person set (everywhere, or at its place)
+  keeps theirs exactly; a line whose chords aren't plain numerals keeps them.
+
+What H gets in D major with every passing chord taken (harmony 1; ionian):
+
+| line | the song's | the trio's (harmony 1) |
+|---|---|---|
+| v1 | I \| I V | D6 \| D6 Em7 A7 |
+| v2 | I \| V I | D6 \| Aadd9 D6 |
+| v3 | I \| IV V | Dmaj7 D7 \| Gmaj7 Em7 A7 |
+| r1 | I \| IV V | D6 D7 \| Gmaj7 Aadd9 |
+| r2 | I vi \| V I | Dmaj7 Bm7 \| Aadd9 D6 |
+| r3 | vi IV \| I V | Bm7 Gmaj7 \| Dmaj7 Aadd9 |
+| r4 | I \| V I | Dmaj7 E7 \| Aadd9 D6 |
+| b1 | vi \| I | Bm7 \| Dmaj7 |
+| b2 | vi \| V | Bm7 \| Aadd9 |
+| b3 | I \| vi V | Dmaj7 F♯m7 \| Bm7 Aadd9 |
+| b4 | I \| V | Dmaj7 Bm7 \| Em7 A7 |
+| t1 | IV \| V | Gmaj7 Bm7 \| Em7 A7 |
+
+H's V is mostly an Aadd9, not an A7: the tune sings F♯ over it (the 13th), and the seventh's G would rub it; where
+nothing is sung over the V's second half (a line's end, a turn) it is A7, and its ii comes before it. The I is a D6
+where the tune sings D over it (a maj7's C♯ would rub), a Dmaj7 where it doesn't.
+
+**The players.**
+
+- *Piano* (`rootless`, new): comping in rootless chords, the third and the seventh (or sixth) with the fifth and a
+  ninth where they sit (the ninth only where the mode's scale has it a whole step over the root and nothing sung
+  rubs it), four notes close round middle C (about an octave under the tonic up to a fourth over the low end of the
+  singer's line), led smoothly from the last (the program's `voicing`, which keeps off every sung pitch). The rhythm:
+  struck as the chord comes and held, or answered: in a waltz on two and three (the bass has one), or on the
+  off-beat after two; in four on the off-beat after two (the Charleston) or the backbeats; now and then pushed an
+  off-beat early. `rootless-light` (the first verse when the band is sparse): held chords only.
+- *Piano with the tune* (`solo`, new): where the piano has the tune (the intro, a turn's quote, the break, an outro),
+  its right hand plays it an octave up and its left hand keeps the chords, the third and seventh under it, in the
+  comping's rhythm. In the break, the piano's chorus on the verse tune, a held note at a line's end is answered after
+  its first beat by a few of the chord's tones. A style's table naming "solo" for the lead's own section turns the
+  lead's "lead" or "quote" into it (`plan_style`; no other style names it).
+- *Upright bass* (`walking`, `twofeel`, new): walking a note a beat, the root as the chord comes, its tones between,
+  moving toward the next chord's root, and on the last beat a step into it: a scale step or a half step, whichever
+  rubs against nothing sung there, else the chord's fifth. Two to a bar in the first verse, the bridge and the tag (a
+  root on one, a fifth on three; in a waltz one a bar), stepping into the next chord now and then; walking in the
+  refrains, the break and the turns, and in the verses once the band is fuller.
+- *Brushes* (`swept`, `swept-light`, new): the kit's own brush sweep (the bristles' stream of catches, circling when
+  one sweep follows another) round the snare, two sweeps a bar in four and one a bar in a waltz; the right hand taps
+  the backbeat (two and four; a waltz's two and three) and the swung off-beat after it now and then; the bass drum
+  feathered on one (and three). Light: the sweeps and the bass drum, the taps barely there. A tap pickup into a
+  fuller section; the last chord one sweep and a tap. No sticks, no cymbals.
+
+**The form.** Room for the piano's chorus: where the rendition's form has no break and the song's template has a
+place for one, the trio adds it, 0.8 of the time by a coin of its own (`style.with_break`, `SOLO_BREAK`): H's break is
+the verse tune, eight bars, before the bridge. A form a person set (`--form`, the studio's order, an edit) is kept as
+it is. A child of a jazz version inherits the form as any child does.
+
+**The rest of what a style brings.** The band's ornament down (no grace notes in the piano's tune). The singer: a
+little less vibrato (-3 cents), nothing else: the tune stays the singer's, sung straight. The mix: a little closer
+(intimacy +0.15), a smaller room (space -0.05), a little narrower. Options: the intro the piano's (0.85) or, with no
+intro, the singer alone first (0.35); a verse with the piano alone or bare 0.15; stop-time 0.1; a breakdown 0.15; a
+lift 0.1; endings a broad ritardando 0.5, ringing 0.4, cold 0.1; entrances 0.25; backing voices rarely (oohs 0.15);
+no half-time bridge.
+
+**What's new, and what stays as it was.** style.py: the trio's block (its StyleDef, `CHANGES`, `SOLO_BREAK`,
+`trio_changes`, `sits`, `changed`, `with_break`), and one hook in `choose_style` (the break). composition.py: one hook
+(`_changed`) after the loop. variation.py: a form set by hand is put back after the style decides as well as after the
+form does (a no-op for every other style). idioms.py: the trio's writers in a block of their own, and the "solo" turn
+in `plan_style`. No numba kernel added or changed. Every other style passes none of the new code's conditions, so
+every other render stays byte-identical (the goldens, every style's scores for four machines, and six renders' PCM
+ids, before and after).
+
+**Decisions for the artist** (at the end, "As built").
