@@ -1154,6 +1154,10 @@ chooses unless named:
 
 # House and dub, again: reinterpretations, not a folk band in new clothes (2026-09-30, evening)
 
+**Hidden for now (2026-09-30, night).** The artist listened: "they haven't convinced me like the others yet".
+Neither is offered in the studio's style picker (`style.HIDDEN`, `style.offered`); a record, a draft or
+`--style` still plays them, and a version already in one still shows its own name. The code stays.
+
 The artist, on the renders above: "House is a fun reinterpretation but I don't know if it's really that
 recognizable." "Dub has some cool elements but doesn't seem like enough of a transformation." Both styles kept
 the folk song's form, its harmony and its phrasing, and changed only the band. A genre lives as much in its

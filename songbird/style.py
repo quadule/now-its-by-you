@@ -770,6 +770,14 @@ STYLES[HOUSE.name] = HOUSE
 OFF_RING[HOUSE.name] = "synthfolk"  # the machines' end, the drum machine and the synths
 STYLES[DUB.name] = DUB
 OFF_RING[DUB.name] = "lofi"  # slow, worn, the bass and the room
+# Not offered in the studio's picker for now (the artist, 2026-09-30: "they haven't convinced me like the others
+# yet"): a record, a draft or --style still plays them, and a version already in one still shows it
+HIDDEN = frozenset({HOUSE.name, DUB.name})
+
+
+def offered(current: str | None = None) -> tuple[str, ...]:
+    """The styles the studio offers: the ring and those beside it, but the hidden ones, unless it's this version's."""
+    return tuple(k for k in (*RING, *OFF_RING) if k not in HIDDEN or k == current)
 
 
 def desk_of(params) -> dict:

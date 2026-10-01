@@ -921,7 +921,7 @@ def style_card(v: Version) -> dict:
     return _card(v, "style", "The style", value, detail, mine + _finish(v, why, "style"), ["style."],
                  style={"name": name, "feel": feel, "ending": s.ending or "ring", "backing": s.backing,
                         "lift": s.lift},
-                 styles={k: STYLE_NAMES.get(k, k) for k in (*style_mod.RING, *style_mod.OFF_RING)}, feels={f: named.get(f) or FEEL_NAMES.get(f, f) for f in feels},
+                 styles={k: STYLE_NAMES.get(k, k) for k in style_mod.offered(name)}, feels={f: named.get(f) or FEEL_NAMES.get(f, f) for f in feels},
                  endings=dict(ENDING_NAMES), backings={"": "no backing voices", **BACKING_NAMES})
 
 
