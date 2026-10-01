@@ -11,7 +11,7 @@ import { pathToFileURL } from 'node:url';
 const [site] = process.argv.slice(2);
 const flag = (name, fallback = null) => (process.argv.includes(name) ? process.argv[process.argv.indexOf(name) + 1] : fallback);
 const edits = JSON.parse(flag('--edits', '{}'));
-const section = Number(flag('--section', '1'));
+const section = flag('--section') === 'none' ? 1 : Number(flag('--section', '1'));
 const bundle = JSON.parse(fs.readFileSync(path.join(site, 'render', 'bundle.json'), 'utf8'));
 const pyDir = path.join(site, 'render', bundle.pyodide) + '/';
 const appDir = path.join(site, 'render', bundle.app) + '/';
@@ -89,7 +89,8 @@ if (flag('--read')) {
   console.log(`  read in ${secs(t)} s: ${out.status} ${got.id || got.error}, heap ${reader.heap()} MiB`);
 }
 
-for (const [what, answer] of [['a section', sectionSpec], ['the whole song', process.argv.includes('--whole') ? wholeSpec : null]]) {
+const sections = flag('--section') === 'none' ? null : sectionSpec;  // --section none: no section made
+for (const [what, answer] of [['a section', sections], ['the whole song', process.argv.includes('--whole') ? wholeSpec : null]]) {
   if (!answer) continue;
   console.log(`${what} (a render worker of its own)`);
   const render = await pyodide();

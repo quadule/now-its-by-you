@@ -20,7 +20,9 @@ in the browser once the memory work lands.
 **In the studio since 2026-09-30**: `songbird studio --public --browser-render DIR` serves a bundle built from
 this prototype, and a desktop visitor's browser makes their previews and recordings from the server's render spec,
 the server as the fallback (docs/WEB-STUDIO.md, "Made in the visitor's browser": what was built, the identity
-checked version by version, the fiddle that parts by a sample or two, the times and the heap).
+checked version by version, the fiddle that parts by a sample or two, the times and the heap). **And since that
+evening, the whole studio runs on the visitor's device** with no server behind it, the page's questions answered by
+the program in a worker too (docs/WEB-STUDIO.md, "On the device").
 
 The prototype is `web/studio-wasm/` (how to run it is at the end). Nothing in
 `songbird/` changed; the goldens hold (`test_determinism`,

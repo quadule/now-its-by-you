@@ -1020,6 +1020,308 @@ Before opening it (Cloudflare Access first, for the beta: "A closed beta first",
 9. **Cloudflare Access** in front for the beta (Zero Trust > Access > Applications), the cache rule above, and
    `STUDIO_NOINDEX` left as `--noindex`.
 
+## On the device (2026-09-30)
+
+The studio now runs entirely on the visitor's device. It is served as static files from `studio.itsby.you` by a
+Cloudflare Worker (built elsewhere), with no studio server behind it. Every question the page asks (`/api/*`) is
+answered in the visitor's browser by the studio's own Python: the same code and the same JSON as `songbird studio`.
+Every song is made there too, phones included. The only requests that reach a server are the Worker's
+`POST /api/versions` and `GET /api/versions/<id>`: a version someone chose to share. The local studio
+(`songbird studio`: native, 127.0.0.1) and `--public` (the VPS design above) are unchanged and pass their tests; this
+is a fourth way, the one meant for launch. Nothing was deployed.
+
+    uv run python web/studio-wasm/tools/build_site.py OUT [--machine none] [--sing-kit DIR]   # the site
+    uv run python web/studio-wasm/tools/serve_site.py OUT                                     # try it: 127.0.0.1:8820
+
+### Architecture
+
+    page (index.html, studio.js, score.js, …)                       the hosting Worker
+      │ fetch("/api/…")                                              ▲ POST /api/versions        (Share it)
+      ▼                                                              │ GET  /api/versions/<id>   (a /v/<id> link)
+    device.js: the page's fetch, wrapped ────────────────────────────┘ the only network calls
+      │ postMessage
+      ├─▶ the studio's worker (one, the whole visit)   studio-worker.mjs + py/studio_device.py: a DeviceStudio,
+      │     answering /api/start, /api/song, /api/options, /api/arrangement, /api/sound, /api/compare, /api/export,
+      │     /api/piano, /api/players, /api/notes-in, /api/keep-words, /api/timeline, /api/phrasings, /api/job/*,
+      │     /api/render/spec, /api/sing* through studio.asked and studio.answer: the server's own routes
+      ├─▶ a reader worker (one per file, let go after) received.examine: a version's file, read as data
+      └── renderer.js ─▶ render workers                 studio_render.py: a section's worker (kept for four),
+                                                        a whole song's (its own, terminated after)
+
+- **The page's shim** (web/studio-wasm/device.js; only the static page loads it, first of its scripts) wraps
+  `window.fetch`: a request to this site's `/api/…` (but `/api/versions`) is posted to the studio's worker and answered
+  with the server's status and JSON, so studio.js, score.js, export.js, learn.js, players.js, perform.js, drafts.js
+  and author.js ask exactly as they did. Everything else (the page's files, the bundle, `/api/versions`) goes to the
+  network. Chosen over a Service Worker, which could also catch `<audio src>`, downloads and the piano tab, but is
+  stopped when idle (losing the Python in it) and complicates a first visit; renders were Blob URLs already, and two
+  answers (the MIDI file, the piano score) are turned into what the browser keeps.
+- **The studio's worker** is the render worker's own script (studio-worker.mjs) with four more commands (`studio`,
+  `request`, `restore`, `read`), running web/studio-wasm/py/studio_device.py: a `DeviceStudio` (a `Studio` with no
+  thread, since Pyodide can't start one; no limits; the machine the build names, `none` by default as on the VPS; no
+  checkout beside it) and a `Device`, which routes each request through **the functions the server's Handler now
+  calls too**: `studio.asked` for the GET questions and `studio.answer` for the JSON posts, moved out of the Handler
+  for this, with the server's statuses for the same refusals. Requests are answered one at a time, the timeline last.
+- **Renders** are made by the existing render workers (renderer.js, studio_render.py), always: there is no server to
+  fall back to. The render spec is asked of the studio's worker, so nothing is worked out twice.
+- **songbird/studio.py**: `answer`, `asked`, `NotFound`, `Studio.start_view`, `Studio.runs_with`, `Jobs._work` and
+  `Jobs(thread=False)` (`Studio.threads`) were factored out; the Handler calls them; nothing it answers changed.
+
+**Memory: two kinds of worker, decided by measurement.** The studio's worker holds 130 MiB once ready, and 187 MiB
+after every question including the timeline (node, below). A whole song's render worker reaches 1.3 to 2.3 GiB and
+never gives it back (wasm memory doesn't shrink). In one worker, the studio would carry a recording's heap for the rest
+of the visit, and every edit's question would wait a minute or more behind a recording (Python is one thread). Apart,
+the page answers at once while a song is made, and the heap goes when the recording is done. The cost is a second
+Pyodide (130 MiB, about 5 s to start from the cache) beside the render: at the peak, while a whole song is made, about
+190 MiB + 1.3-2.3 GiB in two wasm memories. Reading a version's file takes a third, short-lived one.
+
+### What moved, and what's kept
+
+| | the VPS (`--public`) | on the device |
+|---|---|---|
+| the page's questions | the server | the studio's worker, in this browser |
+| sections and recordings | desktop browsers; the server for phones and as the fallback | this browser, always, every browser |
+| the render spec | the server | the same, from the studio's worker |
+| a recording | the server's store (a day), or a Blob | a Blob: *Download it*, and *Share it* |
+| a version someone brings | uploaded, read in a process of its own, kept 30 days | read in a worker of its own in this browser, kept in this browser |
+| a shared link `/v/<id>` | the server's keyed id over the version it kept | the Worker's id over the file someone shared: fetched, read here, kept here |
+| the timeline | the server, per day | here, when *Time* is first opened; kept per day |
+| the MIDI file, the piano score | `/export/…`, `/piano/score/…` | a Blob; the score in localStorage (the latest three), which piano.js reads |
+| the stems | a job on the server | not yet: said in a sentence |
+| ways of singing made | the server, by fingerprint | this browser (IndexedDB), given back to the studio at start |
+| limits, the queue, the visitor cookie | yes | none: nothing shared to protect |
+
+**What's kept, and where** (what the page now says: the footer "Nothing leaves this device unless you share a
+version."; Help's where and *What's kept*; the Tools sheet's "Made on this device."):
+
+- In this browser: the edits (localStorage, as ever); the versions opened (IndexedDB `songbird-studio`: the cleaned
+  record, the song, the timeline, never the audio); each day's timeline; the ways of singing made; the latest three
+  piano scores; the bundle in the HTTP cache (28 MB, once). A recording is a Blob in the page's memory until the page
+  closes: *Download it* keeps it.
+- On the site: only a version the visitor chose to share (*Share it*: the recording's file as it is), and what any site
+  sees (which files were fetched, which `/v/<id>` was opened). A file the visitor brings is read and kept on the device,
+  never uploaded; its address is `/#version=<id>` (a fragment: even its id never reaches the host).
+
+### The page
+
+- **device.js**: at `/v/<id>` it looks in IndexedDB first, else fetches `/api/versions/<id>` and reads it; at
+  `/#version=<id>` it looks only in IndexedDB ("This version was opened from a file, and this browser doesn't keep it
+  any more. Open the file again."). Either way the page's token becomes `device.<id>`, so every request names its
+  version as the server's token does (`<token>.<id>`). A version that can't be found or read replaces the page with the
+  server's notice ("This version isn't here"). A version kept by an earlier program is read again (a shared one) or
+  asked for again (a file). If the studio's worker dies (for memory), the next request starts it again.
+- **renderer.js**: on the device (the page's `studio-render` meta says `device`) every song is made here: no
+  phone/tablet/small-screen/`deviceMemory` check, no server, no "made", "server" or "too long" answers. A failure is
+  said as it is, with what may help, never blaming the device first: "couldn't make it: it ran out of memory in this
+  browser. A shorter version (fewer verses, a quicker tempo) may fit, or a computer."; "the browser stopped it,
+  perhaps for want of memory…"; "it stopped making progress. Try again, or a shorter version, or a computer."; "it
+  went wrong in this browser (…). Try again…". A whole song estimated past what a browser holds (`public.BROWSER_MB`,
+  as before) is **warned of in its progress and made all the same** ("a long version (6.1 minutes), which may need more
+  memory than a browser has"). A whole song is marked in localStorage while it's made, so a page the browser closed
+  for memory (iOS does: no error ever arrives) says so when it's opened again. The Tools sheet's "automatically · in
+  this browser · on the server" is hidden on the device.
+- **studio.js**: the device's words (`applyDevice`, kept apart like the public studio's); *Share it* beside
+  *Download it* after a recording (the file posted to `/api/versions`; the link shown with *copy the link*; the
+  Worker's `{error}` said as it is); the version bar says "which you opened from a file" (no link: it has none) or
+  "which someone shared" (its link); the timeline is asked for only when *Time* is opened; a file opened reloads the
+  page on its `#version=`.
+- **export.js** saves a Blob under its own name; **learn.js** opens only a `/piano/` address; **piano.js** reads
+  `?score=device/<key>.json` from localStorage. The singing note says "Singing here isn't available yet."
+
+### Singing
+
+`/api/sing*` go through the studio's worker to webstudio.singing's `Singing` (the same offer, lyrics, guide, take,
+keep and forget), with its measuring process replaced by `sing_measure.measure(take, request)` (another part of the
+work: web/studio-wasm/py/sing_measure.py, returning what webstudio/worker.py's "take" returns), imported guardedly. A
+take is a job in the studio's queue, made between requests (`Device.work`), and the page polls `/api/job/<id>` as
+ever; the ways of singing made are kept in IndexedDB. Singing is offered only when the build is given the kit
+(`--sing-kit DIR`, zipped as `render/kit-<hash>/kit.zip` and unpacked in the studio's worker) **and**
+`py/sing_measure.py` is there; until then `/api/start` says `{"available": false, "why": "Singing here isn't available
+yet."}`. Not tried end to end (no kit on this computer, no sing_measure yet); tests/test_studio_device.py checks that
+the stand-in calls `measure(take, request)` with the take's bytes and the rest, and that a job taken is made and polled.
+
+### For the host: the build and site.json
+
+The hosting Worker is web/studio-site ("Hosted on Cloudflare", above): Workers Static Assets serve the built site,
+and its Worker answers `/api/*` and `/v/*`. `uv run python web/studio-wasm/tools/build_site.py renders/studio-site`
+(it runs `npm ci` in web/studio-wasm if needed, as build_render.py does, and refuses stale kernels; about 5 s), then
+wrangler's `[build]` runs `tools/prepare.mjs`, which checks site.json against its own rules and writes `_headers` and
+`.assetsignore`. The build writes:
+
+    OUT/index.html, *.js, *.css   the page, from the root: device.js, renderer.js, studio.js, score.js, model.js, …
+    OUT/notice.css                the plain pages' look
+    OUT/piano/                    index.html (its addresses made /piano/…), piano.js, sound.js, piano.css, identity.css
+    OUT/render/bundle.json        {"v", "base": "/render/", "pyodide", "app", "packages", "bytes", "transfer",
+                                   "program", "pyodide_version", "studio": {"song", "machine", "runs_with", "kit"?}}
+    OUT/render/py-<hash>/         Pyodide 314.0.7, numpy, scipy, soundfile (29.9 MiB)
+    OUT/render/app-<hash>/        the worker, the kernels (JS and C/wasm), songbird.zip: the program, studio_render.py,
+                                  studio_device.py, the lead song, webstudio's singing (5.3 MiB)
+    OUT/render/kit-<hash>/kit.zip only with --sing-kit and py/sing_measure.py
+    OUT/site.json                 for the host (below; .assetsignore keeps it off the site)
+
+41 files, 35.8 MiB; 28.3 MiB on the wire the first time (the host compresses: no `.gz` siblings). The largest is
+scipy's wheel, 13.4 MiB; the build refuses any file over 25 MiB. `--machine fictional:NAME` sings as a made-up
+machine instead of `none`. **Every address is from the root** (`/studio.js`, `/render/…`, the workers' URLs, the
+piano page's own files): the page is served at `/v/<id>` too, and its policy allows no `<base>`.
+
+**site.json** (prepare.mjs reads `files` and checks each `cache` against its rules):
+
+    {"v": 1, "program": "<the program's sha256>",
+     "index":    {"/": "/index.html", "/piano/": "/piano/index.html"},
+     "rewrites": [{"from": "/v/*", "to": "/index.html", "status": 200}],
+     "network":  {"POST /api/versions":  {"body", "most_bytes": 67108864, "starts_with": "fLaC", "answers"},
+                  "GET /api/versions/*": {"answers", "headers": {...what a shared version is sent with}}},
+     "headers":  {"X-Content-Type-Options": "nosniff", "Referrer-Policy": "no-referrer"},      (on every file)
+     "files":    {"/index.html": {"type": "text/html; charset=utf-8", "cache": "no-cache", "csp": "…"},
+                  "/render/app-…/studio-worker.mjs": {"type": "text/javascript; charset=utf-8",
+                                                      "cache": "public, max-age=31536000, immutable", "csp": "…"},
+                  …every file, by its path}}
+
+- **Cache**: everything under `render/py-*`, `render/app-*` and `render/kit-*` is immutable (named by its contents'
+  hash); the page, its scripts, `bundle.json` and the piano page are `no-cache` (asked again each visit: a 304 when
+  unchanged). A new program changes `app-<hash>` (5 MB to fetch); a new Pyodide, `py-<hash>`.
+- **The policy**: the Worker's (web/studio-site/src/policy.js), on the page and on the workers' scripts alike:
+  `default-src 'self'; script-src 'self' 'wasm-unsafe-eval'; style-src 'self'; img-src 'self' data:; media-src 'self'
+  blob:; connect-src 'self'; worker-src 'self'; base-uri 'none'; form-action 'none'; frame-ancestors 'none'`. That is
+  the studio's own, with `'wasm-unsafe-eval'` for Pyodide (never `'unsafe-eval'`) and `blob:` for the songs made here.
+  The page needs nothing more: no inline script or style, no `blob:` worker, no fetch of a `blob:` URL (a recording's
+  file is kept as a Blob for *Share it*). build_site.py's `POLICY` is held to policy.js's by a test.
+- **Types that matter**: `.wasm` as `application/wasm` (compiled as it streams), `.mjs` as JavaScript.
+- **The Worker's own paths, never rewritten to the page**: `/api/versions` and `/api/versions/*`. *Share it* posts
+  the recording's bytes with `X-Content-SHA256` (one `crypto.subtle.digest`), so the Worker needn't hash 20 MB; the
+  answer is 201 `{"id", "url"}` or 4xx `{"error"}`, said as it is. The page fetches `/api/versions/<id>` as bytes
+  (it is an attachment; it never navigates there), reads it only as data, and takes back only an id of 32 hex digits.
+- serve_site.py does the same on 127.0.0.1 with a stand-in for the Worker (its headers from site.json, the digest
+  checked); `wrangler dev` in web/studio-site (launch.json "studio-site", 127.0.0.1:8813) is the real thing, over
+  `renders/studio-site`.
+
+### The review (Fable, 2026-09-30)
+
+A read-only review of the design before most of it was built. Its points, ranked as it ranked them, and what came of
+each:
+
+1. **A recording made on the device would name Pyodide's Python and pins** (3.14 and its numpy), which a listener's
+   uv would then try to fetch. The build records the release's (`Studio.runs_with`, natively, at build time) in
+   bundle.json, and the device's specs carry those (checked: the packet's requirements.txt says python 3.12 and the
+   server's pins; tests/test_studio_device.py compares them with a native studio's).
+2. **The Worker becomes a same-origin file host.** Its requirements went into site.json (`network`); the hosting
+   Worker (web/studio-site) checks what's shared and serves it as an attachment.
+3. **A hostile version's file would be read in the studio's own heap**, with no process around it. It is read in a
+   worker of its own, started for the file and terminated after (a deadline of 6 minutes, and 3 to get ready), which
+   holds nothing; what comes back is held to its shape (a 32-hex id, a record, a song) before it is kept or used.
+   Residual: the reader is still this origin's code with this origin's storage within reach, if a libsndfile bug let a
+   file take over Pyodide; a sandboxed iframe on another origin would close that (decision 4).
+4. **Opening a shared link is heavy on a phone** (fetch 15-20 MB, decode, hash, lay out twice, draw the timeline).
+   Kept whole for now, said in words while it happens, and kept in IndexedDB so it happens once (decision 3).
+5. **Memory on phones fails loudly**: iOS closes the tab. A whole song is marked while it's made and the page says so
+   next time; a long one is warned of first, and made all the same.
+6. **The timeline blocks everything.** Asked for only when *Time* is opened, last in the worker's queue, and kept per
+   day in IndexedDB.
+7. **`/api/job/*` is needed** (singing's takes; the stems): answered by the studio's worker (`asked`), its jobs made
+   between requests. The stems are refused in a sentence instead.
+8. **Version ids, and the hash-only navigation**: a file's id is a fixed-key HMAC of what was read (the same file,
+   the same id, any visit); a shared one keeps the Worker's id; opening a file reloads the page on its `#version=`;
+   the path wins over the fragment.
+9. Smaller: the "ready to play" marks come from the renderer's own cache (the studio's worker has no audio); the
+   recording's Blob is kept for *Share it* (no `connect-src blob:`); the piano score in localStorage, the latest three;
+   `/piano/identity.css` is copied; the queue's thread doesn't start in Pyodide; webstudio is in the app zip; *What's
+   kept* says the site sees which shared versions are opened. piano.js's innerHTML of score strings is the program's
+   own words (unchanged).
+10. **A test that the device and the server answer alike**, route by route: tests/test_studio_device.py.
+
+### Measurements
+
+On the M1 Max, **shared with other agents' work throughout** (a load average of 8 to 19: every number here is slower
+than an idle machine's; the earlier section's Chrome figures, taken on a quieter machine, stand beside them). The
+browser is Chrome 152 in the app's built-in pane, from serve_site.py on 127.0.0.1; the pane was **hidden** for most
+runs, which throttles the page's own timers several-fold (the workers less). node is Pyodide under node from the same
+built site (web/studio-wasm/node/device_run.mjs): each worker a Pyodide of its own, as in the browser.
+
+| | Chrome (pane hidden, loaded machine) | node (loaded machine) |
+|---|---|---|
+| **Time to ready**: the page's first question answered | 7.6 and 8.2 s the first visit (35 MB from 127.0.0.1: serve_site.py, then wrangler dev); 6.4 s from the cache | Pyodide and the program 5.2-5.5 s, the studio 0.6 s |
+| a question (`/api/song`, `/api/arrangement`, `/api/sound`) | | 0.6-0.7 s the first time, 0.05 s again |
+| the timeline (once a day, then kept) | | 6.7 s (5.1 on a quieter run) |
+| **a section** (refrain 1, the first one, its worker's start included) | 14.2 s (9.4 s making it) | 5.2 s start + 10.3-12.7 s |
+| **a whole song** | 123 s (H at tempo 92), 118 s (songwriter), recorded from the page | 117 s (synth folk), 185 s (songwriter) |
+| a version's file read (contest.flac 15.8 MB; a recording 19.0 MB) | about 70 s and 280 s, hidden, at a load of 19 to 23; once kept, a reload opens it from IndexedDB | 5.2 s start + 9.6 s (contest.flac); 12.5 + 28.8 s (the recording, at a load of 23) |
+| **wasm heap** | | the studio's worker 130 → 187 MiB; a reader 187 MiB; a section 387 MiB; a whole song 1.30 GiB (synth folk), 1.56 GiB (songwriter); 2.0-2.3 GiB for H with a voice before it (the earlier section's) |
+
+A phone's viewport (the mobile preset: an Android user agent, 375 px) tried: nothing gated, verse 1 made in the
+browser (172 s, hidden and loaded), identical to the native render. The phone itself is untried: the numbers to
+expect are a few times these, and a whole song's 1.3-2.3 GiB is the risk (decision 2).
+
+**Byte identity** (the program's promise; "Byte identity" above):
+
+| what | the device | native | |
+|---|---|---|---|
+| refrain 1 (Chrome, from the page's renderer) | `c2e36da52b55…` | `c2e36da52b55…` | identical |
+| verse 1, tempo 92 (Chrome, the mobile preset) | `91ea074162fe…` | `91ea074162fe…` | identical |
+| refrain 1, synth folk (node) | `76f91272f99e…` | `76f91272f99e…` | identical |
+| whole song, songwriter (node; and Chrome under the Worker: recorded, shared, fetched back) | `779ae148bea7…` | `779ae148bea7…` | **identical** |
+| whole song, tempo 92 (Chrome: recorded, shared, read back from the Worker's store) | `bade764f3743…` | `a2f6283aa311…` | 13 of 8.8 M samples by 1 LSB |
+| whole song, synth folk (node) | `022a0295ad9a…` | `e5d6eb1ddac8…` | 1 of 7.0 M samples by 1 LSB |
+
+The render keys match in every case, as do the records' program (`3506e022…`), parameters, marks and
+requirements.txt; where the samples differ, it is the last-bit drift of Pyodide's libm (above). New here: synth folk,
+with no fiddle, parted by one sample, so the drift isn't the fiddle's alone (its arp or pad, likely); decision 1 of
+"Made in the visitor's browser" (deterministic transcendentals) covers it the same way.
+
+### How it was checked
+
+- tests/test_studio_device.py (17): every JSON route answered as a native studio answers it; `/api/start` saying the
+  device and what it can't do; the timeline; a job 404; the server's statuses for bad edits, a bad machine, a body too
+  large, `/api/listen` and `/api/record`, the stems; a render spec the server's but for the release's Python; a long
+  whole song warned of and still specified; the MIDI file and piano score handed over; a real packet read as data (the
+  file let go, the same id twice, no `voice` kept), restored, opened at `#version=` and at `/v/<id>` with the Worker's
+  id, an unknown id 404, a text file and a climbing id refused; singing's stand-in calling `measure(take, request)`;
+  the static page, its policies, its files and the Worker's headers.
+- tests/studio_renderer_device.test.cjs (6): a phone makes it, never the server; a server's word in a spec changes
+  nothing; a recording keeps its file and is marked while made; memory, a killed worker and an error each said
+  plainly; a long one warned of and made; no workers, said.
+- The studio's server tests (test_studio, test_studio_public, test_studio_browser, test_studio_received,
+  test_web_singing: 92) after the refactor, and every node test (121).
+- In Chrome under the hosting Worker itself (`wrangler dev` in web/studio-site over this build, after its
+  prepare.mjs accepted site.json and wrote `_headers`; its policy on every file): the page ready on a first visit in
+  8.2 s; the songwriter band recorded from *Record* in 118 s, its id the native render's (`779ae148…`); *Share it*
+  answered 201 with `X-Content-SHA256` sent; the link `/v/<id>` opened in the page: fetched from the Worker's store,
+  read in its own worker, "which someone shared … the same program as this studio", its link. The file fetched back
+  from the Worker is the recording, id and all.
+- In Chrome, from serve_site.py: the page drawn from the device ("no machine, only time", the footer, Help, Tools,
+  no server/browser choice); a section played; the tempo set to 92 and the whole song recorded from *Record*, then
+  *Share it* (`201`, the link shown), the shared file's id checked against the native render above; a rendition from
+  renders/ (562cea, another program) dropped on the page with a real drop event: read in its worker, the page reloaded
+  on `#version=…`, "which you opened from a file", the other program said; renders/review/contest.flac opened as a
+  shared link `/v/<id>` (fetched from the stand-in Worker, read, "which someone shared", its link), and reloaded from
+  IndexedDB without fetching it again; the MIDI export a Blob named `now-its-by-you.2026-09-30.1efd07.mid`; the stems
+  refused in their sentence; the piano page opened on `?score=device/<key>.json` at 92; the mobile preset (above). No
+  errors in the console (one connection reset from the stand-in server under load, retried by the browser). In the
+  app's pane, a new worker fetched scipy's 13 MB wheel again rather than from the HTTP cache (the Worker sends it
+  immutable, with an ETag): worth checking in an ordinary Chrome, where a reader's and a render worker's start would
+  then be the 5 s from the cache measured in node.
+
+### Open decisions for the artist
+
+1. **Byte identity of whole songs** stands as before ("Made in the visitor's browser", decision 1), now with one
+   synth-folk sample beside the fiddle's: sections and some whole songs are the native render's to the bit; others
+   differ by a handful of samples at 1 LSB.
+2. **Phones and whole songs.** Nothing is gated. A whole song needs 1.3-2.3 GiB of wasm heap on top of the studio's
+   190 MiB; many phones will manage a section and some a whole song. A failure is said, and a crash is said next time.
+   Making whole songs lighter is the lever (the voices' memory, first).
+3. **A shared link costs its first opener** a 15-20 MB download, a Pyodide to read it and the reading (seconds on a
+   laptop, perhaps a minute on a phone). Opening the page as soon as the record is cleaned, and checking the audio
+   against it in the background, would halve it.
+4. **The reader shares the studio's origin.** A sandboxed iframe on a separate origin would keep even a libsndfile
+   exploit away from the visitor's storage (the file is never run as a program in any case). Worth it if the Worker
+   ever serves files it didn't check.
+5. **The stems** aren't made on the device yet: a whole song and then every part alone, in one worker, is 2× the time
+   and more memory than a recording. Said in a sentence; the recording opened locally makes them.
+6. **What the site keeps of a shared version, and for how long** (the Worker's: a gallery, deletion, words someone
+   wrote) is the hosting side's decision, as it was the VPS's.
+7. **The day** is the visitor's own (their browser's date), where the VPS used its own; a version made just after
+   midnight in Tokyo is that day's.
+8. **Safari and Firefox** are untried (the workers' policy is their own script's in Chrome; if a browser applied the
+   page's instead, Pyodide couldn't compile, and the page would say "it went wrong in this browser").
+
 ## Hosted on Cloudflare (2026-09-30)
 
 The studio now runs entirely on the visitor's device, so it needs no server of its own: studio.itsby.you is a
