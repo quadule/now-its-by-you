@@ -478,3 +478,65 @@ OW before a nasal ("own", "alone", "phone") may have the same fault: its vowel e
 the throat's AO ("fawn") and 7.2 dB from its open OW. The seed sings "own", "alone" and "owns", so
 a fix would change the seed's audio. That's left for the artist to decide. AY and EY before a nasal
 end as their open forms do (3.8 and 2.9 dB from them).
+
+## Folk singers (2026-10-01, an experiment, not shipped)
+
+The artist: "try training our voice model on real public domain folk songs", to learn how much better the
+throat could get with more singers, not to publish the result. Real people's recordings, then, where the
+recording itself is free: singers who released their own singing (LibriVox volunteers' sung hymns, carols and
+ballads, public domain; Makemi's traditional songs and Michael O'Donnell's folk singing, CC BY-SA, usable here
+only because nothing trained on them travels; VocalSet's "Row, Row, Row Your Boat" by 20 trained singers and
+vocadito's public-domain songs, CC BY). Commercial records made before 1926, public domain by age, were allowed
+too, but unaccompanied solo singing of that time is almost all male quartets: none were used. No field recordings.
+
+- **Labelled without a score** (`tools/throat/folk.py`). Every recording is heard through Demucs and left out if
+  accompanied (`separate`); Whisper large-v3 times its words (`transcribe`; run on a Colab A100, 154 recordings in
+  4 minutes); `cut` corrects them against printed lyrics where there are some, cuts lines at pauses in the audio,
+  aligns them with MFA and makes each syllable a note at the pitch actually sung. Lines that aren't sung (the
+  LibriVox announcements), have a word no dictionary has or a word Whisper doubted are left out or masked. Run on
+  the house corpus's own audio, it agrees with the scored labels on 93.5% of frames, 94% of phone starts within
+  20 ms, 95% of pitches exact; with 64 kbps MP3 93.8%, with noise 28 dB down 93.3% (half the takes left out by
+  the noise gate), with an RT60 of 0.7 s 85.4% (reverb isn't gated).
+- **The corpus:** 147 minutes by 73 performers, each a singer of their own (source "folk", not "human": the
+  volunteers' share stays theirs). 9 performers (15 minutes, men and women, studio and home) are held out of every run.
+- **The runs** (Colab A100, about 4.5 minutes each against 40 on this Mac), all from model-house.npz with the
+  volunteers' recipe (14,000 steps, lr 1e-3): **control**, the house corpus alone; **small**, 8 performers and 13.5
+  minutes, the volunteers' size; **half**, 30 and 66; **all**, 64 and 132.
+
+**How near each model gets to a real singer it never heard** (`tools/throat/unseen.py`: the best voice it can
+make for each held-out singer, fitted on half their singing, envelope error on the other half, mean dB; also with
+each stretch's own average spectrum taken out of both, the room's and the microphone's colouring):
+
+| | Error | Without the room and microphone |
+|---|---|---|
+| control (no people) | 10.05 dB | 8.11 dB |
+| the shipped model (8 volunteers, 13.7 min) | 9.57 | 7.73 |
+| small (8 folk singers, 13.5 min) | 8.31 | 6.94 |
+| half (30, 66 min) | 7.41 | 6.49 |
+| all (64, 132 min) | **7.21** | **6.30** |
+
+The house singers' own held-out segments stay at 5.0 dB in every model. Hearing real singers makes the throat
+much better at a real voice it has never heard, about a fifth less error. Most of it came from the first eight
+singers; after that, singers recorded a new way helped (VocalSet's improved only once VocalSet singers trained,
+and they sang the same song) and more of the same kind hardly did.
+
+**On H** it costs nothing, once the voice is blended as the studio blends it (`default_mix`, by register; dry, two
+seeds; a Fable review re-rendered these): control 10.3% of words misheard, UTMOS 1.89; all 10.5%, 1.88. Blending
+the house rows evenly instead (11.6-14.8% in the folk runs) was misleading: a new singer's row starts at the house
+singers' mean and the folk rows hardly moved from it (64 rows spread 0.7 in the 8-number space, the house rows
+2.7), so the house singers' mean *is* the folk voice there. For the same reason the volunteers' UTMOS 1.82 on H
+was mostly the register blend, not their row: the control sung that way scores 1.89.
+
+**It hasn't yet made our song sound better.** The 64 voices sit in one corner of the singer space, and their
+envelopes are flatter than real ones (formant contrast 1.3 dB in the folk rows, 2.2 in the house rows, 3.3 in the
+real singing); blending them in at 30% dilutes the voice (UTMOS 1.88 -> 1.67), and more sharpening doesn't help.
+Next, in this order:
+1. Keep the singers apart, and the singer apart from the recording: new rows started spread like the house rows,
+   the singer table learned faster (lr 1e-2, no weight decay), 16 numbers a singer, and a table of recordings (one
+   row per recording, one shared row for all the house audio) beside it in every layer, singing through the house
+   row at synthesis (it folds into the FiLM biases, so throat.py needn't change).
+2. A loss that keeps the folk rows' own contrast (L1 on the envelope less its 17-point trend).
+3. A bigger network only if (1) spreads the singers and the held-out error stays above 6.5 dB.
+
+The recordings, labels, datasets and models are in a session scratch directory, not kept; folk.py rebuilds them
+from public sources.
