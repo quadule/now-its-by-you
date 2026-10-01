@@ -1070,6 +1070,15 @@ two threads, `MallocLargeCache=0`): with no machine, a waltz, three voices of it
 estimate 1.65); six lineage voices, 1.53 GB; four verses, every part, six voices, tempo 55, 450 s, 2.56 GB
 (estimated 3.00). In the studio's 2100 MB, about five minutes of an a cappella in one go, as before.
 
+**The feet clicked** (the artist heard "some clicking/clipping in the bass drums" in coral's five voices; the mix
+never clipped, peak 0.886). Each stomp's sole slap was noise at full strength from its first sample, through 700 Hz
+to 5 kHz: a step, heard as a click in every stomp (above 6 kHz, 51 spikes over 12 times the mix's 46 ms RMS, each
+within 60 ms of a stomp). Now the slap rises over 1.5 to 4 ms (a hard heel brought down hard to a soft sole,
+gently) through 400 Hz to 2.5 kHz and a 3 kHz low-pass, at the same level (`hand._slap`): in the stem, the energy
+above 6 kHz is 18 dB down a stomp (its peak 21), the energy under 200 Hz the same (+0.1%); in the mix, no spikes
+(the loudest by a stomp 10.9 times the RMS, the median 3.8, was 13.0). Only the stomps change, wherever they
+play (the a cappella, the shanty, the blues); every other part is sample for sample as it was.
+
 ## The jig
 
 **The name.** The style's id and name are **jig** (the page: "jig, in six-eight"). It was `celtic`, "a Celtic
@@ -1126,6 +1135,7 @@ chooses unless named:
 - acappella2-coral-2026-11-02-five-voices-pad-hum (222 s): five lineage voices, `--arrange intro=pad backing=hum`:
   the chords swelling in alone, the verses hummed, the lineage's own harmony in the bridges and the tag.
   Id 7ca8f0e8ad80.
+- acappella3-coral-2026-11-02-five-voices-pad-hum (222 s): the same, its feet without the click. Id e72e88900ff6.
 - acappella2-dmitri-2026-06-21 (208 s): dmitri's own choice, the verses on "oo"s. Id ae4508d32a26.
 - jig-ada-2026-09-27 (166 s, 143.5): a slow air to begin. Id 604f8504cc67.
 - jig-bob-2026-03-14 (108 s, 150.4): a slow air, harmony in thirds from the one lineage voice. Id 9922285407fe.

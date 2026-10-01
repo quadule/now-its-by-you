@@ -23,7 +23,8 @@ sound before them.
 Stomps. A foot comes down on a wooden stage or porch: the heel lands first,
 a hard edge for a millisecond, then the leg's weight through the sole over
 several (the softer and longer the contact, the more of the energy goes low),
-and the sole slaps down after it. The floor booms: boards on joists over an
+and the sole slaps down after it, meeting the board over a few milliseconds
+(a slap, 400 Hz to 2.5 kHz, not a click). The floor booms: boards on joists over an
 air space, a big stiff plate whose modes (the lowest at 45 to 75 Hz, a
 handful more up to 400) ring for a few tenths of a second, with the air under
 it (the cavity's lengthwise and crosswise modes) and the frame holding it up
@@ -259,7 +260,22 @@ def _stompers(make: np.random.Generator, size: float) -> list[dict]:
 
 @lru_cache(maxsize=4)
 def _sole_band(sr: int) -> np.ndarray:
-    return butter(2, [700.0, 5000.0], btype="bandpass", fs=sr, output="sos")
+    """The slap's band: 400 Hz to 2.5 kHz, and a further low-pass at 3 kHz (rubber or leather on a board slaps;
+    it doesn't crack). Until 2026-09-30 it was 700 Hz to 5 kHz, and each stomp clicked."""
+    return np.vstack([butter(2, [400.0, 2500.0], btype="bandpass", fs=sr, output="sos"),
+                      butter(2, 3000.0, fs=sr, output="sos")])
+
+
+def _slap(rng: np.random.Generator, heel: float, vel: float, sr: int) -> np.ndarray:
+    """The sole slapping down after the heel, 20 ms of it, before its level: noise rising over 1.5 ms (a hard
+    heel brought down hard) to 4 ms (a soft sole, gently), the sole's width meeting the board, then falling
+    e-fold every 0.4 to 1.4 ms. It started at full strength until 2026-09-30: a step, heard as a click."""
+    n = int(0.02 * sr)
+    tau = (0.4 + 1.0 * (1.0 - heel)) * 1e-3
+    rise = (1.5 + 1.25 * ((1.0 - heel) + (1.0 - vel))) * 1e-3
+    t = np.arange(n) / sr
+    env = np.sin(0.5 * np.pi * np.minimum(t / rise, 1.0)) ** 2 * np.exp(-np.maximum(t - rise, 0.0) / tau)
+    return sosfilt(_sole_band(sr), rng.standard_normal(n) * env)
 
 
 @lru_cache(maxsize=4)
@@ -313,7 +329,7 @@ def stomps(notes, sr: int, length: int, rng: np.random.Generator, make: np.rando
             amp *= push * rng.uniform(0.85, 1.15, len(freqs)) * vel_gain(vel) / vel_gain(max(note.vel, 1e-3))
             # the sole slapping down after the heel: its energy 14 to 21 dB under the stroke's
             delay = int(rng.uniform(2.0, 10.0) * 1e-3 * sr)
-            sole = sosfilt(_sole_band(sr), burst(rng, (0.4 + 1.0 * (1.0 - p["heel"])) * 1e-3, sr, int(0.02 * sr)))
+            sole = _slap(rng, p["heel"], vel, sr)
             ratio = (0.01 + 0.03 * p["heel"]) * (0.6 + 0.8 * bright) * (0.4 + 0.6 * vel)
             sole *= np.sqrt(ratio * float(amp**2 @ heard) / (2.0 * early_power(np.pad(sole, (delay, 0)), sr, BOOM)))
             feet.append((p, t, amp * p["gain"], sole * p["gain"], delay, b))

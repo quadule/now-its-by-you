@@ -176,9 +176,10 @@ hands, strength, place and timing, their onsets spread over 10 to 25 ms
 (looser when worn); the first hands land on the note and the rest follow.
 
 **Stomps.** A heel's hard edge, then the leg's weight through the sole over
-several milliseconds, and the floor booms: boards on joists over an air
-space, its lowest modes at 45 to 75 Hz and a handful more to 400, ringing a
-few tenths of a second, a few people stomping together.
+several milliseconds, the sole slapping down after it (rising over 1.5 to 4
+ms, 400 Hz to 2.5 kHz: a slap, not a click), and the floor booms: boards on
+joists over an air space, its lowest modes at 45 to 75 Hz and a handful more
+to 400, ringing a few tenths of a second, a few people stomping together.
 
 **Shaker and tambourine** are particles in collision (Cook's PhISEM): a
 shake gives the particles energy that bleeds away in hundredths of a second,

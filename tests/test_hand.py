@@ -132,3 +132,17 @@ def test_a_typical_part_sits_at_the_frame_drums_level(name, art, beats):
 @pytest.mark.parametrize("name,plain,beats", [("claps", "clap", range(1, 32, 2)), ("stomps", "stomp", range(0, 32, 2))])
 def test_the_registrys_contract(name, plain, beats):
     contract(hand, name, plain, [Note(name, b * 0.6, 0.1, 60.0, 0.6, art=plain) for b in beats])
+
+
+def test_a_stomp_thuds_without_a_click():
+    """The sole slaps down rising over a few milliseconds, through 400 Hz to 2.5 kHz: no step, and almost
+    nothing above 6 kHz (as built, noise at full strength through 0.7 to 5 kHz clicked in every stomp, its energy
+    above 6 kHz 36 to 47 dB under the stroke's; now 60 to 72)."""
+    for maker in range(6):
+        for vel in (0.4, 1.0):
+            y = play("stomps", hits("stomps", "stomp", n=1, vel=vel), 1.0, maker=maker)
+            assert band(y, 6000, 20000, 0.2, 0.3) - band(y, 20, 20000, 0.2, 0.3) < -55.0
+    for heel in (0.0, 1.0):
+        for vel in (0.3, 1.0):
+            slap = np.abs(hand._slap(np.random.default_rng(0), heel, vel, SR))
+            assert slap[: int(0.0005 * SR)].max() < 0.15 * slap.max()
