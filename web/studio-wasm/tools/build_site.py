@@ -92,6 +92,8 @@ def page(singing: bool) -> str:
                         '<meta name="studio-token" content="device">', 1)
     html = html.replace('<script src="/renderer.js" defer></script>',
                         '<script src="/device.js" defer></script>\n<script src="/renderer.js" defer></script>', 1)
+    # what's kept, true from the first paint (studio.js says the same once it starts)
+    html = html.replace("Nothing on this page leaves this computer.", "Nothing leaves this device unless you share a version.", 1)
     if singing:  # as webstudio.singing.Singing.page adds it
         html = (html.replace("</head>", '<link rel="stylesheet" href="/sing.css">\n</head>', 1)
                     .replace("</body>", '<script type="module" src="/sing.js"></script>\n</body>', 1))
