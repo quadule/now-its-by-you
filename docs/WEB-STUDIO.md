@@ -1019,3 +1019,229 @@ Before opening it (Cloudflare Access first, for the beta: "A closed beta first",
    part (the fiddle's last bits, "Byte identity" above).
 9. **Cloudflare Access** in front for the beta (Zero Trust > Access > Applications), the cache rule above, and
    `STUDIO_NOINDEX` left as `--noindex`.
+
+## Hosted on Cloudflare (2026-09-30)
+
+The studio now runs entirely on the visitor's device, so it needs no server of its own: studio.itsby.you is a
+Cloudflare Worker (web/studio-site) serving the built site from Workers Static Assets, plus a small API for sharing
+versions. The VPS, the container and the tunnel above aren't needed for it. Nothing has been deployed: the artist
+runs the commands below.
+
+### Architecture
+
+- **The site** is static: `uv run python web/studio-wasm/tools/build_site.py renders/studio-site` writes the studio's
+  page at the root, the render bundle under `render/` (`bundle.json`, `py-<hash>/`, `app-<hash>/`) and `site.json`.
+  Workers Static Assets serves every file straight from Cloudflare's edge, without running the Worker: those
+  requests are free and unlimited.
+- **The headers** come from `_headers`, which `web/studio-site/tools/prepare.mjs` writes into the built site before
+  every deploy and `wrangler dev` (wrangler.toml's `[build]`):
+  - every file: the page's Content-Security-Policy, `X-Content-Type-Options: nosniff`, `Referrer-Policy: no-referrer`,
+    `X-Frame-Options: DENY`, COOP and CORP `same-origin`, HSTS, and a Permissions-Policy (no camera, geolocation,
+    payment or USB; the microphone is left to the page);
+  - a hashed folder's files (`render/py-…/*`, `render/app-…/*`, any folder named `<word>-<8+ hex>`):
+    `public, max-age=31536000, immutable`;
+  - `/`, `/index.html` and `/render/bundle.json`: `no-cache`. Any other file gets Workers Static Assets' own
+    default, `public, max-age=0, must-revalidate`: kept, and checked by its ETag each time.
+  - No rule sets a header another rule sets (`_headers` would join them with a comma). If `site.json` names a cache
+    policy the rules would serve differently, prepare.mjs refuses the build; it also refuses a file over 25 MiB
+    (the static assets' limit for one file; the largest, `pyodide.asm.wasm`, is 9.2 MiB) and more than 20,000
+    files.
+- **The policy** is the studio's own, strict as before, with what the browser's renderer needs:
+  `default-src 'self'; script-src 'self' 'wasm-unsafe-eval'; style-src 'self'; img-src 'self' data:; media-src
+  'self' blob:; connect-src 'self'; worker-src 'self'; base-uri 'none'; form-action 'none'; frame-ancestors 'none'`.
+  Pyodide compiles WebAssembly (`'wasm-unsafe-eval'`, never `'unsafe-eval'`); a song made in the browser plays
+  from a Blob (`blob:` media). The same policy is on every file, so the render worker (a dedicated worker keeps its
+  script's policy) has it too. (src/policy.js holds it, for both the Worker and prepare.mjs.)
+- **Compression.** The bundle's `.gz` copies aren't uploaded (`.assetsignore`): Workers Static Assets serves a file
+  as it is, and a precompressed copy would need the Worker in front of every file (paid requests) to send it as
+  gzip. Cloudflare compresses responses itself, with Brotli or gzip, for the types it compresses (JavaScript, JSON,
+  wasm, HTML, CSS among them); `.zip` and `.whl` are compressed already.
+- **The Worker** runs first only for `/api/*` and `/v/*` (and for a path with no file, to say 404):
+  - `POST /api/versions`: share a version (below). `201 {"id": "<32 hex>", "url": "/v/<id>"}`.
+  - `GET /api/versions/<id>`: the file, `audio/flac`, `public, max-age=31536000, immutable`, its id as the ETag,
+    whole or a range, `Content-Disposition: attachment` and its own policy, `default-src 'none'; sandbox`.
+  - `GET /v/<id>`: the studio's page (index.html, with the page's headers and `no-cache`); the page reads the id
+    from its address, fetches the file and opens it on the device. **The page must refer to its own files from the
+    root** (`/studio.js`, not `studio.js`), or at `/v/<id>` they'd be looked for under `/v/`.
+  - anything else under `/api/`: 404, `{"error": "There's nothing here."}`. Every error is `{"error": "<a
+    sentence>"}` with a 4xx status (500 if something broke here).
+- **R2** (`songbird-versions`, private, bound as `VERSIONS`): `versions/<id>.flac`; `opened/<id>`, when one was last
+  opened; `limits/<hour>/<digest>-<random>`, this hour's shares; `incoming/…`, a file on its way in. The bucket is
+  never public: files are only ever served through `/api/versions/<id>`.
+- **No robots.txt, no noindex**: the public studio may be found (the artist's choice). The built site has none
+  (prepare.mjs warns if it ever does); `/robots.txt` is a 404.
+
+### Sharing a version
+
+`POST /api/versions`, the body a rendition: the FLAC with its packet appended, exactly as a recording is downloaded.
+Every guard comes before a byte of the body is read:
+
+1. the page itself: `Sec-Fetch-Site` same-origin and `Origin` this site's, when a browser sends them (a tool sends
+   neither, and is held to the same limits);
+2. 3 a minute from an address (the rate-limiting binding, counted at each Cloudflare location), an IPv6 address by
+   its /64;
+3. `Content-Length` said, at least 4 KB and at most **64 MB** (as the studio's own reader, `received.UPLOAD`; a
+   rendition is about 15 to 25 MB, its packet about 6);
+4. this hour's shares: at most 10 from one address and 60 from everywhere, counted by marks in R2 (an address
+   only as 64 bits of its SHA-256, gone with the hour). A refused file counts too, so a flood of junk is held back.
+
+Then the file is stored and checked as data, never run:
+
+- **Its name is its content.** The id is the first 32 hex digits (128 bits) of the file's SHA-256. The page should
+  send the whole digest as `X-Content-SHA256` (one `crypto.subtle.digest` of the file it already holds): then R2
+  itself checks the bytes against it as they're written, straight to `versions/<id>.flac`, and a body that isn't
+  the file its digest names is refused without replacing anything. Without the header the Worker hashes the file
+  as it stores it (to `incoming/`, then copied to its place); that works, but hashing 20 MB takes more CPU than the
+  free plan's 10 ms a request, so the page should send it.
+- **Checked from a few ranged reads** of what was stored (src/packet.js; about 100 KB read in all, never the whole
+  file, so the Worker's memory stays small), to the same rules songbird/received.py holds a file to: it begins with
+  `fLaC` and a STREAMINFO at 44.1 kHz, stereo; the archive's end record is the last in its final 64 KB and ends the
+  file; one disk, no ZIP64, at most 512 entries and a 1 MB directory right before the end record; every name
+  plain (no `..`, absolute paths, backslashes, NUL, empty parts) and listed once; nothing encrypted, stored or
+  deflated only, no data descriptors, no entry growing more than 1000 times or past 100 MB, every entry between
+  the audio and the directory; `manifest.json` and `genome.json` present. Only **manifest.json** is read: its
+  local header must be where the directory says and name it, it's inflated through a stream that stops at 1 MiB
+  whatever the header claims, its CRC and size must match, and it must be a record (a 64-hex `id` and
+  `program_sha256`, a title, a whole `generation` from 0 to 100,000, a `parent_id` and `ancestry` of ids).
+  Anything else: `422 {"error": …}` with received.py's sentence ("It isn't a FLAC file…", "Its packet lists the same
+  file twice, which no rendition does."), and the file is deleted at once.
+- **Nothing in it is ever unpacked or run**: not the program, not `__main__.py`, not genome.json. The bytes are
+  kept and served back as they came, as `audio/flac` with `nosniff`, `attachment` and a sandboxing policy, so even
+  a file built to look like a page does nothing on this site. Everything else (the song, the record against
+  this program's bounds, the samples against the record's id) is the studio's reader's, on the device, when the
+  version is opened (docs above, "Threat model"): the host only stores and serves.
+
+### What is kept, and for how long
+
+- **The file itself**, exactly as it was shared, as `versions/<id>.flac`: unlike the VPS studio (which kept only the
+  record and the song), the device needs the whole file to open it. It carries what any copy of it carries (the
+  record, among it the maker's machine's pseudonym, the room and leanings: "Privacy" above), and its program.
+- **For 30 days after it was last shared or opened.** Sharing the same file again writes it again; an open (the
+  file fetched) is noted in `opened/<id>` at most once a week, so a version is kept at least 30 days after anyone
+  last opened it, and at most a week more. The hourly cron deletes the rest (`KEEP_DAYS`, `REFRESH_DAYS` in
+  `[vars]`). A browser that has fetched one keeps its copy (immutable) whatever happens here.
+- **Nothing about who shared it.** No IP address is stored: only this hour's counting marks, 64 bits of a digest of
+  the address, deleted when the hour is over. No logs (`observability` off); errors log only their kind.
+- **Nothing lists versions.** An id is 128 bits; one not there answers 404, and an address asking after many is held
+  to 20 a minute. An id is a plain content address, so anyone who has a file can work out its link, and could check
+  whether it has been shared: that says only that someone shared what they already hold. (The VPS studio's keyed
+  ids hid even that; a content address is what lets the device and the host agree on a version's name.)
+
+### Deploying it
+
+Once:
+
+1. **Build the site** (Node for Pyodide's package, once: `cd web/studio-wasm && npm ci && cd ../..`):
+
+       uv run python web/studio-wasm/tools/build_site.py renders/studio-site
+
+2. **Install wrangler, sign in, make the bucket**:
+
+       cd web/studio-site
+       npm ci
+       npx wrangler login                                  # if this computer isn't signed in yet
+       npx wrangler r2 bucket create songbird-versions
+
+   Optionally, a backstop if the cron ever stops: `npx wrangler r2 bucket lifecycle add songbird-versions limits
+   limits/ --expire-days 1` and the same for `incoming incoming/`. (Not for `versions/`: R2's rules count from the
+   upload, and would delete versions people still open.)
+
+3. **Free studio.itsby.you, if something has it**: a DNS record for `studio` (Cloudflare > itsby.you > DNS >
+   Records; a tunnel's CNAME, from the VPS plan above), the tunnel's public hostname for it, and an Access
+   application in front of it (Zero Trust > Access > Applications) all go; the custom domain makes its own record
+   and certificate. The cache rule for `/render/` ("Cloudflare: cache the bundle", above) isn't needed: the static
+   assets are served from Cloudflare's edge already, with their own headers.
+
+4. **Deploy** (it runs prepare.mjs first, which refuses a site it can't serve):
+
+       npx wrangler deploy
+
+5. **The old singing site** points to the studio (docs/SING-ONLINE.md, "Singing moved to the studio"):
+
+       cd ../sing && npx wrangler deploy
+
+Every later deploy: build the site again, then `npx wrangler deploy` from web/studio-site.
+
+**Check after** (`curl -sI` shows headers):
+
+- `curl -sI https://studio.itsby.you/`: 200, the policy above, `cache-control: no-cache`.
+- `curl -sI https://studio.itsby.you/render/bundle.json`: `no-cache`. Then a file of the bundle, compressed:
+  `curl -sI -H 'Accept-Encoding: br, gzip' https://studio.itsby.you/render/<py-…>/pyodide.asm.wasm`:
+  `content-type: application/wasm`, `immutable`, `content-encoding: br` (or gzip).
+- `curl -s https://studio.itsby.you/robots.txt -o /dev/null -w '%{http_code}\n'`: 404.
+- Share the seed (`f` its FLAC; prints the id and link):
+
+      f=web/sing/public/seed/now-its-by-you.flac
+      curl -s -X POST -H "X-Content-SHA256: $(shasum -a 256 $f | cut -c1-64)" --data-binary @$f https://studio.itsby.you/api/versions
+
+  then open `https://studio.itsby.you/v/<id>` in a browser: the studio opens on the seed.
+- `https://songbird.quadule.com/i/anything`: "Singing happens in the studio now: studio.itsby.you"; now.itsby.you
+  as before.
+- After a day, Workers & Pages > songbird-studio > Metrics: no "Exceeded CPU" errors (if there are, the page isn't
+  sending `X-Content-SHA256`, or the free plan is too tight: Workers Paid is $5 a month).
+
+### Costs
+
+Cloudflare's prices on 30 September 2026:
+
+| | free | beyond |
+|---|---|---|
+| Static assets (the whole site) | free and unlimited requests, no storage charge; 20,000 files (100,000 on Workers Paid), 25 MiB a file | free |
+| Worker requests (`/api/*`, `/v/*`, 404s) | 100,000 a day, 10 ms CPU each | Workers Paid: $5 a month for 10 million, then $0.30 a million; 30 s CPU allowed |
+| R2 storage | 10 GB-month | $0.015 a GB-month |
+| R2 class A (write, list) | 1 million a month | $4.50 a million |
+| R2 class B (read, head) | 10 million a month | $0.36 a million |
+| Egress (R2 and the site) | free | free |
+
+What each thing costs here:
+
+- **A visit to the studio**: nothing (static assets), however much of the bundle it fetches.
+- **Sharing a version**: 3 class A (the hour's list, its mark, the file) and 4 class B (the ranged reads); without
+  the page's digest, 2 more of each. About 20 MB stored for at least 30 days.
+- **Opening a shared link**: 2 Worker requests (the page, the file) and 1 class B; at most weekly, 1 class B and
+  1 class A more.
+- **The hourly tidy**: 4 class A an hour (about 2,900 a month) while fewer than 1,000 versions are kept.
+
+So: 1,000 shares a month keep about 20 GB (10 GB over the free tier: $0.15 a month) and use a few thousand
+operations; 10,000 shares a month keep about 200 GB ($2.85 a month), 30,000 class A, well within the free million.
+50,000 opened links a day is the free plan's 100,000 requests. **The most it could cost**, with the hourly ceiling
+reached every hour for a month by someone uploading 64 MB junk that passes the checks: 43,200 files, about 2.8 TB
+kept, about $41 a month (about $13 at a rendition's real size); lowering `ALL_AN_HOUR` lowers it in proportion. A
+Cloudflare billing notification (Manage Account > Billing > Notifications) is worth setting once Workers Paid or R2
+has a card on it. R2 needs a payment method on file even within its free tier.
+
+### How it was checked
+
+- **web/studio-site/test** (`npm test`, node, 21 tests): packet.test.mjs (a rendition is a version; the seed itself,
+  when built; only the head, the end and manifest.json are read, never the program's entries; each way a file isn't
+  a rendition refused with its sentence: not FLAC, 48 kHz, mono, no packet, bytes after it, a misplaced directory,
+  ZIP64 or empty, too many entries, `../`, absolute and backslashed names, duplicates, encryption, data descriptors,
+  bzip2, a 1000:1 bomb, 101 MB declared, an entry outside the archive, no manifest or song; the manifest too large,
+  inflating past its size, a bad CRC, not JSON, not a record, each field wrong, nested 100,000 deep, a local header
+  elsewhere), worker.test.mjs (shared with and without the digest, the same id and nothing left incoming; a wrong
+  digest refused without touching the version there; refused files not kept; size asked before the body is read;
+  another site's page refused; the minute, the hour from one /64 and from everywhere, with only digests kept; ranges,
+  HEAD, 304, 405, 404s for every other `/api/` path and the guessing limit; `/v/<id>` with the page's policy and
+  nothing else under `/v/`; retention through opens, its weekly note and the cron; a broken bucket a plain 500),
+  prepare.test.mjs (hashed folders, `_headers` with no header set twice, site.json in its shapes checked against
+  the rules, a 26 MiB file and a missing index.html refused).
+- **Under `wrangler dev`** (launch.json `studio-site`, a stand-in site with a hashed bundle, a wasm file and its
+  `.gz`): every header as above; the `.gz` copies, site.json and `_headers` not served; no robots.txt; the seed
+  shared with and without its digest (the same id, `c1980bc7…`), fetched whole (its SHA-256 the same) and in a
+  range; a wrong digest and a junk file refused; the minute's limit; in the built-in browser, `/v/<id>` loaded the
+  page, which fetched the 15.8 MB file, and a module worker compiled WebAssembly under the policy; a share from the
+  page was 201.
+- **The old site**: web/sing's tests, with a new one: every invitation points to the studio, nothing more is sung or
+  kept, singers' pages work, and the seed host answers byte for byte as before.
+
+### Decisions for the artist
+
+1. **The page should send `X-Content-SHA256`** (the studio's page is another agent's work): without it, a share
+   costs the Worker the hashing, which may pass the free plan's 10 ms of CPU and fail. Or take Workers Paid.
+2. **The limits**: 64 MB a file, 10 an hour from one address, 60 from everywhere, kept 30 days after the last open.
+   The ceiling is what bounds the bill (above); raise it if real use reaches it.
+3. **The seed page could link to the studio** (now.itsby.you says how to run the song; a line "or open it in the
+   studio" with `https://studio.itsby.you/v/<the seed's id>` once the seed is shared there). Not done: the seed page
+   stays byte for byte as it is until you say.
+4. **Content-addressed ids** are what was asked for, and they let anyone with a file find whether it was shared (a
+   keyed id would hide that, at the cost of the device and the host not agreeing on a name).
