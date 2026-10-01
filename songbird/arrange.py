@@ -270,7 +270,10 @@ class Lyrics:
 
 
 def _readable(line: str) -> str:
-    return unmarked(line).replace("-", "")
+    """A line as a person reads it: no focus marks, no syllable hyphens, no says (bass{fish}: songbird.heteronyms)."""
+    from .heteronyms import bare
+
+    return bare(unmarked(line)).replace("-", "")
 
 
 def _slot_text(value) -> str:
@@ -2263,7 +2266,7 @@ def options(genome: Genome, lyrics: Lyrics, block: str, index: int = 0) -> dict:
                         best = min(orders, key=lambda o: sum(a.id != b.id for a, b in zip(o, seq)))
                         reorder = [x.id for x in best]
             out["choices"].append({
-                "id": v.id, "lines": list(here.lines) if v.id == here.id else _readable_lines(v.entry),
+                "id": v.id, "lines": [_readable(x) for x in here.lines] if v.id == here.id else _readable_lines(v.entry),
                 "mood": v.mood, "era": v.era, "rare": v.rare, "variant": v.variant, "allowed": why is None,
                 "why": why, "elsewhere": elsewhere, "reorder": reorder})
         entry = by_id.get(here.id)
