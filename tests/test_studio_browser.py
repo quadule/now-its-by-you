@@ -172,7 +172,8 @@ def test_a_recording_from_its_spec_is_the_studios_own_packet_byte_for_byte(home)
     render = studio_render()
     made = render.run(answer["spec"], home / "browser", program=studio.program_digest)
     job = S.Job(id="x", key=answer["key"], kind="record", label="", work=None)
-    studio._whole(job, studio.version(edits), answer["key"])
+    here = studio._whole(job, studio.version(edits), answer["key"])
+    assert answer["bar_seconds"] == here["bar_seconds"]  # its clock, for the page to start it at the playhead's bar
     theirs = studio.cache / answer["key"] / "rendition.flac"
     assert made["record"] == pack.read_manifest(theirs)
     assert made["record"]["program_sha256"] == studio.program_digest and made["record"]["chosen_by_you"]
