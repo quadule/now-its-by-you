@@ -7,7 +7,7 @@ DATASET is a training set (tools/throat/dataset.py, or folk.py merge's) holding 
 must have been held out of (or excluded from) every model's training. docs/THROAT.md, "Folk singers".
 
 For every held-out singer (all their frames were held out of training): the best voice the model can make
-for them, an 8-number singer embedding fitted (Nelder-Mead from the mean of the model's rows) on the first
+for them, a singer embedding fitted (Nelder-Mead from the mean of the model's rows, 40 tries a number) on the first
 half of their sung frames, then the envelope's error on the second half: mean absolute dB over the grid points
 inside each frame's band, vowels and sonorants only (unmasked frames, role >= onset); and the same with each
 stretch's own average spectrum taken out of both (the microphone's and the room's colouring). Also the envelope's
@@ -149,7 +149,7 @@ def main():
             sc_fit, sc_test = scored(d, fr), scored(d, test_runs)
             start = rows.mean(axis=0)
             res = minimize(lambda e: err(model, d, fr, sc_fit, e), start, method="Nelder-Mead",
-                           options=dict(maxfev=300, xatol=1e-3, fatol=1e-4))
+                           options=dict(maxfev=40 * len(start), xatol=1e-3, fatol=1e-4))  # as many tries a number
             e_mean, e_fit = err(model, d, test_runs, sc_test, start), err(model, d, test_runs, sc_test, res.x)
             c_mean, c_fit = (err(model, d, test_runs, sc_test, e, channel=True) for e in (start, res.x))
             pc, pf, rc, rf = texture(model, d, test_runs, sc_test, res.x)

@@ -34,7 +34,8 @@ random point spread as the old singers are, not at their mean (where the folk si
 every recording of a "folk" or "record" singer a row of its own beside the singer's (its microphone and room), the
 house audio one shared row, "studio", and the model written sings through "studio" (folded into the FiLM biases,
 so songbird.synth.throat runs it unchanged); --contrast adds L1 on the envelope less its 17-point trend (log
-power, inside the band), which keeps formant contrast a small model would average away.
+power, inside the band), which keeps formant contrast a small model would average away; --rhotic-from-house learns
+an R after a vowel only from the house audio (people's folk singing mostly drops it).
 """
 
 from __future__ import annotations
@@ -136,6 +137,8 @@ def main() -> None:
     ap.add_argument("--singer-lr", type=float, default=None, help="learning rate of the singer and room tables (no decay)")
     ap.add_argument("--channel-dim", type=int, default=0, help="numbers per recording (its room and microphone); 0: none")
     ap.add_argument("--contrast", type=float, default=0.0, help="weight of L1 on the envelope less its trend")
+    ap.add_argument("--rhotic-from-house", action="store_true",
+                    help="learn an R after a vowel (and ER, AYR, AWR, OYR) only from the house audio, not from people's")
     args = ap.parse_args()
     torch.manual_seed(args.seed)
     rng = np.random.default_rng(args.seed)
@@ -153,6 +156,13 @@ def main() -> None:
     n_sp, n_ap = sp.shape[1], apr.shape[1]
     sp_top = d["sp_top"] if "sp_top" in d else np.full(len(sp), n_sp, dtype=np.int16)
     ap_top = d["ap_top"] if "ap_top" in d else np.full(len(sp), n_ap, dtype=np.int16)
+    if args.rhotic_from_house:  # the folk singing is mostly non-rhotic (hymn and art-song diction, British and Irish
+        # singers: F3 under a coda R 2.66 kHz against the house corpus's 2.31): learned from it, "fire" sang "fi"
+        people = np.array([s in ("folk", "record") for s in sources])[d["singer"].astype(np.int64)]
+        rhotic = np.isin(d["phone"], [phones.index(p) for p in ("ER", "AYR", "AWR", "OYR") if p in phones])
+        rhotic |= (d["phone"] == phones.index("R")) & (d["role"] == 4)
+        mask = mask & ~(people & rhotic)
+        print(f"rhotic frames of people's singing left out: {int((people & rhotic).sum())}", flush=True)
     full = mask & (sp_top >= n_sp) & (ap_top >= n_ap)  # frames learned in every band
     sp_mean, sp_std = sp[full].mean(0), sp[full].std(0) + 1e-3
     ap_mean, ap_std = apr[full].mean(0), apr[full].std(0) + 1e-3
