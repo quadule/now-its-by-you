@@ -625,6 +625,32 @@ def test_a_musician_brings_notes_back_as_a_preview_and_nothing_changes_until_app
     assert took["changes"][0]["value"] == [[0, 96, 7, 90]]
 
 
+def test_a_round_is_chosen_on_the_grid(served):
+    """A round (docs/ARRANGE.md, "A round"): the section says whether it can go round and how, or why not; asked
+    for, it is the person's, longer by its voices' tail, sung by the voices before; played, it can't."""
+    studio, port = served
+    status, grid = post(port, studio, "/api/arrangement", {"edits": {}})
+    assert status == 200, grid
+    sung = [s for s in grid["sections"] if s["can_play"]]
+    assert sung and all(s["can_round"] or s["round_why"] for s in sung)
+    assert all(not s["can_round"] and s["round_why"] is None for s in grid["sections"] if not s["can_play"])
+    pick = next(s for s in sung if s["can_round"] and s["name"] == "refrain")
+    assert not pick["round"] and pick["round_words"] and pick["paths"]["round"] == f"arrange.{pick['id']}.round"
+    status, grid = post(port, studio, "/api/arrangement", {"edits": {pick["paths"]["round"]: True}})
+    now = next(s for s in grid["sections"] if s["id"] == pick["id"])
+    assert now["round"] and now["by"]["round"] == "you" and now["choir"] and now["bars"] > pick["bars"]
+    assert now["bar_options"] == [now["bars"]]
+    status, grid = post(port, studio, "/api/arrangement", {"edits": {pick["paths"]["sung"]: False}})
+    played = next(s for s in grid["sections"] if s["id"] == pick["id"])
+    assert played["can_round"] and not played["round"]  # the page sings it again, as a round, in one choice
+    status, grid = post(port, studio, "/api/arrangement", {"edits": {pick["paths"]["bars"]: 16}})
+    longer = next(s for s in grid["sections"] if s["id"] == pick["id"])
+    assert not longer["can_round"] and "length" in longer["round_why"]
+    texts = [s["round_words"] or "" for s in grid["sections"]] + [s["round_why"] or "" for s in grid["sections"]]
+    texts += [r["text"] for c in grid["cells"] for r in c["why"]]
+    assert not [t for t in texts if FORBIDDEN.search(t)]
+
+
 def test_the_arrangement_is_drawn_as_a_grid_for_a_timeline(served):
     studio, port = served
     edits = {"style.name": "synthfolk", "tempo": 130, "arrange.refrain:0.drummachine.pattern": "half",

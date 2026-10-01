@@ -379,7 +379,7 @@
     const mine = moved(s) || Object.values(s.by).includes("you");
     const region = h("button", { class: `region${s.name.startsWith("refrain") ? " refrain" : ""}${chosen ? " selected" : ""}${mine ? " mine" : ""}`,
       type: "button", draggable: "true", "data-key": `region:${s.id}`, "aria-pressed": String(chosen),
-      "aria-label": `${s.label}, ${s.bars} bars, ${s.sung ? "sung" : "played"}${mine ? "; yours" : ""}. Enter opens its notes.`,
+      "aria-label": `${s.label}, ${s.bars} bars, ${s.round ? "a round" : s.sung ? "sung" : "played"}${mine ? "; yours" : ""}. Enter opens its notes.`,
       title: `${s.label}, ${s.bars} bars${mine ? "; yours" : ""}. Double-click for its notes; drag to move it.`,
       onclick: () => select({ kind: "section", id: s.id }), ondblclick: () => openNotes(s.id),
       ondragstart: (e) => { e.dataTransfer.effectAllowed = "move"; e.dataTransfer.setData("text/x-section", s.id); e.currentTarget.classList.add("dragging"); },
@@ -809,7 +809,7 @@
     };
     const anyMine = Object.keys(state.edits).some((p) => p.startsWith(`arrange.${s.id}.`)) || !!w?.mine || moved(s);
     shell({ kind: "section", rubric: s.label, mine,
-      set: `${s.bars} bars, ${s.sung ? `sung: “${s.first}”` : w?.sung ? `played; its words wait, unsung: “${String(w.lines[0] || "").replace(/\*/g, "")}”` : `played${w ? `: ${String(w.lines[0] || "").replace(/\*/g, "")}` : ""}`}${w?.id && w.block === "verse" ? ` (the verse “${w.id}”)` : ""}`,
+      set: `${s.bars} bars, ${s.sung ? `${s.round ? "a round" : "sung"}: “${s.first}”` : w?.sung ? `played; its words wait, unsung: “${String(w.lines[0] || "").replace(/\*/g, "")}”` : `played${w ? `: ${String(w.lines[0] || "").replace(/\*/g, "")}` : ""}`}${w?.id && w.block === "verse" ? ` (the verse “${w.id}”)` : ""}`,
       problems: s.problems,
       body: h("div", {},
         h("div", { class: "row edit-it" },  // the ways into the section's own material, first
@@ -858,8 +858,14 @@
   // who sings a section: the singer, a round (its voices one after another), or nobody (played); one choice, two paths
   function whoSings(s, v) {
     const next = copyEdits();
-    next[s.paths.round] = v === "round" ? true : null;
-    next[s.paths.sung] = v === "played" ? false : null;
+    // the other choice given back: a null where it was kept from the version before, else simply not asked for
+    const put = (path, value, field) => {
+      if (value !== null) next[path] = value;
+      else if (s.by[field] === "before") next[path] = null;
+      else delete next[path];
+    };
+    put(s.paths.round, v === "round" ? true : null, "round");
+    put(s.paths.sung, v === "played" ? false : null, "sung");
     commitEdits(next, v === "round" ? `${s.label} as a round` : v === "played" ? `${s.label} played, not sung` : `${s.label} sung by the singer`);
   }
   // a style's option that lives in this section (the stripped start, the band joining line by line...): choosable,

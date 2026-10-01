@@ -887,8 +887,6 @@ def round_refusal(genome, name: str, entry: dict, params) -> str | None:
     section = genome.section(name)
     if not section.lyrics:
         return None
-    if entry.get("sung") is False:
-        return "A round is sung; this section is played"
     if entry.get("bars") is not None:
         return "A round's length is its voices'; give the section its own length first"
     if not roundable(genome, name):
@@ -969,7 +967,8 @@ def grid(genome, v, heard: dict) -> dict:
         round_now = plans_[k]  # sung as a round (songbird.canon): its length is its voices'
         if round_now is not None:
             options = [bars]
-        could = choose(genome, name, True, params.mode) if not played and entry.get("bars") is None else None
+        # (played, the page asks for both at once: sung again, as a round; a length of its own must be given back first)
+        could = choose(genome, name, True, params.mode) if section.lyrics and entry.get("bars") is None else None
         lines, u = [], a
         for j, (pid, sung) in enumerate(plan[k]):
             lines.append({"index": j, "phrase": pid, "sung": sung, "start_beat": (u - clock.lead) / beat})
