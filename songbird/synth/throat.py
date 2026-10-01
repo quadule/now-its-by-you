@@ -682,6 +682,17 @@ DURATIONS = {
 }
 TRACT = 1.12  # VoiceParams.tract that leaves the learned envelope where it is
 
+# A diphthong's second half before a nasal coda, sung in the vowel. The network's AW before n, m or ng
+# holds its first target (F1 800-900 Hz, F2 1700-1800) almost to the nasal and closes toward [ʊ] only in
+# the nasal's own frames, where its murmur hides it: the vowel heard ends on AH (its last third 3.6 dB
+# from the throat's own "sund", 8.3 dB from its open AW) and "sound" came out "sund" (the artist,
+# 2026-09-30). So the last fraction of such a vowel is told as the phone given here: UW, which the throat
+# sings before a nasal as [ʊ] (F1 about 450, F2 1150-1300), where its UH there is AH-like (F1 800). The
+# vowel's own timing, pitch and loudness are the schedule's as ever; only what the network is told
+# changes. docs/THROAT.md, "Sound, not sund".
+GLIDE_TAILS = {"AW": (0.2, "UW")}
+NASAL_CODAS = frozenset({"M", "N", "NG"})
+
 
 def parse_mix(spec: str | dict | None) -> dict[str, float] | None:
     """'bright:2,alto:1' (or a dict) as singer weights; empty for an even mix of every trained singer."""
@@ -814,6 +825,31 @@ def stresses(notes, lexicon) -> list[bool]:
     return out
 
 
+def told(segs: list, stressed: list[bool]) -> list[tuple]:
+    """What the network is told is sung: (phone, start, end, stressed, level dB, role) for each of the schedule's
+    segments but breaths (added after: voice.breaths), each note's onsets, its vowel and its codas, an AW
+    before a nasal coda ending in its second target (GLIDE_TAILS)."""
+    rows, k = [], -1
+    for i, s in enumerate(segs):
+        if s.role == "breath":
+            continue
+        note = k + 1 if s.role == "onset" else k
+        if s.role == "vowel":
+            k += 1
+            note = k
+        row = (s.phone, s.t0, s.t1, stressed[min(max(note, 0), len(stressed) - 1)],
+               float(20.0 * np.log10(max(s.amp, 1e-6) / 0.9)), s.role)
+        after = segs[i + 1] if i + 1 < len(segs) else None
+        if s.role == "vowel" and s.phone in GLIDE_TAILS and after is not None and after.role == "coda" \
+                and after.phone in NASAL_CODAS:  # sound, down: the glide's end sung in the vowel, not left to the nasal
+            tail, end = GLIDE_TAILS[s.phone]
+            turn = s.t1 - tail * (s.t1 - s.t0)
+            rows += [(s.phone, s.t0, turn, *row[3:]), (end, turn, s.t1, *row[3:])]
+            continue
+        rows.append(row)
+    return rows
+
+
 def sing(notes, sr: int, voice, seed: int = 0, lexicon: dict | None = None, mix: str | dict | None = None,
          gv: float = 1.0, model: str | None = None, durations: dict | None = DURATIONS) -> np.ndarray:
     """Sung notes as a mono signal, vowels near the formant singer's level: our schedule (when each
@@ -827,16 +863,7 @@ def sing(notes, sr: int, voice, seed: int = 0, lexicon: dict | None = None, mix:
     rng = np.random.default_rng(seed)
     segs = schedule(notes, voice, lexicon, durations, seed=seed)
     stressed = stresses(notes, lexicon)
-    rows, k = [], -1
-    for s in segs:  # each note sings its onsets, one vowel, its codas; breaths are added after (voice.breaths)
-        if s.role == "breath":
-            continue
-        note = k + 1 if s.role == "onset" else k
-        if s.role == "vowel":
-            k += 1
-            note = k
-        level = float(20.0 * np.log10(max(s.amp, 1e-6) / 0.9))
-        rows.append((s.phone, s.t0, s.t1, stressed[min(max(note, 0), len(notes) - 1)], level, s.role))
+    rows = told(segs, stressed)
     duration = max(s.t1 for s in segs) + 0.5
     n = int(np.ceil(duration / FRAME))
     t = timeline(rows, n)

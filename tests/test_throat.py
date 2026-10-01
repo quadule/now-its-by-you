@@ -230,6 +230,62 @@ def test_the_network_gives_an_envelope_for_every_frame_and_a_mix_of_singers_betw
     assert T.parse_mix("a:2, b") == {"a": 2.0, "b": 1.0}
 
 
+def _told(word: str, lexicon: dict | None = None, after: str | None = None):
+    """The schedule's segments and the rows the network is told, for a word on a note (and one after it)."""
+    from songbird.score import Note
+    from songbird.synth.voice import VoiceParams, schedule
+
+    notes = [Note("voice", 0.5, 0.8, 64.0, 0.8, syllable=word, word=word, line_end=after is None)]
+    if after:
+        notes.append(Note("voice", 1.3, 0.8, 64.0, 0.8, syllable=after, word=after, line_end=True))
+    segs = schedule(notes, VoiceParams(), lexicon, T.DURATIONS, seed=0)
+    return segs, T.told(segs, T.stresses(notes, lexicon))
+
+
+def test_an_aw_before_a_nasal_coda_ends_in_its_second_target_and_no_other_vowel_changes():
+    """sound, down, town: the last GLIDE_TAILS fraction of the AW is told as UW (sound, not sund); an open AW
+    (now, how), one before another coda (out, loud) or before a nasal starting the next word (now known), and
+    every other vowel before a nasal (sun, sign), are told as the schedule sings them."""
+    tail, end = T.GLIDE_TAILS["AW"]
+    for word in ("sound", "down", "town", "round"):
+        segs, rows = _told(word)
+        vowel = next(s for s in segs if s.role == "vowel")
+        told = [r for r in rows if r[5] == "vowel"]
+        assert [r[0] for r in told] == ["AW", end]
+        assert told[0][1] == vowel.t0 and told[1][2] == vowel.t1 and told[0][2] == told[1][1]
+        assert np.isclose(told[1][2] - told[1][1], tail * (vowel.t1 - vowel.t0))
+        assert told[0][3:] == told[1][3:]  # the same stress and level
+        assert [r[0] for r in rows if r[5] != "vowel"] == [s.phone for s in segs if s.role not in ("vowel", "breath")]
+    for word, after in (("now", None), ("how", None), ("out", None), ("loud", None), ("sun", None), ("sign", None),
+                        ("now", "known")):
+        segs, rows = _told(word, after=after)
+        assert [r[:3] for r in rows] == [(s.phone, s.t0, s.t1) for s in segs if s.role != "breath"]
+
+
+@pytest.mark.skipif(not T.MODEL.exists(), reason="no trained throat shipped yet")
+def test_sound_is_not_sung_sund():
+    """The shipped throat's AW before a nasal held its first target to the nasal and closed only in the nasal's
+    murmur, so "sound" ended on AH (its last third 3.6 dB from the throat's own "sund", 8.3 dB from its open AW,
+    2026-09-30). Told its second target, it ends as an AW does."""
+    lexicon = {"sund": "S AH1 N D", "sau": "S AW1"}
+    net = T.load()
+    band = (T.grid(128) > 200) & (T.grid(128) < 3500)
+
+    def last_third(word):  # the vowel's last third, each frame's level taken away: its shape alone (dB)
+        segs, rows = _told(word, lexicon)
+        n = int(np.ceil((max(s.t1 for s in segs) + 0.5) / T.FRAME))
+        sp, _ = T.predict(net, T.timeline(rows, n), np.full(n, np.log(330.0)), T.timbre(net, None, 64.0))
+        vowel = next(s for s in segs if s.role == "vowel")
+        i0, i1 = round(vowel.t0 / T.FRAME), round(vowel.t1 / T.FRAME)
+        x = sp[i1 - (i1 - i0) // 3: i1, band] * 10 / np.log(10)
+        return x - x.mean(axis=1, keepdims=True)
+
+    sound, sund, sau = last_third("sound"), last_third("sund"), last_third("sau")
+    k = min(len(sound), len(sund), len(sau))
+    rms = lambda a, b: float(np.sqrt(np.mean((a[-k:] - b[-k:]) ** 2)))  # noqa: E731
+    assert rms(sound, sau) < rms(sound, sund) and rms(sound, sund) > 5.0
+
+
 @pytest.mark.skipif(not T.MODEL.exists(), reason="no trained throat shipped yet")
 def test_the_shipped_throat_sings_a_note():
     from songbird.score import Note

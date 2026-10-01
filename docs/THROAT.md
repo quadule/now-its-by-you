@@ -430,3 +430,51 @@ volunteers' singer alone, while each synthetic singer alone sits 1.8 to 2.8 dB f
 people's singer alone is 3.4 dB from it. The shipped voice is nearer the synthetic blend than any one
 synthetic singer is, and the people's contribution is itself an average of eight. The training material
 (cut lines, features, datasets, the desktop's copies) is deleted with the recordings by 2026-09-30.
+
+## Sound, not sund (2026-09-30)
+
+The artist: "sound" is heard "more like 'sund'". Measured on the dry voice (the learned throat's own
+envelope, fictional:ada's singer, F1/F2 as peaks over the envelope's broad trend): AW before a nasal
+coda held its first target, F1 800-900 Hz and F2 1700-1800, almost to the nasal, and closed toward
+[ʊ] only in the nasal's own frames, where its murmur hides it. So the vowel heard ended on AH. In
+"as the sound of a ring" (a 0.48 s vowel) F2 went 1820 -> 1450 and F1 stayed at 780 to the end, where
+the throat's AH is 810/1450. Over pitches 62-69 and notes of 0.62 and 0.95 s, the last third of
+"sound"'s vowel sat 3.6 dB RMS from the throat's own "sund" (S AH N D) and 8.3 dB from its open AW
+(S AW). "round", "down" and "town" were less bad (5.7-6.7 dB from AH, 6.0-6.7 from the open AW). An
+open AW ("now", "how") or one before a stop ("out", "loud") glides inside the vowel: "now it's by
+you" ends at 480/910. It wasn't the first target (the throat's AW starts fronted, F2 about 1800, as
+American AW before a nasal does), and it wasn't the timing: the vowel keeps 53-77% of its note,
+and the nasal 0.09-0.14 s.
+
+So `throat.told` tells the network that the last fifth of an AW before n, m or ng is UW
+(`GLIDE_TAILS`). The throat sings UW before a nasal as [ʊ], F1 about 450 and F2 1150-1300; its UH
+there is AH-like (F1 800) and didn't close the vowel. The schedule, the pitch and the loudness are
+as before; only what the network hears changes. Measured the same way, "sound"'s vowel now ends
+7.2 dB from "sund" and 4.8 dB from the open AW; "round", "down" and "town" end 4.5-5.7 dB from the
+open AW. In the lines (F1/F2 at 10, 50, 70 and 90% of the vowel):
+
+| Word, line | Before | After |
+|---|---|---|
+| "as the **sound** of a ring" | 780/1820, 780/1710, 780/1550, 780/1450 | 810/1760, 840/1500, 990/1190, 260/1310 |
+| "they learned it as **sound**" | 880/1820, 910/1820, 910/1760, 880/1600 | 910/1820, 1020/1550, 1020/1745, 510/1320 |
+| "from their mothers, and **sound**" | 740/1820, 810/1610, 770/1500, 560/1270 | 810/1760, 840/1400, 680/1190, 240/1310 |
+| "sung in their **town**" | 780/1820, 840/1500, 590/1320, 600/1190 | 910/1700, 915/1270, 680/1180, 220/1310 |
+| "handed on **down**" | 810/1820, 840/1600, 620/1270, 590/1230 | 910/1760, 880/1360, 650/1190, 250/1310 |
+
+The vowel now closes a little further than an open AW does (F1 about 250 at its very end, against
+480 in "now it's"), just before the nasal's own murmur at about the same F1. Whisper doesn't
+separate the two: it heard every line the same before and after, "sound" included, because the
+words around it lead it there. On the words cut out alone it heard "Sam" then "Sounds" for the
+first "sound", "Sound" then "So" for the second, and "They're down" then "Their town" for "town".
+
+Nothing else changes. H's seed sings AW only in "now", three times, so it is byte-identical
+(golden/h-seed.sha256), as are b-refrain, h-words and every seed score. In a render that sings one
+of these words, the lead differs at those words (1 to 13 dB under the voice there) and about 60 dB
+under it elsewhere. The network's global variance and the voice's reference level are taken over
+the whole song, so they move slightly. Before/after excerpts (fictional:ada, the same seed) are
+renders/say/sound-{before,after}-{tongue,ring,town-down}.flac.
+
+OW before a nasal ("own", "alone", "phone") may have the same fault: its vowel ends 4.6 dB from
+the throat's AO ("fawn") and 7.2 dB from its open OW. The seed sings "own", "alone" and "owns", so
+a fix would change the seed's audio. That's left for the artist to decide. AY and EY before a nasal
+end as their open forms do (3.8 and 2.9 dB from them).
