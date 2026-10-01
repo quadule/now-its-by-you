@@ -298,10 +298,10 @@
         title: `Select ${w.label}: its length, who sings, its words`, onclick: () => select({ kind: "section", id: sid }) },
       h("span", { class: `rubric${w.mine ? " hand" : ""}` }, w.label)),
       w.sung ? Object.assign(tag(kind, (w.authored || []).length ? "your lines" : w.mine ? "your words" : w.how), { title: w.note || "" }) : null,
-      o && w.sung && !allAuthored && (o.heads || []).length > 1 ? headChooser(o, w.label) : null,  // sung first
-      o && w.sung && !allAuthored && o.choices.length > 1 ? phraseChooser(w, o) : null,
       h("span", { class: "sectools" }, h("button", { class: `play${ready ? " ready" : ""}`, type: "button", "aria-label": `Hear ${w.label}, sung`,
-        title: ready ? "ready to play" : "sung (it will be made first)", onclick: () => { setHow("sung", false); listen("you", w.index); } }, playIcon())));
+        title: ready ? "ready to play" : "sung (it will be made first)", onclick: () => { setHow("sung", false); listen("you", w.index); } }, playIcon())),
+      o && w.sung && !allAuthored && (o.heads || []).length > 1 ? headChooser(o, w.label) : null,  // sung first
+      o && w.sung && !allAuthored && o.choices.length > 1 ? phraseChooser(w, o) : null);
     let body;
     if (o && w.sung) {
       body = inlineLyrics(w, o);
