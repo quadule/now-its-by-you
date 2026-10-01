@@ -45,7 +45,12 @@ APP = {"studio-worker.mjs": HERE / "studio-worker.mjs",
        "kernels/manifest.json": HERE / "kernels" / "manifest.json",
        "wasm/kernels.mjs": HERE / "wasm" / "kernels.mjs",
        "wasm/kernels.wasm": HERE / "wasm" / "kernels.wasm"}
-STANDINS = ("numba/__init__.py", "wasm_kernels.py", "web_patches.py", "studio_render.py")  # py/ (not soundfile.py)
+STANDINS = ("numba/__init__.py", "wasm_kernels.py", "web_patches.py", "studio_render.py",  # py/ (not soundfile.py)
+            "studio_device.py")  # the studio itself on the visitor's device (build_site.py)
+OPTIONAL = ("sing_measure.py",)  # py/, when it's there: a sung take measured in the browser (another part of the work)
+# beside the program, for the studio on the device: the song it opens on, and singing's side of the studio (outside
+# the program, as on a server: a packet never carries it)
+BESIDE = ("songs/h-now-its-by-you.json", "webstudio/__init__.py", "webstudio/kit.py", "webstudio/singing.py")
 SQUEEZE = (".mjs", ".js", ".json", ".wasm")  # worth sending compressed; zips and wheels are already
 DATE = (1980, 1, 1, 0, 0, 0)
 
@@ -123,6 +128,11 @@ def program_zip() -> tuple[bytes, str]:
                 extra[p.relative_to(site).as_posix()] = p.read_bytes()
     for name in STANDINS:
         extra[name] = (HERE / "py" / name).read_bytes()
+    for name in OPTIONAL:
+        if (HERE / "py" / name).is_file():
+            extra[name] = (HERE / "py" / name).read_bytes()
+    for name in BESIDE:
+        extra[name] = (ROOT / name).read_bytes()
     buffer = io.BytesIO()
     with zipfile.ZipFile(buffer, "w", zipfile.ZIP_DEFLATED, compresslevel=9) as z:
         for name, data in sorted({k[len("program/"):]: v for k, v in program.items()}.items()):

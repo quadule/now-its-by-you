@@ -1351,6 +1351,11 @@ class Studio:
                              "studio sings the song itself")
         self.browser = BrowserBundle(Path(folder), self.program_digest)
 
+    def runs_with(self) -> dict:
+        """What a recording's packet says the program runs with: this Python and its pinned dependencies (a studio on
+        the visitor's device says the release's, which its build recorded: never Pyodide's)."""
+        return {"python": f"{sys.version_info.major}.{sys.version_info.minor}", "requirements": pack.requirements()}
+
     def render_spec(self, edits: dict, who: str = "you", section: int | None = None) -> dict:
         """What the browser needs to make a preview (a section) or the whole song (the recording) exactly as this
         studio would: the key it would be cached under, the words the player says, and the spec (as JSON text,
@@ -1381,8 +1386,7 @@ class Studio:
             spec |= {"voice": v.voice.to_dict() if v.voice is not None else None,
                      "drift": v.drift.to_dict() if v.drift is not None else None,
                      "changes": v.changes if v.drift is not None else None, "marks": v.marks or None,
-                     "packet": {"python": f"{sys.version_info.major}.{sys.version_info.minor}",
-                                "requirements": pack.requirements()}}
+                     "packet": self.runs_with()}
         answer = {"key": key, "label": label, "kind": spec["kind"], "spec": json.dumps(spec, default=str)}
         if section is None:  # what the recording is called, as _keep names it (the day, then its id's first six)
             answer["name"] = {"song": slug(self.genome.title), "day": self.day}
