@@ -157,6 +157,24 @@ def write(out: Path, folder: str, files: dict[str, bytes]) -> tuple[int, int]:
     return raw, sent
 
 
+# ---------------------------------------------------------------------------------------------------------------
+# Measuring a sung take on the device (docs/WEB-SINGING.md, "On the device"): self-contained, tools/sing_bundle.py
+# says what it adds. In the app folder: singing.zip (the measuring code and py/sing_measure.py, unpacked into /app
+# beside the program, as songbird.zip is) and world/ (WORLD in wasm, its loader and its licence). The worker
+# registers world/world.mjs's loadWorld(bytes) as the JS module `songbird_world` before importing sing_measure.
+
+
+def singing_files() -> dict[str, bytes]:
+    bundle = _module(HERE / "tools" / "sing_bundle.py", "sing_bundle")
+    stale = _module(HERE / "tools" / "world_sources.py", "world_sources").stale()
+    if stale:
+        raise SystemExit("WORLD in wasm is stale:\n  " + "\n  ".join(stale))
+    return {"singing.zip": bundle.singing_zip(), **{name: path.read_bytes() for name, path in bundle.APP.items()}}
+
+
+# ---------------------------------------------------------------------------------------------------------------
+
+
 def main() -> None:
     if len(sys.argv) != 2:
         raise SystemExit(__doc__.split("\n\n")[1])
@@ -165,6 +183,7 @@ def main() -> None:
     py_files, names, version = pyodide_files()
     zipped, program = program_zip()
     app_files = {name: path.read_bytes() for name, path in APP.items()} | {"songbird.zip": zipped}
+    app_files |= singing_files()  # measuring a sung take (the block above)
     py_dir, app_dir = f"py-{folder_hash(py_files)}", f"app-{folder_hash(app_files)}"
     out.mkdir(parents=True, exist_ok=True)
     for old in out.iterdir():  # an earlier build's folders go: a studio serves one bundle

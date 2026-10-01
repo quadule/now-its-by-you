@@ -2,7 +2,8 @@
 "On the device").
 
     import sing_measure
-    result = sing_measure.measure(take, request)
+    result = sing_measure.measure(take, request)       # raises Refused, or anything else for a fault
+    answer = sing_measure.answer(take, request)        # never raises: {"ok": result} | {"refused": why} | {"error": what}
 
 take: the take's WAV, as bytes (or a JS ArrayBuffer/Uint8Array: it is copied once into Python and let go).
 request: what webstudio/singing.py hands the server's measuring process for a "take", plus where the kit is:
@@ -13,45 +14,42 @@ request: what webstudio/singing.py hands the server's measuring process for a "t
     to_s      where it was meant to end
     earlier   the measurements of this visitor's takes before it (each result's "measurement"), at most 11
     offered   the guides' digests the kit offers (offer.json specs' "guide")
-    kit       where the singing kit is in Pyodide's file system (default KIT): offer.json, song/<song>.json,
-              guides/, guide/ and measured/templates/ as webstudio/kit.py lays them out (no audio/ or lyrics/
-              needed). The caller puts those files there before measuring.
+    kit       where the singing kit is in Pyodide's file system (default KIT), laid out as webstudio/kit.py lays it
+              out; kit_files() names the files a take needs there, which the caller puts there first
 
 It returns what webstudio/worker.py's "take" op returns, made by the same code: {"measurement" (the take's numbers,
 tools/phrasing.py's shape), "phrasing" (a way of singing made from it and the earlier ones), "portrait" (a few
-sentences about how they sang), "skipped", "audio_seconds", "seconds", "peak_mb"}; peak_mb here is the wasm
-memory held at most (Pyodide's heap and WORLD's largest instance). A take this can't measure raises Refused, whose
-message is the singer's to act on ("Your take sat 7 semitones above the guide's key..."); anything else raised is
-a fault. One take at a time.
+sentences about how they sang), "skipped", "audio_seconds", "seconds", "peak_mb"}; peak_mb here is the wasm memory
+held at most (Pyodide's heap, which only grows, and the largest WORLD instance's). A take this can't measure raises
+Refused (webstudio.worker's), whose message is the singer's to act on ("Your take sat 7 semitones above the guide's
+key..."); anything else raised is a fault. answer() gives the same three outcomes as worker.py's serve() does. One
+take at a time.
 
 What runs is tools/phrasing.py and webstudio/worker.py themselves, unchanged, with three stand-ins put in their
 modules' places here and nowhere else: pyworld (world_wasm: WORLD's own C++ in wasm), librosa (sing_dtw: its DTW
 in numpy, bit for bit) and faster_whisper (worker.py's own, which refuses). MFA is off, as on the server. The take
-is decoded in memory; worker.py writes each piece it measures as a WAV in /tmp, which in Pyodide is memory
-(MEMFS), and removes it as soon as it is read; whatever happens, none is left when this returns."""
+is decoded in memory; worker.py writes each piece it measures as a WAV in /tmp, which in Pyodide is the worker's
+memory (MEMFS), never storage, and removes it as soon as it is read; whatever happens, none is left when this
+returns."""
 
 from __future__ import annotations
 
+import json
 import os
 import sys
 import time
+import traceback
 from pathlib import Path
+
+from webstudio.worker import Refused  # noqa: F401  (the singer's to act on: raised by measure)
 
 KIT = "/kit"
 
 _tools = None
 
 
-class _Refused(Exception):  # replaced by webstudio.worker.Refused once the tools are loaded (install())
-    pass
-
-
-Refused = _Refused
-
-
 def install() -> None:
     """The stand-ins in their modules' places, and worker.py's memory report pointed at the wasm heaps."""
-    global Refused
     os.environ["MFA"] = "off"
     if "pyworld" not in sys.modules:
         import world_wasm
@@ -66,12 +64,11 @@ def install() -> None:
     if "faster_whisper" not in sys.modules:  # as worker.Tools does, for whatever imports the tools first
         sys.modules["faster_whisper"] = worker._no_whisper()
     worker.peak_mb = heap_mb
-    Refused = worker.Refused
 
 
 def heap_mb() -> int:
     """The wasm memory measuring has held at most, in MB: Pyodide's heap (which only grows, so its size is its
-    peak) and the largest memory a WORLD instance held (each is let go after its analysis)."""
+    peak) and the largest memory a WORLD instance held (each is let go after its take)."""
     import world_wasm
 
     try:
@@ -84,7 +81,8 @@ def heap_mb() -> int:
 
 
 def tools(kit: str | Path = KIT):
-    """webstudio.worker.Tools for the kit at kit, made once (it keeps the guides and templates it has read)."""
+    """webstudio.worker.Tools for the kit at kit, made once (it keeps the guides and templates it has read). The
+    kit must have been made by this measuring code (its templates are named by its version)."""
     global _tools
     install()
     from webstudio import worker
@@ -92,8 +90,27 @@ def tools(kit: str | Path = KIT):
 
     root = Path(kit).resolve()
     if _tools is None or _tools.kit.root != root:
-        _tools = worker.Tools(Kit(root))
+        made = worker.Tools(Kit(root))
+        offer = made.kit.offer() or {}
+        if offer.get("extractor") != made.extractor:
+            raise RuntimeError(f"the singing kit at {root} was made by another version of the measuring code "
+                               f"({offer.get('extractor')}, not {made.extractor}), or isn't there")
+        _tools = made
     return _tools
+
+
+def kit_files(offer: dict, guide: str, earlier: list | tuple = ()) -> list[str]:
+    """The kit's files (paths from its root) measuring a take sung to guide needs, given the kit's offer.json
+    (as a dict) and the earlier measurements sent with it: the offer, the song, the score of every guide sung
+    to, and the template singer's analysis of this guide in each key the kit made one for (spec["templates"])."""
+    song, extractor = offer["song"], offer["extractor"]
+    spec = next((s for s in offer["specs"] if s["guide"] == guide), None)
+    if spec is None:
+        raise ValueError(f"guide {guide} isn't one the kit offers")
+    guides = [guide, *[str(m.get("stamp", {}).get("guide", "")) for m in earlier]]
+    guides = list(dict.fromkeys(g for g in guides if any(s["guide"] == g for s in offer["specs"])))
+    return ["offer.json", f"song/{song}.json", *[f"guides/{song}.{g}.score.json" for g in guides],
+            *[f"measured/templates/{guide}.{int(k):+d}.{extractor}.npz" for k in spec["templates"]]]
 
 
 def measure(take, request) -> dict:
@@ -122,3 +139,20 @@ def measure(take, request) -> dict:
         worker.sweep(older_than=-1.0)  # any piece left by a fault: gone now, not when the page closes
     result["seconds"] = round(time.time() - began, 2)
     return result
+
+
+def answer(take, request) -> dict:
+    """measure(), its outcome as worker.py's serve() says it: {"ok": result}, {"refused": what the singer can do}
+    or {"error": what went wrong} (and its trace on standard error)."""
+    try:
+        return {"ok": measure(take, request)}
+    except Refused as e:
+        return {"refused": str(e)}
+    except Exception as e:  # noqa: BLE001  (said to the page, which says it)
+        traceback.print_exc()
+        return {"error": f"{type(e).__name__}: {e}"}
+
+
+def answer_json(take, request) -> str:
+    """answer() as JSON text, for a JS caller that would rather not convert a Python dict."""
+    return json.dumps(answer(take, request))
