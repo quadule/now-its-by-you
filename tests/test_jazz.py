@@ -149,6 +149,38 @@ def test_the_trio_plays_as_designed():
     assert roots <= 0.1 * len(verse)  # rootless: the bass has the root
 
 
+@pytest.fixture
+def home(tmp_path, monkeypatch):
+    monkeypatch.setenv("SONGBIRD_HOME", str(tmp_path / "home"))
+    return tmp_path
+
+
+def test_the_studio_offers_it_in_plain_words_and_shows_its_players(home):
+    """The style card names it "jazz trio" and says what plays; the arrangement view gives each player its patterns
+    in plain words; the Sound view has the three players."""
+    import re
+
+    from songbird import explain, studio as ST, takeover as T
+
+    studio = ST.Studio(None, str(H), "fictional:ada", out=home / "out")
+    forbidden = re.compile(r"\b(genome|drift|harvest|hash|knob|params?|seed|jazz standard|bebop)\b", re.I)
+    v = studio.version({"style.name": "jazz"})
+    card = next(c for c in explain.view(studio.context, v)["cards"] if c["id"] == "style")
+    assert card["styles"]["jazz"] == "jazz trio" and card["value"].startswith("jazz trio, ")
+    assert card["detail"].startswith("piano, upright bass and brushes")
+    for text in [card["value"], card["detail"]] + [r["text"] for r in card["reasons"]]:
+        assert not forbidden.search(text), text
+    grid = studio.arrangement({"style.name": "jazz"})
+    players = {p["name"]: {x["id"]: x["label"] for x in p["patterns"]} for p in grid["players"]}
+    assert set(players) == {"piano", "bass", "kit"}
+    assert {"rootless", "solo"} <= set(players["piano"]) and {"walking", "twofeel"} <= set(players["bass"])
+    assert {"swept", "swept-light"} <= set(players["kit"])
+    for idiom in ("rootless", "rootless-light", "solo", "walking", "twofeel", "swept", "swept-light"):
+        assert T.LABELS[idiom] and not forbidden.search(T.LABELS[idiom])
+    sound = studio.sound({"style.name": "jazz"})
+    assert {"piano", "bass", "kit"} <= {p["player"] for p in sound["players"]}
+
+
 @pytest.mark.parametrize("name,date", MACHINES)
 def test_nine_in_ten_of_its_notes_are_on_the_chord_and_few_rub(name, date):
     """The share of the piano's and the bass's notes on a tone of the chord under them (its ninth counted apart), and
