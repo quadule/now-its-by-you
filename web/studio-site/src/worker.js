@@ -174,13 +174,18 @@ async function keepClaimed(env, request, size, sha) {
 async function keepHashed(env, request, size, now) {
   // no digest from the page: the Worker hashes the file as it stores it, aside, and then puts it in its place
   const incoming = `incoming/${hourOf(now)}-${crypto.randomUUID()}`;
-  const [toStore, toHash] = request.body.tee();
+  // one pipeline, each chunk hashed before it goes on, so R2's pace holds the whole of it (a tee would buffer
+  // what its slower side hadn't taken yet: up to the whole file, in a Worker allowed 128 MB)
   const fixed = new FixedLengthStream(size);
-  const hashing = new crypto.DigestStream("SHA-256");
+  const hashing = new crypto.DigestStream("SHA-256"), hasher = hashing.getWriter();
+  const hashed = new TransformStream({
+    async transform(chunk, ctl) { await hasher.write(chunk); ctl.enqueue(chunk); },
+    async flush() { await hasher.close(); },
+  });
   let sha;
   try {
-    const piped = toStore.pipeTo(fixed.writable);
-    const [put] = await Promise.all([env.VERSIONS.put(incoming, fixed.readable), piped, toHash.pipeTo(hashing)]);
+    const piped = request.body.pipeThrough(hashed).pipeTo(fixed.writable);
+    const [put] = await Promise.all([env.VERSIONS.put(incoming, fixed.readable), piped]);
     if (!put || put.size !== size) throw new Error("short");
     sha = Array.from(new Uint8Array(await hashing.digest), b => b.toString(16).padStart(2, "0")).join("");
   } catch (e) {
