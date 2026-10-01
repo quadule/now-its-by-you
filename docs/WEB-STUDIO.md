@@ -898,6 +898,12 @@ it rendered to before, at one thread and two). Two threads unless said:
 | the jig, 4 verses, every part, tempo 130 | 213 s | the same | 1.56 GB | |
 | house (2026-09-30, new) | 118 s | arp drummachine (a 909) piano synthbass synthpad voice | 0.97 GB | |
 | dub, with its version after the song (new) | 221 s | ebass electric kit melodica organ voice | 1.89 GB | |
+| a hymn (2026-09-30, night: docs/STYLES.md, "A hymn"), three voices of its own | 201 s | pipeorgan, voice, choir1-3 | 1.18 GB | |
+| a hymn, six voices | 201 s | pipeorgan, voice, choir1-6 | 1.20 GB | |
+| a hymn, the lead alone with the organ | 201 s | pipeorgan voice | 1.21 GB | |
+| a hymn with a harmonium | 201 s | harmonium, voice, choir1-3 | 1.12 GB (estimated 1.76: the harmonium's rate is the ballad's) | |
+| a hymn, 4 verses, every part, six voices, tempo 63.4 | 394 s | pipeorgan, voice, choir1-6 | 1.77 GB (estimated 2.66) | |
+| a hymn, 4 verses, every part, six voices, tempo 63.4, a harmonium | 394 s | harmonium, voice, choir1-6 | 2.46 GB | |
 | house again (the evening: its own lengths, the chop; docs/STYLES.md, "House and dub, again") | 163 s | arp chop drummachine piano synthbass synthpad voice | 1.27 GB | |
 | dub again (dissolving into its version after the first refrain, the dub-out after) | 222 s | ebass electric kit melodica organ voice | 1.91 GB | |
 

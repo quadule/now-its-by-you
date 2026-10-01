@@ -1598,3 +1598,139 @@ pYIN on each part's stem (each note's middle against its written pitch), the voi
 score (parallel fifths and octaves between any two of bass, tenor, alto, tune; the share of sung part-notes
 that are chord tones; any semitone against the tune), and Whisper's word errors on the mix (a unison verse, a
 verse in parts and a refrain), beside the ballad's in the same run.
+
+## What the review changed (2026-09-30, night)
+
+A read-only Fable review of the design above, before it was built (its numbers computed from H and public.py).
+Its points, and what was done:
+
+1. **The pipe organ would have been mixed as a whistle**: `mixing.role_of` matches names by substring when the
+   whole name isn't known, and "pipe" is the whistle's (a 250 Hz high-pass: no pedal). `pipeorgan` is named in the
+   organ's role by its whole name (no other stem's role moves).
+2. **The organ, not the voices, sets the memory**, and the length was overestimated: H's default form is 58 bars,
+   193 s at 72 (220 s at the floor), not 240 to 280. The organ is measured (tools/part_memory.py: 6.8 MB a second
+   for the ballad's whistle, so RATES 7.1, as the instruments measured that way are 0.3 over), made lean (one array
+   the length of the song: the wind is made note by note), and the worst cases measured (below).
+3. **The sung descant would have been pinned**: the tune reaches B4, and a part a third to an octave over it under
+   E5 leaves one chord tone or none for 37% of H's notes, above the throat's measured B4. **The descant is the
+   organ's**, over the last refrain, to A5; the treble voices sing the tune there as everywhere.
+4. **The pickups**: realize gives a pickup the next line's first chord, while the organ holds the line before's
+   cadence through it (H's B3 pickups fit neither I nor V). The parts read the chord the band plays at each moment
+   (`ctx.chord_at`), never the melody's `chord`; the lineage's own harmony (`choir_voicing`) is left as it is. The
+   setting leaves a pickup out of a line's beats, so it is harmonized by the line before's last chord. Tested: every
+   sung part note a tone of the band's chord there, or the tune's own note.
+5. **The harmonization fits the machinery** (a bar's chords on its beats: one, two or four in 4/4, as `chords_per_bar`
+   allows; the band, `chord_times`, the MIDI file's chords and the page's lane all take four), with three changes:
+   it **sets the line as it is sung** (`composition.played`: the lineage's variants, and a person's own tune for the
+   line or its place, so a person's tune is harmonized, not left on the song's chords); a person's chords still win;
+   and the harmonic rhythm was measured: 2.0 chord changes a bar in H (the tune's moving eighths ask for them; the
+   cost of staying put changed nothing), a chord a beat or a half bar as asked.
+6. **The tune on top is right for H** (the pedal is the bass, so nothing needs to go over the tune); the alto meets
+   the tune in unison about 2% of the time in D, more in the low keys (A: 20%), as the review predicted. Unison
+   verses are measured for words (below).
+7. **The organ doubles the singers**: exempt from the octave-down rule, and its writer never uses the band's
+   `voicing`, which drops any pitch being sung. The pipe organ's level was set against the harmonium on the same
+   notes (equal); the words are measured with it. The 16' bourdon under a D2 pedal sounds D1, under the organ
+   strip's 55 Hz high-pass: the pedal's weight is its 8'.
+8. **The amen** takes the group's size only for the hymn (gospel's is as it was: its PCM id with `ending=amen` and
+   three voices checked); the organ plays the coda's IV and I (the voicing runs to the song's end).
+9. **Backing "" is the lead alone with the organ**, on the card too ("the singer alone with the organ"); the
+   descant's draw is the same function for the score and the card; chamber stays the anchor; the words added
+   (STYLE_NAMES, PLAYERS, the patterns' labels; the intro's "an instrument states the tune" is true as it stands).
+10. **Byte for byte**: every shared change gated by the hymn's name (or, for `parts: "voices"`, by a group, which only
+    the a cappella had); `stream("pipeorgan")` collides with no other instrument's.
+11. **Measure** the words on a unison verse, a verse in parts and a refrain beside the ballad's; pYIN on each part;
+    the parallels and chord tones from the score; chords a bar: below.
+
+## As built, and measured (2026-09-30, night)
+
+`songbird render --style hymn`, or the studio's style card ("hymn, stately"; its detail "organ, and everyone
+singing in parts", then what it does). Nobody has listened; everything here is measured.
+
+| Where | What |
+|---|---|
+| songbird/hymn.py | the setting (`harmonize`, `setting`), the lines (`voicing`: the tune, alto, tenor, the pedal, the organ's descant), the group's notes (`parts`), the organ's (`w_hymn`), how each section is sung (`kinds`) and registered (`registration`) |
+| songbird/synth/pipeorgan.py | the pipe organ (no kernel of its own: `reed._read_mix`) |
+| songbird/style.py | `HYMN`, `OFF_RING["hymn"] = "chamber"` |
+| songbird/composition.py | `_looped` hands the phrases to `hymn.setting` first (the same list for any other style) |
+| songbird/idioms.py | `backing` hands a hymn's voices to `hymn.parts`; `plan_style` leaves the hymn's organ its own table (no "lead" forced into its intro, no "quote" into its turns); the writers `hymn` and `givingout`, exempt from the octave-down rule; the amen sung by the hymn's whole group; `parts: "voices"` for any style with a group |
+| songbird/explain.py, takeover.py, cli.py | the words: "hymn", "stately", "pipe organ", `hymn_words`, the patterns' labels, `--style hymn` |
+| songbird/synth/mixing.py, public.py | `pipeorgan` mixed as an organ; its memory rate |
+| tests/test_hymn.py | 14 tests (the list is in its commit) |
+
+Beyond the design as reviewed: **the unison verses** (below, the words) are sung by the lead with two voices in
+three, the lowest third resting, over the organ's flutes; the verses in parts are on the flutes too, the refrains
+on the diapasons, the last refrain and the giving out on the full chorus.
+
+**Nothing else moved.** Against the tree before (renders of the same commands, PCM ids): gospel a6676cca96b8,
+chamber 8e10c6ee39a0 and the a cappella ef4e10a46970 for ada on 27 September, the jig 9922285407fe for bob on 14
+March, coral's own style 803edf536f8e on 2 November, and gospel with an amen and three lineage voices for ada
+b6739a4b557f (the amen's one shared line), each the same after every change; the goldens and the style tests pass;
+no numba kernel added or changed (tests/test_browser_kernels.py).
+
+**The setting.** In H, 2.0 to 2.2 chord changes a bar (a chord a beat where the tune's eighths move, a half bar or
+a bar where they don't); each line closes on the song's own chord in root position; more than nine in ten of the
+tune's notes struck on a beat are tones of their chord. In D major the verse's first line is I, V/3, I, I | I, ii,
+V, V (the V6 a passing chord between two tonics); the refrain's "now it's by you" I, IV, I, V | V, I, I, I.
+
+**The lines**, from the four renders below (1581 slices): parallel fifths or octaves between any two lines in 18
+(1.1%), most in the low keys (in A and C, the alto and the tenor share the fifth between E3 and the tune); the
+alto meets the tune in unison in 3.2% of slices; of the 4419 sung part-notes with the lead, 99.6% are tones of the
+chord the organ plays there or the tune's own note (34.6% the tune: the treble voices, and the unison verses). Not
+one part a semitone from the lead outside the lineage's own harmony in the bridges and the tag (`choir_voicing`, as
+in every style: 41 notes in the four, coral's five voices 37 of them; coral's ballad with the same five, 49).
+
+**In tune** (pYIN over each note's middle, on the dry stems of the four): the parts, 4435 notes, median -2.5 cents,
+99.8% within 25 cents; the lead the same for ada and coral; bob's and dmitri's leads sing an octave down (their
+machines' own low singers, as in every style: -1202.5 cents, so in tune an octave under), where the tune stays on
+top in the treble voices and the organ.
+
+**The words** (Whisper base.en on the mix, a verse, the next verse and the first refrain, the four machines, the
+same windows as the ballad's): the hymn 15.9% misheard (70 of 440: the unison verse 16.4%, the verse in parts
+15.4%, the refrain 15.9%); the ballad 15.4% (67 of 434). Before the unison verses were thinned: 36.2% on them (the
+pipe organ's diapasons doubling the tune at pitch, and five voices on every word).
+
+**Memory** (two threads, `MallocLargeCache=0`; docs/WEB-STUDIO.md's table): H's hymn of 201 s 1.18 GB with three
+voices of its own, 1.20 with six, 1.21 with the lead alone; four verses, every part, six voices at 63.4 (394 s)
+1.77 GB with the pipe organ, 2.46 with a harmonium (its song-long arrays). The studio's estimate is set by the
+choir (5.7 MB a second) or the harmonium (6.9): a hymn fits the 2100 MB to about 5.0 minutes with the pipe organ and
+4.1 with a harmonium. ada's (289 s, the pipe organ) fits; coral's (289 s, a harmonium) goes to the browser or is
+refused on the server, as a long version of the a cappella is. The estimate is pessimistic for the pipe organ's
+long version (2.66 against 1.77) and a short harmonium one: those two are in the table, not in MEASURED.
+
+### The renders, for listening
+
+In `renders/styles/` of the main checkout (gitignored; ids in ids-hymn.txt), each with its record, score and lyric
+sheet beside it. Three of the four machines drew the harmonium (0.35 of machines); a fifth render is ada again with
+`--seed 2`, for the pipe organ with its descant.
+
+| render | key, tempo | what it chose | length | id |
+|---|---|---|---|---|
+| hymn-ada-2026-09-27 | D major, 71.8 | the pipe organ; three verses, the bridge twice; an amen | 289.2 s | 92f1b496ac4f |
+| hymn-bob-2026-03-14 | D minor, 75.2 | a harmonium; two verses, an outro; a ritardando | 179.9 s | 5a7da722aee5 |
+| hymn-coral-2026-11-02-five-voices | E♭ minor, 68.6 | a harmonium; five lineage voices; the organ's descant over the last refrain; an amen | 288.6 s | d67abdf5a83b |
+| hymn-dmitri-2026-06-21 | E♭ major, 71.8 | a harmonium; three verses, an outro; the last chord rings | 262.0 s | 2f31bcdde0c9 |
+| hymn-ada-2026-09-27-seed-2-descant | D major, 71.8 | the pipe organ with its descant; an amen | 289.2 s | 1181aa849321 |
+
+Where to listen: the giving out (the first 14 s of each: the organ alone, the refrain's last two lines in four
+parts with the pedal); the first verse in unison against the second in parts (ada: 14 s and 75 s); a turn, the
+organ holding IV and V (ada, 68 s); the bridge, the lineage's harmony over the program's tenors (ada, 195 s); the
+last refrain and the amen (ada, 248 s to the end; the seed-2 render for the pipe organ's descant over it; coral's
+from 239 s for the harmonium's).
+
+## Decisions for the artist (a hymn)
+
+1. **On the ring or beside it** (at chamber's place, as built): beside it, only a person reaches it.
+2. **The pipe organ or a harmonium**: a third of machines draw a harmonium (three of these four did). The pipe organ
+   is the new instrument and the one the style was designed around; the harmonium is the reed organ already built.
+   Either could be the only one.
+3. **The unison verses** are the lead with two voices in three (the lowest rest): all of them on every word cost
+   the words (Whisper 27% against 15%). Fewer voices, or all of them softer, is one number (`hymn.UNISON_ROLES`).
+4. **The descant is the organ's**, about two renditions in three, by the seed (not a person's choice yet): sung, it
+   would sit at D5 and E5, past where the throat is measured. Always, never, or a person's option.
+5. **The giving out** is the intro as the form has it (H's: the refrain's last two lines). The whole refrain given
+   out would need the intro's own length (house's way); a form with no intro starts with the singers.
+6. **The organ doubles the singers' parts** at pitch, as a hymn's organ does, with the pedal under; the bass is the
+   pedal's alone (no voice sings under E3).
+7. **The harmonization** keeps the song's chords as its backbone and adds a chord a beat where the tune moves (I, V6,
+   I; ii before V). A plainer setting (a chord a half bar at most) is one cost (`hymn.WEAK`, `STAY`).
