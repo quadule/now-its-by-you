@@ -540,3 +540,40 @@ Next, in this order:
 
 The recordings, labels, datasets and models are in a session scratch directory, not kept; folk.py rebuilds them
 from public sources.
+
+### Round 2: the singers kept apart (2026-10-01)
+
+The artist, on round 1: "fire and wire just sound like fi and wi". Two causes:
+- **The labels.** folk.py read "fire" as the dictionary's fi-er, two syllables, so the folk corpus had no AYR at
+  all (the program sings fire on one note, AYR). It now reads a diphthong's -er in one syllable with it.
+- **The singing.** Most of it is non-rhotic (hymn and art-song diction, British and Irish singers): the third
+  formant under a coda R sits at 2.66 kHz in it against 2.31 in the house corpus, and ER at 2.66 against 2.38. Trained
+  on it as one voice, the network learns that an R after a vowel is nothing. With the labels fixed and round 1's
+  recipe, H's "fire" and "wire" still dropped F3 only 120 Hz at their end (the control: 1,017).
+
+Round 2 (`train.py --singer-dim 16 --spread --singer-lr 1e-2 --channel-dim 8`: 16 numbers a singer, new singers
+started spread as the house singers are and learned ten times faster, a room for every recording beside the singer,
+the house audio one "studio" room the model sings through) keeps the singers apart, so the folk singers' dropped
+Rs stay theirs. On H, dry, two seeds, the studio's register blend, F3's fall at the end of fire and wire:
+
+| | Words misheard | UTMOS | F3 drop in fire/wire |
+|---|---|---|---|
+| control, singers kept apart | 8.2% | 1.89 | 1,017 Hz |
+| 64 folk singers, round 1's recipe (labels fixed) | 14.8% | 1.88 | 120 Hz |
+| 64 folk singers kept apart | 10.5% | 1.91 | 954 Hz |
+| the same, 30% folk in the blend | 10.5% | 1.92 | 917 Hz |
+| kept apart, with the contrast loss (`--contrast 1.0`) | 8.7% | 1.90 | 992 Hz |
+| the same, 30% folk in the blend | 9.8% | 1.91 | 981 Hz |
+
+The artist: "that fixed fire+wire". Blending the folk singers in no longer dilutes the voice (round 1's folk blend:
+UTMOS 1.67).
+
+Unseen singers, the same test: control 10.35 dB (8.46 without the room), 8 singers 9.89 (8.06), 30: 8.63 (7.11),
+64: 8.06 (6.76), with the contrast loss 8.31 (6.85); round 1's recipe on the same data 7.14 (6.26). The curve is the
+same; the level is higher because a model that sings through the studio room can't make a real recording's room,
+which round 1's model had learned into its voices. A fair test would fit a room for the unseen singer too: the
+model written keeps only the room table, not the room's FiLM weights; keep those next time. The folk-trained
+envelopes are still flatter than the control's (formant contrast 1.65-1.71 dB against 2.48; real singing 3.32).
+
+The data for these runs went through Google Drive (the house dataset, 608 MB, and the folk one, 635 MB, merged on
+the Colab machine), so the next runs need no upload.
