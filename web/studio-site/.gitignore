@@ -1,4 +1,4 @@
 # installed by npm, and wrangler's local state
-node_modules/
+node_modules
 .wrangler/
 .dev.vars

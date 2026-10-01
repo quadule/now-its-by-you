@@ -19,7 +19,8 @@
 // once in REFRESH_DAYS); limits/<hour>/<address digest>-<random>, one mark per upload this hour, for the hourly
 // limits (an address is kept only as 64 bits of a digest, and only until the hour is over); incoming/<random>, a
 // file on its way in (without a digest from the page). Every hour (the cron) a version not opened for KEEP_DAYS is
-// deleted, and so are past hours' marks and anything left incoming. Nothing personal is logged.
+// deleted (at most REFRESH_DAYS later), and so are past hours' marks and anything left incoming. Nothing personal
+// is logged.
 
 import { MAX_BYTES, MIN_BYTES, Refused, checkVersion } from "./packet.js";
 import { PAGE, SECURITY } from "./policy.js";
@@ -247,7 +248,8 @@ async function version(request, env, ctx, id, ip, now) {
 }
 
 async function opened(env, id, head, now) {
-  // note that it was opened, at most once in REFRESH_DAYS: it's kept KEEP_DAYS after the latest
+  // note that it was opened, at most once in REFRESH_DAYS since it was shared or last noted (tidy keeps it
+  // KEEP_DAYS + REFRESH_DAYS after the later of the two, so at least KEEP_DAYS after any open)
   const refresh = setting(env, "REFRESH_DAYS", REFRESH_DAYS) * 86400e3;
   if (now - new Date(head.uploaded).getTime() < refresh) return;
   const mark = await env.VERSIONS.head(`opened/${id}`);
@@ -269,8 +271,10 @@ async function page(request, env) {
 /* ---------- every hour ---------- */
 
 export async function tidy(env, now) {
-  // versions not opened for KEEP_DAYS, past hours' marks, anything left incoming for an hour
-  const keep = setting(env, "KEEP_DAYS", KEEP_DAYS) * 86400e3, hour = hourOf(now);
+  // versions neither shared nor opened for KEEP_DAYS (an open is noted up to REFRESH_DAYS late, so the wait is
+  // KEEP_DAYS + REFRESH_DAYS after the later of the share and the last open noted), past hours' marks, anything
+  // left incoming for an hour
+  const keep = (setting(env, "KEEP_DAYS", KEEP_DAYS) + setting(env, "REFRESH_DAYS", REFRESH_DAYS)) * 86400e3, hour = hourOf(now);
   const latest = new Map();
   for (const o of await listed(env.VERSIONS, "opened/")) latest.set(o.key.slice(7), new Date(o.uploaded).getTime());
   const gone = [];

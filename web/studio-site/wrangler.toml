@@ -13,7 +13,7 @@ preview_urls = false
 routes = [{ pattern = "studio.itsby.you", custom_domain = true }]
 
 # Before every deploy and `wrangler dev`: _headers and .assetsignore written into the built site, and the site
-# checked against the static assets' limits (25 MiB a file, 20,000 files)
+# checked against the static assets' limits (25 MiB a file, 20,000 files). Run wrangler from this folder.
 [build]
 command = "node tools/prepare.mjs ../../renders/studio-site"
 

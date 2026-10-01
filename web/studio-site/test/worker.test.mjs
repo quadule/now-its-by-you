@@ -200,17 +200,18 @@ test("/v/<id> is the studio's page, with its policy; anything else under /v/ isn
   assert.equal((await call(w, e, "/robots.txt")).status, 404); // no robots.txt (the static assets have none)
 });
 
-test("kept 30 days after it was last shared or opened: an open is noted at most weekly, and the hour's counts are forgotten", async () => {
+test("kept 30 days after it was last shared or opened (an open noted at most weekly, so up to a week more), and the hour's counts forgotten", async () => {
   const w = await load(), e = env();
   const mod = await import(`../src/worker.js?isolate=${++isolates}`);
   const fresh = (await share(w, e, packet({ audio: 20001 }))).data.id;
   const old = (await share(w, e, packet({ audio: 20002 }))).data.id;
   const opened = (await share(w, e, packet({ audio: 20003 }))).data.id;
   const now = Date.now();
-  e.VERSIONS.age(`versions/${old}.flac`, 31);
+  e.VERSIONS.age(`versions/${fresh}.flac`, 36); // shared 36 days ago: within 30 + 7
+  e.VERSIONS.age(`versions/${old}.flac`, 38);
   e.VERSIONS.age(`versions/${opened}.flac`, 40);
-  await call(w, e, `/api/versions/${fresh}`); // new: nothing to note
-  assert.deepEqual(e.VERSIONS.keys("opened/"), []);
+  await call(w, e, `/api/versions/${opened}`, { headers: { "If-None-Match": `"${opened}"` } }); // a browser that has it
+  assert.deepEqual(e.VERSIONS.keys("opened/"), []); // it has the bytes, and isn't sent them: not an open
   await call(w, e, `/api/versions/${opened}`); // opened today, after 40 days: noted
   assert.deepEqual(e.VERSIONS.keys("opened/"), [`opened/${opened}`]);
   const puts = e.VERSIONS.puts;
@@ -227,7 +228,7 @@ test("kept 30 days after it was last shared or opened: an open is noted at most 
   assert.deepEqual(e.VERSIONS.keys("versions/").sort(), [`versions/${fresh}.flac`, `versions/${opened}.flac`].sort());
   assert.deepEqual(e.VERSIONS.keys("limits/"), marksNow); // this hour's stay
   assert.deepEqual(e.VERSIONS.keys("incoming/"), ["incoming/now"]);
-  e.VERSIONS.age(`opened/${opened}`, 31);
+  e.VERSIONS.age(`opened/${opened}`, 38);
   await mod.tidy(e, now);
   assert.deepEqual(e.VERSIONS.keys("versions/"), [`versions/${fresh}.flac`]);
   assert.deepEqual(e.VERSIONS.keys("opened/"), []);
@@ -235,7 +236,7 @@ test("kept 30 days after it was last shared or opened: an open is noted at most 
 
   // the cron runs it
   const ctx = context();
-  await w.scheduled({ scheduledTime: now + 31 * 86400e3 }, e, ctx);
+  await w.scheduled({ scheduledTime: now + 2 * 86400e3 }, e, ctx);
   await Promise.all(ctx.waits);
   assert.deepEqual(e.VERSIONS.keys("versions/"), []);
 });
