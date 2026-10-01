@@ -108,6 +108,8 @@ LABELS.update({
     "swept-light": "brushes swept round",
 })
 FILLED += ("swept",)
+# a hymn's organ (2026-09-30, night; docs/STYLES.md, "A hymn")
+LABELS.update({"hymn": "the four parts with the singers, the pedal under", "givingout": "giving the tune out in four parts"})
 
 
 def label(player: str, idiom: str) -> str:

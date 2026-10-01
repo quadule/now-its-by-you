@@ -232,7 +232,7 @@ NAMES = {
     "drone": ("drone", "pad", "shruti", "bagpipe", "hum"),
     "keys": ("piano", "epiano", "rhodes", "keys", "celesta", "musicbox", "music-box", "glock", "glockenspiel", "vibes",
              "vibraphone", "marimba", "xylophone", "bells"),
-    "organ": ("organ", "synthpad", "synth-pad", "harmonium"),  # sustained keys: no drone's 6 kHz low-pass
+    "organ": ("organ", "synthpad", "synth-pad", "harmonium", "pipeorgan"),  # sustained keys: no drone's 6 kHz low-pass
     "reed": ("reed",),
     "squeezebox": ("accordion", "concertina", "melodeon", "bandoneon", "squeezebox"),
     "harmonica": ("harmonica", "melodica"),  # a melodica: a free reed blown, a lead line (2026-09-30)

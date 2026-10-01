@@ -614,6 +614,13 @@ MEASURED = {
     "jazz (a waltz, with the break)": (201.1, "bass kit piano voice", 1740),
     "jazz, swung": (205.8, "bass kit piano voice", 1780),
     "jazz 4 verses, every part, slowest": (371.6, "bass kit piano voice", 3060),
+    # a hymn (2026-09-30, night; docs/STYLES.md, "A hymn"): three voices of its own, six, the lead alone with the
+    # organ, and the worst case, four verses, every part, the slowest, six voices, a harmonium (its long arrays)
+    "hymn (three voices of its own)": (201.1, "choir1 choir2 choir3 pipeorgan voice", 1180),
+    "hymn, six voices": (201.1, "choir1 choir2 choir3 choir4 choir5 choir6 pipeorgan voice", 1200),
+    "hymn, the lead alone with the organ": (201.1, "pipeorgan voice", 1210),
+    "hymn 4 verses, every part, six voices, tempo 63.4, a harmonium": (
+        394.2, "choir1 choir2 choir3 choir4 choir5 choir6 harmonium voice", 2460),
 }
 
 

@@ -98,6 +98,10 @@ STYLE_NAMES.update({"jazz": "jazz trio"})
 STYLE_PLAYERS.update({"jazz": {"bass": "upright bass", "kit": "brushes"}})
 STYLE_FEELS.update({"jazz": {"waltz": "a waltz", "swing": "a ballad, swung"}})
 ENDING_NAMES.update({"version": "the band plays a dub version after the song"})
+# a hymn (2026-09-30, night; docs/STYLES.md, "A hymn"): beside the ring, its words here
+STYLE_NAMES.update({"hymn": "hymn"})
+PLAYERS.update({"pipeorgan": "pipe organ"})
+STYLE_FEELS.update({"hymn": {"straight": "stately"}})
 BACKING_NAMES = {"oohs": "backing voices on oohs", "echo": "backing voices echo the lines",
                  "thirds": "backing voices in harmony", "gang": "everyone sings along",
                  "hum": "voices humming under the verses"}
@@ -884,12 +888,13 @@ def style_card(v: Version) -> dict:
                 {"lead": "", "pad": "a pad swells in to begin", "count": "a count-in to begin",
                  "voice": "the singer begins alone", "quote": "a line of an older song to begin",
                  "air": "the tune slow and free to begin, the lead alone"}).get(s.intro, ""),
-               group_words(v.params) if sdef.group else "",
+               group_words(v.params) if sdef.group and (s.backing or name != "hymn") else "",
                "an older song's first notes over the last chord" if s.coda == "quote" else "",
                {"bridge": "an older song's first notes through the bridge",
                 "chance": "an older song's first notes in the bridge, in some renditions"}.get(s.motif, ""),
                ("the voices join each line's last word in the verses" if s.backing == "echo" and sdef.group
-                and not sdef.leads else BACKING_NAMES.get(s.backing, "")),
+                and not sdef.leads else "" if name == "hymn" else BACKING_NAMES.get(s.backing, "")),
+               *(hymn_words(v.params) if name == "hymn" else ()),
                ENDING_NAMES.get(s.ending, "") if s.ending and s.ending != "ring" else "",
                f"a breakdown after the {ORDINALS[s.drop - 1]} refrain, the singer with the pad, and the drop"
                if 0 < s.drop <= len(ORDINALS) else "",
@@ -941,6 +946,16 @@ def style_card(v: Version) -> dict:
                         "lift": s.lift},
                  styles={k: STYLE_NAMES.get(k, k) for k in style_mod.offered(name)}, feels={f: named.get(f) or FEEL_NAMES.get(f, f) for f in feels},
                  endings=dict(ENDING_NAMES), backings={"": "no backing voices", **BACKING_NAMES})
+
+
+def hymn_words(params) -> tuple[str, ...]:
+    """What a hymn does beyond its band, in the style card's detail (songbird.hymn)."""
+    from .hymn import descant
+
+    if not params.style.backing:
+        return ("the organ gives the tune out to begin", "the singer alone with the organ")
+    return ("the organ gives the tune out to begin", "verses in unison and in parts",
+            "the organ's descant over the last refrain" if descant(params) else "", "the organ's pedal takes the bass")
 
 
 def group_words(params) -> str:
