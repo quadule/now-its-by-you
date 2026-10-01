@@ -1066,8 +1066,10 @@ runs the commands below.
   - anything else under `/api/`: 404, `{"error": "There's nothing here."}`. Every error is `{"error": "<a
     sentence>"}` with a 4xx status (500 if something broke here).
 - **R2** (`songbird-versions`, private, bound as `VERSIONS`): `versions/<id>.flac`; `opened/<id>`, when one was last
-  opened; `limits/<hour>/<digest>-<random>`, this hour's shares; `incoming/…`, a file on its way in. The bucket is
-  never public: files are only ever served through `/api/versions/<id>`.
+  opened; `limits/<hour>/<mark>-<random>` and `limits/<hour>/kept-<random>`, this hour's tries and versions kept;
+  `incoming/…`, a file being checked; `keys/address`, the key the address marks are made with. The bucket is never
+  public: files are only ever served through `/api/versions/<id>`. The Worker is only at studio.itsby.you
+  (`workers_dev = false`: no second address on workers.dev).
 - **No robots.txt, no noindex**: the public studio may be found (the artist's choice). The built site has none
   (prepare.mjs warns if it ever does); `/robots.txt` is a 404.
 
@@ -1082,17 +1084,25 @@ Every guard comes before a byte of the body is read:
    its /64;
 3. `Content-Length` said, at least 4 KB and at most **64 MB** (as the studio's own reader, `received.UPLOAD`; a
    rendition is about 15 to 25 MB, its packet about 6);
-4. this hour's shares: at most 10 from one address and 60 from everywhere, counted by marks in R2 (an address
-   only as 64 bits of its SHA-256, gone with the hour). A refused file counts too, so a flood of junk is held back.
+4. this hour's shares, counted by marks in R2: at most 10 tries from one address (a refused file counts too, so a
+   flood of junk is held back), and at most 60 versions kept from everywhere (only kept ones, so junk from many
+   addresses can't close sharing for everyone). An address is marked only as 64 bits of an HMAC of the hour and
+   the address, under a random key the Worker makes on first use (`keys/address`): without the key, a mark can't be
+   worked back to an address (a plain digest of an IPv4 address could be, by trying all four billion). Marks go
+   with the hour.
 
 Then the file is stored and checked as data, never run:
 
 - **Its name is its content.** The id is the first 32 hex digits (128 bits) of the file's SHA-256. The page should
   send the whole digest as `X-Content-SHA256` (one `crypto.subtle.digest` of the file it already holds): then R2
-  itself checks the bytes against it as they're written, straight to `versions/<id>.flac`, and a body that isn't
-  the file its digest names is refused without replacing anything. Without the header the Worker hashes the file
-  as it stores it (to `incoming/`, then copied to its place); that works, but hashing 20 MB takes more CPU than the
-  free plan's 10 ms a request, so the page should send it.
+  itself checks the bytes against it as they're written, and a body that isn't the file its digest names is
+  refused. Without the header the Worker hashes the file on its way to R2 (one pipeline, so R2's pace bounds what
+  is held in memory); that works, but hashing 20 MB takes more CPU than the free plan's 10 ms a request, so the
+  page should send it.
+- **Checked before it has a name.** The file goes to `incoming/` first, is checked there, and only then is copied to
+  `versions/<id>.flac` (R2 checking the digest again). Whatever stops the Worker half way (an error, a limit), nothing
+  unchecked is ever under a version's name, and `incoming/` is swept within the hour. Sharing a file that is already
+  there writes the same bytes again: only its date changes.
 - **Checked from a few ranged reads** of what was stored (src/packet.js; about 100 KB read in all, never the whole
   file, so the Worker's memory stays small), to the same rules songbird/received.py holds a file to: it begins with
   `fLaC` and a STREAMINFO at 44.1 kHz, stereo; the archive's end record is the last in its final 64 KB and ends the
@@ -1102,7 +1112,10 @@ Then the file is stored and checked as data, never run:
   the audio and the directory; `manifest.json` and `genome.json` present. Only **manifest.json** is read: its
   local header must be where the directory says and name it, it's inflated through a stream that stops at 1 MiB
   whatever the header claims, its CRC and size must match, and it must be a record (a 64-hex `id` and
-  `program_sha256`, a title, a whole `generation` from 0 to 100,000, a `parent_id` and `ancestry` of ids).
+  `program_sha256`, a title, a whole `generation` from 0 to 100,000, a `parent_id` and `ancestry` of ids). A
+  manifest whose entry declares more than 1 MiB compressed is refused before it is read (deflate never grows data
+  much, so that's padding, which would otherwise be read into memory). The entries' tiling (received.py's
+  `_tiled`) isn't checked here: the host reads nothing but the manifest; the device checks it.
   Anything else: `422 {"error": …}` with received.py's sentence ("It isn't a FLAC file…", "Its packet lists the same
   file twice, which no rendition does."), and the file is deleted at once.
 - **Nothing in it is ever unpacked or run**: not the program, not `__main__.py`, not genome.json. The bytes are
@@ -1120,12 +1133,13 @@ Then the file is stored and checked as data, never run:
   file fetched) is noted in `opened/<id>` at most once a week, so a version is kept at least 30 days after anyone
   last opened it, and at most a week more. The hourly cron deletes the rest (`KEEP_DAYS`, `REFRESH_DAYS` in
   `[vars]`). A browser that has fetched one keeps its copy (immutable) whatever happens here.
-- **Nothing about who shared it.** No IP address is stored: only this hour's counting marks, 64 bits of a digest of
-  the address, deleted when the hour is over. No logs (`observability` off); errors log only their kind.
+- **Nothing about who shared it.** No IP address is stored: only this hour's counting marks, 64 bits of a keyed
+  HMAC of the address, deleted when the hour is over. No logs (`observability` off); errors log only their kind.
 - **Nothing lists versions.** An id is 128 bits; one not there answers 404, and an address asking after many is held
   to 20 a minute. An id is a plain content address, so anyone who has a file can work out its link, and could check
-  whether it has been shared: that says only that someone shared what they already hold. (The VPS studio's keyed
-  ids hid even that; a content address is what lets the device and the host agree on a version's name.)
+  whether it has been shared, or keep a share alive by fetching it: that says only that someone shared what they
+  already hold. A deterministic render (the seed's child sung with no edits on a given day) can be made by anyone,
+  so its link can be found. (The VPS studio's keyed ids hid even that: decision 4 below.)
 
 ### Deploying it
 
@@ -1196,30 +1210,32 @@ Cloudflare's prices on 30 September 2026:
 What each thing costs here:
 
 - **A visit to the studio**: nothing (static assets), however much of the bundle it fetches.
-- **Sharing a version**: 3 class A (the hour's list, its mark, the file) and 4 class B (the ranged reads); without
-  the page's digest, 2 more of each. About 20 MB stored for at least 30 days.
+- **Sharing a version**: 5 class A (the hour's list, its two marks, the file into `incoming/` and into its place)
+  and about 6 class B (the key, the ranged reads, the copy). About 20 MB stored for at least 30 days.
 - **Opening a shared link**: 2 Worker requests (the page, the file) and 1 class B; at most weekly, 1 class B and
   1 class A more.
 - **The hourly tidy**: 4 class A an hour (about 2,900 a month) while fewer than 1,000 versions are kept.
 
 So: 1,000 shares a month keep about 20 GB (10 GB over the free tier: $0.15 a month) and use a few thousand
-operations; 10,000 shares a month keep about 200 GB ($2.85 a month), 30,000 class A, well within the free million.
+operations; 10,000 shares a month keep about 200 GB ($2.85 a month), 50,000 class A, well within the free million.
 50,000 opened links a day is the free plan's 100,000 requests. **The most it could cost**, with the hourly ceiling
-reached every hour for a month by someone uploading 64 MB junk that passes the checks: 43,200 files, about 2.8 TB
-kept, about $41 a month (about $13 at a rendition's real size); lowering `ALL_AN_HOUR` lowers it in proportion. A
+reached every hour for a month by someone uploading 64 MB files that pass the checks: 43,200 files kept 37 days,
+about 3.4 TB, about $50 a month (about $16 at a rendition's real size); lowering `ALL_AN_HOUR` lowers it in
+proportion. A
 Cloudflare billing notification (Manage Account > Billing > Notifications) is worth setting once Workers Paid or R2
 has a card on it. R2 needs a payment method on file even within its free tier.
 
 ### How it was checked
 
-- **web/studio-site/test** (`npm test`, node, 21 tests): packet.test.mjs (a rendition is a version; the seed itself,
+- **web/studio-site/test** (`npm test`, node, 22 tests): packet.test.mjs (a rendition is a version; the seed itself,
   when built; only the head, the end and manifest.json are read, never the program's entries; each way a file isn't
   a rendition refused with its sentence: not FLAC, 48 kHz, mono, no packet, bytes after it, a misplaced directory,
   ZIP64 or empty, too many entries, `../`, absolute and backslashed names, duplicates, encryption, data descriptors,
   bzip2, a 1000:1 bomb, 101 MB declared, an entry outside the archive, no manifest or song; the manifest too large,
   inflating past its size, a bad CRC, not JSON, not a record, each field wrong, nested 100,000 deep, a local header
   elsewhere), worker.test.mjs (shared with and without the digest, the same id and nothing left incoming; a wrong
-  digest refused without touching the version there; refused files not kept; size asked before the body is read;
+  digest refused without touching the version there; refused files not kept, and nothing unchecked ever under a
+  version's name, even with R2 failing mid-check; size asked before the body is read;
   another site's page refused; the minute, the hour from one /64 and from everywhere, with only digests kept; ranges,
   HEAD, 304, 405, 404s for every other `/api/` path and the guessing limit; `/v/<id>` with the page's policy and
   nothing else under `/v/`; retention through opens, its weekly note and the cron; a broken bucket a plain 500),
@@ -1243,5 +1259,30 @@ has a card on it. R2 needs a payment method on file even within its free tier.
 3. **The seed page could link to the studio** (now.itsby.you says how to run the song; a line "or open it in the
    studio" with `https://studio.itsby.you/v/<the seed's id>` once the seed is shared there). Not done: the seed page
    stays byte for byte as it is until you say.
-4. **Content-addressed ids** are what was asked for, and they let anyone with a file find whether it was shared (a
-   keyed id would hide that, at the cost of the device and the host not agreeing on a name).
+4. **Content-addressed ids** are what was asked for, and they let anyone with a file (or who can make it: a
+   deterministic render) find whether it was shared. The review's alternative keeps everything else: the id as
+   `HMAC(a key of the Worker's, the file's SHA-256)`, cut to 32 hex; R2 still checks the digest, the same file still
+   gets the same id, and the page learns its link from the 201 rather than working it out. A small change in
+   worker.js if you want it.
+5. **The page's own files from the root.** At `/v/<id>` a relative `./worker.mjs` would be looked for under `/v/`
+   (web/studio-wasm/index.html uses one today); build_site.py's page must use `/…` paths (`base-uri 'none'` rules
+   out a `<base>`).
+
+### The review (Fable, 2026-09-30)
+
+A read-only Fable review of this hosting, the upload API above all. What came of each point:
+
+| | found | now |
+|---|---|---|
+| 1 | **Unchecked bytes could stay under a version's name**: the file was written to its place before it was checked, and only a refusal deleted it; an error, or the Worker stopped (a manifest entry padded to 60 MB read into a 128 MB isolate), would have left it there, servable | Checked in `incoming/` and only then copied to its place; a manifest declaring more than 1 MiB compressed is refused before it's read (test: R2 failing mid-check leaves nothing under `versions/`; a padded manifest refused) |
+| 2 | Refused files counted against everyone's hourly ceiling: a few addresses sending junk closed sharing for all | Tries count per address; only versions kept count against the ceiling (test: six junk shares from six addresses, then two real ones kept) |
+| 3 | A plain 64-bit digest of an IPv4 address can be undone by trying them all | An HMAC under a key of the site's own (`keys/address`) |
+| 4 | Content-addressed ids can be worked out for deterministic renders | Kept as asked; the keyed alternative is decision 4 |
+| 5 | Concurrent shares all pass the hour's count before any is marked | Accepted: the per-minute limit (3) is the brake, and kept versions are marked after they're kept |
+| 6 | A tee for the Worker's own hashing could buffer up to the whole file | One pipeline, each chunk hashed before it goes on |
+| 7 | The tidy could delete a version shared again between its listing and its deleting; an open racing a delete left a mark for good | Each version is looked at again before it's deleted; marks for versions gone are deleted (test) |
+| 8 | `workers_dev` gave the site a second origin; `/v/<id>` didn't revalidate; a failing limiter said nothing | `workers_dev = false`; `If-None-Match` passed on; the limiter's failure logged by kind |
+
+Fine as it was, the review said: nothing uploaded can run or render on the site (`fLaC` first, `audio/flac`, `nosniff`,
+attachment, a sandboxing policy); R2's digest check means a stored file always hashes to its name; the same-site
+check; ranges and 304s; the retention arithmetic; and the old singing site's change (its seed host byte for byte).
