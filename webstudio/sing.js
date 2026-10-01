@@ -1,14 +1,15 @@
 // Singing in the web studio (webstudio/, docs/WEB-SINGING.md): a visitor sings along to the guide on the studio's
-// own page, the take is measured on the server and its audio deleted there, and the song is sung their way.
+// own page, the take is measured (on the server, its audio deleted there; or, in the studio on the visitor's device,
+// in their own browser, never sent: the offer says `device`, and the page says so), and the song is sung their way.
 //
-// A module the studio adds to its page only when started with --web-singing. It reaches the studio's page through
+// A module the studio adds to its page only when started with --web-singing (or built with a singing kit). It reaches the studio's page through
 // window.songbirdStudio alone (studio.js's last section), and reuses the karaoke's timing, drawing and take
 // recorder (tools/karaoke.js, tools/karaoke-recorder.js) rather than its own: a take here is cut, synced and
 // written exactly as one sung in the karaoke or on the online page, so it is measured the same way.
 //
 // What stays in this browser (localStorage, under STORE): whether the consent was read (its version), the
 // device's extra delay, the numbers measured from each take, and the way of singing made from them. The take's
-// audio is only ever in this page's memory, until it is sent to be measured or sung again.
+// audio is only ever in this page's memory, until it is measured (sent to be, from a server's page) or sung again.
 import * as K from "/karaoke.js";
 
 const ST = window.songbirdStudio;
@@ -42,12 +43,62 @@ function delay() { return (Number(kept().nudge) || 0) / 1000; }  // what the dev
 
 // ------------------------------------------------------------------ the panel
 
+// What the page says about the singing, where it is measured: on the server (the words a server's studio has always
+// said), or on this device (the studio running in the browser: nothing of it is sent anywhere)
+const SERVER = {
+  box: "Sing along in your browser, and the song learns a little of your timing and inflection. Your singing is "
+    + "measured on the computer serving this studio and deleted there at once: only numbers about how you sang are "
+    + "kept, never your voice.",
+  promises: () => [
+    [h("b", {}, "Your voice is not kept. "), "While you sing, your microphone is recorded in this browser only. "
+      + "When you send a take to be measured, it goes to the computer serving this studio, which measures it and deletes "
+      + "the recording straight away. It is never saved, played to anyone or used to copy your voice."],
+    [h("b", {}, "What's kept is numbers. "), "For each note: how early or late you came in, how long you held "
+      + "it, how loud it was, how you slid into it and off it. They stay in this browser, and on that computer under a "
+      + "code, with no name or address, for ", h("span", { id: "singKeepDays" }, "30"), " days after they were last used, "
+      + "so the studio can sing the song your way."],
+    [h("b", {}, "Nothing is published unless you record. "), "If you record a version sung your way, the "
+      + "recording carries those numbers (rounded) inside it, as every version carries its singer's way. Anyone with the "
+      + "file hears the machine's voice sing it your way: never your voice."],
+    [h("b", {}, "You can take it back. "), "Forget my singing removes the numbers from this browser and from "
+      + "that computer (not from a recording you already made)."]],
+  measure: "Measure it sends this take to be measured; the recording is deleted there as soon as it has been, and from "
+    + "this page too.",
+  sending: "Sending your take…",
+  unsent: "It couldn't be sent",
+  measured: "Measured, and deleted.",
+  sure: "Forget it everywhere? Press again",
+  forgotten: "Forgotten: your numbers are gone from this browser and from the studio. A recording you made keeps its own copy.",
+};
+const DEVICE = {
+  box: "Sing along; the song learns a little of how you sing. Your singing never leaves this device.",
+  boxTitle: "Your take is measured here, in this browser, and let go. Only numbers about how you sang are kept, in this "
+    + "browser.",
+  promises: () => [
+    [h("b", {}, "Your singing never leaves this device. "), "This browser records your microphone while you sing. "
+      + "Measure it, and the take is measured here, on this device, then let go. It is never sent, saved, played to "
+      + "anyone or used to copy your voice."],
+    [h("b", {}, "What's kept is numbers. "), "For each note: how early or late you came in, how long you held it, how "
+      + "loud it was, how you slid into it and off it. They stay in this browser until you forget them, so the studio "
+      + "can sing the song your way."],
+    [h("b", {}, "Nothing is shared unless you share a recording. "), "A recording sung your way carries those numbers "
+      + "(rounded) inside it, as every version carries its singer's way. Anyone with the file hears the machine's voice "
+      + "sing it your way: never your voice."],
+    [h("b", {}, "You can take it back. "), "Forget my singing removes the numbers from this browser (not from a "
+      + "recording you already made)."]],
+  measure: "Measured here, on this device; the recording is let go once it has been.",
+  sending: "Getting ready to measure it…",
+  unsent: "It couldn't be measured",
+  measured: "Measured, and let go.",
+  sure: "Forget it? Press again",
+  forgotten: "Forgotten: your numbers are gone from this browser. A recording you made keeps its own copy.",
+};
+let SAY = SERVER;
+
 function build() {
   // the studio's "Sing it" box says what singing here is, and opens the singing below it
   const box = $("singTitle").closest("section");
-  box.querySelector("p").textContent = "Sing along in your browser, and the song learns a little of your timing and "
-    + "inflection. Your singing is measured on the computer serving this studio and deleted there at once: only numbers "
-    + "about how you sang are kept, never your voice.";
+  box.querySelector("p").textContent = SAY.box;
   const old = $("sing"), button = old.cloneNode(true);  // the studio's own listener (the karaoke page) stays with the old one
   button.textContent = "Sing it here";
   old.replaceWith(button);
@@ -55,19 +106,7 @@ function build() {
 
   const consent = h("div", { id: "singConsent" },
     h("p", { class: "lead" }, "Before you sing, here is what happens to your singing."),
-    h("ul", { class: "sing-promises" },
-      h("li", {}, h("b", {}, "Your voice is not kept. "), "While you sing, your microphone is recorded in this browser only. "
-        + "When you send a take to be measured, it goes to the computer serving this studio, which measures it and deletes "
-        + "the recording straight away. It is never saved, played to anyone or used to copy your voice."),
-      h("li", {}, h("b", {}, "What's kept is numbers. "), "For each note: how early or late you came in, how long you held "
-        + "it, how loud it was, how you slid into it and off it. They stay in this browser, and on that computer under a "
-        + "code, with no name or address, for ", h("span", { id: "singKeepDays" }, "30"), " days after they were last used, "
-        + "so the studio can sing the song your way."),
-      h("li", {}, h("b", {}, "Nothing is published unless you record. "), "If you record a version sung your way, the "
-        + "recording carries those numbers (rounded) inside it, as every version carries its singer's way. Anyone with the "
-        + "file hears the machine's voice sing it your way: never your voice."),
-      h("li", {}, h("b", {}, "You can take it back. "), "Forget my singing removes the numbers from this browser and from "
-        + "that computer (not from a recording you already made).")),
+    h("ul", { class: "sing-promises", id: "singPromises" }, ...SAY.promises().map((li) => h("li", {}, ...li))),
     h("p", { class: "hint" }, "Wear headphones if you can, so the guide stays out of the microphone. Wrong notes are fine."),
     h("label", { class: "check" }, h("input", { type: "checkbox", id: "singAgree" }), " I understand. Let me sing."),
     h("div", { class: "actions" }, h("button", { class: "btn primary", type: "button", id: "singBegin", disabled: true }, "Start singing")));
@@ -103,8 +142,7 @@ function build() {
         h("input", { type: "range", id: "singShift", min: "-400", max: "400", step: "5", value: "0", "aria-label": "Slide your take earlier or later" }),
         h("span", { class: "hint" }, "later"),
         h("span", { class: "hint", id: "singShiftValue" }, "as recorded")),
-      h("p", { class: "hint" }, "Measure it sends this take to be measured; the recording is deleted there as soon as it has been, "
-        + "and from this page too.")),
+      h("p", { class: "hint", id: "singMeasureHint" }, SAY.measure)),
     h("div", { class: "sing-yours", id: "singYours", hidden: true },
       h("h3", {}, "Your way of singing it"),
       h("p", { class: "sing-portrait", id: "singPortrait" }),
@@ -502,7 +540,7 @@ async function measure() {
   const body = new Blob([meta, K.wavBytes(K.shifted(t.samples, t.rate, S.shift), t.rate)]);
   S.measuring = true;
   controls();
-  say("Sending your take…");
+  say(SAY.sending);
   let job;
   try {
     const r = await fetch("/api/sing/take", { method: "POST", body,
@@ -512,7 +550,7 @@ async function measure() {
   } catch (e) {
     S.measuring = false;
     controls();
-    say(`It couldn't be sent: ${e.message}`, true);
+    say(`${SAY.unsent}: ${e.message}`, true);
     return;
   }
   const estimate = job.estimate || 10;
@@ -532,7 +570,10 @@ async function measure() {
   S.measuring = false;
   controls();
   const result = job.result || {};
-  if (job.state !== "done") { say(`It couldn't be measured: ${job.error || "the studio stopped"}. Sing it again?`, true); return; }
+  if (job.state !== "done") {
+    say(`It couldn't be measured: ${String(job.error || "the studio stopped").replace(/^\w+(Error|Exception): /, "")}. Sing it again?`, true);
+    return;
+  }
   if (result.refused) { say(result.refused, true); return; }
   const measurements = [...earlier, result.measurement];
   keep({ measurements, phrasing: { name: result.name, json: result.phrasing, portrait: result.portrait } });
@@ -540,7 +581,7 @@ async function measure() {
   ST.setEdit("phrasing", result.name, "Sing it your way");
   showYours();
   const skipped = (result.skipped || []).length ? " Some of it sat too far from the guide's key to measure." : "";
-  say(`Measured, and deleted.${skipped} The song is sung your way now: hear it, sing another part, or record it.`);
+  say(`${SAY.measured}${skipped} The song is sung your way now: hear it, sing another part, or record it.`);
 }
 
 function own(name, json) {
@@ -563,7 +604,7 @@ async function forget() {
   const button = $("singForget");
   if (!button.dataset.sure) {
     button.dataset.sure = "1";
-    button.textContent = "Forget it everywhere? Press again";
+    button.textContent = SAY.sure;
     setTimeout(() => { delete button.dataset.sure; button.textContent = "Forget my singing"; }, 5000);
     return;
   }
@@ -576,7 +617,7 @@ async function forget() {
   if (ST.state.edits.phrasing === name) ST.setEdit("phrasing", null, "Forget my singing");
   else ST.renderCards();
   showYours();
-  say("Forgotten: your numbers are gone from this browser and from the studio. A recording you made keeps its own copy.");
+  say(SAY.forgotten);
 }
 
 // ------------------------------------------------------------------ starting
@@ -599,15 +640,25 @@ async function restore() {
   } catch (e) { /* the studio says why on its card */ }
 }
 
+function onDevice() {  // the studio runs in this browser: the take is measured here, and nothing is sent
+  SAY = DEVICE;
+  const box = $("singTitle").closest("section").querySelector("p");
+  box.textContent = SAY.box;
+  box.title = SAY.boxTitle;
+  $("singPromises").replaceChildren(...SAY.promises().map((li) => h("li", {}, ...li)));
+  $("singMeasureHint").textContent = SAY.measure;
+}
+
 async function init() {
   build();
   try { S.offer = await ST.api("/api/sing/offer"); } catch (e) { S.offer = { available: false, why: e.message }; }
+  if (S.offer.device) onDevice();
   if (!S.offer.available) {
     $("sing").disabled = true;
     $("singNote").textContent = S.offer.why || "Singing isn't available here.";
     return;
   }
-  $("singKeepDays").textContent = String(S.offer.keep_days);
+  if ($("singKeepDays")) $("singKeepDays").textContent = String(S.offer.keep_days);
   $("singAboutText").textContent = [...$("singConsent").querySelectorAll("li")].map((li) => li.textContent).join(" ");
   for (const s of S.offer.specs) $("singSpec").append(h("option", { value: s.id }, specLabel(s)));
   showYours();
