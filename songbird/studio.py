@@ -1854,6 +1854,8 @@ class Handler(BaseHTTPRequestHandler):
                                           f"the same song.")
                 return self.audio(kept, name)
             return self.fail(404, "not found")
+        except ConnectionError:  # a player letting go of a file it was sent (it jumped, or stopped): no error
+            raise  # (Server.handle_error)
         except Exception as e:  # said on the page rather than dropping the connection
             traceback.print_exc()
             return self.fail(500, f"{type(e).__name__}: {e}")
@@ -2204,7 +2206,7 @@ class Server(ThreadingHTTPServer):
 
     def handle_error(self, request, client_address) -> None:
         """A browser closing a connection it kept open (a player seeking, a tab closing) is no error."""
-        if isinstance(sys.exc_info()[1], (ConnectionResetError, BrokenPipeError, TimeoutError)):
+        if isinstance(sys.exc_info()[1], (ConnectionError, TimeoutError)):  # reset, broken pipe, aborted
             return
         super().handle_error(request, client_address)
 

@@ -329,6 +329,30 @@ def test_a_section_is_made_on_demand_and_served_with_byte_ranges(served):
     assert again["state"] == "done" and again["url"] == done["url"]
 
 
+def test_a_player_letting_go_of_the_song_it_is_sent_is_no_error(served, monkeypatch, capfd):
+    """A browser drops a file it is being sent whenever its player jumps (the whole song started at the playhead's
+    bar: its start read, then that bar's bytes asked for) or stops: the terminal stays quiet (Server.handle_error)."""
+    import socket as socket_mod
+    import struct
+
+    studio, port = served
+    (studio.cache / f"{'ab' * 12}.flac").write_bytes(b"fLaC" + bytes(8 * 2**20))
+    let_go, quiet = threading.Event(), S.Server.handle_error
+
+    def handled(self, request, client_address):
+        quiet(self, request, client_address)
+        let_go.set()
+
+    monkeypatch.setattr(S.Server, "handle_error", handled)
+    c = socket_mod.create_connection(("127.0.0.1", port), timeout=10)
+    c.sendall(f"GET /audio/{'ab' * 12}.flac HTTP/1.1\r\nHost: 127.0.0.1:{port}\r\nRange: bytes=0-\r\n\r\n".encode())
+    assert b" 206 " in c.recv(64)  # its first bytes on their way
+    c.setsockopt(socket_mod.SOL_SOCKET, socket_mod.SO_LINGER, struct.pack("ii", 1, 0))  # let go at once
+    c.close()
+    assert let_go.wait(10)
+    assert "Traceback" not in capfd.readouterr().err
+
+
 def test_a_whole_song_says_where_each_bar_of_the_ruler_is_in_its_audio(home, monkeypatch):
     """The page starts the whole song at its playhead's bar (score.js, studio.js; tests/studio_playhead.test.cjs) with
     the rendition's own clock: each bar line of the ruler in seconds of the whole song's audio, which its job ends
