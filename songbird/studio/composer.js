@@ -899,6 +899,7 @@
     const phrases = state.scope === "phrase" ? [phrase()] : chosen.flatMap((s) => s.phrases || []);
     let origin = state.scope === "phrase" ? phrase().start_beat + bounds().min_onset
       : Math.min(chosen[0].start_beat, ...phrases.map((p) => p.start_beat - (p.pickup_beats || 0)));
+    let first = state.scope === "phrase" ? phrase().start_beat : chosen[0].start_beat;  // its first bar line (a pickup before)
     const end = state.scope === "phrase" ? phrase().start_beat + bounds().max_end
       : chosen.at(-1).start_beat + chosen.at(-1).duration_beats;
     let events = phrases.flatMap((p) => p.notes.map((n) => ({ beat: p.start_beat + n.onset - origin, duration: n.duration,
@@ -912,8 +913,9 @@
       harmony = harmony.filter((h) => h.beat + h.duration > cut + 1e-9)
         .map((h) => ({ ...h, beat: Math.max(0, h.beat - cut), duration: h.duration - Math.max(0, cut - h.beat) }));
       origin += cut;
+      first = origin;
     }
-    return { origin, duration: Math.max(0.25, end - origin), events, harmony };
+    return { origin, first, duration: Math.max(0.25, end - origin), events, harmony };
   }
   function togglePlay() { if (state.playback) { stop(); paint(); } else play(); }
   function play() {
@@ -969,7 +971,9 @@
     root()?.querySelectorAll(".sbc-overview-section").forEach((node) => node.classList.toggle("is-playing", Number(node.dataset.overviewSection) === currentSection));
     const songCursor = document.getElementById("sbc-song-playhead"), span = songSpan();
     if (songCursor) { songCursor.hidden = false; songCursor.style.left = `${clamp((absoluteBeat - span.start) / span.duration * 100, 0, 100)}%`; }
-    page()?.tick?.(absoluteBeat, (elapsed % duration) / duration);
+    // the score's transport says the bar being played, a pickup into what's played as its first (score.js reads the
+    // beat on its ruler: M.sketchOffset)
+    page()?.tick?.(Math.max(absoluteBeat, playback.first), (elapsed % duration) / duration);
     state.frame = requestAnimationFrame(schedule);
   }
   function stop() {
