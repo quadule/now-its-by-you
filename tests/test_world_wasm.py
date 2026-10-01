@@ -72,6 +72,7 @@ def song() -> np.ndarray:
 @pytest.mark.skipif(shutil.which("node") is None, reason="node runs the wasm")
 def test_world_in_wasm_is_native_pyworld_on_a_sung_signal(tmp_path):
     pyworld = pytest.importorskip("pyworld")
+    assert pyworld.__version__ == "0.3.5"  # world/src is its WORLD: another pyworld means taking its sources again
     sys.path.insert(0, str(ROOT / "tools"))
     import speech_to_song as S  # noqa: E402
 
