@@ -1,7 +1,7 @@
 """Public-domain folk singing as training material for the learned throat (dev only).
 
     uv run python tools/throat/folk.py fetch WORK MANIFEST.json      # the recordings, into WORK/sources/
-    uv run python tools/throat/folk.py separate WORK --python DEMUCS_VENV/bin/python   # accompanied ones
+    uv run python tools/throat/folk.py separate WORK --python DEMUCS_VENV/bin/python   # sung alone or not
     uv run python tools/throat/folk.py transcribe WORK [--model medium.en]
     uv run python tools/throat/folk.py cut WORK [--jobs 6]
     uv run python tools/throat/features.py WORK/corpus --out WORK/features
@@ -16,8 +16,9 @@ WORK is a scratch directory of your choosing, never renders/ or recordings/.
 What it reads. MANIFEST is a JSON list, one recording each: {"id", "url", "title", "performer",
 "licence", "page", "singer" ("folk" for singing its singers released themselves, "records" for
 commercial records old enough to be public domain), "year", optionally "lyrics" (the printed words,
-public domain like the tune), "start"/"end" (seconds to keep), "accompanied" (then WORK/vocals/<id>.wav,
-the voice taken out of the band, is read instead of the source)}. Every source's licence and page stay
+public domain like the tune), "start"/"end" (seconds to keep)}. `separate` marks each one "accompanied" or
+not (Demucs's accompaniment stem against its voice); an accompanied one is left out, or with --separated
+its voice taken out of the band (WORK/vocals/<id>.wav) is used. Every source's licence and page stay
 in WORK/manifest.json; nothing about them goes into the model but the singer's name and "human".
 
 How a recording with no score is labelled (the volunteers' takes had their guides' scores; these have
@@ -38,16 +39,24 @@ only the singing):
   whose phones the aligner stretched past belief ("doubt" in its label, which dataset.py masks).
 - Every recording is brought to the house corpus's level, as the volunteers' takes were, and its
   background (the quietest unvoiced frames against the singing) must be at least --min-quiet dB down.
+  Reverb isn't gated (a decay read off phrase ends measured the singers' own releases, not the rooms); on
+  house audio with an RT60 of 0.7 s the aligner's phone starts within 20 ms of the scored ones fell from
+  94% to 67%, so a reverberant recording teaches blurrier boundaries, partly masked as doubtful.
 - Bandwidth: a record made before 1926 has nothing above about 4 kHz but noise, and its noise would
   read as breath. Each recording's band is measured (the highest frequency where its sung spectrum
   stands --band-db above its quiet frames'), and the label says so ("band_hz"); dataset.py writes it per
   frame and train.py learns the envelope only below it. A record's aperiodicity is not learned at all
   ("ap_band_hz" 0): through surface noise, D4C hears breath everywhere.
 
-`merge` adds the folk frames to the house dataset, one singer per manifest "singer" (every person in
-it sharing one embedding, as the volunteers do: never set to sound like one person), source "human",
-and keeps every singer the base model knows (the volunteers, whose takes are gone) in the singer list
-with no frames, so a fine-tune from it keeps their row.
+Each performer is a singer of their own ("folk-<performer>", source "folk"; "record-..." for records):
+pooled into one row, many people's voices and dialects would leave the network nothing to explain their
+differences with, and it would average them away (flat formants, blurred vowels). A voice made from them
+is a blend of rows (throat.timbre), never one alone, as for the house singers. Their source isn't
+"human": that names the volunteers, whose share of a blend is fixed (throat.HUMAN_SHARE).
+
+`merge` adds the folk frames to the house dataset and keeps every singer the base model knows (with
+--base; the volunteers, whose takes are gone) in the singer list with no frames, so a fine-tune from it
+keeps their row.
 """
 
 from __future__ import annotations
@@ -62,6 +71,8 @@ import re
 import shutil
 import subprocess
 import sys
+import time
+import urllib.error
 import urllib.request
 from concurrent.futures import ProcessPoolExecutor
 from pathlib import Path
@@ -77,7 +88,7 @@ from soulx import syllables  # noqa: E402
 
 from songbird import phonetics as P  # noqa: E402
 
-SOURCE = "human"
+SOURCES = {"folk": "folk", "records": "record"}  # a singer's source by its group: not "human", the volunteers' share
 SR = 24000  # the corpus's rate
 FRAME = 0.005
 PAUSE = 0.15  # seconds of quiet in the audio between two words that ends a line
@@ -116,16 +127,30 @@ def fetch(args) -> None:
         ext = Path(it["url"].split("?")[0]).suffix.lower() or ".audio"
         dest = src / f"{it['id']}{ext}"
         if not dest.exists():
-            req = urllib.request.Request(it["url"], headers={"User-Agent": "songbird-research/0.1 (folk singing study)"})
-            tmp = dest.with_suffix(dest.suffix + ".part")
-            with urllib.request.urlopen(req, timeout=120) as r, open(tmp, "wb") as f:
-                shutil.copyfileobj(r, f)
-            tmp.rename(dest)
+            download(it["url"], dest)
         it["file"] = dest.name
         it["sha256"] = hashlib.sha256(dest.read_bytes()).hexdigest()
         print(f"{it['id']}: {dest.stat().st_size / 1e6:.1f} MB", flush=True)
     (work / "manifest.json").write_text(json.dumps(items, indent=1))
     print(f"{len(items)} recordings in {src}; their licences and pages in {work / 'manifest.json'}")
+
+
+def download(url: str, dest: Path, tries: int = 6) -> None:
+    """One file, politely: a second between files, and a server that says too many requests waited out."""
+    req = urllib.request.Request(url, headers={"User-Agent": "songbird-research/0.1 (folk singing study)"})
+    tmp = dest.with_suffix(dest.suffix + ".part")
+    for k in range(tries):
+        try:
+            with urllib.request.urlopen(req, timeout=120) as r, open(tmp, "wb") as f:
+                shutil.copyfileobj(r, f)
+            tmp.rename(dest)
+            if not url.startswith("file:"):
+                time.sleep(1.0)
+            return
+        except urllib.error.HTTPError as e:
+            if e.code not in (429, 503) or k == tries - 1:
+                raise
+            time.sleep(float(e.headers.get("Retry-After") or 0) or 5.0 * 2**k)
 
 
 def load_audio(path: Path, sr: int, start: float | None = None, end: float | None = None) -> np.ndarray:
@@ -152,28 +177,52 @@ def source_of(work: Path, it: dict) -> Path:
 # --- separate -------------------------------------------------------------------------------------------
 
 
+ACCOMPANIED_DB = -25.0  # dB: band (Demucs's accompaniment stem) against voice, where the voice sings, that counts as accompanied
+
+
 def separate(args) -> None:
-    """The voice of each accompanied recording, taken out of its band by Demucs (MIT; run from its own
-    environment: --python, or DEMUCS_PYTHON), as WORK/vocals/<id>.wav."""
+    """Every recording through Demucs (MIT; run from its own environment: --python, or DEMUCS_PYTHON), to
+    hear whether it is sung alone: where the voice stem sings, the accompaniment stem's level against it.
+    Over ACCOMPANIED_DB, the recording is marked accompanied in WORK/manifest.json and its voice kept as
+    WORK/vocals/<id>.wav (transcribe and cut leave it out unless --separated); under it, it is sung alone
+    and the source is used as it is. The numbers go to WORK/separation.json."""
     work = work_ok(args.work)
-    items = [it for it in json.loads((work / "manifest.json").read_text()) if it.get("accompanied")]
-    out = work / "vocals"
-    out.mkdir(exist_ok=True)
+    items = json.loads((work / "manifest.json").read_text())
+    report_path = work / "separation.json"
+    report = json.loads(report_path.read_text()) if report_path.exists() else {}
+    todo = [it for it in items if it["id"] not in report and (not args.only or it["id"] in args.only)]
+    (work / "vocals").mkdir(exist_ok=True)
     tmp = work / "demucs"
-    for it in items:
-        dest = out / f"{it['id']}.wav"
-        if dest.exists() or (args.only and it["id"] not in args.only):
-            continue
-        src = work / "sources" / it["file"]
-        cmd = [args.python, "-m", "demucs", "--two-stems", "vocals", "-n", args.model, "-o", str(tmp), str(src)]
+    for k in range(0, len(todo), 8):  # a few at a time: the model loads once per call
+        batch = todo[k: k + 8]
+        cmd = [args.python, "-m", "demucs", "--two-stems", "vocals", "-n", args.model, "-d", args.device,
+               "-o", str(tmp)] + [str(work / "sources" / it["file"]) for it in batch]
         run = subprocess.run(cmd, capture_output=True, text=True, check=False)
-        got = tmp / args.model / src.stem / "vocals.wav"
-        if run.returncode != 0 or not got.exists():
-            print(f"{it['id']}: demucs failed: {run.stderr[-800:]}", flush=True)
-            continue
-        got.rename(dest)
-        shutil.rmtree(tmp / args.model / src.stem, ignore_errors=True)
-        print(f"{it['id']}: separated", flush=True)
+        for it in batch:
+            stems = tmp / args.model / Path(it["file"]).stem
+            if run.returncode != 0 or not (stems / "vocals.wav").exists():
+                print(f"{it['id']}: demucs failed: {run.stderr[-500:]}", flush=True)
+                continue
+            v = load_audio(stems / "vocals.wav", 16000)
+            a = load_audio(stems / "no_vocals.wav", 16000)
+            hop = 800  # 50 ms
+            n = min(len(v), len(a)) // hop
+            ev = (v[: n * hop].reshape(n, hop) ** 2).mean(axis=1)
+            ea = (a[: n * hop].reshape(n, hop) ** 2).mean(axis=1)
+            singing = 10 * np.log10(ev + 1e-20) > np.percentile(10 * np.log10(ev + 1e-20), 95) - 20
+            acc = float(10 * np.log10(ea[singing].sum() / (ev[singing].sum() + 1e-20) + 1e-20))
+            report[it["id"]] = dict(accompaniment_db=round(acc, 1), accompanied=acc > ACCOMPANIED_DB)
+            if acc > ACCOMPANIED_DB:
+                shutil.move(str(stems / "vocals.wav"), work / "vocals" / f"{it['id']}.wav")
+            shutil.rmtree(stems, ignore_errors=True)
+            print(f"{it['id']}: accompaniment {acc:+.1f} dB" + ("  ACCOMPANIED" if acc > ACCOMPANIED_DB else ""), flush=True)
+        report_path.write_text(json.dumps(report, indent=1))
+    for it in items:
+        if it["id"] in report:
+            it["accompanied"] = report[it["id"]]["accompanied"]
+    (work / "manifest.json").write_text(json.dumps(items, indent=1))
+    alone = sum(1 for r in report.values() if not r["accompanied"])
+    print(f"{len(report)} recordings heard: {alone} sung alone, {len(report) - alone} accompanied")
 
 
 # --- transcribe -----------------------------------------------------------------------------------------
@@ -189,7 +238,7 @@ def transcribe(args) -> None:
     model = WhisperModel(args.model, device="cpu", compute_type="int8", cpu_threads=args.threads)
     for it in items:
         dest = out / f"{it['id']}.json"
-        if dest.exists() or (args.only and it["id"] not in args.only):
+        if dest.exists() or (args.only and it["id"] not in args.only) or (it.get("accompanied") and not args.separated):
             continue
         try:
             path = source_of(work, it)
@@ -515,6 +564,8 @@ def align(work: Path, prepared: list[dict], jobs: int) -> None:
                      subtype="PCM_16")
             ln["tokens"] = [token_for(norm(w["word"]), tuple(w["phones"]), seen) for w in ln["words"]]
             (d / f"{name}.lab").write_text(" ".join(ln["tokens"]) + "\n")
+    if not seen:
+        return
     with open(mfa / "corpus.dict", "w") as f:
         for (word, phones), tok in sorted(seen.items(), key=lambda kv: kv[1]):
             f.write(f"{tok}\t{' '.join(phones)}\n")
@@ -621,6 +672,12 @@ def notes_of(ln: dict, f0: np.ndarray) -> list[dict] | None:
     return notes
 
 
+def singer_of(it: dict) -> str:
+    """The singer a recording trains: one per performer, named for its group ("folk-makemi")."""
+    who = re.sub(r"[^a-z0-9]+", "-", it.get("performer", "unknown").lower()).strip("-")[:24] or "unknown"
+    return f"{it.get('singer', 'folk')}-{who}"
+
+
 def build(work: Path, r: dict, it: dict) -> dict:
     """The recording's aligned lines as corpus segments (24 kHz wav + label) under WORK/corpus/<singer>/."""
     import soundfile as sf
@@ -658,7 +715,8 @@ def build(work: Path, r: dict, it: dict) -> dict:
         cur.append((ln, notes))
     if cur:
         groups.append(cur)
-    singer = it.get("singer", "folk")
+    group = it.get("singer", "folk")
+    singer = singer_of(it)
     d = work / "corpus" / singer
     d.mkdir(parents=True, exist_ok=True)
     segs = []
@@ -673,9 +731,9 @@ def build(work: Path, r: dict, it: dict) -> dict:
                     n[k] = round(n[k] - t0, 4)
                 n["dur"] = round(n["dur"], 4)
                 notes.append(n)
-        label = dict(index=name, language="English", t0=t0, t1=t1, notes=notes, singer=singer, source=SOURCE,
-                     item=it["id"], kind=it.get("kind", singer), sr=SR, audio_s=round(t1 - t0, 3),
-                     band_hz=r["band_hz"], ap_band_hz=0 if singer == "records" else r["band_hz"])
+        label = dict(index=name, language="English", t0=t0, t1=t1, notes=notes, singer=singer, group=group,
+                     source=SOURCES[group], item=it["id"], sr=SR, audio_s=round(t1 - t0, 3),
+                     band_hz=r["band_hz"], ap_band_hz=0 if group == "records" else r["band_hz"])
         audio = x[int(round(t0 * SR)): int(round(t1 * SR))]
         sf.write(str(d / f"{name}.wav"), np.clip(audio, -1, 1), SR, subtype="PCM_16")
         (d / f"{name}.json").write_text(json.dumps(label, indent=1))
@@ -695,7 +753,8 @@ def cut(args) -> None:
     (work / "mfa" / "audio").mkdir(parents=True)
     target = house_level()
     print(f"{len(items)} recordings; bringing each to the house corpus's level ({target:.1f} dB)", flush=True)
-    todo = [it for it in items.values() if (work / "words" / f"{it['id']}.json").exists()]
+    todo = [it for it in items.values() if (work / "words" / f"{it['id']}.json").exists()
+            and (args.separated or not it.get("accompanied"))]
     with ProcessPoolExecutor(args.jobs) as pool:
         ref = reference_spectrum()
         prepared = list(pool.map(prepare, [work] * len(todo), todo, [target] * len(todo),
@@ -780,13 +839,15 @@ def main() -> None:
     sp = sub.add_parser("separate")
     sp.add_argument("work", type=Path)
     sp.add_argument("--python", default=os.environ.get("DEMUCS_PYTHON", "python3"))
-    sp.add_argument("--model", default="htdemucs_ft")
+    sp.add_argument("--model", default="htdemucs")
+    sp.add_argument("--device", default="mps")
     sp.add_argument("--only", nargs="*", default=None)
     t = sub.add_parser("transcribe")
     t.add_argument("work", type=Path)
     t.add_argument("--model", default="medium.en")
     t.add_argument("--threads", type=int, default=8)
     t.add_argument("--only", nargs="*", default=None)
+    t.add_argument("--separated", action="store_true", help="accompanied recordings too, their Demucs voice")
     c = sub.add_parser("cut")
     c.add_argument("work", type=Path)
     c.add_argument("--jobs", type=int, default=max(1, (os.cpu_count() or 2) - 4))
@@ -795,6 +856,7 @@ def main() -> None:
     c.add_argument("--band-db", type=float, default=12.0,
                    help="a frequency is inside the recording's band if its sung spectrum stands this far over the quiet")
     c.add_argument("--only", nargs="*", default=None)
+    c.add_argument("--separated", action="store_true", help="accompanied recordings too, their Demucs voice")
     m = sub.add_parser("merge")
     m.add_argument("work", type=Path)
     m.add_argument("--house", type=Path, default=HOUSE / "dataset-house.npz")

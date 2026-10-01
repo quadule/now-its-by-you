@@ -109,6 +109,8 @@ def main() -> None:
     ap.add_argument("--noise", type=float, default=1.0,
                     help="scale of the noise added to the pitch (about 30 cents) and level (about 1 dB) inputs while training")
     ap.add_argument("--hold-out", nargs="*", default=None, help="segment name fragments kept out for validation")
+    ap.add_argument("--exclude", nargs="*", default=None,
+                    help="segment name fragments left out altogether (neither trained on nor validated: a smaller corpus)")
     ap.add_argument("--seed", type=int, default=0)
     ap.add_argument("--log-every", type=int, default=500)
     ap.add_argument("--init", type=Path, default=None, help="start from this model's weights and normalisations")
@@ -139,9 +141,11 @@ def main() -> None:
     y_all = np.concatenate([(sp - sp_mean) / sp_std, (apr - ap_mean) / ap_std], axis=1).astype(np.float32)
     phone5 = np.stack([d["prev2"], d["prev"], d["phone"], d["next"], d["next2"]], axis=-1).astype(np.int64)
     cont_all = continuous(d, slice(None))
-    held = [i for i, s in enumerate(segments) if args.hold_out and any(h in s for h in args.hold_out)]
-    train = [i for i in range(len(segments)) if i not in held and lengths[i] > args.crop + 2 * JITTER]
-    print(f"{len(train)} training segments, {len(held)} held out; {len(phones)} phones, singers {singers}", flush=True)
+    out = {i for i, s in enumerate(segments) if args.exclude and any(h in s for h in args.exclude)}
+    held = [i for i, s in enumerate(segments) if args.hold_out and any(h in s for h in args.hold_out) and i not in out]
+    train = [i for i in range(len(segments)) if i not in held and i not in out and lengths[i] > args.crop + 2 * JITTER]
+    print(f"{len(train)} training segments, {len(held)} held out, {len(out)} left out; {len(phones)} phones, "
+          f"singers {singers}", flush=True)
 
     dev = args.device
     model = Throat(len(phones), len(roles), len(singers), args.channels, sp.shape[1], apr.shape[1], args.dropout).to(dev)
@@ -251,6 +255,7 @@ def main() -> None:
                   singer=SINGER, cont=CONT, phones=phones, roles=roles, singers=singers, steps=args.steps,
                   registers=registers, sources=dict(zip(singers, sources)),
                   dataset=str(args.dataset), frames=int(len(sp)), params=int(n_params), held_out=args.hold_out or [],
+                  excluded=args.exclude or [],
                   lr=args.lr, init=str(args.init) if args.init else None)
     args.out.parent.mkdir(parents=True, exist_ok=True)
     np.savez(args.out, config=json.dumps(config), sp_mean=sp_mean, sp_std=sp_std, ap_mean=ap_mean, ap_std=ap_std,
