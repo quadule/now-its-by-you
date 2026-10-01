@@ -117,8 +117,9 @@ def measure(flac: Path) -> dict:
     x = pcm / 32768.0
     m = x[:, 0]
     music = 10 * np.log10(np.mean(m[a:b] ** 2))
-    lead = m[int(0.25 * SR): int(0.55 * SR)]
-    out["lead-in under the music dB"] = round(10 * np.log10(np.mean(lead**2) + 1e-30) - music, 1) if a > 0.55 * SR else None
+    lead = m[int(0.2 * SR): a - int(0.05 * SR)]  # after the needle's drop, before the first note
+    out["lead-in under the music dB"] = round(10 * np.log10(np.mean(lead**2) + 1e-30) - music, 1) if len(lead) > 0.1 * SR else None
+    out["music begins s"] = round(a / SR, 2)
     if taps.get("runout") is not None:
         tail = m[taps["runout"] + int(0.5 * SR): len(m) - int(0.5 * SR)]
         out["run-out under the music dB"] = round(10 * np.log10(np.mean(tail**2) + 1e-30) - music, 1)

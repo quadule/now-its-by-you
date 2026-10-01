@@ -900,6 +900,8 @@ it rendered to before, at one thread and two). Two threads unless said:
 | dub, with its version after the song (new) | 221 s | ebass electric kit melodica organ voice | 1.89 GB | |
 | house again (the evening: its own lengths, the chop; docs/STYLES.md, "House and dub, again") | 163 s | arp chop drummachine piano synthbass synthpad voice | 1.27 GB | |
 | dub again (dissolving into its version after the first refrain, the dub-out after) | 222 s | ebass electric kit melodica organ voice | 1.91 GB | |
+| an old 78 (2026-09-30, night: docs/STYLES.md, "An old 78"), a parlour piano alone, recorded as a 78 (mono) | 243 s (246 with its run-out groove) | piano voice | 1.14 GB | |
+| an old 78, 4 verses, every part, a fiddle, tempo 58 | 471 s | fiddle piano voice | 1.95 GB | |
 
 (The "before" column is the same measure taken again on the tree as the review found it; a few differ from the
 review's own figures by a few percent, and two of its drawn-out versions are measured here at the lengths these edits
@@ -942,6 +944,7 @@ go, on two threads, before → now:
 | the jig, was a Celtic session (whistle, drum) | 7.4 | 4.1 |
 | house (arp; the chop at the voice's rate) | 6.4 | 4.5 (its own lengths make its versions longer: a machine's long shape with a drop, ada's, is 3.8 minutes: it fits) |
 | dub (melodica, 2026-09-30) | 7.4 | 3.9 (a dub version of H's own shape is 3.7: it fits; a machine's longer shape, three verses and the bridge twice, is 4.5 to 5 minutes and doesn't) |
+| an old 78 (voice, piano or guitar, fiddle: 4.5 each since 2026-09-30, the lightest band measured, 3.3 a second) | 4.5 | 6.3 (every machine's old 78 fits; the longest of four, coral's waltz with three verses and the bridge twice, is 5.5 minutes) |
 
 (An a cappella's peak grew with its voices until the group's bus was summed as its voices came rather than
 held until the last, 30 September, to the bit: 1.85 and 2.33 GB before, for three and six voices, 1.51 after.)

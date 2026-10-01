@@ -765,8 +765,8 @@ def shape_card(v: Version) -> dict:
 
         shape = style_of(v.params.style).shape  # a part the style always plays (the old 78's intro and break)
         if shape.get(name) is not None and value == shape[name]:
-            why.append({"kind": "rule", "text": f"{what}: {STYLE_NAMES.get(v.params.style.name, v.params.style.name)} "
-                                                f"always has one"})
+            why.append({"kind": "rule", "text": f"{what}: the {STYLE_NAMES.get(v.params.style.name, v.params.style.name)} "
+                                                f"style always has one"})
             continue
         machine = value != blind.get(name)
         time = value != frozen.get(name)
@@ -986,7 +986,7 @@ def mix_card(v: Version) -> dict:
     why = choice_reasons(v, ["mix.rt60"], lambda path, value, blind: f"your machine's room: {room_words(value)}",
                          None, lambda path, value: room_words(value)) + why
     if mix.disc > 0 and v.params.style.name == "old78":  # the style's recording (synth/disc.py)
-        why.append({"kind": "rule", "text": "an old 78 is recorded as a 78: mono, through a horn's narrow band, with "
+        why.append({"kind": "rule", "text": "the old 78 style records the song as a 78: mono, through a horn's narrow band, with "
                                             "the turntable's wobble, the surface's noise and clicks, the needle's "
                                             "drop and the run-out groove"})
     labels = {"mix.space": "how much room", "mix.width": "how wide", "mix.forward": "the voice over the band",

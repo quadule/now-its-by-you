@@ -1454,3 +1454,193 @@ In `renders/styles/` of the main checkout (gitignored), H as the same made-up ma
 7. **A turn's length** stays the style's (four bars in house); a person can't set it, as before.
 8. **The records from this morning** render differently for house (not for dub without `dissolve`); none was
    released.
+
+# An old 78 (2026-09-30, night)
+
+The song says of itself "Nobody knows who made this song." This version sounds found: a singer with a parlour
+piano (or a guitar), now and then a fiddle, recorded as an acoustic-era 78. It is built the way the a cappella and
+the jig convinced: the singer delivers the tune straight, over instruments the program synthesizes well (piano,
+guitar, fiddle); what makes it old is the recording, a deterministic stage at the end of the mix, not a different
+kind of singer. Nobody has listened; everything below is measured.
+
+**On the page**: "old 78"; its detail "a parlour piano, recorded as a 78" (or "a guitar", and "and a fiddle" when one
+comes); the mix card begins "recorded as a 78". "A 78" names a format, not a provenance: no label, artist, year or
+recording is claimed anywhere (the page, the docs, the code's comments; the studio test forbids the decades).
+
+## The design
+
+- **Beside the ring**, by the songwriter (`OFF_RING["old78"] = "songwriter"`: a singer and one accompanist, close;
+  its neighbours chamber and the lullaby). Chosen by a person (`--style old78`, the studio's style card), never
+  drawn; a lineage in it keeps it or steps to the songwriter's neighbours. Whether it joins the ring is the artist's.
+- **The band**: a parlour piano (1.0), a guitar in its place for about a third of machines (`swaps`, a lineage keeping
+  its own), a fiddle half the time (`optional`). No bass and no drums: an acoustic horn took neither; the piano's left
+  hand (the guitar's thumb) is the bass.
+- **The piano's oom-pah** (`idioms.w_stride`): on the strong beats the root, then the fifth, **in the tenor**
+  (from 19 semitones under the tonic: G2 to F♯3 for H in D), on the others a short chord above it under the tune
+  (oom-pah-pah in a waltz); where a sung line holds its end and the chord changes, about a third of the time the
+  bass walks two steps into the next root. The bridge: broken chords; the tag: one chord left to ring.
+- **The tune over its own hand** (`idioms.w_parlour`): where the piano or the guitar plays the tune (an intro, the
+  break, an outro), its own oom-pah (or Travis thumb) keeps going under it, a little softer. A style's table may now
+  name the idiom a player takes the tune with (`"solo"`, read by `plan_style`); no other style has one, so every
+  other lead plays "lead" as before. The fiddle, when it comes, leads the intro and the outro, rests in the first
+  verse and the break (the piano's solo), answers the lines in fuller verses, plays a counter-line in the refrains
+  and a held tone in the bridge.
+- **The form**: an intro and a break always (`StyleDef.shape`), put into the machine's form after the style is
+  chosen (`style.shaped`, by edits.reshape), never into a form set by hand or a person's own order; a person's
+  `form.intro` and `form.break` are pinned over it, and where the shape card explains a difference it says "the old
+  78 style always has one". Neither has words, so the words are the machine's as they would be.
+- **Feel and tempo**: straight 0.6, a waltz 0.25 (re-barred where the song allows), swung 0.15 (a foxtrot's lilt);
+  straight or swung at 0.86 to 1.0 of the song's tempo (H at 83 to 96, centre 88), a waltz 0.64 to 0.8. Sixths on I
+  and IV, V7 and ii7 at 0.4, always fitted to the sung note. Options: the intro played, no bare verse, no stop-time,
+  no breakdown, a lift now and then (0.1), endings ring or rit (0.45 each) or cold, backing voices in thirds 0.2.
+- **Leans**: the singer a little more vibrato (+6 cents) and pressed a little (rd -0.06: projected into a horn); the
+  band a little older (wear +0.1: the upright's unisons wider) and darker; the mix a dead room (space -0.25; the room
+  itself stays the machine's), the singer close, no plate, no tape's wear, and the disc.
+
+### The recording: `MixParams.disc`, a mix stage any style can have
+
+`disc` (0 to 1, new; left out of a record while 0, so records and every child's draws are as they were) puts the
+whole mix on an acoustic 78 (songbird/synth/disc.py), after the glue and the tilt. Nothing else enters the stage.
+In order:
+
+1. **Mono**: the mid, written to both channels.
+2. **The horn**, each record's own (drawn): a 2nd-order high-pass at 130 to 150 Hz and a 4th-order low-pass at 4.6
+   to 5.2 kHz; a honk at 450 to 700 Hz (+4 to 6 dB), a little more at 1.1 to 1.6 kHz (+2 to 4), a dip of 3 dB at 1.8
+   to 2.1 kHz, the recording diaphragm at 2.4 to 3.2 kHz (+3 to 5, Q at most 3); the cutting stylus's slight
+   saturation.
+3. **The turntable**: the disc a little off centre, so the pitch wavers once a revolution (78.26 rpm: 1.30 Hz), 0.1
+   to 0.3% at its peak (each record its own), with a second harmonic a quarter as deep; flutter 0.02% RMS.
+4. **The surface**, scaled by `disc`: the groove's noise through the playback's band (150 Hz to 1 kHz above the
+   horn's top), 38 LU under the music, swelling ±20% once a revolution (a worn arc, in step with the wow) and
+   drifting ±10% across the side; a fine crackle (25 small ticks a second); scratches, each heard once a revolution
+   for 2 to 20 turns (exactly the rotation's period, from the disc's own angle), and a pop now and then.
+5. **The needle**: dropped into the lead-in groove where the mix begins in silence (a whole song's 0.6 s preroll:
+   the drop at 0.05 s, the noise in over 0.15 s); at the end, where the music has died 50 dB away, the run-out
+   groove's swish and click once a revolution, three seconds of it added after the song, then lifted. A section heard
+   alone (it begins and ends in the music) gets neither.
+
+Every draw is the rendition's (its seed, a stream of its own, a fixed stretch at a time); numpy, scipy and fx's
+existing filters, saturation and warp: **no new numba kernel**, so the browser's translation is as it was.
+
+## What the review changed
+
+A read-only Fable review of the design, before it was built. Its points, and what was done:
+
+1. **The horn would have taken the accompaniment away**: the piano's left hand sat at 65 to 123 Hz, and the
+   proposed 4th-order high-pass at 200 Hz is 17 to 39 dB down there. The horn's low end is now a 2nd-order
+   high-pass at 130 to 150 Hz, and the oom-pah's bass sits in the tenor (98 to 185 Hz), a parlour upright's, not a
+   stride's low octaves (dropped).
+2. **`--mix disc=1` would have been refused** (MixParams.parse checked keys against `to_dict`, which leaves disc out
+   at 0) and **a replay would have differed** (the run-out was to be added to the score's length from params.mix,
+   while `--mix` is applied after the score is made). Parse checks the fields; the score never knows about the disc:
+   the stage appends its own run-out.
+3. **No new clock preroll**: the lead-in is the 0.6 s every song has (0.78 of a revolution), the needle dropped only
+   where the mix begins in silence, so a section preview gets no needle and no run-out.
+4. **`disc` in RANGES and out of `to_dict` at 0** (a `"disc": 0.0` in every record would reseed every child's coins).
+   The lean: keeping the style 1, entering it 1, leaving it 0.
+5. **No special case for tape wear**: the style leans `mix.wear` to -1 (a knob that isn't handed down, so the record
+   says 0 and a child in another style gets its machine's own back); `--mix wear=0.2 disc=1` still works.
+6. **Not inside choose_style**: the shape is put in after the style is chosen, in `variation.choose`, only where no
+   form was set by hand, and the shape card names the style rather than the machine's habit.
+7. **"parlour" beside "lead"** in `LINES` (idioms and takeover), the octave-down rule now reading `LINES`, the
+   takeover's played sections, its fallback idioms and the piano score's tune; labels for both idioms.
+8. **No new pattern needed for the oom-pah** (w_oompah's), but the walk needs its own writer, so `stride` is the
+   style's own, in its own block.
+9. **The chain's numbers**: a 4th-order low-pass (kinder to the consonants), the diaphragm's peak capped at +5 dB and
+   Q 3, an eccentricity drawn per record (some records audibly wobble), the noise heard through the playback's band
+   (white noise to 8 kHz over music stopping at 5 kHz is the giveaway of pasted-on noise). Clicks stay under the
+   limiter's notice (their peaks about 14 dB under the music's loud peaks).
+10. **Memory**: the stage writes the mono back where the stereo mix lies; measured below.
+11. **The mix card** says "recorded as a 78" (and no width: it's mono) and why.
+12. **What `disc` between 0 and 1 means**: how worn the surface is (its noise and clicks); the horn, the mono and the
+    turntable are the same at any amount. Said so in MixParams and the module.
+
+## As built, and measured
+
+| Where | What |
+|---|---|
+| songbird/synth/disc.py | the recording (new) |
+| songbird/synth/mixing.py | `MixParams.disc` (RANGES, left out of `to_dict` at 0, parsed by its fields); the stage after the tilt |
+| songbird/style.py | `OLD78` in a block of its own, `OFF_RING`, `StyleDef.shape`, `shaped` |
+| songbird/variation.py | the style's shape after the style is chosen, where no form was set by hand |
+| songbird/idioms.py, takeover.py, piano.py | `w_stride`, `w_parlour`, the `"solo"` key, `"parlour"` in `LINES`, labels |
+| songbird/explain.py | "old 78", its detail by who plays, "recorded as a 78" on the mix card, the shape card's reason |
+| songbird/public.py | the voice's, piano's, guitar's and fiddle's memory rates (below) |
+| tools/discmeter.py | the measurements below |
+| tests/test_old78.py | the stage (off, the same samples, mono, the band, the wow, the clicks a revolution apart, the needle and the run-out, a section without either) and the style (its band, the oom-pah, the shape and a person's over it, beside the ring, the disc handed down, the studio's words, grid and sound) |
+
+**Nothing else moved.** Six renders made on main before any of this render to the same ids after it: H's seed
+(9b0766353b73, the golden), lo-fi for ada on 30 September (bcce8df33538), the songwriter for ada on 27 September
+(0dc4245d4a5d), gospel for bob on 14 March (3e1e9cafe3c9), the jig for coral on 2 November (6bbecafc3236), dmitri's
+own on 21 June (c123ecde58e1). The goldens hold; `--replay` of bob's old 78 says "matches".
+
+**The renders** (`renders/styles/old78-<machine>-<date>.flac` in the main checkout, gitignored, with their records,
+scores and words; ids in `ids-old78.txt`):
+
+| render | what the machine drew | tempo | length | id |
+|---|---|---|---|---|
+| old78-ada-2026-09-27 | the piano and the fiddle; swung; three verses, the break, the bridge twice; a broad rit | 88.0 | 254.7 s | c80fc6bcd64a |
+| old78-bob-2026-03-14 | the piano alone; swung; two verses, the break, an outro; the last chord rings | 92.2 | 169.8 s | c23cd44e4683 |
+| old78-coral-2026-11-02 | the piano and the fiddle; a waltz; three verses, the bridge twice, the tag; a cold stop | 64.0 | 329.1 s | bc0fdadeea47 |
+| old78-dmitri-2026-06-21 | a guitar alone, Travis-picked; straight; three verses, the break, an outro; a rit | 88.0 | 239.8 s | a9993bf934b0 |
+
+Moments to listen to: the first second of any (the needle's drop and the lead-in groove); the intro (ada's and
+coral's: the fiddle over the oom-pah; bob's: the piano with the tune over its own hand); each break (the piano's solo;
+dmitri's, the guitar's tune over its thumb); a held piano chord (the record's wow); the last five seconds (the run-out
+groove's click once a revolution, then the needle lifted).
+
+**What the recording measures** (tools/discmeter.py on the four renders: their mixes made again without the disc
+and through it, the samples checked to be the renders' own):
+
+- **The band the horn passed** (the music after the horn against before it, the whole song): -6 dB at 108 to 124 Hz
+  and 4.7 to 5.1 kHz; -10 dB at 86 to 92 Hz and 5.5 to 5.8 kHz; 80 Hz 11 dB down, 8 kHz 22 dB, 12 kHz 43 dB. Each
+  horn its own: ada's honk at 468 Hz, bob's at 688 Hz, coral's at 582 Hz, dmitri's at 565 Hz.
+- **The wow**: each record's eccentricity 0.12% (dmitri) to 0.26% (coral); a steady 1 kHz tone through the same
+  turntable wavers 0.21 to 0.36% at its peak (with the second harmonic and the flutter), at 1.3 Hz.
+- **The surface**: 37.8 to 38.1 LU under the music; in the finished files the lead-in groove is 39 to 41 dB under the
+  music's mean level, the run-out groove 32 to 35 dB (3.6 to 5.7 s of it, the music's last ring included).
+- **The clicks**: 0.38 to 0.93 a second (64 to 222 a song); 66 to 82% of them heard again exactly a revolution later.
+- **Loudness**: -14.0 LUFS, true peaks -1.05 to -1.6 dBTP (the limiter never chases a click); loudness range 6.6 to
+  14.6 LU (ada's 14.6, 12.5 without the disc: its sparse piano verses against the full refrains).
+
+**Words misheard** (Whisper base.en on the finished mix, every sung section, the same four machines and dates):
+
+| | ada | bob | coral | dmitri | all |
+|---|---|---|---|---|---|
+| the old 78 | 18.8% | 10.3% | 25.9% | 16.4% | **18.6%** (202 of 1088) |
+| the old 78 without the disc (`--mix disc=0`) | 18.1% | 6.4% | 18.6% | 8.8% | 13.7% (149) |
+| the ballad | 11.7% | 17.2% | 16.9% | 16.8% | 15.4% (168) |
+| lo-fi | 10.0% | 12.7% | 12.0% | 10.6% | 11.2% (122) |
+
+So the arrangement is about as clear as the ballad's, and the recording costs about five words in a hundred (the
+jig, for comparison, is at 21%). Taking the stage apart on coral and dmitri (21.4% as built): a silent surface 17.2%,
+the band to 6.4 kHz 17.9%, no resonances 19.3%, no wow 19.1% (Whisper's own spread is a few points: no one part of the
+recording dominates).
+
+**Memory** (tools/render_memory.py, two threads, `MallocLargeCache=0`): H's own shape with no machine (a parlour piano
+alone, a waltz), 243 s, 1.14 GB; four verses, every part, a fiddle, tempo 58, 471 s, 1.95 GB. The lightest band yet:
+3.3 MB a second against the voice's own 4.7, so the voice's, piano's, guitar's and fiddle's rates are now 4.5 (every
+measurement at or under its estimate and within 1.3 of it, tests/test_studio_public.py; no other band's estimate
+moves but the a cappella's, a little lower). In the studio's 2100 MB an old 78 fits to 6.3 minutes; coral's 5.5 fits.
+
+## Recommended: the recording as a choice for any style
+
+`disc` is already any style's at the command line (`--mix disc=1`: a jig, a ballad, the songwriter on a 78), and a
+record keeps it. The studio's mix card offers only the room (`edits.MIX`); offering "recorded as a 78" for every
+style is one more entry there, a toggle on the mix card and its bounds. I recommend it: the recording is the part of
+this style that is most its own, and a ballad found on a 78 is as true as this one. The style stays (its band, its
+oom-pah and its break are what a 78 of the song would have had). For now only the old 78 sets it.
+
+## Decisions for the artist (an old 78)
+
+1. **On the ring or beside it**: beside the songwriter for now; on the ring it would move every lineage's future.
+2. **"Recorded as a 78" for any style** in the studio's mix card (above).
+3. **The surface's level**: 38 LU under the music, clicks about 0.6 a second. Quieter costs nothing but some of its
+   age; a silent surface took four words in a hundred back on two machines. One number each (`disc.NOISE_DB`,
+   `SCRATCHES`, `CRACKLE`), or a person's `--mix disc=0.5` for a cleaner shellac.
+4. **The band**: about 140 Hz to 5 kHz. Narrower is older (and costs words); wider is an electrical recording.
+5. **Its length**: a ten-inch 78 held about three minutes a side; these are 2.8 to 5.5 minutes (the machine's form,
+   with the break). A shorter old 78 would mean fewer verses, which changes the words, which a style doesn't do.
+6. **The guitar instead of the piano** for about a third of machines, and the fiddle half the time; or the piano
+   always.
+7. **An intro and a break always** (a person can still take either out).

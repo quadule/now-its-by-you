@@ -212,7 +212,7 @@ def test_the_studio_offers_it_in_plain_words_and_shows_its_players(home):
     mix = next(c for c in view["cards"] if c["id"] == "mix")
     assert mix["value"].startswith("recorded as a 78")
     shape = next(c for c in view["cards"] if c["id"] == "shape")
-    assert any("old 78 always has one" in r["text"] for r in shape["reasons"]) or "break" in v.params.form
+    assert any("old 78 style always has one" in r["text"] for r in shape["reasons"]) or "break" in v.params.form
     for c in view["cards"]:
         for text in [c["value"], c.get("detail") or ""] + [r["text"] for r in c["reasons"]]:
             assert not forbidden.search(text), text
