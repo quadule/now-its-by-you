@@ -639,8 +639,8 @@ def main(argv: list[str] | None = None) -> int:
                              "tone=1,1,1,0.8,0.6 balance=fiddle:2")
     render.add_argument("--style", metavar="NAME",
                         help="play it in this style (songbird/style.py STYLES: ballad, stringband, country, gospel, "
-                             "shanty, songwriter, chamber, lullaby, ambient, synthfolk, lofi, indie, blues; beside the ring, house, dub, acappella and "
-                             "jig) instead of "
+                             "shanty, songwriter, chamber, lullaby, ambient, synthfolk, lofi, indie, blues; beside the ring, house, dub, acappella, "
+                             "jig and hymn) instead of "
                              "the one the machine and its parent lead to")
     render.add_argument("--arrange", nargs="*", default=[], metavar="FIELD=VALUE",
                         help="set the arrangement's options (songbird/style.py Style), e.g. --arrange feel=waltz "

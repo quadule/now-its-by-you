@@ -797,9 +797,7 @@ def desk_of(params) -> dict:
 # beat or a half bar, and its parts are songbird/hymn.py. Named for what plays, claiming no tradition.
 
 HYMN = _def(
-    "hymn", "hymn: organ, and everyone singing in parts: the organ gives the tune out, then plays the four lines "
-            "with the singers, its pedal under them; verses in unison and in parts, a descant over the last refrain "
-            "now and then, a plagal amen",
+    "hymn", "hymn: organ, and everyone singing in parts",  # (the rest in the style card's words: explain.hymn_words)
     {"pipeorgan": 1.0},
     {"pipeorgan": {"*": "hymn", "intro": "givingout", "break": "givingout", "outro": "givingout"}},
     ("pipeorgan",), {"straight": 1.0}, {"*": (0.66, 0.75, 0.84)},
