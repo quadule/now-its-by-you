@@ -110,6 +110,9 @@ class Worker:
         config = config.replace('directory = "./public"', f'directory = "{self.public}"')
         config = config.replace('CLOSES_AT = "2026-09-27T22:00:00-07:00"', f'CLOSES_AT = "{closes}"')
         config = config.replace('DELETE_BY = "2026-09-30T20:00:00-07:00"', f'DELETE_BY = "{delete_by}"')
+        # the story of singing here, before it moved to the studio (STUDIO_URL)
+        assert 'STUDIO_URL = "https://studio.itsby.you"' in config
+        config = config.replace('STUDIO_URL = "https://studio.itsby.you"', "")
         config = config.replace("simple = { limit = 120, period = 60 }", "simple = { limit = 100000, period = 60 }")  # every request here is from one address
         assert f'CLOSES_AT = "{closes}"' in config and f'DELETE_BY = "{delete_by}"' in config
         path = self.tmp / f"wrangler-{self.runs}.toml"

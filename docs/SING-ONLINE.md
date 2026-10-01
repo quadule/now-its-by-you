@@ -25,6 +25,17 @@ It runs on the free tiers of Workers, KV and R2 at this scale. A take streams st
 Worker into R2, which checks it against the checksum the page worked out; the Worker reads a small
 copy of song.json (`song/worker.json`) so each request stays within the free plan's 10 ms.
 
+## Singing moved to the studio (2026-09-30)
+
+Singing has closed here: it happens in the studio now (https://studio.itsby.you, docs/WEB-STUDIO.md, "Hosted on
+Cloudflare"). With `STUDIO_URL` in `[vars]`, every invitation's page (`/i/…`, open or not) says only "Singing
+happens in the studio now: studio.itsby.you", linked, and the singing API (the invitation, the song, its guides,
+joining, takes, words, "I'm done") answers 410 with the same sentence, so nothing more is sung or kept here; the
+singing site's root says it too. Singers' own pages (`/y/…`) work as before (since DELETE_BY they say their
+recordings have been deleted, as promised, and no longer offer to sing more), and so do the seed page at
+now.itsby.you and the artist's API. Removing `STUDIO_URL` and deploying again opens singing here again. Deploy it
+with `npx wrangler deploy` from web/sing, as ever.
+
 ## Invitations
 
     uv run python tools/invite.py new 3 --note "choir, Tuesday"     # three personal links
