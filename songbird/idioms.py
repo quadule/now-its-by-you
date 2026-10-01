@@ -2891,8 +2891,8 @@ def ninth(ctx: StyleContext, c: Chord, u0: float, u1: float) -> int | None:
 def trio_keys(ctx: StyleContext, i: int) -> tuple[int, int]:
     """Where the piano's comping sits: from about an octave under the tonic to a little over the low end of what is
     sung, round middle C."""
-    lo = max(B.register_of("piano")[0], ctx.tonic - 12)
-    return lo, max(ctx.floor(i) + 4, lo + 14)
+    lo = max(B.register_of("piano")[0], ctx.tonic - 15)
+    return lo, max(ctx.floor(i) + 2, lo + 14)
 
 
 def comp_hits(ctx: StyleContext, c: Chord, rng, light: bool, first: bool) -> list[tuple[float, float, float]]:
@@ -2933,6 +2933,17 @@ def comp_hits(ctx: StyleContext, c: Chord, rng, light: bool, first: bool) -> lis
     return out
 
 
+def clear_of(ctx: StyleContext, c: Chord, notes: list[int], u0: float, u1: float) -> list[int]:
+    """A voicing with the tones it can spare (all but the chord's third and its seventh or sixth: the fifth, a ninth,
+    the root) left out where they are a semitone from a note sung there on a strong beat or held a beat or more;
+    at least two kept."""
+    pcs = ctx.pcs(c.symbol)
+    guide = {pcs[1]} | ({pcs[3]} if len(pcs) >= 4 and (pcs[3] - pcs[0]) % 12 in (9, 10, 11) else set())
+    strong = [x for x in ctx.sung_in(u0, u1) if x[3]]
+    out = [p for p in notes if p % 12 in guide or not semitone_off(p % 12, strong)]
+    return out if len(out) >= 2 else notes
+
+
 def w_rootless(ctx: StyleContext, i: int, part: str, light: bool = False) -> list[Ev]:
     """The trio's piano comping: each chord without its root (the bass has it), its third and seventh (or sixth) with
     a fifth and a ninth where they sit, close round middle C under the singer, led smoothly from the last."""
@@ -2946,7 +2957,8 @@ def w_rootless(ctx: StyleContext, i: int, part: str, light: bool = False) -> lis
             if extra is not None and extra not in tones:
                 tones.append(extra)
             notes = ctx.voicing(part, tones, lo, hi, a, z, size=4, root=False, chord=c)
-            base = (0.42 if light else 0.5) * weight
+            notes = clear_of(ctx, c, notes, a, z)
+            base = (0.5 if light else 0.6) * weight
             for j, p in enumerate(notes):
                 out.append(ev(part, a, a + 0.92 * (z - a), p, ctx.vel(part, a, base, 0.8), i=i, shift=0.005 * j))
     return out
@@ -3027,11 +3039,13 @@ def w_walking(ctx: StyleContext, i: int, part: str, two: bool = False) -> list[E
                     options = [target - 1] + options
                 p = next((q for q in options if lo <= q <= hi and not semitone_off(q % 12, sung)),
                          nearest({pcs[2]}, p, lo, hi))
-            else:
-                tones = [q for q in range(lo, hi + 1) if q % 12 in pcs[1:] and abs(q - p) <= 7 and q != p
+            else:  # a tone of the chord on the way from its root to where it is going, never back where it just was
+                goal = target if target is not None else root + (7 if root + 7 <= hi else -5)
+                aim = root + (goal - root) * k / max(len(beats) - 1, 1)
+                before = out[-2].pitch if len(out) >= 2 and out[-2].u0 >= c.u0 - 1e-9 else None
+                tones = [q for q in range(lo, hi + 1) if q % 12 in pcs and abs(q - p) <= 7 and q not in (p, before)
                          and not semitone_off(q % 12, sung)]
-                if target is not None:  # leaning toward where it is going
-                    tones.sort(key=lambda q: abs(q - (p + target) / 2) + 2 * rng.random())
+                tones.sort(key=lambda q: abs(q - aim) + 3.0 * rng.random())
                 p = tones[0] if tones else (root + 12 if root + 12 <= hi else nearest({pcs[2]}, root + 7, lo, hi))
             first = k == 0
             out.append(ev(part, u, u + 0.92 * (end - u), p, ctx.vel(part, u, 0.8 if first else 0.68, 0.88), i=i))
@@ -3060,22 +3074,22 @@ def w_swept(ctx: StyleContext, i: int, part: str, light: bool = False) -> list[E
         halves = [(0.0, g.bar)] if len(g.beats) == 3 else [(0.0, g.bar / 2), (g.bar / 2, g.bar)]
         for a, z in halves:
             if s.u0 - 1e-9 <= bar + a < s.u1 - 1e-9:
-                out.append(Ev(part, bar + a, min(bar + z, s.u1), 0.0, ctx.vel(part, bar + a, 0.55, 0.9),
+                out.append(Ev(part, bar + a, min(bar + z, s.u1), 0.0, ctx.vel(part, bar + a, 0.8, 0.9),
                               art="brush-sweep", section=i))
-        hits = [(0.0, "kick", 0.22)] + ([(g.beats[2], "kick", 0.18)] if len(g.beats) == 4 else [])
+        hits = [(0.0, "kick", 0.3)] + ([(g.beats[2], "kick", 0.24)] if len(g.beats) == 4 else [])
         for b in g.beats:
             if g.backbeat(bar + b):
-                hits.append((b, "brush-tap", 0.3 if light else 0.52))
+                hits.append((b, "brush-tap", 0.4 if light else 0.68))
         if not light:  # the swung off-beat after a backbeat, into the next beat: 2 (and) 3, 4 (and) 1
             for k_b, b in enumerate(g.beats):
                 upto = g.beats[k_b + 1] if k_b + 1 < len(g.beats) else g.bar
                 x = next((x for x in g.subs if b < x < upto - 1e-9), None)
                 if g.backbeat(bar + b) and x is not None and rng.random() < 0.6:
-                    hits.append((x, "brush-tap", 0.32))
-        fill = (k == len(bars) - 1 and nxt is not None and nxt.energy > s.energy + 0.05) if asked is None else \
+                    hits.append((x, "brush-tap", 0.45))
+        fill = (not light and k == len(bars) - 1 and nxt is not None and nxt.energy >= s.energy) if asked is None else \
             (k == len(bars) - 1 and asked)
         if fill:
-            hits += [(x, "brush-tap", 0.4 + 0.08 * j) for j, x in enumerate(v for v in g.subs if v >= g.beats[-1] - 1e-9)]
+            hits += [(x, "brush-tap", 0.5 + 0.08 * j) for j, x in enumerate(v for v in g.subs if v >= g.beats[-1] - 1e-9)]
         for off, piece, v in hits:
             u = bar + off
             if s.u0 - 1e-9 <= u < s.u1 - 1e-9:
@@ -3083,8 +3097,8 @@ def w_swept(ctx: StyleContext, i: int, part: str, light: bool = False) -> list[E
     if i == len(ctx.sections) - 1 and ctx.chords:
         final = ctx.chords[-1].u0
         out = [e for e in out if e.u0 < final - 1e-9]
-        out += [Ev(part, final, final + 2 * g.beat, 0.0, 0.45, art="brush-sweep", section=i),
-                hit(part, final, "brush-tap", 0.5, i), hit(part, final, "kick", 0.3, i)]
+        out += [Ev(part, final, final + 2 * g.beat, 0.0, 0.6, art="brush-sweep", section=i),
+                hit(part, final, "brush-tap", 0.6, i), hit(part, final, "kick", 0.35, i)]
     return out
 
 

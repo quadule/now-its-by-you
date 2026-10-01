@@ -1662,7 +1662,7 @@ def finish(score, genome, params):
 
 JAZZ = _def(
     "jazz", "jazz trio: piano, upright bass and brushes",
-    {"piano": 1.0, "bass": 0.95, "kit": 0.65},
+    {"piano": 1.0, "bass": 0.85, "kit": 1.25},
     {"piano": {"intro": "solo", "break": "solo", "outro": "solo", "turn": "solo",
                "verse1": ((0.3, "rootless"), (0.0, "rootless-light")), "*": "rootless", "tag": "rootless"},
      "bass": {"intro": "twofeel", "verse1": "twofeel", "verse": ((0.45, "walking"), (0.0, "twofeel")),
