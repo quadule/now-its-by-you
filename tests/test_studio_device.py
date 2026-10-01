@@ -241,6 +241,26 @@ def test_singing_on_the_device_never_holds_the_take(tmp_path):
     assert out["state"] == "failed" and "ran out of memory" in out["error"]
     assert d.studio.singing.waiting == {}  # nothing of any take left waiting
 
+    cancelled = take(meta)["json"]["id"]
+    assert d.studio.jobs.cancel(cancelled)
+    assert json.loads(d.handout_wire(cancelled))["status"] == 404  # let go before its turn: nothing to measure
+    taken = take(meta)["json"]["id"]
+    assert d.studio.singing.waiting.keys() == {d.studio.jobs.get(taken).key}  # the cancelled take's went with it
+    d.handout(taken)
+    assert json.loads(d.measured_wire(taken, "not json"))["status"] == 400
+    assert d.studio.jobs.get(taken).state == "running"  # still the measuring worker's to answer
+    assert json.loads(d.handout_wire("nope"))["status"] == 404
+    # the guide and its words are the page's to fetch from the kit, never this worker's
+    assert d.handle("GET", "/api/sing/guide", {"spec": "a.k0.t90"}, None, b"", {})["status"] == 404
+
+
+def test_singing_without_its_kit_says_why(tmp_path):
+    """The kit's offer couldn't be fetched (studio-worker.mjs): singing says so, and the studio works."""
+    d = D.Device({"song": str(LEAD), "machine": "none", "home": str(tmp_path), "runs_with": RUNS_WITH,
+                  "singing_why": "Singing couldn't start here: its guides couldn't be fetched. Reload to try again."})
+    start = d.handle("GET", "/api/start", {}, None, b"", {})
+    assert start["status"] == 200 and start["json"]["sing"]["why"].startswith("Singing couldn't start here")
+
 
 def test_the_static_page_and_its_headers():
     html = SITE.page(singing=False)

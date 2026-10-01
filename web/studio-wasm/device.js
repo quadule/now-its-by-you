@@ -31,6 +31,7 @@
   const READ_MS = 360000;  // ... and to read a version's file (a slow phone: it is laid out, and its timeline drawn)
   const MEASURE_MS = 600000;  // ... and to measure a sung take (a whole song on a slow phone)
   const SPEC = /^[a-z0-9]{1,8}\.k-?\d{1,2}\.t\d{1,3}$/;  // a version to sing to (webstudio/kit.py SPEC)
+  const MAX_TAKE_BYTES = 40 * 2 ** 20;  // a take's most, as a server takes it (webstudio/singing.py MAX_TAKE_BYTES)
   const PIANO = "songbird-piano-score:";  // the piano page's scores, by key (the latest few)
   const MAKING = "songbird-making-whole";  // set while a whole song is made here (renderer.js), for after a crash
 
@@ -310,10 +311,11 @@
     const meta = body.slice(0, metaLength), wav = body.slice(metaLength);
     const seconds = wavSeconds(wav);
     if (!(seconds > 0)) return json(400, { error: "That take couldn't be read as a WAV file." });
+    if (wav.byteLength > MAX_TAKE_BYTES) return json(413, { error: "That take is too long to measure here." });  // the server's
     const m = await s.worker.ask({ cmd: "request", method: "POST", path: "/api/sing/take", query: {}, version: null,
       body: meta, headers: { "x-sing-meta": String(metaLength), "x-sing-seconds": String(seconds) } }, [meta]);
     const data = parsed(m);
-    if (m.status === 200 && data && data.id) measuring = measuring.then(() => measureTake(s, data.id, wav));
+    if (m.status === 200 && data && data.id) measuring = measuring.then(() => measureTake(s, data.id, wav)).catch(() => {});  // a take's failure is kept on its job
     return answer("/api/sing/take", m, data);
   }
 
@@ -323,21 +325,22 @@
     const given = await s.worker.ask({ cmd: "handout", job });
     const what = parsed(given);
     if (given.status !== 200 || !what || !what.request) return;  // let go before its turn: the audio goes with it
-    const measurer = spawn(null, true);
-    let said;
-    try {
+    let measurer = null, said;
+    try {  // whatever happens from here, the job is finished (measured), never left running
+      measurer = spawn(null, true);
       await deadline(measurer.ready, READY_MS, "getting ready to measure it");
       const m = await deadline(measurer.ask({ cmd: "measure", kit: new URL(`${bundle.base}${bundle.studio.kit}`, location.href).href,
         request: JSON.stringify(what.request), take: wav }, [wav]), MEASURE_MS, "measuring it");
       wav = null;
       said = m.status === 200 && m.json ? m.json : JSON.stringify({ error: (parsed(m) || {}).error || "it went wrong on this device" });
     } catch (e) {
-      said = JSON.stringify({ error: e.stopped || e.memory
+      said = JSON.stringify({ error: e.memory
         ? "this device ran out of memory measuring it (one section at a time may fit)"
+        : e.stopped ? "the browser stopped measuring it, perhaps for want of memory (one section at a time may fit)"
         : `it went wrong on this device (${e.message})` });
     } finally {
       wav = null;
-      measurer.stop();  // its memory, and the take's bytes in it, go with it
+      measurer?.stop();  // its memory, and the take's bytes in it, go with it
     }
     await s.worker.ask({ cmd: "measured", job, answer: said }).catch(() => {});
   }
@@ -405,8 +408,8 @@
     }
     try {
       if (path === "/api/open" && method === "POST") return json(...(await bring(body, s)));
-      if (method === "GET" && (path === "/api/sing/lyrics" || path === "/api/sing/guide")) return sungFile(path, url.searchParams.get("spec"));
-      if (method === "POST" && path === "/api/sing/take") return take(s, body, Number(headers.get("X-Sing-Meta")));
+      if (method === "GET" && (path === "/api/sing/lyrics" || path === "/api/sing/guide")) return await sungFile(path, url.searchParams.get("spec"));
+      if (method === "POST" && path === "/api/sing/take") return await take(s, body, Number(headers.get("X-Sing-Meta")));
       const ask = { cmd: "request", method, path, query: Object.fromEntries(url.searchParams), version: named, body,
         headers: { "x-sing-meta": headers.get("X-Sing-Meta") || "" } };
       const timeline = path === "/api/timeline" && method === "GET"

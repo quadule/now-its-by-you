@@ -149,8 +149,12 @@ def kit_files(folder: Path) -> dict[str, bytes]:
     offer = kit.offer()
     extractor = ("import sys; from webstudio.kit import Kit; from webstudio.worker import Tools; "
                  "print(Tools(Kit(sys.argv[1])).extractor)")  # the measuring code's version, in a process of its own
-    made = subprocess.run([sys.executable, "-c", extractor, str(kit.root)], cwd=ROOT, capture_output=True, text=True,
-                          check=True).stdout.strip().splitlines()[-1]
+    ran = subprocess.run([sys.executable, "-c", extractor, str(kit.root)], cwd=ROOT, capture_output=True, text=True,
+                         check=False)
+    made = (ran.stdout.strip().splitlines() or [""])[-1]
+    if ran.returncode or not made:
+        raise SystemExit(f"--sing-kit {folder}: the measuring code couldn't be loaded to check the kit (it needs the "
+                         f"web-singing dependencies: uv sync --group web-singing):\n{ran.stderr[-800:]}")
     if offer["extractor"] != made:
         raise SystemExit(f"--sing-kit {folder}: made by another version of the measuring code ({offer['extractor']}, "
                          f"not {made}): make it again (uv run python -m webstudio.prepare --kit {folder})")

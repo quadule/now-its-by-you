@@ -364,13 +364,8 @@ class Device:
                 offer.update(device=True, consent=DEVICE_CONSENT)
                 offer.pop("keep_days", None)
             return {"status": 200, "json": offer}
-        if path in ("/api/sing/lyrics", "/api/sing/guide"):
-            spec = singing.kit.spec(str(query.get("spec", "")))
-            if spec is None or singing.why_not():
-                raise NotFound("no such version to sing to")
-            if path == "/api/sing/lyrics":
-                return {"status": 200, "file": {"path": str(singing.kit.lyrics(spec["id"])), "type": "application/json"}}
-            return {"status": 200, "file": {"path": str(singing.kit.audio(spec["id"])), "type": "audio/flac"}}
+        if path in ("/api/sing/lyrics", "/api/sing/guide"):  # the kit's own files: the page fetches them (device.js)
+            raise NotFound("The page fetches a version's words and guide from the singing kit itself.")
         raise NotFound("not found")
 
     def _take(self, studio: Studio, body: bytes, headers: dict) -> dict:

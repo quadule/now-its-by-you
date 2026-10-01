@@ -107,7 +107,8 @@ def kit_files(offer: dict, guide: str, earlier: list | tuple = ()) -> list[str]:
     spec = next((s for s in offer["specs"] if s["guide"] == guide), None)
     if spec is None:
         raise ValueError(f"guide {guide} isn't one the kit offers")
-    guides = [guide, *[str(m.get("stamp", {}).get("guide", "")) for m in earlier]]
+    guides = [guide, *[str((m.get("stamp") or {}).get("guide", "")) for m in earlier
+                        if isinstance(m, dict) and isinstance(m.get("stamp") or {}, dict)]]  # (a damaged one: worker.py says so)
     guides = list(dict.fromkeys(g for g in guides if any(s["guide"] == g for s in offer["specs"])))
     return ["offer.json", f"song/{song}.json", *[f"guides/{song}.{g}.score.json" for g in guides],
             *[f"measured/templates/{guide}.{int(k):+d}.{extractor}.npz" for k in spec["templates"]]]

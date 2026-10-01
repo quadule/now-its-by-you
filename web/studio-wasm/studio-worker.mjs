@@ -190,8 +190,12 @@ function kitWrite(name, bytes) {
 
 async function studio({ config }) {
   if (config.kit) {  // the singing kit (build_site.py --sing-kit): its offer is all the studio's singing reads here
-    kitWrite('offer.json', await kitFile(config.kit, 'offer.json'));
-    config = { ...config, sing_kit: '/kit' };
+    try {
+      kitWrite('offer.json', await kitFile(config.kit, 'offer.json'));
+      config = { ...config, sing_kit: '/kit' };
+    } catch (err) {  // singing is said to be away; the rest of the studio works
+      config = { ...config, singing_why: "Singing couldn't start here: its guides couldn't be fetched. Reload to try again." };
+    }
   }
   py.globals.set('CONFIG', JSON.stringify(config));
   const view = py.runPython(`
