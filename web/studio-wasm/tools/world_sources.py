@@ -23,8 +23,8 @@ def digest(path: Path) -> str:
 
 
 def sources() -> list[Path]:
-    return [WORLD / "build.sh", WORLD / "glue.cpp", WORLD / "alloc.h", *sorted((WORLD / "src").rglob("*.cpp")),
-            *sorted((WORLD / "src").rglob("*.h"))]
+    return [WORLD / "build.sh", WORLD / "glue.cpp", WORLD / "alloc.h", WORLD / "harvest_lean.cpp",
+            *sorted((WORLD / "src").rglob("*.cpp")), *sorted((WORLD / "src").rglob("*.h"))]
 
 
 def current() -> dict:

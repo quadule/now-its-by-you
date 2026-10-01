@@ -1,7 +1,8 @@
 // WORLD's Harvest and CheapTrick for the browser (web/studio-wasm/world/world.wasm; docs/WEB-SINGING.md, "On the
-// device"). WORLD's sources in src/ are pyworld 0.3.5's own, unmodified; this file only gives them a C interface
-// the page's Python can call through the instance's exports (py/world_wasm.py), with an allocator of its own
-// (alloc.h) and zig's libc for the maths.
+// device"). WORLD's sources in src/ are pyworld 0.3.5's own, unmodified; Harvest is built from harvest_lean.cpp,
+// src/harvest.cpp with three changes that hold less memory and compute the same numbers. This file only gives them
+// a C interface the page's Python can call through the instance's exports (py/world_wasm.py), with an allocator
+// of its own (alloc.h) and zig's libc for the maths.
 //
 // CheapTrick is run a range of frames at a time (so the spectrogram is never whole in this module's memory) and
 // gives the same numbers as one call over every frame: each frame is computed from the signal, its f0 and its

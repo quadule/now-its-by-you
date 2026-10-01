@@ -1,8 +1,9 @@
 {
  "sources": {
   "alloc.h": "3c6e9c0762954738",
-  "build.sh": "40974e4ab10f82dd",
-  "glue.cpp": "eb5fb151b1f44d8d",
+  "build.sh": "fc566b186269b615",
+  "glue.cpp": "834856cac368cfb5",
+  "harvest_lean.cpp": "9b87a662c60949d0",
   "src/cheaptrick.cpp": "6481ea68ebc3a901",
   "src/common.cpp": "ef4a982d103bfd4c",
   "src/fft.cpp": "7a580cc02a0b040b",
@@ -16,6 +17,6 @@
   "src/world/macrodefinitions.h": "6d5417f864a4a4d9",
   "src/world/matlabfunctions.h": "192a6be8cf749c14"
  },
- "world.wasm": "f19a608ce96415d3",
+ "world.wasm": "e3177ec641d36316",
  "zig": "0.16.0"
 }
