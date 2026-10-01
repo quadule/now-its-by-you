@@ -93,6 +93,10 @@ ENDING_NAMES = {"ring": "the last chord rings", "rit": "it slows broadly to the 
 # house and dub (2026-09-30; docs/STYLES.md, "House and dub"): beside the ring, their words here
 STYLE_NAMES.update({"house": "house", "dub": "dub"})
 PLAYERS.update({"melodica": "melodica"})
+# the jazz trio (2026-09-30; docs/STYLES.md, "A jazz trio"): what plays, no tradition claimed; its kit is brushes
+STYLE_NAMES.update({"jazz": "jazz trio"})
+STYLE_PLAYERS.update({"jazz": {"bass": "upright bass", "kit": "brushes"}})
+STYLE_FEELS.update({"jazz": {"waltz": "a waltz", "swing": "a ballad, swung"}})
 ENDING_NAMES.update({"version": "the band plays a dub version after the song"})
 BACKING_NAMES = {"oohs": "backing voices on oohs", "echo": "backing voices echo the lines",
                  "thirds": "backing voices in harmony", "gang": "everyone sings along",

@@ -99,6 +99,13 @@ LABELS.update({
     "dubbass": "the riddim", "skank": "the skank on the off-beats", "bubble": "the organ bubble",
 })
 FILLED += ("onedrop", "steppers")
+# the jazz trio's (2026-09-30; docs/STYLES.md, "A jazz trio")
+LABELS.update({
+    "rootless": "comping, the chords without their root", "rootless-light": "held chords without their root",
+    "solo": "the tune, the left hand keeping the chords", "walking": "walking, a note a beat",
+    "twofeel": "two to a bar", "swept": "brushes swept, the backbeat tapped", "swept-light": "brushes swept",
+})
+FILLED += ("swept",)
 
 
 def label(player: str, idiom: str) -> str:
