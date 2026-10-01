@@ -442,14 +442,11 @@ class Singing:
             return lambda: handler.too_many(503, busy) if public else handler.fail(503, str(busy))
         return None
 
-    def where(self, meta: dict, audio: bytes) -> dict:
+    def where(self, meta: dict, audio: bytes | None, seconds: float | None = None) -> dict:
         """What the measuring process needs to know about a take, each part checked: the version and guide it
         was sung to (one offered, the one on the page), where on the guide's clock it starts and was meant to
-        end, and its length against those."""
-        import io
-
-        import soundfile as sf
-
+        end, and its length against those. (The studio on a visitor's device never holds the take: it is given
+        the take's length, `seconds`, and the page hands the audio to its measuring worker itself.)"""
         why = self.why_not()
         if why:
             raise Refused(why)
@@ -464,24 +461,30 @@ class Singing:
             raise Refused("That take didn't say where it was sung: reload the page.") from None
         if not (0.0 <= from_s < to_s <= spec["duration"] + 0.5):
             raise Refused("That take isn't inside its guide: reload the page.")
-        try:
-            info = sf.info(io.BytesIO(audio))
-        except Exception as e:  # noqa: BLE001
-            raise Refused("That take couldn't be read as a WAV file.") from e
-        if info.duration > (to_s - from_s) + 10.0:
+        if seconds is None:
+            import io
+
+            import soundfile as sf
+
+            try:
+                seconds = sf.info(io.BytesIO(audio)).duration
+            except Exception as e:  # noqa: BLE001
+                raise Refused("That take couldn't be read as a WAV file.") from e
+        if seconds > (to_s - from_s) + 10.0:
             raise Refused("That take is longer than what it was sung to.")
         earlier = meta.get("earlier") or []
         if not isinstance(earlier, list) or len(earlier) > 11:
             raise Refused("A way of singing is made from at most 12 takes: start again to sing more.")
         return {"song": self.kit.offer()["song"], "guide": spec["guide"], "from_s": from_s, "to_s": to_s,
                 "earlier": earlier, "offered": [s["guide"] for s in self.kit.offer()["specs"]],
-                "seconds": float(info.duration)}
+                "seconds": float(seconds)}
 
-    def take(self, meta: dict, audio: bytes, by: tuple[str, str] | None = None) -> dict:
+    def take(self, meta: dict, audio: bytes | None, by: tuple[str, str] | None = None,
+             seconds: float | None = None) -> dict:
         """A take waiting to be measured, in the studio's queue: the job, how many are ahead of it and about
         how long measuring it takes once it starts. by: a public studio's visitor and address, who may have one
         thing in the queue at a time and a few takes an hour (songbird/public.py "takes"), as for renders."""
-        request = self.where(meta, audio)
+        request = self.where(meta, audio, seconds)
         gate = getattr(self.studio, "gate", None)
         limits = {"whole": request["to_s"] - request["from_s"] > SINGLE}
         if by is not None and gate is not None:
