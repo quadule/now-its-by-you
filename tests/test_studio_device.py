@@ -9,7 +9,6 @@ import importlib.util
 import json
 import re
 import sys
-import types
 from pathlib import Path
 
 import pytest
@@ -168,20 +167,79 @@ def test_someone_s_version_is_read_as_data_and_kept_by_id(device, tmp_path):
     assert D.examine(make_packet(tmp_path), s.genome.title, s.machine, s.day, "../x")["status"] == 404
 
 
-def test_singing_measures_a_take_with_sing_measure_when_it_is_here(device, monkeypatch):
-    """The measuring process's stand-in calls sing_measure.measure(take, request) and nothing else; a job taken is
-    made between requests (Device.work)."""
-    seen = {}
-    fake = types.ModuleType("sing_measure")
-    fake.measure = lambda take, request: seen.update(take=take, request=request) or {"measurement": 1}
-    monkeypatch.setitem(sys.modules, "sing_measure", fake)
-    m = D.Measuring()
-    assert m.call("take", {"audio": b"RIFF", "guide": "g"}) == {"measurement": 1}
-    assert seen == {"take": b"RIFF", "request": {"guide": "g"}}
+def test_a_job_taken_is_made_between_requests(device):
     calls = []
-    job = device.studio.jobs.submit("sing:x", "measure", "your singing", lambda job: calls.append(1) or {"ok": 1})
+    job = device.studio.jobs.submit("x", "export", "a job", lambda job: calls.append(1) or {"ok": 1})
     assert job.state == "queued" and device.work() == 1 and calls == [1]
     assert ask(device, f"/api/job/{job.id}", method="GET")["json"]["result"] == {"ok": 1}
+
+
+def sing_kit(folder: Path) -> Path:
+    """A singing kit's offer for the lead song (all the studio's worker reads of a kit: the page fetches the rest)."""
+    import hashlib
+
+    folder.mkdir(parents=True, exist_ok=True)
+    (folder / "offer.json").write_text(json.dumps({
+        "kit": 1, "song": LEAD.stem, "title": "Now It's By You", "genome": hashlib.sha256(LEAD.read_bytes()).hexdigest(),
+        "extractor": "0123456789ab", "set": {"id": "a", "name": "Set A", "about": ""}, "default": "a.k0.t90",
+        "specs": [{"id": "a.k0.t90", "set": "a", "key": 0, "tempo": 90, "guide": "523190fdf68a", "duration": 151.2,
+                   "templates": [-12, 0, 12]}]}))
+    return folder
+
+
+def test_singing_on_the_device_never_holds_the_take(tmp_path):
+    """With the kit, singing is offered and says it is the device's (its own consent); a take is checked and queued
+    from where it was sung and its length alone; it isn't measured in this worker (work skips it) but handed out
+    without audio to the page's measuring worker, whose answer finishes the job as the server's queue does: the way of
+    singing made and kept, a refusal said as the singer's, a fault as a failure."""
+    from webstudio import singing as W
+
+    d = D.Device({"song": str(LEAD), "machine": "none", "home": str(tmp_path / "home"), "runs_with": RUNS_WITH,
+                  "sing_kit": str(sing_kit(tmp_path / "kit"))})
+    offer = d.handle("GET", "/api/sing/offer", {}, None, b"", {})["json"]
+    assert offer["available"] and offer["device"] is True and offer["consent"] == D.DEVICE_CONSENT != W.CONSENT
+    assert "keep_days" not in offer and offer["specs"][0]["id"] == "a.k0.t90"
+
+    def take(meta, seconds="31.5"):
+        body = json.dumps(meta).encode()
+        return d.handle("POST", "/api/sing/take", {}, None, body,
+                        {"x-sing-meta": str(len(body)), "x-sing-seconds": seconds})
+
+    meta = {"spec": "a.k0.t90", "guide": "523190fdf68a", "from_s": 10.0, "to_s": 40.0, "earlier": []}
+    assert take(meta, "nan")["status"] == 400 and take(meta, "0")["status"] == 400
+    assert "longer than" in take(meta, "45")["json"]["error"]
+    assert "guide changed" in take({**meta, "guide": "000000000000"})["json"]["error"]
+    queued = take(meta)
+    assert queued["status"] == 200 and queued["json"]["state"] == "queued" and queued["json"]["estimate"] > 0
+    job = queued["json"]["id"]
+    assert d.work() == 0 and d.studio.jobs.get(job).state == "queued"  # never measured in this worker
+    assert d.studio.singing.waiting[d.studio.jobs.get(job).key]["audio"] is None
+
+    given = json.loads(d.handout_wire(job))
+    request = json.loads(given["json"])["request"]
+    assert given["status"] == 200 and d.studio.jobs.get(job).state == "running"
+    assert request == {"song": LEAD.stem, "guide": "523190fdf68a", "from_s": 10.0, "to_s": 40.0, "earlier": [],
+                       "offered": ["523190fdf68a"]}
+    assert json.loads(d.handout_wire(job))["status"] == 404  # handed out once
+    phrasing = {"phrases": {}, "source_detail": "1 sung take(s)"}
+    answer = {"ok": {"measurement": {"notes": []}, "phrasing": phrasing, "portrait": "You sang.", "skipped": [],
+                     "audio_seconds": 31.5, "seconds": 6.0, "peak_mb": 380}}
+    done = json.loads(d.measured_wire(job, json.dumps(answer)))
+    result = json.loads(done["json"])["result"]
+    assert done["status"] == 200 and json.loads(done["json"])["state"] == "done"
+    assert result["name"].startswith("sung-") and result["portrait"] == "You sang." and result["measurement"] == {"notes": []}
+    assert d.studio.singing.store.path(result["name"]) is not None  # kept, as the server keeps a way
+    assert json.loads(d.measured_wire(job, json.dumps(answer)))["status"] == 404  # finished once
+
+    refused = take(meta)["json"]["id"]
+    d.handout(refused)
+    out = d.measured(refused, {"refused": "Your take sat 7 semitones above the guide's key."})["json"]
+    assert out["state"] == "done" and out["result"] == {"refused": "Your take sat 7 semitones above the guide's key."}
+    failed = take(meta)["json"]["id"]
+    d.handout(failed)
+    out = d.measured(failed, {"error": "this device ran out of memory measuring it"})["json"]
+    assert out["state"] == "failed" and "ran out of memory" in out["error"]
+    assert d.studio.singing.waiting == {}  # nothing of any take left waiting
 
 
 def test_the_static_page_and_its_headers():
@@ -214,3 +272,37 @@ def test_the_static_page_and_its_headers():
             assert url.startswith(("/", "#", "https:")), (name, url)
     assert 'href="/piano/piano.css"' in files["piano/index.html"].decode()
     assert 'href="/"' in files["piano/index.html"].decode()  # back to the studio
+
+
+def test_the_singing_kit_is_served_a_file_at_a_time(tmp_path, monkeypatch):
+    """build_site.py lays the kit out as the device fetches it, each file on its own in a hashed (immutable) folder:
+    only the files the offer names, and a kit for another song, made by other measuring code, or missing a file is
+    refused before anything is built."""
+    import subprocess
+
+    kit = sing_kit(tmp_path / "kit")
+    names = ["offer.json", f"song/{LEAD.stem}.json", "lyrics/a.k0.t90.json", "audio/a.k0.t90.melody.flac",
+             f"guides/{LEAD.stem}.523190fdf68a.score.json",
+             *[f"measured/templates/523190fdf68a.{k}.0123456789ab.npz" for k in ("-12", "+0", "+12")]]
+    version = {"made": "0123456789ab"}
+    monkeypatch.setattr(SITE.subprocess, "run",
+                        lambda *a, **k: subprocess.CompletedProcess(a, 0, version["made"] + "\n", ""))
+    with pytest.raises(SystemExit, match="missing"):
+        SITE.kit_files(kit)
+    for name in names[1:]:
+        (kit / name).parent.mkdir(parents=True, exist_ok=True)
+        (kit / name).write_bytes(name.encode())
+    (kit / "guide").mkdir()
+    (kit / "guide" / "elsewhere.json").write_text("{}")  # a file of the kit's no take needs: not served
+    files = SITE.kit_files(kit)
+    assert list(files) == names and files["audio/a.k0.t90.melody.flac"] == b"audio/a.k0.t90.melody.flac"
+    version["made"] = "ba9876543210"
+    with pytest.raises(SystemExit, match="another version of the measuring code"):
+        SITE.kit_files(kit)
+    offer = json.loads((kit / "offer.json").read_text())
+    (kit / "offer.json").write_text(json.dumps({**offer, "genome": "0" * 64}))
+    with pytest.raises(SystemExit, match="another version of this song"):
+        SITE.kit_files(kit)
+    guide = SITE.describe("render/kit-0123456789abcdef/audio/a.k0.t90.melody.flac")
+    assert guide["type"] == "audio/flac" and guide["cache"] == SITE.IMMUTABLE and "csp" not in guide
+    assert SITE.describe("render/kit-0123456789abcdef/measured/templates/g.+0.v.npz")["cache"] == SITE.IMMUTABLE

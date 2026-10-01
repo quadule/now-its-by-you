@@ -13,6 +13,10 @@
 //   record, the song, its timeline: never the audio) goes in this browser's IndexedDB, so it opens at once next time.
 // - Files a server would offer at an address are kept as this browser keeps things: the MIDI file as a Blob, the
 //   piano page's score in localStorage (the latest few), for the piano tab to read.
+// - Singing (with the singing kit): the guide and its words are the kit's own files, fetched as they are; a take is
+//   checked and queued by the studio's worker from where it was sung and its length alone, and its audio goes to a
+//   measuring worker started for that take and ended after (studio-worker.mjs "measure"), which fetches the kit's
+//   files the take needs and gives back only numbers. The take never reaches the studio's worker, or the network.
 // - Nothing leaves this device but a version the visitor chooses to share (share(), POST /api/versions).
 "use strict";
 
@@ -25,6 +29,8 @@
   const ID = /^[0-9a-f]{32}$/;
   const READY_MS = 180000;  // the most a worker may take to get ready (a first visit fetches ~30 MB) before it's given up
   const READ_MS = 360000;  // ... and to read a version's file (a slow phone: it is laid out, and its timeline drawn)
+  const MEASURE_MS = 600000;  // ... and to measure a sung take (a whole song on a slow phone)
+  const SPEC = /^[a-z0-9]{1,8}\.k-?\d{1,2}\.t\d{1,3}$/;  // a version to sing to (webstudio/kit.py SPEC)
   const PIANO = "songbird-piano-score:";  // the piano page's scores, by key (the latest few)
   const MAKING = "songbird-making-whole";  // set while a whole song is made here (renderer.js), for after a crash
 
@@ -76,7 +82,7 @@
     setTimeout(() => reject(new Error(`${what} took too long`)), ms))]);
 
   // A worker running the program: the studio (for the whole visit), or a reader (one file, then let go).
-  function spawn(onLoading) {
+  function spawn(onLoading, lean = false) {
     const w = new Worker(`${at(bundle.app)}studio-worker.mjs`, { type: "module" });
     const pending = new Map();
     const said = {};
@@ -116,7 +122,7 @@
     };
     worker.make = (config) => { w.postMessage({ cmd: "studio", config }); return worker.made; };
     worker.stop = () => { w.terminate(); stopped("let go"); };
-    w.postMessage({ cmd: "init", pyodide: at(bundle.pyodide), app: at(bundle.app), bytes: bundle.bytes });
+    w.postMessage({ cmd: "init", pyodide: at(bundle.pyodide), app: at(bundle.app), bytes: bundle.bytes, lean });
     return worker;
   }
 
@@ -268,6 +274,87 @@
     }
   }
 
+  // ---------------------------------------------------------------- singing, on this device
+
+  // the guide and its words: the kit's own files (immutable: fetched once), never through the studio's worker
+  async function sungFile(path, spec) {
+    const kit = bundle.studio && bundle.studio.kit;
+    if (!kit || !SPEC.test(spec || "")) return json(404, { error: "no such version to sing to" });
+    const name = path === "/api/sing/lyrics" ? `lyrics/${spec}.json` : `audio/${spec}.melody.flac`;
+    let r;
+    try { r = await network(new URL(`${bundle.base}${kit}${name}`, location.href).href); }
+    catch (e) { return json(503, { error: `It couldn't be fetched: ${e.message}.` }); }
+    return r.ok ? r : json(404, { error: "no such version to sing to" });
+  }
+
+  // a WAV's length in seconds, from its header (the karaoke's recorder writes PCM); NaN if it isn't one
+  function wavSeconds(bytes) {
+    try {
+      const v = new DataView(bytes), tag = (at) => String.fromCharCode(...new Uint8Array(bytes, at, 4));
+      if (tag(0) !== "RIFF" || tag(8) !== "WAVE") return NaN;
+      let at = 12, rate = 0, frame = 0;
+      while (at + 8 <= bytes.byteLength) {
+        const id = tag(at), size = v.getUint32(at + 4, true);
+        if (id === "fmt ") { rate = v.getUint32(at + 12, true); frame = v.getUint16(at + 10, true) * v.getUint16(at + 22, true) / 8; }
+        if (id === "data") return rate && frame ? Math.min(size, bytes.byteLength - at - 8) / (rate * frame) : NaN;
+        at += 8 + size + (size % 2);
+      }
+    } catch (e) { /* not a WAV */ }
+    return NaN;
+  }
+
+  // POST /api/sing/take: where it was sung and its length go to the studio's worker, which checks and queues it as
+  // a server does; the audio stays here until its measuring worker takes it
+  async function take(s, body, metaLength) {
+    if (!body || !(metaLength > 0) || metaLength > body.byteLength - 44) return json(400, { error: "That take was cut short: send it again." });
+    const meta = body.slice(0, metaLength), wav = body.slice(metaLength);
+    const seconds = wavSeconds(wav);
+    if (!(seconds > 0)) return json(400, { error: "That take couldn't be read as a WAV file." });
+    const m = await s.worker.ask({ cmd: "request", method: "POST", path: "/api/sing/take", query: {}, version: null,
+      body: meta, headers: { "x-sing-meta": String(metaLength), "x-sing-seconds": String(seconds) } }, [meta]);
+    const data = parsed(m);
+    if (m.status === 200 && data && data.id) measuring = measuring.then(() => measureTake(s, data.id, wav));
+    return answer("/api/sing/take", m, data);
+  }
+
+  let measuring = Promise.resolve();  // one take at a time
+
+  async function measureTake(s, job, wav) {
+    const given = await s.worker.ask({ cmd: "handout", job });
+    const what = parsed(given);
+    if (given.status !== 200 || !what || !what.request) return;  // let go before its turn: the audio goes with it
+    const measurer = spawn(null, true);
+    let said;
+    try {
+      await deadline(measurer.ready, READY_MS, "getting ready to measure it");
+      const m = await deadline(measurer.ask({ cmd: "measure", kit: new URL(`${bundle.base}${bundle.studio.kit}`, location.href).href,
+        request: JSON.stringify(what.request), take: wav }, [wav]), MEASURE_MS, "measuring it");
+      wav = null;
+      said = m.status === 200 && m.json ? m.json : JSON.stringify({ error: (parsed(m) || {}).error || "it went wrong on this device" });
+    } catch (e) {
+      said = JSON.stringify({ error: e.stopped || e.memory
+        ? "this device ran out of memory measuring it (one section at a time may fit)"
+        : `it went wrong on this device (${e.message})` });
+    } finally {
+      wav = null;
+      measurer.stop();  // its memory, and the take's bytes in it, go with it
+    }
+    await s.worker.ask({ cmd: "measured", job, answer: said }).catch(() => {});
+  }
+
+  // Forget my singing: every way this browser kept (an earlier take's too, not only the one named), here and in the
+  // studio's worker
+  async function forgetSinging(s, named) {
+    const names = new Set([named, ...(await stored("sung", "readonly", (st) => st.getAllKeys()) || [])]);
+    for (const name of names) {
+      if (name !== named) {
+        const body = new TextEncoder().encode(JSON.stringify({ name })).buffer;
+        await s.worker.ask({ cmd: "request", method: "POST", path: "/api/sing/forget", query: {}, version: null, body, headers: {} }, [body]);
+      }
+      await forget("sung", name);
+    }
+  }
+
   // ---------------------------------------------------------------- the page's requests, answered here
 
   const json = (status, data) => new Response(JSON.stringify(data), { status, headers: { "Content-Type": "application/json" } });
@@ -318,6 +405,8 @@
     }
     try {
       if (path === "/api/open" && method === "POST") return json(...(await bring(body, s)));
+      if (method === "GET" && (path === "/api/sing/lyrics" || path === "/api/sing/guide")) return sungFile(path, url.searchParams.get("spec"));
+      if (method === "POST" && path === "/api/sing/take") return take(s, body, Number(headers.get("X-Sing-Meta")));
       const ask = { cmd: "request", method, path, query: Object.fromEntries(url.searchParams), version: named, body,
         headers: { "x-sing-meta": headers.get("X-Sing-Meta") || "" } };
       const timeline = path === "/api/timeline" && method === "GET"
@@ -334,7 +423,7 @@
       const data = parsed(m);
       if (timeline && m.status === 200 && data) keep("answers", timeline, data);
       if (m.status === 200 && data && path === "/api/sing/keep" && data.name && data.phrasing) keep("sung", data.name, data.phrasing);
-      if (m.status === 200 && forgetting) forget("sung", String(forgetting));
+      if (m.status === 200 && forgetting) await forgetSinging(s, String(forgetting));
       return answer(path, m, data);
     } catch (e) {
       if (e.stopped) {

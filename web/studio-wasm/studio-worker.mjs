@@ -15,17 +15,29 @@
 // The same script is also the studio itself, on the visitor's device (songbird/studio/device.js starts one, for the
 // whole visit, apart from the render workers: docs/WEB-STUDIO.md, "On the device"): after "init",
 //
-//   → { cmd: "studio", config: { song, machine, runs_with, sing_kit? } }  ← { kind: "studio", program, song, machine, day, title, heap }
+//   → { cmd: "studio", config: { song, machine, runs_with, kit? } }  ← { kind: "studio", program, song, machine, day, title, heap }
+//     (kit: the singing kit's folder URL, build_site.py's render/kit-<hash>/: its offer.json is fetched)
 //   → { cmd: "request", id, method, path, query, version, body (ArrayBuffer or null), headers }
 //   → { cmd: "restore", id, version: { id, record, genome, timeline, shared } }   a version read before, kept again
 //   → { cmd: "read", id, bytes, title, machine, day, version? }  a version's file, read as data in a worker of its own
 //     (no "studio" asked of it, and let go after): { id, url, shared, record, genome, timeline } to keep, or { error }
 //   ← { kind: "answer", id, status, json (text), file?: { bytes (ArrayBuffer), type, name }, heap }
 //
+//   → { cmd: "handout", id, job }            a sung take's job: what to measure ({request}: the server's, but the audio)
+//   → { cmd: "measured", id, job, answer }   what its measuring worker answered (JSON text): the job finished here
+//
 // Requests are answered one at a time, in order, except the timeline (the heaviest question: seconds), which waits
-// while anything else is waiting. A job the studio took (a sung take's measuring) is made once nothing is.
+// while anything else is waiting. A job the studio took is made once nothing is; a sung take's never is (below).
+//
+// And a sung take is measured in a worker of its own (device.js starts one for each take and ends it after, so the
+// measuring's memory, and the take's freed bytes in it, go with it; docs/WEB-SINGING.md "On the device"):
+//
+//   → { cmd: "init", ..., lean: true }   Pyodide and the program, without the renderer's kernels
+//   → { cmd: "measure", id, kit (the kit's folder URL), request (JSON text), take (ArrayBuffer: the WAV, moved here) }
+//   ← { kind: "answer", id, status: 200, json: sing_measure.answer's ({ok} | {refused} | {error}), heap }
 
 let py = null;
+let appURL = '';
 let received = 0;
 let total = 0;
 let step = '';
@@ -59,8 +71,9 @@ addEventListener('securitypolicyviolation', (e) => {
   postMessage({ kind: 'error', message: `blocked by the page's policy (${e.violatedDirective})`, memory: false });
 });
 
-async function init({ pyodide, app, bytes }) {
+async function init({ pyodide, app, bytes, lean }) {
   const t0 = performance.now();
+  appURL = app;
   total = bytes || 0;
   step = 'Python';
   loading(true);
@@ -71,6 +84,7 @@ async function init({ pyodide, app, bytes }) {
   await py.loadPackage(['numpy', 'scipy', 'soundfile'], { messageCallback: () => {}, errorCallback: () => {} });
   step = 'the program';
   loading(true);
+  if (lean) return initLean(app, t0);
   const kernels = await import(`${app}kernels/kernels.gen.mjs`);
   const rt = await import(`${app}kernels/rt.mjs`);
   const { loadWasmKernels } = await import(`${app}wasm/kernels.mjs`);
@@ -102,6 +116,21 @@ PROGRAM = pack.program_sha256(pack.program_files())
 `);
   postMessage({ kind: 'ready', seconds: (performance.now() - t0) / 1000, heap: heapMiB(), received,
     program: py.globals.get('PROGRAM') });
+}
+
+// A measuring worker's start: the program unpacked, but none of the renderer's kernels or instruments (the measuring
+// imports what it needs itself)
+async function initLean(app, t0) {
+  const zip = new Uint8Array(await (await fetch(`${app}songbird.zip`)).arrayBuffer());
+  py.unpackArchive(zip, 'zip', { extractDir: '/app' });
+  await py.runPythonAsync(`
+import os, sys
+os.environ["SONGBIRD_THREADS"] = "1"
+os.environ["SONGBIRD_HOME"] = "/tmp/songbird-home"
+sys.path.insert(0, "/app")
+os.chdir("/app")
+`);
+  postMessage({ kind: 'ready', seconds: (performance.now() - t0) / 1000, heap: heapMiB(), received });
 }
 
 function render(spec) {
@@ -146,10 +175,22 @@ function failed(err) {
 
 const LATER = new Set(['/api/timeline']);  // asked after everything else that's waiting
 
+// a file of the singing kit (a hashed folder: the browser keeps each for good once fetched), by its path in the kit
+async function kitFile(kit, name) {
+  if (!/^[a-z]+(\/[A-Za-z0-9._+-]+)*\.(json|npz)$/.test(name) || name.includes('..')) throw new Error(`not a kit file: ${name}`);
+  const r = await fetch(kit + name.split('/').map(encodeURIComponent).join('/'));  // "+0" as %2B0, as the host names it
+  if (!r.ok) throw new Error(`the singing kit has no ${name} (${r.status})`);
+  return new Uint8Array(await r.arrayBuffer());
+}
+
+function kitWrite(name, bytes) {
+  py.FS.mkdirTree(`/kit/${name.split('/').slice(0, -1).join('/')}`);
+  py.FS.writeFile(`/kit/${name}`, bytes);
+}
+
 async function studio({ config }) {
-  if (config.kit) {  // the singing kit (build_site.py --sing-kit), unpacked where the studio's singing reads it
-    const zip = new Uint8Array(await (await fetch(config.kit)).arrayBuffer());
-    py.unpackArchive(zip, 'zip', { extractDir: '/kit' });
+  if (config.kit) {  // the singing kit (build_site.py --sing-kit): its offer is all the studio's singing reads here
+    kitWrite('offer.json', await kitFile(config.kit, 'offer.json'));
     config = { ...config, sing_kit: '/kit' };
   }
   py.globals.set('CONFIG', JSON.stringify(config));
@@ -199,6 +240,45 @@ function restore(m) {
   answered(m.id, call('restore', v.id, v.record, v.genome, v.timeline || null, !!v.shared));
 }
 
+function handout(m) {
+  answered(m.id, call('handout', m.job));
+}
+
+function measured(m) {
+  answered(m.id, call('measured', m.job, m.answer));
+}
+
+// ---------------------------------------------------------------- a sung take measured, in a worker of its own
+
+async function measure(m) {
+  const t0 = performance.now();
+  const { loadWorld } = await import(`${appURL}world/world.mjs`);
+  py.registerJsModule('songbird_world', await loadWorld(await (await fetch(`${appURL}world/world.wasm`)).arrayBuffer()));
+  py.unpackArchive(new Uint8Array(await (await fetch(`${appURL}singing.zip`)).arrayBuffer()), 'zip', { extractDir: '/app' });
+  const offer = await kitFile(m.kit, 'offer.json');
+  kitWrite('offer.json', offer);
+  py.globals.set('OFFER', new TextDecoder().decode(offer));
+  py.globals.set('REQUEST', m.request);
+  const names = JSON.parse(py.runPython(`
+import json, sing_measure
+_request = json.loads(REQUEST)
+json.dumps(sing_measure.kit_files(json.loads(OFFER), _request["guide"], _request.get("earlier") or []))
+`));
+  for (const name of names) {
+    if (name !== 'offer.json') kitWrite(name, await kitFile(m.kit, name));
+  }
+  const ready = (performance.now() - t0) / 1000;
+  py.globals.set('TAKE', new Uint8Array(m.take));
+  const said = py.runPython(`
+_request["kit"] = "/kit"
+_said = sing_measure.answer_json(TAKE, _request)
+del TAKE, _request, REQUEST, OFFER
+_said
+`);
+  postMessage({ kind: 'answer', id: m.id, status: 200, json: said, heap: heapMiB(), ready,
+    seconds: (performance.now() - t0) / 1000 });
+}
+
 function work() {  // the jobs the studio took, made now that nothing is waiting
   if (py && py.globals.has('DEVICE')) py.runPython('DEVICE.work()');
 }
@@ -223,6 +303,9 @@ async function handle(m) {
   if (m.cmd === 'request') return request(m);
   if (m.cmd === 'read') return read(m);
   if (m.cmd === 'restore') return restore(m);
+  if (m.cmd === 'handout') return handout(m);
+  if (m.cmd === 'measured') return measured(m);
+  if (m.cmd === 'measure') return measure(m);
 }
 
 async function pump() {

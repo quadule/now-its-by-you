@@ -18,8 +18,11 @@ the same statuses for the same refusals. What differs is only what a server can'
   the audio) in the browser's storage and gives it back at start (Device.restore).
 - **Files** a server would offer at an address (the MIDI file, the piano page's score) are handed to the page, which
   keeps them as the browser keeps things (a Blob, local storage).
-- **Singing**: a take's measurement is sing_measure.measure (made for the browser elsewhere), if it is here and the
-  singing kit is too; until then singing says it isn't available yet.
+- **Singing** (with the singing kit: build_site.py --sing-kit): the studio's own Singing checks a take and queues it,
+  and makes the way of singing from its numbers, as on a server; but the take itself never comes here. The page
+  keeps its audio and hands it to a measuring worker of its own, started for that take and let go after
+  (sing_measure.measure, in web/studio-wasm/studio-worker.mjs), which gives back only numbers: Device.handout says
+  what to measure, Device.measured takes the answer and finishes the job as the server's queue would.
 
     Device(config).handle(method, path, query, version, body, headers) -> {"status", "json", "file"?, ...}
 """
@@ -38,6 +41,7 @@ from songbird import studio as studio_mod
 from songbird.studio import Busy, NotFound, Studio
 
 NOT_YET = "Singing here isn't available yet."
+DEVICE_CONSENT = 2  # the consent's version on the device (webstudio.singing.CONSENT is the server's): its words differ
 NO_STEMS = ("The parts can't be made in the browser yet. Record it, then open the recording with Python on a "
             "computer (python3 the-file.flac studio) to make them.")
 THINKING = 300.0  # seconds the program may take to read a version brought here: a server's 40 is for its own CPU, and
@@ -171,15 +175,14 @@ class Device:
         self._singing(config)
 
     def _singing(self, config: dict) -> None:
-        """Singing, if its measurement is here (sing_measure, made for the browser) and the kit it measures against."""
+        """Singing, if the build gave it the kit (its offer, where sing_kit says: the worker fetched it). The take is
+        measured in a worker of its own (handout, measured), never in this one."""
         kit = config.get("sing_kit")
         if not kit:
             return
         try:
-            import sing_measure  # noqa: F401 - another part of the work: until it's here, singing isn't
-
             from webstudio.singing import Singing
-        except Exception:  # noqa: BLE001 - absent, or not runnable here: said, not raised
+        except Exception:  # noqa: BLE001 - not runnable here: said, not raised
             return
         self.studio.singing = Singing(self.studio, kit, measurer=Measuring())
 
@@ -204,6 +207,18 @@ class Device:
         body = Path(body_path).read_bytes()
         Path(body_path).unlink(missing_ok=True)
         return self._wire(self.handle(method, path, query, version, body, {str(k).lower(): v for k, v in headers.items()}))
+
+    def handout_wire(self, job_id) -> str:
+        try:
+            return self._wire(self.handout(job_id))
+        except NotFound as e:
+            return self._wire({"status": 404, "json": {"error": str(e)}})
+
+    def measured_wire(self, job_id, answer) -> str:
+        try:
+            return self._wire(self.measured(job_id, json.loads(answer)))
+        except (NotFound, ValueError) as e:
+            return self._wire({"status": 404 if isinstance(e, NotFound) else 400, "json": {"error": str(e)}})
 
     def restore_wire(self, vid, record, genome, timeline, shared) -> str:
         ok = self.restore(vid, record, genome, timeline, shared)
@@ -287,24 +302,68 @@ class Device:
     # ------------------------------------------------------------ the jobs a device makes (between requests)
 
     def work(self) -> int:
-        """Every job waiting, made one at a time (a sung take's measuring): how many."""
+        """Every job waiting, made one at a time: how many. A sung take's measuring isn't made here: it waits for
+        the page's measuring worker (handout, measured)."""
         jobs = self.studio.jobs
         made = 0
         while True:
             with jobs.lock:
-                if not jobs.pending:
+                todo = [j for j in jobs.pending if j.kind != "measure"]
+                if not todo:
                     return made
-                job = jobs._next()
+                job = min(todo, key=lambda j: j.created)
+                jobs.pending.remove(job)
                 job.state = "running"
             jobs._work(job)
             made += 1
+
+    def _measuring(self, job_id: str):
+        job = self.studio.jobs.get(str(job_id or ""))
+        if job is None or job.kind != "measure" or self.studio.singing is None:
+            raise NotFound("There's no take waiting to be measured by that name.")
+        return job
+
+    def handout(self, job_id: str) -> dict:
+        """A take's job, handed to the page's measuring worker: what to measure (the server's measuring request, but
+        the audio, which the page kept), the job marked as being measured."""
+        jobs, singing = self.studio.jobs, self.studio.singing
+        job = self._measuring(job_id)
+        with jobs.lock:
+            request = singing.waiting.get(job.key)
+            if job.state != "queued" or request is None:
+                raise NotFound("That take isn't waiting to be measured.")
+            jobs.pending.remove(job)
+            job.state, job.stage, job.progress = "running", "listening to how you sang", 0.05
+        return {"status": 200, "json": {"request": {k: v for k, v in request.items() if k not in ("audio", "seconds")}}}
+
+    def measured(self, job_id: str, answer: dict) -> dict:
+        """The measuring worker's answer ({"ok": result} | {"refused": why} | {"error": what}, sing_measure.answer's)
+        for a take handed out: its job finished as the server's queue finishes it (Singing._measure: the way of
+        singing made and kept, or the refusal said), and the job as the page sees it."""
+        jobs = self.studio.jobs
+        job = self._measuring(job_id)
+        if job.state != "running":
+            raise NotFound("That take isn't being measured.")
+        if not isinstance(answer, dict):
+            answer = {"error": "the measuring worker's answer couldn't be read"}
+        measuring = self.studio.singing.measurer
+        measuring.answer = answer
+        try:
+            jobs._work(job)
+        finally:
+            measuring.answer = None
+        return {"status": 200, "json": jobs.view(job)}
 
     # ------------------------------------------------------------ singing, when its measurement is here
 
     def _sing_get(self, studio: Studio, path: str, query: dict) -> dict:
         singing = studio.singing
         if path == "/api/sing/offer":
-            return {"status": 200, "json": singing.offer()}
+            offer = singing.offer()
+            if offer.get("available"):  # measured here, kept here: the page says so (webstudio/sing.js)
+                offer.update(device=True, consent=DEVICE_CONSENT)
+                offer.pop("keep_days", None)
+            return {"status": 200, "json": offer}
         if path in ("/api/sing/lyrics", "/api/sing/guide"):
             spec = singing.kit.spec(str(query.get("spec", "")))
             if spec is None or singing.why_not():
@@ -315,27 +374,28 @@ class Device:
         raise NotFound("not found")
 
     def _take(self, studio: Studio, body: bytes, headers: dict) -> dict:
-        """A take (a JSON of where it was sung, X-Sing-Meta bytes long, then its WAV): measured here between
-        requests, as the server's queue would; the page polls its job."""
+        """A take, as the page's shim sends it here: the JSON of where it was sung (X-Sing-Meta bytes long), and the
+        take's length in seconds (X-Sing-Seconds), never its audio, which the page keeps for its measuring worker.
+        Checked and queued as the server checks and queues one (Singing.take); the shim hands it out next."""
         from webstudio import singing as singing_mod
 
         if studio.singing is None:
             raise ValueError(self.studio.sing_available().get("why") or NOT_YET)
         try:
             meta_length = int(headers.get("x-sing-meta") or -1)
+            seconds = float(headers.get("x-sing-seconds") or "nan")
         except ValueError:
-            meta_length = -1
-        if not 0 < len(body) <= singing_mod.MAX_META_BYTES + singing_mod.MAX_TAKE_BYTES \
-                or not 0 < meta_length <= min(singing_mod.MAX_META_BYTES, len(body) - 44):
+            meta_length, seconds = -1, float("nan")
+        if not 0 < meta_length == len(body) <= singing_mod.MAX_META_BYTES or not 0.0 < seconds <= 3600.0:
             raise ValueError("That take was cut short: send it again.")
         try:
-            meta = json.loads(body[:meta_length])
+            meta = json.loads(body)
         except ValueError:
             meta = None
         if not isinstance(meta, dict):
             raise ValueError("That take didn't say where it was sung: reload the page.")
         try:
-            return {"status": 200, "json": studio.singing.take(meta, bytes(body[meta_length:]), None)}
+            return {"status": 200, "json": studio.singing.take(meta, None, None, seconds=seconds)}
         except singing_mod.Refused as e:
             raise ValueError(str(e)) from None
 
@@ -373,19 +433,25 @@ def examine_wire(body_path: str, title: str, machine: str, day: str, vid: str | 
 
 
 class Measuring:
-    """The measuring process's stand-in on the device: a take measured here, by sing_measure.measure (the same
-    answer as webstudio/worker.py's "take"), between requests."""
+    """The measuring process's stand-in on the device: the take is measured by the page's measuring worker
+    (sing_measure.answer, the same answer as webstudio/worker.py's "take"); what it answered (Device.measured) is
+    given back to Singing._measure as the measuring process's reply would be."""
 
     idle = 0.0
-    per_second, start = 0.13, 1.5
+    per_second, start = 0.2, 5.0  # 1.2 to 1.6 times this Mac's native measuring, and a worker started for each take
+    answer: dict | None = None
 
     def call(self, op: str, request: dict) -> dict:
-        if op != "take":
-            raise RuntimeError(f"no {op} here")
-        import sing_measure
+        from webstudio.singing import Refused
 
-        take = request.pop("audio")
-        return sing_measure.measure(take, request)
+        if op != "take" or self.answer is None:
+            raise RuntimeError(f"no {op} here: a take is measured by the page's measuring worker")
+        answer = self.answer
+        if "ok" in answer and isinstance(answer["ok"], dict):
+            return answer["ok"]
+        if "refused" in answer:
+            raise Refused(str(answer["refused"]))
+        raise RuntimeError(str(answer.get("error") or "the measuring worker gave no answer"))
 
     def estimate(self, seconds: float) -> float:
         return self.start + self.per_second * seconds
