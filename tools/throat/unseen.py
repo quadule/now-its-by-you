@@ -14,11 +14,17 @@ stretch's own average spectrum taken out of both (the microphone's and the room'
 formant contrast (RMS dB about a 17-point Hann trend, 200 Hz-5 kHz) and flutter (RMS dB of the frame-to-frame
 change) on those frames, predicted against real, since a small network's envelope is an average.
 
+A model trained with rooms (train.py --channel-dim, which writes the room's FiLM weights beside the folded model)
+gets a room fitted too, from the mean of the recordings' rows, beside the singer: the model written sings through
+the studio, and an unseen singer's recording is never the studio (--no-room fits the singer alone, as before).
+
 The house singers' held-out segments are scored with their own rows (does adding people cost the house
-singers anything?).
+singers anything?), through the studio.
 """
 import argparse
+import json
 import sys
+from dataclasses import replace
 
 import numpy as np
 from scipy.optimize import minimize
@@ -64,7 +70,7 @@ def scored(d, runs):
     for r in runs:
         sl = slice(r[0], r[-1] + 1)
         m = np.asarray(d["mask"][sl]) & (np.asarray(d["role"][sl]) >= 2)
-        top = np.asarray(d["sp_top"][sl]) if "sp_top" in d.files else np.full(len(r), 128)
+        top = np.asarray(d["sp_top"][sl]) if "sp_top" in d else np.full(len(r), 128)
         out.append((m, top))
     return out
 
@@ -116,6 +122,21 @@ def texture(model, d, runs, sc, emb):
     return (np.mean(pc), np.mean(pf), np.mean(rc), np.mean(rf)) if pc else (np.nan,) * 4
 
 
+def roomy(path, model):
+    """The model with the room's numbers after the singer's in the embedding it takes (the studio's row giving back
+    the model as written), and the rooms' rows; or the model as it is, and None, if it was written without them."""
+    z = np.load(path)
+    if "room_film.0" not in z.files:
+        return model, None
+    table = z["room_table"].astype(np.float64)
+    w = dict(model.w)
+    for k in range(len(model.config["dilations"])):
+        r = z[f"room_film.{k}"].astype(np.float64)
+        w[f"films.{k}.weight"] = np.concatenate([model.w[f"films.{k}.weight"], r], axis=1)
+        w[f"films.{k}.bias"] = model.w[f"films.{k}.bias"] - r @ table[0]
+    return replace(model, w=w), table
+
+
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("dataset")
@@ -123,17 +144,26 @@ def main():
     ap.add_argument("--singers", nargs="+", required=True, help="held-out singers (all their frames held out)")
     ap.add_argument("--house-held", nargs="*", default=["house-alto.j-goes-like-this.01", "house-rough.k-still-you-grew.02"])
     ap.add_argument("--fit-frames", type=int, default=4000)
+    ap.add_argument("--no-room", action="store_true", help="fit the singer alone, through the studio")
+    ap.add_argument("--fitted", type=Path, default=None,
+                    help="embeddings fitted already (tools/throat/fit_unseen.py, by gradient): scored, not fitted")
+    ap.add_argument("--skip", nargs="*", default=[], help="segment name fragments not used (a singer's later data)")
     args = ap.parse_args()
-    d = np.load(args.dataset, mmap_mode="r")
+    fitted = json.loads(args.fitted.read_text()) if args.fitted else {}
+    z = np.load(args.dataset)
+    d = {k: z[k] for k in z.files}  # in memory once: an npz member is read whole at every d[k]
     segs = [str(s) for s in d["segments"]]
     for path in args.models:
         model = throat.load(path)
         names = model.config["singers"]
         rows = model.w["singer.weight"]
-        print(f"== {path.split('/')[-1]}  ({len(names)} singers)", flush=True)
+        model, rooms = roomy(path, model) if not args.no_room else (model, None)
+        studio = rooms[0] if rooms is not None else np.zeros(0)
+        print(f"== {path.split('/')[-1]}  ({len(names)} singers"
+              + (f", a room fitted too from {len(rooms) - 1} recordings" if rooms is not None else "") + ")", flush=True)
         errs = []
         for s in args.singers:
-            mine = [i for i, n in enumerate(segs) if n.startswith(s + "/")]
+            mine = [i for i, n in enumerate(segs) if n.startswith(s + "/") and not any(k in n for k in args.skip)]
             if not mine:
                 print(f"  {s}: no segments")
                 continue
@@ -147,12 +177,18 @@ def main():
                     break
                 fr.append(r[:budget]); budget -= len(fr[-1])
             sc_fit, sc_test = scored(d, fr), scored(d, test_runs)
-            start = rows.mean(axis=0)
-            res = minimize(lambda e: err(model, d, fr, sc_fit, e), start, method="Nelder-Mead",
-                           options=dict(maxfev=40 * len(start), xatol=1e-3, fatol=1e-4))  # as many tries a number
-            e_mean, e_fit = err(model, d, test_runs, sc_test, start), err(model, d, test_runs, sc_test, res.x)
-            c_mean, c_fit = (err(model, d, test_runs, sc_test, e, channel=True) for e in (start, res.x))
-            pc, pf, rc, rf = texture(model, d, test_runs, sc_test, res.x)
+            start = rows.mean(axis=0) if rooms is None else np.concatenate([rows.mean(axis=0), rooms[1:].mean(axis=0)])
+            given = fitted.get(Path(path).name, {}).get(s)
+            if given is not None:
+                best = np.asarray(given["embedding"], dtype=np.float64)
+                if len(best) != len(start):
+                    raise SystemExit(f"{path}: {s}'s fitted embedding has {len(best)} numbers, the model takes {len(start)}")
+            else:
+                best = minimize(lambda e: err(model, d, fr, sc_fit, e), start, method="Nelder-Mead",
+                                options=dict(maxfev=40 * len(start), xatol=1e-3, fatol=1e-4)).x  # as many tries a number
+            e_mean, e_fit = err(model, d, test_runs, sc_test, start), err(model, d, test_runs, sc_test, best)
+            c_mean, c_fit = (err(model, d, test_runs, sc_test, e, channel=True) for e in (start, best))
+            pc, pf, rc, rf = texture(model, d, test_runs, sc_test, best)
             errs.append((e_fit, e_mean, c_fit, c_mean))
             print(f"  {s:28} error {e_fit:5.2f} dB fitted ({e_mean:5.2f} at the mean row); channel out {c_fit:4.2f} ({c_mean:4.2f}); "
                   f"contrast {pc:4.2f} vs real {rc:4.2f}, flutter {pf:4.2f} vs {rf:4.2f}", flush=True)
@@ -167,7 +203,7 @@ def main():
             singer = segs[mine[0]].split("/")[0] if "/" in segs[mine[0]] else h.split(".")[0]
             singer = singer if singer in names else h.split(".")[0]
             runs = chunked(d, frames_of(d, mine))
-            emb = throat.timbre(model, {singer: 1.0})
+            emb = np.concatenate([throat.timbre(model, {singer: 1.0}), studio])
             print(f"  house held-out {h:36} error {err(model, d, runs, scored(d, runs), emb):5.2f} dB (own row)", flush=True)
 
 
