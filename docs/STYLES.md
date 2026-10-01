@@ -1454,3 +1454,147 @@ In `renders/styles/` of the main checkout (gitignored), H as the same made-up ma
 7. **A turn's length** stays the style's (four bars in house); a person can't set it, as before.
 8. **The records from this morning** render differently for house (not for dub without `dissolve`); none was
    released.
+
+# A hymn (2026-09-30, night)
+
+The artist asked for a hymn version: an organ under everyone singing the tune in four-part harmony. What
+convinced (the jig, the a cappella) was a singer delivering the folk tune straight over instruments we
+synthesize well; what didn't (house, dub) needed another kind of singer or heavy sound design. A hymn is the
+first kind: the song's own tune, sung plainly, by the lineage and the program's voices together (the song is
+about everyone singing it), over sustained chords. The page's words claim no tradition or denomination: the
+style is **hymn**, "organ, and everyone singing in parts".
+
+## The design (as it went to review)
+
+### Where it sits
+
+Beside the ring (`OFF_RING["hymn"] = "chamber"`): no drums, sustained, stately and broadening, a ritardando;
+a lineage that leaves it steps to chamber's neighbours (the ballad, the singer-songwriter), the folk tune
+going home. Chosen by a person (`--style hymn`, the studio's style card), never drawn by a machine; the artist
+decides later whether it joins the ring. Its block in songbird/style.py is its own, as house's and dub's are.
+
+### The band: an organ, and everyone
+
+- **The organ** (`pipeorgan`, a new instrument: songbird/synth/pipeorgan.py), or for about a third of machines a
+  **harmonium** (the reed organ organ.py already plays: `swaps`, kept down a lineage). No rhythm section.
+- **The singers**: the lead on the tune, and a group of at least three (`group=3`, as the a cappella: the
+  lineage's voices first, then the program's own), each matched to its part by range and held to a choir's
+  vibrato at synthesis (`synth.matched`, the a cappella's; the band settings' `parts: "voices"` now set for any
+  style that sings as a group).
+
+### The pipe organ (a new instrument, no new kernel)
+
+A pipe organ is a sum of steady pipes, which is what additive synthesis does well (unlike a voice or a plucked
+string): each rank a pipe per key with a fixed spectrum, and the life in the attack, the wind and the room.
+
+- **Ranks** (each pipe its own table: a period with that rank's spectrum, the machine's voicing a little
+  different pipe to pipe): an open diapason 8' (harmonics falling about 6 dB an octave, a strong second), an
+  octave 4' and a fifteenth 2' (the diapason's spectrum an octave and two up), a stopped flute 8' (odd harmonics:
+  the third about 15 dB down, little even), a flute 4', a mixture (II ranks, 1 1/3' and 1', breaking back an
+  octave in the top two octaves). Pedal: a bourdon 16' (stopped: odd harmonics) and an octave 8'.
+- **Registrations** by articulation, as organ.py names its own: `""` diapason 8' and octave 4' (the plain hymn
+  sound), `flutes` stopped flute 8' and flute 4' (soft, for verses in parts and the turns), `full` diapason,
+  octave, fifteenth and mixture (the giving out and the last refrain), `pedal` the pedal's bourdon and octave.
+- **Each pipe** speaks the way flue pipes do: the upper harmonics first and the fundamental building over 25
+  to 90 ms (longer for a bigger pipe), a little chiff (a burst of noise around the 2nd to 4th harmonic, 20 to
+  40 ms, more on the flutes), wind noise under it at about -45 dB while it sounds, a few cents of tuning per
+  pipe (a machine's `wear` more), and a 40 to 80 ms release. The ranks beat gently against each other (their
+  pipes' tunings differ), which is an organ's chorus; no tremulant. Velocity is not touch (an organ has none):
+  it is the swell box, a gentle level and a darker top as it closes.
+- **Built from the kernels the harmonium already uses** (`reed._read_mix`: the attack's period cross-faded into
+  the steady one, sample by sample), scipy filters and numpy; so no numba kernel is added or changed and the
+  browser's translation (docs/BROWSER-RENDER.md) is as it was. The pipes' chests alternate C side and C♯ side,
+  so the stem is a little wide.
+
+### The harmony: a setting of the style's own
+
+A hymn sets its tune with a chord to a beat or a half bar, plain triads and their first inversions, a bass
+that moves by step where it can, and cadences that close the lines. The style makes **its own harmonization of
+the tune** (songbird/hymn.py, `setting`), laid in `composition.form_phrases` beside a style's loop (so the
+organ, the voices' chords, the MIDI file, the chord lane and karaoke all follow from one place), under every
+line that has a tune; a line whose chords a person set (everywhere, or at its place) keeps theirs; a line with
+no tune (H's turn) keeps the song's chords. For each phrase, a dynamic programme over its beats:
+
+- **candidates**: the mode's own triads on 1 to 6 (and 7 where it is major, mixolydian's ♭VII), root position
+  or first inversion (`IV/3`); no second inversions; no sevenths;
+- **the tune's fit**: a sung note on the beat (or a beat long) that isn't a chord tone costs a lot, a passing
+  eighth between beats a little, a non-chord tone a semitone from a chord tone more (the voices and the organ
+  then leave that tone out there);
+- **the song's own chords as the backbone**: a chord other than the song's at that beat costs a little (it is
+  the same song: I, IV, V and vi where the genome has them, with passing chords and inversions between);
+- **progressions**: the strong ones (down a fifth, up a step, down a third) cheap, the retrogressions (V to
+  IV, V to ii) dear; changes on the strong beats rather than the weak, so mostly a half bar's harmonic rhythm,
+  a beat's where the tune asks;
+- **the bass**: steps cheap, leaps of a fourth or fifth fine in root position, tritones dear; parallel fifths
+  and octaves between the bass and the tune dear;
+- **cadences**: the phrase's last chord is the song's own (I, V, or the bridge's vi), in root position; before
+  a final I, V (authentic) or IV (plagal).
+
+The result is per bar, one to four chords (`("I", "V/3", "vi", "IV")`), the beats with the same chord merged.
+
+### The parts (songbird/hymn.py, `parts`; the a cappella's ranges and singer matching)
+
+The tune is the top line, as a hymn sets it (the lead's tune runs A3 to B4 in D). Under it, from the setting:
+
+- **the bass** is the organ's pedal (the chord's bass, D2 to D3, led by step): the throat thins below E3, so
+  no voice sings it; the program says so plainly ("the organ's pedal takes the bass");
+- **the alto and the tenor** (the a cappella's "under" voice, between E3 and the tune), each syllable a chord
+  tone, chosen together: the missing tones of the triad first (the third never doubled over a bass on the
+  third), each held where the chord keeps it (common tones), else to the nearest; never a semitone from the
+  tune, no parallel fifths or octaves between any two of the four, spacing within an octave between the upper
+  three. Where the tune dips too low to fit two parts under it (H's pickups on A3), the alto sings with the tune
+  in unison, never above it;
+- **the treble** voices (every third voice, as the a cappella's) sing the tune with the lead, as most of a
+  congregation does; over the **last refrain** they sing a **descant** (about two renditions in three, drawn
+  by the rendition's seed): a line above the tune on the same words, a chord tone a third to an octave over it,
+  moving by step and holding through the tune's moving notes, at most E5 (the a cappella's treble ceiling).
+
+### Section by section
+
+- **Intro** (`intro=lead`): the organ **gives out** the tune alone: the intro's lines (H's: the refrain's last
+  two) in four parts with the pedal, on the `full` registration, nobody singing.
+- **Verses**: the first in **unison** (everyone on the tune, the organ in parts under it), the next in
+  **harmony**, and so on alternately; the organ on `""` under unison, `flutes` under parts.
+- **Refrains**: everyone in harmony; the **last refrain** on `full`, with the descant when it comes.
+- **Turns**: the organ alone, the turn's chords held in four parts with the pedal (`flutes`), an interlude.
+- **Break, outro**: the organ gives the tune out again, as the intro.
+- **Bridge and tag** (the genome's own lineage harmony): the lineage's voices sing it as always; the program's
+  own voices sing the tenor under it; the organ on `flutes`.
+- **The end**: the last chord held and released together (`ring`), a broad ritardando (`rit`), or the **amen**
+  (the existing plagal coda: IV then I, two bars, the organ in parts, and every voice of the group on "a-men",
+  6 to 5, 4 to 3, the tonic held: the gospel's amen sung by the whole group, not only the lineage's voices).
+
+### Feel, tempo, the singer, the mix
+
+Straight only (a hymn tune in the song's own four), at 0.66 to 0.84 of the song's tempo (centre 0.75: 72 for
+H), a broader ritardando (feel `ritardando` +0.15) and a congregation's looseness (humanize x1.3). No colour
+(plain triads: `colours` empty, `harmony` 0). The singer plainer (vibrato -6 cents, rd -0.03). The mix: a big
+room (space +0.3, width +0.1, intimacy -0.08), the group 1 dB forward (`mix.choir`). Options: intro lead (1.0);
+ending ring 0.25, rit 0.35, amen 0.4; backing `gang` (1.0: "everyone sings along", the congregation) or a
+person's "" (the lead alone with the organ); no alone, no stop-time, no breakdown, no lift, no entrances.
+
+### What changes in shared code (each only for the hymn)
+
+- style.py: the hymn's block (`HYMN`, `OFF_RING`).
+- composition.py: one line in `_looped` hands the phrases to `hymn.setting` (the same list for every other style).
+- idioms.py: `backing` hands a hymn's voices to `hymn.parts`; the organ's writers (`hymn`, `givingout`) in
+  `WRITERS`; the octave-down rule ("the singer's notes are nobody else's") exempts them (the organ doubles the
+  singers, as a hymn's does); the amen sung by the group where the style has one; `parts: "voices"` for any
+  style that sings as a group (the a cappella's as before).
+- synth: the new instrument module (registered by its SPEC); public.py its memory rate.
+- explain.py, takeover.py: the names and pattern labels.
+
+### Byte for byte, memory
+
+Every other style: the hymn's code runs only where `params.style.name == "hymn"`; checked by the goldens, the
+suite, and PCM ids before and after (the seed, gospel, chamber and the a cappella for ada, the jig for bob,
+coral's own). Memory: a choir voice is the heaviest part (5.7 MB a second); H's hymn is about 240 to 280 s at
+72, so about 1.9 GB on two threads, under 2100; measured with tools/render_memory.py, six voices and the longest
+shape, and MEASURED updated.
+
+### Measures
+
+pYIN on each part's stem (each note's middle against its written pitch), the voice-leading counts from the
+score (parallel fifths and octaves between any two of bass, tenor, alto, tune; the share of sung part-notes
+that are chord tones; any semitone against the tune), and Whisper's word errors on the mix (a unison verse, a
+verse in parts and a refrain), beside the ballad's in the same run.
