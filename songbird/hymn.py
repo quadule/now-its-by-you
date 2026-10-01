@@ -249,6 +249,8 @@ TOP = 81  # A5: the organ's descant's ceiling (played, not sung: the throat is m
 PEDAL = (36, 50)  # C2 to D3: the pedal's line, written at its 8' pitch (its 16' bourdon sounds an octave under)
 ORGAN_TOP = (60, 72)  # where the organ's top line sits where nobody's tune is (a turn, a rest, the amen)
 PARALLELS = 12.0  # what parallel fifths or octaves cost the parts (more than a doubled third or a unison)
+VEL = {"unison": 0.76, True: 0.76, False: 0.8}  # how hard the group sings: in a unison verse, on the tune, a part
+UNISON_ROLES = ("alto", "treble")  # who joins the lead on the tune in a unison verse: the tenors (the lowest) rest
 DESCANT = 0.65  # how often a rendition has a descant over the last refrain (by its seed)
 
 
@@ -462,6 +464,8 @@ def parts(ctx, melody: list[dict], style) -> list:
         for v in range(n):
             role = ROLES[v % 3]
             if kind == "unison":
+                if role not in UNISON_ROLES:
+                    continue
                 pitch = tune
             elif kind == "own":
                 if lineage and v < lineage:
@@ -471,7 +475,7 @@ def parts(ctx, melody: list[dict], style) -> list:
                 pitch = {"tenor": sl.t, "alto": sl.a, "treble": tune}[role]
             if pitch is None or (_semitone(pitch, tune) and pitch != tune):
                 pitch = tune
-            out.append(Sung(v, m["u"], u1, int(pitch), (0.76 if pitch == tune else 0.8) * m["vel"], m["syllable"],
+            out.append(Sung(v, m["u"], u1, int(pitch), VEL[kind if kind == "unison" else pitch == tune] * m["vel"], m["syllable"],
                             m["word"], m["word_len"], bool(m["line_end"]), m["section"], m["phrase"]))
     return sorted(out, key=lambda x: (x.u0, x.voice))
 
@@ -481,7 +485,7 @@ def parts(ctx, melody: list[dict], style) -> list:
 # The organ's registration and swell (velocity) by what the section is: the tune given out full, unison singing
 # on the diapasons, parts on the flutes, the last refrain full
 REGISTRATION = {"intro": ("full", 0.82), "break": ("full", 0.82), "outro": ("full", 0.8), "turn": ("flutes", 0.6),
-                "unison": ("", 0.66), "parts": ("flutes", 0.62), "last": ("full", 0.76),
+                "unison": ("flutes", 0.62), "parts": ("flutes", 0.62), "last": ("full", 0.76),
                 "own": ("flutes", 0.58), "refrain": ("", 0.66)}
 
 
