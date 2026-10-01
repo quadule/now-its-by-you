@@ -198,5 +198,10 @@ def test_the_static_page_and_its_headers():
     files = SITE.page_files(singing=False)
     assert {"index.html", "device.js", "studio.js", "renderer.js", "notice.css", "piano/index.html", "piano/piano.js",
             "piano/identity.css"} <= set(files)
+    # a shared version is anyone's bytes on the studio's origin: never served as anything that runs
+    shared = SITE.NETWORK["GET /api/versions/*"]["headers"]
+    assert shared["Content-Type"] == "audio/flac" and "attachment" in shared["Content-Disposition"]
+    assert "sandbox" in shared["Content-Security-Policy"] and shared["X-Content-Type-Options"] == "nosniff"
+    assert SITE.NETWORK["POST /api/versions"]["starts_with"] == "fLaC"
     headers = SITE.headers_file({"/index.html": SITE.describe("index.html")})
     assert headers.startswith("/index.html\n  Content-Type: text/html") and "X-Content-Type-Options: nosniff" in headers

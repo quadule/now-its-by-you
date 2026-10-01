@@ -57,7 +57,8 @@ def handler(site: Path, versions: Path):
                 f = versions / f"{shared.group(1)}.flac"
                 if not f.is_file():
                     return self._json(404, {"error": "No version by that id."})
-                return self._send(200, f.read_bytes(), VERSION_HEADERS)
+                said = manifest.get("network", {}).get("GET /api/versions/*", {})
+                return self._send(200, f.read_bytes(), said.get("headers") if isinstance(said, dict) else VERSION_HEADERS)
             if path.startswith("/api/"):
                 return self._json(404, {"error": "not found"})
             if re.fullmatch(r"/v/[^/]*/?", path):  # the rewrite

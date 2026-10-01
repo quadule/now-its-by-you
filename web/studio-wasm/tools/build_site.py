@@ -52,6 +52,18 @@ PAGE_POLICY = ("default-src 'self'; media-src 'self' blob:; img-src 'self' data:
 WORKER_POLICY = ("default-src 'none'; script-src 'self' 'wasm-unsafe-eval'; connect-src 'self'; "
                  "frame-ancestors 'none'")
 HEADERS = {"X-Content-Type-Options": "nosniff", "Referrer-Policy": "no-referrer"}
+# The Worker's own two paths, never rewritten to the page, and what the page expects of them. A shared version is
+# bytes from anyone served on the studio's own origin: it must never be something a browser would run or render
+# (a page, a script), so it is checked for FLAC's magic on the way in and sent as an attachment that runs nothing.
+NETWORK = {
+    "POST /api/versions": {"body": "a version's FLAC, as it is", "most_bytes": 64 * 2**20, "starts_with": "fLaC",
+                           "answers": '201 {"id": "<32 hex>", "url": "/v/<id>"}, or 4xx {"error": "<a sentence>"}'},
+    "GET /api/versions/*": {"answers": "that file, or 404 {\"error\"}",
+                            "headers": {"Content-Type": "audio/flac", "X-Content-Type-Options": "nosniff",
+                                        "Content-Disposition": 'attachment; filename="version.flac"',
+                                        "Content-Security-Policy": "default-src 'none'; sandbox",
+                                        "Cache-Control": "private, max-age=3600"}},
+}
 SINGING = {"sing.js": ROOT / "webstudio" / "sing.js", "sing.css": ROOT / "webstudio" / "sing.css",
            "karaoke.js": ROOT / "tools" / "karaoke.js", "recorder.js": ROOT / "tools" / "karaoke-recorder.js"}
 
@@ -191,8 +203,7 @@ def main(argv: list[str] | None = None) -> None:
             "about": "docs/WEB-STUDIO.md, 'On the device': serve every file below at its path with its headers",
             "index": {"/": "/index.html", "/piano/": "/piano/index.html"},
             "rewrites": [{"from": "/v/*", "to": "/index.html", "status": 200}],
-            "network": {"POST /api/versions": "the Worker's: a version shared (FLAC bytes)",
-                        "GET /api/versions/*": "the Worker's: that version's file"},
+            "network": NETWORK,
             "headers": HEADERS, "files": described}
 
     if out.exists():
