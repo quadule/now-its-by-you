@@ -95,6 +95,26 @@ test("what isn't a version is refused with a sentence, and not kept", async () =
   assert.equal((await share(w, e, bytes, { headers: { "X-Content-SHA256": "abc" } })).status, 400);
 });
 
+test("nothing unchecked is ever under a version's name: checked in incoming/, whatever stops the Worker", async () => {
+  const w = await load(), e = env();
+  const bytes = packet();
+  const get = e.VERSIONS.get.bind(e.VERSIONS);
+  let seen = null;
+  e.VERSIONS.get = async (key, opts) => { // R2 failing in the middle of the check
+    if (key.startsWith("incoming/") && opts && opts.range) {
+      seen = e.VERSIONS.keys("versions/");
+      throw new Error("R2 down");
+    }
+    return get(key, opts);
+  };
+  const r = await share(w, e, bytes);
+  assert.equal(r.status, 500);
+  assert.deepEqual(seen, []); // while it was being checked, nothing under versions/
+  assert.deepEqual(e.VERSIONS.keys("versions/"), []);
+  assert.deepEqual(e.VERSIONS.keys("incoming/"), []);
+  assert.equal(e.VERSIONS.keys("limits/").filter(k => k.includes("/kept-")).length, 0);
+});
+
 test("its size is asked before a byte is read: too big, too small, unsaid", async () => {
   const w = await load(), e = env();
   const post = headers => call(w, e, "/api/versions", { method: "POST", body: unread(), duplex: "half", headers: { "Sec-Fetch-Site": "same-origin", ...headers } });
@@ -118,15 +138,15 @@ test("only the studio's own page shares: another site's is refused before anythi
   assert.equal(tool.status, 201); // a tool says neither
 });
 
-test("the limits: a few a minute and so many an hour from one address (an IPv6 one by its /64), so many from everywhere", async () => {
-  const w = await load();
+test("the limits: a few a minute and so many tries an hour from one address (an IPv6 one by its /64), so many kept from everywhere", async () => {
+  const w = await load(), mod = await import(`../src/worker.js?isolate=${++isolates}`);
   let e = env({ UPLOADS: new Limiter(3) });
   for (let i = 0; i < 3; i++) assert.equal((await share(w, e, packet({ audio: 20000 + i }))).status, 201);
   const minute = await share(w, e, packet({ audio: 20010 }));
   assert.equal(minute.status, 429);
   assert.match(minute.data.error, /wait a minute/);
 
-  e = env({ UPLOADS_AN_HOUR: "2", ALL_AN_HOUR: "4" });
+  e = env({ UPLOADS_AN_HOUR: "2", ALL_AN_HOUR: "3" });
   const a = "2001:db8:1:2:aaaa::1", b = "2001:db8:1:2:bbbb::2", c = "2001:db8:9:9::1";
   assert.equal((await share(w, e, packet({ audio: 20001 }), { ip: a })).status, 201);
   assert.equal((await share(w, e, new Uint8Array(5000), { ip: b })).status, 422); // a refused file counts too
@@ -134,16 +154,23 @@ test("the limits: a few a minute and so many an hour from one address (an IPv6 o
   assert.equal(hour.status, 429); // the same /64
   assert.match(hour.data.error, /in an hour/);
   assert.equal(hour.headers.get("Retry-After"), "3600");
+  for (let i = 0; i < 6; i++) { // junk from many places doesn't close sharing for everyone
+    assert.equal((await share(w, e, new Uint8Array(5000), { ip: `198.51.100.${100 + i}` })).status, 422);
+  }
   assert.equal((await share(w, e, packet({ audio: 20003 }), { ip: c })).status, 201);
   assert.equal((await share(w, e, packet({ audio: 20004 }), { ip: "198.51.100.7" })).status, 201);
-  const all = await share(w, e, packet({ audio: 20005 }), { ip: "198.51.100.8" });
+  const all = await share(w, e, packet({ audio: 20005 }), { ip: "198.51.100.8" }); // three kept this hour
   assert.equal(all.status, 429);
   assert.match(all.data.error, /Many versions/);
-  // what's counted: 64 bits of a digest of the address, never the address
+  // what's counted: 64 bits of an HMAC of the address under the site's own key, never the address
   const marks = e.VERSIONS.keys("limits/");
-  assert.equal(marks.length, 4);
-  for (const k of marks) assert.match(k, /^limits\/\d{4}-\d\d-\d\dT\d\d\/[0-9a-f]{16}-[0-9a-f]{8}$/);
+  assert.equal(marks.filter(k => k.includes("/kept-")).length, 3);
+  assert.equal(marks.filter(k => !k.includes("/kept-")).length, 10); // a, b, six junk, c, and one more
+  for (const k of marks) assert.match(k, /^limits\/\d{4}-\d\d-\d\dT\d\d\/([0-9a-f]{16}|kept)-[0-9a-f]{8}$/);
   assert.ok(!marks.join().includes("2001") && !marks.join().includes("198.51"));
+  assert.match(new TextDecoder().decode(e.VERSIONS.objects.get("keys/address").bytes), /^[0-9a-f]{64}$/);
+  assert.equal((await mod.tidy(e, Date.now())).marks, 0); // this hour's stay; the key is never tidied
+  assert.ok(e.VERSIONS.objects.has("keys/address"));
 });
 
 test("a shared version: in ranges, unchanged, HEAD, and nothing to find by guessing", async () => {
@@ -195,6 +222,12 @@ test("/v/<id> is the studio's page, with its policy; anything else under /v/ isn
   assert.equal(r.headers.get("X-Frame-Options"), "DENY");
   assert.equal(r.headers.get("X-Robots-Tag"), null); // the public studio may be found
   assert.equal((await call(w, e, `/v/${id}`, { method: "HEAD" })).status, 200);
+  let asked = null;
+  const assets = e.ASSETS.fetch;
+  e.ASSETS.fetch = async req => { asked = req.headers.get("If-None-Match"); return assets(req); };
+  await call(w, e, `/v/${id}`, { headers: { "If-None-Match": '"page"' } }); // revalidated as / is
+  assert.equal(asked, '"page"');
+  e.ASSETS.fetch = assets;
   assert.equal((await call(w, e, `/v/${id}`, { method: "POST" })).status, 405);
   for (const path of ["/v/nope", `/v/${id}/`, `/v/${id}/studio.js`, "/v/"]) assert.equal((await call(w, e, path)).status, 404, path);
   assert.equal((await call(w, e, "/robots.txt")).status, 404); // no robots.txt (the static assets have none)
@@ -233,6 +266,22 @@ test("kept 30 days after it was last shared or opened (an open noted at most wee
   assert.deepEqual(e.VERSIONS.keys("versions/"), [`versions/${fresh}.flac`]);
   assert.deepEqual(e.VERSIONS.keys("opened/"), []);
   assert.equal((await call(w, e, `/api/versions/${old}`)).status, 404);
+
+  // shared again between the tidy's listing and its deleting: it stays; an open noted for a version gone, goes
+  const again = (await share(w, e, packet({ audio: 20004 }))).data.id;
+  e.VERSIONS.age(`versions/${again}.flac`, 40);
+  const list = e.VERSIONS.list.bind(e.VERSIONS);
+  e.VERSIONS.list = async opts => {
+    const out = await list(opts);
+    if (opts.prefix === "versions/") e.VERSIONS.objects.get(`versions/${again}.flac`).uploaded = new Date(now);
+    return out;
+  };
+  await e.VERSIONS.put(`opened/${"9".repeat(32)}`, "");
+  assert.equal((await mod.tidy(e, now)).versions, 0);
+  e.VERSIONS.list = list;
+  assert.ok(e.VERSIONS.objects.has(`versions/${again}.flac`));
+  assert.ok(!e.VERSIONS.objects.has(`opened/${"9".repeat(32)}`));
+  await e.VERSIONS.delete(`versions/${again}.flac`);
 
   // the cron runs it
   const ctx = context();

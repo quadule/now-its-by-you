@@ -7,7 +7,8 @@ name = "songbird-studio"
 main = "src/worker.js"
 compatibility_date = "2026-09-25"
 
-workers_dev = true
+# only at studio.itsby.you: no second origin for the site and its API on workers.dev
+workers_dev = false
 preview_urls = false
 # itsby.you's DNS is on Cloudflare: the custom domain makes its DNS record and certificate on the first deploy
 routes = [{ pattern = "studio.itsby.you", custom_domain = true }]

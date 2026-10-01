@@ -145,6 +145,8 @@ async function inflated(data, cap) {
 export async function readMember(entry, read, cdStart) {
   // one member's bytes: its local header must be where the directory says, name it, and hold its data
   if (entry.size > RECORD) throw new Refused(`Its packet's ${entry.name} is ${Math.round(entry.size / 1024)} KB; a rendition's is far smaller.`);
+  // deflate never makes data much larger: a bigger entry is padding, and would be read into memory for nothing
+  if (entry.packed > RECORD + 4096) throw new Refused(`Its packet's ${entry.name} is larger than it says.`);
   const nameLen = new TextEncoder().encode(entry.name).length;
   const want = Math.min(30 + nameLen + LOCAL_EXTRA + entry.packed, cdStart - entry.offset);
   const local = await read(entry.offset, want);

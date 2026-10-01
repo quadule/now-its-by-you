@@ -107,7 +107,8 @@ export class Bucket {
     const r = opts.range;
     if (r) bytes = r.suffix !== undefined ? bytes.slice(Math.max(0, bytes.length - r.suffix)) : bytes.slice(r.offset, r.offset + r.length);
     this.reads.push({ key, ...(r || {}) });
-    return { ...this.info(key), body: new Blob([bytes]).stream(), arrayBuffer: async () => bytes.slice().buffer };
+    return { ...this.info(key), body: new Blob([bytes]).stream(), arrayBuffer: async () => bytes.slice().buffer,
+             text: async () => new TextDecoder().decode(bytes) };
   }
   async put(key, value, opts = {}) {
     this.puts += 1;

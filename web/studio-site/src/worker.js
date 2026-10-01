@@ -16,9 +16,10 @@
 // hashes 20-60 MB (the free plan allows 10 ms of CPU a request); without it, the Worker hashes as it stores.
 //
 // In R2 (VERSIONS, private): versions/<id>.flac, the files; opened/<id>, when one was last opened (written at most
-// once in REFRESH_DAYS); limits/<hour>/<address digest>-<random>, one mark per upload this hour, for the hourly
-// limits (an address is kept only as 64 bits of a digest, and only until the hour is over); incoming/<random>, a
-// file on its way in (without a digest from the page). Every hour (the cron) a version not opened for KEEP_DAYS is
+// once in REFRESH_DAYS); limits/<hour>/<address mark>-<random>, one mark per attempt this hour, and
+// limits/<hour>/kept-<random>, one per version kept, for the hourly limits (an address is kept only as 64 bits of an
+// HMAC under keys/address, and only until the hour is over); incoming/<random>, a file on its way in, checked there
+// before it goes to its place. Every hour (the cron) a version not opened for KEEP_DAYS is
 // deleted (at most REFRESH_DAYS later), and so are past hours' marks and anything left incoming. Nothing personal
 // is logged.
 
@@ -61,10 +62,22 @@ export function addressOf(ip) {
   return full.slice(0, 4).map(h => h.replace(/^0+(?=.)/, "")).join(":") + "::/64";
 }
 
-async function digest64(text) {
-  // 64 bits of SHA-256: enough to count an address apart from others, nothing to read it back from
-  const d = new Uint8Array(await crypto.subtle.digest("SHA-256", new TextEncoder().encode(text)));
-  return Array.from(d.slice(0, 8), b => b.toString(16).padStart(2, "0")).join("");
+const hex = bytes => Array.from(bytes, b => b.toString(16).padStart(2, "0")).join("");
+
+async function addressMark(env, address, hour) {
+  // 64 bits of HMAC-SHA-256(a key of this site's own, the hour and the address): enough to count an address apart
+  // from others within the hour, and, without the key, nothing to work it back from (a plain digest of an IPv4
+  // address is undone by trying all four billion). The key is made on first use and kept in R2 (keys/address);
+  // read on every share, so two isolates that both made one agree within moments
+  let key = await env.VERSIONS.get("keys/address");
+  if (!key) {
+    await env.VERSIONS.put("keys/address", hex(crypto.getRandomValues(new Uint8Array(32))));
+    key = await env.VERSIONS.get("keys/address");
+  }
+  const secret = await crypto.subtle.importKey("raw", new TextEncoder().encode(await key.text()), { name: "HMAC", hash: "SHA-256" },
+                                               false, ["sign"]);
+  const mac = await crypto.subtle.sign("HMAC", secret, new TextEncoder().encode(`${hour} ${address}`));
+  return hex(new Uint8Array(mac).slice(0, 8));
 }
 
 async function limited(limiter, key) {
@@ -72,6 +85,7 @@ async function limited(limiter, key) {
   try {
     return !(await limiter.limit({ key })).success;
   } catch (e) {
+    console.error("songbird-studio: limiter", e && e.name); // counted nothing: let it through
     return false;
   }
 }
@@ -114,20 +128,21 @@ async function share(request, env, url, ip, now) {
   const claimed = (request.headers.get("X-Content-SHA256") || "").toLowerCase();
   if (claimed && !DIGEST.test(claimed)) return fail(400, "X-Content-SHA256 must be the file's SHA-256, in 64 hex digits.");
 
-  // this hour's shares, from here and from everywhere, before a byte of the file is read; this one counts
-  // whether or not it is kept, so a flood of bad files is held back as well
-  const hour = hourOf(now), me = await digest64(addressOf(ip));
-  const marks = (await env.VERSIONS.list({ prefix: `limits/${hour}/`, limit: 1000 })).objects.map(o => o.key);
-  if (marks.filter(k => k.startsWith(`limits/${hour}/${me}-`)).length >= setting(env, "UPLOADS_AN_HOUR", UPLOADS_AN_HOUR)) {
+  // this hour's shares, before a byte of the file is read: every attempt from here counts (so a flood of bad files
+  // is held back too), but only versions kept count against everyone's ceiling (so junk can't shut sharing for all)
+  const hour = hourOf(now), me = await addressMark(env, addressOf(ip), hour), at = `limits/${hour}/`;
+  const marks = (await env.VERSIONS.list({ prefix: at, limit: 1000 })).objects.map(o => o.key.slice(at.length));
+  if (marks.filter(k => k.startsWith(`${me}-`)).length >= setting(env, "UPLOADS_AN_HOUR", UPLOADS_AN_HOUR)) {
     return fail(429, "You've shared as many versions as can be shared from one place in an hour: try again next hour.", { "Retry-After": "3600" });
   }
-  if (marks.length >= setting(env, "ALL_AN_HOUR", ALL_AN_HOUR)) {
+  if (marks.filter(k => k.startsWith("kept-")).length >= setting(env, "ALL_AN_HOUR", ALL_AN_HOUR)) {
     return fail(429, "Many versions are being shared just now: try again in an hour.", { "Retry-After": "3600" });
   }
-  await env.VERSIONS.put(`limits/${hour}/${me}-${crypto.randomUUID().slice(0, 8)}`, "");
+  await env.VERSIONS.put(`${at}${me}-${crypto.randomUUID().slice(0, 8)}`, "");
 
-  const kept = claimed ? await keepClaimed(env, request, size, claimed) : await keepHashed(env, request, size, now);
+  const kept = await keep(env, request, size, claimed, hour);
   if (kept.error) return fail(kept.status || 400, kept.error);
+  await env.VERSIONS.put(`${at}kept-${crypto.randomUUID().slice(0, 8)}`, "");
   return json({ id: kept.id, url: `/v/${kept.id}` }, 201);
 }
 
@@ -153,50 +168,36 @@ async function bytesOf(object) {
   return new Uint8Array(await object.arrayBuffer());
 }
 
-async function keepClaimed(env, request, size, sha) {
-  // the page said the file's SHA-256: R2 checks the bytes against it as they're written, straight to their place
-  // (the same bytes, under the same name, are the same version: writing them again changes nothing but the date)
-  const id = sha.slice(0, 32), key = keyOf(id);
-  try {
-    const put = await env.VERSIONS.put(key, request.body, { ...FILE_META, sha256: sha });
-    if (!put || put.size !== size) throw new Error("short");
-  } catch (e) {
-    return { status: 400, error: "The file didn't arrive whole, or isn't the one its SHA-256 names: send it again." };
-  }
-  const why = await checked(env, key, size);
-  if (why) {
-    await env.VERSIONS.delete(key); // never served: only its sender knows its name, until now
-    return { status: 422, error: why };
-  }
-  return { id };
-}
-
-async function keepHashed(env, request, size, now) {
-  // no digest from the page: the Worker hashes the file as it stores it, aside, and then puts it in its place
-  const incoming = `incoming/${hourOf(now)}-${crypto.randomUUID()}`;
-  // one pipeline, each chunk hashed before it goes on, so R2's pace holds the whole of it (a tee would buffer
+async function keep(env, request, size, claimed, hour) {
+  // the file goes to incoming/ first, and to its place only once it has been checked, so nothing unchecked is ever
+  // under a version's name, whatever stops this Worker half way (incoming/ is swept within the hour). With the
+  // page's digest, R2 checks the bytes against it as they're written; without, the Worker hashes them on the way,
+  // in one pipeline, each chunk hashed before it goes on, so R2's pace holds the whole of it (a tee would buffer
   // what its slower side hadn't taken yet: up to the whole file, in a Worker allowed 128 MB)
-  const fixed = new FixedLengthStream(size);
-  const hashing = new crypto.DigestStream("SHA-256"), hasher = hashing.getWriter();
-  const hashed = new TransformStream({
-    async transform(chunk, ctl) { await hasher.write(chunk); ctl.enqueue(chunk); },
-    async flush() { await hasher.close(); },
-  });
-  let sha;
-  try {
-    const piped = request.body.pipeThrough(hashed).pipeTo(fixed.writable);
-    const [put] = await Promise.all([env.VERSIONS.put(incoming, fixed.readable), piped]);
-    if (!put || put.size !== size) throw new Error("short");
-    sha = Array.from(new Uint8Array(await hashing.digest), b => b.toString(16).padStart(2, "0")).join("");
-  } catch (e) {
-    await env.VERSIONS.delete(incoming).catch(() => {});
-    return { status: 400, error: ARRIVED };
+  const incoming = `incoming/${hour}-${crypto.randomUUID()}`;
+  let sha = claimed, hashing = null, body = request.body;
+  if (!claimed) {
+    hashing = new crypto.DigestStream("SHA-256");
+    const hasher = hashing.getWriter(), fixed = new FixedLengthStream(size);
+    request.body.pipeThrough(new TransformStream({
+      async transform(chunk, ctl) { await hasher.write(chunk); ctl.enqueue(chunk); },
+      async flush() { await hasher.close(); },
+    })).pipeTo(fixed.writable).catch(() => {}); // a short or long body fails the put below
+    body = fixed.readable;
   }
   try {
+    try {
+      const put = await env.VERSIONS.put(incoming, body, claimed ? { sha256: claimed } : {});
+      if (!put || put.size !== size) throw new Error("short");
+      if (hashing) sha = hex(new Uint8Array(await hashing.digest));
+    } catch (e) {
+      return { status: 400, error: claimed ? "The file didn't arrive whole, or isn't the one its SHA-256 names: send it again." : ARRIVED };
+    }
     const why = await checked(env, incoming, size);
     if (why) return { status: 422, error: why };
     const id = sha.slice(0, 32), from = await env.VERSIONS.get(incoming);
     if (!from) return { status: 400, error: ARRIVED };
+    // the same bytes, under the same name, are the same version: writing them again changes only the date
     await env.VERSIONS.put(keyOf(id), from.body, { ...FILE_META, sha256: sha });
     return { id };
   } finally {
@@ -265,7 +266,9 @@ async function opened(env, id, head, now) {
 async function page(request, env) {
   // the studio's own page, whatever the path: it reads the version's id from its address
   if (!["GET", "HEAD"].includes(request.method)) return fail(405, "Not here.", { Allow: "GET, HEAD" });
-  const r = await env.ASSETS.fetch(new Request(new URL("/", request.url), { method: request.method }));
+  const pass = {};
+  for (const h of ["If-None-Match", "If-Modified-Since"]) if (request.headers.get(h)) pass[h] = request.headers.get(h);
+  const r = await env.ASSETS.fetch(new Request(new URL("/", request.url), { method: request.method, headers: pass }));
   const out = new Response(r.body, r);
   for (const [k, v] of Object.entries({ ...PAGE, "Cache-Control": "no-cache" })) {
     out.headers.set(k, v);
@@ -282,14 +285,19 @@ export async function tidy(env, now) {
   const keep = (setting(env, "KEEP_DAYS", KEEP_DAYS) + setting(env, "REFRESH_DAYS", REFRESH_DAYS)) * 86400e3, hour = hourOf(now);
   const latest = new Map();
   for (const o of await listed(env.VERSIONS, "opened/")) latest.set(o.key.slice(7), new Date(o.uploaded).getTime());
-  const gone = [];
+  const gone = [], ids = new Set();
   for (const o of await listed(env.VERSIONS, "versions/")) {
     const id = o.key.slice(9, -5);
-    if (now - Math.max(new Date(o.uploaded).getTime(), latest.get(id) || 0) > keep) gone.push(o.key, `opened/${id}`);
+    ids.add(id);
+    if (now - Math.max(new Date(o.uploaded).getTime(), latest.get(id) || 0) <= keep) continue;
+    const again = await env.VERSIONS.head(o.key); // shared again since the listing: it stays
+    if (again && now - new Date(again.uploaded).getTime() <= keep) continue;
+    gone.push(o.key, `opened/${id}`);
   }
+  const orphans = [...latest.keys()].filter(id => !ids.has(id)).map(id => `opened/${id}`); // an open racing a delete
   const marks = (await listed(env.VERSIONS, "limits/")).map(o => o.key).filter(k => k.slice(7, 20) < hour);
   const incoming = (await listed(env.VERSIONS, "incoming/")).filter(o => now - new Date(o.uploaded).getTime() > 3600e3).map(o => o.key);
-  await deleteKeys(env.VERSIONS, [...gone, ...marks, ...incoming]);
+  await deleteKeys(env.VERSIONS, [...gone, ...orphans, ...marks, ...incoming]);
   return { versions: gone.length / 2, marks: marks.length, incoming: incoming.length };
 }
 

@@ -103,6 +103,10 @@ test("its record: read through a bounded stream, and held to a rendition's", asy
   await refused(one(JSON.stringify({ ...MANIFEST, parent_id: 7 })), /parent isn't an id/);
   await refused(one(JSON.stringify({ ...MANIFEST, ancestry: ["x"] })), /ancestry/);
   await refused(one("[".repeat(100000) + "]".repeat(100000)), /isn't JSON|isn't a record/); // deep nesting
+  // a manifest padded out (a small record declaring megabytes compressed) isn't read into memory
+  const padded = packet({ entries: [{ name: "manifest.json", data: JSON.stringify(MANIFEST), central: { packed: 2 ** 20 + 8192 } },
+                                    { name: "genome.json", data: "{}" }, { name: "pad", data: new Uint8Array(3 * 2 ** 20), method: 0 }] });
+  await refused(padded, /manifest\.json is larger than it says/);
   // its local header must name it and sit where the directory says
   await refused(one(JSON.stringify(MANIFEST), { central: { offset: 42 + 20000 + 1 } }), /aren't where its directory says/);
 });
