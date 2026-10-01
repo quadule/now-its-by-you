@@ -356,9 +356,14 @@
 
   // ---------------------------------------------------------------- sharing a version (the only thing sent)
   async function share(blob) {
+    // its SHA-256 said with it, so the site checks the bytes as it stores them rather than hashing 20 MB itself
+    const bytes = await blob.arrayBuffer();
+    const digest = [...new Uint8Array(await crypto.subtle.digest("SHA-256", bytes))]
+      .map((b) => b.toString(16).padStart(2, "0")).join("");
     let r;
     try {
-      r = await network("/api/versions", { method: "POST", body: blob, headers: { "Content-Type": "audio/flac" } });
+      r = await network("/api/versions", { method: "POST", body: bytes,
+        headers: { "Content-Type": "audio/flac", "X-Content-SHA256": digest } });
     } catch (e) {
       throw new Error(`it couldn't reach the site (${e.message})`);
     }

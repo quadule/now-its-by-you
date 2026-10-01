@@ -221,7 +221,7 @@
       "url": "http://127.0.0.1:8812"
     },
     {
-      "name": "studio-site",
+      "name": "studio-site-local",
       "runtimeExecutable": "uv",
       "runtimeArgs": ["run", "python", "web/studio-wasm/tools/serve_site.py", "renders/studio-site", "--port", "8820"],
       "port": 8820,

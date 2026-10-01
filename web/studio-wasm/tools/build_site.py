@@ -17,12 +17,14 @@ It writes, into OUT (emptied first, if it holds an earlier build):
     render/app-<hash>/          the worker, the kernels, the program, the device's side of the studio
     render/kit-<hash>/kit.zip   the singing kit, with --sing-kit and only when py/sing_measure.py is here
     site.json                   for the host: every file's type, cache policy and security policy, the rewrite of
-                                /v/<id> to the page, and the paths that are the Worker's own
-    _headers                    the same headers in Cloudflare's _headers form (site.json is the authority)
+                                /v/<id> to the page, and the paths that are the Worker's own (the hosting Worker's
+                                web/studio-site/tools/prepare.mjs checks it, and writes _headers from its own rules)
 
 Folders named by a hash are cached for good (immutable); the page, bundle.json and the page's own scripts are
 asked again every visit (no-cache). No file is over 25 MiB (Cloudflare's limit per file); the build refuses one that
-is. Text isn't stored compressed: the host compresses."""
+is. Text isn't stored compressed: the host compresses. Every address in it is from the root (/studio.js,
+/render/..., /piano/piano.js): the page is also served at /v/<id>, where a relative one would point elsewhere, and its
+policy allows no <base>."""
 
 from __future__ import annotations
 
@@ -31,6 +33,7 @@ import gzip
 import importlib.util
 import io
 import json
+import re
 import shutil
 import sys
 import zipfile
@@ -44,13 +47,13 @@ FRESH = "no-cache"
 TYPES = {".html": "text/html; charset=utf-8", ".js": "text/javascript; charset=utf-8",
          ".mjs": "text/javascript; charset=utf-8", ".css": "text/css; charset=utf-8", ".json": "application/json",
          ".wasm": "application/wasm", ".zip": "application/zip", ".whl": "application/zip"}
-# the page's policy: the studio's own (songbird/studio.py, Handler.send), a song made here playing from a blob: URL,
-# and its workers from here; Pyodide runs only in the workers, whose scripts carry WORKER_POLICY (a dedicated worker
-# keeps its own script's policy), so the page itself never compiles WebAssembly
-PAGE_POLICY = ("default-src 'self'; media-src 'self' blob:; img-src 'self' data:; style-src 'self'; script-src 'self'; "
-               "worker-src 'self'; connect-src 'self'; frame-ancestors 'none'; form-action 'none'; base-uri 'none'")
-WORKER_POLICY = ("default-src 'none'; script-src 'self' 'wasm-unsafe-eval'; connect-src 'self'; "
-                 "frame-ancestors 'none'")
+# The policy every page and script is served with: the hosting Worker's (web/studio-site/src/policy.js, PAGE_POLICY,
+# which tests/test_studio_device.py holds this to): the studio's own (songbird/studio.py, Handler.send), and what the
+# browser's renderer needs: Pyodide compiling WebAssembly ('wasm-unsafe-eval', never 'unsafe-eval'), a song made here
+# playing from a blob: URL, its workers from here
+POLICY = ("default-src 'self'; script-src 'self' 'wasm-unsafe-eval'; style-src 'self'; img-src 'self' data:; "
+          "media-src 'self' blob:; connect-src 'self'; worker-src 'self'; base-uri 'none'; form-action 'none'; "
+          "frame-ancestors 'none'")
 HEADERS = {"X-Content-Type-Options": "nosniff", "Referrer-Policy": "no-referrer"}
 # The Worker's own two paths, never rewritten to the page, and what the page expects of them. A shared version is
 # bytes from anyone served on the studio's own origin: it must never be something a browser would run or render
@@ -105,10 +108,23 @@ def page_files(singing: bool) -> dict[str, bytes]:
     for path, (name, _) in PIANO_STATIC.items():
         if not path.endswith("/"):
             files[path.lstrip("/")] = (PAGE / name).read_bytes()
+    files["piano/index.html"] = rooted((PAGE / "piano" / "index.html").read_text(), "/piano/").encode()
     if singing:
         for name, source in SINGING.items():
             files[name] = source.read_bytes()
     return files
+
+
+def rooted(html: str, folder: str) -> str:
+    """A page's addresses from the root: the piano page's own (identity.css, piano.js) under `folder`, its way back to
+    the studio ("../") the root. (The page itself is the same file web/piano/ serves, from wherever it's put.)"""
+    def one(m: re.Match) -> str:
+        attr, url = m.group(1), m.group(2)
+        if url.startswith(("/", "#", "http:", "https:", "data:", "mailto:")):
+            return m.group(0)
+        return f'{attr}="{"/" if url == "../" else folder + url}"'
+
+    return re.sub(r'\b(src|href)="([^"]*)"', one, html)
 
 
 def kit_zip(folder: Path) -> bytes:
@@ -134,25 +150,9 @@ def describe(rel: str) -> dict:
     entry = {"type": TYPES.get(suffix, "application/octet-stream")}
     hashed = rel.startswith(("render/py-", "render/app-", "render/kit-"))
     entry["cache"] = IMMUTABLE if hashed else FRESH
-    if suffix == ".html":
-        entry["csp"] = PAGE_POLICY
-    elif rel.startswith("render/") and suffix in (".mjs", ".js"):
-        entry["csp"] = WORKER_POLICY
+    if suffix in (".html", ".mjs", ".js"):  # a page, or a script (a worker keeps its own script's policy)
+        entry["csp"] = POLICY
     return entry
-
-
-def headers_file(files: dict) -> str:
-    """Cloudflare's _headers form of site.json's headers, a path at a time."""
-    lines = []
-    for rel, entry in sorted(files.items()):
-        lines.append(rel)
-        lines.append(f"  Content-Type: {entry['type']}")
-        lines.append(f"  Cache-Control: {entry['cache']}")
-        if "csp" in entry:
-            lines.append(f"  Content-Security-Policy: {entry['csp']}")
-        for k, v in HEADERS.items():
-            lines.append(f"  {k}: {v}")
-    return "\n".join(lines) + "\n"
 
 
 def main(argv: list[str] | None = None) -> None:
@@ -213,7 +213,6 @@ def main(argv: list[str] | None = None) -> None:
         path.parent.mkdir(parents=True, exist_ok=True)
         path.write_bytes(data)
     (out / "site.json").write_text(json.dumps(site, indent=1) + "\n")
-    (out / "_headers").write_text(headers_file(described))
     largest = max(files.items(), key=lambda kv: len(kv[1]))
     print(f"{out}: {len(files)} files, {sum(map(len, files.values())) / 2**20:.1f} MiB "
           f"({sent / 2**20:.1f} MiB on the wire the first time); the largest {largest[0]} "

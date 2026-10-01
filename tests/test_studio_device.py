@@ -7,6 +7,7 @@ the static site's page and headers (build_site.py)."""
 
 import importlib.util
 import json
+import re
 import sys
 import types
 from pathlib import Path
@@ -188,10 +189,13 @@ def test_the_static_page_and_its_headers():
     assert '<meta name="studio-render" content="device">' in html and 'content="device">' in html
     assert html.index("/device.js") < html.index("/renderer.js") and "{{token}}" not in html
     assert "/sing.js" not in html and "/sing.js" in SITE.page(singing=True)
-    assert SITE.describe("index.html")["csp"] == SITE.PAGE_POLICY and "blob:" in SITE.PAGE_POLICY
-    assert "wasm-unsafe-eval" not in SITE.PAGE_POLICY and "wasm-unsafe-eval" in SITE.WORKER_POLICY
+    # the hosting Worker's policy, to the letter (web/studio-site/src/policy.js), on the page and on the workers' scripts
+    policy = re.search(r'PAGE_POLICY = ((?:"[^"]*"\s*\+?\s*)+);', (ROOT / "web" / "studio-site" / "src" / "policy.js").read_text())
+    assert "".join(re.findall(r'"([^"]*)"', policy.group(1))) == SITE.POLICY
+    assert SITE.describe("index.html")["csp"] == SITE.POLICY and "media-src 'self' blob:" in SITE.POLICY
+    assert "'wasm-unsafe-eval'" in SITE.POLICY and "'unsafe-eval'" not in SITE.POLICY.replace("'wasm-unsafe-eval'", "")
     worker = SITE.describe("render/app-0123456789abcdef/studio-worker.mjs")
-    assert worker["cache"] == SITE.IMMUTABLE and worker["csp"] == SITE.WORKER_POLICY
+    assert worker["cache"] == SITE.IMMUTABLE and worker["csp"] == SITE.POLICY
     assert SITE.describe("render/py-0123456789abcdef/pyodide.asm.wasm")["type"] == "application/wasm"
     assert SITE.describe("render/bundle.json")["cache"] == "no-cache"
     assert SITE.describe("studio.js")["cache"] == "no-cache"
@@ -203,5 +207,10 @@ def test_the_static_page_and_its_headers():
     assert shared["Content-Type"] == "audio/flac" and "attachment" in shared["Content-Disposition"]
     assert "sandbox" in shared["Content-Security-Policy"] and shared["X-Content-Type-Options"] == "nosniff"
     assert SITE.NETWORK["POST /api/versions"]["starts_with"] == "fLaC"
-    headers = SITE.headers_file({"/index.html": SITE.describe("index.html")})
-    assert headers.startswith("/index.html\n  Content-Type: text/html") and "X-Content-Type-Options: nosniff" in headers
+    # every address from the root: the page is served at /v/<id> too, and its policy allows no <base>
+    for name in ("index.html", "piano/index.html"):
+        html = files[name].decode()
+        for url in re.findall(r'\b(?:src|href)="([^"]*)"', html):
+            assert url.startswith(("/", "#", "https:")), (name, url)
+    assert 'href="/piano/piano.css"' in files["piano/index.html"].decode()
+    assert 'href="/"' in files["piano/index.html"].decode()  # back to the studio

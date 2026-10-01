@@ -4,7 +4,7 @@ keeping shared versions in a folder (docs/WEB-STUDIO.md, "On the device").
 
 usage: uv run python web/studio-wasm/tools/serve_site.py SITE [--port 8820] [--versions DIR]
 
-    POST /api/versions        a FLAC (at most 64 MB, starting fLaC) -> 201 {"id": 32 hex, "url": "/v/<id>"}, or 4xx {"error"}
+    POST /api/versions        a FLAC (at most 64 MB, starting fLaC; X-Content-SHA256 checked if sent) -> 201 {"id": 32 hex, "url": "/v/<id>"}, or 4xx {"error"}
     GET  /api/versions/<id>   that file, as audio/flac, an attachment, with a policy that runs nothing
 
 Standard library only; 127.0.0.1 only. Not the deploy: the Worker another part of the work builds is."""
@@ -12,6 +12,7 @@ Standard library only; 127.0.0.1 only. Not the deploy: the Worker another part o
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
 import re
 import secrets
@@ -85,6 +86,9 @@ def handler(site: Path, versions: Path):
             data = self.rfile.read(length)
             if not data.startswith(b"fLaC"):
                 return self._json(415, {"error": "That isn't a FLAC file."})
+            claimed = (self.headers.get("X-Content-SHA256") or "").lower()  # as the Worker checks it (R2 does)
+            if claimed and claimed != hashlib.sha256(data).hexdigest():
+                return self._json(400, {"error": "The file didn't arrive whole, or isn't the one its SHA-256 names."})
             vid = secrets.token_hex(16)
             (versions / f"{vid}.flac").write_bytes(data)
             return self._json(201, {"id": vid, "url": f"/v/{vid}"})
