@@ -360,6 +360,30 @@ def test_house_chops_its_hook_on_the_grid():
     assert list(again.part("chop")) == chop
 
 
+def test_house_chop_never_starts_mid_word():
+    """The artist (2026-09-30, night): the hook "doesn't work well" where the first turn opens. A figure's first
+    syllable was left out wherever the singer's last note ended on the turn's downbeat ("bo-dy knows", no "No"); now
+    a sung note ending as a figure begins is clear of it, and a figure is sung from a word's first syllable to a
+    word's last, or not at all."""
+    for seed in (1, 3, 6):
+        g, p = styled("house", drop=2)
+        p = replace(p, seed=seed)  # each rhythm of the three, by the rendition's draw
+        score = realize(g, p)
+        clock = timeline(g, p)
+        bars = [t for t, bar in clock.beats() if bar]
+        chop = sorted(score.part("chop"), key=lambda n: n.start)
+        by_bar = {}
+        for n in chop:
+            by_bar.setdefault(max(t for t in bars if t <= n.start + 1e-6), []).append(n)
+        for figure in by_bar.values():
+            assert figure[0].word.startswith(figure[0].syllable)  # "No", "now": never "bo"
+            assert figure[-1].word.endswith(figure[-1].syllable)  # never ending on "No" or "bo"
+        sixteenth = 15.0 / p.tempo
+        for a, b in spans_of(score, "turn"):  # each turn after a sung refrain: the hook from its first bar
+            first = next(n for n in chop if n.start >= a - 1e-6)
+            assert first.syllable == "No" and first.start < a + 2 * sixteenth + 1e-6
+
+
 def test_house_bass_riffs_in_octaves_and_its_intro_builds_in_layers():
     g, p = styled("house", drop=0, intro="lead")
     score = realize(g, p)

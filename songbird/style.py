@@ -687,6 +687,7 @@ HOUSE_LOOPS = {"vamp": ((6, 4), True), "lift": ((4, 1), True), "home": ((1, 4), 
 # The chop's rhythms: a two-bar figure, each bar (sixteenth of the bar, syllable, sixteenths long); drawn per rendition
 HOUSE_HOOK = {
     "syllables": 4, "vel": 0.85, "drop": 1.0, "soft": 0.6, "staccato": 0.85,
+    "answered": ("drop", "last"),  # where every other bar is the answer ("now it's by you"); hook_bars' hows
     "rhythms": {"beat": ([(0, 0, 2), (2, 1, 1), (3, 2, 1), (4, 3, 4)],
                          [(0, 0, 2), (2, 1, 1), (3, 2, 1), (4, 3, 2), (8, 3, 1), (10, 3, 2)]),
                 "off": ([(2, 0, 1), (3, 1, 1), (4, 2, 2), (6, 3, 3)],
@@ -972,7 +973,8 @@ def hook_bars(genome, params, lead: float) -> list[tuple[float, float, str]]:
     """Where a style's vocal chop sings (StyleDef.hook, house's), in grid units: (from, to, how): its turns whole, the
     bars the style lays in a refrain before or after its lines (own_lines: the drop's before, the last's after), the
     intro's last bars where no instrument states the tune there, the outro's first half; "soft" in a breakdown, "drop"
-    at the drop and "last" after the last refrain (the answer, "now it's by you", joins the call in both)."""
+    at the drop, "last" after the last refrain, "turn" in a turn, "full" elsewhere (the answer, "now it's by you",
+    joins the call where the hook's "answered" says)."""
     sdef = STYLES.get(params.style.name) if params.style.name else None
     if sdef is None or not sdef.hook:
         return []
@@ -988,7 +990,7 @@ def hook_bars(genome, params, lead: float) -> list[tuple[float, float, str]]:
         soft = down is not None and down[0] <= k < down[1]
         how = "soft" if soft else "full"
         if role == "turn":
-            out.append((a, b, how))
+            out.append((a, b, "soft" if soft else "turn"))
         elif role == "refrain" and lines == styled[k] and any(not sung for _p, sung in lines):  # the style's bars
             u, run = a, None
             for pid, sung in lines + [("", True)]:
@@ -1063,8 +1065,14 @@ def chops(genome, params, placed, clock, melody) -> list:
         phrase = next(p for name, p, _s, line in placed if line and genome.section(name).lyrics == "refrain"
                       and (p.id == genome.section(name).phrases[0 if which == "call" else -1]))
         notes = phrase.sung
-        out = [(s, w, c, params.tonic + degree_semitones(notes[j].degree, params.mode, notes[j].alter))
-               for s, w, c, j in words if j < len(notes)]
+        out, at = [], 0
+        for s, w, c, j in words:  # each syllable, and whether it begins its word and ends it
+            if j < len(notes):
+                pitch = params.tonic + degree_semitones(notes[j].degree, params.mode, notes[j].alter)
+                out.append((s, w, c, pitch, at == 0, at + 1 >= max(1, c)))
+            at = 0 if at + 1 >= max(1, c) else at + 1
+        if out:
+            out[-1] = (*out[-1][:5], True)  # the phrase's end ends a word
         while 0 < len(out) < 4:  # a short phrase stutters its first syllable in
             out.insert(0, out[0])
         return out
@@ -1076,6 +1084,11 @@ def chops(genome, params, placed, clock, melody) -> list:
 
     where = spans(genome, params, clock.lead)
     level = {"soft": hook["soft"], "drop": hook["drop"]}
+    answered = hook.get("answered", ("drop", "last"))
+
+    def clear(u, end):  # no sung note under it, nor one starting within a sixteenth after (one ending as it starts)
+        return not any(a < end + sixteenth - 1e-9 and u + 1e-9 < z for a, z in sung)
+
     out = []
     for u0, u1, how in bars:
         k = 0
@@ -1086,16 +1099,23 @@ def chops(genome, params, placed, clock, melody) -> list:
                 start += m.bar
                 k += 1
                 continue
-            words = answer if how in ("last", "drop") and second and answer else call
+            words = answer if how in answered and second and answer else call
             rhythm = rhythms[names[(first + (how == "drop")) % len(names)]]
             figure = rhythm[1] if second else rhythm[0]
+            heard = []  # the figure from its first syllable to where a sung note or the hook's end stops it
             for step, j, length in figure:
                 j = min(j, len(words) - 1)
                 u = start + step * sixteenth
                 end = min(u + length * sixteenth, u1)
-                if u >= u1 - 1e-9 or any(a < end + sixteenth - 1e-9 and u - 1e-9 < z for a, z in sung):
-                    continue
-                s, w, c, pitch = words[j]
+                if u >= u1 - 1e-9 or not clear(u, end):
+                    break
+                heard.append((u, end, j))
+            while heard and not words[heard[-1][2]][5]:  # whole words: never ending inside one
+                heard.pop()
+            if heard and not words[heard[0][2]][4]:  # nor starting inside one
+                heard = []
+            for u, end, j in heard:
+                s, w, c, pitch = words[j][:4]
                 t0, t1 = clock.seconds(u), clock.seconds(end)
                 section = next((name for _sid, name, a, b in where if a - 1e-9 <= u < b - 1e-9), params.form[-1])
                 out.append(Note(part="chop", start=t0, dur=max(0.1, hook.get("staccato", 0.85) * (t1 - t0)),
