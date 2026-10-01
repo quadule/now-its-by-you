@@ -464,3 +464,12 @@ def test_house_and_dub_are_hidden_from_the_picker_but_still_play():
     assert {"acappella", "jig", *S.RING} <= set(S.offered())
     assert "house" in S.offered("house") and "dub" not in S.offered("house")
     assert "house" in S.STYLES and "dub" in S.STYLES
+
+
+def test_the_singer_lets_go_before_the_last_hook():
+    """The last refrain's last word ends with its line, not under the hook's eight bars after it (it was held 16.9 s
+    in house2-ada); a style without bars of its own after the last line holds it as ever."""
+    g, p = styled("house", drop=2)
+    p = replace(p, form=("verse", "refrain", "turn", "verse", "refrain", "turn", "bridge", "refrain"))
+    last = max((n for n in realize(g, p).notes if n.part == "voice"), key=lambda n: n.start)
+    assert last.dur < 60 / p.tempo * g.meter.bar / g.meter.beat  # within its bar, not the hook's eight

@@ -1508,3 +1508,12 @@ counts it once in 30. Otto has no turns or stutter, so its chop is unchanged.
 
 Nothing else moved: every other style renders as before (goldens, the suite). House's own renders change where
 the chop changes: ada and juno, as above; otto replays to its own id.
+
+
+**The last word let go (2026-09-30, night).** The hook fix's agent found the singer's last "*you*." in ada's last
+refrain held 16.9 s, under the whole last hook: `realize` holds the song's last sung note to where the lines end,
+and house's eight hook bars after the last refrain are laid as lines (played). A style with lengths of its own
+(StyleDef.form: house) now holds it only to the end of its own line; nothing else moves (the score's one note: 16.91
+s to 0.73 s). The singer's small random variations are drawn over the whole voice part's length, so the voice stem
+is a fresh take of the same notes from its first word (every other stem identical). house4-ada-2026-09-30
+(6af016bc9bb3), a replay of house3-ada's record.
