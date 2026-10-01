@@ -170,6 +170,17 @@ def export(laid: dict, source: dict, duration: float | None = None) -> dict:
             info = {k: (v + shift) % 12 if k in ("root", "bass") else v for k, v in info.items()}
         chords.append({"start": b(c.u0), "end": b(c.u1), "roman": c.symbol, **info,
                        "name": chord_name(info["root"], info["quality"], names, info.get("bass"))})
+    from .style import CHANGES
+
+    if getattr(getattr(params, "style", None), "name", "") in CHANGES:  # the jazz trio's: a chord written twice to
+        # fill a bar's shares (style.trio_changes) is one held chord, as the trio plays it
+        held = []
+        for c in chords:
+            if held and held[-1]["roman"] == c["roman"] and abs(held[-1]["end"] - c["start"]) < 1e-9:
+                held[-1] = {**held[-1], "end": c["end"]}
+            else:
+                held.append(c)
+        chords = held
 
     # The tune: realize()'s melody entries (the same notes as the band's Context has them, with their words).
     melody, lines = [], []

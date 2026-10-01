@@ -2889,10 +2889,10 @@ def ninth(ctx: StyleContext, c: Chord, u0: float, u1: float) -> int | None:
 
 
 def trio_keys(ctx: StyleContext, i: int) -> tuple[int, int]:
-    """Where the piano's comping sits: from about an octave under the tonic to a little over the low end of what is
+    """Where the piano's comping sits: from a seventh under the tonic to a third over the low end of what is
     sung, round middle C."""
-    lo = max(B.register_of("piano")[0], ctx.tonic - 15)
-    return lo, max(ctx.floor(i) + 2, lo + 14)
+    lo = max(B.register_of("piano")[0], ctx.tonic - 10)
+    return lo, max(ctx.floor(i) + 4, lo + 14)
 
 
 def comp_hits(ctx: StyleContext, c: Chord, rng, light: bool, first: bool) -> list[tuple[float, float, float]]:
@@ -2992,8 +2992,8 @@ def w_solo(ctx: StyleContext, i: int, part: str) -> list[Ev]:
     lo, top = max(B.register_of(part)[0], ctx.tonic - 14), ctx.tonic + 2
     for k, c in enumerate(held(ctx, i)):
         rng = ctx.rand(part, c.u0)
-        pcs = list(ctx.tones(c, c.u0, c.u1))
-        shell = [pcs[1], pcs[3]] if len(pcs) >= 4 else pcs[1:3]
+        pcs = list(ctx.tones(c, c.u0, c.u1))  # its third and seventh (or sixth); else its third and fifth
+        shell = [pcs[1], pcs[3]] if len(pcs) >= 4 and (pcs[3] - pcs[0]) % 12 in (9, 10, 11) else pcs[1:3]
         for a, z, weight in comp_hits(ctx, c, rng, False, k == 0):
             under = min([e.pitch for e in right if e.u0 < z - 1e-9 and e.u1 > a + 1e-9] or [top + 12])
             notes = ctx.voicing(part + "-left", shell, lo, int(min(top, under - 3)), a, z, size=2, root=True)
@@ -3039,12 +3039,17 @@ def w_walking(ctx: StyleContext, i: int, part: str, two: bool = False) -> list[E
                     options = [target - 1] + options
                 p = next((q for q in options if lo <= q <= hi and not semitone_off(q % 12, sung)),
                          nearest({pcs[2]}, p, lo, hi))
-            else:  # a tone of the chord on the way from its root to where it is going, never back where it just was
+            elif two:  # two to a bar: the fifth on the bar's other strong beat
+                p = next((q for q in sorted(range(lo, hi + 1), key=lambda q: abs(q - p))
+                          if q % 12 == pcs[2] and not semitone_off(q % 12, sung)), p)
+            else:  # on the way from the root to where it is going, never back where it just was: a tone of the chord,
+                # or on a weak beat a step of the scale toward it
                 goal = target if target is not None else root + (7 if root + 7 <= hi else -5)
                 aim = root + (goal - root) * k / max(len(beats) - 1, 1)
                 before = out[-2].pitch if len(out) >= 2 and out[-2].u0 >= c.u0 - 1e-9 else None
-                tones = [q for q in range(lo, hi + 1) if q % 12 in pcs and abs(q - p) <= 7 and q not in (p, before)
-                         and not semitone_off(q % 12, sung)]
+                weak = g.beat_index(u) % 2 == 1 if len(g.beats) == 4 else False
+                tones = [q for q in range(lo, hi + 1) if (q % 12 in pcs or weak and q % 12 in scale and 0 < abs(q - p) <= 2)
+                         and abs(q - p) <= 7 and q not in (p, before) and not semitone_off(q % 12, sung)]
                 tones.sort(key=lambda q: abs(q - aim) + 3.0 * rng.random())
                 p = tones[0] if tones else (root + 12 if root + 12 <= hi else nearest({pcs[2]}, root + 7, lo, hi))
             first = k == 0
@@ -3060,9 +3065,10 @@ def w_twofeel(ctx, i, part):
 
 def w_swept(ctx: StyleContext, i: int, part: str, light: bool = False) -> list[Ev]:
     """Brushes: the left hand sweeping round the snare without stopping (two sweeps a bar in four, one a bar in a
-    waltz), the right tapping the backbeat with the swung off-beat before the next (in a waltz two and three), the
-    bass drum feathered on the one; light: the sweep and the bass drum, the taps barely there. A tap where the band
-    goes on into a fuller section; the last chord one sweep and a tap."""
+    waltz), the right hand tapping time on every beat, the backbeat (two and four; a waltz's two and three) the
+    strongest, with the swung off-beat after two and after four (a waltz's after two) now and then: the ride's
+    figure on the snare; the bass drum feathered on the one. Light: the sweep and the bass drum, the backbeat barely
+    tapped. A few taps into a section as full or fuller; the last chord one sweep and a tap."""
     s = ctx.sections[i]
     g = ctx.grid
     out: list[Ev] = []
@@ -3077,15 +3083,15 @@ def w_swept(ctx: StyleContext, i: int, part: str, light: bool = False) -> list[E
                 out.append(Ev(part, bar + a, min(bar + z, s.u1), 0.0, ctx.vel(part, bar + a, 0.8, 0.9),
                               art="brush-sweep", section=i))
         hits = [(0.0, "kick", 0.3)] + ([(g.beats[2], "kick", 0.24)] if len(g.beats) == 4 else [])
-        for b in g.beats:
-            if g.backbeat(bar + b):
-                hits.append((b, "brush-tap", 0.4 if light else 0.68))
-        if not light:  # the swung off-beat after a backbeat, into the next beat: 2 (and) 3, 4 (and) 1
-            for k_b, b in enumerate(g.beats):
-                upto = g.beats[k_b + 1] if k_b + 1 < len(g.beats) else g.bar
-                x = next((x for x in g.subs if b < x < upto - 1e-9), None)
-                if g.backbeat(bar + b) and x is not None and rng.random() < 0.6:
-                    hits.append((x, "brush-tap", 0.45))
+        for k_b, b in enumerate(g.beats):
+            back = g.backbeat(bar + b)
+            if back or not light:
+                hits.append((b, "brush-tap", (0.4 if light else 0.68) if back else 0.42))
+            upto = g.beats[k_b + 1] if k_b + 1 < len(g.beats) else g.bar
+            x = next((x for x in g.subs if b < x < upto - 1e-9), None)
+            skip = back and (len(g.beats) != 3 or k_b == 1)  # after two and four; a waltz's after two
+            if not light and skip and x is not None and rng.random() < 0.6:
+                hits.append((x, "brush-tap", 0.45))
         fill = (not light and k == len(bars) - 1 and nxt is not None and nxt.energy >= s.energy) if asked is None else \
             (k == len(bars) - 1 and asked)
         if fill:

@@ -847,6 +847,19 @@ def loop_words(genome, params) -> str:
     return f"a {'riddim' if sdef.looped == ('version',) else 'loop'} of its own, {said}, {where}"
 
 
+def changes_words(genome, params) -> str:
+    """A style's own changes (the jazz trio's: songbird.style.trio_changes) in words: the song's chords with their
+    sevenths and sixths, and passing chords into the cadences where the version has any."""
+    from . import composition
+    from .theory import parse_symbol
+
+    song = composition.harmonized(genome, params)
+    passing = any(parse_symbol(s)[:2] != parse_symbol(own[min(len(own) - 1, k * len(own) // len(bar))])[:2]
+                  for ph in composition.form_phrases(song, params)
+                  for bar, own in zip(ph.chords, song.phrases[ph.id].chords) for k, s in enumerate(bar))
+    return "the song's chords with sevenths and sixths" + (", and passing chords into the cadences" if passing else "")
+
+
 def style_card(v: Version) -> dict:
     """The tradition the song is played in (songbird.style): its feel and the arrangement's options, why,
     and every style and feel a person could choose."""
@@ -881,6 +894,7 @@ def style_card(v: Version) -> dict:
                f"a breakdown after the {ORDINALS[s.drop - 1]} refrain, the singer with the pad, and the drop"
                if 0 < s.drop <= len(ORDINALS) else "",
                loop_words(v.context.genome, v.params) if sdef.loops else "",
+               changes_words(v.context.genome, v.params) if name in style_mod.CHANGES else "",
                f"after the {ORDINALS[s.dissolve - 1]} refrain the song dissolves into its version: the singer in "
                f"fragments thrown into the echo, the melodica taking the tune in pieces"
                if 0 < s.dissolve <= len(ORDINALS) else ""]

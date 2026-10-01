@@ -1672,8 +1672,9 @@ JAZZ = _def(
              "refrain": "swept", "break": "swept", "turn": "swept", "bridge": "swept-light", "tag": "swept",
              "outro": "swept-light"}},
     ("piano",), {"waltz": 0.55, "swing": 0.45},
-    # a jazz waltz (a waltz's quarter 1.5 times the song's beat: about 105 to 125) or a ballad swung at about 75
-    {"waltz": (0.72, 0.8, 0.88), "swing": (0.7, 0.78, 0.88)},
+    # a jazz waltz (its quarter 1.5 times the song's beat: about 110 to 135, 122 for H) or a ballad swung at about 80;
+    # at the same tempo the waltz is as long as the song (the tempo counts the song's beats, each foot a bar of three)
+    {"waltz": (0.76, 0.85, 0.94), "swing": (0.74, 0.83, 0.92)},
     {"*": ("add9",)}, 0.7, (-0.45, -0.85),
     band={"ornament": -0.3},
     singer={"vibrato_depth": -3.0},
@@ -1781,6 +1782,7 @@ def trio_changes(genome, params, lines: list) -> dict[str, tuple]:
         if nxt is not None:
             after[phrase.id] += [n for n in nxt.sung if n.onset < 0]
     harmony = float(params.style.harmony)
+    shortest = bar if rebarred(genome, params) else bar / 2  # a V split into ii-V: in a waltz a whole bar (two of three)
     out: dict[str, tuple] = {}
     for _i, _j, phrase in lines:
         if phrase.id in out:
@@ -1809,7 +1811,8 @@ def trio_changes(genome, params, lines: list) -> dict[str, tuple]:
             mid = (a + z) / 2
             here = [(_coloured(d, mode, sung(a, z, last)), a, z)]
             heads[k] = d
-            if d == 5 and (nxt == 1 or last) and coin_ii < harmony:  # ii-V: the V's first half its ii
+            if d == 5 and (nxt == 1 or last) and z - a >= shortest - 1e-9 and coin_ii < harmony:  # ii-V: the V's
+                # first half its ii
                 ii, v = trio_chord(2, mode, "seventh"), trio_chord(5, mode, "seventh")
                 if sits(ii, own, mode, sung(a, mid, False)) and sits(v, own, mode, sung(mid, z, last)):
                     here, heads[k] = [(ii, a, mid), (v, mid, z)], 2
@@ -1821,17 +1824,25 @@ def trio_changes(genome, params, lines: list) -> dict[str, tuple]:
                 if fits and fits[0] != first:
                     here = [(first, a, mid), (fits[0], mid, z)]
             played = here + played
-        out[phrase.id] = _bars(played, phrase.bars, bar)
+        chords = _bars(played, phrase.chords, bar)
+        if chords is None:  # a passing chord the bar can't be written with (a bar of three): the colours alone
+            chords = _bars([(_coloured(_plain(own), mode, sung(a, z, k == len(slots) - 1)), a, z)
+                            for k, (own, a, z) in enumerate(slots)], phrase.chords, bar)
+        out[phrase.id] = chords
     return out
 
 
-def _bars(played: list, bars: int, bar: float) -> tuple:
-    """Chords with their spans as the genome writes them: each bar's on the finest of 1, 2 or 4 even shares that holds
-    them all (a chord held over two shares written twice)."""
+def _bars(played: list, own: tuple, bar: float) -> tuple | None:
+    """Chords with their spans as the genome writes them: each bar's on the fewest even shares that hold them all, of
+    1, 2 or 4, or as many as the line's own bar has (a chord held over two shares written twice); None where a bar's
+    can't be written so."""
     out = []
-    for b in range(bars):
+    for b, chords in enumerate(own):
         here = [(s, a - b * bar, z - b * bar) for s, a, z in played if b * bar - 1e-9 <= a < (b + 1) * bar - 1e-9]
-        n = next(n for n in (1, 2, 4) if all(abs(a * n / bar - round(a * n / bar)) < 1e-9 for _s, a, _z in here))
+        n = next((n for n in sorted({1, 2, 4, len(chords)})
+                  if all(abs(a * n / bar - round(a * n / bar)) < 1e-9 for _s, a, _z in here)), None)
+        if n is None:
+            return None
         out.append(tuple(next(s for s, a, z in here if a - 1e-9 <= k * bar / n < z - 1e-9) for k in range(n)))
     return tuple(out)
 
@@ -1845,8 +1856,23 @@ def changed(genome, params, lines: list, phrases: list) -> list:
 
     mine = set((params.composition or {}).get("chords") or {})  # a person's chords for a line, everywhere
     changes = trio_changes(genome, params, [(i, j, genome.phrases[p.id]) for (i, j, _l), p in zip(lines, phrases)])
-    return [_replace(p, chords=changes[p.id])
-            if p.id not in mine and p.chords == genome.phrases[p.id].chords and p.id in changes else p for p in phrases]
+    # (a line with a tune of its own at its place keeps the song's chords there: the changes fit the line's own tune)
+    return [_replace(p, chords=changes[p.id]) if p.id not in mine and p.chords == genome.phrases[p.id].chords
+            and not getattr(p, "place", None) and p.id in changes else p for p in phrases]
+
+
+def held_chords(times: list, params) -> list:
+    """Chords as (start, end, symbol), a chord written twice to fill a bar's shares (the trio's changes) joined into
+    the one chord the trio holds; as they are for every other style (a person's repeated chord is struck again)."""
+    if params.style.name not in CHANGES:
+        return times
+    out: list = []
+    for a, z, symbol in times:
+        if out and out[-1][2] == symbol and abs(out[-1][1] - a) < 1e-9:
+            out[-1] = (out[-1][0], z, symbol)
+        else:
+            out.append((a, z, symbol))
+    return out
 
 
 def with_break(genome, form, material: str, sdef: StyleDef) -> list:

@@ -90,9 +90,48 @@ def test_its_changes_colour_every_chord_and_pass_into_the_cadences():
             assert all(len(chord_tones(s, "ionian")) == 4 for s in chords), (pid, chords)
     g, p = trio(0.0)
     plain = S.trio_changes(g, p, lines)
-    for pid, bars in plain.items():
-        assert [len(b) for b in bars] == [len(b) for b in g.phrases[pid].chords]
-        assert [S._plain(s.rstrip("maj76dd9")) for b in bars for s in b] is not None
+    from songbird.theory import parse_symbol
+
+    for pid, bars in plain.items():  # the song's own chords, coloured: the same roots in the same places
+        assert [[parse_symbol(s)[0] for s in b] for b in bars] == \
+            [[parse_symbol(s)[0] for s in b] for b in g.phrases[pid].chords]
+
+
+def test_a_bar_it_cant_write_keeps_its_shares_and_a_waltz_splits_only_a_whole_bar():
+    """A bar of three or four chords takes no ii-V it can't write (the review: it crashed); in a waltz a V is split
+    into ii-V only where it fills a whole bar of the song (two bars of three), never a beat and two."""
+    g, p = trio(1.0)
+    for chords in ((("I", "IV", "V", "I"), ("V",)), (("vi", "ii", "V"), ("I",))):
+        g2 = replace(g, phrases={**g.phrases, "v1": replace(g.phrases["v1"], chords=chords)})
+        out = S.trio_changes(g2, p, [(0, 0, g2.phrases["v1"]), (0, 0, g2.phrases["v2"])])["v1"]
+        assert [len(b) for b in out] == [len(b) for b in chords]
+    g, p = trio(1.0, feel="waltz")
+    assert S.rebarred(g, p)
+    lines = [(0, 0, g.phrases[x]) for x in ("v1", "v2", "v3", "v2", "r1", "r2", "r3", "r4", "t1", "b1", "b2", "b3",
+                                            "b4", "r1")]
+    changes = S.trio_changes(g, p, lines)
+    assert all(len(b) <= 2 for bars in changes.values() for b in bars)
+    assert changes["b4"][1] == ("iim7", "V7") and changes["t1"][1] == ("iim7", "V7")
+
+
+def test_a_held_chord_is_one_chord_in_the_midi_file_and_the_piano_score():
+    from songbird.idioms import chord_times
+
+    g, p = trio(1.0)
+    times = chord_times(g, p)
+    held = S.held_chords(times, p)
+    assert len(held) < len(times) and all(a[2] != b[2] for a, b in zip(held, held[1:]))
+    other = replace(p, style=S.Style(name="chamber", harmony=1.0))
+    assert S.held_chords(chord_times(g, other), other) == chord_times(g, other)
+
+
+def test_the_style_card_says_what_the_chords_do():
+    from songbird import explain
+
+    g, p = trio(1.0)
+    assert explain.changes_words(g, p).endswith("and passing chords into the cadences")
+    assert explain.changes_words(g, replace(p, style=S.Style(name="jazz", harmony=0.0))) == \
+        "the song's chords with sevenths and sixths"
 
 
 def test_a_persons_chords_and_every_other_style_are_left_as_they_are():
