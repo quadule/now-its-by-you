@@ -234,6 +234,13 @@
       ],
       "port": 8798,
       "url": "http://127.0.0.1:8798"
+    },
+    {
+      "name": "studio-site",
+      "runtimeExecutable": "sh",
+      "runtimeArgs": ["-c", "cd web/studio-site && exec node_modules/.bin/wrangler dev --port 8813 --ip 127.0.0.1"],
+      "port": 8813,
+      "url": "http://127.0.0.1:8813"
     }
   ]
 }

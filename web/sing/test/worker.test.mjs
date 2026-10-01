@@ -261,6 +261,55 @@ test("the seed page is public: at /seed, at the root of the seed host, with exac
   assert.equal((await call(w, e, "/seed", { method: "POST" })).status, 404);
 });
 
+test("singing has moved to the studio: every invitation points there, nothing more is sung here, singers' own pages and the seed page are as they were", async () => {
+  const w = await load();
+  const files = { ...SITE, "/seed.html": "<!doctype html><title>seed</title>", "/seed/now-its-by-you.flac": "fLaC: the song" };
+  const e = env({ files });
+  const token = await invitation(w, e, { people: 5 });
+  const sid = (await join(w, e, token)).data.singer;
+  await send(w, e, sid);
+  const seed = async () => Promise.all(["https://now.itsby.you/", "https://now.itsby.you/seed/now-its-by-you.flac"].map(async u => {
+    const r = await w.fetch(new Request(u), e);
+    return [r.status, [...r.headers].sort(), await r.text()];
+  }));
+  const before = await seed();
+  const takes = e.TAKES.keys("takes/").length;
+
+  e.STUDIO_URL = "https://studio.itsby.you";
+  for (const path of [`/i/${token}`, `/i/${"Z".repeat(24)}`, "/i/anything"]) { // open, unknown: all the same
+    const r = await call(w, e, path);
+    assert.equal(r.status, 410, path);
+    const html = await r.text();
+    assert.match(html, /Singing happens in the studio now: <a href="https:\/\/studio\.itsby\.you\/">studio\.itsby\.you<\/a>\./);
+    assert.doesNotMatch(html.match(/<p>(.*)<\/p>/)[1], /\d{4}|September|clos/); // simply that, no dates
+    assert.match(r.headers.get("Content-Security-Policy"), /default-src 'none'/);
+  }
+  for (const [path, init] of [[`/api/invite/${token}`], [`/api/song/${token}`], [`/api/guide/${token}/a.k0.t100/full`],
+                              [`/api/join/${token}`, { method: "POST", body: "{}" }], [`/api/words/${sid}`, { method: "POST", body: "{}" }],
+                              [`/api/done/${sid}`, { method: "POST" }]]) {
+    const r = await call(w, e, path, init);
+    assert.equal(r.status, 410, path);
+    assert.deepEqual(await r.json(), { error: "moved", message: "Singing happens in the studio now: https://studio.itsby.you/",
+                                       studio: "https://studio.itsby.you/" });
+  }
+  assert.equal((await send(w, e, sid)).status, 410);
+  assert.equal(e.TAKES.keys("takes/").length, takes); // nothing more kept
+  assert.equal(e.TAKES.keys("done/").length, 0);
+
+  assert.equal((await call(w, e, `/y/${sid}`)).status, 200); // a singer's own page, and what it shows
+  const mine = (await page(w, e, sid)).data;
+  assert.equal(mine.sing_more, null); // it no longer offers to sing more here
+  assert.equal((await call(w, e, `/api/yours/${sid}/take/${mine.takes[0].id}`)).status, 200);
+  assert.equal((await admin(w, e, "GET", "singers")).status, 200);
+
+  const root = await call(w, e, "/"); // the singing site's root says where singing is
+  assert.equal(await root.text(), "Songbird: a folk song that passes itself on. Singing happens in the studio now: https://studio.itsby.you/\n");
+  assert.deepEqual(await seed(), before); // the seed host, byte for byte, headers and all
+
+  e.STUDIO_URL = "http://studio.itsby.you"; // only an https address moves it
+  assert.equal((await call(w, e, `/i/${token}`)).status, 200);
+});
+
 test("unknown invitations and pages, the song's files and the admin API give nothing away", async () => {
   const w = await load(), none = env();
   assert.equal((await call(w, none, `/i/${"Z".repeat(24)}`)).status, 404);
