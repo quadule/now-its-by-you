@@ -900,6 +900,9 @@ it rendered to before, at one thread and two). Two threads unless said:
 | dub, with its version after the song (new) | 221 s | ebass electric kit melodica organ voice | 1.89 GB | |
 | house again (the evening: its own lengths, the chop; docs/STYLES.md, "House and dub, again") | 163 s | arp chop drummachine piano synthbass synthpad voice | 1.27 GB | |
 | dub again (dissolving into its version after the first refrain, the dub-out after) | 222 s | ebass electric kit melodica organ voice | 1.91 GB | |
+| the jazz trio (September 30, new: docs/STYLES.md, "A jazz trio"), a waltz with its break | 201 s | bass kit (brushes) piano voice | 1.74 GB | |
+| the jazz trio, swung | 206 s | the same | 1.78 GB | |
+| the jazz trio, 4 verses, every part, slowest | 372 s | the same | 2.51 to 3.06 GB (four runs) | |
 
 (The "before" column is the same measure taken again on the tree as the review found it; a few differ from the
 review's own figures by a few percent, and two of its drawn-out versions are measured here at the lengths these edits
@@ -942,6 +945,7 @@ go, on two threads, before → now:
 | the jig, was a Celtic session (whistle, drum) | 7.4 | 4.1 |
 | house (arp; the chop at the voice's rate) | 6.4 | 4.5 (its own lengths make its versions longer: a machine's long shape with a drop, ada's, is 3.8 minutes: it fits) |
 | dub (melodica, 2026-09-30) | 7.4 | 3.9 (a dub version of H's own shape is 3.7: it fits; a machine's longer shape, three verses and the bridge twice, is 4.5 to 5 minutes and doesn't) |
+| the jazz trio (kit: brushes only, at the kit's rate) | 7.1 | 4.0 (H's own shape with the piano's break is 3.4 minutes: it fits; a machine's longer shape, three verses and the bridge twice, is 4.1 to 4.5 minutes and doesn't; the trio measured 6.0 to 7.4 MB a second over the base, so the estimate is about right) |
 
 (An a cappella's peak grew with its voices until the group's bus was summed as its voices came rather than
 held until the last, 30 September, to the bit: 1.85 and 2.33 GB before, for three and six voices, 1.51 after.)

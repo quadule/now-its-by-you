@@ -605,6 +605,11 @@ MEASURED = {
     # again (2026-09-30, evening; "House and dub, again"): house's own lengths and its chop, dub dissolving
     "house": (163.3, "arp chop drummachine piano synthbass synthpad voice", 1270),
     "dub": (222.2, "ebass electric kit melodica organ voice", 1910),
+    # the jazz trio (September 30, 2026; docs/STYLES.md, "A jazz trio"): H's own shape and its break, a waltz and
+    # swung; the long one's peak the highest of four runs (2.51 to 3.06 GB: the brushes' kit beside the voice)
+    "jazz (a waltz, with the break)": (201.1, "bass kit piano voice", 1740),
+    "jazz, swung": (205.8, "bass kit piano voice", 1780),
+    "jazz 4 verses, every part, slowest": (371.6, "bass kit piano voice", 3060),
 }
 
 
