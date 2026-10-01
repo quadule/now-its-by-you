@@ -170,7 +170,9 @@ def export(laid: dict, source: dict, duration: float | None = None) -> dict:
             info = {k: (v + shift) % 12 if k in ("root", "bass") else v for k, v in info.items()}
         chords.append({"start": b(c.u0), "end": b(c.u1), "roman": c.symbol, **info,
                        "name": chord_name(info["root"], info["quality"], names, info.get("bass"))})
-    from .style import CHANGES
+    from . import style as _style
+
+    CHANGES = getattr(_style, "CHANGES", ())  # (the release's program, which tools/piano_score.py runs, has none)
 
     if getattr(getattr(params, "style", None), "name", "") in CHANGES:  # the jazz trio's: a chord written twice to
         # fill a bar's shares (style.trio_changes) is one held chord, as the trio plays it
