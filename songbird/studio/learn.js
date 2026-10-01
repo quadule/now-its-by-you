@@ -36,6 +36,7 @@
       let made;
       try { made = await r.json(); } catch (_) { made = { error: r.statusText }; }
       if (!r.ok) throw new Error(made.error || r.statusText);
+      if (!String(made.url || "").startsWith("/piano/")) throw new Error("the studio didn't say where the piano page is");
       if (tab && !tab.closed) {
         tab.location.href = made.url;
         try { tab.focus(); } catch (_) { /* the browser decides */ }

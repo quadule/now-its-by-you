@@ -21,6 +21,12 @@
 // (wasm memory never shrinks); sections in one worker kept for a few, then replaced. Any failure, a timeout, running
 // out of memory, the worker stopped: that render is made by the server, said quietly in the progress; after two
 // failures (or a whole song's memory), the server makes them for the rest of the visit.
+//
+// On the device (the static site: docs/WEB-STUDIO.md, "On the device"; the page says studio-render "device"), there
+// is no server: every render is made in this browser, whatever the browser (phones too: no gating), and the render
+// spec is asked of the studio running in the page's own worker (web/studio-wasm/device.js). A failure is said as it
+// is, with what may help (a shorter version, a computer). A whole song being made is marked in localStorage, so a page
+// the browser stopped for memory can say so when it's opened again (SongbirdDevice.crashed).
 "use strict";
 
 (() => {
@@ -68,6 +74,20 @@
     if (mode === "browser") return { where: "browser", why: "you chose this browser" };
     const can = capable(env, bundle);
     return can.ok ? { where: "browser", why: "" } : { where: "server", why: can.why };
+  }
+
+  // On the device: what went wrong, in the simplest true words, and what may help (never "your phone can't").
+  const MAKING = "songbird-making-whole";
+  function plainly(e) {
+    const message = String((e && e.message) || e || "");
+    if (e && e.memory) return "it ran out of memory in this browser. A shorter version (fewer verses, a quicker tempo) may fit, or a computer.";
+    if (e && e.timeout) return "it stopped making progress. Try again, or a shorter version, or a computer.";
+    if (/worker (was )?stopped/i.test(message)) return "the browser stopped it, perhaps for want of memory. A shorter version (fewer verses, a quicker tempo) may fit, or a computer.";
+    return `it went wrong in this browser (${message.slice(0, 200)}). Try again, or a shorter version, or a computer.`;
+  }
+  function onDevice() {
+    if (typeof document === "undefined") return false;
+    try { return document.querySelector('meta[name="studio-render"]')?.content === "device"; } catch (e) { return false; }
   }
 
   // ---------------------------------------------------------------- the browser's workers
@@ -251,6 +271,7 @@
     const storage = storageOf(options);
     const spawn = options.spawn || (typeof Worker === "function" ? (url) => new Worker(url, { type: "module" }) : null);
     const blob = options.blob || ((bytes) => URL.createObjectURL(new Blob([bytes], { type: "audio/flac" })));
+    const device = options.device ?? onDevice();  // no server: every song is made here
 
     function follow(task, path, body, onProgress) {
       return (async () => {
@@ -279,14 +300,17 @@
       const answer = await ask("/api/render/spec", body);
       // the server has made it already (it plays at once from there), or it's too long for a browser's memory
       // and the server can make it: the server's, as ever
-      if (answer.made || answer.server) return null;
+      if (!device && (answer.made || answer.server)) return null;
       // too long for a browser and for the server: said, and made nowhere (never sent to the server to fail there)
-      if (answer.too_long) return { state: "failed", error: answer.too_long, key: answer.key, where: "browser", size };
+      if (!device && answer.too_long) return { state: "failed", error: answer.too_long, key: answer.key, where: "browser", size };
       const hit = shared.cache.get(answer.key);
       if (hit) return hit;
+      if (!answer.spec) throw new Error("the studio didn't say what to make");
       if (!shared.browser) shared.browser = workers({ spawn, bundle: shared.bundle, storage, ...(options.workers || {}) });
       const label = answer.label || (size === "whole" ? "The whole song" : "Song section");
-      const say = (job) => { task.job = job; if (!task.cancelled) onProgress?.(job); };
+      // on the device, a whole song estimated past a browser's memory is made all the same, with a word of warning
+      const warn = device && answer.warn ? ` (${answer.warn})` : "";
+      const say = (job) => { task.job = warn ? { ...job, stage: `${job.stage}${warn}` } : job; if (!task.cancelled) onProgress?.(task.job); };
       say({ state: "running", progress: 0, stage: "getting the singer ready", label, where: "browser" });
       const out = await shared.browser.render(answer.spec, size, (m) => {
         if (m.kind === "loading") {
@@ -299,19 +323,50 @@
           say({ state: "running", progress: m.progress, stage: m.stage, label, where: "browser" });
         }
       }, task);
-      const url = blob(out.flac);
+      // the file itself is kept too, for a recording someone shares (device.js: sent as it is)
+      const file = !options.blob && typeof Blob === "function" ? new Blob([out.flac], { type: "audio/flac" }) : null;
+      const url = file ? URL.createObjectURL(file) : blob(out.flac);
       const clock = answer.bar_seconds ? { bar_seconds: answer.bar_seconds } : {};  // a whole song's, as the server's job ends
       const job = { state: "done", progress: 1, url, key: answer.key, label, where: "browser", id: out.id, size,
-        seconds: out.seconds, result: { duration: out.duration, ...clock } };
+        seconds: out.seconds, heap: out.heap, result: { duration: out.duration, ...clock } };
       if (size === "whole" && out.record) {
         const n = answer.name || {};
         const name = `${n.song || "song"}.${(out.record.rendered_at || n.day || "").slice(0, 10)}.${out.id.slice(0, 6)}.flac`;
         job.result = { recorded: { flac: name, name, id: out.id, duration: out.duration, shared: true, browser: true,
           generation: out.record.generation, yours: out.record.yours, next: `python3 ${name} studio`, download: url,
-          program: out.record.program_sha256 }, ...clock };
+          program: out.record.program_sha256, device, file }, ...clock };
       }
       remember(answer.key, job, size);
       return job;
+    }
+
+    // On the device: always here, every browser trying; what went wrong said plainly (there's no server to ask)
+    function onThisDevice(task, body, size, onProgress) {
+      task.where = "browser";
+      const failed = (error) => (task.job = { state: "failed", error, where: "browser", size });
+      task.done = (async () => {
+        if (!spawn || !env.worker || !env.wasm) {
+          return failed("this browser can't run the singer (it needs WebAssembly and workers). Another browser, or a computer, may.");
+        }
+        const began = Date.now();
+        const marking = size === "whole";
+        try {
+          if (!shared.bundle) await discover(() => ask("/render/bundle.json"));
+          if (!shared.bundle) return failed("the singer's files couldn't be fetched. Reload the page to try again.");
+          if (marking) { try { storage?.setItem(MAKING, String(began)); } catch (e) { /* only a convenience */ } }
+          const job = await inBrowser(task, { edits: body.edits, who: body.who || "you", section: body.section ?? null },
+            size, onProgress);
+          note({ kind: task.kind, size, key: job.key, where: "browser", id: job.id, seconds: job.seconds, at: began });
+          return (task.job = job);
+        } catch (e) {
+          if (task.cancelled || e.cancelled) return task.job || failed("cancelled");
+          note({ kind: task.kind, size, where: "browser", failed: String(e.message || e), at: began });
+          return failed(plainly(e));
+        } finally {
+          if (marking) { try { storage?.removeItem(MAKING); } catch (e) { /* only a convenience */ } }
+        }
+      })();
+      return task;
     }
 
     function run(kind, path, body, size, onProgress) {
@@ -324,6 +379,7 @@
         if (job.state === "done") note({ kind, size, key: job.key, where: "server", at: Date.now() });
         return job;
       };
+      if (device) return onThisDevice(task, body, size, onProgress);
       // settled already (no worker here, the server chosen, or no bundle served): asked at once, as ever
       if (!spawn || !env.worker || modeOf(storage) === "server" || shared.bundle === null) {
         task.where = "server";
@@ -411,7 +467,7 @@
     const box = doc.getElementById?.("makeWhere");
     if (!box || typeof fetch !== "function") return;
     const show = () => {
-      box.hidden = !shared.bundle;
+      box.hidden = !shared.bundle || onDevice();  // on the device there's no choice: it's always made here
       const mode = modeOf(storageOf({}));
       for (const input of box.querySelectorAll("input[name=makeWhere]")) input.checked = input.value === mode;
       const line = doc.getElementById("makeWhereNote");
@@ -423,7 +479,7 @@
     show();
   }
 
-  const api = { create, capable, choose, environment, workers, setMode, status, mount, shared,
+  const api = { create, capable, choose, environment, workers, setMode, status, mount, shared, plainly, MAKING,
     get made() { return shared.made; },
     debug: { kill: () => shared.browser?.kill() || false, busy: () => !!shared.browser?.busy() },
     reset() {  // a fresh page, for the tests

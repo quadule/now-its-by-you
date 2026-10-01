@@ -119,12 +119,12 @@ async function api(path, body) {
   return data;
 }
 
-function toast(text) {
+function toast(text, ms = 2600) {
   const t = $("toast");
   t.textContent = text;
   t.classList.add("show");
   clearTimeout(toast.timer);
-  toast.timer = setTimeout(() => t.classList.remove("show"), 2600);
+  toast.timer = setTimeout(() => t.classList.remove("show"), ms);
 }
 
 // Saved edits belong to the exact song genome they were made for, as a draft does (drafts.js): a tune or lyric
@@ -904,6 +904,11 @@ function segments(values) {
 function renderTimeline() {
   const tl = state.timeline;
   const box = $("timeline");
+  // on the device, asked for once the Time drawer is open (it's drawn there)
+  if (!tl && box && state.start?.device && !state.timelineAsked && $("drawer") && !$("drawer").hidden) {
+    box.replaceChildren(h("p", { class: "hint" }, "Drawing six years of the song…"));
+    loadTimeline();
+  }
   if (!tl || !box) return;
   const width = Math.max(320, box.clientWidth || 800);
   const n = tl.dates.length;
@@ -1234,7 +1239,8 @@ async function record() {
     saved.replaceChildren(
       r.shared
         ? h("p", { title: "The song, the program that sang it and its record, in one file." }, `Made (${fmtTime(r.duration)}). `,
-          h("a", { class: "btn primary", href: r.download, download: r.name }, "Download it"), publicKept(r))
+          h("a", { class: "btn primary", href: r.download, download: r.name }, "Download it"), publicKept(r),
+          r.device && r.file && window.SongbirdDevice?.share ? shareButton(r) : null)
         : h("p", { title: "The song, the program that sang it and its record, in one file." }, "Saved ", h("code", {}, r.flac), ` (${fmtTime(r.duration)}).`),
       h("p", { title: "What you chose, never who you are." }, r.yours ? `${r.yours} choice${r.yours === 1 ? "" : "s"} marked as yours.` : "Every choice in it is the program's."),
       h("p", { class: "hint" }, "To make the next version from this one: ", h("code", {}, r.next)),
@@ -1284,6 +1290,46 @@ function whatsKept(p, singing) {  // what an open studio keeps, said plainly (do
     "shared /v/ link, and any file you download, carries its version's own record: its made-up machine's name, the " +
     "room its microphone heard, the leanings of its words." +
     (singing ? " Singing: only numbers are kept; the audio is deleted once it's measured." : "");
+}
+
+// ------------------------------------------------------------------ on the device (the static site: no server)
+// The studio runs in this browser (web/studio-wasm/device.js answers the page's questions; renderer.js makes every
+// song here), so what the page says is kept, and where, is this browser's. Kept here, apart, as the public studio's
+// words are. docs/WEB-STUDIO.md, "On the device".
+
+function applyDevice(s) {
+  if (!s.device) return;
+  setOn("whereNote", "textContent", "Nothing leaves this device unless you share a version.");
+  setOn("helpShows", "textContent", "This studio shows today's version of the song, and lets you:");
+  setOn("helpWhere", "textContent", "The studio runs in your browser and makes the song on this device. Nothing is sent anywhere unless you share a version.");
+  setOn("helpKept", "textContent", "What's kept: your changes, and the versions you open, in this browser. A recording stays until you leave the page: download it to keep it. A version you share is kept by the site so its link works; like any file you download, it carries its own record (its made-up machine's name, the room its microphone heard, the leanings of its words), never your name. The site sees which versions are opened by link, as any site sees what it serves.");
+  setOn("helpKept", "hidden", false);
+  const crashed = window.SongbirdDevice?.crashed?.();
+  if (crashed) {
+    $("saved")?.replaceChildren(h("p", { class: "problem" }, crashed));
+    toast(crashed, 9000);
+  }
+}
+
+// "Share it": the recording sent to the site (its only upload), and the link it keeps it under
+function shareButton(r) {
+  const out = h("span", { class: "share" });
+  const button = h("button", { class: "btn", type: "button", title: "Sends this recording to the site, which keeps it so anyone with the link can open it and make the next version. Nothing else leaves this device.", onclick: async () => {
+    button.disabled = true;
+    out.replaceChildren(" Sending it…");
+    try {
+      const shared = await window.SongbirdDevice.share(r.file);
+      const copy = h("button", { class: "link small", type: "button", onclick: async () => {
+        try { await navigator.clipboard.writeText(shared.url); toast("The link is copied"); }
+        catch (e) { toast("Copy the link from beside the button"); }
+      } }, "copy the link");
+      out.replaceChildren(" Its link: ", h("a", { href: shared.url }, shared.url), " · ", copy);
+    } catch (e) {
+      button.disabled = false;
+      out.replaceChildren(` Couldn't share it: ${e.message}`);
+    }
+  } }, "Share it");
+  return h("span", {}, " ", button, out);
 }
 
 // ------------------------------------------------------------------ putting it together
@@ -1361,6 +1407,7 @@ async function main() {
     setOn("helpWhere", "textContent", "This studio is shared from someone else's computer for a short preview: that computer makes the song, and what you record is saved there too. Download it to keep it. Your changes stay in this browser.");
   }
   applyPublic(s);
+  applyDevice(s);
   applyVersion(s);
   setOn("helpSong", "textContent", s.title);
   renderLineage(s.generation || 0);
@@ -1380,12 +1427,19 @@ async function main() {
   }
   const scroll = () => { const el = hash.scroll && $(hash.scroll); if (el) el.scrollIntoView({ block: "start" }); };
   scroll();
-  api("/api/timeline").then((tl) => { state.timeline = tl; renderTimeline(); scroll(); }).catch(() => {
-    $("timeline")?.replaceChildren(h("p", { class: "hint" }, "The timeline couldn't be drawn."));
-  });
+  // on the device the timeline (the heaviest question: seconds of this browser's time) waits until it's looked at
+  if (!s.device) loadTimeline(scroll);
   if (hash.compare !== undefined) loadCompare();
   // the song is on the page: help.js may show a first visit around it
   if (typeof CustomEvent === "function") document.dispatchEvent?.(new CustomEvent("studio:ready", { detail: { hash, shared: !!s.shared } }));
+}
+
+function loadTimeline(then) {
+  if (state.timelineAsked) return;
+  state.timelineAsked = true;
+  api("/api/timeline").then((tl) => { state.timeline = tl; renderTimeline(); then?.(); }).catch(() => {
+    $("timeline")?.replaceChildren(h("p", { class: "hint" }, "The timeline couldn't be drawn."));
+  });
 }
 
 // The line this version came down: a mark for each version before it (the nearest nine), filled for this one.
@@ -1496,12 +1550,17 @@ function applyVersion(s) {
     try { await navigator.clipboard.writeText(link); toast("The link is copied"); }
     catch (e) { toast("Copy the link from the address bar"); }
   } }, "copy the link");
+  // on the device, a file the visitor brought is theirs alone (kept in this browser, no link); a shared one has its link
+  const fromFile = s.device && !v.shared;
+  const how = fromFile ? "which you opened from a file" : s.device ? "which someone shared" : "which someone brought here";
   bar.replaceChildren(
     h("p", {}, tag("lineage", "someone's version"), " ",
-      `Continuing ${which}${made} (${v.rendition}…), which someone brought here. What you record is its child.`),
+      `Continuing ${which}${made} (${v.rendition}…), ${how}. What you record is its child.`),
     h("p", { class: "hint" }, v.program_note),
-    h("p", { class: "hint" }, "Its link, for anyone to open it here too: ", h("a", { href: v.url }, link), " · ", copy,
-      " · ", h("a", { href: "/" }, "the song as it began")),
+    fromFile
+      ? h("p", { class: "hint", title: "Kept in this browser only. Record your version and share it to give it a link." }, h("a", { href: "/" }, "the song as it began"))
+      : h("p", { class: "hint" }, "Its link, for anyone to open it here too: ", h("a", { href: v.url }, link), " · ", copy,
+        " · ", h("a", { href: "/" }, "the song as it began")),
   );
   setOn("versionNote", "textContent", "This page is on someone's version. Opening another starts from that one instead.");
 }
@@ -1536,7 +1595,10 @@ async function openVersionFile(file) {
     try { data = await r.json(); } catch (e) { data = { error: r.statusText }; }
     if (!r.ok) throw new Error(data.error || r.statusText);
     note.textContent = "Opening that version…";
-    location.assign(data.url);
+    const to = new URL(data.url, location.href);
+    const here = to.pathname === location.pathname && to.search === location.search;
+    location.assign(to.href);
+    if (here) location.reload();  // only the #version changed (a file opened on the device): opened afresh
   } catch (e) {
     say(`Couldn't open it: ${e.message}`);
   } finally {

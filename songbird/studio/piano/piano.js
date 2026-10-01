@@ -1033,9 +1033,17 @@
 
   async function init() {
     try {
-      const res = await fetch(scoreUrl(), { cache: "no-cache" });
-      if (!res.ok) throw new Error(res.status + " " + res.statusText);
-      score = await res.json();
+      // device/KEY.json: a score the studio on the visitor's device made, kept in this browser (web/studio-wasm/device.js)
+      const kept = /^device\/([0-9a-f]{16,64})\.json$/.exec(scoreUrl());
+      if (kept) {
+        const text = localStorage.getItem("songbird-piano-score:" + kept[1]);
+        if (!text) throw new Error("not kept");
+        score = JSON.parse(text);
+      } else {
+        const res = await fetch(scoreUrl(), { cache: "no-cache" });
+        if (!res.ok) throw new Error(res.status + " " + res.statusText);
+        score = await res.json();
+      }
     } catch (e) {
       $("lead").textContent = scoreUrl() !== "score.json"
         ? "This version's score isn't here any more (the studio keeps what it makes for a while). Open it again from the studio with Learn it at the piano."

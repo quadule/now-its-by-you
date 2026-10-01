@@ -20,10 +20,10 @@
     return data;
   }
 
-  function save(url) {
+  function save(url, name = "") {  // name: a file made on the device, a Blob with no address to name it
     const link = document.createElement("a");
     link.href = url;
-    link.download = new URL(url, location.href).searchParams.get("name") || "";
+    link.download = name || new URL(url, location.href).searchParams.get("name") || "";
     document.body.append(link);
     link.click();
     link.remove();
@@ -51,7 +51,7 @@
         job = await ask(`/api/job/${job.id}`);
       }
       if (job.state === "failed") throw new Error(job.error || "it failed");
-      save(job.url && job.url.startsWith("/export/") ? job.url : url);
+      save(job.url && (job.url.startsWith("/export/") || job.url.startsWith("blob:")) ? job.url : url, job.name);
       say(what === "midi"
         ? "Saved: every part, the words and the chords, with the tempo, key and sections. Bar 1 starts just before the first note."
         : "Saved: each part alone and dry, with the MIDI file and a note on them. They all start at bar 1, so they line up.");
