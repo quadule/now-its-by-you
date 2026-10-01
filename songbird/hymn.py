@@ -248,6 +248,7 @@ ROLES = ("tenor", "alto", "treble")  # voice v of the group sings ROLES[v % 3]: 
 TOP = 81  # A5: the organ's descant's ceiling (played, not sung: the throat is measured to B4)
 PEDAL = (36, 50)  # C2 to D3: the pedal's line, written at its 8' pitch (its 16' bourdon sounds an octave under)
 ORGAN_TOP = (60, 72)  # where the organ's top line sits where nobody's tune is (a turn, a rest, the amen)
+PARALLELS = 12.0  # what parallel fifths or octaves cost the parts (more than a doubled third or a unison)
 DESCANT = 0.65  # how often a rendition has a descant over the last refrain (by its seed)
 
 
@@ -277,13 +278,13 @@ def _semitone(p: int, q: int) -> bool:
 
 def parallels(prev: dict, now: dict) -> int:
     """Parallel fifths and octaves (or unisons) between any two lines that both moved the same way, from one slice
-    to the next."""
+    to the next (two lines on one note in both, a doubling, are one line)."""
     found = 0
     names = [k for k in now if now[k] is not None and prev.get(k) is not None]
     for x in range(len(names)):
         for y in range(x + 1, len(names)):
             p, q = names[x], names[y]
-            if prev[p] == now[p] or prev[q] == now[q]:
+            if prev[p] == now[p] or prev[q] == now[q] or (prev[p] == prev[q] and now[p] == now[q]):
                 continue
             a, b = (prev[p] - prev[q]) % 12, (now[p] - now[q]) % 12
             if a == b and a in (0, 7) and (now[p] - prev[p]) * (now[q] - prev[q]) > 0:
@@ -291,16 +292,19 @@ def parallels(prev: dict, now: dict) -> int:
     return found
 
 
-def _inner(s: int, b: int, pcs, prev: dict) -> tuple[int, int]:
-    """The alto and the tenor under the tune s, over the bass b, from the chord's tones (root, third, fifth): the
-    missing tones first (the third above all, never doubled), held where they can be, never a semitone from the
-    tune or each other, no parallels; in unison with the tune only where nothing fits under it."""
+def _inner(s: int, basses, pcs, prev: dict) -> tuple[int, int, int]:
+    """The alto and the tenor under the tune s, and the bass (one of `basses`, an octave of the chord's bass in the
+    pedal's range), together, from the chord's tones (root, third, fifth): the missing tones first (the third above
+    all, never doubled), held where they can be, the bass led by step where it can, never a semitone from the tune
+    or each other, no parallels; in unison with the tune only where nothing fits under it."""
     root, third, fifth = pcs
     best, cost = None, float("inf")
-    for a in range(FLOOR + 1, s + 1):
+    for b, a in ((b, a) for b in basses for a in range(FLOOR + 1, s + 1)):
         if a % 12 not in pcs or _semitone(a, s):
             continue
         tenors = [p for p in range(FLOOR, a) if p % 12 in pcs and not _semitone(p, s) and not _semitone(p, a)] or [a]
+        was_b = prev.get("b")
+        moved = 0.0 if was_b is None else 0.15 * abs(b - was_b) + (1.0 if abs(b - was_b) > 7 else 0.0)
         for t in tenors:
             have = [s % 12, a % 12, t % 12, b % 12]
             c = (6.0 if third not in have else 0.0) + (3.0 if root not in have else 0.0) \
@@ -313,10 +317,10 @@ def _inner(s: int, b: int, pcs, prev: dict) -> tuple[int, int]:
                     c += 0.5 * abs(q - was) + (2.0 if abs(q - was) > 7 else 0.0)
                 else:
                     c += 0.1 * abs(q - (s - (4 if name == "a" else 9)))
-            c += 8.0 * parallels(prev, {"s": s, "a": a, "t": t, "b": b})
+            c += moved + PARALLELS * parallels(prev, {"s": s, "a": a, "t": t, "b": b})
             if c < cost:
-                best, cost = (a, t), c
-    return best if best is not None else (s, s)
+                best, cost = (a, t, b), c
+    return best if best is not None else (s, s, basses[0])
 
 
 def _descant(s: int, b: int, a: int, t: int, pcs, prev: dict) -> int | None:
@@ -329,7 +333,7 @@ def _descant(s: int, b: int, a: int, t: int, pcs, prev: dict) -> int | None:
         c = 0.5 if d % 12 == pcs[0] else 0.0
         was = prev.get("d")
         c += 0.6 * abs(d - was) + (2.0 if abs(d - was) > 5 else 0.0) if was is not None else 0.2 * abs(d - (s + 7))
-        c += 6.0 * parallels(prev, {"s": s, "d": d, "b": b})
+        c += 6.0 * parallels(prev, {"s": s, "a": a, "t": t, "b": b, "d": d})
         if c < cost:
             best, cost = d, c
     return best
@@ -368,11 +372,15 @@ def voicing(ctx) -> list[Slice]:
                    note is not None and abs(note.u0 - u0) < 1e-9, ctx.section_at(u0))
         pcs = tuple(ctx.pcs(chord.symbol)[:3])
         bass = ctx.bass(chord.symbol)
-        # the pedal: the chord's bass, led to the nearest, held while the chord is
+        # the pedal: the chord's bass, held while the chord is; at a new chord, an octave of it chosen with the parts
         b = prev.get("b")
         if b is None or b % 12 != bass or out[-1].chord is not chord:
-            options = [p for p in range(PEDAL[0], PEDAL[1] + 1) if p % 12 == bass]
-            b = min(options, key=lambda p: (abs(p - (b if b is not None else 43)), p))
+            basses = [p for p in range(PEDAL[0], PEDAL[1] + 1) if p % 12 == bass]
+            if b is None:
+                basses = [min(basses, key=lambda p: (abs(p - 43), p))]
+        else:
+            basses = [b]
+        b = basses[0]
         s = sl.tune
         if s is None:  # nobody's tune here: the organ's own top line, held where the chord keeps it
             was = prev.get("s")
@@ -383,11 +391,11 @@ def voicing(ctx) -> list[Slice]:
                 s = was
         a, t = prev.get("a"), prev.get("t")
         now = {"s": s, "a": a, "t": t, "b": b}
-        keep = (a is not None and t is not None and a % 12 in pcs and t % 12 in pcs and FLOOR <= t < a < s
-                and not _semitone(a, s) and not _semitone(t, s) and parallels(prev, now) == 0
+        keep = (len(basses) == 1 and a is not None and t is not None and a % 12 in pcs and t % 12 in pcs
+                and FLOOR <= t < a < s and not _semitone(a, s) and not _semitone(t, s) and parallels(prev, now) == 0
                 and pcs[1] in (s % 12, a % 12, t % 12, b % 12))
         if not keep:
-            a, t = _inner(s, b, pcs, prev)
+            a, t, b = _inner(s, basses, pcs, prev)
         d = _descant(s, b, a, t, pcs, prev) if over is not None and sl.section == over and sl.tune is not None else None
         sl.top, sl.a, sl.t, sl.b, sl.d = s, a, t, b, d
         prev = sl.lines()
