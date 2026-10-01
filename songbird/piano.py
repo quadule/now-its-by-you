@@ -198,7 +198,7 @@ def export(laid: dict, source: dict, duration: float | None = None) -> dict:
                 line = None
         else:
             k = 0
-            played = [p for p, what in ctx.sections[t.section].parts.items() if what == "lead"]
+            played = [p for p, what in ctx.sections[t.section].parts.items() if what in ("lead", "parlour")]
             note["by"] = played[0] if played else "band"
             note["octave"] = 12 if played and played[0] in ("whistle", "fiddle", "lute") else 0
         melody.append(note)

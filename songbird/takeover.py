@@ -100,10 +100,15 @@ LABELS.update({
 })
 FILLED += ("onedrop", "steppers")
 
+# the old 78's (2026-09-30; docs/STYLES.md, "An old 78"): a parlour piano's oom-pah, and the tune over its own hand
+LABELS.update({"stride": "oom-pah, the bass walking now and then", "parlour": "the tune over its own oom-pah"})
+PLAYER_LABELS_78 = {("guitar", "parlour"): "the tune over its own thumb"}
+LINES += ("parlour",)  # (idioms.LINES)
+
 
 def label(player: str, idiom: str) -> str:
     """What a player plays, in the page's words."""
-    return PLAYER_LABELS.get((player, idiom)) or LABELS.get(idiom, idiom)
+    return PLAYER_LABELS.get((player, idiom)) or PLAYER_LABELS_78.get((player, idiom)) or LABELS.get(idiom, idiom)
 # where one player's idiom has its own name (the ballad's harp picks; its guitar's light is a boom-chick)
 PLAYER_LABELS = {("harp", "arp"): "picked chords", ("harp", "high"): "picking high above the tune",
                  ("harp", "roll"): "rolled chords", ("guitar", "light"): "a boom-chick", ("guitar", "pick"): "fingerpicking",
@@ -631,7 +636,7 @@ def _idiom(ctx, i: int, player: str, level: str) -> str:
     elsewhere = [parts.get(player) for parts in ctx.taken["program"] if parts.get(player)]
     if elsewhere:
         return max(sorted(set(elsewhere)), key=elsewhere.count)
-    options = [x for x in style_patterns(player) if x not in ("lead", "build", "end")]
+    options = [x for x in style_patterns(player) if x not in ("lead", "parlour", "build", "end")]
     return options[0] if options else ""
 
 
@@ -692,7 +697,7 @@ def take_over(ctx, plan=None) -> None:
             u = end
         if played and not s.sung:
             lead = lead_of(ctx, i)
-            if lead is not None and "lead" not in s.parts.values():
+            if lead is not None and not {"lead", "parlour"} & set(s.parts.values()):
                 s.parts[lead] = "lead"
         elif played:
             ctx.taken["played"][i] = (played[0][0], played[-1][1])
