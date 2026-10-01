@@ -445,6 +445,13 @@ DEFAULT_PARTS = {  # for an instrument the style doesn't know (one added to the 
 }
 
 
+def solo(sdef, inst: str) -> str:
+    """What a player plays where it takes the tune: "lead", or what its style's table names as its "solo" (the old
+    78's piano and guitar: the tune with their own accompaniment under it)."""
+    table = sdef.parts.get(inst) or sdef.parts.get(sdef.part_of(inst)) or {}
+    return table.get("solo", "lead")
+
+
 def plan_style(ctx: StyleContext) -> None:
     """Decide, for every section, what each of the style's players does there."""
     sdef = ctx.sdef
@@ -471,9 +478,9 @@ def plan_style(ctx: StyleContext) -> None:
         if sdef.name == "hymn":
             pass  # a hymn's organ plays its own table everywhere: the tune given out in four parts (songbird.hymn)
         elif leads and r in ("intro", "outro") and not (hooked and (r == "outro" or ctx.style.intro != "lead")):
-            parts[leads[0]] = "lead"
+            parts[leads[0]] = solo(sdef, leads[0])
         elif leads and r == "break":
-            parts[leads[(breaks + 1) % len(leads)]] = "lead"
+            parts[leads[(breaks + 1) % len(leads)]] = solo(sdef, leads[(breaks + 1) % len(leads)])
             breaks += 1
         elif leads and r == "turn" and not hooked:
             parts[leads[(turns + 1) % len(leads)]] = "quote"
@@ -2668,7 +2675,8 @@ def chords_first_all(ctx: Context) -> list[str]:
     return [p for p in CHORDS_FIRST if ctx.on(p)]
 
 
-LINES = ("lead", "quote", "counter", "descant", "under", "tone", "double", "hook", "fills")
+LINES = ("lead", "quote", "counter", "descant", "under", "tone", "double", "hook", "fills", "hymn",
+         "givingout")  # (a hymn's organ plays the singers' own lines with them)
 
 
 def shape_events(ctx: Context, plan: Plan, events: list[Ev], rhythm, style) -> list[Ev]:
@@ -2805,8 +2813,7 @@ def arrange_style(genome, params, placed, lead, end, melody, seconds, sdef) -> t
         if e.part in rhythm or family(e.part) in ("lead",) or e.length > 0:
             continue
         what = ctx.sections[e.section].parts.get(e.part, "")
-        if what in ("lead", "quote", "counter", "descant", "under", "tone", "double", "hook", "fills", "hymn",
-                    "givingout"):  # (a hymn's organ plays the singers' own lines with them)
+        if what in LINES:  # (a line of its own: the tune, a counter-line, a fill...)
             continue
         while int(round(e.pitch)) in ctx.voices_at(e.u0) + [p for u0, u1, p in ctx.backing if u0 - 1e-9 <= e.u0 < u1 - 1e-9]:
             e.pitch -= 12
@@ -3143,3 +3150,71 @@ def w_swept_light(ctx, i, part):
 
 WRITERS.update({"rootless": w_rootless, "rootless-light": w_rootless_light, "solo": w_solo, "walking": w_walking,
                 "twofeel": w_twofeel, "swept": w_swept, "swept-light": w_swept_light})
+
+
+# --- the old 78 (2026-09-30; docs/STYLES.md, "An old 78") ------------------------------------------------------------
+#
+# A parlour piano's oom-pah under a song, its bass in the tenor (where a recording horn took it: synth/disc.py) and now
+# and then walking into the next chord; and where the piano or a guitar plays the tune (an intro, a break, an outro)
+# its own left hand or thumb keeps going under it ("parlour": a style's table names it as the player's "solo").
+
+PARLOUR_BASS = 19  # semitones under the tonic the stride's bass starts (a parlour upright's tenor, not a stride's
+# low octaves, which the horn wouldn't take)
+WALK = 0.35  # how often the bass walks into the next chord where a sung line holds its end
+
+
+def w_stride(ctx: StyleContext, i: int, part: str) -> list[Ev]:
+    """Oom-pah as a parlour piano accompanies a song: on the strong beats the bass (the root, then the fifth) in the
+    tenor, on the others a short chord above it, under the tune; oom-pah-pah in a waltz. Where a sung line holds its
+    end and the chord changes, now and then the bass walks into the next root over the chord's last two beats."""
+    out = []
+    lo = max(B.register_of(part)[0], ctx.tonic - PARLOUR_BASS)
+    n = len(ctx.grid.beats)
+    for c in ctx.chords_in(i):
+        rng = ctx.rand(part, c.u0)
+        root, fifth = bass_string(ctx, part, c, lo)
+        beats = ctx.grid.beats_in(c.u0, c.u1)
+        lh = 0
+        for k, u in enumerate(beats):
+            b = ctx.grid.beat_index(u)
+            end = until(beats, k, c.u1)
+            if b == 0 or (n == 4 and b == 2) or abs(u - c.u0) < 1e-9:
+                out.append(ev(part, u, u + 0.75 * (end - u), root if lh % 2 == 0 else fifth, ctx.vel(part, u, 0.66),
+                              i=i))
+                lh += 1
+            else:
+                for j, p in enumerate(fingering(ctx, part, c, u, end, i)[-3:]):
+                    if p > root + 2:
+                        out.append(ev(part, u, u + 0.5 * (end - u), p, ctx.vel(part, u, 0.5), i=i, shift=0.004 * j))
+        nxt = chord_after(ctx, c)
+        if (c.last and ctx.sections[i].sung and nxt is not None and len(beats) >= 3
+                and ctx.bass(nxt.symbol) != ctx.bass(c.symbol) and rng.random() < WALK):
+            target = nearest({ctx.bass(nxt.symbol)}, root, lo, lo + 12)
+            steps = beats[-2:]
+            run = [scale_step(ctx, target, -2), scale_step(ctx, target, -1)]
+            if all(not rubs(run[k], ctx.sung_in(u, until(steps, k, c.u1))) for k, u in enumerate(steps)):
+                out = [e for e in out if not (steps[0] - 1e-9 <= e.u0 < c.u1 - 1e-9)]
+                for k, u in enumerate(steps):
+                    out.append(ev(part, u, until(steps, k, c.u1), run[k], ctx.vel(part, u, 0.6), i=i))
+    return out
+
+
+def w_parlour(ctx: StyleContext, i: int, part: str) -> list[Ev]:
+    """The tune where nobody sings, played by a piano or a guitar with its own accompaniment under it: the tune as
+    `lead` plays it, and the left hand's oom-pah (a guitar's Travis thumb) wherever it sits under the tune there,
+    a little softer than the tune."""
+    tune = w_lead(ctx, i, part)
+    under = (w_stride if family(part) == "keys" else w_travis)(ctx, i, part)
+    if not tune:
+        return under
+    out = list(tune)
+    for e in under:
+        over = [t.pitch for t in tune if t.u0 < e.u1 - 1e-9 and t.u1 > e.u0 + 1e-9]
+        if not over or e.pitch <= min(over) - 2:
+            e.vel = float(np.clip(e.vel * 0.8, 0.03, 1.0))
+            out.append(e)
+    return out
+
+
+WRITERS.update({"stride": w_stride, "parlour": w_parlour})
+LINES = LINES + ("parlour",)  # the tune, with its own hand under it (read where it's used, so every check sees it)

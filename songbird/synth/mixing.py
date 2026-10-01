@@ -64,6 +64,9 @@ class MixParams:
                           band, hiss, and from 0.35 crackle
     balance   name: dB    an instrument (by stem name or role) up or down, e.g. fiddle: +2
     plate     0-2         how much of the singers' plate is heard: 0 none, 1 as designed (a style's taste)
+    disc      0-1         0 none; above 0 the whole record as an acoustic 78 (synth/disc.py): mono, the horn's
+                          band and resonances, the turntable's wow, the needle's lead-in and run-out; how worn
+                          its surface is (noise and clicks), 1 as designed. Left out of a record while 0
     """
 
     rt60: float = 1.1
@@ -78,6 +81,7 @@ class MixParams:
     wear: float = 0.0
     balance: tuple[tuple[str, float], ...] = ()
     plate: float = 1.0
+    disc: float = 0.0  # an acoustic 78 (2026-09-30, the old 78's; any style's at the command line)
 
     @classmethod
     def from_dict(cls, data: dict) -> MixParams:
@@ -96,7 +100,7 @@ class MixParams:
         values = (base or cls()).to_dict()
         for item in items:
             key, _, value = item.partition("=")
-            if key not in values:
+            if key not in {f.name for f in fields(cls)}:  # (disc: left out of to_dict while 0)
                 raise ValueError(f"no mix setting {key!r}; there are {', '.join(values)}")
             if key == "tone":
                 values[key] = [float(v) for v in value.split(",")]
@@ -110,6 +114,8 @@ class MixParams:
         out = {f.name: getattr(self, f.name) for f in fields(self)}
         out["tone"] = list(self.tone)
         out["balance"] = dict(self.balance)
+        if not out["disc"]:  # added after records were made: absent while off, so a record is as it was
+            del out["disc"]
         return out
 
     def clamped(self) -> MixParams:
@@ -131,6 +137,7 @@ RANGES = {
     "tilt": (-2.0, 2.0),
     "wear": (0.0, 1.0),
     "plate": (0.0, 2.0),
+    "disc": (0.0, 1.0),
 }
 
 # --- channel strips ---------------------------------------------------------------------
@@ -721,6 +728,12 @@ def mix_made(parts: list, length: int, sr: int, seed: int = 0, params: MixParams
     if p.tilt:  # shelves reach their gain only well past their corners: these give +-tilt at 60 Hz and 12 kHz
         tone = tone + (("low", 300, -1.15 * p.tilt), ("high", 3000, 1.15 * p.tilt))
     out = fx.equalize(out, fx.design(tone, sr), inplace=True)
+    if p.disc > 0:  # recorded as a 78 (synth/disc.py): a stage nothing else enters
+        from . import disc
+
+        held = [out]
+        del out
+        out = disc.record(held.pop(), sr, p.disc, seed)
     if p.wear > 0:
         held = [out]  # handed over whole: wear lets it go once it has read it
         del out

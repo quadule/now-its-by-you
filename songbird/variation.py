@@ -949,6 +949,12 @@ def choose_room(out: dict, ctx: Context) -> None:
         out.setdefault("mix", {}).update(rt60=ctx.c.room["rt60"], tone=list(ctx.c.room["tone"]))
 
 
+def style_shaped(genome: Genome, out: dict) -> None:
+    from .style import shaped
+
+    shaped(genome, out)
+
+
 def choose_style(out: dict, ctx: Context) -> None:
     """The rendition's style and what it brings (songbird/style.py): once the form, the choir and every
     number are chosen, since a style leans on them."""
@@ -992,6 +998,8 @@ def choose(genome: Genome, parent=None, voice: Voice | None = None, drift: Drift
         out = chosen.to_dict()
         choose_style(out, Context(genome, song, parent, Character(), None, log=log,
                                   style=style or (parent.style.name or "ballad"), arrange=arrange))
+        if form is None:
+            style_shaped(genome, out)  # the parts of the form a style always plays (the old 78's intro and break)
         return Params.from_dict(out)
     ctx = Context(genome, song, parent, character(voice), drift, log=log, trace=trace, style=style, arrange=arrange)
     out = parent.to_dict()
@@ -1008,6 +1016,8 @@ def choose(genome: Genome, parent=None, voice: Voice | None = None, drift: Drift
         if decide in (choose_form, choose_style) and form is not None:  # a form set by hand stands in for the
             # season's (and for a style's: the jazz trio adds a break where a form has none)
             out["form"] = list(form)
+        if decide is choose_style and form is None:  # the parts of the form a style always plays (the old 78's)
+            style_shaped(genome, out)
         if pin is not None:
             pin(out)
     out["seed"] = Chance(voice, drift, parent, seed).seed

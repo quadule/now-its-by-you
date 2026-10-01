@@ -38,10 +38,13 @@ from pathlib import Path
 
 BASE_MB = 300  # the program and its imports, and the page's work beside a render
 RATES = {  # MB for a second of the song, on two threads
-    "voice": 4.7, "chop": 4.7, "harp": 4.7, "celesta": 4.7, "musicbox": 4.7, "synthpad": 4.7,  # chop: house's sung hook
-    "bass": 5.0, "guitar": 5.0, "harmonica": 5.0,
-    "fiddle": 5.6, "claps": 5.6, "stomps": 5.6, "concertina": 5.6,
-    "cello": 5.8, "strings": 5.8, "piano": 5.8, "drone": 5.9, "vibes": 5.9,
+    # the old 78's band (2026-09-30: a voice, a piano or a guitar, a fiddle, mono) is the lightest these play in: 3.3
+    # MB a second measured; 4.5 keeps every measurement at or under its estimate and within 1.3 of it
+    "voice": 4.5, "piano": 4.5, "guitar": 4.5, "fiddle": 4.5,
+    "chop": 4.7, "harp": 4.7, "celesta": 4.7, "musicbox": 4.7, "synthpad": 4.7,  # chop: house's sung hook
+    "bass": 5.0, "harmonica": 5.0,
+    "claps": 5.6, "stomps": 5.6, "concertina": 5.6,
+    "cello": 5.8, "strings": 5.8, "drone": 5.9, "vibes": 5.9,
     "drummachine": 6.2, "synthbass": 6.2, "epiano": 6.2,
     "slide": 6.4, "synthlead": 6.4, "arp": 6.4, "banjo": 6.6, "mandolin": 6.6,
     "lute": 7.0, "drum": 7.0, "whistle": 7.0,

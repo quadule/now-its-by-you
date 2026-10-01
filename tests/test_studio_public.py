@@ -598,6 +598,10 @@ MEASURED = {
     "acappella 4 verses, every part, six voices, tempo 55": (450.4, "choir1 choir2 choir3 choir4 choir5 choir6 voice",
                                                              2560),
     "jig": (112.2, "concertina drum fiddle guitar voice whistle", 990),
+    # the old 78 (docs/STYLES.md, "An old 78", 2026-09-30): the song's length as the studio estimates it (the
+    # record has three seconds of run-out groove more); a parlour piano alone, mono: the lightest band yet
+    "old78 (a parlour piano, a waltz)": (242.9, "piano voice", 1140),
+    "old78, 4 verses, every part, a fiddle, tempo 58": (471.0, "fiddle piano voice", 1950),
     "jig 4 verses, every part, tempo 130": (212.7, "concertina drum fiddle guitar voice whistle", 1560),
     "the session before it was the jig: 4 verses, every part, a reel at 91": (
         347.1, "concertina drone drum fiddle guitar voice whistle", 2340),
