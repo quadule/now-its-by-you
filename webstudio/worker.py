@@ -31,7 +31,6 @@ import contextlib
 import io
 import os
 import pickle
-import resource
 import sys
 import tempfile
 import time
@@ -282,7 +281,10 @@ def measure(tools: Tools, request: dict) -> dict:
 
 
 def peak_mb() -> int:
-    """This process's peak resident memory so far, in MB (Linux counts it in kB, macOS in bytes)."""
+    """This process's peak resident memory so far, in MB (Linux counts it in kB, macOS in bytes). (Imported here:
+    Pyodide has no resource module, and web/studio-wasm/py/sing_measure.py puts the wasm heaps' size here.)"""
+    import resource
+
     peak = resource.getrusage(resource.RUSAGE_SELF).ru_maxrss
     return int(peak / (2**20 if sys.platform == "darwin" else 2**10))
 
