@@ -900,6 +900,8 @@ it rendered to before, at one thread and two). Two threads unless said:
 | dub, with its version after the song (new) | 221 s | ebass electric kit melodica organ voice | 1.89 GB | |
 | house again (the evening: its own lengths, the chop; docs/STYLES.md, "House and dub, again") | 163 s | arp chop drummachine piano synthbass synthpad voice | 1.27 GB | |
 | dub again (dissolving into its version after the first refrain, the dub-out after) | 222 s | ebass electric kit melodica organ voice | 1.91 GB | |
+| a cappella, six voices, a refrain and the bridge as rounds (an arrangement option, not a style: docs/ARRANGE.md, "A round") | 255 s | voice, choir1-6 | 1.54 GB | |
+| a cappella, 4 verses, every part, six voices, tempo 55, every refrain, verse and bridge a round | 712 s | the same | 2.86 GB (2.78 without the rounds, 494 s); refused in the studio, as before | |
 
 (The "before" column is the same measure taken again on the tree as the review found it; a few differ from the
 review's own figures by a few percent, and two of its drawn-out versions are measured here at the lengths these edits

@@ -605,6 +605,10 @@ MEASURED = {
     # again (2026-09-30, evening; "House and dub, again"): house's own lengths and its chop, dub dissolving
     "house": (163.3, "arp chop drummachine piano synthbass synthpad voice", 1270),
     "dub": (222.2, "ebass electric kit melodica organ voice", 1910),
+    # a round (2026-09-30; docs/ARRANGE.md, "A round"): the a cappella's third refrain and its bridge as rounds, six
+    # voices; its voices overlap in the stems they already had, so the peak is the a cappella's, the song a tail longer
+    "acappella, six voices, a refrain and the bridge as rounds": (254.9, "choir1 choir2 choir3 choir4 choir5 choir6 "
+                                                                         "voice", 1540),
 }
 
 

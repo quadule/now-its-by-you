@@ -411,35 +411,36 @@ A round needs a tune whose lines sit over each other's harmony, and most folk tu
   furthest along, so after the section's own lines it plays, line by line, the line that voice is singing;
 - **whole tones** between the voices (milder: said, not counted), and how many beats they sing together.
 
-A round **fits** when its voices clash for at most a beat (and at most one beat in sixteen of what they sing
-together) and the band no more than two beats beyond the tune's own (`style.LOOP_SLACK`). Distances: the whole
+(The tables are scored as the review asked: each overlap weighed by its notes, a note on a foot or a beat long
+counting whole, and a pickup sung over its first bar's chord.) A round **fits** when its voices clash for at most
+a beat (and at most one beat in sixteen of what they sing together) and the band no more than two beats beyond the tune's own (`style.LOOP_SLACK`). Distances: the whole
 section a line apart (two bars), two lines apart (four), and half a line (one bar) for its last line only (below).
 
 **H in its own mode (D ionian)**, each section's four lines:
 
 | section | sung as | voices | band (the tune's own) | whole tones | together | fits |
 |---|---|---|---|---|---|---|
-| verse | the whole, 4 voices a line apart | 1.67 | 4.00 (1.50) | 22.7 | 80.3 | |
-| verse | the whole, 3 voices a line apart | 1.00 | 3.50 (1.00) | 13.0 | 45.8 | |
-| verse | the whole, 2 voices a line apart | 0.50 | 2.17 (0.50) | 6.5 | 17.2 | yes |
-| verse | the whole, 2 voices 2 lines apart | 0.00 | 1.50 (0.50) | 0.0 | 11.5 | yes |
-| verse | its last line, 3 voices half a line apart | 0.00 | 1.33 (0.33) | 2.7 | 5.8 | yes |
-| refrain | the whole, 4 voices a line apart | 0.00 | 2.17 (1.00) | 24.0 | 80.3 | yes |
-| refrain | the whole, 3 voices a line apart | 0.00 | 2.00 (0.67) | 14.7 | 45.8 | yes |
-| refrain | the whole, 2 voices a line apart | 0.00 | 1.83 (0.33) | 6.5 | 17.2 | yes |
-| refrain | the whole, 2 voices 2 lines apart | 0.00 | 0.17 (0.33) | 1.7 | 11.5 | yes |
-| refrain | its last line, 3 voices half a line apart | 0.00 | 0.00 (0.00) | 0.3 | 5.8 | yes |
-| bridge | the whole, 4 voices a line apart | 0.00 | 1.00 (0.50) | 23.3 | 79.7 | yes |
-| bridge | the whole, 3 voices a line apart | 0.00 | 0.67 (0.33) | 13.5 | 45.3 | yes |
-| bridge | the whole, 2 voices a line apart | 0.00 | 0.33 (0.17) | 4.7 | 17.0 | yes |
-| bridge | the whole, 2 voices 2 lines apart | 0.00 | 0.17 (0.17) | 4.2 | 11.3 | yes |
-| bridge | its last line, 3 voices half a line apart | 0.00 | 0.17 (0.33) | 0.7 | 5.8 | yes |
+| verse | the whole, 4 voices a line apart | 1.67 | 4.00 (1.50) | 22.7 | 82.3 | |
+| verse | the whole, 3 voices a line apart | 1.00 | 3.50 (1.00) | 13.0 | 46.8 | |
+| verse | the whole, 2 voices a line apart | 0.50 | 2.17 (0.50) | 6.5 | 17.5 | yes |
+| verse | the whole, 2 voices 2 lines apart | 0.00 | 1.50 (0.50) | 0.0 | 11.8 | yes |
+| verse | its last line, 3 voices half a line apart | 0.00 | 1.33 (0.33) | 2.7 | 7.5 | yes |
+| refrain | the whole, 4 voices a line apart | 0.00 | 2.17 (1.00) | 25.3 | 95.7 | yes |
+| refrain | the whole, 3 voices a line apart | 0.00 | 2.00 (0.67) | 15.3 | 54.2 | yes |
+| refrain | the whole, 2 voices a line apart | 0.00 | 1.83 (0.33) | 6.5 | 20.2 | yes |
+| refrain | the whole, 2 voices 2 lines apart | 0.00 | 0.17 (0.33) | 2.3 | 13.8 | yes |
+| refrain | its last line, 3 voices half a line apart | 0.00 | 0.00 (0.00) | 1.0 | 7.5 | yes |
+| bridge | the whole, 4 voices a line apart | 0.00 | 1.00 (0.50) | 23.3 | 83.0 | yes |
+| bridge | the whole, 3 voices a line apart | 0.00 | 0.67 (0.33) | 13.5 | 47.3 | yes |
+| bridge | the whole, 2 voices a line apart | 0.00 | 0.33 (0.17) | 4.7 | 17.7 | yes |
+| bridge | the whole, 2 voices 2 lines apart | 0.00 | 0.17 (0.17) | 4.2 | 12.0 | yes |
+| bridge | its last line, 3 voices half a line apart | 0.00 | 0.17 (0.33) | 0.7 | 7.5 | yes |
 
 The refrain and the bridge go round with **no semitone or tritone between the voices at any distance**: in a
 major mode H's tune is pentatonic (it sings 1, 2, 3, 5, 6 and touches 4 twice in passing), and a pentatonic tune
 has neither interval in it. Half a line apart (one bar, the whole section) was scored too and fits as cleanly
 (the bridge 0.00 between the voices, the refrain 0.67 for three); it isn't offered for a whole section because
-its tail would end halfway through a line (below). What is left is whole tones: 14.7 beats of 45.8 in a
+its tail would end halfway through a line (below). What is left is whole tones: 15.3 beats of 54.2 in a
 three-voice refrain, the open, ringing sound of a pentatonic round.
 
 **The minor modes take it away.** The same degrees in D aeolian are D E F A B♭: two semitones (E F, A B♭) and a
@@ -447,14 +448,14 @@ tritone (E B♭) appear in the tune itself, and every whole-section round of the
 
 | section | sung as | voices | band (the tune's own) | whole tones | together | fits |
 |---|---|---|---|---|---|---|
-| verse | the whole, 2 voices a line apart | 3.83 | 6.67 (1.83) | 5.2 | 17.2 | |
-| verse | the whole, 2 voices 2 lines apart | 0.00 | 1.67 (1.83) | 0.0 | 11.5 | yes |
-| verse | its last line, 3 voices half a line apart | 0.67 | 2.00 (0.67) | 2.0 | 5.8 | |
-| refrain | the whole, 3 voices a line apart | 8.50 | 19.83 (5.00) | 6.5 | 45.8 | |
-| refrain | the whole, 2 voices 2 lines apart | 1.50 | 6.33 (2.50) | 0.2 | 11.5 | |
-| refrain | its last line, 3 voices half a line apart | 0.00 | 1.00 (1.00) | 0.3 | 5.8 | yes |
-| bridge | the whole, 3 voices a line apart | 13.33 | 15.67 (4.33) | 0.5 | 45.3 | |
-| bridge | its last line, 3 voices half a line apart | 0.67 | 3.17 (1.33) | 0.0 | 5.8 | |
+| verse | the whole, 2 voices a line apart | 3.83 | 6.67 (1.83) | 5.2 | 17.5 | |
+| verse | the whole, 2 voices 2 lines apart | 0.00 | 1.67 (1.83) | 0.0 | 11.8 | yes |
+| verse | its last line, 3 voices half a line apart | 0.67 | 2.00 (1.00) | 2.0 | 7.5 | |
+| refrain | the whole, 3 voices a line apart | 9.17 | 19.83 (5.33) | 6.5 | 54.2 | |
+| refrain | the whole, 2 voices 2 lines apart | 2.17 | 6.33 (2.67) | 0.2 | 13.8 | |
+| refrain | its last line, 3 voices half a line apart | 0.00 | 1.00 (1.00) | 1.0 | 7.5 | yes |
+| bridge | the whole, 3 voices a line apart | 13.33 | 15.67 (4.33) | 0.5 | 47.3 | |
+| bridge | its last line, 3 voices half a line apart | 0.67 | 3.17 (1.33) | 0.0 | 7.5 | |
 
 What a round of H chooses in each mode a machine may sing it in (`tools/round_fit.py --summary`; "at 1": a line
 apart):
@@ -541,3 +542,124 @@ render is byte for byte as before. No style, no kernel, no numba.
 - Whether the singer comes first (as built) or last: the ancestors starting and the singer ending it "and now
   it's by you" is the other reading, and moves the singer's own notes in the layout.
 - Whether a minor version's tag round is enough, or the whole round should be offered with its clash said.
+
+## What the review changed
+
+A read-only Fable review of the design and of canon.py before the rest was built. It found the reasoning sound
+(the pentatonic tune, an option rather than a style, `under`'s tail checked by hand for two to four voices at a
+line and two) and these, all taken:
+
+- **The measure.** An overlap was weighed by where the overlap began, not by its notes; now a note on a foot or a
+  beat long counts whole, as `style.tune_clash` weighs a note (the tables above are the new ones; no choice
+  moved). The singer's own pickup had no chord under it and went unscored; it sings over its first bar's chord.
+  The fit is taken under a person's chords (`composition.harmonized`), which the band plays under the voices.
+- **The singer's last note.** A round on the song's last section would have held the singer's "you" through the
+  whole tail (the last melody note runs to the end of the singing); it ends where its line does.
+- **Where the singing ends.** Both arrangers took the singer's last note as the end of the singing: a quote coda
+  would have started under the later voices, and the last chord's hold was set too early. They take the round's
+  tail (`canon.sung_until`).
+- **No lift at synthesis.** The choir's bus is brought to its loudness as a whole, so a gain on the round's
+  notes would only have pulled the rest of the choir down. None is applied; the levels are measured below (the
+  entries sit 2 to 8 dB under the singer, about level with it in a four-voice bridge).
+- **The singers.** The design's low stand-ins at the written pitch are kept (the notes in the round are written
+  an octave up for a singer who sings an octave down, so they sound where they are written); the a cappella's
+  matching of singers to parts by range leaves the round's notes out of each part's range. **The order**: the
+  oldest voice comes in second and the parent last (`choir1`), so the voice nearest the singer finishes the round,
+  "now it's by you", a reordering of the parts, nothing moved in the layout. The singer stays first: whoever
+  starts sings over the written chords.
+- **The ring.** A voice's last note rings three seconds where it ends the song; a round's last voice doesn't (the
+  singer's doesn't either), unless the style is voices alone.
+- **Held chords running into a round** (an a cappella's hum, oohs) stop where the round begins, not only those
+  starting inside it.
+- **The grid** said the program's line players were playing in a round section, which they don't; the cell says
+  why ("a round, as you chose: the voices carry the tune, so the fiddle rests"), and "Voices before" shows the round.
+- **House's own lengths** (its drop's hook bars) stay before a round refrain; the tail follows them.
+- **Said, not changed**: the tag's band follows the last voice, not the furthest (one line of the last line, under
+  the second voice's second bar and the third voice's whole line; for H it measures the same); a minor version's
+  tag round is enough (offering the whole one "with its clash said" goes against the program's own refusals); a
+  refrain round before the tag gives four "now it's by you" cadences in a row (open, below); the queue's time for a
+  render doesn't count voices.
+
+## As built
+
+`songbird/canon.py` (the fit, the choice, the tail, the later voices), with small hooks elsewhere:
+`takeover.py` (the path, its checks, the layout's tail, a round section's players and fills, the grid's fields and
+words), `realize.py` (the singer's notes marked in a round, none in its tail, no lineage harmony in it, the last
+note, the ring), `idioms.backing` and the seed's own ballad in `band.arrange` (the later voices made as backing
+voices; nobody else's backing there), `band.fills` (none in a round), `synth.stem_jobs` and `matched` (a round's
+notes where they are written; not counted in a part's range), the page (`score.js`, `model.js`, `studio.js`).
+`tools/round_fit.py` prints the tables. `tests/test_round.py` and a grid test in `tests/test_studio.py`.
+
+    songbird render songs/h-now-its-by-you.json --machine fictional:ada --date 2026-09-27 --edits round.json
+
+with `round.json` `{"arrange.refrain:3.round": true}` (or 2 to 4 voices), or "Who sings: a round" in the
+section's inspector. A section with a length of its own refuses it (said: give it its own length first); a
+played one goes round in the same click, the page asking for both. The voices: `choir1` to `choir3` (the parent's
+and the lineage's voices first, then the program's own), panned at -0.45, 0.45 and -0.25.
+
+**Byte for byte.** Before and after: the seed (9b0766353b73), ada's and dmitri's own versions (8e8c9e92fc61,
+c123ecde58e1), coral's a cappella with five voices (b36634aead90), ada's gospel with three (b6739a4b557f), bob's
+shanty with its gang (8c9691e8d1ad) and dmitri's jig (2d0736279ef7) render to the same PCM ids; the goldens and the
+suite pass; `test_takeover`'s "nothing arranged is the same song" holds. No kernel, no numba, so the browser's
+translation is as it was.
+
+## Measured (2026-09-30)
+
+**Tuning**, each note's f0 over its middle (pYIN on the dry stems) against its written pitch, in the round
+sections of the four renders below: every voice's median 1.3 cents flat (the measure's own: the singer's too),
+and 97 to 100% of notes within 25 cents, the singer and each later voice alike (ada's ballad: the singer 98%, the
+two voices 100%; dmitri's four-voice bridge: 98, 100, 100, 100). The voices sound where the tune is written; a
+singer who sings an octave down (dmitri's) stays an octave under them, a canon at the octave.
+
+**Levels**, each voice against the singer where all sing at once, as the mix's buses set them: ada's ballad 4.7
+to 5.9 dB under the singer in the bridge, 5.2 to 5.9 in the last refrain (with a single round in the song, 1.9 and
+3.6: the choir's bus is set by everything it sings); ada's a cappella 4.3 and 7.8 dB under; dmitri's four-voice
+bridge about level with his low voice (+2.5 to -2.7 dB).
+
+**The words blur where the voices overlap.** Whisper (base.en, on the mix, a beat before each round section to
+its end), counting the singer's words heard once against the same sections in the same versions without the
+round: **62% of the words heard in the rounds (173 of 280), 86% without (242 of 280)**. Word error rates aren't
+comparable there: Whisper writes down several voices' words, so the edits pass 100% (124% against 15%). By
+section: the ballad's bridge 52% of the words (82% plain) and its last refrain 58% (88%); the a cappella's 64%
+(82%) and 86% (98%); coral's two-voice verse 72% (90%); coral's last refrain, only its last line round, 91% (85%):
+nothing lost; dmitri's four-voice bridge 36% (85%) and three-voice refrain 27% (79%), where Whisper hears "oh, oh,
+oh" for the whole refrain. A round's first line is the singer alone and clear; from the second voice on, the
+words come round three times over and the ear follows one voice at a time. That is a round's nature: it is
+heard as the tune passed along, not as a lyric.
+
+**Memory** (tools/render_memory.py's measure, two threads, `MallocLargeCache=0`): the later voices sing in choir
+stems a version already has or adds one at a time, so a round costs its tail's seconds, not its overlap: an a
+cappella with six voices, a refrain and the bridge as rounds, 255 s, 1.54 GB (the studio's estimate 1.83; added to
+`MEASURED`); four verses, every part, six voices, tempo 55, every refrain, verse and bridge a round, 712 s, 2.86
+GB, against 2.78 for the same without the rounds (494 s): past the studio's 2100 MB either way, and refused, as
+before. A round adds about 4 bars a section (a line for a last-line round).
+
+## The renders, for listening
+
+In renders/styles/ (ids and times in ids-round.txt), with their records, scores and words:
+
+- **round-ada-2026-09-27-ballad** (232 s, id a12e0eeeacc9): ada's ballad (D ionian), three voices a line apart in
+  the bridge, 2:26 to 2:57 (the voices in at 2:31 and 2:36), and the last refrain, 3:16 to 3:47 (3:21, 3:26).
+- **round-ada-2026-09-27-acappella** (249 s, 502f1dbfddbc): the same in the a cappella: the bridge 2:34 to 3:06
+  (2:39, 2:45), the last refrain 3:27 to 4:05 (3:32, 3:37).
+- **round-coral-2026-11-02-five-voices** (238 s, 00172df8fc33): coral's a cappella, D aeolian, five lineage voices
+  (`--choir 5`): the third verse 1:40 to 2:14, two voices two lines apart (the second in at 1:51); the last
+  refrain 3:20 to 3:47, its last line round (in at 3:39 and 3:42), then the tag.
+- **round-dmitri-2026-06-21** (278 s, 97b884781989): dmitri's own chamber version: the bridge 3:03 to 3:47, four
+  voices a line apart (3:09, 3:15, 3:22), straight into the last refrain, 3:47 to 4:24, three (3:52, 3:59).
+
+## Decisions for the artist
+
+1. **Singer first, parent last.** The singer starts; the oldest voice comes in next and the parent finishes the
+   round. The other way (the ancestors starting, the singer ending it "and now it's by you") would put the
+   singer's own line over chords written for a line ahead, or move everything in the layout.
+2. **Three voices by default**, a line apart; four are there to ask for (dmitri's bridge). Four overlapping
+   voices blur most (36% of the words heard).
+3. **The minor modes** take only the refrain's last line as a round (three voices a bar apart), and the verse two
+   voices two lines apart; the aeolian bridge none (said in the page). Coral's render has both.
+4. **A refrain round before the tag** sings "now it's by you" three times, then the tag's "la" on the same
+   line: four cadences in a row. The tag could make way after a round (or its harmony rest).
+5. **The levels**: the voices are the choir's bus, set as a whole: 2 to 8 dB under the singer, level with it in a
+   four-voice round. A round could have its own, louder level (a mix balance over its span after the bus).
+6. **Words**: about a quarter of them blur in a whole-section round. A round on the bridge (the lineage's own
+   section, which most listeners know by then) or the last refrain (heard three times before) costs the least.
