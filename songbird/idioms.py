@@ -476,6 +476,9 @@ def plan_style(ctx: StyleContext) -> None:
         elif leads and r == "turn" and not hooked:
             parts[leads[(turns + 1) % len(leads)]] = "quote"
             turns += 1
+        for who, what in list(parts.items()):  # a lead that keeps its chords under the tune there (the trio's piano)
+            if what in ("lead", "quote") and (sdef.parts.get(who) or {}).get(r) == "solo":
+                parts[who] = "solo"
         b = busy(ctx, s)
         for inst in ctx.lineup:
             if inst in parts:
@@ -2845,3 +2848,281 @@ def arrange_style(genome, params, placed, lead, end, melody, seconds, sdef) -> t
     if thrown:
         settings["desk"] = thrown  # for songbird.sound: realize takes it out of the band's settings
     return notes, settings
+
+
+# --- the jazz trio's (2026-09-30; docs/STYLES.md, "A jazz trio") ---------------------------------------------------------
+#
+# The trio plays its own changes (songbird.style.trio_changes: the song's chords with sevenths and sixths, a ii-V into
+# the cadences), each where it sits with the tune. A chord held over two of a bar's shares is written twice; the trio
+# holds it as one (held). The piano comps in rootless chords around middle C, under the singer (its third, fifth,
+# seventh or sixth, and a ninth where the scale has one and it rubs against nothing sung), struck on the chord and
+# answered on a beat or an off-beat, now and then a chord pushed an off-beat early; the bass walks a note a beat (the
+# root on the chord, its tones between, a step into the next: a scale step or a half step, whichever rubs against
+# nothing sung) or plays two to a bar; the brushes sweep round the snare, the other hand tapping the backbeat. Where
+# the piano has the tune (an intro, the break, a turn, an outro) its left hand keeps the chords: the chorus.
+
+
+def held(ctx: StyleContext, i: int) -> list[Chord]:
+    """The section's chords, a chord written again at once (held over two shares of a bar) joined to the one before."""
+    from dataclasses import replace
+
+    out: list[Chord] = []
+    for c in ctx.chords_in(i):
+        if out and out[-1].symbol == c.symbol and abs(out[-1].u1 - c.u0) < 1e-9:
+            out[-1] = replace(out[-1], u1=c.u1, last=c.last)
+        else:
+            out.append(c)
+    return out
+
+
+def change_after(ctx: StyleContext, c: Chord) -> Chord | None:
+    """The next chord that isn't this one, from where this one ends (in the next section too)."""
+    return next((x for x in ctx.chords if x.u0 >= c.u1 - 1e-9 and x.symbol != c.symbol), None)
+
+
+def mode_scale(ctx: StyleContext) -> set[int]:
+    from .theory import MODES
+
+    return {(ctx.tonic + s) % 12 for s in MODES[ctx.mode]}
+
+
+def semitone_off(pc: int, sung: list) -> bool:
+    """Whether a pitch class is a semitone from any of these sung notes (any octave)."""
+    return any(min((pc - q) % 12, (q - pc) % 12) == 1 for _a, _b, q, _s in sung)
+
+
+def ninth(ctx: StyleContext, c: Chord, u0: float, u1: float) -> int | None:
+    """The chord's ninth (a whole step over its root, in the mode's scale) where it rubs against nothing sung."""
+    pcs = ctx.pcs(c.symbol)
+    pc = (pcs[0] + 2) % 12
+    if pc in pcs or pc not in mode_scale(ctx) or len(pcs) < 4 and quality(tuple(pcs[:3])) == "other":
+        return None
+    return None if semitone_off(pc, ctx.sung_in(u0, u1)) else pc
+
+
+def trio_keys(ctx: StyleContext, i: int) -> tuple[int, int]:
+    """Where the piano's comping sits: from a seventh under the tonic to a third over the low end of what is
+    sung, round middle C."""
+    lo = max(B.register_of("piano")[0], ctx.tonic - 10)
+    return lo, max(ctx.floor(i) + 4, lo + 14)
+
+
+def comp_hits(ctx: StyleContext, c: Chord, rng, light: bool, first: bool) -> list[tuple[float, float, float]]:
+    """When a chord is struck in the trio's comping: (from, to, weight). Struck as it comes (now and then pushed an
+    off-beat early: an anticipation, never the section's first) and held, or answered: in a waltz on two and three,
+    or on the off-beat after two; in four on the off-beat after two (the Charleston) or the backbeats. Light: held."""
+    g = ctx.grid
+    beats = g.beats_in(c.u0, c.u1)
+    subs = g.subs_in(c.u0, c.u1)
+    start = c.u0
+    if not first and not light and rng.random() < 0.2:
+        before = [u for u in g.subs_in(c.u0 - ctx.beat, c.u0) if not g.on_beat(u)]
+        start = before[-1] if before else c.u0
+    hits = [start]
+    if not light and c.u1 - c.u0 >= ctx.beat * 1.5 - 1e-9:
+        x = rng.random()
+        if len(g.beats) == 3:  # a waltz: each bar of it answered on two and three, or once after two
+            for bar in g.bars(c.u0, c.u1) or [c.u0]:
+                inside = [u for u in beats if bar - 1e-9 <= u < bar + g.bar - 1e-9]
+                offs = [u for u in subs if bar - 1e-9 <= u < bar + g.bar - 1e-9 and not g.on_beat(u)]
+                if x < 0.45 and len(inside) == 3:
+                    hits += inside[1:]
+                elif x < 0.75 and len(offs) >= 2:
+                    hits.append(offs[1])
+                elif bar > c.u0 + 1e-9:
+                    hits.append(bar)
+        elif x < 0.4:  # the Charleston: the off-beat after the chord's second beat
+            offs = [u for u in subs if not g.on_beat(u) and u > c.u0 + 1e-9]
+            if len(offs) >= 2:
+                hits.append(offs[1])
+        elif x < 0.7:
+            hits += [u for u in beats if g.backbeat(u) and u > c.u0 + 1e-9]
+    hits = sorted(set(hits))
+    out = []
+    for k, u in enumerate(hits):
+        end = hits[k + 1] if k + 1 < len(hits) else c.u1
+        out.append((u, end, 1.0 if k == 0 else 0.82))
+    return out
+
+
+def clear_of(ctx: StyleContext, c: Chord, notes: list[int], u0: float, u1: float) -> list[int]:
+    """A voicing with the tones it can spare (all but the chord's third and its seventh or sixth: the fifth, a ninth,
+    the root) left out where they are a semitone from a note sung there on a strong beat or held a beat or more;
+    at least two kept."""
+    pcs = ctx.pcs(c.symbol)
+    guide = {pcs[1]} | ({pcs[3]} if len(pcs) >= 4 and (pcs[3] - pcs[0]) % 12 in (9, 10, 11) else set())
+    strong = [x for x in ctx.sung_in(u0, u1) if x[3]]
+    out = [p for p in notes if p % 12 in guide or not semitone_off(p % 12, strong)]
+    return out if len(out) >= 2 else notes
+
+
+def w_rootless(ctx: StyleContext, i: int, part: str, light: bool = False) -> list[Ev]:
+    """The trio's piano comping: each chord without its root (the bass has it), its third and seventh (or sixth) with
+    a fifth and a ninth where they sit, close round middle C under the singer, led smoothly from the last."""
+    lo, hi = trio_keys(ctx, i)
+    out = []
+    for k, c in enumerate(held(ctx, i)):
+        rng = ctx.rand(part, c.u0)
+        for a, z, weight in comp_hits(ctx, c, rng, light, k == 0):
+            tones = list(ctx.tones(c, max(a, c.u0), z))
+            extra = ninth(ctx, c, a, z)
+            if extra is not None and extra not in tones:
+                tones.append(extra)
+            notes = ctx.voicing(part, tones, lo, hi, a, z, size=4, root=False, chord=c)
+            notes = clear_of(ctx, c, notes, a, z)
+            base = (0.5 if light else 0.6) * weight
+            for j, p in enumerate(notes):
+                out.append(ev(part, a, a + 0.92 * (z - a), p, ctx.vel(part, a, base, 0.8), i=i, shift=0.005 * j))
+    return out
+
+
+def w_rootless_light(ctx, i, part):
+    return w_rootless(ctx, i, part, light=True)
+
+
+def w_solo(ctx: StyleContext, i: int, part: str) -> list[Ev]:
+    """The piano with the tune (an intro, the break, a turn, an outro): the right hand plays it an octave up (a turn
+    quotes a sung line), its long last notes answered by a few of the chord's tones; the left hand keeps the chords,
+    the third and the seventh (or sixth) under it."""
+    s = ctx.sections[i]
+    right = w_quote(ctx, i, part) if s.role == "turn" else B.statement(ctx, part, [t for t in ctx.tune_in(i) if not t.sung],
+                                                                      0.85, i, ornament=False)
+    out = list(right)
+    if s.role == "break":  # the chorus: a held note at a line's end answered after its first beat
+        for e in right:
+            if e.u1 - e.u0 >= 1.5 * ctx.beat - 1e-9:
+                c = ctx.chord_at(e.u0)
+                rng = ctx.rand(part, e.u0)
+                steps = [u for u in ctx.grid.subs_in(e.u0 + ctx.beat, e.u1)][:3]
+                tones = sorted(p for p in range(int(e.pitch) + 1, int(e.pitch) + 9)
+                               if p % 12 in ctx.tones(c, e.u0, e.u1) and p <= B.register_of(part)[1])
+                if len(steps) >= 2 and tones and rng.random() < 0.7:
+                    e.u1 = steps[0]
+                    for k, u in enumerate(steps):
+                        nxt = steps[k + 1] if k + 1 < len(steps) else u + ctx.grid.beat / 2
+                        out.append(ev(part, u, nxt, tones[min(k, len(tones) - 1)], 0.8 * e.vel, i=i))
+    lo, top = max(B.register_of(part)[0], ctx.tonic - 14), ctx.tonic + 2
+    for k, c in enumerate(held(ctx, i)):
+        rng = ctx.rand(part, c.u0)
+        pcs = list(ctx.tones(c, c.u0, c.u1))  # its third and seventh (or sixth); else its third and fifth
+        shell = [pcs[1], pcs[3]] if len(pcs) >= 4 and (pcs[3] - pcs[0]) % 12 in (9, 10, 11) else pcs[1:3]
+        for a, z, weight in comp_hits(ctx, c, rng, False, k == 0):
+            under = min([e.pitch for e in right if e.u0 < z - 1e-9 and e.u1 > a + 1e-9] or [top + 12])
+            notes = ctx.voicing(part + "-left", shell, lo, int(min(top, under - 3)), a, z, size=2, root=True)
+            for j, p in enumerate(notes):
+                out.append(ev(part, a, a + 0.9 * (z - a), p, ctx.vel(part, a, 0.46 * weight, 0.8), i=i, shift=0.004 * j))
+    return out
+
+
+def w_walking(ctx: StyleContext, i: int, part: str, two: bool = False) -> list[Ev]:
+    """The upright bass walking, a note a beat: the chord's root as it comes, its tones between (moving toward the
+    next), and on the last beat a step into the next chord's root, a scale step or a half step, whichever rubs against
+    nothing sung there (else the chord's fifth). Two: two to a bar (a waltz's bar once), the last beat now and then
+    stepping into the next chord."""
+    lo, hi = bass_range(ctx, part)
+    scale = mode_scale(ctx)
+    out: list[Ev] = []
+    prev = ctx._last.get(part, [lo + 7])[0]
+    g = ctx.grid
+    for c in held(ctx, i):
+        rng = ctx.rand(part, c.u0)
+        pcs = ctx.pcs(c.symbol)
+        root = nearest({ctx.bass(c.symbol)}, prev, lo, min(hi, lo + 14))
+        beats = g.beats_in(c.u0, c.u1)
+        nxt = change_after(ctx, c)
+        target = nearest({ctx.bass(nxt.symbol)}, root, lo, hi) if nxt is not None else None
+        step_in = target is not None
+        if two:
+            keep = [u for u in beats if abs(u - c.u0) < 1e-9 or g.beat_index(u) == 0
+                    or (len(g.beats) == 4 and g.beat_index(u) == 2)]
+            step_in = step_in and len(beats) >= 2 and beats[-1] not in keep and rng.random() < 0.35
+            beats = keep + ([beats[-1]] if step_in else [])
+        p = root
+        for k, u in enumerate(beats):
+            end = beats[k + 1] if k + 1 < len(beats) else c.u1
+            sung = ctx.sung_in(u, end)
+            if k == 0:
+                p = root
+            elif k == len(beats) - 1 and step_in:
+                below = [q for q in range(target - 2, target) if q % 12 in scale][-1:]
+                above = [q for q in range(target + 1, target + 3) if q % 12 in scale][:1]
+                options = below + [target - 1] + above + [target + 1]
+                if rng.random() < 0.35:
+                    options = [target - 1] + options
+                p = next((q for q in options if lo <= q <= hi and not semitone_off(q % 12, sung)),
+                         nearest({pcs[2]}, p, lo, hi))
+            elif two:  # two to a bar: the fifth on the bar's other strong beat
+                p = next((q for q in sorted(range(lo, hi + 1), key=lambda q: abs(q - p))
+                          if q % 12 == pcs[2] and not semitone_off(q % 12, sung)), p)
+            else:  # on the way from the root to where it is going, never back where it just was: a tone of the chord,
+                # or on a weak beat a step of the scale toward it
+                goal = target if target is not None else root + (7 if root + 7 <= hi else -5)
+                aim = root + (goal - root) * k / max(len(beats) - 1, 1)
+                before = out[-2].pitch if len(out) >= 2 and out[-2].u0 >= c.u0 - 1e-9 else None
+                weak = g.beat_index(u) % 2 == 1 if len(g.beats) == 4 else False
+                tones = [q for q in range(lo, hi + 1) if (q % 12 in pcs or weak and q % 12 in scale and 0 < abs(q - p) <= 2)
+                         and abs(q - p) <= 7 and q not in (p, before) and not semitone_off(q % 12, sung)]
+                tones.sort(key=lambda q: abs(q - aim) + 3.0 * rng.random())
+                p = tones[0] if tones else (root + 12 if root + 12 <= hi else nearest({pcs[2]}, root + 7, lo, hi))
+            first = k == 0
+            out.append(ev(part, u, u + 0.92 * (end - u), p, ctx.vel(part, u, 0.8 if first else 0.68, 0.88), i=i))
+        prev = p
+        ctx._last[part] = [p]
+    return out
+
+
+def w_twofeel(ctx, i, part):
+    return w_walking(ctx, i, part, two=True)
+
+
+def w_swept(ctx: StyleContext, i: int, part: str, light: bool = False) -> list[Ev]:
+    """Brushes: the left hand sweeping round the snare without stopping (two sweeps a bar in four, one a bar in a
+    waltz), the right hand tapping time on every beat, the backbeat (two and four; a waltz's two and three) the
+    strongest, with the swung off-beat after two and after four (a waltz's after two) now and then: the ride's
+    figure on the snare; the bass drum feathered on the one. Light: the sweep and the bass drum, the backbeat barely
+    tapped. A few taps into a section as full or fuller; the last chord one sweep and a tap."""
+    s = ctx.sections[i]
+    g = ctx.grid
+    out: list[Ev] = []
+    nxt = ctx.sections[i + 1] if i + 1 < len(ctx.sections) else None
+    asked = getattr(ctx, "fills", {}).get((i, part))
+    bars = g.bars(s.u0, s.u1)
+    for k, bar in enumerate(bars):
+        rng = ctx.rand(part, bar)
+        halves = [(0.0, g.bar)] if len(g.beats) == 3 else [(0.0, g.bar / 2), (g.bar / 2, g.bar)]
+        for a, z in halves:
+            if s.u0 - 1e-9 <= bar + a < s.u1 - 1e-9:
+                out.append(Ev(part, bar + a, min(bar + z, s.u1), 0.0, ctx.vel(part, bar + a, 0.8, 0.9),
+                              art="brush-sweep", section=i))
+        hits = [(0.0, "kick", 0.3)] + ([(g.beats[2], "kick", 0.24)] if len(g.beats) == 4 else [])
+        for k_b, b in enumerate(g.beats):
+            back = g.backbeat(bar + b)
+            if back or not light:
+                hits.append((b, "brush-tap", (0.4 if light else 0.68) if back else 0.42))
+            upto = g.beats[k_b + 1] if k_b + 1 < len(g.beats) else g.bar
+            x = next((x for x in g.subs if b < x < upto - 1e-9), None)
+            skip = back and (len(g.beats) != 3 or k_b == 1)  # after two and four; a waltz's after two
+            if not light and skip and x is not None and rng.random() < 0.6:
+                hits.append((x, "brush-tap", 0.45))
+        fill = (not light and k == len(bars) - 1 and nxt is not None and nxt.energy >= s.energy) if asked is None else \
+            (k == len(bars) - 1 and asked)
+        if fill:
+            hits += [(x, "brush-tap", 0.5 + 0.08 * j) for j, x in enumerate(v for v in g.subs if v >= g.beats[-1] - 1e-9)]
+        for off, piece, v in hits:
+            u = bar + off
+            if s.u0 - 1e-9 <= u < s.u1 - 1e-9:
+                out.append(hit(part, u, piece, ctx.vel(part, u, v, 0.9), i))
+    if i == len(ctx.sections) - 1 and ctx.chords:
+        final = ctx.chords[-1].u0
+        out = [e for e in out if e.u0 < final - 1e-9]
+        out += [Ev(part, final, final + 2 * g.beat, 0.0, 0.6, art="brush-sweep", section=i),
+                hit(part, final, "brush-tap", 0.6, i), hit(part, final, "kick", 0.35, i)]
+    return out
+
+
+def w_swept_light(ctx, i, part):
+    return w_swept(ctx, i, part, light=True)
+
+
+WRITERS.update({"rootless": w_rootless, "rootless-light": w_rootless_light, "solo": w_solo, "walking": w_walking,
+                "twofeel": w_twofeel, "swept": w_swept, "swept-light": w_swept_light})

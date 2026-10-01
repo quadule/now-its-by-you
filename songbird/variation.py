@@ -1005,7 +1005,8 @@ def choose(genome: Genome, parent=None, voice: Voice | None = None, drift: Drift
         pin(out)
     for decide in DECISIONS:
         decide(out, ctx)
-        if decide is choose_form and form is not None:  # a form set by hand stands in for the season's
+        if decide in (choose_form, choose_style) and form is not None:  # a form set by hand stands in for the
+            # season's (and for a style's: the jazz trio adds a break where a form has none)
             out["form"] = list(form)
         if pin is not None:
             pin(out)

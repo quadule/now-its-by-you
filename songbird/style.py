@@ -1442,6 +1442,8 @@ def choose_style(out: dict, ctx, forced: str | None = None, arrange: dict | None
     kept = name == (parent.name or "ballad")
     digest = hashlib.sha256(json.dumps(ctx.parent.to_dict(), sort_keys=True).encode()).hexdigest()[:16]
     material = f"{c.hash or 'no-voice'}|{digest}|{name}"
+    if name in SOLO_BREAK and not (out.get("composition") or {}).get("order"):  # the trio's piano chorus, its break
+        out["form"] = with_break(ctx.genome, out.get("form", ctx.parent.form), material, sdef)
     form = tuple(out.get("form", ctx.parent.form))
     voices = int(out.get("choir", ctx.parent.choir))
     options = choose_options(ctx.genome, form, sdef, parent, kept, voices, material, ctx.drift, c,
@@ -1667,3 +1669,245 @@ def finish(score, genome, params):
                                             and (n.part == "voice" or n.part.startswith("choir")))
         notes.append(replace(n, pitch=n.pitch + 2.0) if pitched and late else n)
     return replace(score, notes=tuple(notes))
+
+
+# --- beside the ring: a jazz trio (docs/STYLES.md, "A jazz trio", 2026-09-30) ----------------------------------------
+#
+# A piano, an upright bass and a kit played with brushes, the song as a jazz waltz (re-barred in three, as chamber's
+# waltz) or a swung ballad. The singer keeps the tune. The piano comps in rootless chords around middle C, under the
+# singer; the bass walks, or plays two to a bar; the brushes sweep. The trio plays its own changes (trio_changes):
+# the song's chords with their sevenths and sixths where they sit with the tune, and passing chords into the cadences
+# (a ii-V, a chord a fifth above the next), each kept only where it rubs against no sung note the song's own chord
+# doesn't. Where the rendition has no break, the trio adds one (the verse tune, the piano's chorus) most of the time.
+# Beside the ring at chamber's place (the piano, the waltz, the sevenths): chosen by a person, never drawn by chance.
+
+JAZZ = _def(
+    "jazz", "jazz trio: piano, upright bass and brushes",
+    {"piano": 1.0, "bass": 0.85, "kit": 1.25},
+    {"piano": {"intro": "solo", "break": "solo", "outro": "solo", "turn": "solo",
+               "verse1": ((0.3, "rootless"), (0.0, "rootless-light")), "*": "rootless", "tag": "rootless"},
+     "bass": {"intro": "twofeel", "verse1": "twofeel", "verse": ((0.45, "walking"), (0.0, "twofeel")),
+              "refrain": "walking", "break": "walking", "turn": "walking", "bridge": "twofeel", "tag": "twofeel",
+              "outro": "twofeel"},
+     "kit": {"intro": "swept-light", "verse1": ((0.35, "swept-light"), (0.0, "")), "verse": "swept-light",
+             "refrain": "swept", "break": "swept", "turn": "swept", "bridge": "swept-light", "tag": "swept",
+             "outro": "swept-light"}},
+    ("piano",), {"waltz": 0.55, "swing": 0.45},
+    # a jazz waltz (its quarter 1.5 times the song's beat: about 110 to 135, 122 for H) or a ballad swung at about 80;
+    # at the same tempo the waltz is as long as the song (the tempo counts the song's beats, each foot a bar of three)
+    {"waltz": (0.76, 0.85, 0.94), "swing": (0.74, 0.83, 0.92)},
+    {"*": ("add9",)}, 0.7, (-0.45, -0.85),
+    band={"ornament": -0.3},
+    singer={"vibrato_depth": -3.0},
+    mix={"intimacy": 0.15, "space": -0.05, "width": -0.05},
+    options={"intro": {"lead": 0.85, "voice": 0.35}, "alone": 0.15, "stops": 0.1, "breakdown": 0.15, "lift": 0.1,
+             "ending": {"rit": 0.5, "ring": 0.4, "cold": 0.1}, "entrances": 0.25, "backing": {"": 0.85, "oohs": 0.15},
+             "half": 0.0},
+)
+STYLES[JAZZ.name] = JAZZ
+OFF_RING[JAZZ.name] = "chamber"  # the piano, the waltz, the sevenths
+
+# Styles that play the song's chords as their own changes (trio_changes), and how often they add a break where the
+# form has none (with_break): the trio's piano chorus on the verse tune
+CHANGES = {JAZZ.name}
+SOLO_BREAK = {JAZZ.name: 0.8}
+# A chord's colours as the trio voices it, richest first: the mode's own seventh, a sixth, an added ninth, the triad
+TRIO_COLOURS = {"major": ("seventh", "6", "add9", ""), "dominant": ("seventh", "add9", ""),
+                "minor": ("seventh", "add9", ""), "other": ("seventh", "")}
+
+
+def _numeral(d: int, mode: str) -> tuple[str, tuple]:
+    """A scale degree's numeral in a mode (lower case where its triad is minor or diminished) and its seventh chord's
+    steps above the root."""
+    from .theory import degree_semitones
+
+    tones = [degree_semitones(d + 2 * k, mode) for k in range(4)]
+    steps = tuple(t - tones[0] for t in tones[1:])
+    return (NUMERALS[d - 1] if steps[0] == 4 else NUMERALS[d - 1].lower()), steps
+
+
+def trio_chord(d: int, mode: str, colour: str) -> str:
+    """The trio's chord on a degree of the mode with a colour: "seventh" its own seventh chord (Imaj7, iim7, V7,
+    viim7b5), "6" or "add9" added to its triad (a minor one's "madd9"), "dom" a dominant seventh on that degree
+    whatever the mode (a secondary dominant: VI7), "" the triad."""
+    numeral, steps = _numeral(d, mode)
+    if colour == "seventh":
+        return numeral + SEVENTH_NAMES.get(steps, "")
+    if colour == "dom":
+        return NUMERALS[d - 1] + "7"
+    if colour == "add9":
+        return numeral + ("add9" if steps[:2] == (4, 7) else "madd9" if steps[:2] == (3, 7) else "")
+    if colour == "6":
+        return numeral + ("6" if steps[:2] == (4, 7) else "")
+    return numeral
+
+
+def _kind(d: int, mode: str) -> str:
+    _n, steps = _numeral(d, mode)
+    if steps == (4, 7, 10):
+        return "dominant"
+    return "major" if steps[:2] == (4, 7) else "minor" if steps[:2] == (3, 7) else "other"
+
+
+def _rubs_with(symbol: str, mode: str, pcs: list) -> set:
+    """The sung pitch classes (semitones above the tonic) a semitone from one of the chord's tones."""
+    from .theory import chord_tones
+
+    tones = {t % 12 for t in chord_tones(symbol, mode)}
+    return {p for p in pcs if any(min((p - t) % 12, (t - p) % 12) == 1 for t in tones)}
+
+
+def sits(symbol: str, own: str, mode: str, pcs: list) -> bool:
+    """Whether a chord the trio plays sits with the sung notes over it: it rubs a semitone against none the song's own
+    chord there doesn't (the song's own passing notes rub as they always did; the trio adds no rub of its own)."""
+    return _rubs_with(symbol, mode, pcs) <= _rubs_with(own, mode, pcs)
+
+
+def _plain(symbol: str) -> int | None:
+    """The degree of a plain numeral (the genome's own kind of chord: no quality, accidental or bass), else None."""
+    from .theory import parse_symbol
+
+    try:
+        degree, alter, quality, bass = parse_symbol(symbol)
+    except ValueError:
+        return None
+    return degree if not (alter or quality or bass != 1) else None
+
+
+def _coloured(d: int, mode: str, pcs: list) -> str:
+    own = trio_chord(d, mode, "")
+    for colour in TRIO_COLOURS[_kind(d, mode)]:
+        symbol = trio_chord(d, mode, colour)
+        if sits(symbol, own, mode, pcs):
+            return symbol
+    return own
+
+
+def trio_changes(genome, params, lines: list) -> dict[str, tuple]:
+    """The trio's changes for each tune line of the form, by line id: its chords a bar at a time, as the genome writes
+    them (1, 2 or 4 a bar, a chord held over two shares written twice). Each of the song's chords coloured, the
+    richest of its colours that sits with what is sung over it (sits()); and, each where it sits and the rendition's
+    coin (as often as Style.harmony) says so, a passing chord: a V that resolves to I, or ends a line, takes its ii
+    first (half its length each: ii-V); a chord held a whole bar before another gives its second half to the chord a
+    fifth above that one (the mode's own, else a dominant: I7 before IV, iiim7 before vi). What is sung over a chord
+    is every sung note of the line there, and over its last chord the pickups of the lines that follow it in this
+    form. A line whose chords aren't the genome's plain numerals keeps those it has. lines: (section, place, phrase)."""
+    from .theory import degree_semitones
+
+    mode = params.mode
+    bar = genome.meter.bar
+    after: dict[str, list] = {}
+    for k, (_i, _j, phrase) in enumerate(lines):
+        nxt = lines[k + 1][2] if k + 1 < len(lines) else None
+        after.setdefault(phrase.id, [])
+        if nxt is not None:
+            after[phrase.id] += [n for n in nxt.sung if n.onset < 0]
+    harmony = float(params.style.harmony)
+    shortest = bar if rebarred(genome, params) else bar / 2  # a V split into ii-V: in a waltz a whole bar (two of three)
+    out: dict[str, tuple] = {}
+    for _i, _j, phrase in lines:
+        if phrase.id in out:
+            continue
+        rng = np.random.default_rng([int(params.seed) & 0xFFFFFFFF, 0x7A22, *phrase.id.encode()])
+
+        def sung(a: float, z: float, last: bool, phrase=phrase) -> list:
+            notes = [n for n in phrase.sung if n.onset >= 0 and n.onset < z - 1e-9 and n.onset + n.dur > a + 1e-9]
+            notes += after.get(phrase.id, []) if last else []
+            return [degree_semitones(n.degree, mode, n.alter) % 12 for n in notes]
+
+        slots = [(symbol, b * bar + k * bar / len(chords), b * bar + (k + 1) * bar / len(chords))
+                 for b, chords in enumerate(phrase.chords) for k, symbol in enumerate(chords)]
+        if any(_plain(s) is None for s, _a, _z in slots):
+            out[phrase.id] = phrase.chords
+            continue
+        coins = [(rng.random(), rng.random()) for _ in slots]  # two for every chord: one's choice moves no other's
+        played: list = []
+        heads: list = [None] * (len(slots) + 1)  # the degree each chord's own first chord is on, once decided
+        for k in range(len(slots) - 1, -1, -1):  # from the line's end: a chord approaches what the next one plays
+            own, a, z = slots[k]
+            d = _plain(own)
+            last = k == len(slots) - 1
+            nxt = _plain(slots[k + 1][0]) if not last else None
+            coin_ii, coin_on = coins[k]
+            mid = (a + z) / 2
+            here = [(_coloured(d, mode, sung(a, z, last)), a, z)]
+            heads[k] = d
+            if d == 5 and (nxt == 1 or last) and z - a >= shortest - 1e-9 and coin_ii < harmony:  # ii-V: the V's
+                # first half its ii
+                ii, v = trio_chord(2, mode, "seventh"), trio_chord(5, mode, "seventh")
+                if sits(ii, own, mode, sung(a, mid, False)) and sits(v, own, mode, sung(mid, z, last)):
+                    here, heads[k] = [(ii, a, mid), (v, mid, z)], 2
+            elif z - a >= bar - 1e-9 and heads[k + 1] is not None and heads[k + 1] != d and coin_on < harmony:
+                above = (heads[k + 1] + 3) % 7 + 1  # the degree a fifth above what the next chord starts on
+                options = ([trio_chord(above, mode, "seventh")] if above != d else []) + [trio_chord(above, mode, "dom")]
+                fits = [o for o in options if sits(o, own, mode, sung(mid, z, False))]
+                first = _coloured(d, mode, sung(a, mid, False))
+                if fits and fits[0] != first:
+                    here = [(first, a, mid), (fits[0], mid, z)]
+            played = here + played
+        chords = _bars(played, phrase.chords, bar)
+        if chords is None:  # a passing chord the bar can't be written with (a bar of three): the colours alone
+            chords = _bars([(_coloured(_plain(own), mode, sung(a, z, k == len(slots) - 1)), a, z)
+                            for k, (own, a, z) in enumerate(slots)], phrase.chords, bar)
+        out[phrase.id] = chords
+    return out
+
+
+def _bars(played: list, own: tuple, bar: float) -> tuple | None:
+    """Chords with their spans as the genome writes them: each bar's on the fewest even shares that hold them all, of
+    1, 2 or 4, or as many as the line's own bar has (a chord held over two shares written twice); None where a bar's
+    can't be written so."""
+    out = []
+    for b, chords in enumerate(own):
+        here = [(s, a - b * bar, z - b * bar) for s, a, z in played if b * bar - 1e-9 <= a < (b + 1) * bar - 1e-9]
+        n = next((n for n in sorted({1, 2, 4, len(chords)})
+                  if all(abs(a * n / bar - round(a * n / bar)) < 1e-9 for _s, a, _z in here)), None)
+        if n is None:
+            return None
+        out.append(tuple(next(s for s, a, z in here if a - 1e-9 <= k * bar / n < z - 1e-9) for k in range(n)))
+    return tuple(out)
+
+
+def changed(genome, params, lines: list, phrases: list) -> list:
+    """The phrases with their style's own changes (CHANGES: the trio's), but for a line whose chords aren't the song's
+    own there (a person's, or a loop's); the same list for every other style. lines: as composition.form_phrases."""
+    if params.style.name not in CHANGES:
+        return phrases
+    from dataclasses import replace as _replace
+
+    mine = set((params.composition or {}).get("chords") or {})  # a person's chords for a line, everywhere
+    changes = trio_changes(genome, params, [(i, j, genome.phrases[p.id]) for (i, j, _l), p in zip(lines, phrases)])
+    # (a line with a tune of its own at its place keeps the song's chords there: the changes fit the line's own tune)
+    return [_replace(p, chords=changes[p.id]) if p.id not in mine and p.chords == genome.phrases[p.id].chords
+            and not getattr(p, "place", None) and p.id in changes else p for p in phrases]
+
+
+def held_chords(times: list, params) -> list:
+    """Chords as (start, end, symbol), a chord written twice to fill a bar's shares (the trio's changes) joined into
+    the one chord the trio holds; as they are for every other style (a person's repeated chord is struck again)."""
+    if params.style.name not in CHANGES:
+        return times
+    out: list = []
+    for a, z, symbol in times:
+        if out and out[-1][2] == symbol and abs(out[-1][1] - a) < 1e-9:
+            out[-1] = (out[-1][0], z, symbol)
+        else:
+            out.append((a, z, symbol))
+    return out
+
+
+def with_break(genome, form, material: str, sdef: StyleDef) -> list:
+    """The form with its break where it has none and the song's template has a place for one, as often as the style
+    adds one (SOLO_BREAK: the trio's piano chorus on the verse tune), by a coin of its own; else as it was."""
+    from .variation import _grammar, items
+
+    chance = SOLO_BREAK.get(sdef.name, 0.0)
+    if not chance or "break" in form or "break" not in genome.sections or coin(material, "solo") >= chance:
+        return list(form)
+    match = _grammar(genome).fullmatch("".join(f"{name}," for name in form))
+    slot = next((f"t{it.index}" for it in items(genome) if not it.repeat and it.tokens == (("break", "?"),)), None)
+    if match is None or slot is None:
+        return list(form)
+    parts = {k: v or "" for k, v in match.groupdict().items()}
+    parts[slot] = "break,"
+    return [x for x in "".join(parts.values()).split(",") if x]

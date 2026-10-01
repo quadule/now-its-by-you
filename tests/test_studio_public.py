@@ -609,6 +609,11 @@ MEASURED = {
     # voices; its voices overlap in the stems they already had, so the peak is the a cappella's, the song a tail longer
     "acappella, six voices, a refrain and the bridge as rounds": (254.9, "choir1 choir2 choir3 choir4 choir5 choir6 "
                                                                          "voice", 1540),
+    # the jazz trio (September 30, 2026; docs/STYLES.md, "A jazz trio"): H's own shape and its break, a waltz and
+    # swung; the long one's peak the highest of four runs (2.51 to 3.06 GB: the brushes' kit beside the voice)
+    "jazz (a waltz, with the break)": (201.1, "bass kit piano voice", 1740),
+    "jazz, swung": (205.8, "bass kit piano voice", 1780),
+    "jazz 4 verses, every part, slowest": (371.6, "bass kit piano voice", 3060),
 }
 
 

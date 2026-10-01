@@ -1518,3 +1518,265 @@ and house's eight hook bars after the last refrain are laid as lines (played). A
 s to 0.73 s). The singer's small random variations are drawn over the whole voice part's length, so the voice stem
 is a fresh take of the same notes from its first word (every other stem identical). house4-ada-2026-09-30
 (6af016bc9bb3), a replay of house3-ada's record.
+
+# A jazz trio (September 30, 2026)
+
+The artist, after the jig and the a cappella convinced and house and dub didn't: a style convinces when a singer
+delivers the folk tune straight over instruments the program synthesizes well, and fails when it needs another kind of
+singer or heavy sound design. A **jazz trio** is that kind of style: a piano, an upright bass and brushes, all three
+instruments the program already plays well (the modelled piano, the upright, the kit's swept brushes), the singer on
+the tune as written, and the change carried by the harmony, the comping and the time feel. The page calls it "jazz
+trio" and says what plays, "piano, upright bass and brushes"; it claims no tradition beyond that.
+
+(What follows is the design as it went to review; "What the review changed" and "As built" below say where the
+build differs.)
+
+## The design
+
+**Where it sits.** Beside the ring, at chamber's place (`OFF_RING["jazz"] = "chamber"`: the piano, the waltz, the
+sevenths), as the a cappella, the jig, house and dub do. A person chooses it (`--style jazz`, the studio's style card);
+nothing steps into it by chance; a child of a jazz version keeps it or steps to chamber's neighbours. The artist
+decides later whether it joins the ring.
+
+**The feel and the tempo.** A jazz waltz (the song re-barred in three, as chamber's and country's waltzes already are:
+every stressed syllable on a downbeat), 0.55, or a ballad swung, 0.45. The waltz at 0.72 to 0.88 of the song's tempo
+(centre 0.8: 77 for H, a waltz quarter at 115), the ballad at 0.7 to 0.88 (centre 0.78: 75, swung). Slow enough that
+the singer's words sit as they do in the ballad; the waltz makes the song half again as long, as chamber's does.
+
+**The trio's changes** (`style.trio_changes`; new, and empty for every other style). The song's chords stay the
+song's functions (I is still I), played as a jazz pianist would read them off a lead sheet, and fitted to the tune the
+way house's loops are, but stricter: a chord the trio plays may rub a semitone against **no sung note that the song's
+own chord there doesn't** (`style.sits`: the song's own passing notes, such as the 4 over I in the second verse line,
+rub as they always did; the trio adds no rub of its own). What is sung over a chord is every note of the line in its
+span, and over a line's last chord the pickups of whatever line follows it in this form.
+
+- **Colour, always where it sits.** Each chord the richest of its colours that sits: a major chord its maj7, else a
+  6, else an added ninth, else the triad; a dominant its 7, else an added ninth; a minor chord its m7, else an added
+  ninth. In the mode's own spelling (`trio_chord`, as house's loops are spelled: vim7, IVmaj7, V7; in aeolian im7,
+  ivm7, VImaj7, vm7).
+- **Passing chords, as often as `Style.harmony` says** (0.7 for the style, a machine's richness and the season moving
+  it as for every style; each chord its own coin from the rendition's seed, so one's choice moves no other's):
+  - *ii-V*: a V that resolves to I, or ends a line (a half cadence), takes its ii for its first half (two beats of
+    a bar, or one of a half bar: `iim7 V7 I6`);
+  - *a fifth above*: a chord held a whole bar before another gives its second half to the chord a fifth above what
+    the next one starts on, the mode's own seventh or else a dominant (I7 before IV, iiim7 before vi, vim7 before a
+    ii-V's ii: the circle of fifths walking into the cadence).
+  The lines are decided from the end back, so a chord approaches what the next one actually plays.
+- A chord held over two shares of a bar is written twice (`I6 I6 iim7 V7`), as the genome writes a bar of four
+  chords; the players hold it as one.
+- **Where it goes in.** Between a person's chords and the band, in `composition.form_phrases` (after a style's loop,
+  which the trio has none of), so the band, the choir's and backing voices' harmony, the MIDI file's chord track and
+  the page's chord lane all read the same changes. A line whose chords a person set (everywhere, or at its place)
+  keeps theirs exactly; a line whose chords aren't plain numerals keeps them.
+
+What H gets in D major with every passing chord taken (harmony 1; ionian):
+
+| line | the song's | the trio's (harmony 1) |
+|---|---|---|
+| v1 | I \| I V | D6 \| D6 Em7 A7 |
+| v2 | I \| V I | D6 \| Aadd9 D6 |
+| v3 | I \| IV V | Dmaj7 D7 \| Gmaj7 Em7 A7 |
+| r1 | I \| IV V | D6 D7 \| Gmaj7 Aadd9 |
+| r2 | I vi \| V I | Dmaj7 Bm7 \| Aadd9 D6 |
+| r3 | vi IV \| I V | Bm7 Gmaj7 \| Dmaj7 Aadd9 |
+| r4 | I \| V I | Dmaj7 E7 \| Aadd9 D6 |
+| b1 | vi \| I | Bm7 \| Dmaj7 |
+| b2 | vi \| V | Bm7 \| Aadd9 |
+| b3 | I \| vi V | Dmaj7 F♯m7 \| Bm7 Aadd9 |
+| b4 | I \| V | Dmaj7 Bm7 \| Em7 A7 |
+| t1 | IV \| V | Gmaj7 Bm7 \| Em7 A7 |
+
+H's V is mostly an Aadd9, not an A7: the tune sings F♯ over it (the 13th), and the seventh's G would rub it; where
+nothing is sung over the V's second half (a line's end, a turn) it is A7, and its ii comes before it. The I is a D6
+where the tune sings D over it (a maj7's C♯ would rub), a Dmaj7 where it doesn't.
+
+**The players.**
+
+- *Piano* (`rootless`, new): comping in rootless chords, the third and the seventh (or sixth) with the fifth and a
+  ninth where they sit (the ninth only where the mode's scale has it a whole step over the root and nothing sung
+  rubs it), four notes close round middle C (about an octave under the tonic up to a fourth over the low end of the
+  singer's line), led smoothly from the last (the program's `voicing`, which keeps off every sung pitch). The rhythm:
+  struck as the chord comes and held, or answered: in a waltz on two and three (the bass has one), or on the
+  off-beat after two; in four on the off-beat after two (the Charleston) or the backbeats; now and then pushed an
+  off-beat early. `rootless-light` (the first verse when the band is sparse): held chords only.
+- *Piano with the tune* (`solo`, new): where the piano has the tune (the intro, a turn's quote, the break, an outro),
+  its right hand plays it an octave up and its left hand keeps the chords, the third and seventh under it, in the
+  comping's rhythm. In the break, the piano's chorus on the verse tune, a held note at a line's end is answered after
+  its first beat by a few of the chord's tones. A style's table naming "solo" for the lead's own section turns the
+  lead's "lead" or "quote" into it (`plan_style`; no other style names it).
+- *Upright bass* (`walking`, `twofeel`, new): walking a note a beat, the root as the chord comes, its tones between,
+  moving toward the next chord's root, and on the last beat a step into it: a scale step or a half step, whichever
+  rubs against nothing sung there, else the chord's fifth. Two to a bar in the first verse, the bridge and the tag (a
+  root on one, a fifth on three; in a waltz one a bar), stepping into the next chord now and then; walking in the
+  refrains, the break and the turns, and in the verses once the band is fuller.
+- *Brushes* (`swept`, `swept-light`, new): the kit's own brush sweep (the bristles' stream of catches, circling when
+  one sweep follows another) round the snare, two sweeps a bar in four and one a bar in a waltz; the right hand taps
+  the backbeat (two and four; a waltz's two and three) and the swung off-beat after it now and then; the bass drum
+  feathered on one (and three). Light: the sweeps and the bass drum, the taps barely there. A tap pickup into a
+  fuller section; the last chord one sweep and a tap. No sticks, no cymbals.
+
+**The form.** Room for the piano's chorus: where the rendition's form has no break and the song's template has a
+place for one, the trio adds it, 0.8 of the time by a coin of its own (`style.with_break`, `SOLO_BREAK`): H's break is
+the verse tune, eight bars, before the bridge. A form a person set (`--form`, the studio's order, an edit) is kept as
+it is. A child of a jazz version inherits the form as any child does.
+
+**The rest of what a style brings.** The band's ornament down (no grace notes in the piano's tune). The singer: a
+little less vibrato (-3 cents), nothing else: the tune stays the singer's, sung straight. The mix: a little closer
+(intimacy +0.15), a smaller room (space -0.05), a little narrower. Options: the intro the piano's (0.85) or, with no
+intro, the singer alone first (0.35); a verse with the piano alone or bare 0.15; stop-time 0.1; a breakdown 0.15; a
+lift 0.1; endings a broad ritardando 0.5, ringing 0.4, cold 0.1; entrances 0.25; backing voices rarely (oohs 0.15);
+no half-time bridge.
+
+**What's new, and what stays as it was.** style.py: the trio's block (its StyleDef, `CHANGES`, `SOLO_BREAK`,
+`trio_changes`, `sits`, `changed`, `with_break`), and one hook in `choose_style` (the break). composition.py: one hook
+(`_changed`) after the loop. variation.py: a form set by hand is put back after the style decides as well as after the
+form does (a no-op for every other style). idioms.py: the trio's writers in a block of their own, and the "solo" turn
+in `plan_style`. No numba kernel added or changed. Every other style passes none of the new code's conditions, so
+every other render stays byte-identical (the goldens, every style's scores for four machines, and six renders' PCM
+ids, before and after).
+
+**Decisions for the artist** (at the end, "As built").
+
+## What the review changed (September 30, 2026)
+
+A read-only Fable review of the design above, with the first build in the tree to check it against (it re-derived the
+whole table of changes, ran 206 tests including the goldens, and measured). Its points, and what was done:
+
+1. **A bar the changes can't write crashed.** `_bars` wrote a bar on 1, 2 or 4 shares only, so a ii-V on a quarter-bar
+   V, or any bar of three chords, had no way to be written (a person's `I IV V I`, `vi ii V`). Now a bar keeps as many
+   shares as its own has where those hold it, and where a passing chord can't be written at all the line takes its
+   colours alone (tested).
+2. **A line with a tune of its own at its place** was fitted against the line's own tune. It now keeps the song's
+   chords there (the changes are fitted to the line as the song has it).
+3. **The dominant's seventh under the tune's sixth.** The semitone test is symmetric, which is right for a maj7 under
+   a sung tonic (C♯ a semitone under D: a minor ninth when voiced under it) but also forbids A7's G under a sung F♯, a
+   major seventh under it: A13, the style's most idiomatic sound. So H's V is mostly an Aadd9. **Kept as it is** (the
+   brief: nothing grinds a semitone against the melody), and **left for the artist** (below): a directional rule
+   (`(sung - tone) % 12 == 1` rubs, `== 11` doesn't) would let the V be A7 under the F♯, kept symmetric where the
+   lineage's choir sings (the choir takes any chord tone under the tune, and would sing the G a major seventh under).
+4. **The only chord outside the tune's world** is r4's E7 (V of V, its G♯), where the harmony knob draws it. Good
+   jazz, and the singer never sings G♯; flagged for the artist.
+5. **Passing chords never cross a line** (the changes are by line, so the chord lane and every verse agree): accepted.
+6. **A waltz splits a whole bar's V only**: a quarter-bar ii-V re-barred is a ii on one and a V on two and three;
+   playable, but a waltz player splits a bar's V into a bar of ii and a bar of V. Done (`rebarred`).
+7. **The comping sat low** (C3 to E4, under middle C and over the bass's top): now from a seventh under the tonic to a
+   third over the singer's low end (for H in D: E3 to F♯4), its mean pitch measured at B3 to C4.
+8. **The chorus's left hand** took an added ninth for a seventh (Vadd9's shell was its third and ninth): now the third
+   and the seventh or sixth, else the third and fifth.
+9. **The walking line** used chord tones only: it now takes a scale step on a weak beat, toward where it is going; two
+   to a bar puts the fifth on the other strong beat, as designed.
+10. **The brushes** tapped the backbeat and its skip, a folk brush figure: now every beat (the backbeat strongest) and
+    the skip after two and four (a waltz's after two), the ride's figure on the snare.
+11. **Nothing else moves**: the render paths are gated by the style's name and the goldens pass. What a person sees
+    elsewhere: the new patterns are offered for the piano, the bass and the kit in every style's menus (by
+    `takeover.style_patterns`' design, each with its words). A chord written twice to fill a bar's shares showed as two
+    in the piano score's head ("D6 then D6") and was struck twice in the MIDI file: now one held chord in both, for the
+    trio only (`style.held_chords`; a person's repeated chord is still struck again).
+12. **The style card** said nothing of the chords: it now says "the song's chords with sevenths and sixths, and passing
+    chords into the cadences" (the last part where the version has any).
+13. **The form.** Adding the break in `choose_style` lets the options read a form with the break where a hand-set form
+    is put back after; the options read only the verses and refrains, which a break doesn't change, so it was left
+    there (it also covers a style chosen with no machine, which never reaches `choose_form`).
+14. **The waltz is not half again as long**: the tempo counts the song's beats, each foot a bar of three, so at the same
+    tempo a waltz is the song's length (ada's waltz 261.7 s at 76.6, her swing 268.6 s at 74.6). Corrected above in the
+    code's comment and below.
+15. **Memory is the real risk**: the kit's rate (7.1 MB a second) and the estimate allow about 4 minutes in 2100 MB, and
+    machines' long shapes are longer. The tempo centres went up (the waltz 0.85 of the song's, the ballad 0.83); the
+    break stays a style's choice, never the server's (a version's music doesn't depend on what a server can hold).
+16. **Measure** as the review defined it (below): the chord under a note's middle, the minor ninth apart from the
+    major seventh, seconds as well as notes, the comping's register; Whisper on the mix with the ballad and a swung
+    version beside it.
+
+## As built, and measured (September 30, 2026)
+
+`songbird render --style jazz`, or "jazz trio" in the studio's style card (after the ring's, beside chamber). Nobody
+has listened; everything here is measured.
+
+| Where | What |
+|---|---|
+| songbird/style.py | the trio's block at the end: `JAZZ` (beside the ring at chamber's place), `CHANGES`, `SOLO_BREAK`, `trio_chord`, `sits`, `trio_changes`, `_bars`, `changed`, `held_chords`, `with_break`; the break's hook in `choose_style` |
+| songbird/composition.py | `_changed` after the loop in `form_phrases` |
+| songbird/variation.py | a hand-set form put back after `choose_style` as after `choose_form` |
+| songbird/idioms.py | the trio's writers in a block of their own (`rootless`, `rootless-light`, `solo`, `walking`, `twofeel`, `swept`, `swept-light`); a lead's "solo" in `plan_style` where a style's table names it |
+| songbird/takeover.py, explain.py | the patterns' words; "jazz trio", its players ("upright bass", "brushes"), its feels ("a waltz", "a ballad, swung"), the card's line on the chords (`changes_words`) |
+| songbird/midi.py, piano.py | a held chord one chord in the MIDI file's chord track and the piano score (the trio only) |
+| tests/test_jazz.py | the place, the changes in every mode and harmony, a bar it can't write, a person's chords, the break, the players, the page, the share on the chord |
+
+**As built, where it differs from the design**: the review's changes above; the tempo a little brisker (the waltz
+0.76 to 0.94 of the song's, centre 0.85, its quarter about 122 for H; the ballad 0.74 to 0.92, centre 0.83, about 80);
+the lineup piano 1.0, bass 0.85, kit 1.25 (the brushes' stem sat 17 dB under country's kit at first: now about 8);
+the comping's tones it can spare (a fifth, a ninth) left out where they'd rub a sung note on a strong beat or a long
+one; no new numba kernel, so the browser's translation is as it was.
+
+**Nothing else moved.** Every other style's score for four machines (ada, bob, coral, dmitri on their dates; every
+style for each, with three voices too for ada; the seed; 90 in all) is identical before and after; six renders made
+before the change render to the same PCM ids after it: the seed (9b0766353b73), ada's own (8e8c9e92fc61), chamber for
+ada (8e10c6ee39a0), the songwriter for bob (1d7413323129), country for coral (72a357a11dd0), gospel for dmitri
+(fbe73c7054ad). The goldens pass. A jazz render replays to itself (bob's: "replay: matches").
+
+**The changes, as the four machines drew them** (the harmony knob 0.57 to 0.71): ada's waltz in D major has the verse
+lines D6 | D6 A7, D6 | Aadd9 D6, Dmaj7 | Gmaj7 A7, the refrain's last line Dmaj7 E7 | Aadd9 D6, the turn Gmaj7 Em7 |
+A7, the bridge's end Dmaj7 | Em7 A7 (in a waltz only a whole bar's V takes its ii; swung, the half-bar Vs do too); in minor (bob, coral) im7, ivm7,
+VI6, iim7♭5 vm7. By construction no chord the trio plays rubs a semitone against a note sung over it that the song's
+own chord there doesn't (tested in four modes at three harmonies).
+
+**The notes** (each piano or bass note against the chord under its middle; a sung note is the singer's or a lineage
+voice's, sounding with it for 20 ms or more):
+
+| | piano on the chord (its ninth) | bass on the chord (a step into the next) | piano a minor ninth under a sung note | piano a semitone over one | comping's mean pitch, under C4 |
+|---|---|---|---|---|---|
+| ada, a waltz, D major | 84.5% (14.4%) | 91.5% (8.2%) | 1.3% of notes | 0 | B3, 55% |
+| bob, swung, D minor | 92.4% (5.0%) | 86.2% (11.6%) | 5.2% | 5.4% | B3, 49% |
+| coral, a waltz, E♭ minor | 91.8% (6.9%) | 90.1% (8.3%) | 3.8% | 4.5% | A3, 69% |
+| dmitri, a waltz, E♭ major | 90.6% (8.3%) | 91.7% (8.3%) | 2.0% | 0.3% | C♯4, 31% |
+
+So 98% to 99% of the piano's notes are its chord's tones or its ninth, and the bass's other notes are its steps into
+the next chord. Where a note rubs, it is almost always a tone of the song's own triad held under a passing sung note:
+counted the same way for every chord and bass note of the band, the trio rubs on 1.4% (ada), 10.9% (bob), 7.8%
+(coral) and 2.8% (dmitri) of them, the tones of its own (sevenths, sixths, ninths, steps) on 0.2% to 1.5%; the
+ballad's band, the song's own, on 3.8%, 10.4%, 12.4% and 3.6%. In a minor key the tune's 2 and 6 pass over the minor
+triad's third and fifth in either band.
+
+**Words misheard** (Whisper base.en, `tools/intelligibility.py`, a verse with the band and a refrain, 70 words each,
+four machines, 280 words): the ballad 10.7% on the mix (30 words), the trio as each machine chose it 10.4% (29), the
+trio swung 12.1% (34); the dry voice 8.9%, 7.5% and 8.2%. The trio costs the words nothing as the machines choose it;
+swung, about two words in a hundred.
+
+**Memory** (tools/render_memory.py, two threads, `MallocLargeCache=0`): H's own shape with its break, a waltz, 201 s,
+1.74 GB; swung, 206 s, 1.78 GB; four verses, every part, the slowest tempo, 372 s, 2.51 to 3.06 GB over four runs on a
+busy machine (the kit's sweeps and taps beside the voice: about the kit's own rate, 7.1 MB a second). In the VPS's
+2100 MB about 4 minutes in one go: H's own shape (3.4 minutes) fits; a machine's longer shape (ada's and coral's, 4.1
+and 4.5 minutes) is made in the browser, as other styles' long shapes are. `MEASURED` updated.
+
+### The renders, for listening
+
+In `renders/styles/` (ids in ids-jazz.txt; the main checkout's renders/styles has them too), each as its machine
+chooses:
+
+| render | what it is | length | id | listen for |
+|---|---|---|---|---|
+| jazz-ada-2026-09-27 | a waltz at 81 (a waltz's quarter 122), D major, three verses, the bridge twice, no break (its coin) | 248 s | e1f6e7d4a6bf | the piano's intro (0:01) its left hand under the tune; the first verse with the bass two to a bar and the brushes light, the refrain at 0:36 walking; the turns' Gmaj7 Em7 \| A7 (1:00, 1:53); the bridge's Em7 A7 into the last refrain |
+| jazz-bob-2026-03-14 | a ballad swung at 83, D minor; the second verse with the piano alone; the piano's chorus | 183 s | 87655a873ec8 | the second verse, the singer and the piano alone (0:59); the break, the verse tune an octave up with the left hand's chords (1:45 to 2:08); the cold stop |
+| jazz-coral-2026-11-02 | a waltz at 78, E♭ minor; the band joining line by line; the second verse bare, the third in stop-time; the chorus; the bridge twice; a broad ending | 272 s | 01a9bbbb7a9b | the entrances (0:13); the bare verse (1:03); stop-time (1:52); the break (2:41 to 3:06) |
+| jazz-dmitri-2026-06-21 | a waltz at 81, E♭ major; the band joining line by line; one backing voice on oohs; an outro | 232 s | 0b89d37c4c47 | the first refrain's walk (0:36); the turns; the outro, the piano's tune over the brushes (3:39) |
+| jazz-ada-2026-09-27-swing | ada's as a swung ballad (`--arrange feel=swing`), to hear the other feel in a major key | 254 s | 20919b894039 | the swing against the waltz above |
+
+## Decisions for the artist (the jazz trio)
+
+1. **On the ring or beside it.** Beside it, at chamber's place, as the four before it.
+2. **The dominant: A7 or Aadd9.** The rule is symmetric: no trio tone a semitone from a sung note, either way. That
+   rules out A7's G under the tune's F♯ (A13, a major seventh under the singer, the most idiomatic sound in the style),
+   so H's V is mostly Aadd9, and A7 only where nothing is sung over it (a line's end, a turn). A directional rule
+   (only a minor ninth under the tune rubs) would let A7 sound under the tune; the lineage choir would then sing the
+   G a major seventh under the F♯ in the bridge, unless the choir's lines keep the symmetric rule.
+3. **E7 (V of V) in the refrain's last line**, where the knob draws it: the one chord outside the tune's pentatonic
+   world.
+4. **The break** is added 0.8 of the time where the form has none (the piano's chorus on the verse tune). A form a
+   person sets is kept.
+5. **The feel**: a waltz 0.55, a ballad swung 0.45 (three of the four machines drew the waltz). Swung costs about two
+   words in a hundred.
+6. **The tempo**: the waltz at 0.85 of the song's (122 a quarter), the ballad at 0.83 (80). Slower is more of a
+   ballad, and longer: a machine's long shape already passes the studio's 4 minutes.
+7. **Passing chords stay inside a line** (the changes are by line, so every verse and the chord lane agree).
+8. **The patterns' menus**: the trio's patterns (rootless comping, the chorus, walking, two to a bar, the swept
+   brushes) are offered to the piano, the bass and the kit in every style's arrangement view, as every style's are.

@@ -653,7 +653,7 @@ def form_phrases(genome, params) -> list:
     lines = [(i, own_line(genome, params.form[i], plan, j), genome.phrases[pid])
              for i, plan in enumerate(phrase_plan(genome, params)) for j, (pid, _) in enumerate(plan)]
     if not places_held(params):
-        return _looped(genome, params, lines, [phrase for _, _, phrase in lines])
+        return _changed(genome, params, lines, _looped(genome, params, lines, [phrase for _, _, phrase in lines]))
     tune, chords = params.composition.get("tune") or {}, params.composition.get("chords") or {}
     out = []
     for i, j, phrase in lines:
@@ -666,7 +666,15 @@ def form_phrases(genome, params) -> list:
             phrase = replace(phrase, place=at_tune,
                              chords=tuple(tuple(bar) for bar in chords[at_chords]) if at_chords else phrase.chords)
         out.append(phrase)
-    return _looped(genome, params, lines, out)
+    return _changed(genome, params, lines, _looped(genome, params, lines, out))
+
+
+def _changed(genome, params, lines, phrases) -> list:
+    """The phrases as a style that plays its own changes has them (songbird.style.changed: the jazz trio's), but a
+    line a person (or a loop) gave its chords; the same list for every other style."""
+    from .style import changed
+
+    return changed(genome, params, lines, phrases)
 
 
 def _looped(genome, params, lines, phrases) -> list:
