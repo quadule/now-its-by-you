@@ -446,9 +446,10 @@ def main() -> None:
                             msg += f" ({name} {np.mean([loss_of(batch(ids, c, jitter=0))[1].item() for _ in range(4)]):.4f})"
             print(f"{msg}; {time.time() - t0:.0f} s", flush=True)
 
-    # global variance: how much real envelopes vary within a segment, against how much predicted ones do
+    # global variance: how much real envelopes vary within a segment, against how much predicted ones do, each point
+    # over the segments whose band reaches it (a corpus of band-limited recordings alone has no full-band segment)
     model.eval()
-    real_var, pred_var = [], []
+    real_sum, pred_sum, count = np.zeros(n_sp + n_ap), np.zeros(n_sp + n_ap), np.zeros(n_sp + n_ap)
     with torch.no_grad():
         for i in train[:: max(1, len(train) // 40)]:
             sl = slice(offsets[i], offsets[i] + lengths[i])
@@ -456,12 +457,14 @@ def main() -> None:
             pred = model(tt(phone5, torch.long), tt(d["role"], torch.long), tt(cont_all),
                          model.voice(tt(d["singer"], torch.long), tt(room_of, torch.long)))
             pred = pred[0].cpu().numpy()
-            m = full[sl] & (d["role"][sl] >= 2)
-            if m.sum() < 50:  # a band-limited recording's segment: its upper points aren't real
+            m = mask[sl] & (d["role"][sl] >= 2)
+            if m.sum() < 50:
                 continue
-            real_var.append(y_all[sl][m].var(0))
-            pred_var.append(pred[m].var(0))
-    gv = np.mean(real_var, axis=0) / np.maximum(np.mean(pred_var, axis=0), 1e-6)
+            inside = np.concatenate([np.arange(n_sp) < sp_top[sl][m].min(), np.arange(n_ap) < ap_top[sl][m].min()])
+            real_sum += y_all[sl][m].var(0) * inside
+            pred_sum += pred[m].var(0) * inside
+            count += inside
+    gv = np.where(count > 0, real_sum / np.maximum(pred_sum, 1e-6), 1.0)
     print(f"global variance, real over predicted: envelope median {np.median(gv[:sp.shape[1]]):.2f}, "
           f"aperiodicity {np.median(gv[sp.shape[1]:]):.2f}", flush=True)
 
