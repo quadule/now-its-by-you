@@ -143,8 +143,8 @@ def test_a_persons_chords_and_every_other_style_are_left_as_they_are():
     phrases = form_phrases(song, p)
     assert all(ph.chords == (("IV",), ("V",)) for ph in phrases if ph.id == "v1")
     assert any(ph.chords != g.phrases[ph.id].chords for ph in phrases if ph.id != "v1")
-    for name in S.STYLES:  # nothing but the trio plays its own changes
-        if name != "jazz":
+    for name in S.STYLES:  # nothing but the trio plays its own changes (the hymn sets its own harmony: songbird.hymn)
+        if name not in ("jazz", "hymn"):
             q = replace(p, composition={}, style=S.Style(name=name, harmony=1.0))
             assert [ph.chords for ph in form_phrases(g, q)] == [g.phrases[ph.id].chords for ph in form_phrases(g, q)] \
                 or S.STYLES[name].loops
