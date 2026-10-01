@@ -383,7 +383,8 @@ class Jobs:
     Open to the public (`fair`), previews go in the order asked, each visitor has one render queued or
     running at most, and the page is told about how long it will wait."""
 
-    def __init__(self, waiting: int | None = None, fair: bool = False, per_address: int | None = None):
+    def __init__(self, waiting: int | None = None, fair: bool = False, per_address: int | None = None,
+                 thread: bool = True):
         self.lock = threading.Condition()
         self.per_address = per_address  # renders waiting at once from one address (a public studio), or no limit
         self.pending: list[Job] = []
@@ -393,7 +394,8 @@ class Jobs:
         self.fair = fair
         self.took = {True: 90.0, False: 15.0, "measure": 30.0}  # seconds a whole song, a section and a sung take take:
         # guesses, then measured (each its own, so measuring takes never skews the renders' estimate)
-        threading.Thread(target=self._run, daemon=True, name="studio-renderer").start()
+        if thread:  # (a studio on the visitor's device has none: it makes a job between requests, _work)
+            threading.Thread(target=self._run, daemon=True, name="studio-renderer").start()
 
     def get(self, job_id: str) -> Job | None:
         return self.jobs.get(job_id)
@@ -523,23 +525,28 @@ class Jobs:
                     self.lock.wait()
                 job = self._next()
                 job.state = "running"
-            began = time.monotonic()
-            try:
-                result = job.work(job) or {}
-                done = 0
-                while True:  # what was asked to follow it (a recording's copy), even if asked for just now
-                    with self.lock:
-                        todo = job.then[done:]
-                        if not todo:
-                            job.result, job.progress, job.stage, job.state = result, 1.0, "", "done"
-                            self.took[self._sort(job)] = 0.7 * self.took[self._sort(job)] + 0.3 * (time.monotonic() - began)
-                            break
-                    for then in todo:
-                        result.update(then(job) or {})
-                    done += len(todo)
-            except Exception as e:  # said on the page; the studio carries on
-                traceback.print_exc()
-                job.error, job.state = f"{type(e).__name__}: {e}", "failed"
+            self._work(job)
+
+    def _work(self, job: Job) -> None:
+        """One job made, and what follows it; its result or its failure kept on it. (_run's, one at a time; a
+        studio on the visitor's device, which can't start threads, calls it between requests.)"""
+        began = time.monotonic()
+        try:
+            result = job.work(job) or {}
+            done = 0
+            while True:  # what was asked to follow it (a recording's copy), even if asked for just now
+                with self.lock:
+                    todo = job.then[done:]
+                    if not todo:
+                        job.result, job.progress, job.stage, job.state = result, 1.0, "", "done"
+                        self.took[self._sort(job)] = 0.7 * self.took[self._sort(job)] + 0.3 * (time.monotonic() - began)
+                        break
+                for then in todo:
+                    result.update(then(job) or {})
+                done += len(todo)
+        except Exception as e:  # said on the page; the studio carries on
+            traceback.print_exc()
+            job.error, job.state = f"{type(e).__name__}: {e}", "failed"
 
 
 # ---------------------------------------------------------------- the studio
@@ -582,7 +589,7 @@ class Studio:
         self.day, self.t = today(self.clock)
         # a checkout records into renders/; a packet's program, into the folder it was run from
         self.out = Path(out) if out else (Path.cwd() if self.where == "packet" else Path("renders"))
-        self.jobs = Jobs(public.queue, fair=True, per_address=public.queue_ip) if public else Jobs()
+        self.jobs = Jobs(public.queue, fair=True, per_address=public.queue_ip) if public else Jobs(thread=self.threads)
         self.cache_limit = public.cache_mb * 2**20 if public else CACHE_LIMIT
         # a public studio's counts of what each visitor has had made, and its recordings waiting to be downloaded
         self.gate = public_mod.Gate(public) if public else None
@@ -606,6 +613,7 @@ class Studio:
     # ------------------------------------------------------------ the day
 
     clock: Callable[[], date] = staticmethod(date.today)  # this computer's date (a test's fake clock)
+    threads = True  # its render queue runs in a thread of its own (not on the visitor's device: Pyodide has none)
 
     def roll(self) -> bool:
         """A public studio's day moved on at this computer's midnight, as it would be if it were started then: the
@@ -644,6 +652,17 @@ class Studio:
         if who.startswith("fictional:"):
             return self.context.version(day, voice=harvest.fictional(who.split(":", 1)[1]))
         return self.context.version(edits, phrasings=self.phrasing_choices())
+
+    def start_view(self) -> dict:
+        """What the page asks once (GET /api/start): the song, the machine, the bounds of every choice, what's
+        available; and for an open studio its limits, the largest file it takes, and the version it is on."""
+        start = explain.start(self.context, self)
+        if self.public is not None:
+            start["public"] = self.public.view()
+        start["open"] = {"upload_mb": self.upload_limit // 2**20}
+        if self.version_id is not None:
+            start["version"] = self.version_view()
+        return start
 
     def song(self, edits: dict) -> dict:
         v = self.version(edits)
@@ -1321,6 +1340,11 @@ class Studio:
     browser = None  # the bundle served (BrowserBundle), when --browser-render gave one
     noindex = False  # a public studio asks search engines not to list it (--noindex: its beta)
 
+    @property
+    def makes_specs(self) -> bool:
+        """Whether the page may ask for render specs (/api/render/spec): where a browser makes the song."""
+        return self.browser is not None
+
     def enable_browser_render(self, folder: str | Path) -> None:
         if self.public is None:
             raise ValueError("rendering in the browser is for a public studio (--public); this computer's own "
@@ -1516,6 +1540,84 @@ class BrowserBundle:
             return None
         path = self.folder.joinpath(*parts)
         return path if path.is_file() and path.resolve().is_relative_to(self.folder) else None
+
+
+# ---------------------------------------------------------------- the page's questions, answered
+#
+# What each of the page's JSON requests is answered with, apart from how it arrived: by the Handler (over HTTP, after
+# its guards), and by a studio on the visitor's device (web/studio-wasm/py/studio_device.py): the same JSON either way.
+
+QUESTIONS = ("/api/start", "/api/timeline", "/api/phrasings")  # GET: what the page asks, changing nothing
+
+
+class NotFound(LookupError):
+    """No such question, or no such job: 404, saying so."""
+
+
+def asked(studio: Studio, path: str) -> dict | list:
+    """A GET question's answer (QUESTIONS, or /api/job/<id>)."""
+    if path == "/api/start":
+        return studio.start_view()
+    if path == "/api/timeline":
+        return studio.timeline()
+    if path == "/api/phrasings":
+        return studio.phrasings()
+    if path.startswith("/api/job/"):
+        job = studio.jobs.get(path.rsplit("/", 1)[-1])
+        if job is None:
+            raise NotFound("no such job")
+        return studio.jobs.view(job)
+    raise NotFound("not found")
+
+
+def _who(body: dict) -> str:
+    who = str(body.get("who", "you"))
+    if who not in ("you", "program") and not re.fullmatch(r"fictional:[a-z0-9 _-]{1,24}", who):
+        raise ValueError("no such machine")
+    return who
+
+
+def answer(studio: Studio, path: str, body: dict, by: tuple[str, str] | None = None) -> dict | list:
+    """A POST's answer: `body` the page's JSON (a map, its edits a map), `by` a public studio's visitor and address.
+    Raises NotFound (404), ValueError, KeyError or TypeError (400), Busy (503), public.Limited (429) and
+    public.TooLong (422), which the caller says as it says them."""
+    edits = body.get("edits") or {}
+    if path == "/api/song":
+        return studio.song(edits)
+    if path == "/api/options":
+        return studio.options(edits, str(body.get("block", "")), int(body.get("index", 0)))
+    if path == "/api/keep-words":
+        return studio.keep_words(edits)
+    if path == "/api/compare":
+        return studio.compare(edits, list(body.get("names", [])))
+    if path == "/api/listen":
+        section = body.get("section")
+        return studio.listen(edits, _who(body), None if section is None else int(section), by=by)
+    if path == "/api/cancel":
+        return {"cancelled": studio.jobs.cancel(str(body.get("job", "")), owner=by[0] if by else None)}
+    if path == "/api/export":
+        return studio.export(edits, str(body.get("what", "")), by=by)
+    if path == "/api/record":
+        return studio.record(edits, by=by)
+    if path == "/api/piano":  # the piano page's score of this version (made at once)
+        return studio.piano(edits)
+    if path == "/api/players":  # every part in beats, for the sketch's players (MIDI out)
+        return studio.players(edits)
+    if path == "/api/notes-in":  # a take or a MIDI file, as a preview of edits (notes in)
+        return studio.notes_in(edits, body)
+    # the arrangement as a grid, for a timeline (docs/STUDIO.md, "Arrangement control"; songbird.takeover)
+    if path == "/api/arrangement":
+        return studio.arrangement(edits)
+    if path == "/api/sound":  # sound design: each player's sound and channel, each boundary's transition
+        return studio.sound(edits)
+    if path == "/api/render/spec" and studio.makes_specs:  # to make it in the visitor's browser
+        section = body.get("section")
+        return studio.render_spec(edits, _who(body), None if section is None else int(section))
+    if path == "/api/sing":
+        return studio.sing()
+    if path.startswith("/api/sing/") and studio.singing is not None:
+        return studio.singing.post(path, body)
+    raise NotFound("not found")
 
 
 # ---------------------------------------------------------------- the server
@@ -1807,24 +1909,14 @@ class Handler(BaseHTTPRequestHandler):
             if path in STATIC:
                 name, kind = STATIC[path]
                 return self.send((PAGE / name).read_bytes(), kind)
-            studio = self._asked() if path in ("/api/start", "/api/timeline", "/api/phrasings") else self.studio
-            if studio is None:  # the version the page was opened on (someone brought it) isn't kept any more
-                return self.version_gone()
-            if path == "/api/start":
-                start = explain.start(studio.context, studio)
-                if studio.public is not None:
-                    start["public"] = studio.public.view()
-                start["open"] = {"upload_mb": studio.upload_limit // 2**20}
-                if studio.version_id is not None:
-                    start["version"] = studio.version_view()
-                return self.send_json(start)
-            if path == "/api/timeline":
-                return self.send_json(studio.timeline())
-            if path == "/api/phrasings":
-                return self.send_json(studio.phrasings())
-            if path.startswith("/api/job/"):
-                job = self.studio.jobs.get(path.rsplit("/", 1)[-1])
-                return self.send_json(self.studio.jobs.view(job)) if job else self.fail(404, "no such job")
+            if path in QUESTIONS or path.startswith("/api/job/"):  # the page's questions (asked())
+                studio = self._asked() if path in QUESTIONS else self.studio
+                if studio is None:  # the version the page was opened on (someone brought it) isn't kept any more
+                    return self.version_gone()
+                try:
+                    return self.send_json(asked(studio, path))
+                except NotFound as e:
+                    return self.fail(404, str(e))
             match = re.fullmatch(r"/export/([0-9a-f]{16,64})\.(mid|zip)", path)
             if match:  # a file for a musician's own tools (Studio.export), saved under its name
                 name = parse_qs(urlsplit(self.path).query).get("name", [""])[0]
@@ -1933,58 +2025,16 @@ class Handler(BaseHTTPRequestHandler):
             body = json.loads(raw or b"{}")
             if not isinstance(body, dict) or not isinstance(body.get("edits") or {}, dict):
                 return self.fail(400, "send a map, with the edits a map of choices")
-            edits = body.get("edits") or {}
             # the studio on the version the page was opened on, if someone brought it (singing is the song's own)
             studio = self.studio if version is None or path.startswith("/api/sing") else self.studio.opened(version)
             if studio is None:
                 return self.version_gone()
-            by = self._by() if studio.public is not None else None
-            if path == "/api/song":
-                return self.send_json(studio.song(edits))
-            if path == "/api/options":
-                return self.send_json(studio.options(edits, str(body.get("block", "")), int(body.get("index", 0))))
-            if path == "/api/keep-words":
-                return self.send_json(studio.keep_words(edits))
-            if path == "/api/compare":
-                return self.send_json(studio.compare(edits, list(body.get("names", []))))
-            if path == "/api/listen":
-                section = body.get("section")
-                who = str(body.get("who", "you"))
-                if who not in ("you", "program") and not re.fullmatch(r"fictional:[a-z0-9 _-]{1,24}", who):
-                    return self.fail(400, "no such machine")
-                return self.send_json(studio.listen(edits, who, None if section is None else int(section), by=by))
-            if path == "/api/cancel":
-                return self.send_json({"cancelled": studio.jobs.cancel(str(body.get("job", "")),
-                                                                       owner=by[0] if by else None)})
-            if path == "/api/export":
-                return self.send_json(studio.export(edits, str(body.get("what", "")), by=by))
-            if path == "/api/record":
-                return self.send_json(studio.record(edits, by=by))
-            if path == "/api/piano":  # the piano page's score of this version (made at once)
-                return self.send_json(studio.piano(edits))
-            if path == "/api/players":  # every part in beats, for the sketch's players (MIDI out)
-                return self.send_json(studio.players(edits))
-            if path == "/api/notes-in":  # a take or a MIDI file, as a preview of edits (notes in)
-                return self.send_json(studio.notes_in(edits, body))
-            # the arrangement as a grid, for a timeline (docs/STUDIO.md, "Arrangement control"; songbird.takeover)
-            if path == "/api/arrangement":
-                return self.send_json(studio.arrangement(edits))
             if path == "/api/open/ready":  # someone's version: would a file this size be taken now?
                 refusal = self._may_open(int(body.get("size") or 0), count=False)
                 return refusal() if refusal is not None else self.send_json({"ready": True})
-            if path == "/api/sound":  # sound design: each player's sound and channel, each boundary's transition
-                return self.send_json(studio.sound(edits))
-            if path == "/api/render/spec" and studio.browser is not None:  # to make it in the visitor's browser
-                section = body.get("section")
-                who = str(body.get("who", "you"))
-                if who not in ("you", "program") and not re.fullmatch(r"fictional:[a-z0-9 _-]{1,24}", who):
-                    return self.fail(400, "no such machine")
-                return self.send_json(studio.render_spec(edits, who, None if section is None else int(section)))
-            if path == "/api/sing":
-                return self.send_json(studio.sing())
-            if path.startswith("/api/sing/") and studio.singing is not None:
-                return self.send_json(studio.singing.post(path, body))
-            return self.fail(404, "not found")
+            return self.send_json(answer(studio, path, body, self._by() if studio.public is not None else None))
+        except NotFound as e:
+            return self.fail(404, str(e))
         except Busy as e:
             return self.too_many(503, e) if self.studio.public is not None else self.fail(503, str(e))
         except public_mod.Limited as e:
