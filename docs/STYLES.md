@@ -1572,3 +1572,53 @@ every other render stays byte-identical (the goldens, every style's scores for f
 ids, before and after).
 
 **Decisions for the artist** (at the end, "As built").
+
+## What the review changed (September 30, 2026)
+
+A read-only Fable review of the design above, with the first build in the tree to check it against (it re-derived the
+whole table of changes, ran 206 tests including the goldens, and measured). Its points, and what was done:
+
+1. **A bar the changes can't write crashed.** `_bars` wrote a bar on 1, 2 or 4 shares only, so a ii-V on a quarter-bar
+   V, or any bar of three chords, had no way to be written (a person's `I IV V I`, `vi ii V`). Now a bar keeps as many
+   shares as its own has where those hold it, and where a passing chord can't be written at all the line takes its
+   colours alone (tested).
+2. **A line with a tune of its own at its place** was fitted against the line's own tune. It now keeps the song's
+   chords there (the changes are fitted to the line as the song has it).
+3. **The dominant's seventh under the tune's sixth.** The semitone test is symmetric, which is right for a maj7 under
+   a sung tonic (C♯ a semitone under D: a minor ninth when voiced under it) but also forbids A7's G under a sung F♯, a
+   major seventh under it: A13, the style's most idiomatic sound. So H's V is mostly an Aadd9. **Kept as it is** (the
+   brief: nothing grinds a semitone against the melody), and **left for the artist** (below): a directional rule
+   (`(sung - tone) % 12 == 1` rubs, `== 11` doesn't) would let the V be A7 under the F♯, kept symmetric where the
+   lineage's choir sings (the choir takes any chord tone under the tune, and would sing the G a major seventh under).
+4. **The only chord outside the tune's world** is r4's E7 (V of V, its G♯), where the harmony knob draws it. Good
+   jazz, and the singer never sings G♯; flagged for the artist.
+5. **Passing chords never cross a line** (the changes are by line, so the chord lane and every verse agree): accepted.
+6. **A waltz splits a whole bar's V only**: a quarter-bar ii-V re-barred is a ii on one and a V on two and three;
+   playable, but a waltz player splits a bar's V into a bar of ii and a bar of V. Done (`rebarred`).
+7. **The comping sat low** (C3 to E4, under middle C and over the bass's top): now from a seventh under the tonic to a
+   third over the singer's low end (for H in D: E3 to F♯4), its mean pitch measured at B3 to C4.
+8. **The chorus's left hand** took an added ninth for a seventh (Vadd9's shell was its third and ninth): now the third
+   and the seventh or sixth, else the third and fifth.
+9. **The walking line** used chord tones only: it now takes a scale step on a weak beat, toward where it is going; two
+   to a bar puts the fifth on the other strong beat, as designed.
+10. **The brushes** tapped the backbeat and its skip, a folk brush figure: now every beat (the backbeat strongest) and
+    the skip after two and four (a waltz's after two), the ride's figure on the snare.
+11. **Nothing else moves**: the render paths are gated by the style's name and the goldens pass. What a person sees
+    elsewhere: the new patterns are offered for the piano, the bass and the kit in every style's menus (by
+    `takeover.style_patterns`' design, each with its words). A chord written twice to fill a bar's shares showed as two
+    in the piano score's head ("D6 then D6") and was struck twice in the MIDI file: now one held chord in both, for the
+    trio only (`style.held_chords`; a person's repeated chord is still struck again).
+12. **The style card** said nothing of the chords: it now says "the song's chords with sevenths and sixths, and passing
+    chords into the cadences" (the last part where the version has any).
+13. **The form.** Adding the break in `choose_style` lets the options read a form with the break where a hand-set form
+    is put back after; the options read only the verses and refrains, which a break doesn't change, so it was left
+    there (it also covers a style chosen with no machine, which never reaches `choose_form`).
+14. **The waltz is not half again as long**: the tempo counts the song's beats, each foot a bar of three, so at the same
+    tempo a waltz is the song's length (ada's waltz 261.7 s at 76.6, her swing 268.6 s at 74.6). Corrected above in the
+    code's comment and below.
+15. **Memory is the real risk**: the kit's rate (7.1 MB a second) and the estimate allow about 4 minutes in 2100 MB, and
+    machines' long shapes are longer. The tempo centres went up (the waltz 0.85 of the song's, the ballad 0.83); the
+    break stays a style's choice, never the server's (a version's music doesn't depend on what a server can hold).
+16. **Measure** as the review defined it (below): the chord under a note's middle, the minor ninth apart from the
+    major seventh, seconds as well as notes, the comping's register; Whisper on the mix with the ballad and a swung
+    version beside it.
