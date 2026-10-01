@@ -22,6 +22,10 @@ SR = 44100
 VOICE_GAIN = 1.6  # about +4 dB: the words sit clear of the band
 CHOIR_GAIN = 0.55  # each lineage voice about 5 dB under the lead
 CHOIR_PANS = (-0.45, 0.45, -0.25, 0.25, -0.65, 0.65)
+# Where a round's voices sit while they sing it (songbird.canon), by the order they come in: the singer in the
+# middle, the next two wide to either side, any more between; apart, each line is easier to follow
+ROUND_PANS = (-0.85, 0.85, -0.5, 0.5, -0.7, 0.7)
+ROUND_GLIDE = 0.1  # s a voice takes to move to its place in the round and back, just outside it
 CHOP_GAIN = 1.0  # a style's vocal chop (house's), sung by the singer into the band, at the lead's level
 PARTS = INSTRUMENTS  # the band's stems, by role (songbird.synth.instruments builds each)
 
@@ -56,6 +60,41 @@ def render_stems(score: Score, sr: int = SR, seed: int = 0, voice: VoiceParams |
     return made(jobs, progress, first=singers)
 
 
+def round_places(score: Score, choir: list[str]) -> dict[str, tuple[float, list[tuple[float, float]]]]:
+    """Each voice that sings a round: (where it sits in the round, the stretches it sings it), the voices placed by
+    the order they first come in (ROUND_PANS). {} for a song with no round."""
+    sung: dict[str, list[tuple[float, float]]] = {}
+    for n in score.notes:
+        if n.art == "round" and n.part in choir:
+            sung.setdefault(n.part, []).append((n.start, n.start + n.dur))
+    out = {}
+    for k, name in enumerate(sorted(sung, key=lambda p: (min(a for a, _ in sung[p]), p))):
+        spans: list[list[float]] = []
+        for a, b in sorted(sung[name]):
+            if spans and a - spans[-1][1] < 2.0:  # one round: its notes a breath apart at most
+                spans[-1][1] = max(spans[-1][1], b)
+            else:
+                spans.append([a, b])
+        out[name] = (ROUND_PANS[k % len(ROUND_PANS)], [(a, b) for a, b in spans])
+    return out
+
+
+def moved(y: np.ndarray, mono: np.ndarray, rest: float, place: float, spans, sr: int) -> np.ndarray:
+    """A panned voice (y, at `rest`) moved to `place` over the spans it sings a round, gliding there and back just
+    outside them: only those stretches are made again."""
+    glide = int(ROUND_GLIDE * sr)
+    for a, b in spans:
+        i0, i1 = max(0, int(a * sr) - glide), min(len(mono), int(np.ceil(b * sr)) + glide)
+        if i1 <= i0:
+            continue
+        t = np.arange(i0, i1)
+        inside = np.clip(np.minimum(t - (int(a * sr) - glide), (int(np.ceil(b * sr)) + glide) - t) / max(glide, 1), 0, 1)
+        theta = (rest + (place - rest) * inside + 1.0) * np.pi / 4.0
+        y[i0:i1, 0] = mono[i0:i1] * np.cos(theta)
+        y[i0:i1, 1] = mono[i0:i1] * np.sin(theta)
+    return y
+
+
 def stem_jobs(score: Score, sr: int = SR, seed: int = 0, voice: VoiceParams | None = None,
               ancestors: list[VoiceParams] | None = None) -> tuple[list, tuple[str, ...]]:
     """What render_stems makes, not yet made: (name, make) for each part in its order, and the singers'
@@ -84,6 +123,7 @@ def stem_jobs(score: Score, sr: int = SR, seed: int = 0, voice: VoiceParams | No
     singers = [*(ancestors or [])[: len(choir)], *lineage_voices(len(choir), seed, learned=learned)]
     if (score.band or {}).get("parts") == "voices":  # voices alone: each part to the singer whose range it is
         singers = matched(score, choir, singers[: len(choir)])
+    rounds = round_places(score, choir)
     for name, singer in zip(choir, singers):
         i = int(name[5:]) - 1
 
@@ -92,8 +132,11 @@ def stem_jobs(score: Score, sr: int = SR, seed: int = 0, voice: VoiceParams | No
             if singer.shift and any(n.art == "round" for n in mine):  # a round's voice sings the tune where it is
                 # written, as the singer does (songbird.canon): a low singer an octave down goes under the throat's floor
                 mine = [replace(n, pitch=n.pitch - singer.shift) if n.art == "round" else n for n in mine]
-            y = sing(mine, sr, singer, seed + 101 * (i + 1), score.lexicon)[:length]
-            y = pan(_filled(y, length), CHOIR_PANS[i % len(CHOIR_PANS)])
+            y = _filled(sing(mine, sr, singer, seed + 101 * (i + 1), score.lexicon)[:length], length)
+            mono, y = y, pan(y, CHOIR_PANS[i % len(CHOIR_PANS)])
+            if name in rounds:  # wide apart while it sings a round
+                y = moved(y, mono, CHOIR_PANS[i % len(CHOIR_PANS)], *rounds[name], sr)
+            del mono
             y *= VOICE_GAIN
             y *= CHOIR_GAIN
             return y

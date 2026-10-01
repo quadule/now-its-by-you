@@ -178,3 +178,25 @@ def test_marked_replayed_and_handed_down():
     assert T.arranged(child).get("refrain:3", {}).get("round") is True
     released = E.resolve(G, child, None, None, {"arrange.refrain:3.round": None})
     assert "refrain:3" not in T.arranged(released.params)
+
+
+def test_a_rounds_voices_sit_wide_apart_while_they_sing_it_and_go_back_after():
+    """By the order they come in (synth.ROUND_PANS: the first two to either side of the singer), only over the round
+    (with a glide just outside it): the rest of the song where the choir always sits."""
+    import numpy as np
+
+    from songbird import synth
+    from songbird.score import Note, Score
+
+    notes = [Note("choir1", 10.0, 1.0, 60, 0.6, art="round"), Note("choir1", 11.5, 1.0, 62, 0.6, art="round"),
+             Note("choir2", 6.0, 1.0, 60, 0.6, art="round"), Note("choir2", 30.0, 1.0, 60, 0.6)]
+    score = Score(notes=tuple(notes), duration=40.0, sections=())
+    places = synth.round_places(score, ["choir1", "choir2"])
+    assert places["choir2"] == (synth.ROUND_PANS[0], [(6.0, 7.0)])  # in first
+    assert places["choir1"] == (synth.ROUND_PANS[1], [(10.0, 12.5)])  # its two notes one round
+    sr = 1000
+    mono = np.ones(40 * sr)
+    y = synth.moved(synth.pan(mono, 0.45), mono, 0.45, *places["choir1"], sr)
+    side = lambda t: y[int(t * sr), 1] - y[int(t * sr), 0]  # noqa: E731 (right minus left)
+    assert np.allclose(y[int(30 * sr)], synth.pan(np.ones(1), 0.45)[0])  # elsewhere: as ever
+    assert side(11.0) > side(30.0) and np.allclose(y[int(11 * sr)], synth.pan(np.ones(1), 0.85)[0])
