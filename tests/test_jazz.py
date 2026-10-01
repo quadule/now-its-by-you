@@ -38,12 +38,13 @@ def rubs(symbol: str, mode: str, pcs) -> set:
 
 
 def test_beside_the_ring_at_chamber_chosen_by_a_person():
-    """Beside the ring at chamber's place, offered in the studio's picker, named for what plays; never drawn by a
-    machine on the ring, and a child of a jazz version keeps it or steps to chamber's neighbours."""
+    """Beside the ring at chamber's place, named for what plays; hidden from the studio's picker for now (the artist:
+    "not sure the vocals fit there") but shown where a version plays it; never drawn by a machine on the ring, and a
+    child of a jazz version keeps it or steps to chamber's neighbours."""
     from songbird import explain
 
     assert "jazz" not in S.RING and S.OFF_RING["jazz"] == "chamber" and S.on_ring("jazz") == "chamber"
-    assert "jazz" in S.offered() and "jazz" not in S.HIDDEN
+    assert "jazz" not in S.offered() and "jazz" in S.HIDDEN and "jazz" in S.offered("jazz")
     assert explain.STYLE_NAMES["jazz"] == "jazz trio"
     assert S.JAZZ.about.split(":", 1)[1].strip() == "piano, upright bass and brushes"
     assert set(S.JAZZ.lineup) == {"piano", "bass", "kit"} and S.JAZZ.leads == ("piano",)

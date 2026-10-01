@@ -1521,6 +1521,10 @@ is a fresh take of the same notes from its first word (every other stem identica
 
 # A jazz trio (September 30, 2026)
 
+**Hidden for now (2026-09-30, night).** The artist listened: "everything sounds great except jazz - not sure the
+vocals fit there." The folk singer's straight delivery over a trio is the mismatch, not the trio. It's no longer
+offered in the studio's picker (`style.HIDDEN`); a record, a draft or `--style jazz` still plays it.
+
 The artist, after the jig and the a cappella convinced and house and dub didn't: a style convinces when a singer
 delivers the folk tune straight over instruments the program synthesizes well, and fails when it needs another kind of
 singer or heavy sound design. A **jazz trio** is that kind of style: a piano, an upright bass and brushes, all three

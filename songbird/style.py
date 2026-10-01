@@ -1784,6 +1784,9 @@ JAZZ = _def(
              "half": 0.0},
 )
 STYLES[JAZZ.name] = JAZZ
+# Hidden from the picker for now (the artist, 2026-09-30: "not sure the vocals fit there"): the folk singer over a
+# trio; a record, a draft or --style still plays it
+HIDDEN = HIDDEN | {JAZZ.name}
 OFF_RING[JAZZ.name] = "chamber"  # the piano, the waltz, the sevenths
 
 # Styles that play the song's chords as their own changes (trio_changes), and how often they add a break where the
