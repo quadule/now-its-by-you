@@ -577,3 +577,81 @@ envelopes are still flatter than the control's (formant contrast 1.65-1.71 dB ag
 
 The data for these runs went through Google Drive (the house dataset, 608 MB, and the folk one, 635 MB, merged on
 the Colab machine), so the next runs need no upload.
+
+### Round 3: against the average, and what's synthetic (2026-10-01, afternoon)
+
+The folk-trained envelopes were still flat: formant contrast 1.5 dB on real singers the model never heard, 2.2 on the
+house singers' own held-out takes, against 3.3-3.5 in real singing. Even a singer's own training audio came out
+flatter once the network had learned them (1.6 against the 2.1 of rows it had never trained), so it was averaging over
+the folk labels' noise as much as running out of size. Round 3 tried both cures (`train.py`):
+- **A critic** (`--adversarial 0.1`): a small spectrally normalised 2-D convolution over frames and grid points of the
+  envelope (to 5.6 kHz, which nearly every folk recording reaches) learns to tell real envelopes from the throat's,
+  and the throat learns to fool it (least squares, and the critic's features matched). Only training changes.
+- **A bigger throat** (`--channels 320`, 3.5M parameters against 0.93M), widened from the house model so it starts
+  singing exactly as it did.
+- The room's FiLM weights are now written beside the folded model, so the unseen-singer test fits a room as well as
+  a singer (`tools/throat/fit_unseen.py`, by gradient, scored by `unseen.py --fitted`): round 2's test, which sang
+  every unseen recording through the studio, was unfair to the models that keep rooms apart.
+
+All from model-house.npz, 14,000 steps, round 2's recipe (`--singer-dim 16 --spread --singer-lr 1e-2 --channel-dim 8
+--contrast 1.0`); H dry, two seeds, the studio's register blend:
+
+| | Unseen singers (singer + room fitted) | Contrast, unseen (real 3.32) | H, house rows: WER | H, 30% folk: WER |
+|---|---|---|---|---|
+| control, round 2's recipe | 8.65 dB | 1.95 | 9.1% | |
+| 64 folk singers, round 2's recipe | **7.00** | 1.47 | 9.1% | 7.3% |
+| + critic | 7.01 | 2.11 | 8.2% | 8.2% |
+| + critic at 0.3 | 7.10 | 2.16 | 10.3% | 7.3% |
+| bigger | 7.17 | 1.68 | 8.2% | 6.8% |
+| bigger + critic | 7.28 | 1.99 | **5.0%** | **5.7%** |
+| control, bigger + critic | 9.88 | | 5.5% | |
+
+With rooms fitted, keeping singers apart costs nothing on unseen singers (7.00, round 1's pooled recipe 7.14), and
+the folk singers take a fifth to a quarter off the error. The critic raises contrast and flutter toward real
+singing at no cost in fit (on the house singers' held-out takes 2.17 -> 2.82 dB contrast, flutter 1.07 -> 1.59 on
+unseen singers, real 2.96); bigger + critic halves the words misheard on H, mostly by the recipe (the control has
+it too). Fire and wire keep their R in every model (F3 drop 760-1,020 Hz). Two retrainings of one recipe differ by
+1.5-2 points of WER.
+
+The artist: 4 and 5 (bigger + critic) "are better but smaller differences than I expected at this point. Feels like
+we're overfitting to something synthetic." A ladder on real singers the model never heard, from their recording to
+the program's voice one step at a time (UTMOS):
+
+| | Kalynda | Chris Tierney | VocalSet f2 |
+|---|---|---|---|
+| 0 the recording | 2.18 | 2.22 | 1.51 |
+| 1 WORLD's own analysis and resynthesis | 1.75 | 1.72 | 1.38 |
+| 2 its envelope on our grid, through our vocoder | 1.75 | 1.84 | 1.36 |
+| 3 the model as that singer (singer and room fitted), their pitch and timing | 1.48 | 1.41 | 1.56 |
+| 5 the house blend, their pitch and timing | 2.04 | 2.13 | 1.80 |
+
+UTMOS scores the house voice as high as real singers or higher, and a real studio singer under our renders: it
+prefers the synthetic voice, and the blends and recipes chosen by it were pulled that way. By ear (the artist, on
+Kalynda): 2 "is not robotic" (some static in one word), 3 "is garbled but not quite robotic", 5 "is the most robotic
+definitely". The robotic part is the house corpus, not the vocoder.
+
+And the room: every model so far sings through the "studio" row, which the network learned from the house corpus's
+SoulX renders. Bigger + critic on H with the folk singers' rows alone through the studio: WER 10.5%, "still really
+robotic"; through VocalSet's real studio instead (the mean of its trained rooms' rows, folded into the FiLM biases
+in the studio's place): WER 5.5%, and "so much better". From here voices are judged as the folk singers through a
+real room, by WER and by ear; UTMOS is reported only as a number that favours the synthetic.
+
+### The rest of VocalSet (2026-10-01)
+
+VocalSet's 20 singers were in the corpus only through "Row, Row, Row Your Boat". The rest of it (CC BY 4.0), labelled by
+`folk.py`: its two other songs, "Caro mio ben" and "Dona nobis pacem" (Italian and church Latin, read by their
+spelling with pure vowels, Whisper large-v3 in their languages; 22 minutes, half of it unmasked, the aligner unsure of
+Italian's clusters), and its vowel exercises (`folk.py exercises`: scales, arpeggios and long tones on a, i and u,
+straight, vibrato, slow, belted and breathy, 3.1 hours; e and o left out, since English sings them as glides). One
+room per VocalSet singer (the recording name's part before "~"). Through a real room, the folk rows alone, H's WER:
+
+| round 2's recipe | WER |
+|---|---|
+| without VocalSet's rest (two seeds) | 8.2%, 8.0% |
+| + the songs | 8.0% |
+| + the songs, exercises 5% of every batch | 9.1% |
+| + the songs, exercises 15% (two seeds) | 11.0%, 11.0% |
+
+The songs cost nothing; the exercises cost intelligibility in proportion to their share (steady vowels with no
+consonant either side, a context the program never sings). None of it moved the unseen-singer error (7.02 against
+7.00; the four VocalSet singers held out 7.21 against 7.08): it adds hours, not people.
