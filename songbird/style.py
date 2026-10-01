@@ -687,7 +687,7 @@ HOUSE_LOOPS = {"vamp": ((6, 4), True), "lift": ((4, 1), True), "home": ((1, 4), 
 # The chop's rhythms: a two-bar figure, each bar (sixteenth of the bar, syllable, sixteenths long); drawn per rendition
 HOUSE_HOOK = {
     "syllables": 4, "vel": 0.85, "drop": 1.0, "soft": 0.6, "staccato": 0.85,
-    "answered": ("drop", "last"),  # where every other bar is the answer ("now it's by you"); hook_bars' hows
+    "answered": ("drop", "last", "turn"),  # where every other bar is the answer ("now it's by you"); hook_bars' hows
     "rhythms": {"beat": ([(0, 0, 2), (2, 1, 1), (3, 2, 1), (4, 3, 4)],
                          [(0, 0, 2), (2, 1, 1), (3, 2, 1), (4, 3, 2), (8, 3, 1), (10, 3, 2)]),
                 "off": ([(2, 0, 1), (3, 1, 1), (4, 2, 2), (6, 3, 3)],

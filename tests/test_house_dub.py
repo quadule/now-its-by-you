@@ -379,9 +379,14 @@ def test_house_chop_never_starts_mid_word():
             assert figure[0].word.startswith(figure[0].syllable)  # "No", "now": never "bo"
             assert figure[-1].word.endswith(figure[-1].syllable)  # never ending on "No" or "bo"
         sixteenth = 15.0 / p.tempo
+        answered = 0
         for a, b in spans_of(score, "turn"):  # each turn after a sung refrain: the hook from its first bar
             first = next(n for n in chop if n.start >= a - 1e-6)
             assert first.syllable == "No" and first.start < a + 2 * sixteenth + 1e-6
+            figures = [by_bar[t] for t in sorted(by_bar) if a - 1e-6 <= t < b - 1e-6]
+            assert all(f[0].syllable == "No" for f in figures[::2])  # the call, and in a full turn the answer
+            answered += sum(f[0].syllable == "now" for f in figures[1::2])
+        assert answered >= 2  # (the drop's breakdown sings its turn's call alone, once in two bars, soft)
         stutter = S.HOUSE_HOOK["rhythms"]["stutter"][0]
         again = [(step, length) for (_, j0, _), (step, j, length) in zip(stutter, stutter[1:]) if j == j0]
         assert again and all(step % 2 == 0 and length >= 2 for step, length in again)  # "knows, knows" on eighths
