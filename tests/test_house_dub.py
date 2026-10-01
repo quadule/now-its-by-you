@@ -248,7 +248,7 @@ def test_the_studio_shows_their_patterns_sound_and_options(home):
     v = studio.version({"style.name": "house", "style.drop": 2})
     view = explain.view(studio.context, v)
     card = next(c for c in view["cards"] if c["id"] == "style")
-    assert "house" in card["styles"] and "dub" not in card["styles"] and "version" in card["endings"]  # hidden: its own
+    assert "house" in card["styles"] and "dub" not in card["styles"] and "version" in card["endings"]  # dub hidden
     assert "the drop" in card["detail"]
     for c in view["cards"]:
         for text in [c["value"], c.get("detail") or ""] + [r["text"] for r in c["reasons"]]:
@@ -458,11 +458,12 @@ def test_the_new_options_leave_no_trace_while_off_and_travel_when_on():
     assert p.style.loop == "" and S.loop_of(g, p) is not None and realize(g, p).part("chop")
 
 
-def test_house_and_dub_are_hidden_from_the_picker_but_still_play():
-    """Not offered for now (the artist, 2026-09-30), unless a version already plays one; a record or --style still does."""
-    assert "house" not in S.offered() and "dub" not in S.offered()
-    assert {"acappella", "jig", *S.RING} <= set(S.offered())
-    assert "house" in S.offered("house") and "dub" not in S.offered("house")
+def test_dub_is_hidden_from_the_picker_but_still_plays():
+    """Dub isn't offered for now (the artist, 2026-09-30), unless a version already plays it; a record or --style
+    still does. House is offered again since its hook was fixed."""
+    assert "dub" not in S.offered() and "house" in S.offered()
+    assert {"acappella", "jig", "house", *S.RING} <= set(S.offered())
+    assert "dub" in S.offered("dub")
     assert "house" in S.STYLES and "dub" in S.STYLES
 
 

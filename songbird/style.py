@@ -771,9 +771,10 @@ STYLES[HOUSE.name] = HOUSE
 OFF_RING[HOUSE.name] = "synthfolk"  # the machines' end, the drum machine and the synths
 STYLES[DUB.name] = DUB
 OFF_RING[DUB.name] = "lofi"  # slow, worn, the bass and the room
-# Not offered in the studio's picker for now (the artist, 2026-09-30: "they haven't convinced me like the others
-# yet"): a record, a draft or --style still plays them, and a version already in one still shows it
-HIDDEN = frozenset({HOUSE.name, DUB.name})
+# Not offered in the studio's picker for now (the artist, 2026-09-30: house and dub "haven't convinced me like the
+# others yet"; house back once its hook was fixed: "I like it now!"): a record, a draft or --style still plays a
+# hidden one, and a version already in one still shows it
+HIDDEN = frozenset({DUB.name})
 
 
 def offered(current: str | None = None) -> tuple[str, ...]:
