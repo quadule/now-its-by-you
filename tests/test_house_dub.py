@@ -382,6 +382,9 @@ def test_house_chop_never_starts_mid_word():
         for a, b in spans_of(score, "turn"):  # each turn after a sung refrain: the hook from its first bar
             first = next(n for n in chop if n.start >= a - 1e-6)
             assert first.syllable == "No" and first.start < a + 2 * sixteenth + 1e-6
+        stutter = S.HOUSE_HOOK["rhythms"]["stutter"][0]
+        again = [(step, length) for (_, j0, _), (step, j, length) in zip(stutter, stutter[1:]) if j == j0]
+        assert again and all(step % 2 == 0 and length >= 2 for step, length in again)  # "knows, knows" on eighths
 
 
 def test_house_bass_riffs_in_octaves_and_its_intro_builds_in_layers():
