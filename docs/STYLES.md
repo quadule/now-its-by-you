@@ -1650,8 +1650,9 @@ before the change render to the same PCM ids after it: the seed (9b0766353b73), 
 ada (8e10c6ee39a0), the songwriter for bob (1d7413323129), country for coral (72a357a11dd0), gospel for dmitri
 (fbe73c7054ad). The goldens pass. A jazz render replays to itself (bob's: "replay: matches").
 
-**The changes, as the four machines drew them** (the harmony knob 0.57 to 0.71): in D major ada's verses are D6 | D6
-Em7 A7, D6 | Aadd9 D6, Dmaj7 D7 | Gmaj7 Em7 A7..., the turns Gmaj7 Bm7 | Em7 A7; in minor (bob, coral) im7, ivm7,
+**The changes, as the four machines drew them** (the harmony knob 0.57 to 0.71): ada's waltz in D major has the verse
+lines D6 | D6 A7, D6 | Aadd9 D6, Dmaj7 | Gmaj7 A7, the refrain's last line Dmaj7 E7 | Aadd9 D6, the turn Gmaj7 Em7 |
+A7, the bridge's end Dmaj7 | Em7 A7 (in a waltz only a whole bar's V takes its ii; swung, the half-bar Vs do too); in minor (bob, coral) im7, ivm7,
 VI6, iim7♭5 vm7. By construction no chord the trio plays rubs a semitone against a note sung over it that the song's
 own chord there doesn't (tested in four modes at three harmonies).
 
@@ -1690,7 +1691,7 @@ chooses:
 
 | render | what it is | length | id | listen for |
 |---|---|---|---|---|
-| jazz-ada-2026-09-27 | a waltz at 81 (a waltz's quarter 122), D major, three verses, the bridge twice, no break (its coin) | 248 s | e1f6e7d4a6bf | the piano's intro (0:01) its left hand under the tune; the first verse with the bass two to a bar and the brushes light, the refrain at 0:36 walking; the turns' Gmaj7 Bm7 \| Em7 A7 (1:00, 1:53) |
+| jazz-ada-2026-09-27 | a waltz at 81 (a waltz's quarter 122), D major, three verses, the bridge twice, no break (its coin) | 248 s | e1f6e7d4a6bf | the piano's intro (0:01) its left hand under the tune; the first verse with the bass two to a bar and the brushes light, the refrain at 0:36 walking; the turns' Gmaj7 Em7 \| A7 (1:00, 1:53); the bridge's Em7 A7 into the last refrain |
 | jazz-bob-2026-03-14 | a ballad swung at 83, D minor; the second verse with the piano alone; the piano's chorus | 183 s | 87655a873ec8 | the second verse, the singer and the piano alone (0:59); the break, the verse tune an octave up with the left hand's chords (1:45 to 2:08); the cold stop |
 | jazz-coral-2026-11-02 | a waltz at 78, E♭ minor; the band joining line by line; the second verse bare, the third in stop-time; the chorus; the bridge twice; a broad ending | 272 s | 01a9bbbb7a9b | the entrances (0:13); the bare verse (1:03); stop-time (1:52); the break (2:41 to 3:06) |
 | jazz-dmitri-2026-06-21 | a waltz at 81, E♭ major; the band joining line by line; one backing voice on oohs; an outro | 232 s | 0b89d37c4c47 | the first refrain's walk (0:36); the turns; the outro, the piano's tune over the brushes (3:39) |
