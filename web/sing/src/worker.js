@@ -45,6 +45,10 @@
 // joining are forgotten; once DELETE_BY has passed, every take and file is deleted, with the emails of
 // everyone who didn't ask to hear when the song is released. Nothing personal is logged: no names,
 // no emails, no tokens, no addresses. An address is used only to count requests and joins.
+//
+// Singing has moved to the studio (STUDIO_URL in [vars], 2026-09-30): every invitation's page says so with a
+// link, and joining, the song, takes, words and "I'm done" answer 410; singers' own pages, the seed page and
+// the artist's API are as they were.
 
 import {
   DEFAULTS, FILE_NAME, MAX_FILE_BYTES, MAX_TAKE_BYTES, MAX_WORDS, SPEC, TAKE_ID, TAKE_KEY, TOKEN, WORD, WORDS_KEY,
@@ -116,6 +120,27 @@ function closedPage(state) {
       : state === "done" ? "You've finished singing on this invitation. Thank you!"
       : state === "expired" ? "This invitation has expired. If you'd still like to sing, ask the person who sent it for a new one."
       : "This invitation isn't open (it may have been closed, or the link is mistyped). Ask the person who sent it for a new one.");
+}
+
+function studioOf(env) {
+  // where singing happens now (STUDIO_URL in [vars], an https address), or null while it happens here
+  try {
+    const u = new URL(String(env.STUDIO_URL || ""));
+    return u.protocol === "https:" ? u : null;
+  } catch (e) {
+    return null;
+  }
+}
+
+function movedPage(studio) {
+  // an invitation's page, once singing has moved to the studio: every invitation, open or not
+  const href = studio.href.replace(/&/g, "&amp;").replace(/"/g, "&quot;").replace(/</g, "&lt;");
+  const shown = studio.host.replace(/&/g, "&amp;").replace(/</g, "&lt;");
+  return notice(410, `Singing happens in the studio now: <a href="${href}">${shown}</a>.`);
+}
+
+function moved(studio) {
+  return json({ error: "moved", message: `Singing happens in the studio now: ${studio.href}`, studio: studio.href }, 410);
 }
 
 function shut(state) {
@@ -695,7 +720,7 @@ async function summary(env, sid, who, now) {
     closes: env.CLOSES_AT || null, delete_by: env.DELETE_BY || null,
     can_withdraw: !who.withdrawn && !(closes !== null && now >= closes), set: who.set || null,
     limit: (inv && inv.limit) || DEFAULTS.limit, sent: deleted ? 0 : takes.filter(o => o.key.endsWith(".json")).length,
-    takes: [], files: [], words: [], sing_more: state === "open" ? `/i/${who.invite}#s=${sid}` : null,
+    takes: [], files: [], words: [], sing_more: state === "open" && !studioOf(env) ? `/i/${who.invite}#s=${sid}` : null,
   };
   if (state === "withdrawn") return out;
   if (!deleted) {
@@ -967,6 +992,11 @@ export default {
       if (path.startsWith("/api/") || path.startsWith("/i/") || path.startsWith("/y/")) {
         if (await limited(env.REQUESTS, `ip:${ip}`)) return busy();
       }
+      // once singing has moved to the studio (STUDIO_URL), every invitation says so, and nothing more is
+      // sung or sent here; singers' own pages and the artist's API go on as before
+      const studio = studioOf(env);
+      if (studio && path.startsWith("/i/")) return movedPage(studio);
+      if (studio && /^\/api\/(invite|song|lyrics|guide|preview|join|take|words|done)\//.test(path)) return moved(studio);
       if (path.startsWith("/i/")) {
         const token = path.slice(3);
         const inv = await invite(env, token);
@@ -1027,7 +1057,8 @@ export default {
         return fail(404, "unknown", "No such thing.");
       }
       if (path === "/") {
-        return new Response("Songbird: a folk song that passes itself on. Singers come here by invitation.\n",
+        const said = studio ? `Singing happens in the studio now: ${studio.href}` : "Singers come here by invitation.";
+        return new Response(`Songbird: a folk song that passes itself on. ${said}\n`,
                             { headers: headers({ "Content-Type": "text/plain; charset=utf-8" }) });
       }
       return fail(404, "unknown", "No such thing.");
