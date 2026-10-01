@@ -52,3 +52,21 @@ def test_a_band_keeps_the_grid_points_below_it():
     assert dataset.top(None, 128) == 128
     assert dataset.top(4000.0, 128) == int(np.sum(grid(128) <= 4000.0))
     assert 0 < dataset.top(4000.0, 128) < 128 and dataset.top(0, 32) == 0
+
+
+def test_italian_and_latin_are_read_by_their_spelling_with_pure_vowels():
+    assert folk.reading("languisce", "it") == ["L", "AA0", "N", "G", "W", "IY1", "SH", "EH0"]
+    assert folk.reading("ben", "it") == ["B", "EH1", "N"]  # a word ending in a consonant: stressed last
+    assert folk.reading("mio", "it") == ["M", "Y", "AO1"]  # one syllable on one note, as the aria sets it
+    assert folk.reading("pacem", "la") == ["P", "AA1", "CH", "EH0", "M"]
+    assert folk.reading("Jesu", "la")[0] == "Y"
+    assert not any(p.startswith(("EY", "OW")) for p in folk.reading("credimi", "it") + folk.reading("dona", "la"))
+
+
+def test_an_exercise_is_cut_into_notes_where_its_pitch_steps():
+    # a scale, 60 62 64 at 0.4 s a note, with a 5.5 Hz vibrato of half a semitone on top
+    t = np.arange(240) * folk.FRAME
+    midi = np.repeat([60.0, 62.0, 64.0], 80) + 0.5 * np.sin(2 * np.pi * 5.5 * t)
+    spans = folk.steps(midi)
+    assert len(spans) == 3
+    assert all(abs(a - b) <= 12 for (a, _), b in zip(spans, (0, 80, 160)))

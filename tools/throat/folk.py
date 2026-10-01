@@ -10,13 +10,16 @@
     uv run python tools/throat/dataset.py WORK --out WORK/dataset-folk.npz
     uv run python tools/throat/folk.py merge WORK [--house renders/throat/dataset-house.npz]
         [--base songbird/synth/throat.npz]
+    uv run python tools/throat/folk.py exercises WORK            # vowel exercises instead of cut (no phones.py)
 
 WORK is a scratch directory of your choosing, never renders/ or recordings/.
 
 What it reads. MANIFEST is a JSON list, one recording each: {"id", "url", "title", "performer",
 "licence", "page", "singer" ("folk" for singing its singers released themselves, "records" for
 commercial records old enough to be public domain), "year", optionally "lyrics" (the printed words,
-public domain like the tune), "start"/"end" (seconds to keep)}. `separate` marks each one "accompanied" or
+public domain like the tune), "start"/"end" (seconds to keep), "language" ("it", "la": read by
+spelling, foreign()), "band_hz" (a studio's, not measured), "sung" (true: never taken for speech),
+"exercise" (the vowel of a vowel exercise: `exercises`)}. `separate` marks each one "accompanied" or
 not (Demucs's accompaniment stem against its voice); an accompanied one is left out, or with --separated
 its voice taken out of the band (WORK/vocals/<id>.wav) is used. Every source's licence and page stay
 in WORK/manifest.json; nothing about them goes into the model but the singer's name and "human".
@@ -56,7 +59,11 @@ is a blend of rows (throat.timbre), never one alone, as for the house singers. T
 
 `merge` adds the folk frames to the house dataset and keeps every singer the base model knows (with
 --base; the volunteers, whose takes are gone) in the singer list with no frames, so a fine-tune from it
-keeps their row.
+keeps their row. A singer the house dataset has already (a merged dataset given more of someone's singing:
+VocalSet's other songs and exercises) gets the new frames under the same row.
+
+`exercises` labels vowel exercises (VocalSet's scales, arpeggios and long tones on a, i and u) from the pitch
+alone: a note wherever the pitch, averaged over a vibrato's period, steps; every note the one vowel.
 """
 
 from __future__ import annotations
@@ -264,9 +271,11 @@ def norm(word: str) -> str:
     return re.sub(r"[^a-z'\-]", "", word.lower().replace("’", "'")).strip("'-")
 
 
-def reading(word: str) -> list[str] | None:
+def reading(word: str, language: str = "en") -> list[str] | None:
     """Our pronunciation of a sung word (stress digits kept), or None. A dropped g (wanderin') is read
-    as the -ing word ending in N."""
+    as the -ing word ending in N. An Italian or Latin word ("it", "la") is read by its spelling (foreign)."""
+    if language in LANGUAGES:
+        return foreign(word, language)
     dropped = re.sub(r"[^a-z']", "", word.lower().replace("’", "'")).endswith("in'")  # before norm() strips the '
     w = norm(word)
     if not w:
@@ -291,6 +300,92 @@ def reading(word: str) -> list[str] | None:
         if r:
             return sung(list(r[0]))
     return sung(ing(w)) if w.endswith("in") else None
+
+
+# Italian and church Latin, as an English singer's phones (VocalSet's "Caro mio ben" and "Dona nobis pacem"): the
+# spelling says how, nearly always. Their e and o are pure, so EH and AO, never EY and OW (see EXERCISE_VOWELS).
+FOREIGN_VOWELS = {"a": "AA", "e": "EH", "i": "IY", "o": "AO", "u": "UW", "y": "IY"}
+FOREIGN_STRESS = {"credimi": 0}  # where it isn't the next to last syllable (a word ending in a consonant: its last)
+FOREIGN_SUNG = {"mio": ["M", "Y", "AO1"], "tuo": ["T", "W", "AO1"]}  # one syllable on one note, as the aria sets them
+LANGUAGES = {"it": "Italian", "la": "Latin"}
+
+
+def foreign(word: str, language: str) -> list[str] | None:
+    """An Italian or Latin word in ARPAbet, stress digits on its vowels, or None."""
+    import unicodedata
+
+    raw = word.lower().replace("’", "'")
+    accented = [i for i, ch in enumerate(raw) if unicodedata.decomposition(ch).endswith(("0300", "0301"))]
+    w = "".join(ch for ch in unicodedata.normalize("NFD", raw) if ch.isalpha() and ch.isascii())
+    if not w:
+        return None
+    if language == "it" and w in FOREIGN_SUNG:
+        return list(FOREIGN_SUNG[w])
+    if language == "la":
+        w = w.replace("ae", "e").replace("oe", "e")
+    out: list[str] = []
+    i = 0
+    vowel = lambda k: k < len(w) and w[k] in FOREIGN_VOWELS  # noqa: E731
+    front = lambda k: k < len(w) and w[k] in "eiy"  # noqa: E731
+    while i < len(w):
+        c, nxt = w[i], w[i + 1] if i + 1 < len(w) else ""
+        if c in FOREIGN_VOWELS:
+            if c == "u" and out and out[-1] in ("K", "G") and vowel(i + 1):  # qu, gu before a vowel: a glide
+                out.append("W")
+            elif c == "i" and out and out[-1] in ("CH", "JH", "SH") and vowel(i + 1):  # cia, gio, scia: i only softens
+                pass
+            else:
+                out.append(FOREIGN_VOWELS[c])
+            i += 1
+            continue
+        if c == nxt and c not in "c":  # a double consonant, once
+            i += 1
+            continue
+        if c == "c":
+            if nxt in ("c", "q"):  # cc, cq: once
+                i += 1
+                continue
+            if nxt == "h":
+                out.append("K"); i += 2  # noqa: E702
+            elif front(i + 1):
+                out.append("CH"); i += 1  # noqa: E702
+            else:
+                out.append("K"); i += 1  # noqa: E702
+        elif c == "s" and nxt == "c" and front(i + 2):
+            out.append("SH"); i += 2  # noqa: E702
+        elif c == "g":
+            if nxt == "n":
+                out += ["N", "Y"]; i += 2  # noqa: E702
+            elif nxt == "l" and i + 2 < len(w) and w[i + 2] == "i":  # gli: L Y before a vowel, L IY alone
+                out += ["L", "Y"] if vowel(i + 3) else ["L"]
+                i += 3 if vowel(i + 3) else 2
+            elif nxt == "h":
+                out.append("G"); i += 2  # noqa: E702
+            elif front(i + 1):
+                out.append("JH"); i += 1  # noqa: E702
+            else:
+                out.append("G"); i += 1  # noqa: E702
+        elif c == "q":
+            out.append("K"); i += 1  # noqa: E702
+        elif c == "t" and language == "la" and nxt == "i" and vowel(i + 2) and not (out and out[-1] in ("S", "T")):
+            out += ["T", "S"]; i += 1  # noqa: E702
+        else:
+            out += {"z": ["T", "S"], "x": ["K", "S"], "h": [], "j": ["Y"], "k": ["K"], "w": ["W"]}.get(c, [c.upper()])
+            i += 1
+    nuclei = [k for k, ph in enumerate(out) if ph in FOREIGN_VOWELS.values()]
+    if not nuclei:
+        return None
+    if accented:
+        stressed = min(len(nuclei) - 1, sum(1 for ch in raw[: accented[0]] if ch in "aeiouy"))
+    elif w in FOREIGN_STRESS:
+        stressed = FOREIGN_STRESS[w]
+    elif len(nuclei) == 1 or (language == "it" and w[-1] not in FOREIGN_VOWELS):
+        stressed = len(nuclei) - 1
+    else:
+        stressed = len(nuclei) - 2
+    for n, k in enumerate(nuclei):
+        out[k] += "1" if n == stressed else "0"
+    return out
 
 
 def corrected(words: list[dict], lyrics: str | None) -> list[dict]:
@@ -523,7 +618,8 @@ def prepare(work: Path, it: dict, target_db: float, min_quiet: float, band_db: f
     info.update(singing_db=round(sing_db, 1), background_db=round(back_db - sing_db, 1))
     if back_db - sing_db > -min_quiet:
         return dict(info, skipped=f"background {back_db - sing_db:+.1f} dB against the singing")
-    band = band_of(x, SR, f0, lv, band_db, ref)
+    # a studio's band the manifest gives (measured on a few vowels it would end where they have nothing high to show)
+    band = float(it["band_hz"]) if it.get("band_hz") else band_of(x, SR, f0, lv, band_db, ref)
     if it.get("max_band_hz"):
         band = min(band, float(it["max_band_hz"]))
     info["band_hz"] = round(band)
@@ -540,7 +636,7 @@ def prepare(work: Path, it: dict, target_db: float, min_quiet: float, band_db: f
         why = None
         if BOILERPLATE.search(text):
             why = "announcement"
-        ph = [reading(w["word"]) for w in ln]
+        ph = [reading(w["word"], it.get("language", "en")) for w in ln]
         if why is None and any(p is None for p in ph):
             why = "a word no dictionary has: " + ", ".join(w["word"] for w, p in zip(ln, ph) if p is None)
         if why is None and any(re.search(r"\d", w["word"]) for w in ln):
@@ -723,7 +819,7 @@ def build(work: Path, r: dict, it: dict) -> dict:
             continue
         sung, vowel_s, steady = is_sung(notes, f0)
         ln.update(vowel_s=round(vowel_s, 3), steady=round(steady, 3))
-        if not sung:
+        if not sung and not it.get("sung"):  # the manifest knows it's sung (vibrato isn't steady pitch)
             ln["skipped"] = f"not sung (median vowel {vowel_s:.2f} s, pitch steady {steady:.0%})"
             continue
         doubted = sum(bool(n["doubt"]) for n in notes) / len(notes)
@@ -760,7 +856,7 @@ def build(work: Path, r: dict, it: dict) -> dict:
                     n[k] = round(n[k] - t0, 4)
                 n["dur"] = round(n["dur"], 4)
                 notes.append(n)
-        label = dict(index=name, language="English", t0=t0, t1=t1, notes=notes, singer=singer, group=group,
+        label = dict(index=name, language=LANGUAGES.get(it.get("language"), "English"), t0=t0, t1=t1, notes=notes, singer=singer, group=group,
                      source=SOURCES[group], item=it["id"], sr=SR, audio_s=round(t1 - t0, 3),
                      band_hz=r["band_hz"], ap_band_hz=0 if group == "records" else r["band_hz"])
         audio = x[int(round(t0 * SR)): int(round(t1 * SR))]
@@ -813,6 +909,158 @@ def cut(args) -> None:
     print(f"{sum(len(r.get('segments', [])) for r in report)} segments, {total / 60:.1f} min -> {work / 'corpus'}")
 
 
+# --- exercises ------------------------------------------------------------------------------------------
+
+# A vowel exercise (VocalSet's scales, arpeggios and long tones) is sung on one vowel, so it needs no words: its notes
+# come from the pitch alone, every note that vowel. Only the vowels English sings as they are: a sung e and o are pure,
+# and English sings them as glides (EY, OW), so learned from exercises "day" and "go" would lose their glides.
+EXERCISE_VOWELS = {"a": "AA1", "i": "IY1", "u": "UW1"}
+JOIN = 0.08  # seconds of unvoiced inside a run that still joins it (a breath is longer)
+STEP = 0.6  # semitones from the note sung that start a new one, held for STEP_HOLD
+STEP_HOLD = 0.06
+
+
+def steps(midi: np.ndarray) -> list[tuple[int, int]]:
+    """A voiced run's notes (frame spans): its pitch averaged over a vibrato's period (0.18 s), a new note where it
+    moves STEP semitones from the note's own and stays there STEP_HOLD."""
+    k = max(1, int(round(0.18 / FRAME)))
+    smooth = np.convolve(np.pad(midi, (k // 2, k - 1 - k // 2), mode="edge"), np.ones(k) / k, "valid")
+    hold = int(round(STEP_HOLD / FRAME))
+    out, start, cur = [], 0, smooth[0]
+    i = 1
+    while i < len(smooth):
+        if abs(smooth[i] - cur) > STEP and np.all(np.abs(smooth[i: i + hold] - cur) > STEP) and i + hold <= len(smooth):
+            out.append((start, i))
+            start, cur = i, float(np.median(smooth[i: i + hold]))
+            i += hold
+            continue
+        i += 1
+    out.append((start, len(smooth)))
+    merged = []  # a note shorter than 0.1 s is the glide between two: split between them at its middle (the first
+    for k, (a, b) in enumerate(out):  # and the last join their neighbour)
+        short = (b - a) * FRAME < 0.1
+        if short and merged and k + 1 < len(out):
+            mid = (a + b) // 2
+            merged[-1] = (merged[-1][0], mid)
+            out[k + 1] = (mid, out[k + 1][1])
+        elif merged and (short or (merged[-1][1] - merged[-1][0]) * FRAME < 0.1):
+            merged[-1] = (merged[-1][0], b)
+        else:
+            merged.append((a, b))
+    return merged
+
+
+def exercise(work: Path, it: dict, target_db: float, min_quiet: float, band_db: float, ref: np.ndarray) -> dict:
+    """One vowel exercise as corpus segments (wav + label) and their alignment (one vowel a note, no aligner)."""
+    import soundfile as sf
+
+    vowel = EXERCISE_VOWELS[it["exercise"]]
+    x = load_audio(source_of(work, it), SR)
+    f0 = f0_of(x, SR)
+    n = len(f0)
+    lv = levels(x, SR, n)
+    if (f0 > 0).sum() > 20:  # Harvest's octave slips in a breathy onset or release: unvoiced, not notes far below
+        midi = 69 + 12 * np.log2(np.maximum(f0, 1e-3) / 440.0)
+        f0 = np.where((f0 > 0) & (np.abs(midi - np.median(midi[f0 > 0])) <= 14), f0, 0.0)
+    sung = f0 > 0
+    info = dict(id=it["id"], seconds=round(len(x) / SR, 1))
+    if sung.sum() < 60:
+        return dict(info, skipped="hardly any voicing")
+    sing_db = float(np.median(lv[sung]))
+    back_db = float(np.percentile(lv[~sung], 5)) if (~sung).sum() > 100 else float(np.percentile(lv, 2))
+    info.update(singing_db=round(sing_db, 1), background_db=round(back_db - sing_db, 1))
+    if back_db - sing_db > -min_quiet:
+        return dict(info, skipped=f"background {back_db - sing_db:+.1f} dB against the singing")
+    # the band: a studio's (the manifest says so) or measured; measured on one vowel it is no measure (u has nothing
+    # high to show, so the band would end where u's energy does)
+    band = float(it["band_hz"]) if it.get("band_hz") else band_of(x, SR, f0, lv, band_db, ref)
+    info["band_hz"] = round(band)
+    x = x * 10 ** ((target_db - sing_db) / 20)
+    if np.max(np.abs(x)) > 0.99:
+        x = x * 0.99 / np.max(np.abs(x))
+    # voiced runs, joined over short gaps
+    idx = np.flatnonzero(sung)
+    runs = [(int(g[0]), int(g[-1]) + 1) for g in np.split(idx, np.flatnonzero(np.diff(idx) > JOIN / FRAME) + 1)
+            if (g[-1] + 1 - g[0]) * FRAME >= 0.3]
+    lines = []
+    for a, b in runs:
+        fr = f0[a:b]
+        voiced = fr > 0
+        midi = 69 + 12 * np.log2(np.interp(np.arange(len(fr)), np.flatnonzero(voiced), fr[voiced]) / 440.0)
+        notes = []
+        for na, nb in steps(midi):
+            mid = midi[na + (nb - na) // 4: nb - (nb - na) // 4 or nb]
+            t0, t1 = (a + na) * FRAME, (a + nb) * FRAME
+            doubt = ["vowel unvoiced"] if voiced[na:nb].mean() < 0.5 else []
+            notes.append(dict(word=it["exercise"], word_len=1, syllable=0, phones=[vowel], type=2, sung_start=t0,
+                              sung_end=t1, start=t0, dur=t1 - t0, line_end=False, vel=0.75, doubt=doubt,
+                              pitch=int(round(float(np.median(mid))))))
+        notes[-1]["line_end"] = True
+        lines.append((a * FRAME, b * FRAME, notes))
+    # lines into segments, as cut gathers them
+    groups, cur = [], []
+    for ln in lines:
+        if cur and (ln[0] - cur[-1][1] > SEGMENT_GAP or ln[1] - cur[0][0] > SEGMENT):
+            groups.append(cur)
+            cur = []
+        cur.append(ln)
+    if cur:
+        groups.append(cur)
+    singer = singer_of(it)
+    (work / "corpus" / singer).mkdir(parents=True, exist_ok=True)
+    (work / "align" / singer).mkdir(parents=True, exist_ok=True)
+    segs = []
+    for gi, g in enumerate(groups):
+        t0 = max(0.0, g[0][0] - 0.3)  # a little of the quiet before, as a line has
+        t1 = min(len(x) / SR, g[-1][1] + 0.3)
+        name = f"{it['id']}.s{gi:02d}"
+        notes = []
+        for _, _, ns in g:
+            for nt in ns:
+                nt = dict(nt)
+                for k in ("sung_start", "sung_end", "start"):
+                    nt[k] = round(nt[k] - t0, 4)
+                nt["dur"] = round(nt["dur"], 4)
+                notes.append(nt)
+        label = dict(index=name, language="none", t0=t0, t1=t1, notes=notes, singer=singer, group="folk",
+                     source=SOURCES["folk"], item=it["id"], sr=SR, audio_s=round(t1 - t0, 3), band_hz=round(band),
+                     ap_band_hz=round(band), exercise=it["exercise"])
+        phones = [dict(phone=vowel, start=nt["sung_start"], end=nt["sung_end"], note=k, role="vowel")
+                  for k, nt in enumerate(notes)]
+        found = [dict(found=True, vowel_start=nt["sung_start"], vowel_end=nt["sung_end"], offset=0.0, plausible=True)
+                 for nt in notes]
+        sf.write(str(work / "corpus" / singer / f"{name}.wav"),
+                 np.clip(x[int(round(t0 * SR)): int(round(t1 * SR))], -1, 1), SR, subtype="PCM_16")
+        (work / "corpus" / singer / f"{name}.json").write_text(json.dumps(label, indent=1))
+        (work / "align" / singer / f"{name}.json").write_text(json.dumps(
+            dict(segment=name, singer=singer, lowered=False, phones=phones, notes=found), indent=1))
+        segs.append(dict(name=name, seconds=round(t1 - t0, 2), notes=len(notes)))
+    return dict(info, segments=segs)
+
+
+def exercises(args) -> None:
+    """Every vowel exercise in the manifest ("exercise": its vowel) as corpus segments, aligned already (phones.py
+    isn't run on them: there is nothing to align a vowel against but itself)."""
+    work = work_ok(args.work)
+    items = [it for it in json.loads((work / "manifest.json").read_text()) if it.get("exercise") in EXERCISE_VOWELS]
+    for sub in ("corpus", "features", "align"):
+        shutil.rmtree(work / sub, ignore_errors=True)
+    (work / "quality.json").unlink(missing_ok=True)
+    target, ref = house_level(), reference_spectrum()
+    n = len(items)
+    with ProcessPoolExecutor(args.jobs) as pool:
+        report = list(pool.map(exercise, [work] * n, items, [target] * n, [args.min_quiet] * n, [args.band_db] * n,
+                               [ref] * n))
+    for r in report:
+        if r.get("skipped"):
+            print(f"{r['id']}: LEFT OUT: {r['skipped']}")
+    (work / "cut.json").write_text(json.dumps(report, indent=1))
+    total = sum(s["seconds"] for r in report for s in r.get("segments", []))
+    notes = sum(s["notes"] for r in report for s in r.get("segments", []))
+    print(f"{sum(len(r.get('segments', [])) for r in report)} segments, {notes} notes, {total / 60:.1f} min -> "
+          f"{work / 'corpus'}")
+
+
 # --- merge ----------------------------------------------------------------------------------------------
 
 
@@ -832,11 +1080,22 @@ def merge(args) -> None:
             if name not in singers:
                 singers.append(name)
                 sources.append(cfg["sources"].get(name, "formant"))
-    new = [str(s) for s in folk["singers"]]
-    clash = [s for s in new if s in singers]
-    if clash:
-        raise SystemExit(f"{args.house} or the base model already has {clash}")
-    remap = np.array([len(singers) + i for i in range(len(new))], dtype=np.int16)
+    # a singer already there (a merged dataset's folk singer, given more of their singing) keeps their row; a new one
+    # is added
+    new, new_sources = [str(s) for s in folk["singers"]], [str(s) for s in folk["sources"]]
+    index, added = [], []
+    for name, src in zip(new, new_sources):
+        if name in singers:
+            if sources[singers.index(name)] != src:
+                raise SystemExit(f"{name} is {sources[singers.index(name)]} in {args.house}, {src} here")
+            index.append(singers.index(name))
+        else:
+            index.append(len(singers) + len(added))
+            added.append((name, src))
+    twice = {str(x) for x in house["segments"]} & {str(x) for x in folk["segments"]}
+    if twice:
+        raise SystemExit(f"segments in both datasets: {sorted(twice)[:5]}")
+    remap = np.array(index, dtype=np.int16)
     keys = [k for k in house.files if k not in ("singers", "sources", "phones", "segments", "offsets", "lengths")]
     n, m = len(house["phone"]), len(folk["phone"])
     out = {}
@@ -847,7 +1106,7 @@ def merge(args) -> None:
         if k == "singer":
             v = remap[folk[k].astype(np.int64)].astype(h.dtype)
         out[k] = np.concatenate([h, v.astype(h.dtype)])
-    out.update(singers=np.array(singers + new), sources=np.array(sources + [str(s) for s in folk["sources"]]),
+    out.update(singers=np.array(singers + [a for a, _ in added]), sources=np.array(sources + [b for _, b in added]),
                phones=house["phones"], segments=np.concatenate([house["segments"], folk["segments"]]),
                offsets=np.concatenate([house["offsets"], folk["offsets"] + n]),
                lengths=np.concatenate([house["lengths"], folk["lengths"]]))
@@ -856,7 +1115,7 @@ def merge(args) -> None:
     per = {s: int((folk["singer"] == i).sum()) for i, s in enumerate(new)}
     print(f"{Path(args.house).name}: {n} frames ({n * FRAME / 60:.1f} min) + "
           + ", ".join(f"{s} {c * FRAME / 60:.1f} min" for s, c in per.items())
-          + f" ({folk['mask'].mean():.0%} unmasked); singers {singers + new} -> {dest}")
+          + f" ({folk['mask'].mean():.0%} unmasked); {len(added)} singers new -> {dest}")
 
 
 def main() -> None:
@@ -886,6 +1145,11 @@ def main() -> None:
                    help="a frequency is inside the recording's band if its sung spectrum stands this far over the quiet")
     c.add_argument("--only", nargs="*", default=None)
     c.add_argument("--separated", action="store_true", help="accompanied recordings too, their Demucs voice")
+    e = sub.add_parser("exercises")
+    e.add_argument("work", type=Path)
+    e.add_argument("--jobs", type=int, default=max(1, (os.cpu_count() or 2) - 4))
+    e.add_argument("--min-quiet", type=float, default=25.0)
+    e.add_argument("--band-db", type=float, default=12.0)
     m = sub.add_parser("merge")
     m.add_argument("work", type=Path)
     m.add_argument("--house", type=Path, default=HOUSE / "dataset-house.npz")
@@ -894,9 +1158,10 @@ def main() -> None:
                    help="keep this model's singers in the list (none: '')")
     m.add_argument("--out", type=Path, default=None)
     args = ap.parse_args()
-    if getattr(args, "base", None) is not None and str(args.base) == "":
+    if getattr(args, "base", None) is not None and str(args.base) in ("", "."):  # Path("") reads as "."
         args.base = None
-    {"fetch": fetch, "separate": separate, "transcribe": transcribe, "cut": cut, "merge": merge}[args.cmd](args)
+    {"fetch": fetch, "separate": separate, "transcribe": transcribe, "cut": cut, "exercises": exercises,
+     "merge": merge}[args.cmd](args)
 
 
 if __name__ == "__main__":
