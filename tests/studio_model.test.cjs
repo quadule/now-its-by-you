@@ -161,7 +161,7 @@ test("the keyboard: none fires in a text field; the table's keys", () => {
   assert.deepEqual(key("2"), { action: "view", view: "arrange" });
   assert.deepEqual(key("ArrowRight", { metaKey: true }), { action: "move", step: 1 });
   assert.deepEqual(key("ArrowUp"), { action: "step", axis: "track", step: -1 });
-  for (const [k, a] of [["l", "loop"], ["k", "click"], ["m", "mute"], ["s", "solo"], ["r", "record"], ["t", "time"], ["?", "help"], ["Enter", "open"], ["Escape", "escape"]]) {
+  for (const [k, a] of [["l", "loop"], ["k", "click"], ["m", "mute"], ["s", "solo"], ["e", "record"], ["t", "time"], ["?", "help"], ["Enter", "open"], ["Escape", "escape"]]) {
     assert.equal(key(k).action, a);
   }
   assert.equal(M.keyAction({ key: " ", target: { tagName: "INPUT", type: "text" } }), null);

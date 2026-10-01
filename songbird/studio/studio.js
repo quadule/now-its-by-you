@@ -1223,7 +1223,7 @@ async function record() {
   if (state.recording) return;
   state.recording = true;
   for (const id of ["record", "recordNow"]) setOn(id, "disabled", true);
-  saved.replaceChildren(h("p", {}, "Recording…"));
+  saved.replaceChildren(h("p", {}, "Exporting…"));
   revealRecording(true);
   const edits = copyEdits();
   try {
@@ -1246,10 +1246,10 @@ async function record() {
       h("p", { class: "hint" }, "To make the next version from this one: ", h("code", {}, r.next)),
       h("button", { class: "btn", type: "button", onclick: () => play(job.url, "The recording", r.flac,
         { editsKey: JSON.stringify(edits), label: "The recording", who: "you", section: null, job }) }, "Play the recording"));
-    toast("Recorded.");
+    toast("Exported.");
   } catch (e) {
-    saved.replaceChildren(h("p", { class: "problem" }, `Couldn't record it: ${e.message}`));
-    toast(`Couldn't record it: ${e.message}`);
+    saved.replaceChildren(h("p", { class: "problem" }, `Couldn't export it: ${e.message}`));
+    toast(`Couldn't export it: ${e.message}`);
   } finally {
     revealRecording();
     state.recording = false;
@@ -1413,7 +1413,7 @@ async function main() {
   renderLineage(s.generation || 0);
   setOn("singNote", "textContent", s.sing.available ? "" : s.sing.why);
   setOn("sing", "disabled", !s.sing.available);
-  setOn("toFinishLabel", "textContent", s.sing.available ? "Sing or record" : "Record it");
+  setOn("toFinishLabel", "textContent", s.sing.available ? "Sing or export" : "Export it");
   setOn("day", "min", -s.days);
   setOn("day", "max", s.days);
   score()?.started?.(s, hash);

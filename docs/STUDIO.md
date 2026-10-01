@@ -114,7 +114,7 @@ until the artist signs the score off; both pages share studio.js, so the edits, 
 and recording below are the score's too.
 
 The first screen holds only what matters most: **Hear the song**, a few simple
-changes (key, scale, tempo, a new performance), undo and redo, **Record it**
+changes (key, scale, tempo, a new performance), undo and redo, **Export it**
 (or **Sing or record**, where the singing page exists), and **Help**. Everything
 else is a step deeper, in four areas under them, opening on the words: **Words**,
 **Tune** (the arrangement and melody editor, called Arrange in the code and in
@@ -306,7 +306,7 @@ current draft; opening is itself undoable. Drafts contain no audio or software,
 and belong to the exact song genome they were written for. They are useful for
 saving alternatives while the finished FLAC remains the complete portable artifact.
 
-**Record it** uses the normal renderer and marks every chosen value. The finished
+**Export it** uses the normal renderer and marks every chosen value. The finished
 FLAC carries the program, song, composition, lyrics and record. Opening it in the
 studio makes the next generation from those choices. No browser libraries, sample
 packs, build tools or external services are required by the editor.
@@ -490,7 +490,7 @@ deleted there, and the singer's card offers *your way*. docs/WEB-SINGING.md.
 
 ## Recording
 
-*Record it* renders the whole rendition as `songbird render --pack` does
+*Export it* renders the whole rendition as `songbird render --pack` does
 (`cli.render_one`, as the child of the version opened) and writes one file:
 `<song>.<day>.<first six of its id>.flac`, into `renders/` from a checkout or
 the current folder from a packet. It plays anywhere, and carries the program,
@@ -1282,7 +1282,7 @@ becomes even eighths and a held ending.
   recording isn't made yet, the stems' job makes it first, in the same place
   in the queue (in a public studio, still one whole song against a visitor's
   limits), so the first stems of a version take about twice as long, and
-  *Record it* afterwards only copies the file. It isn't saved into the
+  *Export it* afterwards only copies the file. It isn't saved into the
   recordings' folder until the person records it.
 
 ### How it was checked
@@ -1750,3 +1750,8 @@ actual packet reopening, compound meter, rendered note timing, and the editor's
 compressed size. Browser interaction tests use dependency-free DOM/audio doubles
 for history, races, selection, dragging, playback and original lyric drafts. Live
 browser checks complement these for layout and native controls.
+
+**Export, not record (2026-10-01).** The artist: "\"Record it\" should be more like export or something so it can't
+be mixed up with the singing function." Making the finished file is *Export it* everywhere (the transport's ↓ Export,
+the Tools sheet, the tour, Help; the key E, which was R); *Record* is only ever singing a take. The singing panel says
+"take" for what's sung and "export" for the file.

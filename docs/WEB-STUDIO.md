@@ -631,11 +631,11 @@ natively, and the bundle never goes into the song's packet.
 
 ### What a visitor sees
 
-- **Nothing new, at first.** On a desktop browser the first ▶ or *Record it* says "getting the singer ready (once:
+- **Nothing new, at first.** On a desktop browser the first ▶ or *Export it* says "getting the singer ready (once:
   12 of 35 MB)" in the player, then what the program is doing ("singing", "playing the fiddle", "mastering"), as
   a server render does. This happens once per visitor: the files are cached for good after that, and later visits
   say only "getting the singer ready" for the 5 or 6 seconds Python takes to start.
-- **The Tools sheet** has *Make the song: automatically · in this browser · on the server* under *Record it*, with a
+- **The Tools sheet** has *Make the song: automatically · in this browser · on the server* under *Export it*, with a
   line saying what automatically means here ("This browser makes the song itself, as the server would…", or "The server makes the song:
   phones and tablets have the server make it") and where the last one was made ("The last section was made in this
   browser (5.1 s)"). The choice is kept in this browser. The setting is shown only where the studio serves the

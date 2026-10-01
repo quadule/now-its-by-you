@@ -204,7 +204,7 @@
   function recording(words, progress) {  // studio.js: a recording on its way (null when done)
     S.recording = words;
     if (!words) { idle(); return; }
-    $("nowTitle").textContent = "Recording";
+    $("nowTitle").textContent = "Exporting";
     $("nowSub").textContent = words.replace(/^Recording: /, "");
     $("bar").classList.add("making");
     $("barFill").style.width = pct(progress);

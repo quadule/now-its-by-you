@@ -36,9 +36,7 @@ code { font: 12px var(--mono); background: var(--wash); padding: 0 4px; border-r
 .btn { gap: 6px; font: 500 13px/1.2 var(--sans); padding: 6px 10px; white-space: nowrap; }
 .btn.quiet { background: transparent; border-color: transparent; }
 .btn.quiet:hover { border-color: var(--rule-strong); }
-.btn.rec { color: var(--red); }
-.btn.rec::before { content: ""; width: 9px; height: 9px; border-radius: 50%; background: var(--red); flex: 0 0 auto; }
-.btn.primary.rec { color: var(--card); }
+.btn.export::before { content: "↓"; flex: 0 0 auto; font-weight: 700; line-height: 0.85; padding: 0 2px 1px; border-bottom: 1.5px solid currentColor; }  /* out to a file, not a record dot: the singing records */
 .link { border: 0; background: none; padding: 0; color: var(--hand); text-decoration: underline; text-underline-offset: 3px; font-size: 13px; }
 .link.small { font-size: 12px; }
 /* a chip keeps its size whatever it says (on, yours): the one beside it doesn't move as an answer lands (the EDM

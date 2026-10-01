@@ -57,18 +57,18 @@ const SERVER = {
       + "it, how loud it was, how you slid into it and off it. They stay in this browser, and on that computer under a "
       + "code, with no name or address, for ", h("span", { id: "singKeepDays" }, "30"), " days after they were last used, "
       + "so the studio can sing the song your way."],
-    [h("b", {}, "Nothing is published unless you record. "), "If you record a version sung your way, the "
-      + "recording carries those numbers (rounded) inside it, as every version carries its singer's way. Anyone with the "
+    [h("b", {}, "Nothing is published unless you export. "), "If you export a version sung your way, the "
+      + "file carries those numbers (rounded) inside it, as every version carries its singer's way. Anyone with the "
       + "file hears the machine's voice sing it your way: never your voice."],
     [h("b", {}, "You can take it back. "), "Forget my singing removes the numbers from this browser and from "
-      + "that computer (not from a recording you already made)."]],
-  measure: "Measure it sends this take to be measured; the recording is deleted there as soon as it has been, and from "
+      + "that computer (not from a file you already exported)."]],
+  measure: "Measure it sends this take to be measured; the take is deleted there as soon as it has been, and from "
     + "this page too.",
   sending: "Sending your take…",
   unsent: "It couldn't be sent",
   measured: "Measured, and deleted.",
   sure: "Forget it everywhere? Press again",
-  forgotten: "Forgotten: your numbers are gone from this browser and from the studio. A recording you made keeps its own copy.",
+  forgotten: "Forgotten: your numbers are gone from this browser and from the studio. A file you exported keeps its own copy.",
 };
 const DEVICE = {
   box: "Sing along; the song learns a little of how you sing. Your singing never leaves this device.",
@@ -81,17 +81,17 @@ const DEVICE = {
     [h("b", {}, "What's kept is numbers. "), "For each note: how early or late you came in, how long you held it, how "
       + "loud it was, how you slid into it and off it. They stay in this browser until you forget them, so the studio "
       + "can sing the song your way."],
-    [h("b", {}, "Nothing is shared unless you share a recording. "), "A recording sung your way carries those numbers "
+    [h("b", {}, "Nothing is shared unless you share a version. "), "A version sung your way carries those numbers "
       + "(rounded) inside it, as every version carries its singer's way. Anyone with the file hears the machine's voice "
       + "sing it your way: never your voice."],
     [h("b", {}, "You can take it back. "), "Forget my singing removes the numbers from this browser (not from a "
-      + "recording you already made)."]],
-  measure: "Measured here, on this device; the recording is let go once it has been.",
+      + "file you already exported)."]],
+  measure: "Measured here, on this device; the take is let go once it has been.",
   sending: "Getting ready to measure it…",
   unsent: "It couldn't be measured",
   measured: "Measured, and let go.",
   sure: "Forget it? Press again",
-  forgotten: "Forgotten: your numbers are gone from this browser. A recording you made keeps its own copy.",
+  forgotten: "Forgotten: your numbers are gone from this browser. A file you exported keeps its own copy.",
 };
 let SAY = SERVER;
 
@@ -149,7 +149,7 @@ function build() {
       h("p", { class: "hint", id: "singTakes" }),
       h("div", { class: "actions" },
         h("button", { class: "btn primary", type: "button", id: "singHear" }, "▶ Hear the song your way"),
-        h("button", { class: "btn", type: "button", id: "singToRecord" }, "Record it your way"),
+        h("button", { class: "btn", type: "button", id: "singToRecord" }, "Export it your way"),
         h("button", { class: "link small", type: "button", id: "singForget" }, "Forget my singing"))),
     h("details", { class: "sing-about" }, h("summary", { class: "hint" }, "What happens to your singing"),
       h("p", { class: "hint", id: "singAboutText" })));
