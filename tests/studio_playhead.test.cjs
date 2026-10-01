@@ -1,7 +1,9 @@
-// The whole song heard sung from the score's playhead (songbird/studio/score.js and studio.js), as the sketch is:
-// the transport's ▶ with nothing selected starts the song's audio at the bar the ruler put the playhead at, found by
-// the rendition's own clock (the bar_seconds a whole song's job ends with); a selected section's preview is as it
-// was. The page runs on dependency-free DOM and <audio> doubles. Run with `node --test tests/studio_playhead.test.cjs`.
+// The whole song from the score's playhead (songbird/studio/score.js and studio.js), sung or in the sketch: the
+// transport's ▶ with nothing selected starts the song's audio at the bar the ruler put the playhead at, found by the
+// rendition's own clock (the bar_seconds a whole song's job ends with), and the sketch on that bar's line in its own
+// beats (counted from the first pickup, not bar 1: M.sketchOffset), the transport saying the bar it plays; a selected
+// section's preview is as it was. The page runs on dependency-free DOM and <audio> doubles. Run with
+// `node --test tests/studio_playhead.test.cjs`.
 "use strict";
 const { test } = require("node:test");
 const assert = require("node:assert/strict");
@@ -78,7 +80,9 @@ const BARS = beat / 4;  // 68
 const BAR_SECONDS = Array.from({ length: BARS + 1 }, (_, k) => Math.round((0.911 + 2.4845 * k + (k > BARS - 2 ? 0.4 * (k - BARS + 2) ** 2 : 0)) * 1000) / 1000);
 const WHOLE = { state: "done", url: "/audio/whole.flac", key: "w1", label: "The whole song", progress: 1, result: { bar_seconds: BAR_SECONDS } };
 
-function studio() {
+// lead: where the composition's (and the sketch's) beats put bar 1, counted from the song's first pickup: half a beat
+// for the song's eighth-note pickup, a bar more with a count-in
+function studio({ lead = 0.5 } = {}) {
   const nodes = new Map(), on = {}, asked = [], sketched = [];
   const how = { sketch: new Node("button"), sung: new Node("button") };
   how.sketch.dataset.how = "sketch"; how.sung.dataset.how = "sung";
@@ -123,7 +127,8 @@ function studio() {
       words: ${JSON.stringify(FORM.map(([id, label, , sung], index) => ({ index, label, name: id.split(":")[0], block: id.split(":")[0],
     nth: 0, sung, lines: sung ? ["They sang it *home*"] : [], how: "handed down", mine: false })))},
       listen: {whole: "w1", sections: [], ready: ["w1", "s6"]},
-      composition: {beats_per_bar: 4, duration: 172, sections: ${JSON.stringify(SECTIONS.map(({ id, index }) => ({ id, index, phrases: [] })))}}};`);
+      composition: {beats_per_bar: 4, duration: 172, sections: ${JSON.stringify(SECTIONS.map(({ id, index, start_beat, duration_beats }) =>
+    ({ id, index, start_beat: start_beat + lead, duration_beats, phrases: [] })))}}};`);
   const $ = (id) => document.getElementById(id);
   const find = (node, test) => test(node) ? node : node.childNodes.reduce((hit, c) => hit || find(c, test), null);
   const button = (label) => find($("grid"), (n) => n.getAttribute?.("aria-label") === label);
@@ -155,13 +160,13 @@ test("the whole song, sung, starts at the playhead's bar by the rendition's cloc
   assert.equal(page.$("tPlay").textContent, "■");
 });
 
-test("the sketch starts at the playhead as before, and a selected section is previewed from its own start", async () => {
+test("the sketch starts the song on the playhead's bar line too, and a selected section is previewed from its own start", async () => {
   const page = studio();
   await page.open();
   page.button("Put the playhead at bar 45, Refrain 3").dispatch("click", { clientX: 0 });
   page.how.sketch.dispatch("click");
   page.$("tPlay").dispatch("click");
-  assert.deepEqual(page.sketched, [{ scope: "song", from: 176 }]);
+  assert.deepEqual(page.sketched, [{ scope: "song", from: 176.5 }]);  // bar 45's line in the sketch's beats (it was 176)
   assert.ok(!page.asked.some(([p]) => p === "/api/listen"));
   page.how.sung.dispatch("click");
   find(page, "hear:refrain:2").dispatch("click");  // Refrain 3's ▶: selects it and plays it
@@ -170,6 +175,24 @@ test("the sketch starts at the playhead as before, and a selected section is pre
   assert.equal(page.audio.played, "/audio/refrain.flac");
   assert.equal(page.audio.currentTime, 0);
   assert.equal(page.audio.volume, 1);
+});
+
+test("with a count-in the sketch still starts on the playhead's bar, and the transport says the bar it plays", async () => {
+  const page = studio({ lead: 4.5 });  // a bar of counting and the pickup before bar 1, in the sketch's beats
+  await page.open();
+  page.button("Put the playhead at bar 45, Refrain 3").dispatch("click", { clientX: 0 });
+  page.how.sketch.dispatch("click");
+  page.$("tPlay").dispatch("click");
+  assert.deepEqual(page.sketched, [{ scope: "song", from: 180.5 }]);  // it was 176: more than a bar early
+  const score = page.run("window.SongbirdScore");
+  score.tick(188.5, 0.1);  // two bars in, as the sketch counts them
+  assert.equal(page.$("nowTitle").textContent, "Refrain 3 · bar 47");  // it said bar 48
+  score.tick(4, 0);  // the first pickup, before bar 1: bar 1's, not the last section's
+  assert.equal(page.$("nowTitle").textContent, "Intro · bar 1");
+  score.tick(null);
+  page.button("Put the playhead at bar 1, Intro").dispatch("click", { clientX: 0 });
+  page.$("tPlay").dispatch("click");
+  assert.deepEqual(page.sketched.at(-1), { scope: "song", from: null });  // the song from its start, its first pickup with it
 });
 
 test("bar 1, no playhead, a bar past the song or a job without its clock: the whole song from its very start", async () => {

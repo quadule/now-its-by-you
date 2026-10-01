@@ -137,6 +137,21 @@ test("what is selected: a key, what plays it and how", () => {
   assert.deepEqual(M.position(52, g.sections, 4), { id: "refrain:0", label: "Refrain 1", bar: 14 });
 });
 
+test("the sketch counts beats from the first pickup, the ruler from bar 1's bar line: one turned into the other", () => {
+  const g = M.grid(arrangement, view, sound);  // the ruler's bar 1 at beat -0.5 here
+  const sketch = { sections: [{ id: "intro:0", start_beat: 4 }, { id: "verse:0", start_beat: 20 }] };  // a count-in, then bar 1
+  assert.equal(M.sketchOffset(g, sketch), 4.5);
+  assert.equal(M.sketchOffset(g, null), 0);
+  assert.equal(M.sketchFrom(47.5, g, sketch), 52);  // Refrain 1's bar line, in the sketch's beats
+  assert.equal(M.sketchFrom(-0.5, g, sketch), null);  // bar 1: the song from its start, its first pickup with it
+  assert.equal(M.sketchFrom(null, g, sketch), null);
+  // a beat before bar 1 (the first pickup) is bar 1's, not the last section's; one past the end, the last section's
+  assert.deepEqual(M.position(-1, g.sections, 4), { id: "intro:0", label: "Intro", bar: 1 });
+  assert.equal(M.sectionAtBeat(-1, g.sections).id, "intro:0");
+  assert.equal(M.sectionAtBeat(999, g.sections).id, "refrain:0");
+  assert.equal(M.sectionAtBeat(0, []), null);
+});
+
 test("the keyboard: none fires in a text field; the table's keys", () => {
   const key = (k, o = {}) => M.keyAction({ key: k, target: { tagName: "BODY" }, ...o });
   assert.deepEqual(key(" "), { action: "play", how: "sketch" });

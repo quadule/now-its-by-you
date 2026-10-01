@@ -143,7 +143,7 @@
       const s = secs.find((x) => x.index === t.section);
       if (t.phrase && S.open) C().sketch({ scope: "phrase", index: compIndex(S.open) });
       else if (s) C().sketch({ scope: "section", index: compIndex(s.id) });
-      else C().sketch({ scope: "song", from: S.playhead });
+      else C().sketch({ scope: "song", from: M.sketchFrom(S.playhead, S.grid, state.view.composition) });
     } else if (t.section === null) hearSong();
     else listen("you", t.section);
     paintPlay();
@@ -156,7 +156,7 @@
     b.setAttribute("aria-label", on ? "Stop (Space)" : "Play (Space)");
     b.title = on ? "Stop (Space): back to where it started" : "Play what is selected (Space; Shift+Space sung); press again to stop";
   }
-  function tick(beat, fraction) {  // composer.js, as the sketch plays (null when it stops)
+  function tick(beat, fraction) {  // composer.js, as the sketch plays, in its own beats (null when it stops)
     const head = $("gridHead");
     if (beat === null) {
       S.sketch = false;
@@ -168,18 +168,19 @@
     S.sketch = true;
     const g = S.grid;
     if (!g) return;
-    const where = M.position(beat, g.sections, g.perBar);
+    const at = beat - M.sketchOffset(g, state.view?.composition);  // on the ruler
+    const where = M.position(at, g.sections, g.perBar);
     $("nowTitle").textContent = `${where.label} · bar ${where.bar}`;
     $("nowSub").textContent = "the sketch";
     $("barFill").style.width = `${Math.round((fraction || 0) * 1000) / 10}%`;
-    placeHead(beat);
+    placeHead(at);
     paintPlay();
   }
   function placeHead(beat) {
     const head = $("gridHead"), g = S.grid;
     if (!head || !g || beat === null) return;
-    const s = g.sections.find((x) => beat >= x.startBeat - 1e-9 && beat < x.startBeat + x.beats) || g.sections.at(-1);
-    const cell = document.querySelector(`[data-region="${CSS.escape(s.id)}"]`);
+    const s = M.sectionAtBeat(beat, g.sections);
+    const cell = s && document.querySelector(`[data-region="${CSS.escape(s.id)}"]`);
     if (!cell) return;
     head.hidden = false;
     head.style.left = `${cell.offsetLeft + cell.offsetWidth * Math.min(1, Math.max(0, (beat - s.startBeat) / s.beats))}px`;

@@ -441,18 +441,26 @@ H takes a second or two, the whole song about fifteen seconds on this Mac (the b
 preview: a part heard alone is not the record's exact samples, and the mix's
 balance is judged on the whole song.
 
-The whole song heard sung starts at the score's playhead, as the sketch does:
-on the bar line of the ruler's bar it was put at, found in the audio by the
-rendition's own clock. A whole song's job ends with that clock (`bar_seconds`:
-each bar line of the ruler in seconds of its audio, by `realize.timeline`, so a
-count-in, a slow air and the final ritardando are counted), whether it was made
-now, made before or made in the visitor's browser (from the render spec). Bar 1,
-or no playhead, is the very start, with the breath and the first pickup; at a
-later bar a pickup sung just before its bar line isn't heard, as with any
-playhead. The audio is silent until it sounds there, then comes up over 24 ms,
+The whole song starts at the score's playhead, sung or in the sketch: on the
+bar line of the ruler's bar it was put at. Sung, that bar is found in the audio
+by the rendition's own clock. A whole song's job ends with that clock
+(`bar_seconds`: each bar line of the ruler in seconds of its audio, by
+`realize.timeline`, so a count-in, a slow air and the final ritardando are
+counted), whether it was made now, made before or made in the visitor's browser
+(from the render spec). The sketch counts its beats from the song's first pickup,
+as the composition view does, and the ruler from bar 1's bar line, as the
+arrangement does: the score turns one into the other (`M.sketchOffset`, half a
+beat on this song and a bar more with a count-in), going out with the playhead
+and coming back as the sketch plays, so the transport says the bar being
+played. Bar 1, or no playhead, is the very start, with the breath and the first
+pickup. At a later bar, a pickup sung just before its bar line isn't heard, as
+with any playhead. A section or a line the sketch plays shows its pickup as its
+first bar. The audio is silent until it sounds there, then comes up over 24 ms,
 since a bar line mid-song isn't silence. A selected section is previewed from
 its own start, as ever (tests/studio_playhead.test.cjs, from the ruler's button
-to the audio's time; tests/test_studio.py, the clock against the ruler).
+to the audio's time and the sketch's beat; tests/test_studio.py, the clock
+against the ruler; tests/studio_model.test.cjs and tests/studio_composer.test.cjs,
+the two counts).
 
 One renderer works at a time: recordings first, then the newest preview (a
 preview still waiting is dropped when another is asked for). Every render is

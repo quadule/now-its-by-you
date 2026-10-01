@@ -473,6 +473,20 @@ test("metronome clicks follow score downbeats after pickups in every playback sc
   s.window.SongbirdComposer.stop();
 });
 
+test("the sketch tells the score's transport the bar it plays, in its own beats: a pickup into it said as its first bar", () => {
+  const s = setup();  // bar 1 at beat 0.5, each section a bar, each line's pickup half a beat before its bar line
+  const ticks = [];
+  s.window.SongbirdScore = { tick: (beat) => ticks.push(beat) };
+  s.window.SongbirdComposer.sketch({ scope: "section", index: 2 });  // the refrain: its pickup at 8, its bar line at 8.5
+  assert.equal(ticks.at(-1), 8.5);
+  s.window.SongbirdComposer.sketch({ scope: "song", from: 8.5 });  // the song from the refrain's bar line
+  assert.equal(ticks.at(-1), 8.5);
+  s.window.SongbirdComposer.sketch({ scope: "song" });  // from its start: the first pickup is bar 1's
+  assert.equal(ticks.at(-1), 0.5);
+  s.window.SongbirdComposer.stop();
+  assert.equal(ticks.at(-1), null);
+});
+
 test("the sketch plays the chords and a bass under the tune, from the score, and each can be left out", () => {
   const view = score();
   for (const s of view.composition.sections) for (const p of s.phrases) {
