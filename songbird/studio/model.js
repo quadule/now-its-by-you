@@ -28,6 +28,7 @@
         startBar: Math.round((s.start_beat - first) / perBar) + 1, startBeat: s.start_beat, beats: s.duration_beats,
         startSeconds: s.start_seconds, endSeconds: s.end_seconds,
         sung: s.sung, canPlay: s.can_play, choir: !!s.choir, build: s.build, barOptions: s.bar_options || [s.bars],
+        round: !!s.round, canRound: !!s.can_round, roundWords: s.round_words || "", roundWhy: s.round_why || "",
         first: s.sung ? words(w?.lines?.[0]) : "", wordsMine: !!w?.mine, chords, chordsMine: (own?.phrases || []).some((p) => p.chords_edited),
         moved: Array.isArray(order), by: s.by || {}, program: s.program || {}, paths: s.paths || {}, options: s.options || [],
         problems: s.problems || [], lines: s.lines || [],

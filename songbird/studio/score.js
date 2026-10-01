@@ -388,7 +388,7 @@
       ondragleave: (e) => e.currentTarget.classList.remove("drop"),
       ondrop: (e) => { const from = e.dataTransfer.getData("text/x-section"); if (!from) return; e.preventDefault(); e.stopPropagation(); moveSection(from, { onto: s.id }); } },
     h("span", { class: "name" }, s.label),
-    h("span", { class: "bars" }, `${s.bars} bars${s.sung ? "" : " · instr."}${s.build ? " · build" : ""}`),
+    h("span", { class: "bars" }, `${s.bars} bars${s.sung ? "" : " · instr."}${s.round ? " · a round" : ""}${s.build ? " · build" : ""}`),
     C()?.mini?.(compIndex(s.id)) || null);
   // its length by its right edge: a handle of its own beside the region (not inside it, where a press began the
   // region's drag), 10 px, above and clear of the next section's seam (which starts where this cell ends)
@@ -819,8 +819,11 @@
         chipRow("Length", [...new Set([2, 4, 8, 16, ...s.barOptions])].sort((a, b) => a - b).map((n) => ({ value: n, text: `${n} bars`,
           disabled: !s.barOptions.includes(n), title: s.barOptions.includes(n) ? null : s.sung ? "A sung section is as long as its lines; played, it can be shorter" : "Not this section's" })),
           s.bars, (n) => setBars(s, n), s.by.bars === "you"),
-        s.canPlay ? chipRow("Who sings", [{ value: true, text: "the singer" }, { value: false, text: "nobody: played" }], s.sung,
-          (v) => (v ? releaseEdit(s.paths.sung, `${s.label} sung again`) : setEdit(s.paths.sung, false, `${s.label} played, not sung`)), s.by.sung === "you") : null,
+        // a round: the voices come in one after another (songbird.canon); where the tune can't take one, said why
+        s.canPlay ? chipRow("Who sings", [{ value: "singer", text: "the singer" },
+          { value: "round", text: "a round", disabled: !s.canRound, title: s.canRound ? `The voices come in one after another: ${s.roundWords}` : s.roundWhy },
+          { value: "played", text: "nobody: played" }], s.round ? "round" : s.sung ? "singer" : "played",
+          (v) => whoSings(s, v), s.by.sung === "you" || s.by.round === "you") : null,
         chipRow("Everyone", [{ value: "soft", text: "soft" }, { value: "plays", text: "plays" }, { value: "hard", text: "hard" }], everyone,
           (lv) => { setEdits(M.levelPatch(cells, lv), `Everyone in ${s.label}: ${lv}`); say(`${s.label}: everyone plays ${lv === "plays" ? "as the style has it" : lv}`); },
           cells.some((c) => c.by === "you")),
@@ -842,6 +845,7 @@
         w?.sung ? { kind: w.mine ? "you" : { "handed down": "lineage", "new this time": "time", "drawn by chance": "chance" }[w.how] || "song", text: w.mine ? "these words are yours" : `the words: ${w.how}${(w.tags || []).length ? ` (${w.tags.join(", ")})` : ""}` } : null,
         s.by.bars === "you" ? { kind: "you", text: `${s.bars} bars; the program had ${s.program.bars}` } : null,
         s.by.sung === "you" ? { kind: "you", text: "played, not sung: a drop" } : null,
+        s.by.round === "you" && s.round ? { kind: "you", text: `a round: ${s.roundWords}` } : null,
         s.by.build === "you" ? { kind: "you", text: "a build toward the next section" } : null,
         moved(s) ? { kind: "you", text: "moved here by you" } : null,
         ...s.options.map((opt) => ({ kind: opt.by === "you" ? "you" : opt.by === "chance" ? "chance" : opt.by === "song" ? "song" : "rule", text: opt.text })),
@@ -850,6 +854,13 @@
       hear: hearHow,
       release: { disabled: !anyMine, action: release } });
     return true;
+  }
+  // who sings a section: the singer, a round (its voices one after another), or nobody (played); one choice, two paths
+  function whoSings(s, v) {
+    const next = copyEdits();
+    next[s.paths.round] = v === "round" ? true : null;
+    next[s.paths.sung] = v === "played" ? false : null;
+    commitEdits(next, v === "round" ? `${s.label} as a round` : v === "played" ? `${s.label} played, not sung` : `${s.label} sung by the singer`);
   }
   // a style's option that lives in this section (the stripped start, the band joining line by line...): choosable,
   // lockable (the same value, kept), said with where it came from

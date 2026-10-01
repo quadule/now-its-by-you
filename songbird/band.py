@@ -1185,7 +1185,7 @@ def fills(ctx: Context) -> list[Ev]:
     out: list[Ev] = []
     last_player = None
     for i, s in enumerate(ctx.sections):
-        if not s.sung:
+        if not s.sung or getattr(s, "round", 0):  # (a round: its voices answer each other; songbird.canon)
             continue
         players = [p for p, what in s.parts.items() if what == "fills"]
         if s.parts.get("harp") == "arp" and s.role == "verse":
@@ -1595,6 +1595,11 @@ def arrange(genome, params, placed, lead, end, melody, seconds) -> tuple[list[No
         idioms.shape_plan(ctx, style, shape, rhythm, {"drone"}, "guitar" if ctx.on("guitar") else "harp")
         sung = idioms.backing(ctx, melody, style)
         ctx.choir += [(v.u0, v.u1, v.pitch) for v in sung]  # the band keeps clear of the backing voices too
+    else:  # the seed's own ballad: no backing voices, but a round where a person asked for one (songbird.canon)
+        from .canon import with_round
+
+        sung = with_round(ctx, melody, [])
+        ctx.choir += [(v.u0, v.u1, v.pitch) for v in sung]
     takeover.take_over(ctx, shape if shaped else None)  # a person's arrangement over the program's, if any
     capo = choose_capo(ctx)
     events: list[Ev] = []
@@ -1607,6 +1612,9 @@ def arrange(genome, params, placed, lead, end, melody, seconds) -> tuple[list[No
     events += melodic_parts(ctx)
     events += prelude_part(ctx)
     sung_end = max((m["u_end"] for m in melody), default=end)
+    from .canon import sung_until
+
+    sung_end = sung_until(ctx, sung_end)  # (a round's last voice sings on after the singer: songbird.canon)
     events += coda_part(ctx, sung_end)
     if ctx.on("drum"):
         events += drum_part(ctx)
@@ -1644,7 +1652,9 @@ def arrange(genome, params, placed, lead, end, melody, seconds) -> tuple[list[No
         s = ctx.sections[min(max(e.section, 0), len(ctx.sections) - 1)]
         notes.append(Note(part=e.part, start=start, dur=max(dur, 0.03), pitch=float(e.pitch),
                           vel=float(np.clip(e.vel, 0.02, 1.0)), section=s.name, art=e.art))
-    if shaped:
+    if shaped or sung:
+        from . import idioms
+
         notes += idioms.sung_notes(sung, seconds, ctx.seed)
     settings = {
         **{name: getattr(ctx.band, name) for name in INSTRUMENTS},

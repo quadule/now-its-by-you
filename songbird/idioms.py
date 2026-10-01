@@ -2232,9 +2232,18 @@ class Sung:
     line_end: bool
     section: str
     phrase: str
+    art: str = ""  # "round": a round's later voice (songbird.canon), sung where it is written, whoever sings it
 
 
 def backing(ctx: Context, melody: list[dict], style) -> list[Sung]:
+    """The backing voices' notes, and a round's later voices where a person asked for one (songbird.canon: nobody
+    else's backing in a round)."""
+    from .canon import with_round
+
+    return with_round(ctx, melody, _backing(ctx, melody, style))
+
+
+def _backing(ctx: Context, melody: list[dict], style) -> list[Sung]:
     sdef = getattr(ctx, "sdef", None)
     if sdef is not None and sdef.group:  # a style that sings as a group: its voices are its band
         return shape_parts(ctx, melody, style)
@@ -2511,7 +2520,7 @@ def sung_notes(sung: list[Sung], seconds, seed: int) -> list[Note]:
         end = seconds(s.u1)
         out.append(Note(part=f"choir{s.voice + 1}", start=start, dur=max(end - start, 0.05), pitch=float(s.pitch),
                         vel=float(np.clip(s.vel, 0.05, 1.0)), syllable=s.syllable, word=s.word, word_len=s.word_len,
-                        line_end=s.line_end, section=s.section, phrase=s.phrase))
+                        line_end=s.line_end, section=s.section, phrase=s.phrase, art=s.art))
     return out
 
 
@@ -2710,6 +2719,9 @@ def arrange_style(genome, params, placed, lead, end, melody, seconds, sdef) -> t
     takeover.prepare(ctx, lead)  # which section of the form each is, as a person may have arranged it
     mark_dissolved(ctx)  # a dub's version: the sections after the song dissolves (Style.dissolve)
     sung_end = max((m["u_end"] for m in melody), default=end)
+    from .canon import sung_until
+
+    sung_end = sung_until(ctx, sung_end)  # (a round's last voice sings on after the singer: songbird.canon)
     if params.style.ending == "amen" and end > sung_end + 1e-9 and ctx.sections:
         # the coda: a bar of IV and a bar of I after the last line, in the last section's hands
         last = len(ctx.sections) - 1

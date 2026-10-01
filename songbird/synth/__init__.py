@@ -88,7 +88,11 @@ def stem_jobs(score: Score, sr: int = SR, seed: int = 0, voice: VoiceParams | No
         i = int(name[5:]) - 1
 
         def lineage(name=name, singer=singer, i=i) -> np.ndarray:
-            y = sing(list(score.part(name)), sr, singer, seed + 101 * (i + 1), score.lexicon)[:length]
+            mine = list(score.part(name))
+            if singer.shift and any(n.art == "round" for n in mine):  # a round's voice sings the tune where it is
+                # written, as the singer does (songbird.canon): a low singer an octave down goes under the throat's floor
+                mine = [replace(n, pitch=n.pitch - singer.shift) if n.art == "round" else n for n in mine]
+            y = sing(mine, sr, singer, seed + 101 * (i + 1), score.lexicon)[:length]
             y = pan(_filled(y, length), CHOIR_PANS[i % len(CHOIR_PANS)])
             y *= VOICE_GAIN
             y *= CHOIR_GAIN
@@ -107,7 +111,9 @@ def matched(score: Score, parts: list[str], singers: list[VoiceParams]) -> list[
     octave-down singer, the longest tract) to the lowest part, each singing its part where it is written (a low
     stand-in otherwise sings everything an octave down: a treble under the tune, an under voice below what the
     throat sings cleanly), and each held to a choir's vibrato and scoops."""
-    middle = {p: float(np.median([n.pitch for n in score.part(p)])) for p in parts}
+    # (a round's notes are the tune, whoever sings them: not the part's range; songbird.canon)
+    middle = {p: float(np.median([n.pitch for n in score.part(p) if n.art != "round"]
+                                 or [n.pitch for n in score.part(p)])) for p in parts}
     by_part = sorted(parts, key=lambda p: (middle[p], p))
     by_voice = sorted(range(len(singers)), key=lambda k: (singers[k].shift, singers[k].tract, k))
     given = {part: singers[k] for part, k in zip(by_part, by_voice)}

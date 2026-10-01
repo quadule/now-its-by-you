@@ -964,8 +964,8 @@ class Studio:
         with band_mod.overheard() as heard:
             self._score(v)
         grid = takeover.grid(self.genome, v, heard)
-        for s in grid["sections"]:  # where the voices before sing (the score's track for them): a choir section, sung
-            s["choir"] = bool(v.params.choir and s["sung"] and self.genome.section(s["name"]).choir)
+        for s in grid["sections"]:  # where the voices before sing (the score's track for them): a choir section, sung, or a round
+            s["choir"] = bool(s.get("round") or v.params.choir and s["sung"] and self.genome.section(s["name"]).choir)
         return {"key": self.key(v, None), **grid}
 
     # ------------------------------------------------------------ notes in (docs/STUDIO.md, "Notes in")

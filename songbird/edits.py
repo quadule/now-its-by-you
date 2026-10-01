@@ -35,7 +35,7 @@ keeps. An edit that can't be kept is left out and said why, never bent.
     words.bridge2        the second bridge's stanza
     words.tag            the tag's syllable
     phrasing             whose way the song is sung: a phrasing made on this computer
-    arrange.<section>:<n>.<player>.level|pattern|from|fill, arrange.<section>:<n>.bars|sung|build
+    arrange.<section>:<n>.<player>.level|pattern|from|fill, arrange.<section>:<n>.bars|sung|build|round
                          the arrangement taken over, section by section and player by player (songbird.takeover):
                          in or out and how hard, what it plays, the line it comes in at, a drum fill; a section's
                          length, played rather than sung, a build; null: the program's own
@@ -614,7 +614,7 @@ class Overrides:
         for path, why in takeover.shape_problems(self.genome, out["form"], mine).items():
             # a length asked for now goes back to what the version held; one held from before (a section sung
             # again now) goes back to the section's own
-            was = before.get(path.split(".")[1], {}).get("bars") if path in self.edits else None
+            was = before.get(path.split(".")[1], {}).get(path.rsplit(".", 1)[1]) if path in self.edits else None
             takeover.put(mine, path, self.genome, was)
             if takeover.shape_problems(self.genome, out["form"], mine).get(path):
                 takeover.put(mine, path, self.genome, None)

@@ -351,6 +351,13 @@ def realize(genome: Genome, params: Params, verses=None, phrasing: Phrasing | No
     # each line of the form as its place sings it: its own chords and tune where a person gave it some, else the
     # line everywhere (the very phrase objects, where no place has its own)
     at_places = iter(form_phrases(genome, params))
+    from .canon import plans
+
+    # a section sung as a round (songbird.canon): for each line laid, (its section's place in the form, its line
+    # there), and the lines after its own where its later voices finish (the singer silent, no tune played)
+    rounds_ = plans(genome, params)
+    in_round: dict[int, tuple[int, int]] = {}
+    tails: set[int] = set()
     for j, (name, patch) in enumerate(zip(params.form, patches)):
         section = genome.section(name)  # bridge2: the bridge again, same phrases and choir
         lines: list = [None] * len(section.phrases)
@@ -371,8 +378,18 @@ def realize(genome: Genome, params: Params, verses=None, phrasing: Phrasing | No
             [(pid, lines[k] if sung and k < len(lines) else None)
              for pid, sung, k in zip([p for p, _ in lined[j]], [s for _, s in lined[j]],
                                      np.cumsum([bool(s) for _, s in lined[j]]) - 1)]
-        for pid, line in laid:
+        laid = list(laid)
+        for k, (pid, line) in enumerate(laid):
             phrase = next(at_places)
+            if rounds_[j] is not None:
+                from .takeover import own_line
+
+                ahead = len(laid) - len(rounds_[j].under)  # its lines, then its tail
+                own = own_line(genome, name, lined[j][:ahead], k) if k < ahead else None
+                if own is not None:
+                    in_round[len(placed)] = (j, own)
+                elif k >= ahead:
+                    tails.add(len(placed))
             placed.append((name, phrase, t, line))
             t += phrase.bars * meter.bar
     for name, phrase, line in style_mod.repeated(genome, params, placed):  # a style's ending may sing the last line again
@@ -393,6 +410,8 @@ def realize(genome: Genome, params: Params, verses=None, phrasing: Phrasing | No
     # a dub's version (songbird.style.fragments): the lines after the song dissolves sung in fragments; {} otherwise
     kept = style_mod.fragments(genome, params, placed)
     for j, (section_name, phrase, start, line) in enumerate(placed):
+        if j in tails:  # a round's later voices finish here: nobody else sings or plays the tune
+            continue
         sung = phrase.sung
         words = sung_words(line) if line else [(None, None, 1)] * len(sung)
         if j in kept:  # the rest of the line isn't sung: the band's lead may play it (songbird.idioms)
@@ -433,12 +452,14 @@ def realize(genome: Genome, params: Params, verses=None, phrasing: Phrasing | No
                     section=section_name,
                     phrase=phrase.id,
                     chord=chord,
-                    choir=genome.section(section_name).choir,
+                    # (a round's voices are the lineage there, singing its tune, not harmonizing it)
+                    choir=genome.section(section_name).choir and j not in in_round,
                     index=k,
                     composed=composed,
                     gesture=gesture(phrasing, phrase.id, k),
                     **({"melisma": tuple((off, params.tonic + degree_semitones(d, params.mode)) for off, d in turns)}
                        if turns else {}),
+                    **({"round": in_round[j][0], "line": in_round[j][1]} if j in in_round else {}),
                 )
             )
 
@@ -450,8 +471,8 @@ def realize(genome: Genome, params: Params, verses=None, phrasing: Phrasing | No
     deliveries: dict[str, list[tuple[Note, Note]]] = {"voice": []}
     choirs = choir_voicing(melody, params.choir, params.tonic, params.mode)  # the band keeps clear of the same
     for i, m in enumerate(melody):
-        u_end = min(m["u_end"], melody[i + 1]["u"]) if i + 1 < len(melody) else (
-            min(m["u_end"], sung_end) if m["composed"] else sung_end)
+        u_end = min(m["u_end"], melody[i + 1]["u"]) if i + 1 < len(melody) else (  # (a round's later voices
+            min(m["u_end"], sung_end) if m["composed"] or "round" in m else sung_end)  # sing on after the singer)
         start_s = max(0.0, seconds(m["u"]) + jitter())
         if m["syllable"]:
             beat = seconds_per_unit * meter.beat
@@ -502,7 +523,8 @@ def realize(genome: Genome, params: Params, verses=None, phrasing: Phrasing | No
     held = {"fiddle": 1.0, "whistle": 0.8}
     notes = [
         replace(n, dur=n.dur + held.get(n.part, ring))
-        if n.start + n.dur >= final - 1e-3 and (n.part != "voice" or vocal) else n  # voices alone: the lead holds too
+        if n.start + n.dur >= final - 1e-3 and (n.part != "voice" and n.art != "round" or vocal) else n  # voices
+        # alone: the lead holds too (and a round's last voice, which ends as the singer would, songbird.canon)
         for n in notes
     ]
 

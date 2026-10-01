@@ -358,8 +358,8 @@ function describePath(path) {
   const where = (sid) => sid.replace(/^(\w+?)(2)?:(\d+)$/, (_, name, two, n) => `${two ? "second " : ""}${name} ${Number(n) + 1}`);
   const cell = path.match(/^arrange\.([A-Za-z0-9_-]+:\d+)\.([a-z0-9]+)\.(level|pattern|from|fill)$/);  // the score's grid
   if (cell) return `your ${cell[2]} in ${where(cell[1])}`;
-  const sec = path.match(/^arrange\.([A-Za-z0-9_-]+:\d+)\.(bars|sung|build)$/);
-  if (sec) return `your ${{ bars: "length", sung: "drop", build: "build" }[sec[2]]} in ${where(sec[1])}`;
+  const sec = path.match(/^arrange\.([A-Za-z0-9_-]+:\d+)\.(bars|sung|build|round)$/);
+  if (sec) return `your ${{ bars: "length", sung: "drop", build: "build", round: "round" }[sec[2]]} in ${where(sec[1])}`;
   const into = path.match(/^transition\.([A-Za-z0-9_-]+:\d+)$/);
   if (into) return `your transition into ${where(into[1])}`;
   const sound = path.match(/^(sound|mix)\.([a-z0-9]+)\.(\w+)$/);

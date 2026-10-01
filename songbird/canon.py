@@ -48,16 +48,18 @@ def _lines(genome, name: str):
 
 
 def _sung(genome, pids, start: float, mode: str) -> list[list]:
-    """Lines as one voice sings them from `start` (grid units): [onset, end, semitones from the tonic], a held
-    note giving way to the next line's pickup."""
+    """Lines as one voice sings them from `start` (grid units): [onset, end, semitones from the tonic, strong], a
+    held note giving way to the next line's pickup; strong: on a foot or a beat long or more (as tune_clash
+    weighs a note)."""
     from .theory import degree_semitones
 
-    notes, t0 = [], start
+    notes, t0, m = [], start, genome.meter
     for pid in pids:
         p = genome.phrases[pid]
         for n in p.sung:
-            notes.append([t0 + n.onset, t0 + n.onset + n.dur, degree_semitones(n.degree, mode, n.alter)])
-        t0 += p.bars * genome.meter.bar
+            notes.append([t0 + n.onset, t0 + n.onset + n.dur, degree_semitones(n.degree, mode, n.alter),
+                          n.dur >= m.beat or n.onset % m.foot == 0])
+        t0 += p.bars * m.bar
     notes.sort()
     for a, b in zip(notes, notes[1:]):
         a[1] = min(a[1], b[0])
@@ -73,12 +75,15 @@ def _chords(genome, pids, start: float) -> list[tuple]:
                 a = t0 + b * m.bar + k * m.bar // len(in_bar)
                 out.append((a, a + m.bar // len(in_bar), symbol))
         t0 += p.bars * m.bar
+    if out:  # a pickup before the first bar line sings over the first bar's chord (as tune_clash has it)
+        out[0] = (float("-inf"), *out[0][1:])
     return out
 
 
-def _weight(meter, a: float, b: float) -> float:
+def _weight(meter, a: float, b: float, strong: bool) -> float:
+    """Beats of an overlap from a to b, counted whole where a note in it is strong, a third where none is."""
     w = (b - a) / meter.beat
-    return w if (b - a) >= meter.beat or a % meter.foot == 0 else w / 3.0
+    return w if strong else w / 3.0
 
 
 def _against(meter, notes, chords, mode: str) -> float:
@@ -86,7 +91,7 @@ def _against(meter, notes, chords, mode: str) -> float:
     from .style import _chord_pcs
 
     bad = 0.0
-    for a0, a1, p in notes:
+    for a0, a1, p, strong in notes:
         for c0, c1, symbol in chords:
             s, e = max(a0, c0), min(a1, c1)
             if e <= s:
@@ -95,7 +100,7 @@ def _against(meter, notes, chords, mode: str) -> float:
             pc = p % 12
             if pc in whole or not any(min((pc - t) % 12, (t - pc) % 12) == 1 for t in triad):
                 continue
-            bad += _weight(meter, s, e)
+            bad += _weight(meter, s, e, strong)
     return bad
 
 
@@ -143,12 +148,12 @@ def clash(genome, name: str, plan: Round, mode: str) -> dict:
     between = seconds = overlap = 0.0
     for i in range(plan.voices):
         for j in range(i + 1, plan.voices):
-            for a0, a1, pa in sung[i]:
-                for b0, b1, pb in sung[j]:
+            for a0, a1, pa, strong_a in sung[i]:
+                for b0, b1, pb, strong_b in sung[j]:
                     s, e = max(a0, b0), min(a1, b1)
                     if e <= s:
                         continue
-                    w = _weight(meter, s, e)
+                    w = _weight(meter, s, e, strong_a or strong_b)
                     overlap += w
                     interval = (pa - pb) % 12
                     if interval in (1, 11, 6):
@@ -206,3 +211,107 @@ def choose(genome, name: str, asked, mode: str | None = None) -> Round | None:
         if plan is not None:
             return plan
     return next((p for p in found if not p.whole), None)
+
+
+# ---------------------------------------------------------------- in a version (songbird.takeover, realize, idioms)
+
+
+def plans(genome, params) -> list[Round | None]:
+    """Each section of the form's round, as a person asked for it (arrange.<section>:<n>.round) and this
+    version's mode and chords let it be sung; None where there is none (and everywhere, with nobody asking)."""
+    from .takeover import arranged
+
+    held = arranged(params)
+    if not held or not any("round" in entry for entry in held.values()):
+        return [None] * len(params.form)
+    from .composition import harmonized, section_ids
+
+    genome = harmonized(genome, params)  # a person's chords, which the band plays under the voices
+    out = []
+    for sid, name in zip(section_ids(params.form), params.form):
+        entry = held.get(sid) or {}
+        asked = entry.get("round")
+        if not asked or entry.get("bars") is not None or entry.get("sung") is False:
+            out.append(None)
+            continue
+        out.append(choose(genome, name, asked, params.mode))
+    return out
+
+
+def lines(genome, name: str, plan: Round, laid=None) -> list[tuple[str, bool]]:
+    """A round section's tune lines, as takeover.phrase_plan lays them: its own (or as its style lays them,
+    `laid`: house's drop), then the lines the band plays while the later voices finish (no melody there:
+    realize lays none)."""
+    own = laid if laid is not None else [(pid, True) for pid in genome.section(name).phrases]
+    return list(own) + [(pid, False) for pid in plan.under]
+
+
+VEL = 0.95  # an entry's notes against the singer's (a backing voice's are 0.8 of them: an entry sings the tune)
+
+
+def entries(ctx, melody: list[dict]) -> list:
+    """The later voices of every round in the version, as backing voices (idioms.Sung, voice v the part
+    choir{v+1}): the singer's own notes in the section from the round's first line, each voice `distance` later
+    than the one before, on the same words and pitches. The oldest comes in first and the parent last (choir1),
+    so the voice nearest the singer finishes the round. realize marks the singer's notes in a round (m["round"]:
+    the section's place in the form, m["line"]: which of its own lines)."""
+    from .idioms import Sung
+
+    rounds = plans(ctx.genome, ctx.params)
+    if not any(rounds):
+        return []
+    out = []
+    for k, plan in enumerate(rounds):
+        if plan is None:
+            continue
+        mine = sorted((m for m in melody if m.get("round") == k and m["syllable"] and m["line"] >= plan.first),
+                      key=lambda m: m["u"])
+        for e in range(1, plan.voices):
+            shift, voice = e * plan.distance, plan.voices - 1 - e
+            for j, m in enumerate(mine):
+                u1 = min(m["u_end"], mine[j + 1]["u"]) if j + 1 < len(mine) else m["u_end"]
+                out.append(Sung(voice, m["u"] + shift, u1 + shift, int(m["pitch"]), VEL * float(m["vel"]),
+                                m["syllable"], m["word"], m["word_len"], m["line_end"], m["section"], m["phrase"],
+                                "round"))
+    return out
+
+
+def spans(ctx) -> list[tuple[float, float]]:
+    """Where the version's rounds are sung, in grid units: from the section's first pickup to the end of its
+    tail."""
+    rounds = plans(ctx.genome, ctx.params)
+    out = []
+    for k, plan in enumerate(rounds):
+        if plan is None:
+            continue
+        _sid, name, a, b = ctx.spans[k]
+        first = ctx.genome.phrases[ctx.genome.section(name).phrases[0]]
+        out.append((a - first.pickup, b))
+    return out
+
+
+def sung_until(ctx, sung_end: float) -> float:
+    """Where the singing ends: the singer's last note, or a round's last voice after it."""
+    return max([sung_end] + [b for _a, b in spans(ctx)]) if any(plans(ctx.genome, ctx.params)) else sung_end
+
+
+def with_round(ctx, melody: list[dict], sung: list) -> list:
+    """Backing voices (idioms.backing's) with the version's rounds in them: nobody else's backing in a round
+    section (a held chord running into one stops where it begins), and the round's later voices there. The same
+    list where there is no round."""
+    if not any(plans(ctx.genome, ctx.params)):
+        return sung
+    from dataclasses import replace
+
+    where = spans(ctx)
+    kept = []
+    for s in sung:
+        if any(a - 1e-9 <= s.u0 < b - 1e-9 for a, b in where):
+            continue
+        into = min((a for a, b in where if s.u0 < a < s.u1 - 1e-9), default=None)
+        if into is not None:
+            if into - s.u0 < ctx.sub - 1e-9:
+                continue
+            s = replace(s, u1=into)
+        kept.append(s)
+    return sorted(kept + entries(ctx, melody), key=lambda x: (x.u0, x.voice))

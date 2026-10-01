@@ -13,6 +13,7 @@ stop-time, the breakdown). That stays the default and stays visible. A person ma
     arrange.<section>:<n>.bars               the section's length, 2, 4, 8 or 16 bars, fitted from its tune lines
     arrange.<section>:<n>.sung               false: played, not sung (a drop); its words are still drawn
     arrange.<section>:<n>.build              true: its players fill in bar by bar toward the next section
+    arrange.<section>:<n>.round              true, or 2 to 4 voices: sung as a round (songbird.canon)
 
 kept in params.composition["arrange"] ({"verse:0": {"bars": 16, "sung": False, "build": True, "players":
 {"kit": {"level": "hard"}}}}), by the arrangement's own section ids as form.order and part.* name them. Absent,
@@ -30,12 +31,12 @@ from functools import lru_cache
 
 LEVELS = ("out", "soft", "plays", "hard")  # the page's words for a cell (docs/STUDIO-REDESIGN.md)
 BARS = (2, 4, 8, 16)
-SECTION_FIELDS = ("bars", "sung", "build")
+SECTION_FIELDS = ("bars", "sung", "build", "round")
 CELL_FIELDS = ("level", "pattern", "from", "fill")
 MAX_SECTIONS = 48  # as composition.MAX_SECTIONS
 MAX_LINES = 16  # lines a section can have (a 16-bar section of two-bar lines, or more short ones)
 PATH = re.compile(r"arrange\.([A-Za-z][A-Za-z0-9_-]{0,31}):(\d{1,2})\."
-                  r"(?:([a-z][a-z0-9-]{0,31})\.)?(bars|sung|build|level|pattern|from|fill)")
+                  r"(?:([a-z][a-z0-9-]{0,31})\.)?(bars|sung|build|round|level|pattern|from|fill)")
 # how hard a level plays, against the program's own (1); the section's energy itself doesn't change
 LEVEL_VEL = {"soft": 0.8, "plays": 1.0, "hard": 1.15}
 # where soft and hard read a style's table: the section's own busyness (songbird.idioms.busy), less or more
@@ -202,7 +203,7 @@ def target(genome, path: str) -> tuple[str, str, str | None, str]:
     match = PATH.fullmatch(path)
     if match is None:
         raise ValueError("an arrangement choice needs its section and which time it comes (verse:1), then a "
-                         "player and its level, pattern, from or fill, or the section's bars, sung or build")
+                         "player and its level, pattern, from or fill, or the section's bars, sung, build or round")
     name, nth, player, field = match.groups()
     try:
         genome.section(name)
@@ -237,6 +238,20 @@ def check(genome, path: str, value):
                     raise ValueError(f"the {name} is a line quoted to fit its {own} bars; its length stays")
                 raise ValueError(f"the {name}'s lines can't make {bars} bars")
             return bars
+        if field == "round":  # sung as a round (songbird.canon): true, or how many voices, the singer among them
+            from . import canon
+
+            if value is False:
+                return None
+            if value is not True and (isinstance(value, bool) or not isinstance(value, int) or value not in canon.VOICES):
+                raise ValueError(f"a round is true, or {', '.join(map(str, canon.VOICES[:-1]))} or "
+                                 f"{canon.VOICES[-1]} voices, the singer among them")
+            if not canon.roundable(genome, name):
+                raise ValueError(f"the {name} has no words on lines of one length to sing as a round" if not
+                                 section.lyrics else f"the {name} isn't lines of one tune a round can go over")
+            if canon.choose(genome, name, value) is None:
+                raise ValueError(f"the {name}'s tune doesn't sit over itself as a round")
+            return value
         if not isinstance(value, bool):
             raise ValueError(f"{field} is true or false")
         if field == "sung":
@@ -315,7 +330,7 @@ def value(genome, params, path: str):
         if styled is not None:
             return sum(genome.phrases[p].bars for p, _ in styled)
         return sum(genome.phrases[p].bars for p in genome.section(name).phrases) * rounds(genome, params, name)
-    return bool(genome.section(name).lyrics) if field == "sung" else False
+    return bool(genome.section(name).lyrics) if field == "sung" else False  # (no build, no round)
 
 
 def shape_problems(genome, form, held: dict) -> dict[str, str]:
@@ -328,6 +343,11 @@ def shape_problems(genome, form, held: dict) -> dict[str, str]:
     for sid, entry in held.items():
         bars = entry.get("bars")
         name = names.get(sid) or sid.split(":", 1)[0]
+        if entry.get("round") and (bars is not None or entry.get("sung") is False):  # (songbird.canon)
+            out[f"arrange.{sid}.round"] = (f"a round is sung, as long as its voices take; the {name} is "
+                                           + ("played now" if entry.get("sung") is False else
+                                              "a length of your own now: give it its own length first"))
+            continue
         if bars is None or not genome.section(name).lyrics:
             continue
         sung = entry.get("sung", True) is not False
@@ -361,6 +381,11 @@ def silent(genome, params, path: str, edits: dict | None = None) -> str | None:
     if player is None:
         if field == "build" and entry.get("build") and ids.index(sid) == len(ids) - 1:
             return "a build leads into the next section, and this one ends the song"
+        if field == "round" and entry.get("round"):
+            from .canon import choose
+
+            if choose(genome, name, entry["round"], params.mode) is None:  # (its key's mode, songbird.canon)
+                return f"in this version's mode the {name}'s tune doesn't sit over itself as a round; the choice waits"
         return None
     if not params.band.plays(player):
         if sat_out(params, player, edits):
@@ -413,6 +438,9 @@ def phrase_plan(genome, params) -> list[list[tuple[str, bool]]]:
 
     held = arranged(params)
     styled = own_lines(genome, params)  # a style's own lengths (house's), under a person's
+    from .canon import lines as round_lines, plans
+
+    rounds_ = plans(genome, params)  # a round's (songbird.canon): its own lines and its tail; None everywhere else
     out = []
     for k, (sid, name) in enumerate(zip(section_ids(params.form), params.form)):
         section = genome.section(name)
@@ -426,7 +454,9 @@ def phrase_plan(genome, params) -> list[list[tuple[str, bool]]]:
                 laid = fit(genome, name, None, sung and entry.get("sung", True) is not False)
             return laid
 
-        if entry and entry.get("bars") is not None:
+        if rounds_[k] is not None:
+            lines = round_lines(genome, name, rounds_[k], styled[k])
+        elif entry and entry.get("bars") is not None:
             lines = fitted()
         elif styled[k] is not None and not (entry and entry.get("sung") is False):
             lines = styled[k]
@@ -680,12 +710,18 @@ def take_over(ctx, plan=None) -> None:
     ballad = _ballad(ctx)
     bar = ctx.meter.bar
     lined = dict(zip([o[0] for o in ctx.spans], phrase_plan(ctx.genome, ctx.params)))
+    from .canon import plans
+
+    rounds_ = dict(zip([o[0] for o in ctx.spans], plans(ctx.genome, ctx.params)))  # a round's (songbird.canon)
     for i, s in enumerate(ctx.sections):
         if not _entry(ctx, i):
             continue
-        # a section played, or the bars a sung one plays after its lines: the lead plays the tune there
+        # a section played, or the bars a sung one plays after its lines: the lead plays the tune there (not a
+        # round's tail, where its later voices sing it)
         u, played = s.u0, []
-        for pid, sung in lined.get(ctx.sids[i][0], []):
+        laid = lined.get(ctx.sids[i][0], [])
+        plan = rounds_.get(ctx.sids[i][0])
+        for pid, sung in laid[:len(laid) - len(plan.under)] if plan is not None else laid:
             end = u + ctx.genome.phrases[pid].bars * bar
             if not sung:
                 played.append((u, end))
@@ -697,6 +733,11 @@ def take_over(ctx, plan=None) -> None:
         elif played:
             ctx.taken["played"][i] = (played[0][0], played[-1][1])
         ctx.taken["program"][i] = dict(s.parts)
+        if plan is not None:  # a round: the voices carry the tune; no player on a line of its own, no fills
+            s.round = plan.voices
+            for player, what in list(s.parts.items()):
+                if what in LINES:
+                    s.parts.pop(player)
     for i, s in enumerate(ctx.sections):
         entry = _entry(ctx, i)
         cells = entry.get("players", {})
@@ -825,6 +866,36 @@ ROLE_WORDS = {"intro": "the intro", "verse": "a verse", "refrain": "a refrain", 
               "bridge": "the bridge", "tag": "the tag", "outro": "the outro"}
 
 
+NUMBER_WORDS = {2: "two", 3: "three", 4: "four"}
+
+
+def round_words(plan, genome) -> str | None:
+    """How a round is sung, in the page's words, for a tooltip: "three voices, a line apart"."""
+    if plan is None:
+        return None
+    voices = f"{NUMBER_WORDS.get(plan.voices, plan.voices)} voices"
+    if not plan.whole:
+        return f"{voices} on its last line, a bar apart"
+    lines = plan.distance // (genome.phrases[plan.under[0]].bars * genome.meter.bar) if plan.under else 1
+    return f"{voices}, {'a line' if lines == 1 else f'{NUMBER_WORDS.get(lines, lines)} lines'} apart"
+
+
+def round_refusal(genome, name: str, entry: dict, params) -> str | None:
+    """Why a section can't be sung as a round here, in the page's words (None: it has no words to sing)."""
+    from .canon import roundable
+
+    section = genome.section(name)
+    if not section.lyrics:
+        return None
+    if entry.get("sung") is False:
+        return "A round is sung; this section is played"
+    if entry.get("bars") is not None:
+        return "A round's length is its voices'; give the section its own length first"
+    if not roundable(genome, name):
+        return "Its lines aren't one tune that can go over itself"
+    return "Its tune doesn't fit over itself here"
+
+
 def level_of(busy: float, playing: bool) -> str:
     """How hard the program has a player play, in the grid's four words: from how busy the band is there."""
     if not playing:
@@ -871,8 +942,10 @@ def grid(genome, v, heard: dict) -> dict:
     band_words = explain.STYLE_NAMES.get(sname, sname).split(",")[0]
     everyone = explain.players(params.band, style)
     plan = phrase_plan(genome, params)
+    from .canon import choose, plans
     from .style import own_lines
 
+    plans_ = plans(genome, params)  # the version's rounds (songbird.canon)
     styled = own_lines(genome, params)  # a style's own lengths (house's): the program's
     verses = [k for k, n in enumerate(params.form) if genome.section(n).lyrics == "verse"]
     refrains = [k for k, n in enumerate(params.form) if genome.section(n).lyrics == "refrain"]
@@ -893,6 +966,10 @@ def grid(genome, v, heard: dict) -> dict:
         sung_now = any(sung for _, sung in plan[k])
         played = bool(section.lyrics) and entry.get("sung") is False
         options = sorted({own} | {n for n in BARS if fit(genome, name, n, bool(section.lyrics) and not played)})
+        round_now = plans_[k]  # sung as a round (songbird.canon): its length is its voices'
+        if round_now is not None:
+            options = [bars]
+        could = choose(genome, name, True, params.mode) if not played and entry.get("bars") is None else None
         lines, u = [], a
         for j, (pid, sung) in enumerate(plan[k]):
             lines.append({"index": j, "phrase": pid, "sung": sung, "start_beat": (u - clock.lead) / beat})
@@ -928,10 +1005,13 @@ def grid(genome, v, heard: dict) -> dict:
             "index": k, "id": sid, "name": name, "label": title, "role": s.role, "energy": round(s.energy, 3),
             "bars": bars, "bar_options": options, "own_bars": own, "sung": sung_now, "can_play": bool(section.lyrics),
             "build": bool(entry.get("build")), "lines": lines,
+            "round": round_now is not None, "round_words": round_words(round_now or could, genome),
+            "can_round": could is not None or round_now is not None,
+            "round_why": None if could is not None or round_now is not None else round_refusal(genome, name, entry, params),
             "start_beat": (a - clock.lead) / beat, "duration_beats": (b - a) / beat,
             "start_seconds": clock.seconds(a), "end_seconds": clock.seconds(b),
             "pair": [x for x in ctx.sids[i] if x != sid], "options": said, "paths": paths,
-            "program": {"bars": own, "sung": bool(section.lyrics), "build": False},
+            "program": {"bars": own, "sung": bool(section.lyrics), "build": False, "round": False},
             "by": {f: _whose(v, [p], f in was) for f, p in paths.items()},
             "problems": [p for p in v.problems if p["path"].startswith(f"arrange.{sid}.")
                          and p["path"].count(".") == 2],
@@ -958,6 +1038,9 @@ def grid(genome, v, heard: dict) -> dict:
             if entry.get("build") and whose == "program" and now:
                 why.insert(0, {"kind": "you", "text": "the section builds, as you chose: the players come in one "
                                                     "after another and it grows louder toward what follows"})
+            if round_now is not None and whose == "program" and not now and program["pattern"] in LINES:
+                why.insert(0, {"kind": "you", "text": f"a round, as you chose: the voices carry the tune, so the "
+                                                    f"{explain.player(player)} rests"})
             late = (cell_now.get("from") and starts[min(cell_now["from"], len(starts) - 1)]) \
                 or taken["build"].get((i, player)) or (enters if enters is not None and a - 1e-9 <= enters < b else None)
             fills = fills_for(player) and not ballad
