@@ -12,6 +12,7 @@ Inside the archive (docs/PACKET.md):
     __main__.py       the bootstrap (songbird/bootstrap.py): standard library only
     README.txt        what the file is, in plain words
     LICENSE           CC0
+    CREDITS.md        the singers who asked to be named
     manifest.json     the rendition's record, with its lineage: id, generation, parent, ancestry
     genome.json       the song's skeleton, as it was sung
     lyrics.txt        the words as sung
@@ -158,7 +159,7 @@ def program_files(root: Path = ROOT) -> dict[str, bytes]:
                 or any(part.startswith(".") for part in rel.parts):
             continue
         files[f"program/{rel.as_posix()}"] = path.read_bytes()
-    for name in ("pyproject.toml", "LICENSE"):  # the license travels with the program, so children carry it too
+    for name in ("pyproject.toml", "LICENSE", "CREDITS.md"):  # the license and the credits travel with the program
         if (root / name).exists():
             files[f"program/{name}"] = (root / name).read_bytes()
     total = sum(len(b) for b in files.values())
@@ -274,6 +275,7 @@ Inside:
                       {str(m.get('program_sha256') or '?')[:16]}, is the same in every version it sings)
     requirements.txt  what it needs to run
     LICENSE           CC0: this song and its program belong to no one
+    CREDITS.md        who sang the first version along with it, and asked to be named
 
 Who made this song? Nobody knows.
 """
@@ -309,6 +311,7 @@ def pack(flac: str | Path, record: dict, genome: str | Path, lyrics: str | None 
         "README.txt": readme(m).encode(),
         "LICENSE": ((root / "LICENSE").read_bytes() if (root / "LICENSE").exists()
                     else b"CC0 1.0 Universal: dedicated to the public domain.\n"),
+        **({"CREDITS.md": (root / "CREDITS.md").read_bytes()} if (root / "CREDITS.md").exists() else {}),
         MANIFEST: (json.dumps(m, indent=2) + "\n").encode(),
         "genome.json": Path(genome).read_bytes(),
         "requirements.txt": requirements().encode(),
@@ -329,7 +332,8 @@ def pack(flac: str | Path, record: dict, genome: str | Path, lyrics: str | None 
     buffer = io.BytesIO(audio)
     buffer.seek(0, io.SEEK_END)
     with zipfile.ZipFile(buffer, "a", compression=zipfile.ZIP_DEFLATED, compresslevel=9) as z:
-        order = ["__main__.py", "README.txt", MANIFEST, "genome.json", "lyrics.txt", "LICENSE", "requirements.txt"]
+        order = ["__main__.py", "README.txt", MANIFEST, "genome.json", "lyrics.txt", "LICENSE", "CREDITS.md",
+                 "requirements.txt"]
         for name in [n for n in order if n in files] + sorted(n for n in files if n not in order):
             z.writestr(_entry(name, date), files[name])
     if buffer.tell() - len(audio) > LIMIT:

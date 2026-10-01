@@ -58,6 +58,7 @@ Inside:
 | `requirements.txt` | numpy, scipy, numba, soundfile and cmudict, pinned to the versions it ran with |
 | `program/` | songbird/ (source and data: the learned voice's weights travel here) and pyproject.toml |
 | `LICENSE` | CC0, with the legal code in full; it also travels as `program/LICENSE`, so every child carries it |
+| `CREDITS.md` | the singers who asked to be named (the repo's CREDITS.md); it also travels as `program/CREDITS.md`, so every child carries it |
 
 With everything merged (the learned voice's weights, the styles and the new
 instruments), the program is 85 files, 5.3 MB unpacked and about 3.4 MB in the
