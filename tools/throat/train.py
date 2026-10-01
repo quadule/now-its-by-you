@@ -19,7 +19,13 @@ the global-variance postfilter that keeps a small model's envelopes from going s
 
 --init starts from a model this wrote (a fine-tune): its weights, and its normalisations, so the
 envelope keeps the space the old model sang in. Singers are matched by name; a singer the old model
-didn't know starts at the mean of the ones it did. The channels must match the old model's.
+didn't know starts at the mean of the ones it did. The channels must match the old model's. A singer in
+the dataset's list with no frames of its own (one whose recordings are gone: tools/throat/folk.py merge)
+keeps the old model's row and register.
+
+A band-limited recording's frames (sp_top, ap_top in the dataset: tools/throat/dataset.py) are learned only
+inside their band: the points of each grid above it count for nothing in the loss, the normalisations or
+the global variance.
 """
 
 from __future__ import annotations
@@ -121,8 +127,12 @@ def main() -> None:
     sp = d["sp"].astype(np.float32)
     apr = d["ap"].astype(np.float32)
     mask = d["mask"]
-    sp_mean, sp_std = sp[mask].mean(0), sp[mask].std(0) + 1e-3
-    ap_mean, ap_std = apr[mask].mean(0), apr[mask].std(0) + 1e-3
+    n_sp, n_ap = sp.shape[1], apr.shape[1]
+    sp_top = d["sp_top"] if "sp_top" in d else np.full(len(sp), n_sp, dtype=np.int16)
+    ap_top = d["ap_top"] if "ap_top" in d else np.full(len(sp), n_ap, dtype=np.int16)
+    full = mask & (sp_top >= n_sp) & (ap_top >= n_ap)  # frames learned in every band
+    sp_mean, sp_std = sp[full].mean(0), sp[full].std(0) + 1e-3
+    ap_mean, ap_std = apr[full].mean(0), apr[full].std(0) + 1e-3
     init = np.load(args.init) if args.init else None
     if init is not None:  # a fine-tune keeps the space the old model's outputs are in
         sp_mean, sp_std, ap_mean, ap_std = (init[k].astype(np.float32) for k in ("sp_mean", "sp_std", "ap_mean", "ap_std"))
@@ -163,20 +173,25 @@ def main() -> None:
             ys.append(slice(a, a + crop))
         t = lambda arr, rows, dtype=torch.float32: torch.tensor(np.stack([arr[s] for s in rows]), dtype=dtype, device=dev)  # noqa: E731
         cont = t(cont_all, ys)
+        bands = torch.cat([dims_sp[None, None] < t(sp_top, ys, torch.long)[..., None],
+                           dims_ap[None, None] < t(ap_top, ys, torch.long)[..., None]], dim=-1).float()
         if jitter and args.noise:  # our pitch and dynamics won't be SoulX's: don't lean on their exact values
             b = cont.shape[0]
             cont[..., 6] += args.noise * 0.03 * torch.randn(b, 1, device=dev)  # log f0 (a whole crop, ~30 cents)
             cont[..., 5] += args.noise * 0.1 * torch.randn(b, 1, device=dev)  # level (~1 dB)
         return (t(phone5, xs, torch.long), t(d["role"], xs, torch.long), cont, t(d["singer"], ys, torch.long),
-                t(y_all, ys), t(mask, ys))
+                t(y_all, ys), t(mask, ys), bands)
+
+    dims_sp = torch.arange(n_sp, device=dev)
+    dims_ap = torch.arange(n_ap, device=dev)
 
     def loss_of(xb):
-        phone, role, cont, singer, y, m = xb
+        phone, role, cont, singer, y, m, bands = xb
         pred = model(phone, role, cont, model.singer(singer))
-        m3 = m[..., None]
-        base = ((pred - y).abs() * m3).sum() / (m3.sum() * y.shape[-1] + 1e-6)
-        dm = (m[:, 1:] * m[:, :-1])[..., None]
-        delta = (((pred[:, 1:] - pred[:, :-1]) - (y[:, 1:] - y[:, :-1])).abs() * dm).sum() / (dm.sum() * y.shape[-1] + 1e-6)
+        m3 = m[..., None] * bands  # each frame's points inside its band (every point, but for old records)
+        base = ((pred - y).abs() * m3).sum() / (m3.sum() + 1e-6)
+        dm = m[:, 1:, None] * m[:, :-1, None] * bands[:, 1:] * bands[:, :-1]
+        delta = (((pred[:, 1:] - pred[:, :-1]) - (y[:, 1:] - y[:, :-1])).abs() * dm).sum() / (dm.sum() + 1e-6)
         return base + args.delta * delta, base
 
     t0 = time.time()
@@ -214,7 +229,9 @@ def main() -> None:
             tt = lambda arr, dtype=torch.float32: torch.tensor(arr[sl][None], dtype=dtype, device=dev)  # noqa: E731
             pred = model(tt(phone5, torch.long), tt(d["role"], torch.long), tt(cont_all), model.singer(tt(d["singer"], torch.long)))
             pred = pred[0].cpu().numpy()
-            m = mask[sl] & (d["role"][sl] >= 2)
+            m = full[sl] & (d["role"][sl] >= 2)
+            if m.sum() < 50:  # a band-limited recording's segment: its upper points aren't real
+                continue
             real_var.append(y_all[sl][m].var(0))
             pred_var.append(pred[m].var(0))
     gv = np.mean(real_var, axis=0) / np.maximum(np.mean(pred_var, axis=0), 1e-6)
@@ -224,7 +241,9 @@ def main() -> None:
     # each singer's register: the median pitch it sang (MIDI), so a machine's voice can be mixed from
     # the singers who sing where it sings
     voiced = mask & (d["role"] == 3)
-    registers = {name: float(69 + 12 * np.log2(np.exp(np.median(d["lf0"][voiced & (d["singer"] == i)])) / 440.0))
+    old_registers = json.loads(str(init["config"])).get("registers", {}) if init is not None else {}
+    registers = {name: (float(69 + 12 * np.log2(np.exp(np.median(d["lf0"][voiced & (d["singer"] == i)])) / 440.0))
+                        if (voiced & (d["singer"] == i)).any() else old_registers[name])
                  for i, name in enumerate(singers)}
     weights = {k: v.detach().cpu().numpy().astype(np.float32) for k, v in model.state_dict().items()}
     config = dict(channels=args.channels, dilations=list(DILATIONS), kernel=KERNEL, embed=EMBED, role=ROLE,

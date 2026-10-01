@@ -1,0 +1,46 @@
+"""tools/throat/folk.py: labelling recordings that have no score (dev tool), and dataset.py's bands."""
+
+import sys
+from pathlib import Path
+
+import numpy as np
+
+ROOT = Path(__file__).resolve().parents[1]
+sys.path.insert(0, str(ROOT / "tools" / "throat"))
+
+import dataset  # noqa: E402
+import folk  # noqa: E402
+from features import grid  # noqa: E402
+
+
+def test_a_dropped_g_is_read_as_the_ing_word_ending_in_n():
+    assert folk.reading("rolling")[-1] == "NG"
+    assert folk.reading("rollin'") == folk.reading("rolling")[:-1] + ["N"]
+    assert folk.reading("qzxv") is None
+
+
+def test_a_word_heard_differently_between_matching_neighbours_is_taken_as_printed():
+    heard = [dict(word=w, start=i, end=i + 0.5, p=0.9 if w != "shanandoah" else 0.2)
+             for i, w in enumerate(["Oh", "shanandoah,", "I", "long", "to", "see", "you"])]
+    out = folk.corrected(heard, "Oh Shenandoah, I long to see you")
+    assert out[1]["word"] == "shenandoah" and out[1]["heard"] == "shanandoah," and out[1]["p"] >= 0.6
+    assert all(w.get("printed") for w in out)
+    assert folk.corrected(heard, None) is heard  # no printed words: Whisper's stand
+
+
+def test_lines_end_at_pauses_in_the_audio_not_at_whispers_gaps():
+    words = [dict(word=w, start=s, end=e, p=0.9) for w, s, e in
+             [("one", 0.5, 0.8), ("two", 1.4, 1.7), ("three", 3.0, 3.3), ("four", 3.5, 3.8)]]
+    # Whisper leaves a gap after "one" (a held note) but the voice goes on; the real pause is 2.4-2.9 s
+    pauses = [(2.4, 2.9)]
+    level = np.full(1000, -20.0)
+    lines = folk.lines_from(words, pauses, level, 5.0)
+    assert [[w["word"] for w in ln] for ln, _, _ in lines] == [["one", "two"], ["three", "four"]]
+    (_, t0a, t1a), (_, t0b, t1b) = lines
+    assert t0a == 0.25 and 2.4 < t1a <= 2.65 and 2.65 <= t0b < 2.9 and t1b <= 5.0
+
+
+def test_a_band_keeps_the_grid_points_below_it():
+    assert dataset.top(None, 128) == 128
+    assert dataset.top(4000.0, 128) == int(np.sum(grid(128) <= 4000.0))
+    assert 0 < dataset.top(4000.0, 128) < 128 and dataset.top(0, 32) == 0
