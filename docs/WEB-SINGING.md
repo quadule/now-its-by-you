@@ -2,7 +2,9 @@
 
 The studio's *Sing it* works on the web: a visitor sings along to the guide
 on the studio's own page, the take is measured on the server and its audio
-deleted there, and the song is sung their way: by the machine's voice, with
+deleted there (since 2026-09-30 it can be measured on the visitor's own
+device instead, so it never leaves it: "On the device" below), and the
+song is sung their way: by the machine's voice, with
 their timing, holds, loudness and pitch gestures, never their voice. They can
 hear it and record a rendition that carries it. This is the web studio's
 singing (docs/WEB-STUDIO.md has the public studio it runs in); the karaoke on
@@ -40,10 +42,14 @@ flowchart LR
   the singing, and nothing records until the visitor ticks "I understand"
   (the page remembers the consent's version in its browser, and asks again
   if the words change):
-  - *Your voice is not kept.* The microphone is recorded in the browser only
-    while they sing. A take sent to be measured goes to the computer serving
-    the studio, which measures it and deletes the recording straight away:
-    never saved, played to anyone or used to copy a voice.
+  - *Your singing never leaves this device.* Measured on the device ("On
+    the device" below), the take is recorded in the browser only while they
+    sing, measured there in the page's memory and let go: never sent, saved,
+    played to anyone or used to copy a voice. Where the studio measures on
+    its server instead (the page as it is until it is wired to measure on
+    the device), the words are the server's: *Your voice is not kept.* A
+    take sent to be measured goes to the computer serving the studio, which
+    measures it and deletes the recording straight away.
   - *What's kept is numbers*, for each note: how early or late, how long
     held, how loud, how they slid into it and off it. In their browser, and
     on the server under a code (no name, no address) for 30 days after last
@@ -77,9 +83,10 @@ flowchart LR
 | Where | What | How long |
 |---|---|---|
 | The visitor's browser (localStorage `songbird-web-singing`) | the consent's version, the key chosen, the device's delay, each take's measured numbers (about 40 kB for a whole take), the way made from them | until they forget it or clear the browser |
-| The page's memory | the take's audio, between Stop and Measure it (listen back, slide) | until it is sent, sung again, or the page closes |
-| The server's memory | the take's audio while it waits for the measuring process | until it's measured (at most 3 wait at once; a cancelled one is let go with it) |
-| The measuring process | the take decoded in memory; each piece it reads in a temporary WAV (0600) in /dev/shm (memory) or /tmp | removed as soon as it has been read, whatever happens; leftovers from a killed process swept at its next start |
+| The page's memory | the take's audio, between Stop and Measure it (listen back, slide) | until it is measured (on the device) or sent (to a server), sung again, or the page closes |
+| The page's measuring (on the device) | the take decoded in the measuring worker's memory; each piece it reads as a temporary WAV in Pyodide's in-memory /tmp (never storage); WORLD's own memory for its analysis | each piece removed as soon as it has been read, any left by a fault swept before measuring returns; WORLD's memory let go with the take; the rest freed when measuring returns (its bytes reused, gone when the worker ends) |
+| The server's memory (measuring on the server only) | the take's audio while it waits for the measuring process | until it's measured (at most 3 wait at once; a cancelled one is let go with it) |
+| The measuring process (on the server only) | the take decoded in memory; each piece it reads in a temporary WAV (0600) in /dev/shm (memory) or /tmp | removed as soon as it has been read, whatever happens; leftovers from a killed process swept at its next start |
 | The server's disk (`$SONGBIRD_HOME/studio/sung/sung-<16 hex>.json`) | the way of singing: rounded, bounded gestures by phrase and note, "1 sung take(s)"; named by its fingerprint | 30 days after it was last used, or until forgotten |
 | A recording the visitor makes | the way's rounded gestures, in the record's `performance` (as any rendition's), marked "a person's way" | the file's; a public studio keeps it for download a day |
 
@@ -204,6 +211,197 @@ measurement never run at once. In a public studio the measuring process is
 stopped after every take (its memory given back before the next render); on
 one's own computer it waits five idle minutes for the next take.
 
+## On the device (2026-09-30)
+
+A take can be measured in the visitor's own browser, so the singing never
+leaves their device: the same code as the server's measuring process, in
+Pyodide beside the program the browser already renders with
+(docs/BROWSER-RENDER.md). The page's side (calling it from the studio's
+browser worker) is being wired separately; this is what it calls.
+
+### The design
+
+- **The same code.** `web/studio-wasm/py/sing_measure.py` runs
+  webstudio/worker.py's own `take` (its pieces, tools/phrasing.py's
+  `measure_window` and `singer_phrasing`), unchanged, with three modules
+  stood in for in `sys.modules`, in the browser only: **pyworld** by
+  WORLD in wasm (`py/world_wasm.py`), **librosa** by its DTW in numpy
+  (`py/sing_dtw.py`), **faster_whisper** by worker.py's stub that refuses.
+  MFA is off, as on the server. worker.py itself changed in one line: it
+  imports `resource` (which Pyodide hasn't) only where it reads it.
+- **WORLD in wasm** (`web/studio-wasm/world/`): the measuring calls
+  `harvest(x, 44100, f0_floor=60, f0_ceil=900, frame_period=5)` and
+  `cheaptrick(x, f0, t, 44100)` with its defaults (q1 -0.15, an FFT of
+  2048), nothing else (tests/test_world_wasm.py checks that). pyworld
+  0.3.5's own WORLD sources (`src/`, BSD, its licence beside them and in
+  the bundle) are compiled with zig 0.16's clang for wasm32-wasi
+  (`build.sh`), with a glue (`glue.cpp`) that runs CheapTrick a chunk of
+  frames at a time, carrying its noise generator from chunk to chunk, so
+  the spectrogram is never whole in WORLD's memory. Two things hold its
+  memory down, neither changing a number:
+  - **An allocator of its own** (`alloc.h`). zig's libc allocates in wasm
+    with `std.heap.WasmAllocator`, which never splits a freed block for a
+    smaller request: Harvest frees a few 12 MB buffers and then makes tens
+    of thousands of 1 kB rows, so the memory grew to 2.5 times what WORLD
+    held (485 MB for 206 MB on 35 s of singing).
+  - **A lean Harvest** (`harvest_lean.cpp`, built in `src/harvest.cpp`'s
+    place, each change marked). Its FixStep3 gave every voiced section (at
+    its 1 ms frames, 500 of them in 35 s) a channel as long as the whole
+    contour, which grows as the square of the length (140 MB at 35 s);
+    now each channel holds only the 101 frames either side of its section
+    where anything can be written, and reads as zero beyond, as before.
+    SmoothF0Contour filters one channel at a time, and the candidates'
+    scores are made once the raw candidates are gone. On 23 signals (the
+    artist's takes in 35 s pieces and sections, the machine singer's) its
+    f0 is bit for bit the unmodified build's.
+
+  The module (83 kB, 37 kB sent) has its own memory, not Pyodide's: one
+  instance per take, its pieces reusing the same memory, let go when the
+  take is measured. It is committed with the digests of what it was built
+  from (`world/sources.json`, `tools/world_sources.py`), so the bundle
+  builds without zig and a source changed without a rebuild is caught.
+- **librosa's DTW in numpy** (`py/sing_dtw.py`): exactly the call
+  align_by_pitch makes (a cost matrix, `subseq=True`, steps (1,1) (1,2)
+  (2,1), no weights), a row at a time since every step advances the row,
+  with librosa's first-strict-minimum rule, its default steps of infinite
+  weight, its swapped path columns when the cost has more rows than
+  columns (a take cut at its edge) and its refusals. Natively
+  tools/phrasing.py keeps librosa (decision 2 below).
+- **The bundle**: `web/studio-wasm/tools/build_render.py` adds, in a block
+  of its own (`tools/sing_bundle.py`), `singing.zip` (79 kB: tools/phrasing.py
+  and the six tools modules it imports, webstudio's worker.py and kit.py,
+  the three Python files above; unpacked into `/app` beside the program,
+  byte for byte, since `version()` hashes their source) and `world/`
+  (world.wasm, its loader world.mjs, WORLD's licence) in the app folder.
+
+### How to call it
+
+In the studio's browser worker, once Pyodide, numpy, scipy and soundfile
+and the program are loaded (as `studio-worker.mjs` does):
+
+```js
+const { loadWorld } = await import(`${app}world/world.mjs`);
+py.registerJsModule('songbird_world', await loadWorld(await (await fetch(`${app}world/world.wasm`)).arrayBuffer()));
+py.unpackArchive(new Uint8Array(await (await fetch(`${app}singing.zip`)).arrayBuffer()), 'zip', { extractDir: '/app' });
+const measure = py.pyimport('sing_measure');
+// the kit's files the take needs, written under /kit (kit_files names them; the server serves the kit)
+for (const name of measure.kit_files(py.toPy(offer), guide, py.toPy(earlier)).toJs()) {
+  py.FS.mkdirTree(`/kit/${name.split('/').slice(0, -1).join('/')}`);
+  py.FS.writeFile(`/kit/${name}`, new Uint8Array(await (await fetch(`${kitURL}${name}`)).arrayBuffer()));
+}
+const answer = JSON.parse(measure.answer_json(takeWavBytes, py.toPy({
+  song, guide, from_s, to_s, earlier, offered, kit: '/kit' })));
+// { ok: { measurement, phrasing, portrait, skipped, audio_seconds, seconds, peak_mb } }
+// | { refused: "what the singer can do" } | { error: "what went wrong" }
+```
+
+`measure(take, request)` is the same returning the result and raising
+`Refused` (worker.py's) for what the singer can act on. The request is the
+server's (`webstudio/singing.py` `where()`: song, guide, from_s, to_s,
+earlier, offered) plus `kit`; the checks `where()` makes before a take is
+queued (the version offered, the guide unchanged, the length) are the
+caller's. The kit must be one made by this measuring code: its templates
+are named by tools/phrasing.py `version()`, and a kit of another version
+is said as such. Per take it needs offer.json, the song, each guide's
+score sung to (0.2 to 0.5 MB) and the guide's three templates (about
+0.4 MB each for a 151 s guide). One take at a time; nothing is uploaded.
+
+### How it agrees with native
+
+On the artist's own three takes (recordings/milo/: each whole, 151 s, cut
+in pieces as the server cuts it; and two sections cut from each as the
+page cuts one, 28 to 98 s) and the machine singer's (a section and the
+whole song, every third note planted 50 ms late, at 48 kHz as a browser
+records), against webstudio/worker.py natively on this Mac with the same
+kit: **every case identical, byte for byte**: each note's onset, offset
+and gestures, the lag, key and pieces, the stamp, the phrasing made and
+its portrait (11 takes, 1,030 notes measured). Underneath:
+
+- **WORLD**: on twelve 35 s pieces of the artist's takes, Harvest's f0 is
+  native pyworld's to within 9e-15 (relative; a few bits in the last
+  place: the Mac's build fuses multiply-adds, wasm doesn't, and their maths
+  libraries differ at the last bit), voiced on exactly the same frames;
+  CheapTrick's spectrogram within 2e-9 relative, the loudness
+  tools/phrasing.py reads from it within 1e-12 dB and its activity the
+  same. tests/test_world_wasm.py holds a sung signal to that.
+- **DTW**: bit for bit librosa's (costs and path) on 160 random cost
+  matrices with ties and every shape, on align_by_pitch's own costs from
+  made-up lines sung late, flat, an octave down and cut short
+  (tests/test_sing_dtw.py), and on every one of the 180 alignments (160
+  million cells) the eleven takes above made.
+- **The rest** (numpy 2.4.6 and scipy 1.18.0 in Pyodide, 2.5.3 and 1.18.1
+  here): resampling a 48 kHz take to 44.1 kHz differs by at most 7e-16 (half
+  the samples identical); everything after it gives the same numbers.
+
+Bit-identical isn't promised for every take: a few bits of f0 sit on
+either side of a threshold one day (a voicing decision, a rounding to the
+nearest frame), and a vowel's start moves a frame (5 ms). The server
+(Linux, no fused multiply-adds, another maths library) differs from this
+Mac by as much.
+
+### Memory and time
+
+Under node (Pyodide 314.0.7), each in a fresh worker, this Mac:
+
+| | measuring (native) | measuring in Pyodide | Pyodide's heap at most | WORLD's memory at most | together |
+|---|---|---|---|---|---|
+| a section (28 to 33 s) | 3.2 to 5.4 s | 5.0 to 6.3 s | 269 to 279 MiB | 99 to 112 MiB | 367 to 391 MiB |
+| a long section (98 s, in pieces) | 12 to 14 s | 18 to 19 s | | | |
+| the whole song (151 s, in pieces) | 18 to 21 s | 28 to 34 s | 322 MiB | 114 to 151 MiB | 436 to 473 MiB |
+
+(Times measured with the machine otherwise quiet; under a heavy load they
+were three to five times longer. Loading Pyodide and the program, about
+2 to 5 s, comes before, once per worker.) Pyodide's heap is 75 MiB loaded,
+130 MiB once the measuring code is imported; the rest is the take, its
+piece's spectrogram (CheapTrick's, 1.6 MB a second, which
+tools/phrasing.py reads whole) and the measuring. WORLD's memory follows
+the longest piece (Harvest holds about 3.3 MB a second analysed: 117 MiB
+for 35 s); a take is measured in pieces of at most about 43 s (40 s and
+its lead and tail), so a whole song needs no more than a long section. It
+is given back when the take is measured; Pyodide's heap only grows, so it
+is given back when the worker ends.
+
+### Privacy
+
+Nothing is uploaded: the take goes from the recorder to the measuring
+worker in memory, and only numbers come back to the page. Each piece's WAV
+lives in Pyodide's in-memory file system for as long as it is read, and
+any left by a fault is swept before `measure` returns; the take's bytes,
+once freed, are memory the worker reuses, gone when it ends. Nothing of it
+reaches the Cache API, IndexedDB or localStorage (the kit's files may: they
+are the song's and the machine's).
+
+### Open decisions
+
+1. **No server fallback for measuring.** If measuring on the device fails
+   (an old phone out of memory), sending the take to the server instead
+   would break "Your singing never leaves this device". Suggested: say so
+   on the page ("This device couldn't measure your take") and keep the
+   server out of it; the artist chose not to gate phones.
+2. **librosa natively, or the numpy DTW everywhere.** The port is bit for
+   bit librosa's, so tools/phrasing.py could use it and the server image
+   drop librosa (and numba with it). But align_by_pitch's source is hashed
+   into `version()`, which names every kept measurement in renders/measured
+   and every kit template: switching re-measures every kept take (some of
+   whose audio is now deleted) and remakes the kit. Suggested: switch at
+   the next change that moves `version()` anyway.
+3. **The consent's words on the page** (webstudio/sing.js) still describe
+   the server; when the page measures on the device they become the
+   simplest true statement: "Your singing never leaves this device." (and
+   the hint under *Measure it*: "Measured here, on this device; the
+   recording is let go once it has been.").
+4. **The worker's memory on phones.** About 390 MiB for a section and 470
+   MiB for the whole song at most, more if measuring shares the render
+   worker after a whole-song render (Pyodide's heap is never given back
+   while the worker lives). Ending the worker after measuring (as the
+   renderer does after a whole song) gives everything back, the take's
+   freed bytes included. The kit's templates are downloaded once per guide
+   and key (about 1.2 MB for three).
+5. **WORLD's sources are ours to keep.** world/src is pyworld 0.3.5's, the
+   lean Harvest our change to it; a new pyworld natively (the test pins
+   0.3.5) means taking its sources again, checking the f0 bit for bit
+   against the unmodified build, and rebuilding with zig.
+
 ## Limits
 
 | | | |
@@ -247,6 +445,16 @@ read and dropped a block at a time, nothing of it held (docs/WEB-STUDIO.md,
   lent to build pyworld), copies tools/ and webstudio/; the compose file
   mounts the kit read-only at /kit and passes `--web-singing --sing-kit /kit`
   (`STUDIO_SINGING`, `SING_KIT`).
+- On the device (2026-09-30), in `web/studio-wasm/`: `py/sing_measure.py`
+  (`measure`, `answer`, `kit_files`), `py/world_wasm.py` (pyworld's
+  harvest and cheaptrick over world.wasm), `py/sing_dtw.py` (librosa's DTW),
+  `world/` (WORLD's sources, the glue, the allocator, the lean Harvest,
+  `build.sh`, the committed world.wasm and `sources.json`),
+  `tools/sing_bundle.py` and `tools/world_sources.py`, the block in
+  `tools/build_render.py`, and `node/sing_run.mjs` (a Python file run in
+  that Pyodide under node). Checked by tests/test_sing_measure.py (the
+  planted verse measured in Pyodide as the server measures it, where Pyodide
+  is installed), tests/test_world_wasm.py and tests/test_sing_dtw.py.
 
 ## Decisions for the artist
 

@@ -1,0 +1,22 @@
+{
+ "sources": {
+  "alloc.h": "3c6e9c0762954738",
+  "build.sh": "fc566b186269b615",
+  "glue.cpp": "834856cac368cfb5",
+  "harvest_lean.cpp": "9b87a662c60949d0",
+  "src/cheaptrick.cpp": "6481ea68ebc3a901",
+  "src/common.cpp": "ef4a982d103bfd4c",
+  "src/fft.cpp": "7a580cc02a0b040b",
+  "src/harvest.cpp": "e9e80047a9d9ed3f",
+  "src/matlabfunctions.cpp": "250d4cdc31b64cb3",
+  "src/world/cheaptrick.h": "90acc1f7cbb692cc",
+  "src/world/common.h": "7a761e7d92a3dff7",
+  "src/world/constantnumbers.h": "ed3d3aec8d0e019d",
+  "src/world/fft.h": "ac321b81dea5e811",
+  "src/world/harvest.h": "1ab55206a28236b9",
+  "src/world/macrodefinitions.h": "6d5417f864a4a4d9",
+  "src/world/matlabfunctions.h": "192a6be8cf749c14"
+ },
+ "world.wasm": "e3177ec641d36316",
+ "zig": "0.16.0"
+}
