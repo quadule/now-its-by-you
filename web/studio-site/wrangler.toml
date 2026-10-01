@@ -1,0 +1,68 @@
+# The studio at studio.itsby.you: the built site from Workers Static Assets, and a small Worker for sharing versions.
+# docs/WEB-STUDIO.md, "Hosted on Cloudflare (2026-09-30)", has every step. In short, from the repository's root:
+#   uv run python web/studio-wasm/tools/build_site.py renders/studio-site
+#   npx wrangler r2 bucket create songbird-versions          (once)
+#   cd web/studio-site && npm ci && npx wrangler deploy
+name = "songbird-studio"
+main = "src/worker.js"
+compatibility_date = "2026-09-25"
+
+workers_dev = true
+preview_urls = false
+# itsby.you's DNS is on Cloudflare: the custom domain makes its DNS record and certificate on the first deploy
+routes = [{ pattern = "studio.itsby.you", custom_domain = true }]
+
+# Before every deploy and `wrangler dev`: _headers and .assetsignore written into the built site, and the site
+# checked against the static assets' limits (25 MiB a file, 20,000 files)
+[build]
+command = "node tools/prepare.mjs ../../renders/studio-site"
+
+[assets]
+directory = "../../renders/studio-site"
+binding = "ASSETS"
+# Only the API and the shared versions' pages reach the Worker first; every other file is served straight from
+# the static assets (free and unlimited), with tools/prepare.mjs's _headers. No robots.txt: the public studio may be
+# found (the artist's choice).
+run_worker_first = ["/api/*", "/v/*"]
+html_handling = "auto-trailing-slash"
+not_found_handling = "none"
+
+# Versions people share, private: `npx wrangler r2 bucket create songbird-versions`. Never make it public: files
+# are served only through /api/versions/<id>.
+[[r2_buckets]]
+binding = "VERSIONS"
+bucket_name = "songbird-versions"
+
+[vars]
+# A version is kept this many days after it was last shared or opened (noted at most once in REFRESH_DAYS).
+KEEP_DAYS = "30"
+REFRESH_DAYS = "7"
+# Versions shared in a clock hour: from one address (an IPv6 one by its /64), and from everywhere (a ceiling on
+# what can be stored: at most ALL_AN_HOUR x 24 x 64 MB a day, kept KEEP_DAYS).
+UPLOADS_AN_HOUR = "10"
+ALL_AN_HOUR = "60"
+
+# Every hour: versions not opened for KEEP_DAYS deleted, and past hours' counts forgotten.
+[triggers]
+crons = ["17 * * * *"]
+
+# Per address, counted at each Cloudflare location, so a little loose: 3 shares a minute, 120 API requests a
+# minute, and 20 a minute asking for versions that aren't there. The address is only a key for the count.
+[[ratelimits]]
+name = "UPLOADS"
+namespace_id = "1801"
+simple = { limit = 3, period = 60 }
+
+[[ratelimits]]
+name = "REQUESTS"
+namespace_id = "1802"
+simple = { limit = 120, period = 60 }
+
+[[ratelimits]]
+name = "UNKNOWN"
+namespace_id = "1803"
+simple = { limit = 20, period = 60 }
+
+# No logs kept: requests carry the links to people's versions.
+[observability]
+enabled = false
