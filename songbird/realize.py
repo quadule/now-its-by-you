@@ -398,6 +398,10 @@ def realize(genome: Genome, params: Params, verses=None, phrasing: Phrasing | No
     clock = timeline(genome, params)  # the same layout, as time
     lead, end, seconds, seconds_per_unit = clock.lead, clock.end, clock.seconds, clock.unit
     sung_end = end - style_mod.coda(genome, params)  # where the last line ends, before a style's amen
+    own_form = style_mod.STYLES.get(params.style.name) if params.style.name else None
+    if own_form is not None and own_form.form:  # bars a style lays after the last line (house's last hook) aren't the
+        sung_end = min(sung_end, max((at + phrase.bars * meter.bar for _, phrase, at, line in placed if line),
+                                     default=sung_end))  # singer's to hold its last note through
 
     def jitter() -> float:
         return float(rng.normal(0.0, params.humanize))

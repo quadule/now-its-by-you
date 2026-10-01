@@ -1156,7 +1156,8 @@ chooses unless named:
 
 **Hidden for now (2026-09-30, night).** The artist listened: "they haven't convinced me like the others yet".
 Neither is offered in the studio's style picker (`style.HIDDEN`, `style.offered`); a record, a draft or
-`--style` still plays them, and a version already in one still shows its own name. The code stays.
+`--style` still plays them, and a version already in one still shows its own name. The code stays. House was
+offered again the same night, once its hook was fixed (below): "I like it now!" Dub stays hidden.
 
 The artist, on the renders above: "House is a fun reinterpretation but I don't know if it's really that
 recognizable." "Dub has some cool elements but doesn't seem like enough of a transformation." Both styles kept
@@ -1454,3 +1455,66 @@ In `renders/styles/` of the main checkout (gitignored), H as the same made-up ma
 7. **A turn's length** stays the style's (four bars in house); a person can't set it, as before.
 8. **The records from this morning** render differently for house (not for dub without `dissolve`); none was
    released.
+
+## The chop's turns: whole words, a deliberate stutter, the answer (2026-09-30, night)
+
+**What the artist heard.** On house2-ada: "the chopped hook doesn't work well around 0:55-1:00 - later on it's
+better though." Nothing is chopped at 0:55 to 1:00 in that file: the singer is on the first refrain's last two
+lines, and the chop first comes in with the turn at 1:02.5 (ada's intro is the piano's tune, so this turn is the
+first time the hook is heard). Whisper over 0:50 to 1:10 hears the singer, then "...some of you too Nobody knows,
+nobody knows": the chop's first word runs straight on from the singer's "too". So the place is the turn's entrance
+just after it, as the score shows.
+
+**The cause.** The turn opened "bo-dy knows. knows. knows." with no "No". Nothing fell before the turn: the chop
+leaves out any syllable with a sung note under it, and the singer's last note ("too.") ends on the turn's
+downbeat, and ending there counted as under it. So the figure's first syllable was dropped and the rest was sung.
+This happened at the start of every hook bar that follows a sung note: every turn after a refrain, the drop, and
+the last hook (5 of ada's 26 figures, 1 of juno's 18). The stutter figure (ada's turns and last hook, juno's drop)
+then repeats "knows" twice more, each a sixteenth right after the last (0.1 s long), which sounds like a glitch.
+Whisper heard it as "no body nose, no body nose".
+
+**The fix** (house's chop only: `style.chops`, `hook_bars`, `HOUSE_HOOK`):
+- A sung note that ends exactly as a figure starts no longer counts as under it. A figure is sung from a word's
+  first syllable to a word's last, or not at all. A sung note cutting into a figure ends the figure at its last
+  whole word, and the figure never starts again after it. Every turn, the drop and the last hook now open on
+  their downbeat with "No". This was the most musical of the three options: the hook arrives with the turn.
+  Dropping the figure, or moving it a bar later, would leave the turn's first bar empty.
+- The stutter repeats the whole word on eighths: "No-bo-dy knows, knows, knows", the repeats on beat 3 and the
+  "and" after it, as the drop's "you, you" (which the artist likes). The beat and off-beat figures are unchanged.
+- The turns use the drop's call and answer: each turn alternates "No-bo-dy knows" with "now it's by you", at the
+  turn's level (0.85; the drop is 1.0). A breakdown's turn still sings only the call, once every two bars, softly.
+  Whether the answer belongs in the early turns is the artist's call. To keep the turns as before, set
+  `HOUSE_HOOK["answered"]` to `("drop", "last")`.
+
+**Measured** on the three house renders (ada, juno, otto; replays of their house2 records). Whisper base.en
+transcribed the finished mix two bars at a time over every hook bar.
+
+| | before (house2) | turns call only | as built (house3) |
+|---|---|---|---|
+| "nobody knows" heard, of 30 stretches | 16 (ada 5 of 14, juno 6 of 10, otto 5 of 6) | 24 (11, 8, 5) | 25 (12, 8, 5) |
+| figures starting mid-word | 6 (ada 5, juno 1) | 0 | 0 |
+| a syllable repeated a sixteenth after itself | 14 (ada 10, juno 4) | 0 | 0 |
+
+The 21 of 30 measured earlier (above) does not reproduce today for ada: the same file now gives 5 of 14 (it gave
+10), while juno's 6 and otto's 5 do reproduce. Whisper is a jumpy judge; the same chop under a mix 0.01 dB louder
+can change a window's text. Whisper writes "now it's by you" as "now that I need to give you" and similar, and
+counts it once in 30. Otto has no turns or stutter, so its chop is unchanged.
+
+**For listening** (`renders/styles/` of the main checkout; times are file time):
+
+| render | id | the hook |
+|---|---|---|
+| house3-ada-2026-09-30 | a0919e2b3ac5 | turns at 1:02.5, 1:41.0 (the breakdown's, soft) and 2:34.9; the drop at 2:04.1; the last hook at 3:28.9 |
+| house3-juno-2026-10-15 | 31470a6d2e89 | the intro's tease at 0:24.6; turns at 1:03.5 (from 1:03.8, the off-beat figure) and 1:42.7 (soft); the drop at 2:21.9 |
+
+Nothing else moved: every other style renders as before (goldens, the suite). House's own renders change where
+the chop changes: ada and juno, as above; otto replays to its own id.
+
+
+**The last word let go (2026-09-30, night).** The hook fix's agent found the singer's last "*you*." in ada's last
+refrain held 16.9 s, under the whole last hook: `realize` holds the song's last sung note to where the lines end,
+and house's eight hook bars after the last refrain are laid as lines (played). A style with lengths of its own
+(StyleDef.form: house) now holds it only to the end of its own line; nothing else moves (the score's one note: 16.91
+s to 0.73 s). The singer's small random variations are drawn over the whole voice part's length, so the voice stem
+is a fresh take of the same notes from its first word (every other stem identical). house4-ada-2026-09-30
+(6af016bc9bb3), a replay of house3-ada's record.

@@ -194,11 +194,31 @@
     const i = list.findIndex((x) => x.id === id);
     return i < 0 ? list[0] : list[Math.max(0, Math.min(list.length - 1, i + step))];
   }
+  // the section a beat of the ruler is in: before bar 1 (the first pickup), the first; past the end, the last
+  function sectionAtBeat(beat, sections) {
+    if (!sections.length) return null;
+    if (beat < sections[0].startBeat) return sections[0];
+    return sections.find((x) => beat >= x.startBeat - 1e-9 && beat < x.startBeat + x.beats) || sections.at(-1);
+  }
   // where the playhead is, in words: a section, a bar, and the time
   function position(beat, sections, perBar) {
-    const s = sections.find((x) => beat >= x.startBeat - 1e-9 && beat < x.startBeat + x.beats) || sections.at(-1) || null;
+    const s = sectionAtBeat(beat, sections);
     if (!s) return { label: "", bar: 1 };
     return { id: s.id, label: s.label, bar: s.startBar + Math.floor(Math.max(0, beat - s.startBeat) / perBar) };
+  }
+  // The sketch (composer.js) counts beats from the song's first pickup, as the composition view does; the ruler from
+  // bar 1's bar line, as the arrangement does. A ruler's beat plus this is the sketch's: half a beat for an
+  // eighth-note pickup, a bar more with a count-in.
+  function sketchOffset(grid, composition) {
+    const sketch = composition?.sections?.[0]?.start_beat, ruler = grid?.sections?.[0]?.startBeat;
+    return Number.isFinite(sketch) && Number.isFinite(ruler) ? sketch - ruler : 0;
+  }
+  // where the sketch starts the song for the playhead, in its own beats: on the playhead's bar line; at bar 1 (or with
+  // none), null, the song from its start with its first pickup, as it's sung
+  function sketchFrom(playhead, grid, composition) {
+    const first = grid?.sections?.[0];
+    if (playhead === null || playhead === undefined || !first || playhead <= first.startBeat + 1e-9) return null;
+    return playhead + sketchOffset(grid, composition);
   }
 
   // ------------------------------------------------------------------ the keyboard (docs/STUDIO-REDESIGN.md's table)
@@ -229,7 +249,7 @@
 
   const api = { LEVELS, KIND_WORDS, grid, look, whoseWords, cellLabel, lockPatch, releasePatch, levelPatch, optionLock,
     moveOrder, movedIds, seamWords, seamToggle, seamOver, seamLength, seamLengths, scopeOptions, scopeStart, selectionKey, defaultHow, playTarget,
-    neighbour, position, inField, keyAction, saidCell };
+    neighbour, sectionAtBeat, position, sketchOffset, sketchFrom, inField, keyAction, saidCell };
   if (typeof window !== "undefined") window.SongbirdModel = api;
   if (typeof module === "object" && module.exports) module.exports = api;
 })();

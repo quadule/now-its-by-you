@@ -1042,11 +1042,14 @@ function quietPause() {
   const asked = audio._asked = {};
   return fadeAudio(0).then(() => { if (audio._asked !== asked) return; audio.pause(); audio.volume = 1; });
 }
-function quietPlay() {
-  audio._asked = {};
+// late: brought up only once it sounds (a song begun at a bar line mid-way, which isn't silence, sounds only once
+// it has loaded); a pause or a jump in the meantime takes that over
+function quietPlay(late = false) {
+  const asked = audio._asked = {};
   if (audio.paused !== false) audio.volume = 0;
   const started = audio.play();
-  fadeAudio(1, audio.currentTime > 0.05 ? FADE_MS : 8);
+  if (late) Promise.resolve(started).then(() => { if (audio._asked === asked) fadeAudio(1); }, () => {});
+  else fadeAudio(1, audio.currentTime > 0.05 ? FADE_MS : 8);
   return started;
 }
 function quietSeek(time) {
@@ -1057,13 +1060,14 @@ function quietSeek(time) {
 // every preview and recording is asked of one renderer (renderer.js: the server's queue today)
 const renderer = () => window.SongbirdRenderer.create((path, body) => api(path, body));
 
-async function listen(who = "you", section = null) {
+// bar: the whole song from a bar of the score's ruler (its playhead's), not its start
+async function listen(who = "you", section = null, bar = null) {
   window.SongbirdComposer?.stop();
   if (state.playing?.task) renderer().cancel(state.playing.task);  // one still waiting its turn is dropped
   quietPause();
   const label = section === null ? "The whole song" : state.view.words.find((w) => w.index === section)?.label || "Song section";
   const edits = copyEdits();
-  const playing = { who, section, label, job: null, editsKey: JSON.stringify(edits) };
+  const playing = { who, section, label, job: null, editsKey: JSON.stringify(edits), bar: section === null ? bar : null };
   state.playing = playing;
   setOn("playPause", "disabled", true);
   setOn("nowTime", "textContent", "");
@@ -1105,7 +1109,8 @@ function finished(job, playing) {
   playing.job = job;
   const title = job.label || playing.label;
   if (job.state === "done") {
-    play(job.url, title, playing.section === null ? "the whole song, as it would be recorded" : "a preview of this part", playing);
+    play(job.url, title, playing.section === null ? "the whole song, as it would be recorded" : "a preview of this part", playing,
+      barTime(job.result?.bar_seconds, playing.bar));
     refreshReady(job.key);
     return;
   }
@@ -1124,11 +1129,27 @@ function refreshReady(key) {
   }
 }
 
-function play(url, title, sub, playing = null) {
+// Where a bar of the ruler is in a whole song's audio: its bar line's time there, from the bar lines a whole song's
+// job ends with (bar_seconds, by that rendition's own clock: a count-in, a slow air and the final ritardando
+// included). Bar 1, or none: 0, the very start, with the breath and the first pickup before bar 1.
+function barTime(seconds, bar) {
+  return Array.isArray(seconds) && Number.isInteger(bar) && bar > 1 && bar <= seconds.length ? seconds[bar - 1] : 0;
+}
+
+// start: where in it to begin (seconds), when not at its beginning. A time set before it has loaded is where a
+// browser starts it; one that let it go is told again once it knows the song's length.
+function play(url, title, sub, playing = null, start = 0) {
   state.playing = playing || { editsKey: JSON.stringify(state.edits), label: title, who: "you", section: null, job: null };
   stopFade();
   audio.src = url;
-  quietPlay()?.catch?.(() => {});
+  const at = audio._start = start > 0 ? {} : null;
+  if (at) {
+    audio.currentTime = start;
+    audio.addEventListener("loadedmetadata", () => {
+      if (audio._start === at && Math.abs(audio.currentTime - start) > 0.05) audio.currentTime = start;
+    }, { once: true });
+  }
+  quietPlay(!!at)?.catch?.(() => {});
   showPlayer(title, sub || "", 0, false);
   setOn("playPause", "disabled", false);
 }

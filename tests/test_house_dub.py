@@ -248,7 +248,7 @@ def test_the_studio_shows_their_patterns_sound_and_options(home):
     v = studio.version({"style.name": "house", "style.drop": 2})
     view = explain.view(studio.context, v)
     card = next(c for c in view["cards"] if c["id"] == "style")
-    assert "house" in card["styles"] and "dub" not in card["styles"] and "version" in card["endings"]  # hidden: its own
+    assert "house" in card["styles"] and "dub" not in card["styles"] and "version" in card["endings"]  # dub hidden
     assert "the drop" in card["detail"]
     for c in view["cards"]:
         for text in [c["value"], c.get("detail") or ""] + [r["text"] for r in c["reasons"]]:
@@ -360,6 +360,38 @@ def test_house_chops_its_hook_on_the_grid():
     assert list(again.part("chop")) == chop
 
 
+def test_house_chop_never_starts_mid_word():
+    """The artist (2026-09-30, night): the hook "doesn't work well" where the first turn opens. A figure's first
+    syllable was left out wherever the singer's last note ended on the turn's downbeat ("bo-dy knows", no "No"); now
+    a sung note ending as a figure begins is clear of it, and a figure is sung from a word's first syllable to a
+    word's last, or not at all."""
+    for seed in (1, 3, 6):
+        g, p = styled("house", drop=2)
+        p = replace(p, seed=seed)  # each rhythm of the three, by the rendition's draw
+        score = realize(g, p)
+        clock = timeline(g, p)
+        bars = [t for t, bar in clock.beats() if bar]
+        chop = sorted(score.part("chop"), key=lambda n: n.start)
+        by_bar = {}
+        for n in chop:
+            by_bar.setdefault(max(t for t in bars if t <= n.start + 1e-6), []).append(n)
+        for figure in by_bar.values():
+            assert figure[0].word.startswith(figure[0].syllable)  # "No", "now": never "bo"
+            assert figure[-1].word.endswith(figure[-1].syllable)  # never ending on "No" or "bo"
+        sixteenth = 15.0 / p.tempo
+        answered = 0
+        for a, b in spans_of(score, "turn"):  # each turn after a sung refrain: the hook from its first bar
+            first = next(n for n in chop if n.start >= a - 1e-6)
+            assert first.syllable == "No" and first.start < a + 2 * sixteenth + 1e-6
+            figures = [by_bar[t] for t in sorted(by_bar) if a - 1e-6 <= t < b - 1e-6]
+            assert all(f[0].syllable == "No" for f in figures[::2])  # the call, and in a full turn the answer
+            answered += sum(f[0].syllable == "now" for f in figures[1::2])
+        assert answered >= 2  # (the drop's breakdown sings its turn's call alone, once in two bars, soft)
+        stutter = S.HOUSE_HOOK["rhythms"]["stutter"][0]
+        again = [(step, length) for (_, j0, _), (step, j, length) in zip(stutter, stutter[1:]) if j == j0]
+        assert again and all(step % 2 == 0 and length >= 2 for step, length in again)  # "knows, knows" on eighths
+
+
 def test_house_bass_riffs_in_octaves_and_its_intro_builds_in_layers():
     g, p = styled("house", drop=0, intro="lead")
     score = realize(g, p)
@@ -426,9 +458,19 @@ def test_the_new_options_leave_no_trace_while_off_and_travel_when_on():
     assert p.style.loop == "" and S.loop_of(g, p) is not None and realize(g, p).part("chop")
 
 
-def test_house_and_dub_are_hidden_from_the_picker_but_still_play():
-    """Not offered for now (the artist, 2026-09-30), unless a version already plays one; a record or --style still does."""
-    assert "house" not in S.offered() and "dub" not in S.offered()
-    assert {"acappella", "jig", *S.RING} <= set(S.offered())
-    assert "house" in S.offered("house") and "dub" not in S.offered("house")
+def test_dub_is_hidden_from_the_picker_but_still_plays():
+    """Dub isn't offered for now (the artist, 2026-09-30), unless a version already plays it; a record or --style
+    still does. House is offered again since its hook was fixed."""
+    assert "dub" not in S.offered() and "house" in S.offered()
+    assert {"acappella", "jig", "house", *S.RING} <= set(S.offered())
+    assert "dub" in S.offered("dub")
     assert "house" in S.STYLES and "dub" in S.STYLES
+
+
+def test_the_singer_lets_go_before_the_last_hook():
+    """The last refrain's last word ends with its line, not under the hook's eight bars after it (it was held 16.9 s
+    in house2-ada); a style without bars of its own after the last line holds it as ever."""
+    g, p = styled("house", drop=2)
+    p = replace(p, form=("verse", "refrain", "turn", "verse", "refrain", "turn", "bridge", "refrain"))
+    last = max((n for n in realize(g, p).notes if n.part == "voice"), key=lambda n: n.start)
+    assert last.dur < 60 / p.tempo * g.meter.bar / g.meter.beat  # within its bar, not the hook's eight

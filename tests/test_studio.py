@@ -329,6 +329,76 @@ def test_a_section_is_made_on_demand_and_served_with_byte_ranges(served):
     assert again["state"] == "done" and again["url"] == done["url"]
 
 
+def test_a_player_letting_go_of_the_song_it_is_sent_is_no_error(served, monkeypatch, capfd):
+    """A browser drops a file it is being sent whenever its player jumps (the whole song started at the playhead's
+    bar: its start read, then that bar's bytes asked for) or stops: the terminal stays quiet (Server.handle_error)."""
+    import socket as socket_mod
+    import struct
+
+    studio, port = served
+    (studio.cache / f"{'ab' * 12}.flac").write_bytes(b"fLaC" + bytes(8 * 2**20))
+    let_go, quiet = threading.Event(), S.Server.handle_error
+
+    def handled(self, request, client_address):
+        quiet(self, request, client_address)
+        let_go.set()
+
+    monkeypatch.setattr(S.Server, "handle_error", handled)
+    c = socket_mod.create_connection(("127.0.0.1", port), timeout=10)
+    c.sendall(f"GET /audio/{'ab' * 12}.flac HTTP/1.1\r\nHost: 127.0.0.1:{port}\r\nRange: bytes=0-\r\n\r\n".encode())
+    assert b" 206 " in c.recv(64)  # its first bytes on their way
+    c.setsockopt(socket_mod.SOL_SOCKET, socket_mod.SO_LINGER, struct.pack("ii", 1, 0))  # let go at once
+    c.close()
+    assert let_go.wait(10)
+    assert "Traceback" not in capfd.readouterr().err
+
+
+def test_a_whole_song_says_where_each_bar_of_the_ruler_is_in_its_audio(home, monkeypatch):
+    """The page starts the whole song at its playhead's bar (score.js, studio.js; tests/studio_playhead.test.cjs) with
+    the rendition's own clock: each bar line of the ruler in seconds of the whole song's audio, which its job ends
+    with, made now or made before; a section's preview has none. Not the tempo alone: a count-in, a slow air and the
+    final ritardando are in it."""
+    from itertools import pairwise
+
+    from songbird import cli
+
+    studio = S.Studio(None, str(LEAD), "fictional:ada", out=home / "out")
+    per_bar = studio.genome.meter.bar / studio.genome.meter.beat
+    counted, aired = {"style.name": "synthfolk", "style.intro": "count"}, {"style.name": "jig", "style.intro": "air"}
+    for edits in ({}, counted, {**aired, "form.intro": True}):  # (an air needs an intro: some days' shapes have none)
+        v = studio.version(edits)
+        assert not v.problems
+        bars = S.bar_seconds(studio.genome, v.params)
+        steady = 60.0 / v.params.tempo * per_bar
+        for s in studio.arrangement(edits)["sections"]:  # the ruler's bar n is bars[n - 1]
+            assert bars[round(s["start_beat"] / per_bar)] == round(s["start_seconds"], 3)
+        assert all(b > a for a, b in pairwise(bars))
+        if v.params.ritardando > 0.05:  # the last bar slows (by at least half the ritardando, however long the slowing)
+            assert bars[-1] - bars[-2] > steady * (1 + v.params.ritardando / 3)
+        if edits.get("style.intro") == "count":
+            assert bars[0] > steady  # a bar of counting before bar 1
+        if edits.get("style.intro") == "air":
+            assert bars[1] - bars[0] > 1.5 * steady  # the tune slow and free before the jig
+    v = studio.version({})
+    whole, section = studio.key(v, None), studio.key(v, 3)
+    clock = S.bar_seconds(studio.genome, v.params)
+
+    def fake_render_one(genome, params, out, **kwargs):  # the recording's own making is tested elsewhere
+        out.parent.mkdir(parents=True, exist_ok=True)
+        out.write_bytes(b"fLaC")
+        return {"id": "5beef0" + "a" * 58, "duration": 208.3}
+
+    monkeypatch.setattr(cli, "render_one", fake_render_one)
+    job = studio.listen({}, "you", None)
+    done = wait(studio, job) if job["state"] != "done" else job
+    assert done["state"] == "done" and done["result"]["bar_seconds"] == clock
+    again = studio.listen({}, "you", None)  # made before: at once, with its clock
+    assert again["state"] == "done" and again["url"] == f"/audio/{whole}.flac"
+    assert again["result"] == {"bar_seconds": clock}
+    (studio.cache / f"{section}.flac").write_bytes(b"fLaC")
+    assert "result" not in studio.listen({}, "you", 3)
+
+
 def test_a_recording_is_a_packet_marked_with_a_persons_choices_and_replays(home):
     studio = S.Studio(None, str(B), "fictional:ada", out=home / "out")
     edits = {"tempo": 70, "band.pattern": "pick", "mix.space": 1.2, "form.verses": 2, "form.intro": False,

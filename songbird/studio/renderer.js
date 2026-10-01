@@ -10,6 +10,7 @@
 //   const task = r.record({ edits }, onProgress)                   the whole rendition, as one file
 //   r.cancel(task)                                                 stop waiting; a job still queued is dropped
 //   task.done    -> Promise of the last job: { state: "done", url, key, label, result, where } or { state: "failed", error }
+//                (a whole song's result has bar_seconds: each bar line of the score's ruler, in seconds of its audio)
 //   task.job     the job as last heard; onProgress(job) hears each: { state: "queued" | "running", ahead, eta, stage,
 //                progress 0..1 } (ahead and eta only where the queue is shared: a public studio)
 //   job.where    "browser" or "server": which made it (SongbirdRenderer.made lists every render, for the page and tests)
@@ -299,14 +300,15 @@
         }
       }, task);
       const url = blob(out.flac);
+      const clock = answer.bar_seconds ? { bar_seconds: answer.bar_seconds } : {};  // a whole song's, as the server's job ends
       const job = { state: "done", progress: 1, url, key: answer.key, label, where: "browser", id: out.id, size,
-        seconds: out.seconds, result: { duration: out.duration } };
+        seconds: out.seconds, result: { duration: out.duration, ...clock } };
       if (size === "whole" && out.record) {
         const n = answer.name || {};
         const name = `${n.song || "song"}.${(out.record.rendered_at || n.day || "").slice(0, 10)}.${out.id.slice(0, 6)}.flac`;
         job.result = { recorded: { flac: name, name, id: out.id, duration: out.duration, shared: true, browser: true,
           generation: out.record.generation, yours: out.record.yours, next: `python3 ${name} studio`, download: url,
-          program: out.record.program_sha256 } };
+          program: out.record.program_sha256 }, ...clock };
       }
       remember(answer.key, job, size);
       return job;
