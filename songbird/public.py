@@ -54,6 +54,7 @@ RATES = {  # MB for a second of the song, on two threads
     "synth-arp": 6.9, "synth-bass": 6.9, "synth-pad": 6.9, "synth-solo": 6.9, "ukulele": 6.9, "vibraphone": 6.9,
     "viola": 7.0,
     "melodica": 7.4,  # (2026-09-30: 5.9 to 7.4 over three runs; the highest)
+    "pipeorgan": 7.1,  # a hymn's (2026-09-30, night): 6.8 for the ballad's whistle, 0.3 more
 }
 UNMEASURED = 7.7  # a part never measured (one added since): the heaviest rate above
 MARGIN = 1.05
