@@ -1,6 +1,7 @@
 # The studio at studio.itsby.you: the built site from Workers Static Assets, and a small Worker for sharing versions.
 # docs/WEB-STUDIO.md, "Hosted on Cloudflare (2026-09-30)", has every step. In short, from the repository's root:
-#   uv run python web/studio-wasm/tools/build_site.py renders/studio-site
+#   uv run python -m webstudio.prepare --kit renders/sing-kit             (once: the singing kit)
+#   uv run python web/studio-wasm/tools/build_site.py renders/studio-site --sing-kit renders/sing-kit
 #   npx wrangler r2 bucket create songbird-versions          (once)
 #   cd web/studio-site && npm ci && npx wrangler deploy
 name = "songbird-studio"
