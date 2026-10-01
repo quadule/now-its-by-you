@@ -1622,3 +1622,96 @@ whole table of changes, ran 206 tests including the goldens, and measured). Its 
 16. **Measure** as the review defined it (below): the chord under a note's middle, the minor ninth apart from the
     major seventh, seconds as well as notes, the comping's register; Whisper on the mix with the ballad and a swung
     version beside it.
+
+## As built, and measured (September 30, 2026)
+
+`songbird render --style jazz`, or "jazz trio" in the studio's style card (after the ring's, beside chamber). Nobody
+has listened; everything here is measured.
+
+| Where | What |
+|---|---|
+| songbird/style.py | the trio's block at the end: `JAZZ` (beside the ring at chamber's place), `CHANGES`, `SOLO_BREAK`, `trio_chord`, `sits`, `trio_changes`, `_bars`, `changed`, `held_chords`, `with_break`; the break's hook in `choose_style` |
+| songbird/composition.py | `_changed` after the loop in `form_phrases` |
+| songbird/variation.py | a hand-set form put back after `choose_style` as after `choose_form` |
+| songbird/idioms.py | the trio's writers in a block of their own (`rootless`, `rootless-light`, `solo`, `walking`, `twofeel`, `swept`, `swept-light`); a lead's "solo" in `plan_style` where a style's table names it |
+| songbird/takeover.py, explain.py | the patterns' words; "jazz trio", its players ("upright bass", "brushes"), its feels ("a waltz", "a ballad, swung"), the card's line on the chords (`changes_words`) |
+| songbird/midi.py, piano.py | a held chord one chord in the MIDI file's chord track and the piano score (the trio only) |
+| tests/test_jazz.py | the place, the changes in every mode and harmony, a bar it can't write, a person's chords, the break, the players, the page, the share on the chord |
+
+**As built, where it differs from the design**: the review's changes above; the tempo a little brisker (the waltz
+0.76 to 0.94 of the song's, centre 0.85, its quarter about 122 for H; the ballad 0.74 to 0.92, centre 0.83, about 80);
+the lineup piano 1.0, bass 0.85, kit 1.25 (the brushes' stem sat 17 dB under country's kit at first: now about 8);
+the comping's tones it can spare (a fifth, a ninth) left out where they'd rub a sung note on a strong beat or a long
+one; no new numba kernel, so the browser's translation is as it was.
+
+**Nothing else moved.** Every other style's score for four machines (ada, bob, coral, dmitri on their dates; every
+style for each, with three voices too for ada; the seed; 90 in all) is identical before and after; six renders made
+before the change render to the same PCM ids after it: the seed (9b0766353b73), ada's own (8e8c9e92fc61), chamber for
+ada (8e10c6ee39a0), the songwriter for bob (1d7413323129), country for coral (72a357a11dd0), gospel for dmitri
+(fbe73c7054ad). The goldens pass. A jazz render replays to itself (bob's: "replay: matches").
+
+**The changes, as the four machines drew them** (the harmony knob 0.57 to 0.71): in D major ada's verses are D6 | D6
+Em7 A7, D6 | Aadd9 D6, Dmaj7 D7 | Gmaj7 Em7 A7..., the turns Gmaj7 Bm7 | Em7 A7; in minor (bob, coral) im7, ivm7,
+VI6, iim7♭5 vm7. By construction no chord the trio plays rubs a semitone against a note sung over it that the song's
+own chord there doesn't (tested in four modes at three harmonies).
+
+**The notes** (each piano or bass note against the chord under its middle; a sung note is the singer's or a lineage
+voice's, sounding with it for 20 ms or more):
+
+| | piano on the chord (its ninth) | bass on the chord (a step into the next) | piano a minor ninth under a sung note | piano a semitone over one | comping's mean pitch, under C4 |
+|---|---|---|---|---|---|
+| ada, a waltz, D major | 84.5% (14.4%) | 91.5% (8.2%) | 1.3% of notes | 0 | B3, 55% |
+| bob, swung, D minor | 92.4% (5.0%) | 86.2% (11.6%) | 5.2% | 5.4% | B3, 49% |
+| coral, a waltz, E♭ minor | 91.8% (6.9%) | 90.1% (8.3%) | 3.8% | 4.5% | A3, 69% |
+| dmitri, a waltz, E♭ major | 90.6% (8.3%) | 91.7% (8.3%) | 2.0% | 0.3% | C♯4, 31% |
+
+So 98% to 99% of the piano's notes are its chord's tones or its ninth, and the bass's other notes are its steps into
+the next chord. Where a note rubs, it is almost always a tone of the song's own triad held under a passing sung note:
+counted the same way for every chord and bass note of the band, the trio rubs on 1.4% (ada), 10.9% (bob), 7.8%
+(coral) and 2.8% (dmitri) of them, the tones of its own (sevenths, sixths, ninths, steps) on 0.2% to 1.5%; the
+ballad's band, the song's own, on 3.8%, 10.4%, 12.4% and 3.6%. In a minor key the tune's 2 and 6 pass over the minor
+triad's third and fifth in either band.
+
+**Words misheard** (Whisper base.en, `tools/intelligibility.py`, a verse with the band and a refrain, 70 words each,
+four machines, 280 words): the ballad 10.7% on the mix (30 words), the trio as each machine chose it 10.4% (29), the
+trio swung 12.1% (34); the dry voice 8.9%, 7.5% and 8.2%. The trio costs the words nothing as the machines choose it;
+swung, about two words in a hundred.
+
+**Memory** (tools/render_memory.py, two threads, `MallocLargeCache=0`): H's own shape with its break, a waltz, 201 s,
+1.74 GB; swung, 206 s, 1.78 GB; four verses, every part, the slowest tempo, 372 s, 2.51 to 3.06 GB over four runs on a
+busy machine (the kit's sweeps and taps beside the voice: about the kit's own rate, 7.1 MB a second). In the VPS's
+2100 MB about 4 minutes in one go: H's own shape (3.4 minutes) fits; a machine's longer shape (ada's and coral's, 4.1
+and 4.5 minutes) is made in the browser, as other styles' long shapes are. `MEASURED` updated.
+
+### The renders, for listening
+
+In `renders/styles/` (ids in ids-jazz.txt; the main checkout's renders/styles has them too), each as its machine
+chooses:
+
+| render | what it is | length | id | listen for |
+|---|---|---|---|---|
+| jazz-ada-2026-09-27 | a waltz at 81 (a waltz's quarter 122), D major, three verses, the bridge twice, no break (its coin) | 248 s | e1f6e7d4a6bf | the piano's intro (0:01) its left hand under the tune; the first verse with the bass two to a bar and the brushes light, the refrain at 0:36 walking; the turns' Gmaj7 Bm7 \| Em7 A7 (1:00, 1:53) |
+| jazz-bob-2026-03-14 | a ballad swung at 83, D minor; the second verse with the piano alone; the piano's chorus | 183 s | 87655a873ec8 | the second verse, the singer and the piano alone (0:59); the break, the verse tune an octave up with the left hand's chords (1:45 to 2:08); the cold stop |
+| jazz-coral-2026-11-02 | a waltz at 78, E♭ minor; the band joining line by line; the second verse bare, the third in stop-time; the chorus; the bridge twice; a broad ending | 272 s | 01a9bbbb7a9b | the entrances (0:13); the bare verse (1:03); stop-time (1:52); the break (2:41 to 3:06) |
+| jazz-dmitri-2026-06-21 | a waltz at 81, E♭ major; the band joining line by line; one backing voice on oohs; an outro | 232 s | 0b89d37c4c47 | the first refrain's walk (0:36); the turns; the outro, the piano's tune over the brushes (3:39) |
+| jazz-ada-2026-09-27-swing | ada's as a swung ballad (`--arrange feel=swing`), to hear the other feel in a major key | 254 s | 20919b894039 | the swing against the waltz above |
+
+## Decisions for the artist (the jazz trio)
+
+1. **On the ring or beside it.** Beside it, at chamber's place, as the four before it.
+2. **The dominant: A7 or Aadd9.** The rule is symmetric: no trio tone a semitone from a sung note, either way. That
+   rules out A7's G under the tune's F♯ (A13, a major seventh under the singer, the most idiomatic sound in the style),
+   so H's V is mostly Aadd9, and A7 only where nothing is sung over it (a line's end, a turn). A directional rule
+   (only a minor ninth under the tune rubs) would let A7 sound under the tune; the lineage choir would then sing the
+   G a major seventh under the F♯ in the bridge, unless the choir's lines keep the symmetric rule.
+3. **E7 (V of V) in the refrain's last line**, where the knob draws it: the one chord outside the tune's pentatonic
+   world.
+4. **The break** is added 0.8 of the time where the form has none (the piano's chorus on the verse tune). A form a
+   person sets is kept.
+5. **The feel**: a waltz 0.55, a ballad swung 0.45 (three of the four machines drew the waltz). Swung costs about two
+   words in a hundred.
+6. **The tempo**: the waltz at 0.85 of the song's (122 a quarter), the ballad at 0.83 (80). Slower is more of a
+   ballad, and longer: a machine's long shape already passes the studio's 4 minutes.
+7. **Passing chords stay inside a line** (the changes are by line, so every verse and the chord lane agree).
+8. **The patterns' menus**: the trio's patterns (rootless comping, the chorus, walking, two to a bar, the swept
+   brushes) are offered to the piano, the bass and the kit in every style's arrangement view, as every style's are.
