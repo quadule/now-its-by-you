@@ -19,6 +19,14 @@ def test_a_dropped_g_is_read_as_the_ing_word_ending_in_n():
     assert folk.reading("qzxv") is None
 
 
+def test_a_diphthongs_er_is_sung_in_one_syllable_with_it():
+    assert folk.reading("fire")[-2:] == ["AY1", "R"]  # not fi-er: the program sings it AYR on one note
+    assert folk.reading("hour") == ["AW1", "R"]
+    assert folk.reading("tired") == ["T", "AY1", "R", "D"]
+    assert folk.reading("flower")[-2:] == ["AW1", "R"]
+    assert folk.reading("mother")[-1] == "ER0"  # not after a diphthong: as it is
+
+
 def test_a_word_heard_differently_between_matching_neighbours_is_taken_as_printed():
     heard = [dict(word=w, start=i, end=i + 0.5, p=0.9 if w != "shanandoah" else 0.2)
              for i, w in enumerate(["Oh", "shanandoah,", "I", "long", "to", "see", "you"])]

@@ -26,6 +26,15 @@ keeps the old model's row and register.
 A band-limited recording's frames (sp_top, ap_top in the dataset: tools/throat/dataset.py) are learned only
 inside their band: the points of each grid above it count for nothing in the loss, the normalisations or
 the global variance.
+
+For real people's recordings (docs/THROAT.md, "Folk singers"): --singer-dim widens the singer embedding (an old
+model's rows keep their numbers, the new dimensions start small and random); --spread starts a new singer at a
+random point spread as the old singers are, not at their mean (where the folk singers all stayed, one voice);
+--singer-lr learns the singer table (and the recording table) faster, without weight decay; --channel-dim gives
+every recording of a "folk" or "record" singer a row of its own beside the singer's (its microphone and room), the
+house audio one shared row, "studio", and the model written sings through "studio" (folded into the FiLM biases,
+so songbird.synth.throat runs it unchanged); --contrast adds L1 on the envelope less its 17-point trend (log
+power, inside the band), which keeps formant contrast a small model would average away.
 """
 
 from __future__ import annotations
@@ -67,15 +76,17 @@ def shifted(x: torch.Tensor, d: int) -> torch.Tensor:
 
 
 class Throat(nn.Module):
-    def __init__(self, phones: int, roles: int, singers: int, channels: int, sp: int, ap: int, dropout: float = 0.0):
+    def __init__(self, phones: int, roles: int, singers: int, channels: int, sp: int, ap: int, dropout: float = 0.0,
+                 singer_dim: int = SINGER, rooms: int = 0, room_dim: int = 0):
         super().__init__()
         self.drop = nn.Dropout(dropout)
         self.phone = nn.Embedding(phones, EMBED)
         self.role = nn.Embedding(roles, ROLE)
-        self.singer = nn.Embedding(singers, SINGER)
+        self.singer = nn.Embedding(singers, singer_dim)
+        self.room = nn.Embedding(rooms, room_dim) if room_dim else None
         self.inp = nn.Linear(5 * EMBED + ROLE + CONT, channels)
         self.convs = nn.ModuleList([nn.Linear(KERNEL * channels, channels) for _ in DILATIONS])
-        self.films = nn.ModuleList([nn.Linear(SINGER, 2 * channels) for _ in DILATIONS])
+        self.films = nn.ModuleList([nn.Linear(singer_dim + room_dim, 2 * channels) for _ in DILATIONS])
         self.mixes = nn.ModuleList([nn.Linear(channels, channels) for _ in DILATIONS])
         for f, m in zip(self.films, self.mixes):
             nn.init.zeros_(f.weight)
@@ -83,6 +94,11 @@ class Throat(nn.Module):
             m.weight.data *= 0.3
             nn.init.zeros_(m.bias)
         self.out = nn.Linear(channels, sp + ap)
+
+    def voice(self, singer: torch.Tensor, room: torch.Tensor | None = None) -> torch.Tensor:
+        """What the FiLMs read: the singer's row, and the recording's beside it when there are rooms."""
+        v = self.singer(singer)
+        return torch.cat([v, self.room(room)], dim=-1) if self.room is not None else v
 
     def forward(self, phones: torch.Tensor, role: torch.Tensor, cont: torch.Tensor, singer: torch.Tensor):
         """phones (batch, frames, 5): prev2, prev, phone, next, next2; singer (batch, frames, SINGER)."""
@@ -115,6 +131,11 @@ def main() -> None:
     ap.add_argument("--log-every", type=int, default=500)
     ap.add_argument("--init", type=Path, default=None, help="start from this model's weights and normalisations")
     ap.add_argument("--device", default="mps" if torch.backends.mps.is_available() else "cpu")
+    ap.add_argument("--singer-dim", type=int, default=None, help="numbers per singer (default: the --init model's, or 8)")
+    ap.add_argument("--spread", action="store_true", help="a new singer starts spread as the old ones are, not at their mean")
+    ap.add_argument("--singer-lr", type=float, default=None, help="learning rate of the singer and room tables (no decay)")
+    ap.add_argument("--channel-dim", type=int, default=0, help="numbers per recording (its room and microphone); 0: none")
+    ap.add_argument("--contrast", type=float, default=0.0, help="weight of L1 on the envelope less its trend")
     args = ap.parse_args()
     torch.manual_seed(args.seed)
     rng = np.random.default_rng(args.seed)
@@ -147,24 +168,54 @@ def main() -> None:
     print(f"{len(train)} training segments, {len(held)} held out, {len(out)} left out; {len(phones)} phones, "
           f"singers {singers}", flush=True)
 
+    # rooms: every recording of a person (source folk or record) its own, the rest one shared "studio"
+    rooms = ["studio"]
+    room_of = np.zeros(len(sp), dtype=np.int64)
+    if args.channel_dim:
+        for i, seg in enumerate(segments):
+            who, _, name = seg.partition("/")
+            if sources[singers.index(who)] in ("folk", "record") if who in singers else False:
+                rec = name.rsplit(".s", 1)[0]
+                if rec not in rooms:
+                    rooms.append(rec)
+                room_of[offsets[i]: offsets[i] + lengths[i]] = rooms.index(rec)
+        print(f"{len(rooms)} rooms (studio and {len(rooms) - 1} recordings)", flush=True)
+
     dev = args.device
-    model = Throat(len(phones), len(roles), len(singers), args.channels, sp.shape[1], apr.shape[1], args.dropout).to(dev)
+    old = json.loads(str(init["config"])) if init is not None else None
+    sdim = args.singer_dim or (old.get("singer", SINGER) if old else SINGER)
+    model = Throat(len(phones), len(roles), len(singers), args.channels, sp.shape[1], apr.shape[1], args.dropout,
+                   singer_dim=sdim, rooms=len(rooms), room_dim=args.channel_dim).to(dev)
+    gen = torch.Generator().manual_seed(args.seed)
     if init is not None:
-        old = json.loads(str(init["config"]))
         if old["channels"] != args.channels or old["phones"] != phones:
             raise SystemExit(f"--init {args.init}: {old['channels']} channels and its phones; asked for {args.channels}")
         state = model.state_dict()
         for k in state:
+            if k == "room.weight":
+                continue
             w = torch.tensor(init[f"w.{k}"])
-            if k == "singer.weight":  # by name; a new singer starts at the mean of the old ones
-                rows = [w[old["singers"].index(n)] if n in old["singers"] else w.mean(0) for n in singers]
+            if k == "singer.weight":  # by name; a new singer starts at the old ones' mean (or spread as they are)
+                mean, std = w.mean(0), w.std(0)
+                rows = [w[old["singers"].index(n)] if n in old["singers"]
+                        else mean + (std * torch.randn(len(mean), generator=gen) if args.spread else 0) for n in singers]
                 w = torch.stack(rows)
+                if sdim > w.shape[1]:  # wider: the new numbers start small and random (their FiLM weights at zero)
+                    w = torch.cat([w, 0.3 * std.mean() * torch.randn(len(w), sdim - w.shape[1], generator=gen)], dim=1)
+            elif k.startswith("films.") and k.endswith(".weight") and state[k].shape[1] > w.shape[1]:
+                w = torch.cat([w, torch.zeros(w.shape[0], state[k].shape[1] - w.shape[1])], dim=1)
             state[k] = w
+        if model.room is not None:  # rooms start small and random, their FiLM weights at zero
+            state["room.weight"] = 0.3 * torch.randn(len(rooms), args.channel_dim, generator=gen)
         model.load_state_dict(state)
         print(f"from {args.init}: singers {[n for n in singers if n not in old['singers']]} new", flush=True)
     n_params = sum(p.numel() for p in model.parameters())
-    print(f"{n_params / 1e6:.2f}M parameters", flush=True)
-    opt = torch.optim.AdamW(model.parameters(), lr=args.lr, weight_decay=1e-4)
+    print(f"{n_params / 1e6:.2f}M parameters, {sdim} numbers a singer", flush=True)
+    tables = [model.singer.weight] + ([model.room.weight] if model.room is not None else [])
+    rest = [p for n, p in model.named_parameters() if n not in ("singer.weight", "room.weight")]
+    opt = torch.optim.AdamW([dict(params=rest), dict(params=tables, lr=args.singer_lr or args.lr,
+                                                      weight_decay=0.0 if args.singer_lr else 1e-4)],
+                            lr=args.lr, weight_decay=1e-4)
     sched = torch.optim.lr_scheduler.LambdaLR(opt, lambda s: min(1.0, s / 500) * 0.5 * (1 + math.cos(math.pi * s / args.steps)))
 
     def batch(ids, crop, jitter=JITTER):
@@ -184,19 +235,36 @@ def main() -> None:
             cont[..., 6] += args.noise * 0.03 * torch.randn(b, 1, device=dev)  # log f0 (a whole crop, ~30 cents)
             cont[..., 5] += args.noise * 0.1 * torch.randn(b, 1, device=dev)  # level (~1 dB)
         return (t(phone5, xs, torch.long), t(d["role"], xs, torch.long), cont, t(d["singer"], ys, torch.long),
-                t(y_all, ys), t(mask, ys), bands)
+                t(y_all, ys), t(mask, ys), bands, t(room_of, ys, torch.long))
 
     dims_sp = torch.arange(n_sp, device=dev)
     dims_ap = torch.arange(n_ap, device=dev)
 
+    sp_std_t = torch.tensor(sp_std, device=dev)
+    sp_mean_t = torch.tensor(sp_mean, device=dev)
+    hann = torch.hann_window(19, periodic=False, device=dev)[1:-1]
+    hann = (hann / hann.sum()).view(1, 1, -1)
+
+    def detrended(v):
+        """(batch, frames, sp) log power less its 17-point trend along frequency (the edges held)."""
+        flat = v.reshape(-1, 1, v.shape[-1])
+        trend = F.conv1d(F.pad(flat, (8, 8), mode="replicate"), hann).reshape(v.shape)
+        return v - trend
+
     def loss_of(xb):
-        phone, role, cont, singer, y, m, bands = xb
-        pred = model(phone, role, cont, model.singer(singer))
+        phone, role, cont, singer, y, m, bands, room = xb
+        pred = model(phone, role, cont, model.voice(singer, room))
         m3 = m[..., None] * bands  # each frame's points inside its band (every point, but for old records)
         base = ((pred - y).abs() * m3).sum() / (m3.sum() + 1e-6)
         dm = m[:, 1:, None] * m[:, :-1, None] * bands[:, 1:] * bands[:, :-1]
         delta = (((pred[:, 1:] - pred[:, :-1]) - (y[:, 1:] - y[:, :-1])).abs() * dm).sum() / (dm.sum() + 1e-6)
-        return base + args.delta * delta, base
+        loss = base + args.delta * delta
+        if args.contrast:  # the formants' height over the envelope's trend, as the real singer had it
+            ps, ys_ = (v[..., :n_sp] * sp_std_t + sp_mean_t for v in (pred, y))
+            mc = m3[..., :n_sp]
+            c = ((detrended(ps) - detrended(ys_)).abs() * mc).sum() / (mc.sum() + 1e-6) / sp_std_t.mean()
+            loss = loss + args.contrast * c
+        return loss, base
 
     t0 = time.time()
     for step in range(1, args.steps + 1):
@@ -231,7 +299,8 @@ def main() -> None:
         for i in train[:: max(1, len(train) // 40)]:
             sl = slice(offsets[i], offsets[i] + lengths[i])
             tt = lambda arr, dtype=torch.float32: torch.tensor(arr[sl][None], dtype=dtype, device=dev)  # noqa: E731
-            pred = model(tt(phone5, torch.long), tt(d["role"], torch.long), tt(cont_all), model.singer(tt(d["singer"], torch.long)))
+            pred = model(tt(phone5, torch.long), tt(d["role"], torch.long), tt(cont_all),
+                         model.voice(tt(d["singer"], torch.long), tt(room_of, torch.long)))
             pred = pred[0].cpu().numpy()
             m = full[sl] & (d["role"][sl] >= 2)
             if m.sum() < 50:  # a band-limited recording's segment: its upper points aren't real
@@ -250,16 +319,25 @@ def main() -> None:
                         if (voiced & (d["singer"] == i)).any() else old_registers[name])
                  for i, name in enumerate(singers)}
     weights = {k: v.detach().cpu().numpy().astype(np.float32) for k, v in model.state_dict().items()}
+    room_table = weights.pop("room.weight", None)
+    if room_table is not None:  # sing through the studio: its row folded into every FiLM's bias
+        for k in range(len(DILATIONS)):
+            w = weights[f"films.{k}.weight"]
+            weights[f"films.{k}.bias"] = weights[f"films.{k}.bias"] + w[:, sdim:] @ room_table[0]
+            weights[f"films.{k}.weight"] = np.ascontiguousarray(w[:, :sdim])
     config = dict(channels=args.channels, dilations=list(DILATIONS), kernel=KERNEL, embed=EMBED, role=ROLE,
                   dropout=args.dropout, noise=args.noise,
-                  singer=SINGER, cont=CONT, phones=phones, roles=roles, singers=singers, steps=args.steps,
+                  singer=sdim, cont=CONT, phones=phones, roles=roles, singers=singers, steps=args.steps,
+                  spread=args.spread, singer_lr=args.singer_lr, rooms=len(rooms), room_dim=args.channel_dim,
+                  room_folded="studio" if args.channel_dim else None, contrast=args.contrast,
                   registers=registers, sources=dict(zip(singers, sources)),
                   dataset=str(args.dataset), frames=int(len(sp)), params=int(n_params), held_out=args.hold_out or [],
                   excluded=args.exclude or [],
                   lr=args.lr, init=str(args.init) if args.init else None)
     args.out.parent.mkdir(parents=True, exist_ok=True)
+    extra = dict(rooms=np.array(rooms), room_table=room_table) if room_table is not None else {}
     np.savez(args.out, config=json.dumps(config), sp_mean=sp_mean, sp_std=sp_std, ap_mean=ap_mean, ap_std=ap_std,
-             gv=gv.astype(np.float32), **{f"w.{k}": v for k, v in weights.items()})
+             gv=gv.astype(np.float32), **{f"w.{k}": v for k, v in weights.items()}, **extra)
     print(f"wrote {args.out} ({args.out.stat().st_size / 1e6:.1f} MB)")
 
 

@@ -276,8 +276,13 @@ def reading(word: str) -> list[str] | None:
         r = P.pronunciations(stem + "g")
         return list(r[0][:-1]) + ["N"] if r and r[0][-1] == "NG" else None
 
-    def sung(r: list[str] | None) -> list[str] | None:  # a reading with no vowel ("hm", "sh") has nothing to sing
-        return r if r and any(p[-1:].isdigit() for p in r) else None
+    def sung(r: list[str] | None) -> list[str] | None:
+        """A reading as the program sings it: none with no vowel ("hm", "sh"); a diphthong's -er one syllable with
+        it (fire, wire, hour: AY R, as songbird.phonetics.fit sings fi-er on a note, which the dataset makes AYR).
+        Read as two syllables, a folk corpus never sings AYR and the network forgets it: "fire" came out "fi"."""
+        if not r or not any(p[-1:].isdigit() for p in r):
+            return None
+        return [("R" if p == "ER0" and k and r[k - 1].rstrip("012") in ("AY", "AW", "OY") else p) for k, p in enumerate(r)]
 
     if dropped and ing(w):  # rollin' (rollin alone is a name in the dictionary)
         return sung(ing(w))
@@ -497,7 +502,13 @@ def prepare(work: Path, it: dict, target_db: float, min_quiet: float, band_db: f
     if not words_path.exists():
         return dict(id=it["id"], skipped="not transcribed")
     x = load_audio(source_of(work, it), SR, it.get("start"), it.get("end"))
-    f0 = f0_of(x, SR)
+    cache = work / "cache" / f"{it['id']}.{(it.get('sha256') or 'x')[:12]}.{it.get('start')}-{it.get('end')}.f0.npy"
+    if cache.exists():  # Harvest over a whole recording is most of cut's time: kept between runs
+        f0 = np.load(cache).astype(np.float64)
+    else:
+        f0 = f0_of(x, SR)
+        cache.parent.mkdir(exist_ok=True)
+        np.save(cache, f0.astype(np.float32))
     n = len(f0)
     lv = levels(x, SR, n)
     words = corrected(json.loads(words_path.read_text())["words"], it.get("lyrics"))
