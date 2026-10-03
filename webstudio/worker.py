@@ -134,8 +134,22 @@ class Tools:
 
 
 def part_notes(g, a: float, b: float) -> list:
-    """The guide's notes a piece from a to b seconds measures: those that start inside it."""
-    return [n for n in g.notes if a <= n.start < b]
+    """The guide's notes a piece from a to b seconds measures (those that start inside it), as whole words: a
+    piece of a long take may be cut between two syllables of a word held apart, and the singer sings words."""
+    inside = [k for k, n in enumerate(g.notes) if a <= n.start < b]
+    if not inside:
+        return []
+    first, last, left = inside[0], inside[-1], 0
+    starts = []  # where each note's word begins
+    for k, n in enumerate(g.notes):
+        if not left:
+            begins, left = k, max(int(n.word_len or 1), 1)
+        left -= 1
+        starts.append(begins)
+    first = starts[first]
+    while last + 1 < len(g.notes) and starts[last + 1] == starts[last]:
+        last += 1
+    return g.notes[first : last + 1]
 
 
 def part_name(notes, lexicon) -> str:

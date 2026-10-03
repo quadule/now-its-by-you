@@ -467,6 +467,17 @@ def test_a_long_take_is_measured_in_pieces_cut_in_its_rests():
     assert 34 < cut[0][1] < 36  # the first rest of the song, between its first two stretches
 
 
+def test_the_template_singer_sings_a_piece_in_whole_words():
+    """A long take is cut at its longest rest, which may fall between two syllables of a word held apart; the
+    template singer sings that piece's words whole (the formant singer refuses half a word)."""
+    syllables = [("They", 1), ("half", 4), ("in", 4), ("vent", 4), ("ed", 4), ("fire", 1)]
+    notes = [SimpleNamespace(start=float(k), dur=0.5, word_len=n, syllable=s) for k, (s, n) in enumerate(syllables)]
+    g = SimpleNamespace(notes=notes)
+    assert [n.syllable for n in worker.part_notes(g, 2.5, 4.5)] == ["half", "in", "vent", "ed"]
+    assert [n.syllable for n in worker.part_notes(g, 0.0, 2.5)] == ["They", "half", "in", "vent", "ed"]
+    assert [n.syllable for n in worker.part_notes(g, 5.0, 9.0)] == ["fire"] and worker.part_notes(g, 9.0, 10.0) == []
+
+
 def test_a_planted_way_is_measured_as_the_tools_measure_it_and_the_audio_goes(tmp_path):
     """The template singer sings the first refrain with every second note 60 ms late; the web studio's measuring
     process finds those notes later than the rest, with exactly the numbers tools/phrasing.py measure_window gives
