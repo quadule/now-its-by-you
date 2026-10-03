@@ -115,7 +115,7 @@ test("a section made in this browser: the spec from the server, the worker's fil
   assert.equal(fake.made[0].url, "http://localhost/render/app-0123456789abcdef/studio-worker.mjs");
   assert.deepEqual(fake.made[0].posted[0], { cmd: "init", pyodide: "http://localhost/render/py-0123456789abcdef/",
     app: "http://localhost/render/app-0123456789abcdef/", bytes: 36e6, stemCacheBytes: 128 * 2 ** 20 });
-  assert.ok(heard.some((s) => /getting the singer ready \(once: 1 of 34 MB\)/.test(s)), heard.join(" | "));
+  assert.ok(heard.some((s) => /getting the singer ready \(3%\)/.test(s)), heard.join(" | "));
   assert.ok(heard.includes("singing"));
   assert.deepEqual(R.made.map((m) => [m.where, m.size, m.key]), [["browser", "section", "s2-92"]]);
   // asked again: kept here, it plays at once, and nothing is made

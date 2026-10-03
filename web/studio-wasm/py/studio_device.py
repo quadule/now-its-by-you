@@ -33,6 +33,7 @@ import contextlib
 import json
 import tempfile
 import traceback
+from datetime import date
 from pathlib import Path
 
 from songbird import public as public_mod
@@ -98,7 +99,14 @@ class DeviceStudio(Studio):
     device = True
     singing_why = NOT_YET
 
-    def __init__(self, song: str, machine: str = "none", home: str | Path | None = None, runs_with: dict | None = None):
+    def __init__(self, song: str, machine: str = "none", home: str | Path | None = None, runs_with: dict | None = None,
+                 day: str | None = None):
+        if day is not None:  # the page's own day (the visitor's local date, as device.js reads it), so the answers it
+            # had before this worker was ready (build_site.py's, for that day) and this worker's are one day's
+            fixed = date.fromisoformat(str(day))
+            if fixed.isoformat() != day:
+                raise ValueError("a day is YYYY-MM-DD")
+            self.clock = lambda: fixed
         super().__init__(song=song, machine=machine, home=Path(home or tempfile.mkdtemp(prefix="songbird-")))
         self.versions = DeviceVersions(self.home / "versions")
         self._runs_with = runs_with
@@ -170,7 +178,7 @@ class Device:
         received.THINKING = max(received.THINKING, THINKING)
         self.config = config
         self.studio = DeviceStudio(config["song"], config.get("machine") or "none", config.get("home"),
-                                   config.get("runs_with"))
+                                   config.get("runs_with"), config.get("day"))
         self.studio.singing_why = config.get("singing_why") or NOT_YET
         self._singing(config)
 
@@ -393,6 +401,57 @@ class Device:
             return {"status": 200, "json": studio.singing.take(meta, None, None, seconds=seconds)}
         except singing_mod.Refused as e:
             raise ValueError(str(e)) from None
+
+
+# ---------------------------------------------------------------- the page's first questions, answered ahead
+# What the page asks as it opens on the song as it began (no edits, no version, nothing sung in this browser), with
+# what this studio answers, a day at a time: build_site.py writes one file a day from these (render/start-<hash>/), so
+# the page has its song before Python is fetched, and device.js answers these questions from that file until this
+# worker is ready. The same code answers either way, so the answers are this worker's own (tests hold them to it).
+
+
+def question(method: str, path: str, body: dict | None = None) -> str:
+    """A question's key, as device.js makes it from a request: the method, the path, and the JSON body with its keys
+    sorted and no spaces (none for a GET)."""
+    said = "" if body is None else json.dumps(body, sort_keys=True, separators=(",", ":"), ensure_ascii=False)
+    return f"{method} {path} {said}"
+
+
+def first_answers(device: Device) -> dict[str, list]:
+    """Each first question's key and [status, answer] (the answer as the page receives it), in the order the page
+    asks them: its start, the singing offer, the song, the arrangement and the sound, each sung section's other
+    words, the other computers' versions, the sketch's players, and the ways of singing it knows."""
+    out: dict[str, list] = {}
+
+    def ask(method: str, path: str, body: dict | None = None):
+        said = device.handle(method, path, {}, None, b"" if body is None else json.dumps(body).encode(), {})
+        out[question(method, path, body)] = [said["status"], said.get("json")]
+        return said.get("json")
+
+    start = ask("GET", "/api/start")
+    ask("GET", "/api/sing/offer")
+    song = ask("POST", "/api/song", {"edits": {}})
+    ask("POST", "/api/arrangement", {"edits": {}})
+    ask("POST", "/api/sound", {"edits": {}})
+    for w in song["words"]:
+        if w.get("sung") and w.get("changeable"):
+            ask("POST", "/api/options", {"edits": {}, "block": w["block"], "index": w["nth"]})
+    ask("POST", "/api/compare", {"edits": {}, "names": start["names"]})
+    ask("POST", "/api/players", {"edits": {}})
+    ask("GET", "/api/phrasings")
+    return out
+
+
+def first_days(config: dict, days: list[str], out: str | Path) -> None:
+    """Each day's first answers (first_answers), written to OUT/<day>.json as build_site.py ships them: {"v", "day",
+    "answers"}. Natively, in a process of build_site.py's (it runs several at once); each day a studio of its own,
+    started on that day, as the worker is."""
+    out = Path(out)
+    for day in days:
+        with tempfile.TemporaryDirectory(prefix="songbird-first-") as home:
+            device = Device({**config, "home": home, "day": day})
+            said = {"v": 1, "day": day, "answers": first_answers(device)}
+        (out / f"{day}.json").write_text(json.dumps(said, separators=(",", ":"), ensure_ascii=False))
 
 
 # ---------------------------------------------------------------- someone's version, read on this device

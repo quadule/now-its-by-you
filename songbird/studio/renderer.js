@@ -364,8 +364,8 @@
       say({ state: "running", progress: 0, stage: "getting the singer ready", label, where: "browser" });
       const out = await shared.browser.render(answer.spec, size, (m) => {
         if (m.kind === "loading") {
-          const mb = (n) => Math.round((n || 0) / 2 ** 20);
-          const fetching = m.first && m.bytes ? ` (once: ${mb(Math.min(m.received, m.bytes))} of ${mb(m.bytes)} MB)` : "";
+          // how much of what it fetches the first time has come (bundle.json's bytes: a render worker's own)
+          const fetching = m.first && m.bytes ? ` (${Math.min(99, Math.round(100 * (m.received || 0) / m.bytes))}%)` : "";
           say({ state: "running", progress: 0, stage: `getting the singer ready${fetching}`, label, where: "browser" });
         } else if (m.kind === "ready") {
           say({ state: "running", progress: 0.01, stage: "singing in this browser", label, where: "browser" });

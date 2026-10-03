@@ -18,6 +18,12 @@
 //   measuring worker started for that take and ended after (studio-worker.mjs "measure"), which fetches the kit's
 //   files the take needs and gives back only numbers. The take never reaches the studio's worker, or the network.
 // - Nothing leaves this device but a version the visitor chooses to share (share(), POST /api/versions).
+// - The page's first questions, on the song as it began (no edits saved here, no version, nothing sung here), are
+//   answered at once from a small file the build made for this day (bundle.json's "first": build_site.py, from the
+//   studio's own studio_device.first_answers), while the worker gets ready; then the worker answers everything. So
+//   the song is on the page in a second or two, before Python is fetched. Anything else asked before the worker is
+//   ready waits for it, and the page says so where someone asked. The page's day (this browser's date) is the
+//   worker's too, so both answer for the same day.
 "use strict";
 
 (() => {
@@ -34,6 +40,10 @@
   const MAX_TAKE_BYTES = 40 * 2 ** 20;  // a take's most, as a server takes it (webstudio/singing.py MAX_TAKE_BYTES)
   const PIANO = "songbird-piano-score:";  // the piano page's scores, by key (the latest few)
   const MAKING = "songbird-making-whole";  // set while a whole song is made here (renderer.js), for after a crash
+  const FETCHED = "songbird-studio-fetched";  // the app folder this browser's studio has fetched once (so it's cached)
+  const pad = (n) => String(n).padStart(2, "0");
+  const now = new Date();
+  const DAY = `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}`;  // this browser's date, for the visit
 
   // ---------------------------------------------------------------- which version
   const linked = (location.pathname.match(/^\/v\/([0-9a-f]{32})\/?$/) || [])[1] || null;
@@ -78,12 +88,24 @@
 
   // ---------------------------------------------------------------- workers
   let bundle = null;
+  let bundled = null;  // the bundle's manifest, fetched once (asked again each visit: it names what's current)
+  function manifest() {
+    if (!bundled) {
+      bundled = network("/render/bundle.json", { cache: "no-cache" }).then(async (r) => {
+        if (!r.ok) throw new Error(`the studio's files aren't here (${r.status})`);
+        bundle = await r.json();
+        return bundle;
+      });
+      bundled.catch(() => { bundled = null; });
+    }
+    return bundled;
+  }
   const at = (folder) => new URL(`${bundle.base}${folder}/`, location.href).href;
   const deadline = (promise, ms, what) => Promise.race([promise, new Promise((_, reject) =>
     setTimeout(() => reject(new Error(`${what} took too long`)), ms))]);
 
   // A worker running the program: the studio (for the whole visit), or a reader (one file, then let go).
-  function spawn(onLoading, lean = false, control = false) {
+  function spawn(onLoading, lean = false, control = false, bytes = bundle.bytes) {
     const w = new Worker(`${at(bundle.app)}studio-worker.mjs`, { type: "module" });
     const pending = new Map();
     const said = {};
@@ -123,7 +145,7 @@
     };
     worker.make = (config) => { w.postMessage({ cmd: "studio", config }); return worker.made; };
     worker.stop = () => { w.terminate(); stopped("let go"); };
-    w.postMessage({ cmd: "init", pyodide: at(bundle.pyodide), app: at(bundle.app), bytes: bundle.bytes, lean, control });
+    w.postMessage({ cmd: "init", pyodide: at(bundle.pyodide), app: at(bundle.app), bytes, lean, control });
     return worker;
   }
 
@@ -136,36 +158,100 @@
 
   // ---------------------------------------------------------------- the studio, started at once
   let first = true;
+  let ready = false;  // the studio's worker is ready: from then on it answers everything
   function said(text) {  // before the page has its song: what's happening, where it will say what it's making
+    if (answers !== null) return;  // the page has its song already, from the first answers
     const which = document.getElementById("which");
     if (which && !(window.StudioBridge && window.StudioBridge.snapshot && window.StudioBridge.snapshot().start)) which.textContent = text;
   }
 
   async function start() {
-    if (!bundle) {
-      const r = await network("/render/bundle.json", { cache: "no-cache" });
-      if (!r.ok) throw new Error(`the studio's files aren't here (${r.status})`);
-      bundle = await r.json();
-    }
+    await manifest();
     if (typeof WebAssembly !== "object" || typeof Worker !== "function") {
       throw new Error("this browser can't run the studio (it needs WebAssembly and workers)");
     }
-    const mb = (n) => Math.round((n || 0) / 2 ** 20);
     let fetched = false;  // this browser has these files already (from its cache: nothing to count)
-    try { fetched = localStorage.getItem("songbird-singer-fetched") === bundle.app; } catch (e) { fetched = false; }
-    said("Getting the studio ready…");
+    try { fetched = localStorage.getItem(FETCHED) === bundle.app; } catch (e) { fetched = false; }
+    const total = bundle.studio_bytes || bundle.bytes;
     const worker = spawn((m) => {
-      if (first && !fetched && m.bytes && m.received) said(`Getting the studio ready (once: ${mb(Math.min(m.received, m.bytes))} of ${mb(m.bytes)} MB)…`);
-    }, false, true);
+      if (first && !fetched && total && m.received) said(`Getting the studio ready (${Math.min(99, Math.round(100 * m.received / total))}%)…`);
+    }, false, true, total);
     await deadline(worker.ready, READY_MS, "getting the studio ready");
-    const config = { ...bundle.studio };
+    const config = { ...bundle.studio, day: DAY };
     if (config.kit) config.kit = new URL(`${bundle.base}${config.kit}`, location.href).href;
     const view = await worker.make(config);
+    try { localStorage.setItem(FETCHED, bundle.app); } catch (e) { /* only a convenience */ }
     first = false;
     const studio = { worker, view };
     if (version) await openVersion(studio);
     restoreSinging(studio);
+    ready = true;
     return studio;
+  }
+
+  // ---------------------------------------------------------------- the first answers, while the worker gets ready
+  // The day's file (bundle.json "first"), if this page is on the song as it began: no version, nothing sung in this
+  // browser (the ways of singing kept here change the studio's answers), a day the build made, and a browser that can
+  // unpack it. Each answer is the worker's own for that question that day (tests/test_studio_quick_start.py); a
+  // question asked differently (an edit saved here, another day chosen) isn't in it, and waits for the worker.
+  let answers = undefined;  // undefined: not known yet; null: none (the worker answers everything); else key -> [status, data]
+  let firstUsed = false;  // a first answer was given: the page has its song before the worker
+  const firstAnswers = (async () => {
+    try {
+      if (version || badPath || typeof DecompressionStream !== "function") return null;
+      const b = await manifest();
+      const f = b && b.first;
+      if (!f || !/^first-[0-9a-f]{8,}\/$/.test(f.folder || "") || !(f.from <= DAY && DAY <= f.to)) return null;
+      const sung = await stored("sung", "readonly", (s) => s.count());
+      if (sung) return null;
+      const r = await network(`${b.base}${f.folder}${DAY}.gzip`);
+      if (!r.ok || !r.body) return null;
+      const day = JSON.parse(await new Response(r.body.pipeThrough(new DecompressionStream("gzip"))).text());
+      return day && day.v === 1 && day.day === DAY && day.answers && typeof day.answers === "object" ? day.answers : null;
+    } catch (e) {
+      return null;
+    }
+  })().then((a) => { if (answers === undefined) answers = a; return answers; });
+
+  // a request's key, as studio_device.question makes it: the method, the path, the JSON body with its keys sorted
+  function canonical(v) {
+    if (Array.isArray(v)) return `[${v.map(canonical).join(",")}]`;
+    if (v && typeof v === "object") return `{${Object.keys(v).sort().map((k) => `${JSON.stringify(k)}:${canonical(v[k])}`).join(",")}}`;
+    return JSON.stringify(v);
+  }
+  function question(method, path, body) {
+    return `${method} ${path} ${body === undefined ? "" : canonical(body)}`;
+  }
+
+  // what changes the studio's answers to what follows (a way of singing kept or forgotten, a version opened): once
+  // asked, the first answers are done with, and every question waits for the worker, in order
+  const CHANGES = /^\/api\/(sing(\/|$)|open$|cancel$)/;
+
+  async function answeredFirst(method, url, body, named) {
+    if (ready || named || url.search) return null;
+    const a = answers === undefined ? await firstAnswers : answers;
+    if (!a || ready) return null;
+    let data;
+    try { data = method === "GET" ? undefined : JSON.parse(new TextDecoder().decode(body || new ArrayBuffer(0))); }
+    catch (e) { data = null; }
+    const said = data === null ? null : a[question(method, url.pathname, data)];
+    if (!said) {
+      if (method !== "GET" && CHANGES.test(url.pathname)) answers = null;
+      if (firstUsed) waiting();
+      return null;
+    }
+    firstUsed = true;
+    const copy = typeof structuredClone === "function" ? structuredClone(said[1]) : JSON.parse(JSON.stringify(said[1]));
+    return answer(url.pathname, { status: said[0] }, copy);
+  }
+
+  // asked of the worker before it's ready, on a page that has its song already: said where it was asked, briefly
+  let told = 0;
+  function waiting() {
+    const at = Date.now();
+    if (at - told < 4000) return;
+    told = at;
+    try { window.songbirdStudio?.toast?.("The studio is still getting ready: one moment."); } catch (e) { /* only words */ }
   }
 
   let running = null;
@@ -397,6 +483,8 @@
     if (init.body !== undefined && init.body !== null) body = await new Response(init.body).arrayBuffer();
     else if (request && method !== "GET" && method !== "HEAD") body = await request.arrayBuffer();
     const path = url.pathname;
+    const early = await answeredFirst(method, url, body, named);
+    if (early) return early;
     let s;
     try {
       s = await studio();
