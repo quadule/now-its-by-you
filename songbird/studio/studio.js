@@ -14,7 +14,7 @@ const state = {
   start: null, view: null, timeline: null, edits: {}, open: {}, choose: null, options: null,
   names: [], compare: null, busy: 0, playing: null, poll: null, recordJob: null,
   optionsByKey: {}, optionsFailed: false, undo: [], redo: [], editRevision: 0, refreshSerial: 0,
-  historyGroup: null, workspace: "words", saveStatus: "Saved in this browser", playerSub: "",
+  historyGroup: null, workspace: "words", saveStatus: "Saved", playerSub: "",
   solo: null, mutedLevels: {},
 };
 
@@ -145,7 +145,7 @@ function save() {
   const kept = Object.fromEntries(Object.entries(state.edits).filter(([p]) => p !== "date" && p !== "roll"));
   try {
     localStorage.setItem(storeKey(), JSON.stringify(kept));
-    state.saveStatus = "Saved in this browser";
+    state.saveStatus = "Saved";
   } catch (e) { state.saveStatus = "Storage unavailable · keep this tab open"; }
   renderHistory();
 }
@@ -1302,8 +1302,10 @@ function applyDevice(s) {
   if (!s.device) return;
   setOn("whereNote", "textContent", "Nothing leaves this device unless you share a version.");
   setOn("helpShows", "textContent", "This studio shows today's version of the song, and lets you:");
-  setOn("helpWhere", "textContent", "The studio runs in your browser and makes the song on this device. Nothing is sent anywhere unless you share a version.");
-  setOn("helpKept", "textContent", "What's kept: your changes, and the versions you open, in this browser. A recording stays until you leave the page: download it to keep it. A version you share is kept by the site so its link works; like any file you download, it carries its own record (its made-up machine's name, the room its microphone heard, the leanings of its words), never your name. The site sees which versions are opened by link, as any site sees what it serves.");
+  setOn("helpWhere", "hidden", true);  // the page's foot says it
+  // the file's record (its made-up machine's name, the room, the words' leanings) and what any site sees of what it
+  // serves: docs/WEB-STUDIO.md, "On the device"
+  setOn("helpKept", "textContent", "What's kept: your changes, in this browser. An export stays until you leave the page, so download it to keep it. A version you share is stored on this site so its link works; it never carries your name.");
   setOn("helpKept", "hidden", false);
   const crashed = window.SongbirdDevice?.crashed?.();
   if (crashed) {
