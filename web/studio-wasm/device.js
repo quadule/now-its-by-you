@@ -33,7 +33,8 @@
   const READ_MS = 360000;  // ... and to read a version's file (a slow phone: it is laid out, and its timeline drawn)
   const MEASURE_MS = 600000;  // ... and to measure a sung take (a whole song on a slow phone)
   const GUIDE = /^[0-9a-f]{12}$/;  // a guide's name (webstudio/guide.py digest)
-  const SINGER_IDLE_MS = 45000;  // a singing worker with nothing to do this long is let go (its memory with it)
+  const SINGER_IDLE_MS = 45000;  // a singing worker with nothing to do this long is let go (its memory with it)...
+  const SINGER_DONE_MS = 10000;  // ... or this long, once it has made what a section wants ahead (melody, templates)
   const MAX_TAKE_BYTES = 40 * 2 ** 20;  // a take's most, as a server takes it (webstudio/singing.py MAX_TAKE_BYTES)
   const PIANO = "songbird-piano-score:";  // the piano page's scores, by key (the latest few)
   const MAKING = "songbird-making-whole";  // set while a whole song is made here (renderer.js), for after a crash
@@ -356,7 +357,7 @@
     if (singer) singer.then((w) => w.stop(), () => {});
     singer = null;
   }
-  function singerWork(job) {  // one thing at a time, in order
+  function singerWork(job, idle = SINGER_IDLE_MS) {  // one thing at a time, in order
     const run = singerQueue.then(async () => {
       clearTimeout(singerIdle);
       if (!singer) {
@@ -367,7 +368,7 @@
       try { w = await singer; } catch (e) { singer = null; throw e; }
       try { return await job(w); } finally {
         singing.singer = w.heap;  // its heap (MiB) after the job: what it holds (wasm memory only grows)
-        singerIdle = setTimeout(singerStop, SINGER_IDLE_MS);
+        singerIdle = setTimeout(singerStop, idle);
       }
     });
     singerQueue = run.catch(() => {});
@@ -415,7 +416,7 @@
       if (wanted.every((f) => have.has(f))) return;
       const made = (await singerAsk(w, "template", request)).made;
       for (const [file, bytes] of Object.entries(made)) await sput("parts", file, { bytes });
-    });
+    }, SINGER_DONE_MS);
   }
 
   // a WAV's length in seconds, from its header (the karaoke's recorder writes PCM); NaN if it isn't one
@@ -634,6 +635,7 @@
 
   window.SongbirdDevice = {
     version, linked, share, crashed, MAKING, singing,
+    renderStarts: singerStop,  // a song made here: singing's worker gives its memory back first (renderer.js)
     ready: () => studio().then((s) => ({ ...s.view, heap: s.worker.heap })),
     get heap() { return running ? running.then((s) => s.worker.heap) : Promise.resolve(0); },
   };

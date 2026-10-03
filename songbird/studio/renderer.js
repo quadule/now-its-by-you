@@ -151,6 +151,7 @@
 
     async function make(spec, size, hear, task) {
       if (task?.cancelled) throw Object.assign(new Error("cancelled"), { cancelled: true });
+      globalThis.SongbirdDevice?.renderStarts?.();  // singing's own worker lets its memory go first (device.js)
       let entry;
       if (size === "whole") {
         close(kept);
