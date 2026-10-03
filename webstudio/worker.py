@@ -2,8 +2,8 @@
 
 The studio starts one of these when the first take waits (webstudio/singing.py Measurer), hands it one request
 at a time, and stops it when it has been idle a while, so the memory measuring needs is held only while
-someone sings. It measures exactly as tools/phrasing.py measures a take on the artist's computer, with two
-differences, both for a server:
+someone sings. It measures exactly as tools/phrasing.py measures a take on the artist's computer, with three
+differences, all for a server (and a visitor's browser, which runs this file too: web/studio-wasm/py/sing_measure.py):
 
 - **No forced aligner.** MFA (tools/align.py) isn't here, so each vowel's start is found where its loudness
   climbs out of the consonant before it, as it was before MFA (docs/PHRASING-CALIBRATION.md has what that
@@ -13,6 +13,11 @@ differences, both for a server:
   a take of the whole song (four minutes: 3.4 GB) is measured a section at a time, cut in the rests between
   sung sections, each piece as tools/phrasing.py measures a take of one section (measure_window). A take of
   one section is measured whole, as it would be there.
+- **The template singer sings only what was sung.** tools/phrasing.py compares a take with the template
+  singer singing the whole guide (template(): 4 GB and a minute for a whole song); here it sings the notes of
+  the piece measured alone, from a moment before its first (part_template), in the key the take was sung in,
+  made when it's first needed and kept by those notes (the kit's measured/parts). Over a piece's frames it is
+  the whole guide's template to a median of half a cent, voiced on 99% of the same frames.
 
 The audio arrives as bytes, is decoded in memory, and each piece measured is written to a temporary file
 (tools/phrasing.py reads takes from files) in /dev/shm where there is one (memory, never a disk), else the
@@ -22,7 +27,9 @@ happens. Only numbers come back.
     python -m webstudio.worker KIT      the loop, on its standard input and output: one (op, request) at a
                                         time, each a length and a pickle (the studio is its only reader):
                                         "take" -> the take's measurement and the phrasing made with it;
-                                        "measure", "phrasing" -> each alone; "hello" -> what this process is
+                                        "measure", "phrasing" -> each alone; "melody" -> a stretch of a guide's
+                                        melody (webstudio/guide.py); "template" -> the template singer's analysis
+                                        of a stretch made ahead; "hello" -> what this process is
 """
 
 from __future__ import annotations
@@ -57,12 +64,15 @@ class Refused(Exception):
     """A take or request this studio can't measure, with what the singer can do about it."""
 
 
+MAX_KEY = 19  # semitones from the guide's key a take may sit (an octave and a fifth): past that, it isn't singing along
+TEMPLATE_LEAD = 1.0  # seconds the template singer's part starts before its first note (its consonants come first)
+
+
 class NoTemplate(Refused):
     def __init__(self, key: int):
         way = "above" if key > 0 else "below"
-        super().__init__(f"Your take sat {abs(key)} semitones {way} the guide's key. This studio can measure a take "
-                         "sung in the guide's key or an octave from it: choose the key nearest your voice and sing it "
-                         "again.")
+        super().__init__(f"Your take sat {abs(key)} semitones {way} the guide's key, too far to compare it with the "
+                         "tune: choose another key for the guide and sing it again.")
         self.key = key
 
 
@@ -107,6 +117,7 @@ class Tools:
         self.kit, self.T, self.K, self.M, self.G = kit, T, K, M, G
         self.extractor = T.version()
         self._genomes: dict = {}
+        self.made: list[str] = []  # the templates a request used, by file name (a browser keeps them)
 
     def genome(self, song: str):
         path = self.kit.genome(song)
@@ -115,31 +126,123 @@ class Tools:
         return self._genomes[song]
 
     def guide(self, song: str, digest: str):
-        """The guide a take was sung to, from the kit alone (never the checkout's), its templates guarded."""
+        """The guide a take was sung to, from the kit alone (never the checkout's)."""
         if self.K.guide_score(song, digest) is None:
             raise Refused("This guide isn't one this studio offers: reload the page.")
         path, genome = self.genome(song)
-        g = self.T.guide(path, genome, digest)
-        if not isinstance(g.templates, Templates):
-            g.templates = Templates(g, self)
-        return g
+        return self.T.guide(path, genome, digest)
 
 
-class Templates(dict):
-    """A guide's template analyses, by key: one the kit carries is loaded from it (tools/phrasing.py
-    template() does that when the key isn't here yet); any other is refused, since making one takes 4 GB."""
+def part_notes(g, a: float, b: float) -> list:
+    """The guide's notes a piece from a to b seconds measures (those that start inside it), as whole words: a
+    piece of a long take may be cut between two syllables of a word held apart, and the singer sings words."""
+    inside = [k for k, n in enumerate(g.notes) if a <= n.start < b]
+    if not inside:
+        return []
+    first, last, left = inside[0], inside[-1], 0
+    starts = []  # where each note's word begins
+    for k, n in enumerate(g.notes):
+        if not left:
+            begins, left = k, max(int(n.word_len or 1), 1)
+        left -= 1
+        starts.append(begins)
+    first = starts[first]
+    while last + 1 < len(g.notes) and starts[last + 1] == starts[last]:
+        last += 1
+    return g.notes[first : last + 1]
 
-    def __init__(self, g, tools: Tools):
-        super().__init__(g.templates)
-        self.g, self.tools = g, tools
+
+def part_name(notes, lexicon) -> str:
+    """What a template of these notes (already moved to its own clock) depends on besides the key and the
+    measuring code (both in its file's name beside it), as 16 hex digits: every note as the singer reads it and
+    the words' sounds. The same notes in another version of the song are the same template."""
+    import hashlib
+    import json
+    from dataclasses import asdict
+
+    h = hashlib.sha256(json.dumps([{**asdict(n), "gesture": None} for n in notes], sort_keys=True, default=list).encode())
+    h.update(json.dumps(lexicon or {}, sort_keys=True).encode())
+    return h.hexdigest()[:16]
+
+
+def part_of(tools: Tools, g, a: float, b: float):
+    """The template singer's part for a piece from a to b: the frame of the guide's it begins on, its notes moved
+    to its own clock, and the name its templates are kept under (part_name)."""
+    from dataclasses import replace
+
+    S = tools.T.S
+    notes = part_notes(g, a, b)
+    if not notes:
+        return None
+    p = max(0, int((notes[0].start - TEMPLATE_LEAD) / S.FRAME))
+    mine = [replace(n, start=n.start - p * S.FRAME) for n in notes]
+    return p, mine, part_name(mine, g.lexicon)
+
+
+def part_file(tools: Tools, name: str, key: int) -> str:
+    """A template's file name in the kit's measured/parts."""
+    return f"{name}.{int(key):+d}.{tools.extractor}.npz"
+
+
+def parts(tools: Tools, request: dict) -> list[str]:
+    """The names a take from from_s to to_s (and seconds long, if said) keeps its templates under, one for each
+    piece it is measured in, as measure() will cut it: with key, the files themselves; else the names alone,
+    which every key's file begins with (a browser's measuring worker is handed those it has kept)."""
+    g = tools.guide(str(request["song"]), str(request["guide"]))
+    from_s, to_s = float(request["from_s"]), float(request["to_s"])
+    if request.get("seconds"):
+        to_s = min(to_s, from_s + float(request["seconds"]))
+    out = []
+    for a, b in pieces(g.notes, from_s, to_s):
+        part = part_of(tools, g, a, b)
+        if part is not None:
+            out.append(part_file(tools, part[2], request["key"]) if request.get("key") is not None else f"{part[2]}.")
+    return list(dict.fromkeys(out))
+
+
+def part_template(tools: Tools, g, a: float, b: float, key: int):
+    """The template singer's f0, loudness and activity (tools/phrasing.py template()'s) singing only the notes
+    from a to b, on the guide's clock: its part begins on a frame of the guide's, TEMPLATE_LEAD before the first
+    note, and is silence before. Sung as template() sings it (the formant singer, flat, its tract by the key),
+    analysed as a take is (analyze_take); kept in the kit by its notes, key and the measuring code's version."""
+    from dataclasses import replace
+
+    T = tools.T
+    part = part_of(tools, g, a, b)
+    if part is None:
+        raise Refused("No note of the song was sung in that take.")
+    p, mine, name = part
+    kept = T.MEASURED / "parts" / part_file(tools, name, key)
+    if kept.exists():
+        z = np.load(kept)
+        f0, band, active = z["f0"], z["band"], z["active"]
+    else:
+        singer = replace(T.FLAT, shift=key, tract=1.0 if key <= -6 else 1.12)  # as template() sings it
+        f0, band, active = T.analyze_take(T.V.sing(mine, T.S.SR, singer, 0, g.lexicon))
+        kept.parent.mkdir(parents=True, exist_ok=True)
+        part = kept.with_name(f"{kept.stem}.{os.getpid()}.part.npz")
+        np.savez_compressed(part, f0=f0, band=band, active=active)
+        os.replace(part, kept)
+    tools.made.append(kept.name)
+    return (np.concatenate([np.zeros(p), f0]), np.concatenate([np.full(p, float(np.min(band))), band]),
+            np.concatenate([np.zeros(p, dtype=bool), active]))
+
+
+class PartTemplates(dict):
+    """A guide's template analyses for one piece of a take (a to b seconds), by key, in the guide's place
+    (g.templates): tools/phrasing.py measure_window asks template(g, key), which finds the key here, made
+    (part_template) the first time it's asked. A key past MAX_KEY is refused, said to the singer."""
+
+    def __init__(self, g, tools: Tools, a: float, b: float):
+        super().__init__()
+        self.g, self.tools, self.a, self.b = g, tools, a, b
 
     def __contains__(self, key) -> bool:
-        if dict.__contains__(self, key):
-            return True
-        kept = self.tools.T.MEASURED / "templates" / f"{self.g.digest}.{key:+d}.{self.tools.extractor}.npz"
-        if kept.exists():
-            return False  # template() loads it
-        raise NoTemplate(int(key))
+        if not dict.__contains__(self, key):
+            if abs(int(key)) > MAX_KEY:
+                raise NoTemplate(int(key))
+            self[key] = part_template(self.tools, self.g, self.a, self.b, int(key))
+        return True
 
 
 # ------------------------------------------------------------ a take's audio, briefly
@@ -247,11 +350,14 @@ def measure(tools: Tools, request: dict) -> dict:
         i1 = len(y) if (a, b) == (from_s, to_s) else min(len(y), int(round((b + TAIL - from_s) * sr)))
         if i1 - i0 < int(MIN_SECONDS * sr / 3):
             continue
+        g.templates = PartTemplates(g, tools, a, b)  # the template singer sings this piece's notes alone
         with briefly(y[i0:i1], sr) as path:
             try:
                 results.append(T.measure_window(path, g, start, b))
             except NoTemplate as e:
                 refused.append(e)
+            finally:
+                g.templates = {}
     del y
     if not results:
         raise refused[0] if refused else Refused("No note of the song was sung in that take.")
@@ -264,6 +370,7 @@ def measure(tools: Tools, request: dict) -> dict:
         if sung:
             lags.append(r["lag"])
             keys[r["key"]] += sung
+    notes = fitted(tools, str(request["song"]), notes)
     if not any(n["onset"] is not None for n in notes):
         raise Refused("No note of the song was sung in that take: sing along with the words as they light up.")
     return {
@@ -278,6 +385,19 @@ def measure(tools: Tools, request: dict) -> dict:
         "seconds": round(time.time() - began, 2),
         "peak_mb": peak_mb(),
     }
+
+
+def fitted(tools: Tools, song: str, notes: list[dict]) -> list[dict]:
+    """The notes measured, but any the song's phrases have no place for left unmeasured: a version someone brought
+    may sing a phrase the song doesn't, or a line written longer, and a way of singing is the song's, by phrase
+    and place in it."""
+    _, genome = tools.genome(song)
+    phrases = genome.phrases
+
+    def fits(n):
+        return n["phrase"] in phrases and n["index"] < len(phrases[n["phrase"]].sung)
+
+    return [n if n["onset"] is None or fits(n) else {**n, "onset": None, "off": None, "gesture": None} for n in notes]
 
 
 def peak_mb() -> int:
@@ -353,19 +473,60 @@ def phrasing(tools: Tools, request: dict) -> dict:
 
 def take(tools: Tools, request: dict) -> dict:
     """A take measured, and the phrasing made from it with the takes measured before it (the page keeps
-    those, as numbers, and sends them back)."""
+    those, as numbers, and sends them back). An earlier take sung to a guide the kit no longer has (let go on a
+    server after a while unused, or never given to a browser's measuring) is left out of the way, not refused."""
+    tools.made = []
     measured = measure(tools, request)
-    made = phrasing(tools, {"song": request["song"], "offered": request.get("offered") or [],
-                            "measurements": [*(request.get("earlier") or []), measured["measurement"]]})
-    return {**measured, **made, "peak_mb": peak_mb()}
+    song = str(request["song"])
+    earlier = [d for d in (request.get("earlier") or []) if not isinstance(d, dict) or not isinstance(d.get("stamp"), dict)
+               or tools.kit.guide(song, str(d["stamp"].get("guide", ""))) is not None]
+    offered = {str(request["guide"])} | {str(d["stamp"]["guide"]) for d in earlier if isinstance(d, dict)
+                                         and isinstance(d.get("stamp"), dict)}
+    made = phrasing(tools, {"song": song, "offered": sorted(offered), "measurements": [*earlier, measured["measurement"]]})
+    left = len(request.get("earlier") or []) - len(earlier)
+    return {**measured, **made, "templates": list(dict.fromkeys(tools.made)), "peak_mb": peak_mb(),
+            **({"left_out": left} if left else {})}
+
+
+def melody(tools: Tools, request: dict) -> dict:
+    """A stretch of a guide's melody (webstudio/guide.py melody): request song, guide, from_s, to_s."""
+    import json
+
+    from . import guide as GD
+
+    began = time.time()
+    f = tools.kit.guide(str(request["song"]), str(request["guide"]))
+    if f is None:
+        raise Refused("This guide isn't one this studio made: reload the page.")
+    data = json.loads(f.read_text())
+    a, b = float(request["from_s"]), float(request["to_s"])
+    if not (0.0 <= a < b <= float(data["duration"]) + 2.0):
+        raise Refused("That stretch isn't inside its guide: reload the page.")
+    wav, rate = GD.melody(data, a, b)
+    return {"wav": wav, "rate": rate, "seconds": round(time.time() - began, 2), "peak_mb": peak_mb()}
+
+
+def templates(tools: Tools, request: dict) -> dict:
+    """The template singer's analyses a take from from_s to to_s sung in key will need (one for each piece it is
+    measured in), made ahead while the singer rehearses: request song, guide, from_s, to_s, key."""
+    began = time.time()
+    tools.made = []
+    g = tools.guide(str(request["song"]), str(request["guide"]))
+    key = int(request.get("key") or 0)
+    if abs(key) > MAX_KEY:
+        raise NoTemplate(key)
+    for a, b in pieces(g.notes, float(request["from_s"]), float(request["to_s"])):
+        if part_notes(g, a, b):
+            part_template(tools, g, a, b, key)
+    return {"templates": list(dict.fromkeys(tools.made)), "seconds": round(time.time() - began, 2), "peak_mb": peak_mb()}
 
 
 def hello(tools: Tools, request: dict) -> dict:
-    offer = tools.kit.offer() or {}
-    return {"extractor": tools.extractor, "kit_extractor": offer.get("extractor"), "peak_mb": peak_mb(), "pid": os.getpid()}
+    return {"extractor": tools.extractor, "peak_mb": peak_mb(), "pid": os.getpid()}
 
 
-OPS = {"measure": measure, "phrasing": phrasing, "take": take, "hello": hello}
+OPS = {"measure": measure, "phrasing": phrasing, "take": take, "melody": melody, "template": templates,
+       "parts": lambda tools, request: {"parts": parts(tools, request)}, "hello": hello}
 
 
 def send(f, message) -> None:

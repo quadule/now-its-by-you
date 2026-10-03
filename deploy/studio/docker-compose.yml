@@ -20,7 +20,7 @@ services:
       --allow-host ${STUDIO_HOST:-studio.itsby.you}
       --machine ${STUDIO_MACHINE:-none}
       --client-ip-header CF-Connecting-IP
-      ${STUDIO_SINGING:---web-singing --sing-kit /kit}
+      ${STUDIO_SINGING:---web-singing}
       ${STUDIO_BROWSER:---browser-render /opt/studio/render}
       ${STUDIO_NOINDEX:---noindex}
       ${STUDIO_ARGS:-}
@@ -42,10 +42,9 @@ services:
     tmpfs:
       - /tmp:size=64m
     volumes:
-      - studio-data:/data  # previews, recordings waiting to be downloaded, the compiled synthesis, ways of singing
-      # the singing kit (python -m webstudio.prepare, made on a computer with the memory; docs/WEB-SINGING.md):
-      # the guides and the template singer's analyses. Missing or stale, singing says so and the rest works.
-      - ${SING_KIT:-../../renders/sing-kit}:/kit:ro
+      # previews, recordings waiting to be downloaded, the compiled synthesis, ways of singing, and singing's guides
+      # and template analyses (made as they're needed, let go 30 days after last use: docs/WEB-SINGING.md)
+      - studio-data:/data
     cap_drop: [ALL]
     security_opt: ["no-new-privileges:true"]
     networks: [inside]

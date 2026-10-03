@@ -1318,8 +1318,8 @@ class Studio:
     #
     # A visitor sings to a guide on the studio's own page; the take is measured here and its audio deleted, and
     # the song can be sung their way (docs/WEB-SINGING.md). All of it lives in webstudio/, outside the song's
-    # program (a packet never carries it): it needs a checkout's tools, their dev dependencies and the singing
-    # kit. These are the studio's only hooks into it.
+    # program (a packet never carries it): it needs a checkout's tools and their dev dependencies. These are the
+    # studio's only hooks into it.
 
     def enable_web_singing(self, kit: str | Path | None = None, check: bool = False) -> None:
         if str(ROOT) not in sys.path:
@@ -1631,7 +1631,7 @@ def answer(studio: Studio, path: str, body: dict, by: tuple[str, str] | None = N
     if path == "/api/sing":
         return studio.sing()
     if path.startswith("/api/sing/") and studio.singing is not None:
-        return studio.singing.post(path, body)
+        return studio.singing.post(path, body, studio)
     raise NotFound("not found")
 
 
@@ -2040,8 +2040,10 @@ class Handler(BaseHTTPRequestHandler):
             body = json.loads(raw or b"{}")
             if not isinstance(body, dict) or not isinstance(body.get("edits") or {}, dict):
                 return self.fail(400, "send a map, with the edits a map of choices")
-            # the studio on the version the page was opened on, if someone brought it (singing is the song's own)
-            studio = self.studio if version is None or path.startswith("/api/sing") else self.studio.opened(version)
+            # the studio on the version the page was opened on, if someone brought it (singing is the song's own, but
+            # for the guide, which is the version on the page)
+            studio = self.studio if version is None or (path.startswith("/api/sing") and path != "/api/sing/guide") \
+                else self.studio.opened(version)
             if studio is None:
                 return self.version_gone()
             if path == "/api/open/ready":  # someone's version: would a file this size be taken now?
@@ -2409,10 +2411,10 @@ def add_arguments(parser: argparse.ArgumentParser) -> None:
                              "names the visitor's address (CF-Connecting-IP for a Cloudflare tunnel)")
     parser.add_argument("--web-singing", action="store_true",
                         help="take singing in the browser, measured here and its audio deleted (a checkout with the "
-                             "dev tools and a singing kit: docs/WEB-SINGING.md)")
+                             "dev tools: docs/WEB-SINGING.md)")
     parser.add_argument("--sing-kit", metavar="DIR",
-                        help="the singing kit, made by python -m webstudio.prepare (default $SONGBIRD_SING_KIT, else "
-                             "renders/sing-kit)")
+                        help="where singing keeps the guides and template analyses it makes (default "
+                             "$SONGBIRD_SING_KIT, else sing-kit in the studio's home)")
     parser.add_argument("--noindex", action="store_true",
                         help="public: ask search engines not to list it (X-Robots-Tag: noindex on every reply, and a "
                              "robots.txt that disallows everything), as for a beta")

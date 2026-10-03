@@ -1,15 +1,20 @@
-/* Singing in the web studio (webstudio/sing.js): the panel under "Sing, record & pass it on", in the studio's
-   tokens (songbird/studio/identity.css). The part you sing to is a stage, lit in the dark as the karaoke and the
-   online singing page are (their lane is drawn for a dark ground), in the paper page and the lamplit one alike. */
+/* Singing in the web studio (webstudio/sing.js): the Sing view, the fourth beside Page, Arrange and Mix, in the
+   studio's tokens (songbird/studio/identity.css). The part you sing to is a stage, lit in the dark as the karaoke and
+   the online singing page are (their lane is drawn for a dark ground), in the paper page and the lamplit one alike. */
 
-.websing { margin-top: 18px; }
+/* the whole width: nothing in the inspector's column is about singing */
+.body[data-view=sing] { grid-template-columns: minmax(0, 1fr); }
+.body[data-view=sing] > .inspector { display: none; }
+
+.websing { max-width: 1100px; margin: 0 auto; }
 .websing h3 { font-size: 15px; margin: 14px 0 6px; }
-.websing .lead { font-size: 16px; }
-.websing .sing-promises { margin: 8px 0 12px; padding-left: 20px; max-width: 46em; }
-.websing .sing-promises li { margin: 6px 0; }
+.websing .sing-promises { margin: 4px 0 14px; padding-left: 20px; max-width: 46em; font-size: 16px; }
+.websing .sing-promises li { margin: 8px 0; }
 .websing label.check { display: inline-flex; gap: 6px; align-items: center; }
-.websing .sing-choices { display: flex; flex-wrap: wrap; gap: 8px 16px; align-items: center; margin: 4px 0 8px; }
+.websing .sing-choices { display: flex; flex-wrap: wrap; gap: 8px 16px; align-items: center; margin: 0 0 10px; }
+.websing .sing-choice { display: inline-flex; gap: 6px; align-items: center; }
 .websing .sing-choices select { font: inherit; }
+.websing .chips { display: flex; flex-wrap: wrap; gap: 6px; }
 .websing .sing-status { min-height: 1.5em; margin: 6px 0; }
 .websing .sing-status.warn { color: var(--ochre); }
 .websing .sing-portrait { white-space: pre-wrap; max-width: 46em; }
@@ -19,7 +24,6 @@
 .websing .meter { display: inline-block; width: 90px; height: 8px; background: var(--wash); border: 1px solid var(--rule);
                   border-radius: var(--radius); overflow: hidden; }
 .websing .meter > span { display: block; height: 100%; width: 0; background: var(--green); }
-.websing .sing-about { margin-top: 14px; }
 
 /* the stage: the notes to come, the words as they're sung */
 .websing .sing-stage { position: relative; margin-top: 10px; padding: 10px; background: var(--stage); color: var(--stage-ink);
@@ -62,4 +66,7 @@ body.fs-on { overflow: hidden; }
 @media (max-width: 600px) {
   .websing .reel { padding: 0 12px; }
   .websing .sing-stage { padding: 6px; }
+  .websing .sing-full { top: 12px; right: 12px; }
+  .websing .actions .btn, .websing .chips .chip, .websing .switch button, .websing select { min-height: 44px; }
+  .websing .sing-sync input[type=range] { flex-basis: 100%; max-width: none; }
 }

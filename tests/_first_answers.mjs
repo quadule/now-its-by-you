@@ -2,17 +2,16 @@
 // Python and numpy alone, the program unpacked, scipy and soundfile stood in for (py/lazy_imports.py), a studio started
 // on each day named, and each first question answered as the worker's wire carries it (the answer's JSON text).
 //
-//   node tests/_first_answers.mjs PYODIDE_DIR SONGBIRD_ZIP OFFER_JSON CONFIG_JSON DAY... -> {day: {key: [status, text]}}
+//   node tests/_first_answers.mjs PYODIDE_DIR SONGBIRD_ZIP CONFIG_JSON DAY... -> {day: {key: [status, text]}}
+// (CONFIG as studio-worker.mjs's studio() hands it to the studio: with singing, its sing_kit "/kit")
 import fs from 'node:fs';
 import { pathToFileURL } from 'node:url';
 
-const [pyDir, zip, offer, config, ...days] = process.argv.slice(2);
+const [pyDir, zip, config, ...days] = process.argv.slice(2);
 const { loadPyodide } = await import(pathToFileURL(`${pyDir}/pyodide.mjs`).href);
 const py = await loadPyodide({ indexURL: `${pyDir}/`, packageCacheDir: `${pyDir}/`, stdout: (s) => console.error(s) });
 await py.loadPackage(['numpy'], { messageCallback: () => {} });
 py.unpackArchive(new Uint8Array(fs.readFileSync(zip)), 'zip', { extractDir: '/app' });
-py.FS.mkdirTree('/kit');
-py.FS.writeFile('/kit/offer.json', fs.readFileSync(offer));
 py.globals.set('CONFIG', config);
 py.globals.set('DAYS', JSON.stringify(days));
 const out = py.runPython(`

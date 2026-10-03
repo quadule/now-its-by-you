@@ -159,6 +159,7 @@ test("the keyboard: none fires in a text field; the table's keys", () => {
   assert.deepEqual(key("z", { metaKey: true }), { action: "undo" });
   assert.deepEqual(key("z", { ctrlKey: true, shiftKey: true }), { action: "redo" });
   assert.deepEqual(key("2"), { action: "view", view: "arrange" });
+  assert.deepEqual(key("4"), { action: "view", view: "sing" });  // the Sing view, where the studio has one
   assert.deepEqual(key("ArrowRight", { metaKey: true }), { action: "move", step: 1 });
   assert.deepEqual(key("ArrowUp"), { action: "step", axis: "track", step: -1 });
   for (const [k, a] of [["l", "loop"], ["k", "click"], ["m", "mute"], ["s", "solo"], ["e", "record"], ["t", "time"], ["?", "help"], ["Enter", "open"], ["Escape", "escape"]]) {

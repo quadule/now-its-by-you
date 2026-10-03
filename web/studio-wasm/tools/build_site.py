@@ -4,7 +4,7 @@ studio server behind them. Every question the page asks is answered in the visit
 (web/studio-wasm/device.js and py/studio_device.py); the only requests that reach a server are the hosting Worker's
 POST /api/versions and GET /api/versions/<id> (a version someone chose to share).
 
-usage: uv run python web/studio-wasm/tools/build_site.py OUT [--machine none] [--sing-kit DIR] [--days 400]
+usage: uv run python web/studio-wasm/tools/build_site.py OUT [--machine none] [--no-singing] [--days 400]
 
 It writes, into OUT (emptied first, if it holds an earlier build):
 
@@ -14,16 +14,13 @@ It writes, into OUT (emptied first, if it holds an earlier build):
     render/bundle.json          which folders are current, and the studio's settings (its song, its machine, the Python
                                 and pinned dependencies a recording names)
     render/py-<hash>/           Pyodide and numpy, scipy, soundfile (build_render.py's)
-    render/app-<hash>/          the worker, the kernels, the program, the device's side of the studio; with a singing
-                                kit, the measuring too (singing.zip, world/: build_render.py's singing_files)
+    render/app-<hash>/          the worker, the kernels, the program, the device's side of the studio, and singing's
+                                measuring (singing.zip, world/: build_render.py's singing_files; not with --no-singing:
+                                singing makes its guides and templates on the device, so nothing else is carried)
     render/first-<hash>/        the page's first questions answered ahead, a file a day (<day>.gzip: gzip'd JSON, which
                                 device.js unpacks), from two days before the build to --days after: the song as it
                                 began, as the studio's worker answers it that day (studio_device.first_answers, run
                                 here natively), so the page shows its song before Python is fetched
-    render/kit-<hash>/          the singing kit (--sing-kit, webstudio/prepare.py's), its files as the kit lays them
-                                out, each fetched only when it's needed: offer.json at start; a version's words and
-                                melody guide when it's chosen; the song, the guide's score and its three templates when
-                                a take sung to it is measured (sing_measure.kit_files). The largest is a guide, 6 MB
     site.json                   for the host: every file's type, cache policy and security policy, the rewrite of
                                 /v/<id> to the page, and the paths that are the Worker's own (the hosting Worker's
                                 web/studio-site/tools/prepare.mjs checks it, and writes _headers from its own rules)
@@ -143,42 +140,6 @@ def rooted(html: str, folder: str) -> str:
     return re.sub(r'\b(src|href)="([^"]*)"', one, html)
 
 
-def kit_files(folder: Path) -> dict[str, bytes]:
-    """The singing kit's files the device fetches, by their path in the kit (webstudio/kit.py's layout), from its
-    offer: offer.json and the song; for each version offered, its words, its melody guide, its score and the template
-    singer's analysis in each key the kit made one for. Refused, saying why, if the kit isn't one for this song and
-    this measuring code (its templates are named by tools/phrasing.py version(), which the device's copy shares)."""
-    sys.path.insert(0, str(ROOT))
-    from webstudio.kit import Kit
-
-    kit = Kit(folder)
-    why = kit.fits(SONG)
-    if why:
-        raise SystemExit(f"--sing-kit {folder}: {why}")
-    offer = kit.offer()
-    extractor = ("import sys; from webstudio.kit import Kit; from webstudio.worker import Tools; "
-                 "print(Tools(Kit(sys.argv[1])).extractor)")  # the measuring code's version, in a process of its own
-    ran = subprocess.run([sys.executable, "-c", extractor, str(kit.root)], cwd=ROOT, capture_output=True, text=True,
-                         check=False)
-    made = (ran.stdout.strip().splitlines() or [""])[-1]
-    if ran.returncode or not made:
-        raise SystemExit(f"--sing-kit {folder}: the measuring code couldn't be loaded to check the kit (it needs the "
-                         f"web-singing dependencies: uv sync --group web-singing):\n{ran.stderr[-800:]}")
-    if offer["extractor"] != made:
-        raise SystemExit(f"--sing-kit {folder}: made by another version of the measuring code ({offer['extractor']}, "
-                         f"not {made}): make it again (uv run python -m webstudio.prepare --kit {folder})")
-    song, extractor = offer["song"], offer["extractor"]
-    names = ["offer.json", f"song/{song}.json"]
-    for spec in offer["specs"]:
-        names += [f"lyrics/{spec['id']}.json", f"audio/{spec['id']}.melody.flac",
-                  f"guides/{song}.{spec['guide']}.score.json",
-                  *[f"measured/templates/{spec['guide']}.{int(k):+d}.{extractor}.npz" for k in spec["templates"]]]
-    missing = [n for n in names if not (kit.root / n).is_file()]
-    if missing:
-        raise SystemExit(f"--sing-kit {folder} is missing {', '.join(missing)}: make it again")
-    return {name: (kit.root / name).read_bytes() for name in dict.fromkeys(names)}
-
-
 def runs_with() -> dict:
     """What a recording made on the device names as its Python and dependencies: this build's (the release's, as the
     server's own recordings name them), never Pyodide's."""
@@ -230,7 +191,7 @@ def describe(rel: str) -> dict:
     """A file's type, cache policy and security policy, by where it is."""
     suffix = Path(rel).suffix
     entry = {"type": TYPES.get(suffix, "application/octet-stream")}
-    hashed = rel.startswith(("render/py-", "render/app-", "render/kit-", "render/first-"))
+    hashed = rel.startswith(("render/py-", "render/app-", "render/first-"))
     entry["cache"] = IMMUTABLE if hashed else FRESH
     if suffix in (".html", ".mjs", ".js"):  # a page, or a script (a worker keeps its own script's policy)
         entry["csp"] = POLICY
@@ -242,8 +203,7 @@ def main(argv: list[str] | None = None) -> None:
     parser.add_argument("out", help="the folder to write the site into")
     parser.add_argument("--machine", default="none",
                         help="the machine the studio sings as: none (the default, as the VPS did), or fictional:NAME")
-    parser.add_argument("--sing-kit", help="the singing kit (uv run python -m webstudio.prepare: renders/sing-kit): "
-                                           "singing is offered, measured on the device")
+    parser.add_argument("--no-singing", action="store_true", help="a site without singing (the Sing view)")
     parser.add_argument("--days", type=int, default=DAYS,
                         help=f"the days ahead the page's first answers are made for (default {DAYS}; 0: none, the page "
                              "waits for Python as before)")
@@ -259,17 +219,12 @@ def main(argv: list[str] | None = None) -> None:
     py_files, names, version = render.pyodide_files()
     zipped, program = render.program_zip()
     app_files = {name: path.read_bytes() for name, path in render.APP.items()} | {"songbird.zip": zipped}
-    singing = bool(args.sing_kit)
-    kit = kit_files(Path(args.sing_kit)) if singing else {}
+    singing = not args.no_singing
     if singing:
         app_files |= render.singing_files()  # measuring a sung take: singing.zip and WORLD in wasm
     folders = {f"py-{render.folder_hash(py_files)}": py_files, f"app-{render.folder_hash(app_files)}": app_files}
-    if kit:
-        folders[f"kit-{render.folder_hash(kit)}"] = kit
-    py_dir, app_dir = list(folders)[:2]
-    native = {"song": str(SONG), "machine": args.machine, "runs_with": runs_with()}
-    if singing:
-        native["sing_kit"] = str(Path(args.sing_kit).resolve())
+    py_dir, app_dir = list(folders)
+    native = {"song": str(SONG), "machine": args.machine, "runs_with": runs_with(), "singing": singing}
     days = window(date.today(), args.days)
     first = first_answers(native, days) if days else {}
     if first:
@@ -283,8 +238,8 @@ def main(argv: list[str] | None = None) -> None:
     sent = sum(len(gzip.compress(d, 6, mtime=0)) if Path(n).suffix in (".mjs", ".js", ".json", ".wasm") else len(d)
                for f, c in folders.items() if f.startswith(("py-", "app-")) for n, d in c.items())
     studio = {"song": "/app/songs/h-now-its-by-you.json", "machine": args.machine, "runs_with": runs_with()}
-    if kit:
-        studio["kit"] = f"{next(f for f in folders if f.startswith('kit-'))}/"
+    if singing:
+        studio["singing"] = True
     # bytes: what a render worker fetches, and studio_bytes the studio's (numpy alone: lazy_imports), each as it
     # counts them; transfer: the whole bundle on the wire, the first time (the host compresses text and wasm)
     bundle = {"v": 1, "base": "/render/", "pyodide": py_dir, "app": app_dir, "packages": names,
@@ -318,7 +273,7 @@ def main(argv: list[str] | None = None) -> None:
     print(f"{out}: {len(files)} files, {sum(map(len, files.values())) / 2**20:.1f} MiB "
           f"({sent / 2**20:.1f} MiB on the wire the first time); the largest {largest[0]} "
           f"({len(largest[1]) / 2**20:.1f} MiB); program {program[:12]}, machine {args.machine}"
-          f"{f', singing ({len(kit)} kit files, {sum(map(len, kit.values())) / 2**20:.1f} MiB)' if singing else ''}"
+          f"{', singing' if singing else ''}"
           f"{f'; first answers for {len(first)} days, {days[0]} to {days[-1]} ({sum(map(len, first.values())) / 2**20:.1f} MiB)' if first else ''}")
 
 

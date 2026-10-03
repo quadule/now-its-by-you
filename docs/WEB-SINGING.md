@@ -1,95 +1,132 @@
-# Singing in the web studio (2026-09-29)
+# Singing in the web studio (2026-09-29; the Sing view, 2026-10-03)
 
-The studio's *Sing it* works on the web: a visitor sings along to the guide
-on the studio's own page, the take is measured on the server and its audio
-deleted there (in the studio that runs on the visitor's device, studio.itsby.you,
-it is measured in their own browser instead, so it never leaves it: "On the
-device" below), and the song is sung their way: by the machine's voice, with
-their timing, holds, loudness and pitch gestures, never their voice. They can
-hear it and record a rendition that carries it. This is the web studio's
-singing (docs/WEB-STUDIO.md has the public studio it runs in); the karaoke on
-the artist's computer (tools/karaoke.py) and the contest's online page
-(docs/SING-ONLINE.md) are unchanged.
+The studio's *Sing* view works on the web: a visitor sings the version on the
+studio's page (or the released one) along with its tune, the take is measured
+(in the studio that runs on the visitor's device, studio.itsby.you, in their own
+browser, so it never leaves it: "On the device" below; from a server's studio,
+on the server, its audio deleted there), and the song is sung their way: by the
+machine's voice, with their timing, holds, loudness and pitch gestures, never
+their voice. They can hear it and export a version that carries it. This is the
+web studio's singing (docs/WEB-STUDIO.md has the public studio it runs in); the
+karaoke on the artist's computer (tools/karaoke.py) and the contest's online
+page (docs/SING-ONLINE.md) are unchanged.
 
-    uv run python -m webstudio.prepare                  # once, on a computer with the memory: the singing kit
     uv run songbird studio --public --web-singing       # or without --public, on this computer only
+    uv run python web/studio-wasm/tools/build_site.py OUT   # the studio on the device: singing is in it
 
-`--web-singing` needs a checkout (tools/, webstudio/), the `web-singing`
+`--web-singing` needs a checkout (tools/, webstudio/) and the `web-singing`
 dependency group (pyworld, librosa: `uv sync --group web-singing`; the dev
-group has them too) and the singing kit (`--sing-kit DIR`, else
-$SONGBIRD_SING_KIT, else `renders/sing-kit`). Without any of them the studio
-runs as before; with a kit missing or made for another version of the song
-or of the measuring code, the singing card says so and the rest works.
+group has them too). Nothing is made ahead: what measuring needs is made when
+it's first needed and kept (`--sing-kit DIR`, else $SONGBIRD_SING_KIT, else
+`sing-kit` in the studio's home; "The kit, made as it's needed" below). Without
+the dependencies the studio runs as before and Sing says why.
 
 Nothing of this is in the song's program: `webstudio/` sits beside
 `songbird/`, a packet carries `songbird/` alone, and the studio imports it
-only when `--web-singing` asks.
+only when `--web-singing` asks (or the site is built with it, its default).
+
+## The Sing view (2026-10-03)
+
+The artist, on the panel it replaces: "'Sing it here' displays a different
+version of the lyrics and shouldn't be confined to the sidebar. Still too much
+extraneous text. 'What happens to your singing' and 'What's kept' hard to parse
+with so many qualifiers." And on the words: "It should be the released version
+of the song at minimum, but I think there have to be other options here."
+
+- **A fourth view**, beside Page, Arrange and Mix (its tab, the phone's bottom
+  bar, the key 4, `#view=sing`), the whole width (the inspector's column is
+  hidden there). The Tools sheet keeps one line and a button that opens it.
+  It is there only when the studio takes singing (webstudio/sing.js shows it).
+- **What is sung is what the Page shows.** The guide is made from the version
+  as the page has it (POST `/api/sing/guide` with the page's edits, and the
+  page's token for someone's version): its words, tune, key and tempo, laid on
+  its grid (`realize()` without a singer's phrasing or lay: webstudio/guide.py
+  `score_for`). It is made again whenever the view is opened or the version
+  changes (an edit, a key or tempo from the transport). **The released
+  version** is the other choice ("This version · The released one"): opening
+  the release in the studio would give its child (today's drift: 99.3 BPM, a
+  semitone up, other words and form), so its guide is laid once with the
+  release's own program, as tools/piano_score.py lays the piano page's score
+  (tools/released_guide.py → webstudio/released.json, 100 kB; its words checked
+  against the packet's lyrics.txt).
+- **A speed and a key for a voice**: as written, 90% (where a singer starts, as
+  the karaoke does) or 80%, by stretching the guide's times; and the key moved
+  2 or 4 steps either way ("Too high or too low? …" is the key chooser's
+  tooltip). A take sung an octave (or a few steps) from the guide is measured
+  in its own key, as natively; past 19 semitones it is refused, said.
+- **The words people read**, the simplest true thing (the qualifications in
+  tooltips and here). The consent is three lines, a tick box and *Start*:
+  - *Your voice stays on this device: your microphone is recorded and measured
+    here, then deleted.* (tooltip: nothing of it is sent, saved, played to
+    anyone or used to copy a voice; a take waits in the page's memory until it
+    is measured or sung again)
+  - *Only numbers are kept, in this browser: for each note, when you came in,
+    how long you held it, how loud, how you slid into it.* (until forgotten)
+  - *A version you share carries those numbers, never your voice. Forget my
+    singing removes them.* (not from a version already exported or shared)
+
+  A server's studio says instead that the take is measured on the computer
+  serving it, then deleted; that the numbers are also kept there under a code
+  for 30 days; and that an exported version carries them. Its version is 2,
+  the device's 3 (both changed, so each asks again). The words show only once
+  the offer says where measuring happens: before it, the view says nothing (the
+  device's page used to show the server's words for a moment). Gone: the
+  "What happens to your singing" details (they repeated the consent), the line
+  under *Measure it*, the part label, "Start with one section…", the long
+  slide sentence (now "Line it up: earlier … later", its explanation a
+  tooltip); the headphones advice is the *no headphones* box's tooltip.
 
 ## The flow
 
 ```mermaid
 flowchart LR
-  C[Consent: what is kept, and what isn't] --> S[Sing: a section or the whole song, to the melody guide]
-  S --> L[Listen back, slide the timing]
-  L --> M[Measure it: the take sent, queued, measured, deleted]
+  C[Consent: three lines] --> G[The guide: the version on the page, a speed, a key]
+  G --> S[Sing: a section or the whole song, to its melody]
+  S --> L[Listen back, line it up]
+  L --> M[Measure it: on the device, or sent, measured, deleted]
   M --> Y[Your way: a few sentences on how you sang; the singer's card sings it your way]
-  Y --> H[Hear the song your way] --> R[Record it: the rendition carries your numbers]
+  Y --> H[Hear it your way] --> R[Export it your way: the version carries your numbers]
   Y --> S
   Y --> F[Forget my singing]
 ```
 
-- **Consent first.** The first press of *Sing it here* shows what happens to
-  the singing, and nothing records until the visitor ticks "I understand"
-  (the page remembers the consent's version in its browser, and asks again
-  if the words change):
-  - *Your singing never leaves this device.* On the device (studio.itsby.you:
-    "On the device" below; the consent's version 2), the take is recorded in
-    the browser while they sing, measured there and let go: never sent, saved,
-    played to anyone or used to copy a voice. A server's studio says instead
-    *Your voice is not kept.* (version 1): a take sent to be measured goes to
-    the computer serving the studio, which measures it and deletes the
-    recording straight away.
-  - *What's kept is numbers*, for each note: how early or late, how long
-    held, how loud, how they slid into it and off it. In their browser (until
-    they forget them), and from a server's studio also on the server under a
-    code (no name, no address) for 30 days after last use, so the studio can
-    sing it.
-  - *Nothing is shared unless they share a recording* (a server's studio:
-    *Nothing is published unless they record*). A recording carries the
-    numbers (rounded), as every rendition carries its singer's way.
-  - *They can take it back.* Forget my singing removes the numbers from the
-    browser (and the server, from a server's studio; not from a recording
-    already made).
+- **Consent first** (above). Nothing records until the visitor ticks "I
+  understand" and presses *Start*; the page remembers the consent's version in
+  its browser, and asks again if the words change.
 - **Singing** reuses the karaoke's own code, served from tools/ as it is
   (tools/karaoke.js and tools/karaoke-recorder.js; webstudio/sing.js imports
   them): the take is recorded in the guide's audio clock by the same
   worklet, cut from the same frame, auto-synced by the same pitch slide and
   written as the same 16-bit WAV, so it is measured exactly as a karaoke or
   online take is. The lane of notes and the words as they're sung are the
-  karaoke's; a section or the whole song; a key from the kit (the song's
-  own, and two steps either way by default; the kit's `--keys`); a device
-  delay learned from each take's sync.
-- **Measure it** sends the take (a small JSON of where it was sung, then the
-  WAV, in one request) with the numbers of the takes measured before it,
-  which the browser keeps. It waits in the studio's one queue, with the
-  renders (below), and the page says how many are ahead and about how long.
-  Its result is the new take's numbers and a way of singing made from all
-  of them (each person counts once: tools/phrasing.py `singer_phrasing`),
-  and a portrait ("You sit 12 ms behind the beat on average… You slide into
-  26 of 44 notes…"). The page sets the singer's card to *your way* and
-  offers *Hear the song your way* and *Record it your way*. Each further
-  take joins the way (up to 12).
+  karaoke's (tools/karaoke_words.py lays them out); a section or the whole
+  song; a device delay learned from each take's sync. The melody guide (the
+  karaoke's default mix: the tune on a whistle over a pulse) is made a section
+  at a time (GET `/api/sing/melody?guide=&from=&to=`), its first sample the
+  section's start.
+- **Measure it** hands the take over (a small JSON of where it was sung, then
+  the WAV) with the numbers of the takes measured before it, which the browser
+  keeps. It waits in the studio's one queue, with the renders. Its result is
+  the new take's numbers and a way of singing made from all of them (each
+  person counts once: tools/phrasing.py `singer_phrasing`), and a portrait
+  ("You sit 12 ms behind the beat on average… You slide into 26 of 44
+  notes…"). The page sets the singer's card to *your way* and offers *Hear it
+  your way* and *Export it your way*. Each further take joins the way (up to
+  12); an earlier take sung to a guide that is no longer kept is left out of
+  it rather than refused.
 
 ## What is kept, where, and for how long
 
 | Where | What | How long |
 |---|---|---|
-| The visitor's browser (localStorage `songbird-web-singing`) | the consent's version, the key chosen, the device's delay, each take's measured numbers (about 40 kB for a whole take), the way made from them | until they forget it or clear the browser |
+| The visitor's browser (localStorage `songbird-web-singing`) | the consent's version, the speed and key chosen, the device's delay, each take's measured numbers (about 40 kB for a whole take), the way made from them | until they forget it or clear the browser |
+| The visitor's browser (IndexedDB `songbird-singing`, on the device) | the guides' scores, their melodies, the template singer's analyses: the song's and the machine's, nothing of the singer's (but a template's key, which follows their voice's octave) | until Forget my singing, which clears it too, or the browser is cleared |
 | The page's memory | the take's audio, between Stop and Measure it (listen back, slide) | until it is measured (on the device) or sent (to a server), sung again, or the page closes |
 | The page's measuring (on the device) | the take decoded in the measuring worker's memory; each piece it reads as a temporary WAV in Pyodide's in-memory /tmp (never storage); WORLD's own memory for its analysis | each piece removed as soon as it has been read, any left by a fault swept before measuring returns; WORLD's memory let go with the take; the rest freed when measuring returns (its bytes reused, gone when the worker ends) |
 | The server's memory (measuring on the server only) | the take's audio while it waits for the measuring process | until it's measured (at most 3 wait at once; a cancelled one is let go with it) |
 | The measuring process (on the server only) | the take decoded in memory; each piece it reads in a temporary WAV (0600) in /dev/shm (memory) or /tmp | removed as soon as it has been read, whatever happens; leftovers from a killed process swept at its next start |
 | The server's disk (`$SONGBIRD_HOME/studio/sung/sung-<16 hex>.json`) | the way of singing: rounded, bounded gestures by phrase and note, "1 sung take(s)"; named by its fingerprint | 30 days after it was last used, or until forgotten |
+| The server's disk (the kit: `--sing-kit`, else the studio's home) | the guides, their melodies, the template singer's analyses (the song's and the machine's) | 30 days after last use |
 | A recording the visitor makes | the way's rounded gestures, in the record's `performance` (as any rendition's), marked "a person's way" | the file's; a public studio keeps it for download a day |
 
 No name, address, cookie or anything about who sang is kept with any of it;
@@ -123,30 +160,62 @@ server:
   tools/phrasing.py measures a take of one section (`measure_window`). A
   take of one section (31 s at 90%) is measured whole, exactly as there.
 
-The template singer's analysis of each guide (what a take is compared
-with) takes 4 GB and a minute to make, so the kit carries it, made ahead.
+The template singer's analysis of what was sung (what a take is compared
+with) is made when a take first needs it: next section.
 
-### The kit
+### The kit, made as it's needed (2026-10-03)
 
-`python -m webstudio.prepare [--keys -4 -2 0 2 4] [--tempos 90] [--octaves -12 0 12] [--kit DIR]`
-writes, for each version offered (the first recording set, each key and
-speed): its score, the melody guide (the karaoke's default mix: the tune on
-a whistle over a pulse, rendered from the score alone, mono at 22.05 kHz:
-6 MB of FLAC for the whole song), its words, and the template singer's
-analysis in the guide's key and an octave either side. Each template is
-made in a process of its own (4 GB, about a minute on an M-series Mac); the
-default five keys are 15 templates, about 15 minutes; the kit is about
-45 MB. Nobody's voice is in it: the guides are the song's, the templates the
-machine's.
+Until 2026-10-03 the kit was made ahead (`python -m webstudio.prepare`: one
+recording set's verses at 90% in five keys, 15 whole-guide templates, 42 MB),
+because the template singer's analysis of a whole guide takes 2.3 GB and
+about 33 s an octave natively. That is why the page sang other words than the
+Page showed. Now nothing is made ahead; the kit (webstudio/kit.py) is a folder
+of what has been made:
 
-The templates are kept under the measuring code's version
-(tools/phrasing.py `version()`, which hashes the singer's code), so the kit
-must be made by the program the server runs; the studio checks at start
-and says "the singing kit was made by another version of the measuring
-code" rather than refusing every take. A take sung more than a few
-semitones off the guide's key or its octaves has no template, and is
-refused with what to do: "choose the key nearest your voice and sing it
-again".
+    song/<song>.json                                    the song a way of singing is made for
+    guides/<song>.<digest>.score.json                   each guide's score (the voice and the parts that state
+                                                        the tune, its beats and words: about 120 kB)
+    audio/<digest>.<from ms>-<to ms>.wav                a stretch of a guide's melody (a server's)
+    measured/parts/<notes>.<key>.<measuring code>.npz   the template singer's analysis of a piece's notes
+
+- **The template singer sings only what was sung.** For each piece a take is
+  measured in (a section, or each piece of a whole song: "Long takes in
+  pieces"), the notes that start in it are sung alone, from a frame of the
+  guide's a second before the first, as tools/phrasing.py `template()` sings a
+  whole guide (the formant singer, flat, its tract by the key) and analysed as
+  a take is; the analysis is placed on the guide's clock (silence before) and
+  handed to `measure_window` in the guide's place (`g.templates`: webstudio/
+  worker.py `PartTemplates`), so tools/phrasing.py, whose measuring functions
+  `version()` hashes, is unchanged and no kept measurement is invalidated. It
+  is kept by a digest of those notes (as the singer reads them) and the words'
+  sounds, its key and the measuring code's version, so the same notes in
+  another version of the song are the same template.
+- **Against the whole guide's.** Over the first refrain's frames (49 notes,
+  the version of the day at 90%), the part template is the whole guide's to a
+  median of 0.52 cents, voiced on 99.0% of the same frames, its loudness
+  within 0.45 dB (median); tests/test_web_singing.py holds it to 2 cents, 97%
+  and 1.5 dB. The template's only difference is the context: the note before
+  the section isn't sung into its first. Measuring the template singer's own
+  refrain with either: every onset and every timing the same, loudness within
+  0.01 dB (median), scoops a little larger with the part's (94.7 cents mean
+  size against 88.5: the first notes, sung from silence).
+- **Its key is the take's.** `measure_window` reads the take's key (its octave,
+  or a few steps off) and asks for the template in it, which is made then, once
+  (natively 0.8 s to sing a 28 s section and 2.9 s to analyse it; on the
+  device, 5.7 s); a page asks for its singer's likely key ahead (the key of
+  their last take, else the guide's), while they rehearse or sing, so a take
+  rarely waits for it. A take more than 19 semitones from the guide is refused
+  ("…too far to compare it with the tune: choose another key for the guide").
+- **The melody**: tools/guides.py `render_melody`'s whistle, octave, pulse and
+  room, made a stretch at a time and added up (webstudio/guide.py `melody`):
+  a section (29.5 s) in 0.7 s natively; a whole song (204 s) in 2.5 s and
+  about 1 GB at most rather than 2.2 GB in one piece. Mono 16-bit WAV at
+  22.05 kHz (1.3 MB a section, 9 MB a whole song), set to -18 LUFS.
+- **On a server** the kit is the studio's folder; a file not used for 30 days
+  goes (`Kit.prune`, at start). The melody is made by the measuring process
+  (in a public studio, as a job in its one queue, so its memory never runs
+  beside a render's); a guide's score by the studio's own process (`realize`:
+  a fraction of a second, no tools loaded).
 
 ### How the numbers compare
 
@@ -157,8 +226,8 @@ again".
   with every second note 60 ms late: those notes measure later than the
   rest by 0.14 beats against the 0.086 planted (the neighbours' onsets move
   too; the test asks for at least half).
-- **Pieces against a whole take.** The machine's own singer (the spec's
-  voice mix, 244 s) measured whole and in the nine pieces the worker cuts:
+- **Pieces against a whole take** (with the whole guide's template, before
+  2026-10-03). The machine's own singer (the spec's voice mix, 244 s) measured whole and in the nine pieces the worker cuts:
   every vowel start within 20 ms (all but a handful within 10 ms), timing
   and holds equal for 98% of notes, pitch gestures within a fraction of a
   cent; loudness and swell differ by about 0.9 dB (median), because each is
@@ -197,7 +266,8 @@ computer measures; decision 2 below.
 
 ### Memory and time
 
-On this Mac (M-series), one process measuring, the kit's templates ready:
+On this Mac (M-series), one process measuring, the templates ready (before 2026-10-03, when they were the
+kit's, made ahead; a template made when a take needs it adds about 3.7 s a section, once):
 
 | | measuring | the whole request, cold | peak memory of the measuring process |
 |---|---|---|---|
@@ -278,101 +348,137 @@ the studio's page" below).
 
 ### How to call it
 
-In the studio's browser worker, once Pyodide, numpy, scipy and soundfile
-and the program are loaded (as `studio-worker.mjs` does):
+In a browser worker, once Pyodide, numpy, scipy and soundfile and the program
+are loaded (as `studio-worker.mjs` does: its `kit`, `sing` and `measure`
+commands):
 
 ```js
 const { loadWorld } = await import(`${app}world/world.mjs`);
 py.registerJsModule('songbird_world', await loadWorld(await (await fetch(`${app}world/world.wasm`)).arrayBuffer()));
 py.unpackArchive(new Uint8Array(await (await fetch(`${app}singing.zip`)).arrayBuffer()), 'zip', { extractDir: '/app' });
 const measure = py.pyimport('sing_measure');
-// the kit's files the take needs, written under /kit (kit_files names them; the server serves the kit)
-for (const name of measure.kit_files(py.toPy(offer), guide, py.toPy(earlier)).toJs()) {
-  py.FS.mkdirTree(`/kit/${name.split('/').slice(0, -1).join('/')}`);
-  py.FS.writeFile(`/kit/${name}`, new Uint8Array(await (await fetch(`${kitURL}${name}`)).arrayBuffer()));
-}
-const answer = JSON.parse(measure.answer_json(takeWavBytes, py.toPy({
-  song, guide, from_s, to_s, earlier, offered, kit: '/kit' })));
-// { ok: { measurement, phrasing, portrait, skipped, audio_seconds, seconds, peak_mb } }
+// the guides sung to, under /kit/guides/<song>.<digest>.score.json (the page keeps them: the studio made them)
+// the templates it wants, by name: measure.op_json("parts", request) -> {ok: {parts: ["<notes digest>.", ...]}};
+// those storage has go under /kit/measured/parts/
+const answer = JSON.parse(measure.answer_json(takeWavBytes, py.toPy({ song, guide, from_s, to_s, earlier, kit: '/kit' })));
+// { ok: { measurement, phrasing, portrait, skipped, templates, audio_seconds, seconds, peak_mb } }
 // | { refused: "what the singer can do" } | { error: "what went wrong" }
+// a template it made is a new file in /kit/measured/parts/ (named in templates): storage keeps it
 ```
 
 `measure(take, request)` is the same returning the result and raising
 `Refused` (worker.py's) for what the singer can act on. The request is the
 server's (`webstudio/singing.py` `where()`: song, guide, from_s, to_s,
-earlier, offered) plus `kit`; the checks `where()` makes before a take is
-queued (the version offered, the guide unchanged, the length) are the
-caller's. The kit must be one made by this measuring code: its templates
-are named by tools/phrasing.py `version()`, and a kit of another version
-is said as such. Per take it needs offer.json, the song, each guide's
-score sung to (0.2 to 0.5 MB) and the guide's three templates (about
-0.4 MB each for a 151 s guide). One take at a time; nothing is uploaded.
+earlier, seconds) plus `kit`; the checks `where()` makes before a take is
+queued (a guide the studio made, the take inside it, its length) are the
+caller's. `op_json("melody" | "template", request)` makes a stretch of a
+guide's melody (written to a WAV in Pyodide's memory) or the template
+singer's analyses ahead, as the measuring process's ops of those names do.
+One take at a time; nothing is uploaded.
 
 ### In the studio's page
 
-The studio on the device (docs/WEB-STUDIO.md, "On the device") is built with
-the kit (`build_site.py --sing-kit renders/sing-kit`). Its singing is the
+The studio on the device (docs/WEB-STUDIO.md, "On the device") carries
+singing unless it is built with `--no-singing`: singing.zip, WORLD and the
+released guide, about 0.3 MB, and nothing made ahead. Its singing is the
 server's (webstudio/singing.py `Singing`, in the studio's worker: the offer,
-the checks, the queue, the way kept, forget), with the measuring process
-replaced by a worker in the page:
+the guide, the checks, the queue, the way kept, forget), with the measuring
+process replaced by workers in the page:
 
 ```mermaid
 flowchart LR
-  P[page: sing.js records the take] -->|where, and its length| S[studio's worker: Singing.take checks and queues it]
-  S -->|handout: the request, no audio| D[device.js]
+  V[Sing view: the page's edits] -->|POST /api/sing/guide| S[studio's worker: the guide laid, its score]
+  S -->|the score| I[(IndexedDB songbird-singing)]
+  V -->|GET /api/sing/melody| W[a singing worker: the melody, the templates ahead]
+  I --> W
+  W -->|melody, templates| I
+  P[page: sing.js records the take] -->|where, and its length| S2[studio's worker: Singing.take checks and queues it]
+  S2 -->|handout: the request, no audio| D[device.js]
   P -->|the take, moved| M[a measuring worker, for this take only]
   D --> M
-  M -->|kit files it needs| K[render/kit-hash/, immutable]
-  M -->|numbers only| S2[studio's worker: Singing._measure makes and keeps the way]
+  I -->|the guides and templates it wants| M
+  M -->|numbers only, and templates it made| S3[studio's worker: Singing._measure makes and keeps the way]
   M -.ended.-> X[its memory, and the take's bytes, gone]
 ```
 
-- **The take never reaches the studio's worker, or the network.** device.js
-  splits the page's `POST /api/sing/take`: where it was sung and the take's
-  length (from the WAV's header) go to the studio's worker; the audio stays
-  in the page until a measuring worker, started for that take (studio-worker.mjs,
-  `init` with `lean`: Pyodide and the program, none of the renderer's kernels),
-  takes it, follows "How to call it" above and answers. The page ends it then,
-  so its memory goes back at once. One take is measured at a time.
+- **The guide**: the studio's worker lays it (`Singing.guide`, the version the
+  page's token names) and answers with its words; device.js keeps its score
+  (about 120 kB) in IndexedDB (`songbird-singing`, store `guides`), by its
+  digest. On the device a guide's digest needn't be the server's: Pyodide
+  lays the same notes, but a number may print differently.
+- **The singing worker** (the full worker: the whistle is a kernel) is started
+  when a melody is first wanted, makes it (store `melodies`, by program, guide
+  and stretch), then the template singer's analyses for the section in the
+  singer's likely key (store `parts`), and is let go when idle for 45 s or
+  before a take is measured, so its memory (about 390 MiB once it has made a
+  section and its template) is never held beside the measuring's.
+- **The take never reaches the studio's worker, storage or the network.**
+  device.js splits the page's `POST /api/sing/take`: where it was sung and the
+  take's length (from the WAV's header) go to the studio's worker; the audio
+  stays in the page until a measuring worker, started for that take
+  (studio-worker.mjs, `init` with `lean`: Pyodide and the program, none of the
+  renderer's kernels), takes it with the guides sung to and the templates
+  storage has for its pieces, and answers. Any template it made comes back to
+  be kept. The page ends it then, so its memory goes back at once. One take is
+  measured at a time.
 - **The way is made as the server makes it.** The answer finishes the take's
   job through `Singing._measure` itself (`Device.measured`): the way made and
   kept by its fingerprint, a refusal said as the singer's, a fault as a
   failure ("this device ran out of memory measuring it (one section at a time
   may fit)"). No server is asked instead (decision 1 below).
-- **The kit, a file at a time** in `render/kit-<hash>/` (build_site.py lays it
-  out as webstudio/kit.py does, only the files the offer names, and refuses a
-  kit for another song or other measuring code): `offer.json` when the studio
-  starts; a key's words (45 kB) and melody guide (6 MB) when it is chosen; the
-  song, the guide's score (0.7 MB) and its three templates (0.6 MB each) when a
-  take sung to it is measured. All immutable: each is fetched once. The
-  default kit (five keys at 90%: `uv run python -m webstudio.prepare --kit
-  renders/sing-kit`, about 12 minutes here) is 32 files, 42 MiB,
-  the largest a guide (6.1 MB).
-- **The words** are the device's: "Your singing never leaves this device." on
-  the Sing it box (its tooltip: measured here and let go, only numbers kept,
-  in this browser), the consent above, and under *Measure it*: "Measured here,
-  on this device; the recording is let go once it has been."
+- *Forget my singing* forgets the ways kept and clears `songbird-singing` too.
 
-**Checked in the built-in browser** (`wrangler dev` over the built site, this
-Mac under heavy load): the machine singer singing the song's own key at 90%,
-every third note 50 ms late, at 48 kHz, sent as the page sends a take, gave
+**The Sing view, checked in the built-in browser (2026-10-03)** (serve_site.py
+over the built site, this Mac, the bundle in the browser's cache): the page's
+version of the day at 90%, the take played into the karaoke's recorder as a
+microphone (getUserMedia replaced by the machine singer singing the page's
+guide with every third note 50 ms late, at 48 kHz), so everything after the
+microphone is the page's own path:
+
+| on the device (this Mac, Chromium) | time | Pyodide's heap after (MiB) | natively |
+|---|---|---|---|
+| the guide's words (the studio's worker lays the version) | 0.2 to 0.4 s | (the studio's worker) | 0.2 s + 0.3 s words |
+| a section's melody (29.5 s), the singing worker warm | 0.9 s | | 0.7 s |
+| ... the singing worker cold (started from the browser's cache) | 5.9 s | | |
+| the whole song's melody (204 s), warm / cold | 5.8 s / 11.2 s | 464 | 2.5 s, about 1 GB |
+| a section's template, made ahead (while you sing) | 5.7 s | 387 (with its melody) | 3.7 s |
+| measuring a section (31 s), its template ready | 12.2 s from *Measure it* (6.5 s measuring) | 225 | 4.3 s |
+| ... its template made by the measuring worker | 17.3 s (12.2 s measuring) | 388 | 10.2 s with the process starting |
+| measuring the whole song (204 s, 8 pieces), templates ready | 41.6 s (36.6 s measuring) | 322 | |
+| ... all 8 templates made by the measuring worker | 82 s (77 s measuring) | 557 | 49.8 s, 1.6 GB |
+
+Every number of the measurement, the way of singing and the portrait were the
+native measuring process's, for a section (49 notes) and the whole song (345
+notes, 8 pieces), the device's templates made in Pyodide, the native ones
+natively. The recorded section (through sing.js and the recorder, auto-synced
+90 ms) was measured and the singer's card said "sung your way"; at a phone's
+width (375 px) the view had no sideways scroll, its choices and stage wrapped,
+the bottom bar showed Sing. The released version's guide showed its own
+words and form (two verses, three refrains, the bridge, the tag). A server's
+studio (`songbird studio --web-singing`) showed the server's consent, laid its
+guide in 0.1 s and made a section's melody in 3.4 s (its measuring process
+starting). The browser pane was hidden throughout (another session had the
+side panel), so the page's timers were throttled: a whole song sung through
+the recorder in real time didn't finish on its own and wasn't timed (its
+measuring was, the take sent as the page sends it); the memory is Pyodide's
+heap as the workers reported it, WORLD's own (about 110 MiB a section) beside
+it.
+
+**Before 2026-10-03** (the kit made ahead, `wrangler dev`, the Sing it panel
+in the Tools sheet), checked the same way: the machine singer's take gave
 exactly what the server's measuring process and `Singing._measure` give the
-same take and kit: every number of the measurement, the way of singing, its
-name and the portrait, for a section and for the whole song. A section was
-also recorded through sing.js itself (the take played into the karaoke's
-recorder as a microphone), measured, and the singer's card said "sung your
-way"; at a phone's width (375 px) the panel had no sideways scroll, and the
-way came back after a reload; *Forget my singing* left nothing in IndexedDB.
-The policy needed nothing more: the measuring worker is a `'self'` module
-worker, WORLD's wasm compiles under `'wasm-unsafe-eval'`, the kit is
-`connect-src 'self'`.
+same take and kit, for a section and for the whole song; a phone's width
+(375 px) had no sideways scroll; *Forget my singing* left nothing in
+IndexedDB. The policy needed nothing more: the workers are `'self'` module
+workers, WORLD's wasm compiles under `'wasm-unsafe-eval'`, nothing is fetched
+from elsewhere.
 
-| | the measuring worker starting | the kit's files (from the cache after) | measuring | in all, from *Measure it* | memory at most (Pyodide's heap and WORLD's) | natively |
+| (before 2026-10-03) | the measuring worker starting | the kit's files (from the cache after) | measuring | in all, from *Measure it* | memory at most (Pyodide's heap and WORLD's) | natively |
 |---|---|---|---|---|---|---|
 | a section (31 s) | 2.1 to 2.4 s | 0.3 s | 9.3 to 9.6 s | 12 to 13 s | 380 MB (heap 274 MiB) | 4.3 s, 669 MB |
 | the whole song (241 s, in pieces) | 2.3 s | 0.3 s | 44.5 s | 47 s | 426 MB (heap 328 MiB) | 26.6 s, 911 MB |
 
-The studio's worker held 187 MiB after either, as after any of the page's
+(Before 2026-10-03) the studio's worker held 187 MiB after either, as after any of the page's
 questions (docs/WEB-STUDIO.md): the take was never in it.
 
 **The review (Fable, 2026-09-30)**, read-only, of the wiring. What came of it:
@@ -456,8 +562,9 @@ worker in memory, and only numbers come back to the page. Each piece's WAV
 lives in Pyodide's in-memory file system for as long as it is read, and
 any left by a fault is swept before `measure` returns; the take's bytes,
 once freed, are memory the worker reuses, gone when it ends. Nothing of it
-reaches the Cache API, IndexedDB or localStorage (the kit's files may: they
-are the song's and the machine's).
+reaches the Cache API, IndexedDB or localStorage (the guides, their melodies
+and the template singer's analyses do: they are the song's and the machine's;
+a template's key follows the singer's octave).
 
 ### Open decisions
 
@@ -470,17 +577,18 @@ are the song's and the machine's).
    bit librosa's, so tools/phrasing.py could use it and the server image
    drop librosa (and numba with it). But align_by_pitch's source is hashed
    into `version()`, which names every kept measurement in renders/measured
-   and every kit template: switching re-measures every kept take (some of
-   whose audio is now deleted) and remakes the kit. Suggested: switch at
-   the next change that moves `version()` anyway.
-3. **The consent's words on the page**: done ("In the studio's page"
-   above), as the consent's version 2, so a visitor who agreed to the
-   server's words is asked again.
+   and every template: switching re-measures every kept take (some of
+   whose audio is now deleted); the templates are made again as they're
+   needed. Suggested: switch at the next change that moves `version()`
+   anyway.
+3. **The consent's words on the page**: done, and redone as three lines on
+   2026-10-03 ("The Sing view"), as the consent's version 3 on the device.
 4. **The worker's memory on phones.** About 380 MB for a section and 430
    to 470 MB for the whole song at most, in a worker of its own that ends
    after each take (everything given back, the take's freed bytes
-   included). The kit's templates are downloaded once per guide and key
-   (about 1.8 MB for three). A phone that can't hold it says "this device
+   included); about 390 MiB more, briefly, in the singing worker when it
+   makes a guide's melody and template (let go before a take is measured).
+   A phone that can't hold it says "this device
    ran out of memory measuring it (one section at a time may fit)".
 5. **WORLD's sources are ours to keep.** world/src is pyworld 0.3.5's, the
    lean Harvest our change to it; a new pyworld natively (the test pins
@@ -510,11 +618,18 @@ read and dropped a block at a time, nothing of it held (docs/WEB-STUDIO.md,
 
 ## In the code
 
-- `webstudio/`: `kit.py` (where the kit's files are; standard library
-  only), `prepare.py`, `worker.py` (the measuring process), `singing.py`
-  (the studio's side: routes, the waiting takes, the Measurer, the Store of
-  ways by fingerprint), `sing.js` and `sing.css` (the page's side).
-- `songbird/studio.py`: `--web-singing`, `--sing-kit`;
+- `webstudio/`: `guide.py` (a guide from the version on the page or the
+  released one, its words, its melody a stretch at a time), `released.json`
+  (the released version's guide, made by tools/released_guide.py), `kit.py`
+  (where what measuring needs is kept; standard library only), `worker.py`
+  (the measuring process; the template singer's part: `part_notes`,
+  `part_template`, `PartTemplates`, `parts`; its ops `take`, `melody`,
+  `template`, `parts`), `singing.py` (the studio's side: routes, the guide,
+  the melody, the waiting takes, the Measurer, the Store of ways by
+  fingerprint), `sing.js` and `sing.css` (the Sing view). tools/karaoke_words.py:
+  the karaoke's words, sections and windows, which tools/karaoke.py imports.
+- `songbird/studio.py`: `--web-singing`, `--sing-kit` (where the kit is kept);
+  `/api/sing/guide` answered by the studio on the page's version;
   `Studio.enable_web_singing`, `phrasing_choices` (a name `sung-…` is looked
   up in the Store, never listed), `sung_phrasings` (the card's "your way");
   the handler asks singing first about its routes and the take's upload,
@@ -523,28 +638,34 @@ read and dropped a block at a time, nothing of it held (docs/WEB-STUDIO.md,
   ("sung your way"). `songbird/studio/studio.js`: the ways a browser made are
   offered on the singer's card beside the studio's (`phrasingChoices`), and
   its last section hands webstudio/sing.js a few of the page's functions
-  (`window.songbirdStudio`).
+  (`window.songbirdStudio`); `render()` says `studio:render`. The Sing view's
+  tab, its panel (`#view-sing`) and the phone bar's button are in index.html,
+  hidden until sing.js shows them; score.js `showView` takes `sing` (and says
+  `studio:view`), model.js the key 4.
 - `tools/phrasing.py`: `sung_phrasing`/`singer_phrasing` take measurements
   already made (`measurements=`), for takes that were never files.
 - `deploy/studio/`: the image installs the `web-singing` group (a compiler
   lent to build pyworld), copies tools/ and webstudio/; the compose file
-  mounts the kit read-only at /kit and passes `--web-singing --sing-kit /kit`
-  (`STUDIO_SINGING`, `SING_KIT`).
+  passes `--web-singing` (`STUDIO_SINGING`), and the kit is kept in the
+  studio's data volume.
 - On the device (2026-09-30), in `web/studio-wasm/`: `py/sing_measure.py`
-  (`measure`, `answer`, `kit_files`), `py/world_wasm.py` (pyworld's
+  (`measure`, `answer`, `op_json`), `py/world_wasm.py` (pyworld's
   harvest and cheaptrick over world.wasm), `py/sing_dtw.py` (librosa's DTW),
   `world/` (WORLD's sources, the glue, the allocator, the lean Harvest,
   `build.sh`, the committed world.wasm and `sources.json`),
   `tools/sing_bundle.py` and `tools/world_sources.py`, the block in
   `tools/build_render.py`, and `node/sing_run.mjs` (a Python file run in
   that Pyodide under node). The page's side: `studio-worker.mjs` (`init`
-  with `lean`, `measure`, `handout`, `measured`), `device.js` (the take
-  split, the measuring worker per take, the kit's words and guide),
-  `py/studio_device.py` (`Device.handout`, `Device.measured`, `Measuring`),
-  `tools/build_site.py` (`kit_files`) and webstudio/sing.js (the device's
-  words); tests/test_studio_device.py. Checked by tests/test_sing_measure.py (the
-  planted verse measured in Pyodide as the server measures it, where Pyodide
-  is installed), tests/test_world_wasm.py and tests/test_sing_dtw.py.
+  with `lean`, `kit`, `sing`, `measure`, `handout`, `measured`), `device.js`
+  (IndexedDB `songbird-singing`, the guide kept, the singing worker, the
+  melody and the templates ahead, the take split, the measuring worker per
+  take), `py/studio_device.py` (`/api/sing/guide` with its score as a file,
+  `Device.handout`, `Device.measured`, `Measuring`), `tools/build_site.py`
+  (singing in by default, `--no-singing`) and webstudio/sing.js;
+  tests/test_studio_device.py. Checked by tests/test_sing_measure.py (the
+  planted refrain measured in Pyodide, its template made there, as the server
+  measures it, where Pyodide is installed), tests/test_world_wasm.py and
+  tests/test_sing_dtw.py.
 
 ## Decisions for the artist
 
@@ -564,19 +685,42 @@ read and dropped a block at a time, nothing of it held (docs/WEB-STUDIO.md,
 4. **A recording carries the numbers.** As every rendition does now
    (`performance` in its record). The consent says so; the alternative
    would be a web recording that can't be replayed elsewhere.
-5. **Keys offered**: the song's own and two and four steps either way at
-   90% (the kit's defaults); each key is a guide (6 MB) and three templates.
+5. **Keys and speeds offered**: the version's key and two and four steps
+   either way; as written, 90% (the default) and 80%. Each is a guide made
+   when asked for (nothing to download).
 6. **The melody guide only.** The band's guide ("the whole song") would need
    a full render per key (6.7 GB peak on this Mac) and 20 MB downloads; the
    karaoke's default was the melody anyway.
 7. **A take is one of a public visitor's turns.** Twelve an hour by
    default, one thing in the queue at a time, like a section.
+8. **No kit made ahead, even for the release** (2026-10-03). A guide's words
+   take a fraction of a second, its melody about 1 s a section on the device
+   (6 s the whole song), its template about 6 s a section, made while the
+   singer rehearses or sings, and all of it is kept in the browser after.
+   A precomputed kit for the released version would save a first singer about
+   6 s once per section, and would need making again (and redeploying) at
+   every change to the measuring code or the program's synthesis; not worth
+   it. The 42 MB Set A kit is retired (renders/sing-kit can be deleted).
+9. **The released version is laid by its own program** (released.json, made
+   again with `uv run python tools/released_guide.py` if the release changes):
+   the studio's own program sings the release's words slightly differently
+   laid (it is a later program). Its notes and words are the release's;
+   measured against today's song, a phrase the release sang differently is
+   left unmeasured.
+10. **The words.** The consent's three lines are the artist's suggestion,
+   with "then deleted" (the take is let go from memory once measured, or when
+   sung again or the page closes) and "A version you share" (an exported
+   file carries the numbers too: said in the tooltip). Check they read right.
 
 ## How it was checked
 
 - tests/test_web_singing.py: without `--web-singing` nothing of it is
-  served; the page gets the singing and the karaoke's own files; a kit for
-  another song is said, not used; a take is refused for a wrong token, type,
+  served; the page gets the singing and the karaoke's own files, and a
+  stretch of a guide's melody, made once and kept; a guide is the version on
+  the page (its words line for line, its tempo; at 90% its times stretched,
+  2 steps down its notes; the same version the same guide) or the released
+  one; a studio whose measuring can't start says so; a take is refused for a
+  wrong token, type,
   address, guide, version, length or body, and too big before its body is
   read, with nothing reaching the measuring process; a take waits in the
   queue, is measured, and no audio is held or written anywhere after; a
@@ -584,11 +728,18 @@ read and dropped a block at a time, nothing of it held (docs/WEB-STUDIO.md,
   studio counts takes against each visitor and holds them to one at a time;
   the song is sung "your way" by a name that is never listed, marked "a
   person's way", never whose; a way kept is rounded, bounded, stable,
-  forgettable and expires; a long take is cut in its rests; and the real
-  measuring process on a planted take gives tools/phrasing.py's own numbers,
-  hears the planted notes late, and leaves no piece behind.
-- By hand, in the built-in browser (a public studio with `--web-singing`
-  and a three-key kit): the consent, the stage (lane, words, count-in,
+  forgettable and expires; a long take is cut in its rests, and the
+  template singer sings a piece's words whole; and the real measuring
+  process on a planted take gives tools/phrasing.py's own numbers with the
+  template made ahead in it, hears the planted notes late, makes its melody,
+  and leaves no piece behind; the part template is the whole guide's over
+  the refrain.
+- tests/test_studio_device.py: on the device a guide is laid from the page's
+  edits (a tempo chosen sings at it) and handed to the page as a file; the
+  released one at its own tempo; a take is checked against the guides the
+  studio made; the melody is never the studio worker's to make.
+- By hand, before 2026-10-03, in the built-in browser (a public studio with
+  `--web-singing` and a three-key kit): the consent, the stage (lane, words, count-in,
   progress) rehearsing a verse to the guide, laptop and phone widths with
   no sideways scroll; a whole synthesized take sent as the page sends it
   (the browser pane has no microphone), measured in 31.6 s; the singer's

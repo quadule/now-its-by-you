@@ -135,41 +135,33 @@ QUESTIONS = [
     ["POST", "/api/export", {"edits": {}, "what": "midi"}], ["POST", "/api/export", {"edits": {}, "what": "stems"}],
     ["POST", "/api/render/spec", {"edits": {}, "section": 1}], ["POST", "/api/render/spec", {"edits": {}, "section": None}],
     ["POST", "/api/render/spec", {"edits": {"tempo": 92}, "who": "program", "section": 0}],
-    ["POST", "/api/sing", {}],
+    ["POST", "/api/sing", {}], ["GET", "/api/sing/offer", None],
+    ["POST", "/api/sing/guide", {"edits": {}, "speed": 90, "key": 0}],
+    ["POST", "/api/sing/guide", {"edits": {"tempo": 70}, "speed": 100}],
+    ["POST", "/api/sing/guide", {"which": "released", "speed": 100}],
 ]
 
 
 def test_the_studio_s_questions_never_run_scipy_or_soundfile(tmp_path):
     """The studio's worker loads numpy alone: scipy and soundfile are stand-ins (lazy_imports), and every question
-    the studio answers (the timeline, a render's spec, the MIDI file and the piano score among them) is answered as
+    the studio answers (the timeline, a render's spec, the MIDI file, the piano score and singing's guides among them)
+    is answered as
     a studio with them answers it, never needing either. A stand-in used for real says which package it needs, and
     once that is loaded it is the package's own function."""
     config = {"song": str(LEAD), "machine": "none", "home": str(tmp_path / "lazy"), "runs_with": RUNS_WITH,
-              "day": "2026-12-01"}
+              "day": "2026-12-01", "sing_kit": str(tmp_path / "lazy" / "kit")}  # singing on, as the site has it
     ran = subprocess.run([sys.executable, "-c", CONTROL, str(ROOT), str(PY), json.dumps(config), json.dumps(QUESTIONS)],
                          cwd=ROOT, capture_output=True, text=True, env={**os.environ, "NUMBA_DISABLE_JIT": "1"},
                          timeout=600, check=False)
     assert ran.returncode == 0, ran.stderr[-3000:]
     got = json.loads(ran.stdout.strip().splitlines()[-1])
     assert got["real"] == [] and got["needed"] == "scipy" and got["same"] is True and got["lazy"] == []
-    d = device(tmp_path / "eager", "2026-12-01")
+    d = device(tmp_path / "eager", "2026-12-01", sing_kit=str(tmp_path / "eager" / "kit"))
     for method, path, body in QUESTIONS:
         said = d.handle(method, path, {}, None, b"" if body is None else json.dumps(body).encode(), {})
         key = D.question(method, path, body)
         assert got["answers"][key] == [said["status"], json.loads(json.dumps(said.get("json")))], key
-
-
-def sing_kit(folder: Path) -> Path:
-    """A singing kit's offer for the lead song (all the studio's worker reads of a kit)."""
-    import hashlib
-
-    folder.mkdir(parents=True, exist_ok=True)
-    (folder / "offer.json").write_text(json.dumps({
-        "kit": 1, "song": LEAD.stem, "title": "Now It's By You", "genome": hashlib.sha256(LEAD.read_bytes()).hexdigest(),
-        "extractor": "0123456789ab", "set": {"id": "a", "name": "Set A", "about": ""}, "default": "a.k0.t90",
-        "specs": [{"id": "a.k0.t90", "set": "a", "key": 0, "tempo": 90, "guide": "523190fdf68a", "duration": 151.2,
-                   "templates": [-12, 0, 12]}]}))
-    return folder
+    assert all(got["answers"][D.question(m, p, b)][0] == 200 for m, p, b in QUESTIONS if p.startswith("/api/sing/"))
 
 
 def test_the_build_s_first_answers_are_the_worker_s_byte_for_byte(tmp_path):
@@ -186,16 +178,15 @@ def test_the_build_s_first_answers_are_the_worker_s_byte_for_byte(tmp_path):
         (tmp_path / "py" / name).write_bytes(data)
     zipped, _ = render.program_zip()
     (tmp_path / "songbird.zip").write_bytes(zipped)
-    kit = sing_kit(tmp_path / "kit")
     days = SITE.window(date.today())
     days = [days[0], days[len(days) // 3], days[-1]]
-    native = {"song": str(LEAD), "machine": "none", "runs_with": SITE.runs_with(), "sing_kit": str(kit)}
+    native = {"song": str(LEAD), "machine": "none", "runs_with": SITE.runs_with(), "singing": True}
     files = SITE.first_answers(native, days, jobs=2)
     assert sorted(files) == sorted(f"{d}.gzip" for d in days)
     worker = {"song": "/app/songs/h-now-its-by-you.json", "machine": "none", "runs_with": SITE.runs_with(),
-              "sing_kit": "/kit"}
+              "singing": True, "sing_kit": "/kit"}  # as studio-worker.mjs hands bundle.json's studio over
     ran = subprocess.run(["node", str(ROOT / "tests" / "_first_answers.mjs"), str(tmp_path / "py"),
-                          str(tmp_path / "songbird.zip"), str(kit / "offer.json"), json.dumps(worker), *days],
+                          str(tmp_path / "songbird.zip"), json.dumps(worker), *days],
                          capture_output=True, text=True, timeout=900, check=False)
     assert ran.returncode == 0, ran.stderr[-3000:]
     theirs = json.loads(ran.stdout.strip().splitlines()[-1])

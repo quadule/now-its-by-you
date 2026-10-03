@@ -7,9 +7,13 @@ The studio makes one of these (Studio.enable_web_singing) and asks it first abou
 
     GET  /sing.js, /sing.css                  the page's singing (webstudio/), added to the studio's page
     GET  /karaoke.js, /recorder.js            the karaoke's timing, drawing and take recorder (tools/), reused
-    GET  /api/sing/offer                      whether singing is on, what to sing to, the limits, the consent's version
-    GET  /api/sing/lyrics?spec=ID             a version's words, notes, beats and sections
-    GET  /api/sing/guide?spec=ID              its melody guide (FLAC, with byte ranges)
+    GET  /api/sing/offer                      whether singing is on, its speeds and keys, the limits, the consent's version
+    POST /api/sing/guide {edits, which,       a guide to sing to: the version on the page (its words, tune, key and
+          speed, key}                         tempo, the page's token naming someone's version) or the released one
+                                              ("which": "released"), at a practice speed and in a key moved for a
+                                              voice; its name (a digest), its words, notes, beats and sections
+    GET  /api/sing/melody?guide=&from=&to=    a stretch of its melody guide (a WAV: the tune on a whistle over a
+                                              pulse), made the first time it's asked for and kept a while
     POST /api/sing/take                       a take (the karaoke's WAV, after a small JSON of where it was sung
                                               and the takes measured before, as numbers): a job in the studio's
                                               queue, polled at /api/job/<id>, whose result is the measurement and
@@ -46,7 +50,8 @@ from pathlib import Path
 
 from songbird.public import network
 
-from .kit import ROOT, Kit
+from . import guide as GD
+from .kit import KEEP_DAYS as KIT_DAYS, ROOT, Kit
 
 HERE = Path(__file__).resolve().parent
 FILES = {"/sing.js": (HERE / "sing.js", "text/javascript; charset=utf-8"),
@@ -65,8 +70,10 @@ TIMEOUT = 600.0  # seconds a request to it may take before it's stopped
 NAME = re.compile(r"^sung-[0-9a-f]{16}$")
 SINGLE = 40.0  # seconds: a take longer than this is measured in pieces (webstudio/worker.py), as long as a song
 # measuring seconds for every second of a take, and a start: from this Mac (29 s for a four-minute take in pieces,
-# 4.5 s for a section of 31 s) and a process's start (3 s); learned as takes are measured
-PER_SECOND, START, COLD = 0.13, 1.5, 4.0
+# 4.5 s for a section of 31 s) and a process's start (3 s), and the template singer's part the first time a stretch
+# is sung (about 0.13 s a second); learned as takes are measured
+PER_SECOND, START, COLD = 0.26, 1.5, 4.0
+MELODY_MAX = 400.0  # seconds: the most of a guide's melody made at once (a whole song at 80%)
 
 
 class Refused(ValueError):
@@ -276,35 +283,36 @@ class Phrasings(Mapping):
 class Singing:
     def __init__(self, studio, kit: str | Path | None = None, measurer: Measurer | None = None, check: bool = False):
         self.studio = studio
-        self.kit = Kit(kit)
+        self.kit = Kit(kit, default=Path(studio.home) / "sing-kit")
+        self.song = Path(studio.genome_path).stem  # the song a way of singing is made for (its phrases)
+        self.kit.keep_song(self.song, Path(studio.genome_path).read_bytes())
         self.store = Store(Path(studio.home) / "sung", studio.genome)
         # a public studio stops the measuring process after every take, so a render never runs beside its memory
         self.measurer = measurer or Measurer(self.kit, idle=0 if getattr(studio, "public", None) else IDLE)
         self.waiting: dict[str, dict] = {}  # job key -> the take (audio and where it was sung), until it's measured
         self.arriving: set[str] = set()  # the addresses a take is on its way from now (ARRIVING at most)
         self.lock = threading.Lock()
+        self.melody_lock = threading.Lock()  # one stretch of melody made at a time
         self.stale: str | None = None
-        if check and self.kit.fits(studio.genome_path) is None:
+        with contextlib.suppress(OSError):
+            self.kit.prune(KIT_DAYS)
+        if check:
             threading.Thread(target=self.check, daemon=True, name="songbird-singing-check").start()
 
     def check(self) -> None:
-        """Whether the kit's templates were made by this program's measuring code (they're kept under its
-        version): if not, singing is off, and says why, rather than refusing every take."""
+        """Whether the measuring process starts here (its tools and their dependencies): if not, singing is off, and
+        says why, rather than refusing every take."""
         try:
-            said = self.measurer.call("hello", {})
+            self.measurer.call("hello", {})
         except Exception as e:  # noqa: BLE001
             self.stale = f"Singing here couldn't start its measuring ({e})."
-        else:
-            if said["extractor"] != said["kit_extractor"]:
-                self.stale = ("The singing kit was made by another version of the measuring code; it needs making "
-                              "again (python -m webstudio.prepare).")
         if self.measurer.idle > 0:
             self.measurer.stop()
 
     # ------------------------------------------------------------ what it offers
 
     def why_not(self) -> str | None:
-        return self.kit.fits(self.studio.genome_path) or self.stale
+        return self.stale
 
     def available(self) -> dict:
         why = self.why_not()
@@ -314,11 +322,9 @@ class Singing:
         why = self.why_not()
         if why:
             return {"available": False, "why": why}
-        offer = self.kit.offer()
-        return {"available": True, "title": offer["title"], "set": offer.get("set"), "default": offer["default"],
-                "specs": [{k: s[k] for k in ("id", "key", "tempo", "duration")} for s in offer["specs"]],
-                "consent": CONSENT, "keep_days": KEEP_DAYS, "max_seconds": 360, "max_bytes": MAX_TAKE_BYTES,
-                "takes_an_hour": getattr(getattr(self.studio, "public", None), "takes", None),
+        return {"available": True, "speeds": list(GD.SPEEDS), "speed": GD.SPEED, "keys": list(GD.KEYS),
+                "released": GD.has_released(), "consent": CONSENT, "keep_days": KEEP_DAYS, "max_seconds": 360,
+                "max_bytes": MAX_TAKE_BYTES, "takes_an_hour": getattr(getattr(self.studio, "public", None), "takes", None),
                 "measuring": {"per_second": round(self.measurer.per_second, 3), "start": self.measurer.start,
                               "cold": COLD}}
 
@@ -326,6 +332,71 @@ class Singing:
         """The studio's page with the singing added: its stylesheet and script, nothing else changed."""
         return (html.replace("</head>", '<link rel="stylesheet" href="/sing.css">\n</head>', 1)
                     .replace("</body>", '<script type="module" src="/sing.js"></script>\n</body>', 1))
+
+    # ------------------------------------------------------------ what is sung to
+
+    def guide(self, studio, body: dict) -> tuple[dict, str]:
+        """A guide for the version the page is on (studio: the studio on it, someone's version if they brought one)
+        or the released version, at the speed and key asked: kept in the kit by its digest, which names it to the
+        take; its words for the page, and its file."""
+        why = self.why_not()
+        if why:
+            raise Refused(why)
+        which = str(body.get("which") or "page")
+        try:
+            speed, key = int(body.get("speed", GD.SPEED)), int(body.get("key", 0))
+        except (TypeError, ValueError):
+            raise Refused("Choose a speed and a key the studio offers.") from None
+        if speed not in GD.SPEEDS or key not in GD.KEYS:
+            raise Refused("Choose a speed and a key the studio offers.")
+        if which == "released":
+            if not GD.has_released():
+                raise Refused("The released version isn't here to sing.")
+            data, title = GD.released(speed, key), self.studio.genome.title
+        elif which == "page":
+            v = studio.version(body.get("edits") or {})
+            data, title = GD.score_for(studio.genome, v.params, v.lyrics, speed, key), studio.genome.title
+        else:
+            raise Refused("Sing the version on the page, or the released one.")
+        name, text = GD.digest(data), GD.text(data)
+        path = self.kit.keep_guide(self.song, name, text)
+        return {**GD.words(data, title, name), "which": which}, str(path)
+
+    def melody(self, query: dict) -> bytes:
+        """A stretch of a guide's melody (GET /api/sing/melody), made by the measuring process the first time and
+        kept in the kit."""
+        name = str(query.get("guide", ""))
+        try:
+            a, b = round(float(query.get("from", "nan")), 3), round(float(query.get("to", "nan")), 3)
+        except ValueError:
+            a = b = float("nan")
+        if self.kit.guide(self.song, name) is None or not (0.0 <= a < b and b - a <= MELODY_MAX):
+            raise Refused("No such guide to sing to: reload the page.")
+        f = self.kit.audio(name, a, b)
+
+        def make(job=None) -> dict:
+            with self.melody_lock:
+                if not f.is_file():
+                    made = self.measurer.call("melody", {"song": self.song, "guide": name, "from_s": a, "to_s": b})
+                    from .kit import write
+
+                    write(f, made["wav"])
+            return {"made": True}
+
+        if not f.is_file():
+            if getattr(self.studio, "public", None) is None:
+                make()
+            else:  # a public studio: in its one queue, so a whole song's melody (1 GB) never runs beside a render
+                jobs = self.studio.jobs
+                job = jobs.submit(f"melody:{name}:{a}-{b}", "measure", "the guide", make)
+                waited = time.time()
+                while job.state in ("queued", "running") and time.time() - waited < TIMEOUT:
+                    time.sleep(0.2)
+                if job.state != "done":
+                    raise RuntimeError(job.error or "it took too long")
+        with contextlib.suppress(OSError):
+            f.touch()
+        return f.read_bytes()
 
     # ------------------------------------------------------------ requests
 
@@ -338,19 +409,25 @@ class Singing:
         if path == "/api/sing/offer":
             handler.send_json(self.offer())
             return True
-        if path in ("/api/sing/lyrics", "/api/sing/guide"):
-            spec = self.kit.spec(query.get("spec", ""))
-            if spec is None or self.why_not():
-                handler.fail(404, "no such version to sing to")
-            elif path == "/api/sing/lyrics":
-                handler.send(self.kit.lyrics(spec["id"]).read_bytes(), "application/json")
-            else:
-                handler.audio(self.kit.audio(spec["id"]))
+        if path == "/api/sing/melody":
+            try:
+                handler.send(self.melody(query), "audio/wav")
+            except Refused as e:
+                handler.fail(404, str(e))
+            except RuntimeError as e:
+                handler.fail(500, f"The guide couldn't be made ({e}).")
+            except Exception as e:  # the queue full (a Busy, the studio's or this one's): said, as for a render
+                if type(e).__name__ != "Busy":
+                    raise
+                handler.fail(503, str(e))
             return True
         return False
 
-    def post(self, path: str, body: dict) -> dict:
-        """Answer a JSON POST that is singing's (the studio has checked it came from its own page)."""
+    def post(self, path: str, body: dict, studio=None) -> dict:
+        """Answer a JSON POST that is singing's (the studio has checked it came from its own page; studio: the one on
+        the page's version)."""
+        if path == "/api/sing/guide":
+            return self.guide(studio or self.studio, body)[0]
         if path == "/api/sing/keep":
             name, data = self.store.keep(body.get("phrasing"))
             return {"name": name, "phrasing": data}
@@ -443,23 +520,23 @@ class Singing:
         return None
 
     def where(self, meta: dict, audio: bytes | None, seconds: float | None = None) -> dict:
-        """What the measuring process needs to know about a take, each part checked: the version and guide it
-        was sung to (one offered, the one on the page), where on the guide's clock it starts and was meant to
-        end, and its length against those. (The studio on a visitor's device never holds the take: it is given
-        the take's length, `seconds`, and the page hands the audio to its measuring worker itself.)"""
+        """What the measuring process needs to know about a take, each part checked: the guide it was sung to (one
+        this studio made), where on the guide's clock it starts and was meant to end, and its length against those.
+        (The studio on a visitor's device never holds the take: it is given the take's length, `seconds`, and the
+        page hands the audio to its measuring worker itself.)"""
         why = self.why_not()
         if why:
             raise Refused(why)
-        spec = self.kit.spec(str(meta.get("spec", "")))
-        if spec is None:
-            raise Refused("That version isn't one this studio offers: reload the page.")
-        if meta.get("guide") != spec["guide"]:
-            raise Refused("The guide changed while you sang: reload the page and sing it again.")
+        name = str(meta.get("guide", ""))
+        f = self.kit.guide(self.song, name)
+        if f is None:
+            raise Refused("That guide isn't one this studio made: reload the page and sing it again.")
+        duration = float(json.loads(f.read_text())["duration"])
         try:
-            from_s, to_s = float(meta.get("from_s", 0.0)), float(meta.get("to_s", spec["duration"]))
+            from_s, to_s = float(meta.get("from_s", 0.0)), float(meta.get("to_s", duration))
         except (TypeError, ValueError):
             raise Refused("That take didn't say where it was sung: reload the page.") from None
-        if not (0.0 <= from_s < to_s <= spec["duration"] + 0.5):
+        if not (0.0 <= from_s < to_s <= duration + 0.5):
             raise Refused("That take isn't inside its guide: reload the page.")
         if seconds is None:
             import io
@@ -475,8 +552,7 @@ class Singing:
         earlier = meta.get("earlier") or []
         if not isinstance(earlier, list) or len(earlier) > 11:
             raise Refused("A way of singing is made from at most 12 takes: start again to sing more.")
-        return {"song": self.kit.offer()["song"], "guide": spec["guide"], "from_s": from_s, "to_s": to_s,
-                "earlier": earlier, "offered": [s["guide"] for s in self.kit.offer()["specs"]],
+        return {"song": self.song, "guide": name, "from_s": from_s, "to_s": to_s, "earlier": earlier,
                 "seconds": float(seconds)}
 
     def take(self, meta: dict, audio: bytes | None, by: tuple[str, str] | None = None,

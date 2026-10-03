@@ -13,10 +13,12 @@
 //   record, the song, its timeline: never the audio) goes in this browser's IndexedDB, so it opens at once next time.
 // - Files a server would offer at an address are kept as this browser keeps things: the MIDI file as a Blob, the
 //   piano page's score in localStorage (the latest few), for the piano tab to read.
-// - Singing (with the singing kit): the guide and its words are the kit's own files, fetched as they are; a take is
-//   checked and queued by the studio's worker from where it was sung and its length alone, and its audio goes to a
-//   measuring worker started for that take and ended after (studio-worker.mjs "measure"), which fetches the kit's
-//   files the take needs and gives back only numbers. The take never reaches the studio's worker, or the network.
+// - Singing: the studio's worker makes a guide from the version on the page (its score, kept here in IndexedDB);
+//   a singing worker makes its melody and the template singer's analyses ahead (studio-worker.mjs "sing"), kept
+//   here too, and is let go when idle; a take is checked and queued by the studio's worker from where it was sung
+//   and its length alone, and its audio goes to a measuring worker started for that take and ended after
+//   (studio-worker.mjs "measure"), handed the guides and templates it needs, which gives back only numbers (and
+//   any template it made, to keep). The take never reaches the studio's worker, storage, or the network.
 // - Nothing leaves this device but a version the visitor chooses to share (share(), POST /api/versions).
 // - The page's first questions, on the song as it began (no edits saved here, no version, nothing sung here), are
 //   answered at once from a small file the build made for this day (bundle.json's "first": build_site.py, from the
@@ -36,7 +38,8 @@
   const READY_MS = 180000;  // the most a worker may take to get ready (a first visit fetches ~30 MB) before it's given up
   const READ_MS = 360000;  // ... and to read a version's file (a slow phone: it is laid out, and its timeline drawn)
   const MEASURE_MS = 600000;  // ... and to measure a sung take (a whole song on a slow phone)
-  const SPEC = /^[a-z0-9]{1,8}\.k-?\d{1,2}\.t\d{1,3}$/;  // a version to sing to (webstudio/kit.py SPEC)
+  const GUIDE = /^[0-9a-f]{12}$/;  // a guide's name (webstudio/guide.py digest)
+  const SINGER_IDLE_MS = 45000;  // a singing worker with nothing to do this long is let go (its memory with it)
   const MAX_TAKE_BYTES = 40 * 2 ** 20;  // a take's most, as a server takes it (webstudio/singing.py MAX_TAKE_BYTES)
   const PIANO = "songbird-piano-score:";  // the piano page's scores, by key (the latest few)
   const MAKING = "songbird-making-whole";  // set while a whole song is made here (renderer.js), for after a crash
@@ -178,7 +181,6 @@
     }, false, true, total);
     await deadline(worker.ready, READY_MS, "getting the studio ready");
     const config = { ...bundle.studio, day: DAY };
-    if (config.kit) config.kit = new URL(`${bundle.base}${config.kit}`, location.href).href;
     const view = await worker.make(config);
     try { localStorage.setItem(FETCHED, bundle.app); } catch (e) { /* only a convenience */ }
     first = false;
@@ -361,15 +363,145 @@
 
   // ---------------------------------------------------------------- singing, on this device
 
-  // the guide and its words: the kit's own files (immutable: fetched once), never through the studio's worker
-  async function sungFile(path, spec) {
-    const kit = bundle.studio && bundle.studio.kit;
-    if (!kit || !SPEC.test(spec || "")) return json(404, { error: "no such version to sing to" });
-    const name = path === "/api/sing/lyrics" ? `lyrics/${spec}.json` : `audio/${spec}.melody.flac`;
-    let r;
-    try { r = await network(new URL(`${bundle.base}${kit}${name}`, location.href).href); }
-    catch (e) { return json(503, { error: `It couldn't be fetched: ${e.message}.` }); }
-    return r.ok ? r : json(404, { error: "no such version to sing to" });
+  // What singing makes is kept in its own database, apart from the studio's: the guides' scores (by name), their
+  // melodies (by program, guide and stretch) and the template singer's analyses (by file name). All of it is the
+  // song's and the machine's, never the singer's: Forget my singing clears it all the same.
+  let singingDB = null;
+  function sdb() {
+    if (!singingDB) {
+      singingDB = new Promise((resolve) => {
+        try {
+          const r = indexedDB.open("songbird-singing", 1);
+          r.onupgradeneeded = () => { for (const s of ["guides", "melodies", "parts"]) r.result.createObjectStore(s); };
+          r.onsuccess = () => resolve(r.result);
+          r.onerror = r.onblocked = () => resolve(null);
+        } catch (e) { resolve(null); }
+      });
+    }
+    return singingDB;
+  }
+  async function sstore(store, mode, act) {
+    const d = await sdb();
+    if (!d) return undefined;
+    return new Promise((resolve) => {
+      try {
+        const tx = d.transaction(store, mode);
+        const r = act(tx.objectStore(store));
+        tx.oncomplete = () => resolve(r ? r.result : undefined);
+        tx.onerror = tx.onabort = () => resolve(undefined);
+      } catch (e) { resolve(undefined); }
+    });
+  }
+  const sget = (store, key) => sstore(store, "readonly", (s) => s.get(key));
+  const skeys = (store) => sstore(store, "readonly", (s) => s.getAllKeys());
+  // kept with when: past MOST in a store, the longest unused go (but the guides earlier takes were sung to, which
+  // the way of singing made from them needs)
+  const MOST = { guides: 40, melodies: 24, parts: 60 };
+  async function sput(store, key, value) {
+    await sstore(store, "readwrite", (s) => s.put({ ...value, at: Date.now() }, key));
+    const all = (await sstore(store, "readonly", (s) => s.getAll())) || [];
+    const keys = (await skeys(store)) || [];
+    if (keys.length <= MOST[store]) return;
+    let sung = new Set();
+    try {
+      const k = JSON.parse(localStorage.getItem("songbird-web-singing")) || {};
+      sung = new Set((k.measurements || []).map((m) => m && m.stamp && m.stamp.guide));
+    } catch (e) { /* none kept */ }
+    const old = keys.map((key, i) => [key, (all[i] && all[i].at) || 0])
+      .filter(([key]) => !(store === "guides" && sung.has(key))).sort((a, b) => a[1] - b[1]);
+    const gone = old.slice(0, keys.length - MOST[store]).map(([key]) => key);
+    await sstore(store, "readwrite", (s) => { for (const key of gone) s.delete(key); });
+  }
+
+  const guides = new Map();  // name -> {song, bytes}: this visit's, before storage (a private window has none)
+  async function guideFile(name) {
+    if (guides.has(name)) return guides.get(name);
+    const kept = await sget("guides", name);
+    if (kept && kept.bytes) { guides.set(name, kept); sput("guides", name, kept); }  // used: kept longer
+    return kept || null;
+  }
+
+  // POST /api/sing/guide: the studio's worker lays the guide out; its score is kept here, its words go to the page
+  async function makeGuide(s, ask, body) {
+    const m = await s.worker.ask(ask, body ? [body] : []);
+    const data = parsed(m);
+    if (m.status === 200 && data && GUIDE.test(data.guide || "") && m.file) {
+      const kept = { song: data.song, bytes: m.file.bytes };
+      guides.set(data.guide, kept);
+      sput("guides", data.guide, kept);
+    }
+    return data === null ? json(500, { error: "The studio's answer couldn't be read." }) : json(m.status, data);
+  }
+
+  // The singing worker: the full one (the whistle needs the kernels), started when a guide's melody is first wanted
+  // and let go when it has had nothing to do for a while, or before a take is measured (its memory is wanted then)
+  let singer = null, singerIdle = null, singerQueue = Promise.resolve();
+  const singing = {};  // the last heaps (MiB) and times singing's workers said, for anyone measuring them (SongbirdDevice)
+  function singerStop() {
+    clearTimeout(singerIdle);
+    if (singer) singer.then((w) => w.stop(), () => {});
+    singer = null;
+  }
+  function singerWork(job) {  // one thing at a time, in order
+    const run = singerQueue.then(async () => {
+      clearTimeout(singerIdle);
+      if (!singer) {
+        const w = spawn(null, false, false);
+        singer = deadline(w.ready, READY_MS, "getting ready to make the guide").then(() => w, (e) => { w.stop(); throw e; });
+      }
+      let w;
+      try { w = await singer; } catch (e) { singer = null; throw e; }
+      try { return await job(w); } finally {
+        singing.singer = w.heap;  // its heap (MiB) after the job: what it holds (wasm memory only grows)
+        singerIdle = setTimeout(singerStop, SINGER_IDLE_MS);
+      }
+    });
+    singerQueue = run.catch(() => {});
+    return run;
+  }
+  async function singerAsk(w, op, request, files = {}) {
+    const transfer = Object.values(files);
+    if (transfer.length) await w.ask({ cmd: "kit", files }, transfer);
+    const m = await w.ask({ cmd: "sing", op, request: JSON.stringify(request) });
+    const said = parsed(m) || {};
+    if (said.ok) return { ...said.ok, file: m.file, made: m.made || {} };
+    throw Object.assign(new Error(said.refused || said.error || "it went wrong on this device"), { refused: !!said.refused });
+  }
+  const guideKit = (g, name) => ({ [`guides/${g.song}.${name}.score.json`]: g.bytes.slice(0) });
+
+  // GET /api/sing/melody?guide=&from=&to=[&ahead=KEY]: a stretch of the guide's melody, made by the singing worker
+  // and kept; with ahead, the template singer's analyses for that stretch in that key are made next, while you
+  // rehearse, so measuring a take sung there needn't make them
+  async function melody(query) {
+    const name = query.get("guide") || "", a = Number(query.get("from")), b = Number(query.get("to"));
+    const g = GUIDE.test(name) ? await guideFile(name) : null;
+    if (!g || !(a >= 0 && b > a)) return json(404, { error: "No such guide to sing to: reload the page." });
+    const key = `${bundle.app}|${name}|${a.toFixed(3)}-${b.toFixed(3)}`;
+    let wav = ((await sget("melodies", key)) || {}).bytes;
+    try {
+      if (!wav) {
+        wav = await singerWork(async (w) => (await singerAsk(w, "melody", { song: g.song, guide: name, from_s: a, to_s: b },
+          guideKit(g, name))).file.bytes);
+      }
+      sput("melodies", key, { bytes: wav });
+    } catch (e) {
+      return json(e.refused ? 404 : 500, { error: e.stopped ? "The guide couldn't be made: the browser stopped it, perhaps for want of memory."
+        : `The guide couldn't be made: ${e.message}` });
+    }
+    const ahead = query.get("ahead");
+    if (ahead !== null && /^-?\d{1,2}$/.test(ahead)) templatesAhead(g, name, a, Number(query.get("until") || b), Number(ahead)).catch(() => {});
+    return new Response(wav.slice(0), { status: 200, headers: { "Content-Type": "audio/wav" } });
+  }
+
+  async function templatesAhead(g, name, a, b, key) {
+    const request = { song: g.song, guide: name, from_s: a, to_s: b, key };
+    await singerWork(async (w) => {
+      const wanted = (await singerAsk(w, "parts", request, guideKit(g, name))).parts || [];
+      const have = new Set((await skeys("parts")) || []);
+      if (wanted.every((f) => have.has(f))) return;
+      const made = (await singerAsk(w, "template", request)).made;
+      for (const [file, bytes] of Object.entries(made)) await sput("parts", file, { bytes });
+    });
   }
 
   // a WAV's length in seconds, from its header (the karaoke's recorder writes PCM); NaN if it isn't one
@@ -409,13 +541,36 @@
     const given = await s.worker.ask({ cmd: "handout", job });
     const what = parsed(given);
     if (given.status !== 200 || !what || !what.request) return;  // let go before its turn: the audio goes with it
+    const request = what.request;
+    singerStop();  // the guide is made: its memory is the measuring's now
     let measurer = null, said;
     try {  // whatever happens from here, the job is finished (measured), never left running
       measurer = spawn(null, true);
       await deadline(measurer.ready, READY_MS, "getting ready to measure it");
-      const m = await deadline(measurer.ask({ cmd: "measure", kit: new URL(`${bundle.base}${bundle.studio.kit}`, location.href).href,
-        request: JSON.stringify(what.request), take: wav }, [wav]), MEASURE_MS, "measuring it");
+      // the guides sung to (this take's, and each earlier one's this browser still has), then the templates kept for
+      // the pieces this take is measured in, in any key
+      const files = {};
+      const names = [request.guide, ...(request.earlier || []).map((e) => e && e.stamp && e.stamp.guide)];
+      for (const name of new Set(names.filter((n) => GUIDE.test(n || "")))) {
+        const g = await guideFile(name);
+        if (g) Object.assign(files, guideKit({ ...g, song: request.song }, name));
+      }
+      await measurer.ask({ cmd: "kit", files }, Object.values(files));
+      const parts = parsed(await measurer.ask({ cmd: "sing", op: "parts", request: JSON.stringify(request) })) || {};
+      const prefixes = (parts.ok && parts.ok.parts) || [];
+      const kept = {};
+      for (const file of (await skeys("parts")) || []) {
+        if (prefixes.some((p) => String(file).startsWith(p))) {
+          const part = await sget("parts", file);
+          if (part && part.bytes) kept[`measured/parts/${file}`] = part.bytes;
+        }
+      }
+      if (Object.keys(kept).length) await measurer.ask({ cmd: "kit", files: kept }, Object.values(kept));
+      const m = await deadline(measurer.ask({ cmd: "measure", request: JSON.stringify(request), take: wav }, [wav]),
+        MEASURE_MS, "measuring it");
+      Object.assign(singing, { measuring: m.heap, seconds: m.seconds, made: Object.keys(m.made || {}).length });
       wav = null;
+      for (const [file, bytes] of Object.entries(m.made || {})) await sput("parts", file, { bytes });
       said = m.status === 200 && m.json ? m.json : JSON.stringify({ error: (parsed(m) || {}).error || "it went wrong on this device" });
     } catch (e) {
       said = JSON.stringify({ error: e.memory
@@ -440,6 +595,8 @@
       }
       await forget("sung", name);
     }
+    for (const store of ["guides", "melodies", "parts"]) await sstore(store, "readwrite", (st) => st.clear());
+    guides.clear();
   }
 
   // ---------------------------------------------------------------- the page's requests, answered here
@@ -462,8 +619,6 @@
     } else if (m.file && path === "/api/piano" && data && /^[0-9a-f]{16,64}$/.test(data.key || "")) {
       if (pianoScore(data.key, new TextDecoder().decode(m.file.bytes))) data.url = `/piano/?score=device/${data.key}.json`;
       else return json(507, { error: "This browser has no room to keep the score for the piano page." });
-    } else if (m.file) {  // singing's words and guide: the file itself
-      return new Response(m.file.bytes, { status: m.status, headers: { "Content-Type": m.file.type } });
     }
     if (path === "/api/song" && data && data.listen) {  // what this page has made already plays at once
       const made = window.SongbirdRenderer && window.SongbirdRenderer.shared && window.SongbirdRenderer.shared.cache;
@@ -494,10 +649,11 @@
     }
     try {
       if (path === "/api/open" && method === "POST") return json(...(await bring(body, s)));
-      if (method === "GET" && (path === "/api/sing/lyrics" || path === "/api/sing/guide")) return await sungFile(path, url.searchParams.get("spec"));
+      if (method === "GET" && path === "/api/sing/melody") return await melody(url.searchParams);
       if (method === "POST" && path === "/api/sing/take") return await take(s, body, Number(headers.get("X-Sing-Meta")));
       const ask = { cmd: "request", method, path, query: Object.fromEntries(url.searchParams), version: named, body,
         headers: { "x-sing-meta": headers.get("X-Sing-Meta") || "" } };
+      if (method === "POST" && path === "/api/sing/guide") return await makeGuide(s, ask, body);
       const timeline = path === "/api/timeline" && method === "GET"
         ? `timeline|${s.view.program}|${s.view.song}|${s.view.machine}|${s.view.day}|${named || ""}` : null;
       if (timeline) {
@@ -565,7 +721,7 @@
   }
 
   window.SongbirdDevice = {
-    version, linked, share, crashed, MAKING,
+    version, linked, share, crashed, MAKING, singing,
     ready: () => studio().then((s) => ({ ...s.view, heap: s.worker.heap })),
     get heap() { return running ? running.then((s) => s.worker.heap) : Promise.resolve(0); },
   };
