@@ -498,6 +498,24 @@ def test_ways_kept_here_go_after_a_while_unused(home):
 # ------------------------------------------------------------ measuring
 
 
+def test_the_kit_is_held_to_its_age_and_size(tmp_path):
+    """What singing makes on a server goes 30 days after its last use, and past the kit's size the longest unused
+    go first; its songs stay."""
+    kit = KIT.Kit(tmp_path)
+    kit.keep_song(LEAD.stem, b"{}")
+    now = time.time()
+    for k, folder in enumerate(("guides", "audio", "measured/parts", "audio")):
+        f = tmp_path / folder / f"f{k}.bin"
+        f.parent.mkdir(parents=True, exist_ok=True)
+        f.write_bytes(b"x" * 100)
+        os.utime(f, (now - k * 3600, now - k * 3600))  # f0 the newest
+    old = tmp_path / "guides" / "old.json"
+    old.write_bytes(b"x")
+    os.utime(old, (now - 31 * 86400, now - 31 * 86400))
+    assert kit.prune(most=250) == 3  # the month-old one, then the two longest unused
+    assert sorted(p.name for p in tmp_path.rglob("*") if p.is_file()) == ["f0.bin", "f1.bin", f"{LEAD.stem}.json"]
+
+
 def test_a_long_take_is_measured_in_pieces_cut_in_its_rests():
     notes = [SimpleNamespace(start=s, dur=0.5) for s in list(np.arange(10, 32, 1.0)) + list(np.arange(38, 60, 1.0))
              + list(np.arange(66, 120, 0.8))]

@@ -74,6 +74,7 @@ SINGLE = 40.0  # seconds: a take longer than this is measured in pieces (webstud
 # is sung (about 0.13 s a second); learned as takes are measured
 PER_SECOND, START, COLD = 0.26, 1.5, 4.0
 MELODY_MAX = 400.0  # seconds: the most of a guide's melody made at once (a whole song at 80%)
+PRUNE_EVERY = 600.0  # seconds: the kit is held to its age and size no more often than this
 
 
 class Refused(ValueError):
@@ -294,10 +295,19 @@ class Singing:
         self.lock = threading.Lock()
         self.melody_lock = threading.Lock()  # one stretch of melody made at a time
         self.stale: str | None = None
-        with contextlib.suppress(OSError):
-            self.kit.prune(KIT_DAYS)
+        self.pruned = 0.0
+        self.tidy()
         if check:
             threading.Thread(target=self.check, daemon=True, name="songbird-singing-check").start()
+
+    def tidy(self, every: float = PRUNE_EVERY) -> None:
+        """The kit held to its age and size (Kit.prune), at start and at most every `every` seconds after, as
+        guides and melodies are made."""
+        if time.time() - self.pruned < every:
+            return
+        self.pruned = time.time()
+        with contextlib.suppress(OSError):
+            self.kit.prune(KIT_DAYS)
 
     def check(self) -> None:
         """Whether the measuring process starts here (its tools and their dependencies): if not, singing is off, and
@@ -360,6 +370,7 @@ class Singing:
             raise Refused("Sing the version on the page, or the released one.")
         name, text = GD.digest(data), GD.text(data)
         path = self.kit.keep_guide(self.song, name, text)
+        self.tidy()
         return {**GD.words(data, title, name), "which": which}, str(path)
 
     def melody(self, query: dict, by: tuple[str, str] | None = None) -> bytes:
@@ -389,6 +400,7 @@ class Singing:
                     from .kit import write
 
                     write(f, made["wav"])
+            self.tidy()
             return {"made": True}
 
         if not f.is_file():
@@ -542,6 +554,8 @@ class Singing:
         f = self.kit.guide(self.song, name)
         if f is None:
             raise Refused("That guide isn't one this studio made: reload the page and sing it again.")
+        with contextlib.suppress(OSError):
+            f.touch()  # used: kept longer (Kit.prune)
         duration = float(json.loads(f.read_text())["duration"])
         try:
             from_s, to_s = float(meta.get("from_s", 0.0)), float(meta.get("to_s", duration))
