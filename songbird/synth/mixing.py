@@ -582,9 +582,15 @@ def mix_made(parts: list, length: int, sr: int, seed: int = 0, params: MixParams
     singers_left = len(sung)
 
     voice = choir = singing = None
-    band = np.zeros((length, 2))
-    band_send = np.zeros((length, 2))
-    stepping = np.zeros((length, 2))  # what the instruments that step back under the voice give up
+
+    def empty_band():
+        return (np.zeros((length, 2)), np.zeros((length, 2)), np.zeros((length, 2)))
+
+    # On the singer-first path these three song-long buses are still silence while the voice is made.
+    # Make them only when the first instrument comes to be summed, after the voice's workspace is gone.
+    band = band_send = stepping = None
+    if not sung or steps_back:
+        band, band_send, stepping = empty_band()
     held: dict = {}  # a bus's running sum
     counted: dict = {}
     results = threads.in_order(jobs, first=tuple(name for name, _ in sung[:1]), ahead=threads.workers())
@@ -613,6 +619,8 @@ def mix_made(parts: list, length: int, sr: int, seed: int = 0, params: MixParams
                 if not singers_left:
                     rise = None  # the singers' buses are made: nothing else rises with the arrangement
                 continue
+            if band is None:
+                band, band_send, stepping = empty_band()
             if design is not None and role == "fx":  # the band's filter sweeps, before the transitions join it
                 design.sweep(band, band_send, stepping)
             if result is None:
@@ -638,6 +646,8 @@ def mix_made(parts: list, length: int, sr: int, seed: int = 0, params: MixParams
             part = None  # (a stretch of x: x is let go with it)
     finally:
         results.close()
+    if band is None:  # voices alone still have the band's silent room send, as before
+        band, band_send, stepping = empty_band()
     if design is not None:  # the band's filter sweeps, if no transition stem came to make them
         design.sweep(band, band_send, stepping)
     if progress is not None:
@@ -683,11 +693,19 @@ def mix_made(parts: list, length: int, sr: int, seed: int = 0, params: MixParams
     send, band_send = band_send, None
     plate_send = np.zeros(length)
     if voice is not None:
-        send += voice * (VOICE_ROOM * near)
-        plate_send += voice.sum(axis=1) * (VOICE_PLATE * p.plate * near * np.sqrt(0.5))
+        for a in range(0, length, 1 << 16):
+            b = min(length, a + (1 << 16))
+            send[a:b] += voice[a:b] * (VOICE_ROOM * near)
+            plate_send[a:b] += voice[a:b].sum(axis=1) * (VOICE_PLATE * p.plate * near * np.sqrt(0.5))
     if choir is not None:
-        send += fx.delay(choir, int(CHOIR_LATER * sr)) * CHOIR_ROOM
-        plate_send += choir.sum(axis=1) * (CHOIR_PLATE * p.plate * np.sqrt(0.5))
+        later = min(length, int(CHOIR_LATER * sr))
+        send[:later] += 0.0  # the delayed bus's initial silence, including signed zero
+        for a in range(later, length, 1 << 16):
+            b = min(length, a + (1 << 16))
+            send[a:b] += choir[a - later:b - later] * CHOIR_ROOM
+        for a in range(0, length, 1 << 16):
+            b = min(length, a + (1 << 16))
+            plate_send[a:b] += choir[a:b].sum(axis=1) * (CHOIR_PLATE * p.plate * np.sqrt(0.5))
     # the room is its numbers: the same numbers (a machine's harvested room) give the same room every rendition
     early, tail = room.responses(sr, p.rt60, p.tone, p.predelay, room.seed_of(p.rt60, p.tone, p.predelay))
     if np.any(plate_send):
@@ -705,10 +723,15 @@ def mix_made(parts: list, length: int, sr: int, seed: int = 0, params: MixParams
                  inplace=True)
     if singing is not None:
         # the room gives way to the lead's words, but not where the lineage sings with it: that is its space
-        dip = np.zeros(len(wet))
-        dip[:length] = RETURN_DIP * p.duck * singing * (1.0 - fx.activity(choir, sr) if choir is not None else 1.0)
-        wet *= (10.0 ** (-dip / 20.0))[:, None]
-        del dip
+        choir_activity = fx.activity(choir, sr) if choir is not None else None
+        for a in range(0, length, 1 << 16):
+            b = min(length, a + (1 << 16))
+            dip = RETURN_DIP * p.duck * singing[a:b] * (1.0 - choir_activity[a:b]
+                                                      if choir_activity is not None else 1.0)
+            wet[a:b] *= (10.0 ** (-dip / 20.0))[:, None]
+            del dip
+        wet[length:] *= 1.0
+        del choir_activity
 
     if taps is not None:
         taps.update(voice=voice, choir=choir, band=band, wet=wet.copy(), singing=singing, band_gain=gain)

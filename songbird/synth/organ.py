@@ -732,11 +732,13 @@ class Organ:
         sr = self.sr
         plan, speed_changes = self.plan(notes)
         main, perc = self.generator(plan, length, rng)
-        y = self.scanner(main, plan, rng) + perc
+        y = self.scanner(main, plan, rng)
+        y += perc
+        del main, perc
         y = expression(y, sr, self.swell(plan))
         # the amplifier's tubes: the registrations' drive, and more of it the fuller the swell
         drive = float(np.mean([registration(name, self.brightness).drive for _, _, name in plan])) if plan else 0.4
-        y = tubes(y, drive)
+        y = tubes(y, drive, inplace=True)
         return self.speaker(y, speed_changes, plan[0][0].start if plan else 0.0, rng)
 
 
@@ -749,16 +751,19 @@ def _sos(freq: float, kind: str, sr: int) -> np.ndarray:
     return np.ascontiguousarray(butter(2, freq, btype=kind, fs=sr, output="sos")[0])
 
 
-def tubes(y: np.ndarray, drive: float) -> np.ndarray:
+def tubes(y: np.ndarray, drive: float, inplace: bool = False) -> np.ndarray:
     """The amplifier's tubes: an asymmetric soft clip, even harmonics as well as odd. The input, scaled by
     the drive and biased, goes through 1.5 x - 0.5 x^3 inside ±1 and flat beyond (it meets the flat with
     zero slope): a cubic, so its harmonics stop at the 3rd and nothing folds back below 22 kHz for
     anything the organ plays, until a very loud full organ reaches the knee."""
     k = TUBE_GAIN * (0.6 + 0.8 * drive)
     b = 0.12
-    x = np.clip(k * y + b, -1.0, 1.0)
-    p = x * (1.5 - 0.5 * x * x)
-    return (p - b * (1.5 - 0.5 * b * b)) / (k * 1.5 * (1.0 - b * b))
+    out = y if inplace else np.empty_like(y, dtype=np.result_type(y, k, b))
+    for a in range(0, len(y), 1 << 16):
+        x = np.clip(k * y[a:a + (1 << 16)] + b, -1.0, 1.0)
+        p = x * (1.5 - 0.5 * x * x)
+        out[a:a + (1 << 16)] = (p - b * (1.5 - 0.5 * b * b)) / (k * 1.5 * (1.0 - b * b))
+    return out
 
 
 # --- the harmonium ----------------------------------------------------------------------------------
@@ -791,10 +796,17 @@ class Harmonium:
 
     def pressure(self, length: int, rng: np.random.Generator) -> np.ndarray:
         """The bellows' pressure (1 on average): each stroke pushes it up a few percent, and it sags between."""
-        t = np.arange(length) / self.sr
-        phase = (t / self.pump + rng.uniform(0.0, 1.0)) % 1.0
-        stroke = np.where(phase < 0.25, np.sin(np.pi * phase / 0.5), np.exp(-(phase - 0.25) * 2.2))
-        return 1.0 + 0.05 * (stroke - np.mean(stroke))
+        offset = rng.uniform(0.0, 1.0)
+        stroke = np.empty(length)
+        for a in range(0, length, 1 << 16):
+            b = min(length, a + (1 << 16))
+            t = np.arange(a, b) / self.sr
+            phase = (t / self.pump + offset) % 1.0
+            stroke[a:b] = np.where(phase < 0.25, np.sin(np.pi * phase / 0.5), np.exp(-(phase - 0.25) * 2.2))
+        stroke -= np.mean(stroke)  # the whole track's original reduction, with the same layout
+        stroke *= 0.05
+        stroke += 1.0
+        return stroke
 
     def render(self, notes, length: int, rng: np.random.Generator) -> np.ndarray:
         sr = self.sr
@@ -837,12 +849,19 @@ class Harmonium:
                 wave = self.wave(key, rank, _hz(m + 12.0 * (rank == 2)), bright)
                 reed._read(wave, freq * bend / sr, env * gain, out, i0, rng.random())
             air[i0:i1] += env
+        del press
         if swells:
             drone = reed.drone(swells, sr, length, rng, brightness=self.brightness, wear=self.wear)
             out += drone * 1.4
+            del drone
         # air hissing past the reeds, as much as is blowing through them
-        hiss = sosfilt(butter(2, [300.0, 2500.0], btype="bandpass", fs=sr, output="sos"), rng.standard_normal(length))
-        out += hiss * air * 0.012 * (1.0 + 2.0 * self.wear)
+        sos = butter(2, [300.0, 2500.0], btype="bandpass", fs=sr, output="sos")
+        state = np.zeros((len(sos), 2))
+        for a in range(0, length, 1 << 16):
+            b = min(length, a + (1 << 16))
+            hiss, state = sosfilt(sos, rng.standard_normal(b - a), zi=state)
+            out[a:b] += hiss * air[a:b] * 0.012 * (1.0 + 2.0 * self.wear)
+        del air
         ir = body.impulse_response(body.REED_BOX, sr, seed=self.box_seed, size=self.size)
         return body.resonate(out, ir)
 

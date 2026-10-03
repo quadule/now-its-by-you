@@ -202,11 +202,17 @@ def mix(stems: dict[str, np.ndarray], sr: int = SR, seed: int = 0, params: MixPa
 
 def render(score: Score, sr: int = SR, seed: int = 0, voice: VoiceParams | None = None,
            mix_params: MixParams | None = None, ancestors: list[VoiceParams] | None = None,
-           progress=None) -> np.ndarray:
+           progress=None, cache=None) -> np.ndarray:
     """The unmastered stereo mix, in its room. progress, if given, is told each
     part's name as it starts on it, then "mix"."""
     # each part is made as the mix comes to it, treated and let go (mixing.mix_made): never all held at once
     jobs, _ = stem_jobs(score, sr, seed, voice, ancestors)
+    if cache is not None:
+        from .cache import keys
+
+        identities = keys(score, sr, seed, voice or VoiceParams(), ancestors, [name for name, _ in jobs])
+        jobs = [(name, (lambda key=identities[name], make=make, name=name: cache.make(key, make, part=name))
+                 if name in identities else make) for name, make in jobs]
     length = int(np.ceil(score.duration * sr)) if jobs else 0
     return mixing.mix_made(jobs, length, sr, seed, mix_params, lift=lift_of(score, sr, length), progress=progress,
                            sound=getattr(score, "sound", None) or None)  # a person's sound design, if any

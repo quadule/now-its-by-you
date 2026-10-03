@@ -109,6 +109,25 @@ def test_mix_without_a_voice_or_band(stems):
     assert mixing.mix({}, SR).shape == (0, 2)
 
 
+@pytest.mark.parametrize("names", [("voice",), ("choir1",), ("voice", "choir1")])
+def test_singers_alone_have_the_same_mix_as_a_silent_band(stems, monkeypatch, names):
+    singers = {name: stems[name] for name in names}
+    for workers in ("1", "2", "3"):
+        monkeypatch.setenv("SONGBIRD_THREADS", workers)
+        alone = mixing.mix(singers, SR, seed=4)
+        silent = mixing.mix({**singers, "bass": np.zeros_like(stems["bass"])}, SR, seed=4)
+        assert alone.tobytes() == silent.tobytes()
+
+
+def test_singer_first_and_band_first_mixes_keep_the_same_samples(stems, monkeypatch):
+    # One and two workers put the singer first; three can begin the band while it sings.
+    got = []
+    for workers in ("1", "2", "3"):
+        monkeypatch.setenv("SONGBIRD_THREADS", workers)
+        got.append(mixing.mix(stems, SR, seed=4).tobytes())
+    assert got[0] == got[1] == got[2]
+
+
 def test_forward_sets_the_voice_over_the_band(stems):
     near, far = {}, {}
     mixing.mix(stems, SR, params=MixParams(forward=12.0), taps=near)

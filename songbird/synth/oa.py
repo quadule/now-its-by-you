@@ -114,6 +114,61 @@ def _into(y: np.ndarray, out: np.ndarray | None) -> np.ndarray:
     return out
 
 
+def convolve_shared(x: np.ndarray, h: np.ndarray, n: int | None = None) -> np.ndarray:
+    """Each column's convolve(x, h[:, ch])[:n], sharing the input FFTs.
+
+    The response and inverse FFTs keep convolve's two-dimensional row layout for each channel: transforming
+    all channels together uses another SIMD grouping and can change the last bits. Only the identical
+    input transforms are shared. The output is fresh; callers may place and scale it in place.
+    """
+    x, h = np.asarray(x), np.asarray(h)
+    s1, s2 = len(x), len(h)
+    if s1 == 0 or s2 == 0:
+        return np.empty((0, h.shape[1]))
+    full = s1 + s2 - 1
+    n = full if n is None else min(n, full)
+    channels = h.shape[1]
+
+    def separately():
+        out = np.empty((n, channels))
+        for ch in range(channels):
+            convolve(x, h[:, ch], n, out=out[:, ch])
+        return out
+
+    if (sp_fft.get_workers() != 1 or x.ndim != 1 or h.ndim != 2 or x.dtype != np.float64
+            or h.dtype != np.float64 or s1 == 0 or s2 == 0 or s1 == s2 or channels < 2):
+        return separately()
+    block, overlap, step1, step2 = _calc_oa_lens(s1, s2)
+    if overlap is None or step2 != s2 or s1 <= step1:
+        return separately()
+    steps = math.ceil((s1 + 1) / step1)
+    if (block - overlap) * steps < full:
+        steps += 1
+    spectra_h = [sp_fft.rfftn(h[:, ch].reshape(1, s2), [block], axes=[1]) for ch in range(channels)]
+    out = np.empty((n, channels))
+    per = GROUP * max(1, CALL // (8 * block * GROUP))
+    needed = min(steps, math.ceil(n / step1))
+    carries = [None] * channels
+    for a in range(0, needed, per):
+        b = min(a + per, steps)
+        blocks = np.zeros((b - a, step1))
+        take = x[a * step1: min(b * step1, s1)]
+        blocks.reshape(-1)[:len(take)] = take
+        spectra = sp_fft.rfftn(blocks, [block], axes=[1])
+        del blocks
+        for ch in range(channels):
+            y = sp_fft.irfftn(spectra * spectra_h[ch], [block], axes=[1])
+            if carries[ch] is not None:
+                y[0, :overlap] += carries[ch]
+            y[1:, :overlap] += y[:-1, step1:]
+            carries[ch] = y[-1, step1:].copy()
+            flat = y[:, :step1].reshape(-1)
+            start = a * step1
+            out[start:min(n, start + len(flat)), ch] = flat[:n - start]
+            del y, flat
+    return out
+
+
 def convolve_columns(x: np.ndarray, h: np.ndarray, n: int | None = None, out: np.ndarray | None = None) -> np.ndarray:
     """oaconvolve(x[:, None], h, axes=0)[:n] (mode "full"), one FFT worker, for a 1-D real float64 x and a
     (samples, channels) h: one signal through a response with a column for each channel (a body's two

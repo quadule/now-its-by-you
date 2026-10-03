@@ -204,10 +204,7 @@ def resonate(force: np.ndarray, ir: np.ndarray) -> np.ndarray:
     """A mono bridge force through a (samples, channels) body: the stem, same
     length as the force (the body's ring past the end is dropped; stems carry
     their own tails)."""
-    out = np.empty((len(force), ir.shape[1]))
-    for ch in range(ir.shape[1]):
-        oa.convolve(force, ir[:, ch], len(force), out=out[:, ch])  # oaconvolve's, a few blocks at a time
-    return out
+    return oa.convolve_shared(force, ir, len(force))
 
 
 def response(ir: np.ndarray, sr: int, n: int = 1 << 15) -> tuple[np.ndarray, np.ndarray]:

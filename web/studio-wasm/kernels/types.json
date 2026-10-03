@@ -1,7 +1,7 @@
 {
  "synth.accordion._arm": {
-  "file": ".claude/worktrees/agent-a87462c6205be2634/songbird/synth/accordion.py",
-  "line": 313,
+  "file": "songbird/synth/accordion.py",
+  "line": 315,
   "fastmath": false,
   "params": [
    "x",
@@ -44,7 +44,7 @@
   "source": "6a85430bb29b1e76"
  },
  "synth.amp._dot": {
-  "file": ".claude/worktrees/agent-a87462c6205be2634/songbird/synth/amp.py",
+  "file": "songbird/synth/amp.py",
   "line": 470,
   "fastmath": false,
   "params": [
@@ -97,7 +97,7 @@
   "source": "0724ff2827b6c3c2"
  },
  "synth.amp._run": {
-  "file": ".claude/worktrees/agent-a87462c6205be2634/songbird/synth/amp.py",
+  "file": "songbird/synth/amp.py",
   "line": 490,
   "fastmath": false,
   "params": [
@@ -371,8 +371,8 @@
   "source": "7bedec7f6a7312ec"
  },
  "synth.amp._shape": {
-  "file": ".claude/worktrees/agent-a87462c6205be2634/songbird/synth/amp.py",
-  "line": 700,
+  "file": "songbird/synth/amp.py",
+  "line": 705,
   "fastmath": false,
   "params": [
    "x",
@@ -460,7 +460,7 @@
   "source": "f9963fc7f8e78b9a"
  },
  "synth.amp._spring": {
-  "file": ".claude/worktrees/agent-a87462c6205be2634/songbird/synth/amp.py",
+  "file": "songbird/synth/amp.py",
   "line": 268,
   "fastmath": false,
   "params": [
@@ -595,8 +595,8 @@
   "source": "795ee2193d3903e9"
  },
  "synth.analog._delays": {
-  "file": ".claude/worktrees/agent-a87462c6205be2634/songbird/synth/analog.py",
-  "line": 552,
+  "file": "songbird/synth/analog.py",
+  "line": 554,
   "fastmath": false,
   "params": [
    "x",
@@ -669,8 +669,8 @@
   "source": "43ab093f1d53c994"
  },
  "synth.analog._ladder": {
-  "file": ".claude/worktrees/agent-a87462c6205be2634/songbird/synth/analog.py",
-  "line": 292,
+  "file": "songbird/synth/analog.py",
+  "line": 294,
   "fastmath": false,
   "params": [
    "x",
@@ -682,8 +682,8 @@
   "source": "5ea65db7c57a63e1"
  },
  "synth.analog._ladder_step": {
-  "file": ".claude/worktrees/agent-a87462c6205be2634/songbird/synth/analog.py",
-  "line": 254,
+  "file": "songbird/synth/analog.py",
+  "line": 256,
   "fastmath": false,
   "params": [
    "x",
@@ -776,8 +776,8 @@
   "source": "b51b3a9c8b837850"
  },
  "synth.analog._sat": {
-  "file": ".claude/worktrees/agent-a87462c6205be2634/songbird/synth/analog.py",
-  "line": 243,
+  "file": "songbird/synth/analog.py",
+  "line": 245,
   "fastmath": false,
   "params": [
    "v"
@@ -801,8 +801,8 @@
   "source": "174f76a7233e45e5"
  },
  "synth.analog._sub": {
-  "file": ".claude/worktrees/agent-a87462c6205be2634/songbird/synth/analog.py",
-  "line": 478,
+  "file": "songbird/synth/analog.py",
+  "line": 480,
   "fastmath": false,
   "params": [
    "buf",
@@ -981,8 +981,8 @@
   "source": "5b40a5c5b8f96f55"
  },
  "synth.analog._voice": {
-  "file": ".claude/worktrees/agent-a87462c6205be2634/songbird/synth/analog.py",
-  "line": 333,
+  "file": "songbird/synth/analog.py",
+  "line": 335,
   "fastmath": false,
   "params": [
    "buf",
@@ -1289,8 +1289,8 @@
   "source": "4fafc6a01e7db003"
  },
  "synth.analog._wave": {
-  "file": ".claude/worktrees/agent-a87462c6205be2634/songbird/synth/analog.py",
-  "line": 314,
+  "file": "songbird/synth/analog.py",
+  "line": 316,
   "fastmath": false,
   "params": [
    "kind",
@@ -1332,7 +1332,7 @@
   "source": "3e88174958d3bfd3"
  },
  "synth.bowed._read": {
-  "file": ".claude/worktrees/agent-a87462c6205be2634/songbird/synth/bowed.py",
+  "file": "songbird/synth/bowed.py",
   "line": 29,
   "fastmath": false,
   "params": [
@@ -1400,7 +1400,7 @@
   "source": "5403f64c2025e331"
  },
  "synth.bowed._read_masked": {
-  "file": ".claude/worktrees/agent-a87462c6205be2634/songbird/synth/bowed.py",
+  "file": "songbird/synth/bowed.py",
   "line": 89,
   "fastmath": false,
   "params": [
@@ -1468,7 +1468,7 @@
   "source": "a1672b35a7144830"
  },
  "synth.bowed.run": {
-  "file": ".claude/worktrees/agent-a87462c6205be2634/songbird/synth/bowed.py",
+  "file": "songbird/synth/bowed.py",
   "line": 48,
   "fastmath": false,
   "params": [
@@ -1568,7 +1568,7 @@
   "source": "155947e8244e2290"
  },
  "synth.bowed.run_primed": {
-  "file": ".claude/worktrees/agent-a87462c6205be2634/songbird/synth/bowed.py",
+  "file": "songbird/synth/bowed.py",
   "line": 107,
   "fastmath": false,
   "params": [
@@ -1700,7 +1700,7 @@
   "source": "2f46ac4339620a8d"
  },
  "synth.chip._lfsr": {
-  "file": ".claude/worktrees/agent-a87462c6205be2634/songbird/synth/chip.py",
+  "file": "songbird/synth/chip.py",
   "line": 298,
   "fastmath": false,
   "params": [
@@ -1711,7 +1711,7 @@
   "source": "d8efd651f3efec72"
  },
  "synth.chip._mix_tnd": {
-  "file": ".claude/worktrees/agent-a87462c6205be2634/songbird/synth/chip.py",
+  "file": "songbird/synth/chip.py",
   "line": 354,
   "fastmath": false,
   "params": [
@@ -1788,7 +1788,7 @@
   "source": "771b0bd280854992"
  },
  "synth.chip._noise_events": {
-  "file": ".claude/worktrees/agent-a87462c6205be2634/songbird/synth/chip.py",
+  "file": "songbird/synth/chip.py",
   "line": 307,
   "fastmath": false,
   "params": [
@@ -1803,7 +1803,7 @@
   "source": "659d1fdca08aa073"
  },
  "synth.chip._pulse_events": {
-  "file": ".claude/worktrees/agent-a87462c6205be2634/songbird/synth/chip.py",
+  "file": "songbird/synth/chip.py",
   "line": 213,
   "fastmath": false,
   "params": [
@@ -1917,7 +1917,7 @@
   "source": "f3e0105df1f8265b"
  },
  "synth.chip._staircase": {
-  "file": ".claude/worktrees/agent-a87462c6205be2634/songbird/synth/chip.py",
+  "file": "songbird/synth/chip.py",
   "line": 183,
   "fastmath": false,
   "params": [
@@ -1980,7 +1980,7 @@
   "source": "5ee3b48f79716e2f"
  },
  "synth.chip._triangle_events": {
-  "file": ".claude/worktrees/agent-a87462c6205be2634/songbird/synth/chip.py",
+  "file": "songbird/synth/chip.py",
   "line": 264,
   "fastmath": false,
   "params": [
@@ -2058,8 +2058,8 @@
   "source": "11acdc4e0d766151"
  },
  "synth.cymbals._fdn": {
-  "file": ".claude/worktrees/agent-a87462c6205be2634/songbird/synth/cymbals.py",
-  "line": 193,
+  "file": "songbird/synth/cymbals.py",
+  "line": 194,
   "fastmath": false,
   "params": [
    "x",
@@ -2175,8 +2175,8 @@
   "source": "8708628613a24753"
  },
  "synth.drum._ring": {
-  "file": ".claude/worktrees/agent-a87462c6205be2634/songbird/synth/drum.py",
-  "line": 61,
+  "file": "songbird/synth/drum.py",
+  "line": 63,
   "fastmath": false,
   "params": [
    "freqs",
@@ -2275,7 +2275,7 @@
   "source": "688511c8a5704ef7"
  },
  "synth.drummachine._bank": {
-  "file": ".claude/worktrees/agent-a87462c6205be2634/songbird/synth/drummachine.py",
+  "file": "songbird/synth/drummachine.py",
   "line": 270,
   "fastmath": false,
   "params": [
@@ -2341,7 +2341,7 @@
   "source": "b5ca0593c986644a"
  },
  "synth.drummachine._hat808": {
-  "file": ".claude/worktrees/agent-a87462c6205be2634/songbird/synth/drummachine.py",
+  "file": "songbird/synth/drummachine.py",
   "line": 290,
   "fastmath": false,
   "params": [
@@ -2491,7 +2491,7 @@
   "source": "30b25884a9bd211d"
  },
  "synth.drummachine._ring": {
-  "file": ".claude/worktrees/agent-a87462c6205be2634/songbird/synth/drummachine.py",
+  "file": "songbird/synth/drummachine.py",
   "line": 218,
   "fastmath": false,
   "params": [
@@ -2509,7 +2509,7 @@
   "source": "993b490707ccc826"
  },
  "synth.drummachine._square": {
-  "file": ".claude/worktrees/agent-a87462c6205be2634/songbird/synth/drummachine.py",
+  "file": "songbird/synth/drummachine.py",
   "line": 252,
   "fastmath": false,
   "params": [
@@ -2552,7 +2552,7 @@
   "source": "06706a2b9f821b01"
  },
  "synth.epiano._electrostatic": {
-  "file": ".claude/worktrees/agent-a87462c6205be2634/songbird/synth/epiano.py",
+  "file": "songbird/synth/epiano.py",
   "line": 189,
   "fastmath": false,
   "params": [
@@ -2615,7 +2615,7 @@
   "source": "61d09c2d27c0edaf"
  },
  "synth.epiano._magnetic": {
-  "file": ".claude/worktrees/agent-a87462c6205be2634/songbird/synth/epiano.py",
+  "file": "songbird/synth/epiano.py",
   "line": 173,
   "fastmath": false,
   "params": [
@@ -2675,7 +2675,7 @@
   "source": "0d7cbe768c54ff99"
  },
  "synth.fretboard._combed": {
-  "file": ".claude/worktrees/agent-a87462c6205be2634/songbird/synth/fretboard.py",
+  "file": "songbird/synth/fretboard.py",
   "line": 344,
   "fastmath": false,
   "params": [
@@ -2751,7 +2751,7 @@
   "source": "064ef5416c81fe61"
  },
  "synth.fretboard._two_planes": {
-  "file": ".claude/worktrees/agent-a87462c6205be2634/songbird/synth/fretboard.py",
+  "file": "songbird/synth/fretboard.py",
   "line": 251,
   "fastmath": false,
   "params": [
@@ -2912,7 +2912,7 @@
   "source": "17ab6c8de54eb19d"
  },
  "synth.fretwork._string": {
-  "file": ".claude/worktrees/agent-a87462c6205be2634/songbird/synth/fretwork.py",
+  "file": "songbird/synth/fretwork.py",
   "line": 253,
   "fastmath": false,
   "params": [
@@ -3154,8 +3154,8 @@
   "source": "e779813d8a77def4"
  },
  "synth.fx._apply": {
-  "file": ".claude/worktrees/agent-a87462c6205be2634/songbird/synth/fx.py",
-  "line": 435,
+  "file": "songbird/synth/fx.py",
+  "line": 438,
   "fastmath": false,
   "params": [
    "x",
@@ -3181,6 +3181,9 @@
      "c": [
       "int64"
      ],
+     "change": [
+      "float64"
+     ],
      "chans": [
       "int64"
      ],
@@ -3205,7 +3208,13 @@
      "split": [
       "bool"
      ],
+     "start": [
+      "int64"
+     ],
      "step": [
+      "int64"
+     ],
+     "stop": [
       "int64"
      ],
      "x": [
@@ -3217,11 +3226,11 @@
     }
    }
   ],
-  "source": "4348b2a96e38daa8"
+  "source": "36c8a379de7e0fb6"
  },
  "synth.fx._ballistics": {
-  "file": ".claude/worktrees/agent-a87462c6205be2634/songbird/synth/fx.py",
-  "line": 421,
+  "file": "songbird/synth/fx.py",
+  "line": 424,
   "fastmath": false,
   "params": [
    "target",
@@ -3267,8 +3276,8 @@
   "source": "a43c94053907dd20"
  },
  "synth.fx._block_peaks": {
-  "file": ".claude/worktrees/agent-a87462c6205be2634/songbird/synth/fx.py",
-  "line": 598,
+  "file": "songbird/synth/fx.py",
+  "line": 609,
   "fastmath": false,
   "params": [
    "x",
@@ -3321,7 +3330,7 @@
   "source": "fe30b6155a2cdb5a"
  },
  "synth.fx._block_power": {
-  "file": ".claude/worktrees/agent-a87462c6205be2634/songbird/synth/fx.py",
+  "file": "songbird/synth/fx.py",
   "line": 372,
   "fastmath": false,
   "params": [
@@ -3372,7 +3381,7 @@
   "source": "926629e949e93902"
  },
  "synth.fx._detect_every": {
-  "file": ".claude/worktrees/agent-a87462c6205be2634/songbird/synth/fx.py",
+  "file": "songbird/synth/fx.py",
   "line": 404,
   "fastmath": false,
   "params": [
@@ -3401,6 +3410,9 @@
      "i": [
       "int64"
      ],
+     "k": [
+      "int64"
+     ],
      "key": [
       "array(float64, 2d, C)"
      ],
@@ -3422,10 +3434,10 @@
     }
    }
   ],
-  "source": "90a59ba9dd36143e"
+  "source": "6fb83c25dd9cc338"
  },
  "synth.fx._extended": {
-  "file": ".claude/worktrees/agent-a87462c6205be2634/songbird/synth/fx.py",
+  "file": "songbird/synth/fx.py",
   "line": 282,
   "fastmath": false,
   "params": [
@@ -3457,8 +3469,8 @@
   "source": "3f3a1c2f0e97417f"
  },
  "synth.fx._follow": {
-  "file": ".claude/worktrees/agent-a87462c6205be2634/songbird/synth/fx.py",
-  "line": 566,
+  "file": "songbird/synth/fx.py",
+  "line": 577,
   "fastmath": false,
   "params": [
    "x",
@@ -3534,7 +3546,7 @@
   "source": "534d8f5d7b68dbe1"
  },
  "synth.fx._four": {
-  "file": ".claude/worktrees/agent-a87462c6205be2634/songbird/synth/fx.py",
+  "file": "songbird/synth/fx.py",
   "line": 83,
   "fastmath": false,
   "params": [
@@ -3627,7 +3639,7 @@
   "source": "ee4b159799a508f7"
  },
  "synth.fx._hold": {
-  "file": ".claude/worktrees/agent-a87462c6205be2634/songbird/synth/fx.py",
+  "file": "songbird/synth/fx.py",
   "line": 341,
   "fastmath": false,
   "params": [
@@ -3661,7 +3673,7 @@
   "source": "7864ed53f577f9ea"
  },
  "synth.fx._one": {
-  "file": ".claude/worktrees/agent-a87462c6205be2634/songbird/synth/fx.py",
+  "file": "songbird/synth/fx.py",
   "line": 124,
   "fastmath": false,
   "params": [
@@ -3712,7 +3724,7 @@
   "source": "d613a4db8f6063dd"
  },
  "synth.fx._products": {
-  "file": ".claude/worktrees/agent-a87462c6205be2634/songbird/synth/fx.py",
+  "file": "songbird/synth/fx.py",
   "line": 215,
   "fastmath": false,
   "params": [
@@ -3746,7 +3758,7 @@
   "source": "51fbb8c80c269ac5"
  },
  "synth.fx._running_mean": {
-  "file": ".claude/worktrees/agent-a87462c6205be2634/songbird/synth/fx.py",
+  "file": "songbird/synth/fx.py",
   "line": 239,
   "fastmath": false,
   "params": [
@@ -3808,8 +3820,8 @@
   "source": "4cf787d234d992bd"
  },
  "synth.fx._saturate": {
-  "file": ".claude/worktrees/agent-a87462c6205be2634/songbird/synth/fx.py",
-  "line": 635,
+  "file": "songbird/synth/fx.py",
+  "line": 646,
   "fastmath": false,
   "params": [
    "x",
@@ -3886,7 +3898,7 @@
   "source": "d7ca094d45220af7"
  },
  "synth.fx._sliding_min": {
-  "file": ".claude/worktrees/agent-a87462c6205be2634/songbird/synth/fx.py",
+  "file": "songbird/synth/fx.py",
   "line": 293,
   "fastmath": false,
   "params": [
@@ -3957,8 +3969,8 @@
   "source": "61fc57f131e2cf81"
  },
  "synth.fx._soft": {
-  "file": ".claude/worktrees/agent-a87462c6205be2634/songbird/synth/fx.py",
-  "line": 624,
+  "file": "songbird/synth/fx.py",
+  "line": 635,
   "fastmath": false,
   "params": [
    "v"
@@ -3982,7 +3994,7 @@
   "source": "bfa091d7c3231c4e"
  },
  "synth.fx._span": {
-  "file": ".claude/worktrees/agent-a87462c6205be2634/songbird/synth/fx.py",
+  "file": "songbird/synth/fx.py",
   "line": 186,
   "fastmath": false,
   "params": [
@@ -4029,7 +4041,7 @@
   "source": "b3a1e0241449a824"
  },
  "synth.fx._two": {
-  "file": ".claude/worktrees/agent-a87462c6205be2634/songbird/synth/fx.py",
+  "file": "songbird/synth/fx.py",
   "line": 108,
   "fastmath": false,
   "params": [
@@ -4094,7 +4106,7 @@
   "source": "d7f39fbbaae1c4a3"
  },
  "synth.harmonica._hands": {
-  "file": ".claude/worktrees/agent-a87462c6205be2634/songbird/synth/harmonica.py",
+  "file": "songbird/synth/harmonica.py",
   "line": 251,
   "fastmath": false,
   "params": [
@@ -4110,7 +4122,7 @@
   "source": "d3fe27e0b1d8fbad"
  },
  "synth.instruments._placed": {
-  "file": ".claude/worktrees/agent-a87462c6205be2634/songbird/synth/instruments.py",
+  "file": "songbird/synth/instruments.py",
   "line": 163,
   "fastmath": false,
   "params": [
@@ -4212,8 +4224,8 @@
   "source": "2da4983ae00cf554"
  },
  "synth.kit._contacts": {
-  "file": ".claude/worktrees/agent-a87462c6205be2634/songbird/synth/kit.py",
-  "line": 294,
+  "file": "songbird/synth/kit.py",
+  "line": 297,
   "fastmath": false,
   "params": [
    "d",
@@ -4301,8 +4313,8 @@
   "source": "7217b56d9ca2c3f7"
  },
  "synth.kit._grains": {
-  "file": ".claude/worktrees/agent-a87462c6205be2634/songbird/synth/kit.py",
-  "line": 333,
+  "file": "songbird/synth/kit.py",
+  "line": 336,
   "fastmath": false,
   "params": [
    "strengths",
@@ -4374,8 +4386,8 @@
   "source": "874700ba08655085"
  },
  "synth.master._abs_max": {
-  "file": ".claude/worktrees/agent-a87462c6205be2634/songbird/synth/master.py",
-  "line": 167,
+  "file": "songbird/synth/master.py",
+  "line": 192,
   "fastmath": false,
   "params": [
    "y"
@@ -4414,7 +4426,7 @@
   "source": "60632c430fdb1f14"
  },
  "synth.master._hop_power": {
-  "file": ".claude/worktrees/agent-a87462c6205be2634/songbird/synth/master.py",
+  "file": "songbird/synth/master.py",
   "line": 50,
   "fastmath": false,
   "params": [
@@ -4425,8 +4437,8 @@
   "source": "2809d5bf0c9a67ac"
  },
  "synth.master._mean_ahead": {
-  "file": ".claude/worktrees/agent-a87462c6205be2634/songbird/synth/master.py",
-  "line": 203,
+  "file": "songbird/synth/master.py",
+  "line": 228,
   "fastmath": false,
   "params": [
    "recovered",
@@ -4492,8 +4504,8 @@
   "source": "1eb25e425f79273a"
  },
  "synth.master._over": {
-  "file": ".claude/worktrees/agent-a87462c6205be2634/songbird/synth/master.py",
-  "line": 193,
+  "file": "songbird/synth/master.py",
+  "line": 218,
   "fastmath": false,
   "params": [
    "x",
@@ -4528,8 +4540,8 @@
   "source": "505beaa8f46dae01"
  },
  "synth.master._recover": {
-  "file": ".claude/worktrees/agent-a87462c6205be2634/songbird/synth/master.py",
-  "line": 278,
+  "file": "songbird/synth/master.py",
+  "line": 303,
   "fastmath": false,
   "params": [
    "held",
@@ -4566,7 +4578,7 @@
   "source": "c0c1df3e52e61e33"
  },
  "synth.master._weighted_hop_power": {
-  "file": ".claude/worktrees/agent-a87462c6205be2634/songbird/synth/master.py",
+  "file": "songbird/synth/master.py",
   "line": 65,
   "fastmath": false,
   "params": [
@@ -4630,8 +4642,20 @@
      "w1": [
       "array(float64, 1d, C)"
      ],
+     "w1l": [
+      "float64"
+     ],
+     "w1r": [
+      "float64"
+     ],
      "w2": [
       "array(float64, 1d, C)"
+     ],
+     "w2l": [
+      "float64"
+     ],
+     "w2r": [
+      "float64"
      ],
      "x": [
       "array(float64, 2d, C)"
@@ -4639,17 +4663,29 @@
      "z1": [
       "array(float64, 1d, C)"
      ],
+     "z1l": [
+      "float64"
+     ],
+     "z1r": [
+      "float64"
+     ],
      "z2": [
       "array(float64, 1d, C)"
+     ],
+     "z2l": [
+      "float64"
+     ],
+     "z2r": [
+      "float64"
      ]
     }
    }
   ],
-  "source": "ae955abcf0058e3e"
+  "source": "2832b342fda0749c"
  },
  "synth.master._windows": {
-  "file": ".claude/worktrees/agent-a87462c6205be2634/songbird/synth/master.py",
-  "line": 180,
+  "file": "songbird/synth/master.py",
+  "line": 205,
   "fastmath": false,
   "params": [
    "y",
@@ -4703,7 +4739,7 @@
   "source": "593db61817e2062a"
  },
  "synth.modal.ring": {
-  "file": ".claude/worktrees/agent-a87462c6205be2634/songbird/synth/modal.py",
+  "file": "songbird/synth/modal.py",
   "line": 31,
   "fastmath": false,
   "params": [
@@ -4885,7 +4921,7 @@
   "source": "766a21d8320cd9d2"
  },
  "synth.organ._expression": {
-  "file": ".claude/worktrees/agent-a87462c6205be2634/songbird/synth/organ.py",
+  "file": "songbird/synth/organ.py",
   "line": 397,
   "fastmath": false,
   "params": [
@@ -4997,7 +5033,7 @@
   "source": "f31a8a8762f31d9c"
  },
  "synth.organ._generator": {
-  "file": ".claude/worktrees/agent-a87462c6205be2634/songbird/synth/organ.py",
+  "file": "songbird/synth/organ.py",
   "line": 247,
   "fastmath": false,
   "params": [
@@ -5182,7 +5218,7 @@
   "source": "322c357b904f6bfe"
  },
  "synth.organ._read": {
-  "file": ".claude/worktrees/agent-a87462c6205be2634/songbird/synth/organ.py",
+  "file": "songbird/synth/organ.py",
   "line": 433,
   "fastmath": false,
   "params": [
@@ -5237,7 +5273,7 @@
   "source": "c1d4d8af0f62a3a1"
  },
  "synth.organ._rotors": {
-  "file": ".claude/worktrees/agent-a87462c6205be2634/songbird/synth/organ.py",
+  "file": "songbird/synth/organ.py",
   "line": 446,
   "fastmath": false,
   "params": [
@@ -5468,7 +5504,7 @@
   "source": "a54f93afb34c5d5d"
  },
  "synth.organ._scanner": {
-  "file": ".claude/worktrees/agent-a87462c6205be2634/songbird/synth/organ.py",
+  "file": "songbird/synth/organ.py",
   "line": 334,
   "fastmath": false,
   "params": [
@@ -5619,7 +5655,7 @@
   "source": "4a9801a0566ba413"
  },
  "synth.osc._blamp": {
-  "file": ".claude/worktrees/agent-a87462c6205be2634/songbird/synth/osc.py",
+  "file": "songbird/synth/osc.py",
   "line": 76,
   "fastmath": false,
   "params": [
@@ -5630,7 +5666,7 @@
   "source": "36a23560de67577f"
  },
  "synth.osc._blep": {
-  "file": ".claude/worktrees/agent-a87462c6205be2634/songbird/synth/osc.py",
+  "file": "songbird/synth/osc.py",
   "line": 27,
   "fastmath": false,
   "params": [
@@ -5641,7 +5677,7 @@
   "source": "ef16b19eaf9bc9dd"
  },
  "synth.osc._blep4": {
-  "file": ".claude/worktrees/agent-a87462c6205be2634/songbird/synth/osc.py",
+  "file": "songbird/synth/osc.py",
   "line": 39,
   "fastmath": false,
   "params": [
@@ -5669,7 +5705,7 @@
   "source": "f5f0a3d44a281719"
  },
  "synth.osc._edges": {
-  "file": ".claude/worktrees/agent-a87462c6205be2634/songbird/synth/osc.py",
+  "file": "songbird/synth/osc.py",
   "line": 63,
   "fastmath": false,
   "params": [
@@ -5705,7 +5741,7 @@
   "source": "67b6951750376b56"
  },
  "synth.osc.pulse": {
-  "file": ".claude/worktrees/agent-a87462c6205be2634/songbird/synth/osc.py",
+  "file": "songbird/synth/osc.py",
   "line": 102,
   "fastmath": false,
   "params": [
@@ -5718,7 +5754,7 @@
   "source": "7092bf85872ac7c9"
  },
  "synth.osc.saw": {
-  "file": ".claude/worktrees/agent-a87462c6205be2634/songbird/synth/osc.py",
+  "file": "songbird/synth/osc.py",
   "line": 88,
   "fastmath": false,
   "params": [
@@ -5730,7 +5766,7 @@
   "source": "2d204240dda979c3"
  },
  "synth.osc.stepped": {
-  "file": ".claude/worktrees/agent-a87462c6205be2634/songbird/synth/osc.py",
+  "file": "songbird/synth/osc.py",
   "line": 142,
   "fastmath": false,
   "params": [
@@ -5743,7 +5779,7 @@
   "source": "b4c43396c4dfa508"
  },
  "synth.osc.triangle": {
-  "file": ".claude/worktrees/agent-a87462c6205be2634/songbird/synth/osc.py",
+  "file": "songbird/synth/osc.py",
   "line": 123,
   "fastmath": false,
   "params": [
@@ -5755,7 +5791,7 @@
   "source": "f2a825ad03c46a53"
  },
  "synth.piano._spectrum": {
-  "file": ".claude/worktrees/agent-a87462c6205be2634/songbird/synth/piano.py",
+  "file": "songbird/synth/piano.py",
   "line": 262,
   "fastmath": false,
   "params": [
@@ -5817,7 +5853,7 @@
   "source": "1078ee5ccf84330d"
  },
  "synth.piano.hammer_force": {
-  "file": ".claude/worktrees/agent-a87462c6205be2634/songbird/synth/piano.py",
+  "file": "songbird/synth/piano.py",
   "line": 184,
   "fastmath": false,
   "params": [
@@ -5981,7 +6017,7 @@
   "source": "754462db264b07a3"
  },
  "synth.pipe.run": {
-  "file": ".claude/worktrees/agent-a87462c6205be2634/songbird/synth/pipe.py",
+  "file": "songbird/synth/pipe.py",
   "line": 31,
   "fastmath": false,
   "params": [
@@ -6103,7 +6139,7 @@
   "source": "61c277eda546710a"
  },
  "synth.pluck._bank": {
-  "file": ".claude/worktrees/agent-a87462c6205be2634/songbird/synth/pluck.py",
+  "file": "songbird/synth/pluck.py",
   "line": 221,
   "fastmath": false,
   "params": [
@@ -6195,7 +6231,7 @@
   "source": "6d85530e31849d57"
  },
  "synth.pluck._loop": {
-  "file": ".claude/worktrees/agent-a87462c6205be2634/songbird/synth/pluck.py",
+  "file": "songbird/synth/pluck.py",
   "line": 72,
   "fastmath": false,
   "params": [
@@ -6279,7 +6315,7 @@
   "source": "0719d74fac3af1ce"
  },
  "synth.rattle._collide": {
-  "file": ".claude/worktrees/agent-a87462c6205be2634/songbird/synth/rattle.py",
+  "file": "songbird/synth/rattle.py",
   "line": 160,
   "fastmath": false,
   "params": [
@@ -6501,7 +6537,7 @@
   "source": "bf1e0f275ea803b7"
  },
  "synth.rattle._next": {
-  "file": ".claude/worktrees/agent-a87462c6205be2634/songbird/synth/rattle.py",
+  "file": "songbird/synth/rattle.py",
   "line": 138,
   "fastmath": false,
   "params": [
@@ -6529,7 +6565,7 @@
   "source": "eeea19c7ebe207ce"
  },
  "synth.rattle._wires": {
-  "file": ".claude/worktrees/agent-a87462c6205be2634/songbird/synth/rattle.py",
+  "file": "songbird/synth/rattle.py",
   "line": 302,
   "fastmath": false,
   "params": [
@@ -6718,7 +6754,7 @@
   "source": "eda9c2ba1b51d1f7"
  },
  "synth.rattle.comb": {
-  "file": ".claude/worktrees/agent-a87462c6205be2634/songbird/synth/rattle.py",
+  "file": "songbird/synth/rattle.py",
   "line": 414,
   "fastmath": false,
   "params": [
@@ -6756,7 +6792,7 @@
   "source": "b4053ae9575194f5"
  },
  "synth.reed._read": {
-  "file": ".claude/worktrees/agent-a87462c6205be2634/songbird/synth/reed.py",
+  "file": "songbird/synth/reed.py",
   "line": 83,
   "fastmath": false,
   "params": [
@@ -6818,7 +6854,7 @@
   "source": "c42464deab0cc168"
  },
  "synth.reed._read_mix": {
-  "file": ".claude/worktrees/agent-a87462c6205be2634/songbird/synth/reed.py",
+  "file": "songbird/synth/reed.py",
   "line": 64,
   "fastmath": false,
   "params": [
@@ -6902,7 +6938,7 @@
   "source": "a43ec03a11baddc8"
  },
  "synth.stringloop._run": {
-  "file": ".claude/worktrees/agent-a87462c6205be2634/songbird/synth/stringloop.py",
+  "file": "songbird/synth/stringloop.py",
   "line": 29,
   "fastmath": false,
   "params": [
@@ -7000,7 +7036,7 @@
   "source": "841b18abd483230d"
  },
  "synth.struck._bank": {
-  "file": ".claude/worktrees/agent-a87462c6205be2634/songbird/synth/struck.py",
+  "file": "songbird/synth/struck.py",
   "line": 36,
   "fastmath": false,
   "params": [
@@ -7159,7 +7195,7 @@
   "source": "a565241774d4cc82"
  },
  "synth.struck._up2": {
-  "file": ".claude/worktrees/agent-a87462c6205be2634/songbird/synth/struck.py",
+  "file": "songbird/synth/struck.py",
   "line": 107,
   "fastmath": false,
   "params": [
@@ -7215,7 +7251,7 @@
   "source": "2e49de4498e5cfc9"
  },
  "synth.tube._scatter": {
-  "file": ".claude/worktrees/agent-a87462c6205be2634/songbird/synth/tube.py",
+  "file": "songbird/synth/tube.py",
   "line": 93,
   "fastmath": false,
   "params": [
@@ -7231,7 +7267,7 @@
   "source": "b47517c1149fdd3e"
  },
  "synth.tube.run": {
-  "file": ".claude/worktrees/agent-a87462c6205be2634/songbird/synth/tube.py",
+  "file": "songbird/synth/tube.py",
   "line": 108,
   "fastmath": false,
   "params": [

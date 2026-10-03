@@ -228,9 +228,12 @@ def _restrikes(notes) -> tuple[list, list]:
     return ordered, until
 
 
-def _soft_clip(x: np.ndarray, ceiling: float) -> np.ndarray:
+def _soft_clip(x: np.ndarray, ceiling: float, inplace: bool = False) -> np.ndarray:
     """A preamp running out of headroom: linear while small, rounding off toward `ceiling`."""
-    return ceiling * np.tanh(x / ceiling)
+    out = x if inplace else np.empty_like(x, dtype=np.result_type(x, ceiling))
+    for a in range(0, len(x), 1 << 16):
+        out[a:a + (1 << 16)] = ceiling * np.tanh(x[a:a + (1 << 16)] / ceiling)
+    return out
 
 
 # --- the tine piano ---------------------------------------------------------------------------------
@@ -441,15 +444,25 @@ def render(name: str, notes, sr: int, length: int, rng: np.random.Generator, mak
     phase = rng.uniform(0.0, 2.0 * np.pi)  # where the tremolo's oscillator happens to be when the part starts
     y2 = piano.render(notes, length, rng)
     # the preamp, at twice the rate so its rounding doesn't fold back
-    y = osc.decimate2(_soft_clip(y2, ceiling))[:length]
+    y = osc.decimate2(_soft_clip(y2, ceiling, inplace=True))[:length]
+    del y2
     if len(y) < length:
         y = np.concatenate([y, np.zeros(length - len(y))])
     # the amplifier's speakers: nothing much under 60 Hz, a gentle fall above 7-9 kHz (a bigger cabinet lower)
     top = (9000.0 if name == "epiano" else 7000.0) / piano.size
     y = sosfilt(butter(2, [55.0 / piano.size, min(top, 0.45 * sr)], btype="bandpass", fs=sr, output="sos"), y)
-    wave = _tremolo_wave(length, sr, piano.rate, phase)
     if name == "epiano":
         depth = 0.85 * piano.ornament
-        return np.stack([y * (1.0 + depth * wave), y * (1.0 - depth * wave)], axis=1)
-    depth = 0.7 * piano.ornament
-    return y * (1.0 - depth * 0.5 * (1.0 - wave))
+        out = np.empty((length, 2))
+    else:
+        depth = 0.7 * piano.ornament
+        out = y
+    for a in range(0, length, 1 << 16):
+        b = min(length, a + (1 << 16))
+        wave = np.sin(2.0 * np.pi * piano.rate * np.arange(a, b) / sr + phase)
+        if name == "epiano":
+            out[a:b, 0] = y[a:b] * (1.0 + depth * wave)
+            out[a:b, 1] = y[a:b] * (1.0 - depth * wave)
+        else:
+            out[a:b] *= 1.0 - depth * 0.5 * (1.0 - wave)
+    return out

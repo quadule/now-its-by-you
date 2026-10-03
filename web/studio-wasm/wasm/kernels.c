@@ -164,11 +164,16 @@ void drum_ring(const double *freqs, const double *amps, const double *t60s, int3
 EXPORT(fx_detect_every)
 void fx_detect_every(const double *key, int32_t n, int32_t chans, double coef, int32_t step, double *out) {
   double p = 0.0;
-  for (int32_t i = 0; i < n; i++) {
-    double s = 0.0;
-    for (int32_t c = 0; c < chans; c++) s += key[(int64_t)i * chans + c] * key[(int64_t)i * chans + c];
-    p = coef * p + (1.0 - coef) * s / chans;
-    if (i % step == 0) out[i / step] = p;
+  int32_t count = (n + step - 1) / step;
+  for (int32_t k = 0; k < count; k++) {
+    int32_t start = (k - 1) * step + 1;
+    if (start < 0) start = 0;
+    for (int32_t i = start; i < k * step + 1; i++) {
+      double s = 0.0;
+      for (int32_t c = 0; c < chans; c++) s += key[(int64_t)i * chans + c] * key[(int64_t)i * chans + c];
+      p = coef * p + (1.0 - coef) * s / chans;
+    }
+    out[k] = p;
   }
 }
 
@@ -176,13 +181,27 @@ EXPORT(fx_apply)
 void fx_apply(const double *x, int32_t n, int32_t chans, const double *lin, int32_t n_lin, int32_t step,
               const double *band, int32_t band_chans, double *y) {
   int split = band_chans == chans;
-  for (int32_t i = 0; i < n; i++) {
-    int32_t k = i / step;
-    double f = (double)(i - k * step) / (double)step;
-    double g = (k + 1 >= n_lin) ? lin[k] : lin[k] + f * (lin[k + 1] - lin[k]);
-    for (int32_t c = 0; c < chans; c++) {
-      int64_t at = (int64_t)i * chans + c;
-      y[at] = split ? x[at] + band[at] * (g - 1.0) : x[at] * g;
+  int32_t count = (n + step - 1) / step;
+  for (int32_t k = 0; k < count; k++) {
+    int32_t start = k * step;
+    int32_t stop = start + step < n ? start + step : n;
+    if (k + 1 < n_lin) {
+      double change = lin[k + 1] - lin[k];
+      for (int32_t i = start; i < stop; i++) {
+        double f = (double)(i - start) / (double)step;
+        double g = lin[k] + f * change;
+        for (int32_t c = 0; c < chans; c++) {
+          int64_t at = (int64_t)i * chans + c;
+          y[at] = split ? x[at] + band[at] * (g - 1.0) : x[at] * g;
+        }
+      }
+    } else {
+      for (int32_t i = start; i < stop; i++) {
+        for (int32_t c = 0; c < chans; c++) {
+          int64_t at = (int64_t)i * chans + c;
+          y[at] = split ? x[at] + band[at] * (lin[k] - 1.0) : x[at] * lin[k];
+        }
+      }
     }
   }
 }
@@ -217,8 +236,37 @@ void fx_block_power(const double *x, int32_t n, int32_t chans, int32_t block, do
 EXPORT(master_weighted_hop_power)
 void master_weighted_hop_power(const double *x, int32_t n, int32_t chans, const double *p, const double *q,
                                int32_t hop, double *state, double *out) {
-  double *z1 = state, *z2 = state + chans, *w1 = state + 2 * chans, *w2 = state + 3 * chans;
   int32_t k = n / hop;
+  if (chans == 2) {
+    double z1l = state[0], z2l = state[2], w1l = state[4], w2l = state[6];
+    double z1r = state[1], z2r = state[3], w1r = state[5], w2r = state[7];
+    for (int32_t j = 0; j < k; j++) {
+      double s = 0.0;
+      for (int32_t i = j * hop; i < (j + 1) * hop; i++) {
+        double v = x[(int64_t)i * 2];
+        double o = p[0] * v + z1l;
+        z1l = p[1] * v - p[4] * o + z2l;
+        z2l = p[2] * v - p[5] * o;
+        double u = q[0] * o + w1l;
+        w1l = q[1] * o - q[4] * u + w2l;
+        w2l = q[2] * o - q[5] * u;
+        s += u * u;
+        v = x[(int64_t)i * 2 + 1];
+        o = p[0] * v + z1r;
+        z1r = p[1] * v - p[4] * o + z2r;
+        z2r = p[2] * v - p[5] * o;
+        u = q[0] * o + w1r;
+        w1r = q[1] * o - q[4] * u + w2r;
+        w2r = q[2] * o - q[5] * u;
+        s += u * u;
+      }
+      out[j] = s / hop;
+    }
+    state[0] = z1l; state[2] = z2l; state[4] = w1l; state[6] = w2l;
+    state[1] = z1r; state[3] = z2r; state[5] = w1r; state[7] = w2r;
+    return;
+  }
+  double *z1 = state, *z2 = state + chans, *w1 = state + 2 * chans, *w2 = state + 3 * chans;
   for (int32_t j = 0; j < k; j++) {
     double s = 0.0;
     for (int32_t i = j * hop; i < (j + 1) * hop; i++)

@@ -137,7 +137,7 @@ QUIET = {"hat": 0.45, "hat-open": 0.55, "ride": 0.5, "shaker": 0.35, "tambourine
          "ghost": 0.4}
 
 # Modules under songbird/synth/ that are not instruments (never imported to look for a SPEC).
-NOT_INSTRUMENTS = {"__init__", "instruments", "body", "bowed", "drum", "pipe", "pluck", "reed", "glottis", "master",
+NOT_INSTRUMENTS = {"__init__", "instruments", "cache", "body", "bowed", "drum", "pipe", "pluck", "reed", "glottis", "master",
                    "mixing", "fx", "room", "throat", "tract", "tube", "tubevoice", "voice"}
 
 

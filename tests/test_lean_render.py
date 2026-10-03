@@ -210,3 +210,24 @@ def test_widening_is_as_it_was():
         mine = x.copy()
         assert same(fx.width(x, SR, amount), want)
         assert same(fx.width(mine, SR, amount, inplace=True), want) and same(mine, want)
+
+
+@pytest.mark.parametrize("dtype", [np.float32, np.float64])
+def test_widening_keeps_rounding_on_strided_inputs(dtype):
+    from songbird.synth.iir import butter
+
+    rng = np.random.default_rng(82)
+    x = rng.standard_normal((131_081, 4)).astype(dtype)[::2, ::2]
+    for amount in (0.0, 0.7, 1.4):
+        # The side's subtraction and scaling round in its input dtype before joining the filtered side.
+        mid = (x[:, 0] + x[:, 1]) / 2.0
+        side = (x[:, 0] - x[:, 1]) / 2.0
+        low = fx.equalize(side, butter(2, 140.0, btype="lowpass", fs=SR, output="sos"))
+        side -= low
+        side *= amount
+        low *= min(amount, 1.0)
+        low += side
+        want = np.stack([mid + low, mid - low], axis=1)
+        assert same(fx.width(x, SR, amount), want)
+        mine = x.copy()
+        assert same(fx.width(mine, SR, amount, inplace=True), want)

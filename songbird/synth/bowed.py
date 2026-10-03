@@ -295,11 +295,13 @@ def bow(notes, sr: int, length: int, rng: np.random.Generator, *, vibrato: float
         return np.zeros(length)
     period, bridge_len, bow_v, grip, catch = tracks(notes, sr, length, rng, vibrato=vibrato, wear=wear)
     # the hair's noise and the grip's floor, each made where it lies: the same products, sums and maxima
-    hair = rng.standard_normal(length)
-    hair *= noise
-    hair *= 0.02
-    hair *= np.abs(bow_v)
-    hair += catch
-    del catch
+    hair = catch  # the short catches already occupy the track wanted for the hair's noise
+    for a in range(0, length, 1 << 16):
+        b = min(length, a + (1 << 16))
+        drawn = rng.standard_normal(b - a)
+        drawn *= noise
+        drawn *= 0.02
+        drawn *= np.abs(bow_v[a:b])
+        hair[a:b] = drawn + hair[a:b]
     np.maximum(grip, 1e-4, out=grip)
     return run(period, bridge_len, bow_v, grip, hair, POLE, GAIN)

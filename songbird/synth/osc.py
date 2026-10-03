@@ -189,7 +189,10 @@ def drift(n: int, sr: float, rng: np.random.Generator, cents: float, rate: float
     points = max(4, int(n / sr * rate * 2.0) + 4)
     knots = rng.standard_normal(points) * cents
     t = np.linspace(0.0, points - 1.0, n)
-    i = np.minimum(t.astype(np.int64), points - 2)
-    f = t - i
-    s = f * f * (3.0 - 2.0 * f)  # smoothstep between knots: no corners in pitch
-    return knots[i] * (1.0 - s) + knots[i + 1] * s
+    for a in range(0, n, 1 << 16):
+        part = t[a:a + (1 << 16)]
+        i = np.minimum(part.astype(np.int64), points - 2)
+        f = part - i
+        s = f * f * (3.0 - 2.0 * f)  # smoothstep between knots: no corners in pitch
+        part[:] = knots[i] * (1.0 - s) + knots[i + 1] * s
+    return t

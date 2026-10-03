@@ -545,13 +545,21 @@ def consonant_pitch(segs: list[Segment], tb: np.ndarray) -> np.ndarray:
         after = sounds[i + 1] if i + 1 < len(sounds) and sounds[i + 1].t0 < s.t1 + 0.02 else None
         if voiced and manner in ("stop", "fricative", "affricate") and voiced_sound(before):  # between voiced sounds
             mid, half = 0.5 * (s.t0 + s.t1), 0.5 * (s.t1 - s.t0) + 0.03
-            out += SAG * (0.5 + 0.5 * np.cos(np.pi * np.clip((tb - mid) / half, -1.0, 1.0)))
-            out += SAG_REBOUND * np.clip((tb - s.t1 + 0.01) / 0.03, 0.0, 1.0) * np.clip((s.t1 + 0.1 - tb) / 0.07, 0.0, 1.0)
+            sl = slice(*np.searchsorted(tb, [mid - half, mid + half], side="left"))
+            local = tb[sl]
+            out[sl] += SAG * (0.5 + 0.5 * np.cos(np.pi * np.clip((local - mid) / half, -1.0, 1.0)))
+            sl = slice(*np.searchsorted(tb, [s.t1 - 0.01, s.t1 + 0.1]))
+            local = tb[sl]
+            out[sl] += SAG_REBOUND * np.clip((local - s.t1 + 0.01) / 0.03, 0.0, 1.0) * np.clip((s.t1 + 0.1 - local) / 0.07, 0.0, 1.0)
         elif not voiced:
             if voiced_sound(before):  # the voice stopping: falls into it, then (unheard) back
-                out += STOP_FALL * np.clip((tb - s.t0 + 0.06) / 0.06, 0.0, 1.0) * np.clip((s.t1 - tb) / max(s.t1 - s.t0, 0.02), 0.0, 1.0)
+                sl = slice(*np.searchsorted(tb, [s.t0 - 0.06, s.t1]))
+                local = tb[sl]
+                out[sl] += STOP_FALL * np.clip((local - s.t0 + 0.06) / 0.06, 0.0, 1.0) * np.clip((s.t1 - local) / max(s.t1 - s.t0, 0.02), 0.0, 1.0)
             if voiced_sound(after):  # starting again a little high, settling in 80 ms
-                out += RESTART * np.clip((tb - s.t1 + 0.03) / 0.03, 0.0, 1.0) * np.clip((s.t1 + 0.08 - tb) / 0.08, 0.0, 1.0)
+                sl = slice(*np.searchsorted(tb, [s.t1 - 0.03, s.t1 + 0.08]))
+                local = tb[sl]
+                out[sl] += RESTART * np.clip((local - s.t1 + 0.03) / 0.03, 0.0, 1.0) * np.clip((s.t1 + 0.08 - local) / 0.08, 0.0, 1.0)
     return out
 
 
@@ -679,8 +687,13 @@ def pitch_track(notes: list[Note], n_blocks: int, sr: int, voice: VoiceParams, r
             t_on = t50 - 1.5 * dur
             if prev is not None:  # move while the voice is silent: just after the last line let go
                 t_on = min(t_on, prev.start + prev.dur - (line_release(prev.dur) if prev.line_end else 0.0) + 0.01)
-            after = tb >= t_on
-            target[after] = p - depth * (1.0 - glide_shape((tb[after] - t50) / dur))
+            after = slice(int(np.searchsorted(tb, t_on)), None)
+            # The spline holds exactly 1 past its last knot. Compute its changing stretch,
+            # then broadcast the same settled expression over the remaining blocks.
+            settled = max(after.start, int(np.searchsorted(tb, t50 + 3.0 * dur))) if dur > 0 else n_blocks
+            transition = slice(after.start, settled)
+            target[transition] = p - depth * (1.0 - glide_shape((tb[transition] - t50) / dur))
+            target[settled:] = p - depth * (1.0 - np.float64(1.0))
         else:
             # a wider leap takes a little longer (about 4 ms a semitone); each move has its own length, its
             # own moment (upward ones near the vowel's start, downward ones sooner, a phrase leaning one way
@@ -693,22 +706,31 @@ def pitch_track(notes: list[Note], n_blocks: int, sr: int, voice: VoiceParams, r
             lo, hi = prev.start + 0.5 * prev.dur + 0.75 * dur, note.start + 0.3 * note.dur
             t50 = float(np.clip(t50, lo, hi)) if lo < hi else note.start - 0.2 * dur
             t_on = t50 - 2.0 * dur
-            after = tb >= t_on
+            after = slice(int(np.searchsorted(tb, t_on)), None)
             q = float(target[min(int(np.searchsorted(tb, t_on)), n_blocks - 1)])  # wherever the voice is as it leaves
-            tau = (tb[after] - t50) / dur
+            # At tau >= 20 both Gaussian bumps underflow to exactly zero and the spline
+            # holds exactly 1. Keep q + (p - q), rather than replacing it by p: its rounding
+            # is part of the existing pitch track.
+            settled = max(after.start, int(np.searchsorted(tb, t50 + 20.0 * dur))) if dur > 0 else n_blocks
+            transition = slice(after.start, settled)
+            tau = (tb[transition] - t50) / dur
             # (an ornament is its own way onto the note: no overshoot into it)
             past = 0.0 if orn else voice.overshoot * (p - q) + 0.1 * s * zk[2]  # semitones past the note, at most
             dip = -(0.03 * (p - q) + 0.04) * float(np.exp(0.5 * s * zk[3])) if p > q else 0.0
-            target[after] = q + (p - q) * glide_shape(tau) + past * overshoot_bump(tau) + dip * preparation_dip(tau)
+            target[transition] = q + (p - q) * glide_shape(tau) + past * overshoot_bump(tau) + dip * preparation_dip(tau)
+            target[settled:] = q + (p - q) * np.float64(1.0) + past * np.float64(0.0) + dip * np.float64(0.0)
         left = 0.0
+        # The note's envelope and gestures are only read inside its own span. Keeping their
+        # work there avoids whole-song temporaries and repeated scans for each syllable.
+        inside = slice(*np.searchsorted(tb, [note.start, end]))
+        local = tb[inside]
         turning = None
         if orn:  # sung inside the note, over its vowel
             bend, moving, settled = ornament_bend(orn, note.start, note.start + 1.0 if melisma
                                                   else max(span_end, note.start + 0.05), tb, move_time)
             target[after] += bend[after]
-            turning = np.clip((tb - moving + 0.05) / 0.05, 0.0, 1.0) * np.clip((settled + 0.1 - tb) / 0.05, 0.0, 1.0)
+            turning = np.clip((local - moving + 0.05) / 0.05, 0.0, 1.0) * np.clip((settled + 0.1 - local) / 0.05, 0.0, 1.0)
             left = float(orn[-1][1])
-        inside = (tb >= note.start) & (tb < end)
         # vibrato on some held notes: likelier the longer the note and at a line's end, and in some phrases
         # more than others; each its own depth, rate and onset, growing in over a few tenths of a second and
         # a little more through a long note, and at a line's end blooming, slower and wider, as it lets go
@@ -720,41 +742,41 @@ def pitch_track(notes: list[Note], n_blocks: int, sr: int, voice: VoiceParams, r
         if g is not None and g.vibrato >= 0:
             wants, extent = g.vibrato > 0, g.vibrato
         if wants:
-            x = np.maximum(tb - note.start - delay, 0.0)
+            x = np.maximum(local - note.start - delay, 0.0)
             v = (1.0 - np.exp(-x / 0.12)) * (0.85 + 0.15 * np.clip((x - 0.4) / 0.8, 0.0, 1.0))
-            v *= np.clip((heard - tb) / 0.08, 0.0, 1.0)  # gone with the vowel: consonants are sung without it
-            here = np.full(n_blocks, rate_k)
+            v *= np.clip((heard - local) / 0.08, 0.0, 1.0)  # gone with the vowel: consonants are sung without it
+            here = np.full(len(local), rate_k)
             if note.line_end:
-                bloom = np.clip((tb - (heard - 0.3)) / 0.3, 0.0, 1.0)
+                bloom = np.clip((local - (heard - 0.3)) / 0.3, 0.0, 1.0)
                 v, here = v * (1.0 + 0.3 * bloom), here * (1.0 - 0.1 * bloom)
             if turning is not None:  # vibrato eases off while an ornament turns the voice
                 v = v * (1.0 - 0.8 * (0.5 - 0.5 * np.cos(np.pi * turning)))
-            vib_env[inside] = extent * v[inside]
-            vib_rate[inside] = here[inside]
+            vib_env[inside] = extent * v
+            vib_rate[inside] = here
             trem_phase[inside] = 2 * np.pi * u[k, 2]
         if accents is not None and accents[k]:  # a note leaned on is lifted a little, eased in and out
-            lift = accents[k] * np.clip((tb - note.start) / 0.05, 0.0, 1.0) * np.clip((end - tb) / 0.05, 0.0, 1.0)
-            gestures[inside] += lift[inside]
+            lift = accents[k] * np.clip((local - note.start) / 0.05, 0.0, 1.0) * np.clip((end - local) / 0.05, 0.0, 1.0)
+            gestures[inside] += lift
         if note.line_end and heard - note.start > 0.15:  # the voice falls a little as it lets go of the line
             letgo = min(0.1, 0.4 * (heard - note.start))
             fall = FINAL_FALL * float(np.exp(0.4 * s * zk[9]))
-            drop = fall * (0.5 - 0.5 * np.cos(np.pi * np.clip((tb - (heard - letgo)) / letgo, 0.0, 1.0)))
-            gestures[inside] += drop[inside]
+            drop = fall * (0.5 - 0.5 * np.cos(np.pi * np.clip((local - (heard - letgo)) / letgo, 0.0, 1.0)))
+            gestures[inside] += drop
         if g is not None:
             dur = max(heard - note.start, 0.05)
-            x = np.clip((tb - note.start) / dur, 0.0, 1.0)
+            x = np.clip((local - note.start) / dur, 0.0, 1.0)
             approach = min(0.12, 0.3 * dur)
             letgo = min(0.12, 0.35 * dur)
-            into = np.clip((tb - note.start) / approach, 0.0, 1.0)
-            out = np.clip((tb - (heard - letgo)) / letgo, 0.0, 1.0)
+            into = np.clip((local - note.start) / approach, 0.0, 1.0)
+            out = np.clip((local - (heard - letgo)) / letgo, 0.0, 1.0)
             shape = g.scoop * 0.5 * (1 + np.cos(np.pi * into))  # the vowel begins off the note and settles onto it
             shape = shape + g.bend * np.clip((x - 0.3) / 0.6, 0.0, 1.0)  # drifts while held
             shape = shape + g.fall * 0.5 * (1 - np.cos(np.pi * out))  # falls or lifts letting go
             if orn:  # an ornament is the note's shape: the gesture keeps only its tuning
                 shape = 0.0
             # the note held a little sharp or flat, eased in and out so the glides between notes stay whole
-            shape = shape + g.tune * np.clip((tb - note.start) / 0.03, 0.0, 1.0) * np.clip((end - tb) / 0.03, 0.0, 1.0)
-            gestures[inside] += np.broadcast_to(shape, tb.shape)[inside]
+            shape = shape + g.tune * np.clip((local - note.start) / 0.03, 0.0, 1.0) * np.clip((end - local) / 0.03, 0.0, 1.0)
+            gestures[inside] += np.broadcast_to(shape, local.shape)
 
     rate = sr / BLOCK
     # a vibrato's rate and extent both drift within the note (natural singers: rate CV ~0.2, extent ~0.6)

@@ -69,6 +69,31 @@ def _weighted_hop_power(x: np.ndarray, p: np.ndarray, q: np.ndarray, hop: int) -
     n, chans = x.shape
     k = n // hop
     out = np.zeros(k)
+    if chans == 2:
+        # Stereo is the render's usual case. Scalar state stays in registers,
+        # with the left then right powers added in the original order.
+        z1l = z2l = w1l = w2l = z1r = z2r = w1r = w2r = 0.0
+        for j in range(k):
+            s = 0.0
+            for i in range(j * hop, (j + 1) * hop):
+                v = x[i, 0]
+                o = p[0] * v + z1l
+                z1l = p[1] * v - p[4] * o + z2l
+                z2l = p[2] * v - p[5] * o
+                u = q[0] * o + w1l
+                w1l = q[1] * o - q[4] * u + w2l
+                w2l = q[2] * o - q[5] * u
+                s += u * u
+                v = x[i, 1]
+                o = p[0] * v + z1r
+                z1r = p[1] * v - p[4] * o + z2r
+                z2r = p[2] * v - p[5] * o
+                u = q[0] * o + w1r
+                w1r = q[1] * o - q[4] * u + w2r
+                w2r = q[2] * o - q[5] * u
+                s += u * u
+            out[j] = s / hop
+        return out
     z1 = np.zeros(chans)
     z2 = np.zeros(chans)
     w1 = np.zeros(chans)
@@ -271,7 +296,9 @@ def true_peak_envelope(x: np.ndarray, floor: float = 0.0) -> np.ndarray:
 
 def true_peak(x: np.ndarray) -> float:
     """True peak in dBTP, measured with 4x oversampling."""
-    peak = float(np.max(np.abs(x))) if len(x) else 0.0
+    peak = 0.0
+    for a in range(0, len(x), 1 << 16):
+        peak = float(np.maximum(peak, np.max(np.abs(x[a:a + (1 << 16)]))))
     return float(20.0 * np.log10(np.max(true_peak_envelope(x, 0.5 * peak), initial=0.0) + 1e-12))
 
 
@@ -398,7 +425,7 @@ def to_pcm16(x: np.ndarray, seed: int = 0) -> np.ndarray:
 
 def pcm_sha256(pcm: np.ndarray) -> str:
     """The identity of a rendition: a hash of its decoded samples, not of the file."""
-    return hashlib.sha256(np.ascontiguousarray(pcm, dtype="<i2").tobytes()).hexdigest()
+    return hashlib.sha256(np.ascontiguousarray(pcm, dtype="<i2")).hexdigest()
 
 
 def write_flac(path: str | Path, pcm: np.ndarray, sr: int, tags: dict | None = None, cover: bool = True) -> None:

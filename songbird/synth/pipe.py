@@ -138,9 +138,21 @@ def blow(notes, sr: int, length: int, rng: np.random.Generator, *, brightness: f
         return np.zeros(length)
     freq, breath, chiff, drive, aim = tracks(notes, sr, length, rng, brightness=brightness, wear=wear, vibrato=vibrato)
     # turbulence at the lip is a hiss, not a rumble: nothing much below a few hundred hertz
-    noise = sosfilt(butter(2, 350.0, btype="highpass", fs=sr, output="sos"), rng.standard_normal(length))
-    noise *= 1.6 * breathiness * (1.0 + 0.5 * wear)
+    sos = butter(2, 350.0, btype="highpass", fs=sr, output="sos")
+    noise = np.empty(length)
+    state = np.zeros((len(sos), 2))
+    for a in range(0, length, 1 << 16):
+        b = min(length, a + (1 << 16))
+        filtered, state = sosfilt(sos, rng.standard_normal(b - a), zi=state)
+        filtered *= 1.6 * breathiness * (1.0 + 0.5 * wear)
+        noise[a:b] = filtered
     y = run(freq, breath, chiff, drive, aim, noise, 0.65, 0.35, float(sr))
     del freq, breath, chiff, drive, aim, noise
     # radiation from the open holes and the embouchure favours the highs a little; no DC leaves the pipe
-    return sosfilt(butter(1, 180.0, btype="highpass", fs=sr, output="sos"), y)
+    sos = butter(1, 180.0, btype="highpass", fs=sr, output="sos")
+    state = np.zeros((len(sos), 2))
+    for a in range(0, length, 1 << 16):
+        b = min(length, a + (1 << 16))
+        filtered, state = sosfilt(sos, y[a:b], zi=state)
+        y[a:b] = filtered
+    return y

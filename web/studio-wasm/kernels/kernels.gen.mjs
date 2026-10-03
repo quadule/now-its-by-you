@@ -1943,28 +1943,29 @@ export function k_synth$fx$_block_power(x, block) {
 
 // songbird/synth/fx.py:405
 export function k_synth$fx$_detect_every(key, coef, step) {
-  let c, chans, i, n, out, p, s, $t1, $t2, $t3, $t4, key_d, key_n0, key_n1, key_s0, key_s1, out_d, out_n0, out_n1, out_s0, out_s1;
+  let c, chans, i, k, n, out, p, s, $t1, $t2, $t3, $t4, $t5, $t6, key_d, key_n0, key_n1, key_s0, key_s1, out_d, out_n0, out_n1, out_s0, out_s1;
   key_d = key.d; key_n0 = key.n0; key_n1 = key.n1; key_s0 = key.s0; key_s1 = key.s1;
   n = key_n0;
   chans = key_n1;
   out = rt.alloc(1, Math.floor(((n + step) - 1) / step), 0, 'f8', 0); out_d = out.d; out_n0 = out.n0; out_n1 = out.n1; out_s0 = out.s0; out_s1 = out.s1;
   p = 0.0;
-  for ($t1 = 0, $t2 = n; $t1 < $t2; $t1 += 1) {
-    i = $t1;
-    s = 0.0;
-    for ($t3 = 0, $t4 = chans; $t3 < $t4; $t3 += 1) {
-      c = $t3;
-      s = (s + (key_d[(i) * key_s0 + (c)] * key_d[(i) * key_s0 + (c)]));
+  for ($t1 = 0, $t2 = out_n0; $t1 < $t2; $t1 += 1) {
+    k = $t1;
+    for ($t3 = rt.pmax(0, (((k - 1) * step) + 1)), $t4 = ((k * step) + 1); $t3 < $t4; $t3 += 1) {
+      i = $t3;
+      s = 0.0;
+      for ($t5 = 0, $t6 = chans; $t5 < $t6; $t5 += 1) {
+        c = $t5;
+        s = (s + (key_d[(i) * key_s0 + (c)] * key_d[(i) * key_s0 + (c)]));
+      }
+      p = ((coef * p) + (((1.0 - coef) * s) / chans));
     }
-    p = ((coef * p) + (((1.0 - coef) * s) / chans));
-    if (((rt.mod(i, step) === 0))) {
-      out_d[Math.floor(i / step)] = p;
-    }
+    out_d[k] = p;
   }
   return out;
 }
 
-// songbird/synth/fx.py:422
+// songbird/synth/fx.py:425
 export function k_synth$fx$_ballistics(target, attack, release) {
   let c, g, i, out, t, $t1, $t2, out_d, out_n0, out_n1, out_s0, out_s1, target_d, target_n0, target_n1, target_s0, target_s1;
   target_d = target.d; target_n0 = target.n0; target_n1 = target.n1; target_s0 = target.s0; target_s1 = target.s1;
@@ -1980,9 +1981,9 @@ export function k_synth$fx$_ballistics(target, attack, release) {
   return out;
 }
 
-// songbird/synth/fx.py:436
+// songbird/synth/fx.py:439
 export function k_synth$fx$_apply(x, lin, step, band, y) {
-  let c, chans, f, g, i, k, n, split, $t1, $t2, $t3, $t4, band_d, band_n0, band_n1, band_s0, band_s1, lin_d, lin_n0, lin_n1, lin_s0, lin_s1, x_d, x_n0, x_n1, x_s0, x_s1, y_d, y_n0, y_n1, y_s0, y_s1;
+  let c, change, chans, f, g, i, k, n, split, start, stop, $t1, $t2, $t3, $t4, $t5, $t6, $t7, $t8, $t9, $t10, band_d, band_n0, band_n1, band_s0, band_s1, lin_d, lin_n0, lin_n1, lin_s0, lin_s1, x_d, x_n0, x_n1, x_s0, x_s1, y_d, y_n0, y_n1, y_s0, y_s1;
   x_d = x.d; x_n0 = x.n0; x_n1 = x.n1; x_s0 = x.s0; x_s1 = x.s1;
   lin_d = lin.d; lin_n0 = lin.n0; lin_n1 = lin.n1; lin_s0 = lin.s0; lin_s1 = lin.s1;
   band_d = band.d; band_n0 = band.n0; band_n1 = band.n1; band_s0 = band.s0; band_s1 = band.s1;
@@ -1990,20 +1991,35 @@ export function k_synth$fx$_apply(x, lin, step, band, y) {
   n = x_n0;
   chans = x_n1;
   split = ((band_n1 === chans));
-  for ($t1 = 0, $t2 = n; $t1 < $t2; $t1 += 1) {
-    i = $t1;
-    k = Math.floor(i / step);
-    f = ((i - (k * step)) / step);
-    g = ((((k + 1) >= lin_n0)) ? lin_d[k] : (lin_d[k] + (f * (lin_d[(k + 1)] - lin_d[k]))));
-    for ($t3 = 0, $t4 = chans; $t3 < $t4; $t3 += 1) {
-      c = $t3;
-      y_d[(i) * y_s0 + (c)] = (split ? (x_d[(i) * x_s0 + (c)] + (band_d[(i) * band_s0 + (c)] * (g - 1.0))) : (x_d[(i) * x_s0 + (c)] * g));
+  for ($t1 = 0, $t2 = Math.floor(((n + step) - 1) / step); $t1 < $t2; $t1 += 1) {
+    k = $t1;
+    start = (k * step);
+    stop = rt.pmin(n, (start + step));
+    if ((((k + 1) < lin_n0))) {
+      change = (lin_d[(k + 1)] - lin_d[k]);
+      for ($t3 = start, $t4 = stop; $t3 < $t4; $t3 += 1) {
+        i = $t3;
+        f = ((i - start) / step);
+        g = (lin_d[k] + (f * change));
+        for ($t5 = 0, $t6 = chans; $t5 < $t6; $t5 += 1) {
+          c = $t5;
+          y_d[(i) * y_s0 + (c)] = (split ? (x_d[(i) * x_s0 + (c)] + (band_d[(i) * band_s0 + (c)] * (g - 1.0))) : (x_d[(i) * x_s0 + (c)] * g));
+        }
+      }
+    } else {
+      for ($t7 = start, $t8 = stop; $t7 < $t8; $t7 += 1) {
+        i = $t7;
+        for ($t9 = 0, $t10 = chans; $t9 < $t10; $t9 += 1) {
+          c = $t9;
+          y_d[(i) * y_s0 + (c)] = (split ? (x_d[(i) * x_s0 + (c)] + (band_d[(i) * band_s0 + (c)] * (lin_d[k] - 1.0))) : (x_d[(i) * x_s0 + (c)] * lin_d[k]));
+        }
+      }
     }
   }
   return y;
 }
 
-// songbird/synth/fx.py:567
+// songbird/synth/fx.py:578
 export function k_synth$fx$_follow(x, detect, rise, fall, floor_db, span_db) {
   let a, c, chans, coef, i, n, out, p, s, t, $t1, $t2, $t3, $t4, out_d, out_n0, out_n1, out_s0, out_s1, x_d, x_n0, x_n1, x_s0, x_s1;
   x_d = x.d; x_n0 = x.n0; x_n1 = x.n1; x_s0 = x.s0; x_s1 = x.s1;
@@ -2029,7 +2045,7 @@ export function k_synth$fx$_follow(x, detect, rise, fall, floor_db, span_db) {
   return out;
 }
 
-// songbird/synth/fx.py:599
+// songbird/synth/fx.py:610
 export function k_synth$fx$_block_peaks(x, block) {
   let b, c, chans, i, k, m, n, out, v, $t1, $t2, $t3, $t4, $t5, $t6, out_d, out_n0, out_n1, out_s0, out_s1, x_d, x_n0, x_n1, x_s0, x_s1;
   x_d = x.d; x_n0 = x.n0; x_n1 = x.n1; x_s0 = x.s0; x_s1 = x.s1;
@@ -2055,7 +2071,7 @@ export function k_synth$fx$_block_peaks(x, block) {
   return out;
 }
 
-// songbird/synth/fx.py:625
+// songbird/synth/fx.py:636
 export function k_synth$fx$_soft(v) {
   let w;
   if (((v >= 3.0))) {
@@ -2068,7 +2084,7 @@ export function k_synth$fx$_soft(v) {
   return ((v * (27.0 + w)) / (27.0 + (9.0 * w)));
 }
 
-// songbird/synth/fx.py:636
+// songbird/synth/fx.py:647
 export function k_synth$fx$_saturate(x, k, bias, dc, y) {
   let c, chans, i, n, norm, out, prev_in, prev_out, slope, th, v, w, $t1, $t2, $t3, $t4, x_d, x_n0, x_n1, x_s0, x_s1, y_d, y_n0, y_n1, y_s0, y_s1;
   x_d = x.d; x_n0 = x.n0; x_n1 = x.n1; x_s0 = x.s0; x_s1 = x.s1;
@@ -2249,7 +2265,7 @@ export function k_synth$master$_hop_power(y, hop) {
 
 // songbird/synth/master.py:66
 export function k_synth$master$_weighted_hop_power(x, p, q, hop) {
-  let c, chans, i, j, k, n, o, out, s, u, v, w1, w2, z1, z2, $t1, $t2, $t3, $t4, $t5, $t6, out_d, out_n0, out_n1, out_s0, out_s1, p_d, p_n0, p_n1, p_s0, p_s1, q_d, q_n0, q_n1, q_s0, q_s1, w1_d, w1_n0, w1_n1, w1_s0, w1_s1, w2_d, w2_n0, w2_n1, w2_s0, w2_s1, x_d, x_n0, x_n1, x_s0, x_s1, z1_d, z1_n0, z1_n1, z1_s0, z1_s1, z2_d, z2_n0, z2_n1, z2_s0, z2_s1;
+  let c, chans, i, j, k, n, o, out, s, u, v, w1, w1l, w1r, w2, w2l, w2r, z1, z1l, z1r, z2, z2l, z2r, $t1, $t2, $t3, $t4, $t5, $t6, $t7, $t8, $t9, $t10, $t11, out_d, out_n0, out_n1, out_s0, out_s1, p_d, p_n0, p_n1, p_s0, p_s1, q_d, q_n0, q_n1, q_s0, q_s1, w1_d, w1_n0, w1_n1, w1_s0, w1_s1, w2_d, w2_n0, w2_n1, w2_s0, w2_s1, x_d, x_n0, x_n1, x_s0, x_s1, z1_d, z1_n0, z1_n1, z1_s0, z1_s1, z2_d, z2_n0, z2_n1, z2_s0, z2_s1;
   x_d = x.d; x_n0 = x.n0; x_n1 = x.n1; x_s0 = x.s0; x_s1 = x.s1;
   p_d = p.d; p_n0 = p.n0; p_n1 = p.n1; p_s0 = p.s0; p_s1 = p.s1;
   q_d = q.d; q_n0 = q.n0; q_n1 = q.n1; q_s0 = q.s0; q_s1 = q.s1;
@@ -2257,17 +2273,53 @@ export function k_synth$master$_weighted_hop_power(x, p, q, hop) {
   chans = x_n1;
   k = Math.floor(n / hop);
   out = rt.alloc(1, k, 0, 'f8', 0); out_d = out.d; out_n0 = out.n0; out_n1 = out.n1; out_s0 = out.s0; out_s1 = out.s1;
+  if (((chans === 2))) {
+    $t1 = 0.0;
+    z1l = $t1;
+    z2l = $t1;
+    w1l = $t1;
+    w2l = $t1;
+    z1r = $t1;
+    z2r = $t1;
+    w1r = $t1;
+    w2r = $t1;
+    for ($t2 = 0, $t3 = k; $t2 < $t3; $t2 += 1) {
+      j = $t2;
+      s = 0.0;
+      for ($t4 = (j * hop), $t5 = ((j + 1) * hop); $t4 < $t5; $t4 += 1) {
+        i = $t4;
+        v = x_d[(i) * x_s0 + (0)];
+        o = ((p_d[0] * v) + z1l);
+        z1l = (((p_d[1] * v) - (p_d[4] * o)) + z2l);
+        z2l = ((p_d[2] * v) - (p_d[5] * o));
+        u = ((q_d[0] * o) + w1l);
+        w1l = (((q_d[1] * o) - (q_d[4] * u)) + w2l);
+        w2l = ((q_d[2] * o) - (q_d[5] * u));
+        s = (s + (u * u));
+        v = x_d[(i) * x_s0 + (1)];
+        o = ((p_d[0] * v) + z1r);
+        z1r = (((p_d[1] * v) - (p_d[4] * o)) + z2r);
+        z2r = ((p_d[2] * v) - (p_d[5] * o));
+        u = ((q_d[0] * o) + w1r);
+        w1r = (((q_d[1] * o) - (q_d[4] * u)) + w2r);
+        w2r = ((q_d[2] * o) - (q_d[5] * u));
+        s = (s + (u * u));
+      }
+      out_d[j] = (s / hop);
+    }
+    return out;
+  }
   z1 = rt.alloc(1, chans, 0, 'f8', 0); z1_d = z1.d; z1_n0 = z1.n0; z1_n1 = z1.n1; z1_s0 = z1.s0; z1_s1 = z1.s1;
   z2 = rt.alloc(1, chans, 0, 'f8', 0); z2_d = z2.d; z2_n0 = z2.n0; z2_n1 = z2.n1; z2_s0 = z2.s0; z2_s1 = z2.s1;
   w1 = rt.alloc(1, chans, 0, 'f8', 0); w1_d = w1.d; w1_n0 = w1.n0; w1_n1 = w1.n1; w1_s0 = w1.s0; w1_s1 = w1.s1;
   w2 = rt.alloc(1, chans, 0, 'f8', 0); w2_d = w2.d; w2_n0 = w2.n0; w2_n1 = w2.n1; w2_s0 = w2.s0; w2_s1 = w2.s1;
-  for ($t1 = 0, $t2 = k; $t1 < $t2; $t1 += 1) {
-    j = $t1;
+  for ($t6 = 0, $t7 = k; $t6 < $t7; $t6 += 1) {
+    j = $t6;
     s = 0.0;
-    for ($t3 = (j * hop), $t4 = ((j + 1) * hop); $t3 < $t4; $t3 += 1) {
-      i = $t3;
-      for ($t5 = 0, $t6 = chans; $t5 < $t6; $t5 += 1) {
-        c = $t5;
+    for ($t8 = (j * hop), $t9 = ((j + 1) * hop); $t8 < $t9; $t8 += 1) {
+      i = $t8;
+      for ($t10 = 0, $t11 = chans; $t10 < $t11; $t10 += 1) {
+        c = $t10;
         v = x_d[(i) * x_s0 + (c)];
         o = ((p_d[0] * v) + z1_d[c]);
         z1_d[c] = (((p_d[1] * v) - (p_d[4] * o)) + z2_d[c]);
@@ -2283,7 +2335,7 @@ export function k_synth$master$_weighted_hop_power(x, p, q, hop) {
   return out;
 }
 
-// songbird/synth/master.py:168
+// songbird/synth/master.py:193
 export function k_synth$master$_abs_max(y) {
   let c, chans, i, m, n, out, $t1, $t2, $t3, $t4, out_d, out_n0, out_n1, out_s0, out_s1, y_d, y_n0, y_n1, y_s0, y_s1;
   y_d = y.d; y_n0 = y.n0; y_n1 = y.n1; y_s0 = y.s0; y_s1 = y.s1;
@@ -2302,7 +2354,7 @@ export function k_synth$master$_abs_max(y) {
   return out;
 }
 
-// songbird/synth/master.py:181
+// songbird/synth/master.py:206
 export function k_synth$master$_windows(y, ch, points, reach) {
   let i, j, n, out, r, top, $t1, $t2, $t3, $t4, out_d, out_n0, out_n1, out_s0, out_s1, points_d, points_n0, points_n1, points_s0, points_s1, y_d, y_n0, y_n1, y_s0, y_s1;
   y_d = y.d; y_n0 = y.n0; y_n1 = y.n1; y_s0 = y.s0; y_s1 = y.s1;
@@ -2321,7 +2373,7 @@ export function k_synth$master$_windows(y, ch, points, reach) {
   return out;
 }
 
-// songbird/synth/master.py:194
+// songbird/synth/master.py:219
 export function k_synth$master$_over(x, a) {
   let flat, i, out, $t1, $t2, flat_d, flat_n0, flat_n1, flat_s0, flat_s1, out_d, out_n0, out_n1, out_s0, out_s1, x_d, x_n0, x_n1, x_s0, x_s1;
   x_d = x.d; x_n0 = x.n0; x_n1 = x.n1; x_s0 = x.s0; x_s1 = x.s1;
@@ -2334,7 +2386,7 @@ export function k_synth$master$_over(x, a) {
   return out;
 }
 
-// songbird/synth/master.py:204
+// songbird/synth/master.py:229
 export function k_synth$master$_mean_ahead(recovered, ahead, need, out) {
   let first, g, i, m, n, ring, s, size, v, width, $t1, $t2, $t3, $t4, need_d, need_n0, need_n1, need_s0, need_s1, out_d, out_n0, out_n1, out_s0, out_s1, recovered_d, recovered_n0, recovered_n1, recovered_s0, recovered_s1, ring_d, ring_n0, ring_n1, ring_s0, ring_s1;
   recovered_d = recovered.d; recovered_n0 = recovered.n0; recovered_n1 = recovered.n1; recovered_s0 = recovered.s0; recovered_s1 = recovered.s1;
@@ -2364,7 +2416,7 @@ export function k_synth$master$_mean_ahead(recovered, ahead, need, out) {
   return out;
 }
 
-// songbird/synth/master.py:279
+// songbird/synth/master.py:306
 export function k_synth$master$_recover(held, coef, out) {
   let g, i, $t1, $t2, held_d, held_n0, held_n1, held_s0, held_s1, out_d, out_n0, out_n1, out_s0, out_s1;
   held_d = held.d; held_n0 = held.n0; held_n1 = held.n1; held_s0 = held.s0; held_s1 = held.s1;

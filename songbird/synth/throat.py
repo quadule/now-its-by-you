@@ -58,33 +58,50 @@ def grid(n: int) -> np.ndarray:
     return 700.0 * (10.0 ** (m / 2595.0) - 1.0)
 
 
-def to_bins(values: np.ndarray, fft: int, sr: int, log_power: bool) -> np.ndarray:
-    """(frames, n) on the mel grid to (frames, fft // 2 + 1) linear FFT bins.
-
-    Log power continues above the grid at ROLLOFF dB per octave; aperiodicity holds its last value."""
-    at = grid(values.shape[1])
+@lru_cache(maxsize=32)
+def _bin_geometry(points: int, fft: int, sr: int) -> tuple[np.ndarray, ...]:
+    """Immutable interpolation geometry shared by every pulse block at these dimensions."""
+    at = grid(points)
     bins = np.arange(fft // 2 + 1) * sr / fft
     # interpolate each row along mel, all rows at once
     pos = np.interp(mel(np.clip(bins, F_LO, F_HI)), mel(at), np.arange(len(at)))
     lo = np.floor(pos).astype(int)
     hi = np.minimum(lo + 1, len(at) - 1)
     w = pos - lo
-    out = values[:, lo] * (1 - w) + values[:, hi] * w
+    above = bins > F_HI
+    rolloff = (ROLLOFF / 10.0 * np.log(10.0)) * np.log2(bins[above] / F_HI)
+    arrays = (lo, hi, 1 - w, w, above, rolloff)
+    for a in arrays:
+        a.flags.writeable = False
+    return arrays
+
+
+def to_bins(values: np.ndarray, fft: int, sr: int, log_power: bool) -> np.ndarray:
+    """(frames, n) on the mel grid to (frames, fft // 2 + 1) linear FFT bins.
+
+    Log power continues above the grid at ROLLOFF dB per octave; aperiodicity holds its last value."""
+    lo, hi, before, after, above, rolloff = _bin_geometry(values.shape[1], fft, sr)
+    out = values[:, lo] * before + values[:, hi] * after
     if log_power:
-        above = bins > F_HI
-        out[:, above] -= (ROLLOFF / 10.0 * np.log(10.0)) * np.log2(bins[above] / F_HI)
+        out[:, above] -= rolloff
     return out
+
+
+@lru_cache(maxsize=8)
+def _cepstrum_fold(fft: int) -> np.ndarray:
+    fold = np.zeros(fft)
+    fold[0] = 1.0
+    fold[1 : fft // 2] = 2.0
+    fold[fft // 2] = 1.0
+    fold.flags.writeable = False
+    return fold
 
 
 def min_phase(log_mag: np.ndarray) -> np.ndarray:
     """Minimum-phase spectra (rows, fft // 2 + 1) from natural-log magnitudes, by folding the real cepstrum."""
     fft = 2 * (log_mag.shape[-1] - 1)
     cep = np.fft.irfft(log_mag, n=fft, axis=-1)
-    fold = np.zeros(fft)
-    fold[0] = 1.0
-    fold[1 : fft // 2] = 2.0
-    fold[fft // 2] = 1.0
-    return np.exp(np.fft.rfft(cep * fold, n=fft, axis=-1))
+    return np.exp(np.fft.rfft(cep * _cepstrum_fold(fft), n=fft, axis=-1))
 
 
 def pulse_times(f0: np.ndarray, sr: int, n: int, block: int = 1 << 16) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
@@ -175,13 +192,22 @@ def _knots(sr: int) -> int:
     return len(np.arange(0.0, sr / 2 + SCATTER_BW, SCATTER_BW))
 
 
-def _smooth(r: np.ndarray, fft: int, sr: int) -> np.ndarray:
-    """Rows of values r at knots SCATTER_BW Hz apart, linear between them, per FFT bin."""
+@lru_cache(maxsize=16)
+def _scatter_geometry(fft: int, sr: int, knots: int) -> tuple[np.ndarray, ...]:
     hz = np.arange(fft // 2 + 1) * sr / fft
     pos = hz / SCATTER_BW
-    lo = np.minimum(pos.astype(int), r.shape[1] - 2)
+    lo = np.minimum(pos.astype(int), knots - 2)
     w = pos - lo
-    return r[:, lo] * (1 - w) + r[:, lo + 1] * w
+    arrays = (lo, lo + 1, 1 - w, w)
+    for a in arrays:
+        a.flags.writeable = False
+    return arrays
+
+
+def _smooth(r: np.ndarray, fft: int, sr: int) -> np.ndarray:
+    """Rows of values r at knots SCATTER_BW Hz apart, linear between them, per FFT bin."""
+    lo, hi, before, after = _scatter_geometry(fft, sr, r.shape[1])
+    return r[:, lo] * before + r[:, hi] * after
 
 
 def _smooth_random(rng: np.random.Generator, rows: int, fft: int, sr: int) -> np.ndarray:
@@ -246,7 +272,7 @@ def synthesize(f0: np.ndarray, sp: np.ndarray, ap: np.ndarray, sr: int, rng: np.
         # periodic: a minimum-phase pulse, delayed by its fraction of a sample, scaled for its period. Made for
         # the voiced pulses only (an unvoiced pulse's is nothing), into zeros laid out in memory as the FFT lays
         # out its output for spectra laid out as these are, so the sum below adds each row in the same order.
-        periodic = np.fft.irfft(np.zeros_like(power, dtype=complex), n=fft, axis=-1)
+        periodic = np.zeros((fft, len(v))).T
         on = np.flatnonzero(v)
         if len(on):
             g = sl.start + on  # the voiced pulses, by their index among all
@@ -486,8 +512,18 @@ def _gelu(x: np.ndarray, out: np.ndarray | None = None) -> np.ndarray:
     return out
 
 
+def _matmul(x: np.ndarray, weight: np.ndarray) -> np.ndarray:
+    """The network's matrix product, also shared by the browser's BLAS implementation."""
+    return x @ weight.T
+
+
 def _linear(x: np.ndarray, w: dict, name: str) -> np.ndarray:
-    return x @ w[f"{name}.weight"].T + w[f"{name}.bias"]
+    y = _matmul(x, w[f"{name}.weight"])
+    bias = w[f"{name}.bias"]
+    if y.dtype == bias.dtype:
+        y += bias
+        return y
+    return y + bias
 
 
 # The people's share of every voice: the singer trained on everyone's takes together (source "human", one
@@ -586,12 +622,16 @@ def machine_mix(seed: int, pitch: float, model: Model | None = None, most: float
     return ",".join([f"{n}:{x:.3f}" for n, x in zip(near, w)] + [f"{n}:{HUMAN_SHARE / len(people):.3f}" for n in people])
 
 
-def predict(model: Model, t: dict, lf0: np.ndarray, singer: np.ndarray, gv: float = 1.0) -> tuple[np.ndarray, np.ndarray]:
-    """Envelope (log power, MEL points) and aperiodicity for every frame of a timeline."""
+PREDICT_BLOCK = 4096  # frames, plus the network's temporal context on either side
+
+
+def _predict_raw(model: Model, t: dict, cont: np.ndarray, singer: np.ndarray) -> np.ndarray:
+    """The network's unscaled outputs for these frames, before whole-song global variance."""
     w = model.w
     phones = np.stack([t["prev2"], t["prev"], t["phone"], t["next"], t["next2"]], axis=-1).astype(int)
-    e = w["phone.weight"][phones].reshape(len(lf0), -1)
-    x = _linear(np.concatenate([e, w["role.weight"][t["role"].astype(int)], continuous(t, lf0)], axis=1), w, "inp")
+    e = w["phone.weight"][phones].reshape(len(cont), -1)
+    x = _linear(np.concatenate([e, w["role.weight"][t["role"].astype(int)], cont], axis=1), w, "inp")
+    del phones, e
     for i, d in enumerate(model.config["dilations"]):
         gamma, beta = np.split(_linear(singer[None], w, f"films.{i}"), 2, axis=1)
         # [x d frames back, x, x d frames on] side by side, zeros past either end: what concatenating the three
@@ -604,26 +644,65 @@ def predict(model: Model, t: dict, lf0: np.ndarray, singer: np.ndarray, gv: floa
             stacked[: len(x) - d, 2 * width:] = x[d:]
         # _linear(stacked) * (1 + gamma) + beta, then x + _linear(gelu(h)): the same products and sums, each where
         # the last left it (the same matrices into the same products), each input let go once used
-        h = stacked @ w[f"convs.{i}.weight"].T
+        h = _matmul(stacked, w[f"convs.{i}.weight"])
         del stacked
         h += w[f"convs.{i}.bias"]
         h *= 1.0 + gamma
         h += beta
         h = _gelu(h, out=h)
-        m = h @ w[f"mixes.{i}.weight"].T
+        m = _matmul(h, w[f"mixes.{i}.weight"])
         del h
         m += w[f"mixes.{i}.bias"]
         x += m
         del m
     y = _linear(x, w, "out")
+    del x
+    return y
+
+
+def predict(model: Model, t: dict, lf0: np.ndarray, singer: np.ndarray, gv: float = 1.0) -> tuple[np.ndarray, np.ndarray]:
+    """Envelope (log power, MEL points) and aperiodicity for every frame of a timeline.
+
+    Long timelines are inferred a bounded stretch at a time, with the network's complete temporal
+    context on each side. Continuous inputs are formed before slicing so log-f0 slopes stay whole;
+    global variance is applied to the assembled output, with the same full-song mean as before."""
+    cont = continuous(t, lf0)
+    if len(lf0) <= PREDICT_BLOCK:
+        y = _predict_raw(model, t, cont, singer)
+    else:
+        context = sum(model.config["dilations"])
+        y = np.empty((len(lf0), len(model.w["out.bias"])))
+        starts = list(range(0, len(lf0), PREDICT_BLOCK))
+        # Keep a tiny final tail with its preceding block: the browser uses a different
+        # matrix-product implementation below 64 rows, with another rounding order.
+        if len(starts) > 1 and len(lf0) - starts[-1] < 64:
+            starts.pop()
+        for a, b in zip(starts, starts[1:] + [len(lf0)]):
+            lo, hi = max(0, a - context), min(len(lf0), b + context)
+            raw = _predict_raw(model, {k: v[lo:hi] for k, v in t.items()}, cont[lo:hi], singer)
+            y[a:b] = raw[a - lo: b - lo]
+            del raw
+    del cont
     n_sp = len(model.sp_mean)
     sp, ap = y[:, :n_sp], y[:, n_sp:]
     if gv != 0.0:  # global variance: give back the contrast a small model averages away
         sung = t["role"] >= 2
         mu = sp[sung].mean(axis=0) if sung.any() else sp.mean(axis=0)
         scale = np.clip(np.sqrt(model.gv[:n_sp]), 1.0, 1.6) ** gv
-        sp = mu + (sp - mu) * scale
-    return sp * model.sp_std + model.sp_mean, np.clip(ap * model.ap_std + model.ap_mean, 0.0, 1.0)
+        sp = sp - mu
+        sp *= scale
+        np.add(mu, sp, out=sp)
+    # Preserve the multiply, add and clip order while reusing each newly owned result.
+    if gv != 0.0:  # the variance calculation already made sp an owned contiguous array
+        sp *= model.sp_std
+    else:
+        sp = sp * model.sp_std
+    sp += model.sp_mean
+    ap = ap * model.ap_std
+    del y
+    ap += model.ap_mean
+    np.clip(ap, 0.0, 1.0, out=ap)
+    return sp, ap
 
 
 def warp(values: np.ndarray, factor: float) -> np.ndarray:

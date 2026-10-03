@@ -408,13 +408,16 @@ def _detect_every(key: np.ndarray, coef: float, step: int) -> np.ndarray:
     n, chans = key.shape
     out = np.empty((n + step - 1) // step)
     p = 0.0
-    for i in range(n):
-        s = 0.0
-        for c in range(chans):
-            s += key[i, c] * key[i, c]
-        p = coef * p + (1.0 - coef) * s / chans
-        if i % step == 0:
-            out[i // step] = p
+    for k in range(len(out)):
+        # Each decision follows every sample since the previous one. Keeping the
+        # boundary outside the sample loop avoids a division and remainder per
+        # sample, and the unused tail after the last decision need not be read.
+        for i in range(max(0, (k - 1) * step + 1), k * step + 1):
+            s = 0.0
+            for c in range(chans):
+                s += key[i, c] * key[i, c]
+            p = coef * p + (1.0 - coef) * s / chans
+        out[k] = p
     return out
 
 
@@ -438,12 +441,20 @@ def _apply(x: np.ndarray, lin: np.ndarray, step: int, band: np.ndarray, y: np.nd
     has channels, only that part of x is scaled: x + band * (gain - 1)."""
     n, chans = x.shape
     split = band.shape[1] == chans
-    for i in range(n):
-        k = i // step
-        f = (i - k * step) / step
-        g = lin[k] if k + 1 >= len(lin) else lin[k] + f * (lin[k + 1] - lin[k])
-        for c in range(chans):
-            y[i, c] = x[i, c] + band[i, c] * (g - 1.0) if split else x[i, c] * g
+    for k in range((n + step - 1) // step):
+        start = k * step
+        stop = min(n, start + step)
+        if k + 1 < len(lin):
+            change = lin[k + 1] - lin[k]
+            for i in range(start, stop):
+                f = (i - start) / step
+                g = lin[k] + f * change
+                for c in range(chans):
+                    y[i, c] = x[i, c] + band[i, c] * (g - 1.0) if split else x[i, c] * g
+        else:
+            for i in range(start, stop):
+                for c in range(chans):
+                    y[i, c] = x[i, c] + band[i, c] * (lin[k] - 1.0) if split else x[i, c] * lin[k]
     return y
 
 
@@ -675,18 +686,21 @@ def width(x: np.ndarray, sr: int, amount: float, mono_below: float = 140.0, inpl
     array), each step on its own copy of the mid and side as before."""
     if amount == 1.0:
         return x
-    mid = (x[:, 0] + x[:, 1]) / 2.0
-    side = (x[:, 0] - x[:, 1]) / 2.0
-    low = equalize(side, butter(2, mono_below, btype="lowpass", fs=sr, output="sos"))
-    # side = low * min(amount, 1) + (side - low) * amount, each product and sum where the last left it
-    side -= low
-    side *= amount
-    low *= min(amount, 1.0)
-    low += side
-    del side
+    low = equalize((x[:, 0] - x[:, 1]) / 2.0,
+                   butter(2, mono_below, btype="lowpass", fs=sr, output="sos"), inplace=True)
     out = x if inplace and x.dtype == np.float64 and x.ndim == 2 and x.shape[1] == 2 else np.empty((len(x), 2))
-    np.add(mid, low, out=out[:, 0])
-    np.subtract(mid, low, out=out[:, 1])
+    # Keep the filter's state across the whole side, then combine a bounded stretch at a time.
+    for a in range(0, len(x), 1 << 16):
+        b = min(len(x), a + (1 << 16))
+        mid = (x[a:b, 0] + x[a:b, 1]) / 2.0
+        side = (x[a:b, 0] - x[a:b, 1]) / 2.0
+        # Each product and sum where the last left it, including a float32 side's rounding.
+        side -= low[a:b]
+        side *= amount
+        low[a:b] *= min(amount, 1.0)
+        low[a:b] += side
+        np.add(mid, low[a:b], out=out[a:b, 0])
+        np.subtract(mid, low[a:b], out=out[a:b, 1])
     return out
 
 
