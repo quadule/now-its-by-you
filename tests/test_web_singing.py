@@ -26,7 +26,7 @@ from webstudio import kit as KIT, singing as W, worker
 
 ROOT = Path(__file__).resolve().parents[1]
 LEAD = ROOT / "songs" / "h-now-its-by-you.json"
-GUIDE = "0123456789ab"
+GUIDE, GUIDE2 = "0123456789ab", "ba9876543210"
 
 
 @pytest.fixture
@@ -39,7 +39,9 @@ def home(tmp_path, monkeypatch):
 def a_kit(root: Path) -> KIT.Kit:
     """A kit with a guide in it and nothing heavy: a minute of the lead song's guide, by its name."""
     kit = KIT.Kit(root)
-    kit.keep_guide(LEAD.stem, GUIDE, json.dumps({"duration": 60.0, "notes": [], "tempo": 90.0}))
+    for name in (GUIDE, GUIDE2):
+        kit.keep_guide(LEAD.stem, name, json.dumps({"duration": 60.0, "notes": [], "tempo": 90.0, "sections": [],
+                                                    "beats": []}))
     return kit
 
 
@@ -157,12 +159,15 @@ def test_the_page_gets_the_singing_and_the_karaokes_own_code(singing):
     offer = json.loads(ask(port, "GET", "/api/sing/offer")[2])
     assert offer["available"] and offer["keep_days"] == W.KEEP_DAYS and offer["released"]
     assert offer["speeds"] == [100, 90, 80] and offer["speed"] == 90 and 0 in offer["keys"]
-    status, _, body = ask(port, "GET", f"/api/sing/melody?guide={GUIDE}&from=6&to=14.6")
+    status, _, body = ask(port, "GET", f"/api/sing/melody?guide={GUIDE}&from=0.000&to=60.000")
     assert status == 200 and body[:4] == b"RIFF"
-    assert studio.singing.kit.audio(GUIDE, 6.0, 14.6).is_file()  # kept: asked again, it isn't made again
-    assert ask(port, "GET", f"/api/sing/melody?guide={GUIDE}&from=6&to=14.6")[2] == body and len(fake.asked) == 1
+    assert studio.singing.kit.audio(GUIDE, 0.0, 60.0).is_file()  # kept: asked again, it isn't made again
+    assert ask(port, "GET", f"/api/sing/melody?guide={GUIDE}&from=0&to=60")[2] == body and len(fake.asked) == 1
     assert ask(port, "GET", "/api/sing/melody?guide=../../offer&from=0&to=1")[0] == 404
-    assert ask(port, "GET", f"/api/sing/melody?guide={GUIDE}&from=0&to=900")[0] == 404
+    for a, b in ((0, 900), (6, 14.6), (0.05, 60)):  # only what a page sings: the whole song, or a sung section
+        assert ask(port, "GET", f"/api/sing/melody?guide={GUIDE}&from={a}&to={b}")[0] == 404, (a, b)
+    assert ask(port, "GET", f"/api/sing/melody?guide={GUIDE}&from=0.001&to=60")[2] == body  # its own, as kept
+    assert len(fake.asked) == 1
     start = json.loads(ask(port, "GET", "/api/start")[2])
     assert start["sing"] == {"available": True, "web": True}
 
@@ -178,6 +183,9 @@ def test_a_guide_is_the_version_on_the_page(singing):
     sung = [letters("".join(s["text"] for s in line["syllables"])) for line in page["lines"]]
     assert sung == shown  # the page's own words, line for line
     assert page["tempo"] == studio.version({}).params.tempo
+    a, b = next(s["window"] for s in page["sections"] if s.get("window"))  # a section's melody, as the page asks
+    query = f"guide={page['guide']}&from={a:.3f}&to={min(page['duration'], b + 1.0):.3f}"
+    assert ask(port, "GET", f"/api/sing/melody?{query}")[0] == 200
     status, slow = post(port, studio, "/api/sing/guide", {"edits": {}, "speed": 90, "key": -2})
     assert slow["guide"] != page["guide"] and abs(slow["duration"] - page["duration"] / 0.9) < 1e-6
     first = lambda d: d["lines"][0]["syllables"][0]  # noqa: E731
@@ -294,6 +302,41 @@ def test_a_public_studio_counts_takes_against_each_visitors_limits(home):
         assert status == 429 and "takes measured" in body["error"] and body["retry"] > 0
         assert take(port, studio, **{"Cookie": f"songbird-visitor-{port}=someone-else"})[0] == 200
     finally:
+        server.shutdown()
+        server.server_close()
+
+
+def test_a_public_visitor_has_one_melody_made_at_a_time(home):
+    """A guide's melody is made in a public studio's one queue, as the visitor's one thing in it: a second asked for
+    while the first waits is refused (429), and nobody else's turn is taken."""
+    from songbird import public as P
+
+    studio = S.Studio(None, str(LEAD), "none", out=home / "out", public=P.Limits())
+    a_kit(home / "kit")
+    studio.enable_web_singing(home / "kit")
+    fake = studio.singing.measurer = FakeMeasurer()
+    server = S.serve(studio, 18782)
+    threading.Thread(target=server.serve_forever, daemon=True).start()
+    port = server.server_address[1]
+    try:
+        cookie = {"Cookie": f"songbird-visitor-{port}=someone-singing-here"}
+        fake.release.clear()
+        first = []
+        threading.Thread(target=lambda: first.append(ask(port, "GET", f"/api/sing/melody?guide={GUIDE}&from=0&to=60",
+                                                         headers=cookie)[0]), daemon=True).start()
+        for _ in range(100):
+            if fake.asked:
+                break
+            time.sleep(0.05)
+        assert ask(port, "GET", f"/api/sing/melody?guide={GUIDE2}&from=0&to=60", headers=cookie)[0] == 429
+        fake.release.set()
+        for _ in range(100):
+            if first:
+                break
+            time.sleep(0.05)
+        assert first == [200]
+    finally:
+        fake.release.set()
         server.shutdown()
         server.server_close()
 

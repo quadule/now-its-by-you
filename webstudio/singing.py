@@ -362,16 +362,24 @@ class Singing:
         path = self.kit.keep_guide(self.song, name, text)
         return {**GD.words(data, title, name), "which": which}, str(path)
 
-    def melody(self, query: dict) -> bytes:
+    def melody(self, query: dict, by: tuple[str, str] | None = None) -> bytes:
         """A stretch of a guide's melody (GET /api/sing/melody), made by the measuring process the first time and
-        kept in the kit."""
+        kept in the kit. Only the stretches a page sings (the whole song, or a sung section: guide.stretches_offered)
+        are made, so a guide has a handful at most; by: a public studio's visitor and address, who may have one
+        thing in the queue at a time, as for a take."""
         name = str(query.get("guide", ""))
         try:
-            a, b = round(float(query.get("from", "nan")), 3), round(float(query.get("to", "nan")), 3)
+            a, b = float(query.get("from", "nan")), float(query.get("to", "nan"))
         except ValueError:
             a = b = float("nan")
-        if self.kit.guide(self.song, name) is None or not (0.0 <= a < b and b - a <= MELODY_MAX):
+        path = self.kit.guide(self.song, name)
+        if path is None:
             raise Refused("No such guide to sing to: reload the page.")
+        offered = GD.stretches_offered(json.loads(path.read_text()))
+        stretch = next(((x, y) for x, y in offered if abs(x - a) < 0.01 and abs(y - b) < 0.01), None)
+        if stretch is None or stretch[1] - stretch[0] > MELODY_MAX:
+            raise Refused("That isn't a part of the guide to sing: reload the page.")
+        a, b = round(stretch[0], 3), round(stretch[1], 3)
         f = self.kit.audio(name, a, b)
 
         def make(job=None) -> dict:
@@ -388,7 +396,8 @@ class Singing:
                 make()
             else:  # a public studio: in its one queue, so a whole song's melody (1 GB) never runs beside a render
                 jobs = self.studio.jobs
-                job = jobs.submit(f"melody:{name}:{a}-{b}", "measure", "the guide", make)
+                limits = {} if by is None else {"owner": by[0], "where": network(by[1])}
+                job = jobs.submit(f"melody:{name}:{a}-{b}", "measure", "the guide", make, **limits)
                 waited = time.time()
                 while job.state in ("queued", "running") and time.time() - waited < TIMEOUT:
                     time.sleep(0.2)
@@ -410,16 +419,18 @@ class Singing:
             handler.send_json(self.offer())
             return True
         if path == "/api/sing/melody":
+            public = getattr(self.studio, "public", None) is not None
             try:
-                handler.send(self.melody(query), "audio/wav")
+                handler.send(self.melody(query, handler._by() if public else None), "audio/wav")
             except Refused as e:
                 handler.fail(404, str(e))
             except RuntimeError as e:
                 handler.fail(500, f"The guide couldn't be made ({e}).")
-            except Exception as e:  # the queue full (a Busy, the studio's or this one's): said, as for a render
-                if type(e).__name__ != "Busy":
+            except Exception as e:  # the queue full (Busy), or a visitor's turn taken (Limited): said, as for a render
+                if type(e).__name__ not in ("Busy", "Limited"):
                     raise
-                handler.fail(503, str(e))
+                code = 429 if type(e).__name__ == "Limited" else 503
+                handler.too_many(code, e) if public else handler.fail(code, str(e))
             return True
         return False
 

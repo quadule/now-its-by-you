@@ -23,7 +23,7 @@ const ST = window.songbirdStudio;
 const TOKEN = document.querySelector('meta[name="studio-token"]').content;
 const STORE = "songbird-web-singing";
 const MAX_TAKES = 12;
-const RING = 1.0;  // seconds of a section's guide past its window's end: the last note and the room die away
+const RING = 1.0;  // seconds of a section's guide past its window's end (webstudio/guide.py RING: a server makes no other stretch)
 const $ = (id) => document.getElementById(id);
 const h = ST.h;
 
