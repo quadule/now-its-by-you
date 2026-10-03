@@ -1030,7 +1030,7 @@ Every song is made there too, phones included. The only requests that reach a se
 (`songbird studio`: native, 127.0.0.1) and `--public` (the VPS design above) are unchanged and pass their tests; this
 is a fourth way, the one meant for launch. Nothing was deployed.
 
-    uv run python web/studio-wasm/tools/build_site.py OUT [--machine none] [--sing-kit DIR]   # the site
+    uv run python web/studio-wasm/tools/build_site.py OUT [--machine none] [--no-singing]     # the site
     uv run python web/studio-wasm/tools/serve_site.py OUT                                     # try it: 127.0.0.1:8820
 
 ### Architecture
@@ -1125,27 +1125,31 @@ version."; Help's where and *What's kept*; the Tools sheet's "Made on this devic
   "which someone shared" (its link); the timeline is asked for only when *Time* is opened; a file opened reloads the
   page on its `#version=`.
 - **export.js** saves a Blob under its own name; **learn.js** opens only a `/piano/` address; **piano.js** reads
-  `?score=device/<key>.json` from localStorage. Without a singing kit, the singing note says "Singing here isn't
+  `?score=device/<key>.json` from localStorage. Built with `--no-singing`, the singing note says "Singing here isn't
   available yet."
 
 ### Singing
 
-Singing is offered when the site is built with the singing kit (`--sing-kit renders/sing-kit`); without it the page
-says "Singing here isn't available yet." It is the server's singing (webstudio.singing's `Singing`: the same offer,
-checks, queue, keep and forget, in the studio's worker), with the take measured on the device instead of in a
-measuring process: docs/WEB-SINGING.md, "In the studio's page", has it whole. In short:
+Singing is in the site unless it is built with `--no-singing` (then the page says "Singing here isn't available
+yet."): the Sing view, the fourth beside Page, Arrange and Mix (2026-10-03). It is the server's singing
+(webstudio.singing's `Singing`: the same offer, guide, checks, queue, keep and forget, in the studio's worker), with
+the guide's melody, the template singer's analyses and the take's measuring done in workers of the page's own:
+docs/WEB-SINGING.md, "The Sing view" and "In the studio's page", has it whole. In short:
 
+- **What is sung is the version on the page**: the studio's worker lays the guide from the page's edits (or the
+  released version, webstudio/released.json), at a speed and in a key for a voice. Nothing is made ahead or fetched:
+  a singing worker (the full one: the whistle is a kernel) makes a section's melody (about 1 s) and the template
+  singer's part (about 6 s) when they're first wanted, kept in IndexedDB (`songbird-singing`), and is let go when
+  idle.
 - **The take never reaches the studio's worker.** device.js sends it only where the take was sung and its length;
   the studio checks and queues it (`Singing.take(meta, None, seconds=…)`), then hands it out (`Device.handout`: the
   server's measuring request, without audio). The page starts a **measuring worker for that take** (the same
-  studio-worker.mjs, `init` with `lean`, then `measure`), moves the audio to it, and ends it when it answers, so the
-  measuring's memory (about 380 MB for a section) is given back at once. Its answer finishes the job in the studio's
-  worker through the server's own `Singing._measure` (`Device.measured`); the page polls `/api/job/<id>` as ever.
-- **The kit, a file at a time**: `render/kit-<hash>/`, laid out as webstudio/kit.py lays it out. The studio's worker
-  fetches `offer.json` at start; the page fetches a version's words and melody guide when it is chosen; a measuring
-  worker fetches the song, the guide's score and its three templates (about 2.5 MB). Each is immutable, so a browser
-  fetches it once.
-- The ways of singing made are kept in IndexedDB and given back at start; *Forget my singing* forgets every one kept.
+  studio-worker.mjs, `init` with `lean`, then `kit` and `measure`), hands it the guides and templates it needs,
+  moves the audio to it, and ends it when it answers, so the measuring's memory (about 390 MB for a section) is
+  given back at once. Its answer finishes the job in the studio's worker through the server's own
+  `Singing._measure` (`Device.measured`); the page polls `/api/job/<id>` as ever.
+- The ways of singing made are kept in IndexedDB and given back at start; *Forget my singing* forgets every one kept,
+  and clears what singing made.
 
 ### For the host: the build and site.json
 
@@ -1163,8 +1167,9 @@ wrangler's `[build]` runs `tools/prepare.mjs`, which checks site.json against it
     OUT/render/py-<hash>/         Pyodide 314.0.7, numpy, scipy, soundfile (29.9 MiB)
     OUT/render/app-<hash>/        the worker, the kernels (JS and C/wasm), songbird.zip: the program, studio_render.py,
                                   studio_device.py, the lead song, webstudio's singing (5.3 MiB)
-    OUT/render/kit-<hash>/        with --sing-kit: offer.json, song/, guides/, lyrics/, audio/, measured/templates/
-                                  (32 files and 42 MiB for five keys; each fetched only when needed)
+                                  and singing's measuring (singing.zip, world/; not with --no-singing). Until
+                                  2026-10-03 a singing kit made ahead was served beside (render/kit-<hash>/, 42 MiB);
+                                  singing now makes what it needs on the device ("Singing" above)
     OUT/site.json                 for the host (below; .assetsignore keeps it off the site)
 
 41 files, 35.8 MiB; 28.3 MiB on the wire the first time (the host compresses: no `.gz` siblings). The largest is
@@ -1185,7 +1190,7 @@ piano page's own files): the page is served at `/v/<id>` too, and its policy all
                                                       "cache": "public, max-age=31536000, immutable", "csp": "…"},
                   …every file, by its path}}
 
-- **Cache**: everything under `render/py-*`, `render/app-*` and `render/kit-*` is immutable (named by its contents'
+- **Cache**: everything under `render/py-*` and `render/app-*` is immutable (named by its contents'
   hash); the page, its scripts, `bundle.json` and the piano page are `no-cache` (asked again each visit: a 304 when
   unchanged). A new program changes `app-<hash>` (5 MB to fetch); a new Pyodide, `py-<hash>`.
 - **The policy**: the Worker's (web/studio-site/src/policy.js), on the page and on the workers' scripts alike:
@@ -1340,9 +1345,9 @@ runs the commands below.
 
 ### Architecture
 
-- **The site** is static: `uv run python web/studio-wasm/tools/build_site.py renders/studio-site --sing-kit
-  renders/sing-kit` writes the studio's page at the root, the render bundle under `render/` (`bundle.json`,
-  `py-<hash>/`, `app-<hash>/`, the singing kit's `kit-<hash>/`) and `site.json`.
+- **The site** is static: `uv run python web/studio-wasm/tools/build_site.py renders/studio-site` writes the
+  studio's page at the root, the render bundle under `render/` (`bundle.json`, `py-<hash>/`, `app-<hash>/`) and
+  `site.json`.
   Workers Static Assets serves every file straight from Cloudflare's edge, without running the Worker: those
   requests are free and unlimited.
 - **The headers** come from `_headers`, which `web/studio-site/tools/prepare.mjs` writes into the built site before
@@ -1457,12 +1462,10 @@ Then the file is stored and checked as data, never run:
 
 Once:
 
-1. **Build the site** (Node for Pyodide's package, once: `cd web/studio-wasm && npm ci && cd ../..`). The singing
-   kit is made once, and again only when the song or the measuring code changes (the build refuses a stale kit and
-   says so); it takes about 4 GB and 12 minutes:
+1. **Build the site** (Node for Pyodide's package, once: `cd web/studio-wasm && npm ci && cd ../..`). Singing needs
+   nothing made ahead (since 2026-10-03):
 
-       uv run python -m webstudio.prepare --kit renders/sing-kit          # once: the guides and templates singing needs
-       uv run python web/studio-wasm/tools/build_site.py renders/studio-site --sing-kit renders/sing-kit
+       uv run python web/studio-wasm/tools/build_site.py renders/studio-site
 
 2. **Install wrangler, sign in, make the bucket**:
 
@@ -1489,8 +1492,7 @@ Once:
 
        cd ../sing && npx wrangler deploy
 
-Every later deploy: build the site again (with `--sing-kit renders/sing-kit`), then `npx wrangler deploy` from
-web/studio-site.
+Every later deploy: build the site again, then `npx wrangler deploy` from web/studio-site.
 
 **Check after** (`curl -sI` shows headers):
 
@@ -1499,10 +1501,8 @@ web/studio-site.
   `curl -sI -H 'Accept-Encoding: br, gzip' https://studio.itsby.you/render/<py-…>/pyodide.asm.wasm`:
   `content-type: application/wasm`, `immutable`, `content-encoding: br` (or gzip).
 - `curl -s https://studio.itsby.you/robots.txt -o /dev/null -w '%{http_code}\n'`: 404.
-- The singing kit: `curl -sI https://studio.itsby.you/render/<kit-…>/offer.json`: 200, `immutable` (the folder is
-  in `render/bundle.json`'s `studio.kit`), and a template, whose name has a `+`:
-  `curl -sI https://studio.itsby.you/render/<kit-…>/measured/templates/<guide>.%2B0.<version>.npz`: 200, not a
-  redirect. Then in a browser, *Sing it here* offers the five keys.
+- Singing: `render/bundle.json`'s `studio.singing` is true; in a browser, the Sing view (4) sets out the Page's
+  words and makes a section's guide in a few seconds.
 - Share the seed (`f` its FLAC; prints the id and link):
 
       f=web/sing/public/seed/now-its-by-you.flac
