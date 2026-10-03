@@ -1370,11 +1370,11 @@
   }
   function started(start, hash) {
     const p = start.public;
-    $("toolsWhere").textContent = start.device ? "Made on this device."
+    $("toolsWhere").textContent = start.device ? ""  // the page's foot says where
       : p ? `An open studio: ${p.records} whole songs and ${p.previews} sections an hour each, made one at a time.`
         : start.shared ? "Recordings are made on the computer serving this studio."
           : `Recordings go into ${start.out} on this computer.`;
-    if (p || start.device) {  // what an open studio, or one on the device, keeps: in Help, a word away
+    if (p) {  // what an open studio keeps: in Help, a word away (on the device, the page's foot says it)
       const kept = document.createElement("button");
       Object.assign(kept, { type: "button", className: "btn quiet", textContent: "What's kept" });
       kept.addEventListener("click", () => { window.SongbirdHelp?.open(); $("helpKept")?.scrollIntoView?.({ block: "nearest" }); });
