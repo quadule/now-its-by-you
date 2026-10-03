@@ -1,13 +1,15 @@
 """Singing in the web studio (webstudio/, docs/WEB-SINGING.md): only when asked for; a take is guarded as the
 studio's own requests are, waits in its one queue, and its audio is let go once measured; the song is then sung
-the visitor's way by a name only their page knows, rounded and bounded, kept a while and forgettable; and a take
-is measured exactly as tools/phrasing.py measures one (without the aligner), planted gestures and all."""
+the visitor's way by a name only their page knows, rounded and bounded, kept a while and forgettable; a guide is
+the version on the page; and a take is measured exactly as tools/phrasing.py measures one (without the aligner),
+with the template singer singing what was sung, planted gestures and all."""
 
 import hashlib
 import http.client
 import io
 import json
 import os
+import re
 import subprocess
 import sys
 import threading
@@ -24,7 +26,7 @@ from webstudio import kit as KIT, singing as W, worker
 
 ROOT = Path(__file__).resolve().parents[1]
 LEAD = ROOT / "songs" / "h-now-its-by-you.json"
-SPEC, GUIDE = "a.k0.t90", "0123456789ab"
+GUIDE = "0123456789ab"
 
 
 @pytest.fixture
@@ -35,16 +37,9 @@ def home(tmp_path, monkeypatch):
 
 
 def a_kit(root: Path) -> KIT.Kit:
-    """A kit's files with nothing heavy in them: an offer for the lead song, words, a second of guide."""
+    """A kit with a guide in it and nothing heavy: a minute of the lead song's guide, by its name."""
     kit = KIT.Kit(root)
-    (root / "lyrics").mkdir(parents=True)
-    (root / "audio").mkdir()
-    kit.lyrics(SPEC).write_text(json.dumps({"title": "t", "guide": GUIDE, "duration": 60.0, "lines": [], "sections": []}))
-    sf.write(str(kit.audio(SPEC)), np.zeros(22050, dtype=np.int16), 22050, format="FLAC")
-    kit.offer_path.write_text(json.dumps({
-        "kit": KIT.VERSION, "song": LEAD.stem, "title": "Now It's by You", "genome": hashlib.sha256(LEAD.read_bytes()).hexdigest(),
-        "extractor": "x", "set": {"id": "a"}, "default": SPEC,
-        "specs": [{"id": SPEC, "set": "a", "key": 0, "tempo": 90, "guide": GUIDE, "duration": 60.0, "templates": [0]}]}))
+    kit.keep_guide(LEAD.stem, GUIDE, json.dumps({"duration": 60.0, "notes": [], "tempo": 90.0}))
     return kit
 
 
@@ -58,11 +53,13 @@ class FakeMeasurer:
     def __init__(self):
         self.asked, self.release = [], threading.Event()
         self.release.set()
-        self.running, self.per_second, self.start = False, 0.1, 1.0
+        self.running, self.per_second, self.start, self.idle = False, 0.1, 1.0, 0
 
     def call(self, op, request):
         self.asked.append((op, dict(request)))
         self.release.wait(10)
+        if op == "melody":
+            return {"wav": wav(1.0, 22050), "rate": 22050}
         return {"measurement": {"notes": []}, "phrasing": PHRASING, "portrait": "Take 1: lined up with the guide.",
                 "skipped": [], "seconds": 0.5, "audio_seconds": 6.0}
 
@@ -112,7 +109,7 @@ def wav(seconds=6.0, sr=48000) -> bytes:
 
 
 def take(port, studio, meta=None, audio=None, **headers):
-    meta = json.dumps({"spec": SPEC, "guide": GUIDE, "section": 1, "from_s": 6.0, "to_s": 14.0, "earlier": [],
+    meta = json.dumps({"guide": GUIDE, "section": 1, "from_s": 6.0, "to_s": 14.0, "earlier": [],
                        **(meta or {})}).encode()
     head = {"Content-Type": "application/x-songbird-take", "X-Studio": studio.token, "X-Sing-Meta": str(len(meta)),
             **headers}
@@ -141,7 +138,8 @@ def test_without_web_singing_none_of_it_is_served(home):
         assert studio.singing is None
         page = ask(port, "GET", "/")[2]
         assert b"/sing.js" not in page and b"/sing.css" not in page
-        for path in ("/sing.js", "/karaoke.js", "/recorder.js", f"/api/sing/offer", f"/api/sing/guide?spec={SPEC}"):
+        for path in ("/sing.js", "/karaoke.js", "/recorder.js", "/api/sing/offer",
+                     f"/api/sing/melody?guide={GUIDE}&from=0&to=10"):
             assert ask(port, "GET", path)[0] == 404, path
         assert take(port, studio)[0] == 415  # not JSON: the studio's own refusal, nothing of singing's
     finally:
@@ -150,28 +148,59 @@ def test_without_web_singing_none_of_it_is_served(home):
 
 
 def test_the_page_gets_the_singing_and_the_karaokes_own_code(singing):
-    studio, port, _ = singing
+    studio, port, fake = singing
     page = ask(port, "GET", "/")[2].decode()
     assert '<script type="module" src="/sing.js">' in page and 'href="/sing.css"' in page
     assert ask(port, "GET", "/karaoke.js")[2] == (ROOT / "tools" / "karaoke.js").read_bytes()  # reused, not copied
     assert ask(port, "GET", "/recorder.js")[2] == (ROOT / "tools" / "karaoke-recorder.js").read_bytes()
     assert ask(port, "GET", "/sing.js")[0] == 200 and ask(port, "GET", "/sing.css")[0] == 200
     offer = json.loads(ask(port, "GET", "/api/sing/offer")[2])
-    assert offer["available"] and offer["default"] == SPEC and offer["keep_days"] == W.KEEP_DAYS
-    assert json.loads(ask(port, "GET", f"/api/sing/lyrics?spec={SPEC}")[2])["guide"] == GUIDE
-    status, head, body = ask(port, "GET", f"/api/sing/guide?spec={SPEC}", headers={"Range": "bytes=0-3"})
-    assert status == 206 and body == b"fLaC"
-    assert ask(port, "GET", "/api/sing/guide?spec=../../offer")[0] == 404
+    assert offer["available"] and offer["keep_days"] == W.KEEP_DAYS and offer["released"]
+    assert offer["speeds"] == [100, 90, 80] and offer["speed"] == 90 and 0 in offer["keys"]
+    status, _, body = ask(port, "GET", f"/api/sing/melody?guide={GUIDE}&from=6&to=14.6")
+    assert status == 200 and body[:4] == b"RIFF"
+    assert studio.singing.kit.audio(GUIDE, 6.0, 14.6).is_file()  # kept: asked again, it isn't made again
+    assert ask(port, "GET", f"/api/sing/melody?guide={GUIDE}&from=6&to=14.6")[2] == body and len(fake.asked) == 1
+    assert ask(port, "GET", "/api/sing/melody?guide=../../offer&from=0&to=1")[0] == 404
+    assert ask(port, "GET", f"/api/sing/melody?guide={GUIDE}&from=0&to=900")[0] == 404
     start = json.loads(ask(port, "GET", "/api/start")[2])
     assert start["sing"] == {"available": True, "web": True}
 
 
-def test_a_kit_made_for_another_song_is_said_not_used(home):
-    studio = S.Studio(None, str(ROOT / "songs" / "b-coal-from-the-fire.json"), "fictional:ada", out=home / "out")
-    a_kit(home / "kit")
-    studio.enable_web_singing(home / "kit")
-    assert not studio.sing_available()["available"] and "another version" in studio.sing_available()["why"]
-    assert not W.Singing(studio, home / "nowhere").available()["available"]
+def test_a_guide_is_the_version_on_the_page(singing):
+    """The words sung are the page's: its version's words, key and tempo, at the speed asked; or the released
+    version's; each kept by its digest, which a take names."""
+    studio, port, _ = singing
+    status, page = post(port, studio, "/api/sing/guide", {"edits": {}, "speed": 100, "key": 0})
+    assert status == 200 and page["which"] == "page" and studio.singing.kit.guide(LEAD.stem, page["guide"])
+    letters = lambda s: re.sub(r"[^a-z]", "", s.lower())  # noqa: E731
+    shown = [letters(line) for w in studio.song({})["words"] if w["sung"] for line in w["lines"]]
+    sung = [letters("".join(s["text"] for s in line["syllables"])) for line in page["lines"]]
+    assert sung == shown  # the page's own words, line for line
+    assert page["tempo"] == studio.version({}).params.tempo
+    status, slow = post(port, studio, "/api/sing/guide", {"edits": {}, "speed": 90, "key": -2})
+    assert slow["guide"] != page["guide"] and abs(slow["duration"] - page["duration"] / 0.9) < 1e-6
+    first = lambda d: d["lines"][0]["syllables"][0]  # noqa: E731
+    assert first(slow)["pitch"] == first(page)["pitch"] - 2 and abs(first(slow)["start"] - first(page)["start"] / 0.9) < 1e-6
+    status, again = post(port, studio, "/api/sing/guide", {"edits": {}, "speed": 100, "key": 0})
+    assert again["guide"] == page["guide"]  # the same version is the same guide
+    status, released = post(port, studio, "/api/sing/guide", {"which": "released", "speed": 100, "key": 0})
+    assert status == 200 and released["which"] == "released" and released["tempo"] == 96.0
+    words = " ".join(s["text"] for s in released["lines"][0]["syllables"])
+    assert words.startswith("They saved it as num bers")  # the release's first line, as the piano page has it
+    assert post(port, studio, "/api/sing/guide", {"speed": 70})[0] == 400
+    assert post(port, studio, "/api/sing/guide", {"which": "somewhere"})[0] == 400
+
+
+def test_singing_that_cant_measure_here_says_so(home):
+    class Broken(FakeMeasurer):
+        def call(self, op, request):
+            raise RuntimeError("no pyworld here")
+
+    studio = S.Studio(None, str(LEAD), "fictional:ada", out=home / "out")
+    singing = W.Singing(studio, home / "kit", measurer=Broken())
+    singing.check()
+    assert not singing.available()["available"] and "couldn't start its measuring" in singing.available()["why"]
 
 
 # ------------------------------------------------------------ a take
@@ -183,9 +212,9 @@ def test_a_take_is_guarded_as_the_studios_own_requests_are(singing):
     assert take(port, studio, **{"Content-Type": "audio/wav"})[0] == 415
     assert take(port, studio, **{"Host": "evil.example"})[0] == 403
     status, body = take(port, studio, meta={"guide": "ffffffffffff"})
-    assert status == 400 and "guide changed" in body["error"]
-    status, body = take(port, studio, meta={"spec": "z.k9.t50"})
-    assert status == 400 and "isn't one this studio offers" in body["error"]
+    assert status == 400 and "isn't one this studio made" in body["error"]
+    status, body = take(port, studio, meta={"guide": "../../x"})
+    assert status == 400 and "isn't one this studio made" in body["error"]
     status, body = take(port, studio, audio=b"not a wav at all" * 10)
     assert status == 400 and "WAV" in body["error"]
     status, body = take(port, studio, meta={"from_s": 50.0, "to_s": 40.0})
@@ -286,7 +315,7 @@ def test_a_take_is_guarded_before_a_byte_of_it_is_read_and_only_a_few_arrive_at_
     server = S.serve(studio, 18782, client_ip_header="CF-Connecting-IP")
     threading.Thread(target=server.serve_forever, daemon=True).start()
     port = server.server_address[1]
-    meta = json.dumps({"spec": SPEC, "guide": GUIDE, "from_s": 6.0, "to_s": 14.0}).encode()
+    meta = json.dumps({"guide": GUIDE, "from_s": 6.0, "to_s": 14.0}).encode()
     big = meta + bytes(30 * 2**20)  # made before memory is watched
     try:
         tracemalloc.start()
@@ -307,7 +336,7 @@ def test_a_take_is_guarded_before_a_byte_of_it_is_read_and_only_a_few_arrive_at_
 
         def sender(ip):  # a take on its way, slowly: its headers and a little of its body
             s = socket.create_connection(("127.0.0.1", port), timeout=10)
-            meta = b'{"spec": "a.k0.t90"}'
+            meta = b'{"guide": "0123456789ab"}'
             s.sendall((f"POST /api/sing/take HTTP/1.1\r\nHost: 127.0.0.1:{port}\r\nContent-Type: "
                        f"application/x-songbird-take\r\nX-Studio: {studio.token}\r\nX-Sing-Meta: {len(meta)}\r\n"
                        f"CF-Connecting-IP: {ip}\r\nCookie: songbird-visitor-{port}=visitor-{ip.replace('.', '-')}xx"
@@ -439,25 +468,35 @@ def test_a_long_take_is_measured_in_pieces_cut_in_its_rests():
 
 
 def test_a_planted_way_is_measured_as_the_tools_measure_it_and_the_audio_goes(tmp_path):
-    """The template singer sings the first verse with every second note 60 ms late; the web studio's measuring
-    process finds those notes later than the rest, with exactly the numbers tools/phrasing.py measure_window
-    gives the same take (without MFA); and nothing of the take is left where it was read."""
+    """The template singer sings the first refrain with every second note 60 ms late; the web studio's measuring
+    process finds those notes later than the rest, with exactly the numbers tools/phrasing.py measure_window gives
+    the same take (without MFA) against the template singer singing the refrain's notes, made ahead in the
+    measuring process as a page asks for it while its singer rehearses; that template is the whole guide's over
+    the refrain, to a fraction of a cent; its melody is made too; and nothing of the take is left where it was
+    read."""
     kit, out = tmp_path / "kit", tmp_path / "out"
     made = subprocess.run([sys.executable, str(ROOT / "tests" / "_web_singing_take.py"), str(kit), str(out)],
                           capture_output=True, text=True, timeout=600)
     assert made.returncode == 0, made.stderr[-2000:]
     where = json.loads((out / "take.json").read_text())
+    close = json.loads((out / "template.json").read_text())
+    assert close["voiced_agree"] > 0.97 and close["median_cents"] < 2.0 and close["band_db"] < 1.5
+    for f in (kit / "measured" / "parts").glob("*.npz"):  # made again, by the measuring process
+        f.unlink()
     measurer = W.Measurer(KIT.Kit(kit), idle=60)
     before = set(worker.scratch_dir().glob(f"{worker.SCRATCH_PREFIX}*"))
+    stretch = {"song": where["song"], "guide": where["guide"], "from_s": where["from_s"], "to_s": where["to_s"]}
     try:
-        result = measurer.call("take", {"song": where["song"], "guide": where["guide"], "from_s": where["from_s"],
-                                        "to_s": where["to_s"], "earlier": [], "offered": [where["guide"]],
-                                        "audio": (out / "take.wav").read_bytes()})
+        ahead = measurer.call("template", {**stretch, "key": 0})
+        melody = measurer.call("melody", {**stretch, "to_s": where["to_s"] + 0.6})
+        result = measurer.call("take", {**stretch, "earlier": [], "audio": (out / "take.wav").read_bytes()})
         hello = measurer.call("hello", {})
     finally:
         measurer.stop()
     assert set(worker.scratch_dir().glob(f"{worker.SCRATCH_PREFIX}*")) == before
-    assert hello["extractor"] == hello["kit_extractor"]
+    assert hello["extractor"] and len(ahead["templates"]) == 1 and result["templates"] == ahead["templates"]
+    seconds = sf.info(io.BytesIO(melody["wav"])).duration
+    assert melody["rate"] == 22050 and abs(seconds - (where["to_s"] + 0.6 - where["from_s"])) < 0.01
     m, reference = result["measurement"], json.loads((out / "reference.json").read_text())
     assert m["notes"] == reference["notes"] and m["lag"] == reference["lag"] and m["key"] == reference["key"]
     early = m["fields"].index("early")

@@ -1,52 +1,52 @@
-"""The singing kit: everything the web studio needs to take a take, made ahead by webstudio/prepare.py.
+"""The singing kit: what measuring a take needs besides the take, made as it's needed and kept (docs/WEB-SINGING.md).
 
-Measuring a take compares it with the template singer singing the same guide, and making that analysis for a
-whole guide takes 4 GB and a minute (tools/phrasing.py template(): the formant singer, then WORLD's harvest,
-which holds about 14 MB for every second analysed). A server in a memory-capped container can't, so the kit
-carries it, made once on a computer that can, beside the guides themselves:
+Measuring a take compares it with the template singer singing the same notes (tools/phrasing.py template()), on
+the guide the take was sung to. Both are made from the version the visitor sang (webstudio/guide.py), when they
+sing it: the guide's score when they open Sing, its melody and the template singer's analysis of the stretch they
+sing (a section, or each piece of a whole song) when it's first needed. Nothing is made ahead, so the guide is
+always the version on the page. The kit is a folder laid out as the tools expect their own:
 
-    offer.json                                      what is offered: the song (its genome's digest), each
-                                                    version to sing to (a spec, tools/guides.py) and its guide
-    song/<song>.json                                the genome the kit was made from
-    guides/<song>.<digest>.score.json               each guide's score, by digest (tools/takes.py GUIDES)
-    guide/<song>/<spec>.score.json, .note.json      each spec's score as tools/guides.py keeps it
-    audio/<spec>.melody.flac                        the melody guide a visitor hears (whistle and pulse)
-    lyrics/<spec>.json                              its words, notes, beats and sections (tools/karaoke.py)
-    measured/templates/<digest>.<key>.<ver>.npz     the template singer's analysis in each key offered
+    song/<song>.json                                    the song a way of singing is made for (its genome)
+    guides/<song>.<digest>.score.json                   each guide's score, by digest (tools/takes.py GUIDES)
+    audio/<digest>.<from ms>-<to ms>.wav                a stretch of a guide's melody (a server's; a browser keeps
+                                                        its own in IndexedDB)
+    measured/parts/<notes>.<key>.<measuring code>.npz   the template singer's analysis of a stretch's notes, in a
+                                                        take's key (webstudio/worker.py part_template)
 
-Nothing here is anyone's voice: the guides are the song's, the templates the machine's. This module reads the
-kit with the standard library alone, so the studio's own process never loads the measuring tools.
+On a server it is a folder of the studio's (--sing-kit, else $SONGBIRD_SING_KIT, else the studio's home), its files
+let go a while after they were last used; in a visitor's browser it is the measuring worker's memory, filled from
+and saved back to the browser's own storage. Nothing here is anyone's voice: the guides are the song's, the
+templates the machine's. This module needs the standard library alone, so the studio's own process never loads
+the measuring tools.
 """
 
 from __future__ import annotations
 
-import hashlib
-import json
+import contextlib
 import os
 import re
+import secrets
+import time
 from pathlib import Path
 
-VERSION = 1  # the kit's layout
 ROOT = Path(__file__).resolve().parent.parent
-DEFAULT = ROOT / "renders" / "sing-kit"
-SPEC = re.compile(r"^[a-z0-9]{1,8}\.k-?\d{1,2}\.t\d{1,3}$")
 DIGEST = re.compile(r"^[0-9a-f]{12}$")
+KEEP_DAYS = 30  # a file of the kit kept on a server after it was last used
 
 
-def home(given: str | Path | None = None) -> Path:
-    """Where the kit is: given, else $SONGBIRD_SING_KIT, else renders/sing-kit in a checkout."""
-    return Path(given or os.environ.get("SONGBIRD_SING_KIT") or DEFAULT).expanduser().resolve()
+def home(given: str | Path | None = None, default: str | Path | None = None) -> Path:
+    """Where the kit is: given, else $SONGBIRD_SING_KIT, else default."""
+    where = given or os.environ.get("SONGBIRD_SING_KIT") or default
+    if not where:
+        raise ValueError("no folder for the singing kit")
+    return Path(where).expanduser().resolve()
 
 
 class Kit:
-    def __init__(self, root: str | Path | None = None):
-        self.root = home(root)
+    def __init__(self, root: str | Path | None = None, default: str | Path | None = None):
+        self.root = home(root, default)
 
     # ------------------------------------------------------------ where things are
-
-    @property
-    def offer_path(self) -> Path:
-        return self.root / "offer.json"
 
     def genome(self, song: str) -> Path:
         return self.root / "song" / f"{song}.json"
@@ -56,42 +56,55 @@ class Kit:
         return self.root / "guides"
 
     @property
-    def specs(self) -> Path:  # tools/guides.py GUIDES: each spec's score and note
+    def specs(self) -> Path:  # tools/guides.py GUIDES (nothing is written there: the tools only want it to exist)
         return self.root / "guide"
 
     @property
     def measured(self) -> Path:  # tools/phrasing.py MEASURED: the templates
         return self.root / "measured"
 
-    def audio(self, spec: str) -> Path:
-        return self.root / "audio" / f"{spec}.melody.flac"
-
-    def lyrics(self, spec: str) -> Path:
-        return self.root / "lyrics" / f"{spec}.json"
-
-    # ------------------------------------------------------------ what it offers
-
-    def offer(self) -> dict | None:
-        try:
-            data = json.loads(self.offer_path.read_text())
-        except (OSError, ValueError):
+    def guide(self, song: str, digest: str) -> Path | None:
+        """A guide's score, if it is here."""
+        if not DIGEST.match(str(digest or "")):
             return None
-        return data if isinstance(data, dict) and data.get("kit") == VERSION else None
+        f = self.guides / f"{song}.{digest}.score.json"
+        return f if f.is_file() else None
 
-    def spec(self, spec_id: str) -> dict | None:
-        """One version offered, by its id; None if it isn't offered (or isn't an id at all)."""
-        offer = self.offer()
-        if offer is None or not SPEC.match(str(spec_id or "")):
-            return None
-        return next((s for s in offer["specs"] if s["id"] == spec_id), None)
+    def audio(self, digest: str, a: float, b: float) -> Path:
+        return self.root / "audio" / f"{digest}.{round(a * 1000)}-{round(b * 1000)}.wav"
 
-    def fits(self, genome_path: Path) -> str | None:
-        """Why this kit can't take takes for the song at genome_path; None if it can."""
-        offer = self.offer()
-        if offer is None:
-            return ("Singing here needs its guides made first (python -m webstudio.prepare), and they "
-                    "haven't been.")
-        digest = hashlib.sha256(Path(genome_path).read_bytes()).hexdigest()
-        if digest != offer.get("genome"):
-            return "The singing guides were made for another version of this song; they need making again."
-        return None
+    # ------------------------------------------------------------ keeping
+
+    def keep_song(self, song: str, data: bytes) -> Path:
+        f = self.genome(song)
+        if not f.is_file() or f.read_bytes() != data:
+            write(f, data)
+        return f
+
+    def keep_guide(self, song: str, digest: str, text: str) -> Path:
+        f = self.guides / f"{song}.{digest}.score.json"
+        if f.is_file():
+            with contextlib.suppress(OSError):
+                f.touch()
+        else:
+            write(f, text.encode())
+        return f
+
+    def prune(self, days: float = KEEP_DAYS) -> int:
+        """What wasn't used for days goes (the songs stay: each is the studio's own)."""
+        cutoff, gone = time.time() - days * 86400, 0
+        for folder in (self.guides, self.root / "audio", self.measured / "parts"):
+            for f in folder.glob("*") if folder.is_dir() else ():
+                with contextlib.suppress(OSError):
+                    if f.is_file() and f.stat().st_mtime < cutoff:
+                        f.unlink()
+                        gone += 1
+        return gone
+
+
+def write(f: Path, data: bytes) -> None:
+    """Whole or not at all, whoever else is writing it."""
+    f.parent.mkdir(parents=True, exist_ok=True)
+    part = f.with_name(f"{f.name}.{secrets.token_hex(4)}.part")
+    part.write_bytes(data)
+    os.replace(part, f)
