@@ -212,10 +212,19 @@ of what has been made:
   about 1 GB at most rather than 2.2 GB in one piece. Mono 16-bit WAV at
   22.05 kHz (1.3 MB a section, 9 MB a whole song), set to -18 LUFS.
 - **On a server** the kit is the studio's folder; a file not used for 30 days
-  goes (`Kit.prune`, at start). The melody is made by the measuring process
-  (in a public studio, as a job in its one queue, so its memory never runs
-  beside a render's); a guide's score by the studio's own process (`realize`:
-  a fraction of a second, no tools loaded).
+  goes, and past 512 MB in all the longest unused (`Kit.prune`, at start and
+  at most every ten minutes after). Only the stretches a page sings are made
+  (the whole song, or a sung section's window and a second more:
+  `guide.stretches_offered`), so a guide has a handful. The melody is made by
+  the measuring process (in a public studio, as a job in its one queue, the
+  visitor's one thing in it, so its memory never runs beside a render's); a
+  guide's score by the studio's own process (`realize`: a fraction of a
+  second, no tools loaded).
+- **In a browser** the store keeps at most 40 guides, 24 melodies and 60
+  templates, the longest unused going first (their times kept apart, in
+  `used`), never a guide an earlier take was sung to; the singing worker lets
+  its memory go 10 s after it has made a section's melody and templates, and
+  at once when a song is made (`SongbirdDevice.renderStarts`).
 
 ### How the numbers compare
 

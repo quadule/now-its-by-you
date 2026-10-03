@@ -383,8 +383,12 @@
     if (!singingDB) {
       singingDB = new Promise((resolve) => {
         try {
-          const r = indexedDB.open("songbird-singing", 1);
-          r.onupgradeneeded = () => { for (const s of ["guides", "melodies", "parts"]) r.result.createObjectStore(s); };
+          const r = indexedDB.open("songbird-singing", 2);
+          r.onupgradeneeded = () => {  // 2: when each thing was last used, apart from it ("used", "<store>|<key>")
+            for (const s of ["guides", "melodies", "parts", "used"]) {
+              if (!r.result.objectStoreNames.contains(s)) r.result.createObjectStore(s);
+            }
+          };
           r.onsuccess = () => resolve(r.result);
           r.onerror = r.onblocked = () => resolve(null);
         } catch (e) { resolve(null); }
@@ -406,30 +410,60 @@
   }
   const sget = (store, key) => sstore(store, "readonly", (s) => s.get(key));
   const skeys = (store) => sstore(store, "readonly", (s) => s.getAllKeys());
-  // kept with when: past MOST in a store, the longest unused go (but the guides earlier takes were sung to, which
-  // the way of singing made from them needs)
+  // kept with when it was last used, in a store of its own (small: a time each), so finding the longest unused never
+  // reads a melody; past MOST in a store, the longest unused go (but the guides earlier takes were sung to, which the
+  // way of singing made from them needs)
   const MOST = { guides: 40, melodies: 24, parts: 60 };
+  const used = (store, key) => sstore("used", "readwrite", (s) => s.put(Date.now(), `${store}|${key}`));
   async function sput(store, key, value) {
-    await sstore(store, "readwrite", (s) => s.put({ ...value, at: Date.now() }, key));
-    const all = (await sstore(store, "readonly", (s) => s.getAll())) || [];
-    const keys = (await skeys(store)) || [];
-    if (keys.length <= MOST[store]) return;
+    const d = await sdb();
+    if (!d) return;
+    await new Promise((resolve) => {
+      try {
+        const tx = d.transaction([store, "used"], "readwrite");
+        tx.objectStore(store).put(value, key);
+        tx.objectStore("used").put(Date.now(), `${store}|${key}`);
+        tx.oncomplete = tx.onerror = tx.onabort = () => resolve();
+      } catch (e) { resolve(); }
+    });
+    const count = await sstore(store, "readonly", (s) => s.count());
+    if (!(count > MOST[store])) return;
     let sung = new Set();
     try {
       const k = JSON.parse(localStorage.getItem("songbird-web-singing")) || {};
       sung = new Set((k.measurements || []).map((m) => m && m.stamp && m.stamp.guide));
     } catch (e) { /* none kept */ }
-    const old = keys.map((key, i) => [key, (all[i] && all[i].at) || 0])
-      .filter(([key]) => !(store === "guides" && sung.has(key))).sort((a, b) => a[1] - b[1]);
-    const gone = old.slice(0, keys.length - MOST[store]).map(([key]) => key);
-    await sstore(store, "readwrite", (s) => { for (const key of gone) s.delete(key); });
+    const when = new Map();  // key -> when last used, read with one cursor (each a number)
+    await new Promise((resolve) => {
+      try {
+        const tx = d.transaction("used", "readonly");
+        const r = tx.objectStore("used").openCursor(IDBKeyRange.bound(`${store}|`, `${store}|\uffff`));
+        r.onsuccess = () => {
+          const c = r.result;
+          if (!c) return;
+          when.set(String(c.key).slice(store.length + 1), Number(c.value) || 0);
+          c.continue();
+        };
+        tx.oncomplete = tx.onerror = tx.onabort = () => resolve();
+      } catch (e) { resolve(); }
+    });
+    const keys = new Set((await skeys(store)) || []);
+    const old = [...keys].filter((k) => !(store === "guides" && sung.has(k))).sort((x, y) => (when.get(x) || 0) - (when.get(y) || 0));
+    const gone = old.slice(0, keys.size - MOST[store]);
+    await new Promise((resolve) => {
+      try {
+        const tx = d.transaction([store, "used"], "readwrite");
+        for (const k of gone) { tx.objectStore(store).delete(k); tx.objectStore("used").delete(`${store}|${k}`); }
+        tx.oncomplete = tx.onerror = tx.onabort = () => resolve();
+      } catch (e) { resolve(); }
+    });
   }
 
   const guides = new Map();  // name -> {song, bytes}: this visit's, before storage (a private window has none)
   async function guideFile(name) {
     if (guides.has(name)) return guides.get(name);
     const kept = await sget("guides", name);
-    if (kept && kept.bytes) { guides.set(name, kept); sput("guides", name, kept); }  // used: kept longer
+    if (kept && kept.bytes) { guides.set(name, kept); used("guides", name); }  // used: kept longer
     return kept || null;
   }
 
@@ -491,11 +525,12 @@
     const key = `${bundle.app}|${name}|${a.toFixed(3)}-${b.toFixed(3)}`;
     let wav = ((await sget("melodies", key)) || {}).bytes;
     try {
-      if (!wav) {
+      if (wav) used("melodies", key);
+      else {
         wav = await singerWork(async (w) => (await singerAsk(w, "melody", { song: g.song, guide: name, from_s: a, to_s: b },
           guideKit(g, name))).file.bytes);
+        sput("melodies", key, { bytes: wav });
       }
-      sput("melodies", key, { bytes: wav });
     } catch (e) {
       return json(e.refused ? 404 : 500, { error: e.stopped ? "The guide couldn't be made: the browser stopped it, perhaps for want of memory."
         : `The guide couldn't be made: ${e.message}` });
@@ -574,7 +609,7 @@
       for (const file of (await skeys("parts")) || []) {
         if (prefixes.some((p) => String(file).startsWith(p))) {
           const part = await sget("parts", file);
-          if (part && part.bytes) kept[`measured/parts/${file}`] = part.bytes;
+          if (part && part.bytes) { kept[`measured/parts/${file}`] = part.bytes; used("parts", file); }
         }
       }
       if (Object.keys(kept).length) await measurer.ask({ cmd: "kit", files: kept }, Object.values(kept));
@@ -607,7 +642,7 @@
       }
       await forget("sung", name);
     }
-    for (const store of ["guides", "melodies", "parts"]) await sstore(store, "readwrite", (st) => st.clear());
+    for (const store of ["guides", "melodies", "parts", "used"]) await sstore(store, "readwrite", (st) => st.clear());
     guides.clear();
   }
 
