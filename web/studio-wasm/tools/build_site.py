@@ -27,7 +27,7 @@ It writes, into OUT (emptied first, if it holds an earlier build):
 
 Folders named by a hash are cached for good (immutable); the page, bundle.json and the page's own scripts are
 asked again every visit (no-cache). No file is over 25 MiB (Cloudflare's limit per file); the build refuses one that
-is. Text isn't stored compressed: the host compresses. Every address in it is from the root (/studio.js,
+is. Text isn't stored compressed (the host compresses), but the first answers (the page unpacks them). Every address in it is from the root (/studio.js,
 /render/..., /piano/piano.js): the page is also served at /v/<id>, where a relative one would point elsewhere, and its
 policy allows no <base>."""
 
@@ -159,7 +159,8 @@ def first_answers(config: dict, days: list[str], jobs: int | None = None) -> dic
     with tempfile.TemporaryDirectory(prefix="songbird-first-") as tmp:
         runs = [subprocess.Popen([sys.executable, "-c", script, str(HERE / "py"), json.dumps(config), tmp, *days[i::n]],
                                  cwd=ROOT, stderr=subprocess.PIPE, text=True) for i in range(n)]
-        failed = [r.stderr.read()[-1500:] for r in runs if r.wait()]
+        said = [r.communicate()[1] for r in runs]  # read whole (a pipe left full would stall its process)
+        failed = [err[-1500:] for r, err in zip(runs, said) if r.returncode]
         if failed:
             raise SystemExit("the first answers couldn't be worked out:\n" + failed[0])
         return {f"{day}.gzip": gzip.compress((Path(tmp) / f"{day}.json").read_bytes(), 9, mtime=0) for day in days}

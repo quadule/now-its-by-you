@@ -1353,9 +1353,10 @@ fetches half as much behind it.
 **What a visitor sees.** The song's words, the header ("Your version today, …"), the transport, the choices of words,
 the sidebar, the Arrange and Mix views and the Sketch, within a fraction of a second of the page arriving. Python
 loads behind them; until it's ready, anything that needs it (an edit, *New performance*, Sung, export, opening a
-version) waits, and the page says "The studio is still getting ready: one moment." where it was asked; the change
-shows when it's ready. With an edit saved in this browser, on a version's page, or on a day outside the files, the
-page waits for the worker as before ("Getting the studio ready (40%)…").
+version) waits, and if someone has just pressed or typed something, the page says "The studio is still getting ready:
+one moment."; the change shows when it's ready. With an edit saved in this browser, the header says "Getting the
+studio ready (40%)…" until the worker has made the song with that edit (what the page asks of its own accord as it
+opens is never toasted). On a version's page, or on a day outside the files, the page waits for the worker as before.
 
 **How.**
 

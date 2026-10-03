@@ -162,10 +162,13 @@
   // ---------------------------------------------------------------- the studio, started at once
   let first = true;
   let ready = false;  // the studio's worker is ready: from then on it answers everything
-  function said(text) {  // before the page has its song: what's happening, where it will say what it's making
-    if (answers !== null) return;  // the page has its song already, from the first answers
+  // Before the page has its song: what's happening, where it will say what it's making. Not while the first answers
+  // give it the song; but if they can't (an edit saved here), until the header is drawn from the worker's answer.
+  function said(text) {
     const which = document.getElementById("which");
-    if (which && !(window.StudioBridge && window.StudioBridge.snapshot && window.StudioBridge.snapshot().start)) which.textContent = text;
+    if (!which) return;
+    if (answers === null ? window.StudioBridge?.snapshot?.().start : !missed || which.firstElementChild) return;
+    which.textContent = text;
   }
 
   async function start() {
@@ -198,6 +201,7 @@
   // question asked differently (an edit saved here, another day chosen) isn't in it, and waits for the worker.
   let answers = undefined;  // undefined: not known yet; null: none (the worker answers everything); else key -> [status, data]
   let firstUsed = false;  // a first answer was given: the page has its song before the worker
+  let missed = false;  // a question the file couldn't answer was asked before the worker was ready
   const firstAnswers = (async () => {
     try {
       if (version || badPath || typeof DecompressionStream !== "function") return null;
@@ -231,7 +235,8 @@
 
   async function answeredFirst(method, url, body, named) {
     if (ready || named || url.search) return null;
-    const a = answers === undefined ? await firstAnswers : answers;
+    if (answers === undefined) await firstAnswers;
+    const a = answers;  // as it is now: a change asked while the file was coming ends it for what follows
     if (!a || ready) return null;
     let data;
     try { data = method === "GET" ? undefined : JSON.parse(new TextDecoder().decode(body || new ArrayBuffer(0))); }
@@ -239,6 +244,7 @@
     const said = data === null ? null : a[question(method, url.pathname, data)];
     if (!said) {
       if (method !== "GET" && CHANGES.test(url.pathname)) answers = null;
+      missed = true;
       if (firstUsed) waiting();
       return null;
     }
@@ -247,11 +253,16 @@
     return answer(url.pathname, { status: said[0] }, copy);
   }
 
-  // asked of the worker before it's ready, on a page that has its song already: said where it was asked, briefly
-  let told = 0;
+  // asked of the worker before it's ready, on a page that has its song already, just after someone did something
+  // (pressed, clicked, typed): said where it was asked, briefly. What the page asks of its own accord (its song with
+  // the edits saved here, as it opens) isn't someone's doing: the header says how it's getting on instead (said).
+  let told = 0, acted = 0;
+  for (const kind of ["pointerdown", "keydown"]) {
+    try { document.addEventListener(kind, () => { acted = Date.now(); }, true); } catch (e) { /* no events: no words */ }
+  }
   function waiting() {
     const at = Date.now();
-    if (at - told < 4000) return;
+    if (at - acted > 1500 || at - told < 4000) return;
     told = at;
     try { window.songbirdStudio?.toast?.("The studio is still getting ready: one moment."); } catch (e) { /* only words */ }
   }

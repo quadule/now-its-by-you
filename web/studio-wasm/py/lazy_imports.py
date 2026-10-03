@@ -29,7 +29,7 @@ import types
 _LAZY: set[str] = set()
 
 
-class Needed(BaseException):  # noqa: N818 - a signal to the worker, not an error
+class Needed(BaseException):  # a signal to the worker, not an error
     """A package a stand-in needs: the worker fetches it and asks again."""
 
     def __init__(self, package: str):
@@ -51,7 +51,7 @@ def _named(module: str, names: tuple[str, ...]):
 class _Stand:
     """What `from scipy.signal import sosfilt` gives here: the real thing, looked up (or made) when first used."""
 
-    __slots__ = ("_package", "_make", "_what", "_real", "_made")
+    __slots__ = ("_made", "_make", "_package", "_real", "_what")
 
     def __init__(self, package: str, make, what: str):
         for k, v in (("_package", package), ("_make", make), ("_what", what), ("_real", None), ("_made", False)):

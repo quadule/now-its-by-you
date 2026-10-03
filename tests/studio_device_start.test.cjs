@@ -25,7 +25,7 @@ const ANSWERS = {
 const tick = () => new Promise((resolve) => setImmediate(resolve));
 
 function page({ pathname = "/", first = { folder: FOLDER, from: "2000-01-01", to: "2999-12-31" }, decompress = true,
-                day = TODAY } = {}) {
+                day = TODAY, file = Promise.resolve() } = {}) {
   const fetched = [];
   const workers = [];
   const toasts = [];
@@ -43,10 +43,13 @@ function page({ pathname = "/", first = { folder: FOLDER, from: "2000-01-01", to
     terminate() {}
   }
   const meta = { 'meta[name="studio-render"]': { content: "device" }, 'meta[name="studio-token"]': { content: "" } };
+  const listeners = {};
+  const which = { textContent: "Making your version of the song…", firstElementChild: null };  // the header's line
+  const bridge = { start: null };  // what the page has had of its start (StudioBridge.snapshot)
   const store = new Map();
   const sandbox = {
-    document: { querySelector: (q) => meta[q] || null, getElementById: () => null, readyState: "complete",
-                addEventListener() {} },
+    document: { querySelector: (q) => meta[q] || null, getElementById: (id) => (id === "which" ? which : null),
+                readyState: "complete", addEventListener: (kind, f) => { (listeners[kind] ||= []).push(f); } },
     location: { pathname, hash: "", href: `http://studio.test${pathname}`, origin: "http://studio.test" },
     localStorage: { getItem: (k) => store.get(k) ?? null, setItem: (k, v) => store.set(k, String(v)), removeItem: (k) => store.delete(k) },
     Worker: FakeWorker, WebAssembly, URL, URLSearchParams, Response, Headers, Request, TextDecoder, TextEncoder, Blob,
@@ -56,6 +59,7 @@ function page({ pathname = "/", first = { folder: FOLDER, from: "2000-01-01", to
   };
   sandbox.window = sandbox;
   sandbox.songbirdStudio = { toast: (text) => toasts.push(text) };
+  sandbox.StudioBridge = { snapshot: () => ({ start: bridge.start }) };
   sandbox.fetch = async (input) => {
     const url = new URL(String(input), "http://studio.test");
     fetched.push(url.pathname);
@@ -64,6 +68,7 @@ function page({ pathname = "/", first = { folder: FOLDER, from: "2000-01-01", to
         bytes: 35e6, studio_bytes: 20e6, studio: { song: "/app/songs/h.json", machine: "none" }, ...(first ? { first } : {}) }));
     }
     if (url.pathname === `/render/${FOLDER}${day}.gzip`) {
+      await file;
       return new Response(zlib.gzipSync(JSON.stringify({ v: 1, day, answers: ANSWERS })));
     }
     return new Response("not found", { status: 404 });
@@ -76,7 +81,9 @@ function page({ pathname = "/", first = { folder: FOLDER, from: "2000-01-01", to
     return { status: r.status, data: await r.json() };
   };
   const asked = () => workers.flatMap((w) => w.posted.filter((m) => m.cmd === "request").map((m) => m.path));
-  return { ask, asked, workers, fetched, toasts, release, sandbox };
+  const press = () => { for (const f of listeners.pointerdown || []) f({}); };  // someone did something
+  const loading = (worker, received) => worker.onmessage?.({ data: { kind: "loading", received, bytes: 20e6 } });
+  return { ask, asked, workers, fetched, toasts, release, sandbox, press, which, bridge, loading };
 }
 
 test("before the worker is ready, the page's first questions are answered from the day's file", async () => {
@@ -106,6 +113,7 @@ test("before the worker is ready, the page's first questions are answered from t
 test("anything else waits for the worker, and the page is told where it asked", async () => {
   const p = page();
   await p.ask("/api/start");
+  p.press();  // a person did something (New performance, say)
   let answered = null;
   const edit = p.ask("/api/song", { edits: { tempo: 92 } }).then((r) => { answered = r; });
   for (let i = 0; i < 5; i++) await tick();
@@ -144,4 +152,45 @@ test("a version's page, a day the build didn't make, or no way to unpack the fil
     assert.equal((await start).data.from, "the worker", JSON.stringify(options));
     assert.deepEqual(p.toasts, []);
   }
+});
+
+test("what the page asks of its own accord (its song with edits saved here) isn't toasted: the header says how it's going", async () => {
+  const p = page();
+  const start = await p.ask("/api/start");
+  assert.equal(start.data.from, "the file");
+  p.bridge.start = start.data;
+  const song = p.ask("/api/song", { edits: { tempo: 92 } });  // the page's refresh, with the saved edits
+  for (let i = 0; i < 5; i++) await tick();
+  assert.deepEqual(p.toasts, []);
+  p.loading(p.workers[0], 5e6);
+  assert.equal(p.which.textContent, "Getting the studio ready (25%)…");
+  p.release();
+  assert.equal((await song).data.from, "the worker");
+  p.which.firstElementChild = {};  // the header drawn from the worker's song: nothing more said there
+  p.loading(p.workers[0], 10e6);
+  assert.equal(p.which.textContent, "Getting the studio ready (25%)…");
+});
+
+test("on the song as it began, the header isn't written over while the worker loads", async () => {
+  const p = page();
+  await p.ask("/api/start");
+  await p.ask("/api/song", { edits: {} });
+  await tick();
+  p.loading(p.workers[0], 5e6);
+  assert.equal(p.which.textContent, "Making your version of the song…");
+});
+
+test("a change asked while the day's file is still coming ends the file's answers for what follows it", async () => {
+  let arrive = null;
+  const p = page({ file: new Promise((resolve) => { arrive = resolve; }) });
+  const kept = p.ask("/api/sing/keep", { phrasing: "{}" });
+  await tick();
+  const start = p.ask("/api/start");
+  await tick();
+  arrive();
+  for (let i = 0; i < 10; i++) await tick();
+  p.release();
+  assert.equal((await kept).data.path, "/api/sing/keep");
+  assert.equal((await start).data.from, "the worker");
+  assert.deepEqual(p.asked(), ["/api/sing/keep", "/api/start"]);
 });
