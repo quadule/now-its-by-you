@@ -23,9 +23,9 @@ from pathlib import Path
 
 HERE = Path(__file__).resolve().parent.parent  # web/studio-wasm
 ROOT = HERE.parent.parent
-TOOLS = ("phrasing.py", "speech_to_song.py", "align.py", "takes.py", "guides.py", "intelligibility.py",
+TOOLS = ("phrasing.py", "speech_to_song.py", "align.py", "takes.py", "guides.py", "intelligibility.py", "karaoke_words.py",
          "wer_suite.py")  # tools/phrasing.py and everything it imports at the top
-WEBSTUDIO = ("__init__.py", "kit.py", "worker.py")
+WEBSTUDIO = ("__init__.py", "kit.py", "worker.py", "guide.py")
 PY = ("sing_measure.py", "world_wasm.py", "sing_dtw.py")
 APP = {"world/world.wasm": HERE / "world" / "world.wasm", "world/world.mjs": HERE / "world" / "world.mjs",
        "world/LICENSE.txt": HERE / "world" / "LICENSE.txt"}

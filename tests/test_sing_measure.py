@@ -1,8 +1,8 @@
 """Measuring a sung take on the visitor's device (web/studio-wasm/py/sing_measure.py; docs/WEB-SINGING.md, "On the
-device"): the browser carries every module the measuring imports, names the kit's files a take needs, and, where
-Pyodide is installed (npm ci in web/studio-wasm, its packages fetched once), measures the machine singer's planted
-verse in Pyodide under node with exactly the numbers, phrasing and portrait the server's measuring process gives
-the same take, leaving nothing behind in its file system."""
+device"): the browser carries every module the measuring imports, and, where Pyodide is installed (npm ci in
+web/studio-wasm, its packages fetched once), names the templates a take wants, makes the template singer's part in
+Pyodide itself, and measures the machine singer's planted refrain under node with exactly the numbers, phrasing and
+portrait the server's measuring process gives the same take, leaving nothing behind in its file system."""
 
 import ast
 import importlib.util
@@ -43,22 +43,11 @@ def test_the_bundle_carries_every_module_the_measuring_imports():
             todo += [n for n in names if (ROOT / "tools" / f"{n}.py").exists()]
     assert seen <= carried, seen - carried
     files = bundle.files()
-    assert {"webstudio/worker.py", "webstudio/kit.py", "sing_measure.py", "world_wasm.py", "sing_dtw.py"} <= set(files)
+    assert {"webstudio/worker.py", "webstudio/kit.py", "webstudio/guide.py", "sing_measure.py", "world_wasm.py",
+            "sing_dtw.py", "tools/karaoke_words.py"} <= set(files)
     for name, data in files.items():  # byte for byte: tools/phrasing.py version() hashes their source
         source = ROOT / name if name.startswith(("tools/", "webstudio/")) else WASM / "py" / name
         assert source.read_bytes() == data, name
-
-
-def test_kit_files_names_what_a_take_needs():
-    sing_measure = load("sing_measure", WASM / "py" / "sing_measure.py")  # (py/ itself not on the path: its
-    # soundfile.py is the renders' stub)
-    offer = {"song": "s", "extractor": "abc", "specs": [{"guide": "g1", "templates": [-12, 0, 12]},
-                                                         {"guide": "g2", "templates": [0]}]}
-    assert sing_measure.kit_files(offer, "g1", [{"stamp": {"guide": "g2"}}, {"stamp": {"guide": "gone"}}]) == [
-        "offer.json", "song/s.json", "guides/s.g1.score.json", "guides/s.g2.score.json",
-        "measured/templates/g1.-12.abc.npz", "measured/templates/g1.+0.abc.npz", "measured/templates/g1.+12.abc.npz"]
-    with pytest.raises(ValueError):
-        sing_measure.kit_files(offer, "g3")
 
 
 def pyodide_ready() -> bool:
@@ -74,12 +63,12 @@ import json, os
 import sing_measure
 where = json.load(open("/t/out/take.json"))
 request = {"song": where["song"], "guide": where["guide"], "from_s": where["from_s"], "to_s": where["to_s"],
-           "earlier": [], "offered": [where["guide"]], "kit": "/t/kit"}
-offer = json.load(open("/t/kit/offer.json"))
-needs = sing_measure.kit_files(offer, where["guide"])
+           "earlier": [], "kit": "/t/kit"}
+parts = json.loads(sing_measure.op_json("parts", request))
+ahead = json.loads(sing_measure.op_json("template", {**request, "key": 0}))
 said = sing_measure.answer(open("/t/out/take.wav", "rb").read(), request)
 wrong = sing_measure.answer(open("/t/out/take.wav", "rb").read(), {**request, "guide": "000000000000"})
-json.dump({"said": said, "wrong": wrong, "needs": [os.path.exists("/t/kit/" + n) for n in needs],
+json.dump({"said": said, "wrong": wrong, "parts": parts, "ahead": ahead,
            "left": [f for f in os.listdir("/tmp") if f.startswith("songbird-take-")]}, open("/t/web.json", "w"))
 """
 
@@ -94,10 +83,12 @@ def test_a_take_measured_in_pyodide_is_measured_as_the_server_measures_it(tmp_pa
     measurer = W.Measurer(KIT.Kit(kit), idle=60)
     try:
         native = measurer.call("take", {"song": where["song"], "guide": where["guide"], "from_s": where["from_s"],
-                                        "to_s": where["to_s"], "earlier": [], "offered": [where["guide"]],
-                                        "audio": (out / "take.wav").read_bytes()})
+                                        "to_s": where["to_s"], "earlier": [], "audio": (out / "take.wav").read_bytes()})
     finally:
         measurer.stop()
+    made_here = {f.name: f.read_bytes() for f in (kit / "measured" / "parts").glob("*.npz")}
+    for f in (kit / "measured" / "parts").glob("*.npz"):  # the browser makes its own
+        f.unlink()
 
     dist = tmp_path / "dist"
     for tool in ("bundle.py", "sing_bundle.py"):
@@ -112,8 +103,21 @@ def test_a_take_measured_in_pyodide_is_measured_as_the_server_measures_it(tmp_pa
     web = json.loads((tmp_path / "web.json").read_text())
     assert "ok" in web["said"], web["said"]
     got = web["said"]["ok"]
-    for k in ("measurement", "phrasing", "portrait", "skipped", "audio_seconds"):
+    for k in ("measurement", "phrasing", "portrait", "skipped", "audio_seconds", "templates"):
         assert got[k] == native[k], k
-    assert "refused" in web["wrong"]  # a guide the kit doesn't offer: the singer's to act on, not a fault
-    assert all(web["needs"]) and web["left"] == []
+    assert "refused" in web["wrong"]  # a guide the kit doesn't have: the singer's to act on, not a fault
+    assert web["left"] == []
+    # the templates it wants, named before it's measured; made ahead in Pyodide, as the native ones
+    assert [n.startswith(p) for n, p in zip(native["templates"], web["parts"]["ok"]["parts"])] == [True]
+    assert web["ahead"]["ok"]["templates"] == native["templates"]
+    import io
+
+    import numpy as np
+
+    for name, data in made_here.items():
+        ours, theirs = np.load(io.BytesIO(data)), np.load(kit / "measured" / "parts" / name)
+        voiced = (ours["f0"] > 0) & (theirs["f0"] > 0)
+        assert np.array_equal(ours["f0"] > 0, theirs["f0"] > 0) and np.array_equal(ours["active"], theirs["active"])
+        # a few bits apart (the singer in numpy there and here, WORLD in wasm and native): a cent is 6e-4
+        assert np.max(np.abs(ours["f0"][voiced] - theirs["f0"][voiced]) / theirs["f0"][voiced]) < 1e-6
     assert 0 < got["peak_mb"] < 1500

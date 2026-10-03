@@ -138,18 +138,52 @@ def part_notes(g, a: float, b: float) -> list:
     return [n for n in g.notes if a <= n.start < b]
 
 
-def part_name(notes, lexicon, key: int) -> str:
-    """What a template of these notes (already moved to its own clock) depends on, as 16 hex digits: every
-    note as the singer reads it, the words' sounds and the key. (The measuring code's version is in its file's
-    name beside it.) The same notes in another version of the song are the same template."""
+def part_name(notes, lexicon) -> str:
+    """What a template of these notes (already moved to its own clock) depends on besides the key and the
+    measuring code (both in its file's name beside it), as 16 hex digits: every note as the singer reads it and
+    the words' sounds. The same notes in another version of the song are the same template."""
     import hashlib
     import json
     from dataclasses import asdict
 
     h = hashlib.sha256(json.dumps([{**asdict(n), "gesture": None} for n in notes], sort_keys=True, default=list).encode())
     h.update(json.dumps(lexicon or {}, sort_keys=True).encode())
-    h.update(str(int(key)).encode())
     return h.hexdigest()[:16]
+
+
+def part_of(tools: Tools, g, a: float, b: float):
+    """The template singer's part for a piece from a to b: the frame of the guide's it begins on, its notes moved
+    to its own clock, and the name its templates are kept under (part_name)."""
+    from dataclasses import replace
+
+    S = tools.T.S
+    notes = part_notes(g, a, b)
+    if not notes:
+        return None
+    p = max(0, int((notes[0].start - TEMPLATE_LEAD) / S.FRAME))
+    mine = [replace(n, start=n.start - p * S.FRAME) for n in notes]
+    return p, mine, part_name(mine, g.lexicon)
+
+
+def part_file(tools: Tools, name: str, key: int) -> str:
+    """A template's file name in the kit's measured/parts."""
+    return f"{name}.{int(key):+d}.{tools.extractor}.npz"
+
+
+def parts(tools: Tools, request: dict) -> list[str]:
+    """The names a take from from_s to to_s (and seconds long, if said) keeps its templates under, one for each
+    piece it is measured in, as measure() will cut it: with key, the files themselves; else the names alone,
+    which every key's file begins with (a browser's measuring worker is handed those it has kept)."""
+    g = tools.guide(str(request["song"]), str(request["guide"]))
+    from_s, to_s = float(request["from_s"]), float(request["to_s"])
+    if request.get("seconds"):
+        to_s = min(to_s, from_s + float(request["seconds"]))
+    out = []
+    for a, b in pieces(g.notes, from_s, to_s):
+        part = part_of(tools, g, a, b)
+        if part is not None:
+            out.append(part_file(tools, part[2], request["key"]) if request.get("key") is not None else f"{part[2]}.")
+    return list(dict.fromkeys(out))
 
 
 def part_template(tools: Tools, g, a: float, b: float, key: int):
@@ -160,20 +194,17 @@ def part_template(tools: Tools, g, a: float, b: float, key: int):
     from dataclasses import replace
 
     T = tools.T
-    S = T.S
-    notes = part_notes(g, a, b)
-    if not notes:
+    part = part_of(tools, g, a, b)
+    if part is None:
         raise Refused("No note of the song was sung in that take.")
-    p = max(0, int((notes[0].start - TEMPLATE_LEAD) / S.FRAME))
-    origin = p * S.FRAME
-    mine = [replace(n, start=n.start - origin) for n in notes]
-    kept = T.MEASURED / "parts" / f"{part_name(mine, g.lexicon, key)}.{key:+d}.{tools.extractor}.npz"
+    p, mine, name = part
+    kept = T.MEASURED / "parts" / part_file(tools, name, key)
     if kept.exists():
         z = np.load(kept)
         f0, band, active = z["f0"], z["band"], z["active"]
     else:
         singer = replace(T.FLAT, shift=key, tract=1.0 if key <= -6 else 1.12)  # as template() sings it
-        f0, band, active = T.analyze_take(T.V.sing(mine, S.SR, singer, 0, g.lexicon))
+        f0, band, active = T.analyze_take(T.V.sing(mine, T.S.SR, singer, 0, g.lexicon))
         kept.parent.mkdir(parents=True, exist_ok=True)
         part = kept.with_name(f"{kept.stem}.{os.getpid()}.part.npz")
         np.savez_compressed(part, f0=f0, band=band, active=active)
@@ -481,7 +512,7 @@ def hello(tools: Tools, request: dict) -> dict:
 
 
 OPS = {"measure": measure, "phrasing": phrasing, "take": take, "melody": melody, "template": templates,
-       "hello": hello}
+       "parts": lambda tools, request: {"parts": parts(tools, request)}, "hello": hello}
 
 
 def send(f, message) -> None:

@@ -373,12 +373,27 @@ class Singing:
         if self.kit.guide(self.song, name) is None or not (0.0 <= a < b and b - a <= MELODY_MAX):
             raise Refused("No such guide to sing to: reload the page.")
         f = self.kit.audio(name, a, b)
-        with self.melody_lock:
-            if not f.is_file():
-                made = self.measurer.call("melody", {"song": self.song, "guide": name, "from_s": a, "to_s": b})
-                from .kit import write
 
-                write(f, made["wav"])
+        def make(job=None) -> dict:
+            with self.melody_lock:
+                if not f.is_file():
+                    made = self.measurer.call("melody", {"song": self.song, "guide": name, "from_s": a, "to_s": b})
+                    from .kit import write
+
+                    write(f, made["wav"])
+            return {"made": True}
+
+        if not f.is_file():
+            if getattr(self.studio, "public", None) is None:
+                make()
+            else:  # a public studio: in its one queue, so a whole song's melody (1 GB) never runs beside a render
+                jobs = self.studio.jobs
+                job = jobs.submit(f"melody:{name}:{a}-{b}", "measure", "the guide", make)
+                waited = time.time()
+                while job.state in ("queued", "running") and time.time() - waited < TIMEOUT:
+                    time.sleep(0.2)
+                if job.state != "done":
+                    raise RuntimeError(job.error or "it took too long")
         with contextlib.suppress(OSError):
             f.touch()
         return f.read_bytes()
@@ -401,6 +416,10 @@ class Singing:
                 handler.fail(404, str(e))
             except RuntimeError as e:
                 handler.fail(500, f"The guide couldn't be made ({e}).")
+            except Exception as e:  # the queue full (a Busy, the studio's or this one's): said, as for a render
+                if type(e).__name__ != "Busy":
+                    raise
+                handler.fail(503, str(e))
             return True
         return False
 

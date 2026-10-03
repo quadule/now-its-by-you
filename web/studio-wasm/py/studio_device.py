@@ -18,11 +18,13 @@ the same statuses for the same refusals. What differs is only what a server can'
   the audio) in the browser's storage and gives it back at start (Device.restore).
 - **Files** a server would offer at an address (the MIDI file, the piano page's score) are handed to the page, which
   keeps them as the browser keeps things (a Blob, local storage).
-- **Singing** (with the singing kit: build_site.py --sing-kit): the studio's own Singing checks a take and queues it,
-  and makes the way of singing from its numbers, as on a server; but the take itself never comes here. The page
-  keeps its audio and hands it to a measuring worker of its own, started for that take and let go after
-  (sing_measure.measure, in web/studio-wasm/studio-worker.mjs), which gives back only numbers: Device.handout says
-  what to measure, Device.measured takes the answer and finishes the job as the server's queue would.
+- **Singing** (when the site carries its measuring): the studio's own Singing makes the guide for the version on the
+  page (its score, kept by digest in this worker's memory and handed to the page, which keeps it), checks a take
+  and queues it, and makes the way of singing from its numbers, as on a server; but the take itself never comes
+  here. The page keeps its audio and hands it to a measuring worker of its own, started for that take and let go
+  after (sing_measure.measure, in web/studio-wasm/studio-worker.mjs), which gives back only numbers: Device.handout
+  says what to measure, Device.measured takes the answer and finishes the job as the server's queue would. The
+  guide's melody and the template singer's analyses are made by the page's singing worker, never here.
 
     Device(config).handle(method, path, query, version, body, headers) -> {"status", "json", "file"?, ...}
 """
@@ -41,7 +43,7 @@ from songbird import studio as studio_mod
 from songbird.studio import Busy, NotFound, Studio
 
 NOT_YET = "Singing here isn't available yet."
-DEVICE_CONSENT = 2  # the consent's version on the device (webstudio.singing.CONSENT is the server's): its words differ
+DEVICE_CONSENT = 3  # the consent's version on the device (webstudio.singing.CONSENT is the server's): its words differ
 NO_STEMS = ("The parts can't be made in the browser yet. Record it, then open the recording with Python on a "
             "computer (python3 the-file.flac studio) to make them.")
 THINKING = 300.0  # seconds the program may take to read a version brought here: a server's 40 is for its own CPU, and
@@ -175,8 +177,8 @@ class Device:
         self._singing(config)
 
     def _singing(self, config: dict) -> None:
-        """Singing, if the build gave it the kit (its offer, where sing_kit says: the worker fetched it). The take is
-        measured in a worker of its own (handout, measured), never in this one."""
+        """Singing, if the site carries its measuring (sing_kit: where its guides are kept, in this worker's memory).
+        The take is measured in a worker of its own (handout, measured), never in this one."""
         kit = config.get("sing_kit")
         if not kit:
             return
@@ -227,7 +229,8 @@ class Device:
     # ------------------------------------------------------------ the page's questions
 
     def _for(self, version: str | None, path: str) -> Studio | None:
-        if version is None or path.startswith("/api/sing"):  # singing is the song's own, as on a server
+        # singing is the song's own, as on a server, but for its guide: the version on the page
+        if version is None or (path.startswith("/api/sing") and path != "/api/sing/guide"):
             return self.studio
         return self.studio.opened(version)
 
@@ -273,6 +276,15 @@ class Device:
             raise ValueError("send a map, with the edits a map of choices")
         if path == "/api/open/ready":  # nothing to wait for here: the file is read on this device
             return {"status": 200, "json": {"ready": True}}
+        if path == "/api/sing/guide" and studio.singing is not None:  # its words, and its score for the page to keep
+            from webstudio import singing as singing_mod
+
+            try:
+                words, score = studio.singing.guide(studio, data)
+            except singing_mod.Refused as e:
+                raise ValueError(str(e)) from None
+            return {"status": 200, "json": {**words, "song": studio.singing.song},
+                    "file": {"path": score, "type": "application/json", "name": words["guide"]}}
         out = {"status": 200, "json": studio_mod.answer(studio, path, data, None)}
         return self._files(studio, path, out)
 
@@ -334,7 +346,7 @@ class Device:
                 raise NotFound("That take isn't waiting to be measured.")
             jobs.pending.remove(job)
             job.state, job.stage, job.progress = "running", "listening to how you sang", 0.05
-        return {"status": 200, "json": {"request": {k: v for k, v in request.items() if k not in ("audio", "seconds")}}}
+        return {"status": 200, "json": {"request": {k: v for k, v in request.items() if k != "audio"}}}
 
     def measured(self, job_id: str, answer: dict) -> dict:
         """The measuring worker's answer ({"ok": result} | {"refused": why} | {"error": what}, sing_measure.answer's)
@@ -364,8 +376,8 @@ class Device:
                 offer.update(device=True, consent=DEVICE_CONSENT)
                 offer.pop("keep_days", None)
             return {"status": 200, "json": offer}
-        if path in ("/api/sing/lyrics", "/api/sing/guide"):  # the kit's own files: the page fetches them (device.js)
-            raise NotFound("The page fetches a version's words and guide from the singing kit itself.")
+        if path == "/api/sing/melody":  # made by the page's singing worker (device.js), never here
+            raise NotFound("The page makes its guide's melody itself.")
         raise NotFound("not found")
 
     def _take(self, studio: Studio, body: bytes, headers: dict) -> dict:
@@ -433,7 +445,9 @@ class Measuring:
     given back to Singing._measure as the measuring process's reply would be."""
 
     idle = 0.0
-    per_second, start = 0.2, 5.0  # 1.2 to 1.6 times this Mac's native measuring, and a worker started for each take
+    # 1.2 to 1.6 times this Mac's native measuring, the template singer's part when it isn't kept yet, and a worker
+    # started for each take
+    per_second, start = 0.35, 5.0
     answer: dict | None = None
 
     def call(self, op: str, request: dict) -> dict:

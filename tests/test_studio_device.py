@@ -174,42 +174,36 @@ def test_a_job_taken_is_made_between_requests(device):
     assert ask(device, f"/api/job/{job.id}", method="GET")["json"]["result"] == {"ok": 1}
 
 
-def sing_kit(folder: Path) -> Path:
-    """A singing kit's offer for the lead song (all the studio's worker reads of a kit: the page fetches the rest)."""
-    import hashlib
-
-    folder.mkdir(parents=True, exist_ok=True)
-    (folder / "offer.json").write_text(json.dumps({
-        "kit": 1, "song": LEAD.stem, "title": "Now It's By You", "genome": hashlib.sha256(LEAD.read_bytes()).hexdigest(),
-        "extractor": "0123456789ab", "set": {"id": "a", "name": "Set A", "about": ""}, "default": "a.k0.t90",
-        "specs": [{"id": "a.k0.t90", "set": "a", "key": 0, "tempo": 90, "guide": "523190fdf68a", "duration": 151.2,
-                   "templates": [-12, 0, 12]}]}))
-    return folder
-
-
 def test_singing_on_the_device_never_holds_the_take(tmp_path):
-    """With the kit, singing is offered and says it is the device's (its own consent); a take is checked and queued
-    from where it was sung and its length alone; it isn't measured in this worker (work skips it) but handed out
-    without audio to the page's measuring worker, whose answer finishes the job as the server's queue does: the way of
-    singing made and kept, a refusal said as the singer's, a fault as a failure."""
+    """With singing, it is offered and says it is the device's (its own consent); a guide is made from the version on
+    the page and its score handed to the page to keep; a take is checked and queued from where it was sung and its
+    length alone; it isn't measured in this worker (work skips it) but handed out without audio to the page's
+    measuring worker, whose answer finishes the job as the server's queue does: the way of singing made and kept, a
+    refusal said as the singer's, a fault as a failure."""
     from webstudio import singing as W
 
     d = D.Device({"song": str(LEAD), "machine": "none", "home": str(tmp_path / "home"), "runs_with": RUNS_WITH,
-                  "sing_kit": str(sing_kit(tmp_path / "kit"))})
+                  "sing_kit": str(tmp_path / "kit")})
     offer = d.handle("GET", "/api/sing/offer", {}, None, b"", {})["json"]
     assert offer["available"] and offer["device"] is True and offer["consent"] == D.DEVICE_CONSENT != W.CONSENT
-    assert "keep_days" not in offer and offer["specs"][0]["id"] == "a.k0.t90"
+    assert "keep_days" not in offer and offer["speed"] == 90 and offer["released"]
+    made = d.handle("POST", "/api/sing/guide", {}, None, json.dumps({"edits": {}, "speed": 90, "key": 0}).encode(), {})
+    guide = made["json"]["guide"]
+    assert made["status"] == 200 and made["json"]["song"] == LEAD.stem and made["json"]["lines"]
+    assert made["file"]["type"] == "application/json" and Path(made["file"]["path"]).read_text().startswith("{")
+    window = next(s["window"] for s in made["json"]["sections"] if s.get("window"))
 
     def take(meta, seconds="31.5"):
         body = json.dumps(meta).encode()
         return d.handle("POST", "/api/sing/take", {}, None, body,
                         {"x-sing-meta": str(len(body)), "x-sing-seconds": seconds})
 
-    meta = {"spec": "a.k0.t90", "guide": "523190fdf68a", "from_s": 10.0, "to_s": 40.0, "earlier": []}
+    meta = {"guide": guide, "from_s": window[0], "to_s": window[1], "earlier": []}
+    seconds = str(round(window[1] - window[0] + 0.6, 2))
     assert take(meta, "nan")["status"] == 400 and take(meta, "0")["status"] == 400
-    assert "longer than" in take(meta, "45")["json"]["error"]
-    assert "guide changed" in take({**meta, "guide": "000000000000"})["json"]["error"]
-    queued = take(meta)
+    assert "longer than" in take(meta, "60")["json"]["error"]
+    assert "isn't one this studio made" in take({**meta, "guide": "000000000000"})["json"]["error"]
+    queued = take(meta, seconds)
     assert queued["status"] == 200 and queued["json"]["state"] == "queued" and queued["json"]["estimate"] > 0
     job = queued["json"]["id"]
     assert d.work() == 0 and d.studio.jobs.get(job).state == "queued"  # never measured in this worker
@@ -218,8 +212,8 @@ def test_singing_on_the_device_never_holds_the_take(tmp_path):
     given = json.loads(d.handout_wire(job))
     request = json.loads(given["json"])["request"]
     assert given["status"] == 200 and d.studio.jobs.get(job).state == "running"
-    assert request == {"song": LEAD.stem, "guide": "523190fdf68a", "from_s": 10.0, "to_s": 40.0, "earlier": [],
-                       "offered": ["523190fdf68a"]}
+    assert request == {"song": LEAD.stem, "guide": guide, "from_s": window[0], "to_s": window[1], "earlier": [],
+                       "seconds": float(seconds)}
     assert json.loads(d.handout_wire(job))["status"] == 404  # handed out once
     phrasing = {"phrases": {}, "source_detail": "1 sung take(s)"}
     answer = {"ok": {"measurement": {"notes": []}, "phrasing": phrasing, "portrait": "You sang.", "skipped": [],
@@ -231,35 +225,47 @@ def test_singing_on_the_device_never_holds_the_take(tmp_path):
     assert d.studio.singing.store.path(result["name"]) is not None  # kept, as the server keeps a way
     assert json.loads(d.measured_wire(job, json.dumps(answer)))["status"] == 404  # finished once
 
-    refused = take(meta)["json"]["id"]
+    refused = take(meta, seconds)["json"]["id"]
     d.handout(refused)
-    out = d.measured(refused, {"refused": "Your take sat 7 semitones above the guide's key."})["json"]
-    assert out["state"] == "done" and out["result"] == {"refused": "Your take sat 7 semitones above the guide's key."}
-    failed = take(meta)["json"]["id"]
+    out = d.measured(refused, {"refused": "Your take sat 21 semitones above the guide's key."})["json"]
+    assert out["state"] == "done" and out["result"] == {"refused": "Your take sat 21 semitones above the guide's key."}
+    failed = take(meta, seconds)["json"]["id"]
     d.handout(failed)
     out = d.measured(failed, {"error": "this device ran out of memory measuring it"})["json"]
     assert out["state"] == "failed" and "ran out of memory" in out["error"]
     assert d.studio.singing.waiting == {}  # nothing of any take left waiting
 
-    cancelled = take(meta)["json"]["id"]
+    cancelled = take(meta, seconds)["json"]["id"]
     assert d.studio.jobs.cancel(cancelled)
     assert json.loads(d.handout_wire(cancelled))["status"] == 404  # let go before its turn: nothing to measure
-    taken = take(meta)["json"]["id"]
+    taken = take(meta, seconds)["json"]["id"]
     assert d.studio.singing.waiting.keys() == {d.studio.jobs.get(taken).key}  # the cancelled take's went with it
     d.handout(taken)
     assert json.loads(d.measured_wire(taken, "not json"))["status"] == 400
     assert d.studio.jobs.get(taken).state == "running"  # still the measuring worker's to answer
     assert json.loads(d.handout_wire("nope"))["status"] == 404
-    # the guide and its words are the page's to fetch from the kit, never this worker's
-    assert d.handle("GET", "/api/sing/guide", {"spec": "a.k0.t90"}, None, b"", {})["status"] == 404
+    # the melody is the page's singing worker's to make, never this worker's
+    assert d.handle("GET", "/api/sing/melody", {"guide": guide, "from": "0", "to": "10"}, None, b"", {})["status"] == 404
 
 
-def test_singing_without_its_kit_says_why(tmp_path):
-    """The kit's offer couldn't be fetched (studio-worker.mjs): singing says so, and the studio works."""
-    d = D.Device({"song": str(LEAD), "machine": "none", "home": str(tmp_path), "runs_with": RUNS_WITH,
-                  "singing_why": "Singing couldn't start here: its guides couldn't be fetched. Reload to try again."})
+def test_the_guide_is_the_version_the_page_is_on(tmp_path):
+    """The guide is laid from the version as the page has it (its edits: a tempo chosen sings at that tempo), and the
+    released version is offered beside it, at its own tempo."""
+    d = D.Device({"song": str(LEAD), "machine": "none", "home": str(tmp_path / "home"), "runs_with": RUNS_WITH,
+                  "sing_kit": str(tmp_path / "kit")})
+    ours = d.handle("POST", "/api/sing/guide", {}, None, json.dumps({"speed": 100}).encode(), {})["json"]
+    released = d.handle("POST", "/api/sing/guide", {}, None, json.dumps({"which": "released", "speed": 100}).encode(), {})
+    assert released["status"] == 200 and released["json"]["tempo"] == 96.0 and released["json"]["guide"] != ours["guide"]
+    assert ours["tempo"] == d.studio.version({}).params.tempo
+    slower = d.handle("POST", "/api/sing/guide", {}, None, json.dumps({"edits": {"tempo": 70}, "speed": 100}).encode(), {})
+    assert slower["status"] == 200 and slower["json"]["tempo"] == d.studio.version({"tempo": 70}).params.tempo != ours["tempo"]
+
+
+def test_singing_without_its_measuring_says_why(tmp_path):
+    """A site built without singing: the studio says singing isn't here, and works."""
+    d = D.Device({"song": str(LEAD), "machine": "none", "home": str(tmp_path), "runs_with": RUNS_WITH})
     start = d.handle("GET", "/api/start", {}, None, b"", {})
-    assert start["status"] == 200 and start["json"]["sing"]["why"].startswith("Singing couldn't start here")
+    assert start["status"] == 200 and start["json"]["sing"]["why"] == "Singing here isn't available yet."
 
 
 def test_the_static_page_and_its_headers():
@@ -292,37 +298,3 @@ def test_the_static_page_and_its_headers():
             assert url.startswith(("/", "#", "https:")), (name, url)
     assert 'href="/piano/piano.css"' in files["piano/index.html"].decode()
     assert 'href="/"' in files["piano/index.html"].decode()  # back to the studio
-
-
-def test_the_singing_kit_is_served_a_file_at_a_time(tmp_path, monkeypatch):
-    """build_site.py lays the kit out as the device fetches it, each file on its own in a hashed (immutable) folder:
-    only the files the offer names, and a kit for another song, made by other measuring code, or missing a file is
-    refused before anything is built."""
-    import subprocess
-
-    kit = sing_kit(tmp_path / "kit")
-    names = ["offer.json", f"song/{LEAD.stem}.json", "lyrics/a.k0.t90.json", "audio/a.k0.t90.melody.flac",
-             f"guides/{LEAD.stem}.523190fdf68a.score.json",
-             *[f"measured/templates/523190fdf68a.{k}.0123456789ab.npz" for k in ("-12", "+0", "+12")]]
-    version = {"made": "0123456789ab"}
-    monkeypatch.setattr(SITE.subprocess, "run",
-                        lambda *a, **k: subprocess.CompletedProcess(a, 0, version["made"] + "\n", ""))
-    with pytest.raises(SystemExit, match="missing"):
-        SITE.kit_files(kit)
-    for name in names[1:]:
-        (kit / name).parent.mkdir(parents=True, exist_ok=True)
-        (kit / name).write_bytes(name.encode())
-    (kit / "guide").mkdir()
-    (kit / "guide" / "elsewhere.json").write_text("{}")  # a file of the kit's no take needs: not served
-    files = SITE.kit_files(kit)
-    assert list(files) == names and files["audio/a.k0.t90.melody.flac"] == b"audio/a.k0.t90.melody.flac"
-    version["made"] = "ba9876543210"
-    with pytest.raises(SystemExit, match="another version of the measuring code"):
-        SITE.kit_files(kit)
-    offer = json.loads((kit / "offer.json").read_text())
-    (kit / "offer.json").write_text(json.dumps({**offer, "genome": "0" * 64}))
-    with pytest.raises(SystemExit, match="another version of this song"):
-        SITE.kit_files(kit)
-    guide = SITE.describe("render/kit-0123456789abcdef/audio/a.k0.t90.melody.flac")
-    assert guide["type"] == "audio/flac" and guide["cache"] == SITE.IMMUTABLE and "csp" not in guide
-    assert SITE.describe("render/kit-0123456789abcdef/measured/templates/g.+0.v.npz")["cache"] == SITE.IMMUTABLE
