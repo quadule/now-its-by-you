@@ -13,10 +13,12 @@
 // One render at a time; the renderer terminates the worker after a whole song (wasm memory never shrinks).
 //
 // The same script is also the studio itself, on the visitor's device (songbird/studio/device.js starts one, for the
-// whole visit, apart from the render workers: docs/WEB-STUDIO.md, "On the device"): after "init",
+// whole visit, apart from the render workers: docs/WEB-STUDIO.md, "On the device"): after "init" with control (numpy
+// alone: scipy and soundfile stood in for until used, py/lazy_imports.py),
 //
-//   → { cmd: "studio", config: { song, machine, runs_with, kit? } }  ← { kind: "studio", program, song, machine, day, title, heap }
-//     (kit: the singing kit's folder URL, build_site.py's render/kit-<hash>/: its offer.json is fetched)
+//   → { cmd: "studio", config: { song, machine, runs_with, day, kit? } }  ← { kind: "studio", program, song, machine, day, title, heap }
+//     (day: the page's, YYYY-MM-DD; kit: the singing kit's folder URL, build_site.py's render/kit-<hash>/: its
+//     offer.json is fetched)
 //   → { cmd: "request", id, method, path, query, version, body (ArrayBuffer or null), headers }
 //   → { cmd: "restore", id, version: { id, record, genome, timeline, shared } }   a version read before, kept again
 //   → { cmd: "read", id, bytes, title, machine, day, version? }  a version's file, read as data in a worker of its own
@@ -71,20 +73,49 @@ addEventListener('securitypolicyviolation', (e) => {
   postMessage({ kind: 'error', message: `blocked by the page's policy (${e.violatedDirective})`, memory: false });
 });
 
+// The studio's worker and a reader ("control") load numpy alone: the program imports scipy and soundfile but their
+// questions never run them (py/lazy_imports.py stands in for both), so neither is fetched unless one is used; then it
+// is, and the question asked again (needing, below). A render or a measuring worker loads all three.
+const LAZY = ['scipy', 'soundfile'];
+
+// The packages' wheels fetched while Python starts, rather than after it (into the HTTP cache: they're immutable,
+// where loadPackage then finds them); not counted here, but when loadPackage reads them
+function warm(pyodide, packages) {
+  fetched(`${pyodide}pyodide-lock.json`).then((r) => r.json()).then((lock) => {
+    const names = new Set();
+    const todo = [...packages];
+    while (todo.length) {
+      const name = todo.pop();
+      if (names.has(name) || !lock.packages[name]) continue;
+      names.add(name);
+      todo.push(...(lock.packages[name].depends || []));
+    }
+    for (const name of names) fetched(`${pyodide}${lock.packages[name].file_name}`).then((r) => r.arrayBuffer()).catch(() => {});
+  }).catch(() => {});
+}
+
 async function init({ pyodide, app, bytes, lean, control, stemCacheBytes }) {
   const t0 = performance.now();
   appURL = app;
   total = bytes || 0;
   step = 'Python';
   loading(true);
+  // the program is fetched beside Python and its packages, not after them
+  const program = lean || control ? fetch(`${app}songbird.zip`).then((r) => {
+    if (!r.ok) throw new Error(`the program couldn't be fetched (${r.status})`);
+    return r.arrayBuffer();
+  }) : null;
+  program?.catch(() => {});
+  const packages = control ? ['numpy'] : ['numpy', 'scipy', 'soundfile'];
+  if (control) warm(pyodide, packages);
   const { loadPyodide } = await import(`${pyodide}pyodide.mjs`);
   py = await loadPyodide({ indexURL: pyodide, stdout: () => {}, stderr: () => {} });
-  step = 'numpy, scipy';
+  step = packages.join(', ');
   loading(true);
-  await py.loadPackage(['numpy', 'scipy', 'soundfile'], { messageCallback: () => {}, errorCallback: () => {} });
+  await py.loadPackage(packages, { messageCallback: () => {}, errorCallback: () => {} });
   step = 'the program';
   loading(true);
-  if (lean || control) return initLean(app, t0, control);
+  if (lean || control) return initLean(new Uint8Array(await program), t0, control);
   const kernels = await import(`${app}kernels/kernels.gen.mjs`);
   const rt = await import(`${app}kernels/rt.mjs`);
   const { loadWasmKernels } = await import(`${app}wasm/kernels.mjs`);
@@ -121,8 +152,7 @@ PROGRAM = pack.program_sha256(pack.program_files())
 
 // A measuring worker's start: the program unpacked, but none of the renderer's kernels or instruments (the measuring
 // imports what it needs itself)
-async function initLean(app, t0, control = false) {
-  const zip = new Uint8Array(await (await fetch(`${app}songbird.zip`)).arrayBuffer());
+async function initLean(zip, t0, control = false) {
   py.unpackArchive(zip, 'zip', { extractDir: '/app' });
   await py.runPythonAsync(`
 import os, sys
@@ -131,6 +161,7 @@ os.environ["SONGBIRD_HOME"] = "/tmp/songbird-home"
 ${control ? 'os.environ["NUMBA_DISABLE_JIT"] = "1"' : ''}
 sys.path.insert(0, "/app")
 os.chdir("/app")
+${control ? `import lazy_imports\nlazy_imports.install(${JSON.stringify(LAZY)})` : ''}
 `);
   postMessage({ kind: 'ready', seconds: (performance.now() - t0) / 1000, heap: heapMiB(), received });
 }
@@ -175,6 +206,23 @@ function failed(err) {
 
 // ---------------------------------------------------------------- the studio on the device (py/studio_device.py)
 
+// Python run with what it needs: if it used scipy or soundfile, which a control worker hasn't fetched
+// (lazy_imports.Needed), the package is fetched and the same thing run again. What ran is the studio's answering, which
+// keeps nothing of a question it didn't finish.
+const NEEDED = /lazy_imports\.Needed: (\w+)/;
+async function needing(run) {
+  for (let tries = 0; ; tries++) {
+    try {
+      return run();
+    } catch (err) {
+      const need = NEEDED.exec(String((err && err.message) || err));
+      if (!need || !LAZY.includes(need[1]) || tries >= LAZY.length) throw err;
+      await py.loadPackage([need[1]], { messageCallback: () => {}, errorCallback: () => {} });
+      py.runPython(`import lazy_imports\nlazy_imports.real(${JSON.stringify(need[1])})`);
+    }
+  }
+}
+
 const LATER = new Set(['/api/timeline']);  // asked after everything else that's waiting
 
 // a file of the singing kit (a hashed folder: the browser keeps each for good once fetched), by its path in the kit
@@ -200,11 +248,11 @@ async function studio({ config }) {
     }
   }
   py.globals.set('CONFIG', JSON.stringify(config));
-  const view = py.runPython(`
+  const view = await needing(() => py.runPython(`
 import json, studio_device
 DEVICE = studio_device.Device(json.loads(CONFIG))
 json.dumps(DEVICE.view)
-`);
+`));
   postMessage({ kind: 'studio', ...JSON.parse(view), heap: heapMiB() });
 }
 
@@ -230,28 +278,32 @@ function call(method, ...args) {
   return py.runPython(`import json\nDEVICE.${method}_wire(*json.loads(ARGS))`);
 }
 
-function request(m) {
-  py.FS.writeFile(BODY, m.body ? new Uint8Array(m.body) : new Uint8Array(0));
-  answered(m.id, call('handle', m.method || 'GET', m.path, m.query || {}, m.version || null, BODY, m.headers || {}));
+async function request(m) {
+  answered(m.id, await needing(() => {
+    py.FS.writeFile(BODY, m.body ? new Uint8Array(m.body) : new Uint8Array(0));  // (again, if asked again)
+    return call('handle', m.method || 'GET', m.path, m.query || {}, m.version || null, BODY, m.headers || {});
+  }));
 }
 
-function read(m) {
-  py.FS.writeFile(BODY, new Uint8Array(m.bytes));
-  py.globals.set('ARGS', JSON.stringify([BODY, m.title, m.machine, m.day, m.version || null]));
-  answered(m.id, py.runPython('import json, studio_device\nstudio_device.examine_wire(*json.loads(ARGS))'));
+async function read(m) {
+  answered(m.id, await needing(() => {
+    py.FS.writeFile(BODY, new Uint8Array(m.bytes));
+    py.globals.set('ARGS', JSON.stringify([BODY, m.title, m.machine, m.day, m.version || null]));
+    return py.runPython('import json, studio_device\nstudio_device.examine_wire(*json.loads(ARGS))');
+  }));
 }
 
-function restore(m) {
+async function restore(m) {
   const v = m.version || {};
-  answered(m.id, call('restore', v.id, v.record, v.genome, v.timeline || null, !!v.shared));
+  answered(m.id, await needing(() => call('restore', v.id, v.record, v.genome, v.timeline || null, !!v.shared)));
 }
 
-function handout(m) {
-  answered(m.id, call('handout', m.job));
+async function handout(m) {
+  answered(m.id, await needing(() => call('handout', m.job)));
 }
 
-function measured(m) {
-  answered(m.id, call('measured', m.job, m.answer));
+async function measured(m) {
+  answered(m.id, await needing(() => call('measured', m.job, m.answer)));
 }
 
 // ---------------------------------------------------------------- a sung take measured, in a worker of its own
@@ -285,8 +337,8 @@ _said
     seconds: (performance.now() - t0) / 1000 });
 }
 
-function work() {  // the jobs the studio took, made now that nothing is waiting
-  if (py && py.globals.has('DEVICE')) py.runPython('DEVICE.work()');
+async function work() {  // the jobs the studio took, made now that nothing is waiting
+  if (py && py.globals.has('DEVICE')) await needing(() => py.runPython('DEVICE.work()'));
 }
 
 function failedAnswer(id, err) {
@@ -329,7 +381,7 @@ async function pump() {
         else failed(err);
       }
       if (!waiting.length && m.cmd === 'request') {
-        try { work(); } catch (err) { /* a job's failure is kept on the job */ }
+        try { await work(); } catch (err) { /* a job's failure is kept on the job */ }
       }
     }
   } finally {
