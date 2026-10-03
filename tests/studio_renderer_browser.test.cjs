@@ -186,6 +186,26 @@ test("an oversized file remains usable and evicted or reset blob URLs are releas
   }
 });
 
+test("a file the player is on is released only when the player moves on, though the cache let it go", async () => {
+  const revoke = URL.revokeObjectURL;
+  const gone = [];
+  URL.revokeObjectURL = (url) => gone.push(url);
+  try {
+    const { r } = browser({}, { cacheBytes: 1 });
+    const first = await r.preview({ edits: {}, section: 1 }).done;
+    R.playing(first.url);  // heard while the next is made
+    const second = await r.preview({ edits: {}, section: 2 }).done;
+    assert.ok(!R.shared.cache.has(first.key));
+    assert.ok(!gone.includes(first.url));
+    R.playing(second.url);
+    assert.ok(gone.includes(first.url));
+    assert.ok(!gone.includes(second.url));
+  } finally {
+    R.reset();
+    URL.revokeObjectURL = revoke;
+  }
+});
+
 test("preview eviction preserves the displayed recording until a new recording replaces it", async () => {
   const revoke = URL.revokeObjectURL;
   const gone = [];

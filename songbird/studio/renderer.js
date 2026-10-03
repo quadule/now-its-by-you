@@ -220,7 +220,7 @@
 
   const shared = {  // one per page: the bundle, the workers, what went wrong, what was made here
     bundle: undefined, found: null, browser: null, failures: { count: 0, whole: false, visit: false },
-    made: [], cache: new Map(), recording: null, mode: null, listeners: new Set(),
+    made: [], cache: new Map(), recording: null, playing: null, retired: new Set(), mode: null, listeners: new Set(),
   };
 
   function storageOf(options) {
@@ -263,7 +263,21 @@
     if (!job) return;
     shared.cache.delete(key);
     if (shared.recording === job) shared.recording = null;
-    try { URL.revokeObjectURL(job.url); } catch (e) { /* already gone */ }
+    // the page's player may still be on it (a seek in a revoked file stalls without a word): let go when it moves on
+    if (job.url === shared.playing) shared.retired.add(job.url);
+    else revoke(job.url);
+  }
+
+  function revoke(url) {
+    try { URL.revokeObjectURL(url); } catch (e) { /* already gone */ }
+  }
+
+  // The page says which file its player has (studio.js's play()); one forgotten while it played is released now.
+  function playing(url) {
+    shared.playing = url || null;
+    for (const old of shared.retired) {
+      if (old !== shared.playing) { shared.retired.delete(old); revoke(old); }
+    }
   }
 
   function remember(key, job, size, budget, recording) {
@@ -518,14 +532,15 @@
     show();
   }
 
-  const api = { create, capable, choose, environment, workers, setMode, status, mount, shared, plainly, MAKING,
+  const api = { create, capable, choose, environment, workers, setMode, status, mount, shared, plainly, playing, MAKING,
     get made() { return shared.made; },
     debug: { kill: () => shared.browser?.kill() || false, busy: () => !!shared.browser?.busy() },
     reset() {  // a fresh page, for the tests
       shared.browser?.close();
       for (const key of shared.cache.keys()) forget(key);
+      playing(null);
       Object.assign(shared, { bundle: undefined, found: null, browser: null, mode: null, made: [], cache: new Map(), recording: null,
-        failures: { count: 0, whole: false, visit: false } });
+        playing: null, retired: new Set(), failures: { count: 0, whole: false, visit: false } });
       shared.listeners.clear();
     } };
   if (typeof window !== "undefined") {

@@ -1147,6 +1147,7 @@ function play(url, title, sub, playing = null, start = 0) {
   state.playing = playing || { editsKey: JSON.stringify(state.edits), label: title, who: "you", section: null, job: null };
   stopFade();
   audio.src = url;
+  window.SongbirdRenderer?.playing?.(url);  // kept while it plays, though the renderer's cache lets it go
   const at = audio._start = start > 0 ? {} : null;
   if (at) {
     audio.currentTime = start;
