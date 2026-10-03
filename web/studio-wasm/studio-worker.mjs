@@ -71,7 +71,7 @@ addEventListener('securitypolicyviolation', (e) => {
   postMessage({ kind: 'error', message: `blocked by the page's policy (${e.violatedDirective})`, memory: false });
 });
 
-async function init({ pyodide, app, bytes, lean }) {
+async function init({ pyodide, app, bytes, lean, control, stemCacheBytes }) {
   const t0 = performance.now();
   appURL = app;
   total = bytes || 0;
@@ -84,7 +84,7 @@ async function init({ pyodide, app, bytes, lean }) {
   await py.loadPackage(['numpy', 'scipy', 'soundfile'], { messageCallback: () => {}, errorCallback: () => {} });
   step = 'the program';
   loading(true);
-  if (lean) return initLean(app, t0);
+  if (lean || control) return initLean(app, t0, control);
   const kernels = await import(`${app}kernels/kernels.gen.mjs`);
   const rt = await import(`${app}kernels/rt.mjs`);
   const { loadWasmKernels } = await import(`${app}wasm/kernels.mjs`);
@@ -101,6 +101,7 @@ async function init({ pyodide, app, bytes, lean }) {
 import os, sys
 os.environ["SONGBIRD_THREADS"] = "1"
 os.environ["SONGBIRD_HOME"] = "/tmp/songbird-home"
+os.environ["SONGBIRD_STEM_CACHE_BYTES"] = ${JSON.stringify(String(stemCacheBytes ?? 64 * 2 ** 20))}
 sys.path.insert(0, "/app")
 os.chdir("/app")
 import wasm_kernels
@@ -120,13 +121,14 @@ PROGRAM = pack.program_sha256(pack.program_files())
 
 // A measuring worker's start: the program unpacked, but none of the renderer's kernels or instruments (the measuring
 // imports what it needs itself)
-async function initLean(app, t0) {
+async function initLean(app, t0, control = false) {
   const zip = new Uint8Array(await (await fetch(`${app}songbird.zip`)).arrayBuffer());
   py.unpackArchive(zip, 'zip', { extractDir: '/app' });
   await py.runPythonAsync(`
 import os, sys
 os.environ["SONGBIRD_THREADS"] = "1"
 os.environ["SONGBIRD_HOME"] = "/tmp/songbird-home"
+${control ? 'os.environ["NUMBA_DISABLE_JIT"] = "1"' : ''}
 sys.path.insert(0, "/app")
 os.chdir("/app")
 `);

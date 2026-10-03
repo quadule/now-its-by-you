@@ -83,7 +83,7 @@
     setTimeout(() => reject(new Error(`${what} took too long`)), ms))]);
 
   // A worker running the program: the studio (for the whole visit), or a reader (one file, then let go).
-  function spawn(onLoading, lean = false) {
+  function spawn(onLoading, lean = false, control = false) {
     const w = new Worker(`${at(bundle.app)}studio-worker.mjs`, { type: "module" });
     const pending = new Map();
     const said = {};
@@ -123,7 +123,7 @@
     };
     worker.make = (config) => { w.postMessage({ cmd: "studio", config }); return worker.made; };
     worker.stop = () => { w.terminate(); stopped("let go"); };
-    w.postMessage({ cmd: "init", pyodide: at(bundle.pyodide), app: at(bundle.app), bytes: bundle.bytes, lean });
+    w.postMessage({ cmd: "init", pyodide: at(bundle.pyodide), app: at(bundle.app), bytes: bundle.bytes, lean, control });
     return worker;
   }
 
@@ -156,10 +156,8 @@
     said("Getting the studio ready…");
     const worker = spawn((m) => {
       if (first && !fetched && m.bytes && m.received) said(`Getting the studio ready (once: ${mb(Math.min(m.received, m.bytes))} of ${mb(m.bytes)} MB)…`);
-    });
+    }, false, true);
     await deadline(worker.ready, READY_MS, "getting the studio ready");
-    // the singer's files are in this browser's cache now: the renderer's first song needn't say it fetches them
-    try { localStorage.setItem("songbird-singer-fetched", bundle.app); } catch (e) { /* only a convenience */ }
     const config = { ...bundle.studio };
     if (config.kit) config.kit = new URL(`${bundle.base}${config.kit}`, location.href).href;
     const view = await worker.make(config);
@@ -214,7 +212,7 @@
 
   // a version's file read as data in a worker of its own, let go after: {status, data | error}
   async function readApart(bytes, view, id) {
-    const reader = spawn();
+    const reader = spawn(null, false, true);
     try {
       await deadline(reader.ready, READY_MS, "getting ready to read it");
       const m = await deadline(reader.ask({ cmd: "read", bytes, title: view.title, machine: view.machine, day: view.day,

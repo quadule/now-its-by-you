@@ -426,3 +426,177 @@ steel 3.9 with its spring's long convolution): 5 to 7.5 MB for every second of s
   the BLAS might choose another kernel for the smaller matrices and sum in another order.
 - **The mix's sums**: the voice's bus kept as its mono sound and two gains (above), and the parts' stems through their
   channel strips a stretch at a time where the strip allows, would each save a stereo copy of the song.
+
+
+# Whole rendering pipeline (2026-10-02)
+
+This pass covers native and browser rendering, voice control and prediction, instruments, dynamics,
+loudness measurement, PCM hashing, and the browser's worker and audio cache. The audio remains unchanged:
+H's recording still has PCM id `9b0766353b737cc66833d4e7b9423b136cedefeec15555d7f1931b38e6971beb`.
+No sample rate, precision, model quality, or arrangement was reduced.
+
+## Render measurements
+
+Before is a clean snapshot of the checkout before this pass; after is the updated checkout. The machine
+is the same Apple Silicon Mac, CPython 3.12.14, numpy 2.5.3, scipy 1.18.1, numba 0.67.0, and Pyodide 314.0.7.
+Runs shared the host with other work, so these are observations rather than device performance guarantees.
+Browser measurements use the actual Pyodide/numpy/scipy/JS/wasm renderer under node, not a simulated synth.
+Native measurements include `cli.render_one`, mastering, record measurements and writing FLAC, with seed
+phrasing. Two repeats after warm-up; `MallocLargeCache=0` in both trees, returning large freed buffers.
+
+| Work | Before | After |
+|---|---:|---:|
+| Browser refrain, 25.1 s of audio, first render | 8.64 s | 5.61 s |
+| Browser refrain, same worker warm | 6.78 s | 4.52 s |
+| Browser whole H, 151.4 s of audio | 55.46 s | 33.61 s |
+| Native whole H, one thread, warm repeats | 18.15–19.21 s | 16.50–17.11 s |
+| Native whole H, two threads, warm repeats | 11.57–11.90 s | 10.79–10.96 s |
+| Native peak RSS, one thread | 1.182 GB | 1.118 GB |
+| Native peak RSS, two threads | 1.287 GB | 1.226 GB |
+
+The browser section's heap remains 387 MiB. Whole H's heap remains about 1.1 GiB (1117 MiB before,
+1145 MiB after); its large neural-network matrices still dominate. The instrument memory improvements
+below help different arrangements without promising that this particular song's browser heap will fall.
+Actual phone hardware and Safari were not measured in this pass.
+
+## Where the work was saved
+
+- **Browser neural prediction.** The existing BLAS patch accelerated input/output projection, but the
+  convolution and residual matrices bypassed it and used Pyodide numpy's slow matrix multiplication.
+  Every product now goes through `throat._matmul`, with scipy's BLAS on the browser path. The transpose
+  layout avoids copies of inputs and returns a contiguous matrix. Native multiplication is unchanged;
+  bias addition reuses the product buffer when its dtype matches.
+- **Voice pitch and consonants.** Vibrato, gestures and consonant perturbations are evaluated over their
+  own time spans. Transition splines keep their changing stretch; settled tails retain the original
+  expression's rounding. Gaussian tails are cut only where they underflow to exactly zero. H's pitch
+  control: 134.6 → 18.9 ms; B's: 43.0 → 9.9 ms. The vocoder allocates its correctly laid-out zero periodic
+  response directly instead of transforming a zero spectrum: a 30 s case takes 563 → 513 ms on one thread.
+- **Acoustic bodies.** `oa.convolve_shared` shares the bridge force's forward FFTs across microphones.
+  Each response and inverse transform retains its previous row grouping and each overlap-add its order;
+  batching inverse transforms across channels was rejected because it changed the bits.
+- **Instrument temporaries.** Fiddle hair noise reuses the catch buffer. Electric pianos clip and apply
+  tremolo in bounded stretches and release the oversampled result early. Organ releases its generator
+  buffers before the speaker and clips an owned buffer in place. Harmonium makes pressure and hiss in
+  stretches, retaining the original whole-track pressure average. Oscillator drift reuses its time buffer.
+- **Mixing and mastering.** Gain application moves division and branching outside the per-sample loop.
+  Stereo K-weighting uses scalar filter states while adding left then right power in the original order.
+  On 3,000,077 stereo samples: split-band gain 8.04 → 6.34 ms; K-weighting 26.62 → 14.18 ms. PCM hashing reads
+  the contiguous little-endian array's buffer directly, eliminating a second PCM-sized bytes allocation.
+
+Standalone 150 s instrument workloads, one thread, median of three; traced peak allocations, decimal MB.
+These are each piece's allocation peaks, not whole-process RSS or wasm heap measurements. Every output
+hash matched before and after, including the random streams after chunked noise generation.
+
+| Piece | Before peak | After peak | Before → after time |
+|---|---:|---:|---:|
+| Guitar body | 229 MB | 210 MB | 0.258 → 0.203 s |
+| Fiddle bridge | 370 MB | 318 MB | 0.577 → 0.572 s |
+| Electric piano | 425 MB | 160 MB | 1.142 → 1.081 s |
+| Reed piano | 319 MB | 159 MB | 0.935 → 0.950 s |
+| Organ | 323 MB | 159 MB | 1.097 → 1.104 s |
+| Harmonium | 438 MB | 224 MB | 1.243 → 1.266 s |
+| Oscillator drift | 370 MB | 56 MB | 0.0375 → 0.038 s |
+
+## Browser memory after a render
+
+Cached files are now least-recently-used and bounded by both counts and bytes: 64 MiB on phones or devices
+reporting less than 4 GB of memory, 192 MiB otherwise. Eviction releases the blob URL. The newest result and
+most recent actual recording are retained even when they exceed the budget, since the player's and the
+visible recording's Download/Play controls still need them. Promoting a cached whole preview to a recording
+also releases the previous recording's exception. The existing 16-section/3-whole count bounds still apply.
+
+A section worker whose successful render reports a heap over 512 MiB on those constrained devices, or
+768 MiB elsewhere, is terminated after its file is transferred. Small workers keep the existing reuse,
+four-render and idle limits. Whole workers retain their existing one-render lifecycle. This changes only
+retained memory, not which browser is permitted to render or how failures fall back to the server.
+
+## Verification
+
+- H's browser section and whole-song PCM match the pre-change files byte for byte (13,355,872 samples
+  for the whole stereo song). The regenerated JS section also matches. Native H keeps its golden PCM id
+  on one and two threads; the full run's other golden checks passed.
+- All 60 registered instruments' native gauntlet stems match the pre-change stems byte for byte.
+  All 60 also render with the browser's wasm path. Cross-platform float64 differences from transcendental
+  functions remain, as documented in BROWSER-RENDER.md; these are distinct from before/after sample parity.
+- Generated JS, type metadata, C ports, wasm binary and source stamps were updated together. Captured
+  gain, detector and stereo meter calls match native output exactly through the updated browser ports.
+- Focused regression tests cover original control-track/instrument hashes, convolution geometry, strided
+  inputs, partial blocks, in-place ownership, mixed dtypes, BLAS routing and browser cache/worker lifecycle.
+- Full run: 1935 passed and 13 skipped. Librosa initially could not write its numba cache outside the
+  sandbox; the affected tests and the regenerated-kernel checks were rerun with a temporary cache:
+  18 passed. Two unrelated assertions remain and fail identically in the pre-change snapshot: the invite
+  test's October 1 fixture has become stale, and the piano grid test gets 648 of 721 notes against a 90%
+  threshold. Final JavaScript run: 126 passed.
+
+Repeat browser measurements with `node web/studio-wasm/node/run.mjs --section 2 --kernels wasm --stages`
+and `--whole --reps 1`; rebuild its ignored `dist/songbird.zip` with `tools/bundle.py` after Python changes.
+Use `tools/transpile.py --check` for generated-source freshness and `bench/gauntlet.py` for every instrument.
+
+## Follow-up: memory, edit reuse, and Astra review
+
+The second pass addresses the remaining five areas without changing sample rate, precision, model quality,
+or exported PCM. Before below is the completed first pass above, not the original checkout.
+
+| Work | First pass | Follow-up |
+|---|---:|---:|
+| Learned predictor, 30,280 frames, native traced peak | 204.5 MiB | 74.1 MiB |
+| Owned preview gain/clip/limit/fade/quantization, 3,000,077 stereo frames, traced temporary peak | 148.4 MiB | 57.0 MiB |
+| Stereo width, same frame count, traced temporary peak | 68.7 MiB | 24.4 MiB |
+| Room sends, 60 s mix, traced stage peak | 60.6 MiB | 21.2 MiB |
+| Room ducking, same mix, traced stage peak | 81.3 MiB | 21.7 MiB |
+| Browser H vocal-phase heap (at next part's progress) | 1044 MiB | 660 MiB |
+| Browser H whole render | 33.61 s | 31.95 s |
+| Browser H whole heap | 1145 MiB | 1148 MiB |
+| Browser refrain, first / warm | 5.61 / 4.52 s | 5.31 / 4.44 s |
+
+These are desktop observations under the same native/Pyodide environments as above, with other work on
+the host. Temporary peaks are allocations of the named operation, not whole-process memory. Whole-song
+native RSS remains about 1.12 GB, with warm one-thread observations of 16.64–18.06 s; the remaining instrument
+and mix phases still set its peak. The whole-song browser heap also remains about 1.1 GiB. Actual phones
+and Safari remain unmeasured.
+
+- **Voice:** inference processes 4096-frame blocks with the sum of all convolution dilations as context.
+  Pitch slopes are calculated before slicing; global variance keeps its full-song reduction. Tiny final
+  blocks are merged to retain the browser's BLAS routing. Input embeddings and final activations are
+  released early; normalization reuses owned results. Mel/bin interpolation, spectral scatter geometry,
+  and cepstrum folds use small bounded, read-only caches.
+- **Mix and preview:** owned preview buffers are clipped, limited and faded in place, then released after
+  quantization. Sends, delayed choir sends, return ducking, width scratch and scalar magnitude checks use
+  bounded stretches. Singer-first rendering postpones the three empty band buses until an instrument is
+  ready, removing roughly 306 MiB from H's vocal lifetime. Whistle turbulence and final high-pass filters
+  carry SOS state across bounded stretches and retain the same RNG draws.
+- **Edit reuse:** studio previews keep immutable dry-stem snapshots and return an owned copy to the mixer.
+  Keys describe realized notes, timing, seed, instrument settings, lexicon and singer/choir context, rather
+  than the edit request alone. Changed parts replace their older snapshots; admission favors synthesis
+  work saved per byte. The cache is bounded to 32 MiB on constrained browsers, 128 MiB on other browsers,
+  and 64 MiB in the native studio. Oversized stems bypass it. Whole renders clear/bypass it. Allocation
+  failure during optional retention skips caching; failure copying a hit transfers ownership and clears
+  retained entries.
+- **Startup:** permanent control and packet-reader workers retain numpy/scipy/soundfile but omit renderer
+  kernels and eager DSP initialization. They select vectorized fallback paths before importing the synth.
+  The renderer alone marks its assets fetched. Actual-worker measurements: ready 5.45 → 2.17 s, but studio
+  imports move to view creation, so time to usable view improves only 6.09 → 5.33 s and its resident heap
+  remains 130 MiB. Timeline generation remains about 5 s; this is a separate future target.
+
+The actual `studio-worker.mjs` also made an unchanged preview and a mix-width edit with the same PCM IDs as
+the first-pass worker: warm edited preview 1.02 → 0.56 s; returning to the original 0.98 → 0.55 s. This is a
+live device-studio section under its `machine: none` choices, distinct from the fixed H refrain benchmark.
+Its renderer heap grows 187 → 224 MiB as it retains the bounded 32 MiB cache: a deliberate memory/latency
+tradeoff. The control worker remains separate, so synthesis does not block studio requests.
+
+**Verification:** Astra reviewed ownership/invalidation, convolution context and global statistics, filter
+state/RNG order, bus ordering, layout/dtype boundaries and control initialization. Its two empty-convolution
+findings were fixed, including float32/int16 empty outputs. Before/after H section and whole-song browser PCM
+match byte for byte, and native H keeps its golden id. Native browser/server section and packed whole-render
+identity pass. Final frozen-source regression/integration checks passed 128 Python tests, following the
+broader voice, dynamics and mastering checks. All 123 JavaScript tests passed. The actual
+lean worker answered timeline/arrangement/sound/render-spec requests and read/restored a packed rendition.
+Generated kernel freshness and the portable program's 8 MiB goal pass (6,944,665 bytes).
+
+Reproduce actual-worker startup, preview reuse and optional packet read/restore with
+`node web/studio-wasm/node/preview_bench.mjs --bundle SITE/render/app-HASH/songbird.zip --cache-mib 32`
+after `tools/build_site.py` creates a local site. Add `--full-control` for the former initialization path,
+`--control-only` to omit audio, or `--read RENDITION.flac` for a packed rendition. The runner uses Node's
+workers with Web Worker API adapters around the unchanged production worker; it does not simulate a phone.
+The WAV/PCM prototype zip made by `tools/bundle.py` deliberately contains a soundfile stub and cannot be
+used for this FLAC-worker benchmark. `node/run.mjs --bundle BEFORE.zip` supports isolated comparisons.

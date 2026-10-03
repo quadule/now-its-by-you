@@ -63,11 +63,12 @@ function device(fate, extra = {}) {
 }
 
 test("a phone makes the song itself: no gating, never the server", async () => {
-  const { r, asked } = device();
+  const { r, asked, fake } = device();
   const job = await r.preview({ edits: {}, section: 1 }).done;
   assert.equal(job.state, "done");
   assert.equal(job.where, "browser");
   assert.equal(job.heap, 300);
+  assert.equal(fake.made[0].posted[0].stemCacheBytes, 32 * 2 ** 20);
   assert.ok(!asked.some((p) => p === "/api/listen" || p === "/api/record" || p.startsWith("/api/job")));
 });
 

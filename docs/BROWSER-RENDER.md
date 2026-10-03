@@ -5,6 +5,14 @@ section preview (and ideally a whole recording) inside a visitor's browser,
 instead of on the 8 GB server it shares with the mail? Targets: a section in
 ≤15 s, the song in ≤90 s, peak memory ≤1.5 GB, on a desktop browser.
 
+**Update, 2026-10-02:** all neural prediction layers now use the browser's BLAS acceleration, with further
+voice, instrument, mixing and cache improvements. A measured H whole render fell from 55.5 to 32.0 s,
+and a warm refrain from 6.8 to 4.4 s, retaining identical PCM. The whole-song heap is still about 1.1 GiB.
+See [the current pipeline measurements](PERFORMANCE.md#whole-rendering-pipeline-2026-10-02); the spike's
+historical measurements below are from its original runs.
+The follow-up adds bounded voice inference, preview stem reuse, fewer mixer/preview copies, bounded whistle
+filters, and separate control-worker initialization; see [the follow-up measurements](PERFORMANCE.md#follow-up-memory-edit-reuse-and-astra-review).
+
 **Short answer: yes for previews, today, and byte for byte.** The unmodified
 `songbird/` package runs in Pyodide (CPython compiled to WebAssembly) with its
 81 numba kernels replaced, in the browser only, by translations to JavaScript

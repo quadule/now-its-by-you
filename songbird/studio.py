@@ -270,9 +270,12 @@ def cut(score, t0: float, t1: float, before: float = 1.0, tail: float = 2.5):
                                      if b > start and a < t1), **moved), t0 - start
 
 
-def faded(x: np.ndarray, sr: int, skip: float, fade_in: float = 0.25, fade_out: float = 1.5) -> np.ndarray:
-    """The preview from where the section starts, faded in and out."""
-    y = x[int(skip * sr):].copy()
+def faded(x: np.ndarray, sr: int, skip: float, fade_in: float = 0.25, fade_out: float = 1.5,
+          inplace: bool = False) -> np.ndarray:
+    """The preview from where the section starts, faded in and out. inplace: reuse an owned float64 mix."""
+    y = x[int(skip * sr):]
+    if not inplace or y.dtype != np.float64:
+        y = y.copy()
     n_in, n_out = min(len(y), int(fade_in * sr)), min(len(y), int(fade_out * sr))
     if n_in:
         y[:n_in] *= (0.5 - 0.5 * np.cos(np.linspace(0.0, np.pi, n_in)))[:, None]
@@ -591,6 +594,9 @@ class Studio:
         self.out = Path(out) if out else (Path.cwd() if self.where == "packet" else Path("renders"))
         self.jobs = Jobs(public.queue, fair=True, per_address=public.queue_ip) if public else Jobs(thread=self.threads)
         self.cache_limit = public.cache_mb * 2**20 if public else CACHE_LIMIT
+        from .synth.cache import StemCache
+
+        self._stem_cache = StemCache(64 * 2**20)
         # a public studio's counts of what each visitor has had made, and its recordings waiting to be downloaded
         self.gate = public_mod.Gate(public) if public else None
         self.downloads = public_mod.Downloads(self.home / "downloads", public.downloads_mb * 2**20,
@@ -815,11 +821,15 @@ class Studio:
         singer = explain.singer_of(v.params)
         ancestors = choir_of(self.parent_record, singer)[1]  # the earlier versions sing its choir, as they will
         mix = synth.render(part, seed=v.params.seed, voice=singer, mix_params=MixParams.from_dict(v.params.mix or {}),
-                           ancestors=ancestors, progress=job.report)
+                           ancestors=ancestors, progress=job.report, cache=self._stem_cache)
         job.report("master")
         ceiling = master.CEILING_DB - master.MARGIN_DB
-        loud = master.limit(master.clip(mix * 10.0 ** (PREVIEW_GAIN_DB / 20.0), ceiling), synth.SR, ceiling)
-        pcm = master.to_pcm16(faded(loud, synth.SR, lead_in), seed=v.params.seed)
+        mix *= 10.0 ** (PREVIEW_GAIN_DB / 20.0)
+        loud = master.limit(master.clip(mix, ceiling, inplace=True), synth.SR, ceiling, inplace=True)
+        del mix
+        loud = faded(loud, synth.SR, lead_in, inplace=True)
+        pcm = master.to_pcm16(loud, seed=v.params.seed)
+        del loud
         tmp = self.cache / f"{key}.part.flac"
         master.write_flac(tmp, pcm, synth.SR)
         tmp.replace(self.cache / f"{key}.flac")
@@ -833,6 +843,7 @@ class Studio:
         the recording."""
         from .cli import render_one
 
+        self._stem_cache.clear()
         job.stage = stage_words("score")
         job.plan = stages(self._score(v))
         folder = self.cache / key

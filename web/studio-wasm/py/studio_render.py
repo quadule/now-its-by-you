@@ -18,8 +18,13 @@ from __future__ import annotations
 import contextlib
 import io
 import json
+import os
 import types
 from pathlib import Path
+
+from songbird.synth.cache import StemCache
+
+_STEM_CACHE = StemCache(int(os.environ.get("SONGBIRD_STEM_CACHE_BYTES", 64 * 2**20)))
 
 VERSION = 1  # the spec's shape; Studio.render_spec's RENDER_SPEC must match
 
@@ -90,11 +95,15 @@ def section(spec: dict, folder: Path, progress=None) -> dict:
     singer = explain.singer_of(params)
     ancestors = choir_of(spec.get("parent"), singer)[1]
     mix = synth.render(part, seed=params.seed, voice=singer, mix_params=MixParams.from_dict(params.mix or {}),
-                       ancestors=ancestors, progress=job.report)
+                       ancestors=ancestors, progress=job.report, cache=_STEM_CACHE)
     job.report("master")
     ceiling = master.CEILING_DB - master.MARGIN_DB
-    loud = master.limit(master.clip(mix * 10.0 ** (PREVIEW_GAIN_DB / 20.0), ceiling), synth.SR, ceiling)
-    pcm = master.to_pcm16(faded(loud, synth.SR, lead_in), seed=params.seed)
+    mix *= 10.0 ** (PREVIEW_GAIN_DB / 20.0)
+    loud = master.limit(master.clip(mix, ceiling, inplace=True), synth.SR, ceiling, inplace=True)
+    del mix
+    loud = faded(loud, synth.SR, lead_in, inplace=True)
+    pcm = master.to_pcm16(loud, seed=params.seed)
+    del loud
     flac = folder / f"{spec['key']}.flac"
     master.write_flac(flac, pcm, synth.SR)
     return {"kind": "section", "key": spec["key"], "flac": str(flac), "id": master.pcm_sha256(pcm),
@@ -127,6 +136,7 @@ def whole(spec: dict, folder: Path, progress=None) -> dict:
     from songbird.cli import render_one
     from songbird.studio import stage_words, stages
 
+    _STEM_CACHE.clear()
     job = _job(spec["key"], "record", progress)
     job.stage = stage_words("score")
     song, genome, params, lyrics = load(spec, folder)

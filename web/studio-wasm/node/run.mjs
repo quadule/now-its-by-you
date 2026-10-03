@@ -44,7 +44,7 @@ if (mode === 'wasm') {
   py.registerJsModule('songbird_kernels', { kernels, rt, manifest });
   py.registerJsModule('songbird_wasm', wasm);
 }
-const zip = fs.readFileSync(path.join(root, 'dist/songbird.zip'));
+const zip = fs.readFileSync(opt('--bundle', path.join(root, 'dist/songbird.zip')));
 py.unpackArchive(new Uint8Array(zip), 'zip', { extractDir: '/app' });
 const tZip = performance.now();
 if (opt('--mount', null)) {  // host:guest, a host folder in Pyodide's file system (e.g. captured kernel calls)

@@ -33,6 +33,7 @@ function fakeWorkers(script = {}) {
           if (fate === "crash") return setImmediate(() => w.onerror?.({ message: "the worker crashed" }));
           say({ kind: "progress", progress: 0.5, stage: "singing" });
           say({ kind: "done", made: what.kind, key: what.key, id: `id-${what.key}`, duration: 9.2, seconds: 4.8,
+            heap: script.heap,
             flac: new ArrayBuffer(8),
             record: what.kind === "whole" ? { generation: 1, rendered_at: "2026-09-30T12:00:00+00:00", yours: 3, program_sha256: "p" } : null });
         }
@@ -75,7 +76,7 @@ function browser(script, options = {}, extra = {}) {
   const server = studioServer(extra);
   let blobs = 0;
   const r = R.create(server.ask, { wait: now, env: options.env || DESKTOP, spawn: fake.spawn, storage: null,
-    blob: () => `blob:${++blobs}`, workers: options.workers });
+    blob: () => `blob:${++blobs}`, workers: options.workers, cacheBytes: options.cacheBytes });
   return { r, fake, server };
 }
 
@@ -113,7 +114,7 @@ test("a section made in this browser: the spec from the server, the worker's fil
   assert.equal(fake.made.length, 1);
   assert.equal(fake.made[0].url, "http://localhost/render/app-0123456789abcdef/studio-worker.mjs");
   assert.deepEqual(fake.made[0].posted[0], { cmd: "init", pyodide: "http://localhost/render/py-0123456789abcdef/",
-    app: "http://localhost/render/app-0123456789abcdef/", bytes: 36e6 });
+    app: "http://localhost/render/app-0123456789abcdef/", bytes: 36e6, stemCacheBytes: 128 * 2 ** 20 });
   assert.ok(heard.some((s) => /getting the singer ready \(once: 1 of 34 MB\)/.test(s)), heard.join(" | "));
   assert.ok(heard.includes("singing"));
   assert.deepEqual(R.made.map((m) => [m.where, m.size, m.key]), [["browser", "section", "s2-92"]]);
@@ -140,6 +141,85 @@ test("a section's worker makes a few, then is replaced; a whole song gets its ow
   assert.equal(rec.browser, true);
   assert.equal(rec.yours, 3);
   assert.equal(rec.next, "python3 now-its-by-you.2026-09-30.id-w92.flac studio");
+});
+
+test("a large section's heap is released after success, while a smaller worker is reused", async () => {
+  const { r, fake } = browser({ heap: 700 }, { workers: { maxHeap: 512 } });
+  const job = await r.preview({ edits: {}, section: 1 }).done;
+  assert.equal(job.state, "done");
+  assert.equal(fake.made[0].terminated, true);
+  await r.preview({ edits: {}, section: 2 }).done;
+  assert.equal(fake.made.length, 2);
+  const small = browser({ heap: 400 }, { workers: { maxHeap: 512 } });
+  await small.r.preview({ edits: {}, section: 1 }).done;
+  await small.r.preview({ edits: {}, section: 2 }).done;
+  assert.equal(small.fake.made.length, 1);
+  assert.equal(small.fake.made[0].terminated, false);
+});
+
+test("cached files share a byte budget and a recently heard file stays cached", async () => {
+  const { r, fake } = browser({}, { cacheBytes: 16 });
+  await r.preview({ edits: {}, section: 1 }).done;
+  await r.preview({ edits: {}, section: 2 }).done;
+  await r.preview({ edits: {}, section: 1 }).done;
+  assert.equal(fake.made[0].renders, 2);
+  await r.record({ edits: {} }).done;
+  assert.deepEqual([...R.shared.cache.keys()], ["s1-0", "w0"]);
+  assert.equal([...R.shared.cache.values()].reduce((n, j) => n + j.bytes, 0), 16);
+});
+
+test("an oversized file remains usable and evicted or reset blob URLs are released", async () => {
+  const revoke = URL.revokeObjectURL;
+  const gone = [];
+  URL.revokeObjectURL = (url) => gone.push(url);
+  try {
+    const { r } = browser({}, { cacheBytes: 1 });
+    const first = await r.preview({ edits: {}, section: 1 }).done;
+    const second = await r.preview({ edits: {}, section: 2 }).done;
+    assert.deepEqual([...R.shared.cache.keys()], [second.key]);
+    assert.ok(gone.includes(first.url));
+    assert.ok(!gone.includes(second.url));
+    R.reset();
+    assert.ok(gone.includes(second.url));
+  } finally {
+    URL.revokeObjectURL = revoke;
+  }
+});
+
+test("preview eviction preserves the displayed recording until a new recording replaces it", async () => {
+  const revoke = URL.revokeObjectURL;
+  const gone = [];
+  URL.revokeObjectURL = (url) => gone.push(url);
+  try {
+    const { r } = browser({}, { cacheBytes: 8 });
+    const recording = await r.record({ edits: {} }).done;
+    for (const section of [1, 2, 3]) await r.preview({ edits: {}, section }).done;
+    assert.ok(R.shared.cache.has(recording.key));
+    assert.ok(!gone.includes(recording.url));
+    const next = await r.record({ edits: { tempo: 100 } }).done;
+    assert.equal(R.shared.recording, next);
+    assert.ok(gone.includes(recording.url));
+    assert.ok(!gone.includes(next.url));
+  } finally {
+    R.reset();
+    URL.revokeObjectURL = revoke;
+  }
+});
+
+test("a cached whole preview promoted to recording releases the previous recording's cache exception", async () => {
+  const { r, fake } = browser({}, { cacheBytes: 8 });
+  const old = await r.record({ edits: {} }).done;
+  const preview = await r.preview({ edits: { tempo: 100 }, section: null }).done;
+  assert.equal(R.shared.cache.size, 2);
+  const recording = await r.record({ edits: { tempo: 100 } }).done;
+  assert.equal(recording, preview);
+  assert.equal(R.shared.recording, recording);
+  assert.ok(!R.shared.cache.has(old.key));
+  assert.equal(fake.made.length, 2);
+  R.setMode("server", null);
+  await r.record({ edits: {} }).done;
+  assert.equal(R.shared.recording, null);
+  assert.ok(!R.shared.cache.has(recording.key));
 });
 
 test("a whole song made here ends with its clock, as the server's job does: the page starts it at the playhead's bar", async () => {

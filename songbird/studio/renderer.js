@@ -41,6 +41,7 @@
   // these watch for a stall, not the whole time), and the most a render may take in all
   const TIMEOUT = { ready: 180000, section: 300000, whole: 600000, total: 2400000 };
   const KEEP = { section: 16, whole: 3 };  // songs made here, kept to play again at once
+  const MiB = 2 ** 20;
 
   // ---------------------------------------------------------------- where a song is made
 
@@ -97,7 +98,7 @@
   const later = (f, ms) => { const t = setTimeout(f, ms); t?.unref?.(); return t; };  // (node: never held open)
 
   function workers({ spawn, bundle, timeouts = TIMEOUT, uses = SECTION_USES, idle = IDLE, schedule = later,
-                     unschedule = clearTimeout, storage = null }) {
+                     unschedule = clearTimeout, storage = null, maxHeap = 768, stemCacheBytes = 64 * 2 ** 20 }) {
     let kept = null;  // the section worker: { w, ready, uses, timer }
     let current = null;  // what is being made: { entry, reject }
     let chain = Promise.resolve();
@@ -121,7 +122,7 @@
         };
       });
       entry.ready.catch(() => {});
-      w.postMessage({ cmd: "init", pyodide: at(bundle.pyodide), app: at(bundle.app), bytes: bundle.bytes });
+      w.postMessage({ cmd: "init", pyodide: at(bundle.pyodide), app: at(bundle.app), bytes: bundle.bytes, stemCacheBytes });
       return entry;
     }
 
@@ -180,6 +181,8 @@
         });
         entry.w.postMessage({ cmd: "render", spec });
         const out = await Promise.race([made, making.stalled, stopped]);
+        // wasm heaps never shrink: an unusually large section mustn't keep its heap for the next few previews.
+        if (out.heap > maxHeap) close(entry);
         out.ready = ready.seconds;
         return out;
       } catch (e) {
@@ -217,7 +220,7 @@
 
   const shared = {  // one per page: the bundle, the workers, what went wrong, what was made here
     bundle: undefined, found: null, browser: null, failures: { count: 0, whole: false, visit: false },
-    made: [], cache: new Map(), mode: null, listeners: new Set(),
+    made: [], cache: new Map(), recording: null, mode: null, listeners: new Set(),
   };
 
   function storageOf(options) {
@@ -255,19 +258,45 @@
     changed();
   }
 
-  function remember(key, job, size) {
+  function forget(key) {
+    const job = shared.cache.get(key);
+    if (!job) return;
+    shared.cache.delete(key);
+    if (shared.recording === job) shared.recording = null;
+    try { URL.revokeObjectURL(job.url); } catch (e) { /* already gone */ }
+  }
+
+  function remember(key, job, size, budget, recording) {
+    forget(key);
     shared.cache.set(key, job);
+    if (recording) shared.recording = job;  // the visible recording's Download and Play buttons still use this URL
+    trim(key, size, budget);
+  }
+
+  function trim(key, size, budget) {
     const mine = [...shared.cache].filter(([, j]) => j.size === size);
     while (mine.length > KEEP[size]) {
-      const [old, j] = mine.shift();
-      shared.cache.delete(old);
-      try { URL.revokeObjectURL(j.url); } catch (e) { /* already gone */ }
+      const at = mine.findIndex(([, j]) => j !== shared.recording);
+      const [old] = mine.splice(at, 1)[0];
+      forget(old);
+    }
+    // Counts alone let long recordings hold hundreds of MB. Keep the newest result and visible recording usable
+    // even when they exceed the budget, and let go of older files in least-recently-used order across both kinds.
+    let bytes = [...shared.cache.values()].reduce((n, j) => n + (j.bytes || 0), 0);
+    while (bytes > budget && shared.cache.size > 1) {
+      const candidate = [...shared.cache].find(([old, j]) => old !== key && j !== shared.recording);
+      if (!candidate) break;
+      const [old, j] = candidate;
+      bytes -= j.bytes || 0;
+      forget(old);
     }
   }
 
   function create(ask, options = {}) {
     const pause = options.wait || wait;
     const env = options.env || environment();
+    const constrained = env.mobile || (env.memory !== null && env.memory < 4);
+    const cacheBytes = options.cacheBytes ?? (constrained ? 64 : 192) * MiB;
     const storage = storageOf(options);
     const spawn = options.spawn || (typeof Worker === "function" ? (url) => new Worker(url, { type: "module" }) : null);
     const blob = options.blob || ((bytes) => URL.createObjectURL(new Blob([bytes], { type: "audio/flac" })));
@@ -304,9 +333,16 @@
       // too long for a browser and for the server: said, and made nowhere (never sent to the server to fail there)
       if (!device && answer.too_long) return { state: "failed", error: answer.too_long, key: answer.key, where: "browser", size };
       const hit = shared.cache.get(answer.key);
-      if (hit) return hit;
+      if (hit) {  // a file heard again stays ahead of an older one when the cache needs room
+        shared.cache.delete(answer.key);
+        shared.cache.set(answer.key, hit);
+        if (task.kind === "record") shared.recording = hit;
+        trim(answer.key, hit.size, cacheBytes);
+        return hit;
+      }
       if (!answer.spec) throw new Error("the studio didn't say what to make");
-      if (!shared.browser) shared.browser = workers({ spawn, bundle: shared.bundle, storage, ...(options.workers || {}) });
+      if (!shared.browser) shared.browser = workers({ spawn, bundle: shared.bundle, storage,
+        maxHeap: constrained ? 512 : 768, stemCacheBytes: (constrained ? 32 : 128) * MiB, ...(options.workers || {}) });
       const label = answer.label || (size === "whole" ? "The whole song" : "Song section");
       // on the device, a whole song estimated past a browser's memory is made all the same, with a word of warning
       const warn = device && answer.warn ? ` (${answer.warn})` : "";
@@ -328,7 +364,7 @@
       const url = file ? URL.createObjectURL(file) : blob(out.flac);
       const clock = answer.bar_seconds ? { bar_seconds: answer.bar_seconds } : {};  // a whole song's, as the server's job ends
       const job = { state: "done", progress: 1, url, key: answer.key, label, where: "browser", id: out.id, size,
-        seconds: out.seconds, heap: out.heap, result: { duration: out.duration, ...clock } };
+        seconds: out.seconds, heap: out.heap, bytes: out.flac.byteLength, result: { duration: out.duration, ...clock } };
       if (size === "whole" && out.record) {
         const n = answer.name || {};
         const name = `${n.song || "song"}.${(out.record.rendered_at || n.day || "").slice(0, 10)}.${out.id.slice(0, 6)}.flac`;
@@ -336,7 +372,7 @@
           generation: out.record.generation, yours: out.record.yours, next: `python3 ${name} studio`, download: url,
           program: out.record.program_sha256, device, file }, ...clock };
       }
-      remember(answer.key, job, size);
+      remember(answer.key, job, size, cacheBytes, task.kind === "record");
       return job;
     }
 
@@ -376,7 +412,10 @@
         const hear = instead && onProgress
           ? (job) => onProgress({ ...job, stage: `${job.stage || "making it"} on the server` }) : onProgress;
         const job = await follow(task, path, kind === "record" ? { edits: body.edits } : body, hear);
-        if (job.state === "done") note({ kind, size, key: job.key, where: "server", at: Date.now() });
+        if (job.state === "done") {
+          if (kind === "record" && shared.recording) forget(shared.recording.key);
+          note({ kind, size, key: job.key, where: "server", at: Date.now() });
+        }
         return job;
       };
       if (device) return onThisDevice(task, body, size, onProgress);
@@ -484,7 +523,8 @@
     debug: { kill: () => shared.browser?.kill() || false, busy: () => !!shared.browser?.busy() },
     reset() {  // a fresh page, for the tests
       shared.browser?.close();
-      Object.assign(shared, { bundle: undefined, found: null, browser: null, mode: null, made: [], cache: new Map(),
+      for (const key of shared.cache.keys()) forget(key);
+      Object.assign(shared, { bundle: undefined, found: null, browser: null, mode: null, made: [], cache: new Map(), recording: null,
         failures: { count: 0, whole: false, visit: false } });
       shared.listeners.clear();
     } };
