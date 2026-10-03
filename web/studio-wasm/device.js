@@ -307,14 +307,31 @@
     });
   }
   const sget = (store, key) => sstore(store, "readonly", (s) => s.get(key));
-  const sput = (store, key, value) => sstore(store, "readwrite", (s) => s.put(value, key));
   const skeys = (store) => sstore(store, "readonly", (s) => s.getAllKeys());
+  // kept with when: past MOST in a store, the longest unused go (but the guides earlier takes were sung to, which
+  // the way of singing made from them needs)
+  const MOST = { guides: 40, melodies: 24, parts: 60 };
+  async function sput(store, key, value) {
+    await sstore(store, "readwrite", (s) => s.put({ ...value, at: Date.now() }, key));
+    const all = (await sstore(store, "readonly", (s) => s.getAll())) || [];
+    const keys = (await skeys(store)) || [];
+    if (keys.length <= MOST[store]) return;
+    let sung = new Set();
+    try {
+      const k = JSON.parse(localStorage.getItem("songbird-web-singing")) || {};
+      sung = new Set((k.measurements || []).map((m) => m && m.stamp && m.stamp.guide));
+    } catch (e) { /* none kept */ }
+    const old = keys.map((key, i) => [key, (all[i] && all[i].at) || 0])
+      .filter(([key]) => !(store === "guides" && sung.has(key))).sort((a, b) => a[1] - b[1]);
+    const gone = old.slice(0, keys.length - MOST[store]).map(([key]) => key);
+    await sstore(store, "readwrite", (s) => { for (const key of gone) s.delete(key); });
+  }
 
   const guides = new Map();  // name -> {song, bytes}: this visit's, before storage (a private window has none)
   async function guideFile(name) {
     if (guides.has(name)) return guides.get(name);
     const kept = await sget("guides", name);
-    if (kept && kept.bytes) guides.set(name, kept);
+    if (kept && kept.bytes) { guides.set(name, kept); sput("guides", name, kept); }  // used: kept longer
     return kept || null;
   }
 
@@ -374,13 +391,13 @@
     const g = GUIDE.test(name) ? await guideFile(name) : null;
     if (!g || !(a >= 0 && b > a)) return json(404, { error: "No such guide to sing to: reload the page." });
     const key = `${bundle.app}|${name}|${a.toFixed(3)}-${b.toFixed(3)}`;
-    let wav = await sget("melodies", key);
+    let wav = ((await sget("melodies", key)) || {}).bytes;
     try {
       if (!wav) {
         wav = await singerWork(async (w) => (await singerAsk(w, "melody", { song: g.song, guide: name, from_s: a, to_s: b },
           guideKit(g, name))).file.bytes);
-        sput("melodies", key, wav);
       }
+      sput("melodies", key, { bytes: wav });
     } catch (e) {
       return json(e.refused ? 404 : 500, { error: e.stopped ? "The guide couldn't be made: the browser stopped it, perhaps for want of memory."
         : `The guide couldn't be made: ${e.message}` });
@@ -397,7 +414,7 @@
       const have = new Set((await skeys("parts")) || []);
       if (wanted.every((f) => have.has(f))) return;
       const made = (await singerAsk(w, "template", request)).made;
-      for (const [file, bytes] of Object.entries(made)) await sput("parts", file, bytes);
+      for (const [file, bytes] of Object.entries(made)) await sput("parts", file, { bytes });
     });
   }
 
@@ -458,8 +475,8 @@
       const kept = {};
       for (const file of (await skeys("parts")) || []) {
         if (prefixes.some((p) => String(file).startsWith(p))) {
-          const bytes = await sget("parts", file);
-          if (bytes) kept[`measured/parts/${file}`] = bytes;
+          const part = await sget("parts", file);
+          if (part && part.bytes) kept[`measured/parts/${file}`] = part.bytes;
         }
       }
       if (Object.keys(kept).length) await measurer.ask({ cmd: "kit", files: kept }, Object.values(kept));
@@ -467,7 +484,7 @@
         MEASURE_MS, "measuring it");
       Object.assign(singing, { measuring: m.heap, seconds: m.seconds, made: Object.keys(m.made || {}).length });
       wav = null;
-      for (const [file, bytes] of Object.entries(m.made || {})) await sput("parts", file, bytes);
+      for (const [file, bytes] of Object.entries(m.made || {})) await sput("parts", file, { bytes });
       said = m.status === 200 && m.json ? m.json : JSON.stringify({ error: (parsed(m) || {}).error || "it went wrong on this device" });
     } catch (e) {
       said = JSON.stringify({ error: e.memory
