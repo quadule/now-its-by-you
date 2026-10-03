@@ -19,6 +19,8 @@ edge, mostly click; "top" the back hand pressed high, pitch up, dry (the reel's,
 
 from __future__ import annotations
 
+import functools
+
 import numpy as np
 from numba import njit
 from scipy.signal import sosfilt
@@ -29,7 +31,8 @@ from .iir import butter
 STROKE_GAIN = {"bass": 1.0, "tip": 0.55, "mute": 0.5, "rim": 0.45, "top": 0.5}
 
 
-def _modes(top: float = 40.0) -> tuple[tuple[int, int, float], ...]:
+@functools.cache
+def membrane(top: float = 40.0) -> tuple[tuple[int, int, float], ...]:
     """(m, n, Bessel zero j_mn) of every mode of an ideal membrane up to j = top
     (about sixteen times the fundamental): the first few are (0,1) 2.405,
     (1,1) 3.832, (2,1) 5.136, (0,2) 5.520."""
@@ -41,12 +44,15 @@ def _modes(top: float = 40.0) -> tuple[tuple[int, int, float], ...]:
     return tuple(sorted(modes, key=lambda x: x[2]))
 
 
-MODES = _modes()
-_M = np.array([m for m, _, _ in MODES])
-_J = np.array([j for _, _, j in MODES], dtype=float)
-_EDGE = np.array([max(abs(jv(m + 1, j)), 1e-3) for m, _, j in MODES])  # each mode's normalization, as it was made
-_TWO = np.full(len(MODES), 2.0)
-_SEVEN_TENTHS = np.full(len(MODES), 0.7)
+# The modes and their tables are worked out when a drum is first played, not on import: the studio's own worker
+# (web/studio-wasm, the page's questions) imports every instrument and plays none, so it needn't fetch scipy.
+@functools.cache
+def _tables() -> tuple[np.ndarray, ...]:
+    modes = membrane()
+    m = np.array([m for m, _, _ in modes])
+    j = np.array([j for _, _, j in modes], dtype=float)
+    edge = np.array([max(abs(jv(m + 1, j)), 1e-3) for m, _, j in modes])  # each mode's normalization, as it was made
+    return m, j, edge, np.full(len(modes), 2.0), np.full(len(modes), 0.7)
 
 STROKES = {
     # radius (0 centre, 1 rim), pitch factor (the hand behind the skin), ring (seconds, the fundamental's T60),
@@ -113,13 +119,14 @@ def hit(stroke: str, vel: float, sr: int, rng: np.random.Generator, *, pitch: fl
     # every mode at once, each value by the same operations as one at a time: the powers through np.power with an
     # array of exponents (the C library's pow, as a scalar ** uses; an array ** 2 would square instead), the
     # modes' random spread drawn together (the same draws in the same order)
-    m, j = _M, _J
-    freqs = f0 * j / MODES[0][2]
-    shape = jv(m, j * radius) / _EDGE
+    modes = membrane()
+    m, j, edge, two, seven_tenths = _tables()
+    freqs = f0 * j / modes[0][2]
+    shape = jv(m, j * radius) / edge
     radiate = np.where(m == 0, 1.0, 0.45)  # modes with nodal diameters radiate worse
-    spectrum = 1.0 / (1.0 + np.power(2.0 * freqs * contact, _TWO))  # a half-sine contact's envelope: -12 dB/octave past 1/2τ
-    amps = shape * np.cos(m * theta) * radiate * spectrum * rng.uniform(0.8, 1.2, len(MODES))
-    t60s = ring * np.power(f0 / freqs, _SEVEN_TENTHS) * (1.0 + 0.3 * wear)
+    spectrum = 1.0 / (1.0 + np.power(2.0 * freqs * contact, two))  # a half-sine contact's envelope: -12 dB/octave past 1/2τ
+    amps = shape * np.cos(m * theta) * radiate * spectrum * rng.uniform(0.8, 1.2, len(modes))
+    t60s = ring * np.power(f0 / freqs, seven_tenths) * (1.0 + 0.3 * wear)
     length = int((max(t60s) + 0.05) * sr)
     y = _ring(freqs, amps, t60s, 0.06 * vel ** 2, 0.03, length, float(sr))
     level = np.max(np.abs(y[: int(0.01 * sr)])) + 1e-9

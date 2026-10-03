@@ -24,6 +24,8 @@ several channels, each hearing its own mix of the modes (two microphones).
 
 from __future__ import annotations
 
+import functools
+
 import numpy as np
 from numba import njit
 from scipy.signal import firwin, resample_poly
@@ -98,10 +100,13 @@ def _bank(freqs, decay, phase, pos, amps, mix, bend, damp, dweight, rate, length
 
 # The lowpass for each doubling of the rate: flat to 0.8 of the lower rate's Nyquist, about 75 dB down from 1.2.
 # It is a half-band filter (every other tap zero but the middle one), so a doubled signal keeps its old samples
-# and only the new ones between them are filtered: 24 taps for every other sample.
-HALFBAND = firwin(47, 0.5, window=("kaiser", 7.5))
-_ODD = np.ascontiguousarray(2.0 * HALFBAND[0::2][::-1])  # the taps between old samples, reversed for the sum below
-_MIDDLE = 2.0 * HALFBAND[23]
+# and only the new ones between them are filtered: 24 taps for every other sample. Made when first needed, not on
+# import (the studio's own worker imports every instrument and plays none, so it needn't fetch scipy).
+@functools.cache
+def _halfband() -> tuple[np.ndarray, float]:
+    """The taps between old samples (reversed, for the sum in _up2), and the middle one."""
+    halfband = firwin(47, 0.5, window=("kaiser", 7.5))
+    return np.ascontiguousarray(2.0 * halfband[0::2][::-1]), 2.0 * halfband[23]
 
 
 @njit(cache=True, nogil=True)
@@ -139,7 +144,8 @@ def _up2_into(x: np.ndarray, into: np.ndarray, add: bool = False, block: int = 1
     taps' reach either side (zeros past its ends, as _up2 pads it) doubled by _up2 itself, and the samples of the
     stretch kept: every sample made by the same products summed in the same order."""
     n = len(x)
-    m = len(_ODD)
+    odd, middle = _halfband()
+    m = len(odd)
     half = m // 2
     for a in range(0, n, block):
         b = min(n, a + block)
@@ -147,7 +153,7 @@ def _up2_into(x: np.ndarray, into: np.ndarray, add: bool = False, block: int = 1
         near = np.zeros(hi - lo)
         s0, s1 = max(lo, 0), min(hi, n)
         near[s0 - lo: s1 - lo] = x[s0:s1]
-        y = _up2(near, _ODD, _MIDDLE)[2 * (half - 1): 2 * (half - 1 + b - a)]
+        y = _up2(near, odd, middle)[2 * (half - 1): 2 * (half - 1 + b - a)]
         if add:
             into[2 * a: 2 * b] += y
         else:

@@ -52,7 +52,7 @@ from scipy.signal import sosfilt
 from scipy.special import jv
 
 from . import struck
-from .drum import MODES as MEMBRANE
+from .drum import membrane
 from .iir import butter
 from .rattle import HOP, collide, contact, early_power, late, modal_weights, vel_gain
 
@@ -270,7 +270,8 @@ def _tambourine(make: np.random.Generator, size: float, bright: float, wear: flo
         starts.append(len(freqs))
     # the skin: an ideal membrane's modes up to about six times its lowest
     skin = 300.0 * 2.0 ** make.uniform(-0.3, 0.3) * 0.254 / across
-    membrane = [(m, j) for m, n, j in MEMBRANE if j < 6.0 * MEMBRANE[0][2]]
+    modes = membrane()
+    skin_modes = [(m, j) for m, n, j in modes if j < 6.0 * modes[0][2]]
     # the frame's hoop, knocked: a few heavily damped modes
     hoop = np.array([420.0, 1100.0, 2300.0]) * 2.0 ** make.uniform(-0.2, 0.2, 3) * 0.254 / across
     return dict(
@@ -278,8 +279,8 @@ def _tambourine(make: np.random.Generator, size: float, bright: float, wear: flo
         jingles=(np.array(freqs), np.array(t60s), np.array(gains), np.array(tilts), starts),
         shell=((2300.0 * 2.0 ** make.uniform(-0.2, 0.2) * 0.254 / across,), (4.0,), (0.3,)),
         rate=pairs * make.uniform(200.0, 300.0), tau=make.uniform(0.07, 0.1) * (1.0 + 0.5 * wear),
-        skin=np.array([skin * j / MEMBRANE[0][2] for m, j in membrane]),
-        skin_m=np.array([m for m, j in membrane]), skin_j=np.array([j for m, j in membrane]),
+        skin=np.array([skin * j / modes[0][2] for m, j in skin_modes]),
+        skin_m=np.array([m for m, j in skin_modes]), skin_j=np.array([j for m, j in skin_modes]),
         skin_t60=0.18 * np.exp(make.normal(0.0, 0.1)),
         hoop=hoop, hoop_t60=np.array([0.07, 0.05, 0.04]) * np.exp(make.normal(0.0, 0.15, 3)),
         thump=float(make.uniform(0.4, 0.6)) if headed else 0.0, knock=float(make.uniform(0.25, 0.4)),

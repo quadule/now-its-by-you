@@ -47,7 +47,7 @@ def _ring_as_it_was(freqs, t60s, times, amps, sr, length, *, mix=None, bend=None
     factors = np.array([struck._factor(f, sr) if multirate else 1 for f in freqs])
 
     def double(y):
-        return np.stack([struck._up2(np.ascontiguousarray(y[:, c]), struck._ODD, struck._MIDDLE)
+        return np.stack([struck._up2(np.ascontiguousarray(y[:, c]), *struck._halfband())
                          for c in range(y.shape[1])], axis=1)
 
     base = -(-length // 8) + 16
@@ -107,7 +107,7 @@ def test_doubling_a_stretch_at_a_time_is_doubling_the_whole():
     rng = np.random.default_rng(20)
     for n in (0, 1, 5, 23, 24, 47, 100, 1000, 70_001):
         x = rng.standard_normal(n)
-        whole = struck._up2(x, struck._ODD, struck._MIDDLE)
+        whole = struck._up2(x, *struck._halfband())
         for block in (1, 2, 7, 23, 100, 1 << 16):
             out = np.empty(2 * n)
             struck._up2_into(x, out, block=block)
@@ -116,7 +116,7 @@ def test_doubling_a_stretch_at_a_time_is_doubling_the_whole():
             struck._up2_into(x, added, add=True, block=block)
             assert same(out, whole) and same(added, base + whole), (n, block)
         column = np.stack([x, -x], axis=1)
-        assert same(struck._double(column)[:, 1], struck._up2(-x, struck._ODD, struck._MIDDLE))
+        assert same(struck._double(column)[:, 1], struck._up2(-x, *struck._halfband()))
 
 
 def test_a_track_at_every_sample_is_interp():

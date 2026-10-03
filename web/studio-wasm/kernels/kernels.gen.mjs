@@ -1221,7 +1221,7 @@ export function k_synth$cymbals$_fdn(x, lines, gains, poles, taps, signs, damp, 
   return out;
 }
 
-// songbird/synth/drum.py:64
+// songbird/synth/drum.py:70
 export function k_synth$drum$_ring(freqs, amps, t60s, glide, glide_time, n, sr) {
   let a, bend, c, d, decay, f, fall, g, i, k, out, phase, w, y0, y1, y2, $t1, $t2, $t3, $t4, $t5, $t6, amps_d, amps_n0, amps_n1, amps_s0, amps_s1, freqs_d, freqs_n0, freqs_n1, freqs_s0, freqs_s1, out_d, out_n0, out_n1, out_s0, out_s1, t60s_d, t60s_n0, t60s_n1, t60s_s0, t60s_s1;
   freqs_d = freqs.d; freqs_n0 = freqs.n0; freqs_n1 = freqs.n1; freqs_s0 = freqs.s0; freqs_s1 = freqs.s1;
@@ -2929,7 +2929,7 @@ export function k_synth$organ$_rotors(x, sr, ev_t, ev_fast, fast0, speeds, times
   return out;
 }
 
-// songbird/synth/osc.py:28
+// songbird/synth/osc.py:30
 export function k_synth$osc$_blep(t, dt) {
   let x;
   if (((t < dt))) {
@@ -2943,7 +2943,7 @@ export function k_synth$osc$_blep(t, dt) {
   return 0.0;
 }
 
-// songbird/synth/osc.py:40
+// songbird/synth/osc.py:42
 export function k_synth$osc$_blep4(t) {
   let s, u;
   if ((((t <= (- 2.0))) || ((t >= 2.0)))) {
@@ -2964,7 +2964,7 @@ export function k_synth$osc$_blep4(t) {
   return (((((- u) * u) * u) * u) / 24.0);
 }
 
-// songbird/synth/osc.py:64
+// songbird/synth/osc.py:66
 export function k_synth$osc$_edges(p, dt) {
   let after, before, r;
   r = 0.0;
@@ -2979,7 +2979,7 @@ export function k_synth$osc$_edges(p, dt) {
   return r;
 }
 
-// songbird/synth/osc.py:77
+// songbird/synth/osc.py:79
 export function k_synth$osc$_blamp(t, dt) {
   let x;
   if (((t < dt))) {
@@ -2993,7 +2993,7 @@ export function k_synth$osc$_blamp(t, dt) {
   return 0.0;
 }
 
-// songbird/synth/osc.py:89
+// songbird/synth/osc.py:91
 export function k_synth$osc$saw(freq, sr, phase = 0.0) {
   let dt, i, n, y, $t1, $t2, freq_d, freq_n0, freq_n1, freq_s0, freq_s1, y_d, y_n0, y_n1, y_s0, y_s1;
   freq_d = freq.d; freq_n0 = freq.n0; freq_n1 = freq.n1; freq_s0 = freq.s0; freq_s1 = freq.s1;
@@ -3011,7 +3011,7 @@ export function k_synth$osc$saw(freq, sr, phase = 0.0) {
   return [y, phase];
 }
 
-// songbird/synth/osc.py:103
+// songbird/synth/osc.py:105
 export function k_synth$osc$pulse(freq, duty, sr, phase = 0.0) {
   let d, dt, i, n, q, v, y, $t1, $t2, duty_d, duty_n0, duty_n1, duty_s0, duty_s1, freq_d, freq_n0, freq_n1, freq_s0, freq_s1, y_d, y_n0, y_n1, y_s0, y_s1;
   freq_d = freq.d; freq_n0 = freq.n0; freq_n1 = freq.n1; freq_s0 = freq.s0; freq_s1 = freq.s1;
@@ -3038,7 +3038,7 @@ export function k_synth$osc$pulse(freq, duty, sr, phase = 0.0) {
   return [y, phase];
 }
 
-// songbird/synth/osc.py:124
+// songbird/synth/osc.py:126
 export function k_synth$osc$triangle(freq, sr, phase = 0.0) {
   let dt, i, n, q, v, y, $t1, $t2, freq_d, freq_n0, freq_n1, freq_s0, freq_s1, y_d, y_n0, y_n1, y_s0, y_s1;
   freq_d = freq.d; freq_n0 = freq.n0; freq_n1 = freq.n1; freq_s0 = freq.s0; freq_s1 = freq.s1;
@@ -3062,7 +3062,7 @@ export function k_synth$osc$triangle(freq, sr, phase = 0.0) {
   return [y, phase];
 }
 
-// songbird/synth/osc.py:143
+// songbird/synth/osc.py:145
 export function k_synth$osc$stepped(freq, table, sr, phase = 0.0) {
   let dt, frac, i, jump, k, n, pos, sdt, steps, v, x, y, $t1, $t2, freq_d, freq_n0, freq_n1, freq_s0, freq_s1, table_d, table_n0, table_n1, table_s0, table_s1, y_d, y_n0, y_n1, y_s0, y_s1;
   freq_d = freq.d; freq_n0 = freq.n0; freq_n1 = freq.n1; freq_s0 = freq.s0; freq_s1 = freq.s1;
@@ -3652,7 +3652,7 @@ export function k_synth$stringloop$_run(x, delay, gain, loss, pole, size) {
   return y;
 }
 
-// songbird/synth/struck.py:108
+// songbird/synth/struck.py:113
 export function k_synth$struck$_up2(x, taps, middle) {
   let acc, half, i, m, n, padded, t, y, $t1, $t2, $t3, $t4, padded_d, padded_n0, padded_n1, padded_s0, padded_s1, taps_d, taps_n0, taps_n1, taps_s0, taps_s1, x_d, x_n0, x_n1, x_s0, x_s1, y_d, y_n0, y_n1, y_s0, y_s1;
   x_d = x.d; x_n0 = x.n0; x_n1 = x.n1; x_s0 = x.s0; x_s1 = x.s1;

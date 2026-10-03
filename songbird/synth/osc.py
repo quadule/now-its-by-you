@@ -19,6 +19,8 @@ voice can continue.
 
 from __future__ import annotations
 
+import functools
+
 import numpy as np
 from numba import njit
 from scipy.signal import firwin, resample_poly
@@ -172,13 +174,15 @@ def stepped(freq, table, sr, phase=0.0):
     return y, phase
 
 
-_HALFBAND = firwin(95, 21000.0, fs=88200.0, window=("kaiser", 9.0))
+@functools.cache
+def _halfband() -> np.ndarray:  # made when first needed, not on import (the studio's own worker never plays)
+    return firwin(95, 21000.0, fs=88200.0, window=("kaiser", 9.0))
 
 
 def decimate2(x: np.ndarray) -> np.ndarray:
     """A signal at twice the sample rate brought down to it: flat to about 18 kHz,
     everything that would fold below 20 kHz at least 85 dB down."""
-    return resample_poly(x, 1, 2, window=_HALFBAND, axis=0)
+    return resample_poly(x, 1, 2, window=_halfband(), axis=0)
 
 
 def drift(n: int, sr: float, rng: np.random.Generator, cents: float, rate: float = 0.3) -> np.ndarray:
