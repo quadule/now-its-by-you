@@ -594,7 +594,10 @@ function showYours() {
   const k = kept(), n = (k.measurements || []).length;
   $("singYours").hidden = !k.phrasing;
   if (!k.phrasing) return;
-  $("singPortrait").textContent = k.phrasing.portrait || "";
+  // the latest take's sentences (each take has its own); every take's in the tooltip
+  const portrait = String(k.phrasing.portrait || "");
+  $("singPortrait").textContent = portrait.split(/\n(?=Take \d+:)/).pop();
+  $("singPortrait").title = portrait.includes("\nTake ") ? portrait : "";
   $("singTakes").textContent = `From ${n} take${n === 1 ? "" : "s"}. Each one you measure joins it.`;
   $("singTakes").title = `Up to ${MAX_TAKES}: sing another section, or the same one again.`;
 }
