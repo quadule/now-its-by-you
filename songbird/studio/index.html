@@ -103,6 +103,7 @@
   <button role="tab" type="button" id="tab-page" data-view="page" aria-controls="view-page" aria-selected="true">Page<span class="kbd" aria-hidden="true">1</span></button>
   <button role="tab" type="button" id="tab-arrange" data-view="arrange" aria-controls="view-arrange" aria-selected="false" tabindex="-1">Arrange<span class="kbd" aria-hidden="true">2</span></button>
   <button role="tab" type="button" id="tab-mix" data-view="mix" aria-controls="view-mix" aria-selected="false" tabindex="-1">Mix<span class="kbd" aria-hidden="true">3</span></button>
+  <button role="tab" type="button" id="tab-sing" data-view="sing" aria-controls="view-sing" aria-selected="false" tabindex="-1" hidden>Sing<span class="kbd" aria-hidden="true">4</span></button>
   <button class="what" type="button" id="viewWhat" aria-expanded="false" aria-controls="viewAbout" title="What is this view?">?</button>
   <p class="about" id="viewAbout" hidden></p>
 </div>
@@ -156,6 +157,8 @@
   <main class="view" id="view-mix" role="tabpanel" aria-labelledby="tab-mix" data-view="mix" hidden>
     <div class="mix" id="mix" role="group" aria-label="The mix: a strip for each player, the voice, the room"></div>
   </main>
+  <!-- singing in the browser (webstudio/sing.js, when the studio takes it) fills this, and shows its tab -->
+  <main class="view sing-view" id="view-sing" role="tabpanel" aria-labelledby="tab-sing" data-view="sing" hidden></main>
   <aside class="inspector empty" id="inspector" role="complementary" aria-labelledby="inspectorTitle"></aside>
 </div>
 
@@ -165,6 +168,7 @@
   <button type="button" data-view="page" aria-pressed="true">Page</button>
   <button type="button" data-view="arrange" aria-pressed="false">Arrange</button>
   <button type="button" data-view="mix" aria-pressed="false">Mix</button>
+  <button type="button" data-view="sing" aria-pressed="false" hidden>Sing</button>
 </nav>
 
 <div class="scrim" id="scrim" hidden></div>
@@ -257,7 +261,7 @@
       <tr><th>Space · Shift+Space</th><td>play or stop the sketch · the sung version, of what is selected</td></tr>
       <tr><th>L · K</th><td>loop · click</td></tr>
       <tr><th>⌘/Ctrl Z · ⌘/Ctrl Shift Z</th><td>undo · redo</td></tr>
-      <tr><th>1 · 2 · 3</th><td>Page · Arrange · Mix</td></tr>
+      <tr><th id="viewKeys">1 · 2 · 3</th><td id="viewNames">Page · Arrange · Mix</td></tr>
       <tr><th>← →</th><td>the section before or after; in the notes, move the selected note (Shift: its length)</td></tr>
       <tr><th>↑ ↓</th><td>the track above or below; in the notes, the note's pitch</td></tr>
       <tr><th>Enter · Esc</th><td>open the selected section's notes · close what is open: a sheet or the Time drawer first, then the notes, then the column</td></tr>

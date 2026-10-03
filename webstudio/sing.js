@@ -1,29 +1,37 @@
-// Singing in the web studio (webstudio/, docs/WEB-SINGING.md): a visitor sings along to the guide on the studio's
-// own page, the take is measured (on the server, its audio deleted there; or, in the studio on the visitor's device,
-// in their own browser, never sent: the offer says `device`, and the page says so), and the song is sung their way.
+// Singing in the web studio (webstudio/, docs/WEB-SINGING.md): the Sing view. A visitor sings the version on the page
+// (or the released one) along with its tune, the take is measured (in the studio on the visitor's device, in their
+// own browser, never sent: the offer says `device`; from a server's studio, on that server, its audio deleted there),
+// and the song is sung their way.
 //
-// A module the studio adds to its page only when started with --web-singing (or built with a singing kit). It reaches the studio's page through
-// window.songbirdStudio alone (studio.js's last section), and reuses the karaoke's timing, drawing and take
-// recorder (tools/karaoke.js, tools/karaoke-recorder.js) rather than its own: a take here is cut, synced and
-// written exactly as one sung in the karaoke or on the online page, so it is measured the same way.
+// A module the studio adds to its page only when it takes singing (--web-singing, or the site built for the device).
+// It reaches the studio's page through window.songbirdStudio (studio.js's last section) and window.SongbirdScore (the
+// views), and reuses the karaoke's timing, drawing and take recorder (tools/karaoke.js, tools/karaoke-recorder.js)
+// rather than its own: a take here is cut, synced and written exactly as one sung in the karaoke or on the online
+// page, so it is measured the same way.
 //
-// What stays in this browser (localStorage, under STORE): whether the consent was read (its version), the
-// device's extra delay, the numbers measured from each take, and the way of singing made from them. The take's
-// audio is only ever in this page's memory, until it is measured (sent to be, from a server's page) or sung again.
+// The guide is made from the version as the page has it each time the view is opened or the version changes (POST
+// /api/sing/guide: its words, tune, key and tempo, at the speed and in the key chosen here), and its melody a section
+// at a time (GET /api/sing/melody), so what is sung is always what the Page shows.
+//
+// What stays in this browser (localStorage, under STORE): whether the consent was read (its version), the speed and
+// key chosen, the device's extra delay, the numbers measured from each take, and the way of singing made from them.
+// The take's audio is only ever in this page's memory, until it is measured (sent to be, from a server's page) or
+// sung again.
 import * as K from "/karaoke.js";
 
 const ST = window.songbirdStudio;
 const TOKEN = document.querySelector('meta[name="studio-token"]').content;
 const STORE = "songbird-web-singing";
 const MAX_TAKES = 12;
+const RING = 1.0;  // seconds of a section's guide past its window's end: the last note and the room die away
 const $ = (id) => document.getElementById(id);
 const h = ST.h;
 
 const S = {
-  offer: null, spec: null, lyrics: null, sections: [], part: null, view: null, reel: null, words: new Map(),
-  guides: new Map(), ctx: null, stream: null, recorder: null, analyser: null, buf: null, opening: null,
+  offer: null, which: "page", lyrics: null, sections: [], part: null, view: null, reel: null, words: new Map(),
+  guides: new Map(), ctx: null, stream: null, recorder: null, analyser: null, buf: null, opening: null, asked: null,
   mode: "idle", starting: false, src: [], t0: 0, out: 0, inn: 0, stopAt: null, chunks: [], trail: [], showTrail: null,
-  recording: null, take: null, takeTrail: [], shift: 0, autoShift: 0, measuring: false, run: 0,
+  recording: null, take: null, takeTrail: [], shift: 0, autoShift: 0, measuring: false, run: 0, shown: false,
 };
 
 // ------------------------------------------------------------------ what this browser keeps
@@ -41,84 +49,56 @@ function keep(patch) {
 
 function delay() { return (Number(kept().nudge) || 0) / 1000; }  // what the device adds beyond what it reports
 
-// ------------------------------------------------------------------ the panel
+// ------------------------------------------------------------------ the words (the simplest true thing; the rest in
+// tooltips and docs/WEB-SINGING.md)
 
-// What the page says about the singing, where it is measured: on the server (the words a server's studio has always
-// said), or on this device (the studio running in the browser: nothing of it is sent anywhere)
-const SERVER = {
-  box: "Sing along in your browser, and the song learns a little of your timing and inflection. Your singing is "
-    + "measured on the computer serving this studio and deleted there at once: only numbers about how you sang are "
-    + "kept, never your voice.",
-  promises: () => [
-    [h("b", {}, "Your voice is not kept. "), "While you sing, your microphone is recorded in this browser only. "
-      + "When you send a take to be measured, it goes to the computer serving this studio, which measures it and deletes "
-      + "the recording straight away. It is never saved, played to anyone or used to copy your voice."],
-    [h("b", {}, "What's kept is numbers. "), "For each note: how early or late you came in, how long you held "
-      + "it, how loud it was, how you slid into it and off it. They stay in this browser, and on that computer under a "
-      + "code, with no name or address, for ", h("span", { id: "singKeepDays" }, "30"), " days after they were last used, "
-      + "so the studio can sing the song your way."],
-    [h("b", {}, "Nothing is published unless you export. "), "If you export a version sung your way, the "
-      + "file carries those numbers (rounded) inside it, as every version carries its singer's way. Anyone with the "
-      + "file hears the machine's voice sing it your way: never your voice."],
-    [h("b", {}, "You can take it back. "), "Forget my singing removes the numbers from this browser and from "
-      + "that computer (not from a file you already exported)."]],
-  measure: "Measure it sends this take to be measured; the take is deleted there as soon as it has been, and from "
-    + "this page too.",
-  sending: "Sending your take…",
-  unsent: "It couldn't be sent",
-  measured: "Measured, and deleted.",
-  sure: "Forget it everywhere? Press again",
-  forgotten: "Forgotten: your numbers are gone from this browser and from the studio. A file you exported keeps its own copy.",
+const WORDS = {
+  device: [  // measured in this browser: the consent's own version (studio_device.py DEVICE_CONSENT)
+    ["Your voice stays on this device: your microphone is recorded and measured here, then deleted.",
+      "Nothing of it is sent, saved, played to anyone or used to copy a voice. A take waits in this page's memory until you measure it or sing again."],
+    ["Only numbers are kept, in this browser: for each note, when you came in, how long you held it, how loud, how you slid into it.",
+      "They stay until you forget them, so the studio can sing the song your way."],
+    ["A version you share carries those numbers, never your voice. Forget my singing removes them.",
+      "Not from a version you already exported or shared."],
+  ],
+  server: [  // measured on the computer serving the studio (webstudio/singing.py CONSENT)
+    ["Your voice isn't kept: your take is measured on the computer serving this studio, then deleted.",
+      "It is never saved, played to anyone or used to copy a voice."],
+    ["Only numbers are kept: for each note, when you came in, how long you held it, how loud, how you slid into it.",
+      "In this browser, and on that computer under a code (no name or address) for {days} days after they were last used, so the studio can sing the song your way."],
+    ["A version you export carries those numbers, never your voice. Forget my singing removes them.",
+      "From this browser and that computer; not from a file you already exported."],
+  ],
 };
-const DEVICE = {
-  box: "Sing along; the song learns a little of how you sing. Your singing never leaves this device.",
-  boxTitle: "Your take is measured here, in this browser, and let go. Only numbers about how you sang are kept, in this "
-    + "browser.",
-  promises: () => [
-    [h("b", {}, "Your singing never leaves this device. "), "This browser records your microphone while you sing. "
-      + "Measure it, and the take is measured here, on this device, then let go. It is never sent, saved, played to "
-      + "anyone or used to copy your voice."],
-    [h("b", {}, "What's kept is numbers. "), "For each note: how early or late you came in, how long you held it, how "
-      + "loud it was, how you slid into it and off it. They stay in this browser until you forget them, so the studio "
-      + "can sing the song your way."],
-    [h("b", {}, "Nothing is shared unless you share a version. "), "A version sung your way carries those numbers "
-      + "(rounded) inside it, as every version carries its singer's way. Anyone with the file hears the machine's voice "
-      + "sing it your way: never your voice."],
-    [h("b", {}, "You can take it back. "), "Forget my singing removes the numbers from this browser (not from a "
-      + "file you already exported)."]],
-  measure: "Measured here, on this device; the take is let go once it has been.",
-  sending: "Getting ready to measure it…",
-  unsent: "It couldn't be measured",
-  measured: "Measured, and let go.",
-  sure: "Forget it? Press again",
-  forgotten: "Forgotten: your numbers are gone from this browser. A file you exported keeps its own copy.",
-};
-let SAY = SERVER;
+
+// ------------------------------------------------------------------ the view
 
 function build() {
-  // the studio's "Sing it" box says what singing here is, and opens the singing below it
-  const box = $("singTitle").closest("section");
-  box.querySelector("p").textContent = SAY.box;
+  // the Tools sheet's way in: one line, and the button opens the Sing view
+  const tool = $("singTitle").closest("section");
+  const line = tool.querySelector("p");
+  line.textContent = "Sing along; the song learns a little of how you sing.";
+  line.removeAttribute("title");
   const old = $("sing"), button = old.cloneNode(true);  // the studio's own listener (the karaoke page) stays with the old one
-  button.textContent = "Sing it here";
+  button.textContent = "Sing it";
   old.replaceWith(button);
-  button.addEventListener("click", open);
+  button.addEventListener("click", () => {
+    $("finishPanel").querySelector("[data-close]")?.click();
+    window.SongbirdScore?.showView("sing", true);
+  });
 
-  const consent = h("div", { id: "singConsent" },
-    h("p", { class: "lead" }, "Before you sing, here is what happens to your singing."),
-    h("ul", { class: "sing-promises", id: "singPromises" }, ...SAY.promises().map((li) => h("li", {}, ...li))),
-    h("p", { class: "hint" }, "Wear headphones if you can, so the guide stays out of the microphone. Wrong notes are fine."),
-    h("label", { class: "check" }, h("input", { type: "checkbox", id: "singAgree" }), " I understand. Let me sing."),
-    h("div", { class: "actions" }, h("button", { class: "btn primary", type: "button", id: "singBegin", disabled: true }, "Start singing")));
-
+  const choice = (id, label, title, options) => h("label", { class: "sing-choice", title },
+    h("span", {}, label), h("select", { id, "aria-label": label }, ...options));
   const work = h("div", { id: "singWork", hidden: true },
     h("div", { class: "sing-choices" },
-      h("label", {}, h("span", { class: "hint" }, "Key "), h("select", { id: "singSpec", "aria-label": "The key to sing in" })),
-      h("span", { class: "hint" }, "Too high or too low? Choose another key; a man and a woman can sing an octave apart."),
-      h("label", { class: "check hint", title: "the browser takes the guide out of the microphone (echo cancellation)" },
+      h("span", { class: "switch", role: "group", "aria-label": "What to sing", id: "singWhich", hidden: true },
+        h("button", { type: "button", "data-which": "page", "aria-pressed": "true", title: "The version on the Page: its words, key and tempo" }, "This version"),
+        h("button", { type: "button", "data-which": "released", "aria-pressed": "false", title: "The song as it was released" }, "The released one")),
+      choice("singSpeed", "Speed", "A slower guide to learn it by; your timing is measured against it", []),
+      choice("singKey", "Key", "Too high or too low? Choose another key; a man and a woman can sing an octave apart.", []),
+      h("label", { class: "check hint", title: "Headphones keep the guide out of the microphone. Without them, the browser takes the guide out of what it hears (echo cancellation)." },
         h("input", { type: "checkbox", id: "singSpeaker" }), " no headphones")),
     h("div", { class: "chips", id: "singParts", role: "group", "aria-label": "What to sing" }),
-    h("p", { class: "hint", id: "singPartLabel" }),
     h("div", { class: "sing-stage", id: "singStage" },
       h("button", { class: "sing-full", type: "button", id: "singFull" }, "Full screen"),
       h("canvas", { class: "lane", id: "singLane", "aria-hidden": "true" }),
@@ -129,39 +109,41 @@ function build() {
       h("button", { class: "btn primary", type: "button", id: "singRecord" }, "● Record"),
       h("button", { class: "btn", type: "button", id: "singStop", disabled: true }, "■ Stop"),
       h("span", { class: "hint sing-meter", title: "your microphone" }, "mic ", h("span", { class: "meter" }, h("span", { id: "singLevel" })))),
-    h("p", { class: "sing-status", id: "singStatus", "aria-live": "polite" }, "Loading the words…"),
+    h("p", { class: "sing-status", id: "singStatus", "aria-live": "polite" }),
     h("div", { class: "sing-review", id: "singReview", hidden: true },
       h("h3", { id: "singReviewTitle" }, "That take"),
       h("div", { class: "actions" },
-        h("button", { class: "btn", type: "button", id: "singListen" }, "▶ Listen back with the guide"),
+        h("button", { class: "btn", type: "button", id: "singListen" }, "▶ Listen back"),
         h("button", { class: "btn primary", type: "button", id: "singMeasure" }, "Measure it"),
         h("button", { class: "btn quiet", type: "button", id: "singDiscard" }, "Sing it again")),
-      h("div", { class: "sing-sync" },
-        h("span", { class: "hint" }, "If your voice sits late or early against the music, slide it while you listen: "),
-        h("span", { class: "hint" }, "earlier"),
+      h("div", { class: "sing-sync", title: "If your voice sits late or early against the guide, slide it while you listen." },
+        h("span", { class: "hint" }, "Line it up: earlier"),
         h("input", { type: "range", id: "singShift", min: "-400", max: "400", step: "5", value: "0", "aria-label": "Slide your take earlier or later" }),
         h("span", { class: "hint" }, "later"),
-        h("span", { class: "hint", id: "singShiftValue" }, "as recorded")),
-      h("p", { class: "hint", id: "singMeasureHint" }, SAY.measure)),
+        h("span", { class: "hint", id: "singShiftValue" }, "as recorded"))),
     h("div", { class: "sing-yours", id: "singYours", hidden: true },
-      h("h3", {}, "Your way of singing it"),
+      h("h3", {}, "Your way"),
       h("p", { class: "sing-portrait", id: "singPortrait" }),
       h("p", { class: "hint", id: "singTakes" }),
       h("div", { class: "actions" },
-        h("button", { class: "btn primary", type: "button", id: "singHear" }, "▶ Hear the song your way"),
+        h("button", { class: "btn primary", type: "button", id: "singHear" }, "▶ Hear it your way"),
         h("button", { class: "btn", type: "button", id: "singToRecord" }, "Export it your way"),
-        h("button", { class: "link small", type: "button", id: "singForget" }, "Forget my singing"))),
-    h("details", { class: "sing-about" }, h("summary", { class: "hint" }, "What happens to your singing"),
-      h("p", { class: "hint", id: "singAboutText" })));
+        h("button", { class: "link small", type: "button", id: "singForget" }, "Forget my singing"))));
 
-  const panel = h("section", { class: "panel websing", id: "webSing", hidden: true, "aria-labelledby": "webSingTitle" },
-    h("h2", { id: "webSingTitle" }, "Sing it here"), consent, work);
-  $("finishPanel").querySelector(".two").after(panel);
-  $("singAboutText").textContent = [...consent.querySelectorAll("li")].map((li) => li.textContent).join(" ");
+  const consent = h("div", { id: "singConsent", hidden: true },
+    h("ul", { class: "sing-promises", id: "singPromises" }),
+    h("label", { class: "check" }, h("input", { type: "checkbox", id: "singAgree" }), " I understand."),
+    h("div", { class: "actions" }, h("button", { class: "btn primary", type: "button", id: "singBegin", disabled: true }, "Start")));
+
+  $("view-sing").append(h("section", { class: "websing", id: "webSing", "aria-labelledby": "webSingTitle" },
+    h("h2", { class: "sr-only", id: "webSingTitle" }, "Sing"),
+    h("p", { class: "hint", id: "singWhy" }), consent, work));
 
   $("singAgree").addEventListener("change", () => { $("singBegin").disabled = !$("singAgree").checked; });
   $("singBegin").addEventListener("click", () => { keep({ consent: S.offer.consent }); showWork(); });
-  $("singSpec").addEventListener("change", () => chooseSpec($("singSpec").value));
+  for (const b of $("singWhich").querySelectorAll("button")) b.addEventListener("click", () => chooseWhich(b.dataset.which));
+  $("singSpeed").addEventListener("change", () => { keep({ speed: Number($("singSpeed").value) }); guideWords(); });
+  $("singKey").addEventListener("change", () => { keep({ key: Number($("singKey").value) }); guideWords(); });
   $("singSpeaker").checked = !!kept().speaker;
   $("singSpeaker").addEventListener("change", () => {
     keep({ speaker: $("singSpeaker").checked || null });
@@ -187,9 +169,19 @@ function build() {
   $("singForget").addEventListener("click", forget);
   K.fullScreen($("singStage"), $("singFull"), () => { if (S.mode === "idle" && S.view) resting(); });
   document.addEventListener("keydown", (e) => {
-    if (e.code === "Space" && S.mode !== "idle" && !["INPUT", "SELECT", "TEXTAREA"].includes(e.target.tagName)) { e.preventDefault(); stop(); }
+    if (e.code === "Space" && S.mode !== "idle" && !["INPUT", "SELECT", "TEXTAREA"].includes(e.target.tagName)) {
+      e.preventDefault();
+      e.stopPropagation();
+      stop();
+    }
+  }, true);
+  window.addEventListener("resize", () => { if (S.mode === "idle" && S.view && S.shown) resting(); });
+  document.addEventListener("studio:view", (e) => {
+    S.shown = e.detail.view === "sing";
+    if (S.shown) enter();
+    else if (S.mode === "rehearsing" || S.mode === "listening") stop();
   });
-  window.addEventListener("resize", () => { if (S.mode === "idle" && S.view) resting(); });
+  document.addEventListener("studio:render", () => { if (S.shown) guideWords(); });  // the version changed
 }
 
 function say(text, warn = false) {
@@ -198,11 +190,11 @@ function say(text, warn = false) {
   el.classList.toggle("warn", warn);
 }
 
-async function open() {
-  $("webSing").hidden = false;
-  $("webSing").scrollIntoView({ behavior: "smooth", block: "start" });
+function enter() {
   if (!S.offer || !S.offer.available) return;
   if (kept().consent === S.offer.consent) showWork();
+  else { $("singConsent").hidden = false; $("singWork").hidden = true; }
+  if (S.view) requestAnimationFrame(resting);  // the lane's size is known now it's shown
 }
 
 function showWork() {
@@ -211,58 +203,57 @@ function showWork() {
   if (!window.isSecureContext || !navigator.mediaDevices) {
     say("This browser won't lend the page its microphone here: the studio needs to be opened over https.", true);
   }
-  if (!S.lyrics) chooseSpec(kept().spec || S.offer.default);
+  guideWords();
 }
 
-// ------------------------------------------------------------------ what to sing: a key, a section or the whole song
+// ------------------------------------------------------------------ what to sing: the version (or the released one),
+// a speed, a key, a section or the whole song
 
-function specLabel(s) {
-  const tempos = new Set(S.offer.specs.map((x) => x.tempo));
-  return (s.key === 0 ? "the song's own key" : K.keyLabel(s.key)) + (tempos.size > 1 ? `, ${K.speedLabel(s.tempo)}` : "");
+function chooseWhich(which) {
+  S.which = which === "released" && S.offer.released ? "released" : "page";
+  for (const b of $("singWhich").querySelectorAll("button")) b.setAttribute("aria-pressed", String(b.dataset.which === S.which));
+  guideWords();
 }
 
-async function getJSON(url) {
-  const r = await fetch(url);
-  const data = await r.json().catch(() => ({}));
-  if (!r.ok || data.error) throw new Error(data.error || `The studio said ${r.status}.`);
-  return data;
+function asking() {
+  // the version's edits but the way it's sung (a phrasing moves no note of the tune: the guide is on its grid)
+  const edits = { ...ST.state.edits };
+  delete edits.phrasing;
+  return { which: S.which, speed: Number($("singSpeed").value), key: Number($("singKey").value),
+           edits: S.which === "page" ? edits : {} };
 }
 
-function words(spec) {  // a version's words and notes, fetched once
-  if (!S.words.has(spec)) {
-    const p = getJSON(`/api/sing/lyrics?spec=${encodeURIComponent(spec)}`);
-    p.catch(() => S.words.delete(spec));
-    S.words.set(spec, p);
-  }
-  return S.words.get(spec);
-}
-
-async function chooseSpec(spec) {
-  if (!S.offer.specs.some((s) => s.id === spec)) spec = S.offer.default;
-  $("singSpec").value = spec;
-  keep({ spec });
-  S.wanted = spec;
+async function guideWords() {
+  // the guide's words for the version as it is now: asked again when it changed (a choice here, or an edit)
+  if ($("singWork").hidden || S.mode !== "idle" || S.starting || S.take || S.measuring) return;
+  const want = asking(), sig = JSON.stringify(want);
+  if (sig === S.asked) return;
+  S.asked = sig;
   controls();
-  say("Loading the words…");
+  if (!S.words.has(sig)) {
+    const p = ST.api("/api/sing/guide", want);
+    p.catch(() => S.words.delete(sig));
+    S.words.set(sig, p);
+  }
+  if (!S.lyrics) say("Setting out the words…");
   let lyrics;
-  try { lyrics = await words(spec); } catch (e) { say(e.message, true); return; }
-  if (S.wanted !== spec) return;
+  try { lyrics = await S.words.get(sig); } catch (e) { S.asked = null; say(e.message, true); return; }
+  if (S.asked !== sig) return;
   const was = S.part;
-  S.spec = spec;
   S.lyrics = lyrics;
   S.sections = K.sungSections(lyrics);
   const same = was && was.index !== null ? S.sections.find((s) => s.name === was.name && s.title === was.title) : null;
-  choosePart(was && was.index === null ? null : same ? same.index : S.sections.length ? S.sections[0].index : null);
+  choosePart(was && was.index === null ? null : same ? same.index : S.sections.length ? S.sections[0].index : null, !!was);
   controls();
-  say("Rehearse to hear it through, or record when you're ready. Start with one section: it's quicker to measure.");
-  guide(spec).catch(() => {});  // fetched ahead, so it's ready when you are
 }
 
-function choosePart(index) {
+function choosePart(index, quiet = false) {
   S.part = K.part(S.lyrics, index) || K.part(S.lyrics);
   view(S.lyrics, S.part);
   drawParts();
   resting();
+  if (!quiet) say("");
+  guide(S.part).catch(() => {});  // made ahead, so it's ready when you are
 }
 
 function drawParts() {
@@ -276,9 +267,7 @@ function drawParts() {
     box.append(b);
   };
   for (const s of S.sections) chip(s.index, s.title, K.sectionLabel(s));
-  chip(null, K.WHOLE, K.WHOLE);
-  $("singPartLabel").textContent = S.part.index === null ? "The whole song, from the top: about four minutes, and a minute or so to measure."
-    : S.part.label;
+  chip(null, K.WHOLE, "From the top: longer to sing, and to measure");
   $("singRecord").textContent = S.part.index === null ? "● Record the whole song" : `● Record ${S.part.title}`;
 }
 
@@ -300,11 +289,13 @@ function drawLane(pos) {
 }
 
 function controls() {
-  const idle = S.mode === "idle" && !S.starting, loading = !S.lyrics || S.wanted !== S.spec;
+  const idle = S.mode === "idle" && !S.starting, loading = !S.lyrics;
+  const busy = !idle || !!S.take || S.measuring;
   $("singStop").disabled = S.mode === "idle";
   $("singRehearse").disabled = !idle || loading;
-  $("singRecord").disabled = !idle || loading || !!S.take || S.measuring;
-  $("singSpec").disabled = !idle || !!S.take || S.measuring;
+  $("singRecord").disabled = busy || loading;
+  for (const id of ["singSpeed", "singKey"]) $(id).disabled = busy;
+  for (const b of $("singWhich").querySelectorAll("button")) b.disabled = busy;
   $("singMeasure").disabled = S.measuring;
   $("singDiscard").disabled = S.measuring;
   drawParts();
@@ -317,24 +308,33 @@ async function context() {
   await S.ctx.resume();
 }
 
-function guide(spec) {  // the melody guide, fetched and decoded once
-  if (!S.guides.has(spec)) {
+function guide(part) {  // a part's melody guide, made (or kept) by the studio, decoded once: {buffer, at}
+  const lyrics = S.lyrics, at = part.from, to = part.index === null ? lyrics.duration : Math.min(lyrics.duration, part.to + RING);
+  const name = `${lyrics.guide}|${at}|${to}`;
+  if (!S.guides.has(name)) {
+    const last = (kept().measurements || []).slice(-1)[0];
+    const query = new URLSearchParams({ guide: lyrics.guide, from: at.toFixed(3), to: to.toFixed(3),
+                                        ahead: String(last && Number.isInteger(last.key) ? last.key : 0), until: part.to.toFixed(3) });
     const p = (async () => {
-      const r = await fetch(`/api/sing/guide?spec=${encodeURIComponent(spec)}`);
-      if (!r.ok) throw new Error("The guide couldn't be loaded: reload the page.");
+      const r = await fetch(`/api/sing/melody?${query}`, { headers: { "X-Studio": TOKEN } });
+      if (!r.ok) throw new Error(((await r.json().catch(() => ({}))).error) || "The guide couldn't be made: reload the page.");
       const bytes = await r.arrayBuffer();
       await context();
-      return S.ctx.decodeAudioData(bytes);
+      return { buffer: await S.ctx.decodeAudioData(bytes), at };
     })();
-    p.catch(() => S.guides.delete(spec));
-    S.guides.set(spec, p);
+    p.catch(() => S.guides.delete(name));
+    S.guides.set(name, p);
   }
-  return S.guides.get(spec);
+  return S.guides.get(name);
 }
 
 async function chosenGuide() {
-  if (!S.guides.has(S.spec)) say("Loading the guide…");
-  return guide(S.spec);
+  const p = guide(S.part);
+  let ready = false;
+  p.then(() => { ready = true; }, () => {});
+  await Promise.resolve();
+  if (!ready) say(S.part.index === null ? "Making the guide for the whole song (a minute or so, once)…" : "Making the guide…");
+  return p;
 }
 
 function microphone() {  // opened once: a second tap waits for the first
@@ -374,20 +374,21 @@ async function starting(go) {
   try { await go(); } catch (e) { say(e.message, true); } finally { S.starting = false; controls(); }
 }
 
-function start(buffers, mode, from = 0, shifts = [], until = null, gains = []) {
-  // play from guide time `from` (a take's buffer `shifts` seconds earlier, at `gains`), until guide time `until`
+function start(sources, mode, from = 0, until = null) {
+  // play from guide time `from` until guide time `until`: each source a buffer whose first sample is guide time `at`
+  // (the guide's stretch; a take, slid), at its gain
   const when = S.ctx.currentTime + 0.12;
   S.t0 = when - from;
   S.stopAt = until;
   S.out = (S.ctx.outputLatency || 0) + (S.ctx.baseLatency || 0);
   S.inn = S.stream ? S.stream.getAudioTracks()[0].getSettings().latency || 0 : 0;
   const out = mode === "listening" ? K.listenOut(S.ctx) : S.ctx.destination;
-  S.src = buffers.map((buffer, i) => {
+  S.src = sources.map((s, i) => {
     const src = S.ctx.createBufferSource(), fader = S.ctx.createGain();
-    src.buffer = buffer;
+    src.buffer = s.buffer;
     (mode === "listening" && i > 0 ? src.connect(K.takeFilter(S.ctx)) : src).connect(fader).connect(out);
-    const at = from + (shifts[i] || 0), level = gains[i] ?? 1;
-    if (from > 0) { fader.gain.setValueAtTime(0, when); fader.gain.linearRampToValueAtTime(level, when + 0.03); }
+    const at = from - s.at, level = s.gain ?? 1;
+    if (from > s.at) { fader.gain.setValueAtTime(0, when); fader.gain.linearRampToValueAtTime(level, when + 0.03); }
     else fader.gain.value = level;
     if (at >= 0) src.start(when, at); else src.start(when - at);
     src.fader = fader;
@@ -404,7 +405,7 @@ function start(buffers, mode, from = 0, shifts = [], until = null, gains = []) {
   controls();
   $("singReview").hidden = true;
   const section = S.view.part.index !== null;
-  say(mode === "recording" ? (section ? `Recording ${S.view.part.title}. It stops by itself at the end.` : "Recording. Space or Stop to finish.")
+  say(mode === "recording" ? (section ? `Recording ${S.view.part.title}.` : "Recording. Space or Stop to finish.")
     : mode === "listening" ? "Your take, with the guide." : "Rehearsing.");
   const run = S.run = S.run + 1;
   const tick = () => {
@@ -446,11 +447,12 @@ function stop() {
   silence(S.src);
   S.src = [];
   if (was === "recording" || was === "finishing") finishTake(was === "finishing" ? S.stopAt : pos);
-  else say(S.take ? "Measure it, or sing it again." : "Rehearse again, or record a take.");
+  else say(S.take ? "Measure it, or sing it again." : "");
   $("singReview").hidden = !S.take;
   S.showTrail = null;
   controls();
   resting();
+  if (!S.take) guideWords();  // the version may have changed meanwhile
 }
 
 function windowEnds() {
@@ -475,11 +477,10 @@ function finishTake(stoppedAt) {
   const notes = K.notesOf(r.lyrics);
   S.shift = S.autoShift = long ? (whole ? K.autoSync(S.takeTrail, notes) : K.autoSyncWindow(S.takeTrail, notes, part.from, part.to)) : 0;
   $("singShift").value = String(Math.max(-400, Math.min(400, -S.shift * 1000)));
-  $("singShiftValue").textContent = S.shift ? `auto-synced, ${Math.abs(Math.round(S.shift * 1000))} ms ${S.shift > 0 ? "earlier" : "later"}` : "as recorded";
+  $("singShiftValue").textContent = S.shift ? `auto, ${Math.abs(Math.round(S.shift * 1000))} ms ${S.shift > 0 ? "earlier" : "later"}` : "as recorded";
   if (S.shift) keep({ nudge: Math.round(delay() * 1000 + S.shift * 1000) });  // the next take starts closer
   $("singReviewTitle").textContent = whole ? "That take" : `That take of ${part.title}`;
-  const synced = S.shift ? ` Synced: your device held the sound ${Math.round(Math.abs(S.shift) * 1000)} ms longer than it said.` : "";
-  say(long ? `Got it.${synced} Listen back if you like, then measure it.` : "That was short. Record again?");
+  say(long ? "Got it. Listen back if you like, then measure it." : "That was short. Record again?");
 }
 
 function rehearse() {
@@ -487,7 +488,7 @@ function rehearse() {
     await context();
     const g = await chosenGuide();
     try { await microphone(); } catch (e) { /* rehearsing works without it: no pitch line */ }
-    start([g], "rehearsing", S.part.from, [], S.part.index === null ? null : S.part.to);
+    start([g], "rehearsing", S.part.from, S.part.index === null ? null : S.part.to);
   });
 }
 
@@ -496,8 +497,8 @@ function record() {
     await context();
     const g = await chosenGuide();
     try { await microphone(); } catch (e) { throw new Error(`The page couldn't use your microphone (${e.message}). Allow it in the browser, then record again.`); }
-    S.recording = { spec: S.spec, lyrics: S.lyrics, part: S.part, digest: S.lyrics.guide, guide: g };
-    start([g], "recording", S.part.from, [], S.part.index === null ? null : S.part.to);
+    S.recording = { lyrics: S.lyrics, part: S.part, digest: S.lyrics.guide, guide: g };
+    start([g], "recording", S.part.from, S.part.index === null ? null : S.part.to);
   });
 }
 
@@ -512,9 +513,9 @@ function takeBuffer() {
 function listenFrom(from) {
   const t = S.take, p = t.part;
   if (S.mode !== "idle") { silence(S.src); S.mode = "idle"; }
-  t.gain = t.gain || K.takeGain(t.samples, t.rate);  // lifted to be heard over the guide (what's sent stays as sung)
-  start([t.guide, takeBuffer()], "listening", Math.max(p.from, from), [0, S.shift - p.from], p.index === null ? null : t.to + 0.3,
-        [K.UNDER, t.gain]);
+  t.gain = t.gain || K.takeGain(t.samples, t.rate);  // lifted to be heard over the guide (what's measured stays as sung)
+  start([{ ...t.guide, gain: K.UNDER }, { buffer: takeBuffer(), at: p.from - S.shift, gain: t.gain }], "listening",
+        Math.max(p.from, from), p.index === null ? null : t.to + 0.3);
 }
 
 function discard() {
@@ -522,10 +523,11 @@ function discard() {
   S.take = null;  // the audio goes with it
   $("singReview").hidden = true;
   controls();
-  say("Ready when you are.");
+  say("");
+  guideWords();
 }
 
-// ------------------------------------------------------------------ measuring: the take sent, its numbers back
+// ------------------------------------------------------------------ measuring: the take measured, its numbers back
 
 async function measure() {
   const t = S.take;
@@ -533,14 +535,14 @@ async function measure() {
   if (S.mode === "listening") stop();
   const earlier = (kept().measurements || []).slice(-(MAX_TAKES - 1));
   const meta = new TextEncoder().encode(JSON.stringify({
-    spec: t.spec, guide: t.digest, section: t.part.index, from_s: t.part.from, to_s: t.to,
+    guide: t.digest, section: t.part.index, from_s: t.part.from, to_s: t.to,
     shift_ms: Math.round(S.shift * 1000), auto_ms: Math.round((S.autoShift || 0) * 1000), device_ms: Math.round(t.device * 1000),
     earlier,
   }));
   const body = new Blob([meta, K.wavBytes(K.shifted(t.samples, t.rate, S.shift), t.rate)]);
   S.measuring = true;
   controls();
-  say(SAY.sending);
+  say("Measuring it…");
   let job;
   try {
     const r = await fetch("/api/sing/take", { method: "POST", body,
@@ -550,19 +552,17 @@ async function measure() {
   } catch (e) {
     S.measuring = false;
     controls();
-    say(`${SAY.unsent}: ${e.message}`, true);
+    say(`It couldn't be measured: ${e.message}`, true);
     return;
   }
   const estimate = job.estimate || 10;
-  S.take = null;  // sent: this page lets go of the recording too
+  S.take = null;  // handed over: this page lets go of the recording
   $("singReview").hidden = true;
   for (;;) {
-    if (job.state === "queued") {
-      const wait = job.eta ? `, about ${job.eta < 90 ? `${Math.max(5, Math.round(job.eta / 5) * 5)} s` : `${Math.round(job.eta / 60)} minutes`} in all` : "";
-      say(job.ahead ? `Waiting its turn: ${job.ahead} ahead of it${wait} (this studio makes one thing at a time). Then about ${estimate} s.`
-        : `Measuring starts in a moment, and takes about ${estimate} s.`);
-    } else if (job.state === "running") {
-      say(`Listening to how you sang (about ${estimate} s)…`);
+    if (job.state === "queued" && job.ahead) {
+      say(`Waiting its turn (${job.ahead} ahead), then about ${estimate} s to measure.`);
+    } else if (job.state === "queued" || job.state === "running") {
+      say(`Measuring it (about ${estimate} s)…`);
     } else break;
     await new Promise((r) => setTimeout(r, 1000));
     try { job = await ST.api(`/api/job/${job.id}`); } catch (e) { job = { state: "failed", error: e.message }; }
@@ -580,8 +580,7 @@ async function measure() {
   own(result.name, result.phrasing);
   ST.setEdit("phrasing", result.name, "Sing it your way");
   showYours();
-  const skipped = (result.skipped || []).length ? " Some of it sat too far from the guide's key to measure." : "";
-  say(`${SAY.measured}${skipped} The song is sung your way now: hear it, sing another part, or record it.`);
+  say("Measured. The song is sung your way now.");
 }
 
 function own(name, json) {
@@ -596,34 +595,34 @@ function showYours() {
   $("singYours").hidden = !k.phrasing;
   if (!k.phrasing) return;
   $("singPortrait").textContent = k.phrasing.portrait || "";
-  $("singTakes").textContent = `Made from ${n} take${n === 1 ? "" : "s"}. Each take you measure joins it (up to ${MAX_TAKES}): `
-    + "sing another section, or the same one again.";
+  $("singTakes").textContent = `From ${n} take${n === 1 ? "" : "s"}. Each one you measure joins it.`;
+  $("singTakes").title = `Up to ${MAX_TAKES}: sing another section, or the same one again.`;
 }
 
 async function forget() {
   const button = $("singForget");
   if (!button.dataset.sure) {
     button.dataset.sure = "1";
-    button.textContent = SAY.sure;
+    button.textContent = "Forget it? Press again";
     setTimeout(() => { delete button.dataset.sure; button.textContent = "Forget my singing"; }, 5000);
     return;
   }
   delete button.dataset.sure;
   button.textContent = "Forget my singing";
   const name = (kept().phrasing || {}).name;
-  try { if (name) await ST.api("/api/sing/forget", { name }); } catch (e) { say(`It couldn't be forgotten there: ${e.message}`, true); return; }
+  try { if (name) await ST.api("/api/sing/forget", { name }); } catch (e) { say(`It couldn't be forgotten: ${e.message}`, true); return; }
   keep({ measurements: null, phrasing: null });
   ST.ownPhrasings.splice(0, ST.ownPhrasings.length);
   if (ST.state.edits.phrasing === name) ST.setEdit("phrasing", null, "Forget my singing");
   else ST.renderCards();
   showYours();
-  say(SAY.forgotten);
+  say("Forgotten.");
 }
 
 // ------------------------------------------------------------------ starting
 
 async function restore() {
-  // a way of singing made on an earlier visit: offered again, and kept again there (the studio keeps it by its
+  // a way of singing made on an earlier visit: offered again, and kept again there (a server keeps it by its
   // fingerprint for a while after it was last used; this browser is where it lives)
   const k = kept();
   if (!k.phrasing || !k.phrasing.json) return;
@@ -640,29 +639,39 @@ async function restore() {
   } catch (e) { /* the studio says why on its card */ }
 }
 
-function onDevice() {  // the studio runs in this browser: the take is measured here, and nothing is sent
-  SAY = DEVICE;
-  const box = $("singTitle").closest("section").querySelector("p");
-  box.textContent = SAY.box;
-  box.title = SAY.boxTitle;
-  $("singPromises").replaceChildren(...SAY.promises().map((li) => h("li", {}, ...li)));
-  $("singMeasureHint").textContent = SAY.measure;
+function offered() {
+  // the view's choices and words, once the offer says where the singing is measured (never before: a device's page
+  // must not show a server's words, even for a moment)
+  const o = S.offer, k = kept();
+  const days = String(o.keep_days || 30);
+  $("singPromises").replaceChildren(...WORDS[o.device ? "device" : "server"].map(([line, more]) =>
+    h("li", { title: more.replace("{days}", days) }, line)));
+  for (const speed of o.speeds) $("singSpeed").append(h("option", { value: String(speed) }, speed === 100 ? "as written" : `${speed}%`));
+  for (const key of o.keys) $("singKey").append(h("option", { value: String(key) }, key ? K.keyLabel(key) : "as written"));
+  $("singSpeed").value = String(o.speeds.includes(k.speed) ? k.speed : o.speed);
+  $("singKey").value = String(o.keys.includes(k.key) ? k.key : 0);
+  $("singWhich").hidden = !o.released;
 }
 
 async function init() {
   build();
   try { S.offer = await ST.api("/api/sing/offer"); } catch (e) { S.offer = { available: false, why: e.message }; }
-  if (S.offer.device) onDevice();
+  // the Sing view and its ways in: its tab, the phone's bar, the keyboard's 4
+  $("tab-sing").hidden = false;
+  document.querySelector('#bottombar [data-view="sing"]')?.removeAttribute("hidden");
+  if ($("viewKeys")) { $("viewKeys").textContent = "1 · 2 · 3 · 4"; $("viewNames").textContent = "Page · Arrange · Mix · Sing"; }
+  // an address that names the view (#view=sing) was read before the view was here
+  if (new URLSearchParams(location.hash.slice(1)).get("view") === "sing") window.SongbirdScore?.showView("sing");
   if (!S.offer.available) {
-    $("sing").disabled = true;
-    $("singNote").textContent = S.offer.why || "Singing isn't available here.";
+    $("singWhy").textContent = S.offer.why || "Singing isn't available here.";
+    $("singNote").textContent = $("singWhy").textContent;
     return;
   }
-  if ($("singKeepDays")) $("singKeepDays").textContent = String(S.offer.keep_days);
-  $("singAboutText").textContent = [...$("singConsent").querySelectorAll("li")].map((li) => li.textContent).join(" ");
-  for (const s of S.offer.specs) $("singSpec").append(h("option", { value: s.id }, specLabel(s)));
+  $("singWhy").hidden = true;
+  offered();
   showYours();
   restore();
+  if (S.shown) enter();
 }
 
 init();

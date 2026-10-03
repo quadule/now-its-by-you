@@ -333,6 +333,7 @@
   // The singing worker: the full one (the whistle needs the kernels), started when a guide's melody is first wanted
   // and let go when it has had nothing to do for a while, or before a take is measured (its memory is wanted then)
   let singer = null, singerIdle = null, singerQueue = Promise.resolve();
+  const singing = {};  // the last heaps (MiB) and times singing's workers said, for anyone measuring them (SongbirdDevice)
   function singerStop() {
     clearTimeout(singerIdle);
     if (singer) singer.then((w) => w.stop(), () => {});
@@ -347,7 +348,10 @@
       }
       let w;
       try { w = await singer; } catch (e) { singer = null; throw e; }
-      try { return await job(w); } finally { singerIdle = setTimeout(singerStop, SINGER_IDLE_MS); }
+      try { return await job(w); } finally {
+        singing.singer = w.heap;  // its heap (MiB) after the job: what it holds (wasm memory only grows)
+        singerIdle = setTimeout(singerStop, SINGER_IDLE_MS);
+      }
     });
     singerQueue = run.catch(() => {});
     return run;
@@ -461,6 +465,7 @@
       if (Object.keys(kept).length) await measurer.ask({ cmd: "kit", files: kept }, Object.values(kept));
       const m = await deadline(measurer.ask({ cmd: "measure", request: JSON.stringify(request), take: wav }, [wav]),
         MEASURE_MS, "measuring it");
+      Object.assign(singing, { measuring: m.heap, seconds: m.seconds, made: Object.keys(m.made || {}).length });
       wav = null;
       for (const [file, bytes] of Object.entries(m.made || {})) await sput("parts", file, bytes);
       said = m.status === 200 && m.json ? m.json : JSON.stringify({ error: (parsed(m) || {}).error || "it went wrong on this device" });
@@ -611,7 +616,7 @@
   }
 
   window.SongbirdDevice = {
-    version, linked, share, crashed, MAKING,
+    version, linked, share, crashed, MAKING, singing,
     ready: () => studio().then((s) => ({ ...s.view, heap: s.worker.heap })),
     get heap() { return running ? running.then((s) => s.worker.heap) : Promise.resolve(0); },
   };

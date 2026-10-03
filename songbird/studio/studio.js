@@ -1347,6 +1347,8 @@ function render() {
   window.SongbirdComposer?.render(state.view);
   window.SongbirdPerform?.render(state.view);  // notes in: a part played in, a MIDI file brought back
   score()?.render(state.view);  // the score's views and inspector
+  // the version changed (webstudio/sing.js follows it)
+  if (typeof CustomEvent === "function") document.dispatchEvent?.(new CustomEvent("studio:render"));
 }
 
 function showWorkspace(name, focus = false) {

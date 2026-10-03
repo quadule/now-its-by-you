@@ -51,10 +51,12 @@
     page: "The words as this version sings them. A word with a dashed line under it can change: pick another and the tune keeps its syllables. Select a section's name or a line to change more; ▶ plays that part, sung.",
     arrange: "The song as a timeline: its sections over a ruler of bars, and under them a row for each player. A cell says whether that player plays there and how hard. Select a section, a player, a cell, or the seam between two. Drag a section to move it, its right edge for its length. Double-click a section for its notes (its tune and chords), or the singer's row for its words.",
     mix: "A strip for each player (its level, where it sits, how it pumps), then the voice and the room. Judge the voice against the band on the whole song: a part heard alone is levelled for listening.",
+    sing: "Sing this version along with its tune. The song learns a little of how you sing, and can sing it your way.",
   };
   function showView(v, focus = false) {
-    if (!["page", "arrange", "mix"].includes(v)) return;
+    if (!["page", "arrange", "mix", "sing"].includes(v) || (v === "sing" && $("tab-sing")?.hidden !== false)) return;
     S.view = v;
+    if ($("body")?.dataset) $("body").dataset.view = v;
     for (const t of document.querySelectorAll("#tabs [role=tab]")) {
       const on = t.dataset.view === v;
       t.setAttribute("aria-selected", String(on)); t.tabIndex = on ? 0 : -1;
@@ -64,6 +66,7 @@
     for (const m of document.querySelectorAll("main.view")) m.hidden = m.dataset.view !== v;
     $("viewAbout").textContent = ABOUT[v];
     if (v !== "arrange") C()?.stop?.();
+    if (typeof CustomEvent === "function") document.dispatchEvent?.(new CustomEvent("studio:view", { detail: { view: v } }));
   }
 
   // ------------------------------------------------------------------ what is selected
@@ -1402,6 +1405,7 @@
   }
   window.SongbirdScore = {
     render, renderPage, renderInspector, started, reveal, recording, playerChanged, tick, composerSelected, closeNotes, narrow,
+    showView, view: () => S.view,
     playersChanged: () => { if (S.sel?.kind === "player" || S.sel?.kind === "choir") renderInspector(); renderGrid(); },
     _state: S,
   };
