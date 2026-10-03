@@ -1151,23 +1151,29 @@ measuring process: docs/WEB-SINGING.md, "In the studio's page", has it whole. In
 
 The hosting Worker is web/studio-site ("Hosted on Cloudflare", above): Workers Static Assets serve the built site,
 and its Worker answers `/api/*` and `/v/*`. `uv run python web/studio-wasm/tools/build_site.py renders/studio-site`
-(it runs `npm ci` in web/studio-wasm if needed, as build_render.py does, and refuses stale kernels; about 5 s), then
+(it runs `npm ci` in web/studio-wasm if needed, as build_render.py does, and refuses stale kernels; about 40 s, most
+of it the first answers below, in up to eight processes; `--days 0` skips them), then
 wrangler's `[build]` runs `tools/prepare.mjs`, which checks site.json against its own rules and writes `_headers` and
 `.assetsignore`. The build writes:
 
     OUT/index.html, *.js, *.css   the page, from the root: device.js, renderer.js, studio.js, score.js, model.js, …
     OUT/notice.css                the plain pages' look
     OUT/piano/                    index.html (its addresses made /piano/…), piano.js, sound.js, piano.css, identity.css
-    OUT/render/bundle.json        {"v", "base": "/render/", "pyodide", "app", "packages", "bytes", "transfer",
-                                   "program", "pyodide_version", "studio": {"song", "machine", "runs_with", "kit"?}}
+    OUT/render/bundle.json        {"v", "base": "/render/", "pyodide", "app", "packages", "bytes", "studio_bytes",
+                                   "transfer", "program", "pyodide_version", "studio": {"song", "machine", "runs_with",
+                                   "kit"?}, "first"?: {"folder", "from", "to"}}  (bytes: what a render worker fetches,
+                                   studio_bytes the studio's worker: each counted as it arrives, for its percentage)
     OUT/render/py-<hash>/         Pyodide 314.0.7, numpy, scipy, soundfile (29.9 MiB)
     OUT/render/app-<hash>/        the worker, the kernels (JS and C/wasm), songbird.zip: the program, studio_render.py,
                                   studio_device.py, the lead song, webstudio's singing (5.3 MiB)
+    OUT/render/first-<hash>/      the page's first answers, <day>.gzip a day (gzip'd JSON, 42-49 KB; 402 days, 17 MiB:
+                                  "A quicker start", below)
     OUT/render/kit-<hash>/        with --sing-kit: offer.json, song/, guides/, lyrics/, audio/, measured/templates/
                                   (32 files and 42 MiB for five keys; each fetched only when needed)
     OUT/site.json                 for the host (below; .assetsignore keeps it off the site)
 
-41 files, 35.8 MiB; 28.3 MiB on the wire the first time (the host compresses: no `.gz` siblings). The largest is
+81 files and 78 MiB with the singing kit, and 402 more (17 MiB) of first answers; a first visit fetches 14 MiB of it
+before the page can be edited, and 28.5 MiB once something is sung (the host compresses: no `.gz` siblings). The largest is
 scipy's wheel, 13.4 MiB; the build refuses any file over 25 MiB. `--machine fictional:NAME` sings as a made-up
 machine instead of `none`. **Every address is from the root** (`/studio.js`, `/render/…`, the workers' URLs, the
 piano page's own files): the page is served at `/v/<id>` too, and its policy allows no `<base>`.
@@ -1185,7 +1191,7 @@ piano page's own files): the page is served at `/v/<id>` too, and its policy all
                                                       "cache": "public, max-age=31536000, immutable", "csp": "…"},
                   …every file, by its path}}
 
-- **Cache**: everything under `render/py-*`, `render/app-*` and `render/kit-*` is immutable (named by its contents'
+- **Cache**: everything under `render/py-*`, `render/app-*`, `render/first-*` and `render/kit-*` is immutable (named by its contents'
   hash); the page, its scripts, `bundle.json` and the piano page are `no-cache` (asked again each visit: a 304 when
   unchanged). A new program changes `app-<hash>` (5 MB to fetch); a new Pyodide, `py-<hash>`.
 - **The policy**: the Worker's (web/studio-site/src/policy.js), on the page and on the workers' scripts alike:
@@ -1330,6 +1336,108 @@ with no fiddle, parted by one sample, so the drift isn't the fiddle's alone (its
    midnight in Tokyo is that day's.
 8. **Safari and Firefox** are untried (the workers' policy is their own script's in Chrome; if a browser applied the
    page's instead, Pyodide couldn't compile, and the page would say "it went wrong in this browser").
+
+### A quicker start (2026-10-03)
+
+The artist: "Does it really need to load 78MB to display the lyrics and become interactive?" It didn't. A first visit
+showed "Getting the studio ready (once: 3 of 78 MB)…" and no words until the studio's worker had fetched Python,
+numpy, scipy, soundfile and the program (28.5 MiB on the wire; the 78 was bundle.json's unpacked bytes with the
+singing kit, which is fetched only to sing, a file at a time). Now the song is on the page at once, and the worker
+fetches half as much behind it.
+
+**What a visitor sees.** The song's words, the header ("Your version today, …"), the transport, the choices of words,
+the sidebar, the Arrange and Mix views and the Sketch, within a fraction of a second of the page arriving. Python
+loads behind them; until it's ready, anything that needs it (an edit, *New performance*, Sung, export, opening a
+version) waits, and the page says "The studio is still getting ready: one moment." where it was asked; the change
+shows when it's ready. With an edit saved in this browser, on a version's page, or on a day outside the files, the
+page waits for the worker as before ("Getting the studio ready (40%)…").
+
+**How.**
+
+- **The first answers, a day at a time.** The page's first questions on the song as it began (its start, the singing
+  offer, the song, the arrangement, the sound, each sung section's other words, the other computers, the sketch's
+  players, the ways of singing) are answered by the studio's own code (`studio_device.first_answers`) at build time,
+  natively, for 402 days (two before the build's date, for a visitor west of it, and 400 from it: `--days`), and
+  shipped as `render/first-<hash>/<day>.gzip` (gzip'd JSON, 42-49 KB each, 17 MiB in all; immutable). The view
+  differs day by day (the words are handed down, or new, by day), so one file a day. They're compressed here rather
+  than by the host because the host can't send a stored `.gz` as gzip without the Worker in front of every file; the
+  page unpacks them with the browser's `DecompressionStream` (Chrome 80, Safari 16.4, Firefox 113; without it, the
+  page waits for the worker). The build takes about 40 s instead of 5.
+- **The page's day is the worker's.** device.js reads this browser's date once, fetches that day's file beside the
+  worker's start, and tells the worker the same day (`config.day`: `DeviceStudio(day=…)`), so both answer for one day
+  even across midnight.
+- **Answered from the file only while it's true.** A question is answered from the file only if it is asked exactly
+  as the file has it (method, path and JSON body with its keys sorted: `studio_device.question`, `device.js
+  question()`), before the worker is ready, with no version on the page and no way of singing kept in this browser
+  (those change the studio's answers). Anything else waits for the worker. Something that changes the studio's
+  answers (singing kept or forgotten, a version opened) ends the file's answers, so nothing after it is answered out
+  of order. Once the worker is ready it answers everything.
+- **The studio's worker doesn't fetch scipy or soundfile.** It imports the whole program but plays nothing, so it
+  loads numpy alone; `py/lazy_imports.py` stands in for scipy and soundfile (`from scipy.signal import sosfilt` gives a
+  stand-in that becomes the real function once the package is loaded). Measured first, natively and in Pyodide: no
+  question the studio answers (the timeline, a render's spec, the MIDI file and the piano score among them) runs
+  either. Five tables were computed with scipy as their modules were imported: the frame drum's membrane modes, the
+  shaker's skin, the struck bank's and the oscillators' half-band filters are now made on first use
+  (`functools.cache`; the gauntlet's 60 stems identical to before, bit for bit); the voice's glide shape is left as it
+  is (voice.py's bytes are part of the singing measurement's version, so changing it would mean making the singing
+  kit again), and its stand-in makes it on first use. If a stand-in is ever used for real, it raises
+  `lazy_imports.Needed`, and the worker fetches the package and asks the same question again (a version's reader does
+  this for soundfile, checked). Render and measuring workers load everything, as before. The control worker also
+  fetches the program and its wheel beside Python rather than after it.
+- **The words of loading** say a percentage of what that worker fetches ("Getting the studio ready (40%)…", "getting
+  the singer ready (40%)"): bundle.json's `studio_bytes` and `bytes`, counted as they arrive. No sizes on the page.
+
+**What it costs.** The first Sung after a visit fetches scipy then (14 MB, in the render worker; it was fetched up
+front before), and the site holds 17 MiB more (402 files; 483 in all, under the 20,000), uploaded again whenever the
+program changes. The day's file (about 44 KB) is the only thing a visit fetches that it didn't.
+
+**Measured** (Chrome in the app's pane, mostly hidden, from a stand-in host that compresses as Cloudflare does and
+holds the whole server to one bandwidth; a new port each time, so nothing was cached. The machine was shared with
+other agents' work, loads 4 to 13, so the seconds are slower than an idle machine's and vary run to run; the bytes
+don't):
+
+| a first visit | before (68016b8) | now |
+|---|---|---|
+| fetched before the page can be edited | 28.5 MiB (Python, numpy, scipy, soundfile, the program) | **14.3 MiB** (Python, numpy, the program) |
+| the words on the page, 50 Mbit/s, desktop | 11.7 s (another run, at load 10: 48 s) | **0.07-0.08 s** |
+| editing ready, 50 Mbit/s, desktop | 10.8 s (at load 10: 42 s) | **4.5 s** (at load 10: 10.9 s) |
+| the words on the page, 10 Mbit/s, the phone preset | 61 s (at load 10: 70 s) | **0.20-0.28 s** |
+| editing ready, 10 Mbit/s, the phone preset | 56 s (at load 10: 64.5 s) | **13.3-19.3 s** (four runs) |
+| the studio's worker: making the studio (node) | 3.25 s | 1.06 s |
+| the first Sung section, 50 Mbit/s, at load 10 (scipy fetched by the render worker now) | 72 s | 69 s, the same file (`afc608272142…`) |
+
+The Sketch played before Python was ready (10 Mbit/s, the phone preset: ▶ at 3 s, "Verse 1 · bar 1, the sketch").
+*New performance* pressed before it was ready: said, and drawn once it was (draw 2). A version brought as a file
+(renders/review/contest.flac) read by a reader that fetched soundfile when it needed it, and opened at
+`#version=…` (no first answers there: the worker's, as before). On a phone's 10 Mbit/s the download is most of what's
+left: 14.3 MiB is about 12 s.
+
+**How it was checked.** tests/test_studio_quick_start.py: the page's day is the studio's; the first answers are what a
+studio started that day answers, question by question, under the key device.js makes; every question the studio's
+worker answers is answered the same with scipy and soundfile stood in for, needing neither, and a stand-in used for
+real asks for its package and is then the package's own function; **in Pyodide under node with numpy alone, the
+build's first answers are the worker's byte for byte** (the first day the build makes, one a third of the way, the
+last, singing offered); the window of days. tests/studio_device_start.test.cjs: device.js answers from the day's file
+before the worker is ready and never after; the same key however the page orders its JSON; anything else waits and is
+said; what changes the studio's answers ends the file's; the worker is told the page's day; a version's page, a day
+outside the file's, no file, or no `DecompressionStream`: the worker answers everything. The gauntlet natively, before
+and after the instruments' tables moved: all 60 stems identical. The host's prepare.mjs accepted the full build (484
+files, `render/first-*` immutable).
+
+**Open decisions for the artist**
+
+1. **How many days ahead.** 400 days of first answers is 17 MiB and 40 s of build, uploaded again with each new
+   program. A site not deployed for 13 months falls back to waiting for Python (still working). Fewer days (60: 2.6
+   MiB) would do if it's deployed often.
+2. **Fetch scipy for the singer ahead of time?** Now the first Sung fetches it (14 MB) when it's asked for; a visitor
+   who only reads, edits and plays the Sketch never does. Fetching it once the page is idle would make the first Sung
+   a few seconds quicker on a slow connection, at 14 MB for everyone.
+3. **Saved edits** (a returning visitor) still wait for Python (from the browser's cache: a few seconds). The first
+   answers could cover them only by being worked out in the page, which is what Python is for.
+4. **The timeline** (*Time*) still waits for Python and then takes a few seconds; it could be shipped a day at a time
+   too (about 13 KB more a day, compressed: 5 MiB for 400 days).
+5. **The first question after the worker is ready** pays for importing what it needs (about 1 s in node; more on a
+   busy phone); the worker could ask the song once in the background as soon as it's ready.
 
 ## Hosted on Cloudflare (2026-09-30)
 
