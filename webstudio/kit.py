@@ -32,6 +32,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parent.parent
 DIGEST = re.compile(r"^[0-9a-f]{12}$")
 KEEP_DAYS = 30  # a file of the kit kept on a server after it was last used
+MOST_BYTES = 512 * 2**20  # ... and all of them together at most: past it, the longest unused go first
 
 
 def home(given: str | Path | None = None, default: str | Path | None = None) -> Path:
@@ -90,15 +91,25 @@ class Kit:
             write(f, text.encode())
         return f
 
-    def prune(self, days: float = KEEP_DAYS) -> int:
-        """What wasn't used for days goes (the songs stay: each is the studio's own)."""
-        cutoff, gone = time.time() - days * 86400, 0
+    def prune(self, days: float = KEEP_DAYS, most: int = MOST_BYTES) -> int:
+        """What wasn't used for days goes, and past `most` bytes in all the longest unused (the songs stay: each is
+        the studio's own). Using a file (keeping it again, serving it) touches it."""
+        cutoff, files = time.time() - days * 86400, []
         for folder in (self.guides, self.root / "audio", self.measured / "parts"):
             for f in folder.glob("*") if folder.is_dir() else ():
                 with contextlib.suppress(OSError):
-                    if f.is_file() and f.stat().st_mtime < cutoff:
-                        f.unlink()
-                        gone += 1
+                    if f.is_file():
+                        stat = f.stat()
+                        files.append((stat.st_mtime, stat.st_size, f))
+        files.sort(key=lambda x: x[0])
+        total, gone = sum(size for _, size, _ in files), 0
+        for mtime, size, f in files:
+            if mtime >= cutoff and total <= most:
+                break
+            with contextlib.suppress(OSError):
+                f.unlink()
+                total -= size
+                gone += 1
         return gone
 
 

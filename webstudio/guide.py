@@ -40,6 +40,7 @@ MELODIC = ("whistle", "fiddle", "lute", "melody")  # parts that can state the tu
 TAIL = 4.0  # seconds a stretch of melody rings on past its last note's start (a held note, the room)
 STRETCH = 40.0  # seconds: a whole song's melody is made in stretches no longer, cut in its rests (worker.pieces)
 LOUDNESS = -18.0  # LUFS: the guide's level (under a voice; a little quieter than a mastered song)
+RING = 1.0  # seconds a section's melody runs past its window's end, for its last note and the room (webstudio/sing.js)
 
 
 def _tools() -> None:
@@ -119,6 +120,21 @@ def words(data: dict, title: str, name: str) -> dict:
     import karaoke_words
 
     return {**karaoke_words.lyrics(data, title, data["tempo"]), "guide": name, **data.get("guide", {})}
+
+
+def stretches_offered(data: dict) -> list[tuple[float, float]]:
+    """The stretches of a guide's melody a page may ask for (webstudio/sing.js asks for no others): the whole song,
+    and each sung section's window, RING seconds longer."""
+    _tools()
+    import karaoke_words
+
+    duration = float(data["duration"])
+    out = [(0.0, duration)]
+    for s in karaoke_words.sections(data):
+        if s.get("window"):
+            a, b = s["window"]
+            out.append((float(a), min(duration, float(b) + RING)))
+    return out
 
 
 # ------------------------------------------------------------ the melody guide (tools/guides.py's, a stretch at a time

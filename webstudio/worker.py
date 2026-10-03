@@ -214,6 +214,8 @@ def part_template(tools: Tools, g, a: float, b: float, key: int):
     p, mine, name = part
     kept = T.MEASURED / "parts" / part_file(tools, name, key)
     if kept.exists():
+        with contextlib.suppress(OSError):
+            kept.touch()  # used: a server's kit keeps it longer (Kit.prune)
         z = np.load(kept)
         f0, band, active = z["f0"], z["band"], z["active"]
     else:
