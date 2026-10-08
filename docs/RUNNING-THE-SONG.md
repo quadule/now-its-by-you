@@ -25,11 +25,11 @@ a section at a time (docs/WEB-STUDIO.md).
 | | What | Why, and where it comes from |
 |---|---|---|
 | Python | 3.11 or newer (`python3`; `py` on Windows) | pyproject.toml's `requires-python`. The bootstrap itself runs on 3.7 and up, so it can say what's wrong; older ones (and Python 2) stop with a SyntaxError before it can. With **uv** on the path, the Python version doesn't matter: uv fetches the one the rendition was made with (3.12 for today's). |
-| The program's libraries | numpy, scipy, numba (with llvmlite), soundfile (with cffi, and libsndfile inside its wheel), cmudict | The file's `requirements.txt`, pinned to the versions it was made with (numpy 2.5.3, scipy 1.18.1, numba 0.67.0, soundfile 0.14.0, cmudict 1.1.3). If the pins can't be installed (a newer Python they have no wheels for), it tries the newest versions. |
+| The program's libraries | numpy, scipy, numba (with llvmlite), soundfile (with cffi, and libsndfile inside its wheel), cmudict | The file's `requirements.txt`, pinned to the versions it was made with (numpy 2.5.3, scipy 1.18.1, numba 0.67.0, soundfile 0.14.0, cmudict 1.1.3). It installs ready-made builds (wheels) only, so nothing is compiled. If the pins have none for this computer (a newer Python, an Intel Mac), it takes the newest versions that do. Files made before October 7, 2026, the first version among them, ask for the newest whether or not it has wheels, which fails on Intel Macs (see Intel Macs). |
 | Download | about 100 MB, once | From PyPI, by uv or by pip. The installers keep their usual caches. |
 | Disk | about 250 MB for the libraries; about 6 MB for each rendition's unpacked program; up to 300 MB of studio previews; about 15 to 22 MB for each recording | `~/.songbird/envs/` (one environment, shared by every rendition with the same pins), `~/.songbird/packets/<the file's hash>/`, `~/.songbird/studio/cache/` (the least recently heard go first), and the folder you ran it from. `$SONGBIRD_HOME` moves everything but the recordings. |
 | Memory | about 2 to 3 GB at the peak of a whole song | The song as it began, rendered on an M1 Max: 2.7 GB on six threads (the default with six cores or more), 2.2 GB on two (`SONGBIRD_THREADS=2`); less where the system takes freed memory back at once, as Linux does (docs/notes/PERFORMANCE.md, "Memory (2026-09-29)"). A long version with every player can take up to twice that (docs/WEB-STUDIO.md, "A whole song's memory"). Sections need less. |
-| Processor | a Mac with Apple silicon, a Windows PC (x64) or Linux (x86-64 or ARM64, glibc) | Where numba and llvmlite publish wheels. Not Intel Macs (numba publishes no wheels for them for the versions a rendition pins, and on October 7, 2026 the newest versions failed the same way: the studio at https://studio.itsby.you works there), 32-bit systems, Windows on ARM, or Alpine-style Linux, where pip would try to compile llvmlite and fail. |
+| Processor | a Mac (Apple silicon, or Intel with Python 3.11 to 3.13 or uv), a Windows PC (x64) or Linux (x86-64 or ARM64, glibc) | Where numba and llvmlite publish wheels. numba's wheels for Intel Macs stop at 0.62.1 (Python 3.10 to 3.13): a file finds them by itself, except the first version and others made before October 7, 2026, which need one line the first time (Intel Macs, below). Not 32-bit systems, Windows on ARM, or Alpine-style Linux, which have no wheels; the studio at https://studio.itsby.you works there. |
 | Browser | Safari 16.4, Chrome or Edge 111, Firefox 113, or newer | The page uses `color-mix()`, `<dialog>` and modern JavaScript; no plugins. It must run on the same computer (the studio answers only 127.0.0.1) unless it is shared on purpose (docs/STUDIO.md). |
 
 ## What it doesn't need
@@ -97,6 +97,34 @@ first time. Nothing is sent anywhere.
 | `couldn't fetch what the program needs` | offline, or a firewall or proxy in the way | connect, and run the same command again |
 | `run again with --yes` | it wasn't run from a terminal it could ask in | `python3 song.flac --yes studio` |
 | `doesn't match its own record` | the file was changed after it was made | get another copy; `unpack` still shows what's inside |
-| pip tries to *build* llvmlite and fails | a platform without wheels (see Processor) | use another computer |
+| pip or uv tries to *build* numba or llvmlite and fails | a file made before October 7, 2026 on an Intel Mac, or a platform without wheels (see Processor) | on an Intel Mac, see below; elsewhere, the studio at studio.itsby.you |
+| `they may not be made for Python 3.14 on this computer` | no wheels for this Python here (an Intel Mac with Python 3.14 or newer) | install uv, or Python 3.13 (`python3.13 song.flac ...`) |
 | the browser doesn't open | no default browser, or a remote session | open the address the terminal prints (`http://127.0.0.1:8766`) |
 | the computer grinds on the whole song | too little memory | close other programs; sections still work |
+
+## Intel Macs
+
+numba's last wheels for Intel Macs are 0.62.1 (September 2025, for Python 3.10
+to 3.13), which takes llvmlite 0.45.1 and numpy 2.3.5 at most. A file made
+from October 7, 2026 on installs those by itself when its pins have no wheels
+there.
+
+The first version's file, and any made before then, asks for its pins and then
+for the newest versions, and an Intel Mac has wheels for neither. The first
+time, run it like this, with Python 3.11 to 3.13 (or with uv, and any Python):
+
+    PIP_ONLY_BINARY=:all: UV_EXCLUDE_NEWER=2025-12-01 python3 now-its-by-you.flac new
+
+(or `studio` instead of `new`). pip then takes wheels only, so its fallback
+lands on the newest versions that have them; uv takes the versions published
+by December 1, 2025, before numba's first release without them. Each installer
+ignores the other's variable. After that, the plain commands work. Python 3.14
+and newer have no numba wheels for Intel Macs at all.
+
+Checked on October 7, 2026 from an Apple silicon Mac without Rosetta: for
+x86_64 macOS, both installs resolve to numba 0.62.1, llvmlite 0.45.1 and numpy
+2.3.5 (with pip, scipy 1.18.1, or 1.17.1 on Python 3.11; with uv, scipy
+1.16.3, soundfile 0.13.1 and cmudict 1.1.2), and with those versions the first
+version's program sings new versions and replays itself bit-exact on that Mac.
+It hasn't run on an Intel Mac itself, where, as on any other platform, the
+samples may differ slightly.
