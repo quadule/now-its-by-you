@@ -329,32 +329,8 @@ def build(genome_path: Path, out: Path, rebuild: bool = False, bitrate: str = BI
     clear(out)
     (out / "song").mkdir()
 
-    texts = {name: consent_html((WEB / f"{name}.md").read_text()) for name in ("consent", "words-release")
-             if (WEB / f"{name}.md").exists()}
-    if "words-release" not in texts:
-        raise SystemExit("web/sing/words-release.md is missing: the page asks people to agree to it before sending words")
+    texts = pages(out)
     agreed, words = digest(texts["consent"]), digest(texts["words-release"])
-    fill = {"{{CONSENT_DIGEST}}": agreed, "{{CONSENT}}": texts["consent"],
-            "{{WORDS_DIGEST}}": words, "{{WORDS_RELEASE}}": texts["words-release"]}
-    page = (WEB / "page" / "index.html").read_text()
-    if "{{CONSENT}}" not in page or "{{CONSENT_DIGEST}}" not in page:
-        raise SystemExit("web/sing/page/index.html has lost its {{CONSENT}} or {{CONSENT_DIGEST}}")
-    for f in sorted((WEB / "page").iterdir()):  # the pages with the releases in them, and what they load
-        if f.is_file() and not f.name.startswith("."):
-            if f.suffix == ".html":
-                text = f.read_text()
-                for mark, value in fill.items():
-                    text = text.replace(mark, value)
-                (out / f.name).write_text(text)
-            else:
-                shutil.copyfile(f, out / f.name)
-    shutil.copyfile(ROOT / "tools" / "karaoke.js", out / "karaoke.js")
-    shutil.copyfile(ROOT / "tools" / "karaoke-recorder.js", out / "recorder.js")
-    seed_page(out)
-    versioned(out)
-    (out / "robots.txt").write_text("User-agent: *\nDisallow: /\n")
-    (out / "favicon.svg").write_text(FAVICON)
-    (out / "_headers").write_text(HEADERS)
     # each release as people read it, kept by the digest their takes and words carry
     K.GUIDES.mkdir(parents=True, exist_ok=True)
     (K.GUIDES / f"release.{agreed}.html").write_text(texts["consent"] + "\n")
@@ -432,6 +408,38 @@ def build(genome_path: Path, out: Path, rebuild: bool = False, bitrate: str = BI
     (out / "song" / "worker.json").write_text(json.dumps(worker_index(song), separators=(",", ":")) + "\n")
     publish(out, final)
     return song
+
+
+def pages(out: Path) -> dict[str, str]:
+    """Everything in the site but song/: the pages (web/sing/page/) with the releases in them, the seed page with
+    the song's editions (seed_page), each page asking for its scripts and styles by digest, and the small files.
+    The releases' texts, as the page shows them."""
+    texts = {name: consent_html((WEB / f"{name}.md").read_text()) for name in ("consent", "words-release")
+             if (WEB / f"{name}.md").exists()}
+    if "words-release" not in texts:
+        raise SystemExit("web/sing/words-release.md is missing: the page asks people to agree to it before sending words")
+    fill = {"{{CONSENT_DIGEST}}": digest(texts["consent"]), "{{CONSENT}}": texts["consent"],
+            "{{WORDS_DIGEST}}": digest(texts["words-release"]), "{{WORDS_RELEASE}}": texts["words-release"]}
+    page = (WEB / "page" / "index.html").read_text()
+    if "{{CONSENT}}" not in page or "{{CONSENT_DIGEST}}" not in page:
+        raise SystemExit("web/sing/page/index.html has lost its {{CONSENT}} or {{CONSENT_DIGEST}}")
+    for f in sorted((WEB / "page").iterdir()):  # the pages with the releases in them, and what they load
+        if f.is_file() and not f.name.startswith("."):
+            if f.suffix == ".html":
+                text = f.read_text()
+                for mark, value in fill.items():
+                    text = text.replace(mark, value)
+                (out / f.name).write_text(text)
+            else:
+                shutil.copyfile(f, out / f.name)
+    shutil.copyfile(ROOT / "tools" / "karaoke.js", out / "karaoke.js")
+    shutil.copyfile(ROOT / "tools" / "karaoke-recorder.js", out / "recorder.js")
+    seed_page(out)
+    versioned(out)
+    (out / "robots.txt").write_text("User-agent: *\nDisallow: /\n")
+    (out / "favicon.svg").write_text(FAVICON)
+    (out / "_headers").write_text(HEADERS)
+    return texts
 
 
 def aside(out: Path) -> Path:
