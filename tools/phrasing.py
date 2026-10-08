@@ -1,4 +1,4 @@
-"""A person's phrasing, taken from a sung take or a plain reading (dev-only).
+"""A person's phrasing, taken from a sung take or a plain reading (also how the studio's Sing view measures one).
 
     uv run python tools/phrasing.py songs/h-now-its-by-you.json --guide     # a backing track to sing along to
     uv run python tools/phrasing.py songs/h-now-its-by-you.json --singer Milo      # every take they kept

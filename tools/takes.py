@@ -1,4 +1,4 @@
-"""Who sang what: sung takes kept on this computer, a folder per singer (dev-only).
+"""Who sang what: sung takes kept on this computer, a folder per singer (the studio in a browser keeps none).
 
     recordings/<singer>/<song>-<yyyymmdd-hhmmss>.wav    a take, already lined up with the guide
     recordings/<singer>/<song>-<yyyymmdd-hhmmss>.json   who sang it, to which guide (and which mix of

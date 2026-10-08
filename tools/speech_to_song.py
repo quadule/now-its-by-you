@@ -1,4 +1,4 @@
-"""Sing with a real voice: spoken lyrics moved onto the tune. A probe; dev-only.
+"""Sing with a real voice: spoken lyrics moved onto the tune. A probe; tools/phrasing.py uses its helpers.
 
     uv run python tools/speech_to_song.py songs/h-now-its-by-you.json --script
     uv run python tools/speech_to_song.py songs/h-now-its-by-you.json --speech recordings/h.wav

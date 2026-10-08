@@ -1,4 +1,4 @@
-"""Where each sung syllable's vowel begins, heard by a forced aligner (dev-only).
+"""Where each sung syllable's vowel begins, heard by a forced aligner where one is installed.
 
     uv run python tools/align.py songs/h-now-its-by-you.json recordings/milo/h-now-its-by-you-*.wav
 
