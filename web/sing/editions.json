@@ -22,7 +22,7 @@
         "tag": "first-version"
       },
       "command": "uv run python tools/everyone.py --render renders/review/contest.flac --arrange motif=bridge lift=false ending=ring",
-      "credit": "79 sung takes by 12 singers",
+      "credit": "79 takes by eight people",
       "archives": []
     }
   ]

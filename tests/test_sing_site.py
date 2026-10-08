@@ -410,7 +410,7 @@ def test_the_songs_editions_are_listed_rightly():
     assert (first["number"], first["id"], first["title"], first["date"]) == (1, "07ac74fbd4eb", "The first version", "2026-09-28")
     assert first["file"] == {"sha256": "c1980bc78724232b07179ffe8f611318268cd2159cc4f7e07d44f75284b6bc10", "bytes": 15840849}
     assert first["render"]["path"] == "renders/review/contest.flac" and first["source"]["commit"].startswith("10dc1e0")
-    assert first["credit"] == "79 sung takes by 12 singers"
+    assert first["credit"] == "79 takes by eight people"
     assert W.us_date(first["day"]) == "September 28, 2026"
     if first["render"]["found"]:  # in a checkout that has it: made into exactly the bytes released
         assert W.sha256(first["render"]["found"]) == first["render"]["sha256"]
@@ -431,17 +431,18 @@ def test_the_preview_mp3_says_what_it_is(tmp_path, monkeypatch):
 
 
 def test_the_home_pages_about_is_the_artists_statement_and_credits_the_singers_as_they_asked(tmp_path, monkeypatch):
-    """The About card leads with the artist's statement word for word (docs/STATEMENT.md: the one sentence and the
-    current pitch that continues it); its singers are CREDITS.md's, as they asked, and no one else; the source code
-    is linked only once it's switched on."""
+    """The About card leads with the artist's statement word for word (their one sentence, opening with the song's
+    title since the title was decided, and the pitch that continues it, as README.md quotes them); its singers are
+    CREDITS.md's, as they asked, and no one else; the source code is linked only once it's switched on."""
     import html
 
-    def quoted(after: str) -> str:
-        text = (ROOT / "docs" / "STATEMENT.md").read_text()
-        block = text[text.index(after):].split("\n\n")[1]
-        return " ".join(line.removeprefix(">").strip() for line in block.splitlines())
-
-    statement = f"{quoted('**The artist' + chr(39) + 's:**')} {quoted('**The artist' + chr(39) + 's, current')}"
+    statement = (
+        "<cite>Now It's by You</cite> is a folk song passed between people and computers that explores music's ability "
+        "to take on a life of its own, in verse and by embedding the software that sang it. Run the program and you get "
+        "a new version of the song, shaped by your computer and the season. Sing into it and it learns a little of your "
+        "timing and inflection (your recording is deleted right after, and your voice is never cloned). The piece "
+        "confronts the blurred authorship of AI music through the lens of folk music and oral tradition: it wonders who "
+        "made it, and invites you to take part.")
     page = (W.WEB / "page" / "seed.html").read_text()
     shown = re.search(r"<blockquote>\s*<p>(.*?)</p>\s*</blockquote>", page, re.DOTALL)[1]
     assert " ".join(shown.split()) == statement
