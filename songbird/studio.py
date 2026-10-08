@@ -1,4 +1,4 @@
-"""The studio: see how your version of the song was made, change it if you like, and record it.
+"""The studio: see how your version of the song was made, change it if you like, and export it.
 
     songbird studio [PARENT.flac|record.json] [--song GENOME] [--machine here] [--port 8766] [--out DIR]
                     [--host 0.0.0.0] [--allow-host NAME] [--key WORD]

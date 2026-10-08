@@ -662,7 +662,7 @@ def main(argv: list[str] | None = None) -> int:
     from .studio import add_arguments as studio_arguments, run as studio_run
 
     studio = commands.add_parser("studio", help="see how your version of the song is made, change it if you "
-                                                "like, and record it, in a page on this computer")
+                                                "like, and export it, in a page on this computer")
     studio_arguments(studio)
     studio.set_defaults(run=studio_run)
 

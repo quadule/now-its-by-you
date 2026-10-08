@@ -81,6 +81,10 @@ travels inside every file the program writes. The exception is WORLD, in web/stu
 modified BSD license (its LICENSE.txt); [THIRD-PARTY.md](THIRD-PARTY.md) lists what studio.itsby.you serves beside
 the program, and under which licenses.
 
+## Contact
+
+Questions, or something to report (a shared version included): milo@winningham.net.
+
 ---
 
 ## Running it from this repository

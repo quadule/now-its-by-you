@@ -7,7 +7,7 @@ of the song on your computer:
 
     python3 THIS_FILE.flac              what this is, and what you can do
     python3 THIS_FILE.flac new          sing a new version here, today
-    python3 THIS_FILE.flac studio       open the studio: hear it, change it, record it
+    python3 THIS_FILE.flac studio       open the studio: hear it, change it, make your own
     python3 THIS_FILE.flac unpack       unpack everything into a folder, to read it first
     python3 THIS_FILE.flac songbird ... run one of the program's own commands
 
@@ -205,7 +205,7 @@ def usage(z: zipfile.ZipFile) -> str:
              "songbird COMMAND ...]", "",
              "  new             sing a new version of the song here, today, shaped by this computer and the day"]
     if studio:
-        lines.append("  studio          open the studio: explore the choices, change them, record, then sing it")
+        lines.append("  studio          open the studio: explore the choices, change them, then make your own version")
     lines += ["  unpack [DIR]    unpack the program, the song and this version's record, to read them first",
               "  about           what this file is (the default)",
               "  songbird ...    run one of the program's own commands, e.g. `songbird render --help`"]
