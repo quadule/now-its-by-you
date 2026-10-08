@@ -4,7 +4,7 @@
 
 How long a render takes, where the time goes, and what was done about it. The rule for every change
 here: **the output is byte-identical.** Each change was checked against the seed render's PCM hash
-(`tests/golden/h-seed.sha256`, `b600b712e77a…`) and, where it touched one function, that function's
+(`tests/golden/h-seed.sha256`, now h-seed.darwin-arm64.sha256, `b600b712e77a…`) and, where it touched one function, that function's
 own output bit for bit against the code before it. A speed-up that changes even one sample's last bit
 was not taken; those are listed at the end as options.
 

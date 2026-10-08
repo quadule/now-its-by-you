@@ -21,7 +21,7 @@ filters, and separate control-worker initialization; see [the follow-up measurem
 (or, for the heaviest, C compiled to wasm). In Chrome, H's first refrain (25 s
 of music) renders in **4.7-5.8 s**, and its 16-bit PCM is **identical** to the
 native render's. The whole song renders in **32 s**, and its id is
-`9b0766353b73…`, the golden id in `tests/golden/h-seed.sha256`. What misses
+`9b0766353b73…`, the golden id in `tests/golden/h-seed.darwin-arm64.sha256`. What misses
 the targets is the whole song's **memory: a 3.1 GB wasm heap**, the same shape
 as the native peak (4.7 GB RSS at one thread). Recommendation below:
 **hybrid** now (previews in the browser, records on the server), whole songs
@@ -92,7 +92,7 @@ unchanged except where marked.
 
 - **H's section and whole song: identical** to native, JS or wasm kernels, node
   and Chrome: section `de0bce5b3945…`, whole song `9b0766353b73…` (the golden,
-  `tests/golden/h-seed.sha256`).
+  `tests/golden/h-seed.darwin-arm64.sha256`).
 - **Kernels, bit for bit** (166 captured numba calls of 63 kernels, H's refrain
   and every instrument): **48 of 63 identical** in JS, including all the new
   lean ones and, now that `fastmath` is gone, `analog._delays`,

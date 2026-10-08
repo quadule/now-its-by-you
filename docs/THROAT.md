@@ -413,7 +413,7 @@ and above (`throat.air_floor`); 0.4 by default, chosen by ear ("a bit better, no
 ## Everyone's voice (2026-09-28, 01:30)
 
 The consent lets the recordings train the voice once, after singing closed, blended from everyone and
-never set to sound like one person. So: `tools/throat/volunteers.py` and `clean_takes.py` cut the 79
+never set to sound like one person. So: `tools/archive/volunteers-2026/volunteers.py` and `clean_takes.py` cut the 79
 takes into sung lines by their guides' scores, cancelled the melody guide where it leaked from a speaker,
 gated the room, and kept what the check passed: 13.7 minutes by eight singers (six credited by name in
 CREDITS.md, two without credit), none more than 26% of it. All of them are ONE singer to the network, "volunteers", source "human": there is no per-person embedding
@@ -467,7 +467,7 @@ words around it lead it there. On the words cut out alone it heard "Sam" then "S
 first "sound", "Sound" then "So" for the second, and "They're down" then "Their town" for "town".
 
 Nothing else changes. H's seed sings AW only in "now", three times, so it is byte-identical
-(golden/h-seed.sha256), as are b-refrain, h-words and every seed score. In a render that sings one
+(golden/h-seed.darwin-arm64.sha256), as are b-refrain, h-words and every seed score. In a render that sings one
 of these words, the lead differs at those words (1 to 13 dB under the voice there) and about 60 dB
 under it elsewhere. The network's global variance and the voice's reference level are taken over
 the whole song, so they move slightly. Before/after excerpts (fictional:ada, the same seed) are

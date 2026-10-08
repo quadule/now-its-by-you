@@ -53,7 +53,7 @@ current `SUNG` constants in `tools/phrasing.py`.
 
 ## How it was checked
 
-**Reference singers** (tools/reference.py). A reference singer has an
+**Reference singers** (tools/archive/reference-voices/reference.py). A reference singer has an
 intended phrasing, drawn at random but shaped like a person's: a little
 behind the beat, scooping into leaps, falling off line ends, vibrato on long
 notes. Every take strays from the intent by a performance's worth of noise.
@@ -80,7 +80,7 @@ they do (the medians are 170 ms late).
 **Correction, later the same day.** Listening showed the Gemini references
 had bursts of static. Gemini 3.8 returns WAV, and its header had been played
 as sound, putting a click before every line; that probably also broke Puck's
-alignment. tools/tts.py now reads the header as a header and uses Gemini
+alignment. tools/archive/reference-voices/tts.py now reads the header as a header and uses Gemini
 3.8's interactions API with a style, and Eleven v3. The Kore numbers below
 predate the fix. The calibration voices (Daniel, George, Matilda) weren't
 affected. Every reference is also robotic, because speech is moved onto the
@@ -308,13 +308,13 @@ measures as it did.
 - MFA dithers its features, so aligning a take twice moves a few
   boundaries by 10 ms. That's another reason alignments are kept.
 
-MFA lives outside the repo in /Users/milo/Code/mfa: a micromamba env of
+MFA lives outside the repo, in the folder `MFA_HOME` names: a micromamba env of
 conda-forge's montreal-forced-aligner, the two english_us_arpa files saved
 with `mfa model save`, and a wrapper at bin/mfa. The firewall (LuLu)
 blocked micromamba's own downloads, so the packages were fetched with curl
 into a local channel and installed from there. Never pass MFA `--verbose`:
 it then asks GitHub for its latest version and waits. Runs queue on
-/Users/milo/Code/mfa/.lock (tools/align.py `lock()`), because two at once
+`$MFA_HOME/.lock` (tools/align.py `lock()`), because two at once
 unpack the model into the same folder.
 
 ## Limits and what's next
@@ -335,7 +335,7 @@ unpack the model into the same folder.
 Rerun it all:
 
 ```
-uv run python tools/reference.py songs/h-now-its-by-you.json --voice formant say:Daniel elevenlabs:George elevenlabs:Matilda gemini:Kore gemini:Puck
+uv run python tools/archive/reference-voices/reference.py songs/h-now-its-by-you.json --voice formant say:Daniel elevenlabs:George elevenlabs:Matilda gemini:Kore gemini:Puck
 uv run python tools/phrasing_eval.py songs/h-now-its-by-you.json --reference formant say-daniel elevenlabs-george elevenlabs-matilda gemini-kore --pool --onsets
 uv run python tools/phrasing_eval.py songs/h-now-its-by-you.json --reference seedvc-eleven-warm-baritone-male seedvc-eleven-clear-bright-female --pool --onsets
 uv run python tools/phrasing_eval.py songs/h-now-its-by-you.json --singer milo

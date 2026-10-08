@@ -79,7 +79,7 @@ Guard against false positives:
 
 ## The first note shifts the song took (2026-09-27)
 
-After the first night online (four singers, 28 takes), `tools/hard_notes.py` pooled every measured
+After the first night online (four singers, 28 takes), `tools/archive/volunteers-2026/hard_notes.py` pooled every measured
 note, each singer counting once, and found the tune hard in pitch, not in time: every line was
 sung 20 to 45 ms late about equally, but some notes were sung as other notes by nearly everyone.
 Most were lines that start like a more familiar one and then turn, where singers sang the familiar
@@ -99,11 +99,11 @@ line. The artist heard the changes and took them all (15 notes of a whole song, 
 Each is now an exact copy of the line it was being mistaken for, or the note the singers chose. Guides
 built from 2026-09-27 00:20 sing it; takes sung before are still measured against what they heard,
 and a phrasing leaves out a changed note's tuning from takes sung to the old one (tools/phrasing.py).
-Run `tools/hard_notes.py` as more people sing: a candidate is a note half the singers or more sing
+Run `tools/archive/volunteers-2026/hard_notes.py` as more people sing: a candidate is a note half the singers or more sing
 as the same other note.
 
 **After a tune change** (2026-09-27): a take's measured "off" is from the note of the guide it sang to,
-so once the tune moves a note, tools/hard_notes.py adds the difference (the guide's note against the
+so once the tune moves a note, tools/archive/volunteers-2026/hard_notes.py adds the difference (the guide's note against the
 tune's, in the song's own key) before pooling, and a singer who sang what the tune now says counts as
 on it. tools/phrasing.py likewise keeps such a sighting's timing and loudness but drops its tuning.
 Run hard_notes again after each change: what remains are new candidates, not the old ones repeated.
