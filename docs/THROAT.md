@@ -415,9 +415,8 @@ and above (`throat.air_floor`); 0.4 by default, chosen by ear ("a bit better, no
 The consent lets the recordings train the voice once, after singing closed, blended from everyone and
 never set to sound like one person. So: `tools/throat/volunteers.py` and `clean_takes.py` cut the 79
 takes into sung lines by their guides' scores, cancelled the melody guide where it leaked from a speaker,
-gated the room, and kept what the check passed: 13.7 minutes by eight singers, the largest share 26%
-(David), then an open-call singer, Milo, essqao, Gorman, Talia, Geoff and another open-call singer. All
-of them are ONE singer to the network, "volunteers", source "human": there is no per-person embedding
+gated the room, and kept what the check passed: 13.7 minutes by eight singers (six credited by name in
+CREDITS.md, two without credit), none more than 26% of it. All of them are ONE singer to the network, "volunteers", source "human": there is no per-person embedding
 to find. The house model was fine-tuned 14,000 steps on the house corpus plus those frames (a 4080,
 about 15 minutes; volunteers' held-out loss 0.39) and shipped as songbird/synth/throat.npz.
 

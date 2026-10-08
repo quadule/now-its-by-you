@@ -77,8 +77,7 @@ Guard against false positives:
 
 ## The first note shifts the song took (2026-09-27)
 
-After the first night online (four singers, 28 takes: Milo, an open-call singer, milo-test-fnrlhv
-and gorman, who said parts were "harder to match"), `tools/hard_notes.py` pooled every measured
+After the first night online (four singers, 28 takes), `tools/hard_notes.py` pooled every measured
 note, each singer counting once, and found the tune hard in pitch, not in time: every line was
 sung 20 to 45 ms late about equally, but some notes were sung as other notes by nearly everyone.
 Most were lines that start like a more familiar one and then turn, where singers sang the familiar
