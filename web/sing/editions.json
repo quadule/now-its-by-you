@@ -1,5 +1,5 @@
 {
-  "about": "The song's editions, read by tools/sing_site.py (docs/SING-ONLINE.md, 'Editions'). The home page (now.itsby.you) offers the newest; /history offers every one, newest first. An edition is named by its audio id (the SHA-256 of its samples, in its record) and its bytes never change once released: the build checks file.sha256 and file.bytes. To add one, add it here with its released file kept (file.path) or its render (render.path, given the cover as it's served).",
+  "about": "The song's editions, read by tools/sing_site.py (docs/HOME-PAGE.md, 'Editions'). The home page (now.itsby.you) offers the newest; /history offers every one, newest first. An edition is named by its audio id (the SHA-256 of its samples, in its record) and its bytes never change once released: the build checks file.sha256 and file.bytes. To add one, add it here with its released file kept (file.path) or its render (render.path, given the cover as it's served).",
   "editions": [
     {
       "title": "The first version",

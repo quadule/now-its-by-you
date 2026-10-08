@@ -3,7 +3,8 @@
     uv run python tools/sing_site.py                                          # H, every spec, into web/sing/public
     uv run python tools/sing_site.py --sets a --keys 0,-2 --tempos 100        # only these specs
     uv run python tools/sing_site.py songs/h-now-its-by-you.json --rebuild    # render every guide again first
-    cd web/sing && npx wrangler deploy                                        # then publish it (docs/history/SING-ONLINE.md)
+    uv run python tools/sing_site.py --pages                                  # only the pages (the home page, history), keeping the guides
+    cd web/sing && npx wrangler deploy                                        # then publish it (docs/HOME-PAGE.md)
 
 What it writes, all served by web/sing/src/worker.js:
 
@@ -60,6 +61,7 @@ import hashlib
 import html
 import json
 import multiprocessing
+import os
 import re
 import shutil
 import subprocess
@@ -446,6 +448,31 @@ def pages(out: Path) -> dict[str, str]:
     return texts
 
 
+def pages_only(out: Path) -> None:
+    """The pages again over the site as it was last built, its guides (song/) and all kept: the home page and the
+    history change without rendering a guide (singing moved to the studio on September 30, 2026, so the guides only
+    serve singers' own pages). Built beside it and put in its place whole, like build()."""
+    final = Path(out)
+    if not (final / MARK).exists():
+        raise SystemExit(f"{final} isn't a site this tool built: run a whole build first (without --pages)")
+    built = aside(final)
+    shutil.rmtree(built, ignore_errors=True)
+
+    def link(src, dst):  # the guides by hard link, so this takes a moment, not a copy of 450 MB
+        try:
+            os.link(src, dst)
+        except OSError:
+            shutil.copy2(src, dst)
+
+    shutil.copytree(final, built, copy_function=link)
+    for f in built.iterdir():  # every page file is written again; a hard-linked one is let go first, never written through
+        if f.is_file() and not f.name.startswith("."):  # (the build's marks stay)
+            f.unlink()
+    shutil.rmtree(built / "seed", ignore_errors=True)
+    pages(built)
+    publish(built, final)
+
+
 def aside(out: Path) -> Path:
     """Where a site is built before it takes out's place: beside it, where wrangler never looks."""
     return out.with_name(out.name + ".next")
@@ -821,11 +848,20 @@ def main() -> None:
     ap.add_argument("--bitrate", default=BITRATE, help=f"the full guides' MP3 bitrate (default {BITRATE})")
     ap.add_argument("--melody-bitrate", default=MELODY_BITRATE,
                     help=f"the melody guides' (default {MELODY_BITRATE}; the full guides' if it doesn't decode in time)")
+    ap.add_argument("--pages", action="store_true",
+                    help="build only the pages (the home page, the history, their files) over the site as it was "
+                         "last built, keeping its guides: seconds, not a render")
     ap.add_argument("--keep-wavs", action="store_true",
                     help="keep every spec's rendered mixes for the karaoke here (about 130 MB a spec; else let go once "
                          "encoded, and rendered again when the karaoke asks)")
     args = ap.parse_args()
     out = Path(args.out).resolve()
+    if args.pages:
+        started = time.time()
+        pages_only(out)
+        print(f"{out}: the pages built over the site as it was, in {time.time() - started:.0f} s; "
+              f"publish with: cd web/sing && npx wrangler deploy")
+        return
 
     def listed(text, kind=str):
         return [kind(v) for v in text.split(",") if v.strip()] if text else None

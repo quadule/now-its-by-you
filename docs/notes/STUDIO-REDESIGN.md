@@ -574,7 +574,7 @@ open), `studio-redesign-desktop-dark.png` (the same by lamplight, a chord select
 size); the desktop `-2x` files beside them are the same states at full resolution from headless Chrome
 (1440 px wide, 2×), with `-page-`, `-mix-`, `-tools-` and `-time-` for the other views (no headless phone
 pictures: Chrome won't make a window narrower than about 500 px, so those came out cropped). To serve the mockup for a browser, `.claude/launch.json` has `design-mockups`
-(a static server on docs/design, port 8798) and `studio-ada` (the studio itself, Ada, port 8799).
+(a static server on docs/notes/design, port 8798) and `studio-ada` (the studio itself, Ada, port 8799).
 
 Clicking in the mockup selects and switches; nothing is edited for real and nothing is heard. It is for
 looking at and reacting to, not for testing.

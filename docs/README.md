@@ -24,7 +24,8 @@ pages say how it works. Each is dated when it was written; the code is the final
 2. [What it reads from your computer](HARVEST.md), and what it keeps.
 3. [The voice](THROAT.md): the learned throat and how it was trained.
 4. [The studio on the web](WEB-STUDIO.md): the whole studio in the browser, and how the site is hosted.
-5. Notes: [performance](notes/PERFORMANCE.md), [rendering in the browser](notes/BROWSER-RENDER.md),
+5. [The home page](HOME-PAGE.md): now.itsby.you, the song's editions and how to add one.
+6. Notes: [performance](notes/PERFORMANCE.md), [rendering in the browser](notes/BROWSER-RENDER.md),
    [portability](notes/PORTABILITY.md), [the studio's redesign](notes/STUDIO-REDESIGN.md),
    [open questions](notes/open-questions.md).
 

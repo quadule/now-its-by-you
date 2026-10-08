@@ -1,6 +1,7 @@
 """tools/sing_site.py: the page for singers anywhere, built from one guide score."""
 
 import json
+import os
 import re
 import shutil
 import sys
@@ -473,3 +474,34 @@ def test_the_home_pages_about_is_the_artists_statement_and_credits_the_singers_a
         home = (out / "seed.html").read_text()
         assert f"<p>{said}</p>" in home and "{{" not in home
         assert ('<a href="https://github.com/quadule/songbird">The source code</a> is on GitHub.' in home) is public
+
+
+def test_pages_alone_are_built_over_the_site_as_it_was_and_never_write_through_its_links(tmp_path, monkeypatch):
+    """--pages: the pages again over the last build, its guides kept (hard links, not copies), and a page file that
+    was a link to the old one is replaced, never written through, so the old build's bytes are as they were."""
+    site = tmp_path / "public"
+    (site / "song").mkdir(parents=True)
+    (site / W.MARK).write_text("built\n")
+    (site / ".assetsignore").write_text(f"{W.MARK}\n")
+    (site / "song" / "a.mp3").write_bytes(b"guide")
+    old = tmp_path / "old-seed.html"
+    old.write_text("the old page")
+    os.link(old, site / "seed.html")
+    (site / "seed").mkdir()
+    (site / "seed" / "gone.flac").write_bytes(b"old edition")
+
+    def pages(out):
+        (out / "seed.html").write_text("the new page")
+        (out / "seed").mkdir(exist_ok=True)
+        (out / "seed" / "now.flac").write_bytes(b"new edition")
+
+    monkeypatch.setattr(W, "pages", pages)
+    W.pages_only(site)
+    assert (site / "seed.html").read_text() == "the new page"
+    assert old.read_text() == "the old page"
+    assert (site / "song" / "a.mp3").read_bytes() == b"guide"
+    assert sorted(p.name for p in (site / "seed").iterdir()) == ["now.flac"]
+    assert (site / W.MARK).exists() and (site / ".assetsignore").exists()
+    assert not W.aside(site).exists()
+    with pytest.raises(SystemExit, match="whole build"):
+        W.pages_only(tmp_path / "nothing")
