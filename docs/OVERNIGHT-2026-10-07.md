@@ -3,7 +3,9 @@
 The artist, after choosing the recipe: "Train on my desktop with the 4080 Super", then "keep going with this
 overnight". Everything is on branch `claude/singing-synthesis-exploration-c0bf8c` in atomic commits; nothing is
 merged into main, pushed, deployed or shipped. The shipped voice (songbird/synth/throat.npz) is unchanged.
-docs/THROAT.md "New house singers from our own voice" has the method and the numbers.
+docs/THROAT.md "New house singers from our own voice" has the method and the numbers. Full suite on the branch:
+2013 passed, 1 failed (tests/test_invite.py's time-dependent fixture, fixed on main since by 0ab1383; main has moved on,
+so merging this branch takes that fix).
 
 ## Listen first
 
