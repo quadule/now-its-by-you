@@ -432,7 +432,7 @@ def test_the_preview_mp3_says_what_it_is(tmp_path, monkeypatch):
 
 
 def test_the_home_pages_about_is_the_artists_statement_and_credits_the_singers_as_they_asked(tmp_path, monkeypatch):
-    """The About card leads with the artist's statement word for word (their one sentence, opening with the song's
+    """The home page's top text is the artist's statement word for word (their one sentence, opening with the song's
     title since the title was decided, and the pitch that continues it, as README.md quotes them); its singers are
     CREDITS.md's, as they asked, and no one else; the source code is linked only once it's switched on."""
     import html
@@ -445,8 +445,8 @@ def test_the_home_pages_about_is_the_artists_statement_and_credits_the_singers_a
         "confronts the blurred authorship of AI music through the lens of folk music and oral tradition: it wonders who "
         "made it, and invites you to take part.")
     page = (W.WEB / "page" / "seed.html").read_text()
-    shown = re.search(r"<blockquote>\s*<p>(.*?)</p>\s*</blockquote>", page, re.DOTALL)[1]
-    assert " ".join(shown.split()) == statement
+    sleeve = re.search(r'<p class="lead">(.*?)</p>\s*<p>(.*?)</p>', page, re.DOTALL)  # the top text, beside the cover
+    assert " ".join(f"{sleeve[1]} {sleeve[2]}".split()) == statement
 
     credits = tmp_path / "CREDITS.md"
     credits.write_text("# Credits\n\n## Singers\n\nSome words.\n\nCredited, as they asked:\n\n- Ann\n- B & C\n- dee\n\n"
@@ -472,7 +472,7 @@ def test_the_home_pages_about_is_the_artists_statement_and_credits_the_singers_a
         shutil.copyfile(W.WEB / "page" / "seed.html", out / "seed.html")
         W.seed_page(out, manifest, public=public)
         home = (out / "seed.html").read_text()
-        assert f"<p>{said}</p>" in home and "{{" not in home
+        assert f"<p>Eight people sang into the first version. {said}</p>" in home and "{{" not in home
         assert ('<a href="https://github.com/quadule/songbird">The source code</a> is on GitHub.' in home) is public
 
 

@@ -20,10 +20,12 @@ The pages alone build in seconds over the site as it was last built, its guides 
 `--pages`) also renders every guide that isn't current; on October 7, 2026 none was (the code had changed since
 September 28), so it would take about 26 minutes, for guides only singers' own pages still use.
 
-**The studio's pictures** (web/sing/page/studio.webp, 1600 x 1063, and studio-phone.webp, 780 x 880, for a
-screen 640 px wide or less) are the live studio's Page view, light, taken with headless Chromium (Playwright) on
-October 7, 2026: a 1024 x 680 window at 1.5625x, and a 390 px phone's first screen at 3x, cropped and halved.
-Take them again when the studio's look changes.
+**The studio's pictures** (web/sing/page/tab-page.webp, tab-arrange.webp, tab-mix.webp, tab-sing.webp, 860 x 645
+each) are four close crops, one of each view with something being changed in it and nothing shared between them:
+a refrain's line open on its other words (Page), a refrain's players set to hard (Arrange), the whistle's fader
+moved (Mix), the lane while a line is sung (Sing). Taken October 7, 2026 with headless Chromium (Playwright) at 2x;
+Page, Arrange and Mix from the live studio, Sing from the studio run here with a stand-in microphone. Two by two
+on a wide screen, a row to swipe on a phone. Take them again when the studio's look changes.
 
 **The source code.** `SOURCE_PUBLIC` in tools/sing_site.py is off. Turned on (once github.com/quadule/songbird
 is public, with the tag `first-version` on 10dc1e0 pushed), the home page links the repository and the history

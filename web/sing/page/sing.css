@@ -234,3 +234,25 @@ pre { margin: 0 0 10px; padding: 10px 12px; overflow-x: auto; background: var(--
 .statement blockquote p { margin: 0; }
 .statement figcaption { margin: 8px 0 0 18px; color: var(--dim); font-size: 15px; }
 .about h3 { margin-top: 18px; }
+
+/* the home page, consolidated (2026-10-07): the statement beside the cover, then one card to make your own (the
+   studio's four views, two by two, then the file's own commands), then who made it */
+.pitch .lead cite { font-style: normal; }
+.studio .tabs { display: grid; grid-template-columns: 1fr 1fr; gap: 14px 16px; margin: 12px 0 14px; }
+.studio .tabs figure { margin: 0; }
+.studio .tabs img { display: block; width: 100%; height: auto; border: 1px solid var(--line); border-radius: 4px; }
+.studio .tabs figcaption { margin-top: 6px; font-size: 15px; line-height: 1.35; color: var(--dim); }
+.studio .tabs figcaption b { color: var(--ink); font-weight: 600; margin-right: 2px; }
+.studio h3 { margin: 22px 0 6px; padding-top: 14px; border-top: 1px solid var(--line); }
+.card.disclosure > p + p { margin-top: 10px; }
+@media (max-width: 640px) {
+  /* on a phone: the cover small beside the statement, so the player is near the first screen; the four views a
+     row to swipe through, each nearly the card's width, rather than a long column */
+  .sleeve { display: block; }
+  .sleeve .cover { float: left; width: 42%; margin: 4px 14px 6px 0; }
+  .sleeve::after { content: ""; display: block; clear: both; }
+  .pitch .lead { font-size: 19px; }
+  .studio .tabs { display: flex; gap: 12px; overflow-x: auto; scroll-snap-type: x mandatory; margin-right: -18px;
+                  padding-right: 18px; padding-bottom: 6px; overscroll-behavior-x: contain; }
+  .studio .tabs figure { flex: 0 0 84%; scroll-snap-align: start; }
+}

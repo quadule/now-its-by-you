@@ -660,7 +660,7 @@ def seed_page(out: Path, path: Path | None = None, public: bool | None = None) -
         offered.append(e)
     fill = {"{{SEED_FILE}}": SEED_FILE, "{{SEED_MB}}": "0", "{{SEED_V}}": "", "{{SEED_WORDS}}": "", "{{EDITION}}": "",
             "{{CREDITS}}": credits(),
-            "{{SOURCE}}": f'<p><a href="{SOURCE}">The source code</a> is on GitHub.</p>' if public else ""}
+            "{{SOURCE}}": f'<a href="{SOURCE}">The source code</a> is on GitHub. ' if public else ""}
     if not offered:
         print("seed page: no edition to offer (web/sing/editions.json); the page is built without a file", file=sys.stderr)
     else:
