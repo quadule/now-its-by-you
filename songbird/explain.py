@@ -428,13 +428,6 @@ def singer_of(params) -> VoiceParams:
     return _singer(params, [])
 
 
-def drawn_words(genome, params):
-    """The words a machine sings with these params: drawn from the bank, or None for the song's own."""
-    from .cli import words
-
-    return words(genome, params, sung_by_a_machine=True)
-
-
 def as_sung(genome, params, lyrics):
     """Words to show: the drawn ones, or the song's own for the form (named for the bank's entries)."""
     from .composition import lyric_overlay

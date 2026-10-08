@@ -188,7 +188,7 @@ def _spread_curve(fft: int, sr: int, start: float) -> np.ndarray:
 
 
 def _knots(sr: int) -> int:
-    """How many random values a row of _smooth_random draws."""
+    """How many random values a row of scatter holds: one a knot, SCATTER_BW Hz apart up to Nyquist."""
     return len(np.arange(0.0, sr / 2 + SCATTER_BW, SCATTER_BW))
 
 
@@ -208,11 +208,6 @@ def _smooth(r: np.ndarray, fft: int, sr: int) -> np.ndarray:
     """Rows of values r at knots SCATTER_BW Hz apart, linear between them, per FFT bin."""
     lo, hi, before, after = _scatter_geometry(fft, sr, r.shape[1])
     return r[:, lo] * before + r[:, hi] * after
-
-
-def _smooth_random(rng: np.random.Generator, rows: int, fft: int, sr: int) -> np.ndarray:
-    """Rows of unit-variance random values at knots SCATTER_BW Hz apart, linear between them, per FFT bin."""
-    return _smooth(rng.standard_normal((rows, _knots(sr))), fft, sr)
 
 
 BLOCK = 512  # pulses synthesize() hands a thread at a time: a few tens of MB of spectra each

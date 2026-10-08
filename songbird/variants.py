@@ -298,12 +298,6 @@ def load_of(genome: Genome, variants) -> dict[str, int]:
     return used
 
 
-def fullness(genome: Genome, variants) -> float:
-    """The fullest section's variants over what it can hold (1: full)."""
-    cap, used = room(genome), load_of(genome, variants)
-    return max((used.get(name, 0) / max(n, 1) for name, n in cap.items()), default=0.0)
-
-
 def _check(genome: Genome, v: Variant) -> str | None:
     """Why one variant can't be sung, on its own; None if it can."""
     meter = genome.meter

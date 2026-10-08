@@ -424,10 +424,6 @@ class ReedPiano:
 # --- the amplifiers ------------------------------------------------------------------------------------
 
 
-def _tremolo_wave(n: int, sr: int, rate: float, phase: float) -> np.ndarray:
-    return np.sin(2.0 * np.pi * rate * np.arange(n) / sr + phase)
-
-
 def render(name: str, notes, sr: int, length: int, rng: np.random.Generator, make: np.random.Generator,
            settings: dict) -> np.ndarray:
     """An electric piano part, dry, `length` samples, before placement and level: the tine piano stereo

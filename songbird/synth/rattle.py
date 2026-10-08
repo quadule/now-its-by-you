@@ -92,11 +92,6 @@ def modal_weights(freqs, t60s, sr: int, window: float = WINDOW, weight=None) -> 
     return k_power(freqs, sr) * energy * (1.0 if weight is None else np.asarray(weight) ** 2) / window
 
 
-def modal_power(amps: np.ndarray, freqs, t60s, sr: int, window: float = WINDOW, weight=None) -> np.ndarray:
-    """Each hit's early power from its mode amplitudes amps[h, k] (see modal_weights)."""
-    return np.abs(np.asarray(amps)) ** 2 @ modal_weights(freqs, t60s, sr, window, weight)
-
-
 def burst(rng: np.random.Generator, tau: float, sr: int, n: int | None = None) -> np.ndarray:
     """A burst of noise falling e-fold every tau seconds, `n` samples (default 7 tau)."""
     n = int(7.0 * tau * sr) + 1 if n is None else n

@@ -123,13 +123,3 @@ def ring(out, start, force, freqs, gain_re, gain_im, t60, t60_damped, damp_at, r
                 else:
                     j += 1
     return written
-
-
-def t60_to_rate(t60: np.ndarray) -> np.ndarray:
-    """Decay rate in nepers per second of a T60 in seconds."""
-    return LN1000 / np.asarray(t60, dtype=np.float64)
-
-
-def rate_to_t60(rate: np.ndarray) -> np.ndarray:
-    """T60 in seconds of a decay rate in nepers per second."""
-    return LN1000 / np.maximum(np.asarray(rate, dtype=np.float64), 1e-9)

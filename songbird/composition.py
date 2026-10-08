@@ -741,11 +741,6 @@ def notes_at(genome, params, key: str) -> list[dict]:
             for d, _, u, length, slur, _ in flat_notes(at_line(genome, params, key), params)]
 
 
-def chords_at(genome, params, key: str) -> list[list[str]]:
-    """A place's chords as these parameters sing them (a part key, "refrain:2.1")."""
-    return [list(bar) for bar in at_place(genome, params, key).chords]
-
-
 def scope(params, form, index: int, line: int, pid: str, kind: str) -> dict:
     """Where the tune ("tune") or chords ("chords") a line of the form sings come from: "place" (its own time),
     "last" (the last time its section comes), "line" (the line everywhere) or None (the program's own); the key
@@ -1209,5 +1204,3 @@ def played_in(genome, params, placed, clock) -> list:
                 out.append(Note(part=player, start=start, dur=max(stop - start, 0.03),
                                 pitch=float(params.tonic + pitch), vel=vel / 127, section=name))
     return out
-
-
