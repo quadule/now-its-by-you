@@ -180,17 +180,20 @@ day the parent heard comes back out before today's goes in (`variation.Knob.cent
 
 Where the record can't tell which centre the day moved from (a bound cut the day off, or a held choice
 or the nearest mode could have come from two), the song's own is taken if it fits. So machine none's
-versions of versions of the seed sing, each day, exactly what that day's first version sings. A style
-chosen again on a machine's own version no longer adds its lean twice either.
+versions of versions of the seed sing, each day, what that day's first version sings in every number (the
+words, the form and the tune's variants are the lineage's own). A value a person pinned (a tempo, say) is
+read as carrying the day it was pinned on, as any value its machine sang. A style chosen again on a machine's
+own version no longer adds its lean twice, and keeps the version's options (its feel, intro and ending), as
+it does when the style isn't named.
 
 A hand-off between two machines is unchanged: the new machine's day moves the parent's value once. The
 seed, every generation 0 and every hand-off sing as before, and the first version still replays
 bit-exact. What changed is a machine's own version sung again on that machine.
 
 **Still open.** A lineage passed only between quiet machines takes each one's day once, so over many
-hand-offs it can wander within each number's bounds. And a style's options (the ending, the intro) are
-coins keyed by the parent, so a machine singing its own version again may change them; a clock, as the
-tune's and the words' have, would hold them.
+hand-offs it can wander within each number's bounds. And for a machine that knows itself, a style's
+options (the ending, the intro) are coins keyed by the parent, so singing its own version again may change
+them; a clock, as the tune's and the words' have, would hold them.
 
 ## What never changes
 
