@@ -1535,16 +1535,19 @@ def choose_style(out: dict, ctx, forced: str | None = None, arrange: dict | None
     out["style"] = style.to_dict()
 
     # the tempo the style takes the song at: the parent's tempo as a share of its own style's centre, pulled
-    # toward the machine's own pace (moved by the day's drift), then that share of this style's centre
+    # toward the machine's own pace (moved by the day's drift), then that share of this style's centre; with
+    # no pace, its own is the parent's, as it stood before this machine's day moved it (variation.Knob.centre)
     song = ctx.song.tempo
     pl, pc, ph = pdef.centre(parent.feel or "straight") if parent.name else (0.75, 1.0, 1.3)
     lo, centre, hi = sdef.centre(style.feel)
+    span = 0.10 + 0.06 * (c.range if "range" in c.known else 0.0)
     r_parent = ctx.parent.tempo / (pc * song)
+    if "pace" not in c.known and getattr(ctx, "then", None) is not None:  # its own rendition sung again
+        r_parent = _knob("tempo").centre(ctx.parent.tempo, ctx, pc * song, (pl * song, ph * song)) / (pc * song)
     r_own = r_parent
     if "pace" in c.known:
         r_own = 2 ** (0.18 * c.pace)
     if ctx.drift is not None:
-        span = 0.10 + 0.06 * (c.range if "range" in c.known else 0.0)
         r_own *= 1.0 + span * ctx.drift.view("full").get("tempo", 0.0)
     r = r_parent + PULL * (r_own - r_parent)
     out["tempo"] = round(max(lo * song, min(hi * song, r * centre * song)), 1)

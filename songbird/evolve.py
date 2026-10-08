@@ -84,6 +84,12 @@ def _memo(key, make, owner=None):
     return hit[1]
 
 
+def _then(ctx: Context) -> float | None:
+    """When this machine made the parent, if it did (variation.made_here): its leanings depend on it."""
+    then = getattr(ctx, "then", None)
+    return then.t if then is not None else None
+
+
 def _ranked(parts: tuple, items: list, weights=None, names=None) -> list:
     """Items in a weighted random order fixed by `parts`: the heavier, the likelier to come early. Each
     item's place comes from its own name, so adding or removing an option never reorders the others."""
@@ -630,7 +636,8 @@ def swap(genome, form, held: dict, ctx: Context, picker: Picker, mode: str | Non
         kind = where[0]
         if kind == "verse":
             season = _memo(("season", id(genome), ctx.c.hash, clocks.hash, start, mode,
-                            repr(getattr(ctx.parent, "leanings", None))), lambda: own_leanings(ctx, start, mode), genome)
+                            repr(getattr(ctx.parent, "leanings", None)), _then(ctx)),
+                           lambda: own_leanings(ctx, start, mode), genome)
             weights = arrange.verse_weights(genome, season)
             chosen = _ranked((clocks.hash, "swap-in", k), options, [weights[x] for x in options])[0]
             was = new["verses"][where[1]]["id"]
@@ -692,8 +699,8 @@ def choose_words(out: dict, ctx: Context) -> None:
 
     hash_ = Clocks(ctx).hash
     stamp = getattr(ctx.parent, "generation", 0)
-    taste = _memo(("taste", id(genome), ctx.c.hash, hash_, stamp, repr(getattr(ctx.parent, "leanings", None))),
-                  lambda: own_leanings(ctx), genome)
+    taste = _memo(("taste", id(genome), ctx.c.hash, hash_, stamp, repr(getattr(ctx.parent, "leanings", None)),
+                   _then(ctx)), lambda: own_leanings(ctx), genome)
     picker = Picker(genome, hash_, stamp, taste)
     base = getattr(ctx.parent, "words", None) or seed_words(genome, ctx.parent)
     held = fit(genome, tuple(out["form"]), base, picker, getattr(ctx, "log", None))

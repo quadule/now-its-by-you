@@ -115,6 +115,106 @@ def test_a_neutral_machine_sings_like_its_parent(h):
     assert V.fits(h, p.form)
 
 
+NEUTRAL = H.Voice()  # machine none: the public studio's, and `--machine none`
+
+
+def own_again(g, parent, voice, date: str, n: int = 5, style: str | None = None) -> list:
+    """A machine singing a version on a date, then singing its own last version again n times that day."""
+    d = D.drift(D.parse(date), voice.hash)
+    versions = [choose_params(g, parent, voice, d, style=style)]
+    for _ in range(n):
+        versions.append(choose_params(g, versions[-1], voice, d, style=style))
+    return versions
+
+
+def chosen(p) -> dict:
+    """What a version chose, less what moves on every generation by design: the choir (a voice a generation),
+    the style's lineage, the rendition's seed (from the parent) and who made it when."""
+    data = p.to_dict()
+    for key in ("choir", "generation", "made", "seed"):
+        data.pop(key, None)
+    if isinstance(data.get("style"), dict):
+        data["style"] = {k: v for k, v in data["style"].items() if k != "lineage"}
+    return data
+
+
+@pytest.mark.parametrize("date", ["2026-10-07", "2028-06-10", "2031-02-09"])
+def test_a_machine_singing_its_own_again_that_day_sings_it_the_same(h, date):
+    # A machine with nothing of its own somewhere takes its parent's value there, moved by its day. Before October
+    # 7, 2026 a machine singing its own version again added that day once more each time: machine none climbed a
+    # semitone and about 5 BPM a generation (E-flat, E, F, F#, G) to the bounds, its band thinned, its mode darkened.
+    # Now the day the parent already carries is taken out first (variation.Knob.centre, centred()).
+    for parent in (None, child(h, "ada", "2026-06-01")):
+        versions = own_again(h, parent, NEUTRAL, date)
+        assert len({(p.tonic, p.tempo, p.mode) for p in versions}) == 1
+        assert all(chosen(p) == chosen(versions[0]) for p in versions)
+
+
+def test_a_machines_own_versions_stay_in_its_field_around_one_centre(h):
+    # machine none singing its own last version every few days for a year: on each day what the day gives around
+    # the seed's own values, exactly as that day's version sung from the seed, never a walk
+    seed = Params.from_dict(h.seed_params)
+    p = None
+    for t in np.arange(D.parse("2026-10-07"), D.parse("2027-10-07"), 3.0):
+        d = D.drift(t, NEUTRAL.hash)
+        p = choose_params(h, p, NEUTRAL, d)
+        fresh = choose_params(h, None, NEUTRAL, d)
+        assert p.tonic == fresh.tonic and abs(p.tonic - seed.tonic) <= 1  # a drift of 1 moves the key 0.6 x 2
+        assert abs(p.tempo - fresh.tempo) <= 0.2 and abs(p.tempo / seed.tempo - 1) <= V.PULL * 0.10 + 0.002
+        assert (p.mode, p.band.pattern, p.band.lead) == (fresh.mode, fresh.band.pattern, fresh.band.lead)
+
+
+def test_what_a_machine_knows_nothing_of_holds_when_it_sings_its_own_again(h):
+    # a machine read only in part (as `--machine here` before a harvest: no files, hands, words or room) knows its
+    # identity, so its style sets the tempo, but not its pace, its rubato or its vocabulary
+    quiet = replace(H.fictional("ada"), ages=None, hand=None, words=None, room=None)
+    versions = own_again(h, None, quiet, "2026-10-07")
+    for read in (lambda p: p.tempo, lambda p: p.humanize, lambda p: p.band.ornament,
+                 lambda p: p.leanings.get("era_bias"), lambda p: p.leanings.get("rarity_appetite")):
+        assert len({read(p) for p in versions}) == 1
+    # the mix's duck reads no trait of any machine: a made-up machine's own versions held it too (bo's fell from
+    # 0.91 to the floor of 0.6 in four)
+    assert len({p.mix.get("duck") for p in own_again(h, None, H.fictional("bo"), "2026-10-07")}) == 1
+
+
+def test_only_a_machines_own_version_has_its_day_taken_out(h):
+    d = D.drift(D.parse("2026-10-07"), NEUTRAL.hash)
+    mine, theirs = choose_params(h, None, NEUTRAL, d), child(h, "ada", "2026-10-07")
+    assert V.made_here(Params.from_dict(h.seed_params), d) is None and V.made_here(theirs, d) is None
+    assert V.made_here(mine, d).t == d.t
+    # a hand-off takes its one turn: machine none's version of ada's is ada's moved by its day, as ever
+    kid = choose_params(h, theirs, NEUTRAL, d)
+    assert abs(kid.tempo - theirs.tempo * (1 + V.PULL * 0.10 * d.full["tempo"])) <= 0.051
+    # and the studio's reasons say time moved its own version since, not the machine
+    trace: dict = {}
+    V.choose(h, mine, NEUTRAL, D.drift(D.parse("2026-11-20"), NEUTRAL.hash), trace=trace)
+    t = trace["tempo"]
+    assert t["own"] == t["was"] == mine.tempo
+    assert abs(V.PULL * (t["moved"] - t["own"]) - (t["value"] - t["was"])) <= 0.051
+
+
+def test_making_yours_from_a_version_shared_in_the_studio_keeps_its_numbers(h):
+    # the public studio sings as machine none: a version someone made there and shared, opened and made yours the
+    # same day, is its parent again in every number (a person's own tempo too); a month on, its field moved by time
+    from songbird import explain
+
+    day, later = "2026-10-07", "2026-11-07"
+
+    def yours(parent, edits, on):
+        record = {"params": parent.to_dict()} if parent is not None else None
+        ctx = explain.Context(h, parent, record, NEUTRAL, "none", on, D.parse(on), shared=True)
+        return ctx.version(edits).params
+
+    for edits in ({}, {"tempo": 120.0}):
+        shared = yours(None, edits, day)
+        assert shared.tempo == edits.get("tempo", shared.tempo)
+        again = yours(shared, {}, day)
+        assert (again.tonic, again.tempo, again.mode, again.band, again.mix) == \
+               (shared.tonic, shared.tempo, shared.mode, shared.band, shared.mix)
+        on = yours(shared, {}, later)
+        assert abs(on.tonic - shared.tonic) <= 1 and abs(on.tempo / shared.tempo - 1) <= 2 * V.PULL * 0.10
+
+
 def test_a_lineage_keeps_its_accent(h):
     seed = Params.from_dict(h.seed_params)
     a, b = H.fictional("ada"), H.fictional("cy")
