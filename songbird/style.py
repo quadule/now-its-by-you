@@ -1500,6 +1500,9 @@ def _kept(knob, ctx) -> float:
 
     if knob is None:
         return 1.0
+    # Only on a machine's own version: a hand-off whose machine knows none of the knob's traits copies the
+    # parent's lean whole too, but generation 0 has the seed as its parent and counts its "rit" ending as a
+    # lean (a ritardando of 0.32 would become 0.2), so changing the share there would move generation-0 ids.
     if getattr(ctx, "then", None) is not None and not any(u in ctx.c.known for u in knob.uses):
         return 1.0
     return 1.0 - PULL if knob.inherit else 0.0
@@ -1541,8 +1544,9 @@ def choose_style(out: dict, ctx, forced: str | None = None, arrange: dict | None
     voices = int(out.get("choir", ctx.parent.choir))
     options = choose_options(ctx.genome, form, sdef, parent, kept, voices, material, ctx.drift, c,
                              out.get("mode", ctx.parent.mode))
-    if arrange and kept and "identity" not in c.known:
-        # a person choosing one of the options with no machine to draw the rest: the rest as the version had them
+    if kept and (arrange or getattr(ctx, "then", None) is not None) and "identity" not in c.known:
+        # a person choosing one of the options with no machine to draw the rest, or the style named again on a
+        # machine's own version (variation.made_here), as it keeps them unnamed: the rest as the version had them
         options = {k: v for k, v in parent.to_dict().items() if k not in ("name", "lineage")}
     options.update(arrange or {})
     style = Style.from_dict({"name": name, "lineage": lineage + (name,), **options})

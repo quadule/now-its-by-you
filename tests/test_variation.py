@@ -192,17 +192,24 @@ def test_what_a_machine_knows_nothing_of_holds_when_it_sings_its_own_again(h):
 
 
 def test_a_style_named_each_time_never_compounds_on_a_machines_own(h):
-    # the studio's style chosen again on each version: the style's lean on what the machine knows nothing of
-    # comes back out whole (style._kept), so its numbers settle at once (a bound may trim the first)
-    from songbird.style import STYLES
-
+    # the studio's style chosen again on each version: its options (the feel, the intro, the ending...) are the
+    # version's own, as when it isn't named, and the style's lean on what the machine knows nothing of comes back
+    # out whole (style._kept), so its numbers settle at once (a bound may trim the first)
     versions = own_again(h, None, NEUTRAL, "2026-10-07", style="shanty")
-    assert len({p.tonic for p in versions}) == 1
-    # its tempo as a share of the style's own for the feel it took (a feel is the style's to choose each time)
-    shares = [p.tempo / STYLES["shanty"].centre(p.style.feel)[1] for p in versions]
-    assert max(shares) - min(shares) < 0.2
-    settled = [(p.singer, p.mix, p.humanize, p.ritardando, p.band.density, p.band.brightness) for p in versions[1:]]
-    assert all(s == settled[0] for s in settled)
+    assert len({json.dumps(chosen(p)["style"], sort_keys=True) for p in versions}) == 1
+    assert len({(p.tonic, p.tempo) for p in versions}) == 1  # a feel that flipped took the tempo 100.7 to 120.8
+    assert all(numbers(p) == numbers(versions[1]) for p in versions[1:])
+    # a hand-off still takes its turn: machine none naming the style on ada's version draws its own options
+    ada, turns = H.fictional("ada"), 0
+    for date in ("2026-10-07", "2027-01-15", "2027-05-01"):
+        theirs = choose_params(h, None, ada, D.drift(D.parse(date), ada.hash), style="shanty")
+        d = D.drift(D.parse(date), NEUTRAL.hash)
+        hand = choose_params(h, theirs, NEUTRAL, d, style="shanty")
+        mine = choose_params(h, replace(theirs, made={"by": NEUTRAL.hash[:12], "at": round(d.t, 6)}), NEUTRAL, d,
+                             style="shanty")
+        assert chosen(mine)["style"] == chosen(theirs)["style"]
+        turns += chosen(hand)["style"] != chosen(theirs)["style"]
+    assert turns >= 2
 
 
 def test_only_a_machines_own_version_has_its_day_taken_out(h):
