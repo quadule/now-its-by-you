@@ -41,9 +41,10 @@ No recording of any person was used for the house model. Since 2026-09-28 the sh
 model fine-tuned once on the volunteers' takes together (below, "Everyone's voice").
 - **The teacher.** SoulX-Singer (Apache-2.0; a 2.8 GB zero-shot singing model trained on 42,000
   hours of undisclosed singers) sings our own scores. It runs beside the repo and never ships.
-- **Its timbre prompts.** Ten-second clips of seven synthetic singers that Eleven Music made
-  for H (ElevenLabs' terms allow training on outputs). The throat's timbres are second-hand
-  statistics of two generative models.
+- **Its timbre prompts** (first version, superseded: the shipped house model's prompts were our own formant
+  singer's, below, "Shipped: the house model sings by default"). Ten-second clips of seven synthetic singers that
+  Eleven Music made for H (ElevenLabs' terms allow training on outputs). That model's timbres were second-hand
+  statistics of two generative models; it never shipped.
 - **The corpus.** `tools/throat/corpus.py` plans it:
   - every song in songs/;
   - all 38 verses, 6 refrain couplets and 3 bridges of H's bank;

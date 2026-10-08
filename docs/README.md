@@ -36,7 +36,8 @@ pages say how it works. Each is dated when it was written; the code is the final
 3. [Choosing a voice](history/VOICE-OPTIONS.md), [its delivery](history/DELIVERY.md),
    [learning phrasing](history/PHRASING-CALIBRATION.md).
 4. [Singing online](history/SING-ONLINE.md) and [what the singers were asked to sing](history/RECORDING-SETS.md):
-   eight people sang into it; their recordings were deleted by September 30, 2026.
+   eight people sang into it; their recordings were deleted by September 30, 2026. What they agreed to:
+   [the release](../web/sing/consent.md).
 5. [What else to learn from a singer](history/MAKING-IT-THEIR-OWN.md), [the creative review](history/CREATIVE-REVIEW.md),
    [an EDM version made in the studio](history/STUDIO-EDM-TEST.md).
 6. [The studio on a server](history/web-studio-server-plan.md): the first plan for the web studio, never deployed.
