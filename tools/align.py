@@ -26,9 +26,9 @@ down by whole octaves with WORLD, its spectral envelope and timing kept: the
 speech-trained model lost its place in a soprano's lines until then. A word
 the dictionary lacks is read as songbird.phonetics reads it.
 
-MFA lives outside the repo: /Users/milo/Code/mfa (a micromamba env, its
-models in mfa_root, a wrapper at bin/mfa). $MFA names another wrapper, and
-MFA=off goes without. Without MFA, tools/phrasing.py measures with its own
+MFA lives outside the repo, where $MFA_HOME says (a micromamba env, its
+models in mfa_root, a wrapper at bin/mfa); without it, MFA isn't installed.
+$MFA names another wrapper, and MFA=off goes without. Without MFA, tools/phrasing.py measures with its own
 onsets alone, as it did before. MFA runs one at a time on this machine
 (lock(): two at once unpack the model into the same folder). Each take's
 alignment is kept in renders/measured/mfa/ until the take's audio, the guide
@@ -57,7 +57,6 @@ import numpy as np
 
 ROOT = Path(__file__).resolve().parent.parent
 CACHE = ROOT / "renders" / "measured" / "mfa"
-HOME = Path("/Users/milo/Code/mfa")  # where MFA was installed (micromamba env, models, wrapper)
 MODEL = "english_us_arpa"  # acoustic model and dictionary, US English in ARPAbet (the phones songbird.phonetics uses)
 SR = 16000  # what the acoustic model was trained at
 BEAM, RETRY_BEAM = 100, 400  # wider than MFA's 10/40: sung vowels last far longer than spoken ones
@@ -81,35 +80,53 @@ class AlignError(RuntimeError):
 # --- where MFA is -------------------------------------------------------------------
 
 
+def home() -> Path | None:
+    """Where MFA was installed ($MFA_HOME: a micromamba env, its models in mfa_root, a wrapper at bin/mfa),
+    or None: not installed."""
+    name = os.environ.get("MFA_HOME", "").strip()
+    return Path(name).expanduser() if name else None
+
+
 def executable() -> Path | None:
-    """The mfa command, or None if there isn't one: $MFA (off to go without), else the install at HOME."""
-    name = os.environ.get("MFA", str(HOME / "bin" / "mfa")).strip()
+    """The mfa command, or None if there isn't one: $MFA (off to go without), else the install at home()."""
+    name = os.environ.get("MFA")
+    if name is None:
+        name = str(home() / "bin" / "mfa") if home() else ""
+    name = name.strip()
     if name.lower() in ("", "off", "no", "none", "0"):
         return None
     path = Path(name).expanduser()
     return path if path.is_file() and os.access(path, os.X_OK) else None
 
 
-def models() -> Path:
-    """MFA's own folder of saved models (as the wrapper sets it)."""
+def models() -> Path | None:
+    """MFA's own folder of saved models (as the wrapper sets it); None where MFA isn't installed."""
     exe = executable()
-    base = exe.resolve().parent.parent if exe else HOME
-    return Path(os.environ.get("MFA_ROOT_DIR") or base / "mfa_root")
+    base = exe.resolve().parent.parent if exe else home()
+    if os.environ.get("MFA_ROOT_DIR"):
+        return Path(os.environ["MFA_ROOT_DIR"])
+    return base / "mfa_root" if base else None
 
 
-def model_files() -> tuple[Path, Path]:
-    saved = models() / "pretrained_models"
+def model_files() -> tuple[Path, Path] | None:
+    """The acoustic model and dictionary MFA aligns with, where it saves them; None where MFA isn't installed."""
+    saved = models()
+    if saved is None:
+        return None
+    saved = saved / "pretrained_models"
     return saved / "acoustic" / f"{MODEL}.zip", saved / "dictionary" / f"{MODEL}.dict"
 
 
 def available() -> bool:
     """Whether MFA and its model are here to use."""
-    return executable() is not None and all(f.exists() for f in model_files())
+    return executable() is not None and all(f.exists() for f in model_files() or ())
 
 
 def lock_path() -> Path:
     exe = executable()
-    return Path(os.environ.get("MFA_LOCK") or (exe.resolve().parent.parent if exe else HOME) / ".lock")
+    base = exe.resolve().parent.parent if exe else home()
+    fallback = base / ".lock" if base else Path(tempfile.gettempdir()) / "songbird-mfa.lock"
+    return Path(os.environ.get("MFA_LOCK") or fallback)
 
 
 @contextlib.contextmanager
@@ -299,9 +316,9 @@ def run(job: dict, jobs: int | None = None) -> dict:
 
 def settings() -> dict:
     """What an alignment depends on besides the take and its guide."""
-    acoustic, lexicon = model_files()
-    return {"mfa": mfa_version(), "model": MODEL, "model_bytes": acoustic.stat().st_size if acoustic.exists() else 0,
-            "dictionary_bytes": lexicon.stat().st_size if lexicon.exists() else 0, "beam": BEAM,
+    files = model_files()
+    acoustic, lexicon = (f.stat().st_size if f.exists() else 0 for f in files) if files else (0, 0)
+    return {"mfa": mfa_version(), "model": MODEL, "model_bytes": acoustic, "dictionary_bytes": lexicon, "beam": BEAM,
             "retry_beam": RETRY_BEAM, "cut": [BEFORE, AFTER], "lower_above": LOWER_ABOVE, "sr": SR, "format": FORMAT}
 
 
@@ -416,7 +433,9 @@ def main() -> None:
     ap.add_argument("--lag", default="0", help="seconds each take runs behind its guide, or 'measured' (tools/phrasing)")
     args = ap.parse_args()
     if not available():
-        raise SystemExit(f"no MFA at {os.environ.get('MFA', HOME / 'bin' / 'mfa')} (or its {MODEL} model isn't saved)")
+        where = os.environ.get("MFA") or (home() / "bin" / "mfa" if home() else None)
+        raise SystemExit(f"no MFA at {where} (or its {MODEL} model isn't saved)" if where else
+                         "MFA isn't installed: set MFA_HOME to where it is (or MFA to its wrapper)")
     sys.path.insert(0, str(Path(__file__).parent))
     import phrasing as T
     import takes as K

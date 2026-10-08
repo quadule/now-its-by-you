@@ -1,10 +1,11 @@
 """The volunteers' takes with the guide's leak and the room's steady noise taken out (dev only; private, temporary).
 
-    uv run python tools/throat/clean_takes.py [OUT] [--only fishman,gorman] [--taps 128] [--floor-db -12] [--jobs 6]
+    uv run python tools/throat/clean_takes.py [OUT] [--only singer-a,singer-b] [--taps 128] [--floor-db -12] [--jobs 6]
     uv run python tools/throat/volunteers.py cut WORK --takes OUT/takes      # then the pipeline as usual
 
-OUT defaults to the session scratchpad's volunteers/cleaned/. Read-only on recordings/: every take that
-tools/throat/volunteers.py would cut (its counts()) is written to OUT/takes/<singer>/<name>.wav, with its
+OUT defaults to songbird-volunteers/cleaned/ in the system's temporary folder (never the checkout).
+Read-only on recordings/: every take that tools/throat/volunteers.py would cut (its counts()) is
+written to OUT/takes/<singer>/<name>.wav, with its
 sidecar copied beside it field for field plus a "cleaned" field saying what was done. A take that needs
 nothing is linked, not copied. OUT/report.json has every take's numbers, OUT/guides/ the re-rendered guides.
 
@@ -53,6 +54,7 @@ import json
 import os
 import shutil
 import sys
+import tempfile
 import warnings
 from concurrent.futures import ProcessPoolExecutor
 from pathlib import Path
@@ -67,8 +69,7 @@ sys.path.insert(0, str(Path(__file__).parent))
 
 import takes as K  # noqa: E402
 
-SCRATCH = Path("/private/tmp/claude-501/-Users-milo-Code-songbird/f0c81ab4-d6f4-47a7-95bc-e66f784e609d/scratchpad")
-DEFAULT_OUT = SCRATCH / "volunteers" / "cleaned"
+DEFAULT_OUT = Path(tempfile.gettempdir()) / "songbird-volunteers" / "cleaned"  # people's voices: never the checkout
 FRAME = 0.005
 REACH = 0.6  # seconds either side of the sidecar's placement the leak is looked for
 PRE = 0.25e-3  # seconds of the filter before the direct sound (sub-sample and the decoder's slop)

@@ -26,8 +26,12 @@ the resynthesis (docs/THROAT.md, "Vocoder"):
 
 --render measures whole files instead (the learned engine singing, say) with their own Harvest f0,
 beside the originals' figures. --mos scores every written file with UTMOS and DNSMOS
-(renders/reference/mos/score.py, in its own venv). A variant is keyword arguments to
-throat.Texture (texture=none for the plain WORLD-style vocoder).
+(renders/reference/mos/score.py, or the score.py in $MOS_DIR, run by the Python in its own venv:
+$MOS_PYTHON). A variant is keyword arguments to throat.Texture (texture=none for the plain
+WORLD-style vocoder).
+
+The corpus is read from renders/throat/ (tools/throat/corpus.py, soulx_batch.py, features.py), or
+from $THROAT_DATA: a worktree can name the main checkout's.
 """
 
 from __future__ import annotations
@@ -49,7 +53,7 @@ sys.path.insert(0, str(ROOT))
 
 from songbird.synth import throat  # noqa: E402
 
-DATA = Path("/Users/milo/Code/songbird/renders/throat")  # the corpus lives in the main checkout
+DATA = Path(os.environ.get("THROAT_DATA") or ROOT / "renders" / "throat")  # the corpus, its features
 BANDS = ((0, 1000), (1000, 2000), (2000, 4000), (4000, 6000), (6000, 8000), (8000, 11800))
 # One refrain line and one other song per house singer; the lead's two held-out segments among them.
 SEGMENTS = [f"{s}/{s}.{g}" for s, g in (
@@ -362,10 +366,10 @@ def main() -> None:
         (args.out / "results.json").write_text(json.dumps(rows, indent=1))
 
 
-MOS_PYTHON = "/Users/milo/Code/mos/.venv/bin/python"
+MOS_DIR = Path(os.environ.get("MOS_DIR") or ROOT / "renders" / "reference" / "mos")  # where score.py is
 MOS_SCRIPT = """
 import json, sys
-sys.path.insert(0, "/Users/milo/Code/songbird/renders/reference/mos")
+sys.path.insert(0, sys.argv.pop(1))
 import score
 out = {}
 for path in sys.argv[1:]:
@@ -377,8 +381,11 @@ print(json.dumps(out))
 
 def score_mos(paths: list[Path]) -> dict:
     """UTMOS and DNSMOS for every file, in the MOS scorer's own venv (one model load)."""
-    done = subprocess.run([MOS_PYTHON, "-W", "ignore", "-c", MOS_SCRIPT, *map(str, paths)], capture_output=True, text=True,
-                          check=True)
+    python = os.environ.get("MOS_PYTHON")
+    if not python:
+        raise SystemExit("--mos needs MOS_PYTHON: the Python of a venv with the MOS scorer's packages")
+    done = subprocess.run([python, "-W", "ignore", "-c", MOS_SCRIPT, str(MOS_DIR), *map(str, paths)],
+                          capture_output=True, text=True, check=True)
     return json.loads(done.stdout.strip().splitlines()[-1])
 
 

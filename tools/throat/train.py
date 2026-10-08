@@ -1,6 +1,6 @@
 """Train the learned throat (dev only; run with a Python that has torch, e.g. SoulX-Singer's venv).
 
-    ~/Code/svs/SoulX-Singer/.venv/bin/python -B tools/throat/train.py renders/throat/dataset.npz \
+    $SOULX/.venv/bin/python -B tools/throat/train.py renders/throat/dataset.npz \
         --out renders/throat/model.npz [--steps 30000] [--channels 128] [--hold-out bright.a-nobody]
         [--init renders/throat/model-house.npz]
 
