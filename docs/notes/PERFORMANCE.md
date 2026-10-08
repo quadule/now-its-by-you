@@ -312,7 +312,7 @@ needs the one-thread heap high-water, about 1.0 GB, plus its allocator's fragmen
 
 # The heaviest parts (2026-09-30)
 
-The public studio renders in a 2.5 GB container with a 2100 MB budget for a whole song (docs/WEB-STUDIO.md, "Before
+The public studio renders in a 2.5 GB container with a 2100 MB budget for a whole song (docs/history/web-studio-server-plan.md, "Before
 launch"), and measured band by band the drum kit held about 9 MB for every second of song on its own: every style
 with a kit was refused on the server past about 1.7 minutes, and country's and gospel's own defaults were past the
 container. This made the heaviest parts lean by the rule above: **every change byte-identical**, at any thread count.

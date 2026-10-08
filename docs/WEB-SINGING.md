@@ -622,7 +622,7 @@ Origin), a shared studio's key, the page's token, a content type of its own
 Since 2026-09-30 every one of them, and singing's own (on, the visitor's
 turn and takes this hour, room among the takes waiting, and the takes on
 their way), is asked before a byte of the take is read; a refused take is
-read and dropped a block at a time, nothing of it held (docs/WEB-STUDIO.md,
+read and dropped a block at a time, nothing of it held (docs/history/web-studio-server-plan.md,
 "Before launch").
 
 ## In the code

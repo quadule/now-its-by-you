@@ -1284,7 +1284,7 @@ function applyPublic(s) {
   setOn("helpKept", "hidden", false);
 }
 
-function whatsKept(p, singing) {  // what an open studio keeps, said plainly (docs/WEB-STUDIO.md, "What is logged, and kept")
+function whatsKept(p, singing) {  // what an open studio keeps, said plainly (docs/history/web-studio-server-plan.md, "What is logged, and kept")
   const hours = p.download_hours === 24 ? "a day" : `${p.download_hours} hours`;
   return "What's kept: a random id in a cookie, so everyone gets a fair share (it names nobody). Your changes stay in " +
     "this browser, sent only to make the song. A recording waits here " + hours + " to be downloaded, then goes. A " +

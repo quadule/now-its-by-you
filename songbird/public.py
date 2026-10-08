@@ -5,7 +5,7 @@ What it keeps of a visitor is counts: how many songs and sections they (a random
 their address had made in the last hour, and how many requests their address sent in the last minute,
 each under a keyed hash whose key lives only in memory, so an address can't be read back from them and
 they are gone when the studio stops. The access log says what was asked and how it was answered,
-never by whom (no address, no cookie, no query, no body). docs/WEB-STUDIO.md has the design.
+never by whom (no address, no cookie, no query, no body). docs/history/web-studio-server-plan.md has the design.
 """
 
 from __future__ import annotations

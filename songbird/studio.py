@@ -30,7 +30,7 @@ machine that shapes the song is the computer serving it. docs/STUDIO.md,
 Public (`--public`), it is open to anyone who reaches it, for good: shared as above but with no key
 unless one is given, each visitor held to one render at a time and a few an hour (songbird.public),
 recordings offered for download a while and not kept, and an access log that never says who.
-docs/WEB-STUDIO.md.
+docs/history/web-studio-server-plan.md.
 """
 
 from __future__ import annotations
@@ -2403,9 +2403,9 @@ def add_arguments(parser: argparse.ArgumentParser) -> None:
     parser.add_argument("--public", action="store_true",
                         help="open to anyone who reaches it, for good, with limits for each visitor: no link key "
                              "needed (unless --key), recordings offered for download and not kept, an access "
-                             "log that never says who (docs/WEB-STUDIO.md)")
+                             "log that never says who (docs/history/web-studio-server-plan.md)")
     parser.add_argument("--limit", action="append", default=[], metavar="NAME=N",
-                        help=f"a public studio's limit: {', '.join(public_mod.names())} (docs/WEB-STUDIO.md)")
+                        help=f"a public studio's limit: {', '.join(public_mod.names())} (docs/history/web-studio-server-plan.md)")
     parser.add_argument("--client-ip-header", metavar="HEADER",
                         help="public, behind a proxy on this machine or its private network: the header that "
                              "names the visitor's address (CF-Connecting-IP for a Cloudflare tunnel)")
