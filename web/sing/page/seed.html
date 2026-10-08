@@ -37,17 +37,18 @@
       </div>
     </div>
     <div class="preview">
-      <audio id="player" controls preload="none" src="/seed/{{SEED_FILE}}"></audio>
+      <audio id="player" controls preload="none" src="/seed/{{SEED_FILE}}?v={{SEED_V}}"></audio>
       <div class="lyric" id="lyric" data-words="{{SEED_WORDS}}" role="group" aria-label="The words, as they are sung" hidden>
         <p class="now"></p>
         <p class="next"></p>
       </div>
+      <p class="hint which">{{EDITION}}</p>
     </div>
   </section>
 
   <section class="card" aria-label="Download">
     <h2>Take it</h2>
-    <p><a href="/seed/{{SEED_FILE}}" download>{{SEED_FILE}}</a> ({{SEED_MB}} MB, FLAC). It plays in any music player.</p>
+    <p><a href="/seed/{{SEED_FILE}}?v={{SEED_V}}" download>{{SEED_FILE}}</a> ({{SEED_MB}} MB, FLAC). It plays in any music player.</p>
     <p class="hint">Inside the same file: the program, the song's skeleton, this version's record and its words. Unzip it to
       read them first if you like.</p>
   </section>

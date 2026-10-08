@@ -239,28 +239,127 @@ def test_the_seed_pages_words_are_timed_as_the_file_sang_them(tmp_path):
     assert W.seed_words(plain) is None  # no packet, nothing to lay it from
 
 
+def packed(path: Path, seed: int, monkeypatch) -> str:
+    """A small packed render, packed before the program embedded the cover; its id."""
+    from songbird import pack
+    from songbird.synth import master
+
+    pcm = (np.random.default_rng(seed).normal(0, 3000, (22050, 2))).astype("<i2")
+    master.write_flac(path, pcm, 44100, cover=False)
+    record = {"id": master.pcm_sha256(pcm), "title": "Now It's by You", **pack.lineage(None)}
+    with monkeypatch.context() as m:
+        m.setattr(pack.artwork, "embed", lambda audio, description=None: audio)
+        pack.pack(path, record, ROOT / "songs" / "h-now-its-by-you.json")
+    return record["id"]
+
+
+def edition(n: int, date: str, render, audio: str, **more) -> dict:
+    return {"id": str(n), "title": f"Version {n}", "date": date, "render": str(render), "audio": audio[:12],
+            "commit": "10dc1e0bba140e5dfed9217f4ddcc90b4d531004", "note": f"What changed in {n} & why.", **more}
+
+
 def test_the_seed_pages_file_carries_the_cover_with_its_packet_and_id(tmp_path, monkeypatch):
     """The public file is a copy of the render given the song's cover (pack.with_cover): the render itself is
     left alone, and the copy has the same samples, the same packet and so the same id."""
     from songbird import artwork, pack
-    from songbird.synth import master
 
-    pcm = (np.random.default_rng(1).normal(0, 3000, (22050, 2))).astype("<i2")
     render = tmp_path / "contest.flac"
-    master.write_flac(render, pcm, 44100, cover=False)
-    record = {"id": master.pcm_sha256(pcm), "title": "Now It's by You", **pack.lineage(None)}
-    with monkeypatch.context() as m:  # packed before the program embedded the cover
-        m.setattr(pack.artwork, "embed", lambda audio, description=None: audio)
-        pack.pack(render, record, ROOT / "songs" / "h-now-its-by-you.json")
+    made = packed(render, 1, monkeypatch)
     before = render.read_bytes()
+    manifest = tmp_path / "editions.json"
+    manifest.write_text(json.dumps({"editions": [edition(1, "2026-09-28", render, made)]}))
     out = tmp_path / "public"
     out.mkdir()
     (out / "seed.html").write_text("{{SEED_FILE}} {{SEED_MB}} {{SEED_WORDS}}")
-    monkeypatch.setenv("SONGBIRD_SEED", str(render))
     monkeypatch.setattr(W, "seed_words", lambda flac: None)
-    W.seed_page(out)
+    W.seed_page(out, manifest)
     served = out / "seed" / W.SEED_FILE
     assert render.read_bytes() == before
     assert [p["type"] for p in artwork.pictures(served.read_bytes())] == [artwork.FRONT]
-    assert pack.read_record(served)["id"] == record["id"] == pack.samples_id(pack.audio_bytes(served))
+    assert pack.read_record(served)["id"] == made == pack.samples_id(pack.audio_bytes(served))
     assert pack.read_member(served, "genome.json") == pack.read_member(render, "genome.json")
+    assert (out / "seed" / "now-its-by-you-2026-09-28.flac").read_bytes() == served.read_bytes()  # its edition's own name
+
+
+def test_the_home_page_offers_the_newest_edition_and_the_history_every_one(tmp_path, monkeypatch):
+    """web/sing/editions.json: the seed page (the home page) plays and offers the newest edition whose render is
+    here, its words timed, under the same name as ever; /history offers every one, newest first, each under its
+    date's name; an edition whose render isn't here is left out, and the pages still build without any."""
+    first, second = tmp_path / "first.flac", tmp_path / "second.flac"
+    ids = {first: packed(first, 1, monkeypatch), second: packed(second, 2, monkeypatch)}
+    manifest = tmp_path / "editions.json"
+    listed = [edition(1, "2026-09-28", first, ids[first]), edition(2, "2026-10-20", second, ids[second]),
+              edition(3, "2026-11-02", tmp_path / "not-yet.flac", "0" * 12)]
+    manifest.write_text(json.dumps({"editions": listed}))
+    web = tmp_path / "web"
+    shutil.copytree(W.WEB / "page", web / "page")
+    for name in ("consent.md", "words-release.md"):
+        shutil.copyfile(W.WEB / name, web / name)
+    monkeypatch.setattr(W, "WEB", web)
+    monkeypatch.setattr(W, "EDITIONS", manifest)
+    timed = {"duration": 0.5, "lines": [[0.0, 0.5, [["Who", 0.0, 0.5, 1]]]]}
+    monkeypatch.setattr(W, "seed_words", lambda flac: timed if flac == second else None)
+    assert W.seed_source() == second
+    out = tmp_path / "public"
+    out.mkdir()
+    W.pages(out)
+
+    seed = out / "seed"
+    assert sorted(f.name for f in seed.iterdir()) == ["now-its-by-you-2026-09-28.flac", "now-its-by-you-2026-10-20.flac",
+                                                       "now-its-by-you.flac", "words.json"]
+    assert (seed / W.SEED_FILE).read_bytes() == (seed / "now-its-by-you-2026-10-20.flac").read_bytes()
+    assert json.loads((seed / "words.json").read_text()) == timed
+    home = (out / "seed.html").read_text()
+    assert "{{" not in home
+    assert home.count(f'/seed/now-its-by-you.flac?v={ids[second][:12]}"') == 2  # the player and the download
+    assert f'data-words="/seed/words.json?v={W.digest((seed / "words.json").read_text())}"' in home
+    assert 'Version 2, <time datetime="2026-10-20">October 20, 2026</time> · <a href="/history">History</a>' in home
+    assert "Version 1" not in home and "2026-09-28" not in home  # only the current one on the home page
+    page = (out / "history.html").read_text()
+    assert "{{" not in page and 'href="/sing.css?v=' in page and 'href="/identity.css?v=' in page
+    shown = re.findall(r'<audio controls preload="none" src="([^"]+)">', page)
+    assert shown == ["/seed/now-its-by-you-2026-10-20.flac", "/seed/now-its-by-you-2026-09-28.flac"]  # newest first
+    assert '<time datetime="2026-09-28">September 28, 2026</time>' in page and "What changed in 1 &amp; why." in page
+    assert "Version 3" not in page  # its render isn't here
+
+    second.unlink()  # the newest here is the current one
+    assert W.seed_source() == first
+    first.unlink()
+    assert W.seed_source() is None
+    again = tmp_path / "again"
+    again.mkdir()
+    W.pages(again)
+    assert not (again / "seed" / W.SEED_FILE).exists() and "{{" not in (again / "seed.html").read_text()
+    assert "<p>Nothing yet.</p>" in (again / "history.html").read_text()
+
+
+def test_an_editions_list_that_is_wrong_stops_the_build(tmp_path, monkeypatch):
+    render = tmp_path / "one.flac"
+    made = packed(render, 1, monkeypatch)
+    manifest = tmp_path / "editions.json"
+    out = tmp_path / "public"
+    out.mkdir()
+    (out / "seed.html").write_text("{{SEED_FILE}}")
+    monkeypatch.setattr(W, "seed_words", lambda flac: None)
+
+    def build(*listed):
+        manifest.write_text(json.dumps({"editions": list(listed)}))
+        W.seed_page(out, manifest)
+
+    for listed, said in (([], "lists no editions"), ([{**edition(1, "2026-09-28", render, made), "note": ""}], "has no note"),
+                         ([edition(1, "28 September 2026", render, made)], "isn't YYYY-MM-DD"),
+                         ([edition(1, "2026-09-28", render, made, commit="main")], "commit isn't one"),
+                         ([edition(1, "2026-09-28", render, made), edition(1, "2026-10-01", render, made)], "another's too"),
+                         ([edition(1, "2026-09-28", render, made), edition(2, "2026-09-28", render, made)], "another's too"),
+                         ([edition(1, "2026-09-28", render, "0" * 12)], "the wrong file")):
+        with pytest.raises(SystemExit, match=said):
+            build(*listed)
+    build(edition(1, "2026-09-28", render, made))  # as it should be
+
+
+def test_the_songs_editions_are_listed_rightly():
+    """web/sing/editions.json as it is: the first version is the contest's file, from the program it was made with."""
+    listed = W.editions()
+    assert listed[-1]["id"] == "1" and listed[-1]["title"] == "The first version" and listed[-1]["date"] == "2026-09-28"
+    assert listed[-1]["audio"] == "07ac74fbd4eb" and listed[-1]["render"] == "renders/review/contest.flac"
+    assert W.us_date(listed[-1]["day"]) == "September 28, 2026"

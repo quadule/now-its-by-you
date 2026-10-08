@@ -203,3 +203,12 @@ pre { margin: 0 0 10px; padding: 10px 12px; overflow-x: auto; background: var(--
                white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 /* a phone: the line being sung may take two lines; room for both, so the strip never jumps */
 @media (max-width: 640px) { .lyric .now { min-height: 2.6em; } }
+/* which edition plays, under the player, and the way to the others */
+.which { margin: 8px 0 0; }
+.which:empty { display: none; }
+
+/* the history: every edition, newest first, each on a card of its own */
+.kicker a { color: inherit; }
+.edition .when { margin: -2px 0 8px; color: var(--dim); font-size: 15px; }
+.edition audio { margin: 12px 0 8px; }
+.edition > p.hint { margin: 0; }

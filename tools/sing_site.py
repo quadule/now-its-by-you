@@ -10,9 +10,11 @@ What it writes, all served by web/sing/src/worker.js:
     index.html, sing.css, sing.js...  the pages (web/sing/page/), with the releases in them: for recording
                                       (web/sing/consent.md) and for words people send (words-release.md);
                                       and the seed page's cover.jpg and seed.js
-    seed/now-its-by-you.flac          the seed page's file (seed_source(), with the song's cover embedded:
-                                      pack.with_cover, the same audio, packet and id), and seed/words.json its words
+    seed/now-its-by-you.flac          the seed page's file: the current edition's (the newest in web/sing/editions.json
+                                      whose render is here: seed_source()), with the song's cover embedded
+                                      (pack.with_cover: the same audio, packet and id), and seed/words.json its words
                                       as it sang them, timed (seed_words()), shown as it plays
+    seed/now-its-by-you-<date>.flac   every edition's file, as /history (history.html) offers them, newest first
     karaoke.js, recorder.js           the timing core they share with the karaoke here (tools/karaoke.js)
     song/song.json                    what's on offer (v2): the sets, keys and speeds, and for every spec
                                       its guide score's digest, its words' file, and each mix's MP3 and
@@ -61,7 +63,6 @@ import multiprocessing
 import re
 import shutil
 import subprocess
-import os
 import sys
 import time
 import warnings
@@ -495,50 +496,127 @@ def earlier(song: str, title: str, now: dict[str, tuple[str, list]]) -> dict[str
 
 
 SEED_FILE = "now-its-by-you.flac"  # the seed page's file name (web/sing/src/worker.js SEED_FILE serves exactly this)
+EDITIONS = WEB / "editions.json"  # the song's editions: the seed page offers the newest, /history every one
+FIELDS = ("id", "title", "date", "render", "audio", "commit", "note")
+MONTHS = ("January", "February", "March", "April", "May", "June", "July", "August", "September", "October",
+          "November", "December")
 
 
-def seed_source() -> Path | None:
-    """The render the seed page offers, and the page's preview unless --preview says otherwise: $SONGBIRD_SEED,
-    else renders/review/contest.flac, else the newest FLAC in renders/review/; None without any."""
-    chosen = os.environ.get("SONGBIRD_SEED")
-    path = Path(chosen) if chosen else ROOT / "renders" / "review" / "contest.flac"
-    if path.exists():
-        return path
-    candidates = sorted((ROOT / "renders" / "review").glob("*.flac"), key=lambda f: f.stat().st_mtime)
-    return candidates[-1] if candidates else None
+def us_date(day: dt.date) -> str:
+    """A date as people here read it: September 28, 2026 (whatever the machine's locale)."""
+    return f"{MONTHS[day.month - 1]} {day.day}, {day.year}"
 
 
-def seed_page(out: Path) -> None:
-    """The public seed page (/seed, and the root of now.itsby.you): web/sing/page/seed.html with the song's file
-    beside it in public/seed/, and its words as sung, timed (seed_words), for the page to show as it plays. The
-    file is $SONGBIRD_SEED, else renders/review/contest.flac, else the newest packed render in renders/review/;
-    without any, the page still builds and says so (and shows no words)."""
-    path = seed_source()
+def editions(path: Path | None = None) -> list[dict]:
+    """The song's editions (web/sing/editions.json), newest first, each as written with its day (a date), its
+    render found ("found": None if this checkout hasn't it) and the name it's served under in seed/
+    (now-its-by-you-<date>.flac, its date making it its own). A manifest that's wrong stops the build: a field
+    missing or malformed, an id or a date twice."""
+    path = Path(path or EDITIONS)
+    listed = json.loads(path.read_text()).get("editions") or []
+    if not listed:
+        raise SystemExit(f"{path} lists no editions: the seed page offers the newest")
+    out, ids, dates = [], set(), set()
+    for n, e in enumerate(listed, 1):
+        missing = [k for k in FIELDS if not isinstance(e.get(k), str) or not e[k].strip()]
+        if missing:
+            raise SystemExit(f"{path}: edition {n} has no {', '.join(missing)}")
+        try:
+            day = dt.date.fromisoformat(e["date"])
+        except ValueError:
+            raise SystemExit(f"{path}: edition {n}'s date {e['date']!r} isn't YYYY-MM-DD") from None
+        wrong = [k for k, pattern in (("id", r"[A-Za-z0-9-]+"), ("audio", r"[0-9a-f]{12,64}"), ("commit", r"[0-9a-f]{7,40}"))
+                 if not re.fullmatch(pattern, e[k])]
+        if wrong:
+            raise SystemExit(f"{path}: edition {n}'s {', '.join(wrong)} isn't one (id: letters, digits and -; audio: "
+                             "the start of the render's id, 12 or more hex digits; commit: a commit's hash)")
+        if e["id"] in ids or day in dates:
+            raise SystemExit(f"{path}: edition {n}'s id or date is another's too: each is its own")
+        ids.add(e["id"])
+        dates.add(day)
+        render = Path(e["render"]) if Path(e["render"]).is_absolute() else ROOT / e["render"]
+        out.append({**e, "day": day, "found": render if render.is_file() else None,
+                    "file": f"now-its-by-you-{day.isoformat()}.flac"})
+    return sorted(out, key=lambda e: e["day"], reverse=True)
+
+
+def seed_source(path: Path | None = None) -> Path | None:
+    """The render the seed page offers, and the singing page's preview unless --preview says otherwise: the
+    current edition's, the newest whose render this checkout has (editions()); None without any."""
+    found = [e["found"] for e in editions(path) if e["found"]]
+    return found[0] if found else None
+
+
+def seed_page(out: Path, path: Path | None = None) -> None:
+    """The public seed page (/seed, and the root of now.itsby.you) and its history (/history): every edition's
+    file in public/seed/ (its own name), the current one's (the newest this checkout has) as the seed page's file
+    too, with its words as sung, timed (seed_words), for the page to show as it plays; and history.html, every
+    edition newest first. An edition whose render isn't here is left out, said; without any, the pages still
+    build and say so (no file, no words)."""
+    from songbird import pack as P
+
     (out / "seed").mkdir(exist_ok=True)
-    page = (out / "seed.html").read_text()
-    if path is None:
-        print("seed page: no render to offer (renders/review/*.flac); the page is built without a file", file=sys.stderr)
-        mb, words = "0", ""
-    else:
-        from songbird import pack as P
-
+    offered = []
+    for e in editions(path):
+        if e["found"] is None:
+            print(f"seed page: edition {e['id']} ({e['render']}) isn't in this checkout; it's left out", file=sys.stderr)
+            continue
+        try:  # its packet's record, checked against its own audio
+            made = str((P.read_record(e["found"]) or {}).get("id") or "")
+        except ValueError:
+            made = ""
+        if not made.startswith(e["audio"]):
+            raise SystemExit(f"edition {e['id']}: {e['render']} is audio {made[:12] or '(no record)'}, not {e['audio']}: "
+                             "the wrong file, or the wrong id in web/sing/editions.json")
+        served = out / "seed" / e["file"]
         try:  # the song's cover as its front cover, if the render hasn't it: the same audio, packet and id
-            P.with_cover(path, out / "seed" / SEED_FILE)
-        except ValueError as e:
-            print(f"seed page: the file is offered without the cover ({e})", file=sys.stderr)
-            shutil.copyfile(path, out / "seed" / SEED_FILE)
-        mb = f"{(out / 'seed' / SEED_FILE).stat().st_size / 2**20:.0f}"
-        print(f"seed page: {path.relative_to(ROOT) if path.is_relative_to(ROOT) else path} -> seed/{SEED_FILE} ({mb} MB)")
-        timed, words = seed_words(path), ""
+            P.with_cover(e["found"], served)
+        except ValueError as err:
+            print(f"seed page: edition {e['id']} is offered without the cover ({err})", file=sys.stderr)
+            shutil.copyfile(e["found"], served)
+        offered.append({**e, "bytes": served.stat().st_size})
+    fill = {"{{SEED_FILE}}": SEED_FILE, "{{SEED_MB}}": "0", "{{SEED_V}}": "", "{{SEED_WORDS}}": "", "{{EDITION}}": ""}
+    if not offered:
+        print("seed page: no edition's render to offer (web/sing/editions.json); the page is built without a file",
+              file=sys.stderr)
+    else:
+        now = offered[0]
+        shutil.copyfile(out / "seed" / now["file"], out / "seed" / SEED_FILE)
+        fill["{{SEED_MB}}"] = f"{now['bytes'] / 2**20:.0f}"
+        fill["{{SEED_V}}"] = now["audio"]  # a new edition's file under the same name, never an old one's from a cache
+        fill["{{EDITION}}"] = (f'{html.escape(now["title"])}, <time datetime="{now["date"]}">{us_date(now["day"])}</time>'
+                               ' · <a href="/history">History</a>')
+        print(f"seed page: edition {now['id']}, {now['render']} -> seed/{SEED_FILE} ({fill['{{SEED_MB}}']} MB); "
+              f"{len(offered)} in its history")
+        timed = seed_words(now["found"])
         if timed is None:
             print("seed page: the file's words can't be timed (not a packed render, or its score doesn't come out as "
                   "it sang); the page plays it without them", file=sys.stderr)
         else:
             text = json.dumps(timed, separators=(",", ":")) + "\n"
             (out / "seed" / SEED_WORDS).write_text(text)
-            words = f"/seed/{SEED_WORDS}?v={digest(text)}"  # a new render's words, never an old one's from a cache
-    (out / "seed.html").write_text(page.replace("{{SEED_FILE}}", SEED_FILE).replace("{{SEED_MB}}", mb)
-                                   .replace("{{SEED_WORDS}}", words))
+            fill["{{SEED_WORDS}}"] = f"/seed/{SEED_WORDS}?v={digest(text)}"  # a new render's words, never an old one's
+    page = (out / "seed.html").read_text()
+    for mark, value in fill.items():
+        page = page.replace(mark, value)
+    (out / "seed.html").write_text(page)
+    if (out / "history.html").exists():
+        (out / "history.html").write_text((out / "history.html").read_text().replace("{{EDITIONS}}", history(offered)))
+
+
+def history(offered: list[dict]) -> str:
+    """The history page's editions, newest first: each one's title, date and note, a player and its file."""
+    items = []
+    for e in offered:
+        src, anchor = f"/seed/{e['file']}", f"edition-{e['id']}"
+        items.append(f"""<article class="card edition" id="{anchor}" aria-labelledby="{anchor}-title">
+    <h2 id="{anchor}-title">{html.escape(e["title"])}</h2>
+    <p class="when"><time datetime="{e["date"]}">{us_date(e["day"])}</time></p>
+    <p>{html.escape(e["note"])}</p>
+    <audio controls preload="none" src="{src}"></audio>
+    <p class="hint"><a href="{src}" download>{e["file"]}</a> ({e["bytes"] / 2**20:.0f} MB, FLAC)</p>
+  </article>""")
+    return "\n  ".join(items) or "<p>Nothing yet.</p>"
 
 
 SEED_WORDS = "words.json"  # the seed file's words, timed (web/sing/src/worker.js SEED_FILES serves it)
@@ -596,10 +674,10 @@ def versioned(out: Path) -> None:
 
     swap("sing.js", 'from "./karaoke.js"', f'from "./karaoke.js?v={stamp("karaoke.js")}"')
     swap("sing.js", 'addModule("/recorder.js")', f'addModule("/recorder.js?v={stamp("recorder.js")}")')
-    for page in ("index.html", "seed.html", "yours.html"):  # identity.css: the tokens and shared pieces, first
+    for page in ("index.html", "seed.html", "history.html", "yours.html"):  # identity.css: the tokens and shared pieces, first
         swap(page, 'href="/identity.css"', f'href="/identity.css?v={stamp("identity.css")}"')
-    swap("index.html", 'href="/sing.css"', f'href="/sing.css?v={stamp("sing.css")}"')
-    swap("seed.html", 'href="/sing.css"', f'href="/sing.css?v={stamp("sing.css")}"')
+    for page in ("index.html", "seed.html", "history.html"):
+        swap(page, 'href="/sing.css"', f'href="/sing.css?v={stamp("sing.css")}"')
     swap("seed.html", 'src="/seed.js"', f'src="/seed.js?v={stamp("seed.js")}"')
     swap("index.html", 'src="/sing.js"', f'src="/sing.js?v={stamp("sing.js")}"')
     swap("yours.html", 'href="/yours.css"', f'href="/yours.css?v={stamp("yours.css")}"')

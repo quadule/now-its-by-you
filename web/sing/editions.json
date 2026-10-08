@@ -1,0 +1,14 @@
+{
+  "about": "The song's editions, read by tools/sing_site.py (docs/SING-ONLINE.md, 'Editions'). The home page (now.itsby.you) offers the newest; /history offers every one, newest first. To add one, add it at the end: id (letters, digits, -), title, date (YYYY-MM-DD, the day it's released; one a day), render (the packed render, from the checkout), audio (the start of its id, at least 12 characters), commit (the program it came from), note (a sentence on what changed).",
+  "editions": [
+    {
+      "id": "1",
+      "title": "The first version",
+      "date": "2026-09-28",
+      "render": "renders/review/contest.flac",
+      "audio": "07ac74fbd4eb",
+      "commit": "10dc1e0bba140e5dfed9217f4ddcc90b4d531004",
+      "note": "The song as it began, shaped by the people who sang along to it online."
+    }
+  ]
+}
