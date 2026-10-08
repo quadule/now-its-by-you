@@ -528,8 +528,9 @@ def _linear(x: np.ndarray, w: dict, name: str) -> np.ndarray:
 
 # The people's share of every voice: the singer trained on everyone's takes together (source "human", one
 # embedding for all of them; docs/THROAT.md "Everyone's voice") is this much of the machine's default blend and
-# of every machine's own, the rest the synthetic singers' as before. Never more: the consent promises a voice
-# blended from everyone, never set to sound like one person, and at 0.3 it is 70% synthetic by construction.
+# of every machine's own, the rest the synthetic singers' as before. The consent promises a voice trained on
+# everyone's takes at once and never set to sound like one person (web/sing/consent.md); 0.3 is our choice,
+# not the consent's: 70% synthetic by construction. The artist allows 0.3-0.6 (2026-10-07).
 HUMAN_SHARE = 0.3
 
 
