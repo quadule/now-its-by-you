@@ -261,6 +261,14 @@ def replayed(record: dict, made: dict, out: Path, recorded: bytes | None, beside
             f"of it is at hand to compare the samples with")
 
 
+def credited(gestures: dict | None, about: dict | None) -> dict | None:
+    """A performance's gestures as a record carries them, with what its record says of them beside (render_one
+    keeps all but the gestures as the record's phrasing); the gestures alone where it says nothing."""
+    if not gestures or not isinstance(about, dict):
+        return gestures
+    return {**{k: v for k, v in about.items() if k not in ("phrases", "fields")}, **gestures}
+
+
 def replay_command(args: argparse.Namespace, genome) -> int:
     """A rendition rendered again exactly as its record says: its parameters, the words it recorded (not
     drawn again), its machine and moment, and the small performance it carries. Then it says how the replay
@@ -277,6 +285,11 @@ def replay_command(args: argparse.Namespace, genome) -> int:
     voice = harvest.Voice.from_dict(record["voice"]) if record.get("voice") else None
     drift = drift_mod.Drift.from_dict(record["drift"]) if record.get("drift") else None
     phrasing_json, choir_json = phrasing_mod.inherited(genome.source, record)
+    if isinstance(record.get("performance"), dict):  # the gestures it carries, with what the record says of them
+        # (where they came from, "79 sung takes by 12 singers"), so the replay's record says it again
+        phrasing_json = credited(phrasing_json, record.get("phrasing"))
+        about = list(record.get("choir_phrasings") or [])
+        choir_json = [credited(c, about[i] if i < len(about) else None) for i, c in enumerate(choir_json)]
     if args.phrasing:
         phrasing_json = json.loads(Path(args.phrasing).read_text())
     if record.get("phrasing") and "performance" not in record and not args.phrasing:
