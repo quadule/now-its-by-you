@@ -1,12 +1,13 @@
-# The public studio and the tunnel that reaches it: docs/history/web-studio-server-plan.md.
+# The public studio and the tunnel that reaches it, on a server of your own (README.md):
+# docs/history/web-studio-server-plan.md.
 #
 #   cp deploy/studio/studio.env.example deploy/studio/.env    # then fill in TUNNEL_TOKEN
 #   docker compose -f deploy/studio/docker-compose.yml up -d --build
 #
-# No port is opened on the host (mailcow keeps 80 and 443): cloudflared dials out to Cloudflare, and
-# Cloudflare sends visitors down that connection to the studio. The studio's own network has no way out.
+# No port is opened on the host: cloudflared dials out to Cloudflare, and Cloudflare sends visitors down that
+# connection to the studio. The studio's own network has no way out.
 # Its memory is capped with no swap, and the kernel is told to kill it before anything else on the host:
-# if a render runs out, the studio dies and restarts, never the mail server.
+# if a render runs out, the studio dies and restarts, never the host's other services.
 
 name: songbird-studio
 
@@ -17,7 +18,7 @@ services:
       dockerfile: deploy/studio/Dockerfile
     image: songbird-studio
     command: >-
-      --allow-host ${STUDIO_HOST:-studio.itsby.you}
+      --allow-host ${STUDIO_HOST:-studio.example.com}
       --machine ${STUDIO_MACHINE:-none}
       --client-ip-header CF-Connecting-IP
       ${STUDIO_SINGING:---web-singing}
