@@ -899,7 +899,7 @@ def sync(site: Site, make: bool = True, memo: dict | None = None, measure: bool 
         made_at = max([state.get("now") or utc_now(), *(e["at"] for e in events if e.get("at"))], key=instant)
         make_all(site, made_at, withdrawn, memo)
     if state.get("deleting"):
-        purge(site, state, quiet=True)
+        purge(site, state, quiet=True, now=state.get("now"))  # as of the site's clock, like made_at
     return Say.lines - start
 
 
@@ -1082,18 +1082,19 @@ def throat(first: str, delete_by: str | None) -> None:
             say(f"  {rel(p)}{'/' if p.is_dir() else ''}")
 
 
-def purge(site: Site, state: dict | None = None, quiet: bool = False, server: bool = False) -> int:
+def purge(site: Site, state: dict | None = None, quiet: bool = False, server: bool = False,
+          now: str | None = None) -> int:
     """Once DELETE_BY has passed: the audio of every online take here (from a singer's page: its sidecar has a
-    sid) and every version made from them, deleted; their sidecars (saying "purged") and the numbers measured from
-    them stay. Training sets that may hold their voices are named, not deleted. server: the site's own purge too,
-    now (it runs hourly anyway). How many files went here."""
+    sid) and every version made from them, deleted; their sidecars (saying "purged", as of now: an ISO time, the
+    clock's if not given) and the numbers measured from them stay. Training sets that may hold their voices are
+    named, not deleted. server: the site's own purge too, now (it runs hourly anyway). How many files went here."""
     state = state or site.call("GET", "/api/admin/status")
     if not state.get("deleting"):
         if not quiet:
             print("not yet: recordings are kept for their singers until "
                   f"{when(state['delete_by']) if state.get('delete_by') else 'DELETE_BY'}; purge does nothing before then")
         return 0
-    now, takes, first, folders = utc_now(), 0, None, set()
+    now, takes, first, folders = now or utc_now(), 0, None, set()
     for side, info in sidecars():
         if info.get("source") == "online" and info.get("sid"):
             folders.add(side.parent.name)
@@ -1130,12 +1131,13 @@ def purge(site: Site, state: dict | None = None, quiet: bool = False, server: bo
 # ---------- the old way: first-version invitations
 
 def fetch(site: Site, invite: str | None = None, keep: bool = False, singer: str | None = None, dry_run: bool = False,
-          purge: bool = False) -> list:
+          purge: bool = False, now: dt.datetime | None = None) -> list:
     """The old way, for first-version (one-time) invitations: every take waiting on the server (or one
     invitation's) into recordings/ (under --singer's name, if given), then off the server. A take from a singer's
     page (a second-version take: its sidecar has a sid) is kept as sync keeps it, in its person's own folder, and
     never deleted from the server here: its singer needs it until DELETE_BY. purge: delete what's left of
-    first-version takes that never arrived whole (half a take, STALE seconds old)."""
+    first-version takes that never arrived whole (half a take, STALE seconds old as of now: the clock's if not given)."""
+    now = now or dt.datetime.now(dt.UTC)
     query = f"?invite={urllib.parse.quote(invite)}" if invite else ""
     waiting = site.call("GET", f"/api/admin/takes{query}")["takes"]
     notes = {inv["token"]: inv.get("note", "") for inv in site.call("GET", "/api/admin/invites")["invites"]}
@@ -1155,7 +1157,7 @@ def fetch(site: Site, invite: str | None = None, keep: bool = False, singer: str
             continue
         if "json" not in t or "wav" not in t:
             part = t.get("wav") or t.get("json")
-            age = (dt.datetime.now(dt.UTC) - instant(part["uploaded"])).total_seconds()
+            age = (now - instant(part["uploaded"])).total_seconds()
             if purge and age > STALE and not dry_run and not paged:
                 remove(site, t)
                 print(f"{label}: never arrived whole (its {'sidecar' if 'wav' in t else 'WAV'} is missing): deleted")
