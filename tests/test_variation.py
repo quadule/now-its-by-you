@@ -138,6 +138,20 @@ def chosen(p) -> dict:
     return data
 
 
+def numbers(p) -> dict:
+    """Every number and choice a version makes (chosen()) but what its lineage holds as its own, kept by
+    generation (its words, its form, its tune's variants), each knob read with its default where it isn't
+    written, so a value written at its default and one left out read alike."""
+    data = chosen(p)
+    for key in ("words", "form", "variants", "singer", "mix", "leanings"):
+        data.pop(key, None)
+    data |= {k.path: V.read(p, k.path) for k in V.KNOBS if V.exists(k.path)}
+    data["moods"] = (p.leanings or {}).get("mood_weights")
+    data["vocabulary"] = (p.leanings or {}).get("vocabulary")
+    data["mix"] = {k: v for k, v in (p.mix or {}).items() if f"mix.{k}" not in data}  # the room's own, if any
+    return data
+
+
 @pytest.mark.parametrize("date", ["2026-10-07", "2028-06-10", "2031-02-09"])
 def test_a_machine_singing_its_own_again_that_day_sings_it_the_same(h, date):
     # A machine with nothing of its own somewhere takes its parent's value there, moved by its day. Before October
@@ -152,16 +166,16 @@ def test_a_machine_singing_its_own_again_that_day_sings_it_the_same(h, date):
 
 def test_a_machines_own_versions_stay_in_its_field_around_one_centre(h):
     # machine none singing its own last version every few days for a year: on each day what the day gives around
-    # the seed's own values, exactly as that day's version sung from the seed, never a walk
+    # the seed's own values, in every number exactly as that day's version sung from the seed, never a walk
     seed = Params.from_dict(h.seed_params)
     p = None
     for t in np.arange(D.parse("2026-10-07"), D.parse("2027-10-07"), 3.0):
         d = D.drift(t, NEUTRAL.hash)
         p = choose_params(h, p, NEUTRAL, d)
         fresh = choose_params(h, None, NEUTRAL, d)
-        assert p.tonic == fresh.tonic and abs(p.tonic - seed.tonic) <= 1  # a drift of 1 moves the key 0.6 x 2
-        assert abs(p.tempo - fresh.tempo) <= 0.2 and abs(p.tempo / seed.tempo - 1) <= V.PULL * 0.10 + 0.002
-        assert (p.mode, p.band.pattern, p.band.lead) == (fresh.mode, fresh.band.pattern, fresh.band.lead)
+        assert numbers(p) == numbers(fresh)
+        assert abs(p.tonic - seed.tonic) <= 1  # a drift of 1 moves the key 0.6 x 2 semitones
+        assert abs(p.tempo / seed.tempo - 1) <= V.PULL * 0.10 + 0.002
 
 
 def test_what_a_machine_knows_nothing_of_holds_when_it_sings_its_own_again(h):
