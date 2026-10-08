@@ -212,3 +212,8 @@ pre { margin: 0 0 10px; padding: 10px 12px; overflow-x: auto; background: var(--
 .edition .when { margin: -2px 0 8px; color: var(--dim); font-size: 15px; }
 .edition audio { margin: 12px 0 8px; }
 .edition > p.hint { margin: 0; }
+
+/* the studio, as it opens: a picture of it in a hairline, as the cover is; a phone's on a phone */
+.shot { display: block; width: 100%; height: auto; margin: 4px 0 14px; border: 1px solid var(--rule); border-radius: var(--radius);
+        background: var(--wash); }
+.leaf .button { min-height: 44px; }
