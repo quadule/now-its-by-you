@@ -1,5 +1,15 @@
 # Songbird
 
+> *Now It's by You* is a folk song passed between people and computers that explores music's ability to take on a
+> life of its own, in verse and by embedding the software that sang it.
+>
+> Run the program and you get a new version of the song, shaped by your computer and the season. Sing into it and it
+> learns a little of your timing and inflection (your recording is deleted right after, and your voice is never
+> cloned). The piece confronts the blurred authorship of AI music through the lens of folk music and oral
+> tradition: it wonders who made it, and invites you to take part.
+>
+> — Milo Winningham
+
 A folk song whose real artifact is the program that sings it. Each rendition is
 an audio file with this program embedded inside it; running the program on a
 rendition sings a new one, in the voice of the machine it runs on, shaped by the
@@ -59,8 +69,7 @@ alone on a whistle over a quiet pulse, the whole song, or the machine's singer.
 `uv run python tools/karaoke.py songs/h-now-its-by-you.json` records them on
 this computer; singers anywhere use the same page behind one-time links, on
 Cloudflare ([docs/history/SING-ONLINE.md](docs/history/SING-ONLINE.md)). Takes stay in
-`recordings/`, never in git; [docs/SINGERS.md](docs/SINGERS.md) is the brief
-and release for singers.
+`recordings/`, never in git.
 
 ## Checking a render without ears
 

@@ -1729,7 +1729,7 @@ somewhere other than `renders/`.
    person's way needs that phrasing's file (the record keeps its fingerprint).
    Carrying the gestures in the record would make every rendition replayable
    anywhere, and would carry a little of a person's singing with it: whether
-   the consent in docs/SINGERS.md covers that is the artist's call.
+   the consent the first version's singers gave covers that is the artist's call.
 7. **Made-up machines have names** (Ada, Basil, Coral), because a name is what
    makes one; any name can be typed.
 8. **Recordings are named** `<song>.<day>.<id6>.flac`, into `renders/` (a

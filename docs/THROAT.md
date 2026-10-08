@@ -117,7 +117,7 @@ learns from that.
   House singers are a little less clear, but they're good training material. Their spectra keep a
   trace of the formant singer's clean upper harmonics under natural consonants and transitions.
 
-Consenting human singers (docs/SINGERS.md) are the next source. Each of them is a prompt for
+Consenting human singers (below, "Everyone's voice") are the next source. Each of them is a prompt for
 unlimited SoulX singing as well as direct training data. They'd enter the same way,
 `source="human"`.
 
