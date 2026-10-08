@@ -428,3 +428,47 @@ def test_the_preview_mp3_says_what_it_is(tmp_path, monkeypatch):
                                       str(tmp_path / "preview.mp3")], capture_output=True, check=True).stdout)["format"]["tags"]
     assert tags["comment"] == W.LISTENING and "also the program that sang it" not in json.dumps(
         {k: v for k, v in tags.items() if k != "comment"})
+
+
+def test_the_home_pages_about_is_the_artists_statement_and_credits_the_singers_as_they_asked(tmp_path, monkeypatch):
+    """The About card leads with the artist's statement word for word (docs/STATEMENT.md: the one sentence and the
+    current pitch that continues it); its singers are CREDITS.md's, as they asked, and no one else; the source code
+    is linked only once it's switched on."""
+    import html
+
+    def quoted(after: str) -> str:
+        text = (ROOT / "docs" / "STATEMENT.md").read_text()
+        block = text[text.index(after):].split("\n\n")[1]
+        return " ".join(line.removeprefix(">").strip() for line in block.splitlines())
+
+    statement = f"{quoted('**The artist' + chr(39) + 's:**')} {quoted('**The artist' + chr(39) + 's, current')}"
+    page = (W.WEB / "page" / "seed.html").read_text()
+    shown = re.search(r"<blockquote>\s*<p>(.*?)</p>\s*</blockquote>", page, re.DOTALL)[1]
+    assert " ".join(shown.split()) == statement
+
+    credits = tmp_path / "CREDITS.md"
+    credits.write_text("# Credits\n\n## Singers\n\nSome words.\n\nCredited, as they asked:\n\n- Ann\n- B & C\n- dee\n\n"
+                       "And one more who sang without credit.\n\n## Other\n\n- Not a singer\n")
+    assert W.credits(credits) == "Credited, as they asked: Ann, B &amp; C and dee. And one more who sang without credit."
+    credits.write_text("Credited, as they asked:\n- Ann\n")
+    assert W.credits(credits) == "Credited, as they asked: Ann."
+    credits.write_text("# Credits\n\nNobody yet.\n")
+    with pytest.raises(SystemExit, match="Credited, as they asked"):
+        W.credits(credits)
+    said = W.credits()  # CREDITS.md as it is
+    listed = re.search(r"Credited, as they asked:\n\n((?:- .+\n)+)", (ROOT / "CREDITS.md").read_text())[1]
+    assert all(html.escape(line[2:]) in said for line in listed.splitlines())
+
+    render = tmp_path / "one.flac"
+    made = packed(render, 1, monkeypatch)
+    manifest = tmp_path / "editions.json"
+    manifest.write_text(json.dumps({"editions": [edition(1, "2026-09-28", made, covered(render), render=render)]}))
+    monkeypatch.setattr(W, "seed_words", lambda flac: None)
+    for public in (False, True):
+        out = tmp_path / f"public-{public}"
+        out.mkdir()
+        shutil.copyfile(W.WEB / "page" / "seed.html", out / "seed.html")
+        W.seed_page(out, manifest, public=public)
+        home = (out / "seed.html").read_text()
+        assert f"<p>{said}</p>" in home and "{{" not in home
+        assert ('<a href="https://github.com/quadule/songbird">The source code</a> is on GitHub.' in home) is public

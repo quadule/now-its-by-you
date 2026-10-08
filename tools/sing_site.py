@@ -502,9 +502,23 @@ SEED_FILE = "now-its-by-you.flac"  # the seed page's file name (web/sing/src/wor
 EDITIONS = WEB / "editions.json"  # the song's editions: the seed page offers the newest, /history every one
 SOURCE = "https://github.com/quadule/songbird"  # the source code, linked from the pages once SOURCE_PUBLIC
 SOURCE_PUBLIC = False  # True once the repository is public: the home page links it, the history each edition's commit
+CREDITS = ROOT / "CREDITS.md"  # the singers credited as they asked, named on the home page (credits())
 HEX64 = re.compile(r"[0-9a-f]{64}")
 MONTHS = ("January", "February", "March", "April", "May", "June", "July", "August", "September", "October",
           "November", "December")
+
+
+def credits(path: Path | None = None) -> str:
+    """The singers CREDITS.md credits, for the seed page, in its own words: "Credited, as they asked:", their names
+    in a sentence, then what it says after them. It names no one else, and neither does this."""
+    path = Path(path or CREDITS)
+    m = re.search(r"^(Credited, as they asked:)[ \t]*\n+((?:- .+\n?)+)\n*([^\n#].*)?", path.read_text(), re.MULTILINE)
+    if not m:
+        raise SystemExit(f"{path} no longer lists its singers under \"Credited, as they asked:\": "
+                         "tools/sing_site.py's credits() needs telling")
+    names = [html.escape(line[2:].strip()) for line in m[2].splitlines() if line.strip()]
+    listed = f"{', '.join(names[:-1])} and {names[-1]}" if len(names) > 1 else names[0]
+    return f"{m[1]} {listed}." + (f" {html.escape(m[3].strip())}" if m[3] else "")
 
 
 def us_date(day: dt.date) -> str:
@@ -617,7 +631,9 @@ def seed_page(out: Path, path: Path | None = None, public: bool | None = None) -
             continue
         release(e, out / "seed" / e["name"])
         offered.append(e)
-    fill = {"{{SEED_FILE}}": SEED_FILE, "{{SEED_MB}}": "0", "{{SEED_V}}": "", "{{SEED_WORDS}}": "", "{{EDITION}}": ""}
+    fill = {"{{SEED_FILE}}": SEED_FILE, "{{SEED_MB}}": "0", "{{SEED_V}}": "", "{{SEED_WORDS}}": "", "{{EDITION}}": "",
+            "{{CREDITS}}": credits(),
+            "{{SOURCE}}": f'<p><a href="{SOURCE}">The source code</a> is on GitHub.</p>' if public else ""}
     if not offered:
         print("seed page: no edition to offer (web/sing/editions.json); the page is built without a file", file=sys.stderr)
     else:
