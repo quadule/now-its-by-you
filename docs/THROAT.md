@@ -655,3 +655,78 @@ room per VocalSet singer (the recording name's part before "~"). Through a real 
 The songs cost nothing; the exercises cost intelligibility in proportion to their share (steady vowels with no
 consonant either side, a context the program never sings). None of it moved the unseen-singer error (7.02 against
 7.00; the four VocalSet singers held out 7.21 against 7.08): it adds hours, not people.
+
+## New house singers from our own voice (2026-10-07 and 08)
+
+The artist hears the house corpus as the robotic part of the voice (round 3 above). Its timbres came from our old
+formant singer, so the throat learned SoulX's natural delivery in timbres that were never natural. This replaces
+those timbres with ones made from the shipped voice itself, made more natural by a second open singing model.
+
+**YingMusic-Singer** (ASLP-lab, CC BY 4.0; 727M parameters: an F5-TTS-style flow-matching DiT, SOME's melody encoder,
+Stable Audio 2's VAE, whose license bars training a "foundational" model on its output; our 3.5M-parameter throat
+isn't one) sings new words to the tune of a sung clip in the timbre of another. It runs beside the repo, never ships,
+at about real time on this Mac (MPS; its own venv: `tools/throat/ying_batch.py` says how). What the artist heard, on
+two of H's couplets:
+- YingMusic with the same Eleven Music prompt as SoulX: SoulX better.
+- YingMusic re-singing the shipped voice in its own timbre: better than the shipped voice. It keeps the tune
+  (14-19 cents median from the clip) and the words (the throat's volunteers row alone, misheard on 9 of 17 words of
+  "copy", is heard right after it).
+- A real singer's clip as the timbre (VocalSet f2 and f7, CC BY 4.0): "too off-key" (31-41 cents). Staying in one
+  voice is what keeps it on key, so people come in through the throat's own rows, not through recordings.
+- SoulX prompted with YingMusic's version of our voice ("B"): "the best blend". The volunteers' share in the throat's
+  mix at 30, 60 and 100%: all on key; SoulX prompted from one YingMusic pass ("d", "more natural") or two ("e",
+  "a slight edge") were "definitely best". YingMusic's own timing drags at phrase ends ("ever knew it by heart"), so
+  it only ever makes the ten-second prompt; SoulX sings the corpus to the score's timing.
+- New singers from a single old house row each: "a step backward", old and new alike; from a blend of rows, as a
+  machine's own voice is drawn: "better all around" in both registers. A bass re-sung twice "sounds less natural";
+  once was best, with the volunteers at 57% or 30% close.
+
+**The volunteers' share.** The consent (web/sing/consent.md) promises a voice trained on everyone's takes at once and
+never set to sound like one person; HUMAN_SHARE's 0.3 was our choice, not the consent's. The artist, whose
+volunteers are close family and friends: retraining is fine "as long as no result sounds like an individual", with
+the share kept within 0.3-0.6. The people's row is itself an average of eight (the largest 26%), so at 0.6 no one
+person is more than about 16% of any voice. Their recordings were deleted on September 30 and none is used here: the
+new singers are renders of the shipped model's row.
+
+**The recipe** (`tools/throat/ying.py`): ten new singers, one in each old house singer's register and keys. Each is
+a random blend of the house rows that sing near that register (`throat.machine_mix`, at most 0.45 of any one) with
+the volunteers' row at a share spread over 0.3-0.6 so high and low voices both get the whole range. The shipped
+throat sings the guide's prompt window and the couplet after it in that voice; YingMusic re-sings each in the
+other's timbre, once (the high voices alternate once and twice), three seeds a pass, keeping the one Whisper hears
+best, then the one within 120 ms of the throat's timing (SoulX places a prompt's phones by the guide's timing alone;
+Fable's review), then the one nearest its pitch; trimmed to the window. SoulX sings the old house plans (the same
+126 + 93 items, keys, tempos and seeds) in the new prompts: `plan-blend.json`, `plan-blend-cover.json`, 143 minutes,
+333 segments, 2 h 15 on this Mac; 328 kept by `check.py`.
+
+Formant contrast of the corpus itself (dB about the envelope's 17-point trend, 200 Hz-5 kHz, voiced frames, every
+segment against the old singer's render of it): old 3.40, new 3.18, the new higher in 22% of segments (the mezzo
+and baritone higher, the tenors and bright lower). The artist preferred the new corpus by ear in both registers, so
+this measure, like UTMOS, doesn't follow what is heard as natural here.
+
+**Training** (the desktop's RTX 4080 Super, `train.py --init songbird/synth/throat.npz --steps 14000 --singer-dim 16
+--spread --singer-lr 1e-2 --contrast 1.0 --adversarial 0.1`): A, the old house corpus with the new (`--retire
+house-*`: their rows train and keep the consonants' coverage but no voice draws them), and B, the new corpus alone;
+each at 320 channels (3.45M parameters, 16 minutes) and at the shipped 160. A model trained on these has no
+volunteers row: the people's share is in every singer it draws, 0.3-0.6 by construction, and `HUMAN_SHARE` no
+longer applies (`throat.humans` finds no people's row). `throat.drawn` and `train.py --retire` are new.
+
+**Results** (models in renders/throat/blend-models/, not shipped; the artist chooses by ear: renders/ym-listen/
+model-1..5 dry, full/song-1..5 the first published version in the mix):
+
+| | WER on H, `wer_suite.py --sketch h --seeds 2` (438 words) | One core, 62 s of singing | Weights | Drawn singers alone vs the default blend (dB, median, range) |
+|---|---|---|---|---|
+| shipped | 9.1% | 2.17 s | 3.6 MB | 2.84, 1.8-5.7 |
+| A-320 (old + new) | 8.0% | | 13.8 MB | 1.96, 0.8-4.8 |
+| B-320 (new only) | 8.9% | 2.66 s | 13.8 MB | 2.23, 1.2-4.4 |
+| A-160 (old + new) | 8.0% | | 3.7 MB | 1.91, 0.9-4.3 |
+| B-160 (new only) | 8.7% | | 3.7 MB | 2.38, 0.8-4.2 |
+
+- **Words** hold: every model is within a few words of the shipped voice on H.
+- **Size** decides the bigger network more than speed does: a 320-channel model costs 23% more time on one core but
+  13.2 MiB, against `songbird budget`'s 8 MiB goal for program and model together (6.63 MiB today, the model 3.40).
+  At float16 it would still be about 9.9 MiB; only 8-bit weights would fit.
+- **Variety narrows among the high voices.** Every new singer carries 0.3-0.6 of one shared row, so the high ones sit
+  0.8-1.9 dB from the blend (the shipped house rows 1.8-4.0); the low ones keep their distance (3-5 dB). Machines
+  singing in H's register would sound more alike than today's. If that matters, the high singers need more apart
+  prompts (a higher cap than 0.45, or tract warps in the prompts), and a measure of it in the gate.
+- The people's share now lives in the singers: no model here has a volunteers row (`throat.humans` is empty).
