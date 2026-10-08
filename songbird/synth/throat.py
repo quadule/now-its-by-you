@@ -534,10 +534,18 @@ def _linear(x: np.ndarray, w: dict, name: str) -> np.ndarray:
 HUMAN_SHARE = 0.3
 
 
+def drawn(model: Model) -> list[str]:
+    """The singers a voice is mixed from by default: every trained singer the model hasn't retired. A retired
+    singer (config "retired") keeps its row, so a version whose timbre names it still sings as it did, but no
+    default or machine's own blend draws it."""
+    retired = set(model.config.get("retired") or [])
+    return [n for n in model.config["singers"] if n not in retired]
+
+
 def humans(model: Model) -> list[str]:
-    """The model's singers learned from people (source "human"), if any."""
+    """The model's singers learned from people (source "human") that it still draws, if any."""
     sources = model.config.get("sources") or {}
-    return [n for n in model.config["singers"] if sources.get(n) == "human"]
+    return [n for n in drawn(model) if sources.get(n) == "human"]
 
 
 def default_mix(model: Model, pitch: float | None = None) -> dict[str, float]:
@@ -545,7 +553,7 @@ def default_mix(model: Model, pitch: float | None = None) -> dict[str, float]:
     fifth of their register, the nearer the more), or all of them evenly when the model doesn't know
     their registers; and the people's singer, where the model has one, at HUMAN_SHARE."""
     people = humans(model)
-    names = [n for n in model.config["singers"] if n not in people]
+    names = [n for n in drawn(model) if n not in people]
     if pitch is not None and model.config.get("registers"):
         away = np.array([abs(pitch - model.config["registers"][n]) for n in names])
         weights = np.clip(1.0 - away / 7.0, 0.0, None)
@@ -607,7 +615,7 @@ def machine_mix(seed: int, pitch: float, model: Model | None = None, most: float
     so no machine is ever one of the synthetic singers it learned from."""
     model = model or load()
     people = humans(model)
-    names = [n for n in model.config["singers"] if n not in people]
+    names = [n for n in drawn(model) if n not in people]
     registers = model.config.get("registers") or {}
     near = [n for n in names if abs(registers.get(n, pitch) - pitch) <= 7.0] or list(names)
     if len(near) < 2:
