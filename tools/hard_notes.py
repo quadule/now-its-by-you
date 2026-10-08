@@ -8,7 +8,7 @@ each as it arrives), says for each note of the tune how far the singer's pitch s
 note, in the key and octave they sang in ("off", cents). Here each singer's notes at each place in
 the tune become one number (their median), so a singer counts once however many takes they sent,
 and a note is a candidate for changing when two or more singers independently sing the same other
-note of the scale there, 70 cents or more away (docs/MAKING-IT-THEIR-OWN.md: a slip happens once; a
+note of the scale there, 70 cents or more away (docs/history/MAKING-IT-THEIR-OWN.md: a slip happens once; a
 change that several people make is the folk process at work).
 
 For each candidate it also says which other line of the tune has that note at that place, when

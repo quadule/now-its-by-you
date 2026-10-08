@@ -1000,7 +1000,7 @@ def marks(genome: Genome, generated, generated_lyrics, final_lyrics, applied: li
             was = variation.read(program, path)
         out[path] = {"value": value, "was": was}
         if path.startswith(("arrange.", "style.")) and value == was and value is not None:
-            out[path]["locked"] = True  # a lock: the program's own choice, kept (docs/STUDIO-REDESIGN.md)
+            out[path]["locked"] = True  # a lock: the program's own choice, kept (docs/notes/STUDIO-REDESIGN.md)
     return out
 
 

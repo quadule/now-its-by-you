@@ -288,7 +288,7 @@
     row.next = options.next || null;  // what follows a line used: the score's next line to write
     return row;
   }
-  // One line of a section, in the score's inspector (docs/STUDIO-REDESIGN.md, "A line of words"): the same rows,
+  // One line of a section, in the score's inspector (docs/notes/STUDIO-REDESIGN.md, "A line of words"): the same rows,
   // counts and checks as the section's own editor, one line used at a time; the nodes are kept, so typing survives a
   // redraw.
   function line(view, sectionId, lineIndex, anchor, options = {}) {

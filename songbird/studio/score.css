@@ -1,4 +1,4 @@
-/* The score (docs/STUDIO-REDESIGN.md; its mockup docs/design/studio-redesign.html): the tune book's paper and two
+/* The score (docs/notes/STUDIO-REDESIGN.md; its mockup docs/notes/design/studio-redesign.html): the tune book's paper and two
    inks, a transport, three views and one inspector. The tokens are identity.css's (loaded first); the studio's own
    few below. System fonts, no images; the phone layout is container queries on .app, so a narrow window and a
    phone lay out the same. */

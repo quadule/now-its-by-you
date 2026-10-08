@@ -1,5 +1,7 @@
 # Render performance (2026-09-27)
 
+*An engineering note, September 27 to October 2, 2026: how long a render takes, and what made it quicker without changing a sample.*
+
 How long a render takes, where the time goes, and what was done about it. The rule for every change
 here: **the output is byte-identical.** Each change was checked against the seed render's PCM hash
 (`tests/golden/h-seed.sha256`, `b600b712e77a…`) and, where it touched one function, that function's
@@ -248,7 +250,7 @@ limiter's copies, three copies for the dither).
 | The master: loudness K-weighted and summed sample by sample (`master._weighted_hop_power`, no filtered copy); the true-peak windows gathered from the signal (no padded copy); the limiter's need, hold, recovery and look-ahead mean in place (`_mean_ahead`: `np.cumsum`'s running sum); the clip and the dither in place (the second draw and the scaled signal added a stretch at a time); `render_one` lets go of the mix once mastered | the master 1.1 to 0.65 GB, and 1.0 to 0.3 s | the same filter and sums in the same order; the same matrix into the same product; `np.cumsum` adds in order (checked); the same draws in the same order |
 | Order: on one or two threads the voice first (the least memory); on three or more, the band's parts before the first that steps back under the voice are made and summed while the voice is sung | six threads 7.6 to 6.9 s | the band's sums are in the same order either way |
 | The frame drum's 196 modes at once, the powers through `np.power` with an array of exponents | `drum.hit` a quarter faster | an array `** 2` squares, which differs from the C library's `pow` (why the loop was kept, above); `np.power(x, array of 2.0)` calls `pow`, as a scalar `**` does (checked) |
-| With `NUMBA_DISABLE_JIT=1` the new loops give way to the numpy and scipy operations they replace (`fx.JIT`) | no interpreted cost from them (docs/PORTABILITY.md) | the same values |
+| With `NUMBA_DISABLE_JIT=1` the new loops give way to the numpy and scipy operations they replace (`fx.JIT`) | no interpreted cost from them (docs/notes/PORTABILITY.md) | the same values |
 
 ### How it was verified
 

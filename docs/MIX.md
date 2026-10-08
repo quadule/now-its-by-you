@@ -228,7 +228,7 @@ warmer; the voice at `forward` 10 dominates the middle (see Doubts).
 numba kernels compile once, about 1.5 s, and are cached). A full `songbird
 render` of H: 17 s on the old instruments, 26 s with the band. (2026-09-27: the mix and master of H
 take about 3.5 s and its whole render about 7 s, the channel strips and a long signal's two channels
-worked on threads, the same bytes whatever the thread count; docs/PERFORMANCE.md.)
+worked on threads, the same bytes whatever the thread count; docs/notes/PERFORMANCE.md.)
 
 ## The hiss (2026-09-26)
 

@@ -1,4 +1,4 @@
-// The score's pure parts (docs/STUDIO-REDESIGN.md): the Arrange grid made from the studio's answers, what a
+// The score's pure parts (docs/notes/STUDIO-REDESIGN.md): the Arrange grid made from the studio's answers, what a
 // selection is, the scope of a chord or tune edit, a lock, the order a section may move to, the keyboard. No DOM,
 // no requests: score.js draws what these say, and tests/studio_model.test.cjs checks them.
 "use strict";
@@ -221,7 +221,7 @@
     return playhead + sketchOffset(grid, composition);
   }
 
-  // ------------------------------------------------------------------ the keyboard (docs/STUDIO-REDESIGN.md's table)
+  // ------------------------------------------------------------------ the keyboard (docs/notes/STUDIO-REDESIGN.md's table)
   function inField(target) {
     const tag = target?.tagName;
     return !!target?.isContentEditable || tag === "TEXTAREA" || tag === "SELECT" ||

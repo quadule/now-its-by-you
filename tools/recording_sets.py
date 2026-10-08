@@ -9,11 +9,11 @@ tools/intelligibility.py's alignment (a homophone, a number written as digits, o
 words counts as heard: a listener couldn't tell them apart). The chooser then picks six sets, each a song
 the bank's rules allow, that together hold every word the voice surely says wrong and every verse it gets
 clearly wrong at least once (targets() says what surely and clearly mean), and as many as fit of the other
-words it often mishears; docs/RECORDING-SETS.md tells what they hold and what they leave out.
+words it often mishears; docs/history/RECORDING-SETS.md tells what they hold and what they leave out.
 
     uv run python tools/recording_sets.py measure    # sing and hear everything (cached in renders/sets/)
     uv run python tools/recording_sets.py choose     # write tools/sets/h-now-its-by-you.json
-    uv run python tools/recording_sets.py report     # the analysis, for docs/RECORDING-SETS.md
+    uv run python tools/recording_sets.py report     # the analysis, for docs/history/RECORDING-SETS.md
 
 Dev-only: measuring needs faster-whisper and its base.en model; choosing needs only what measuring cached.
 """
@@ -768,7 +768,7 @@ def sets_file(genome, sets: list[dict]) -> dict:
     }
 
 
-# The report, for the artist (docs/RECORDING-SETS.md)
+# The report, for the artist (docs/history/RECORDING-SETS.md)
 
 # The sounds, as a reader says them.
 SAY = {"P": "p", "G": "g (go)", "K": "k", "HH": "h", "AE": "a (cat)", "OW": "o (go)", "AYR": "ire (fire)",
@@ -788,7 +788,7 @@ def _minutes(s: float) -> str:
 
 
 def report(genome, analysis: dict, data: dict) -> str:
-    """docs/RECORDING-SETS.md: what the learned voice says worst, the sets, and what they hold."""
+    """docs/history/RECORDING-SETS.md: what the learned voice says worst, the sets, and what they hold."""
     song = A._song(genome)
     want = targets(analysis)
     sets = data["sets"]
@@ -993,7 +993,7 @@ def main(argv: list[str] | None = None) -> int:
         print(f"wrote {path.relative_to(ROOT)}")
     if args.what == "report":
         data = json.loads((SETS / f"{SONG.stem}.json").read_text())
-        path = ROOT / "docs" / "RECORDING-SETS.md"
+        path = ROOT / "docs" / "history" / "RECORDING-SETS.md"
         path.write_text(report(genome, analysis, data))
         print(f"wrote {path.relative_to(ROOT)}")
     return 0

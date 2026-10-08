@@ -1,5 +1,7 @@
 # Making the song their own: what else to learn from a singer (plan, 2026-09-26)
 
+*History: a plan of September 26, 2026 for learning more from a singer than timing and tuning, and the notes the song changed after its first singers, the next day.*
+
 The artist: "in addition to the timing+intonation, let's consider if we can learn any note shifts
 by the singer and other ways they make the song their own."
 
@@ -50,7 +52,7 @@ guide, and travels the way the phrasing does: as a few numbers, never audio.
 ## How a change travels
 
 A singer's own choices live in their phrasing: when their way leads, the machine sings their
-variants. PLAN.md already says the genome itself mutates only through what people sing: "the
+variants. PLAN-2026-09-24.md already says the genome itself mutates only through what people sing: "the
 extracted contour ... replaces the genome contour wherever it differs confidently and the
 difference survives the gate." That gives a natural rule:
 

@@ -2,7 +2,7 @@
 
 The artist's direction: "use as many vocal sources as we need to train our own smaller voice
 synthesis engine that is optimized for our use case", and adopt SoulX-Singer directly only if that
-fails. This is the learned throat of docs/VOICE-OPTIONS.md §4, trained on synthetic singers
+fails. This is the learned throat of docs/history/VOICE-OPTIONS.md §4, trained on synthetic singers
 rather than the artist's speech. Our program still decides everything about the delivery:
 - when each phone starts and ends (`voice.schedule`);
 - the pitch, with its glides, vibrato and phrasing gestures (`voice.pitch_track`);

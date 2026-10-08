@@ -9,7 +9,7 @@ machine's voice, with their timing, holds, loudness and pitch gestures, never
 their voice. They can hear it and export a version that carries it. This is the
 web studio's singing (docs/WEB-STUDIO.md has the public studio it runs in); the
 karaoke on the artist's computer (tools/karaoke.py) and the contest's online
-page (docs/SING-ONLINE.md) are unchanged.
+page (docs/history/SING-ONLINE.md) are unchanged.
 
     uv run songbird studio --public --web-singing       # or without --public, on this computer only
     uv run python web/studio-wasm/tools/build_site.py OUT   # the studio on the device: singing is in it
@@ -246,7 +246,7 @@ of what has been made:
   read in place from the main checkout for this comparison only, their
   audio never copied; each note's vowel start and gestures against the
   cached MFA-led measurement): see the table below. This is the accuracy
-  cost of no aligner: docs/PHRASING-CALIBRATION.md measured it on planted
+  cost of no aligner: docs/history/PHRASING-CALIBRATION.md measured it on planted
   takes (78% of vowel starts within 30 ms without MFA, 96% with it) and on
   windows (16 to 46% within 10 ms of the whole take's without MFA).
 
@@ -297,7 +297,7 @@ one's own computer it waits five idle minutes for the next take.
 A take can be measured in the visitor's own browser, so the singing never
 leaves their device: the same code as the server's measuring process, in
 Pyodide beside the program the browser already renders with
-(docs/BROWSER-RENDER.md). The studio that runs on the device calls it ("In
+(docs/notes/BROWSER-RENDER.md). The studio that runs on the device calls it ("In
 the studio's page" below).
 
 ### The design

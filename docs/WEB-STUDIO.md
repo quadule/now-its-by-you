@@ -166,7 +166,7 @@ downloads are on the volume and survive.
 
 ## Memory
 
-Since 2026-09-29 (docs/PERFORMANCE.md, "Memory (2026-09-29)") a whole render
+Since 2026-09-29 (docs/notes/PERFORMANCE.md, "Memory (2026-09-29)") a whole render
 peaks at about 1.33 GB with 2 threads and 1.13 GB with 1, the output byte for
 byte what it was (it was 3.2 GB). Those are macOS figures with
 `MallocLargeCache=0`, the nearest stand-in for Linux, which hands large freed
@@ -621,7 +621,7 @@ main points, and what came of them (all are in the design as it stands):
 
 ## Made in the visitor's browser (2026-09-30)
 
-The feasibility spike (docs/BROWSER-RENDER.md) showed the program itself running in a browser: Pyodide, the numba
+The feasibility spike (docs/notes/BROWSER-RENDER.md) showed the program itself running in a browser: Pyodide, the numba
 kernels translated to JavaScript and a few to C/wasm, the same samples as native. This puts it behind the studio's
 page, so a desktop visitor's own browser makes their previews and their recording, and the VPS mostly serves files.
 The server stays the fallback for everything the browser can't do. The local studio is unchanged: it renders
@@ -760,7 +760,7 @@ fiddle in most whole songs. The Linux server and a Mac very likely part the same
 What a difference means: the browser's recording is a valid packet (its record's id is its own audio's), plays the
 same (1 LSB is -96 dBFS, a handful of samples), and continues the lineage the same; but it isn't the file the server
 would have made, and rendering its record again natively gives the server's id, not its own. The cure is the one
-docs/BROWSER-RENDER.md names: deterministic `sin`, `cos`, `exp`… in the kernels and on the few hot numpy paths
+docs/notes/BROWSER-RENDER.md names: deterministic `sin`, `cos`, `exp`… in the kernels and on the few hot numpy paths
 (here, the bowed string's vibrato), which changes the native renders of fiddle versions once (decision 1 below).
 
 ### Time and memory
@@ -860,7 +860,7 @@ A Fable review of the public studio as built found four launch blockers and a fe
 
 Measured on 30 September on the M1 Max, `tools/render_memory.py` (the whole process's resident high-water mark,
 `MallocLargeCache=0` as the stand-in for Linux): first as the review found it, then after the heaviest parts were made
-lean the same day, byte for byte (docs/PERFORMANCE.md, "The heaviest parts"; every rendition below renders to the id
+lean the same day, byte for byte (docs/notes/PERFORMANCE.md, "The heaviest parts"; every rendition below renders to the id
 it rendered to before, at one thread and two). Two threads unless said:
 
 | version | length | parts | peak, 2 threads (before → now) | 1 thread (before → now) |
@@ -1597,7 +1597,7 @@ Once:
 
        npx wrangler deploy
 
-5. **The old singing site** points to the studio (docs/SING-ONLINE.md, "Singing moved to the studio"):
+5. **The old singing site** points to the studio (docs/history/SING-ONLINE.md, "Singing moved to the studio"):
 
        cd ../sing && npx wrangler deploy
 

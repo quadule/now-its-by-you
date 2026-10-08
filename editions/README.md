@@ -51,8 +51,8 @@ uv run songbird budget
 ```
 
 Production choices and remaining questions are in
-[the creative review](../docs/CREATIVE-REVIEW.md); the continuing measurement
-workflow is in [phrasing calibration](../docs/PHRASING-CALIBRATION.md).
+[the creative review](../docs/history/CREATIVE-REVIEW.md); the continuing measurement
+workflow is in [phrasing calibration](../docs/history/PHRASING-CALIBRATION.md).
 
 Compare finished packets before accepting a new production or volunteer batch:
 

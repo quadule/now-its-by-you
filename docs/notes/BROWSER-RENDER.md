@@ -1,8 +1,10 @@
 # Can Songbird render in the browser? (2026-09-29)
 
+*An engineering note, September 29, 2026 (updated October 2): the spike that put the program in the browser. The studio built on it is in [WEB-STUDIO.md](../WEB-STUDIO.md).*
+
 A feasibility spike for the public web studio: can the program itself sing a
 section preview (and ideally a whole recording) inside a visitor's browser,
-instead of on the 8 GB server it shares with the mail? Targets: a section in
+instead of on a small server? Targets: a section in
 ≤15 s, the song in ≤90 s, peak memory ≤1.5 GB, on a desktop browser.
 
 **Update, 2026-10-02:** all neural prediction layers now use the browser's BLAS acceleration, with further
@@ -38,7 +40,7 @@ The prototype is `web/studio-wasm/` (how to run it is at the end). Nothing in
 and the words golden: 22 passed).
 
 **Update, the same evening: the memory work landed, and whole songs now fit.**
-With the lean renderer (docs/PERFORMANCE.md, "Memory (2026-09-29)") the whole
+With the lean renderer (docs/notes/PERFORMANCE.md, "Memory (2026-09-29)") the whole
 song's wasm heap is **1.12 GiB** (was 3.07 GB), a section's **387 MiB** (was
 ~690), both still **byte-identical** to native, in node and in Chrome. See
 "Refreshed for the lean renderer" just below; the spike's own account follows it
@@ -193,7 +195,7 @@ H's seed touches 20 of the 81 kernels. Whole song, JIT, by time:
 `fx._products` 0.05, `fx._follow` 0.05, `master._hop_power` 0.03,
 `reed._read` 0.03, `fx._ballistics`, `fx._span`. Ten cover 85%. Other
 styles and lineups bring in the rest (every instrument is exercised by
-`bench/gauntlet.py`, below). (docs/PORTABILITY.md, when it lands on main, has
+`bench/gauntlet.py`, below). (docs/notes/PORTABILITY.md, when it lands on main, has
 the other agent's table; it wasn't there when this was written.)
 
 ## What was built
@@ -409,7 +411,7 @@ songs need every second.
 
 - **Section previews in the browser.** Measured at 4.7-6.8 s in Chrome, well
   under the 15 s target, at ~700 MB, identical to the server's render. That
-  takes the most frequent, most interactive work off the shared VPS, and the
+  takes the most frequent, most interactive work off the server, and the
   visitor hears their edit without waiting in a queue.
 - **Records (whole songs) on the server**, for now. They work in Chrome (32 s)
   but at 3 GB, beyond Safari, iOS and modest laptops; they also make the

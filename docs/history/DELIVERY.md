@@ -1,5 +1,7 @@
 # How the singer delivers a song
 
+*History: how the singer's delivery was tuned for the first version, September 25-27, 2026.*
+
 The voice stays synthetic. What should sound like a person is the delivery: how it gets from one
 note to the next, how a held note moves, how loud each syllable is, when and how it breathes. Two
 passes so far: the first (2026-09-25, below) against Milo's takes and the Eleven Music singers; the
@@ -312,14 +314,14 @@ Two related changes:
 
   These two figures predate the forced aligner, which has since changed
   how timing is measured. Some of the agreement between takes was the old
-  extractor's own repeating error: docs/PHRASING-CALIBRATION.md.
+  extractor's own repeating error: docs/history/PHRASING-CALIBRATION.md.
 
 ### Next
 
 - Vowel starts now come from a forced aligner (Montreal Forced Aligner)
   where its timing can be trusted, with the loudness-climb heuristic as the
   fallback. On the natural references, 96% land within 30 ms, up from 78%
-  (docs/PHRASING-CALIBRATION.md). Next there: lower the floor under timing
+  (docs/history/PHRASING-CALIBRATION.md). Next there: lower the floor under timing
   (REPEATS), which was set for the old extractor's errors, and check holds
   on more real singers.
 - Score-following singing synthesis (SoulX-Singer or DiffSinger) for

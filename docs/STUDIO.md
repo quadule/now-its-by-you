@@ -107,7 +107,7 @@ records what `songbird render --parent THE_PACKET --machine here --date
 
 ## The musical workbench
 
-Since 2026-09-30 the studio's page is **the score** (docs/STUDIO-REDESIGN.md, and its "Built" section): one
+Since 2026-09-30 the studio's page is **the score** (docs/notes/STUDIO-REDESIGN.md, and its "Built" section): one
 transport, three views (Page, Arrange, Mix), one inspector for whatever is selected, *Tools* for taking it out
 and bringing it in, and *Time* as a drawer. What follows describes the page it replaced, kept at `/classic`
 until the artist signs the score off; both pages share studio.js, so the edits, history, drafts, listening
@@ -437,7 +437,7 @@ begun halfway). It is made,
 brought up by the gain mastering gives a whole rendition (5.3 dB, measured on
 H: 5.1 to 5.4) under the same ceiling, so a quiet verse stays quiet and a turn
 isn't pushed to the loudness of a refrain, and faded in and out. A section of
-H takes a second or two, the whole song about fifteen seconds on this Mac (the band, the choir and the vocoder now run on threads; docs/PERFORMANCE.md). The page calls it a
+H takes a second or two, the whole song about fifteen seconds on this Mac (the band, the choir and the vocoder now run on threads; docs/notes/PERFORMANCE.md). The page calls it a
 preview: a part heard alone is not the record's exact samples, and the mix's
 balance is judged on the whole song.
 
@@ -1012,7 +1012,7 @@ for later: the export stays as it is, and the chord is named from its notes.
 
 ## Looser harmony and melody: sevenths, one place or everywhere, melisma (2026-09-29)
 
-The musician-like test (docs/STUDIO-EDM-TEST.md) found the chords "quick and
+The musician-like test (docs/history/STUDIO-EDM-TEST.md) found the chords "quick and
 clear, but triads and sus only", that "a line's chords change everywhere it's
 sung", and that "the melody can be moved but not rewritten": a phrase keeps its
 syllable count and its ending, *Even rhythm* put notes off the grid (1.2727,
@@ -1270,7 +1270,7 @@ becomes even eighths and a held ending.
   the note as it was, so the page announced the old name with the new degree;
   it is now worked out from the new degree.
 - **The asterisks** in the words (`*sung*`) mark the word a line leans on
-  (the singer sings it a little louder and lifts it: docs/DELIVERY.md). Kept,
+  (the singer sings it a little louder and lifts it: docs/history/DELIVERY.md). Kept,
   and said beside the lines: "A word between stars is the one the line leans
   on: the singer gives it a little more. Keep, move or drop the stars."
 - **The stems' id.** The zip was named by the version's cache key, the
@@ -1389,11 +1389,11 @@ with the same notes (Am7 over C6/A) is kept in the ranking.
 
 ## Arrangement control (2026-09-29)
 
-The EDM test (docs/STUDIO-EDM-TEST.md) found the arrangement's dynamics drawn by chance and out of a
+The EDM test (docs/history/STUDIO-EDM-TEST.md) found the arrangement's dynamics drawn by chance and out of a
 person's reach. The engine now lets a person take any of it over, section by section and player by
 player, and says what the program chose and why beside it (docs/ARRANGE.md, "Taking over the
 arrangement": the edits, what each does, how it is checked, stored, replayed and handed down). This is
-the API the redesigned page draws its Arrange grid from (docs/STUDIO-REDESIGN.md); today's page uses only
+the API the redesigned page draws its Arrange grid from (docs/notes/STUDIO-REDESIGN.md); today's page uses only
 the tempo's range.
 
 **The edits** (`songbird/takeover.py`; by the form's section ids, `refrain:1` the second refrain):
@@ -1476,11 +1476,11 @@ map as `/api/song`, so they always agree).
 
 ## Sound design (2026-09-29)
 
-docs/STUDIO-EDM-TEST.md's first finding was that there was no electronic sound to reach for: no sidechain
+docs/history/STUDIO-EDM-TEST.md's first finding was that there was no electronic sound to reach for: no sidechain
 pump, no patches or filter, no risers, sweeps or rolls, one drum kit. Each is now an edit, marked as the
 person's, undoable, recorded, replayed byte for byte and handed down, as every other. The design, its Fable
 review and how it was built are in docs/SOUND-DESIGN.md; this is what a person (and the page) gets. The
-engine and its API are built; the page's controls come with the redesign (docs/STUDIO-REDESIGN.md: a mixer
+engine and its API are built; the page's controls come with the redesign (docs/notes/STUDIO-REDESIGN.md: a mixer
 strip's pump and patch, a player's inspector, a seam's transition), so for now the edits are made by a
 draft file, `songbird render --edits`, or a page's own requests.
 

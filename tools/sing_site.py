@@ -3,7 +3,7 @@
     uv run python tools/sing_site.py                                          # H, every spec, into web/sing/public
     uv run python tools/sing_site.py --sets a --keys 0,-2 --tempos 100        # only these specs
     uv run python tools/sing_site.py songs/h-now-its-by-you.json --rebuild    # render every guide again first
-    cd web/sing && npx wrangler deploy                                        # then publish it (docs/SING-ONLINE.md)
+    cd web/sing && npx wrangler deploy                                        # then publish it (docs/history/SING-ONLINE.md)
 
 What it writes, all served by web/sing/src/worker.js:
 

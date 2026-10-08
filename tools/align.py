@@ -13,7 +13,7 @@ its start is used where its own timing looks like singing of this tune
 (plausible()) or where it agrees with ours to within GATE, less the bias it
 shows for each class of sound before the vowel (MFA_BIAS); elsewhere ours
 stands (combine()). How well that does against singers whose every vowel
-start is known: docs/PHRASING-CALIBRATION.md.
+start is known: docs/history/PHRASING-CALIBRATION.md.
 
 How a take is aligned. Each lyric line is cut from the take, from its first
 note's start - 0.5 s to its last note's end + 0.4 s (moved by the take's

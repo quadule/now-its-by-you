@@ -295,7 +295,7 @@ def test_a_place_this_version_doesnt_sing_is_said_and_an_inherited_one_waits():
 
 
 def test_was_is_the_programs_own_for_the_style_and_shape_the_person_chose():
-    """docs/STUDIO-EDM-TEST.md, second attempt, bug 7: after the style changed, a tempo's "was" is that style's
+    """docs/history/STUDIO-EDM-TEST.md, second attempt, bug 7: after the style changed, a tempo's "was" is that style's
     tempo, not the one it replaced; a player sat out was playing in that style; the order was the program's for
     the shape chosen (bug 4: not the song's first order, so a region isn't called moved when only the shape
     changed)."""

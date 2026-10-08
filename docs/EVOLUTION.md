@@ -62,7 +62,7 @@ scale steps and fractions, so it follows a change of mode or tempo.
 
 Where a variant came from is part of its record: `source` is `drift` (a machine's own way, chosen as
 below), `edit` (a person, in the studio) or `sung:<name>` (learned from a singer's takes, per
-docs/MAKING-IT-THEIR-OWN.md: a note shift or an ornament found again and again in their takes enters as
+docs/history/MAKING-IT-THEIR-OWN.md: a note shift or an ornament found again and again in their takes enters as
 the same record), and `born` is the generation it came in.
 
 ### How it changes

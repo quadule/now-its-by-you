@@ -4,7 +4,7 @@ The genome keeps the tune; a variant is how one lineage has come to sing a note 
 flicked in, a turn, a passing note sliding through a leap, a leap sung a step wider, a pair of notes
 dotted. They are kept in Params.variants, inherited, and gained and forgotten a few at a time
 (songbird.evolve decides which), so a lineage accumulates its own way with the tune as a folk tune does.
-A singer's own variants, learned from their takes (docs/MAKING-IT-THEIR-OWN.md), come in as the same
+A singer's own variants, learned from their takes (docs/history/MAKING-IT-THEIR-OWN.md), come in as the same
 record with source "sung:<name>"; a person editing the song in the studio makes source "edit".
 
 What a variant may never change (problems() checks every one, and candidates() offers none that break):

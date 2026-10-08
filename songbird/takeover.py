@@ -29,7 +29,7 @@ from __future__ import annotations
 import re
 from functools import lru_cache
 
-LEVELS = ("out", "soft", "plays", "hard")  # the page's words for a cell (docs/STUDIO-REDESIGN.md)
+LEVELS = ("out", "soft", "plays", "hard")  # the page's words for a cell (docs/notes/STUDIO-REDESIGN.md)
 BARS = (2, 4, 8, 16)
 SECTION_FIELDS = ("bars", "sung", "build", "round")
 CELL_FIELDS = ("level", "pattern", "from", "fill")

@@ -1,5 +1,7 @@
 # How flexible is the studio? An EDM version, made only through its page (2026-09-29)
 
+*History: a filmed test of the studio, September 29-30, 2026, and the fixes it led to. The studio has changed since: [STUDIO.md](../STUDIO.md) is current.*
+
 The artist: "Make an EDM version of the song with significantly different lyrics and melody but still a
 recognizable connection. Record a video of the process and condense it to the length of the song while
 snapping actions to the beat."
@@ -184,7 +186,7 @@ for every player in every section, section lengths, played sections, builds, the
 choosable and lockable: docs/ARRANGE.md), sound design (patches, a filter, kits, a sidechain pump, transitions
 at the seams, pan and sends: docs/SOUND-DESIGN.md), sevenths with *here only* or *everywhere*, melisma and a
 freer tune (docs/STUDIO.md), and a new page, the score (one transport; Page · Arrange · Mix; one inspector; a
-Tools sheet: docs/STUDIO-REDESIGN.md). The rules were the first attempt's: only the page, as a person uses it
+Tools sheet: docs/notes/STUDIO-REDESIGN.md). The rules were the first attempt's: only the page, as a person uses it
 (headless Chromium driven by Playwright: clicks, typing, drags), a made-up machine (`--machine
 fictional:vela`), nothing from the command line. This time the brief asked for a convincing EDM track, not the
 nearest the studio could get.

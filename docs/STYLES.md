@@ -608,7 +608,7 @@ colours: sus2 and the open fifth (the drones' sound).
   when the style says so (its sympathetic strings); an a cappella's singers matched to parts.
 - explain.py: the names (a cappella, voices alone; a Celtic session), the backing, the intros, the
   optional players, the group; the style card lists every style, the ring's and those beside it.
-- No numba kernel is added or changed, so the browser's translation (docs/BROWSER-RENDER.md) is as it was.
+- No numba kernel is added or changed, so the browser's translation (docs/notes/BROWSER-RENDER.md) is as it was.
 
 Every existing render stays byte-identical: the seed and the goldens, and each style's own renders (a few
 machines and dates, compared by PCM id against the tree before); `--replay` exact; the packet within 8 MiB.
@@ -722,7 +722,7 @@ with the concertina, coral's slow air into a jig, dmitri's reel), each with its 
 # House and dub (2026-09-30)
 
 The artist: "a real dance style, and dub." The two studio tests that made EDM through the page
-(docs/STUDIO-EDM-TEST.md) ended the same way: "still a folk band in synths: no dance style, no clap
+(docs/history/STUDIO-EDM-TEST.md) ended the same way: "still a folk band in synths: no dance style, no clap
 on two and four, no ride, no off-beat bass, no filter automation." And dub, because Jamaican version
 culture is this song's own idea: the B-side that re-cuts the same song, the dub plate, the riddim
 sung over again by the next singer. A version is a song passed on and remade.
@@ -1833,7 +1833,7 @@ string): each rank a pipe per key with a fixed spectrum, and the life in the att
   it is the swell box, a gentle level and a darker top as it closes.
 - **Built from the kernels the harmonium already uses** (`reed._read_mix`: the attack's period cross-faded into
   the steady one, sample by sample), scipy filters and numpy; so no numba kernel is added or changed and the
-  browser's translation (docs/BROWSER-RENDER.md) is as it was. The pipes' chests alternate C side and C♯ side,
+  browser's translation (docs/notes/BROWSER-RENDER.md) is as it was. The pipes' chests alternate C side and C♯ side,
   so the stem is a little wide.
 
 ### The harmony: a setting of the style's own

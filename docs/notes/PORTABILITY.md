@@ -1,13 +1,15 @@
 # Portability profile: where the compiled loops' time goes (2026-09-29)
 
+*An engineering note, September 29, 2026, for the browser spike ([BROWSER-RENDER.md](BROWSER-RENDER.md)).*
+
 For the browser spike: which numba kernels a port has to make fast, and which of them can't be turned
 into whole-array operations. Without numba's compiler (`NUMBA_DISABLE_JIT=1`) every kernel runs as Python,
 one sample at a time: H's refrain alone takes about three minutes on one thread instead of 2.7 s.
 
 ## How it was measured
 
-- H's seed rendition (`cli.render_one`, as docs/PERFORMANCE.md measures it), `SONGBIRD_THREADS=1`, Apple
-  M1 Max, numba's cache warm, the tree of 2026-09-29 (after the memory work in docs/PERFORMANCE.md).
+- H's seed rendition (`cli.render_one`, as docs/notes/PERFORMANCE.md measures it), `SONGBIRD_THREADS=1`, Apple
+  M1 Max, numba's cache warm, the tree of 2026-09-29 (after the memory work in docs/notes/PERFORMANCE.md).
 - Every numba dispatcher in `songbird.synth.*` wrapped with a timer. A kernel called from inside another
   kernel counts in its caller (`fx._soft` in `fx._saturate`, `bowed._read` in `bowed.run`).
 - "JIT": the whole song, 151 s of audio: **14.6 s**, of which **3.8 s (26%)** is inside the kernels. The rest
@@ -55,7 +57,7 @@ together compiled) have numpy or scipy equivalents that give the same values; wi
 Other styles and instruments bring their own kernels (91 in all under songbird/synth/, in 27 modules). None is
 compiled with `fastmath` since 2026-09-29: the seven in songbird/synth/analog.py (the analog synths of the synth
 styles) were, so their output depended on how the compiler reordered and fused their arithmetic, and they
-leaked fastmath into `osc._blep4`'s cached code (docs/BROWSER-RENDER.md); they are ordinary kernels now.
+leaked fastmath into `osc._blep4`'s cached code (docs/notes/BROWSER-RENDER.md); they are ordinary kernels now.
 
 ## What it means for a port
 

@@ -1,5 +1,7 @@
 # Now It's by You: creative and technical review, 2026-09-27
 
+*History: a review of the song and its production on September 27, 2026, the day before the first version.*
+
 The song's strongest idea is already in its form: one voice asks who made it;
 other voices can eventually help pass it on. The fifth on “song,” the answering
 “nobody knows,” and the cadence into “you” are the things to protect. The most
@@ -49,7 +51,7 @@ The caches came from their original guides and preserve their extractor stamps.
 This is an audition of the current learner against existing measurements, not
 an assertion that every extracted gesture is correct.
 
-Render commands and repeatable edit files are in [editions](../editions/README.md).
+Render commands and repeatable edit files are in [editions](../../editions/README.md).
 
 ## Timing, pronunciation and inflection
 

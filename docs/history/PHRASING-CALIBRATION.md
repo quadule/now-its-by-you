@@ -1,5 +1,7 @@
 # Can the machine learn a phrasing? (2026-09-25)
 
+*History: the check, September 25-27, 2026, that a singer's phrasing can be learned from their takes, made for the first version.*
+
 The test the artist set: *we can learn phrasing if two inputs give a better
 result than one.* The phrasing genes (songbird/phrasing.py) are measured from
 sung takes by tools/phrasing.py; this is the check of that extractor, and of

@@ -15,7 +15,7 @@ a person meets doing it for the first time.
 - **The network once**: about 100 MB fetched from PyPI into `~/.songbird`, about 250 MB on disk.
 - **A web browser** from 2023 or later, on the same computer.
 - **Memory**: a whole song peaked at about 5.6 GB while it was made (measured on an M1 Max); 8 GB computers will manage, slowly.
-- **Time**: a few minutes the first time; then a sung section in a second or two and the whole song in about 15 s on a recent Mac (docs/PERFORMANCE.md); a slower or busier computer takes longer.
+- **Time**: a few minutes the first time; then a sung section in a second or two and the whole song in about 15 s on a recent Mac (docs/notes/PERFORMANCE.md); a slower or busier computer takes longer.
 
 ## What it needs
 

@@ -3,14 +3,14 @@
 A folk song whose real artifact is the program that sings it. Each rendition is
 an audio file with this program embedded inside it; running the program on a
 rendition sings a new one, in the voice of the machine it runs on, shaped by the
-moment it was run. The design is in [docs/PLAN.md](docs/PLAN.md); the seed song
+moment it was run. The design is in [docs/history/PLAN-2026-09-24.md](docs/history/PLAN-2026-09-24.md); the seed song
 is still being written: every candidate, with lyrics, ratings and a bank of
 lines to reuse, is in [songs/](songs/README.md).
 
 Status: prototype with a small learned singing voice, procedural bands,
 volunteer phrasing, a local studio and replayable audio/program packets.
 [Listening editions](editions/README.md) and a
-[creative review](docs/CREATIVE-REVIEW.md) develop H, **Now It's by You**.
+[creative review](docs/history/CREATIVE-REVIEW.md) develop H, **Now It's by You**.
 The portable program and model aim to fit in **8 MiB**, excluding the audio;
 `uv run songbird budget` reports their current size (packing warns past the goal).
 
@@ -58,7 +58,7 @@ A person's phrasing comes from takes they sing along to a guide: the tune
 alone on a whistle over a quiet pulse, the whole song, or the machine's singer.
 `uv run python tools/karaoke.py songs/h-now-its-by-you.json` records them on
 this computer; singers anywhere use the same page behind one-time links, on
-Cloudflare ([docs/SING-ONLINE.md](docs/SING-ONLINE.md)). Takes stay in
+Cloudflare ([docs/history/SING-ONLINE.md](docs/history/SING-ONLINE.md)). Takes stay in
 `recordings/`, never in git; [docs/SINGERS.md](docs/SINGERS.md) is the brief
 and release for singers.
 

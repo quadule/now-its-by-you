@@ -1,4 +1,4 @@
-// The score (docs/STUDIO-REDESIGN.md): one transport, three views of the song (Page, Arrange, Mix), one inspector
+// The score (docs/notes/STUDIO-REDESIGN.md): one transport, three views of the song (Page, Arrange, Mix), one inspector
 // that shows whatever is selected, Your tools as a sheet and Time as a drawer. It draws; studio.js keeps the edits,
 // the history, the drafts and the listening (its globals: state, h, api, setEdit, listen, record...), composer.js the
 // notes and the sketch, author.js a line of words, players.js where the sketch's players go, perform.js notes in.
@@ -1259,7 +1259,7 @@
     return false;
   }
 
-  // ------------------------------------------------------------------ the keyboard (docs/STUDIO-REDESIGN.md's table)
+  // ------------------------------------------------------------------ the keyboard (docs/notes/STUDIO-REDESIGN.md's table)
   function key(e) {
     // Enter or Space on a control of the page's is a keyboard selection: the inspector's heading takes the focus
     if (e.key === "Enter" && e.target.closest?.("#grid [role=gridcell], #grid .region, #grid .name, #page .rub, #mix .nm, .door")) {

@@ -4,7 +4,7 @@ A rendition travels as one file. It is an ordinary FLAC that plays in any
 player, and it is also a zip archive that carries the program that sang it,
 the song's skeleton, the rendition's record and its words. Run it with Python
 and it sings a new version of the song, on your computer and your day, as
-that version's child. This is milestone 6 of docs/PLAN.md.
+that version's child. This is milestone 6 of docs/history/PLAN-2026-09-24.md.
 
 The record's `performance` now carries the lead and choir's rounded phrasing
 gestures, without recordings or local paths. Children inherit them unless a

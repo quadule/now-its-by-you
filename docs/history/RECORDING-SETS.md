@@ -1,5 +1,7 @@
 # Recording sets
 
+*History: what the first version's singers were asked to sing, September 26, 2026. Singing now happens in the studio ([WEB-SINGING.md](../WEB-SINGING.md)).*
+
 *Made by `tools/recording_sets.py` (2026-09-26), for singing v2. The sets themselves are in `tools/sets/h-now-its-by-you.json`.*
 
 Singers are asked to sing one of six sets: each is the whole song, three or four verses, its refrains, the bridge and the tag, in one of the song's own shapes and within the bank's rules. Between them the sets put in front of singers the words and verses the learned voice says worst, so that singers' takes are the data for making every word legible. The singers never hear that: each set's line for them only says what its verses are about.

@@ -235,14 +235,14 @@ Found while building this; the bank is the other thread's to change:
 
 # Taking over the arrangement (2026-09-29)
 
-The studio test that made an EDM version through the page (docs/STUDIO-EDM-TEST.md) found that the
+The studio test that made an EDM version through the page (docs/history/STUDIO-EDM-TEST.md) found that the
 arrangement's dynamics came from chance, not from the person: how the song starts, the band joining line
 by line, the breakdown were drawn and couldn't be set; there was no per-section drum pattern, no
 instrumental drop, sections were fixed at their bars; and the tempo stopped at 1.3 times the song's,
 whatever the style. The artist: the program's own choices (drawn by chance, per machine and date) are the
 point of the piece, stay the default and stay visible; a person can take any of them over. This is the
 engine and the API a DAW-like page needs (sections as regions, players as tracks, a track x section grid,
-one inspector: docs/STUDIO-REDESIGN.md); the page itself is designed there. `songbird/takeover.py` holds it
+one inspector: docs/notes/STUDIO-REDESIGN.md); the page itself is designed there. `songbird/takeover.py` holds it
 (not `arrange.py`, which draws the words).
 
 ## The design, as built
@@ -264,7 +264,7 @@ both and a released choice goes back to it.
 
 | Path | Value | What |
 |---|---|---|
-| `arrange.<section>:<n>.<player>.level` | out, soft, plays, hard | in or out, and how hard (the page's words: docs/STUDIO-REDESIGN.md). out sits the player out there; soft keeps only its beats, 0.8 as loud, and plays what the style gives it with the band a little quieter (its busyness less 0.3), the ballad's players a step down from the program's (a walk to roots, a strum to a boom-chick); plays is the program's own there (the style's for the section's energy where the program had it out); hard what the style gives a fuller band (busyness plus 0.3), a step up for the ballad's, 1.15 as loud. The section's energy itself doesn't move, so a hard refrain gets no fill it wasn't getting unless `fill` asks |
+| `arrange.<section>:<n>.<player>.level` | out, soft, plays, hard | in or out, and how hard (the page's words: docs/notes/STUDIO-REDESIGN.md). out sits the player out there; soft keeps only its beats, 0.8 as loud, and plays what the style gives it with the band a little quieter (its busyness less 0.3), the ballad's players a step down from the program's (a walk to roots, a strum to a boom-chick); plays is the program's own there (the style's for the section's energy where the program had it out); hard what the style gives a fuller band (busyness plus 0.3), a step up for the ballad's, 1.15 as loud. The section's energy itself doesn't move, so a hard refrain gets no fill it wasn't getting unless `fill` asks |
 | `arrange.<section>:<n>.<player>.pattern` | an idiom of the player's | what it plays there: a kit's or a drum machine's groove, four on the floor, half time, toms, a boom-bap, winding down, a build; a bass's roots, two, walk, eighths, sub; a guitar's strum, boom-chick, Travis picking; "lead", the tune... The vocabulary (`takeover.patterns`): every idiom any style gives that instrument (or the part it stands in for), its family's own, "lead" for a pitched player, and for the drums the grooves and a build; the ballad's eight have their own writers' idioms (`BALLAD`). One that plays the same as another is offered once (`takeover.ALIASES`: the drum machine's "machine", its own four on the floor until 2026-09-30, is "four"; an edit, a record or a lock that says "machine" reads as "four") |
 | `arrange.<section>:<n>.<player>.from` | a line (0: from the start) | where it comes in: the band joining line by line, per player, per section, counted in the section's own lines |
 | `arrange.<section>:<n>.<player>.fill` | true, false | a drum fill in the section's last bar into the next, or none: a kit or a drum machine (`idioms.w_groove`); the frame drum's fills were taken out on 2026-09-27 and stay out |
@@ -282,7 +282,7 @@ the rest now keeps the others as the version had them (`style.choose_style`); be
 again.
 
 **A lock.** Keeping what chance drew is the same edit with the program's own value (the page's padlock,
-docs/STUDIO-REDESIGN.md "Decided"): the record marks it `locked: true` beside its value and "was" in
+docs/notes/STUDIO-REDESIGN.md "Decided"): the record marks it `locked: true` beside its value and "was" in
 `chosen_by_you`, the version is the same, and a new performance can't move it. For a cell, "was" is the
 program's own level, pattern, line and fill there (`takeover.program_cells`: the score laid out once, no
 audio, and kept for the same parameters); a lock isn't counted as a change (`explain.Version.held`).

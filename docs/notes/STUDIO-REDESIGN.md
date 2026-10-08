@@ -1,13 +1,15 @@
 # The studio, redesigned: one score, one inspector (2026-09-29)
 
+*A design note, September 29-30, 2026: the studio's redesign as planned, with its mockups in [design/](design/). The studio as built is in [STUDIO.md](../STUDIO.md).*
+
 The artist: "Let's do everything we can to make the studio more flexible given the report without making
 the UI look too busy — we can redesign anything if there are concepts we can combine or simplify or make
 more like conventional DAW apps."
 
 This page is the information architecture for that: what combines, what goes, where every current thing
 lands, what is borrowed from a DAW and what is refused, and what is left for the artist to decide. The
-clickable mockup beside it is `docs/design/studio-redesign.html` (one file, no network, fake but realistic
-data from *Now It's by You* as Ada sings it today); its pictures are `docs/design/studio-redesign-*.png`.
+clickable mockup beside it is `docs/notes/design/studio-redesign.html` (one file, no network, fake but realistic
+data from *Now It's by You* as Ada sings it today); its pictures are `docs/notes/design/studio-redesign-*.png`.
 Nothing in songbird/ changes with this page; it is a design, made before the engine work it is designed for
 (per-section arrangement, sound design, transitions, wider tempo, sevenths, per-appearance scope, freer
 melody editing) so that work has a place to land.
@@ -17,7 +19,7 @@ melody editing) so that work has a place to land.
 The studio today is a **tune book with four chapters** (Words, Tune, Sound, Other versions), each chapter a
 pile of cards and panels, and every new ability (chords, stems, the piano, players over MIDI, singing in the
 browser, playing a part in) has been another card on the pile. The EDM test found the *engine's* limits
-(docs/STUDIO-EDM-TEST.md), but it also filmed the page's: 108 actions across four chapters, scrolling a lot,
+(docs/history/STUDIO-EDM-TEST.md), but it also filmed the page's: 108 actions across four chapters, scrolling a lot,
 a transport in one place and a player in another, the band in Sound and its parts in Tune, "the last
 refrain starts stripped down" said in a card's fold and not choosable anywhere.
 
@@ -545,7 +547,7 @@ Two changes from the mockup:
 
 ## The mockup
 
-`docs/design/studio-redesign.html`: one file, no network, plain HTML, CSS and JavaScript, the studio's own
+`docs/notes/design/studio-redesign.html`: one file, no network, plain HTML, CSS and JavaScript, the studio's own
 tokens copied from identity.css (both schemes: the system's, or the Light / Dark buttons), Ada's version of
 *Now It's by You* today as its data (13 sections, 82 bars, the ballad band's eight players, the song's
 chords in D, the words as sung). It shows:
@@ -565,7 +567,7 @@ A state can be put in the address, so any view and selection can be linked to or
 `studio-redesign.html#s={"view":"arrange","sel":{"kind":"cell","id":"drum","sec":"refrain:0"},"theme":"dark"}`
 (`view`, `sel`, `theme`, `open` tools or drawer, `frame` phone, `scroll`).
 
-The pictures, under docs/design/: `studio-redesign-desktop-light.png` (Arrange, a cell selected, the notes
+The pictures, under docs/notes/design/: `studio-redesign-desktop-light.png` (Arrange, a cell selected, the notes
 open), `studio-redesign-desktop-dark.png` (the same by lamplight, a chord selected), `studio-redesign-phone.png`
 (the Page with a section's sheet) and `studio-redesign-phone-arrange.png`, taken in the built-in browser
 (its pane is about 1070 px wide, so the desktop pictures are scaled; the phone ones are at the phone's own
@@ -585,7 +587,7 @@ version); the tune book of four chapters it replaces is kept, unchanged, at `/cl
 until the artist signs the new one off, on the same API. Help links to it. Pictures of the built page, taken
 with headless Chrome from the page's own address (a view and a selection can be put in it:
 `#view=arrange&sel=cell:drummachine:refrain:2&open=refrain:0&panel=tools`, with `e=` an edit map, as the
-classic page's links had), are `docs/design/studio-built-*.png`: the Page, Arrange (light, with the notes of a
+classic page's links had), are `docs/notes/design/studio-built-*.png`: the Page, Arrange (light, with the notes of a
 refrain open; dark, a chord selected), Mix, the Tools sheet, the Time drawer, and a phone (the Page with a
 section's sheet; Arrange with a cell's).
 
@@ -597,7 +599,7 @@ section's sheet; Arrange with a cell's).
 | `songbird/studio/score.css` | its look: the mockup's, on identity.css's tokens; the phone layout by container queries |
 | `songbird/studio/score.js` | the views (Page, the Arrange grid, the Mix strips), the inspector's fourteen states, the transport, the sheets, the keyboard |
 | `songbird/studio/model.js` | the pure parts: the grid from the studio's answers, a cell's look and words, a lock, moving a section in story order, a seam's transitions, the scope switch, what plays, the keyboard's table (tests/studio_model.test.cjs) |
-| `songbird/studio/renderer.js` | previews and recordings behind one interface (`preview`, `record`, `cancel`, progress), the server's queue today; the place a later step makes a section in the visitor's browser (docs/BROWSER-RENDER.md), the server as its fallback (tests/studio_renderer.test.cjs) |
+| `songbird/studio/renderer.js` | previews and recordings behind one interface (`preview`, `record`, `cancel`, progress), the server's queue today; the place a later step makes a section in the visitor's browser (docs/notes/BROWSER-RENDER.md), the server as its fallback (tests/studio_renderer.test.cjs) |
 | `songbird/studio/classic.html` | the page before, served at /classic |
 
 The core is shared, not copied: studio.js keeps the edit map, undo and redo, the drafts in this browser,

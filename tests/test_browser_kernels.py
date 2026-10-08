@@ -1,4 +1,4 @@
-"""The browser's kernels keep step with songbird's (docs/BROWSER-RENDER.md): web/studio-wasm/kernels is the
+"""The browser's kernels keep step with songbird's (docs/notes/BROWSER-RENDER.md): web/studio-wasm/kernels is the
 numba kernels translated to JavaScript, typed as numba typed them, and a few ported to C by hand. A change to a
 kernel's source that isn't carried there would make the web studio sing an older program. This asks
 tools/transpile.py --check, which writes nothing: it translates again in memory and compares, and compares

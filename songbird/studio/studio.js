@@ -61,7 +61,7 @@ function svg(tag, attrs, ...children) {
   return el;
 }
 
-// Draw `children` into `parent` in place (docs/STUDIO-EDM-TEST.md, second attempt, bugs 1 and 2): a node already
+// Draw `children` into `parent` in place (docs/history/STUDIO-EDM-TEST.md, second attempt, bugs 1 and 2): a node already
 // there that the new drawing has in the same place (the same tag and data-key, both drawn by h) is kept and given
 // the new one's attributes, text, value and listeners, so an answer arriving mid-click neither replaces the button
 // under the pointer nor moves what didn't change; anything else is put in, or taken out. A details' open is the

@@ -103,7 +103,7 @@ PIANO_STATIC = {"/piano/": ("piano/index.html", "text/html; charset=utf-8"),
                 "/piano/identity.css": ("identity.css", "text/css; charset=utf-8")}
 STATIC["/players.js"] = ("players.js", "text/javascript; charset=utf-8")
 STATIC["/learn.js"] = ("learn.js", "text/javascript; charset=utf-8")
-# the score (docs/STUDIO-REDESIGN.md): one page, three views, one inspector (index.html); the tune book of four
+# the score (docs/notes/STUDIO-REDESIGN.md): one page, three views, one inspector (index.html); the tune book of four
 # chapters it replaced (classic.html) was removed when the artist signed it off (2026-09-30)
 STATIC["/renderer.js"] = ("renderer.js", "text/javascript; charset=utf-8")  # previews and recordings, one interface
 STATIC["/model.js"] = ("model.js", "text/javascript; charset=utf-8")

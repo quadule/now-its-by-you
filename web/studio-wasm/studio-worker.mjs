@@ -1,7 +1,7 @@
 // The studio's render worker: the song made in the visitor's browser (songbird/studio/renderer.js starts it,
 // docs/WEB-STUDIO.md "Made in the visitor's browser"). Pyodide, numpy, scipy and soundfile, the program itself
 // (songbird.zip: the same files the server runs, so a recording carries the same program), and its kernels in JS
-// and C/wasm (docs/BROWSER-RENDER.md). It makes what the server's render spec says (py/studio_render.py) and
+// and C/wasm (docs/notes/BROWSER-RENDER.md). It makes what the server's render spec says (py/studio_render.py) and
 // hands back the FLAC: a section's preview, or the whole song as its recording (the packet).
 //
 //   → { cmd: "init", pyodide: URL of py-<hash>/, app: URL of app-<hash>/, bytes: what a first visit fetches }

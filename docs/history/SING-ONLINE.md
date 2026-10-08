@@ -1,5 +1,7 @@
 # Singing online: the karaoke for singers anywhere
 
+*History: how people were invited to sing into the first version online, September 2026. Their recordings were deleted by September 30, 2026; anyone can now sing in the studio ([WEB-SINGING.md](../WEB-SINGING.md)).*
+
 Singers who aren't in the room sing the song on a page reached by a link: the karaoke
 (tools/karaoke.html) behind an invitation, recording in the guide's audio clock with the same timing
 corrections, so a take sung online is measured exactly like one sung here. Each singer gets a page

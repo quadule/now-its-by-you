@@ -42,7 +42,7 @@ repeats in every take by the same voice (REPEATS), so more takes by one
 person only go so far; other people's takes go further, and several singers'
 takes make everyone's way at once, each person counting once. How well all
 this works, checked against reference singers whose every gesture is known:
-docs/PHRASING-CALIBRATION.md.
+docs/history/PHRASING-CALIBRATION.md.
 
 Readings. The reading is aligned the way tools/speech_to_song.py aligns it, then every
 syllable is measured against its note: where it falls in its line compared

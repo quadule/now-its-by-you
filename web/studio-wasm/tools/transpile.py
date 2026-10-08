@@ -839,7 +839,7 @@ def generate() -> tuple[str, str, dict]:
     return gen, json.dumps(manifest, indent=1) + "\n", manifest
 
 
-REGENERATE = """To regenerate (docs/BROWSER-RENDER.md, "Running the prototype"):
+REGENERATE = """To regenerate (docs/notes/BROWSER-RENDER.md, "Running the prototype"):
   NUMBA_CACHE_DIR=$(mktemp -d) uv run python web/studio-wasm/tools/kernel_types.py songs/h-now-its-by-you.json \\
       web/studio-wasm/kernels/types.json --whole --gauntlet      (if types.json is stale)
   uv run python web/studio-wasm/tools/transpile.py

@@ -1,5 +1,5 @@
 """A render that holds less memory makes the same samples: each lean way of working against the way it replaced
-(docs/PERFORMANCE.md, 2026-09-29). The goldens (h-seed, b-refrain) hold the whole; these hold each piece."""
+(docs/notes/PERFORMANCE.md, 2026-09-29). The goldens (h-seed, b-refrain) hold the whole; these hold each piece."""
 
 import numpy as np
 import pytest

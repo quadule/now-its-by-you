@@ -27,7 +27,7 @@ from pathlib import Path
 # ---------------------------------------------------------------- a whole song's memory
 #
 # A whole render's peak memory grows with the song's length, and with who plays it. Measured on 30 September, after
-# the heaviest parts were made lean (docs/PERFORMANCE.md, "The heaviest parts"; tools/render_memory.py: H with each
+# the heaviest parts were made lean (docs/notes/PERFORMANCE.md, "The heaviest parts"; tools/render_memory.py: H with each
 # style's own band, and the ballad, chamber and the kit's bands at 3 to 8 minutes; two threads, MallocLargeCache=0,
 # which hands freed arrays back as Linux does; docs/WEB-STUDIO.md, "A whole song's memory"), it is about BASE_MB and
 # so many MB for every second of the song. A part's rate is the lightest band's it plays in (the lullaby's 4.7, the

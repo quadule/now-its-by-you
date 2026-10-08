@@ -1,5 +1,7 @@
 # Voice options: the artist's voice and generative models
 
+*History: a research memo of September 25, 2026 that led to the learned voice ([THROAT.md](../THROAT.md)).*
+
 Research memo, 2026-09-25. Question: the formant singer (`songbird/synth/voice.py`) is at about 27% word error on the dry Whisper suite (16–17% on the plainer pentatonic songs H and I) and feels like it is hitting a wall. Can we train on the artist's own voice (no singing talent) or bring in a generative model, without giving up what is ours: the score, pitch track with drift, vibrato, timing, phoneme schedule and per-machine `VoiceParams`? The constraints that decide this are principles 1 (the program is the artifact), 4 (the machine is the voice), 8 (nothing identifying leaves the machine) and 9 (offline replay), plus the Synthesis rule "no pretrained audio models" and the LLM-backend pattern for anything external (hosted with a sunset, local option, fallback, recorded).
 
 ## 1. The field, September 2026
@@ -37,7 +39,7 @@ Only two families leave the puppeteer intact. A from-scratch model driven by our
 
 ## 3. Fit with the principles
 
-*The program is the artifact.* A 3-minute rendition is about 15 MB of FLAC. A 1–5 MB weight file the program itself trained, with the training code and a provenance record in the manifest, is defensible cargo; 400 MB of third-party encoders is not, and 2.8 GB is a different artwork. PLAN.md's "no pretrained audio models" should be sharpened to: no third-party weights, ever; weights this program trained on the artist's own voice may ship if small, and the formant voice stays as the fallback throat so every rendition can still be re-sung without them.
+*The program is the artifact.* A 3-minute rendition is about 15 MB of FLAC. A 1–5 MB weight file the program itself trained, with the training code and a provenance record in the manifest, is defensible cargo; 400 MB of third-party encoders is not, and 2.8 GB is a different artwork. PLAN-2026-09-24.md's "no pretrained audio models" should be sharpened to: no third-party weights, ever; weights this program trained on the artist's own voice may ship if small, and the formant voice stays as the fallback throat so every rendition can still be re-sung without them.
 
 *Offline replay.* Anything shipped replays; anything hosted does not, and unlike lyrics the voice cannot be cached as text.
 

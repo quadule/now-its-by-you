@@ -244,12 +244,12 @@ def test_composition_and_editor_travel_inside_the_audio(tmp_path):
                            if (i.filename.startswith("program/songbird/studio/")
                                and not i.filename.startswith("program/songbird/studio/piano/"))
                            or i.filename.endswith("composition.py"))
-        # 101 KB with sevenths, places and melisma (2026-09-29); 153 KB with the score (docs/STUDIO-REDESIGN.md: its
+        # 101 KB with sevenths, places and melisma (2026-09-29); 153 KB with the score (docs/notes/STUDIO-REDESIGN.md: its
         # page, views and inspector, 47 KB) beside the classic page it replaces (16 KB of its own), kept at /classic
         # until the artist signs the score off; about 137 KB once it goes. The program 5.9 of 8 MiB. 163 KB with the
         # renderer's way to make the song in a visitor's browser (renderer.js, 6 KB: docs/WEB-STUDIO.md, "Made in the
         # visitor's browser"); about 143 KB once the classic page goes. 169 KB with the column drawn in place and the
-        # second EDM test's fixes (docs/STUDIO-EDM-TEST.md, "Fixed after the test": morph, a seam's lengths, where a pump
+        # second EDM test's fixes (docs/history/STUDIO-EDM-TEST.md, "Fixed after the test": morph, a seam's lengths, where a pump
         # pumps, a line at a time; about 3 KB). 154 KB once the classic page and its stylesheet went (2026-09-30).
         # The artist (2026-09-30): no tight cap; the packet's budget (`songbird budget`, 8 MiB goal) is what counts,
         # so this is only a tripwire for something that doesn't belong (an image, the browser's render bundle).
