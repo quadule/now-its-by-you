@@ -344,9 +344,14 @@ def environment(requirements: bytes, wanted: str) -> tuple[Path, Path]:
     return env, env / ("Scripts/python.exe" if os.name == "nt" else "bin/python")
 
 
+READY_MADE = ["--only-binary", ":all:"]  # wheels only, for pip and uv alike: nothing is compiled
+
+
 def set_up(where: Path, env: Path, py: Path, wanted: str, tell=say) -> None:
     """Make the program's environment: with uv if it's there (with the Python the version was made
-    with), else this Python's venv and pip; the pinned versions first, the newest if they fail."""
+    with), else this Python's venv and pip. Ready-made builds (wheels) only, so nothing is compiled: the pinned
+    versions first, else the newest versions made for this computer. (Intel Macs are why: numba's builds for them
+    stop at 0.62.1, and asking for the newest without this picked a later numba, to compile, which fails.)"""
     requirements = where / "requirements.txt"
     loose = [line.split("==")[0] for line in requirements.read_text().splitlines() if line and not line.startswith("#")]
     with Lock(env.with_name(env.name + ".lock")):
@@ -370,15 +375,20 @@ def set_up(where: Path, env: Path, py: Path, wanted: str, tell=say) -> None:
                         raise SystemExit("couldn't make an environment; on Debian or Ubuntu, "
                                          "`sudo apt install python3-venv` first")
                     install = [str(py), "-m", "pip", "install", "--quiet", "--disable-pip-version-check"]
-                if subprocess.run([*install, "-r", str(requirements)]).returncode != 0:
-                    tell("The exact versions it was made with couldn't be installed (if you're offline, it needs the "
-                         "network once); trying the newest ones instead.")
-                    subprocess.run([*install, *loose], check=True)
+                if subprocess.run([*install, *READY_MADE, "-r", str(requirements)]).returncode != 0:
+                    tell("The exact versions it was made with couldn't be installed here (if you're offline, it needs "
+                         "the network once); trying the newest ones made for this computer instead. What it sings "
+                         "with them may differ slightly.")
+                    subprocess.run([*install, *READY_MADE, *loose], check=True)
         except (subprocess.CalledProcessError, OSError) as e:
             shutil.rmtree(env, ignore_errors=True)
+            this = f"{sys.version_info[0]}.{sys.version_info[1]}"
+            other = "" if uv or not wanted or wanted == this else (
+                f" If it's online, they may not be made for Python {this} on this computer: with uv "
+                f"(https://docs.astral.sh/uv/) installed, it uses Python {wanted}, the one this version was made with.")
             raise SystemExit(f"couldn't fetch what the program needs ({e}). If this computer is offline, connect it "
-                             "and run the same command again; `--here` uses this Python as it is, for people who "
-                             "already have numpy, scipy, numba, soundfile and cmudict.")
+                             f"and run the same command again.{other} `--here` uses this Python as it is, for people "
+                             "who already have numpy, scipy, numba, soundfile and cmudict.")
         (env / ".ready").write_text(datetime.now().isoformat() + "\n")
 
 

@@ -106,8 +106,12 @@ does four things.
        was made with;
      - without uv, this Python's venv and pip do (Debian and Ubuntu need
        python3-venv);
-     - if the pinned versions can't be installed, it tries the newest, and
-       says it needs the network once;
+     - it installs ready-made builds (wheels) only, so nothing is compiled;
+     - if the pinned versions can't be installed, it tries the newest that
+       have wheels for this computer (on an Intel Mac, numba 0.62.1), and
+       says it needs the network once (files made before October 7, 2026
+       ask for the newest, wheels or not, which fails on Intel Macs:
+       docs/RUNNING-THE-SONG.md, "Intel Macs");
      - `--here` skips all of this and uses the running Python as it is.
 4. **Runs the program** with the packet as its parent. `new` renders with
    `--parent THIS_FILE --machine here --pack` into the current folder.
