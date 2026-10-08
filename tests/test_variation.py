@@ -178,6 +178,37 @@ def test_a_machines_own_versions_stay_in_its_field_around_one_centre(h):
         assert abs(p.tempo / seed.tempo - 1) <= V.PULL * 0.10 + 0.002
 
 
+def test_a_machines_own_versions_of_another_machines_stay_around_it(h):
+    # a version from another machine (ada's), then machine none's own chain of it every few days for a year: each
+    # day about what machine none sings straight from ada's version that day, a field around ada's values, never a
+    # walk. Where a bound cut a day off, the record can't say how far, and the centre taken is the one nearest the
+    # song's own (Knob.centre), so a number ada left near a bound may sit a little inside it; and the band's pattern
+    # and lead, held against flicker, may sit on either side of a boundary
+    seed, root = Params.from_dict(h.seed_params), child(h, "ada", "2026-06-01")
+    p = root
+    for t in np.arange(D.parse("2026-10-07"), D.parse("2027-10-07"), 5.0):
+        d = D.drift(t, NEUTRAL.hash)
+        p = choose_params(h, p, NEUTRAL, d)
+        direct = choose_params(h, root, NEUTRAL, d)
+        assert (p.tonic, p.mode, p.tempo, p.humanize) == (direct.tonic, direct.mode, direct.tempo, direct.humanize)
+        a, b = numbers(p), numbers(direct)
+        for k in V.KNOBS:
+            if V.exists(k.path):
+                lo, hi = k.bounds(V.read(seed, k.path)) if callable(k.bounds) else k.bounds
+                assert abs(a[k.path] - b[k.path]) <= 0.1 * (hi - lo), k.path
+
+
+def test_a_machines_own_version_sung_again_a_moment_later_is_the_same(h):
+    # made.at keeps a version's instant to a millionth of a day, so a machine singing its own version again even a
+    # moment later reads a field that has moved a hair: its centre comes back exactly all the same (Knob.centre)
+    t = D.parse("2026-10-07") + 0.123456789
+    for parent in (None, child(h, "ada", "2026-06-01")):
+        first = choose_params(h, parent, NEUTRAL, D.drift(t, NEUTRAL.hash))
+        assert first.made["at"] != t
+        again = choose_params(h, first, NEUTRAL, D.drift(t + 1e-6, NEUTRAL.hash))
+        assert numbers(again) == numbers(first)
+
+
 def test_what_a_machine_knows_nothing_of_holds_when_it_sings_its_own_again(h):
     # a machine read only in part (as `--machine here` before a harvest: no files, hands, words or room) knows its
     # identity, so its style sets the tempo, but not its pace, its rubato or its vocabulary

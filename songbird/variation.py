@@ -303,10 +303,9 @@ class Knob:
 
         The day is affine in the value (a shift, or for a ratio a scale), so it comes straight back out. When
         more than one centre fits the parent (a bound cut the day off, or the rounding), the song's own value x
-        if it is one of them; else, once the field has moved, the centre is kept on a grid the day can't fold
-        two points of onto one value (the step, or two for a ratio, which can shrink), so it comes back exactly
-        each time and the rounding can't wander. bounds: those the parent's value was held to, if not the
-        knob's."""
+        if it is one of them; else, once the field has moved, a centre on the knob's grid that sings the
+        parent's value again (regained), so it comes back exactly each time and the rounding can't wander.
+        bounds: those the parent's value was held to, if not the knob's."""
         if ctx.then is None or not self.drift:
             return was
         share = PULL if self.inherit else 1.0
@@ -322,8 +321,12 @@ class Knob:
         centre = (was - zero) / slope
         if ctx.drift is not None and self.reads(ctx.drift) == self.reads(ctx.then):
             return centre  # the field hasn't moved since: the parent's value comes straight back
-        grid = self.step * (2 if self.ratio else 1)
-        return round(float(round(centre / grid) * grid), 6)
+        step = self.step
+
+        def sung(c: float) -> float:  # what the machine sang from c that day
+            return round(float(round(clip(zero + slope * c, lo, hi) / step) * step), 6)
+
+        return regained(was, centre, sung, step, even=self.ratio)
 
     def apply(self, out: dict, ctx: Context) -> None:
         if not exists(self.path):
@@ -484,6 +487,19 @@ class Context:
             return None
         local = 0.1 * self.c.id(f"habit:{name}:{where}") if where else 0.0
         return clip(0.5 + 0.3 * self.c.id(f"habit:{name}") + local, 0.0, 1.0)
+
+
+def regained(was: float, inverse: float, sung: Callable, step: float, even: bool = False) -> float:
+    """A centre on the step grid, near inverse (where the day points back to), that sings the parent's value
+    (was) again: sung(centre) == was. So the record's rounding never wanders down a machine's own versions.
+    Where a ratio could fold two grid points onto one value (even), the one on the grid of two steps, so the
+    next time comes back to the same one exactly; at most one such move, made where it can't be heard (both
+    sang was). If none sings was (a person's own value, say), the nearest grid point."""
+    k = round(inverse / step)
+    fits = [c for c in (round((k + i) * step, 6) for i in (0, -1, 1)) if sung(c) == was]
+    if not fits:
+        return round(k * step, 6)
+    return min(fits, key=lambda c: (even and round(c / step) % 2 != 0, abs(c - inverse)))
 
 
 def made_here(parent, drift: Drift | None) -> Drift | None:
@@ -1000,9 +1016,10 @@ def choose_mood(out: dict, ctx: Context) -> None:
 
         then = {m: day(m, ctx.at_then("slow", "mood"), ctx.parent.mode) for m in was}
         now = {m: day(m, tilt, mode) for m in was}
-        if now != then:  # the field has moved since: that day out (to a grid of 0.02, so it comes back exactly
-            # each time), today's in; unmoved, the parent's stand
-            was = {m: round(w / then[m] / 0.02) * 0.02 * now[m] for m, w in was.items()}
+        if now != then:  # the field has moved since: that day out (as a ratio knob's, Knob.centre), today's in;
+            # unmoved, the parent's stand
+            was = {m: regained(w, w / then[m], lambda c, m=m: round(float(c * then[m]), 2), 0.01, even=True) * now[m]
+                   for m, w in was.items()}
         out.setdefault("leanings", {})["mood_weights"] = {m: round(float(w), 2) for m, w in was.items()}
         return
     if screen is None and ctx.then is not None:  # its own rendition of the song's own: the song's own, today
