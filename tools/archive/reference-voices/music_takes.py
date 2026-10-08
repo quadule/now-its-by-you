@@ -1,7 +1,7 @@
 """Takes of the song by music models, steered onto the guide as closely as they go (dev-only).
 
-    ELEVENLABS_API_KEY=... uv run python tools/music_takes.py songs/h-now-its-by-you.json --eleven "warm baritone folk singer" ...
-    GEMINI_API_KEY=... uv run python tools/music_takes.py songs/h-now-its-by-you.json --lyria "warm baritone folk singer"
+    ELEVENLABS_API_KEY=... uv run python tools/archive/reference-voices/music_takes.py songs/h-now-its-by-you.json --eleven "warm baritone folk singer" ...
+    GEMINI_API_KEY=... uv run python tools/archive/reference-voices/music_takes.py songs/h-now-its-by-you.json --lyria "warm baritone folk singer"
 
 A music model sings like a person, but picks its own melody and timing. So
 each is told everything it will take about ours:
@@ -23,7 +23,7 @@ renders/reference/music/<model>-<voice>/<song>-take1.wav, with what was
 asked for beside it. What phrasing a take sang isn't known: these are for
 extracting and combining phrasings from singers who sound like people (a
 test; they never join the lineage), not for checking the extractor against
-a truth (tools/reference.py).
+a truth (tools/archive/reference-voices/reference.py).
 """
 
 from __future__ import annotations
@@ -43,7 +43,8 @@ import soundfile as sf
 from scipy.signal import resample_poly
 
 warnings.filterwarnings("ignore", message="pkg_resources")
-sys.path.insert(0, str(Path(__file__).parent))
+sys.path.insert(0, str(Path(__file__).resolve().parents[2]))  # tools/: phrasing, speech_to_song
+sys.path.insert(0, str(Path(__file__).parent))  # tts, beside this
 import phrasing as T  # noqa: E402
 import speech_to_song as S  # noqa: E402
 import tts  # noqa: E402

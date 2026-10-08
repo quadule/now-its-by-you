@@ -1,10 +1,10 @@
 """The volunteers' takes with the guide's leak and the room's steady noise taken out (dev only; private, temporary).
 
-    uv run python tools/throat/clean_takes.py [OUT] [--only singer-a,singer-b] [--taps 128] [--floor-db -12] [--jobs 6]
-    uv run python tools/throat/volunteers.py cut WORK --takes OUT/takes      # then the pipeline as usual
+    uv run python tools/archive/volunteers-2026/clean_takes.py [OUT] [--only singer-a,singer-b] [--taps 128] [--floor-db -12] [--jobs 6]
+    uv run python tools/archive/volunteers-2026/volunteers.py cut WORK --takes OUT/takes      # then the pipeline as usual
 
 OUT defaults to songbird-volunteers/cleaned/ in the system's temporary folder (never the checkout).
-Read-only on recordings/: every take that tools/throat/volunteers.py would cut (its counts()) is
+Read-only on recordings/: every take that tools/archive/volunteers-2026/volunteers.py would cut (its counts()) is
 written to OUT/takes/<singer>/<name>.wav, with its
 sidecar copied beside it field for field plus a "cleaned" field saying what was done. A take that needs
 nothing is linked, not copied. OUT/report.json has every take's numbers, OUT/guides/ the re-rendered guides.
@@ -62,10 +62,10 @@ from pathlib import Path
 import numpy as np
 
 warnings.filterwarnings("ignore")
-ROOT = Path(__file__).resolve().parents[2]
+ROOT = Path(__file__).resolve().parents[3]  # tools/archive/volunteers-2026/ is three down
 sys.path.insert(0, str(ROOT))
 sys.path.insert(0, str(ROOT / "tools"))
-sys.path.insert(0, str(Path(__file__).parent))
+sys.path.insert(0, str(Path(__file__).parent))  # volunteers, beside this
 
 import takes as K  # noqa: E402
 

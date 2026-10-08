@@ -14,7 +14,7 @@ sung take in one of its voices while keeping the take's pitch and timing.
 
 These voices belong to nobody, which is the point: they sing the song with a
 phrasing we choose, so we can check how well the extractor finds it again
-(tools/reference.py). They never join the lineage. Keys come from the
+(tools/archive/reference-voices/reference.py). They never join the lineage. Keys come from the
 environment or from a .env file at the repository root, which git ignores.
 Every line read is kept in renders/reference/speech/, so the same line in the
 same voice is only ever paid for once.
@@ -39,7 +39,7 @@ import numpy as np
 import soundfile as sf
 from scipy.signal import resample_poly
 
-ROOT = Path(__file__).parent.parent
+ROOT = Path(__file__).resolve().parents[3]  # tools/archive/reference-voices/ is three down
 CACHE = ROOT / "renders" / "reference" / "speech"
 ELEVENLABS_MODEL = "eleven_v3"  # the most expressive; audio tags in [brackets]
 ELEVENLABS_STABILITY = 0.5  # v3's "Natural": 0.0 Creative (drifts), 1.0 Robust (flat, ignores tags)

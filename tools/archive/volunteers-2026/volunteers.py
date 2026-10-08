@@ -1,11 +1,11 @@
 """The volunteers' takes as training material for the learned throat (dev only; private, temporary).
 
-    uv run python tools/throat/volunteers.py cut WORK [--min-quiet 20] [--jobs 6] [--takes DIR]
+    uv run python tools/archive/volunteers-2026/volunteers.py cut WORK [--min-quiet 20] [--jobs 6] [--takes DIR]
     uv run python tools/throat/features.py WORK/corpus --out WORK/features
     uv run python tools/throat/phones.py WORK/corpus
     uv run python tools/throat/check.py WORK --cents 200 --min-tune 0.75
     uv run python tools/throat/dataset.py WORK --out WORK/dataset-volunteers.npz
-    uv run python tools/throat/volunteers.py merge WORK [--house renders/throat/dataset-house.npz]
+    uv run python tools/archive/volunteers-2026/volunteers.py merge WORK [--house renders/throat/dataset-house.npz]
 
 WORK is a scratch directory of your choosing, never renders/ or recordings/. `cut` reads every take in
 recordings/<singer>/ that counts (tools/takes.py's `use`), leaving out the artist's tests (sim-*.wav,
@@ -33,7 +33,7 @@ guide has no singing (its pre-roll and the gaps between lines, which carry any r
 leak of the backing) against the level of its singing. A take whose background is within
 --min-quiet dB of its singing is left out, and said so.
 
---takes DIR reads the takes from DIR/<singer>/*.wav instead of recordings/ (tools/throat/clean_takes.py's
+--takes DIR reads the takes from DIR/<singer>/*.wav instead of recordings/ (tools/archive/volunteers-2026/clean_takes.py's
 OUT/takes: the same takes with the guide's leak and the room's noise taken out, each beside a copy of its
 sidecar). The guides' scores are still read from recordings/guides/, and each take is named, tagged and
 reported as the recordings/<singer>/<name>.wav it was made from, so its segments keep their names.
@@ -71,10 +71,10 @@ from pathlib import Path
 
 import numpy as np
 
-ROOT = Path(__file__).resolve().parents[2]
+ROOT = Path(__file__).resolve().parents[3]  # tools/archive/volunteers-2026/ is three down
 sys.path.insert(0, str(ROOT))
 sys.path.insert(0, str(ROOT / "tools"))
-sys.path.insert(0, str(Path(__file__).parent))
+sys.path.insert(0, str(ROOT / "tools" / "throat"))  # soulx
 
 import takes as K  # noqa: E402
 from soulx import segment  # noqa: E402

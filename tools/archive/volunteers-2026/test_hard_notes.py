@@ -1,10 +1,11 @@
-"""tools/hard_notes.py: the notes several singers independently sing as another."""
+"""tools/archive/volunteers-2026/hard_notes.py: the notes several singers independently sing as another (archived with it, out of the
+default suite: uv run pytest tools/archive/volunteers-2026)."""
 
 import sys
 from pathlib import Path
 
-sys.path.insert(0, str(Path(__file__).parent.parent / "tools"))
-import hard_notes as N  # noqa: E402  (tools/hard_notes.py)
+sys.path.insert(0, str(Path(__file__).parent))
+import hard_notes as N  # noqa: E402  (hard_notes.py, beside this)
 
 from songbird import genome as G  # noqa: E402
 

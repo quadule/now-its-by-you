@@ -1,7 +1,7 @@
 """Where singers depart from the tune, and what they sing instead, from everyone's measured takes (dev-only).
 
-    uv run python tools/hard_notes.py                  # the notes singers change, most agreed on first
-    uv run python tools/hard_notes.py --line b4        # one line, note by note, singer by singer
+    uv run python tools/archive/volunteers-2026/hard_notes.py                  # the notes singers change, most agreed on first
+    uv run python tools/archive/volunteers-2026/hard_notes.py --line b4        # one line, note by note, singer by singer
 
 Every take ticked to count, once measured (tools/phrasing.py; `invite.py sync --measure` measures
 each as it arrives), says for each note of the tune how far the singer's pitch sat from the written
@@ -29,8 +29,8 @@ from pathlib import Path
 
 import numpy as np
 
-ROOT = Path(__file__).parent.parent
-sys.path.insert(0, str(Path(__file__).parent))
+ROOT = Path(__file__).resolve().parents[3]  # tools/archive/volunteers-2026/ is three down
+sys.path.insert(0, str(ROOT / "tools"))
 sys.path.insert(0, str(ROOT))
 import takes as K  # noqa: E402  (tools/takes.py)
 

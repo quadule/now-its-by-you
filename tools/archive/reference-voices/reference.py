@@ -1,8 +1,8 @@
 """Reference singers: a phrasing we choose, sung by voices that belong to nobody (dev-only).
 
-    uv run python tools/reference.py songs/h-now-its-by-you.json --voice formant say:Daniel --takes 4
-    ELEVENLABS_API_KEY=... uv run python tools/reference.py songs/h-now-its-by-you.json --voice elevenlabs:George
-    GEMINI_API_KEY=... uv run python tools/reference.py songs/h-now-its-by-you.json --voice gemini:Kore
+    uv run python tools/archive/reference-voices/reference.py songs/h-now-its-by-you.json --voice formant say:Daniel --takes 4
+    ELEVENLABS_API_KEY=... uv run python tools/archive/reference-voices/reference.py songs/h-now-its-by-you.json --voice elevenlabs:George
+    GEMINI_API_KEY=... uv run python tools/archive/reference-voices/reference.py songs/h-now-its-by-you.json --voice gemini:Kore
 
 The extractor (tools/phrasing.py) can only be checked against singing whose
 phrasing is known. A reference singer has a way with the song, an intended
@@ -14,11 +14,11 @@ same guide a person sings along to, in one of these voices:
 
     formant                      the machine's own singer, as a lineage stand-in (the easy case)
     say:<voice>                  a macOS voice's reading of the lyric, moved onto the tune
-    elevenlabs:<voice>, gemini:<voice>    the same, read by those services (tools/tts.py)
+    elevenlabs:<voice>, gemini:<voice>    the same, read by those services (tools/archive/reference-voices/tts.py)
     seedvc:<file.wav>            the formant singer's take, sung again by Seed-VC (singing voice
                                  conversion, installed beside the repo, SEED_VC) in the voice of the
                                  singer in file.wav (1 to 30 s of them alone, e.g. from
-                                 tools/music_takes.py): a voice that sounds like a person, with the
+                                 tools/archive/reference-voices/music_takes.py): a voice that sounds like a person, with the
                                  pitch and timing sung exactly as planted
 
 and is then heard through a cheap microphone in a small room. The spoken
@@ -46,7 +46,8 @@ import soundfile as sf
 from scipy.signal import butter, fftconvolve, resample_poly, sosfilt
 
 warnings.filterwarnings("ignore", message="pkg_resources")
-sys.path.insert(0, str(Path(__file__).parent))
+sys.path.insert(0, str(Path(__file__).resolve().parents[2]))  # tools/: phrasing, speech_to_song
+sys.path.insert(0, str(Path(__file__).parent))  # tts, beside this
 import phrasing as T  # noqa: E402
 import speech_to_song as S  # noqa: E402
 import tts  # noqa: E402
