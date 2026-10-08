@@ -204,6 +204,9 @@ def main() -> None:
     ap.add_argument("--contrast", type=float, default=0.0, help="weight of L1 on the envelope less its trend")
     ap.add_argument("--rhotic-from-house", action="store_true",
                     help="learn an R after a vowel (and ER, AYR, AWR, OYR) only from the house audio, not from people's")
+    ap.add_argument("--retire", nargs="*", default=[], metavar="SINGER",
+                    help="singers the model keeps but never draws into a voice (throat.drawn): an older version's "
+                         "blend still reaches their rows; a name ending in * retires every singer it begins")
     ap.add_argument("--adversarial", type=float, default=0.0, help="weight of fooling the critic (0: no critic)")
     ap.add_argument("--feature-match", type=float, default=None,
                     help="weight of matching the critic's features on real and predicted (default: twice --adversarial)")
@@ -492,6 +495,8 @@ def main() -> None:
                   adversarial=args.adversarial, share=args.share, feature_match=fm_weight if args.adversarial else 0.0,
                   widened_from=old["channels"] if old and old["channels"] < args.channels else None,
                   registers=registers, sources=dict(zip(singers, sources)),
+                  retired=[n for n in singers if any(n == r or (r.endswith("*") and n.startswith(r[:-1]))
+                                                     for r in args.retire)],
                   dataset=str(args.dataset), frames=int(len(sp)), params=int(n_params), held_out=args.hold_out or [],
                   excluded=args.exclude or [],
                   lr=args.lr, init=str(args.init) if args.init else None)
