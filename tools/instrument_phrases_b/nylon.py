@@ -100,22 +100,6 @@ PHRASES = {
                          mix_as={"ukulele": "guitar"}),
 }
 
-def _fingerpicked(vel: float = 0.6, bars: int = 8) -> list:
-    """The classical guitar's everyday accompaniment: the thumb on the bass on 1 and 3, the fingers picking
-    the chord in eighths above it (p i m a m i), D, Bm, G, A."""
-    c = Clock(96)
-    shapes = [("D3", ("A3", "D4", "F#4")), ("B2", ("F#3", "B3", "D4")), ("G2", ("G3", "B3", "D4")),
-              ("A2", ("E3", "A3", "C#4"))]
-    notes = []
-    for bar in range(bars):
-        bass, (i, m, a) = shapes[(bar // 2) % 4]
-        b0 = 4 * bar
-        notes += [c.note("nylon", b0, 1.9, pitch(bass), vel, "thumb"), c.note("nylon", b0 + 2, 1.9, pitch(bass), vel, "thumb")]
-        for k, p in enumerate((i, m, a, m, i, m, a, m)):
-            notes.append(c.note("nylon", b0 + 0.5 * k, 0.9, pitch(p), vel * 0.85, ""))
-    return notes
-
-
 def _strummed(vel: float = 0.6, bars: int = 8) -> list:
     """Full chords strummed with the fingers, down on the beats and up between (as the band's guitar strums):
     the classical guitar's level is set by this, like the band's guitar and the other new instruments'."""
