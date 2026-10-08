@@ -240,7 +240,7 @@ def test_the_seed_pages_words_are_timed_as_the_file_sang_them(tmp_path):
 
 
 def packed(path: Path, seed: int, monkeypatch) -> str:
-    """A small packed render, packed before the program embedded the cover; its id."""
+    """A small packed render, packed before the program embedded the cover; its audio id."""
     from songbird import pack
     from songbird.synth import master
 
@@ -253,9 +253,24 @@ def packed(path: Path, seed: int, monkeypatch) -> str:
     return record["id"]
 
 
-def edition(n: int, date: str, render, audio: str, **more) -> dict:
-    return {"id": str(n), "title": f"Version {n}", "date": date, "render": str(render), "audio": audio[:12],
-            "commit": "10dc1e0bba140e5dfed9217f4ddcc90b4d531004", "note": f"What changed in {n} & why.", **more}
+def edition(n: int, date: str, audio: str, released: Path, render: Path | None = None, kept: Path | None = None,
+            **more) -> dict:
+    """An edition as web/sing/editions.json lists one: its file as released (the bytes at `released`), served
+    from a kept copy or made from its render."""
+    return {"title": f"Version {n}", "date": date, "note": f"What changed in {n} & why.", "audio": audio,
+            "file": {"sha256": W.sha256(released), "bytes": released.stat().st_size, **({"path": str(kept)} if kept else {})},
+            **({"render": {"path": str(render), "sha256": W.sha256(render), "bytes": render.stat().st_size}} if render else {}),
+            "program": "a" * 64, "python": "3.12", "source": {"commit": "10dc1e0bba140e5dfed9217f4ddcc90b4d531004"},
+            "command": f"uv run songbird render --seed {n}", "credit": f"{n} sung takes", **more}
+
+
+def covered(render: Path) -> Path:
+    """The render as it's released: given the song's cover (pack.with_cover)."""
+    from songbird import pack
+
+    out = render.with_name(render.stem + ".released.flac")
+    pack.with_cover(render, out)
+    return out
 
 
 def test_the_seed_pages_file_carries_the_cover_with_its_packet_and_id(tmp_path, monkeypatch):
@@ -265,9 +280,11 @@ def test_the_seed_pages_file_carries_the_cover_with_its_packet_and_id(tmp_path, 
 
     render = tmp_path / "contest.flac"
     made = packed(render, 1, monkeypatch)
+    released = covered(render)
     before = render.read_bytes()
     manifest = tmp_path / "editions.json"
-    manifest.write_text(json.dumps({"editions": [edition(1, "2026-09-28", render, made)]}))
+    manifest.write_text(json.dumps({"editions": [edition(1, "2026-09-28", made, released, render=render)]}))
+    released.unlink()  # made again from the render, byte for byte
     out = tmp_path / "public"
     out.mkdir()
     (out / "seed.html").write_text("{{SEED_FILE}} {{SEED_MB}} {{SEED_WORDS}}")
@@ -282,14 +299,18 @@ def test_the_seed_pages_file_carries_the_cover_with_its_packet_and_id(tmp_path, 
 
 
 def test_the_home_page_offers_the_newest_edition_and_the_history_every_one(tmp_path, monkeypatch):
-    """web/sing/editions.json: the seed page (the home page) plays and offers the newest edition whose render is
-    here, its words timed, under the same name as ever; /history offers every one, newest first, each under its
-    date's name; an edition whose render isn't here is left out, and the pages still build without any."""
+    """web/sing/editions.json: the seed page (the home page) plays and offers the newest edition whose bytes are
+    here, its words timed, under the same name as ever; /history offers every one, newest first and numbered,
+    each under its date's name with what identifies it; an edition whose bytes aren't here is left out, and the
+    pages still build without any."""
     first, second = tmp_path / "first.flac", tmp_path / "second.flac"
     ids = {first: packed(first, 1, monkeypatch), second: packed(second, 2, monkeypatch)}
+    kept = covered(second)  # the second's released file, kept as it is
     manifest = tmp_path / "editions.json"
-    listed = [edition(1, "2026-09-28", first, ids[first]), edition(2, "2026-10-20", second, ids[second]),
-              edition(3, "2026-11-02", tmp_path / "not-yet.flac", "0" * 12)]
+    listed = [edition(1, "2026-09-28", ids[first], covered(first), render=first,
+                      archives=[{"name": "Zenodo", "url": "https://doi.org/10.5281/zenodo.1"}]),
+              edition(2, "2026-10-20", ids[second], kept, kept=kept),
+              {**edition(3, "2026-11-02", "c" * 64, kept, kept=tmp_path / "not-yet.flac")}]
     manifest.write_text(json.dumps({"editions": listed}))
     web = tmp_path / "web"
     shutil.copytree(W.WEB / "page", web / "page")
@@ -298,8 +319,8 @@ def test_the_home_page_offers_the_newest_edition_and_the_history_every_one(tmp_p
     monkeypatch.setattr(W, "WEB", web)
     monkeypatch.setattr(W, "EDITIONS", manifest)
     timed = {"duration": 0.5, "lines": [[0.0, 0.5, [["Who", 0.0, 0.5, 1]]]]}
-    monkeypatch.setattr(W, "seed_words", lambda flac: timed if flac == second else None)
-    assert W.seed_source() == second
+    monkeypatch.setattr(W, "seed_words", lambda flac: timed if flac.read_bytes() == kept.read_bytes() else None)
+    assert W.seed_source() == kept
     out = tmp_path / "public"
     out.mkdir()
     W.pages(out)
@@ -307,7 +328,7 @@ def test_the_home_page_offers_the_newest_edition_and_the_history_every_one(tmp_p
     seed = out / "seed"
     assert sorted(f.name for f in seed.iterdir()) == ["now-its-by-you-2026-09-28.flac", "now-its-by-you-2026-10-20.flac",
                                                        "now-its-by-you.flac", "words.json"]
-    assert (seed / W.SEED_FILE).read_bytes() == (seed / "now-its-by-you-2026-10-20.flac").read_bytes()
+    assert (seed / W.SEED_FILE).read_bytes() == (seed / "now-its-by-you-2026-10-20.flac").read_bytes() == kept.read_bytes()
     assert json.loads((seed / "words.json").read_text()) == timed
     home = (out / "seed.html").read_text()
     assert "{{" not in home
@@ -319,10 +340,24 @@ def test_the_home_page_offers_the_newest_edition_and_the_history_every_one(tmp_p
     assert "{{" not in page and 'href="/sing.css?v=' in page and 'href="/identity.css?v=' in page
     shown = re.findall(r'<audio controls preload="none" src="([^"]+)">', page)
     assert shown == ["/seed/now-its-by-you-2026-10-20.flac", "/seed/now-its-by-you-2026-09-28.flac"]  # newest first
+    assert re.findall(r'<span class="n">(\d)</span> Version (\d)', page) == [("2", "2"), ("1", "1")]
+    assert page.count('<span class="badge">on the home page</span>') == 1 and page.index("badge") < page.index("Version 1")
+    assert f'<li class="card edition" id="{ids[first][:12]}">' in page
     assert '<time datetime="2026-09-28">September 28, 2026</time>' in page and "What changed in 1 &amp; why." in page
-    assert "Version 3" not in page  # its render isn't here
+    assert ids[first] in page and listed[0]["file"]["sha256"] in page and listed[0]["render"]["sha256"] in page
+    assert "uv run songbird render --seed 1" in page and '<a href="https://doi.org/10.5281/zenodo.1">Zenodo</a>' in page
+    assert "github.com" not in page  # the source is private until it's switched on
+    assert "Version 3" not in page  # its file isn't here
 
-    second.unlink()  # the newest here is the current one
+    public = tmp_path / "public-source"
+    public.mkdir()
+    for name in ("seed.html", "history.html"):
+        shutil.copyfile(web / "page" / name, public / name)
+    W.seed_page(public, public=True)
+    assert '<a href="https://github.com/quadule/songbird/tree/10dc1e0bba140e5dfed9217f4ddcc90b4d531004">' in (
+        public / "history.html").read_text()
+
+    kept.unlink()  # the newest here is the current one
     assert W.seed_source() == first
     first.unlink()
     assert W.seed_source() is None
@@ -333,9 +368,10 @@ def test_the_home_page_offers_the_newest_edition_and_the_history_every_one(tmp_p
     assert "<p>Nothing yet.</p>" in (again / "history.html").read_text()
 
 
-def test_an_editions_list_that_is_wrong_stops_the_build(tmp_path, monkeypatch):
+def test_an_editions_bytes_never_change_and_a_wrong_list_stops_the_build(tmp_path, monkeypatch):
     render = tmp_path / "one.flac"
     made = packed(render, 1, monkeypatch)
+    released = covered(render)
     manifest = tmp_path / "editions.json"
     out = tmp_path / "public"
     out.mkdir()
@@ -346,20 +382,49 @@ def test_an_editions_list_that_is_wrong_stops_the_build(tmp_path, monkeypatch):
         manifest.write_text(json.dumps({"editions": list(listed)}))
         W.seed_page(out, manifest)
 
-    for listed, said in (([], "lists no editions"), ([{**edition(1, "2026-09-28", render, made), "note": ""}], "has no note"),
-                         ([edition(1, "28 September 2026", render, made)], "isn't YYYY-MM-DD"),
-                         ([edition(1, "2026-09-28", render, made, commit="main")], "commit isn't one"),
-                         ([edition(1, "2026-09-28", render, made), edition(1, "2026-10-01", render, made)], "another's too"),
-                         ([edition(1, "2026-09-28", render, made), edition(2, "2026-09-28", render, made)], "another's too"),
-                         ([edition(1, "2026-09-28", render, "0" * 12)], "the wrong file")):
+    one = edition(1, "2026-09-28", made, released, render=render)
+    for listed, said in (([], "lists no editions"), ([{**one, "note": ""}], "needs note"),
+                         ([{**one, "date": "28 September 2026"}], r"needs date \(YYYY-MM-DD\)"),
+                         ([{**one, "audio": made[:12]}], "needs audio"), ([{**one, "source": {"commit": "main"}}], "source.commit"),
+                         ([{**one, "file": {"sha256": one["file"]["sha256"]}}], "file.bytes"),
+                         ([{**one, "render": {}}], "file.path or render.path"),
+                         ([{**one, "archives": [{"name": "IA", "url": "http://archive.org"}]}], "archives"),
+                         ([one, {**one, "date": "2026-10-01"}], "another's too"),
+                         ([one, edition(2, "2026-09-28", "b" * 64, released, render=render)], "another's too")):
         with pytest.raises(SystemExit, match=said):
             build(*listed)
-    build(edition(1, "2026-09-28", render, made))  # as it should be
+    # the released bytes, or nothing: a render made otherwise now (another cover, say) would change the file
+    for changed in ({**one["file"], "sha256": "0" * 64}, {**one["file"], "bytes": one["file"]["bytes"] + 1}):
+        with pytest.raises(SystemExit, match="never change"):
+            build({**one, "file": changed})
+        assert not (out / "seed" / "now-its-by-you-2026-09-28.flac").exists()
+    build(one)  # as it should be
+    assert W.sha256(out / "seed" / W.SEED_FILE) == W.sha256(released)
 
 
 def test_the_songs_editions_are_listed_rightly():
-    """web/sing/editions.json as it is: the first version is the contest's file, from the program it was made with."""
+    """web/sing/editions.json as it is: the first version is the contest's file as now.itsby.you has served it since
+    September 30 (the render with the cover), from the program it was made with."""
     listed = W.editions()
-    assert listed[-1]["id"] == "1" and listed[-1]["title"] == "The first version" and listed[-1]["date"] == "2026-09-28"
-    assert listed[-1]["audio"] == "07ac74fbd4eb" and listed[-1]["render"] == "renders/review/contest.flac"
-    assert W.us_date(listed[-1]["day"]) == "September 28, 2026"
+    first = listed[-1]
+    assert (first["number"], first["id"], first["title"], first["date"]) == (1, "07ac74fbd4eb", "The first version", "2026-09-28")
+    assert first["file"] == {"sha256": "c1980bc78724232b07179ffe8f611318268cd2159cc4f7e07d44f75284b6bc10", "bytes": 15840849}
+    assert first["render"]["path"] == "renders/review/contest.flac" and first["source"]["commit"].startswith("10dc1e0")
+    assert first["credit"] == "79 sung takes by 12 singers"
+    assert W.us_date(first["day"]) == "September 28, 2026"
+    if first["render"]["found"]:  # in a checkout that has it: made into exactly the bytes released
+        assert W.sha256(first["render"]["found"]) == first["render"]["sha256"]
+
+
+def test_the_preview_mp3_says_what_it_is(tmp_path, monkeypatch):
+    """A listening copy made from a packed FLAC doesn't inherit its comment ("This file is also the program..."),
+    which isn't true of an MP3."""
+    import subprocess
+
+    render = tmp_path / "packed.flac"
+    packed(render, 1, monkeypatch)
+    W.preview_mp3(render, tmp_path / "preview.mp3")
+    tags = json.loads(subprocess.run(["ffprobe", "-v", "error", "-show_entries", "format_tags", "-of", "json",
+                                      str(tmp_path / "preview.mp3")], capture_output=True, check=True).stdout)["format"]["tags"]
+    assert tags["comment"] == W.LISTENING and "also the program that sang it" not in json.dumps(
+        {k: v for k, v in tags.items() if k != "comment"})

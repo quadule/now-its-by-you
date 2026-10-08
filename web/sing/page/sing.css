@@ -207,11 +207,21 @@ pre { margin: 0 0 10px; padding: 10px 12px; overflow-x: auto; background: var(--
 .which { margin: 8px 0 0; }
 .which:empty { display: none; }
 
-/* the history: every edition, newest first, each on a card of its own */
+/* the history: every edition, newest first, each on a card of its own, numbered as a hymnal numbers its verses;
+   what identifies it behind a disclosure, the hashes free to break anywhere on a phone */
 .kicker a { color: inherit; }
+.editions { list-style: none; margin: 0; padding: 0; }
 .edition .when { margin: -2px 0 8px; color: var(--dim); font-size: 15px; }
 .edition audio { margin: 12px 0 8px; }
 .edition > p.hint { margin: 0; }
+
+.facts { margin-top: 10px; font-size: 15px; }
+.facts > summary { cursor: pointer; color: var(--ink-2); }
+.facts dl { display: grid; grid-template-columns: max-content minmax(0, 1fr); gap: 4px 14px; margin: 10px 0 0; }
+.facts dt { color: var(--dim); }
+.facts dd { margin: 0; }
+.facts code { font-size: 13px; overflow-wrap: anywhere; }
+@media (max-width: 640px) { .facts dl { grid-template-columns: minmax(0, 1fr); gap: 0; } .facts dd { margin-bottom: 6px; } }
 
 /* the studio, as it opens: a picture of it in a hairline, as the cover is; a phone's on a phone */
 .shot { display: block; width: 100%; height: auto; margin: 4px 0 14px; border: 1px solid var(--rule); border-radius: var(--radius);
