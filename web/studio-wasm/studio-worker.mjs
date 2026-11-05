@@ -135,11 +135,11 @@ async function init({ pyodide, app, bytes, lean, control, stemCacheBytes }) {
   if (lean || control) return initLean(new Uint8Array(await program), t0, control, code);
   const kernels = await import(`${app}kernels/kernels.gen.mjs`);
   const rt = await import(`${app}kernels/rt.mjs`);
-  const { loadWasmKernels } = await import(`${app}wasm/kernels.mjs`);
+  const { loadWasmKernels, kernelsFile } = await import(`${app}wasm/kernels.mjs`);
   rt.setHeap(() => py._module.HEAPU8.buffer);
   const manifest = await (await fetch(`${app}kernels/manifest.json`)).text();
   py.registerJsModule('songbird_kernels', { kernels, rt, manifest });
-  const wasm = await (await fetch(`${app}wasm/kernels.wasm`)).arrayBuffer();
+  const wasm = await (await fetch(`${app}${kernelsFile()}`)).arrayBuffer();  // with SIMD where it validates
   py.registerJsModule('songbird_wasm', await loadWasmKernels(wasm, py._module.memory));
   const zip = new Uint8Array(await (await fetch(`${app}songbird.zip`)).arrayBuffer());
   py.unpackArchive(zip, 'zip', { extractDir: '/app' });

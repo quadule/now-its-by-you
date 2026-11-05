@@ -684,6 +684,9 @@ whole song: 4.3 s less in the browser and 54 MiB less heap; natively a 25 s voic
    OpenBLAS without SIMD at about 7 GFLOP/s. A wasm-SIMD kernel ran 16 GFLOP/s in node (2.3x); to be taken only if it
    matches OpenBLAS's own order of sums bit for bit in Pyodide (its K blocking, to be found by experiment), with a
    fallback where wasm has no SIMD. About 0.7 s a section and 10 s a whole song.
+   **Done** (below, "The voice's matrix product in wasm SIMD"): OpenBLAS's blocks are four of 120 for K = 480,
+   not two, and the kernel equals `blas.dgemm` bit for bit; 1.22 to 0.62 s of a section, 7.35 to 3.78 s of a
+   whole song, measured on 4 shared x86 cores.
 2. **The treated stems kept, not the dry ones** (`mixing.mix_made`'s `instrument` and `lead`): an edit of the mix
    treats every stem again (0.6 s of channel strips, 0.3 s of the lead). A strip depends only on its stem, role, rate
    and length; keeping it would take an edit from 2.4 to about 1.5 s, with the stem cache's keys carried into the mix.
@@ -703,3 +706,42 @@ Reproduce: `node web/studio-wasm/node/preview_bench.mjs --bundle SITE/render/app
 reaches Pyodide's CDN through a proxy only with `NODE_USE_ENV_PROXY=1`; where the CDN is refused, the release's
 `pyodide-314.0.7.tar.bz2` from GitHub holds the same wheels (its lock is the npm package's), unpacked beside
 `node_modules/pyodide`.
+
+# The voice's matrix product in wasm SIMD (2026-11-05)
+
+In the browser, the learned voice's matrix products (`throat._matmul`, x @ W.T in float64: (N, 480) @ (480, 160)
+for each convolution and (N, 160) @ (160, 160) for each mix, N about 4096 plus context) went to scipy's OpenBLAS
+`dgemm` (`py/web_patches.py`), at about 7 GFLOP/s in Pyodide. They now go to a C kernel built with `-msimd128`
+(`wasm/kernels.c` `matmul_blas`, in a second build `wasm/kernels-simd.wasm`), at 14 to 17 GFLOP/s in node, with
+the same bits.
+
+**The same bits.** A product's last bits depend on the order its k terms are summed, so the kernel sums each
+output in the order Pyodide's OpenBLAS does, found by experiment and then from its source. Pyodide 314.0.7's
+`libopenblas.so` is OpenBLAS 0.3.31 built single-threaded for `RISCV64_GENERIC` (its config string): dgemm's Q is
+120, its unroll 2, its kernel the generic 2x2. With beta 0 it zeroes C, then adds each block of k's partial sum
+(each summed one product after another from zero) to C in turn. `driver/level3/level3.c` takes Q at a time while
+at least 2Q remain, then the rest if no more than Q, else half of it rounded up to the unroll. So K = 480 is
+((((0 + S[0:120]) + S[120:240]) + S[240:360]) + S[360:480]), not two blocks; K = 160 is (0 + S[0:80]) + S[80:160].
+Against `blas.dgemm` on random inputs of every magnitude, only Q = 120 matched for K = 480 (Q = 60 to 512 tried),
+and the rule matched every one of 100 shapes (K from 1 to 1000, odd N and M, zero rows). Each f64x2 lane is one
+output, two of a row's outputs at a time, a 2 x 4 tile of lanes summed in registers; wasm has no fused
+multiply-add, so each product rounds before it is added, as in OpenBLAS's C. The compiler's own vectorizing is
+off in that build (`-fno-vectorize -fno-slp-vectorize`), so the other 14 ports are the same instructions as in
+`kernels.wasm` (compared function by function in the assembly). `kernels.wasm` itself is unchanged, byte for byte.
+
+**Guards.** `wasm/kernels.mjs` fetches `kernels-simd.wasm` where a 26-byte SIMD module validates
+(`WebAssembly.validate`), else `kernels.wasm`, and then the products stay dgemm's. Before its first use at each
+k and m, `web_patches` compares the kernel with `blas.dgemm` bit for bit on random inputs of every magnitude and
+uses dgemm if they differ, so a Pyodide whose OpenBLAS sums otherwise would only be slower. `tools/check_kernels.py`
+checks it against `blas.dgemm` (216 shapes, and every weight of the network), and `wasm/sources.json` records
+`throat._matmul`'s source and the Pyodide version it was checked in: a change to either makes `transpile.py
+--check` (tests/test_browser_kernels.py, and the site's build) ask for that check again, then `--stamp-wasm`.
+
+**Measured** (node 22, 4 shared x86 cores, so ±15%): at the network's shapes, 4465 x 480 @ 480 x 160 took 99 ms
+by dgemm and 49 ms by the kernel; 4465 x 160 @ 160 x 160, 33 and 15 ms. In H's refrain (section 2) the voice's 36
+products of 64 rows or more (16 convolutions, 18 mixes, 2 outputs) took 1.22 s by dgemm and 0.62 s by the kernel (the section 8.2 to 7.8 s,
+warm); over the whole song the 144 such products took 7.35 s and 3.78 s (the render 70.9 to 68.5 s). Section
+and whole-song PCM are byte-identical to dgemm's (`node/run.mjs --section 2` / `--whole --kernels wasm`, and
+`--no-simd` for the fallback), and the device studio's H keeps its ids (`preview_bench.mjs` on a
+`build_site.py --days 0` site: section 14ec579ee295..., `device_run.mjs --whole`: 351e1dfa89f7...), as does H's
+native golden (tests/test_styles.py).
