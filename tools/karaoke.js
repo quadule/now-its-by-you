@@ -15,7 +15,7 @@
 // sample 0 is guide time `from`: the frame (t0 + from + out + inn + extra) * rate. Everything
 // else is as for the whole song, which is the window [0, the song's end).
 
-export const NAMES = { intro: "Intro", verse: "Verse", refrain: "Refrain", turn: "Turn", bridge: "Bridge", tag: "Tag",
+export const NAMES = { intro: "Intro", verse: "Verse", refrain: "Refrain", turn: "Turn", bridge: "Bridge", bridge2: "Bridge 2", tag: "Tag",
                        break: "Break", outro: "Outro" };
 export const PAST = 2.0, FUTURE = 5.0; // seconds of the lane either side of the playhead, on a wide screen
 export const PX_PER_SECOND = 100; // at least this: a fifth of a second is then 20 px, room for its syllable

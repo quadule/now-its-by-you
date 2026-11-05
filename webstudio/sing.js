@@ -93,11 +93,11 @@ function build() {
     h("div", { class: "sing-choices" },
       h("span", { class: "switch", role: "group", "aria-label": "What to sing", id: "singWhich", hidden: true },
         h("button", { type: "button", "data-which": "page", "aria-pressed": "true", title: "The version on the Page: its words, key and tempo" }, "This version"),
-        h("button", { type: "button", "data-which": "released", "aria-pressed": "false", title: "The song as it was released" }, "The released one")),
+        h("button", { type: "button", "data-which": "released", "aria-pressed": "false", title: "The song as it was released" }, "Released")),
       choice("singSpeed", "Speed", "A slower guide to learn it by; your timing is measured against it", []),
       choice("singKey", "Key", "Too high or too low? Choose another key; a man and a woman can sing an octave apart.", []),
       h("label", { class: "check hint", title: "Headphones keep the guide out of the microphone. Without them, the browser takes the guide out of what it hears (echo cancellation)." },
-        h("input", { type: "checkbox", id: "singSpeaker" }), " no headphones")),
+        h("input", { type: "checkbox", id: "singSpeaker" }), " No headphones")),
     h("div", { class: "chips", id: "singParts", role: "group", "aria-label": "What to sing" }),
     h("div", { class: "sing-stage", id: "singStage" },
       h("button", { class: "sing-full", type: "button", id: "singFull" }, "Full screen"),
@@ -111,13 +111,13 @@ function build() {
       h("span", { class: "hint sing-meter", title: "your microphone" }, "mic ", h("span", { class: "meter" }, h("span", { id: "singLevel" })))),
     h("p", { class: "sing-status", id: "singStatus", "aria-live": "polite" }),
     h("div", { class: "sing-review", id: "singReview", hidden: true },
-      h("h3", { id: "singReviewTitle" }, "That take"),
+      h("h3", { id: "singReviewTitle" }, "Your take"),
       h("div", { class: "actions" },
         h("button", { class: "btn", type: "button", id: "singListen" }, "▶ Listen back"),
-        h("button", { class: "btn primary", type: "button", id: "singMeasure" }, "Measure it"),
-        h("button", { class: "btn quiet", type: "button", id: "singDiscard" }, "Sing it again")),
+        h("button", { class: "btn primary", type: "button", id: "singMeasure", title: "The song measures your timing in this take, then deletes it" }, "Use this take"),
+        h("button", { class: "btn quiet", type: "button", id: "singDiscard" }, "Record again")),
       h("div", { class: "sing-sync", title: "If your voice sits late or early against the guide, slide it while you listen." },
-        h("span", { class: "hint" }, "Line it up: earlier"),
+        h("span", { class: "hint" }, "earlier"),
         h("input", { type: "range", id: "singShift", min: "-400", max: "400", step: "5", value: "0", "aria-label": "Slide your take earlier or later" }),
         h("span", { class: "hint" }, "later"),
         h("span", { class: "hint", id: "singShiftValue" }, "as recorded"))),
@@ -126,8 +126,8 @@ function build() {
       h("p", { class: "sing-portrait", id: "singPortrait" }),
       h("p", { class: "hint", id: "singTakes" }),
       h("div", { class: "actions" },
-        h("button", { class: "btn primary", type: "button", id: "singHear" }, "▶ Hear it your way"),
-        h("button", { class: "btn", type: "button", id: "singToRecord" }, "Export it your way"),
+        h("button", { class: "btn primary", type: "button", id: "singHear" }, "▶ Hear it"),
+        h("button", { class: "btn", type: "button", id: "singToRecord" }, "Export"),
         h("button", { class: "link small", type: "button", id: "singForget" }, "Forget my singing"))));
 
   const consent = h("div", { id: "singConsent", hidden: true },
@@ -201,7 +201,7 @@ function showWork() {
   $("singConsent").hidden = true;
   $("singWork").hidden = false;
   if (!window.isSecureContext || !navigator.mediaDevices) {
-    say("This browser won't lend the page its microphone here: the studio needs to be opened over https.", true);
+    say("The microphone needs the studio opened over https.", true);
   }
   guideWords();
 }
@@ -267,7 +267,7 @@ function drawParts() {
     box.append(b);
   };
   for (const s of S.sections) chip(s.index, s.title, K.sectionLabel(s));
-  chip(null, K.WHOLE, "From the top: longer to sing, and to measure");
+  chip(null, K.WHOLE, "From the top");
   $("singRecord").textContent = S.part.index === null ? "● Record the whole song" : `● Record ${S.part.title}`;
 }
 
@@ -333,7 +333,7 @@ async function chosenGuide() {
   let ready = false;
   p.then(() => { ready = true; }, () => {});
   await Promise.resolve();
-  if (!ready) say(S.part.index === null ? "Making the guide for the whole song (a minute or so, once)…" : "Making the guide…");
+  if (!ready) say(S.part.index === null ? "Making the guide for the whole song (about a minute)…" : "Making the guide…");
   return p;
 }
 
@@ -406,7 +406,7 @@ function start(sources, mode, from = 0, until = null) {
   $("singReview").hidden = true;
   const section = S.view.part.index !== null;
   say(mode === "recording" ? (section ? `Recording ${S.view.part.title}.` : "Recording. Space or Stop to finish.")
-    : mode === "listening" ? "Your take, with the guide." : "Rehearsing.");
+    : "");
   const run = S.run = S.run + 1;
   const tick = () => {
     if (run !== S.run || S.mode === "idle" || S.mode === "finishing") return;
@@ -447,7 +447,7 @@ function stop() {
   silence(S.src);
   S.src = [];
   if (was === "recording" || was === "finishing") finishTake(was === "finishing" ? S.stopAt : pos);
-  else say(S.take ? "Measure it, or sing it again." : "");
+  else say("");
   $("singReview").hidden = !S.take;
   S.showTrail = null;
   controls();
@@ -461,7 +461,7 @@ function windowEnds() {
   S.mode = "finishing";
   silence(S.src);
   S.src = [];
-  say("That's the section…");
+  say("");
   S.finishing = setTimeout(stop, (K.TAIL + Math.max(0, S.inn + delay()) + 0.15) * 1000);
 }
 
@@ -479,8 +479,8 @@ function finishTake(stoppedAt) {
   $("singShift").value = String(Math.max(-400, Math.min(400, -S.shift * 1000)));
   $("singShiftValue").textContent = S.shift ? `auto, ${Math.abs(Math.round(S.shift * 1000))} ms ${S.shift > 0 ? "earlier" : "later"}` : "as recorded";
   if (S.shift) keep({ nudge: Math.round(delay() * 1000 + S.shift * 1000) });  // the next take starts closer
-  $("singReviewTitle").textContent = whole ? "That take" : `That take of ${part.title}`;
-  say(long ? "Got it. Listen back if you like, then measure it." : "That was short. Record again?");
+  $("singReviewTitle").textContent = whole ? "Your take" : `Your take: ${part.title}`;
+  say(long ? "" : "Too short. Record again.");
 }
 
 function rehearse() {
@@ -552,7 +552,7 @@ async function measure() {
   } catch (e) {
     S.measuring = false;
     controls();
-    say(`It couldn't be measured: ${e.message}`, true);
+    say(`The take couldn't be used: ${e.message}`, true);
     return;
   }
   const estimate = job.estimate || 10;
@@ -560,9 +560,9 @@ async function measure() {
   $("singReview").hidden = true;
   for (;;) {
     if (job.state === "queued" && job.ahead) {
-      say(`Waiting its turn (${job.ahead} ahead), then about ${estimate} s to measure.`);
+      say(`Waiting (${job.ahead} ahead), then about ${estimate} s.`);
     } else if (job.state === "queued" || job.state === "running") {
-      say(`Measuring it (about ${estimate} s)…`);
+      say(`Measuring your timing (about ${estimate} s)…`);
     } else break;
     await new Promise((r) => setTimeout(r, 1000));
     try { job = await ST.api(`/api/job/${job.id}`); } catch (e) { job = { state: "failed", error: e.message }; }
@@ -571,7 +571,7 @@ async function measure() {
   controls();
   const result = job.result || {};
   if (job.state !== "done") {
-    say(`It couldn't be measured: ${String(job.error || "the studio stopped").replace(/^\w+(Error|Exception): /, "")}. Sing it again?`, true);
+    say(`The take couldn't be used: ${String(job.error || "the studio stopped").replace(/^\w+(Error|Exception): /, "")}. Record again.`, true);
     return;
   }
   if (result.refused) { say(result.refused, true); return; }
@@ -580,7 +580,7 @@ async function measure() {
   own(result.name, result.phrasing);
   ST.setEdit("phrasing", result.name, "Sing it your way");
   showYours();
-  say("Measured. The song is sung your way now.");
+  say("The song follows your timing now.");
 }
 
 function own(name, json) {
@@ -598,8 +598,8 @@ function showYours() {
   const portrait = String(k.phrasing.portrait || "");
   $("singPortrait").textContent = portrait.split(/\n(?=Take \d+:)/).pop();
   $("singPortrait").title = portrait.includes("\nTake ") ? portrait : "";
-  $("singTakes").textContent = `From ${n} take${n === 1 ? "" : "s"}. Each one you measure joins it.`;
-  $("singTakes").title = `Up to ${MAX_TAKES}: sing another section, or the same one again.`;
+  $("singTakes").textContent = `From ${n} take${n === 1 ? "" : "s"}.`;
+  $("singTakes").title = `Each take you use joins it, up to ${MAX_TAKES}.`;
 }
 
 async function forget() {
