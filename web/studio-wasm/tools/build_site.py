@@ -182,7 +182,8 @@ def window(today: date, days: int = DAYS) -> list[str]:
 def fetched(py_files: dict[str, bytes], app_files: dict[str, bytes], lock: dict, packages: list[str]) -> int:
     """What a worker fetches (its bytes as they arrive, unpacked: what it counts), by the packages it loads: Python,
     its library, the lock, those packages' wheels and the program; a render worker also its kernels' manifest and
-    wasm (scripts it imports aren't counted)."""
+    wasm (scripts it imports aren't counted; the SIMD build's, which every current browser takes: a browser
+    without wasm SIMD fetches kernels.wasm, 3 KB less)."""
     wheels = set()
     todo = list(packages)
     while todo:
@@ -192,7 +193,7 @@ def fetched(py_files: dict[str, bytes], app_files: dict[str, bytes], lock: dict,
             todo += lock["packages"][name].get("depends", [])
     names = ["pyodide.asm.wasm", "python_stdlib.zip", "pyodide-lock.json",
              *[lock["packages"][w]["file_name"] for w in wheels]]
-    app = ["songbird.zip"] + (["kernels/manifest.json", "wasm/kernels.wasm"] if "scipy" in packages else [])
+    app = ["songbird.zip"] + (["kernels/manifest.json", "wasm/kernels-simd.wasm"] if "scipy" in packages else [])
     return sum(len(py_files[n]) for n in names) + sum(len(app_files[n]) for n in app)
 
 

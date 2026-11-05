@@ -16,6 +16,7 @@ progress(fraction, words), as the server's job reports it (Studio's Job.report a
 from __future__ import annotations
 
 import contextlib
+import hashlib
 import io
 import json
 import os
@@ -66,14 +67,36 @@ def load(spec: dict, folder: Path):
     return song, genome, params, lyrics
 
 
+_SCORES: dict[str, object] = {}  # the last few versions laid out, by what laid them (_score_key)
+SCORES = 2
+
+
+def _score_key(spec: dict) -> str:
+    """What a version's score is made from: the song, its choices but the mix's (realize and lay never read the mix,
+    which only the synthesis does), its words, phrasing and choir."""
+    made_of = [spec["genome"], {k: v for k, v in spec["params"].items() if k != "mix"}, spec.get("lyrics"),
+               spec.get("phrasing"), spec.get("choir")]
+    return hashlib.sha256(json.dumps(made_of, sort_keys=True, default=str).encode()).hexdigest()
+
+
 def _score(genome, params, lyrics, spec: dict):
-    """The version laid out, as Studio._score lays it."""
+    """The version laid out, as Studio._score lays it. A section's edit of the mix alone (or one asked again) lays out
+    the same score, so the last few are kept: a quarter of an edit's preview in the browser (0.75 of 3 s in node). A
+    Score and its notes are frozen, and what reads them (window, cut, the synthesis) makes new ones."""
     from songbird import phrasing as phrasing_mod, variation
     from songbird.realize import realize
 
+    key = _score_key(spec)
+    if key in _SCORES:
+        _SCORES[key] = _SCORES.pop(key)  # the most recent last
+        return _SCORES[key]
     phrasing = phrasing_mod.from_json(spec["phrasing"]) if spec.get("phrasing") else None
     choir = [phrasing_mod.from_json(ph) for ph in spec.get("choir") or []]
-    return variation.lay(realize(genome, params, phrasing=phrasing, choir=choir, lyrics=lyrics), params)
+    score = variation.lay(realize(genome, params, phrasing=phrasing, choir=choir, lyrics=lyrics), params)
+    _SCORES[key] = score
+    while len(_SCORES) > SCORES:
+        del _SCORES[next(iter(_SCORES))]
+    return score
 
 
 def section(spec: dict, folder: Path, progress=None) -> dict:

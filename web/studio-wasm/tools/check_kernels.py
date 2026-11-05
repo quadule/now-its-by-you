@@ -3,7 +3,12 @@
 whichever the shim chose) and, where small enough, through the plain Python function too; compare the
 results with numba's bit for bit (float64 as it is, not rounded to 16 bits).
 
-  node web/studio-wasm/node/run.mjs [--kernels wasm] --mount CALLS_DIR:/calls --exec web/studio-wasm/tools/check_kernels.py"""
+With --kernels wasm (the SIMD build, kernels-simd.wasm), the voice's matrix product too: matmul_blas against
+scipy's blas.dgemm, which it must equal bit for bit (py/web_patches.py), on inputs of every magnitude in shapes
+around OpenBLAS's blocks of k and on the network's own weights. Then tools/transpile.py --stamp-wasm.
+
+  node web/studio-wasm/node/run.mjs [--kernels wasm] --mount CALLS_DIR:/calls --exec web/studio-wasm/tools/check_kernels.py
+  (without --mount, the matrix product alone)"""
 
 import glob
 import importlib
@@ -69,4 +74,44 @@ for path in sorted(glob.glob("/calls/*.npz")):
         s2, w2 = compare(getattr(fn, "py_func", fn), z)
         py = "same" if s2 else f"{w2[0]} ulp, {w2[1]:.1e} of peak"
     rows.append(f"{name:36s} {port:6s} {'same' if same else f'DIFFERS max {worst[0]} ulp, {worst[1]:.1e} of peak':40s} python: {py}")
+
+
+def matmul_rows() -> list[str]:
+    """matmul_blas against blas.dgemm (as web_patches calls each), every bit: random inputs of every magnitude,
+    with zero rows, for each k around OpenBLAS's blocks (Q 120: 120, 240, 241, 480, ...) and column counts that
+    leave every remainder of the kernel's eight; then the network's own weights on such inputs."""
+    import web_patches
+
+    kernel = web_patches._kernel()
+    if kernel is None:
+        return ["matmul_blas                          -      not loaded (kernels.wasm, no SIMD): dgemm stays"]
+    same = lambda a, b: a.shape == b.shape and np.array_equal(a.view(np.int64), b.view(np.int64))
+    rng = np.random.default_rng(2026)
+    rand = lambda *shape: rng.standard_normal(shape) * np.exp2(rng.integers(-30, 30, shape))
+    cases = [(n, k, m) for k in (1, 2, 3, 7, 64, 119, 120, 121, 122, 123, 160, 161, 200, 239, 240, 241, 243, 250,
+                                 300, 359, 360, 361, 479, 480, 481, 600, 1000)
+             for n, m in ((64, 160), (65, 161), (67, 163), (130, 2), (101, 3), (66, 1), (99, 15), (4501, 160))]
+    bad = []
+    for n, k, m in cases:
+        x, w = rand(n, k), rand(m, k)
+        x[::7] = 0.0
+        x[3::11] = -0.0
+        if not same(web_patches._dgemm_matmul(x, w), web_patches._simd_product(kernel, x, w)):
+            bad.append(f"{n}x{k}@{k}x{m}")
+    rows = [f"{'matmul_blas, random':36s} simd   {'same' if not bad else 'DIFFERS ' + ', '.join(bad[:6]):40s}"
+            f" ({len(cases) - len(bad)}/{len(cases)} shapes)"]
+    from songbird.synth import throat
+
+    weights = {k: v for k, v in throat.load().w.items() if k.endswith(".weight") and v.ndim == 2 and v.shape[1] > 1}
+    bad = []
+    for name, w in sorted(weights.items()):
+        x = rng.standard_normal((4501, w.shape[1]))
+        if not same(web_patches._dgemm_matmul(x, w), web_patches._simd_product(kernel, x, w)):
+            bad.append(name)
+    rows.append(f"{'matmul_blas, the network':36s} simd   {'same' if not bad else 'DIFFERS ' + ', '.join(bad[:6]):40s}"
+                f" ({len(weights) - len(bad)}/{len(weights)} weights, {sorted({w.shape for w in weights.values()})})")
+    return rows
+
+
+rows += matmul_rows()
 print("\n".join(rows))

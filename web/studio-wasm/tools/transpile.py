@@ -7,7 +7,9 @@ writes web/studio-wasm/kernels/kernels.gen.mjs and kernels/manifest.json ({kerne
 --check writes nothing: it exits 1, saying what to run, when those files, kernels/types.json (numba's types,
 by each kernel's source digest) or the C ports (wasm/sources.json, likewise) are stale relative to the
 kernels' source; tests/test_browser_kernels.py runs it. --stamp-wasm records the sources the C ports were
-checked against (tools/check_kernels.py) in wasm/sources.json.
+checked against (tools/check_kernels.py) in wasm/sources.json: the numba kernels', and the SIMD matrix product's
+(matmul_blas, py/web_patches.py), whose source is throat._matmul and the order Pyodide's OpenBLAS sums in, so
+the Pyodide it was checked in is recorded too (package.json's).
 
 What it keeps from numba's semantics, so a port is the same arithmetic in the same order (bit for bit where
 the kernel uses only + - * / and comparisons; JS numbers are IEEE doubles and nothing fuses a multiply-add):
@@ -867,11 +869,36 @@ def stale() -> list[str]:
         problems.append(f"kernels/types.json has {key}, no longer a kernel")
     ports = HERE / "wasm" / "sources.json"
     if ports.exists():
-        for key, d in json.loads(ports.read_text()).items():
+        stamped = json.loads(ports.read_text())
+        for key, want in matmul_stamps().items():
+            if stamped.pop(key, None) != want:
+                problems.append(f"wasm/kernels.c's matmul_blas was checked against another {key}"
+                                f" ({'Pyodide' if key == 'pyodide' else 'source'}, now {want}): it bakes in"
+                                " how Pyodide's OpenBLAS orders its sums, so check it bit for bit against"
+                                " blas.dgemm again (tools/check_kernels.py), then transpile.py --stamp-wasm")
+        for key, d in stamped.items():
             if digests.get(key) != d:
                 problems.append(f"wasm/kernels.c ports {key} from other source ({'gone' if key not in digests else 'changed'}):"
                                 " port it again (or drop it from py/wasm_kernels.py), check it, then transpile.py --stamp-wasm")
     return problems
+
+
+# The C port of a plain function, not a numba kernel: py/web_patches.py's SIMD product (wasm/kernels.c
+# matmul_blas) for throat._matmul, summed as Pyodide's own OpenBLAS dgemm sums, which it bakes in
+MATMUL = "synth.throat._matmul"
+
+
+def matmul_digest() -> str:
+    tree = ast.parse((ROOT / "songbird" / "synth" / "throat.py").read_text())
+    return source_digest(next(n for n in tree.body if isinstance(n, ast.FunctionDef) and n.name == "_matmul"))
+
+
+def pyodide_version() -> str:
+    return json.loads((HERE / "package.json").read_text())["dependencies"]["pyodide"]
+
+
+def matmul_stamps() -> dict:
+    return {MATMUL: matmul_digest(), "pyodide": pyodide_version()}
 
 
 def wasm_ports() -> list[str]:
@@ -893,8 +920,8 @@ def main():
         generate()
         ports = wasm_ports()
         (HERE / "wasm" / "sources.json").write_text(
-            json.dumps({k: source_digest(ALL[k][0]) for k in ports}, indent=1) + "\n")
-        print(f"wasm/sources.json: {len(ports)} C ports stamped")
+            json.dumps({k: source_digest(ALL[k][0]) for k in ports} | matmul_stamps(), indent=1) + "\n")
+        print(f"wasm/sources.json: {len(ports)} C ports and matmul_blas (Pyodide {pyodide_version()}) stamped")
         return
     gen, manifest_text, manifest = generate()
     (KERNELS / "kernels.gen.mjs").write_text(gen)

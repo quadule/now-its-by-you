@@ -22,6 +22,7 @@ machine: dense from the start, bright, wide, with little low end.
 from __future__ import annotations
 
 import zlib
+from functools import lru_cache
 
 import numpy as np
 from scipy.fft import irfft, next_fast_len, rfft, rfftfreq
@@ -169,7 +170,13 @@ def responses(sr: int, rt60: float = 1.1, tone=TONE, predelay: float = 0.012, se
     """The room's early reflections (2, samples, 2) and late tail (samples, 2),
     scaled together so a centred source's response has unit energy per ear.
     Small rooms are heard more by their early reflections, large ones by
-    their tail."""
+    their tail. Made once for each room's numbers (every render of a version is in the same room) and handed back
+    read-only."""
+    return _responses(sr, rt60, tuple(tone), predelay, seed)
+
+
+@lru_cache(maxsize=4)
+def _responses(sr: int, rt60: float, tone: tuple, predelay: float, seed: int) -> tuple[np.ndarray, np.ndarray]:
     early = _coloured(early_reflections(sr, rt60, predelay, seed), sr, tone)
     volume = float(np.prod(dimensions(rt60)))
     mixing = max(0.005, 0.001 * np.sqrt(volume))  # when echoes have become too dense to tell apart
@@ -180,6 +187,7 @@ def responses(sr: int, rt60: float = 1.1, tone=TONE, predelay: float = 0.012, se
     e_tail = np.sum(tail**2) / 2.0
     early = early * np.sqrt(share / e_early)
     tail = tail * np.sqrt((1.0 - share) / e_tail)
+    early.flags.writeable = tail.flags.writeable = False
     return early, tail
 
 
@@ -193,10 +201,13 @@ def impulse_response(sr: int, rt60: float = 1.1, tone=TONE, predelay: float = 0.
     return _unit(ir)
 
 
+@lru_cache(maxsize=4)
 def plate(sr: int, rt60: float = 1.6, seed: int = 0) -> np.ndarray:
     """The voice's plate, shape (samples, 2), unit energy per ear: dense from the
-    first millisecond, bright, wide, light in the low end."""
-    return _unit(late_tail(sr, rt60, PLATE_TONE, seed + 7, start=0.0, ramp=0.003, air=PLATE_AIR, coherence=150.0))
+    first millisecond, bright, wide, light in the low end. (Made once, read-only.)"""
+    out = _unit(late_tail(sr, rt60, PLATE_TONE, seed + 7, start=0.0, ramp=0.003, air=PLATE_AIR, coherence=150.0))
+    out.flags.writeable = False
+    return out
 
 
 WORKERS = 4  # threads for the long convolutions' FFTs: a fixed number, so every machine computes the same bits

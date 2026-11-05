@@ -17,7 +17,7 @@ Each folder is named by a hash of its contents, so the studio serves every file 
 program fetches only its own few megabytes. Text and wasm files get a .gz beside them, which the studio sends to a
 browser that takes it. Needs Node (for Pyodide's npm package: `npm ci` in web/studio-wasm, run here if missing;
 numpy and scipy come from Pyodide's CDN the first time and are cached beside it) at build time only; zig isn't
-needed (the C kernels are built and committed: wasm/kernels.wasm). Refuses to build from kernels that are stale
+needed (the C kernels are built and committed: wasm/kernels.wasm and kernels-simd.wasm). Refuses to build from kernels that are stale
 (tools/transpile.py --check)."""
 
 from __future__ import annotations
@@ -44,10 +44,12 @@ APP = {"studio-worker.mjs": HERE / "studio-worker.mjs",
        "kernels/hand.mjs": HERE / "kernels" / "hand.mjs",
        "kernels/manifest.json": HERE / "kernels" / "manifest.json",
        "wasm/kernels.mjs": HERE / "wasm" / "kernels.mjs",
-       "wasm/kernels.wasm": HERE / "wasm" / "kernels.wasm"}
+       "wasm/kernels.wasm": HERE / "wasm" / "kernels.wasm",
+       "wasm/kernels-simd.wasm": HERE / "wasm" / "kernels-simd.wasm"}
 STANDINS = ("numba/__init__.py", "wasm_kernels.py", "web_patches.py", "studio_render.py",  # py/ (not soundfile.py)
             "studio_device.py",  # the studio itself on the visitor's device (build_site.py)
-            "lazy_imports.py")  # ... whose worker stands in for scipy and soundfile until they're used
+            "lazy_imports.py",  # ... whose worker stands in for scipy and soundfile until they're used
+            "bytecode.py")  # every worker: what Python compiles, kept in the browser for the next one
 OPTIONAL = ("sing_measure.py",)  # py/, when it's there: a sung take measured in the browser (another part of the work)
 # beside the program, for the studio on the device: the song it opens on, and singing's side of the studio (outside
 # the program, as on a server: a packet never carries it)

@@ -233,6 +233,13 @@ the other agent's table; it wasn't there when this was written.)
    no allocator, 6 KB. `py/wasm_kernels.py` adapts them (numba's allocations
    done with numpy first). This is what a proper Pyodide package built with
    emscripten would be, without the package.
+   Since 2026-11-05 a second build, `kernels-simd.wasm` (`-msimd128`, the
+   compiler's own vectorizing off, so the 14 are the same instructions),
+   adds `matmul_blas`: the learned voice's matrix products (below) two
+   outputs at a time in f64x2 lanes, each summed exactly as Pyodide's
+   OpenBLAS sums it, so the same bits at twice dgemm's speed. A browser
+   without wasm SIMD (`WebAssembly.validate` on a 26-byte module,
+   `wasm/kernels.mjs`) is given `kernels.wasm` and keeps dgemm.
 4. **Two browser-only patches**, same numbers (`py/web_patches.py`; the first
    retired that evening, see above):
    - `master.true_peak_envelope` gathers rows from a `sliding_window_view`;
@@ -434,8 +441,9 @@ songs need every second.
                                                                   # (only when types.json is stale; an empty numba cache so numba compiles and keeps types)
     uv run python web/studio-wasm/tools/transpile.py              # kernels/kernels.gen.mjs + manifest.json
     uv run python web/studio-wasm/tools/bundle.py                 # dist/songbird.zip (again after any change to py/)
-    ZIG="uv run --with ziglang python -m ziglang" sh web/studio-wasm/tools/build_wasm.sh  # wasm/kernels.wasm
-    uv run python web/studio-wasm/tools/transpile.py --stamp-wasm # after check_kernels.py passes a changed C port
+    ZIG="uv run --with ziglang==0.16.0 python -m ziglang" sh web/studio-wasm/tools/build_wasm.sh  # wasm/kernels.wasm, kernels-simd.wasm
+    node web/studio-wasm/node/run.mjs --kernels wasm --exec web/studio-wasm/tools/check_kernels.py  # matmul_blas = blas.dgemm, bit for bit
+    uv run python web/studio-wasm/tools/transpile.py --stamp-wasm # after check_kernels.py passes a changed C port (or a new Pyodide)
 
     node web/studio-wasm/node/run.mjs --section 2 [--kernels js|wasm|python] [--times] [--stages] [--fallbacks] [--out x.npy]
     node web/studio-wasm/node/run.mjs --whole --kernels wasm --out whole.npy

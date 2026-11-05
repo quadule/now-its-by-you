@@ -1,7 +1,7 @@
 // Exercise the actual studio worker in Node with Web Worker API adapters. This measures desktop
 // Pyodide, not phone performance. Use the FLAC-capable songbird.zip from tools/build_site.py.
 // node web/studio-wasm/node/preview_bench.mjs --bundle SITE/render/app-HASH/songbird.zip [--full-control]
-//   [--section 2] [--cache-mib 32] [--out preview.flac] [--read rendition.flac] [--control-only]
+//   [--section 2] [--cache-mib 32] [--out preview.flac] [--read rendition.flac] [--control-only] [--kept DIR]
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
@@ -21,6 +21,17 @@ if (!isMainThread) {
     globalThis.onmessage?.({ data });
     for (const listener of listeners.get('message') || []) listener({ data });
   });
+  if (workerData.kept) {  // Cache Storage, as a browser's worker has it: one file per key, in this folder
+    const file = (key) => path.join(workerData.kept, encodeURIComponent(typeof key === 'string' ? key : key.url));
+    const store = {
+      async match(key) { return fs.existsSync(file(key)) ? new Response(fs.readFileSync(file(key))) : undefined; },
+      async put(key, response) { fs.writeFileSync(file(key), new Uint8Array(await response.arrayBuffer())); },
+      async keys() { return fs.readdirSync(workerData.kept).map((n) => ({ url: decodeURIComponent(n) })); },
+      async delete(key) { fs.rmSync(file(key), { force: true }); return true; },
+    };
+    fs.mkdirSync(workerData.kept, { recursive: true });
+    globalThis.caches = { open: async () => store };
+  }
   const network = globalThis.fetch;
   globalThis.fetch = async (url, options) => {
     if (!String(url).startsWith('file:')) return network(url, options);
@@ -37,10 +48,13 @@ if (!isMainThread) {
   if (!supplied) throw new Error('--bundle requires the FLAC-capable songbird.zip from tools/build_site.py');
   const zipped = path.resolve(supplied);
   const section = Number(option('--section', '2'));
+  // --kept DIR: the workers keep their bytecode there (studio-worker.mjs, "bytecode kept in this browser"), as a
+  // browser's Cache Storage would: run twice to see a second visit's start
+  const kept = option('--kept', null) && path.resolve(option('--kept'));
   const cacheBytes = Number(option('--cache-mib', '32')) * 2 ** 20;
   const seconds = (start) => ((performance.now() - start) / 1000).toFixed(3);
   const open = async (control) => {
-    const worker = new Worker(new URL(import.meta.url), { workerData: { bundle: zipped } });
+    const worker = new Worker(new URL(import.meta.url), { workerData: { bundle: zipped, kept } });
     let next = 0;
     const pending = new Map();
     worker.on('message', (message) => {
@@ -115,6 +129,10 @@ if (!isMainThread) {
       await make(changed, 'mix edit');
       await make(spec, 'original again');
       console.log(`control heap remains ${view.heap?.toFixed(0)} MiB; cache budget ${cacheBytes / 2 ** 20} MiB`);
+      if (kept) {  // as a visitor listens: the renderer keeps what it compiled
+        const said = await renderer.wait('kept').catch(() => null);
+        console.log(`renderer kept ${said ? said.kept.join(', ') : 'nothing new'}`);
+      }
     }
   } finally {
     await renderer?.worker.terminate();
