@@ -93,9 +93,11 @@ def test_the_sketchs_players_are_the_midi_files_parts_in_beats(served):
     """Every part but the singer's (the sketch's tune is its own), on the MIDI file's channels with its programs,
     each note in beats of the grid the composition view counts: the band's lute doubles the tune on its beats."""
     studio, port = served
-    status, data = post(port, studio, "/api/players", {"edits": {"tonic": 64}})
-    assert status == 200 and data["key"] == studio.key(studio.version({"tonic": 64}), None)
-    v = studio.version({"tonic": 64})
+    # a fixed day: the band's swing drifts from day to day, and with more of it fewer off beats sit on the sixteenths
+    edits = {"tonic": 64, "date": "2026-11-04"}
+    status, data = post(port, studio, "/api/players", {"edits": edits})
+    assert status == 200 and data["key"] == studio.key(studio.version(edits), None)
+    v = studio.version(edits)
     layout = {t["part"]: t for t in midi.layout(studio._score(v))}
     assert data["tune"]["channel"] == layout["voice"]["channel"] and data["chords"]["channel"] == midi.CHORDS_CHANNEL
     parts = {p["part"]: p for p in data["players"]}
@@ -105,7 +107,7 @@ def test_the_sketchs_players_are_the_midi_files_parts_in_beats(served):
         assert all(0 <= key <= 127 and 1 <= vel <= 127 and length > 0 for _, length, key, vel in p["notes"])
     assert parts["drum"]["channel"] == 9 and parts["drum"]["program"] is None
     # on the view's grid: every tune note's beat, and the band's notes land within a sixteenth of the grid
-    view = studio.song({"tonic": 64})["composition"]
+    view = studio.song(edits)["composition"]
     beats = [p["start_beat"] + n["onset"] for s in view["sections"] for p in s["phrases"] for n in p["notes"]]
     on_grid = [b for part in ("bass", "harp", "lute") for b, *_ in parts[part]["notes"]]
     assert sum(abs(b * 4 - round(b * 4)) < 0.2 for b in on_grid) > 0.9 * len(on_grid)
