@@ -11,7 +11,7 @@ PY = HERE / "node_modules" / "pyodide"
 FILES = [PY / "pyodide.mjs", PY / "pyodide.asm.mjs", PY / "pyodide.asm.wasm", PY / "python_stdlib.zip",
          PY / "pyodide-lock.json", *sorted(PY.glob("numpy-*.whl")), *sorted(PY.glob("scipy-*.whl")),
          HERE / "dist" / "songbird.zip", HERE / "kernels" / "kernels.gen.mjs", HERE / "kernels" / "rt.mjs",
-         HERE / "kernels" / "hand.mjs", HERE / "wasm" / "kernels.wasm"]
+         HERE / "kernels" / "hand.mjs", HERE / "wasm" / "kernels-simd.wasm"]  # (kernels.wasm without SIMD)
 
 try:
     import brotli
