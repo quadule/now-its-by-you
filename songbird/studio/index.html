@@ -58,8 +58,8 @@
   </div>
   <span class="sep wide"></span>
   <div class="group wide">
-    <button class="tbtn" id="tLoop" type="button" aria-pressed="false" aria-label="Loop (L)" title="Loop (L)">⟳</button>
-    <button class="tbtn" id="tClick" type="button" aria-pressed="false" aria-label="Click (K)" title="Click (K)">♩</button>
+    <button class="tbtn" id="tLoop" type="button" aria-pressed="false" aria-label="Loop (L)" title="Loop (L)"><svg viewBox="0 0 20 20" aria-hidden="true"><path d="M5 8.5V8a3 3 0 0 1 3-3h7"/><path d="M12.5 2.5 15 5l-2.5 2.5"/><path d="M15 11.5v.5a3 3 0 0 1-3 3H5"/><path d="M7.5 17.5 5 15l2.5-2.5"/></svg></button>
+    <button class="tbtn" id="tClick" type="button" aria-pressed="false" aria-label="Click (K)" title="Click (K)"><svg viewBox="0 0 20 20" aria-hidden="true"><path d="M7.5 3h5l3 14h-11z"/><path d="M10 13l4.5-7.5"/><path d="M6.2 13h7.6"/></svg></button>
   </div>
   <div class="position" id="position">
     <button class="now" id="positionNow" type="button" title="Where we are; on a phone, how it plays">
@@ -68,14 +68,15 @@
     <div class="bar" id="bar" title="Click to move through what is playing"><i id="barFill"></i></div>
   </div>
   <div class="group">
-    <button class="tempo" id="tempoBtn" type="button" aria-expanded="false" aria-controls="tempoPop" title="Tempo"><b id="tempoValue">·</b><small>BPM</small></button>
+    <label class="tempo" id="tempoBox" title="Tempo"><input type="number" id="tempoNumber" inputmode="numeric" step="1" aria-label="Tempo in beats a minute"><small>BPM</small></label>
+    <button class="tbtn reset" id="tempoReset" type="button" hidden aria-label="Reset the tempo" title="Reset"><svg viewBox="0 0 20 20" aria-hidden="true"><path d="M7 4.5 3.5 8 7 11.5"/><path d="M3.5 8h8a4.25 4.25 0 0 1 0 8.5H8"/></svg></button>
     <button class="keychip" id="keyBtn" type="button" aria-expanded="false" aria-controls="keyPop" title="Key and scale">·</button>
   </div>
   <span class="sep wide"></span>
   <button class="btn quiet wide" id="roll" type="button" title="Chance drawn again for everything you haven't chosen or locked">New performance</button>
   <div class="right">
-    <button class="tbtn wide" id="undoEdit" type="button" disabled aria-label="Undo" title="Undo (⌘/Ctrl Z)">↶</button>
-    <button class="tbtn wide" id="redoEdit" type="button" disabled aria-label="Redo" title="Redo (⌘/Ctrl Shift Z)">↷</button>
+    <button class="tbtn wide" id="undoEdit" type="button" disabled aria-label="Undo" title="Undo (⌘/Ctrl Z)"><svg viewBox="0 0 20 20" aria-hidden="true"><path d="M7 4.5 3.5 8 7 11.5"/><path d="M3.5 8h8a4.25 4.25 0 0 1 0 8.5H8"/></svg></button>
+    <button class="tbtn wide" id="redoEdit" type="button" disabled aria-label="Redo" title="Redo (⌘/Ctrl Shift Z)"><svg viewBox="0 0 20 20" aria-hidden="true"><path d="M13 4.5 16.5 8 13 11.5"/><path d="M16.5 8h-8a4.25 4.25 0 0 0 0 8.5H12"/></svg></button>
     <button class="btn export" id="recordNow" type="button" title="Export it: one file, the program inside (E)"><span class="wide">Export</span><span class="sr-only">Export it</span></button>
     <button class="btn" id="toolsBtn" type="button" aria-expanded="false" aria-controls="finishPanel" title="Take it out, bring it in">Tools</button>
   </div>
@@ -95,7 +96,6 @@
       <button class="btn quiet" type="button" data-do="roll">New performance</button>
     </div>
   </div>
-  <div class="pop" id="tempoPop" hidden role="group" aria-label="Tempo"></div>
   <div class="pop" id="keyPop" hidden role="group" aria-label="Key and scale"></div>
 </div>
 

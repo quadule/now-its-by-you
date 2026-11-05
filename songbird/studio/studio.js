@@ -311,8 +311,10 @@ function renderHeader() {
   const v = state.view;
   $("title").textContent = v.title;
   document.title = `${v.title} · Songbird studio`;
-  const when = v.offset ? `on ${v.date} (${v.when})` : `today, ${v.date}`;
-  $("which").replaceChildren("Your version ", h("b", {}, when), `, ${v.from}, sung by ${v.by}.`);
+  // the day, then only what isn't the plain case: a parent other than the song as it began, a machine if there is one
+  const from = v.from === "from the song as it began" ? "" : v.from;
+  const by = v.by === "no machine, only time" ? "" : v.by.replace(/^a made-up machine called /, "");
+  $("which").replaceChildren(h("b", {}, v.offset ? `${v.date} (${v.when})` : `Today, ${v.date}`), [from, by].filter(Boolean).map((x) => ` · ${x}`).join(""));
   setOn("draw", "textContent", v.roll ? `chance drawn again: draw ${v.roll + 1}` : "");
   const mine = v.changed;
   const locks = lockCount(v.held);  // a lock (the score's padlock) is held, not changed

@@ -99,7 +99,7 @@ function studio({ lead = 0.5 } = {}) {
     createTextNode: (text) => new Node("#text", text),
     activeElement: null,
   };
-  for (const id of ["finishPanel", "drawer", "scrim", "notes", "howPop", "tempoPop", "keyPop"]) document.getElementById(id).hidden = true;
+  for (const id of ["finishPanel", "drawer", "scrim", "notes", "howPop", "keyPop"]) document.getElementById(id).hidden = true;
   const window = {
     addEventListener() {},
     SongbirdComposer: { stop() {}, playing: () => false, sketch: (o) => sketched.push(JSON.parse(JSON.stringify(o))) },

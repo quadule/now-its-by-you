@@ -18,7 +18,7 @@
   const card = (id) => state.view?.cards?.find((c) => c.id === id);
   const edited = (path) => Object.prototype.hasOwnProperty.call(state.edits, path) && state.edits[path] !== null;
   const was = (path) => state.view?.marks?.[path]?.was;
-  // a value chosen: the program's own value gives the choice back to the program (as "The program's choice" does),
+  // a value chosen: the program's own value gives the choice back to the program (as Reset does),
   // rather than being kept as yours; any other is set
   const same = (a, b) => JSON.stringify(a) === JSON.stringify(b);
   function choose(path, value, label) {
@@ -223,10 +223,12 @@
   function renderTransport() {
     const v = state.view, tempo = card("tempo"), key = card("key");
     if (tempo) {
-      $("tempoValue").textContent = Math.round(tempo.tempo);
-      $("tempoBtn").classList.toggle("you", edited("tempo"));
-      $("tempoBtn").title = `Tempo: ${tempo.value}${edited("tempo") && was("tempo") ? `; was ${Math.round(was("tempo"))}` : ""}. This style: ${tempo.range?.min} to ${tempo.range?.max}`;
-      $("tempoBtn").setAttribute("aria-label", `Tempo ${Math.round(tempo.tempo)} beats a minute${edited("tempo") ? ", yours" : ""}`);
+      const number = $("tempoNumber"), range = { ...state.start.bounds.tempo, ...(tempo.range || {}) };
+      number.min = range.min; number.max = range.max;
+      if (document.activeElement !== number) number.value = Math.round(tempo.tempo);  // not under a hand typing in it
+      $("tempoBox").classList.toggle("you", edited("tempo"));
+      $("tempoBox").title = `Tempo: ${tempo.value}${edited("tempo") && was("tempo") ? `; the program's ${Math.round(was("tempo"))}` : ""}. This style: ${range.min} to ${range.max}`;
+      $("tempoReset").hidden = !edited("tempo");
     }
     if (key) {
       $("keyBtn").textContent = key.value;
@@ -235,41 +237,26 @@
     }
     const by = v.by.replace(/^a made-up machine called /, "");
     $("whichShort").textContent = `${v.offset ? v.date : "today"} · ${by}`;
-    if (S.pop === "tempoPop") tempoPop();
     if (S.pop === "keyPop") keyPop();
   }
-  const opener = (id) => ({ howPop: narrow() ? "positionNow" : "howMore", tempoPop: "tempoBtn", keyPop: "keyBtn" })[id];
+  const opener = (id) => ({ howPop: narrow() ? "positionNow" : "howMore", keyPop: "keyBtn" })[id];
   function togglePop(id) {
     const open = S.pop !== id;
-    for (const p of ["howPop", "tempoPop", "keyPop"]) $(p).hidden = true;
-    for (const b of ["howMore", "tempoBtn", "keyBtn", "positionNow"]) $(b).setAttribute("aria-expanded", "false");
+    for (const p of ["howPop", "keyPop"]) $(p).hidden = true;
+    for (const b of ["howMore", "keyBtn", "positionNow"]) $(b).setAttribute("aria-expanded", "false");
     S.pop = open ? id : null;
     if (!open) return;
-    if (id === "tempoPop") tempoPop();
     if (id === "keyPop") keyPop();
     $(id).hidden = false;
     $(opener(id)).setAttribute("aria-expanded", "true");
     $(id).querySelector("input, button, select")?.focus();
   }
-  function tempoPop() {
-    const c = card("tempo");
+  function setTempo() {  // the tempo's field in the bar: a whole number inside this style's range, else as it was
+    const c = card("tempo"), number = $("tempoNumber");
     if (!c) return;
-    const range = { ...state.start.bounds.tempo, ...(c.range || {}) };
-    const out = h("output", { class: edited("tempo") ? "you" : null }, `${Math.round(c.tempo)}`);
-    const number = h("input", { type: "number", id: "tempoNumber", min: range.min, max: range.max, step: 1, value: Math.round(c.tempo), "aria-label": "Tempo in beats a minute" });
-    const slider = h("input", { type: "range", min: range.min, max: range.max, step: 1, value: c.tempo, class: edited("tempo") ? "you" : null, "aria-label": "Tempo" });
-    const commit = (value) => {
-      if (!Number.isFinite(value) || value < range.min || value > range.max) { number.value = Math.round(c.tempo); toast(`Choose a tempo from ${range.min} to ${range.max} for this style.`); return; }
-      choose("tempo", value, "Change tempo");
-    };
-    number.addEventListener("change", () => commit(Number(number.value)));
-    slider.addEventListener("input", () => { out.textContent = slider.value; number.value = slider.value; });
-    slider.addEventListener("change", () => commit(Number(slider.value)));
-    $("tempoPop").replaceChildren(
-      h("label", { class: "field" }, h("span", { class: "label" }, "Beats a minute ", out), number),
-      slider, h("div", { class: "ends hint", title: c.value }, `This style: ${range.min} to ${range.max}`),
-      edited("tempo") ? h("div", { class: "row" }, h("span", { class: "hint" }, `the program's: ${Math.round(was("tempo") || 0)}`),
-        h("button", { class: "link small", type: "button", onclick: () => releaseEdit("tempo", "The program's tempo") }, "The program's choice")) : "");
+    const range = { ...state.start.bounds.tempo, ...(c.range || {}) }, value = Math.round(Number(number.value));
+    if (!number.value || !Number.isFinite(value) || value < range.min || value > range.max) { number.value = Math.round(c.tempo); toast(`Choose a tempo from ${range.min} to ${range.max} for this style.`); return; }
+    if (value !== Math.round(c.tempo)) choose("tempo", value, "Change tempo");
   }
   function keyPop() {
     const c = card("key"), b = state.start.bounds;
@@ -279,7 +266,7 @@
     $("keyPop").replaceChildren(
       chipRow("Note", notes.map((n) => ({ value: n, text: b.tonic.names[n] })), c.tonic, (n) => choose("tonic", n, "Change the key"), edited("tonic")),
       chipRow("Scale", b.mode.options.map((m) => ({ value: m, text: b.mode.names[m], title: [b.mode.glosses?.[m], "A minor mode leans the words darker."].filter(Boolean).join(". ") })), c.mode, (m) => choose("mode", m, "Change the scale"), edited("mode")),
-      edited("tonic") || edited("mode") ? h("button", { class: "link small", type: "button", onclick: () => clearEdits(["tonic", "mode"], "The program's key") }, "The program's choice") : "");
+      edited("tonic") || edited("mode") ? h("button", { class: "link small", type: "button", onclick: () => clearEdits(["tonic", "mode"], "Reset the key") }, "Reset") : "");
   }
 
   // ------------------------------------------------------------------ Page: the words as sung
@@ -676,7 +663,7 @@
   // ------------------------------------------------------------------ the inspector: one shape in every state
   const STATE_ABOUT = {
     song: "This version in five parts: style, singer, band, shape and room. Select anything on the page to see what it is, why the program chose it, and how to change it.",
-    section: "A part of the song. Its length, who sings, how hard everyone plays and its moment are yours to choose, and so are its words. The program's choice gives back everything you set here.",
+    section: "A part of the song. Its length, who sings, how hard everyone plays and its moment are yours to choose, and so are its words. Reset gives back everything you set here.",
     player: "One player, everywhere it plays: its level, its sound, where it sits, how it pumps, and where the sketch sends it.",
     cell: "One player in one section: out, soft, plays or hard, and what it plays there. What chance drew is drawn dashed; Lock keeps it through a new performance.",
     seam: "The moment one section turns into the next: a riser, a sweep, a snare roll or a stop over the bars before, an impact on the downbeat, a downlifter after it. A transition adds sound. It doesn't change who plays or how long a section is. A roll takes the snare's place in its bars, and a stop quiets the band while the singer goes on.",
@@ -710,8 +697,8 @@
       why?.length ? reasonsFold(kind, why, whyOpen) : null,
       hear || release || extra ? h("div", { class: "foot" },
         hear ? h("button", { class: "btn", type: "button", onclick: hear }, "▶ Hear it") : null, extra || null,
-        release ? h("button", { class: "link small release", type: "button", disabled: !!release.disabled, title: "Give it back to the program: your choice released",
-          onclick: release.action }, release.label || "The program's choice") : null) : null]);
+        release ? h("button", { class: "link small release", type: "button", disabled: !!release.disabled, title: "Back to the program's choice",
+          onclick: release.action }, release.label || "Reset") : null) : null]);
   }
   function reasonsFold(kind, why, open) {
     const list = why.map((r) => (Array.isArray(r) ? { kind: r[0], text: r[1] } : r)).filter((r) => r.text);
@@ -752,7 +739,7 @@
         onchange: (e) => (commit || ((x) => choose(path, x, label)))(from(Number(e.target.value))) }),
       ends ? h("div", { class: "ends" }, h("span", {}, ends[0]), h("span", {}, ends[1])) : null);
   }
-  function releasing(paths, label) {  // "The program's choice": each path the person set, released in one step
+  function releasing(paths, label) {  // Reset: each path the person set, released in one step
     const mine = paths.filter((p) => Object.prototype.hasOwnProperty.call(state.edits, p));
     return { disabled: !mine.length, action: () => clearEdits(mine, label) };
   }
@@ -1348,7 +1335,9 @@
     $("sketchBass").addEventListener("change", (e) => C()?.options?.({ bass: e.target.checked }));
     $("howMore").addEventListener("click", () => togglePop("howPop"));
     $("positionNow").addEventListener("click", () => { if (narrow()) togglePop("howPop"); });
-    $("tempoBtn").addEventListener("click", () => togglePop("tempoPop"));
+    $("tempoNumber").addEventListener("change", setTempo);
+    $("tempoNumber").addEventListener("keydown", (e) => { if (e.key === "Enter") e.target.blur(); });
+    $("tempoReset").addEventListener("click", () => releaseEdit("tempo", "Reset the tempo"));
     $("keyBtn").addEventListener("click", () => togglePop("keyPop"));
     for (const b of document.querySelectorAll("#howPop [data-do]")) b.addEventListener("click", () => {
       if (b.dataset.do === "roll") $("roll").click(); else travelHistory(b.dataset.do);
@@ -1368,7 +1357,7 @@
     drop.addEventListener("drop", (e) => { e.preventDefault(); e.stopPropagation(); drop.classList.remove("over"); $("dropVeil").hidden = true; window.SongbirdPerform?.bringBack(e.dataTransfer.files[0]); });
     document.addEventListener("keydown", key);
     document.addEventListener("click", (e) => {  // a popover closes when something else is pressed
-      if (S.pop && !e.target.closest(".pop, #howMore, #tempoBtn, #keyBtn, #positionNow")) togglePop(S.pop);
+      if (S.pop && !e.target.closest(".pop, #howMore, #keyBtn, #positionNow")) togglePop(S.pop);
     });
     const audio = $("audio");
     for (const ev of ["play", "pause", "ended"]) audio.addEventListener(ev, () => { paintPlay(); if (ev !== "play") setTimeout(idle, 1200); });
