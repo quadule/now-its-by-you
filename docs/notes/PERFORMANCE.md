@@ -567,7 +567,7 @@ and Safari remain unmeasured.
   bounded stretches. Singer-first rendering postpones the three empty band buses until an instrument is
   ready, removing roughly 306 MiB from H's vocal lifetime. Whistle turbulence and final high-pass filters
   carry SOS state across bounded stretches and retain the same RNG draws.
-- **Edit reuse:** studio previews keep immutable dry-stem snapshots and return an owned copy to the mixer.
+- **Edit reuse:** studio previews keep immutable stem snapshots (since 2026-11-05 treated, below) and return an owned copy to the mixer.
   Keys describe realized notes, timing, seed, instrument settings, lexicon and singer/choir context, rather
   than the edit request alone. Changed parts replace their older snapshots; admission favors synthesis
   work saved per byte. The cache is bounded to 32 MiB on constrained browsers, 128 MiB on other browsers,
@@ -704,6 +704,7 @@ whole song: 4.3 s less in the browser and 54 MiB less heap; natively a 25 s voic
 2. **The treated stems kept, not the dry ones** (`mixing.mix_made`'s `instrument` and `lead`): an edit of the mix
    treats every stem again (0.6 s of channel strips, 0.3 s of the lead). A strip depends only on its stem, role, rate
    and length; keeping it would take an edit from 2.4 to about 1.5 s, with the stem cache's keys carried into the mix.
+   **Done** (below, "The treated stems kept, not the dry ones").
 3. **The JS kernels to C/wasm**: `master._windows`, `fx._sliding_min`, `_follow`, `_running_mean`, `_abs_max`,
    `_placed`, `_mean_ahead`, `_saturate`, `_block_peaks` (0.35 s of a section or an edit, 4-6 s of a whole song), as
    the fourteen ported, checked by `check_kernels.py`.
@@ -759,3 +760,27 @@ and whole-song PCM are byte-identical to dgemm's (`node/run.mjs --section 2` / `
 `--no-simd` for the fallback), and the device studio's H keeps its ids (`preview_bench.mjs` on a
 `build_site.py --days 0` site: section 14ec579ee295..., `device_run.mjs --whole`: 351e1dfa89f7...), as does H's
 native golden (tests/test_styles.py).
+
+# The treated stems kept, not the dry ones (2026-11-05)
+
+A mix edit with every stem kept still put each one through what the mix does to it alone: an instrument's
+channel strip (equalizer, compressor, peaks, saturation, on the stretch that sounds) and the lead's chain
+(equalizer, de-esser, compressor, softening, saturation, peaks, level). None of that reads the mix's
+parameters: only the dry stem, its role (`ROLES`, with a person's kit's role from the score's `sound`), the
+rate and the song's length. So the cache now keeps that instead of the dry stem (`cache.Cached`: `render`'s
+maker for each keyed stem; `mixing.mix_made` asks it for `treated(...)`, kept under the dry key with the role,
+length and rate): an instrument as its (span, samples), the lead whole. What does read them — the balance and
+trim, a person's sidechain (`design.pump`), the lead's rise with the arrangement and its activity — is done
+afterwards on the copy the cache gives, the same operations in the same order. A stem is kept one way only,
+never dry and treated both, so the budget holds what it did (an instrument only where it sounds, a little
+less); admission, the cost per byte (now synthesis and treatment) and an edited part replacing its older take
+are as before. Choir parts and a lead of several voices are still kept dry: their buses are summed first, and
+the choir's width reads the mix.
+
+`preview_bench.mjs --cache-mib 128` (node 22, 4 shared x86 cores, as above), main with the SIMD products and this,
+three runs each, taken in turn: the same ids (initial `14ec579ee295…`, mix edit `f0bf9568c2ea…`, the original again
+`14ec579ee295…`); the mix edit 2.52-2.67 s before, **1.88-2.16 s** after, the original again 2.44-2.87 s before,
+1.83-2.17 s after; renderer heap 464 MiB both. The whole song keeps `351e1dfa89f7…` (`device_run.mjs --whole`, 1539
+MiB, not cached), `device_run.mjs`'s section `5099049fa1c9…` both. Native H keeps its golden (tests/test_styles.py,
+tests/test_determinism.py), and tests/test_stem_cache.py checks that a cached mix with a sidechain and a lift
+matches an uncached one, edit after edit, and that the cache holds the treated stems and not the dry ones.
