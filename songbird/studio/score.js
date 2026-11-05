@@ -275,34 +275,79 @@
     if (!v || !box) return;
     keepFocus(() => box.replaceChildren(...v.words.map(pageSection)));
   }
+  // ‹ n/m ›: through the verses (couplets, openings) that fit here, one press at a time; the lines under it are
+  // what each is. The ones the song refuses here are passed over (the column says why).
+  function stepper(name, items, current, pick, key) {
+    const fit = items.filter((c) => c.allowed !== false || c.id === current);
+    const at = Math.max(0, fit.findIndex((c) => c.id === current));
+    const go = (step) => pick(fit[(at + step + fit.length) % fit.length].id);
+    return h("span", { class: "stepper", role: "group", "aria-label": name },
+      h("button", { type: "button", "aria-label": `${name}: the one before`, title: `${name}: the one before`, "data-focus": `${key}.before`, onclick: () => go(-1) }, "‹"),
+      h("span", { class: "n", title: `${name} ${at + 1} of ${fit.length}` }, `${at + 1}/${fit.length}`),
+      h("button", { type: "button", "aria-label": `${name}: the next`, title: `${name}: the next`, "data-focus": `${key}.next`, onclick: () => go(1) }, "›"));
+  }
+  function steppers(w, o) {
+    const name = { verse: "Verse", refrain: "Couplet", bridge: "Stanza", tag: "Syllable" }[o.block] || "Phrase", key = `${w.block}.${w.nth}`;
+    const heads = (o.heads || []).filter((c) => c.allowed !== false).length > 1, phrases = o.choices.filter((c) => c.allowed !== false).length > 1;
+    const head = heads ? stepper("Opening", o.heads, o.head, (id) => { const edit = refrainEdit(o); delete edit.slots; edit.head = id; setEdit(o.path, edit, "Change refrain opening"); }, `${key}.head`) : null;
+    const phrase = phrases ? stepper(name, o.choices, o.sung, (id) => setEdit(o.path, o.block === "verse" ? { id }
+      : o.block === "refrain" ? Object.assign(refrainEdit(o), { id }) : id, `Choose ${w.label.toLowerCase()} ${name.toLowerCase()}`), `${key}.phrase`) : null;
+    // named only where there are two of them
+    return head && phrase ? [h("span", { class: "stepname" }, "opening"), head, h("span", { class: "stepname" }, name.toLowerCase()), phrase] : [head, phrase];
+  }
+  // A word that can change is a button: each press, the next of its alternatives (inlineLyrics makes a menu of them)
+  function cyclers(body) {
+    for (const select of [...body.querySelectorAll("select.lyric-select")]) {
+      const options = [...select.options].map((x) => ({ value: x.value, text: x.textContent }));
+      const at = Math.max(0, options.findIndex((x) => x.value === select.value)), next = options[(at + 1) % options.length];
+      const word = h("button", { class: `lyric-word${select.classList.contains("focus") ? " focus" : ""}`, type: "button", "data-focus": select.dataset.focus,
+        title: options.map((x) => x.text).join(" · "), "aria-label": `${select.getAttribute("aria-label")}: ${options[at].text}. Press for ${next.text}`,
+        onclick: (e) => { e.stopPropagation(); select.value = next.value; select.dispatchEvent(new Event("change")); } }, options[at].text);
+      select.replaceWith(options.length > 1 ? word : document.createTextNode(options[at].text));
+    }
+    return body;
+  }
   function pageSection(w) {
     const v = state.view, o = state.optionsByKey[`${w.block}.${w.nth}`];
     const sid = v.composition?.sections?.find((s) => s.index === w.index)?.id || `${w.name}:${w.nth}`;
     const chosen = S.sel && ["section", "line"].includes(S.sel.kind) && S.sel.id === sid;
     const ready = v.listen.ready.includes(v.listen.sections[w.index]);
     const arranged = S.grid && [...S.grid.cells.values()].some((c) => c.section === sid && (c.by === "you" || c.locked));
-    const kind = w.mine ? "you" : { "handed down": "lineage", "new this time": "time", "drawn by chance": "chance" }[w.how] || "song";
     const allAuthored = (w.authored || []).length >= w.lines.length;
     const head = h("div", { class: "sec-head" },
       h("button", { class: "rub", type: "button", "data-key": `rub:${sid}`, "aria-pressed": String(chosen && S.sel.kind === "section"),
-        title: `Select ${w.label}: its length, who sings, its words`, onclick: () => select({ kind: "section", id: sid }) },
+        title: [w.sung ? (w.mine ? "your words" : w.how) : null, w.note].filter(Boolean).join(": ") || null, onclick: () => select({ kind: "section", id: sid }) },
       h("span", { class: `rubric${w.mine ? " hand" : ""}` }, w.label)),
-      w.sung ? Object.assign(tag(kind, (w.authored || []).length ? "your lines" : w.mine ? "your words" : w.how), { title: w.note || "" }) : null,
+      o && w.sung && !allAuthored ? steppers(w, o) : null,
       h("span", { class: "sectools" }, h("button", { class: `play${ready ? " ready" : ""}`, type: "button", "aria-label": `Hear ${w.label}, sung`,
-        title: ready ? "ready to play" : "sung (it will be made first)", onclick: () => { setHow("sung", false); listen("you", w.index); } }, playIcon())),
-      o && w.sung && !allAuthored && (o.heads || []).length > 1 ? headChooser(o, w.label) : null,  // sung first
-      o && w.sung && !allAuthored && o.choices.length > 1 ? phraseChooser(w, o) : null);
+        title: ready ? "ready to play" : "sung (it will be made first)", onclick: () => { setHow("sung", false); listen("you", w.index); } }, playIcon())));
     let body;
     if (o && w.sung) {
-      body = inlineLyrics(w, o);
+      body = cyclers(inlineLyrics(w, o));
       [...body.querySelectorAll("p")].forEach((p, j) => {
         p.classList.add("pick");
-        if (S.sel?.kind === "line" && S.sel.id === sid && S.sel.line === j) p.classList.add("selected");
-        p.title = "Select this line to write your own";
-        p.addEventListener("click", (e) => { if (!e.target.closest("select")) select({ kind: "line", id: sid, line: j }); });
+        p.title = "Write this line";
+        p.addEventListener("click", (e) => { if (!e.target.closest("button, select")) select({ kind: "line", id: sid, line: j }); });
+        if (S.sel?.kind === "line" && S.sel.id === sid && S.sel.line === j) writeHere(p, sid, j);
       });
     } else body = lines(w.lines);
     return h("div", { class: `sec${w.sung ? "" : " instrumental"}${w.mine || (!w.sung && arranged) ? " mine" : ""}${chosen ? " selected" : ""}`, id: `sec-${w.index}` }, head, body);
+  }
+  // The selected line, written where it stands: its field takes the line's place (author.js keeps the field, so
+  // typing survives a redraw); a line used, the next one opens
+  function writeHere(p, sid, j) {
+    const phrases = state.view.composition?.sections?.find((x) => x.id === sid)?.phrases || [];
+    const anchor = h("div", { class: "lyric-author" });
+    const next = () => {
+      const k = phrases.findIndex((q, n) => n > j && q.lyric_path);
+      if (k < 0 || S.sel?.kind !== "line" || S.sel.id !== sid || S.sel.line !== j) return;
+      select({ kind: "line", id: sid, line: k });
+      $("page").querySelector(".lyric-author textarea")?.focus({ preventScroll: true });
+    };
+    if (!window.SongbirdAuthor?.line(state.view, sid, j, anchor, { next })) return;
+    p.classList.add("selected");
+    p.hidden = true;
+    p.after(anchor);
   }
 
   // ------------------------------------------------------------------ Arrange: the grid, from /api/arrangement and /api/sound
@@ -806,11 +851,8 @@
     const phrases = state.view.composition?.sections?.find((x) => x.id === s.id)?.phrases || [];
     const writable = phrases.some((p) => p.lyric_path);
     const allAuthored = w && (w.authored || []).length >= w.lines.length;
-    const choosers = o && w.sung && !allAuthored ? [(o.heads || []).length > 1 ? headChooser(o, w.label) : null, o.choices.length ? phraseChooser(w, o) : null].filter(Boolean) : [];
-    const oneChoice = o && o.choices.filter((c) => c.allowed).length <= 1 && (o.heads || []).filter((c) => c.allowed).length <= 1;
     const rules = o && w.sung && !allAuthored ? chooser(w, o) : null;
     if (rules) rules.querySelector("summary").textContent = "Refused here, and why";
-    if (stale) for (const c of choosers) c.querySelectorAll("select").forEach((x) => { x.disabled = true; x.setAttribute("disabled", ""); });
     const options = s.options.map((opt) => optionRow(opt));
     const release = () => {
       const next = copyEdits();
@@ -850,8 +892,6 @@
           h("button", { class: "btn quiet", type: "button", hidden: S.open !== s.id, onclick: closeNotes }, "Close the notes")),
         // what the style and the words offer here last: rows that come and go with an answer push only what's below
         options,
-        choosers.length && !oneChoice ? h("div", { class: "row" }, choosers) : null,
-        choosers.length && oneChoice ? h("details", {}, h("summary", {}, "more"), h("div", { class: "row" }, choosers)) : null,
         rules),
       why: [
         w?.sung ? { kind: w.mine ? "you" : { "handed down": "lineage", "new this time": "time", "drawn by chance": "chance" }[w.how] || "song", text: w.mine ? "these words are yours" : `the words: ${w.how}${(w.tags || []).length ? ` (${w.tags.join(", ")})` : ""}` } : null,
@@ -1002,25 +1042,11 @@
   }
 
   function lineState(sel) {
-    const s = sectionAt(sel.id), w = wordsOf(s);
+    const s = sectionAt(sel.id);
     const phrases = state.view.composition?.sections?.find((x) => x.id === sel.id)?.phrases || [];
     const p = phrases[sel.line];
     if (!s || !p?.lyric_path) return false;
-    const anchor = h("div", { class: "lyric-author", "data-whole": "" });  // author.js's own nodes: redrawn whole
-    // one line at a time: a line used, the column moves on to the next one to write (typing elsewhere stays a draft)
-    const next = () => {
-      const j = phrases.findIndex((q, k) => k > sel.line && q.lyric_path);
-      if (j < 0 || S.sel?.kind !== "line" || S.sel.id !== sel.id || S.sel.line !== sel.line) return;
-      select({ kind: "line", id: sel.id, line: j });
-      $("inspector").querySelector("textarea")?.focus({ preventScroll: true });
-    };
-    window.SongbirdAuthor?.line(state.view, sel.id, sel.line, anchor, { next });
     shell({ kind: "line", rubric: `${s.label}, line ${sel.line + 1}`, mine: !!p.authored,
-      set: p.authored ? "yours" : w?.how ? `the song's, ${w.how}` : "the song's",
-      body: h("div", {},
-        phrases.length > 1 ? chipRow("Line", phrases.map((_, j) => ({ value: j, text: String(j + 1), disabled: !phrases[j].lyric_path })), sel.line,
-          (j) => select({ kind: "line", id: sel.id, line: j })) : null,
-        anchor),
       why: p.authored ? [["you", "your line; it follows these words wherever they are sung"]] : [["lineage", "handed down from the song as it began"], ["machine", card("words")?.detail || ""]],
       hear: () => listen("you", s.index) });
     return true;

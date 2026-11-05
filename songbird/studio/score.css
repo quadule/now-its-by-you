@@ -161,7 +161,14 @@ input[type=number] { width: 72px; border: 1px solid var(--rule-strong); backgrou
 .sec-head .rub:hover .rubric { text-decoration: underline; text-decoration-color: var(--red); text-underline-offset: 4px; }
 .sec.selected .rubric { text-decoration: underline; text-decoration-color: var(--red); text-underline-offset: 4px; text-decoration-thickness: 2px; }
 .sec-head .sectools { margin-left: auto; display: inline-flex; gap: 6px; align-items: center; }
-.sec-head > .lyric-slot-label { flex-basis: 100%; }  /* the words' choosers on lines of their own, under the name and its play */
+.stepper { display: inline-flex; align-items: center; gap: 2px; font: 12px var(--sans); color: var(--ink-2); font-variant-numeric: tabular-nums; }
+.stepper button { width: 24px; height: 24px; border: 1px solid transparent; border-radius: var(--radius); background: none; color: var(--ink); font-size: 16px; line-height: 1; padding: 0; }
+.stepper button:hover { border-color: var(--rule-strong); }
+.stepper .n { min-width: 2.6em; text-align: center; }
+.stepname { font: 11px var(--sans); color: var(--ink-3); }
+.lyric-word { font: inherit; color: inherit; background: none; border: 0; border-bottom: 1.5px dashed var(--ink-3); border-radius: 0; padding: 0 1px; cursor: pointer; }
+.lyric-word:hover { background: var(--hand-wash); border-bottom-color: var(--hand); }
+#page .lyric-author { margin: 4px 0 8px; }
 .rubric.hand, .rubric.you { color: var(--hand); }
 .lines { font-family: var(--serif); font-size: clamp(17px, 1.8vw, 21px); line-height: 1.5; }
 .lines p { margin: 0; }
