@@ -85,7 +85,7 @@ class MixParams:
     balance: tuple[tuple[str, float], ...] = ()
     plate: float = 1.0
     disc: float = 0.0  # an acoustic 78 (2026-09-30, the old 78's; any style's at the command line)
-    voices: float = 1.0  # the singers muted at 0 (2026-11-04: the band alone, as the record has it)
+    voices: float = 1.0  # the singers muted at 0: the band alone, as the record has it
 
     @classmethod
     def from_dict(cls, data: dict) -> MixParams:

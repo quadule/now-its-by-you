@@ -764,7 +764,7 @@ function mutePlayer(card, player) {
     setEdit(path, 0, `Mute ${card.players[player] || player}`);
   } else {
     // back to the level before: the program's own is given back to the program, not kept as a choice of yours
-    // (a mute found on the page when it opened has no level remembered: the program's own, then)
+    // (a mute found on the page when it opened has no level remembered: the program's, then)
     const mark = state.view?.marks?.[path], to = state.mutedLevels[player] || (typeof mark?.was === "number" && mark.was > 0.02 ? mark.was : 1);
     if (mark && typeof mark.was === "number" && Math.abs(mark.was - to) < 1e-9) releaseEdit(path, `Unmute ${card.players[player] || player}`);
     else setEdit(path, to, `Unmute ${card.players[player] || player}`);
@@ -796,7 +796,7 @@ function editor(c) {
       return h("div", {},
         chips("The key's note", notes, c.tonic, (m) => setEdit("tonic", m), { text: b.tonic.names }),
         chips("Its mode", b.mode.options, c.mode, (m) => setEdit("mode", m), { text: b.mode.names, title: b.mode.glosses }),
-        h("p", { class: "hint aside-note" }, "A minor mode leans the words darker, as the machine's own would."));
+        h("p", { class: "hint aside-note" }, "A minor mode leans the words darker, as the machine's would."));
     }
     case "tempo":
       return slider("Beats a minute", "tempo", c.tempo, { ...b.tempo, ...(c.range || {}) }, (x) => `${Number(x).toFixed(0)}`, ["slower", "quicker"]);
@@ -853,7 +853,7 @@ function editor(c) {
         chips("Backing voices", Object.keys(c.backings), st.backing, (x) => setEdit("style.backing", x), { text: c.backings }),
         chips("The last refrain", ["lift", "no lift"], st.lift ? "lift" : "no lift", (x) => setEdit("style.lift", x === "lift"),
           { text: { "lift": "a whole step up", "no lift": "in the same key" } }),
-        h("p", { class: "hint aside-note" }, "A style brings its own band, its pace and its feel; a version moves one style at a time, so its children will drift back toward your machine's."));
+        h("p", { class: "hint aside-note" }, "A style sets the band, the pace and the feel. A version moves one style at a time, so its children will drift back toward your machine's."));
     }
     case "mix": {
       const m = c.mix;
@@ -868,11 +868,11 @@ function editor(c) {
         h("p", { class: "hint aside-note" }, "Judge the voice against the band on the whole song: a part heard alone is levelled for listening."));
     }
     case "singer": {
-      const box = h("div", {}, h("p", { class: "hint" }, "The singer is your machine's own voice, the same in every song it sings. What you can give it is your way of singing."));
+      const box = h("div", {}, h("p", { class: "hint" }, "The singer is your machine's voice, the same in every song it sings. What you can give it is your way of singing."));
       const phrasings = phrasingChoices(s.phrasings);  // with the one sung in this browser, if any
       if (phrasings.length) {
         const select = h("select", { "aria-label": "Whose way it is sung" },
-          h("option", { value: "" }, "the song's own way"),
+          h("option", { value: "" }, "the song's way"),
           phrasings.map((p) => h("option", { value: p.id }, `${p.way || `${p.label}'s way`}${p.detail ? ` (${p.detail})` : ""}`)));
         select.value = c.phrasing || "";
         select.addEventListener("change", () => setEdit("phrasing", select.value || null));
@@ -1268,7 +1268,7 @@ async function record() {
           h("a", { class: "btn primary", href: r.download, download: r.name }, "Download it"), publicKept(r),
           r.device && r.file && window.SongbirdDevice?.share ? shareButton(r) : null)
         : h("p", { title: "The song, the program that sang it and its record, in one file." }, "Saved ", h("code", {}, r.flac), ` (${fmtTime(r.duration)}).`),
-      h("p", { title: "What you chose, never who you are." }, r.yours ? `${r.yours} choice${r.yours === 1 ? "" : "s"} marked as yours.` : "Every choice in it is the program's."),
+      h("p", { title: "Your choices are marked. Your name isn't recorded." }, r.yours ? `${r.yours} choice${r.yours === 1 ? "" : "s"} marked as yours.` : "Every choice in it is the program's."),
       h("p", { class: "hint" }, "To make the next version from this one: ", h("code", {}, r.next)),
       h("button", { class: "btn", type: "button", onclick: () => play(job.url, "The recording", r.flac,
         { editsKey: JSON.stringify(edits), label: "The recording", who: "you", section: null, job }) }, "Play the recording"));
@@ -1313,7 +1313,7 @@ function whatsKept(p, singing) {  // what an open studio keeps, said plainly (do
   const hours = p.download_hours === 24 ? "a day" : `${p.download_hours} hours`;
   return "What's kept: a random id in a cookie, so everyone gets a fair share (it names nobody). Your changes stay in " +
     "this browser, sent only to make the song. A recording waits here " + hours + " to be downloaded, then goes. A " +
-    "shared /v/ link, and any file you download, carries its version's own record: its made-up machine's name, the " +
+    "shared /v/ link, and any file you download, carries its version's record: its made-up machine's name, the " +
     "room its microphone heard, the leanings of its words." +
     (singing ? " Singing: only numbers are kept; the audio is deleted once it's measured." : "");
 }
@@ -1330,7 +1330,7 @@ function applyDevice(s) {
   setOn("helpWhere", "hidden", true);  // the page's foot says it
   // the file's record (its made-up machine's name, the room, the words' leanings) and what any site sees of what it
   // serves: docs/WEB-STUDIO.md, "On the device"
-  setOn("helpKept", "textContent", "What's kept: your changes, in this browser. An export stays until you leave the page, so download it to keep it. A version you share is stored on this site so its link works; it never carries your name.");
+  setOn("helpKept", "textContent", "What's kept: your changes, in this browser. An export stays until you leave the page, so download it to keep it. A version you share is stored on this site so its link works. Your name isn't in it.");
   setOn("helpKept", "hidden", false);
   const crashed = window.SongbirdDevice?.crashed?.();
   if (crashed) {

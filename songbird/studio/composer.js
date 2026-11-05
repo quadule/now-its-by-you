@@ -1042,7 +1042,7 @@
             button("Even rhythm", evenRhythm, { title: `Even the notes on the phrase's own grid (the snap: ${fmt(state.snap)} beat)` })))),
       why: reasons(n.edited, scope === "line" ? "yours: this line is sung this way everywhere" : "yours, in this place only",
         [["song", "the tune as it was written, and as the versions before have sung it"], ["rule", "a phrase keeps its syllables, their order and its ending's place in the scale"]]),
-      release: { label: scope === "line" ? "The program's own" : "The line's own, here", disabled: !held("tune", p),
+      release: { label: scope === "line" ? "The program's choice" : "As the line is elsewhere", disabled: !held("tune", p),
         action: () => { state.note = null; commit(scopedPath("tune", p), null); told(); } },
       hear: () => audition(pitchFor(n)),
     };
@@ -1063,7 +1063,7 @@
       mine, scope: scopeSwitch("chords"), body,
       why: reasons(mine, scope === "line" ? "yours: this line's chords, everywhere it's sung" : "yours, in this place only",
         [["song", "the song's own harmony, as it was written"], ["rule", "the band, the voices before and the backing voices follow it; the tune stays"]]),
-      release: { label: scope === "line" ? "The program's own" : "The line's own, here", disabled: !held("chords", p),
+      release: { label: scope === "line" ? "The program's choice" : "As the line is elsewhere", disabled: !held("chords", p),
         action: () => { state.chord = null; commit(scopedPath("chords", p), null); told(); } },
       hear: () => strum(h.symbol),
     };

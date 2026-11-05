@@ -18,7 +18,7 @@
   const card = (id) => state.view?.cards?.find((c) => c.id === id);
   const edited = (path) => Object.prototype.hasOwnProperty.call(state.edits, path) && state.edits[path] !== null;
   const was = (path) => state.view?.marks?.[path]?.was;
-  // a value chosen: the program's own value gives the choice back to the program (as "The program's own" does),
+  // a value chosen: the program's own value gives the choice back to the program (as "The program's choice" does),
   // rather than being kept as yours; any other is set
   const same = (a, b) => JSON.stringify(a) === JSON.stringify(b);
   function choose(path, value, label) {
@@ -51,7 +51,7 @@
     page: "The words as this version sings them. A word with a dashed line under it can change: pick another and the tune keeps its syllables. Select a section's name or a line to change more; ▶ plays that part, sung.",
     arrange: "The song as a timeline: its sections over a ruler of bars, and under them a row for each player. A cell says whether that player plays there and how hard. Select a section, a player, a cell, or the seam between two. Drag a section to move it, its right edge for its length. Double-click a section for its notes (its tune and chords), or the singer's row for its words.",
     mix: "A strip for each player (its level, where it sits, how it pumps), then the voice and the room. Judge the voice against the band on the whole song: a part heard alone is levelled for listening.",
-    sing: "Sing this version along with its tune. The song learns a little of how you sing, and can sing it your way.",
+    sing: "Sing along with this version's tune. The song learns your timing and can sing it your way.",
   };
   function showView(v, focus = false) {
     if (!["page", "arrange", "mix", "sing"].includes(v) || (v === "sing" && $("tab-sing")?.hidden !== false)) return;
@@ -269,7 +269,7 @@
       h("label", { class: "field" }, h("span", { class: "label" }, "Beats a minute ", out), number),
       slider, h("div", { class: "ends hint", title: c.value }, `This style: ${range.min} to ${range.max}`),
       edited("tempo") ? h("div", { class: "row" }, h("span", { class: "hint" }, `the program's: ${Math.round(was("tempo") || 0)}`),
-        h("button", { class: "link small", type: "button", onclick: () => releaseEdit("tempo", "The program's tempo") }, "The program's own")) : "");
+        h("button", { class: "link small", type: "button", onclick: () => releaseEdit("tempo", "The program's tempo") }, "The program's choice")) : "");
   }
   function keyPop() {
     const c = card("key"), b = state.start.bounds;
@@ -279,7 +279,7 @@
     $("keyPop").replaceChildren(
       chipRow("Note", notes.map((n) => ({ value: n, text: b.tonic.names[n] })), c.tonic, (n) => choose("tonic", n, "Change the key"), edited("tonic")),
       chipRow("Scale", b.mode.options.map((m) => ({ value: m, text: b.mode.names[m], title: [b.mode.glosses?.[m], "A minor mode leans the words darker."].filter(Boolean).join(". ") })), c.mode, (m) => choose("mode", m, "Change the scale"), edited("mode")),
-      edited("tonic") || edited("mode") ? h("button", { class: "link small", type: "button", onclick: () => clearEdits(["tonic", "mode"], "The program's key") }, "The program's own") : "");
+      edited("tonic") || edited("mode") ? h("button", { class: "link small", type: "button", onclick: () => clearEdits(["tonic", "mode"], "The program's key") }, "The program's choice") : "");
   }
 
   // ------------------------------------------------------------------ Page: the words as sung
@@ -675,19 +675,19 @@
 
   // ------------------------------------------------------------------ the inspector: one shape in every state
   const STATE_ABOUT = {
-    song: "This version in five doors: its style, its singer, its band, its shape and its room. Select anything on the page to see what it is, why the program chose it, and change it.",
-    section: "A part of the song. Its length, who sings, how hard everyone plays and its moment are yours to choose; so are its words. The program's own gives back everything you set here.",
+    song: "This version in five parts: style, singer, band, shape and room. Select anything on the page to see what it is, why the program chose it, and how to change it.",
+    section: "A part of the song. Its length, who sings, how hard everyone plays and its moment are yours to choose, and so are its words. The program's choice gives back everything you set here.",
     player: "One player, everywhere it plays: its level, its sound, where it sits, how it pumps, and where the sketch sends it.",
     cell: "One player in one section: out, soft, plays or hard, and what it plays there. What chance drew is drawn dashed; Lock keeps it through a new performance.",
-    seam: "The moment one section turns into the next: a riser, a sweep, a snare roll or a stop over the bars before, an impact on the downbeat, a downlifter after it. A transition is sound, not arrangement: it doesn't change who plays or how long a section is; a roll takes the snare's place in its bars, a stop quiets the band and not the singer.",
-    chord: "A chord under the tune. The band, the voices before and the backing voices follow it; the tune stays. A sung note that isn't in the chord is shown, not forbidden.",
+    seam: "The moment one section turns into the next: a riser, a sweep, a snare roll or a stop over the bars before, an impact on the downbeat, a downlifter after it. A transition adds sound. It doesn't change who plays or how long a section is. A roll takes the snare's place in its bars, and a stop quiets the band while the singer goes on.",
+    chord: "A chord under the tune. The band, the voices before and the backing voices follow it; the tune stays. A sung note outside the chord is marked and still allowed.",
     note: "A note of the tune: its pitch, where it starts and how long. A phrase keeps its syllables and its ending's place in the scale unless you free it.",
-    line: "Write your own line: one syllable a note, longer words split with hyphens (car-ry). A word between stars, like *heart*, is the one the line leans on. A word said two ways, like bass, shows its ways under the line: choose one. To say any word your own way, write how it sounds in braces after it, like bass{base}. The singer checks the syllables and the pronunciation before it changes the song; the story and the rhyme are yours.",
-    singer: "The singer is your machine's own voice, the same in every song it sings. What you can give it is a way of singing, and where it sits against the band.",
+    line: "Write your own line: one syllable a note, longer words split with hyphens (car-ry). A word between stars, like *heart*, is the one the line leans on. A word said two ways, like bass, shows its ways under the line: choose one. To say a word differently, write how it sounds in braces after it, like bass{base}. The singer checks the syllables and the pronunciation before it changes the song; the story and the rhyme are yours.",
+    singer: "The singer is your machine's voice, the same in every song it sings. What you can give it is a way of singing, and where it sits against the band.",
     choir: "Voices from the versions before this one, one more for every version, up to six; they sing where the song has a choir. How many follows the versions before; where they sing is the song's.",
     room: "The room the song is sung in: how much of it you hear, how wide it is, how long it rings and how soon it answers.",
-    style: "A style brings its own band, its pace and its feel; a version moves one style at a time, so its children drift back toward your machine's.",
-    band: "How the band plays everywhere: its pattern, who leads where nobody sings, how busy and how bright. Each player's own is in Arrange and Mix.",
+    style: "A style sets the band, the pace and the feel. A version moves one style at a time, so its children drift back toward your machine's.",
+    band: "How the band plays everywhere: its pattern, who leads where nobody sings, how busy and how bright. Each player's part and level are in Arrange and Mix.",
     shape: "The parts of the song and how many verses. Their order is the regions in Arrange: drag them there.",
   };
   function shell({ kind, rubric, set, mine, body, why, release, hear, problems, extra }) {
@@ -711,7 +711,7 @@
       hear || release || extra ? h("div", { class: "foot" },
         hear ? h("button", { class: "btn", type: "button", onclick: hear }, "▶ Hear it") : null, extra || null,
         release ? h("button", { class: "link small release", type: "button", disabled: !!release.disabled, title: "Give it back to the program: your choice released",
-          onclick: release.action }, release.label || "The program's own") : null) : null]);
+          onclick: release.action }, release.label || "The program's choice") : null) : null]);
   }
   function reasonsFold(kind, why, open) {
     const list = why.map((r) => (Array.isArray(r) ? { kind: r[0], text: r[1] } : r)).filter((r) => r.text);
@@ -752,7 +752,7 @@
         onchange: (e) => (commit || ((x) => choose(path, x, label)))(from(Number(e.target.value))) }),
       ends ? h("div", { class: "ends" }, h("span", {}, ends[0]), h("span", {}, ends[1])) : null);
   }
-  function releasing(paths, label) {  // "The program's own": each path the person set, released in one step
+  function releasing(paths, label) {  // "The program's choice": each path the person set, released in one step
     const mine = paths.filter((p) => Object.prototype.hasOwnProperty.call(state.edits, p));
     return { disabled: !mine.length, action: () => clearEdits(mine, label) };
   }
@@ -997,7 +997,7 @@
             title: value?.sweep ? null : "Choose a sweep first",
             onclick: () => { const v = latest(); if (!v?.sweep || sweepType === type) return; put({ ...v, sweep: { bars: typeof v.sweep === "object" ? v.sweep.bars : v.sweep, type } }, `Into ${s.label}: the sweep ${type === "lowpass" ? "falling" : "rising"}`); } }, text)))) : null,
         null),
-      why: yours ? [["you", `yours: ${M.seamWords(value)}`]] : [["song", "the song's own seams are plain: the band goes straight on, and a turn is how this song breathes between parts"]],
+      why: yours ? [["you", `yours: ${M.seamWords(value)}`]] : [["song", "the song's seams are plain: the band goes straight on, with a turn between parts"]],
       hear: () => listen("you", s.index),
       release: { disabled: !edited(seam.path), action: () => { releaseEdit(seam.path, `Into ${s.label}: the program's`); renderInspector(); } } });
     return true;
@@ -1027,7 +1027,7 @@
     };
     window.SongbirdAuthor?.line(state.view, sel.id, sel.line, anchor, { next });
     shell({ kind: "line", rubric: `${s.label}, line ${sel.line + 1}`, mine: !!p.authored,
-      set: p.authored ? "yours" : w?.how ? `the song's own, ${w.how}` : "the song's own",
+      set: p.authored ? "yours" : w?.how ? `the song's, ${w.how}` : "the song's",
       body: h("div", {},
         phrases.length > 1 ? chipRow("Line", phrases.map((_, j) => ({ value: j, text: String(j + 1), disabled: !phrases[j].lyric_path })), sel.line,
           (j) => select({ kind: "line", id: sel.id, line: j })) : null,
@@ -1067,9 +1067,9 @@
     if (!sp) return null;
     const out = [];
     if (sp.patch) out.push(chipRow("Sound", sp.patch.options.map((o) => ({ value: o.name, text: o.name, title: o.about })), sp.patch.value,
-      (v) => (v === sp.patch.program ? releaseEdit(sp.patch.path, `${t.label}: its own sound`) : setEdit(sp.patch.path, v, `${t.label}: ${v}`)), sp.patch.yours));
+      (v) => (v === sp.patch.program ? releaseEdit(sp.patch.path, `${t.label}: its usual sound`) : setEdit(sp.patch.path, v, `${t.label}: ${v}`)), sp.patch.yours));
     if (sp.kit) out.push(chipRow("Kit", sp.kit.options.map((o) => ({ value: o.name, text: o.name, title: o.about })), sp.kit.value,
-      (v) => (v === sp.kit.program ? releaseEdit(sp.kit.path, `${t.label}: its own kit`) : setEdit(sp.kit.path, v, `${t.label}: the ${v} kit`)), sp.kit.yours));
+      (v) => (v === sp.kit.program ? releaseEdit(sp.kit.path, `${t.label}: its usual kit`) : setEdit(sp.kit.path, v, `${t.label}: the ${v} kit`)), sp.kit.yours));
     if (sp.sidechain && (!sp.sidechain.is_key || sp.sidechain.yours)) {  // not on the drummer: it's the kick it ducks on
       out.push(h("div", { class: "row" }, h("span", { class: "label" }, "Pump"), pumpSelect(sp.sidechain, `${t.label}: pump`),
         h("span", { class: "hint" }, sp.sidechain.has_kick ? "on the kick" : "on the beat (no kick here)")));
@@ -1135,7 +1135,7 @@
   function singerState() {
     const c = card("singer"), mix = card("mix"), b = state.start.bounds, m = mix?.mix || {};
     const phrasings = phrasingChoices(state.start.phrasings);
-    const sel = h("select", { "aria-label": "Whose way it is sung", id: "singerWay" }, h("option", { value: "" }, "the song's own way"),
+    const sel = h("select", { "aria-label": "Whose way it is sung", id: "singerWay" }, h("option", { value: "" }, "the song's way"),
       phrasings.map((p) => h("option", { value: p.id }, `${p.way || `${p.label}'s way`}${p.detail ? ` (${p.detail})` : ""}`)));
     sel.value = c?.phrasing || "";
     sel.addEventListener("change", (e) => setEdit("phrasing", e.target.value || null, "The singer's way"));

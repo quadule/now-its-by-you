@@ -1034,12 +1034,12 @@ def singer_card(v: Version, phrasings: list[dict]) -> dict:
     c = variation.character(v.voice)
     why = []
     if "identity" in c.known:
-        why.append({"kind": "machine", "text": "your machine's own voice, the same in every song it sings"})
+        why.append({"kind": "machine", "text": "your machine's voice, the same in every song it sings"})
     for path, word in (("singer.rd", ("its voice is a little breathier", "its voice is a little more pressed")),
                        ("singer.breath", ("its voice is a little breathier", "its voice is a little clearer")),
                        ("singer.vibrato_depth", ("it sings with a little more vibrato", "it sings with a little less vibrato"))):
         why += number_reasons(v, path, None, lambda t, w=word: f"{_when('full')} {w[0] if t > 0 else w[1]}")
-    way = "sung the song's own way"
+    way = "sung the song's way"
     mine = []
     if "phrasing" in v.applied:
         chosen = next((p for p in phrasings if p["id"] == v.edits.get("phrasing")), {})

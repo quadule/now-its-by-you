@@ -938,7 +938,7 @@ def phrasing_mark(phrasing_json: dict) -> dict:
     fingerprint of it, so the same phrasing can be recognised (and given again to replay the rendition)."""
     everyone = "singers" in str(phrasing_json.get("source_detail", ""))
     digest = hashlib.sha256(json.dumps(phrasing_json, sort_keys=True).encode()).hexdigest()[:16]
-    return {"value": "everyone's way" if everyone else "a person's way", "was": "the song's own way",
+    return {"value": "everyone's way" if everyone else "a person's way", "was": "the song's way",
             "detail": phrasing_json.get("source_detail", ""), "digest": digest}
 
 

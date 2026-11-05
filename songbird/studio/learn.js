@@ -40,7 +40,7 @@
       if (tab && !tab.closed) {
         tab.location.href = made.url;
         try { tab.focus(); } catch (_) { /* the browser decides */ }
-        say("Opened in its own tab. Changed something? Press it again and the tab follows.");
+        say("Opened in a new tab. Changed something? Press it again and the tab follows.");
       } else {
         say("Your browser kept the tab from opening:", made.url);
       }

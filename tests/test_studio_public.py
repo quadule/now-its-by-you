@@ -519,7 +519,7 @@ def test_the_page_says_plainly_what_an_open_studio_keeps(opened):
     assert '<p id="helpKept" hidden></p>' in page  # filled and shown in an open studio only (studio.js applyPublic)
     script = (S.PAGE / "studio.js").read_text()
     for said in ("What's kept: a random id in a cookie", "sent only to make the song", "its made-up machine's name",
-                 "room its microphone heard, the leanings of its words", "carries its version's own record",
+                 "room its microphone heard, the leanings of its words", "carries its version's record",
                  "only numbers are kept; the audio is deleted once it's measured",
                  "Your changes stay in this browser (Help says what's kept)"):
         assert said in script, said
