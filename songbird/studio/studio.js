@@ -363,6 +363,7 @@ function describePath(path) {
   const into = path.match(/^transition\.([A-Za-z0-9_-]+:\d+)$/);
   if (into) return `your transition into ${where(into[1])}`;
   const sound = path.match(/^(sound|mix)\.([a-z0-9]+)\.(\w+)$/);
+  if (path === VOICES) return "the voice's mute";
   if (sound && !["space", "width", "forward", "intimacy", "rt60", "predelay"].includes(sound[2])) return `your ${sound[2]}'s ${sound[3]}`;
   return { "words.refrain": "your refrain's words", "words.bridge": "your bridge's words", "words.bridge2": "your second bridge", "words.tag": "your tag", "phrasing": "the singer's way", "date": "the day" }[path] || `your ${path.replace(/^\w+\./, "").replace(/_/g, " ")}`;
 }
@@ -709,27 +710,50 @@ function renderSessionControls() {
   box.replaceChildren(...controls);
 }
 
+// The singers (the lead and the lineage choir) as one channel: mix.voices, 0 muted, else as sung. Muted, the band
+// stays as the record has it, still making way where they sing (songbird.synth.mixing).
+const VOICES = "mix.voices", VOICE = "voice";
+
+function voicesProgram() {  // the program's own: 1, or a parent's mute handed down
+  const mark = state.view?.marks?.[VOICES];
+  if (mark && typeof mark.was === "number") return mark.was;
+  return state.view?.cards?.find((c) => c.id === "mix")?.mix?.voices ?? 1;
+}
+
+function voicesLevel() {  // what's heard now: the latest edit's, else the program's
+  return Object.hasOwn(state.edits, VOICES) && state.edits[VOICES] !== null ? state.edits[VOICES] : voicesProgram();
+}
+
+// the edit that brings the singers to a level: the program's own is given back to the program, not kept as yours
+const voicesEdit = (level) => (Math.abs(level - voicesProgram()) < 1e-9 ? null : level);
+
+function muteVoice() {
+  const muted = voicesLevel() <= 0.02;
+  setEdits({ [VOICES]: voicesEdit(muted ? 1 : 0) }, muted ? "Unmute the voice" : "Mute the voice");
+}
+
 function currentSolo() {
-  if (state.solo && Object.entries(state.solo.patch).some(([path, value]) => state.edits[path] !== value)) state.solo = null;
+  if (state.solo && Object.entries(state.solo.patch).some(([path, value]) => (state.edits[path] ?? null) !== value)) state.solo = null;
   return state.solo;
 }
 
-function soloPlayer(card, player) {
+function soloPlayer(card, player) {  // a band player alone, or (VOICE) the singers alone
   const active = currentSolo();
   if (active?.player === player) {
     state.solo = null;
-    setEdits(active.before, "Restore the band mix");
+    setEdits(active.before, "Restore the mix");
     return;
   }
   const names = Object.keys(card.players);
-  const before = active?.before || Object.fromEntries(names.map((name) => {
-    const path = `band.${name}`;
-    return [path, Object.hasOwn(state.edits, path) ? state.edits[path] : null];
-  }));
+  const before = active?.before || Object.fromEntries([...names.map((name) => `band.${name}`), VOICES].map((path) =>
+    [path, Object.hasOwn(state.edits, path) ? state.edits[path] : null]));
   const levels = active?.levels || Object.fromEntries(names.map((name) => [name, card.band[name]]));
   const patch = Object.fromEntries(names.map((name) => [`band.${name}`, name === player ? Math.max(0.03, levels[name] || 1) : 0]));
+  // the singers out with the rest of the band; alone, heard even if they were muted before
+  const sung = before[VOICES] ?? voicesProgram();
+  patch[VOICES] = voicesEdit(player !== VOICE ? 0 : sung > 0.02 ? sung : 1);
   state.solo = { player, before, levels, patch };
-  setEdits(patch, `Solo ${card.players[player] || player}`);
+  setEdits(patch, player === VOICE ? "Solo the voice" : `Solo ${card.players[player] || player}`);
 }
 
 function mutePlayer(card, player) {
@@ -740,7 +764,8 @@ function mutePlayer(card, player) {
     setEdit(path, 0, `Mute ${card.players[player] || player}`);
   } else {
     // back to the level before: the program's own is given back to the program, not kept as a choice of yours
-    const to = state.mutedLevels[player] || 1, mark = state.view?.marks?.[path];
+    // (a mute found on the page when it opened has no level remembered: the program's own, then)
+    const mark = state.view?.marks?.[path], to = state.mutedLevels[player] || (typeof mark?.was === "number" && mark.was > 0.02 ? mark.was : 1);
     if (mark && typeof mark.was === "number" && Math.abs(mark.was - to) < 1e-9) releaseEdit(path, `Unmute ${card.players[player] || player}`);
     else setEdit(path, to, `Unmute ${card.players[player] || player}`);
   }
@@ -815,7 +840,7 @@ function editor(c) {
         slider("How busy", "band.density", band.density, b["band.density"], (x) => `${Math.round(x * 100)}%`, ["sparse", "busy"]),
         slider("How bright", "band.brightness", band.brightness, b["band.brightness"], (x) => `${Math.round(x * 100)}%`, ["dark and soft", "bright"]),
         bandMixer(c),
-        h("p", { class: "hint aside-note" }, "M mutes a player. S isolates a player in the band; click again to restore the mix. The singer stays audible."),
+        h("p", { class: "hint aside-note" }, "M mutes a player. S plays it alone; click again to restore the mix."),
         h("p", { class: "hint aside-note" }, c.styled ? "The style chooses who plays and who leads; change the style to change the band. With nobody playing, the voice sings alone."
           : "With nobody playing, the voice sings alone."));
     }

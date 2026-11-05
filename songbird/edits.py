@@ -14,6 +14,7 @@ keeps. An edit that can't be kept is left out and said why, never bent.
                          form.tag, form.outro, form.bridge2: each part of the shape on or off
     band.pattern, band.lead, band.density, band.brightness, band.<instrument> (0: it sits out)
     mix.space, mix.width, mix.forward, mix.intimacy, mix.rt60 (s), mix.predelay (s)
+    mix.voices           0: the singers muted (the band alone, mixed as the record has it); 1 or null: as sung
     variants.<name>      a melody variant, once a rendition carries them (Params.variants)
     tune.<line>          a tune line's notes: [{degree, onset, duration}, ...] in beats (songbird.composition)
     chords.<line>        a tune line's chords: a list of chords a bar ([["I"], ["V/3", "vi"]]), each a function
@@ -81,7 +82,8 @@ from .band import INSTRUMENTS, LEADS, PATTERNS
 from .genome import Genome
 from .synth.mixing import RANGES, MixParams
 
-MIX = ("space", "width", "forward", "intimacy", "rt60", "predelay")  # the room: how long it rings, how soon it answers
+MIX = ("space", "width", "forward", "intimacy", "rt60", "predelay",  # the room: how long it rings, how soon it answers
+       "voices")  # the singers: 0 muted (the band alone, as the record has it)
 # The arrangement's options a person may set (songbird.style.Style), each as the style's own choices go
 STYLE_OPTIONS = {"feel": ("straight", "swing", "shuffle", "twelve", "half", "double", "waltz", "six"),
                  "ending": ("ring", "rit", "cold", "amen", "repeat"), "backing": ("", "oohs", "echo", "thirds", "gang", "hum"),

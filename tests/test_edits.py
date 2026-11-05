@@ -41,6 +41,11 @@ def test_each_edit_takes_its_place_within_bounds():
     assert p.seed == E.rolled(plain.seed, 1) != plain.seed
     assert set(o.applied) == {"tempo", "tonic", "mode", "band.pattern", "band.lead", "band.density", "band.drum",
                               "mix.space", "mix.forward", "roll"}
+    # the singers muted (Mix's M on the voice): a mix setting like the others, absent from a version that sings
+    muted = choose_params(g, None, ADA, DAY, overrides=E.Overrides(g, E.check(g, {"mix.voices": 0})[0]))
+    assert muted.mix["voices"] == 0 and "voices" not in plain.mix
+    assert {k: v for k, v in muted.mix.items() if k != "voices"} == plain.mix
+    assert E.bounds(g)["mix.voices"]["song"] == 1.0
     # everything not edited is the program's own
     same = {k: v for k, v in plain.to_dict().items() if k not in ("tempo", "tonic", "mode", "band", "mix", "seed", "leanings")}
     # the learned singer's blend follows where the song sits, so a new key may bring other singers into it

@@ -279,7 +279,9 @@ the sea" keeps AE.
 Cards expose the style, form, players, room, vocal presence and other choices.
 Reasons and provenance are folded away. Every band player has a gain control
 (0–200%), a mute that remembers its previous level, and a solo control that restores
-the previous band mix when released. Solo leaves the singer audible. A solo or a
+the previous mix when released. The voice has the same two: its mute takes the singer
+and the choir out and leaves the band as the record has it (`mix.voices`), and a solo
+is one channel alone, the voice or a player. A solo or a
 batch of mix changes is one undoable edit. A new style brings its own instruments,
 pace, feel and arrangement options.
 
@@ -332,6 +334,7 @@ server keeps nothing else but caches, so any request can be replayed.
 | `form.verses`, `form.pairs`, `form.intro`, `form.turn`, `form.break`, `form.tag`, `form.outro`, `form.bridge2` | a count; on or off | `Params.form`: the program's shape with just these parts changed |
 | `band.pattern`, `band.lead`, `band.density`, `band.brightness`, `band.<instrument>` | as `Band`; an instrument's gain (0 sits it out) | `Params.band` |
 | `mix.space`, `mix.width`, `mix.forward`, `mix.intimacy`, `mix.rt60`, `mix.predelay` | as `MixParams` (the room: how long it rings, 0.3 to 2.5 s; how soon it answers, 5 to 80 ms) | `Params.mix` |
+| `mix.voices` | 0 to 1: 0 mutes the singers (the lead and the lineage choir), leaving the band as the record has it, still making way where they sing; Mix's **M** on the voice | `Params.mix` (left out while 1) |
 | `variants.<name>` | as the variant takes | `Params.variants`, once it exists (said refused until then) |
 | `words.verse.<i>` | `{"id": verse, "slots": {slot: words}}` | the i-th verse section's verse (from 0) |
 | `words.refrain.<i>` | `{"id": couplet, "head": head, "slots": {slot: words}}`, any of the three, or just a couplet | the i-th refrain's own words: its couplet (never the last's), its head (between the first and last), its words (the question too, between them) |

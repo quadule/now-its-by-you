@@ -275,6 +275,8 @@ def mix_words(mix) -> str:
     width = "wide" if mix.width > 1.12 else "narrow" if mix.width < 0.85 else ""
     wear = "worn like an old tape" if mix.wear > 0.3 else "a little worn" if mix.wear > 0.12 else ""
     voice = f"the voice {listed([near, over])}"
+    if getattr(mix, "voices", 1.0) <= 0.02:  # the singers muted: the band alone
+        voice = "the singers muted"
     room = f"{room_words(mix.rt60)}, {space}" if space else room_words(mix.rt60)
     if getattr(mix, "disc", 0.0) > 0:  # recorded as a 78: mono, so no width (synth/disc.py)
         return "; ".join(x for x in ("recorded as a 78", room, voice, wear) if x)
@@ -1017,14 +1019,14 @@ def mix_card(v: Version) -> dict:
                                             "drop and the run-out groove"})
     labels = {"mix.space": "how much room", "mix.width": "how wide", "mix.forward": "the voice over the band",
               "mix.intimacy": "how close the singer is", "mix.rt60": "how long the room rings",
-              "mix.predelay": "how soon the room answers"}
+              "mix.predelay": "how soon the room answers", "mix.voices": "the singers muted"}
     from .sound import label  # a player's channel (mix.<player>.pan, .send, .sidechain) in plain words
 
     mine = [{"kind": "you", "text": f"{labels.get(p) or label(p)}: chosen by you", "path": p} for p in v.mine("mix.")]
     return _card(v, "mix", "The room and the mix", mix_words(mix), f"the room takes {mix.rt60:.1f} s to fall quiet",
                  mine + _finish(v, why, "mix"), ["mix."],
                  mix={k: getattr(mix, k) for k in ("space", "width", "forward", "intimacy", "rt60", "predelay", "tilt",
-                                                   "wear")})
+                                                   "wear", "voices")})
 
 
 def singer_card(v: Version, phrasings: list[dict]) -> dict:

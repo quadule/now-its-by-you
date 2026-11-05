@@ -454,7 +454,7 @@
     return h("div", { class: `head track-head ${t.kind}${chosen ? " selected" : ""}`, role: "rowheader" },
       target ? h("button", { class: "name", type: "button", "data-key": `track:${t.id}`, title: t.kind === "player" ? `${t.label} everywhere` : t.label,
         onclick: () => select(target) }, t.label) : h("span", { class: "name" }, t.label),
-      t.kind === "player" ? muteSolo(t.id, t.label) : null,
+      t.kind === "player" ? muteSolo(t.id, t.label) : t.kind === "singer" ? voiceMuteSolo() : null,
       t.kind === "player" ? routeMark(t.id) : null);
   }
   function muteSolo(name, label) {
@@ -465,7 +465,21 @@
     const level = band.band?.[name] ?? 1, muted = level <= 0.02, solo = currentSolo()?.player === name;
     return h("span", { class: "ms" },
       h("button", { type: "button", "aria-pressed": String(muted), "aria-label": `${muted ? "Unmute" : "Mute"} ${label}`, title: "Mute (M)", onclick: () => { mutePlayer(bc, name); say(`${label} ${muted ? "back in" : "muted"}`); } }, "M"),
-      h("button", { type: "button", "aria-pressed": String(solo), "aria-label": `Solo ${label}`, title: "Solo (S): the singer stays", onclick: () => { soloPlayer(bc, name); say(`${label} ${solo ? "back in the band" : "alone with the singer"}`); } }, "S"));
+      h("button", { type: "button", "aria-pressed": String(solo), "aria-label": `Solo ${label}`, title: "Solo (S)", onclick: () => { soloPlayer(bc, name); say(`${label} ${solo ? "back in the band" : "alone"}`); } }, "S"));
+  }
+  // the singers' own: M takes the lead and the choir out and leaves the band as the record has it; S, them alone
+  function voiceBand() {  // the band's card, with every player that plays (the ones solo quiets)
+    const band = card("band");
+    if (!band) return null;
+    const players = { ...band.players };
+    for (const sp of S.sound?.players || []) if (sp.playing !== false && !players[sp.player]) players[sp.player] = sp.name || sp.player;
+    return { ...band, players };
+  }
+  function voiceMuteSolo() {
+    const muted = voicesLevel() <= 0.02, solo = currentSolo()?.player === VOICE;
+    return h("span", { class: "ms" },
+      h("button", { type: "button", "aria-pressed": String(muted), "aria-label": `${muted ? "Unmute" : "Mute"} the voice`, title: "Mute (M): the band without the singers", onclick: () => { muteVoice(); say(`The voice ${muted ? "back in" : "muted"}`); } }, "M"),
+      h("button", { type: "button", "aria-pressed": String(solo), "aria-label": "Solo the voice", title: "Solo (S)", onclick: () => { const bc = voiceBand(); if (!bc) return; soloPlayer(bc, VOICE); say(`The voice ${solo ? "back with the band" : "alone"}`); } }, "S"));
   }
   function routeMark(name) {
     const ui = P();
@@ -548,7 +562,8 @@
     const box = $("mix"), band = card("band"), mix = card("mix");
     if (!box || !S.sound || !band) return;
     keepFocus(() => {
-      const strips = S.sound.players.filter((p) => p.playing !== false).map((sp) => strip(sp, band));
+      // a player the program sits out has no strip; one a person muted (or a solo quieted) keeps its own, to come back by
+      const strips = S.sound.players.filter((p) => p.playing !== false || edited(`band.${p.player}`)).map((sp) => strip(sp, band));
       morph(box, [...strips, voiceStrip(mix), roomStrip(mix)]);  // in place: a fader being moved stays put
     });
   }
@@ -639,8 +654,9 @@
   }
   function voiceStrip(mix) {
     const b = state.start.bounds, m = mix.mix;
-    return h("div", { class: `strip bus${S.sel?.kind === "singer" ? " selected" : ""}` },
+    return h("div", { class: `strip bus${S.sel?.kind === "singer" ? " selected" : ""}${voicesLevel() <= 0.02 ? " muted" : ""}` },
       h("button", { class: "nm", type: "button", onclick: () => select({ kind: "singer" }) }, "Voice"),
+      voiceMuteSolo(),
       h("div", { class: "sliders" },
         busSlider("over the band", "mix.forward", m.forward, b["mix.forward"], (x) => `${Number(x).toFixed(1)} dB`, "bus:forward"),
         busSlider("how close", "mix.intimacy", m.intimacy, b["mix.intimacy"], pct, "bus:intimacy")),
@@ -1288,6 +1304,7 @@
         const name = S.sel?.kind === "player" ? S.sel.id : S.sel?.kind === "cell" ? S.sel.player : null;
         const t = S.grid?.tracks.find((x) => x.id === name && x.kind === "player");
         if (t) { e.preventDefault(); const band = card("band"); const bc = { ...band, players: { ...band.players, [t.id]: t.label } }; (a.action === "mute" ? mutePlayer : soloPlayer)(bc, t.id); }
+        else if (S.sel?.kind === "singer" && voiceBand()) { e.preventDefault(); if (a.action === "mute") muteVoice(); else soloPlayer(voiceBand(), VOICE); }
         break;
       }
       case "record": e.preventDefault(); record(); break;

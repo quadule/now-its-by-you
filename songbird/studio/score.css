@@ -222,7 +222,7 @@ input[type=number] { width: 72px; border: 1px solid var(--rule-strong); backgrou
   display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; overflow-wrap: anywhere; }
 .track-head button.name:hover { color: var(--hand); }
 .track-head.selected button.name { color: var(--hand); font-weight: 600; }
-.track-head .ms { display: inline-flex; gap: 2px; }
+.track-head .ms, .strip .ms { display: inline-flex; gap: 2px; }
 .ms button { width: 20px; height: 20px; border: 1px solid var(--rule); background: var(--card); border-radius: var(--radius); font-size: 10px; padding: 0; color: var(--ink-2); }
 .ms button[aria-pressed=true] { background: var(--hand-wash); border-color: var(--hand); color: var(--hand); font-weight: 600; }
 .track-head .route { font-size: 10px; color: var(--ink-3); min-width: 34px; }

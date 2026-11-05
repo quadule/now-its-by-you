@@ -111,6 +111,7 @@ mix in its JSON). Values outside a range are held to it.
 | `tilt` | −2–+2 dB | 0 | the record darker or brighter: ±this at 60 Hz and 12 kHz against 1 kHz | screen brightness |
 | `wear` | 0–1 | 0 | how worn the recording sounds (below) | file ages |
 | `balance` | name or role: ±12 dB | none | an instrument up or down, e.g. `balance=fiddle:2` | drift |
+| `voices` | 0–1 | 1 | how much of the singers is heard: 0 takes the lead and the lineage choir out of the record, its room and its plate, and leaves the band as it was mixed for them, still making way where they sing (a backing track; the studio's **M** on the voice) | a person only |
 
 **Wear** is the plan's "how worn the arrangement sounds", off by default.
 Toward 1: the tape's speed wanders (wow, about 0.2% at 0.5–0.8 Hz) and
