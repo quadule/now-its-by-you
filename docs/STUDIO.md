@@ -113,6 +113,27 @@ and bringing it in, and *Time* as a drawer. What follows describes the page it r
 until the artist signs the score off; both pages share studio.js, so the edits, history, drafts, listening
 and recording below are the score's too.
 
+The score's page, in short (songbird/studio/score.js draws it):
+
+- **The header** names the day ("Today, Wednesday, November 4, 2026"), then a parent other than the song as it
+  began and a machine, when there is one. *Time* opens other days, other computers and someone's version.
+- **The transport** has play, Sketch or Sung, loop, click, the tempo as a number field (a whole number in the
+  style's range; a Reset beside it when the tempo is yours), the key, New performance, undo, redo, Export and
+  Tools.
+- **Page** is the words. A section's name is followed by a list button and how many ways its words can go;
+  selecting the section lists them in the column (each choice's first two lines, the one sung marked, the ones
+  the song refuses there greyed with why), with *Write your own* at the head of the list. A refrain has a list
+  for its opening and one for its couplet. Clicking a line opens its field in the line's place, with its
+  syllable count, *Use this line* and *Discard typing*. A word with alternatives is a menu at the word.
+- **Arrange** and **Mix** are as described below; in both, the voice has mute and solo like a player
+  (`mix.voices`).
+- **The column** shows whatever is selected. With nothing selected it lists this version, a row each: Style,
+  Singer, Band, Shape, Room, Melody, Choir, Words, Machine, with the first few words of what each is.
+- **Yours** is a colour: a choice a person made is drawn in the hand's blue wherever it shows, and *Reset* gives
+  it back to the program.
+- **Tools** has Export (Song file, MIDI, Stems, Piano page, Draft) and Import (MIDI file, MIDI keyboard, Sing,
+  Draft).
+
 The first screen holds only what matters most: **Hear the song**, a few simple
 changes (key, scale, tempo, a new performance), undo and redo, **Export it**
 (or **Sing or record**, where the singing page exists), and **Help**. Everything
@@ -132,10 +153,9 @@ everything makes it busy and confusing"):
   there, or in each card's *How this choice works*;
 - the **Help** button (or the ? key) opens the whole studio in plain words,
   with **Show me around**;
-- a first visit is walked through four steps, each pointing at one thing:
-  hear it, change something simple, go deeper, record it. It is shown once
-  per browser (and never on a link into a particular view), and Skip or Esc
-  ends it. songbird/studio/help.js has both.
+- **Show me around** walks four steps, each pointing at one thing: hear it,
+  change something simple, go deeper, export it. Skip or Esc ends it.
+  songbird/studio/help.js has both.
 
 ### Tune (Arrange)
 
