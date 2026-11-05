@@ -40,12 +40,11 @@ code { font: 12px var(--mono); background: var(--wash); padding: 0 4px; border-r
 .link { border: 0; background: none; padding: 0; color: var(--hand); text-decoration: underline; text-underline-offset: 3px; font-size: 13px; }
 .link.small { font-size: 12px; }
 /* a chip keeps its size whatever it says (on, yours): the one beside it doesn't move as an answer lands (the EDM
-   test's second attempt, bug 2). Its weight is drawn, not set (a bolder face is wider); its ✎ sits on its corner */
+   test's second attempt, bug 2). Its weight is drawn, not set (a bolder face is wider); yours is its colour */
 .chip { position: relative; border: 1px solid var(--rule); background: var(--card); border-radius: var(--radius); padding: 3px 9px; font-size: 13px; min-height: 26px; }
 .chip:hover { border-color: var(--hand); }
 .chip.on { border-color: var(--ink); background: var(--wash); color: var(--ink); text-shadow: .35px 0 0 currentColor, -.15px 0 0 currentColor; }
 .chip.on.you { border-color: var(--hand); background: var(--hand-wash); color: var(--hand); }
-.chip.on.you::after { content: "✎" / ""; position: absolute; top: -8px; right: -5px; font-size: 10px; line-height: 1; padding: 1px 2px; border-radius: 6px; background: var(--card); text-shadow: none; pointer-events: none; }
 .chip.drawn { border-style: dashed; border-color: var(--ink-2); }
 .chips { display: flex; flex-wrap: wrap; gap: 5px; }
 select.sel, .inspector select, .pop select { border: 1px solid var(--rule-strong); background: var(--card); border-radius: var(--radius); padding: 4px 6px; font-size: 13px; max-width: 100%; }
@@ -163,7 +162,7 @@ input[type=number] { width: 72px; border: 1px solid var(--rule-strong); backgrou
 .sec.selected .rubric { text-decoration: underline; text-decoration-color: var(--red); text-underline-offset: 4px; text-decoration-thickness: 2px; }
 .sec-head .sectools { margin-left: auto; display: inline-flex; gap: 6px; align-items: center; }
 .sec-head > .lyric-slot-label { flex-basis: 100%; }  /* the words' choosers on lines of their own, under the name and its play */
-.rubric.hand::after, .hand::after { content: " ✎"; font-size: .85em; color: var(--hand); font-variant-caps: normal; }
+.rubric.hand, .rubric.you { color: var(--hand); }
 .lines { font-family: var(--serif); font-size: clamp(17px, 1.8vw, 21px); line-height: 1.5; }
 .lines p { margin: 0; }
 .lines p.pick { cursor: text; border-radius: var(--radius); }
@@ -355,7 +354,6 @@ button.sbc-chord.is-rub::after { content: "•"; color: var(--red); margin-left:
 .fader .tick { position: absolute; left: -4px; right: -4px; height: 0; border-top: 1.5px dashed var(--ink-3); pointer-events: none; }
 .strip .val { font-size: 12px; font-variant-numeric: tabular-nums; }
 .strip .val.you { color: var(--hand); font-weight: 600; }
-.strip .val.you::after { content: " ✎"; font-weight: 400; }
 .strip .knob { width: 100%; display: grid; gap: 2px; font-size: 10px; color: var(--ink-2); text-align: center; }
 .strip .knob.you { color: var(--hand); }
 .strip .knob select { font-size: 11px; padding: 1px 2px; border: 1px solid var(--rule); background: var(--card); border-radius: var(--radius); width: 100%; }
@@ -414,18 +412,20 @@ button.sbc-chord.is-rub::after { content: "•"; color: var(--red); margin-left:
 .inspector details[open] > summary { margin-bottom: 6px; }
 .reason { display: flex; gap: 6px; align-items: baseline; font-size: 12px; color: var(--ink-2); margin: 4px 0; }
 .reason .tag { flex: 0 0 auto; }
+.reason.you { color: var(--hand); }
 .inspector .foot { display: flex; gap: 8px; align-items: center; margin-top: 14px; padding: 10px 0 0; border-top: 1px solid var(--rule); flex-wrap: wrap; font: inherit; color: inherit; }
 .inspector .foot .release { margin-left: auto; }
 .inspector .foot .btn.quiet { margin-left: 8px; }
-.inspector .doors { display: grid; gap: 8px; }
-.door { text-align: left; border: 1px solid var(--rule); background: var(--paper); border-radius: var(--radius); padding: 8px 10px; display: grid; gap: 2px; width: 100%; color: var(--ink); }
-.door:hover { border-color: var(--hand); }
-.door .rubric { font-size: 13px; }
-.door .v { font: 14px/1.3 var(--serif); }
-.door .v.you { color: var(--hand); }
-.door .d { font-size: 11px; color: var(--ink-3); }
-.lineitem { display: flex; justify-content: space-between; align-items: center; gap: 8px; font-size: 12px; color: var(--ink-2); padding: 4px 0; border-top: 1px solid var(--rule); }
-.lineitem b { font-weight: 600; color: var(--ink); text-align: right; }
+.inspector .doors { display: grid; }
+.door { text-align: left; border: 0; border-top: 1px solid var(--rule); background: none; padding: 7px 0; display: grid; grid-template-columns: 64px minmax(0, 1fr); gap: 8px; align-items: baseline; width: 100%; color: var(--ink); }
+.door:first-child { border-top: 0; }
+.door:hover .v { text-decoration: underline; text-underline-offset: 3px; }
+.door .k { font-size: 12px; color: var(--ink-2); }
+.door .v { font: 15px/1.3 var(--serif); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.door.you .v { color: var(--hand); }
+.lineitem { display: grid; grid-template-columns: 64px minmax(0, 1fr) auto; gap: 8px; align-items: baseline; padding: 7px 0; border-top: 1px solid var(--rule); }
+.lineitem .k { font-size: 12px; color: var(--ink-2); }
+.lineitem .v { font: 15px/1.3 var(--serif); color: var(--ink); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .field { display: grid; gap: 3px; margin: 8px 0; }
 .field > .label { font-size: 12px; color: var(--ink-2); display: flex; justify-content: space-between; gap: 8px; }
 .field .ends { display: flex; justify-content: space-between; font-size: 11px; color: var(--ink-3); }
@@ -482,15 +482,15 @@ button.sbc-chord.is-rub::after { content: "•"; color: var(--red); margin-left:
 .tools .cols { display: grid; grid-template-columns: 1fr 1fr; gap: 22px; margin-top: 14px; }
 .tools h3 { font: 600 15px var(--serif); font-variant-caps: all-small-caps; letter-spacing: .08em; color: var(--red); margin: 0 0 8px; border-bottom: 1px solid var(--red-rule); padding-bottom: 4px; }
 /* each tool a row of one grid: its button in a column of its own (one width for all), what it does beside it */
-.tool { display: grid; grid-template-columns: 136px minmax(0, 1fr); gap: 4px 12px; align-items: baseline; padding: 10px 0; border-top: 1px solid var(--rule); }
-.tool > .btn { justify-self: start; max-width: 100%; white-space: normal; text-align: left; }
+.tool { display: grid; grid-template-columns: 128px minmax(0, 1fr); gap: 4px 12px; align-items: center; padding: 8px 0; border-top: 1px solid var(--rule); }
+.tool > .btn { width: 100%; white-space: normal; text-align: left; }
 .tools .btn.quiet { padding-left: 0; padding-right: 0; border: 0; }
 .tools .btn.quiet:hover { background: none; text-decoration: underline; text-underline-offset: 3px; }
 .col > h3 + .tool { border-top: 0; }
 .tool > p { margin: 0; font-size: 12px; color: var(--ink-2); }
 .tool > :not(.btn):not(p:first-of-type) { grid-column: 1 / -1; }
 .tool > p.hint:empty { display: none; }
-.tool .drop { border: 1px dashed var(--rule-strong); border-radius: var(--radius); padding: 10px; font-size: 12px; color: var(--ink-3); text-align: center; }
+.tool .drop { border: 1px dashed var(--rule-strong); border-radius: var(--radius); padding: 5px; font-size: 12px; color: var(--ink-3); text-align: center; }
 .tool .drop.over { border-color: var(--hand); color: var(--hand); background: var(--hand-wash); }
 .saved { font-size: 13px; }
 .saved p { margin: 4px 0; }

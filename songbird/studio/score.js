@@ -1,5 +1,5 @@
 // The score (docs/notes/STUDIO-REDESIGN.md): one transport, three views of the song (Page, Arrange, Mix), one inspector
-// that shows whatever is selected, Your tools as a sheet and Time as a drawer. It draws; studio.js keeps the edits,
+// that shows whatever is selected, Tools as a sheet and Time as a drawer. It draws; studio.js keeps the edits,
 // the history, the drafts and the listening (its globals: state, h, api, setEdit, listen, record...), composer.js the
 // notes and the sketch, author.js a line of words, players.js where the sketch's players go, perform.js notes in.
 // Pure parts are model.js's. Everything shown is built as text: nothing from an answer is read as markup.
@@ -302,9 +302,7 @@
         p.addEventListener("click", (e) => { if (!e.target.closest("select")) select({ kind: "line", id: sid, line: j }); });
       });
     } else body = lines(w.lines);
-    const sec = h("div", { class: `sec${w.sung ? "" : " instrumental"}${w.mine ? " mine" : ""}${chosen ? " selected" : ""}`, id: `sec-${w.index}` }, head, body,
-      !w.sung && arranged ? h("p", { class: "hint you" }, "arranged by you ✎") : null);
-    return sec;
+    return h("div", { class: `sec${w.sung ? "" : " instrumental"}${w.mine || (!w.sung && arranged) ? " mine" : ""}${chosen ? " selected" : ""}`, id: `sec-${w.index}` }, head, body);
   }
 
   // ------------------------------------------------------------------ Arrange: the grid, from /api/arrangement and /api/sound
@@ -646,8 +644,7 @@
       voiceMuteSolo(),
       h("div", { class: "sliders" },
         busSlider("over the band", "mix.forward", m.forward, b["mix.forward"], (x) => `${Number(x).toFixed(1)} dB`, "bus:forward"),
-        busSlider("how close", "mix.intimacy", m.intimacy, b["mix.intimacy"], pct, "bus:intimacy")),
-      edited("mix.forward") || edited("mix.intimacy") ? h("div", { class: "why you" }, "yours ✎") : null);
+        busSlider("how close", "mix.intimacy", m.intimacy, b["mix.intimacy"], pct, "bus:intimacy")));
   }
   function roomStrip(mix) {
     const b = state.start.bounds, m = mix.mix;
@@ -686,7 +683,7 @@
     const whyOpen = !!S.why[kind];
     morph(box, [  // in place, not redrawn whole: what the pointer is on stays where it is (studio.js morph)
       h("button", { class: "handle", type: "button", "aria-label": S.tall ? "Lower the column" : "Raise the column", onclick: () => { S.tall = !S.tall; box.classList.toggle("tall", S.tall); } }),
-      h("div", { class: "top" }, h("span", { class: "rubric", id: "inspectorTitle", tabindex: "-1" }, rubric, mine ? h("span", { class: "you", "aria-label": ", yours" }, " ✎") : null),
+      h("div", { class: "top" }, h("span", { class: `rubric${mine ? " you" : ""}`, id: "inspectorTitle", tabindex: "-1" }, rubric, mine ? h("span", { class: "sr-only" }, ", yours") : null),
         h("button", { class: "iconbtn q", type: "button", "aria-expanded": String(S.about), "aria-label": "What is this?", title: "What is this?", onclick: () => { S.about = !S.about; renderInspector(); } }, "?"),
         kind === "song" && !S.songShown ? null : h("button", { class: "iconbtn close", type: "button", "aria-label": "Close (Esc)", title: "Close (Esc)",
           onclick: () => { S.songShown = false; select(null); } }, "✕")),
@@ -701,10 +698,14 @@
           onclick: release.action }, release.label || "Reset") : null) : null]);
   }
   function reasonsFold(kind, why, open) {
-    const list = why.map((r) => (Array.isArray(r) ? { kind: r[0], text: r[1] } : r)).filter((r) => r.text);
+    // a person's choice is shown by its colour, on the control and here: "chosen by you" isn't said
+    const list = why.map((r) => (Array.isArray(r) ? { kind: r[0], text: r[1] } : r))
+      .map((r) => (r.kind === "you" ? { ...r, text: String(r.text || "").replace(/^(.*: )?(chosen|kept) by you(; )?/, "") } : r)).filter((r) => r.text);
     list.sort((a, b) => (b.kind === "you") - (a.kind === "you"));
-    const d = h("details", {}, h("summary", {}, "Why the program chose this"),
-      list.map((r) => h("div", { class: "reason" }, tag(r.kind === "program" ? "song" : r.kind), h("span", {}, r.text))));
+    if (!list.length) return null;
+    const d = h("details", {}, h("summary", {}, "Why"),
+      list.map((r) => (r.kind === "you" ? h("div", { class: "reason you" }, h("span", {}, r.text))
+        : h("div", { class: "reason" }, tag(r.kind === "program" ? "song" : r.kind), h("span", {}, r.text)))));
     d.open = open;
     d.addEventListener("toggle", (e) => { S.why[kind] = e.target.open; });
     return d;
@@ -760,30 +761,31 @@
     const yoursCells = S.grid ? [...S.grid.cells.values()].filter((c) => c.by === "you" || c.locked) : [];
     const who = [...new Set(yoursCells.map((c) => S.grid.tracks.find((t) => t.id === c.player)?.label))];
     const off = shape?.parts ? state.start.optional.filter((p) => !shape.parts[p]).map((p) => state.start.parts[p]) : [];
-    const door = (rubric, value, detail, sel, mine) => h("button", { class: "door", type: "button", onclick: () => select(sel) },
-      h("span", { class: "rubric" }, rubric), h("span", { class: `v${mine ? " you" : ""}` }, value, mine ? " ✎" : ""), detail ? h("span", { class: `d${mine ? " you" : ""}` }, detail) : null);
+    // a row for each: its name and the first few words of what it is (the whole of it is its tooltip, and what it opens)
+    const brief = (text) => String(text || "").split(/[;,:]/)[0].replace(/^(the|an?) /, "");
+    const door = (name, value, detail, sel, mine) => h("button", { class: `door${mine ? " you" : ""}`, type: "button", title: [value, detail].filter(Boolean).join("; "),
+      "aria-label": `${name}: ${value}${mine ? ", yours" : ""}`, onclick: () => select(sel) }, h("span", { class: "k" }, name), h("span", { class: "v" }, brief(value)));
     const line = (c, label, value, extra = null) => {
       if (!c) return null;
       const more = h("div", { class: "hint", hidden: true }, [c.detail, ...(c.lines || []), ...(c.reasons || []).map((r) => r.text)].filter(Boolean).join(" · "), extra);
-      return h("div", {}, h("div", { class: "lineitem" }, h("span", {}, label), h("b", {}, value || c.value),
+      return h("div", {}, h("div", { class: "lineitem", title: value || c.value }, h("span", { class: "k" }, label), h("span", { class: "v" }, brief(value || c.value)),
         h("button", { class: "what", type: "button", "aria-label": `About ${label}`, "aria-expanded": "false",
           onclick: (e) => { const box = e.currentTarget.parentNode.nextSibling; box.hidden = !box.hidden; e.currentTarget.setAttribute("aria-expanded", String(!box.hidden)); } }, "?")), more);
     };
     shell({ kind: "song", rubric: "This version",
       body: h("div", {},
         h("div", { class: "doors" },
-          style ? door("The style", style.value, style.detail, { kind: "style" }, style.mine) : null,
-          singer ? door("The singer", singer.value, singer.detail, { kind: "singer" }, singer.mine) : null,
-          band ? door("The band", band.value, who.length ? `${who.join(", ")}: yours in ${yoursCells.length} place${yoursCells.length === 1 ? "" : "s"} ✎` : band.detail, { kind: "band" }, band.mine || yoursCells.length > 0) : null,
-          shape ? door("The shape", shape.value, off.length ? `add: ${off.slice(0, 4).join(" · ")}` : null, { kind: "shape" }, shape.mine || !!v.edits["form.order"]) : null,
-          mix ? door("The room", mix.value, mix.detail, { kind: "room" }, mix.mine) : null),
-        h("h4", {}, "And"),
-        line(card("variants"), "The melody", null, (card("variants")?.variants || []).length ? h("div", { class: "row" }, card("variants").variants.map((x) =>
+          style ? door("Style", style.value, style.detail, { kind: "style" }, style.mine) : null,
+          singer ? door("Singer", singer.value, singer.detail, { kind: "singer" }, singer.mine) : null,
+          band ? door("Band", band.value, who.length ? `${who.join(", ")}: yours in ${yoursCells.length} place${yoursCells.length === 1 ? "" : "s"}` : band.detail, { kind: "band" }, band.mine || yoursCells.length > 0) : null,
+          shape ? door("Shape", shape.value, off.length ? `add: ${off.slice(0, 4).join(" · ")}` : null, { kind: "shape" }, shape.mine || !!v.edits["form.order"]) : null,
+          mix ? door("Room", mix.value, mix.detail, { kind: "room" }, mix.mine) : null),
+        line(card("variants"), "Melody", null, (card("variants")?.variants || []).length ? h("div", { class: "row" }, card("variants").variants.map((x) =>
           h("label", { class: "check" }, h("input", { type: "checkbox", checked: !!x.value, onchange: (e) => choose(x.path, e.target.checked, x.label) }), ` ${x.label}`))) : null),
-        line(card("choir"), "Voices before"),
-        line(card("words"), "The words", card("words")?.detail, h("div", { class: "row" }, h("button", { class: "btn quiet", type: "button", onclick: keepWords,
+        line(card("choir"), "Choir"),
+        line(card("words"), "Words", card("words")?.detail, h("div", { class: "row" }, h("button", { class: "btn quiet", type: "button", onclick: keepWords,
           title: "Hold every word as it is now, so that time and chance change only the music" }, "Keep these words"))),
-        line(card("machine"), "Your machine"),
+        line(card("machine"), "Machine"),
         null) });
     return true;
   }
@@ -1132,7 +1134,7 @@
       body: h("div", {},
         h("div", { class: "row" }, h("span", { class: "label" }, "Sings in"), h("span", { class: "minisec" }, sung)),
         phrasings.length ? h("div", { class: "row" }, h("span", { class: "label" }, "Whose way"), sel)
-          : h("p", { class: "hint" }, state.start.sing.available ? "Sing it (in Tools) to have it sung your way." : state.start.sing.why),
+          : h("p", { class: "hint" }, state.start.sing.available ? "Sing (in Tools) to have it sung your way." : state.start.sing.why),
         field("Over the band", "mix.forward", m.forward, b["mix.forward"], (x) => `${Number(x).toFixed(1)} dB`, ["among it", "well over it"]),
         field("How close", "mix.intimacy", m.intimacy, b["mix.intimacy"], pct, ["further back", "at your ear"]),
         routeControls("tune", "the tune")),
@@ -1220,7 +1222,7 @@
     return true;
   }
 
-  // ------------------------------------------------------------------ sheets: Your tools, the Time drawer
+  // ------------------------------------------------------------------ sheets: Tools, the Time drawer
   function openTools(on, side) {
     const sheet = $("finishPanel");
     if (on === undefined) on = sheet.hidden;
@@ -1237,7 +1239,7 @@
   function sayTarget() {  // what "Play a part in" plays over: the selection
     const s = S.open || S.sel?.id || S.sel?.section;
     const label = s ? sectionAt(s)?.label : null;
-    $("performWhat").textContent = `A MIDI keyboard, live, over the sketch: from ${label || "the whole song"}.`;
+    $("performWhat").textContent = `Play a part in, over the sketch: from ${label || "the whole song"}.`;
     $("performWhat").title = "The sketch is the guide; only the notes are kept. Choose the player and the lines in it.";
     const where = $("performWhere");
     if (where && s) { const i = compIndex(s); if (i >= 0 && where.value !== String(i)) { where.value = String(i); where.dispatchEvent(new Event("change")); } }

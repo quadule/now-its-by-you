@@ -77,10 +77,10 @@ function build() {
   // the Tools sheet's way in: one line, and the button opens the Sing view
   const tool = $("singTitle").closest("section");
   const line = tool.querySelector("p");
-  line.textContent = "Sing along; the song learns a little of how you sing.";
+  line.textContent = "The song learns your timing.";
   line.removeAttribute("title");
   const old = $("sing"), button = old.cloneNode(true);  // the studio's own listener (the karaoke page) stays with the old one
-  button.textContent = "Sing it";
+  button.textContent = "Sing";
   old.replaceWith(button);
   button.addEventListener("click", () => {
     $("finishPanel").querySelector("[data-close]")?.click();
