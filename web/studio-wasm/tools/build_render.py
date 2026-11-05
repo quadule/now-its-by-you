@@ -47,7 +47,8 @@ APP = {"studio-worker.mjs": HERE / "studio-worker.mjs",
        "wasm/kernels.wasm": HERE / "wasm" / "kernels.wasm"}
 STANDINS = ("numba/__init__.py", "wasm_kernels.py", "web_patches.py", "studio_render.py",  # py/ (not soundfile.py)
             "studio_device.py",  # the studio itself on the visitor's device (build_site.py)
-            "lazy_imports.py")  # ... whose worker stands in for scipy and soundfile until they're used
+            "lazy_imports.py",  # ... whose worker stands in for scipy and soundfile until they're used
+            "bytecode.py")  # every worker: what Python compiles, kept in the browser for the next one
 OPTIONAL = ("sing_measure.py",)  # py/, when it's there: a sung take measured in the browser (another part of the work)
 # beside the program, for the studio on the device: the song it opens on, and singing's side of the studio (outside
 # the program, as on a server: a packet never carries it)
