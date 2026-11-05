@@ -28,6 +28,7 @@ GUIDE = "86341ecd9a2a"
 SONG = "h-now-its-by-you"
 CLOSES, DELETE_BY = "2026-09-27T22:00:00-07:00", "2026-09-30T20:00:00-07:00"  # the Worker's CLOSES_AT, DELETE_BY
 OPEN, CLOSED, DELETING = "2026-09-26T23:30:00.000Z", "2026-09-28T06:00:00.000Z", "2026-10-01T04:00:00.000Z"
+UPLOADED = "2026-10-01T10:00:00.000Z"  # when a take reached the bucket, unless a test says otherwise
 
 
 def iso(stamp: str) -> str:
@@ -63,7 +64,7 @@ class FakeSite:
                 "deleting": now >= moment(DELETE_BY)}
 
     def add_take(self, token: str, stamp: str, name: str = "", mix: str = "melody", corrupt: bool = False,
-                 uploaded: str = "2026-10-01T10:00:00.000Z") -> str:
+                 uploaded: str = UPLOADED) -> str:
         """A first-version take: kept under its invitation, no singer id."""
         data = wav_bytes()
         key = f"takes/{token}/{stamp}-abcdef"
@@ -412,9 +413,10 @@ def test_what_never_arrived_whole_can_be_cleared(site, capsys):
     old = site.add_take(token, "20260101T100000Z", uploaded="2026-01-01T10:00:00.000Z")
     new = site.add_take(token, "20261001T100000Z")  # the sidecar may still be on its way
     del site.objects[f"{old}.json"], site.objects[f"{new}.json"]
-    assert I.fetch(site.api) == [] and len(site.objects) == 2
+    soon = moment(UPLOADED) + dt.timedelta(seconds=I.STALE // 2)  # the clock, as the tool sees it
+    assert I.fetch(site.api, now=soon) == [] and len(site.objects) == 2
     assert "--purge-incomplete deletes it" in capsys.readouterr().out
-    assert I.fetch(site.api, purge=True) == []
+    assert I.fetch(site.api, purge=True, now=soon) == []
     assert list(site.objects) == [f"{new}.wav"] and site.deleted == [f"{old}.wav"]
 
 
@@ -423,7 +425,7 @@ def test_a_damaged_or_half_sent_take_stays_on_the_server(site, capsys):
     site.add_take(token, "20261001T100000Z", corrupt=True)
     orphan = site.add_take(token, "20261001T110000Z")
     del site.objects[f"{orphan}.json"]
-    assert I.fetch(site.api) == []
+    assert I.fetch(site.api, now=moment(UPLOADED) + dt.timedelta(hours=1)) == []
     assert len(site.objects) == 3 and not site.deleted
     out = capsys.readouterr().out
     assert "doesn't match" in out and "incomplete" in out
@@ -845,9 +847,9 @@ def test_purge_waits_for_delete_by_then_takes_the_online_audio(site, monkeypatch
     capsys.readouterr()
     assert I.purge(site.api) == 0 and "not yet" in capsys.readouterr().out and take.path.exists()
     site.now = DELETING
-    assert I.purge(site.api, server=True) == 3  # its audio, and its version and vocals
+    assert I.purge(site.api, server=True, now=DELETING) == 3  # its audio, and its version and vocals
     out = capsys.readouterr().out
-    assert not take.path.exists() and json.loads(take.sidecar().read_text())["purged"]
+    assert not take.path.exists() and json.loads(take.sidecar().read_text())["purged"] == DELETING
     assert here.path.exists() and old.path.exists() and all(f.exists() for f in numbers)
     assert not (K.ROOT / "renders" / "versions" / "jo").exists() and json.loads(I.versions_file().read_text()) == {}
     assert "renders/throat/corpus/" in out and "renders/throat/dataset.npz" in out  # named, not deleted

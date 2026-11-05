@@ -58,7 +58,7 @@ FILES = {"/sing.js": (HERE / "sing.js", "text/javascript; charset=utf-8"),
          "/sing.css": (HERE / "sing.css", "text/css; charset=utf-8"),
          "/karaoke.js": (ROOT / "tools" / "karaoke.js", "text/javascript; charset=utf-8"),
          "/recorder.js": (ROOT / "tools" / "karaoke-recorder.js", "text/javascript; charset=utf-8")}
-CONSENT = 2  # the consent's version: the page asks again when what it says changes (2: three lines, 2026-10-03)
+CONSENT = 3  # the consent's version: the page asks again when what it says changes
 MAX_TAKE_BYTES = 40 * 2**20  # a whole song at 48 kHz, 16-bit mono, is about 23 MB
 MAX_META_BYTES = 2**20  # where it was sung, and the takes before it as numbers (about 40 kB each)
 MAX_WAITING_TAKES = 3  # takes held in memory waiting for the measuring process, at once

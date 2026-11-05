@@ -14,16 +14,15 @@ timing exact.
 Writes renders/throat/align/<singer>/<segment>.json: every phone with its start and end (seconds,
 on the segment's own clock), the note it belongs to and its role (onset, vowel, coda), and, per
 note, whether MFA's vowel sits where the note is sung (its start within [-0.15, +0.25] s of the
-note's start and lasting at least a fifth of it). MFA runs are serialized with the lock the phrasing
-extractor uses (~/Code/mfa/.lock), since two runs at once collide unpacking the model.
+note's start and lasting at least a fifth of it). MFA is found as tools/align.py finds it ($MFA_HOME,
+or $MFA naming its wrapper), and runs are serialized with the lock the phrasing extractor uses
+(align.lock()), since two runs at once collide unpacking the model.
 """
 
 from __future__ import annotations
 
 import argparse
-import fcntl
 import json
-import os
 import re
 import shutil
 import subprocess
@@ -37,11 +36,12 @@ from scipy.signal import resample_poly
 
 ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT))
+sys.path.insert(0, str(ROOT / "tools"))
+
+import align  # noqa: E402  (tools/align.py: where MFA is, and its lock)
 
 from songbird.synth import throat  # noqa: E402
 
-MFA = os.environ.get("MFA", "/Users/milo/Code/mfa/bin/mfa")
-LOCK = Path(os.environ.get("MFA_LOCK", "/Users/milo/Code/mfa/.lock"))
 SR = 16000
 HIGH = 57  # MIDI: voices whose median note is at or above A3 are aligned an octave down
 SKIP = {"", "sil", "sp", "spn", "<eps>"}
@@ -160,18 +160,19 @@ def main() -> None:
     if not todo:
         print("nothing to align")
         return
+    mfa = align.executable()
+    if mfa is None:
+        raise SystemExit("MFA isn't installed: set MFA_HOME to where it is (or MFA to its wrapper)")
     work = args.keep or Path(tempfile.mkdtemp(prefix="throat-mfa-"))
     try:
         seen, cuts = prepare(args.corpus, features, work, todo)
         with open(work / "corpus.dict", "w") as f:
             for (word, phones), tok in sorted(seen.items(), key=lambda kv: kv[1]):
                 f.write(f"{tok}\t{' '.join(phones)}\n")
-        cmd = [MFA, "align", str(work / "corpus"), str(work / "corpus.dict"), "english_us_arpa", str(work / "aligned"),
+        cmd = [str(mfa), "align", str(work / "corpus"), str(work / "corpus.dict"), "english_us_arpa", str(work / "aligned"),
                "-t", str(work / "tmp"), "-j", str(args.jobs), "--clean", "--beam", "100", "--retry_beam", "400", "-q"]
-        LOCK.parent.mkdir(parents=True, exist_ok=True)
-        with open(LOCK, "w") as lock:
-            print(f"{len(cuts)} lines from {len(todo)} segments; waiting for MFA's lock...", flush=True)
-            fcntl.flock(lock, fcntl.LOCK_EX)
+        print(f"{len(cuts)} lines from {len(todo)} segments; waiting for MFA's lock...", flush=True)
+        with align.lock():
             print("aligning", flush=True)
             run = subprocess.run(cmd, capture_output=True, text=True, check=False)
         if run.returncode != 0:

@@ -2,6 +2,6 @@
   "name": "songbird-studio-wasm",
   "private": true,
   "type": "module",
-  "description": "Feasibility prototype: Songbird rendering in Pyodide (docs/BROWSER-RENDER.md)",
+  "description": "Feasibility prototype: Songbird rendering in Pyodide (docs/notes/BROWSER-RENDER.md)",
   "dependencies": { "pyodide": "314.0.7" }
 }

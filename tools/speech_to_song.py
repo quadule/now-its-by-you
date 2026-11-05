@@ -1,4 +1,4 @@
-"""Sing with a real voice: spoken lyrics moved onto the tune. A probe; dev-only.
+"""Sing with a real voice: spoken lyrics moved onto the tune. A probe; tools/phrasing.py uses its helpers.
 
     uv run python tools/speech_to_song.py songs/h-now-its-by-you.json --script
     uv run python tools/speech_to_song.py songs/h-now-its-by-you.json --speech recordings/h.wav
@@ -14,7 +14,7 @@ vibrato, drift), and loudness follows the score rather than the reading. The
 voice is mixed and mastered like any render, and it and the formant singer
 are both scored with Whisper the way tools/wer_suite.py does.
 
-This is the cheap first test proposed after docs/VOICE-OPTIONS.md: does the
+This is the cheap first test proposed after docs/history/VOICE-OPTIONS.md: does the
 artist's own voice, pushed onto the tune by our puppeteer, sound like the
 song? Lines are found with Whisper's word timestamps; inside a line every phoneme
 is found by warping our own formant voice, speaking the same words, onto the

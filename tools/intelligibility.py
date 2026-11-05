@@ -3,8 +3,9 @@
     uv run python tools/intelligibility.py renders/b-refrain            # the dry voice stem
     uv run python tools/intelligibility.py renders/b-refrain --mix      # the finished mix
 
-Dev-only: needs faster-whisper and the base.en model (about 145 MB, downloaded on
-first use). The lyric is never shown to the recognizer.
+Needs faster-whisper and the base.en model (about 145 MB, downloaded on first
+use). The lyric is never shown to the recognizer. The studio in a browser
+carries this file for speech_to_song.py, never Whisper.
 """
 
 from __future__ import annotations

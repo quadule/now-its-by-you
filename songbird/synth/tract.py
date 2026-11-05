@@ -117,14 +117,3 @@ def upper_branch(sr: int, scale: float = 1.0, mouth_cm: float = 1.0, crossover: 
     fade = taps // 5
     h[-fade:] *= 0.5 * (1.0 + np.cos(np.linspace(0.0, np.pi, fade)))
     return h
-
-
-def high_shelf(freq: float, gain_db: float, sr: int, slope: float = 0.8) -> np.ndarray:
-    """An RBJ high-shelf biquad as one second-order section."""
-    a = 10.0 ** (gain_db / 40.0)
-    w = 2.0 * np.pi * freq / sr
-    alpha = np.sin(w) / 2.0 * np.sqrt((a + 1.0 / a) * (1.0 / slope - 1.0) + 2.0)
-    cw, sq = np.cos(w), 2.0 * np.sqrt(a) * alpha
-    b = [a * ((a + 1) + (a - 1) * cw + sq), -2 * a * ((a - 1) + (a + 1) * cw), a * ((a + 1) + (a - 1) * cw - sq)]
-    den = [(a + 1) - (a - 1) * cw + sq, 2 * ((a - 1) - (a + 1) * cw), (a + 1) - (a - 1) * cw - sq]
-    return np.array([b + den]) / den[0]

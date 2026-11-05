@@ -164,11 +164,12 @@ def test_mix_edits_keep_each_stem_treated_in_place_of_dry_and_finish_it_the_same
     def makers():
         return [("bass", lambda: bass.copy()), ("voice", lambda: voice.copy())]
     cache = StemCache(64 * 2**20)
-    for balance in ({}, {"bass": -3.0, "voice": 2.0}, {}):
-        params = MixParams.from_dict({"balance": balance})
+    edits = ({}, {"balance": {"bass": -3.0, "voice": 2.0}}, {"voices": 0.0}, {})  # muted, then sung again
+    for edit in edits:
+        params = MixParams.from_dict(edit)
         kept = [(name, Cached(cache, name, make, name)) for name, make in makers()]
         heard = mixing.mix_made(kept, length, sr, params=params, lift=lift, sound=sound)
         np.testing.assert_array_equal(heard, mixing.mix_made(makers(), length, sr, params=params, lift=lift,
                                                              sound=sound))
-    assert cache.misses == 2 and cache.hits == 4 and len(cache._entries) == 2
+    assert cache.misses == 2 and cache.hits == 6 and len(cache._entries) == 2
     assert cache.bytes < bass.nbytes + voice.nbytes  # the bass where it sounds, and no dry stem besides

@@ -44,7 +44,7 @@ from songbird import studio as studio_mod
 from songbird.studio import Busy, NotFound, Studio
 
 NOT_YET = "Singing here isn't available yet."
-DEVICE_CONSENT = 3  # the consent's version on the device (webstudio.singing.CONSENT is the server's): its words differ
+DEVICE_CONSENT = 4  # the consent's version on the device (webstudio.singing.CONSENT is the server's): its words differ
 NO_STEMS = ("The parts can't be made in the browser yet. Record it, then open the recording with Python on a "
             "computer (python3 the-file.flac studio) to make them.")
 THINKING = 300.0  # seconds the program may take to read a version brought here: a server's 40 is for its own CPU, and

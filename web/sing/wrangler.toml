@@ -1,4 +1,4 @@
-# Songbird's page for singers anywhere: docs/SING-ONLINE.md has every step.
+# Songbird's page for singers anywhere: docs/history/SING-ONLINE.md has every step.
 # Build the site first (uv run python tools/sing_site.py), then `npx wrangler deploy` from this folder.
 name = "songbird-sing"
 main = "src/worker.js"
@@ -39,7 +39,7 @@ binding = "ASSETS"
 # The worker sees the pages' own addresses, the API and the song (served only to open invitations);
 # the pages' scripts and styles are served straight from the assets, with public/_headers. (robots.txt goes
 # through the worker: only the singing site's host has one.)
-run_worker_first = ["/", "/robots.txt", "/index.html", "/yours.html", "/seed.html", "/seed", "/seed/*", "/i/*", "/y/*", "/api/*", "/song/*"]
+run_worker_first = ["/", "/robots.txt", "/index.html", "/yours.html", "/seed.html", "/seed", "/seed/*", "/history", "/history.html", "/i/*", "/y/*", "/api/*", "/song/*"]
 html_handling = "none"
 not_found_handling = "none"
 
@@ -51,7 +51,7 @@ id = "aa2b6ac9172d4276a186ac9e648a8c57"
 
 # Takes, private: `npx wrangler r2 bucket create songbird-takes`. Never make this bucket public. As a
 # backstop to the purge, have R2 itself delete takes and files after 30 September
-# (docs/SING-ONLINE.md, "Put it online").
+# (docs/history/SING-ONLINE.md, "Put it online").
 [[r2_buckets]]
 binding = "TAKES"
 bucket_name = "songbird-takes"

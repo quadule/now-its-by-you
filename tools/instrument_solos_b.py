@@ -34,7 +34,8 @@ from pathlib import Path
 
 import numpy as np
 
-sys.path.insert(0, str(Path(__file__).parent.parent))
+ROOT = Path(__file__).resolve().parent.parent
+sys.path.insert(0, str(ROOT))
 from songbird import synth  # noqa: E402
 from songbird.synth import instruments, master  # noqa: E402
 
@@ -42,7 +43,7 @@ SR = synth.SR
 TARGETS = {"comping": -23.7, "lead": -20.7, "percussion": -28.4, "bass": -24.1, "colour": -26.5}
 SETTINGS = dict(brightness=0.5, wear=0.25, ornament=0.5, body=1.0, maker=0, tonic=62, capo=0)
 PHRASE_DIR = Path(__file__).parent / "instrument_phrases_b"
-OUT = Path("/Users/milo/Code/songbird/renders/production/instruments")
+OUT = ROOT / "renders" / "production" / "instruments"
 
 
 def families() -> list:

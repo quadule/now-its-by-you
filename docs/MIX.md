@@ -111,6 +111,7 @@ mix in its JSON). Values outside a range are held to it.
 | `tilt` | −2–+2 dB | 0 | the record darker or brighter: ±this at 60 Hz and 12 kHz against 1 kHz | screen brightness |
 | `wear` | 0–1 | 0 | how worn the recording sounds (below) | file ages |
 | `balance` | name or role: ±12 dB | none | an instrument up or down, e.g. `balance=fiddle:2` | drift |
+| `voices` | 0–1 | 1 | how much of the singers is heard: 0 takes the lead and the lineage choir out of the record, its room and its plate, and leaves the band as it was mixed for them, still making way where they sing (a backing track; the studio's **M** on the voice) | a person only |
 
 **Wear** is the plan's "how worn the arrangement sounds", off by default.
 Toward 1: the tape's speed wanders (wow, about 0.2% at 0.5–0.8 Hz) and
@@ -228,7 +229,7 @@ warmer; the voice at `forward` 10 dominates the middle (see Doubts).
 numba kernels compile once, about 1.5 s, and are cached). A full `songbird
 render` of H: 17 s on the old instruments, 26 s with the band. (2026-09-27: the mix and master of H
 take about 3.5 s and its whole render about 7 s, the channel strips and a long signal's two channels
-worked on threads, the same bytes whatever the thread count; docs/PERFORMANCE.md.)
+worked on threads, the same bytes whatever the thread count; docs/notes/PERFORMANCE.md.)
 
 ## The hiss (2026-09-26)
 

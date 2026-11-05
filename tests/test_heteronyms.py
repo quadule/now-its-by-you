@@ -270,6 +270,6 @@ def test_the_table_is_pinned_for_the_words_editor():
                                               "Close, the door; close the door", "a (live) wire", "“Wind” the clock up"]})
     for name, data in (("say-table.json", H.table()), ("say-lines.json", lines)):
         path = GOLDEN / name
-        if os.environ.get("SONGBIRD_UPDATE_GOLDEN") or not path.exists():
+        if os.environ.get("SONGBIRD_UPDATE_GOLDEN"):
             path.write_text(json.dumps(data, indent=1, sort_keys=True, ensure_ascii=False) + "\n")
         assert data == json.loads(path.read_text()), name

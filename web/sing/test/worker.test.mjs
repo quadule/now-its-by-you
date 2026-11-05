@@ -261,6 +261,39 @@ test("the seed page is public: at /seed, at the root of the seed host, with exac
   assert.equal((await call(w, e, "/seed", { method: "POST" })).status, 404);
 });
 
+test("the history is public too: /history, and every edition's file by its date, in parts for a player", async () => {
+  const w = await load();
+  const files = { ...SITE, "/seed.html": "<!doctype html><title>seed</title>", "/history.html": "<!doctype html><title>history</title>",
+                  "/seed/now-its-by-you.flac": "fLaC: the song", "/seed/now-its-by-you-2026-09-28.flac": "fLaC: the first" };
+  const e = env({ files });
+  for (const url of ["https://now.itsby.you/history", "https://songbird.test/history"]) { // on every host, as /seed is
+    const page = await w.fetch(new Request(url), e);
+    assert.equal(page.status, 200, url);
+    assert.match(await page.text(), /history/);
+    assert.match(page.headers.get("content-type"), /text\/html/);
+    assert.ok(page.headers.get("content-security-policy"));
+  }
+  const moved = await w.fetch(new Request("https://itsby.you/history"), e); // the bare domain sends it on, as ever
+  assert.equal(moved.headers.get("location"), "https://now.itsby.you/history");
+  const file = await call(w, e, "/seed/now-its-by-you-2026-09-28.flac");
+  assert.equal(file.status, 200);
+  assert.equal(file.headers.get("content-type"), "audio/flac");
+  assert.equal(file.headers.get("content-disposition"), 'attachment; filename="now-its-by-you-2026-09-28.flac"');
+  assert.equal(file.headers.get("accept-ranges"), "bytes");
+  assert.equal(await file.text(), "fLaC: the first");
+  const part = await call(w, e, "/seed/now-its-by-you-2026-09-28.flac", { headers: { Range: "bytes=6-" } });
+  assert.equal(part.status, 206);
+  assert.equal(part.headers.get("content-range"), "bytes 6-14/15");
+  assert.equal(await part.text(), "the first");
+  assert.equal((await call(w, e, "/seed/now-its-by-you.flac")).status, 200); // the current one keeps its address
+  assert.equal((await call(w, e, "/seed/now-its-by-you-2026-09-29.flac")).status, 404); // no such edition
+  for (const path of ["/seed/now-its-by-you-2026-9-28.flac", "/seed/now-its-by-you-2026-09-28.flac.json", "/seed/x/now-its-by-you-2026-09-28.flac",
+                      "/history.html", "/history/", "/seed.html"]) {
+    assert.equal((await call(w, e, path)).status, 404, path);
+  }
+  assert.equal((await call(w, e, "/history", { method: "POST" })).status, 404);
+});
+
 test("singing has moved to the studio: every invitation points there, nothing more is sung here, singers' own pages and the seed page are as they were", async () => {
   const w = await load();
   const files = { ...SITE, "/seed.html": "<!doctype html><title>seed</title>", "/seed/now-its-by-you.flac": "fLaC: the song" };

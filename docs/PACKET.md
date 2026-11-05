@@ -4,7 +4,7 @@ A rendition travels as one file. It is an ordinary FLAC that plays in any
 player, and it is also a zip archive that carries the program that sang it,
 the song's skeleton, the rendition's record and its words. Run it with Python
 and it sings a new version of the song, on your computer and your day, as
-that version's child. This is milestone 6 of docs/PLAN.md.
+that version's child. This is milestone 6 of docs/history/PLAN-2026-09-24.md.
 
 The record's `performance` now carries the lead and choir's rounded phrasing
 gestures, without recordings or local paths. Children inherit them unless a
@@ -106,8 +106,12 @@ does four things.
        was made with;
      - without uv, this Python's venv and pip do (Debian and Ubuntu need
        python3-venv);
-     - if the pinned versions can't be installed, it tries the newest, and
-       says it needs the network once;
+     - it installs ready-made builds (wheels) only, so nothing is compiled;
+     - if the pinned versions can't be installed, it tries the newest that
+       have wheels for this computer (on an Intel Mac, numba 0.62.1), and
+       says it needs the network once (files made before October 7, 2026
+       ask for the newest, wheels or not, which fails on Intel Macs:
+       docs/RUNNING-THE-SONG.md, "Intel Macs");
      - `--here` skips all of this and uses the running Python as it is.
 4. **Runs the program** with the packet as its parent. `new` renders with
    `--parent THIS_FILE --machine here --pack` into the current folder.

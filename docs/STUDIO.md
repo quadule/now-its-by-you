@@ -107,11 +107,34 @@ records what `songbird render --parent THE_PACKET --machine here --date
 
 ## The musical workbench
 
-Since 2026-09-30 the studio's page is **the score** (docs/STUDIO-REDESIGN.md, and its "Built" section): one
+Since 2026-09-30 the studio's page is **the score** (docs/notes/STUDIO-REDESIGN.md, and its "Built" section): one
 transport, three views (Page, Arrange, Mix), one inspector for whatever is selected, *Tools* for taking it out
 and bringing it in, and *Time* as a drawer. What follows describes the page it replaced, kept at `/classic`
 until the artist signs the score off; both pages share studio.js, so the edits, history, drafts, listening
 and recording below are the score's too.
+
+The score's page, in short (songbird/studio/score.js draws it):
+
+- **The header** names the day ("Today, Wednesday, November 4, 2026"), then a parent other than the song as it
+  began and a machine, when there is one. *Time* opens other days, other computers and someone's version.
+- **The transport** has play, Sketch or Sung, loop, click, the tempo as a number field (a whole number in the
+  style's range; a Reset beside it when the tempo is yours), the key, New performance, undo, redo, Export and
+  Tools.
+- **Page** is the words, read as plain text. A sung section's name is followed by **Edit** (a click on a line
+  does the same), which turns its lines into fields where they stand: each line as it is written (`car-ry`,
+  `*heart*`, `bass{base}`, with a legend of the three under the fields), its syllable count beside it, and *Use
+  these lines* and *Discard typing* for the lot. Under them, each word with alternatives is a row of them to
+  press, and the other verses (a refrain's openings and couplets) are lists to read and choose from, the one
+  sung marked, the ones the song refuses there greyed with why. *Done* closes it. The column has no part in a
+  section's words.
+- **Arrange** and **Mix** are as described below; in both, the voice has mute and solo like a player
+  (`mix.voices`).
+- **The column** shows whatever is selected. With nothing selected it lists this version, a row each: Style,
+  Singer, Band, Shape, Room, Melody, Choir, Words, Machine, with the first few words of what each is.
+- **Yours** is a colour: a choice a person made is drawn in the hand's blue wherever it shows, and *Reset* gives
+  it back to the program.
+- **Tools** has Export (Song file, MIDI, Stems, Piano page, Draft) and Import (MIDI file, MIDI keyboard, Sing,
+  Draft).
 
 The first screen holds only what matters most: **Hear the song**, a few simple
 changes (key, scale, tempo, a new performance), undo and redo, **Export it**
@@ -132,10 +155,9 @@ everything makes it busy and confusing"):
   there, or in each card's *How this choice works*;
 - the **Help** button (or the ? key) opens the whole studio in plain words,
   with **Show me around**;
-- a first visit is walked through four steps, each pointing at one thing:
-  hear it, change something simple, go deeper, record it. It is shown once
-  per browser (and never on a link into a particular view), and Skip or Esc
-  ends it. songbird/studio/help.js has both.
+- **Show me around** walks four steps, each pointing at one thing: hear it,
+  change something simple, go deeper, export it. Skip or Esc ends it.
+  songbird/studio/help.js has both.
 
 ### Tune (Arrange)
 
@@ -279,7 +301,9 @@ the sea" keeps AE.
 Cards expose the style, form, players, room, vocal presence and other choices.
 Reasons and provenance are folded away. Every band player has a gain control
 (0–200%), a mute that remembers its previous level, and a solo control that restores
-the previous band mix when released. Solo leaves the singer audible. A solo or a
+the previous mix when released. The voice has the same two: its mute takes the singer
+and the choir out and leaves the band as the record has it (`mix.voices`), and a solo
+is one channel alone, the voice or a player. A solo or a
 batch of mix changes is one undoable edit. A new style brings its own instruments,
 pace, feel and arrangement options.
 
@@ -332,6 +356,7 @@ server keeps nothing else but caches, so any request can be replayed.
 | `form.verses`, `form.pairs`, `form.intro`, `form.turn`, `form.break`, `form.tag`, `form.outro`, `form.bridge2` | a count; on or off | `Params.form`: the program's shape with just these parts changed |
 | `band.pattern`, `band.lead`, `band.density`, `band.brightness`, `band.<instrument>` | as `Band`; an instrument's gain (0 sits it out) | `Params.band` |
 | `mix.space`, `mix.width`, `mix.forward`, `mix.intimacy`, `mix.rt60`, `mix.predelay` | as `MixParams` (the room: how long it rings, 0.3 to 2.5 s; how soon it answers, 5 to 80 ms) | `Params.mix` |
+| `mix.voices` | 0 to 1: 0 mutes the singers (the lead and the lineage choir), leaving the band as the record has it, still making way where they sing; Mix's **M** on the voice | `Params.mix` (left out while 1) |
 | `variants.<name>` | as the variant takes | `Params.variants`, once it exists (said refused until then) |
 | `words.verse.<i>` | `{"id": verse, "slots": {slot: words}}` | the i-th verse section's verse (from 0) |
 | `words.refrain.<i>` | `{"id": couplet, "head": head, "slots": {slot: words}}`, any of the three, or just a couplet | the i-th refrain's own words: its couplet (never the last's), its head (between the first and last), its words (the question too, between them) |
@@ -437,7 +462,7 @@ begun halfway). It is made,
 brought up by the gain mastering gives a whole rendition (5.3 dB, measured on
 H: 5.1 to 5.4) under the same ceiling, so a quiet verse stays quiet and a turn
 isn't pushed to the loudness of a refrain, and faded in and out. A section of
-H takes a second or two, the whole song about fifteen seconds on this Mac (the band, the choir and the vocoder now run on threads; docs/PERFORMANCE.md). The page calls it a
+H takes a second or two, the whole song about fifteen seconds on this Mac (the band, the choir and the vocoder now run on threads; docs/notes/PERFORMANCE.md). The page calls it a
 preview: a part heard alone is not the record's exact samples, and the mix's
 balance is judged on the whole song.
 
@@ -480,8 +505,8 @@ made on this computer: each person who kept takes of this song, and everyone's
 together; never the reference voices. The singing page's own "hear the
 machine" sings the song as it began, not the studio's version: the studio's
 preview is where to hear your version sung your way. A packet's program has
-no singing page yet (songbird.quadule.com will take takes online), and the
-card says so.
+no singing page, and the card says so: singing needs a checkout (below), or
+the studio at studio.itsby.you (docs/WEB-SINGING.md).
 
 Started with `--web-singing` (a checkout, with the singing kit), the studio
 takes singing on its own page instead, for the web studio: the visitor sings
@@ -543,7 +568,7 @@ exactly that, so the stems and the MIDI file dropped at the start of a project
 line up. `songbird render --midi` writes the same file beside a render and says
 where bar 1 falls against its FLAC.
 
-In a public studio (docs/WEB-STUDIO.md) the MIDI file is made at once, as
+In a public studio (docs/history/web-studio-server-plan.md) the MIDI file is made at once, as
 here; the stems wait their turn in the one queue, one at a time for each
 visitor, and count as a whole song against the visitor's and the address's
 hourly limits. Both are served from the previews' cache, streamed, so the
@@ -1012,7 +1037,7 @@ for later: the export stays as it is, and the chord is named from its notes.
 
 ## Looser harmony and melody: sevenths, one place or everywhere, melisma (2026-09-29)
 
-The musician-like test (docs/STUDIO-EDM-TEST.md) found the chords "quick and
+The musician-like test (docs/history/STUDIO-EDM-TEST.md) found the chords "quick and
 clear, but triads and sus only", that "a line's chords change everywhere it's
 sung", and that "the melody can be moved but not rewritten": a phrase keeps its
 syllable count and its ending, *Even rhythm* put notes off the grid (1.2727,
@@ -1270,7 +1295,7 @@ becomes even eighths and a held ending.
   the note as it was, so the page announced the old name with the new degree;
   it is now worked out from the new degree.
 - **The asterisks** in the words (`*sung*`) mark the word a line leans on
-  (the singer sings it a little louder and lifts it: docs/DELIVERY.md). Kept,
+  (the singer sings it a little louder and lifts it: docs/history/DELIVERY.md). Kept,
   and said beside the lines: "A word between stars is the one the line leans
   on: the singer gives it a little more. Keep, move or drop the stars."
 - **The stems' id.** The zip was named by the version's cache key, the
@@ -1389,11 +1414,11 @@ with the same notes (Am7 over C6/A) is kept in the ranking.
 
 ## Arrangement control (2026-09-29)
 
-The EDM test (docs/STUDIO-EDM-TEST.md) found the arrangement's dynamics drawn by chance and out of a
+The EDM test (docs/history/STUDIO-EDM-TEST.md) found the arrangement's dynamics drawn by chance and out of a
 person's reach. The engine now lets a person take any of it over, section by section and player by
 player, and says what the program chose and why beside it (docs/ARRANGE.md, "Taking over the
 arrangement": the edits, what each does, how it is checked, stored, replayed and handed down). This is
-the API the redesigned page draws its Arrange grid from (docs/STUDIO-REDESIGN.md); today's page uses only
+the API the redesigned page draws its Arrange grid from (docs/notes/STUDIO-REDESIGN.md); today's page uses only
 the tempo's range.
 
 **The edits** (`songbird/takeover.py`; by the form's section ids, `refrain:1` the second refrain):
@@ -1476,11 +1501,11 @@ map as `/api/song`, so they always agree).
 
 ## Sound design (2026-09-29)
 
-docs/STUDIO-EDM-TEST.md's first finding was that there was no electronic sound to reach for: no sidechain
+docs/history/STUDIO-EDM-TEST.md's first finding was that there was no electronic sound to reach for: no sidechain
 pump, no patches or filter, no risers, sweeps or rolls, one drum kit. Each is now an edit, marked as the
 person's, undoable, recorded, replayed byte for byte and handed down, as every other. The design, its Fable
 review and how it was built are in docs/SOUND-DESIGN.md; this is what a person (and the page) gets. The
-engine and its API are built; the page's controls come with the redesign (docs/STUDIO-REDESIGN.md: a mixer
+engine and its API are built; the page's controls come with the redesign (docs/notes/STUDIO-REDESIGN.md: a mixer
 strip's pump and patch, a player's inspector, a seam's transition), so for now the edits are made by a
 draft file, `songbird render --edits`, or a page's own requests.
 
@@ -1630,7 +1655,7 @@ Left as they are, for the artist:
   everyone; the queue's cap keeps it from growing without end, and
   recordings fill the disk at about 15 MB each. (A public studio,
   `--public`, has limits per person and keeps no recordings:
-  docs/WEB-STUDIO.md.)
+  docs/history/web-studio-server-plan.md.)
 - **Previews are shared by what they are.** Two visitors with the same
   choices hear the same cached render; nobody can list anyone else's.
 
@@ -1729,7 +1754,7 @@ somewhere other than `renders/`.
    person's way needs that phrasing's file (the record keeps its fingerprint).
    Carrying the gestures in the record would make every rendition replayable
    anywhere, and would carry a little of a person's singing with it: whether
-   the consent in docs/SINGERS.md covers that is the artist's call.
+   the consent the first version's singers gave covers that is the artist's call.
 7. **Made-up machines have names** (Ada, Basil, Coral), because a name is what
    makes one; any name can be typed.
 8. **Recordings are named** `<song>.<day>.<id6>.flac`, into `renders/` (a

@@ -1,4 +1,4 @@
-"""A rendition's time and peak memory, stage by stage (docs/PERFORMANCE.md, 2026-09-29).
+"""A rendition's time and peak memory, stage by stage (docs/notes/PERFORMANCE.md, 2026-09-29).
 
     uv run python tools/render_memory.py                      # H's seed, as tests/test_styles.py renders it
     SONGBIRD_THREADS=2 MallocLargeCache=0 uv run python tools/render_memory.py --form refrain

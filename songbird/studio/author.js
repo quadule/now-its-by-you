@@ -115,7 +115,8 @@
       groups.push(group);
     }
     row.say.replaceChildren(...groups);
-    row.say.hidden = !groups.length;
+    // on the score's Page, only for a line a person has written: the song's lines are said as the song has them
+    row.say.hidden = !groups.length || (!!row.section.whole && text === row.base && !row.phrase.authored);
   }
   function pick(row, index, name) {
     const {parts, words} = wordsOf(row.input.value);
@@ -124,7 +125,7 @@
     parts[w.at] = withSay(bare(w.token), name);
     row.input.value = parts.join("");
     count(row);
-    row.section.status.textContent = "Not in the song until you use it.";
+    row.section.status.textContent = row.section.whole ? "" : "Not in the song until you use it.";
     if (row.status) row.status.textContent = "Not in the song until you use it.";
   }
   function node(tag, className, text) {
@@ -145,7 +146,8 @@
   }
   function count(row) {
     const n = syllables(row.input.value);
-    row.count.textContent = `${n} / ${row.phrase.syllable_count} syllables`;
+    row.count.textContent = `${n} / ${row.phrase.syllable_count}`;
+    row.count.append(node("span", "unit", " syllables"));  // (the word goes where there's no room for it)
     row.count.classList.toggle("is-valid", n === row.phrase.syllable_count);
     row.input.setAttribute("aria-invalid", String(n !== row.phrase.syllable_count));
     row.input.classList.toggle("is-dirty", row.input.value !== row.base);
@@ -222,6 +224,17 @@
     actions.append(section.save, discard);
     details.append(summary, hint, lines, actions, status);
     section.hint = hint;  // kept: the score's line state moves it out of the details
+    // how a line is written, shown beside the fields (the score's Page): an example of each mark and what it does
+    const legend = node("p", "author-legend");
+    legend.append(node("span", "", "One syllable a note."));
+    for (const [mark, does] of [["car-ry", "two notes"], ["*heart*", "leaned on"], ["bass{base}", "said like “base”"]]) {
+      const item = node("span");
+      item.append(node("code", "", mark), ` ${does}`);
+      legend.append(item);
+    }
+    legend.title = STARS;
+    section.legend = legend;
+    section.actions = actions;
     return section;
   }
   function rowFor(section, p, index, label) {
@@ -251,7 +264,7 @@
       row = {wrap, input, count: tally, restore, say, section, base: p.lyric_text, phrase: p};
       input.value = p.lyric_text;
       input.title = STARS;
-      input.addEventListener("input", () => { count(row); section.status.textContent = "Not in the song until you use it."; });
+      input.addEventListener("input", () => { count(row); section.status.textContent = section.whole ? "" : "Not in the song until you use it."; });
       section.rows.set(p.lyric_path, row);
       section.lines.append(wrap);
     } else if (row.input.value === row.base) {
@@ -288,7 +301,7 @@
     row.next = options.next || null;  // what follows a line used: the score's next line to write
     return row;
   }
-  // One line of a section, in the score's inspector (docs/STUDIO-REDESIGN.md, "A line of words"): the same rows,
+  // One line of a section, in the score's inspector (docs/notes/STUDIO-REDESIGN.md, "A line of words"): the same rows,
   // counts and checks as the section's own editor, one line used at a time; the nodes are kept, so typing survives a
   // redraw.
   function line(view, sectionId, lineIndex, anchor, options = {}) {
@@ -305,6 +318,62 @@
     anchor.append(row.wrap, row.actions, row.status, section.hint);
     if (focus?.path === p.lyric_path) { row.input.focus({preventScroll: true}); row.input.setSelectionRange(focus.start, focus.end); focus = null; }
     return true;
+  }
+  // A section's lines, all of them, where the section stands on the score's Page: a field for each line, the legend
+  // of how a line is written, and Use and Discard for the lot. The nodes are kept, so typing survives a redraw.
+  function whole(view, sectionId, anchor) {
+    const s = (view.composition?.sections || []).find((x) => x.id === sectionId);
+    if (!s || !s.phrases.some((p) => p.lyric_path)) return false;
+    useTable(view.composition?.say);
+    capture();
+    let section = sections.get(s.id);
+    if (!section) { section = makeSection(s); sections.set(s.id, section); }
+    section.label = s.label;
+    section.whole = true;  // the Page's Done uses the lines (finish): no button of its own, nothing to say until then
+    // the lines of the words sung here now: a field kept for other words (another verse chosen) goes
+    const sung = new Set(s.phrases.map((p) => p.lyric_path).filter(Boolean));
+    for (const [path, row] of section.rows) if (!sung.has(path)) { row.wrap.remove(); section.rows.delete(path); }
+    for (const [index, p] of s.phrases.entries()) {
+      if (!p.lyric_path) continue;
+      const row = rowFor(section, p, index, s.label);
+      section.lines.append(row.wrap);
+      if (!row.fits) {  // a field as tall as its line
+        row.fits = () => { row.input.style.height = "auto"; row.input.style.height = `${row.input.scrollHeight}px`; };
+        row.input.rows = 1;
+        row.input.addEventListener("input", row.fits);
+      }
+      if (typeof requestAnimationFrame === "function") requestAnimationFrame(row.fits);
+    }
+    anchor.append(section.lines, section.legend, section.status);
+    if (focus) {
+      const input = [...section.rows.values()].map((row) => row.input).find((item) => item.dataset.lyricPath === focus.path);
+      if (input) { input.focus({preventScroll: true}); input.setSelectionRange(focus.start, focus.end); }
+      focus = null;
+    }
+    return true;
+  }
+  // The Page's Done: what was typed in a section's fields goes into the song (true), or its status says why it
+  // can't and the first such line is focused (false). With nothing typed there is nothing to do.
+  const typed = (section) => [...(section?.rows.values() || [])].filter((row) => row.input.value !== row.base);
+  function finish(sectionId) {
+    const section = sections.get(sectionId), changed = typed(section);
+    if (!changed.length) return Promise.resolve(true);
+    const wrong = changed.filter((row) => syllables(row.input.value) !== row.phrase.syllable_count);
+    if (wrong.length) {
+      section.status.textContent = "Each line needs its count of syllables.";
+      wrong[0].input.focus();
+      return Promise.resolve(false);
+    }
+    let used = false;
+    return Promise.resolve(apply(section, Object.fromEntries(changed.map((row) => [row.phrase.lyric_path, row.input.value])), null, () => { used = true; }))
+      .then(() => { if (used) section.status.textContent = ""; return used; });
+  }
+  const dirty = (sectionId) => typed(sections.get(sectionId)).length > 0;
+  function discard(sectionId) {
+    const section = sections.get(sectionId);
+    if (!section) return;
+    for (const row of section.rows.values()) { row.input.value = row.base; count(row); }
+    section.status.textContent = "";
   }
   function decorate(view, parent) {
     useTable(view.composition?.say);
@@ -326,5 +395,5 @@
       focus = null;
     }
   }
-  window.SongbirdAuthor = {capture, decorate, line, say: {useTable, choices, decide, bare, syllables}};
+  window.SongbirdAuthor = {capture, decorate, line, whole, finish, dirty, discard, say: {useTable, choices, decide, bare, syllables}};
 })();

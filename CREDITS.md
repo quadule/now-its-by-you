@@ -19,3 +19,5 @@ Credited, as they asked:
 - Milo Winningham
 
 And two more who sang without credit.
+
+The first version's own record counts 12 singers: some people sang under more than one invitation.

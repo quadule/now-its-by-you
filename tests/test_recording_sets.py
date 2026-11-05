@@ -1,6 +1,6 @@
 """The recording sets (tools/sets/h-now-its-by-you.json, made by tools/recording_sets.py): the file is in
 the shape the guides read, every set is a song the bank's rules allow, as written and as singers hear it
-with turns, and the sets hold what docs/RECORDING-SETS.md says they do. No Whisper here: what the learned
+with turns, and the sets hold what docs/history/RECORDING-SETS.md says they do. No Whisper here: what the learned
 voice was heard to say worst is kept below as tools/recording_sets.py measured it on 2026-09-26."""
 
 import json

@@ -1,4 +1,4 @@
-"""The score's layout where a person's pointer needs room (docs/STUDIO-EDM-TEST.md, second attempt): a region's
+"""The score's layout where a person's pointer needs room (docs/history/STUDIO-EDM-TEST.md, second attempt): a region's
 length edge is a handle of its own, 10 px, above the next section's seam and not under it (bug 3: the seam
 covered all but 1 to 3 px of it, and a drag beside it moved the section). Checked in headless Chrome by hand
 (every pixel of each edge is the edge, of each seam the seam, a drag from the edge's middle gives "4 → 8 bars");

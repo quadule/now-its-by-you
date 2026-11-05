@@ -582,7 +582,7 @@ Swap *nod* for point; *wife* for son.
 Swap *garden had* for gardener; *mower* for reaper. The one verse where "it"
 isn't the song but a flower nobody planted. The artist's early draft (K, "Still
 You Grew") told the whole song that way, in images, never saying "song", and
-the artist and their wife missed it (2026-09-27). Sung among verses about the
+it was missed (2026-09-27). Sung among verses about the
 song, the refrain's "this song" lands on the flower, and the listener makes the
 figure for themselves: it comes up unasked, children string it, it's cut down.
 

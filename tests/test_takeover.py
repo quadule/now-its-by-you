@@ -139,7 +139,7 @@ def test_a_player_sits_out_plays_soft_or_hard():
 
 
 def test_a_player_sat_out_after_its_cells_were_set_is_silent_and_nothing_is_wrong():
-    """docs/STUDIO-EDM-TEST.md, second attempt, bug 5: everyone hard in refrain 2, then the guitar sat out
+    """docs/history/STUDIO-EDM-TEST.md, second attempt, bug 5: everyone hard in refrain 2, then the guitar sat out
     everywhere; the guitar is silent and the page isn't told "this version's band has no guitar"."""
     edits = {"style.name": "synthfolk", "arrange.refrain:1.guitar.level": "hard", "band.guitar": 0}
     r = E.resolve(G, None, ADA, DAY, E.check(G, edits)[0])

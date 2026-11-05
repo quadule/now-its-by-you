@@ -1,6 +1,6 @@
 # Sound design in the studio (2026-09-29)
 
-docs/STUDIO-EDM-TEST.md's first finding: "No EDM sounds. There is no sidechain pump (the mixer only ducks
+docs/history/STUDIO-EDM-TEST.md's first finding: "No EDM sounds. There is no sidechain pump (the mixer only ducks
 for the voice), no synth patch or filter choices, no risers, sweeps or snare rolls, and the drum kit is
 fixed." This is how a person gets them: as edits, like every other choice in the studio (marked as the
 person's, undoable, recorded, replayed byte for byte by `--replay`, handed down to children). The engine and
@@ -243,7 +243,7 @@ A read-only review of the design above; its points are in, and change it where t
 
 As designed with the review's changes, and one more: a **stop** (`"stop": 1, 2 or 4`, in beats: the band
 silent for the last beats before the section, the singer and the transitions going on), which the redesign's
-seam offers (docs/STUDIO-REDESIGN.md). Each value in `/api/sound` also carries its `path`, the edit that sets
+seam offers (docs/notes/STUDIO-REDESIGN.md). Each value in `/api/sound` also carries its `path`, the edit that sets
 it. The analog synth's patches sit after its kernels in analog.py, so each kernel keeps the line the browser's
 translation names it by (web/studio-wasm is unchanged). What a person gets, the API, the measurements of a
 real run (the pad pumping at the beat rate, the riser's centroid rising, replay exact, 1.13 GB on two threads)

@@ -1,4 +1,4 @@
-# The public studio (songbird studio --public), in a container: docs/WEB-STUDIO.md.
+# The public studio (songbird studio --public), in a container: docs/history/web-studio-server-plan.md.
 # Built from the checkout's root:  docker compose -f deploy/studio/docker-compose.yml build
 # The image holds the program, the songs and the locked dependencies, and the synthesis compiled once
 # (so the first visitor doesn't wait for it). Nothing of the host's: no harvested voice, no recordings.

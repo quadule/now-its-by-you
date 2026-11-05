@@ -48,10 +48,6 @@ class Grid:
     downbeats: np.ndarray        # bar lines
     sections: list[tuple[float, str]] = field(default_factory=list)  # (time, name)
 
-    def beat_len(self, t: float) -> float:
-        i = int(np.clip(np.searchsorted(self.beats, t), 1, len(self.beats) - 1))
-        return float(self.beats[i] - self.beats[i - 1])
-
 
 def read_midi(path: Path):
     """Tempo map, time signatures and markers of a standard MIDI file (format 0 or 1): the first track's meta events."""

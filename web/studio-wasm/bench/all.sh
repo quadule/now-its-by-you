@@ -1,5 +1,5 @@
 #!/bin/sh
-# The numbers in docs/BROWSER-RENDER.md, one after another on one machine: native (numba, one thread) and
+# The numbers in docs/notes/BROWSER-RENDER.md, one after another on one machine: native (numba, one thread) and
 # Pyodide under node with the JS kernels and with the wasm ones, a section (H's first refrain) and the
 # whole song, each with the process's peak memory. PCM goes to $OUT for tools/compare.py.
 #   sh web/studio-wasm/bench/all.sh OUTDIR

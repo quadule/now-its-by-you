@@ -16,7 +16,7 @@ def test_a_packet_replays_its_lead_choir_singer_and_mix_without_local_files(tmp_
     gesture = P.Gesture(early=-0.0625, level=1, fall=-20, vibrato=12)
     way = {pid: tuple(gesture for _ in phrase.sung) for pid, phrase in genome.phrases.items()}
     phrasing = tmp_path / "volunteer.json"
-    phrasing.write_text(json.dumps(P.to_json(way)))
+    phrasing.write_text(json.dumps(P.to_json(way, source="song", source_detail="3 sung takes by 2 singers")))
     original, replay = tmp_path / "original.flac", tmp_path / "replay.flac"
     assert cli.main(["render", str(H), "--form", "tag", "--out", str(original), "--pack",
                      "--voice", "engine=formant", "tract=1.03", "--mix", "forward=6", "space=0.2",
@@ -30,6 +30,9 @@ def test_a_packet_replays_its_lead_choir_singer_and_mix_without_local_files(tmp_
     assert again["id"] == record["id"]
     assert again["singer"] == record["singer"] and again["mix"] == record["mix"]
     assert again["performance"] == record["performance"]
+    # and says where the performance came from as the record did (the first version's credit line)
+    assert record["phrasing"]["source_detail"] == "3 sung takes by 2 singers"
+    assert (again["phrasing"], again["choir_phrasings"]) == (record["phrasing"], record["choir_phrasings"])
 
 
 def test_children_inherit_delivery_and_explicit_contributions_replace_it(tmp_path, monkeypatch):

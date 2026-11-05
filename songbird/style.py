@@ -1491,6 +1491,23 @@ def _knob(path: str):
     return next((k for k in KNOBS if k.path == path), None)
 
 
+def _kept(knob, ctx) -> float:
+    """How much of the parent style's lean reached a child's value before this style leans it (_lean's kept):
+    all of it for a value copied from the parent (no knob chooses it; or a machine singing its own rendition
+    again knows none of the traits the knob reads, so the value is the parent's with only the day moved,
+    variation.Knob.centre), 1 - PULL for one pulled from it, none for a body, the machine's own outright."""
+    from .variation import PULL
+
+    if knob is None:
+        return 1.0
+    # Only on a machine's own version: a hand-off whose machine knows none of the knob's traits copies the
+    # parent's lean whole too, but generation 0 has the seed as its parent and counts its "rit" ending as a
+    # lean (a ritardando of 0.32 would become 0.2), so changing the share there would move generation-0 ids.
+    if getattr(ctx, "then", None) is not None and not any(u in ctx.c.known for u in knob.uses):
+        return 1.0
+    return 1.0 - PULL if knob.inherit else 0.0
+
+
 def _lean(out: dict, path: str, own: float, was: float, lo: float, hi: float, kept: float, current: float,
           step: float = 0.001) -> None:
     """Move a chosen value by this style's offset (own), taking back the share of the parent style's offset
@@ -1527,24 +1544,28 @@ def choose_style(out: dict, ctx, forced: str | None = None, arrange: dict | None
     voices = int(out.get("choir", ctx.parent.choir))
     options = choose_options(ctx.genome, form, sdef, parent, kept, voices, material, ctx.drift, c,
                              out.get("mode", ctx.parent.mode))
-    if arrange and kept and "identity" not in c.known:
-        # a person choosing one of the options with no machine to draw the rest: the rest as the version had them
+    if kept and (arrange or getattr(ctx, "then", None) is not None) and "identity" not in c.known:
+        # a person choosing one of the options with no machine to draw the rest, or the style named again on a
+        # machine's own version (variation.made_here), as it keeps them unnamed: the rest as the version had them
         options = {k: v for k, v in parent.to_dict().items() if k not in ("name", "lineage")}
     options.update(arrange or {})
     style = Style.from_dict({"name": name, "lineage": lineage + (name,), **options})
     out["style"] = style.to_dict()
 
     # the tempo the style takes the song at: the parent's tempo as a share of its own style's centre, pulled
-    # toward the machine's own pace (moved by the day's drift), then that share of this style's centre
+    # toward the machine's own pace (moved by the day's drift), then that share of this style's centre; with
+    # no pace, its own is the parent's, as it stood before this machine's day moved it (variation.Knob.centre)
     song = ctx.song.tempo
     pl, pc, ph = pdef.centre(parent.feel or "straight") if parent.name else (0.75, 1.0, 1.3)
     lo, centre, hi = sdef.centre(style.feel)
+    span = 0.10 + 0.06 * (c.range if "range" in c.known else 0.0)
     r_parent = ctx.parent.tempo / (pc * song)
+    if "pace" not in c.known and getattr(ctx, "then", None) is not None:  # its own rendition sung again
+        r_parent = _knob("tempo").centre(ctx.parent.tempo, ctx, pc * song, (pl * song, ph * song)) / (pc * song)
     r_own = r_parent
     if "pace" in c.known:
         r_own = 2 ** (0.18 * c.pace)
     if ctx.drift is not None:
-        span = 0.10 + 0.06 * (c.range if "range" in c.known else 0.0)
         r_own *= 1.0 + span * ctx.drift.view("full").get("tempo", 0.0)
     r = r_parent + PULL * (r_own - r_parent)
     out["tempo"] = round(max(lo * song, min(hi * song, r * centre * song)), 1)
@@ -1572,14 +1593,14 @@ def choose_style(out: dict, ctx, forced: str | None = None, arrange: dict | None
         if off or poff:
             current = float(band.get(field_name, getattr(ctx.parent.band, field_name)))
             tmp: dict = {}
-            _lean(tmp, "x", off, poff, 0.0, 1.0, 1.0 - PULL, current, 0.01)
+            _lean(tmp, "x", off, poff, 0.0, 1.0, _kept(_knob(f"band.{field_name}"), ctx), current, 0.01)
             band[field_name] = tmp["x"]
     out["band"] = band
 
     # the performance's looseness: a chamber group breathes, and slows more at the end
     fh, pfh = sdef.feel.get("humanize", 1.0), pdef.feel.get("humanize", 1.0) if parent.name else 1.0
     if fh != 1.0 or pfh != 1.0:
-        h = float(out.get("humanize", ctx.parent.humanize)) * fh / pfh ** (1.0 - PULL)
+        h = float(out.get("humanize", ctx.parent.humanize)) * fh / pfh ** _kept(_knob("humanize"), ctx)
         out["humanize"] = round(max(0.002, min(0.03, h)), 4)
     rit, prit = sdef.feel.get("ritardando", 0.0), pdef.feel.get("ritardando", 0.0) if parent.name else 0.0
     if style.ending == "rit":
@@ -1587,8 +1608,8 @@ def choose_style(out: dict, ctx, forced: str | None = None, arrange: dict | None
     if parent.ending == "rit":
         prit += 0.2
     if rit or prit:
-        _lean(out, "ritardando", rit, prit, 0.1, 0.9, 1.0 - PULL, float(out.get("ritardando", ctx.parent.ritardando)),
-              0.01)
+        _lean(out, "ritardando", rit, prit, 0.1, 0.9, _kept(_knob("ritardando"), ctx),
+              float(out.get("ritardando", ctx.parent.ritardando)), 0.01)
 
     # the singer's lean: gently, only the habits a singer might bring to a tradition
     singer = out.setdefault("singer", {})
@@ -1598,8 +1619,8 @@ def choose_style(out: dict, ctx, forced: str | None = None, arrange: dict | None
         poff = pdef.singer.get(field_name, 0.0) if parent.name else 0.0
         current = float(singer.get(field_name, getattr(VoiceParams(), field_name)))
         lo_b, hi_b = knob.bounds if knob is not None and not callable(knob.bounds) else (-1e9, 1e9)
-        kept_share = (1.0 - PULL if knob.inherit else 0.0) if knob is not None else 1.0
-        _lean(out, f"singer.{field_name}", off, poff, lo_b, hi_b, kept_share, current, knob.step if knob else 0.001)
+        _lean(out, f"singer.{field_name}", off, poff, lo_b, hi_b, _kept(knob, ctx), current,
+              knob.step if knob else 0.001)
 
     # the mix's lean: how much room, how close, how wide, how far forward; never the room itself
     from .synth.mixing import RANGES, MixParams
@@ -1612,8 +1633,7 @@ def choose_style(out: dict, ctx, forced: str | None = None, arrange: dict | None
         knob = _knob(f"mix.{field_name}")
         current = float(mix.get(field_name, getattr(defaults, field_name)))
         lo_b, hi_b = RANGES[field_name]
-        kept_share = (1.0 - PULL if knob.inherit else 0.0) if knob is not None else 1.0
-        _lean(out, f"mix.{field_name}", off, poff, lo_b, hi_b, kept_share, current, 0.01)
+        _lean(out, f"mix.{field_name}", off, poff, lo_b, hi_b, _kept(knob, ctx), current, 0.01)
     balance = dict(mix.get("balance") or {})
     if sdef.mix.get("choir"):
         balance["choir"] = float(sdef.mix["choir"])

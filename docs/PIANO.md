@@ -17,7 +17,7 @@ The released version, on its own:
     open http://127.0.0.1:8770/piano/
 
 (or `piano` in .claude/launch.json). It serves `web/` rather than `web/piano/` so the page can use the
-site's own `web/sing/page/identity.css` (web/piano/identity.css is a link to it). Chrome, Edge and Firefox
+studio's own `songbird/studio/identity.css` (web/piano/identity.css is a link to it). Chrome, Edge and Firefox
 have Web MIDI; Safari doesn't, so there the page plays from the screen's keys and the computer's.
 
 **One page, two places.** The page's files live in `songbird/studio/piano/` (so they travel in the song's

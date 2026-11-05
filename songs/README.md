@@ -1,8 +1,10 @@
 # Songs
 
-Every candidate seed song lives here. `<letter>-<slug>.json` is the genome
-(tune, chords, refrain, verse template, seed verses) and `<letter>-<slug>.md`
-is its lyric sheet. Render one with
+**H, [Now It's by You](h-now-its-by-you.md), is the song**, and
+[h-bank.md](h-bank.md) is its bank of verses. A to L are the candidates it was
+chosen from, written on September 25, 2026, with the artist's ratings below.
+`<letter>-<slug>.json` is a song's genome (tune, chords, refrain, verse
+template, seed verses) and `<letter>-<slug>.md` its lyric sheet. Render one with
 
 ```
 uv run songbird render songs/<name>.json
@@ -24,7 +26,7 @@ songs/<name>.json` lists a song's own lines where the rules would choose another
 sense. Braces that start a word are slots (`{kin}`) and turns (`{made|sang}`);
 braces right after a word are its say.
 
-## The songs so far, with the artist's ratings (2026-09-25)
+## The candidates, with the artist's ratings (September 25, 2026)
 
 | | Song | Shape | Rating | Note |
 | --- | --- | --- | --- | --- |
@@ -35,7 +37,7 @@ braces right after a word are its say.
 | E | Nothing of You | the machine confesses, 4/4 aeolian | 6.5 | Tune not catchy enough; lyrics too literal; some details are cool, but not all of them are decided yet |
 | F | The Long Count | deep-time counting song, 4/4 phrygian | 7 | Interesting concept, not working as a song |
 | G | Hweelonalay | refrain in no language, 4/4 phrygian | 7 | Interesting; the melody could be better and the refrain is a little too complex |
-| H | Now It's by You | the best of: A's question, B's answer, vehicle verses; now with B's refrain as a bridge for the lineage choir, a la tag, turns to breathe, and a turning question (made, sang, heard, owns); 4/4 major pentatonic | lead | Best all round: the chorus is memorable and encapsulates the project; the wire and screen verses are favourites |
+| H | Now It's by You | the best of: A's question, B's answer, vehicle verses; now with B's refrain as a bridge for the lineage choir, a la tag, turns to breathe, and a turning question (made, sang, heard, owns); 4/4 major pentatonic | chosen | Best all round: the chorus is memorable and encapsulates the project; the wire and screen verses are favourites |
 | I | Something Going Round | the creature, abstract: lives in the air, dies on the ground; one host per verse; 4/4 major pentatonic | | |
 | J | Goes Like This | sound outlasts words: the refrain ends by singing its own tune on "la"; common-metre verses; 4/4 major pentatonic | | Good ideas; likes how the ending connects to the chorus, but the la la las run long (H's tag borrows it, shorter) |
 | K | Still You Grew | the song as a named character: Daisy, the lawn flower nobody plants; 4/4 major pentatonic, a call and answer | runner-up | Catchy chorus, lyrics and melody; loves the hidden Daisy Bell reference; the overall meaning would be lost on most listeners |
@@ -44,7 +46,7 @@ braces right after a word are its say.
 A to C were written by Claude; D to G by Fable lyricists, each sent down a
 stranger path. H onwards follow "Where next" below.
 
-## Where next
+## Where next (September 25, 2026)
 
 - **The heart of it is stickiness** (the artist, 2026-09-25): music sticks in
   your head whether you want it to or not, and AI-made hooks stick just as

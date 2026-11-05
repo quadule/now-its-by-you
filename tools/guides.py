@@ -1,4 +1,4 @@
-"""What a singer hears while they sing along: the karaoke's guide mixes (dev-only).
+"""What a singer hears while they sing along: the guide mixes of the karaoke and the studio's Sing view.
 
     full     the song as the machine sings it: its singer and its band, mixed and mastered
     melody   the tune alone, on the band's whistle played plainly, over a quiet pulse: every sung
