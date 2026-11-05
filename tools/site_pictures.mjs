@@ -28,10 +28,21 @@ await page.waitForFunction(() => Object.keys(state.optionsByKey || {}).length > 
 // Page: the first refrain being edited (its fields, the legend, its words to swap)
 await page.evaluate(() => { const sec = [...document.querySelectorAll("#page .sec")].find((s) => /Refrain 1/i.test(s.querySelector(".rubric").textContent)); sec.querySelector(".editbtn").click(); });
 await wait(1200);
-await page.evaluate(() => { document.activeElement?.blur(); document.querySelector("#page .is-writing").scrollIntoView({ block: "start" }); window.scrollBy(0, -70); });
-await wait(400);
+// a close crop: the section held to the crop's width, so its counts sit inside it (as "11 / 11", as on a phone)
+// (set on the elements: the page's policy takes no added style sheet)
+await page.evaluate(() => {
+  const sec = document.querySelector("#page .is-writing");
+  sec.style.maxWidth = "548px";
+  for (const unit of sec.querySelectorAll(".author-count .unit")) unit.style.display = "none";
+  for (const input of sec.querySelectorAll("textarea")) input.dispatchEvent(new Event("input"));  // each field as tall as its line now
+  for (const unit of sec.querySelectorAll(".author-count .unit")) unit.style.display = "none";
+  document.activeElement?.blur();
+  sec.scrollIntoView({ block: "start" });
+  window.scrollBy(0, -70);
+});
+await wait(600);
 let b = await box("#page .is-writing");
-await shot("page", { x: b.x - 14, y: b.y - 8, width: Math.min(b.width + 28, 700), height: Math.min(b.width + 28, 700) * 0.75 });
+await shot("page", { x: b.x - 14, y: b.y - 8, width: 576, height: 432 });
 await page.evaluate(() => document.querySelector("#page .editbtn.on").click());
 
 // Arrange: the first refrain selected, everyone in it playing hard
@@ -43,7 +54,7 @@ await page.evaluate(() => [...document.querySelectorAll("#inspector .chip")].fin
 await settle(); await wait(1500);
 await page.evaluate(() => window.scrollTo(0, 0));
 b = await box("#grid");
-await shot("arrange", { x: b.x, y: b.y, width: 640, height: 480 });
+await shot("arrange", { x: b.x, y: b.y, width: 500, height: 375 });
 await page.evaluate(() => document.querySelector("#inspector .close")?.click());
 
 // Mix: the whistle's fader moved, the voice's strip beside the players
