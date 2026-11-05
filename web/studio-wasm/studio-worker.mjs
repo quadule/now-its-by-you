@@ -9,6 +9,8 @@
 //   → { cmd: "render", spec: the spec as JSON text }
 //   ← { kind: "progress", progress, stage }  ...  { kind: "done", id, duration, flac (ArrayBuffer), seconds, heap, record }
 //   ← { kind: "error", message, memory } at any point: the renderer then asks the server instead
+//   ← { kind: "kept", kept: ["stdlib" | "site" | "app"] } when it has kept what Python compiled, for the next worker
+//     (a moment after it was last asked anything; "bytecode kept in this browser" below)
 //
 // One render at a time; the renderer terminates the worker after a whole song (wasm memory never shrinks).
 //
@@ -114,13 +116,23 @@ async function init({ pyodide, app, bytes, lean, control, stemCacheBytes }) {
   const packages = control ? ['numpy'] : ['numpy', 'scipy', 'soundfile'];
   if (control) warm(pyodide, packages);
   const { loadPyodide } = await import(`${pyodide}pyodide.mjs`);
-  py = await loadPyodide({ indexURL: pyodide, stdout: () => {}, stderr: () => {} });
+  const code = await keptCode(pyodide, app);
+  py = await loadPyodide({ indexURL: pyodide, stdout: () => {}, stderr: () => {}, fsInit: code.stdlib ? async (FS, { sitePackages }) => {
+    // the standard library with its bytecode, in place of the one served: once Pyodide has written that (as its fetch
+    // arrives, after this hook is called; Python starts only when both are done)
+    const [, major, minor] = /python(\d+)\.(\d+)/.exec(sitePackages);
+    const zip = `/lib/python${major}${minor}.zip`;
+    for (const t = performance.now(); !FS.analyzePath(zip).exists && performance.now() - t < 60000;) {
+      await new Promise((resolve) => setTimeout(resolve, 5));
+    }
+    FS.writeFile(zip, code.stdlib);
+  } : undefined });
   step = packages.join(', ');
   loading(true);
   await py.loadPackage(packages, { messageCallback: () => {}, errorCallback: () => {} });
   step = 'the program';
   loading(true);
-  if (lean || control) return initLean(new Uint8Array(await program), t0, control);
+  if (lean || control) return initLean(new Uint8Array(await program), t0, control, code);
   const kernels = await import(`${app}kernels/kernels.gen.mjs`);
   const rt = await import(`${app}kernels/rt.mjs`);
   const { loadWasmKernels, kernelsFile } = await import(`${app}wasm/kernels.mjs`);
@@ -131,6 +143,7 @@ async function init({ pyodide, app, bytes, lean, control, stemCacheBytes }) {
   py.registerJsModule('songbird_wasm', await loadWasmKernels(wasm, py._module.memory));
   const zip = new Uint8Array(await (await fetch(`${app}songbird.zip`)).arrayBuffer());
   py.unpackArchive(zip, 'zip', { extractDir: '/app' });
+  unpackCode(code);
   step = 'getting the singer ready';
   loading(true);
   await py.runPythonAsync(`
@@ -140,6 +153,10 @@ os.environ["SONGBIRD_HOME"] = "/tmp/songbird-home"
 os.environ["SONGBIRD_STEM_CACHE_BYTES"] = ${JSON.stringify(String(stemCacheBytes ?? 64 * 2 ** 20))}
 sys.path.insert(0, "/app")
 os.chdir("/app")
+import bytecode
+bytecode.start()
+import web_patches
+web_patches.plain_docs()
 import wasm_kernels
 wasm_kernels.install()
 import numba
@@ -157,8 +174,9 @@ PROGRAM = pack.program_sha256(pack.program_files())
 
 // A measuring worker's start: the program unpacked, but none of the renderer's kernels or instruments (the measuring
 // imports what it needs itself)
-async function initLean(zip, t0, control = false) {
+async function initLean(zip, t0, control = false, code = {}) {
   py.unpackArchive(zip, 'zip', { extractDir: '/app' });
+  unpackCode(code);
   await py.runPythonAsync(`
 import os, sys
 os.environ["SONGBIRD_THREADS"] = "1"
@@ -166,7 +184,9 @@ os.environ["SONGBIRD_HOME"] = "/tmp/songbird-home"
 ${control ? 'os.environ["NUMBA_DISABLE_JIT"] = "1"' : ''}
 sys.path.insert(0, "/app")
 os.chdir("/app")
-${control ? `import lazy_imports\nlazy_imports.install(${JSON.stringify(LAZY)})` : ''}
+import bytecode
+bytecode.start()
+${control ? `import lazy_imports\nlazy_imports.install(${JSON.stringify(LAZY)})` : 'import web_patches\nweb_patches.plain_docs()'}
 `);
   postMessage({ kind: 'ready', seconds: (performance.now() - t0) / 1000, heap: heapMiB(), received });
 }
@@ -389,6 +409,70 @@ function failedAnswer(id, err) {
     json: JSON.stringify({ error: memory ? 'This browser ran out of memory answering that.' : said }) });
 }
 
+// ---------------------------------------------------------------- bytecode kept in this browser (py/bytecode.py)
+
+// What Python compiled, kept in Cache Storage under the bundle's own content-named folders (a new Pyodide or a new
+// program is a new folder, so a new key; the older keys are let go when the new ones are kept), for the next worker
+// to start with: the standard library's zip with its bytecode, and the pyc files of Pyodide's packages and of the
+// program. Each pyc is checked against its source's hash as it's imported, so nothing kept is ever run stale. Where
+// there is no Cache Storage (a private window may refuse it), every worker compiles as before.
+const KEPT = 'songbird-bytecode';
+const keptKeys = (pyodide, app) => ({ stdlib: `${pyodide}bytecode/stdlib.zip`, site: `${pyodide}bytecode/site.zip`,
+  app: `${app}bytecode/app.zip` });  // (the folders' URLs end in /)
+let codeKeys = null;
+
+async function keptCode(pyodide, app) {
+  codeKeys = keptKeys(pyodide, app);
+  const out = {};
+  try {
+    const cache = await caches.open(KEPT);
+    for (const [name, key] of Object.entries(codeKeys)) {
+      const hit = await cache.match(key);
+      if (hit) out[name] = new Uint8Array(await hit.arrayBuffer());
+    }
+  } catch { /* none kept, or none to be had */ }
+  return out;
+}
+
+function unpackCode(code) {  // before bytecode.start(): what an earlier worker kept, under /pycache
+  for (const name of ['site', 'app']) {
+    if (!code[name]) continue;
+    try { py.unpackArchive(code[name], 'zip', { extractDir: '/' }); } catch { /* compiled again */ }
+  }
+}
+
+// Once this worker has compiled something new and nothing has been asked of it for a moment: the standard library's
+// modules compiled a few at a time (a question asked meanwhile waits for one step), then the archives kept.
+let keepTimer = null;
+function keepLater(ms = 2000) {
+  if (!py || !codeKeys || !globalThis.caches) return;
+  clearTimeout(keepTimer);
+  keepTimer = setTimeout(keepCode, ms);
+}
+
+async function keepCode() {
+  const busy = () => pumping || waiting.length;
+  try {
+    if (busy() || !py.runPython('import bytecode\nbytecode.new() or bool(bytecode.stdlib_step(0))')) return;
+    while (py.runPython('bytecode.stdlib_step(0.05)') > 0) {
+      await new Promise((resolve) => setTimeout(resolve, 0));
+      if (busy()) return keepLater();
+    }
+    if (busy()) return keepLater();
+    const made = JSON.parse(py.runPython('import json\njson.dumps(bytecode.kept("/tmp/bytecode"))'));
+    const cache = await caches.open(KEPT);
+    for (const [name, path] of Object.entries(made)) {
+      const bytes = py.FS.readFile(path);
+      py.FS.unlink(path);
+      await cache.put(codeKeys[name], new Response(bytes, { headers: { 'content-type': 'application/zip' } }));
+      for (const old of await cache.keys()) {  // an older Pyodide's or program's
+        if (old.url !== codeKeys[name] && old.url.endsWith(`/bytecode/${name}.zip`)) await cache.delete(old);
+      }
+    }
+    if (Object.keys(made).length) postMessage({ kind: 'kept', kept: Object.keys(made) });
+  } catch { /* not kept: the next worker compiles what it needs */ }
+}
+
 // ---------------------------------------------------------------- one message at a time
 
 const waiting = [];
@@ -428,6 +512,7 @@ async function pump() {
     }
   } finally {
     pumping = false;
+    keepLater();
   }
 }
 

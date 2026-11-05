@@ -1095,7 +1095,9 @@ version."; Help's where and *What's kept*; the Tools sheet's "Made on this devic
 
 - In this browser: the edits (localStorage, as ever); the versions opened (IndexedDB `songbird-studio`: the cleaned
   record, the song, the timeline, never the audio); each day's timeline; the ways of singing made; the latest three
-  piano scores; the bundle in the HTTP cache (28 MB, once). A recording is a Blob in the page's memory until the page
+  piano scores; the bundle in the HTTP cache (28 MB, once); the bytecode Python compiled, for the next worker's start
+  (Cache Storage `songbird-bytecode`, about 17 MB, replaced with each new program: docs/PERFORMANCE.md, "The web
+  studio's start, its edits and its voice"). A recording is a Blob in the page's memory until the page
   closes: *Download it* keeps it.
 - On the site: only a version the visitor chose to share (*Share it*: the recording's file as it is), and what any site
   sees (which files were fetched, which `/v/<id>` was opened). A file the visitor brings is read and kept on the device,
