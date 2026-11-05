@@ -145,7 +145,8 @@
   }
   function count(row) {
     const n = syllables(row.input.value);
-    row.count.textContent = `${n} / ${row.phrase.syllable_count} syllables`;
+    row.count.textContent = `${n} / ${row.phrase.syllable_count}`;
+    row.count.append(node("span", "unit", " syllables"));  // (the word goes where there's no room for it)
     row.count.classList.toggle("is-valid", n === row.phrase.syllable_count);
     row.input.setAttribute("aria-invalid", String(n !== row.phrase.syllable_count));
     row.input.classList.toggle("is-dirty", row.input.value !== row.base);
