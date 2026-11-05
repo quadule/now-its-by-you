@@ -363,3 +363,83 @@ void pipe_run(const double *freq, const double *breath, const double *chiff, con
     out[t] = y;
   }
 }
+
+#ifdef __wasm_simd128__
+// throat._matmul (x @ W.T) as Pyodide's scipy computes it, BLAS dgemm: the build with -msimd128 only
+// (kernels-simd.wasm; py/web_patches.py). Every output is summed exactly as that OpenBLAS (0.3.31, built for
+// RISCV64_GENERIC: dgemm's Q 120, unroll 2, its generic 2x2 kernel) sums it: C zeroed (beta 0), then for each
+// block of k in turn, its products summed one after another from zero, added to C. The blocks are level3.c's:
+// Q at a time while at least 2Q remain, then what remains if no more than Q, else half of it rounded up to
+// the unroll (480: four of 120; 160: 80 and 80). Found by experiment against blas.dgemm, which it equals bit
+// for bit (tools/check_kernels.py; web_patches checks again before using it). Two outputs of a row at a time,
+// one in each f64x2 lane; wasm has no fused multiply-add, so a product rounds before it is added, as there.
+#include <wasm_simd128.h>
+
+#define MM_Q 120
+#define MM_UNROLL 2
+
+static inline int32_t mm_block(int32_t left) {
+  if (left >= 2 * MM_Q) return MM_Q;
+  if (left > MM_Q) return ((left / 2 + MM_UNROLL - 1) / MM_UNROLL) * MM_UNROLL;
+  return left;
+}
+
+// rows i..i+R of out, columns j..j+2V: for each block of k, R x V sums of products in f64x2 lanes, then added
+// to out (to 0.0 for the first: C's zeros). Called with constant R and V, each call its own code; 2 x 4 keeps
+// the eight sums, four of W's pairs and one of x in registers
+static inline __attribute__((always_inline)) void mm_tile(const double *x, int32_t k, const double *wt, int32_t m,
+                                                          double *out, int32_t i, int32_t j, int R, int V) {
+  for (int32_t k0 = 0; k0 < k;) {
+    int32_t k1 = k0 + mm_block(k - k0);
+    v128_t s[2][4];
+    for (int r = 0; r < R; r++)
+      for (int v = 0; v < V; v++) s[r][v] = wasm_f64x2_splat(0.0);
+    for (int32_t q = k0; q < k1; q++) {
+      const double *w = wt + (int64_t)q * m + j;
+      v128_t b[4];
+      for (int v = 0; v < V; v++) b[v] = wasm_v128_load(w + 2 * v);
+      for (int r = 0; r < R; r++) {
+        v128_t a = wasm_f64x2_splat(x[(int64_t)(i + r) * k + q]);
+        for (int v = 0; v < V; v++) s[r][v] = wasm_f64x2_add(s[r][v], wasm_f64x2_mul(a, b[v]));
+      }
+    }
+    for (int r = 0; r < R; r++)
+      for (int v = 0; v < V; v++) {
+        double *o = out + (int64_t)(i + r) * m + j + 2 * v;
+        v128_t c = k0 == 0 ? wasm_f64x2_splat(0.0) : wasm_v128_load(o);
+        wasm_v128_store(o, wasm_f64x2_add(c, s[r][v]));
+      }
+    k0 = k1;
+  }
+}
+
+// out (n x m, C order) = x (n x k, C order) times wt (k x m, C order: W.T made contiguous)
+EXPORT(matmul_blas)
+void matmul_blas(const double *x, int32_t n, int32_t k, const double *wt, int32_t m, double *out) {
+  int32_t m8 = m & ~7, m2 = m & ~1;
+  for (int32_t i0 = 0; i0 < n; i0 += 64) {  // 64 rows of x at a time, kept in cache across every column
+    int32_t i1 = i0 + 64 < n ? i0 + 64 : n;
+    int32_t i2 = i0 + ((i1 - i0) & ~1);
+    for (int32_t j = 0; j < m8; j += 8) {
+      for (int32_t i = i0; i < i2; i += 2) mm_tile(x, k, wt, m, out, i, j, 2, 4);
+      if (i2 < i1) mm_tile(x, k, wt, m, out, i2, j, 1, 4);
+    }
+    for (int32_t j = m8; j < m2; j += 2) {
+      for (int32_t i = i0; i < i2; i += 2) mm_tile(x, k, wt, m, out, i, j, 2, 1);
+      if (i2 < i1) mm_tile(x, k, wt, m, out, i2, j, 1, 1);
+    }
+    if (m > m2)  // the last column alone, in plain doubles: the same sums
+      for (int32_t i = i0; i < i1; i++) {
+        double c = 0.0;
+        for (int32_t k0 = 0; k0 < k;) {
+          int32_t k1 = k0 + mm_block(k - k0);
+          double s = 0.0;
+          for (int32_t q = k0; q < k1; q++) s = s + x[(int64_t)i * k + q] * wt[(int64_t)q * m + m2];
+          c = c + s;
+          k0 = k1;
+        }
+        out[(int64_t)i * m + m2] = c;
+      }
+  }
+}
+#endif

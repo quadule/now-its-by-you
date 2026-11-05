@@ -2,7 +2,10 @@
 // compare with the native render's.
 //
 //   node web/studio-wasm/node/run.mjs [--section 2 | --whole] [--kernels js|python|wasm] [--out x.npy]
-//        [--song songs/h-now-its-by-you.json] [--times] [--reps 2]
+//        [--song songs/h-now-its-by-you.json] [--times] [--reps 2] [--no-simd]
+//
+// --kernels wasm loads wasm/kernels-simd.wasm where wasm SIMD validates (always, in node), so the voice's matrix
+// products are the SIMD kernel's; --no-simd loads kernels.wasm as a browser without SIMD does (scipy's dgemm).
 //
 // Needs `npm install` in web/studio-wasm (pyodide) and dist/songbird.zip (tools/bundle.py). numpy and scipy
 // are Pyodide's packages, fetched from its CDN the first time and cached beside it.
@@ -39,8 +42,10 @@ const env = { SONGBIRD_THREADS: '1', SONGBIRD_WEB_DGEMM: args.includes('--no-dge
 if (args.includes('--fallbacks')) env.NUMBA_DISABLE_JIT = '1';
 if (mode !== 'wasm') py.registerJsModule('songbird_kernels', { kernels, rt, manifest });
 if (mode === 'wasm') {
-  const { loadWasmKernels } = await import('../wasm/kernels.mjs');
-  const wasm = await loadWasmKernels(fs.readFileSync(path.join(root, 'wasm/kernels.wasm')), py._module.memory);
+  const { loadWasmKernels, kernelsFile } = await import('../wasm/kernels.mjs');
+  const file = kernelsFile(!args.includes('--no-simd'));
+  const wasm = await loadWasmKernels(fs.readFileSync(path.join(root, file)), py._module.memory);
+  log('wasm kernels:', file);
   py.registerJsModule('songbird_kernels', { kernels, rt, manifest });
   py.registerJsModule('songbird_wasm', wasm);
 }
@@ -71,6 +76,7 @@ instruments.registry()
 import web_patches
 web_patches.install(dgemm=os.environ.get("SONGBIRD_WEB_DGEMM", "1") == "1")
 IMPORT_S = time.perf_counter() - t
+print('matmul:', web_patches.matmul())
 `);
 const tImp = performance.now();
 log(`load: pyodide ${((tPy - t0) / 1000).toFixed(2)}s, numpy+scipy ${((tPk - tPy) / 1000).toFixed(2)}s, ` +

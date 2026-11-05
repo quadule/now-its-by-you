@@ -20,10 +20,10 @@ const py = await loadPyodide({ indexURL: pyDir, packageCacheDir: pyDir });
 await py.loadPackage(['numpy', 'scipy', 'soundfile'], { messageCallback: () => {} });
 const kernels = await import(pathToFileURL(appDir + 'kernels/kernels.gen.mjs').href);
 const rt = await import(pathToFileURL(appDir + 'kernels/rt.mjs').href);
-const { loadWasmKernels } = await import(pathToFileURL(appDir + 'wasm/kernels.mjs').href);
+const { loadWasmKernels, kernelsFile } = await import(pathToFileURL(appDir + 'wasm/kernels.mjs').href);
 rt.setHeap(() => py._module.HEAPU8.buffer);
 py.registerJsModule('songbird_kernels', { kernels, rt, manifest: fs.readFileSync(appDir + 'kernels/manifest.json', 'utf8') });
-py.registerJsModule('songbird_wasm', await loadWasmKernels(fs.readFileSync(appDir + 'wasm/kernels.wasm'), py._module.memory));
+py.registerJsModule('songbird_wasm', await loadWasmKernels(fs.readFileSync(appDir + kernelsFile()), py._module.memory));
 py.unpackArchive(new Uint8Array(fs.readFileSync(appDir + 'songbird.zip')), 'zip', { extractDir: '/app' });
 await py.runPythonAsync(`
 import os, sys

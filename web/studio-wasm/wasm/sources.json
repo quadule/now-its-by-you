@@ -12,5 +12,7 @@
  "synth.master._weighted_hop_power": "2832b342fda0749c",
  "synth.pipe.run": "61c277eda546710a",
  "synth.pluck._bank": "6d85530e31849d57",
- "synth.pluck._loop": "0719d74fac3af1ce"
+ "synth.pluck._loop": "0719d74fac3af1ce",
+ "synth.throat._matmul": "eda2a738f84d9928",
+ "pyodide": "314.0.7"
 }

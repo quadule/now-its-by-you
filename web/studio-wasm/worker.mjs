@@ -4,7 +4,7 @@
 import { loadPyodide } from './node_modules/pyodide/pyodide.mjs';
 import * as kernels from './kernels/kernels.gen.mjs';
 import * as rt from './kernels/rt.mjs';
-import { loadWasmKernels } from './wasm/kernels.mjs';
+import { loadWasmKernels, kernelsFile } from './wasm/kernels.mjs';
 
 let py = null;
 const say = (msg) => postMessage({ kind: 'log', msg });
@@ -20,7 +20,7 @@ async function init(mode, times) {
   const manifest = await (await fetch('./kernels/manifest.json')).text();
   py.registerJsModule('songbird_kernels', { kernels, rt, manifest });
   if (mode === 'wasm') {
-    const bytes = await (await fetch('./wasm/kernels.wasm')).arrayBuffer();
+    const bytes = await (await fetch(`./${kernelsFile()}`)).arrayBuffer();
     py.registerJsModule('songbird_wasm', await loadWasmKernels(bytes, py._module.memory));
   }
   const zip = new Uint8Array(await (await fetch('./dist/songbird.zip')).arrayBuffer());

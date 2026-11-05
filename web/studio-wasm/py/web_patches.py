@@ -1,7 +1,8 @@
 """What the browser needs changed in songbird, the same numbers either way. Installed by the loader after
 songbird is imported; natively nothing imports this.
 
-- throat._matmul by BLAS, including every convolution and residual layer: Pyodide's numpy has none.
+- throat._matmul by BLAS, including every convolution and residual layer: Pyodide's numpy has none. Where wasm
+  SIMD is supported, by the C kernel that sums as that BLAS does, twice as fast (wasm/kernels.c matmul_blas).
 
 (Until 2026-09-29 master.true_peak_envelope was patched too: it gathered rows from a sliding_window_view,
 a virtual array over 2 GiB for a whole song, which numpy on wasm32 refuses. The memory work gathers them
@@ -24,8 +25,69 @@ def _dgemm_matmul(x: np.ndarray, weight: np.ndarray) -> np.ndarray:
     return blas.dgemm(1.0, weight.T, x.T, trans_a=True).T
 
 
+def _kernel():
+    """The SIMD build's matmul_blas (wasm/kernels.mjs fetched kernels-simd.wasm), or None: no wasm kernels, or
+    the build without SIMD."""
+    try:
+        import songbird_wasm
+    except ImportError:
+        return None
+    return getattr(songbird_wasm, "matmul_blas", None)
+
+
+def _address(a: np.ndarray) -> int:
+    return a.__array_interface__["data"][0]
+
+
+def _simd_product(kernel, x: np.ndarray, weight: np.ndarray) -> np.ndarray:
+    x = np.ascontiguousarray(x)
+    wt = np.ascontiguousarray(weight.T)  # 600 KB for the convolutions' weights
+    out = np.empty((len(x), len(weight)))
+    kernel(_address(x), len(x), x.shape[1], _address(wt), len(weight), _address(out))
+    return out
+
+
+_AGREES: dict[tuple[int, int], bool] = {}
+
+
+def _agrees(kernel, k: int, m: int) -> bool:
+    """Whether the kernel gives dgemm's own bits for this k and m (once each): it bakes in how this Pyodide's
+    OpenBLAS blocks its sums, so a Pyodide with another would be caught here and keep to dgemm. Inputs of every
+    magnitude, with zero rows, where any other order of the sums shows; its own generator, so the program's
+    random numbers are untouched."""
+    if (k, m) not in _AGREES:
+        rng = np.random.default_rng([k, m])
+        x = rng.standard_normal((67, k)) * np.exp2(rng.integers(-30, 30, (67, k)))
+        w = rng.standard_normal((m, k)) * np.exp2(rng.integers(-30, 30, (m, k)))
+        x[::7] = 0.0
+        want = _dgemm_matmul(x, w)
+        got = _simd_product(kernel, x, w)
+        _AGREES[k, m] = bool(np.array_equal(want.view(np.int64), got.view(np.int64)))
+    return _AGREES[k, m]
+
+
+def _simd_matmul(x: np.ndarray, weight: np.ndarray) -> np.ndarray:
+    """throat._matmul by wasm/kernels.c's matmul_blas: dgemm's numbers bit for bit (each output summed in its
+    order, f64x2 lanes two outputs at a time), about twice its speed. Whatever dgemm wouldn't take goes where
+    _dgemm_matmul sends it."""
+    if (x.dtype != np.float64 or weight.dtype != np.float64 or x.ndim != 2 or weight.ndim != 2 or len(x) < 64
+            or x.shape[1] != weight.shape[1] or weight.shape[1] == 0):  # (k 0: the kernel writes nothing)
+        return _dgemm_matmul(x, weight)
+    kernel = _kernel()
+    if not _agrees(kernel, weight.shape[1], weight.shape[0]):
+        return _dgemm_matmul(x, weight)
+    return _simd_product(kernel, x, weight)
+
+
+def matmul() -> str:
+    """Which product throat._matmul is: "simd", "dgemm" or "numpy" (as installed)."""
+    from songbird.synth import throat
+
+    return {_simd_matmul: "simd", _dgemm_matmul: "dgemm"}.get(throat._matmul, "numpy")
+
+
 def install(dgemm: bool = True) -> None:
     from songbird.synth import throat
 
     if dgemm:
-        throat._matmul = _dgemm_matmul
+        throat._matmul = _simd_matmul if _kernel() is not None else _dgemm_matmul
