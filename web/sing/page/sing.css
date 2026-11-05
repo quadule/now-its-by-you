@@ -235,16 +235,31 @@ pre { margin: 0 0 10px; padding: 10px 12px; overflow-x: auto; background: var(--
 .statement figcaption { margin: 8px 0 0 18px; color: var(--dim); font-size: 15px; }
 .about h3 { margin-top: 18px; }
 
-/* the home page, consolidated (2026-10-07): the statement beside the cover, then one card to make your own (the
-   studio's four views, two by two, then the file's own commands), then who made it */
+/* the home page: the statement beside the cover, then one card to make your own (the studio's four views, then
+   the file's own commands), then who made it */
 .pitch .lead cite { font-style: normal; }
 .studio .tabs { display: grid; grid-template-columns: 1fr 1fr; gap: 14px 16px; margin: 12px 0 14px; }
 .studio .tabs figure { margin: 0; }
 .studio .tabs img { display: block; width: 100%; height: auto; border: 1px solid var(--line); border-radius: 4px; }
 .studio .tabs figcaption { margin-top: 6px; font-size: 15px; line-height: 1.35; color: var(--dim); }
 .studio .tabs figcaption b { color: var(--ink); font-weight: 600; margin-right: 2px; }
+.studio .button.primary { font-size: 18px; font-weight: 600; padding: 12px 28px; min-height: 52px; }
 .studio h3 { margin: 22px 0 6px; padding-top: 14px; border-top: 1px solid var(--line); }
 .card.disclosure > p + p { margin-top: 10px; }
+@media (min-width: 641px) {
+  /* on a wide screen: the four views in one row, each a slanted stripe of its picture, a seam's width apart */
+  .studio .tabs { --slant: 44px; --seam: 6px; grid-template-columns: repeat(4, 1fr); gap: 0; }
+  .studio .tabs figure { min-width: 0; margin-right: calc(-1 * var(--slant)); }
+  .studio .tabs figure:last-child { margin-right: 0; }
+  .studio .tabs img { height: 210px; object-fit: cover; object-position: left top; border: 0; border-radius: 0;
+                      clip-path: polygon(calc(var(--slant) + var(--seam)) 0, 100% 0, calc(100% - var(--slant)) 100%, var(--seam) 100%); }
+  .studio .tabs figure:first-child img { clip-path: polygon(0 0, 100% 0, calc(100% - var(--slant)) 100%, 0 100%); }
+  .studio .tabs figure:last-child img { clip-path: polygon(calc(var(--slant) + var(--seam)) 0, 100% 0, 100% 100%, var(--seam) 100%); }
+  .studio .tabs figure:nth-child(2) img { object-position: 30% top; }    /* Arrange: the refrain set to hard */
+  .studio .tabs figure:nth-child(3) img { object-position: right top; }  /* Mix: the voice's strip, at its right */
+  .studio .tabs figcaption { margin-left: calc(var(--seam) + 2px); }
+  .studio .tabs figure:first-child figcaption { margin-left: 0; }
+}
 @media (max-width: 640px) {
   /* on a phone: the cover small beside the statement, so the player is near the first screen; the four views a
      row to swipe through, each nearly the card's width, rather than a long column */

@@ -25,7 +25,8 @@ each) are four close crops, one of each view with something being changed in it 
 a refrain being edited (Page), a refrain's players set to hard (Arrange), the whistle's fader moved beside the
 voice's strip (Mix), the lane while a line is sung (Sing). `tools/site_pictures.mjs` takes them from the web studio
 served on this computer with headless Chromium (Playwright) at 2x, in the light colours, and `tools/site_pictures.py`
-makes the WebP files; both say how to run them. Two by two on a wide screen, a row to swipe on a phone. Take them
+makes the WebP files; both say how to run them. On a wide screen they are one row of four slanted stripes, each a part of its picture (sing.css chooses which part);
+on a phone, a row to swipe, each picture whole. Take them
 again when the studio's look changes.
 
 **The source code.** `SOURCE_PUBLIC` in tools/sing_site.py is off. Turned on (once github.com/quadule/songbird
