@@ -8,7 +8,8 @@ import pytest
 
 from songbird import synth
 from songbird.score import Note, Score
-from songbird.synth.cache import StemCache, keys
+from songbird.synth import mixing
+from songbird.synth.cache import Cached, StemCache, keys
 from songbird.synth.mixing import MixParams
 from songbird.synth.voice import VoiceParams
 
@@ -140,3 +141,34 @@ def test_mix_edits_reuse_dry_audio_without_changing_uncached_output():
     changed = synth.render(lyric, seed=3, cache=cache)
     assert cache.hits == 3
     np.testing.assert_array_equal(changed, synth.render(lyric, seed=3))
+
+
+def test_a_treated_stem_is_kept_with_its_span_and_given_back_as_a_copy():
+    cache = StemCache(64)
+    made = cache.make("a", lambda: (slice(2, 10), np.arange(8.0)))
+    made[1][:] = -1
+    where, heard = cache.make("a", lambda: pytest.fail("treated stem was made again"))
+    assert where == slice(2, 10) and heard.flags.writeable
+    np.testing.assert_array_equal(heard, np.arange(8.0))
+    assert cache.bytes == 64 and cache.make("silent", lambda: None) is None and cache.bytes == 64
+
+
+def test_mix_edits_keep_each_stem_treated_in_place_of_dry_and_finish_it_the_same():
+    sr, length = 44100, 2 * 44100
+    t = np.arange(length) / sr
+    bass = np.stack([np.sin(2 * np.pi * 110 * t), 0.5 * np.sin(2 * np.pi * 110 * t)], axis=1) * (t > 0.8)[:, None]
+    voice = np.stack([np.sin(2 * np.pi * 330 * t) * np.sin(2 * np.pi * 3 * t)] * 2, axis=1) * 0.2
+    sound = {"players": {"bass": {"sidechain": {"depth": 6.0, "release": 0.2, "attack": 0.003}}},
+             "triggers": [[1.0, "bass"], [1.5, "bass"]]}
+    lift = np.linspace(-2.0, 2.0, length)
+    def makers():
+        return [("bass", lambda: bass.copy()), ("voice", lambda: voice.copy())]
+    cache = StemCache(64 * 2**20)
+    for balance in ({}, {"bass": -3.0, "voice": 2.0}, {}):
+        params = MixParams.from_dict({"balance": balance})
+        kept = [(name, Cached(cache, name, make, name)) for name, make in makers()]
+        heard = mixing.mix_made(kept, length, sr, params=params, lift=lift, sound=sound)
+        np.testing.assert_array_equal(heard, mixing.mix_made(makers(), length, sr, params=params, lift=lift,
+                                                             sound=sound))
+    assert cache.misses == 2 and cache.hits == 4 and len(cache._entries) == 2
+    assert cache.bytes < bass.nbytes + voice.nbytes  # the bass where it sounds, and no dry stem besides

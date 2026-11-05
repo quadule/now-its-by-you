@@ -490,6 +490,14 @@ def mix_made(parts: list, length: int, sr: int, seed: int = 0, params: MixParams
     def stem(name: str) -> np.ndarray:
         return _conform(makers[name](), length)
 
+    def made(name: str, how: str, treat):
+        """treat(the stem): what depends on nothing but the dry stem, its role, the rate and the length. A maker
+        that keeps stems (synth.cache.Cached) keeps this instead, and gives a copy of it to finish."""
+        treated = getattr(makers[name], "treated", None)
+        if treated is None:
+            return treat(stem(name))
+        return treated([how, roles[name], length, sr], lambda x: treat(_conform(x, length)))
+
     # The lead: everything else is placed against it.
     # Each treatment works on its sound where it lies once the sound is its own (a copy made by the first step
     # that makes one, or a stem the mix was given to keep): the same samples as treated copies.
@@ -502,9 +510,17 @@ def mix_made(parts: list, length: int, sr: int, seed: int = 0, params: MixParams
         return _at(_peaks(fx.saturate(x, sr, VOICE_DRIVE, inplace=True), sr, inplace=True), sr, REFERENCE, inplace=True)
 
     def lead_bus(voice, owned):
+        return lead_rises(None if voice is None else _treated(voice, lead, owned))
+
+    def lead_alone(name: str):  # the lead of one singer: its treatment is its stem's alone
+        def treat(x):
+            x = _alone(x)
+            return None if x is None else _treated(x, lead, own)
+        return lead_rises(made(name, "lead", treat))
+
+    def lead_rises(voice):
         if voice is None:
             return None
-        voice = _treated(voice, lead, owned)
         if rise is not None:  # the lead rises with the arrangement: quieter in a sparse verse, fuller at the climax
             voice *= rise[:len(voice)]
         return voice, fx.activity(voice, sr, attack=MAKE_WAY[0], release=MAKE_WAY[1])
@@ -540,18 +556,19 @@ def mix_made(parts: list, length: int, sr: int, seed: int = 0, params: MixParams
             x = y
         return fx.saturate(x, sr, strip.drive, inplace=owned)
 
-    def instrument(name: str):
-        x = stem(name)
+    def strip_of(name: str, x):  # the channel strip's work on the stretch that sounds: (where, samples of its own)
         where = fx.span(x, sr)
         if where.stop <= where.start:
             return None
-        strip = ROLES[roles[name]]
-        y = _treated(x[where], partial(channel, strip=strip, role=roles[name]), own)
-        gain = 10.0 ** ((strip.trim + nudge[name]) / 20.0)
-        if own or not np.shares_memory(y, x):
-            y *= gain  # where it lies: the same products
-        else:
-            y = y * gain
+        y = _treated(x[where], partial(channel, strip=ROLES[roles[name]], role=roles[name]), own)
+        return where, (y if own or not np.shares_memory(y, x) else y.copy())  # the caller's stem stays as it was
+
+    def instrument(name: str):
+        treated = made(name, "channel", partial(strip_of, name))
+        if treated is None:
+            return None
+        where, y = treated
+        y *= 10.0 ** ((ROLES[roles[name]].trim + nudge[name]) / 20.0)  # where it lies: the same products
         if design is not None:  # a person's sidechain: the channel ducks on its key, its send with it
             design.pump(name, where, y)
         return where, y
@@ -564,7 +581,8 @@ def mix_made(parts: list, length: int, sr: int, seed: int = 0, params: MixParams
     sung = []
     for bus, names in groups.items():
         if len(names) == 1:
-            sung.append((names[0], lambda bus=bus, name=names[0]: buses[bus](_alone(stem(name)), own)))
+            sung.append((names[0], partial(lead_alone, names[0]) if bus == "voice" else
+                         lambda bus=bus, name=names[0]: buses[bus](_alone(stem(name)), own)))
         else:
             sung += [(name, partial(stem, name)) for name in names]
     played = [(name, partial(instrument, name)) for name, role in roles.items() if role not in buses]

@@ -565,7 +565,7 @@ and Safari remain unmeasured.
   bounded stretches. Singer-first rendering postpones the three empty band buses until an instrument is
   ready, removing roughly 306 MiB from H's vocal lifetime. Whistle turbulence and final high-pass filters
   carry SOS state across bounded stretches and retain the same RNG draws.
-- **Edit reuse:** studio previews keep immutable dry-stem snapshots and return an owned copy to the mixer.
+- **Edit reuse:** studio previews keep immutable stem snapshots (since 2026-11-05 treated, below) and return an owned copy to the mixer.
   Keys describe realized notes, timing, seed, instrument settings, lexicon and singer/choir context, rather
   than the edit request alone. Changed parts replace their older snapshots; admission favors synthesis
   work saved per byte. The cache is bounded to 32 MiB on constrained browsers, 128 MiB on other browsers,
@@ -600,3 +600,26 @@ after `tools/build_site.py` creates a local site. Add `--full-control` for the f
 workers with Web Worker API adapters around the unchanged production worker; it does not simulate a phone.
 The WAV/PCM prototype zip made by `tools/bundle.py` deliberately contains a soundfile stub and cannot be
 used for this FLAC-worker benchmark. `node/run.mjs --bundle BEFORE.zip` supports isolated comparisons.
+
+### Edit reuse, treated (2026-11-05)
+
+A mix edit with every stem kept still put each one through what the mix does to it alone: an instrument's
+channel strip (equalizer, compressor, peaks, saturation, on the stretch that sounds) and the lead's chain
+(equalizer, de-esser, compressor, softening, saturation, peaks, level). None of that reads the mix's
+parameters: only the dry stem, its role (`ROLES`, with a person's kit's role from the score's `sound`), the
+rate and the song's length. So the cache now keeps that instead of the dry stem (`cache.Cached`: `render`'s
+maker for each keyed stem; `mixing.mix_made` asks it for `treated(...)`, kept under the dry key with the role,
+length and rate): an instrument as its (span, samples), the lead whole. What does read them — the balance and
+trim, a person's sidechain (`design.pump`), the lead's rise with the arrangement and its activity — is done
+afterwards on the copy the cache gives, the same operations in the same order. A stem is kept one way only,
+never dry and treated both, so the budget holds what it did (an instrument only where it sounds, a little
+less); admission, the cost per byte (now synthesis and treatment) and an edited part replacing its older take
+are as before. Choir parts and a lead of several voices are still kept dry: their buses are summed first, and
+the choir's width reads the mix.
+
+`preview_bench.mjs --cache-mib 128` on a 4-core cloud container, before and after: the same ids (initial
+`14ec579ee295…`, mix edit `f0bf9568c2ea…`, the original again `14ec579ee295…`); the mix edit 3.13 and 2.90 s
+before, 2.41–2.45 s after, the original again 2.68–3.12 s before, 2.26–2.48 s after; renderer heap 464 MiB
+both. Native H keeps its golden (tests/test_styles.py, tests/test_determinism.py), and tests/test_stem_cache.py
+checks that a cached mix with a sidechain and a lift matches an uncached one, edit after edit, and that the
+cache holds the treated stems and not the dry ones.
