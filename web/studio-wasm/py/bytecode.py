@@ -31,7 +31,7 @@ STDLIB = f"/lib/python{sys.version_info[0]}{sys.version_info[1]}.zip"  # where P
 GROUPS = {"app": PREFIX + "/app", "site": PREFIX + "/lib"}  # the program (with the bundle), and Pyodide's packages
 CHECKED = (0b11).to_bytes(4, "little")  # a pyc's flags: hash-based, its source checked
 
-_known: set[str] = set()  # the pyc files this worker started with, or has handed back
+_known: dict[str, tuple[int, int]] = {}  # the pyc files this worker started with or has handed back: size, time
 _stdlib: dict[str, bytes] = {}  # standard library modules compiled since (their names in the zip: the pyc's bytes)
 _stdlib_given = 0  # how many of them kept() has handed back (each archive holds them all)
 
@@ -42,13 +42,21 @@ def start() -> None:
     os.makedirs(PREFIX, exist_ok=True)  # (import makes a missing top folder relative to the working one, and fails)
     sys.pycache_prefix = PREFIX
     sys.dont_write_bytecode = False
-    _known.update(_files(PREFIX))
+    _known.update(_marks(_files(PREFIX)))
 
 
 def _files(root: str) -> list[str]:
     out = []
     for folder, _, names in os.walk(root):
         out.extend(os.path.join(folder, n) for n in names if n.endswith(".pyc"))
+    return out
+
+
+def _marks(paths: list[str]) -> dict[str, tuple[int, int]]:
+    out = {}
+    for p in paths:
+        st = os.stat(p)
+        out[p] = (st.st_size, st.st_mtime_ns)
     return out
 
 
@@ -86,7 +94,8 @@ def stdlib_step(seconds: float = 0.05) -> int:
 
 def new() -> bool:
     """Whether this worker has compiled anything since it started (or last handed it back)."""
-    return len(_stdlib) > _stdlib_given or any(p not in _known for p in _files(PREFIX))
+    return len(_stdlib) > _stdlib_given or any(_known.get(p) != m for root in GROUPS.values()
+                                               for p, m in _marks(_files(root)).items())
 
 
 def _checked(pyc: str) -> None:
@@ -111,7 +120,7 @@ def kept(folder: str) -> dict[str, str]:
     out = {}
     for group, root in GROUPS.items():
         files = _files(root)
-        if all(p in _known for p in files):
+        if all(_known.get(p) == m for p, m in _marks(files).items()):
             continue
         path = os.path.join(folder, f"{group}.zip")
         with zipfile.ZipFile(path, "w", zipfile.ZIP_DEFLATED, compresslevel=1) as z:
@@ -121,7 +130,7 @@ def kept(folder: str) -> dict[str, str]:
                 except OSError:  # its source gone (a file the worker wrote and removed): not kept
                     continue
                 z.write(pyc, pyc.lstrip("/"))
-        _known.update(files)
+        _known.update(_marks(files))
         out[group] = path
     if len(_stdlib) > _stdlib_given:
         path = os.path.join(folder, "stdlib.zip")
