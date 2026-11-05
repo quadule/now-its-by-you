@@ -222,6 +222,17 @@
     actions.append(section.save, discard);
     details.append(summary, hint, lines, actions, status);
     section.hint = hint;  // kept: the score's line state moves it out of the details
+    // how a line is written, shown beside the fields (the score's Page): an example of each mark and what it does
+    const legend = node("p", "author-legend");
+    legend.append(node("span", "", "One syllable a note."));
+    for (const [mark, does] of [["car-ry", "two notes"], ["*heart*", "leaned on"], ["bass{base}", "said like “base”"]]) {
+      const item = node("span");
+      item.append(node("code", "", mark), ` ${does}`);
+      legend.append(item);
+    }
+    legend.title = STARS;
+    section.legend = legend;
+    section.actions = actions;
     return section;
   }
   function rowFor(section, p, index, label) {
@@ -306,6 +317,38 @@
     if (focus?.path === p.lyric_path) { row.input.focus({preventScroll: true}); row.input.setSelectionRange(focus.start, focus.end); focus = null; }
     return true;
   }
+  // A section's lines, all of them, where the section stands on the score's Page: a field for each line, the legend
+  // of how a line is written, and Use and Discard for the lot. The nodes are kept, so typing survives a redraw.
+  function whole(view, sectionId, anchor) {
+    const s = (view.composition?.sections || []).find((x) => x.id === sectionId);
+    if (!s || !s.phrases.some((p) => p.lyric_path)) return false;
+    useTable(view.composition?.say);
+    capture();
+    let section = sections.get(s.id);
+    if (!section) { section = makeSection(s); sections.set(s.id, section); }
+    section.label = s.label;
+    // the lines of the words sung here now: a field kept for other words (another verse chosen) goes
+    const sung = new Set(s.phrases.map((p) => p.lyric_path).filter(Boolean));
+    for (const [path, row] of section.rows) if (!sung.has(path)) { row.wrap.remove(); section.rows.delete(path); }
+    for (const [index, p] of s.phrases.entries()) {
+      if (!p.lyric_path) continue;
+      const row = rowFor(section, p, index, s.label);
+      section.lines.append(row.wrap);
+      if (!row.fits) {  // a field as tall as its line
+        row.fits = () => { row.input.style.height = "auto"; row.input.style.height = `${row.input.scrollHeight}px`; };
+        row.input.rows = 1;
+        row.input.addEventListener("input", row.fits);
+      }
+      if (typeof requestAnimationFrame === "function") requestAnimationFrame(row.fits);
+    }
+    anchor.append(section.lines, section.legend, section.actions, section.status);
+    if (focus) {
+      const input = [...section.rows.values()].map((row) => row.input).find((item) => item.dataset.lyricPath === focus.path);
+      if (input) { input.focus({preventScroll: true}); input.setSelectionRange(focus.start, focus.end); }
+      focus = null;
+    }
+    return true;
+  }
   function decorate(view, parent) {
     useTable(view.composition?.say);
     for (const s of view.composition?.sections || []) {
@@ -326,5 +369,5 @@
       focus = null;
     }
   }
-  window.SongbirdAuthor = {capture, decorate, line, say: {useTable, choices, decide, bare, syllables}};
+  window.SongbirdAuthor = {capture, decorate, line, whole, say: {useTable, choices, decide, bare, syllables}};
 })();

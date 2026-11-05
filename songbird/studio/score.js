@@ -102,14 +102,11 @@
   }
   // a section's words, to edit: the Page, scrolled to it, the field of its first line that can be written, ready
   function editWords(id, line = null) {
-    const s = sectionAt(id), phrases = state.view?.composition?.sections?.find((x) => x.id === id)?.phrases || [];
-    const j = line ?? phrases.findIndex((p) => p.lyric_path);
-    if (!s || j < 0 || !phrases[j]?.lyric_path) return false;
+    const s = sectionAt(id);
+    if (!s || !(state.view?.composition?.sections?.find((x) => x.id === id)?.phrases || []).some((p) => p.lyric_path)) return false;
     showView("page");
-    select({ kind: "line", id, line: j });
+    write(id, line);
     $(`sec-${s.index}`)?.scrollIntoView?.({ block: "start", behavior: "smooth" });
-    $("page").querySelector(".lyric-author textarea")?.focus({ preventScroll: true });
-    say(`${s.label}, line ${j + 1}: write it here`);
     return true;
   }
   const canWrite = (id) => (state.view?.composition?.sections?.find((x) => x.id === id)?.phrases || []).some((p) => p.lyric_path);
@@ -275,13 +272,12 @@
     keepFocus(() => box.replaceChildren(...v.words.map(pageSection)));
   }
   // A section's words to choose from, as a list to read: each choice's first lines, the one sung marked, the ones
-  // the song refuses here greyed with why. `write`, if given, heads the list: the way into writing a line.
-  function pickList(name, items, current, pick, { write = null, stale = false } = {}) {
+  // the song refuses here greyed with why.
+  function pickList(name, items, current, pick) {
     const text = (line) => String(line || "").replace(/\*/g, "");
     const list = h("div", { class: "picklist", role: "group", "aria-label": name },
-      write ? h("button", { class: "pick-item write", type: "button", onclick: write }, "Write your own") : null,
       items.map((c) => h("button", { class: `pick-item${c.id === current ? " on" : ""}`, type: "button", "aria-pressed": String(c.id === current),
-        disabled: stale || c.allowed === false, title: c.allowed === false ? c.why || "Not here" : c.lines.map(text).join("\n"),
+        disabled: c.allowed === false, title: c.allowed === false ? c.why || "Not here" : c.lines.map(text).join("\n"),
         onclick: () => { if (c.id !== current) pick(c.id); } },
       h("span", {}, text(c.lines[0] || c.id)), c.lines[1] ? h("span", { class: "more" }, text(c.lines[1])) : null)));
     // the one sung, in view when the list is drawn (the list's own scroll, never the page's)
@@ -290,49 +286,65 @@
   }
   // how many ways a section's words can go here (its verses, or a refrain's couplets and openings)
   const choicesHere = (o) => Math.max(o.choices.filter((c) => c.allowed !== false).length, (o.heads || []).filter((c) => c.allowed !== false).length);
-  const LIST = () => { const x = h("span", { class: "list-icon", "aria-hidden": "true" }); x.innerHTML = '<svg viewBox="0 0 20 20"><path d="M4 6h12M4 10h12M4 14h12"/></svg>'; return x; };
+  const PENCIL = () => { const x = h("span", { class: "pencil", "aria-hidden": "true" }); x.innerHTML = '<svg viewBox="0 0 20 20"><path d="M4 16l1-4 9-9 3 3-9 9z"/><path d="M12.5 4.5l3 3"/></svg>'; return x; };
+  // The Page has one way to change a section's words, where they stand: Edit (or a click on a line) turns its
+  // lines into fields, with the words that can be swapped and the other verses to sing under them; Done closes it.
+  function write(sid, line = null) {
+    S.writing = sid;
+    renderPage();
+    if (!sid) return;
+    const phrases = state.view?.composition?.sections?.find((x) => x.id === sid)?.phrases || [];
+    const p = phrases[line ?? 0]?.lyric_path ? phrases[line ?? 0] : phrases.find((q) => q.lyric_path);
+    if (p) document.getElementById(`author-${p.lyric_path}`)?.focus({ preventScroll: true });
+  }
   function pageSection(w) {
     const v = state.view, o = state.optionsByKey[`${w.block}.${w.nth}`];
-    const sid = v.composition?.sections?.find((s) => s.index === w.index)?.id || `${w.name}:${w.nth}`;
+    const section = v.composition?.sections?.find((s) => s.index === w.index);
+    const sid = section?.id || `${w.name}:${w.nth}`;
     const chosen = S.sel && ["section", "line"].includes(S.sel.kind) && S.sel.id === sid;
     const ready = v.listen.ready.includes(v.listen.sections[w.index]);
     const arranged = S.grid && [...S.grid.cells.values()].some((c) => c.section === sid && (c.by === "you" || c.locked));
-    const allAuthored = (w.authored || []).length >= w.lines.length;
+    const writable = w.sung && ((section?.phrases || []).some((p) => p.lyric_path) || (o && choicesHere(o) > 1));
+    const writing = writable && S.writing === sid;
     const head = h("div", { class: "sec-head" },
       h("button", { class: "rub", type: "button", "data-key": `rub:${sid}`, "aria-pressed": String(chosen && S.sel.kind === "section"),
         title: [w.sung ? (w.mine ? "your words" : w.how) : null, w.note].filter(Boolean).join(": ") || null, onclick: () => select({ kind: "section", id: sid }) },
       h("span", { class: `rubric${w.mine ? " hand" : ""}` }, w.label)),
-      o && w.sung && !allAuthored && choicesHere(o) > 1 ? h("button", { class: "listbtn", type: "button", "aria-label": `${w.label}: choose its words, from ${choicesHere(o)}`,
-        title: "Choose its words", onclick: () => select({ kind: "section", id: sid }) }, LIST(), String(choicesHere(o))) : null,
+      !writable ? null : writing ? h("button", { class: "editbtn on", type: "button", "data-focus": `${sid}.edit`, onclick: () => write(null) }, "Done")
+        : h("button", { class: "editbtn", type: "button", "data-focus": `${sid}.edit`, "aria-label": `Edit ${w.label}'s words`, onclick: () => write(sid) }, PENCIL(), "Edit"),
       h("span", { class: "sectools" }, h("button", { class: `play${ready ? " ready" : ""}`, type: "button", "aria-label": `Hear ${w.label}, sung`,
         title: ready ? "ready to play" : "sung (it will be made first)", onclick: () => { setHow("sung", false); listen("you", w.index); } }, playIcon())));
     let body;
-    if (o && w.sung) {
-      body = inlineLyrics(w, o);
-      [...body.querySelectorAll("p")].forEach((p, j) => {
+    if (writing) body = writingBody(w, o, sid);
+    else {
+      body = o && w.sung ? inlineLyrics(w, o) : lines(w.lines);
+      // read, the words are plain text: the ones with alternatives are swapped while editing
+      for (const select of [...body.querySelectorAll("select.lyric-select")]) select.replaceWith(h("span", { class: select.classList.contains("focus") ? "focus" : null }, select.options[select.selectedIndex]?.textContent || ""));
+      body.querySelector(".lyric-fallbacks")?.remove();
+      if (writable) [...body.querySelectorAll("p")].forEach((p, j) => {
         p.classList.add("pick");
-        p.title = "Write this line";
-        p.addEventListener("click", (e) => { if (!e.target.closest("button, select")) select({ kind: "line", id: sid, line: j }); });
-        if (S.sel?.kind === "line" && S.sel.id === sid && S.sel.line === j) writeHere(p, sid, j);
+        p.title = "Edit";
+        p.addEventListener("click", () => write(sid, j));
       });
-    } else body = lines(w.lines);
-    return h("div", { class: `sec${w.sung ? "" : " instrumental"}${w.mine || (!w.sung && arranged) ? " mine" : ""}${chosen ? " selected" : ""}`, id: `sec-${w.index}` }, head, body);
+    }
+    return h("div", { class: `sec${w.sung ? "" : " instrumental"}${w.mine || (!w.sung && arranged) ? " mine" : ""}${chosen ? " selected" : ""}${writing ? " is-writing" : ""}`, id: `sec-${w.index}` }, head, body);
   }
-  // The selected line, written where it stands: its field takes the line's place (author.js keeps the field, so
-  // typing survives a redraw); a line used, the next one opens
-  function writeHere(p, sid, j) {
-    const phrases = state.view.composition?.sections?.find((x) => x.id === sid)?.phrases || [];
-    const anchor = h("div", { class: "lyric-author" });
-    const next = () => {
-      const k = phrases.findIndex((q, n) => n > j && q.lyric_path);
-      if (k < 0 || S.sel?.kind !== "line" || S.sel.id !== sid || S.sel.line !== j) return;
-      select({ kind: "line", id: sid, line: k });
-      $("page").querySelector(".lyric-author textarea")?.focus({ preventScroll: true });
-    };
-    if (!window.SongbirdAuthor?.line(state.view, sid, j, anchor, { next })) return;
-    p.classList.add("selected");
-    p.hidden = true;
-    p.after(anchor);
+  // A section being edited: its lines as fields (author.js), then each word that can be swapped as a row of its
+  // alternatives, then the other verses (a refrain's openings and couplets) as lists to read and choose from
+  function writingBody(w, o, sid) {
+    const fields = h("div", { class: "lyric-author" });
+    const typed = window.SongbirdAuthor?.whole(state.view, sid, fields);
+    const allAuthored = (w.authored || []).length >= w.lines.length;
+    const text = (slot, value) => String(slot.labels?.[value] || value).replace(/[*-]/g, "");
+    const swaps = o && !allAuthored ? (o.words || []).filter((slot) => slot.options.length > 1).map((slot) =>
+      chipRow("", slot.options.map((value) => ({ value, text: text(slot, value) })), slot.sung, (value) => chooseSlot(o, slot.slot, value), false,
+        { aria: `${w.label}: ${text(slot, slot.sung)} or another` })) : [];
+    const name = o ? { verse: "Verses", refrain: "Couplets", bridge: "Stanzas", tag: "Syllables" }[o.block] || "Phrases" : "";
+    const heads = o && !allAuthored && (o.heads || []).length > 1 ? [h("div", { class: "listname" }, "Openings"), pickList("Openings", o.heads, o.head, (id) => {
+      const edit = refrainEdit(o); delete edit.slots; edit.head = id; setEdit(o.path, edit, "Change refrain opening"); })] : [];
+    const phrases = o && !allAuthored && o.choices.length > 1 ? [h("div", { class: "listname" }, name), pickList(name, o.choices, o.sung, (id) => setEdit(o.path,
+      o.block === "verse" ? { id } : o.block === "refrain" ? Object.assign(refrainEdit(o), { id }) : id, `Choose ${w.label.toLowerCase()}'s words`))] : [];
+    return h("div", { class: "writing" }, typed ? fields : lines(w.lines), swaps.length ? h("div", { class: "swaps" }, swaps) : null, heads, phrases);
   }
 
   // ------------------------------------------------------------------ Arrange: the grid, from /api/arrangement and /api/sound
@@ -838,15 +850,6 @@
     const writable = phrases.some((p) => p.lyric_path);
     const allAuthored = w && (w.authored || []).length >= w.lines.length;
     const rules = o && w.sung && !allAuthored ? chooser(w, o) : null;
-    // its words to choose from, each list named where there are two; writing your own heads the first
-    const phraseName = o ? { verse: "Verse", refrain: "Couplet", bridge: "Stanza", tag: "Syllable" }[o.block] || "Phrase" : "";
-    const write = writable ? () => editWords(s.id) : null;
-    const headList = o && w.sung && !allAuthored && (o.heads || []).length > 1 ? pickList("Opening", o.heads, o.head, (id) => {
-      const edit = refrainEdit(o); delete edit.slots; edit.head = id; setEdit(o.path, edit, "Change refrain opening"); }, { write, stale }) : null;
-    const phraseList = o && w.sung && !allAuthored && o.choices.length > 1 ? pickList(phraseName, o.choices, o.sung, (id) => setEdit(o.path,
-      o.block === "verse" ? { id } : o.block === "refrain" ? Object.assign(refrainEdit(o), { id }) : id, `Choose ${w.label.toLowerCase()} ${phraseName.toLowerCase()}`),
-      { write: headList ? null : write, stale }) : null;
-    const lists = [headList && phraseList ? h("h4", {}, "Opening") : null, headList, headList && phraseList ? h("h4", {}, phraseName) : null, phraseList].filter(Boolean);
     if (rules) rules.querySelector("summary").textContent = "Refused here, and why";
     const options = s.options.map((opt) => optionRow(opt));
     const release = () => {
@@ -862,9 +865,8 @@
       problems: s.problems,
       body: h("div", {},
         h("div", { class: "row edit-it" },  // the ways into the section's own material, first
-          writable && !lists.length ? h("button", { class: "btn", type: "button", onclick: () => editWords(s.id), title: "A line's field, where the line stands on the Page" }, "Write your own") : null,
+          writable ? h("button", { class: "btn", type: "button", onclick: () => editWords(s.id), title: "Its words, edited where they stand on the Page" }, "Edit its words") : null,
           h("button", { class: "btn", type: "button", onclick: () => openNotes(s.id, true), title: "Its tune and chords, under the grid (Enter, or double-click the section)" }, "Edit its notes")),
-        lists,
         // every length drawn, the ones this section can't have disabled: a drop's shorter lengths don't push the rows
         chipRow("Length", [...new Set([2, 4, 8, 16, ...s.barOptions])].sort((a, b) => a - b).map((n) => ({ value: n, text: `${n} bars`,
           disabled: !s.barOptions.includes(n), title: s.barOptions.includes(n) ? null : s.sung ? "A sung section is as long as its lines; played, it can be shorter" : "Not this section's" })),
@@ -1281,6 +1283,7 @@
     if (!$("finishPanel").hidden) { openTools(false); return true; }
     if (!$("drawer").hidden) { openTime(false); return true; }
     if (S.open) { closeNotes(); return true; }
+    if (S.writing) { write(null); return true; }
     if (S.sel) { select(null); return true; }
     if (S.songShown) { S.songShown = false; renderInspector(); return true; }
     return false;

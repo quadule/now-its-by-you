@@ -120,11 +120,13 @@ The score's page, in short (songbird/studio/score.js draws it):
 - **The transport** has play, Sketch or Sung, loop, click, the tempo as a number field (a whole number in the
   style's range; a Reset beside it when the tempo is yours), the key, New performance, undo, redo, Export and
   Tools.
-- **Page** is the words. A section's name is followed by a list button and how many ways its words can go;
-  selecting the section lists them in the column (each choice's first two lines, the one sung marked, the ones
-  the song refuses there greyed with why), with *Write your own* at the head of the list. A refrain has a list
-  for its opening and one for its couplet. Clicking a line opens its field in the line's place, with its
-  syllable count, *Use this line* and *Discard typing*. A word with alternatives is a menu at the word.
+- **Page** is the words, read as plain text. A sung section's name is followed by **Edit** (a click on a line
+  does the same), which turns its lines into fields where they stand: each line as it is written (`car-ry`,
+  `*heart*`, `bass{base}`, with a legend of the three under the fields), its syllable count beside it, and *Use
+  these lines* and *Discard typing* for the lot. Under them, each word with alternatives is a row of them to
+  press, and the other verses (a refrain's openings and couplets) are lists to read and choose from, the one
+  sung marked, the ones the song refuses there greyed with why. *Done* closes it. The column has no part in a
+  section's words.
 - **Arrange** and **Mix** are as described below; in both, the voice has mute and solo like a player
   (`mix.voices`).
 - **The column** shows whatever is selected. With nothing selected it lists this version, a row each: Style,
