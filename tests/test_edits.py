@@ -41,6 +41,11 @@ def test_each_edit_takes_its_place_within_bounds():
     assert p.seed == E.rolled(plain.seed, 1) != plain.seed
     assert set(o.applied) == {"tempo", "tonic", "mode", "band.pattern", "band.lead", "band.density", "band.drum",
                               "mix.space", "mix.forward", "roll"}
+    # the singers muted (Mix's M on the voice): a mix setting like the others, absent from a version that sings
+    muted = choose_params(g, None, ADA, DAY, overrides=E.Overrides(g, E.check(g, {"mix.voices": 0})[0]))
+    assert muted.mix["voices"] == 0 and "voices" not in plain.mix
+    assert {k: v for k, v in muted.mix.items() if k != "voices"} == plain.mix
+    assert E.bounds(g)["mix.voices"]["song"] == 1.0
     # everything not edited is the program's own
     same = {k: v for k, v in plain.to_dict().items() if k not in ("tempo", "tonic", "mode", "band", "mix", "seed", "leanings")}
     # the learned singer's blend follows where the song sits, so a new key may bring other singers into it
@@ -295,7 +300,7 @@ def test_a_place_this_version_doesnt_sing_is_said_and_an_inherited_one_waits():
 
 
 def test_was_is_the_programs_own_for_the_style_and_shape_the_person_chose():
-    """docs/STUDIO-EDM-TEST.md, second attempt, bug 7: after the style changed, a tempo's "was" is that style's
+    """docs/history/STUDIO-EDM-TEST.md, second attempt, bug 7: after the style changed, a tempo's "was" is that style's
     tempo, not the one it replaced; a player sat out was playing in that style; the order was the program's for
     the shape chosen (bug 4: not the song's first order, so a region isn't called moved when only the shape
     changed)."""

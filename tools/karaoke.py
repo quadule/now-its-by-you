@@ -14,7 +14,7 @@ tracked by git, tools/takes.py), and each singer's takes become that
 singer's phrasing (tools/phrasing.py), so several people can sing without
 blending into one another. Then hear the machine sing the song one person's
 way, or everyone's way at once, with the other singers in the lineage choir.
-The same page, for singers anywhere, is web/sing (docs/SING-ONLINE.md).
+The same page, for singers anywhere, is web/sing (docs/history/SING-ONLINE.md).
 
 A singer can also choose a spec (tools/guides.py): a set of the song's words,
 a key and a speed, each with its own guide, rendered the first time it's asked

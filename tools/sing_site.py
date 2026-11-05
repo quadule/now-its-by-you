@@ -3,16 +3,19 @@
     uv run python tools/sing_site.py                                          # H, every spec, into web/sing/public
     uv run python tools/sing_site.py --sets a --keys 0,-2 --tempos 100        # only these specs
     uv run python tools/sing_site.py songs/h-now-its-by-you.json --rebuild    # render every guide again first
-    cd web/sing && npx wrangler deploy                                        # then publish it (docs/SING-ONLINE.md)
+    uv run python tools/sing_site.py --pages                                  # only the pages (the home page, history), keeping the guides
+    cd web/sing && npx wrangler deploy                                        # then publish it (docs/HOME-PAGE.md)
 
 What it writes, all served by web/sing/src/worker.js:
 
     index.html, sing.css, sing.js...  the pages (web/sing/page/), with the releases in them: for recording
                                       (web/sing/consent.md) and for words people send (words-release.md);
                                       and the seed page's cover.jpg and seed.js
-    seed/now-its-by-you.flac          the seed page's file (seed_source(), with the song's cover embedded:
-                                      pack.with_cover, the same audio, packet and id), and seed/words.json its words
+    seed/now-its-by-you.flac          the seed page's file: the current edition's (the newest in web/sing/editions.json
+                                      whose render is here: seed_source()), with the song's cover embedded
+                                      (pack.with_cover: the same audio, packet and id), and seed/words.json its words
                                       as it sang them, timed (seed_words()), shown as it plays
+    seed/now-its-by-you-<date>.flac   every edition's file, as /history (history.html) offers them, newest first
     karaoke.js, recorder.js           the timing core they share with the karaoke here (tools/karaoke.js)
     song/song.json                    what's on offer (v2): the sets, keys and speeds, and for every spec
                                       its guide score's digest, its words' file, and each mix's MP3 and
@@ -58,10 +61,10 @@ import hashlib
 import html
 import json
 import multiprocessing
+import os
 import re
 import shutil
 import subprocess
-import os
 import sys
 import time
 import warnings
@@ -197,6 +200,7 @@ def encode(wav: Path, mp3: Path, bitrate: str = BITRATE) -> dict:
 
 
 PREVIEW_BITRATE = "256k"  # the song as it stands, in stereo: about 4.8 MB for two and a half minutes (128k fluttered on held vowels turned up)
+LISTENING = "A listening copy. The FLAC it was made from is also the program that sang it."
 
 
 def preview_mp3(flac: Path, mp3: Path) -> dict:
@@ -206,7 +210,9 @@ def preview_mp3(flac: Path, mp3: Path) -> dict:
     if not flac.exists():
         raise SystemExit(f"{flac} doesn't exist: render it first (tools/everyone.py --render {flac})")
     mp3.parent.mkdir(parents=True, exist_ok=True)
-    ffmpeg("-y", "-i", str(flac), "-vn", "-ac", "2", "-codec:a", "libmp3lame", "-b:a", PREVIEW_BITRATE, str(mp3))
+    # its own comment: the FLAC's says the file is also the program, which an MP3 isn't
+    ffmpeg("-y", "-i", str(flac), "-vn", "-ac", "2", "-codec:a", "libmp3lame", "-b:a", PREVIEW_BITRATE,
+           "-metadata", f"comment={LISTENING}", str(mp3))
     data = mp3.read_bytes()
     out = {"file": mp3.name, "bytes": len(data), "digest": hashlib.sha256(data).hexdigest()[:12],
            "seconds": round(len(decode(mp3, 44100)) / 44100, 1)}
@@ -329,32 +335,8 @@ def build(genome_path: Path, out: Path, rebuild: bool = False, bitrate: str = BI
     clear(out)
     (out / "song").mkdir()
 
-    texts = {name: consent_html((WEB / f"{name}.md").read_text()) for name in ("consent", "words-release")
-             if (WEB / f"{name}.md").exists()}
-    if "words-release" not in texts:
-        raise SystemExit("web/sing/words-release.md is missing: the page asks people to agree to it before sending words")
+    texts = pages(out)
     agreed, words = digest(texts["consent"]), digest(texts["words-release"])
-    fill = {"{{CONSENT_DIGEST}}": agreed, "{{CONSENT}}": texts["consent"],
-            "{{WORDS_DIGEST}}": words, "{{WORDS_RELEASE}}": texts["words-release"]}
-    page = (WEB / "page" / "index.html").read_text()
-    if "{{CONSENT}}" not in page or "{{CONSENT_DIGEST}}" not in page:
-        raise SystemExit("web/sing/page/index.html has lost its {{CONSENT}} or {{CONSENT_DIGEST}}")
-    for f in sorted((WEB / "page").iterdir()):  # the pages with the releases in them, and what they load
-        if f.is_file() and not f.name.startswith("."):
-            if f.suffix == ".html":
-                text = f.read_text()
-                for mark, value in fill.items():
-                    text = text.replace(mark, value)
-                (out / f.name).write_text(text)
-            else:
-                shutil.copyfile(f, out / f.name)
-    shutil.copyfile(ROOT / "tools" / "karaoke.js", out / "karaoke.js")
-    shutil.copyfile(ROOT / "tools" / "karaoke-recorder.js", out / "recorder.js")
-    seed_page(out)
-    versioned(out)
-    (out / "robots.txt").write_text("User-agent: *\nDisallow: /\n")
-    (out / "favicon.svg").write_text(FAVICON)
-    (out / "_headers").write_text(HEADERS)
     # each release as people read it, kept by the digest their takes and words carry
     K.GUIDES.mkdir(parents=True, exist_ok=True)
     (K.GUIDES / f"release.{agreed}.html").write_text(texts["consent"] + "\n")
@@ -434,6 +416,63 @@ def build(genome_path: Path, out: Path, rebuild: bool = False, bitrate: str = BI
     return song
 
 
+def pages(out: Path) -> dict[str, str]:
+    """Everything in the site but song/: the pages (web/sing/page/) with the releases in them, the seed page with
+    the song's editions (seed_page), each page asking for its scripts and styles by digest, and the small files.
+    The releases' texts, as the page shows them."""
+    texts = {name: consent_html((WEB / f"{name}.md").read_text()) for name in ("consent", "words-release")
+             if (WEB / f"{name}.md").exists()}
+    if "words-release" not in texts:
+        raise SystemExit("web/sing/words-release.md is missing: the page asks people to agree to it before sending words")
+    fill = {"{{CONSENT_DIGEST}}": digest(texts["consent"]), "{{CONSENT}}": texts["consent"],
+            "{{WORDS_DIGEST}}": digest(texts["words-release"]), "{{WORDS_RELEASE}}": texts["words-release"]}
+    page = (WEB / "page" / "index.html").read_text()
+    if "{{CONSENT}}" not in page or "{{CONSENT_DIGEST}}" not in page:
+        raise SystemExit("web/sing/page/index.html has lost its {{CONSENT}} or {{CONSENT_DIGEST}}")
+    for f in sorted((WEB / "page").iterdir()):  # the pages with the releases in them, and what they load
+        if f.is_file() and not f.name.startswith("."):
+            if f.suffix == ".html":
+                text = f.read_text()
+                for mark, value in fill.items():
+                    text = text.replace(mark, value)
+                (out / f.name).write_text(text)
+            else:
+                shutil.copyfile(f, out / f.name)
+    shutil.copyfile(ROOT / "tools" / "karaoke.js", out / "karaoke.js")
+    shutil.copyfile(ROOT / "tools" / "karaoke-recorder.js", out / "recorder.js")
+    seed_page(out)
+    versioned(out)
+    (out / "robots.txt").write_text("User-agent: *\nDisallow: /\n")
+    (out / "favicon.svg").write_text(FAVICON)
+    (out / "_headers").write_text(HEADERS)
+    return texts
+
+
+def pages_only(out: Path) -> None:
+    """The pages again over the site as it was last built, its guides (song/) and all kept: the home page and the
+    history change without rendering a guide (singing moved to the studio on September 30, 2026, so the guides only
+    serve singers' own pages). Built beside it and put in its place whole, like build()."""
+    final = Path(out)
+    if not (final / MARK).exists():
+        raise SystemExit(f"{final} isn't a site this tool built: run a whole build first (without --pages)")
+    built = aside(final)
+    shutil.rmtree(built, ignore_errors=True)
+
+    def link(src, dst):  # the guides by hard link, so this takes a moment, not a copy of 450 MB
+        try:
+            os.link(src, dst)
+        except OSError:
+            shutil.copy2(src, dst)
+
+    shutil.copytree(final, built, copy_function=link)
+    for f in built.iterdir():  # every page file is written again; a hard-linked one is let go first, never written through
+        if f.is_file() and not f.name.startswith("."):  # (the build's marks stay)
+            f.unlink()
+    shutil.rmtree(built / "seed", ignore_errors=True)
+    pages(built)
+    publish(built, final)
+
+
 def aside(out: Path) -> Path:
     """Where a site is built before it takes out's place: beside it, where wrangler never looks."""
     return out.with_name(out.name + ".next")
@@ -487,50 +526,215 @@ def earlier(song: str, title: str, now: dict[str, tuple[str, list]]) -> dict[str
 
 
 SEED_FILE = "now-its-by-you.flac"  # the seed page's file name (web/sing/src/worker.js SEED_FILE serves exactly this)
+EDITIONS = WEB / "editions.json"  # the song's editions: the seed page offers the newest, /history every one
+SOURCE = "https://github.com/quadule/songbird"  # the source code, linked from the pages once SOURCE_PUBLIC
+SOURCE_PUBLIC = False  # True once the repository is public: the home page links it, the history each edition's commit
+CREDITS = ROOT / "CREDITS.md"  # the singers credited as they asked, named on the home page (credits())
+HEX64 = re.compile(r"[0-9a-f]{64}")
+MONTHS = ("January", "February", "March", "April", "May", "June", "July", "August", "September", "October",
+          "November", "December")
 
 
-def seed_source() -> Path | None:
-    """The render the seed page offers, and the page's preview unless --preview says otherwise: $SONGBIRD_SEED,
-    else renders/review/contest.flac, else the newest FLAC in renders/review/; None without any."""
-    chosen = os.environ.get("SONGBIRD_SEED")
-    path = Path(chosen) if chosen else ROOT / "renders" / "review" / "contest.flac"
-    if path.exists():
-        return path
-    candidates = sorted((ROOT / "renders" / "review").glob("*.flac"), key=lambda f: f.stat().st_mtime)
-    return candidates[-1] if candidates else None
+def credits(path: Path | None = None) -> str:
+    """The singers CREDITS.md credits, for the seed page, in its own words: "Credited, as they asked:", their names
+    in a sentence, then what it says after them. It names no one else, and neither does this."""
+    path = Path(path or CREDITS)
+    m = re.search(r"^(Credited, as they asked:)[ \t]*\n+((?:- .+\n?)+)\n*([^\n#].*)?", path.read_text(), re.MULTILINE)
+    if not m:
+        raise SystemExit(f"{path} no longer lists its singers under \"Credited, as they asked:\": "
+                         "tools/sing_site.py's credits() needs telling")
+    names = [html.escape(line[2:].strip()) for line in m[2].splitlines() if line.strip()]
+    listed = f"{', '.join(names[:-1])} and {names[-1]}" if len(names) > 1 else names[0]
+    return f"{m[1]} {listed}." + (f" {html.escape(m[3].strip())}" if m[3] else "")
 
 
-def seed_page(out: Path) -> None:
-    """The public seed page (/seed, and the root of now.itsby.you): web/sing/page/seed.html with the song's file
-    beside it in public/seed/, and its words as sung, timed (seed_words), for the page to show as it plays. The
-    file is $SONGBIRD_SEED, else renders/review/contest.flac, else the newest packed render in renders/review/;
-    without any, the page still builds and says so (and shows no words)."""
-    path = seed_source()
-    (out / "seed").mkdir(exist_ok=True)
-    page = (out / "seed.html").read_text()
-    if path is None:
-        print("seed page: no render to offer (renders/review/*.flac); the page is built without a file", file=sys.stderr)
-        mb, words = "0", ""
+def us_date(day: dt.date) -> str:
+    """A date as people here read it: September 28, 2026 (whatever the machine's locale)."""
+    return f"{MONTHS[day.month - 1]} {day.day}, {day.year}"
+
+
+def sha256(path: Path) -> str:
+    h = hashlib.sha256()
+    with open(path, "rb") as f:
+        for block in iter(lambda: f.read(1 << 20), b""):
+            h.update(block)
+    return h.hexdigest()
+
+
+def editions(path: Path | None = None) -> list[dict]:
+    """The song's editions (web/sing/editions.json), newest first, each as written and with: its id (the start
+    of its audio id), its day (a date), its number (the oldest is 1), the name it's served under in seed/
+    (now-its-by-you-<date>.flac), and where this checkout has its bytes: "kept" (file.path, the released file
+    itself) or "render" (render.path, made into it with the cover), each None if it isn't here. A manifest
+    that's wrong stops the build: a field missing or malformed, an audio id or a date twice."""
+    path = Path(path or EDITIONS)
+    listed = json.loads(path.read_text()).get("editions") or []
+    if not listed:
+        raise SystemExit(f"{path} lists no editions: the seed page offers the newest")
+
+    def here(p) -> Path | None:
+        if not isinstance(p, str) or not p:
+            return None
+        p = Path(p) if Path(p).is_absolute() else ROOT / p
+        return p if p.is_file() else None
+
+    out, ids, days = [], set(), set()
+    for n, e in enumerate(listed, 1):
+        file, render, source = (e.get(k) if isinstance(e.get(k), dict) else {} for k in ("file", "render", "source"))
+        wrong = [k for k in ("title", "note") if not isinstance(e.get(k), str) or not e[k].strip()]
+        try:
+            day = dt.date.fromisoformat(str(e.get("date")))
+        except ValueError:
+            day = None
+            wrong.append("date (YYYY-MM-DD)")
+        wrong += [k for k, v in (("audio", e.get("audio")), ("file.sha256", file.get("sha256")), ("program", e.get("program")),
+                                 ("render.sha256", render.get("sha256", "0" * 64)))
+                  if not isinstance(v, str) or not HEX64.fullmatch(v)]
+        if not isinstance(source.get("commit"), str) or not re.fullmatch(r"[0-9a-f]{7,40}", source["commit"]):
+            wrong.append("source.commit")
+        if not isinstance(file.get("bytes"), int) or file["bytes"] <= 0:
+            wrong.append("file.bytes")
+        if not file.get("path") and not render.get("path"):
+            wrong.append("file.path or render.path")
+        if any(not isinstance(a, dict) or not a.get("name") or not str(a.get("url", "")).startswith("https://")
+               for a in e.get("archives") or []):
+            wrong.append("archives (each a name and an https url)")
+        if wrong:
+            raise SystemExit(f"{path}: edition {n} needs {', '.join(wrong)}")
+        if e["audio"][:12] in ids or day in days:
+            raise SystemExit(f"{path}: edition {n}'s audio or date is another's too: each edition is its own")
+        ids.add(e["audio"][:12])
+        days.add(day)
+        out.append({**e, "id": e["audio"][:12], "day": day, "name": f"now-its-by-you-{day.isoformat()}.flac",
+                    "kept": here(file.get("path")), "render": {**render, "found": here(render.get("path"))}})
+    out.sort(key=lambda e: e["day"])
+    for number, e in enumerate(out, 1):
+        e["number"] = number
+    return out[::-1]
+
+
+def seed_source(path: Path | None = None) -> Path | None:
+    """The render the seed page offers, and the singing page's preview unless --preview says otherwise: the
+    current edition's (the newest this checkout has: its released file, else its render); None without any."""
+    for e in editions(path):
+        if e["kept"] or e["render"]["found"]:
+            return e["kept"] or e["render"]["found"]
+    return None
+
+
+def release(e: dict, to: Path) -> None:
+    """An edition's released file, byte for byte: its kept copy as it is, else made from its render with the song's
+    cover (pack.with_cover: the same audio, packet and id). Stops the build if the bytes aren't the ones released
+    (file.sha256 and file.bytes): an edition's bytes never change, since its SHA-256 is its studio link
+    (/v/<sha256[:32]>) and what any archive holds."""
+    from songbird import pack as P
+
+    if e["kept"]:
+        shutil.copyfile(e["kept"], to)
     else:
-        from songbird import pack as P
+        P.with_cover(e["render"]["found"], to)
+    made, size = sha256(to), to.stat().st_size
+    if made != e["file"]["sha256"] or size != e["file"]["bytes"]:
+        to.unlink()
+        raise SystemExit(f"edition {e['id']} ({e['title']}) would be {made[:12]}… ({size} bytes), not the "
+                         f"{e['file']['sha256'][:12]}… ({e['file']['bytes']} bytes) released: an edition's bytes never "
+                         "change. Keep the released file and name it as file.path in web/sing/editions.json")
 
-        try:  # the song's cover as its front cover, if the render hasn't it: the same audio, packet and id
-            P.with_cover(path, out / "seed" / SEED_FILE)
-        except ValueError as e:
-            print(f"seed page: the file is offered without the cover ({e})", file=sys.stderr)
-            shutil.copyfile(path, out / "seed" / SEED_FILE)
-        mb = f"{(out / 'seed' / SEED_FILE).stat().st_size / 2**20:.0f}"
-        print(f"seed page: {path.relative_to(ROOT) if path.is_relative_to(ROOT) else path} -> seed/{SEED_FILE} ({mb} MB)")
-        timed, words = seed_words(path), ""
+
+def seed_page(out: Path, path: Path | None = None, public: bool | None = None) -> None:
+    """The public seed page (/seed, and the root of now.itsby.you) and its history (/history): every edition's
+    released file in public/seed/ under its own name (release()), the current one's (the newest this checkout
+    has) as the seed page's file too, with its words as sung, timed (seed_words), for the page to show as it
+    plays; and history.html, every edition newest first (history()). An edition whose bytes aren't here is left
+    out, said; without any, the pages still build and say so (no file, no words). public: link the source code
+    (SOURCE_PUBLIC unless said)."""
+    public = SOURCE_PUBLIC if public is None else public
+    (out / "seed").mkdir(exist_ok=True)
+    offered = []
+    for e in editions(path):
+        if not e["kept"] and not e["render"]["found"]:
+            print(f"seed page: edition {e['id']} ({e['title']}) isn't in this checkout ({e['file'].get('path') or ''}"
+                  f"{e['render'].get('path') or ''}); it's left out", file=sys.stderr)
+            continue
+        release(e, out / "seed" / e["name"])
+        offered.append(e)
+    fill = {"{{SEED_FILE}}": SEED_FILE, "{{SEED_MB}}": "0", "{{SEED_V}}": "", "{{SEED_WORDS}}": "", "{{EDITION}}": "",
+            "{{CREDITS}}": credits(),
+            "{{SOURCE}}": f'<a href="{SOURCE}">The source code</a> is on GitHub. ' if public else ""}
+    if not offered:
+        print("seed page: no edition to offer (web/sing/editions.json); the page is built without a file", file=sys.stderr)
+    else:
+        now = offered[0]
+        shutil.copyfile(out / "seed" / now["name"], out / "seed" / SEED_FILE)
+        fill["{{SEED_MB}}"] = f"{now['file']['bytes'] / 2**20:.0f}"
+        fill["{{SEED_V}}"] = now["id"]  # a new edition's file under the same name, never an old one's from a cache
+        fill["{{EDITION}}"] = (f'{html.escape(now["title"])}, <time datetime="{now["date"]}">{us_date(now["day"])}</time>'
+                               ' · <a href="/history">History</a>')
+        print(f"seed page: edition {now['number']}, {now['id']} -> seed/{SEED_FILE} ({fill['{{SEED_MB}}']} MB); "
+              f"{len(offered)} in its history")
+        timed = seed_words(out / "seed" / SEED_FILE)
         if timed is None:
             print("seed page: the file's words can't be timed (not a packed render, or its score doesn't come out as "
                   "it sang); the page plays it without them", file=sys.stderr)
         else:
             text = json.dumps(timed, separators=(",", ":")) + "\n"
             (out / "seed" / SEED_WORDS).write_text(text)
-            words = f"/seed/{SEED_WORDS}?v={digest(text)}"  # a new render's words, never an old one's from a cache
-    (out / "seed.html").write_text(page.replace("{{SEED_FILE}}", SEED_FILE).replace("{{SEED_MB}}", mb)
-                                   .replace("{{SEED_WORDS}}", words))
+            fill["{{SEED_WORDS}}"] = f"/seed/{SEED_WORDS}?v={digest(text)}"  # a new render's words, never an old one's
+    page = (out / "seed.html").read_text()
+    for mark, value in fill.items():
+        page = page.replace(mark, value)
+    (out / "seed.html").write_text(page)
+    if (out / "history.html").exists():
+        page = (out / "history.html").read_text().replace("{{EDITIONS}}", history(offered, public))
+        (out / "history.html").write_text(page)
+
+
+def history(offered: list[dict], public: bool = False) -> str:
+    """The history page's editions, newest first, numbered (the oldest is 1): each one's title, date and note, a
+    player and its file, the newest marked as the one on the home page; and behind a disclosure, what identifies
+    it (its audio id, the file's SHA-256 and size, as released and as rendered, the program's hash), its source,
+    how it was made, whose singing it carries and where it's archived."""
+    if not offered:
+        return "<p>Nothing yet.</p>"
+    esc = html.escape
+
+    def code(text: str) -> str:
+        return f"<code>{esc(text)}</code>"
+
+    items = []
+    for i, e in enumerate(offered):
+        src, f, r, s = f"/seed/{e['name']}", e["file"], e["render"], e["source"]
+        facts = [("Audio id", code(e["audio"])), ("File SHA-256", f"{code(f['sha256'])} ({f['bytes']:,} bytes)")]
+        if r.get("sha256"):
+            facts.append(("As rendered", f"{code(r['sha256'])} ({r['bytes']:,} bytes), before the cover was added"
+                          if r.get("bytes") else code(r["sha256"])))
+        facts.append(("Program", code(e["program"]) + (f", Python {esc(e['python'])}" if e.get("python") else "")))
+        commit = code(s["commit"][:12])
+        if public:  # its tag too, once the repository (and so the tag) can be seen
+            commit = f'<a href="{SOURCE}/tree/{s["commit"]}">{commit}</a>' + (f", tag {code(s['tag'])}" if s.get("tag") else "")
+        facts.append(("Source", f"commit {commit}"))
+        if e.get("command"):
+            facts.append(("Made with", code(e["command"])))
+        if e.get("credit"):
+            facts.append(("Singing", esc(e["credit"])))
+        if e.get("archives"):
+            facts.append(("Archived", ", ".join(f'<a href="{esc(a["url"])}">{esc(a["name"])}</a>' for a in e["archives"])))
+        listed = "\n        ".join(f"<dt>{k}</dt><dd>{v}</dd>" for k, v in facts)
+        here = ' <span class="badge">on the home page</span>' if i == 0 else ""
+        items.append(f"""<li class="card edition" id="{e['id']}">
+    <h2 id="{e['id']}-title"><span class="n">{e['number']}</span> {esc(e["title"])}</h2>
+    <p class="when"><time datetime="{e["date"]}">{us_date(e["day"])}</time>{here}</p>
+    <p>{esc(e["note"])}</p>
+    <audio controls preload="none" src="{src}"></audio>
+    <p class="hint"><a href="{src}" download>{e["name"]}</a> ({f["bytes"] / 2**20:.0f} MB, FLAC)</p>
+    <details class="facts">
+      <summary>Details</summary>
+      <dl>
+        {listed}
+      </dl>
+    </details>
+  </li>""")
+    return '<ol class="editions" reversed>\n  ' + "\n  ".join(items) + "\n</ol>"
 
 
 SEED_WORDS = "words.json"  # the seed file's words, timed (web/sing/src/worker.js SEED_FILES serves it)
@@ -588,10 +792,10 @@ def versioned(out: Path) -> None:
 
     swap("sing.js", 'from "./karaoke.js"', f'from "./karaoke.js?v={stamp("karaoke.js")}"')
     swap("sing.js", 'addModule("/recorder.js")', f'addModule("/recorder.js?v={stamp("recorder.js")}")')
-    for page in ("index.html", "seed.html", "yours.html"):  # identity.css: the tokens and shared pieces, first
+    for page in ("index.html", "seed.html", "history.html", "yours.html"):  # identity.css: the tokens and shared pieces, first
         swap(page, 'href="/identity.css"', f'href="/identity.css?v={stamp("identity.css")}"')
-    swap("index.html", 'href="/sing.css"', f'href="/sing.css?v={stamp("sing.css")}"')
-    swap("seed.html", 'href="/sing.css"', f'href="/sing.css?v={stamp("sing.css")}"')
+    for page in ("index.html", "seed.html", "history.html"):
+        swap(page, 'href="/sing.css"', f'href="/sing.css?v={stamp("sing.css")}"')
     swap("seed.html", 'src="/seed.js"', f'src="/seed.js?v={stamp("seed.js")}"')
     swap("index.html", 'src="/sing.js"', f'src="/sing.js?v={stamp("sing.js")}"')
     swap("yours.html", 'href="/yours.css"', f'href="/yours.css?v={stamp("yours.css")}"')
@@ -644,11 +848,20 @@ def main() -> None:
     ap.add_argument("--bitrate", default=BITRATE, help=f"the full guides' MP3 bitrate (default {BITRATE})")
     ap.add_argument("--melody-bitrate", default=MELODY_BITRATE,
                     help=f"the melody guides' (default {MELODY_BITRATE}; the full guides' if it doesn't decode in time)")
+    ap.add_argument("--pages", action="store_true",
+                    help="build only the pages (the home page, the history, their files) over the site as it was "
+                         "last built, keeping its guides: seconds, not a render")
     ap.add_argument("--keep-wavs", action="store_true",
                     help="keep every spec's rendered mixes for the karaoke here (about 130 MB a spec; else let go once "
                          "encoded, and rendered again when the karaoke asks)")
     args = ap.parse_args()
     out = Path(args.out).resolve()
+    if args.pages:
+        started = time.time()
+        pages_only(out)
+        print(f"{out}: the pages built over the site as it was, in {time.time() - started:.0f} s; "
+              f"publish with: cd web/sing && npx wrangler deploy")
+        return
 
     def listed(text, kind=str):
         return [kind(v) for v in text.split(",") if v.strip()] if text else None

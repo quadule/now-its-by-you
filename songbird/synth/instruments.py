@@ -495,14 +495,3 @@ def band_parts(score: Score, sr: int, seed: int) -> list[tuple[str, Callable[[],
         if any(t["kind"] not in sweeps.SWEEPS for t in design["transitions"]):
             jobs.append(("fx", fx))
     return jobs
-
-
-def render_band(score: Score, sr: int, seed: int, progress=None) -> dict[str, np.ndarray]:
-    """A stem for every instrument that plays in the score: the eight in their order, then any other by name.
-    progress, if given, is told the name of each instrument as it starts on it."""
-    stems = {}
-    for name, make in band_parts(score, sr, seed):
-        if progress is not None:
-            progress(name)
-        stems[name] = make()
-    return stems

@@ -5,6 +5,7 @@ and dependencies (never Pyodide's), a version's file read as data and kept by id
 offered at an address, what a device can't do said in a sentence, singing absent until its measurement is here, and
 the static site's page and headers (build_site.py)."""
 
+import importlib.metadata
 import importlib.util
 import json
 import re
@@ -261,6 +262,22 @@ def test_the_guide_is_the_version_the_page_is_on(tmp_path):
     assert slower["status"] == 200 and slower["json"]["tempo"] == d.studio.version({"tempo": 70}).params.tempo != ours["tempo"]
 
 
+def test_the_licences_name_every_package_the_site_sends():
+    """THIRD-PARTY.md (the site's licenses.txt) names each package build_render.py takes from Pyodide's lock, at the
+    version the lock pins, and Pyodide's own: a new Pyodide means reading its packages' licences again."""
+    render = _load("build_render", ROOT / "web" / "studio-wasm" / "tools" / "build_render.py")
+    if not (render.PYODIDE / "pyodide-lock.json").exists():
+        pytest.skip("Pyodide isn't installed here (npm ci in web/studio-wasm)")
+    lock = json.loads((render.PYODIDE / "pyodide-lock.json").read_text())
+    notices = (ROOT / "THIRD-PARTY.md").read_text().lower()
+    version = json.loads((render.PYODIDE / "package.json").read_text())["version"]
+    assert f"**pyodide** {version}" in notices
+    names = {"soundfile": "python-soundfile"}
+    for name in render.packages(lock):
+        assert f"**{names.get(name, name)}** {lock['packages'][name]['version']}" in notices, name
+    assert f"**python-cmudict** {importlib.metadata.version('cmudict')}" in notices
+
+
 def test_singing_without_its_measuring_says_why(tmp_path):
     """A site built without singing: the studio says singing isn't here, and works."""
     d = D.Device({"song": str(LEAD), "machine": "none", "home": str(tmp_path), "runs_with": RUNS_WITH})
@@ -285,7 +302,11 @@ def test_the_static_page_and_its_headers():
     assert SITE.describe("studio.js")["cache"] == "no-cache"
     files = SITE.page_files(singing=False)
     assert {"index.html", "device.js", "studio.js", "renderer.js", "notice.css", "piano/index.html", "piano/piano.js",
-            "piano/identity.css"} <= set(files)
+            "piano/identity.css", "licenses.txt"} <= set(files)
+    # the licences of what the site sends besides the project's own, linked from the page's foot and shown as text
+    assert re.search(r'<footer class="foot">.*<a href="/licenses.txt">Licenses</a></footer>', html, re.DOTALL)
+    assert files["licenses.txt"] == (ROOT / "THIRD-PARTY.md").read_bytes()
+    assert SITE.describe("licenses.txt") == {"type": "text/plain; charset=utf-8", "cache": "no-cache"}
     # a shared version is anyone's bytes on the studio's origin: never served as anything that runs
     shared = SITE.NETWORK["GET /api/versions/*"]["headers"]
     assert shared["Content-Type"] == "audio/flac" and "attachment" in shared["Content-Disposition"]

@@ -7,6 +7,7 @@ from pathlib import Path
 
 import numpy as np
 import pytest
+from _golden import check
 
 from songbird import genome as G
 from songbird.band import Band
@@ -34,23 +35,19 @@ def test_every_seed_is_arranged_exactly_as_before():
 
     path = GOLDEN / "seed-scores.json"
     got = {p.stem: score_hash(G.load(p)) for p in SONGS}
-    if os.environ.get("SONGBIRD_UPDATE_GOLDEN") or not path.exists():
+    if os.environ.get("SONGBIRD_UPDATE_GOLDEN"):
         path.write_text(json.dumps(got, indent=1, sort_keys=True) + "\n")
     assert got == json.loads(path.read_text())
 
 
 def test_the_seed_of_h_renders_byte_identical(tmp_path):
-    """H's seed rendition, audio and all: its id is golden/h-seed.sha256 (441dc83b1d1e... when styles came)."""
-    import os
-
+    """H's seed rendition, audio and all: its id is golden/h-seed.<platform>.sha256 (tests/_golden.py; on the
+    artist's Mac, 441dc83b1d1e... when styles came)."""
     from songbird import cli
 
     g = G.load(H)
     record = cli.render_one(g, choose_params(g), tmp_path / "h.flac", phrasing_json=g.source.get("seed_phrasing"))
-    path = GOLDEN / "h-seed.sha256"
-    if os.environ.get("SONGBIRD_UPDATE_GOLDEN") or not path.exists():
-        path.write_text(record["id"] + "\n")
-    assert record["id"] == path.read_text().strip()
+    check("h-seed", record["id"])
 
 
 # --- the record ----------------------------------------------------------------------------------------

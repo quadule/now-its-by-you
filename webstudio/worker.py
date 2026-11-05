@@ -6,7 +6,7 @@ someone sings. It measures exactly as tools/phrasing.py measures a take on the a
 differences, all for a server (and a visitor's browser, which runs this file too: web/studio-wasm/py/sing_measure.py):
 
 - **No forced aligner.** MFA (tools/align.py) isn't here, so each vowel's start is found where its loudness
-  climbs out of the consonant before it, as it was before MFA (docs/PHRASING-CALIBRATION.md has what that
+  climbs out of the consonant before it, as it was before MFA (docs/history/PHRASING-CALIBRATION.md has what that
   costs). No speech recogniser is needed either: faster-whisper reads plain readings, never sung takes, so
   it isn't loaded (a stand-in that refuses to work is put in its place, should anything reach for it).
 - **Long takes in pieces.** WORLD's pitch tracker holds about 14 MB for every second it analyses at once, so

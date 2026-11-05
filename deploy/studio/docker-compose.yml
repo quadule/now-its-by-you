@@ -1,12 +1,13 @@
-# The public studio and the tunnel that reaches it: docs/WEB-STUDIO.md.
+# The public studio and the tunnel that reaches it, on a server of your own (README.md):
+# docs/history/web-studio-server-plan.md.
 #
 #   cp deploy/studio/studio.env.example deploy/studio/.env    # then fill in TUNNEL_TOKEN
 #   docker compose -f deploy/studio/docker-compose.yml up -d --build
 #
-# No port is opened on the host (mailcow keeps 80 and 443): cloudflared dials out to Cloudflare, and
-# Cloudflare sends visitors down that connection to the studio. The studio's own network has no way out.
+# No port is opened on the host: cloudflared dials out to Cloudflare, and Cloudflare sends visitors down that
+# connection to the studio. The studio's own network has no way out.
 # Its memory is capped with no swap, and the kernel is told to kill it before anything else on the host:
-# if a render runs out, the studio dies and restarts, never the mail server.
+# if a render runs out, the studio dies and restarts, never the host's other services.
 
 name: songbird-studio
 
@@ -17,7 +18,7 @@ services:
       dockerfile: deploy/studio/Dockerfile
     image: songbird-studio
     command: >-
-      --allow-host ${STUDIO_HOST:-studio.itsby.you}
+      --allow-host ${STUDIO_HOST:-studio.example.com}
       --machine ${STUDIO_MACHINE:-none}
       --client-ip-header CF-Connecting-IP
       ${STUDIO_SINGING:---web-singing}
@@ -29,7 +30,7 @@ services:
       # the container's memory, as the studio's budget for a whole song (less 400 MB; --limit render-mb=N overrides):
       # a whole song estimated past it is refused before it's queued, rather than killing the studio mid-render
       STUDIO_MEMORY: ${STUDIO_MEMORY:-2500m}
-      # glibc hands large freed arrays straight back (a render peaks ~1.3 GB on 2 threads, docs/PERFORMANCE.md
+      # glibc hands large freed arrays straight back (a render peaks ~1.3 GB on 2 threads, docs/notes/PERFORMANCE.md
       # "Memory (2026-09-29)"): few arenas, and anything over 1 MB mapped and unmapped on its own
       MALLOC_ARENA_MAX: "2"
       MALLOC_MMAP_THRESHOLD_: "1048576"
@@ -59,7 +60,7 @@ services:
     image: cloudflare/cloudflared:${CLOUDFLARED_VERSION:-2025.8.1}
     command: tunnel --no-autoupdate run
     environment:
-      TUNNEL_TOKEN: ${TUNNEL_TOKEN:-}  # deploy/studio/.env (docs/WEB-STUDIO.md)
+      TUNNEL_TOKEN: ${TUNNEL_TOKEN:-}  # deploy/studio/.env (docs/history/web-studio-server-plan.md)
     depends_on:
       studio:
         condition: service_healthy

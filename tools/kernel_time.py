@@ -1,4 +1,4 @@
-"""How much of a rendition's time each numba kernel takes (docs/PORTABILITY.md).
+"""How much of a rendition's time each numba kernel takes (docs/notes/PORTABILITY.md).
 
     SONGBIRD_THREADS=1 uv run python tools/kernel_time.py                        # H's seed, compiled
     SONGBIRD_THREADS=1 NUMBA_DISABLE_JIT=1 uv run python tools/kernel_time.py --form refrain   # interpreted

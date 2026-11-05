@@ -1,0 +1,29 @@
+{
+  "about": "The song's editions, read by tools/sing_site.py (docs/HOME-PAGE.md, 'Editions'). The home page (now.itsby.you) offers the newest; /history offers every one, newest first. An edition is named by its audio id (the SHA-256 of its samples, in its record) and its bytes never change once released: the build checks file.sha256 and file.bytes. To add one, add it here with its released file kept (file.path) or its render (render.path, given the cover as it's served).",
+  "editions": [
+    {
+      "title": "The first version",
+      "date": "2026-09-28",
+      "note": "The song as it began, shaped by the people who sang along to it online.",
+      "audio": "07ac74fbd4eb24be53a8f001c71b32ff6db3b6599de4656110384848c01e2ac9",
+      "file": {
+        "sha256": "c1980bc78724232b07179ffe8f611318268cd2159cc4f7e07d44f75284b6bc10",
+        "bytes": 15840849
+      },
+      "render": {
+        "path": "renders/review/contest.flac",
+        "sha256": "1ddc820aa953d3d7e9d59e1efdb33e44787b38ff9ce663e719d262d67ad96e70",
+        "bytes": 15770845
+      },
+      "program": "971e37bde494259a2bc7b2f2f0f3f78cf7738bb12e8e96d7ebcab9de6ee65f95",
+      "python": "3.12",
+      "source": {
+        "commit": "10dc1e0bba140e5dfed9217f4ddcc90b4d531004",
+        "tag": "first-version"
+      },
+      "command": "uv run python tools/everyone.py --render renders/review/contest.flac --arrange motif=bridge lift=false ending=ring",
+      "credit": "79 takes by eight people",
+      "archives": []
+    }
+  ]
+}

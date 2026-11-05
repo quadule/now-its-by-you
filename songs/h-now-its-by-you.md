@@ -124,5 +124,5 @@ switched off, re-barred from its waltz into the song's 4/4: so mi do so, / la
 ti do la / do so. It is never sung. When a rendition's intro is a quote
 (`--arrange intro=quote`; docs/STYLES.md), the whistle plays it alone over the
 drone in four bars before the song, the machine singer nodding to its
-ancestor. The seed's own arrangement doesn't quote, so the singing site's
-guides keep their timing; the contest render may.
+ancestor. The seed's own arrangement doesn't quote, so the guides the first
+singers sang to kept their timing.

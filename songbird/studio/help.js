@@ -1,10 +1,9 @@
-// Help, on demand: the Help dialog (the whole studio in plain words) and a first-visit walk of four steps,
+// Help, on demand: the Help dialog (the whole studio in plain words) and a walk of four steps,
 // each pointing at the one thing it names. Each area's own "What is this?" is plain HTML (<details>).
-// No dependencies; what a person has seen is kept in this browser only.
+// No dependencies.
 "use strict";
 
 (() => {
-  const SEEN = "songbird-studio-tour-seen";
   // where the song is made: this computer, or on the static site (made on the device) whatever the device is
   const HERE = typeof document !== "undefined" && document.querySelector('meta[name="studio-render"][content="device"]')
     ? "on this device" : "on this computer";
@@ -12,25 +11,18 @@
     { target: "hearAll", text: `This is your version of the song, made today ${HERE}. Start here: hear it.` },
     { target: "simpleChanges", text: "Change something simple: the key, the scale, the tempo, or a new performance. Undo takes anything back." },
     { target: "studioTabs", text: "Go deeper when you like: the words, the tune, the sound, and how the song changes with time and between computers." },
-    { target: "toFinish", text: "When it's yours, export it: one file that plays anywhere and carries the song on. Help is always at the top." },
+    { target: "toFinish", text: "When you're done, export it. The file plays in any music player and contains the program, so anyone can make the next version. Help is always at the top." },
   ];
   // the score (index.html): hear it, change something in the transport, select a section, record it
   const SCORE = [
     { target: "tPlay", text: `This is your version of the song, made today ${HERE}. Start here: hear it. Sketch plays at once; Sung makes the real thing.` },
     { target: "transport", text: "Change something in the bar at the top: the tempo, the key, a new performance. Undo takes anything back." },
     { target: "page", text: "Select a section by its name (or its region in Arrange): the column beside it says what it is, why the program chose it, and how to change it." },
-    { target: "recordNow", text: "When it's yours, export it: one file that plays anywhere and carries the song on. Tools has the MIDI, the parts, the piano page, and ways to bring things in." },
+    { target: "recordNow", text: "When you're done, export it. The file plays in any music player and contains the program, so anyone can make the next version. Tools has the MIDI, the parts, the piano page, and ways to bring things in." },
   ];
   const STEPS = document.getElementById("transport") ? SCORE : CLASSIC;
   const $ = (id) => document.getElementById(id);
   let step = -1, shared = false;
-
-  function seen() {
-    try { return localStorage.getItem(SEEN) === "1"; } catch (e) { return true; }  // no storage: don't nag
-  }
-  function remember() {
-    try { localStorage.setItem(SEEN, "1"); } catch (e) { /* this visit only */ }
-  }
 
   function show(index) {
     document.querySelectorAll(".tour-focus").forEach((el) => el.classList.remove("tour-focus"));
@@ -38,7 +30,6 @@
     const tour = $("tour");
     if (index < 0 || index >= STEPS.length) {
       tour.hidden = true;
-      remember();
       return;
     }
     const { target } = STEPS[index];
@@ -78,12 +69,9 @@
     const t = event.target;
     if (event.key === "?" && !(t.isContentEditable || ["INPUT", "TEXTAREA", "SELECT"].includes(t.tagName))) openHelp();
   });
-  // A first visit gets the walk once the song is on the page; a link into a particular view doesn't.
+  // The walk opens from Help (tourAgain).
   document.addEventListener("studio:ready", (event) => {
-    const hash = event.detail?.hash || {};
     shared = !!event.detail?.shared;
-    if (seen() || hash.scroll || hash.choose || hash.workspace || hash.view || hash.sel) return;
-    setTimeout(() => { if (!$("help").open) show(0); }, 500);
   });
   window.SongbirdHelp = { open: openHelp, tour: () => show(0) };
 })();

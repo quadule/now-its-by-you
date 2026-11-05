@@ -1,6 +1,6 @@
 """Render the learned throat's corpus plan with SoulX-Singer (dev only; run in SoulX-Singer's venv).
 
-    SOULX=/Users/milo/Code/svs/SoulX-Singer
+    export SOULX=/path/to/SoulX-Singer   # a checkout of SoulX-Singer, with its venv and pretrained models
     $SOULX/.venv/bin/python -B tools/throat/soulx_batch.py renders/throat/plan.json [--out renders/throat/corpus]
 
 Every segment of every item in the plan (tools/throat/corpus.py) is sung in its singer's timbre
@@ -24,7 +24,9 @@ import numpy as np
 import soundfile as sf
 import torch
 
-SOULX = Path(os.environ.get("SOULX", "/Users/milo/Code/svs/SoulX-Singer"))
+if not os.environ.get("SOULX"):
+    raise SystemExit("set SOULX to a checkout of SoulX-Singer (with its venv and pretrained models)")
+SOULX = Path(os.environ["SOULX"]).expanduser()
 sys.path.insert(0, str(SOULX))
 
 from cli.inference import build_model  # noqa: E402

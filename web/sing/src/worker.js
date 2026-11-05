@@ -70,6 +70,8 @@ const SEED_FILES = {
   [SEED_FILE]: { "Content-Type": "audio/flac", "Content-Disposition": `attachment; filename="${SEED_FILE}"` },
   "words.json": { "Content-Type": "application/json; charset=utf-8" },
 };
+// and every edition's file, by its date, as the history page (/history) offers them (web/sing/editions.json)
+const EDITION_FILE = /^now-its-by-you-\d{4}-\d{2}-\d{2}\.flac$/;
 
 const SECURITY = {
   "X-Content-Type-Options": "nosniff",
@@ -1049,10 +1051,21 @@ export default {
         return asset(env, request, "/seed.html", { "Content-Type": "text/html; charset=utf-8", "Cache-Control": "public, max-age=300",
                                                  "Content-Security-Policy": PAGE_CSP });
       }
+      // its history: every edition, newest first, on every host as the seed page is
+      if (path === "/history" && ["GET", "HEAD"].includes(request.method)) {
+        return asset(env, request, "/history.html", { "Content-Type": "text/html; charset=utf-8", "Cache-Control": "public, max-age=300",
+                                                    "Content-Security-Policy": PAGE_CSP });
+      }
       if (path.startsWith("/seed/") && ["GET", "HEAD"].includes(request.method)) {
         const file = path.slice(6);
         if (Object.prototype.hasOwnProperty.call(SEED_FILES, file)) {
           return asset(env, request, path, { ...SEED_FILES[file], "Cache-Control": "public, max-age=3600" }, { ranges: true });
+        }
+        if (EDITION_FILE.test(file)) { // an edition's file never changes under its name
+          const r = await asset(env, request, path, { "Content-Type": "audio/flac", "Content-Disposition": `attachment; filename="${file}"`,
+                                                      "Cache-Control": "public, max-age=86400" }, { ranges: true });
+          if (r.status !== 404) return r;
+          if (r.body) r.body.cancel().catch(() => {});
         }
         return fail(404, "unknown", "No such thing.");
       }

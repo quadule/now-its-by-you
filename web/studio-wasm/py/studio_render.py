@@ -7,7 +7,7 @@ voices before, the parent's record, the machine and the day, so nothing is worke
 what the server's own renders call: a section as Studio._section makes it (the score cut at the section's window,
 brought up by the preview's gain, faded), the whole song as Studio._whole does (cli.render_one, packed: the
 recording, one file with the program, the song and its record). The same inputs through the same functions: the
-same samples (docs/BROWSER-RENDER.md, "Byte identity"), and the same packet.
+same samples (docs/notes/BROWSER-RENDER.md, "Byte identity"), and the same packet.
 
     run(spec_text, folder, progress=None) -> {"kind", "key", "flac": path, "id", "duration", "record"?}
 

@@ -2,15 +2,23 @@
 __pycache__/
 *.pyc
 .pytest_cache/
+.ruff_cache/
 renders/
 *.egg-info/
 dist/
+.DS_Store
 
 # The artist's own voice stays out of git unless they choose otherwise
 recordings/
 
-# API keys for the reference voices (ElevenLabs, Gemini), never in git
+# Local secrets, never in git
 .env
+.dev.vars
 
-# Parallel agents work in their own git worktrees here
+# Installed by npm, and wrangler's local state (web/*)
+node_modules/
+.wrangler/
+
+# Parallel agents work in their own git worktrees here; local settings stay local
 .claude/worktrees/
+.claude/settings.local.json

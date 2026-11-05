@@ -151,13 +151,35 @@ test('solo switches players and restores the original gain edits in one undoable
   run(`state.edits = {"band.lute": 0.7, tempo: 100};
     const bandCard = {players: {lute: "Lute", fiddle: "Fiddle"}, band: {lute: 0.7, fiddle: 0.4}};
     soloPlayer(bandCard, "lute")`);
-  assert.deepEqual(plain(run('state.edits')), { 'band.lute': 0.7, 'band.fiddle': 0, tempo: 100 });
+  assert.deepEqual(plain(run('state.edits')), { 'band.lute': 0.7, 'band.fiddle': 0, 'mix.voices': 0, tempo: 100 });
   run('soloPlayer(bandCard, "fiddle")');
-  assert.deepEqual(plain(run('state.edits')), { 'band.lute': 0, 'band.fiddle': 0.4, tempo: 100 });
+  assert.deepEqual(plain(run('state.edits')), { 'band.lute': 0, 'band.fiddle': 0.4, 'mix.voices': 0, tempo: 100 });
   run('soloPlayer(bandCard, "fiddle")');
   assert.deepEqual(plain(run('state.edits')), { 'band.lute': 0.7, tempo: 100 });
   run('travelHistory("undo")');
-  assert.deepEqual(plain(run('state.edits')), { 'band.lute': 0, 'band.fiddle': 0.4, tempo: 100 });
+  assert.deepEqual(plain(run('state.edits')), { 'band.lute': 0, 'band.fiddle': 0.4, 'mix.voices': 0, tempo: 100 });
+});
+
+test('the voice mutes and solos like a player: a solo brings a muted voice back, and its release the mute', () => {
+  const { run } = studio();
+  run(`state.edits = {"band.lute": 0.7};
+    const bandCard = {players: {lute: "Lute", fiddle: "Fiddle"}, band: {lute: 0.7, fiddle: 0.4}};
+    muteVoice()`);
+  assert.deepEqual(plain(run('state.edits')), { 'band.lute': 0.7, 'mix.voices': 0 });
+  run('soloPlayer(bandCard, VOICE)');
+  assert.deepEqual(plain(run('state.edits')), { 'band.lute': 0, 'band.fiddle': 0 });
+  assert.equal(run('currentSolo().player'), 'voice');
+  run('soloPlayer(bandCard, "lute")');  // from the voice alone to a player alone
+  assert.deepEqual(plain(run('state.edits')), { 'band.lute': 0.7, 'band.fiddle': 0, 'mix.voices': 0 });
+  run('soloPlayer(bandCard, "lute")');
+  assert.deepEqual(plain(run('state.edits')), { 'band.lute': 0.7, 'mix.voices': 0 });
+  run('muteVoice()');
+  assert.deepEqual(plain(run('state.edits')), { 'band.lute': 0.7 });
+  // a parent's mute handed down is the program's own: unmuting is the choice, muting again gives it back
+  run('state.view = {cards: [{id: "mix", mix: {voices: 0}}]}; muteVoice()');
+  assert.deepEqual(plain(run('state.edits')), { 'band.lute': 0.7, 'mix.voices': 1 });
+  run('muteVoice()');
+  assert.deepEqual(plain(run('state.edits')), { 'band.lute': 0.7 });
 });
 
 test('mute restores the previous audible level instead of discarding the mix', () => {

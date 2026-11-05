@@ -203,3 +203,71 @@ pre { margin: 0 0 10px; padding: 10px 12px; overflow-x: auto; background: var(--
                white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 /* a phone: the line being sung may take two lines; room for both, so the strip never jumps */
 @media (max-width: 640px) { .lyric .now { min-height: 2.6em; } }
+/* which edition plays, under the player, and the way to the others */
+.which { margin: 8px 0 0; }
+.which:empty { display: none; }
+
+/* the history: every edition, newest first, each on a card of its own, numbered as a hymnal numbers its verses;
+   what identifies it behind a disclosure, the hashes free to break anywhere on a phone */
+.kicker a { color: inherit; }
+.editions { list-style: none; margin: 0; padding: 0; }
+.edition .when { margin: -2px 0 8px; color: var(--dim); font-size: 15px; }
+.edition audio { margin: 12px 0 8px; }
+.edition > p.hint { margin: 0; }
+
+.facts { margin-top: 10px; font-size: 15px; }
+.facts > summary { cursor: pointer; color: var(--ink-2); }
+.facts dl { display: grid; grid-template-columns: max-content minmax(0, 1fr); gap: 4px 14px; margin: 10px 0 0; }
+.facts dt { color: var(--dim); }
+.facts dd { margin: 0; }
+.facts code { font-size: 13px; overflow-wrap: anywhere; }
+@media (max-width: 640px) { .facts dl { grid-template-columns: minmax(0, 1fr); gap: 0; } .facts dd { margin-bottom: 6px; } }
+
+/* the studio, as it opens: a picture of it in a hairline, as the cover is; a phone's on a phone */
+.shot { display: block; width: 100%; height: auto; margin: 4px 0 14px; border: 1px solid var(--rule); border-radius: var(--radius);
+        background: var(--wash); }
+.leaf .button { min-height: 44px; }
+
+/* about: the artist's statement first, quoted in a red margin rule as a copybook's, then who sang */
+.statement { margin: 0 0 14px; }
+.statement blockquote { margin: 0; padding: 2px 0 2px 16px; border-left: 2px solid var(--red-rule); }
+.statement blockquote p { margin: 0; }
+.statement figcaption { margin: 8px 0 0 18px; color: var(--dim); font-size: 15px; }
+.about h3 { margin-top: 18px; }
+
+/* the home page: the statement beside the cover, then one card to make your own (the studio's four views, then
+   the file's own commands), then who made it */
+.pitch .lead cite { font-style: normal; }
+.studio .tabs { display: grid; grid-template-columns: 1fr 1fr; gap: 14px 16px; margin: 12px 0 14px; }
+.studio .tabs figure { margin: 0; }
+.studio .tabs img { display: block; width: 100%; height: auto; border: 1px solid var(--line); border-radius: 4px; }
+.studio .tabs figcaption { margin-top: 6px; font-size: 15px; line-height: 1.35; color: var(--dim); }
+.studio .tabs figcaption b { color: var(--ink); font-weight: 600; margin-right: 2px; }
+.studio .button.primary { font-size: 18px; font-weight: 600; padding: 12px 28px; min-height: 52px; }
+.studio h3 { margin: 22px 0 6px; padding-top: 14px; border-top: 1px solid var(--line); }
+.card.disclosure > p + p { margin-top: 10px; }
+@media (min-width: 641px) {
+  /* on a wide screen: the four views in one row, each a slanted stripe of its picture, a seam's width apart */
+  .studio .tabs { --slant: 44px; --seam: 6px; grid-template-columns: repeat(4, 1fr); gap: 0; }
+  .studio .tabs figure { min-width: 0; margin-right: calc(-1 * var(--slant)); }
+  .studio .tabs figure:last-child { margin-right: 0; }
+  .studio .tabs img { height: 210px; object-fit: cover; object-position: left top; border: 0; border-radius: 0;
+                      clip-path: polygon(calc(var(--slant) + var(--seam)) 0, 100% 0, calc(100% - var(--slant)) 100%, var(--seam) 100%); }
+  .studio .tabs figure:first-child img { clip-path: polygon(0 0, 100% 0, calc(100% - var(--slant)) 100%, 0 100%); }
+  .studio .tabs figure:last-child img { clip-path: polygon(calc(var(--slant) + var(--seam)) 0, 100% 0, 100% 100%, var(--seam) 100%); }
+  .studio .tabs figure:nth-child(2) img { object-position: 30% top; }    /* Arrange: the refrain set to hard */
+  .studio .tabs figure:nth-child(3) img { object-position: right top; }  /* Mix: the voice's strip, at its right */
+  .studio .tabs figcaption { margin-left: calc(var(--seam) + 2px); }
+  .studio .tabs figure:first-child figcaption { margin-left: 0; }
+}
+@media (max-width: 640px) {
+  /* on a phone: the cover small beside the statement, so the player is near the first screen; the four views a
+     row to swipe through, each nearly the card's width, rather than a long column */
+  .sleeve { display: block; }
+  .sleeve .cover { float: left; width: 42%; margin: 4px 14px 6px 0; }
+  .sleeve::after { content: ""; display: block; clear: both; }
+  .pitch .lead { font-size: 19px; }
+  .studio .tabs { display: flex; gap: 12px; overflow-x: auto; scroll-snap-type: x mandatory; margin-right: -18px;
+                  padding-right: 18px; padding-bottom: 6px; overscroll-behavior-x: contain; }
+  .studio .tabs figure { flex: 0 0 84%; scroll-snap-align: start; }
+}

@@ -139,6 +139,27 @@ def test_forward_sets_the_voice_over_the_band(stems):
     assert gap(near) - gap(far) == pytest.approx(8.0, abs=1.5)
 
 
+def test_muting_the_singers_leaves_the_band_as_the_record_has_it(stems):
+    sung, muted = {}, {}
+    whole = mixing.mix(stems, SR, seed=4, taps=sung)
+    alone = mixing.mix(stems, SR, seed=4, params=MixParams(voices=0.0), taps=muted)
+    # the band is placed, ducked and carved for singers who aren't heard: the same samples as under them
+    assert np.array_equal(muted["band"], sung["band"]) and np.array_equal(muted["singing"], sung["singing"])
+    assert not np.any(muted["voice"]) and not np.any(muted["choir"])
+    assert np.any(sung["voice"]) and np.any(sung["choir"])
+    # no singer in the room or the plate either: what's left of the room is the band's
+    n = len(sung["band"])
+    assert master.loudness(muted["wet"][:n], SR) < master.loudness(sung["wet"][:n], SR) - 3.0
+    assert np.all(np.isfinite(alone)) and not np.array_equal(alone, whole)
+    # the singers as sung are left out of a record, so every record before the mute reads as it did
+    assert "voices" not in MixParams().to_dict() and MixParams(voices=0.0).to_dict()["voices"] == 0.0
+    assert MixParams.from_dict(MixParams(voices=0.0).to_dict()).voices == 0.0
+    assert whole.tobytes() == mixing.mix(stems, SR, seed=4, params=MixParams(voices=1.0)).tobytes()
+    # nobody at all is silence, not a mix brought up to loudness
+    nobody = mixing.mix({k: stems[k] for k in ("voice", "choir1")}, SR, params=MixParams(voices=0.0))
+    assert not np.any(master.master(nobody, SR))
+
+
 def test_panned_stems_are_treated_as_one_sound():
     rng = np.random.default_rng(2)
     mono = rng.standard_normal(SR)

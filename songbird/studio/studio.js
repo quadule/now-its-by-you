@@ -61,7 +61,7 @@ function svg(tag, attrs, ...children) {
   return el;
 }
 
-// Draw `children` into `parent` in place (docs/STUDIO-EDM-TEST.md, second attempt, bugs 1 and 2): a node already
+// Draw `children` into `parent` in place (docs/history/STUDIO-EDM-TEST.md, second attempt, bugs 1 and 2): a node already
 // there that the new drawing has in the same place (the same tag and data-key, both drawn by h) is kept and given
 // the new one's attributes, text, value and listeners, so an answer arriving mid-click neither replaces the button
 // under the pointer nor moves what didn't change; anything else is put in, or taken out. A details' open is the
@@ -311,8 +311,10 @@ function renderHeader() {
   const v = state.view;
   $("title").textContent = v.title;
   document.title = `${v.title} · Songbird studio`;
-  const when = v.offset ? `on ${v.date} (${v.when})` : `today, ${v.date}`;
-  $("which").replaceChildren("Your version ", h("b", {}, when), `, ${v.from}, sung by ${v.by}.`);
+  // the day, then only what isn't the plain case: a parent other than the song as it began, a machine if there is one
+  const from = v.from === "from the song as it began" ? "" : v.from;
+  const by = v.by === "no machine, only time" ? "" : v.by.replace(/^a made-up machine called /, "");
+  $("which").replaceChildren(h("b", {}, v.offset ? `${v.date} (${v.when})` : `Today, ${v.date}`), [from, by].filter(Boolean).map((x) => ` · ${x}`).join(""));
   setOn("draw", "textContent", v.roll ? `chance drawn again: draw ${v.roll + 1}` : "");
   const mine = v.changed;
   const locks = lockCount(v.held);  // a lock (the score's padlock) is held, not changed
@@ -363,6 +365,7 @@ function describePath(path) {
   const into = path.match(/^transition\.([A-Za-z0-9_-]+:\d+)$/);
   if (into) return `your transition into ${where(into[1])}`;
   const sound = path.match(/^(sound|mix)\.([a-z0-9]+)\.(\w+)$/);
+  if (path === VOICES) return "the voice's mute";
   if (sound && !["space", "width", "forward", "intimacy", "rt60", "predelay"].includes(sound[2])) return `your ${sound[2]}'s ${sound[3]}`;
   return { "words.refrain": "your refrain's words", "words.bridge": "your bridge's words", "words.bridge2": "your second bridge", "words.tag": "your tag", "phrasing": "the singer's way", "date": "the day" }[path] || `your ${path.replace(/^\w+\./, "").replace(/_/g, " ")}`;
 }
@@ -709,27 +712,50 @@ function renderSessionControls() {
   box.replaceChildren(...controls);
 }
 
+// The singers (the lead and the lineage choir) as one channel: mix.voices, 0 muted, else as sung. Muted, the band
+// stays as the record has it, still making way where they sing (songbird.synth.mixing).
+const VOICES = "mix.voices", VOICE = "voice";
+
+function voicesProgram() {  // the program's own: 1, or a parent's mute handed down
+  const mark = state.view?.marks?.[VOICES];
+  if (mark && typeof mark.was === "number") return mark.was;
+  return state.view?.cards?.find((c) => c.id === "mix")?.mix?.voices ?? 1;
+}
+
+function voicesLevel() {  // what's heard now: the latest edit's, else the program's
+  return Object.hasOwn(state.edits, VOICES) && state.edits[VOICES] !== null ? state.edits[VOICES] : voicesProgram();
+}
+
+// the edit that brings the singers to a level: the program's own is given back to the program, not kept as yours
+const voicesEdit = (level) => (Math.abs(level - voicesProgram()) < 1e-9 ? null : level);
+
+function muteVoice() {
+  const muted = voicesLevel() <= 0.02;
+  setEdits({ [VOICES]: voicesEdit(muted ? 1 : 0) }, muted ? "Unmute the voice" : "Mute the voice");
+}
+
 function currentSolo() {
-  if (state.solo && Object.entries(state.solo.patch).some(([path, value]) => state.edits[path] !== value)) state.solo = null;
+  if (state.solo && Object.entries(state.solo.patch).some(([path, value]) => (state.edits[path] ?? null) !== value)) state.solo = null;
   return state.solo;
 }
 
-function soloPlayer(card, player) {
+function soloPlayer(card, player) {  // a band player alone, or (VOICE) the singers alone
   const active = currentSolo();
   if (active?.player === player) {
     state.solo = null;
-    setEdits(active.before, "Restore the band mix");
+    setEdits(active.before, "Restore the mix");
     return;
   }
   const names = Object.keys(card.players);
-  const before = active?.before || Object.fromEntries(names.map((name) => {
-    const path = `band.${name}`;
-    return [path, Object.hasOwn(state.edits, path) ? state.edits[path] : null];
-  }));
+  const before = active?.before || Object.fromEntries([...names.map((name) => `band.${name}`), VOICES].map((path) =>
+    [path, Object.hasOwn(state.edits, path) ? state.edits[path] : null]));
   const levels = active?.levels || Object.fromEntries(names.map((name) => [name, card.band[name]]));
   const patch = Object.fromEntries(names.map((name) => [`band.${name}`, name === player ? Math.max(0.03, levels[name] || 1) : 0]));
+  // the singers out with the rest of the band; alone, heard even if they were muted before
+  const sung = before[VOICES] ?? voicesProgram();
+  patch[VOICES] = voicesEdit(player !== VOICE ? 0 : sung > 0.02 ? sung : 1);
   state.solo = { player, before, levels, patch };
-  setEdits(patch, `Solo ${card.players[player] || player}`);
+  setEdits(patch, player === VOICE ? "Solo the voice" : `Solo ${card.players[player] || player}`);
 }
 
 function mutePlayer(card, player) {
@@ -740,7 +766,8 @@ function mutePlayer(card, player) {
     setEdit(path, 0, `Mute ${card.players[player] || player}`);
   } else {
     // back to the level before: the program's own is given back to the program, not kept as a choice of yours
-    const to = state.mutedLevels[player] || 1, mark = state.view?.marks?.[path];
+    // (a mute found on the page when it opened has no level remembered: the program's, then)
+    const mark = state.view?.marks?.[path], to = state.mutedLevels[player] || (typeof mark?.was === "number" && mark.was > 0.02 ? mark.was : 1);
     if (mark && typeof mark.was === "number" && Math.abs(mark.was - to) < 1e-9) releaseEdit(path, `Unmute ${card.players[player] || player}`);
     else setEdit(path, to, `Unmute ${card.players[player] || player}`);
   }
@@ -771,7 +798,7 @@ function editor(c) {
       return h("div", {},
         chips("The key's note", notes, c.tonic, (m) => setEdit("tonic", m), { text: b.tonic.names }),
         chips("Its mode", b.mode.options, c.mode, (m) => setEdit("mode", m), { text: b.mode.names, title: b.mode.glosses }),
-        h("p", { class: "hint aside-note" }, "A minor mode leans the words darker, as the machine's own would."));
+        h("p", { class: "hint aside-note" }, "A minor mode leans the words darker, as the machine's would."));
     }
     case "tempo":
       return slider("Beats a minute", "tempo", c.tempo, { ...b.tempo, ...(c.range || {}) }, (x) => `${Number(x).toFixed(0)}`, ["slower", "quicker"]);
@@ -815,7 +842,7 @@ function editor(c) {
         slider("How busy", "band.density", band.density, b["band.density"], (x) => `${Math.round(x * 100)}%`, ["sparse", "busy"]),
         slider("How bright", "band.brightness", band.brightness, b["band.brightness"], (x) => `${Math.round(x * 100)}%`, ["dark and soft", "bright"]),
         bandMixer(c),
-        h("p", { class: "hint aside-note" }, "M mutes a player. S isolates a player in the band; click again to restore the mix. The singer stays audible."),
+        h("p", { class: "hint aside-note" }, "M mutes a player. S plays it alone; click again to restore the mix."),
         h("p", { class: "hint aside-note" }, c.styled ? "The style chooses who plays and who leads; change the style to change the band. With nobody playing, the voice sings alone."
           : "With nobody playing, the voice sings alone."));
     }
@@ -828,7 +855,7 @@ function editor(c) {
         chips("Backing voices", Object.keys(c.backings), st.backing, (x) => setEdit("style.backing", x), { text: c.backings }),
         chips("The last refrain", ["lift", "no lift"], st.lift ? "lift" : "no lift", (x) => setEdit("style.lift", x === "lift"),
           { text: { "lift": "a whole step up", "no lift": "in the same key" } }),
-        h("p", { class: "hint aside-note" }, "A style brings its own band, its pace and its feel; a version moves one style at a time, so its children will drift back toward your machine's."));
+        h("p", { class: "hint aside-note" }, "A style sets the band, the pace and the feel. A version moves one style at a time, so its children will drift back toward your machine's."));
     }
     case "mix": {
       const m = c.mix;
@@ -843,11 +870,11 @@ function editor(c) {
         h("p", { class: "hint aside-note" }, "Judge the voice against the band on the whole song: a part heard alone is levelled for listening."));
     }
     case "singer": {
-      const box = h("div", {}, h("p", { class: "hint" }, "The singer is your machine's own voice, the same in every song it sings. What you can give it is your way of singing."));
+      const box = h("div", {}, h("p", { class: "hint" }, "The singer is your machine's voice, the same in every song it sings. What you can give it is your way of singing."));
       const phrasings = phrasingChoices(s.phrasings);  // with the one sung in this browser, if any
       if (phrasings.length) {
         const select = h("select", { "aria-label": "Whose way it is sung" },
-          h("option", { value: "" }, "the song's own way"),
+          h("option", { value: "" }, "the song's way"),
           phrasings.map((p) => h("option", { value: p.id }, `${p.way || `${p.label}'s way`}${p.detail ? ` (${p.detail})` : ""}`)));
         select.value = c.phrasing || "";
         select.addEventListener("change", () => setEdit("phrasing", select.value || null));
@@ -1243,7 +1270,7 @@ async function record() {
           h("a", { class: "btn primary", href: r.download, download: r.name }, "Download it"), publicKept(r),
           r.device && r.file && window.SongbirdDevice?.share ? shareButton(r) : null)
         : h("p", { title: "The song, the program that sang it and its record, in one file." }, "Saved ", h("code", {}, r.flac), ` (${fmtTime(r.duration)}).`),
-      h("p", { title: "What you chose, never who you are." }, r.yours ? `${r.yours} choice${r.yours === 1 ? "" : "s"} marked as yours.` : "Every choice in it is the program's."),
+      h("p", { title: "Your choices are marked. Your name isn't recorded." }, r.yours ? `${r.yours} choice${r.yours === 1 ? "" : "s"} marked as yours.` : "Every choice in it is the program's."),
       h("p", { class: "hint" }, "To make the next version from this one: ", h("code", {}, r.next)),
       h("button", { class: "btn", type: "button", onclick: () => play(job.url, "The recording", r.flac,
         { editsKey: JSON.stringify(edits), label: "The recording", who: "you", section: null, job }) }, "Play the recording"));
@@ -1284,11 +1311,11 @@ function applyPublic(s) {
   setOn("helpKept", "hidden", false);
 }
 
-function whatsKept(p, singing) {  // what an open studio keeps, said plainly (docs/WEB-STUDIO.md, "What is logged, and kept")
+function whatsKept(p, singing) {  // what an open studio keeps, said plainly (docs/history/web-studio-server-plan.md, "What is logged, and kept")
   const hours = p.download_hours === 24 ? "a day" : `${p.download_hours} hours`;
   return "What's kept: a random id in a cookie, so everyone gets a fair share (it names nobody). Your changes stay in " +
     "this browser, sent only to make the song. A recording waits here " + hours + " to be downloaded, then goes. A " +
-    "shared /v/ link, and any file you download, carries its version's own record: its made-up machine's name, the " +
+    "shared /v/ link, and any file you download, carries its version's record: its made-up machine's name, the " +
     "room its microphone heard, the leanings of its words." +
     (singing ? " Singing: only numbers are kept; the audio is deleted once it's measured." : "");
 }
@@ -1305,7 +1332,7 @@ function applyDevice(s) {
   setOn("helpWhere", "hidden", true);  // the page's foot says it
   // the file's record (its made-up machine's name, the room, the words' leanings) and what any site sees of what it
   // serves: docs/WEB-STUDIO.md, "On the device"
-  setOn("helpKept", "textContent", "What's kept: your changes, in this browser. An export stays until you leave the page, so download it to keep it. A version you share is stored on this site so its link works; it never carries your name.");
+  setOn("helpKept", "textContent", "What's kept: your changes, in this browser. An export stays until you leave the page, so download it to keep it. A version you share is stored on this site so its link works. Your name isn't in it.");
   setOn("helpKept", "hidden", false);
   const crashed = window.SongbirdDevice?.crashed?.();
   if (crashed) {

@@ -22,7 +22,7 @@ is the song's, the wind{air}): --heteronyms lists those the rules would say anot
 
 To fix a word, give the song its own reading, stressing only what English does:
 "nobody": "N OW1 B AA0 D IY0". Then check the words are still heard (tools/wer_suite.py --sketch h
---seeds 6), and build the site again (tools/sing_site.py; docs/SING-ONLINE.md says why that's safe
+--seeds 6), and build the site again (tools/sing_site.py; docs/history/SING-ONLINE.md says why that's safe
 while people sing).
 """
 

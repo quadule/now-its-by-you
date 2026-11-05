@@ -33,7 +33,7 @@ def main() -> None:
     ap.add_argument("root", type=Path, nargs="?", default=ROOT / "renders/throat")
     ap.add_argument("--min-tune", type=float, default=0.85)
     ap.add_argument("--min-align", type=float, default=0.6)
-    # added for human takes (tools/throat/volunteers.py): people aren't score-controlled, and the network is
+    # added for human takes (tools/archive/volunteers-2026/volunteers.py): people aren't score-controlled, and the network is
     # given the f0 they sang, not the note, so their tune only needs to show the voice was tracked in its key
     ap.add_argument("--cents", type=float, default=50.0, help="how near the note a note's middle must be to count as on tune")
     args = ap.parse_args()

@@ -1,4 +1,4 @@
-"""The studio: see how your version of the song was made, change it if you like, and record it.
+"""The studio: see how your version of the song was made, change it if you like, and export it.
 
     songbird studio [PARENT.flac|record.json] [--song GENOME] [--machine here] [--port 8766] [--out DIR]
                     [--host 0.0.0.0] [--allow-host NAME] [--key WORD]
@@ -30,7 +30,7 @@ machine that shapes the song is the computer serving it. docs/STUDIO.md,
 Public (`--public`), it is open to anyone who reaches it, for good: shared as above but with no key
 unless one is given, each visitor held to one render at a time and a few an hour (songbird.public),
 recordings offered for download a while and not kept, and an access log that never says who.
-docs/WEB-STUDIO.md.
+docs/history/web-studio-server-plan.md.
 """
 
 from __future__ import annotations
@@ -103,7 +103,7 @@ PIANO_STATIC = {"/piano/": ("piano/index.html", "text/html; charset=utf-8"),
                 "/piano/identity.css": ("identity.css", "text/css; charset=utf-8")}
 STATIC["/players.js"] = ("players.js", "text/javascript; charset=utf-8")
 STATIC["/learn.js"] = ("learn.js", "text/javascript; charset=utf-8")
-# the score (docs/STUDIO-REDESIGN.md): one page, three views, one inspector (index.html); the tune book of four
+# the score (docs/notes/STUDIO-REDESIGN.md): one page, three views, one inspector (index.html); the tune book of four
 # chapters it replaced (classic.html) was removed when the artist signed it off (2026-09-30)
 STATIC["/renderer.js"] = ("renderer.js", "text/javascript; charset=utf-8")  # previews and recordings, one interface
 STATIC["/model.js"] = ("model.js", "text/javascript; charset=utf-8")
@@ -2406,9 +2406,9 @@ def add_arguments(parser: argparse.ArgumentParser) -> None:
     parser.add_argument("--public", action="store_true",
                         help="open to anyone who reaches it, for good, with limits for each visitor: no link key "
                              "needed (unless --key), recordings offered for download and not kept, an access "
-                             "log that never says who (docs/WEB-STUDIO.md)")
+                             "log that never says who (docs/history/web-studio-server-plan.md)")
     parser.add_argument("--limit", action="append", default=[], metavar="NAME=N",
-                        help=f"a public studio's limit: {', '.join(public_mod.names())} (docs/WEB-STUDIO.md)")
+                        help=f"a public studio's limit: {', '.join(public_mod.names())} (docs/history/web-studio-server-plan.md)")
     parser.add_argument("--client-ip-header", metavar="HEADER",
                         help="public, behind a proxy on this machine or its private network: the header that "
                              "names the visitor's address (CF-Connecting-IP for a Cloudflare tunnel)")

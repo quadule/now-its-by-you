@@ -1,7 +1,7 @@
 // The studio's render worker: the song made in the visitor's browser (songbird/studio/renderer.js starts it,
 // docs/WEB-STUDIO.md "Made in the visitor's browser"). Pyodide, numpy, scipy and soundfile, the program itself
 // (songbird.zip: the same files the server runs, so a recording carries the same program), and its kernels in JS
-// and C/wasm (docs/BROWSER-RENDER.md). It makes what the server's render spec says (py/studio_render.py) and
+// and C/wasm (docs/notes/BROWSER-RENDER.md). It makes what the server's render spec says (py/studio_render.py) and
 // hands back the FLAC: a section's preview, or the whole song as its recording (the packet).
 //
 //   → { cmd: "init", pyodide: URL of py-<hash>/, app: URL of app-<hash>/, bytecode?: URL of bc-<hash>/,
@@ -125,11 +125,11 @@ async function init({ pyodide, app, bytecode, bytes, lean, control, stemCacheByt
   if (lean || control) return initLean(new Uint8Array(await program), t0, control, await code.modules);
   const kernels = await import(`${app}kernels/kernels.gen.mjs`);
   const rt = await import(`${app}kernels/rt.mjs`);
-  const { loadWasmKernels } = await import(`${app}wasm/kernels.mjs`);
+  const { loadWasmKernels, kernelsFile } = await import(`${app}wasm/kernels.mjs`);
   rt.setHeap(() => py._module.HEAPU8.buffer);
   const manifest = await (await fetch(`${app}kernels/manifest.json`)).text();
   py.registerJsModule('songbird_kernels', { kernels, rt, manifest });
-  const wasm = await (await fetch(`${app}wasm/kernels.wasm`)).arrayBuffer();
+  const wasm = await (await fetch(`${app}${kernelsFile()}`)).arrayBuffer();  // with SIMD where it validates
   py.registerJsModule('songbird_wasm', await loadWasmKernels(wasm, py._module.memory));
   const zip = new Uint8Array(await (await fetch(`${app}songbird.zip`)).arrayBuffer());
   py.unpackArchive(zip, 'zip', { extractDir: '/app' });

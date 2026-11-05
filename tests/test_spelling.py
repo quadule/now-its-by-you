@@ -1,4 +1,4 @@
-"""Notes and chords spelt by the key's signature (docs/STUDIO-EDM-TEST.md, second attempt, bug 6): C♯ minor has
+"""Notes and chords spelt by the key's signature (docs/history/STUDIO-EDM-TEST.md, second attempt, bug 6): C♯ minor has
 G♯m, D♯° and G♯4, not A♭m, E♭° and A♭4. Every major and minor key: its seven notes on seven letters, its
 signature the one its name has, its chords' roots its own notes, the page's twelve names, the MIDI file's key."""
 

@@ -31,48 +31,67 @@
       <img class="cover" src="/cover.jpg" width="800" height="800"
            alt="The cover: a seed packet printed The Volunteers, Now It's by You, with a daisy growing from a cracked stone, propped on a curb beside a lawn.">
       <div>
-        <p class="lead">A folk song passed between people and computers. Who made this song? Nobody knows.</p>
-        <p>The file below is the song, and it is also the program that sang it. Play it and you hear this version. Run it and it
-          sings a new one, on your computer and your day, that carries a little of everyone who sang into it before you.</p>
+        <p class="lead"><cite>Now It's by You</cite> is a folk song passed between people and computers that explores
+          music's ability to take on a life of its own, in verse and by embedding the software that sang it.</p>
+        <p>Run the program and you get a new version of the song, shaped by your computer and the season. Sing into it
+          and it learns a little of your timing and inflection (your recording is deleted right after, and your voice is
+          never cloned). The piece confronts the blurred authorship of AI music through the lens of folk music and oral
+          tradition: it wonders who made it, and invites you to take part.</p>
       </div>
     </div>
     <div class="preview">
-      <audio id="player" controls preload="none" src="/seed/{{SEED_FILE}}"></audio>
+      <audio id="player" controls preload="none" src="/seed/{{SEED_FILE}}?v={{SEED_V}}"></audio>
       <div class="lyric" id="lyric" data-words="{{SEED_WORDS}}" role="group" aria-label="The words, as they are sung" hidden>
         <p class="now"></p>
         <p class="next"></p>
       </div>
+      <p class="hint which">{{EDITION}} · <a href="/seed/{{SEED_FILE}}?v={{SEED_V}}" download>Download</a> ({{SEED_MB}} MB, FLAC)</p>
     </div>
   </section>
 
-  <section class="card" aria-label="Download">
-    <h2>Take it</h2>
-    <p><a href="/seed/{{SEED_FILE}}" download>{{SEED_FILE}}</a> ({{SEED_MB}} MB, FLAC). It plays in any music player.</p>
-    <p class="hint">Inside the same file: the program, the song's skeleton, this version's record and its words. Unzip it to
-      read them first if you like.</p>
-  </section>
+  <section class="card studio" aria-labelledby="studio">
+    <h2 id="studio">Make your own</h2>
+    <p>The studio opens your version of the song for today, in your browser.</p>
+    <div class="tabs">
+      <figure>
+        <img src="/tab-page.webp" width="860" height="484" loading="lazy" alt="The Page view: the first refrain being edited, its lines as fields with their syllable counts, and the words that can be swapped under them.">
+        <figcaption><b>Page</b></figcaption>
+      </figure>
+      <figure>
+        <img src="/tab-arrange.webp" width="860" height="484" loading="lazy" alt="The Arrange view: the first refrain selected, every player in it marked to play hard, beside the verses around it.">
+        <figcaption><b>Arrange</b></figcaption>
+      </figure>
+      <figure>
+        <img src="/tab-mix.webp" width="860" height="484" loading="lazy" alt="The Mix view: six players' level and pan, the whistle's fader moved up from 98% to 139%, and the voice's strip with mute and solo.">
+        <figcaption><b>Mix</b></figcaption>
+      </figure>
+      <figure>
+        <img src="/tab-sing.webp" width="860" height="484" loading="lazy" alt="The Sing view: the tune as a lane of notes with the words under it, a line lit as it is sung.">
+        <figcaption><b>Sing</b></figcaption>
+      </figure>
+    </div>
+    <p><a class="button primary" href="https://studio.itsby.you">Open the studio</a></p>
 
-  <section class="card" aria-label="Run it">
-    <h2>Sow it</h2>
-    <p>With Python 3.11 or newer installed, in a terminal:</p>
+    <h3>Or run the file</h3>
+    <p>With Python 3.11 or newer:</p>
     <pre>python3 {{SEED_FILE}}          what this is, and what you can do
 python3 {{SEED_FILE}} new      sing a new version here, today
-python3 {{SEED_FILE}} studio   change it, sing into it, record your own</pre>
-    <p class="hint">On Windows, <code>py</code> instead of <code>python3</code>. The first run fetches its libraries (about
-      100 MB) into a folder of its own and installs nothing else. It says what it will do and asks before it writes anything.</p>
+python3 {{SEED_FILE}} studio   change it and make your own</pre>
+    <p class="hint">On Windows, <code>py</code> instead of <code>python3</code>. On an Intel Mac, use the studio.
+      The first run downloads its libraries (about 100 MB) and asks first.</p>
   </section>
 
-  <aside class="card disclosure" aria-label="About the AI in this">
-    <h2>About the AI in this</h2>
-    <p>The music you hear is made by a small computer program running on the artist's home computer, and every version it
-      sings is a little different. The program and its song were written with commercial generative AI models as
-      collaborators. The finished program is not dependent on any online service; it runs on an average computer using
-      traditional software synthesis methods for instrumentation and a small offline model for the voice.</p>
-  </aside>
+  <section class="card disclosure" aria-labelledby="who">
+    <h2 id="who">Who made it</h2>
+    <p>The music you hear is made by a small computer program, and every version it sings is a little different. The
+      program and its song were written with commercial generative AI models as collaborators. The finished program is
+      not dependent on any online service; it runs on an average computer using traditional software synthesis methods
+      for instrumentation and a small offline model for the voice.</p>
+    <p>Eight people sang into the first version. {{CREDITS}}</p>
+  </section>
 
-  <p class="hint">The song, its program and every version are in the <a href="https://creativecommons.org/publicdomain/zero/1.0/" rel="license">public domain</a>: they belong to no one. The people who sang into it lent
-    their timing and inflection as a handful of numbers; their recordings are deleted, and no voice is cloned. Singing into
-    the shared version is by invitation.</p>
+  <p class="hint">The song, its program and every version are in the <a href="https://creativecommons.org/publicdomain/zero/1.0/" rel="license">public domain</a>.
+    {{SOURCE}}Questions, or something to report: <a href="mailto:milo@winningham.net">milo@winningham.net</a>.</p>
 </main>
 </body>
 </html>

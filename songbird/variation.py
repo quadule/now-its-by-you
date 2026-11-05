@@ -5,7 +5,10 @@ parameters (what was inherited), the machine's voice (who is singing) and the
 drift (when), plus chance. Every number goes the same way:
 
 1. The machine's own value: read from its voice (see Character); where it
-   gave no signal the decision reads, its own value is the parent's.
+   gave no signal the decision reads, its own value is the parent's, as it
+   stood before this machine's day moved it: if this machine made the parent
+   (its own last rendition), the day it added then is taken back out, so
+   singing its own rendition again never adds its day twice (see centre()).
 2. Drift moves the machine's own value: today it is a little brisker, a
    little lower, a little breathier. A drift of 1 moves it by the knob's span.
 3. The child pulls from its parent toward that: child = parent + PULL (own
@@ -43,6 +46,7 @@ from typing import Callable
 from . import evolve
 from .band import INSTRUMENTS, Band
 from .drift import DIMENSIONS, Drift, series
+from .drift import drift as field_at
 from .genome import Genome
 from .harvest import MODE_FAMILIES, THEMES, Voice
 from .synth.mixing import MixParams
@@ -254,6 +258,7 @@ class Knob:
     path    where it goes: a Params field, singer.<VoiceParams field>, band.<Band field>,
             mix.<MixParams field>, leanings.<key>
     uses    the traits its own value reads; with none of them known, own is the parent's
+            (as it stood before this machine's day moved it: centre())
     own     the machine's own value, from its character c and x, the song's own value
     drift   the drift dimension that moves the machine's own value, and span how far
             a drift of 1 moves it (a fraction of it where ratio); or a tuple of each
@@ -274,25 +279,75 @@ class Knob:
     step: float = 0.001
     inherit: bool = True
 
+    def moved(self, value: float, drift: Drift, c: Character) -> float:
+        """A machine's own value as the drift moves it."""
+        dims = self.drift if isinstance(self.drift, tuple) else (self.drift,)
+        spans = self.span if isinstance(self.span, tuple) else (self.span,)
+        for dim, span in zip(dims, spans):
+            d = drift.view(self.view).get(dim, 0.0)
+            span = span(c) if callable(span) else span
+            value = value * (1 + span * d) if self.ratio else value + span * d
+        return value
+
+    def reads(self, drift: Drift) -> tuple:
+        dims = self.drift if isinstance(self.drift, tuple) else (self.drift,)
+        return tuple(drift.view(self.view).get(dim, 0.0) for dim in dims)
+
+    def centre(self, was: float, ctx: Context, x: float | None = None, bounds: tuple | None = None) -> float:
+        """Where a machine that knows nothing of its own here starts from: the parent's value as it stood
+        before this machine's day moved it. That is the parent's value, unless this machine made the parent
+        (ctx.then): then the share of that day the parent heard comes back out, so singing its own rendition
+        again gives the same while the field stands and, as the field moves, a field around the same centre,
+        never the day added again each time (which walked a quiet machine's own versions up a semitone and
+        about 5 BPM a generation to the bounds, until October 7, 2026).
+
+        The day is affine in the value (a shift, or for a ratio a scale), so it comes straight back out. When
+        more than one centre fits the parent (a bound cut the day off, or the rounding), the song's own value x
+        if it is one of them; else, once the field has moved, a centre on the knob's grid that sings the
+        parent's value again (regained), so it comes back exactly each time and the rounding can't wander.
+        bounds: those the parent's value was held to, if not the knob's."""
+        if ctx.then is None or not self.drift:
+            return was
+        share = PULL if self.inherit else 1.0
+        zero = share * self.moved(0.0, ctx.then, ctx.c)
+        slope = 1.0 + share * (self.moved(1.0, ctx.then, ctx.c) - 1.0) - zero
+        if slope <= 0:  # (no drift can turn a value round; never divide by it)
+            return was
+        x = read(ctx.song, self.path) if x is None else x
+        lo, hi = bounds or (self.bounds(x) if callable(self.bounds) else self.bounds)
+        day = zero + slope * x  # the song's own value, as that day moved it
+        if (was <= lo and day <= lo) or (was >= hi and day >= hi) or abs(day - was) <= self.step / 2:
+            return x  # the song's own fits the parent (a lineage from the seed, say)
+        centre = (was - zero) / slope
+        if ctx.drift is not None and self.reads(ctx.drift) == self.reads(ctx.then):
+            return centre  # the field hasn't moved since: the parent's value comes straight back
+        step = self.step
+
+        def sung(c: float) -> float:  # what the machine sang from c that day
+            return round(float(round(clip(zero + slope * c, lo, hi) / step) * step), 6)
+
+        return regained(was, centre, sung, step, even=self.ratio)
+
     def apply(self, out: dict, ctx: Context) -> None:
         if not exists(self.path):
             return
         x = read(ctx.song, self.path)
         was = read(ctx.parent, self.path)
-        own = self.own(ctx.c, x) if any(u in ctx.c.known for u in self.uses) else was
+        if any(u in ctx.c.known for u in self.uses):
+            base, own = was, self.own(ctx.c, x)
+        else:  # nothing of its own here: the parent's, as it stood before this machine's day moved it
+            base = own = self.centre(was, ctx, x)
         machine = own
         if self.drift and ctx.drift is not None:
-            dims = self.drift if isinstance(self.drift, tuple) else (self.drift,)
-            spans = self.span if isinstance(self.span, tuple) else (self.span,)
-            for dim, span in zip(dims, spans):
-                d = ctx.drift.view(self.view).get(dim, 0.0)
-                span = span(ctx.c) if callable(span) else span
-                own = own * (1 + span * d) if self.ratio else own + span * d
-        value = was + PULL * (own - was) if self.inherit else own
+            own = self.moved(own, ctx.drift, ctx.c)
+        raw = base + PULL * (own - base) if self.inherit else own
         lo, hi = self.bounds(x) if callable(self.bounds) else self.bounds
-        value = round(float(round(clip(value, lo, hi) / self.step) * self.step), 6)
+        value = round(float(round(clip(raw, lo, hi) / self.step) * self.step), 6)
         if ctx.trace is not None:  # how the value came to be: the parent's, the machine's own, moved by time
-            ctx.trace[self.path] = {"was": was, "own": machine, "moved": own, "value": value, "inherit": self.inherit}
+            shown, moved = machine, own
+            if base != was:  # its own rendition sung again: no pull of its own, only how far time has moved since
+                shown, moved = was, was + (raw - was) / (PULL if self.inherit else 1.0)
+            ctx.trace[self.path] = {"was": was, "own": shown, "moved": moved, "value": value, "inherit": self.inherit}
         head, _, tail = self.path.partition(".")
         held = getattr(ctx.parent, head)
         if tail and isinstance(held, dict) and value == was and tail not in held:
@@ -414,12 +469,16 @@ class Context:
     trace: dict | None = None  # if given, each knob's arithmetic by path (for the studio's reasons)
     style: str | None = None  # a style asked for by name (songbird render --style), else the ring decides
     arrange: dict | None = None  # the arrangement's options asked for (Style fields), else the style decides
+    then: Drift | None = None  # this machine's drift when it made the parent, if it did (made_here)
 
     def at(self, view: str, dimension: str) -> float:
         return self.drift.view(view).get(dimension, 0.0) if self.drift is not None else 0.0
 
     def pull(self, was: float, own: float) -> float:
         return was + PULL * (own - was)
+
+    def at_then(self, view: str, dimension: str) -> float:
+        return self.then.view(view).get(dimension, 0.0) if self.then is not None else 0.0
 
     def habit(self, name: str, where: str = "") -> float | None:
         """How much this machine likes something (0..1), stable for the machine,
@@ -428,6 +487,51 @@ class Context:
             return None
         local = 0.1 * self.c.id(f"habit:{name}:{where}") if where else 0.0
         return clip(0.5 + 0.3 * self.c.id(f"habit:{name}") + local, 0.0, 1.0)
+
+
+def regained(was: float, inverse: float, sung: Callable, step: float, even: bool = False) -> float:
+    """A centre on the step grid, near inverse (where the day points back to), that sings the parent's value
+    (was) again: sung(centre) == was. So the record's rounding never wanders down a machine's own versions.
+    Where a ratio could fold two grid points onto one value (even), the one on the grid of two steps, so the
+    next time comes back to the same one exactly; at most one such move, made where it can't be heard (both
+    sang was). If none sings was (a person's own value, say), the nearest grid point."""
+    k = round(inverse / step)
+    fits = [c for c in (round((k + i) * step, 6) for i in (0, -1, 1)) if sung(c) == was]
+    if not fits:
+        return round(k * step, 6)
+    return min(fits, key=lambda c: (even and round(c / step) % 2 != 0, abs(c - inverse)))
+
+
+def made_here(parent, drift: Drift | None) -> Drift | None:
+    """This machine's drift at the moment it made the parent (Params.made), if it made it: its own last
+    rendition, sung again. What the machine knows nothing of its own about, the parent already carries that
+    day's move in, so it is taken back out before today's goes in (Knob.centre, centred()). None for a parent
+    from another machine or from no machine (the seed): that hand-off takes its one turn."""
+    made = getattr(parent, "made", None) or {}
+    if drift is None or not drift.hash or made.get("by") != drift.hash[:12] or made.get("at") is None:
+        return None
+    return _field_at(float(made["at"]), drift.hash)
+
+
+@functools.lru_cache(maxsize=256)
+def _field_at(t: float, hash_: str) -> Drift:
+    """The drift at a moment, remembered: the studio asks of one parent's moment for a year of days."""
+    return field_at(t, hash_)
+
+
+def centred(ctx: Context, was, options, choose, home, estimate: Callable):
+    """The option a decision starts from for a machine that knows nothing of its own there: the parent's
+    (was), unless this machine made the parent; then the one its day then moved to the parent's, one of the
+    options from which choose(option, ctx.then) gives was. So the same day gives the parent's again, and
+    later days the machine's field around one centre, never a walk. A held choice or a nearest mode can't
+    always tell which option that was: then the song's own (home) if it is one, else the nearest to where
+    the day points back to (estimate(option): how far from it), the parent's own in a tie."""
+    if ctx.then is None:
+        return was
+    found = [o for o in options if choose(o, ctx.then) == was]
+    if not found:
+        return was
+    return min(found, key=lambda o: (o != home, estimate(o), o != was))
 
 
 # Modes by brightness, and a chord's quality in a mode. A drift of 1 moves the machine's own mode this many
@@ -458,18 +562,28 @@ def allowed_modes(genome: Genome, own_mode: str) -> tuple[str, ...]:
 def choose_mode(out: dict, ctx: Context) -> None:
     """The parent's mode pulled toward the voice family's home, moved by the
     year's drift (a positive drift brightens), then the nearest mode the family
-    and the song's chords allow."""
+    and the song's chords allow. With no family, the home is the parent's
+    (centred(): as it stood before this machine's day moved it)."""
     allowed = allowed_modes(ctx.genome, ctx.song.mode)
+
+    def mode(parent: str, d: float) -> str:
+        members = allowed
+        home = parent
+        if ctx.c.family in MODE_FAMILIES:
+            family, home = MODE_FAMILIES[ctx.c.family]
+            members = [m for m in family if m in allowed] or allowed
+        elif parent not in allowed:
+            members = sorted(set(allowed) | {parent}, key=lambda m: -BRIGHTNESS[m])
+        target = ctx.pull(BRIGHTNESS[parent], BRIGHTNESS[home] + MODE_SPAN * d)
+        return min(members, key=lambda m: (abs(BRIGHTNESS[m] - target), abs(BRIGHTNESS[m] - BRIGHTNESS[parent])))
+
     parent = ctx.parent.mode
-    members = allowed
-    home = parent
-    if ctx.c.family in MODE_FAMILIES:
-        family, home = MODE_FAMILIES[ctx.c.family]
-        members = [m for m in family if m in allowed] or allowed
-    elif parent not in allowed:
-        members = sorted(set(allowed) | {parent}, key=lambda m: -BRIGHTNESS[m])
-    target = ctx.pull(BRIGHTNESS[parent], BRIGHTNESS[home] + MODE_SPAN * ctx.at("year", "mode"))
-    out["mode"] = min(members, key=lambda m: (abs(BRIGHTNESS[m] - target), abs(BRIGHTNESS[m] - BRIGHTNESS[parent])))
+    if ctx.c.family not in MODE_FAMILIES:
+        back = BRIGHTNESS[parent] - PULL * MODE_SPAN * ctx.at_then("year", "mode")
+        parent = centred(ctx, parent, sorted(set(allowed) | {parent}, key=lambda m: -BRIGHTNESS[m]),
+                         lambda m, then: mode(m, then.view("year").get("mode", 0.0)), ctx.song.mode,
+                         lambda m: abs(BRIGHTNESS[m] - back))
+    out["mode"] = mode(parent, ctx.at("year", "mode"))
 
 
 # The accompaniment: patterns over the chord voicing (0 the bass, 1-4 above it; . rests), by steps per bar.
@@ -480,6 +594,7 @@ PATTERNS = {
 }
 
 
+@functools.lru_cache(maxsize=256)
 def busy(pattern: str) -> float:
     steps = pattern.split()
     return sum(s != "." for s in steps) / len(steps)
@@ -488,19 +603,32 @@ def busy(pattern: str) -> float:
 def choose_accomp(out: dict, ctx: Context) -> None:
     """The pattern nearest in busyness to the parent's pulled toward the
     machine's density moved by the texture drift; close enough keeps the
-    parent's own pattern."""
+    parent's own pattern. With no density, the machine's own is the parent's
+    (centred(): as it stood before this machine's day moved it)."""
     parent = ctx.parent.accomp
     choices = PATTERNS.get(len(parent.split()))
     if not choices:
         return
-    was = busy(parent)
-    own = 0.72 + 0.2 * ctx.c.density if "density" in ctx.c.known else was
-    target = ctx.pull(was, own + 0.3 * ctx.at("slow", "texture"))
-    if abs(target - was) < 0.08:
-        return
-    best = min(abs(busy(p) - target) for p in choices)
-    near = [p for p in choices if abs(busy(p) - target) - best < 1e-9]
-    out["accomp"] = near[min(len(near) - 1, int((ctx.c.id("accomp") + 1) / 2 * len(near)))]
+
+    def accomp(parent: str, d: float) -> str:
+        was = busy(parent)
+        own = 0.72 + 0.2 * ctx.c.density if "density" in ctx.c.known else was
+        target = ctx.pull(was, own + 0.3 * d)
+        if abs(target - was) < 0.08:
+            return parent
+        best = min(abs(busy(p) - target) for p in choices)
+        near = [p for p in choices if abs(busy(p) - target) - best < 1e-9]
+        return near[min(len(near) - 1, int((ctx.c.id("accomp") + 1) / 2 * len(near)))]
+
+    start = parent
+    if "density" not in ctx.c.known:
+        back = busy(parent) - PULL * 0.3 * ctx.at_then("slow", "texture")
+        start = centred(ctx, parent, tuple(dict.fromkeys((parent, *choices))),
+                        lambda p, then: accomp(p, then.view("slow").get("texture", 0.0)), ctx.song.accomp,
+                        lambda p: abs(busy(p) - back))
+    chosen = accomp(start, ctx.at("slow", "texture"))
+    if chosen != parent:
+        out["accomp"] = chosen
 
 
 HOLD = 0.2  # a held choice moves to a neighbour only once its position is this far past the boundary
@@ -548,19 +676,45 @@ LEAD_SPAN = 1.2
 def choose_pattern(out: dict, ctx: Context) -> None:
     """The band's accompaniment family: the parent's pulled toward the machine's own (its identity,
     a busy machine leaning to the strum), moved by the slow drift, held against flicker."""
-    was = PATTERN_ORDER.index(ctx.parent.band.pattern) if ctx.parent.band.pattern in PATTERN_ORDER else 2
-    own = 2.0 + 1.1 * ctx.c.id("pattern") + 0.4 * ctx.c.density if "identity" in ctx.c.known else was
-    k = held(ctx, "slow", "pattern", ctx.pull(was, own), PATTERN_SPAN, len(PATTERN_ORDER))
+    index = lambda band: PATTERN_ORDER.index(band.pattern) if band.pattern in PATTERN_ORDER else 2  # noqa: E731
+    was = index(ctx.parent.band)
+    if "identity" in ctx.c.known:
+        base = ctx.pull(was, 2.0 + 1.1 * ctx.c.id("pattern") + 0.4 * ctx.c.density)
+    else:
+        base = held_centre(ctx, "slow", "pattern", was, index(ctx.song.band), PATTERN_SPAN, len(PATTERN_ORDER))
+    k = held(ctx, "slow", "pattern", base, PATTERN_SPAN, len(PATTERN_ORDER))
     out.setdefault("band", {})["pattern"] = PATTERN_ORDER[k]
 
 
 def choose_lead(out: dict, ctx: Context) -> None:
     """Who states the tune where nobody sings: the parent's lead pulled toward the machine's own,
     moved by the year's drift, held against flicker."""
-    was = LEAD_ORDER.index(ctx.parent.band.lead) if ctx.parent.band.lead in LEAD_ORDER else 0
-    own = 1.0 + 1.3 * ctx.c.id("lead") if "identity" in ctx.c.known else was
-    k = held(ctx, "year", "lead", ctx.pull(was, own), LEAD_SPAN, len(LEAD_ORDER))
+    index = lambda band: LEAD_ORDER.index(band.lead) if band.lead in LEAD_ORDER else 0  # noqa: E731
+    was = index(ctx.parent.band)
+    if "identity" in ctx.c.known:
+        base = ctx.pull(was, 1.0 + 1.3 * ctx.c.id("lead"))
+    else:
+        base = held_centre(ctx, "year", "lead", was, index(ctx.song.band), LEAD_SPAN, len(LEAD_ORDER))
+    k = held(ctx, "year", "lead", base, LEAD_SPAN, len(LEAD_ORDER))
     out.setdefault("band", {})["lead"] = LEAD_ORDER[k]
+
+
+def held_centre(ctx: Context, view: str, dimension: str, was: int, home: int, span: float, n: int) -> int:
+    """Where a held choice starts for a machine with no identity: the parent's (was), as it stood before this
+    machine's day moved it (centred(); home: the song's own)."""
+    if ctx.then is None:
+        return was
+    return _held_centre(ctx.then.t, ctx.then.hash, view, dimension, was, home, span, n)
+
+
+@functools.lru_cache(maxsize=1024)
+def _held_centre(t: float, hash_: str, view: str, dimension: str, was: int, home: int, span: float, n: int) -> int:
+    """held_centre for the parent made at t, remembered (reading a held choice back can take the field's past)."""
+    then = _field_at(t, hash_)
+    ctx = Context(None, None, None, Character(), then, then=then)
+    back = was - span * ctx.at_then(view, dimension)
+    return centred(ctx, was, range(n), lambda k, _: held(ctx, view, dimension, k, span, n), home,
+                   lambda k: abs(k - back))
 
 
 def choose_choir(out: dict, ctx: Context) -> None:
@@ -834,20 +988,43 @@ def choose_mood(out: dict, ctx: Context) -> None:
     """Mood weights over plain, light, dark and tender: the parent's pulled
     toward the screen's (a light screen lightens, a warm one is tender), with
     the slow mood drift tilting the machine's own (a positive drift lightens),
-    darker in a minor mode. Never read from the person's words."""
+    darker in a minor mode. Never read from the person's words. With no
+    screen, the machine's own is the parent's, as it stood before this
+    machine's day (and a minor mode's darkening) moved it, as Knob.centre."""
     was = {**LEANINGS["mood_weights"], **ctx.parent.leanings.get("mood_weights", {})}
     c = ctx.c
     screen = {"plain": 1.0, "light": 1.0 + 0.6 * c.brightness, "dark": 1.0 - 0.5 * c.brightness,
               "tender": 1.0 + 0.5 * c.warmth} if "brightness" in c.known else None
-    tilt = ctx.at("slow", "mood")
     lean = {"plain": 0.5, "light": 1.0, "dark": -1.0, "tender": -0.5}  # a drift of 1 doubles light, halves dark
-    minor = {"dark": 1.5, "tender": 1.2} if out.get("mode") in MINOR else {}
-    weights = {}
-    for mood, w in was.items():
-        own = (screen.get(mood, 1.0) if screen else w) * 2 ** (lean.get(mood, 0.0) * tilt) * minor.get(mood, 1.0)
-        weights[mood] = ctx.pull(w, own)
-    mean = sum(weights.values()) / len(weights)
-    out.setdefault("leanings", {})["mood_weights"] = {k: round(float(v / mean), 2) for k, v in weights.items()}
+
+    def sung(was: dict, tilt: float, mode) -> dict:
+        minor = {"dark": 1.5, "tender": 1.2} if mode in MINOR else {}
+        weights = {}
+        for mood, w in was.items():
+            own = (screen.get(mood, 1.0) if screen else w) * 2 ** (lean.get(mood, 0.0) * tilt) * minor.get(mood, 1.0)
+            weights[mood] = ctx.pull(w, own)
+        mean = sum(weights.values()) / len(weights)
+        return {k: round(float(v / mean), 2) for k, v in weights.items()}
+
+    tilt, mode = ctx.at("slow", "mood"), out.get("mode")
+    home = {**LEANINGS["mood_weights"], **(ctx.song.leanings or {}).get("mood_weights", {})}
+    if screen is None and ctx.then is not None and sung(home, ctx.at_then("slow", "mood"), ctx.parent.mode) != was:
+        # its own rendition sung again, from other than the song's own: each weight as a ratio knob's centre
+        def day(mood: str, tilt: float, mode) -> float:
+            minor = {"dark": 1.5, "tender": 1.2} if mode in MINOR else {}
+            return ctx.pull(1.0, 2 ** (lean.get(mood, 0.0) * tilt) * minor.get(mood, 1.0))
+
+        then = {m: day(m, ctx.at_then("slow", "mood"), ctx.parent.mode) for m in was}
+        now = {m: day(m, tilt, mode) for m in was}
+        if now != then:  # the field has moved since: that day out (as a ratio knob's, Knob.centre), today's in;
+            # unmoved, the parent's stand
+            was = {m: regained(w, w / then[m], lambda c, m=m: round(float(c * then[m]), 2), 0.01, even=True) * now[m]
+                   for m, w in was.items()}
+        out.setdefault("leanings", {})["mood_weights"] = {m: round(float(w), 2) for m, w in was.items()}
+        return
+    if screen is None and ctx.then is not None:  # its own rendition of the song's own: the song's own, today
+        was = home
+    out.setdefault("leanings", {})["mood_weights"] = sung(was, tilt, mode)
 
 
 def choose_vocabulary(out: dict, ctx: Context) -> None:
@@ -891,12 +1068,13 @@ LEANING_KNOBS = tuple(k for k in KNOBS if k.path.startswith("leanings."))
 def own_leanings(ctx: Context, t: float | None = None, mode: str | None = None):
     """The lyric leanings this machine would choose from its parent's at a moment (a clock's stretch's start,
     so a choice made with them holds through the stretch), or with no moment, from its character alone: its
-    taste without the season's drift. As songbird.arrange takes them; None if neutral."""
+    taste without the season's drift. As songbird.arrange takes them; None if neutral. (They depend on
+    ctx.then too, for what the machine knows nothing of its own about: a memo of them keys it.)"""
     from .drift import drift as drift_at
 
     hash_ = ctx.drift.hash if ctx.drift is not None else ""
     moment = drift_at(t, hash_) if t is not None and hash_ else None
-    sub = Context(ctx.genome, ctx.song, ctx.parent, ctx.c, moment)
+    sub = Context(ctx.genome, ctx.song, ctx.parent, ctx.c, moment, then=ctx.then)
     tmp = {"leanings": dict(getattr(ctx.parent, "leanings", None) or {}), "mode": mode}
     for knob in LEANING_KNOBS:
         knob.apply(tmp, sub)
@@ -1001,7 +1179,8 @@ def choose(genome: Genome, parent=None, voice: Voice | None = None, drift: Drift
         if form is None:
             style_shaped(genome, out)  # the parts of the form a style always plays (the old 78's intro and break)
         return Params.from_dict(out)
-    ctx = Context(genome, song, parent, character(voice), drift, log=log, trace=trace, style=style, arrange=arrange)
+    ctx = Context(genome, song, parent, character(voice), drift, log=log, trace=trace, style=style, arrange=arrange,
+                  then=made_here(parent, drift))
     out = parent.to_dict()
     for key in ("singer", "mix", "leanings"):
         out[key] = dict(out.get(key) or {})

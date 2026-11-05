@@ -1,5 +1,5 @@
 // Run with `node --test tests/studio_morph.test.cjs`: the score's column, grid and mix drawn again in place
-// (songbird/studio/studio.js morph; docs/STUDIO-EDM-TEST.md, second attempt, bugs 1 and 2). A node the new drawing
+// (songbird/studio/studio.js morph; docs/history/STUDIO-EDM-TEST.md, second attempt, bugs 1 and 2). A node the new drawing
 // has in the same place is kept and given the new one's attributes, text, value and listeners, so an answer that
 // lands mid-click neither replaces the button under the pointer nor moves what didn't change.
 const { test } = require('node:test');

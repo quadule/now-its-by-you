@@ -16,7 +16,7 @@ how much of each gesture's spread belongs to the note rather than to the
 moment (reliability: 0 is all noise, 1 all signal), and whether two takes
 agree note by note.
 
---reference: takes by reference singers (tools/reference.py), whose every
+--reference: takes by reference singers (tools/archive/reference-voices/reference.py), whose every
 gesture is known. How closely the extractor reads each gesture (correlation,
 the slope it reads them at, the error), and how close a phrasing learned
 from 1, 2 or 4 takes comes to what the singer meant, against the best any
@@ -239,7 +239,7 @@ def reference_takes(genome_path: Path, genome, voice: str):
         truth = json.loads(wav.with_suffix(".truth.json").read_text())
         out.append((T.measured(genome_path, genome, wav), truth))
     if not out:
-        raise SystemExit(f"no reference takes in {folder}: make some with tools/reference.py")
+        raise SystemExit(f"no reference takes in {folder}: make some with tools/archive/reference-voices/reference.py")
     return out
 
 

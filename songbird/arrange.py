@@ -1834,11 +1834,6 @@ def free_questions(genome: Genome) -> tuple[str, ...]:
     return tuple(_options(spec)[1:-1])
 
 
-def refrain_problem(genome: Genome, held_rounds: list[dict]) -> str | None:
-    """Why some rounds, sung as they stand one refrain each, break the bank's rules; None if they don't."""
-    return _rounds_problem(_song(genome), [dict(r) for r in held_rounds])
-
-
 def couplet_ids(genome: Genome) -> tuple[str, ...]:
     """The couplets a refrain before the last may sing (all but the canon)."""
     song = _song(genome)

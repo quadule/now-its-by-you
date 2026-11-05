@@ -1,6 +1,6 @@
 """Sung notes as SoulX-Singer metadata (dev only: SoulX-Singer is a reference and a teacher, never shipped).
 
-SoulX-Singer (Apache-2.0, installed beside the repo at ~/Code/svs/SoulX-Singer with its own venv)
+SoulX-Singer (Apache-2.0; a checkout with its own venv, named by $SOULX: tools/throat/soulx_batch.py)
 sings a score given, per note, its phones (ARPAbet), its length and its MIDI pitch, in the timbre of
 a ten-second prompt. These helpers turn our notes (songbird.score.Note, or dicts with the same
 fields) into its metadata. From renders/reference/svs/score_to_soulx.py, where they were first

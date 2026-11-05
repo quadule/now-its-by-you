@@ -67,6 +67,9 @@ class MixParams:
     disc      0-1         0 none; above 0 the whole record as an acoustic 78 (synth/disc.py): mono, the horn's
                           band and resonances, the turntable's wow, the needle's lead-in and run-out; how worn
                           its surface is (noise and clicks), 1 as designed. Left out of a record while 0
+    voices    0-1         how much of the singers is heard: 1 as sung, 0 none (the lead and the lineage choir
+                          out of the record and its room; the band stays as it was mixed for them, still
+                          making way where they sing). Left out of a record while 1
     """
 
     rt60: float = 1.1
@@ -82,6 +85,7 @@ class MixParams:
     balance: tuple[tuple[str, float], ...] = ()
     plate: float = 1.0
     disc: float = 0.0  # an acoustic 78 (2026-09-30, the old 78's; any style's at the command line)
+    voices: float = 1.0  # the singers muted at 0: the band alone, as the record has it
 
     @classmethod
     def from_dict(cls, data: dict) -> MixParams:
@@ -116,6 +120,8 @@ class MixParams:
         out["balance"] = dict(self.balance)
         if not out["disc"]:  # added after records were made: absent while off, so a record is as it was
             del out["disc"]
+        if out["voices"] == 1.0:  # the same
+            del out["voices"]
         return out
 
     def clamped(self) -> MixParams:
@@ -138,6 +144,7 @@ RANGES = {
     "wear": (0.0, 1.0),
     "plate": (0.0, 2.0),
     "disc": (0.0, 1.0),
+    "voices": (0.0, 1.0),
 }
 
 # --- channel strips ---------------------------------------------------------------------
@@ -652,6 +659,15 @@ def mix_made(parts: list, length: int, sr: int, seed: int = 0, params: MixParams
         design.sweep(band, band_send, stepping)
     if progress is not None:
         progress("mix")
+    # The singers turned down or muted (p.voices): out of the record, their room and plate, and a desk's throws;
+    # what the band and the room do around them (singing, the choir's own space) stays as it was measured
+    choir_sang = None
+    if p.voices < 1.0:
+        if choir is not None and singing is not None:
+            choir_sang = fx.activity(choir, sr)
+        for bus in (voice, choir):
+            if bus is not None:
+                bus *= p.voices
     # from here each long signal is let go as soon as it has been used, and treated where it lies when nothing
     # else holds it (the same samples as a treated copy)
     rise = None
@@ -723,7 +739,8 @@ def mix_made(parts: list, length: int, sr: int, seed: int = 0, params: MixParams
                  inplace=True)
     if singing is not None:
         # the room gives way to the lead's words, but not where the lineage sings with it: that is its space
-        choir_activity = fx.activity(choir, sr) if choir is not None else None
+        choir_activity = choir_sang if choir_sang is not None else fx.activity(choir, sr) if choir is not None else None
+        choir_sang = None
         for a in range(0, length, 1 << 16):
             b = min(length, a + (1 << 16))
             dip = RETURN_DIP * p.duck * singing[a:b] * (1.0 - choir_activity[a:b]

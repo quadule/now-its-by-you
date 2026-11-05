@@ -286,6 +286,75 @@ def test_the_bootstrap_says_what_this_computer_lacks_before_asking(monkeypatch):
     assert bootstrap.python_problem(False, (3, 9)) is None
 
 
+PINS = "# the first version's\nnumpy==2.5.3\nscipy==1.18.1\nnumba==0.67.0\nsoundfile==0.14.0\ncmudict==1.1.3\n"
+
+
+class Installer:
+    """uv and pip, stood in for: each command is kept; a venv command makes the environment; an install fails if it
+    asks for something with no ready-made build here (`unbuilt`, e.g. numba 0.67.0 on an Intel Mac) or would compile
+    (no --only-binary :all:), and every install fails offline."""
+
+    def __init__(self, unbuilt=(), offline=False):
+        self.calls, self.unbuilt, self.offline = [], set(unbuilt), offline
+
+    def __call__(self, cmd, check=False, **kwargs):
+        cmd = [str(c) for c in cmd]
+        self.calls.append(cmd)
+        if "venv" in cmd:
+            (Path(cmd[-1]) / "bin").mkdir(parents=True)
+            (Path(cmd[-1]) / "bin" / "python").write_text("")
+            return subprocess.CompletedProcess(cmd, 0)
+        asked = Path(cmd[cmd.index("-r") + 1]).read_text().split() if "-r" in cmd else cmd
+        ready_made = "--only-binary" in cmd and cmd[cmd.index("--only-binary") + 1] == ":all:"
+        ok = ready_made and not self.offline and not self.unbuilt & set(asked)
+        if not ok and check:
+            raise subprocess.CalledProcessError(1, cmd)
+        return subprocess.CompletedProcess(cmd, 0 if ok else 1)
+
+
+def _set_up(tmp_path, monkeypatch, installer, uv=None, wanted="3.12"):
+    from songbird import bootstrap
+
+    (tmp_path / "packet").mkdir(parents=True)
+    (tmp_path / "packet" / "requirements.txt").write_text(PINS)
+    monkeypatch.setattr(bootstrap.shutil, "which", lambda name: uv)
+    monkeypatch.setattr(bootstrap.subprocess, "run", installer)
+    env = tmp_path / "envs" / "e"
+    said = []
+    bootstrap.set_up(tmp_path / "packet", env, env / "bin" / "python", wanted, tell=said.append)
+    return env, " ".join(said)
+
+
+def test_the_bootstrap_installs_the_pins_ready_made_and_else_the_newest_made_for_this_computer(tmp_path, monkeypatch):
+    # an Intel Mac, with pip: numba 0.67.0 has no build for it, so the pins fail, and the newest made for it install
+    pip = Installer(unbuilt={"numba==0.67.0"})
+    env, said = _set_up(tmp_path, monkeypatch, pip)
+    installs = [c for c in pip.calls if "install" in c]
+    assert len(installs) == 2 and installs[0][-2:] == ["-r", str(tmp_path / "packet" / "requirements.txt")]
+    assert installs[1][-5:] == ["numpy", "scipy", "numba", "soundfile", "cmudict"]  # unpinned: the resolver picks
+    assert all(c[c.index("--only-binary") + 1] == ":all:" for c in installs)  # never compiled, either time
+    assert "couldn't be installed here" in said and "newest ones made for this computer" in said
+    assert (env / ".ready").exists()
+    # with uv, where the pins have builds: uv makes it with the Python the version was made with, and that's all
+    uv = Installer()
+    env, said = _set_up(tmp_path / "uv", monkeypatch, uv, uv="/usr/bin/uv")
+    assert uv.calls[0][:5] == ["/usr/bin/uv", "venv", "--quiet", "--python", "3.12"]
+    assert [c[:3] for c in uv.calls[1:]] == [["/usr/bin/uv", "pip", "install"]] and "-r" in uv.calls[1]
+    assert "--only-binary" in uv.calls[1] and "couldn't" not in said and (env / ".ready").exists()
+
+
+def test_when_nothing_installs_the_bootstrap_says_why_it_may_be_and_keeps_nothing(tmp_path, monkeypatch):
+    # offline: both tries fail, the half-made environment goes, and it says to connect
+    with pytest.raises(SystemExit) as stop:
+        _set_up(tmp_path, monkeypatch, Installer(offline=True), wanted="3.10")
+    assert "offline" in str(stop.value) and not (tmp_path / "envs" / "e").exists()
+    # with pip on a Python other than the version's, there may be no builds for this one: uv fetches the version's
+    assert "may not be made for Python" in str(stop.value) and "uv" in str(stop.value) and "3.10" in str(stop.value)
+    with pytest.raises(SystemExit) as stop:  # uv already fetched that Python: nothing more to suggest
+        _set_up(tmp_path / "uv", monkeypatch, Installer(offline=True), uv="/usr/bin/uv", wanted="3.10")
+    assert "offline" in str(stop.value) and "may not be made" not in str(stop.value)
+
+
 def test_the_studios_first_time_has_a_page_that_says_what_it_waits_for():
     import http.client
 

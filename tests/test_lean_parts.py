@@ -1,4 +1,4 @@
-"""The heaviest parts made with less memory make the same samples (docs/PERFORMANCE.md, "The heaviest parts",
+"""The heaviest parts made with less memory make the same samples (docs/notes/PERFORMANCE.md, "The heaviest parts",
 2026-09-30): each lean piece against the way it replaced, and a whole kit, every piece and implement, against the
 samples the kit made before (its hash, taken from the tree before the change)."""
 

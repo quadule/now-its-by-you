@@ -2,7 +2,7 @@
 
 The artist's direction: "use as many vocal sources as we need to train our own smaller voice
 synthesis engine that is optimized for our use case", and adopt SoulX-Singer directly only if that
-fails. This is the learned throat of docs/VOICE-OPTIONS.md §4, trained on synthetic singers
+fails. This is the learned throat of docs/history/VOICE-OPTIONS.md §4, trained on synthetic singers
 rather than the artist's speech. Our program still decides everything about the delivery:
 - when each phone starts and ends (`voice.schedule`);
 - the pitch, with its glides, vibrato and phrasing gestures (`voice.pitch_track`);
@@ -41,9 +41,10 @@ No recording of any person was used for the house model. Since 2026-09-28 the sh
 model fine-tuned once on the volunteers' takes together (below, "Everyone's voice").
 - **The teacher.** SoulX-Singer (Apache-2.0; a 2.8 GB zero-shot singing model trained on 42,000
   hours of undisclosed singers) sings our own scores. It runs beside the repo and never ships.
-- **Its timbre prompts.** Ten-second clips of seven synthetic singers that Eleven Music made
-  for H (ElevenLabs' terms allow training on outputs). The throat's timbres are second-hand
-  statistics of two generative models.
+- **Its timbre prompts** (first version, superseded: the shipped house model's prompts were our own formant
+  singer's, below, "Shipped: the house model sings by default"). Ten-second clips of seven synthetic singers that
+  Eleven Music made for H (ElevenLabs' terms allow training on outputs). That model's timbres were second-hand
+  statistics of two generative models; it never shipped.
 - **The corpus.** `tools/throat/corpus.py` plans it:
   - every song in songs/;
   - all 38 verses, 6 refrain couplets and 3 bridges of H's bank;
@@ -117,7 +118,7 @@ learns from that.
   House singers are a little less clear, but they're good training material. Their spectra keep a
   trace of the formant singer's clean upper harmonics under natural consonants and transitions.
 
-Consenting human singers (docs/SINGERS.md) are the next source. Each of them is a prompt for
+Consenting human singers (below, "Everyone's voice") are the next source. Each of them is a prompt for
 unlimited SoulX singing as well as direct training data. They'd enter the same way,
 `source="human"`.
 
@@ -413,11 +414,10 @@ and above (`throat.air_floor`); 0.4 by default, chosen by ear ("a bit better, no
 ## Everyone's voice (2026-09-28, 01:30)
 
 The consent lets the recordings train the voice once, after singing closed, blended from everyone and
-never set to sound like one person. So: `tools/throat/volunteers.py` and `clean_takes.py` cut the 79
+never set to sound like one person. So: `tools/archive/volunteers-2026/volunteers.py` and `clean_takes.py` cut the 79
 takes into sung lines by their guides' scores, cancelled the melody guide where it leaked from a speaker,
-gated the room, and kept what the check passed: 13.7 minutes by eight singers, the largest share 26%
-(David), then an open-call singer, Milo, essqao, Gorman, Talia, Geoff and another open-call singer. All
-of them are ONE singer to the network, "volunteers", source "human": there is no per-person embedding
+gated the room, and kept what the check passed: 13.7 minutes by eight singers (six credited by name in
+CREDITS.md, two without credit), none more than 26% of it. All of them are ONE singer to the network, "volunteers", source "human": there is no per-person embedding
 to find. The house model was fine-tuned 14,000 steps on the house corpus plus those frames (a 4080,
 about 15 minutes; volunteers' held-out loss 0.39) and shipped as songbird/synth/throat.npz.
 
@@ -468,7 +468,7 @@ words around it lead it there. On the words cut out alone it heard "Sam" then "S
 first "sound", "Sound" then "So" for the second, and "They're down" then "Their town" for "town".
 
 Nothing else changes. H's seed sings AW only in "now", three times, so it is byte-identical
-(golden/h-seed.sha256), as are b-refrain, h-words and every seed score. In a render that sings one
+(golden/h-seed.darwin-arm64.sha256), as are b-refrain, h-words and every seed score. In a render that sings one
 of these words, the lead differs at those words (1 to 13 dB under the voice there) and about 60 dB
 under it elsewhere. The network's global variance and the voice's reference level are taken over
 the whole song, so they move slightly. Before/after excerpts (fictional:ada, the same seed) are

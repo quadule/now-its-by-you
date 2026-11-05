@@ -464,7 +464,7 @@ class Amp:
     tank: Tank = Tank()
     tremolo: tuple[str, float, float] = ("optical", 5.5, 0.0)  # kind ("optical" or "bias"), Hz, depth 0..1
     cabinet: Cabinet = Cabinet()
-    master: float = 1.0  # the output's level (amp.reference_gain sets it)
+    master: float = 1.0  # the output's level (electric.master_volume sets it, in the chain's parameters)
 
 
 @njit(cache=True, nogil=True)
@@ -742,16 +742,3 @@ def preamp(x: np.ndarray, drive: float, tilt: float = 0.1, os_: int = 2) -> np.n
     lag = (len(down) - 1) // os_
     xp = np.concatenate([np.asarray(x, dtype=np.float64), np.zeros(lag)])
     return _shape(xp, up, down, float(drive), float(tilt))[lag:]
-
-
-def reference_gain(chain: Chain, level: float) -> float:
-    """The master volume that brings a steady chord of `level` volts peak from the pickup to a fixed level
-    out of the power stage, whatever the amp's gain: an amp's master volume, so a crunch sits about as loud
-    as a clean sound played the same."""
-    sr = chain.sr
-    t = np.arange(int(0.8 * sr)) / sr  # long enough to average a tremolo's swing
-    x = (np.sin(2 * np.pi * 110.0 * t) + 0.7 * np.sin(2 * np.pi * 164.8 * t + 1.0)
-         + 0.5 * np.sin(2 * np.pi * 220.0 * t + 2.0) + 0.35 * np.sin(2 * np.pi * 277.2 * t + 0.5))
-    x *= level / np.max(np.abs(x))
-    y = chain.run(x) / chain.amp.master
-    return float(0.3 / (np.sqrt(np.mean(y[int(0.2 * sr):] ** 2)) + 1e-12))

@@ -10,6 +10,8 @@ It writes, into OUT (emptied first, if it holds an earlier build):
 
     index.html, *.js, *.css     the studio's page, served from the root; device.js first among its scripts
     notice.css                  the plain pages' look ("This version isn't here")
+    licenses.txt                THIRD-PARTY.md: what the site sends that isn't the project's own, and its licences
+                                (the page's foot links it)
     piano/                      the piano page the studio opens in a tab (index.html, piano.js, sound.js, *.css)
     render/bundle.json          which folders are current, and the studio's settings (its song, its machine, the Python
                                 and pinned dependencies a recording names)
@@ -55,7 +57,7 @@ FRESH = "no-cache"
 TYPES = {".html": "text/html; charset=utf-8", ".js": "text/javascript; charset=utf-8",
          ".mjs": "text/javascript; charset=utf-8", ".css": "text/css; charset=utf-8", ".json": "application/json",
          ".wasm": "application/wasm", ".zip": "application/zip", ".whl": "application/zip", ".flac": "audio/flac",
-         ".npz": "application/octet-stream", ".gzip": "application/octet-stream"}
+         ".npz": "application/octet-stream", ".gzip": "application/octet-stream", ".txt": "text/plain; charset=utf-8"}
 SONG = ROOT / "songs" / "h-now-its-by-you.json"  # the song the studio opens on (build_render.py's BESIDE)
 DAYS = 400  # the first answers ahead (render/first-<hash>/): a file a day, about 50 KB each
 BEFORE = 2  # ... from this many days before the build's date (a visitor west of here is still on yesterday)
@@ -106,6 +108,12 @@ def page(singing: bool) -> str:
                         '<script src="/device.js" defer></script>\n<script src="/renderer.js" defer></script>', 1)
     # what's kept, true from the first paint (studio.js says the same once it starts)
     html = html.replace("Nothing on this page leaves this computer.", "Nothing leaves this device unless you share a version.", 1)
+    # the licences of what the site sends besides the project's own (Pyodide, numpy, scipy...): licenses.txt
+    foot = re.search(r'<footer class="foot">.*?(</footer>)', html, re.DOTALL)
+    if foot is None:
+        raise SystemExit("songbird/studio/index.html has no <footer class=\"foot\">: build_site.py doesn't know where to "
+                         "link the licences")
+    html = html[:foot.start(1)] + '<a href="/licenses.txt">Licenses</a>' + html[foot.start(1):]
     if singing:  # as webstudio.singing.Singing.page adds it
         html = (html.replace("</head>", '<link rel="stylesheet" href="/sing.css">\n</head>', 1)
                     .replace("</body>", '<script type="module" src="/sing.js"></script>\n</body>', 1))
@@ -116,7 +124,7 @@ def page_files(singing: bool) -> dict[str, bytes]:
     from songbird.studio import PAGE, PIANO_STATIC, STATIC
 
     files = {"index.html": page(singing).encode(), "device.js": (HERE / "device.js").read_bytes(),
-             "notice.css": (PAGE / "notice.css").read_bytes()}
+             "notice.css": (PAGE / "notice.css").read_bytes(), "licenses.txt": (ROOT / "THIRD-PARTY.md").read_bytes()}
     for path, (name, _) in STATIC.items():
         files[path.lstrip("/")] = (PAGE / name).read_bytes()
     for path, (name, _) in PIANO_STATIC.items():
@@ -176,7 +184,8 @@ def fetched(py_files: dict[str, bytes], app_files: dict[str, bytes], lock: dict,
             bc_files: dict[str, bytes] | None = None) -> int:
     """What a worker fetches (its bytes as they arrive, unpacked: what it counts), by the packages it loads: Python,
     its library (the bytecode folder's, when there is one), the lock, those packages' wheels and the program; their
-    bytecode; a render worker also its kernels' manifest and wasm (scripts it imports aren't counted)."""
+    bytecode; a render worker also its kernels' manifest and wasm (scripts it imports aren't counted; the SIMD build's,
+    which every current browser takes: a browser without wasm SIMD fetches kernels.wasm, 3 KB less)."""
     wheels = set()
     todo = list(packages)
     while todo:
@@ -185,7 +194,7 @@ def fetched(py_files: dict[str, bytes], app_files: dict[str, bytes], lock: dict,
             wheels.add(name)
             todo += lock["packages"][name].get("depends", [])
     names = ["pyodide.asm.wasm", "pyodide-lock.json", *[lock["packages"][w]["file_name"] for w in wheels]]
-    app = ["songbird.zip"] + (["kernels/manifest.json", "wasm/kernels.wasm"] if "scipy" in packages else [])
+    app = ["songbird.zip"] + (["kernels/manifest.json", "wasm/kernels-simd.wasm"] if "scipy" in packages else [])
     if not bc_files:
         return sum(len(py_files[n]) for n in names + ["python_stdlib.zip"]) + sum(len(app_files[n]) for n in app)
     code = ["stdlib.zip", *[f"{p}.zip" for p in packages if f"{p}.zip" in bc_files]]

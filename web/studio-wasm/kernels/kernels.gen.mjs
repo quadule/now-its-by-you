@@ -3299,7 +3299,7 @@ export function k_synth$pluck$_bank(x, wholes, taps, gains, coupling) {
   return out;
 }
 
-// songbird/synth/rattle.py:139
+// songbird/synth/rattle.py:134
 export function k_synth$rattle$_next(state) {
   let out, x;
   state = BigInt(state);
@@ -3311,7 +3311,7 @@ export function k_synth$rattle$_next(state) {
   return [x, (Number(out) * (1.0 / 9007199254740992.0))];
 }
 
-// songbird/synth/rattle.py:161
+// songbird/synth/rattle.py:156
 export function k_synth$rattle$_collide(energy, hop, rate, gamma, decay, lp_lo, lp_hi, sb, sa1, sa2, sgain, click, ma1, ma2, mgain, mtilt, mstart, kick, state, out) {
   let a_lp, b, c, cut, e, hit, i, i0, i1, j, k, last, level, lp, lp1, lp2, m1, m2, n, nb, nk, objects, p, peak, root, s1, s2, sound, strength, u, v, w, x, y, yb, $t1, $t2, $t3, $t4, $t5, $t6, $t7, $t8, $t9, $t10, $t11, $t12, $t13, $t14, $t15, $t16, $t17, energy_d, energy_n0, energy_n1, energy_s0, energy_s1, m1_d, m1_n0, m1_n1, m1_s0, m1_s1, m2_d, m2_n0, m2_n1, m2_s0, m2_s1, ma1_d, ma1_n0, ma1_n1, ma1_s0, ma1_s1, ma2_d, ma2_n0, ma2_n1, ma2_s0, ma2_s1, mgain_d, mgain_n0, mgain_n1, mgain_s0, mgain_s1, mstart_d, mstart_n0, mstart_n1, mstart_s0, mstart_s1, mtilt_d, mtilt_n0, mtilt_n1, mtilt_s0, mtilt_s1, out_d, out_n0, out_n1, out_s0, out_s1, s1_d, s1_n0, s1_n1, s1_s0, s1_s1, s2_d, s2_n0, s2_n1, s2_s0, s2_s1, sa1_d, sa1_n0, sa1_n1, sa1_s0, sa1_s1, sa2_d, sa2_n0, sa2_n1, sa2_s0, sa2_s1, sb_d, sb_n0, sb_n1, sb_s0, sb_s1, sgain_d, sgain_n0, sgain_n1, sgain_s0, sgain_s1, y_d, y_n0, y_n1, y_s0, y_s1;
   energy_d = energy.d; energy_n0 = energy.n0; energy_n1 = energy.n1; energy_s0 = energy.s0; energy_s1 = energy.s1;
@@ -3429,7 +3429,7 @@ export function k_synth$rattle$_collide(energy, hop, rate, gamma, decay, lp_lo, 
   return state;
 }
 
-// songbird/synth/rattle.py:303
+// songbird/synth/rattle.py:298
 export function k_synth$rattle$_wires(freqs, decay, amps, shapes, spring, press, damping, bounce, sr, n_max, click, state, out, start) {
   let a, acc, bound, c1, c2, cur, dt, held, i, j, j_n, k, k_n, left, level, n, n_out, nxt, prev, pull, r, rel, rest, settled, th, top, touching, u, u1, u2, vel, w, wv, x, $t1, $t2, $t3, $t4, $t5, $t6, $t7, $t8, $t9, $t10, $t11, $t12, $t13, $t14, $t15, $t16, $t17, $t18, $t19, amps_d, amps_n0, amps_n1, amps_s0, amps_s1, c1_d, c1_n0, c1_n1, c1_s0, c1_s1, c2_d, c2_n0, c2_n1, c2_s0, c2_s1, cur_d, cur_n0, cur_n1, cur_s0, cur_s1, decay_d, decay_n0, decay_n1, decay_s0, decay_s1, freqs_d, freqs_n0, freqs_n1, freqs_s0, freqs_s1, out_d, out_n0, out_n1, out_s0, out_s1, press_d, press_n0, press_n1, press_s0, press_s1, prev_d, prev_n0, prev_n1, prev_s0, prev_s1, pull_d, pull_n0, pull_n1, pull_s0, pull_s1, shapes_d, shapes_n0, shapes_n1, shapes_s0, shapes_s1, spring_d, spring_n0, spring_n1, spring_s0, spring_s1, touching_d, touching_n0, touching_n1, touching_s0, touching_s1, u1_d, u1_n0, u1_n1, u1_s0, u1_s1, u2_d, u2_n0, u2_n1, u2_s0, u2_s1, w_d, w_n0, w_n1, w_s0, w_s1, wv_d, wv_n0, wv_n1, wv_s0, wv_s1;
   freqs_d = freqs.d; freqs_n0 = freqs.n0; freqs_n1 = freqs.n1; freqs_s0 = freqs.s0; freqs_s1 = freqs.s1;
@@ -3555,7 +3555,7 @@ export function k_synth$rattle$_wires(freqs, decay, amps, shapes, spring, press,
   return state;
 }
 
-// songbird/synth/rattle.py:415
+// songbird/synth/rattle.py:410
 export function k_synth$rattle$comb(x, period, gain) {
   let n, y, $t1, $t2, x_d, x_n0, x_n1, x_s0, x_s1, y_d, y_n0, y_n1, y_s0, y_s1;
   x_d = x.d; x_n0 = x.n0; x_n1 = x.n1; x_s0 = x.s0; x_s1 = x.s1;

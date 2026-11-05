@@ -6,7 +6,7 @@
 <meta name="color-scheme" content="light dark">
 <meta name="studio-token" content="{{token}}">
 <title>Songbird studio</title>
-<!-- The score (docs/STUDIO-REDESIGN.md): one transport, three views of the song (Page, Arrange, Mix), one inspector
+<!-- The score (docs/notes/STUDIO-REDESIGN.md): one transport, three views of the song (Page, Arrange, Mix), one inspector
      for whatever is selected, one sheet for taking it out and bringing it in, and time as a drawer. studio.js is the
      core (edits, undo, drafts, the record); score.js draws the page. -->
 <link rel="stylesheet" href="/identity.css">
@@ -58,8 +58,8 @@
   </div>
   <span class="sep wide"></span>
   <div class="group wide">
-    <button class="tbtn" id="tLoop" type="button" aria-pressed="false" aria-label="Loop (L)" title="Loop (L)">⟳</button>
-    <button class="tbtn" id="tClick" type="button" aria-pressed="false" aria-label="Click (K)" title="Click (K)">♩</button>
+    <button class="tbtn" id="tLoop" type="button" aria-pressed="false" aria-label="Loop (L)" title="Loop (L)"><svg viewBox="0 0 20 20" aria-hidden="true"><path d="M5 8.5V8a3 3 0 0 1 3-3h7"/><path d="M12.5 2.5 15 5l-2.5 2.5"/><path d="M15 11.5v.5a3 3 0 0 1-3 3H5"/><path d="M7.5 17.5 5 15l2.5-2.5"/></svg></button>
+    <button class="tbtn" id="tClick" type="button" aria-pressed="false" aria-label="Click (K)" title="Click (K)"><svg viewBox="0 0 20 20" aria-hidden="true"><path d="M7.5 3h5l3 14h-11z"/><path d="M10 13l4.5-7.5"/><path d="M6.2 13h7.6"/></svg></button>
   </div>
   <div class="position" id="position">
     <button class="now" id="positionNow" type="button" title="Where we are; on a phone, how it plays">
@@ -68,14 +68,15 @@
     <div class="bar" id="bar" title="Click to move through what is playing"><i id="barFill"></i></div>
   </div>
   <div class="group">
-    <button class="tempo" id="tempoBtn" type="button" aria-expanded="false" aria-controls="tempoPop" title="Tempo"><b id="tempoValue">·</b><small>BPM</small></button>
+    <label class="tempo" id="tempoBox" title="Tempo"><input type="number" id="tempoNumber" inputmode="numeric" step="1" aria-label="Tempo in beats a minute"><small>BPM</small></label>
+    <button class="tbtn reset" id="tempoReset" type="button" hidden aria-label="Reset the tempo" title="Reset"><svg viewBox="0 0 20 20" aria-hidden="true"><path d="M7 4.5 3.5 8 7 11.5"/><path d="M3.5 8h8a4.25 4.25 0 0 1 0 8.5H8"/></svg></button>
     <button class="keychip" id="keyBtn" type="button" aria-expanded="false" aria-controls="keyPop" title="Key and scale">·</button>
   </div>
   <span class="sep wide"></span>
   <button class="btn quiet wide" id="roll" type="button" title="Chance drawn again for everything you haven't chosen or locked">New performance</button>
   <div class="right">
-    <button class="tbtn wide" id="undoEdit" type="button" disabled aria-label="Undo" title="Undo (⌘/Ctrl Z)">↶</button>
-    <button class="tbtn wide" id="redoEdit" type="button" disabled aria-label="Redo" title="Redo (⌘/Ctrl Shift Z)">↷</button>
+    <button class="tbtn wide" id="undoEdit" type="button" disabled aria-label="Undo" title="Undo (⌘/Ctrl Z)"><svg viewBox="0 0 20 20" aria-hidden="true"><path d="M7 4.5 3.5 8 7 11.5"/><path d="M3.5 8h8a4.25 4.25 0 0 1 0 8.5H8"/></svg></button>
+    <button class="tbtn wide" id="redoEdit" type="button" disabled aria-label="Redo" title="Redo (⌘/Ctrl Shift Z)"><svg viewBox="0 0 20 20" aria-hidden="true"><path d="M13 4.5 16.5 8 13 11.5"/><path d="M16.5 8h-8a4.25 4.25 0 0 0 0 8.5H12"/></svg></button>
     <button class="btn export" id="recordNow" type="button" title="Export it: one file, the program inside (E)"><span class="wide">Export</span><span class="sr-only">Export it</span></button>
     <button class="btn" id="toolsBtn" type="button" aria-expanded="false" aria-controls="finishPanel" title="Take it out, bring it in">Tools</button>
   </div>
@@ -95,7 +96,6 @@
       <button class="btn quiet" type="button" data-do="roll">New performance</button>
     </div>
   </div>
-  <div class="pop" id="tempoPop" hidden role="group" aria-label="Tempo"></div>
   <div class="pop" id="keyPop" hidden role="group" aria-label="Key and scale"></div>
 </div>
 
@@ -112,8 +112,7 @@
   <button class="iconbtn close" type="button" data-close aria-label="Close (Esc)" title="Close (Esc)">✕</button>
   <div class="two-cols">
     <div>
-      <h2>Through time</h2>
-      <p class="hint" title="The song changes a little from day to day, more from month to month, most from year to year. Your own changes stay put.">The song on another day. Your changes stay put.</p>
+      <h2 title="The song changes a little from day to day, more from month to month, most from year to year. Your changes stay put.">Through time</h2>
       <div id="timeline" class="timeline-box"><p class="hint">Drawing six years of the song…</p></div>
       <input type="range" id="day" min="-1095" max="1095" step="1" value="0" aria-label="The day the song is sung">
       <div class="ends"><span>3 years ago</span><span id="dayLabel" class="when">today</span><span>in 3 years</span></div>
@@ -124,8 +123,7 @@
       </div>
     </div>
     <div>
-      <h2>Other computers</h2>
-      <p class="hint" title="The same song, the same day, as other computers would sing it. They are made up: a name always makes the same one.">The same day on other computers. ▶ plays theirs.</p>
+      <h2 title="The same song, the same day, as other computers would sing it. They are made up: a name always makes the same one.">Other computers</h2>
       <div class="compare-wrap" id="compare"><p class="hint">Asking other computers…</p></div>
       <form class="make-up" id="makeUp">
         <label class="sr-only" for="machineName">Make up a computer</label>
@@ -138,7 +136,7 @@
         <button class="btn quiet" id="versionChoose" type="button">Choose a file…</button>
         <input type="file" id="versionFile" accept=".flac,audio/flac" hidden>
       </div>
-      <p class="hint" id="versionNote" role="status" aria-live="polite" title="The file is only read here, never run.">What you export is its child.</p>
+      <p class="hint" id="versionNote" role="status" aria-live="polite" title="The file is only read here, never run."></p>
     </div>
   </div>
 </section>
@@ -174,13 +172,13 @@
 <div class="scrim" id="scrim" hidden></div>
 <section class="tools" id="finishPanel" hidden role="dialog" aria-modal="false" aria-labelledby="toolsTitle">
   <button class="iconbtn close" type="button" data-close aria-label="Close (Esc)" title="Close (Esc)">✕</button>
-  <h2 id="toolsTitle" tabindex="-1">Your tools</h2>
+  <h2 id="toolsTitle" tabindex="-1">Tools</h2>
   <div class="cols two">
     <div class="col" id="toolsOut">
-      <h3>Take it out</h3>
+      <h3>Export</h3>
       <div class="tool" id="recordPanel">
-        <button class="btn primary export" id="record" type="button">Export it</button>
-        <p title="The file plays anywhere and carries the program that sang it, the song and its record, so anyone can make the next version. Your choices are marked as yours; your name never is.">One file that plays anywhere and carries the program, for the next version. Your name isn't in it.</p>
+        <button class="btn primary export" id="record" type="button">Song file</button>
+        <p title="The file contains the program that sang it, the song and its record, so anyone can make the next version. Your choices are marked as yours, without your name.">A .flac that plays anywhere and contains the program.</p>
         <div class="saved" id="saved" aria-live="polite"></div>
       </div>
       <!-- where the song is made (renderer.js shows it where the studio serves the singer for browsers) -->
@@ -195,46 +193,46 @@
       </fieldset>
       <div class="tool">
         <button class="btn" id="exportMidi" type="button">MIDI</button>
-        <p title="At once: the singer's notes with the words, each voice and player on its own track, the chords named, the tempo, key and sections.">Every part on its own track, with the words and chords.</p>
+        <p title="At once: the singer's notes with the words, each voice and player on its own track, the chords named, the tempo, key and sections.">Every part, with words and chords.</p>
       </div>
       <div class="tool">
-        <button class="btn" id="exportStems" type="button">The parts (stems)</button>
-        <p title="Each voice and instrument alone and dry, zipped with the MIDI file, all from bar 1.">Each part alone, in a zip. Takes as long as the whole song.</p>
+        <button class="btn" id="exportStems" type="button">Stems</button>
+        <p title="Each voice and instrument alone and dry, zipped with the MIDI file, all from bar 1. Takes as long as the whole song.">Each part alone, zipped.</p>
         <p class="hint" id="exportNote" aria-live="polite"></p>
       </div>
       <div class="tool">
-        <button class="btn" type="button" data-learn-piano>The piano page ↗</button>
-        <p title="Your version on a keyboard, in a tab: falling notes, the chords, the words; slow it down, loop it, fit it to your keys.">Learn it on a keyboard, in a tab.</p>
+        <button class="btn" type="button" data-learn-piano>Piano page ↗</button>
+        <p title="Your version on a keyboard, in a tab: falling notes, the chords, the words; slow it down, loop it, fit it to your keys.">Learn it on a keyboard.</p>
         <p class="hint" data-piano-note aria-live="polite"></p>
       </div>
       <div class="tool">
-        <button class="btn quiet" type="button" id="saveDraft">Save a draft file</button>
-        <p>Your changes, to finish on another computer.</p>
+        <button class="btn" type="button" id="saveDraft">Draft</button>
+        <p>Your changes, as a file.</p>
       </div>
     </div>
     <div class="col" id="toolsIn">
-      <h3>Bring it in</h3>
+      <h3>Import</h3>
       <div class="tool">
-        <button class="btn" id="importMidi" type="button">A MIDI file</button>
-        <p title="A melody or a part from your sequencer, changed from this version's MIDI file. It says what it found and what would change before anything does.">A part you changed in your sequencer. Nothing changes until you say.</p>
-        <div class="drop" id="midiDrop">Drop a .mid file here, or choose one</div>
+        <button class="btn" id="importMidi" type="button">MIDI file</button>
+        <p title="A melody or a part from your sequencer, changed from this version's MIDI file. It says what it found and what would change before anything does.">A part changed in your sequencer.</p>
+        <div class="drop" id="midiDrop">Drop a .mid here</div>
         <input type="file" id="importFile" accept=".mid,.midi,audio/midi,audio/x-midi" hidden aria-label="A MIDI file to bring in">
         <p class="hint" id="importNote" aria-live="polite"></p>
         <div id="importBox"></div>
       </div>
       <div class="tool wide-tool">
-        <button class="btn" id="performOpen" type="button" aria-expanded="false" aria-controls="performPanel">Play a part in</button>
-        <p id="performWhat">A MIDI keyboard, live, over the sketch.</p>
+        <button class="btn" id="performOpen" type="button" aria-expanded="false" aria-controls="performPanel">MIDI keyboard</button>
+        <p id="performWhat">Play a part in, over the sketch.</p>
         <section class="perform-panel" id="performPanel" aria-label="Play a part in" hidden></section>
       </div>
       <section class="tool" aria-labelledby="singTitle">
-        <button class="btn" id="sing" type="button">Sing it ↗</button>
-        <p title="The song learns a little of your timing and inflection. Your recording stays on this computer; only a few numbers about how you sang go into the song.">Sing along; the song learns a little of how you sing. Your recording stays here.</p>
+        <button class="btn" id="sing" type="button">Sing ↗</button>
+        <p title="The song learns a little of your timing and inflection. Your recording stays on this computer; only a few numbers about how you sang go into the song.">The song learns your timing.</p>
         <h4 class="sr-only" id="singTitle">Sing it</h4>
         <p class="hint" id="singNote"></p>
       </section>
       <div class="tool">
-        <button class="btn quiet" type="button" id="openDraft">Open a draft file</button>
+        <button class="btn" type="button" id="openDraft">Draft</button>
         <p title="Checked before it replaces what's here. Undo takes it back.">A saved <code>.songbird.json</code>.</p>
         <input type="file" id="draftFile" accept=".json,application/json" hidden aria-label="Open a Songbird draft">
       </div>
@@ -249,10 +247,10 @@
   <p><b id="helpSong">This song</b> is a folk song that changes as it's passed on. Each copy is a sound file that also carries the program that sings it.</p>
   <p id="helpShows">This studio shows the version this computer makes today, and lets you:</p>
   <ul>
-    <li><b>Hear it.</b> ▶ in the bar at the top plays what is selected: the sketch at once, or sung, which takes a little while.</li>
+    <li><b>Hear it.</b> ▶ in the bar at the top plays what is selected: the sketch at once, or sung, which takes a few seconds.</li>
     <li><b>Change something.</b> The tempo and the key at the top; the words on the <i>Page</i>; who plays where, and the notes, in <i>Arrange</i>; the levels and the room in <i>Mix</i>. Select anything and the column beside it says what it is, why the program chose it, and how to change it. Undo takes anything back.</li>
-    <li><b>Wander.</b> <i>Time</i> shows other days, other computers, and opens someone's version.</li>
-    <li><b>Pass it on.</b> Export it: one file to share. Anyone can run it with Python to make the next version, with yours as its parent. <i>Tools</i> has the MIDI, the parts, the piano page, and ways to bring things in.</li>
+    <li><b>Compare.</b> <i>Time</i> shows other days, other computers, and opens someone's version.</li>
+    <li><b>Export.</b> One file to share. Anyone can run it with Python to make the next version, with yours as its parent. <i>Tools</i> has the MIDI, the parts, the piano page, and ways to bring things in.</li>
   </ul>
   <p id="helpWhere">Your changes stay in this browser. Nothing is sent anywhere.</p>
   <p id="helpKept" hidden></p>
