@@ -22,10 +22,11 @@ September 28), so it would take about 26 minutes, for guides only singers' own p
 
 **The studio's pictures** (web/sing/page/tab-page.webp, tab-arrange.webp, tab-mix.webp, tab-sing.webp, 860 x 645
 each) are four close crops, one of each view with something being changed in it and nothing shared between them:
-a refrain's line open on its other words (Page), a refrain's players set to hard (Arrange), the whistle's fader
-moved (Mix), the lane while a line is sung (Sing). Taken October 7, 2026 with headless Chromium (Playwright) at 2x;
-Page, Arrange and Mix from the live studio, Sing from the studio run here with a stand-in microphone. Two by two
-on a wide screen, a row to swipe on a phone. Take them again when the studio's look changes.
+a refrain being edited (Page), a refrain's players set to hard (Arrange), the whistle's fader moved beside the
+voice's strip (Mix), the lane while a line is sung (Sing). `tools/site_pictures.mjs` takes them from the web studio
+served on this computer with headless Chromium (Playwright) at 2x, in the light colours, and `tools/site_pictures.py`
+makes the WebP files; both say how to run them. Two by two on a wide screen, a row to swipe on a phone. Take them
+again when the studio's look changes.
 
 **The source code.** `SOURCE_PUBLIC` in tools/sing_site.py is off. Turned on (once github.com/quadule/songbird
 is public, with the tag `first-version` on 10dc1e0 pushed), the home page links the repository and the history
