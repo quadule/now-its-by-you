@@ -20,7 +20,7 @@ The pages alone build in seconds over the site as it was last built, its guides 
 `--pages`) also renders every guide that isn't current; on October 7, 2026 none was (the code had changed since
 September 28), so it would take about 26 minutes, for guides only singers' own pages still use.
 
-**The studio's pictures** (web/sing/page/tab-page.webp, tab-arrange.webp, tab-mix.webp, tab-sing.webp, 860 x 645
+**The studio's pictures** (web/sing/page/tab-page.webp, tab-arrange.webp, tab-mix.webp, tab-sing.webp, 860 x 484
 each) are four close crops, one of each view with something being changed in it and nothing shared between them:
 a refrain being edited (Page), a refrain's players set to hard (Arrange), the whistle's fader moved beside the
 voice's strip (Mix), the lane while a line is sung (Sing). `tools/site_pictures.mjs` takes them from the web studio

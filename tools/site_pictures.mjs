@@ -4,7 +4,7 @@
 //   uv run python web/studio-wasm/tools/build_site.py renders/studio-site
 //   uv run python web/studio-wasm/tools/serve_site.py renders/studio-site --port 8820 &
 //   node tools/site_pictures.mjs http://127.0.0.1:8820/ /tmp/pictures          # page.png, arrange.png, mix.png, sing.png, at 2x
-//   uv run python tools/site_pictures.py /tmp/pictures                         # each to 860 x 645 WebP in web/sing/page/
+//   uv run python tools/site_pictures.py /tmp/pictures                         # each to 860 x 484 WebP in web/sing/page/
 //
 // Needs Node >= 22 and playwright where Node resolves it from this file (as tools/video/kit.mjs does). CHROMIUM, if
 // set, is the browser to run (a Chromium other than the one that playwright installed).
@@ -32,7 +32,7 @@ await wait(1200);
 // (set on the elements: the page's policy takes no added style sheet)
 await page.evaluate(() => {
   const sec = document.querySelector("#page .is-writing");
-  sec.style.maxWidth = "548px";
+  sec.style.maxWidth = "612px";
   for (const unit of sec.querySelectorAll(".author-count .unit")) unit.style.display = "none";
   for (const input of sec.querySelectorAll("textarea")) input.dispatchEvent(new Event("input"));  // each field as tall as its line now
   for (const unit of sec.querySelectorAll(".author-count .unit")) unit.style.display = "none";
@@ -42,7 +42,7 @@ await page.evaluate(() => {
 });
 await wait(600);
 let b = await box("#page .is-writing");
-await shot("page", { x: b.x - 14, y: b.y - 8, width: 576, height: 432 });
+await shot("page", { x: b.x - 14, y: b.y - 20, width: 640, height: 360 });  // down to the list's name
 await page.evaluate(() => document.querySelector("#page .editbtn.on").click());
 
 // Arrange: the first refrain selected, everyone in it playing hard
@@ -54,7 +54,7 @@ await page.evaluate(() => [...document.querySelectorAll("#inspector .chip")].fin
 await settle(); await wait(1500);
 await page.evaluate(() => window.scrollTo(0, 0));
 b = await box("#grid");
-await shot("arrange", { x: b.x, y: b.y, width: 500, height: 375 });
+await shot("arrange", { x: b.x, y: b.y, width: 560, height: 315 });
 await page.evaluate(() => document.querySelector("#inspector .close")?.click());
 
 // Mix: the whistle's fader moved, the voice's strip beside the players
@@ -62,9 +62,11 @@ await tab("Mix");
 await page.evaluate(() => { commitEdits({ "band.whistle": 1.39 }, "Whistle up"); });
 await settle(); await wait(1500);
 const strips = await page.evaluate(() => [...document.querySelectorAll("#mix .strip")].map((s) => { const r = s.getBoundingClientRect(); return { name: s.querySelector(".nm").textContent, x: r.x, y: r.y, right: r.right, bottom: r.bottom }; }));
-const from = strips.find((s) => /fiddle/i.test(s.name)), to = strips.find((s) => /Voice/.test(s.name));
+// as many players before the voice as make the strips' height nine sixteenths of the picture's width
+const to = strips.find((s) => /Voice/.test(s.name)), tall = to.bottom - to.y + 16;
+const from = strips.filter((s) => s.x < to.x).reverse().find((s) => (to.right - s.x + 16) * 9 / 16 >= tall) || strips[0];
 const width = to.right - from.x + 16;
-await shot("mix", { x: from.x - 8, y: from.y - 8, width, height: width * 0.75 });
+await shot("mix", { x: from.x - 8, y: from.y - 8, width, height: width * 9 / 16 });
 
 // Sing: the lane while the first verse's guide plays
 await page.evaluate(() => commitEdits({}, "Reset song"));
@@ -77,6 +79,6 @@ await wait(1500);
 await page.evaluate(() => document.getElementById("singRehearse").click());
 await wait(11000);
 b = await box("#singStage");
-const w = Math.min(b.width, 640);
-await shot("sing", { x: b.x, y: b.y, width: w, height: w * 0.75 });
+const w = Math.min(b.width, b.height * 16 / 9);  // the stage's whole height: the lane and the lines under it
+await shot("sing", { x: b.x, y: b.y, width: w, height: w * 9 / 16 });
 await browser.close();

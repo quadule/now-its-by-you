@@ -1,4 +1,4 @@
-"""The home page's studio pictures, from the screenshots tools/site_pictures.mjs takes: each to 860 x 645 WebP in
+"""The home page's studio pictures, from the screenshots tools/site_pictures.mjs takes: each to 860 x 484 WebP in
 web/sing/page/ (tab-page.webp, tab-arrange.webp, tab-mix.webp, tab-sing.webp).
 
 usage: uv run python tools/site_pictures.py SHOTS_DIR
@@ -10,7 +10,7 @@ from pathlib import Path
 from PIL import Image
 
 ROOT = Path(__file__).resolve().parent.parent
-SIZE = (860, 645)
+SIZE = (860, 484)
 
 
 def main(shots: str) -> None:
