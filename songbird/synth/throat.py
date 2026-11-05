@@ -101,7 +101,8 @@ def min_phase(log_mag: np.ndarray) -> np.ndarray:
     """Minimum-phase spectra (rows, fft // 2 + 1) from natural-log magnitudes, by folding the real cepstrum."""
     fft = 2 * (log_mag.shape[-1] - 1)
     cep = np.fft.irfft(log_mag, n=fft, axis=-1)
-    return np.exp(np.fft.rfft(cep * _cepstrum_fold(fft), n=fft, axis=-1))
+    cep *= _cepstrum_fold(fft)
+    return np.exp(np.fft.rfft(cep, n=fft, axis=-1))
 
 
 def pulse_times(f0: np.ndarray, sr: int, n: int, block: int = 1 << 16) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
@@ -265,10 +266,13 @@ def synthesize(f0: np.ndarray, sp: np.ndarray, ap: np.ndarray, sr: int, rng: np.
         rows of the random values drawn for them."""
         env = to_bins(sp[k0[sl]] * (1 - w[sl]) + sp[k1[sl]] * w[sl], fft, sr, log_power=True)
         aper = to_bins(ap[k0[sl]] * (1 - w[sl]) + ap[k1[sl]] * w[sl], fft, sr, log_power=False)
-        ratio = np.clip(aper, 0.001, 0.999) ** 2
+        # (worked out in place where the arrays are this block's own: each product and sum as before, in the same
+        # order, so the same bits with a fifth of the temporaries, which in the browser are most of the time)
+        ratio = np.clip(aper, 0.001, 0.999, out=aper)
+        np.square(ratio, out=ratio)
         v = voiced[sl]
-        ratio = np.where(v[:, None], ratio, 1.0)
-        power = np.exp(env)
+        ratio[~v] = 1.0
+        power = np.exp(env, out=env)
         # periodic: a minimum-phase pulse, delayed by its fraction of a sample, scaled for its period. Made for
         # the voiced pulses only (an unvoiced pulse's is nothing), into zeros laid out in memory as the FFT lays
         # out its output for spectra laid out as these are, so the sum below adds each row in the same order.
@@ -280,29 +284,58 @@ def synthesize(f0: np.ndarray, sp: np.ndarray, ap: np.ndarray, sr: int, rng: np.
             if source is not None:
                 voiced_power = voiced_power * np.exp(to_bins(source[k0[g]] * (1 - w[g]) + source[k1[g]] * w[g], fft,
                                                              sr, log_power=False))
-            pulse = min_phase(0.5 * np.log(voiced_power * (1.0 - ratio[on]) + 1e-16))
-            turn = -2 * np.pi * bins * frac[g, None] / fft
+            mag = ratio[on]
+            np.subtract(1.0, mag, out=mag)
+            mag *= voiced_power
+            mag += 1e-16
+            np.log(mag, out=mag)
+            mag *= 0.5
+            pulse = min_phase(mag)
+            del mag
+            turn = (-2 * np.pi * bins) * frac[g, None]
+            turn /= fft
             if spread is not None:
-                turn = turn + (tx.spread * period[g, None] / sr) * spread[None, :]
+                turn += (tx.spread * period[g, None] / sr) * spread[None, :]
             if scatter is not None:
-                harmonic = hz[None, :] * period[g, None] / sr
-                rise = np.clip((harmonic - tx.scatter_from) / max(tx.scatter_to - tx.scatter_from, 1e-9), 0.0, 1.0)
-                turn = turn + tx.scatter * rise * _smooth(scatter[on], fft, sr)
+                harmonic = hz[None, :] * period[g, None]
+                harmonic /= sr
+                harmonic -= tx.scatter_from
+                harmonic /= max(tx.scatter_to - tx.scatter_from, 1e-9)
+                np.clip(harmonic, 0.0, 1.0, out=harmonic)
+                harmonic *= tx.scatter
+                harmonic *= _smooth(scatter[on], fft, sr)
+                turn += harmonic
+                del harmonic
             pulse *= np.exp(1j * turn)
-            periodic[on] = np.fft.irfft(pulse, n=fft, axis=-1) * np.sqrt(period[g, None])
+            del turn
+            made = np.fft.irfft(pulse, n=fft, axis=-1)
+            del pulse
+            made *= np.sqrt(period[g, None])
+            periodic[on] = made
+            del made
         # aperiodic: a period's worth of white noise through the aperiodic part of the envelope
         m = np.maximum(np.round(period[sl]).astype(int), 1)
         inside = np.arange(fft)[None, :] < m[:, None]
-        noise = np.where(inside, noise, 0.0)
-        noise -= inside * (noise.sum(axis=1, keepdims=True) / m[:, None])  # no DC, as WORLD
-        shaped = min_phase(0.5 * np.log(power * ratio + 1e-16)) * np.fft.rfft(noise, axis=-1)
+        noise[~inside] = 0.0
+        dc = noise.sum(axis=1, keepdims=True)
+        dc /= m[:, None]
+        noise -= inside * dc  # no DC, as WORLD
+        ratio *= power
+        ratio += 1e-16
+        np.log(ratio, out=ratio)
+        ratio *= 0.5
+        shaped = min_phase(ratio)
+        shaped *= np.fft.rfft(noise, axis=-1)
         aperiodic = np.fft.irfft(shaped, n=fft, axis=-1)
+        del shaped
         # each response laid out from `half` samples before its pulse: the part of a delayed pulse that
         # rings before it (which the FFT wraps to the end) back where it belongs, then the pulse's DC
         # taken away over the window centred on it
         response = np.zeros((len(m), fft + half))
-        response[:, half - lead: half - lead + fft] = np.roll(periodic, lead, axis=1)
+        response[:, half - lead: half] = periodic[:, fft - lead:]  # np.roll's wrapped tail
+        response[:, half: half - lead + fft] = periodic[:, : fft - lead]
         response[:, half:] += aperiodic
+        del aperiodic
         response[:, :fft] -= periodic.sum(axis=1, keepdims=True) * hann
         return response
 
