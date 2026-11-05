@@ -5,13 +5,16 @@ usage: uv run python web/studio-wasm/tools/build_render.py OUT_DIR
 
 It writes, into OUT_DIR (emptied of any earlier build first):
 
-    bundle.json     which two folders are current, the program they carry (its digest), what a first visit fetches
+    bundle.json     which folders are current, the program they carry (its digest), what a first visit fetches
     py-<hash>/      Pyodide (its core, the standard library) and the packages the program needs from it: numpy,
                     scipy, soundfile (and theirs), checked against Pyodide's own lock file
     app-<hash>/     the worker (studio-worker.mjs), the kernels in JS (kernels/) and C/wasm (wasm/), and the
                     program: songbird.zip, holding exactly the files a packet carries as program/ (so a recording
                     made in the browser names the same program as the server's), cmudict, the browser's stand-ins
-                    (py/: numba, the wasm kernels' adapters, the patches) and studio_render.py
+                    (py/: numba, the wasm kernels' adapters, the patches) and studio_render.py; and the program's
+                    bytecode (bytecode.zip, py/bytecode.py)
+    bc-<hash>/      the bytecode of the standard library and the packages, as the program imports them: made in
+                    Pyodide under node (tools/bytecode.mjs), so a worker needn't compile them as it starts
 
 Each folder is named by a hash of its contents, so the studio serves every file for good (immutable) and a new
 program fetches only its own few megabytes. Text and wasm files get a .gz beside them, which the studio sends to a
@@ -146,6 +149,23 @@ def program_zip() -> tuple[bytes, str]:
     return buffer.getvalue(), pack.program_sha256(program)
 
 
+def bytecode_files(program: bytes) -> tuple[dict[str, bytes], bytes]:
+    """The bundle's bytecode (py/bytecode.py), made in Pyodide under node (tools/bytecode.mjs) from this program zip:
+    the bc folder's files (the standard library's zip, numpy's, scipy's and soundfile's pycs) and the program's own
+    (app.zip, the app folder's bytecode.zip). The same bytes for the same program and Pyodide."""
+    import tempfile
+
+    with tempfile.TemporaryDirectory() as tmp:
+        zipped, out = Path(tmp) / "program.zip", Path(tmp) / "out"
+        zipped.write_bytes(program)
+        run = subprocess.run(["node", str(HERE / "tools" / "bytecode.mjs"), str(zipped), str(out)], cwd=HERE,
+                             capture_output=True, text=True)
+        if run.returncode != 0:
+            raise SystemExit(f"tools/bytecode.mjs failed: {run.stderr[-2000:]}")
+        files = {p.name: p.read_bytes() for p in sorted(out.glob("*.zip"))}
+    return {n: d for n, d in files.items() if n != "app.zip"}, files["app.zip"]
+
+
 def folder_hash(files: dict[str, bytes]) -> str:
     h = hashlib.sha256()
     for name in sorted(files):
@@ -198,19 +218,23 @@ def main() -> None:
     zipped, program = program_zip()
     app_files = {name: path.read_bytes() for name, path in APP.items()} | {"songbird.zip": zipped}
     app_files |= singing_files()  # measuring a sung take (the block above)
-    py_dir, app_dir = f"py-{folder_hash(py_files)}", f"app-{folder_hash(app_files)}"
+    bc_files, app_files["bytecode.zip"] = bytecode_files(zipped)
+    py_dir, app_dir, bc_dir = (f"py-{folder_hash(py_files)}", f"app-{folder_hash(app_files)}",
+                               f"bc-{folder_hash(bc_files)}")
     out.mkdir(parents=True, exist_ok=True)
     for old in out.iterdir():  # an earlier build's folders go: a studio serves one bundle
-        if old.is_dir() and old.name.split("-")[0] in ("py", "app"):
+        if old.is_dir() and old.name.split("-")[0] in ("py", "app", "bc"):
             shutil.rmtree(old)
     py_raw, py_sent = write(out, py_dir, py_files)
     app_raw, app_sent = write(out, app_dir, app_files)
-    manifest = {"v": 1, "pyodide": py_dir, "app": app_dir, "program_sha256": program, "pyodide_version": version,
-                "packages": names, "bytes": py_raw + app_raw, "transfer": py_sent + app_sent,
-                "program_bytes": len(zipped)}
+    bc_raw, bc_sent = write(out, bc_dir, bc_files)
+    manifest = {"v": 1, "pyodide": py_dir, "app": app_dir, "bytecode": bc_dir, "program_sha256": program,
+                "pyodide_version": version, "packages": names, "bytes": py_raw + app_raw + bc_raw,
+                "transfer": py_sent + app_sent + bc_sent, "program_bytes": len(zipped)}
     (out / "bundle.json").write_text(json.dumps(manifest, indent=2) + "\n")
     print(f"{out}: {py_dir} ({py_raw / 2**20:.1f} MiB, {py_sent / 2**20:.1f} sent), "
-          f"{app_dir} ({app_raw / 2**20:.1f} MiB, {app_sent / 2**20:.1f} sent); program {program[:12]}")
+          f"{app_dir} ({app_raw / 2**20:.1f} MiB, {app_sent / 2**20:.1f} sent), {bc_dir} ({bc_raw / 2**20:.1f} MiB); "
+          f"program {program[:12]}")
 
 
 if __name__ == "__main__":

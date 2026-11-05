@@ -1,143 +1,162 @@
-"""Python's bytecode, kept in this browser so the next worker needn't compile it again (docs/WEB-STUDIO.md,
-"Bytecode kept in the browser").
+"""Python's bytecode, made with the bundle so a worker needn't compile what it imports (docs/PERFORMANCE.md, "The web
+studio's start, its edits and its voice").
 
 Pyodide compiles every module it imports from its source: its standard library and its wheels carry no bytecode, and
 it writes none. A render worker imports about 860 modules, 680 of them from source (the standard library, numpy,
-scipy, the program), and compiling them was more than half of its start (about 7 s of 10.5 in node on a desktop; a
-phone's several times that), paid again by every worker: each whole song's, each fourth section's, the studio's own.
+scipy, the program), and compiling them was 7 s of its 10 s start in node on a desktop (a phone's several times
+that), paid again by every worker: each whole song's, each fourth section's, the studio's own.
 
-So a worker writes what it compiles, as Python's import does with a cache prefix (start(): sys.pycache_prefix), and
-once it has made something its kept copy lacked, kept() hands back archives of it for the worker to keep (Cache
-Storage, by the bundle's own content-named folders): each module a checked-hash pyc (PEP 552), which Python runs only
-for a source whose hash it carries. A changed source is compiled again, never run stale. The standard library is
-imported from a zip, where Python writes nothing: the modules this worker imported from it are compiled (a few at a
-time, stdlib_step(), so a question asked meanwhile waits for one step at most) into a copy of the zip, which the
-next worker is started with in place of the one served.
+So the build compiles them (build(), run in Pyodide itself under node by tools/bytecode.mjs, so the bytecode is its
+interpreter's own) into archives the worker fetches beside the wheels and unpacks before it imports anything:
 
-Only bytecode is kept, and what it runs is the source beside it, unchanged: the program's digest (pack.program_files,
-which never reads __pycache__ or a prefix) and every sample are the same either way."""
+    stdlib.zip     Pyodide's standard library zip, with bytecode beside the source of each module the program uses
+                   (the worker starts Pyodide with it in place of python_stdlib.zip)
+    numpy.zip, scipy.zip, soundfile.zip   the pyc files of the modules of each package the program uses (soundfile's
+                   with cffi's and pycparser's), at their paths under PREFIX
+    app.zip        every module of the program and the bundle's stand-ins, likewise (in the app folder: it changes with
+                   the program)
+
+Each module's bytecode is a checked-hash pyc (PEP 552): Python runs it only for a source whose hash it carries, so a
+source that differs is compiled as before, never run stale. Compiled without column tables (PYTHONNODEBUGRANGES: a
+fifth smaller; a traceback still names the line). What a worker imports that the build didn't is compiled as it
+always was. What runs is the source beside it, unchanged: the program's digest (pack.program_files, which never reads
+a cache prefix) and every sample are the same either way.
+
+    start()          in the worker, before anything it fetched is imported: read bytecode from under PREFIX
+    build(out)       at build time, in Pyodide with numpy, scipy and soundfile loaded and the program at /app"""
 
 from __future__ import annotations
 
+import ast
+import importlib
 import importlib.util
+import io
 import os
-import shutil
+import pkgutil
 import sys
-import time
 import zipfile
 
-PREFIX = "/pycache"  # sys.pycache_prefix: every module's bytecode under it, at its source's path
+PREFIX = "/pycache"  # sys.pycache_prefix: each module's bytecode under it, at its source's path
 STDLIB = f"/lib/python{sys.version_info[0]}{sys.version_info[1]}.zip"  # where Pyodide puts the standard library
-GROUPS = {"app": PREFIX + "/app", "site": PREFIX + "/lib"}  # the program (with the bundle), and Pyodide's packages
-CHECKED = (0b11).to_bytes(4, "little")  # a pyc's flags: hash-based, its source checked
-
-_known: dict[str, tuple[int, int]] = {}  # the pyc files this worker started with or has handed back: size, time
-_stdlib: dict[str, bytes] = {}  # standard library modules compiled since (their names in the zip: the pyc's bytes)
-_stdlib_given = 0  # how many of them kept() has handed back (each archive holds them all)
+SITE = f"/lib/python{sys.version_info[0]}.{sys.version_info[1]}/site-packages"
+APP = "/app"
+PACKAGES = {"numpy": "numpy", "scipy": "scipy"}  # a site-packages module's top name -> its archive (else soundfile's)
+DATE = (1980, 1, 1, 0, 0, 0)
+JS = ("wasm_kernels", "songbird_wasm", "songbird_kernels", "js", "pyodide_js")  # what a worker's loader gives from JS
 
 
 def start() -> None:
-    """Write and read bytecode under PREFIX (before anything else is imported), knowing what was there to start with
-    (the archives kept by an earlier worker, unpacked into / before this)."""
-    os.makedirs(PREFIX, exist_ok=True)  # (import makes a missing top folder relative to the working one, and fails)
+    """Read bytecode from under PREFIX (the archives fetched with the bundle, unpacked into / before this)."""
     sys.pycache_prefix = PREFIX
-    sys.dont_write_bytecode = False
-    _known.update(_marks(_files(PREFIX)))
 
 
-def _files(root: str) -> list[str]:
-    out = []
-    for folder, _, names in os.walk(root):
-        out.extend(os.path.join(folder, n) for n in names if n.endswith(".pyc"))
-    return out
-
-
-def _marks(paths: list[str]) -> dict[str, tuple[int, int]]:
-    out = {}
-    for p in paths:
-        st = os.stat(p)
-        out[p] = (st.st_size, st.st_mtime_ns)
-    return out
-
-
-def _stdlib_todo() -> list[str]:
-    """The standard library's modules this worker imported that the zip it started with has no bytecode for, by
-    their names in the zip."""
-    with zipfile.ZipFile(STDLIB) as z:
-        have = set(z.namelist())
-    todo = []
-    for module in list(sys.modules.values()):
-        f = getattr(module, "__file__", None) or ""
-        if f.startswith(STDLIB + "/") and f.endswith(".py"):
-            name = f[len(STDLIB) + 1:]
-            if name[:-3] + ".pyc" not in have and name not in _stdlib:
-                todo.append(name)
-    return sorted(set(todo))
-
-
-def stdlib_step(seconds: float = 0.05) -> int:
-    """Compile standard library modules for about this long; how many are left."""
-    todo = _stdlib_todo()
-    if not todo:
-        return 0
+def pyc(source: bytes, path: str) -> bytes:
+    """A module's checked-hash pyc, compiled as import compiles it."""
     from importlib._bootstrap_external import _code_to_hash_pyc
 
-    end = time.perf_counter() + seconds
-    with zipfile.ZipFile(STDLIB) as z:
-        while todo and time.perf_counter() < end:
-            name = todo.pop()
-            source = z.read(name)
-            code = compile(source, f"{STDLIB}/{name}", "exec", dont_inherit=True)
-            _stdlib[name] = bytes(_code_to_hash_pyc(code, importlib.util.source_hash(source), True))
-    return len(todo)
+    code = compile(source, path, "exec", dont_inherit=True)
+    return bytes(_code_to_hash_pyc(code, importlib.util.source_hash(source), True))
 
 
-def new() -> bool:
-    """Whether this worker has compiled anything since it started (or last handed it back)."""
-    return len(_stdlib) > _stdlib_given or any(_known.get(p) != m for root in GROUPS.values()
-                                               for p, m in _marks(_files(root)).items())
+def cached(path: str) -> str:
+    """Where a source's bytecode lies under PREFIX, as a name in an archive unpacked into /."""
+    tag = sys.implementation.cache_tag
+    folder, name = os.path.split(path)
+    return f"{PREFIX}{folder}/{name[:-3]}.{tag}.pyc".lstrip("/")
 
 
-def _checked(pyc: str) -> None:
-    """A pyc Python's import wrote (by its source's time and size, which differ in every worker: Pyodide unpacks its
-    files when it starts) made checked-hash: the same code, kept for its source's hash."""
-    with open(pyc, "rb") as f:
-        data = f.read()
-    if int.from_bytes(data[4:8], "little") & 1:
-        return
-    with open(importlib.util.source_from_cache(pyc), "rb") as f:
-        source = f.read()
-    with open(pyc, "wb") as f:
-        f.write(data[:4] + CHECKED + importlib.util.source_hash(source) + data[16:])
+def _entry(name: str) -> zipfile.ZipInfo:
+    info = zipfile.ZipInfo(name, DATE)
+    info.compress_type = zipfile.ZIP_DEFLATED
+    info.external_attr = 0o644 << 16
+    return info
 
 
-def kept(folder: str) -> dict[str, str]:
-    """Archives of everything compiled so far, for the groups that have something new: {"app" | "site" | "stdlib":
-    the archive's path in folder}. app and site are zips of their pyc files at their paths from / (unpacked there
-    before start()); stdlib is the standard library's zip with bytecode for its modules (Pyodide's in its place)."""
-    global _stdlib_given
-    os.makedirs(folder, exist_ok=True)
+def imported_by(source: bytes) -> set[str]:
+    """Every module a source names in an import, at any depth (a function's own imports too), and each name taken
+    from one (it may be a submodule)."""
+    try:
+        tree = ast.parse(source)
+    except SyntaxError:
+        return set()
+    names = set()
+    for node in ast.walk(tree):
+        if isinstance(node, ast.Import):
+            names.update(a.name for a in node.names)
+        elif isinstance(node, ast.ImportFrom) and node.module and not node.level:
+            names.add(node.module)
+            names.update(f"{node.module}.{a.name}" for a in node.names)
+    return names
+
+
+def _sources(root: str) -> dict[str, bytes]:
     out = {}
-    for group, root in GROUPS.items():
-        files = _files(root)
-        if all(_known.get(p) == m for p, m in _marks(files).items()):
-            continue
-        path = os.path.join(folder, f"{group}.zip")
-        with zipfile.ZipFile(path, "w", zipfile.ZIP_DEFLATED, compresslevel=1) as z:
-            for pyc in sorted(files):
-                try:
-                    _checked(pyc)
-                except OSError:  # its source gone (a file the worker wrote and removed): not kept
-                    continue
-                z.write(pyc, pyc.lstrip("/"))
-        _known.update(_marks(files))
-        out[group] = path
-    if len(_stdlib) > _stdlib_given:
-        path = os.path.join(folder, "stdlib.zip")
-        shutil.copyfile(STDLIB, path)
-        with zipfile.ZipFile(path, "a", zipfile.ZIP_DEFLATED, compresslevel=6) as z:
-            for name, pyc in sorted(_stdlib.items()):
-                z.writestr(zipfile.ZipInfo(name[:-3] + ".pyc", (1980, 1, 1, 0, 0, 0)), pyc)
-        _stdlib_given = len(_stdlib)
-        out["stdlib"] = path
+    for folder, _, files in os.walk(root):
+        for f in sorted(files):
+            if f.endswith(".py"):
+                path = os.path.join(folder, f)
+                with open(path, "rb") as fh:
+                    out[path] = fh.read()
     return out
+
+
+def _import_everything(sources: dict[str, bytes]) -> None:
+    """What the program can import, imported: each of its modules, and each module any of them names (one that fails
+    is only one this build makes no bytecode for)."""
+    import warnings
+
+    if APP not in sys.path:
+        sys.path.insert(0, APP)
+    names = {info.name for info in pkgutil.walk_packages([APP])}
+    for source in sources.values():
+        names |= imported_by(source)
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore")
+        for name in sorted(names):
+            if name.split(".")[0] in JS or "test" in name.split("."):
+                continue
+            try:
+                importlib.import_module(name)
+            except BaseException:  # noqa: BLE001 (anything at all: SystemExit from a tool's module included)
+                pass
+
+
+def _zipped(files: dict[str, bytes]) -> bytes:
+    buffer = io.BytesIO()
+    with zipfile.ZipFile(buffer, "w") as z:
+        for name in sorted(files):
+            z.writestr(_entry(name), files[name], compresslevel=9)
+    return buffer.getvalue()
+
+
+def build(out: str) -> dict[str, int]:
+    """The archives (the module's docstring) into the folder out: {archive: how many modules it has bytecode for}."""
+    os.makedirs(out, exist_ok=True)
+    sources = _sources(APP)
+    _import_everything(sources)
+    site: dict[str, dict[str, bytes]] = {}
+    stdlib: set[str] = set()
+    for module in list(sys.modules.values()):
+        f = getattr(module, "__file__", None) or ""
+        if not f.endswith(".py"):
+            continue
+        if f.startswith(STDLIB + "/"):
+            stdlib.add(f[len(STDLIB) + 1:])
+        elif f.startswith(SITE + "/"):
+            top = f[len(SITE) + 1:].split("/")[0].removesuffix(".py")
+            with open(f, "rb") as fh:
+                site.setdefault(PACKAGES.get(top, "soundfile"), {})[cached(f)] = pyc(fh.read(), f)
+    made = {}
+    files = {}
+    with zipfile.ZipFile(STDLIB) as served:
+        for info in served.infolist():
+            data = served.read(info)
+            files[info.filename] = data
+            if info.filename in stdlib:
+                files[info.filename[:-3] + ".pyc"] = pyc(data, f"{STDLIB}/{info.filename}")
+    archives = {"stdlib": files, **site, "app": {cached(path): pyc(source, path) for path, source in sources.items()}}
+    for name, contents in sorted(archives.items()):
+        with open(os.path.join(out, f"{name}.zip"), "wb") as fh:
+            fh.write(_zipped(contents))
+        made[f"{name}.zip"] = len(stdlib) if name == "stdlib" else len(contents)
+    return made

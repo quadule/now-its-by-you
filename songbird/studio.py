@@ -1500,9 +1500,9 @@ def prune(folder: Path, limit: int) -> None:
 
 # ---------------------------------------------------------------- rendering in the visitor's browser: the bundle
 #
-# What web/studio-wasm/tools/build_render.py makes: bundle.json, naming two folders named by their contents' hash,
-# py-<hash>/ (Pyodide and its packages: changes with Pyodide) and app-<hash>/ (the worker, the kernels, this
-# program: changes with every program), so each file is cached by the visitor for good and a new program fetches
+# What web/studio-wasm/tools/build_render.py makes: bundle.json, naming folders named by their contents' hash,
+# py-<hash>/ (Pyodide and its packages: changes with Pyodide), app-<hash>/ (the worker, the kernels, this
+# program: changes with every program) and bc-<hash>/ (the bytecode of Pyodide's library and packages), so each file is cached by the visitor for good and a new program fetches
 # only its own few megabytes. Served only if it was built from this very program (its digest), since a recording
 # made in the browser carries it.
 
@@ -1518,7 +1518,7 @@ RENDER_POLICY = ("default-src 'none'; script-src 'self' 'wasm-unsafe-eval'; conn
 
 
 class BrowserBundle:
-    """A built bundle, checked: its manifest, its two folders, and that it carries this program."""
+    """A built bundle, checked: its manifest, its folders, and that it carries this program."""
 
     def __init__(self, folder: Path, program: str):
         folder = Path(folder).resolve()
@@ -1528,8 +1528,10 @@ class BrowserBundle:
             raise ValueError(f"{folder} has no bundle.json (build it with web/studio-wasm/tools/build_render.py): "
                              f"{e}") from None
         dirs = {manifest.get("pyodide"), manifest.get("app")}
-        if not all(isinstance(d, str) and re.fullmatch(r"(py|app)-[0-9a-f]{12,64}", d) and (folder / d).is_dir()
-                   for d in dirs) or len(dirs) != 2:
+        if manifest.get("bytecode") is not None:  # the bytecode's folder (a bundle built before it has none)
+            dirs.add(manifest["bytecode"])
+        if not all(isinstance(d, str) and re.fullmatch(r"(py|app|bc)-[0-9a-f]{12,64}", d) and (folder / d).is_dir()
+                   for d in dirs) or len(dirs) != 2 + ("bytecode" in manifest):
             raise ValueError(f"{folder}/bundle.json names folders it hasn't got; build it again")
         if manifest.get("program_sha256") != program:
             raise ValueError(f"the bundle in {folder} was built from another program "
@@ -1542,11 +1544,12 @@ class BrowserBundle:
         fetches."""
         m = self.manifest
         return {"v": RENDER_SPEC, "base": "/render/", "pyodide": m["pyodide"], "app": m["app"],
+                **({"bytecode": m["bytecode"]} if m.get("bytecode") else {}),
                 "packages": m.get("packages", []), "bytes": m.get("bytes"), "transfer": m.get("transfer"),
                 "program": m["program_sha256"]}
 
     def file(self, rel: str) -> Path | None:
-        """A file of the bundle by its path under /render/ ("app-1234…/kernels/rt.mjs"), or None: only in its two
+        """A file of the bundle by its path under /render/ ("app-1234…/kernels/rt.mjs"), or None: only in its
         folders, only plain names (no dot files, no climbing), only the types it serves."""
         parts = rel.split("/")
         if len(parts) < 2 or parts[0] not in self.dirs or len(rel) > 200 \

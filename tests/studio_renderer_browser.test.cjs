@@ -124,6 +124,12 @@ test("a section made in this browser: the spec from the server, the worker's fil
   assert.equal(fake.made[0].renders, 1);
 });
 
+test("a bundle with its bytecode's folder: the worker is told where it is", async () => {
+  const { r, fake } = browser({}, {}, { bundle: { ...BUNDLE, bytecode: "bc-0123456789abcdef" } });
+  await r.preview({ edits: {}, section: 1 }).done;
+  assert.equal(fake.made[0].posted[0].bytecode, "http://localhost/render/bc-0123456789abcdef/");
+});
+
 test("a section's worker makes a few, then is replaced; a whole song gets its own, terminated after", async () => {
   const { r, fake } = browser({}, { workers: { uses: 2 } });
   for (const tempo of [90, 91, 92]) await r.preview({ edits: { tempo }, section: 1 }).done;

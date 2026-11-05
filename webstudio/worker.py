@@ -403,8 +403,18 @@ def fitted(tools: Tools, song: str, notes: list[dict]) -> list[dict]:
 
 
 def peak_mb() -> int:
-    """This process's peak resident memory so far, in MB (Linux counts it in kB, macOS in bytes). (Imported here:
-    Pyodide has no resource module, and web/studio-wasm/py/sing_measure.py puts the wasm heaps' size here.)"""
+    """This process's peak resident memory so far, in MB. On Linux its own (/proc's VmHWM): getrusage's ru_maxrss
+    keeps, across exec, the peak of the process it was forked from, so a measuring process started by a 2.4 GB
+    studio said 2.4 GB however little it used. Elsewhere ru_maxrss (macOS counts it in bytes, others in kB).
+    (Imported here: Pyodide has no resource module, and web/studio-wasm/py/sing_measure.py puts the wasm heaps' size
+    here.)"""
+    try:
+        with open("/proc/self/status") as f:
+            for line in f:
+                if line.startswith("VmHWM:"):
+                    return int(line.split()[1]) // 1024
+    except OSError:
+        pass
     import resource
 
     peak = resource.getrusage(resource.RUSAGE_SELF).ru_maxrss

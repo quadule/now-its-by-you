@@ -122,7 +122,8 @@
         };
       });
       entry.ready.catch(() => {});
-      w.postMessage({ cmd: "init", pyodide: at(bundle.pyodide), app: at(bundle.app), bytes: bundle.bytes, stemCacheBytes });
+      w.postMessage({ cmd: "init", pyodide: at(bundle.pyodide), app: at(bundle.app),
+        ...(bundle.bytecode ? { bytecode: at(bundle.bytecode) } : {}), bytes: bundle.bytes, stemCacheBytes });
       return entry;
     }
 
