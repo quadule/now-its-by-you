@@ -271,15 +271,17 @@
     if (!v || !box) return;
     keepFocus(() => box.replaceChildren(...v.words.map(pageSection)));
   }
-  // A section's words to choose from, as a list to read: each choice's first lines, the one sung marked, the ones
-  // the song refuses here greyed with why.
+  // A section's words to choose from, as a list to read: each choice's first lines, the one sung marked. The ones
+  // the song refuses here come after the rest, folded away, each with why.
   function pickList(name, items, current, pick) {
     const text = (line) => String(line || "").replace(/\*/g, "");
+    const fits = items.filter((c) => c.allowed !== false || c.id === current), refused = items.filter((c) => c.allowed === false && c.id !== current);
     const list = h("div", { class: "picklist", role: "group", "aria-label": name },
-      items.map((c) => h("button", { class: `pick-item${c.id === current ? " on" : ""}`, type: "button", "aria-pressed": String(c.id === current),
-        disabled: c.allowed === false, title: c.allowed === false ? c.why || "Not here" : c.lines.map(text).join("\n"),
-        onclick: () => { if (c.id !== current) pick(c.id); } },
-      h("span", {}, text(c.lines[0] || c.id)), c.lines[1] ? h("span", { class: "more" }, text(c.lines[1])) : null)));
+      fits.map((c) => h("button", { class: `pick-item${c.id === current ? " on" : ""}`, type: "button", "aria-pressed": String(c.id === current),
+        title: c.lines.map(text).join("\n"), onclick: () => { if (c.id !== current) pick(c.id); } },
+      h("span", {}, text(c.lines[0] || c.id)), c.lines[1] ? h("span", { class: "more" }, text(c.lines[1])) : null)),
+      refused.length ? h("details", { class: "pick-refused" }, h("summary", {}, `${refused.length} not here`),
+        refused.map((c) => h("p", {}, h("span", {}, text(c.lines[0] || c.id)), c.why ? h("span", { class: "more" }, c.why) : null))) : null);
     // the one sung, in view when the list is drawn (the list's own scroll, never the page's)
     requestAnimationFrame(() => { const on = list.querySelector(".on"); if (on && !list.matches(":hover")) list.scrollTop = Math.max(0, on.offsetTop - list.clientHeight / 2 + on.clientHeight / 2); });
     return list;
@@ -353,9 +355,10 @@
       chipRow("", slot.options.map((value) => ({ value, text: text(slot, value) })), slot.sung, (value) => chooseSlot(o, slot.slot, value), false,
         { aria: `${w.label}: ${text(slot, slot.sung)} or another` })) : [];
     const name = o ? { verse: "Verses", refrain: "Couplets", bridge: "Stanzas", tag: "Syllables" }[o.block] || "Phrases" : "";
-    const heads = o && !allAuthored && (o.heads || []).length > 1 ? [h("div", { class: "listname" }, "Openings"), pickList("Openings", o.heads, o.head, (id) => {
+    const fit = (items) => (items || []).filter((c) => c.allowed !== false).length;  // a list is for choosing: more than one that fits
+    const heads = o && !allAuthored && fit(o.heads) > 1 ? [h("div", { class: "listname" }, "Openings"), pickList("Openings", o.heads, o.head, (id) => {
       const edit = refrainEdit(o); delete edit.slots; edit.head = id; setEdit(o.path, edit, "Change refrain opening"); })] : [];
-    const phrases = o && !allAuthored && o.choices.length > 1 ? [h("div", { class: "listname" }, name), pickList(name, o.choices, o.sung, (id) => setEdit(o.path,
+    const phrases = o && !allAuthored && fit(o.choices) > 1 ? [h("div", { class: "listname" }, name), pickList(name, o.choices, o.sung, (id) => setEdit(o.path,
       o.block === "verse" ? { id } : o.block === "refrain" ? Object.assign(refrainEdit(o), { id }) : id, `Choose ${w.label.toLowerCase()}'s words`))] : [];
     return h("div", { class: "writing" }, typed ? fields : lines(w.lines), swaps.length ? h("div", { class: "swaps" }, swaps) : null, heads, phrases);
   }

@@ -188,7 +188,10 @@ input[type=number] { width: 72px; border: 1px solid var(--rule-strong); backgrou
 .pick-item:hover:not(:disabled) { background: var(--wash); }
 .pick-item .more { color: var(--ink-3); font-size: 13px; }
 .pick-item.on { background: var(--wash); box-shadow: inset 3px 0 0 var(--ink); }
-.pick-item:disabled { color: var(--ink-3); }
+.pick-refused { border-top: 1px solid var(--rule); font: 13px/1.3 var(--serif); color: var(--ink-3); }
+.pick-refused summary { font: 12px var(--sans); color: var(--ink-2); padding: 7px 8px; cursor: pointer; }
+.pick-refused p { display: grid; gap: 1px; margin: 0; padding: 5px 8px; border-top: 1px solid var(--rule); }
+.pick-refused .more { font: 12px var(--sans); }
 #page .lyric-author { margin: 4px 0 8px; }
 .rubric.hand, .rubric.you { color: var(--hand); }
 .lines { font-family: var(--serif); font-size: clamp(17px, 1.8vw, 21px); line-height: 1.5; }
