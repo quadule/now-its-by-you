@@ -763,9 +763,10 @@ less); admission, the cost per byte (now synthesis and treatment) and an edited 
 are as before. Choir parts and a lead of several voices are still kept dry: their buses are summed first, and
 the choir's width reads the mix.
 
-`preview_bench.mjs --cache-mib 128` on a 4-core cloud container, before and after: the same ids (initial
-`14ec579ee295…`, mix edit `f0bf9568c2ea…`, the original again `14ec579ee295…`); the mix edit 3.13 and 2.90 s
-before, 2.41–2.45 s after, the original again 2.68–3.12 s before, 2.26–2.48 s after; renderer heap 464 MiB
-both. Native H keeps its golden (tests/test_styles.py, tests/test_determinism.py), and tests/test_stem_cache.py
-checks that a cached mix with a sidechain and a lift matches an uncached one, edit after edit, and that the
-cache holds the treated stems and not the dry ones.
+`preview_bench.mjs --cache-mib 128` (node 22, 4 shared x86 cores, as above), main with the SIMD products and this,
+three runs each, taken in turn: the same ids (initial `14ec579ee295…`, mix edit `f0bf9568c2ea…`, the original again
+`14ec579ee295…`); the mix edit 2.52-2.67 s before, **1.88-2.16 s** after, the original again 2.44-2.87 s before,
+1.83-2.17 s after; renderer heap 464 MiB both. The whole song keeps `351e1dfa89f7…` (`device_run.mjs --whole`, 1539
+MiB, not cached), `device_run.mjs`'s section `5099049fa1c9…` both. Native H keeps its golden (tests/test_styles.py,
+tests/test_determinism.py), and tests/test_stem_cache.py checks that a cached mix with a sidechain and a lift
+matches an uncached one, edit after edit, and that the cache holds the treated stems and not the dry ones.
