@@ -600,3 +600,106 @@ after `tools/build_site.py` creates a local site. Add `--full-control` for the f
 workers with Web Worker API adapters around the unchanged production worker; it does not simulate a phone.
 The WAV/PCM prototype zip made by `tools/bundle.py` deliberately contains a soundfile stub and cannot be
 used for this FLAC-worker benchmark. `node/run.mjs --bundle BEFORE.zip` supports isolated comparisons.
+
+# The web studio's start, its edits and its voice (2026-11-05)
+
+A fresh look at the browser's renders, with an advisor (Fable) reading the hot code beside the profiles. The rule is
+the same: **no sample changes.** H's seed keeps `tests/golden/h-seed.sha256`; the device studio's refrain preview
+keeps `14ec579ee295…` (its mix-width edit `f0bf9568c2ea…`), its whole song `351e1dfa89f7…`, before and after.
+
+Measured in node 22 with Pyodide 314.0.7 on an x86 Linux container (4 cores, about 1.7x an M1 Max's times, so every
+number is larger than the earlier sections'), from a built site (`tools/build_site.py --days 0`) through the actual
+worker (`node/preview_bench.mjs --cache-mib 128`, the desktop's stem cache). Phones and Safari were not measured.
+
+| | before | after |
+|---|---:|---:|
+| the studio's worker: usable (control ready + the studio's view) | 4.69 s | **1.73 s** (a later visit or worker) |
+| a render worker: ready | 9.99 s | **4.15-4.5 s** (a later visit or worker) |
+| a section's edit (the mix's width), its stems kept | 2.8 s | **2.3-2.45 s** |
+| the whole song (the device's H, in its own worker) | 123.9 s | **119.6 s**, its heap 1598 → 1544 MiB |
+| the first section, its worker started | 10.2-10.9 s | 10.3-11.3 s (within the run-to-run noise here) |
+
+## Where the start went
+
+A render worker took 10 s to be ready: Pyodide 2.2 s, numpy/scipy/soundfile 2.6 s, importing the program 5.6 s.
+cProfile put 4.1 s of the import in `compile()`: **Pyodide's standard library and wheels carry no bytecode, and it
+writes none** (`sys.dont_write_bytecode`), so every worker compiled about 680 modules from source: scipy 2.7 s, the
+standard library 2.4 s (1.9 s of it inside `loadPyodide`, before any code of ours runs), the program 1.3 s, numpy
+0.7 s. And every worker starts afresh: each whole song's, each fourth section's, one idle three minutes, the studio's.
+
+- **Bytecode kept in the browser** (`py/bytecode.py`, `studio-worker.mjs` "bytecode kept in this browser"). A worker
+  writes what it compiles under `sys.pycache_prefix` (as Python's import does; the prefix's top folder has to exist
+  first, or import makes it relative to the working directory and fails silently), and once it has made something new
+  and been idle two seconds, hands back archives that it keeps in Cache Storage (`songbird-bytecode`): Pyodide's
+  packages' and the program's pycs, and the standard library's zip with bytecode for the modules it imported
+  (compiled a few at a time, so a question asked meanwhile waits for one step). The next worker unpacks them before
+  it imports, and starts Pyodide with the kept zip in place of the served one (`loadPyodide`'s `fsInit`, once
+  Pyodide's own write of the served zip has landed: it is written as its fetch arrives, after the hook is called).
+  Every pyc is **checked-hash** (PEP 552): Python runs it only for a source whose hash it carries, so nothing kept is
+  ever run stale, whatever the cache holds (unpacked files' times can't be trusted: Pyodide gives them the time they
+  were unpacked). The keys are the bundle's content-named folders, so a new program or Pyodide is a new key, and
+  the older ones are let go when the new are kept. About 17 MB is kept (the standard library 8.1, the packages 6.5,
+  the program 2.2). Without Cache Storage (a private window may refuse it), workers compile as before.
+- **Why not shipped from the build.** The same bytecode, made at build time, is 9.5 MB on the wire for a render
+  worker (5.5 for the studio's), against 14-28 MB today; pyc files are about four times the size of their sources
+  compressed (without column tables, `PYTHONNODEBUGRANGES`, a fifth less). Kept in the browser, it costs nothing to
+  fetch, and only the first worker of each kind on a first visit compiles.
+- **scipy's docstrings left as they are** (`web_patches.plain_docs`, before scipy.signal is imported). scipy parses
+  and rewrites about 800 docstrings as it is imported (array-API notes, the stats tests' parameters), with its
+  numpydoc reader: its `FunctionDoc` and `ClassDoc` are stood in for by one that keeps each docstring as it was.
+  Importing the program: 2.05 → 1.53 s with the bytecode kept. Only docstrings change.
+
+## Where an edit went
+
+With its stems kept (128 MiB), a section's mix edit took 2.8 s: laying out the score again 0.75 s (`band.arrange`'s
+Python), the mix 2.2 s, the master and FLAC 0.4 s.
+
+- **The score is kept across edits** (`studio_render._score`, the last two). It is made of the song, the version's
+  choices but the mix's (realize and lay never read the mix), its words, phrasing and choir; a mix edit, or the same
+  version asked again, lays out the same frozen Score, which window, cut and the synthesis only read.
+- **The room's responses are made once for its numbers** (`room.responses`, `room.plate`: `lru_cache`, handed back
+  read-only), natively too. About 0.1-0.2 s a render, within this machine's noise.
+
+## The voice's vocoder
+
+`throat.synthesize`'s blocks of pulses made about twenty temporaries the size of the block each (clips, wheres,
+exps, the phase's chain, a roll), each an allocation and a pass in wasm. Now each is worked out in place where the
+array is the block's own, every product and sum the same, in the same order (a product's operands swapped only where
+IEEE multiplication commutes), the roll as two slice copies, the cepstrum folded in place: the same bits, natively at
+any thread count (Fable checked 7,727 pulses with the texture and a source, and plain) and the goldens above. The
+whole song: 4.3 s less in the browser and 54 MiB less heap; natively a 25 s voice 1.07 → 0.84 s on one thread.
+
+## Measured and not taken
+
+- **The CMU dictionary read a word at a time.** The profiler put `cmudict.dict()` at 1.6 s of the first section; it is
+  0.51 s unprofiled (a Python loop, which cProfile inflates), and an exact lazy reader (a regular expression for each
+  line's word, the first and last line of each by a dict, verified against every word) made it 0.31 s. Not worth a
+  second reader of the dictionary. (phonetics.py's bytes are part of singing's measurement version,
+  `tools/phrasing.py` `version()`: a change there would make every kept template stale, so any such change belongs
+  in the browser's patches, not in it.)
+
+## What's left, by size (the advisor's list, measured here)
+
+1. **The network's products** (`web_patches._dgemm_matmul`): 1.3 s of a section, 20 s of the whole song, Pyodide's
+   OpenBLAS without SIMD at about 7 GFLOP/s. A wasm-SIMD kernel ran 16 GFLOP/s in node (2.3x); to be taken only if it
+   matches OpenBLAS's own order of sums bit for bit in Pyodide (its K blocking, to be found by experiment), with a
+   fallback where wasm has no SIMD. About 0.7 s a section and 10 s a whole song.
+2. **The treated stems kept, not the dry ones** (`mixing.mix_made`'s `instrument` and `lead`): an edit of the mix
+   treats every stem again (0.6 s of channel strips, 0.3 s of the lead). A strip depends only on its stem, role, rate
+   and length; keeping it would take an edit from 2.4 to about 1.5 s, with the stem cache's keys carried into the mix.
+3. **The JS kernels to C/wasm**: `master._windows`, `fx._sliding_min`, `_follow`, `_running_mean`, `_abs_max`,
+   `_placed`, `_mean_ahead`, `_saturate`, `_block_peaks` (0.35 s of a section or an edit, 4-6 s of a whole song), as
+   the fourteen ported, checked by `check_kernels.py`.
+4. **The stereo biquads two channels at a time** (`fx_two/_four/_one` in `wasm/kernels.c`, f64x2 lanes, each channel's
+   arithmetic unchanged): bit-identical in node, 72 → 38 ms on 7.3 M stereo samples; 5.4 s of a whole song. Needs a
+   `-msimd128` build beside the plain one.
+5. **The true peak's taps** (`master.true_peak_envelope`'s `rows @ taps.T`, numpy's plain loop in Pyodide): a kernel in
+   the same order, about 2 s of a whole song.
+6. **The timeline** (`/api/timeline`): still 9.5 s in the studio's worker, a separate target (docs/WEB-STUDIO.md, "A
+   quicker start", decision 4).
+
+Reproduce: `node web/studio-wasm/node/preview_bench.mjs --bundle SITE/render/app-HASH/songbird.zip --cache-mib 128
+--kept DIR`, twice (the second is a later visit: `--kept` stands in a folder for Cache Storage). Node's fetch
+reaches Pyodide's CDN through a proxy only with `NODE_USE_ENV_PROXY=1`; where the CDN is refused, the release's
+`pyodide-314.0.7.tar.bz2` from GitHub holds the same wheels (its lock is the npm package's), unpacked beside
+`node_modules/pyodide`.
