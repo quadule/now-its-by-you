@@ -613,11 +613,24 @@ worker (`node/preview_bench.mjs --cache-mib 128`, the desktop's stem cache). Pho
 
 | | before | after |
 |---|---:|---:|
-| the studio's worker: usable (control ready + the studio's view) | 4.69 s | **1.73 s** (a later visit or worker) |
-| a render worker: ready | 9.99 s | **4.15-4.5 s** (a later visit or worker) |
+| the studio's worker: usable (control ready + the studio's view) | 5.1 s | **1.9 s** (every worker, the first too) |
+| a render worker: ready | 10.0-11.1 s | **4.7-5.2 s** |
 | a section's edit (the mix's width), its stems kept | 2.8 s | **2.3-2.45 s** |
 | the whole song (the device's H, in its own worker) | 123.9 s | **119.6 s**, its heap 1598 → 1544 MiB |
-| the first section, its worker started | 10.2-10.9 s | 10.3-11.3 s (within the run-to-run noise here) |
+| the first section, its worker started | 11.9 s | 10.7-12.9 s (within the run-to-run noise here) |
+
+And in Chrome (headless, Playwright's Chromium, from `tools/serve_site.py`), a first visit with nothing cached: the
+studio's worker started and its view made, then a render worker, then the refrain's preview, as the page asks for
+them, with the network held to a speed by Chrome's own throttling (20 ms latency):
+
+| a first visit | compiled as before | the bytecode fetched with the bundle |
+|---|---|---|
+| no throttling: studio usable / render worker ready / the section, from asking | 6.0 / 9.6 / 21.8 s | **2.0 / 4.2 / 15.9 s** |
+| 50 Mbit/s | 9.3 / 13.3 / 26.0 s | **6.1 / 8.6 / 20.3 s** |
+| 10 Mbit/s | 22.7 / 29.0 / 41.9 s | 23.1 / **26.4 / 38.5 s** |
+
+The same PCM id (`14ec579ee295…`) every time. At 10 Mbit/s the studio's first start breaks even (4.4 MB more to
+fetch against its compiling, on this machine; a phone compiles several times slower); everything after it is ahead.
 
 ## Where the start went
 
@@ -627,23 +640,27 @@ writes none** (`sys.dont_write_bytecode`), so every worker compiled about 680 mo
 standard library 2.4 s (1.9 s of it inside `loadPyodide`, before any code of ours runs), the program 1.3 s, numpy
 0.7 s. And every worker starts afresh: each whole song's, each fourth section's, one idle three minutes, the studio's.
 
-- **Bytecode kept in the browser** (`py/bytecode.py`, `studio-worker.mjs` "bytecode kept in this browser"). A worker
-  writes what it compiles under `sys.pycache_prefix` (as Python's import does; the prefix's top folder has to exist
-  first, or import makes it relative to the working directory and fails silently), and once it has made something new
-  and been idle two seconds, hands back archives that it keeps in Cache Storage (`songbird-bytecode`): Pyodide's
-  packages' and the program's pycs, and the standard library's zip with bytecode for the modules it imported
-  (compiled a few at a time, so a question asked meanwhile waits for one step). The next worker unpacks them before
-  it imports, and starts Pyodide with the kept zip in place of the served one (`loadPyodide`'s `fsInit`, once
-  Pyodide's own write of the served zip has landed: it is written as its fetch arrives, after the hook is called).
-  Every pyc is **checked-hash** (PEP 552): Python runs it only for a source whose hash it carries, so nothing kept is
-  ever run stale, whatever the cache holds (unpacked files' times can't be trusted: Pyodide gives them the time they
-  were unpacked). The keys are the bundle's content-named folders, so a new program or Pyodide is a new key, and
-  the older ones are let go when the new are kept. About 17 MB is kept (the standard library 8.1, the packages 6.5,
-  the program 2.2). Without Cache Storage (a private window may refuse it), workers compile as before.
-- **Why not shipped from the build.** The same bytecode, made at build time, is 9.5 MB on the wire for a render
-  worker (5.5 for the studio's), against 14-28 MB today; pyc files are about four times the size of their sources
-  compressed (without column tables, `PYTHONNODEBUGRANGES`, a fifth less). Kept in the browser, it costs nothing to
-  fetch, and only the first worker of each kind on a first visit compiles.
+- **Bytecode with the bundle** (`py/bytecode.py`, `tools/bytecode.mjs`, `studio-worker.mjs` "the bundle's
+  bytecode"). The build runs Pyodide itself under node (so the bytecode is its interpreter's own), imports every
+  module of the program and every module any of its sources names (a function's own imports too, found by reading
+  them), and writes each imported module's bytecode: `render/bc-<hash>/stdlib.zip` (Pyodide's standard library zip,
+  with bytecode beside the 221 modules used; the worker starts Pyodide with it in place of `python_stdlib.zip`),
+  `numpy.zip` (132 modules), `scipy.zip` (444), `soundfile.zip`, and the program's 110 in the app folder's
+  `bytecode.zip`. A worker fetches those for the packages it loads beside the wheels, unpacks them under
+  `/pycache` (`sys.pycache_prefix`) before it imports anything, and compiles only what the build didn't import. Every
+  pyc is **checked-hash** (PEP 552): Python runs it only for a source whose hash it carries, so a source that differs
+  is compiled as before, never run stale (unpacked files' times can't be trusted: Pyodide gives them the time they
+  were unpacked). Compiled without column tables (`PYTHONNODEBUGRANGES`: a fifth smaller; a traceback still names the
+  line). The same bytes each build, so the bc folder's name (its contents' hash) changes only with Pyodide or with
+  what the program imports, and a new program fetches only its own `bytecode.zip` again.
+- **What it costs.** A render worker fetches 8.1 MB more the first time (the standard library zip 2.5 → 4.4 MB,
+  numpy's 1.2, scipy's 3.6, the program's 1.6), the studio's worker 4.4 MB more; the site holds 10 MB more; the
+  build takes 30 s more (`tools/bytecode.mjs`). bytecode is about four times the size of its source compressed,
+  which is why only what's imported is shipped. (Before this, the worker compiled once and kept the result in Cache
+  Storage for the next: no bytes, but no help to a first visit; it went for this.)
+- **A bundle built before it** names no bytecode folder (`bundle.json` has no `bytecode`), and its workers compile as
+  before; so does a worker whose archive can't be fetched. The public studio's bundle (`tools/build_render.py`,
+  `songbird studio --browser-render`) carries it too.
 - **scipy's docstrings left as they are** (`web_patches.plain_docs`, before scipy.signal is imported). scipy parses
   and rewrites about 800 docstrings as it is imported (array-API notes, the stats tests' parameters), with its
   numpydoc reader: its `FunctionDoc` and `ClassDoc` are stood in for by one that keeps each docstring as it was.
@@ -698,8 +715,8 @@ whole song: 4.3 s less in the browser and 54 MiB less heap; natively a 25 s voic
 6. **The timeline** (`/api/timeline`): still 9.5 s in the studio's worker, a separate target (docs/WEB-STUDIO.md, "A
    quicker start", decision 4).
 
-Reproduce: `node web/studio-wasm/node/preview_bench.mjs --bundle SITE/render/app-HASH/songbird.zip --cache-mib 128
---kept DIR`, twice (the second is a later visit: `--kept` stands in a folder for Cache Storage). Node's fetch
+Reproduce: `node web/studio-wasm/node/preview_bench.mjs --bundle SITE/render/app-HASH/songbird.zip --cache-mib 128`,
+and with `--no-bytecode` for a worker compiling everything as before. Node's fetch
 reaches Pyodide's CDN through a proxy only with `NODE_USE_ENV_PROXY=1`; where the CDN is refused, the release's
 `pyodide-314.0.7.tar.bz2` from GitHub holds the same wheels (its lock is the npm package's), unpacked beside
 `node_modules/pyodide`.

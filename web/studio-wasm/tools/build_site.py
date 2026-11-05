@@ -14,6 +14,7 @@ It writes, into OUT (emptied first, if it holds an earlier build):
     render/bundle.json          which folders are current, and the studio's settings (its song, its machine, the Python
                                 and pinned dependencies a recording names)
     render/py-<hash>/           Pyodide and numpy, scipy, soundfile (build_render.py's)
+    render/bc-<hash>/           the bytecode of the standard library and the packages (build_render.py's)
     render/app-<hash>/          the worker, the kernels, the program, the device's side of the studio, and singing's
                                 measuring (singing.zip, world/: build_render.py's singing_files; not with --no-singing:
                                 singing makes its guides and templates on the device, so nothing else is carried)
@@ -171,10 +172,11 @@ def window(today: date, days: int = DAYS) -> list[str]:
     return [(today + timedelta(days=k)).isoformat() for k in range(-BEFORE, days)] if days > 0 else []
 
 
-def fetched(py_files: dict[str, bytes], app_files: dict[str, bytes], lock: dict, packages: list[str]) -> int:
+def fetched(py_files: dict[str, bytes], app_files: dict[str, bytes], lock: dict, packages: list[str],
+            bc_files: dict[str, bytes] | None = None) -> int:
     """What a worker fetches (its bytes as they arrive, unpacked: what it counts), by the packages it loads: Python,
-    its library, the lock, those packages' wheels and the program; a render worker also its kernels' manifest and
-    wasm (scripts it imports aren't counted)."""
+    its library (the bytecode folder's, when there is one), the lock, those packages' wheels and the program; their
+    bytecode; a render worker also its kernels' manifest and wasm (scripts it imports aren't counted)."""
     wheels = set()
     todo = list(packages)
     while todo:
@@ -182,17 +184,20 @@ def fetched(py_files: dict[str, bytes], app_files: dict[str, bytes], lock: dict,
         if name not in wheels:
             wheels.add(name)
             todo += lock["packages"][name].get("depends", [])
-    names = ["pyodide.asm.wasm", "python_stdlib.zip", "pyodide-lock.json",
-             *[lock["packages"][w]["file_name"] for w in wheels]]
+    names = ["pyodide.asm.wasm", "pyodide-lock.json", *[lock["packages"][w]["file_name"] for w in wheels]]
     app = ["songbird.zip"] + (["kernels/manifest.json", "wasm/kernels.wasm"] if "scipy" in packages else [])
-    return sum(len(py_files[n]) for n in names) + sum(len(app_files[n]) for n in app)
+    if not bc_files:
+        return sum(len(py_files[n]) for n in names + ["python_stdlib.zip"]) + sum(len(app_files[n]) for n in app)
+    code = ["stdlib.zip", *[f"{p}.zip" for p in packages if f"{p}.zip" in bc_files]]
+    return (sum(len(py_files[n]) for n in names) + sum(len(bc_files[n]) for n in code)
+            + sum(len(app_files[n]) for n in app + ["bytecode.zip"]))
 
 
 def describe(rel: str) -> dict:
     """A file's type, cache policy and security policy, by where it is."""
     suffix = Path(rel).suffix
     entry = {"type": TYPES.get(suffix, "application/octet-stream")}
-    hashed = rel.startswith(("render/py-", "render/app-", "render/first-"))
+    hashed = rel.startswith(("render/py-", "render/app-", "render/bc-", "render/first-"))
     entry["cache"] = IMMUTABLE if hashed else FRESH
     if suffix in (".html", ".mjs", ".js"):  # a page, or a script (a worker keeps its own script's policy)
         entry["csp"] = POLICY
@@ -223,8 +228,10 @@ def main(argv: list[str] | None = None) -> None:
     singing = not args.no_singing
     if singing:
         app_files |= render.singing_files()  # measuring a sung take: singing.zip and WORLD in wasm
-    folders = {f"py-{render.folder_hash(py_files)}": py_files, f"app-{render.folder_hash(app_files)}": app_files}
-    py_dir, app_dir = list(folders)
+    bc_files, app_files["bytecode.zip"] = render.bytecode_files(zipped)  # (tools/bytecode.mjs: Pyodide under node)
+    folders = {f"py-{render.folder_hash(py_files)}": py_files, f"app-{render.folder_hash(app_files)}": app_files,
+               f"bc-{render.folder_hash(bc_files)}": bc_files}
+    py_dir, app_dir, bc_dir = list(folders)
     native = {"song": str(SONG), "machine": args.machine, "runs_with": runs_with(), "singing": singing}
     days = window(date.today(), args.days)
     first = first_answers(native, days) if days else {}
@@ -237,15 +244,15 @@ def main(argv: list[str] | None = None) -> None:
             files[f"render/{folder}/{name}"] = data
     lock = json.loads(py_files["pyodide-lock.json"])
     sent = sum(len(gzip.compress(d, 6, mtime=0)) if Path(n).suffix in (".mjs", ".js", ".json", ".wasm") else len(d)
-               for f, c in folders.items() if f.startswith(("py-", "app-")) for n, d in c.items())
+               for f, c in folders.items() if f.startswith(("py-", "app-", "bc-")) for n, d in c.items())
     studio = {"song": "/app/songs/h-now-its-by-you.json", "machine": args.machine, "runs_with": runs_with()}
     if singing:
         studio["singing"] = True
     # bytes: what a render worker fetches, and studio_bytes the studio's (numpy alone: lazy_imports), each as it
     # counts them; transfer: the whole bundle on the wire, the first time (the host compresses text and wasm)
-    bundle = {"v": 1, "base": "/render/", "pyodide": py_dir, "app": app_dir, "packages": names,
-              "bytes": fetched(py_files, app_files, lock, ["numpy", "scipy", "soundfile"]),
-              "studio_bytes": fetched(py_files, app_files, lock, ["numpy"]),
+    bundle = {"v": 1, "base": "/render/", "pyodide": py_dir, "app": app_dir, "bytecode": bc_dir, "packages": names,
+              "bytes": fetched(py_files, app_files, lock, ["numpy", "scipy", "soundfile"], bc_files),
+              "studio_bytes": fetched(py_files, app_files, lock, ["numpy"], bc_files),
               "transfer": sent, "program": program, "pyodide_version": version, "studio": studio}
     if first:  # the days the page's first answers are ready for, and where
         bundle["first"] = {"folder": f"{next(f for f in folders if f.startswith('first-'))}/", "from": days[0],

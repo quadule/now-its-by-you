@@ -108,6 +108,22 @@ def test_the_bundle_is_served_for_good_under_its_hashed_folders(public):
         assert ask(port, "GET", path)[0] == 404, path
 
 
+def test_a_bundle_with_its_bytecode_serves_that_folder_too(home):
+    studio = S.Studio(None, str(LEAD), "fictional:wren", out=home / "out", public=P.Limits())
+    folder = fake_bundle(home / "bundle", studio.program_digest)
+    manifest = json.loads((folder / "bundle.json").read_text())
+    with pytest.raises(ValueError):  # named, but not there
+        (folder / "bundle.json").write_text(json.dumps({**manifest, "bytecode": "bc-00112233445566"}))
+        S.BrowserBundle(folder, studio.program_digest)
+    (folder / "bc-00112233445566").mkdir()
+    (folder / "bc-00112233445566" / "stdlib.zip").write_bytes(b"PK\5\6" + bytes(18))
+    bundle = S.BrowserBundle(folder, studio.program_digest)
+    assert bundle.view()["bytecode"] == "bc-00112233445566"
+    assert bundle.file("bc-00112233445566/stdlib.zip") is not None and bundle.file("bc-0011/stdlib.zip") is None
+    (folder / "bundle.json").write_text(json.dumps(manifest))
+    assert "bytecode" not in S.BrowserBundle(folder, studio.program_digest).view()  # one built before it
+
+
 def test_the_page_may_play_what_the_browser_made_and_is_otherwise_as_strict(public, home):
     studio, port = public
     status, head, page = ask(port, "GET", "/")

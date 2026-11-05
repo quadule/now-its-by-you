@@ -149,7 +149,8 @@
     };
     worker.make = (config) => { w.postMessage({ cmd: "studio", config }); return worker.made; };
     worker.stop = () => { w.terminate(); stopped("let go"); };
-    w.postMessage({ cmd: "init", pyodide: at(bundle.pyodide), app: at(bundle.app), bytes, lean, control });
+    w.postMessage({ cmd: "init", pyodide: at(bundle.pyodide), app: at(bundle.app),
+      ...(bundle.bytecode ? { bytecode: at(bundle.bytecode) } : {}), bytes, lean, control });
     return worker;
   }
 
