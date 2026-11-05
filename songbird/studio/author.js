@@ -115,7 +115,8 @@
       groups.push(group);
     }
     row.say.replaceChildren(...groups);
-    row.say.hidden = !groups.length;
+    // on the score's Page, only for a line a person has written: the song's lines are said as the song has them
+    row.say.hidden = !groups.length || (!!row.section.whole && text === row.base && !row.phrase.authored);
   }
   function pick(row, index, name) {
     const {parts, words} = wordsOf(row.input.value);
@@ -124,7 +125,7 @@
     parts[w.at] = withSay(bare(w.token), name);
     row.input.value = parts.join("");
     count(row);
-    row.section.status.textContent = "Not in the song until you use it.";
+    row.section.status.textContent = row.section.whole ? "" : "Not in the song until you use it.";
     if (row.status) row.status.textContent = "Not in the song until you use it.";
   }
   function node(tag, className, text) {
@@ -263,7 +264,7 @@
       row = {wrap, input, count: tally, restore, say, section, base: p.lyric_text, phrase: p};
       input.value = p.lyric_text;
       input.title = STARS;
-      input.addEventListener("input", () => { count(row); section.status.textContent = "Not in the song until you use it."; });
+      input.addEventListener("input", () => { count(row); section.status.textContent = section.whole ? "" : "Not in the song until you use it."; });
       section.rows.set(p.lyric_path, row);
       section.lines.append(wrap);
     } else if (row.input.value === row.base) {
@@ -328,6 +329,7 @@
     let section = sections.get(s.id);
     if (!section) { section = makeSection(s); sections.set(s.id, section); }
     section.label = s.label;
+    section.whole = true;  // the Page's Done uses the lines (finish): no button of its own, nothing to say until then
     // the lines of the words sung here now: a field kept for other words (another verse chosen) goes
     const sung = new Set(s.phrases.map((p) => p.lyric_path).filter(Boolean));
     for (const [path, row] of section.rows) if (!sung.has(path)) { row.wrap.remove(); section.rows.delete(path); }
@@ -342,13 +344,36 @@
       }
       if (typeof requestAnimationFrame === "function") requestAnimationFrame(row.fits);
     }
-    anchor.append(section.lines, section.legend, section.actions, section.status);
+    anchor.append(section.lines, section.legend, section.status);
     if (focus) {
       const input = [...section.rows.values()].map((row) => row.input).find((item) => item.dataset.lyricPath === focus.path);
       if (input) { input.focus({preventScroll: true}); input.setSelectionRange(focus.start, focus.end); }
       focus = null;
     }
     return true;
+  }
+  // The Page's Done: what was typed in a section's fields goes into the song (true), or its status says why it
+  // can't and the first such line is focused (false). With nothing typed there is nothing to do.
+  const typed = (section) => [...(section?.rows.values() || [])].filter((row) => row.input.value !== row.base);
+  function finish(sectionId) {
+    const section = sections.get(sectionId), changed = typed(section);
+    if (!changed.length) return Promise.resolve(true);
+    const wrong = changed.filter((row) => syllables(row.input.value) !== row.phrase.syllable_count);
+    if (wrong.length) {
+      section.status.textContent = "Each line needs its count of syllables.";
+      wrong[0].input.focus();
+      return Promise.resolve(false);
+    }
+    let used = false;
+    return Promise.resolve(apply(section, Object.fromEntries(changed.map((row) => [row.phrase.lyric_path, row.input.value])), null, () => { used = true; }))
+      .then(() => { if (used) section.status.textContent = ""; return used; });
+  }
+  const dirty = (sectionId) => typed(sections.get(sectionId)).length > 0;
+  function discard(sectionId) {
+    const section = sections.get(sectionId);
+    if (!section) return;
+    for (const row of section.rows.values()) { row.input.value = row.base; count(row); }
+    section.status.textContent = "";
   }
   function decorate(view, parent) {
     useTable(view.composition?.say);
@@ -370,5 +395,5 @@
       focus = null;
     }
   }
-  window.SongbirdAuthor = {capture, decorate, line, whole, say: {useTable, choices, decide, bare, syllables}};
+  window.SongbirdAuthor = {capture, decorate, line, whole, finish, dirty, discard, say: {useTable, choices, decide, bare, syllables}};
 })();

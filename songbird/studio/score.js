@@ -310,7 +310,8 @@
       h("button", { class: "rub", type: "button", "data-key": `rub:${sid}`, "aria-pressed": String(chosen && S.sel.kind === "section"),
         title: [w.sung ? (w.mine ? "your words" : w.how) : null, w.note].filter(Boolean).join(": ") || null, onclick: () => select({ kind: "section", id: sid }) },
       h("span", { class: `rubric${w.mine ? " hand" : ""}` }, w.label)),
-      !writable ? null : writing ? h("button", { class: "editbtn on", type: "button", "data-focus": `${sid}.edit`, onclick: () => write(null) }, "Done")
+      !writable ? null : writing ? [h("button", { class: "editbtn on", type: "button", "data-focus": `${sid}.edit`, title: "What you typed goes into the song", onclick: () => doneWriting(sid) }, "Done"),
+        h("button", { class: "link small discard", type: "button", title: "What you typed is dropped", onclick: () => { window.SongbirdAuthor?.discard(sid); write(null); } }, "Discard")]
         : h("button", { class: "editbtn", type: "button", "data-focus": `${sid}.edit`, "aria-label": `Edit ${w.label}'s words`, onclick: () => write(sid) }, PENCIL(), "Edit"),
       h("span", { class: "sectools" }, h("button", { class: `play${ready ? " ready" : ""}`, type: "button", "aria-label": `Hear ${w.label}, sung`,
         title: ready ? "ready to play" : "sung (it will be made first)", onclick: () => { setHow("sung", false); listen("you", w.index); } }, playIcon())));
@@ -327,7 +328,19 @@
         p.addEventListener("click", () => write(sid, j));
       });
     }
-    return h("div", { class: `sec${w.sung ? "" : " instrumental"}${w.mine || (!w.sung && arranged) ? " mine" : ""}${chosen ? " selected" : ""}${writing ? " is-writing" : ""}`, id: `sec-${w.index}` }, head, body);
+    const sec = h("div", { class: `sec${w.sung ? "" : " instrumental"}${w.mine || (!w.sung && arranged) ? " mine" : ""}${chosen ? " selected" : ""}${writing ? " is-writing" : ""}`, id: `sec-${w.index}` }, head, body);
+    if (writing) {  // Discard shows once something is typed
+      const mark = () => sec.classList.toggle("is-typed", !!window.SongbirdAuthor?.dirty(sid));
+      sec.addEventListener("input", mark);
+      sec.addEventListener("click", () => setTimeout(mark));  // (a pronunciation chosen changes the line too)
+      mark();
+    }
+    return sec;
+  }
+  // Done: what was typed goes into the song and the section closes; a line that can't be sung keeps it open, saying why
+  async function doneWriting(sid) {
+    if (await window.SongbirdAuthor?.finish(sid) === false) return;
+    if (S.writing === sid) write(null);
   }
   // A section being edited: its lines as fields (author.js), then each word that can be swapped as a row of its
   // alternatives, then the other verses (a refrain's openings and couplets) as lists to read and choose from
