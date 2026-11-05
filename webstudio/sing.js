@@ -54,20 +54,20 @@ function delay() { return (Number(kept().nudge) || 0) / 1000; }  // what the dev
 
 const WORDS = {
   device: [  // measured in this browser: the consent's own version (studio_device.py DEVICE_CONSENT)
-    ["Your voice stays on this device: your microphone is recorded and measured here, then deleted.",
-      "Nothing of it is sent, saved, played to anyone or used to copy a voice. A take waits in this page's memory until you measure it or sing again."],
-    ["Only numbers are kept, in this browser: for each note, when you came in, how long you held it, how loud, how you slid into it.",
-      "They stay until you forget them, so the studio can sing the song your way."],
-    ["A version you share carries those numbers, never your voice. Forget my singing removes them.",
-      "Not from a version you already exported or shared."],
+    ["Your singing is recorded and measured on this device, then deleted. It is not sent anywhere.",
+      "It is not saved, played to anyone or used to copy a voice. A take waits in this page's memory until you use it or record again."],
+    ["What is kept, in this browser, is a set of numbers for each note: when you came in, how long you held it, how loud it was and how you slid into it.",
+      "They stay in this browser until you choose Forget my singing."],
+    ["A version you share contains those numbers and no recording of you. Forget my singing deletes them from this browser.",
+      "It can't remove them from a version you already exported or shared."],
   ],
   server: [  // measured on the computer serving the studio (webstudio/singing.py CONSENT)
-    ["Your voice isn't kept: your take is measured on the computer serving this studio, then deleted.",
-      "It is never saved, played to anyone or used to copy a voice."],
-    ["Only numbers are kept: for each note, when you came in, how long you held it, how loud, how you slid into it.",
-      "In this browser, and on that computer under a code (no name or address) for {days} days after they were last used, so the studio can sing the song your way."],
-    ["A version you export carries those numbers, never your voice. Forget my singing removes them.",
-      "From this browser and that computer; not from a file you already exported."],
+    ["Your take is sent to the computer that runs this studio, measured there, then deleted.",
+      "It is not saved, played to anyone or used to copy a voice."],
+    ["What is kept is a set of numbers for each note: when you came in, how long you held it, how loud it was and how you slid into it.",
+      "They are stored in this browser and on the computer that runs this studio, with no name or address attached. That copy is deleted {days} days after its last use."],
+    ["A version you export contains those numbers and no recording of you. Forget my singing deletes them.",
+      "From this browser and from the computer that runs this studio. It can't remove them from a file you already exported."],
   ],
 };
 

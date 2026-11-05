@@ -56,19 +56,22 @@ of the song at minimum, but I think there have to be other options here."
   in its own key, as natively; past 19 semitones it is refused, said.
 - **The words people read**, the simplest true thing (the qualifications in
   tooltips and here). The consent is three lines, a tick box and *Start*:
-  - *Your voice stays on this device: your microphone is recorded and measured
-    here, then deleted.* (tooltip: nothing of it is sent, saved, played to
-    anyone or used to copy a voice; a take waits in the page's memory until it
-    is measured or sung again)
-  - *Only numbers are kept, in this browser: for each note, when you came in,
-    how long you held it, how loud, how you slid into it.* (until forgotten)
-  - *A version you share carries those numbers, never your voice. Forget my
-    singing removes them.* (not from a version already exported or shared)
+  - *Your singing is recorded and measured on this device, then deleted. It is
+    not sent anywhere.* (tooltip: it is not saved, played to anyone or used to
+    copy a voice; a take waits in the page's memory until it is used or
+    recorded again)
+  - *What is kept, in this browser, is a set of numbers for each note: when you
+    came in, how long you held it, how loud it was and how you slid into it.*
+    (until Forget my singing)
+  - *A version you share contains those numbers and no recording of you. Forget
+    my singing deletes them from this browser.* (it can't remove them from a
+    version already exported or shared)
 
-  A server's studio says instead that the take is measured on the computer
-  serving it, then deleted; that the numbers are also kept there under a code
-  for 30 days; and that an exported version carries them. Its version is 2,
-  the device's 3 (both changed, so each asks again). The words show only once
+  A server's studio says instead that the take is sent to the computer that
+  runs the studio, measured there, then deleted; that the numbers are also
+  stored there with no name or address attached, and deleted 30 days after
+  their last use; and that an exported version contains them. Its version is 3,
+  the device's 4 (a page asks again when its words change). The words show only once
   the offer says where measuring happens: before it, the view says nothing (the
   device's page used to show the server's words for a moment). Gone: the
   "What happens to your singing" details (they repeated the consent), the line
