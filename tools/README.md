@@ -35,6 +35,13 @@ karaoke.html and everyone.py).
   it needs).
 - phrasing_eval.py, recording_sets.py, delivery.py, fit_postures.py.
 
+## The cover
+
+- cover/: the album cover (now-its-by-you.png at the top of the repo). woodcut.py cuts the daisy, face.py prints
+  the packets' faces, concrete.py makes the stone, scene.py builds and renders it all in Blender, finish.py
+  makes the release sizes and reads the QR back; blender_link.py and send.py build it in an open Blender while
+  you watch.
+
 ## Archive
 
 archive/ keeps the record of how the first version was made; nothing runs it now.
