@@ -824,10 +824,17 @@ NASAL_LIFT = 2.0  # dB a coda nasal comes up
 # alveolar burst's); dB added to the burst; its rise and fall (s); how many times as long it lasts; `decay` (s; None, a
 # flat burst), a release that falls away from its first instant as a real one does; dB added to the aspiration after it
 # (which doesn't follow the burst's level); the aspiration's own shape (None, the burst's) and when it starts after the
-# release (s); and what is left of the throat's own t from the release to its end (1, all of it). These values leave the
-# t as it was.
+# release (s); what is left of the throat's own t from the release to its end (1, all of it); and what is left of it
+# through the closure before the release (None, CLOSURE_DIP's), the silence a coda t ("part", "heart") is heard by.
+# These values leave the t as it was.
 T_RELEASE = {"shape": None, "burst": 0.0, "ramp": 0.002, "longer": 1.0, "decay": None, "aspiration": 0.0,
-             "aspiration_shape": None, "aspiration_from": 0.008, "own": 1.0}
+             "aspiration_shape": None, "aspiration_from": 0.008, "own": 1.0, "closure": None}
+# The t the artist chose on the contest version (E8bl, 2026-11-07: "tE sounds best"): mostly 6-10 kHz with a little 3-4
+# kHz 12 dB under, a release falling away over 10 ms and lasting about 30, loud enough that the lead's de-esser leaves
+# "part" and "heart" a t (after the lead chain, 13-17 dB under the word, 22-25 ms long, where Scylla's heard t's are
+# 11-17 dB under for 15-40 ms). Not applied: T_RELEASE.update(T_CHOSEN) sings it.
+T_CHOSEN = {"shape": [(8000.0, 4000.0, 0.0), (3500.0, 1500.0, -12.0)], "ramp": 0.0005, "burst": 8.0, "longer": 2.5,
+            "decay": 0.01, "aspiration": -6.0, "own": 0.3}
 
 
 def articulate(y: np.ndarray, segs: list, sr: int, voice, rng: np.random.Generator, ref: float) -> np.ndarray:
@@ -893,6 +900,8 @@ def articulate(y: np.ndarray, segs: list, sr: int, voice, rng: np.random.Generat
                 breath_shape, breath_from = T_RELEASE["aspiration_shape"], T_RELEASE["aspiration_from"]
                 if T_RELEASE["own"] < 1.0:
                     dip(release, s.t1, T_RELEASE["own"])
+                if T_RELEASE["closure"] is not None:
+                    dip(s.t0, release, T_RELEASE["closure"])
             hiss(release, release + length, shape, level, ramp, s.amp, decay=decay)
             if manner == "affricate":
                 sh_shape, sh_level = ph.FRICATION["ZH" if voiced else "SH"]
