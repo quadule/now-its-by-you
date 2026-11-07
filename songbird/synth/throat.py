@@ -826,15 +826,17 @@ NASAL_LIFT = 2.0  # dB a coda nasal comes up
 # (which doesn't follow the burst's level); the aspiration's own shape (None, the burst's) and when it starts after the
 # release (s); what is left of the throat's own t from the release to its end (1, all of it); and what is left of it
 # through the closure before the release (None, CLOSURE_DIP's), the silence a coda t ("part", "heart") is heard by.
-# These values leave the t as it was.
-T_RELEASE = {"shape": None, "burst": 0.0, "ramp": 0.002, "longer": 1.0, "decay": None, "aspiration": 0.0,
-             "aspiration_shape": None, "aspiration_from": 0.008, "own": 1.0, "closure": None}
+# T_AS_WAS leaves the t as it was.
+T_AS_WAS = {"shape": None, "burst": 0.0, "ramp": 0.002, "longer": 1.0, "decay": None, "aspiration": 0.0,
+            "aspiration_shape": None, "aspiration_from": 0.008, "own": 1.0, "closure": None}  # every t as it was
 # The t the artist chose on the contest version (E8bl, 2026-11-07: "tE sounds best"): mostly 6-10 kHz with a little 3-4
 # kHz 12 dB under, a release falling away over 10 ms and lasting about 30, loud enough that the lead's de-esser leaves
 # "part" and "heart" a t (after the lead chain, 13-17 dB under the word, 22-25 ms long, where Scylla's heard t's are
-# 11-17 dB under for 15-40 ms). Not applied: T_RELEASE.update(T_CHOSEN) sings it.
+# 11-17 dB under for 15-40 ms). Sung by default since the performance voice (2026-11-07); T_RELEASE.update(T_AS_WAS)
+# sings the t's as they were.
 T_CHOSEN = {"shape": [(8000.0, 4000.0, 0.0), (3500.0, 1500.0, -12.0)], "ramp": 0.0005, "burst": 8.0, "longer": 2.5,
             "decay": 0.01, "aspiration": -6.0, "own": 0.3}
+T_RELEASE = {**T_AS_WAS, **T_CHOSEN}
 
 
 def articulate(y: np.ndarray, segs: list, sr: int, voice, rng: np.random.Generator, ref: float) -> np.ndarray:
