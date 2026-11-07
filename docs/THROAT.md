@@ -730,3 +730,69 @@ model-1..5 dry, full/song-1..5 the first published version in the mix):
   singing in H's register would sound more alike than today's. If that matters, the high singers need more apart
   prompts (a higher cap than 0.45, or tract warps in the prompts), and a measure of it in the gate.
 - The people's share now lives in the singers: no model here has a volunteers row (`throat.humans` is empty).
+
+## Scylla's Band as a teacher (2026-11-06, overnight; an experiment, not shipped)
+
+**Scylla's Band** (lowkeytea, Apache-2.0; a flow-matching speech and singing model with 14 fixed voices, run here on
+its LiteRT CPU bundle beside the repo, never shipped; its training data isn't disclosed) has a singing graph that
+takes IPA phones, a frame count for each (512 samples at 24 kHz) and a melody track directly. So it sings our own
+schedule: `tools/throat/scylla.py` plans what the throat would sing (`voice.schedule` with `throat.DURATIONS`, the
+same seed), turns its phones into Scylla's (diphthongs and affricates two symbols at fixed shares, a `<sil>` at each
+word boundary), and writes the labels as what Scylla was told rather than what MFA heard. That takes MFA (not on
+this Linux desktop) out of the corpus: the sibilants' energy lines up with the labels best at 0 ms. Scylla sang
+better than our throat on the same notes, timing and seed (Gemini, below: +2.0 of 3 both on sounding human and on
+words). Our throat sung on Scylla's own f0 was no better than on ours (-0.5), so the gap is the envelope, not the
+pitch track: what training on it can teach.
+
+**The corpus** (`scylla.py --per-item 2`, `scylla_batch.py` in Scylla's venv): 76 of `corpus.py`'s items, each sung
+by two of the voices in a key moved into that voice's range (an octave shift into 3 below to 5 above its centre,
+then ±2 semitones), H by all fourteen; 239 renditions, 423 segments, 70.6 min on 24 CPU threads (about 2x real
+time). `check.py` kept 361: all but one or two of every voice's, except ink (0 of 31: sharp, 50 cents median) and
+tuesday (7 of 31: 31 cents sharp); 151.5 minutes, 13 singers.
+
+**Training**, the October A-160 recipe (`train.py --init songbird/synth/throat.npz --steps 14000 --channels 160
+--singer-dim 16 --spread --singer-lr 1e-2 --contrast 1.0 --adversarial 0.1`, the 4080 Super, 14 min each;
+`renders/throat-scylla/train-all.sh`): C, blend A (October's old and new house corpus, `--retire house-*`) with
+Scylla's; D, blend B (the new corpus alone) with Scylla's; S, Scylla's alone. `tools/throat/retire.py` copies a
+model drawing only some of its singers, the weights unchanged: Cbl and Dbl draw the blend singers alone (Scylla's
+rows trained, never drawn), Csc and Dsc Scylla's alone. Held-out loss: C 0.253, D 0.249, S 0.242 (A-160 0.257).
+
+**Gemini as a listener** (`tools/throat/gemini_judge.py`, gemini-3.8-flash): two renders of the same notes, timing
+and seed, the dry voice stem cut into the same six 20-second windows of H's seed rendition (or a machine's own
+blend, fictional:ada), loudness-matched, each pair asked in both orders; which sounds more like a person singing
+and whose words are clearer, -3 to +3. It picks the same clip in both orders only 59% (human) and 65% (words) of
+the time, so a score under about ±0.5 is noise. About $0.004 a call; this whole night $0.78.
+
+**Results** (models in renders/throat-scylla/, listening in renders/throat-scylla/listen/compare/):
+
+| | WER on H, `wer_suite.py --sketch h --seeds 6` (1314 words) | Gemini against shipped, human / words (seed; ada) | People's share of a voice |
+|---|---|---|---|
+| shipped | 10.3% | | 0.3 (`HUMAN_SHARE`) |
+| A-160 | 7.7% | +0.75 / +0.50 (two windows) | 0.3-0.6 |
+| C (blend A + Scylla) | **3.7%** | +0.17 / +0.67; +0.67 / +0.83 | about 0.1-0.35 |
+| D (blend B + Scylla) | **3.7%** | +0.75 / +0.58; +1.08 / +0.92 | about 0.1-0.35 |
+| S (Scylla alone) | 5.6% | **+1.58 / +1.42; +1.67 / +1.58** | none |
+| Cbl (C, blend singers drawn) | 5.5% | +1.00 / +0.50; +0.33 / +0.33 | 0.3-0.6 |
+| Dbl (D, blend singers drawn) | 7.3% | +0.75 / +0.67 | 0.3-0.6 |
+| Csc, Dsc (Scylla's drawn) | 5.3%, 5.5% (two seeds) | | none |
+
+Head to head (seed): C over A-160 +0.58 / +0.50; S over A-160 +0.75 / +1.17; S over C -0.25 / +0.25; S over D
+-0.50 / 0.00; Cbl over C -0.25 / -0.17; Cbl over A-160 +0.33 / +0.17. What it hears: the shipped voice "buzzy",
+"muffled", "metallic buzz on sustained vowels"; C and S "slight metallic grain on higher sustained vowels",
+"mechanical stiffness" in the transitions.
+
+- **Words improve most.** Every model trained with Scylla's singing hears better than the shipped voice and A-160:
+  C and D mishear a third as many of H's words as the shipped voice does. Most of what's left is the lexicon's
+  ("hundredodd", "quay" heard as "key", "a" as "the"), not the voice.
+- **Sounding human:** the new models all beat the shipped voice; among themselves, within the judge's noise. S beats
+  the shipped voice by the most, but not C or D head to head.
+- **The volunteers' share decides between them.** The artist's 0.3-0.6 (a choice, not the consent's) puts the people
+  in every voice. Scylla's singers carry none of it, so wherever a voice draws them the share falls: in
+  C and D a machine's voice in H's register is 37-56% blend rows (median; `machine_mix` over 300 seeds, pitches
+  55-65), so 0.1-0.35 people; S, Csc and Dsc have none. Only Cbl and Dbl keep the share, Scylla's singing still
+  teaching the shared network: Cbl hears 5.5% (the shipped 10.3%) and Gemini prefers it to the shipped voice and
+  to A-160, a little.
+- **Not measured:** the variety among machines (October's spread from the default blend), the mix with the band
+  (listen/ has the full mixes, unjudged), any song but H.
+- Scylla's voices are fixed singers. No machine in C draws more than 0.41 of one (300 seeds; `machine_mix`'s cap 0.6, and
+  more singers near each register); S and Csc would make every machine a blend of only Scylla's voices.

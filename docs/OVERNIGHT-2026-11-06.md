@@ -1,0 +1,44 @@
+# Overnight, 2026-11-06 to 07: Scylla's Band as the throat's teacher
+
+The artist: "try to train against it to improve ours", then "take this as far as you can overnight", with Gemini
+for listening (at most $5-10; this night spent $0.78). Everything is on branch `claude/scylla-teacher` (from
+`claude/singing-synthesis-exploration-c0bf8c`) in atomic commits; nothing is merged, pushed, deployed or shipped.
+The shipped voice (songbird/synth/throat.npz) is unchanged. docs/THROAT.md "Scylla's Band as a teacher" has the
+method and the numbers. The throat tests pass (27).
+
+## Listen first
+
+**renders/throat-scylla/listen/compare/** (dry, a minute of H from 0:30): `seed-N-*` is H's seed rendition,
+`ada-N-*` a machine's own blend (fictional:ada), the same notes, timing and seed in each:
+1 shipped, 2 A-160 (October), 3 C, 4 D, 5 S, 6 Cbl, 7 Dbl.
+
+- C = October's blend A with Scylla's singing; D = blend B with it; S = Scylla's alone.
+- Cbl, Dbl = C and D drawing only the blend singers: Scylla's rows taught the network but no voice uses them.
+
+The full mixes (with the band) and whole voice stems are beside them in listen/.
+
+## What the numbers say
+
+- **Words:** C and D mishear 3.7% of H's words (1314 words over six seeds), the shipped voice 10.3%, A-160 7.7%.
+  Cbl 5.5%, S 5.6%, Dbl 7.3%.
+- **Sounding human (Gemini):** every new model beats the shipped voice; S by the most (+1.6 of 3), C and D
+  +0.2 to +1.1, Cbl +0.3 to +1.0. Head to head they're within the judge's noise (it agrees with itself across
+  the two orders only 59% of the time).
+- **Size and speed:** unchanged, 160 channels, 3.7 MB.
+
+## Decisions for the artist
+
+- **The volunteers' share.** Scylla's singers carry none of the people's row. Drawing them (C, D) puts a machine's
+  voice at about 0.1-0.35 people, below your 0.3-0.6; S, Csc and Dsc have none. **Cbl keeps the share** and still
+  mishears about half as many words as the shipped voice, so it's my pick to ship if your ears agree; C if its
+  clearer words are worth a smaller share (the range is yours, not the consent's).
+- **Scylla's training data isn't disclosed.** Its license (Apache-2.0) allows this use, but its fourteen fixed
+  voices may be modelled on singers we know nothing about. Every Scylla singer is source `scyllasband`, so
+  `dataset.py --without scyllasband` takes them all out again.
+- **ink and tuesday** sang sharp (50 and 31 cents) and are out (ink) or nearly so (tuesday, 3 minutes).
+
+## Not done
+
+- Machines' variety (October's spread measure), the mix with the band judged, any song but H.
+- C's words with the people's share kept: the blend singers would need more of the people's row (up to 0.6 each)
+  and `throat.machine_mix` a floor on the blend rows' part of every voice; not tried.
