@@ -792,7 +792,26 @@ Head to head (seed): C over A-160 +0.58 / +0.50; S over A-160 +0.75 / +1.17; S o
   55-65), so 0.1-0.35 people; S, Csc and Dsc have none. Only Cbl and Dbl keep the share, Scylla's singing still
   teaching the shared network: Cbl hears 5.5% (the shipped 10.3%) and Gemini prefers it to the shipped voice and
   to A-160, a little.
-- **Not measured:** the variety among machines (October's spread from the default blend), the mix with the band
-  (listen/ has the full mixes, unjudged), any song but H.
+- **Every song** (`wer_suite.py --seeds 2`, 5002 words; renders/throat-scylla/eval/wer-all.txt): shipped 15.2%,
+  A-160 11.4%, S 10.6%, Cbl 9.8%, C 8.7%, D 7.6%; D or C best on every song but e (S) and g (A-160; its refrain in no
+  language). The corpora, Scylla's and the house plans', sing these songs' own words, so this is partly
+  in-domain, for the shipped voice's corpus as much as for the new ones.
+- **Variety** (the throat's predicted envelope on H's first item, voiced frames, mean |dB| from the default
+  blend; a new measure, not October's, so only its own column compares): each drawn singer alone, median (range);
+  machines' own blends (20 seeds), median (range).
+
+  | | Singers alone | Machines |
+  |---|---|---|
+  | shipped | 5.88 (4.2-10.7) | 1.10 (0.5-2.2) |
+  | A-160 | 3.92 (1.5-8.7) | 0.65 (0.1-1.3) |
+  | C | 6.84 (3.3-9.7) | 0.81 (0.3-2.8) |
+  | Cbl | 3.69 (1.3-7.7) | 0.61 (0.1-1.3) |
+  | D | 6.70 (3.5-8.8) | 0.82 (0.3-2.9) |
+  | S | 5.02 (2.7-7.2) | 1.09 (0.3-1.7) |
+
+  Cbl's machines are as close together as A-160's (October's narrowing, the volunteers' row shared by every blend
+  singer), about half the shipped voice's spread; Scylla's singers widen it back in C and D, and S's are as far
+  apart as the shipped voice's.
+- **Not measured:** the mix with the band (listen/ has the full mixes, unjudged).
 - Scylla's voices are fixed singers. No machine in C draws more than 0.41 of one (300 seeds; `machine_mix`'s cap 0.6, and
   more singers near each register); S and Csc would make every machine a blend of only Scylla's voices.

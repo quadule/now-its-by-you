@@ -21,10 +21,13 @@ The full mixes (with the band) and whole voice stems are beside them in listen/.
 
 - **Words:** C and D mishear 3.7% of H's words (1314 words over six seeds), the shipped voice 10.3%, A-160 7.7%.
   Cbl 5.5%, S 5.6%, Dbl 7.3%.
+  Over every song's words (5002, two seeds): D 7.6%, C 8.7%, Cbl 9.8%, S 10.6%, A-160 11.4%, shipped 15.2%.
 - **Sounding human (Gemini):** every new model beats the shipped voice; S by the most (+1.6 of 3), C and D
   +0.2 to +1.1, Cbl +0.3 to +1.0. Head to head they're within the judge's noise (it agrees with itself across
   the two orders only 59% of the time).
 - **Size and speed:** unchanged, 160 channels, 3.7 MB.
+- **Variety:** Cbl's machines sit as close together as A-160's (0.61 and 0.65 dB from the default blend, the
+  shipped voice's 1.10); drawing Scylla's singers widens it (C, D 0.8; S 1.09).
 
 ## Decisions for the artist
 
@@ -39,6 +42,6 @@ The full mixes (with the band) and whole voice stems are beside them in listen/.
 
 ## Not done
 
-- Machines' variety (October's spread measure), the mix with the band judged, any song but H.
+- The mix with the band judged (the full mixes are in listen/); Gemini on any song but H.
 - C's words with the people's share kept: the blend singers would need more of the people's row (up to 0.6 each)
   and `throat.machine_mix` a floor on the blend rows' part of every voice; not tried.
