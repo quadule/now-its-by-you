@@ -816,11 +816,18 @@ ASPIRATION = -8.0  # dB under its burst the aspiration after a voiceless stop's 
 WEAK_FRICATIVES = {"F": 6.0, "TH": 6.0, "V": 6.0, "DH": 4.0}  # dB over the formant singer's frication levels
 FRICATIVE_DIP = 0.5  # what is left of the throat's output through a voiceless weak fricative
 NASAL_LIFT = 2.0  # dB a coda nasal comes up
-# A t's release on its own (the stop the artist wanted softer, 2026-11-07): dB added to its burst, the burst's rise and
-# fall (s), how many times as long it lasts, and dB added to the aspiration after it (which doesn't follow the burst's
-# change). Scylla's Band's t's, on the same notes and timing, spread their energy over the whole t: their 3-9 kHz peak
-# 18 dB over its mean, ours 22-27 (docs/THROAT.md). These values leave the t as it was.
-T_RELEASE = {"burst": 0.0, "ramp": 0.002, "longer": 1.0, "aspiration": 0.0}
+# A t's release on its own (the stop the artist heard as harsh, 2026-11-07). Scylla's Band's t's, on the same notes and
+# timing, have almost nothing under 4 kHz (2-3 kHz 22-27 dB under their vowels there); ours 20-27 dB more, from the
+# alveolar burst's band (centred 4.7 kHz at the default tract; its 6.5 kHz band, summed in phase, mostly cancels), which
+# the lead's de-esser (split 4.5 kHz) leaves while turning down what's above it (docs/THROAT.md). Turning the burst down
+# only made it quieter. The keys: the noise's shape (band-pass regions as phonetics.BURSTS writes them; None, the
+# alveolar burst's); dB added to the burst; its rise and fall (s); how many times as long it lasts; `decay` (s; None, a
+# flat burst), a release that falls away from its first instant as a real one does; dB added to the aspiration after it
+# (which doesn't follow the burst's level); the aspiration's own shape (None, the burst's) and when it starts after the
+# release (s); and what is left of the throat's own t from the release to its end (1, all of it). These values leave the
+# t as it was.
+T_RELEASE = {"shape": None, "burst": 0.0, "ramp": 0.002, "longer": 1.0, "decay": None, "aspiration": 0.0,
+             "aspiration_shape": None, "aspiration_from": 0.008, "own": 1.0}
 
 
 def articulate(y: np.ndarray, segs: list, sr: int, voice, rng: np.random.Generator, ref: float) -> np.ndarray:
@@ -843,7 +850,8 @@ def articulate(y: np.ndarray, segs: list, sr: int, voice, rng: np.random.Generat
         if i1 > i0:
             gain[i0:i1] = np.minimum(gain[i0:i1], 1.0 - crisp * (1.0 - left))
 
-    def hiss(t0: float, t1: float, shape, level_db: float, ramp: float, amp: float, fading: bool = False) -> None:
+    def hiss(t0: float, t1: float, shape, level_db: float, ramp: float, amp: float, fading: bool = False,
+             decay: float | None = None) -> None:
         i0, i1 = max(int(t0 * sr), 0), min(int(t1 * sr), n)
         if i1 <= i0:
             return
@@ -855,6 +863,8 @@ def articulate(y: np.ndarray, segs: list, sr: int, voice, rng: np.random.Generat
         env = np.clip(np.minimum((t - t0) / ramp, (t1 - t) / ramp), 0.0, 1.0)
         if fading:
             env = env * np.clip((t1 - t) / max(t1 - t0, 1e-3), 0.0, 1.0)
+        if decay is not None:  # a release: at its loudest as it opens, falling away from there
+            env = env * np.exp(-np.maximum(t - t0, 0.0) / decay)
         added[lo:hi] += crisp * ref * 10.0 ** (level_db / 20.0) * amp * env * shaped
 
     spread = float(getattr(voice, "spread", 0.0))
@@ -873,18 +883,23 @@ def articulate(y: np.ndarray, segs: list, sr: int, voice, rng: np.random.Generat
             level = level + BURST - (3.0 if voiced else 0.0) + BURST_SPREAD[0] * float(z[0])
             length = (0.008 if voiced else 0.012) * float(np.exp(BURST_SPREAD[1] * z[1]))
             aspiration = level + ASPIRATION
-            ramp = 0.002
+            ramp, decay, breath_shape, breath_from = 0.002, None, None, 0.008
             if s.phone == "T":
+                shape = T_RELEASE["shape"] or shape
                 aspiration += T_RELEASE["aspiration"]
                 level += T_RELEASE["burst"]
                 length *= T_RELEASE["longer"]
-                ramp = T_RELEASE["ramp"]
-            hiss(release, release + length, shape, level, ramp, s.amp)
+                ramp, decay = T_RELEASE["ramp"], T_RELEASE["decay"]
+                breath_shape, breath_from = T_RELEASE["aspiration_shape"], T_RELEASE["aspiration_from"]
+                if T_RELEASE["own"] < 1.0:
+                    dip(release, s.t1, T_RELEASE["own"])
+            hiss(release, release + length, shape, level, ramp, s.amp, decay=decay)
             if manner == "affricate":
                 sh_shape, sh_level = ph.FRICATION["ZH" if voiced else "SH"]
                 hiss(release, s.t1, sh_shape, sh_level, 0.01, s.amp)
             elif not voiced:
-                hiss(release + 0.008, max(s.t1, release + 0.03), shape, aspiration, 0.004, s.amp, fading=True)
+                hiss(release + breath_from, max(s.t1, release + 0.03), breath_shape or shape, aspiration, 0.004, s.amp,
+                     fading=True)
         elif manner == "fricative" and s.phone in WEAK_FRICATIVES:
             if not voiced:
                 dip(s.t0, s.t1, FRICATIVE_DIP)
