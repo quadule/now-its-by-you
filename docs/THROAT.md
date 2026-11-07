@@ -761,7 +761,7 @@ rows trained, never drawn), Csc and Dsc Scylla's alone. Held-out loss: C 0.253, 
 and seed, the dry voice stem cut into the same six 20-second windows of H's seed rendition (or a machine's own
 blend, fictional:ada), loudness-matched, each pair asked in both orders; which sounds more like a person singing
 and whose words are clearer, -3 to +3. It picks the same clip in both orders only 59% (human) and 65% (words) of
-the time, so a score under about ±0.5 is noise. About $0.004 a call; this whole night $0.78.
+the time, so a score under about ±0.5 is noise. About $0.004 a call; this whole night $0.87.
 
 **Results** (models in renders/throat-scylla/, listening in renders/throat-scylla/listen/compare/):
 
@@ -812,6 +812,7 @@ Head to head (seed): C over A-160 +0.58 / +0.50; S over A-160 +0.75 / +1.17; S o
   Cbl's machines are as close together as A-160's (October's narrowing, the volunteers' row shared by every blend
   singer), about half the shipped voice's spread; Scylla's singers widen it back in C and D, and S's are as far
   apart as the shipped voice's.
-- **Not measured:** the mix with the band (listen/ has the full mixes, unjudged).
+- **In the mix** (H's seed rendition with the band, the same six windows) Gemini can't tell them apart: Cbl over the
+  shipped voice -0.08 / -0.25, D +0.33 / 0.00. The voice's gain is heard dry, and in the words.
 - Scylla's voices are fixed singers. No machine in C draws more than 0.41 of one (300 seeds; `machine_mix`'s cap 0.6, and
   more singers near each register); S and Csc would make every machine a blend of only Scylla's voices.

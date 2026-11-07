@@ -1,7 +1,7 @@
 # Overnight, 2026-11-06 to 07: Scylla's Band as the throat's teacher
 
 The artist: "try to train against it to improve ours", then "take this as far as you can overnight", with Gemini
-for listening (at most $5-10; this night spent $0.78). Everything is on branch `claude/scylla-teacher` (from
+for listening (at most $5-10; this night spent $0.87). Everything is on branch `claude/scylla-teacher` (from
 `claude/singing-synthesis-exploration-c0bf8c`) in atomic commits; nothing is merged, pushed, deployed or shipped.
 The shipped voice (songbird/synth/throat.npz) is unchanged. docs/THROAT.md "Scylla's Band as a teacher" has the
 method and the numbers. The throat tests pass (27).
@@ -25,6 +25,8 @@ The full mixes (with the band) and whole voice stems are beside them in listen/.
 - **Sounding human (Gemini):** every new model beats the shipped voice; S by the most (+1.6 of 3), C and D
   +0.2 to +1.1, Cbl +0.3 to +1.0. Head to head they're within the judge's noise (it agrees with itself across
   the two orders only 59% of the time).
+- **In the mix** with the band, Gemini hears no difference (Cbl -0.08, D +0.33 against the shipped voice): the
+  gain is in the dry voice and the words.
 - **Size and speed:** unchanged, 160 channels, 3.7 MB.
 - **Variety:** Cbl's machines sit as close together as A-160's (0.61 and 0.65 dB from the default blend, the
   shipped voice's 1.10); drawing Scylla's singers widens it (C, D 0.8; S 1.09).
@@ -42,6 +44,6 @@ The full mixes (with the band) and whole voice stems are beside them in listen/.
 
 ## Not done
 
-- The mix with the band judged (the full mixes are in listen/); Gemini on any song but H.
+- Gemini on any song but H.
 - C's words with the people's share kept: the blend singers would need more of the people's row (up to 0.6 each)
   and `throat.machine_mix` a floor on the blend rows' part of every voice; not tried.
