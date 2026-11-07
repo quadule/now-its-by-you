@@ -888,3 +888,18 @@ after the release; B, A with a 0.5 ms rise falling away over 4 ms and 1.7 times 
 Fable's B also gave the aspiration a broader shape (2.5 and 7 kHz), but that put 3 kHz back up 6 dB, and the artist
 warned the breath can sound harsh too, so B keeps A's. k and ch have the same excess on Cbl (k 6-16 dB over Scylla's
 at 2-5 kHz, ch 8-13), E8bl less; not changed yet, nor the de-esser.
+
+**The t the artist chose, and B major** (2026-11-07, evening). A moved the colour up but went quiet: its coda t's
+peaked 12 dB under Scylla's, and "part" and "heart" (both line ends, E4) lost their t. Through the lead chain (EQ,
+`fx.deess`, compressor, `fx.soften`; the softener does nothing to a t) the de-esser takes 7 dB off a burst that lies
+wholly above 4.5 kHz, so D3 (6-10 kHz, +3 dB) left a 10 ms tick at -19 dB under the word. Scylla's heard line-end t's
+are a release 11-17 dB under the vowel, mostly above 4.5 kHz with 2-4.5 kHz about 13 dB under that, falling away over
+15-40 ms. `throat.T_CHOSEN` (tE, the artist's pick: "tE sounds best") gives that: 6-10 kHz with 3-4 kHz 12 dB under,
+a 0.5 ms rise falling away over 10 ms, about 30 ms long, +8 dB; after the lead chain "part" -17 dB and "heart" -13
+(today's t -18 and -16 but with its 2-4.5 kHz only 1-3 dB under the top). Not applied by default.
+
+For the singers' ranges, the contest version in B major (`renders/release/record-B.json`, the record with tonic 59):
+the lead F#3-G#4 (A3-B4 in D), the band down 3 semitones, but the choir's floor (`theory.FLOOR`, E3, under which the
+throat's pulses are heard one by one) re-voices the lowest voice for 10 notes of the bridge and 5 of the tag (choir 3)
+and 2 of the bridge (choir 1), and the guitar's voicings change. E8bl with tE in B: renders/throat-scylla/listen/
+contest-B/, with the shipped voice in B beside it; "part" -17 dB, "heart" -16.
