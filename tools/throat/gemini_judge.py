@@ -63,14 +63,14 @@ def ask(model: str, one: tuple, two: tuple) -> tuple[dict, dict]:
         try:
             with urllib.request.urlopen(req, timeout=300) as r:
                 out = json.loads(r.read())
-            break
-        except Exception as e:  # rate limits and the odd 500: wait and ask again
+            text = "".join(p.get("text", "") for p in out["candidates"][0]["content"]["parts"])
+            return json.loads(text), out.get("usageMetadata", {})
+        except Exception as e:  # rate limits, the odd 500, an answer that isn't JSON: wait and ask again
             if attempt == 3:
                 raise
             print(f"  retrying after {e}", flush=True)
             time.sleep(20 * (attempt + 1))
-    text = "".join(p.get("text", "") for p in out["candidates"][0]["content"]["parts"])
-    return json.loads(text), out.get("usageMetadata", {})
+    raise AssertionError("unreachable")
 
 
 def main() -> None:
