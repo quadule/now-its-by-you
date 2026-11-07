@@ -1,7 +1,7 @@
 # Overnight, 2026-11-06 to 07: Scylla's Band as the throat's teacher
 
 The artist: "try to train against it to improve ours", then "take this as far as you can overnight", with Gemini
-for listening (at most $5-10; this night spent $0.87). Everything is on branch `claude/scylla-teacher` (from
+for listening (at most $5-10; this night and the next morning, $1.01). Everything is on branch `claude/scylla-teacher` (from
 `claude/singing-synthesis-exploration-c0bf8c`) in atomic commits; nothing is merged, pushed, deployed or shipped.
 The shipped voice (songbird/synth/throat.npz) is unchanged. docs/THROAT.md "Scylla's Band as a teacher" has the
 method and the numbers. The throat tests pass (27).
@@ -10,12 +10,17 @@ method and the numbers. The throat tests pass (27).
 
 **renders/throat-scylla/listen/compare/** (dry, a minute of H from 0:30): `seed-N-*` is H's seed rendition,
 `ada-N-*` a machine's own blend (fictional:ada), the same notes, timing and seed in each:
-1 shipped, 2 A-160 (October), 3 C, 4 D, 5 S, 6 Cbl, 7 Dbl.
+1 shipped, 2 A-160 (October), 3 C, 4 D, 5 S, 6 Cbl, 7 Dbl, 8 E16, 9 E16bl, 10 E8bl.
 
 - C = October's blend A with Scylla's singing; D = blend B with it; S = Scylla's alone.
 - Cbl, Dbl = C and D drawing only the blend singers: Scylla's rows taught the network but no voice uses them.
+- E = the shipped voice's own house corpus with Scylla's, the shipped volunteers row kept (added the next morning,
+  THROAT.md "E"); E16bl and E8bl draw exactly the shipped voice's singers, E16 Scylla's too (still 0.3 people).
 
-The full mixes (with the band) and whole voice stems are beside them in listen/; the models are
+**renders/throat-scylla/listen/full/**: complete songs with the band, H (2:31) and F (3:41), seed and ada, numbered
+the same way (01-10).
+
+The whole voice stems are in listen/; the models are
 renders/throat-scylla/model-*-160.npz (`SONGBIRD_THROAT=` to sing with one).
 
 ## What the numbers say
@@ -32,6 +37,12 @@ renders/throat-scylla/model-*-160.npz (`SONGBIRD_THROAT=` to sing with one).
 - **Variety:** Cbl's machines sit as close together as A-160's (0.61 and 0.65 dB from the default blend, the
   shipped voice's 1.10); drawing Scylla's singers widens it (C, D 0.8; S 1.09).
 
+## The next morning: E
+
+E16bl (the shipped corpus and Scylla's, drawing the shipped voice's singers at its 0.3 people) hears 7.9% over every
+song, against Cbl's 9.8% and the shipped 15.2%; the same as Cbl on H (5.5%); Gemini can't tell it from Cbl. But the
+volunteers' row, with no frames of its own, moved about 6.5 dB from how it sings today (the house rows 2.5).
+
 ## Decisions for the artist
 
 - **The volunteers' share.** Scylla's singers carry none of the people's row. Drawing them (C, D) puts a machine's
@@ -47,5 +58,6 @@ renders/throat-scylla/model-*-160.npz (`SONGBIRD_THROAT=` to sing with one).
 ## Not done
 
 - Gemini on any song but H.
+- Holding the volunteers' row in E: frames of the shipped model singing as the volunteers alone, added to its corpus.
 - C's words with the people's share kept: the blend singers would need more of the people's row (up to 0.6 each)
   and `throat.machine_mix` a floor on the blend rows' part of every voice; not tried.

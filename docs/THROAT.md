@@ -761,7 +761,7 @@ rows trained, never drawn), Csc and Dsc Scylla's alone. Held-out loss: C 0.253, 
 and seed, the dry voice stem cut into the same six 20-second windows of H's seed rendition (or a machine's own
 blend, fictional:ada), loudness-matched, each pair asked in both orders; which sounds more like a person singing
 and whose words are clearer, -3 to +3. It picks the same clip in both orders only 59% (human) and 65% (words) of
-the time, so a score under about ±0.5 is noise. About $0.004 a call; this whole night $0.87.
+the time, so a score under about ±0.5 is noise. About $0.004 a call; this night and the next morning $1.01.
 
 **Results** (models in renders/throat-scylla/, listening in renders/throat-scylla/listen/compare/):
 
@@ -816,3 +816,32 @@ Head to head (seed): C over A-160 +0.58 / +0.50; S over A-160 +0.75 / +1.17; S o
   shipped voice -0.08 / -0.25, D +0.33 / 0.00. The voice's gain is heard dry, and in the words.
 - Scylla's voices are fixed singers. No machine in C draws more than 0.41 of one (300 seeds; `machine_mix`'s cap 0.6, and
   more singers near each register); S and Csc would make every machine a blend of only Scylla's voices.
+
+### E: the shipped voice's own corpus with Scylla's (2026-11-07, morning)
+
+The artist, after hearing Cbl ("amazing"): we hadn't tried the shipped voice's corpus with Scylla's, without
+October's unshipped blend singers. The shipped model's dataset (dataset-house-volunteers.npz) went with the
+volunteers' recordings, but its house corpus is inside blend A as the house-* segments: `tools/throat/subset.py`
+cuts them out (332 segments, 142.8 min; the shipped model saw these and 13.7 min of the volunteers), and `folk.py
+merge` with the default `--base` adds Scylla's and keeps the shipped model's `volunteers` row by name (no frames of
+its own). The October recipe at 16 numbers a singer (E16) and at the shipped model's 8 (E8); held out 0.251, 0.250.
+E16bl and E8bl draw what the shipped voice draws: the ten house singers, and the volunteers at `HUMAN_SHARE` 0.3.
+E16 draws Scylla's singers too, but `default_mix` and `machine_mix` set the people's row's share before the rest, so
+it still sings 0.3 people.
+
+| | WER on H (1314 words) | Every song (5002) | Gemini (human / words) |
+|---|---|---|---|
+| shipped | 10.3% | 15.2% | |
+| Cbl | 5.5% | 9.8% | |
+| E16 | 4.4% | 7.8% | |
+| **E16bl** | 5.5% | **7.9%** | over shipped +0.67 / +0.33; over Cbl -0.25 / +0.58, in the mix 0.00 / +0.42 |
+| E8bl | 5.5% | 9.1% | |
+
+- **E16bl hears as well as Cbl on H and better over every song**, and Gemini can't tell them apart. It draws the
+  shipped voice's own singers in the shipped voice's own blend: the smallest change to what ships.
+- **The volunteers' row moved.** With no frames to hold it, it sings 6.65 dB (E16) and 6.49 dB (E8) from what the
+  shipped model's row sings, against 2.4-2.6 dB for the house rows (the throat's predicted envelope on H's first
+  item, voiced frames, mean |dB|). Keeping 8 numbers a singer didn't hold it. In E the people's 0.3 is the old row
+  read by a new network: still never one person, no longer quite how the volunteers' takes sounded. Holding it
+  would take frames of its own: the shipped model singing as the volunteers alone (as October's blend singers were
+  made from its renders), added to the corpus.
