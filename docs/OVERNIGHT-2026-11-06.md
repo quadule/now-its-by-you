@@ -15,7 +15,8 @@ method and the numbers. The throat tests pass (27).
 - C = October's blend A with Scylla's singing; D = blend B with it; S = Scylla's alone.
 - Cbl, Dbl = C and D drawing only the blend singers: Scylla's rows taught the network but no voice uses them.
 
-The full mixes (with the band) and whole voice stems are beside them in listen/.
+The full mixes (with the band) and whole voice stems are beside them in listen/; the models are
+renders/throat-scylla/model-*-160.npz (`SONGBIRD_THROAT=` to sing with one).
 
 ## What the numbers say
 
@@ -35,8 +36,9 @@ The full mixes (with the band) and whole voice stems are beside them in listen/.
 
 - **The volunteers' share.** Scylla's singers carry none of the people's row. Drawing them (C, D) puts a machine's
   voice at about 0.1-0.35 people, below your 0.3-0.6; S, Csc and Dsc have none. **Cbl keeps the share** and still
-  mishears about half as many words as the shipped voice, so it's my pick to ship if your ears agree; C if its
-  clearer words are worth a smaller share (the range is yours, not the consent's).
+  mishears about half as many of H's words as the shipped voice (two thirds over every song), so it's my pick to
+  ship if your ears agree; C or D if their clearer words are worth a smaller share (the range is yours, not the
+  consent's).
 - **Scylla's training data isn't disclosed.** Its license (Apache-2.0) allows this use, but its fourteen fixed
   voices may be modelled on singers we know nothing about. Every Scylla singer is source `scyllasband`, so
   `dataset.py --without scyllasband` takes them all out again.
