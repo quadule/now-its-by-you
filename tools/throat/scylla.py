@@ -1,7 +1,7 @@
 """Our songs sung by Scylla's Band, with our own timing, as training material for the throat (dev only).
 
     uv run python tools/throat/scylla.py [--out renders/throat/scylla-plan.json] [--voices gwen felix ...]
-        [--per-item 2] [--items h-now-its-by-you ...] [--seed 0]
+        [--per-item 2] [--items h-now-its-by-you ...] [--prefix h-] [--after PLAN.json ...] [--seed 0]
 
 Scylla's Band (https://github.com/lowkeytea/scyllasband, Apache-2.0 code and weights, a checkout named by
 SCYLLA) is a 24 kHz text-to-speech and singing model with 14 fixed voices and no cloning. Unlike SoulX-Singer
@@ -307,6 +307,9 @@ def main() -> None:
     ap.add_argument("--voices", nargs="*", default=None, help="Scylla's voices to use (all 14 by default)")
     ap.add_argument("--per-item", type=int, default=2, help="voices per item (H itself is sung by all)")
     ap.add_argument("--items", nargs="*", default=None, help="only these items (ids such as h-verse-wire)")
+    ap.add_argument("--prefix", default=None, help="only items whose ids start with this (h- for H's own)")
+    ap.add_argument("--after", type=Path, nargs="*", default=[],
+                    help="plans already sung: a voice that sang an item there isn't chosen for it again")
     ap.add_argument("--seed", type=int, default=0)
     args = ap.parse_args()
     rng = np.random.default_rng(args.seed)
@@ -315,12 +318,16 @@ def main() -> None:
     pool = items(rng)
     if args.items:
         pool = [it for it in pool if it["id"] in args.items]
+    if args.prefix:
+        pool = [it for it in pool if it["id"].startswith(args.prefix)]
+    sung = {(p["voice"], p["item"]) for plan_path in args.after for p in json.loads(plan_path.read_text())["items"]}
     load = dict.fromkeys(voices, 0.0)
     plan = []
     h = "h-now-its-by-you"
     for it in pool:
         length = it["notes"][-1]["start"] + it["notes"][-1]["dur"] - it["notes"][0]["start"]
-        who = voices if it["id"] == h else sorted(voices, key=lambda v: (load[v], rng.random()))[: args.per_item]
+        fresh = [v for v in voices if (v, it["id"]) not in sung]  # a second plan's voices are new to the item
+        who = fresh if it["id"] == h else sorted(fresh, key=lambda v: (load[v], rng.random()))[: args.per_item]
         for voice in who:
             shift = key_for(it["notes"], centre[voice], rng)
             seed = int(rng.integers(1 << 30))
