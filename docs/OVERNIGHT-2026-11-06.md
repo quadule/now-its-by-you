@@ -1,7 +1,7 @@
 # Overnight, 2026-11-06 to 07: Scylla's Band as the throat's teacher
 
 The artist: "try to train against it to improve ours", then "take this as far as you can overnight", with Gemini
-for listening (at most $5-10; this night and the next morning, $1.01). Everything is on branch `claude/scylla-teacher` (from
+for listening (at most $5-10; this night and the next day, $1.16). Everything is on branch `claude/scylla-teacher` (from
 `claude/singing-synthesis-exploration-c0bf8c`) in atomic commits; nothing is merged, pushed, deployed or shipped.
 The shipped voice (songbird/synth/throat.npz) is unchanged. docs/THROAT.md "Scylla's Band as a teacher" has the
 method and the numbers. The throat tests pass (27).
@@ -61,3 +61,10 @@ volunteers' row, with no frames of its own, moved about 6.5 dB from how it sings
 - Holding the volunteers' row in E: frames of the shipped model singing as the volunteers alone, added to its corpus.
 - C's words with the people's share kept: the blend singers would need more of the people's row (up to 0.6 each)
   and `throat.machine_mix` a floor on the blend rows' part of every voice; not tried.
+
+## The next afternoon: the contest version and the t's
+
+The comparisons that count are now renders/throat-scylla/listen/contest/: the release (Now It's by You is a 2026 AI
+Song Contest finalist) replayed exactly with each throat, choir and all. More of Scylla singing H (Cbl2, E8bl2)
+didn't change much. The harsh t's are the burst's colour (4-5 kHz), not its level; A and B move it up, and the artist
+chooses between them (THROAT.md "The contest version, more of H, and the t's").

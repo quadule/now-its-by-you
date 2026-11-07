@@ -761,7 +761,7 @@ rows trained, never drawn), Csc and Dsc Scylla's alone. Held-out loss: C 0.253, 
 and seed, the dry voice stem cut into the same six 20-second windows of H's seed rendition (or a machine's own
 blend, fictional:ada), loudness-matched, each pair asked in both orders; which sounds more like a person singing
 and whose words are clearer, -3 to +3. It picks the same clip in both orders only 59% (human) and 65% (words) of
-the time, so a score under about ±0.5 is noise. About $0.004 a call; this night and the next morning $1.01.
+the time, so a score under about ±0.5 is noise. About $0.004 a call; this night and the next day $1.16.
 
 **Results** (models in renders/throat-scylla/, listening in renders/throat-scylla/listen/compare/):
 
@@ -845,3 +845,46 @@ it still sings 0.3 people.
   read by a new network: still never one person, no longer quite how the volunteers' takes sounded. Holding it
   would take frames of its own: the shipped model singing as the volunteers alone (as October's blend singers were
   made from its renders), added to the corpus.
+
+### The contest version, more of H, and the t's (2026-11-07, afternoon)
+
+**What to compare.** Now It's by You is a 2026 AI Song Contest finalist, performed in Bangkok on November 29; only H
+matters now. A plain `songbird render songs/h-now-its-by-you.json` is the program's own seed version, with no choir
+at all, so the artist heard no harmonies in the bridge. The contest version is the release (id 07ac74fb…, program
+971e37bd, from now.itsby.you, kept in renders/release/), sung everyone's way with the three-voice choir. Its record
+replayed with the shipped throat (`songbird render renders/release/genome.json --replay renders/release/record.json`)
+matches the release to the sample (correlation 1.000) though its id differs (the program has moved on; the replay
+exits 1 saying so), so a replay with another throat changes only the voice. renders/throat-scylla/listen/contest/ has
+it for every model, the lead and the three choir voices beside each.
+
+**More of Scylla singing H.** `scylla.py --prefix h- --after renders/throat-scylla/plan.json --per-item 4` (ink and
+tuesday left out): four new voices on each of H's 64 items, new keys, tempos and verses; 256 segments, 43.8 min to
+render, 250 kept, 90.6 min. Cbl2 and E8bl2 are the Cbl and E8bl recipes with it added. On H (1314 words): Cbl2 6.3%
+(Cbl 5.5%), E8bl2 5.2% (E8bl 5.5%), within noise; Gemini on the contest lead: Cbl2 over Cbl -0.17 / -0.17, E8bl2 over
+E8bl +0.17 / +0.17. E8bl2's volunteers row moved further (7.3 dB). Gemini prefers E8bl to Cbl there, +0.58 / +0.83.
+
+**The t's.** The artist hears the t's as harsh; turning their bursts down (-3 to -12 dB, longer, slower) "just sorta
+turns down the volume". Each band's level over the t and 30 ms after, against that band in the segment's vowels
+(dry, the same notes and timing as Scylla sang them, median of 144):
+
+| | 2 kHz | 3 kHz | 4 kHz | 5 kHz | 6.5 kHz | 8 kHz | 10 kHz |
+|---|---|---|---|---|---|---|---|
+| Scylla's Band | -26.7 | -21.5 | -10.7 | +0.9 | +1.2 | +6.0 | +5.9 |
+| Cbl | -12.7 | +5.5 | +13.6 | +14.9 | +15.3 | +18.0 | +6.9 |
+| E8bl | -17.1 | -1.3 | +1.9 | +6.1 | +9.1 | +10.7 | -0.9 |
+| Cbl, `articulate` off | -21.5 | -13.1 | -8.0 | -6.4 | -5.2 | -5.2 | -8.0 |
+| Cbl, A (below) | -22.4 | -13.4 | -6.2 | +3.2 | +7.7 | +10.7 | +6.1 |
+| E8bl, A | -23.4 | -15.1 | -7.3 | -3.0 | +2.5 | +3.7 | -1.8 |
+
+The t's 2-5 kHz excess is `articulate`'s burst, not the network. Fable's review (asked before any re-render): the
+alveolar burst (phonetics.BURSTS, at the default tract centred 4.7 kHz) through second-order band-passes is only 4 dB
+down at 3 kHz, and its 6.5 kHz band, summed in phase, mostly cancels (the sum -0.4 dB at 4 kHz, -10.9 at 6.5), so the
+stock t is one 4-5 kHz peak; the lead's de-esser (`fx.deess`, split 4.5 kHz, 4 ms detector) turns down what's above
+4.5 kHz on every burst and leaves the 2.7-4.5 kHz part; and the burst is a flat 12 ms block where a release falls
+away from its first instant. `throat.T_RELEASE` (the defaults leave every t as it was) now sets a t's noise shape,
+level, rise, length, decay, aspiration and how much of the throat's own t is left after the release. The renders for
+the artist: A, a single band at 7 kHz (4 kHz wide), -13 dB, 4 ms rise, aspiration -6 dB, the throat's own t at 0.3
+after the release; B, A with a 0.5 ms rise falling away over 4 ms and 1.7 times as long, the aspiration from 4 ms.
+Fable's B also gave the aspiration a broader shape (2.5 and 7 kHz), but that put 3 kHz back up 6 dB, and the artist
+warned the breath can sound harsh too, so B keeps A's. k and ch have the same excess on Cbl (k 6-16 dB over Scylla's
+at 2-5 kHz, ch 8-13), E8bl less; not changed yet, nor the de-esser.
