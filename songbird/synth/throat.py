@@ -816,6 +816,11 @@ ASPIRATION = -8.0  # dB under its burst the aspiration after a voiceless stop's 
 WEAK_FRICATIVES = {"F": 6.0, "TH": 6.0, "V": 6.0, "DH": 4.0}  # dB over the formant singer's frication levels
 FRICATIVE_DIP = 0.5  # what is left of the throat's output through a voiceless weak fricative
 NASAL_LIFT = 2.0  # dB a coda nasal comes up
+# A t's release on its own (the stop the artist wanted softer, 2026-11-07): dB added to its burst, the burst's rise and
+# fall (s), how many times as long it lasts, and dB added to the aspiration after it (which doesn't follow the burst's
+# change). Scylla's Band's t's, on the same notes and timing, spread their energy over the whole t: their 3-9 kHz peak
+# 18 dB over its mean, ours 22-27 (docs/THROAT.md). These values leave the t as it was.
+T_RELEASE = {"burst": 0.0, "ramp": 0.002, "longer": 1.0, "aspiration": 0.0}
 
 
 def articulate(y: np.ndarray, segs: list, sr: int, voice, rng: np.random.Generator, ref: float) -> np.ndarray:
@@ -867,12 +872,19 @@ def articulate(y: np.ndarray, segs: list, sr: int, voice, rng: np.random.Generat
             z = rng.standard_normal(2) * spread  # each burst its own, a little louder or softer, longer or shorter
             level = level + BURST - (3.0 if voiced else 0.0) + BURST_SPREAD[0] * float(z[0])
             length = (0.008 if voiced else 0.012) * float(np.exp(BURST_SPREAD[1] * z[1]))
-            hiss(release, release + length, shape, level, 0.002, s.amp)
+            aspiration = level + ASPIRATION
+            ramp = 0.002
+            if s.phone == "T":
+                aspiration += T_RELEASE["aspiration"]
+                level += T_RELEASE["burst"]
+                length *= T_RELEASE["longer"]
+                ramp = T_RELEASE["ramp"]
+            hiss(release, release + length, shape, level, ramp, s.amp)
             if manner == "affricate":
                 sh_shape, sh_level = ph.FRICATION["ZH" if voiced else "SH"]
                 hiss(release, s.t1, sh_shape, sh_level, 0.01, s.amp)
             elif not voiced:
-                hiss(release + 0.008, max(s.t1, release + 0.03), shape, level + ASPIRATION, 0.004, s.amp, fading=True)
+                hiss(release + 0.008, max(s.t1, release + 0.03), shape, aspiration, 0.004, s.amp, fading=True)
         elif manner == "fricative" and s.phone in WEAK_FRICATIVES:
             if not voiced:
                 dip(s.t0, s.t1, FRICATIVE_DIP)
