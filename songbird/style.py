@@ -73,9 +73,10 @@ class Style:
     coda        quote: after the last line, as the last chord rings two bars on, the lead instrument alone plays
                 the opening of the older song the genome names (genome.quote), softly: a leitmotif; "" none
     motif       bridge: in the bridge, where the lineage sings, the lead instrument (H: the whistle) plays the quote's
-                opening over the third phrase, the fiddle's pad resting for it (band.motif_part; only where every
-                note is a tone of the chord under it); chance:
-                about a third of renditions do, by their seed, an easter egg; "" none
+                opening over the third phrase, the fiddle's pad resting for it (band.motif_part; only where it
+                fits the version: every note a tone of the chord under it and in the instrument's reach above
+                the singers, the lead free and already in); chance: about a third of renditions do, by their
+                seed, an easter egg, and a drawn ballad's default where the song names a quote; "" none
     drop        a breakdown and a drop: after this refrain (1 the first) every section before the next refrain
                 is the breakdown (the drums, the bass and the rest out, the singer with the pad; the band's
                 low-pass opening across it, a riser and a snare roll into the refrain after), and that refrain
@@ -105,6 +106,7 @@ class Style:
     voices: int = 0
     coda: str = ""  # quote: after the last line, over the ringing last chord, the lead alone plays the quote's opening
     motif: str = ""  # bridge: the lead plays the quote's opening over the bridge's third phrase; chance: some renditions
+    # (a drawn ballad's default where the song names a quote: choose_style)
     drop: int = 0  # the refrain a breakdown and a drop follow (house's habit, 2026-09-30); 0 none, and no trace in a record
     loop: str = ""  # a loop of the style's own under the song (house's, dub's riddim; 2026-09-30, evening)
     dissolve: int = 0  # the refrain after which the song dissolves into its version (dub's); 0 none
@@ -1548,6 +1550,10 @@ def choose_style(out: dict, ctx, forced: str | None = None, arrange: dict | None
         # a person choosing one of the options with no machine to draw the rest, or the style named again on a
         # machine's own version (variation.made_here), as it keeps them unnamed: the rest as the version had them
         options = {k: v for k, v in parent.to_dict().items() if k not in ("name", "lineage")}
+    if name == "ballad" and getattr(ctx.genome, "quote", None) is not None and not options.get("motif"):
+        # the quote's opening woven into the bridge by chance (about a third of renditions, and only where it fits
+        # the version: band.motif_part), unless a person or the version handed down chose otherwise (2026-11-09)
+        options["motif"] = "chance"
     options.update(arrange or {})
     style = Style.from_dict({"name": name, "lineage": lineage + (name,), **options})
     out["style"] = style.to_dict()

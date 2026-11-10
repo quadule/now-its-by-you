@@ -1304,6 +1304,7 @@ def melodic_parts(ctx: Context) -> list[Ev]:
         if woven:
             written += woven
             out += woven
+            ctx.woven = [(e, e.u0, e.u1) for e in woven]  # whole or not at all (arrange, after the shaping)
         for part in ("whistle", "fiddle", "lute"):
             what = s.parts.get(part)
             if what == "lead":  # the tune where nobody sings (not the singer's pickup into the next line)
@@ -1442,28 +1443,52 @@ def motif_part(ctx: Context, section: int, part: str, top: int) -> list[Ev]:
     phrase, one note to each quarter of the phrase, above the singers, the fiddle's pad resting for it; only
     where every note is a tone of the chord under it (H's b3 runs I, then vi V: so mi over I, do over vi, so,
     over V), so it sits in the harmony as if it had always been there. Nothing where the style doesn't ask
-    (wants_motif)."""
+    (wants_motif), and nothing where it wouldn't fit this version: the lead busy with a line of its own in the
+    bridge, a note out of the instrument's reach above the singers, or a chord that doesn't hold it."""
     if not wants_motif(ctx):
         return []
     q = ctx.genome.quote
     s = ctx.sections[section]
+    if s.parts.get(part) not in (None, "", "pad"):  # the lead has a line of its own here (its pad rests for it)
+        return []
     spans = [p for p in ctx.phrases if s.u0 - 1e-9 <= p[0] < s.u1 - 1e-9]
     motif = list(q.sung[:4])
     if len(spans) < 3 or len(motif) < 4:
         return []
     p0, p1 = spans[2]
+    if getattr(ctx, "entering", {}).get((section, part), s.u0) > p0 + 1e-9:  # the lead not in by then
+        return []
     step = (p1 - p0) / len(motif)
     pitches = [ctx.tonic + degree_semitones(n.degree, ctx.mode, n.alter) for n in motif]
     for k, pitch in enumerate(pitches):
         if pitch % 12 not in ctx.pcs(ctx.chord_at(p0 + k * step).symbol):
             return []
-    # just above the singers, in whole octaves, and no lower than the instrument plays
-    shift = max(12 * int(np.ceil((top + 1 - min(pitches)) / 12.0)), octave_for(part, pitches))
+    # just above the singers, in whole octaves, and no lower than the instrument plays; where that's past the top
+    # of its reach, the nearest octave above the singers it reaches, and where none, nothing
+    above = 12 * int(np.ceil((top + 1 - min(pitches)) / 12.0))
+    lo, hi = register_of(part)
+    shift = next((x for x in dict.fromkeys((max(above, octave_for(part, pitches)), above, above + 12, above + 24))
+                  if lo <= min(pitches) + x and max(pitches) + x <= hi), None)
+    if shift is None:
+        return []
     notes = [Tune(p0 + k * step, p0 + (k + 1) * step, pitch, 0.6, False, section, k == 0, k == len(motif) - 1, ())
              for k, pitch in enumerate(pitches)]
     # heard, not hidden: about 3 dB under the intro's statement of the tune (0.5 and 0.42 sat 8.6 dB under it,
     # and 20 dB under the singers: "pretty hard to notice", 2026-09-27)
     return statement(ctx, part, notes, 0.65, section, ornament=False, shift=shift)
+
+
+def whole_motif(ctx: Context, events: list[Ev]) -> list[Ev]:
+    """The motif whole or not at all: where the arrangement's options (a late entrance, stop-time) or a person's
+    arrangement cut or shortened any of its notes, none of it plays, since a scrap of it isn't the quote."""
+    woven = getattr(ctx, "woven", None)
+    if not woven:
+        return events
+    here = {id(e) for e in events}
+    if all(id(e) in here and abs(e.u0 - u0) < 1e-9 and abs(e.u1 - u1) < 1e-9 for e, u0, u1 in woven):
+        return events
+    gone = {id(e) for e, _, _ in woven}
+    return [e for e in events if id(e) not in gone]
 
 
 # --- the quote before the song -------------------------------------------------------
@@ -1593,6 +1618,7 @@ def arrange(genome, params, placed, lead, end, melody, seconds) -> tuple[list[No
         shape = idioms.Plan()
         rhythm = {p for p in ("bass", "drum") if ctx.on(p)}
         idioms.shape_plan(ctx, style, shape, rhythm, {"drone"}, "guitar" if ctx.on("guitar") else "harp")
+        ctx.entering = shape.entrances  # where a part comes in late (the woven motif waits for none: motif_part)
         sung = idioms.backing(ctx, melody, style)
         ctx.choir += [(v.u0, v.u1, v.pitch) for v in sung]  # the band keeps clear of the backing voices too
     else:  # the seed's own ballad: no backing voices, but a round where a person asked for one (songbird.canon)
@@ -1624,6 +1650,7 @@ def arrange(genome, params, placed, lead, end, melody, seconds) -> tuple[list[No
     if shaped:
         events = idioms.shape_events(ctx, shape, events, rhythm, style)
     events = takeover.shape(ctx, events)
+    events = whole_motif(ctx, events)
     harp = let_ring(ctx, [e for e in events if e.part == "harp"])
     events = [e for e in events if e.part != "harp"] + harp
     # whatever sounds through the last chord holds to the end, and rings on from there (through a coda's bars too)

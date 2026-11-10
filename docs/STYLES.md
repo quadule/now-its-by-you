@@ -301,7 +301,7 @@ times it, and waltz styles have their own, slower, ranges.
 | lift | the last refrain a whole step up |
 | ending | rit, cold, amen, repeat; "" the last chord rings |
 | coda | quote: the lead alone plays the genome's quote's first notes over the last chord as it rings two bars on (H: Daisy, Daisy); "" none |
-| motif | bridge: the lead instrument (H: the whistle) plays the quote's first notes over the bridge's third phrase, the fiddle's pad resting, where they sit in the chords (H: so mi over I, do over vi, so, over V); chance: about a third of renditions, by seed; "" none. Played about 3 dB under the intro's statement of the tune (it sat 8.6 dB under it and went unnoticed, 2026-09-27) |
+| motif | bridge: the lead instrument (H: the whistle) plays the quote's first notes over the bridge's third phrase, the fiddle's pad resting, where they sit in the chords (H: so mi over I, do over vi, so, over V); chance: about a third of renditions, by seed, and every drawn ballad's default where the song names a quote unless a person or the version handed down chose (2026-11-09); "" none. Only where it fits the version, whole or not at all: every note in the lead's reach above the singers (REGISTER), the lead with no line of its own in the bridge and not entering late there (a pad of its own rests). Played about 3 dB under the intro's statement of the tune (it sat 8.6 dB under it and went unnoticed, 2026-09-27) |
 | entrances | the first verse builds line by line |
 | backing, voices | what the backing voices sing (oohs, echo, thirds, gang) and how many sang it |
 

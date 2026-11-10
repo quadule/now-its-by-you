@@ -283,7 +283,7 @@ def test_the_ballad_as_a_style_plays_the_seeds_band():
     plain = realize(g, replace(p, tempo=own.tempo))
     assert {n.part for n in plain.notes} == {n.part for n in seed.notes}
     asked = replace(p, tempo=own.tempo, band=own.band, ritardando=own.ritardando, style=replace(
-        p.style, lineage=(), **{f: getattr(own.style, f) for f in ("entrances", "breakdown", "backing", "ending", "lift", "feel")}))
+        p.style, lineage=(), **{f: getattr(own.style, f) for f in ("entrances", "breakdown", "backing", "ending", "lift", "feel", "motif")}))  # motif: chance by default
     assert asked.style == own.style
     again = realize(g, asked)
     assert [n for n in again.notes] == [n for n in seed.notes]

@@ -117,3 +117,48 @@ def test_the_quote_woven_into_the_bridge_in_the_whistles_voice():
         fid = [n for n in score.notes if n.part == "whistle" and third[0] - 0.2 <= n.start < third[1] - 0.2 and n.dur >= 0.4]
         hits += [int(round(n.pitch - p.tonic)) % 12 for n in fid] == [7, 4, 0, 7]
     assert 8 <= hits <= 32, hits
+
+
+def test_a_drawn_ballad_weaves_the_motif_by_chance_where_it_fits():
+    """Chance is the default (2026-11-09): a version a machine draws in the ballad has motif=chance unless a person
+    or the version before chose one; and wherever the motif plays, it's in the lead's reach with the lead free."""
+    from songbird import band as B, drift as D, harvest as Hv
+
+    g = G.load(H)
+    parent = replace(choose_params(g), style=replace(choose_params(g).style, motif=""))
+    ballads = 0
+    for k in range(8):
+        voice = Hv.fictional(f"daisy{k}")
+        child = choose_params(g, parent, voice, D.drift(20400.0 + 37 * k, voice.hash))
+        if child.style.name not in ("", "ballad"):
+            assert child.style.motif == "", child.style  # only the ballad weaves it
+            continue
+        ballads += 1
+        assert child.style.motif == "chance", child.style
+        with B.overheard() as heard:  # asked outright, to see that it plays only where it fits
+            realize(g, replace(child, style=replace(child.style, motif="bridge")))
+        ctx = heard["ctx"]
+        lo, hi = B.register_of(ctx.band.lead)
+        for e, _, _ in getattr(ctx, "woven", None) or []:
+            assert lo <= e.pitch <= hi and ctx.sections[e.section].parts.get(ctx.band.lead) in (None, "", "pad")
+    assert ballads
+    kept = replace(parent, style=replace(parent.style, motif="bridge"))  # the contest's: handed down as chosen
+    voice = Hv.fictional("daisy0")
+    child = choose_params(g, kept, voice, D.drift(20400.0, voice.hash), arrange={"motif": ""})
+    assert child.style.motif == ""  # a person's "none" wins over the default
+
+
+def test_the_motif_is_withheld_out_of_the_instruments_reach():
+    """Above the singers but past the top of the whistle's reach (the song a tone higher than the contest's D, whose
+    top so is the whistle's top note): no motif, rather than one the player couldn't play."""
+    from songbird import band as B
+
+    g = G.load(H)
+    plain = choose_params(g)
+    up = replace(plain, tonic=plain.tonic + 2, style=replace(plain.style, motif="bridge"))
+    with B.overheard() as heard:
+        realize(g, up)
+    assert not getattr(heard["ctx"], "woven", None)
+    with B.overheard() as heard:
+        realize(g, replace(plain, style=replace(plain.style, motif="bridge")))
+    assert heard["ctx"].woven  # in the song's own key it plays, as it did in the contest's

@@ -905,8 +905,8 @@ def style_card(v: Version) -> dict:
                  "air": "the tune slow and free to begin, the lead alone"}).get(s.intro, ""),
                group_words(v.params) if sdef.group and (s.backing or name != "hymn") else "",
                "an older song's first notes over the last chord" if s.coda == "quote" else "",
-               {"bridge": "an older song's first notes through the bridge",
-                "chance": "an older song's first notes in the bridge, in some renditions"}.get(s.motif, ""),
+               # by chance it's an easter egg, and every drawn ballad's default: not told
+               {"bridge": "an older song's first notes through the bridge"}.get(s.motif, ""),
                ("the voices join each line's last word in the verses" if s.backing == "echo" and sdef.group
                 and not sdef.leads else "" if name == "hymn" else BACKING_NAMES.get(s.backing, "")),
                *(hymn_words(v.params) if name == "hymn" else ()),
