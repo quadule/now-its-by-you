@@ -186,6 +186,14 @@ body.seed main { max-width: 820px; }
 pre, code { font-family: var(--mono); font-size: 13.5px; }
 pre { margin: 0 0 10px; padding: 10px 12px; overflow-x: auto; background: var(--paper); border-left: 2px solid var(--red-rule); line-height: 1.5; }
 
+/* the seed page's word that the song is an AI Song Contest finalist, and the way to vote (2026-11-09), first thing
+   under the title */
+.finalist { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px 16px;
+            margin: 0 0 18px; padding: 10px 14px; border: 1px solid var(--rule); border-left: 3px solid var(--red-rule);
+            border-radius: var(--radius); background: var(--paper); }
+.finalist span { flex: 1 1 18em; }
+.finalist .button { white-space: nowrap; text-decoration: none; }
+
 /* the seed page's sleeve: the cover beside the pitch, above it on a phone */
 .sleeve { display: grid; grid-template-columns: minmax(0, 280px) 1fr; gap: 22px; align-items: start; }
 .cover { display: block; width: 100%; height: auto; aspect-ratio: 1; border: 1px solid var(--rule); border-radius: var(--radius);

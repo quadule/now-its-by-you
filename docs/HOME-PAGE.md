@@ -71,3 +71,10 @@ from `static.cloudflareinsights.com`, with its integrity hash), and the Worker's
 script and its report of a page view to `cloudflareinsights.com` (no cookies), those two hosts and nothing else;
 web/sing/test/worker.test.mjs holds it to exactly those two. The studio's pages do the same (docs/WEB-STUDIO.md).
 Takes effect when the Worker is deployed.
+
+## The contest (2026-11-09)
+
+First thing under the title: "A finalist in the AI Song Contest 2026. The winner is chosen partly by public vote."
+and a **Vote for it** button to https://www.aisongcontest.com/the-2026-finalists (page/seed.html, `.finalist` in
+sing.css). The winner is half the jury's and half the public's; the awards are in Bangkok on November 29, 2026. Take
+it down, or say how it ended, after that.
