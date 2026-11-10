@@ -754,7 +754,7 @@ def exercise(record: dict, genome, machine: str = "none", day: str | None = None
     day = day or date.today().isoformat()
     try:
         parent = _parent(record, genome)
-        voice = harvest.fictional(machine.split(":", 1)[1]) if machine.startswith("fictional:") else harvest.Voice()
+        voice = harvest.machine_voice(machine) if machine.startswith(("fictional:", harvest.BROWSER)) else harvest.Voice()
         ctx = explain.Context(genome, parent, record, voice, machine, day, drift_mod.parse(day), shared=True)
         v = ctx.version({})
         explain.view(ctx, v, [])
@@ -779,7 +779,7 @@ def exercise(record: dict, genome, machine: str = "none", day: str | None = None
         raise Refused(f"This program can't continue it: {_why(e)}") from None
     if time.monotonic() - began > THINKING:
         raise Refused("It takes this program far longer to read than any version of the song does.")
-    reproducible = machine == "none" or machine.startswith("fictional:")
+    reproducible = machine == "none" or machine.startswith(("fictional:", harvest.BROWSER))
     return {"minutes": round(scores[0].duration / 60, 1),
             "timeline": {"day": day, "machine": machine, "drawn": drawn} if reproducible else None}
 

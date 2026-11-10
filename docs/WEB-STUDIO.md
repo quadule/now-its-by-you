@@ -188,8 +188,9 @@ wrangler's `[build]` runs `tools/prepare.mjs`, which checks site.json against it
 
 About 50 files and 36 MiB, and 402 more (17 MiB) of first answers; a first visit fetches 14 MiB of it before the
 page can be edited, and 28.5 MiB once something is sung (the host compresses: no `.gz` siblings). The largest is
-scipy's wheel, 13.4 MiB; the build refuses any file over 25 MiB. `--machine fictional:NAME` sings as a made-up
-machine instead of `none`. **Every address is from the root** (`/studio.js`, `/render/…`, the workers' URLs, the
+scipy's wheel, 13.4 MiB; the build refuses any file over 25 MiB. The machine is each visitor's browser by default
+(`--machine browser`, 2026-11-09: below, "Each visitor's browser"); `--machine none` sings as time alone, as the VPS
+did, and `--machine fictional:NAME` as a made-up machine. **Every address is from the root** (`/studio.js`, `/render/…`, the workers' URLs, the
 piano page's own files): the page is served at `/v/<id>` too, and its policy allows no `<base>`.
 
 **site.json** (prepare.mjs reads `files` and checks each `cache` against its rules):
@@ -358,6 +359,11 @@ showed "Getting the studio ready (once: 3 of 78 MB)…" and no words until the s
 numpy, scipy, soundfile and the program (28.5 MiB on the wire; the 78 was bundle.json's unpacked bytes with the
 singing kit, which was fetched only to sing, a file at a time, and is now retired). Now the song is on the page at once, and the worker
 fetches half as much behind it.
+
+**Since 2026-11-09 they are made for the version the page opens on**: in the default build, the published version as
+it was released (below, "The published version first"); in a build naming one machine (`--machine none` or
+`fictional:NAME`), that machine's version, as before. A visitor's own browser can't be answered ahead, so its version
+(`/?new`) waits for the worker.
 
 **What a visitor sees.** The song's words, the header ("Your version today, …"), the transport, the choices of words,
 the sidebar, the Arrange and Mix views and the Sketch, within a fraction of a second of the page arriving. Python
@@ -1351,3 +1357,73 @@ main points, and what came of them (all are in the design as it stands):
 5. **What a link shows of the maker** (the privacy note above): the same as
    the file, to whoever has the link. Blurring the machine's pseudonym and
    room for shared links would change what the child inherits.
+
+## Each visitor's browser (2026-11-09)
+
+The artist: "we don't need to make them editable directly but need the web studio to work similarly to the
+standalone. Why not measure basic browser info?" Before, the site sang as `none`: every visitor on a day had the same
+version, moved by time alone, and since a machine that gives nothing keeps its parent's style (style.py,
+choose_style), the style never moved on the ring.
+
+**Now** `build_site.py --machine browser` (the default) has device.js gather what any page may ask (the languages,
+the core count, Chromium's deviceMemory, the dark-mode setting) and a salt it keeps in localStorage, and the studio's
+worker reduces them as a computer's quiet reading is (`harvest.browser`, `studio_device.machine_of`; docs/HARVEST.md,
+"A visitor's browser"). The worker sings as `browser:{salt, signals}`, a spec that is the voice itself, so the render
+workers, a version's reader and the record all sing as the same machine. The page says "this browser", and its machine
+card says what was read ("it speaks English, and leans to folk modes", "a big machine", "a dark screen"). Nothing
+leaves the browser but what a recording or a shared version carries, as on a computer: the reduced numbers and the
+salt.
+
+**What it costs.** Nothing at first sight: the page opens on the published version (next section), answered ahead.
+This browser's own version waits for the worker: about 1.4 s after the press here (files cached by then; a 24-core
+desktop), and on a phone that pressed at once, the rest of the 14 MiB first.
+
+**How it was checked.** tests/test_browser_machine.py (the reduction, the spec, the musical traits with no uptime, the
+words, the device studio singing as the browser and its style moving where `none`'s doesn't, and the published view
+below);
+tests/studio_device_start.test.cjs (the worker is told the browser's facts and the kept salt; the next visit the same
+salt; a build naming its own machine reads nothing). In Chrome from serve_site.py: "this browser" in the header and the
+sidebar, the machine card's lines, the same salt after a reload, no console errors.
+
+## The published version first (2026-11-09)
+
+The artist: "For fast loading, the web studio could start with the currently published version's lyrics and settings
+but have a prominent button to switch to the new version."
+
+**What a visitor sees.** At `/`, the published version as it was released: "The first version · as it was published,
+Monday, September 28, 2026", its words and settings (D major, 96, the whistle, its choir), the machine "as it was
+published" ("nothing chose anything here"), no Time menu (nothing moves it). On the page in 68 ms here, from the
+build's first answers. First thing under the title, **Make this browser's version →**, to `/?new`: this browser's next
+version of it ("Today, … · from the first version · this browser", generation 1), with "← the published version" back
+to `/`. A version someone shared (`/v/…`, `#version=…`) is continued by this browser, as before. A person's changes
+can be made on either; each keeps its own (the page's saved edits are keyed by the machine's label).
+
+**How.**
+
+- **The release's record** is webstudio/released-record.json: the packet's own manifest.json of the newest edition in
+  web/sing/editions.json, byte for byte (`tools/released_record.py THE-EDITION.flac`, which refuses any other file;
+  the build refuses a record that isn't the newest edition's). It rides beside the program (build_render.py's BESIDE,
+  100 KB), and the studio's worker opens with it as its parent (`DeviceStudio(parent=…)`), so this browser's version
+  continues the published one, as `python3 the-file.flac studio` does on a computer. The edition's date comes from
+  editions.json (`released_on`): the released record keeps none.
+- **The machine "published"** (`harvest.PUBLISHED`, `explain.Context.published`): the parent with no voice and no
+  drift, which `choose_params` gives back as it is: its settings exactly, its words, its phrasing; a person's edits on
+  top as on any version. The start says so (`published`: which version, when; generation the parent's own) and
+  studio.js draws the header and the button from it (`applyPublished`); the browser's start carries `published_offer`
+  for the way back.
+- **The build** (`--machine browser`, the default) makes the first answers for the published version
+  (`opens: "published"` in bundle.json's studio), a day at a time as before; device.js opens the worker on "published"
+  unless the address asks for `?new` (or a version), and then neither uses the day's file nor reads the browser until
+  it's asked for.
+
+**What it doesn't do.** *Sung* on the published version is made by today's program from its settings, so it isn't
+the released recording byte for byte (the release was made with its own program: the home page and the file are the
+recording itself).
+
+**How it was checked.** tests/test_browser_machine.py: the record is the newest edition's; the published view's
+settings are the record's exactly, its start, every first question answered, an edit on top; this browser's is
+generation 1 and different. tests/studio_device_start.test.cjs: a build opening on the published version answers from
+the file and starts the worker on "published", reading nothing of the browser; `?new` waits for the worker, fetches no
+day's file and sends the browser's facts. A section of the published version rendered from its spec (24.8 s). In
+Chrome from serve_site.py: the published version's header, words and button at 68 ms; the button to `/?new`, this
+browser's version drawn 1.4 s after, the way back; no console errors.

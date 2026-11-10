@@ -17,7 +17,7 @@
 // whole visit, apart from the render workers: docs/WEB-STUDIO.md, "On the device"): after "init" with control (numpy
 // alone: scipy and soundfile stood in for until used, py/lazy_imports.py),
 //
-//   → { cmd: "studio", config: { song, machine, runs_with, day, singing? } }  ← { kind: "studio", program, song, machine, day, title, heap }
+//   → { cmd: "studio", config: { song, machine, runs_with, day, singing?, browser? } }  ← { kind: "studio", program, song, machine, day, title, heap }
 //     (day: the page's, YYYY-MM-DD; singing: the site carries singing's measuring, so the studio offers it)
 //   → { cmd: "request", id, method, path, query, version, body (ArrayBuffer or null), headers }
 //   → { cmd: "restore", id, version: { id, record, genome, timeline, shared } }   a version read before, kept again

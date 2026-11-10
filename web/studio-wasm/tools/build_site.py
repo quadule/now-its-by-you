@@ -4,7 +4,7 @@ studio server behind them. Every question the page asks is answered in the visit
 (web/studio-wasm/device.js and py/studio_device.py); the only requests that reach a server are the hosting Worker's
 POST /api/versions and GET /api/versions/<id> (a version someone chose to share).
 
-usage: uv run python web/studio-wasm/tools/build_site.py OUT [--machine none] [--no-singing] [--days 400]
+usage: uv run python web/studio-wasm/tools/build_site.py OUT [--machine browser|none|fictional:NAME] [--no-singing] [--days 400]
 
 It writes, into OUT (emptied first, if it holds an earlier build):
 
@@ -59,6 +59,19 @@ TYPES = {".html": "text/html; charset=utf-8", ".js": "text/javascript; charset=u
          ".wasm": "application/wasm", ".zip": "application/zip", ".whl": "application/zip", ".flac": "audio/flac",
          ".npz": "application/octet-stream", ".gzip": "application/octet-stream", ".txt": "text/plain; charset=utf-8"}
 SONG = ROOT / "songs" / "h-now-its-by-you.json"  # the song the studio opens on (build_render.py's BESIDE)
+RECORD = ROOT / "webstudio" / "released-record.json"  # the published version's record (tools/released_record.py)
+EDITIONS = ROOT / "web" / "sing" / "editions.json"  # the song's editions, newest first (the home page's)
+
+
+def released_edition() -> dict:
+    """The newest edition, whose record the studio opens on: refused if webstudio/released-record.json is another's
+    (tools/released_record.py makes it from the edition's file)."""
+    edition = json.loads(EDITIONS.read_text())["editions"][0]
+    record = json.loads(RECORD.read_text()) if RECORD.is_file() else {}
+    if record.get("id") != edition["audio"]:
+        raise SystemExit(f"{RECORD.relative_to(ROOT)} isn't the newest edition's ({edition['title']}): "
+                         "uv run python tools/released_record.py THE-EDITION.flac")
+    return edition
 DAYS = 400  # the first answers ahead (render/first-<hash>/): a file a day, about 50 KB each
 BEFORE = 2  # ... from this many days before the build's date (a visitor west of here is still on yesterday)
 # The policy every page and script is served with: the hosting Worker's (web/studio-site/src/policy.js, PAGE_POLICY,
@@ -216,15 +229,17 @@ def describe(rel: str) -> dict:
 def main(argv: list[str] | None = None) -> None:
     parser = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
     parser.add_argument("out", help="the folder to write the site into")
-    parser.add_argument("--machine", default="none",
-                        help="the machine the studio sings as: none (the default, as the VPS did), or fictional:NAME")
+    parser.add_argument("--machine", default="browser",
+                        help="the machine the studio sings as: browser (the default: each visitor's own, read as a "
+                             "computer is read quietly, its languages, size and screen), none (time alone, as the "
+                             "VPS did), or fictional:NAME")
     parser.add_argument("--no-singing", action="store_true", help="a site without singing (the Sing view)")
     parser.add_argument("--days", type=int, default=DAYS,
                         help=f"the days ahead the page's first answers are made for (default {DAYS}; 0: none, the page "
                              "waits for Python as before)")
     args = parser.parse_args(argv)
-    if args.machine != "none" and not args.machine.startswith("fictional:"):
-        raise SystemExit("--machine: none, or fictional:NAME (a visitor's own computer isn't measured)")
+    if args.machine not in ("browser", "none") and not args.machine.startswith("fictional:"):
+        raise SystemExit("--machine: browser, none, or fictional:NAME")
     out = Path(args.out).resolve()
     if out.exists() and any(out.iterdir()) and not (out / "site.json").exists():
         raise SystemExit(f"{out} holds something other than a site this built; give an empty or new folder")
@@ -241,7 +256,14 @@ def main(argv: list[str] | None = None) -> None:
     folders = {f"py-{render.folder_hash(py_files)}": py_files, f"app-{render.folder_hash(app_files)}": app_files,
                f"bc-{render.folder_hash(bc_files)}": bc_files}
     py_dir, app_dir, bc_dir = list(folders)
-    native = {"song": str(SONG), "machine": args.machine, "runs_with": runs_with(), "singing": singing}
+    # Where each visitor's browser sings, the page opens on the published version as it was released (the machine
+    # "published", nothing chosen), which can be answered ahead, and offers this browser's new version of it (?new);
+    # a build naming one machine opens on that machine's version, as before. Either way, the first answers are the
+    # version the page opens on, a day at a time.
+    released = released_edition() if args.machine == "browser" else None
+    opens = "published" if released else args.machine
+    native = {"song": str(SONG), "machine": opens, "runs_with": runs_with(), "singing": singing,
+              **({"parent": str(RECORD), "released_on": released["date"]} if released else {})}
     days = window(date.today(), args.days)
     first = first_answers(native, days) if days else {}
     if first:
@@ -254,7 +276,9 @@ def main(argv: list[str] | None = None) -> None:
     lock = json.loads(py_files["pyodide-lock.json"])
     sent = sum(len(gzip.compress(d, 6, mtime=0)) if Path(n).suffix in (".mjs", ".js", ".json", ".wasm") else len(d)
                for f, c in folders.items() if f.startswith(("py-", "app-", "bc-")) for n, d in c.items())
-    studio = {"song": "/app/songs/h-now-its-by-you.json", "machine": args.machine, "runs_with": runs_with()}
+    studio = {"song": "/app/songs/h-now-its-by-you.json", "machine": args.machine, "runs_with": runs_with(),
+              **({"opens": opens, "parent": "/app/webstudio/released-record.json", "released_on": released["date"]}
+                 if released else {})}
     if singing:
         studio["singing"] = True
     # bytes: what a render worker fetches, and studio_bytes the studio's (numpy alone: lazy_imports), each as it

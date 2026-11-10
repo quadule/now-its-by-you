@@ -232,7 +232,10 @@
       $("keyBtn").setAttribute("aria-label", `Key: ${key.value}${edited("tonic") || edited("mode") ? ", yours" : ""}`);
     }
     const by = v.by === "no machine, only time" ? "" : v.by.replace(/^a made-up machine called /, "");
-    $("whichShort").textContent = [v.offset ? v.date : "Today", by].filter(Boolean).join(" · ");
+    const published = S.start?.published;  // the version as it was released: no day to it (studio.js applyPublished)
+    $("whichShort").textContent = published
+      ? `${published.which.charAt(0).toUpperCase()}${published.which.slice(1)} · as published`
+      : [v.offset ? v.date : "Today", by].filter(Boolean).join(" · ");
     if (S.pop === "keyPop") keyPop();
   }
   const opener = (id) => ({ howPop: narrow() ? "positionNow" : "howMore", keyPop: "keyBtn" })[id];
@@ -1421,6 +1424,7 @@
     if (S.hash) loadGrid().then(afterFirst); else loadGrid();
   }
   function started(start, hash) {
+    S.start = start;  // (the published version's, for the short header)
     const p = start.public;
     $("toolsWhere").textContent = start.device ? ""  // the page's foot says where
       : p ? `An open studio: ${p.records} whole songs and ${p.previews} sections an hour each, made one at a time.`

@@ -228,3 +228,30 @@ The seed packet's manifest (milestone 6) should carry less: the parameters
 drawn from the ranges above and reduced the same way, the same one every
 time for a name; `--machine fictional:NAME` sings as it. They are for
 hearing two machines side by side without two computers.
+
+## A visitor's browser (2026-11-09)
+
+The web studio (docs/WEB-STUDIO.md) sings as each visitor's browser, read as a
+computer is read quietly the first time (`here()`: its languages, size and
+screen, never its files, documents or typing), from what any page may ask of
+it, and reduced by the same functions to the same buckets
+(`harvest.browser`, called by the studio's worker; device.js only gathers):
+
+| read (device.js `browserMachine`) | becomes |
+|---|---|
+| `navigator.languages` (up to 8) | tongue, by the same vote as a computer's locales |
+| `navigator.hardwareConcurrency` | machine.cores |
+| `navigator.deviceMemory` (Chromium's alone, a power of two; 8, its cap for years, read as unknown) | machine.memory (unknown: the middle bucket) |
+| `prefers-color-scheme` (dark, light, or none said) | colour, as a computer's dark mode with no accent colour read |
+| nothing | machine.uptime is None: a page can't see it, so the machine's tiredness is unknown, not middling |
+
+No operating system, form factor, screen size, time zone, fonts or anything
+else is read: those would say more about the visitor than the song needs, and
+the program reads nothing like them on a computer. The salt is drawn once by
+the page (`crypto.getRandomValues`) and kept in the browser's localStorage
+(`songbird-machine-salt`), so a browser sings as the same machine from visit
+to visit; without storage, for that visit. The spec, `browser:{salt,
+signals}`, is the reduced voice itself, so every worker handed it, and a
+version's record, sings as the same machine without reading the browser
+again. A browser that says nothing still has its salt: a machine of its own,
+moved by its identity and time.

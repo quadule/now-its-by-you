@@ -14,7 +14,7 @@ studio.itsby.you carries these as they are, so they stay where they are
 - karaoke_words.py, karaoke.js, karaoke-recorder.js: the words in time, the sing-along, the recorder.
 - sets/h-now-its-by-you.json: what guides.py asks a singer to sing.
 
-Beside them: released_guide.py and piano_score.py make webstudio/released.json and web/piano/score.json;
+Beside them: released_guide.py and piano_score.py make webstudio/released.json and web/piano/score.json; released_record.py keeps the newest edition's record as webstudio/released-record.json (the web studio opens on it);
 sing_site.py builds the page at now.itsby.you. The studio on your computer sings through karaoke.py (with
 karaoke.html and everyone.py).
 

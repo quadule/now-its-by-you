@@ -314,7 +314,13 @@ function renderHeader() {
   // the day, then only what isn't the plain case: a parent other than the song as it began, a machine if there is one
   const from = v.from === "from the song as it began" ? "" : v.from;
   const by = v.by === "no machine, only time" ? "" : v.by.replace(/^a made-up machine called /, "");
-  $("which").replaceChildren(h("b", {}, v.offset ? `${v.date} (${v.when})` : `Today, ${v.date}`), [from, by].filter(Boolean).map((x) => ` · ${x}`).join(""));
+  const published = state.start?.published;
+  if (published) {  // the version as it was released: no day, no machine, nothing chosen
+    const which = published.which.charAt(0).toUpperCase() + published.which.slice(1);
+    $("which").replaceChildren(h("b", {}, which), ` · as it was published${published.made ? `, ${published.made}` : ""}`);
+  } else {
+    $("which").replaceChildren(h("b", {}, v.offset ? `${v.date} (${v.when})` : `Today, ${v.date}`), [from, by].filter(Boolean).map((x) => ` · ${x}`).join(""));
+  }
   setOn("draw", "textContent", v.roll ? `chance drawn again: draw ${v.roll + 1}` : "");
   const mine = v.changed;
   const locks = lockCount(v.held);  // a lock (the score's padlock) is held, not changed
@@ -1341,6 +1347,29 @@ function applyDevice(s) {
   }
 }
 
+// The web studio opens on the published version as it was released (at once: the build answered it ahead), and
+// offers this browser's own new version of it, first thing under the title; there, the way back. docs/WEB-STUDIO.md,
+// "The published version first".
+function applyPublished(s) {
+  const bar = $("publishedBar");
+  if (!bar) return;
+  const p = s.published;
+  if (p) {
+    setOn("timeBtn", "hidden", true);  // nothing moves it: no other days, no machine to compare
+    bar.replaceChildren(
+      h("a", { class: "btn primary", href: "/?new", id: "toNew" }, "Make this browser's version \u2192"),
+      h("p", { class: "hint" }, `This is ${p.which} as it was published. This browser can sing the next version of it: `
+        + "its languages, its size, its screen and today all move the song."),
+    );
+  } else if (s.published_offer) {
+    bar.classList.add("back");
+    bar.replaceChildren(h("a", { href: "/" }, "\u2190 the published version"));
+  } else {
+    return;
+  }
+  bar.hidden = false;
+}
+
 // "Share it": the recording sent to the site (its only upload), and the link it keeps it under
 function shareButton(r) {
   const out = h("span", { class: "share" });
@@ -1441,6 +1470,7 @@ async function main() {
   applyPublic(s);
   applyDevice(s);
   applyVersion(s);
+  applyPublished(s);
   setOn("helpSong", "textContent", s.title);
   renderLineage(s.generation || 0);
   setOn("singNote", "textContent", s.sing.available ? "" : s.sing.why);

@@ -57,7 +57,7 @@ OPTIONAL = ("sing_measure.py",)  # py/, when it's there: a sung take measured in
 # beside the program, for the studio on the device: the song it opens on, and singing's side of the studio (outside
 # the program, as on a server: a packet never carries it)
 BESIDE = ("songs/h-now-its-by-you.json", "webstudio/__init__.py", "webstudio/kit.py", "webstudio/singing.py",
-          "webstudio/guide.py", "webstudio/released.json", "tools/karaoke_words.py")
+          "webstudio/guide.py", "webstudio/released.json", "webstudio/released-record.json", "tools/karaoke_words.py")
 SQUEEZE = (".mjs", ".js", ".json", ".wasm")  # worth sending compressed; zips and wheels are already
 DATE = (1980, 1, 1, 0, 0, 0)
 

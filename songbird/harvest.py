@@ -101,7 +101,7 @@ class Machine:
 
     cores: float  # 0, .25, .5, .75, 1: up to 2, 4, 8, 16, more
     memory: float  # 0, .2 ... 1: up to 4, 8, 16, 32, 64 GB, more
-    uptime: float  # 0, .5, 1: up less than a day, less than a week, longer
+    uptime: float | None  # 0, .5, 1: up less than a day, less than a week, longer; None: unknown (a browser can't see it)
 
 
 @dataclass(frozen=True)
@@ -937,15 +937,59 @@ def here() -> Voice:
 
 
 def machine_voice(spec: str) -> Voice:
-    """--machine: 'here', 'none' (a neutral voice), 'fictional:NAME', or a voice
-    file (a render's record works too, replaying its voice)."""
+    """--machine: 'here', 'none' (a neutral voice), 'fictional:NAME', 'browser:{...}' (a visitor's browser, its
+    reduced voice in the spec itself: browser_spec), or a voice file (a render's record works too, replaying its
+    voice)."""
     if spec == "here":
         return here()
-    if spec in ("none", "neutral"):
+    if spec in ("none", "neutral", PUBLISHED):  # (published: the parent as it was released, no machine nor time)
         return Voice()
     if spec.startswith("fictional:"):
         return fictional(spec.split(":", 1)[1])
+    if spec.startswith(BROWSER):
+        return Voice.from_dict(json.loads(spec[len(BROWSER):]))
     return Voice.from_dict(json.loads(Path(spec).read_text()))
+
+
+# ---------------------------------------------------------------- a visitor's browser
+
+BROWSER = "browser:"
+PUBLISHED = "published"  # a studio on its parent as it was released: sung by no machine, on no day (explain.Context)
+_SALT = re.compile(r"[0-9a-f]{16}")
+
+
+def browser(facts: dict, salt: str) -> Voice:
+    """A visitor's browser, read as a computer is read quietly (here(): its languages, size and screen, never its
+    files, documents or typing), from what any page may ask of it and reduced the same way: `languages`
+    (navigator.languages), `cores` (navigator.hardwareConcurrency), `memory` in GB (navigator.deviceMemory:
+    Chromium's alone, rounded to a power of two; 8 was its cap for years, so 8 is only 'at least 8' and read as
+    unknown), and `dark` (the
+    prefers-color-scheme the browser reports; None where it has no preference). No uptime: a page can't see it, so
+    the machine's tiredness is unknown rather than middling. salt: 16 hex digits drawn once by the page and kept
+    in the browser, so it sings as the same machine from visit to visit. Anything unreadable is simply absent."""
+    if not _SALT.fullmatch(str(salt or "")):
+        raise ValueError("a browser's salt is 16 hex digits")
+
+    def number(key, lo, hi):
+        value = facts.get(key)
+        return float(value) if isinstance(value, (int, float)) and not isinstance(value, bool) and lo <= value <= hi else None
+
+    languages = [str(x)[:35] for x in (facts.get("languages") or [])[:8] if isinstance(x, str)]
+    cores, memory = number("cores", 1, 1024), number("memory", 0.0625, 1024)
+    if memory == 8:
+        memory = None  # deviceMemory's old cap (later Chromium says more): at least 8 GB, how much more unknown
+    machine = reduce_machine(int(cores) if cores else None, int(memory * 2**30) if memory else None, None)
+    dark = facts.get("dark")
+    return Voice(tongue=reduce_tongue(languages),
+                 machine=None if machine is None else replace(machine, uptime=None),
+                 colour=reduce_appearance(dark, None) if isinstance(dark, bool) else None,
+                 salt=str(salt))
+
+
+def browser_spec(voice: Voice) -> str:
+    """The --machine spec of a browser's voice: the voice itself, so every worker and record that is handed the
+    spec sings as the same machine without reading the browser again."""
+    return BROWSER + json.dumps({"salt": voice.salt, "signals": voice.signals()}, sort_keys=True, separators=(",", ":"))
 
 
 # ---------------------------------------------------------------- fictional machines

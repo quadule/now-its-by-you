@@ -38,6 +38,7 @@ import traceback
 from datetime import date
 from pathlib import Path
 
+from songbird import harvest
 from songbird import public as public_mod
 from songbird import received
 from songbird import studio as studio_mod
@@ -94,7 +95,8 @@ class DeviceVersions:
 
 class DeviceStudio(Studio):
     """The studio as it is on a visitor's device: this computer's own in what it may do (no limits, no queue to share,
-    no key), a neutral or made-up machine (the device's own isn't measured), and no checkout beside it."""
+    no key), this visitor's browser read quietly (machine_of: its languages, size and screen; never its files) or the
+    build's neutral or made-up machine, and no checkout beside it."""
 
     threads = False
     makes_specs = True  # every render is made in the browser, from its spec
@@ -102,14 +104,14 @@ class DeviceStudio(Studio):
     singing_why = NOT_YET
 
     def __init__(self, song: str, machine: str = "none", home: str | Path | None = None, runs_with: dict | None = None,
-                 day: str | None = None):
+                 day: str | None = None, parent: str | None = None):
         if day is not None:  # the page's own day (the visitor's local date, as device.js reads it), so the answers it
             # had before this worker was ready (build_site.py's, for that day) and this worker's are one day's
             fixed = date.fromisoformat(str(day))
             if fixed.isoformat() != day:
                 raise ValueError("a day is YYYY-MM-DD")
             self.clock = lambda: fixed
-        super().__init__(song=song, machine=machine, home=Path(home or tempfile.mkdtemp(prefix="songbird-")))
+        super().__init__(parent=parent, song=song, machine=machine, home=Path(home or tempfile.mkdtemp(prefix="songbird-")))
         self.versions = DeviceVersions(self.home / "versions")
         self._runs_with = runs_with
 
@@ -161,6 +163,8 @@ class DeviceStudio(Studio):
     def start_view(self) -> dict:
         start = super().start_view()
         start["device"] = True
+        if getattr(self, "released_on", None) and not self.context.published and self.version_id is None:
+            start["published_offer"] = True  # this browser's new version, where the page opens on the published one
         return start
 
     def version_view(self) -> dict | None:
@@ -172,6 +176,20 @@ class DeviceStudio(Studio):
         return view
 
 
+def machine_of(config: dict) -> str:
+    """The machine the studio sings as: the build's (none, or a made-up one), or, where the build says "browser",
+    this visitor's browser as the page read it (config["browser"]: device.js browserFacts, and the salt it keeps),
+    reduced as a computer's quiet reading is (harvest.browser); a page that couldn't read it sings as none."""
+    machine = config.get("machine") or "none"
+    if machine != "browser":
+        return machine
+    read = config.get("browser")
+    try:
+        return harvest.browser_spec(harvest.browser(read.get("facts") or {}, read.get("salt")))
+    except (AttributeError, TypeError, ValueError):
+        return "none"
+
+
 class Device:
     """The page's questions answered (handle), a version someone brought kept (restore: examine reads it, in a worker
     of its own), the jobs made (work)."""
@@ -179,9 +197,10 @@ class Device:
     def __init__(self, config: dict):
         received.THINKING = max(received.THINKING, THINKING)
         self.config = config
-        self.studio = DeviceStudio(config["song"], config.get("machine") or "none", config.get("home"),
-                                   config.get("runs_with"), config.get("day"))
+        self.studio = DeviceStudio(config["song"], machine_of(config), config.get("home"), config.get("runs_with"),
+                                   config.get("day"), config.get("parent"))
         self.studio.singing_why = config.get("singing_why") or NOT_YET
+        self.studio.released_on = config.get("released_on")  # the published version's date (editions.json)
         self._singing(config)
 
     def _singing(self, config: dict) -> None:

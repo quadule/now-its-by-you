@@ -25,7 +25,8 @@ const ANSWERS = {
 const tick = () => new Promise((resolve) => setImmediate(resolve));
 
 function page({ pathname = "/", first = { folder: FOLDER, from: "2000-01-01", to: "2999-12-31" }, decompress = true,
-                day = TODAY, file = Promise.resolve() } = {}) {
+                day = TODAY, file = Promise.resolve(), machine = "none", store = new Map(), search = "", opens,
+                navigator = { languages: ["en-GB", "fr"], hardwareConcurrency: 8, deviceMemory: 4 }, scheme = "dark" } = {}) {
   const fetched = [];
   const workers = [];
   const toasts = [];
@@ -46,11 +47,11 @@ function page({ pathname = "/", first = { folder: FOLDER, from: "2000-01-01", to
   const listeners = {};
   const which = { textContent: "Making your version of the song…", firstElementChild: null };  // the header's line
   const bridge = { start: null };  // what the page has had of its start (StudioBridge.snapshot)
-  const store = new Map();
   const sandbox = {
+    navigator, matchMedia: (q) => ({ matches: q === `(prefers-color-scheme: ${scheme})` }),
     document: { querySelector: (q) => meta[q] || null, getElementById: (id) => (id === "which" ? which : null),
                 readyState: "complete", addEventListener: (kind, f) => { (listeners[kind] ||= []).push(f); } },
-    location: { pathname, hash: "", href: `http://studio.test${pathname}`, origin: "http://studio.test" },
+    location: { pathname, search, hash: "", href: `http://studio.test${pathname}${search}`, origin: "http://studio.test" },
     localStorage: { getItem: (k) => store.get(k) ?? null, setItem: (k, v) => store.set(k, String(v)), removeItem: (k) => store.delete(k) },
     Worker: FakeWorker, WebAssembly, URL, URLSearchParams, Response, Headers, Request, TextDecoder, TextEncoder, Blob,
     DecompressionStream: decompress ? DecompressionStream : undefined, structuredClone, clearTimeout,
@@ -65,7 +66,7 @@ function page({ pathname = "/", first = { folder: FOLDER, from: "2000-01-01", to
     fetched.push(url.pathname);
     if (url.pathname === "/render/bundle.json") {
       return new Response(JSON.stringify({ v: 1, base: "/render/", pyodide: "py-0123456789abcdef", app: "app-0123456789abcdef",
-        bytes: 35e6, studio_bytes: 20e6, studio: { song: "/app/songs/h.json", machine: "none" }, ...(first ? { first } : {}) }));
+        bytes: 35e6, studio_bytes: 20e6, studio: { song: "/app/songs/h.json", machine, ...(opens ? { opens } : {}) }, ...(first ? { first } : {}) }));
     }
     if (url.pathname === `/render/${FOLDER}${day}.gzip`) {
       await file;
@@ -193,4 +194,46 @@ test("a change asked while the day's file is still coming ends the file's answer
   assert.equal((await kept).data.path, "/api/sing/keep");
   assert.equal((await start).data.from, "the worker");
   assert.deepEqual(p.asked(), ["/api/sing/keep", "/api/start"]);
+});
+
+test("where the build says browser, the worker is told what this browser says of itself, and its kept salt", async () => {
+  const store = new Map();
+  const studioConfig = async (opts) => {
+    const p = page({ machine: "browser", first: null, store, ...opts });
+    p.release();
+    await p.sandbox.SongbirdDevice.ready();
+    return p.workers[0].posted.find((m) => m.cmd === "studio").config;
+  };
+  const a = await studioConfig({});
+  assert.deepEqual(JSON.parse(JSON.stringify(a.browser.facts)), { languages: ["en-GB", "fr"], cores: 8, memory: 4, dark: true });
+  assert.match(a.browser.salt, /^[0-9a-f]{16}$/);
+  assert.equal(store.get("songbird-machine-salt"), a.browser.salt);
+  // the next visit: the same singer, its screen as it is now; nothing it can't say is guessed
+  const b = await studioConfig({ scheme: "no-preference", navigator: { language: "ja" } });
+  assert.equal(b.browser.salt, a.browser.salt);
+  assert.deepEqual(JSON.parse(JSON.stringify(b.browser.facts)), { languages: ["ja"], cores: null, memory: null, dark: null });
+  // a build that names its own machine: nothing of the browser is read
+  const p = page({ machine: "none", first: null });
+  p.release();
+  await p.sandbox.SongbirdDevice.ready();
+  assert.equal(p.workers[0].posted.find((m) => m.cmd === "studio").config.browser, undefined);
+});
+
+test("a build that opens on the published version: answered at once as it; ?new is this browser's, from the worker", async () => {
+  const p = page({ machine: "browser", opens: "published" });
+  assert.equal((await p.ask("/api/start")).data.from, "the file");  // the published version, answered ahead
+  p.release();
+  await p.sandbox.SongbirdDevice.ready();
+  const config = p.workers[0].posted.find((m) => m.cmd === "studio").config;
+  assert.equal(config.machine, "published");
+  assert.equal(config.browser, undefined);  // nothing of the browser is read for the published version
+  const q = page({ machine: "browser", opens: "published", search: "?new" });
+  const asked = q.ask("/api/start");  // not from the file: it was made for the published version
+  q.release();
+  await q.sandbox.SongbirdDevice.ready();
+  assert.equal((await asked).data.from, "the worker");
+  assert.ok(!q.fetched.some((f) => f.endsWith(".gzip")));
+  const c = q.workers[0].posted.find((m) => m.cmd === "studio").config;
+  assert.equal(c.machine, "browser");
+  assert.match(c.browser.salt, /^[0-9a-f]{16}$/);
 });

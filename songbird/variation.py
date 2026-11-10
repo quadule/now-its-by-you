@@ -152,8 +152,10 @@ def character(voice: Voice | None) -> Character:
         known.add("pace")
     if voice.machine:
         traits["density"] = clip(voice.machine.cores + voice.machine.memory - 1)
-        traits["tired"] = 2 * voice.machine.uptime - 1
-        known |= {"density", "tired"}
+        known.add("density")
+        if voice.machine.uptime is not None:  # (a browser can't see how long its computer has been up)
+            traits["tired"] = 2 * voice.machine.uptime - 1
+            known.add("tired")
     if voice.colour:
         traits["brightness"] = 2 * voice.colour.brightness - 1
         traits["warmth"] = voice.colour.warm - voice.colour.cool

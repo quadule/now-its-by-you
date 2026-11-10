@@ -314,6 +314,9 @@ def lean_words(leanings: dict) -> str:
     return f"a little {listed(parts)}" if parts else "no particular way"
 
 
+PUBLISHED_LINES = ["nothing chose anything here: these are its own settings and words, as it was published"]
+
+
 def machine_words(voice) -> list[str]:
     """What a machine is, as its few kept numbers say it, one plain line each."""
     if voice is None or voice.neutral:
@@ -337,7 +340,9 @@ def machine_words(voice) -> list[str]:
         light = "dark" if voice.colour.brightness < 0.3 else "light" if voice.colour.brightness > 0.7 else "middling"
         hue = max(("warm", voice.colour.warm), ("green", voice.colour.green), ("cool", voice.colour.cool),
                   key=lambda x: x[1])
-        out.append(f"a {light} screen, {hue[0] if hue[1] > 0.4 else 'mixed'} in colour")
+        # an even spread (no accent colour read, a grey picture) comes out a quarter, a half, a quarter: no colour
+        uncoloured = (voice.colour.warm, voice.colour.green, voice.colour.cool) == (0.25, 0.5, 0.25)
+        out.append(f"a {light} screen" if uncoloured else f"a {light} screen, {hue[0] if hue[1] > 0.4 else 'mixed'} in colour")
     if voice.words:
         even = 1.0 / max(len(voice.words.themes), 1)
         themes = [THEMES.get(t, t) for t, share in sorted(voice.words.themes.items(), key=lambda x: -x[1])
@@ -420,6 +425,8 @@ def _word(token: str) -> str:
 
 def still(d):
     """The same moment with time standing still: every dimension of the drift at zero, and no past to read."""
+    if d is None:
+        return None
     zero = {k: 0.0 for k in d.full}
     return drift_mod.Drift(t=d.t, full=zero, slow=dict(zero), season=dict(zero), year=dict(zero), hash="")
 
@@ -519,6 +526,11 @@ class Context:
         self.song = edits_mod.song_params(self.genome)
         self.base = self.parent if self.parent is not None else self.song
 
+    @property
+    def published(self) -> bool:
+        """On the parent as it was released (machine "published"): its own settings and words, nothing chosen."""
+        return self.machine == harvest.PUBLISHED and self.parent is not None
+
     def instant(self, day: str) -> float:
         return self.t if day == self.day else drift_mod.parse(day)
 
@@ -536,7 +548,10 @@ class Context:
         if day != self.day:
             clean["date"] = day
         voice = voice if voice is not None else self.voice
-        d = drift_mod.drift(self.instant(day), (voice if voice is not None else harvest.Voice()).hash)
+        if self.published and voice is self.voice:  # the parent as it was released: no machine, no time moves it
+            voice, d = None, None
+        else:
+            d = drift_mod.drift(self.instant(day), (voice if voice is not None else harvest.Voice()).hash)
         chosen_phrasing = json.loads(Path(phrasings[clean["phrasing"]]).read_text()) if "phrasing" in clean else None
         trace: dict = {}
         changes: list = []
@@ -567,6 +582,10 @@ class Context:
             return "no machine, only time"
         if spec.startswith("fictional:"):
             return f"a made-up machine called {spec.split(':', 1)[1].title()}"
+        if spec.startswith("browser:"):
+            return "this browser"
+        if self.published:
+            return "as it was published"
         return "the machine its record names"
 
     def opening(self) -> str:
@@ -1505,10 +1524,23 @@ def start(ctx: Context, studio) -> dict:
     return {
         "title": genome.title, "song_digest": studio.song_digest,
         "day": ctx.day, "date": long_date(ctx.day), "days": TIMELINE_DAYS,
-        "machine": {"label": ctx.machine_label(), "lines": machine_words(ctx.voice)},
+        "machine": {"label": ctx.machine_label(), "lines": PUBLISHED_LINES if ctx.published else machine_words(ctx.voice)},
         "from": ctx.from_words(), "bounds": b, "players": {n: player(n) for n in INSTRUMENTS},
         "patterns": PATTERNS, "parts": PARTS, "optional": list(edits_mod.optional(genome)), "kinds": KINDS,
         "sing": studio.sing_available(), "phrasings": studio.phrasings(), "out": studio.out_shown(),
         "names": ["Ada", "Basil", "Coral"], "packet": studio.packet_note(), "shared": studio.shared,
-        "generation": generation_of(ctx.parent_record),
+        # the published version is its own place in the line; anything else is the next after its parent
+        "generation": ctx.parent_record.get("generation", 0) if ctx.published else generation_of(ctx.parent_record),
+        **({"published": published_view(ctx, getattr(studio, "released_on", None))} if ctx.published else {}),
     }
+
+
+def published_view(ctx: Context, released_on: str | None = None) -> dict:
+    """On the parent as it was released (machine "published"): which version it is and when it was released (the
+    edition's date, given: a released record keeps no date of its own), for the page's header and its offer of this
+    machine's new version (studio.js, published())."""
+    made = released_on or (ctx.parent_record.get("rendered_at") or "")[:10]
+    generation = ctx.parent_record.get("generation")
+    which = (f"the {ORDINALS[generation]} version" if isinstance(generation, int) and generation < len(ORDINALS)
+             else "a version before")
+    return {"which": which, "made": long_date(made) if made else "", "id": ctx.parent_record.get("id") or ""}

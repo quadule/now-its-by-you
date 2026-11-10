@@ -48,12 +48,36 @@
   const pad = (n) => String(n).padStart(2, "0");
   const now = new Date();
   const DAY = `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}`;  // this browser's date, for the visit
+  const SALT = "songbird-machine-salt";  // this browser's random number, drawn once: who it sings as (harvest.browser)
+
+  // ---------------------------------------------------------------- this browser, as the studio reads a machine
+  // Where the build says "browser", the song is shaped by this browser as a computer is read quietly: its languages,
+  // its size (cores, and memory where Chromium says), and whether its screen is dark; nothing else, and only the
+  // studio's worker reduces it (studio_device.machine_of: coarse buckets, docs/HARVEST.md). A random salt, kept here,
+  // makes it the same singer from visit to visit; without storage, the same for this visit.
+  function browserMachine() {
+    const n = navigator;
+    const languages = Array.isArray(n.languages) && n.languages.length ? [...n.languages] : (n.language ? [n.language] : []);
+    const prefers = (scheme) => { try { return matchMedia(`(prefers-color-scheme: ${scheme})`).matches; } catch (e) { return false; } };
+    const dark = prefers("dark") ? true : prefers("light") ? false : null;
+    const facts = { languages: languages.slice(0, 8), cores: n.hardwareConcurrency || null, memory: n.deviceMemory || null, dark };
+    let salt = null;
+    try { salt = localStorage.getItem(SALT); } catch (e) { salt = null; }
+    if (!/^[0-9a-f]{16}$/.test(salt || "")) {
+      salt = Array.from(crypto.getRandomValues(new Uint8Array(8)), (b) => b.toString(16).padStart(2, "0")).join("");
+      try { localStorage.setItem(SALT, salt); } catch (e) { /* this visit's alone */ }
+    }
+    return { facts, salt };
+  }
 
   // ---------------------------------------------------------------- which version
   const linked = (location.pathname.match(/^\/v\/([0-9a-f]{32})\/?$/) || [])[1] || null;
   const brought = linked ? null : (new URLSearchParams(location.hash.slice(1)).get("version") || null);
   const version = linked || (brought && ID.test(brought) ? brought : null);
   const badPath = location.pathname.startsWith("/v/") && !linked;
+  // ?new: this browser's new version (studio.js offers it from the published version the page opens on); a version
+  // someone brought is continued by this browser too
+  const NEW = new URLSearchParams(location.search).has("new") || !!version;
   const token = document.querySelector('meta[name="studio-token"]');
   if (token) token.content = version ? `device.${version}` : "device";
 
@@ -185,7 +209,10 @@
       if (first && !fetched && total && m.received) said(`Getting the studio ready (${Math.min(99, Math.round(100 * m.received / total))}%)…`);
     }, false, true, total);
     await deadline(worker.ready, READY_MS, "getting the studio ready");
-    const config = { ...bundle.studio, day: DAY };
+    // where the build opens on the published version, that's the machine until this browser's is asked for (?new)
+    const published = bundle.studio.opens === "published" && !NEW;
+    const config = { ...bundle.studio, day: DAY, ...(published ? { machine: "published" } : {}),
+                     ...(!published && bundle.studio.machine === "browser" ? { browser: browserMachine() } : {}) };
     const view = await worker.make(config);
     try { localStorage.setItem(FETCHED, bundle.app); } catch (e) { /* only a convenience */ }
     first = false;
@@ -208,6 +235,7 @@
     try {
       if (version || badPath || typeof DecompressionStream !== "function") return null;
       const b = await manifest();
+      if (NEW && b && b.studio && b.studio.opens === "published") return null;  // made for the published version
       const f = b && b.first;
       if (!f || !/^first-[0-9a-f]{8,}\/$/.test(f.folder || "") || !(f.from <= DAY && DAY <= f.to)) return null;
       const sung = await stored("sung", "readonly", (s) => s.count());
