@@ -1333,7 +1333,7 @@ function whatsKept(p, singing) {  // what an open studio keeps, said plainly (do
 
 function applyDevice(s) {
   if (!s.device) return;
-  setOn("whereNote", "textContent", "Nothing leaves this device unless you share a version.");
+  setOn("whereNote", "textContent", "Your changes stay on this device unless you share a version. The site counts visits (Cloudflare Web Analytics, no cookies).");
   setOn("helpShows", "textContent", "This studio shows today's version of the song, and lets you:");
   setOn("helpWhere", "hidden", true);  // the page's foot says it
   // the file's record (its made-up machine's name, the room, the words' leanings) and what any site sees of what it

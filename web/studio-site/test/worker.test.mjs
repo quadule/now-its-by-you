@@ -215,7 +215,10 @@ test("/v/<id> is the studio's page, with its policy; anything else under /v/ isn
   assert.equal(r.status, 200);
   assert.equal(await r.text(), PAGE_HTML);
   assert.equal(r.headers.get("Content-Security-Policy"), PAGE_POLICY);
-  assert.match(PAGE_POLICY, /script-src 'self' 'wasm-unsafe-eval';/);
+  assert.match(PAGE_POLICY, /script-src 'self' 'wasm-unsafe-eval' https:\/\/static\.cloudflareinsights\.com;/);
+  // Cloudflare Web Analytics, the zone's beacon: its script and its report, those two hosts and no other
+  assert.match(PAGE_POLICY, /connect-src 'self' https:\/\/cloudflareinsights\.com;/);
+  assert.deepEqual(PAGE_POLICY.match(/https:\/\/[^ ;]+/g), ["https://static.cloudflareinsights.com", "https://cloudflareinsights.com"]);
   assert.match(PAGE_POLICY, /media-src 'self' blob:;/);
   assert.doesNotMatch(PAGE_POLICY, /'unsafe-eval'|'unsafe-inline'|\*/);
   assert.equal(r.headers.get("Cache-Control"), "no-cache");

@@ -213,6 +213,11 @@ piano page's own files): the page is served at `/v/<id>` too, and its policy all
   `default-src 'self'; script-src 'self' 'wasm-unsafe-eval'; style-src 'self'; img-src 'self' data:; media-src 'self'
   blob:; connect-src 'self'; worker-src 'self'; base-uri 'none'; form-action 'none'; frame-ancestors 'none'`. That is
   the studio's own, with `'wasm-unsafe-eval'` for Pyodide (never `'unsafe-eval'`) and `blob:` for the songs made here.
+  Since 2026-11-09 it also lets in Cloudflare Web Analytics, which the zone injects into each page a browser asks for:
+  its beacon from `https://static.cloudflareinsights.com` (`script-src`) reporting a page view, no cookies, to
+  `https://cloudflareinsights.com` (`connect-src`), those two hosts and no other (the live page had blocked it:
+  "violates … script-src 'self'"). The device's foot says so: "The site counts visits (Cloudflare Web Analytics, no
+  cookies)".
   The page needs nothing more: no inline script or style, no `blob:` worker, no fetch of a `blob:` URL (a recording's
   file is kept as a Blob for *Share it*). build_site.py's `POLICY` is held to policy.js's by a test.
 - **Types that matter**: `.wasm` as `application/wasm` (compiled as it streams), `.mjs` as JavaScript.

@@ -82,8 +82,14 @@ const SECURITY = {
   "Permissions-Policy": "microphone=(self), camera=(), geolocation=(), payment=(), usb=()",
   "Strict-Transport-Security": "max-age=15552000",
 };
-const PAGE_CSP = "default-src 'none'; script-src 'self'; style-src 'self'; img-src 'self' data:; media-src 'self' blob:; " +
-                 "connect-src 'self'; base-uri 'none'; form-action 'none'; frame-ancestors 'none'";
+// Cloudflare Web Analytics (2026-11-09): the zone injects its beacon into each page a browser asks for (from
+// static.cloudflareinsights.com) and it reports a page view to cloudflareinsights.com, no cookies; those two hosts and
+// nothing else
+const ANALYTICS_SCRIPT = "https://static.cloudflareinsights.com";
+const ANALYTICS_REPORT = "https://cloudflareinsights.com";
+const PAGE_CSP = `default-src 'none'; script-src 'self' ${ANALYTICS_SCRIPT}; style-src 'self'; img-src 'self' data:; ` +
+                 `media-src 'self' blob:; connect-src 'self' ${ANALYTICS_REPORT}; base-uri 'none'; form-action 'none'; ` +
+                 "frame-ancestors 'none'";
 
 /* ---------- responses ---------- */
 

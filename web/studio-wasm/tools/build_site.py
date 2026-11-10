@@ -77,10 +77,11 @@ BEFORE = 2  # ... from this many days before the build's date (a visitor west of
 # The policy every page and script is served with: the hosting Worker's (web/studio-site/src/policy.js, PAGE_POLICY,
 # which tests/test_studio_device.py holds this to): the studio's own (songbird/studio.py, Handler.send), and what the
 # browser's renderer needs: Pyodide compiling WebAssembly ('wasm-unsafe-eval', never 'unsafe-eval'), a song made here
-# playing from a blob: URL, its workers from here
-POLICY = ("default-src 'self'; script-src 'self' 'wasm-unsafe-eval'; style-src 'self'; img-src 'self' data:; "
-          "media-src 'self' blob:; connect-src 'self'; worker-src 'self'; base-uri 'none'; form-action 'none'; "
-          "frame-ancestors 'none'")
+# playing from a blob: URL, its workers from here; and Cloudflare Web Analytics (2026-11-09), whose beacon the zone
+# injects into the page (static.cloudflareinsights.com) and which reports a page view to cloudflareinsights.com
+POLICY = ("default-src 'self'; script-src 'self' 'wasm-unsafe-eval' https://static.cloudflareinsights.com; "
+          "style-src 'self'; img-src 'self' data:; media-src 'self' blob:; connect-src 'self' https://cloudflareinsights.com; "
+          "worker-src 'self'; base-uri 'none'; form-action 'none'; frame-ancestors 'none'")
 HEADERS = {"X-Content-Type-Options": "nosniff", "Referrer-Policy": "no-referrer"}
 # The Worker's own two paths, never rewritten to the page, and what the page expects of them. A shared version is
 # bytes from anyone served on the studio's own origin: it must never be something a browser would run or render

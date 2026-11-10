@@ -194,6 +194,11 @@ test("an invitation closed in R2 is closed, whatever KV still says", async () =>
   const sing = await call(w, e, `/i/${open}`);
   assert.equal(sing.status, 200);
   assert.match(sing.headers.get("Content-Security-Policy"), /script-src 'self'/);
+  // Cloudflare Web Analytics, the zone's beacon: its script and its report, those two hosts and no other
+  const csp = sing.headers.get("Content-Security-Policy");
+  assert.match(csp, /script-src 'self' https:\/\/static\.cloudflareinsights\.com;/);
+  assert.match(csp, /connect-src 'self' https:\/\/cloudflareinsights\.com;/);
+  assert.deepEqual(csp.match(/https:\/\/[^ ;]+/g), ["https://static.cloudflareinsights.com", "https://cloudflareinsights.com"]);
   assert.equal(sing.headers.get("Strict-Transport-Security"), "max-age=15552000");
   assert.equal((await call(w, e, `/i/${open}`, { method: "HEAD" })).status, 200); // link previews look first
   // the song, one guide's words, one guide: only to an open invitation, and only what's in the song

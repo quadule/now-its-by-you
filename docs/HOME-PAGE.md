@@ -62,3 +62,12 @@ newest whose bytes this checkout has as `/seed/now-its-by-you.flac` too, with it
 file somewhere that lasts (renders/ is the checkout's, not the repository's), add its entry at the end, build and
 deploy; the home page moves to it and the history keeps every one before it. One edition a day at most (its
 file is named by its date).
+
+## Cloudflare Web Analytics (2026-11-09)
+
+The zone injects Cloudflare's Web Analytics beacon into each page a browser asks for (a `<script type="module">`
+from `static.cloudflareinsights.com`, with its integrity hash), and the Worker's page policy had blocked it ("violates
+… script-src 'self'"), so no visit was counted. The policy (web/sing/src/worker.js, `PAGE_CSP`) now lets in that
+script and its report of a page view to `cloudflareinsights.com` (no cookies), those two hosts and nothing else;
+web/sing/test/worker.test.mjs holds it to exactly those two. The studio's pages do the same (docs/WEB-STUDIO.md).
+Takes effect when the Worker is deployed.
