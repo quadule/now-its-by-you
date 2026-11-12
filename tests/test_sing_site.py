@@ -409,7 +409,8 @@ def test_the_songs_editions_are_listed_rightly():
     listed = W.editions()
     first = listed[-1]
     assert (first["number"], first["id"], first["title"], first["date"]) == (1, "07ac74fbd4eb", "The first version", "2026-09-28")
-    assert first["file"] == {"sha256": "c1980bc78724232b07179ffe8f611318268cd2159cc4f7e07d44f75284b6bc10", "bytes": 15840849}
+    assert first["file"] == {"path": "renders/release/now-its-by-you.flac",  # the released file itself, kept
+                             "sha256": "c1980bc78724232b07179ffe8f611318268cd2159cc4f7e07d44f75284b6bc10", "bytes": 15840849}
     assert first["render"]["path"] == "renders/review/contest.flac" and first["source"]["commit"].startswith("10dc1e0")
     assert first["credit"] == "79 takes by eight people"
     assert W.us_date(first["day"]) == "September 28, 2026"
@@ -503,5 +504,15 @@ def test_pages_alone_are_built_over_the_site_as_it_was_and_never_write_through_i
     assert sorted(p.name for p in (site / "seed").iterdir()) == ["now.flac"]
     assert (site / W.MARK).exists() and (site / ".assetsignore").exists()
     assert not W.aside(site).exists()
-    with pytest.raises(SystemExit, match="whole build"):
-        W.pages_only(tmp_path / "nothing")
+    # with no site built there before, the pages alone, without guides (singing is in the studio: none is served)
+    fresh = tmp_path / "fresh"
+    W.pages_only(fresh)
+    assert (fresh / "seed.html").read_text() == "the new page"
+    assert not (fresh / "song").exists()
+    assert (fresh / W.MARK).exists() and (fresh / ".assetsignore").exists() and not W.aside(fresh).exists()
+    # and never over a folder something else made
+    (tmp_path / "theirs").mkdir()
+    (tmp_path / "theirs" / "keep.txt").write_text("mine")
+    with pytest.raises(SystemExit, match="wasn't built here"):
+        W.pages_only(tmp_path / "theirs")
+    assert (tmp_path / "theirs" / "keep.txt").read_text() == "mine"

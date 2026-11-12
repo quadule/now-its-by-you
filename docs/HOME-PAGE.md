@@ -15,10 +15,12 @@ them), and the AI disclosure. now.itsby.you is a second custom-domain route of t
 opens on the seed page; songbird.quadule.com/seed is the same page. Every invited singer's page is unchanged; the bare root of the singing host still shows
 its one line.
 
-The pages alone build in seconds over the site as it was last built, its guides kept:
-`uv run python tools/sing_site.py --pages`, then `cd web/sing && npx wrangler deploy`. A whole build (without
-`--pages`) also renders every guide that isn't current; on October 7, 2026 none was (the code had changed since
-September 28), so it would take about 26 minutes, for guides only singers' own pages still use.
+The pages alone build in seconds: `uv run python tools/sing_site.py --pages`, then `cd web/sing && npx wrangler
+deploy`. Over a site built here before, its guides (song/) are kept; with none, the pages are built without them
+(since 2026-11-11). The guides are the singing page's, served only to an open invitation, and none has been open
+since singing moved to the studio on September 30 (`STUDIO_URL`: every invitation and the singing API say so), so
+nothing on the site reads them now; the home page doesn't wait on them. A whole build (without `--pages`) renders
+the 90 guides too (6 sets x 5 keys x 3 speeds, about half an hour), only needed to open singing here again.
 
 **The studio's pictures** (web/sing/page/tab-page.webp, tab-arrange.webp, tab-mix.webp, tab-sing.webp, 860 x 484
 each) are four close crops, one of each view with something being changed in it and nothing shared between them:
