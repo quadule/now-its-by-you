@@ -903,3 +903,43 @@ the lead F#3-G#4 (A3-B4 in D), the band down 3 semitones, but the choir's floor 
 throat's pulses are heard one by one) re-voices the lowest voice for 10 notes of the bridge and 5 of the tag (choir 3)
 and 2 of the bridge (choir 1), and the guitar's voicings change. E8bl with tE in B: renders/throat-scylla/listen/
 contest-B/, with the shipped voice in B beside it; "part" -17 dB, "heart" -16.
+
+## Physical stops, after Chimera (2026-11-08 to 11)
+
+[Chimera](https://github.com/jamesondh/chimera-vocal-synth) (MIT, Nov 2026) is a physical airway model, not a
+neural voice: an FDTD tract, a glottis and articulators in a 2D head. On H's lead in B (its male body, our timing,
+our lead chain) Whisper loses 30.6% of the words, against E8bl's 8.3% and the shipped voice's 12.0%, so it is no
+teacher; its stops are quiet clicks (dead-silent closures, a release gone in 6 ms, 10 dB under Scylla's over the
+first 30 ms). What it taught is how a stop is made: pressure behind the closure lets go in a spike, the opening is
+briefly too wide to hiss, and then breath through the folds, coloured by the tract it passes (the vowel the mouth is
+moving to).
+
+`tools/throat/stop_release.py` measures each release from the audio (the quietest 10 ms near the label, then the
+sharpest rise of 2-9 kHz after it) as three bands' envelopes (1.5-2.7, 2.7-4.5, 4.5-9 kHz) re the vowel level, over
+Scylla's labelled H items and ours on the same notes. Scylla's 3,400 stops: a broadband spike, ~10 dB down 5 ms later
+in 1.5-4.5 kHz, then an even breath ~27 dB under the vowel for 30-40 ms in a coda, and a t's onset hiss above 4.5
+kHz ~10 dB under it until the vowel. Ours: the old t held 2.7-4.5 kHz through 2-10 ms with no dip (the harshness the
+artist heard); tE's 4.5-9 kHz spike was 15 dB over Scylla's for 5 ms and gone by 30 ms.
+
+`throat.STOP_RELEASE` makes a release that way for each phone (spike, gap, a breath coloured by the vowel's formants
+with the place's own regions; an affricate's own hiss instead of the breath; a voiced stop's folds voicing on), and
+`throat.STOP_PHYSICAL` holds the settings tuned to Scylla's, sung by default since 2026-11-11 (`STOP_AS_WAS` sings
+every release as before, tE's t included). Mean |difference| from Scylla's envelopes over the first 40 ms, dry, at
+the default tract:
+
+| | t onset | t coda | k onset | k coda | p onset | p coda | ch onset | b onset | d onset | d coda | g onset |
+|---|---|---|---|---|---|---|---|---|---|---|---|
+| as was (tE) | 7.9 | 9.3 | 4.4 | 8.7 | 9.3 | 10.0 | 5.4 | 11.9 | 9.7 | 13.2 | 5.7 |
+| physical | 2.8 | 3.8 | 3.3 | 4.9 | 6.0 | 5.8 | 4.7 | 10.8 | 6.0 | 9.7 | 4.0 |
+
+It is closer at a short tract (0.95) and a long one (1.3) for every phone too. After the lead chain "part" and
+"heart" keep their t (-16 and -19 dB under the word, 40 ms long, where tE's was 22 ms). On the lead in B Whisper
+loses 3.9-4.4% of the words (tE 4.4%). The artist: "E8bl-phys-B sounds great" (t, k, p), then "keep all of them"
+(with ch, j, b, d, g).
+
+Two things found on the way. The throat starts its own ch hiss ~25 ms before `voice._stop_times`'s release, so a
+ch's release was lost in a hiss already rising; `closure` holds the closure shut, as given, because `voice.crisp`
+(0.6) scales every other dip and left a "5%" closure at 45%. And after b and d our vowels are 10-15 dB duller at
+1.5-4.5 kHz than Scylla's for 60 ms: that is the throat's own voiced onset, which no release noise can give; a
+fine-tune that weights those transitions is the way to it. The coda ch and the j have only 3-5 clean examples in
+Scylla's H and are set like the onset ch, not tuned.

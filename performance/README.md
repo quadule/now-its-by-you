@@ -2,7 +2,9 @@
 
 The contest version (the release, id 07ac74fb…, from https://now.itsby.you) moved to B major for the singers'
 ranges, sung by the performance voice: the shipped throat retrained with Scylla's Band as its teacher (E8bl,
-docs/THROAT.md "Scylla's Band as a teacher") and its t's softened (throat.T_CHOSEN).
+docs/THROAT.md "Scylla's Band as a teacher") with physical stops (throat.STOP_PHYSICAL, docs/THROAT.md "Physical
+stops, after Chimera"). The default replay below is the artist's E8bl-phys-all-B (id 67be86f259eb, 2026-11-11);
+before the stops it was E8bl-tE-B (id e49f6475571d; `throat.STOP_RELEASE.update(throat.STOP_AS_WAS)` sings it).
 
 - `genome.json`: the release's own genome, from its packet.
 - `record-B.json`: the release's record with `params.tonic` 59 (B) instead of 62 (D). Nothing else changed.
