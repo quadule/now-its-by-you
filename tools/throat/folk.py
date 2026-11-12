@@ -70,7 +70,6 @@ from __future__ import annotations
 
 import argparse
 import difflib
-import fcntl
 import hashlib
 import json
 import os
@@ -89,8 +88,10 @@ import numpy as np
 ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT))
 sys.path.insert(0, str(Path(__file__).parent))
+sys.path.insert(0, str(ROOT / "tools"))
 
-from phones import LOCK, MFA, SKIP, textgrid  # noqa: E402
+import align  # noqa: E402  (tools/align.py: where MFA is, and its lock)
+from phones import SKIP, textgrid  # noqa: E402
 from soulx import syllables  # noqa: E402
 
 from songbird import phonetics as P  # noqa: E402
@@ -692,12 +693,13 @@ def align(work: Path, prepared: list[dict], jobs: int) -> None:
             f.write(f"{tok}\t{' '.join(phones)}\n")
     out = mfa / "aligned"
     shutil.rmtree(out, ignore_errors=True)
-    cmd = [MFA, "align", str(corpus), str(mfa / "corpus.dict"), "english_us_arpa", str(out),
+    exe = align.executable()
+    if exe is None:
+        raise SystemExit("MFA isn't installed: set MFA_HOME to where it is (or MFA to its wrapper)")
+    cmd = [str(exe), "align", str(corpus), str(mfa / "corpus.dict"), "english_us_arpa", str(out),
            "-t", str(mfa / "tmp"), "-j", str(jobs), "--clean", "--beam", "100", "--retry_beam", "400", "-q"]
-    LOCK.parent.mkdir(parents=True, exist_ok=True)
-    with open(LOCK, "w") as lock:
-        print("waiting for MFA's lock...", flush=True)
-        fcntl.flock(lock, fcntl.LOCK_EX)
+    print("waiting for MFA's lock...", flush=True)
+    with align.lock():
         print("aligning", flush=True)
         run = subprocess.run(cmd, capture_output=True, text=True, check=False)
     if run.returncode != 0:

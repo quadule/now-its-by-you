@@ -1,6 +1,6 @@
 """Run YingMusic-Singer over a job list from tools/throat/ying.py (dev only; in YingMusic-Singer's venv).
 
-    YING=/Users/milo/Code/svs/YingMusic-Singer
+    YING=~/Code/svs/YingMusic-Singer
     cd $YING && .venv/bin/python -I /path/to/songbird/tools/throat/ying_batch.py JOBS.json [--device mps]
 
 Each job sings melody_audio's tune and timing to target_text in the timbre of ref_audio (which sings
