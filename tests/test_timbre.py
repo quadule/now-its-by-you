@@ -43,6 +43,15 @@ def test_the_default_mix_is_the_singers_near_the_pitch(model):
     assert np.allclose(throat.timbre(model, {"nobody": 1.0}, 58.0), throat.timbre(model, None, 58.0))
 
 
+def test_a_retired_singer_still_sings_when_named_but_is_never_drawn(model):
+    model.config["retired"] = ["mid"]
+    assert "mid" not in throat.default_mix(model, 58.0)
+    for seed in range(20):
+        assert "mid" not in throat.parse_mix(throat.machine_mix(seed, 58.0, model))
+    # a blend that names it (an older version's) still reaches its row
+    assert np.allclose(throat.timbre(model, {"mid": 1.0}, 58.0), np.eye(5)[2])
+
+
 def test_a_machine_sings_a_blend_of_its_own_pulled_from_its_parent(model):
     g = genome.load("songs/h-now-its-by-you.json")
     seed = Params.from_dict(g.seed_params)

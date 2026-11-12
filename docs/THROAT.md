@@ -478,3 +478,468 @@ OW before a nasal ("own", "alone", "phone") may have the same fault: its vowel e
 the throat's AO ("fawn") and 7.2 dB from its open OW. The seed sings "own", "alone" and "owns", so
 a fix would change the seed's audio. That's left for the artist to decide. AY and EY before a nasal
 end as their open forms do (3.8 and 2.9 dB from them).
+
+## Folk singers (2026-10-01, an experiment, not shipped)
+
+The artist: "try training our voice model on real public domain folk songs", to learn how much better the
+throat could get with more singers, not to publish the result. Real people's recordings, then, where the
+recording itself is free: singers who released their own singing (LibriVox volunteers' sung hymns, carols and
+ballads, public domain; Makemi's traditional songs and Michael O'Donnell's folk singing, CC BY-SA, usable here
+only because nothing trained on them travels; VocalSet's "Row, Row, Row Your Boat" by 20 trained singers and
+vocadito's public-domain songs, CC BY). Commercial records made before 1926, public domain by age, were allowed
+too, but unaccompanied solo singing of that time is almost all male quartets: none were used. No field recordings.
+
+- **Labelled without a score** (`tools/throat/folk.py`). Every recording is heard through Demucs and left out if
+  accompanied (`separate`); Whisper large-v3 times its words (`transcribe`; run on a Colab A100, 154 recordings in
+  4 minutes); `cut` corrects them against printed lyrics where there are some, cuts lines at pauses in the audio,
+  aligns them with MFA and makes each syllable a note at the pitch actually sung. Lines that aren't sung (the
+  LibriVox announcements), have a word no dictionary has or a word Whisper doubted are left out or masked. Run on
+  the house corpus's own audio, it agrees with the scored labels on 93.5% of frames, 94% of phone starts within
+  20 ms, 95% of pitches exact; with 64 kbps MP3 93.8%, with noise 28 dB down 93.3% (half the takes left out by
+  the noise gate), with an RT60 of 0.7 s 85.4% (reverb isn't gated).
+- **The corpus:** 147 minutes by 73 performers, each a singer of their own (source "folk", not "human": the
+  volunteers' share stays theirs). 9 performers (15 minutes, men and women, studio and home) are held out of every run.
+- **The runs** (Colab A100, about 4.5 minutes each against 40 on this Mac), all from model-house.npz with the
+  volunteers' recipe (14,000 steps, lr 1e-3): **control**, the house corpus alone; **small**, 8 performers and 13.5
+  minutes, the volunteers' size; **half**, 30 and 66; **all**, 64 and 132.
+
+**How near each model gets to a real singer it never heard** (`tools/throat/unseen.py`: the best voice it can
+make for each held-out singer, fitted on half their singing, envelope error on the other half, mean dB; also with
+each stretch's own average spectrum taken out of both, the room's and the microphone's colouring):
+
+| | Error | Without the room and microphone |
+|---|---|---|
+| control (no people) | 10.05 dB | 8.11 dB |
+| the shipped model (8 volunteers, 13.7 min) | 9.57 | 7.73 |
+| small (8 folk singers, 13.5 min) | 8.31 | 6.94 |
+| half (30, 66 min) | 7.41 | 6.49 |
+| all (64, 132 min) | **7.21** | **6.30** |
+
+The house singers' own held-out segments stay at 5.0 dB in every model. Hearing real singers makes the throat
+much better at a real voice it has never heard, about a fifth less error. Most of it came from the first eight
+singers; after that, singers recorded a new way helped (VocalSet's improved only once VocalSet singers trained,
+and they sang the same song) and more of the same kind hardly did.
+
+**On H** it costs nothing, once the voice is blended as the studio blends it (`default_mix`, by register; dry, two
+seeds; a Fable review re-rendered these): control 10.3% of words misheard, UTMOS 1.89; all 10.5%, 1.88. Blending
+the house rows evenly instead (11.6-14.8% in the folk runs) was misleading: a new singer's row starts at the house
+singers' mean and the folk rows hardly moved from it (64 rows spread 0.7 in the 8-number space, the house rows
+2.7), so the house singers' mean *is* the folk voice there. For the same reason the volunteers' UTMOS 1.82 on H
+was mostly the register blend, not their row: the control sung that way scores 1.89.
+
+**It hasn't yet made our song sound better.** The 64 voices sit in one corner of the singer space, and their
+envelopes are flatter than real ones (formant contrast 1.3 dB in the folk rows, 2.2 in the house rows, 3.3 in the
+real singing); blending them in at 30% dilutes the voice (UTMOS 1.88 -> 1.67), and more sharpening doesn't help.
+Next, in this order:
+1. Keep the singers apart, and the singer apart from the recording: new rows started spread like the house rows,
+   the singer table learned faster (lr 1e-2, no weight decay), 16 numbers a singer, and a table of recordings (one
+   row per recording, one shared row for all the house audio) beside it in every layer, singing through the house
+   row at synthesis (it folds into the FiLM biases, so throat.py needn't change).
+2. A loss that keeps the folk rows' own contrast (L1 on the envelope less its 17-point trend).
+3. A bigger network only if (1) spreads the singers and the held-out error stays above 6.5 dB.
+
+The recordings, labels, datasets and models are in a session scratch directory, not kept; folk.py rebuilds them
+from public sources.
+
+### Round 2: the singers kept apart (2026-10-01)
+
+The artist, on round 1: "fire and wire just sound like fi and wi". Two causes:
+- **The labels.** folk.py read "fire" as the dictionary's fi-er, two syllables, so the folk corpus had no AYR at
+  all (the program sings fire on one note, AYR). It now reads a diphthong's -er in one syllable with it.
+- **The singing.** Most of it is non-rhotic (hymn and art-song diction, British and Irish singers): the third
+  formant under a coda R sits at 2.66 kHz in it against 2.31 in the house corpus, and ER at 2.66 against 2.38. Trained
+  on it as one voice, the network learns that an R after a vowel is nothing. With the labels fixed and round 1's
+  recipe, H's "fire" and "wire" still dropped F3 only 120 Hz at their end (the control: 1,017).
+
+Round 2 (`train.py --singer-dim 16 --spread --singer-lr 1e-2 --channel-dim 8`: 16 numbers a singer, new singers
+started spread as the house singers are and learned ten times faster, a room for every recording beside the singer,
+the house audio one "studio" room the model sings through) keeps the singers apart, so the folk singers' dropped
+Rs stay theirs. On H, dry, two seeds, the studio's register blend, F3's fall at the end of fire and wire:
+
+| | Words misheard | UTMOS | F3 drop in fire/wire |
+|---|---|---|---|
+| control, singers kept apart | 8.2% | 1.89 | 1,017 Hz |
+| 64 folk singers, round 1's recipe (labels fixed) | 14.8% | 1.88 | 120 Hz |
+| 64 folk singers kept apart | 10.5% | 1.91 | 954 Hz |
+| the same, 30% folk in the blend | 10.5% | 1.92 | 917 Hz |
+| kept apart, with the contrast loss (`--contrast 1.0`) | 8.7% | 1.90 | 992 Hz |
+| the same, 30% folk in the blend | 9.8% | 1.91 | 981 Hz |
+
+The artist: "that fixed fire+wire". Blending the folk singers in no longer dilutes the voice (round 1's folk blend:
+UTMOS 1.67).
+
+Unseen singers, the same test: control 10.35 dB (8.46 without the room), 8 singers 9.89 (8.06), 30: 8.63 (7.11),
+64: 8.06 (6.76), with the contrast loss 8.31 (6.85); round 1's recipe on the same data 7.14 (6.26). The curve is the
+same; the level is higher because a model that sings through the studio room can't make a real recording's room,
+which round 1's model had learned into its voices. A fair test would fit a room for the unseen singer too: the
+model written keeps only the room table, not the room's FiLM weights; keep those next time. The folk-trained
+envelopes are still flatter than the control's (formant contrast 1.65-1.71 dB against 2.48; real singing 3.32).
+
+The data for these runs went through Google Drive (the house dataset, 608 MB, and the folk one, 635 MB, merged on
+the Colab machine), so the next runs need no upload.
+
+### Round 3: against the average, and what's synthetic (2026-10-01, afternoon)
+
+The folk-trained envelopes were still flat: formant contrast 1.5 dB on real singers the model never heard, 2.2 on the
+house singers' own held-out takes, against 3.3-3.5 in real singing. Even a singer's own training audio came out
+flatter once the network had learned them (1.6 against the 2.1 of rows it had never trained), so it was averaging over
+the folk labels' noise as much as running out of size. Round 3 tried both cures (`train.py`):
+- **A critic** (`--adversarial 0.1`): a small spectrally normalised 2-D convolution over frames and grid points of the
+  envelope (to 5.6 kHz, which nearly every folk recording reaches) learns to tell real envelopes from the throat's,
+  and the throat learns to fool it (least squares, and the critic's features matched). Only training changes.
+- **A bigger throat** (`--channels 320`, 3.5M parameters against 0.93M), widened from the house model so it starts
+  singing exactly as it did.
+- The room's FiLM weights are now written beside the folded model, so the unseen-singer test fits a room as well as
+  a singer (`tools/throat/fit_unseen.py`, by gradient, scored by `unseen.py --fitted`): round 2's test, which sang
+  every unseen recording through the studio, was unfair to the models that keep rooms apart.
+
+All from model-house.npz, 14,000 steps, round 2's recipe (`--singer-dim 16 --spread --singer-lr 1e-2 --channel-dim 8
+--contrast 1.0`); H dry, two seeds, the studio's register blend:
+
+| | Unseen singers (singer + room fitted) | Contrast, unseen (real 3.32) | H, house rows: WER | H, 30% folk: WER |
+|---|---|---|---|---|
+| control, round 2's recipe | 8.65 dB | 1.95 | 9.1% | |
+| 64 folk singers, round 2's recipe | **7.00** | 1.47 | 9.1% | 7.3% |
+| + critic | 7.01 | 2.11 | 8.2% | 8.2% |
+| + critic at 0.3 | 7.10 | 2.16 | 10.3% | 7.3% |
+| bigger | 7.17 | 1.68 | 8.2% | 6.8% |
+| bigger + critic | 7.28 | 1.99 | **5.0%** | **5.7%** |
+| control, bigger + critic | 9.88 | | 5.5% | |
+
+With rooms fitted, keeping singers apart costs nothing on unseen singers (7.00, round 1's pooled recipe 7.14), and
+the folk singers take a fifth to a quarter off the error. The critic raises contrast and flutter toward real
+singing at no cost in fit (on the house singers' held-out takes 2.17 -> 2.82 dB contrast, flutter 1.07 -> 1.59 on
+unseen singers, real 2.96); bigger + critic halves the words misheard on H, mostly by the recipe (the control has
+it too). Fire and wire keep their R in every model (F3 drop 760-1,020 Hz). Two retrainings of one recipe differ by
+1.5-2 points of WER.
+
+The artist: 4 and 5 (bigger + critic) "are better but smaller differences than I expected at this point. Feels like
+we're overfitting to something synthetic." A ladder on real singers the model never heard, from their recording to
+the program's voice one step at a time (UTMOS):
+
+| | Kalynda | Chris Tierney | VocalSet f2 |
+|---|---|---|---|
+| 0 the recording | 2.18 | 2.22 | 1.51 |
+| 1 WORLD's own analysis and resynthesis | 1.75 | 1.72 | 1.38 |
+| 2 its envelope on our grid, through our vocoder | 1.75 | 1.84 | 1.36 |
+| 3 the model as that singer (singer and room fitted), their pitch and timing | 1.48 | 1.41 | 1.56 |
+| 5 the house blend, their pitch and timing | 2.04 | 2.13 | 1.80 |
+
+UTMOS scores the house voice as high as real singers or higher, and a real studio singer under our renders: it
+prefers the synthetic voice, and the blends and recipes chosen by it were pulled that way. By ear (the artist, on
+Kalynda): 2 "is not robotic" (some static in one word), 3 "is garbled but not quite robotic", 5 "is the most robotic
+definitely". The robotic part is the house corpus, not the vocoder.
+
+And the room: every model so far sings through the "studio" row, which the network learned from the house corpus's
+SoulX renders. Bigger + critic on H with the folk singers' rows alone through the studio: WER 10.5%, "still really
+robotic"; through VocalSet's real studio instead (the mean of its trained rooms' rows, folded into the FiLM biases
+in the studio's place): WER 5.5%, and "so much better". From here voices are judged as the folk singers through a
+real room, by WER and by ear; UTMOS is reported only as a number that favours the synthetic.
+
+### The rest of VocalSet (2026-10-01)
+
+VocalSet's 20 singers were in the corpus only through "Row, Row, Row Your Boat". The rest of it (CC BY 4.0), labelled by
+`folk.py`: its two other songs, "Caro mio ben" and "Dona nobis pacem" (Italian and church Latin, read by their
+spelling with pure vowels, Whisper large-v3 in their languages; 22 minutes, half of it unmasked, the aligner unsure of
+Italian's clusters), and its vowel exercises (`folk.py exercises`: scales, arpeggios and long tones on a, i and u,
+straight, vibrato, slow, belted and breathy, 3.1 hours; e and o left out, since English sings them as glides). One
+room per VocalSet singer (the recording name's part before "~"). Through a real room, the folk rows alone, H's WER:
+
+| round 2's recipe | WER |
+|---|---|
+| without VocalSet's rest (two seeds) | 8.2%, 8.0% |
+| + the songs | 8.0% |
+| + the songs, exercises 5% of every batch | 9.1% |
+| + the songs, exercises 15% (two seeds) | 11.0%, 11.0% |
+
+The songs cost nothing; the exercises cost intelligibility in proportion to their share (steady vowels with no
+consonant either side, a context the program never sings). None of it moved the unseen-singer error (7.02 against
+7.00; the four VocalSet singers held out 7.21 against 7.08): it adds hours, not people.
+
+## New house singers from our own voice (2026-10-07 and 08)
+
+The artist hears the house corpus as the robotic part of the voice (round 3 above). Its timbres came from our old
+formant singer, so the throat learned SoulX's natural delivery in timbres that were never natural. This replaces
+those timbres with ones made from the shipped voice itself, made more natural by a second open singing model.
+
+**YingMusic-Singer** (ASLP-lab, CC BY 4.0; 727M parameters: an F5-TTS-style flow-matching DiT, SOME's melody encoder,
+Stable Audio 2's VAE, whose license bars training a "foundational" model on its output; our 3.5M-parameter throat
+isn't one) sings new words to the tune of a sung clip in the timbre of another. It runs beside the repo, never ships,
+at about real time on this Mac (MPS; its own venv: `tools/throat/ying_batch.py` says how). What the artist heard, on
+two of H's couplets:
+- YingMusic with the same Eleven Music prompt as SoulX: SoulX better.
+- YingMusic re-singing the shipped voice in its own timbre: better than the shipped voice. It keeps the tune
+  (14-19 cents median from the clip) and the words (the throat's volunteers row alone, misheard on 9 of 17 words of
+  "copy", is heard right after it).
+- A real singer's clip as the timbre (VocalSet f2 and f7, CC BY 4.0): "too off-key" (31-41 cents). Staying in one
+  voice is what keeps it on key, so people come in through the throat's own rows, not through recordings.
+- SoulX prompted with YingMusic's version of our voice ("B"): "the best blend". The volunteers' share in the throat's
+  mix at 30, 60 and 100%: all on key; SoulX prompted from one YingMusic pass ("d", "more natural") or two ("e",
+  "a slight edge") were "definitely best". YingMusic's own timing drags at phrase ends ("ever knew it by heart"), so
+  it only ever makes the ten-second prompt; SoulX sings the corpus to the score's timing.
+- New singers from a single old house row each: "a step backward", old and new alike; from a blend of rows, as a
+  machine's own voice is drawn: "better all around" in both registers. A bass re-sung twice "sounds less natural";
+  once was best, with the volunteers at 57% or 30% close.
+
+**The volunteers' share.** The consent (web/sing/consent.md) promises a voice trained on everyone's takes at once and
+never set to sound like one person; HUMAN_SHARE's 0.3 was our choice, not the consent's. The artist, whose
+volunteers are close family and friends: retraining is fine "as long as no result sounds like an individual", with
+the share kept within 0.3-0.6. The people's row is itself an average of eight (the largest 26%), so at 0.6 no one
+person is more than about 16% of any voice. Their recordings were deleted on September 30 and none is used here: the
+new singers are renders of the shipped model's row.
+
+**The recipe** (`tools/throat/ying.py`): ten new singers, one in each old house singer's register and keys. Each is
+a random blend of the house rows that sing near that register (`throat.machine_mix`, at most 0.45 of any one) with
+the volunteers' row at a share spread over 0.3-0.6 so high and low voices both get the whole range. The shipped
+throat sings the guide's prompt window and the couplet after it in that voice; YingMusic re-sings each in the
+other's timbre, once (the high voices alternate once and twice), three seeds a pass, keeping the one Whisper hears
+best, then the one within 120 ms of the throat's timing (SoulX places a prompt's phones by the guide's timing alone;
+Fable's review), then the one nearest its pitch; trimmed to the window. SoulX sings the old house plans (the same
+126 + 93 items, keys, tempos and seeds) in the new prompts: `plan-blend.json`, `plan-blend-cover.json`, 143 minutes,
+333 segments, 2 h 15 on this Mac; 328 kept by `check.py`.
+
+Formant contrast of the corpus itself (dB about the envelope's 17-point trend, 200 Hz-5 kHz, voiced frames, every
+segment against the old singer's render of it): old 3.40, new 3.18, the new higher in 22% of segments (the mezzo
+and baritone higher, the tenors and bright lower). The artist preferred the new corpus by ear in both registers, so
+this measure, like UTMOS, doesn't follow what is heard as natural here.
+
+**Training** (the desktop's RTX 4080 Super, `train.py --init songbird/synth/throat.npz --steps 14000 --singer-dim 16
+--spread --singer-lr 1e-2 --contrast 1.0 --adversarial 0.1`): A, the old house corpus with the new (`--retire
+house-*`: their rows train and keep the consonants' coverage but no voice draws them), and B, the new corpus alone;
+each at 320 channels (3.45M parameters, 16 minutes) and at the shipped 160. A model trained on these has no
+volunteers row: the people's share is in every singer it draws, 0.3-0.6 by construction, and `HUMAN_SHARE` no
+longer applies (`throat.humans` finds no people's row). `throat.drawn` and `train.py --retire` are new.
+
+**Results** (models in renders/throat/blend-models/, not shipped; the artist chooses by ear: renders/ym-listen/
+model-1..5 dry, full/song-1..5 the first published version in the mix):
+
+| | WER on H, `wer_suite.py --sketch h --seeds 2` (438 words) | One core, 62 s of singing | Weights | Drawn singers alone vs the default blend (dB, median, range) |
+|---|---|---|---|---|
+| shipped | 9.1% | 2.17 s | 3.6 MB | 2.84, 1.8-5.7 |
+| A-320 (old + new) | 8.0% | | 13.8 MB | 1.96, 0.8-4.8 |
+| B-320 (new only) | 8.9% | 2.66 s | 13.8 MB | 2.23, 1.2-4.4 |
+| A-160 (old + new) | 8.0% | | 3.7 MB | 1.91, 0.9-4.3 |
+| B-160 (new only) | 8.7% | | 3.7 MB | 2.38, 0.8-4.2 |
+
+- **Words** hold: every model is within a few words of the shipped voice on H.
+- **Size** decides the bigger network more than speed does: a 320-channel model costs 23% more time on one core but
+  13.2 MiB, against `songbird budget`'s 8 MiB goal for program and model together (6.63 MiB today, the model 3.40).
+  At float16 it would still be about 9.9 MiB; only 8-bit weights would fit.
+- **Variety narrows among the high voices.** Every new singer carries 0.3-0.6 of one shared row, so the high ones sit
+  0.8-1.9 dB from the blend (the shipped house rows 1.8-4.0); the low ones keep their distance (3-5 dB). Machines
+  singing in H's register would sound more alike than today's. If that matters, the high singers need more apart
+  prompts (a higher cap than 0.45, or tract warps in the prompts), and a measure of it in the gate.
+- The people's share now lives in the singers: no model here has a volunteers row (`throat.humans` is empty).
+
+## Scylla's Band as a teacher (2026-11-06, overnight; an experiment, not shipped)
+
+**Scylla's Band** (lowkeytea, Apache-2.0; a flow-matching speech and singing model with 14 fixed voices, run here on
+its LiteRT CPU bundle beside the repo, never shipped; its training data isn't disclosed) has a singing graph that
+takes IPA phones, a frame count for each (512 samples at 24 kHz) and a melody track directly. So it sings our own
+schedule: `tools/throat/scylla.py` plans what the throat would sing (`voice.schedule` with `throat.DURATIONS`, the
+same seed), turns its phones into Scylla's (diphthongs and affricates two symbols at fixed shares, a `<sil>` at each
+word boundary), and writes the labels as what Scylla was told rather than what MFA heard. That takes MFA (not on
+this Linux desktop) out of the corpus: the sibilants' energy lines up with the labels best at 0 ms. Scylla sang
+better than our throat on the same notes, timing and seed (Gemini, below: +2.0 of 3 both on sounding human and on
+words). Our throat sung on Scylla's own f0 was no better than on ours (-0.5), so the gap is the envelope, not the
+pitch track: what training on it can teach.
+
+**The corpus** (`scylla.py --per-item 2`, `scylla_batch.py` in Scylla's venv): 76 of `corpus.py`'s items, each sung
+by two of the voices in a key moved into that voice's range (an octave shift into 3 below to 5 above its centre,
+then ±2 semitones), H by all fourteen; 239 renditions, 423 segments, 70.6 min on 24 CPU threads (about 2x real
+time). `check.py` kept 361: all but one or two of every voice's, except ink (0 of 31: sharp, 50 cents median) and
+tuesday (7 of 31: 31 cents sharp); 151.5 minutes, 13 singers.
+
+**Training**, the October A-160 recipe (`train.py --init songbird/synth/throat.npz --steps 14000 --channels 160
+--singer-dim 16 --spread --singer-lr 1e-2 --contrast 1.0 --adversarial 0.1`, the 4080 Super, 14 min each;
+`renders/throat-scylla/train-all.sh`): C, blend A (October's old and new house corpus, `--retire house-*`) with
+Scylla's; D, blend B (the new corpus alone) with Scylla's; S, Scylla's alone. `tools/throat/retire.py` copies a
+model drawing only some of its singers, the weights unchanged: Cbl and Dbl draw the blend singers alone (Scylla's
+rows trained, never drawn), Csc and Dsc Scylla's alone. Held-out loss: C 0.253, D 0.249, S 0.242 (A-160 0.257).
+
+**Gemini as a listener** (`tools/throat/gemini_judge.py`, gemini-3.8-flash): two renders of the same notes, timing
+and seed, the dry voice stem cut into the same six 20-second windows of H's seed rendition (or a machine's own
+blend, fictional:ada), loudness-matched, each pair asked in both orders; which sounds more like a person singing
+and whose words are clearer, -3 to +3. It picks the same clip in both orders only 59% (human) and 65% (words) of
+the time, so a score under about ±0.5 is noise. About $0.004 a call; this night and the next day $1.16.
+
+**Results** (models in renders/throat-scylla/, listening in renders/throat-scylla/listen/compare/):
+
+| | WER on H, `wer_suite.py --sketch h --seeds 6` (1314 words) | Gemini against shipped, human / words (seed; ada) | People's share of a voice |
+|---|---|---|---|
+| shipped | 10.3% | | 0.3 (`HUMAN_SHARE`) |
+| A-160 | 7.7% | +0.75 / +0.50 (two windows) | 0.3-0.6 |
+| C (blend A + Scylla) | **3.7%** | +0.17 / +0.67; +0.67 / +0.83 | about 0.1-0.35 |
+| D (blend B + Scylla) | **3.7%** | +0.75 / +0.58; +1.08 / +0.92 | about 0.1-0.35 |
+| S (Scylla alone) | 5.6% | **+1.58 / +1.42; +1.67 / +1.58** | none |
+| Cbl (C, blend singers drawn) | 5.5% | +1.00 / +0.50; +0.33 / +0.33 | 0.3-0.6 |
+| Dbl (D, blend singers drawn) | 7.3% | +0.75 / +0.67 | 0.3-0.6 |
+| Csc, Dsc (Scylla's drawn) | 5.3%, 5.5% (two seeds) | | none |
+
+Head to head (seed): C over A-160 +0.58 / +0.50; S over A-160 +0.75 / +1.17; S over C -0.25 / +0.25; S over D
+-0.50 / 0.00; Cbl over C -0.25 / -0.17; Cbl over A-160 +0.33 / +0.17. What it hears: the shipped voice "buzzy",
+"muffled", "metallic buzz on sustained vowels"; C and S "slight metallic grain on higher sustained vowels",
+"mechanical stiffness" in the transitions.
+
+- **Words improve most.** Every model trained with Scylla's singing hears better than the shipped voice and A-160:
+  C and D mishear a third as many of H's words as the shipped voice does. Most of what's left is the lexicon's
+  ("hundredodd", "quay" heard as "key", "a" as "the"), not the voice.
+- **Sounding human:** the new models all beat the shipped voice; among themselves, within the judge's noise. S beats
+  the shipped voice by the most, but not C or D head to head.
+- **The volunteers' share decides between them.** The artist's 0.3-0.6 (a choice, not the consent's) puts the people
+  in every voice. Scylla's singers carry none of it, so wherever a voice draws them the share falls: in
+  C and D a machine's voice in H's register is 37-56% blend rows (median; `machine_mix` over 300 seeds, pitches
+  55-65), so 0.1-0.35 people; S, Csc and Dsc have none. Only Cbl and Dbl keep the share, Scylla's singing still
+  teaching the shared network: Cbl hears 5.5% (the shipped 10.3%) and Gemini prefers it to the shipped voice and
+  to A-160, a little.
+- **Every song** (`wer_suite.py --seeds 2`, 5002 words; renders/throat-scylla/eval/wer-all.txt): shipped 15.2%,
+  A-160 11.4%, S 10.6%, Cbl 9.8%, C 8.7%, D 7.6%; D or C best on every song but e (S) and g (A-160; its refrain in no
+  language). The corpora, Scylla's and the house plans', sing these songs' own words, so this is partly
+  in-domain, for the shipped voice's corpus as much as for the new ones.
+- **Variety** (the throat's predicted envelope on H's first item, voiced frames, mean |dB| from the default
+  blend; a new measure, not October's, so only its own column compares): each drawn singer alone, median (range);
+  machines' own blends (20 seeds), median (range).
+
+  | | Singers alone | Machines |
+  |---|---|---|
+  | shipped | 5.88 (4.2-10.7) | 1.10 (0.5-2.2) |
+  | A-160 | 3.92 (1.5-8.7) | 0.65 (0.1-1.3) |
+  | C | 6.84 (3.3-9.7) | 0.81 (0.3-2.8) |
+  | Cbl | 3.69 (1.3-7.7) | 0.61 (0.1-1.3) |
+  | D | 6.70 (3.5-8.8) | 0.82 (0.3-2.9) |
+  | S | 5.02 (2.7-7.2) | 1.09 (0.3-1.7) |
+
+  Cbl's machines are as close together as A-160's (October's narrowing, the volunteers' row shared by every blend
+  singer), about half the shipped voice's spread; Scylla's singers widen it back in C and D, and S's are as far
+  apart as the shipped voice's.
+- **In the mix** (H's seed rendition with the band, the same six windows) Gemini can't tell them apart: Cbl over the
+  shipped voice -0.08 / -0.25, D +0.33 / 0.00. The voice's gain is heard dry, and in the words.
+- Scylla's voices are fixed singers. No machine in C draws more than 0.41 of one (300 seeds; `machine_mix`'s cap 0.6, and
+  more singers near each register); S and Csc would make every machine a blend of only Scylla's voices.
+
+### E: the shipped voice's own corpus with Scylla's (2026-11-07, morning)
+
+The artist, after hearing Cbl ("amazing"): we hadn't tried the shipped voice's corpus with Scylla's, without
+October's unshipped blend singers. The shipped model's dataset (dataset-house-volunteers.npz) went with the
+volunteers' recordings, but its house corpus is inside blend A as the house-* segments: `tools/throat/subset.py`
+cuts them out (332 segments, 142.8 min; the shipped model saw these and 13.7 min of the volunteers), and `folk.py
+merge` with the default `--base` adds Scylla's and keeps the shipped model's `volunteers` row by name (no frames of
+its own). The October recipe at 16 numbers a singer (E16) and at the shipped model's 8 (E8); held out 0.251, 0.250.
+E16bl and E8bl draw what the shipped voice draws: the ten house singers, and the volunteers at `HUMAN_SHARE` 0.3.
+E16 draws Scylla's singers too, but `default_mix` and `machine_mix` set the people's row's share before the rest, so
+it still sings 0.3 people.
+
+| | WER on H (1314 words) | Every song (5002) | Gemini (human / words) |
+|---|---|---|---|
+| shipped | 10.3% | 15.2% | |
+| Cbl | 5.5% | 9.8% | |
+| E16 | 4.4% | 7.8% | |
+| **E16bl** | 5.5% | **7.9%** | over shipped +0.67 / +0.33; over Cbl -0.25 / +0.58, in the mix 0.00 / +0.42 |
+| E8bl | 5.5% | 9.1% | |
+
+- **E16bl hears as well as Cbl on H and better over every song**, and Gemini can't tell them apart. It draws the
+  shipped voice's own singers in the shipped voice's own blend: the smallest change to what ships.
+- **The volunteers' row moved.** With no frames to hold it, it sings 6.65 dB (E16) and 6.49 dB (E8) from what the
+  shipped model's row sings, against 2.4-2.6 dB for the house rows (the throat's predicted envelope on H's first
+  item, voiced frames, mean |dB|). Keeping 8 numbers a singer didn't hold it. In E the people's 0.3 is the old row
+  read by a new network: still never one person, no longer quite how the volunteers' takes sounded. Holding it
+  would take frames of its own: the shipped model singing as the volunteers alone (as October's blend singers were
+  made from its renders), added to the corpus.
+
+### The contest version, more of H, and the t's (2026-11-07, afternoon)
+
+**What to compare.** Now It's by You is a 2026 AI Song Contest finalist, performed in Bangkok on November 29; only H
+matters now. A plain `songbird render songs/h-now-its-by-you.json` is the program's own seed version, with no choir
+at all, so the artist heard no harmonies in the bridge. The contest version is the release (id 07ac74fb…, program
+971e37bd, from now.itsby.you, kept in renders/release/), sung everyone's way with the three-voice choir. Its record
+replayed with the shipped throat (`songbird render renders/release/genome.json --replay renders/release/record.json`)
+matches the release to the sample (correlation 1.000) though its id differs (the program has moved on; the replay
+exits 1 saying so), so a replay with another throat changes only the voice. renders/throat-scylla/listen/contest/ has
+it for every model, the lead and the three choir voices beside each.
+
+**More of Scylla singing H.** `scylla.py --prefix h- --after renders/throat-scylla/plan.json --per-item 4` (ink and
+tuesday left out): four new voices on each of H's 64 items, new keys, tempos and verses; 256 segments, 43.8 min to
+render, 250 kept, 90.6 min. Cbl2 and E8bl2 are the Cbl and E8bl recipes with it added. On H (1314 words): Cbl2 6.3%
+(Cbl 5.5%), E8bl2 5.2% (E8bl 5.5%), within noise; Gemini on the contest lead: Cbl2 over Cbl -0.17 / -0.17, E8bl2 over
+E8bl +0.17 / +0.17. E8bl2's volunteers row moved further (7.3 dB). Gemini prefers E8bl to Cbl there, +0.58 / +0.83.
+
+**The t's.** The artist hears the t's as harsh; turning their bursts down (-3 to -12 dB, longer, slower) "just sorta
+turns down the volume". Each band's level over the t and 30 ms after, against that band in the segment's vowels
+(dry, the same notes and timing as Scylla sang them, median of 144):
+
+| | 2 kHz | 3 kHz | 4 kHz | 5 kHz | 6.5 kHz | 8 kHz | 10 kHz |
+|---|---|---|---|---|---|---|---|
+| Scylla's Band | -26.7 | -21.5 | -10.7 | +0.9 | +1.2 | +6.0 | +5.9 |
+| Cbl | -12.7 | +5.5 | +13.6 | +14.9 | +15.3 | +18.0 | +6.9 |
+| E8bl | -17.1 | -1.3 | +1.9 | +6.1 | +9.1 | +10.7 | -0.9 |
+| Cbl, `articulate` off | -21.5 | -13.1 | -8.0 | -6.4 | -5.2 | -5.2 | -8.0 |
+| Cbl, A (below) | -22.4 | -13.4 | -6.2 | +3.2 | +7.7 | +10.7 | +6.1 |
+| E8bl, A | -23.4 | -15.1 | -7.3 | -3.0 | +2.5 | +3.7 | -1.8 |
+
+The t's 2-5 kHz excess is `articulate`'s burst, not the network. Fable's review (asked before any re-render): the
+alveolar burst (phonetics.BURSTS, at the default tract centred 4.7 kHz) through second-order band-passes is only 4 dB
+down at 3 kHz, and its 6.5 kHz band, summed in phase, mostly cancels (the sum -0.4 dB at 4 kHz, -10.9 at 6.5), so the
+stock t is one 4-5 kHz peak; the lead's de-esser (`fx.deess`, split 4.5 kHz, 4 ms detector) turns down what's above
+4.5 kHz on every burst and leaves the 2.7-4.5 kHz part; and the burst is a flat 12 ms block where a release falls
+away from its first instant. `throat.T_RELEASE` (the defaults leave every t as it was) now sets a t's noise shape,
+level, rise, length, decay, aspiration and how much of the throat's own t is left after the release. The renders for
+the artist: A, a single band at 7 kHz (4 kHz wide), -13 dB, 4 ms rise, aspiration -6 dB, the throat's own t at 0.3
+after the release; B, A with a 0.5 ms rise falling away over 4 ms and 1.7 times as long, the aspiration from 4 ms.
+Fable's B also gave the aspiration a broader shape (2.5 and 7 kHz), but that put 3 kHz back up 6 dB, and the artist
+warned the breath can sound harsh too, so B keeps A's. k and ch have the same excess on Cbl (k 6-16 dB over Scylla's
+at 2-5 kHz, ch 8-13), E8bl less; not changed yet, nor the de-esser.
+
+**The t the artist chose, and B major** (2026-11-07, evening). A moved the colour up but went quiet: its coda t's
+peaked 12 dB under Scylla's, and "part" and "heart" (both line ends, E4) lost their t. Through the lead chain (EQ,
+`fx.deess`, compressor, `fx.soften`; the softener does nothing to a t) the de-esser takes 7 dB off a burst that lies
+wholly above 4.5 kHz, so D3 (6-10 kHz, +3 dB) left a 10 ms tick at -19 dB under the word. Scylla's heard line-end t's
+are a release 11-17 dB under the vowel, mostly above 4.5 kHz with 2-4.5 kHz about 13 dB under that, falling away over
+15-40 ms. `throat.T_CHOSEN` (tE, the artist's pick: "tE sounds best") gives that: 6-10 kHz with 3-4 kHz 12 dB under,
+a 0.5 ms rise falling away over 10 ms, about 30 ms long, +8 dB; after the lead chain "part" -17 dB and "heart" -13
+(today's t -18 and -16 but with its 2-4.5 kHz only 1-3 dB under the top). Not applied by default.
+
+For the singers' ranges, the contest version in B major (`renders/release/record-B.json`, the record with tonic 59):
+the lead F#3-G#4 (A3-B4 in D), the band down 3 semitones, but the choir's floor (`theory.FLOOR`, E3, under which the
+throat's pulses are heard one by one) re-voices the lowest voice for 10 notes of the bridge and 5 of the tag (choir 3)
+and 2 of the bridge (choir 1), and the guitar's voicings change. E8bl with tE in B: renders/throat-scylla/listen/
+contest-B/, with the shipped voice in B beside it; "part" -17 dB, "heart" -16.
+
+## Physical stops, after Chimera (2026-11-08 to 11)
+
+[Chimera](https://github.com/jamesondh/chimera-vocal-synth) (MIT, Nov 2026) is a physical airway model, not a
+neural voice: an FDTD tract, a glottis and articulators in a 2D head. On H's lead in B (its male body, our timing,
+our lead chain) Whisper loses 30.6% of the words, against E8bl's 8.3% and the shipped voice's 12.0%, so it is no
+teacher; its stops are quiet clicks (dead-silent closures, a release gone in 6 ms, 10 dB under Scylla's over the
+first 30 ms). What it taught is how a stop is made: pressure behind the closure lets go in a spike, the opening is
+briefly too wide to hiss, and then breath through the folds, coloured by the tract it passes (the vowel the mouth is
+moving to).
+
+`tools/throat/stop_release.py` measures each release from the audio (the quietest 10 ms near the label, then the
+sharpest rise of 2-9 kHz after it) as three bands' envelopes (1.5-2.7, 2.7-4.5, 4.5-9 kHz) re the vowel level, over
+Scylla's labelled H items and ours on the same notes. Scylla's 3,400 stops: a broadband spike, ~10 dB down 5 ms later
+in 1.5-4.5 kHz, then an even breath ~27 dB under the vowel for 30-40 ms in a coda, and a t's onset hiss above 4.5
+kHz ~10 dB under it until the vowel. Ours: the old t held 2.7-4.5 kHz through 2-10 ms with no dip (the harshness the
+artist heard); tE's 4.5-9 kHz spike was 15 dB over Scylla's for 5 ms and gone by 30 ms.
+
+`throat.STOP_RELEASE` makes a release that way for each phone (spike, gap, a breath coloured by the vowel's formants
+with the place's own regions; an affricate's own hiss instead of the breath; a voiced stop's folds voicing on), and
+`throat.STOP_PHYSICAL` holds the settings tuned to Scylla's, sung by default since 2026-11-11 (`STOP_AS_WAS` sings
+every release as before, tE's t included). Mean |difference| from Scylla's envelopes over the first 40 ms, dry, at
+the default tract:
+
+| | t onset | t coda | k onset | k coda | p onset | p coda | ch onset | b onset | d onset | d coda | g onset |
+|---|---|---|---|---|---|---|---|---|---|---|---|
+| as was (tE) | 7.9 | 9.3 | 4.4 | 8.7 | 9.3 | 10.0 | 5.4 | 11.9 | 9.7 | 13.2 | 5.7 |
+| physical | 2.8 | 3.8 | 3.3 | 4.9 | 6.0 | 5.8 | 4.7 | 10.8 | 6.0 | 9.7 | 4.0 |
+
+It is closer at a short tract (0.95) and a long one (1.3) for every phone too. After the lead chain "part" and
+"heart" keep their t (-16 and -19 dB under the word, 40 ms long, where tE's was 22 ms). On the lead in B Whisper
+loses 3.9-4.4% of the words (tE 4.4%). The artist: "E8bl-phys-B sounds great" (t, k, p), then "keep all of them"
+(with ch, j, b, d, g).
+
+Two things found on the way. The throat starts its own ch hiss ~25 ms before `voice._stop_times`'s release, so a
+ch's release was lost in a hiss already rising; `closure` holds the closure shut, as given, because `voice.crisp`
+(0.6) scales every other dip and left a "5%" closure at 45%. And after b and d our vowels are 10-15 dB duller at
+1.5-4.5 kHz than Scylla's for 60 ms: that is the throat's own voiced onset, which no release noise can give; a
+fine-tune that weights those transitions is the way to it. The coda ch and the j have only 3-5 clean examples in
+Scylla's H and are set like the onset ch, not tuned.

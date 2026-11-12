@@ -556,15 +556,24 @@ def _linear(x: np.ndarray, w: dict, name: str) -> np.ndarray:
 
 # The people's share of every voice: the singer trained on everyone's takes together (source "human", one
 # embedding for all of them; docs/THROAT.md "Everyone's voice") is this much of the machine's default blend and
-# of every machine's own, the rest the synthetic singers' as before. Never more: the consent promises a voice
-# blended from everyone, never set to sound like one person, and at 0.3 it is 70% synthetic by construction.
+# of every machine's own, the rest the synthetic singers' as before. The consent promises a voice trained on
+# everyone's takes at once and never set to sound like one person (web/sing/consent.md); 0.3 is our choice,
+# not the consent's: 70% synthetic by construction. The artist allows 0.3-0.6 (2026-10-07).
 HUMAN_SHARE = 0.3
 
 
+def drawn(model: Model) -> list[str]:
+    """The singers a voice is mixed from by default: every trained singer the model hasn't retired. A retired
+    singer (config "retired") keeps its row, so a version whose timbre names it still sings as it did, but no
+    default or machine's own blend draws it."""
+    retired = set(model.config.get("retired") or [])
+    return [n for n in model.config["singers"] if n not in retired]
+
+
 def humans(model: Model) -> list[str]:
-    """The model's singers learned from people (source "human"), if any."""
+    """The model's singers learned from people (source "human") that it still draws, if any."""
     sources = model.config.get("sources") or {}
-    return [n for n in model.config["singers"] if sources.get(n) == "human"]
+    return [n for n in drawn(model) if sources.get(n) == "human"]
 
 
 def default_mix(model: Model, pitch: float | None = None) -> dict[str, float]:
@@ -572,7 +581,7 @@ def default_mix(model: Model, pitch: float | None = None) -> dict[str, float]:
     fifth of their register, the nearer the more), or all of them evenly when the model doesn't know
     their registers; and the people's singer, where the model has one, at HUMAN_SHARE."""
     people = humans(model)
-    names = [n for n in model.config["singers"] if n not in people]
+    names = [n for n in drawn(model) if n not in people]
     if pitch is not None and model.config.get("registers"):
         away = np.array([abs(pitch - model.config["registers"][n]) for n in names])
         weights = np.clip(1.0 - away / 7.0, 0.0, None)
@@ -634,7 +643,7 @@ def machine_mix(seed: int, pitch: float, model: Model | None = None, most: float
     so no machine is ever one of the synthetic singers it learned from."""
     model = model or load()
     people = humans(model)
-    names = [n for n in model.config["singers"] if n not in people]
+    names = [n for n in drawn(model) if n not in people]
     registers = model.config.get("registers") or {}
     near = [n for n in names if abs(registers.get(n, pitch) - pitch) <= 7.0] or list(names)
     if len(near) < 2:
@@ -835,6 +844,93 @@ ASPIRATION = -8.0  # dB under its burst the aspiration after a voiceless stop's 
 WEAK_FRICATIVES = {"F": 6.0, "TH": 6.0, "V": 6.0, "DH": 4.0}  # dB over the formant singer's frication levels
 FRICATIVE_DIP = 0.5  # what is left of the throat's output through a voiceless weak fricative
 NASAL_LIFT = 2.0  # dB a coda nasal comes up
+# A t's release on its own (the stop the artist heard as harsh, 2026-11-07). Scylla's Band's t's, on the same notes and
+# timing, have almost nothing under 4 kHz (2-3 kHz 22-27 dB under their vowels there); ours 20-27 dB more, from the
+# alveolar burst's band (centred 4.7 kHz at the default tract; its 6.5 kHz band, summed in phase, mostly cancels), which
+# the lead's de-esser (split 4.5 kHz) leaves while turning down what's above it (docs/THROAT.md). Turning the burst down
+# only made it quieter. The keys: the noise's shape (band-pass regions as phonetics.BURSTS writes them; None, the
+# alveolar burst's); dB added to the burst; its rise and fall (s); how many times as long it lasts; `decay` (s; None, a
+# flat burst), a release that falls away from its first instant as a real one does; dB added to the aspiration after it
+# (which doesn't follow the burst's level); the aspiration's own shape (None, the burst's) and when it starts after the
+# release (s); what is left of the throat's own t from the release to its end (1, all of it); and what is left of it
+# through the closure before the release (None, CLOSURE_DIP's), the silence a coda t ("part", "heart") is heard by.
+# T_AS_WAS leaves the t as it was.
+T_AS_WAS = {"shape": None, "burst": 0.0, "ramp": 0.002, "longer": 1.0, "decay": None, "aspiration": 0.0,
+            "aspiration_shape": None, "aspiration_from": 0.008, "own": 1.0, "closure": None}  # every t as it was
+# The t the artist chose on the contest version (E8bl, 2026-11-07: "tE sounds best"): mostly 6-10 kHz with a little 3-4
+# kHz 12 dB under, a release falling away over 10 ms and lasting about 30, loud enough that the lead's de-esser leaves
+# "part" and "heart" a t (after the lead chain, 13-17 dB under the word, 22-25 ms long, where Scylla's heard t's are
+# 11-17 dB under for 15-40 ms). Sung by default from the performance voice (2026-11-07) to the physical stops
+# (2026-11-11, STOP_PHYSICAL), and still when STOP_RELEASE["T"] is None; T_RELEASE.update(T_AS_WAS) sings the old t.
+T_CHOSEN = {"shape": [(8000.0, 4000.0, 0.0), (3500.0, 1500.0, -12.0)], "ramp": 0.0005, "burst": 8.0, "longer": 2.5,
+            "decay": 0.01, "aspiration": -6.0, "own": 0.3}
+T_RELEASE = {**T_AS_WAS, **T_CHOSEN}
+
+# A release made as an airway makes one (as Chimera's physical model does, jamesondh/chimera-vocal-synth), for a
+# voiceless stop's phone: the pressure behind the closure lets go in a spike (`spike` dB re the vowels, lasting
+# `spike_len` s and falling away over `spike_decay`, in `spike_shape`, None for the place's own burst), there is a
+# gap while the opening is still too wide for the air to hiss (`breath_from` s), and then the breath through the
+# folds as they close again, coloured by the tract it passes: the formants of the vowel the mouth is at (the next
+# one for an onset, the last one for a coda; F1 `f1` dB, F2 and F3 at 0 and `f3`) with `extra` regions of the
+# place's own (a t's alveolar hiss, say), at `breath` dB, to the vowel (an onset, `into` s into it) or for
+# `breath_len` s (a coda), falling away over `breath_decay` s (a coda; an onset fades into its vowel). `own` is
+# what is left of the throat's own sound from the release to the stop's end. Measured against Scylla's 3,400
+# stops on H (2026-11-08): a broadband spike, ~10 dB down 5 ms later in 1.5-4.5 kHz, then an even breath 27 dB
+# under the vowel for 30-40 ms in a coda, and a t's onset hiss above 4.5 kHz about 10 dB under it until the vowel.
+# A voiced stop (B D G) is the same with `breath` None for none (its folds go on voicing), and an affricate (CH JH)
+# has its fricative's own hiss (SH's, ZH's, or `fric_shape`) from `breath_from` after the spike to its end, at
+# `breath` dB, in place of the breath. `closure` (None, CLOSURE_DIP's) is what is left of the throat's own sound
+# through the closure: the throat starts its own ch hiss ~25 ms before the release, which a closure held silent keeps
+# for the release (held as given: voice.crisp scales every other dip, and at its 0.6 a closure "5% left" kept 45%).
+# None leaves a phone's release as articulate makes it (T_RELEASE's t), as STOP_AS_WAS does for every phone; since
+# 2026-11-11 STOP_PHYSICAL's are sung by default.
+STOP_AS_WAS: dict[str, dict | None] = {p: None for p in ("T", "K", "P", "CH", "B", "D", "G", "JH")}
+STOP_RELEASE_DEFAULT = {"spike": -24.0, "spike_len": 0.003, "spike_decay": 0.0012, "spike_shape": None,
+                        "breath_from": 0.006, "breath": -27.0, "f1": -12.0, "f3": -3.0, "extra": (),
+                        "breath_len": 0.04, "breath_decay": 0.03, "into": 0.01, "own": 0.3, "closure": None,
+                        "fric_shape": None}
+# The physical stops: the t, k and p the artist heard on the contest version ("E8bl-phys-B sounds great",
+# 2026-11-11), tuned to Scylla's releases on H (tools/throat/stop_release.py): from 10.9 dB off Scylla's coda t's
+# envelope (tE) to 3.7; then ch, j, b, d and g ("keep all of them", 2026-11-11).
+_SPIKE_T = [(2100.0, 1200.0, 0.0), (3600.0, 1800.0, 0.0), (6500.0, 5000.0, -6.0)]
+_SPIKE_CH = [(3600.0, 1800.0, -6.0), (6500.0, 5000.0, 0.0)]
+_FRIC_CH = [(3800.0, 1400.0, -4.0), (6500.0, 5000.0, 0.0)]
+STOP_PHYSICAL: dict[str, dict] = {
+    "T": {"spike": -6.0, "spike_shape": _SPIKE_T, "breath_from": 0.004,
+          "coda": {"breath": -10.0, "extra": [(6500.0, 5000.0, -8.0)]},
+          "onset": {"breath": 0.0, "extra": [(6500.0, 5000.0, 16.0)], "f1": -20.0}},
+    "K": {"spike": -2.0, "breath": -11.0, "breath_from": 0.004, "extra": [(6500.0, 5000.0, -14.0)]},
+    "P": {"spike": -7.0, "f1": -6.0, "breath_from": 0.004,
+          "onset": {"breath": -15.0, "extra": [(6500.0, 5000.0, -16.0)]},
+          "coda": {"breath": -13.0, "extra": [(6500.0, 5000.0, -12.0)]}},
+    # ch and j (2026-11-11): a closure held shut (the throat's own hiss started 25 ms early, so its release was
+    # lost: ch's 4.5-9 kHz 10 dB under Scylla's for 30 ms), a spike above 3 kHz and a hiss brighter than SH's.
+    "CH": {"spike": -10.0, "spike_shape": _SPIKE_CH, "breath_from": 0.001, "breath": -9.0, "fric_shape": _FRIC_CH,
+           "own": 0.15, "closure": 0.05},
+    "JH": {"spike": -12.0, "spike_shape": _SPIKE_CH, "breath_from": 0.001, "breath": -15.0, "fric_shape": _FRIC_CH,
+           "own": 0.6, "closure": 0.3},
+    # b, d and g: their spikes 5-10 dB under Scylla's, raised, and a short breath after (a d's hiss to 30 ms into
+    # its vowel); the folds go on voicing (own 1). What is left, 10-15 dB less 1.5-4.5 kHz in the 10-60 ms after the
+    # release, is the throat's own voiced onset of the vowel, not the release.
+    "B": {"spike": -4.0, "breath": -18.0, "f1": -6.0, "own": 1.0, "breath_from": 0.003, "into": 0.01,
+          "coda": {"breath_len": 0.02, "breath_decay": 0.015}},
+    "D": {"spike": 1.0, "spike_shape": _SPIKE_T, "breath": -11.0, "extra": [(6500.0, 5000.0, 4.0)], "own": 1.0,
+          "breath_from": 0.003, "into": 0.03, "coda": {"breath_len": 0.03, "breath_decay": 0.02}},
+    "G": {"spike": -4.0, "breath": -18.0, "extra": [(6500.0, 5000.0, -6.0)], "own": 1.0, "breath_from": 0.003,
+          "into": 0.015, "coda": {"breath_len": 0.02, "breath_decay": 0.015}},
+}
+STOP_RELEASE: dict[str, dict | None] = {**STOP_AS_WAS, **STOP_PHYSICAL}
+
+
+def _vowel_colour(vowel: str | None, f1: float, f3: float, coda: bool) -> list[tuple[float, float, float]]:
+    """Band-pass regions for breath through the tract at a vowel: its F1, F2 and F3 (a diphthong's first
+    quality for an onset, its last for a coda), broad as an open glottis leaves them."""
+    from .. import phonetics as ph
+    v = (vowel or "AX").rstrip("012")
+    if v in ph.DIPHTHONGS:
+        v = ph.DIPHTHONGS[v][-1 if coda else 0]
+    F = ph.VOWEL_FORMANTS.get(v, ph.VOWEL_FORMANTS["AX"])
+    return [(float(F[0]), 300.0, f1), (float(F[1]), 450.0, 0.0), (float(F[2]), 700.0, f3)]
 
 
 def articulate(y: np.ndarray, segs: list, sr: int, voice, rng: np.random.Generator, ref: float) -> np.ndarray:
@@ -857,7 +953,8 @@ def articulate(y: np.ndarray, segs: list, sr: int, voice, rng: np.random.Generat
         if i1 > i0:
             gain[i0:i1] = np.minimum(gain[i0:i1], 1.0 - crisp * (1.0 - left))
 
-    def hiss(t0: float, t1: float, shape, level_db: float, ramp: float, amp: float, fading: bool = False) -> None:
+    def hiss(t0: float, t1: float, shape, level_db: float, ramp: float, amp: float, fading: bool = False,
+             decay: float | None = None) -> None:
         i0, i1 = max(int(t0 * sr), 0), min(int(t1 * sr), n)
         if i1 <= i0:
             return
@@ -869,6 +966,8 @@ def articulate(y: np.ndarray, segs: list, sr: int, voice, rng: np.random.Generat
         env = np.clip(np.minimum((t - t0) / ramp, (t1 - t) / ramp), 0.0, 1.0)
         if fading:
             env = env * np.clip((t1 - t) / max(t1 - t0, 1e-3), 0.0, 1.0)
+        if decay is not None:  # a release: at its loudest as it opens, falling away from there
+            env = env * np.exp(-np.maximum(t - t0, 0.0) / decay)
         added[lo:hi] += crisp * ref * 10.0 ** (level_db / 20.0) * amp * env * shaped
 
     spread = float(getattr(voice, "spread", 0.0))
@@ -886,12 +985,52 @@ def articulate(y: np.ndarray, segs: list, sr: int, voice, rng: np.random.Generat
             z = rng.standard_normal(2) * spread  # each burst its own, a little louder or softer, longer or shorter
             level = level + BURST - (3.0 if voiced else 0.0) + BURST_SPREAD[0] * float(z[0])
             length = (0.008 if voiced else 0.012) * float(np.exp(BURST_SPREAD[1] * z[1]))
-            hiss(release, release + length, shape, level, 0.002, s.amp)
+            aspiration = level + ASPIRATION
+            ramp, decay, breath_shape, breath_from = 0.002, None, None, 0.008
+            R = STOP_RELEASE.get(s.phone)
+            if R is not None:  # a release as an airway makes one (STOP_RELEASE)
+                R = {**STOP_RELEASE_DEFAULT, **R, **R.get(s.role, {})}  # an "onset" or "coda" dict: its own
+                jitter = BURST_SPREAD[0] * float(z[0])
+                if R["own"] < 1.0:
+                    dip(release, s.t1, R["own"])
+                if R["closure"] is not None:  # held as given, not by voice.crisp: a closure is shut
+                    i0, i1 = max(int(s.t0 * sr), 0), min(int(release * sr), n)
+                    gain[i0:i1] = np.minimum(gain[i0:i1], R["closure"])
+                hiss(release, release + R["spike_len"], R["spike_shape"] or shape, R["spike"] + jitter, 0.0003,
+                     s.amp, decay=R["spike_decay"])
+                coda = s.role == "coda"
+                extra = [tuple(e) for e in R["extra"]]
+                if R["breath"] is None:
+                    pass
+                elif manner == "affricate":  # the tongue lets go slowly: its fricative's hiss, to the stop's end
+                    fr_shape = R["fric_shape"] or ph.FRICATION["ZH" if voiced else "SH"][0]
+                    hiss(release + R["breath_from"], s.t1 + (0.0 if coda else R["into"]), list(fr_shape) + extra,
+                         R["breath"] + jitter, 0.006, s.amp, decay=R["breath_decay"] if coda else None)
+                else:
+                    colour = _vowel_colour(s.prev_vowel if coda and s.prev_vowel else s.next_vowel or s.prev_vowel,
+                                           R["f1"], R["f3"], coda) + extra
+                    end = release + R["breath_len"] if coda or not s.next_vowel else s.t1 + R["into"]
+                    hiss(release + R["breath_from"], end, colour, R["breath"] + jitter, 0.003, s.amp,
+                         fading=not coda, decay=R["breath_decay"] if coda else None)
+                continue
+            if s.phone == "T":
+                shape = T_RELEASE["shape"] or shape
+                aspiration += T_RELEASE["aspiration"]
+                level += T_RELEASE["burst"]
+                length *= T_RELEASE["longer"]
+                ramp, decay = T_RELEASE["ramp"], T_RELEASE["decay"]
+                breath_shape, breath_from = T_RELEASE["aspiration_shape"], T_RELEASE["aspiration_from"]
+                if T_RELEASE["own"] < 1.0:
+                    dip(release, s.t1, T_RELEASE["own"])
+                if T_RELEASE["closure"] is not None:
+                    dip(s.t0, release, T_RELEASE["closure"])
+            hiss(release, release + length, shape, level, ramp, s.amp, decay=decay)
             if manner == "affricate":
                 sh_shape, sh_level = ph.FRICATION["ZH" if voiced else "SH"]
                 hiss(release, s.t1, sh_shape, sh_level, 0.01, s.amp)
             elif not voiced:
-                hiss(release + 0.008, max(s.t1, release + 0.03), shape, level + ASPIRATION, 0.004, s.amp, fading=True)
+                hiss(release + breath_from, max(s.t1, release + 0.03), breath_shape or shape, aspiration, 0.004, s.amp,
+                     fading=True)
         elif manner == "fricative" and s.phone in WEAK_FRICATIVES:
             if not voiced:
                 dip(s.t0, s.t1, FRICATIVE_DIP)

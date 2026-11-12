@@ -9,7 +9,10 @@ the syllable's stress, the note's level; plus log f0 and the singer) and what it
 alignment (tools/throat/phones.py) turned into songbird's inventory: stress dropped, an unstressed
 AH is AX, a diphthong running into r (fire, hour) one phone. The quiet between phones is silence,
 or a breath where it's loud enough just before the singing starts again. Notes whose alignment
-MFA got wrong are masked out, with their consonants.
+MFA got wrong are masked out, with their consonants, as are notes a label marks with a "doubt" (recordings
+labelled without a score, tools/throat/folk.py). A label's "band_hz" and "ap_band_hz" (a band-limited
+recording) become every frame's sp_top and ap_top: how many points of each grid, from the bottom, are
+learned from it (all of them when the label doesn't say).
 """
 
 from __future__ import annotations
@@ -23,6 +26,7 @@ import numpy as np
 
 ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT))
+sys.path.insert(0, str(Path(__file__).parent))
 
 from songbird.synth import throat  # noqa: E402
 
@@ -128,7 +132,7 @@ def build(label: dict, al: dict, feats, singer: int):
     mask = np.ones(n, dtype=bool)
     notes = label["notes"]
     for k, f in enumerate(al["notes"]):
-        if f.get("plausible"):
+        if f.get("plausible") and not label["notes"][k].get("doubt"):
             continue
         near = range(max(k - 1, 0), min(k + 2, len(notes)))
         spans = [(p["start"], p["end"]) for p in phones if p["note"] in near]
@@ -137,8 +141,19 @@ def build(label: dict, al: dict, feats, singer: int):
         i0, i1 = np.searchsorted(times, [a, b])
         mask[i0:i1] = False
     x.update(lf0=lf0.astype(np.float32), singer=np.full(n, singer, dtype=np.int8), mask=mask, voiced=voiced,
-             sp=feats["sp"], ap=feats["ap"])
+             sp=feats["sp"], ap=feats["ap"],
+             sp_top=np.full(n, top(label.get("band_hz"), feats["sp"].shape[1]), dtype=np.int16),
+             ap_top=np.full(n, top(label.get("ap_band_hz"), feats["ap"].shape[1]), dtype=np.int16))
     return x
+
+
+def top(band_hz: float | None, points: int) -> int:
+    """How many points of an n-point mel grid (tools/throat/features.py's) lie inside a band reaching band_hz."""
+    if band_hz is None:
+        return points
+    from features import grid
+
+    return int(np.sum(grid(points) <= float(band_hz)))
 
 
 def main() -> None:
