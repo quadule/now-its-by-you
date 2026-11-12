@@ -74,7 +74,8 @@ Takes effect when the Worker is deployed.
 
 ## The contest (2026-11-09)
 
-First thing under the title: "A finalist in the AI Song Contest 2026. The winner is chosen partly by public vote."
-and a **Vote for it** button to https://www.aisongcontest.com/the-2026-finalists (page/seed.html, `.finalist` in
-sing.css). The winner is half the jury's and half the public's; the awards are in Bangkok on November 29, 2026. Take
+A thin dark bar across the top of the page, above the title, in spaced capitals: "Now an AI Song Contest 2026
+finalist — Vote by November 21", the contest's name linked to https://www.aisongcontest.com/ and the vote to
+https://www.aisongcontest.com/the-2026-finalists (page/seed.html, `.contest` in sing.css; on a phone the two halves
+stack). Public voting closes November 21. The winner is half the jury's and half the public's; the awards are in Bangkok on November 29, 2026. Take
 it down, or say how it ended, after that.
