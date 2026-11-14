@@ -663,3 +663,53 @@ In renders/styles/ (ids and times in ids-round.txt), with their records, scores 
    four-voice round. A round could have its own, louder level (a mix balance over its span after the bus).
 6. **Words**: about a quarter of them blur in a whole-section round. A round on the bridge (the lineage's own
    section, which most listeners know by then) or the last refrain (heard three times before) costs the least.
+
+# A stage edition (2026-11-14)
+
+The awards stage mix ("arc-morph") was first made outside the program, by a script over its stems. The program
+renders it from a record (`songbird/stage.py`): `songbird render performance/genome.json --replay
+performance/record-arc-morph.json` (with `--stems` for its parts). Two layers of data say what an edition is.
+
+**The grid**, in the person's arrangement (`params.composition["arrange"]`, `songbird.takeover`), what the
+studio can show and what a child inherits, as the rest of the arrangement:
+
+| Path | Value | What |
+|---|---|---|
+| `arrange.<section>:<n>.human` | 0 to 1, or a list, one a line | how much of people is in the lead (`stage.amounts`): its phrasing's gestures and the singer's own liveliness scaled by min(2h, 1), the people's share of its timbre 0.6 h. 0 the machine alone, 0.5 the performance voice as it is. A section with none keeps the amount before it |
+| `arrange.<section>:<n>.<player>.synth` | all, until:<line>, under | the player's synth twin (`stage.TWINS`: harp and guitar an arpeggio, bass a synth bass, drum a drum machine, whistle and fiddle a synth lead) plays the player's own notes, level with it: in its place, until that line (0 the first) and the player from there, or under the player at 7 dB below |
+
+The arrangers never read these (`takeover.arranged` leaves them out), so a section with only these is, to them,
+a section nobody arranged. Absent, the render is the program's own, to the sample.
+
+**The exact data**, `params.composition["exact"]`, the edition's own and never inherited
+(`composition.handed_down` drops it):
+
+```json
+{"twins": {"harp~": ["harp", "arp"], "harp#": ["harp", "chip"]},
+ "layers": [{"style": "synthfolk", "parts": ["arp", "synthpad"],
+             "copy": [{"part": "synthpad", "to": "verse:0", "from": "verse:1"}]}],
+ "levels": {"harp~": [["verse:0.3", -3], ["refrain:0", null]], "harp": [["verse:0.3", null], ["refrain:0", 0]]},
+ "release": 0.35,
+ "human": {"verse:0": [0, 0, 0, 0.2]}}
+```
+
+`twins`: a synth (any instrument) on a player's own notes, named, level with the player by the whole stems'
+RMS; `layers`: another style's players on the same song (its key, tempo, form and chords), a section of a part
+played as it plays another; `levels`: each named part's level along the song as points (where, dB or null for
+silent) joined by straight fades, the first and last held, a point at the place of the one before it 0.12 s
+after it; `release`: seconds over which the lead and each choir voice let go of their last note; `human`:
+amounts finer than the grid's. A place is `<section>:<n>` (its start), `<section>:<n>.<line>` (where the lead's
+line begins, its pickup with it) or `<section>:<n>.end`. Where the exact data gives `twins` or `levels`, they are
+the whole table: what the grid's synth cells would make of them is left aside.
+
+**The render.** `stage.prepare` lays the plan out in the score (`Score.stage`, never written to the score's
+file): the lead realized again at each amount the song names, which take is heard from which line, the
+twins, the layered scores and the levels in seconds. `synth.stem_jobs` makes the stems from it
+(`stage.jobs`): the lead sung whole at each amount and the takes joined where its lines begin (30 ms fades);
+the twins; the layered parts; each named part times its level; the singers' last notes let go. The stem cache
+keeps none of these under the program's own key. The mix and the master are the program's own.
+
+**Measured** against the script's own stems: every stem within float rounding (-149 dB or less, relative to
+the stem), the mix -150 dB, the FLAC against the script's -79 dB (the 16-bit dither; against the script's mix
+mastered and dithered as the program does, -115 dB). record-B with none of these renders the same samples as
+before.

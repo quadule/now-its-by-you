@@ -40,6 +40,10 @@ keeps. An edit that can't be kept is left out and said why, never bent.
                          the arrangement taken over, section by section and player by player (songbird.takeover):
                          in or out and how hard, what it plays, the line it comes in at, a drum fill; a section's
                          length, played rather than sung, a build; null: the program's own
+    arrange.<section>:<n>.human, arrange.<section>:<n>.<player>.synth
+                         the stage's (songbird.stage): how much of people is in the lead there, 0 to 1, or a
+                         list, one a line; a synth twin playing the player's own notes: all, until:<line>, under.
+                         Absent: the lead as the record sings it, the player itself; null: absent
     style.intro, style.stops, style.alone, style.alone_with, style.bridge (beside style.entrances, style.breakdown...)
                          the style's options for the whole song: how it starts, which verse is in stop-time or
                          bare (and over whom), a half-time bridge
@@ -1156,7 +1160,7 @@ def _taken_over(genome: Genome, generated, params, applied: list, problems: list
     quiet = {p: why for p, why in quiet.items() if why}
     if not quiet:
         return params, applied, problems, edits
-    held = takeover.copy(takeover.arranged(params))
+    held = takeover.copy(takeover.arranged(params, stage=True))
     for path in quiet:
         takeover.put(held, path, genome, _held_before(genome, generated, path))
     composition_ = dict(params.composition)
@@ -1172,5 +1176,5 @@ def _taken_over(genome: Genome, generated, params, applied: list, problems: list
 def _held_before(genome: Genome, generated, path: str):
     """What the version before held at an arrangement path (None: nothing, the program's own)."""
     sid, _, player, field = takeover.target(genome, path)
-    entry = takeover.arranged(generated).get(sid, {})
+    entry = takeover.arranged(generated, stage=True).get(sid, {})
     return entry.get("players", {}).get(player, {}).get(field) if player else entry.get(field)

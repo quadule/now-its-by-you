@@ -141,6 +141,10 @@ def stem_jobs(score: Score, sr: int = SR, seed: int = 0, voice: VoiceParams | No
             y *= CHOIR_GAIN
             return y
         jobs.append((name, lineage))
+    if getattr(score, "stage", None):  # a stage edition's plan (songbird.stage): its takes, twins, layers, levels
+        from .. import stage
+
+        jobs = stage.jobs(score, sr, seed, voice, jobs)
     return jobs, (("voice",) if sung else ()) + tuple(choir)
 
 
@@ -212,6 +216,10 @@ def render(score: Score, sr: int = SR, seed: int = 0, voice: VoiceParams | None 
 
         # a stem the mix treats the same way on every render is kept treated (mixing.mix_made: Cached.treated)
         identities = keys(score, sr, seed, voice or VoiceParams(), ancestors, [name for name, _ in jobs])
+        if getattr(score, "stage", None):  # a stage edition's stems are its own, never the program's of that name
+            from ..stage import touched
+
+            identities = {name: key for name, key in identities.items() if name not in touched(score)}
         jobs = [(name, Cached(cache, identities[name], make, name) if name in identities else make)
                 for name, make in jobs]
     length = int(np.ceil(score.duration * sr)) if jobs else 0

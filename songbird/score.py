@@ -49,6 +49,9 @@ class Score:
     # a person's sound design (songbird.sound, docs/SOUND-DESIGN.md): each player's sound, the sidechain's key
     # track and the transitions, in seconds; read only by the synthesis. Left out of to_dict() while empty.
     sound: dict = field(default_factory=dict)
+    # a stage edition's plan (songbird.stage.prepare): the lead's takes and where each is heard, the synth twins,
+    # the layered parts and each part's level along the song; read only by the synthesis, never in to_dict()
+    stage: dict = field(default_factory=dict, compare=False)
 
     def part(self, name: str) -> tuple[Note, ...]:
         return tuple(n for n in self.notes if n.part == name)

@@ -14,7 +14,7 @@ from pathlib import Path
 import numpy as np
 
 from . import RECORD_FORMAT, __version__, drift as drift_mod, genome as genome_mod, harvest, pack as pack_mod, phrasing as phrasing_mod, synth, variation
-from . import edits as edits_mod, evolve, variants as variants_mod
+from . import edits as edits_mod, evolve, stage, variants as variants_mod
 from .arrange import ArrangeError, Lyrics, arrange, hold, problem, sing, verse_problem
 from .composition import has_lines
 from .dates import us_date
@@ -140,6 +140,8 @@ def render_one(genome, params: Params, out: Path, *, voice=None, drift=None, lyr
     choir_json = list(choir_json)
     choir = [phrasing_mod.from_json(d) for d in choir_json]
     score = variation.lay(realize(genome, params, phrasing=phrasing, choir=choir, lyrics=lyrics), params)
+    # a stage edition (songbird.stage): its plan laid out in the score, for the synthesis; any other, the same score
+    score = stage.prepare(genome, params, score, phrasing=phrasing, choir=choir, lyrics=lyrics)
     singer = _singer(params, list(singer_overrides))
     # the mix: as the rendition chose it (params.mix: the machine's room, its drift and its habits), then any --mix
     mixing = MixParams.parse(list(mix_overrides), base=MixParams.from_dict(params.mix or {}))

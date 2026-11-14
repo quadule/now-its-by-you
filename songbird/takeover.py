@@ -15,9 +15,16 @@ stop-time, the breakdown). That stays the default and stays visible. A person ma
     arrange.<section>:<n>.build              true: its players fill in bar by bar toward the next section
     arrange.<section>:<n>.round              true, or 2 to 4 voices: sung as a round (songbird.canon)
 
+and two the stage reads (songbird.stage, docs/ARRANGE.md "A stage edition"), never the arrangers:
+
+    arrange.<section>:<n>.human              how much of people is in the lead, 0 to 1: one amount, or one a line
+    arrange.<section>:<n>.<player>.synth     all, until:<line> or under: a synth twin (stage.TWINS) plays the
+                                             player's own notes in its place, until that line, or under it
+
 kept in params.composition["arrange"] ({"verse:0": {"bars": 16, "sung": False, "build": True, "players":
 {"kit": {"level": "hard"}}}}), by the arrangement's own section ids as form.order and part.* name them. Absent,
-everything is as it was: every function here gives back what it was given.
+everything is as it was: every function here gives back what it was given. The stage's fields are left out of
+what the arrangers read (arranged()), so a section with only those is, to them, a section nobody arranged.
 
 The program decides first, always: take_over() is called by both arrangers right after their own plan (and the
 style's options), keeps what the program decided beside the person's, and puts the person's in its place;
@@ -33,10 +40,14 @@ LEVELS = ("out", "soft", "plays", "hard")  # the page's words for a cell (docs/n
 BARS = (2, 4, 8, 16)
 SECTION_FIELDS = ("bars", "sung", "build", "round")
 CELL_FIELDS = ("level", "pattern", "from", "fill")
+# what the stage reads (songbird.stage): the lead's amount of people, a player's synth twin
+STAGE_SECTION_FIELDS = ("human",)
+STAGE_CELL_FIELDS = ("synth",)
+SYNTH = ("all", "under")  # a twin's ways besides "until:<line>"
 MAX_SECTIONS = 48  # as composition.MAX_SECTIONS
 MAX_LINES = 16  # lines a section can have (a 16-bar section of two-bar lines, or more short ones)
 PATH = re.compile(r"arrange\.([A-Za-z][A-Za-z0-9_-]{0,31}):(\d{1,2})\."
-                  r"(?:([a-z][a-z0-9-]{0,31})\.)?(bars|sung|build|round|level|pattern|from|fill)")
+                  r"(?:([a-z][a-z0-9-]{0,31})\.)?(bars|sung|build|round|human|level|pattern|from|fill|synth)")
 # how hard a level plays, against the program's own (1); the section's energy itself doesn't change
 LEVEL_VEL = {"soft": 0.8, "plays": 1.0, "hard": 1.15}
 # where soft and hard read a style's table: the section's own busyness (songbird.idioms.busy), less or more
@@ -131,10 +142,46 @@ LEVEL_WORDS = {"out": "out", "soft": "soft", "plays": "plays", "hard": "hard"}
 # ---------------------------------------------------------------- what can be asked
 
 
-def arranged(params) -> dict:
+def arranged(params, stage: bool = False) -> dict:
     """{section id: {bars, sung, build, players: {player: {level, pattern, from, fill}}}} as these parameters
-    carry a person's arrangement ({} for none)."""
-    return (getattr(params, "composition", None) or {}).get("arrange") or {}
+    carry a person's arrangement ({} for none), as the arrangers read it: without the stage's fields (human,
+    synth), and without a section or a player that has only those. stage: everything it holds, theirs too."""
+    held = (getattr(params, "composition", None) or {}).get("arrange") or {}
+    if stage or not _has_stage(held):
+        return held
+    out = {}
+    for sid, entry in held.items():
+        mine = {k: v for k, v in entry.items() if k not in STAGE_SECTION_FIELDS and k != "players"}
+        players = {p: {f: x for f, x in cell.items() if f not in STAGE_CELL_FIELDS}
+                   for p, cell in (entry.get("players") or {}).items()}
+        players = {p: cell for p, cell in players.items() if cell}
+        if players:
+            mine["players"] = players
+        if mine:
+            out[sid] = mine
+    return out
+
+
+def _has_stage(held: dict) -> bool:
+    return any(f in entry for entry in held.values() for f in STAGE_SECTION_FIELDS) or any(
+        f in cell for entry in held.values() for cell in (entry.get("players") or {}).values()
+        for f in STAGE_CELL_FIELDS)
+
+
+def staged(params) -> dict:
+    """The stage's fields of a person's arrangement: {section id: {"human": amount or [one a line],
+    "players": {player: {"synth": way}}}} ({} for none; songbird.stage)."""
+    out = {}
+    for sid, entry in arranged(params, stage=True).items():
+        mine = {k: v for k, v in entry.items() if k in STAGE_SECTION_FIELDS}
+        players = {p: {f: x for f, x in cell.items() if f in STAGE_CELL_FIELDS}
+                   for p, cell in (entry.get("players") or {}).items()}
+        players = {p: cell for p, cell in players.items() if cell}
+        if players:
+            mine["players"] = players
+        if mine:
+            out[sid] = mine
+    return out
 
 
 @lru_cache(maxsize=None)
@@ -226,9 +273,9 @@ def target(genome, path: str) -> tuple[str, str, str | None, str]:
         raise ValueError(f"there is no section called {name}") from None
     if (name not in genome.sections and name != "bridge2") or int(nth) >= MAX_SECTIONS:
         raise ValueError(f"there is no section called {name}")
-    if player is None and field in CELL_FIELDS:
+    if player is None and field in CELL_FIELDS + STAGE_CELL_FIELDS:
         raise ValueError(f"a {field} is a player's: name the player (arrange.{name}:{int(nth)}.drum.{field})")
-    if player is not None and field in SECTION_FIELDS:
+    if player is not None and field in SECTION_FIELDS + STAGE_SECTION_FIELDS:
         raise ValueError(f"the {field} is the section's, not a player's")
     return f"{name}:{int(nth)}", name, player, field
 
@@ -243,6 +290,17 @@ def check(genome, path: str, value):
         return None
     section = genome.section(name)
     if player is None:
+        if field == "human":  # the lead's amount of people (songbird.stage): one, or one a line
+            def amount(x) -> float:
+                if isinstance(x, bool) or not isinstance(x, (int, float)) or not 0.0 <= x <= 1.0:
+                    raise ValueError("how much of people is in the lead is a number from 0 to 1, or a list of "
+                                     "them, one a line")
+                return float(x)
+            if isinstance(value, list):
+                if not 1 <= len(value) <= MAX_LINES:
+                    raise ValueError(f"a section has 1 to {MAX_LINES} lines")
+                return [amount(x) for x in value]
+            return amount(value)
         if field == "bars":
             if isinstance(value, bool) or not isinstance(value, (int, float)) or value not in BARS:
                 raise ValueError(f"a section is {', '.join(map(str, BARS[:-1]))} or {BARS[-1]} bars long")
@@ -276,6 +334,18 @@ def check(genome, path: str, value):
         return True if value else None  # build
     if player not in known():
         raise ValueError(f"there's no player called {player}")
+    if field == "synth":  # a synth twin playing the player's own notes (songbird.stage)
+        from .stage import TWINS
+
+        if player not in TWINS:
+            raise ValueError(f"the {player} has no synth twin; the {', '.join(sorted(TWINS))} have")
+        if value in SYNTH:
+            return value
+        way, _, line = str(value).partition(":")
+        if way == "until" and line.isdigit() and 0 <= int(line) < MAX_LINES:
+            return f"until:{int(line)}" if int(line) else None  # until the first line: the player itself
+        raise ValueError('a synth twin plays all of the section ("all"), under the player ("under"), or until a '
+                         'line ("until:2")')
     if field == "level":
         if value not in LEVELS:
             raise ValueError(f"a player's level is {', '.join(LEVELS[:-1])} or {LEVELS[-1]}")
@@ -330,12 +400,15 @@ def value(genome, params, path: str):
     """What a path holds in these parameters: the person's (or the version before's) choice, or the song's own
     shape (its own bars, sung, no build) or "the program's own" for a player."""
     sid, name, player, field = target(genome, path)
-    entry = arranged(params).get(sid, {})
+    entry = arranged(params, stage=True).get(sid, {})
     if player is not None:
         held = entry.get("players", {}).get(player, {}).get(field)
-        return held if held is not None else "the program's own"
+        return held if held is not None else ("the player itself" if field in STAGE_CELL_FIELDS
+                                              else "the program's own")
     if field in entry:
         return entry[field]
+    if field == "human":
+        return "as sung"
     if field == "bars":  # its own, as many times round as its style plays it, or as long as its style lays it
         from .composition import section_ids
         from .style import own_lines, rounds
@@ -406,6 +479,8 @@ def silent(genome, params, path: str, edits: dict | None = None) -> str | None:
         if sat_out(params, player, edits):
             return None
         return f"this version's band has no {player}; the choice waits for one that has"
+    if field in STAGE_CELL_FIELDS:
+        return None
     ballad = not params.band.lineup
     cell = entry.get("players", {}).get(player, {})
     if field == "pattern" and ALIASES.get(cell.get("pattern"), cell.get("pattern")) not in patterns(player, ballad):
