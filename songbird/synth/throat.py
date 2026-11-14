@@ -576,10 +576,11 @@ def humans(model: Model) -> list[str]:
     return [n for n in drawn(model) if sources.get(n) == "human"]
 
 
-def default_mix(model: Model, pitch: float | None = None) -> dict[str, float]:
+def default_mix(model: Model, pitch: float | None = None, share: float | None = None) -> dict[str, float]:
     """The trained singers blended by default: every synthetic one who sings near this pitch (MIDI; within a
     fifth of their register, the nearer the more), or all of them evenly when the model doesn't know
-    their registers; and the people's singer, where the model has one, at HUMAN_SHARE."""
+    their registers; and the people's singer, where the model has one, at HUMAN_SHARE (or `share`)."""
+    share = HUMAN_SHARE if share is None else share
     people = humans(model)
     names = [n for n in drawn(model) if n not in people]
     if pitch is not None and model.config.get("registers"):
@@ -589,19 +590,21 @@ def default_mix(model: Model, pitch: float | None = None) -> dict[str, float]:
             weights = (away == away.min()).astype(float)
     else:
         weights = np.ones(len(names))
-    weights = weights / weights.sum() * (1.0 - HUMAN_SHARE if people else 1.0)
+    weights = weights / weights.sum() * (1.0 - share if people else 1.0)
     mix = {n: float(w) for n, w in zip(names, weights) if w > 0}
-    mix.update({n: HUMAN_SHARE / len(people) for n in people})
+    mix.update({n: share / len(people) for n in people})
     return mix
 
 
-def timbre(model: Model, mix: dict[str, float] | None, pitch: float | None = None) -> np.ndarray:
+def timbre(model: Model, mix: dict[str, float] | None, pitch: float | None = None,
+           share: float | None = None) -> np.ndarray:
     """A singer embedding: the weighted mean of the trained singers' (default_mix unless a mix is
-    given; singers this model doesn't know are left out, and a mix of none it knows is the default)."""
+    given, the people's singer at `share` of it, HUMAN_SHARE if None; singers this model doesn't know are left
+    out, and a mix of none it knows is the default)."""
     names = model.config["singers"]
     weights = np.array([float((mix or {}).get(n, 0.0)) for n in names])
     if weights.sum() <= 0:
-        chosen = default_mix(model, pitch)
+        chosen = default_mix(model, pitch, share)
         weights = np.array([chosen.get(n, 0.0) for n in names])
     weights = weights / weights.sum()
     return weights @ model.w["singer.weight"]
@@ -637,7 +640,8 @@ def blend_spec(mix: dict[str, float]) -> str:
     return ",".join(f"{n}:{x:.3f}" for n, x in sorted(mix.items()) if x >= 0.0005)
 
 
-def machine_mix(seed: int, pitch: float, model: Model | None = None, most: float = 0.6) -> str:
+def machine_mix(seed: int, pitch: float, model: Model | None = None, most: float = 0.6,
+                share: float | None = None) -> str:
     """A machine's own singer, as a timbre spec for VoiceParams.timbre: a random blend (from seed) of
     the trained singers who sing near this pitch (MIDI), never more than `most` of any one of them,
     so no machine is ever one of the synthetic singers it learned from."""
@@ -655,8 +659,9 @@ def machine_mix(seed: int, pitch: float, model: Model | None = None, most: float
             break
     else:
         w = np.full(len(near), 1.0 / len(near))
-    w = w * (1.0 - HUMAN_SHARE if people else 1.0)  # the people's share first, the machine's own draw in the rest
-    return ",".join([f"{n}:{x:.3f}" for n, x in zip(near, w)] + [f"{n}:{HUMAN_SHARE / len(people):.3f}" for n in people])
+    share = HUMAN_SHARE if share is None else share
+    w = w * (1.0 - share if people else 1.0)  # the people's share first, the machine's own draw in the rest
+    return ",".join([f"{n}:{x:.3f}" for n, x in zip(near, w)] + [f"{n}:{share / len(people):.3f}" for n in people])
 
 
 PREDICT_BLOCK = 4096  # frames, plus the network's temporal context on either side
@@ -1095,9 +1100,11 @@ def told(segs: list, stressed: list[bool]) -> list[tuple]:
 
 
 def sing(notes, sr: int, voice, seed: int = 0, lexicon: dict | None = None, mix: str | dict | None = None,
-         gv: float = 1.0, model: str | None = None, durations: dict | None = DURATIONS) -> np.ndarray:
+         gv: float = 1.0, model: str | None = None, durations: dict | None = DURATIONS,
+         share: float | None = None) -> np.ndarray:
     """Sung notes as a mono signal, vowels near the formant singer's level: our schedule (when each
-    phone is sung), our pitch track and our dynamics, through the learned throat."""
+    phone is sung), our pitch track and our dynamics, through the learned throat. share: the people's share of
+    a default or a machine's own timbre (HUMAN_SHARE if None; songbird.stage sings a lead at its own)."""
     from scipy.signal import butter, resample_poly, sosfilt
 
     from .voice import BLOCK, breaths, pitch_track, schedule, sway
@@ -1120,8 +1127,8 @@ def sing(notes, sr: int, voice, seed: int = 0, lexicon: dict | None = None, mix:
     f0 = np.interp(np.arange(n) * FRAME, (np.arange(n_blocks) + 0.5) * BLOCK / RATE, f0b)
     sung = np.median([n.pitch + voice.shift for n in notes])
     if isinstance(mix, str) and mix.startswith("machine:"):  # a singer of its own, drawn for this pitch
-        mix = machine_mix(int(mix.split(":", 1)[1]), float(sung), net)
-    sp, ap = predict(net, t, np.log(f0), timbre(net, parse_mix(mix), sung), gv=gv)
+        mix = machine_mix(int(mix.split(":", 1)[1]), float(sung), net, share=share)
+    sp, ap = predict(net, t, np.log(f0), timbre(net, parse_mix(mix), sung, share), gv=gv)
     sp = sharpen(sp, SHARPEN)
     factor = voice.tract / TRACT
     sp, ap = warp(sp, factor), warp(ap, factor)
