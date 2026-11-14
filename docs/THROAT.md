@@ -923,8 +923,11 @@ artist heard); tE's 4.5-9 kHz spike was 15 dB over Scylla's for 5 ms and gone by
 
 `throat.STOP_RELEASE` makes a release that way for each phone (spike, gap, a breath coloured by the vowel's formants
 with the place's own regions; an affricate's own hiss instead of the breath; a voiced stop's folds voicing on), and
-`throat.STOP_PHYSICAL` holds the settings tuned to Scylla's, sung by default since 2026-11-11 (`STOP_AS_WAS` sings
-every release as before, tE's t included). Mean |difference| from Scylla's envelopes over the first 40 ms, dry, at
+`throat.STOP_PHYSICAL` holds the settings tuned to Scylla's. They were sung by default from 2026-11-11; on
+2026-11-14 the artist heard them as the harshness left in the voice, "too much like an audio artifact rather than
+primitive speech synthesis" (the performance voice's first verse, sung by the machine alone, with each part of the
+consonants turned off in turn: only these releases changed it), and `STOP_AS_WAS` (every release as articulate makes
+it, tE's t included) is the default again; `throat.STOP_RELEASE.update(throat.STOP_PHYSICAL)` sings them. Mean |difference| from Scylla's envelopes over the first 40 ms, dry, at
 the default tract:
 
 | | t onset | t coda | k onset | k coda | p onset | p coda | ch onset | b onset | d onset | d coda | g onset |

@@ -879,7 +879,7 @@ T_AS_WAS = {"shape": None, "burst": 0.0, "ramp": 0.002, "longer": 1.0, "decay": 
 # The t chosen by ear on the performance voice: mostly 6-10 kHz with a little 3-4
 # kHz 12 dB under, a release falling away over 10 ms and lasting about 30, loud enough that the lead's de-esser leaves
 # "part" and "heart" a t (after the lead chain, 13-17 dB under the word, 22-25 ms long, where Scylla's heard t's are
-# 11-17 dB under for 15-40 ms). Sung when STOP_RELEASE["T"] is None (by default STOP_PHYSICAL's t is sung);
+# 11-17 dB under for 15-40 ms). Sung when STOP_RELEASE["T"] is None (by default);
 # T_RELEASE.update(T_AS_WAS) sings the plain t.
 T_CHOSEN = {"shape": [(8000.0, 4000.0, 0.0), (3500.0, 1500.0, -12.0)], "ramp": 0.0005, "burst": 8.0, "longer": 2.5,
             "decay": 0.01, "aspiration": -6.0, "own": 0.3}
@@ -901,8 +901,8 @@ T_RELEASE = {**T_AS_WAS, **T_CHOSEN}
 # `breath` dB, in place of the breath. `closure` (None, CLOSURE_DIP's) is what is left of the throat's own sound
 # through the closure: the throat starts its own ch hiss ~25 ms before the release, which a closure held silent keeps
 # for the release (held as given: voice.crisp scales every other dip, and at its 0.6 a closure "5% left" kept 45%).
-# None leaves a phone's release as articulate makes it (T_RELEASE's t), as STOP_AS_WAS does for every phone;
-# STOP_PHYSICAL's are sung by default.
+# None leaves a phone's release as articulate makes it (T_RELEASE's t), as STOP_AS_WAS does for every phone, by
+# default: the physical releases are heard as harsh, more an artifact than a voice, on the machine's consonants.
 STOP_AS_WAS: dict[str, dict | None] = {p: None for p in ("T", "K", "P", "CH", "B", "D", "G", "JH")}
 STOP_RELEASE_DEFAULT = {"spike": -24.0, "spike_len": 0.003, "spike_decay": 0.0012, "spike_shape": None,
                         "breath_from": 0.006, "breath": -27.0, "f1": -12.0, "f3": -3.0, "extra": (),
@@ -937,7 +937,7 @@ STOP_PHYSICAL: dict[str, dict] = {
     "G": {"spike": -4.0, "breath": -18.0, "extra": [(6500.0, 5000.0, -6.0)], "own": 1.0, "breath_from": 0.003,
           "into": 0.015, "coda": {"breath_len": 0.02, "breath_decay": 0.015}},
 }
-STOP_RELEASE: dict[str, dict | None] = {**STOP_AS_WAS, **STOP_PHYSICAL}
+STOP_RELEASE: dict[str, dict | None] = dict(STOP_AS_WAS)  # STOP_RELEASE.update(STOP_PHYSICAL) sings those
 
 
 def _vowel_colour(vowel: str | None, f1: float, f3: float, coda: bool) -> list[tuple[float, float, float]]:
