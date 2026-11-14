@@ -267,8 +267,7 @@ def cut(score, t0: float, t1: float, before: float = 1.0, tail: float = 2.5):
     if getattr(score, "stage", None):  # a stage edition's plan moves with the notes (songbird.stage)
         from .stage import shifted
 
-        end = max((b for _, _, b in score.sections), default=t1)
-        moved["stage"] = shifted(score.stage, start, t0, t1, end, cut)
+        moved["stage"] = shifted(score.stage, start, t0, t1, cut)
     return dc_replace(score, notes=tuple(notes), duration=(t1 - start) + tail,
                       sections=tuple((s, max(0.0, a - start), b - start) for s, a, b in score.sections
                                      if b > start and a < t1), **moved), t0 - start

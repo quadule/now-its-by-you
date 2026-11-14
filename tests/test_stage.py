@@ -158,9 +158,9 @@ def test_every_render_lays_its_score_out_alike():
 def test_a_sections_preview_takes_its_stretch_of_the_plan():
     from songbird.studio import cut, window
 
-    params = with_composition(seed(), arrange=GRID, exact={"release": 0.35})
+    params = with_composition(seed(), arrange=GRID)
     score = S.laid(G, params)
-    assert score.stage["takes"] and score.stage["levels"] and score.stage["release"]
+    assert score.stage["takes"] and score.stage["levels"]
     k = list(params.form).index("refrain")
     t0, t1 = window(G, params, score, params.form, k)
     part, lead_in = cut(score, t0, t1)
@@ -172,10 +172,6 @@ def test_a_sections_preview_takes_its_stretch_of_the_plan():
     assert plan["plan"][0][0] <= 0.0  # the take heard where the preview begins, then each that comes in it
     for name, (ts, gs) in plan["levels"].items():
         assert ts == [t - start for t in score.stage["levels"][name][0]] and gs == score.stage["levels"][name][1]
-    assert "release" not in plan  # its last note isn't the song's
-    last, _ = window(G, params, score, params.form, len(params.form) - 1)
-    end = max(b for _, _, b in score.sections)
-    assert cut(score, last, end)[0].stage["release"] == 0.35
 
 
 def test_a_part_copied_plays_anothers_notes_there():

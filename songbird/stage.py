@@ -298,11 +298,10 @@ def copied(score, part: str, span: tuple[float, float], start: float):
     return replace(score, notes=tuple(sorted(kept + moved, key=lambda n: n.start)))
 
 
-def shifted(plan: dict, start: float, t0: float, t1: float, end: float, cut) -> dict:
+def shifted(plan: dict, start: float, t0: float, t1: float, cut) -> dict:
     """A stage plan for a stretch of the song (a section's preview: studio.cut), from `start` (zero there) to
     t1: the lead's takes and their joins, the levels and the layered parts moved as the notes are (cut, the
-    studio's, for a layer's score), a sung note before t0 left out as cut leaves it. The last notes are let go
-    only where the stretch reaches the song's end. A twin is level with its player over the stretch, and a layered
+    studio's, for a layer's score), a sung note before t0 left out as cut leaves it. A twin is level with its player over the stretch, and a layered
     part copied from elsewhere plays the notes it plays there (copied()): a preview is near the whole render's
     sound there, not its samples, as every preview is."""
     out = {}
@@ -322,8 +321,6 @@ def shifted(plan: dict, start: float, t0: float, t1: float, end: float, cut) -> 
         for part, span, source in layer["copies"]:  # (the sound it copies may lie outside the stretch: its notes)
             whole = copied(whole, part, span, source)
         out.setdefault("layers", []).append({**layer, "score": cut(whole, t0, t1)[0], "copies": []})
-    if plan.get("release") and t1 >= end:
-        out["release"] = plan["release"]
     return out
 
 
