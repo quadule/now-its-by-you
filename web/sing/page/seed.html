@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Now It's by You</title>
+  <title>Now It's by You · The Volunteers</title>
   <link rel="stylesheet" href="/identity.css">
   <link rel="stylesheet" href="/sing.css">
   <link rel="icon" href="/favicon.svg" type="image/svg+xml">
@@ -24,64 +24,90 @@
   <span>Now an <a href="https://www.aisongcontest.com/">AI Song Contest 2026</a> finalist</span><span class="sep" aria-hidden="true">—</span><a class="vote" href="https://www.aisongcontest.com/the-2026-finalists">Vote by November 21</a>
 </aside>
 <main>
-  <header class="masthead">
-    <p class="kicker">The Volunteers</p>
-    <h1>Now It's by You</h1>
-  </header>
-
-  <section class="pitch" aria-label="What this is">
-    <div class="sleeve">
-      <img class="cover" src="/cover.jpg" width="800" height="800"
-           alt="The cover: a seed packet printed The Volunteers, Now It's by You, with a daisy growing from a cracked stone, propped on a curb beside a lawn.">
-      <div>
-        <p class="lead"><cite>Now It's by You</cite> is a folk song passed between people and computers that explores
-          music's ability to take on a life of its own, in verse and by embedding the software that sang it.</p>
-        <p>Run the program and you get a new version of the song, shaped by your computer and the season. Sing into it
-          and it learns a little of your timing and inflection (your recording is deleted right after, and your voice is
-          never cloned). The piece confronts the blurred authorship of AI music through the lens of folk music and oral
-          tradition: it wonders who made it, and invites you to take part.</p>
-      </div>
-    </div>
+  <section class="hero" aria-label="The song">
+    <header class="masthead">
+      <p class="kicker">The Volunteers</p>
+      <h1>Now It's by You</h1>
+    </header>
+    <img class="cover" src="/cover.jpg" width="800" height="800"
+         alt="The cover: a seed packet printed The Volunteers, Now It's by You, with a daisy growing from a cracked stone, propped on a curb beside a lawn.">
     <div class="preview">
-      <audio id="player" controls preload="none" src="/seed/{{SEED_FILE}}?v={{SEED_V}}"></audio>
+      <audio id="player" controls preload="metadata" aria-label="Now It's by You: play the song" src="/seed/{{SEED_FILE}}?v={{SEED_V}}"></audio>
       <div class="lyric" id="lyric" data-words="{{SEED_WORDS}}" role="group" aria-label="The words, as they are sung" hidden>
-        <p class="now"></p>
-        <p class="next"></p>
       </div>
       <p class="hint which">{{EDITION}} · <a href="/seed/{{SEED_FILE}}?v={{SEED_V}}" download>Download</a> ({{SEED_MB}} MB, FLAC)</p>
+    </div>
+    <div class="pitch">
+      <p class="lead"><strong>A folk song passed between people and computers</strong> exploring music's ability to
+        take on a life of its own, in verse and by embedding the software that sings it.</p>
+      <p>Every copy is both an audio file and the same program that synthesized the song's instruments and vocals.
+        Run the program to get a new version, shaped by your computer and the season. Or, open the studio mode and
+        change the words, melody, style, and mix. Sing along yourself, and a bit of your timing and inflection can
+        influence the voice of future generations. Nobody can quite say who made it, and now it's by you.
+        <a class="more" href="/about">Read more&nbsp;&rarr;</a></p>
     </div>
   </section>
 
   <section class="card studio" aria-labelledby="studio">
     <h2 id="studio">Make your own</h2>
-    <p>The studio opens your version of the song for today, in your browser.</p>
+    <p>Hear how your device sings it today and edit any part.</p>
     <div class="tabs">
       <figure>
-        <img src="/tab-page.webp" width="860" height="484" loading="lazy" alt="The Page view: the first refrain being edited, its lines as fields with their syllable counts, and the words that can be swapped under them.">
+        <a href="https://studio.itsby.you"><img src="/tab-page.webp" width="860" height="484" loading="lazy" alt="The Page view: the first refrain being edited, its lines as fields with their syllable counts, and the words that can be swapped under them."></a>
         <figcaption><b>Page</b></figcaption>
       </figure>
       <figure>
-        <img src="/tab-arrange.webp" width="860" height="484" loading="lazy" alt="The Arrange view: the first refrain selected, every player in it marked to play hard, beside the verses around it.">
+        <a href="https://studio.itsby.you"><img src="/tab-arrange.webp" width="860" height="484" loading="lazy" alt="The Arrange view: the first refrain selected, every player in it marked to play hard, beside the verses around it."></a>
         <figcaption><b>Arrange</b></figcaption>
       </figure>
       <figure>
-        <img src="/tab-mix.webp" width="860" height="484" loading="lazy" alt="The Mix view: six players' level and pan, the whistle's fader moved up from 98% to 139%, and the voice's strip with mute and solo.">
+        <a href="https://studio.itsby.you"><img src="/tab-mix.webp" width="860" height="484" loading="lazy" alt="The Mix view: six players' level and pan, the whistle's fader moved up from 98% to 139%, and the voice's strip with mute and solo."></a>
         <figcaption><b>Mix</b></figcaption>
       </figure>
       <figure>
-        <img src="/tab-sing.webp" width="860" height="484" loading="lazy" alt="The Sing view: the tune as a lane of notes with the words under it, a line lit as it is sung.">
+        <a href="https://studio.itsby.you"><img src="/tab-sing.webp" width="860" height="484" loading="lazy" alt="The Sing view: the tune as a lane of notes with the words under it, a line lit as it is sung."></a>
         <figcaption><b>Sing</b></figcaption>
       </figure>
     </div>
-    <p><a class="button primary" href="https://studio.itsby.you">Open the studio</a></p>
+    <p><a class="button primary" href="https://studio.itsby.you">Open the studio &rarr;</a></p>
 
-    <h3>Or run the file</h3>
-    <p>With Python 3.11 or newer:</p>
-    <pre>python3 {{SEED_FILE}}          what this is, and what you can do
-python3 {{SEED_FILE}} new      sing a new version here, today
-python3 {{SEED_FILE}} studio   change it and make your own</pre>
-    <p class="hint">On Windows, <code>py</code> instead of <code>python3</code>. On an Intel Mac, use the studio.
-      The first run downloads its libraries (about 100 MB) and asks first.</p>
+    <h3 id="run">Or run the file</h3>
+    <p>The song's file is also the program that sings it: an ordinary FLAC with a Python program packed inside. Run
+      it with Python and you can create a new version, or edit and sing in the studio mode.</p>
+    <div class="os" id="os">
+      <div class="ostabs" role="tablist" aria-label="Your computer" hidden>
+        <button type="button" role="tab" id="tab-windows" aria-controls="run-windows" aria-selected="false" tabindex="-1">Windows</button>
+        <button type="button" role="tab" id="tab-unix" aria-controls="run-unix" aria-selected="true">Mac or Linux</button>
+      </div>
+      <div class="ospanel" id="run-windows" role="tabpanel" aria-labelledby="tab-windows">
+        <h4>Windows</h4>
+        <ol>
+          <li><a href="/seed/{{SEED_FILE}}?v={{SEED_V}}" download>Download the song</a> ({{SEED_MB}} MB).</li>
+          <li>Install Python 3.11 or newer from <a href="https://www.python.org/downloads/">python.org</a>.</li>
+          <li>Open the folder you saved the song in, right-click an empty part of it and choose
+            <em>Open in Terminal</em>.</li>
+          <li>Type this, and press Enter:</li>
+        </ol>
+        <div class="cmd"><pre>py {{SEED_FILE}}</pre><button type="button" class="copy" aria-live="polite" hidden>Copy</button></div>
+      </div>
+      <div class="ospanel" id="run-unix" role="tabpanel" aria-labelledby="tab-unix">
+        <h4>Mac or Linux</h4>
+        <ol>
+          <li><a href="/seed/{{SEED_FILE}}?v={{SEED_V}}" download>Download the song</a> ({{SEED_MB}} MB).</li>
+          <li>You need Python 3.11 or newer. On a Mac, install it from
+            <a href="https://www.python.org/downloads/">python.org</a>; most Linux systems have it already.</li>
+          <li>Open a terminal and go to the folder you saved the song in. For most people that is
+            <code>cd Downloads</code></li>
+          <li>Type this, and press Enter:</li>
+        </ol>
+        <div class="cmd"><pre>python3 {{SEED_FILE}}</pre><button type="button" class="copy" aria-live="polite" hidden>Copy</button></div>{{INTEL}}
+      </div>
+    </div>
+    <p class="hint">Before it changes anything it says what it will do, and asks. The first time, it downloads the
+      libraries it needs (about 100 MB, from PyPI) into its own folder, <code>.songbird</code> in your home folder,
+      which is all there is to delete; after that it needs no network, and nothing is sent
+      anywhere. If you use <a href="https://docs.astral.sh/uv/">uv</a>, <code>uv run python {{SEED_FILE}}</code>
+      needs no Python installed.</p>
   </section>
 
   <section class="card disclosure" aria-labelledby="who">
@@ -90,11 +116,12 @@ python3 {{SEED_FILE}} studio   change it and make your own</pre>
       program and its song were written with commercial generative AI models as collaborators. The finished program is
       not dependent on any online service; it runs on an average computer using traditional software synthesis methods
       for instrumentation and a small offline model for the voice.</p>
-    <p>Eight people sang into the first version. {{CREDITS}}</p>
   </section>
 
-  <p class="hint">The song, its program and every version are in the <a href="https://creativecommons.org/publicdomain/zero/1.0/" rel="license">public domain</a>.
-    {{SOURCE}}Questions, or something to report: <a href="mailto:milo@winningham.net">milo@winningham.net</a>.</p>
+  <footer class="foot">
+    <p><a href="/about">About and credits</a> · <a href="/history">History</a> · <a href="https://studio.itsby.you">The studio</a> · {{SOURCE}}<a href="mailto:milo@winningham.net">milo@winningham.net</a></p>
+    <p>The song, its program and every version are in the <a href="https://creativecommons.org/publicdomain/zero/1.0/" rel="license">public domain</a>.</p>
+  </footer>
 </main>
 </body>
 </html>

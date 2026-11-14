@@ -46,9 +46,9 @@
 // everyone who didn't ask to hear when the song is released. Nothing personal is logged: no names,
 // no emails, no tokens, no addresses. An address is used only to count requests and joins.
 //
-// Singing has moved to the studio (STUDIO_URL in [vars], 2026-09-30): every invitation's page says so with a
+// Singing is in the studio (STUDIO_URL in [vars]): every invitation's page says so with a
 // link, and joining, the song, takes, words and "I'm done" answer 410; singers' own pages, the seed page and
-// the artist's API are as they were.
+// the artist's API still answer.
 
 import {
   DEFAULTS, FILE_NAME, MAX_FILE_BYTES, MAX_TAKE_BYTES, MAX_WORDS, SPEC, TAKE_ID, TAKE_KEY, TOKEN, WORD, WORDS_KEY,
@@ -82,7 +82,7 @@ const SECURITY = {
   "Permissions-Policy": "microphone=(self), camera=(), geolocation=(), payment=(), usb=()",
   "Strict-Transport-Security": "max-age=15552000",
 };
-// Cloudflare Web Analytics (2026-11-09): the zone injects its beacon into each page a browser asks for (from
+// Cloudflare Web Analytics: the zone injects its beacon into each page a browser asks for (from
 // static.cloudflareinsights.com) and it reports a page view to cloudflareinsights.com, no cookies; those two hosts and
 // nothing else
 const ANALYTICS_SCRIPT = "https://static.cloudflareinsights.com";
@@ -141,7 +141,7 @@ function studioOf(env) {
 }
 
 function movedPage(studio) {
-  // an invitation's page, once singing has moved to the studio: every invitation, open or not
+  // an invitation's page, where singing is in the studio: every invitation, open or not
   const href = studio.href.replace(/&/g, "&amp;").replace(/"/g, "&quot;").replace(/</g, "&lt;");
   const shown = studio.host.replace(/&/g, "&amp;").replace(/</g, "&lt;");
   return notice(410, `Singing happens in the studio now: <a href="${href}">${shown}</a>.`);
@@ -1000,8 +1000,8 @@ export default {
       if (path.startsWith("/api/") || path.startsWith("/i/") || path.startsWith("/y/")) {
         if (await limited(env.REQUESTS, `ip:${ip}`)) return busy();
       }
-      // once singing has moved to the studio (STUDIO_URL), every invitation says so, and nothing more is
-      // sung or sent here; singers' own pages and the artist's API go on as before
+      // where singing is in the studio (STUDIO_URL), every invitation says so, and nothing more is
+      // sung or sent here; singers' own pages and the artist's API still answer
       const studio = studioOf(env);
       if (studio && path.startsWith("/i/")) return movedPage(studio);
       if (studio && /^\/api\/(invite|song|lyrics|guide|preview|join|take|words|done)\//.test(path)) return moved(studio);
@@ -1057,9 +1057,10 @@ export default {
         return asset(env, request, "/seed.html", { "Content-Type": "text/html; charset=utf-8", "Cache-Control": "public, max-age=300",
                                                  "Content-Security-Policy": PAGE_CSP });
       }
-      // its history: every edition, newest first, on every host as the seed page is
-      if (path === "/history" && ["GET", "HEAD"].includes(request.method)) {
-        return asset(env, request, "/history.html", { "Content-Type": "text/html; charset=utf-8", "Cache-Control": "public, max-age=300",
+      // about the song (the artist's statement, how it was made, its credits) and its history (every edition,
+      // newest first), on every host as the seed page is
+      if ((path === "/about" || path === "/history") && ["GET", "HEAD"].includes(request.method)) {
+        return asset(env, request, `${path}.html`, { "Content-Type": "text/html; charset=utf-8", "Cache-Control": "public, max-age=300",
                                                     "Content-Security-Policy": PAGE_CSP });
       }
       if (path.startsWith("/seed/") && ["GET", "HEAD"].includes(request.method)) {

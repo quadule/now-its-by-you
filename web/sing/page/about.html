@@ -1,0 +1,83 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>About · Now It's by You</title>
+  <link rel="stylesheet" href="/identity.css">
+  <link rel="stylesheet" href="/sing.css">
+  <link rel="icon" href="/favicon.svg" type="image/svg+xml">
+  <meta name="description" content="How a folk song is like open source software, how this one was made with AI models as collaborators, and who sang into it.">
+  <link rel="canonical" href="https://now.itsby.you/about">
+  <meta property="og:url" content="https://now.itsby.you/about">
+  <meta property="og:type" content="article">
+  <meta property="og:title" content="About Now It's by You">
+  <meta property="og:description" content="How a folk song is like open source software, how this one was made, and who sang into it.">
+  <meta property="og:image" content="https://now.itsby.you/cover.jpg">
+  <meta property="og:image:width" content="800">
+  <meta property="og:image:height" content="800">
+  <meta name="twitter:card" content="summary_large_image">
+</head>
+<body class="leaf seed about">
+<main>
+  <header class="masthead">
+    <p class="kicker"><a href="https://now.itsby.you/">Now It's by You</a></p>
+    <h1>About the song</h1>
+  </header>
+
+  <p class="lead">AI-generated music has become synonymous with the fake artists and prompt-to-song outputs that have
+    flooded music streaming services in recent years, but its history is deeper and lesser known. For the
+    <a href="https://www.aisongcontest.com/">2026 AI Song Contest</a>, I wanted to explore the key issues of
+    authorship and compensation by looking to two traditions that challenge our conventional notions of them: folk
+    music and open source software.</p>
+
+  <section aria-labelledby="why">
+    <h2 id="why">An open source folk song</h2>
+    <p>Folk songs change as they travel and lose their authors along the way. Each singer learns a song from someone
+      else, changes a line or a turn of the melody, and passes it on. Open source software travels in a similar way:
+      anyone can take the code, change it and share the result. Its history records every change and who made it,
+      but its authors are rarely paid for it.</p>
+    <p>Now It's by You is my attempt at a song that works like both. The program that sings it travels inside every
+      copy, so anyone who has the song can change it. Each version records the one it came from, and singers from up
+      to six earlier versions join in for harmony during the bridge. There, the melody also quotes “Daisy Bell”, the
+      first song a computer sang, in 1961, so the song's lineage includes machines as well as people.</p>
+    <p>This song is built upon the creative works of countless uncredited artists before me, including the unknown
+      singers, writers, and programmers whose work trained the AI models I used. So I've dedicated it to the public
+      domain: no one can quite say who made it, and no one should own it.</p>
+  </section>
+
+  <section aria-labelledby="how">
+    <h2 id="how">How it was made</h2>
+    <p>The idea came to me a few days before the contest deadline: a folk song changing as it passes between computers
+      as well as people, with authorship blurred between them. I could only realize this vision in its totality by
+      treating AI agents as full creative collaborators and taking the role of part director and part editor.</p>
+    <p>I primarily used Claude Code and Opus 5.5 to develop a Python program that synthesizes every instrument and
+      voice from a template we wrote together in the style of a ballad: a tune, a refrain, a bank of verses, and the
+      rules for how they change from one version to the next.</p>
+    <p>The voice itself was the most challenging, as I wanted it to sound both human and synthetic at the same time. It
+      started as a classic formant synthesizer, then became a small learned model trained on singing from other open
+      voice models, and finally was fine-tuned on the takes of eight volunteers who sang the song through a
+      karaoke-style website (with all recordings deleted shortly after).</p>
+  </section>
+
+  <section class="card credits" aria-labelledby="credits">
+    <h2 id="credits">Credits</h2>
+    <dl>
+      <dt>Song and software</dt>
+      <dd>Milo Winningham, with Claude (Anthropic), Codex (OpenAI), and Gemini (Google).</dd>
+      <dt>Volunteer singers</dt>
+      <dd>{{CREDITS}}</dd>
+      <dt>Voice trained with outputs and ideas from</dt>
+      <dd><a href="https://github.com/Soul-AILab/SoulX-Singer">SoulX-Singer</a>,
+        <a href="https://github.com/lowkeytea/scyllasband">Scylla's Band</a> and
+        <a href="https://github.com/jamesondh/chimera-vocal-synth">Chimera</a>.</dd>
+    </dl>
+  </section>
+
+  <footer class="foot">
+    <p><a href="https://now.itsby.you/">The song</a> · <a href="/history">History</a> · <a href="https://studio.itsby.you">The studio</a> · {{SOURCE}}<a href="mailto:milo@winningham.net">milo@winningham.net</a></p>
+    <p>The song, its program and every version are in the <a href="https://creativecommons.org/publicdomain/zero/1.0/" rel="license">public domain</a>.</p>
+  </footer>
+</main>
+</body>
+</html>

@@ -333,7 +333,7 @@ def test_the_home_page_offers_the_newest_edition_and_the_history_every_one(tmp_p
     assert json.loads((seed / "words.json").read_text()) == timed
     home = (out / "seed.html").read_text()
     assert "{{" not in home
-    assert home.count(f'/seed/now-its-by-you.flac?v={ids[second][:12]}"') == 2  # the player and the download
+    assert home.count(f'/seed/now-its-by-you.flac?v={ids[second][:12]}"') == 4  # the player, the download, and the file to run (a step in each tab)
     assert f'data-words="/seed/words.json?v={W.digest((seed / "words.json").read_text())}"' in home
     assert 'Version 2, <time datetime="2026-10-20">October 20, 2026</time> · <a href="/history">History</a>' in home
     assert "Version 1" not in home and "2026-09-28" not in home  # only the current one on the home page
@@ -403,6 +403,26 @@ def test_an_editions_bytes_never_change_and_a_wrong_list_stops_the_build(tmp_pat
     assert W.sha256(out / "seed" / W.SEED_FILE) == W.sha256(released)
 
 
+def test_an_edition_held_back_is_left_off_the_home_page_and_the_history(tmp_path, monkeypatch):
+    """"held": true keeps a listed edition off the site (the studio's build still reads it) until it's released."""
+    one, two = tmp_path / "one.flac", tmp_path / "two.flac"
+    made = {one: packed(one, 1, monkeypatch), two: packed(two, 2, monkeypatch)}
+    manifest = tmp_path / "editions.json"
+    held = covered(two)
+    manifest.write_text(json.dumps({"editions": [{**edition(2, "2026-11-12", made[two], held, kept=held), "held": True},
+                                                 edition(1, "2026-09-28", made[one], covered(one), render=one)]}))
+    out = tmp_path / "public"
+    out.mkdir()
+    (out / "seed.html").write_text("{{EDITION}}")
+    (out / "history.html").write_text("{{EDITIONS}}")
+    monkeypatch.setattr(W, "seed_words", lambda flac: None)
+    W.seed_page(out, manifest)
+    assert sorted(f.name for f in (out / "seed").iterdir()) == ["now-its-by-you-2026-09-28.flac", "now-its-by-you.flac"]
+    assert "2026-09-28" in (out / "seed.html").read_text()
+    assert "2026-11-12" not in (out / "seed.html").read_text() + (out / "history.html").read_text()
+    assert [e["date"] for e in W.editions(manifest)] == ["2026-11-12", "2026-09-28"]  # still listed, newest first
+
+
 def test_the_songs_editions_are_listed_rightly():
     """web/sing/editions.json as it is: the first version is the contest's file as now.itsby.you has served it since
     September 30 (the render with the cover), from the program it was made with."""
@@ -433,9 +453,10 @@ def test_the_preview_mp3_says_what_it_is(tmp_path, monkeypatch):
 
 
 def test_the_home_pages_about_is_the_artists_statement_and_credits_the_singers_as_they_asked(tmp_path, monkeypatch):
-    """The home page's top text is the artist's statement word for word (their one sentence, opening with the song's
-    title since the title was decided, and the pitch that continues it, as README.md quotes them); its singers are
-    CREDITS.md's, as they asked, and no one else; the source code is linked only once it's switched on."""
+    """The home page's top text doesn't repeat the title beside the masthead, and the page about the song (/about)
+    doesn't repeat the home page: it has its own opening, not the artist's statement (README.md keeps that). It
+    credits the singers as CREDITS.md does, as they asked, and no one else, and the home page sends people there;
+    the source code is linked from both only once it's switched on."""
     import html
 
     statement = (
@@ -445,9 +466,13 @@ def test_the_home_pages_about_is_the_artists_statement_and_credits_the_singers_a
         "timing and inflection (your recording is deleted right after, and your voice is never cloned). The piece "
         "confronts the blurred authorship of AI music through the lens of folk music and oral tradition: it wonders who "
         "made it, and invites you to take part.")
-    page = (W.WEB / "page" / "seed.html").read_text()
-    sleeve = re.search(r'<p class="lead">(.*?)</p>\s*<p>(.*?)</p>', page, re.DOTALL)  # the top text, beside the cover
-    assert " ".join(f"{sleeve[1]} {sleeve[2]}".split()) == statement
+    page = (W.WEB / "page" / "about.html").read_text()
+    assert "<blockquote>" not in page and "passed between people and computers" not in page
+    readme = " ".join(line.lstrip("> ") for line in (ROOT / "README.md").read_text().splitlines() if line.startswith(">"))
+    assert statement.replace("<cite>", "*").replace("</cite>", "*") in " ".join(readme.split())
+    home = (W.WEB / "page" / "seed.html").read_text()  # the home page: the title once, in the masthead, not the lead
+    lead = re.search(r'<p class="lead">(.*?)</p>', home, re.DOTALL)[1]
+    assert lead.startswith("<strong>A folk song passed between people and computers</strong>") and "Now It" not in lead
 
     credits = tmp_path / "CREDITS.md"
     credits.write_text("# Credits\n\n## Singers\n\nSome words.\n\nCredited, as they asked:\n\n- Ann\n- B & C\n- dee\n\n"
@@ -470,11 +495,14 @@ def test_the_home_pages_about_is_the_artists_statement_and_credits_the_singers_a
     for public in (False, True):
         out = tmp_path / f"public-{public}"
         out.mkdir()
-        shutil.copyfile(W.WEB / "page" / "seed.html", out / "seed.html")
+        for name in ("seed.html", "about.html"):
+            shutil.copyfile(W.WEB / "page" / name, out / name)
         W.seed_page(out, manifest, public=public)
-        home = (out / "seed.html").read_text()
-        assert f"<p>Eight people sang into the first version. {said}</p>" in home and "{{" not in home
-        assert ('<a href="https://github.com/quadule/songbird">The source code</a> is on GitHub.' in home) is public
+        home, about = (out / "seed.html").read_text(), (out / "about.html").read_text()
+        assert f"<dd>{said}</dd>" in about and "{{" not in home + about
+        assert '<a href="/about">' in home and said not in home
+        for page in (home, about):
+            assert ('<a href="https://github.com/quadule/songbird">Source code</a>' in page) is public
 
 
 def test_pages_alone_are_built_over_the_site_as_it_was_and_never_write_through_its_links(tmp_path, monkeypatch):

@@ -60,7 +60,7 @@ export function moment(value) {
 
 export function stateOf(invite, now = Date.now(), closes = null) {
   // closes (CLOSES_AT) is when singing for the first release ends: withdrawal closes with it, but an
-  // invitation stays open, so people can go on singing for later versions (the artist, 2026-09-27)
+  // invitation stays open, so people can go on singing for later versions
   if (!invite) return "unknown";
   if (invite.state !== "open") return invite.state; // done (an old invitation) or revoked
   void closes;

@@ -299,6 +299,23 @@ test("the history is public too: /history, and every edition's file by its date,
   assert.equal((await call(w, e, "/history", { method: "POST" })).status, 404);
 });
 
+test("the page about the song is public too: /about on every host, as the history is", async () => {
+  const w = await load();
+  const e = env({ files: { ...SITE, "/seed.html": "<!doctype html><title>seed</title>", "/about.html": "<!doctype html><title>about</title>" } });
+  for (const url of ["https://now.itsby.you/about", "https://songbird.test/about"]) {
+    const page = await w.fetch(new Request(url), e);
+    assert.equal(page.status, 200, url);
+    assert.match(await page.text(), /about/);
+    assert.match(page.headers.get("content-type"), /text\/html/);
+    assert.ok(page.headers.get("content-security-policy"));
+    assert.equal(page.headers.get("x-robots-tag"), null); // to be found, as the home page is
+  }
+  const moved = await w.fetch(new Request("https://itsby.you/about"), e);
+  assert.equal(moved.headers.get("location"), "https://now.itsby.you/about");
+  for (const path of ["/about.html", "/about/"]) assert.equal((await call(w, e, path)).status, 404, path);
+  assert.equal((await call(w, e, "/about", { method: "POST" })).status, 404);
+});
+
 test("singing has moved to the studio: every invitation points there, nothing more is sung here, singers' own pages and the seed page are as they were", async () => {
   const w = await load();
   const files = { ...SITE, "/seed.html": "<!doctype html><title>seed</title>", "/seed/now-its-by-you.flac": "fLaC: the song" };

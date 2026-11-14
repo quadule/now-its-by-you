@@ -39,7 +39,7 @@ binding = "ASSETS"
 # The worker sees the pages' own addresses, the API and the song (served only to open invitations);
 # the pages' scripts and styles are served straight from the assets, with public/_headers. (robots.txt goes
 # through the worker: only the singing site's host has one.)
-run_worker_first = ["/", "/robots.txt", "/index.html", "/yours.html", "/seed.html", "/seed", "/seed/*", "/history", "/history.html", "/i/*", "/y/*", "/api/*", "/song/*"]
+run_worker_first = ["/", "/robots.txt", "/index.html", "/yours.html", "/seed.html", "/seed", "/seed/*", "/history", "/history.html", "/about", "/about.html", "/i/*", "/y/*", "/api/*", "/song/*"]
 html_handling = "none"
 not_found_handling = "none"
 

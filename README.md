@@ -50,6 +50,7 @@ samples again on the same kind of computer. The rest of this README says how to 
 
 - **Listen:** https://now.itsby.you plays the current version, to listen to or take; the first, from
   September 28, 2026, is kept there too.
+- **Read about it:** https://now.itsby.you/about says why it is a folk song, how it was made and who is in it.
 - **Make your own:** https://studio.itsby.you, with nothing to install: the whole studio runs in your browser, on
   your device. Or `python3 now-its-by-you.flac studio` on your own computer.
 - **Read the code:** this repository. [docs/README.md](docs/README.md) is the map of the documentation:
@@ -64,7 +65,8 @@ documents; each commit it helped write says so in a Co-Authored-By line. Gemini 
 verses and a couplet on a branch and mocked up the cover; Codex contributed a branch (performances travelling inside
 the file). The voice was taught, not recorded: SoulX-Singer, an open singing model, sang the project's own scores in
 timbres the program itself proposed, a small model learned from that, and it was then fine-tuned once on the eight
-volunteers' takes together, as one singer. Synthetic voices from ElevenLabs were used only as a benchmark; nothing
+volunteers' takes together, as one singer. For the performance version (November 2026) it was taught again, with
+Scylla's Band, another open model, as a second teacher ([docs/THROAT.md](docs/THROAT.md)). Synthetic voices from ElevenLabs were used only as a benchmark; nothing
 trained on them ships. Whisper and the Montreal Forced Aligner scored intelligibility and aligned syllables during
 development; none of these tools is in the file. What ships runs offline on an ordinary computer.
 

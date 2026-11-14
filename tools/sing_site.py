@@ -3,7 +3,7 @@
     uv run python tools/sing_site.py                                          # H, every spec, into web/sing/public
     uv run python tools/sing_site.py --sets a --keys 0,-2 --tempos 100        # only these specs
     uv run python tools/sing_site.py songs/h-now-its-by-you.json --rebuild    # render every guide again first
-    uv run python tools/sing_site.py --pages                                  # only the pages (the home page, history): seconds, no guides rendered
+    uv run python tools/sing_site.py --pages                                  # only the pages (the home page, about, history): seconds, no guides rendered
     cd web/sing && npx wrangler deploy                                        # then publish it (docs/HOME-PAGE.md)
 
 What it writes, all served by web/sing/src/worker.js:
@@ -537,6 +537,9 @@ SEED_FILE = "now-its-by-you.flac"  # the seed page's file name (web/sing/src/wor
 EDITIONS = WEB / "editions.json"  # the song's editions: the seed page offers the newest, /history every one
 SOURCE = "https://github.com/quadule/songbird"  # the source code, linked from the pages once SOURCE_PUBLIC
 SOURCE_PUBLIC = False  # True once the repository is public: the home page links it, the history each edition's commit
+# files made from this day on find their libraries on an Intel Mac by themselves (docs/RUNNING-THE-SONG.md, "Intel
+# Macs"); the home page says to use the studio there only while it offers an edition made before it
+INTEL_SINCE = dt.date(2026, 10, 7)
 CREDITS = ROOT / "CREDITS.md"  # the singers credited as they asked, named on the home page (credits())
 HEX64 = re.compile(r"[0-9a-f]{64}")
 MONTHS = ("January", "February", "March", "April", "May", "June", "July", "August", "September", "October",
@@ -650,16 +653,21 @@ def release(e: dict, to: Path) -> None:
 
 
 def seed_page(out: Path, path: Path | None = None, public: bool | None = None) -> None:
-    """The public seed page (/seed, and the root of now.itsby.you) and its history (/history): every edition's
+    """The public seed page (/seed, and the root of now.itsby.you), the page about the song (/about: the artist's
+    statement, how it was made, its credits) and its history (/history): every edition's
     released file in public/seed/ under its own name (release()), the current one's (the newest this checkout
     has) as the seed page's file too, with its words as sung, timed (seed_words), for the page to show as it
-    plays; and history.html, every edition newest first (history()). An edition whose bytes aren't here is left
-    out, said; without any, the pages still build and say so (no file, no words). public: link the source code
+    plays; and history.html, every edition newest first (history()). An edition whose bytes aren't here, or one
+    held back (`"held": true`), is left out, said; without any, the pages still build and say so (no file, no words). public: link the source code
     (SOURCE_PUBLIC unless said)."""
     public = SOURCE_PUBLIC if public is None else public
     (out / "seed").mkdir(exist_ok=True)
     offered = []
     for e in editions(path):
+        if e.get("held"):  # listed, and read by the studio's build, but not yet released here
+            print(f"seed page: edition {e['id']} ({e['title']}) is held back (held in editions.json); it's left out",
+                  file=sys.stderr)
+            continue
         if not e["kept"] and not e["render"]["found"]:
             print(f"seed page: edition {e['id']} ({e['title']}) isn't in this checkout ({e['file'].get('path') or ''}"
                   f"{e['render'].get('path') or ''}); it's left out", file=sys.stderr)
@@ -667,14 +675,16 @@ def seed_page(out: Path, path: Path | None = None, public: bool | None = None) -
         release(e, out / "seed" / e["name"])
         offered.append(e)
     fill = {"{{SEED_FILE}}": SEED_FILE, "{{SEED_MB}}": "0", "{{SEED_V}}": "", "{{SEED_WORDS}}": "", "{{EDITION}}": "",
-            "{{CREDITS}}": credits(),
-            "{{SOURCE}}": f'<a href="{SOURCE}">The source code</a> is on GitHub. ' if public else ""}
+            "{{CREDITS}}": credits(), "{{INTEL}}": "",
+            "{{SOURCE}}": f'<a href="{SOURCE}">Source code</a> · ' if public else ""}
     if not offered:
         print("seed page: no edition to offer (web/sing/editions.json); the page is built without a file", file=sys.stderr)
     else:
         now = offered[0]
         shutil.copyfile(out / "seed" / now["name"], out / "seed" / SEED_FILE)
         fill["{{SEED_MB}}"] = f"{now['file']['bytes'] / 2**20:.0f}"
+        if now["day"] < INTEL_SINCE:  # this file can't set itself up on an Intel Mac: say so beside the command
+            fill["{{INTEL}}"] = '\n        <p class="hint">On an Intel Mac, use the studio above.</p>'
         fill["{{SEED_V}}"] = now["id"]  # a new edition's file under the same name, never an old one's from a cache
         fill["{{EDITION}}"] = (f'{html.escape(now["title"])}, <time datetime="{now["date"]}">{us_date(now["day"])}</time>'
                                ' · <a href="/history">History</a>')
@@ -688,10 +698,12 @@ def seed_page(out: Path, path: Path | None = None, public: bool | None = None) -
             text = json.dumps(timed, separators=(",", ":")) + "\n"
             (out / "seed" / SEED_WORDS).write_text(text)
             fill["{{SEED_WORDS}}"] = f"/seed/{SEED_WORDS}?v={digest(text)}"  # a new render's words, never an old one's
-    page = (out / "seed.html").read_text()
-    for mark, value in fill.items():
-        page = page.replace(mark, value)
-    (out / "seed.html").write_text(page)
+    for name in ("seed.html", "about.html"):  # the home page, and the page about the song (its credits, the source)
+        if (out / name).exists():
+            page = (out / name).read_text()
+            for mark, value in fill.items():
+                page = page.replace(mark, value)
+            (out / name).write_text(page)
     if (out / "history.html").exists():
         page = (out / "history.html").read_text().replace("{{EDITIONS}}", history(offered, public))
         (out / "history.html").write_text(page)
@@ -800,9 +812,9 @@ def versioned(out: Path) -> None:
 
     swap("sing.js", 'from "./karaoke.js"', f'from "./karaoke.js?v={stamp("karaoke.js")}"')
     swap("sing.js", 'addModule("/recorder.js")', f'addModule("/recorder.js?v={stamp("recorder.js")}")')
-    for page in ("index.html", "seed.html", "history.html", "yours.html"):  # identity.css: the tokens and shared pieces, first
+    for page in ("index.html", "seed.html", "about.html", "history.html", "yours.html"):  # identity.css: the tokens and shared pieces, first
         swap(page, 'href="/identity.css"', f'href="/identity.css?v={stamp("identity.css")}"')
-    for page in ("index.html", "seed.html", "history.html"):
+    for page in ("index.html", "seed.html", "about.html", "history.html"):
         swap(page, 'href="/sing.css"', f'href="/sing.css?v={stamp("sing.css")}"')
     swap("seed.html", 'src="/seed.js"', f'src="/seed.js?v={stamp("seed.js")}"')
     swap("index.html", 'src="/sing.js"', f'src="/sing.js?v={stamp("sing.js")}"')
