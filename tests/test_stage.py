@@ -141,3 +141,49 @@ def test_the_plan_makes_the_stems(monkeypatch):
     assert stems["choir1"][-1].max() < 1e-3 and stems["choir1"][0].max() == 1.0  # its last note let go
     first = plan["plan"][1][0]
     assert stems["voice"][int(first * sr) - 100, 0] == pytest.approx(1.0 * 1.6 * np.cos(np.pi / 4))  # human 0
+
+
+def test_every_render_lays_its_score_out_alike():
+    """The command line, the studio and the browser's studio sing a stage edition from one score (stage.laid):
+    none of them lays one out on its own."""
+    import inspect
+
+    from songbird import cli, studio
+
+    browser = (ROOT / "web" / "studio-wasm" / "py" / "studio_render.py").read_text()
+    for source in (inspect.getsource(cli.render_one), inspect.getsource(studio.Studio._score), browser):
+        assert "stage.laid(" in source and "variation.lay(realize(" not in source
+
+
+def test_a_sections_preview_takes_its_stretch_of_the_plan():
+    from songbird.studio import cut, window
+
+    params = with_composition(seed(), arrange=GRID, exact={"release": 0.35})
+    score = S.laid(G, params)
+    assert score.stage["takes"] and score.stage["levels"] and score.stage["release"]
+    k = list(params.form).index("refrain")
+    t0, t1 = window(G, params, score, params.form, k)
+    part, lead_in = cut(score, t0, t1)
+    start = t0 - lead_in
+    plan = part.stage
+    for h, take in plan["takes"].items():
+        mine = [n.start - start for n in score.stage["takes"][h]["notes"] if t0 <= n.start < t1]
+        assert [n.start for n in take["notes"]] == mine
+    assert plan["plan"][0][0] <= 0.0  # the take heard where the preview begins, then each that comes in it
+    for name, (ts, gs) in plan["levels"].items():
+        assert ts == [t - start for t in score.stage["levels"][name][0]] and gs == score.stage["levels"][name][1]
+    assert "release" not in plan  # its last note isn't the song's
+    last, _ = window(G, params, score, params.form, len(params.form) - 1)
+    end = max(b for _, _, b in score.sections)
+    assert cut(score, last, end)[0].stage["release"] == 0.35
+
+
+def test_a_part_copied_plays_anothers_notes_there():
+    score = variation.lay(realize(G, seed()), seed())
+    (_, a, b), (_, c, _) = score.sections[1], score.sections[3]
+    part = next(n.part for n in score.notes if a <= n.start < b and not n.part.startswith(("voice", "choir")))
+    out = S.copied(score, part, (a, b), c)
+    there = sorted(n.start - a for n in out.notes if n.part == part and a <= n.start < b)
+    theirs = sorted(n.start - c for n in score.notes if n.part == part and c <= n.start < c + (b - a))
+    assert np.allclose(there, theirs)
+    assert [n for n in out.notes if n.part != part] == [n for n in score.notes if n.part != part]

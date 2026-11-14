@@ -83,8 +83,7 @@ def _score(genome, params, lyrics, spec: dict):
     """The version laid out, as Studio._score lays it. A section's edit of the mix alone (or one asked again) lays out
     the same score, so the last few are kept: a quarter of an edit's preview in the browser (0.75 of 3 s in node). A
     Score and its notes are frozen, and what reads them (window, cut, the synthesis) makes new ones."""
-    from songbird import phrasing as phrasing_mod, variation
-    from songbird.realize import realize
+    from songbird import phrasing as phrasing_mod, stage
 
     key = _score_key(spec)
     if key in _SCORES:
@@ -92,7 +91,7 @@ def _score(genome, params, lyrics, spec: dict):
         return _SCORES[key]
     phrasing = phrasing_mod.from_json(spec["phrasing"]) if spec.get("phrasing") else None
     choir = [phrasing_mod.from_json(ph) for ph in spec.get("choir") or []]
-    score = variation.lay(realize(genome, params, phrasing=phrasing, choir=choir, lyrics=lyrics), params)
+    score = stage.laid(genome, params, phrasing=phrasing, choir=choir, lyrics=lyrics)  # (as cli.render_one)
     _SCORES[key] = score
     while len(_SCORES) > SCORES:
         del _SCORES[next(iter(_SCORES))]

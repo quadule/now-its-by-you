@@ -76,14 +76,16 @@ def test_studio_previews_recordings_and_cache_keep_the_packets_delivery(tmp_path
     version = studio.version({})
     assert version.phrasing_json == lead and version.choir_phrasings == [choir]
 
+    import songbird.realize as realize_mod
+
     realized = []
-    original_realize = S.realize
+    original_realize = realize_mod.realize
 
     def inspect_score(*args, **kwargs):
         realized.append(kwargs)
         return original_realize(*args, **kwargs)
 
-    monkeypatch.setattr(S, "realize", inspect_score)
+    monkeypatch.setattr(realize_mod, "realize", inspect_score)  # (the studio's score is stage.laid's)
     studio._score(version)
     assert realized[-1]["phrasing"] == P.from_json(lead)
     assert realized[-1]["choir"] == [P.from_json(choir)]

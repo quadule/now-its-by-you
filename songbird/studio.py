@@ -67,9 +67,9 @@ from urllib.parse import parse_qs, urlsplit
 
 import numpy as np
 
-from . import RECORD_FORMAT, artwork, drift as drift_mod, explain, genome as genome_mod, harvest, midi, pack, synth, variation
+from . import RECORD_FORMAT, artwork, drift as drift_mod, explain, genome as genome_mod, harvest, midi, pack, stage, synth
 from . import public as public_mod, received
-from .realize import Params, realize
+from .realize import Params
 from .synth import master
 from .synth.instruments import INSTRUMENTS
 from .synth.mixing import MixParams
@@ -264,6 +264,11 @@ def cut(score, t0: float, t1: float, before: float = 1.0, tail: float = 2.5):
         from .sound import shifted
 
         moved = {"sound": shifted(score.sound, start, t1)}
+    if getattr(score, "stage", None):  # a stage edition's plan moves with the notes (songbird.stage)
+        from .stage import shifted
+
+        end = max((b for _, _, b in score.sections), default=t1)
+        moved["stage"] = shifted(score.stage, start, t0, t1, end, cut)
     return dc_replace(score, notes=tuple(notes), duration=(t1 - start) + tail,
                       sections=tuple((s, max(0.0, a - start), b - start) for s, a, b in score.sections
                                      if b > start and a < t1), **moved), t0 - start
@@ -809,7 +814,7 @@ class Studio:
 
         phrasing = phrasing_mod.from_json(v.phrasing_json) if v.phrasing_json else None
         choir = [phrasing_mod.from_json(ph) for ph in v.choir_phrasings]
-        return variation.lay(realize(self.genome, v.params, phrasing=phrasing, choir=choir, lyrics=v.lyrics), v.params)
+        return stage.laid(self.genome, v.params, phrasing=phrasing, choir=choir, lyrics=v.lyrics)  # (as cli.render_one)
 
     def _section(self, job: Job, v: explain.Version, key: str, index: int) -> dict:
         """A preview of one section: cut from the whole rendition's score, made, and brought up by the gain a

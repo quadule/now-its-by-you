@@ -39,7 +39,10 @@ own, to the sample.
 The lead with an amount of people is sung whole at each amount the song names (its phrasing's gestures and the
 singer's own liveliness scaled, the people's share of its timbre set) and the takes joined where its lines
 begin (arc_plan, spliced). A section with no amount keeps the one before it (before any, the least named).
-prepare() lays all of it out from the score (Score.stage); jobs() makes the stems from that (synth.stem_jobs).
+prepare() lays all of it out from the score (Score.stage), and laid() is the score every render starts from:
+the command line's (cli.render_one), the studio's and the browser's (studio.Studio._score, studio_render), so
+they sing a stage edition alike; shifted() moves the plan with a section's preview (studio.cut). jobs() makes the
+stems from it (synth.stem_jobs).
 """
 
 from __future__ import annotations
@@ -275,6 +278,57 @@ def prepare(genome, params, score, phrasing=None, choir=(), lyrics=None):
     if ex.get("release"):
         plan["release"] = float(ex["release"])
     return replace(score, stage=plan) if plan else score
+
+
+def laid(genome, params, phrasing=None, choir=(), lyrics=None):
+    """A version's score as every render lays it out (the command line's, the studio's, the browser's): realized,
+    laid (variation.lay), and with its stage plan where it has one (prepare())."""
+    from . import variation
+    from .realize import realize
+
+    score = variation.lay(realize(genome, params, phrasing=phrasing, choir=list(choir), lyrics=lyrics), params)
+    return prepare(genome, params, score, phrasing=phrasing, choir=choir, lyrics=lyrics)
+
+
+def copied(score, part: str, span: tuple[float, float], start: float):
+    """A score with one part's notes in span (a, b) those it plays from `start` for as long (the same bars and
+    chords elsewhere in the song): its own notes there let go. A section's preview copies so (shifted()); a whole
+    render copies the sound itself (jobs()), with the notes that ring across the span's edges."""
+    a, b = span
+    shift = a - start
+    kept = [n for n in score.notes if n.part != part or not a <= n.start < b]
+    moved = [replace(n, start=n.start + shift) for n in score.notes
+             if n.part == part and start <= n.start < start + (b - a)]
+    return replace(score, notes=tuple(sorted(kept + moved, key=lambda n: n.start)))
+
+
+def shifted(plan: dict, start: float, t0: float, t1: float, end: float, cut) -> dict:
+    """A stage plan for a stretch of the song (a section's preview: studio.cut), from `start` (zero there) to
+    t1: the lead's takes and their joins, the levels and the layered parts moved as the notes are (cut, the
+    studio's, for a layer's score), a sung note before t0 left out as cut leaves it. The last notes are let go
+    only where the stretch reaches the song's end. A twin is level with its player over the stretch, and a layered
+    part copied from elsewhere plays the notes it plays there (copied()): a preview is near the whole render's
+    sound there, not its samples, as every preview is."""
+    out = {}
+    if plan.get("takes"):
+        out["takes"] = {h: {**take, "notes": tuple(replace(n, start=n.start - start) for n in take["notes"]
+                                                   if t0 <= n.start < t1)}
+                        for h, take in plan["takes"].items()}
+        joins = plan["plan"]
+        first = max((k for k, (t, _) in enumerate(joins) if t <= start), default=0)
+        out["plan"] = [(t - start, h) for t, h in joins[first:] if t < t1]
+    if plan.get("twins"):
+        out["twins"] = plan["twins"]
+    if plan.get("levels"):
+        out["levels"] = {name: ([t - start for t in ts], gs) for name, (ts, gs) in plan["levels"].items()}
+    for layer in plan.get("layers") or []:
+        whole = layer["score"]
+        for part, span, source in layer["copies"]:  # (the sound it copies may lie outside the stretch: its notes)
+            whole = copied(whole, part, span, source)
+        out.setdefault("layers", []).append({**layer, "score": cut(whole, t0, t1)[0], "copies": []})
+    if plan.get("release") and t1 >= end:
+        out["release"] = plan["release"]
+    return out
 
 
 def touched(score) -> set[str]:
