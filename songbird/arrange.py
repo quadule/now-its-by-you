@@ -1366,10 +1366,10 @@ def _named(entries: list[dict], sung, fallback: str) -> tuple[str, dict]:
 #      "tag": "la"}
 #
 # Slot words are kept as sung (a coupled slot's by column), so a record reads plainly. A form with fewer
-# refrains sings the first rounds and the last; a lone refrain asks what the first asks. Words held before
-# each refrain had words of its own ({"slots": the once-a-song words, "couplets": each refrain's but the
+# refrains sings the first rounds and the last; a lone refrain asks what the first asks. Held words that
+# give the refrains none of their own ({"slots": the once-a-song words, "couplets": each refrain's but the
 # last's, "last": the canon's own slot words}, the question turning in order) are read as the rounds they
-# sang (rounds()). sing() fits held words to a form, held_problem() says why it can't, and songbird.evolve
+# sing (rounds()). sing() fits held words to a form, held_problem() says why it can't, and songbird.evolve
 # changes them a little at a time down a lineage and over time.
 
 
@@ -1399,7 +1399,7 @@ def _round(song: _Song, s: Sung) -> dict:
 
 def rounds(genome: Genome, held: dict) -> list[dict]:
     """The refrains some held words sing, one round each, the last the canon's (copies): as held, or, for
-    words held before each refrain had words of its own, as they were sung: the once-a-song words in every
+    held words that give the refrains none of their own, as those are sung: the once-a-song words in every
     refrain, a couplet for each but the last, the question turning in order."""
     refrain = held.get("refrain") or {}
     if "rounds" in refrain:
@@ -1432,7 +1432,7 @@ def _placed(song: _Song, held_rounds: list[dict], n: int) -> list[dict]:
             asked = _options(song.bank["refrain"]["slots"]["question"])
             question = _question_rule(song, 0, 1, head)
             if question is None:
-                # A first refrain can now choose among several questions. When
+                # A first refrain can choose among several questions. When
                 # shortening a song, keep the question its first refrain asked;
                 # the last refrain supplies the canon couplet, not its question.
                 firsts = _firsts(song)
@@ -1532,8 +1532,8 @@ def _option(spec, value) -> int | None:
 
 def _held_picks(entry: dict, slots: dict, what: str, first_if_missing: bool = False) -> dict[str, int]:
     """The option index for each slot an entry sings, from the words held for it. first_if_missing: a slot
-    the words don't name sings its first word (a refrain's held words from before the bank gave the refrain
-    that slot, as "this" song came to be a slot on 2026-09-27: the bank lists the word sung until then first)."""
+    the words don't name sings its first word (a refrain's words held by a record made without that slot, as
+    the earliest records are without "this" song's: the bank lists the word they sing first)."""
     spec = entry.get("slots", {})
     picks = {}
     for name in slot_names(entry["lines"]):

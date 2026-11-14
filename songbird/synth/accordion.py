@@ -545,7 +545,7 @@ def render(name: str, notes, sr: int, length: int, rng: np.random.Generator, mak
     places = {"treble": (-0.3, 1.0), "bass": (0.3, 1.3), "left": (-0.25, 1.0), "right": (0.25, 1.0)}
     # Each side's dry sound, out + clicks + the hiss (the filtered noise * air * HISS * (1 + 3 wear)), made where the
     # reeds lie: the clicks a touching run at a time (each run summed from 0.0 in the order they were made, as a
-    # whole track of them was; between runs that track is 0.0, which adds nothing to a sum begun from 0.0), the hiss
+    # whole track of them would be; between runs that track is 0.0, which adds nothing to a sum begun from 0.0), the hiss
     # a stretch at a time (the noise drawn and filtered a stretch at a time, in order, the filter's state carried).
     for k, side in enumerate(sides):
         dry, air_side, bursts = out[side], air[side], clicks[side]
@@ -575,7 +575,7 @@ def render(name: str, notes, sr: int, length: int, rng: np.random.Generator, mak
 
 def _lay_runs(into: np.ndarray, bursts: list) -> None:
     """Short bursts (start, values), in the order they were made, added into `into` as a whole track of them would
-    have been: each run of touching bursts summed from 0.0 in that order, then added."""
+    be: each run of touching bursts summed from 0.0 in that order, then added."""
     spans = sorted(range(len(bursts)), key=lambda k: bursts[k][0])
     run, hi = [], -1
     for k in spans + [None]:

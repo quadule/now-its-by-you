@@ -43,9 +43,9 @@ LEVEL_VEL = {"soft": 0.8, "plays": 1.0, "hard": 1.15}
 LEVEL_SHIFT = {"soft": -0.3, "hard": 0.3}
 DRUMS = ("drums", "drum machine")  # the families that play a kit's grooves (songbird.idioms.groove_bar)
 FILLED = ("groove", "four", "toms", "half", "machine")  # the grooves that end a section with a fill (w_groove)
-# Idioms that play the same as another, offered once: the drum machine's own four on the floor was "machine" until
-# 2026-09-30 (idioms.w_machine is w_four); a record, a draft or a lock that says it is read as the one kept.
-ALIASES = {"machine": "four", "bodhran": "tipped", "bodhran-light": "tipped-light"}  # (the jig's drum, renamed)
+# Idioms that play the same as another, offered once: the drum machine's own four on the floor is "machine" too
+# (idioms.w_machine is w_four); a record, a draft or a lock that says it is read as the one offered.
+ALIASES = {"machine": "four", "bodhran": "tipped", "bodhran-light": "tipped-light"}  # (the jig's drum too)
 LINES = ("lead", "quote", "counter", "descant", "under", "tone", "double", "hook", "fills")  # idioms.LINES
 
 # The ballad band's players (songbird.band) and what their own writers play
@@ -91,7 +91,7 @@ LABELS = {
 }
 
 
-# house's and dub's (2026-09-30; docs/STYLES.md, "House and dub")
+# house's and dub's (docs/STYLES.md, "House and dub")
 LABELS.update({
     "floor": "four on the floor, open hats between", "house": "a house groove: claps on two and four",
     "drop": "the drop: the ride on every beat", "offbeat": "on the off-beats", "rolling": "a rolling bass",
@@ -100,7 +100,7 @@ LABELS.update({
     "dubbass": "the riddim", "skank": "the skank on the off-beats", "bubble": "the organ bubble",
 })
 FILLED += ("onedrop", "steppers")
-# the jazz trio's (2026-09-30; docs/STYLES.md, "A jazz trio")
+# the jazz trio's (docs/STYLES.md, "A jazz trio")
 LABELS.update({
     "rootless": "comping, the chords without their root", "rootless-light": "held chords without their root",
     "solo": "the tune, the left hand keeping the chords", "walking": "walking, into each chord by a step",
@@ -108,10 +108,10 @@ LABELS.update({
     "swept-light": "brushes swept round",
 })
 FILLED += ("swept",)
-# a hymn's organ (2026-09-30, night; docs/STYLES.md, "A hymn")
+# a hymn's organ (docs/STYLES.md, "A hymn")
 LABELS.update({"hymn": "the four parts with the singers, the pedal under", "givingout": "giving the tune out in four parts"})
 
-# the old 78's (2026-09-30; docs/STYLES.md, "An old 78"): a parlour piano's oom-pah, and the tune over its own hand
+# the old 78's (docs/STYLES.md, "An old 78"): a parlour piano's oom-pah, and the tune over its own hand
 LABELS.update({"stride": "oom-pah, the bass walking now and then", "parlour": "the tune over its own oom-pah"})
 PLAYER_LABELS_78 = {("guitar", "parlour"): "the tune over its own thumb"}
 LINES += ("parlour",)  # (idioms.LINES)
@@ -542,7 +542,7 @@ def spans(genome, params, lead: float) -> list[tuple[str, str, float, float]]:
 # ---------------------------------------------------------------- in the arrangers (songbird.band, songbird.idioms)
 #
 # prepare() before the program's plan, take_over() after it (and after the style's options), shape() on the notes
-# written. The program's plan runs on its own sections, as it always has: a pair of sections in a row (verses
+# written. The program's plan runs on its own sections: a pair of sections in a row (verses
 # in pairs) is one section to it; a pair a person arranged either of is split only afterwards, both halves
 # keeping what the program gave the pair, so nothing else in the band moves.
 

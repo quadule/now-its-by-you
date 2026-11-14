@@ -273,7 +273,7 @@ def ring(freqs, t60s, times, amps, sr: int, length: int, *, mix=None, bend=None,
         acc, at = _double(acc), at // 2
     if acc is None:
         out = np.zeros((length, mix.shape[1]))
-    else:  # the sum as it lies, a view of its first `length` samples: + 0.0 is what adding it to zeros did
+    else:  # the sum as it lies, a view of its first `length` samples: + 0.0 is what adding it to zeros does
         out = acc[:length]
         out += 0.0
     if apart:

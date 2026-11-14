@@ -132,7 +132,7 @@ STREAM = {name: k + 1 for k, name in enumerate(INSTRUMENTS)} | {"fills": 20, "qu
 
 def register_of(part: str) -> tuple[int, int]:
     """The MIDI range a part's player reaches: the seed's band's own table (unlimited for the eight
-    it doesn't list, as it always was), and any other instrument's from the registry."""
+    it doesn't list), and any other instrument's from the registry."""
     if part in REGISTER:
         return REGISTER[part]
     if part in INSTRUMENTS:
@@ -1360,10 +1360,9 @@ def drum_part(ctx: Context) -> list[Ev]:
             rng = ctx.rand("drum", bar_u)
             hits = _drum_bar(ctx, what)
             last_bar = b == bars - 1
-            # (Until 2026-09-27 the last bar before a refrain or a bigger section ended in a fill: a triplet of tip
-            # strokes, or a build of eighths. Three even, identical taps on a synthesized skin read as a finger on a
-            # microphone, and the artist heard them all night; the bar keeps its pattern and the section change is
-            # the singer's to make.)
+            # (The last bar before a refrain or a bigger section has no fill, neither a triplet of tip strokes nor a
+            # build of eighths: three even, identical taps on a synthesized skin read as a finger on a microphone.
+            # The bar keeps its pattern and the section change is the singer's to make.)
             if what == "end":
                 hits = [(0.0, "bass", 0.35)] if not last_bar else []
             for pos, stroke, v in hits:
@@ -1473,8 +1472,8 @@ def motif_part(ctx: Context, section: int, part: str, top: int) -> list[Ev]:
         return []
     notes = [Tune(p0 + k * step, p0 + (k + 1) * step, pitch, 0.6, False, section, k == 0, k == len(motif) - 1, ())
              for k, pitch in enumerate(pitches)]
-    # heard, not hidden: about 3 dB under the intro's statement of the tune (0.5 and 0.42 sat 8.6 dB under it,
-    # and 20 dB under the singers: "pretty hard to notice", 2026-09-27)
+    # heard, not hidden: about 3 dB under the intro's statement of the tune (0.5 and 0.42 sit 8.6 dB under it,
+    # and 20 dB under the singers: hard to notice)
     return statement(ctx, part, notes, 0.65, section, ornament=False, shift=shift)
 
 

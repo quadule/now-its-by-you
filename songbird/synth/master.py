@@ -268,7 +268,7 @@ def true_peak_envelope(x: np.ndarray, floor: float = 0.0) -> np.ndarray:
     taps = _interpolator()
     between = np.zeros(len(loud))
     # the window around n, samples n + REACH down to n - REACH (zero past either end), a row for each point,
-    # copied out of the signal as the rows of a sliding view over it zero-padded and reversed were (the same
+    # copied out of the signal as the rows of a sliding view over it zero-padded and reversed would be (the same
     # matrix, value for value, into the same product; the padded copy of the song is never made)
 
     if not fx.JIT:  # the same rows, from a sliding view over the signal zero-padded and reversed

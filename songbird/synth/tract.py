@@ -101,7 +101,7 @@ def upper_branch(sr: int, scale: float = 1.0, mouth_cm: float = 1.0, crossover: 
     lossy tube's response, high-passed where the cascade takes over. Kept
     parallel (not after the cascade) so the cascade's block-wise coefficient
     updates stay buried under its own roll-off instead of being lifted into
-    audible hiss. Design and measurements by the Fable voice review.
+    audible hiss.
     """
     f = np.linspace(0.0, sr / 2.0, n_fft // 2 + 1)
     u = tube_magnitude(np.maximum(f, 1.0), 16.64 / scale, mouth_cm)  # 16.64 cm puts F1 at 500 Hz

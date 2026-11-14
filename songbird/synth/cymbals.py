@@ -389,7 +389,7 @@ def _ticks(hits: list[Hit], sr: int, length: int, rng: np.random.Generator, brig
            into: np.ndarray | None = None) -> np.ndarray:
     """The stick's own tick on the bronze: a fraction of a millisecond of bright noise. hits in time order.
     into: the ticks added to it (and it returned), a run of touching ticks at a time, each run's samples
-    summed from 0.0 in the hits' order as a whole track of them was; between runs that track is 0.0, and adding
+    summed from 0.0 in the hits' order as a whole track of them would be; between runs that track is 0.0, and adding
     0.0 leaves every value but -0.0 as it was (into is a sum begun from 0.0: it holds no -0.0)."""
     out = np.zeros((length, 2)) if into is None else into  # (or a pair of channels, each added to)
     n = int(0.003 * sr)

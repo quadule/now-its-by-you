@@ -112,7 +112,7 @@ def _spelt(letter: int, alter: int) -> str:
 def tonic_letter(tonic: int, mode: str) -> tuple[int, int]:
     """The tonic's letter and accidental: the name a musician writes the key by, the one of its two names with the
     fewer sharps or flats (D♭ major's five flats, not C♯ major's seven sharps; G♯ minor's five sharps, not A♭
-    minor's seven flats; the artist, 2026-09-30), its usual name (NOTE_NAMES) when they tie (F♯ major, E♭ minor)
+    minor's seven flats), its usual name (NOTE_NAMES) when they tie (F♯ major, E♭ minor)
     or it has only one."""
     pc = tonic % 12
     name = NOTE_NAMES[pc]
@@ -231,7 +231,7 @@ def chord_name(symbol: str, tonic: int, mode: str) -> str:
 
 
 FLOOR = 52  # E3: below about 160 Hz the learned throat's pulses are heard one by one (a "tapping" through the
-# bridge, 2026-09-27: 35 thumps a second at E2, 10 at D3, 2 at E3, none from A3 up); real basses sing to E2 (40),
+# bridge: 35 thumps a second at E2, 10 at D3, 2 at E3, none from A3 up); real basses sing to E2 (40),
 # and the bass instrument has that register
 
 

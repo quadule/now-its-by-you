@@ -156,13 +156,13 @@ class Texture:
       the next. By harmonic, because what matters is where harmonics stop being heard one by one.
     """
 
-    spread: float = 0.25  # the teacher's upper harmonics are about this spread (docs/THROAT.md; 0.15 until 2026-09-27)
+    spread: float = 0.25  # the teacher's upper harmonics are about this spread (docs/THROAT.md)
     spread_from: float = 1500.0
     jitter: float = 0.0
     jitter_corr: float = 0.5
-    scatter: float = 0.5  # radians: upper harmonics nearer the teacher's steadiness (docs/THROAT.md; 0.4 until
-    # 2026-09-27: steady vowels' 4-8 kHz still bunched at the pulse, excess kurtosis 2.8 to the teacher's 1.3, and
-    # a low voice buzzed with it; 0.25/0.5 lands on the teacher, 0.3/0.6 overshoots)
+    scatter: float = 0.5  # radians: upper harmonics nearer the teacher's steadiness (docs/THROAT.md; at
+    # 0.4 steady vowels' 4-8 kHz still bunch at the pulse, excess kurtosis 2.8 to the teacher's 1.3, and a low
+    # voice buzzes with it; 0.25/0.5 lands on the teacher, 0.3/0.6 overshoots)
     scatter_from: float = 8.0
     scatter_to: float = 20.0
 
@@ -261,7 +261,7 @@ def synthesize(f0: np.ndarray, sp: np.ndarray, ap: np.ndarray, sr: int, rng: np.
         rows of the random values drawn for them."""
         env = to_bins(sp[k0[sl]] * (1 - w[sl]) + sp[k1[sl]] * w[sl], fft, sr, log_power=True)
         aper = to_bins(ap[k0[sl]] * (1 - w[sl]) + ap[k1[sl]] * w[sl], fft, sr, log_power=False)
-        # (worked out in place where the arrays are this block's own: each product and sum as before, in the same
+        # (worked out in place where the arrays are this block's own: each product and sum as written out, in the same
         # order, so the same bits with a fifth of the temporaries, which in the browser are most of the time)
         ratio = np.clip(aper, 0.001, 0.999, out=aper)
         np.square(ratio, out=ratio)
@@ -344,7 +344,7 @@ def synthesize(f0: np.ndarray, sp: np.ndarray, ap: np.ndarray, sr: int, rng: np.
     try:
         for c0 in range(0, len(at), chunk):
             rows = len(at[c0: c0 + chunk])
-            # the chunk's random values, drawn as they always were: its scatter, then its noise
+            # the chunk's random values, always drawn in this order: its scatter, then its noise
             scatter = rng.standard_normal((rows, _knots(sr))) if tx.scatter > 0 else None
             noise = rng.standard_normal((rows, fft))
             # blocks of BLOCK pulses, the last taking one left over (a single row is summed in another order)
@@ -556,9 +556,9 @@ def _linear(x: np.ndarray, w: dict, name: str) -> np.ndarray:
 
 # The people's share of every voice: the singer trained on everyone's takes together (source "human", one
 # embedding for all of them; docs/THROAT.md "Everyone's voice") is this much of the machine's default blend and
-# of every machine's own, the rest the synthetic singers' as before. The consent promises a voice trained on
+# of every machine's own, the rest the synthetic singers'. The consent promises a voice trained on
 # everyone's takes at once and never set to sound like one person (web/sing/consent.md); 0.3 is our choice,
-# not the consent's: 70% synthetic by construction. The artist allows 0.3-0.6 (2026-10-07).
+# not the consent's: 70% synthetic by construction. The artist allows 0.3-0.6.
 HUMAN_SHARE = 0.3
 
 
@@ -702,7 +702,7 @@ def predict(model: Model, t: dict, lf0: np.ndarray, singer: np.ndarray, gv: floa
 
     Long timelines are inferred a bounded stretch at a time, with the network's complete temporal
     context on each side. Continuous inputs are formed before slicing so log-f0 slopes stay whole;
-    global variance is applied to the assembled output, with the same full-song mean as before."""
+    global variance is applied to the assembled output, with the full song's mean."""
     cont = continuous(t, lf0)
     if len(lf0) <= PREDICT_BLOCK:
         y = _predict_raw(model, t, cont, singer)
@@ -781,7 +781,7 @@ def sharpen(sp: np.ndarray, amount: float, width: int = 17) -> np.ndarray:
 RATE = 24000  # the throat sings at its training data's rate; the result is resampled to the mix's
 
 # How long its teacher held each consonant (median seconds, by phone and place in the syllable,
-# measured by forced alignment over the SoulX corpus, 2026-09-25). SoulX's sonorants run about
+# measured by forced alignment over the SoulX corpus). SoulX's sonorants run about
 # twice the formant singer's (a coda n 120 ms against 49): sung under those lengths, the throat
 # hears what it learned instead of consonants squeezed into half the time.
 DURATIONS = {
@@ -801,8 +801,8 @@ TRACT = 1.12  # VoiceParams.tract that leaves the learned envelope where it is
 # A diphthong's second half before a nasal coda, sung in the vowel. The network's AW before n, m or ng
 # holds its first target (F1 800-900 Hz, F2 1700-1800) almost to the nasal and closes toward [ʊ] only in
 # the nasal's own frames, where its murmur hides it: the vowel heard ends on AH (its last third 3.6 dB
-# from the throat's own "sund", 8.3 dB from its open AW) and "sound" came out "sund" (the artist,
-# 2026-09-30). So the last fraction of such a vowel is told as the phone given here: UW, which the throat
+# from the throat's own "sund", 8.3 dB from its open AW) and "sound" comes out "sund".
+# So the last fraction of such a vowel is told as the phone given here: UW, which the throat
 # sings before a nasal as [ʊ] (F1 about 450, F2 1150-1300), where its UH there is AH-like (F1 800). The
 # vowel's own timing, pitch and loudness are the schedule's as ever; only what the network is told
 # changes. docs/THROAT.md, "Sound, not sund".
@@ -826,17 +826,16 @@ def parse_mix(spec: str | dict | None) -> dict[str, float] | None:
 # ---- the consonants the throat sings too softly -----------------------------------------------------
 
 # The teacher's word-final consonants are soft and the network's softer: on H sung everyone's way
-# (2026-09-27) a coda t or k came out 22 to 48 dB under its vowel with nothing above 3 kHz (no release at
+# a coda t or k comes out 22 to 48 dB under its vowel with nothing above 3 kHz (no release at
 # all), a coda d 8 to 18 dB under and no different from the nasal before it, and an f a low rumble; the
-# words went with them ("lit" heard "only", "laughed" "luck", "hummed" "harmed", "part" "board", "saved"
+# words go with them ("lit" heard "only", "laughed" "luck", "hummed" "harmed", "part" "board", "saved"
 # "seh"). What tells a listener a stop is its closure and its release, and a weak fricative its hiss. So
 # the formant singer's bursts and frication (songbird.phonetics BURSTS, FRICATION, as voice.sing lays them)
 # go over the throat's own, its output dipped through each stop's closure and each weak fricative, and a
-# coda nasal comes up a little. voice.crisp scales all of it; 0 leaves the throat as it was.
+# coda nasal comes up a little. voice.crisp scales all of it; 0 leaves the throat's own.
 # The blend: the throat's own consonant (the teacher's, as measured) stays under the rule-made one. Deeper dips and
 # louder bursts (0.3/0.06, +0 dB) read the same to Whisper (7.3% against 7.1% of H's words misheard, dry) and
-# sounded made; these keep more of the sung consonant (the artist: "soften or blend them slightly with measured
-# pronunciations", 2026-09-27).
+# sound made; these keep more of the sung consonant, softened and blended with the measured one.
 CLOSURE_DIP = {True: 0.5, False: 0.2}  # what is left of the throat's output through a voiced / voiceless stop's closure
 BURST = -3.0  # dB against the formant singer's burst levels (phonetics.BURSTS)
 BURST_SPREAD = (1.5, 0.15)  # dB of level and log length one burst differs from the next, at voice.spread 1 (no two alike)
@@ -844,24 +843,24 @@ ASPIRATION = -8.0  # dB under its burst the aspiration after a voiceless stop's 
 WEAK_FRICATIVES = {"F": 6.0, "TH": 6.0, "V": 6.0, "DH": 4.0}  # dB over the formant singer's frication levels
 FRICATIVE_DIP = 0.5  # what is left of the throat's output through a voiceless weak fricative
 NASAL_LIFT = 2.0  # dB a coda nasal comes up
-# A t's release on its own (the stop the artist heard as harsh, 2026-11-07). Scylla's Band's t's, on the same notes and
+# A t's release on its own (the stop heard as harsh). Scylla's Band's t's, on the same notes and
 # timing, have almost nothing under 4 kHz (2-3 kHz 22-27 dB under their vowels there); ours 20-27 dB more, from the
 # alveolar burst's band (centred 4.7 kHz at the default tract; its 6.5 kHz band, summed in phase, mostly cancels), which
 # the lead's de-esser (split 4.5 kHz) leaves while turning down what's above it (docs/THROAT.md). Turning the burst down
-# only made it quieter. The keys: the noise's shape (band-pass regions as phonetics.BURSTS writes them; None, the
+# only makes it quieter. The keys: the noise's shape (band-pass regions as phonetics.BURSTS writes them; None, the
 # alveolar burst's); dB added to the burst; its rise and fall (s); how many times as long it lasts; `decay` (s; None, a
 # flat burst), a release that falls away from its first instant as a real one does; dB added to the aspiration after it
 # (which doesn't follow the burst's level); the aspiration's own shape (None, the burst's) and when it starts after the
 # release (s); what is left of the throat's own t from the release to its end (1, all of it); and what is left of it
 # through the closure before the release (None, CLOSURE_DIP's), the silence a coda t ("part", "heart") is heard by.
-# T_AS_WAS leaves the t as it was.
+# T_AS_WAS leaves the t plain: the alveolar burst as articulate makes every stop's.
 T_AS_WAS = {"shape": None, "burst": 0.0, "ramp": 0.002, "longer": 1.0, "decay": None, "aspiration": 0.0,
-            "aspiration_shape": None, "aspiration_from": 0.008, "own": 1.0, "closure": None}  # every t as it was
-# The t the artist chose on the contest version (E8bl, 2026-11-07: "tE sounds best"): mostly 6-10 kHz with a little 3-4
+            "aspiration_shape": None, "aspiration_from": 0.008, "own": 1.0, "closure": None}  # every t plain
+# The t chosen by ear on the performance voice: mostly 6-10 kHz with a little 3-4
 # kHz 12 dB under, a release falling away over 10 ms and lasting about 30, loud enough that the lead's de-esser leaves
 # "part" and "heart" a t (after the lead chain, 13-17 dB under the word, 22-25 ms long, where Scylla's heard t's are
-# 11-17 dB under for 15-40 ms). Sung by default from the performance voice (2026-11-07) to the physical stops
-# (2026-11-11, STOP_PHYSICAL), and still when STOP_RELEASE["T"] is None; T_RELEASE.update(T_AS_WAS) sings the old t.
+# 11-17 dB under for 15-40 ms). Sung when STOP_RELEASE["T"] is None (by default STOP_PHYSICAL's t is sung);
+# T_RELEASE.update(T_AS_WAS) sings the plain t.
 T_CHOSEN = {"shape": [(8000.0, 4000.0, 0.0), (3500.0, 1500.0, -12.0)], "ramp": 0.0005, "burst": 8.0, "longer": 2.5,
             "decay": 0.01, "aspiration": -6.0, "own": 0.3}
 T_RELEASE = {**T_AS_WAS, **T_CHOSEN}
@@ -875,23 +874,22 @@ T_RELEASE = {**T_AS_WAS, **T_CHOSEN}
 # place's own (a t's alveolar hiss, say), at `breath` dB, to the vowel (an onset, `into` s into it) or for
 # `breath_len` s (a coda), falling away over `breath_decay` s (a coda; an onset fades into its vowel). `own` is
 # what is left of the throat's own sound from the release to the stop's end. Measured against Scylla's 3,400
-# stops on H (2026-11-08): a broadband spike, ~10 dB down 5 ms later in 1.5-4.5 kHz, then an even breath 27 dB
+# stops on H: a broadband spike, ~10 dB down 5 ms later in 1.5-4.5 kHz, then an even breath 27 dB
 # under the vowel for 30-40 ms in a coda, and a t's onset hiss above 4.5 kHz about 10 dB under it until the vowel.
 # A voiced stop (B D G) is the same with `breath` None for none (its folds go on voicing), and an affricate (CH JH)
 # has its fricative's own hiss (SH's, ZH's, or `fric_shape`) from `breath_from` after the spike to its end, at
 # `breath` dB, in place of the breath. `closure` (None, CLOSURE_DIP's) is what is left of the throat's own sound
 # through the closure: the throat starts its own ch hiss ~25 ms before the release, which a closure held silent keeps
 # for the release (held as given: voice.crisp scales every other dip, and at its 0.6 a closure "5% left" kept 45%).
-# None leaves a phone's release as articulate makes it (T_RELEASE's t), as STOP_AS_WAS does for every phone; since
-# 2026-11-11 STOP_PHYSICAL's are sung by default.
+# None leaves a phone's release as articulate makes it (T_RELEASE's t), as STOP_AS_WAS does for every phone;
+# STOP_PHYSICAL's are sung by default.
 STOP_AS_WAS: dict[str, dict | None] = {p: None for p in ("T", "K", "P", "CH", "B", "D", "G", "JH")}
 STOP_RELEASE_DEFAULT = {"spike": -24.0, "spike_len": 0.003, "spike_decay": 0.0012, "spike_shape": None,
                         "breath_from": 0.006, "breath": -27.0, "f1": -12.0, "f3": -3.0, "extra": (),
                         "breath_len": 0.04, "breath_decay": 0.03, "into": 0.01, "own": 0.3, "closure": None,
                         "fric_shape": None}
-# The physical stops: the t, k and p the artist heard on the contest version ("E8bl-phys-B sounds great",
-# 2026-11-11), tuned to Scylla's releases on H (tools/throat/stop_release.py): from 10.9 dB off Scylla's coda t's
-# envelope (tE) to 3.7; then ch, j, b, d and g ("keep all of them", 2026-11-11).
+# The physical stops: t, k and p tuned to Scylla's releases on H (tools/throat/stop_release.py), 3.7 dB off
+# Scylla's coda t's envelope where T_CHOSEN's t is 10.9; and ch, j, b, d and g.
 _SPIKE_T = [(2100.0, 1200.0, 0.0), (3600.0, 1800.0, 0.0), (6500.0, 5000.0, -6.0)]
 _SPIKE_CH = [(3600.0, 1800.0, -6.0), (6500.0, 5000.0, 0.0)]
 _FRIC_CH = [(3800.0, 1400.0, -4.0), (6500.0, 5000.0, 0.0)]
@@ -903,7 +901,7 @@ STOP_PHYSICAL: dict[str, dict] = {
     "P": {"spike": -7.0, "f1": -6.0, "breath_from": 0.004,
           "onset": {"breath": -15.0, "extra": [(6500.0, 5000.0, -16.0)]},
           "coda": {"breath": -13.0, "extra": [(6500.0, 5000.0, -12.0)]}},
-    # ch and j (2026-11-11): a closure held shut (the throat's own hiss started 25 ms early, so its release was
+    # ch and j: a closure held shut (the throat's own hiss starts 25 ms early, so its release is
     # lost: ch's 4.5-9 kHz 10 dB under Scylla's for 30 ms), a spike above 3 kHz and a hiss brighter than SH's.
     "CH": {"spike": -10.0, "spike_shape": _SPIKE_CH, "breath_from": 0.001, "breath": -9.0, "fric_shape": _FRIC_CH,
            "own": 0.15, "closure": 0.05},
@@ -1047,8 +1045,8 @@ def articulate(y: np.ndarray, segs: list, sr: int, voice, rng: np.random.Generat
 
 
 # A real voice is part noise at the top: in the natural reference's vowels the aperiodicity runs 0.32 to 0.65 from
-# 2 to 8 kHz, the throat's 0.18 to 0.48, and its harmonics stand as clean lines to 10 kHz (a buzz the artist heard as
-# robotic, 2026-09-27). voice.air sets a floor the aperiodicity never falls under, rising from AIR_FROM to AIR_TO Hz.
+# 2 to 8 kHz, the throat's 0.18 to 0.48, and its harmonics stand as clean lines to 10 kHz (a buzz heard as
+# robotic). voice.air sets a floor the aperiodicity never falls under, rising from AIR_FROM to AIR_TO Hz.
 AIR_FROM, AIR_TO = 2500.0, 8000.0
 
 

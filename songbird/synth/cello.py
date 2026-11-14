@@ -455,7 +455,7 @@ def _hiss(force: np.ndarray, bow_v: np.ndarray, beta: np.ndarray, sr: int, rng: 
     for a in range(0, total, BLOCK):
         b = min(total, a + BLOCK)
         noise, state = sosfilt(sos, rng.standard_normal(b - a), zi=state)
-        burst = np.zeros(b - a)  # each stroke's bite, laid on as a whole track of them was: in order, from 0.0
+        burst = np.zeros(b - a)  # each stroke's bite, laid on as a whole track of them would be: in order, from 0.0
         for at, motion_at, hard in strokes:
             m = min(n, total - at)
             lo, hi = max(a, at), min(b, at + m)

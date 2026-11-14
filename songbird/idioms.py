@@ -1601,7 +1601,7 @@ def tipped_bar(ctx: StyleContext, light: bool) -> list[tuple[float, str, float]]
     (bass: the open stroke near the middle; tip: lighter, the back hand on the skin). Down-up-down on each dotted
     beat, the bar's first open: in six-eight the song re-barred, else each beat of the song in threes (its own
     eighths in a six-eight song, twelve-eight's swung ones in another). Light: the beats and a stroke before the
-    next. (The reel's down-up sixteenths and its back-hand-high "top" stroke went with the reel, 2026-09-30.)"""
+    next."""
     if ctx.feel == "six":
         if light:
             return [(0.0, "bass", 0.72), (4.0, "tip", 0.5), (7.0, "tip", 0.36)]
@@ -1710,7 +1710,7 @@ WRITERS = {
     "machine": w_machine, "end": w_end, "stomp": w_stomp, "stomp4": w_stomp4, "claps": w_claps,
     "tambourine": w_tambourine, "shaker": w_shaker, "cajon": w_cajon,
     "build": w_build,  # only where a person asked for a build (songbird.takeover)
-    # the jig's (docs/STYLES.md, "Two more", 2026-09-30), its drum's by their old names too (takeover.ALIASES)
+    # the jig's (docs/STYLES.md, "Two more"), its drum's by their other names too (takeover.ALIASES)
     "tipped": w_tipped, "tipped-light": w_tipped_light, "dadgad": w_dadgad,
     "bodhran": w_tipped, "bodhran-light": w_tipped_light,
 }
@@ -1724,10 +1724,10 @@ def w_hymn(ctx: StyleContext, i: int, part: str) -> list[Ev]:
     return hymn.w_hymn(ctx, i, part)
 
 
-WRITERS.update({"hymn": w_hymn, "givingout": w_hymn})  # a hymn's (docs/STYLES.md, "A hymn", 2026-09-30, night)
+WRITERS.update({"hymn": w_hymn, "givingout": w_hymn})  # a hymn's (docs/STYLES.md, "A hymn")
 
 
-# --- house and dub (2026-09-30; docs/STYLES.md, "House and dub") ------------------------------------------------
+# --- house and dub (docs/STYLES.md, "House and dub") ------------------------------------------------
 #
 # House: a drum machine's four on the floor with the open hat on every off-beat, a clap on two and four, the ride
 # in the drop; an off-beat or rolling synth bass; piano or organ stabs; a pluck. Dub: the kit's one drop (nothing
@@ -2312,7 +2312,7 @@ def _backing(ctx: Context, melody: list[dict], style) -> list[Sung]:
     return out
 
 
-# --- voices alone: an a cappella's parts (docs/STYLES.md, "Two more", 2026-09-30) -------------------------------
+# --- voices alone: an a cappella's parts (docs/STYLES.md, "Two more") -------------------------------
 #
 # The lead sings the tune, the tenor as in shape-note singing, and the group sings around it, each voice a part in
 # turn: the under voice (the chord's root where it fits between the throat's floor and the tune, else a chord tone
@@ -2874,7 +2874,7 @@ def arrange_style(genome, params, placed, lead, end, melody, seconds, sdef) -> t
     return notes, settings
 
 
-# --- the jazz trio's (2026-09-30; docs/STYLES.md, "A jazz trio") ---------------------------------------------------------
+# --- the jazz trio's (docs/STYLES.md, "A jazz trio") ---------------------------------------------------------
 #
 # The trio plays its own changes (songbird.style.trio_changes: the song's chords with sevenths and sixths, a ii-V into
 # the cadences), each where it sits with the tune. A chord held over two of a bar's shares is written twice; the trio
@@ -3152,7 +3152,7 @@ WRITERS.update({"rootless": w_rootless, "rootless-light": w_rootless_light, "sol
                 "twofeel": w_twofeel, "swept": w_swept, "swept-light": w_swept_light})
 
 
-# --- the old 78 (2026-09-30; docs/STYLES.md, "An old 78") ------------------------------------------------------------
+# --- the old 78 (docs/STYLES.md, "An old 78") ------------------------------------------------------------
 #
 # A parlour piano's oom-pah under a song, its bass in the tenor (where a recording horn took it: synth/disc.py) and now
 # and then walking into the next chord; and where the piano or a guitar plays the tune (an intro, a break, an outro)

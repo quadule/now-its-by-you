@@ -483,7 +483,7 @@ def fit_rounds(genome, n: int, rounds: list[dict], picker: Picker, note=None) ->
 
     once = arrange.refrain_once(genome)
 
-    def pick(i: int, slot: str, words: list):  # the machine's own (a word kept once a song, as it always was)
+    def pick(i: int, slot: str, words: list):  # the machine's own (a word kept once a song is drawn once)
         return picker.one(f"refrain:{slot}" if slot in once else f"refrain {i + 1}:{slot}", words)
 
     held = [r.get("words") or {} for r in placed]

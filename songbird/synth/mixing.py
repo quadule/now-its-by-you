@@ -84,7 +84,7 @@ class MixParams:
     wear: float = 0.0
     balance: tuple[tuple[str, float], ...] = ()
     plate: float = 1.0
-    disc: float = 0.0  # an acoustic 78 (2026-09-30, the old 78's; any style's at the command line)
+    disc: float = 0.0  # an acoustic 78 (the old 78's; any style's at the command line)
     voices: float = 1.0  # the singers muted at 0: the band alone, as the record has it
 
     @classmethod
@@ -118,7 +118,7 @@ class MixParams:
         out = {f.name: getattr(self, f.name) for f in fields(self)}
         out["tone"] = list(self.tone)
         out["balance"] = dict(self.balance)
-        if not out["disc"]:  # added after records were made: absent while off, so a record is as it was
+        if not out["disc"]:  # absent while off, so a record made without it reads the same
             del out["disc"]
         if out["voices"] == 1.0:  # the same
             del out["voices"]
@@ -205,7 +205,7 @@ ROLES: dict[str, Strip] = {
     # 131 Hz) kept, the box's hump near 250 Hz eased; they mostly comp, so they step back only a little.
     "squeezebox": Strip(eq=(("hp", 50), ("peak", 250, -1.0, 1.0), ("peak", 1200, -1.5, 1.0), ("peak", 2800, -2.0, 1.0),
                             ("high", 9000, -1.0)), send=1.1, duck=1.0),
-    # A harmonica: its cover plates' presence near 3 kHz is its reed's own now, so only a little of its honk near
+    # A harmonica: its cover plates' presence near 3 kHz is its reed's own, so only a little of its honk near
     # 1 kHz out and its breath's top softened; a lead line, it steps back under the voice.
     "harmonica": Strip(eq=(("hp", 180), ("peak", 1000, -1.5, 1.0), ("high", 10000, -1.0)), send=1.1, duck=2.0),
     # A cello or a section: the fiddle's treatment without its 180 Hz high-pass, so the low strings are heard; the
@@ -249,13 +249,13 @@ NAMES = {
     "organ": ("organ", "synthpad", "synth-pad", "harmonium", "pipeorgan"),  # sustained keys: no drone's 6 kHz low-pass
     "reed": ("reed",),
     "squeezebox": ("accordion", "concertina", "melodeon", "bandoneon", "squeezebox"),
-    "harmonica": ("harmonica", "melodica"),  # a melodica: a free reed blown, a lead line (2026-09-30)
+    "harmonica": ("harmonica", "melodica"),  # a melodica: a free reed blown, a lead line
     "strings": ("cello", "viola", "strings", "quartet"),  # their low strings kept: no fiddle's 180 Hz high-pass
     "synth": ("synth", "synthlead", "arp", "chip"),
     "steel": ("steel", "pedalsteel", "lapsteel"),  # its low strings kept, and no fiddle's duck: it swells by its pedal
     "slide": ("slide", "bottleneck"),
     "fx": ("fx",),  # a person's transitions (docs/SOUND-DESIGN.md)
-    "chop": ("chop",),  # a style's vocal chop (house's, 2026-09-30)
+    "chop": ("chop",),  # a style's vocal chop (house's)
 }
 SINGERS = ("voice", "choir")  # stems sung by the singers: matched by their whole names only
 
@@ -274,7 +274,7 @@ def role_of(name: str) -> str:
 
 
 # The voice and choir, in the same terms as the band's roles.
-VOICE_EQ = (("hp", 80), ("peak", 900, -2.0, 1.2), ("peak", 3500, 0.5, 0.9))  # presence 2.0 until 2026-09-27 (the top notes were harsh)
+VOICE_EQ = (("hp", 80), ("peak", 900, -2.0, 1.2), ("peak", 3500, 0.5, 0.9))  # presence 0.5 dB: at 2.0 the top notes are harsh
 # The voice's air (7-14 kHz) against its body (0.5-2 kHz): natural singers (SoulX-Singer renders of our score)
 # measure -21 to -23 dB. A voice brighter than AIR is brought half way back, never by more than 3 dB.
 AIR = -20.0
@@ -299,7 +299,7 @@ PLATE_RT60 = 1.5
 RETURN_EQ = (("hp", 120), ("lp", 12000))  # wide enough that the harvested tone's ends are heard
 RETURN_DIP = 3.0  # dB the room and plate give way while the voice sings
 MAKE_WAY = (0.02, 0.9)  # s the band and room take to make way for the voice (quick: its first consonants), and to come back after it (slow: no breathing)
-RIDE = (5.0, 1.5)  # dB the band comes up where the voice rests, over this many seconds (3.0 until 2026-09-27)
+RIDE = (5.0, 1.5)  # dB the band comes up where the voice rests, over this many seconds
 
 CARVE = (2600.0, 0.7)  # the band's dip for the voice: centre Hz, Q
 CARVE_DEPTH = 6.0  # dB at full voice
@@ -307,19 +307,19 @@ BAND_EQ = (("low", 200, 2.5), ("peak", 600, -2.0, 0.8))  # the band as a whole: 
 BAND_COMP = (10.0, 1.5, 0.02, 0.2, 2.0, 3.0)  # the band together, lightly: its arc from sparse verses to full refrains is kept
 GLUE = (8.0, 1.5, 0.05, 0.4, 3.0, 3.0)  # the whole mix, lightly: what stands out of its surroundings, never the song's arc
 REFERENCE = -20.0  # LUFS the voice is brought to before the balance is set
-# The lead's saturation. At 0.2 its drive was set against the voice's typical peaks, and the throat's loudest
-# syllables (its crest is 13.7 dB) ran 4-9 dB further into the curve: distortion above 2 kHz at -21 dB under
-# the voice's own highs on the loudest twentieth, which nothing masked (the band's highs sit 18-29 dB under
-# the voice's). That was the "roughness as the voice gets loud" the artist heard (2026-09-27). 0.05: -33 dB.
+# The lead's saturation. At 0.2 its drive is set against the voice's typical peaks, and the throat's loudest
+# syllables (its crest is 13.7 dB) run 4-9 dB further into the curve: distortion above 2 kHz at -21 dB under
+# the voice's own highs on the loudest twentieth, which nothing masks (the band's highs sit 18-29 dB under
+# the voice's). It is heard as a roughness as the voice gets loud. 0.05: -33 dB.
 VOICE_DRIVE = 0.05
 # The transient softener on the lead (fx.soften: dB over its own recent level a jump may reach, the fraction of the
 # excess taken off), before the saturation, which would harden what it leaves: the learned voice's consonant
-# bursts read as clipping to the artist (2026-09-27; Whisper in the mix 11.4% -> 11.9% of words, within noise). None: off.
+# bursts read as clipping (Whisper in the mix 11.4% -> 11.9% of words, within noise). None: off.
 VOICE_SOFTEN = (6.0, 0.6)
 # The singers rise and fall with the arrangement's energy (songbird.band: each section's, 0..1, arcing across
 # the song): LEAD_ARC[0] dB per unit of energy above ENERGY_REST, held between LEAD_ARC[1] and LEAD_ARC[2] dB and
-# smoothed over LEAD_ARC[3] s. Without it the lead came out at REFERENCE in every sung section, whatever the band
-# did, so a build the band made of 6 dB reached the record as half a dB (the mix review of 2026-09-27).
+# smoothed over LEAD_ARC[3] s. Without it the lead comes out at REFERENCE in every sung section, whatever the band
+# does, so a build the band makes of 6 dB reaches the record as half a dB.
 LEAD_ARC = (6.0, -2.0, 2.5, 1.0)
 THROWN_SEND = 0.5  # how much of a dub desk's echo or spring return reaches the room, against the band's send (synth.dub)
 ENERGY_REST = 0.55
@@ -427,7 +427,7 @@ def lead_lift(sections, energies, sr: int, length: int) -> np.ndarray | None:
     """dB per sample the singers rise with the arrangement: from each section's (name, start, end) and its
     energy (0..1, the band's, in the same order), LEAD_ARC dB per unit above ENERGY_REST, held within the
     arc's bounds and smoothed over LEAD_ARC[3] s so a section's change arrives as a swell, not a step. None
-    when the sections and energies don't pair up (an older score: level singers, as before)."""
+    when the sections and energies don't pair up (an older score: level singers)."""
     if not sections or not energies or len(sections) != len(energies) or length <= 0:
         return None
     lift = np.zeros(length)
@@ -581,7 +581,7 @@ def mix_made(parts: list, length: int, sr: int, seed: int = 0, params: MixParams
         return where, y
 
     # Each bus's and instrument's own treatment depends on nothing but its own sound, so they are made at once
-    # (threads.in_order, a few ahead); they are put together below, one at a time, in the order they always were:
+    # (threads.in_order, a few ahead); they are put together below, one at a time, always in the same order:
     # a bus of one stem is made with its stem; a bus of several is summed as they come, then treated.
     buses = {"voice": lead_bus, "choir": choir_bus}
     groups = {bus: [n for n, r in roles.items() if r == bus] for bus in buses}
@@ -628,7 +628,7 @@ def mix_made(parts: list, length: int, sr: int, seed: int = 0, params: MixParams
             if role in buses:
                 singers_left -= 1
                 if len(groups[role]) > 1:  # summed as they come, in the group's order (_sum's sums, to the bit),
-                    # never all held at once: a choir of six singing a whole song held 1 GB more (docs/STYLES.md)
+                    # never all held at once: a choir of six singing a whole song would hold 1 GB more (docs/STYLES.md)
                     summed = result.copy() if role not in held else np.add(held[role], result, out=held[role])
                     held[role], counted[role] = summed, counted.get(role, 0) + 1
                     del result, summed
@@ -671,7 +671,7 @@ def mix_made(parts: list, length: int, sr: int, seed: int = 0, params: MixParams
             part = None  # (a stretch of x: x is let go with it)
     finally:
         results.close()
-    if band is None:  # voices alone still have the band's silent room send, as before
+    if band is None:  # voices alone still have the band's silent room send
         band, band_send, stepping = empty_band()
     if design is not None:  # the band's filter sweeps, if no transition stem came to make them
         design.sweep(band, band_send, stepping)

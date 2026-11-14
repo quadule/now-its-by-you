@@ -6,7 +6,7 @@ A render splits where its pieces don't depend on one another: the band's parts a
 activations (throat._gelu), a long stereo signal's two channels through an equalizer (fx._biquads), the
 FLAC and the record's loudness and peak (cli.render_one).
 Each piece draws on its own random stream and is computed exactly as it would be alone; only the
-putting together (a sum, an overlap-add) happens in one place, in the order it always has. So a
+putting together (a sum, an overlap-add) happens in one place, in a fixed order. So a
 render is the same whichever thread makes which piece, and whatever SONGBIRD_THREADS says.
 
 numpy's large operations and the numba loops (compiled with nogil) let go of the interpreter

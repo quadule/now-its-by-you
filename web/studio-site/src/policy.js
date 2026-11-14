@@ -3,7 +3,7 @@
 // WebAssembly ('wasm-unsafe-eval', never 'unsafe-eval'), and a song made in the browser plays from a Blob (blob:
 // media). Scripts, workers and requests only from here; no frames, forms or base. The microphone is left to the
 // page itself (Permissions-Policy names only what it never uses).
-// Cloudflare Web Analytics (2026-11-09): the zone injects its beacon (static.cloudflareinsights.com), which reports a
+// Cloudflare Web Analytics: the zone injects its beacon (static.cloudflareinsights.com), which reports a
 // page view to cloudflareinsights.com, no cookies; those two hosts and nothing else.
 export const PAGE_POLICY = "default-src 'self'; script-src 'self' 'wasm-unsafe-eval' https://static.cloudflareinsights.com; " +
   "style-src 'self'; img-src 'self' data:; media-src 'self' blob:; connect-src 'self' https://cloudflareinsights.com; " +

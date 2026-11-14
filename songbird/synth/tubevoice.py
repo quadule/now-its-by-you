@@ -8,7 +8,7 @@ where turbulence is injected so the cavity in front colours the hiss. The
 tongue keeps gliding from vowel to vowel underneath the consonants, which is
 how coarticulation happens in a mouth (Ohman 1966).
 
-Status (2026-09-25): experimental, selected with VoiceParams(engine="tube").
+Status: experimental, selected with VoiceParams(engine="tube").
 Static vowels are right (postures fitted per vowel within its anatomical
 region reproduce F1-F3 within a few percent), and the spectrum is full to the
 top with no truncation. Sung words are not yet intelligible: about 76% word

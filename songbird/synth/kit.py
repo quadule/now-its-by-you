@@ -751,7 +751,7 @@ def render(name, notes, sr: int, length: int, rng: np.random.Generator, make: np
         amps = np.array([st.vel for st in loud])[:, None] * np.tile([1.0, 0.6, 0.4, 0.3], 3)[None, :] * 0.03
         # one bank of the twelve modes, a channel a tom: rung a tom at a time (each channel hears only its own four
         # modes, the others adding 0.0 to it), each with the whole bank's floor, so each drops a mode where the
-        # whole bank did
+        # whole bank would
         loudest = np.max(np.abs(amps), axis=0) * np.max(np.abs(mix), axis=1)
         floor = float((struck.QUIET * loudest.max()) ** 2)
         at = np.array([st.time + 0.001 for st in loud])

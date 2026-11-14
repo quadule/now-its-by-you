@@ -3,7 +3,7 @@ studio's start, its edits and its voice").
 
 Pyodide compiles every module it imports from its source: its standard library and its wheels carry no bytecode, and
 it writes none. A render worker imports about 860 modules, 680 of them from source (the standard library, numpy,
-scipy, the program), and compiling them was 7 s of its 10 s start in node on a desktop (a phone's several times
+scipy, the program), and compiling them is 7 s of its 10 s start in node on a desktop (a phone's several times
 that), paid again by every worker: each whole song's, each fourth section's, the studio's own.
 
 So the build compiles them (build(), run in Pyodide itself under node by tools/bytecode.mjs, so the bytecode is its
@@ -17,9 +17,9 @@ interpreter's own) into archives the worker fetches beside the wheels and unpack
                    the program)
 
 Each module's bytecode is a checked-hash pyc (PEP 552): Python runs it only for a source whose hash it carries, so a
-source that differs is compiled as before, never run stale. Compiled without column tables (PYTHONNODEBUGRANGES: a
+source that differs is compiled afresh, never run stale. Compiled without column tables (PYTHONNODEBUGRANGES: a
 fifth smaller; a traceback still names the line). What a worker imports that the build didn't is compiled as it
-always was. What runs is the source beside it, unchanged: the program's digest (pack.program_files, which never reads
+is imported. What runs is the source beside it, unchanged: the program's digest (pack.program_files, which never reads
 a cache prefix) and every sample are the same either way.
 
     start()          in the worker, before anything it fetched is imported: read bytecode from under PREFIX

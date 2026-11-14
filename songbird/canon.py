@@ -1,5 +1,4 @@
-"""A round: a section sung by voices coming in one after another on the same tune (docs/ARRANGE.md, "A round",
-2026-09-30).
+"""A round: a section sung by voices coming in one after another on the same tune (docs/ARRANGE.md, "A round").
 
 The singer starts the section; the lineage's voices (the choir, the parent's first), else the program's own, come
 in after it on the same tune and the same words, each panned apart; at the end they drop out in turn, each

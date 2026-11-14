@@ -5,9 +5,8 @@ songbird is imported; natively nothing imports this.
   SIMD is supported, by the C kernel that sums as that BLAS does, twice as fast (wasm/kernels.c matmul_blas).
 - plain_docs(), before scipy is imported: scipy's docstrings left as they are, not parsed and rewritten.
 
-(Until 2026-09-29 master.true_peak_envelope was patched too: it gathered rows from a sliding_window_view,
-a virtual array over 2 GiB for a whole song, which numpy on wasm32 refuses. The memory work gathers them
-with a kernel, master._windows, so the patch went.)"""
+(master.true_peak_envelope needs no patch: it gathers its rows with a kernel, master._windows, not from a
+sliding_window_view, a virtual array over 2 GiB for a whole song, which numpy on wasm32 refuses.)"""
 
 from __future__ import annotations
 

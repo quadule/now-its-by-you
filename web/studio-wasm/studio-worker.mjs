@@ -404,8 +404,8 @@ function failedAnswer(id, err) {
 // Made with the bundle (tools/bytecode.mjs), so this worker compiles only what the build didn't import: the standard
 // library's zip with its modules' bytecode (Pyodide is started with it in place of the one it serves), and the pyc
 // files of the packages this worker loads and of the program, unpacked under /pycache before anything is imported.
-// Each pyc is checked against its source's hash as it's imported. Without them (a bundle built before them, or an
-// archive that couldn't be fetched) the modules are compiled as they're imported, as before.
+// Each pyc is checked against its source's hash as it's imported. Without them (a bundle built without them, or an
+// archive that couldn't be fetched) the modules are compiled as they're imported.
 function shippedCode(bytecode, app, packages) {
   const get = (url) => fetch(url).then((r) => (r.ok ? r.arrayBuffer() : null)).catch(() => null);
   // the standard library: Pyodide fetches it as it would its own (beside its wasm); undefined, its own

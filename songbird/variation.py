@@ -300,8 +300,8 @@ class Knob:
         before this machine's day moved it. That is the parent's value, unless this machine made the parent
         (ctx.then): then the share of that day the parent heard comes back out, so singing its own rendition
         again gives the same while the field stands and, as the field moves, a field around the same centre,
-        never the day added again each time (which walked a quiet machine's own versions up a semitone and
-        about 5 BPM a generation to the bounds, until October 7, 2026).
+        never the day added again each time (which would walk a quiet machine's own versions up a semitone and
+        about 5 BPM a generation to the bounds).
 
         The day is affine in the value (a shift, or for a ratio a scale), so it comes straight back out. When
         more than one centre fits the parent (a bound cut the day off, or the rounding), the song's own value x

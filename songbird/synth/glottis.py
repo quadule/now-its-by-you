@@ -81,7 +81,7 @@ def tables(sr: int, tilt: float = 1.0) -> tuple[np.ndarray, np.ndarray]:
         flow[i] = u / u.max()
     # Every shape at the same power as a modal one: how pressed the folds are changes how bright the
     # voice is, not how loud; loudness is the amplitude's. (Peak-normalized, a pressed pulse has
-    # 0.17 of the power of a breathy one, so the syllables sung hardest came out quietest.)
+    # 0.17 of the power of a breathy one, so the syllables sung hardest would come out quietest.)
     modal = int(np.argmin(np.abs(RD_GRID - 1.0)))
     for j in range(len(BAND_EDGES)):
         want = np.sqrt(np.mean(derivative[modal, j] ** 2))

@@ -70,7 +70,7 @@ FIDDLE = Body(  # the violin: A0 near 275 Hz, the B1 pair near 470 and 540, a br
 CELLO = Body(  # the cello: A0 near 100 Hz, the B1 pair near 180 and 215 (the wolf's F-F#), a bridge hill near 1.3 kHz
     # (Askenfelt 1982; Bynum and Rossing 1997; the bridge's own resonances near 1 and 2.2 kHz, Reinicke 1973): a
     # violin scaled about 0.38 in its low modes, the hill half as high up. Above the B1 pair a cello radiates well
-    # through 250-500 Hz (its principal formant, Meyer), where the scaled violin had a 7-10 dB hole: a cluster of
+    # through 250-500 Hz (its principal formant, Meyer), where the scaled violin has a 7-10 dB hole: a cluster of
     # modes fills it, and the pair stands 6-9 dB over it rather than 11-13.
     modes=((100.0, 16.0, 4.0), (150.0, 26.0, 1.0), (182.0, 30.0, 5.5), (216.0, 32.0, 4.5),
            (258.0, 24.0, 4.0), (292.0, 28.0, 3.0), (330.0, 24.0, 4.0), (372.0, 26.0, 4.0)),

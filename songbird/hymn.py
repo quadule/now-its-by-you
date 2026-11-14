@@ -1,4 +1,4 @@
-"""A hymn (docs/STYLES.md, "A hymn", 2026-09-30): the style's own setting of the tune, and its parts.
+"""A hymn (docs/STYLES.md, "A hymn"): the style's own setting of the tune, and its parts.
 
 The hymn is an organ (or a harmonium) under everyone singing the song's tune in parts. Two things here are its
 own, and nothing else calls them for any other style:

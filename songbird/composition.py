@@ -579,7 +579,7 @@ def phrase_value(genome, params, pid, place: str | None = None):
             for d, _, u, length, slur, _ in flat_notes(phrase, params)]
 
 
-# ---------------------------------------------------------------- one place, or everywhere (2026-09-29)
+# ---------------------------------------------------------------- one place, or everywhere
 #
 # A chord or tune edit names a line everywhere it is sung (chords.<line>, tune.<line>), or one place of the form:
 # <section>:<n>.<i>, the i-th line of the n-th time that section comes (the arrangement's id, as form.order and a

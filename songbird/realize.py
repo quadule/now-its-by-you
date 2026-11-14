@@ -55,7 +55,7 @@ class Params:
     inventory: str = ""  # phoneme inventory for the singer's vowels, "" the seed's (not yet read by the singer)
     # How this lineage has come to sing the song (docs/EVOLUTION.md). Inherited, and changed a little at a time
     # by songbird.evolve; empty for the seed, which sings its tune as written and its own words. Left out of
-    # to_dict() while empty, so a record from before them reads (and seeds its children) as it did.
+    # to_dict() while empty, so a record made without them reads (and seeds its children) the same.
     variants: tuple = ()  # songbird.variants.Variant: this lineage's departures from the written tune
     words: dict = field(default_factory=dict)  # the words this lineage holds (arrange.hold): {} the seed's own
     generation: int = 0  # renditions between this one and the seed: 0 the seed, 1 its child...
@@ -71,11 +71,11 @@ class Params:
         known = {f.name for f in fields(cls)}
         values = {k: v for k, v in data.items() if k in known}
         values["form"] = tuple(values["form"])
-        if data.get("room"):  # a record from before the mix: its room was the mix's rt60 and tone
+        if data.get("room"):  # a record with a room and no mix: its room is the mix's rt60 and tone
             values["mix"] = {**data["room"], **(values.get("mix") or {})}
         band = values.get("band")
         if data.get("swing") and not isinstance(band, Band) and "swing" not in (band or {}):
-            # a record from before the band: its swing was the fraction of the off-beat half pushed late,
+            # a record with a swing of its own, outside the band: the fraction of the off-beat half pushed late,
             # a third being a triplet lilt, which is band.swing 1
             values["band"] = band = {**(band or {}), "swing": min(1.0, float(data["swing"]) / 0.333)}
         if "band" in values:
@@ -98,7 +98,7 @@ class Params:
             if data[name] == empty:
                 del data[name]
         # The seed's own style and band leave no trace, so a record (and the rendition seed a child draws
-        # from its parent's record) is as it was before styles existed.
+        # from its parent's record) is the same as one made without styles.
         if self.style.seed:
             del data["style"]
         else:
@@ -548,7 +548,7 @@ def realize(genome: Genome, params: Params, verses=None, phrasing: Phrasing | No
     notes, sound = sound_mod.produce(genome, params, placed, clock, notes, desk)
     notes.sort(key=lambda n: (n.start, n.part, n.pitch))
     # the score's own words: the song's lexicon, and the syllables the backing voices sing ("oo", which no
-    # dictionary has: a machine choosing oohs for a song without its own reading used to fail)
+    # dictionary has: without it a machine choosing oohs for a song without its own reading would fail)
     score = Score(tuple(notes), final + ring, tuple(section_spans), {**SUNG_SYLLABLES, **genome.lexicon}, band=band_settings,
                   sound=sound)
     return style_mod.finish(score, genome, params)  # a style's key lift for the last refrain, if it has one

@@ -683,7 +683,7 @@ def saturate(x: np.ndarray, sr: int, drive: float, bias: float = 0.15, inplace: 
 def width(x: np.ndarray, sr: int, amount: float, mono_below: float = 140.0, inplace: bool = False) -> np.ndarray:
     """Scale the side (L - R) against the mid; below `mono_below` the side is
     never widened, so the low end stays centred. inplace: the result is written over x (a float64 (n, 2)
-    array), each step on its own copy of the mid and side as before."""
+    array), each step on its own copy of the mid and side either way."""
     if amount == 1.0:
         return x
     low = equalize((x[:, 0] - x[:, 1]) / 2.0,

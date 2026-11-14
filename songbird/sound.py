@@ -91,7 +91,7 @@ ATTACK = 0.003  # s: how fast a pumped channel ducks
 
 PRESETS["off"] = {"depth": 0.0, "release": 0.55, "key": "kick"}  # no pump, over a style's own (house's pumps)
 BARS = (0, 1, 2, 4)
-SWEEP_TYPES = ("highpass", "lowpass", "open")  # open: a low-pass rising (2026-09-30)
+SWEEP_TYPES = ("highpass", "lowpass", "open")  # open: a low-pass rising
 SWEEP_KINDS = {"highpass": "sweep-hp", "lowpass": "sweep-lp", "open": "sweep-open"}
 TRANSITION_KEYS = ("riser", "roll", "sweep", "stop", "impact", "down")  # a stop in beats, the rest in bars
 BEFORE = ("riser", "roll", "sweep", "stop")  # over the bars before the section: nothing comes before the first
@@ -572,7 +572,7 @@ def produce(genome, params, placed, clock, notes: list, desk: dict | None = None
     return notes, out
 
 
-# ---------------------------------------------------------------- a style's own sound (2026-09-30)
+# ---------------------------------------------------------------- a style's own sound
 #
 # A style may bring a sound of its own (StyleDef.sound: house's 909, its pumping pad and bass) and a habit at its
 # boundaries (a drop's riser, roll and opening filter; a filtered intro): the program's, under a person's, path by

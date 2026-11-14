@@ -55,7 +55,7 @@ SOURCES = ("drift", "edit")  # and "sung:<name>" for a singer's own
 
 # Ornament timing, in seconds at the song's own tempo; stored as fractions of the sung vowel (a note less
 # the consonants after it, CODA), so a slower rendition ornaments a little slower. Each kind also needs its
-# note to be long enough to hold it (a Fable review measured H's vowels at 96 bpm: a 1-unit note gets about
+# note to be long enough to hold it (H's vowels measured at 96 bpm: a 1-unit note gets about
 # 230 ms, a 2-unit one 535, a line's last note about a second).
 CODA = 0.085  # seconds of a note, on average, that aren't its vowel
 GRACE = 0.075  # a grace note's length

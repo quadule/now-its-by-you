@@ -1,7 +1,7 @@
 """Words spelt alike and said two ways (heteronyms), and which way the singer says one.
 
-The pronouncing dictionary lists both readings of "bass" and the singer used to take the first, which
-is the fish (B AE1 S): "The bass is a heartbeat" came out as the fish. Here each such word has its
+The pronouncing dictionary lists both readings of "bass", and the first is the fish (B AE1 S): taken
+as listed, "The bass is a heartbeat" would come out as the fish. Here each such word has its
 senses, the most common in songs first, and a few rules that read the words beside it in the line:
 
     bass   low note (B EY1 S), unless fish, a lake, a hook, a boat... are in the line: the fish (B AE1 S)

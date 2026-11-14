@@ -108,7 +108,7 @@ class Cached:
     """A stem's maker through a StemCache (synth.render's, for each stem its key gives). Called, it gives the dry
     stem, kept under that key. A mix that treats the stem the same way on every render asks treated() instead,
     and the cache keeps that treatment in the dry stem's place, never both: a mix edit then neither sings nor
-    treats it again, and holds no more than before."""
+    treats it again, and holds no more than the dry stem alone."""
 
     def __init__(self, cache: StemCache, key: str, make, part: str):
         self.cache, self.key, self.make, self.part = cache, key, make, part

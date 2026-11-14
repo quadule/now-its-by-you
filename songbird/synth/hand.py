@@ -261,7 +261,7 @@ def _stompers(make: np.random.Generator, size: float) -> list[dict]:
 @lru_cache(maxsize=4)
 def _sole_band(sr: int) -> np.ndarray:
     """The slap's band: 400 Hz to 2.5 kHz, and a further low-pass at 3 kHz (rubber or leather on a board slaps;
-    it doesn't crack). Until 2026-09-30 it was 700 Hz to 5 kHz, and each stomp clicked."""
+    it doesn't crack). A band of 700 Hz to 5 kHz makes each stomp click."""
     return np.vstack([butter(2, [400.0, 2500.0], btype="bandpass", fs=sr, output="sos"),
                       butter(2, 3000.0, fs=sr, output="sos")])
 
@@ -269,7 +269,7 @@ def _sole_band(sr: int) -> np.ndarray:
 def _slap(rng: np.random.Generator, heel: float, vel: float, sr: int) -> np.ndarray:
     """The sole slapping down after the heel, 20 ms of it, before its level: noise rising over 1.5 ms (a hard
     heel brought down hard) to 4 ms (a soft sole, gently), the sole's width meeting the board, then falling
-    e-fold every 0.4 to 1.4 ms. It started at full strength until 2026-09-30: a step, heard as a click."""
+    e-fold every 0.4 to 1.4 ms. Started at full strength it would be a step, heard as a click."""
     n = int(0.02 * sr)
     tau = (0.4 + 1.0 * (1.0 - heel)) * 1e-3
     rise = (1.5 + 1.25 * ((1.0 - heel) + (1.0 - vel))) * 1e-3

@@ -13,8 +13,8 @@ Sung notes (with their syllables) go in; a mono voice comes out.
    tract above F5 (see tract.upper_branch); frication and bursts are shaped
    noise added in parallel.
 
-Settings were tuned against a Whisper transcription suite (tools/wer_suite.py)
-and a review of the design by a Fable advisor: where naturalness and machine
+Settings are tuned against a Whisper transcription suite (tools/wer_suite.py):
+where naturalness and machine
 intelligibility pulled apart (dynamics, sonorant levels), the values sit in
 between and the trade-off is a voice parameter.
 """
@@ -51,8 +51,8 @@ CONSONANT_SPREAD = 0.15  # log spread of a consonant's length around its rule's,
 class VoiceParams:
     shift: int = 0  # semitones from written to sung pitch
     tract: float = 1.12  # formant scale: 1 an average adult male tract, 1.12 an alto's
-    rd: float = 0.9  # glottal shape: 0.6 pressed, 1 modal, 1.8 breathy (0.7 until 2026-09-27: the top notes were harsh)
-    tilt: float = 0.7  # glottal closing speed: below 1 closes faster, a brighter voice (0.4 until 2026-09-27: with rd, the learned voice's "no" at B4 sat 4.5 dB hotter at 2-5 kHz than a natural singer's; these bring it level, at no cost in words)
+    rd: float = 0.9  # glottal shape: 0.6 pressed, 1 modal, 1.8 breathy (at 0.7 the top notes are harsh)
+    tilt: float = 0.7  # glottal closing speed: below 1 closes faster, a brighter voice (at 0.4, with rd 0.7, the learned voice's "no" at B4 sits 4.5 dB hotter at 2-5 kHz than a natural singer's; these bring it level, at no cost in words)
     breath: float = 0.05  # aspiration mixed into voicing
     vibrato_rate: float = 5.6  # Hz (each note's own, around this)
     vibrato_depth: float = 22.0  # cents, a held note's vibrato once grown in (each note's own, around this)
@@ -87,8 +87,8 @@ class VoiceParams:
     focus: float = 1.0  # dB more on a word the lyric marks as its line's focus (*word*), most on its stressed syllable (2 cost words)
     reduce: float = 0.0  # how far a little word's vowel off the beat moves toward "uh" (0.3 cost the words: WER 15% -> 18%)
     mouth: float = 1.0  # cm radius of the mouth opening: small keeps the upper resonances ringing
-    air: float = 0.4  # the top of the voice part breath: the learned throat's aperiodicity floor, rising from 2.5 kHz to this at 8 kHz (throat.air_floor; 0 until 2026-09-28: the harmonics stood as clean lines to 10 kHz, a buzz); for the formant singer, noise above 3.5 kHz pulsing with the voicing
-    crisp: float = 0.6  # the learned throat's consonants sharpened: its stops given their closure and release, weak fricatives their hiss, coda nasals lifted (throat.articulate; 0 leaves the throat's own, which lost the ends of words; 1 read as clipping to the artist, 0.6 with the mix's transient softener chosen by ear, 2026-09-27)
+    air: float = 0.4  # the top of the voice part breath: the learned throat's aperiodicity floor, rising from 2.5 kHz to this at 8 kHz (throat.air_floor; at 0 the harmonics stand as clean lines to 10 kHz, a buzz); for the formant singer, noise above 3.5 kHz pulsing with the voicing
+    crisp: float = 0.6  # the learned throat's consonants sharpened: its stops given their closure and release, weak fricatives their hiss, coda nasals lifted (throat.articulate; 0 leaves the throat's own, which loses the ends of words; 1 reads as clipping, 0.6 with the mix's transient softener chosen by ear)
     engine: str = "learned"  # "learned" (songbird.synth.throat, the default), "formant" (Klatt cascade) or "tube" (waveguide, experimental)
     timbre: str = ""  # the learned engine's singer: weights over its trained singers, "bright:2,alto:1" (default all evenly)
 
@@ -239,7 +239,7 @@ def schedule(notes: list[Note], voice: VoiceParams, lexicon: dict[str, str] | No
                 segs.append(Segment(t, t + d, c, "onset", amp, prev_v, syl.nucleus))
             t += d
         # the vowel: to the coda, at least 40 ms, but never past the next syllable's first sound (two notes a hair
-        # apart, as backing voices at a section's seam can be, used to overlap there)
+        # apart, as backing voices at a section's seam can be, would overlap there)
         v_end = max(limit(k) - sum(coda[k]), min(note.start + 0.04, limit(k)), note.start + 0.005)
         light = word[k] in ph.FUNCTION_WORDS and note.vel < 0.75
         segs.append(Segment(note.start, v_end, syl.nucleus, "vowel", amp, prev_v, next_v,
@@ -407,7 +407,7 @@ def _lowpassed_noise(rng: np.random.Generator, n: int, cutoff: float, rate: floa
 
 def line_release(dur: float) -> float:
     """How long before a line's last note ends the singer lets go of it, to breathe. (Natural singers hold
-    about 85% of it, min(0.2, 0.25 * dur); held that long, the learned throat lost words: H 13.7% -> 16.0%.)"""
+    about 85% of it, min(0.2, 0.25 * dur); held that long, the learned throat loses words: H 13.7% -> 16.0%.)"""
     return min(0.3, 0.35 * dur)
 
 

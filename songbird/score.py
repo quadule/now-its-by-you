@@ -32,7 +32,7 @@ class Note:
 
 def _note_dict(note: Note) -> dict:
     data = asdict(note)
-    if not note.ornament:  # a plain note's record is as it always was
+    if not note.ornament:  # a plain note's record names no ornament
         del data["ornament"]
     if not note.melisma:
         del data["melisma"]

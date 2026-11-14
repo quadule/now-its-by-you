@@ -24,18 +24,18 @@ import numpy as np
 
 FEELS = ("straight", "swing", "shuffle", "twelve", "half", "double", "waltz", "six")
 INTROS = ("lead", "pad", "count", "voice", "quote", "air")  # air: the tune slow and free, the lead alone
-ENDINGS = ("ring", "rit", "cold", "amen", "repeat", "version")  # version: a dub after the song (2026-09-30)
+ENDINGS = ("ring", "rit", "cold", "amen", "repeat", "version")  # version: a dub after the song
 BACKINGS = ("oohs", "echo", "thirds", "gang", "hum")  # hum: an a cappella's open-fifth drone under the verses
 LINEAGE_MAX = 16  # generations of styles a record remembers
-# Style's options a record leaves out while they're off (added after records were made)
+# Style's options a record leaves out while they're off (a record made without them reads the same)
 QUIET_OFF = ("drop", "loop", "dissolve")
-# Values retired since records were made, read as what replaced them: an a cappella's intro sung on shape-note
-# syllables (2026-09-30) is now the lead humming the tune over the group; the Celtic session is the jig
+# Values a record or an edit may hold under another name, read as the one sung: an a cappella's intro on
+# shape-note syllables is the lead humming the tune over the group; the Celtic session is the jig
 RENAMED = {"intro": {"notes": "lead"}, "name": {"celtic": "jig"}}
 
 
 def renamed(option: str, value):
-    """A style option's value as it is now called (a retired one read as its replacement)."""
+    """A style option's value by the name the program knows it by (RENAMED: another name read as that one)."""
     return RENAMED.get(option, {}).get(value, value) if isinstance(value, str) else value
 
 
@@ -80,7 +80,7 @@ class Style:
     drop        a breakdown and a drop: after this refrain (1 the first) every section before the next refrain
                 is the breakdown (the drums, the bass and the rest out, the singer with the pad; the band's
                 low-pass opening across it, a riser and a snare roll into the refrain after), and that refrain
-                is the drop; 0 none. Left out of a record while 0, so a record is as it was before it
+                is the drop; 0 none. Left out of a record while 0, so a record made without it reads the same
     loop        a chord loop of the style's own (StyleDef.loops, by name) under the sections the style loops, in place
                 of the song's chords; "song" the song's own; "" the style's default (the loop that best fits the tune
                 in this key and mode, for a style with loops). Left out of a record while ""
@@ -107,8 +107,8 @@ class Style:
     coda: str = ""  # quote: after the last line, over the ringing last chord, the lead alone plays the quote's opening
     motif: str = ""  # bridge: the lead plays the quote's opening over the bridge's third phrase; chance: some renditions
     # (a drawn ballad's default where the song names a quote: choose_style)
-    drop: int = 0  # the refrain a breakdown and a drop follow (house's habit, 2026-09-30); 0 none, and no trace in a record
-    loop: str = ""  # a loop of the style's own under the song (house's, dub's riddim; 2026-09-30, evening)
+    drop: int = 0  # the refrain a breakdown and a drop follow (house's habit); 0 none, and no trace in a record
+    loop: str = ""  # a loop of the style's own under the song (house's, dub's riddim)
     dissolve: int = 0  # the refrain after which the song dissolves into its version (dub's); 0 none
 
     @classmethod
@@ -120,7 +120,7 @@ class Style:
     def to_dict(self) -> dict:
         data = asdict(self)
         data["lineage"] = list(self.lineage)
-        for name in QUIET_OFF:  # options added since records were made: absent while off, so a digest is as it was
+        for name in QUIET_OFF:  # absent while off, so the digest of a record made without them is the same
             if not data[name]:
                 del data[name]
         return data
@@ -191,12 +191,12 @@ class StyleDef:
     rounds: int = 0  # how many times round a short played section's tune goes (the jig's); 0 as the form has it
     ornaments: float = 0.0  # how often the singer ornaments a long stressed note of its own accord (the jig's)
     # a style's own sound design, under a person's (songbird.sound.program_players): {"players": {part: {kit, patch,
-    # sidechain...}}, "intro": "open" (the band's low-pass opening across an intro)}; {}: none (house, 2026-09-30)
+    # sidechain...}}, "intro": "open" (the band's low-pass opening across an intro)}; {}: none (house's)
     sound: dict = field(default_factory=dict)
-    # the mixing desk as an instrument (dub, 2026-09-30; songbird.idioms "the desk"): drop-outs, throws and splashes
+    # the mixing desk as an instrument (dub's; songbird.idioms "the desk"): drop-outs, throws and splashes
     # by section, the echo's time and feedback (DESK's keys); {}: the desk is left alone
     desk: dict = field(default_factory=dict)
-    # chord loops of the style's own (house's, dub's riddims; 2026-09-30, evening): {name: (degrees a bar, sevenths)},
+    # chord loops of the style's own (house's, dub's riddims): {name: (degrees a bar, sevenths)},
     # the mode's own chords on those degrees; and the sections that take one ("version": dub's dissolved sections)
     loops: dict = field(default_factory=dict)
     looped: tuple = ()
@@ -513,12 +513,12 @@ def neighbours(name: str) -> tuple[str, str]:
     return RING[(k - 1) % len(RING)], RING[(k + 1) % len(RING)]
 
 
-# --- beside the ring: a cappella (docs/STYLES.md, "Two more", 2026-09-30; "A cappella and the jig, revised") ---
+# --- beside the ring: a cappella (docs/STYLES.md, "Two more"; "A cappella and the jig, revised") ---
 #
 # Only voices: the lead on the tune and a group in harmony around it, the lineage's own voices first and then the
 # program's own harmony voices, at least three (group); the parts are idioms.shape_parts. Everyone on the refrains'
 # words; under the verses a hum, "oo"s or the line ends answered; where a band would play the tune the lead hums it
-# on "oo" over the group's chords (revised 2026-09-30: no shape-note syllables). Feet or hands come now and then
+# on "oo" over the group's chords (no shape-note syllables). Feet or hands come now and then
 # (optional); a player that doesn't come sits in the lineup at gain 0, so the lineup is never empty (empty is the
 # seed's eight).
 
@@ -552,12 +552,11 @@ def voices_alone(params) -> bool:
 def vocalise(params) -> str:
     """What the lead sings where a band would play the tune (an intro, a break, an outro, a line played): "oo",
     the group humming the chords under it (idioms.shape_parts); "" where a band plays it (every style but a
-    cappella). An a cappella's shape-note syllables (fa, sol, la, mi) were taken out on 2026-09-30: the artist
-    heard them as gibberish."""
+    cappella). Not shape-note syllables (fa, sol, la, mi): sung by this throat they are heard as gibberish."""
     return "oo" if voices_alone(params) else ""
 
 
-# --- beside the ring: the jig (docs/STYLES.md, "Two more", 2026-09-30; "A cappella and the jig, revised") --------
+# --- beside the ring: the jig (docs/STYLES.md, "Two more"; "A cappella and the jig, revised") --------
 #
 # The song as a jig, always in six-eight (H's long-short-short feet are a jig's dotted beat; a song that can't be
 # re-barred keeps its beats and plays them in threes: feels_for). The whistle and the fiddle (and a concertina, when
@@ -565,8 +564,8 @@ def vocalise(params) -> str:
 # a short played section round twice (rounds: songbird.takeover.phrase_plan), the first time the lead and the
 # guitar, the second everyone; the frame drum tipped, down-up-down on each dotted beat; a guitar in an open tuning
 # (DADGAD); a reed drone when it comes. The singer keeps the song, with a few turns of its own (ornaments). Named
-# for what it plays, not for a tradition it would claim: it was "celtic", a session, with a reel, until the artist
-# asked for "jig" (2026-09-30); records and edits that say "celtic" are read as the jig (RENAMED).
+# for what it plays, not for a tradition it would claim; records and edits that say "celtic" are read as the jig
+# (RENAMED).
 
 JIG = _def(
     "jig", "jig: the song in six-eight, the whistle and the fiddle on the tune together, round twice between the "
@@ -663,7 +662,7 @@ def sung_ornaments(genome, params) -> tuple:
     return tuple(chosen)
 
 
-# --- beside the ring: an old 78 (2026-09-30; docs/STYLES.md, "An old 78") ---------------------------------------------
+# --- beside the ring: an old 78 (docs/STYLES.md, "An old 78") ---------------------------------------------
 #
 # The song says nobody knows who made it; this version sounds found. The singer sings the tune straight with a parlour
 # piano (a guitar for about a third of machines: the swap), a fiddle now and then (optional), the piano's oom-pah in the
@@ -712,7 +711,7 @@ def shaped(genome, out: dict) -> None:
     out["form"] = list(form)
 
 
-# --- house and dub (2026-09-30; docs/STYLES.md, "House and dub") --------------------------------------------------
+# --- house and dub (docs/STYLES.md, "House and dub") --------------------------------------------------
 #
 # Beside the ring, as a cappella and the session are (OFF_RING): a person chooses them, or a parent hands one down; a
 # child of one travels from its anchor's place, keeping its style where it would keep the anchor's and stepping to
@@ -735,7 +734,7 @@ VERSION_DESK = {**DESK, "dropout": {"version": 0.55}, "voice": {}, "splash": 0.0
 VERSION_BARS = 8  # the version: the last refrain's last eight bars' chords again
 VERSION_RING = 6.0  # s after the version's last chord: its echoes' tails
 
-# House's loops (2026-09-30, evening): degrees a bar, voiced as sevenths; the rendition plays one that fits its tune
+# House's loops: degrees a bar, voiced as sevenths; the rendition plays one that fits its tune
 HOUSE_LOOPS = {"vamp": ((6, 4), True), "lift": ((4, 1), True), "home": ((1, 4), True), "deep": ((2, 5, 1, 6), True),
                "royal": ((4, 5, 3, 6), True), "pop": ((6, 4, 1, 5), True), "minor": ((7, 4, 1, 5), True)}
 # The chop's rhythms: a two-bar figure, each bar (sixteenth of the bar, syllable, sixteenths long); drawn per rendition
@@ -825,9 +824,8 @@ STYLES[HOUSE.name] = HOUSE
 OFF_RING[HOUSE.name] = "synthfolk"  # the machines' end, the drum machine and the synths
 STYLES[DUB.name] = DUB
 OFF_RING[DUB.name] = "lofi"  # slow, worn, the bass and the room
-# Not offered in the studio's picker for now (the artist, 2026-09-30: house and dub "haven't convinced me like the
-# others yet"; house back once its hook was fixed: "I like it now!"): a record, a draft or --style still plays a
-# hidden one, and a version already in one still shows it
+# Not offered in the studio's picker: a record, a draft or --style still plays a hidden one, and a version already
+# in one still shows it
 HIDDEN = frozenset({DUB.name})
 
 
@@ -844,7 +842,7 @@ def desk_of(params) -> dict:
     return VERSION_DESK if params.style.ending == "version" else {}
 
 
-# --- beside the ring: a hymn (docs/STYLES.md, "A hymn", 2026-09-30, night) ---------------------------------------
+# --- beside the ring: a hymn (docs/STYLES.md, "A hymn") ---------------------------------------
 #
 # An organ (a pipe organ, or for some machines a harmonium) under everyone singing the tune in parts: the lead on the
 # tune, a group of at least three (the lineage's voices, then the program's own) on the tenor, the alto and the tune,
@@ -871,7 +869,7 @@ STYLES[HYMN.name] = HYMN
 OFF_RING[HYMN.name] = "chamber"  # no drums, sustained, stately and broadening; a lineage leaving it goes home to folk
 
 
-# --- a loop of the style's own (2026-09-30, evening; docs/STYLES.md, "House and dub, again") ------------------------
+# --- a loop of the style's own (docs/STYLES.md, "House and dub, again") ------------------------
 #
 # A loop is scale degrees a bar, the mode's own chords on them (a seventh where the style voices sevenths), laid
 # under the sections the style loops from each section's first bar, round and round, in place of the song's chords
@@ -1552,7 +1550,7 @@ def choose_style(out: dict, ctx, forced: str | None = None, arrange: dict | None
         options = {k: v for k, v in parent.to_dict().items() if k not in ("name", "lineage")}
     if name == "ballad" and getattr(ctx.genome, "quote", None) is not None and not options.get("motif"):
         # the quote's opening woven into the bridge by chance (about a third of renditions, and only where it fits
-        # the version: band.motif_part), unless a person or the version handed down chose otherwise (2026-11-09)
+        # the version: band.motif_part), unless a person or the version handed down chose otherwise
         options["motif"] = "chance"
     options.update(arrange or {})
     style = Style.from_dict({"name": name, "lineage": lineage + (name,), **options})
@@ -1776,7 +1774,7 @@ def finish(score, genome, params):
     return replace(score, notes=tuple(notes))
 
 
-# --- beside the ring: a jazz trio (docs/STYLES.md, "A jazz trio", 2026-09-30) ----------------------------------------
+# --- beside the ring: a jazz trio (docs/STYLES.md, "A jazz trio") ----------------------------------------
 #
 # A piano, an upright bass and a kit played with brushes, the song as a jazz waltz (re-barred in three, as chamber's
 # waltz) or a swung ballad. The singer keeps the tune. The piano comps in rootless chords around middle C, under the
@@ -1810,8 +1808,7 @@ JAZZ = _def(
              "half": 0.0},
 )
 STYLES[JAZZ.name] = JAZZ
-# Hidden from the picker for now (the artist, 2026-09-30: "not sure the vocals fit there"): the folk singer over a
-# trio; a record, a draft or --style still plays it
+# Hidden from the picker (the folk singer over a trio); a record, a draft or --style still plays it
 HIDDEN = HIDDEN | {JAZZ.name}
 OFF_RING[JAZZ.name] = "chamber"  # the piano, the waltz, the sevenths
 
@@ -1867,7 +1864,7 @@ def _rubs_with(symbol: str, mode: str, pcs: list) -> set:
 
 def sits(symbol: str, own: str, mode: str, pcs: list) -> bool:
     """Whether a chord the trio plays sits with the sung notes over it: it rubs a semitone against none the song's own
-    chord there doesn't (the song's own passing notes rub as they always did; the trio adds no rub of its own)."""
+    chord there doesn't (the song's own passing notes rub as in any style; the trio adds no rub of its own)."""
     return _rubs_with(symbol, mode, pcs) <= _rubs_with(own, mode, pcs)
 
 
