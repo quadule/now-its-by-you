@@ -25,12 +25,11 @@ Intel Mac (`INTEL_SINCE`). Then the AI
 disclosure, and a foot with the ways on.
 
 `/about` (page/about.html) is the page about the song, shortened from the artist's process document for the AI
-Song Contest 2026 and not repeating the home page: the artist's opening (authorship and compensation, folk music
-and open source), the likeness of the two and what the song takes from both, why it is made in code (a gap left
-for the artist's early experiments with Suno), how it was made in five numbered steps (a plan, a fixed core, a
-band and a voice in code, eight singers, one loop judged by ear), the voice as a copy of a copy (and Daisy Bell in the bridge), and short credits:
-the song and program, the singers as CREDITS.md credits them (`{{CREDITS}}`), and the projects the voice learned
-from, linked (SoulX-Singer, Scylla's Band, Chimera). The artist's statement stays in README.md. The home page and
+Song Contest 2026 and not repeating the home page, in the artist's words: an opening (authorship and compensation,
+folk music and open source), what the song takes from both and why it is in the public domain, how it was made
+(the idea, the program, the voice), and short credits: the song and program, the singers as CREDITS.md credits
+them (`{{CREDITS}}`), and the models whose outputs the voice was trained with, linked (SoulX-Singer, Scylla's
+Band). The artist's statement stays in README.md. The home page and
 the history link to it. It is served like the history, on every host.
 
 now.itsby.you is a second custom-domain route of the same worker (itsby.you's DNS is on Cloudflare), so it opens on
