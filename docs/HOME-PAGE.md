@@ -98,17 +98,14 @@ https://www.aisongcontest.com/the-2026-finalists (page/seed.html, `.contest` in 
 stack). Public voting closes November 21. The winner is half the jury's and half the public's; the awards are in Bangkok on November 29, 2026. Take
 it down, or say how it ended, after that.
 
-## The performance version (2026-11-12; on the home page since November 14 as "Awards performance draft")
+## The performance version (not an edition)
 
-The second edition: performance/'s replay (the contest version in B major, the performance voice, id 67be86f259eb),
-packed with the program as it stood that day (0.2.0, record format 2) into
-renders/release/now-its-by-you-performance.flac, listed first in editions.json, with webstudio/released-record.json
-and released.json made from it. Its entry is provisional until it is released: when the program changes again
-before then, render and pack it again with the entry's own command and put the new file's `sha256`, `bytes`,
-`program` and `source.commit` (and the day it is released as `date`) in its entry, then the two tools above. Once
-it has been served, its bytes never change.
+performance/'s replay (the contest version in B major, the performance voice, id 67be86f259eb), packed into
+renders/release/now-its-by-you-performance.flac, was the second edition on the site for part of November 14, 2026,
+as "Awards performance draft", by mistake: the awards draft is the stage mix from tools/performance/ (arc-morph,
+renders/performance/now-its-by-you-arc-morph.flac). It was taken down the same day: the home page, /history and
+the studio (webstudio/released*.json, the first version's again) offer only the first version. The arc-morph mix
+is audio alone, with no packet: it is an edition only once a file of it carries the program.
 
-Since November 14, 2026 it is the second edition, "Awards performance draft": the home page offers it, /history
-lists both, and the studio opens on it. Its bytes are served, so they never change; a later performance render is
-an edition of its own. An edition marked `"held": true` is left off the home page and /history (tools/sing_site.py)
-while the studio's build still reads it, for one not ready to be listed.
+An edition marked `"held": true` in editions.json is left off the home page and /history (tools/sing_site.py) while
+the studio's build still reads it, for one not ready to be listed.
