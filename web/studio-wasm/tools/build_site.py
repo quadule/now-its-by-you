@@ -154,10 +154,10 @@ def page(singing: bool) -> str:
                         '<script src="/device.js" defer></script>\n<script src="/renderer.js" defer></script>', 1)
     # how a link to the studio looks where it's pasted, and in a tab: the song's name, a line on what this is, the
     # song's cover (now.itsby.you's) (studio.js sets the title again once it knows the version)
-    if "<title>Studio</title>" not in html:
-        raise SystemExit("songbird/studio/index.html has no <title>Studio</title>: build_site.py doesn't know "
-                         "where to say what the site is")
-    html = html.replace("<title>Studio</title>", SHARED_HEAD, 1)
+    if not re.search(r"<title>[^<]*</title>", html):
+        raise SystemExit("songbird/studio/index.html has no <title>: build_site.py doesn't know where to say what the "
+                         "site is")
+    html = re.sub(r"<title>[^<]*</title>", lambda _: SHARED_HEAD, html, count=1)
     # what's kept, true from the first paint (studio.js says the same once it starts)
     html = html.replace("Nothing on this page leaves this computer.", "Nothing leaves this device unless you share a version.", 1)
     # the licences of what the site sends besides the project's own (Pyodide, numpy, scipy...): licenses.txt
