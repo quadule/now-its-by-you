@@ -80,7 +80,7 @@ STYLE_NAMES = {"ballad": "the ballad band, the song's own", "stringband": "a str
                "gospel": "gospel", "shanty": "a sea shanty", "songwriter": "a singer-songwriter",
                "chamber": "chamber folk", "lullaby": "a lullaby", "ambient": "ambient", "synthfolk": "synth folk",
                "lofi": "lo-fi", "indie": "indie folk", "blues": "country blues",
-               # beside the ring (docs/STYLES.md, "Two more", 2026-09-30; the jig was "a Celtic session")
+               # beside the ring (docs/STYLES.md, "Two more")
                "acappella": "a cappella", "jig": "jig"}
 # A player as a style names it (the jig's guitar is in an open tuning, DADGAD, which the style's detail says)
 STYLE_PLAYERS = {"jig": {"guitar": "open-tuned guitar", "drone": "reed drone"}}
@@ -90,21 +90,21 @@ FEEL_NAMES = {"straight": "played straight", "swing": "swung", "shuffle": "a shu
               "half": "half-time", "double": "double-time", "waltz": "a waltz", "six": "in six-eight"}
 ENDING_NAMES = {"ring": "the last chord rings", "rit": "it slows broadly to the end", "cold": "it stops dead",
                 "amen": "it ends on an amen", "repeat": "the last line is sung again"}
-# house and dub (2026-09-30; docs/STYLES.md, "House and dub"): beside the ring, their words here
+# house and dub (docs/STYLES.md, "House and dub"): beside the ring, their words here
 STYLE_NAMES.update({"house": "house", "dub": "dub"})
 PLAYERS.update({"melodica": "melodica"})
-# the jazz trio (2026-09-30; docs/STYLES.md, "A jazz trio"): what plays, no tradition claimed; its kit is brushes
+# the jazz trio (docs/STYLES.md, "A jazz trio"): what plays, no tradition claimed; its kit is brushes
 STYLE_NAMES.update({"jazz": "jazz trio"})
 STYLE_PLAYERS.update({"jazz": {"bass": "upright bass", "kit": "brushes"}})
 STYLE_FEELS.update({"jazz": {"waltz": "a waltz", "swing": "a ballad, swung"}})
 ENDING_NAMES.update({"version": "the band plays a dub version after the song"})
-# a hymn (2026-09-30, night; docs/STYLES.md, "A hymn"): beside the ring, its words here
+# a hymn (docs/STYLES.md, "A hymn"): beside the ring, its words here
 STYLE_NAMES.update({"hymn": "hymn"})
 PLAYERS.update({"pipeorgan": "pipe organ"})
 STYLE_FEELS.update({"hymn": {"straight": "stately"}})
 
 
-# the old 78 (2026-09-30; docs/STYLES.md, "An old 78"): beside the ring; its detail says who plays this time
+# the old 78 (docs/STYLES.md, "An old 78"): beside the ring; its detail says who plays this time
 def _old78(params) -> str:
     lineup = dict(params.band.lineup or {})
     who = "a guitar" if lineup.get("guitar", 0) > 0.02 and lineup.get("piano", 0) <= 0.02 else "a parlour piano"
@@ -552,7 +552,7 @@ class Context:
             voice, d = None, None
         else:
             d = drift_mod.drift(self.instant(day), (voice if voice is not None else harvest.Voice()).hash)
-        chosen_phrasing = json.loads(Path(phrasings[clean["phrasing"]]).read_text()) if "phrasing" in clean else None
+        chosen_phrasing = json.loads(Path(phrasings[clean["phrasing"]]).read_text(encoding="utf-8")) if "phrasing" in clean else None
         trace: dict = {}
         changes: list = []
         r = edits_mod.resolve(genome, self.parent, voice, d, clean, phrasing_json=chosen_phrasing, trace=trace,
@@ -1401,6 +1401,7 @@ def view(ctx: Context, v: Version, phrasings: list[dict] | None = None) -> dict:
                 card["today"] = f"today: {was}"
     return {
         "title": ctx.genome.title,
+        "name": version_name_of(ctx, v),
         "day": v.day, "offset": v.offset, "when": distance(v.offset), "date": long_date(v.day),
         "from": ctx.from_words(), "by": ctx.machine_label(),
         "roll": v.edits.get("roll", 0),
@@ -1430,8 +1431,17 @@ def _headline(card: str, v: Version):
     return None
 
 
+def version_name_of(ctx: Context, v: Version) -> str | None:
+    """The version's own title: a person's (the edit `name`), else its parent's, handed down; None when it goes by
+    the song's."""
+    parent = ctx.parent_record if isinstance(ctx.parent_record, dict) else {}
+    named = v.edits.get("name") or parent.get("name")
+    return named if isinstance(named, str) and named and named != ctx.genome.title else None
+
+
 def listen_label(ctx: Context, v: Version, section: int | None, who: str) -> str:
-    whose = ("your version" if who == "you" else "as the program would sing it" if who == "program"
+    whose = ("as published" if who == "you" and ctx.published and not v.changed
+             else "your version" if who == "you" else "as the program would sing it" if who == "program"
              else f"{who.split(':', 1)[-1].title()}'s version")
     if section is None:
         return f"The whole song, {whose}"
@@ -1531,16 +1541,25 @@ def start(ctx: Context, studio) -> dict:
         "names": ["Ada", "Basil", "Coral"], "packet": studio.packet_note(), "shared": studio.shared,
         # the published version is its own place in the line; anything else is the next after its parent
         "generation": ctx.parent_record.get("generation", 0) if ctx.published else generation_of(ctx.parent_record),
-        **({"published": published_view(ctx, getattr(studio, "released_on", None))} if ctx.published else {}),
+        **({"published": published_view(ctx, getattr(studio, "released_on", None),
+                                                    getattr(studio, "released_title", None),
+                                                    getattr(studio, "released_audio", None))} if ctx.published else {}),
     }
 
 
-def published_view(ctx: Context, released_on: str | None = None) -> dict:
-    """On the parent as it was released (machine "published"): which version it is and when it was released (the
-    edition's date, given: a released record keeps no date of its own), for the page's header and its offer of this
-    machine's new version (studio.js, published())."""
+def published_view(ctx: Context, released_on: str | None = None, released_title: str | None = None,
+                   released_audio: str | None = None) -> dict:
+    """On the parent as it was released (machine "published"): which version it is (the edition's title, given, as
+    "the performance version"; without one, by its generation) and when it was released (the edition's date, given:
+    a released record keeps no date of its own), for the page's header and its offer of this machine's new version
+    (studio.js, published()); and where its own file is, if the studio has it (released_audio), to play it from
+    while nothing is changed rather than make it again."""
     made = released_on or (ctx.parent_record.get("rendered_at") or "")[:10]
     generation = ctx.parent_record.get("generation")
-    which = (f"the {ORDINALS[generation]} version" if isinstance(generation, int) and generation < len(ORDINALS)
-             else "a version before")
-    return {"which": which, "made": long_date(made) if made else "", "id": ctx.parent_record.get("id") or ""}
+    if released_title:
+        which = released_title[:1].lower() + released_title[1:]
+    else:
+        which = (f"the {ORDINALS[generation]} version" if isinstance(generation, int) and generation < len(ORDINALS)
+                 else "a version before")
+    return {"which": which, "made": long_date(made) if made else "", "id": ctx.parent_record.get("id") or "",
+            **({"audio": released_audio} if released_audio else {})}

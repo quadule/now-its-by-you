@@ -195,6 +195,8 @@
     if (!which) return;
     if (answers === null ? window.StudioBridge?.snapshot?.().start : !missed || which.firstElementChild) return;
     which.textContent = text;
+    const short = document.getElementById("whichShort");  // what a narrow screen shows in its place
+    if (short) short.textContent = text;
   }
 
   async function start() {
@@ -208,7 +210,12 @@
     const worker = spawn((m) => {
       if (first && !fetched && total && m.received) said(`Getting the studio ready (${Math.min(99, Math.round(100 * m.received / total))}%)…`);
     }, false, true, total);
-    await deadline(worker.ready, READY_MS, "getting the studio ready");
+    try {
+      await deadline(worker.ready, READY_MS, "getting the studio ready");
+    } catch (e) {
+      worker.stop();  // never a second one beside it when the page asks again
+      throw e;
+    }
     // where the build opens on the published version, that's the machine until this browser's is asked for (?new)
     const published = bundle.studio.opens === "published" && !NEW;
     const config = { ...bundle.studio, day: DAY, ...(published ? { machine: "published" } : {}),
@@ -309,7 +316,7 @@
       return studio();
     });
   }
-  if (!badPath) studio();
+  if (!badPath) studio().catch(() => {});  // said where it's asked for (the page's first question fails with why)
 
   // ---------------------------------------------------------------- someone's version
 

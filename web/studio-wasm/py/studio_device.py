@@ -201,6 +201,8 @@ class Device:
                                    config.get("day"), config.get("parent"))
         self.studio.singing_why = config.get("singing_why") or NOT_YET
         self.studio.released_on = config.get("released_on")  # the published version's date (editions.json)
+        self.studio.released_audio = config.get("released_audio")  # its own file on the site, played while unchanged
+        self.studio.released_title = config.get("released_title")  # and its title, as the home page names it
         self._singing(config)
 
     def _singing(self, config: dict) -> None:

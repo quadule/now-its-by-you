@@ -38,6 +38,7 @@ from __future__ import annotations
 
 import argparse
 import gzip
+import hashlib
 import importlib.util
 import json
 import os
@@ -57,7 +58,7 @@ FRESH = "no-cache"
 TYPES = {".html": "text/html; charset=utf-8", ".js": "text/javascript; charset=utf-8",
          ".mjs": "text/javascript; charset=utf-8", ".css": "text/css; charset=utf-8", ".json": "application/json",
          ".wasm": "application/wasm", ".zip": "application/zip", ".whl": "application/zip", ".flac": "audio/flac",
-         ".npz": "application/octet-stream", ".gzip": "application/octet-stream", ".txt": "text/plain; charset=utf-8"}
+         ".npz": "application/octet-stream", ".gzip": "application/octet-stream", ".txt": "text/plain; charset=utf-8", ".svg": "image/svg+xml"}
 SONG = ROOT / "songs" / "h-now-its-by-you.json"  # the song the studio opens on (build_render.py's BESIDE)
 RECORD = ROOT / "webstudio" / "released-record.json"  # the published version's record (tools/released_record.py)
 EDITIONS = ROOT / "web" / "sing" / "editions.json"  # the song's editions, newest first (the home page's)
@@ -72,12 +73,26 @@ def released_edition() -> dict:
         raise SystemExit(f"{RECORD.relative_to(ROOT)} isn't the newest edition's ({edition['title']}): "
                          "uv run python tools/released_record.py THE-EDITION.flac")
     return edition
+def released_file(edition: dict) -> tuple[str, bytes] | None:
+    """The newest edition's own file, to play from while a visitor has changed nothing (the studio would otherwise
+    make the same song again, a minute's work): (its name on the site, its bytes), checked against the edition's
+    SHA-256; None where this checkout hasn't the file (the studio then makes it, as it does everything else)."""
+    path = (edition.get("file") or {}).get("path")
+    path = (Path(path) if path and Path(path).is_absolute() else ROOT / path) if path else None
+    if path is None or not path.is_file():
+        return None
+    data = path.read_bytes()
+    if hashlib.sha256(data).hexdigest() != edition["file"].get("sha256"):
+        raise SystemExit(f"{path} isn't the newest edition's released file (web/sing/editions.json names another)")
+    return f"released-{edition['audio'][:12]}.flac", data
+
+
 DAYS = 400  # the first answers ahead (render/first-<hash>/): a file a day, about 50 KB each
 BEFORE = 2  # ... from this many days before the build's date (a visitor west of here is still on yesterday)
 # The policy every page and script is served with: the hosting Worker's (web/studio-site/src/policy.js, PAGE_POLICY,
 # which tests/test_studio_device.py holds this to): the studio's own (songbird/studio.py, Handler.send), and what the
 # browser's renderer needs: Pyodide compiling WebAssembly ('wasm-unsafe-eval', never 'unsafe-eval'), a song made here
-# playing from a blob: URL, its workers from here; and Cloudflare Web Analytics (2026-11-09), whose beacon the zone
+# playing from a blob: URL, its workers from here; and Cloudflare Web Analytics, whose beacon the zone
 # injects into the page (static.cloudflareinsights.com) and which reports a page view to cloudflareinsights.com
 POLICY = ("default-src 'self'; script-src 'self' 'wasm-unsafe-eval' https://static.cloudflareinsights.com; "
           "style-src 'self'; img-src 'self' data:; media-src 'self' blob:; connect-src 'self' https://cloudflareinsights.com; "
@@ -106,6 +121,23 @@ def _module(path: Path, name: str):
     return module
 
 
+ABOUT_LINE = ("A folk song that changes as it's passed on. Hear it, change it, sing it and share your own version, "
+              "all in your browser.")
+SHARED_HEAD = f"""<title>Now It's by You · make your own version</title>
+<meta name="description" content="{ABOUT_LINE}">
+<meta property="og:type" content="website">
+<meta property="og:title" content="Now It's by You: make your own version">
+<meta property="og:description" content="{ABOUT_LINE}">
+<meta property="og:image" content="https://now.itsby.you/cover.jpg">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="theme-color" content="#f4ecdc" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#17130e" media="(prefers-color-scheme: dark)">
+<link rel="icon" href="/favicon.svg" type="image/svg+xml">"""
+# the mark in the tab: the same as now.itsby.you's (tools/sing_site.py FAVICON)
+FAVICON = ("""<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32"><circle cx="16" cy="16" r="15" fill="#c2533b"/>"""
+           """<path d="M13 22.5a3.5 3 0 1 1-2-2.7V8l10-2v11.5a3.5 3 0 1 1-2-2.7V9.4l-6 1.2z" fill="#fffaf3"/></svg>\n""")
+
+
 def page(singing: bool) -> str:
     """The studio's page as the static site serves it: on the device (its token names no server, only the version
     the page is on, which device.js sets), the shim first among its scripts."""
@@ -120,6 +152,12 @@ def page(singing: bool) -> str:
                         '<meta name="studio-token" content="device">', 1)
     html = html.replace('<script src="/renderer.js" defer></script>',
                         '<script src="/device.js" defer></script>\n<script src="/renderer.js" defer></script>', 1)
+    # how a link to the studio looks where it's pasted, and in a tab: the song's name, a line on what this is, the
+    # song's cover (now.itsby.you's) (studio.js sets the title again once it knows the version)
+    if "<title>Studio</title>" not in html:
+        raise SystemExit("songbird/studio/index.html has no <title>Studio</title>: build_site.py doesn't know "
+                         "where to say what the site is")
+    html = html.replace("<title>Studio</title>", SHARED_HEAD, 1)
     # what's kept, true from the first paint (studio.js says the same once it starts)
     html = html.replace("Nothing on this page leaves this computer.", "Nothing leaves this device unless you share a version.", 1)
     # the licences of what the site sends besides the project's own (Pyodide, numpy, scipy...): licenses.txt
@@ -138,7 +176,7 @@ def page_files(singing: bool) -> dict[str, bytes]:
     from songbird.studio import PAGE, PIANO_STATIC, STATIC
 
     files = {"index.html": page(singing).encode(), "device.js": (HERE / "device.js").read_bytes(),
-             "notice.css": (PAGE / "notice.css").read_bytes(), "licenses.txt": (ROOT / "THIRD-PARTY.md").read_bytes()}
+             "notice.css": (PAGE / "notice.css").read_bytes(), "licenses.txt": (ROOT / "THIRD-PARTY.md").read_bytes(), "favicon.svg": FAVICON.encode()}
     for path, (name, _) in STATIC.items():
         files[path.lstrip("/")] = (PAGE / name).read_bytes()
     for path, (name, _) in PIANO_STATIC.items():
@@ -259,18 +297,23 @@ def main(argv: list[str] | None = None) -> None:
     py_dir, app_dir, bc_dir = list(folders)
     # Where each visitor's browser sings, the page opens on the published version as it was released (the machine
     # "published", nothing chosen), which can be answered ahead, and offers this browser's new version of it (?new);
-    # a build naming one machine opens on that machine's version, as before. Either way, the first answers are the
+    # a build naming one machine opens on that machine's version. Either way, the first answers are the
     # version the page opens on, a day at a time.
     released = released_edition() if args.machine == "browser" else None
     opens = "published" if released else args.machine
+    audio = released_file(released) if released else None
+    told = ({"released_on": released["date"], "released_title": released["title"],
+             **({"released_audio": f"/{audio[0]}"} if audio else {})} if released else {})
     native = {"song": str(SONG), "machine": opens, "runs_with": runs_with(), "singing": singing,
-              **({"parent": str(RECORD), "released_on": released["date"]} if released else {})}
+              **({"parent": str(RECORD), **told} if released else {})}
     days = window(date.today(), args.days)
     first = first_answers(native, days) if days else {}
     if first:
         folders[f"first-{render.folder_hash(first)}"] = first
 
     files: dict[str, bytes] = page_files(singing)
+    if audio:
+        files[audio[0]] = audio[1]
     for folder, contents in folders.items():
         for name, data in contents.items():
             files[f"render/{folder}/{name}"] = data
@@ -278,8 +321,7 @@ def main(argv: list[str] | None = None) -> None:
     sent = sum(len(gzip.compress(d, 6, mtime=0)) if Path(n).suffix in (".mjs", ".js", ".json", ".wasm") else len(d)
                for f, c in folders.items() if f.startswith(("py-", "app-", "bc-")) for n, d in c.items())
     studio = {"song": "/app/songs/h-now-its-by-you.json", "machine": args.machine, "runs_with": runs_with(),
-              **({"opens": opens, "parent": "/app/webstudio/released-record.json", "released_on": released["date"]}
-                 if released else {})}
+              **({"opens": opens, "parent": "/app/webstudio/released-record.json", **told} if released else {})}
     if singing:
         studio["singing"] = True
     # bytes: what a render worker fetches, and studio_bytes the studio's (numpy alone: lazy_imports), each as it

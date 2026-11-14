@@ -224,7 +224,11 @@ test('Record opens the finish panel before scrolling and reopens it when the fin
   assert.equal(details.open, true);
   assert.equal(nodes.get('recordNow').disabled, false);
   assert.equal(run('state.recording'), false);
-  nodes.get('saved').children.at(-1).listeners.click();
+  // the export, ready: its Play is the one button in it here (no Download: this studio saved the file; no Share)
+  const pressable = (node) => (node?.listeners?.click ? [node] : (node?.children || []).flatMap(pressable));
+  const buttons = pressable(nodes.get('saved'));
+  assert.equal(buttons.length, 1);
+  buttons[0].listeners.click();
   assert.equal(nodes.get('audio').src, '/recorded.flac');
   assert.match(nodes.get('nowSub').textContent, /Earlier version/);
 });

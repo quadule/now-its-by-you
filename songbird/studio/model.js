@@ -234,7 +234,7 @@
     if (mod && (k === "ArrowLeft" || k === "ArrowRight")) return { action: "move", step: k === "ArrowLeft" ? -1 : 1 };
     if (mod || event.altKey) return null;
     if (k === " " || k === "Spacebar") return { action: "play", how: event.shiftKey ? "sung" : "sketch" };
-    const plain = { l: "loop", k: "click", m: "mute", s: "solo", e: "record", t: "time", "?": "help", Enter: "open", Escape: "escape" };
+    const plain = { k: "click", m: "mute", s: "solo", e: "record", t: "time", "?": "help", Enter: "open", Escape: "escape" };
     if (plain[k.length === 1 ? k.toLowerCase() : k] && !(k.length === 1 && event.shiftKey && k !== "?")) return { action: plain[k.length === 1 ? k.toLowerCase() : k] };
     if (["1", "2", "3", "4"].includes(k)) return { action: "view", view: ["page", "arrange", "mix", "sing"][Number(k) - 1] };
     if (k === "ArrowLeft" || k === "ArrowRight") return { action: "step", axis: "section", step: k === "ArrowLeft" ? -1 : 1 };

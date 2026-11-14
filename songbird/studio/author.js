@@ -210,7 +210,7 @@
       if (!changed.length) { status.textContent = "Already in your song."; return; }
       const wrong = changed.filter((row) => syllables(row.input.value) !== row.phrase.syllable_count);
       if (wrong.length) {
-        status.textContent = "Each line needs its count of syllables.";
+        status.textContent = "Each line needs as many syllables as its tune has notes: the count beside it says how many. Split a longer word with hyphens (num-bers) so each part gets a note.";
         wrong[0].input.focus();
         return;
       }
@@ -360,7 +360,7 @@
     if (!changed.length) return Promise.resolve(true);
     const wrong = changed.filter((row) => syllables(row.input.value) !== row.phrase.syllable_count);
     if (wrong.length) {
-      section.status.textContent = "Each line needs its count of syllables.";
+      section.status.textContent = "Each line needs as many syllables as its tune has notes: the count beside it says how many. Split a longer word with hyphens (num-bers) so each part gets a note.";
       wrong[0].input.focus();
       return Promise.resolve(false);
     }

@@ -200,11 +200,11 @@
     $("position").classList.toggle("stale", /^Earlier version/.test($("nowSub").textContent));
     paintPlay();
   }
-  function recording(words, progress) {  // studio.js: a recording on its way (null when done)
+  function recording(words, progress) {  // studio.js: an export on its way (null when done)
     S.recording = words;
     if (!words) { idle(); return; }
     $("nowTitle").textContent = "Exporting";
-    $("nowSub").textContent = words.replace(/^Recording: /, "");
+    $("nowSub").textContent = words.replace(/^Exporting: /, "");
     $("bar").classList.add("making");
     $("barFill").style.width = pct(progress);
   }
@@ -214,6 +214,45 @@
     const t = a.currentTime;
     const s = g.sections.find((x) => t >= x.startSeconds && t < x.endSeconds);
     if (s) { $("nowTitle").textContent = `${s.label}`; $("nowSub").textContent = "sung"; }
+  }
+
+  // The Page follows the singing: the section being heard is marked, and in it the line being sung, from the
+  // score's own times (the section's seconds, its lines' beats). The whole song by its clock; a section heard
+  // alone by how far through it the sound is. Nothing is marked while a section's words are being written.
+  function sungLineAt() {
+    const a = $("audio"), sections = state.view?.composition?.sections, p = state.playing;
+    let section = null, through = 0;
+    if (sections && p && !a.paused && !a.ended && a.duration && p.who !== undefined) {
+      if (p.section === null || p.section === undefined) {
+        const t = a.currentTime;
+        section = sections.find((s) => t >= s.start_seconds && t < s.end_seconds) || null;
+        if (section) through = (t - section.start_seconds) / Math.max(section.end_seconds - section.start_seconds, 0.01);
+      } else {
+        section = sections.find((s) => s.index === p.section) || null;
+        // by the section's own length: the sound runs on a little after it, as its last note rings
+        if (section) through = Math.min(1, a.currentTime / Math.max(section.end_seconds - section.start_seconds, 0.01));
+      }
+    }
+    const box = section && $(`sec-${section.index}`);
+    let line = null;
+    if (box && !box.classList.contains("is-writing") && section.sung) {
+      const lines = [...box.querySelectorAll("p")].filter((x) => !x.closest(".sec-head"));
+      const phrases = section.phrases || [];
+      if (lines.length && lines.length === phrases.length) {
+        const beat = section.start_beat + through * section.duration_beats;
+        let k = 0;
+        while (k < phrases.length - 1 && phrases[k + 1].start_beat - (phrases[k + 1].pickup_beats || 0) <= beat) k++;
+        line = lines[k];
+      }
+    }
+    for (const el of document.querySelectorAll("#page .sec.heard")) if (el !== box) el.classList.remove("heard");
+    for (const el of document.querySelectorAll("#page p.sung-now")) if (el !== line) el.classList.remove("sung-now");
+    if (box && !box.classList.contains("heard")) {
+      box.classList.add("heard");
+      // the whole song, read along: the page keeps up with it (never while something on it is being written)
+      if (S.view === "page" && !S.writing && (p.section === null || p.section === undefined)) box.scrollIntoView({ block: "nearest", behavior: "smooth" });
+    }
+    if (line) line.classList.add("sung-now");
   }
 
   function renderTransport() {
@@ -1323,7 +1362,6 @@
     if (a.action === "play" && e.target.matches?.("input[type=checkbox], input[type=radio]")) return;
     switch (a.action) {
       case "play": e.preventDefault(); play(a.how); break;
-      case "loop": toggle("tLoop"); break;
       case "click": toggle("tClick"); break;
       case "view": showView(a.view, e.target.getAttribute?.("role") === "tab"); break;
       case "open": {
@@ -1341,7 +1379,7 @@
         break;
       }
       case "record": e.preventDefault(); record(); break;
-      case "time": e.preventDefault(); openTime(); break;
+      case "time": if (!$("timeBtn").hidden) { e.preventDefault(); openTime(); } break;
       case "move": if (S.sel?.kind === "section") { e.preventDefault(); moveSection(S.sel.id, { step: a.step }); } break;
       case "step":
         if (e.target.closest?.(".sbc-note, input, select, [role=tab]")) return;
@@ -1353,9 +1391,8 @@
   function toggle(id) {
     const b = $(id), on = b.getAttribute("aria-pressed") !== "true";
     b.setAttribute("aria-pressed", String(on));
-    if (id === "tLoop") { C()?.options?.({ loop: on }); $("popLoop").checked = on; }
     if (id === "tClick") { C()?.options?.({ metronome: on }); $("popClick").checked = on; }
-    say(`${id === "tLoop" ? "Loop" : "Click"} ${on ? "on" : "off"}`);
+    say(`Click ${on ? "on" : "off"}`);
   }
 
   // ------------------------------------------------------------------ wiring
@@ -1373,9 +1410,7 @@
     $("viewWhat").addEventListener("click", () => { const a = $("viewAbout"); a.hidden = !a.hidden; $("viewWhat").setAttribute("aria-expanded", String(!a.hidden)); });
     for (const b of document.querySelectorAll("[data-how]")) b.addEventListener("click", () => setHow(b.dataset.how));
     $("tPlay").addEventListener("click", () => play());
-    $("tLoop").addEventListener("click", () => toggle("tLoop"));
     $("tClick").addEventListener("click", () => toggle("tClick"));
-    $("popLoop").addEventListener("change", () => toggle("tLoop"));
     $("popClick").addEventListener("change", () => toggle("tClick"));
     $("sketchChords").addEventListener("change", (e) => C()?.options?.({ chords: e.target.checked }));
     $("sketchBass").addEventListener("change", (e) => C()?.options?.({ bass: e.target.checked }));
@@ -1385,9 +1420,6 @@
     $("tempoNumber").addEventListener("keydown", (e) => { if (e.key === "Enter") e.target.blur(); });
     $("tempoReset").addEventListener("click", () => releaseEdit("tempo", "Reset the tempo"));
     $("keyBtn").addEventListener("click", () => togglePop("keyPop"));
-    for (const b of document.querySelectorAll("#howPop [data-do]")) b.addEventListener("click", () => {
-      if (b.dataset.do === "roll") $("roll").click(); else travelHistory(b.dataset.do);
-    });
     $("toolsBtn").addEventListener("click", () => openTools());
     $("timeBtn").addEventListener("click", () => openTime());
     $("scrim").addEventListener("click", () => { openTools(false); openTime(false); });
@@ -1408,6 +1440,7 @@
     const audio = $("audio");
     for (const ev of ["play", "pause", "ended"]) audio.addEventListener(ev, () => { paintPlay(); if (ev !== "play") setTimeout(idle, 1200); });
     audio.addEventListener("timeupdate", wholeSongAt);
+    for (const ev of ["timeupdate", "play", "pause", "ended", "seeked", "emptied"]) audio.addEventListener(ev, sungLineAt);
     new ResizeObserver(() => { if (S.playhead !== null) placeHead(S.playhead); }).observe($("gridScroll"));
     showView("page");
     setHow(M.defaultHow(null), false);  // nothing selected: the whole song, sung (decision 2)
@@ -1428,8 +1461,8 @@
     const p = start.public;
     $("toolsWhere").textContent = start.device ? ""  // the page's foot says where
       : p ? `An open studio: ${p.records} whole songs and ${p.previews} sections an hour each, made one at a time.`
-        : start.shared ? "Recordings are made on the computer serving this studio."
-          : `Recordings go into ${start.out} on this computer.`;
+        : start.shared ? "Exports are made on the computer serving this studio."
+          : `Exports go into ${start.out} on this computer.`;
     if (p) {  // what an open studio keeps: in Help, a word away (on the device, the page's foot says it)
       const kept = document.createElement("button");
       Object.assign(kept, { type: "button", className: "btn quiet", textContent: "What's kept" });

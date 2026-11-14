@@ -119,7 +119,16 @@ async function api(path, body) {
   return data;
 }
 
-function toast(text, ms = 2600) {
+// Why the studio has no song to show: in the line under the title, and in the short one a narrow screen shows
+// in its place (score.css hides the long one there), so a phone isn't left on a page that says nothing.
+function stuck(text) {
+  setOn("which", "textContent", text);
+  setOn("whichShort", "textContent", text);
+}
+
+// A word at the foot of the page. Unless told how long, it stays long enough to be read: a line of failure
+// (it ran out of memory, and what to try) longer than "Exported."
+function toast(text, ms = Math.min(12000, Math.max(2600, 55 * String(text).length))) {
   const t = $("toast");
   t.textContent = text;
   t.classList.add("show");
@@ -297,7 +306,7 @@ async function refresh() {
     if (revision === state.editRevision && serial === state.refreshSerial) renderWords();
   } catch (e) {
     if (revision !== state.editRevision || serial !== state.refreshSerial) return;
-    if (!state.view) $("which").textContent = `The studio couldn't make your version of the song: ${e.message}`;
+    if (!state.view) stuck(`The studio couldn't make your version of the song: ${e.message}`);
     toast(e.message);
   } finally {
     state.busy--;
@@ -309,19 +318,18 @@ async function refresh() {
 
 function renderHeader() {
   const v = state.view;
-  $("title").textContent = v.title;
-  document.title = `${v.title} · Songbird studio`;
+  if (!$("title").querySelector?.("input")) $("title").textContent = v.name || v.title;  // (not under a hand renaming it)
+  document.title = `${v.name || v.title} · Studio`;
   // the day, then only what isn't the plain case: a parent other than the song as it began, a machine if there is one
   const from = v.from === "from the song as it began" ? "" : v.from;
   const by = v.by === "no machine, only time" ? "" : v.by.replace(/^a made-up machine called /, "");
   const published = state.start?.published;
   if (published) {  // the version as it was released: no day, no machine, nothing chosen
     const which = published.which.charAt(0).toUpperCase() + published.which.slice(1);
-    $("which").replaceChildren(h("b", {}, which), ` · as it was published${published.made ? `, ${published.made}` : ""}`);
+    $("which").replaceChildren(h("b", {}, which), ` · as published${published.made ? ` ${published.made}` : ""}`);
   } else {
     $("which").replaceChildren(h("b", {}, v.offset ? `${v.date} (${v.when})` : `Today, ${v.date}`), [from, by].filter(Boolean).map((x) => ` · ${x}`).join(""));
   }
-  setOn("draw", "textContent", v.roll ? `chance drawn again: draw ${v.roll + 1}` : "");
   const mine = v.changed;
   const locks = lockCount(v.held);  // a lock (the score's padlock) is held, not changed
   const held = v.held.some((p) => p.startsWith("words."));
@@ -373,7 +381,7 @@ function describePath(path) {
   const sound = path.match(/^(sound|mix)\.([a-z0-9]+)\.(\w+)$/);
   if (path === VOICES) return "the voice's mute";
   if (sound && !["space", "width", "forward", "intimacy", "rt60", "predelay"].includes(sound[2])) return `your ${sound[2]}'s ${sound[3]}`;
-  return { "words.refrain": "your refrain's words", "words.bridge": "your bridge's words", "words.bridge2": "your second bridge", "words.tag": "your tag", "phrasing": "the singer's way", "date": "the day" }[path] || `your ${path.replace(/^\w+\./, "").replace(/_/g, " ")}`;
+  return { "name": "your title", "words.refrain": "your refrain's words", "words.bridge": "your bridge's words", "words.bridge2": "your second bridge", "words.tag": "your tag", "phrasing": "the singer's way", "date": "the day" }[path] || `your ${path.replace(/^\w+\./, "").replace(/_/g, " ")}`;
 }
 
 // ------------------------------------------------------------------ the words
@@ -1104,6 +1112,18 @@ async function listen(who = "you", section = null, bar = null) {
   if (state.playing?.task) renderer().cancel(state.playing.task);  // one still waiting its turn is dropped
   quietPause();
   const label = section === null ? "The whole song" : state.view.words.find((w) => w.index === section)?.label || "Song section";
+  // the published version with nothing changed is its own recording: played at once, from the file as released,
+  // where the site has it (nothing is made again). From a later bar, by the score's own time for that bar.
+  const released = state.start?.published?.audio;
+  if (released && who === "you" && section === null && !state.edits.roll
+      && !(state.view.changed || []).some((p) => p !== "name")) {  // (a title of its own changes no sound)
+    const sections = state.view.composition?.sections || [], perBar = state.view.composition?.beats_per_bar || 4;
+    const first = sections[0]?.start_beat || 0;
+    const from = Number.isInteger(bar) && bar > 1 ? sections.find((x) => Math.round((x.start_beat - first) / perBar) + 1 === bar) : null;
+    play(released, label, "as published", { who, section, label, job: null, editsKey: JSON.stringify(copyEdits()), bar: null },
+      from ? from.start_seconds : 0);
+    return;
+  }
   const edits = copyEdits();
   const playing = { who, section, label, job: null, editsKey: JSON.stringify(edits), bar: section === null ? bar : null };
   state.playing = playing;
@@ -1114,7 +1134,7 @@ async function listen(who = "you", section = null, bar = null) {
     playing.task = renderer().preview({ edits, who, section }, (job) => making(job, playing));
     finished(await playing.task.done, playing);
   } catch (e) {
-    if (playing === state.playing) showPlayer(label, e.message, 0, false);
+    if (playing === state.playing) { showPlayer(label, e.message, 0, false); toast(e.message); }
   }
 }
 
@@ -1127,7 +1147,7 @@ function pauseAudio() {
   // so resuming a finished audio track still says when its choices differ from the current song.
   state.playing = { ...playing };
   if (!playing.job || ["queued", "running"].includes(playing.job.state)) {
-    showPlayer(playing.label, "Preview stopped while the melody sketch plays", 0, false);
+    showPlayer(playing.label, "Stopped while the sketch plays", 0, false);
     setOn("playPause", "disabled", true);
   }
 }
@@ -1153,6 +1173,7 @@ function finished(job, playing) {
     return;
   }
   showPlayer(title, job.error === "cancelled" ? "stopped" : `couldn't make it: ${job.error}`, 0, false);
+  if (job.error !== "cancelled") toast(`Couldn't make it: ${job.error}`);  // a narrow screen hides the player's small line
 }
 
 // One song is made at a time; a shared studio's visitors wait on each other, so say how many are ahead.
@@ -1188,7 +1209,13 @@ function play(url, title, sub, playing = null, start = 0) {
       if (audio._start === at && Math.abs(audio.currentTime - start) > 0.05) audio.currentTime = start;
     }, { once: true });
   }
-  quietPlay(!!at)?.catch?.(() => {});
+  // made long after the press that asked for it, a browser may refuse to start it unasked (Safari on a phone does):
+  // then it waits, and says so
+  quietPlay(!!at)?.catch?.((e) => {
+    if (e?.name !== "NotAllowedError" || audio._asked === undefined || !audio.paused) return;
+    showPlayer(title, "ready: press ▶ to hear it", 0, false);
+    toast("Ready: press ▶ to hear it.");
+  });
   showPlayer(title, sub || "", 0, false);
   setOn("playPause", "disabled", false);
 }
@@ -1206,7 +1233,7 @@ function markAudioState() {
   const stale = !!state.playing && state.playing.editsKey !== JSON.stringify(state.edits);
   const player = document.querySelector(".player");
   player?.classList.toggle("player-stale", stale);
-  if ($("nowSub")) $("nowSub").textContent = stale ? "Earlier version · press Play song to hear your edits" : state.playerSub;
+  if ($("nowSub")) $("nowSub").textContent = stale ? "Earlier version · press ▶ to hear your changes" : state.playerSub;
 }
 
 audio.addEventListener("timeupdate", () => {
@@ -1262,7 +1289,7 @@ async function record() {
   const edits = copyEdits();
   try {
     const task = renderer().record({ edits }, (job) => {
-      const words = `Recording: ${job.state === "queued" ? waitingWords(job) : job.stage || "making it"}… ${Math.round((job.progress || 0) * 100)}%`;
+      const words = `Exporting: ${job.state === "queued" ? waitingWords(job) : job.stage || "making it"}… ${Math.round((job.progress || 0) * 100)}%`;
       saved.replaceChildren(h("p", {}, words), h("div", { class: "bar making" }, h("div", { style: null })));
       saved.querySelector(".bar > div").style.width = `${Math.round((job.progress || 0) * 100)}%`;
       score()?.recording?.(words, job.progress || 0);
@@ -1270,16 +1297,9 @@ async function record() {
     const job = await task.done;
     if (job.state === "failed") throw new Error(job.error);
     const r = job.result.recorded;
-    saved.replaceChildren(
-      r.shared
-        ? h("p", { title: "The song, the program that sang it and its record, in one file." }, `Made (${fmtTime(r.duration)}). `,
-          h("a", { class: "btn primary", href: r.download, download: r.name }, "Download it"), publicKept(r),
-          r.device && r.file && window.SongbirdDevice?.share ? shareButton(r) : null)
-        : h("p", { title: "The song, the program that sang it and its record, in one file." }, "Saved ", h("code", {}, r.flac), ` (${fmtTime(r.duration)}).`),
-      h("p", { title: "Your choices are marked. Your name isn't recorded." }, r.yours ? `${r.yours} choice${r.yours === 1 ? "" : "s"} marked as yours.` : "Every choice in it is the program's."),
-      h("p", { class: "hint" }, "To make the next version from this one: ", h("code", {}, r.next)),
-      h("button", { class: "btn", type: "button", onclick: () => play(job.url, "The recording", r.flac,
-        { editsKey: JSON.stringify(edits), label: "The recording", who: "you", section: null, job }) }, "Play the recording"));
+    state.exported = { r, job, key: JSON.stringify(edits) };
+    saved.replaceChildren(exportReady(r, job, edits));
+    $("record")?.classList.remove("primary");  // the file is made: the way to take it is the one to press now
     toast("Exported.");
   } catch (e) {
     saved.replaceChildren(h("p", { class: "problem" }, `Couldn't export it: ${e.message}`));
@@ -1312,7 +1332,7 @@ function applyPublic(s) {
   if (!p) return;
   setOn("localBadge", "textContent", "Open studio");
   setOn("whereNote", "textContent", "An open studio: songs are made one at a time. Your changes stay in this browser (Help says what's kept).");
-  setOn("helpWhere", "textContent", `This studio is open to anyone. A small server makes the song, one at a time for everyone, so you may wait your turn; each person can have ${p.records} whole songs and ${p.previews} sections made an hour, and what's made already plays at once. What you record is yours to download (it waits ${p.download_hours} hours). Your changes stay in this browser.`);
+  setOn("helpWhere", "textContent", `This studio is open to anyone. A small server makes the song, one at a time for everyone, so you may wait your turn; each person can have ${p.records} whole songs and ${p.previews} sections made an hour, and what's made already plays at once. What you export is yours to download (it waits ${p.download_hours} hours). Your changes stay in this browser.`);
   setOn("helpKept", "textContent", whatsKept(p, s.sing?.web));
   setOn("helpKept", "hidden", false);
 }
@@ -1334,11 +1354,20 @@ function whatsKept(p, singing) {  // what an open studio keeps, said plainly (do
 function applyDevice(s) {
   if (!s.device) return;
   setOn("whereNote", "textContent", "Your changes stay on this device unless you share a version. The site counts visits (Cloudflare Web Analytics, no cookies).");
-  setOn("helpShows", "textContent", "This studio shows today's version of the song, and lets you:");
+  setOn("helpShows", "textContent", s.published ? "This studio opens on the song as it was published, and lets you:"
+    : "This studio shows today's version of the song, and lets you:");
+  if (window.SongbirdDevice?.share) setOn("shareTool", "hidden", false);  // a link to your version, from Tools
+  // the parts alone can't be made in a browser: said on the button's own line, not after it is pressed
+  const stems = $("exportStems");
+  if (stems) {
+    stems.disabled = true;
+    const about = stems.parentElement?.querySelector("p");
+    if (about) about.textContent = "Each part alone: not in the browser yet. Export the song, then run its file with Python on a computer.";
+  }
   setOn("helpWhere", "hidden", true);  // the page's foot says it
   // the file's record (its made-up machine's name, the room, the words' leanings) and what any site sees of what it
   // serves: docs/WEB-STUDIO.md, "On the device"
-  setOn("helpKept", "textContent", "What's kept: your changes, in this browser. An export stays until you leave the page, so download it to keep it. A version you share is stored on this site so its link works. Your name isn't in it.");
+  setOn("helpKept", "textContent", "What's kept: your changes, in this browser. An export stays until you leave the page, so download it to keep it. A version you share is stored on this site, where anyone with its link can open it; it is deleted 30 days after it was last opened. Your name isn't in it.");
   setOn("helpKept", "hidden", false);
   const crashed = window.SongbirdDevice?.crashed?.();
   if (crashed) {
@@ -1356,11 +1385,11 @@ function applyPublished(s) {
   const p = s.published;
   if (p) {
     setOn("timeBtn", "hidden", true);  // nothing moves it: no other days, no machine to compare
-    bar.replaceChildren(
-      h("a", { class: "btn primary", href: "/?new", id: "toNew" }, "Make this browser's version \u2192"),
-      h("p", { class: "hint" }, `This is ${p.which} as it was published. This browser can sing the next version of it: `
-        + "its languages, its size, its screen and today all move the song."),
-    );
+    setOn("helpCompare", "hidden", true);
+    setOn("helpTimeKey", "hidden", true);
+    bar.replaceChildren(h("a", { class: "btn primary", href: "/?new", id: "toNew",
+      title: "Every browser sings the song a little differently, and it changes from day to day. This makes the version yours sings today, for you to change." },
+      "Make your own version \u2192"));
   } else if (s.published_offer) {
     bar.classList.add("back");
     bar.replaceChildren(h("a", { href: "/" }, "\u2190 the published version"));
@@ -1370,25 +1399,56 @@ function applyPublished(s) {
   bar.hidden = false;
 }
 
-// "Share it": the recording sent to the site (its only upload), and the link it keeps it under
-function shareButton(r) {
-  const out = h("span", { class: "share" });
-  const button = h("button", { class: "btn", type: "button", title: "Sends this recording to the site, which keeps it so anyone with the link can open it and make the next version. Nothing else leaves this device.", onclick: async () => {
-    button.disabled = true;
-    out.replaceChildren(" Sending it…");
+// An export, ready: one line saying so, then what to do with it, each a button of the same kind (take it, hear it,
+// and where the studio can keep it for a link, share it). Where the link goes once there is one: #shareOut.
+function exportReady(r, job, edits) {
+  const yours = r.yours ? ` \u00B7 ${r.yours} choice${r.yours === 1 ? "" : "s"} marked as yours` : "";
+  const canShare = r.device && r.file && window.SongbirdDevice?.share;
+  return h("div", { class: "export-ready" },
+    h("p", { title: "The song, the program that sang it and its record, in one file. Your name isn't in it." },
+      r.shared ? `Ready \u00B7 ${fmtTime(r.duration)}` : `Saved as ${r.flac} \u00B7 ${fmtTime(r.duration)}`, publicKept(r), yours),
+    h("div", { class: "actions" },
+      r.shared ? h("a", { class: "btn primary", href: r.download, download: r.name }, "Download") : null,
+      h("button", { class: "btn", type: "button", onclick: () => play(job.url, "Your export", r.flac,
+        { editsKey: JSON.stringify(edits), label: "Your export", who: "you", section: null, job }) }, "Play"),
+      canShare ? h("button", { class: "btn", type: "button", id: "shareIt", title: SHARE_WHAT, onclick: () => shareExport() }, "Share") : null),
+    h("div", { class: "share-out", id: "shareOut", "aria-live": "polite" }));
+}
+
+// Sharing: the exported file sent to the site (the studio's only upload), which keeps it under a link. The link is
+// the file's own (its hash), so there is no sharing without the file: where none has been made of the song as it
+// is now, Share makes it first, then sends it.
+const SHARE_WHAT = "Sends the file to this site, which keeps it so anyone with the link can open it and make the next version. It is deleted 30 days after it was last opened. Nothing else leaves this device.";
+
+async function shareExport() {
+  if (state.sharing) return;
+  state.sharing = true;
+  for (const id of ["shareNow", "shareIt"]) setOn(id, "disabled", true);
+  try {
+    const current = () => state.exported && state.exported.key === JSON.stringify(copyEdits()) && state.exported.r.file;
+    if (!current()) await record();
+    if (!current()) return;  // it couldn't be made: record() has said why
+    revealRecording();
+    const out = $("shareOut");
+    out.replaceChildren(h("p", {}, "Sending it\u2026"));
     try {
-      const shared = await window.SongbirdDevice.share(r.file);
-      const copy = h("button", { class: "link small", type: "button", onclick: async () => {
-        try { await navigator.clipboard.writeText(shared.url); toast("The link is copied"); }
-        catch (e) { toast("Copy the link from beside the button"); }
-      } }, "copy the link");
-      out.replaceChildren(" Its link: ", h("a", { href: shared.url }, shared.url), " · ", copy);
+      const shared = await window.SongbirdDevice.share(state.exported.r.file);
+      const field = h("input", { type: "text", readonly: "", value: shared.url, "aria-label": "The link to your version" });
+      field.addEventListener("focus", () => field.select());
+      const copy = h("button", { class: "btn", type: "button", onclick: async () => {
+        try { await navigator.clipboard.writeText(shared.url); copy.textContent = "Copied"; }
+        catch (e) { field.focus(); toast("Copy the link from its box"); }
+      } }, "Copy link");
+      out.replaceChildren(h("div", { class: "share-link" }, field, copy),
+        h("p", { class: "hint" }, "Anyone with the link can open your version. It is kept for 30 days after it was last opened."));
+      setOn("shareIt", "hidden", true);
     } catch (e) {
-      button.disabled = false;
-      out.replaceChildren(` Couldn't share it: ${e.message}`);
+      out.replaceChildren(h("p", { class: "problem" }, `Couldn't share it: ${e.message}`));
     }
-  } }, "Share it");
-  return h("span", {}, " ", button, out);
+  } finally {
+    state.sharing = false;
+    for (const id of ["shareNow", "shareIt"]) setOn(id, "disabled", false);
+  }
 }
 
 // ------------------------------------------------------------------ putting it together
@@ -1448,7 +1508,7 @@ async function main() {
   try {
     state.start = await api("/api/start");
   } catch (e) {
-    $("which").textContent = `The studio isn't answering: ${e.message}`;
+    stuck(`The studio isn't answering: ${e.message}`);
     return;
   }
   const s = state.start;
@@ -1552,9 +1612,45 @@ document.addEventListener("keydown", (event) => {
 });
 
 $("hearAll")?.addEventListener("click", () => listen("you", null));
-$("roll")?.addEventListener("click", () => setEdit("roll", (state.edits.roll || 0) + 1));
+// A version's own title: the song's title becomes a field, 60 characters at most; Enter or leaving it keeps
+// what was typed, Escape leaves it as it was. Emptied, or the song's own title again, the version goes by the song's.
+const TITLE_MAX = 60;  // edits.py NAME_MAX
+$("renameBtn")?.addEventListener("click", () => {
+  const v = state.view, title = $("title"), button = $("renameBtn");
+  if (!v || !title) return;
+  const now = v.name || v.title;
+  const input = h("input", { type: "text", class: "title-input", maxlength: String(TITLE_MAX), value: now,
+    "aria-label": "This version's title" });
+  let over = false;
+  const finish = (keep) => {
+    if (over) return;
+    over = true;
+    const typed = input.value.replace(/\s+/g, " ").trim().slice(0, TITLE_MAX);
+    title.textContent = now;
+    button.hidden = false;
+    if (!keep || typed === now) return;
+    if (!typed || typed === v.title) clearEdits(["name"], "Use the song's own title");
+    else setEdit("name", typed, "Rename this version");
+  };
+  input.addEventListener("keydown", (e) => {
+    e.stopPropagation();
+    if (e.key === "Enter") finish(true);
+    else if (e.key === "Escape") finish(false);
+  });
+  input.addEventListener("blur", () => finish(true));
+  title.replaceChildren(input);
+  button.hidden = true;
+  input.focus();
+  input.select?.();
+});
+
+$("roll")?.addEventListener("click", () => {
+  setEdit("roll", (state.edits.roll || 0) + 1);
+  toast("A new performance. Press \u25B6 to hear it.");
+});
 $("record")?.addEventListener("click", record);
 $("recordNow")?.addEventListener("click", record);
+$("shareNow")?.addEventListener("click", shareExport);
 $("toFinish")?.addEventListener("click", () => {
   // what singing and recording are, and the button that does it: opened, not started, from the top
   const panel = $("finishPanel");
@@ -1615,15 +1711,16 @@ function applyVersion(s) {
   // on the device, a file the visitor brought is theirs alone (kept in this browser, no link); a shared one has its link
   const fromFile = s.device && !v.shared;
   const how = fromFile ? "which you opened from a file" : s.device ? "which someone shared" : "which someone brought here";
-  bar.replaceChildren(
-    h("p", {}, tag("lineage", "someone's version"), " ",
-      `Continuing ${which}${made} (${v.rendition}…), ${how}. What you record is its child.`),
-    h("p", { class: "hint" }, v.program_note),
-    fromFile
-      ? h("p", { class: "hint", title: "Kept in this browser only. Record your version and share it to give it a link." }, h("a", { href: "/" }, "the song as it began"))
-      : h("p", { class: "hint" }, "Its link, for anyone to open it here too: ", h("a", { href: v.url }, link), " · ", copy,
-        " · ", h("a", { href: "/" }, "the song as it began")),
-  );
+  // one line: whose this is, the way to hear it as it came (its own file, where the site keeps it), its link
+  const named = v.name ? `\u201C${v.name}\u201D, ` : "";
+  const heard = s.device && v.shared && window.SongbirdDevice?.linked
+    ? h("button", { class: "link small", type: "button", title: "Its own file, as it was shared: nothing is made again",
+      onclick: () => play(`/api/versions/${window.SongbirdDevice.linked}`, v.name || "Someone's version", "as it was shared",
+        { editsKey: null, label: v.name || "Someone's version", who: "shared", section: null, job: null }) }, "\u25B6 hear it as shared")
+    : null;
+  bar.replaceChildren(h("p", { title: v.program_note },
+    tag("lineage", "someone's version"), " ", `Continuing ${named}${which}${made}, ${how}. What you export is its child.`,
+    ...[heard, fromFile ? null : copy, h("a", { href: "/" }, "the published version")].filter(Boolean).flatMap((x) => [" \u00B7 ", x])));
   setOn("versionNote", "textContent", "This page is on someone's version. Opening another starts from that one instead.");
 }
 const ORDINAL_WORDS = ["first", "second", "third", "fourth", "fifth", "sixth", "seventh", "eighth", "ninth", "tenth",

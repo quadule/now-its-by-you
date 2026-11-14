@@ -162,8 +162,9 @@ test("the keyboard: none fires in a text field; the table's keys", () => {
   assert.deepEqual(key("4"), { action: "view", view: "sing" });  // the Sing view, where the studio has one
   assert.deepEqual(key("ArrowRight", { metaKey: true }), { action: "move", step: 1 });
   assert.deepEqual(key("ArrowUp"), { action: "step", axis: "track", step: -1 });
-  for (const [k, a] of [["l", "loop"], ["k", "click"], ["m", "mute"], ["s", "solo"], ["e", "record"], ["t", "time"], ["?", "help"], ["Enter", "open"], ["Escape", "escape"]]) {
+  for (const [k, a] of [["k", "click"], ["m", "mute"], ["s", "solo"], ["e", "record"], ["t", "time"], ["?", "help"], ["Enter", "open"], ["Escape", "escape"]]) {
     assert.equal(key(k).action, a);
+  assert.equal(key("l"), null);  // no loop: the transport plays what is selected once
   }
   assert.equal(M.keyAction({ key: " ", target: { tagName: "INPUT", type: "text" } }), null);
   assert.equal(M.keyAction({ key: "m", target: { tagName: "TEXTAREA" } }), null);

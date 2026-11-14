@@ -1395,12 +1395,13 @@ sidebar, the machine card's lines, the same salt after a reload, no console erro
 The artist: "For fast loading, the web studio could start with the currently published version's lyrics and settings
 but have a prominent button to switch to the new version."
 
-**What a visitor sees.** At `/`, the published version as it was released: "The first version · as it was published,
-Monday, September 28, 2026", its words and settings (D major, 96, the whistle, its choir), the machine "as it was
-published" ("nothing chose anything here"), no Time menu (nothing moves it). On the page in 68 ms here, from the
-build's first answers. First thing under the title, **Make this browser's version →**, to `/?new`: this browser's next
-version of it ("Today, … · from the first version · this browser", generation 1), with "← the published version" back
-to `/`. A version someone shared (`/v/…`, `#version=…`) is continued by this browser, as before. A person's changes
+**What a visitor sees.** At `/`, the published version as it was released: its edition's title and date under
+the song's ("The performance version · as published Thursday, November 12, 2026"), its words and settings, the
+machine "as it was published" ("nothing chose anything here"), no Time menu (nothing moves it). On the page in
+68 ms here, from the build's first answers. On the same line, **Make your own version →**, to `/?new`: this
+browser's next version of it (generation 1), with "← the published version" back to `/`. The line above the title
+links to the song's page (now.itsby.you).
+A version someone shared (`/v/…`, `#version=…`) is continued by this browser, as before. A person's changes
 can be made on either; each keeps its own (the page's saved edits are keyed by the machine's label).
 
 **How.**

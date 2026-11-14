@@ -70,3 +70,6 @@ body.fs-on { overflow: hidden; }
   .websing .actions .btn, .websing .chips .chip, .websing .switch button, .websing select { min-height: 44px; }
   .websing .sing-sync input[type=range] { flex-basis: 100%; max-width: none; }
 }
+
+/* what each promise leaves unsaid in its first sentence, under it, small: read before agreeing, not in a tooltip */
+.sing-promises .more { display: block; margin-top: 2px; font-size: 13px; line-height: 1.4; color: var(--ink-3); }

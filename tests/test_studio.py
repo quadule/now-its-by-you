@@ -546,7 +546,7 @@ def test_identity_is_one_file_in_two_places():
 def test_the_score_has_every_place_the_shared_scripts_write_to():
     """studio.js (the core), the drafts, the export, the piano link, notes in and the web studio's singing find
     their places by id: the score (index.html) has each, so nothing a feature needs was lost in the redesign (docs/notes/STUDIO-REDESIGN.md, "Every current feature, and where it goes")."""
-    ids = {"title", "which", "lineage", "yoursBar", "problemsBar", "versionBar", "draw", "localBadge", "whereNote",
+    ids = {"title", "which", "lineage", "yoursBar", "problemsBar", "versionBar", "publishedBar", "localBadge", "whereNote",
            "undoEdit", "redoEdit", "historyStatus", "roll", "recordNow", "record", "saved", "packetNote",
            "nowTitle", "nowSub", "nowTime", "bar", "barFill", "audio", "toast", "dropVeil",
            "day", "dayLabel", "timeline", "compare", "makeUp", "machineName", "versionChoose", "versionFile", "versionNote",

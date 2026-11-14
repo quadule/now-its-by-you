@@ -49,8 +49,8 @@ function keep(patch) {
 
 function delay() { return (Number(kept().nudge) || 0) / 1000; }  // what the device adds beyond what it reports
 
-// ------------------------------------------------------------------ the words (the simplest true thing; the rest in
-// tooltips and docs/WEB-SINGING.md)
+// ------------------------------------------------------------------ the words (the simplest true thing first, the rest
+// under it, smaller; docs/WEB-SINGING.md)
 
 const WORDS = {
   device: [  // measured in this browser: the consent's own version (studio_device.py DEVICE_CONSENT)
@@ -487,6 +487,8 @@ function rehearse() {
   return starting(async () => {
     await context();
     const g = await chosenGuide();
+    // the browser asks for the microphone here: said first, so the question isn't a surprise
+    if (!S.stream) ST.toast?.("Your browser may ask for the microphone: rehearsing uses it only to draw your pitch. Nothing is recorded.", 7000);
     try { await microphone(); } catch (e) { /* rehearsing works without it: no pitch line */ }
     start([g], "rehearsing", S.part.from, S.part.index === null ? null : S.part.to);
   });
@@ -648,7 +650,7 @@ function offered() {
   const o = S.offer, k = kept();
   const days = String(o.keep_days || 30);
   $("singPromises").replaceChildren(...WORDS[o.device ? "device" : "server"].map(([line, more]) =>
-    h("li", { title: more.replace("{days}", days) }, line)));
+    h("li", {}, line, h("small", { class: "more" }, more.replace("{days}", days)))));  // all of it read before "I understand"
   for (const speed of o.speeds) $("singSpeed").append(h("option", { value: String(speed) }, speed === 100 ? "as written" : `${speed}%`));
   for (const key of o.keys) $("singKey").append(h("option", { value: String(key) }, key ? K.keyLabel(key) : "as written"));
   $("singSpeed").value = String(o.speeds.includes(k.speed) ? k.speed : o.speed);

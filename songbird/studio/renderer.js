@@ -84,6 +84,10 @@
     if (e && e.memory) return "it ran out of memory in this browser. A shorter version (fewer verses, a quicker tempo) may fit, or a computer.";
     if (e && e.timeout) return "it stopped making progress. Try again, or a shorter version, or a computer.";
     if (/worker (was )?stopped/i.test(message)) return "the browser stopped it, perhaps for want of memory. A shorter version (fewer verses, a quicker tempo) may fit, or a computer.";
+    // a part of the studio that is no longer where this page expects it: the site was updated under an open page
+    if (/dynamically imported module|Importing a module script failed|error loading dynamically/i.test(message)) {
+      return "the studio was updated while this page was open. Reload the page to go on; your changes are kept.";
+    }
     return `it went wrong in this browser (${message.slice(0, 200)}). Try again, or a shorter version, or a computer.`;
   }
   function onDevice() {

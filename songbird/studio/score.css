@@ -74,6 +74,12 @@ input[type=number] { width: 72px; border: 1px solid var(--rule-strong); backgrou
 .mast { padding: 14px 24px 0; }
 .brand { display: flex; align-items: center; gap: 10px; }
 .mast .kicker { font-size: 13px; }
+.mast .kicker a { color: inherit; }
+/* the title, and the way to give this version one of its own; renamed, the title is a field in the title's face */
+.titleline { display: flex; align-items: baseline; flex-wrap: wrap; gap: 4px 12px; }
+.titleline h1 { min-width: 0; }
+.title-input { font: inherit; letter-spacing: inherit; color: var(--hand); background: var(--paper); border: 1px solid var(--rule-strong);
+               border-radius: var(--radius); padding: 0 8px; width: min(26ch, 100%); }
 .brand .help { margin-left: auto; }
 .local-badge { font: italic 14px var(--serif); color: var(--red); }
 .mast h1 { margin: 2px 0 4px; font-size: clamp(24px, 3vw, 32px); }
@@ -90,23 +96,23 @@ input[type=number] { width: 72px; border: 1px solid var(--rule-strong); backgrou
 .lineage .more { color: var(--ink-2); margin-right: 4px; font-size: 13px; }
 .yours { margin-left: auto; font: 13px var(--sans); display: inline-flex; flex-wrap: wrap; gap: 6px 12px; align-items: center; }
 .yours .tag.you { background: none; border: 0; padding: 0; font-size: 13px; }
-.draw:empty, .problems-bar:empty { display: none; }
-.draw { margin: 4px 0 0; }
+.problems-bar:empty { display: none; }
 .problems-bar { margin-top: 6px; }
 .version-bar { margin-top: 8px; padding: 8px 12px; border-left: 3px solid var(--parent); background: var(--wash); font-size: 13px; }
 .version-bar p { margin: 2px 0; }
 .version-bar a { color: var(--hand); overflow-wrap: anywhere; }
 /* the web studio opens on the published version: its offer of this browser's own, first thing under the title */
-.published-bar { margin-top: 10px; display: flex; flex-wrap: wrap; align-items: center; gap: 8px 14px; }
-.published-bar .btn.primary { font-size: 15px; padding: 9px 16px; text-decoration: none; }
-.published-bar p { margin: 0; flex: 1 1 18em; font-size: 13px; }
-.published-bar.back { margin-top: 4px; font-size: 13px; }
+/* on the published version, the way to your own, on the title's own line; on your own, the way back */
+.published-bar { display: inline-flex; align-items: center; }
+.published-bar .btn.primary { font: 600 14px var(--sans); padding: 6px 14px; text-decoration: none; }
+.published-bar.back { font-size: 13px; }
 
 /* ---------------------------------------------------------------- the transport */
 .transport { position: sticky; top: 0; z-index: 12; display: flex; align-items: center; gap: 6px; padding: 8px 24px; background: var(--card); border-bottom: 1px solid var(--rule); }
 .transport .group { display: inline-flex; align-items: center; gap: 4px; flex: 0 0 auto; }
 .transport .sep { width: 1px; height: 22px; background: var(--rule); margin: 0 4px; flex: 0 0 auto; }
 .tbtn { width: 34px; height: 32px; display: inline-grid; place-items: center; border: 1px solid transparent; border-radius: var(--radius); background: transparent; font-size: 13px; color: var(--ink); padding: 0; }
+.rowbreak { display: none; }
 .tbtn svg { width: 20px; height: 20px; fill: none; stroke: currentColor; stroke-width: 1.6; stroke-linecap: round; stroke-linejoin: round; }
 .tbtn:disabled { color: var(--ink-3); }
 .tbtn.reset { width: 26px; color: var(--hand); }
@@ -115,7 +121,7 @@ input[type=number] { width: 72px; border: 1px solid var(--rule-strong); backgrou
 .tbtn[aria-pressed=true] { border-color: var(--hand); background: var(--hand-wash); color: var(--hand); }
 .tbtn.play { background: var(--ink); color: var(--card); width: 38px; height: 32px; }
 .tbtn.play:hover { background: var(--ink-2); }
-.tbtn.play.playing { background: var(--red); border-color: var(--red); }
+.tbtn.play.playing, .tbtn.play.playing:hover { background: var(--red); border-color: var(--red); color: var(--card); }
 .tbtn.more { width: 20px; }
 .switch { display: inline-flex; border: 1px solid var(--rule-strong); border-radius: var(--radius); overflow: hidden; flex: 0 0 auto; }
 .switch button { border: 0; background: var(--card); padding: 4px 9px; font-size: 12px; color: var(--ink-2); min-height: 26px; }
@@ -170,6 +176,8 @@ input[type=number] { width: 72px; border: 1px solid var(--rule-strong); backgrou
 .editbtn:hover { border-color: var(--ink); color: var(--ink); }
 .editbtn.on { background: var(--ink); border-color: var(--ink); color: var(--card); padding: 2px 10px; }
 .sec .discard { display: none; }
+/* the Page follows the singing: the line being sung is lit */
+.sec p.sung-now { color: var(--red); transition: color .2s; }
 .sec.is-typed .discard { display: inline; }
 .pencil svg { width: 13px; height: 13px; display: block; fill: none; stroke: currentColor; stroke-width: 1.5; stroke-linecap: round; stroke-linejoin: round; }
 /* a section being edited: each line a field set as the line is, its count beside it */
@@ -530,6 +538,11 @@ button.sbc-chord.is-rub::after { content: "•"; color: var(--red); margin-left:
 .tool .drop.over { border-color: var(--hand); color: var(--hand); background: var(--hand-wash); }
 .saved { font-size: 13px; }
 .saved p { margin: 4px 0; }
+/* an export, ready: a line, then its buttons in one row; the link, once shared, in a box to copy from */
+.export-ready .actions { display: flex; flex-wrap: wrap; gap: 8px; margin: 8px 0 4px; }
+.export-ready .actions .btn { font-size: 14px; padding: 7px 14px; text-decoration: none; }
+.share-link { display: flex; gap: 8px; margin: 8px 0 2px; }
+.share-link input { flex: 1 1 auto; min-width: 0; font: 13px var(--sans); color: var(--ink); background: var(--paper); border: 1px solid var(--rule-strong); border-radius: var(--radius); padding: 7px 10px; }
 .saved .bar { height: 4px; background: var(--wash); }
 .saved .bar > div { height: 100%; background: var(--ochre); }
 .sheet-foot p { margin: 3px 0; }
@@ -596,10 +609,10 @@ dialog.help .keys td { padding: 3px 0; }
 .tour-actions .grow { flex: 1; }
 .tour-focus { outline: 3px solid var(--red); outline-offset: 3px; }
 .toast { position: fixed; left: 50%; bottom: 28px; transform: translateX(-50%); background: var(--ink); color: var(--paper); padding: 8px 16px; border-radius: var(--radius); font-size: 14px; z-index: 45; opacity: 0; transition: opacity .3s; pointer-events: none; max-width: min(680px, calc(100vw - 30px)); text-align: center; }
-.toast.show { opacity: .94; }
+.toast.show { opacity: 1; }
 
 .inspector .handle, .notes .readonly, .phone-only-inline { display: none; }
-@container app (max-width: 1180px) { .transport .sep { display: none; } #roll { padding: 6px 6px; } }
+@container app (max-width: 1180px) { .transport .sep { display: none; } }
 @container app (max-width: 1020px) { .body { grid-template-columns: minmax(0, 1fr) 290px; } .transport { flex-wrap: wrap; row-gap: 4px; } .position { order: 5; flex-basis: 100%; } }
 
 /* ---------------------------------------------------------------- narrow: a phone, or a narrow window */
@@ -614,15 +627,21 @@ dialog.help .keys td { padding: 3px 0; }
   .yours .link { display: none; }
   .brand .help > span:last-child { display: none; }
   .transport { padding: 6px 8px; gap: 4px; }
-  .transport .wide, .transport .keychip { display: none !important; }
+  .transport .wide { display: none !important; }
   .transport .right { margin-left: 0; gap: 4px; }
   .transport .right .btn { padding: 6px 8px; min-height: 36px; }
   .tbtn.play { width: 44px; height: 38px; }
   .tempo { padding: 3px 6px; min-height: 36px; }
   .position { flex: 1 1 auto; min-width: 0; padding: 0 2px; order: 0; }
-  .transport { flex-wrap: nowrap; }
+  /* two rows: play, where it is, Export and Tools; under them the tempo, the key, undo and redo */
+  .transport { flex-wrap: wrap; row-gap: 6px; }
+  .transport .rowbreak { display: block; flex: 0 0 100%; height: 0; order: 1; }
+  .transport .group:has(#tempoBox), .transport .group.edit { order: 2; }
+  .transport .group.edit { margin-left: auto; }
+  .transport .group.edit .tbtn { width: 40px; height: 36px; }
   .position .now { cursor: pointer; }
-  .position .now .sub, .position .now .time { display: none; }
+  .position .now .time { display: none; }
+  .position .now .sub { display: block; white-space: normal; font-size: 12px; line-height: 1.3; }
   #howPop { left: 8px; right: 8px; }
   #keyPop { right: 8px; left: 8px; }
   .phone-only { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }

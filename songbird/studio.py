@@ -67,7 +67,7 @@ from urllib.parse import parse_qs, urlsplit
 
 import numpy as np
 
-from . import artwork, drift as drift_mod, explain, genome as genome_mod, harvest, midi, pack, synth, variation
+from . import RECORD_FORMAT, artwork, drift as drift_mod, explain, genome as genome_mod, harvest, midi, pack, synth, variation
 from . import public as public_mod, received
 from .realize import Params, realize
 from .synth import master
@@ -103,8 +103,7 @@ PIANO_STATIC = {"/piano/": ("piano/index.html", "text/html; charset=utf-8"),
                 "/piano/identity.css": ("identity.css", "text/css; charset=utf-8")}
 STATIC["/players.js"] = ("players.js", "text/javascript; charset=utf-8")
 STATIC["/learn.js"] = ("learn.js", "text/javascript; charset=utf-8")
-# the score (docs/notes/STUDIO-REDESIGN.md): one page, three views, one inspector (index.html); the tune book of four
-# chapters it replaced (classic.html) was removed when the artist signed it off (2026-09-30)
+# the score (docs/notes/STUDIO-REDESIGN.md): one page, three views, one inspector (index.html)
 STATIC["/renderer.js"] = ("renderer.js", "text/javascript; charset=utf-8")  # previews and recordings, one interface
 STATIC["/model.js"] = ("model.js", "text/javascript; charset=utf-8")
 STATIC["/score.js"] = ("score.js", "text/javascript; charset=utf-8")
@@ -151,7 +150,7 @@ def find_song(record: dict | None, song: str | None) -> Path:
     if record and record.get("title") and songs.is_dir():
         for path in sorted(songs.glob("*.json")):
             with contextlib.suppress(OSError, ValueError):
-                if json.loads(path.read_text()).get("title") == record["title"]:
+                if json.loads(path.read_text(encoding="utf-8")).get("title") == record["title"]:
                     return path
     lead = songs / f"{LEAD}.json"
     if lead.exists():
@@ -573,7 +572,7 @@ class Studio:
         self.genome_path = Path(genome_path).resolve()
         self.genome = genome_mod.load(self.genome_path)
         self.song_digest = hashlib.sha256(self.genome_path.read_bytes()).hexdigest()
-        # the program itself, not its version number (which stays 0.1.0), so an updated program never plays
+        # the program itself, not its version number (which changes only at a release), so an updated program never plays
         # a preview an older one made
         self.program_digest = pack.program_sha256(pack.program_files())
         self.parent_record = record
@@ -586,7 +585,7 @@ class Studio:
         if machine == "here":
             cached = harvest.load()
             with contextlib.suppress(OSError, ValueError):
-                quiet = cached is None or bool(json.loads(harvest.cache_path().read_text()).get("quiet"))
+                quiet = cached is None or bool(json.loads(harvest.cache_path().read_text(encoding="utf-8")).get("quiet"))
         self.machine = machine
         self.voice = harvest.machine_voice(machine)
         self.day, self.t = today(self.clock)
@@ -699,6 +698,10 @@ class Studio:
         return {"machines": rows}
 
     # ------------------------------------------------------------ listening
+
+    def name_of(self, v: explain.Version) -> str | None:
+        """The version's own title (a person's, else its parent's), or None when it goes by the song's."""
+        return explain.version_name_of(self.context, v)
 
     def key(self, v: explain.Version, section: int | None) -> str:
         """What a render depends on, hashed: the same rendition and section are made once."""
@@ -857,8 +860,8 @@ class Studio:
                                 lyrics=v.lyrics, phrasing_json=v.phrasing_json, choir_json=v.choir_phrasings,
                                 parent=self.parent_record,
                                 packet_genome=genome_file, changes=v.changes if v.drift is not None else None,
-                                chosen_by_you=v.marks or None, progress=job.report)
-        (folder / "rendition.json").write_text(json.dumps(record, indent=2) + "\n")
+                                chosen_by_you=v.marks or None, progress=job.report, name=self.name_of(v))
+        (folder / "rendition.json").write_text(json.dumps(record, indent=2) + "\n", encoding="utf-8")
         link(folder / "rendition.flac", self.cache / f"{key}.flac")
         job.url = f"/audio/{key}.flac"
         prune(self.cache, self.cache_limit)
@@ -903,7 +906,7 @@ class Studio:
         folder = self.cache / key
         if not ((folder / "rendition.json").exists() and (self.cache / f"{key}.flac").exists()):
             self._whole(job, v, key)
-        return json.loads((folder / "rendition.json").read_text())
+        return json.loads((folder / "rendition.json").read_text(encoding="utf-8"))
 
     def recording_name(self, record: dict) -> str:
         """A recording's file name without its extension, as Record it names it (_keep)."""
@@ -911,7 +914,7 @@ class Studio:
 
     def stems_name(self, key: str) -> str:
         """The name the stems of the version cached under key go by: their recording's."""
-        return self.recording_name(json.loads((self.cache / key / "rendition.json").read_text()))
+        return self.recording_name(json.loads((self.cache / key / "rendition.json").read_text(encoding="utf-8")))
 
     def _stems(self, job: Job, v: explain.Version, key: str) -> dict:
         """Every part of the rendition rendered alone and dry (synth.render_stems, as the command line's
@@ -976,7 +979,7 @@ class Studio:
             data = piano_mod.export(laid, {"kind": "studio", "exporter": "songbird studio", "day": self.day,
                                            "version": key[:6]})
             tmp = self.cache / f"{key}.piano.part.json"
-            tmp.write_text(json.dumps(data, separators=(",", ":"), ensure_ascii=False))
+            tmp.write_text(json.dumps(data, separators=(",", ":"), ensure_ascii=False), encoding="utf-8")
             tmp.replace(path)
             prune(self.cache, self.cache_limit)
         return {"url": f"/piano/?score=score/{key}.json", "score": f"/piano/score/{key}.json", "key": key}
@@ -1061,7 +1064,7 @@ class Studio:
     def _keep(self, folder: Path) -> dict:
         """The recording copied from the cache to where recordings go, as <song>.<day>.<its id's first six>.flac:
         one file, the program, the song and the record inside it."""
-        record = json.loads((folder / "rendition.json").read_text())
+        record = json.loads((folder / "rendition.json").read_text(encoding="utf-8"))
         day = (record.get("rendered_at") or self.day)[:10]
         flac = self.out / f"{slug(self.genome.title)}.{day}.{record['id'][:6]}.flac"
         if self.downloads is not None:  # open to the public: kept a while to download, not here for good
@@ -1229,10 +1232,14 @@ class Studio:
         r = self.parent_record
         theirs = r["program_sha256"]
         other = theirs != self.program_digest
+        newer = isinstance(r.get("record_format"), int) and r["record_format"] > RECORD_FORMAT
         return {"id": self.version_id, "url": f"/v/{self.version_id}", "generation": generation(r),
-                "made": (r.get("rendered_at") or "")[:10] or None, "rendition": r["id"][:12],
+                "made": (r.get("rendered_at") or "")[:10] or None, "rendition": r["id"][:12], "name": r.get("name"),
                 "program": theirs[:12], "other_program": other,
-                "program_note": (f"It was made by another version of the program ({theirs[:8]}…); this studio "
+                "program_note": ("It was made by a newer version of the program than this studio's, which continues "
+                                 "it with what it understands of it; the file's own studio understands all of it."
+                                 if newer else
+                                 f"It was made by another version of the program ({theirs[:8]}…); this studio "
                                  f"continues it with its own ({self.program_digest[:8]}…), so the new version is "
                                  "sung by this one." if other else "It was made by the same program as this studio.")}
 
@@ -1262,7 +1269,7 @@ class Studio:
         for who, path in self.phrasing_files().items():
             detail = ""
             with contextlib.suppress(OSError, ValueError):
-                detail = json.loads(path.read_text()).get("source_detail", "")
+                detail = json.loads(path.read_text(encoding="utf-8")).get("source_detail", "")
             out.append({"id": who, "label": "everyone who has sung it" if who == "everyone" else singer_name(who),
                         "detail": detail})
         return out
@@ -1324,7 +1331,11 @@ class Studio:
     def enable_web_singing(self, kit: str | Path | None = None, check: bool = False) -> None:
         if str(ROOT) not in sys.path:
             sys.path.insert(0, str(ROOT))
-        from webstudio.singing import Singing
+        try:
+            from webstudio.singing import Singing
+        except ImportError:  # it doesn't travel in a version's file: singing is in a checkout, and at studio.itsby.you
+            raise SystemExit("songbird: singing isn't in this file's studio; sing at https://studio.itsby.you, "
+                             "or from the program's source") from None
 
         self.singing = Singing(self, kit, check=check)
 
@@ -1397,10 +1408,10 @@ class Studio:
             spec |= {"voice": v.voice.to_dict() if v.voice is not None else None,
                      "drift": v.drift.to_dict() if v.drift is not None else None,
                      "changes": v.changes if v.drift is not None else None, "marks": v.marks or None,
-                     "packet": self.runs_with()}
+                     "name": self.name_of(v), "packet": self.runs_with()}
         answer = {"key": key, "label": label, "kind": spec["kind"], "spec": json.dumps(spec, default=str)}
         if section is None:  # what the recording is called, as _keep names it (the day, then its id's first six)
-            answer["name"] = {"song": slug(self.genome.title), "day": self.day}
+            answer["name"] = {"song": slug(self.name_of(v) or self.genome.title), "day": self.day}
             answer["bar_seconds"] = bar_seconds(self.genome, v.params)  # its clock, as _whole's job ends with it
         return answer
 
@@ -1414,7 +1425,7 @@ def singer_name(who: str) -> str:
     """A singer's name as they wrote it, from their newest take's note; else their folder's name."""
     for note in sorted((ROOT / "recordings" / who).glob("*.json"), reverse=True):
         with contextlib.suppress(OSError, ValueError):
-            name = json.loads(note.read_text()).get("singer")
+            name = json.loads(note.read_text(encoding="utf-8")).get("singer")
             if name:
                 return str(name)
     return who.replace("-", " ").title()
@@ -1523,7 +1534,7 @@ class BrowserBundle:
     def __init__(self, folder: Path, program: str):
         folder = Path(folder).resolve()
         try:
-            manifest = json.loads((folder / "bundle.json").read_text())
+            manifest = json.loads((folder / "bundle.json").read_text(encoding="utf-8"))
         except (OSError, ValueError) as e:
             raise ValueError(f"{folder} has no bundle.json (build it with web/studio-wasm/tools/build_render.py): "
                              f"{e}") from None
@@ -1816,7 +1827,7 @@ class Handler(BaseHTTPRequestHandler):
 
     def refuse_visitor(self) -> None:
         page = ("<!doctype html><meta charset=utf-8><meta name=viewport content='width=device-width'>"
-                "<title>Songbird studio</title><link rel=stylesheet href='/notice.css'><body class=notice>"
+                "<title>Studio</title><link rel=stylesheet href='/notice.css'><body class=notice>"
                 "<h1>This studio is shared by link</h1>"
                 "<p>Its link carries a key: ask the person who shared it for the whole link, "
                 "ending in <code>?key=</code>.</p></body>")
@@ -1910,7 +1921,7 @@ class Handler(BaseHTTPRequestHandler):
             page_name = PAGES.get(path.rstrip("/") if path != "/" else "") or ("index.html" if version else None)
             if page_name:
                 token = f"{self.studio.token}.{version.group(1)}" if version else self.studio.token
-                page = (PAGE / page_name).read_text().replace("{{token}}", token)
+                page = (PAGE / page_name).read_text(encoding="utf-8").replace("{{token}}", token)
                 if self.studio.browser is not None:  # the page asks for the browser's bundle only when there is one
                     page = page.replace('<meta name="studio-token"', '<meta name="studio-render" content="bundle">\n<meta name="studio-token"', 1)
                 if singing is not None:
@@ -2117,7 +2128,7 @@ class Handler(BaseHTTPRequestHandler):
         if not urlsplit(self.path).path.startswith("/v/"):
             return self.fail(404, why)
         page = ("<!doctype html><meta charset=utf-8><meta name=viewport content='width=device-width'>"
-                "<title>Songbird studio</title><link rel=stylesheet href='/notice.css'><body class=notice>"
+                "<title>Studio</title><link rel=stylesheet href='/notice.css'><body class=notice>"
                 "<h1>This version isn't here</h1>"
                 f"<p>{why}</p><p><a href='/'>Open the studio on the song as it began</a></p></body>")
         self.send(page.encode(), "text/html; charset=utf-8", 404)
@@ -2391,7 +2402,7 @@ def add_arguments(parser: argparse.ArgumentParser) -> None:
                         help="who sings: this machine (the default; public, none), none, a made-up one, or a "
                              "voice file or record")
     parser.add_argument("--port", type=int, default=PORT, help=f"the port (default {PORT}, or the next free one)")
-    parser.add_argument("--out", metavar="DIR", help="where recordings go (default renders/)")
+    parser.add_argument("--out", metavar="DIR", help="where recordings go (default: renders/ in a checkout, the current folder from a file)")
     parser.add_argument("--no-open", action="store_true", help="don't open the page in a browser")
     parser.add_argument("--host", default=HOST, metavar="ADDRESS",
                         help="where to serve it: 127.0.0.1, this computer only (the default); 0.0.0.0 for "
@@ -2466,7 +2477,7 @@ def run(args: argparse.Namespace) -> int:
     server = serve(studio, args.port, host=host, names=names, client_ip_header=header)
     port = server.server_address[1]
     url = f"http://127.0.0.1:{port}"
-    print(f"Songbird studio: {studio.genome.title}, {studio.context.opening()}", flush=True)
+    print(f"The studio: {studio.genome.title}, {studio.context.opening()}", flush=True)
     if limits:
         shares, url = links(host, port, allow, names, key)
         print(public_warning(shares or [url], limits, key, machine, singing=studio.singing is not None), flush=True)

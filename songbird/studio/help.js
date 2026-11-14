@@ -1,5 +1,5 @@
 // Help, on demand: the Help dialog (the whole studio in plain words) and a walk of four steps,
-// each pointing at the one thing it names. Each area's own "What is this?" is plain HTML (<details>).
+// each pointing at the one thing it names.
 // No dependencies.
 "use strict";
 
@@ -7,32 +7,41 @@
   // where the song is made: this computer, or on the static site (made on the device) whatever the device is
   const HERE = typeof document !== "undefined" && document.querySelector('meta[name="studio-render"][content="device"]')
     ? "on this device" : "on this computer";
-  const CLASSIC = [
-    { target: "hearAll", text: `This is your version of the song, made today ${HERE}. Start here: hear it.` },
-    { target: "simpleChanges", text: "Change something simple: the key, the scale, the tempo, or a new performance. Undo takes anything back." },
-    { target: "studioTabs", text: "Go deeper when you like: the words, the tune, the sound, and how the song changes with time and between computers." },
-    { target: "toFinish", text: "When you're done, export it. The file plays in any music player and contains the program, so anyone can make the next version. Help is always at the top." },
-  ];
-  // the score (index.html): hear it, change something in the transport, select a section, record it
-  const SCORE = [
-    { target: "tPlay", text: `This is your version of the song, made today ${HERE}. Start here: hear it. Sketch plays at once; Sung makes the real thing.` },
-    { target: "transport", text: "Change something in the bar at the top: the tempo, the key, a new performance. Undo takes anything back." },
-    { target: "page", text: "Select a section by its name (or its region in Arrange): the column beside it says what it is, why the program chose it, and how to change it." },
-    { target: "recordNow", text: "When you're done, export it. The file plays in any music player and contains the program, so anyone can make the next version. Tools has the MIDI, the parts, the piano page, and ways to bring things in." },
-  ];
-  const STEPS = document.getElementById("transport") ? SCORE : CLASSIC;
+  const DEVICE = HERE === "on this device";
+  // hear it, change something in the transport, select a section, export it. Each step says what is true where it
+  // is shown: on the published version or on your own, on a wide screen or a narrow one.
+  const steps = () => {
+    const published = !!window.StudioBridge?.snapshot?.().start?.published;
+    const narrow = typeof matchMedia === "function" && matchMedia("(max-width: 620px)").matches;
+    const what = published ? "This is the song as it was published."
+      : `This is your version of the song, made today ${HERE}.`;
+    const how = narrow ? "Tap the song's name beside \u25B6 to choose the sketch, at once, or sung, the real thing."
+      : "Sketch plays at once; Sung makes the real thing.";
+    const own = published ? " \u201CMake your own version\u201D at the top starts yours." : "";
+    return [
+      { target: "tPlay", text: `${what} Start here: hear it. ${how}${own}` },
+      { target: "transport", text: "Change something in the bar at the top: the tempo and the key. Undo takes anything back." },
+      { target: "page", view: "page", text: "Select a section by its name (or its region in Arrange): the column beside it says what it is, why the program chose it, and how to change it." },
+      { target: "recordNow", text: DEVICE
+        ? "When you're done, export it. The file plays in any music player and contains the program, so anyone can make the next version from it. Tools has the MIDI, the piano page, and ways to bring things in."
+        : "When you're done, export it. The file plays in any music player and contains the program, so anyone can make the next version. Tools has the MIDI, the parts, the piano page, and ways to bring things in." },
+    ];
+  };
+  let STEPS = steps();
   const $ = (id) => document.getElementById(id);
   let step = -1, shared = false;
 
   function show(index) {
     document.querySelectorAll(".tour-focus").forEach((el) => el.classList.remove("tour-focus"));
+    if (index === 0) STEPS = steps();  // as the page is now
     step = index;
     const tour = $("tour");
     if (index < 0 || index >= STEPS.length) {
       tour.hidden = true;
       return;
     }
-    const { target } = STEPS[index];
+    const { target, view } = STEPS[index];
+    if (view) window.SongbirdScore?.showView?.(view);  // what the step points at, shown
     // shared for a preview, the version is the serving computer's, not the visitor's
     const text = index === 0 && shared ? STEPS[0].text.replace("on this computer", "on the computer serving this studio") : STEPS[index].text;
     const el = $(target);
