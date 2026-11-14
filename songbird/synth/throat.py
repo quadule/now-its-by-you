@@ -382,6 +382,11 @@ SILENCE = 0.6
 # Where nothing is sung the vocoder is silent: it sounds from HUSH[0] s before a sung phone to HUSH[1] s
 # after one (a phone's own ring), fading over HUSH[2] s beyond. Breaths are voice.breaths', added after.
 HUSH = (0.06, 0.15, 0.03)
+# LAST_SILENCE: the silence after a singer's last phone is told (predict()) as a silence before a breath. The
+# training's labels name a breath only just before the singing starts again (tools/throat/dataset.py), so a
+# silence with nothing after it holds whatever its recording had after the last phrase (a breath out, the room),
+# and the network told of one sings that: a hiss rising to 20 dB over the last note's own tail 0.03-0.13 s after
+# it, louder the larger the people's share. A silence before a breath is quiet.
 
 
 def timeline(segments: list[tuple], n: int) -> dict[str, np.ndarray]:
@@ -702,17 +707,20 @@ def _predict_raw(model: Model, t: dict, cont: np.ndarray, singer: np.ndarray) ->
     return y
 
 
-def predict(model: Model, t: dict, lf0: np.ndarray, singer: np.ndarray, gv: float = 1.0) -> tuple[np.ndarray, np.ndarray]:
+def predict(model: Model, t: dict, lf0: np.ndarray, singer: np.ndarray, gv: float = 1.0,
+            last: int | None = None) -> tuple[np.ndarray, np.ndarray]:
     """Envelope (log power, MEL points) and aperiodicity for every frame of a timeline.
 
     Long timelines are inferred a bounded stretch at a time, with the network's complete temporal
     context on each side. Continuous inputs are formed before slicing so log-f0 slopes stay whole;
-    global variance is applied to the assembled output, with the full song's mean."""
+    global variance is applied to the assembled output, with the full song's mean. last: the frame where
+    the silence after the last phone begins; its frames are told of it as a silence before a breath
+    (LAST_SILENCE), the frames before it as the timeline has them."""
     cont = continuous(t, lf0)
+    context = sum(model.config["dilations"])
     if len(lf0) <= PREDICT_BLOCK:
         y = _predict_raw(model, t, cont, singer)
     else:
-        context = sum(model.config["dilations"])
         y = np.empty((len(lf0), len(model.w["out.bias"])))
         starts = list(range(0, len(lf0), PREDICT_BLOCK))
         # Keep a tiny final tail with its preceding block: the browser uses a different
@@ -724,6 +732,13 @@ def predict(model: Model, t: dict, lf0: np.ndarray, singer: np.ndarray, gv: floa
             raw = _predict_raw(model, {k: v[lo:hi] for k, v in t.items()}, cont[lo:hi], singer)
             y[a:b] = raw[a - lo: b - lo]
             del raw
+    if last is not None and last < len(lf0):
+        lo = max(0, min(last - context, len(lf0) - 64))  # (64 rows or more: the browser's own product, as above)
+        tail = {k: v[lo:] for k, v in t.items()}
+        tail["next"] = tail["next"].copy()
+        tail["next"][last - lo:] = PHONES.index("breath")
+        y[last:] = _predict_raw(model, tail, cont[lo:], singer)[last - lo:]
+        del tail
     del cont
     n_sp = len(model.sp_mean)
     sp, ap = y[:, :n_sp], y[:, n_sp:]
@@ -1118,6 +1133,7 @@ def sing(notes, sr: int, voice, seed: int = 0, lexicon: dict | None = None, mix:
     duration = max(s.t1 for s in segs) + 0.5
     n = int(np.ceil(duration / FRAME))
     t = timeline(rows, n)
+    last = int(np.searchsorted(np.arange(n) * FRAME, rows[-1][2])) if rows else None  # the silence after them all
 
     vowels = [s for s in segs if s.role == "vowel"]
     n_blocks = int(np.ceil(duration * RATE / BLOCK))
@@ -1128,7 +1144,7 @@ def sing(notes, sr: int, voice, seed: int = 0, lexicon: dict | None = None, mix:
     sung = np.median([n.pitch + voice.shift for n in notes])
     if isinstance(mix, str) and mix.startswith("machine:"):  # a singer of its own, drawn for this pitch
         mix = machine_mix(int(mix.split(":", 1)[1]), float(sung), net, share=share)
-    sp, ap = predict(net, t, np.log(f0), timbre(net, parse_mix(mix), sung, share), gv=gv)
+    sp, ap = predict(net, t, np.log(f0), timbre(net, parse_mix(mix), sung, share), gv=gv, last=last)
     sp = sharpen(sp, SHARPEN)
     factor = voice.tract / TRACT
     sp, ap = warp(sp, factor), warp(ap, factor)

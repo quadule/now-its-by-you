@@ -287,6 +287,27 @@ def test_sound_is_not_sung_sund():
 
 
 @pytest.mark.skipif(not T.MODEL.exists(), reason="no trained throat shipped yet")
+def test_after_the_last_note_the_throat_is_quiet():
+    """Nothing follows a singer's last phone: the silence there is quiet (LAST_SILENCE), not a breath out."""
+    from songbird.score import Note
+    from songbird.synth.voice import VoiceParams, schedule
+
+    sr = 44100
+    singer = VoiceParams(tract=1.12, rd=0.9, tilt=0.7, engine="learned")
+    notes = [Note("voice", 0.5, 0.36, 63.0, 0.8, syllable="la", word="la"),
+             Note("voice", 0.89, 0.35, 61.0, 0.8, syllable="la", word="la"),
+             Note("voice", 1.28, 1.34, 59.0, 0.8, syllable="la.", word="la.", line_end=True)]
+    end = schedule(notes, singer, None, T.DURATIONS, seed=1)[-1].t1
+    y = T.sing(notes, sr, singer, seed=1, share=0.45)
+
+    def db(a: float) -> float:
+        return 10 * np.log10(np.mean(y[int(a * sr): int((a + 0.01) * sr)] ** 2) + 1e-30)
+
+    tail = 10 * np.log10(np.mean(y[int((end - 0.1) * sr): int(end * sr)] ** 2))
+    assert max(db(t) for t in np.arange(end + 0.03, end + 0.15, 0.01)) < tail - 30.0
+
+
+@pytest.mark.skipif(not T.MODEL.exists(), reason="no trained throat shipped yet")
 def test_the_shipped_throat_sings_a_note():
     from songbird.score import Note
     from songbird.synth.voice import VoiceParams
