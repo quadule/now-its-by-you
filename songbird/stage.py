@@ -23,12 +23,10 @@ The edition's own exact data, params.composition["exact"], which the renderer ho
                                                              another style's players on the same song (its key,
                                                              tempo, form and chords: layered()), a section of a
                                                              part played as it plays another
-     "levels": {"harp~": [["verse:0.3", -3], ["refrain:0", null]], ...},
+     "levels": {"harp~": [["verse:0.3", -3], ["refrain:0", null]], ...}}
                                                              each named part's level along the song: points
                                                              (where, dB or null for silent) joined by straight
                                                              fades, the first and last held (curve())
-     "release": 0.35}                                        s over which the lead and each choir voice let go
-                                                             of their last note (released())
 
 A place is "<section>:<n>" (its start), "<section>:<n>.<line>" (where its line begins, 0 the first: a line is
 the lead's, from just before its first note, its pickup with it) or "<section>:<n>.end". "twins" and "levels",
@@ -272,8 +270,6 @@ def prepare(genome, params, score, phrasing=None, choir=(), lyrics=None):
         layers.append({"score": s2, "seed": p2.seed, "parts": tuple(layer["parts"]), "copies": copies})
     if layers:
         plan["layers"] = layers
-    if ex.get("release"):
-        plan["release"] = float(ex["release"])
     return replace(score, stage=plan) if plan else score
 
 
@@ -284,10 +280,8 @@ def touched(score) -> set[str]:
     out = set(plan.get("levels") or {}) | set(plan.get("twins") or {})
     out |= {part for part, _ in (plan.get("twins") or {}).values()}
     out |= {name for layer in plan.get("layers") or [] for name in layer["parts"]}
-    if plan.get("takes") or plan.get("release"):
+    if plan.get("takes"):
         out.add("voice")
-    if plan.get("release"):
-        out |= {n.part for n in score.notes if n.part.startswith("choir")}
     return out
 
 
@@ -314,18 +308,6 @@ def spliced(takes: dict, plan: list[tuple[float, object]], sr: int, fade: float 
             w[i1: i1 + f] = np.linspace(1.0, 0.0, f)
         out += takes[key] * w
     return out
-
-
-def released(y: np.ndarray, over: float, sr: int) -> np.ndarray:
-    """A sung stem with its last note let go softly: its last `over` seconds of sound faded (a held note
-    otherwise stops while it still sounds). In place."""
-    loud = np.flatnonzero(np.abs(y).reshape(len(y), -1).max(axis=1) > 1e-4)
-    if len(loud):
-        end = loud[-1] + 1
-        n = min(int(over * sr), end)
-        fade = 0.5 + 0.5 * np.cos(np.linspace(0.0, np.pi, n))
-        y[end - n: end] = (y[end - n: end].T * fade).T
-    return y
 
 
 def rms(x: np.ndarray) -> float:
@@ -368,8 +350,7 @@ def sung(notes, sr: int, singer, seed: int, lexicon, share: float) -> np.ndarray
 
 def jobs(score, sr: int, seed: int, voice, jobs: list) -> list:
     """The stems' makers (synth.stem_jobs') as the score's stage plan has them: the lead joined from its takes,
-    the twins and the layered parts added, each named part at its levels along the song, the singers' last
-    notes let go."""
+    the twins and the layered parts added, each named part at its levels along the song."""
     from .synth import VOICE_GAIN, pan
     from .synth.instruments import band_parts, render_part
     from .synth.voice import VoiceParams
@@ -379,7 +360,6 @@ def jobs(score, sr: int, seed: int, voice, jobs: list) -> list:
     voice = voice or VoiceParams()
     makes = dict(jobs)
     order = [name for name, _ in jobs]
-    release = plan.get("release")
     twins = {name: pair for name, pair in (plan.get("twins") or {}).items() if pair[0] in makes}
     played = {part: _Played(makes[part]) for part, _ in twins.values()}
     for part, shared in played.items():
@@ -396,16 +376,8 @@ def jobs(score, sr: int, seed: int, voice, jobs: list) -> list:
                 sung_takes[h] = fit(y, length) * VOICE_GAIN
             y = spliced(sung_takes, plan["plan"], sr)
             del sung_takes
-            if release:
-                y = released(y, release, sr)
             return pan(y, 0.0)
         makes["voice"] = lead
-    elif release and "voice" in makes:
-        makes["voice"] = lambda make=makes["voice"]: released(make(), release, sr)
-    if release:
-        for name in order:
-            if name.startswith("choir"):
-                makes[name] = lambda make=makes[name]: released(make(), release, sr)
 
     for name, (part, synth_name) in twins.items():
         def twin(part=part, synth_name=synth_name) -> np.ndarray:

@@ -68,7 +68,7 @@ def test_no_stage_fields_is_the_programs_own_score():
 
 
 def test_a_child_keeps_the_grid_and_never_the_exact_data():
-    exact = {"release": 0.35, "levels": {"harp~": [["verse:0", 0]]}, "twins": {"harp~": ["harp", "arp"]}}
+    exact = {"levels": {"harp~": [["verse:0", 0]]}, "twins": {"harp~": ["harp", "arp"]}}
     parent = with_composition(seed(), arrange=GRID, exact=exact)
     for child in (choose_params(G, parent), choose_params(G, parent, ADA, DAY),
                   variation.choose(G, parent, ADA, DAY), choose_params(G, parent, style="synthfolk")):
@@ -110,11 +110,11 @@ def test_the_amount_scales_the_phrasing_and_the_timbre():
 
 def test_the_plan_makes_the_stems(monkeypatch):
     """The stems from a plan, with the synthesis stood in for: the lead joined from its takes, the twin level with
-    its player, each named part at its levels, the singers' last notes let go."""
+    its player, each named part at its levels, the choir as the program sang it."""
     from songbird.synth import instruments, throat
 
     sr = 1000
-    params = with_composition(seed(), arrange=GRID, exact={"release": 0.2})
+    params = with_composition(seed(), arrange=GRID)
     score = variation.lay(realize(G, params), params)
     score = S.prepare(G, params, score)
     plan = score.stage
@@ -138,6 +138,6 @@ def test_the_plan_makes_the_stems(monkeypatch):
     assert stems["harp"][int((a + 1) * sr)].max() == 0.0
     assert stems["bass~"].max() == pytest.approx(2.0)  # level with the bass
     assert stems["bass"][int((a + b) / 2 * sr)].max() == 0.0  # the twin plays all of the first verse
-    assert stems["choir1"][-1].max() < 1e-3 and stems["choir1"][0].max() == 1.0  # its last note let go
+    np.testing.assert_array_equal(stems["choir1"], 1.0)
     first = plan["plan"][1][0]
     assert stems["voice"][int(first * sr) - 100, 0] == pytest.approx(1.0 * 1.6 * np.cos(np.pi / 4))  # human 0

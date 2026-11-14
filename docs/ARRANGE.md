@@ -689,7 +689,6 @@ a section nobody arranged. Absent, the render is the program's own, to the sampl
  "layers": [{"style": "synthfolk", "parts": ["arp", "synthpad"],
              "copy": [{"part": "synthpad", "to": "verse:0", "from": "verse:1"}]}],
  "levels": {"harp~": [["verse:0.3", -3], ["refrain:0", null]], "harp": [["verse:0.3", null], ["refrain:0", 0]]},
- "release": 0.35,
  "human": {"verse:0": [0, 0, 0, 0.2]}}
 ```
 
@@ -697,19 +696,19 @@ a section nobody arranged. Absent, the render is the program's own, to the sampl
 RMS; `layers`: another style's players on the same song (its key, tempo, form and chords), a section of a part
 played as it plays another; `levels`: each named part's level along the song as points (where, dB or null for
 silent) joined by straight fades, the first and last held, a point at the place of the one before it 0.12 s
-after it; `release`: seconds over which the lead and each choir voice let go of their last note; `human`:
-amounts finer than the grid's. A place is `<section>:<n>` (its start), `<section>:<n>.<line>` (where the lead's
-line begins, its pickup with it) or `<section>:<n>.end`. Where the exact data gives `twins` or `levels`, they are
-the whole table: what the grid's synth cells would make of them is left aside.
+after it; `human`: amounts finer than the grid's. A place is `<section>:<n>` (its start), `<section>:<n>.<line>`
+(where the lead's line begins, its pickup with it) or `<section>:<n>.end`. Where the exact data gives `twins` or
+`levels`, they are the whole table: what the grid's synth cells would make of them is left aside.
 
 **The render.** `stage.prepare` lays the plan out in the score (`Score.stage`, never written to the score's
 file): the lead realized again at each amount the song names, which take is heard from which line, the
 twins, the layered scores and the levels in seconds. `synth.stem_jobs` makes the stems from it
 (`stage.jobs`): the lead sung whole at each amount and the takes joined where its lines begin (30 ms fades);
-the twins; the layered parts; each named part times its level; the singers' last notes let go. The stem cache
-keeps none of these under the program's own key. The mix and the master are the program's own.
+the twins; the layered parts; each named part times its level. The stem cache keeps none of these under the
+program's own key. The mix and the master are the program's own.
 
-**Measured** against the script's own stems: every stem within float rounding (-149 dB or less, relative to
+**Measured** against the script's own stems (its release left out: the throat is quiet after a singer's last
+note, throat.LAST_SILENCE): every stem within float rounding (-149 dB or less, relative to
 the stem), the mix -150 dB, the FLAC against the script's -79 dB (the 16-bit dither; against the script's mix
 mastered and dithered as the program does, -115 dB). record-B with none of these renders the same samples as
 before.
