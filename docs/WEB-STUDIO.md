@@ -1396,7 +1396,7 @@ The artist: "For fast loading, the web studio could start with the currently pub
 but have a prominent button to switch to the new version."
 
 **What a visitor sees.** At `/`, the published version as it was released: its edition's title and date under
-the song's ("The performance version · as published Thursday, November 12, 2026"), its words and settings, the
+the song's ("Awards performance draft · as published Thursday, November 12, 2026"), its words and settings, the
 machine "as it was published" ("nothing chose anything here"), no Time menu (nothing moves it). On the page in
 68 ms here, from the build's first answers. On the same line, **Make your own version →**, to `/?new`: this
 browser's next version of it (generation 1), with "← the published version" back to `/`. The line above the title

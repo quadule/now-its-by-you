@@ -98,7 +98,7 @@ https://www.aisongcontest.com/the-2026-finalists (page/seed.html, `.contest` in 
 stack). Public voting closes November 21. The winner is half the jury's and half the public's; the awards are in Bangkok on November 29, 2026. Take
 it down, or say how it ended, after that.
 
-## The performance version (2026-11-12, held back from the home page)
+## The performance version (2026-11-12; on the home page since November 14 as "Awards performance draft")
 
 The second edition: performance/'s replay (the contest version in B major, the performance voice, id 67be86f259eb),
 packed with the program as it stood that day (0.2.0, record format 2) into
@@ -108,7 +108,7 @@ before then, render and pack it again with the entry's own command and put the n
 `program` and `source.commit` (and the day it is released as `date`) in its entry, then the two tools above. Once
 it has been served, its bytes never change.
 
-Since November 14, 2026 the studio opens on it (its build reads the first edition, held or not) and plays its file,
-so its sound is public there; the home page and /history leave it out while its entry says `"held": true`
-(tools/sing_site.py), and keep offering the first version. To release it on the home page, remove the mark,
-build and deploy.
+Since November 14, 2026 it is the second edition, "Awards performance draft": the home page offers it, /history
+lists both, and the studio opens on it. Its bytes are served, so they never change; a later performance render is
+an edition of its own. An edition marked `"held": true` is left off the home page and /history (tools/sing_site.py)
+while the studio's build still reads it, for one not ready to be listed.

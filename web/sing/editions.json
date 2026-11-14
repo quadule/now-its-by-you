@@ -2,8 +2,7 @@
   "about": "The song's editions, read by tools/sing_site.py (docs/HOME-PAGE.md, 'Editions'). The home page (now.itsby.you) offers the newest; /history offers every one, newest first. An edition is named by its audio id (the SHA-256 of its samples, in its record) and its bytes never change once released: the build checks file.sha256 and file.bytes. To add one, add it first in the list (newest first: the studio's build reads the first as the newest), with its released file kept (file.path) or its render (render.path, given the cover as it's served). One marked \"held\": true is left off the home page and the history (the studio's build still reads it) until it is released: then remove the mark.",
   "editions": [
     {
-      "title": "The performance version",
-      "held": true,
+      "title": "Awards performance draft",
       "date": "2026-11-12",
       "note": "The song in B major, sung by its new voice, for the AI Song Contest 2026 awards in Bangkok.",
       "audio": "67be86f259eb78b5f460c3427e9482293d5f40e93f35f5d6c498c4a67fb44c30",
