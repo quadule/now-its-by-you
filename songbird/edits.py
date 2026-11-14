@@ -88,12 +88,12 @@ MIX = ("space", "width", "forward", "intimacy", "rt60", "predelay",  # the room:
 STYLE_OPTIONS = {"feel": ("straight", "swing", "shuffle", "twelve", "half", "double", "waltz", "six"),
                  "ending": ("ring", "rit", "cold", "amen", "repeat"), "backing": ("", "oohs", "echo", "thirds", "gang", "hum"),
                  "lift": bool, "entrances": bool, "breakdown": bool, "coda": ("", "quote"), "motif": ("", "bridge", "chance"),
-                 # how it starts, which verse is in stop-time or bare and over whom, a half-time bridge (2026-09-29)
+                 # how it starts, which verse is in stop-time or bare and over whom, a half-time bridge
                  "intro": ("", "lead", "pad", "count", "voice", "quote", "air"), "stops": int, "alone": int, "alone_with": str,
                  "bridge": ("", "half")}
-# house's and dub's (2026-09-30): a breakdown and a drop after a refrain; a dub version after the song
+# house's and dub's: a breakdown and a drop after a refrain; a dub version after the song
 STYLE_OPTIONS.update({"drop": int, "ending": STYLE_OPTIONS["ending"] + ("version",)})
-# house's and dub's again (2026-09-30, evening): a loop of the style's own (a name, "song" the song's own chords, ""
+# house's and dub's too: a loop of the style's own (a name, "song" the song's own chords, ""
 # the style's best fit), and the refrain after which a dub dissolves into its version
 STYLE_OPTIONS.update({"loop": "loop", "dissolve": int})
 
@@ -290,6 +290,10 @@ def check(genome: Genome, edits: dict, phrasings=()) -> tuple[dict, list[dict]]:
         try:
             if path == "date":
                 clean[path] = date.fromisoformat(str(value)).isoformat()
+            elif path == "name":
+                named = version_name(value)
+                if named:
+                    clean[path] = named
             elif path == "roll":
                 roll = int(value)
                 if roll < 0 or roll >= 2**31:
@@ -342,7 +346,7 @@ def check(genome: Genome, edits: dict, phrasings=()) -> tuple[dict, list[dict]]:
             elif path == "style.name":
                 from .style import STYLES, renamed
 
-                value = renamed("name", value)  # a style renamed since the edits were made (celtic: the jig)
+                value = renamed("name", value)  # a style by its other name (celtic: the jig)
                 if value not in STYLES:
                     raise LookupError(f"the styles are {', '.join(sorted(STYLES))}")
                 clean[path] = value
@@ -352,7 +356,7 @@ def check(genome: Genome, edits: dict, phrasings=()) -> tuple[dict, list[dict]]:
                 from .style import renamed
 
                 options = STYLE_OPTIONS[path[6:]]
-                value = renamed(path[6:], value)  # a value retired since the edits were made, as it is now called
+                value = renamed(path[6:], value)  # a value by another name, as the program knows it
                 if options is bool:
                     clean[path] = bool(value)
                 elif options is int:  # which verse (1 the first), 0 none; which refrain the drop follows
@@ -394,7 +398,7 @@ def check(genome: Genome, edits: dict, phrasings=()) -> tuple[dict, list[dict]]:
         except LookupError as e:
             problems.append(Problem(path, str(e.args[0]) if e.args else "there's no such choice"))
         except (TypeError, ValueError) as e:
-            if path == "form.order" or path.startswith(("tune.", "chords.", "lyrics.", "part.", "arrange.")) \
+            if path in ("form.order", "name") or path.startswith(("tune.", "chords.", "lyrics.", "part.", "arrange.")) \
                     or sound_mod.owns(path):
                 problems.append(Problem(path, str(e)))
                 continue
@@ -403,6 +407,25 @@ def check(genome: Genome, edits: dict, phrasings=()) -> tuple[dict, list[dict]]:
 
 
 # ---------------------------------------------------------------- into the program's table
+
+
+NAME_MAX = 60  # characters in a version's own title
+
+
+def version_name(value) -> str:
+    """A version's own title, as a person gave it: one line of at most NAME_MAX characters, its spaces single, with
+    nothing in it that isn't written (no control characters). "" for none. The song's title (the genome's) is what
+    says which song a file is and never changes; this is what a version is called, shown and tagged in its place."""
+    import unicodedata
+
+    if not isinstance(value, str):
+        raise ValueError("a title is a line of text")
+    named = " ".join(value.split())
+    if any(unicodedata.category(c) in ("Cc", "Cf", "Cs", "Co", "Cn") for c in named):
+        raise ValueError("a title is plain text")
+    if len(named) > NAME_MAX:
+        raise ValueError(f"a title is at most {NAME_MAX} characters, and this is {len(named)}")
+    return named
 
 
 def rolled(seed: int, roll: int) -> int:
@@ -790,9 +813,11 @@ def resolve(genome: Genome, parent, voice, drift, edits: dict, *, seed: int | No
     else:
         generated = variation.choose(genome, parent, voice, drift, seed, trace=trace, log=log)
     applied: list[str] = ["date"] if day_chosen else []
+    if edits.get("name"):  # the version's own title: nothing of the song depends on it
+        applied.append("name")
     problems: list[dict] = []
     params = generated
-    body = {k: v for k, v in edits.items() if k not in ("date", "phrasing") and not WORDS.fullmatch(k)}
+    body = {k: v for k, v in edits.items() if k not in ("date", "phrasing", "name") and not WORDS.fullmatch(k)}
     if "style.feel" in body:  # a feel the style can't play this song in is said, not bent
         from .style import STYLES, feels_for, of
 
@@ -957,6 +982,8 @@ def marks(genome: Genome, generated, generated_lyrics, final_lyrics, applied: li
         value, was = edits.get(path), None
         if path == "date":
             was = "the day it was made"
+        elif path == "name":
+            was = genome.title
         elif path == "roll":
             was = 0
         elif path == "phrasing":
@@ -1090,7 +1117,7 @@ def keep_words(genome: Genome, lyrics) -> dict:
     return out
 
 
-# ---------------------------------------------------------------- the arrangement taken over (docs/ARRANGE.md, 2026-09-29)
+# ---------------------------------------------------------------- the arrangement taken over (docs/ARRANGE.md)
 #
 # A person's arrangement (arrange.*: songbird.takeover) goes in with the composition (Overrides._arrange); what a
 # version can't play of it is said here, after the rest is resolved, as a played part's is. The tempo a person may

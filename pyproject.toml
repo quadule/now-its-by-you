@@ -1,6 +1,6 @@
 [project]
 name = "songbird"
-version = "0.1.0"
+version = "0.2.0"
 description = "Now It's by You: a folk song whose audio files carry the program that sings new versions of it."
 readme = "README.md"
 license = "CC0-1.0"

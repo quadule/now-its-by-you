@@ -26,8 +26,8 @@ from pathlib import Path
 
 # ---------------------------------------------------------------- a whole song's memory
 #
-# A whole render's peak memory grows with the song's length, and with who plays it. Measured on 30 September, after
-# the heaviest parts were made lean (docs/notes/PERFORMANCE.md, "The heaviest parts"; tools/render_memory.py: H with each
+# A whole render's peak memory grows with the song's length, and with who plays it. As measured
+# (the heaviest parts made lean: docs/notes/PERFORMANCE.md, "The heaviest parts"; tools/render_memory.py: H with each
 # style's own band, and the ballad, chamber and the kit's bands at 3 to 8 minutes; two threads, MallocLargeCache=0,
 # which hands freed arrays back as Linux does; docs/WEB-STUDIO.md, "A whole song's memory"), it is about BASE_MB and
 # so many MB for every second of the song. A part's rate is the lightest band's it plays in (the lullaby's 4.7, the
@@ -38,7 +38,7 @@ from pathlib import Path
 
 BASE_MB = 300  # the program and its imports, and the page's work beside a render
 RATES = {  # MB for a second of the song, on two threads
-    # the old 78's band (2026-09-30: a voice, a piano or a guitar, a fiddle, mono) is the lightest these play in: 3.3
+    # the old 78's band (a voice, a piano or a guitar, a fiddle, mono) is the lightest these play in: 3.3
     # MB a second measured; 4.5 keeps every measurement at or under its estimate and within 1.3 of it
     "voice": 4.5, "piano": 4.5, "guitar": 4.5, "fiddle": 4.5,
     "chop": 4.7, "harp": 4.7, "celesta": 4.7, "musicbox": 4.7, "synthpad": 4.7,  # chop: house's sung hook
@@ -56,10 +56,10 @@ RATES = {  # MB for a second of the song, on two threads
     "harmonium": 6.9, "marimba": 6.9, "music-box": 7.1, "nylon": 6.9, "shaker": 6.4, "sub-bass": 6.9,
     "synth-arp": 6.9, "synth-bass": 6.9, "synth-pad": 6.9, "synth-solo": 6.9, "ukulele": 6.9, "vibraphone": 6.9,
     "viola": 7.0,
-    "melodica": 7.4,  # (2026-09-30: 5.9 to 7.4 over three runs; the highest)
-    "pipeorgan": 4.7,  # a hymn's (2026-09-30, night): H's hymn with the lead alone 4.5 (with voices the choir sets it)
+    "melodica": 7.4,  # (5.9 to 7.4 over three runs; the highest)
+    "pipeorgan": 4.7,  # a hymn's: H's hymn with the lead alone 4.5 (with voices the choir sets it)
 }
-UNMEASURED = 7.7  # a part never measured (one added since): the heaviest rate above
+UNMEASURED = 7.7  # a part never measured: the heaviest rate above
 MARGIN = 1.05
 CHOIR = 1.0  # a voice from before, more than the voice's (not measured apart: a guess)
 STEM = 0.71  # a stereo stem held whole until the stems' zip is packed (float64, 44.1 kHz), for each part
@@ -93,7 +93,7 @@ def memory_mb() -> int:
         scale = {"": 1 / 2**20, "k": 1 / 1024, "m": 1, "g": 1024}[match.group(2)]
         return int(float(match.group(1)) * scale)
     with contextlib.suppress(OSError, ValueError):
-        return int(Path("/sys/fs/cgroup/memory.max").read_text().strip()) // 2**20
+        return int(Path("/sys/fs/cgroup/memory.max").read_text(encoding="utf-8").strip()) // 2**20
     return 2500
 
 

@@ -482,3 +482,101 @@ def test_a_render_carries_the_cover_and_replays_to_the_same_samples(tmp_path, ca
     assert cli.main(["render", str(GENOME), "--replay", str(out), "--out", str(again)]) == 0
     assert "replay: matches" in capsys.readouterr().out
     assert len(front_covers(again.read_bytes())) == 1 and pack.samples_id(again.read_bytes()) == record["id"]
+
+
+def test_an_environment_is_shared_by_its_pins_and_made_again_when_it_no_longer_fits(tmp_path, monkeypatch):
+    """The folder of libraries is named by what a file asks for and its Python, not by the comment above its pins
+    (which names the program that wrote them), so a new release with the same pins fetches nothing. Its .ready says
+    how it was made: one pip made from a Python since replaced, or made of the newest versions before uv was here,
+    is made again; one an earlier bootstrap made (its .ready only a date) is taken as it is."""
+    from songbird import bootstrap
+
+    monkeypatch.setattr(bootstrap, "HOME", tmp_path)
+    one, _ = bootstrap.environment(b"# songbird 0.1.0's dependencies (python 3.12)\nnumpy==2.5.3\nscipy==1.18.1\n", "3.12")
+    two, _ = bootstrap.environment(b"# songbird 0.2.0's dependencies, later\r\n\r\nnumpy==2.5.3\r\nscipy==1.18.1\r\n", "3.12")
+    assert one == two
+    assert bootstrap.environment(b"numpy==2.5.4\nscipy==1.18.1\n", "3.12")[0] != one
+    assert bootstrap.environment(b"numpy==2.5.3\nscipy==1.18.1\n", "3.13")[0] != one
+
+    pip = Installer(unbuilt={"numba==0.67.0"})
+    env, _ = _set_up(tmp_path / "pip", monkeypatch, pip)
+    py = env / "bin" / "python"
+    assert bootstrap.made(env) == {**bootstrap.made(env), "with": "pip", "versions": "newest", "python": bootstrap.THIS_PYTHON}
+    assert bootstrap.ready(env, py)
+    monkeypatch.setattr(bootstrap.shutil, "which", lambda name: "/usr/bin/uv")  # uv arrives: the pinned ones can be had
+    assert not bootstrap.ready(env, py)
+    monkeypatch.setattr(bootstrap.shutil, "which", lambda name: None)
+    monkeypatch.setattr(bootstrap, "THIS_PYTHON", "9.99")  # the system's Python was replaced under it
+    assert not bootstrap.ready(env, py)
+    (env / ".ready").write_text("2026-09-28T12:00:00\n")  # as the first version's bootstrap wrote it
+    assert bootstrap.made(env) == {"with": "?"} and bootstrap.ready(env, py)
+    assert not bootstrap.ready(tmp_path / "none", py) and not bootstrap.ready(env, env / "bin" / "gone")
+
+
+def test_when_uv_cant_make_the_environment_this_python_does(tmp_path, monkeypatch):
+    class NoUv(Installer):
+        def __call__(self, cmd, check=False, **kwargs):
+            if str(cmd[0]) == "/usr/bin/uv":
+                self.calls.append([str(c) for c in cmd])
+                return subprocess.CompletedProcess(cmd, 2)
+            return super().__call__(cmd, check=check, **kwargs)
+
+    runs = NoUv()
+    env, said = _set_up(tmp_path, monkeypatch, runs, uv="/usr/bin/uv")
+    from songbird import bootstrap
+    uv_tries = [c for c in runs.calls if c[0] == "/usr/bin/uv"]
+    assert [("--python" in c) for c in uv_tries] == [True, False]  # the Python it was made with, then uv's own
+    assert "trying with this Python" in said and bootstrap.made(env)["with"] == "pip"
+
+
+def test_the_file_runs_its_own_program_whatever_is_in_the_folder(rendition, tmp_path):
+    """A songbird/ or a random.py in the folder the file is run from is never taken for the program or for Python's
+    own: the program runs with the current folder off its path."""
+    from songbird import bootstrap
+
+    seen = {}
+    real = bootstrap.subprocess.call
+    try:
+        bootstrap.subprocess.call = lambda cmd, env=None: seen.update(env=env) or 0
+        bootstrap.run(tmp_path, sys.executable, ["harvest", "--show"])
+    finally:
+        bootstrap.subprocess.call = real
+    assert seen["env"]["PYTHONSAFEPATH"] == "1" and seen["env"]["PYTHONPATH"].split(os.pathsep)[0] == str(tmp_path / "program")
+
+
+def test_a_record_says_which_format_it_is_written_in_and_a_newer_one_is_said_to_be(capsys):
+    import songbird
+    from songbird import cli
+
+    assert songbird.RECORD_FORMAT >= 2
+    assert cli.newer_than_this({"params": {}}) == "" == cli.newer_than_this({"record_format": songbird.RECORD_FORMAT})
+    said = cli.newer_than_this({"record_format": songbird.RECORD_FORMAT + 1, "program_version": "9.0.0"})
+    assert "newer Songbird (9.0.0)" in said and songbird.__version__ in said
+    with pytest.raises(ValueError, match="no params"):
+        cli._parent({"id": "x", "record_format": songbird.RECORD_FORMAT + 1})
+    assert cli.main(["render", "no-such-genome.json"]) == 2  # a sentence, not a traceback
+    assert "songbird: " in capsys.readouterr().err
+
+
+def test_a_version_can_have_a_title_of_its_own_within_bounds(rendition, tmp_path):
+    """A version's own title (the record's `name`) is one line of plain text, 60 characters at most; the song's
+    title, which says which song a file is, stays. The file says its own title when asked what it is, and its
+    README opens with it."""
+    from songbird import edits, genome as G
+
+    assert edits.version_name("  The   Long\tWay Home ") == "The Long Way Home" and edits.version_name("") == ""
+    assert edits.version_name("x" * edits.NAME_MAX) == "x" * edits.NAME_MAX
+    for bad in ("x" * (edits.NAME_MAX + 1), "a\x00b", "a‮b", 5, None):
+        with pytest.raises(ValueError):
+            edits.version_name(bad)
+    clean, problems = edits.check(G.load(GENOME), {"name": " The Long  Way Home ", "tempo": 100})
+    assert clean["name"] == "The Long Way Home" and not problems
+    clean, problems = edits.check(G.load(GENOME), {"name": "x" * 61})
+    assert "name" not in clean and "at most 60" in problems[0]["why"]
+
+    flac, _, record = rendition
+    pack.pack(flac, {**record, "name": "The Long Way Home"}, GENOME)
+    m = pack.read_manifest(flac)
+    assert (m["name"], m["title"]) == ("The Long Way Home", "Now It's by You")
+    assert pack.read_member(flac, "README.txt").startswith("The Long Way Home\n")
+    assert _run(flac, home=tmp_path / "home").stdout.startswith("The Long Way Home\n")

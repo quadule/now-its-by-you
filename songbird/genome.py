@@ -269,4 +269,4 @@ def from_dict(data: dict) -> Genome:
 
 
 def load(path: str | Path) -> Genome:
-    return from_dict(json.loads(Path(path).read_text()))
+    return from_dict(json.loads(Path(path).read_text(encoding="utf-8")))

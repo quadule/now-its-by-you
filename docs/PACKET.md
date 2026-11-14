@@ -27,7 +27,7 @@ budget (see setup below).
     uv run songbird render songs/h-now-its-by-you.json --pack --out seed.flac
     python3 seed.flac                 what this is, and what you can do
     python3 seed.flac new             sing a new version here, today (a packet too)
-    python3 seed.flac studio          open the studio on this version (once the studio lands)
+    python3 seed.flac studio          open the studio on this version
     python3 seed.flac unpack          unpack everything into a folder
     uv run songbird pack FLAC         attach a packet to a FLAC rendered without one
     uv run songbird unpack FLAC       unpack one
@@ -52,7 +52,7 @@ Inside:
 |---|---|
 | `__main__.py` | the bootstrap (songbird/bootstrap.py): standard library only |
 | `README.txt` | what the file is, in plain words: what it reads, what it keeps, how to run it |
-| `manifest.json` | the render record plus the lineage: `id` (SHA-256 of the samples), `generation`, `parent_id`, `ancestry`, and `path`, `gate`, `llm`, `python`, `program_sha256`, `name` |
+| `manifest.json` | the render record plus the lineage: `id` (SHA-256 of the samples), `generation`, `parent_id`, `ancestry`, `python`, `program_sha256`, `program_version` and `record_format` (see Compatibility); `name`, the version's own title if a person gave it one (one line, 60 characters at most; the studio's Rename, `render --name`; a child keeps its parent's), shown and tagged in place of `title`, which says which song the file is and never changes; `path`, `gate` and `llm` are left from the first plan, written as the first version wrote them and read by nothing |
 | `genome.json` | the song's skeleton as sung: tune, refrain, chords, verse bank |
 | `lyrics.txt` | the words as sung |
 | `requirements.txt` | numpy, scipy, numba, soundfile and cmudict, pinned to the versions it ran with |
@@ -224,3 +224,38 @@ since:
 - **Whether the seed carries its day.** A seed rendered without `--date` has no
   `rendered_at`, so its archive's entries are dated 1980 and its README names
   no day.
+
+## Compatibility (2026-11-11)
+
+A version's file is run for years after it is made, by Pythons and libraries that didn't exist then, beside files
+made by earlier and later programs. What holds that together:
+
+- **The record's format.** A record says which format it is written in: `record_format`, a whole number
+  (`songbird.RECORD_FORMAT`, 2 now). A record without one is 1, as the first version's is. The number goes up only
+  when a record changes so that an older program would misread it, never for a field added: every reader passes
+  over fields it doesn't know (params, band, style, mix, voice). A program given a record with a higher number
+  than its own says so (the command line on stderr, the studio in its note on the version) and sings from what
+  it understands of it; a parent it can't sing from at all is refused in a sentence.
+- **The program's version.** `program_version` is 0.1.0 in the first version (September 28, 2026) and 0.2.0 from
+  the performance version on. The program's identity is still its hash (`program_sha256`), which has no order;
+  the version is for people and for "newer than this".
+- **The bootstrap** (`__main__.py`) parses and runs on Python 3.7 and every later one. It has no
+  `from __future__ import annotations` (to be withdrawn from Python some years on): the annotations an old Python
+  couldn't evaluate are strings. tests/test_pack.py holds it to the standard library.
+- **Only the file's own program runs.** The program is started with `PYTHONSAFEPATH=1`, so a `songbird/` folder or
+  a `random.py` in the folder the file is run from is never imported in place of the file's program or Python's
+  own modules.
+- **The environment** (`~/.songbird/envs/<hash>/`) is named by the pins and the Python a file asks for, not by the
+  comment above the pins, so two releases with the same pins share one. Its `.ready` says how it was made (`with`
+  uv or pip, `versions` pinned or newest, which `python`). One that pip made from a Python since replaced (a system
+  upgrade), or of the newest versions before uv was installed, is made again; one an earlier bootstrap made (a
+  `.ready` holding only a date) is taken as it is. If uv can't make the environment, this Python's venv and pip
+  do, where it is 3.11 or newer.
+- **The voice file** (`~/.songbird/voice.json`) is shared by every release. A field this program doesn't know is
+  passed over; a signal it can't make is left out, the rest kept; and a file no voice can be made of keeps its
+  salt (so the singer stays the same) and the signals a person left out, and is set aside as `voice.json.unread`
+  rather than written over. It is written whole or not at all.
+- **Text is UTF-8** wherever the program reads or writes it, whatever the system's own encoding (Windows read the
+  studio's page as cp1252 before, and couldn't).
+- **Mistakes are sentences.** A mistyped path, date or option on the command line is said in a line;
+  `SONGBIRD_DEBUG=1` shows the traceback.

@@ -136,7 +136,7 @@ def read_record(path: str | Path, verify: bool = True) -> dict:
             raise ValueError(f"{Path(path).name}'s audio isn't the rendition its record describes")
         return record
     try:
-        return json.loads(Path(path).read_text())
+        return json.loads(Path(path).read_text(encoding="utf-8"))
     except UnicodeDecodeError:
         raise ValueError(f"{path} is neither a packet nor a render record") from None
 
@@ -170,7 +170,7 @@ def program_files(root: Path = ROOT) -> dict[str, bytes]:
 
 
 def budget(root: Path = ROOT) -> dict:
-    """Portable bytes before compression, against the GOAL (the artist, 2026-09-27: a goal to keep in mind
+    """Portable bytes before compression, against the GOAL (a goal to keep in mind
     while the model is trimmed, compressed or quantized, not a wall; only LIMIT refuses). Audio and
     installed runtime dependencies are separate."""
     files = program_files(root)
@@ -223,9 +223,9 @@ def words_as_sung(score: dict, title: str | None = None) -> str:
 
 
 def readme(m: dict) -> str:
-    title = m.get("title") or "A song"
+    title = m.get("name") or m.get("title") or "A song"  # its own title, if it was given one
     generation = m.get("generation", 0)
-    where = "the seed: the first version" if generation == 0 else \
+    where = "the seed: a version with none before it" if generation == 0 else \
         f"generation {generation}, the child of {str(m.get('parent_id'))[:12]}"
     return f"""{title}
 

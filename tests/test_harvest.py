@@ -236,3 +236,24 @@ def test_cache(tmp_path, monkeypatch):
     record.write_text(json.dumps({"id": "x", "voice": voice.to_dict()}))
     assert H.machine_voice(str(record)) == voice
     assert "Documents" not in (tmp_path / "cache" / "voice.json").read_text()
+
+
+def test_a_voice_file_this_program_cant_read_keeps_its_singer_and_what_was_left_out(tmp_path, monkeypatch):
+    """A voice file from another version of the program, or a damaged one: a signal this program can't make is left
+    out and the rest kept; and where no voice can be made of it at all, its salt (the singer) and the signals a
+    person asked to be left out are kept, and the file is set aside, not written over."""
+    monkeypatch.setenv("SONGBIRD_HOME", str(tmp_path))
+    path = H.cache_path()
+    good = H.fictional("ada").to_dict()
+    newer = {**good, "songbird_voice": 2, "signals": {**good["signals"], "machine": {"cores_of_tomorrow": 1}}}
+    voice = H.Voice.from_dict(newer)
+    assert voice.machine is None and voice.tongue == H.fictional("ada").tongue and voice.salt == good["salt"]
+
+    path.write_text(json.dumps({"songbird_voice": 3, "salt": "abcd1234", "signals": "elsewhere", "without": ["colour", "ages"]}))
+    assert H.load() is None and H.stored()["salt"] == "abcd1234"
+    monkeypatch.setattr(H, "harvest", lambda without=(), **kw: H.Voice(salt=kw.get("salt") or "new") if "colour" in without else None)
+    voice = H.here()
+    assert voice.salt == "abcd1234"
+    assert H.stored()["without"] == ["ages", "colour"] and H.stored()["salt"] == "abcd1234"
+    assert json.loads(path.with_name("voice.json.unread").read_text())["songbird_voice"] == 3
+    assert not list(tmp_path.glob("*.part"))

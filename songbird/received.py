@@ -64,8 +64,9 @@ WORD = re.compile(r"[A-Za-z0-9 _.:,+-]{0,128}")
 ENGINES = ("learned", "formant")  # not the experimental waveguide
 # What a parent gives its child (cli.render_one, explain.Context, phrasing.inherited, cli.choir_of): nothing else
 # of a record is kept. Not its machine's numbers (voice, drift), which name nothing but aren't needed.
-KEPT = ("id", "title", "generation", "parent_id", "ancestry", "rendered_at", "params", "lyrics", "singer",
-        "lineage_singers", "performance", "chosen_by_you", "program_sha256", "program_version", "duration")
+KEPT = ("id", "title", "name", "generation", "parent_id", "ancestry", "rendered_at", "params", "lyrics", "singer",
+        "lineage_singers", "performance", "chosen_by_you", "program_sha256", "program_version", "record_format",
+        "duration")
 
 
 class Refused(ValueError):
@@ -669,6 +670,20 @@ def clean_record(raw, genome) -> dict:
         if not isinstance(version, str) or not re.fullmatch(r"[A-Za-z0-9.+_-]{1,32}", version):
             raise Refused("Its record's program version isn't one.")
         out["program_version"] = version
+    if raw.get("name") is not None:  # its own title, if it has one: a line of plain text, no longer than any is
+        from .edits import version_name
+
+        try:
+            named = version_name(raw["name"])
+        except ValueError:
+            raise Refused("Its record's own title isn't one.") from None
+        if named:
+            out["name"] = named
+    fmt = raw.get("record_format")  # absent in records written before the number was (the first version's): 1
+    if fmt is not None:
+        if isinstance(fmt, bool) or not isinstance(fmt, int) or not 1 <= fmt <= 10**6:
+            raise Refused("Its record's format number isn't one.")
+        out["record_format"] = fmt
     if raw.get("duration") is not None:
         out["duration"] = _number(raw["duration"], "duration")
         _within(out["duration"], 0.0, AUDIO_MINUTES * 60, "duration")
@@ -907,9 +922,9 @@ class Versions:
             part = self.folder / f".part-{vid}.{os.getpid()}.{time.monotonic_ns()}"
             part.mkdir()
             (part / "genome.json").write_bytes(genome)
-            (part / "record.json").write_text(json.dumps(record, indent=1) + "\n")
+            (part / "record.json").write_text(json.dumps(record, indent=1) + "\n", encoding="utf-8")
             if timeline is not None:
-                (part / "timeline.json").write_text(json.dumps(timeline))
+                (part / "timeline.json").write_text(json.dumps(timeline), encoding="utf-8")
             try:
                 part.rename(final)
             except OSError:  # made at the same moment by another request: theirs is the same
@@ -927,10 +942,10 @@ class Versions:
         folder = self.folder / vid
         with contextlib.suppress(OSError, ValueError):
             if time.time() - folder.stat().st_mtime < self.days * 86400:
-                record = json.loads((folder / "record.json").read_text())
+                record = json.loads((folder / "record.json").read_text(encoding="utf-8"))
                 timeline = None
                 with contextlib.suppress(OSError, ValueError):
-                    timeline = json.loads((folder / "timeline.json").read_text())
+                    timeline = json.loads((folder / "timeline.json").read_text(encoding="utf-8"))
                 os.utime(folder)
                 return record, folder / "genome.json", timeline
         return None

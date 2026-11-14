@@ -5,7 +5,7 @@ holding the program that sang it (Songbird), the song's skeleton, this
 version's record and its words. Run it with Python and it sings a new version
 of the song on your computer:
 
-    python3 THIS_FILE.flac              what this is, and what you can do
+    python3 THIS_FILE.flac              what this is; at a terminal, it then asks what you'd like to do
     python3 THIS_FILE.flac new          sing a new version here, today
     python3 THIS_FILE.flac studio       open the studio: hear it, change it, make your own
     python3 THIS_FILE.flac unpack       unpack everything into a folder, to read it first
@@ -21,10 +21,12 @@ installs nothing into your system. `--yes` answers the question in advance;
 before the command.
 
 This is the archive's __main__.py. It is standard-library only, and it runs
-before anything is set up.
+before anything is set up, on whatever Python it is given: it is written to
+parse and run on Python 3.7 and every later one, so that an old Python can say
+what's wrong, and a new one finds nothing here it has stopped understanding
+(so no `from __future__ import annotations`, which is to be withdrawn: the
+annotations an old Python couldn't evaluate are written as strings).
 """
-
-from __future__ import annotations
 
 import hashlib
 import importlib.util
@@ -164,7 +166,7 @@ class WaitingPage:
     def fail(self, text: str) -> None:
         self.stage, self.failed = text, True
 
-    def step_aside(self) -> int | None:
+    def step_aside(self) -> "int | None":
         """Done: the page will reload into the studio, which takes this port."""
         if self.server is None:
             return None
@@ -175,7 +177,7 @@ class WaitingPage:
         return self.port
 
 
-def python_problem(here: bool, version: tuple = sys.version_info[:2]) -> str | None:
+def python_problem(here: bool, version: tuple = sys.version_info[:2]) -> "str | None":
     """Why this computer can't set the program up as it is, said before anything is asked or written."""
     if here or shutil.which("uv"):
         return None
@@ -184,7 +186,7 @@ def python_problem(here: bool, version: tuple = sys.version_info[:2]) -> str | N
         return (f"The program in this file needs Python 3.11 or newer, and this is Python {v}. Nothing has been "
                 "written. Either of these fixes it:\n"
                 "  - Install a newer Python from https://www.python.org/downloads/ and run this again with it "
-                f"(for example `python3.12 {PACKET.name} ...`{'; on Windows, `py -3.12`' if os.name == 'nt' else ''}).\n"
+                f"(`{run_as()} {PACKET.name} ...`).\n"
                 "  - Or install uv (https://docs.astral.sh/uv/), which fetches the right Python by itself, and "
                 "run the same command again.")
     if importlib.util.find_spec("venv") is None or importlib.util.find_spec("ensurepip") is None:
@@ -222,7 +224,7 @@ def manifest(z: zipfile.ZipFile) -> dict:
     return m
 
 
-def text(m: dict, key: str, n: int | None = None) -> str:
+def text(m: dict, key: str, n: "int | None" = None) -> str:
     value = m.get(key)
     value = value if isinstance(value, str) else ""
     return value[:n] if n else value
@@ -238,9 +240,9 @@ def program_hash(z: zipfile.ZipFile) -> str:
 
 def about(z: zipfile.ZipFile, m: dict) -> None:
     generation = m.get("generation") if isinstance(m.get("generation"), int) else 0
-    say(text(m, "title") or "A song")
+    say(text(m, "name", 80) or text(m, "title") or "A song")  # its own title, if it was given one
     if generation == 0:
-        say("the seed: the first version, sung by the program that made it")
+        say("the seed: a version with none before it")
     else:
         say(f"generation {generation}: {generation} version{'s' if generation != 1 else ''} before this one")
     if text(m, "rendered_at"):
@@ -259,7 +261,31 @@ def about(z: zipfile.ZipFile, m: dict) -> None:
         say(problem.replace(" Nothing has been written.", ""))
 
 
-def safe_members(z: zipfile.ZipFile, to: Path) -> list[zipfile.ZipInfo]:
+def choose(has_studio: bool) -> "str | None":
+    """The file run with no command, by a person at a terminal: after saying what it is, it asks what they'd like
+    to do, so one line is all anyone has to type. "new" or "studio", or None (nothing chosen; not a terminal, as
+    when a script runs it; or this computer can't run the program yet, which `about` has just said)."""
+    if not (sys.stdin.isatty() and sys.stdout.isatty()) or python_problem(False):
+        return None
+    say()
+    say("What would you like to do?")
+    say("  n   sing a new version of the song here, today")
+    if has_studio:
+        say("  s   open the studio: hear it, change it, make your own version")
+    say("  (or press Enter to do nothing)")
+    try:
+        answer = input("> ").strip().lower()
+    except (EOFError, KeyboardInterrupt):
+        say()
+        return None
+    if answer in ("n", "new"):
+        return "new"
+    if has_studio and answer in ("s", "studio"):
+        return "studio"
+    return None
+
+
+def safe_members(z: zipfile.ZipFile, to: Path) -> "list[zipfile.ZipInfo]":
     """Every entry, checked to land inside `to`, and not too much in all."""
     root = os.path.realpath(to)
     if sum(i.file_size for i in z.infolist()) > MOST:
@@ -328,7 +354,7 @@ def extracted(z: zipfile.ZipFile, key: str) -> Path:
         tmp = Path(tempfile.mkdtemp(prefix=f".{key}-", dir=HOME / "packets"))
         try:
             unpack(z, tmp)
-            (tmp / ".complete").write_text(datetime.now().isoformat() + "\n")
+            (tmp / ".complete").write_text(datetime.now().isoformat() + "\n", encoding="utf-8")
             if where.exists():
                 shutil.rmtree(where)
             os.replace(tmp, where)
@@ -338,67 +364,125 @@ def extracted(z: zipfile.ZipFile, key: str) -> Path:
     return where
 
 
-def environment(requirements: bytes, wanted: str) -> tuple[Path, Path]:
-    key = hashlib.sha256(requirements + wanted.encode()).hexdigest()[:16]
+def needs(requirements: str) -> "list[str]":
+    """What a requirements.txt asks for, a line each (`numpy==2.5.3`), without its comments and blank lines."""
+    return [line.strip() for line in requirements.splitlines() if line.strip() and not line.lstrip().startswith("#")]
+
+
+def environment(requirements: bytes, wanted: str) -> "tuple[Path, Path]":
+    """Where the program's libraries go, and the Python there: one folder for every file that asks for the same
+    versions with the same Python, whatever its requirements.txt says in its comment (which program wrote it)."""
+    asked = "\n".join(needs(requirements.decode("utf-8", "replace")))
+    key = hashlib.sha256((asked + "\n" + wanted).encode()).hexdigest()[:16]
     env = HOME / "envs" / key
     return env, env / ("Scripts/python.exe" if os.name == "nt" else "bin/python")
+
+
+THIS_PYTHON = "%d.%d" % sys.version_info[:2]
+
+
+def made(env: Path) -> dict:
+    """How an environment was made, from its .ready: {"with": "uv" or "pip", "versions": "pinned" or "newest",
+    "python": "3.12"}. Empty for one that isn't ready; {"with": "?"} for one an earlier bootstrap made (its .ready
+    is only a date), which is taken as it is."""
+    try:
+        lines = (env / ".ready").read_text(encoding="utf-8").splitlines()
+    except OSError:
+        return {}
+    return dict(line.split("=", 1) for line in lines if "=" in line) or {"with": "?"}
+
+
+def ready(env: Path, py: Path) -> bool:
+    """Whether the environment can be used as it is. Not if it was never finished; not if pip made it from a Python
+    that has since been replaced by another (a system upgrade leaves its libraries where the new one doesn't look);
+    and not if it holds the newest versions for want of the pinned ones and uv is here now, which can fetch the
+    Python those were made for: then it is made again."""
+    how = made(env)
+    if not how or not py.exists():
+        return False
+    if how.get("with") == "pip" and how.get("python") != THIS_PYTHON:
+        return False
+    if how.get("with") == "pip" and how.get("versions") == "newest" and shutil.which("uv"):
+        return False
+    return True
 
 
 READY_MADE = ["--only-binary", ":all:"]  # wheels only, for pip and uv alike: nothing is compiled
 
 
 def set_up(where: Path, env: Path, py: Path, wanted: str, tell=say) -> None:
-    """Make the program's environment: with uv if it's there (with the Python the version was made
-    with), else this Python's venv and pip. Ready-made builds (wheels) only, so nothing is compiled: the pinned
-    versions first, else the newest versions made for this computer. (Intel Macs are why: numba's builds for them
-    stop at 0.62.1, and asking for the newest without this picked a later numba, to compile, which fails.)"""
+    """Make the program's environment: with uv if it's there (with the Python the version was made with, or failing
+    that the one uv has), else, or if uv can't, this Python's venv and pip. Ready-made builds (wheels) only, so
+    nothing is compiled: the pinned versions first, else the newest versions made for this computer. (Intel Macs
+    are why: numba's builds for them stop at 0.62.1, and asking for the newest without this picked a later numba,
+    to compile, which fails.) How it was made is written into its .ready (made())."""
     requirements = where / "requirements.txt"
-    loose = [line.split("==")[0] for line in requirements.read_text().splitlines() if line and not line.startswith("#")]
+    loose = [line.split("==")[0] for line in needs(requirements.read_text(encoding="utf-8"))]
+    uv = shutil.which("uv")
+
+    def venv_with_uv() -> "list[str] | None":
+        for python in ([["--python", wanted]] if wanted else []) + [[]]:  # the Python it was made with, else uv's own
+            if subprocess.run([uv, "venv", "--quiet", *python, str(env)]).returncode == 0:
+                return [uv, "pip", "install", "--quiet", "--python", str(py)]
+            shutil.rmtree(env, ignore_errors=True)
+        return None
+
+    def venv_with_pip() -> "list[str]":
+        if sys.version_info < (3, 11):
+            raise SystemExit(python_problem(False) or "The program in this file needs Python 3.11 or newer.")
+        if subprocess.run([sys.executable, "-m", "venv", str(env)]).returncode != 0:
+            raise SystemExit("couldn't make an environment; on Debian or Ubuntu, `sudo apt install python3-venv` first")
+        return [str(py), "-m", "pip", "install", "--quiet", "--disable-pip-version-check"]
+
     with Lock(env.with_name(env.name + ".lock")):
-        if (env / ".ready").exists() and py.exists():
+        if ready(env, py):
             return
         if env.exists():
             shutil.rmtree(env)
-        uv = shutil.which("uv")
         tell(f"Fetching what the program needs ({', '.join(loose)}): about 100 MB, the first time only. "
              "A few minutes on a slow connection.")
         try:
             with Ticking("fetching what the program needs"):
-                if uv:
-                    subprocess.run([uv, "venv", "--quiet", *(["--python", wanted] if wanted else []), str(env)],
-                                   check=True)
-                    install = [uv, "pip", "install", "--quiet", "--python", str(py)]
-                else:
-                    if sys.version_info < (3, 11):
-                        raise SystemExit(python_problem(False))
-                    if subprocess.run([sys.executable, "-m", "venv", str(env)]).returncode != 0:
-                        raise SystemExit("couldn't make an environment; on Debian or Ubuntu, "
-                                         "`sudo apt install python3-venv` first")
-                    install = [str(py), "-m", "pip", "install", "--quiet", "--disable-pip-version-check"]
+                install = venv_with_uv() if uv else None
+                by = "uv" if install else "pip"
+                if install is None:
+                    if uv:
+                        tell("uv couldn't make an environment; trying with this Python instead.")
+                    install = venv_with_pip()
+                versions = "pinned"
                 if subprocess.run([*install, *READY_MADE, "-r", str(requirements)]).returncode != 0:
                     tell("The exact versions it was made with couldn't be installed here (if you're offline, it needs "
                          "the network once); trying the newest ones made for this computer instead. What it sings "
-                         "with them may differ slightly.")
+                         "with them may differ, and if they have moved on too far it may not run: then install uv "
+                         "(https://docs.astral.sh/uv/), which fetches the Python it was made with, and run it again.")
+                    versions = "newest"
                     subprocess.run([*install, *READY_MADE, *loose], check=True)
         except (subprocess.CalledProcessError, OSError) as e:
             shutil.rmtree(env, ignore_errors=True)
-            this = f"{sys.version_info[0]}.{sys.version_info[1]}"
-            other = "" if uv or not wanted or wanted == this else (
-                f" If it's online, they may not be made for Python {this} on this computer: with uv "
+            other = "" if uv or not wanted or wanted == THIS_PYTHON else (
+                f" If it's online, they may not be made for Python {THIS_PYTHON} on this computer: with uv "
                 f"(https://docs.astral.sh/uv/) installed, it uses Python {wanted}, the one this version was made with.")
-            raise SystemExit(f"couldn't fetch what the program needs ({e}). If this computer is offline, connect it "
-                             f"and run the same command again.{other} `--here` uses this Python as it is, for people "
-                             "who already have numpy, scipy, numba, soundfile and cmudict.")
-        (env / ".ready").write_text(datetime.now().isoformat() + "\n")
+            why = "the installer stopped" if isinstance(e, subprocess.CalledProcessError) else str(e)
+            raise SystemExit(f"couldn't fetch what the program needs ({why}; its own words are above). If this "
+                             f"computer is offline, connect it and run the same command again.{other} `--here` uses "
+                             "this Python as it is, for people who already have numpy, scipy, numba, soundfile and "
+                             "cmudict.")
+        (env / ".ready").write_text(f"made={datetime.now().isoformat()}\nwith={by}\nversions={versions}\n"
+                                    f"python={wanted if by == 'uv' and wanted else THIS_PYTHON}\n", encoding="utf-8")
 
 
-def consent(lines: list[str], yes: bool) -> None:
+def consent(lines: "list[str]", yes: bool) -> None:
     say("\n".join(lines))
     if yes:
         return
     if not sys.stdin.isatty():
         raise SystemExit("run again with --yes (before the command) to go ahead")
-    if input("Go ahead? [y/N] ").strip().lower() not in ("y", "yes"):
+    try:
+        answer = input("Go ahead? [y/N] ")
+    except (EOFError, KeyboardInterrupt):
+        answer = ""
+        say()
+    if answer.strip().lower() not in ("y", "yes"):
         raise SystemExit("nothing done")
 
 
@@ -406,13 +490,16 @@ def slug(title: str) -> str:
     return re.sub(r"[^a-z0-9]+", "-", title.lower().replace("'", "").replace("’", "")).strip("-") or "song"
 
 
-def run(where: Path, py: str, args: list[str]) -> int:
+def run(where: Path, py: str, args: "list[str]") -> int:
     env = dict(os.environ, SONGBIRD_PACKET=str(PACKET))  # which file the program was started from
+    # only the file's own program, never a songbird/ (or a random.py) that happens to be in the folder it is run
+    # from: Python 3.11 and later leave the current folder off the path when told to
+    env["PYTHONSAFEPATH"] = "1"
     env["PYTHONPATH"] = str(where / "program") + (os.pathsep + env["PYTHONPATH"] if env.get("PYTHONPATH") else "")
     return subprocess.call([py, "-m", "songbird", *args], env=env)
 
 
-def main(argv: list[str]) -> int:
+def main(argv: "list[str]") -> int:
     # the bootstrap's own flags go before the command; everything after `songbird` is the program's
     head, tail = (argv[: argv.index("songbird")], argv[argv.index("songbird"):]) if "songbird" in argv else (argv, [])
     flags = {a for a in head if a in FLAGS}
@@ -423,16 +510,21 @@ def main(argv: list[str]) -> int:
         raise SystemExit(f"{PACKET} doesn't carry a program ({e})")
     with z:
         m = manifest(z)
+        has_studio = "program/songbird/studio.py" in z.namelist()
         command = args[0] if args else "about"
         if command in ("about", "-h", "--help", "help"):
             about(z, m)
-            return 0
+            command = choose(has_studio) if not args else None  # the file run by itself, at a terminal: it asks
+            if command is None:
+                return 0
+            args = [command]
         if command == "unpack":
             to = Path(args[1]) if len(args) > 1 else PACKET.with_name(PACKET.stem + "-unpacked")
             say(f"unpacked into {unpack(z, to)}")
             return 0
-        has_studio = "program/songbird/studio.py" in z.namelist()
         if command not in ("new", "songbird") and not (command == "studio" and has_studio):
+            say(f"{PACKET.name} has no command {command!r}.")
+            say()
             say(usage(z))
             return 2
         recorded = text(m, "program_sha256")
@@ -446,7 +538,7 @@ def main(argv: list[str]) -> int:
         env, py = environment(requirements, wanted)
         here = "--here" in flags
         fresh = not (where / ".complete").exists()
-        fetch = not here and not ((env / ".ready").exists() and py.exists())
+        fetch = not here and not ready(env, py)
         if fetch:  # said before anything is asked or written: what this computer lacks, and how to get it
             problem = python_problem(here)
             if problem:
@@ -456,8 +548,7 @@ def main(argv: list[str]) -> int:
             lines = [f"This will run the program inside {PACKET.name}.",
                      f"  - It unpacks the program into {where} ({size:.1f} MB)." if fresh else None]
             if fetch:
-                names = ", ".join(line.split("==")[0] for line in requirements.decode().splitlines()
-                                  if line and not line.startswith("#"))
+                names = ", ".join(line.split("==")[0] for line in needs(requirements.decode("utf-8", "replace")))
                 lines.append(f"  - It fetches {names} from PyPI (about 100 MB to download, 250 MB on disk) into "
                              f"{env}" + (", with uv, which may also fetch Python " + wanted if shutil.which("uv") and
                                          wanted else "") + "; the installers keep their usual download caches.")
@@ -496,7 +587,7 @@ def main(argv: list[str]) -> int:
     python = sys.executable if here else str(py)
     genome = str(where / "genome.json")
     if command == "new":
-        out = Path.cwd() / f"{slug(text(m, 'title') or 'song')}-{datetime.now().strftime('%Y%m%d-%H%M%S')}.flac"
+        out = Path.cwd() / f"{slug(text(m, 'name', 80) or text(m, 'title') or 'song')}-{datetime.now().strftime('%Y%m%d-%H%M%S')}.flac"
         return run(where, python, ["render", genome, "--parent", str(PACKET), "--machine", "here", "--pack",
                                    "--out", str(out), *args[1:]])
     if command == "studio":

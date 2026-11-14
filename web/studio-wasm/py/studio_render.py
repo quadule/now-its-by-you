@@ -171,7 +171,7 @@ def whole(spec: dict, folder: Path, progress=None) -> dict:
         record = render_one(genome, params, out, voice=voice, drift=drift, lyrics=lyrics,
                             phrasing_json=spec.get("phrasing"), choir_json=spec.get("choir") or [],
                             parent=spec.get("parent"), packet_genome=song, changes=spec.get("changes"),
-                            chosen_by_you=spec.get("marks") or None, progress=job.report)
+                            chosen_by_you=spec.get("marks") or None, progress=job.report, name=spec.get("name"))
     from songbird import pack
 
     # the record as it travels (the packet's manifest: with the program's digest and what it runs with)

@@ -27,7 +27,7 @@ a section at a time (docs/WEB-STUDIO.md).
 | Python | 3.11 or newer (`python3`; `py` on Windows) | pyproject.toml's `requires-python`. The bootstrap itself runs on 3.7 and up, so it can say what's wrong; older ones (and Python 2) stop with a SyntaxError before it can. With **uv** on the path, the Python version doesn't matter: uv fetches the one the rendition was made with (3.12 for today's). |
 | The program's libraries | numpy, scipy, numba (with llvmlite), soundfile (with cffi, and libsndfile inside its wheel), cmudict | The file's `requirements.txt`, pinned to the versions it was made with (numpy 2.5.3, scipy 1.18.1, numba 0.67.0, soundfile 0.14.0, cmudict 1.1.3). It installs ready-made builds (wheels) only, so nothing is compiled. If the pins have none for this computer (a newer Python, an Intel Mac), it takes the newest versions that do. Files made before October 7, 2026, the first version among them, ask for the newest whether or not it has wheels, which fails on Intel Macs (see Intel Macs). |
 | Download | about 100 MB, once | From PyPI, by uv or by pip. The installers keep their usual caches. |
-| Disk | about 250 MB for the libraries; about 6 MB for each rendition's unpacked program; up to 300 MB of studio previews; about 15 to 22 MB for each recording | `~/.songbird/envs/` (one environment, shared by every rendition with the same pins), `~/.songbird/packets/<the file's hash>/`, `~/.songbird/studio/cache/` (the least recently heard go first), and the folder you ran it from. `$SONGBIRD_HOME` moves everything but the recordings. |
+| Disk | about 250 MB for the libraries; about 6 MB for each rendition's unpacked program; up to 300 MB of studio previews; about 15 to 22 MB for each recording | `~/.songbird/envs/` (one environment, shared by every rendition with the same pins and Python; docs/PACKET.md, "Compatibility"), `~/.songbird/packets/<the file's hash>/`, `~/.songbird/studio/cache/` (the least recently heard go first), and the folder you ran it from. `$SONGBIRD_HOME` moves everything but the recordings. |
 | Memory | about 2 to 3 GB at the peak of a whole song | The song as it began, rendered on an M1 Max: 2.7 GB on six threads (the default with six cores or more), 2.2 GB on two (`SONGBIRD_THREADS=2`); less where the system takes freed memory back at once, as Linux does (docs/notes/PERFORMANCE.md, "Memory (2026-09-29)"). A long version with every player can take up to twice that (docs/WEB-STUDIO.md, "A whole song's memory"). Sections need less. |
 | Processor | a Mac (Apple silicon, or Intel with Python 3.11 to 3.13 or uv), a Windows PC (x64) or Linux (x86-64 or ARM64, glibc) | Where numba and llvmlite publish wheels. numba's wheels for Intel Macs stop at 0.62.1 (Python 3.10 to 3.13): a file finds them by itself, except the first version and others made before October 7, 2026, which need one line the first time (Intel Macs, below). Not 32-bit systems, Windows on ARM, or Alpine-style Linux, which have no wheels; the studio at https://studio.itsby.you works there. |
 | Browser | Safari 16.4, Chrome or Edge 111, Firefox 113, or newer | The page uses `color-mix()`, `<dialog>` and modern JavaScript; no plugins. It must run on the same computer (the studio answers only 127.0.0.1) unless it is shared on purpose (docs/STUDIO.md). |
@@ -72,7 +72,10 @@ first time. Nothing is sent anywhere.
    - *Anywhere*: installing uv (https://docs.astral.sh/uv/) instead makes the
      Python version stop mattering.
 3. **`python3 song.flac`** says what the file is and what it can do, and, if
-   this Python is too old to run it, says so and how to get one.
+   this Python is too old to run it, says so and how to get one. At a
+   terminal, a file made from November 2026 on then asks what to do: `n`
+   for a new version, `s` for the studio, Enter for nothing. With uv and no
+   Python at all, `uv run python song.flac` does the same.
 4. **`python3 song.flac studio`** checks this computer first. If its Python
    is too old or can't make an environment, it says so, and how to fix it,
    before asking or writing anything. Otherwise it lists what it will do

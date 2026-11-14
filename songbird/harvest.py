@@ -205,10 +205,15 @@ class Voice:
             spec = signals.get(name)
             if spec is None:
                 continue
-            known = {f.name for f in fields(kind)}
-            spec = {k: tuple(v) if isinstance(v, list) else v for k, v in spec.items() if k in known}
-            values[name] = kind(**spec)
-        return cls(**values, salt=str(data.get("salt", "")))
+            # a file from another version of the program: a field this one doesn't know is passed over, and a
+            # signal it can't make sense of (a field it needs is missing) is left out, the others and the salt kept
+            try:
+                known = {f.name for f in fields(kind)}
+                spec = {k: tuple(v) if isinstance(v, list) else v for k, v in spec.items() if k in known}
+                values[name] = kind(**spec)
+            except (TypeError, ValueError, AttributeError):
+                continue
+        return cls(**values, salt=str(data.get("salt") or ""))
 
 
 def _plain(value):
@@ -383,7 +388,7 @@ def _uptime() -> float | None:
         return time.time() - int(found.group(1)) if found else None
     if sys.platform.startswith("linux"):
         try:
-            return float(Path("/proc/uptime").read_text().split()[0])
+            return float(Path("/proc/uptime").read_text(encoding="utf-8").split()[0])
         except (OSError, ValueError, IndexError):
             return None
     if sys.platform == "win32":
@@ -895,18 +900,36 @@ def cache_path() -> Path:
     return home_dir() / "voice.json"
 
 
+def stored() -> dict:
+    """The voice file as it is written, or {} if there is none or it can't be read as one: for what it holds
+    beside the voice (`without`, the signals a person asked to be left out; `quiet`) and, when the voice in it
+    can't be made (load() is None), for the salt and those wishes, which outlive it."""
+    try:
+        data = json.loads(cache_path().read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return {}
+    return data if isinstance(data, dict) else {}
+
+
 def load() -> Voice | None:
     try:
-        return Voice.from_dict(json.loads(cache_path().read_text()))
-    except (OSError, ValueError, TypeError, KeyError):
+        return Voice.from_dict(json.loads(cache_path().read_text(encoding="utf-8")))
+    except (OSError, ValueError, TypeError, KeyError, AttributeError):
         return None
 
 
-def save(voice: Voice, quiet: bool = False) -> Path:
-    """Cache the voice; `quiet` marks one read without `songbird harvest`, which reads the rest next time."""
+def save(voice: Voice, quiet: bool = False, without=None) -> Path:
+    """Cache the voice; `quiet` marks one read without `songbird harvest`, which reads the rest next time;
+    `without` names the signals a person asked to be left out, kept so they stay out. Written whole or not at
+    all (beside it, then put in its place), so a run that is stopped never leaves half a file, which would be
+    taken for no voice and a new singer made."""
     path = cache_path()
     path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(json.dumps({**voice.to_dict(), **({"quiet": True} if quiet else {})}, indent=2, sort_keys=True) + "\n")
+    data = {**voice.to_dict(), **({"quiet": True} if quiet else {}),
+            **({"without": sorted(without)} if without is not None else {})}
+    tmp = path.with_name(f"{path.name}.{os.getpid()}.part")
+    tmp.write_text(json.dumps(data, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+    os.replace(tmp, path)
     return path
 
 
@@ -929,8 +952,18 @@ def here() -> Voice:
     the same when the rest is read."""
     voice = load()
     if voice is None:
-        voice = harvest(without=QUIET, pictures=False)
-        save(voice, quiet=True)
+        # no voice file, or one this program can't read (another version's, or a damaged one): what it says of the
+        # singer (its salt) and of what to leave out is kept, and the file itself set aside, not written over
+        was = stored()
+        left_out = {s for s in was.get("without") or [] if s in SIGNALS} if isinstance(was.get("without"), list) else set()
+        salt = was["salt"] if isinstance(was.get("salt"), str) and was["salt"] else None
+        if cache_path().exists():
+            try:
+                os.replace(cache_path(), cache_path().with_name("voice.json.unread"))
+            except OSError:
+                pass
+        voice = harvest(without=tuple(sorted(set(QUIET) | left_out)), pictures=False, salt=salt)
+        save(voice, quiet=True, without=left_out if left_out else None)
         print("This machine hasn't been harvested, so it sings with its languages, size and screen only; "
               "`songbird harvest --show` reads the rest and shows exactly what is kept.", file=sys.stderr)
     return rested(voice)
@@ -948,7 +981,7 @@ def machine_voice(spec: str) -> Voice:
         return fictional(spec.split(":", 1)[1])
     if spec.startswith(BROWSER):
         return Voice.from_dict(json.loads(spec[len(BROWSER):]))
-    return Voice.from_dict(json.loads(Path(spec).read_text()))
+    return Voice.from_dict(json.loads(Path(spec).read_text(encoding="utf-8")))
 
 
 # ---------------------------------------------------------------- a visitor's browser

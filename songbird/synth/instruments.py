@@ -307,7 +307,7 @@ def registry() -> dict[str, tuple[dict, object]]:
     for info in sorted(pkgutil.iter_modules([str(here)]), key=lambda m: m.name):
         if info.name in NOT_INSTRUMENTS or info.name.startswith("_"):
             continue
-        text = (here / f"{info.name}.py").read_text(errors="ignore") if (here / f"{info.name}.py").exists() else ""
+        text = (here / f"{info.name}.py").read_text(encoding="utf-8", errors="ignore") if (here / f"{info.name}.py").exists() else ""
         if "SPEC" not in text or "def render(" not in text:
             continue
         module = importlib.import_module(f"{__package__}.{info.name}")
