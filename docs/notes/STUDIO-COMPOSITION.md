@@ -23,6 +23,18 @@ inheritance. Preserve old records without migrating or reinterpreting them.
   words, tune, harmony and custom instrument notes. A section copy includes
   player patterns and levels too. Destinations retain their timing structure;
   a checked paste applies atomically with one undo step.
+- One roll for a whole section, melody or instrument: phrases end to end, each
+  note its phrase's, each phrase's chords over it. The melody's rows are
+  semitones; a sung line's chromatic note is stored as a degree and a half
+  step with its words, a tune line keeps to the scale.
+- Several notes at once (Shift-click, Shift-drag, Ctrl/⌘+A in a phrase) moved,
+  nudged, transposed, deleted, quantized, copied, cut, pasted at a cursor and
+  duplicated as one edit; a drag on the grid draws a note.
+- The whole lyric at once: Write lyrics on the Page takes every section's
+  words, a paragraph each, fits notes to lines with another count, and applies
+  them as one checked edit, each refused line saying why.
+- A person's tempo from 40 to 220 (`tempo.free`) and any of the seven modes;
+  the program's own choices keep their ranges.
 - Keep the existing score, transport, arrangement, inspector and mix. A Part
   selector reuses the lower editor; instrumental cells open it directly.
   Extra phrase and section actions sit in disclosures instead of new views.
@@ -101,8 +113,7 @@ counts and lengths. It should be additive:
    lengths, missing sources and bounded rendering. Only then expose the
    familiar New / Duplicate / Delete / Split clip commands.
 
-After that, per-track clips, multiselection, quantization and automation
-lanes can build on one model. Sample recording and third-party plugin hosting
+After that, per-track clips and automation lanes can build on one model. Sample recording and third-party plugin hosting
 would introduce a different portability problem and are not needed to let
 someone write an entirely different song with Songbird's instruments.
 

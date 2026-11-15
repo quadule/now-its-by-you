@@ -119,7 +119,13 @@ go; perform.js notes in; model.js the pure parts.
 - **Page** is the words as this version sings them. A word with a dashed line
   under it can change. A sung section's name is followed by **Edit** (a click
   on a line does the same), which turns its lines into fields ("Words",
-  below).
+  below). **Write lyrics** at its top takes the whole song's words in one
+  field, a paragraph for each section of words in the song's order (a refrain
+  once; a line in brackets, `[Verse 2]`, names one): each line changed is
+  written, its notes fitted to it where its count differs from its tune's
+  (`SongbirdModel.lyricSheetPatch`), and all go in as one checked edit and
+  one undo step. A paragraph or a line too many is refused; a line the singer
+  can't sing says why beside it.
 - **Arrange** is the song as a timeline: its sections over a ruler of bars,
   and a row for each player, a cell saying whether that player plays there and
   how hard ("Arrangement control", below). Drag a section to move it, its
@@ -152,12 +158,32 @@ everything makes it busy and confusing"):
 
 ### Tune (Arrange)
 
-The tune editor opens on a section: a phrase strip and a scale-based piano
-roll, each note carrying its sung syllable. Drag up/down for pitch,
-left/right for timing, or the right edge for length. Select a note for exact
-pitch, start and duration controls. Arrow keys nudge notes; Shift+Left/Right
-changes duration. Snap and zoom set the editing grid. The harmony lane shows
-the chords under the tune. A new phrase edit starts with **here only**; choose **everywhere** to change
+The tune editor opens on a section: a phrase strip and one piano roll for the
+whole section, its phrases end to end on one time axis (a line where each
+begins, each phrase's chords over it), each note carrying its sung syllable.
+A note belongs to its phrase and stays inside that phrase's bounds, pickup
+included; choosing it chooses its phrase, which the scope, the tools, the
+words' draft and the clipboard then act on (the selected phrase is shaded).
+The rows are semitones: the scale's own tones plain, the tonic marked, the
+ones between shaded. Drag up/down for pitch, left/right for timing, or the
+right edge for length. Select a note for exact pitch, start and duration
+controls. Arrow keys nudge notes; Shift+Left/Right changes duration. Snap and
+zoom set the editing grid.
+
+Several notes: Shift-click adds a note to the selection or takes it away;
+Shift-drag on the grid draws a rectangle that selects the notes it touches
+in the phrase it began in; Ctrl/⌘+A selects the phrase. A selection lies in
+one phrase. Dragging one of its notes, the arrow keys, **↑/↓ Step** and
+Delete act on all of it as one edit (one undo step, and for a sung line one
+words draft). Ctrl/⌘ with C, X, V and D copy, cut, paste and duplicate it
+(never while typing in a field); **Copy notes** and **Paste notes** use the
+same clipboard. A click on the empty grid puts a cursor there and lets the
+notes go: a paste goes to the cursor, else after the selection, else to the
+phrase's start, each pasted note in place of any note it overlaps; nothing
+selected (or all) copies the whole phrase, which pastes fitted to the
+destination phrase as before. A paste that doesn't fit is refused and says
+why. **Quantize** puts the selection's (or the phrase's) starts and ends on
+the snap, a melisma kept joined and the next line's pickup clear. A new phrase edit starts with **here only**; choose **everywhere** to change
 all appearances, including instrumental echoes. Existing edits open at the
 scope they already use ("This place only, or everywhere", below).
 
@@ -166,7 +192,8 @@ checks the arrangement before accepting it. Repeated verses and refrains keep
 their story order (the lyric bank's rules depend on it) but can move around
 other kinds of section.
 
-**Add note** or double-click empty space to draw; **Delete note** (or Delete
+**Add note**, a drag on the empty grid (a note as long as the drag) or a
+double-click (a note the snap's length) draws; **Delete note** (or Delete
 on a selected note) leaves a rest. A different count of syllables opens a
 line draft: write its words, or use **Fit notes to words** to give your new
 words a rhythm following the melody's contour. **Write line** starts with
@@ -175,9 +202,14 @@ navigation and song refreshes during the visit, but are not exported until
 applied. Pronunciation errors leave the draft available to correct.
 
 An authored melody may reach ten scale steps past the song's range, use wide
-leaps, and end on any scale degree. The note inspector's **Accidental** moves
-a syllable a semitone off its scale degree, storing it with its words. A
-melisma still carries one syllable over up to four scale notes. The singer
+leaps, and end on any scale degree. A sung line's note moves by semitones: a
+pitch between the scale's tones is stored as the neighbouring degree with a
+half step (`alter`), sharp when it was reached going up, else flat
+(`SongbirdModel.spell`), and goes with the line's words as a line of its own
+(only a line of its own holds a half step). The **Pitch** menu lists every
+semitone for it. A tune line without words of its own (an instrumental
+echo) and a melisma's notes keep to the scale's rows; a melisma still
+carries one syllable over up to four scale notes. The singer
 needs nonoverlapping notes of at least a quarter beat, room before the next
 phrase's pickup, and one to 32 syllables in a written line. **Step** transposes the whole phrase, its ending included. **Soften leaps**
 and **Even rhythm** remain optional transformations. **Restore phrase/order** removes the local
@@ -205,8 +237,12 @@ such.
 The notes editor's **Part** chooses Melody or a pitched member of the band.
 Double-click an instrument's arrangement cell, or choose **Edit notes** in
 its inspector, to open that part directly. The piano roll loads its generated
-notes; editing makes the phrase yours. Draw, drag, resize or delete notes;
-set pitch, start, length and velocity precisely. Polyphonic instruments accept
+notes; editing makes the phrase yours. It shows the whole section as the
+melody's roll does, each phrase's notes kept as that phrase's own part edit,
+with the same selection, clipboard keys, drawing and Quantize (a paste for an
+instrument that plays one note at a time takes the place of what it
+overlaps). Draw, drag, resize or delete notes; set pitch, start, length and
+velocity precisely. Polyphonic instruments accept
 chords. **Clear notes** makes a rest; **Reset part** restores procedural
 playing, including an override inherited from a parent. **Hear phrase** is an
 instant oscillator sketch; use Sung to hear the instrument's real sound.
@@ -1202,8 +1238,11 @@ the version doesn't change, a new performance can't move it, and the record
 marks it `locked: true` in `chosen_by_you` (beside `value` and `was`); the
 grid says `locked`. The tempo's range follows the style (`edits.tempo_range`:
 the style's range a tenth wider each way, never narrower than 0.75 to 1.3 of
-the song's tempo, inside 0.4 to 1.6): the tempo card has it as `range`, and
-the transport's tempo field uses it.
+the song's tempo, inside 0.4 to 1.6): the tempo card has it as `range`. The
+transport's tempo field takes any tempo from 40 to 220 (`bounds.tempo.free`,
+`edits.free_tempo_range`): one outside the style's range goes in with
+`tempo.free: true`, which the style doesn't hold; a tempo without it is held
+as above.
 
 **`POST /api/arrangement`** `{"edits": {...}}` (the page's token and JSON, as
 every request; made at once from the score laid out, no audio, about half a
@@ -1477,8 +1516,9 @@ somewhere other than `renders/`.
 3. **The singer is the machine's.** Only its phrasing changes, by singing.
 4. **A person's ranges are the designed ones**, wider than a machine's own:
    the tempo the style's range a tenth wider (0.75 to 1.3 times for the
-   ballad; docs/ARRANGE.md), every instrument can sit out (all of them for the
-   voice alone), the mix's full ranges.
+   ballad; docs/ARRANGE.md), or any tempo from 40 to 220 as their own
+   (`tempo.free`), any of the seven modes, every instrument can sit out (all
+   of them for the voice alone), the mix's full ranges.
 5. **A mode chosen by a person leans the words**, as the machine's own mode
    would; the rest of an edit changes only what it names.
 6. **A singer's gestures don't travel.** Replaying a rendition sung a

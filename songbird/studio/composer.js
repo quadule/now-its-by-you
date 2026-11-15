@@ -132,7 +132,7 @@
     return `${name}, ${pitchName(pitchFor(n))}, scale degree ${sign(n.alter)}${n.degree}, beat ${beatLabel(n.onset)}, ${fmt(n.duration)} beats${index === p.notes.length - 1 ? ", phrase ending" : ""}`;
   }
   function selectedSection(index) {
-    stop(); state.section = clamp(index, 0, sections().length - 1); state.phrase = firstSung(); state.note = null; state.chord = null;
+    stop(); state.section = clamp(index, 0, sections().length - 1); state.phrase = firstSung(); state.note = null; state.chord = null; state.cursor = null;
     state.where = { tune: null, chords: null }; paint(); told();
   }
   function selectedPhrase(index) {
@@ -1560,7 +1560,7 @@
   function open(index, player = "voice") {
     state.player = (composition()?.players || []).some((p) => p.name === player) ? player : "voice";
     if (index === state.section && sections()[index]) { paint(); return; }
-    stop(); state.section = clamp(index, 0, sections().length - 1); state.phrase = firstSung(); state.note = null; state.chord = null;
+    stop(); state.section = clamp(index, 0, sections().length - 1); state.phrase = firstSung(); state.note = null; state.chord = null; state.cursor = null;
     state.where = { tune: null, chords: null }; paint();
   }
   function deselect() { if (state.note !== null || state.chord) { state.note = null; state.chord = null; paint(); } }

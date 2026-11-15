@@ -233,7 +233,9 @@ asks for one. Splitting first would move stop-time, the oohs and a fill onto the
 for H; synth folk reaches 134.1, indie 137.3, a string band 147.8; a lullaby's waltz goes down to 38 (its quarter
 at 57). A tempo is checked against the widest (`edits.bounds`: 38.4 to 153.6) and held to its style's at the end,
 once the style is chosen (a style or a feel chosen after it may hold it), said if it had to be, and marked as
-sung so it replays. The tempo card carries its style's range, and the page's tempo input and slider use it.
+sung so it replays. The tempo card carries its style's range. A person's own tempo, whatever the style, is
+`tempo.free: true` beside the tempo: 40 to 220 (`edits.free_tempo_range`, never narrower than the 0.4 to 1.6 reach),
+not held to the style's range; the page's tempo field writes it for a tempo outside the style's range.
 
 **The rhythm section.** `idioms.DRUMS` holds both the drums and the drum machine families, and `PERCUSSION` holds
 them with percussion: the drum machine plays through a breakdown, waits with the rhythm after a quoted intro,
