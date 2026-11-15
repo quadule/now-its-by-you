@@ -8,14 +8,14 @@
       "audio": "2751cf097e9da8c427d9d8886c1acdac9d677ad0d285e998bf6514c7b39263a1",
       "file": {
         "path": "renders/release/now-its-by-you-awards-draft.flac",
-        "sha256": "c60afd7c6db926aff8942ce0b6152e6e9b17788d3aa7d6fa9927c74750af101f",
-        "bytes": 16850278
+        "sha256": "88336eefd2e1f5dd481496e8426369843c7258a483cc85c54b6b05db2f9d670f",
+        "bytes": 16850711
       },
       "render": {},
-      "program": "cfdcc42a42a521d5d057de9d4298f3a13639acbf85cc9d55205b12f66625db1f",
+      "program": "2f79e4721ab1526508e9345c2191cf4ad20513f8012e55519c06934dcf8ca450",
       "python": "3.12",
       "source": {
-        "commit": "6b55fcaf7f36ff38695128447a0145cd9b9ac135",
+        "commit": "9c83fa5c6ec804e9d43c868524c6b37af3cc8d9b",
         "tag": "awards-draft"
       },
       "command": "uv run python -m songbird render performance/genome.json --replay performance/record-arc-morph.json --pack --out renders/release/now-its-by-you-awards-draft.flac",
