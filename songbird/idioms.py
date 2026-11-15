@@ -24,7 +24,7 @@ tune and the lineage choir, a random stream per part and bar):
 
 from __future__ import annotations
 
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 
 import numpy as np
 
@@ -2537,6 +2537,22 @@ def amen(ctx: Context, u0: float, n: int) -> list[Sung]:
     return out
 
 
+def given_way(sung: list[Sung], amen_: list[Sung], sub: float) -> list[Sung]:
+    """The backing voices as they give way to the amen: a voice that sings it lets go of what it holds where the
+    amen begins, and sings nothing after (one voice sings one note at a time: "oo" under "A-" would split the word)."""
+    starts: dict[int, float] = {}
+    for s in amen_:
+        starts[s.voice] = min(s.u0, starts.get(s.voice, s.u0))
+    out = []
+    for s in sung:
+        u0 = starts.get(s.voice)
+        if u0 is None or s.u1 <= u0:
+            out.append(s)
+        elif u0 - s.u0 >= sub:
+            out.append(replace(s, u1=u0))
+    return out
+
+
 def sung_notes(sung: list[Sung], seconds, seed: int) -> list[Note]:
     """The backing voices' notes, in time, each voice a hair off the beat its own way."""
     out = []
@@ -2778,7 +2794,8 @@ def arrange_style(genome, params, placed, lead, end, melody, seconds, sdef) -> t
         sets(ctx, params.style)
     sung = backing(ctx, melody, params.style)
     if params.style.ending == "amen":  # (a hymn's amen is sung by its whole group)
-        sung += amen(ctx, end - 2 * ctx.bar, len({s.voice for s in sung}) if sdef.name == "hymn" else int(params.choir))
+        said = amen(ctx, end - 2 * ctx.bar, len({s.voice for s in sung}) if sdef.name == "hymn" else int(params.choir))
+        sung = given_way(sung, said, ctx.sub) + said
     ctx.backing = [(s.u0, s.u1, s.pitch) for s in sung]
     takeover.take_over(ctx, ctx.plan)  # a person's arrangement over the program's (and chance's), if any
     mark_dissolved(ctx)  # (again: a pair a person arranged is split in two)

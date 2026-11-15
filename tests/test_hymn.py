@@ -250,3 +250,20 @@ def test_the_page_says_it_plainly(tmp_path, monkeypatch):
     grid = studio.arrangement({"style.name": "hymn"})
     organ = next(pl for pl in grid["players"] if pl["name"] in ("pipeorgan", "harmonium"))
     assert {"hymn", "givingout"} <= {x["id"] for x in organ["patterns"]}
+
+
+def test_a_voice_gives_way_to_the_amen():
+    """The amen takes the voices that sing it for the last two bars: a backing "oo" they hold there ends where the
+    amen begins (one voice, one note at a time; gospel's oohs under its amen split "a-men" and the singer refused)."""
+    from songbird import drift as D, harvest as H_, variation
+
+    g = G.load(H)
+    ada = H_.fictional("ada")
+    p = choose_params(g, None, ada, D.drift(D.parse("2026-11-14"), ada.hash), style="gospel",
+                      form=("verse", "refrain"), arrange={"ending": "amen", "backing": "oohs"})
+    score = realize(g, replace(p, choir=2))
+    for part in {n.part for n in score.notes if n.part.startswith("choir")}:
+        notes = sorted(score.part(part), key=lambda n: n.start)
+        amen = [n for n in notes if n.word == "a-men"]
+        assert amen
+        assert all(n.start + n.dur <= amen[0].start + 0.05 for n in notes if n.word != "a-men")
