@@ -14,8 +14,10 @@ studio.itsby.you carries these as they are, so they stay where they are
 - karaoke_words.py, karaoke.js, karaoke-recorder.js: the words in time, the sing-along, the recorder.
 - sets/h-now-its-by-you.json: what guides.py asks a singer to sing.
 
-Beside them: released_guide.py and piano_score.py make webstudio/released.json and web/piano/score.json; released_record.py keeps the newest edition's record as webstudio/released-record.json (the web studio opens on it);
-sing_site.py builds the page at now.itsby.you. The studio on your computer sings through karaoke.py (with
+Beside them: released_guide.py and piano_score.py make webstudio/released.json and web/piano/score.json;
+released_record.py keeps the newest edition's record as webstudio/released-record.json (the web studio opens on
+it); sing_site.py builds the page at now.itsby.you, and site_pictures.mjs and site_pictures.py make its pictures
+of the studio. The studio on your computer sings through karaoke.py (with
 karaoke.html and everyone.py).
 
 ## Checking a render
@@ -31,8 +33,8 @@ karaoke.html and everyone.py).
 
 ## How the voice was made
 
-- throat/: the learned throat, trained on SoulX-Singer's renders of the project's own songs (its README says what
-  it needs).
+- throat/: how the learned throat was trained (its README says the steps, what each was trained on, and what
+  they need).
 - phrasing_eval.py, recording_sets.py, delivery.py, fit_postures.py.
 
 ## The cover
@@ -44,11 +46,12 @@ karaoke.html and everyone.py).
 
 ## Archive
 
-archive/ keeps the record of how the first version was made; nothing runs it now.
+archive/ keeps the record of how the first version was made; nothing runs it.
 
-- archive/reference-voices/: tts.py, reference.py, music_takes.py. Reference singers from ElevenLabs and Gemini
-  for checking the phrasing extractor (docs/history/PHRASING-CALIBRATION.md). They need ELEVENLABS_API_KEY or
-  GEMINI_API_KEY.
+- archive/reference-voices/: tts.py, reference.py, music_takes.py. Synthetic test voices (speech moved onto the
+  tune, and takes from music models) for checking the phrasing extractor's measurements
+  (docs/history/PHRASING-CALIBRATION.md). Nothing that ships was trained on them, and they never sing in a
+  version of the song. They need ELEVENLABS_API_KEY or GEMINI_API_KEY.
 - archive/volunteers-2026/: hard_notes.py, volunteers.py, clean_takes.py. They read the takes people sang in
   September 2026, which were deleted on September 30, 2026. hard_notes.py's test runs with
   `uv run pytest tools/archive/volunteers-2026`.

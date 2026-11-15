@@ -1,20 +1,17 @@
-# The new instruments (2026-09-26)
+# Keyboards, mallets, synthesizers and drum machines
 
-The band was a small acoustic folk band: plucked, bowed and blown strings, a
-frame drum and a reed drone ([BAND.md](BAND.md)). The artist, having heard
-it: "We should still strive for more variation in arrangement and genre
-too." So the band can now also reach for keyboards (a piano, electric
-pianos, a tonewheel organ, a harmonium), mallets (vibraphone, marimba,
-glockenspiel, celesta, music box), an analog synthesizer, a game console's
-sound chip and a drum machine. Everything is still synthesized in code from
-the seeds, with numpy, scipy and numba, so the program stays the whole
-artifact: no samples, no downloads.
+Beyond the ballad's acoustic folk band ([BAND.md](BAND.md)), the styles can
+reach for keyboards (a piano, electric pianos, a tonewheel organ, a
+harmonium), mallets (vibraphone, marimba, glockenspiel, celesta, music box),
+an analog synthesizer, a game console's sound chip and a drum machine. A
+second set, the kit, hand percussion, fretted, electric and bowed strings
+and the squeezeboxes, is in [INSTRUMENTS-B.md](INSTRUMENTS-B.md). Everything
+is synthesized in code from the seeds, with numpy, scipy and numba: no
+samples, no downloads.
 
-As with the band, nobody but the artist can listen, so every model was
-judged by measurement against what the real instrument does, and a Fable
-advisor reviewed the plan before any of it was built and the rendered
-instruments by measurement after. The renders in `renders/production/instruments/` are for
-the ears: each instrument alone, a short phrase in D written for it.
+Nobody but the artist can listen, so every model was judged by measurement
+against what the real instrument does, and a Fable advisor reviewed the plan
+and then the rendered instruments by measurement.
 
 ## How they plug in
 
@@ -34,7 +31,7 @@ keeps its instruments across renditions); `settings` is the band dict
 kind of part the instrument was levelled for; `register` is the sounding
 compass; for unpitched instruments `art` names the piece.
 
-The twenty-two, from their SPECs (articulations combine with "+" where an
+The twenty, from their SPECs (articulations combine with "+" where an
 instrument says so: `ped+soft`, `gospel fast`, `25+arp-min`):
 
 | Name | Family | Role | Register | Poly | Articulations |
@@ -120,12 +117,12 @@ is a nonlinear spring, F = K δ^p, stiffer the harder it is squeezed. The
 hammer is simulated only while it touches the strings: a mass on that
 spring against the strings' impedance, with the waves it launches coming
 back from the agraffe and the bridge (they are what throws the hammer off
-in the treble). The masses are Chaigne and Askenfelt's (1994). Their felt
-exponents (2.3 to 3), in this model, leave the felt stiff even when barely
-squeezed, so the strings' impedance sets the contact and a harder blow
-hardly brightens it; measured hammers run from about 2.2 to 3.5 (Hall and
-Askenfelt), and exponents of 3.2 in the bass and 3.5 from the tenor up, the
-felt as stiff as a fifth of theirs at 0.3 mm, behave as a piano does. A
+in the treble). The masses are Chaigne and Askenfelt's (1994). The felt's
+exponent is 3.2 in the bass and 3.5 from the tenor up (measured hammers run
+from about 2.2 to 3.5: Hall and Askenfelt), the felt as stiff as a fifth of
+Chaigne and Askenfelt's at 0.3 mm: with their stiffer felt the strings'
+impedance sets the contact in this model and a harder blow hardly brightens
+it. A
 C4's contact lasts 3.0 ms at pp and 2.0 at ff (measured about 4 and 2), a
 C2's 4.8 to 3.1, a C7's 0.96 to 0.58 (measured, under a millisecond); peak
 forces run from about 7 N at pp to 80 N at ff at C4. The pulse's peak
@@ -182,8 +179,9 @@ in about 0.15 s, off a C2 in 0.4 s (the heavy strings take longer); the keys
 from F#6 up have no dampers and ring on. A key struck again stops what its
 last blow left ringing. The sustain pedal (art `ped`) holds the dampers for
 the note's whole written length and lets the open strings whose partials lie
-within a few cents of the note's answer it: each builds up over about a
-second, as a string driven by a decaying partial does, to 21 dB under the
+within a few cents of the note's answer it, as modes at the open strings'
+own partials (harmonic string loops would beat against the piano's
+stretched partials): each builds up over about a second, as a string driven by a decaying partial does, to 21 dB under the
 partial it shares, which lifts a held D4's sustain by about 1 dB. Una corda
 (art `soft`) shifts the hammer so it misses one string and meets the others
 with unworn felt: 2 dB softer at the attack, with more of the aftersound.
@@ -207,10 +205,8 @@ pitch, hardens the hammers (compacted felt) and lets the dampers leak.
 make gives each machine its own piano: the unisons, each key's pitch, the
 hammers' unevenness and voicing, the soundboard's modes.
 
-**Cost.** A three-minute comping part (1152 notes) costs 3.5 s of CPU; the
-worst case, pedalled bass octaves and six-note chords every half bar for
-three minutes, 13 s. Partials 60 dB under a note's strongest are never
-rendered, nor past the 90th (a bass note's is above 3.5 kHz).
+**Cost.** Partials 60 dB under a note's strongest are never rendered, nor
+past the 90th (a bass note's is above 3.5 kHz).
 
 ## Electric pianos
 
@@ -246,7 +242,7 @@ harmonics together, and a nasal bark when played hard (at middle C the
 second harmonic 17 dB under the fundamental at velocity 0.3 and 4 under at
 0.9). It rings 4 s at C3 and 1 s at C6, mono, with an amplitude tremolo at
 5.5 to 6.5 Hz. Both pianos are within 0.4 cent, every onset at most 2.8
-times the ring's RMS, and a three-minute part costs about 2 s.
+times the ring's RMS.
 
 ## Organs
 
@@ -276,7 +272,7 @@ second slow, 6.7 and 5.7 fast: at speed the horn's pitch swings ±0.76% and
 its level 9 dB, the drum's ±0.24% and 4 dB, heard by two microphones with a
 cabinet reflection; the horn spins up in about a second, the drum in about
 four, and both coast down about 2.5 times more slowly. Everything is within
-0.34 cent through the whole chain; a three-minute part costs 1.4 s.
+0.34 cent through the whole chain.
 
 **The harmonium.** A thin wrapper on the band's reeds (reed.py) with the
 reed box as its body: an 8' rank, a celeste rank 3 to 8 cents sharp (the
@@ -301,7 +297,9 @@ at A2 to 1.1 ms at C7, cord on a vibraphone 2 to 1 ms, felt on a celesta 2 to
 sharper, so from pp to ff a marimba's fourth partial gains 8 to 9 dB on its
 fundamental and its tenth 13 to 20. The force drives the modes through
 modal.ring; what radiates is the bar's acceleration, as a dipole below a
-corner set by its width. A chord's mallets land up to 3 ms apart.
+corner set by its width. A chord's mallets land up to 3 ms apart. A
+stroke's worst sample-to-sample jump is under 3.3 times its local slope, as
+the piano's, so soft strokes don't click.
 
 **Resonators.** A tube (a box, under a celesta's plates) is a second mode
 coupled to the bar's first: it shortens the bar's ring (a marimba's A2 from
@@ -361,8 +359,7 @@ through a bucket-brigade chorus: two lines swept by LFOs near 0.5 and 0.85
 Hz in antiphase, 3.2 to 4.7 ms, ±3.6 cents. The sub bass is a sine with its
 2nd and 3rd harmonics 15 and 30 dB down, its phase reset at every attack so
 every attack is the same waveform and every kick-and-sub sums alike.
-Velocity 0.3 to 0.9 is 8 to 10 dB louder and 0.3 to 0.5 octave brighter. A
-three-minute part costs 0.3 s (sub) to 5 s (pad).
+Velocity 0.3 to 0.9 is 8 to 10 dB louder and 0.3 to 0.5 octave brighter.
 
 ## Game console
 
@@ -384,8 +381,7 @@ cents sharp, is left out), a C7 pulse folding under -80 dB, the triangle's
 steps putting its 31st and 33rd harmonics 30 dB under the fundamental (the
 chip's buzz), and the console's filters taking 14.5 dB off a 110 Hz
 triangle's fundamental: the thin NES bass. Each channel plays one sound at a
-time: a later noise hit cuts the one sounding. A three-minute part costs
-under 1.1 s.
+time: a later noise hit cuts the one sounding.
 
 ## Drum machine
 
@@ -422,11 +418,12 @@ its parts' tolerances and knobs; wear makes pitch wander and adds hiss;
 brightness turns the tone knobs; body retunes the drums. The kit comes back
 in stereo as a machine's separate outputs would be panned: kick, snare, clap
 and rim in the middle, the hats a little right, the toms high right to low
-left.
+left. Every voice opens over half a millisecond rather than stepping
+out of silence in one sample.
 
 ## The palette
 
-`palette.py` gathers all 22 by name: `palette.SPEC[name]`,
+`palette.py` gathers all twenty by name: `palette.SPEC[name]`,
 `palette.render(name, ...)` and `palette.stem(name, ..., gain)` (the render
 placed and at its SPEC level, times the band's balance for it).
 
@@ -568,51 +565,6 @@ at 0.3, accents (0.85 and up) on downbeats and pushes only, not every beat.
 An open hat rings until a closed or pedal hat chokes it: always close it.
 Duration and pitch are ignored.
 
-## What the reviews changed
-
-A Fable advisor read the plan before anything was built, measuring against
-the house code as it went, and changed a good deal of it. The piano's
-treble would have rung far too long (C7 2.3 s where real ones fall 50 dB a
-second); its decays now follow measured rates, partial by partial, by
-frequency. A single bass string can't have a unison's double decay, so each
-string's second plane was added. The pedal's halo was to be a bank of
-harmonic string loops, which would have beaten against the piano's
-stretched partials; it is modes at the open strings' own partials instead.
-It set the levels of what K-weighting misreads (a sub bass 3 dB under the
-upright's reading, bells 3 dB under comping, the mono synth's line between
-comping and a lead), asked for the tonewheel organ's scanner vibrato and
-chorus (the sound most heard from one), and for one SPEC-driven test and one
-touch curve so that five builders would meet one standard.
-
-Measuring the piano against real ones then changed its hammer. Chaigne and
-Askenfelt's felt, in this model, left the contact to the strings'
-impedance: 2.5 ms at pp and 1.9 at ff at C4, and a hard blow hardly
-brighter than a soft one; a softer felt with a steeper exponent gives the
-measured contact times and a hard blow 45 dB more above 3 kHz. The
-per-partial decay first let the unisons decouple into slow single strings
-in the upper partials (a C7 fell 26 dB a second, not 56); the aftersound now
-shortens toward the prompt sound above 2 kHz. Levelling each note by its
-velocity let soft top notes, which their blows barely reach, click at 30 to
-5000 times their ring; a note's swing under the hammer is now held to six
-times its ring. A hard voicing made the explicit contact unstable; it is
-solved implicitly. The soundboard's two microphones differed by up to 8 dB
-in some registers, pulling notes across the player's image; they are
-balanced third-octave by third-octave.
-
-A last Fable review measured the rendered demos. It found every solo at
-exactly its loudness, no DC, no aliasing (18-22 kHz 90 to 110 dB under the
-peak), tails ending cleanly, positive stereo correlation throughout, and
-every checked note within 5 cents; the organ, harmonium, electric pianos,
-pad, basses and chip nothing wrong. It found clicks: the drum machines'
-voices stepped out of silence in one sample (the 909's kick to a third of
-full scale), which now open over half a millisecond, and soft mallet
-strokes spiked at their start (up to a fifth of the peak in the marimba's
-roll), from a correction taken out while the mallet touches whose second
-difference has no meaning at a pulse's start; that term is gone and every
-mallet's worst jump is under 3.3 times its local slope, as the piano's.
-The sketches' sub bass sat 3 to 3.6 dB heavy under the ballad and lounge,
-and is 4 dB lower there.
-
 ## Limits
 
 - Nobody has listened. The models are right by the measures above, but the
@@ -621,18 +573,13 @@ and is 4 dB lower there.
   pedal thump or key release noise, and its halo answers only the partials
   a note shares with an open string (not the whole undamped wash a real
   pedal lets loose on the attack). Its hammer is simulated against an ideal
-  string, stiffness left to the modes.
+  string, stiffness left to the modes. It is dark above 5 kHz for a
+  mid-weight blow.
 - The organ has no tonewheel leakage or hum and no pedalboard (notes below
   C2 play an octave up), and its velocity is the swell for the whole organ.
-  The mixer (mixing.role_of) sends "organ", "harmonium" and "synth-pad" to
-  its drone strip (a 6 kHz low-pass, -3 dB at 2.5 kHz), which suits the
-  harmonium and the pad but dulls the organ's click and horn; "synth-bass",
-  "sub-bass" and "chip-bass" go to the bass strip, "chip-drums" and the drum
-  machines to the drum strip, everything else to the plain band strip. A
-  name with "lead" in it would go to the voice bus, which is why the mono
-  synth is "synth-solo".
-- The tine piano's centroid rises 0.96 octave from pp to ff, not quite the
-  octave asked for; the reed piano is mono, as the real one's speakers are.
+- The tine piano's centroid rises 0.96 octave from pp to ff, a little short
+  of the octave a real one shows; the reed piano is mono, as the real one's
+  speakers are.
 - The pad's detune at the default wear is 3.75 cents, under the 5-12 of a
   classic pad (it starts at 1 cent so wear 0 stays in tune).
 - The chip leaves out its timers' pitch rounding and counts frames from each
@@ -642,14 +589,15 @@ and is 4 dB lower there.
   recordings. The drum machines' docstrings name the machines they model.
 - Comping instruments were levelled on block chords at velocity 0.6; a
   one-note arpeggio or a single line on them sits a few dB lower.
-- Open from the last review: the arpeggio synth's accented notes (every
-  beat in its demo) start with a snap, a swing of half the peak within five
-  samples, 6 to 10 times the local slope; its envelopes aren't instant (1.5
-  ms, the filter's 1 ms), so it is most likely the resonant ladder snapping
-  3.2 octaves open, the pluck's own snap, louder on an accent, but it is not
-  confirmed; the mallets' attacks measure
-  36 to 86 ms from -20 dB to their peak in the demos (the resonators'
-  bloom explains the marimba's and vibraphone's, not the glockenspiel's or
-  the music box's); some solos lean to one side (up to 4 dB), which is
-  mostly their SPEC place in the band; and the piano is dark above 5 kHz
-  for a mid-weight blow.
+- In the mix (`mixing.role_of`) the organ, harmonium and synth pad take the
+  organ strip (a 55 Hz high-pass, the voice's presence cleared, an 8 kHz
+  low-pass), the piano, electric pianos and mallets the keys strip, the solo
+  and arpeggio synths and the chip the synth strip, the basses the bass
+  strip, and the chip's drums and the drum machines the drum strip.
+- Open: the arpeggio synth's accented notes start with a snap, a swing of
+  half the peak within five samples, 6 to 10 times the local slope; its
+  envelopes aren't instant (1.5 ms, the filter's 1 ms), so it is most likely
+  the resonant ladder snapping 3.2 octaves open, the pluck's own snap, but it
+  is not confirmed. The mallets' attacks measure 36 to 86 ms from -20 dB to
+  their peak (the resonators' bloom explains the marimba's and vibraphone's,
+  not the glockenspiel's or the music box's).

@@ -1,13 +1,8 @@
-# How the song evolves: the tune and the words (2026-09-26)
+# How the song evolves: the tune and the words
 
-The artist: "I'd like to see some examples of how the song can evolve too. We'll do our training with
-static melody + lyrics but I do want to allow both to drift subtly, and for the final deliverable tool to
-allow the user to explore the procedural generation and optionally edit the song before recording."
-
-Everything else a rendition decides already moves with its machine and its day: the key, the mode, the
-tempo, the form, the band, the singer, the mix (docs/HARVEST.md, BAND.md, MIX.md). This adds the last two
-things a folk song changes as it is passed on: small departures from the written tune, and its words.
-Both change a little at a time, both are handed down, and both leave the seed exactly as it was. The
+A rendition's key, mode, tempo, form, band, singer and mix move with its machine and its day
+(docs/HARVEST.md, BAND.md, MIX.md). Two more things change as a folk song is passed on: small departures
+from the written tune, and its words. Both change a little at a time, both are handed down, and both leave the seed exactly as it was. The
 code is `songbird/variants.py` (what a departure from the tune may be), `songbird/evolve.py` (when the
 tune and the words change) and the holding of words in `songbird/arrange.py`.
 
@@ -96,14 +91,13 @@ anticipations, neighbour notes, in that order) and now and then a moved note. On
 parent (the seed, say) over three years holds one or two variants of its own at a time, which change two
 to four times a year and never change back within a week. A machine that sings its own last rendition
 gathers variants at the pace of its clocks: after three years of weekly renditions, three to nine. However
-many a lineage gathers, its tune stays close to the seed's as the lineage gate will measure it (relative
+many a lineage gathers, its tune stays close to the seed's as `variants.distance` measures it (relative
 moves by dynamic time warping, hooks weighted): 0.4 semitones a move for the fullest set, where every other
 song in songs/ is 1.1 to 1.5 away.
 
 ## The words
 
-Before this, a machine's words were drawn afresh from the bank every render, so they changed completely
-from one day to the next. Now a lineage **holds** its words (`Params.words`): the verses it sang in order
+A lineage **holds** its words (`Params.words`): the verses it sang in order
 with their slot words, each refrain as it sang it (a round: its head, the words it sang in the head's slots,
 such as while or when or if and it goes or who knows or it grows, the question it asked, and its couplet),
 the bridge's stanzas with their slot words and the tag's syllable. A child keeps its parent's, and the words
@@ -154,65 +148,54 @@ each variant's forgetting clock 90 to 220, the word swap clock 40 to 110.
 A rendition records who made it and when (`Params.made`). A child sung on the machine that made its parent
 changes only what a clock has turned on since then, so a machine re-singing its own last rendition the
 next day sings it the same; a child sung on another machine takes its one turn at everything, so a lineage
-changes about once a hand-off. No chance is ever read from the instant a render starts. (A Fable review
-caught the first design's flaw here: coins keyed by the parent would have re-rolled on every render of a
-machine's own chain.) `Params.generation` counts as the record does (the seed packet's lineage): a
+changes about once a hand-off. No chance is ever read from the instant a render starts, and none is keyed
+by the parent alone, which would draw again on every render of a machine's own chain. `Params.generation` counts as the record does (the seed packet's lineage): a
 machine singing from the genome with no parent rendition is generation 0, its child 1.
 
-## A machine singing its own again (October 7, 2026)
+## A machine singing its own again
 
-**The bug.** Where a machine gives no signal a choice reads (machine none, as the public studio sings, or
-a machine read only in part), its own value was its parent's, moved by the day's drift. When the parent
-was its own last version, the parent already carried that day's move, and it went in again every time.
-Machine none singing its own version again on one day walked H up a semitone and about 5 BPM a generation
-(E-flat, E, F, F-sharp, G, to the bounds of +5 semitones and 1.3 times the tempo), and its band, mix,
-mode and moods walked the same way. Studio sharing chains did this, and so did `python3 song.flac new` on
-its own output on a quiet machine. Made-up machines know their traits and settled within a generation or
-two, except in the mix's duck, which reads no machine's traits (bo's fell from 0.91 to its floor of 0.6).
-
-**The rule now.** Where a machine knows nothing of its own, its own value is its parent's as it stood
-before this machine's day moved it. If this machine made the parent (`Params.made`), the share of that
-day the parent heard comes back out before today's goes in (`variation.Knob.centre`, `centred`):
+Where a machine gives no signal a choice reads (machine none, as the public studio sings, or a machine read
+only in part), its value is its parent's as it stood before this machine's day moved it. If this machine
+made the parent (`Params.made`), the share of that day the parent heard comes back out before today's goes
+in (`variation.Knob.centre`, `centred`):
 
 - the same day, it sings its own version the same;
 - on later days, its field around one centre, as a machine that knows itself sings around its own value.
-  Never a walk.
 
-Where the record can't tell which centre the day moved from (a bound cut the day off, or a held choice
-or the nearest mode could have come from two), the song's own is taken if it fits. So machine none's
-versions of versions of the seed sing, each day, what that day's first version sings in every number (the
-words, the form and the tune's variants are the lineage's own). A value a person pinned (a tempo, say) is
-read as carrying the day it was pinned on, as any value its machine sang. A style chosen again on a machine's
-own version no longer adds its lean twice, and keeps the version's options (its feel, intro and ending), as
-it does when the style isn't named.
+Without this, a quiet machine singing its own last version again would add the day's move every time and
+walk the song to its bounds (a semitone and about 5 BPM a generation for H). Where the record can't tell which
+centre the day moved from (a bound cut the day off, or a held choice or the nearest mode could have come from
+two), the song's value is taken if it fits. So machine none's versions of versions of the seed sing, each day,
+what that day's first version sings in every number (the words, the form and the tune's variants are the
+lineage's). A value a person pinned (a tempo, say) is read as carrying the day it was pinned on, as any value
+its machine sang. A style chosen again on a machine's own version adds its lean once, and keeps the version's
+options (its feel, intro and ending), as it does when the style isn't named.
 
-A hand-off between two machines is unchanged: the new machine's day moves the parent's value once. The
-seed, every generation 0 and every hand-off sing as before, and the first version still replays
-bit-exact. What changed is a machine's own version sung again on that machine.
+A hand-off between two machines moves the parent's value by the new machine's day once.
 
-**Still open.** A lineage passed only between quiet machines takes each one's day once, so over many
-hand-offs it can wander within each number's bounds. And for a machine that knows itself, a style's
-options (the ending, the intro) are coins keyed by the parent, so singing its own version again may change
-them; a clock, as the tune's and the words' have, would hold them.
+**Open.** A lineage passed only between quiet machines takes each one's day once, so over many hand-offs it
+can wander within each number's bounds. And for a machine that knows itself, a style's options (the ending, the
+intro) are coins keyed by the parent, so singing its own version again may change them; a clock, as the tune's
+and the words' have, would hold them.
 
 ## What never changes
 
 - The genome: the tune as written, its contour, stress, targets, chords, hooks and refrain text.
-- The seed: with no machine and no date, nothing here runs. The seed's render, record and score are byte
-  for byte what they were (H's seed id 441dc83b1d1e; the golden hash).
+- The seed: with no machine and no date, nothing here runs, and the seed renders to its golden hash
+  (tests/test_determinism.py).
 - The karaoke guide and every training corpus: they sing the seed's parameters, so the static tune and the
   seed's words.
 - A replay: a record's parameters sing the same rendition again.
 
 ## The examples
 
-`renders/production/evolution/` (README.txt there lists every file and what changed, with a piano roll of
-each rendition's tune against the seed's and its lyric sheet), made by `uv run python tools/evolution.py`:
+`uv run python tools/evolution.py` writes them into `renders/production/evolution/` (README.txt there lists
+every file and what changed, with a piano roll of each rendition's tune against the seed's and its lyric
+sheet):
 
 - `lineage/`: the seed, then four generations on four made-up machines, each singing the one before, a few
-  months apart. Picked from a couple of thousand orderings of twelve made-up machines as a lively lineage
-  that shows every kind of change on top of the key, mode, tempo, form, band and singer (a typical lineage
-  carries two variants by its fourth generation; this one five).
+  months apart: a lively lineage that shows every kind of change on top of the key, mode, tempo, form, band
+  and singer (a typical lineage carries two variants by its fourth generation; this one five).
 - `timeline/`: one made-up machine singing the seed every four months for three years: time alone.
 - `own/`: the same machine singing its own last rendition every nine months.
 
@@ -225,9 +208,9 @@ The interfaces a tool that explores and edits the song before recording should u
   with `variants.problems(genome, variants)` (plain sentences, empty if sound) or one addition with
   `variants.fits(genome, current, v)`, name one with `variants.describe(genome, v, lyrics)`, and measure
   how far a tune has come with `variants.distance(genome, a, b)`. A person's own choice is `source="edit"`.
-- `Params.words`: the held words, plain JSON (see the comment above `arrange.hold`). Words held before
-  each refrain had words of its own (the refrain's once-a-song `slots`, `couplets`, `last`) are read as the
-  refrains they sang (`arrange.rounds`), so an older lineage sings on as it did. Sing them with
+- `Params.words`: the held words, plain JSON (see the comment above `arrange.hold`). Words held in the
+  older shape (the refrain's once-a-song `slots`, `couplets`, `last`) are read as the refrains they sang
+  (`arrange.rounds`), so an older lineage sings on as it did. Sing them with
   `arrange.sing(genome, form, words)` and check an edit with `arrange.check(genome, form, words)` (the
   first thing wrong, exactly what the drift's own changes are checked against). To offer one change at a
   time, `evolve.places(genome, words)` lists every place a swap could fall and
@@ -248,7 +231,7 @@ The interfaces a tool that explores and edits the song before recording should u
   rendition is a new one: give it its parent's generation plus one and a `made` of the machine and the
   moment it was edited (or `{}`), or a later child on that machine will misjudge which clocks have turned.
 - The render's record has an `evolution` block: each variant with its description, the changes, and the
-  tune's contour distance to its parent and to the seed. A record without it is the seed's, or from before.
+  tune's contour distance to its parent and to the seed. A record without it is the seed's, or an older program's.
 
 ## Open questions
 

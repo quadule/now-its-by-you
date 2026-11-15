@@ -1,7 +1,7 @@
 # Documentation
 
 **Now It's by You** is a folk song whose audio files carry the program that sings new versions of it. These
-pages say how it works. Each is dated when it was written; the code is the final word.
+pages say how it works; where a page and the code disagree, the code is right.
 
 ## Start here
 
@@ -10,13 +10,20 @@ pages say how it works. Each is dated when it was written; the code is the final
 
 ## For musicians
 
-1. [How the words are drawn](ARRANGE.md): the bank of verses, the refrain's turns, the forms.
-2. [How the song evolves](EVOLUTION.md): what drifts with the day and the computer, and what never changes.
-3. [The band](BAND.md), [its instruments](INSTRUMENTS.md) and [more of them](INSTRUMENTS-B.md): who plays what.
+1. [How the words are drawn, and the arrangement](ARRANGE.md): the verse bank and the forms, a person's
+   arrangement section by section, rounds, and stage editions.
+2. [How the song evolves](EVOLUTION.md): how the tune and the words drift from version to version, and what
+   never changes.
+3. [The band](BAND.md), [keyboards, mallets, synthesizers and drum machines](INSTRUMENTS.md) and
+   [the kit, hand percussion, strings and reeds](INSTRUMENTS-B.md): who plays what, and how each instrument is
+   made.
 4. [Styles](STYLES.md): the song carried into other traditions.
-5. [Sound design](SOUND-DESIGN.md) and [the mix](MIX.md).
-6. [Singing into it](WEB-SINGING.md): what a take becomes, and what is kept (numbers, never your voice).
+5. [Sound design](SOUND-DESIGN.md): a person's patches, filters and kits; [the mix](MIX.md): how the song is
+   mixed and mastered.
+6. [Singing into it](WEB-SINGING.md): what a sung take becomes, and what is kept (numbers, never your voice).
 7. [Learning it at the piano](PIANO.md).
+8. [The performance version](../performance/README.md): the song for the AI Song Contest 2026 awards in
+   Bangkok.
 
 ## For programmers
 
@@ -25,7 +32,9 @@ pages say how it works. Each is dated when it was written; the code is the final
 3. [The voice](THROAT.md): the learned throat and how it was trained.
 4. [The studio on the web](WEB-STUDIO.md): the whole studio in the browser, and how the site is hosted.
 5. [The home page](HOME-PAGE.md): now.itsby.you, the song's editions and how to add one.
-6. Notes: [performance](notes/PERFORMANCE.md), [rendering in the browser](notes/BROWSER-RENDER.md),
+6. [The look](IDENTITY.md): the palette, type and shared pieces every page uses.
+7. [The tools](../tools/README.md): what made and checks the song, none of it needed to run it.
+8. Notes: [performance](notes/PERFORMANCE.md), [rendering in the browser](notes/BROWSER-RENDER.md),
    [portability](notes/PORTABILITY.md), [the studio's redesign](notes/STUDIO-REDESIGN.md),
    [open questions](notes/open-questions.md).
 
@@ -41,6 +50,5 @@ pages say how it works. Each is dated when it was written; the code is the final
 5. [What else to learn from a singer](history/MAKING-IT-THEIR-OWN.md), [the creative review](history/CREATIVE-REVIEW.md),
    [an EDM version made in the studio](history/STUDIO-EDM-TEST.md).
 6. [The studio on a server](history/web-studio-server-plan.md): the first plan for the web studio, never deployed.
-7. [The look](IDENTITY.md).
 
 Credits: [CREDITS.md](../CREDITS.md).

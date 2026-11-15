@@ -1,167 +1,109 @@
-# How a song's words are drawn (2026-09-25)
+# How a song's words are drawn
 
-A rendition's words come from its song's lyric bank. For H that is 38
-verses, six refrain couplets, three bridge stanzas and three tag syllables,
-each with slots for the words that can swap (songs/h-bank.md, for reading;
-under `bank` in songs/h-now-its-by-you.json, for the program). The bank also
-states the rules for putting a song together. `songbird/arrange.py` draws a
-rendition's words from it with a seed: no network, no model, and the same
-inputs always give the same words. The refrain stays the refrain; the verses
+A rendition's words come from its song's lyric bank. For H that is 51 verses, the refrain's own head and eight
+more, eight refrain couplets, five bridge stanzas and three tag syllables, each with slots for the words that can
+swap (songs/h-bank.md, for reading; under `bank` in songs/h-now-its-by-you.json, for the program). The bank also
+states the rules for putting a song together. `songbird/arrange.py` draws a rendition's words from it with a seed:
+no network, no model, and the same inputs always give the same words. The refrain stays the refrain; the verses
 are where a rendition wanders.
 
 ## What gets drawn
 
-The form comes first: the order of sections a rendition sings (intro, verse,
-refrain, turn, verse, refrain, turn, bridge, refrain, tag for the seed). The
-drift will choose it; for now it is the seed's, or `--form`. Every sung
-section of that form is then filled:
+The form comes first: the order of sections a rendition sings (intro, verse, refrain, turn, verse, refrain, turn,
+bridge, refrain, tag for the seed), the seed's or `--form`. Every sung section of that form is then filled:
 
-- **Verses**, one for each verse section, two to four in a song. The first
-  is a plain one (AABB, common, no phrase run over a line break), because it
-  teaches the shape. At most one variant (ABAB, ABCB or enjambed) and at
-  most one rare verse. Dated verses are sung earliest first, so the song
-  reads as time passing; a verse with no year can go anywhere. A pair (wire
-  and learned, wax and sample, mind and names...) is sung side by side when
-  both are in. No two dark verses side by side, and at most one light verse.
-  Each verse's swaps are chosen once: a girl, or a nun, and her pronouns
-  with her.
-- **The refrain**, each time round, with words of its own (since the
-  artist asked for "different variations ... in each iteration of the
-  chorus", 2026-09-26). Its first two lines are its head. The first and last
-  refrains sing the song's own ("Who made this song? Nobody knows. / It's
-  yours while you sing it, and then it goes."), so the hook is heard first
-  and last. A refrain between them may sing another head instead, each at
-  most once a song: for H, the artist's, sung as written, "Who wrote this
-  song? Nobody, so / it's yours if you sing it and then who knows?" (in
-  about half of the songs with three refrains, always the middle one). The
-  first refrain asks who made it and the last who owns it; each refrain
-  between asks something else (sang, heard, kept or wrote), a different word
-  each time. A lone refrain asks who made it, as the fixed refrain does.
-  "While" (or when, or if) is drawn afresh each time round, and so is "it
-  goes" (or who knows, or it grows), but each refrain ends its own way
-  while there are endings left: a song of three refrains sings all three.
-  The artist's head always ends "and then who knows?", so no other refrain
-  in that song says it as a statement. Its second couplet is different each
-  time, never repeated, and the last refrain always sings the canon: "by
-  everyone, no one, and now it's by you."
-- **The bridge**: the first bridge section sings the canon, its swaps
-  (water, mountain, border or desert; coal, spark or light; dark or cold)
-  chosen once. If the form sings the bridge twice (bridge, bridge, or bridge
-  and bridge2) the second is one extra stanza, coat or given, sung by the
-  same choir on the same tune.
+- **Verses**, one for each verse section, two to four in a song. The first is a plain one (AABB, common, no phrase
+  run over a line break), because it teaches the shape. At most one variant (ABAB, ABCB or enjambed) and at most
+  one rare verse. Dated verses are sung earliest first, so the song reads as time passing; a verse with no year
+  can go anywhere. A pair (wire and learned, wax and sample, mind and names...) is sung side by side when both
+  are in. No two dark verses side by side, and at most one light verse. Each verse's swaps are chosen once: a
+  girl, or a nun, and her pronouns with her.
+- **The refrain**, each time round, with different words. Its first two lines are its head. The first and last
+  refrains sing the song's head ("Who made this song? Nobody knows. / It's yours while you sing it, and then it
+  goes."), so the hook is heard first and last. A refrain between them may sing another head instead, each at
+  most once a song. The first refrain asks who made, wrote or sang it and the last who owns it; each refrain
+  between asks something else, a different word each time. "While" (or when, or if) is drawn afresh each time
+  round, and so is "it goes" (or who knows, or it grows), each refrain ending differently while there are endings
+  left. A head that ends "and then who knows?" as a question keeps any other refrain in that song from saying it
+  as a statement. Its second couplet is different each time, never repeated, and the last refrain always sings
+  the canon: "by everyone, no one, and now it's by you."
+- **The bridge**: the first bridge section sings the canon, its swaps (water, mountain, border or desert; coal,
+  spark or light; dark or cold) chosen once. If the form sings the bridge twice (bridge, bridge, or bridge and
+  bridge2) the second is one extra stanza (coat, owed, borrow or slow), sung by the same choir on the same tune.
 - **The tag**: la, loo or oo, one syllable on every note.
 
-A form the rules can't fill is refused in a plain sentence rather than bent:
-five verse sections, seven refrains, a third bridge. `forms()` says what the
-bank can fill: for H, 2 to 4 verses, up to 6 refrains (one couplet each,
-canon last) and up to 2 bridge sections. The bank's rules don't ask for a
-refrain or a bridge, so arrange doesn't either; the genome's form template
-does (three refrains and a bridge). A rule arrange doesn't know how to keep
-is an error too, not a silence, so a rule added to the bank later can't be
-skipped without anyone noticing.
+A form the rules can't fill is refused in a plain sentence rather than bent: five verse sections, nine refrains,
+a third bridge. `forms()` says what the bank can fill: for H, 2 to 4 verses, up to 8 refrains (one couplet each,
+canon last) and up to 2 bridge sections. The bank's rules don't ask for a refrain or a bridge, so arrange doesn't
+either; the genome's form template does. A rule arrange doesn't know how to keep is an error, so a rule added to
+the bank later can't be skipped without anyone noticing.
 
 ## How the draw works
 
-Verses are drawn by weight, one at a time. Pairs are call and answer: once
-one of a pair is drawn, its partner answers it next half the time, where
-the rules would let the two be sung together (less often if the leanings
-turn away from the partner; a rare partner isn't rationed as an answer). So
-that having a partner doesn't make a verse commoner, a paired verse is
-drawn on its own that much less often. When the drawn verses can't go
-together (two light ones, say, or none plain enough to open with) the whole
-set is drawn again; when they can, one of the orders the rules allow is
-chosen. Every other choice (each slot, the couplets, the extra stanza, the
-tag syllable) is an even draw among its options unless a leaning tilts it.
+Verses are drawn by weight, one at a time. Pairs are call and answer: once one of a pair is drawn, its partner
+answers it next half the time, where the rules would let the two be sung together (less often if the leanings
+turn away from the partner; a rare partner isn't rationed as an answer). So that having a partner doesn't make a
+verse commoner, a paired verse is drawn alone that much less often. When the drawn verses can't go together (two
+light ones, say, or none plain enough to open with) the whole set is drawn again; when they can, one of the
+orders the rules allow is chosen. Every other choice (each slot, the couplets, the extra stanza, the tag syllable)
+is an even draw among its options unless a leaning tilts it.
 
-Each part of the song draws from its own stream of the seed, separate from
-the rest of the rendition's randomness, so changing how many verses a form
-has doesn't change which couplets its refrains sing. The refrains' heads and
-their questions have streams of their own too.
+Each part of the song draws from a separate stream of the seed, apart from the rest of the rendition's
+randomness, so changing how many verses a form has doesn't change which couplets its refrains sing. The refrains'
+heads and their questions have separate streams too.
 
 The refrain's rules are data, as the rest are (`bank.rules.refrain`):
-`question` is "turn" (in order, as the fixed refrain turns, the last time
-round the last word) or "draw" (H's: the first word first, the last last,
-the rest drawn between); `once_per_song` names head slots kept the same in
-every refrain (H's had while and then until 2026-09-26; none now);
-`distinct` names slots each refrain sings its own word in while the words
-last, the ones a head fixes set aside for it (H's: then);
-`head_first` and `head_last` name the heads the first and last refrains
-sing, and `head_repeat: false` sings another head at most once a song, and never two
-heads that fix the same question (swear and grew both ask who made it, as
-written);
-`first` and `last` hold a slot to one word in the first and last refrains
-(H's: `{"this": "this"}` both, so those ask about this song and the ones
-between may ask about that song or the song), a head's own fixed word
-winning. A
-head is written like the refrain's own lines, on the same phrases, singing
-the refrain's slots by name; its `fixed` holds any slot to one word, sung as
-written. The rules a bank can't keep together are refused when it's read:
-a distinct slot also kept once a song, a head fixing a word kept once a
-song, a head asking its own question that may be sung twice. One function
-(`_round_words`) gives every refrain's words for a fresh draw, held words,
-the drift and a person's choices alike, and one says why words break the
-rules. With H's rules as they were before, this draw gives exactly the
-words the old one gave (the words golden, unchanged); the new rules change
-only the refrains (every verse, bridge and tag drawn over the golden's 600
-draws is as before).
 
-What that gives, over 3,000 seeds. With the seed's two verses: 603
-different pairs of verses (769 counting their order); every one of the 29
-verses that may open a song opens some; a common verse is in 3 to 7% of
-songs, most near 6% (the variants, which share one place a song, lower:
-hold, light and a variant, 3%); the rare ones less (learned 1.8%; trench,
-rare, dark, a variant and dated 1916, 0.5%); partners are sung together in
-6% of songs. With four verses: 2,945 different songs, partners together in
-14%. When one of a pair is sung, its partner answers it 29 to 76% of the
-time. The rules turn a drawn set back about once in twelve songs of two
-verses, and a song of four never took more than seven draws.
+- `question` is "turn" (in order, as the fixed refrain turns, the last time round the last word) or "draw" (H's:
+  the first refrain's word from `question_first`, the last last, the rest drawn between);
+- `once_per_song` names head slots kept the same in every refrain (H's: none);
+- `distinct` names slots each refrain sings a different word in while the words last, the ones a head fixes set
+  aside for it (H's: then);
+- `head_first` and `head_last` name the heads the first and last refrains sing, and `head_repeat: false` sings
+  another head at most once a song, and never two heads that fix the same question (swear and grew both ask who
+  made it, as written);
+- `first` and `last` hold a slot to one word in the first and last refrains (H's: `{"this": "this"}` both, so
+  those ask about this song and the ones between may ask about that song or the song), a head's fixed word
+  winning.
 
-Era order has a consequence worth hearing: most songs open in the 1800s
-or out of time (with four verses, 43% open on a verse from the 1800s and
-32% on one with no year), and the newest verses close. The era bias is how
-time moves that.
+A head is written like the refrain's lines, on the same phrases, singing the refrain's slots by name; its `fixed`
+holds any slot to one word, sung as written. The rules a bank can't keep together are refused when it's read: a
+distinct slot also kept once a song, a head fixing a word kept once a song, a head asking its own question that
+may be sung twice. One function (`_round_words`) gives every refrain's words for a fresh draw, held words, the
+drift and a person's choices alike, and one says why words break the rules.
 
-The singer leans on a line's focus word, marked `*like this*`. The bank
-marks none of its own verses yet; the artist's refrain head carries its
-own marks, on the question and on "yours", as the song's own head has them. Where a bank entry is one of the seed's own
-blocks (the five seed verses, the refrain's first two lines, the canon
-couplet, the canon bridge) the seed's marks come with it, on the same word
-in the same place, whatever the swaps: "It's *yours* when you sing it",
-"*hand* it along like a spark from the fire". A mark never moves onto a
-swapped word. Everything else is sung without a focus word until the bank
+The singer leans on a line's focus word, marked `*like this*`. The bank's verses carry no marks; the refrain's
+heads do, on the question and on "yours". Where a bank entry is one of the seed's blocks (the five seed verses,
+the refrain's first two lines, the canon couplet, the canon bridge) the seed's marks come with it, on the same
+word in the same place, whatever the swaps: "It's *yours* when you sing it", "*hand* it along like a spark from
+the fire". A mark never moves onto a swapped word. Everything else is sung without a focus word until the bank
 marks it; a mark the bank adds to a line wins over a lent one.
 
 ## What can steer it
 
-The seed gives chance. The rest of the program can lean on the draw through
-`Leanings`, and a leaning only ever changes how likely a choice is, never
-whether the rules allow it:
+The seed gives chance. The rest of the program can lean on the draw through `Leanings`, and a leaning only ever
+changes how likely a choice is, never whether the rules allow it:
 
 | Leaning | What it does | Neutral | Range |
 |---|---|---|---|
 | `mood_weights` | how much likelier a plain, light, dark or tender verse is | 1 each | 0.05 to 20 |
 | `era_bias` | toward older verses (−1) or newer ones (+1), by year; a verse with no year is unaffected | 0 | −1 to 1: up to 3 times likelier or less likely |
-| `rarity_appetite` | how often a rare verse comes on its own: a third as often as a common one at 0, as often at +1, a ninth at −1 | 0 | −1 to 1 |
+| `rarity_appetite` | how often a rare verse comes alone: a third as often as a common one at 0, as often at +1, a ninth at −1 | 0 | −1 to 1 |
 | `vocabulary` | common words a person uses; the verses, couplets, stanzas and swaps that use them are likelier, the more so the fewer others share the word | none | any words; the little ones (the, her, it) count for nothing |
 
-A value past its range is held at the end and recorded that way, so a
-record says what bore on the draw. The drift is meant to set the first
-three from time, so a machine's song darkens or brightens and wanders
-between old times and new over the months; the harvest gives the
-vocabulary, so a person who writes about phones hears the ringtone verse
-more often, and one who plays the banjo hears it in the busker's hands.
+A value past its range is held at the end and recorded that way, so a record says what bore on the draw. A
+machine's traits set them (`variation.leanings`): its song darkens or brightens and wanders between old times and
+new, and the vocabulary comes from what the harvest finds, so a person who writes about phones hears the ringtone
+verse more often.
 
 ## What a rendition keeps
 
-`arrange()` returns a `Lyrics`: the form, the seed, the leanings, and for
-each sung section which verse, couplet, stanza or syllable it sings, the
-words chosen for its slots, and its lines as sung. It goes into the
-render's record under `lyrics` and prints as a lyric sheet. Of a person's
-vocabulary it keeps only the words the bank has, since no others can touch
-the draw: nothing more of them leaves the machine, and drawing again from
-the record gives the same words. A rendition is replayed from the lines it
-recorded, not by drawing again, so it sings the same even if a later numpy
-draws differently from the same seed.
+`arrange()` returns a `Lyrics`: the form, the seed, the leanings, and for each sung section which verse, couplet,
+stanza or syllable it sings, the words chosen for its slots, and its lines as sung. It goes into the render's
+record under `lyrics` and prints as a lyric sheet. Of a person's vocabulary it keeps only the words the bank has,
+since no others can touch the draw: nothing more of them leaves the machine, and drawing again from the record
+gives the same words. A rendition is replayed from the lines it recorded, not by drawing again, so it sings the
+same even if a later numpy draws differently from the same seed.
 
 ## Using it
 
@@ -169,236 +111,169 @@ draws differently from the same seed.
     uv run python -m songbird.arrange songs/h-now-its-by-you.json --forms
     uv run songbird render songs/h-now-its-by-you.json --lyrics-seed 7
 
-The first prints a lyric sheet and what was chosen (add `--form ...` for
-another form, `--json` for the record). The last sings it, with the lyric
-sheet written beside the render. Without `--lyrics-seed` a render sings the
-seed's own words exactly as before; a machine or a date sings the words its
-lineage holds (`Params.words`), which change a verse or a word at a time
-rather than being drawn afresh every render (docs/EVOLUTION.md). `hold()`
-keeps a rendition's words for its lineage, `sing()` sings held words in a
-form, and `check()` says why they can't be.
+The first prints a lyric sheet and what was chosen (add `--form ...` for another form, `--json` for the record).
+The last sings it, with the lyric sheet written beside the render. Without `--lyrics-seed` a render sings the
+seed's words; a machine or a date sings the words its lineage holds (`Params.words`), which change a verse or a
+word at a time rather than being drawn afresh every render (docs/EVOLUTION.md). `hold()` keeps a rendition's words
+for its lineage, `sing()` sings held words in a form, and `check()` says why they can't be.
 
-In code: `arrange(genome, form, seed, leanings=None)` gives the `Lyrics`,
-and `realize(genome, params, ..., lyrics=lyrics)` sings them. `forms(genome)`
-says how many of each section the bank can fill, and `problem(genome, form)`
-says in a sentence why a form can't be filled (None if it can).
-`seed_lyrics(genome, form)` gives the seed's own words as a `Lyrics`, named
-for the bank entries they are.
+In code: `arrange(genome, form, seed, leanings=None)` gives the `Lyrics`, and `realize(genome, params, ...,
+lyrics=lyrics)` sings them. `forms(genome)` says how many of each section the bank can fill, and `problem(genome,
+form)` says in a sentence why a form can't be filled (None if it can). `seed_lyrics(genome, form)` gives the
+seed's words as a `Lyrics`, named for the bank entries they are.
 
-## How it was checked
+## How it is checked
 
-- Every rule, checked from the bank's own data rather than through
-  arrange's checks: three thousand seeds of the seed form with two, three
-  and four verses; every form the bank can fill (2 to 4 verses, 0 to 6
-  refrains, 0 to 2 bridge sections, with and without a tag), twenty seeds
-  each; a few forms out of the template's shape; five sets of extreme
-  leanings; and the fallback search that takes over if drawing ever gives
-  up.
-- The same inputs give the same words, in separate processes with
-  different hash seeds too; a hundred seeds give a hundred different songs.
-- Without drawn words, every song renders exactly as before: the seed's
-  own words given as a `Lyrics` sing the identical score for all twelve
-  songs, and the previous `realize()` and this one give identical scores.
-  The golden render is unchanged.
-- Sung with drawn words, every syllable lands on its note in its phrase,
-  the second bridge is sung by the choir, the focus marks reach the singer,
-  and nothing else about the score moves. A render's record alone replays
-  its words, its score and its lyric sheet exactly.
-- A Fable review, read-only, tried to break the rules with odd forms and
-  extreme leanings and found no violation; its findings on pairs, leanings
-  and the interface are in.
+- Every rule, checked from the bank's data rather than through arrange's checks: thousands of seeds of the seed
+  form with two, three and four verses; every form the bank can fill, twenty seeds each; a few forms out of the
+  template's shape; extreme leanings; and the fallback search that takes over if drawing ever gives up.
+- The same inputs give the same words, in separate processes with different hash seeds too.
+- The seed's words given as a `Lyrics` sing the identical score to the seed's.
+- Sung with drawn words, every syllable lands on its note in its phrase, the second bridge is sung by the choir,
+  the focus marks reach the singer, and nothing else about the score moves. A render's record alone replays its
+  words, its score and its lyric sheet exactly.
 
 ## What the bank can't do yet
 
-Found while building this; the bank is the other thread's to change:
+- Three of the six pairs can never be sung together, because the rules forbid it: carve and ink are both dark (a
+  pair must be side by side, two dark verses never are), hold and ring are both light (at most one light verse),
+  kids and lullaby are both variants (at most one variant).
+- A pair with no years (mind and names) has no order, so names comes first half the time; if one is the call and
+  the other the answer, the bank could say which.
+- The sample verse swaps "girl" and "her" as separate slots, so "a boy put a piece of it under a beat ... and
+  nobody paid her" can be drawn; the bank's rule is that a pronoun follows its noun.
+- The bank's verses carry no focus marks, so a song that draws one of the seed's verses and one of the others
+  leans on one and not the other.
+- The genome's form template has no second bridge, so the extra stanza is only sung in a form built outside it,
+  and the template allows a single verse where the rules need two.
 
-- Three of the six pairs can never be sung together, because the rules
-  forbid it: carve and ink are both dark (a pair must be side by side, two
-  dark verses never are), hold and ring are both light (at most one light
-  verse), kids and lullaby are both variants (at most one variant).
-- A pair with no years (mind and names) has no order, so names comes first
-  half the time; if one is the call and the other the answer, the bank
-  could say which.
-- The sample verse swaps "girl" and "her" as separate slots, so "a boy put
-  a piece of it under a beat ... and nobody paid her" can be drawn; the
-  bank's own rule is that a pronoun follows its noun. Shepherd and goatherd,
-  sheep and goats are separate too (a goatherd singing to sheep).
-- The bank's lines carry no focus marks, so only the seed's own verses,
-  refrain and bridge are sung with a focus word; a song that draws one of
-  the seed's verses and one of the others leans on one and not the other.
-- Small ones: the ink verse is dated 1800 but can lie in a drawer "a
-  thousand-odd years"; the probe can pass Pluto, which no probe carrying a
-  record did; shell, deaf and nurse give pronoun columns no line uses.
-- The genome's form template has no second bridge, so the extra stanza is
-  only sung in a form built outside it, and the template allows a single
-  verse where the rules need two.
+# Taking over the arrangement
 
-# Taking over the arrangement (2026-09-29)
+The program's arrangement (how the song starts, the band joining line by line, a breakdown) is drawn by chance,
+per machine and date. Those choices are the point of the piece, stay the default and stay visible; a person can
+take any of them over, section by section and player by player, as the studio's grid of sections and players
+does (docs/notes/STUDIO-REDESIGN.md). `songbird/takeover.py` holds it (`arrange.py` draws the words).
 
-The studio test that made an EDM version through the page (docs/history/STUDIO-EDM-TEST.md) found that the
-arrangement's dynamics came from chance, not from the person: how the song starts, the band joining line
-by line, the breakdown were drawn and couldn't be set; there was no per-section drum pattern, no
-instrumental drop, sections were fixed at their bars; and the tempo stopped at 1.3 times the song's,
-whatever the style. The artist: the program's own choices (drawn by chance, per machine and date) are the
-point of the piece, stay the default and stay visible; a person can take any of them over. This is the
-engine and the API a DAW-like page needs (sections as regions, players as tracks, a track x section grid,
-one inspector: docs/notes/STUDIO-REDESIGN.md); the page itself is designed there. `songbird/takeover.py` holds it
-(not `arrange.py`, which draws the words).
+## The design
 
-## The design, as built
+**One place the program's arrangement lives.** Both arrangers decide, section by section, what each player does
+there: `band.plan` (the ballad) and `idioms.plan_style` (every other style) fill each `Section.parts` (player ->
+idiom: "walk", "strum", "four", "half"...), and the style's options (`idioms.shape_plan`: entrances, a bare verse,
+stop-time, a breakdown, a half-time bridge, a pad intro) then remove players or make them come in late
+(`Plan.entrances`). A person's arrangement is laid over that by three calls in both arrangers: `takeover.prepare`
+before the plan (which sections of the form each of the band's sections holds, and a section a person had played
+marked so), `takeover.take_over` after the plan and the style's options (the program's decisions kept in
+`ctx.taken`, then the person's put in their place) and `takeover.shape` on the notes written (entrances, levels, a
+build, a played section's tune). The program decides first, always, and what it decided is kept beside the
+person's, so the page shows both and a released choice goes back to it.
 
-**One place the program's arrangement lives.** Both arrangers already decide, section by section, what
-each player does there: `band.plan` (the ballad) and `idioms.plan_style` (every other style) fill each
-`Section.parts` (player -> idiom: "walk", "strum", "four", "half"...), and the style's options
-(`idioms.shape_plan`: entrances, a bare verse, stop-time, a breakdown, a half-time bridge, a pad intro)
-then remove players or make them come in late (`Plan.entrances`). A person's arrangement is laid over that
-by three calls in both arrangers: `takeover.prepare` before the plan (which sections of the form each of
-the band's sections holds, and a section a person had played marked so), `takeover.take_over` after the
-plan and the style's options (the program's decisions kept in `ctx.taken`, then the person's put in their
-place) and `takeover.shape` on the notes written (entrances, levels, a build, a played section's tune).
-The program decides first, always, and what it decided is kept beside the person's, so the page shows
-both and a released choice goes back to it.
-
-**The edits.** Flat paths, as every edit is (docs/STUDIO.md), by the arrangement's own section ids
-(`verse:1`, the second verse in story order, as `form.order` and `part.*` name them):
+**The edits.** Flat paths, as every edit is (docs/STUDIO.md), by the arrangement's section ids (`verse:1`, the
+second verse in story order, as `form.order` and `part.*` name them):
 
 | Path | Value | What |
 |---|---|---|
-| `arrange.<section>:<n>.<player>.level` | out, soft, plays, hard | in or out, and how hard (the page's words: docs/notes/STUDIO-REDESIGN.md). out sits the player out there; soft keeps only its beats, 0.8 as loud, and plays what the style gives it with the band a little quieter (its busyness less 0.3), the ballad's players a step down from the program's (a walk to roots, a strum to a boom-chick); plays is the program's own there (the style's for the section's energy where the program had it out); hard what the style gives a fuller band (busyness plus 0.3), a step up for the ballad's, 1.15 as loud. The section's energy itself doesn't move, so a hard refrain gets no fill it wasn't getting unless `fill` asks |
-| `arrange.<section>:<n>.<player>.pattern` | an idiom of the player's | what it plays there: a kit's or a drum machine's groove, four on the floor, half time, toms, a boom-bap, winding down, a build; a bass's roots, two, walk, eighths, sub; a guitar's strum, boom-chick, Travis picking; "lead", the tune... The vocabulary (`takeover.patterns`): every idiom any style gives that instrument (or the part it stands in for), its family's own, "lead" for a pitched player, and for the drums the grooves and a build; the ballad's eight have their own writers' idioms (`BALLAD`). One that plays the same as another is offered once (`takeover.ALIASES`: the drum machine's "machine", its own four on the floor until 2026-09-30, is "four"; an edit, a record or a lock that says "machine" reads as "four") |
-| `arrange.<section>:<n>.<player>.from` | a line (0: from the start) | where it comes in: the band joining line by line, per player, per section, counted in the section's own lines |
-| `arrange.<section>:<n>.<player>.fill` | true, false | a drum fill in the section's last bar into the next, or none: a kit or a drum machine (`idioms.w_groove`); the frame drum's fills were taken out on 2026-09-27 and stay out |
-| `arrange.<section>:<n>.bars` | 2, 4, 8, 16 | the section's length. A played section (an intro, a break, an outro, or a sung one made played) is fitted from its own tune lines, the last ones kept (the cadence) and repeated backwards: the eight-bar break (v1 v2 v3 v2) at four is v3 v2, at sixteen itself twice. A sung section is only lengthened: its lines sung, then the band plays its last lines again, the lead on the tune (a post-refrain drop); never shortened below its lines. A turn keeps its two bars (its tune is a line quoted to fit them). The jig's own length for a played section of four bars or less is twice round (`style.rounds`, docs/STYLES.md "Two more"): its intro eight, its turns four; a person's length wins, and says the section's own |
-| `arrange.<section>:<n>.sung` | false | the section played, not sung: its words are still drawn (so no other section's words move, and a person's lines for it wait) but the singer, the lineage choir and the backing voices leave it, the fills between lines with them, and the band's lead plays the tune; the band keeps its weight under the lead (a drop, not a break: `band.Context.vel` leaves off the dimming it gives an instrumental statement) |
+| `arrange.<section>:<n>.<player>.level` | out, soft, plays, hard | in or out, and how hard. out sits the player out there; soft keeps only its beats, 0.8 as loud, and plays what the style gives it with the band a little quieter (its busyness less 0.3), the ballad's players a step down from the program's (a walk to roots, a strum to a boom-chick); plays is the program's choice there (the style's for the section's energy where the program had it out); hard what the style gives a fuller band (busyness plus 0.3), a step up for the ballad's, 1.15 as loud. The section's energy itself doesn't move, so a hard refrain gets no fill it wasn't getting unless `fill` asks |
+| `arrange.<section>:<n>.<player>.pattern` | an idiom of the player's | what it plays there: a kit's or a drum machine's groove, four on the floor, half time, toms, a boom-bap, winding down, a build; a bass's roots, two, walk, eighths, sub; a guitar's strum, boom-chick, Travis picking; "lead", the tune... The vocabulary (`takeover.patterns`): every idiom any style gives that instrument (or the part it stands in for), its family's, "lead" for a pitched player, and for the drums the grooves and a build; the ballad's eight players have their writers' idioms (`BALLAD`). One that plays the same as another is offered once (`takeover.ALIASES`: the drum machine's "machine" plays as "four", so an edit, a record or a lock that says "machine" reads as "four") |
+| `arrange.<section>:<n>.<player>.from` | a line (0: from the start) | where it comes in: the band joining line by line, per player, per section, counted in the section's lines |
+| `arrange.<section>:<n>.<player>.fill` | true, false | a drum fill in the section's last bar into the next, or none: a kit or a drum machine (`idioms.w_groove`); the frame drum plays none |
+| `arrange.<section>:<n>.bars` | 2, 4, 8, 16 | the section's length. A played section (an intro, a break, an outro, or a sung one made played) is fitted from its tune lines, the last ones kept (the cadence) and repeated backwards: the eight-bar break (v1 v2 v3 v2) at four is v3 v2, at sixteen itself twice. A sung section is only lengthened: its lines sung, then the band plays its last lines again, the lead on the tune (a post-refrain drop); never shortened below its lines. A turn keeps its two bars (its tune is a line quoted to fit them). The jig plays a played section of four bars or less twice round (`style.rounds`, docs/STYLES.md "Two more"): its intro eight, its turns four; a person's length wins, and the section's own is said |
+| `arrange.<section>:<n>.sung` | false | the section played: its words are still drawn (so no other section's words move, and a person's lines for it wait) but the singer, the lineage choir and the backing voices leave it, the fills between lines with them, and the band's lead plays the tune; the band keeps its weight under the lead (a drop rather than a break: `band.Context.vel` leaves off the dimming it gives an instrumental statement) |
 | `arrange.<section>:<n>.build` | true | a build toward the next section: the players come in one after another at bar lines through its first half (the chords first, then the bass, the drums, the rest, as the band joins line by line), everything rises from 0.7 to 1.15 as loud, and a kit or a drum machine plays a build (`idioms.w_build`: a crash, the kick on every beat through the first half, the snare on beats, then half-beats, then the feel's finest steps, rising; the last beat empty) unless its pattern is set; the ballad's frame drum keeps its pattern and rises. Not on the song's last section (said) |
+| `arrange.<section>:<n>.round` | true, or 2 to 4 | the section sung as a round ("A round", below) |
 
-null releases any of them (and so do `sung: true` and `build: false`, the section's own). The style's
-own options have the rest of their edits: `style.intro`, `style.stops`, `style.alone`,
-`style.alone_with` and `style.bridge`, beside the existing `style.entrances`, `style.breakdown`,
-`style.lift` and `style.ending`, so how it starts, stop-time and the breakdown can be chosen whole; a
-cell's `level` or `from` then overrides what they did to that player there (and a player a person
-arranged in a stop-time verse plays as they chose). Choosing one of these options with no machine to draw
-the rest now keeps the others as the version had them (`style.choose_style`); before, they were all drawn
-again.
+null releases any of them (and so do `sung: true` and `build: false`, the section's defaults). The style's options
+have the rest of their edits: `style.intro`, `style.stops`, `style.alone`, `style.alone_with` and `style.bridge`,
+beside `style.entrances`, `style.breakdown`, `style.lift` and `style.ending`, so how it starts, stop-time and the
+breakdown can be chosen whole; a cell's `level` or `from` then overrides what they did to that player there (and
+a player a person arranged in a stop-time verse plays as they chose). Choosing one of these options with no
+machine to draw the rest keeps the others as the version had them (`style.choose_style`).
 
-**A lock.** Keeping what chance drew is the same edit with the program's own value (the page's padlock,
+**A lock.** Keeping what chance drew is the same edit with the program's value (the page's padlock,
 docs/notes/STUDIO-REDESIGN.md "Decided"): the record marks it `locked: true` beside its value and "was" in
-`chosen_by_you`, the version is the same, and a new performance can't move it. For a cell, "was" is the
-program's own level, pattern, line and fill there (`takeover.program_cells`: the score laid out once, no
-audio, and kept for the same parameters); a lock isn't counted as a change (`explain.Version.held`).
+`chosen_by_you`, the version is the same, and a new performance can't move it. For a cell, "was" is the program's
+level, pattern, line and fill there (`takeover.program_cells`: the score laid out once, no audio, and kept for the
+same parameters); a lock isn't counted as a change (`explain.Version.held`).
 
-**Stored** as a person's composition is: `params.composition["arrange"]` = `{"verse:0": {"bars": 16,
-"sung": false, "build": true, "players": {"drummachine": {"level": "hard", "pattern": "four"}}}}`, so the
-record's parameters carry it and `--replay` renders from them byte for byte; `from_record` makes the
-edits again from the marks. Absent when empty: a version with no such edits is the version as before,
-byte for byte (the goldens are unchanged).
+**Stored** as a person's composition is: `params.composition["arrange"]` = `{"verse:0": {"bars": 16, "sung":
+false, "build": true, "players": {"drummachine": {"level": "hard", "pattern": "four"}}}}`, so the record's
+parameters carry it and `--replay` renders from them byte for byte; `from_record` makes the edits again from the
+marks. Absent when empty: a version with no such edits renders the same samples as one made without this module.
 
-**Inherited** by place, as a played part is: a child keeps the person's arrangement (decision 1 in
-docs/STUDIO.md). A choice for a section the version doesn't have, a player its band hasn't got (its style
-moved round the ring), a pattern its player doesn't play, a `from` past the section's lines or a build
-at the end is kept, silent, and waits for a version that has them; a new one is said and not kept
-(`takeover.silent`, `edits._taken_over`). A played part (`part.*`) for a line a section's new length no
-longer plays is said and waits the same way (`takeover.part_missing`).
+**Inherited** by place, as a played part is: a child keeps the person's arrangement (decision 1 in docs/STUDIO.md).
+A choice for a section the version doesn't have, a player its band hasn't got (its style moved round the ring), a
+pattern its player doesn't play, a `from` past the section's lines or a build at the end is kept, silent, and
+waits for a version that has them; a new one is said and not kept (`takeover.silent`, `edits._taken_over`). A
+played part (`part.*`) for a line a section's new length doesn't play is said and waits the same way
+(`takeover.part_missing`).
 
-**Validated** in two steps. `edits.check` (`takeover.check`): the path's grammar, the section one of the
-song's (or `bridge2`) under 48, the player one the program knows, the level one of four, the pattern one
-that player plays in some band, `from` under 16, `fill` only a kit's or a drum machine's, `bars` 2, 4, 8 or
-16 and reachable from the section's lines, `sung` only where there are words, `build` a boolean. Then with
-the rest of the edits and what the version held (`Overrides._arrange`): a sung section shorter than its
-lines is refused ("to shorten it, have it played rather than sung"), a length held from before goes back
-to the section's own when a person has it sung again; and after the version is resolved, what it can't
-play (above).
+**Validated** in two steps. `edits.check` (`takeover.check`): the path's grammar, the section one of the song's
+(or `bridge2`) under 48, the player one the program knows, the level one of four, the pattern one that player
+plays in some band, `from` under 16, `fill` only a kit's or a drum machine's, `bars` 2, 4, 8 or 16 and reachable
+from the section's lines, `sung` only where there are words, `build` a boolean. Then with the rest of the edits
+and what the version held (`Overrides._arrange`): a sung section shorter than its lines is refused ("to shorten
+it, have it played rather than sung"), and a length held from before goes back to the section's default when a
+person has it sung again; and after the version is resolved, what it can't play (above).
 
-**Where the length acts.** Everything that lays the form out on the grid reads one list, a section
-occurrence's tune lines and whether each is sung (`takeover.phrase_plan`: exactly the section's own when
-nobody changed it): realize's layout and its clock (`realize.timeline`), the chord times
-(`idioms.chord_times`), the tune editor's view (`composition.view`), the notes-in line windows and layout,
-a section's preview window and the MIDI file's markers (both share a run of same-named sections by bars,
-not evenly, once their lengths differ), and a style's repeated last line (the last one sung, if the last
-lines were played). A section length is a list of the song's own tune lines, so the harmony, the chords a
-person changed, the variants and the lift all follow.
+**Where the length acts.** Everything that lays the form out on the grid reads one list, a section occurrence's
+tune lines and whether each is sung (`takeover.phrase_plan`: exactly the section's own when nobody changed it):
+realize's layout and its clock (`realize.timeline`), the chord times (`idioms.chord_times`), the tune editor's view
+(`composition.view`), the notes-in line windows and layout, a section's preview window and the MIDI file's markers
+(both share a run of same-named sections by bars, so lengths may differ), and a style's repeated last line (the
+last one sung, if the last lines were played). A section length is a list of the song's tune lines, so the
+harmony, the chords a person changed, the variants and the lift all follow.
 
-**A pair of sections in a row** (verses in pairs) is one section to the band's plan. A person's
-arrangement of either splits it at the boundary only after the program's plan, the style's options and
-the backing voices have run on the program's own sections, so their indices (the first verse's table
-entry, stop-time's and a bare verse's verse numbers, the oohs) are the program's; both halves keep the
-pair's role, energy and parts, its entrances go with the half they fall in, stop-time and half-time with
-both, and no fill lands on the boundary unless a person asks for one.
+**A pair of sections in a row** (verses in pairs) is one section to the band's plan. A person's arrangement of
+either splits it at the boundary only after the program's plan, the style's options and the backing voices have
+run on the program's sections, so their indices (the first verse's table entry, stop-time's and a bare verse's
+verse numbers, the oohs) are the program's; both halves keep the pair's role, energy and parts, its entrances go
+with the half they fall in, stop-time and half-time with both, and no fill lands on the boundary unless a person
+asks for one. Splitting first would move stop-time, the oohs and a fill onto the boundary.
 
-**Tempo, by style.** A person's range was 0.75 to 1.3 times the song's tempo, whatever the style. Now
-(`edits.tempo_range`) it is the style's own range at its feel multiplied by 0.9 and 1.1, never narrower
-than 0.75 to 1.3 of the song's, inside 0.4 to 1.6 of it: the ballad keeps 72 to 124.8 for H; synth folk
-reaches 134.1, indie 137.3, a string band 147.8; a lullaby's waltz goes down to 38 (its quarter at 57). A
-tempo is checked against the widest (`edits.bounds`: 38.4 to 153.6) and held to its style's at the end,
-once the style is chosen (a style or a feel chosen after it may hold it), said if it had to be, and marked
-as sung so it replays. The tempo card carries its style's range, and the page's tempo input and slider
-use it.
+**Tempo, by style.** A person's range (`edits.tempo_range`) is the style's range at its feel multiplied by 0.9 and
+1.1, never narrower than 0.75 to 1.3 of the song's tempo, inside 0.4 to 1.6 of it: the ballad keeps 72 to 124.8
+for H; synth folk reaches 134.1, indie 137.3, a string band 147.8; a lullaby's waltz goes down to 38 (its quarter
+at 57). A tempo is checked against the widest (`edits.bounds`: 38.4 to 153.6) and held to its style's at the end,
+once the style is chosen (a style or a feel chosen after it may hold it), said if it had to be, and marked as
+sung so it replays. The tempo card carries its style's range, and the page's tempo input and slider use it.
 
-**A drum machine is the rhythm, as a kit is** (2026-09-30). Its module gives it a family of its own ("drum
-machine"), and the style arranger counted only "drums" (with percussion and bass) as the rhythm, so a
-chance-drawn breakdown held the drum machine back with the pads and leads until the last refrain's third line:
-half that refrain went without its kick (the arrangement agent measured it in a synth folk render).
-`idioms.DRUMS` is both families now, and `PERCUSSION` holds it: the drum machine plays through a breakdown,
-waits with the rhythm after a quoted intro, joins with the drums in the band's entrances, goes half-time in a
-half-time bridge (which a style with a drum machine may now draw, as one with a kit could), and its last hit
-isn't held to the end. That changes default renders of synth folk and lo-fi where those options fall (for
-three machines on three days, ten of eighteen: seven of synth folk's nine, three of lo-fi's); the ballad, H's seed and the goldens are unchanged.
-**So is the synth bass the bass** (2026-09-30, the artist: fix the bugs). Its module registers it with the
-synths (family "synth", for the mixer), so it sat out the first half of a breakdown's last refrain (synth folk:
-0 + 32 notes across its halves; now 32 + 32). `idioms.is_bass` counts it, and `idioms.rhythmic` is the rhythm
-section wherever the style arranger groups it (the breakdown's players, the entrances' order, the leads it
-isn't, a half-time bridge's roots). Synth folk's and lo-fi's renders change again where those options fall.
+**The rhythm section.** `idioms.DRUMS` holds both the drums and the drum machine families, and `PERCUSSION` holds
+them with percussion: the drum machine plays through a breakdown, waits with the rhythm after a quoted intro,
+joins with the drums in the band's entrances, goes half-time in a half-time bridge (which a style with a drum
+machine may draw, as one with a kit can), and its last hit isn't held to the end. `idioms.is_bass` counts the
+synth bass as the bass (it registers with the synths, family "synth", for the mixer), and `idioms.rhythmic` is
+the rhythm section wherever the style arranger groups it (the breakdown's players, the entrances' order, the leads
+it isn't, a half-time bridge's roots).
+
+**Levels are relative to the section** (busyness less or more 0.3, a step down or up for the ballad) rather than
+fixed tables. The ballad's plan takes no per-player busyness offset: a person's cell is taken as they set it, and
+the ballad's players step along their idioms, so the harp doesn't follow a guitar a person changed as it follows
+the program's.
 
 **The API for the page**: `/api/arrangement` (docs/STUDIO.md, "Arrangement control").
 
-## What the review changed
+## How it is checked
 
-A read-only Fable review of the design before it was built; its points are in: the pair split after the
-program's plan, not before it (splitting first would have moved stop-time, the oohs and a fill onto the
-pair's boundary), both halves copying what the program gave the pair; the layout sites the design missed
-(the previews' and the MIDI markers' even share of a same-named run, the notes-in layout's sung flag, the
-repeated last line, parts in lines a length drops); a played section's lead and its loudness (the band's
-dimming under a lead left off); the backing voices' oohs, which sing by section, kept out of a played one;
-validation in two steps, the second with the rest of the edits, the version's own and the form; levels
-relative to the section (busyness less or more 0.3, a step down or up for the ballad) rather than fixed
-tables; a build as players coming in at bar lines with a rise, not notes left out at random, and refused
-at the song's end; `from` counted in the occurrence's own lines; the notes of the pass kept in the order
-written; the tempo rule multiplied, per feel, known only once the style is chosen, and marked as sung; the
-module named apart from `arrange.py`; the page's words. Its suggestion that the ballad's plan take a
-per-player busyness offset (so the harp would follow a guitar a person changed, as it follows the
-program's) is left: a person's cell is taken as they set it, and the ballad's players step along their own
-idioms.
-
-## How it was checked
-
-- tests/test_takeover.py: nothing arranged is the same song (three versions, and an empty arrangement);
-  thirteen kinds of refusal with why, a sung section refused shorter and allowed once played, releases;
-  four on the floor in the first verse of synth folk (a kick on every beat but the fill's) with nobody
-  else moving; a player out, soft (fewer, softer notes) and hard (harder), and the ballad's bass a step
-  down; a played refrain (no singer or choir there, the synth lead on the tune, the band as heavy, the
-  words drawn the same, the singer elsewhere as sung); lengths (a 16-bar break, an 8-bar intro, a 16-bar
-  last refrain sung then played; the clock, the tune view and the spans agree; a short break keeps its
-  cadence); a 16-bar build (snares per bar rising to sixteenths, the last beat empty, players joining, the
-  weight rising; at the song's end said); a player from a later line, a fill taken away and asked for; a
-  pair split only where arranged, the rest of the score untouched; marks with the program's values, made
-  again from the record, replayed the same, handed down, released, and a lock (the same version, marked
-  locked); silent and said where a version can't play it, and inherited ones waiting; the tempo by style;
-  the style's options chosen whole, the rest kept with no machine.
-- tests/test_studio.py: `/api/arrangement` draws the grid (every section and player, the person's cell
-  with the program's beside it, a played 16-bar refrain with the lead on the tune, reasons for every
-  program's cell, the style's tempo range, a silent choice said, a lock kept and marked), and none of its
-  words says the code's names.
+- tests/test_takeover.py: nothing arranged is the same song; the refusals with why, a sung section refused
+  shorter and allowed once played, releases; four on the floor in the first verse of synth folk with nobody else
+  moving; a player out, soft and hard, and the ballad's bass a step down; a played refrain (no singer or choir
+  there, the synth lead on the tune, the band as heavy, the words drawn the same); lengths (the clock, the tune
+  view and the spans agree; a short break keeps its cadence); a build (snares per bar rising to sixteenths, the
+  last beat empty, players joining; at the song's end said); a player from a later line, a fill taken away and
+  asked for; a pair split only where arranged; marks with the program's values, made again from the record,
+  replayed the same, handed down, released, and a lock; silent and said where a version can't play it; the tempo
+  by style; the style's options chosen whole, the rest kept with no machine.
+- tests/test_studio.py: `/api/arrangement` draws the grid (every section and player, the person's cell with the
+  program's beside it, reasons for every program's cell, the style's tempo range, a silent choice said, a lock
+  kept and marked), and none of its words says the code's names.
 - tests/test_edits.py: the tempo checked against the widest and held to the ballad's, said.
-- The goldens (tests/test_determinism.py, test_styles.py, test_lean_render.py, test_variation.py) are
-  unchanged.
 
-# A round (2026-09-30)
+# A round
 
 The song is about a song handed from person to person and changed; a round enacts it: the singer starts a
 section, a second voice comes in a line later on the same tune and the same words, then a third, the song passed
-from voice to voice. The voices are the lineage's (the choir: the parent's first), else the program's own.
+from voice to voice. The voices are the lineage's (the choir), else the program's stand-ins.
 
-## Measured first: where H's tune takes a round
+## Where H's tune takes a round
 
 A round needs a tune whose lines sit over each other's harmony, and most folk tunes don't at every distance.
 `songbird/canon.py` scores every way of singing a section as a round, and `tools/round_fit.py` prints the tables:
@@ -408,13 +283,14 @@ A round needs a tune whose lines sit over each other's harmony, and most folk tu
   `style.tune_clash` counts a loop against the tune (house's `fitting_loops`);
 - **the clash with the band**: the beats where a later voice's note is a semitone off the chord the band plays
   under it (and not one of its tones), beyond what the tune has with its own chords; the band follows the voice
-  furthest along, so after the section's own lines it plays, line by line, the line that voice is singing;
+  furthest along, so after the section's lines it plays, line by line, the line that voice is singing;
 - **whole tones** between the voices (milder: said, not counted), and how many beats they sing together.
 
-(The tables are scored as the review asked: each overlap weighed by its notes, a note on a foot or a beat long
-counting whole, and a pickup sung over its first bar's chord.) A round **fits** when its voices clash for at most
-a beat (and at most one beat in sixteen of what they sing together) and the band no more than two beats beyond the tune's own (`style.LOOP_SLACK`). Distances: the whole
-section a line apart (two bars), two lines apart (four), and half a line (one bar) for its last line only (below).
+Each overlap is weighed by its notes, and the singer's pickup is sung over its first bar's chord. The fit is
+taken under a person's chords (`composition.harmonized`), which the band plays under the voices. A round **fits**
+when its voices clash for at most a beat (and at most one beat in sixteen of what they sing together) and the
+band no more than two beats beyond the tune's own (`style.LOOP_SLACK`). Distances: the whole section a line apart
+(two bars), two lines apart (four), and half a line (one bar) for its last line only (below).
 
 **H in its own mode (D ionian)**, each section's four lines:
 
@@ -438,10 +314,10 @@ section a line apart (two bars), two lines apart (four), and half a line (one ba
 
 The refrain and the bridge go round with **no semitone or tritone between the voices at any distance**: in a
 major mode H's tune is pentatonic (it sings 1, 2, 3, 5, 6 and touches 4 twice in passing), and a pentatonic tune
-has neither interval in it. Half a line apart (one bar, the whole section) was scored too and fits as cleanly
-(the bridge 0.00 between the voices, the refrain 0.67 for three); it isn't offered for a whole section because
-its tail would end halfway through a line (below). What is left is whole tones: 15.3 beats of 54.2 in a
-three-voice refrain, the open, ringing sound of a pentatonic round.
+has neither interval in it. Half a line apart (one bar, the whole section) fits as cleanly (the bridge 0.00
+between the voices, the refrain 0.67 for three); it isn't offered for a whole section because its tail would end
+halfway through a line. What is left is whole tones: 15.3 beats of 54.2 in a three-voice refrain, the open,
+ringing sound of a pentatonic round.
 
 **The minor modes take it away.** The same degrees in D aeolian are D E F A B♭: two semitones (E F, A B♭) and a
 tritone (E B♭) appear in the tune itself, and every whole-section round of the refrain and the bridge clashes:
@@ -469,220 +345,158 @@ apart):
 | aeolian | whole, 2 at 2 | last line, 3 at ½ | none |
 | phrygian | whole, 2 at 2 | none | none |
 
-The other sketches, each in its own mode: B's refrain, K's refrain and L's verse take three voices; A, D, E, F, G,
-I and J two, or the last line; C none.
+The other sketches, each in its mode: B's refrain, K's refrain and L's verse take three voices; A, D, E, F, G, I
+and J two, or the last line; C none.
 
-## The choice: an arrangement option, not a style
+## An arrangement option
 
-So the round is **(b), an arrangement option**: `arrange.<section>:<n>.round`, for any style, the ballad among
-them. What decides it is the tune, section by section and mode by mode, not a band: H's refrain and bridge take a
-round in the major modes, its verse barely, a minor mode only the refrain's last line. A style of its own would
-be a song sung round from beginning to end, which this tune can't carry in half the modes a machine sings it in,
-and a round is a moment, the last refrain or the bridge, not a whole song's texture. Voices alone are already a
-style (the a cappella): a round in an a cappella is (a) where a person wants it. No style changes, so the three
-styles being added beside this (in style.py) and this merge without touching each other.
+A round is an arrangement option, `arrange.<section>:<n>.round`, for any style, the ballad among them. What
+decides it is the tune, section by section and mode by mode: H's refrain and bridge take a round in the major
+modes, its verse barely, a minor mode only the refrain's last line. A style would be a song sung round from
+beginning to end, which this tune can't carry in half the modes a machine sings it in, and a round is a moment,
+the last refrain or the bridge. Voices alone are already a style (the a cappella), and a round in an a cappella
+goes where a person wants it.
 
-## The design
+## How it is sung
 
 **The edit.** `arrange.<section>:<n>.round`: `true` (a round: three voices where the tune takes three, else two),
 or a number of voices, 2 to 4, the singer among them; null gives the section back. Checked (`takeover.check`): a
-section with words on two or more lines of one length, and a round that fits it in the song's own mode; refused
-with why otherwise ("the verse's tune doesn't sit over itself as a round"). With the rest of the edits
-(`shape_problems`): not with a length of its own (`bars`) or played (`sung: false`), each said. Stored and handed
-down as every arrangement choice is (`params.composition["arrange"]`); a version whose mode the round doesn't fit
-keeps it, silent, said ("in this version's mode its tune doesn't sit over itself"), as a choice for a player its
-band hasn't got waits.
-
-**How it is sung** (`canon.choose`, in the version's mode): the whole section a line apart if that fits, else two
-lines apart, with the voices asked for (true: three, else two); where no whole round fits, **its last line as a
-round**: the singer sings the section as always, and on its last line two more voices come in half a line apart,
-singing that line ("by everyone, no one, and now it's by you"), a tag over the section's end, three voices
-whatever was asked. The free round the brief allowed for, and the only round a minor mode leaves H.
-
-**The ending: the voices drop out in turn.** Each voice sings the section once and stops at the end of its own
-last line, held as the singer holds it; the section is longer by the later voices' tail, `(voices - 1)` times the
-distance (a three-voice refrain a line apart: 8 bars and 4 more, 12). Under the tail the band plays, line by
-line, the line the voice furthest along is singing (`canon.under`: three voices a line apart, the last line
-twice; the tag, its last line once), so each voice's "now it's by you" lands on the chords it was written over,
-and the last one ends the section alone on the tonic, with the band. In the layout (`takeover.phrase_plan`) the
-tail is lines the section plays after its own, as a sung section made longer is (`bars`): the tune lines, chord
-times, spans, karaoke, MIDI markers and the piano score all follow; the singer is silent there and no instrument
-plays the tune (realize lays no melody notes on those lines). A held chord at the end (everyone stopping at once)
-was the other way: it cuts the later voices off before their last line, and the last line is the hook.
-
-**The voices.** The singer is the first; each later entry is a choir part, `choir1` the second voice, `choir2`
-the third: the lineage's voices where it has them (params.choir; the parent first), else the program's own
-stand-ins (as the a cappella's group is made up), each its own singer, panned apart as the choir is (the singer in
-the middle, `choir1` left at -0.45, `choir2` right at 0.45, a fourth -0.25). Each sings the singer's own notes
-in the section (its variants, the words of that verse or refrain) at the written pitch, shifted by its entry,
-each a hair off the beat its own way (as backing voices are, `idioms.sung_notes`). A stand-in drawn "low" sings an
-octave down everywhere else; in the round it sings where the tune is written (an octave down, H's tune goes under
-the throat's floor, E3), as the a cappella's singers do. The entries are made as backing voices are
-(`idioms.backing`), so the band keeps clear of their notes as it does of the backing.
-
-**Everything else in a round section steps aside.** No backing voices there (the gang, thirds, oohs, an a
-cappella's parts), no lineage harmony (a round of the bridge is the lineage passing its tune instead of
-harmonizing it), no fills between the lines and no player on a line of its own (a counter-melody, a descant,
-the tune doubled: `takeover.LINES`); the band's chords, bass and drums play as the program has them.
-
-**How loud.** A lineage voice sits about 9 dB under the singer (CHOIR_GAIN and the choir's bus). An entry of a
-round is a voice singing the tune, not a backing; in a round section the entries are lifted (`ROUND_GAIN` at
-synthesis, over their own notes, faded in and out) to sit a few dB under the singer. To be measured on the stems.
-
-**The page.** In the section's inspector, "Who sings": the singer · a round · nobody: played. "A round" has the
-tooltip "the voices come in one after another" (where it is the last line: "on its last line"); where the tune
-can't take one, it is disabled with why. The region's label says "· a round". The section's line in the grid's
-"Voices before" row shows the round there.
-
-**Nothing else moves.** Absent, nothing here runs: every function gives back what it was given, and every
-render is byte for byte as before. No style, no kernel, no numba.
-
-## Open before the review
-
-- Whether the singer comes first (as built) or last: the ancestors starting and the singer ending it "and now
-  it's by you" is the other reading, and moves the singer's own notes in the layout.
-- Whether a minor version's tag round is enough, or the whole round should be offered with its clash said.
-
-## What the review changed
-
-A read-only Fable review of the design and of canon.py before the rest was built. It found the reasoning sound
-(the pentatonic tune, an option rather than a style, `under`'s tail checked by hand for two to four voices at a
-line and two) and these, all taken:
-
-- **The measure.** An overlap was weighed by where the overlap began, not by its notes; now a note on a foot or a
-  beat long counts whole, as `style.tune_clash` weighs a note (the tables above are the new ones; no choice
-  moved). The singer's own pickup had no chord under it and went unscored; it sings over its first bar's chord.
-  The fit is taken under a person's chords (`composition.harmonized`), which the band plays under the voices.
-- **The singer's last note.** A round on the song's last section would have held the singer's "you" through the
-  whole tail (the last melody note runs to the end of the singing); it ends where its line does.
-- **Where the singing ends.** Both arrangers took the singer's last note as the end of the singing: a quote coda
-  would have started under the later voices, and the last chord's hold was set too early. They take the round's
-  tail (`canon.sung_until`).
-- **No lift at synthesis.** The choir's bus is brought to its loudness as a whole, so a gain on the round's
-  notes would only have pulled the rest of the choir down. None is applied; the levels are measured below (the
-  entries sit 2 to 8 dB under the singer, about level with it in a four-voice bridge).
-- **The singers.** The design's low stand-ins at the written pitch are kept (the notes in the round are written
-  an octave up for a singer who sings an octave down, so they sound where they are written); the a cappella's
-  matching of singers to parts by range leaves the round's notes out of each part's range. **The order**: the
-  oldest voice comes in second and the parent last (`choir1`), so the voice nearest the singer finishes the round,
-  "now it's by you", a reordering of the parts, nothing moved in the layout. The singer stays first: whoever
-  starts sings over the written chords.
-- **The ring.** A voice's last note rings three seconds where it ends the song; a round's last voice doesn't (the
-  singer's doesn't either), unless the style is voices alone.
-- **Held chords running into a round** (an a cappella's hum, oohs) stop where the round begins, not only those
-  starting inside it.
-- **The grid** said the program's line players were playing in a round section, which they don't; the cell says
-  why ("a round, as you chose: the voices carry the tune, so the fiddle rests"), and "Voices before" shows the round.
-- **House's own lengths** (its drop's hook bars) stay before a round refrain; the tail follows them.
-- **Said, not changed**: the tag's band follows the last voice, not the furthest (one line of the last line, under
-  the second voice's second bar and the third voice's whole line; for H it measures the same); a minor version's
-  tag round is enough (offering the whole one "with its clash said" goes against the program's own refusals); a
-  refrain round before the tag gives four "now it's by you" cadences in a row (open, below); the queue's time for a
-  render doesn't count voices.
-
-## As built
-
-`songbird/canon.py` (the fit, the choice, the tail, the later voices), with small hooks elsewhere:
-`takeover.py` (the path, its checks, the layout's tail, a round section's players and fills, the grid's fields and
-words), `realize.py` (the singer's notes marked in a round, none in its tail, no lineage harmony in it, the last
-note, the ring), `idioms.backing` and the seed's own ballad in `band.arrange` (the later voices made as backing
-voices; nobody else's backing there), `band.fills` (none in a round), `synth.stem_jobs` and `matched` (a round's
-notes where they are written; not counted in a part's range), the page (`score.js`, `model.js`, `studio.js`).
-`tools/round_fit.py` prints the tables. `tests/test_round.py` and a grid test in `tests/test_studio.py`.
+section with words on two or more lines of one length, and a round that fits it in the song's mode; refused with
+why otherwise ("the verse's tune doesn't sit over itself as a round"). With the rest of the edits
+(`shape_problems`): not with a length set (`bars`) or played (`sung: false`), each said. Stored and handed down as
+every arrangement choice is (`params.composition["arrange"]`); a version whose mode the round doesn't fit keeps
+it, silent, said ("in this version's mode its tune doesn't sit over itself"), as a choice for a player its band
+hasn't got waits.
 
     songbird render songs/h-now-its-by-you.json --machine fictional:ada --date 2026-09-27 --edits round.json
 
-with `round.json` `{"arrange.refrain:3.round": true}` (or 2 to 4 voices), or "Who sings: a round" in the
-section's inspector. A section with a length of its own refuses it (said: give it its own length first); a
-played one goes round in the same click, the page asking for both. The voices: `choir1` to `choir3` (the parent's
-and the lineage's voices first, then the program's own), panned at -0.45, 0.45 and -0.25.
+with `round.json` `{"arrange.refrain:3.round": true}`, or "Who sings: a round" in the section's inspector.
 
-**Byte for byte.** Before and after: the seed (9b0766353b73), ada's and dmitri's own versions (8e8c9e92fc61,
-c123ecde58e1), coral's a cappella with five voices (b36634aead90), ada's gospel with three (b6739a4b557f), bob's
-shanty with its gang (8c9691e8d1ad) and dmitri's jig (2d0736279ef7) render to the same PCM ids; the goldens and the
-suite pass; `test_takeover`'s "nothing arranged is the same song" holds. No kernel, no numba, so the browser's
-translation is as it was.
+**The shape** (`canon.choose`, in the version's mode): the whole section a line apart if that fits, else two lines
+apart, with the voices asked for (true: three, else two); where no whole round fits, **its last line as a round**:
+the singer sings the section as always, and on its last line two more voices come in half a line apart, singing
+that line ("by everyone, no one, and now it's by you"), a tag over the section's end, three voices whatever was
+asked. That is the only round a minor mode leaves H.
 
-## Measured (2026-09-30)
+**The ending: the voices drop out in turn.** Each voice sings the section once and stops at the end of its last
+line, held as the singer holds it; the section is longer by the later voices' tail, `(voices - 1)` times the
+distance (a three-voice refrain a line apart: 8 bars and 4 more, 12). Under the tail the band plays, line by line,
+the line the voice furthest along is singing (`canon.under`; for the tag, its last line once), so each voice's
+"now it's by you" lands on the chords it was written over, and the last one ends the section alone on the tonic,
+with the band. A held chord at the end, everyone stopping at once, would cut the later voices off before their
+last line, and the last line is the hook. In the layout (`takeover.phrase_plan`) the tail is lines the section
+plays after its own, as a sung section made longer is (`bars`): the tune lines, chord times, spans, karaoke, MIDI
+markers and the piano score all follow; the singer is silent there and no instrument plays the tune. Both
+arrangers take the round's tail as the end of the singing (`canon.sung_until`), so a quote coda and the last
+chord's hold come after it. On the song's last section the singer's last note ends where its line does.
+
+**The voices.** The singer is first; each later entry is a choir part, the lineage's voices where it has them
+(params.choir), else the program's stand-ins (as the a cappella's group is made up), panned as the choir is
+(`synth.CHOIR_PANS`: the singer in the middle, then -0.45, 0.45, -0.25). The oldest comes in second and the
+parent last (`choir1`), so the voice nearest the singer finishes the round, "now it's by you" (`canon.entries`).
+The singer stays first because whoever starts sings over the written chords. Each sings the singer's notes in the
+section (its variants, the words of that verse or refrain) at the written pitch, shifted by its entry, each a hair
+off the beat (as backing voices are, `idioms.sung_notes`). A stand-in drawn "low" sings an octave down everywhere
+else; in the round its notes are written an octave up so they sound where the tune is written (an octave down,
+H's tune goes under the throat's floor, E3), and they are left out of its part's range. The entries are made as
+backing voices are (`idioms.backing`), so the band keeps clear of their notes as it does of the backing. A
+voice's last note rings three seconds where it ends the song; a round's last voice doesn't (the singer's doesn't
+either), unless the style is voices alone.
+
+**Everything else in a round section steps aside.** No backing voices there (the gang, thirds, oohs, an a
+cappella's parts), no lineage harmony (a round of the bridge is the lineage passing its tune instead of
+harmonizing it), no fills between the lines and no player on a line alone (a counter-melody, a descant, the tune
+doubled: `takeover.LINES`); the band's chords, bass and drums play as the program has them. Held chords running
+into a round (an a cappella's hum, oohs) stop where it begins. House's drop lengths (its hook bars) stay before a
+round refrain; the tail follows them.
+
+**How loud.** The entries sing on the choir's bus, which is brought to its loudness as a whole, so no gain is
+applied to a round's notes alone (it would only pull the rest of the choir down).
+
+**The page.** In the section's inspector, "Who sings": the singer · a round · nobody: played. "A round" has the
+tooltip "the voices come in one after another" (where it is the last line: "on its last line"); where the tune
+can't take one, it is disabled with why. A section with a length set refuses it (said: give it its default length
+first); a played one goes round in the same click, the page asking for both. The region's label says "· a round",
+and the grid's "Voices before" row shows the round. A line player's cell says why it rests ("a round, as you
+chose: the voices carry the tune, so the fiddle rests").
+
+**Nothing else moves.** With no round asked for, nothing here runs: every function gives back what it was given,
+and every render is as it would be without canon.py. No kernel and no numba, so the browser's translation needs
+nothing new.
+
+The code: `songbird/canon.py` (the fit, the choice, the tail, the later voices), with small hooks in
+`takeover.py` (the path, its checks, the layout's tail, a round section's players and fills, the grid's fields and
+words), `realize.py` (the singer's notes marked in a round, none in its tail, no lineage harmony in it, the last
+note, the ring), `idioms.backing` and the seed's ballad in `band.arrange` (the later voices made as backing voices;
+nobody else's backing there), `band.fills` (none in a round), `synth.stem_jobs` and `matched` (a round's notes
+where they are written; not counted in a part's range), and the page (`score.js`, `model.js`, `studio.js`). Tests:
+tests/test_round.py and a grid test in tests/test_studio.py.
+
+## Measured
 
 **Tuning**, each note's f0 over its middle (pYIN on the dry stems) against its written pitch, in the round
-sections of the four renders below: every voice's median 1.3 cents flat (the measure's own: the singer's too),
-and 97 to 100% of notes within 25 cents, the singer and each later voice alike (ada's ballad: the singer 98%, the
-two voices 100%; dmitri's four-voice bridge: 98, 100, 100, 100). The voices sound where the tune is written; a
-singer who sings an octave down (dmitri's) stays an octave under them, a canon at the octave.
+sections of four renders (ada's ballad and a cappella, coral's a cappella in D aeolian with five voices, dmitri's
+chamber version): every voice's median 1.3 cents flat (the measure's bias: the singer's too), and 97 to 100% of
+notes within 25 cents, the singer and each later voice alike. The voices sound where the tune is written; a singer
+who sings an octave down (dmitri's) stays an octave under them, a canon at the octave.
 
 **Levels**, each voice against the singer where all sing at once, as the mix's buses set them: ada's ballad 4.7
 to 5.9 dB under the singer in the bridge, 5.2 to 5.9 in the last refrain (with a single round in the song, 1.9 and
 3.6: the choir's bus is set by everything it sings); ada's a cappella 4.3 and 7.8 dB under; dmitri's four-voice
 bridge about level with his low voice (+2.5 to -2.7 dB).
 
-**The words blur where the voices overlap.** Whisper (base.en, on the mix, a beat before each round section to
-its end), counting the singer's words heard once against the same sections in the same versions without the
-round: **62% of the words heard in the rounds (173 of 280), 86% without (242 of 280)**. Word error rates aren't
-comparable there: Whisper writes down several voices' words, so the edits pass 100% (124% against 15%). By
-section: the ballad's bridge 52% of the words (82% plain) and its last refrain 58% (88%); the a cappella's 64%
-(82%) and 86% (98%); coral's two-voice verse 72% (90%); coral's last refrain, only its last line round, 91% (85%):
-nothing lost; dmitri's four-voice bridge 36% (85%) and three-voice refrain 27% (79%), where Whisper hears "oh, oh,
-oh" for the whole refrain. A round's first line is the singer alone and clear; from the second voice on, the
-words come round three times over and the ear follows one voice at a time. That is a round's nature: it is
-heard as the tune passed along, not as a lyric.
+**The words blur where the voices overlap.** Whisper (base.en, on the mix, a beat before each round section to its
+end), counting the singer's words heard once against the same sections in the same versions without the round:
+62% of the words heard in the rounds (173 of 280), 86% without (242 of 280). Word error rates aren't comparable
+there: Whisper writes down several voices' words. By section: the ballad's bridge 52% of the words (82% plain)
+and its last refrain 58% (88%); the a cappella's 64% (82%) and 86% (98%); coral's two-voice verse 72% (90%);
+coral's last refrain, only its last line round, 91% (85%); dmitri's four-voice bridge 36% (85%) and three-voice
+refrain 27% (79%). A round's first line is the singer alone and clear; from the second voice on, the words come
+round three times over and the ear follows one voice at a time. A round is heard as the tune passed along more
+than as a lyric.
 
 **Memory** (tools/render_memory.py's measure, two threads, `MallocLargeCache=0`): the later voices sing in choir
-stems a version already has or adds one at a time, so a round costs its tail's seconds, not its overlap: an a
-cappella with six voices, a refrain and the bridge as rounds, 255 s, 1.54 GB (the studio's estimate 1.83; added to
+stems a version already has or adds one at a time, so a round costs its tail's seconds rather than its overlap:
+an a cappella with six voices, a refrain and the bridge as rounds, 255 s, 1.54 GB (the studio's estimate 1.83; in
 `MEASURED`); four verses, every part, six voices, tempo 55, every refrain, verse and bridge a round, 712 s, 2.86
-GB, against 2.78 for the same without the rounds (494 s): past the studio's 2100 MB either way, and refused, as
-before. A round adds about 4 bars a section (a line for a last-line round).
+GB, against 2.78 for the same without the rounds (494 s): past the studio's 2100 MB either way, and refused. A
+round adds about 4 bars a section (a line for a last-line round).
 
-## The renders, for listening
+## Choices and open questions
 
-In renders/styles/ (ids and times in ids-round.txt), with their records, scores and words:
-
-- **round-ada-2026-09-27-ballad** (232 s, id a12e0eeeacc9): ada's ballad (D ionian), three voices a line apart in
-  the bridge, 2:26 to 2:57 (the voices in at 2:31 and 2:36), and the last refrain, 3:16 to 3:47 (3:21, 3:26).
-- **round-ada-2026-09-27-acappella** (249 s, 502f1dbfddbc): the same in the a cappella: the bridge 2:34 to 3:06
-  (2:39, 2:45), the last refrain 3:27 to 4:05 (3:32, 3:37).
-- **round-coral-2026-11-02-five-voices** (238 s, 00172df8fc33): coral's a cappella, D aeolian, five lineage voices
-  (`--choir 5`): the third verse 1:40 to 2:14, two voices two lines apart (the second in at 1:51); the last
-  refrain 3:20 to 3:47, its last line round (in at 3:39 and 3:42), then the tag.
-- **round-dmitri-2026-06-21** (278 s, 97b884781989): dmitri's own chamber version: the bridge 3:03 to 3:47, four
-  voices a line apart (3:09, 3:15, 3:22), straight into the last refrain, 3:47 to 4:24, three (3:52, 3:59).
-
-## Decisions for the artist
-
-1. **Singer first, parent last.** The singer starts; the oldest voice comes in next and the parent finishes the
-   round. The other way (the ancestors starting, the singer ending it "and now it's by you") would put the
-   singer's own line over chords written for a line ahead, or move everything in the layout.
-2. **Three voices by default**, a line apart; four are there to ask for (dmitri's bridge). Four overlapping
-   voices blur most (36% of the words heard).
+1. **Singer first, parent last.** The other way (the ancestors starting, the singer ending it "and now it's by
+   you") would put the singer's line over chords written for a line ahead, or move everything in the layout.
+2. **Three voices by default**, a line apart; four are there to ask for. Four overlapping voices blur most (36%
+   of the words heard).
 3. **The minor modes** take only the refrain's last line as a round (three voices a bar apart), and the verse two
-   voices two lines apart; the aeolian bridge none (said in the page). Coral's render has both.
-4. **A refrain round before the tag** sings "now it's by you" three times, then the tag's "la" on the same
+   voices two lines apart; the aeolian bridge none (said in the page). Offering the whole round "with its clash
+   said" would go against the program's refusals elsewhere.
+4. **Open: a refrain round before the tag** sings "now it's by you" three times, then the tag's "la" on the same
    line: four cadences in a row. The tag could make way after a round (or its harmony rest).
-5. **The levels**: the voices are the choir's bus, set as a whole: 2 to 8 dB under the singer, level with it in a
-   four-voice round. A round could have its own, louder level (a mix balance over its span after the bus).
-6. **Words**: about a quarter of them blur in a whole-section round. A round on the bridge (the lineage's own
-   section, which most listeners know by then) or the last refrain (heard three times before) costs the least.
+5. **Open: the levels.** The voices are the choir's bus, set as a whole: 2 to 8 dB under the singer, level with it
+   in a four-voice round. A round could have a louder level (a mix balance over its span after the bus).
+6. **Words**: about a quarter of them blur in a whole-section round. A round on the bridge (the lineage's section,
+   which most listeners know by then) or the last refrain (heard three times before) costs the least.
 
-# A stage edition (2026-11-14)
+# A stage edition
 
-The awards stage mix ("arc-morph") was first made outside the program, by a script over its stems. The program
-renders it from a record (`songbird/stage.py`): `songbird render performance/genome.json --replay
-performance/record-arc-morph.json` (with `--stems` for its parts). Two layers of data say what an edition is.
+The awards stage mix ("arc-morph") renders from a record (`songbird/stage.py`): `songbird render
+performance/genome.json --replay performance/record-arc-morph.json` (with `--stems` for its parts). Two layers of
+data say what an edition is.
 
-**The grid**, in the person's arrangement (`params.composition["arrange"]`, `songbird.takeover`), what the
-studio can show and what a child inherits, as the rest of the arrangement:
+**The grid**, in the person's arrangement (`params.composition["arrange"]`, `songbird.takeover`), what the studio
+can show and what a child inherits, as the rest of the arrangement:
 
 | Path | Value | What |
 |---|---|---|
-| `arrange.<section>:<n>.human` | 0 to 1, or a list, one a line | how much of people is in the lead (`stage.amounts`): its phrasing's gestures and the singer's own liveliness scaled by min(2h, 1), the people's share of its timbre 0.6 h. 0 the machine alone, 0.5 the performance voice as it is. A section with none keeps the amount before it |
-| `arrange.<section>:<n>.<player>.synth` | all, until:<line>, under | the player's synth twin (`stage.TWINS`: harp and guitar an arpeggio, bass a synth bass, drum a drum machine, whistle and fiddle a synth lead) plays the player's own notes, level with it: in its place, until that line (0 the first) and the player from there, or under the player at 7 dB below |
+| `arrange.<section>:<n>.human` | 0 to 1, or a list, one a line | how much of people is in the lead (`stage.amounts`): its phrasing's gestures and the singer's liveliness scaled by min(2h, 1), the people's share of its timbre 0.6 h. 0 the machine alone, 0.5 the performance voice as it is. A section with none keeps the amount before it |
+| `arrange.<section>:<n>.<player>.synth` | all, until:<line>, under | the player's synth twin (`stage.TWINS`: harp and guitar an arpeggio, bass a synth bass, drum a drum machine, whistle and fiddle a synth lead) plays the player's notes, level with it: in its place, until that line (0 the first) and the player from there, or under the player at 7 dB below |
 
-The arrangers never read these (`takeover.arranged` leaves them out), so a section with only these is, to them,
-a section nobody arranged. Absent, the render is the program's own, to the sample.
+The arrangers never read these (`takeover.arranged` leaves them out), so a section with only these is, to them, a
+section nobody arranged. Absent, the render is the program's, to the sample.
 
-**The exact data**, `params.composition["exact"]`, the edition's own and never inherited
-(`composition.handed_down` drops it):
+**The exact data**, `params.composition["exact"]`, the edition's and never inherited (`composition.handed_down`
+drops it):
 
 ```json
 {"twins": {"harp~": ["harp", "arp"], "harp#": ["harp", "chip"]},
@@ -692,23 +506,23 @@ a section nobody arranged. Absent, the render is the program's own, to the sampl
  "human": {"verse:0": [0, 0, 0, 0.2]}}
 ```
 
-`twins`: a synth (any instrument) on a player's own notes, named, level with the player by the whole stems'
-RMS; `layers`: another style's players on the same song (its key, tempo, form and chords), a section of a part
-played as it plays another; `levels`: each named part's level along the song as points (where, dB or null for
-silent) joined by straight fades, the first and last held, a point at the place of the one before it 0.12 s
-after it; `human`: amounts finer than the grid's. A place is `<section>:<n>` (its start), `<section>:<n>.<line>`
-(where the lead's line begins, its pickup with it) or `<section>:<n>.end`. Where the exact data gives `twins` or
-`levels`, they are the whole table: what the grid's synth cells would make of them is left aside.
+`twins`: a synth (any instrument) on a player's notes, named, level with the player by the whole stems' RMS;
+`layers`: another style's players on the same song (its key, tempo, form and chords), a section of a part played
+as it plays another; `levels`: each named part's level along the song as points (where, dB or null for silent)
+joined by straight fades, the first and last held, a point at the place of the one before it 0.12 s after it;
+`human`: amounts finer than the grid's. A place is `<section>:<n>` (its start), `<section>:<n>.<line>` (where the
+lead's line begins, its pickup with it) or `<section>:<n>.end`. Where the exact data gives `twins` or `levels`,
+they are the whole table: what the grid's synth cells would make of them is left aside.
 
-**The render.** `stage.prepare` lays the plan out in the score (`Score.stage`, never written to the score's
-file): the lead realized again at each amount the song names, which take is heard from which line, the
-twins, the layered scores and the levels in seconds. `synth.stem_jobs` makes the stems from it
-(`stage.jobs`): the lead sung whole at each amount and the takes joined where its lines begin (30 ms fades);
-the twins; the layered parts; each named part times its level. The stem cache keeps none of these under the
-program's own key. The mix and the master are the program's own.
+**The render.** `stage.prepare` lays the plan out in the score (`Score.stage`, never written to the score's file):
+the lead realized again at each amount the song names, which take is heard from which line, the twins, the
+layered scores and the levels in seconds. `synth.stem_jobs` makes the stems from it (`stage.jobs`): the lead sung
+whole at each amount and the takes joined where its lines begin (30 ms fades); the twins; the layered parts; each
+named part times its level. The stem cache keeps none of these under the program's key. The mix and the master
+are the program's. The throat is quiet after a singer's last note (throat.LAST_SILENCE), so a stage edition adds
+no release.
 
-**Measured** against the script's own stems (its release left out: the throat is quiet after a singer's last
-note, throat.LAST_SILENCE): every stem within float rounding (-149 dB or less, relative to
-the stem), the mix -150 dB, the FLAC against the script's -79 dB (the 16-bit dither; against the script's mix
+**Measured** against the stems of the script that first made the mix: every stem within float rounding (-149 dB
+or less, relative to the stem), the mix -150 dB, the FLAC -79 dB (the 16-bit dither; against the script's mix
 mastered and dithered as the program does, -115 dB). record-B with none of these renders the same samples as
-before.
+without stage.py.

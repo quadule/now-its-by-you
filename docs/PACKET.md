@@ -1,28 +1,27 @@
-# The seed packet (2026-09-26)
+# The seed packet
 
 A rendition travels as one file. It is an ordinary FLAC that plays in any
 player, and it is also a zip archive that carries the program that sang it,
 the song's skeleton, the rendition's record and its words. Run it with Python
 and it sings a new version of the song, on your computer and your day, as
-that version's child. This is milestone 6 of docs/history/PLAN-2026-09-24.md.
+that version's child.
 
-The record's `performance` now carries the lead and choir's rounded phrasing
+The record's `performance` carries the lead and choir's rounded phrasing
 gestures, without recordings or local paths. Children inherit them unless a
 new phrasing is supplied; the studio uses them in previews and recordings.
 `render --replay` restores these gestures and the final singer and mix,
-including their overrides. Old records without a performance still use the
-seed's phrasing and warn when an external contribution needs supplying.
+including their overrides. A record without a performance uses the seed's
+phrasing and warns when an external contribution needs supplying.
 
-The program and model aim for **8 MiB**, excluding the audio: a goal to keep
-in mind while the model is trimmed, compressed or quantized (the artist,
-2026-09-27), not a wall. It is measured before compression so it stays
+The program and model aim for **8 MiB**, excluding the audio: a goal (the
+artist's), not a wall. It is measured before compression so it stays
 meaningful as the model changes; packing warns past the goal and refuses only
 absurd sizes (40 MiB, a stray render). It also measures the attached material,
 including the genome, learned gestures, lineage and ZIP overhead.
-`uv run songbird budget` shows the model, source and remaining room;
-`uv run songbird budget --json` supplies exact counts for build checks. The
-platform's separately installed Python dependencies are not embedded in this
-budget (see setup below).
+`uv run songbird budget` shows the model, source and remaining room (6.7 MiB
+in all, 3.4 of it the model); `uv run songbird budget --json` gives exact
+counts for build checks. The Python dependencies installed beside it are not
+in this budget (see setup below).
 
     uv run songbird render songs/h-now-its-by-you.json --pack --out seed.flac
     python3 seed.flac                 what this is, and what you can do
@@ -34,7 +33,7 @@ budget (see setup below).
 
 `render --pack` writes the one file and nothing beside it: the record and the
 words travel inside. Without `--pack` a render still writes its sidecars
-(.json, .score.json, .txt) as before.
+(.json, .score.json, .txt).
 
 ## How it works
 
@@ -60,10 +59,7 @@ Inside:
 | `LICENSE` | CC0, with the legal code in full; it also travels as `program/LICENSE`, so every child carries it |
 | `CREDITS.md` | the singers who asked to be named (the repo's CREDITS.md); it also travels as `program/CREDITS.md`, so every child carries it |
 
-With everything merged (the learned voice's weights, the styles and the new
-instruments), the program is 85 files, 5.3 MB unpacked and about 3.4 MB in the
-archive. H's seed packet is 16 MB in all. Sung cold from it with `--here`, a
-child took 38 s. A rendition's archive is deterministic: the same rendition
+A rendition's archive is deterministic: the same rendition
 packs to the same bytes, with its entries dated by the rendition's own day.
 Packing again replaces the archive rather than stacking a second one, and the
 audio before it is never touched but for its cover (below).
@@ -150,8 +146,8 @@ its front-cover PICTURE block: songbird/cover.jpg (600 by 600, 68 KB, so every
 child can embed it too), written by songbird/artwork.py after the Vorbis
 comments and before the first audio frame, and before the archive is appended,
 so the archive's offsets and the id are untouched (a packet carries about 140 KB
-for it: the block and program/songbird/cover.jpg). `pack.with_cover` gives an
-older file the cover, its archive kept byte for byte and only moved along;
+for it: the block and program/songbird/cover.jpg). `pack.with_cover` gives a
+file made without one the cover, its archive kept byte for byte and only moved along;
 that is how tools/sing_site.py makes the public seed file from the submitted
 render. ffprobe shows it as an attached picture and metaflac lists it; macOS's
 Finder and QuickLook show no art for any FLAC (not even one made by metaflac),
@@ -160,8 +156,7 @@ so there it shows as a plain audio file.
 ## Checked
 
 For the seed as a packet, and for a child sung by running the seed cold with a
-fresh `SONGBIRD_HOME` (51 s, including setting up the environment from uv's
-cache):
+fresh `SONGBIRD_HOME`:
 
 - **Players decode every sample, identically.**
   - libsndfile (soundfile);
@@ -187,23 +182,13 @@ tests/test_pack.py checks:
 - running the file with Python (`about`, `songbird --help --here`, `unpack`);
 - ffmpeg decoding the same samples.
 
-A Fable review (2026-09-26) found the first version's weak points, all fixed
-since:
-- the unpacked program was keyed by the record's id, so a changed file could
-  run an old copy, and a hostile id chose a path;
-- it unpacked before asking;
-- the prompt understated what it fetches;
-- it advertised a studio that didn't exist yet;
-- children lost the license text;
-- a parent's lineage wasn't checked against its audio.
-
 ## Caveats to reconsider
 
 - **The FLAC reference tools object.** `flac -t` and `flac -d` decode every
   sample, then report the archive as lost sync and exit with an error (`flac -d`
   won't write its output unless given `-F`). The players above don't mind.
   - *The plan's alternative:* hold the archive in a FLAC APPLICATION metadata
-    block. That is strictly valid FLAC, but it is no longer a zip or a Python
+    block. That is strictly valid FLAC, but it is not a zip or a Python
     program, so only `songbird unpack` could open it.
   - *Choice:* the file stays a polyglot.
 - **macOS `ditto -x -k` won't open it.** It wants the zip at the file's start;
@@ -214,10 +199,9 @@ since:
   about 100 MB, so it doesn't.
 - **Nothing in the file can vouch for itself.** The program hash only proves
   consistency. For trust from outside:
-  - *A published hash:* the artist could publish the seed and its program hash
-    somewhere stable (songbird.quadule.com, say), plus one line in README.txt
-    saying where, so a careful stranger can look it up before running
-    anything.
+  - *A published hash:* the seed and its program hash published somewhere
+    stable, plus one line in README.txt saying where, would let a careful
+    stranger look it up before running anything.
   - *Signing:* signing the program would let the bootstrap refuse modified
     programs, but it sits awkwardly with CC0 and with anyone packing their own
     changes. That's the artist's call.
@@ -225,19 +209,19 @@ since:
   `rendered_at`, so its archive's entries are dated 1980 and its README names
   no day.
 
-## Compatibility (2026-11-11)
+## Compatibility
 
 A version's file is run for years after it is made, by Pythons and libraries that didn't exist then, beside files
 made by earlier and later programs. What holds that together:
 
 - **The record's format.** A record says which format it is written in: `record_format`, a whole number
-  (`songbird.RECORD_FORMAT`, 2 now). A record without one is 1, as the first version's is. The number goes up only
+  (`songbird.RECORD_FORMAT`, 2 in this program). A record without one is 1, as the first version's is. The number goes up only
   when a record changes so that an older program would misread it, never for a field added: every reader passes
   over fields it doesn't know (params, band, style, mix, voice). A program given a record with a higher number
   than its own says so (the command line on stderr, the studio in its note on the version) and sings from what
   it understands of it; a parent it can't sing from at all is refused in a sentence.
-- **The program's version.** `program_version` is 0.1.0 in the first version (September 28, 2026) and 0.2.0 from
-  the performance version on. The program's identity is still its hash (`program_sha256`), which has no order;
+- **The program's version.** `program_version` is 0.1.0 in the first version and 0.2.0 in the performance
+  version. The program's identity is its hash (`program_sha256`), which has no order;
   the version is for people and for "newer than this".
 - **The bootstrap** (`__main__.py`) parses and runs on Python 3.7 and every later one. It has no
   `from __future__ import annotations` (to be withdrawn from Python some years on): the annotations an old Python
@@ -247,15 +231,14 @@ made by earlier and later programs. What holds that together:
   own modules.
 - **The environment** (`~/.songbird/envs/<hash>/`) is named by the pins and the Python a file asks for, not by the
   comment above the pins, so two releases with the same pins share one. Its `.ready` says how it was made (`with`
-  uv or pip, `versions` pinned or newest, which `python`). One that pip made from a Python since replaced (a system
-  upgrade), or of the newest versions before uv was installed, is made again; one an earlier bootstrap made (a
+  uv or pip, `versions` pinned or newest, which `python`). One that pip made from a Python that has been replaced (a
+  system upgrade), or of the newest versions before uv was installed, is made again; one an earlier bootstrap made (a
   `.ready` holding only a date) is taken as it is. If uv can't make the environment, this Python's venv and pip
   do, where it is 3.11 or newer.
 - **The voice file** (`~/.songbird/voice.json`) is shared by every release. A field this program doesn't know is
   passed over; a signal it can't make is left out, the rest kept; and a file no voice can be made of keeps its
   salt (so the singer stays the same) and the signals a person left out, and is set aside as `voice.json.unread`
   rather than written over. It is written whole or not at all.
-- **Text is UTF-8** wherever the program reads or writes it, whatever the system's own encoding (Windows read the
-  studio's page as cp1252 before, and couldn't).
+- **Text is UTF-8** wherever the program reads or writes it, whatever the system's encoding.
 - **Mistakes are sentences.** A mistyped path, date or option on the command line is said in a line;
   `SONGBIRD_DEBUG=1` shows the traceback.

@@ -1,11 +1,11 @@
 # Listening editions
 
 Three arrangements of **Now It's by You** made by hand, each a file of choices
-the program makes on top of its own (`songbird render --edits`). Each keeps the
+the program applies on top of its own (`songbird render --edits`). Each keeps the
 song's tune, key and refrain, and a version made from one carries its choices
 in its record (`chosen_by_you`).
 
-**Open Door** is the song's own arrangement (`seed_params` in the genome carry
+**Open Door** is the song's default arrangement (`seed_params` in the genome carry
 it; the file spells the same choices out). The harp plays alone under the first
 line, and the rhythm and the answering instruments join a few at a time. The
 upper band drops out for the first half of the last refrain, and the guitar and
@@ -43,7 +43,7 @@ the same kind of computer (docs/PACKET.md):
 uv run songbird render songs/h-now-its-by-you.json --replay renders/open-door.flac --out renders/open-door-again.flac --pack
 ```
 
-How they were made and judged, in September 2026:
+How they were made and judged:
 [the creative review](../docs/history/CREATIVE-REVIEW.md) and
 [phrasing calibration](../docs/history/PHRASING-CALIBRATION.md). To compare
 finished files by their numbers, see "Checking a render without ears" in

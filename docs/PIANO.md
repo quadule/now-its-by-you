@@ -1,8 +1,9 @@
-# Learning the song at the piano (2026-09-29)
+# Learning the song at the piano
 
 A page for learning "Now It's by You" on a piano or a MIDI keyboard, note for note: falling notes over a
 keyboard, the chord above, the words below. It teaches two things: the released version (web/piano/, as the
-release sings it; dev-only for now, nothing deploys it), and, from the studio, **your version**: the one on
+release sings it; served locally, not deployed), and, from the studio (on your computer, or at
+https://studio.itsby.you, which serves the page at /piano/), **your version**: the one on
 the studio's page, with its key, tempo, chords, words, form and tune (docs/STUDIO.md, "Learning it at the
 piano").
 
@@ -21,12 +22,12 @@ studio's own `songbird/studio/identity.css` (web/piano/identity.css is a link to
 have Web MIDI; Safari doesn't, so there the page plays from the screen's keys and the computer's.
 
 **One page, two places.** The page's files live in `songbird/studio/piano/` (so they travel in the song's
-packet with the studio: 77 KB, 23 KB compressed); `web/piano/index.html`, `piano.js`, `piano.css` and
+packet with the studio); `web/piano/index.html`, `piano.js`, `piano.css` and
 `sound.js` are links to them, so there is nothing to keep in step by hand. The page reads `score.json` beside
 it, or the score its address names: `?score=score/KEY.json`, a path on the same site (the studio's). A
 studio's score says so (`source.kind: "studio"`), and the page then calls it your version and shows the way
 back. The settings are the browser's, per site; a score in another key than the settings were made for
-(the studio's version after a key change) starts the page's own key change again from 0 and fits the hands
+(the studio's version after a key change) starts the page's key change again from 0 and fits the hands
 to the keyboard again, if one is set.
 
 To make the release's score again, after a new release:
@@ -68,8 +69,8 @@ To make the release's score again, after a new release:
 
 ## How the score was derived
 
-`tools/piano_score.py` (its docstring has the details). The release, `renders/review/contest.flac`, is a
-packet (docs/PACKET.md): it carries the program that sang it, the genome, the render record and the words.
+`tools/piano_score.py` (its docstring has the details). The release (the FLAC from https://now.itsby.you,
+which the tool reads from `renders/review/contest.flac`) is a packet (docs/PACKET.md): it carries the program that sang it, the genome, the render record and the words.
 The exporter unzips the packet's own program (checked against the record's `program_sha256`) and imports
 it ahead of this tree's `songbird/`, so later changes can't move a note. Then it lays the score again as
 `songbird render --replay` does (and `tools/sing_site.py` `seed_words`): `realize()` with the record's
@@ -108,12 +109,11 @@ fifth above too. The chords (G and Bm are there, G# isn't) and the note-by-note 
 
 ### Your version, from the studio
 
-The same export (`songbird.piano.export`, moved into the package from the tool, which now calls it and
-still writes `score.json` byte for byte) makes the studio's score, from `songbird.piano.lay`: the version on
+The same export (`songbird.piano.export`, which the tool calls too) makes the studio's score, from `songbird.piano.lay`: the version on
 the studio's page laid out with this program, realize() and `variation.lay` as a render has them, no audio
 (a tenth of a second or two). This program's band hands over its Context itself when asked
 (`band.overheard()`, on the asking thread only, so a render on another of the server's threads is never
-listened in on; a style's band too); the release's older program is still listened in on by wrapping
+listened in on; a style's band too); the release's older program is listened in on by wrapping
 `band.plan` and `band.arrange`, which only a one-off script may do. What a person's version adds:
 
 - **Chords** a person chose: an inversion's bass (`"bass"`, named `C#m/E`) and sus chords (`sus2`, `sus4`);
@@ -122,7 +122,7 @@ listened in on; a style's band too); the release's older program is still listen
 - **A style's band**: the bass line is the style's bass part (an electric or a synth bass); a style's lift
   (the last refrain a whole step up) is in the notes (the refrain's pickup too) and the chords, and said as
   `lift`.
-- **Key, tempo, form, words and tune** are simply the version's.
+- **Key, tempo, form, words and tune** are the version's.
 
 `source` says `{"kind": "studio", "exporter": "songbird studio", "day", "version"}`. The studio keeps each
 score in its cache under the version's key (`Studio.piano`, `/api/piano`) and serves it at
@@ -132,9 +132,8 @@ the studio.
 Checked by tests/test_piano_score.py (the sung notes are the render's, in order; a key, tempo and chords
 change; a lift; listening in on one thread only; the release's score again, byte for byte, where the release
 is in the checkout) and tests/test_studio_piano.py (the page served from the studio, one source with
-web/piano/, a public studio's limits), and in the built-in browser: the key and a chord changed in the
-studio (E major, C#m/E) shown on the page, the keyboard fitted (25 keys: 11 notes moved an octave; 37: none),
-and a later key change (G) starting the page's key again and refitting.
+web/piano/, a public studio's limits), and by hand in a browser: a key and a chord changed in the studio shown
+on the page, the keyboard fitted, and a later key change starting the page's key again and refitting.
 
 ## What's where
 

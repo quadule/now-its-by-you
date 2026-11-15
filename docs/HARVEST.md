@@ -1,8 +1,7 @@
 # What the harvest reads, and what it becomes
 
-A machine sings in its own voice, read from its context (principle 4) and
-reduced so that nothing identifying leaves it (principle 8). This is the
-audit: every source the program reads, what it keeps, and what that drives.
+A machine sings in a voice read from its context and reduced so that nothing
+identifying leaves it. This is the audit: every source the program reads, what it keeps, and what that drives.
 The code is `songbird/harvest.py` (reading and reducing) and
 `songbird/variation.py` (turning the numbers into music); each signal is one
 small function whose docstring says the same as its entry here.
@@ -72,7 +71,7 @@ aeolian, phrygian; home aeolian) for Slavic and West Asian. The year's
 drift moves a machine through its family: for H a folk or bright machine
 sings ionian most years and mixolydian some, a dark one aeolian most years
 and the seed's own ionian some. The tables are `harvest.LANGUAGES`, `FAMILY_OF`
-and `MODE_FAMILIES`, and they are a stylization for the artist to revisit.
+and `MODE_FAMILIES`, and they are a stylization.
 
 Drives which modes the tune is realized in (only modes in which every chord
 of the song stays a major or minor triad: for H's I IV V vi, ionian,
@@ -219,8 +218,8 @@ sheet beside it); only the bank's words ever appear there. The parameters
 include the tune's variants and the words the lineage holds, and who made
 the rendition (the hash's first 12 digits) and when, so a child on the same
 machine can tell which of its clocks have turned since (docs/EVOLUTION.md).
-The seed packet's manifest (milestone 6) should carry less: the parameters
-(what can be heard anyway) and the hash, not the voice block.
+A packet's manifest is the same record, the voice block with it
+(docs/PACKET.md).
 
 ## Made-up machines
 
@@ -229,7 +228,7 @@ drawn from the ranges above and reduced the same way, the same one every
 time for a name; `--machine fictional:NAME` sings as it. They are for
 hearing two machines side by side without two computers.
 
-## A visitor's browser (2026-11-09)
+## A visitor's browser
 
 The web studio (docs/WEB-STUDIO.md) sings as each visitor's browser, read as a
 computer is read quietly the first time (`here()`: its languages, size and

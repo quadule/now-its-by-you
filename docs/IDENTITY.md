@@ -12,7 +12,7 @@ the studio. The packet's README and the command line are text and stay text.
 link, audio control, double rule). It is one file in two places, byte for byte: `web/sing/page/identity.css`
 (served by the worker, stamped by `tools/sing_site.py`'s `versioned()`) and `songbird/studio/identity.css`
 (served by `songbird/studio.py`); a test holds them equal. Edit one, copy it over the other. Each page loads
-it first, then its own stylesheet (`sing.css`, `yours.css`, `studio.css`) for its own layout. The reading
+it first, then its stylesheet (`sing.css`, `yours.css`, `studio.css`) for its layout. The reading
 pages mark `<body class="leaf">`, so their plain `<button>`s and fields take the shared look; the studio
 uses `.btn`.
 
@@ -36,7 +36,7 @@ uses `.btn`.
 | `--stage-ink` / `--sung` / `--stage-red` | `#efe6da` / `#f2b25c` / `#e0664d` | same | lamplight on the page; the canvas (tools/karaoke.js) draws in these | 14.5 / 9.7 / 5.3 |
 
 Every text colour clears 4.5:1 on paper, card and wash in both schemes; the primary button's cream on ink is
-14:1. The studio's legend keeps its own `--parent` (`#7a4a2c` / `#d6a784`, an older hand's iron-gall brown,
+14:1. The studio's legend adds `--parent` (`#7a4a2c` / `#d6a784`, an older hand's iron-gall brown,
 6.3 / 8.6) and `--chance`; everything else it names (`--you`, `--rubric`, `--soft`...) is an alias of these.
 
 ## Type
@@ -79,7 +79,7 @@ always legible as a second hand.
 
 ## Not done
 
-Gradients (the only ones left draw hard-edged lines: a syllable's fill, the studio's margin rule, a select's
+Gradients (the only ones draw hard-edged lines: a syllable's fill, the studio's margin rule, a select's
 caret, the piano roll's grid); glass or blur; rounded pills or big radii (2 px is the most); drop shadows or
 glows; emoji; purple, teal or neon; hero images, textures, drawn wear or fake-old type; downloaded fonts;
 the system sans as the voice of every page; letterspaced uppercase grey labels. The `▶ ● ■ ✓ ✗ ⛶` in some

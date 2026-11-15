@@ -1,50 +1,65 @@
-# How the song is mixed and mastered (2026-09-26)
+# How the song is mixed and mastered
 
 A rendition should sound like a well-made record: a warm, intimate, modern
-acoustic folk record with the voice clear and in front. Before this, the
-stems were summed at fixed gains, sent into one room, and brought to −14 LUFS
-under a sample-peak limiter. Now every stem has a channel strip, the voice,
-the lineage choir and the band each have a bus, the room is built from the
-harvest's numbers the way a room sounds, and the master keeps the true peak
-under −1 dBTP. Nobody but the artist can listen; everything here was judged
-by measurement, against a reference, against the singer's own design, and
-by a read-only Fable review that measured the mix itself. Listening
-decides; these are the guard rails.
+acoustic folk record with the voice clear and in front. Every stem has a
+channel strip, the voice, the lineage choir and the band each have a bus, the
+room is built from the harvest's numbers the way a room sounds, and the
+master keeps the true peak under −1 dBTP. Nobody but the artist can listen;
+everything here was judged by measurement, against a reference, against
+natural singers, and by a read-only Fable review that measured the mix
+itself. Listening decides; these are the guard rails.
 
 ## The path
 
 `synth.mix()` (songbird/synth/mixing.py) takes the stems by name. A stem's
-name gives its role: voice, choirN, lute (or melody), guitar, harp, bass,
-fiddle, whistle, drum, drone; anything else is treated as a plain
-instrument. Stems of any shape are taken (mono, one column, a different
-length). The tools are in songbird/synth/fx.py.
+name gives its role (`mixing.role_of`): voice, choirN, lute (or melody),
+guitar, harp, bass, fiddle, whistle, drum, drone, and the strips the wider
+palette adds (keys, organ, kit, banjo, strings, steel and so on; see
+docs/INSTRUMENTS-B.md, "For the mix"); anything else is treated as a plain
+instrument. Only a whole name makes a stem a singer. Stems of any shape are
+taken (mono, one column, a different length). The tools are in
+songbird/synth/fx.py.
 
-**The voice.** High-passed at 80 Hz, 2 dB less honk around 900 Hz, half a dB of
-presence at 3.5 kHz (2 dB until 2026-09-27, when the top notes were heard as
-harsh; set beside natural singers: SoulX-Singer renders of the same score). Its air (7–14 kHz against 0.5–2 kHz) is measured, and only a
-voice brighter than natural singers is brought back, halfway. A de-esser
-that listens to the balance of the highs (over 4.5 kHz) against the voice's
-body (the voice an octave under them, where no "s" reaches), not to how
-loud the singer is, and turns the highs down on a split without phase, so
-an "s" comes down whole and nothing is ever turned up (see "The hiss"). A
-compressor that only leans on the syllables that stand out of their
-phrase: its threshold rides 3 dB over the
-level of the three seconds around each moment, so a syllable is evened
-against its neighbours but a quiet verse stays quiet and a full refrain
-full (2:1, 15 ms attack; on H it works on 30% of the sung time, by more
-than 2 dB on 4%). Then a touch of saturation, and a peak stage for its
-rarest peaks. Everything the voice's tools react to is measured on the
-voice itself, so a quieter or brighter singer (the learned one) is treated
-the same.
+**The voice.** High-passed at 80 Hz, 2 dB less honk around 900 Hz, half a
+dB of presence at 3.5 kHz (at 2 dB the top notes are harsh, set beside
+natural singers: SoulX-Singer renders of the same score). Its air (7–14 kHz
+against 0.5–2 kHz) is measured, and only a voice brighter than natural
+singers is brought back, halfway. A de-esser that listens to the balance of
+the highs against the voice's body, not to how loud the singer is (see "The
+hiss"). A compressor that only leans on the syllables that stand out of
+their phrase: its threshold rides 3 dB over the level of the three seconds
+around each moment, so a syllable is evened against its neighbours but a
+quiet verse stays quiet and a full refrain full (2:1, 15 ms attack). A
+transient softener (`VOICE_SOFTEN`) takes the edge off consonant bursts that
+jump more than 6 dB over the voice's recent level, which would otherwise
+read as clipping. Then a light saturation (`VOICE_DRIVE` 0.05) and a peak
+stage for the rarest peaks. The saturation is light because the throat's
+crest factor is 13.7 dB: at a drive of 0.2 its loudest syllables ran 4-9 dB
+further into the curve, distortion above 2 kHz sat 21 dB under the voice's
+own highs with nothing in the band to mask it, and the artist heard it as a
+roughness as the voice got loud; at 0.05 it is 33 dB under. Everything the
+voice's tools react to is measured on the voice itself, so a quieter or
+brighter singer is treated the same.
+
+**The singers rise with the arrangement** (`mixing.lead_lift`). Brought to
+`REFERENCE` in every sung section, the lead would come out at the same
+loudness in a sparse verse and at the climax, and a 6 dB build in the band
+would reach the record as half a dB. So the lead (after its strip) and the
+choir group follow the band's energy per section (`songbird.band`, 0..1
+arcing across the song): `LEAD_ARC` gives 6 dB per unit of energy above
+0.55, held between −2 and +2.5 dB and smoothed over a second. `synth.render`
+computes it from the score (`lift_of`); a score without the band's sections
+sings level. On H's seed arrangement this makes verse 1 −15.5 LUFS, refrain
+2 −12.8 and the last refrain −12.2, the whole still at −14 LUFS.
 
 **The lineage choir** (the bridge and tag, `--choir N`) is one group:
 thinner below 260 Hz and in the presence range than the lead, de-essed and
 compressed together, 35% wider, 4 dB under the lead, and further back in
-the room (a bigger send, reaching the room 20 ms later). Its consonants
-jumped far over the rest and made the master limiter work 5 dB in the
-bridge; a peak stage rounds them off now. Its root voice sings no lower
-than E3 (`theory.FLOOR`): below about 160 Hz the learned throat's pulses
-are heard one by one, like a finger tapping a microphone (docs/THROAT.md).
+the room (a bigger send, reaching the room 20 ms later). A peak stage rounds
+off its consonants, which would otherwise stand far over the rest and make
+the master limiter work in the bridge. Its root voice sings no lower than E3
+(`theory.FLOOR`): below about 160 Hz the learned throat's pulses are heard
+one by one, like a finger tapping a microphone (docs/THROAT.md).
 
 **The band.** The arrangement sets each instrument's level and place (and
 the drift turns each up or down), so the mix keeps them: an instrument's
@@ -59,8 +74,8 @@ dips by up to 6 dB and the lute, which doubles the tune under the words,
 steps back 3 dB (fiddle and whistle 2 dB); both clear within 20 ms of the
 voice's first consonant and come back over 0.9 s after it stops, so
 nothing breathes. Where the voice rests a while (the intro, the turns) the
-band is ridden up 3 dB, as an engineer rides the fader in the breaks, and
-back down before the voice returns.
+band is ridden up (`RIDE`, 5 dB at `duck` 1), as an engineer rides the
+fader in the breaks, and back down before the voice returns.
 
 **The room** (songbird/synth/room.py) is regenerated from the harvest's
 RT60, five-band tone and predelay, and only from them: the same numbers give
@@ -83,19 +98,19 @@ peak stage of their own.
 surroundings, never the song's arc), given a little weight (2 dB under
 180 Hz), tilted if asked, and worn if asked (below).
 
-**Mastering** (songbird/synth/master.py) brings it to the rendition's `loudness` (Params; −14 LUFS by default, and
-H's seed asks −12 since 2026-09-27, for players that don't normalize) integrated
-with the true peak under −1 dBTP, measured with 4× oversampling as BS.1770-4
-annex 2 asks: a player's reconstruction filter, or a lossy decoder, swings
-between the samples. A soft clip rounds off the sharpest peaks (the top
-2 dB, about 0.1% of the samples), then a limiter that looks ahead 5 ms and
-lets go over 80 ms catches the rest. Then seeded TPDF dither to 16 bits, as
-before.
+**Mastering** (songbird/synth/master.py) brings it to the rendition's
+`loudness` (Params; −14 LUFS by default, −12 for listeners' players that
+don't normalize) integrated, with the true peak under −1 dBTP, measured with
+4× oversampling as BS.1770-4 annex 2 asks: a player's reconstruction filter,
+or a lossy decoder, swings between the samples. A soft clip rounds off the
+sharpest peaks (the top 2 dB, about 0.1% of the samples), then a limiter
+that looks ahead 5 ms and lets go over 80 ms catches the rest. Then seeded
+TPDF dither to 16 bits.
 
 ## What a rendition can vary
 
 `MixParams` (passed to `render()` and `mix()`; `songbird render --mix
-rt60=2.2 wear=0.5`; the render starts from `params.room` and records the
+rt60=2.2 wear=0.5`; the render starts from `params.mix` and records the
 mix in its JSON). Values outside a range are held to it.
 
 | Knob | Range | Default | What it does | Might map from |
@@ -113,15 +128,15 @@ mix in its JSON). Values outside a range are held to it.
 | `balance` | name or role: ±12 dB | none | an instrument up or down, e.g. `balance=fiddle:2` | drift |
 | `voices` | 0–1 | 1 | how much of the singers is heard: 0 takes the lead and the lineage choir out of the record, its room and its plate, and leaves the band as it was mixed for them, still making way where they sing (a backing track; the studio's **M** on the voice) | a person only |
 
-**Wear** is the plan's "how worn the arrangement sounds", off by default.
-Toward 1: the tape's speed wanders (wow, about 0.2% at 0.5–0.8 Hz) and
-trembles (flutter, 5–14 Hz), so held notes waver by up to 2.3 cents RMS;
-the tape saturates (distortion on loud tones from 0.9% at 0.1 to 5.8% at 1);
-the band narrows (the top falls from 20 kHz to 7.6 kHz, the bottom rises to
-80 Hz, with a small head bump); hiss rises from 74 to 46 dB under the music;
-and from 0.35 the surface crackles, sparse clicks up to 15 a second. All of
-it is made from the render's seed. The band's own `wear` (detuning, looser
-time) is the arrangement's; this is the recording's.
+**Wear** is how worn the recording sounds, off by default. Toward 1: the
+tape's speed wanders (wow, about 0.2% at 0.5–0.8 Hz) and trembles (flutter,
+5–14 Hz), so held notes waver by up to 2.3 cents RMS; the tape saturates
+(distortion on loud tones from 0.9% at 0.1 to 5.8% at 1); the band narrows
+(the top falls from 20 kHz to 7.6 kHz, the bottom rises to 80 Hz, with a
+small head bump); hiss rises from 74 to 46 dB under the music; and from 0.35
+the surface crackles, sparse clicks up to 15 a second. All of it is made
+from the render's seed. The band's own `wear` (detuning, looser time) is the
+arrangement's; this is the recording's.
 
 ## What a machine and the drift choose
 
@@ -129,8 +144,8 @@ time) is the arrangement's; this is the recording's.
 `params.mix`, which `songbird render` turns into MixParams before any
 `--mix` changes: the machine's own value from its harvest
 ([HARVEST.md](HARVEST.md)), moved by the drift, and the child pulled 0.6 of
-the way there from its parent. With no machine and no date the mix is as
-designed. An old record's `room` loads as `mix`.
+the way there from its parent. With no machine and no date the mix is the
+seed's. A record with `room` in place of `mix` loads it as `mix`.
 
 | Knob | The machine's own | Drift (view), at a drift of 1 | Kept within |
 |---|---|---|---|
@@ -145,53 +160,45 @@ designed. An old record's `room` loads as `mix`.
 | wear | 0.12 + 0.24 × file-age wear + 0.03 × tiredness, 0 for young files; the machine's own | none | 0–0.4 |
 | balance | not set: the band's own gains carry the balance (docs/BAND.md) | | |
 
-`forward` stays near the designed 10 dB (lower costs words; the review
-liked 6–7 for warmth; nobody has listened yet). The recording's wear
-crackles from 0.35, which only machines whose files are some eight years
-old or more reach. Over 16 made-up machines and four years: space
-0.77–1.23, duck 0.76–1.24, intimacy 0.38–0.64, width 0.90–1.09, forward
-9.4–10.5 dB, tilt ±0.55 dB, wear 0–0.33 (none crackled), each barely moving
-from one day to the next.
+The recording's wear crackles from 0.35, which only machines whose files are
+some eight years old or more reach. Over 16 made-up machines and four years:
+space 0.77–1.23, duck 0.76–1.24, intimacy 0.38–0.64, width 0.90–1.09,
+forward 9.4–10.5 dB, tilt ±0.55 dB, wear 0–0.33 (none crackled), each barely
+moving from one day to the next.
+
+**H's seed** (songs/h-now-its-by-you.json) sets `forward` 7.5, `space` 0.8,
+`width` 1.25 and `intimacy` 0.65, and the band's `drum` 1.5, from a mix
+review of the contest renders. At `forward` 7.5 the band sits a decibel
+closer and the 125-250 Hz region comes up to 8 dB under 500-1000 Hz (9 at
+10). At width 1 the verses read L/R correlation 0.97 against a folk record's
+0.87 (the voice centred 8-12 dB over everything keeps them narrow whatever
+the width). At gain 1 the drum sits at −39 LUFS where it plays, 10 dB under
+the bass and guitar, so the patterns that mark the build are barely there.
+Left alone, with reasons: `duck` below 1 (clarity −1 dB), `balance bass:+2`
+(the low-mid deficit is the guitar's and harp's body, not the bass).
 
 ## Measurements
 
-H, "Now It's by You", 150 s, mastered. "Before" is the code this branch
-started from (the old instruments, one room, fixed gains); "band, its mix"
-is the new band as its own branch mixed it; "band, new mix" is the same
-stems through this mix (the merged sound), with and without the lineage
-choir. The reference is one Eleven Music folk instrumental (dev-only,
-renders/production/mix/reference/, never shipped).
+H, "Now It's by You", 150 s, mastered to −14 LUFS at the design defaults
+(`forward` 10), the eight-piece band, with and without the lineage choir.
+The reference row is a folk instrumental from a music generator, measured
+only for comparison.
 
 | | Loudness | True peak | LRA | PLR | Crest | L/R correlation | Side/mid |
 |---|---|---|---|---|---|---|---|
-| before | −14.0 LUFS | −3.8 dBTP | 7.0 LU | 10.2 dB | 13.5 dB | +0.90 | −12.5 dB |
-| after (old instruments) | −14.0 | −1.1 | 5.1 | 13.0 | 16.2 | +0.93 | −14.4 |
-| band, its mix | −14.0 | −3.9 | 7.3 | 10.1 | 13.0 | +0.84 | −10.2 |
-| band, new mix | −14.0 | −1.1 | 7.5 | 13.0 | 15.9 | +0.93 | −13.9 |
-| band and choir, new mix | −14.0 | −1.0 | 8.8 | 13.0 | 15.9 | +0.83 | −12.8 |
+| band | −14.0 LUFS | −1.1 dBTP | 7.5 LU | 13.0 dB | 15.9 dB | +0.93 | −13.9 dB |
+| band and choir | −14.0 | −1.0 | 8.8 | 13.0 | 15.9 | +0.83 | −12.8 |
 | reference | −12.0 | −0.8 | 3.8 | 11.2 | 13.6 | +0.87 | −11.2 |
 
-The old mix never reached its ceiling (its true peak sat 3 dB under it):
-the new master uses that headroom for the peaks rather than squashing
-anything, and keeps the band's arc (LRA as the band's own mix, higher with
-the choir). The before-and-after spectra at equal loudness, against the
-reference: the old mix had almost nothing under 150 Hz (63 Hz −39 dB,
-125 Hz −20 dB against the reference); with the new band and this mix it is
-63 Hz −6, 125 Hz −8, the rest of the difference being the voice, which a
-vocal record has and an instrumental doesn't (500 Hz–1 kHz +5 to +9 dB).
+The master uses the headroom up to the ceiling for the peaks rather than
+squashing anything, and keeps the band's arc. At equal loudness against the
+reference the spectrum is 6 dB under it at 63 Hz and 8 dB under at 125 Hz;
+500 Hz–1 kHz is 5 to 9 dB over, the voice, which a vocal record has and an
+instrumental doesn't.
 
-**Words understood** (Whisper base.en on the finished mix,
-`tools/wer_suite.py --mix --sketch h`):
-
-| | 3 seeds | 5 seeds |
-|---|---|---|
-| before (old instruments, old mix) | 44.9% | 45.8% |
-| old instruments, new mix | 42.6% | 43.3% |
-| new band, its own mix | 36.7% | 36.7% |
-| new band, new mix | | 32.0% |
-| merged main (the band, the variation table, the new mix) | 31.8% | |
-
-The dry voice alone is 15%.
+**Words understood.** Whisper base.en on the finished mix
+(`tools/wer_suite.py --mix --sketch h`) gets about 32% of H's words wrong
+over 3 to 5 seeds; on the dry voice alone, 15%.
 
 **The delivery kept.** Per sung vowel on H, the level after the voice's
 strip against its dry level: 82% of the singer's syllable-to-syllable
@@ -199,12 +206,7 @@ contrast is kept by the strip, 78% as finally heard (glue and limiter
 too); the equalizer alone keeps 93% (vowels differ in how much of them sits
 at 900 Hz), the dynamics 85% of what they are given. The loud half of the
 singer's intended syllables stands 4.0 dB over the soft half dry, 3.4 dB as
-heard. The de-esser then worked 4.6% of the sung time, never more than
-1.7 dB: it was barely de-essing at all (see "The hiss"). Now, on the
-learned singer (4-hana), it works 12.0% of the sung time (more than 2 dB on
-7.4%), takes 4.7 dB (median; 2.3-5.1 dB, 10th to 90th percentile) off the
-loud "s" sounds and at most 8 dB, and moves the vowels' 150-2000 Hz by
-0.002 dB (99th percentile).
+heard.
 
 **The room.** T30 per octave within a few percent of what was asked at
 every octave, rt60 0.3 to 2.5 s; the ears' coherence 0.8 at 125 Hz, under
@@ -213,241 +215,108 @@ every octave, rt60 0.3 to 2.5 s; the ears' coherence 0.8 at 125 Hz, under
 at every size (a close singer), the band's +18 dB in a 0.3 s room to +13 dB
 in a 2.5 s one, the choir's +6 to +8 dB (further back).
 
-**The checks** (`tools/mixcheck.py`, H with the new band and the choir): the
-room 3.3 dB under the band in the gaps; clarity (voice over band and room,
-1–4 kHz, while singing) +6.7 dB; what the mix adds to the band's own dip
-under the words +0.3 dB (the band already comps 5 dB softer there by
-arrangement); clip and limiter at most 1.3 dB over any 10 ms, more than
-1 dB on 0.1% of loud stretches; correlation never under +0.1 in any 400 ms
-window, the mono fold costing 0.4 LU; no clicks the stems didn't bring
-(the stems carry 23 sharp high-band jumps, the whistle's and bass's
-attacks; the master 11); nothing under 30 Hz (−47 dB). One stays open: the
-low end, 125–250 Hz, sits 10.7 dB under 500–1000 Hz, where 8 would be
-warmer; the voice at `forward` 10 dominates the middle (see Doubts).
+**The checks** (`tools/mixcheck.py`, H with the band and the choir, at
+`forward` 10): the room 3.3 dB under the band in the gaps; clarity (voice
+over band and room, 1–4 kHz, while singing) +6.7 dB; what the mix adds to
+the band's own dip under the words +0.3 dB (the band already comps 5 dB
+softer there by arrangement); clip and limiter at most 1.3 dB over any 10
+ms, more than 1 dB on 0.1% of loud stretches; correlation never under +0.1
+in any 400 ms window, the mono fold costing 0.4 LU; no clicks the stems
+didn't bring (the stems carry 23 sharp high-band jumps, the whistle's and
+bass's attacks; the master 11); nothing under 30 Hz (−47 dB). The master's
+clip and limiter engage only in a dense bridge with a choir (0.3% of the
+bridge's samples in the knee); in the default arrangement they take nothing.
 
-**Time.** Mixing and mastering 12 stems of 150 s takes about 6 s (the
-numba kernels compile once, about 1.5 s, and are cached). A full `songbird
-render` of H: 17 s on the old instruments, 26 s with the band. (2026-09-27: the mix and master of H
-take about 3.5 s and its whole render about 7 s, the channel strips and a long signal's two channels
-worked on threads, the same bytes whatever the thread count; docs/notes/PERFORMANCE.md.)
+**Time.** The mix and master of H take about 3.5 s and its whole render
+about 7 s, the channel strips and a long signal's two channels worked on
+threads, the same bytes whatever the thread count (docs/notes/PERFORMANCE.md).
+The numba kernels compile once, about 1.5 s, and are cached.
 
-## The hiss (2026-09-26)
+## The hiss
 
-The artist: "Sometimes the reverb (+ other effects?) produce a loud hiss; a
-good example is the beginning 4-hana.verse-refrain". 4-hana was rendered
-again from 3-dee's record, byte-identical (id aaff7164ee58), keeping every
-stem and the mixer's buses; its highs over 6 kHz were followed every 50 ms
-through each dry stem, the voice, choir and band buses, and the room's and
-the plate's returns apart, and a Fable review measured the diagnosis and
-the fixes again. It was a hiss and a murmur under it, neither the reverb's
-own: the reverb returned what it was sent.
+Two things can put a hiss or a murmur into a mix that the reverb then
+carries: an "s" the de-esser misses, and a singer sounding where it doesn't
+sing. The room and plate add nothing of their own; they return what they
+are sent.
 
-**The hiss: the de-esser never de-essed.** At each burst of highs the mix's
-highs were the voice bus's (−30 to −32 dB; the band 60 dB under, the room
-and plate 14-30 dB under): the "s" of "saved" (0.8-0.95 s into the
-excerpt), "as", "numbers", "sent", 100-250 ms each, up to 9 dB over the
-mix's 1-4 kHz band. After each "s" the plate carried it for a quarter of a
-second, the loudest source of highs until it died. The throat's "s" is a
-natural singer's (its sibilants 16.3 dB under its vowels, its teacher's
-16.9, over 59 training segments); the de-esser took at most 0.5 dB from any
-of them, 0.0 dB (median) from the loud ones over the song. It weighed the
-highs over 5.5 kHz against `x` minus a second-order high-pass, which is
-+1.8 dB at the split and still −4.4 dB at 11 kHz, so an "s" was mostly its
-own "rest of the voice" and read 1-5 dB under it, never over the threshold;
-and it turned down that high-pass's output, 90 degrees from the voice near
-the split, which at −8 dB lifted 3.9 kHz by 1.2 dB and cut the split by
-0.7. This singer's "s" (tract 1.025, 8.5% under the throat's own) centres at
-5 kHz, across the split. The lineage choir had no de-esser at all: in the
-bridge, four choir voices and the lead said the "s" of "it's" together
-(237.15 s), 16.5 dB over the mix's 1-4 kHz band, into the choir's room send
-(0.5, the band's 0.18) and the plate.
+**The de-esser** (`fx.deess`) weighs the highs over the split (4.5 kHz,
+where this singer's "s" centres) against the voice's body, the voice an
+octave under the split, where no "s" reaches: an "s" stands 5-11 dB over
+the body, a vowel 24-34 dB under. It splits the voice without phase (its
+low-passes run forward and back): the part turned down is −14 dB half an
+octave under the split, −6 dB at it and all of the voice above, adds back to
+the voice exactly, and is never turned up. `excess` +3 dB over the body,
+`ratio` 3, at most 8 dB. The choir group goes through the same de-esser
+after its equalizer. On the learned singer (4-hana) it works 12.0% of the
+sung time (more than 2 dB on 7.4%), takes 4.7 dB (median; 2.3-5.1 dB, 10th
+to 90th percentile) off the loud "s" sounds, the hardest from −3.3 dB at 4-5
+kHz to −7.3 at 8-9 kHz, and moves the vowels' 150-2000 Hz by 0.002 dB (99th
+percentile). A de-esser that compares an "s" with the rest of the voice
+above a second-order high-pass reads it as mostly its own reference and
+barely acts; that is why the body is the voice an octave under the split.
 
-Now `fx.deess` weighs the highs against the body (the voice an octave under
-the split, where no "s" reaches: an "s" stands 5-11 dB over it, a vowel
-24-34 dB under) and splits the voice without phase (its low-passes run
-forward and back): the part turned down is −14 dB half an octave under the
-split, −6 dB at it and all of the voice above, adds back to the voice
-exactly, and is never turned up. So the split comes down onto this
-singer's "s", 4.5 kHz. `excess` is +3 dB over the body (it was −3 over the
-old reference), `ratio` 3, at most 8 dB, as before. The choir group goes
-through the same de-esser after its equalizer. On 4-hana's lead it works
-12.0% of the sung time (more than 2 dB on 7.4%), takes 4.7 dB (median) off
-the loud "s" sounds, the hardest from −3.3 dB at 4-5 kHz to −7.3 at 8-9 kHz,
-and moves the vowels' 150-2000 Hz by 0.002 dB. The plate and the room are
-unchanged: fed a de-essed voice, the plate's tail after the "s" of "saved"
-is about 10 dB lower.
+**The singers are silent where they don't sing.** The throat's network
+learned from phrases whose silences were short (half under 0.07 s, 99% under
+0.51 s, none as long as 1 s). Told of a long rest as one silence, it guesses
+an envelope far louder than silence, which the vocoder fills with noise: a
+murmur coloured like a vowel, up to 8 dB under the singing at the start of a
+220 s wait, and through the choir's room send the room runs level with the
+band in the intro. So `throat.timeline` tells the network of a silence
+longer than 0.6 s (`SILENCE`) as one 0.6 s long, its first and last halves at
+their own pace and its middle held; and `throat.hush` silences the vocoder
+where nothing is sung, from 60 ms before a sung phone to 150 ms after one,
+with a 30 ms fade (`HUSH`). A phone's release has fallen 70 dB within 50 ms,
+before the murmur's return at about 100 ms; the gate opens 45-75 ms before
+an onset, where the murmur's foot lies 47-58 dB under the vowel; inside sung
+stretches nothing changes. The breaths are added after. Where a singer
+rests it sits 53-63 dB under its singing (the breaths), and a note after a
+60 s wait is within 1 dB of the same note after a 1 s one.
 
-**The murmur: the singers sounded where they didn't sing.** The throat's
-network learned from phrases whose silences were short (half under 0.07 s,
-99% under 0.51 s, none as long as 1 s); `throat.timeline` told it of every
-rest as one silence as long as the rest, and it guessed an envelope far
-louder than silence, which the vocoder filled with noise: a murmur coloured
-like a vowel (96% of its power under 1 kHz, peaks near 450 Hz and 2 kHz,
-noise to 11 kHz). Its teacher's silences aren't silent either (−31 dB
-under its vowels 0.15-0.3 s after a phone), so a silence told as one it knows
-still murmurs at −38 to −44 dB: the vocoder has to be hushed too. Against
-the singing:
-
-| Silence | Before | Told as a silence it knows | And hushed |
-|---|---|---|---|
-| a 220 s wait, its first second | −7.7 dB | −44 dB | silent |
-| a 60 s wait, its first second | −13 dB | −45 dB | silent |
-| a 15 s wait | −41 to −44 dB | −44 dB | silent |
-| the middle of a 2-16 s rest | −34 to −41 dB | −38 dB | silent |
-
-In 4-hana the four choir voices wait 224 s for the bridge. They murmured
-from the first second at −31 dB in the mix, level with the whole band
-(−26 to −37 dB) through the intro and the first verse, 12 LU under the
-song (the choir bus alone over its first minute: −25.9 LUFS), fading over
-the song; through the choir's room send the room ran level with the band in
-the intro instead of 8-10 dB under it. The lead's 14 s intro murmured 31-44
-dB under its singing. Every render with a learned singer had it wherever a
-singer rested more than a second; worst where a choir waits longest: 4-hana
-(224 s), country-waltz (209 s), 5-jun (176 s), stringband (120 s), 6-lu
-and 3-dee (about 100 s), and every tour piece with a choir (25-60 s).
-
-Now `throat.timeline` tells the network of a silence longer than 0.6 s
-(`SILENCE`) as one 0.6 s long, its first and last halves at their own pace
-and its middle held (33 of the training set's 5,959 silences, 0.6-0.97 s
-long, would be told so on a retrain; the shipped weights need nothing); and
-`throat.hush` silences the vocoder where nothing is sung, from 60 ms before
-a sung phone to 150 ms after one, with a 30 ms fade (`HUSH`). A phone's
-release has fallen 70 dB within 50 ms, before the murmur's return at about
-100 ms; the gate opens 45-75 ms before an onset, where the murmur's foot
-lies 47-58 dB under the vowel; inside sung stretches nothing changes. The
-breaths are added after, as before. The network's receptive field is ±150 ms,
-so sung frames near a rest hear the change: on 4-hana's stems every band
-stem is bit-identical, the singers differ by 55-60 dB under their singing
-where they sing and, where they rest, fall from 19-37 dB under their
-singing to 53-63 dB under (the breaths). A note after a 60 s wait is within
-1 dB of the same note after a 1 s one.
-
-| 4-hana | Before | After |
-|---|---|---|
-| choir bus, intro and first verse | −31 dB (the band −26 to −37) | silent until it sings |
-| room return, intro | −28 to −30 dB, level with the band | −33 to −37 dB, 8-10 dB under it |
-| the "s" of "saved", its highs (mastered, 100 ms) | −25.4 dBFS, +6 dB over 1-4 kHz | −31.7 dBFS, +1.5 dB |
-| the plate's tail after it (>6 kHz) | −45 to −54 dB | −55 to −64 dB |
-| the "s" of "it's" in the bridge (237.15 s), over 1-4 kHz | +16.5 dB | +8.0 dB |
-| excerpt, 0.5-1.5 s: highs over 1-4 kHz (1 s) | −4.0 dB | −9.2 dB |
-| excerpt, seconds within 10 dB of 1-4 kHz | 16 of 55 | 9 of 55 |
-| excerpt, loudest highs (99th percentile, re its loud level) | −10.0 dB | −16.3 dB |
-
-**Across the styles renders** (`tools/hisscheck.py`, every render of
-renders/production/styles made again with this code): seconds where the
-highs come within 10 dB of 1-4 kHz, 303 to 145 over the tour and the four
-songs, 299 to 179 over the lineage; every render's worst 100 ms 0.3-6.5 dB
-lower, its worst second 1.4-6.5 dB lower, and the loudest highs of every
-listening pair 4.7-7.3 dB lower. What remains is consonants on a sparse texture
-(the lofi piece's "s" of "song" at 27 s, 22 dB over the mids for 100 ms
-over a dark electric piano), as in any record, and the kit's cymbals. One
-moment reads worse by the ratio and isn't: the "z" of "as" (2.45 s into
-4-hana's excerpt) is as loud as before (−30.6 dBFS against −30.3) but the
-murmur under the mids is gone (+7.6 dB over 1-4 kHz, from +3.4). A voiced
-"z" loses only about 1 dB, its voicing counting as the body; `excess` 0
-would take 1.9, −3 would take 3.0, and change little else (see Doubts).
-Listening pairs are in renders/production/mix/hiss/ (README.txt).
-
-**Not it:** the plate's and room's responses are shaped noise but add
-nothing of their own (a convolution is silent when nothing is sent); what
-they returned was the choir's murmur and the "s". The pedal steel's
-stand-in (the bowed model) was the band's highs until its last note ended
-at 13.96 s, the excerpt's first 0.45 s (the real pedal steel, merged since,
-lowers the highs there 3-5 dB); it wasn't playing at any burst. The kit's brush sweep starts just after the first "s" (14.52 s) and
-was 29-34 dB under the voice in the highs there. The bursts stop at 11.8
-kHz, where the throat's envelope ends.
-
-## The singers rise with the arrangement (2026-09-27)
-
-A mix review of the four candidate renders for the contest measured the arrangement's build and
-found it never reached the meter: from the first verse to the last refrain the dry band rose 6.6 dB,
-the band bus 4.7 dB, the record 0.5 LU. `mix()` brought the lead to `REFERENCE` in every sung
-section and set the band `forward` dB under it, so the voice bus came out within half a dB of the
-same loudness in a sparse verse and at the climax, and the band, 7-12 dB under it, could add only
-its share. The loudness range the renders showed (LRA 6.9-7.7) was voice-on against voice-off: the
-intro and the turns 6 dB under the sung sections, the la-la tag a decibel over them (the loudest
-thing in the record).
-
-Now the singers follow the arrangement's energy (`mixing.lead_lift`, from `songbird.band`'s energy
-per section, 0..1 arcing across the song): `LEAD_ARC` gives 6 dB per unit of energy above 0.55, held
-between -2 and +2.5 dB and smoothed over a second, applied to the lead after its strip and to the
-choir group; `synth.render` computes it from the score (`lift_of`), so older scores without the
-band's sections sing level as before. On the default arrangement (Open Door, below): verse 1
--15.5 LUFS, refrain 2 -12.8, the last refrain -12.2: a build of 3.3 dB where there was 0.5, the
-whole still at -14 LUFS, the limiter touching the ceiling by hundredths of a decibel. The review
-measured intelligibility improving where it was weakest (the lead over band and room in the
-refrains, +1 to +2 dB) and easing a little in the first verse, still the clearest section.
-
-Also from the review, in the seed's own arrangement (Open Door, `seed_params`): `forward` 7.5 (the
-band a decibel closer; the 125-250 Hz region, which read 9 dB under the 500-1000 Hz band, comes to
--8), `width` 1.25 (the verses read L/R correlation 0.97 against a folk record's 0.87; the voice
-centred 8-12 dB over everything keeps them narrow whatever the width), `drum` 1.5 (the drum bus sat
-at -39 LUFS where it played, 10 dB under the bass and guitar, so the patterns that mark the build
-were barely there; +3.5 dB moves nothing else). Left alone, with reasons: `duck` below 1 (clarity
--1 dB), `balance bass:+2` (the low-mid deficit is the guitar's and harp's body, not the bass), a
-louder master (only worth it if the contest plays files without loudness normalization).
-
-## The lead's saturation was the roughness (2026-09-27)
-
-The artist heard "a little roughness as the voice gets loud, not horrible but common". A review of
-the voice found it in the lead strip, not the throat: `fx.saturate(x, sr, 0.2)` sets its drive
-against the voice's typical peaks, and the throat's crest factor is 13.7 dB (the formant singer's
-18.8), so the loudest syllables ran 4-9 dB further into the curve. Distortion above 2 kHz, against
-the voice's own highs, on the loudest twentieth of 50 ms windows: -21 dB (-15 at the 90th
-percentile); the band's highs sit 18-29 dB under the voice's in every section, so nothing masked
-it; and the dry throat's roughness does not rise with level (r = -0.42), so what grew with level was
-this stage. `VOICE_DRIVE` 0.05 reads -33 dB there (the instruments keep their strips' drives). The
-other stage that scales with level, the master's clip and limiter, engages only in a dense bridge
-with a choir (night-wire: 0.3% of the bridge's samples in the knee); in the default arrangement it
-takes nothing. The de-esser dips vowels by more than a decibel 8% of the time (an HF warble on bright
-vowels; a hold above threshold would target it better than `excess`): minor, not done.
+**Across the styles renders** (`tools/hisscheck.py`): what remains is
+consonants on a sparse texture (an "s" over a dark electric piano can stand
+22 dB over the mids for 100 ms), as in any record, and the kit's cymbals. A
+voiced "z" loses only about 1 dB, its voicing counting as the body (see
+Doubts).
 
 ## Doubts and next
 
-- **The balance is a judgment.** `forward` 10 dB puts the voice well on top
-  (the old mix had it about 14 dB over a much quieter band; the new band's
-  own mix about 7). Whisper wants it; the review thought 6–7 would sound
-  warmer and more like a band. At 7–8 the new band's low end comes up about
-  3 dB and Whisper loses 2–4 points (still at or under the band's own mix);
-  on the old instruments it lost 7–14. If the voice sounds too far in
-  front, `forward` 8 is the first thing to try.
+- **The balance is a judgment.** `forward` 10 puts the voice well on top.
+  Whisper wants it; the review thought 6–7 would sound warmer and more like a
+  band. At 7–8 the low end comes up about 3 dB and Whisper loses 2–4 points.
+  H's seed sits at 7.5.
 - **Whisper is a jumpy judge.** One section it mishears can move H's score
   by several points, so single changes under about 4 points were read as
   noise, settings were chosen on what a mix engineer would do, and Whisper
   kept as the floor.
-- **One reference.** The spectral and dynamic targets came from one Eleven
-  Music folk instrumental and from SoulX-Singer renders for the voice. A
+- **One reference.** The spectral and dynamic targets came from one
+  generated folk instrumental and from SoulX-Singer renders for the voice. A
   vocal folk reference would say more about the voice's level and
   brightness.
-- **The learned singer** (engine "learned") wasn't tried: its weights
-  weren't in any tree. Everything the voice's tools react to is relative to
-  the voice itself, its air shelf is measured, and its equalizer is gentle,
-  but its de-esser and presence should be looked at when it sings. (Its
-  de-esser was, and it didn't work: "The hiss". Its presence hasn't been
-  looked at yet.)
+- **The learned singer's presence** (its 3.5 kHz) hasn't been looked at on
+  its own.
 - **The de-esser's depth is a judgment.** About 5 dB off a loud "s", at most
   8 (`excess` +3 over the body, `ratio` 3, `most` 8). A voiced "z" loses
   about 1 dB: `excess` 0 takes 1.9, −3 takes 3.0, and change little else.
   A de-essed "s" still stands 17.8 dB over the lead's low mids in the stem;
   a close-miked singer is nearer 10-15, and `most` 10 or `ratio` 4 would go
-  there. Nobody has listened yet.
+  there. It also dips bright vowels by more than a decibel 8% of the time (an
+  HF warble); a hold above threshold would target that better than `excess`.
 - **The plate is bright by design:** its top decays at 0.87 of its middle
   (the room's at 0.55), so a 120 ms "s" rings within 10 dB for 0.23 s.
   `PLATE_AIR` (0.75, 0.95, 1.0, 0.85, 0.6) would darken its top (6-12 kHz
   RT60 1.24 to 0.97 s, the vowels' tails unchanged): a matter of taste.
-- **Line ends are as sudden as the throat makes them.** The murmur used to
-  cushion them; the throat lets go of a phone 54 dB in 50 ms. If a line's
-  last note sounds clipped, that is the network's release, not the hush.
-- **Verses are narrow** (L/R correlation about 0.95 while the voice carries
-  a sparse verse), wide in the bridge; the band's own placement decides
-  most of it. `width` 1.2–1.3 opens the verses.
+- **Line ends are as sudden as the throat makes them**: it lets go of a
+  phone 54 dB in 50 ms. If a line's last note sounds clipped, that is the
+  network's release, not the hush.
+- **Verses are narrow** at width 1 (L/R correlation about 0.95 while the
+  voice carries a sparse verse), wide in the bridge; the band's own placement
+  decides most of it. `width` 1.2–1.3 opens the verses.
 - **The stems' own attacks.** The whistle's and the bass's note starts have
   sharp high-band jumps (tools/mixcheck.py counts 23 in H's stems); the mix
   doesn't add any, but they may be heard as clicks.
 - **Across machines.** A render is byte-identical run to run on one machine
   (the FFTs use a fixed number of threads); FFT and libm rounding differ
   across CPU architectures, so the hash that names a rendition won't.
-- **Wiring.** The drift and harvest move the mix through `params.mix` (see
-  "What a machine and the drift choose"). render_stems' VOICE_GAIN and CHOIR_GAIN no
-  longer set the balance (the voice and choir are set by loudness in the
-  mix); they only scale `--stems`.
+- **Wiring.** render_stems' `VOICE_GAIN` and `CHOIR_GAIN` don't set the
+  balance (the voice and choir are set by loudness in the mix); they only
+  scale `--stems`.

@@ -2,7 +2,7 @@
 
 **H, [Now It's by You](h-now-its-by-you.md), is the song**, and
 [h-bank.md](h-bank.md) is its bank of verses. A to L are the candidates it was
-chosen from, written on September 25, 2026, with the artist's ratings below.
+chosen from, with the artist's ratings below.
 `<letter>-<slug>.json` is a song's genome (tune, chords, refrain, verse
 template, seed verses) and `<letter>-<slug>.md` its lyric sheet. Render one with
 
@@ -26,7 +26,7 @@ songs/<name>.json` lists a song's own lines where the rules would choose another
 sense. Braces that start a word are slots (`{kin}`) and turns (`{made|sang}`);
 braces right after a word are its say.
 
-## The candidates, with the artist's ratings (September 25, 2026)
+## The candidates, with the artist's ratings
 
 | | Song | Shape | Rating | Note |
 | --- | --- | --- | --- | --- |
@@ -37,42 +37,32 @@ braces right after a word are its say.
 | E | Nothing of You | the machine confesses, 4/4 aeolian | 6.5 | Tune not catchy enough; lyrics too literal; some details are cool, but not all of them are decided yet |
 | F | The Long Count | deep-time counting song, 4/4 phrygian | 7 | Interesting concept, not working as a song |
 | G | Hweelonalay | refrain in no language, 4/4 phrygian | 7 | Interesting; the melody could be better and the refrain is a little too complex |
-| H | Now It's by You | the best of: A's question, B's answer, vehicle verses; now with B's refrain as a bridge for the lineage choir, a la tag, turns to breathe, and a turning question (made, sang, heard, owns); 4/4 major pentatonic | chosen | Best all round: the chorus is memorable and encapsulates the project; the wire and screen verses are favourites |
+| H | Now It's by You | the best of: A's question, B's answer, vehicle verses; B's refrain as a bridge for the lineage choir, a la tag, turns to breathe, and a turning question (made, sang, heard, owns); 4/4 major pentatonic | chosen | Best all round: the chorus is memorable and encapsulates the project; the wire and screen verses are favourites |
 | I | Something Going Round | the creature, abstract: lives in the air, dies on the ground; one host per verse; 4/4 major pentatonic | | |
 | J | Goes Like This | sound outlasts words: the refrain ends by singing its own tune on "la"; common-metre verses; 4/4 major pentatonic | | Good ideas; likes how the ending connects to the chorus, but the la la las run long (H's tag borrows it, shorter) |
 | K | Still You Grew | the song as a named character: Daisy, the lawn flower nobody plants; 4/4 major pentatonic, a call and answer | runner-up | Catchy chorus, lyrics and melody; loves the hidden Daisy Bell reference; the overall meaning would be lost on most listeners |
 | L | Sticky Burr | stickiness, obliquely: the song as a burdock burr ("you never picked it, it picked you"); 6/8 major pentatonic, a playground-chant hook | | |
 
 A to C were written by Claude; D to G by Fable lyricists, each sent down a
-stranger path. H onwards follow "Where next" below.
+stranger path. H to L were written to the artist's direction after the first
+seven:
 
-## Where next (September 25, 2026)
-
-- **The heart of it is stickiness** (the artist, 2026-09-25): music sticks in
-  your head whether you want it to or not, and AI-made hooks stick just as
-  easily even when they're kind of meaningless. "Pass it along or it dies"
-  is still interesting but secondary: the song travels because it sticks,
-  not because anyone decides to pass it on. So the hook matters more than
-  the message: short, repetitive and easy to hum, and a little nonsense is fine.
-  D (the earworm), G and J (sound over words) are closest to this.
-- **Mix and match.** Many lines are strong; take them across songs (bank below).
-- **Simpler scale and melody.** Major pentatonic or plain major, mostly steps,
-  a narrow range, I, IV, V and vi. A plain tune leaves room for the drift to
-  move the timbre, the harmony and the mode.
-- **Less "I".** The song itself ("it") and the listener ("you") carry the
+- **The heart of it is stickiness**: music sticks in your head whether you
+  want it to or not, and AI-made hooks stick just as easily even when they're
+  kind of meaningless. The song travels because it sticks, so the hook
+  matters more than the message: short, repetitive and easy to hum, and a
+  little nonsense is fine.
+- **Mix and match**: take strong lines across songs (the line bank below).
+- **A simple scale and melody**: major pentatonic or plain major, mostly
+  steps, a narrow range, I, IV, V and vi, leaving room for the drift to move
+  the timbre, the harmony and the mode.
+- **Less "I"**: the song itself ("it") and the listener ("you") carry the
   concept better than a first-person singer.
-- **A creature can work if it stays abstract**: something that lives in
-  voices and needs hosts to travel, not a literal worm or parasite, whose
-  disgust factor could limit how far it spreads.
-- **Don't pin down undecided mechanics** (what exactly the harvest reads) in
-  the fixed refrain.
-- **More metaphorical and oblique** (2026-09-25). The artist's own "Oh
-  Melody", made in Suno in 2025, is an Elephant 6-ish song that tells the
-  story of its own writing and forgetting without ever saying so. The song is
-  a named character, told in one family of images, and a stranger ends up
-  retracing its shapes without knowing. Keep the refrain plain enough to hear
-  and let the verses wander; an LLM refilling image-led verses can drift
-  further without breaking a plot.
+- **A creature only if it stays abstract**: something that lives in voices
+  and needs hosts to travel, not a literal worm or parasite.
+- **Metaphorical and oblique**: the song as a named character, told in one
+  family of images, the refrain plain enough to hear and the verses free to
+  wander.
 
 ## Line bank
 

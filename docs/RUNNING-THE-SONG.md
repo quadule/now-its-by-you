@@ -4,8 +4,7 @@ A rendition of the song is one FLAC file. It plays in any audio player, and it
 is also a program (docs/PACKET.md): `python3 song.flac studio` opens the
 studio on it. This page says what that needs, as it is in
 songbird/bootstrap.py (the file's `__main__.py`) and pyproject.toml, and what
-a person meets doing it for the first time. (Written September 27, 2026; the
-memory figures are from October.)
+a person meets doing it for the first time.
 
 With nothing installed, https://studio.itsby.you opens the same studio in a
 browser (Chrome is where it has been tried most). A whole song takes 1.3 to
@@ -50,8 +49,8 @@ first time. Nothing is sent anywhere.
 | Fetching the libraries | 20 s from uv's cache; 1 to 5 minutes on a home connection | the first time on a computer |
 | The first sound | 10 to 15 s more | numba compiles the synthesis the first time it runs; the studio starts this as it opens, on today's first verse |
 | A section, then | about 6 s | a preview, made when asked |
-| The whole song, or a recording | about 15 s | 14 s measured on an M1 Max after the threading work of 2026-09-27 (38.8 s before); a slower or busier computer takes longer |
-| A new version from the file, cold | 38 to 51 s | docs/PACKET.md, including setting up from uv's cache |
+| The whole song, or a recording | about 15 s | 14 s measured on an M1 Max; a slower or busier computer takes longer |
+| A new version from the file, cold | 38 to 51 s | including setting up from uv's cache |
 
 ## The first time, as a less experienced person meets it
 
@@ -124,7 +123,7 @@ by December 1, 2025, before numba's first release without them. Each installer
 ignores the other's variable. After that, the plain commands work. Python 3.14
 and newer have no numba wheels for Intel Macs at all.
 
-Checked on October 7, 2026 from an Apple silicon Mac without Rosetta: for
+Checked from an Apple silicon Mac without Rosetta: for
 x86_64 macOS, both installs resolve to numba 0.62.1, llvmlite 0.45.1 and numpy
 2.3.5 (with pip, scipy 1.18.1, or 1.17.1 on Python 3.11; with uv, scipy
 1.16.3, soundfile 0.13.1 and cmudict 1.1.2), and with those versions the first
