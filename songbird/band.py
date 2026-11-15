@@ -252,7 +252,8 @@ class Context:
             index = len(self.sections) - 1
             self.phrases.append((s0, s1))
             self.phrase_ids.append(phrase.id)
-            self.phrase_places.append(getattr(phrase, "place", None))
+            # where this line's tune is its place's own, or a line of its own's (whose notes aren't the line's)
+            self.phrase_places.append(getattr(phrase, "place", None) or getattr(phrase, "own", None))
             beats_per_bar = meter.bar / meter.beat
             for b, chords in enumerate(phrase.chords):
                 bar_u = s0 + b * meter.bar
@@ -1015,7 +1016,8 @@ def composed(ctx: Context, phrase) -> list[Tune] | None:
     if first is None:  # not sung this time (or only at places of their own): as it would be
         from .composition import played
 
-        notes = played(replace(phrase, place=None) if getattr(phrase, "place", None) else phrase, ctx.params)
+        notes = played(replace(phrase, place=None, own=None) if getattr(phrase, "place", None) or
+                       getattr(phrase, "own", None) else phrase, ctx.params)
         return [Tune(n.onset, n.onset + n.dur, ctx.tonic + degree_semitones(n.degree, ctx.mode, n.alter), 0.0,
                      True, 0, k == 0, k == len(notes) - 1, (), phrase.id, n.dur) for k, n in enumerate(notes)]
     s0, s1 = ctx.phrases[first]

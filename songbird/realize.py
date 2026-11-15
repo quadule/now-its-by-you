@@ -354,7 +354,7 @@ def realize(genome: Genome, params: Params, verses=None, phrasing: Phrasing | No
     lined = arranged_plan(genome, params)
     # each line of the form as its place sings it: its own chords and tune where a person gave it some, else the
     # line everywhere (the very phrase objects, where no place has its own)
-    at_places = iter(form_phrases(genome, params))
+    at_places = iter(form_phrases(genome, params, lyrics))
     from .canon import plans
 
     # a section sung as a round (songbird.canon): for each line laid, (its section's place in the form, its line
@@ -425,7 +425,7 @@ def realize(genome: Genome, params: Params, verses=None, phrasing: Phrasing | No
         if j in kept:  # the rest of the line isn't sung: the band's lead may play it (songbird.idioms)
             words = [w if k in kept[j] else (None, None, 1) for k, w in enumerate(words)]
         # the lineage's variants: a note moved to another degree, a weak note's onset moved, an ornament
-        composed = tune_key(phrase) in params.composition.get("tune", {})
+        composed = bool(phrase.own) or tune_key(phrase) in params.composition.get("tune", {})
         if composed:
             from .composition import played as composed_notes
 
@@ -464,7 +464,10 @@ def realize(genome: Genome, params: Params, verses=None, phrasing: Phrasing | No
                     choir=genome.section(section_name).choir and j not in in_round,
                     index=k,
                     composed=composed,
-                    gesture=gesture(phrasing, phrase.id, k),
+                    # a line of its own sings with the singer's own timing: a gesture is kept by note, and these
+                    # aren't the notes it was kept for
+                    gesture=None if phrase.own else gesture(phrasing, phrase.id, k),
+                    own=bool(phrase.own),
                     **({"melisma": tuple((off, params.tonic + degree_semitones(d, params.mode)) for off, d in turns)}
                        if turns else {}),
                     **({"round": in_round[j][0], "line": in_round[j][1]} if j in in_round else {}),
@@ -507,7 +510,7 @@ def realize(genome: Genome, params: Params, verses=None, phrasing: Phrasing | No
             for v, pitch in enumerate(choirs[i]):
                 own = choir[v] if choir and v < len(choir) else None
                 if own:  # sung that voice's way, from its own phrasing
-                    g = gesture(own, m["phrase"], m["index"])
+                    g = None if m["own"] else gesture(own, m["phrase"], m["index"])
                     base = replace(unphrased, part=f"choir{v + 1}", pitch=float(pitch), vel=0.9 * unphrased.vel,
                                    ornament=(), melisma=())
                     deliveries.setdefault(base.part, []).append((base, sung_as(base, g, beat)))

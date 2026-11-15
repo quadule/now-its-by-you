@@ -83,7 +83,7 @@ from . import variation
 from . import composition
 from . import sound as sound_mod
 from .band import INSTRUMENTS, LEADS, PATTERNS
-from .genome import Genome
+from .genome import Genome, sung_words
 from .synth.mixing import RANGES, MixParams
 
 MIX = ("space", "width", "forward", "intimacy", "rt60", "predelay",  # the room: how long it rings, how soon it answers
@@ -327,6 +327,8 @@ def check(genome: Genome, edits: dict, phrasings=()) -> tuple[dict, list[dict]]:
                 clean[path] = notes
             elif path.startswith("lyrics."):
                 clean[path] = composition.check_lyric(genome, path, value)
+            elif path.startswith("line."):  # a line with its own count, its words and notes (docs/notes/OWN-COUNT-LINES.md)
+                clean[path] = composition.check_own(genome, path, value)
             elif path.startswith("form."):
                 part = path[5:]
                 if part == "verses":
@@ -402,7 +404,7 @@ def check(genome: Genome, edits: dict, phrasings=()) -> tuple[dict, list[dict]]:
         except LookupError as e:
             problems.append(Problem(path, str(e.args[0]) if e.args else "there's no such choice"))
         except (TypeError, ValueError) as e:
-            if path in ("form.order", "name") or path.startswith(("tune.", "chords.", "lyrics.", "part.", "arrange.")) \
+            if path in ("form.order", "name") or path.startswith(("tune.", "chords.", "lyrics.", "line.", "part.", "arrange.")) \
                     or sound_mod.owns(path):
                 problems.append(Problem(path, str(e)))
                 continue
@@ -452,6 +454,7 @@ class Overrides:
         self.problems: list[dict] = []
         self._has_variants = None
         self._lines_before: dict | None = None
+        self._own_before: dict | None = None
 
     def pin(self, out: dict) -> None:
         """The edits, in the table's working dict of parameters. Idempotent: the table calls it after its
@@ -601,6 +604,36 @@ class Overrides:
             held["lines"] = lines
         else:
             held.pop("lines", None)
+        # a person's lines with their own count, kept as their words are, by the verse (or round) they're for
+        own = {k: dict(v) for k, v in held.get("own", {}).items()}
+        if self._own_before is None:
+            self._own_before = {k: dict(v) for k, v in own.items()}
+        for path, value in e.items():  # words written to the tune's count take the line back to its tune's notes
+            if path.startswith("lyrics.") and value is not None and path in applied:
+                key, line, _ = composition.lyric_target(self.genome, path)
+                own.get(key, {}).pop(str(line), None)
+                if key in own and not own[key]:
+                    own.pop(key)
+        for path, value in e.items():
+            if not path.startswith("line."):
+                continue
+            try:
+                checked = composition.check_own(self.genome, path, value)
+                key, line, _ = composition.lyric_target(self.genome, "lyrics." + path[5:])
+                patch = own.setdefault(key, {})
+                if checked is None:
+                    patch.pop(str(line), None)
+                else:
+                    patch[str(line)] = composition.pack_own(self.genome, checked)
+                if not patch:
+                    own.pop(key, None)
+                applied.append(path)
+            except (ValueError, TypeError) as ex:
+                problems.append(Problem(path, str(ex)))
+        if own:
+            held["own"] = own
+        else:
+            held.pop("own", None)
         if "form.order" in e:
             try:
                 names = composition.order(self.genome, e["form.order"])
@@ -692,9 +725,9 @@ class Overrides:
         aren't known yet, so a verse's lines stay until they are."""
         absent = []
         for path in self.applied:
-            if not path.startswith("lyrics.") or self.edits.get(path) is None:
+            if not path.startswith(("lyrics.", "line.")) or self.edits.get(path) is None:
                 continue
-            key = composition.lyric_target(self.genome, path)[0]
+            key = composition.lyric_target(self.genome, _lyric(path))[0]
             if not verses and self.genome.section(key.split(":", 1)[0]).lyrics == "verse":
                 continue
             if key not in keys:
@@ -702,24 +735,28 @@ class Overrides:
         if not absent:
             return params, []
         held = dict(params.composition)
-        lines = {k: dict(v) for k, v in held.get("lines", {}).items()}
-        for path in absent:
-            key, line, _ = composition.lyric_target(self.genome, path)
-            previous = (self._lines_before or {}).get(key, {}).get(str(line))
-            patch = lines.setdefault(key, {})
-            if previous is None:
-                patch.pop(str(line), None)
+        for kind, before in (("lines", self._lines_before), ("own", self._own_before)):
+            lines = {k: dict(v) for k, v in held.get(kind, {}).items()}
+            for path in absent:
+                if (kind == "own") != path.startswith("line."):
+                    continue
+                key, line, _ = composition.lyric_target(self.genome, _lyric(path))
+                previous = (before or {}).get(key, {}).get(str(line))
+                patch = lines.setdefault(key, {})
+                if previous is None:
+                    patch.pop(str(line), None)
+                else:
+                    patch[str(line)] = previous
+                if not patch:
+                    lines.pop(key, None)
+            if lines:
+                held[kind] = lines
             else:
-                patch[str(line)] = previous
-            if not patch:
-                lines.pop(key, None)
+                held.pop(kind, None)
+        for path in absent:
             self.applied = [p for p in self.applied if p != path]
             self.problems = [*self.problems, Problem(path, "this version doesn't sing that section; "
                                                            "choose a line shown in the song")]
-        if lines:
-            held["lines"] = lines
-        else:
-            held.pop("lines", None)
         return replace(params, composition=held), absent
 
     def params(self, params):
@@ -729,6 +766,11 @@ class Overrides:
         out = params.to_dict()
         self.pin(out)
         return self.finish(Params.from_dict(out))
+
+
+def _lyric(path: str) -> str:
+    """A line of its own's path as the lyric path that names the same line: line.verse:wire.2 is lyrics.verse:wire.2."""
+    return "lyrics." + path[5:] if path.startswith("line.") else path
 
 
 def pins(genome: Genome, form, edits: dict) -> tuple[dict, list[dict], list[str]]:
@@ -1012,6 +1054,9 @@ def marks(genome: Genome, generated, generated_lyrics, final_lyrics, applied: li
             continue
         elif path.startswith("lyrics."):
             was = composition.lyric_value(genome, generated, generated_lyrics, path)
+        elif path.startswith("line."):  # a line of its own: the words the program sang there, and its count
+            words = composition.lyric_value(genome, generated, generated_lyrics, _lyric(path))
+            was = {"words": words, "syllables": len(sung_words(words))} if words else None
         elif path.startswith("form."):
             was = generated_shape.get(path[5:])
         elif path in ("words.refrain", "words.bridge"):  # words for all: just the slots chosen, as first sung

@@ -53,6 +53,7 @@ from .theory import MODES, SEVENTHS, chord_bass, chord_name, chord_tones, degree
 GRID = 0.25  # a sixteenth note in a quarter-note beat
 MELISMA = 4  # notes a syllable may be sung over: its own and three more, slurred (docs/STUDIO.md, "A freer melody")
 MELISMA_STEP = 4  # scale steps a melisma may move from one of its notes to the next (a fifth)
+OWN_MAX = 32  # syllables a line of its own may sing (docs/notes/OWN-COUNT-LINES.md)
 RANGE = 3  # scale steps a person's tune may go past the song's own lowest and highest notes
 MAX_SECTIONS = 48
 LYRIC_PATH = re.compile(r"lyrics\.([A-Za-z][A-Za-z0-9_-]*):([A-Za-z0-9_-]+)\.(\d+)")
@@ -131,7 +132,7 @@ def lyric_target(genome, path: str) -> tuple[str, int, str]:
     return f"{name}:{which}", index, section.phrases[index]
 
 
-def check_lyric(genome, path: str, value) -> str | None:
+def check_lyric(genome, path: str, value, target: int | None = None) -> str | None:
     """A pronounceable syllable per note; spelling, punctuation and emphasis stay
     human. The line is checked as a bank line is (songbird.bank.line_problem),
     a *focus* mark included, and told what's wrong in the studio's words."""
@@ -150,7 +151,7 @@ def check_lyric(genome, path: str, value) -> str | None:
     text = " ".join(heteronyms.normalized(value.replace("’", "'")).split())
     if any(not part for word in text.split() for part in heteronyms.bare(word).split("-")):
         raise ValueError("put syllable hyphens inside words, like car-ry")
-    target = len(genome.phrases[pid].sung)
+    target = len(genome.phrases[pid].sung) if target is None else target  # a line of its own: its notes' count
     for word in text.split():
         why = heteronyms.problem(word, len([p for p in heteronyms.bare(word).split("-") if p]))
         if why:
@@ -170,9 +171,29 @@ def check_lyric(genome, path: str, value) -> str | None:
     raise ValueError(f"{problem[1]!r} needs {problem[3]} syllables; show them with hyphens")
 
 
+def check_own(genome, path: str, value) -> dict | None:
+    """A line of its own (line.verse:wire.2: docs/notes/OWN-COUNT-LINES.md): its words and its notes, checked as
+    one, the notes against every fence a tune edit keeps but the count, the words against the notes' count.
+    Gives {"words": text, "notes": [...]}, None to release it. Raises with why."""
+    if not path.startswith("line."):
+        raise ValueError("a line of its own is named line.<section>:<which>.<line>")
+    lyric = "lyrics." + path[5:]
+    _, _, pid = lyric_target(genome, lyric)
+    if value is None:
+        return None
+    if not isinstance(value, dict) or set(value) != {"words", "notes"}:
+        raise ValueError("a line of its own needs its words and its notes")
+    if not isinstance(value["notes"], list):
+        raise ValueError(f"a line of its own sings 1 to {OWN_MAX} syllables")
+    notes = check_phrase(genome, pid, value["notes"], free=True)
+    count = sum(not n.get("slur") for n in notes)
+    return {"words": check_lyric(genome, lyric, value["words"], target=count), "notes": notes}
+
+
 def has_lines(params) -> bool:
-    """Whether a person wrote any of the lines sung, kept by key or, in an older record, by place."""
-    return bool(params.composition.get("lines") or params.composition.get("lyrics"))
+    """Whether a person wrote any of the lines sung, kept by key or, in an older record, by place, or a line of its
+    own."""
+    return bool(params.composition.get("lines") or params.composition.get("lyrics") or params.composition.get("own"))
 
 
 def authored(genome, params, lyrics=None) -> list[dict]:
@@ -180,6 +201,10 @@ def authored(genome, params, lyrics=None) -> list[dict]:
     these words (arrange.Lyrics; None: the seed's own): those kept by key, over any an older record
     keeps by place."""
     lines, placed = params.composition.get("lines", {}), params.composition.get("lyrics", {})
+    own = params.composition.get("own", {})
+    if own:  # a line of its own's words, over a written line of the tune's count
+        lines = {k: {**lines.get(k, {}), **{i: e["words"] for i, e in own.get(k, {}).items()}}
+                 for k in set(lines) | set(own)}
     if not lines and not placed:
         return [{} for _ in params.form]
     if lines and lyrics is None:
@@ -209,6 +234,16 @@ def lyric_overlay(genome, params, lyrics):
     return replace(base, sections=tuple(sections))
 
 
+def own_places(genome, params, lyrics) -> frozenset:
+    """Each (section of the form, line) that sings a line of its own (composition["own"]) over these words
+    (arrange.Lyrics, None the seed's): the lines whose count is their notes', not their tune line's."""
+    own = params.composition.get("own")
+    if not own:
+        return frozenset()
+    keys = lyric_keys(genome, params.form, lyrics if lyrics is not None else _seed(genome, params))
+    return frozenset((i, int(j)) for i, key in enumerate(keys) if key for j in own.get(key, {}))
+
+
 def lyric_value(genome, params, lyrics, path):
     """The line a lyric path names as these words sing it (a person's own over them), None if they don't."""
     key, line, _ = lyric_target(genome, path)
@@ -218,7 +253,8 @@ def lyric_value(genome, params, lyrics, path):
     keys = lyric_keys(genome, params.form, base)
     if key not in keys:
         return None
-    sung = lyric_overlay(genome, params, base).lines_for(genome, params.form)[keys.index(key)]
+    sung = lyric_overlay(genome, params, base).lines_for(genome, params.form, own_places(genome, params, base))[
+        keys.index(key)]
     return sung[line] if sung else None
 
 
@@ -320,9 +356,10 @@ def line_of(genome, key: str) -> str:
     return place_target(genome, key)[3] if is_place(key) else key
 
 
-def check_phrase(genome, pid: str, value) -> list[dict] | None:
+def check_phrase(genome, pid: str, value, free: bool = False) -> list[dict] | None:
     """Validate atomically: a rejected note leaves the entire phrase unchanged. pid: a tune line, or a place of
-    the form (refrain:last.1), whose line's fences it keeps."""
+    the form (refrain:last.1), whose line's fences it keeps. free: any count of syllables from 1 to OWN_MAX (a
+    line with its own count, check_own), else the line's own."""
     pid = line_of(genome, pid)
     if pid not in genome.phrases:
         raise ValueError(f"there is no tune line called {pid}")
@@ -332,9 +369,14 @@ def check_phrase(genome, pid: str, value) -> list[dict] | None:
     if not phrase.sung:
         raise ValueError("this line is a rest; it has no melody notes to move")
     want = len(phrase.sung)
-    if not isinstance(value, list) or not want <= len(value) <= want * MELISMA:
+    if free:
+        if not isinstance(value, list) or not 1 <= len(value) <= OWN_MAX * MELISMA:
+            raise ValueError(f"a line of its own sings 1 to {OWN_MAX} syllables")
+        if not 1 <= sum(not (isinstance(item, dict) and item.get("slur") is True) for item in value) <= OWN_MAX:
+            raise ValueError(f"a line of its own sings 1 to {OWN_MAX} syllables, each with its own note")
+    elif not isinstance(value, list) or not want <= len(value) <= want * MELISMA:
         raise ValueError(f"this line needs {want} notes, one for each syllable")
-    if sum(not (isinstance(item, dict) and item.get("slur") is True) for item in value) != want:
+    elif sum(not (isinstance(item, dict) and item.get("slur") is True) for item in value) != want:
         raise ValueError(f"this line needs {want} notes, one for each syllable (and any more slurred onto them)")
     limits = bounds(genome, phrase)
     result = []
@@ -368,7 +410,8 @@ def check_phrase(genome, pid: str, value) -> list[dict] | None:
                 raise ValueError(f"a melisma moves a fifth at most; note {i + 1} leaps further")
         else:
             k, run = k + 1, 0
-            if result and abs(degree - result[-1]["degree"]) > max(7, abs(phrase.sung[k].degree - phrase.sung[k - 1].degree)):
+            own_leap = abs(phrase.sung[k].degree - phrase.sung[k - 1].degree) if 0 < k < want and not free else 0
+            if result and abs(degree - result[-1]["degree"]) > max(7, own_leap):
                 raise ValueError(f"the leap into note {i + 1} is wider than an octave")
         result.append({"degree": int(degree), "onset": onset, "duration": duration, **({"slur": True} if slur else {})})
     # the ending may leave its home note: said as advice (advice()), not refused
@@ -409,6 +452,16 @@ def pack_phrase(genome, notes) -> list[list]:
             out[-1][2] = n["onset"] * genome.meter.beat + n["duration"] * genome.meter.beat - out[-1][1]
             continue
         out.append([n["degree"], n["onset"] * genome.meter.beat, n["duration"] * genome.meter.beat])
+    return out
+
+
+def pack_own(genome, checked: dict) -> dict:
+    """A line of its own as it is kept (composition["own"]): its words, its syllables' notes as a tune edit keeps
+    them, and their melismas if it has any."""
+    out = {"words": checked["words"], "tune": pack_phrase(genome, checked["notes"])}
+    turns = pack_melisma(genome, checked["notes"])
+    if turns:
+        out["melisma"] = turns
     return out
 
 
@@ -561,8 +614,23 @@ def tune_key(phrase) -> str:
     return phrase.place or phrase.id
 
 
+def own_entry(phrase, params) -> dict | None:
+    """A line of its own's kept entry (composition["own"]), for a phrase form_phrases gave one; None otherwise."""
+    if not getattr(phrase, "own", None):
+        return None
+    key, _, line = phrase.own.rpartition(".")
+    return ((params.composition.get("own") or {}).get(key) or {}).get(line)
+
+
 def played(phrase, params):
-    """Human choices take precedence over variants on this line alone: a place's own tune, else the line's."""
+    """Human choices take precedence over variants on this line alone: a line of its own's notes, a place's own
+    tune, else the line's."""
+    entry = own_entry(phrase, params)
+    if entry is not None:  # its notes are the phrase's (form_phrases), never a variant's; its melismas beside them
+        turns = entry.get("melisma") or {}
+        return tuple(variants.Played(n.degree, 0, float(n.onset), float(n.dur), (), None,
+                                     melisma=tuple((float(off), int(deg)) for deg, off in turns.get(str(k), ())))
+                     for k, n in enumerate(phrase.sung))
     notes = variants.realized(phrase, params.variants)
     key = tune_key(phrase)
     edited = params.composition.get("tune", {}).get(key)
@@ -644,10 +712,54 @@ def places_held(params) -> bool:
     return any(is_place(k) for kind in ("tune", "chords") for k in (params.composition.get(kind) or {}))
 
 
-def form_phrases(genome, params) -> list:
+HELD = object()  # form_phrases' words: the ones the rendition holds (held_lyrics), where the caller has none to give
+
+
+def held_lyrics(genome, params):
+    """The words a rendition sings as its parameters hold them (as handed_down reads them): its held words, where
+    the bank can sing them in this form, else the seed's own."""
+    from . import arrange
+
+    words = params.words
+    if words and genome.source.get("bank") and not arrange.held_problem(genome, params.form, words):
+        return arrange.sing(genome, params.form, words)
+    return arrange.seed_lyrics(genome, params.form)
+
+
+def own_notes(entry: dict) -> tuple:
+    """A line of its own's kept notes as a tune line's: each syllable's degree, onset and length in grid units."""
+    from .genome import TuneNote
+
+    return tuple(TuneNote(int(d), 0, t, length) for d, t, length in entry["tune"])
+
+
+def _owned(genome, params, lines, phrases, lyrics) -> list:
+    """The phrases with each line of its own (composition["own"]) where its words are sung: a copy with the
+    person's notes, its own naming where they're kept. The same list where there are none."""
+    own = params.composition.get("own")
+    if not own:
+        return phrases
+    keys = lyric_keys(genome, params.form, held_lyrics(genome, params) if lyrics is HELD else
+                      lyrics if lyrics is not None else _seed(genome, params))
+    out = []
+    for (i, j, _line), phrase in zip(lines, phrases):
+        entry = own.get(keys[i], {}).get(str(j)) if j is not None and keys[i] else None
+        out.append(replace(phrase, notes=own_notes(entry), place=None, own=f"{keys[i]}.{j}") if entry else phrase)
+    return out
+
+
+def _seed(genome, params):
+    from .arrange import seed_lyrics
+
+    return seed_lyrics(genome, params.form)
+
+
+def form_phrases(genome, params, lyrics=HELD) -> list:
     """The phrase for each line of the form, in order: the line itself (the very object, where no place has its
     own), or a copy with its place's chords and its place (Phrase.place: where played() reads its own tune), its
-    id still the line's. genome: the song as realize sings it (harmonized: a person's everywhere chords in)."""
+    id still the line's; a line of its own where its words are sung (_owned). genome: the song as realize sings
+    it (harmonized: a person's everywhere chords in). lyrics: the words sung (arrange.Lyrics, None the seed's),
+    where the caller knows them; else the ones the rendition holds."""
     from .takeover import phrase_plan
 
     # each section's lines as a person's arrangement lays them (songbird.takeover: a length of its own)
@@ -657,7 +769,8 @@ def form_phrases(genome, params) -> list:
     lines = [(i, own_line(genome, params.form[i], plan, j), genome.phrases[pid])
              for i, plan in enumerate(phrase_plan(genome, params)) for j, (pid, _) in enumerate(plan)]
     if not places_held(params):
-        return _changed(genome, params, lines, _looped(genome, params, lines, [phrase for _, _, phrase in lines]))
+        return _changed(genome, params, lines, _looped(genome, params, lines, _owned(
+            genome, params, lines, [phrase for _, _, phrase in lines], lyrics)))
     tune, chords = params.composition.get("tune") or {}, params.composition.get("chords") or {}
     out = []
     for i, j, phrase in lines:
@@ -670,7 +783,7 @@ def form_phrases(genome, params) -> list:
             phrase = replace(phrase, place=at_tune,
                              chords=tuple(tuple(bar) for bar in chords[at_chords]) if at_chords else phrase.chords)
         out.append(phrase)
-    return _changed(genome, params, lines, _looped(genome, params, lines, out))
+    return _changed(genome, params, lines, _looped(genome, params, lines, _owned(genome, params, lines, out, lyrics)))
 
 
 def _changed(genome, params, lines, phrases) -> list:
@@ -840,10 +953,10 @@ def view(genome, params, lyrics) -> dict:
     keys = lyric_keys(genome, params.form, lyrics)
     patches = authored(genome, params, lyrics)
     lyrics = lyric_overlay(genome, params, lyrics)
-    lines = lyrics.lines_for(genome, params.form)
+    lines = lyrics.lines_for(genome, params.form, own_places(genome, params, lyrics))
     edited = params.composition.get("tune", {})
     in_parts = performed_parts(params)
-    at_places = iter(form_phrases(genome, params))  # each line as its place sings it
+    at_places = iter(form_phrases(genome, params, lyrics))  # each line as its place sings it
     sections = []
     cursor = clock.lead
     from .takeover import phrase_plan
@@ -903,6 +1016,11 @@ def view(genome, params, lyrics) -> dict:
                             else "",
                             **({"played": True} if section.lyrics and not sung else {}),  # a person had it played
                             "syllable_count": len(phrase.sung),
+                            # a line of its own (docs/notes/OWN-COUNT-LINES.md): where it's kept, its edit's path, and
+                            # the tune line's own count; the line's own count is the syllable count above
+                            "own": phrase.own, "own_path": f"line.{keys[index]}.{at}" if keys[index] and
+                            at < len(section.phrases) else None,
+                            "tune_syllable_count": len(song.phrases[pid].sung),
                             "advice": advice(genome, params, phrase),  # a freed ending, said
                             "authored": str(at) in patches[index],
                             # its words said two ways, as sung (songbird.heteronyms.as_sung): only where it has one
