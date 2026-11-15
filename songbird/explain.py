@@ -25,6 +25,7 @@ field this module doesn't know yet still gets a card, in plain values.
 from __future__ import annotations
 
 import json
+import re
 from dataclasses import asdict, dataclass, field, fields, is_dataclass
 from datetime import date as _date, timedelta
 from functools import lru_cache
@@ -82,6 +83,14 @@ STYLE_NAMES = {"ballad": "the ballad band, the song's own", "stringband": "a str
                "lofi": "lo-fi", "indie": "indie folk", "blues": "country blues",
                # beside the ring (docs/STYLES.md, "Two more")
                "acappella": "a cappella", "jig": "jig"}
+
+
+def _alphabetical(name: str) -> str:
+    """A style's place in the studio's list: by the name the page gives it, past its "a" or "the" ("a cappella"
+    keeps its a)."""
+    return re.sub(r"^(the|a) (?!cappella)", "", STYLE_NAMES.get(name, name).lower())
+
+
 # A player as a style names it (the jig's guitar is in an open tuning, DADGAD, which the style's detail says)
 STYLE_PLAYERS = {"jig": {"guitar": "open-tuned guitar", "drone": "reed drone"}}
 # A feel as a style names it (the jig is always in threes: re-barred in six-eight, or each beat of the song in three)
@@ -979,7 +988,7 @@ def style_card(v: Version) -> dict:
     return _card(v, "style", "The style", value, detail, mine + _finish(v, why, "style"), ["style."],
                  style={"name": name, "feel": feel, "ending": s.ending or "ring", "backing": s.backing,
                         "lift": s.lift},
-                 styles={k: STYLE_NAMES.get(k, k) for k in style_mod.offered(name)}, feels={f: named.get(f) or FEEL_NAMES.get(f, f) for f in feels},
+                 styles={k: STYLE_NAMES.get(k, k) for k in sorted(style_mod.offered(name), key=_alphabetical)}, feels={f: named.get(f) or FEEL_NAMES.get(f, f) for f in feels},
                  endings=dict(ENDING_NAMES), backings={"": "no backing voices", **BACKING_NAMES})
 
 
