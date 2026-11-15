@@ -1,6 +1,6 @@
 # A line with its own count
 
-Draft design, an experiment on the branch `claude/editable-notes-syllables-line-59bd88`, November 14, 2026.
+Built November 14, 2026, on the branch `claude/editable-notes-syllables-line-59bd88`.
 
 A person may sing a line with more or fewer syllables than its tune line has
 notes, by writing the line's words and its notes together. Everything else in

@@ -28,6 +28,10 @@ keeps. An edit that can't be kept is left out and said why, never bent.
                          or brought back from a MIDI file: [[onset, length, pitch, velocity], ...], whole numbers
                          (96ths of a beat from the line's first bar line; semitones from the key's note; 1..127),
                          in place of that player's own notes there; [] it rests; null: the program's own part
+    line.<section>:<which>.<i>
+                         a line with its own count of syllables: {"words": text, "notes": [{degree, onset, duration,
+                         slur?, alter?}, ...]}, kept by the verse (or round) its words are for, as lyrics.* are
+                         (docs/notes/OWN-COUNT-LINES.md); null gives the line back to its tune line
     words.verse.<i>      {"id": verse, "slots": {slot: words}}, or just the verse: the i-th verse (from 0)
     words.refrain.<i>    the i-th refrain's own words: {"id": couplet, "head": head, "slots": {slot: words}},
                          any of the three, or just a couplet (never the last's: it always sings the canon)

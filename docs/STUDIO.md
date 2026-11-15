@@ -1052,7 +1052,7 @@ What each limit on a person's tune is for:
 
 | Limit | Its reason | Rule |
 |---|---|---|
-| a note for each syllable, in order | the singer schedules one syllable a note, its consonants and vowel (`synth.voice.schedule`), and the lyric bank's lines are counted against the tune | a syllable may carry up to four notes (melisma) |
+| a note for each syllable, in order | the singer schedules one syllable a note, its consonants and vowel (`synth.voice.schedule`), and the lyric bank's lines are counted against the tune | a syllable may carry up to four notes (melisma); one line may have its own count, with its own words (below) |
 | the ending's scale degree | lines are recognized by their endings as the song evolves (the lineage's gate compares phrase-final targets), and the line's last chord is written under that note | the page keeps it unless the person frees it; the program takes any ending and says so as advice |
 | the song's range, three scale steps past its lowest and highest notes | a range the singer (and the learned throat) sings well | in H, E3 to E5 at D |
 | leaps of an octave at most, no overlaps, room before the next line's pickup, inside the line | singable lines, one voice, the next pickup's breath | kept |
@@ -1092,6 +1092,17 @@ syllable's `[degree, onset, duration]` (the duration through its melisma) and
 back as the edit wrote them, slurs and all, so the record's marks, undo, a
 replay and notes in agree; a line restored loses its melisma with it. The
 piano page shows a melisma's syllable on its first note only.
+
+**A line with its own count.** One sung line may have more syllables or
+fewer than its tune line, written with its words: in the note card, **New
+syllable** splits a note into two syllables and **Merge** sings a note on the
+syllable before, and a card asks for the line's words for the new count. Its
+words and notes are one edit, `line.<section>:<which>.<line>` (`{"words",
+"notes"}`, a note's half step as `alter` beside its degree), kept with the
+verse or round they're written for, as a written line is, so they never part.
+docs/notes/OWN-COUNT-LINES.md has the design: what a round, a played section,
+a hymn, the trio and a MIDI file do with such a line, and why a program that
+doesn't know it sings the song's line there.
 
 **A freed ending.** The program accepts an ending off the line's home note,
 and says so beside the line as advice ("this line now ends on 2, not on 1 as
