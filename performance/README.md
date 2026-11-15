@@ -12,7 +12,7 @@ its stops released as articulate makes them (tE's t).
   folk's own (an arpeggio and pad, then its drum machine, then its bass, a line each); then the band itself, one
   player a line (the harp, the bass, the guitar, the drum), each where the lead takes its next step of people.
   The screen verse ends in the artist's own lines (composition "lines", handed down to a child that sings it):
-  "they laughed and they wept, and they scrolled on and on, / but nobody sang it, and then it was gone."
+  "they laughed and they wept, and they *scrolled* on and on, / but nobody *sang* it, and then it was gone."
 
     uv run python -m songbird render performance/genome.json --replay performance/record-B.json --out performance-B.flac
     uv run python -m songbird render performance/genome.json --replay performance/record-arc-morph.json --out arc-morph.flac
