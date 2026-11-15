@@ -99,6 +99,8 @@ def test_the_grid_makes_twins_and_levels():
     ts, gs = S.points(levels["harp"], secs, [9.6, 15.0, 20.0, 29.6])
     assert ts == [0.0, 10.0, 10.0 + S.EDGE, 15.0, 15.0 + S.EDGE] and gs == [1.0, 1.0, 0.0, 0.0, 1.0]
     assert S.when("verse:0.9", secs, [9.6, 15.0]) == 30.0 and S.when("tag:0.end", secs, []) == 60.0
+    assert S.when("intro:0@0.5", secs, []) == 5.0 and S.when("verse:0@0.25", secs, []) == 15.0
+    assert S.points([["intro:0@0.5", None], ["outro:0@0.5", 0]], secs, [])[0] == [5.0]
 
 
 def test_the_amount_scales_the_phrasing_and_the_timbre():
@@ -183,3 +185,28 @@ def test_a_part_copied_plays_anothers_notes_there():
     theirs = sorted(n.start - c for n in score.notes if n.part == part and c <= n.start < c + (b - a))
     assert np.allclose(there, theirs)
     assert [n for n in out.notes if n.part != part] == [n for n in score.notes if n.part != part]
+
+
+def test_a_twin_plays_a_layered_parts_notes_level_with_it(monkeypatch):
+    """A twin may play a layered part's notes (the copies it plays among them), level with that part."""
+    from songbird.synth import instruments
+
+    sr = 1000
+    score = variation.lay(realize(G, seed()), seed())
+    (_, a, b), (_, c, _) = score.sections[1], score.sections[3]
+    theirs = replace(score, notes=tuple(replace(n, part="drummachine") for n in score.part("harp")))
+    length = int(np.ceil(score.duration * sr))
+    heard = {}
+
+    def render_part(name, notes, *a, **k):
+        heard[name] = notes
+        return np.full((length, 2), 0.25)
+
+    monkeypatch.setattr(instruments, "band_parts", lambda s, sr, seed: [("drummachine", lambda: np.full((length, 2), 0.5))])
+    monkeypatch.setattr(instruments, "render_part", render_part)
+    plan = {"layers": [{"score": theirs, "seed": 1, "parts": ("drummachine",), "copies": [("drummachine", (a, b), c)]}],
+            "twins": {"drummachine#": ("drummachine", "chip-drums")}}
+    stems = dict((name, make()) for name, make in S.jobs(replace(score, stage=plan), sr, 1, None, []))
+    assert list(stems) == ["drummachine", "drummachine#"]
+    assert stems["drummachine#"].max() == pytest.approx(0.5)
+    assert heard["chip-drums"] == S.copied(theirs, "drummachine", (a, b), c).part("drummachine")

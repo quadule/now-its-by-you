@@ -250,6 +250,10 @@
           "harp#": [
             "harp",
             "chip"
+          ],
+          "drummachine#": [
+            "drummachine",
+            "chip-drums"
           ]
         },
         "layers": [
@@ -257,11 +261,28 @@
             "style": "synthfolk",
             "parts": [
               "arp",
-              "synthpad"
+              "synthpad",
+              "drummachine",
+              "synthbass"
             ],
             "copy": [
               {
                 "part": "synthpad",
+                "to": "verse:0",
+                "from": "verse:1"
+              },
+              {
+                "part": "arp",
+                "to": "verse:0",
+                "from": "verse:1"
+              },
+              {
+                "part": "drummachine",
+                "to": "verse:0",
+                "from": "verse:1"
+              },
+              {
+                "part": "synthbass",
                 "to": "verse:0",
                 "from": "verse:1"
               }
@@ -291,11 +312,11 @@
           ],
           "harp~": [
             [
-              "verse:0.3",
+              "verse:0",
               -3
             ],
             [
-              "refrain:0",
+              "verse:0",
               null
             ]
           ],
@@ -305,14 +326,22 @@
               null
             ],
             [
-              "refrain:0",
+              "verse:0.3",
               0
             ]
           ],
           "bass~": [
             [
-              "refrain:0",
+              "verse:0.2",
               0
+            ],
+            [
+              "verse:0.2",
+              null
+            ],
+            [
+              "refrain:0",
+              null
             ],
             [
               "refrain:0.1",
@@ -345,14 +374,14 @@
               null
             ],
             [
-              "refrain:0.1",
+              "refrain:0",
               0
             ]
           ],
           "guitar~": [
             [
               "refrain:0.1",
-              0
+              null
             ],
             [
               "refrain:0.2",
@@ -389,19 +418,11 @@
               null
             ],
             [
-              "refrain:0.2",
+              "refrain:0.1",
               0
             ]
           ],
           "drum~": [
-            [
-              "refrain:0.2",
-              0
-            ],
-            [
-              "refrain:0.3",
-              null
-            ],
             [
               "bridge:0.end",
               null
@@ -421,11 +442,27 @@
               null
             ],
             [
-              "refrain:0.3",
+              "refrain:0.2",
               0
             ]
           ],
           "harp#": [
+            [
+              "verse:0",
+              null
+            ],
+            [
+              "verse:0",
+              -1
+            ],
+            [
+              "verse:0.3",
+              -1
+            ],
+            [
+              "verse:0.3",
+              null
+            ],
             [
               "turn:0.end",
               null
@@ -474,6 +511,22 @@
             ]
           ],
           "arp": [
+            [
+              "verse:0",
+              null
+            ],
+            [
+              "verse:0",
+              6
+            ],
+            [
+              "refrain:0.1",
+              6
+            ],
+            [
+              "refrain:0.1",
+              null
+            ],
             [
               "bridge:0.end",
               null
@@ -527,6 +580,60 @@
             [
               "tag:0",
               2
+            ]
+          ],
+          "drummachine": [
+            [
+              "verse:0.1",
+              null
+            ],
+            [
+              "verse:0.1",
+              3
+            ],
+            [
+              "refrain:0.2",
+              3
+            ],
+            [
+              "refrain:0.2",
+              null
+            ]
+          ],
+          "synthbass": [
+            [
+              "verse:0.2",
+              null
+            ],
+            [
+              "verse:0.2",
+              3
+            ],
+            [
+              "refrain:0",
+              3
+            ],
+            [
+              "refrain:0",
+              null
+            ]
+          ],
+          "drummachine#": [
+            [
+              "intro:0@0.5",
+              null
+            ],
+            [
+              "intro:0@0.5",
+              0
+            ],
+            [
+              "verse:0.1",
+              0
+            ],
+            [
+              "verse:0.1",
+              null
             ]
           ]
         }

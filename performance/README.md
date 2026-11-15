@@ -6,8 +6,11 @@ its stops released as articulate makes them (tE's t).
 
 - `genome.json`: the release's genome, from its packet.
 - `record-B.json`: the release's record with `params.tonic` 59 (B) instead of 62 (D). Nothing else changed.
-- `record-arc-morph.json`: the stage mix, arc-morph: record-B with the lead's arc and the twins in the grid, and
-  synth folk's arp and pad (docs/ARRANGE.md, "A stage edition").
+- `record-arc-morph.json`: the stage mix, arc-morph ("Awards performance draft" on the home page): record-B with
+  the lead's arc and the twins in the grid (docs/ARRANGE.md, "A stage edition"). The band begins as synths: the
+  intro's on its own notes, a game console's drums joining at its third bar; the first verse a synth band of synth
+  folk's own (an arpeggio and pad, then its drum machine, then its bass, a line each); then the band itself, one
+  player a line (the harp, the bass, the guitar, the drum), each where the lead takes its next step of people.
 
     uv run python -m songbird render performance/genome.json --replay performance/record-B.json --out performance-B.flac
     uv run python -m songbird render performance/genome.json --replay performance/record-arc-morph.json --out arc-morph.flac

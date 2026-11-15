@@ -506,12 +506,12 @@ drops it):
  "human": {"verse:0": [0, 0, 0, 0.2]}}
 ```
 
-`twins`: a synth (any instrument) on a player's notes, named, level with the player by the whole stems' RMS;
+`twins`: a synth (any instrument) on a player's notes or a layered part's, named, level with it by the whole stems' RMS;
 `layers`: another style's players on the same song (its key, tempo, form and chords), a section of a part played
 as it plays another; `levels`: each named part's level along the song as points (where, dB or null for silent)
 joined by straight fades, the first and last held, a point at the place of the one before it 0.12 s after it;
 `human`: amounts finer than the grid's. A place is `<section>:<n>` (its start), `<section>:<n>.<line>` (where the
-lead's line begins, its pickup with it) or `<section>:<n>.end`. Where the exact data gives `twins` or `levels`,
+lead's line begins, its pickup with it), `<section>:<n>.end` or `<section>:<n>@<f>` (that far through it, 0 to 1). Where the exact data gives `twins` or `levels`,
 they are the whole table: what the grid's synth cells would make of them is left aside.
 
 **The render.** `stage.prepare` lays the plan out in the score (`Score.stage`, never written to the score's file):

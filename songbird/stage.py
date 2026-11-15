@@ -17,7 +17,8 @@ The edition's own exact data, params.composition["exact"], which the renderer ho
     {"human": {"verse:0": [0, 0, 0, 0.2]},                   amounts finer than the grid's, by section (optional)
      "twins": {"harp~": ["harp", "arp"], "harp#": ["harp", "chip"]},
                                                              a synth (any instrument) on a player's own notes,
-                                                             level with the player (whole-stem RMS), by its name
+                                                             or a layered part's, level with it (whole-stem
+                                                             RMS), by its name
      "layers": [{"style": "synthfolk", "parts": ["arp", "synthpad"],
                  "copy": [{"part": "synthpad", "to": "verse:0", "from": "verse:1"}]}],
                                                              another style's players on the same song (its key,
@@ -29,7 +30,8 @@ The edition's own exact data, params.composition["exact"], which the renderer ho
                                                              fades, the first and last held (curve())
 
 A place is "<section>:<n>" (its start), "<section>:<n>.<line>" (where its line begins, 0 the first: a line is
-the lead's, from just before its first note, its pickup with it) or "<section>:<n>.end". "twins" and "levels",
+the lead's, from just before its first note, its pickup with it), "<section>:<n>.end" or "<section>:<n>@<f>"
+(that far through it: "intro:0@0.5" its middle). "twins" and "levels",
 where the exact data gives them, are the edition's whole table and every level: what the grid's synth cells
 would make of them is left aside. With neither layer, nothing here is called and every render is the program's
 own, to the sample.
@@ -123,8 +125,12 @@ def lines_of(lines: list[float], a: float, b: float) -> list[float]:
 
 
 def when(place: str, secs: dict, lines: list[float]) -> float:
-    """A place in seconds: "<section>:<n>", "<section>:<n>.<line>" or "<section>:<n>.end". A line past the
-    section's own is its end."""
+    """A place in seconds: "<section>:<n>", "<section>:<n>.<line>", "<section>:<n>.end" or "<section>:<n>@<f>"
+    (that far through the section, 0 to 1: @0.5 its middle). A line past the section's own is its end."""
+    sid, _, frac = place.partition("@")
+    if frac:
+        a, b = secs[sid]
+        return a + float(frac) * (b - a)
     sid, _, rest = place.partition(".")
     a, b = secs[sid]
     if rest == "end":
@@ -140,7 +146,7 @@ def points(levels: list, secs: dict, lines: list[float]) -> tuple[list[float], l
     the one before it comes EDGE after it. A place in a section the version hasn't got is left out."""
     ts, gs = [], []
     for place, db in levels:
-        if place.partition(".")[0] not in secs:
+        if place.partition("@")[0].partition(".")[0] not in secs:
             continue
         t = when(place, secs, lines)
         ts.append(t if not ts or t > ts[-1] else ts[-1] + EDGE)
@@ -286,6 +292,14 @@ def laid(genome, params, phrasing=None, choir=(), lyrics=None):
     return prepare(genome, params, score, phrasing=phrasing, choir=choir, lyrics=lyrics)
 
 
+def copied_all(score, part: str, copies) -> "Score":
+    """copied() for each of a layer's copies of the part ((part, span, start), the plan's)."""
+    for name, span, start in copies:
+        if name == part:
+            score = copied(score, part, span, start)
+    return score
+
+
 def copied(score, part: str, span: tuple[float, float], start: float):
     """A score with one part's notes in span (a, b) those it plays from `start` for as long (the same bars and
     chords elsewhere in the song): its own notes there let go. A section's preview copies so (shifted()); a whole
@@ -411,10 +425,7 @@ def jobs(score, sr: int, seed: int, voice, jobs: list) -> list:
     voice = voice or VoiceParams()
     makes = dict(jobs)
     order = [name for name, _ in jobs]
-    twins = {name: pair for name, pair in (plan.get("twins") or {}).items() if pair[0] in makes}
-    played = {part: _Played(makes[part]) for part, _ in twins.values()}
-    for part, shared in played.items():
-        makes[part] = shared.take
+    notes_of = {}  # a layered part's notes, its copies among them (for its twins)
 
     if plan.get("takes"):
         takes = plan["takes"]
@@ -430,14 +441,6 @@ def jobs(score, sr: int, seed: int, voice, jobs: list) -> list:
             return pan(y, 0.0)
         makes["voice"] = lead
 
-    for name, (part, synth_name) in twins.items():
-        def twin(part=part, synth_name=synth_name) -> np.ndarray:
-            y = render_part(synth_name, score.part(part), sr, length, score.band, seed, None)
-            return y * (played[part].rms() / max(rms(y), 1e-9))  # level with the player whose part it plays
-        makes[name] = twin
-        if name not in order:
-            order.append(name)
-
     for layer in plan.get("layers") or []:
         theirs = dict(band_parts(layer["score"], sr, layer["seed"]))
         for name in layer["parts"]:
@@ -452,8 +455,22 @@ def jobs(score, sr: int, seed: int, voice, jobs: list) -> list:
                     y[i1: i1 + n] = y[i2: i2 + n]
                 return y
             makes[name] = theirs_here
+            notes_of[name] = copied_all(layer["score"], name, layer["copies"]).part(name)
             if name not in order:
                 order.append(name)
+
+    twins = {name: pair for name, pair in (plan.get("twins") or {}).items() if pair[0] in makes}
+    played = {part: _Played(makes[part]) for part, _ in twins.values()}
+    for part, shared in played.items():
+        makes[part] = shared.take
+
+    for name, (part, synth_name) in twins.items():
+        def twin(part=part, synth_name=synth_name) -> np.ndarray:
+            y = render_part(synth_name, notes_of.get(part) or score.part(part), sr, length, score.band, seed, None)
+            return y * (played[part].rms() / max(rms(y), 1e-9))  # level with the player whose part it plays
+        makes[name] = twin
+        if name not in order:
+            order.append(name)
 
     for name, (ts, gs) in (plan.get("levels") or {}).items():
         if name in makes:
