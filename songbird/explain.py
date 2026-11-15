@@ -126,7 +126,7 @@ BACKING_NAMES = {"oohs": "backing voices on oohs", "echo": "backing voices echo 
                  "thirds": "backing voices in harmony", "gang": "everyone sings along",
                  "hum": "voices humming under the verses"}
 PATTERNS = {"lilt": "a lilting strum", "strum": "a steady strum", "pick": "fingerpicking", "air": "a slow air"}
-PATTERN_DETAIL = {"lilt": "the strum follows the tune's long-short-short", "strum": "the old faithful strum",
+PATTERN_DETAIL = {"lilt": "the strum follows the tune's long-short-short", "strum": "a steady strum in the player's own groove",
                   "pick": "picked strings, no strumming", "air": "rolled chords and held notes, no drum"}
 SECTIONS = {"intro": "Intro", "verse": "Verse", "refrain": "Refrain", "turn": "Turn", "break": "Break",
             "bridge": "Bridge", "bridge2": "Bridge again", "tag": "Tag", "outro": "Outro"}
