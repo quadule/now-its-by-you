@@ -892,6 +892,8 @@ def _hand_stroke(ctx: Context, hand, played, u: float, c: Chord, voicing, capo: 
         sung = ctx.voices_at(u)
         order = [(k, GUITAR_TUNING[k] + capo) for k in (5, 4, 3)
                  if not any(min((GUITAR_TUNING[k] + capo - q) % 12, (q - GUITAR_TUNING[k] - capo) % 12) == 1 for q in sung)]
+        if len(order) < 2:  # too few strings that don't rub: the hand lifts without touching
+            return []
         vel = ctx.vel("guitar", u, 0.85 * st.accent * 0.5)
     else:
         first = abs(u - c.u0) < 1e-9 or abs((u - s.u0) % ctx.bar) < 1e-9

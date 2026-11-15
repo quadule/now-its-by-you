@@ -830,6 +830,8 @@ def w_strum(ctx: StyleContext, i: int, part: str, kind: str = "strum") -> list[E
             if st.flag == "open" and part in GUITARS:
                 sung = ctx.sung_in(u, c.u1)
                 notes = [p for p in strumming.open_strings(ctx.capo) if not rubs(p, sung)]
+                if len(notes) < 2:  # too few strings that don't rub: the hand lifts without touching
+                    continue
                 hit = notes[::-1]
                 vel = ctx.vel(part, u, 0.85 * st.accent * 0.5)
             else:

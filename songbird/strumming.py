@@ -146,11 +146,11 @@ class Hand:
         allowed = STYLE_GROOVES.get(style)
         full = ladder(beats, compound, bpm)
         self.ladder = tuple(g for g in full if allowed is None or g.name in allowed) or full
-        if base is not None:  # the family the seed's band asked for (its lilt or its strum) sets the home
-            target = {"lilt": 0.5, "strum": 0.55}.get(base, 0.5) + 0.25 * (density - 0.5) + rng.normal(0.0, 0.05)
-        else:
-            target = 0.3 + 0.55 * density + rng.normal(0.0, 0.1)
+        target = 0.3 + 0.55 * density + rng.normal(0.0, 0.1)
         self.home = int(np.argmin([abs(g.busy - target) for g in self.ladder]))
+        named = {"lilt": "lilt", "strum": "faithful"}.get(base or "")
+        if named in [g.name for g in self.ladder]:  # the seed band's family is its home groove (the lilt the lilt)
+            self.home = [g.name for g in self.ladder].index(named)
         self.lean = float(rng.uniform(0.002, 0.008))  # seconds this player's ups sit late in a lazy groove
         self.reach = float(rng.uniform(0.0, 1.0))  # how often a down comes in above the lowest string
         self.lifts = float(rng.uniform(0.35, 0.75))  # how often the up before a change is the open strings
