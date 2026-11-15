@@ -31,9 +31,11 @@
     link.remove();
   }
 
-  function say(text) {
+  function say(text, busy = false) {  // busy: a spinner beside it while the parts are made
     const note = $("exportNote");
-    if (note) note.textContent = text;
+    if (!note) return;
+    note.replaceChildren(...(busy ? [Object.assign(document.createElement("span"), { className: "spinner", ariaHidden: "true" })] : []), text);
+    note.classList.toggle("making", busy);
   }
 
   async function exportFile(what) {
@@ -43,13 +45,13 @@
     if (button) button.disabled = true;
     const edits = bridge().getEdits ? bridge().getEdits() : {};
     try {
-      say(what === "midi" ? "Writing the MIDI file…" : "Playing every part alone: about as long as making the whole song…");
+      say(what === "midi" ? "Writing the MIDI file…" : "Playing every part alone: about as long as making the whole song…", true);
       let job = await ask("/api/export", { edits, what });
       if (job.state === "device") job = await onDevice(job);
       const url = job.download || job.url;
       while (job.state === "queued" || job.state === "running") {
         const ahead = job.state === "queued" && job.ahead ? ` (${job.ahead} ahead of it)` : "";
-        say(`Making the stems${ahead}: ${job.stage || "starting"}… ${Math.round((job.progress || 0) * 100)}%`);
+        say(`Making the stems${ahead}: ${job.stage || "starting"}… ${Math.round((job.progress || 0) * 100)}%`, true);
         await new Promise((resolve) => setTimeout(resolve, 700));
         job = await ask(`/api/job/${job.id}`);
       }
@@ -73,7 +75,7 @@
     if (!window.SongbirdRenderer) throw new Error("this page can't make them here");
     renderer = renderer || window.SongbirdRenderer.create(ask);
     const task = renderer.stems(answer, (job) => {
-      say(`Making the stems: ${job.stage || "starting"}… ${Math.round((job.progress || 0) * 100)}%`);
+      say(`Making the stems: ${job.stage || "starting"}… ${Math.round((job.progress || 0) * 100)}%`, true);
     });
     const job = await task.done;
     if (job.state === "failed") throw new Error(job.error || "it failed");

@@ -1294,14 +1294,14 @@ async function record() {
   if (state.recording) return;
   state.recording = true;
   setOn("record", "disabled", true);
-  saved.replaceChildren(h("p", {}, "Exporting…"));
+  const making = (words) => saved.replaceChildren(h("p", { class: "making" }, h("span", { class: "spinner", "aria-hidden": "true" }), words));  // its bar is the transport's
+  making("Exporting…");
   revealRecording(true);
   const edits = copyEdits();
   try {
     const task = renderer().record({ edits }, (job) => {
       const words = `Exporting: ${job.state === "queued" ? waitingWords(job) : job.stage || "making it"}… ${Math.round((job.progress || 0) * 100)}%`;
-      saved.replaceChildren(h("p", {}, words), h("div", { class: "bar making" }, h("div", { style: null })));
-      saved.querySelector(".bar > div").style.width = `${Math.round((job.progress || 0) * 100)}%`;
+      making(words);
       score()?.recording?.(words, job.progress || 0);
     });
     const job = await task.done;

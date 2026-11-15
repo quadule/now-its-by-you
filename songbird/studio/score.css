@@ -555,8 +555,9 @@ button.sbc-chord.is-rub::after { content: "•"; color: var(--red); margin-left:
 .export-ready .actions .btn { font-size: 14px; padding: 7px 14px; text-decoration: none; }
 .share-link { display: flex; gap: 8px; margin: 8px 0 2px; }
 .share-link input { flex: 1 1 auto; min-width: 0; font: 13px var(--sans); color: var(--ink); background: var(--paper); border: 1px solid var(--rule-strong); border-radius: var(--radius); padding: 7px 10px; }
-.saved .bar { height: 4px; background: var(--wash); }
-.saved .bar > div { height: 100%; background: var(--ochre); }
+/* an export on its way: a turning ring in the transport bar's ochre beside its words; the bar itself is the transport's */
+.making > .spinner { display: inline-block; width: 10px; height: 10px; margin-right: 7px; vertical-align: -1px; border: 1.5px solid var(--wash); border-top-color: var(--ochre); border-radius: 50%; animation: spin .9s linear infinite; }
+@keyframes spin { to { transform: rotate(360deg); } }
 .sheet-foot p { margin: 3px 0; }
 .sheet-foot, .drawer .foot { margin-top: 18px; font: italic 13px var(--serif); color: var(--ink-3); border-top: 1px solid var(--rule); padding-top: 10px; }
 /* a sheet's ✕ level with its heading */
