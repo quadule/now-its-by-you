@@ -4,7 +4,7 @@ The contest version is the release (id 07ac74fb…, from https://now.itsby.you) 
 sung by the performance voice: the shipped throat retrained with Scylla's Band as its teacher (E8bl, docs/THROAT.md),
 its stops released as articulate makes them (tE's t).
 
-- `genome.json`: the release's genome, from its packet.
+- `genome.json`: the release's genome, from its packet, its bank's lines marked with their focus words as the song's are (`songs/h-now-its-by-you.json`, the same file).
 - `record-B.json`: the release's record with `params.tonic` 59 (B) instead of 62 (D). Nothing else changed.
 - `record-arc-morph.json`: the stage mix, arc-morph ("Awards performance draft" on the home page): record-B with
   the lead's arc and the twins in the grid (docs/ARRANGE.md, "A stage edition"). The band begins as synths: the
