@@ -46,7 +46,7 @@ it, and the next line answers: it's yours while you sing it.
 refrain, turn, bridge, refrain, tag. A turn is two bars of the strings alone
 (IV, V) so a singer can catch their breath.
 
-**Further seed verses**, for longer forms and as the LLM's first context:
+**Further seed verses**, for longer forms:
 
 > A quiet man kept it alone in his head,
 > so close and so safe that it never was said.
@@ -87,7 +87,7 @@ harmony line against the melody from the chord underneath: the nearest chord
 tone a third or more below, the nearest above, the root beneath, then the
 same an octave down. The seed has no ancestors, so it sings its bridge alone;
 each generation adds a voice, so you can hear how far a rendition has
-travelled. Until the seed packet carries real ancestors (milestone 5),
+travelled: a version's record carries the singers before it, up to six.
 `songbird render --choir N` stands in N made-up singers.
 - **The tune.** Each foot is a quarter and two eighths. Refrain lines 1 and 2
 are a question and answer (open on so, closed on do); line 3 sits on la, the

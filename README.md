@@ -27,7 +27,9 @@ python3 now-its-by-you.flac
 It needs Python 3.11 or newer, or uv ([docs/RUNNING-THE-SONG.md](docs/RUNNING-THE-SONG.md)). The first run fetches
 the program's libraries once (about 100 MB) and asks before it writes; after that nothing goes over the network.
 
-Every run sings a new version. The shape of the tune, its stresses, its chords and the refrain's words never change.
+Every run sings a new version. The shape of the tune, its stresses and its chords never change. Every refrain asks
+who made (or sang, or owns) the song, and the last always ends "now it's by you"; its other words change from
+version to version, from the song's own bank.
 The key, mode, tempo, form, style, band and singer are chosen each time from a few plain facts about the computer
 (its languages, its size, its screen: `songbird harvest --show` prints what is kept) and from the date, through a
 slow drift: a little day to day, most year to year. The new version is the child of the one it was run from: it
