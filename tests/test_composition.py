@@ -22,8 +22,8 @@ ADA = H.fictional("ada")
 DAY = D.drift(D.parse("2026-09-27"), ADA.hash)
 # Exercise the authoring path with existing song text, without inventing lyrics.
 BANK_LINES = {verse["id"]: verse["lines"] for verse in G.source["bank"]["verses"]}
-AUTHORED = BANK_LINES["kids"][0]
-HYPHENATED = BANK_LINES["lullaby"][0]
+AUTHORED = unmarked(BANK_LINES["kids"][0])  # as a person writes it, no focus mark
+HYPHENATED = unmarked(BANK_LINES["lullaby"][0])
 AUTHORED_PATH = "lyrics.verse:wire.0"  # wire opens every version of this song
 
 
