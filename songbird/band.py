@@ -1583,8 +1583,11 @@ def overheard():
 
 
 def overhear(ctx, melody, seconds, lead, end) -> None:
+    """Hands the block the first arrangement made in it: the version's own band. A stage edition realizes the
+    song again for its layers (another style's players, songbird.stage.layered) and its lead's takes; those
+    arrangements are not the version's, and the grid and the piano score keep the one before them."""
     heard = getattr(_ears, "heard", None)
-    if heard is not None:
+    if heard is not None and "ctx" not in heard:
         heard.update(ctx=ctx, melody=melody, seconds=seconds, lead=lead, end=end)
 
 

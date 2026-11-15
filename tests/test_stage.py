@@ -211,3 +211,17 @@ def test_a_twin_plays_a_layered_parts_notes_level_with_it(monkeypatch):
     assert list(stems) == ["drummachine", "drummachine#"]
     assert stems["drummachine#"].max() == pytest.approx(0.5)
     assert heard["chip-drums"] == S.copied(theirs, "drummachine", (a, b), c).part("drummachine")
+
+
+def test_the_bands_own_arrangement_is_heard_under_a_layer():
+    """A stage edition's layer realizes the song again with another style's band; what is overheard (the
+    studio's Arrange grid, the piano score) is still the version's own band."""
+    from songbird import band as B
+
+    params = with_composition(seed(), exact={"layers": [{"style": "synthfolk", "parts": ["arp"]}]})
+    with B.overheard() as plain:
+        realize(G, seed())
+    with B.overheard() as heard:
+        S.laid(G, params)
+    assert type(heard["ctx"]) is type(plain["ctx"])
+    assert [dict(s.parts) for s in heard["ctx"].sections] == [dict(s.parts) for s in plain["ctx"].sections]
