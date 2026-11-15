@@ -17,7 +17,7 @@
       : `This is your version of the song, made today ${HERE}.`;
     const how = narrow ? "Tap the song's name beside \u25B6 to choose the sketch, at once, or sung, the real thing."
       : "Sketch plays at once; Sung makes the real thing.";
-    const own = published ? " \u201CMake your own version\u201D at the top starts yours." : "";
+    const own = published ? " \u201CHear your machine's version\u201D at the top makes yours." : "";
     return [
       { target: "tPlay", text: `${what} Start here: hear it. ${how}${own}` },
       { target: "transport", text: "Change something in the bar at the top: the tempo and the key. Undo takes anything back." },

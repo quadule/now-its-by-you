@@ -368,7 +368,7 @@ machine reads nothing).
 **What a visitor sees.** At `/`, the published version as it was released: its edition's title and date under the
 song's ("The first version · as published Monday, September 28, 2026"), its words and settings, the machine "as it
 was published" ("nothing chose anything here"), no Time menu (nothing moves it). It is on the page in about 70 ms,
-from the build's first answers. On the same line, **Make your own version →**, to `/?new`: this browser's next
+from the build's first answers. On the same line, **Hear your machine's version →**, to `/?new`: this browser's next
 version of it (generation 1), with "← the published version" back to `/`. The line above the title links to the
 song's page (now.itsby.you). A version someone shared (`/v/…`, `#version=…`) is continued by this browser. A
 person's changes can be made on either; each keeps its own (the page's saved edits are keyed by the machine's label).

@@ -1389,7 +1389,7 @@ function applyPublished(s) {
     setOn("helpTimeKey", "hidden", true);
     bar.replaceChildren(h("a", { class: "btn primary", href: "/?new", id: "toNew",
       title: "Every browser sings the song a little differently, and it changes from day to day. This makes the version yours sings today, for you to change." },
-      "Make your own version \u2192"));
+      "Hear your machine's version \u2192"));
   } else if (s.published_offer) {
     bar.classList.add("back");
     bar.replaceChildren(h("a", { href: "/" }, "\u2190 the published version"));
