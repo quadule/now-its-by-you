@@ -373,7 +373,7 @@ CHAMBER = _def(
 
 LULLABY = _def(
     "lullaby", "a lullaby: a music box's comb and a celesta high above the voice, a harp's broken chords, a soft pad",
-    {"musicbox": 0.9, "harp": 0.8, "celesta": 0.7, "synthpad": 0.6},
+    {"musicbox": 0.9, "harp": 0.8, "celesta": 1.0, "synthpad": 0.6},
     {"musicbox": {"*": "box", "bridge": "box"},
      "harp": {"verse1": ((0.3, "arpeggio"), (0.0, "")), "*": "arpeggio", "tag": "ring"},
      "celesta": {"verse1": "", "verse": "", "refrain": "bells", "last": "hook", "bridge": "bells"},
@@ -391,7 +391,7 @@ LULLABY = _def(
 AMBIENT = _def(
     "ambient", "ambient drone: a synth pad and a slow bowed swell over a held drone, a vibraphone's scattered "
                "notes, no drums, the voice far off in a big space",
-    {"synthpad": 1.0, "strings": 0.7, "drone": 0.7, "vibes": 0.5},
+    {"synthpad": 1.0, "strings": 0.9, "drone": 0.7, "vibes": 1.4},
     {"synthpad": {"*": "pad"},
      "strings": {"verse1": "", "verse": "", "refrain": "swell", "bridge": "swell", "tag": "swell"},
      "drone": {"*": "drone"},
@@ -427,7 +427,7 @@ SYNTHFOLK = _def(
 LOFI = _def(
     "lofi", "lo-fi bedroom: an electric piano's lazy sevenths and ninths, a soft swung drum machine, a round bass, "
             "a vibraphone now and then, worn tape and a dark top",
-    {"epiano": 1.0, "synthbass": 0.9, "drummachine": 0.75, "vibes": 0.45},
+    {"epiano": 1.0, "synthbass": 0.9, "drummachine": 0.75, "vibes": 1.4},
     {"epiano": {"*": "epiano", "tag": "ring"},
      "synthbass": {"verse1": "sub", "*": "sub", "tag": "long"},
      "drummachine": {"verse1": ((0.4, "lofi"), (0.0, "")), "*": "lofi", "tag": "end"},
