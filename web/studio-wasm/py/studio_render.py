@@ -165,8 +165,10 @@ def packed_as(packet: dict | None):
         pack.sys, pack.requirements = was_sys, was_requirements
 
 
-def whole(spec: dict, folder: Path, progress=None) -> dict:
-    """The whole rendition, as Studio._whole makes it: cli.render_one, packed. It is the recording."""
+def whole(spec: dict, folder: Path, progress=None, keep: dict | None = None) -> dict:
+    """The whole rendition, as Studio._whole makes it: cli.render_one, packed. It is the recording. keep: the
+    stems kept as it is made (Kept), named after it as the page names it ({"song", "day"}: the recording is
+    <song>.<the day it was made>.<its id's first six>.flac), under "stems"."""
     from songbird import drift as drift_mod, harvest
     from songbird.cli import render_one
     from songbird.studio import stage_words, stages
@@ -179,16 +181,24 @@ def whole(spec: dict, folder: Path, progress=None) -> dict:
     voice = harvest.Voice.from_dict(spec["voice"]) if spec.get("voice") else None
     drift = drift_mod.Drift.from_dict(spec["drift"]) if spec.get("drift") else None
     out = folder / "rendition.flac"
+    kept = Kept(spec, folder) if keep is not None else None
     with packed_as(spec.get("packet")), contextlib.redirect_stdout(io.StringIO()):
         record = render_one(genome, params, out, voice=voice, drift=drift, lyrics=lyrics,
                             phrasing_json=spec.get("phrasing"), choir_json=spec.get("choir") or [],
                             parent=spec.get("parent"), packet_genome=song, changes=spec.get("changes"),
-                            chosen_by_you=spec.get("marks") or None, progress=job.report, name=spec.get("name"))
+                            chosen_by_you=spec.get("marks") or None, progress=job.report, name=spec.get("name"),
+                            kept=kept)
     from songbird import pack
 
     # the record as it travels (the packet's manifest: with the program's digest and what it runs with)
-    return {"kind": "whole", "key": spec["key"], "flac": str(out), "id": record["id"],
+    made = {"kind": "whole", "key": spec["key"], "flac": str(out), "id": record["id"],
             "duration": record["duration"], "record": pack.read_manifest(out) or record}
+    if kept is not None:
+        day = (made["record"].get("rendered_at") or keep.get("day") or "")[:10]
+        stems = kept.packed((f"{keep.get('song') or 'song'}.{day}.{record['id'][:6]}.flac", record["id"]))
+        if stems is not None:
+            made["stems"] = stems
+    return made
 
 
 def stems(spec: dict, folder: Path, out: str | Path) -> list[str]:
@@ -208,6 +218,9 @@ def stems(spec: dict, folder: Path, out: str | Path) -> list[str]:
 
 
 CEILING = 0.989  # the stems' loudest sample: Studio._stems' gain is min(1, CEILING / the loudest part's peak)
+
+
+BLOCK = 1 << 16  # samples a part is packed in at a time
 
 
 def stems_gain(peak: float) -> float:
@@ -273,7 +286,12 @@ class Stems:
         self.part, self.y = part, y
         return float(np.max(np.abs(y))) if y.size else 0.0
 
-    def _file(self, part: str, out) -> tuple[int, str, bytes, int]:
+    def _named(self, part: str) -> tuple[int, str]:
+        i = self.order.index(part) + 1
+        return i, f"{self.stem}/{i:02d}-{part}.flac"
+
+    def _packed(self, write) -> tuple[bytes, int]:
+        """A part's file: write(the open file) writes its samples; 24-bit FLAC with the song's artwork, and its CRC."""
         import zlib
 
         import soundfile as sf
@@ -281,38 +299,46 @@ class Stems:
         from songbird import artwork, synth
 
         buffer = io.BytesIO()
-        sf.write(buffer, out, synth.SR, format="FLAC", subtype="PCM_24")
-        del out
+        with sf.SoundFile(buffer, "w", synth.SR, 2, "PCM_24", format="FLAC") as f:
+            write(f)
         flac = artwork.embed(buffer.getvalue(), self.genome.title)
-        i = self.order.index(part) + 1
-        return i, f"{self.stem}/{i:02d}-{part}.flac", flac, zlib.crc32(flac)
+        return flac, zlib.crc32(flac)
+
+    def _padded(self, y, gain: float):
+        """What writes a part's samples at gain, after the pad to bar 1, a block at a time (no copy of the part)."""
+        import numpy as np
+
+        def write(f) -> None:
+            if self.pad:
+                f.write(np.zeros((self.pad, y.shape[1])))
+            for a in range(0, len(y), BLOCK):
+                f.write(y[a:a + BLOCK] * gain)
+        return write
 
     def encode(self, gain: float) -> tuple[int, str, bytes, int]:
         """The part made last, packed at gain (as Studio._stems packs it), and let go."""
-        import numpy as np
-
         y, part = self.y, self.part
         self.part = self.y = None
-        out = np.zeros((self.pad + len(y), y.shape[1]), y.dtype)  # padded where it's made: one copy more, not two
-        np.multiply(y, gain, out=out[self.pad:])
-        del y
         try:
-            return self._file(part, out)
+            return (*self._named(part), *self._packed(self._padded(y, gain)))
+        finally:
+            del y
+            gc.collect()
+
+    def _turned(self, data: bytes, was: float, gain: float) -> tuple[bytes, int]:
+        import soundfile as sf
+
+        out, _ = sf.read(io.BytesIO(data), dtype="float64", always_2d=True)
+        out *= gain / was
+        try:
+            return self._packed(lambda f: f.write(out))
         finally:
             del out
             gc.collect()
 
     def rescale(self, part: str, data: bytes, was: float, gain: float) -> tuple[int, str, bytes, int]:
         """A part's file packed at gain `was`, turned to `gain`: its samples read back, times the ratio, packed again."""
-        import soundfile as sf
-
-        out, _ = sf.read(io.BytesIO(data), dtype="float64", always_2d=True)
-        out *= gain / was
-        try:
-            return self._file(part, out)
-        finally:
-            del out
-            gc.collect()
+        return (*self._named(part), *self._turned(data, was, gain))
 
     def finish(self, gain: float) -> dict:
         import zlib
@@ -360,6 +386,52 @@ def stems_zipped(spec: dict, folder: Path, emit, progress=None, recording: tuple
     return {**stems.finish(stems_gain(peak)), "again": again}
 
 
+class Kept:
+    """The stems of a whole song kept as it is made (cli.render_one's kept): each part, as the mix is handed it dry,
+    packed at the gain the peaks heard so far give, as Stems packs it; at the end, a part packed before a louder one
+    is turned down from its file (Stems.rescale), and every file is named after the recording just made. The same
+    files as Stems makes, without making any part again."""
+
+    def __init__(self, spec: dict, folder: Path):
+        self.stems = Stems({**spec, "kind": "stems", "stem": ""}, folder)
+        self.files: dict[str, tuple[float, bytes, int]] = {}
+        self.peak = 0.0
+        self.seconds = 0.0
+
+    def __call__(self, part: str, y) -> None:
+        import time
+
+        import numpy as np
+
+        if part not in self.stems.order or part in self.files:
+            return
+        t0 = time.perf_counter()
+        self.peak = max(self.peak, float(np.max(np.abs(y))) if y.size else 0.0)
+        gain = stems_gain(self.peak)
+        self.files[part] = (gain, *self.stems._packed(self.stems._padded(y, gain)))
+        self.seconds += time.perf_counter() - t0
+
+    def packed(self, recording: tuple[str, str]) -> dict | None:
+        """Every file, named after the recording (its file name and id), or None if a part wasn't handed over."""
+        import time
+
+        s = self.stems
+        if set(self.files) != set(s.order):
+            return None
+        t0 = time.perf_counter()
+        s.recording, s.stem = tuple(recording), recording[0][: -len(".flac")]
+        gain = stems_gain(self.peak)
+        files, again = [], []
+        for part in s.order:
+            was, flac, crc = self.files.pop(part)
+            if was != gain:
+                again.append(part)
+                flac, crc = s._turned(flac, was, gain)
+            files.append([*s._named(part), flac, crc])
+        self.seconds += time.perf_counter() - t0
+        return {**s.finish(gain), "files": files, "again": again, "seconds": round(self.seconds, 2)}
+
+
 def check(spec: dict, program: str | None = None) -> None:
     """Refused, saying why, unless this program can make this spec: its shape, and the program it names (a
     recording carries the program's digest, so the program here must be the server's, file for file)."""
@@ -375,13 +447,14 @@ def check(spec: dict, program: str | None = None) -> None:
         raise Refused(f"the server sings program {str(spec.get('program'))[:12]}, this one is {program[:12]}")
 
 
-def run(spec_text: str, folder: str | Path, progress=None, program: str | None = None) -> dict:
+def run(spec_text: str, folder: str | Path, progress=None, program: str | None = None,
+        keep: dict | None = None) -> dict:
     spec = json.loads(spec_text)
     check(spec, program)
     folder = Path(folder)
     if spec["kind"] == "stems":
         raise Refused("the stems are made by run_stems")
-    return section(spec, folder, progress) if spec["kind"] == "section" else whole(spec, folder, progress)
+    return section(spec, folder, progress) if spec["kind"] == "section" else whole(spec, folder, progress, keep)
 
 
 def run_stems(spec_text: str, folder: str | Path, emit, progress=None, program: str | None = None,

@@ -7,8 +7,11 @@
 //   → { cmd: "init", pyodide: URL of py-<hash>/, app: URL of app-<hash>/, bytecode?: URL of bc-<hash>/,
 //       bytes: what a first visit fetches }
 //   ← { kind: "loading", received, bytes, step }  ...  { kind: "ready", seconds, heap }
-//   → { cmd: "render", spec: the spec as JSON text }
-//   ← { kind: "progress", progress, stage }  ...  { kind: "done", id, duration, flac (ArrayBuffer), seconds, heap, record }
+//   → { cmd: "render", spec: the spec as JSON text, keep?: { song, day } }
+//   ← { kind: "progress", progress, stage }  ...  { kind: "done", id, duration, flac (ArrayBuffer), seconds, heap, record,
+//       stems? }
+//   (keep, for a whole song: its stems kept as it is made, named after it (studio_render.Kept): stems is
+//    { name, parts, gain, again, seconds, files: [{ index, name, crc, bytes }], midi: { name, crc, bytes }, readme })
 //   ← { kind: "error", message, memory } at any point: the renderer then asks the server instead
 //
 // One render at a time; the renderer terminates the worker after a whole song (wasm memory never shrinks).
@@ -184,7 +187,7 @@ ${control ? `import lazy_imports\nlazy_imports.install(${JSON.stringify(LAZY)})`
   postMessage({ kind: 'ready', seconds: (performance.now() - t0) / 1000, heap: heapMiB(), received });
 }
 
-function render(spec) {
+function render(spec, keep = null) {
   const t0 = performance.now();
   let told = 0;
   const progress = (fraction, stage) => {
@@ -193,10 +196,13 @@ function render(spec) {
   };
   py.globals.set('SPEC', spec);
   py.globals.set('PROGRESS', progress);
+  py.globals.set('KEEP', keep ? JSON.stringify(keep) : null);
   py.runPython(`
 import gc, json, shutil
 shutil.rmtree("/tmp/render", ignore_errors=True)
-OUT = studio_render.run(SPEC, "/tmp/render", PROGRESS, PROGRAM)
+OUT = studio_render.run(SPEC, "/tmp/render", PROGRESS, PROGRAM, json.loads(KEEP) if KEEP else None)
+del KEEP
+KEPT = OUT.pop("stems", None)
 RECORD = OUT.pop("record", None)
 SUMMARY = json.dumps({**{k: OUT[k] for k in ("kind", "key", "id", "duration")},
                       "record": {"generation": RECORD.get("generation"), "rendered_at": RECORD.get("rendered_at"),
@@ -208,10 +214,22 @@ gc.collect()
   const summary = JSON.parse(py.globals.get('SUMMARY'));
   const path = py.runPython('OUT["flac"]');
   const flac = py.FS.readFile(path);  // a copy, out of Pyodide's memory
-  py.runPython('shutil.rmtree("/tmp/render", ignore_errors=True); del OUT, SPEC; gc.collect()');
+  const moved = [flac.buffer];
+  let stems;
+  const kept = py.runPython('KEPT');
+  if (kept) {
+    const out = kept.toJs({ dict_converter: Object.fromEntries });  // the files copied out of Pyodide's memory
+    kept.destroy();
+    const own = (data) => (data.byteLength === data.buffer.byteLength ? data.buffer : data.slice().buffer);
+    const file = (index, name, data, crc) => ({ index, name, crc: crc >>> 0, bytes: own(data) });
+    stems = { name: out.name, parts: out.parts, gain: out.gain, again: out.again, seconds: out.seconds,
+      files: out.files.map((f) => file(...f)), midi: file(0, ...out.midi), readme: file(0, ...out.readme) };
+    moved.push(...stems.files.map((f) => f.bytes), stems.midi.bytes, stems.readme.bytes);
+  }
+  py.runPython('shutil.rmtree("/tmp/render", ignore_errors=True); del OUT, SPEC, KEPT; gc.collect()');
   py.globals.delete('PROGRESS');
   postMessage({ ...summary, kind: 'done', made: summary.kind, seconds: (performance.now() - t0) / 1000, heap: heapMiB(),
-    flac: flac.buffer }, [flac.buffer]);
+    flac: flac.buffer, ...(stems ? { stems } : {}) }, moved);
 }
 
 // The stems, in the steps the page schedules over a few of these workers (py/studio_render.py Stems; renderer.js
@@ -505,7 +523,7 @@ let pumping = false;
 
 async function handle(m) {
   if (m.cmd === 'init') return init(m);
-  if (m.cmd === 'render') return render(m.spec);
+  if (m.cmd === 'render') return render(m.spec, m.keep);
   if (m.cmd === 'stems') return stemsStep(m);
   if (m.cmd === 'studio') return studio(m).catch((err) => failed(err));
   if (m.cmd === 'request') return request(m);

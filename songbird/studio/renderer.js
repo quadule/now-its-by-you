@@ -167,7 +167,7 @@
       return { stalled, poke, stop: () => unschedule(timer) };
     }
 
-    async function make(spec, size, hear, task) {
+    async function make(spec, size, hear, task, keep = null) {
       if (task?.cancelled) throw Object.assign(new Error("cancelled"), { cancelled: true });
       globalThis.SongbirdDevice?.renderStarts?.();  // singing's own worker lets its memory go first (device.js)
       const alone = size === "whole";
@@ -199,7 +199,7 @@
             else if (m.kind === "error") reject(Object.assign(new Error(m.message), { memory: !!m.memory }));
           };
         });
-        entry.w.postMessage({ cmd: "render", spec });
+        entry.w.postMessage(keep ? { cmd: "render", spec, keep } : { cmd: "render", spec });
         const out = await Promise.race([made, making.stalled, stopped]);
         // wasm heaps never shrink: an unusually large section mustn't keep its heap for the next few previews.
         if (out.heap > maxHeap) close(entry);
@@ -325,8 +325,8 @@
         chain = run.catch(() => {});
         return run;
       },
-      render(spec, size, hear, task) {
-        const run = chain.then(() => make(spec, size, hear, task));
+      render(spec, size, hear, task, keep) {
+        const run = chain.then(() => make(spec, size, hear, task, keep));
         chain = run.catch(() => {});
         return run;
       },
@@ -528,6 +528,8 @@
       const warn = device && answer.warn ? ` (${answer.warn})` : "";
       const say = (job) => { task.job = warn ? { ...job, stage: `${job.stage}${warn}` } : job; if (!task.cancelled) onProgress?.(task.job); };
       say({ state: "running", progress: 0, stage: "getting the singer ready", label, where: "browser" });
+      // on the device, a whole song's stems are kept as it is made (studio_render.Kept), for Export -> Stems at once
+      const keep = device && size === "whole" ? { song: answer.name?.song || "song", day: answer.name?.day || "" } : null;
       const out = await shared.browser.render(answer.spec, size, (m) => {
         if (m.kind === "loading") {
           // how much of what it fetches the first time has come (bundle.json's bytes: a render worker's own)
@@ -538,7 +540,7 @@
         } else if (m.kind === "progress") {
           say({ state: "running", progress: m.progress, stage: m.stage, label, where: "browser" });
         }
-      }, task);
+      }, task, keep);
       // the file itself is kept too, for a recording someone shares (device.js: sent as it is)
       const file = !options.blob && typeof Blob === "function" ? new Blob([out.flac], { type: "audio/flac" }) : null;
       const url = file ? URL.createObjectURL(file) : blob(out.flac);
@@ -551,6 +553,13 @@
         job.result = { recorded: { flac: name, name, id: out.id, duration: out.duration, shared: true, browser: true,
           generation: out.record.generation, yours: out.record.yours, next: `python3 ${name} studio`, download: url,
           program: out.record.program_sha256, device, file }, ...clock };
+      }
+      if (out.stems) {
+        // one song's stems at a time (each part as a Blob, which the browser may keep on disk), outside the budget
+        for (const j of shared.cache.values()) delete j.stems;
+        const file = (f) => ({ name: f.name, crc: f.crc, size: f.bytes.byteLength, data: new Blob([f.bytes]) });
+        const { files, midi, readme, ...rest } = out.stems;
+        job.stems = { ...rest, files: files.map(file), midi: file(midi), readme: file(readme) };
       }
       remember(answer.key, job, size, cacheBytes, task.kind === "record");
       return job;
@@ -585,9 +594,10 @@
       return task;
     }
 
-    // The stems, on the device: every part made alone, over a few workers of their own (as many as this device has
-    // room for: stemWorkers), each part moved here as it is made and kept as a Blob, then zipped with the MIDI file
-    // and the note. Named after this version's recording if the page has made it, as a server names them.
+    // The stems, on the device: zipped at once if they were kept as this version's whole song was made (inBrowser);
+    // otherwise every part made alone, over a few workers of their own (as many as this device has room for:
+    // stemWorkers), each part moved here as it is made and kept as a Blob, then zipped with the MIDI file and the
+    // note. Named after this version's recording if the page has made it, as a server names them.
     function stems(answer, onProgress) {
       const task = { kind: "stems", size: "stems", job: null, cancelled: false, where: "browser" };
       const failed = (error) => (task.job = { state: "failed", error, where: "browser", size: "stems" });
@@ -597,6 +607,14 @@
         }
         if (!answer?.spec) return failed("the studio didn't say what to make");
         const began = Date.now();
+        const kept = shared.cache.get(answer.key)?.stems;
+        if (kept) {  // kept as this version's whole song was made: zipped at once
+          const zip = zipped([...kept.files, kept.midi, kept.readme]);
+          note({ kind: "stems", size: "stems", key: answer.key, where: "browser", seconds: 0, at: began, kept: true });
+          return (task.job = { state: "done", progress: 1, where: "browser", key: answer.key, url: URL.createObjectURL(zip),
+            name: `${kept.name}.stems.zip`, parts: kept.parts, gain: kept.gain, turned: kept.again, kept: true,
+            seconds: (Date.now() - began) / 1000, packing: kept.seconds, bytes: zip.size });
+        }
         try {
           if (!shared.bundle) await discover(() => ask("/render/bundle.json"));
           if (!shared.bundle) return failed("the singer's files couldn't be fetched. Reload the page to try again.");

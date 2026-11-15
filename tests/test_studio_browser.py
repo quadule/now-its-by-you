@@ -186,14 +186,42 @@ def test_a_recording_from_its_spec_is_the_studios_own_packet_byte_for_byte(home)
     spec = json.loads(answer["spec"])
     assert spec["packet"]["requirements"] == pack.requirements() and spec["marks"]["tempo"]["value"] == 70.0
     render = studio_render()
-    made = render.run(answer["spec"], home / "browser", program=studio.program_digest)
+    made = render.run(answer["spec"], home / "browser", program=studio.program_digest, keep=answer["name"])
     job = S.Job(id="x", key=answer["key"], kind="record", label="", work=None)
     here = studio._whole(job, studio.version(edits), answer["key"])
     assert answer["bar_seconds"] == here["bar_seconds"]  # its clock, for the page to start it at the playhead's bar
     theirs = studio.cache / answer["key"] / "rendition.flac"
     assert made["record"] == pack.read_manifest(theirs)
     assert made["record"]["program_sha256"] == studio.program_digest and made["record"]["chosen_by_you"]
-    assert Path(made["flac"]).read_bytes() == theirs.read_bytes()
+    assert Path(made["flac"]).read_bytes() == theirs.read_bytes()  # the stems kept as it was made change nothing
+
+    # ...and the stems kept are the server's (Studio._stems, after this recording): to the byte, but a part packed
+    # before a louder one, turned down from its file (within a step of 24 bits)
+    import io
+    import zipfile
+
+    import numpy as np
+    import soundfile as sf
+
+    kept = made["stems"]
+    studio._stems(S.Job(id="y", key=answer["key"], kind="preview", label="", work=None), studio.version(edits),
+                  answer["key"])
+    zip_ = zipfile.ZipFile(studio.cache / f"{answer['key']}.zip")
+    assert kept["name"] == studio.stems_name(answer["key"])
+    mine = {name: data for _, name, data, _ in kept["files"]}
+    mine |= {kept["midi"][0]: kept["midi"][1], kept["readme"][0]: kept["readme"][1]}
+    assert sorted(mine) == sorted(zip_.namelist())
+    assert [i for i, *_ in kept["files"]] == list(range(1, len(kept["parts"]) + 1))
+    turned = {f"{kept['name']}/{i:02d}-{part}.flac" for i, part in enumerate(kept["parts"], 1) if part in kept["again"]}
+    for i, name, data, crc in kept["files"]:
+        assert crc == __import__("zlib").crc32(data)
+    for name in zip_.namelist():
+        if name in turned:
+            a, _ = sf.read(io.BytesIO(mine[name]))
+            b, _ = sf.read(io.BytesIO(zip_.read(name)))
+            assert a.shape == b.shape and np.max(np.abs(a - b)) <= 1.01 / 2**23, name
+        else:
+            assert mine[name] == zip_.read(name), name
     with pytest.raises(render.Refused, match="another|program"):
         render.run(answer["spec"], home / "again", program="f" * 64)
     with pytest.raises(render.Refused, match="shape"):

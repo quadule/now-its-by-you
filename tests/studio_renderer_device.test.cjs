@@ -42,8 +42,16 @@ function fakeWorkers(fate) {
             midi: { name: "x/x.mid", crc: 4, bytes: file("MThd") }, readme: { name: "x/README.txt", crc: 5, bytes: file("hello") } });
         }
         say({ kind: "progress", progress: 0.5, stage: "singing" });
+        // a whole song asked to keep its stems hands them over with it (studio_render.Kept), unless a part wasn't
+        const bytes = (text) => new TextEncoder().encode(text).buffer;
+        const stems = m.keep && fate !== "unkept" ? { name: `${m.keep.song}.kept`, parts: ["voice", "guitar"], gain: 0.5,
+          again: ["voice"], seconds: 2.5,
+          files: [{ index: 1, name: "k/01-voice.flac", crc: 21, bytes: bytes("kept voice") },
+            { index: 2, name: "k/02-guitar.flac", crc: 22, bytes: bytes("kept guitar") }],
+          midi: { index: 0, name: "k/k.mid", crc: 23, bytes: bytes("MThd") }, readme: { index: 0, name: "k/README.txt", crc: 24, bytes: bytes("note") } } : null;
         say({ kind: "done", made: what.kind, key: what.key, id: `id-${what.key}`, duration: 9.2, seconds: 4.8, heap: 300,
-          flac: new ArrayBuffer(8), record: what.kind === "whole" ? { generation: 1, rendered_at: "2026-09-30T12:00:00+00:00", yours: 1, program_sha256: "p" } : null });
+          flac: new ArrayBuffer(8), record: what.kind === "whole" ? { generation: 1, rendered_at: "2026-09-30T12:00:00+00:00", yours: 1, program_sha256: "p" } : null,
+          ...(stems ? { stems } : {}) });
       },
       terminate() { this.terminated = true; } };
     made.push(w);
@@ -68,7 +76,7 @@ function device(fate, extra = {}) {
     if (path === "/render/bundle.json") return BUNDLE;
     if (path === "/api/render/spec") {
       const whole = body.section === null;
-      const key = whole ? "w" : `s${body.section}`;
+      const key = whole ? `w${body.edits?.take ?? ""}` : `s${body.section}`;
       // the device's studio never says "made", "server" or "too long"; if anything did, it's made here regardless
       return { key, label: key, kind: whole ? "whole" : "section", spec: `{"v":1,"kind":"${whole ? "whole" : "section"}","key":"${key}"}`,
         ...(whole ? { name: { song: "now-its-by-you", day: "2026-09-30" }, ...(extra.warn ? { warn: extra.warn } : {}) } : {}),
@@ -206,12 +214,50 @@ test("how many workers make the stems: one where memory or cores are short, else
 });
 
 test("the stems name the recording the page made of the same version", async () => {
-  const { r, fake } = device();
+  const { r, fake } = device("unkept");
   const made = await r.record({ edits: {} }).done;
   const job = await r.stems({ state: "device", key: made.key, spec: '{"v":1,"kind":"stems","key":"w"}' }).done;
   assert.equal(job.state, "done");
   assert.deepEqual(fake.made[1].recording, [made.result.recorded.name, made.result.recorded.id]);
   assert.equal(job.name, "rec.stems.zip");
+});
+
+test("a whole song's stems are kept as it is made, and zipped at once: no part made again", async () => {
+  const { r, fake } = device();
+  await r.preview({ edits: {}, section: 1 }).done;
+  assert.equal(fake.made[0].posted[1].keep, undefined);  // a section keeps none
+  const made = await r.record({ edits: {} }).done;
+  const render = fake.made.at(-1).posted.find((m) => m.cmd === "render");
+  assert.deepEqual(render.keep, { song: "now-its-by-you", day: "2026-09-30" });
+  const workers = fake.made.length;
+  const job = await r.stems({ state: "device", key: made.key, spec: '{"v":1,"kind":"stems","key":"w"}' }).done;
+  assert.equal(job.state, "done", job.error);
+  assert.equal(fake.made.length, workers);  // no worker started
+  assert.equal(job.kept, true);
+  assert.equal(job.name, "now-its-by-you.kept.stems.zip");
+  assert.deepEqual(job.turned, ["voice"]);
+  const blob = await (await fetch(job.url)).blob();
+  assert.deepEqual(await unzipped(blob), [
+    { name: "k/01-voice.flac", crc: 21, text: "kept voice" }, { name: "k/02-guitar.flac", crc: 22, text: "kept guitar" },
+    { name: "k/k.mid", crc: 23, text: "MThd" }, { name: "k/README.txt", crc: 24, text: "note" }]);
+  // and asked again, the same files again
+  const again = await r.stems({ state: "device", key: made.key, spec: '{"v":1,"kind":"stems","key":"w"}' }).done;
+  assert.equal(again.kept, true);
+  assert.equal(fake.made.length, workers);
+});
+
+test("only the newest whole song's stems are kept", async () => {
+  const { r, fake } = device();
+  const first = await r.record({ edits: { take: 1 } }).done;
+  const second = await r.record({ edits: { take: 2 } }).done;
+  assert.notEqual(first.key, second.key);
+  const n = fake.made.length;
+  const job = await r.stems({ state: "device", key: first.key, spec: `{"v":1,"kind":"stems","key":"${first.key}"}` }).done;
+  assert.equal(job.state, "done", job.error);
+  assert.notEqual(job.kept, true);
+  assert.ok(fake.made.length > n);  // made, part by part
+  const kept = await r.stems({ state: "device", key: second.key, spec: `{"v":1,"kind":"stems","key":"${second.key}"}` }).done;
+  assert.equal(kept.kept, true);
 });
 
 test("stems that run out of memory are said plainly", async () => {

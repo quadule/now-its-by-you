@@ -84,7 +84,15 @@ version.", in Help's *What's kept*, and in the Tools sheet's "Made on this devic
   site sees (which files were fetched, which `/v/<id>` was opened). A file the visitor brings is read and kept on the
   device, never uploaded; its address is `/#version=<id>`, a fragment, so even its id never reaches the host.
 - The day is the visitor's own (their browser's date).
-- The stems are made on the device, in render workers of their own. `/api/export` answers them with the whole
+- A whole song made on the device keeps its stems as it is made (studio_render.Kept, through cli.render_one's
+  `kept`): the mix is handed each part dry before it treats it, and the worker packs it as Stems packs it, at the
+  gain the peaks so far give, a block at a time. Once the recording is made, a part packed before a louder one is
+  turned down from its file, every file is named after the recording, and they come to the page with it as Blobs.
+  Export → Stems then zips them at once. The recording is the same to the byte; only the newest whole song's stems
+  are kept, outside the page's budget for songs. H in Chromium on this desktop: the song file 240 s with them
+  kept, 230 s without (the same id), its heap at most 1748 MiB against 1646; packing the 19 parts took 12.4 s of
+  it (eight turned down at the end); then the stems in 0.1 s, 113 MB.
+- Otherwise the stems are made on the device, in render workers of their own. `/api/export` answers them with the whole
   song's spec, of kind `stems`; the renderer (renderer.js `stems`) starts two workers (one on a phone or a computer
   with little memory: `stemWorkers`), and each lays the song and then takes the next part (studio_render.Stems): the
   voice first where there are two, then the band, then the voices before. A worker makes its part, says its peak,
@@ -248,7 +256,7 @@ and a whole song's 1.3-2.3 GiB is the risk.
   file and piano score handed over; a real packet read as data, restored, opened at `#version=` and at `/v/<id>`; the
   static page, its policies, its files and the Worker's headers.
 - tests/studio_renderer_device.test.cjs: a phone makes it, never the server; a recording keeps its file and is marked
-  while made; memory, a killed worker and an error each said plainly; a long one warned of and made.
+  while made; a whole song's stems kept and zipped at once, the newest song's only; memory, a killed worker and an error each said plainly; a long one warned of and made.
 - tests/test_studio_quick_start.py and tests/studio_device_start.test.cjs ("A quicker start");
   tests/test_browser_machine.py ("Each visitor's browser", "The published version first").
 
@@ -265,8 +273,9 @@ and a whole song's 1.3-2.3 GiB is the risk.
 4. **The reader shares the studio's origin.** The file is never run, but if a libsndfile bug let a file take over
    Pyodide, this origin's storage would be within reach; a sandboxed iframe on a separate origin would close that.
    Worth it if the Worker ever serves files it didn't check.
-5. **The stems' recording.** On the device they are named after a recording only if the page has made it; the
-   server makes the recording first. Making it first would double the time and bring back the whole song's memory.
+5. **The stems' recording.** On the device they are named after a recording only if the page has made it (and are
+   then free: kept as it was made); the server makes the recording first. Making it first when it isn't made would
+   bring back the whole song's memory, for about as long as the stems take alone.
 6. **Safari and Firefox** are untried. If a browser applied the page's policy to the workers instead of their own
    script's, Pyodide couldn't compile, and the page would say "it went wrong in this browser".
 
@@ -670,7 +679,8 @@ builds the bundle in a stage of its own.
 ### Byte identity
 
 Checked natively (tests/test_studio_browser.py: a section and a recording made from their specs are the studio's
-own, byte for byte), in Pyodide under node from the built bundle (web/studio-wasm/bench/identity.sh), and in
+own, byte for byte, and the stems the recording kept are Studio._stems' after it, each part turned down within a
+step of 24 bits), in Pyodide under node from the built bundle (web/studio-wasm/bench/identity.sh), and in
 Chrome 152.
 
 | what | browser (Pyodide) vs native | id |

@@ -1367,6 +1367,9 @@ function applyDevice(s) {
   setOn("helpShows", "textContent", s.published ? "This studio opens on the song as it was published, and lets you:"
     : "This studio shows today's version of the song, and lets you:");
   if (window.SongbirdDevice?.share) setOn("shareTool", "hidden", false);  // a link to your version, from Export
+  // the stems are kept as the song file is made here (renderer.js)
+  document.querySelector("#exportStems + p")?.setAttribute("title",
+    "Each voice and instrument alone and dry, zipped with the MIDI file, all from bar 1. At once after the song file.");
   setOn("helpWhere", "hidden", true);  // the page's foot says it
   // the file's record (its made-up machine's name, the room, the words' leanings) and what any site sees of what it
   // serves: docs/WEB-STUDIO.md, "On the device"
