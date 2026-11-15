@@ -101,7 +101,7 @@ uv sync                                                                      # t
 uv run songbird render songs/h-now-its-by-you.json                           # renders/h-now-its-by-you.flac: the seed, no computer's or day's choices
 uv run songbird render songs/h-now-its-by-you.json --machine fictional:ada   # sung by a made-up computer, today
 uv run songbird render songs/h-now-its-by-you.json --machine here --date 2026-12-25 --pack   # by this one on a day, program inside
-uv run songbird harvest --show                                               # what it reads from this computer: all that is kept
+uv run songbird harvest --show                                               # all that is kept of this computer; reads nothing new
 uv run songbird year songs/h-now-its-by-you.json --machine fictional:ada     # one computer's choices through a year
 uv run songbird studio                                                       # the studio, on this computer only
 uv run songbird budget                                                       # the program and its voice against the 8 MiB goal

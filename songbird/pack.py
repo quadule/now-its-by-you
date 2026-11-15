@@ -253,8 +253,8 @@ size, its screen's colours) and from the day. Those facts are reduced to a
 handful of numbers before anything uses them. Only the numbers are kept, in
 ~/.songbird/voice.json and in the new version's record, so no one can read
 your computer back out of them.
-`python3 THIS_FILE.flac songbird harvest --show` shows exactly what is read
-and kept, and `... songbird harvest --without ...` leaves anything out.
+`python3 THIS_FILE.flac songbird harvest --show` shows exactly what is kept,
+and `... songbird harvest --without ...` leaves anything out.
 
 The same program and record give the same samples on the same platform. On
 another platform the samples may differ, too little to hear, and a difference

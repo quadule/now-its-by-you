@@ -965,7 +965,7 @@ def here() -> Voice:
         voice = harvest(without=tuple(sorted(set(QUIET) | left_out)), pictures=False, salt=salt)
         save(voice, quiet=True, without=left_out if left_out else None)
         print("This machine hasn't been harvested, so it sings with its languages, size and screen only; "
-              "`songbird harvest --show` reads the rest and shows exactly what is kept.", file=sys.stderr)
+              "`songbird harvest --show` prints exactly what is kept; `songbird harvest` says what else it reads, then reads it.", file=sys.stderr)
     return rested(voice)
 
 
