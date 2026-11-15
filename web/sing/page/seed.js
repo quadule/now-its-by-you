@@ -31,9 +31,10 @@ if (audio && "mediaSession" in navigator && typeof MediaMetadata === "function")
 // lines: [[start, end, [[text, start, end, wordEnd], ...]], ...], in seconds
 // Every line is set once, one under another at one size, in a window that scrolls. Playing, the window is two lines
 // tall, the line being sung at its top, lit, and the next under it, dimmed; when a line is done the window scrolls
-// down by it, so the next rises into its place: always in order, and never changing size. A visitor who scrolls
-// the words themselves is left to read for a few seconds before they follow the song again. The strip opens when
-// the song starts, unless the visitor folded it while it played.
+// down by it, so the next rises into its place: always in order, and never changing size, paused or not. Opened
+// by hand while the song isn't playing, the window is taller, to read through. A visitor who scrolls the words
+// themselves is left to read for a few seconds before they follow the song again. The strip opens when the song
+// starts, unless the visitor folded it while it played.
 function follow(lines) {
   const view = document.createElement("div"), reel = document.createElement("div");
   view.className = "view";
@@ -55,7 +56,7 @@ function follow(lines) {
   });
   view.append(reel);
   box.append(view);
-  let shown = -1, frame = 0, folded = false, reading = -Infinity;
+  let shown = -1, frame = 0, folded = false, reading = -Infinity, browsing = false;
   const READ = 4000; // ms a visitor's own scrolling holds the words still
   const smooth = !matchMedia("(prefers-reduced-motion: reduce)").matches;
 
@@ -66,9 +67,10 @@ function follow(lines) {
     return i;
   };
 
-  // the window's height: two lines (line i and the one after) while the song plays, more to read while it doesn't
+  // the window's height: two lines (line i and the one after), or more to read when opened by hand while the song
+  // isn't playing
   const size = i => {
-    if (audio.paused) return Math.min(reel.offsetHeight, Math.max(160, Math.round(innerHeight * 0.4)));
+    if (browsing) return Math.min(reel.offsetHeight, Math.max(160, Math.round(innerHeight * 0.4)));
     const row = rows[i], after = rows[i + 1] || row;
     return after.offsetTop === row.offsetTop ? 2 * row.offsetHeight : after.offsetTop + after.offsetHeight - row.offsetTop;
   };
@@ -100,11 +102,12 @@ function follow(lines) {
   };
   for (const ev of ["wheel", "touchmove", "keydown"]) view.addEventListener(ev, () => { reading = performance.now(); }, { passive: true });
   box.addEventListener("toggle", () => {
-    if (box.open) { folded = false; reading = -Infinity; place(shown, true); }
+    if (box.open) { folded = false; browsing = audio.paused; reading = -Infinity; place(shown, true); }
     else if (!audio.paused) folded = true;
   });
   audio.addEventListener("play", () => {
     if (!box.open && !folded) box.open = true; // its toggle places the words
+    browsing = false;
     reading = -Infinity;
     place(shown);
     if (!frame) frame = requestAnimationFrame(run);
