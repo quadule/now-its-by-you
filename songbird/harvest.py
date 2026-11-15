@@ -16,8 +16,8 @@ Every signal can be left out (`without`); a missing signal is neutral, so a
 locked-down machine still sings, closer to its parent. The voice is cached
 in ~/.songbird/voice.json (or $SONGBIRD_HOME) holding only the reduced
 numbers, so it stays the same from run to run until it is harvested again.
-Its hash, which seeds the drift and the singer's body, is a hash of those
-numbers alone.
+Its hash, which seeds the drift and the singer's body, is a hash of a random
+salt drawn at the first harvest alone, so it says nothing of the numbers.
 
 `fictional(name)` makes up a plausible machine, the same one every time for a
 name, so two machines can be heard side by side without two computers.

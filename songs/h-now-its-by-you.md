@@ -111,9 +111,9 @@ knew it by heart"; A's screen verse with B's "nobody hummed it; it wasn't a
 song"; A's mind verse with C's "kept it alone in [his] head"; A's ink
 couplet with B's drawer couplet; A's sailor and orange girl with C's "only a
 mouth".
-- **The bank (2026-09-25).** Thirty-eight verses, six refrain couplets, three
-bridges and three tag syllables, riffed with the artist in one thread and
-checked against the tune: see [h-bank.md](h-bank.md). The artist's own lines
+- **The bank.** Fifty-one verses, eight refrain couplets, eight refrain heads,
+five bridges and three tag syllables, begun with the artist on September 25,
+2026 and grown since, each checked against the tune: see [h-bank.md](h-bank.md). The artist's own lines
 are the heard and owns refrains (now the true and take couplets) and the first
 line of the kids verse.
 

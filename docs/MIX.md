@@ -196,9 +196,9 @@ reference the spectrum is 6 dB under it at 63 Hz and 8 dB under at 125 Hz;
 500 Hz–1 kHz is 5 to 9 dB over, the voice, which a vocal record has and an
 instrumental doesn't.
 
-**Words understood.** Whisper base.en on the finished mix
-(`tools/wer_suite.py --mix --sketch h`) gets about 32% of H's words wrong
-over 3 to 5 seeds; on the dry voice alone, 15%.
+**Words understood.** Whisper base.en gets 5.5% of H's words wrong on the
+shipped voice dry (E8bl, docs/THROAT.md); `tools/wer_suite.py --mix --sketch h`
+measures the finished mix the same way.
 
 **The delivery kept.** Per sung vowel on H, the level after the voice's
 strip against its dry level: 82% of the singer's syllable-to-syllable
