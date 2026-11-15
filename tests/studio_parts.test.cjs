@@ -26,3 +26,17 @@ test("polyphonic parts preserve chords, velocities and rests within the renderer
   assert.throws(() => normalize([[0, 96, NaN, 90]], player, b), /inside/);
   assert.throws(() => normalize([[768, 96, 0, 90]], player, b), /inside/);
 });
+test("several instrument notes at once: moved together inside the phrase, copied, pasted beside the others and put on the grid", () => {
+  const { shifted, clipOf, pasted, quantized } = window.SongbirdParts.core;
+  const b = { low: -12, high: 12, start: -48, end: 384 };
+  const notes = [[0, 96, 0, 90], [96, 48, 4, 90], [200, 40, 7, 80]];
+  assert.deepEqual(clone(shifted(notes, [1, 2], 500, 2, b)), [[0, 96, 0, 90], [279, 48, 6, 90], [383, 40, 9, 80]], "held at the phrase's end");
+  assert.deepEqual(clone(shifted(notes, [0, 2], -100, 20, b)), [[-48, 96, 5, 90], [96, 48, 4, 90], [152, 40, 12, 80]], "and its pickup and the range");
+  const clip = clipOf(notes, [1, 2]);
+  assert.deepEqual(clone(clip), { start: 96, notes: [[0, 48, 4, 90], [104, 40, 7, 80]] });
+  assert.deepEqual(clone(pasted(notes, clip, 192, b).put), [[192, 48, 4, 90], [296, 40, 7, 80]]);
+  assert.throws(() => pasted(notes, clip, 300, b), /don't fit here/);
+  assert.deepEqual(clone(pasted(notes, clip, 0, b, true).notes), [[200, 40, 7, 80], [0, 48, 4, 90], [104, 40, 7, 80]], "one note at a time: in place of what they overlap");
+  assert.deepEqual(clone(quantized(notes, [2], 48, b)), [[0, 96, 0, 90], [96, 48, 4, 90], [192, 48, 7, 80]]);
+  assert.equal(notes[2][0], 200, "the source stays intact");
+});

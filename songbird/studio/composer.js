@@ -1422,18 +1422,20 @@
           [p.name, p.name === "voice" ? "Melody" : p.label]), (value) => {
           stop(); state.player = value; state.note = null; state.chord = null; paint(); told();
         }, { id: "sbc-part" }),
-        part ? el("span", { class: "hint" }, "This phrase only") : scopeSwitch("tune"),
+        part ? el("span", { class: "hint" }, "This section only") : scopeSwitch("tune"),
         el("span", { class: "settings" }, select("Snap", state.snap, [[0.25, "¼"], [0.5, "½"], [1, "1"]], (value) => { state.snap = Number(value); paint(); }, { id: "sbc-snap" }),
           select("Zoom", state.zoom, [[1, "fit"], [1.5, "150%"], [2, "200%"], [3, "300%"]], (value) => { state.zoom = Number(value); paint(); }, { id: "sbc-zoom" })),
         button("Close", () => page()?.closeNotes?.(), { class: "sbc-button sbc-quiet", id: "sbc-close", title: "Close the notes (Esc)" }),
         !part && p?.notes?.length ? health() : null),
       (s.phrases || []).length ? phraseStrip() : null,
-      part ? window.SongbirdParts.render(state.view, p, state.player, { snap: state.snap, zoom: state.zoom, paint,
-        hear: (notes) => {
+      part ? window.SongbirdParts.render(state.view, s, state.player, { snap: state.snap, zoom: state.zoom, paint, phrase: state.phrase,
+        // a note of another phrase chosen in the instrument's roll: that phrase is the one the strip and ▶ mean
+        choose: (q) => { const i = (s.phrases || []).indexOf(q); if (i >= 0) { state.phrase = i; state.note = null; state.chord = null; } },
+        hear: (notes, q = p) => {
           stop(); bridge().pauseAudio?.(); const ctx = audioContext(); if (!ctx) return;
           const unit = 60 / composition().tempo, origin = Math.min(0, ...notes.map((n) => n[0] / 96));
           for (const [start, length, pitch, velocity] of notes) tone(ctx, composition().tonic + pitch,
-            ctx.currentTime + 0.03 + (start / 96 - origin) * unit, Math.min(length / 96, p.duration_beats - start / 96) * unit, false, velocity);
+            ctx.currentTime + 0.03 + (start / 96 - origin) * unit, Math.min(length / 96, (q?.duration_beats ?? 4) - start / 96) * unit, false, velocity);
         } }) : el("div", {},
       p?.notes?.length ? editTools() : null,
       p?.notes?.length ? pianoRoll() : el("p", { class: "sbc-muted notes-foot" }, "This section has no melody to change."),
@@ -1515,7 +1517,10 @@
       : focusNote !== undefined ? noteNode(focusPhrase, focusNote)
       : focusId ? document.getElementById(focusId)
         : focusAction ? [...box.querySelectorAll("button")].find((node) => node.dataset.composerAction === focusAction) : null;
-    const drawn = state.focusNote ? noteNode(state.phrase, state.note) : null;
+    const partKey = state.player !== "voice" ? window.SongbirdParts?.focus?.() : null;  // an instrument's note, after its edit
+    if (partKey) window.SongbirdParts.focused();
+    const drawn = state.focusNote ? noteNode(state.phrase, state.note)
+      : partKey ? [...box.querySelectorAll(".sbc-note")].find((node) => node.dataset.partNote === partKey) : null;
     state.focusNote = false;
     (drawn || restore || (focused && noteNode(state.phrase, state.note)))?.focus({ preventScroll: true });
   }

@@ -157,6 +157,8 @@ function setup(view = score(), { audioAvailable = true } = {}) {
     pauseAudio: () => { pauseCount++; }, listen() {} };
   if (audioAvailable) window.AudioContext = AudioContext;
   vm.runInNewContext(fs.readFileSync(path.join(__dirname, "../songbird/studio/model.js"), "utf8"), { window });
+  vm.runInNewContext(fs.readFileSync(path.join(__dirname, "../songbird/studio/parts.js"), "utf8"), { window, document, Node: Element,
+    setTimeout: (fn) => { timers.push(fn); return timers.length; } });
   vm.runInNewContext(source, { window, document, Node: Element, console,
     setTimeout: (fn) => { timers.push(fn); return timers.length; },
     requestAnimationFrame: (fn) => { const id = ++frameId; frames.set(id, fn); return id; },
@@ -994,4 +996,29 @@ test("a drag on the empty grid draws a note as long as the drag; a Shift-drag se
   s.find("#sbc-snap").emit("change", { target: { value: "1" } });
   s.clickText("Quantize");
   assert.deepEqual(s.commits.at(-1).value.map((n) => [n.onset, n.duration]), [[-0.5, 0.5], [0, 1], [1, 1], [2, 1], [3, 1]]);
+});
+
+test("an instrument's roll is the whole section too: its phrases' notes each their own part edit, selected, moved and pasted together", () => {
+  const view = writableScore(), c = view.composition, [a, b] = c.sections[1].phrases;
+  c.players = [{ name: "voice", label: "Melody" }, { name: "fiddle", label: "Fiddle", low: 55, high: 88, poly: false }];
+  Object.assign(a, { part_key: "verse:0.0", part_notes: { fiddle: [[0, 96, 0, 90], [96, 96, 2, 90]] } });
+  Object.assign(b, { part_key: "verse:0.1", part_notes: { fiddle: [[0, 192, 4, 90]] } });
+  const s = setup(view);
+  s.root.dataset.mode = "notes"; s.window.SongbirdComposer.open(1);  // the score's notes
+  s.find("#sbc-part").emit("change", { target: { value: "fiddle" } });
+  const notes = () => s.root.querySelectorAll(".sbc-note").filter((n) => n.dataset.partNote);
+  assert.deepEqual(notes().map((n) => n.dataset.partNote), ["0.0", "0.1", "1.0"], "both phrases in one roll");
+  assert(parseFloat(notes()[2].style.left) > parseFloat(notes()[1].style.left));
+  notes()[0].emit("click"); notes()[1].emit("click", { shiftKey: true });
+  notes()[1].emit("keydown", { key: "ArrowUp" });
+  assert.deepEqual(s.commits.at(-1), { path: "part.fiddle.verse:0.0", value: [[0, 96, 1, 90], [96, 96, 3, 90]] }, "both, one edit");
+  assert.deepEqual(notes().filter((n) => n.classList.contains("is-selected")).map((n) => n.dataset.partNote), ["0.0", "0.1"]);
+  s.find("#sbc-part-roll").emit("keydown", { key: "c", ctrlKey: true });
+  // into the second phrase: a click on its empty grid puts the cursor at its start, and Ctrl+V pastes there
+  const plot = s.root.querySelectorAll(".sbc-grid")[0], x = parseFloat(notes()[2].style.left) + 1;
+  plot.emit("pointerdown", { clientX: x, clientY: 2000 }); plot.emit("pointerup", { clientX: x, clientY: 2000 });
+  assert.equal(s.find("#sbc-phrase-1").getAttribute("aria-pressed"), "true", "the strip follows the roll");
+  s.find("#sbc-part-roll").emit("keydown", { key: "v", ctrlKey: true });
+  assert.deepEqual(s.commits.at(-1), { path: "part.fiddle.verse:0.1", value: [[0, 96, 1, 90], [96, 96, 3, 90]] },
+    "one note at a time: the long note gives way to the pasted ones");
 });
