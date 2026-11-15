@@ -12,11 +12,17 @@ from pathlib import Path
 import numpy as np
 import pytest
 
-from songbird import composition as C, drift as D, edits as E, harvest as H, midi, notesin, studio as S
+from songbird import composition as C
+from songbird import drift as D
+from songbird import edits as E
+from songbird import harvest as H
+from songbird import midi, notesin
+from songbird import studio as S
 from songbird.genome import load
 from songbird.realize import Params, choose_params, realize, timeline
 from songbird.score import Score
-from songbird.synth import drum as frame_drum, instruments
+from songbird.synth import drum as frame_drum
+from songbird.synth import instruments
 
 ROOT = Path(__file__).parent.parent
 G = load(ROOT / "songs" / "h-now-its-by-you.json")
@@ -133,7 +139,7 @@ def test_written_strokes_replace_the_players_own_in_their_line_and_nowhere_else(
     v0, v1, _ = window(mine, "verse:0.1")
     assert not [n for n in after.part("kit") if v0 - 0.05 <= n.start < v1]  # the kit rests there
     assert [n for n in before.part("kit") if v0 - 0.05 <= n.start < v1]
-    outside = lambda score: [n for n in score.part("kit") if not (w0 - 0.05 <= n.start < v1)]  # noqa: E731
+    outside = lambda score: [n for n in score.part("kit") if not (w0 - 0.05 <= n.start < v1)]
     assert outside(after) == outside(before)
     released = E.resolve(G, mine, None, None, {"part.kit.verse:0.0": None, "part.kit.verse:0.1": None})
     assert realize(G, released.params) == before
@@ -143,7 +149,7 @@ def test_the_frame_drum_plays_its_own_strokes():
     params = Params.from_dict(G.seed_params)
     strokes = [[0, 24, 0, 100], [96, 24, 1, 60], [192, 24, 3, 90], [288, 24, 4, 110]]
     mine = with_edits({"part.drum.refrain:0.0": strokes}, params)
-    w0, w1, bar = window(mine, "refrain:0.0")
+    w0, w1, _ = window(mine, "refrain:0.0")
     written = [n for n in realize(G, mine).part("drum") if w0 - 1e-6 <= n.start < w1]
     assert [n.art for n in written] == ["bass", "tip", "rim", "top"]
     assert all(n.pitch == mine.tonic - 24 for n in written)  # where the program's own strokes are
@@ -158,7 +164,7 @@ def test_a_written_part_changes_the_kit_s_sound_there_and_the_same_samples_each_
         score = realize(G, p)
         notes = tuple(replace(n, start=n.start - w0 + 0.05) for n in score.part("kit") if w0 - 1e-6 <= n.start < w1)
         short = Score(notes=notes, duration=w1 - w0 + 0.5, sections=(), band=score.band)
-        (name, make), = [(n, f) for n, f in instruments.band_parts(short, 44100, p.seed) if n == "kit"]
+        (_, make), = [(n, f) for n, f in instruments.band_parts(short, 44100, p.seed) if n == "kit"]
         return make()
 
     a, b = stem(params), stem(mine)
@@ -216,7 +222,7 @@ def test_the_midi_file_writes_the_strokes_on_channel_ten():
     params = country()
     mine = with_edits({"part.kit.verse:0.0": BAR}, params)
     score = realize(G, mine)
-    data, lead_in = midi.from_score(G, mine, score)
+    data, _ = midi.from_score(G, mine, score)
     read = midi.parse(data)
     kit = next(t for t in read["tracks"] if t["name"] == "Kit")
     w0, w1, _ = window(mine, "verse:0.0")
