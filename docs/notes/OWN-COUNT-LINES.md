@@ -32,7 +32,7 @@ their notes are sung with them.
 (`verse:wire.2`), any other sung section by its round or `last`
 (`refrain:0.1`, `refrain:last.1`). `null` releases it.
 
-Checked as one thing:
+Checked as one thing (`composition.check_own`):
 
 - the notes keep every fence a tune edit keeps (`composition.check_phrase`:
   range, leaps, no overlaps, inside the line, room before the next pickup,
@@ -40,6 +40,9 @@ Checked as one thing:
   syllables, a syllable being a note not slurred onto the one before;
 - the words are checked as a written line is (`check_lyric`), against that
   count instead of the tune line's.
+
+The record marks it with the words the program sang there and their count
+(`"was": {"words": ..., "syllables": 11}`), and replays from the mark.
 
 ## Kept
 
@@ -85,14 +88,37 @@ On a line with its own count:
   a file with another count coming in is still refused for tune lines, and
   taken as an own line only where the line's words are written (later).
 
+A `lyrics.` edit for the same line (words to the tune's count) takes the line
+back to its tune line's notes: the own entry goes.
+
 ## The studio
 
-On a sung line, the tune editor's Split makes the second note a new syllable
-when **New syllable** is held (or from the note's menu), and Join merges a
-syllable into the one before. Once the count differs from the tune line's, the
-line shows its count beside the tune's ("8 syllables; the tune's line has 7")
-and the words field counts against the new number; **Use these lines** sends one
-`line.` edit with both. **Use the song's line** releases it.
+In the note inspector of a sung line, **New syllable** splits the note in two,
+the second a syllable of its own, and **Merge** sings a note on the syllable
+before (the note before holds on through its time). Once the count differs
+from the tune line's, a card under the note asks for the line's words ("12
+syllables; the tune's line has 11"), counting as typed; **Use these words**
+sends one `line.` edit with the words and the notes, **Cancel** puts the notes
+back. On a line of its own every later note change goes out as the same edit
+with its words, its notes are marked yours, the "everywhere / only here" switch
+is hidden (it is sung with its verse's words alone), and the note card's
+release is **Use the tune's line**.
+
+## Known gaps in the prototype
+
+- **Rounds** (`canon`): a round's fit is judged on the song's tune; a line of
+  its own in a section sung as a round isn't refused or re-judged.
+- **A section played, not sung** (`arrange.<section>:<n>.sung` false) still
+  plays the person's notes on the lead there.
+- **Words the band doesn't know**: the band and a style's chord timing read
+  `form_phrases` with the rendition's held words. A render with `--lyrics-seed`,
+  or one that sings the seed's words over held bank words, sings a line of its
+  own where the band may not keep clear of it. realize and the page pass their
+  own words and are always right.
+- **The jazz trio's changes** are keyed by the tune line and ignore the notes.
+- **A MIDI file brought back** with another count is refused, as before.
+- No JS unit test for the inspector's buttons yet (tested by hand in the
+  studio).
 
 ## Not in this draft
 

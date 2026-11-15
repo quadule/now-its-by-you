@@ -990,7 +990,7 @@ def view(genome, params, lyrics) -> dict:
                               "pitch": params.tonic + degree_semitones(degree, params.mode, alter),
                               "onset": onset / meter.beat, "duration": length / meter.beat,
                               "syllable": syllable or "", "word": word or (words[k][1] if k < len(words) else ""),
-                              "edited": tune_from["from"] is not None,
+                              "edited": tune_from["from"] is not None or bool(phrase.own),
                               **({"slur": True, "syllable_index": k} if slur else {})})
             phrases.append({"id": pid, "path": f"tune.{pid}", "start_beat": cursor / meter.beat,
                             "duration_beats": phrase.bars * meter.bar / meter.beat,
