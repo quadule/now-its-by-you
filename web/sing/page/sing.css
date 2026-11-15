@@ -212,7 +212,8 @@ pre { margin: 0 0 10px; padding: 10px 12px; overflow-x: auto; background: var(--
 .hero .pitch { grid-area: pitch; margin: 0; }
 .hero .preview { grid-area: preview; margin-top: 12px; }
 .hero .which { margin-top: 6px; line-height: 1.4; }
-.which .size { white-space: nowrap; }
+/* the edition on one line, the ways to the others and to the file on the next */
+.which .edition, .which .links { display: block; }
 .hero .preview audio { display: block; width: 100%; margin-top: 0; }
 .hero .lyric { grid-area: lyric; margin-top: 18px; }
 .hero .pitch .lead { font-size: 21px; line-height: 1.4; font-style: normal; margin-bottom: 12px; text-wrap: pretty; }

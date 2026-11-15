@@ -33,7 +33,8 @@
          alt="The cover: a seed packet printed The Volunteers, Now It's by You, with a daisy growing from a cracked stone, propped on a curb beside a lawn.">
     <div class="preview">
       <audio id="player" controls preload="metadata" aria-label="Now It's by You: play the song" src="/seed/{{SEED_FILE}}?v={{SEED_V}}"></audio>
-      <p class="hint which">{{EDITION}} · <span class="size"><a href="/seed/{{SEED_FILE}}?v={{SEED_V}}" download>Download</a> ({{SEED_MB}} MB, FLAC)</span></p>
+      <p class="hint which"><span class="edition">{{EDITION}}</span>
+        <span class="links"><a href="/history">History</a> · <a href="/seed/{{SEED_FILE}}?v={{SEED_V}}" download>Download</a> ({{SEED_MB}} MB, FLAC)</span></p>
     </div>
     <details class="lyric" id="lyric" data-words="{{SEED_WORDS}}" hidden>
       <summary>Words</summary>

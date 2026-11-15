@@ -686,8 +686,7 @@ def seed_page(out: Path, path: Path | None = None, public: bool | None = None) -
         if now["day"] < INTEL_SINCE:  # this file can't set itself up on an Intel Mac: say so beside the command
             fill["{{INTEL}}"] = '\n        <p class="hint">On an Intel Mac, use the studio above.</p>'
         fill["{{SEED_V}}"] = now["id"]  # a new edition's file under the same name, never an old one's from a cache
-        fill["{{EDITION}}"] = (f'{html.escape(now["title"])}, <time datetime="{now["date"]}">{us_date(now["day"])}</time>'
-                               ' · <a href="/history">History</a>')
+        fill["{{EDITION}}"] = f'{html.escape(now["title"])}, <time datetime="{now["date"]}">{us_date(now["day"])}</time>'
         print(f"seed page: edition {now['number']}, {now['id']} -> seed/{SEED_FILE} ({fill['{{SEED_MB}}']} MB); "
               f"{len(offered)} in its history")
         timed = seed_words(out / "seed" / SEED_FILE)

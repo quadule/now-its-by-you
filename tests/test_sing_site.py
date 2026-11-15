@@ -335,7 +335,8 @@ def test_the_home_page_offers_the_newest_edition_and_the_history_every_one(tmp_p
     assert "{{" not in home
     assert home.count(f'/seed/now-its-by-you.flac?v={ids[second][:12]}"') == 4  # the player, the download, and the file to run (a step in each tab)
     assert f'data-words="/seed/words.json?v={W.digest((seed / "words.json").read_text())}"' in home
-    assert 'Version 2, <time datetime="2026-10-20">October 20, 2026</time> · <a href="/history">History</a>' in home
+    assert '<span class="edition">Version 2, <time datetime="2026-10-20">October 20, 2026</time></span>' in home
+    assert '<a href="/history">History</a> · <a href="/seed/' in home
     assert "Version 1" not in home and "2026-09-28" not in home  # only the current one on the home page
     page = (out / "history.html").read_text()
     assert "{{" not in page and 'href="/sing.css?v=' in page and 'href="/identity.css?v=' in page
