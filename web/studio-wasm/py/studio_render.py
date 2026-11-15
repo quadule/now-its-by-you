@@ -24,6 +24,7 @@ import os
 import types
 from pathlib import Path
 
+from songbird import stems as stems_mod
 from songbird.synth.cache import StemCache
 
 _STEM_CACHE = StemCache(int(os.environ.get("SONGBIRD_STEM_CACHE_BYTES", 64 * 2**20)))
@@ -217,14 +218,10 @@ def stems(spec: dict, folder: Path, out: str | Path) -> list[str]:
     return list(parts)
 
 
-CEILING = 0.989  # the stems' loudest sample: Studio._stems' gain is min(1, CEILING / the loudest part's peak)
-
-
-BLOCK = 1 << 16  # samples a part is packed in at a time
-
-
 def stems_gain(peak: float) -> float:
-    return min(1.0, CEILING / peak) if peak > 0 else 1.0
+    from songbird.stems import gain_of
+
+    return gain_of(peak)
 
 
 class Stems:
@@ -253,7 +250,7 @@ class Stems:
         self.ancestors = choir_of(spec.get("parent"), self.singer)[1]
         jobs, singers = synth.stem_jobs(self.score, seed=self.params.seed, voice=self.singer, ancestors=self.ancestors)
         names = [name for name, _ in jobs]
-        self.order = sorted(names, key=lambda p: (p != "voice", not p.startswith("choir"), names.index(p)))
+        self.order = stems_mod.in_order(names)
         self.singers = [p for p in self.order if p in singers]
         self.band = [p for p in names if p not in singers]
         self.makes, self.used = dict(jobs), set()
@@ -291,29 +288,18 @@ class Stems:
         return i, f"{self.stem}/{i:02d}-{part}.flac"
 
     def _packed(self, write) -> tuple[bytes, int]:
-        """A part's file: write(the open file) writes its samples; 24-bit FLAC with the song's artwork, and its CRC."""
+        """A part's file (songbird.stems.packed) and its CRC."""
         import zlib
 
-        import soundfile as sf
+        from songbird import stems
 
-        from songbird import artwork, synth
-
-        buffer = io.BytesIO()
-        with sf.SoundFile(buffer, "w", synth.SR, 2, "PCM_24", format="FLAC") as f:
-            write(f)
-        flac = artwork.embed(buffer.getvalue(), self.genome.title)
+        flac = stems.packed(write, self.genome.title)
         return flac, zlib.crc32(flac)
 
     def _padded(self, y, gain: float):
-        """What writes a part's samples at gain, after the pad to bar 1, a block at a time (no copy of the part)."""
-        import numpy as np
+        from songbird import stems
 
-        def write(f) -> None:
-            if self.pad:
-                f.write(np.zeros((self.pad, y.shape[1])))
-            for a in range(0, len(y), BLOCK):
-                f.write(y[a:a + BLOCK] * gain)
-        return write
+        return stems.padded(y, self.pad, gain)
 
     def encode(self, gain: float) -> tuple[int, str, bytes, int]:
         """The part made last, packed at gain (as Studio._stems packs it), and let go."""
@@ -326,15 +312,15 @@ class Stems:
             gc.collect()
 
     def _turned(self, data: bytes, was: float, gain: float) -> tuple[bytes, int]:
-        import soundfile as sf
+        import zlib
 
-        out, _ = sf.read(io.BytesIO(data), dtype="float64", always_2d=True)
-        out *= gain / was
+        from songbird import stems
+
         try:
-            return self._packed(lambda f: f.write(out))
+            flac = stems.turned(data, was, gain, self.genome.title)
         finally:
-            del out
             gc.collect()
+        return flac, zlib.crc32(flac)
 
     def rescale(self, part: str, data: bytes, was: float, gain: float) -> tuple[int, str, bytes, int]:
         """A part's file packed at gain `was`, turned to `gain`: its samples read back, times the ratio, packed again."""
@@ -387,49 +373,31 @@ def stems_zipped(spec: dict, folder: Path, emit, progress=None, recording: tuple
 
 
 class Kept:
-    """The stems of a whole song kept as it is made (cli.render_one's kept): each part, as the mix is handed it dry,
-    packed at the gain the peaks heard so far give, as Stems packs it; at the end, a part packed before a louder one
-    is turned down from its file (Stems.rescale), and every file is named after the recording just made. The same
-    files as Stems makes, without making any part again."""
+    """The stems of a whole song kept as it is made (songbird.stems.Kept, through cli.render_one's kept), named after
+    the recording just made, as Stems names them: the same files as Stems makes, without making any part again."""
 
     def __init__(self, spec: dict, folder: Path):
+        from songbird import stems
+
         self.stems = Stems({**spec, "kind": "stems", "stem": ""}, folder)
-        self.files: dict[str, tuple[float, bytes, int]] = {}
-        self.peak = 0.0
-        self.seconds = 0.0
+        self.kept = stems.Kept(self.stems.order, self.stems.pad, self.stems.genome.title)
 
     def __call__(self, part: str, y) -> None:
-        import time
-
-        import numpy as np
-
-        if part not in self.stems.order or part in self.files:
-            return
-        t0 = time.perf_counter()
-        self.peak = max(self.peak, float(np.max(np.abs(y))) if y.size else 0.0)
-        gain = stems_gain(self.peak)
-        self.files[part] = (gain, *self.stems._packed(self.stems._padded(y, gain)))
-        self.seconds += time.perf_counter() - t0
+        self.kept(part, y)
 
     def packed(self, recording: tuple[str, str]) -> dict | None:
         """Every file, named after the recording (its file name and id), or None if a part wasn't handed over."""
-        import time
+        import zlib
 
-        s = self.stems
-        if set(self.files) != set(s.order):
+        made = self.kept.finished()
+        if made is None:
             return None
-        t0 = time.perf_counter()
+        gain, files, again = made
+        s = self.stems
         s.recording, s.stem = tuple(recording), recording[0][: -len(".flac")]
-        gain = stems_gain(self.peak)
-        files, again = [], []
-        for part in s.order:
-            was, flac, crc = self.files.pop(part)
-            if was != gain:
-                again.append(part)
-                flac, crc = s._turned(flac, was, gain)
-            files.append([*s._named(part), flac, crc])
-        self.seconds += time.perf_counter() - t0
-        return {**s.finish(gain), "files": files, "again": again, "seconds": round(self.seconds, 2)}
+        out = [[*s._named(part), files[part], zlib.crc32(files[part])] for part in s.order]
+        return {**s.finish(gain), "files": out, "again": again,
+                "seconds": round(self.kept.seconds, 2)}
 
 
 def check(spec: dict, program: str | None = None) -> None:

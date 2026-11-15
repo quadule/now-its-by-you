@@ -84,8 +84,8 @@ version.", in Help's *What's kept*, and in the Tools sheet's "Made on this devic
   site sees (which files were fetched, which `/v/<id>` was opened). A file the visitor brings is read and kept on the
   device, never uploaded; its address is `/#version=<id>`, a fragment, so even its id never reaches the host.
 - The day is the visitor's own (their browser's date).
-- A whole song made on the device keeps its stems as it is made (studio_render.Kept, through cli.render_one's
-  `kept`): the mix is handed each part dry before it treats it, and the worker packs it as Stems packs it, at the
+- A whole song made on the device keeps its stems as it is made, as the studio's own does (songbird.stems.Kept;
+  studio_render.Kept names them, through cli.render_one's `kept`): the mix is handed each part dry before it treats it, and the worker packs it as Stems packs it, at the
   gain the peaks so far give, a block at a time. Once the recording is made, a part packed before a louder one is
   turned down from its file, every file is named after the recording, and they come to the page with it as Blobs.
   Export → Stems then zips them at once. The recording is the same to the byte; only the newest whole song's stems
@@ -274,8 +274,8 @@ and a whole song's 1.3-2.3 GiB is the risk.
    Pyodide, this origin's storage would be within reach; a sandboxed iframe on a separate origin would close that.
    Worth it if the Worker ever serves files it didn't check.
 5. **The stems' recording.** On the device they are named after a recording only if the page has made it (and are
-   then free: kept as it was made); the server makes the recording first. Making it first when it isn't made would
-   bring back the whole song's memory, for about as long as the stems take alone.
+   then free: kept as it was made); the server makes the recording first, and its stems with it. Making it first
+   on the device would bring back the whole song's memory, for about as long as the stems take alone.
 6. **Safari and Firefox** are untried. If a browser applied the page's policy to the workers instead of their own
    script's, Pyodide couldn't compile, and the page would say "it went wrong in this browser".
 

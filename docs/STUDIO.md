@@ -534,8 +534,8 @@ in it:
   `G/B`, `Dsus4`, `A7`) as a text event, a person's harmony included. The
   first track has the time signature, the key (a mode by its relative major; a
   style's lift as a key change), the sections as markers and the tempo map.
-- **Stems**, a render: each part rendered alone and dry by
-  `synth.render_stems`, as `songbird render --stems` makes them, as 24-bit
+- **Stems**: each part alone and dry, as `synth.render_stems` and
+  `songbird render --stems` make them, as 24-bit
   FLAC, with the MIDI file and a README, zipped. One gain for all of them if
   any would clip, so they keep their balance.
 
@@ -549,14 +549,15 @@ by exactly that, so the stems and the MIDI file dropped at the start of a
 project line up. `songbird render --midi` writes the same file beside a render
 and says where bar 1 falls against its FLAC.
 
-**The stems belong to a recording.** They are made after the song file of the same version, from
-the same choices and score, and named after it: `<song>.<day>.<id6>.stems.zip`
-(the day the record's), a folder of the same name inside, the MIDI file too,
-and the README names the recording they belong to by its file name and full
-id. Where the song file isn't made yet, the stems' job makes it first, in the
-same place in the queue, so the first stems of a version take about twice as
-long and *Export* afterwards only copies the file. It isn't saved into the
-output folder until the person exports it.
+**The stems belong to a recording.** They come with the song file of the same version, and are
+named after it: `<song>.<day>.<id6>.stems.zip` (the day the record's), a folder of the same name
+inside, the MIDI file too, and the README names the recording they belong to by its file name and
+full id. Making a whole song keeps them (songbird.stems.Kept): the mix is handed each part dry, which
+is packed as it comes at the gain the peaks so far give; once the song is made, a part packed before
+a louder one is turned down from its file (within a step of 24 bits of making it again), and the zip
+is written beside the song. So *Stems* after the song file is at once (H: the song 16 s instead of
+15, the stems 0 s instead of 9); before it, the stems' job makes the song file, in the same place in
+the queue. Either isn't saved into the output folder until the person exports it.
 
 In a public studio the MIDI file is made at once, as here; the stems wait
 their turn in the one queue, one at a time for each visitor, and count as a
