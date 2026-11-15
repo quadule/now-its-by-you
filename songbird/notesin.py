@@ -4,7 +4,10 @@ docs/STUDIO.md, "Notes in". Both come to the same thing: notes laid over the ver
 form at a time, and turned into the edits a person could have made by hand, each checked as those are:
 
 - a band player's notes in a line: part.<player>.<section>:<n>.<line> (composition.check_part);
-- the singer's: tune.<line>, a note a syllable, through the tune's fences (composition.check_phrase);
+- the singer's: tune.<line>, a note a syllable, through the tune's fences (composition.check_phrase); or, where a
+  line has another count of notes than the version sings there (or is a line of its own already), a line of its
+  own, line.<key>.<line>, its words read from the file's lyrics (composition.check_own; docs/notes/
+  OWN-COUNT-LINES.md);
 - the Chords track's (a file only): chords.<line>, in the chord grammar (composition.check_chords).
 
 Nothing is applied here. Each answer is a preview: the changes, each with its path, value and place, what
@@ -324,7 +327,11 @@ def from_file(genome, params, score, file_bytes: bytes, assign: dict | None = No
         if not changed:
             continue
         if name == "Voice":
-            _voice(genome, params, lines, same, changed, changes, out)
+            # each note's lyric, where the file has one on it (the syllable it begins: a melisma's later notes have
+            # none), by the note's place before the lineage's lay is taken off
+            said_at = {on: text for on, kind, text in t["texts"] if kind == 0x05}
+            lyric = {(round(to_u(on * scale), 6), key): said_at[on] for on, _, _, key, _ in t["notes"] if on in said_at}
+            _voice(genome, params, lines, same, changed, changes, out, lyric)
         elif part is None or part.startswith("choir"):
             out["said"].append(f"{name}: the lineage voices sing harmony made from the tune and the chords; "
                                "change those instead.")
@@ -399,18 +406,33 @@ def _scoped(lines, found: dict, kind: str, where: list[int], what, said: list | 
     return out
 
 
-def _voice(genome, params, lines, same, changed, changes, out) -> None:
+def _voice(genome, params, lines, same, changed, changes, out, lyric=None) -> None:
     """The singer's changed lines as tune edits: each note moved as the file moved it, from the line's notes as
     written there (not their performed timing); a note added or taken away is refused with the count. A line
     changed alike wherever it's sung is changed everywhere, one changed in some places only there (_scoped)."""
     beat = genome.meter.beat
     found: dict[int, list] = {}
+    owned = _owned_paths(genome, params, lines)
     for k in changed:
         ln = lines[k]
         if not ln["sung"]:
             continue
         mine, ours = sorted(same["mine"][k]), sorted(same["ours"][k])
         want = len(genome.phrases[ln["pid"]].sung)
+        path, own = owned.get(k, (None, False))
+        back = params.lay * beat
+        syllables = sum((round(u - back, 6), p) in (lyric or {}) for u, _, p, _ in mine)
+        # a line of its own already, or one the file sings with another count of syllables (its lyrics say so):
+        # its words and notes as the file has them
+        if path and (own or (len(mine) != len(ours) and syllables and syllables != want)):
+            try:
+                value = _own_line(genome, params, ln, path, mine, ours, lyric or {}, back, own)
+            except ValueError as e:
+                out["refused"].append({"where": f"{ln['where']} (Voice)", "why": str(e)})
+                continue
+            syllables = sum(not n.get("slur") for n in value["notes"])
+            _change(changes, path, value, ln["where"], f"the line's words and notes, {syllables} syllables")
+            continue
         if len(mine) != len(ours):
             out["refused"].append({"where": f"{ln['where']} (Voice)", "why": f"the line needs {want} notes, one for "
                                    f"each syllable; the file has {len(mine)} there"})
@@ -441,6 +463,60 @@ def _voice(genome, params, lines, same, changed, changes, out) -> None:
     sung = [k for k, ln in enumerate(lines) if ln["sung"]]
     changes.update(_scoped(lines, found, "tune", sung, lambda value, everywhere: "the tune, everywhere this line is "
                            "sung" if everywhere else "the tune, here only", out["said"]))
+
+
+def _owned_paths(genome, params, lines) -> dict[int, tuple[str, bool]]:
+    """Each sung line's line of its own path (line.<key>.<line>), by its index among the lines, and whether it is
+    one already (composition["own"] has it)."""
+    keys = C.own_keys(genome, params)
+    own = params.composition.get("own") or {}
+    out = {}
+    for k, ln in enumerate(lines):
+        key = keys[ln["index"]] if ln["index"] < len(keys) else None
+        if key and ln["sung"] and ln["own"]:
+            out[k] = (f"line.{key}.{ln['line']}", str(ln["line"]) in own.get(key, {}))
+    return out
+
+
+def _own_line(genome, params, ln, path: str, mine, ours, lyric: dict, back: float, own: bool) -> dict:
+    """A line of its own as the file sings it: its notes, each placed as the nearest of this version's notes there
+    is written, moved by as much as the file moved it, a note with no lyric on it slurred onto the one before (as
+    the file writes a melisma); and its words, the lyrics on them. A line of its own whose file has no lyrics on
+    it keeps its words and melismas if its count of notes is unchanged. Raises with why (composition.check_own's,
+    or the file's)."""
+    beat = genome.meter.beat
+    written = C.notes_at(genome, params, ln["key"])  # as this place sings it, a note each, a melisma's too
+    if not mine:
+        raise ValueError("the file has no notes there; a sung line needs at least one")
+    if not ours or len(written) != len(ours):
+        raise ValueError("this line can't be read against the version's notes")
+    texts = [lyric.get((round(u - back, 6), p)) for u, _, p, _ in mine]
+    if texts[0] is not None:
+        words = "".join(t for t in texts if t is not None).strip()
+        slurred = [k > 0 and t is None for k, t in enumerate(texts)]
+    elif own and len(mine) == len(ours):  # no lyrics in the file: the words and melismas it has
+        key, _, line = path[5:].rpartition(".")
+        words = params.composition["own"][key][line]["words"]
+        slurred = [bool(w.get("slur")) for w in written]
+    else:
+        raise ValueError(f"the line has {len(ours)} notes and the file {len(mine)}, with no words on them: "
+                         "put a lyric on each syllable's first note")
+    p0, d0 = ours[0][2], written[0]["degree"]
+    notes = []
+    for (u, z, p, _), slur in zip(mine, slurred):
+        degree = degree_of(degree_semitones(d0, params.mode) + (p - p0), params.mode)
+        if degree is None:
+            raise ValueError(f"{pitch_name(p, params.tonic, params.mode)} isn't in the key's scale")
+        j = min(range(len(ours)), key=lambda i: abs(ours[i][0] - u))  # the version's nearest note there
+        onset = written[j]["onset"] + round((u - ours[j][0]) / beat * C.PPB) / C.PPB
+        note = {"degree": degree, "onset": onset, "duration": max(C.GRID, round((z - u) / beat * C.PPB) / C.PPB)}
+        if slur:  # sung on the syllable before: it starts where that one ends
+            notes[-1]["duration"] = max(C.GRID, onset - notes[-1]["onset"])
+            note["onset"], note["slur"] = notes[-1]["onset"] + notes[-1]["duration"], True
+        notes.append(note)
+    for x, y in zip(notes, notes[1:]):
+        x["duration"] = min(x["duration"], max(C.GRID, y["onset"] - x["onset"]))
+    return C.check_own(genome, path, {"words": words, "notes": notes})
 
 
 # ---------------------------------------------------------------- the chords

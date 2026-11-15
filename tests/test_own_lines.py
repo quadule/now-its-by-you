@@ -181,3 +181,49 @@ def test_the_trio_keeps_the_songs_chords_under_a_line_of_its_own():
     v1 = [p for p in C.form_phrases(C.harmonized(G, mine.params), mine.params, mine.lyrics) if p.id == "v1"]
     assert v1[0].own and v1[0].chords == G.phrases["v1"].chords  # the trio's changes fit the song's tune, not this
     assert v1[1].chords != G.phrases["v1"].chords  # its other verses take the changes
+
+
+def test_a_midi_file_with_a_syllable_more_comes_back_as_a_line_of_its_own():
+    from _midi_edit import rewrite
+    from songbird import midi, notesin, variation as V
+
+    params = Params.from_dict(G.seed_params)  # the seed's words: wire's verse first
+    score = V.lay(realize(G, params), params)
+    data = midi.from_score(G, params, score, title=G.title)[0]
+    ln = next(x for x in notesin.layout(G, params) if x["key"] == "verse:0.0")
+    _, origin, step, per, _, _ = midi.tick_grid(G, params)
+    tick = lambda u: round((u - origin) / step * per)  # noqa: E731
+    a, b = tick(ln["w0"]) - 60, tick(ln["w1"]) - 60
+    voice = next(t for t in midi.parse(data)["tracks"] if t["name"] == "Voice")
+    saved, it = sorted(n for n in voice["notes"] if a <= n[0] < b)[1:3]
+    half = (saved[0] + saved[1]) // 2
+
+    def change(name, notes):  # "saved" in two: "saved it", and the old "it" sings "all"
+        if name != "Voice":
+            return notes
+        for n in notes:
+            if n[0] == saved[0]:
+                n[1] = half
+        return notes + [[half, saved[1], saved[2], saved[3], saved[4]]]
+
+    def retext(name, texts):
+        if name != "Voice":
+            return texts
+        texts = [[t, k, "all " if k == 0x05 and t == it[0] else s] for t, k, s in texts]
+        return texts + [[half, 0x05, "it "]]
+
+    def brought(with_lyrics=True):
+        return notesin.from_file(G, params, score, rewrite(data, change, retext=retext if with_lyrics else None))
+
+    r = brought()
+    assert not r["refused"], r["refused"]
+    (c,) = r["changes"]
+    assert c["path"] == "line.verse:wire.0" and c["value"]["words"] == "They saved it all as num-bers and sent it by wire,"
+    assert len(c["value"]["notes"]) == 12 and "12 syllables" in c["what"]
+    # made with it, the version's own export comes back as no change
+    mine = E.Overrides(G, {c["path"]: c["value"]}).params(params)
+    again = V.lay(realize(G, mine), mine)
+    assert notesin.from_file(G, mine, again, midi.from_score(G, mine, again, title=G.title)[0])["changes"] == []
+    # a note added with no words on it is still the tune line's: refused with the count, as before
+    r = brought(with_lyrics=False)
+    assert not r["changes"] and "needs 11 notes" in r["refused"][0]["why"]
