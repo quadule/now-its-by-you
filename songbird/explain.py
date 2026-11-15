@@ -989,7 +989,7 @@ def style_card(v: Version) -> dict:
                  style={"name": name, "feel": feel, "ending": s.ending or "ring", "backing": s.backing,
                         "lift": s.lift},
                  styles={k: STYLE_NAMES.get(k, k) for k in sorted(style_mod.offered(name), key=_alphabetical)}, feels={f: named.get(f) or FEEL_NAMES.get(f, f) for f in feels},
-                 endings=dict(ENDING_NAMES), backings={"": "no backing voices", **BACKING_NAMES})
+                 endings={k: w for k, w in ENDING_NAMES.items() if k != "amen" or name == "hymn" or s.ending == "amen"}, backings={"": "no backing voices", **BACKING_NAMES})
 
 
 def hymn_words(params) -> tuple[str, ...]:

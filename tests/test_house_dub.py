@@ -462,7 +462,8 @@ def test_dub_is_hidden_from_the_picker_but_still_plays():
     """Dub isn't offered for now (the artist, 2026-09-30), unless a version already plays it; a record or --style
     still does. House is offered again since its hook was fixed."""
     assert "dub" not in S.offered() and "house" in S.offered()
-    assert {"acappella", "jig", "house", *S.RING} <= set(S.offered())
+    assert {"acappella", "jig", "house", *S.RING} - {"blues", "gospel"} <= set(S.offered())
+    assert not {"blues", "gospel"} & set(S.offered())
     assert "dub" in S.offered("dub")
     assert "house" in S.STYLES and "dub" in S.STYLES
 

@@ -825,8 +825,9 @@ OFF_RING[HOUSE.name] = "synthfolk"  # the machines' end, the drum machine and th
 STYLES[DUB.name] = DUB
 OFF_RING[DUB.name] = "lofi"  # slow, worn, the bass and the room
 # Not offered in the studio's picker: a record, a draft or --style still plays a hidden one, and a version already
-# in one still shows it
-HIDDEN = frozenset({DUB.name})
+# in one still shows it. Country blues and gospel, as the artist heard them, aren't the song's (each keeps its place
+# on the ring until another style takes it)
+HIDDEN = frozenset({DUB.name, BLUES.name, GOSPEL.name})
 
 
 def offered(current: str | None = None) -> tuple[str, ...]:
@@ -1808,8 +1809,6 @@ JAZZ = _def(
              "half": 0.0},
 )
 STYLES[JAZZ.name] = JAZZ
-# Hidden from the picker (the folk singer over a trio); a record, a draft or --style still plays it
-HIDDEN = HIDDEN | {JAZZ.name}
 OFF_RING[JAZZ.name] = "chamber"  # the piano, the waltz, the sevenths
 
 # Styles that play the song's chords as their own changes (trio_changes), and how often they add a break where the
