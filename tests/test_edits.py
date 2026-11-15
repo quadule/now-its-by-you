@@ -67,10 +67,11 @@ def test_edits_without_a_machine_or_a_day():
 
 
 def test_refused_edits_say_why():
-    edits, problems = E.check(g, {"mode": "lydian", "band.pattern": "polka", "colour": "red", "phrasing": "nobody",
-                                  "tempo": "fast"})
+    edits, problems = E.check(g, {"mode": "blues", "band.pattern": "polka", "colour": "red", "phrasing": "nobody",
+                                  "tempo": "fast", "tempo.free": "yes"})
     why = {p["path"]: p["why"] for p in problems}
-    assert "keep their shape only in ionian, mixolydian, aeolian" in why["mode"]
+    assert "the modes are lydian, ionian, mixolydian, dorian, aeolian, phrygian, locrian" in why["mode"]
+    assert "isn't a value" in why["tempo.free"]
     assert "lilt, strum, pick, air" in why["band.pattern"]
     assert why["colour"] == "there's no such choice"
     assert "no such phrasing" in why["phrasing"]
@@ -322,3 +323,28 @@ def test_was_is_the_programs_own_for_the_style_and_shape_the_person_chose():
     assert r.marks["form.order"]["was"] == order
     assert r.marks["style.name"]["was"] == r.generated.style.name  # the style's own "was" is the program's style
     assert E.resolve(g, None, vela, day, {"tempo": 90}).marks["tempo"]["was"] == r.generated.tempo  # no style: as before
+
+
+def test_a_persons_own_tempo_and_mode_are_free_of_the_style_and_the_songs_chords():
+    """tempo.free: the tempo a person chose, 40 to 220 beats a minute whatever the style; without it a tempo is held
+    to its style's range as it always was (a stored edit keeps its meaning). Any of the seven modes may be chosen;
+    the machine's own keep to the ones the song's chords keep their shape in."""
+    assert E.bounds(g)["tempo"]["free"] == {"min": 38.4, "max": 220.0}  # H's reach (0.4 of 96) is lower than 40
+    held, problems = E.check(g, {"tempo": 200})
+    assert held == {"tempo": 153.6} and not problems
+    o = E.Overrides(g, held)
+    assert choose_params(g, None, ADA, DAY, overrides=o).tempo == 124.8 and o.problems[0]["path"] == "tempo"
+    free, problems = E.check(g, {"tempo": 400, "tempo.free": True, "mode": "dorian"})
+    assert free == {"tempo": 220.0, "tempo.free": True, "mode": "dorian"} and not problems
+    o = E.Overrides(g, free)
+    p = choose_params(g, None, ADA, DAY, overrides=o)
+    assert (p.tempo, p.mode) == (220.0, "dorian") and not o.problems
+    assert {"tempo", "tempo.free", "mode"} <= set(o.applied)
+    slow = choose_params(g, None, ADA, DAY, overrides=E.Overrides(g, E.check(g, {"tempo": 40, "tempo.free": True})[0]))
+    assert slow.tempo == 40.0
+    r = E.resolve(g, None, None, None, free)
+    assert r.marks["tempo.free"] == {"value": True, "was": None} and r.marks["tempo"]["value"] == 220.0
+    again = E.resolve(g, None, None, None, E.check(g, E.from_record({"chosen_by_you": r.marks}))[0])
+    assert (again.params.tempo, again.params.mode) == (220.0, "dorian")  # it replays
+    for mode in E.bounds(g)["mode"]["options"]:
+        assert choose_params(g, None, ADA, DAY, overrides=E.Overrides(g, {"mode": mode})).mode == mode

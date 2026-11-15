@@ -97,7 +97,8 @@ def test_the_page_gets_the_song_its_choices_and_their_bounds(served):
     status, _, data = ask(port, "GET", "/api/start")
     start = json.loads(data)
     assert status == 200 and start["title"] == "Now It's by You"
-    assert start["bounds"]["mode"]["options"] == ["ionian", "mixolydian", "aeolian"]
+    assert start["bounds"]["mode"]["options"] == ["lydian", "ionian", "mixolydian", "dorian", "aeolian", "phrygian", "locrian"]
+    assert start["bounds"]["tempo"]["free"] == {"min": 38.4, "max": 220.0}
     status, view = post(port, studio, "/api/song", {"edits": {"tempo": 88, "band.drum": 0, "nonsense": 1}})
     assert status == 200
     assert {c["id"] for c in view["cards"]} >= {"key", "tempo", "shape", "band", "mix", "singer", "words", "choir",

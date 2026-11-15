@@ -291,7 +291,8 @@
     const v = state.view, tempo = card("tempo"), key = card("key");
     if (tempo) {
       const number = $("tempoNumber"), range = { ...state.start.bounds.tempo, ...(tempo.range || {}) };
-      number.min = range.min; number.max = range.max;
+      const free = state.start.bounds.tempo.free || range;  // a person's own tempo, whatever the style
+      number.min = free.min; number.max = free.max;
       if (document.activeElement !== number) number.value = Math.round(tempo.tempo);  // not under a hand typing in it
       $("tempoBox").classList.toggle("you", edited("tempo"));
       $("tempoBox").title = `Tempo: ${tempo.value}${edited("tempo") && was("tempo") ? `; the program's ${Math.round(was("tempo"))}` : ""}. This style: ${range.min} to ${range.max}`;
@@ -321,12 +322,16 @@
     $(opener(id)).setAttribute("aria-expanded", "true");
     $(id).querySelector("input, button, select")?.focus();
   }
-  function setTempo() {  // the tempo's field in the bar: a whole number inside this style's range, else as it was
+  function setTempo() {  // the tempo's field in the bar: a whole number a person may choose, else as it was
     const c = card("tempo"), number = $("tempoNumber");
     if (!c) return;
-    const range = { ...state.start.bounds.tempo, ...(c.range || {}) }, value = Math.round(Number(number.value));
-    if (!number.value || !Number.isFinite(value) || value < range.min || value > range.max) { number.value = Math.round(c.tempo); toast(`Choose a tempo from ${range.min} to ${range.max} for this style.`); return; }
-    if (value !== Math.round(c.tempo)) choose("tempo", value, "Change tempo");
+    const style = { ...state.start.bounds.tempo, ...(c.range || {}) }, range = state.start.bounds.tempo.free || style;
+    const value = Math.round(Number(number.value));
+    if (!number.value || !Number.isFinite(value) || value < range.min || value > range.max) { number.value = Math.round(c.tempo); toast(`Choose a tempo from ${range.min} to ${range.max}.`); return; }
+    if (value === Math.round(c.tempo)) return;
+    // the style's own range: a tempo edit as ever (the program's own value given back); outside it, the person's own
+    if (value >= style.min && value <= style.max && !edited("tempo.free")) choose("tempo", value, "Change tempo");
+    else chooseTempo(value, style);
   }
   function keyPop() {
     const c = card("key"), b = state.start.bounds;
@@ -1465,7 +1470,7 @@
     $("positionNow").addEventListener("click", () => { if (narrow()) togglePop("howPop"); });
     $("tempoNumber").addEventListener("change", setTempo);
     $("tempoNumber").addEventListener("keydown", (e) => { if (e.key === "Enter") e.target.blur(); });
-    $("tempoReset").addEventListener("click", () => releaseEdit("tempo", "Reset the tempo"));
+    $("tempoReset").addEventListener("click", () => releaseTempo("Reset the tempo"));
     $("keyBtn").addEventListener("click", () => togglePop("keyPop"));
     $("toolsBtn").addEventListener("click", () => openTools());
     $("recordNow").addEventListener("click", () => togglePop("exportPop"));

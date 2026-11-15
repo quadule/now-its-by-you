@@ -142,16 +142,19 @@ def _knob(path: str):
 
 def bounds(genome: Genome) -> dict:
     """What a person may choose, path by path: the tempo as far as any style lets a person take it (0.4 to 1.6
-    times the song's; each style's own range is tempo_range's), the key as far as the program's table lets any
-    machine go (five semitones either way), the modes the song's chords
-    keep their shape in, and the band's and the mix's designed ranges (wider than a machine's own)."""
+    times the song's; each style's own range is tempo_range's), and with tempo.free a tempo of the person's own,
+    whatever the style (free: 40 to 220 beats a minute, or wider where the song's reach is); the key as far as the
+    program's table lets any machine go (five semitones either way); any of the seven modes (the program's own
+    choices keep to the ones the song's chords keep their shape in, variation.allowed_modes); and the band's and
+    the mix's designed ranges (wider than a machine's own)."""
     song = song_params(genome)
     tempo = tuple(TEMPO_REACH[k] * song.tempo for k in (0, 1))  # the widest any style allows (tempo_range)
     tonic = _knob("tonic").bounds(song.tonic)
     out = {
-        "tempo": {"min": round(tempo[0], 1), "max": round(tempo[1], 1), "step": 0.5, "song": song.tempo},
+        "tempo": {"min": round(tempo[0], 1), "max": round(tempo[1], 1), "step": 0.5, "song": song.tempo,
+                  "free": dict(zip(("min", "max"), free_tempo_range(genome)))},
         "tonic": {"min": int(tonic[0]), "max": int(tonic[1]), "song": song.tonic},
-        "mode": {"options": list(variation.allowed_modes(genome, song.mode)), "song": song.mode},
+        "mode": {"options": sorted(variation.BRIGHTNESS, key=lambda m: -variation.BRIGHTNESS[m]), "song": song.mode},
         "band.pattern": {"options": list(PATTERNS)},
         "band.lead": {"options": list(LEADS)},
         "band.density": {"min": 0.0, "max": 1.0, "step": 0.01},
@@ -308,13 +311,18 @@ def check(genome: Genome, edits: dict, phrasings=()) -> tuple[dict, list[dict]]:
                     raise ValueError
                 if roll:
                     clean[path] = roll
-            elif path == "tempo":
-                clean[path] = round(_number(value, b["tempo"]["min"], b["tempo"]["max"]), 1)
+            elif path == "tempo":  # a tempo of the person's own (tempo.free) is held only to the free range
+                reach = b["tempo"]["free"] if (edits or {}).get("tempo.free") is True else b["tempo"]
+                clean[path] = round(_number(value, reach["min"], reach["max"]), 1)
+            elif path == "tempo.free":
+                if value is not True:
+                    raise ValueError("tempo.free is true: the tempo is the person's own, whatever the style")
+                clean[path] = True
             elif path == "tonic":
                 clean[path] = int(_number(round(float(value)), b["tonic"]["min"], b["tonic"]["max"]))
             elif path == "mode":
                 if value not in b["mode"]["options"]:
-                    raise LookupError(f"the song's chords keep their shape only in {', '.join(b['mode']['options'])}")
+                    raise LookupError(f"the modes are {', '.join(b['mode']['options'])}")
                 clean[path] = value
             elif path == "form.order":
                 names = composition.order(genome, value)
@@ -468,7 +476,11 @@ class Overrides:
             if key in e:
                 out[key] = e[key]
                 applied.append(key)
-        if "tempo" in e:  # held to the range of the style it is played in (tempo_range), said if it had to be
+        if "tempo" in e and e.get("tempo.free") is True:  # the person's own, whatever the style
+            applied.append("tempo.free")
+            lo, hi = free_tempo_range(self.genome)
+            out["tempo"] = round(min(hi, max(lo, float(e["tempo"]))), 1)
+        elif "tempo" in e:  # held to the range of the style it is played in (tempo_range), said if it had to be
             lo, hi = tempo_range(self.genome, out.get("style"))
             out["tempo"] = round(min(hi, max(lo, float(e["tempo"]))), 1)
             if abs(out["tempo"] - float(e["tempo"])) > 0.05:
@@ -1032,6 +1044,8 @@ def marks(genome: Genome, generated, generated_lyrics, final_lyrics, applied: li
         value, was = edits.get(path), None
         if path == "date":
             was = "the day it was made"
+        elif path == "tempo.free":
+            was = None  # the tempo held to its style's range
         elif path == "name":
             was = genome.title
         elif path == "roll":
@@ -1177,6 +1191,7 @@ def keep_words(genome: Genome, lyrics) -> dict:
 # choose follows the style it is played in.
 
 TEMPO_REACH = (0.4, 1.6)  # of the song's own tempo: the widest a person may take it, in any style
+FREE_TEMPO = (40.0, 220.0)  # beats a minute: a tempo of the person's own (tempo.free), whatever the style
 TEMPO_WIDEN = (0.9, 1.1)  # a style's own range, widened this much each way (multiplied), for a person
 
 
@@ -1196,6 +1211,14 @@ def tempo_range(genome: Genome, style=None) -> tuple[float, float]:
         lo, hi = min(lo, TEMPO_WIDEN[0] * low), max(hi, TEMPO_WIDEN[1] * high)
     lo, hi = max(TEMPO_REACH[0], lo), min(TEMPO_REACH[1], hi)
     return round(lo * song, 1), round(hi * song, 1)
+
+
+def free_tempo_range(genome: Genome) -> tuple[float, float]:
+    """The tempos a person may choose as their own (tempo.free), whatever the style: 40 to 220 beats a minute,
+    and never narrower than the song's reach in any style (TEMPO_REACH). The singer fits its consonants to any
+    note's length (synth.voice.schedule), so the engine has no bound of its own here."""
+    song = song_params(genome).tempo
+    return round(min(FREE_TEMPO[0], TEMPO_REACH[0] * song), 1), round(max(FREE_TEMPO[1], TEMPO_REACH[1] * song), 1)
 
 
 def _taken_over(genome: Genome, generated, params, applied: list, problems: list, edits: dict):

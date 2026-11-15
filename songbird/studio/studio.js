@@ -256,6 +256,20 @@ async function applyPatch(patch, label = "Edit song") {
   return commitEdits(next, label);
 }
 
+// A tempo chosen: inside the style's range (style), a tempo edit as it has always been; outside it, the person's own
+// (tempo.free), which the style doesn't hold (songbird/edits.py free_tempo_range). Reset lets both go.
+function chooseTempo(value, style, label = "Change tempo") {
+  const outside = value < style.min || value > style.max;
+  if (!outside && !state.edits["tempo.free"]) return setEdit("tempo", value, label);
+  return setEdits({ tempo: value, "tempo.free": outside ? true : null }, label);
+}
+function releaseTempo(label = "Reset the tempo") {
+  const next = copyEdits();
+  next.tempo = null;
+  delete next["tempo.free"];
+  return commitEdits(next, label);
+}
+
 function clearEdits(paths, label = "Restore song choices") {
   return setEdits(Object.fromEntries(paths.map((path) => [path, null])), label);
 }
@@ -712,8 +726,9 @@ function renderSessionControls() {
   const bounds = state.start.bounds;
   const controls = [];
   if (tempo) {
-    const range = { ...bounds.tempo, ...(tempo.range || {}) };  // the tempos this style takes (docs/ARRANGE.md)
-    const input = h("input", { type: "number", min: range.min, max: range.max, step: range.step,
+    const style = { ...bounds.tempo, ...(tempo.range || {}) };  // the tempos this style takes (docs/ARRANGE.md)
+    const range = bounds.tempo.free || style;  // and a person's own, whatever the style
+    const input = h("input", { type: "number", min: range.min, max: range.max, step: style.step,
       value: tempo.tempo, "aria-label": "Tempo in beats per minute" });
     input.addEventListener("change", () => {
       const value = Number(input.value);
@@ -722,7 +737,7 @@ function renderSessionControls() {
         toast(`Choose a tempo from ${range.min} to ${range.max} BPM.`);
         return;
       }
-      setEdit("tempo", value, "Change tempo");
+      chooseTempo(value, style);
     });
     controls.push(h("label", { class: "session-control" }, h("span", {}, "Tempo"), input, h("span", { class: "hint" }, "BPM")));
   }
