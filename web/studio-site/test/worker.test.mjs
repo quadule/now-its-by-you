@@ -191,6 +191,8 @@ test("a shared version: in ranges, unchanged, HEAD, and nothing to find by guess
   assert.equal(same.status, 304);
   assert.equal((await call(w, e, `/api/versions/${id}`, { method: "DELETE" })).status, 405);
 
+  const gone = "0".repeat(32);
+  assert.equal((await call(w, e, `/api/versions/${gone}`, { headers: { "If-None-Match": `"${gone}"` } })).status, 404); // a copy kept is no proof it's here
   const missing = await call(w, e, `/api/versions/${"0".repeat(32)}`);
   assert.equal(missing.status, 404);
   assert.match((await missing.json()).error, /no version here/);
@@ -246,9 +248,11 @@ test("kept 30 days after it was last shared or opened (an open noted at most wee
   e.VERSIONS.age(`versions/${fresh}.flac`, 36); // shared 36 days ago: within 30 + 7
   e.VERSIONS.age(`versions/${old}.flac`, 38);
   e.VERSIONS.age(`versions/${opened}.flac`, 40);
-  await call(w, e, `/api/versions/${opened}`, { headers: { "If-None-Match": `"${opened}"` } }); // a browser that has it
-  assert.deepEqual(e.VERSIONS.keys("opened/"), []); // it has the bytes, and isn't sent them: not an open
-  await call(w, e, `/api/versions/${opened}`); // opened today, after 40 days: noted
+  const same = await call(w, e, `/api/versions/${opened}`, { headers: { "If-None-Match": `"${opened}"` } }); // a browser that has it
+  assert.equal(same.status, 304);
+  assert.deepEqual(e.VERSIONS.keys("opened/"), [`opened/${opened}`]); // it isn't sent the bytes, but it is an open
+  e.VERSIONS.objects.delete(`opened/${opened}`);
+  await call(w, e, `/api/versions/${opened}`, { method: "HEAD" }); // the page opening the one it keeps: noted
   assert.deepEqual(e.VERSIONS.keys("opened/"), [`opened/${opened}`]);
   const puts = e.VERSIONS.puts;
   await call(w, e, `/api/versions/${opened}`, { headers: { Range: "bytes=0-3" } }); // again this week: no write

@@ -5,7 +5,9 @@
 //   POST /api/versions          share a version: the body is a rendition (a FLAC with its packet appended); it is
 //                               checked as data (src/packet.js: never unpacked, never run), kept in R2 under its
 //                               content address, and answered 201 {"id": "<32 hex>", "url": "/v/<id>"}
-//   GET  /api/versions/<id>     that file (audio/flac, immutable), whole or in ranges
+//   GET  /api/versions/<id>     that file (audio/flac, immutable), whole or in ranges; every fetch of it, a HEAD and
+//                               a 304 among them, is an open, which keeps it (the page sends an uncached HEAD when
+//                               it opens a version it already keeps, so the link stays alive for the next person)
 //   GET  /v/<id>                the studio's page, which fetches the file and opens it on the device
 //   anything else under /api/   404
 //
@@ -225,18 +227,18 @@ async function version(request, env, ctx, id, ip, now) {
     "Accept-Ranges": "bytes", "Content-Security-Policy": FILE_POLICY,
     "Content-Disposition": `attachment; filename="songbird-${id}.flac"`,
   };
-  // the same name is always the same bytes: a browser that has them needn't be sent them again
-  if ((request.headers.get("If-None-Match") || "").split(",").map(s => s.trim().replace(/^W\//, "")).includes(tag)) {
-    return new Response(null, { status: 304, headers: fileHeaders });
-  }
-  // one read for the usual whole file; a range, or HEAD, asks its size first
-  const ranged = request.method === "HEAD" || request.headers.get("Range") !== null;
+  // the same name is always the same bytes: a browser that has them needn't be sent them again, but it is an open
+  // all the same, and only while the version is still here
+  const same = (request.headers.get("If-None-Match") || "").split(",").map(s => s.trim().replace(/^W\//, "")).includes(tag);
+  // one read for the usual whole file; a range, HEAD, or a browser that has it asks its size first
+  const ranged = same || request.method === "HEAD" || request.headers.get("Range") !== null;
   const found = ranged ? await env.VERSIONS.head(keyOf(id)) : await env.VERSIONS.get(keyOf(id));
   if (!found) {
     if (await limited(env.UNKNOWN, `unknown:${addressOf(ip)}`)) return busy();
     return fail(404, GONE);
   }
   ctx.waitUntil(opened(env, id, found, now).catch(e => console.error("songbird-studio: opened", e && e.name)));
+  if (same) return new Response(null, { status: 304, headers: fileHeaders });
   if (!ranged) return new Response(found.body, { headers: { ...fileHeaders, "Content-Length": String(found.size) } });
   const range = parseRange(request.headers.get("Range"), found.size);
   if (range === false) {

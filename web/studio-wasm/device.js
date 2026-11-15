@@ -322,11 +322,24 @@
 
   const isGone = (text) => Object.assign(new Error(text), { gone: true });
 
+  function stillShared() {
+    // a version this browser keeps opens from here, but its link is kept for others only while it is opened:
+    // an uncached HEAD says so to the site (no audio), and says if the link has gone
+    network(`/api/versions/${linked}`, { method: "HEAD", cache: "no-store" }).then((r) => {
+      if (r.status === 404 || r.status === 410) {
+        window.songbirdStudio?.toast?.("This version's link no longer works for others. Share it again for a new one.");
+      }
+    }).catch(() => {});
+  }
+
   async function openVersion({ worker, view }) {
     const kept = await recall("versions", version);
     if (kept && kept.program === view.program && kept.machine === view.machine) {
       const r = await worker.ask({ cmd: "restore", version: kept });
-      if (r.status === 200) return;
+      if (r.status === 200) {
+        if (linked) stillShared();
+        return;
+      }
     }
     if (!linked) {
       throw isGone("This version was opened from a file, and this browser doesn't keep it any more. Open the file again.");
