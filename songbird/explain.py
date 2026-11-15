@@ -1350,7 +1350,7 @@ def words_view(v: Version) -> list[dict]:
                          if any(where == p or where.startswith(p) for p in places)), "")
         item.update({"block": block, "nth": nth, "id": s.id, "lines": [readable(bare(line)) for line in s.lines],
                      "tags": [t for t in tags if t], "how": how, "note": note, "mine": mine, "kept": kept,
-                     "path": path, "changeable": bool(drawn and bank)})
+                     "path": path, "changeable": bool(bank)})
         authored = own[k]
         if authored:
             item.update({"authored": sorted(int(i) for i in authored), "how": "includes your own lyrics", "mine": True})

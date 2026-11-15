@@ -127,6 +127,7 @@ def test_the_published_words_can_be_chosen_among(tmp_path):
     config = {"song": str(LEAD), "parent": str(RECORD), "home": str(tmp_path / "a"), "released_on": "2026-09-28"}
     s = D.Device({**config, "machine": "published"}).studio
     assert s.version({}).lyrics is None
+    assert all(w["changeable"] for w in s.song({})["words"] if w.get("sung"))
     options = s.options({}, "verse", 0)
     assert options["sung"] == "wire" and sum(c["allowed"] for c in options["choices"]) > 3
     chosen = s.version({"words.verse.0": {"id": "box"}})
