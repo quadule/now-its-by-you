@@ -360,6 +360,27 @@
     out.forEach((n) => delete n.pasted);
     return { notes: out, added };
   }
+  // The chosen notes' starts and ends put on the grid (beats), each still at least a grid step long: a slurred
+  // note still starts where the one before ends, no note overlaps the next, and the line's last note leaves the next
+  // line's pickup its room. Returns the notes, or throws where they can't all go on the grid.
+  function quantizeNotes(notes, indices, grid, b) {
+    const set = new Set(indices), at = (t) => Math.round(Math.round(t / grid) * grid * 1e9) / 1e9;
+    const out = notes.map((n, i) => {
+      if (!set.has(i)) return { ...n };
+      const onset = at(n.onset), end = Math.max(at(n.onset + n.duration), onset + grid);
+      return { ...n, onset, duration: end - onset };
+    });
+    for (let i = 0; i < out.length; i++) {
+      const n = out[i], prev = out[i - 1], next = out[i + 1];
+      if (n.slur && prev) { const end = n.onset + n.duration; n.onset = prev.onset + prev.duration; n.duration = end - n.onset; }
+      if (next && n.onset + n.duration > next.onset + 1e-9) n.duration = (next.slur ? next.onset + next.duration - grid : next.onset) - n.onset;
+    }
+    const last = out.at(-1), least = Math.min(grid, b.min_duration ?? grid) - 1e-9;
+    if (out.some((n, i) => n.duration < least || n.onset < b.min_onset - 1e-9 || n.onset + n.duration > b.max_end + 1e-9 ||
+      (i && n.onset < out[i - 1].onset + out[i - 1].duration - 1e-9)) || last.onset > (b.max_final_onset ?? b.max_end) + 1e-9)
+      throw new Error("These notes can't all go on this grid. Choose a finer snap.");
+    return out;
+  }
   // the shortcuts of a roll with notes selected: copy, cut, paste, duplicate, all (never in a text field)
   function rollKey(event) {
     if (inField(event.target) || !(event.metaKey || event.ctrlKey) || event.altKey || event.shiftKey) return null;
@@ -493,7 +514,7 @@
   const api = { LEVELS, KIND_WORDS, grid, look, whoseWords, cellLabel, lockPatch, releasePatch, levelPatch, optionLock,
     moveOrder, movedIds, seamWords, seamToggle, seamOver, seamLength, seamLengths, scopeOptions, scopeStart, selectionKey, defaultHow, playTarget,
     neighbour, sectionAtBeat, position, sketchOffset, sketchFrom, inField, keyAction, phraseAt, semitone, spell, moveRows,
-    withSyllables, shiftLimit, deleteNotes, clipOf, pasteAt, rollKey, saidCell, fitNotes, writtenNotes, lyricPatch,
+    withSyllables, shiftLimit, deleteNotes, clipOf, pasteAt, quantizeNotes, rollKey, saidCell, fitNotes, writtenNotes, lyricPatch,
     lyricTargets, lyricSheet, parseLyricSheet, lyricSheetPatch, phrasePatch, sectionPatch };
   if (typeof window !== "undefined") window.SongbirdModel = api;
   if (typeof module === "object" && module.exports) module.exports = api;

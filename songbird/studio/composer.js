@@ -392,6 +392,16 @@
       pasteAt(notes, added);
     } catch (error) { bridge().toast?.(error.message); }
   }
+  function quantize() {  // the selection's (or the phrase's) starts and ends on the snap
+    const p = phrase(), chosen = picked();
+    if (!p?.notes?.length) return;
+    const all = chosen.length ? window.SongbirdModel.withSyllables(p.notes, chosen) : p.notes.map((_, i) => i);
+    try {
+      const notes = window.SongbirdModel.quantizeNotes(p.notes, all, state.snap, bounds(p));
+      if (chosen.length) pick(state.note, chosen);
+      commitNotes(notes, `${chosen.length > 1 ? `${chosen.length} notes` : chosen.length ? "The note" : "The phrase"} on the ${fmt(round(state.snap))}-beat grid.`);
+    } catch (error) { bridge().toast?.(error.message); }
+  }
   function cutNotes() {
     if (!picked().length || !copyNotes(true)) return;
     deleteNote();
@@ -424,6 +434,7 @@
       button("Delete note", deleteNote, { disabled: state.note === null }),
       button("Copy notes", () => copyNotes(), { title: "Copy the selected notes, or the phrase (Ctrl+C)" }),
       button("Paste notes", () => pasteNotes(), { disabled: !clipboard, title: "Paste (Ctrl+V)" }),
+      button("Quantize", quantize, { title: "Put the selected notes, or the phrase, on the snap" }),
       button("Write line", writeLine, { disabled: !p?.own_path || !!state.draft }),
       el("details", { class: "sbc-phrase-actions" }, el("summary", {}, "Phrase"),
         button("Copy phrase", () => {
@@ -802,28 +813,40 @@
     if (p && state.reveal) { state.reveal = false; state.scrollTo = Math.max(0, xAt(g, g.spans[state.phrase].start) - g.left); }
     return el("div", { id: "sbc-roll-scroll", class: "sbc-roll-scroll", tabindex: "0", "aria-label": "Scrollable melody editor", onkeydown: shortcut }, roll);
   }
-  // On the empty roll: a click puts the cursor there (where a paste goes) and lets the notes go; two add a note;
-  // a drag draws a rectangle that selects the notes it touches in the phrase it began in.
+  // On the empty roll: a click puts the cursor there (where a paste goes) and lets the notes go; two add a note.
+  // A drag draws a note as long as the drag, where a line can have notes added (a sung line); a Shift-drag (or any
+  // drag in a line that can't) draws a rectangle that selects the notes it touches in the phrase it began in.
   let lastClick = null;
   function emptyDrag(event, g, plot) {
     if (event.button !== 0 || (notesMode() && page()?.narrow?.())) return;
     const rect = plot.getBoundingClientRect(), x0 = event.clientX, y0 = event.clientY;
     const at = (x, y) => ({ beat: g.start + (x - rect.left) / g.unit, semi: g.high - Math.floor((y - rect.top) / g.row) });
     const down = at(x0, y0), pi = window.SongbirdModel.phraseAt(g.spans, down.beat);
-    const box = el("div", { class: "sbc-marquee", hidden: true });
+    const drawing = !event.shiftKey && pi !== null && !!g.spans[pi].p.own_path;
+    const snapped = (beat) => Math.round(beat / state.snap) * state.snap;
+    const drawn = (beat) => {  // the note a drag draws: from where it began to where it is, on the snap
+      const a = snapped(Math.min(down.beat, beat)), z = Math.max(snapped(Math.max(down.beat, beat)), a + state.snap);
+      return { onset: a - g.spans[pi].off, duration: z - a };
+    };
+    const box = el("div", { class: drawing ? "sbc-note is-drawing" : "sbc-marquee", hidden: true, "aria-hidden": "true" });
     plot.parentNode?.append(box);
     let moved = false;
     plot.setPointerCapture?.(event.pointerId);
     const move = (e) => {
       if (!moved && Math.abs(e.clientX - x0) + Math.abs(e.clientY - y0) < 4) return;
       moved = true; box.hidden = false;
-      Object.assign(box.style, { left: `${g.left + Math.min(x0, e.clientX) - rect.left}px`, top: `${g.ruler + Math.min(y0, e.clientY) - rect.top}px`,
+      if (drawing) Object.assign(box.style, noteStyle({ ...drawn(at(e.clientX, e.clientY).beat), pitch: (composition()?.tonic || 60) + down.semi }, g, g.spans[pi].off));
+      else Object.assign(box.style, { left: `${g.left + Math.min(x0, e.clientX) - rect.left}px`, top: `${g.ruler + Math.min(y0, e.clientY) - rect.top}px`,
         width: `${Math.abs(e.clientX - x0)}px`, height: `${Math.abs(e.clientY - y0)}px` });
     };
     const up = (e) => {
       plot.removeEventListener("pointermove", move); plot.removeEventListener("pointerup", up); plot.removeEventListener("pointercancel", cancel);
       if (plot.hasPointerCapture?.(e.pointerId)) plot.releasePointerCapture(e.pointerId);
       box.remove?.();
+      if (moved && drawing) {
+        const note = drawn(at(e.clientX, e.clientY).beat);
+        focusPhrase(pi); addNote(note.onset, M().spell(down.semi, scale()), note.duration); return;
+      }
       if (moved) { marquee(g, pi, down, at(e.clientX, e.clientY)); return; }
       const now = Date.now(), twice = lastClick && now - lastClick.time < 450 && Math.abs(lastClick.x - x0) + Math.abs(lastClick.y - y0) < 8;
       lastClick = twice ? null : { time: now, x: x0, y: y0 };
@@ -1416,7 +1439,7 @@
       p?.notes?.length ? pianoRoll() : el("p", { class: "sbc-muted notes-foot" }, "This section has no melody to change."),
       ownCard(),
       el("p", { class: "readonly hint notes-foot" }, "Tap a note to change it in the column."),
-      el("div", { class: "notes-foot" }, el("span", { title: "Arrow keys nudge the selected note; ⇧ ← → its length; Delete removes it." }, "Drag to move or resize. Double-click to add a note."),
+      el("div", { class: "notes-foot" }, el("span", { title: "Arrow keys move the selected notes; ⇧ ← → a note's length; Delete removes; Ctrl or ⌘ with C, X, V, D, A: copy, cut, paste, duplicate, select all." }, "Drag on the grid to draw a note; Shift-drag to select."),
         p?.notes?.length ? button("▶ Hear this phrase", () => { state.scope = "phrase"; state.playIndex = null; play(); }, { class: "sbc-button" }) : null),
       el("p", { id: "sbc-drag-value", class: "sbc-visually-hidden", "aria-live": "off" })));
   }

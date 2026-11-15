@@ -916,9 +916,9 @@ test("a tune line's selection keeps to the scale, and a rectangle on the empty r
   const s = setup(writableScore());
   const plot = s.find(".sbc-grid"), first = s.root.querySelectorAll('[data-phrase="0"]');
   const left = parseFloat(first[0].style.left), right = parseFloat(first[2].style.left) + 5;
-  plot.emit("pointerdown", { clientX: left + 1, clientY: 0 });
-  plot.emit("pointermove", { clientX: right, clientY: 1000 });
-  plot.emit("pointerup", { clientX: right, clientY: 1000 });
+  plot.emit("pointerdown", { clientX: left + 1, clientY: 0, shiftKey: true });
+  plot.emit("pointermove", { clientX: right, clientY: 1000, shiftKey: true });
+  plot.emit("pointerup", { clientX: right, clientY: 1000, shiftKey: true });
   assert.deepEqual(s.root.querySelectorAll('[data-phrase="0"]').filter((n) => n.classList.contains("is-selected")).map((n) => n.dataset.note), ["0", "1", "2"]);
   assert.equal(s.document.activeElement?.dataset.note, "0", "the selection takes the keys");
   // a click on the empty roll lets them go, and puts the cursor there
@@ -969,4 +969,29 @@ test("the keyboard's clipboard: Ctrl+C, X, V and D on the selection, refused whe
   input.tagName = "INPUT"; input.type = "text";
   roll().emit("keydown", { key: "v", ctrlKey: true, target: input });
   assert.equal(lineTwo().notes.length, 4);
+});
+test("a drag on the empty grid draws a note as long as the drag; a Shift-drag selects; Quantize puts notes on the snap", () => {
+  const view = writableScore(), p = view.composition.sections[1].phrases[0];
+  p.notes[1].duration = 0.5;  // a rest from 0.5 to 1
+  const s = setup(view), plot = s.find(".sbc-grid");
+  const note1 = s.find('[data-note="1"]'), unit = parseFloat(note1.style.width) + 3 + 0;  // half a beat, drawn
+  const x = parseFloat(note1.style.left) - 1 + unit, y = parseFloat(note1.style.top) - 2 - 54 + 5;  // right after "this", on its row
+  plot.emit("pointerdown", { clientX: x, clientY: y + 54 });
+  plot.emit("pointermove", { clientX: x + unit, clientY: y + 54 });
+  plot.emit("pointerup", { clientX: x + unit, clientY: y + 54 });
+  assert.equal(s.phrase().notes.length, 6, "drawn into the rest");
+  assert.deepEqual(clone([s.phrase().notes[2].onset, s.phrase().notes[2].duration, s.phrase().notes[2].degree]), [0.5, 0.5, 4]);
+  assert.match(s.find(".sbc-own").textContent, /\/ 6 syllables/, "the words wait to be written");
+  s.clickText("Cancel");
+  // Shift-drag over "this" and "song": selected, not drawn
+  const left = parseFloat(s.find('[data-note="1"]').style.left), right = parseFloat(s.find('[data-note="2"]').style.left) + 5;
+  plot.emit("pointerdown", { clientX: left + 1, clientY: 0, shiftKey: true });
+  plot.emit("pointermove", { clientX: right, clientY: 1000, shiftKey: true });
+  plot.emit("pointerup", { clientX: right, clientY: 1000, shiftKey: true });
+  assert.equal(s.phrase().notes.length, 5);
+  assert.deepEqual(s.root.querySelectorAll('[data-phrase="0"]').filter((n) => n.classList.contains("is-selected")).map((n) => n.dataset.note), ["1", "2"]);
+  // a whole-beat snap: "this" (0 to 0.5) and "song" (1 to 2) stay on it; the phrase's pickup is quantized only when chosen
+  s.find("#sbc-snap").emit("change", { target: { value: "1" } });
+  s.clickText("Quantize");
+  assert.deepEqual(s.commits.at(-1).value.map((n) => [n.onset, n.duration]), [[-0.5, 0.5], [0, 1], [1, 1], [2, 1], [3, 1]]);
 });

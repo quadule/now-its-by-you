@@ -301,3 +301,14 @@ test("a lyric sheet: paragraphs onto the song's sections of words in order, brac
   const long = M.lyricSheetPatch(targets, M.parseLyricSheet(Array(20).fill("la").join(" ")), count);
   assert.match(long.errors[0].message, /Verse 1, line 1: These words need more room/);
 });
+
+test("quantize puts the chosen notes' starts and ends on the grid, keeping a melisma joined and the next line's pickup clear", () => {
+  const b = { min_onset: -0.5, max_end: 4, max_final_onset: 3.5, min_duration: 0.25 };
+  const notes = [{ degree: 1, onset: -1 / 3, duration: 1 / 3 }, { degree: 2, onset: 0.1, duration: 0.6 }, { degree: 3, onset: 0.7, duration: 0.55, slur: true },
+    { degree: 4, onset: 1.4, duration: 1.2 }, { degree: 5, onset: 3.4, duration: 0.6 }];
+  const q = M.quantizeNotes(notes, [0, 1, 2, 3, 4], 0.5, b);
+  assert.deepEqual(q.map((n) => [n.onset, n.duration]), [[-0.5, 0.5], [0, 0.5], [0.5, 1], [1.5, 1], [3.5, 0.5]]);
+  assert.equal(q[2].slur, true);
+  assert.deepEqual(M.quantizeNotes(notes, [3], 1, b).map((n) => [n.onset, n.duration]).slice(3), [[1, 2], [3.4, 0.6]], "only the chosen; the others as they were");
+  assert.throws(() => M.quantizeNotes(notes, [4], 0.5, { ...b, max_final_onset: 3.4 }), /finer snap/, "the last note past the next line's pickup");
+});
