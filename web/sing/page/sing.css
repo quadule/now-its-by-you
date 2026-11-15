@@ -183,11 +183,13 @@ details.listen label.speaker { display: flex; gap: 8px; align-items: center; mar
 /* the seed page: how to run it, set in the typewriter face of a field recordist's card; the page a little wider
    than the singing one so the three commands sit on their lines without scrolling */
 body.seed main { max-width: 980px; }  /* wide enough that the hero's cover and its words beside it are of a height */
-/* every paragraph and list one measure, the hero's column's (54 of 100 parts of 980 px, less the gap: 29em at
-   17 px), in em so smaller text wraps at as many letters */
-body.seed .card > p, body.seed .card > ol, body.seed main > p { max-width: 44em; }  /* /about's own column is narrower */
-body.seed:not(.about) { --prose: 29em; }
+/* the sections under the hero: every paragraph and list one measure (in em, so smaller text wraps at as many
+   letters, about 75), and room around it in the card; /about keeps its own narrower column */
+body.seed .card > p, body.seed .card > ol, body.seed main > p { max-width: 44em; }
+body.seed:not(.about) { --prose: 40em; }
 body.seed:not(.about) :is(.card > p, .card > ol, main > p, .ospanel ol, .ospanel .hint) { max-width: var(--prose); }
+@media (min-width: 721px) { body.seed:not(.about) .card { padding: 22px 30px 24px; } }
+.ospanel li code { white-space: nowrap; }  /* a command never breaks in the middle (cd Downloads) */
 pre, code { font-family: var(--mono); font-size: 13.5px; }
 pre { margin: 0 0 10px; padding: 10px 12px; overflow-x: auto; background: var(--paper); border-left: 2px solid var(--red-rule); line-height: 1.5; }
 
