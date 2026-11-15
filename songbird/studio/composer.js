@@ -15,6 +15,9 @@
     loop: false, metronome: false, scope: "phrase", drag: null, chords: true, bass: true, chord: null,
     where: { tune: null, chords: null }, // one place or everywhere: "line", "place" or "last" (null: as the line has it)
     freeEnding: false, // the ending may leave its home note (the program keeps it, and says so)
+    // a line whose count of syllables changed, waiting for its words (docs/notes/OWN-COUNT-LINES.md):
+    // { path: its line. path, notes, was: the line's notes before }
+    draft: null,
     context: null, bus: null, playback: null, nodes: new Set(), frame: null,
   };
   const bridge = () => window.StudioBridge || {};
@@ -137,7 +140,7 @@
   }
   function scopeChoice(kind) {
     const p = phrase(), s = section();
-    if (!p?.place) return null;
+    if (!p?.place || (kind === "tune" && p.own)) return null;  // a line of its own is sung with its verse's words alone
     const count = p.appearances || 1, name = s.name.replace("bridge2", "second bridge");
     const options = [["line", count > 1 ? `Everywhere it's sung (${count} places)` : "Everywhere it's sung"],
       ["place", `Only here (${s.label})`]];
@@ -159,10 +162,12 @@
     if (value === null && bridge().releaseEdit) bridge().releaseEdit(path); // an inherited choice released, explicitly
     else if (bridge().setEdit) bridge().setEdit(path, value);
   }
-  function serializeNotes(notes) {
+  function serializeNotes(notes, own = false) {
     // Keep untouched expressive and compound-meter timing exact. A third of a
     // beat rounded for display can otherwise become a false syllable overlap.
-    return notes.map((n) => ({ degree: n.degree, onset: n.onset, duration: n.duration, ...(n.slur ? { slur: true } : {}) }));
+    // A line of its own carries each note's half step (a tune line's notes keep the line's own by place).
+    return notes.map((n) => ({ degree: n.degree, onset: n.onset, duration: n.duration, ...(n.slur ? { slur: true } : {}),
+      ...(own && n.alter && !n.slur ? { alter: n.alter } : {}) }));
   }
   // ---- a melisma (docs/STUDIO.md, "A freer melody"): a note slurred on from the one before sings the same
   // syllable, starting where it ends. Moving a slurred note's start moves the boundary between the two; any other
@@ -192,6 +197,53 @@
     state.note = i + 1;
     commitNotes(notes, "Note split: the second half is sung on the same syllable. Move it to make a melisma.");
   }
+  // ---- a line with its own count (docs/notes/OWN-COUNT-LINES.md): a note split into a new syllable, or a syllable
+  // merged into the one before; the line's words are written for the new count before it is sung
+  function newSyllable() {
+    const p = phrase(), i = state.note, n = note(), b = bounds(p);
+    if (!p?.own_path || n === undefined || n === null) return;
+    if (n.duration < 2 * b.min_duration - 1e-9) { bridge().toast?.("This note is too short to split: each half needs a quarter beat."); return; }
+    const unit = Math.abs(n.duration * 3 - Math.round(n.duration * 3)) < 1e-6 && Math.abs(n.duration * 4 - Math.round(n.duration * 4)) > 1e-6 ? 1 / 3 : b.grid;
+    const half = clamp(Math.round(n.duration / 2 / unit) * unit, b.min_duration, n.duration - b.min_duration);
+    const notes = p.notes.map((x) => ({ ...x }));
+    notes.splice(i, 1, { ...n, duration: half }, { ...n, onset: n.onset + half, duration: n.duration - half, slur: false, syllable: "?", word: "", pitch: n.pitch });
+    delete notes[i + 1].slur;
+    state.note = i + 1;
+    commitNotes(notes, "A new syllable: write the line's words for it.");
+  }
+  function mergeSyllable() {
+    const p = phrase(), i = state.note, n = note();
+    if (!p?.own_path || !n || n.slur || i === 0) return;
+    const notes = p.notes.map((x) => ({ ...x }));
+    notes[i - 1].duration = n.onset + n.duration - notes[i - 1].onset;  // the note before holds on through its time
+    notes.splice(i, 1);  // (any notes slurred onto it go on from the one before)
+    state.note = i - 1;
+    commitNotes(notes, "Merged into the syllable before: write the line's words for one fewer.");
+  }
+  const sylls = (text) => window.SongbirdAuthor?.say?.syllables ? window.SongbirdAuthor.say.syllables(text)
+    : String(text || "").replace(/\{[^{}]*\}/g, "").trim().split(/[\s-]+/u).filter(Boolean).length;
+  function ownCard() {
+    // the line's words for its new count: one edit with its notes (line.<key>.<i>)
+    const p = phrase(), d = state.draft;
+    if (!p || !d || d.path !== p.own_path) return null;
+    const want = d.notes.filter((n) => !n.slur).length;
+    const input = el("input", { type: "text", class: "sbc-own-words", value: p.lyric_text || "", "aria-label": `The line's words, ${want} syllables`, id: "sbc-own-words" });
+    const count = el("span", { class: "sbc-muted" }, "");
+    const shown = () => { const n = sylls(input.value); count.textContent = `${n} / ${want} syllables`; count.classList.toggle("is-valid", n === want); };
+    input.addEventListener("input", shown);
+    shown();
+    return el("div", { class: "sbc-own" },
+      el("strong", {}, want === p.tune_syllable_count ? `${want} syllables, as the tune's line has` : `${want} syllables; the tune's line has ${p.tune_syllable_count}`),
+      el("p", { class: "sbc-muted" }, "One syllable a note; split longer words with hyphens (car-ry)."),
+      input, count,
+      el("div", { class: "sbc-button-group" },
+        button("Use these words", () => {
+          if (sylls(input.value) !== want) { bridge().toast?.(`This line needs ${want} syllables; it has ${sylls(input.value)}.`); return; }
+          state.draft = null;
+          commit(p.own_path, { words: input.value.trim(), notes: serializeNotes(d.notes, true) });
+        }),
+        button("Cancel", () => { p.notes = d.was; state.draft = null; state.note = null; paint(); told(); }, { class: "sbc-button sbc-quiet" })));
+  }
   function joinNote() {
     const p = phrase(), i = state.note, n = note();
     if (!p || !n?.slur) return;
@@ -220,6 +272,20 @@
     }
     const ref = p.notes[0];
     const updated = notes.map((n, index) => ({ ...n, pitch: pitchFor(shape ? p.notes[index] : ref, n.degree) }));
+    // a line of its own, or one whose count now differs from its tune line's: its words and notes go together
+    const count = updated.filter((n) => !n.slur).length;
+    if (p.own_path && (p.own || count !== p.tune_syllable_count || state.draft?.path === p.own_path)) {
+      if (count === p.syllable_count && p.own && state.draft?.path !== p.own_path) {
+        commit(p.own_path, { words: p.lyric_text, notes: serializeNotes(updated, true) });
+      } else {  // its words wait to be written for the new count (ownCard)
+        state.draft = { path: p.own_path, notes: updated, was: state.draft?.path === p.own_path ? state.draft.was : p.notes };
+        p.notes = updated.map((n, index) => ({ ...n, index, edited: true }));
+      }
+      paint();
+      told();  // the score's inspector shows the words card
+      if (message) announce(message);
+      return;
+    }
     for (const s of sections()) for (const shared of s.phrases || []) {
       if (!sharesScope("tune", p, shared)) continue;
       const words = shared.notes.filter((n) => !n.slur); // each syllable's words, found again by syllable
@@ -729,7 +795,11 @@
       // a melisma: a note split in two sings its syllable on, and a slurred note joins the one before again
       el("div", { class: "sbc-button-group", role: "group", "aria-label": "Notes on one syllable" },
         button("Split", splitNote, { title: "Split this note in two, the second sung on the same syllable (a melisma)" }),
-        n.slur ? button("Join", joinNote, { title: "Join this note into the one before it" }) : null),
+        n.slur ? button("Join", joinNote, { title: "Join this note into the one before it" }) : null,
+        // a line's own count (docs/notes/OWN-COUNT-LINES.md): a syllable more, or one fewer, with words for them
+        p.own_path ? button("New syllable", newSyllable, { title: "Split this note in two, the second a syllable of its own" }) : null,
+        p.own_path && !n.slur && index ? button("Merge", mergeSyllable, { title: "Sing this note on the syllable before" }) : null),
+      ownCard(),
       last ? checkbox("Free the ending", state.freeEnding, (value) => { state.freeEnding = value; paint(); }) : null);
   }
   function health() {
@@ -994,6 +1064,7 @@
   // roll; the selected note's or chord's card is drawn by the page's inspector from noteState() and chordState()
   function scopeSwitch(kind) {
     const p = phrase(), s = section();
+    if (kind === "tune" && p?.own) return null;  // a line of its own is sung with its verse's words alone
     const options = window.SongbirdModel?.scopeOptions(p, s) || [];
     if (!options.length) return null;
     const now = where(kind, p);
@@ -1042,7 +1113,9 @@
             button("Even rhythm", evenRhythm, { title: `Even the notes on the phrase's own grid (the snap: ${fmt(state.snap)} beat)` })))),
       why: reasons(n.edited, scope === "line" ? "yours: this line is sung this way everywhere" : "yours, in this place only",
         [["song", "the tune as it was written, and as the versions before have sung it"], ["rule", "a phrase keeps its syllables, their order and its ending's place in the scale"]]),
-      release: { label: scope === "line" ? "Reset" : "Reset here", disabled: !held("tune", p),
+      release: p.own ? { label: "Use the tune's line", disabled: false,
+        action: () => { state.note = null; state.draft = null; commit(p.own_path, null); told(); } }
+        : { label: scope === "line" ? "Reset" : "Reset here", disabled: !held("tune", p),
         action: () => { state.note = null; commit(scopedPath("tune", p), null); told(); } },
       hear: () => audition(pitchFor(n)),
     };

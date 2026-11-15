@@ -5,6 +5,8 @@ import hashlib
 import numpy as np
 import pytest
 
+from _golden import pinned
+
 from songbird.score import Note
 from songbird.synth import body, bowed, epiano, oa, organ, osc, pipe
 
@@ -117,4 +119,4 @@ def test_optimized_instruments_make_the_samples_they_made(name):
         module = epiano if name.startswith("epiano") else organ
         y = module.render(name, notes, sr, length, rng, make,
                           dict(brightness=0.6, wear=0.4, ornament=0.7, body=1.1))
-    assert hashlib.sha256(np.ascontiguousarray(y).tobytes()).hexdigest() == MADE[name]
+    pinned("instruments", name, hashlib.sha256(np.ascontiguousarray(y).tobytes()).hexdigest(), MADE)

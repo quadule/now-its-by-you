@@ -248,6 +248,13 @@
       "runtimeArgs": ["-c", "cd web/studio-site && exec node_modules/.bin/wrangler dev --port 8813 --ip 127.0.0.1"],
       "port": 8813,
       "url": "http://127.0.0.1:8813"
+    },
+    {
+      "name": "studio-own-lines",
+      "runtimeExecutable": "env",
+      "runtimeArgs": ["SONGBIRD_HOME=/tmp/claude-1000/-home-milo-Code-songbird--claude-worktrees-editable-notes-syllables-line-59bd88/8e656f32-4985-4fb1-91eb-e3ddc26e7eb5/scratchpad/home", "uv", "run", "songbird", "studio", "--no-open", "--port", "8830", "--machine", "fictional:ada"],
+      "port": 8830,
+      "url": "http://127.0.0.1:8830"
     }
   ]
 }

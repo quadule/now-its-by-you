@@ -54,6 +54,9 @@ class Phrase:
     # a line as one place in the form sings it (songbird.composition.form_phrases): the key its own tune is kept
     # under there ("refrain:last.1"), None where it sings the line's everywhere tune; its id stays the line's
     place: str | None = None
+    # a line with its own count (docs/notes/OWN-COUNT-LINES.md): the lyric key and line its words and notes are
+    # kept under ("verse:wire.2"), its notes the person's; None for the tune line's own
+    own: str | None = None
 
     @property
     def sung(self) -> tuple[TuneNote, ...]:

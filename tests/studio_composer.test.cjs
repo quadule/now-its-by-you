@@ -734,3 +734,50 @@ test("a note is named as the key writes it: the composition's names, G♯ in C�
   assert.match(label, /G♯4/);
   assert.doesNotMatch(label, /A♭/);
 });
+
+test("a line's own count: a syllable added or merged away waits for its words, then goes as one line. edit", () => {
+  const view = score();
+  const own = (p) => Object.assign(p, { own_path: "line.verse:wire.0", lyric_text: "Sing this song your way",
+    syllable_count: 5, tune_syllable_count: 5, own: null });
+  own(view.composition.sections[1].phrases[0]);
+  const s = setup(view);
+  s.find('[data-note="1"]').emit("click"); // "this", a whole beat
+  s.clickText("New syllable");
+  assert.equal(s.commits.length, 0, "nothing is sung until the words are written");
+  assert.match(s.find(".sbc-own").textContent, /6 syllables; the tune's line has 5/);
+  const input = s.find("#sbc-own-words");
+  input.value = "Sing this song your way"; input.emit("input");
+  s.clickText("Use these words");
+  assert.equal(s.toasts.at(-1), "This line needs 6 syllables; it has 5.");
+  assert.equal(s.commits.length, 0);
+  input.value = "Sing it, this song, your way"; input.emit("input");
+  s.clickText("Use these words");
+  const { path, value } = s.commits.at(-1);
+  assert.equal(path, "line.verse:wire.0");
+  assert.equal(value.words, "Sing it, this song, your way");
+  assert.deepEqual(value.notes.slice(1, 3), [{ degree: 4, onset: 0, duration: 0.5 }, { degree: 4, onset: 0.5, duration: 0.5 }]);
+  assert.equal(value.notes.filter((n) => !n.slur).length, 6);
+
+  // Cancel puts the notes back
+  const again = score();
+  own(again.composition.sections[1].phrases[0]);
+  const c = setup(again);
+  c.find('[data-note="2"]').emit("click");
+  c.clickText("Merge");
+  assert.match(c.find(".sbc-own").textContent, /4 syllables; the tune's line has 5/);
+  assert.equal(c.phrase().notes.length, 4);
+  c.clickText("Cancel");
+  assert.equal(c.phrase().notes.length, 5);
+  assert.equal(c.commits.length, 0);
+
+  // a line of its own: a note moved goes out with its words, and the scope switch isn't offered
+  const mine = score();
+  Object.assign(own(mine.composition.sections[1].phrases[0]), { own: "verse:wire.0", place: "verse:0.0", appearances: 2 });
+  const m = setup(mine);
+  m.find('[data-note="2"]').emit("click");
+  m.find("#sbc-note-pitch").emit("change", { target: { value: "5" } });
+  assert.equal(m.commits.at(-1).path, "line.verse:wire.0");
+  assert.equal(m.commits.at(-1).value.words, "Sing this song your way");
+  assert.equal(m.commits.at(-1).value.notes[2].degree, 5);
+  assert(!m.root.querySelectorAll("button").some((b) => /Everywhere it's sung/.test(b.textContent)));
+});

@@ -198,7 +198,7 @@ class Lyrics:
     def tag(self) -> str | None:
         return next((s.id for s in self.sections if s.block == "tag"), None)
 
-    def lines_for(self, genome: Genome, form: Iterable[str]) -> list[tuple[str, ...] | None]:
+    def lines_for(self, genome: Genome, form: Iterable[str], free=frozenset()) -> list[tuple[str, ...] | None]:
         """The lines each section of the form sings, None where it sings no
         words, checked against the form they were drawn for and the tune."""
         form = _form(form)
@@ -206,7 +206,7 @@ class Lyrics:
             raise ValueError(f"these words were drawn for the form {' '.join(self.form)}, not {' '.join(form)}")
         drawn = iter(self.sections)
         out: list[tuple[str, ...] | None] = []
-        for name in form:
+        for i, name in enumerate(form):
             section = genome.section(name)
             if not section.lyrics:
                 out.append(None)
@@ -219,9 +219,9 @@ class Lyrics:
                 continue
             if len(sung.lines) != len(section.phrases):
                 raise ValueError(f"{name}: {len(sung.lines)} lines for {len(section.phrases)} phrases")
-            for line, pid in zip(sung.lines, section.phrases):
+            for j, (line, pid) in enumerate(zip(sung.lines, section.phrases)):
                 want, got = len(genome.phrases[pid].sung), len(syllables(line))
-                if want != got:
+                if want != got and (i, j) not in free:  # free: a line of its own's, sung on its own notes
                     raise ValueError(f"{name}: {line!r} has {got} syllables, phrase {pid} has {want} notes")
             out.append(sung.lines)
         if next(drawn, None) is not None:
