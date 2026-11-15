@@ -24,7 +24,8 @@ the plan before training and each change to the vocoder; their numbers are below
 - **The vocoder.** Our own, in numpy, in the manner of WORLD: minimum-phase pitch pulses plus a
   period of shaped noise each (below, "Vocoder").
 - **Everything ships.** The network runs in numpy too, so what ships is the weights
-  (songbird/synth/throat.npz, 3.6 MB) and code.
+  (songbird/synth/throat.npz, 3.1 MB: each array's float32 bytes in planes, throat.save, which
+  deflate packs better and reads back bit for bit) and code.
 - **Our source.**
   - An envelope learned from a singer already contains that singer's glottal source.
     Exciting it with our Liljencrants-Fant pulses as well would double the tilt. Fable measured
@@ -51,7 +52,7 @@ The shipped model was trained in three steps.
    together, as one singer (below).
 3. **Scylla's Band as a second teacher** (November). The throat retrained on the house corpus with
    152 minutes of Scylla's Band, another open model, singing our schedule (below). This is the
-   performance voice in songbird/synth/throat.npz: 886,372 parameters, 3.6 MB. It draws the ten
+   performance voice in songbird/synth/throat.npz: 886,372 parameters, 3.1 MB. It draws the ten
    house singers and the volunteers' singer at 0.3; Scylla's 13 singers trained it but are never
    drawn.
 

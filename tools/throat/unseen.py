@@ -125,8 +125,8 @@ def texture(model, d, runs, sc, emb):
 def roomy(path, model):
     """The model with the room's numbers after the singer's in the embedding it takes (the studio's row giving back
     the model as written), and the rooms' rows; or the model as it is, and None, if it was written without them."""
-    z = np.load(path)
-    if "room_film.0" not in z.files:
+    z = throat.arrays(path)
+    if "room_film.0" not in z:
         return model, None
     table = z["room_table"].astype(np.float64)
     w = dict(model.w)

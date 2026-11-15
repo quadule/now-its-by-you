@@ -505,11 +505,39 @@ class Model:
     gv: np.ndarray
 
 
+def arrays(path: str | Path) -> dict[str, np.ndarray]:
+    """A throat file's arrays as training wrote them: its config, normalisations and weights (float32).
+
+    The shipped file (save) keeps each float32 array as its bytes in four planes, every value's first byte, then
+    every value's second, and so on: the planes holding the sign and exponent repeat a great deal and deflate well,
+    the mantissas' hardly at all, so the file is 0.3 MB smaller and the values are the same bit for bit. Its
+    "planes" entry names the arrays kept so. A file without one (as training writes it) reads as it is."""
+    with np.load(path) as z:
+        planed = {str(k) for k in z["planes"]} if "planes" in z.files else set()
+        out = {}
+        for k in z.files:
+            if k == "planes":
+                continue
+            a = z[k]
+            if k in planed:  # (4, *shape) bytes -> (*shape,) little-endian float32
+                a = np.ascontiguousarray(np.moveaxis(a, 0, -1)).view("<f4").reshape(a.shape[1:])
+            out[k] = a
+    return out
+
+
+def save(path: str | Path, model: dict[str, np.ndarray]) -> None:
+    """A throat file as it ships (arrays reads it): each float32 array's bytes in planes, compressed."""
+    planed = sorted(k for k, a in model.items() if a.dtype == np.float32)
+    stored = {k: np.moveaxis(np.ascontiguousarray(a, dtype="<f4").reshape(*a.shape, 1).view(np.uint8), -1, 0)
+              if k in planed else a for k, a in model.items()}
+    np.savez_compressed(path, planes=np.array(planed), **stored)
+
+
 @lru_cache(maxsize=4)
 def load(path: str | None = None) -> Model:
     path = path or os.environ.get("SONGBIRD_THROAT") or str(MODEL)
-    z = np.load(path)
-    w = {k[2:]: z[k].astype(np.float64) for k in z.files if k.startswith("w.")}
+    z = arrays(path)
+    w = {k[2:]: z[k].astype(np.float64) for k in z if k.startswith("w.")}
     return Model(json.loads(str(z["config"])), w, z["sp_mean"].astype(np.float64), z["sp_std"].astype(np.float64),
                  z["ap_mean"].astype(np.float64), z["ap_std"].astype(np.float64), z["gv"].astype(np.float64))
 

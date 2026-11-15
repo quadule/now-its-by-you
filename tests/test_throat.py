@@ -218,6 +218,34 @@ def tiny_model(tmp_path, singers=("a", "b")) -> str:
     return str(path)
 
 
+def test_a_throat_saved_in_planes_reads_back_bit_for_bit_and_one_as_training_writes_it_reads_as_it_is(tmp_path):
+    import importlib.util
+    from pathlib import Path
+
+    plain = tiny_model(tmp_path)
+    T.save(tmp_path / "planes.npz", dict(np.load(plain)))
+    spec = importlib.util.spec_from_file_location(
+        "modelfile", Path(__file__).resolve().parents[1] / "tools" / "throat" / "modelfile.py")
+    modelfile = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(modelfile)  # the torch tools' reader, numpy alone, reads it as the program does
+    with np.load(plain) as z:
+        want = {k: z[k] for k in z.files}
+    for got in (T.arrays(plain), T.arrays(tmp_path / "planes.npz"), modelfile.arrays(tmp_path / "planes.npz")):
+        assert sorted(got) == sorted(want)
+        for k, a in want.items():
+            assert got[k].dtype == a.dtype and got[k].shape == a.shape and got[k].tobytes() == a.tobytes(), k
+
+
+@pytest.mark.skipif(not T.MODEL.exists(), reason="no trained throat shipped yet")
+def test_the_shipped_throat_keeps_its_weights_in_planes():
+    """Every float32 array of the shipped model is kept in planes (T.save): a model copied in from training as it is
+    (np.savez) sings the same, from a file 0.5 MB larger before compression and 0.2 MB larger in every packet."""
+    with np.load(T.MODEL) as z:
+        planed = {str(k) for k in z["planes"]} if "planes" in z.files else set()
+    floats = {k for k, a in T.arrays(T.MODEL).items() if a.dtype == np.float32}
+    assert floats and floats <= planed, "ship a throat as throat.save writes it: throat.save(MODEL, throat.arrays(new))"
+
+
 def test_the_network_gives_an_envelope_for_every_frame_and_a_mix_of_singers_between_them(tmp_path):
     model = T.load(tiny_model(tmp_path))
     t = T.timeline([("AA", 0.1, 0.4, True, 0.0, "vowel")], 100)

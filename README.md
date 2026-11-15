@@ -110,7 +110,7 @@ uv run songbird --help                                                       # e
 
 Every song in [songs/](songs/README.md) renders the same way, and [editions/](editions/README.md) has three
 arrangements of the song made by hand. The program and its voice are meant to fit in 8 MiB beside the audio;
-`songbird budget` reports their size (6.73 MiB), and packing warns past it.
+`songbird budget` reports their size (6.26 MiB), and packing warns past it.
 
 ## The studio, here and on the web
 

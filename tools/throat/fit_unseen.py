@@ -24,6 +24,8 @@ import numpy as np
 import torch
 import torch.nn.functional as F
 
+import modelfile  # tools/throat/modelfile.py: a model .npz as the program reads it
+
 KEYS = ["phone", "prev", "next", "prev2", "next2", "role", "pos", "dur", "stress", "level"]
 
 
@@ -31,14 +33,14 @@ class Net:
     """A throat .npz as tensors, with the room's FiLM weights after the singer's when it has them."""
 
     def __init__(self, path: Path, dev: str):
-        z = np.load(path)
+        z = modelfile.arrays(path)
         self.config = json.loads(str(z["config"]))
         t = lambda a: torch.tensor(np.asarray(a, dtype=np.float32), device=dev)  # noqa: E731
-        self.w = {k[2:]: t(z[k]) for k in z.files if k.startswith("w.")}
+        self.w = {k[2:]: t(z[k]) for k in z if k.startswith("w.")}
         self.sp_mean, self.sp_std, self.gv = t(z["sp_mean"]), t(z["sp_std"]), t(z["gv"])
         rows = z["w.singer.weight"]
         self.start = rows.mean(0)
-        if "room_film.0" in z.files:
+        if "room_film.0" in z:
             table = z["room_table"]
             for k in range(len(self.config["dilations"])):
                 r = t(z[f"room_film.{k}"])
