@@ -343,7 +343,8 @@
   function renderPage() {
     const v = state.view, box = $("page");
     if (!v || !box) return;
-    keepFocus(() => box.replaceChildren(...v.words.map(pageSection)));
+    const sheet = window.SongbirdAuthor?.sheet?.(v);  // the whole lyric at once
+    keepFocus(() => box.replaceChildren(...(sheet ? [sheet] : []), ...v.words.map(pageSection)));
   }
   // A section's words to choose from, as a list to read: each choice's first lines, the one sung marked. The ones
   // the song refuses here come after the rest, folded away, each with why.

@@ -402,6 +402,60 @@
     }
     return { [phrase.lyric_path]: text };
   }
+  // ------------------------------------------------------------------ the whole lyric at once (author.js's sheet)
+  // The sections a lyric sheet writes, in the song's order: each sung words once (a refrain's are the same every
+  // time it comes), with the lines that can be written.
+  function lyricTargets(composition) {
+    const seen = new Set(), out = [];
+    for (const s of composition?.sections || []) {
+      const phrases = (s.phrases || []).filter((p) => p.lyric_path);
+      const key = s.lyric_key || phrases[0]?.lyric_path?.split(".").slice(0, -1).join(".");
+      if (!s.sung || !phrases.length || seen.has(key)) continue;
+      seen.add(key);
+      out.push({ key, id: s.id, label: s.label, phrases });
+    }
+    return out;
+  }
+  function lyricSheet(targets) {
+    return targets.map((t) => [`[${t.label}]`, ...t.phrases.map((p) => p.lyric_text || "")].join("\n")).join("\n\n");
+  }
+  // A sheet's paragraphs: a blank line between sections; a line in brackets ([Verse 2]) names the one it starts.
+  function parseLyricSheet(text) {
+    const blocks = [];
+    let block = null;
+    String(text).split(/\r?\n/).forEach((raw, at) => {
+      const line = raw.trim();
+      if (!line) { block = null; return; }
+      if (/^\[[^\]]*\]$/.test(line)) { block = { label: line.slice(1, -1).trim(), lines: [] }; blocks.push(block); return; }
+      if (!block) { block = { label: null, lines: [] }; blocks.push(block); }
+      block.lines.push({ text: line, at });
+    });
+    return blocks.filter((b) => b.lines.length);
+  }
+  // Each paragraph onto the next section, line by line: a line changed is written, its notes fitted to it where its
+  // count of syllables differs from the tune's. Lines left out keep their words. Returns the one patch, what each
+  // line does, and what can't be (a paragraph or a line too many, words that don't fit).
+  function lyricSheetPatch(targets, blocks, count) {
+    const patch = {}, lines = [], errors = [];
+    if (blocks.length > targets.length) errors.push({ message: `This song has ${targets.length} sections of words; this has ${blocks.length} paragraphs.` });
+    blocks.slice(0, targets.length).forEach((block, b) => {
+      const t = targets[b];
+      if (block.lines.length > t.phrases.length) errors.push({ block: b, message: `${t.label} has ${t.phrases.length} lines; this paragraph has ${block.lines.length}.` });
+      block.lines.slice(0, t.phrases.length).forEach((line, i) => {
+        const p = t.phrases[i], n = count(line.text), entry = { block: b, line: i, at: line.at, label: t.label, text: line.text,
+          syllables: n, want: p.syllable_count, changed: line.text !== p.lyric_text, fitted: false, paths: [] };
+        lines.push(entry);
+        if (!entry.changed) return;
+        try {
+          const one = lyricPatch(p, line.text, n !== p.syllable_count);
+          entry.fitted = n !== p.syllable_count;
+          entry.paths = Object.keys(one);
+          Object.assign(patch, one);
+        } catch (error) { entry.error = error.message; errors.push({ block: b, line: i, message: `${t.label}, line ${i + 1}: ${error.message}` }); }
+      });
+    });
+    return { patch, lines, errors };
+  }
   function phrasePatch(source, target) {
     const a = source.bounds?.min_onset ?? -(source.pickup_beats || 0), b = target.bounds?.min_onset ?? -(target.pickup_beats || 0);
     const ratio = (target.duration_beats - b) / (source.duration_beats - a);
@@ -440,7 +494,7 @@
     moveOrder, movedIds, seamWords, seamToggle, seamOver, seamLength, seamLengths, scopeOptions, scopeStart, selectionKey, defaultHow, playTarget,
     neighbour, sectionAtBeat, position, sketchOffset, sketchFrom, inField, keyAction, phraseAt, semitone, spell, moveRows,
     withSyllables, shiftLimit, deleteNotes, clipOf, pasteAt, rollKey, saidCell, fitNotes, writtenNotes, lyricPatch,
-    phrasePatch, sectionPatch };
+    lyricTargets, lyricSheet, parseLyricSheet, lyricSheetPatch, phrasePatch, sectionPatch };
   if (typeof window !== "undefined") window.SongbirdModel = api;
   if (typeof module === "object" && module.exports) module.exports = api;
 })();

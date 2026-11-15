@@ -36,7 +36,7 @@ function setup() {
     status: () => all().find((x) => x.className === 'author-status').textContent,
     answer: (problems = []) => pending({ok: true, json: async () => ({problems})}),
     flush: () => new Promise((resolve) => setImmediate(resolve)),
-    change: () => revision++, get edits() { return edits; }, get requests() { return requests; },
+    change: () => revision++, get edits() { return edits; }, get requests() { return requests; }, win,
   };
 }
 
@@ -198,4 +198,40 @@ test('fitting new words stores their notes atomically, and later words preserve 
   s.render(v); s.type('We sing here'); s.save(); s.answer(); await s.flush();
   assert.equal(s.edits['line.verse:wire.0'].words, 'We sing here');
   assert.deepEqual(s.edits['line.verse:wire.0'].notes, entry.notes);
+});
+
+test('the whole lyric at once: each paragraph onto the next section, a changed count fitted, one checked patch, and why a line is refused beside it', async () => {
+  const s = setup(), calls = [];
+  const phrase = (key, i, text, count) => ({lyric_path: `lyrics.${key}.${i}`, own_path: `line.${key}.${i}`, lyric_text: text, syllable_count: count,
+    tune_syllable_count: count, duration_beats: 4, pickup_beats: 0, bounds: {min_onset: 0, max_end: 4, max_final_onset: 3.5, min_duration: 0.25},
+    notes: Array.from({length: count}, (_, k) => ({degree: k + 1, onset: k * 0.5, duration: 0.5}))});
+  const v = {composition: {sections: [
+    {id: 'verse:0', lyric_key: 'verse:0', label: 'Verse 1', sung: true, phrases: [phrase('verse:0', 0, 'I sing this song', 4), phrase('verse:0', 1, 'you sing it too', 4)]},
+    {id: 'refrain:0', lyric_key: 'refrain', label: 'Refrain 1', sung: true, phrases: [phrase('refrain', 0, 'now it is yours', 4)]},
+    {id: 'refrain:1', lyric_key: 'refrain', label: 'Refrain 2', sung: true, phrases: [phrase('refrain', 0, 'now it is yours', 4)]}]}};
+  let refuse = null;
+  s.win.StudioBridge.applyPatch = async (patch) => { calls.push(patch); if (refuse) throw Object.assign(new Error('no'), {problems: refuse}); return true; };
+  const box = s.win.SongbirdAuthor.sheet(v);
+  const find = (pred) => [box, ...box.querySelectorAll('*')].find(pred);
+  find((x) => x.textContent === 'Write lyrics').listeners.click();
+  const text = find((x) => x.tag === 'textarea');
+  assert.equal(text.value, '[Verse 1]\nI sing this song\nyou sing it too\n\n[Refrain 1]\nnow it is yours', 'a refrain once');
+  // a paragraph too many is refused before anything is checked
+  text.value = 'a b c d\n\ne f g h\n\ni j k l'; text.listeners.input();
+  find((x) => x.textContent === 'Use these words').listeners.click();
+  assert.equal(calls.length, 0);
+  assert.match(find((x) => x.className === 'author-status').textContent, /2 sections of words; this has 3/);
+  // the first line kept, the second longer (its notes fitted), the refrain's the same count
+  text.value = 'I sing this song\nyou sing it to me now\n\nnow it is ours'; text.listeners.input();
+  assert(find((x) => x.className === 'unit' && /notes fitted/.test(x.textContent)), 'said under the field');
+  refuse = [{path: 'lyrics.refrain.0', why: "the singer can't say “ours” yet"}];
+  await find((x) => x.textContent === 'Use these words').listeners.click();
+  assert.deepEqual(Object.keys(calls[0]).sort(), ['line.verse:0.1', 'lyrics.refrain.0'], 'one patch: the unchanged line left out');
+  assert.equal(calls[0]['line.verse:0.1'].notes.length, 6);
+  assert.equal(calls[0]['lyrics.refrain.0'], 'now it is ours');
+  assert(find((x) => x.className === 'problem' && /“ours”/.test(x.textContent)), 'the refusal beside its line');
+  refuse = null;
+  await find((x) => x.textContent === 'Use these words').listeners.click();
+  assert.equal(calls.length, 2);
+  assert.equal(find((x) => x.className === 'lyric-sheet-panel').hidden, true, 'used: the field closes');
 });

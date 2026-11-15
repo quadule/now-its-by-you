@@ -251,7 +251,7 @@ async function applyPatch(patch, label = "Edit song") {
   const view = await api("/api/song", { edits: next });
   const paths = new Set(Object.keys(patch));
   const problems = (view.problems || []).filter((p) => paths.has(p.path));
-  if (problems.length) throw new Error(problems.map((p) => p.why).join(" "));
+  if (problems.length) throw Object.assign(new Error(problems.map((p) => p.why).join(" ")), { problems });  // each with its path
   if (state.editRevision !== revision) throw new Error("The song changed. Paste again to use its current version.");
   return commitEdits(next, label);
 }

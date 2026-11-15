@@ -413,5 +413,106 @@
       focus = null;
     }
   }
-  window.SongbirdAuthor = {capture, decorate, line, whole, finish, dirty, discard, say: {useTable, choices, decide, bare, syllables}};
+  // The whole lyric at once, on the Page: every section's words in one field, a blank line between sections, in the
+  // song's order (model.js lyricSheetPatch). Each line changed goes in, its notes fitted to it where its count of
+  // syllables differs from the tune's, all as one checked edit and one undo step; a line the singer can't sing is
+  // said beside it. The nodes are kept, so typing survives a redraw.
+  const sheetState = {open: false, node: null, problems: new Map(), targets: []};
+  function sheet(view) {
+    const M = window.SongbirdModel;
+    if (!M?.lyricTargets) return null;
+    useTable(view.composition?.say);
+    const st = sheetState;
+    st.targets = M.lyricTargets(view.composition);
+    if (!st.targets.length) return null;
+    if (!st.node) {
+      const wrap = node("div", "lyric-sheet");
+      const toggle = button("Write lyrics", () => (st.open ? close() : open()));
+      toggle.id = "lyricSheetToggle";
+      toggle.setAttribute("aria-expanded", "false");
+      const panel = node("div", "lyric-sheet-panel");
+      panel.hidden = true;
+      const text = node("textarea", "author-input lyric-sheet-text");
+      text.id = "lyricSheetText";
+      text.rows = 16;
+      text.spellcheck = true;
+      text.setAttribute("aria-label", "The song's words");
+      text.title = STARS;
+      const hint = node("p", "hint", "A blank line between sections, in the song's order. A line in brackets names one: [Verse 2].");
+      const lines = node("div", "lyric-sheet-lines");
+      const status = node("p", "author-status");
+      status.setAttribute("role", "status");
+      const use = button("Use these words", () => useSheet());
+      use.className = "btn";
+      const actions = node("div", "author-actions");
+      actions.append(use, button("Cancel", () => close()));
+      panel.append(text, hint, lines, actions, status);
+      wrap.append(toggle, panel);
+      text.addEventListener("input", () => { st.problems.clear(); status.textContent = ""; preview(); });
+      Object.assign(st, {node: wrap, toggle, panel, text, lines, status, use});
+    }
+    if (st.open) preview();
+    return st.node;
+  }
+  function open() {
+    const st = sheetState;
+    st.open = true; st.problems.clear(); st.status.textContent = "";
+    st.text.value = window.SongbirdModel.lyricSheet(st.targets);
+    st.panel.hidden = false; st.toggle.setAttribute("aria-expanded", "true");
+    preview();
+    st.text.focus();
+  }
+  function close() {
+    const st = sheetState;
+    st.open = false; st.panel.hidden = true; st.toggle.setAttribute("aria-expanded", "false");
+    st.toggle.focus();
+  }
+  function sheetResult() {
+    const M = window.SongbirdModel, st = sheetState;
+    return M.lyricSheetPatch(st.targets, M.parseLyricSheet(st.text.value), syllables);
+  }
+  // what each line does, under the field: its count against its tune's, fitted where it differs, and why not
+  function preview() {
+    const st = sheetState, {lines, errors} = sheetResult(), groups = [];
+    for (const e of errors.filter((x) => x.line === undefined)) {
+      const p = node("p", "problem", e.message);
+      p.setAttribute("role", "alert");
+      groups.push(p);
+    }
+    let list = null;
+    lines.forEach((e) => {
+      if (!list || list.dataset.block !== String(e.block)) {
+        groups.push(node("h4", "", e.label));
+        list = node("ol", "lyric-sheet-list");
+        list.dataset.block = String(e.block);
+        groups.push(list);
+      }
+      const item = node("li", e.changed ? "is-dirty" : "");
+      item.append(node("span", "lyric-sheet-line", bare(e.text).replace(/\*/g, "")));
+      const tally = node("span", `author-count${e.syllables === e.want ? " is-valid" : ""}`, `${e.syllables} / ${e.want}`);
+      if (e.changed && e.fitted && !e.error) tally.append(node("span", "unit", " · notes fitted"));
+      item.append(tally);
+      const why = e.error || e.paths.map((path) => st.problems.get(path)).find(Boolean);
+      if (why) { const p = node("span", "problem", why); p.setAttribute("role", "alert"); item.append(p); }
+      list.append(item);
+    });
+    st.lines.replaceChildren(...groups);
+  }
+  async function useSheet() {
+    const st = sheetState, {patch, errors} = sheetResult();
+    if (errors.length) { st.status.textContent = errors[0].message; st.text.focus(); return; }
+    if (!Object.keys(patch).length) { st.status.textContent = "Already in your song."; return; }
+    st.use.disabled = true; st.status.textContent = "Checking…";
+    try {
+      await bridge().applyPatch(patch, "Write the lyrics");
+      st.status.textContent = "";
+      close();
+      bridge().toast?.("Your words are in the song. Undo takes them back.");
+    } catch (error) {
+      st.problems = new Map((error.problems || []).map((p) => [p.path, p.why]));
+      st.status.textContent = st.problems.size ? "Some lines can't be sung yet: each says why." : error.message;
+      preview();
+    } finally { st.use.disabled = false; }
+  }
+  window.SongbirdAuthor = {capture, decorate, line, whole, finish, dirty, discard, sheet, say: {useTable, choices, decide, bare, syllables}};
 })();

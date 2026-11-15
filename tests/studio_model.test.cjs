@@ -276,3 +276,28 @@ test("several notes at once: a move stops at the notes not chosen, a melisma mov
   assert.equal(M.rollKey({ key: "z", ctrlKey: true, target: {} }), null, "undo is the page's");
   assert.equal(M.rollKey({ key: "c", target: {} }), null);
 });
+
+test("a lyric sheet: paragraphs onto the song's sections of words in order, brackets naming them, lines too many refused", () => {
+  const p = (path, text, count = 3) => ({ lyric_path: path, own_path: path.replace("lyrics", "line"), lyric_text: text, syllable_count: count,
+    duration_beats: 4, pickup_beats: 0, bounds: { min_onset: 0, max_end: 4, max_final_onset: 3.5, min_duration: 0.25 },
+    notes: Array.from({ length: count }, (_, k) => ({ degree: k + 1, onset: k, duration: 1 })) });
+  const composition = { sections: [{ id: "intro:0", sung: false, phrases: [{}] },
+    { id: "verse:0", lyric_key: "verse:0", label: "Verse 1", sung: true, phrases: [p("lyrics.verse:0.0", "one two three"), p("lyrics.verse:0.1", "four five six")] },
+    { id: "refrain:0", lyric_key: "refrain", label: "Refrain", sung: true, phrases: [p("lyrics.refrain.0", "la la la")] },
+    { id: "refrain:1", lyric_key: "refrain", label: "Refrain 2", sung: true, phrases: [p("lyrics.refrain.0", "la la la")] }] };
+  const targets = M.lyricTargets(composition);
+  assert.deepEqual(targets.map((t) => t.label), ["Verse 1", "Refrain"]);
+  assert.equal(M.lyricSheet(targets), "[Verse 1]\none two three\nfour five six\n\n[Refrain]\nla la la");
+  const blocks = M.parseLyricSheet("[Verse 1]\n one two three \n\n\n  \nseven eight nine ten\n[Refrain]\nla la la");
+  assert.deepEqual(blocks.map((b) => [b.label, b.lines.map((l) => l.text)]), [["Verse 1", ["one two three"]], [null, ["seven eight nine ten"]], ["Refrain", ["la la la"]]]);
+  const count = (t) => t.trim().split(/[\s-]+/).length;
+  const two = M.lyricSheetPatch(targets, M.parseLyricSheet("one two three\nfour five six seven\n\nla la la"), count);
+  assert.deepEqual(two.errors, []);
+  assert.deepEqual(Object.keys(two.patch), ["line.verse:0.1"], "unchanged lines are no edit");
+  assert.equal(two.patch["line.verse:0.1"].notes.length, 4);
+  assert.equal(two.lines[1].fitted, true);
+  const many = M.lyricSheetPatch(targets, M.parseLyricSheet("a b c\nd e f\ng h i"), count);
+  assert.match(many.errors[0].message, /Verse 1 has 2 lines; this paragraph has 3/);
+  const long = M.lyricSheetPatch(targets, M.parseLyricSheet(Array(20).fill("la").join(" ")), count);
+  assert.match(long.errors[0].message, /Verse 1, line 1: These words need more room/);
+});
