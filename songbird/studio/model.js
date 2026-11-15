@@ -337,7 +337,7 @@
         ...(n.slur && k && indices[k - 1] === indices[k] - 1 ? { slur: true } : !n.slur && n.alter ? { alter: n.alter } : {}) })) };
   }
   // Copied notes put in at a time (beats of the line), each in place of any note it overlaps. A slurred note
-  // that no longer follows the one it went on from sings a syllable of its own. Returns the notes, and where the
+  // without a note ending where it starts sings a syllable of its own. Returns the notes, and where the
   // pasted ones are; refuses (throws) notes that don't fit the line.
   function pasteAt(notes, clip, at, b) {
     const shift = at - clip.start, most = b.melisma || 4;
