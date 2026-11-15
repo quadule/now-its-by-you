@@ -136,7 +136,11 @@ def choose_params(genome: Genome, parent: Params | None = None, voice: Voice | N
     if parent is not None:
         from .composition import handed_down
 
+        exact = parent.composition.get("exact")
         parent = handed_down(genome, parent)
+        if (exact is not None and overrides is None and voice is None and drift is None and style is None
+                and not arrange and form is None):  # the version itself, as it was: its exact data with it
+            parent = replace(parent, composition={**parent.composition, "exact": exact})
     if overrides is not None:
         from .edits import Overrides
 

@@ -70,11 +70,12 @@ def test_no_stage_fields_is_the_programs_own_score():
 def test_a_child_keeps_the_grid_and_never_the_exact_data():
     exact = {"levels": {"harp~": [["verse:0", 0]]}, "twins": {"harp~": ["harp", "arp"]}}
     parent = with_composition(seed(), arrange=GRID, exact=exact)
-    for child in (choose_params(G, parent), choose_params(G, parent, ADA, DAY),
+    for child in (choose_params(G, parent, ADA, DAY),
                   variation.choose(G, parent, ADA, DAY), choose_params(G, parent, style="synthfolk")):
         assert "exact" not in child.composition
         assert T.staged(child) == T.staged(parent)
-    # the edition itself, replayed from its record, keeps it
+    # the edition itself, replayed from its record or opened as it was published (no machine), keeps it
+    assert choose_params(G, parent).composition["exact"] == exact
     assert Params.from_dict(parent.to_dict()).composition["exact"] == exact
 
 
