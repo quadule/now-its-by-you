@@ -2,7 +2,7 @@
 
 <img src="web/sing/page/cover.jpg" width="240" align="right" alt="The cover: a seed packet printed The Volunteers, Now It's by You, with a daisy growing from a cracked stone, propped on a curb beside a lawn.">
 
-By The Volunteers. A finalist in the [2026 AI Song Contest](https://www.aisongcontest.com/the-2026-finalists).
+By The Volunteers. A finalist in the [2026 AI Song Contest](https://www.aisongcontest.com/the-2026-finalists): [vote by November 21](https://www.aisongcontest.com/the-2026-finalists).
 
 **A folk song passed between people and computers** exploring music's ability to take on a life of its own, in verse
 and by embedding the software that sings it. Addressing the blurred authorship of AI music and code, its refrain asks

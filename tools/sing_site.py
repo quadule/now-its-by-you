@@ -536,7 +536,7 @@ def earlier(song: str, title: str, now: dict[str, tuple[str, list]]) -> dict[str
 SEED_FILE = "now-its-by-you.flac"  # the seed page's file name (web/sing/src/worker.js SEED_FILE serves exactly this)
 EDITIONS = WEB / "editions.json"  # the song's editions: the seed page offers the newest, /history every one
 SOURCE = "https://github.com/quadule/now-its-by-you"  # the source code, linked from the pages once SOURCE_PUBLIC
-SOURCE_PUBLIC = False  # True once the repository is public: the home page links it, the history each edition's commit
+SOURCE_PUBLIC = True  # the repository is public: the home page links it, the history each edition's commit
 # files made from this day on find their libraries on an Intel Mac by themselves (docs/RUNNING-THE-SONG.md, "Intel
 # Macs"); the home page says to use the studio there only while it offers an edition made before it
 INTEL_SINCE = dt.date(2026, 10, 7)
