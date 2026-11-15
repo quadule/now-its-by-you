@@ -355,7 +355,7 @@ def test_the_home_page_offers_the_newest_edition_and_the_history_every_one(tmp_p
     for name in ("seed.html", "history.html"):
         shutil.copyfile(web / "page" / name, public / name)
     W.seed_page(public, public=True)
-    assert '<a href="https://github.com/quadule/songbird/tree/10dc1e0bba140e5dfed9217f4ddcc90b4d531004">' in (
+    assert '<a href="https://github.com/quadule/now-its-by-you/tree/10dc1e0bba140e5dfed9217f4ddcc90b4d531004">' in (
         public / "history.html").read_text()
 
     kept.unlink()  # the newest here is the current one
@@ -452,27 +452,22 @@ def test_the_preview_mp3_says_what_it_is(tmp_path, monkeypatch):
         {k: v for k, v in tags.items() if k != "comment"})
 
 
-def test_the_home_pages_about_is_the_artists_statement_and_credits_the_singers_as_they_asked(tmp_path, monkeypatch):
-    """The home page's top text doesn't repeat the title beside the masthead, and the page about the song (/about)
-    doesn't repeat the home page: it has its own opening, not the artist's statement (README.md keeps that). It
-    credits the singers as CREDITS.md does, as they asked, and no one else, and the home page sends people there;
-    the source code is linked from both only once it's switched on."""
+def test_the_home_pages_about_has_its_own_opening_and_credits_the_singers_as_they_asked(tmp_path, monkeypatch):
+    """The home page's top text doesn't repeat the title beside the masthead, and README.md opens with the same
+    words; the page about the song (/about) doesn't repeat them: it has its own opening. It credits the singers as
+    CREDITS.md does, as they asked, and no one else, and the home page sends people there; the source code is
+    linked from both only once it's switched on."""
     import html
 
-    statement = (
-        "<cite>Now It's by You</cite> is a folk song passed between people and computers that explores music's ability "
-        "to take on a life of its own, in verse and by embedding the software that sang it. Run the program and you get "
-        "a new version of the song, shaped by your computer and the season. Sing into it and it learns a little of your "
-        "timing and inflection (your recording is deleted right after, and your voice is never cloned). The piece "
-        "confronts the blurred authorship of AI music through the lens of folk music and oral tradition: it wonders who "
-        "made it, and invites you to take part.")
     page = (W.WEB / "page" / "about.html").read_text()
     assert "<blockquote>" not in page and "passed between people and computers" not in page
-    readme = " ".join(line.lstrip("> ") for line in (ROOT / "README.md").read_text().splitlines() if line.startswith(">"))
-    assert statement.replace("<cite>", "*").replace("</cite>", "*") in " ".join(readme.split())
     home = (W.WEB / "page" / "seed.html").read_text()  # the home page: the title once, in the masthead, not the lead
     lead = re.search(r'<p class="lead">(.*?)</p>', home, re.DOTALL)[1]
     assert lead.startswith("<strong>A folk song passed between people and computers</strong>") and "Now It" not in lead
+    pitch = re.search(r'<p class="lead">.*?</p>\s*<p>(.*?)<a class="more"', home, re.DOTALL)[1]
+    words = lambda text: " ".join(re.sub(r"<[^>]+>|\*\*|(?<!\w)_|_(?!\w)", "", html.unescape(text)).split())
+    readme = words((ROOT / "README.md").read_text())
+    assert words(lead) in readme and words(pitch) in readme
 
     credits = tmp_path / "CREDITS.md"
     credits.write_text("# Credits\n\n## Singers\n\nSome words.\n\nCredited, as they asked:\n\n- Ann\n- B & C\n- dee\n\n"
@@ -502,7 +497,7 @@ def test_the_home_pages_about_is_the_artists_statement_and_credits_the_singers_a
         assert f"<dd>{said}</dd>" in about and "{{" not in home + about
         assert '<a href="/about">' in home and said not in home
         for page in (home, about):
-            assert ('<a href="https://github.com/quadule/songbird">Source code</a>' in page) is public
+            assert ('<a href="https://github.com/quadule/now-its-by-you">Source code</a>' in page) is public
 
 
 def test_pages_alone_are_built_over_the_site_as_it_was_and_never_write_through_its_links(tmp_path, monkeypatch):

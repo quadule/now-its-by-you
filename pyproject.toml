@@ -17,7 +17,7 @@ dependencies = [
 [project.urls]
 Homepage = "https://now.itsby.you"
 Studio = "https://studio.itsby.you"
-Source = "https://github.com/quadule/songbird"
+Source = "https://github.com/quadule/now-its-by-you"
 
 [project.scripts]
 songbird = "songbird.cli:main"

@@ -1,16 +1,19 @@
 # Now It's by You
 
-A folk song whose audio file is also the program that sings it. By The Volunteers; the program is called Songbird.
+<img src="web/sing/page/cover.jpg" width="240" align="right" alt="The cover: a seed packet printed The Volunteers, Now It's by You, with a daisy growing from a cracked stone, propped on a curb beside a lawn.">
 
-> *Now It's by You* is a folk song passed between people and computers that explores music's ability to take on a
-> life of its own, in verse and by embedding the software that sang it.
->
-> Run the program and you get a new version of the song, shaped by your computer and the season. Sing into it and it
-> learns a little of your timing and inflection (your recording is deleted right after, and your voice is never
-> cloned). The piece confronts the blurred authorship of AI music through the lens of folk music and oral
-> tradition: it wonders who made it, and invites you to take part.
->
-> — Milo Winningham
+By The Volunteers. A finalist in the [2026 AI Song Contest](https://www.aisongcontest.com/the-2026-finalists).
+
+**A folk song passed between people and computers** exploring music's ability to take on a life of its own, in verse
+and by embedding the software that sings it. Addressing the blurred authorship of AI music and code, its refrain asks
+the central question outright: _“Who made this song? Nobody knows.”_
+
+Every copy is both an audio file and the same program that synthesized the song's instruments and vocals. Run it to
+get a new version, shaped by your computer and the season. Or, open the studio mode and change the words, melody,
+style, and mix. Sing along yourself, and a bit of your timing and inflection can influence the voice of future
+generations of the song.
+
+The program that sings it is called Songbird.
 
 ## What it is
 
@@ -18,9 +21,7 @@ A version is one FLAC file. A music player reads it from the front and plays it;
 and finds the program that sang it, the song's skeleton, the version's record and its words. Python runs it:
 
 ```
-python3 now-its-by-you.flac          what this is, and what you can do
-python3 now-its-by-you.flac new      sing a new version here, today
-python3 now-its-by-you.flac studio   change it, and make your own version
+python3 now-its-by-you.flac
 ```
 
 It needs Python 3.11 or newer, or uv ([docs/RUNNING-THE-SONG.md](docs/RUNNING-THE-SONG.md)). The first run fetches
@@ -48,8 +49,8 @@ samples again on the same kind of computer. The rest of this README says how to 
 
 ## Listen, make your own, read the code
 
-- **Listen:** https://now.itsby.you plays the current version, to listen to or take; the first, from
-  September 28, 2026, is kept there too.
+- **Listen:** https://now.itsby.you plays the first version, from September 28, 2026, to listen to or download.
+  [History](https://now.itsby.you/history) lists every version released there.
 - **Read about it:** https://now.itsby.you/about says why it is a folk song, how it was made and who is in it.
 - **Make your own:** https://studio.itsby.you, with nothing to install: the whole studio runs in your browser, on
   your device. Or `python3 now-its-by-you.flac studio` on your own computer.
@@ -59,16 +60,17 @@ samples again on the same kind of computer. The rest of this README says how to 
 
 ## How it was made
 
-The program and the song were written by the artist with commercial AI models as collaborators, in conversation.
+The music you hear is made by a small computer program, and every version it sings is a little different. The
+program and its song were written with commercial generative AI models as collaborators, in conversation.
 Claude (Anthropic's Opus 5.5 and Fable 5.1, through Claude Code) wrote most of the code and drafted most of the
 documents; each commit it helped write says so in a Co-Authored-By line. Gemini reviewed the lyrics, contributed
 verses and a couplet on a branch and mocked up the cover; Codex contributed a branch (performances travelling inside
 the file). The voice was taught, not recorded: SoulX-Singer, an open singing model, sang the project's own scores in
 timbres the program itself proposed, a small model learned from that, and it was then fine-tuned once on the eight
 volunteers' takes together, as one singer. For the performance version (November 2026) it was taught again, with
-Scylla's Band, another open model, as a second teacher ([docs/THROAT.md](docs/THROAT.md)). Synthetic voices from ElevenLabs were used only as a benchmark; nothing
-trained on them ships. Whisper and the Montreal Forced Aligner scored intelligibility and aligned syllables during
-development; none of these tools is in the file. What ships runs offline on an ordinary computer.
+Scylla's Band, another open model, as a second teacher ([docs/THROAT.md](docs/THROAT.md)). Whisper and the Montreal
+Forced Aligner scored intelligibility and aligned syllables during development; none of these tools is in the file.
+What ships runs offline on an ordinary computer.
 
 ## Credits
 
@@ -85,7 +87,7 @@ the program, and under which licenses.
 
 ## Contact
 
-Questions, or something to report (a shared version included): milo@winningham.net.
+milo@winningham.net
 
 ---
 
@@ -107,7 +109,7 @@ uv run songbird --help                                                       # e
 
 Every song in [songs/](songs/README.md) renders the same way, and [editions/](editions/README.md) has three
 arrangements of the song made by hand. The program and its voice are meant to fit in 8 MiB beside the audio;
-`songbird budget` reports their size (6.63 MiB on October 7, 2026), and packing warns past it.
+`songbird budget` reports their size (6.73 MiB), and packing warns past it.
 
 ## The studio, here and on the web
 
