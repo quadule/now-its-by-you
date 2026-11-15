@@ -6,9 +6,10 @@ Writes a plan: for each item (a whole song from songs/, a verse from H's bank, a
 a bridge), which synthetic singer sings it, in which key and at what tempo, as SoulX-Singer
 metadata segments. tools/throat/soulx_batch.py renders the plan in SoulX-Singer's own venv.
 
-The singers are Eleven Music's synthetic voices (renders/reference/music/eleven-*/, a cappella
-takes of H), used as ten-second timbre prompts: nobody real, and none of it ever ships. What ships
-is what our own small model learns from the renders about how sung English sounds.
+The singers are the house singers: our own formant singer, sung with ten different VoiceParams, gives
+SoulX-Singer a ten-second timbre prompt each, and SoulX sings our scores naturally in that timbre.
+Nobody real is in it, and none of it ships. What ships is what our own small model learns from the
+renders about how sung English sounds.
 """
 
 from __future__ import annotations
@@ -28,25 +29,15 @@ from soulx import ROOT, segment, segments  # noqa: E402
 from songbird import bank as B, genome as G  # noqa: E402
 from songbird.realize import choose_params, realize  # noqa: E402
 
-MUSIC = ROOT / "renders/reference/music"
 GUIDE = ROOT / "renders/guide/h-now-its-by-you.guide.score.json"
 H = ROOT / "songs/h-now-its-by-you.json"
 THROAT = ROOT / "renders/throat"
 
 # Every singer the corpus can use, with where its ten-second timbre prompt comes from, so a whole
 # source can be left out and the throat retrained without it (dataset.py --without SOURCE):
-#   eleven-music  a clip of an Eleven Music a cappella take of H (a benchmark only: ElevenLabs' terms
-#                 likely don't allow training on its output, so these go before anything ships)
 #   formant       our own formant singer, sung with the given VoiceParams: a timbre made by this program
 # keys: semitones from the written tune the singer sings in (low voices an octave down).
 SINGERS = {
-    "bright": dict(source="eleven-music", take="eleven-clear-bright-female", keys=(-3, 0, 3)),
-    "husky": dict(source="eleven-music", take="eleven-husky-mezzo-female", keys=(-4, 0, 2)),
-    "alto": dict(source="eleven-music", take="eleven-low-warm-alto", keys=(-5, -2, 0)),
-    "breathy": dict(source="eleven-music", take="eleven-soft-breathy-young", keys=(-2, 0, 4)),
-    "tenor": dict(source="eleven-music", take="eleven-tender-tenor-male", keys=(-7, -4, 0)),
-    "baritone": dict(source="eleven-music", take="eleven-warm-baritone-male", keys=(-15, -12, -9)),
-    "gravelly": dict(source="eleven-music", take="eleven-gravelly-older-male", keys=(-14, -12, -8)),
     # house singers: our formant singer as the timbre, SoulX's natural singing as the delivery
     "house-alto": dict(source="formant", voice=dict(), shift=0, keys=(-3, 0, 2)),
     "house-bright": dict(source="formant", voice=dict(tract=1.2, rd=0.6, tilt=0.3), shift=0, keys=(-1, 0, 3)),
@@ -68,35 +59,26 @@ def voice_notes(score) -> list[dict]:
 
 
 def prompt(name: str) -> dict:
-    """A singer's ten-second prompt: the clip (from their first take of H, or sung here by our formant
-    singer) and its metadata from the guide score."""
+    """A singer's ten-second prompt: the clip (sung here by our formant singer) and its metadata from the
+    guide score."""
     spec = SINGERS[name]
     score = json.loads(GUIDE.read_text())
     out = THROAT / "prompts" / f"{name}.wav"
     out.parent.mkdir(parents=True, exist_ok=True)
-    if spec["source"] == "eleven-music":
-        take = MUSIC / spec["take"] / "h-now-its-by-you-take1.wav"
-        sidecar = json.loads(take.with_suffix(".json").read_text())
-        window = next(r for r in sidecar["requests"]
-                      if r["composition_plan"]["chunks"][0]["conditioning_ref"]["range"]["start_ms"] <= PROMPT_AT * 1000
-                      < r["composition_plan"]["chunks"][0]["conditioning_ref"]["range"]["end_ms"])
-        key = window["key"]
-        y, sr = sf.read(str(take), dtype="float32")
-        y = y if y.ndim == 1 else y.mean(axis=1)
-    else:  # our formant singer sings the guide's own notes, in the singer's register
-        from dataclasses import fields as dfields
+    # our formant singer sings the guide's own notes, in the singer's register
+    from dataclasses import fields as dfields
 
-        from songbird.score import Note
-        from songbird.synth.voice import VoiceParams, sing as formant_sing
+    from songbird.score import Note
+    from songbird.synth.voice import VoiceParams, sing as formant_sing
 
-        key = spec["shift"]
-        known = {f.name for f in dfields(Note)}
-        notes = [Note(**{k: v for k, v in n.items() if k in known and k != "gesture"})
-                 for n in score["notes"] if n["part"] == "voice"]
-        sr = 44100
-        y = formant_sing(notes, sr, replace(VoiceParams(engine="formant"), shift=key, **spec["voice"]), seed=1,
-                         lexicon=G.load(H).lexicon).astype(np.float32)
-        y = 0.5 * y / max(float(np.max(np.abs(y))), 1e-9)
+    key = spec["shift"]
+    known = {f.name for f in dfields(Note)}
+    notes = [Note(**{k: v for k, v in n.items() if k in known and k != "gesture"})
+             for n in score["notes"] if n["part"] == "voice"]
+    sr = 44100
+    y = formant_sing(notes, sr, replace(VoiceParams(engine="formant"), shift=key, **spec["voice"]), seed=1,
+                     lexicon=G.load(H).lexicon).astype(np.float32)
+    y = 0.5 * y / max(float(np.max(np.abs(y))), 1e-9)
     clip = y[int(PROMPT_AT * sr): int((PROMPT_AT + PROMPT_LEN) * sr)]
     sf.write(str(out), clip, sr, subtype="PCM_16")
     notes = [dict(n, start=n["start"] - PROMPT_AT) for n in score["notes"]

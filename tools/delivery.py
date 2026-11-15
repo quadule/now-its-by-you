@@ -4,9 +4,8 @@
     uv run python tools/delivery.py table renders/delivery/teacher.json renders/delivery/formant.json ...
 
 The teacher is SoulX-Singer singing our own scores (renders/throat/corpus/<singer>/<segment>.wav, with
-the notes it was asked to sing beside it in <segment>.json). Only the house singers (source "formant":
-SoulX prompted with our own formant singer) are measured by default; the singers prompted with Eleven
-Music voices are a comparison at most (--source eleven-music), never something to fit.
+the notes it was asked to sing beside it in <segment>.json). The house singers (source "formant":
+SoulX prompted with our own formant singer) are measured by default; --source picks others.
 
 Ours is the same notes sung by our singer (the formant singer, or the learned throat with
 SONGBIRD_THROAT set). Both are analysed the same way, every 5 ms: f0 (WORLD's Harvest, searched within

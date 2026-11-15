@@ -161,7 +161,7 @@ def main() -> None:
     ap.add_argument("root", type=Path, nargs="?", default=ROOT / "renders/throat")
     ap.add_argument("--out", type=Path, default=None)
     ap.add_argument("--without", nargs="*", default=[], metavar="SOURCE",
-                    help="leave out every singer whose timbre came from these sources (e.g. eleven-music)")
+                    help="leave out every singer whose timbre came from these sources (e.g. scyllasband)")
     args = ap.parse_args()
     quality = json.loads((args.root / "quality.json").read_text())
     kept = sorted(k for k, v in quality.items() if v["keep"])
