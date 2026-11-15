@@ -94,6 +94,6 @@ its entry first in the list (newest first: tools/released_record.py and the stud
 newest), make the studio's record and guide of it (`tools/released_record.py FILE`, `tools/released_guide.py FILE`),
 build and deploy. The home page moves to it and the history keeps every one before it.
 
-The site offers one edition, the first version. The stage mix for the awards performance (tools/performance/,
-renders/performance/now-its-by-you-arc-morph.flac) is audio alone, with no packet, so it isn't an edition; it can be
-one only once a file of it carries the program.
+The site offers two editions. The newest, "Awards performance draft" (November 14, 2026), is the stage mix for the
+awards performance: performance/record-arc-morph.json rendered with `--pack` (the program and its record in the
+file), kept as renders/release/now-its-by-you-awards-draft.flac. The first version is in the history.

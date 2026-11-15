@@ -2,6 +2,26 @@
   "about": "The song's editions, read by tools/sing_site.py (docs/HOME-PAGE.md, 'Editions'). The home page (now.itsby.you) offers the newest; /history offers every one, newest first. An edition is named by its audio id (the SHA-256 of its samples, in its record) and its bytes never change once released: the build checks file.sha256 and file.bytes. To add one, add it first in the list (newest first: the studio's build reads the first as the newest), with its released file kept (file.path) or its render (render.path, given the cover as it's served). One marked \"held\": true is left off the home page and the history (the studio's build still reads it) until it is released: then remove the mark.",
   "editions": [
     {
+      "title": "Awards performance draft",
+      "date": "2026-11-14",
+      "note": "The song in B major for the AI Song Contest 2026 awards in Bangkok, its band and its voice moving from machine to human together.",
+      "audio": "a3615d5eed57c0d9a57317cbc4fc96c562157e8522f6c3182fa7c510f15c7f53",
+      "file": {
+        "path": "renders/release/now-its-by-you-awards-draft.flac",
+        "sha256": "37c887ada920d65576d2da63a0b962d351f86a685323eaba8969035e21ae47fc",
+        "bytes": 17076945
+      },
+      "render": {},
+      "program": "479320b30bacbebf83199c0c304c30c05be21ae33393636cd99cbf201ddbbfea",
+      "python": "3.12",
+      "source": {
+        "commit": "5ce9c94"
+      },
+      "command": "uv run python -m songbird render performance/genome.json --replay performance/record-arc-morph.json --pack --out renders/release/now-its-by-you-awards-draft.flac",
+      "credit": "79 takes by eight people",
+      "archives": []
+    },
+    {
       "title": "The first version",
       "date": "2026-09-28",
       "note": "The song as it began, shaped by the people who sang along to it online.",

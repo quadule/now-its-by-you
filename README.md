@@ -49,7 +49,8 @@ samples again on the same kind of computer. The rest of this README says how to 
 
 ## Listen, make your own, read the code
 
-- **Listen:** https://now.itsby.you plays the first version, from September 28, 2026, to listen to or download.
+- **Listen:** https://now.itsby.you plays the newest edition, the awards performance draft from November 14, 2026, to
+  listen to or download; its History has the first version, from September 28, 2026.
   [History](https://now.itsby.you/history) lists every version released there.
 - **Read about it:** https://now.itsby.you/about says why it is a folk song, how it was made and who is in it.
 - **Make your own:** https://studio.itsby.you, with nothing to install: the whole studio runs in your browser, on

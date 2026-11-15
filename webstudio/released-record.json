@@ -1,12 +1,12 @@
 {
-  "id": "07ac74fbd4eb24be53a8f001c71b32ff6db3b6599de4656110384848c01e2ac9",
+  "id": "a3615d5eed57c0d9a57317cbc4fc96c562157e8522f6c3182fa7c510f15c7f53",
   "title": "Now It's by You",
   "generation": 0,
   "parent_id": null,
   "ancestry": [],
   "rendered_at": null,
   "params": {
-    "tonic": 62,
+    "tonic": 59,
     "mode": "ionian",
     "tempo": 96.0,
     "form": [
@@ -47,12 +47,69 @@
       "body": 1.0,
       "maker": 0
     },
-    "singer": {},
+    "singer": {
+      "shift": 0,
+      "tract": 1.12,
+      "rd": 0.9,
+      "tilt": 0.7,
+      "breath": 0.05,
+      "vibrato_rate": 5.6,
+      "vibrato_depth": 22.0,
+      "vibrato_delay": 0.25,
+      "glide": 0.11,
+      "glide_spread": 0.35,
+      "overshoot": 0.025,
+      "scoop": 0.35,
+      "jitter": 0.4,
+      "wander": 9.0,
+      "shimmer": 2.5,
+      "articulation": 1.0,
+      "cluster": 0.7,
+      "across": 1.0,
+      "glides": 1.0,
+      "liquids": 1.0,
+      "release": 0.05,
+      "dynamics": 15.0,
+      "lean": 1.0,
+      "light": 1.0,
+      "ease": 0.75,
+      "let_go": 1.0,
+      "climb": 0.5,
+      "taper": -4.0,
+      "vibrato_from": 0.7,
+      "breathe": 0.12,
+      "inhale": -36.0,
+      "accent": 8.0,
+      "tremolo": 0.4,
+      "waver": 2.2,
+      "spread": 0.7,
+      "focus": 1.0,
+      "reduce": 0.0,
+      "mouth": 1.0,
+      "air": 0.4,
+      "crisp": 0.6,
+      "engine": "learned",
+      "timbre": ""
+    },
     "mix": {
-      "forward": 7.5,
+      "rt60": 1.1,
+      "tone": [
+        1.0,
+        1.0,
+        1.0,
+        0.9,
+        0.7
+      ],
+      "predelay": 0.012,
       "space": 0.8,
+      "intimacy": 0.65,
       "width": 1.25,
-      "intimacy": 0.65
+      "forward": 7.5,
+      "duck": 1.0,
+      "tilt": 0.0,
+      "wear": 0.0,
+      "balance": {},
+      "plate": 1.0
     },
     "leanings": {},
     "lay": 0.0,
@@ -78,6 +135,566 @@
       "voices": 0,
       "coda": "",
       "motif": "bridge"
+    },
+    "composition": {
+      "arrange": {
+        "verse:0": {
+          "human": [
+            0.0,
+            0.0,
+            0.0,
+            0.2
+          ],
+          "players": {
+            "whistle": {
+              "synth": "until:1"
+            },
+            "harp": {
+              "synth": "until:3"
+            },
+            "bass": {
+              "synth": "all"
+            },
+            "guitar": {
+              "synth": "all"
+            },
+            "drum": {
+              "synth": "all"
+            }
+          }
+        },
+        "refrain:0": {
+          "human": [
+            0.3,
+            0.4,
+            0.5,
+            0.5
+          ],
+          "players": {
+            "bass": {
+              "synth": "until:1"
+            },
+            "guitar": {
+              "synth": "until:2"
+            },
+            "drum": {
+              "synth": "until:3"
+            }
+          }
+        },
+        "verse:1": {
+          "human": 0.5,
+          "players": {
+            "bass": {
+              "synth": "under"
+            },
+            "guitar": {
+              "synth": "under"
+            }
+          }
+        },
+        "refrain:1": {
+          "human": 0.6,
+          "players": {
+            "bass": {
+              "synth": "under"
+            },
+            "guitar": {
+              "synth": "under"
+            },
+            "fiddle": {
+              "synth": "under"
+            }
+          }
+        },
+        "bridge:0": {
+          "human": 0.7
+        },
+        "refrain:2": {
+          "human": 0.75,
+          "players": {
+            "bass": {
+              "synth": "under"
+            },
+            "guitar": {
+              "synth": "under"
+            },
+            "drum": {
+              "synth": "under"
+            },
+            "fiddle": {
+              "synth": "under"
+            }
+          }
+        },
+        "tag:0": {
+          "human": 0.75,
+          "players": {
+            "guitar": {
+              "synth": "under"
+            }
+          }
+        },
+        "intro:0": {
+          "players": {
+            "whistle": {
+              "synth": "all"
+            },
+            "harp": {
+              "synth": "all"
+            },
+            "bass": {
+              "synth": "all"
+            },
+            "guitar": {
+              "synth": "all"
+            },
+            "drum": {
+              "synth": "all"
+            }
+          }
+        },
+        "turn:0": {
+          "players": {
+            "bass": {
+              "synth": "under"
+            },
+            "guitar": {
+              "synth": "under"
+            }
+          }
+        },
+        "turn:1": {
+          "players": {
+            "bass": {
+              "synth": "under"
+            },
+            "guitar": {
+              "synth": "under"
+            },
+            "fiddle": {
+              "synth": "under"
+            }
+          }
+        }
+      },
+      "exact": {
+        "twins": {
+          "whistle~": [
+            "whistle",
+            "synthlead"
+          ],
+          "harp~": [
+            "harp",
+            "arp"
+          ],
+          "bass~": [
+            "bass",
+            "synthbass"
+          ],
+          "guitar~": [
+            "guitar",
+            "arp"
+          ],
+          "drum~": [
+            "drum",
+            "drummachine"
+          ],
+          "fiddle~": [
+            "fiddle",
+            "synthlead"
+          ],
+          "harp#": [
+            "harp",
+            "chip"
+          ],
+          "drummachine#": [
+            "drummachine",
+            "chip-drums"
+          ]
+        },
+        "layers": [
+          {
+            "style": "synthfolk",
+            "parts": [
+              "arp",
+              "synthpad",
+              "drummachine",
+              "synthbass"
+            ],
+            "copy": [
+              {
+                "part": "synthpad",
+                "to": "verse:0",
+                "from": "verse:1"
+              },
+              {
+                "part": "arp",
+                "to": "verse:0",
+                "from": "verse:1"
+              },
+              {
+                "part": "drummachine",
+                "to": "verse:0",
+                "from": "verse:1"
+              },
+              {
+                "part": "synthbass",
+                "to": "verse:0",
+                "from": "verse:1"
+              }
+            ]
+          }
+        ],
+        "levels": {
+          "whistle~": [
+            [
+              "verse:0",
+              0
+            ],
+            [
+              "verse:0.1",
+              null
+            ]
+          ],
+          "whistle": [
+            [
+              "verse:0",
+              null
+            ],
+            [
+              "refrain:0",
+              0
+            ]
+          ],
+          "harp~": [
+            [
+              "verse:0",
+              -3
+            ],
+            [
+              "verse:0",
+              null
+            ]
+          ],
+          "harp": [
+            [
+              "verse:0.3",
+              null
+            ],
+            [
+              "verse:0.3",
+              0
+            ]
+          ],
+          "bass~": [
+            [
+              "verse:0.2",
+              0
+            ],
+            [
+              "verse:0.2",
+              null
+            ],
+            [
+              "refrain:0",
+              null
+            ],
+            [
+              "refrain:0.1",
+              -9
+            ],
+            [
+              "turn:1.end",
+              -9
+            ],
+            [
+              "bridge:0",
+              null
+            ],
+            [
+              "bridge:0.end",
+              null
+            ],
+            [
+              "refrain:2",
+              -5
+            ],
+            [
+              "tag:0",
+              null
+            ]
+          ],
+          "bass": [
+            [
+              "refrain:0",
+              null
+            ],
+            [
+              "refrain:0",
+              0
+            ]
+          ],
+          "guitar~": [
+            [
+              "refrain:0.1",
+              null
+            ],
+            [
+              "refrain:0.2",
+              -9
+            ],
+            [
+              "turn:1.end",
+              -9
+            ],
+            [
+              "bridge:0",
+              null
+            ],
+            [
+              "bridge:0.end",
+              null
+            ],
+            [
+              "refrain:2",
+              -5
+            ],
+            [
+              "tag:0",
+              -9
+            ],
+            [
+              "tag:0.end",
+              null
+            ]
+          ],
+          "guitar": [
+            [
+              "refrain:0.1",
+              null
+            ],
+            [
+              "refrain:0.1",
+              0
+            ]
+          ],
+          "drum~": [
+            [
+              "bridge:0.end",
+              null
+            ],
+            [
+              "refrain:2",
+              -4
+            ],
+            [
+              "tag:0",
+              null
+            ]
+          ],
+          "drum": [
+            [
+              "refrain:0.2",
+              null
+            ],
+            [
+              "refrain:0.2",
+              0
+            ]
+          ],
+          "harp#": [
+            [
+              "verse:0",
+              null
+            ],
+            [
+              "verse:0",
+              -1
+            ],
+            [
+              "verse:0.3",
+              -1
+            ],
+            [
+              "verse:0.3",
+              null
+            ],
+            [
+              "turn:0.end",
+              null
+            ],
+            [
+              "verse:1.1",
+              -8
+            ],
+            [
+              "refrain:1",
+              -8
+            ],
+            [
+              "refrain:1.1",
+              null
+            ]
+          ],
+          "fiddle~": [
+            [
+              "refrain:1",
+              null
+            ],
+            [
+              "refrain:1.1",
+              -6
+            ],
+            [
+              "turn:1",
+              -6
+            ],
+            [
+              "turn:1.end",
+              null
+            ],
+            [
+              "bridge:0.end",
+              null
+            ],
+            [
+              "refrain:2",
+              -6
+            ],
+            [
+              "tag:0",
+              null
+            ]
+          ],
+          "arp": [
+            [
+              "verse:0",
+              null
+            ],
+            [
+              "verse:0",
+              6
+            ],
+            [
+              "refrain:0.1",
+              6
+            ],
+            [
+              "refrain:0.1",
+              null
+            ],
+            [
+              "bridge:0.end",
+              null
+            ],
+            [
+              "refrain:2",
+              4
+            ],
+            [
+              "tag:0",
+              0
+            ],
+            [
+              "tag:0.end",
+              null
+            ]
+          ],
+          "synthpad": [
+            [
+              "refrain:0",
+              6
+            ],
+            [
+              "refrain:0.1",
+              4
+            ],
+            [
+              "turn:0.end",
+              4
+            ],
+            [
+              "verse:1.1",
+              2
+            ],
+            [
+              "turn:1.end",
+              2
+            ],
+            [
+              "bridge:0",
+              null
+            ],
+            [
+              "bridge:0.end",
+              null
+            ],
+            [
+              "refrain:2",
+              4
+            ],
+            [
+              "tag:0",
+              2
+            ]
+          ],
+          "drummachine": [
+            [
+              "verse:0.1",
+              null
+            ],
+            [
+              "verse:0.1",
+              3
+            ],
+            [
+              "refrain:0.2",
+              3
+            ],
+            [
+              "refrain:0.2",
+              null
+            ]
+          ],
+          "synthbass": [
+            [
+              "verse:0.2",
+              null
+            ],
+            [
+              "verse:0.2",
+              3
+            ],
+            [
+              "refrain:0",
+              3
+            ],
+            [
+              "refrain:0",
+              null
+            ]
+          ],
+          "drummachine#": [
+            [
+              "intro:0@0.5",
+              null
+            ],
+            [
+              "intro:0@0.5",
+              0
+            ],
+            [
+              "verse:0.1",
+              0
+            ],
+            [
+              "verse:0.1",
+              null
+            ]
+          ]
+        }
+      }
     }
   },
   "lyrics": null,
@@ -5419,15 +6036,16 @@
     "plate": 1.0
   },
   "loudness_lufs": -14.0,
-  "loudness_range_lu": 6.49,
+  "loudness_range_lu": 5.54,
   "true_peak_dbtp": -1.05,
   "peak_dbfs": -1.05,
   "duration": 151.227,
-  "program_version": "0.1.0",
+  "program_version": "0.2.0",
+  "record_format": 2,
   "gate": null,
   "path": "record",
   "llm": null,
-  "program_sha256": "971e37bde494259a2bc7b2f2f0f3f78cf7738bb12e8e96d7ebcab9de6ee65f95",
+  "program_sha256": "479320b30bacbebf83199c0c304c30c05be21ae33393636cd99cbf201ddbbfea",
   "python": "3.12",
   "name": null
 }
