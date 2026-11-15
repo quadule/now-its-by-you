@@ -26,7 +26,7 @@ from __future__ import annotations
 
 import json
 import re
-from dataclasses import asdict, dataclass, field, fields, is_dataclass
+from dataclasses import asdict, dataclass, field, fields, is_dataclass, replace
 from datetime import date as _date, timedelta
 from functools import lru_cache
 from pathlib import Path
@@ -530,6 +530,7 @@ class Context:
     t: float  # today's instant: noon UTC today
     quiet: bool = False  # the machine was read only in part (its languages, size and screen)
     shared: bool = False  # served to others (studio --host/--allow-host): "this machine" is the one serving it
+    parent_title: str | None = None  # the parent's title where it is a published edition ("Awards performance draft")
 
     def __post_init__(self):
         self.song = edits_mod.song_params(self.genome)
@@ -577,6 +578,8 @@ class Context:
     def from_words(self) -> str:
         if self.parent_record is None:
             return "from the song as it began"
+        if self.parent_title:  # a published edition, by the name the home page gives it
+            return f"from the {self.parent_title[:1].lower()}{self.parent_title[1:]}"
         made = (self.parent_record.get("rendered_at") or "")[:10]
         generation = self.parent_record.get("generation")
         which = (f"the {ORDINALS[generation]} version" if isinstance(generation, int) and generation < len(ORDINALS)
@@ -1306,6 +1309,11 @@ def words_view(v: Version) -> list[dict]:
     from .composition import authored as authored_lines
 
     own = authored_lines(genome, v.params, v.lyrics)  # a person's lines, section by section
+    # lines the parent already sang (an edition's own, as the awards draft's screen lines) are handed down, not yours
+    parent_lines = (v.context.parent.composition or {}).get("lines", {}) if v.context.parent is not None else {}
+    handed_lines = authored_lines(genome, replace(v.params, composition={**v.params.composition, "lines": parent_lines}),
+                                  v.lyrics) if parent_lines else [{} for _ in own]
+    own = [{i: t for i, t in mine_.items() if handed_lines[k].get(i) != t} for k, mine_ in enumerate(own)]
     seen: dict = {}
     out = []
     for k, name in enumerate(v.params.form):
@@ -1505,11 +1513,34 @@ def timeline(ctx: Context, days: int = TIMELINE_DAYS) -> dict:
 # ---------------------------------------------------------------- other machines
 
 
+def new_verse(v: Version, lyrics) -> str:
+    """The words that differ between machines, for comparing them: the first verse not handed down (the first ones
+    are, whoever sings), by its first line, or where only a word of it was drawn again, by the line with that word;
+    "none" where every verse is handed down."""
+    from . import evolve
+
+    kept = handed(v) if v.lyrics is not None else {}
+    entries = (v.params.words or {}).get("verses", [])
+    base = v.context.base
+    was = (getattr(base, "words", None) or evolve.seed_words(v.context.genome, base)).get("verses", [])
+    verses = [s for s in lyrics.sections if s.block == "verse" and s.lines]
+    for k, s in enumerate(verses):
+        if kept.get(("verse", k), True):
+            continue
+        lines = [readable(bare(line)).replace("*", "") for line in s.lines]
+        if k < len(entries) and k < len(was) and entries[k].get("id") == was[k].get("id"):  # the same verse, a word new
+            old = was[k].get("slots") or {}
+            words = [readable(bare(str(w))) for key, w in (entries[k].get("slots") or {}).items() if old.get(key) != w]
+            return next((line for line in lines for w in words if w and w in line), lines[0])
+        return lines[0]
+    return "none"
+
+
 def summary(ctx: Context, v: Version, who: str, name: str | None = None) -> dict:
     """One machine's version in a few plain words, for comparing machines side by side."""
     p = v.params
     lyrics = as_sung(ctx.genome, p, v.lyrics)
-    first = next((readable(bare(s.lines[0])).replace("*", "") for s in lyrics.sections if s.block == "verse" and s.lines), "")
+    fresh = new_verse(v, lyrics)
     mix = MixParams.from_dict(p.mix or {})
     singer = singer_of(p)
     style = p.style.name or "ballad"
@@ -1522,7 +1553,7 @@ def summary(ctx: Context, v: Version, who: str, name: str | None = None) -> dict
                      "Shape": shape_words(edits_mod.shape(ctx.genome, p.form)),
                      "Band": band,
                      "Singer": "a low voice" if singer.shift <= -12 else "a high voice",
-                     "Room": room_words(mix.rt60), "First line": first}}
+                     "Room": room_words(mix.rt60), "New verse": fresh}}
 
 
 # ---------------------------------------------------------------- the opening

@@ -203,6 +203,8 @@ class Device:
         self.studio.released_on = config.get("released_on")  # the published version's date (editions.json)
         self.studio.released_audio = config.get("released_audio")  # its own file on the site, played while unchanged
         self.studio.released_title = config.get("released_title")  # and its title, as the home page names it
+        if config.get("parent") and self.studio.released_title:  # a version made from it says so by that name
+            self.studio.context.parent_title = self.studio.released_title
         self._singing(config)
 
     def _singing(self, config: dict) -> None:
