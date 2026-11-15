@@ -162,10 +162,12 @@
     if (value === null && bridge().releaseEdit) bridge().releaseEdit(path); // an inherited choice released, explicitly
     else if (bridge().setEdit) bridge().setEdit(path, value);
   }
-  function serializeNotes(notes) {
+  function serializeNotes(notes, own = false) {
     // Keep untouched expressive and compound-meter timing exact. A third of a
     // beat rounded for display can otherwise become a false syllable overlap.
-    return notes.map((n) => ({ degree: n.degree, onset: n.onset, duration: n.duration, ...(n.slur ? { slur: true } : {}) }));
+    // A line of its own carries each note's half step (a tune line's notes keep the line's own by place).
+    return notes.map((n) => ({ degree: n.degree, onset: n.onset, duration: n.duration, ...(n.slur ? { slur: true } : {}),
+      ...(own && n.alter && !n.slur ? { alter: n.alter } : {}) }));
   }
   // ---- a melisma (docs/STUDIO.md, "A freer melody"): a note slurred on from the one before sings the same
   // syllable, starting where it ends. Moving a slurred note's start moves the boundary between the two; any other
@@ -238,7 +240,7 @@
         button("Use these words", () => {
           if (sylls(input.value) !== want) { bridge().toast?.(`This line needs ${want} syllables; it has ${sylls(input.value)}.`); return; }
           state.draft = null;
-          commit(p.own_path, { words: input.value.trim(), notes: serializeNotes(d.notes) });
+          commit(p.own_path, { words: input.value.trim(), notes: serializeNotes(d.notes, true) });
         }),
         button("Cancel", () => { p.notes = d.was; state.draft = null; state.note = null; paint(); told(); }, { class: "sbc-button sbc-quiet" })));
   }
@@ -274,7 +276,7 @@
     const count = updated.filter((n) => !n.slur).length;
     if (p.own_path && (p.own || count !== p.tune_syllable_count || state.draft?.path === p.own_path)) {
       if (count === p.syllable_count && p.own && state.draft?.path !== p.own_path) {
-        commit(p.own_path, { words: p.lyric_text, notes: serializeNotes(updated) });
+        commit(p.own_path, { words: p.lyric_text, notes: serializeNotes(updated, true) });
       } else {  // its words wait to be written for the new count (ownCard)
         state.draft = { path: p.own_path, notes: updated, was: state.draft?.path === p.own_path ? state.draft.was : p.notes };
         p.notes = updated.map((n, index) => ({ ...n, index, edited: true }));

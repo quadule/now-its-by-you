@@ -383,7 +383,7 @@ def check_phrase(genome, pid: str, value, free: bool = False) -> list[dict] | No
     k, run = -1, 0  # the syllable each note sings, and how many notes it has so far
     for i, item in enumerate(value):
         if not isinstance(item, dict) or not {"degree", "onset", "duration"} <= set(item) <= {
-                "degree", "onset", "duration", "slur"}:
+                "degree", "onset", "duration", "slur"} | ({"alter"} if free else set()):
             raise ValueError("each note needs degree, onset and duration (and slur, for a note sung on the "
                              "syllable before)")
         slur = item.get("slur", False)
@@ -413,7 +413,13 @@ def check_phrase(genome, pid: str, value, free: bool = False) -> list[dict] | No
             own_leap = abs(phrase.sung[k].degree - phrase.sung[k - 1].degree) if 0 < k < want and not free else 0
             if result and abs(degree - result[-1]["degree"]) > max(7, own_leap):
                 raise ValueError(f"the leap into note {i + 1} is wider than an octave")
-        result.append({"degree": int(degree), "onset": onset, "duration": duration, **({"slur": True} if slur else {})})
+        alter = item.get("alter", 0)  # a line of its own's note a half step off its degree (a tune line's keeps its own)
+        if isinstance(alter, bool) or alter not in (-1, 0, 1):
+            raise ValueError(f"note {i + 1} is a half step off its degree at most: alter -1, 0 or 1")
+        if alter and slur:
+            raise ValueError(f"note {i + 1} is slurred on: a melisma's notes are the scale's")
+        result.append({"degree": int(degree), "onset": onset, "duration": duration, **({"slur": True} if slur else {}),
+                       **({"alter": int(alter)} if alter else {})})
     # the ending may leave its home note: said as advice (advice()), not refused
     if result[-1]["onset"] > limits["max_final_onset"] + 1e-8:
         raise ValueError("the last syllable needs room before the next line's pickup")
@@ -451,7 +457,8 @@ def pack_phrase(genome, notes) -> list[list]:
         if n.get("slur"):
             out[-1][2] = n["onset"] * genome.meter.beat + n["duration"] * genome.meter.beat - out[-1][1]
             continue
-        out.append([n["degree"], n["onset"] * genome.meter.beat, n["duration"] * genome.meter.beat])
+        out.append([n["degree"], n["onset"] * genome.meter.beat, n["duration"] * genome.meter.beat]
+                   + ([n["alter"]] if n.get("alter") else []))  # a line of its own's half step, where it has one
     return out
 
 
@@ -628,7 +635,7 @@ def played(phrase, params):
     entry = own_entry(phrase, params)
     if entry is not None:  # its notes are the phrase's (form_phrases), never a variant's; its melismas beside them
         turns = entry.get("melisma") or {}
-        return tuple(variants.Played(n.degree, 0, float(n.onset), float(n.dur), (), None,
+        return tuple(variants.Played(n.degree, n.alter, float(n.onset), float(n.dur), (), None,
                                      melisma=tuple((float(off), int(deg)) for deg, off in turns.get(str(k), ())))
                      for k, n in enumerate(phrase.sung))
     notes = variants.realized(phrase, params.variants)
@@ -730,7 +737,7 @@ def own_notes(entry: dict) -> tuple:
     """A line of its own's kept notes as a tune line's: each syllable's degree, onset and length in grid units."""
     from .genome import TuneNote
 
-    return tuple(TuneNote(int(d), 0, t, length) for d, t, length in entry["tune"])
+    return tuple(TuneNote(int(d), int(rest[0]) if rest else 0, t, length) for d, t, length, *rest in entry["tune"])
 
 
 def own_keys(genome, params, lyrics=HELD) -> list:

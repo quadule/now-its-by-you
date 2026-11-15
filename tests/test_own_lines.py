@@ -227,3 +227,84 @@ def test_a_midi_file_with_a_syllable_more_comes_back_as_a_line_of_its_own():
     # a note added with no words on it is still the tune line's: refused with the count, as before
     r = brought(with_lyrics=False)
     assert not r["changes"] and "needs 11 notes" in r["refused"][0]["why"]
+
+
+def own_export():
+    """The seed's version with wire's first line of its own (twelve syllables), its score and its MIDI file."""
+    from songbird import midi, variation as V
+
+    params = E.Overrides(G, {PATH: {"words": WORDS, "notes": twelve()}}).params(Params.from_dict(G.seed_params))
+    score = V.lay(realize(G, params), params)
+    return params, score, midi.from_score(G, params, score, title=G.title)[0]
+
+
+def voice_line(params, data):
+    from songbird import midi, notesin
+
+    ln = next(x for x in notesin.layout(G, params) if x["key"] == "verse:0.0")
+    _, origin, step, per, _, _ = midi.tick_grid(G, params)
+    a, b = [round((u - origin) / step * per) - 60 for u in (ln["w0"], ln["w1"])]
+    voice = next(t for t in midi.parse(data)["tracks"] if t["name"] == "Voice")
+    return sorted(n for n in voice["notes"] if a <= n[0] < b)
+
+
+def test_a_line_of_its_own_comes_back_with_its_lengths_and_its_words_when_a_note_is_nudged():
+    from _midi_edit import rewrite
+    from songbird import notesin
+
+    params, score, data = own_export()
+    kept = params.composition["own"]["verse:wire"]["0"]
+    num = voice_line(params, data)[6]  # "num": moved later, its lyric left where it was (a sequencer's lyric lane)
+
+    def nudge(name, notes):
+        if name == "Voice":
+            for n in notes:
+                if n[0] == num[0]:
+                    n[0] += 60
+        return notes
+
+    r = notesin.from_file(G, params, score, rewrite(data, nudge))
+    assert not r["refused"], r["refused"]
+    (c,) = r["changes"]
+    assert c["value"]["words"] == WORDS and len(c["value"]["notes"]) == 12
+    lengths = [n["duration"] for n in c["value"]["notes"]]
+    written = [length / G.meter.beat for _, _, length in kept["tune"]]
+    assert [a for k, a in enumerate(lengths) if k not in (5, 6)] == [a for k, a in enumerate(written) if k not in (5, 6)]
+
+    def raise_one(name, notes):  # one pitch up a step: the rest exactly as written, round trip after round trip
+        if name == "Voice":
+            for n in notes:
+                if n[0] == num[0]:
+                    n[3] += 2
+        return notes
+
+    r = notesin.from_file(G, params, score, rewrite(data, raise_one))
+    (c,) = r["changes"]
+    got = [(n["onset"], n["duration"]) for n in c["value"]["notes"]]
+    assert got == [(t / G.meter.beat, length / G.meter.beat) for _, t, length in kept["tune"]]
+
+
+def test_a_round_judges_a_line_of_its_own_only_where_it_is_sung():
+    from songbird import canon
+
+    entry = {"words": "x", "tune": [[1, 0.0, 4.0]]}
+    song, names = canon._with_own(G, "verse", {"1": entry})
+    assert G.section("verse").phrases == ("v1", "v2", "v3", "v2")  # v2 sung twice
+    assert song.section("verse").phrases == ("v1", "v2#own1", "v3", "v2") and names == {"v2#own1": "v2"}
+    assert song.phrases["v2"] is G.phrases["v2"]
+
+
+def test_a_line_of_its_own_may_sing_a_half_step_off_the_scale():
+    notes = twelve()
+    notes[3] = dict(notes[3], alter=-1)
+    clean, problems = E.check(G, {PATH: {"words": WORDS, "notes": notes}})
+    assert not problems
+    slurred = twelve()
+    slurred[2] = dict(slurred[2], slur=True, alter=1)
+    assert "melisma's notes are the scale's" in E.check(G, {PATH: {"words": WORDS, "notes": slurred}})[1][0]["why"]
+    plain = E.resolve(G, None, ADA, DAY, {PATH: {"words": WORDS, "notes": twelve()}})
+    flat = E.resolve(G, None, ADA, DAY, clean)
+    a = [n.pitch for n in realize(G, plain.params, lyrics=plain.lyrics).part("voice") if n.section == "verse"][:12]
+    b = [n.pitch for n in realize(G, flat.params, lyrics=flat.lyrics).part("voice") if n.section == "verse"][:12]
+    assert [y - x for x, y in zip(a, b)] == [0, 0, 0, -1] + [0] * 8
+    assert E.check(G, {"tune.v1": [dict(n, alter=-1) for n in C.phrase_value(G, choose_params(G), "v1")]})[1]  # a tune line's: no
