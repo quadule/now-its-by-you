@@ -39,6 +39,26 @@ def _whole_predict(model, t, lf0, singer, gv):
     return sp * model.sp_std + model.sp_mean, np.clip(ap * model.ap_std + model.ap_mean, 0.0, 1.0)
 
 
+def _rows_stand_alone(matmul) -> bool:
+    """Whether this BLAS gives each row of a product the same bits however many rows go in with it: chunks of a
+    timeline can only keep the whole's bytes where it does (Apple's Accelerate; OpenBLAS's kernels on some x86
+    CPUs block the rows differently, a last bit apart)."""
+    rng = np.random.default_rng(3)
+    x, w = rng.standard_normal((300, 96)), rng.standard_normal((80, 96))
+    whole = matmul(x, w)
+    return all(np.array_equal(matmul(x[a:b], w).view(np.int64), whole[a:b].view(np.int64))
+               for a, b in ((0, 128), (128, 256), (256, 300), (5, 42)))
+
+
+def _unless_blas(got, want) -> None:
+    """Skipped, saying why, where the chunks' bytes differ from the whole's only as this BLAS makes them (within a
+    few units in the last place, its rows blocked by how many go in); asserted everywhere else."""
+    if all(a.tobytes() == b.tobytes() for a, b in zip(got, want)) or _rows_stand_alone(T._matmul):
+        return
+    assert all(np.allclose(a, b, rtol=1e-12, atol=1e-12) for a, b in zip(got, want))
+    pytest.skip("this BLAS's products differ by how many rows go in, so chunks can't keep the whole's bytes")
+
+
 def _inputs(frames):
     t = T.timeline([("AA", 0.1, frames * 0.003, True, 0.0, "vowel"),
                     ("S", frames * 0.003, frames * 0.004, False, 1.0, "coda")], frames)
@@ -53,6 +73,7 @@ def test_temporal_chunks_keep_the_full_network_and_global_variance_bytes(frames,
     singer = T.timbre(model, None)
     want = _whole_predict(model, t, lf0, singer, gv)
     got = T.predict(model, t, lf0, singer, gv)
+    _unless_blas(got, want)
     for a, b in zip(got, want):
         assert a.dtype == b.dtype and a.tobytes() == b.tobytes()
         assert a.flags.c_contiguous == b.flags.c_contiguous
@@ -73,6 +94,7 @@ def test_chunks_use_the_loaded_models_context_and_full_pitch_slopes(tmp_path, mo
     singer = T.timbre(model, None)
     want = _whole_predict(model, t, lf0, singer, 1.0)
     got = T.predict(model, t, lf0, singer, 1.0)
+    _unless_blas(got, want)
     assert all(a.tobytes() == b.tobytes() for a, b in zip(got, want))
 
 

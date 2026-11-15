@@ -6,6 +6,8 @@ from dataclasses import replace
 import numpy as np
 import pytest
 
+from _golden import pinned
+
 from songbird.phrasing import Gesture
 from songbird.score import Note
 from songbird.synth import throat as T, voice as V
@@ -60,7 +62,7 @@ PITCH = {(24000, 'learned', 0.7, 0): 'd19740eef60f15195cc10b6ae93f93ea3c6375010b
 
 @pytest.mark.parametrize("case", list(PITCH))
 def test_bounded_pitch_tracks_keep_the_previous_bytes(case):
-    assert digest(*pitch_output(*case)) == PITCH[case]
+    pinned("voice-pitch", case, digest(*pitch_output(*case)), PITCH)
 
 
 def _consonants_whole(segs, tb):
@@ -119,7 +121,7 @@ VOCODER = {(24000, 1, 0): 'dd11a53a7f02fa4f256fb2404459a563b8a980834725970af610d
 @pytest.mark.parametrize("case", list(VOCODER))
 def test_the_vocoder_keeps_the_previous_bytes_without_the_zero_fft(case, monkeypatch):
     monkeypatch.setenv("SONGBIRD_THREADS", "1")
-    assert digest(vocoder_output(*case)) == VOCODER[case]
+    pinned("voice-vocoder", case, digest(vocoder_output(*case)), VOCODER)
 
 
 def test_all_network_matrix_products_use_the_shared_blas_hook(tmp_path, monkeypatch):
