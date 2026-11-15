@@ -887,7 +887,7 @@ class Studio:
         if what == "midi":
             path = self.cache / f"{key}.mid"
             if not path.exists():
-                data, _ = midi.from_score(self.genome, v.params, self._score(v), title=self.genome.title)
+                data, _ = midi.from_score(self.genome, v.params, self._score(v), title=self.genome.title, lyrics=v.lyrics)
                 path.write_bytes(data)
             return {"state": "done", "progress": 1.0,
                     "url": f"/export/{key}.mid?name={self.export_name(v, '.mid')}", "label": "the MIDI file"}
@@ -936,7 +936,7 @@ class Studio:
         share.stage = stage_words("score")
         score = self._score(v)
         share.plan = [p for p in stages(score) if p[0] not in ("mix", "master")] + [("master", 1.0)]
-        data, lead_in = midi.from_score(self.genome, v.params, score, title=self.genome.title)
+        data, lead_in = midi.from_score(self.genome, v.params, score, title=self.genome.title, lyrics=v.lyrics)
         singer = explain.singer_of(v.params)
         stems = synth.render_stems(score, seed=v.params.seed, voice=singer,
                                    ancestors=choir_of(self.parent_record, singer)[1], progress=share.report)

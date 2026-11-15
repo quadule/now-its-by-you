@@ -220,7 +220,7 @@ def render_one(genome, params: Params, out: Path, *, voice=None, drift=None, lyr
     if midi_file:  # every part, the words and the chords, for a musician's own tools (songbird/midi.py)
         from . import midi
 
-        data, lead_in = midi.from_score(genome, params, score)
+        data, lead_in = midi.from_score(genome, params, score, lyrics=lyrics)
         out.with_suffix(".mid").write_bytes(data)
         print(f"{out.with_suffix('.mid')}  bar 1 begins {-lead_in:.3f}s before the audio's first sample")
 

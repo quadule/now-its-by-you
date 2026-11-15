@@ -1981,9 +1981,11 @@ def changed(genome, params, lines: list, phrases: list) -> list:
 
     mine = set((params.composition or {}).get("chords") or {})  # a person's chords for a line, everywhere
     changes = trio_changes(genome, params, [(i, j, genome.phrases[p.id]) for (i, j, _l), p in zip(lines, phrases)])
-    # (a line with a tune of its own at its place keeps the song's chords there: the changes fit the line's own tune)
+    # (a line with a tune of its own at its place, or a line of its own, keeps the song's chords there: the changes
+    # fit the line's own tune)
     return [_replace(p, chords=changes[p.id]) if p.id not in mine and p.chords == genome.phrases[p.id].chords
-            and not getattr(p, "place", None) and p.id in changes else p for p in phrases]
+            and not getattr(p, "place", None) and not getattr(p, "own", None) and p.id in changes else p
+            for p in phrases]
 
 
 def held_chords(times: list, params) -> list:

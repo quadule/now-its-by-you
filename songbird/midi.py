@@ -519,9 +519,10 @@ def in_beats(genome, params, score) -> list[dict]:
     return out
 
 
-def from_score(genome, params, score, title: str | None = None) -> tuple[bytes, float]:
+def from_score(genome, params, score, title: str | None = None, lyrics="held") -> tuple[bytes, float]:
     """The MIDI file of a rendition's score (as rendered), and where its bar 1 begins in seconds (at or
-    before zero)."""
+    before zero). lyrics: the words the score sang (arrange.Lyrics), for the chords under a line of its own;
+    None the seed's; "held": the ones the rendition holds."""
     from . import composition, idioms, style as style_mod
     from .theory import chord_name
 
@@ -575,7 +576,7 @@ def from_score(genome, params, score, title: str | None = None) -> tuple[bytes, 
     harmony = composition.harmonized(genome, params)
     lift = style_mod.lifted(genome, score) if params.style.lift else None
     events = [(0, 0, text(0x03, "Chords")), (0, 1, bytes([0xC0 | CHORDS_CHANNEL, PROGRAMS["chords"]]))]
-    for a, z, symbol in style_mod.held_chords(idioms.chord_times(harmony, params), params):
+    for a, z, symbol in style_mod.held_chords(idioms.chord_times(harmony, params, lyrics), params):
         up = 2 if lift is not None and a >= lift - 1e-6 else 0
         on, off = ticks.tick(a), ticks.tick(z)
         events.append((on, 2, text(0x01, chord_name(symbol, params.tonic + up, params.mode))))

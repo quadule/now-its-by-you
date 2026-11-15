@@ -46,10 +46,12 @@ def triple_ok(genome) -> bool:
     return all(n.onset % m.foot in (0, 2, 3) for p in genome.phrases.values() for n in p.sung)
 
 
-def chord_times(genome, params) -> list[tuple[float, float, str]]:
+def chord_times(genome, params, lyrics="held") -> list[tuple[float, float, str]]:
     """Every chord of a rendition as (start, end, function) in seconds, laid out as realize() lays out the
-    form (a style's repeated last line and amen included), for checking what the band plays against them."""
-    from .composition import form_phrases
+    form (a style's repeated last line and amen included), for checking what the band plays against them.
+    lyrics: the words sung (arrange.Lyrics), where a line of its own may sing (a hymn sets its chords to the
+    line's notes), None the seed's; "held": the ones the rendition holds."""
+    from .composition import HELD, form_phrases
     from .realize import timeline
     from .style import coda, repeated_phrases
 
@@ -58,7 +60,7 @@ def chord_times(genome, params) -> list[tuple[float, float, str]]:
     m = genome.meter
     # each line as its place sings it (a person's chords for one place), each section as long as a person arranged
     # it (songbird.takeover: form_phrases follows its plan)
-    phrases = form_phrases(genome, params)
+    phrases = form_phrases(genome, params, HELD if lyrics == "held" else lyrics)
     phrases += phrases[-1:] if repeated_phrases(genome, params) else []  # a style's last line again, as sung
     out, u = [], clock.lead
     units, bounds = [], []  # each chord in grid units, and each phrase's first chord and span (for a dub version)

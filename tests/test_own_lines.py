@@ -117,3 +117,67 @@ def test_the_band_and_the_midi_file_hear_its_notes():
     data, _ = midi.from_score(G, mine, score)
     voice = next(t for t in midi.parse(data)["tracks"] if t["name"] == "Voice")
     assert len(voice["notes"]) == len(score.part("voice"))
+
+
+REFRAIN = "Who sang it, this song? No-bo-dy knows."  # r1's eight syllables and one more: "sang" split
+
+
+def nine(degree=5):
+    from songbird.realize import Params
+
+    n = split(C.phrase_value(G, Params.from_dict(G.seed_params), "r1"), 1)
+    n[4]["degree"], n[5]["degree"] = degree, 6 if degree == 5 else degree
+    return n
+
+
+def test_a_round_is_judged_on_the_lines_own_notes_and_its_voices_sing_them():
+    from songbird import canon
+    from songbird.realize import Params
+
+    seed = Params.from_dict(G.seed_params)
+    round_ = {"arrange.refrain:0.round": True}
+    k = seed.form.index("refrain")
+    plain = E.Overrides(G, round_).params(seed)
+    same = E.Overrides(G, {**round_, "line.refrain:0.0": {"words": REFRAIN, "notes": nine()}}).params(seed)
+    sour = E.Overrides(G, {**round_, "line.refrain:0.0": {"words": REFRAIN, "notes": nine(4)}}).params(seed)
+    whole = canon.plans(G, plain)[k]
+    assert canon.plans(G, same)[k] == whole  # the same tune, a syllable more: the round it was
+    assert canon.plans(G, sour)[k].voices < whole.voices  # a line that rubs against the next: fewer voices
+    # every voice sings the line's nine syllables
+    score = realize(G, same)
+    for part in ("voice", "choir1", "choir2"):
+        line = [n.syllable for n in score.part(part) if n.section == "refrain"][:9]
+        assert line == syllables(REFRAIN), part
+
+
+def test_a_section_played_rather_than_sung_plays_the_tune_lines_notes():
+    resolved = E.resolve(G, None, ADA, DAY, {PATH: {"words": WORDS, "notes": twelve()},
+                                             "arrange.verse:0.sung": False})
+    assert not resolved.problems, resolved.problems
+    phrases = C.form_phrases(G, resolved.params, resolved.lyrics)
+    first = next(p for p in phrases if p.id == "v1")
+    assert first.own is None and len(first.sung) == 11
+    # sung again, it sings its own
+    sung = E.resolve(G, None, ADA, DAY, {PATH: {"words": WORDS, "notes": twelve()}})
+    assert next(p for p in C.form_phrases(G, sung.params, sung.lyrics) if p.id == "v1").own == "verse:wire.0"
+
+
+def test_a_hymn_sets_its_chords_to_the_line_where_its_words_are_sung():
+    from songbird import idioms
+
+    raised = [dict(n, degree=n["degree"] + 3) if 1 <= i <= 6 else n for i, n in enumerate(twelve())]
+    mine = E.resolve(G, None, ADA, DAY, {"line.verse:deaf.0": {"words": "And deaf to the wire, it went all the way "
+                                                                         "to town,", "notes": raised},
+                                         "style.name": "hymn"})
+    assert not mine.problems and "deaf" in mine.lyrics.verses
+    song = C.harmonized(G, mine.params)
+    sung = idioms.chord_times(song, mine.params, mine.lyrics)
+    assert idioms.chord_times(song, mine.params) == sung  # the words the version holds are the ones it sang
+    assert idioms.chord_times(song, mine.params, None) != sung  # the seed's words don't sing deaf: the song's line
+
+
+def test_the_trio_keeps_the_songs_chords_under_a_line_of_its_own():
+    mine = E.resolve(G, None, ADA, DAY, {PATH: {"words": WORDS, "notes": twelve()}, "style.name": "jazz"})
+    v1 = [p for p in C.form_phrases(C.harmonized(G, mine.params), mine.params, mine.lyrics) if p.id == "v1"]
+    assert v1[0].own and v1[0].chords == G.phrases["v1"].chords  # the trio's changes fit the song's tune, not this
+    assert v1[1].chords != G.phrases["v1"].chords  # its other verses take the changes

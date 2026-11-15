@@ -733,17 +733,25 @@ def own_notes(entry: dict) -> tuple:
     return tuple(TuneNote(int(d), 0, t, length) for d, t, length in entry["tune"])
 
 
-def _owned(genome, params, lines, phrases, lyrics) -> list:
+def own_keys(genome, params, lyrics=HELD) -> list:
+    """The lyric key each section of the form sings (lyric_keys), from these words, or the ones the rendition
+    holds."""
+    return lyric_keys(genome, params.form, held_lyrics(genome, params) if lyrics is HELD else
+                      lyrics if lyrics is not None else _seed(genome, params))
+
+
+def _owned(genome, params, lines, phrases, lyrics, sung=None) -> list:
     """The phrases with each line of its own (composition["own"]) where its words are sung: a copy with the
-    person's notes, its own naming where they're kept. The same list where there are none."""
+    person's notes, its own naming where they're kept. A line a person had played instead (sung False) keeps its
+    tune line's notes: the words aren't sung there. The same list where there are none."""
     own = params.composition.get("own")
     if not own:
         return phrases
-    keys = lyric_keys(genome, params.form, held_lyrics(genome, params) if lyrics is HELD else
-                      lyrics if lyrics is not None else _seed(genome, params))
+    keys = own_keys(genome, params, lyrics)
     out = []
-    for (i, j, _line), phrase in zip(lines, phrases):
-        entry = own.get(keys[i], {}).get(str(j)) if j is not None and keys[i] else None
+    for k, ((i, j, _line), phrase) in enumerate(zip(lines, phrases)):
+        played_only = sung is not None and not sung[k]
+        entry = own.get(keys[i], {}).get(str(j)) if j is not None and keys[i] and not played_only else None
         out.append(replace(phrase, notes=own_notes(entry), place=None, own=f"{keys[i]}.{j}") if entry else phrase)
     return out
 
@@ -766,11 +774,13 @@ def form_phrases(genome, params, lyrics=HELD) -> list:
     from .takeover import own_line
 
     # each line's own place in its section (a line a style laid before a section's own has none: takeover.own_line)
+    planned = phrase_plan(genome, params)
     lines = [(i, own_line(genome, params.form[i], plan, j), genome.phrases[pid])
-             for i, plan in enumerate(phrase_plan(genome, params)) for j, (pid, _) in enumerate(plan)]
+             for i, plan in enumerate(planned) for j, (pid, _) in enumerate(plan)]
+    sung = [bool(s) for plan in planned for _, s in plan]  # a line a person had played sings no words, so no own
     if not places_held(params):
         return _changed(genome, params, lines, _looped(genome, params, lines, _owned(
-            genome, params, lines, [phrase for _, _, phrase in lines], lyrics)))
+            genome, params, lines, [phrase for _, _, phrase in lines], lyrics, sung)))
     tune, chords = params.composition.get("tune") or {}, params.composition.get("chords") or {}
     out = []
     for i, j, phrase in lines:
@@ -783,7 +793,8 @@ def form_phrases(genome, params, lyrics=HELD) -> list:
             phrase = replace(phrase, place=at_tune,
                              chords=tuple(tuple(bar) for bar in chords[at_chords]) if at_chords else phrase.chords)
         out.append(phrase)
-    return _changed(genome, params, lines, _looped(genome, params, lines, _owned(genome, params, lines, out, lyrics)))
+    return _changed(genome, params, lines, _looped(genome, params, lines, _owned(genome, params, lines, out, lyrics,
+                                                                                sung)))
 
 
 def _changed(genome, params, lines, phrases) -> list:

@@ -226,15 +226,40 @@ def plans(genome, params) -> list[Round | None]:
     from .composition import harmonized, section_ids
 
     genome = harmonized(genome, params)  # a person's chords, which the band plays under the voices
+    own = params.composition.get("own")
+    keys = None
     out = []
-    for sid, name in zip(section_ids(params.form), params.form):
+    for k, (sid, name) in enumerate(zip(section_ids(params.form), params.form)):
         entry = held.get(sid) or {}
         asked = entry.get("round")
         if not asked or entry.get("bars") is not None or entry.get("sung") is False:
             out.append(None)
             continue
-        out.append(choose(genome, name, asked, params.mode))
+        if own and keys is None:
+            from .composition import own_keys
+
+            keys = own_keys(genome, params)
+        out.append(choose(_with_own(genome, name, own.get(keys[k]) if own and keys[k] else None), name, asked,
+                          params.mode))
     return out
+
+
+def _with_own(genome, name: str, lines: dict | None):
+    """The song with a section's lines of their own (composition["own"]: {line: entry}) as its tune lines, so a
+    round is judged on the notes the voices will sing; the song itself where it has none."""
+    if not lines:
+        return genome
+    import json
+    from dataclasses import replace
+
+    from .composition import own_notes
+
+    phrases = dict(genome.phrases)
+    for j, pid in enumerate(genome.section(name).phrases):
+        entry = lines.get(str(j))
+        if entry is not None:
+            phrases[pid] = replace(phrases[pid], notes=own_notes(entry), tune="own:" + json.dumps(entry["tune"]))
+    return replace(genome, phrases=phrases)
 
 
 def lines(genome, name: str, plan: Round, laid=None) -> list[tuple[str, bool]]:
