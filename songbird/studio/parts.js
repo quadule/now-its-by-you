@@ -100,9 +100,9 @@
       const missing = s.lines.filter((x) => !x.ready);
       const edits = bridge().getEdits?.() || {}, data = await ask("/api/players", { edits });
       if (current !== s || !s.loading) return;
-      const first = missing[0].p, last = missing.at(-1).p;
-      const from = first.start_beat - (first.pickup_beats || 0) - 0.125, end = last.start_beat + last.duration_beats;
-      const notes = (data.players.find((x) => x.part === s.player.name)?.notes || []).filter((n) => n[0] >= from && n[0] < end);
+      // the notes in the windows of those phrases (each from just before its pickup to its end), never a written one's
+      const inside = (t) => missing.some(({ p }) => t >= p.start_beat - (p.pickup_beats || 0) - 0.125 && t < p.start_beat + p.duration_beats);
+      const notes = (data.players.find((x) => x.part === s.player.name)?.notes || []).filter((n) => inside(n[0]));
       const preview = await ask("/api/notes-in", { edits, take: { player: s.player.name, notes, lines: missing.map((x) => x.p.part_key) } });
       if (current !== s || !s.loading) return;
       if (preview.refused?.length) throw new Error(`${preview.refused[0].why}. Start empty to write a new part.`);
