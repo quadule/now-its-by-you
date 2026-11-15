@@ -35,9 +35,10 @@ the view a choice reads is what keeps it from flickering across a threshold.
 
 from __future__ import annotations
 
-import hashlib
 from dataclasses import dataclass
 from datetime import date, datetime, timezone
+from functools import lru_cache
+import hashlib
 
 import numpy as np
 
@@ -161,11 +162,15 @@ def noise(x, seed) -> np.ndarray:
     return (2 * f3 - 3 * f2 + 1) * v0 + (f3 - 2 * f2 + f) * m0 + (3 * f2 - 2 * f3) * v1 + (f3 - f2) * m1
 
 
+@lru_cache(maxsize=64)
 def _seeds(voice_hash: str, dimensions: tuple) -> tuple[np.ndarray, np.ndarray]:
     """Each (dimension, octave)'s seed and lattice phase, so the lattice never sits on midnight."""
     seeds = np.array([[_seed("drift", voice_hash, name, k) for k in range(len(PERIODS))] for name in dimensions],
                      dtype=np.uint64)
-    return seeds, (seeds >> np.uint64(11)).astype(np.float64) / 2.0**53
+    phases = (seeds >> np.uint64(11)).astype(np.float64) / 2.0**53
+    seeds.flags.writeable = False
+    phases.flags.writeable = False
+    return seeds, phases
 
 
 def octaves(t, voice_hash: str, dimensions) -> np.ndarray:
@@ -185,6 +190,7 @@ def series(t, voice_hash: str, dimensions=None) -> dict[str, dict[str, np.ndarra
     return {name: {view: values[d] for view, values in views.items()} for d, name in enumerate(names)}
 
 
+@lru_cache(maxsize=4096)
 def epoch(t_days: float, voice_hash: str, name: str, lo: float, hi: float) -> tuple[int, float]:
     """Which stretch of a named clock the moment t falls in, and the day that stretch began.
 

@@ -490,9 +490,9 @@ class Version:
         if what not in self._cf:
             ctx = self.context
             if what == "time":
-                self._cf[what] = ctx.choose(self.voice, still(self.drift))
+                self._cf[what] = ctx.without_time(self.voice, self.drift)
             elif what == "machine":
-                self._cf[what] = ctx.choose(harvest.Voice(), self.drift)
+                self._cf[what] = ctx.without_machine(self.drift)
             else:
                 self._cf[what] = ctx.base
         return self._cf[what]
@@ -535,6 +535,7 @@ class Context:
     def __post_init__(self):
         self.song = edits_mod.song_params(self.genome)
         self.base = self.parent if self.parent is not None else self.song
+        self._cf_cache: dict = {}
 
     @property
     def published(self) -> bool:
@@ -544,9 +545,25 @@ class Context:
     def instant(self, day: str) -> float:
         return self.t if day == self.day else drift_mod.parse(day)
 
-    def choose(self, voice, d, trace: dict | None = None):
+    def choose(self, voice, d, trace: dict | None = None, evolve: bool = True):
         """The program's own choices for a machine at a moment (the edits aside)."""
-        return variation.choose(self.genome, self.parent, voice, d, trace=trace)
+        return variation.choose(self.genome, self.parent, voice, d, trace=trace, evolve=evolve)
+
+    def without_time(self, voice, d):
+        key = ("time", id(self.parent), voice.hash if voice is not None else None, d.t if d is not None else None)
+        if key not in self._cf_cache:
+            if len(self._cf_cache) > 32:
+                self._cf_cache.clear()
+            self._cf_cache[key] = self.choose(voice, still(d))
+        return self._cf_cache[key]
+
+    def without_machine(self, d):
+        key = ("machine", id(self.parent), d.t if d is not None else None, d.hash if d is not None else None)
+        if key not in self._cf_cache:
+            if len(self._cf_cache) > 32:
+                self._cf_cache.clear()
+            self._cf_cache[key] = self.choose(harvest.Voice(), d)
+        return self._cf_cache[key]
 
     def version(self, edits: dict | None = None, voice=None, phrasings: dict | None = None) -> Version:
         """The rendition on the day the edits name (today if none), by this machine or another, with the
@@ -1481,15 +1498,23 @@ def timeline(ctx: Context, days: int = TIMELINE_DAYS) -> dict:
     dates = [(start + timedelta(days=k)).isoformat() for k in range(2 * days + 1)]
     ts = np.array([drift_mod.parse(d) for d in dates])
     vhash = (voice if voice is not None else harvest.Voice()).hash
-    series = drift_mod.series(ts, vhash)
+    hist = variation.HISTORY
+    ts_ext = np.concatenate([ts[0] - np.arange(hist, 0, -1, dtype=float), ts]) if len(ts) else ts
+    series = drift_mod.series(ts_ext, vhash)
     names = list(series)
     lanes: dict = {k: [] for k in ("key", "mode", "tonic", "tempo", "verses", "parts", "pattern", "lead", "lean",
                                    "style")}
+    shapes: dict = {}
     for i, t in enumerate(ts):
-        d = drift_mod.Drift(t=float(t), **{view: {name: float(series[name][view][i]) for name in names}
+        pos = hist + i
+        d = drift_mod.Drift(t=float(t), **{view: {name: float(series[name][view][pos]) for name in names}
                                            for view in drift_mod.VIEWS}, hash=vhash)
-        p = ctx.choose(voice, d)
-        parts = edits_mod.shape(genome, p.form) or {}
+        if vhash:
+            object.__setattr__(d, "_history", (series, pos))
+        p = ctx.choose(voice, d, evolve=False)
+        parts = shapes.get(p.form)
+        if parts is None:
+            parts = shapes[p.form] = edits_mod.shape(genome, p.form) or {}
         mood = (p.leanings or {}).get("mood_weights", {})
         lanes["key"].append(key_words(p.tonic, p.mode))
         lanes["mode"].append(p.mode)

@@ -656,11 +656,31 @@ class Studio:
         version that day."""
         edits = dict(edits or {})
         day = {"date": edits["date"]} if "date" in edits else {}
+        target_edits = day if (who == "program" or who.startswith("fictional:")) else edits
+        cache = getattr(self, "_version_cache", None)
+        if cache is None:
+            cache = self._version_cache = collections.OrderedDict()
+        perf = (self.context.parent_record or {}).get("performance")
+        cache_key = None
+        if "phrasing" not in target_edits:
+            cache_key = (id(self.context), self.day, self.t, id(perf),
+                         json.dumps(perf, sort_keys=True, default=str) if perf else "",
+                         who, json.dumps(target_edits, sort_keys=True, default=str))
+            hit = cache.get(cache_key)
+            if hit is not None:
+                cache.move_to_end(cache_key)
+                return hit
         if who == "program":
-            return self.context.version(day, phrasings=self.phrasing_choices())
-        if who.startswith("fictional:"):
-            return self.context.version(day, voice=harvest.fictional(who.split(":", 1)[1]))
-        return self.context.version(edits, phrasings=self.phrasing_choices())
+            v = self.context.version(day, phrasings=self.phrasing_choices())
+        elif who.startswith("fictional:"):
+            v = self.context.version(day, voice=harvest.fictional(who.split(":", 1)[1]))
+        else:
+            v = self.context.version(edits, phrasings=self.phrasing_choices())
+        if cache_key is not None:
+            cache[cache_key] = v
+            while len(cache) > 16:
+                cache.popitem(last=False)
+        return v
 
     def start_view(self) -> dict:
         """What the page asks once (GET /api/start): the song, the machine, the bounds of every choice, what's
@@ -709,15 +729,24 @@ class Studio:
 
     def key(self, v: explain.Version, section: int | None) -> str:
         """What a render depends on, hashed: the same rendition and section are made once."""
-        material = {"program": self.program_digest, "song": self.song_digest, "params": v.params.to_dict(),
+        choir = v.choir_phrasings
+        tag = (self.program_digest, self.song_digest, self.version_id, choir)
+        kcache = getattr(v, "_key_cache", None)
+        if kcache is None or kcache[0] != tag:
+            base = {"program": self.program_digest, "song": self.song_digest, "params": v.params.to_dict(),
                     "lyrics": v.lyrics.to_dict() if v.lyrics else None, "phrasing": v.phrasing_json,
-                    "choir_phrasings": v.choir_phrasings,
-                    "section": section, "voice": v.voice.to_dict() if v.voice is not None else None,
+                    "choir_phrasings": choir,
+                    "voice": v.voice.to_dict() if v.voice is not None else None,
                     "drift": v.drift.to_dict() if v.drift is not None else None,
-                    "marks": v.marks if section is None else None, "gain": PREVIEW_GAIN_DB}
-        if self.version_id is not None:  # someone's version: its lineage sings the choir and names the parent
-            material["parent"] = self.version_id
-        return hashlib.sha256(json.dumps(material, sort_keys=True, default=str).encode()).hexdigest()[:24]
+                    "gain": PREVIEW_GAIN_DB}
+            if self.version_id is not None:  # someone's version: its lineage sings the choir and names the parent
+                base["parent"] = self.version_id
+            kcache = v._key_cache = (tag, base, {})
+        _, base, keys = kcache
+        if section not in keys:
+            material = {**base, "section": section, "marks": v.marks if section is None else None}
+            keys[section] = hashlib.sha256(json.dumps(material, sort_keys=True, default=str).encode()).hexdigest()[:24]
+        return keys[section]
 
     def listen_keys(self, v: explain.Version) -> dict:
         keys = {"whole": self.key(v, None), "sections": [self.key(v, k) for k in range(len(v.params.form))]}
@@ -808,12 +837,21 @@ class Studio:
         first = next((k for k, name in enumerate(v.params.form) if self.genome.section(name).lyrics), 0)
         self.listen({}, "you", first)
 
-    def _score(self, v: explain.Version):
-        from . import phrasing as phrasing_mod
+    def _score_and_heard(self, v: explain.Version) -> tuple[object, dict]:
+        from . import band as band_mod, phrasing as phrasing_mod, realize as realize_mod
 
+        cached = getattr(v, "_score_cache", None)
+        if cached is not None and cached[0] is realize_mod.realize:
+            return cached[1], cached[2]
         phrasing = phrasing_mod.from_json(v.phrasing_json) if v.phrasing_json else None
         choir = [phrasing_mod.from_json(ph) for ph in v.choir_phrasings]
-        return stage.laid(self.genome, v.params, phrasing=phrasing, choir=choir, lyrics=v.lyrics)  # (as cli.render_one)
+        with band_mod.overheard() as heard:
+            score = stage.laid(self.genome, v.params, phrasing=phrasing, choir=choir, lyrics=v.lyrics)  # (as cli.render_one)
+        v._score_cache = (realize_mod.realize, score, heard)
+        return score, heard
+
+    def _score(self, v: explain.Version):
+        return self._score_and_heard(v)[0]
 
     def _section(self, job: Job, v: explain.Version, key: str, index: int) -> dict:
         """A preview of one section: cut from the whole rendition's score, made, and brought up by the gain a
@@ -1009,11 +1047,10 @@ class Studio:
     # audio), like the MIDI file; held to a public studio's limit on requests like every other request.
 
     def arrangement(self, edits: dict) -> dict:
-        from . import band as band_mod, takeover
+        from . import takeover
 
         v = self.version(edits)
-        with band_mod.overheard() as heard:
-            self._score(v)
+        _, heard = self._score_and_heard(v)
         grid = takeover.grid(self.genome, v, heard)
         for s in grid["sections"]:  # where the voices before sing (the score's track for them): a choir section, sung, or a round
             s["choir"] = bool(s.get("round") or v.params.choir and s["sung"] and self.genome.section(s["name"]).choir)

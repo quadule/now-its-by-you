@@ -51,6 +51,10 @@ def _job(key: str, kind: str, progress):
     return job
 
 
+_GENOMES: dict[str, object] = {}  # the last few songs parsed, by their digest
+GENOMES = 2
+
+
 def load(spec: dict, folder: Path):
     """The song and the version's choices, as the spec gives them: the song's file written as it came (a
     recording packs these very bytes), everything else read back by its own class."""
@@ -60,8 +64,16 @@ def load(spec: dict, folder: Path):
 
     folder.mkdir(parents=True, exist_ok=True)
     song = folder / "genome.json"
-    song.write_bytes(spec["genome"].encode("utf-8"))
-    genome = genome_mod.from_dict(json.loads(spec["genome"]))
+    raw = spec["genome"].encode("utf-8")
+    song.write_bytes(raw)
+    gkey = hashlib.sha256(raw).hexdigest()
+    if gkey in _GENOMES:
+        genome = _GENOMES[gkey] = _GENOMES.pop(gkey)
+    else:
+        genome = genome_mod.from_dict(json.loads(spec["genome"]))
+        _GENOMES[gkey] = genome
+        while len(_GENOMES) > GENOMES:
+            del _GENOMES[next(iter(_GENOMES))]
     params = Params.from_dict(spec["params"])
     lyrics = Lyrics.from_dict(spec["lyrics"]) if spec.get("lyrics") else None
     return song, genome, params, lyrics

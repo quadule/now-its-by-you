@@ -955,6 +955,14 @@ function renderTimeline() {
   const n = tl.dates.length;
   const left = 70, right = 10, laneH = 22, gap = 8;
   const x = (i) => left + (i / (n - 1)) * (width - left - right);
+  const today = tl.today;
+  const at = today + (state.view ? state.view.offset : 0);
+  const existing = box.firstElementChild;
+  if (existing && existing._tl === tl && existing._width === width && existing._cursor) {
+    existing._cursor.setAttribute("x1", x(at));
+    existing._cursor.setAttribute("x2", x(at));
+    return;
+  }
   const lanes = [["Style", "style"], ["Key", "key"], ["Tempo", "tempo"], ["Verses", "verses"], ["Lead", "lead"], ["Words", "lean"]];
   const height = lanes.length * (laneH + gap) + 26;
   const root = svg("svg", { class: "timeline", viewBox: `0 0 ${width} ${height}`, width: "100%", height, role: "img",
@@ -997,10 +1005,12 @@ function renderTimeline() {
       if (w > 10 + 6.4 * text.length) root.append(svg("text", { x: x(a) + 4, y: y + 15, fill: ink }, text));
     }
   });
-  const today = tl.today;
   root.append(svg("line", { class: "today-mark", x1: x(today), x2: x(today), y1: 0, y2: height - 18 }));
-  const at = today + (state.view ? state.view.offset : 0);
-  root.append(svg("line", { class: "cursor", x1: x(at), x2: x(at), y1: 0, y2: height - 18 }));
+  const cursor = svg("line", { class: "cursor", x1: x(at), x2: x(at), y1: 0, y2: height - 18 });
+  root.append(cursor);
+  root._tl = tl;
+  root._width = width;
+  root._cursor = cursor;
   const pick = (ev) => {
     const r = root.getBoundingClientRect();
     const px = (ev.clientX - r.left) * (width / r.width);

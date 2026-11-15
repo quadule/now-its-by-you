@@ -125,8 +125,13 @@ class Character:
         habit), from the voice hash; 0 for a neutral voice."""
         if "identity" not in self.known:
             return 0.0
-        digest = hashlib.sha256(f"identity|{self.hash}|{trait}".encode()).digest()
-        return int.from_bytes(digest[:8], "little") / 2**63 - 1.0
+        return _trait_id(self.hash, trait)
+
+
+@functools.lru_cache(maxsize=1024)
+def _trait_id(voice_hash: str, trait: str) -> float:
+    digest = hashlib.sha256(f"identity|{voice_hash}|{trait}".encode()).digest()
+    return int.from_bytes(digest[:8], "little") / 2**63 - 1.0
 
 
 def character(voice: Voice | None) -> Character:
@@ -197,7 +202,7 @@ class Chance:
     same machine, instant and parent always give the same child."""
 
     def __init__(self, voice: Voice | None, drift: Drift | None, parent, seed: int | None = None):
-        digest = hashlib.sha256(json.dumps(parent.to_dict(), sort_keys=True).encode()).hexdigest()[:16]
+        digest = parent.digest
         instant = f"{drift.t:.6f}" if drift is not None else "timeless"
         self.material = f"{voice.hash if voice is not None else 'no-voice'}|{instant}|{digest}"
         self.fixed = seed
@@ -218,6 +223,9 @@ class Chance:
 LEANINGS = {"mood_weights": {"plain": 1.0, "light": 1.0, "dark": 1.0, "tender": 1.0}, "era_bias": 0.0,
             "rarity_appetite": 0.0, "vocabulary": {}}
 VOCABULARY_AT = 0.6
+_VOICE_DEFAULTS = VoiceParams()
+_BAND_DEFAULTS = Band()
+_MIX_DEFAULTS = MixParams()
 
 
 def read(params, path: str):
@@ -231,8 +239,11 @@ def read(params, path: str):
         return getattr(held, tail)
     if tail in held:
         return held[tail]
-    return {"singer": lambda: getattr(VoiceParams(), tail), "mix": lambda: getattr(MixParams(), tail),
-            "leanings": lambda: LEANINGS[tail]}[head]()
+    if head == "singer":
+        return getattr(_VOICE_DEFAULTS, tail)
+    if head == "mix":
+        return getattr(_MIX_DEFAULTS, tail)
+    return LEANINGS[tail]
 
 
 def write(out: dict, path: str, value) -> None:
@@ -243,11 +254,17 @@ def write(out: dict, path: str, value) -> None:
         out[head] = value
 
 
+@functools.lru_cache(maxsize=256)
 def exists(path: str) -> bool:
     """Whether a knob's field exists (a singer's or the band's may be gone after it changes)."""
     head, _, tail = path.partition(".")
-    return {"singer": lambda: hasattr(VoiceParams(), tail), "band": lambda: hasattr(Band(), tail),
-            "mix": lambda: hasattr(MixParams(), tail)}.get(head, lambda: True)()
+    if head == "singer":
+        return hasattr(_VOICE_DEFAULTS, tail)
+    if head == "band":
+        return hasattr(_BAND_DEFAULTS, tail)
+    if head == "mix":
+        return hasattr(_MIX_DEFAULTS, tail)
+    return True
 
 
 # ---------------------------------------------------------------- the table of numbers
@@ -657,7 +674,15 @@ def held(ctx: Context, view: str, dimension: str, base: float, span: float, n: i
     if here is not None:
         return here
     drift = ctx.drift
-    if drift is not None and drift.hash:
+    hist = getattr(drift, "_history", None)
+    if hist is not None:
+        s_all, pos = hist
+        arr = s_all[dimension][view]
+        for back in range(1, HISTORY + 1):
+            k = firm(base + span * float(arr[pos - back]))
+            if k is not None:
+                return k
+    elif drift is not None and drift.hash:
         for start in range(1, HISTORY + 1, 60):
             back = np.arange(start, min(start + 60, HISTORY + 1), dtype=float)
             for v in series(drift.t - back, drift.hash, [dimension])[dimension][view]:
@@ -1147,6 +1172,15 @@ def choose_style(out: dict, ctx: Context) -> None:
 DECISIONS = (choose_mode, choose_form, choose_accomp, choose_pattern, choose_lead, choose_choir, choose_mood,
              choose_vocabulary, choose_inventory, choose_room, choose_timbre, choose_style, evolve.choose_words,
              evolve.choose_variants)
+DECISIONS_TIMELINE = (choose_mode, choose_form, choose_pattern, choose_lead, choose_choir, choose_mood, choose_style)
+KNOBS_TIMELINE = tuple(k for k in KNOBS if k.path in ("tonic", "tempo", "band.whistle", "band.fiddle", "band.lute"))
+
+
+@per_genome
+def _seed_params(genome: Genome):
+    from .realize import Params
+
+    return Params.from_dict(genome.seed_params)
 
 
 # ---------------------------------------------------------------- putting it together
@@ -1154,14 +1188,15 @@ DECISIONS = (choose_mode, choose_form, choose_accomp, choose_pattern, choose_lea
 
 def choose(genome: Genome, parent=None, voice: Voice | None = None, drift: Drift | None = None,
            seed: int | None = None, log: list | None = None, form=None, pin: Callable | None = None,
-           trace: dict | None = None, style: str | None = None, arrange: dict | None = None):
+           trace: dict | None = None, style: str | None = None, arrange: dict | None = None,
+           evolve: bool = True):
     """The child's parameters; see realize.choose_params. log, form: as there. pin(out), if given, puts a
     person's choices (songbird.edits) in place after the knobs and after every decision, so a decision that
     reads one reads the person's and none overwrites it; trace, if given, receives each knob's arithmetic.
     style, arrange: a style asked for by name and its options (songbird.style), else the ring decides."""
     from .realize import Params
 
-    song = Params.from_dict(genome.seed_params)
+    song = _seed_params(genome)
     if parent is not None:  # a person's lines from an older record, by verse rather than by place
         from .composition import handed_down
 
@@ -1188,11 +1223,11 @@ def choose(genome: Genome, parent=None, voice: Voice | None = None, drift: Drift
         out[key] = dict(out.get(key) or {})
     out["generation"] = generation
     out["made"] = {"by": drift.hash[:12], "at": round(drift.t, 6)} if drift is not None and drift.hash else {}
-    for knob in KNOBS:
+    for knob in (KNOBS if evolve else KNOBS_TIMELINE):
         knob.apply(out, ctx)
     if pin is not None:
         pin(out)
-    for decide in DECISIONS:
+    for decide in (DECISIONS if evolve else DECISIONS_TIMELINE):
         decide(out, ctx)
         if decide in (choose_form, choose_style) and form is not None:  # a form set by hand stands in for the
             # season's (and for a style's: the jazz trio adds a break where a form has none)
@@ -1201,7 +1236,8 @@ def choose(genome: Genome, parent=None, voice: Voice | None = None, drift: Drift
             style_shaped(genome, out)
         if pin is not None:
             pin(out)
-    out["seed"] = Chance(voice, drift, parent, seed).seed
+    if evolve or seed is not None:
+        out["seed"] = Chance(voice, drift, parent, seed).seed
     return Params.from_dict(out)
 
 

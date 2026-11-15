@@ -15,10 +15,11 @@ own arrangement, exactly as it always played (the ballad band).
 
 from __future__ import annotations
 
+from dataclasses import asdict, dataclass, field, fields
+from functools import lru_cache
 import hashlib
 import json
 import re
-from dataclasses import asdict, dataclass, field, fields
 
 import numpy as np
 
@@ -29,6 +30,7 @@ BACKINGS = ("oohs", "echo", "thirds", "gang", "hum")  # hum: an a cappella's ope
 LINEAGE_MAX = 16  # generations of styles a record remembers
 # Style's options a record leaves out while they're off (a record made without them reads the same)
 QUIET_OFF = ("drop", "loop", "dissolve")
+_LOOP_RE = re.compile(r"[a-z]{1,16}")
 # Values a record or an edit may hold under another name, read as the one sung: an a cappella's intro on
 # shape-note syllables is the lead humming the tune over the group; the Celtic session is the jig
 RENAMED = {"intro": {"notes": "lead"}, "name": {"celtic": "jig"}}
@@ -113,16 +115,37 @@ class Style:
 
     @classmethod
     def from_dict(cls, data: dict | None) -> Style:
-        known = {f.name for f in fields(cls)}
-        values = {k: v for k, v in (data or {}).items() if k in known}
+        if not data:
+            return _SEED_STYLE
+        values = {k: v for k, v in data.items() if k in _STYLE_FIELDS}
         return cls(**values).clamped()
 
     def to_dict(self) -> dict:
-        data = asdict(self)
-        data["lineage"] = list(self.lineage)
-        for name in QUIET_OFF:  # absent while off, so the digest of a record made without them is the same
-            if not data[name]:
-                del data[name]
+        data = {
+            "name": self.name,
+            "lineage": list(self.lineage),
+            "feel": self.feel,
+            "harmony": self.harmony,
+            "intro": self.intro,
+            "alone": self.alone,
+            "alone_with": self.alone_with,
+            "stops": self.stops,
+            "breakdown": self.breakdown,
+            "bridge": self.bridge,
+            "lift": self.lift,
+            "ending": self.ending,
+            "entrances": self.entrances,
+            "backing": self.backing,
+            "voices": self.voices,
+            "coda": self.coda,
+            "motif": self.motif,
+        }
+        if self.drop:
+            data["drop"] = self.drop
+        if self.loop:
+            data["loop"] = self.loop
+        if self.dissolve:
+            data["dissolve"] = self.dissolve
         return data
 
     def clamped(self) -> Style:
@@ -148,14 +171,18 @@ class Style:
             coda=pick(self.coda, ("quote",)),
             motif=pick(self.motif, ("bridge", "chance")),
             drop=max(0, min(8, int(self.drop or 0))),
-            loop=str(self.loop or "") if re.fullmatch(r"[a-z]{1,16}", str(self.loop or "")) else "",
+            loop=str(self.loop) if self.loop and _LOOP_RE.fullmatch(str(self.loop)) else "",
             dissolve=max(0, min(8, int(self.dissolve or 0))),
         )
 
     @property
     def seed(self) -> bool:
         """Whether this is the seed's own arrangement (no style, no options)."""
-        return self == Style()
+        return self == _SEED_STYLE
+
+
+_STYLE_FIELDS = frozenset(f.name for f in fields(Style))
+_SEED_STYLE = Style()
 
 
 # --- the palette ------------------------------------------------------------------------------------
@@ -1332,7 +1359,15 @@ def held_ring(drift, base: float, span: float, n: int = len(RING)) -> int:
     here = firm(now)
     if here is not None:
         return here
-    if drift is not None and drift.hash:
+    hist = getattr(drift, "_history", None)
+    if hist is not None:
+        s_all, pos = hist
+        arr = s_all["style"]["slow"]
+        for back in range(1, HISTORY + 1):
+            k = firm(base + span * float(arr[pos - back]))
+            if k is not None:
+                return k
+    elif drift is not None and drift.hash:
         for start in range(1, HISTORY + 1, 60):
             back = np.arange(start, min(start + 60, HISTORY + 1), dtype=float)
             for v in series(drift.t - back, drift.hash, ["style"])["style"]["slow"]:
@@ -1477,6 +1512,7 @@ def choose_options(genome, form, sdef: StyleDef, parent: Style, kept: bool, voic
 CHORDS_FIRST = ("guitar", "piano", "harp", "epiano", "banjo", "concertina", "accordion", "musicbox", "organ")
 
 
+@lru_cache(maxsize=128)
 def instruments_family(name: str) -> str:
     from .synth import instruments
 
@@ -1486,6 +1522,7 @@ def instruments_family(name: str) -> str:
         return ""
 
 
+@lru_cache(maxsize=128)
 def _knob(path: str):
     from .variation import KNOBS
 
@@ -1525,8 +1562,7 @@ def choose_style(out: dict, ctx, forced: str | None = None, arrange: dict | None
     """The rendition's style: where on the ring it is played (its parent's, or a neighbour's), and what that
     brings: the arrangement's options, the band's lineup and its lean, the tempo the style takes the song
     at, the singer's and the mix's lean. A machine that gave nothing keeps its parent's style."""
-    from .synth.voice import VoiceParams
-    from .variation import PULL
+    from .variation import PULL, _MIX_DEFAULTS, _VOICE_DEFAULTS
 
     parent: Style = ctx.parent.style
     c = ctx.c
@@ -1537,7 +1573,7 @@ def choose_style(out: dict, ctx, forced: str | None = None, arrange: dict | None
     name = renamed("name", forced) or place(parent, c, ctx.drift)
     sdef, pdef = STYLES[name], of(parent)
     kept = name == (parent.name or "ballad")
-    digest = hashlib.sha256(json.dumps(ctx.parent.to_dict(), sort_keys=True).encode()).hexdigest()[:16]
+    digest = ctx.parent.digest
     material = f"{c.hash or 'no-voice'}|{digest}|{name}"
     if name in SOLO_BREAK and not (out.get("composition") or {}).get("order"):  # the trio's piano chorus, its break
         out["form"] = with_break(ctx.genome, out.get("form", ctx.parent.form), material, sdef)
@@ -1622,16 +1658,16 @@ def choose_style(out: dict, ctx, forced: str | None = None, arrange: dict | None
         knob = _knob(f"singer.{field_name}")
         off = sdef.singer.get(field_name, 0.0)
         poff = pdef.singer.get(field_name, 0.0) if parent.name else 0.0
-        current = float(singer.get(field_name, getattr(VoiceParams(), field_name)))
+        current = float(singer.get(field_name, getattr(_VOICE_DEFAULTS, field_name)))
         lo_b, hi_b = knob.bounds if knob is not None and not callable(knob.bounds) else (-1e9, 1e9)
         _lean(out, f"singer.{field_name}", off, poff, lo_b, hi_b, _kept(knob, ctx), current,
               knob.step if knob else 0.001)
 
     # the mix's lean: how much room, how close, how wide, how far forward; never the room itself
-    from .synth.mixing import RANGES, MixParams
+    from .synth.mixing import RANGES
 
     mix = out.setdefault("mix", {})
-    defaults = MixParams()
+    defaults = _MIX_DEFAULTS
     for field_name in sorted((set(sdef.mix) | (set(pdef.mix) if parent.name else set())) - {"choir"}):
         off = sdef.mix.get(field_name, 0.0)
         poff = pdef.mix.get(field_name, 0.0) if parent.name else 0.0

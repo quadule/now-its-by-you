@@ -30,7 +30,9 @@ arc), with defaults that are the seed's arrangement.
 
 from __future__ import annotations
 
+import bisect
 import contextlib
+import math
 import re
 import threading
 from dataclasses import asdict, dataclass, field, fields, replace
@@ -46,6 +48,11 @@ INSTRUMENTS = ("lute", "guitar", "harp", "bass", "fiddle", "whistle", "drum", "d
 PATTERNS = ("lilt", "strum", "pick", "air")
 LEADS = ("whistle", "fiddle", "lute")
 ROLES = ("intro", "verse", "refrain", "turn", "break", "bridge", "tag", "outro")
+
+
+def _clip(x: float, lo: float, hi: float) -> float:
+    x = float(x)
+    return lo if x < lo else hi if x > hi else x
 
 
 @dataclass(frozen=True)
@@ -80,33 +87,43 @@ class Band:
 
     @classmethod
     def from_dict(cls, data: dict | None) -> Band:
-        known = {f.name for f in fields(cls)}
-        return cls(**{k: v for k, v in (data or {}).items() if k in known}).clamped()
+        if not data:
+            return _DEFAULT_BAND
+        return cls(**{k: v for k, v in data.items() if k in _BAND_FIELDS}).clamped()
 
     def to_dict(self) -> dict:
-        return asdict(self)
+        return {
+            "lute": self.lute, "guitar": self.guitar, "harp": self.harp, "bass": self.bass,
+            "fiddle": self.fiddle, "whistle": self.whistle, "drum": self.drum, "drone": self.drone,
+            "brightness": self.brightness, "pattern": self.pattern, "density": self.density,
+            "swing": self.swing, "wear": self.wear, "ornament": self.ornament, "arc": self.arc,
+            "lead": self.lead, "body": self.body, "maker": self.maker, "lineup": dict(self.lineup),
+        }
 
     def clamped(self) -> Band:
-        values = {}
-        for f in fields(self):
-            v = getattr(self, f.name)
-            if f.name == "lineup":  # a mapping, or (name, gain) pairs as an old JSON might hold them
-                pairs = v.items() if isinstance(v, dict) else (v or ())
-                v = {str(k): float(np.clip(float(g), 0.0, 2.0)) for k, g in pairs}
-            elif f.name in INSTRUMENTS:
-                v = float(np.clip(float(v), 0.0, 2.0))
-            elif f.name in ("brightness", "density", "swing", "wear", "ornament", "arc"):
-                v = float(np.clip(float(v), 0.0, 1.0))
-            elif f.name == "body":
-                v = float(np.clip(float(v), 0.8, 1.25))
-            elif f.name == "maker":
-                v = int(v)
-            elif f.name == "pattern":
-                v = v if v in PATTERNS else "lilt"
-            elif f.name == "lead":
-                v = v if v in LEADS else "whistle"
-            values[f.name] = v
-        return Band(**values)
+        lineup = self.lineup
+        pairs = lineup.items() if isinstance(lineup, dict) else (lineup or ())
+        return Band(
+            lute=_clip(self.lute, 0.0, 2.0),
+            guitar=_clip(self.guitar, 0.0, 2.0),
+            harp=_clip(self.harp, 0.0, 2.0),
+            bass=_clip(self.bass, 0.0, 2.0),
+            fiddle=_clip(self.fiddle, 0.0, 2.0),
+            whistle=_clip(self.whistle, 0.0, 2.0),
+            drum=_clip(self.drum, 0.0, 2.0),
+            drone=_clip(self.drone, 0.0, 2.0),
+            brightness=_clip(self.brightness, 0.0, 1.0),
+            pattern=self.pattern if self.pattern in PATTERNS else "lilt",
+            density=_clip(self.density, 0.0, 1.0),
+            swing=_clip(self.swing, 0.0, 1.0),
+            wear=_clip(self.wear, 0.0, 1.0),
+            ornament=_clip(self.ornament, 0.0, 1.0),
+            arc=_clip(self.arc, 0.0, 1.0),
+            lead=self.lead if self.lead in LEADS else "whistle",
+            body=_clip(self.body, 0.8, 1.25),
+            maker=int(self.maker),
+            lineup={str(k): _clip(g, 0.0, 2.0) for k, g in pairs},
+        )
 
     def gain(self, name: str) -> float:
         """An instrument's gain: from the lineup when a style set one, else the eight's own fields."""
@@ -116,6 +133,10 @@ class Band:
 
     def plays(self, name: str) -> bool:
         return self.gain(name) > 0.02
+
+
+_BAND_FIELDS = frozenset(f.name for f in fields(Band))
+_DEFAULT_BAND = Band()
 
 
 # Timing habits: seconds each part sits against the grid (a bowed note speaks
@@ -331,17 +352,33 @@ class Context:
         return [t for t in self.tune if t.section == section]
 
     def chord_at(self, u: float) -> Chord:
-        for c in self.chords:
-            if c.u0 - 1e-9 <= u < c.u1 - 1e-9:
+        if getattr(self, "_chords_len", -1) != len(self.chords):
+            self._chords_u0 = [c.u0 for c in self.chords]
+            self._chords_len = len(self.chords)
+        idx = bisect.bisect_right(self._chords_u0, u + 1e-9) - 1
+        if idx >= 0:
+            c = self.chords[idx]
+            if u < c.u1 - 1e-9:
                 return c
         return self.chords[-1] if u >= self.chords[-1].u0 else self.chords[0]
 
     def sung_at(self, u: float) -> Tune | None:
-        return next((t for t in self.tune if t.sung and t.u0 - 1e-9 <= u < t.u1 - 1e-9), None)
+        if getattr(self, "_sung_len", -1) != len(self.tune):
+            self._sung_tune = [t for t in self.tune if t.sung]
+            self._sung_u0 = [t.u0 for t in self._sung_tune]
+            self._sung_len = len(self.tune)
+        idx = bisect.bisect_right(self._sung_u0, u + 1e-9) - 1
+        if idx >= 0:
+            t = self._sung_tune[idx]
+            if u < t.u1 - 1e-9:
+                return t
+        return None
 
     def voices_at(self, u: float) -> list[int]:
         """Every pitch being sung at u: the singer's and the lineage voices'."""
         sung = self.sung_at(u)
+        if not self.choir:
+            return [sung.pitch] if sung else []
         return ([sung.pitch] if sung else []) + [p for u0, u1, p in self.choir if u0 - 1e-9 <= u < u1 - 1e-9]
 
     def pcs(self, symbol: str) -> tuple[int, ...]:
@@ -373,9 +410,14 @@ class Context:
 
     def breath(self, u: float) -> float:
         """Players breathe with the phrase: a little fuller through a line's middle than at its ends."""
-        for p0, p1 in self.phrases:
-            if p0 - 1e-9 <= u < p1 - 1e-9:
-                return 0.96 + 0.08 * float(np.sin(np.pi * (u - p0) / (p1 - p0)))
+        if getattr(self, "_phrases_len", -1) != len(self.phrases):
+            self._phrases_u0 = [p0 for p0, _ in self.phrases]
+            self._phrases_len = len(self.phrases)
+        idx = bisect.bisect_right(self._phrases_u0, u + 1e-9) - 1
+        if idx >= 0:
+            p0, p1 = self.phrases[idx]
+            if u < p1 - 1e-9:
+                return 0.96 + 0.08 * math.sin(math.pi * (u - p0) / (p1 - p0))
         return 1.0
 
     def vel(self, part: str, u: float, base: float, under_words: float = 0.78) -> float:
@@ -388,7 +430,7 @@ class Context:
         elif any(what in ("lead", "quote") for what in self.sections[self.section_at(u)].parts.values()) \
                 and not getattr(self.sections[self.section_at(u)], "played", False):  # a drop keeps its weight
             v *= 0.7
-        return float(np.clip(v * (1.0 + self.rand(part, u).uniform(-0.06, 0.06)), 0.03, 1.0))
+        return _clip(v * (1.0 + self.rand(part, u).uniform(-0.06, 0.06)), 0.03, 1.0)
 
 
 def _role(name: str, section) -> str:

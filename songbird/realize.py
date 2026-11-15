@@ -68,8 +68,7 @@ class Params:
 
     @classmethod
     def from_dict(cls, data: dict) -> Params:
-        known = {f.name for f in fields(cls)}
-        values = {k: v for k, v in data.items() if k in known}
+        values = {k: v for k, v in data.items() if k in _PARAMS_FIELDS}
         values["form"] = tuple(values["form"])
         if data.get("room"):  # a record with a room and no mix: its room is the mix's rt60 and tone
             values["mix"] = {**data["room"], **(values.get("mix") or {})}
@@ -90,22 +89,70 @@ class Params:
         return cls(**values)
 
     def to_dict(self) -> dict:
-        data = asdict(self)
-        data["form"] = list(self.form)
-        data["variants"] = [v.to_dict() for v in self.variants]
-        for name, empty in (("variants", []), ("words", {}), ("generation", 0), ("made", {}), ("composition", {}),
-                            ("sound", {})):
-            if data[name] == empty:
-                del data[name]
+        band = self.band.to_dict()
+        if not self.band.lineup:
+            del band["lineup"]
+        data = {
+            "tonic": self.tonic,
+            "mode": self.mode,
+            "tempo": self.tempo,
+            "form": list(self.form),
+            "seed": self.seed,
+            "accomp": self.accomp,
+            "humanize": self.humanize,
+            "ritardando": self.ritardando,
+            "choir": self.choir,
+            "loudness": self.loudness,
+            "band": band,
+            "singer": _copy_dict(self.singer),
+            "mix": _copy_dict(self.mix),
+            "leanings": _copy_dict(self.leanings),
+            "lay": self.lay,
+            "inventory": self.inventory,
+        }
+        if self.variants:
+            data["variants"] = [v.to_dict() for v in self.variants]
+        if self.words:
+            data["words"] = _copy_dict(self.words)
+        if self.generation != 0:
+            data["generation"] = self.generation
+        if self.made:
+            data["made"] = _copy_dict(self.made)
         # The seed's own style and band leave no trace, so a record (and the rendition seed a child draws
         # from its parent's record) is the same as one made without styles.
-        if self.style.seed:
-            del data["style"]
-        else:
+        if not self.style.seed:
             data["style"] = self.style.to_dict()
-        if not self.band.lineup:
-            del data["band"]["lineup"]
+        if self.composition:
+            data["composition"] = _copy_dict(self.composition)
+        if self.sound:
+            data["sound"] = _copy_dict(self.sound)
         return data
+
+    @property
+    def digest(self) -> str:
+        d = getattr(self, "_digest", None)
+        if d is None:
+            import hashlib
+            import json
+
+            d = hashlib.sha256(json.dumps(self.to_dict(), sort_keys=True).encode()).hexdigest()[:16]
+            object.__setattr__(self, "_digest", d)
+        return d
+
+
+_PARAMS_FIELDS = frozenset(f.name for f in fields(Params))
+
+
+def _copy_dict(d: dict) -> dict:
+    if not d:
+        return {}
+    return {k: (_copy_dict(v) if isinstance(v, dict) else _copy_seq(v) if isinstance(v, (list, tuple)) else v)
+            for k, v in d.items()}
+
+
+def _copy_seq(seq):
+    return type(seq)(_copy_dict(v) if isinstance(v, dict) else _copy_seq(v) if isinstance(v, (list, tuple)) else v
+                     for v in seq)
 
 
 def choose_params(genome: Genome, parent: Params | None = None, voice: Voice | None = None,

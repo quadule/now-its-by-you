@@ -107,13 +107,13 @@ async function init({ pyodide, app, bytecode, bytes, lean, control, stemCacheByt
   step = 'Python';
   loading(true);
   // the program is fetched beside Python and its packages, not after them
-  const program = lean || control ? fetch(`${app}songbird.zip`).then((r) => {
+  const program = fetch(`${app}songbird.zip`).then((r) => {
     if (!r.ok) throw new Error(`the program couldn't be fetched (${r.status})`);
     return r.arrayBuffer();
-  }) : null;
-  program?.catch(() => {});
+  });
+  program.catch(() => {});
   const packages = control ? ['numpy'] : ['numpy', 'scipy', 'soundfile'];
-  if (control) warm(pyodide, packages);
+  warm(pyodide, packages);
   const { loadPyodide } = await import(`${pyodide}pyodide.mjs`);
   const code = shippedCode(bytecode, app, packages);
   py = await loadPyodide({ indexURL: pyodide, stdout: () => {}, stderr: () => {}, stdLibURL: code.stdlib });
@@ -123,15 +123,18 @@ async function init({ pyodide, app, bytecode, bytes, lean, control, stemCacheByt
   step = 'the program';
   loading(true);
   if (lean || control) return initLean(new Uint8Array(await program), t0, control, await code.modules);
-  const kernels = await import(`${app}kernels/kernels.gen.mjs`);
-  const rt = await import(`${app}kernels/rt.mjs`);
-  const { loadWasmKernels, kernelsFile } = await import(`${app}wasm/kernels.mjs`);
+  const [kernels, rt, { loadWasmKernels, kernelsFile }, manifest, zipBuf] = await Promise.all([
+    import(`${app}kernels/kernels.gen.mjs`),
+    import(`${app}kernels/rt.mjs`),
+    import(`${app}wasm/kernels.mjs`),
+    fetch(`${app}kernels/manifest.json`).then((r) => r.text()),
+    program,
+  ]);
   rt.setHeap(() => py._module.HEAPU8.buffer);
-  const manifest = await (await fetch(`${app}kernels/manifest.json`)).text();
   py.registerJsModule('songbird_kernels', { kernels, rt, manifest });
   const wasm = await (await fetch(`${app}${kernelsFile()}`)).arrayBuffer();  // with SIMD where it validates
   py.registerJsModule('songbird_wasm', await loadWasmKernels(wasm, py._module.memory));
-  const zip = new Uint8Array(await (await fetch(`${app}songbird.zip`)).arrayBuffer());
+  const zip = new Uint8Array(zipBuf);
   py.unpackArchive(zip, 'zip', { extractDir: '/app' });
   unpackCode(await code.modules);
   step = 'getting the singer ready';

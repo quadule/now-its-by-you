@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from functools import lru_cache
 import math
 import re
 
@@ -31,6 +32,7 @@ _CHORD = re.compile(r"([#b]?)(?i:(i{1,3}|iv|vi{0,2}|v))("
                     + "|".join(sorted(QUALITIES, key=len, reverse=True)) + r")?(?:/([357]))?")
 
 
+@lru_cache(maxsize=1024)
 def degree_semitones(degree: int, mode: str, alter: int = 0) -> int:
     """Semitones above the tonic for an absolute scale degree.
 
@@ -41,6 +43,7 @@ def degree_semitones(degree: int, mode: str, alter: int = 0) -> int:
     return 12 * octave + steps[index] + alter
 
 
+@lru_cache(maxsize=512)
 def parse_symbol(symbol: str) -> tuple[int, int, str, int]:
     """A chord function in full: (degree 1-7, alteration in semitones, quality, bass).
 
@@ -67,6 +70,7 @@ def parse_chord(symbol: str) -> tuple[int, int]:
     return degree, alter
 
 
+@lru_cache(maxsize=1024)
 def chord_tones(symbol: str, mode: str) -> tuple[int, ...]:
     """Semitone offsets from the tonic of the chord's root, third and fifth, and
     its added tone if it has one (a seventh, a sixth, a ninth).
@@ -109,6 +113,7 @@ def _spelt(letter: int, alter: int) -> str:
     return LETTERS[letter % 7] + _SIGN[alter]
 
 
+@lru_cache(maxsize=256)
 def tonic_letter(tonic: int, mode: str) -> tuple[int, int]:
     """The tonic's letter and accidental: the name a musician writes the key by, the one of its two names with the
     fewer sharps or flats (D♭ major's five flats, not C♯ major's seven sharps; G♯ minor's five sharps, not A♭
@@ -143,6 +148,7 @@ def scale_names(tonic: int, mode: str) -> tuple[str, ...]:
     return tuple(_spelt(letter + d, _alter(pc + MODES[mode][d], letter + d)) for d in range(7))
 
 
+@lru_cache(maxsize=256)
 def spelling(tonic: int, mode: str) -> tuple[str, ...]:
     """The twelve pitch classes (C first) as this key writes them: its own seven on their letters; a note outside
     it natural if a natural is that note, else sharp in a sharp key and flat in a flat one (NOTE_NAMES' own in a
@@ -200,6 +206,7 @@ def _chord_note(pc: int, letter: int, tonic: int, mode: str) -> str:
     return _spelt(letter, alter)
 
 
+@lru_cache(maxsize=1024)
 def chord_bass(symbol: str, mode: str) -> int:
     """Semitone offset from the tonic of the chord's lowest note: its root, or the third or fifth a person
     put in the bass (I/3, V/5)."""
@@ -214,6 +221,7 @@ KINDS = {(4, 7): "", (3, 7): "m", (3, 6): "°", (4, 8): "+", (5, 7): "sus4", (2,
          (2, 7, 10): "7sus2"}
 
 
+@lru_cache(maxsize=2048)
 def chord_name(symbol: str, tonic: int, mode: str) -> str:
     """A chord function as a musician reads it in this key: vi in D major is Bm, bVII is C, V in D is A, V7 A7,
     viim7b5 C♯m7♭5, V7/7 A7/G."""
