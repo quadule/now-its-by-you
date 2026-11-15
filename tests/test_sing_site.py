@@ -324,6 +324,10 @@ def test_the_home_page_offers_the_newest_edition_and_the_history_every_one(tmp_p
     assert W.seed_source() == kept
     out = tmp_path / "public"
     out.mkdir()
+    monkeypatch.setattr(W, "REQUIRE_EDITIONS", True)  # the command line's build: an edition missing stops it
+    with pytest.raises(SystemExit, match="2026-11-02|isn't in this checkout"):
+        W.pages(out)
+    monkeypatch.setattr(W, "REQUIRE_EDITIONS", False)  # --allow-missing-editions: left out, said
     W.pages(out)
 
     seed = out / "seed"
