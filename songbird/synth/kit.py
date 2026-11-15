@@ -428,7 +428,7 @@ def sweep(start: float, dur: float, vel: float, sr: int, length: int, rng: np.ra
     if circling:
         speed = 0.35 + 0.65 * speed
     speed *= 1.0 + 0.2 * np.sin(2.0 * np.pi * rng.uniform(1.5, 3.0) * x + rng.uniform(0.0, 6.28))
-    counts = rng.poisson(8000.0 * speed * step)
+    counts = rng.poisson(8000.0 * speed * step).astype(np.intp)  # np.repeat takes counts the size of an index
     total = int(counts.sum())
     at = ((np.repeat(t, counts) + rng.uniform(0.0, step, total)) * sr).astype(np.int64)
     blows = np.repeat(speed ** 1.75, counts) * rng.exponential(1.0, total) / 2.5
