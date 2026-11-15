@@ -28,6 +28,7 @@ from dataclasses import dataclass, field, replace
 
 import numpy as np
 
+from . import strumming
 from . import band as B
 from .band import Chord, Context, Ev, Tune, nearest
 from .score import Note
@@ -736,31 +737,20 @@ GUITARS = ("guitar", "electric")
 
 
 def strokes(ctx: StyleContext, kind: str) -> list[tuple[float, str, float]]:
-    """(offset in the bar, stroke, accent) for a strum in this feel: D a down stroke across the strings, U
-    an up stroke catching the top strings, d a light down on the top strings."""
-    feel, g = ctx.feel, ctx.grid
-    if feel == "waltz":
-        return [(0.0, "D", 1.0), (2.0, "D", 0.65), (2.5, "U", 0.42), (3.0, "D", 0.65), (3.5, "U", 0.42)]
-    if feel == "six":
-        return [(0.0, "D", 1.0), (2.0, "d", 0.55), (3.0, "U", 0.5), (4.0, "D", 0.85), (6.0, "d", 0.55), (7.0, "U", 0.5)]
-    beats = g.beats
-    m = ctx.meter
-    if kind == "dadgad" and m.beat % 3 == 0 and m.beat > 1:  # the jig in a song already in six-eight: the same
-        return [x for k, b in enumerate(beats)  # down-down-up on each dotted beat
-                for x in ((b, "D", 1.0 if k == 0 else 0.85), (b + m.beat / 3, "d", 0.55), (b + 2 * m.beat / 3, "U", 0.5))]
+    """(offset in the bar, stroke, accent) for the fixed patterns (the grooves are songbird.strumming's): a ring's
+    one stroke, and the jig's DADGAD down-down-up on each dotted beat. D a down stroke, U an up catching the top
+    strings, d a light down on the top strings."""
+    feel = ctx.feel
     if kind == "ring":
         return [(0.0, "D", 0.9)]
-    if feel in ("shuffle", "twelve"):
-        return [x for b in beats for x in ((b, "D", 1.0 if b == 0 else 0.75), (b + ctx.beat / 2, "U", 0.5))]
-    if feel == "half":
-        return [(0.0, "D", 1.0), (beats[len(beats) // 2], "D", 0.8)] + [(b + ctx.beat / 2, "U", 0.45) for b in beats[1::2]]
-    if feel == "double":
-        return [(u, "D" if k % 2 == 0 else "U", 0.9 if k == 0 else 0.6) for k, u in enumerate(g.subs)]
-    if len(beats) == 4:  # the old faithful: down, down-up, up-down-up
-        half = ctx.beat / 2
-        return [(beats[0], "D", 1.0), (beats[1], "D", 0.7), (beats[1] + half, "U", 0.5), (beats[2] + half, "U", 0.5),
-                (beats[3], "D", 0.7), (beats[3] + half, "U", 0.5)]
-    return [(b, "D", 1.0 if k == 0 else 0.7) for k, b in enumerate(beats)] + [(b + ctx.beat / 2, "U", 0.45) for b in beats[1:]]
+    if feel == "six":
+        return [(0.0, "D", 1.0), (2.0, "d", 0.55), (3.0, "U", 0.5), (4.0, "D", 0.85), (6.0, "d", 0.55), (7.0, "U", 0.5)]
+    m = ctx.meter
+    beats = ctx.grid.beats
+    if m.beat % 3 == 0 and m.beat > 1:  # a song already in six-eight: the same down-down-up on each dotted beat
+        return [x for k, b in enumerate(beats)
+                for x in ((b, "D", 1.0 if k == 0 else 0.85), (b + m.beat / 3, "d", 0.55), (b + 2 * m.beat / 3, "U", 0.5))]
+    return [x for k, b in enumerate(beats) for x in ((b, "D", 1.0 if k == 0 else 0.8), (b + ctx.beat / 2, "U", 0.5))]
 
 
 def fingering(ctx: StyleContext, part: str, c: Chord, u0: float, u1: float, i: int) -> list[int]:
@@ -779,31 +769,110 @@ def fingering(ctx: StyleContext, part: str, c: Chord, u0: float, u1: float, i: i
     return ctx.voicing(part, tones, lo, hi, u0, u1, size=4, chord=c)
 
 
+def hand(ctx: StyleContext, part: str) -> strumming.Hand:
+    """The part's strumming hand for the song (songbird.strumming), as the feel bars it."""
+    hands = ctx.__dict__.setdefault("_hands", {})
+    if part not in hands:
+        feel, m = ctx.feel, ctx.meter
+        compound = feel == "six" or (m.beat % 3 == 0 and m.beat > 1 and feel not in ("waltz",))
+        beats = 3 if feel == "waltz" else 2 if feel == "six" else len(ctx.grid.beats)
+        hands[part] = strumming.Hand(ctx.seed, part, beats=beats, compound=compound, bpm=float(ctx.params.tempo),
+                                     density=ctx.band.density, style=ctx.sdef.name)
+        if feel == "half":  # half time: the quieter grooves of the ladder
+            hands[part].ladder = tuple(g for g in hands[part].ladder if g.busy <= 0.45) or hands[part].ladder
+            hands[part].home = min(hands[part].home, len(hands[part].ladder) - 1)
+        elif feel == "double":  # double time: sixteenths
+            hands[part].ladder = strumming.FOUR_SIXTEENTHS
+            hands[part].home = min(hands[part].home, len(hands[part].ladder) - 1)
+    return hands[part]
+
+
+def _slot_unit(ctx: StyleContext, slot: int, slots: int) -> float:
+    """Where a groove's slot falls in the bar, in grid units: on the feel's own subdivisions where the groove has
+    as many slots as they are (a waltz's and a six-eight's uneven ones too), else evenly."""
+    g = ctx.grid
+    if ctx.feel not in ("shuffle", "twelve") and slots == len(g.subs):
+        return g.subs[slot]
+    if slots == len(g.fine):
+        return g.fine[slot]
+    return slot * g.bar / slots
+
+
 def w_strum(ctx: StyleContext, i: int, part: str, kind: str = "strum") -> list[Ev]:
-    """Strummed chords in the feel's pattern, each bar its own: some up strokes dropped, a chop now and then."""
+    """Strummed chords: the player's groove for the section (songbird.strumming), each bar played as a hand
+    plays it. A ring is one stroke a chord; the jig's DADGAD its down-down-up."""
+    if kind != "strum":
+        return _w_strum_fixed(ctx, i, part, kind)
+    h = hand(ctx, part)
+    s = ctx.sections[i]
+    groove, span = h.groove(i, s.energy, s.role)
+    chords = ctx.chords_in(i)
+    if not chords:
+        return []
+    out: list[Ev] = []
+    beat_s = 60.0 / float(ctx.params.tempo)
+    bars = sorted(set(ctx.grid.bars(chords[0].u0, chords[-1].u1))
+                  | {chords[0].u0 - ((chords[0].u0 - ctx.grid.origin) % ctx.grid.bar)})
+    phrase_ends = [p1 for _p0, p1 in ctx.phrases]
+    for bar in bars:
+        rng = ctx.rand(part, bar)
+        bar_end = bar + ctx.grid.bar
+        changes = tuple(sorted({(c.u0 - bar) / ctx.grid.bar * h.beats for c in chords + ctx.chords_in(i + 1)
+                                if bar + 1e-9 < c.u0 <= bar_end + 1e-9}))
+        last = any(abs(bar_end - e) < 1e-6 for e in phrase_ends)
+        strokes = h.bar(groove, rng, last=last, changes=changes)
+        for st in strokes:
+            u = bar + _slot_unit(ctx, st.slot, st.slots)
+            c = next((c for c in chords if c.u0 - 1e-9 <= u < c.u1 - 1e-9), None)
+            if c is None:
+                continue
+            first = abs(u - bar) < 1e-9 or abs(u - c.u0) < 1e-9
+            if st.flag == "open" and part in GUITARS:
+                sung = ctx.sung_in(u, c.u1)
+                notes = [p for p in strumming.open_strings(ctx.capo) if not rubs(p, sung)]
+                hit = notes[::-1]
+                vel = ctx.vel(part, u, 0.85 * st.accent * 0.5)
+            else:
+                notes = fingering(ctx, part, c, u, c.u1, i)
+                hit = h.strings(st, notes, span, rng, first=first)
+                vel = ctx.vel(part, u, 0.85 * st.accent * (0.85 + 0.3 * span))
+            slot_s = ctx.grid.bar / st.slots / ctx.beat * beat_s
+            art = "mute" if st.kind == "x" else "up" if st.kind in "Uu" else "down"
+            for p, v, shift in h.voiced(st, hit, vel, slot_s, rng, late=h.late(groove)):
+                out.append(ev(part, u, c.u1, p, v, art=art, i=i, shift=shift))
+    return ring_on(out)
+
+
+def _w_strum_fixed(ctx: StyleContext, i: int, part: str, kind: str) -> list[Ev]:
+    """A ring (one stroke a chord, left to ring) or the jig's DADGAD down-down-up: a fixed pattern, each stroke
+    as the hand plays it (songbird.strumming)."""
     out = []
-    density = ctx.band.density
+    h = hand(ctx, part)
+    beat_s = 60.0 / float(ctx.params.tempo)
     for c in ctx.chords_in(i):
         rng = ctx.rand(part, c.u0)
-        for bar in sorted(set(ctx.grid.bars(c.u0, c.u1)) | {c.u0 - ((c.u0 - ctx.grid.origin) % ctx.grid.bar)}):
+        bars = [c.u0] if kind == "ring" else \
+            sorted(set(ctx.grid.bars(c.u0, c.u1)) | {c.u0 - ((c.u0 - ctx.grid.origin) % ctx.grid.bar)})
+        for bar in bars:  # a ring is one stroke where its chord starts
             for off, stroke, accent in strokes(ctx, kind):
                 u = bar + off
-                if not (c.u0 - 1e-9 <= u < c.u1 - 1e-9) or (kind == "ring" and u > c.u0 + 1e-9):
-                    continue
-                if stroke == "U" and (density < 0.3 or rng.random() < 0.15 + 0.3 * max(0.0, 0.5 - density)):
+                if not (c.u0 - 1e-9 <= u < c.u1 - 1e-9):
                     continue
                 notes = dadgad(ctx, c, u, c.u1) if kind == "dadgad" else fingering(ctx, part, c, u, c.u1, i)
                 if not notes:
                     continue
-                if stroke in ("U", "d"):
-                    notes = notes[-min(len(notes), 3):][::-1] if stroke == "U" else notes[-4:]
                 vel = ctx.vel(part, u, 0.85 * accent)
-                spread = 0.05 if kind == "ring" else (0.018 + 0.02 * (1.0 - vel)) * (0.8 if stroke == "U" else 1.0)
                 end = c.u1 if kind != "ring" else max(c.u1, ctx.sections[i].u1 if c.last else c.u1)
-                for j, p in enumerate(notes):
-                    out.append(ev(part, u, end, p, vel * (1.0 - 0.05 * j) * rng.uniform(0.85, 1.05),
-                                  art="up" if stroke == "U" else "down", i=i,
-                                  shift=spread * j / max(len(notes) - 1, 1)))
+                st = strumming.Stroke(off / ctx.grid.beat, stroke, accent)
+                if kind == "ring":  # a slow rake across every string
+                    hit = list(notes)
+                    played = [(p, vel * (1.0 - 0.05 * j) * rng.uniform(0.9, 1.05), 0.05 * j / max(len(notes) - 1, 1))
+                              for j, p in enumerate(hit)]
+                else:
+                    hit = h.strings(st, notes, 0.6, rng, first=abs(u - c.u0) < 1e-9 or abs(off) < 1e-9)
+                    played = h.voiced(st, hit, vel, ctx.grid.beat / 3 / ctx.beat * beat_s, rng)
+                for p, v, shift in played:
+                    out.append(ev(part, u, end, p, v, art="up" if stroke in "Uu" else "down", i=i, shift=shift))
     return ring_on(out)
 
 
