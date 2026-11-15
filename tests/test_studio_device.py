@@ -73,6 +73,50 @@ def test_the_page_s_questions_get_the_server_s_answers(device, server, path, bod
     assert json.loads(json.dumps(out["json"])) == json.loads(json.dumps(S.answer(server, path, body)))
 
 
+def test_rewritten_music_has_the_same_score_notes_import_midi_and_render_spec(device, server):
+    """The DAW editor's portable edits cross both runtimes, including a changed lyric count,
+    a wide chromatic melody, polyphonic instrumental notes, rests and explicit releases."""
+    original = server.song({})["composition"]
+    verse = next(s for s in original["sections"] if s["name"] == "verse")
+    phrase, following = verse["phrases"][:2]
+    notes = [{"degree": phrase["bounds"]["min_degree"], "onset": 0, "duration": 0.5},
+             {"degree": phrase["bounds"]["max_degree"], "alter": -1, "onset": 1, "duration": 0.5},
+             {"degree": 2, "onset": 2, "duration": 1}]
+    part_path = f"part.guitar.{phrase['part_key']}"
+    edits = {phrase["own_path"]: {"words": "We sing now", "notes": notes},
+             f"chords.{phrase['place']}": [["IV"] for _ in phrase["chords"]],
+             part_path: [[0, 96, 0, 80], [0, 96, 4, 110], [192, 48, 7, 96]],
+             f"part.bass.{phrase['part_key']}": [], f"part.guitar.{following['part_key']}": None}
+    for path in ("/api/song", "/api/arrangement", "/api/players"):
+        actual = ask(device, path, {"edits": edits})
+        assert actual["status"] == 200
+        assert actual["json"] == S.answer(server, path, {"edits": edits})
+    view = ask(device, "/api/song", {"edits": edits})["json"]
+    assert not view["problems"]
+    written = next(s for s in view["composition"]["sections"] if s["id"] == verse["id"])["phrases"][0]
+    assert written["lyric_text"] == "We sing now" and len(written["notes"]) == 3
+    assert written["notes"][1]["alter"] == -1 and written["part_notes"]["guitar"] == edits[part_path]
+    assert written["part_notes"]["bass"] == []
+
+    # Opening an instrument roll converts generated notes through notes-in before editing.
+    players = ask(device, "/api/players", {"edits": {}})["json"]["players"]
+    take = {"player": "guitar", "lines": [phrase["part_key"]],
+            "notes": next(p for p in players if p["part"] == "guitar")["notes"]}
+    body = {"edits": {}, "take": take}
+    preview = ask(device, "/api/notes-in", body)
+    assert preview["status"] == 200 and preview["json"] == S.answer(server, "/api/notes-in", body)
+    assert not preview["json"]["refused"]
+
+    exported = ask(device, "/api/export", {"edits": edits, "what": "midi"})
+    native = server.export(edits, "midi")
+    assert exported["status"] == 200 and exported["json"] == native
+    filename = native["url"].split("?")[0].rsplit("/", 1)[1]
+    assert Path(exported["file"]["path"]).read_bytes() == (server.cache / filename).read_bytes()
+    spec = ask(device, "/api/render/spec", {"edits": edits, "section": verse["index"]})
+    assert spec["status"] == 200
+    assert spec["json"] == server.render_spec(edits, "you", verse["index"])
+
+
 def test_start_says_the_device_and_what_it_can_t_do(device, server):
     out = ask(device, "/api/start", method="GET")
     start, theirs = out["json"], server.start_view()
@@ -301,6 +345,10 @@ def test_the_static_page_and_its_headers():
     files = SITE.page_files(singing=False)
     assert {"index.html", "device.js", "studio.js", "renderer.js", "notice.css", "piano/index.html", "piano/piano.js",
             "piano/identity.css", "licenses.txt"} <= set(files)
+    # New editor modules cannot ship in just one studio: both use these exact assets.
+    for name in ("parts.js", "model.js", "composer.js", "author.js", "score.js", "studio.js", "score.css"):
+        assert files[name] == (S.PAGE / name).read_bytes()
+        assert f'/{name}"' in html
     # the licences of what the site sends besides the project's own, linked from the page's foot and shown as text
     assert re.search(r'<footer class="foot">.*<a href="/licenses.txt">Licenses</a></footer>', html, re.DOTALL)
     assert files["licenses.txt"] == (ROOT / "THIRD-PARTY.md").read_bytes()

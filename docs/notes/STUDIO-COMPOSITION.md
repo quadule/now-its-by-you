@@ -43,6 +43,29 @@ words and melody follow that identity wherever it occurs, as existing
 own-line records do. The editor states this scope; independent copies of the
 same lyric identity need the clip model below.
 
+## Web and standalone parity
+
+Every composition feature belongs in both studios. The Python studio serves
+the editor from `songbird/studio/`; the static web build copies those same
+files from `studio.STATIC`. Its device worker delegates editing requests to
+the same `studio.answer` implementation. The instrument roll uses the shared
+`/api/players` and `/api/notes-in` routes, and checked lyric and clipboard edits
+use `/api/song`. No composition rule belongs exclusively in the web shim.
+
+The packet carries the same editor assets and Python program, so a newly
+exported standalone file includes these features. Previously exported files
+keep the program they carried; updating the website does not rewrite them.
+
+`tests/test_studio_device.py` compares rewritten lyrics, wide chromatic
+melodies, instrumental chords and rests, note import, MIDI bytes and render
+specifications between the device adapter and native studio. It also checks
+the shared editor assets. `tests/test_pack.py` checks those assets inside an
+actual standalone packet. For runtime verification, build the static site,
+exercise its editing flow in a browser, then render an edited section's spec
+with `web/studio-wasm/node/spec_run.mjs` and compare it with the native render
+using `web/studio-wasm/tools/pcm_diff.py`. Native adapter tests alone do not
+exercise Pyodide or its browser fetch shim.
+
 ## The structural boundary
 
 The timeline still lays out the song's section templates. A verse is not an

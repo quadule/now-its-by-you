@@ -45,6 +45,12 @@ def test_packet_plays_unzips_and_keeps_its_audio(rendition, tmp_path):
         assert not [n for n in names if "__pycache__" in n]
         manifest = json.loads(z.read("manifest.json"))
         assert z.read("genome.json") == GENOME.read_bytes()
+        # A standalone song carries every editor asset served by the Python studio,
+        # including the instrument piano roll used by the static web studio.
+        from songbird.studio import PAGE, STATIC
+
+        for name, _ in STATIC.values():
+            assert z.read(f"program/songbird/studio/{name}") == (PAGE / name).read_bytes()
     assert manifest["id"] == record["id"] and manifest["generation"] == 0 and manifest["ancestry"] == []
     assert pack.read_record(flac)["id"] == record["id"]
     # packing again replaces the archive rather than stacking another on it
