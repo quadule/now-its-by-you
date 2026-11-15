@@ -248,3 +248,31 @@ test("a semitone is spelled as the scale writes it: a sharp reached going up, el
   assert.deepEqual(M.moveRows({ degree: 3 }, 1, scaleOnly), { degree: 4, alter: 0 }, "E to F is a row");
   assert.deepEqual(M.moveRows({ degree: 1 }, -12, scaleOnly), { degree: -3, alter: 0 }, "an octave, held at the range's bottom");
 });
+
+test("several notes at once: a move stops at the notes not chosen, a melisma moves and goes whole, a paste takes the place of what it overlaps", () => {
+  const b = { min_onset: -0.5, max_end: 4, max_final_onset: 3.5, melisma: 4 };
+  const notes = [{ degree: 3, onset: -0.5, duration: 0.5 }, { degree: 4, onset: 0, duration: 0.5 }, { degree: 5, onset: 0.5, duration: 0.5, slur: true },
+    { degree: 6, onset: 2, duration: 1 }, { degree: 1, onset: 3, duration: 0.5 }];
+  assert.deepEqual(M.withSyllables(notes, [2]), [1, 2], "a slurred note moves with its syllable");
+  assert.equal(M.shiftLimit(notes, [1, 2], 2, b, 0.25), 1, "up to the note after");
+  assert.equal(M.shiftLimit(notes, [1, 2], -2, b, 0.25), 0, "the note before is in the way");
+  assert.equal(M.shiftLimit(notes, [3, 4], 0.6, b, 0.25), 0.5, "the last note keeps the next line's pickup clear");
+  assert.equal(M.shiftLimit(notes, [3], 0.3, b, 0.25), 0, "and the next note");
+  assert.equal(M.shiftLimit(notes, [3], -0.3, b, 0.25), -0.25, "the anchor on the grid");
+  assert.deepEqual(M.deleteNotes(notes, [2]).map((n) => [n.onset, n.duration]), [[-0.5, 0.5], [0, 1], [2, 1], [3, 0.5]], "a slurred note alone joins the one before");
+  assert.deepEqual(M.deleteNotes(notes, [1, 4]).map((n) => n.onset), [-0.5, 2], "a syllable goes with its melisma");
+  const clip = M.clipOf(notes, [2, 3]);
+  assert.deepEqual(clip.notes.map((n) => !!n.slur), [false, false], "a slurred note copied without its own sings its own syllable");
+  assert.equal(clip.start, 0.5);
+  const { notes: put, added } = M.pasteAt(notes, M.clipOf(notes, [1, 2]), 2, b);
+  assert.deepEqual(put.map((n) => [n.degree, n.onset, !!n.slur]), [[3, -0.5, false], [4, 0, false], [5, 0.5, true], [4, 2, false], [5, 2.5, true], [1, 3, false]]);
+  assert.deepEqual(added, [3, 4]);
+  assert.throws(() => M.pasteAt(notes, M.clipOf(notes, [3]), 3.5, b), /fit here/);
+  assert.throws(() => M.pasteAt(notes, { start: 0, notes: [{ degree: 1, onset: 0, duration: 0.25 }] }, 3.75, b), /pickup/);
+  const field = { tagName: "INPUT", type: "text" };
+  assert.deepEqual(M.rollKey({ key: "c", ctrlKey: true, target: {} }), { action: "copy" });
+  assert.deepEqual(M.rollKey({ key: "D", metaKey: true, target: {} }), { action: "duplicate" });
+  assert.equal(M.rollKey({ key: "c", ctrlKey: true, target: field }), null);
+  assert.equal(M.rollKey({ key: "z", ctrlKey: true, target: {} }), null, "undo is the page's");
+  assert.equal(M.rollKey({ key: "c", target: {} }), null);
+});

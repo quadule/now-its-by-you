@@ -810,6 +810,7 @@ test('drawing into a rest and copying notes to another phrase does not alter the
   assert.equal(s.phrase().notes.length, 6);
   assert.equal(s.phrase().notes[2].onset, 0.5);
   assert.equal(s.commits.length, 0, 'words and notes wait to be saved together');
+  s.find('#sbc-roll-scroll').emit('keydown', { key: 'a', ctrlKey: true });  // all of them: the whole phrase
   s.clickText('Copy notes'); s.clickText('Cancel');
   s.find('#sbc-phrase-1').emit('click'); s.clickText('Paste notes');
   assert.equal(s.root.querySelectorAll('[data-phrase="1"]').length, 6);
@@ -877,4 +878,95 @@ test("the whole section is one roll: each phrase's notes in its own time, chosen
   // a chord of the second phrase is that phrase's
   s.root.querySelectorAll(".sbc-chord").filter((node) => node.dataset.chordPhrase === "0")[0].emit("click");
   assert.equal(s.find("#sbc-phrase-0").getAttribute("aria-pressed"), "true");
+});
+
+test("several notes at once: Shift-click and a rectangle select them, and a move, a nudge, a transposition or a deletion is one edit", () => {
+  const s = setup(writableScore()), notes = () => s.root.querySelectorAll('[data-phrase="0"]');
+  s.find('[data-note="1"]').emit("click");
+  s.find('[data-note="2"]').emit("click", { shiftKey: true });
+  assert.deepEqual(notes().filter((n) => n.classList.contains("is-selected")).map((n) => n.dataset.note), ["1", "2"]);
+  // up a row: F and A both a half step up, in one edit
+  s.find('[data-note="2"]').emit("keydown", { key: "ArrowUp" });
+  assert.equal(s.commits.length, 1);
+  assert.deepEqual(s.commits[0].value.notes.slice(1, 3).map((n) => [n.degree, n.alter || 0]), [[4, 1], [6, 1]]);
+  // right a snap: both later, the gap after them taken (the next note starts at 2, so they can go no further than 1)
+  s.find('[data-note="1"]').emit("keydown", { key: "ArrowRight" });
+  assert.equal(s.commits.length, 1, "already touching the note after: nothing to pin");
+  // dragged together: a note of the selection takes the others with it
+  const item = s.find('[data-note="1"]'), rect = item.getBoundingClientRect();
+  item.emit("pointerdown", { clientX: rect.left + 2, clientY: 150 });
+  item.emit("pointermove", { clientX: rect.left + 2, clientY: 104 });
+  item.emit("pointerup", { clientX: rect.left + 2, clientY: 104 });
+  // (this page's song is as it was before the half steps: the server's answer would bring them)
+  const sung = (k) => (Array.isArray(s.commits[k].value) ? s.commits[k].value : s.commits[k].value.notes);
+  assert.equal(s.commits.length, 2);
+  assert.deepEqual(sung(1).slice(1, 3).map((n) => [n.degree, n.alter || 0]), [[5, 0], [7, 0]], "two half steps: G and B");
+  assert.deepEqual(sung(1).map((n) => n.onset), [-0.5, 0, 1, 2, 3], "their timing kept");
+  // ↑ Step transposes only the selection
+  s.clickText("↑ Step");
+  assert.deepEqual(sung(2).map((n) => n.degree), [3, 6, 8, 3, 1]);
+  // deleted together: one draft asking for the line's words, two syllables fewer
+  s.find('[data-note="1"]').emit("keydown", { key: "Delete" });
+  assert.equal(s.commits.length, 3, "the words are written first");
+  assert.match(s.find(".sbc-own").textContent, /\/ 3 syllables/);
+  assert.deepEqual(clone(s.phrase().notes.map((n) => n.onset)), [-0.5, 2, 3], "the gaps are rests");
+});
+
+test("a tune line's selection keeps to the scale, and a rectangle on the empty roll selects in the phrase it began in", () => {
+  const s = setup(writableScore());
+  const plot = s.find(".sbc-grid"), first = s.root.querySelectorAll('[data-phrase="0"]');
+  const left = parseFloat(first[0].style.left), right = parseFloat(first[2].style.left) + 5;
+  plot.emit("pointerdown", { clientX: left + 1, clientY: 0 });
+  plot.emit("pointermove", { clientX: right, clientY: 1000 });
+  plot.emit("pointerup", { clientX: right, clientY: 1000 });
+  assert.deepEqual(s.root.querySelectorAll('[data-phrase="0"]').filter((n) => n.classList.contains("is-selected")).map((n) => n.dataset.note), ["0", "1", "2"]);
+  assert.equal(s.document.activeElement?.dataset.note, "0", "the selection takes the keys");
+  // a click on the empty roll lets them go, and puts the cursor there
+  plot.emit("pointerdown", { clientX: right + 400, clientY: 40 });
+  plot.emit("pointerup", { clientX: right + 400, clientY: 40 });
+  assert.equal(s.root.querySelectorAll(".sbc-note").filter((n) => n.classList.contains("is-selected")).length, 0);
+  assert.equal(s.root.querySelectorAll(".sbc-cursor").length, 1);
+  // a tune line: Ctrl+A, then up a row is up the scale for each, as one tune edit
+  const t = setup();
+  t.find("#sbc-roll-scroll").emit("keydown", { key: "a", metaKey: true });
+  assert.equal(t.root.querySelectorAll(".sbc-note").filter((n) => n.classList.contains("is-selected")).length, 5);
+  t.find('[data-note="0"]').emit("keydown", { key: "ArrowUp" });
+  assert.equal(t.commits.at(-1).path, "tune.a1");
+  assert.deepEqual(t.commits.at(-1).value.map((n) => n.degree), [4, 5, 7, 4, 2]);
+  t.find('[data-note="0"]').emit("keydown", { key: "Delete" });
+  assert.match(t.toasts.at(-1), /sung line/, "a tune line keeps its count");
+});
+
+test("the keyboard's clipboard: Ctrl+C, X, V and D on the selection, refused where it can't fit, and never in a text field", () => {
+  const s = setup(writableScore()), roll = () => s.find("#sbc-roll-scroll");
+  s.find('[data-note="1"]').emit("click");
+  s.find('[data-note="2"]').emit("click", { shiftKey: true });
+  roll().emit("keydown", { key: "c", ctrlKey: true });
+  assert.match(s.toasts.at(-1), /2 notes copied/);
+  // into the other phrase, at its cursor: in place of the notes they overlap
+  const plot = s.find(".sbc-grid"), second = s.root.querySelectorAll('[data-phrase="1"]');
+  const x = parseFloat(second[3].style.left) + 1;
+  plot.emit("pointerdown", { clientX: x, clientY: 40 }); plot.emit("pointerup", { clientX: x, clientY: 40 });
+  assert.equal(s.find("#sbc-phrase-1").getAttribute("aria-pressed"), "true");
+  roll().emit("keydown", { key: "v", ctrlKey: true });
+  assert.equal(s.commits.at(-1).path, "tune.a2", "the same count: the line's tune");
+  assert.deepEqual(s.commits.at(-1).value.map((n) => [n.degree, n.onset, n.duration]), [[3, -0.5, 0.5], [4, 0, 1], [6, 1, 1], [4, 2, 1], [6, 3, 1]]);
+  assert.deepEqual(s.root.querySelectorAll('[data-phrase="1"]').filter((n) => n.classList.contains("is-selected")).map((n) => n.dataset.note), ["3", "4"], "the pasted notes selected");
+  // duplicated after the selection where it fits: two notes after "your way" don't
+  const last = s.root.querySelectorAll('[data-phrase="1"]').filter((n) => n.dataset.note === "4")[0];
+  last.emit("click");
+  roll().emit("keydown", { key: "d", ctrlKey: true });
+  assert.match(s.toasts.at(-1), /No room to duplicate/);
+  // cut: copied, and taken out (a draft for the words)
+  const count = s.commits.length;
+  s.root.querySelectorAll('[data-phrase="1"]').filter((n) => n.dataset.note === "2")[0].emit("click");
+  roll().emit("keydown", { key: "x", ctrlKey: true });
+  const lineTwo = () => s.view.composition.sections[1].phrases[1];
+  assert.equal(s.commits.length, count, "a syllable fewer waits for its words");
+  assert.equal(lineTwo().notes.length, 4);
+  // in a text field the browser's own shortcuts stay
+  const input = s.find("#sbc-own-words");
+  input.tagName = "INPUT"; input.type = "text";
+  roll().emit("keydown", { key: "v", ctrlKey: true, target: input });
+  assert.equal(lineTwo().notes.length, 4);
 });

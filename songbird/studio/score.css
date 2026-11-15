@@ -371,6 +371,8 @@ input[type=number] { width: 72px; border: 1px solid var(--rule-strong); backgrou
 .sbc-tonic-row { background: color-mix(in srgb, var(--ink) 5%, transparent); pointer-events: none; }
 .sbc-out-row { position: absolute; background: color-mix(in srgb, var(--ink) 9%, transparent); pointer-events: none; }
 .sbc-key.is-out { background: var(--wash); color: var(--ink-3); }
+.sbc-marquee { position: absolute; border: 1px solid var(--hand); background: color-mix(in srgb, var(--hand) 10%, transparent); pointer-events: none; z-index: 5; }
+.sbc-cursor { position: absolute; width: 0; border-left: 2px dashed var(--hand); pointer-events: none; z-index: 3; }
 .sbc-phrase-span { position: absolute; background: color-mix(in srgb, var(--hand) 5%, transparent); pointer-events: none; }
 .sbc-phrase-line { position: absolute; width: 2px; background: color-mix(in srgb, var(--ink) 45%, transparent); pointer-events: none; z-index: 1; }
 .sbc-grid-line { width: 1px; background: color-mix(in srgb, var(--rule) 80%, transparent); pointer-events: none; }

@@ -285,6 +285,88 @@
     return { degree: Math.min(hi, Math.max(lo, spell(target, scale).degree)), alter };
   }
 
+  // ------------------------------------------------------------------ several notes of a melody line at once
+  // A note slurred on (slur) sings the syllable before it; a melody line's notes are in time order, none overlapping.
+  // The notes a time move takes: each chosen note with the rest of its syllable (a melisma moves whole).
+  function withSyllables(notes, indices) {
+    const out = new Set();
+    for (const i of indices) {
+      let a = i, z = i;
+      while (a > 0 && notes[a].slur) a--;
+      while (notes[z + 1]?.slur) z++;
+      for (let k = a; k <= z; k++) out.add(k);
+    }
+    return [...out].sort((x, y) => x - y);
+  }
+  // How far (beats) the chosen notes move together for a wish of dt: the anchor note lands on the grid, and none
+  // passes an unchosen neighbour, the line's start or end, or (the line's last note) its latest start.
+  function shiftLimit(notes, indices, dt, b, grid, anchor = indices[0]) {
+    const set = new Set(indices), a = notes[anchor];
+    if (!set.size || !a || !dt) return 0;
+    const want = Math.round((a.onset + dt) / grid) * grid - a.onset;
+    let lo = -Infinity, hi = Infinity;
+    for (let i = 0; i < notes.length; i++) {
+      if (!set.has(i) || set.has(i - 1)) continue;
+      let j = i;
+      while (set.has(j + 1)) j++;
+      const before = i ? notes[i - 1].onset + notes[i - 1].duration : b.min_onset;
+      const after = j < notes.length - 1 ? notes[j + 1].onset : b.max_end;
+      lo = Math.max(lo, before - notes[i].onset);
+      hi = Math.min(hi, after - (notes[j].onset + notes[j].duration));
+      if (j === notes.length - 1) hi = Math.min(hi, (b.max_final_onset ?? b.max_end) - notes[j].onset);
+    }
+    return lo > hi + 1e-9 ? 0 : Math.round(Math.min(hi, Math.max(lo, want)) * 1e9) / 1e9;
+  }
+  // The chosen notes taken out: a syllable with its melisma; a slurred note alone joins the note before.
+  function deleteNotes(notes, indices) {
+    const set = new Set(indices), out = [];
+    let dropping = false;
+    notes.forEach((n, i) => {
+      if (!n.slur) dropping = set.has(i);
+      if (dropping) return;
+      if (set.has(i) && n.slur && out.length) { const prev = out.at(-1); prev.duration = n.onset + n.duration - prev.onset; return; }
+      out.push({ ...n });
+    });
+    return out;
+  }
+  // Notes copied: each as written, timed from the first's start. A slurred note stays slurred only after its own.
+  function clipOf(notes, indices) {
+    const chosen = indices.map((i) => notes[i]);
+    return { start: chosen[0].onset, end: chosen.at(-1).onset + chosen.at(-1).duration,
+      notes: chosen.map((n, k) => ({ degree: n.degree, onset: n.onset, duration: n.duration,
+        ...(n.slur && k && indices[k - 1] === indices[k] - 1 ? { slur: true } : !n.slur && n.alter ? { alter: n.alter } : {}) })) };
+  }
+  // Copied notes put in at a time (beats of the line), each in place of any note it overlaps. A slurred note
+  // that no longer follows the one it went on from sings a syllable of its own. Returns the notes, and where the
+  // pasted ones are; refuses (throws) notes that don't fit the line.
+  function pasteAt(notes, clip, at, b) {
+    const shift = at - clip.start, most = b.melisma || 4;
+    const put = clip.notes.map((n) => ({ ...n, onset: Math.round((n.onset + shift) * 1e9) / 1e9, syllable: n.slur ? "" : "?", word: "", pasted: true }));
+    if (!put.length || put.some((n) => n.onset < b.min_onset - 1e-8 || n.onset + n.duration > b.max_end + 1e-8))
+      throw new Error("These notes don't fit here. Paste them earlier or into a longer phrase.");
+    const kept = notes.filter((n) => !put.some((m) => n.onset < m.onset + m.duration - 1e-8 && n.onset + n.duration > m.onset + 1e-8));
+    const out = [...kept.map((n) => ({ ...n })), ...put].sort((x, y) => x.onset - y.onset);
+    let run = 0;
+    out.forEach((n, i) => {
+      if (n.slur && (!i || Math.abs(out[i - 1].onset + out[i - 1].duration - n.onset) > 1e-8 || run >= most - 1)) {
+        delete n.slur; n.syllable = "?";
+      }
+      run = n.slur ? run + 1 : 0;
+      if (n.slur) n.alter = 0;
+    });
+    if (out.at(-1).onset > (b.max_final_onset ?? b.max_end) + 1e-8)
+      throw new Error("The last note needs room before the next line's pickup. Paste earlier.");
+    const added = out.flatMap((n, i) => (n.pasted ? [i] : []));
+    out.forEach((n) => delete n.pasted);
+    return { notes: out, added };
+  }
+  // the shortcuts of a roll with notes selected: copy, cut, paste, duplicate, all (never in a text field)
+  function rollKey(event) {
+    if (inField(event.target) || !(event.metaKey || event.ctrlKey) || event.altKey || event.shiftKey) return null;
+    const action = { c: "copy", x: "cut", v: "paste", d: "duplicate", a: "all" }[String(event.key).toLowerCase()];
+    return action ? { action } : null;
+  }
+
   // ------------------------------------------------------------------ said after an edit (the live region)
   function saidCell(track, section, level) {
     return level === "out" ? `${section.label}: the ${track.label} sits out` : `${section.label}: the ${track.label} now ${level === "plays" ? "plays" : `plays ${level}`}`;
@@ -356,7 +438,8 @@
 
   const api = { LEVELS, KIND_WORDS, grid, look, whoseWords, cellLabel, lockPatch, releasePatch, levelPatch, optionLock,
     moveOrder, movedIds, seamWords, seamToggle, seamOver, seamLength, seamLengths, scopeOptions, scopeStart, selectionKey, defaultHow, playTarget,
-    neighbour, sectionAtBeat, position, sketchOffset, sketchFrom, inField, keyAction, phraseAt, semitone, spell, moveRows, saidCell, fitNotes, writtenNotes, lyricPatch,
+    neighbour, sectionAtBeat, position, sketchOffset, sketchFrom, inField, keyAction, phraseAt, semitone, spell, moveRows,
+    withSyllables, shiftLimit, deleteNotes, clipOf, pasteAt, rollKey, saidCell, fitNotes, writtenNotes, lyricPatch,
     phrasePatch, sectionPatch };
   if (typeof window !== "undefined") window.SongbirdModel = api;
   if (typeof module === "object" && module.exports) module.exports = api;

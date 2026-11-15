@@ -11,8 +11,9 @@
     locrian: [0, 1, 3, 5, 6, 8, 10],
   };
   const state = {
-    view: null, section: -1, phrase: 0, note: null, snap: 0.25, zoom: 1, player: "voice",
+    view: null, section: -1, phrase: 0, snap: 0.25, zoom: 1, player: "voice",
     loop: false, metronome: false, scope: "phrase", drag: null, chords: true, bass: true, chord: null,
+    chosen: new Set(), cursor: null, // notes selected with state.note, and where a paste goes: { phrase, beat }
     where: { tune: null, chords: null }, // one place or everywhere: "line", "place" or "last" (null: as the line has it)
     // a line whose count of syllables changed, waiting for its words (docs/notes/OWN-COUNT-LINES.md):
     // { path: its line. path, notes, was: the line's notes before }
@@ -34,6 +35,9 @@
   const firstSung = () => Math.max(0, (section()?.phrases || []).findIndex((p) => p.notes?.length));
   const drafts = new Map();
   let clipboard = null, phraseClipboard = null;
+  // the selected note; choosing one note lets go of any others chosen with it (pick() keeps them)
+  let selectedNote = null;
+  Object.defineProperty(state, "note", { get: () => selectedNote, set: (value) => { selectedNote = value; state.chosen = new Set(); } });
   Object.defineProperty(state, "draft", {
     get: () => drafts.get(phrase()?.own_path) || null,
     set: (value) => { const key = value?.path || phrase()?.own_path; if (value) drafts.set(key, value); else drafts.delete(key); },
@@ -312,41 +316,114 @@
     state.focusNote = true;  // the new note takes the keys: Delete and the arrows are its own
     commitNotes(notes, "Note added. Write the words for this line.");
   }
+  // ---- several notes at once: the selected note (state.note) and any chosen with it (state.chosen), all in the
+  // selected phrase; a move, a nudge, a transposition, a deletion or a paste of them is one edit, one undo step
+  function picked() {
+    const count = phrase()?.notes?.length || 0;
+    if (state.note === null || state.note >= count) return [];
+    return [...new Set([state.note, ...state.chosen])].filter((i) => i < count).sort((a, z) => a - z);
+  }
+  function pick(index, more = []) { state.note = index; state.chosen = new Set(more); }
+  function toggleNote(pi, index) {  // Shift-click: a note added to the selection, or taken from it
+    if (focusPhrase(pi) || state.note === null) { pick(index); paint(); told(); return; }
+    const now = new Set(picked());
+    if (now.has(index)) now.delete(index); else now.add(index);
+    const rest = [...now];
+    if (!rest.length) state.note = null; else pick(rest.includes(index) ? index : rest[0], rest);
+    paint(); told();
+    announce(`${rest.length} note${rest.length === 1 ? "" : "s"} selected`);
+  }
+  function selectAll() {
+    const p = phrase();
+    if (!p?.notes?.length) return;
+    pick(0, p.notes.map((_, i) => i)); state.chord = null; state.focusNote = true; paint(); told();
+    announce(`All ${p.notes.length} notes of phrase ${state.phrase + 1} selected`);
+  }
+  const several = () => picked().length > 1;
   function deleteNote() {
-    const p = phrase(), i = state.note, n = note();
+    const p = phrase(), i = state.note, n = note(), chosen = picked();
     if (!n) return;
-    if (n.slur) { joinNote(); return; }
-    if (!p.own_path || p.notes.filter((x) => !x.slur).length < 2) {
-      bridge().toast?.("Keep one syllable in a sung line. The section's Singer control can make the section instrumental."); return;
+    if (chosen.length < 2 && n.slur) { joinNote(); return; }
+    const notes = window.SongbirdModel.deleteNotes(p.notes, chosen);
+    const left = notes.filter((x) => !x.slur).length;
+    if (left === p.notes.filter((x) => !x.slur).length) { pick(Math.min(i, notes.length - 1)); commitNotes(notes, "Joined into the notes before."); return; }
+    if (!p.own_path || left < 1) {
+      bridge().toast?.(p.own_path ? "Keep one syllable in a sung line. The section's Singer control can make the section instrumental."
+        : "Choose a sung line to change how many notes it has."); return;
     }
-    let end = i + 1;
-    while (p.notes[end]?.slur) end++;
-    const notes = p.notes.filter((_, k) => k < i || k >= end).map((x) => ({ ...x }));
-    state.note = Math.min(i, notes.length - 1); commitNotes(notes, "Note deleted; the gap is a rest.");
+    pick(Math.min(chosen[0], notes.length - 1));
+    commitNotes(notes, chosen.length > 1 ? `${chosen.length} notes deleted; the gaps are rests.` : "Note deleted; the gap is a rest.");
   }
-  function copyNotes() {
-    const p = phrase(); if (!p?.notes?.length) return;
-    clipboard = { notes: serializeNotes(p.notes, true), start: bounds(p).min_onset, end: bounds(p).max_end };
-    paint(); bridge().toast?.("Notes copied. Choose another phrase and paste.");
+  // the clipboard: the selected notes, or the whole phrase when none (or all) are selected. A whole phrase pasted
+  // takes another phrase's place, fitted to its length; a few notes go in at the cursor, after the selection, or at
+  // the phrase's start, each in place of any note they overlap
+  function copyNotes(quiet = false) {
+    const p = phrase(); if (!p?.notes?.length) return false;
+    const chosen = picked(), whole = !chosen.length || chosen.length === p.notes.length;
+    clipboard = whole ? { whole, notes: serializeNotes(p.notes, true), start: bounds(p).min_onset, end: bounds(p).max_end }
+      : { whole, ...window.SongbirdModel.clipOf(p.notes, chosen) };
+    if (!quiet) { paint(); bridge().toast?.(whole ? "Notes copied. Choose another phrase and paste." : `${chosen.length} note${chosen.length === 1 ? "" : "s"} copied.`); }
+    return true;
   }
-  function pasteNotes() {
-    const p = phrase(); if (!clipboard || !p) return;
-    const b = bounds(p), scale = (b.max_end - b.min_onset) / (clipboard.end - clipboard.start);
-    const notes = clipboard.notes.map((n) => ({ ...n, onset: b.min_onset + (n.onset - clipboard.start) * scale, duration: n.duration * scale }));
-    if (notes.some((n) => n.duration < b.min_duration || n.degree < b.min_degree || n.degree > b.max_degree) || notes.at(-1).onset > b.max_final_onset) {
-      bridge().toast?.("These notes don't fit this phrase. Paste into a longer phrase or use fewer notes."); return;
-    }
-    if (!p.own_path && (notes.filter((n) => !n.slur).length !== p.notes.filter((n) => !n.slur).length || notes.some((n) => n.alter))) {
+  function pasteAt(notes, added, p = phrase(), message = "Notes pasted. Undo restores the phrase.") {
+    if (!p.own_path && (notes.filter((n) => !n.slur).length !== p.notes.filter((n) => !n.slur).length || notes.some((n) => n.alter && !n.slur))) {
       bridge().toast?.("Choose a sung line to paste a different syllable count or chromatic notes."); return;
     }
-    state.note = 0; commitNotes(notes, "Notes pasted. Undo restores the phrase."); told();
+    pick(added[0] ?? 0, added); state.focusNote = true;
+    commitNotes(notes, message); told();
+  }
+  function pasteNotes(at = null) {
+    const p = phrase(); if (!clipboard || !p) return;
+    const b = bounds(p);
+    if (clipboard.whole) {
+      const ratio = (b.max_end - b.min_onset) / (clipboard.end - clipboard.start);
+      const notes = clipboard.notes.map((n) => ({ ...n, onset: b.min_onset + (n.onset - clipboard.start) * ratio, duration: n.duration * ratio }));
+      if (notes.some((n) => n.duration < b.min_duration || n.degree < b.min_degree || n.degree > b.max_degree) || notes.at(-1).onset > b.max_final_onset) {
+        bridge().toast?.("These notes don't fit this phrase. Paste into a longer phrase or use fewer notes."); return;
+      }
+      pasteAt(notes, notes.map((_, i) => i)); return;
+    }
+    const chosen = picked();
+    const where = at ?? (state.cursor?.phrase === state.phrase ? state.cursor.beat
+      : chosen.length ? p.notes[chosen.at(-1)].onset + p.notes[chosen.at(-1)].duration : b.min_onset);
+    try {
+      if (clipboard.notes.some((n) => n.degree < b.min_degree || n.degree > b.max_degree)) throw new Error("These notes are outside this line's range.");
+      const { notes, added } = window.SongbirdModel.pasteAt(p.notes, clipboard, where, b);
+      pasteAt(notes, added);
+    } catch (error) { bridge().toast?.(error.message); }
+  }
+  function cutNotes() {
+    if (!picked().length || !copyNotes(true)) return;
+    deleteNote();
+  }
+  function duplicateNotes() {
+    const p = phrase(), chosen = picked();
+    if (!chosen.length) { bridge().toast?.("Select notes to duplicate."); return; }
+    const clip = window.SongbirdModel.clipOf(p.notes, chosen), last = p.notes[chosen.at(-1)];
+    try {
+      const { notes, added } = window.SongbirdModel.pasteAt(p.notes, clip, last.onset + last.duration, bounds(p));
+      pasteAt(notes, added, p, `${chosen.length} note${chosen.length === 1 ? "" : "s"} duplicated.`);
+    } catch (error) { bridge().toast?.(`No room to duplicate here. ${error.message}`); }
+  }
+  // Ctrl or ⌘ with C, X, V, D or A in the roll (model.js rollKey: never in a text field)
+  function shortcut(event) {
+    const key = window.SongbirdModel?.rollKey?.(event);
+    if (!key || state.player !== "voice" && notesMode()) return false;
+    event.preventDefault(); event.stopPropagation?.();
+    if (key.action === "all") selectAll();
+    else if (key.action === "copy") copyNotes();
+    else if (key.action === "cut") cutNotes();
+    else if (key.action === "paste") pasteNotes();
+    else if (key.action === "duplicate") duplicateNotes();
+    return true;
   }
   function editTools() {
     const p = phrase();
     return el("div", { class: "sbc-tools notes-foot", role: "group", "aria-label": "Edit phrase" },
       button("Add note", () => addNote(), { disabled: !p?.own_path }),
       button("Delete note", deleteNote, { disabled: state.note === null }),
-      button("Copy notes", copyNotes), button("Paste notes", pasteNotes, { disabled: !clipboard }),
+      button("Copy notes", () => copyNotes(), { title: "Copy the selected notes, or the phrase (Ctrl+C)" }),
+      button("Paste notes", () => pasteNotes(), { disabled: !clipboard, title: "Paste (Ctrl+V)" }),
       button("Write line", writeLine, { disabled: !p?.own_path || !!state.draft }),
       el("details", { class: "sbc-phrase-actions" }, el("summary", {}, "Phrase"),
         button("Copy phrase", () => {
@@ -440,14 +517,41 @@
       "onset" in changes ? state.note : -1);
     commitNotes(notes, noteTitle(notes[state.note], state.note));
   }
-  function transpose(steps) {
+  function transpose(steps) {  // the selected notes, or the whole phrase, by steps of the scale
     const p = phrase(), b = bounds();
     if (!p) return;
-    const notes = p.notes.map((n) => ({ ...n, degree: n.degree + steps }));
+    const chosen = several() ? new Set(picked()) : null;
+    const notes = p.notes.map((n, i) => ({ ...n, degree: n.degree + (!chosen || chosen.has(i) ? steps : 0) }));
     if (notes.some((n) => n.degree < b.min_degree || n.degree > b.max_degree)) {
       bridge().toast?.("That would go beyond this melody’s singing range."); return;
     }
-    commitNotes(notes, Math.abs(steps) < 7 ? "Phrase transposed." : "Phrase moved an octave.");
+    if (chosen) pick(state.note, [...chosen]);
+    commitNotes(notes, chosen ? `${chosen.size} notes transposed.` : Math.abs(steps) < 7 ? "Phrase transposed." : "Phrase moved an octave.");
+  }
+  // The selection moved together: by rows (a line of its own's notes by semitones, respelled; a tune line's by the
+  // scale steps its anchor moves) and by dt beats (the anchor landing on the grid, no note passing one not chosen).
+  function movedGroup(p, chosen, rows, dt, anchor = state.note) {
+    const b = bounds(p), model = window.SongbirdModel, tonic = composition()?.tonic || 60;
+    const semis = chosen.map((i) => semiOf(p.notes[i]));
+    rows = clamp(rows, scaleOffset(b.min_degree) - Math.min(...semis), scaleOffset(b.max_degree) - Math.max(...semis));
+    const timed = model.withSyllables(p.notes, chosen);
+    const shift = model.shiftLimit(p.notes, timed, dt, b, Math.max(b.grid, state.snap), anchor);
+    const set = new Set(chosen), moved = new Set(timed), whole = chromatic(p, p.notes[anchor]);
+    const steps = rowsMoved(p, p.notes[anchor], rows).degree - p.notes[anchor].degree;
+    return p.notes.map((n, i) => {
+      const next = { ...n };
+      if (set.has(i) && rows) {
+        Object.assign(next, whole ? rowsMoved(p, n, rows) : { degree: clamp(n.degree + steps, b.min_degree, b.max_degree) });
+        next.pitch = tonic + scaleOffset(next.degree) + (next.alter || 0);
+      }
+      if (moved.has(i) && shift) next.onset = n.onset + shift;
+      return next;
+    });
+  }
+  function moveGroup(rows, dt) {
+    const p = phrase(), chosen = picked(), anchor = state.note;
+    pick(anchor, chosen);
+    commitNotes(movedGroup(p, chosen, rows, dt, anchor), `${chosen.length} notes moved.`);
   }
   // The grid a phrase's rhythm lives on: halves of a beat where every note sits on them, thirds where they sit
   // on thirds (a six feel, a triplet lilt), quarters otherwise; each with the finer grids of its kind after it.
@@ -649,13 +753,9 @@
     const plot = el("div", { class: "sbc-grid", style: { left: `${g.left}px`, top: `${g.ruler}px`, width: `${g.width - g.left}px`, height: `${g.height - g.ruler}px`,
       backgroundSize: `${g.unit * state.snap}px ${g.row}px` } });
     roll.append(plot);
-    plot.addEventListener("dblclick", (event) => {
-      const rect = plot.getBoundingClientRect(), beat = g.start + (event.clientX - rect.left) / g.unit;
-      const at = window.SongbirdModel.phraseAt(g.spans, beat);
-      if (at === null) return;
-      focusPhrase(at);
-      addNote(beat - g.spans[at].off, M().spell(g.high - Math.floor((event.clientY - rect.top) / g.row), scale()));
-    });
+    plot.addEventListener("pointerdown", (event) => emptyDrag(event, g, plot));
+    if (state.cursor && g.spans[state.cursor.phrase]) roll.append(el("div", { class: "sbc-cursor", "aria-hidden": "true",
+      style: { left: `${xAt(g, g.spans[state.cursor.phrase].off + state.cursor.beat)}px`, top: `${g.ruler}px`, height: `${g.height - g.ruler}px` } }));
     // the selected phrase's time, and a line where each phrase after the first begins
     const chosen = g.spans[state.phrase];
     if (chosen?.p.notes?.length) roll.append(el("div", { class: "sbc-phrase-span", style: { left: `${xAt(g, chosen.start)}px`, top: `${g.ruler}px`,
@@ -682,14 +782,15 @@
       el("div", { class: `sbc-grid-line${bar ? " is-bar" : ""}`, style: { left: `${x}px`, top: `${g.ruler}px`, height: `${g.height - g.ruler}px` } }));
     }
     for (const span of g.spans) {
-      const q = span.p, here = span.i === state.phrase;
+      const q = span.p, here = span.i === state.phrase, chosen = here ? new Set(picked()) : new Set();
       q.notes.forEach((n, index) => {
-        const picked = here && index === state.note;
+        const picked = chosen.has(index);
         const item = el("button", { type: "button", class: `sbc-note${picked ? " is-selected" : ""}${index === q.notes.length - 1 ? " is-cadence" : ""}${n.edited ? " is-edited" : ""}${n.slur ? " is-slur" : ""}${here && chosenChord()?.rubs?.includes(index) ? " is-rub" : ""}`,
           "aria-label": noteTitle(n, index, q), "aria-pressed": picked ? "true" : "false", "data-note": index, "data-phrase": span.i,
           title: `${noteTitle(n, index, q)}. Drag to move; drag right edge to resize. Arrow keys move; Shift + left/right changes length.`,
-          style: noteStyle(n, g, span.off), onclick: () => {
+          style: noteStyle(n, g, span.off), onclick: (event) => {
             if (state.drag?.moved) return;
+            if (event.shiftKey) { toggleNote(span.i, index); return; }
             selectNote(span.i, index); audition(pitchFor(n));
           }, onpointerdown: (event) => startNoteDrag(event, span.i, index, g), onkeydown: (event) => noteKey(event, index, span.i),
         }, el("span", { class: "sbc-note-word" }, n.slur ? "‿" : displayWords(n.syllable) || "♪"), el("span", { class: "sbc-resize", "aria-hidden": "true" }, ""));
@@ -699,7 +800,56 @@
     roll.append(el("div", { id: "sbc-playhead", class: "sbc-playhead", hidden: !state.playback,
       style: { left: `${g.left}px`, top: `${g.ruler}px`, height: `${g.height - g.ruler}px` } }));
     if (p && state.reveal) { state.reveal = false; state.scrollTo = Math.max(0, xAt(g, g.spans[state.phrase].start) - g.left); }
-    return el("div", { id: "sbc-roll-scroll", class: "sbc-roll-scroll", tabindex: "0", "aria-label": "Scrollable melody editor" }, roll);
+    return el("div", { id: "sbc-roll-scroll", class: "sbc-roll-scroll", tabindex: "0", "aria-label": "Scrollable melody editor", onkeydown: shortcut }, roll);
+  }
+  // On the empty roll: a click puts the cursor there (where a paste goes) and lets the notes go; two add a note;
+  // a drag draws a rectangle that selects the notes it touches in the phrase it began in.
+  let lastClick = null;
+  function emptyDrag(event, g, plot) {
+    if (event.button !== 0 || (notesMode() && page()?.narrow?.())) return;
+    const rect = plot.getBoundingClientRect(), x0 = event.clientX, y0 = event.clientY;
+    const at = (x, y) => ({ beat: g.start + (x - rect.left) / g.unit, semi: g.high - Math.floor((y - rect.top) / g.row) });
+    const down = at(x0, y0), pi = window.SongbirdModel.phraseAt(g.spans, down.beat);
+    const box = el("div", { class: "sbc-marquee", hidden: true });
+    plot.parentNode?.append(box);
+    let moved = false;
+    plot.setPointerCapture?.(event.pointerId);
+    const move = (e) => {
+      if (!moved && Math.abs(e.clientX - x0) + Math.abs(e.clientY - y0) < 4) return;
+      moved = true; box.hidden = false;
+      Object.assign(box.style, { left: `${g.left + Math.min(x0, e.clientX) - rect.left}px`, top: `${g.ruler + Math.min(y0, e.clientY) - rect.top}px`,
+        width: `${Math.abs(e.clientX - x0)}px`, height: `${Math.abs(e.clientY - y0)}px` });
+    };
+    const up = (e) => {
+      plot.removeEventListener("pointermove", move); plot.removeEventListener("pointerup", up); plot.removeEventListener("pointercancel", cancel);
+      if (plot.hasPointerCapture?.(e.pointerId)) plot.releasePointerCapture(e.pointerId);
+      box.remove?.();
+      if (moved) { marquee(g, pi, down, at(e.clientX, e.clientY)); return; }
+      const now = Date.now(), twice = lastClick && now - lastClick.time < 450 && Math.abs(lastClick.x - x0) + Math.abs(lastClick.y - y0) < 8;
+      lastClick = twice ? null : { time: now, x: x0, y: y0 };
+      if (pi === null) return;
+      focusPhrase(pi);
+      if (twice) { addNote(down.beat - g.spans[pi].off, M().spell(down.semi, scale())); return; }
+      state.note = null; state.chord = null;
+      state.cursor = { phrase: pi, beat: clamp(Math.round((down.beat - g.spans[pi].off) / state.snap) * state.snap, g.spans[pi].b.min_onset, g.spans[pi].b.max_end) };
+      paint(); told();
+      root()?.querySelector("#sbc-roll-scroll")?.focus({ preventScroll: true });
+    };
+    const cancel = (e) => { moved = false; box.remove?.(); plot.removeEventListener("pointermove", move); plot.removeEventListener("pointerup", up); plot.removeEventListener("pointercancel", cancel); };
+    plot.addEventListener("pointermove", move); plot.addEventListener("pointerup", up); plot.addEventListener("pointercancel", cancel);
+  }
+  function marquee(g, pi, a, z) {
+    const lo = Math.min(a.beat, z.beat), hi = Math.max(a.beat, z.beat), top = Math.max(a.semi, z.semi), bottom = Math.min(a.semi, z.semi);
+    const inside = (span) => span.p.notes.flatMap((n, i) => (span.off + n.onset < hi && span.off + n.onset + n.duration > lo &&
+      semiOf(n) <= top && semiOf(n) >= bottom ? [i] : []));
+    // the phrase it began in, or else the one it caught the most notes of
+    const span = pi !== null && inside(g.spans[pi]).length ? g.spans[pi]
+      : g.spans.reduce((best, x) => (inside(x).length > (best ? inside(best).length : 0) ? x : best), null);
+    const chosen = span ? inside(span) : [];
+    if (!chosen.length) { state.note = null; paint(); told(); return; }
+    focusPhrase(span.i); pick(chosen[0], chosen); state.chord = null; state.focusNote = true;
+    paint(); told();
+    announce(`${chosen.length} note${chosen.length === 1 ? "" : "s"} selected`);
   }
   function noteStyle(n, g, off = offsetOf(phrase())) {
     return { left: `${xAt(g, off + n.onset) + 1}px`, top: `${g.ruler + (g.high - semiOf(n)) * g.row + 2}px`,
@@ -728,11 +878,14 @@
   function startNoteDrag(event, pi, index, geometry) {
     if (event.button !== 0) return;
     if (notesMode() && page()?.narrow?.()) return; // on a phone the roll is read, and a tap selects: the inspector edits
+    if (event.shiftKey) return;  // Shift-click adds the note to the selection, or takes it away (its click)
     stop();
     let target = event.currentTarget;
     const rect = target.getBoundingClientRect();
     const resizing = event.target.classList.contains("sbc-resize") || event.clientX > rect.right - Math.min(10, rect.width / 3);
-    selectNote(pi, index);
+    // a note of the selection drags the whole selection (its click, without a drag, chooses it alone)
+    const group = !resizing && pi === state.phrase && several() && picked().includes(index) ? picked() : null;
+    if (!group) selectNote(pi, index);
     target = noteNode(pi, index) || target;  // a new phrase repaints the roll
     const p = phrase(), original = { ...p.notes[index] }, off = offsetOf(p);
     const drag = { index, original, x: event.clientX, y: event.clientY, moved: false, resizing, preview: original };
@@ -744,7 +897,14 @@
       // a drag that stays within half a grid unit sideways is a pitch change only: the note's timing,
       // off-grid or not, is kept exactly instead of being snapped by a pixel of drift
       const sideways = Math.abs(nextEvent.clientX - drag.x) >= Math.max(4, geometry.unit / 2);
-      const pitch = rowsMoved(p, original, -Math.round((nextEvent.clientY - drag.y) / geometry.row));
+      const rows = -Math.round((nextEvent.clientY - drag.y) / geometry.row);
+      if (group) {
+        drag.notes = movedGroup(p, group, rows, sideways ? time : 0, index);
+        drag.notes.forEach((n, i) => { const node = noteNode(state.phrase, i); if (node) Object.assign(node.style, noteStyle(n, geometry, off)); });
+        target.classList.add("is-dragging");
+        return;
+      }
+      const pitch = rowsMoved(p, original, rows);
       const changes = resizing ? { duration: original.duration + time } : sideways ? { onset: original.onset + time, ...pitch } : pitch;
       drag.preview = limitedNote(index, changes, p);
       Object.assign(target.style, noteStyle(drag.preview, geometry, off));
@@ -756,7 +916,8 @@
       target.removeEventListener("pointermove", move); target.removeEventListener("pointerup", finish); target.removeEventListener("pointercancel", cancel);
       if (target.hasPointerCapture(upEvent.pointerId)) target.releasePointerCapture(upEvent.pointerId);
       target.classList.remove("is-dragging");
-      if (drag.moved) {
+      if (drag.moved && group) { pick(index, group); commitNotes(drag.notes, `${group.length} notes moved.`); audition(drag.notes[index].pitch); }
+      else if (drag.moved) {
         const notes = keepSlurs(p.notes.map((n, i) => i === index ? drag.preview : { ...n }), drag.preview.onset !== original.onset ? index : -1);
         commitNotes(notes, noteTitle(drag.preview, index)); audition(drag.preview.pitch ?? pitchFor(original, drag.preview.degree));
       }
@@ -764,16 +925,25 @@
       setTimeout(() => { if (state.drag === drag) state.drag = null; }, 0);
     };
     const cancel = (cancelEvent) => {
-      drag.moved = false; Object.assign(target.style, noteStyle(original, geometry, off)); finish(cancelEvent); state.drag = null;
+      drag.moved = false;
+      p.notes.forEach((n, i) => { const node = noteNode(state.phrase, i); if (node) Object.assign(node.style, noteStyle(n, geometry, off)); });
+      finish(cancelEvent); state.drag = null;
     };
     target.addEventListener("pointermove", move); target.addEventListener("pointerup", finish); target.addEventListener("pointercancel", cancel);
   }
   function noteKey(event, index, pi = state.phrase) {
     if (event.key === "Delete" || event.key === "Backspace") {
-      event.preventDefault(); event.stopPropagation?.(); focusPhrase(pi); state.note = index; deleteNote(); return;
+      event.preventDefault(); event.stopPropagation?.(); focusPhrase(pi); if (!picked().includes(index)) state.note = index; deleteNote(); return;
     }
     if (!["ArrowUp", "ArrowDown", "ArrowLeft", "ArrowRight"].includes(event.key)) return;
-    event.preventDefault(); focusPhrase(pi); state.note = index;
+    event.preventDefault(); focusPhrase(pi);
+    const vertical = event.key === "ArrowUp" || event.key === "ArrowDown", direction = ["ArrowUp", "ArrowRight"].includes(event.key) ? 1 : -1;
+    if (!picked().includes(index) || (event.shiftKey && !vertical)) state.note = index;  // ⇧ ← → a note's own length
+    else if (several()) {
+      moveGroup(vertical ? direction * (event.altKey ? 12 : 1) : 0, vertical ? 0 : direction * state.snap);
+      noteNode(state.phrase, index)?.focus({ preventScroll: true });
+      return;
+    }
     const n = note();
     if (event.key === "ArrowUp" || event.key === "ArrowDown") {
       const direction = event.key === "ArrowUp" ? 1 : -1;  // a row (a semitone, or the scale's next tone); ⌥ an octave
@@ -1258,7 +1428,7 @@
     const name = pitchName(pitchFor(n));
     const scope = where("tune", p);
     return {
-      rubric: `Note ${index + 1} of ${p.notes.length}`,
+      rubric: several() ? `${picked().length} of ${p.notes.length} notes` : `Note ${index + 1} of ${p.notes.length}`,
       set: `“${displayWords(n.slur ? n.word : n.syllable) || "♪"}”${n.slur ? ", held on" : ""} · ${name} · scale degree ${sign(n.alter)}${n.degree}${last ? " · the phrase's ending" : ""}${n.edited ? " · yours" : ""}`,
       mine: !!n.edited,
       body: el("div", { class: "sbc-note-state" }, (() => { const box = inspector(); box.querySelector(".sbc-audition")?.remove(); return box; })(),  // ▶ Hear it plays the note
@@ -1353,6 +1523,10 @@
     paint();
   }
   window.addEventListener("pagehide", stop);
+  // a browser that keeps the focus on the page when a note is clicked: the roll's shortcuts while notes are selected
+  document.addEventListener?.("keydown", (event) => {
+    if (event.target === document.body && picked().length && root()?.isConnected !== false && !document.getElementById("notes")?.hidden) shortcut(event);
+  });
   document.addEventListener("visibilitychange", () => { if (document.hidden) stop(); });
   // for the score: open a section's notes, the selection's card, the sketch the transport drives
   function open(index, player = "voice") {
