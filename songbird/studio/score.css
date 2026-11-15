@@ -163,6 +163,7 @@ input[type=number] { width: 72px; border: 1px solid var(--rule-strong); backgrou
 
 /* ---------------------------------------------------------------- the body: a view and the inspector */
 .body { display: grid; grid-template-columns: minmax(0, 1fr) 320px; flex: 1; min-height: 0; position: relative; }
+@container app (min-width: 1200px) { .body { grid-template-columns: minmax(0, 1fr) 360px; } }
 .view { padding: 18px 24px 40px; min-width: 0; }
 
 /* Page: the words as sung */
@@ -428,21 +429,26 @@ button.sbc-chord.is-rub::after { content: "•"; color: var(--red); margin-left:
 .strip .patch { font-size: 10px; border: 0; background: none; padding: 0; color: var(--ink-2); text-decoration: underline dotted; text-underline-offset: 2px; max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 
 /* ---------------------------------------------------------------- the inspector */
-.inspector { --lab: 72px; --gap: 10px; border-left: 1px solid var(--rule); background: var(--card); padding: 14px 16px 24px; position: sticky; top: 47px; align-self: start; max-height: calc(100vh - 47px); overflow: auto; min-width: 0; }
+.inspector { --lab: 80px; --gap: 12px; border-left: 1px solid var(--rule); background: var(--card); padding: 16px 20px 28px; position: sticky; top: 47px; align-self: start; max-height: calc(100vh - 47px); overflow: auto; min-width: 0; }
 .inspector .top { display: flex; align-items: baseline; gap: 2px; border-bottom: 1px solid var(--red-rule); padding-bottom: 6px; margin-bottom: var(--gap); }
 .inspector .top .rubric { font-size: 16px; flex: 1; min-width: 0; outline-offset: 2px; }
 .inspector .about { font: 13px/1.5 var(--serif); color: var(--ink-2); background: var(--paper); padding: 8px 10px; margin: 0 0 var(--gap); }
-/* what it is now, one line (the whole in its tooltip): a longer answer moves nothing below, and leaves no gap */
-.inspector .set { font: 15px/1.35 var(--serif); margin: 0 0 var(--gap); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+/* what it is now, whole and wrapped; it keeps the height it has had while the same thing is open (score.js shell), so
+   a choice that shortens it moves nothing under the pointer */
+.inspector .set { font: 14.5px/1.45 var(--serif); color: var(--ink-2); margin: 0 0 16px; text-wrap: pretty; overflow-wrap: anywhere; }
 .inspector .set.you { color: var(--hand); }
 .inspector h4 { margin: 12px 0 4px; font: 600 11px var(--sans); letter-spacing: .08em; text-transform: uppercase; color: var(--ink-3); }
 /* the rows: one grid through every state, a label's column and the controls' (whatever else a row holds goes under
    its controls), one step between rows; a row with no label starts at the content's edge */
 .inspector .row { display: flex; gap: 6px; align-items: center; flex-wrap: wrap; margin: 0 0 var(--gap); }
-.inspector .row:has(> .label) { display: grid; grid-template-columns: var(--lab) minmax(0, 1fr); column-gap: 10px; row-gap: 6px; align-items: baseline; }
+.inspector .row:has(> .label) { display: grid; grid-template-columns: var(--lab) minmax(0, 1fr); column-gap: 12px; row-gap: 6px; align-items: baseline; }
 .inspector .row:has(> .label) > :not(.label) { grid-column: 2; min-width: 0; justify-self: start; max-width: 100%; }
 .inspector .row:has(> .label) > select { justify-self: stretch; }
-.inspector .row > .label { font-size: 12px; color: var(--ink-2); grid-column: 1; overflow-wrap: anywhere; }
+.inspector .row > .label { font-size: 12px; line-height: 1.3; color: var(--ink-2); grid-column: 1; text-wrap: balance; }
+/* a choice is a phrase ("it slows broadly to the end"): read from the left, wrapped as words wrap */
+.inspector .chips { gap: 6px 5px; }
+.inspector .chip { text-align: left; line-height: 1.3; padding: 4px 8px; text-wrap: pretty; }
+.inspector .row:has(> .label) > select { padding: 5px 8px; }
 .inspector .row > .minisec, .inspector .row > .stepper { align-self: center; margin: 0; }
 .inspector .row:has(> .label) > .minisec { justify-self: stretch; min-width: 0; }
 .inspector .row .row { margin: 0; }

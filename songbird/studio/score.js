@@ -797,6 +797,16 @@
         hear ? h("button", { class: "btn", type: "button", onclick: hear }, "▶ Hear it") : null, extra || null,
         release ? h("button", { class: "link small release", type: "button", disabled: !!release.disabled, title: "Back to the program's choice",
           onclick: release.action }, release.label || "Reset") : null) : null]);
+    // what it is now keeps the most height it has had while the same thing stays open: a choice that shortens it moves
+    // nothing under the pointer
+    const now = box.querySelector(":scope > .set");
+    if (now) {
+      const key = `${kind}:${rubric}`;
+      if (S.setHeld?.key !== key) S.setHeld = { key, h: 0 };
+      now.style.minHeight = "";
+      S.setHeld.h = Math.max(S.setHeld.h, now.offsetHeight);
+      now.style.minHeight = `${S.setHeld.h}px`;
+    }
   }
   function reasonsFold(kind, why, open) {
     // a person's choice is shown by its colour, on the control and here: "chosen by you" isn't said
