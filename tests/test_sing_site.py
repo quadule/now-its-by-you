@@ -324,6 +324,7 @@ def test_the_home_page_offers_the_newest_edition_and_the_history_every_one(tmp_p
     assert W.seed_source() == kept
     out = tmp_path / "public"
     out.mkdir()
+    monkeypatch.setattr(W, "SOURCE_PUBLIC", False)  # the pages with the source unlinked (linked: below)
     monkeypatch.setattr(W, "REQUIRE_EDITIONS", True)  # the command line's build: an edition missing stops it
     with pytest.raises(SystemExit, match="2026-11-02|isn't in this checkout"):
         W.pages(out)
@@ -352,7 +353,7 @@ def test_the_home_page_offers_the_newest_edition_and_the_history_every_one(tmp_p
     assert '<time datetime="2026-09-28">September 28, 2026</time>' in page and "What changed in 1 &amp; why." in page
     assert ids[first] in page and listed[0]["file"]["sha256"] in page and listed[0]["render"]["sha256"] in page
     assert "uv run songbird render --seed 1" in page and '<a href="https://doi.org/10.5281/zenodo.1">Zenodo</a>' in page
-    assert "github.com" not in page  # the source is private until it's switched on
+    assert "github.com" not in page  # SOURCE_PUBLIC off: no link to the source
     assert "Version 3" not in page  # its file isn't here
 
     public = tmp_path / "public-source"
