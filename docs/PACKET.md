@@ -18,8 +18,8 @@ artist's), not a wall. It is measured before compression so it stays
 meaningful as the model changes; packing warns past the goal and refuses only
 absurd sizes (40 MiB, a stray render). It also measures the attached material,
 including the genome, learned gestures, lineage and ZIP overhead.
-`uv run songbird budget` shows the model, source and remaining room (6.7 MiB
-in all, 3.4 of it the model); `uv run songbird budget --json` gives exact
+`uv run songbird budget` shows the model, source and remaining room (6.3 MiB
+in all, 2.9 of it the model); `uv run songbird budget --json` gives exact
 counts for build checks. The Python dependencies installed beside it are not
 in this budget (see setup below).
 

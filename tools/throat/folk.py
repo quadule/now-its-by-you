@@ -95,6 +95,7 @@ from phones import SKIP, textgrid  # noqa: E402
 from soulx import syllables  # noqa: E402
 
 from songbird import phonetics as P  # noqa: E402
+from songbird.synth import throat  # noqa: E402
 
 SOURCES = {"folk": "folk", "records": "record"}  # a singer's source by its group: not "human", the volunteers' share
 SR = 24000  # the corpus's rate
@@ -1076,7 +1077,7 @@ def merge(args) -> None:
     singers = [str(s) for s in house["singers"]]
     sources = [str(s) for s in house["sources"]]
     if args.base:
-        z = np.load(args.base)
+        z = throat.arrays(args.base)
         cfg = json.loads(str(z["config"]))
         for name in cfg["singers"]:
             if name not in singers:

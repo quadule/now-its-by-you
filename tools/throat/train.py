@@ -62,6 +62,8 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
+import modelfile  # tools/throat/modelfile.py: a model .npz as the program reads it
+
 DILATIONS = (1, 2, 4, 8, 1, 2, 4, 8)
 KERNEL = 3
 EMBED = 16
@@ -240,7 +242,7 @@ def main() -> None:
     full = mask & (sp_top >= n_sp) & (ap_top >= n_ap)  # frames learned in every band
     sp_mean, sp_std = sp[full].mean(0), sp[full].std(0) + 1e-3
     ap_mean, ap_std = apr[full].mean(0), apr[full].std(0) + 1e-3
-    init = np.load(args.init) if args.init else None
+    init = modelfile.arrays(args.init) if args.init else None
     if init is not None:  # a fine-tune keeps the space the old model's outputs are in
         sp_mean, sp_std, ap_mean, ap_std = (init[k].astype(np.float32) for k in ("sp_mean", "sp_std", "ap_mean", "ap_std"))
     y_all = np.concatenate([(sp - sp_mean) / sp_std, (apr - ap_mean) / ap_std], axis=1).astype(np.float32)

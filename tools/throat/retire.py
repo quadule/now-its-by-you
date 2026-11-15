@@ -16,18 +16,20 @@ import sys
 
 import numpy as np
 
+from songbird.synth import throat
+
 
 def main() -> None:
     if len(sys.argv) < 4:
         raise SystemExit(__doc__)
     src, dst, *keep = sys.argv[1:]
-    z = dict(np.load(src))
+    z = throat.arrays(src)
     cfg = json.loads(str(z["config"]))
     cfg["retired"] = [s for s in cfg["singers"] if not any(s.startswith(k) for k in keep)]
     if len(cfg["retired"]) == len(cfg["singers"]):
         raise SystemExit(f"no singer in {src} starts with {keep}")
     z["config"] = np.array(json.dumps(cfg))
-    np.savez(dst, **z)
+    throat.save(dst, z)
     print(f"{dst}: draws {[s for s in cfg['singers'] if s not in cfg['retired']]}")
 
 
