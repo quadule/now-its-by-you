@@ -242,6 +242,17 @@
     return null;
   }
 
+  // ------------------------------------------------------------------ the section's roll (composer.js)
+  // The phrase a time of the section's roll belongs to. spans: each phrase's { off: its bar line, start: its earliest
+  // note, end: its latest, final: its last note's latest start }, in beats from the section's start. Where the next
+  // line's pickup lies in a line's last bar, a time past the line's last possible start is the next line's.
+  function phraseAt(spans, t) {
+    const inside = spans.map((s, i) => ({ ...s, i })).filter((s) => t >= s.start - 1e-9 && t < s.end - 1e-9);
+    const here = inside.filter((s) => t >= s.off - 1e-9).at(-1), early = inside.find((s) => t < s.off - 1e-9);
+    if (here && early && t > here.final + 1e-9) return early.i;
+    return (here ?? early)?.i ?? null;
+  }
+
   // ------------------------------------------------------------------ said after an edit (the live region)
   function saidCell(track, section, level) {
     return level === "out" ? `${section.label}: the ${track.label} sits out` : `${section.label}: the ${track.label} now ${level === "plays" ? "plays" : `plays ${level}`}`;
@@ -313,7 +324,7 @@
 
   const api = { LEVELS, KIND_WORDS, grid, look, whoseWords, cellLabel, lockPatch, releasePatch, levelPatch, optionLock,
     moveOrder, movedIds, seamWords, seamToggle, seamOver, seamLength, seamLengths, scopeOptions, scopeStart, selectionKey, defaultHow, playTarget,
-    neighbour, sectionAtBeat, position, sketchOffset, sketchFrom, inField, keyAction, saidCell, fitNotes, writtenNotes, lyricPatch,
+    neighbour, sectionAtBeat, position, sketchOffset, sketchFrom, inField, keyAction, phraseAt, saidCell, fitNotes, writtenNotes, lyricPatch,
     phrasePatch, sectionPatch };
   if (typeof window !== "undefined") window.SongbirdModel = api;
   if (typeof module === "object" && module.exports) module.exports = api;

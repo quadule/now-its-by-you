@@ -31,6 +31,7 @@
   const section = () => sections()[state.section];
   const phrase = () => section()?.phrases?.[state.phrase];
   const note = () => phrase()?.notes?.[state.note];
+  const firstSung = () => Math.max(0, (section()?.phrases || []).findIndex((p) => p.notes?.length));
   const drafts = new Map();
   let clipboard = null, phraseClipboard = null;
   Object.defineProperty(state, "draft", {
@@ -116,11 +117,11 @@
     return `${name}, ${pitchName(pitchFor(n))}, scale degree ${n.degree}, beat ${beatLabel(n.onset)}, ${fmt(n.duration)} beats${index === p.notes.length - 1 ? ", phrase ending" : ""}`;
   }
   function selectedSection(index) {
-    stop(); state.section = clamp(index, 0, sections().length - 1); state.phrase = 0; state.note = null; state.chord = null;
+    stop(); state.section = clamp(index, 0, sections().length - 1); state.phrase = firstSung(); state.note = null; state.chord = null;
     state.where = { tune: null, chords: null }; paint(); told();
   }
   function selectedPhrase(index) {
-    stop(); state.phrase = index; state.note = null; state.chord = null; state.where = { tune: null, chords: null }; paint(); told();
+    stop(); state.phrase = index; state.note = null; state.chord = null; state.where = { tune: null, chords: null }; state.reveal = true; paint(); told();
   }
   function told() { if (notesMode()) page()?.composerSelected?.(state.chord ? "chord" : state.note !== null ? "note" : null); }
 
@@ -592,45 +593,64 @@
     el("span", { class: "sbc-phrase-label" }, `Phrase ${index + 1}${drafts.has(p.own_path) ? " · draft" : ""}`, composition().edited_phrases?.includes(p.id) ? el("span", { class: "sbc-edited-dot", title: "Your melody" }, "•") : null),
     el("span", { class: "sbc-phrase-words" }, words || "Instrumental melody"));
   }
-  function gridGeometry(p) {
-    const b = bounds(p), notes = p.notes || [];
-    const low = Math.max(b.min_degree, Math.min(1, ...notes.map((n) => n.degree)) - 2);
-    const high = Math.min(b.max_degree, Math.max(8, ...notes.map((n) => n.degree)) + 2);
-    const start = b.min_onset, end = b.max_end;
-    const row = 23, left = 58, ruler = p.chords?.length ? 54 : 28;
+  // ---- the whole section in one roll: its phrases end to end on one time axis, from the first line's pickup to the
+  // last bar. Each note stays its phrase's, inside that phrase's own bounds; the phrase holding the selection is the
+  // one the tools, the scope, the words' draft and the clipboard act on.
+  const offsetOf = (p, s = section()) => (p?.start_beat ?? s?.start_beat ?? 0) - (s?.start_beat ?? 0);
+  function sectionGeometry(s = section()) {
+    const spans = (s?.phrases || []).map((p, i) => {
+      const b = bounds(p), off = offsetOf(p, s);
+      return { p, i, b, off, start: off + b.min_onset, end: off + b.max_end, final: off + (b.max_final_onset ?? b.max_end) };
+    });
+    const sung = spans.filter((x) => x.p.notes?.length), notes = sung.flatMap((x) => x.p.notes);
+    const low = Math.max(Math.min(...sung.map((x) => x.b.min_degree)), Math.min(1, ...notes.map((n) => n.degree)) - 2);
+    const high = Math.min(Math.max(...sung.map((x) => x.b.max_degree)), Math.max(8, ...notes.map((n) => n.degree)) + 2);
+    const start = Math.min(0, ...sung.map((x) => x.start)), end = Math.max(s?.duration_beats || 0, ...sung.map((x) => x.end));
+    const row = 23, left = 58, ruler = spans.some((x) => x.p.chords?.length) ? 54 : 28;
     const available = Math.max(500, (root()?.clientWidth || 950) - 44);
-    const unit = Math.max(42, (available - left) / Math.max(1, end - start)) * state.zoom;
-    return { low, high, start, end, row, left, ruler, unit, width: left + (end - start) * unit, height: ruler + (high - low + 1) * row };
+    const unit = Math.max(32, (available - left) / Math.max(1, end - start)) * state.zoom;
+    return { spans, low, high, start, end, row, left, ruler, unit, width: left + (end - start) * unit, height: ruler + (high - low + 1) * row };
+  }
+  const xAt = (g, beat) => g.left + (beat - g.start) * g.unit;  // a beat of the section, on the roll
+  function chordLane(roll, g, span) {
+    const p = span.p, c = composition();
+    const lane = p.harmony?.length ? p.harmony : p.chords.flatMap((chords, bar) => chords.map((symbol, slot) => ({
+      bar, slot, symbol, name: symbol, start: bar * c.beats_per_bar + slot * c.beats_per_bar / chords.length, beats: c.beats_per_bar / chords.length })));
+    lane.forEach((h) => {
+      const chosen = span.i === state.phrase && state.chord && state.chord.bar === h.bar && state.chord.slot === h.slot;
+      const rub = h.rubs?.length ? `; ${h.rubs.length} sung note${h.rubs.length === 1 ? "" : "s"} not in it${h.hard ? ", one a half step off" : ""}` : "";
+      roll.append(el("button", { type: "button", "data-chord": `${h.bar}.${h.slot}`, "data-chord-phrase": span.i,
+        class: `sbc-chord${chordMine(p, h) ? " is-edited" : ""}${chosen ? " is-selected" : ""}${h.hard ? " is-rub" : ""}`,
+        "aria-pressed": chosen ? "true" : "false", "aria-label": `Phrase ${span.i + 1}, bar ${h.bar + 1}, chord ${h.name}${rub}. Select to change it.`,
+        title: `Bar ${h.bar + 1}: ${h.name}${rub}. Select to change it.`, onclick: () => selectChord(h, span.i),
+        style: { left: `${xAt(g, span.off + h.start)}px`, width: `${Math.max(1, h.beats * g.unit - 2)}px` } }, h.name));
+    });
   }
   function pianoRoll() {
-    const p = phrase(), g = gridGeometry(p), c = composition();
+    const s = section(), g = sectionGeometry(s), c = composition(), p = phrase();
     const roll = el("div", { class: "sbc-roll", style: { width: `${g.width}px`, height: `${g.height}px` }, "aria-label": "Melody piano roll" });
-    if (p.chords?.length) {
-      roll.append(el("span", { class: "sbc-harmony-label" }, "Harmony"));
-      const lane = p.harmony?.length ? p.harmony : p.chords.flatMap((chords, bar) => chords.map((symbol, slot) => ({
-        bar, slot, symbol, name: symbol, start: bar * c.beats_per_bar + slot * c.beats_per_bar / chords.length, beats: c.beats_per_bar / chords.length })));
-      lane.forEach((h) => {
-        const chosen = state.chord && state.chord.bar === h.bar && state.chord.slot === h.slot;
-        const rub = h.rubs?.length ? `; ${h.rubs.length} sung note${h.rubs.length === 1 ? "" : "s"} not in it${h.hard ? ", one a half step off" : ""}` : "";
-        roll.append(el("button", { type: "button", "data-chord": `${h.bar}.${h.slot}`,
-          class: `sbc-chord${chordMine(p, h) ? " is-edited" : ""}${chosen ? " is-selected" : ""}${h.hard ? " is-rub" : ""}`,
-          "aria-pressed": chosen ? "true" : "false", "aria-label": `Bar ${h.bar + 1}, chord ${h.name}${rub}. Select to change it.`,
-          title: `Bar ${h.bar + 1}: ${h.name}${rub}. Select to change it.`, onclick: () => selectChord(h),
-          style: { left: `${g.left + (h.start - g.start) * g.unit}px`, width: `${Math.max(1, h.beats * g.unit - 2)}px` } }, h.name));
-      });
-    }
+    if (g.spans.some((x) => x.p.chords?.length)) roll.append(el("span", { class: "sbc-harmony-label" }, "Harmony"));
+    for (const span of g.spans) if (span.p.chords?.length) chordLane(roll, g, span);
     const plot = el("div", { class: "sbc-grid", style: { left: `${g.left}px`, top: `${g.ruler}px`, width: `${g.width - g.left}px`, height: `${g.height - g.ruler}px`,
       backgroundSize: `${g.unit * state.snap}px ${g.row}px` } });
     roll.append(plot);
     plot.addEventListener("dblclick", (event) => {
-      const rect = plot.getBoundingClientRect();
-      addNote(g.start + (event.clientX - rect.left) / g.unit, g.high - Math.floor((event.clientY - rect.top) / g.row));
+      const rect = plot.getBoundingClientRect(), beat = g.start + (event.clientX - rect.left) / g.unit;
+      const at = window.SongbirdModel.phraseAt(g.spans, beat);
+      if (at === null) return;
+      focusPhrase(at);
+      addNote(beat - g.spans[at].off, g.high - Math.floor((event.clientY - rect.top) / g.row));
     });
+    // the selected phrase's time, and a line where each phrase after the first begins
+    const chosen = g.spans[state.phrase];
+    if (chosen?.p.notes?.length) roll.append(el("div", { class: "sbc-phrase-span", style: { left: `${xAt(g, chosen.start)}px`, top: `${g.ruler}px`,
+      width: `${(chosen.end - chosen.start) * g.unit}px`, height: `${g.height - g.ruler}px` } }));
+    for (const span of g.spans.slice(1)) roll.append(el("div", { class: "sbc-phrase-line", style: { left: `${xAt(g, span.off)}px`, top: "0px", height: `${g.height}px` } }));
+    const ref = g.spans.find((x) => x.p.notes?.length)?.p.notes[0];
     for (let degree = g.high; degree >= g.low; degree--) {
       const y = g.ruler + (g.high - degree) * g.row;
       const tonic = ((degree - 1) % 7 + 7) % 7 === 0;
       if (tonic) roll.append(el("div", { class: "sbc-tonic-row", style: { left: `${g.left}px`, top: `${y}px`, width: `${g.width - g.left}px`, height: `${g.row}px` } }));
-      const ref = p.notes[0];
       roll.append(button("", () => audition(pitchFor(ref, degree)), { class: `sbc-key${tonic ? " is-tonic" : ""}`,
         id: `sbc-key-${degree}`,
         title: `Scale degree ${degree}, ${pitchName(pitchFor(ref, degree))}. Click to hear.`, "aria-label": `Hear ${pitchName(pitchFor(ref, degree))}, scale degree ${degree}`,
@@ -639,47 +659,66 @@
       roll.lastChild.append(el("span", {}, degreeName(degree)), el("small", {}, pitchName(pitchFor(ref, degree))));
     }
     for (let beat = Math.ceil(g.start); beat <= g.end; beat++) {
-      const x = g.left + (beat - g.start) * g.unit;
+      const x = xAt(g, beat);
       const bar = beat >= 0 && beat % c.beats_per_bar === 0;
       roll.append(el("span", { class: `sbc-ruler-label${bar ? " is-bar" : ""}`, style: { left: `${x}px` } },
         beat < 0 ? "↗" : bar ? `${Math.floor(beat / c.beats_per_bar) + 1}` : "·"),
       el("div", { class: `sbc-grid-line${bar ? " is-bar" : ""}`, style: { left: `${x}px`, top: `${g.ruler}px`, height: `${g.height - g.ruler}px` } }));
     }
-    p.notes.forEach((n, index) => {
-      const item = el("button", { type: "button", class: `sbc-note${index === state.note ? " is-selected" : ""}${index === p.notes.length - 1 ? " is-cadence" : ""}${n.edited ? " is-edited" : ""}${n.slur ? " is-slur" : ""}${chosenChord()?.rubs?.includes(index) ? " is-rub" : ""}`,
-        "aria-label": noteTitle(n, index, p), "aria-pressed": index === state.note ? "true" : "false", "data-note": index,
-        title: `${noteTitle(n, index, p)}. Drag to move; drag right edge to resize. Arrow keys move; Shift + left/right changes length.`,
-        style: noteStyle(n, g), onclick: () => {
-          if (state.drag?.moved) return;
-          state.note = index; selectNote(item, index); audition(pitchFor(n));
-        }, onpointerdown: (event) => startNoteDrag(event, index, g), onkeydown: (event) => noteKey(event, index),
-      }, el("span", { class: "sbc-note-word" }, n.slur ? "‿" : displayWords(n.syllable) || "♪"), el("span", { class: "sbc-resize", "aria-hidden": "true" }, ""));
-      roll.append(item);
-    });
+    for (const span of g.spans) {
+      const q = span.p, here = span.i === state.phrase;
+      q.notes.forEach((n, index) => {
+        const picked = here && index === state.note;
+        const item = el("button", { type: "button", class: `sbc-note${picked ? " is-selected" : ""}${index === q.notes.length - 1 ? " is-cadence" : ""}${n.edited ? " is-edited" : ""}${n.slur ? " is-slur" : ""}${here && chosenChord()?.rubs?.includes(index) ? " is-rub" : ""}`,
+          "aria-label": noteTitle(n, index, q), "aria-pressed": picked ? "true" : "false", "data-note": index, "data-phrase": span.i,
+          title: `${noteTitle(n, index, q)}. Drag to move; drag right edge to resize. Arrow keys move; Shift + left/right changes length.`,
+          style: noteStyle(n, g, span.off), onclick: () => {
+            if (state.drag?.moved) return;
+            selectNote(span.i, index); audition(pitchFor(n));
+          }, onpointerdown: (event) => startNoteDrag(event, span.i, index, g), onkeydown: (event) => noteKey(event, index, span.i),
+        }, el("span", { class: "sbc-note-word" }, n.slur ? "‿" : displayWords(n.syllable) || "♪"), el("span", { class: "sbc-resize", "aria-hidden": "true" }, ""));
+        roll.append(item);
+      });
+    }
     roll.append(el("div", { id: "sbc-playhead", class: "sbc-playhead", hidden: !state.playback,
       style: { left: `${g.left}px`, top: `${g.ruler}px`, height: `${g.height - g.ruler}px` } }));
+    if (p && state.reveal) { state.reveal = false; state.scrollTo = Math.max(0, xAt(g, g.spans[state.phrase].start) - g.left); }
     return el("div", { id: "sbc-roll-scroll", class: "sbc-roll-scroll", tabindex: "0", "aria-label": "Scrollable melody editor" }, roll);
   }
-  function noteStyle(n, g) {
-    return { left: `${g.left + (n.onset - g.start) * g.unit + 1}px`, top: `${g.ruler + (g.high - n.degree) * g.row + 2}px`,
+  function noteStyle(n, g, off = offsetOf(phrase())) {
+    return { left: `${xAt(g, off + n.onset) + 1}px`, top: `${g.ruler + (g.high - n.degree) * g.row + 2}px`,
       width: `${Math.max(9, n.duration * g.unit - 3)}px`, height: `${g.row - 4}px` };
   }
-  function selectNote(item, index) {
+  const noteNode = (pi, index) => [...(root()?.querySelectorAll(".sbc-note") || [])]
+    .find((node) => node.dataset.note === String(index) && node.dataset.phrase === String(pi)) || null;
+  // the phrase the tools act on: choosing another one lets go of the last one's chord and scope
+  function focusPhrase(pi) {
+    if (pi === state.phrase) return false;
+    state.phrase = pi; state.note = null; state.chord = null; state.where = { tune: null, chords: null };
+    return true;
+  }
+  function selectNote(pi, index) {
+    if (focusPhrase(pi)) {  // another phrase: its tools, scope and words are drawn for it
+      state.note = index; state.focusNote = true; paint();
+      announce(noteTitle(phrase().notes[index], index)); told(); return;
+    }
     state.note = index;
-    root().querySelectorAll(".sbc-note").forEach((node) => { const chosen = Number(node.dataset.note) === index; node.classList.toggle("is-selected", chosen); node.setAttribute("aria-pressed", String(chosen)); });
+    root().querySelectorAll(".sbc-note").forEach((node) => { const chosen = Number(node.dataset.note) === index && Number(node.dataset.phrase) === pi; node.classList.toggle("is-selected", chosen); node.setAttribute("aria-pressed", String(chosen)); });
     const old = root().querySelector(".sbc-inspector");
     if (state.chord) { state.chord = null; root().querySelector(".sbc-chord-card")?.replaceWith(inspector()); root().querySelectorAll(".sbc-chord.is-selected, .sbc-note.is-rub").forEach((node) => node.classList.remove("is-selected", "is-rub")); }
     else if (old) old.replaceWith(inspector());
     announce(noteTitle(phrase().notes[index], index)); told();
   }
-  function startNoteDrag(event, index, geometry) {
+  function startNoteDrag(event, pi, index, geometry) {
     if (event.button !== 0) return;
     if (notesMode() && page()?.narrow?.()) return; // on a phone the roll is read, and a tap selects: the inspector edits
     stop();
-    const target = event.currentTarget, p = phrase(), original = { ...p.notes[index] };
+    let target = event.currentTarget;
     const rect = target.getBoundingClientRect();
     const resizing = event.target.classList.contains("sbc-resize") || event.clientX > rect.right - Math.min(10, rect.width / 3);
-    state.note = index; selectNote(target, index);
+    selectNote(pi, index);
+    target = noteNode(pi, index) || target;  // a new phrase repaints the roll
+    const p = phrase(), original = { ...p.notes[index] }, off = offsetOf(p);
     const drag = { index, original, x: event.clientX, y: event.clientY, moved: false, resizing, preview: original };
     state.drag = drag; target.setPointerCapture(event.pointerId);
     const move = (nextEvent) => {
@@ -692,7 +731,7 @@
       const degree = original.degree - Math.round((nextEvent.clientY - drag.y) / geometry.row);
       const changes = resizing ? { duration: original.duration + time } : sideways ? { onset: original.onset + time, degree } : { degree };
       drag.preview = limitedNote(index, changes, p);
-      Object.assign(target.style, noteStyle(drag.preview, geometry));
+      Object.assign(target.style, noteStyle(drag.preview, geometry, off));
       target.classList.add("is-dragging");
       const detail = document.getElementById("sbc-drag-value");
       if (detail) detail.textContent = noteTitle(drag.preview, index);
@@ -709,16 +748,16 @@
       setTimeout(() => { if (state.drag === drag) state.drag = null; }, 0);
     };
     const cancel = (cancelEvent) => {
-      drag.moved = false; Object.assign(target.style, noteStyle(original, geometry)); finish(cancelEvent); state.drag = null;
+      drag.moved = false; Object.assign(target.style, noteStyle(original, geometry, off)); finish(cancelEvent); state.drag = null;
     };
     target.addEventListener("pointermove", move); target.addEventListener("pointerup", finish); target.addEventListener("pointercancel", cancel);
   }
-  function noteKey(event, index) {
+  function noteKey(event, index, pi = state.phrase) {
     if (event.key === "Delete" || event.key === "Backspace") {
-      event.preventDefault(); event.stopPropagation?.(); state.note = index; deleteNote(); return;
+      event.preventDefault(); event.stopPropagation?.(); focusPhrase(pi); state.note = index; deleteNote(); return;
     }
     if (!["ArrowUp", "ArrowDown", "ArrowLeft", "ArrowRight"].includes(event.key)) return;
-    event.preventDefault(); state.note = index;
+    event.preventDefault(); focusPhrase(pi); state.note = index;
     const n = note();
     if (event.key === "ArrowUp" || event.key === "ArrowDown") {
       const direction = event.key === "ArrowUp" ? 1 : -1;
@@ -727,7 +766,7 @@
       const delta = (event.key === "ArrowRight" ? 1 : -1) * state.snap;
       changeNote(event.shiftKey ? { duration: n.duration + delta } : { onset: n.onset + delta });
     }
-    root()?.querySelector(`[data-note="${index}"]`)?.focus({ preventScroll: true });
+    noteNode(state.phrase, state.note ?? index)?.focus({ preventScroll: true });
   }
   // ---- the chords (docs/STUDIO.md, "Changing the chords"): a tune line's chords, a list a bar, each a function
   // of the key (a numeral, a quality if named, a bass if not the root), changed everywhere the line is sung.
@@ -773,10 +812,11 @@
     const own = p.song_chords?.[h.bar];
     return !own || own.length !== p.chords[h.bar].length || own[h.slot] !== h.symbol;
   }
-  function selectChord(h) {
+  function selectChord(h, pi = state.phrase) {
+    focusPhrase(pi);
     state.chord = { bar: h.bar, slot: h.slot }; state.note = null;
     paint(); strum(h.symbol); told();
-    root()?.querySelector(`[data-chord="${h.bar}.${h.slot}"]`)?.focus({ preventScroll: true });
+    [...root().querySelectorAll(".sbc-chord")].find((node) => node.dataset.chord === `${h.bar}.${h.slot}` && node.dataset.chordPhrase === String(pi))?.focus({ preventScroll: true });
   }
   function strum(symbol) {
     if (bridge().pauseAudio) bridge().pauseAudio();
@@ -1117,9 +1157,9 @@
       playback.nextCycle++;
     }
     const absoluteBeat = playback.origin + (Math.max(0, elapsed) % duration) / playback.seconds;
-    const p = phrase(), g = gridGeometry(p), localBeat = absoluteBeat - p.start_beat;
+    const g = sectionGeometry(), localBeat = absoluteBeat - (section()?.start_beat || 0);
     const cursor = document.getElementById("sbc-playhead");
-    if (cursor) { cursor.hidden = localBeat < g.start || localBeat > g.end; cursor.style.left = `${g.left + (localBeat - g.start) * g.unit}px`; }
+    if (cursor) { cursor.hidden = localBeat < g.start || localBeat > g.end; cursor.style.left = `${xAt(g, localBeat)}px`; }
     const currentSection = sections().findIndex((s) => absoluteBeat >= s.start_beat && absoluteBeat < s.start_beat + s.duration_beats);
     root()?.querySelectorAll(".sbc-section").forEach((node) => node.classList.toggle("is-playing", Number(node.dataset.section) === currentSection));
     root()?.querySelectorAll(".sbc-overview-section").forEach((node) => node.classList.toggle("is-playing", Number(node.dataset.overviewSection) === currentSection));
@@ -1243,7 +1283,7 @@
     const box = root(), c = composition();
     if (!box || !c) return;
     const focused = box.contains(document.activeElement) ? document.activeElement : null;
-    const focusId = focused?.id, focusNote = focused?.dataset.note, focusPart = focused?.dataset.partNote, focusAction = focused?.dataset.composerAction;
+    const focusId = focused?.id, focusNote = focused?.dataset.note, focusPhrase = focused?.dataset.phrase, focusPart = focused?.dataset.partNote, focusAction = focused?.dataset.composerAction;
     const scroll = box.querySelector(".sbc-roll-scroll")?.scrollLeft || 0;
     const scrollTop = box.querySelector(".sbc-roll-scroll")?.scrollTop || 0;
     const arrangeScroll = box.querySelector(".sbc-arrangement-scroll")?.scrollLeft || 0;
@@ -1252,15 +1292,16 @@
       el("div", { id: "sbc-status", class: "sbc-visually-hidden", role: "status", "aria-live": "polite" }));
     else box.replaceChildren(transport(), arrangement(), section() ? editor() : null,
       el("div", { id: "sbc-status", class: "sbc-visually-hidden", role: "status", "aria-live": "polite" }));
-    const roll = box.querySelector(".sbc-roll-scroll"); if (roll) { roll.scrollLeft = scroll; roll.scrollTop = scrollTop; }
+    const roll = box.querySelector(".sbc-roll-scroll"); if (roll) { roll.scrollLeft = state.scrollTo ?? scroll; roll.scrollTop = scrollTop; }
+    state.scrollTo = null;
     const arrange = box.querySelector(".sbc-arrangement-scroll"); if (arrange) arrange.scrollLeft = arrangeScroll;
     const restore = focusPart !== undefined ? box.querySelector(`[data-part-note="${focusPart}"]`)
-      : focusNote !== undefined ? box.querySelector(`[data-note="${focusNote}"]`)
+      : focusNote !== undefined ? noteNode(focusPhrase, focusNote)
       : focusId ? document.getElementById(focusId)
         : focusAction ? [...box.querySelectorAll("button")].find((node) => node.dataset.composerAction === focusAction) : null;
-    const drawn = state.focusNote ? box.querySelector(".sbc-note.is-selected") : null;
+    const drawn = state.focusNote ? noteNode(state.phrase, state.note) : null;
     state.focusNote = false;
-    (drawn || restore || (focused && box.querySelector('.sbc-note.is-selected')))?.focus({ preventScroll: true });
+    (drawn || restore || (focused && noteNode(state.phrase, state.note)))?.focus({ preventScroll: true });
   }
   function render(view) {
     const changed = state.view !== view;
@@ -1283,6 +1324,7 @@
     if (state.section < 0) state.section = Math.max(0, sections().findIndex((s) => s.phrases?.some((p) => p.notes?.length)));
     state.section = clamp(state.section, 0, sections().length - 1);
     state.phrase = clamp(state.phrase, 0, Math.max(0, (section().phrases?.length || 0) - 1));
+    if (!phrase()?.notes?.length) state.phrase = Math.max(0, (section().phrases || []).findIndex((p) => p.notes?.length));  // a played line first
     if (state.note !== null && state.note >= (phrase()?.notes?.length || 0)) state.note = null;
     if (state.chord && !(phrase()?.chords?.[state.chord.bar]?.length > state.chord.slot)) state.chord = null;
     paint();
@@ -1293,7 +1335,7 @@
   function open(index, player = "voice") {
     state.player = (composition()?.players || []).some((p) => p.name === player) ? player : "voice";
     if (index === state.section && sections()[index]) { paint(); return; }
-    stop(); state.section = clamp(index, 0, sections().length - 1); state.phrase = 0; state.note = null; state.chord = null;
+    stop(); state.section = clamp(index, 0, sections().length - 1); state.phrase = firstSung(); state.note = null; state.chord = null;
     state.where = { tune: null, chords: null }; paint();
   }
   function deselect() { if (state.note !== null || state.chord) { state.note = null; state.chord = null; paint(); } }

@@ -212,3 +212,15 @@ test("phrase contents copy as portable local edits, including rests and inherite
   assert.equal(p.part_notes.guitar[0][0], 0, "the source is immutable");
   assert.throws(() => M.sectionPatch({ phrases: [p] }, { phrases: [q, q] }), /same number/);
 });
+
+test("a time of the section's roll belongs to the phrase that can sing a note there: a pickup past a line's last start is the next line's", () => {
+  // two four-beat lines, each with a half-beat pickup; a line's last note starts by 3.25 to leave the next one's pickup room
+  const spans = [{ off: 0, start: -0.5, end: 4, final: 3.25 }, { off: 4, start: 3.5, end: 8, final: 7.25 }];
+  assert.equal(M.phraseAt(spans, -0.5), 0, "the first line's pickup");
+  assert.equal(M.phraseAt(spans, 2), 0);
+  assert.equal(M.phraseAt(spans, 3.25), 0, "the first line's latest start");
+  assert.equal(M.phraseAt(spans, 3.5), 1, "past it, the second line's pickup");
+  assert.equal(M.phraseAt(spans, 4), 1);
+  assert.equal(M.phraseAt(spans, 8), null);
+  assert.equal(M.phraseAt(spans, -1), null);
+});

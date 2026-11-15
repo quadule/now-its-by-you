@@ -784,7 +784,8 @@ test("a line's own count: a syllable added or merged away waits for its words, t
 function writableScore() {
   const view = score(), p = view.composition.sections[1].phrases[0];
   Object.assign(p, { own_path: 'line.verse:wire.0', lyric_text: 'Sing this song your way', syllable_count: 5, tune_syllable_count: 5 });
-  view.composition.sections[1].phrases.push({ ...clone(p), id: 'a2', path: 'tune.a2', own_path: 'line.verse:wire.1' });
+  view.composition.sections[1].phrases.push({ ...clone(p), id: 'a2', path: 'tune.a2', own_path: 'line.verse:wire.1', start_beat: p.start_beat + p.duration_beats });
+  view.composition.sections[1].duration_beats += p.duration_beats;
   return view;
 }
 test('deleting a syllable leaves a rest and a draft that survives navigation and refresh', () => {
@@ -811,7 +812,7 @@ test('drawing into a rest and copying notes to another phrase does not alter the
   assert.equal(s.commits.length, 0, 'words and notes wait to be saved together');
   s.clickText('Copy notes'); s.clickText('Cancel');
   s.find('#sbc-phrase-1').emit('click'); s.clickText('Paste notes');
-  assert.equal(s.root.querySelectorAll('.sbc-note').length, 6);
+  assert.equal(s.root.querySelectorAll('[data-phrase="1"]').length, 6);
   assert.equal(s.phrase().notes.length, 5);
 });
 test('writing words first fits their rhythm and chromatic edits use the existing own-line format', () => {
@@ -828,4 +829,26 @@ test('writing words first fits their rhythm and chromatic edits use the existing
   m.find('#sbc-note-alter').emit('change', { target: { value: '-1' } });
   assert.equal(m.commits.at(-1).path, 'line.verse:wire.0');
   assert.equal(m.commits.at(-1).value.notes[1].alter, -1);
+});
+test("the whole section is one roll: each phrase's notes in its own time, chosen by its notes, moved only inside its bounds", () => {
+  const s = setup(writableScore());
+  const second = s.root.querySelectorAll('[data-phrase="1"]').filter((node) => node.classList.contains("sbc-note"));
+  assert.equal(second.length, 5, "the second phrase is drawn beside the first");
+  assert(parseFloat(second[0].style.left) > parseFloat(s.root.querySelectorAll('[data-phrase="0"]').at(-1).style.left), "after it in time");
+  assert.equal(s.root.querySelectorAll(".sbc-phrase-line").length, 1, "where the second phrase begins");
+  assert.equal(s.root.querySelectorAll(".sbc-chord").length, 4, "each phrase's chords over it");
+  second[0].emit("click");
+  assert.equal(s.find("#sbc-phrase-1").getAttribute("aria-pressed"), "true", "a note chooses its phrase");
+  assert.equal(s.document.activeElement.dataset.phrase, "1");
+  // dragged far left, its pickup stops at its own line's start, never into the line before
+  const item = s.root.querySelectorAll('[data-phrase="1"]').find((node) => node.dataset.note === "0"), rect = item.getBoundingClientRect();
+  item.emit("pointerdown", { clientX: rect.left + 2, clientY: 150 });
+  item.emit("pointermove", { clientX: rect.left - 2000, clientY: 150 });
+  item.emit("pointerup", { clientX: rect.left - 2000, clientY: 150 });
+  assert.equal(s.commits.length, 0, "already at its earliest: nothing is pinned");
+  item.emit("keydown", { key: "ArrowUp" });
+  assert.equal(s.commits.at(-1).path, "tune.a2", "the second phrase's own line");
+  // a chord of the second phrase is that phrase's
+  s.root.querySelectorAll(".sbc-chord").filter((node) => node.dataset.chordPhrase === "0")[0].emit("click");
+  assert.equal(s.find("#sbc-phrase-0").getAttribute("aria-pressed"), "true");
 });
