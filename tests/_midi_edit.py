@@ -3,15 +3,21 @@
 from songbird import midi
 
 
-def rewrite(data: bytes, change=None, tpq: int | None = None, offs_as_ons: bool = False) -> bytes:
+def rewrite(data: bytes, change=None, tpq: int | None = None, offs_as_ons: bool = False, retext=None) -> bytes:
     """A MIDI file saved again, as a sequencer might: its tracks' notes changed by change(name, notes) (notes as
-    [on, off, channel, key, velocity] in ticks), at another division, its note-offs as note-ons at velocity 0."""
+    [on, off, channel, key, velocity] in ticks), at another division, its note-offs as note-ons at velocity 0;
+    its texts changed by retext(name, texts) (texts as [tick, kind, text], the lyrics kind 0x05)."""
     read, parsed = midi.read(data), midi.parse(data)
     scale = (tpq or midi.TPQ) / midi.TPQ
     tracks = []
     for raw, track in zip(read["tracks"], parsed["tracks"]):
+        texts = [[t, e["meta"], bytes(e["data"]).decode("utf-8", "replace")] for t, e in raw if "meta" in e
+                 and 0x01 <= e["meta"] <= 0x07]
+        if retext is not None:
+            texts = retext(track["name"], texts)
         events = [(round(t * scale), 0, midi.meta(e["meta"], bytes(e["data"]))) for t, e in raw if "meta" in e
-                  and e["meta"] != 0x2F]
+                  and e["meta"] != 0x2F and not 0x01 <= e["meta"] <= 0x07]
+        events += [(round(t * scale), 0, midi.meta(kind, text.encode("utf-8"))) for t, kind, text in texts]
         events += [(round(t * scale), 1, bytes([e["status"] | e["channel"], *e["args"]])) for t, e in raw
                    if e.get("status") == 0xC0]
         notes = [list(n) for n in track["notes"]]

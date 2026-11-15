@@ -15,7 +15,7 @@ fits, its last line as a round (the voices come in half a line apart on it, a ta
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 
 VOICES = (2, 3, 4)  # how many may sing a round, the singer among them
 DEFAULT = 3  # "a round" asked for without a number: the singer and two more, where the tune takes three
@@ -226,15 +226,50 @@ def plans(genome, params) -> list[Round | None]:
     from .composition import harmonized, section_ids
 
     genome = harmonized(genome, params)  # a person's chords, which the band plays under the voices
+    own = params.composition.get("own")
+    keys = None
     out = []
-    for sid, name in zip(section_ids(params.form), params.form):
+    for k, (sid, name) in enumerate(zip(section_ids(params.form), params.form)):
         entry = held.get(sid) or {}
         asked = entry.get("round")
         if not asked or entry.get("bars") is not None or entry.get("sung") is False:
             out.append(None)
             continue
-        out.append(choose(genome, name, asked, params.mode))
+        if own and keys is None:
+            from .composition import own_keys
+
+            keys = own_keys(genome, params)
+        song, names = _with_own(genome, name, own.get(keys[k]) if own and keys[k] else None)
+        plan = choose(song, name, asked, params.mode)
+        out.append(replace(plan, under=tuple(names.get(p, p) for p in plan.under)) if plan and names else plan)
     return out
+
+
+def _with_own(genome, name: str, lines: dict | None):
+    """The song with a section's lines of their own (composition["own"]: {line: entry}) as its tune lines, so a
+    round is judged on the notes the voices will sing, and the names those lines are given there ({given: the
+    tune line's}); the song itself and {} where it has none. Each line of its own is a tune line of its own name,
+    so a section that sings one tune line twice (a verse's v2, v3, v2) has it judged only where it's sung."""
+    if not lines:
+        return genome, {}
+    import json
+
+    from .composition import own_notes
+
+    section = genome.section(name)
+    phrases, sections, names, laid = dict(genome.phrases), dict(genome.sections), {}, []
+    for j, pid in enumerate(section.phrases):
+        entry = lines.get(str(j))
+        if entry is None:
+            laid.append(pid)
+            continue
+        given = f"{pid}#own{j}"
+        phrases[given] = replace(phrases[pid], id=given, notes=own_notes(entry),
+                                 tune="own:" + json.dumps(entry["tune"]))
+        names[given] = pid
+        laid.append(given)
+    sections[name] = replace(section, phrases=tuple(laid))
+    return replace(genome, phrases=phrases, sections=sections), names
 
 
 def lines(genome, name: str, plan: Round, laid=None) -> list[tuple[str, bool]]:

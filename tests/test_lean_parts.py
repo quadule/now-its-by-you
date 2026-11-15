@@ -8,6 +8,8 @@ from dataclasses import dataclass
 import numpy as np
 import pytest
 
+from _golden import pinned
+
 from songbird.synth import cymbals, kit, struck
 
 SR = 44100
@@ -216,7 +218,7 @@ def made(which: str) -> str:
 
 @pytest.mark.parametrize("which", list(CASES))
 def test_a_whole_kit_makes_the_samples_it_made(which):
-    assert made(which) == MADE[which]
+    pinned("lean-kit", which, made(which), MADE)
 
 
 @pytest.mark.parametrize("s1,s2", [(5000, 3), (100_000, 15435), (2_000_000, 15435), (70_000, 15435), (40_000, 30_000),
@@ -267,7 +269,7 @@ def bowed_made(name: str) -> str:
 
 @pytest.mark.parametrize("name", list(BOWED))
 def test_bowed_strings_make_the_samples_they_made(name):
-    assert bowed_made(name) == BOWED[name]
+    pinned("lean-bowed", name, bowed_made(name), BOWED)
 
 
 def test_a_tape_read_a_stretch_at_a_time_is_read_as_whole():
@@ -301,7 +303,7 @@ def worn(amount: float) -> str:
 
 @pytest.mark.parametrize("amount", list(WORN))
 def test_a_worn_mix_is_worn_as_it_was(amount):
-    assert worn(amount) == WORN[amount]
+    pinned("lean-worn", amount, worn(amount), WORN)
 
 
 # What the mallets made of _struck() before 2026-09-30 (the tree at 02384c8): a vibraphone's motor on, changing
@@ -334,7 +336,7 @@ def mallets_made(name: str, ornament: float) -> str:
 
 @pytest.mark.parametrize("name,ornament", list(MALLETS))
 def test_mallets_make_the_samples_they_made(name, ornament):
-    assert mallets_made(name, ornament) == MALLETS[name, ornament]
+    pinned("lean-mallets", (name, ornament), mallets_made(name, ornament), MALLETS)
 
 
 # What the free reeds made of _squeezed() before 2026-09-30 (the tree at 02384c8).
@@ -367,7 +369,7 @@ def reeds_made(name: str) -> str:
 
 @pytest.mark.parametrize("name", list(REEDS))
 def test_free_reeds_make_the_samples_they_made(name):
-    assert reeds_made(name) == REEDS[name]
+    pinned("lean-reeds", name, reeds_made(name), REEDS)
 
 
 # What the synthesizers made of a few chords and a line before 2026-09-30 (the tree at 02384c8): the pad through its
@@ -391,7 +393,7 @@ def synth_made(name: str) -> str:
 
 @pytest.mark.parametrize("name", list(SYNTHS))
 def test_synthesizers_make_the_samples_they_made(name):
-    assert synth_made(name) == SYNTHS[name]
+    pinned("lean-synths", name, synth_made(name), SYNTHS)
 
 
 # What these made of a few bars before 2026-09-30 (the tree at 02384c8), placed and levelled as a band's stem: a
@@ -415,7 +417,7 @@ def body_made(name: str) -> str:
 
 @pytest.mark.parametrize("name", list(BODIES))
 def test_bodies_make_the_samples_they_made(name):
-    assert body_made(name) == BODIES[name]
+    pinned("lean-bodies", name, body_made(name), BODIES)
 
 
 def test_the_voices_pulses_found_a_stretch_at_a_time_are_those_the_whole_tracks_gave():
@@ -443,7 +445,9 @@ def test_the_voices_pulses_found_a_stretch_at_a_time_are_those_the_whole_tracks_
 
 def test_the_throats_network_predicts_what_it_did():
     """The layers worked where each step left the last (the same matrices into the same products): the
-    envelope and aperiodicity for a timeline, against their hash from the tree before (02384c8)."""
+    envelope and aperiodicity for a timeline, against their hash for the shipped throat (golden/lean-network.
+    <platform>.json; pinned again when the throat is retrained: the hash from the tree before, 02384c8, was the
+    September throat's)."""
     from songbird.synth import throat
 
     if not throat.available():
@@ -457,7 +461,4 @@ def test_the_throats_network_predicts_what_it_did():
     sp, ap = throat.predict(model, t, np.log(rng.uniform(100.0, 400.0, frames)), throat.timbre(model, None, 60.0))
     digest = hashlib.sha256(np.ascontiguousarray(sp).data)
     digest.update(np.ascontiguousarray(ap).data)
-    assert digest.hexdigest() == NETWORK
-
-
-NETWORK = "f53d33a4761fc4c67f30425960c914cdc51a98f7aedc369b861e130b162fee89"
+    pinned("lean-network", "network", digest.hexdigest(), None)

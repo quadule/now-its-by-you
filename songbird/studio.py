@@ -47,6 +47,7 @@ import re
 import secrets
 import shutil
 import socket
+import struct
 import subprocess
 import sys
 import tempfile
@@ -925,7 +926,7 @@ class Studio:
         if what == "midi":
             path = self.cache / f"{key}.mid"
             if not path.exists():
-                data, _ = midi.from_score(self.genome, v.params, self._score(v), title=self.genome.title)
+                data, _ = midi.from_score(self.genome, v.params, self._score(v), title=self.genome.title, lyrics=v.lyrics)
                 path.write_bytes(data)
             return {"state": "done", "progress": 1.0,
                     "url": f"/export/{key}.mid?name={self.export_name(v, '.mid')}", "label": "the MIDI file"}
@@ -974,7 +975,7 @@ class Studio:
         share.stage = stage_words("score")
         score = self._score(v)
         share.plan = [p for p in stages(score) if p[0] not in ("mix", "master")] + [("master", 1.0)]
-        data, lead_in = midi.from_score(self.genome, v.params, score, title=self.genome.title)
+        data, lead_in = midi.from_score(self.genome, v.params, score, title=self.genome.title, lyrics=v.lyrics)
         singer = explain.singer_of(v.params)
         stems = synth.render_stems(score, seed=v.params.seed, voice=singer,
                                    ancestors=choir_of(self.parent_record, singer)[1], progress=share.report)
@@ -1909,16 +1910,36 @@ class Handler(BaseHTTPRequestHandler):
         # a minute's grace), so a reader taking a byte at a time can't hold its connection for days
         rate = self.studio.public.send_kb * 1024 if self.studio.public is not None else None
         began, sent, left = time.monotonic(), 0, size
-        while left:
-            chunk = body.read(min(left, 2**16))
-            if not chunk:
-                break
-            self.wfile.write(chunk)
-            sent += len(chunk)
-            left -= len(chunk)
-            if rate and left and time.monotonic() - began > self.send_grace + sent / rate:
-                self.close_connection = True  # too slow: the rest isn't sent
-                return
+        before = self.connection.gettimeout()
+        try:
+            while left:
+                chunk = body.read(min(left, 2**16))
+                if not chunk:
+                    break
+                if rate:  # each block sent by when the least rate has it sent: a reader that stops reading blocks
+                    # the write itself, so the write is what times out
+                    due = began + self.send_grace + (sent + len(chunk)) / rate - time.monotonic()
+                    self.connection.settimeout(max(due, 0.05) if before is None else min(max(due, 0.05), before))
+                try:
+                    self.wfile.write(chunk)
+                except (TimeoutError, socket.timeout):
+                    self.let_go()
+                    return
+                sent += len(chunk)
+                left -= len(chunk)
+                if rate and left and time.monotonic() - began > self.send_grace + sent / rate:
+                    self.let_go()
+                    return
+        finally:
+            if rate:
+                self.connection.settimeout(before)
+
+    def let_go(self) -> None:
+        """A download too slow to keep: the rest isn't sent, and what the system still holds for it is dropped (the
+        connection reset, not closed), so a reader taking a byte at a time can't drain megabytes from its buffers."""
+        self.close_connection = True
+        with contextlib.suppress(OSError):
+            self.connection.setsockopt(socket.SOL_SOCKET, socket.SO_LINGER, struct.pack("ii", 1, 0))
 
     def send_json(self, data, code: int = 200) -> None:
         self.send(json.dumps(data).encode(), "application/json", code)

@@ -37,3 +37,28 @@ def check(name: str, got: str) -> None:
         pytest.skip(f"no golden {name} for {here()} (audio may differ by platform; "
                     f"SONGBIRD_UPDATE_GOLDEN=1 writes {golden.name})")
     assert got == golden.read_text().strip()
+
+
+MAC = "darwin-arm64"  # where the tables written into the tests themselves were made
+
+
+def pinned(table: str, key, got: str, mac: dict | None) -> None:
+    """got is the golden for `key` in a table of them: on the artist's Mac, the table `mac` the test writes out (made
+    there, against the tree before an optimization); on any other platform (and on the Mac too, with no `mac`),
+    golden/<table>.<platform>.json, pinned there when SONGBIRD_UPDATE_GOLDEN is set (each key written as it is
+    made) and skipped where it has none."""
+    import json
+
+    if here() == MAC and mac is not None:
+        assert got == mac[key]
+        return
+    golden = DIR / f"{table}.{here()}.json"
+    name = key if isinstance(key, str) else " ".join(str(k) for k in (key if isinstance(key, tuple) else (key,)))
+    held = json.loads(golden.read_text()) if golden.exists() else {}
+    if os.environ.get("SONGBIRD_UPDATE_GOLDEN"):
+        held[name] = got
+        golden.write_text(json.dumps(held, indent=1, sort_keys=True) + "\n")
+    if name not in held:
+        pytest.skip(f"no golden {table} {name!r} for {here()} (samples may differ by platform; "
+                    f"SONGBIRD_UPDATE_GOLDEN=1 writes {golden.name})")
+    assert got == held[name]
